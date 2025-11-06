@@ -41,6 +41,9 @@ class MainWindow(QMainWindow):
         self.albums = []
         self.current_view_state = "home"
 
+        # 创建快捷键管理器
+        self.shortcut_manager = None
+
         # 初始化UI
         self.init_ui()
 
@@ -48,7 +51,9 @@ class MainWindow(QMainWindow):
         """初始化用户界面"""
         self.setWindowTitle("漫画阅读器 - 现代化图片管理")
         self.setMinimumSize(1200, 800)
-        self.resize(1400, 900)
+
+        # 应用窗口状态 - 优先于UI创建
+        self.restore_window_state()
 
         # 应用样式
         self.style_manager.themeChanged.connect(self.apply_theme_style)
@@ -116,8 +121,8 @@ class MainWindow(QMainWindow):
         self.toolbar.themeClicked.connect(self.toggle_theme)
         self.toolbar.settingsClicked.connect(self.show_settings)
 
-        # 相册网格
-        self.album_grid = AlbumGrid()
+        # 相册网格 - 传递config_manager
+        self.album_grid = AlbumGrid(self.config_manager)
         self.album_grid.albumClicked.connect(self.open_album)
         self.album_grid.favoriteClicked.connect(self.toggle_favorite)
 
@@ -177,12 +182,96 @@ class MainWindow(QMainWindow):
         help_menu.addAction(settings_action)
 
     def create_shortcuts(self):
-        """创建快捷键"""
-        # F5刷新扫描
-        refresh_action = QAction(self)
-        refresh_action.setShortcut(QKeySequence("F5"))
-        refresh_action.triggered.connect(self.scan_albums)
-        self.addAction(refresh_action)
+        """创建快捷键 - 从配置中读取并注册"""
+        from .components.shortcuts import ShortcutManager
+
+        # 创建快捷键管理器
+        self.shortcut_manager = ShortcutManager(self)
+        shortcuts = self.config_manager.get_shortcuts()
+
+        # 注册所有快捷键
+        # 1. 打开文件夹 - Ctrl+O
+        self.shortcut_manager.register(
+            shortcuts.get('open_folder', 'Ctrl+O'),
+            self.browse_folder,
+            "打开文件夹"
+        )
+
+        # 2. 扫描漫画 - F5
+        self.shortcut_manager.register(
+            shortcuts.get('scan_albums', 'F5'),
+            self.scan_albums,
+            "扫描漫画"
+        )
+
+        # 3. 最近浏览 - Ctrl+R
+        self.shortcut_manager.register(
+            shortcuts.get('open_recent', 'Ctrl+R'),
+            self.show_recent,
+            "最近浏览"
+        )
+
+        # 4. 我的收藏 - Ctrl+F
+        self.shortcut_manager.register(
+            shortcuts.get('open_favorites', 'Ctrl+F'),
+            self.show_favorites,
+            "我的收藏"
+        )
+
+        # 5. 收藏/取消收藏 - Ctrl+D
+        self.shortcut_manager.register(
+            shortcuts.get('toggle_favorite', 'Ctrl+D'),
+            lambda: self.toggle_favorite(self.folder_path) if self.folder_path else None,
+            "收藏/取消收藏"
+        )
+
+        # 6. 全屏 - F11
+        self.shortcut_manager.register(
+            shortcuts.get('fullscreen', 'F11'),
+            self.toggle_fullscreen,
+            "全屏"
+        )
+
+        # 7. 设置 - Ctrl+,
+        settings_action = QAction(self)
+        settings_action.setShortcut(QKeySequence("Ctrl+,"))
+        settings_action.triggered.connect(self.show_settings)
+        self.addAction(settings_action)
+
+    def restore_window_state(self):
+        """恢复窗口状态"""
+        # 应用窗口几何信息
+        geometry = self.config_manager.get_window_geometry()
+        if geometry and len(geometry) == 4:
+            self.setGeometry(*geometry)
+
+        # 应用窗口最大化状态
+        if self.config_manager.get_window_maximized():
+            self.showMaximized()
+
+    def save_window_state(self):
+        """保存窗口状态"""
+        if not self.config_manager.get_auto_save_window_state():
+            return
+
+        # 保存窗口几何信息
+        if self.windowState() == Qt.WindowState.WindowNoState:
+            # 窗口未最大化时，保存几何信息
+            self.config_manager.set_window_geometry([
+                self.x(),
+                self.y(),
+                self.width(),
+                self.height()
+            ])
+            self.config_manager.set_window_maximized(False)
+        elif self.windowState() == Qt.WindowState.WindowMaximized:
+            # 窗口最大化时，只保存最大化状态
+            self.config_manager.set_window_maximized(True)
+
+    def closeEvent(self, event):
+        """窗口关闭事件 - 保存窗口状态"""
+        self.save_window_state()
+        super().closeEvent(event)
 
     def apply_theme_style(self):
         """应用主题样式"""
@@ -241,7 +330,7 @@ class MainWindow(QMainWindow):
         # 创建扫描器实例（如果不存在）
         if not hasattr(self, 'scanner'):
             from src.core.album_scanner import AlbumScannerService
-            self.scanner = AlbumScannerService(self)
+            self.scanner = AlbumScannerService(self, self.config_manager)
 
         # 启动扫描
         self.status_bar.set_status("正在扫描...", "info")
@@ -325,3 +414,12 @@ class MainWindow(QMainWindow):
             # 如果在收藏视图中，需要重新加载收藏列表
             if self.current_view_state == "favorites":
                 self.show_favorites()
+
+    def toggle_fullscreen(self):
+        """切换全屏模式"""
+        if self.windowState() == Qt.WindowState.WindowFullScreen:
+            self.showNormal()
+            self.status_bar.set_status("退出全屏", "info")
+        else:
+            self.showFullScreen()
+            self.status_bar.set_status("全屏模式", "info")

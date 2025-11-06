@@ -19,15 +19,22 @@ class ImageProcessor:
     IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff']
 
     @classmethod
-    def scan_albums(cls, root_path, progress_callback=None):
+    def scan_albums(cls, root_path, progress_callback=None, recursive=True, include_hidden=False, image_formats=None):
         """扫描漫画文件夹 - 简化多线程版本
 
         Args:
             root_path: 根目录路径
             progress_callback: 进度回调函数，接收(progress, status)参数
+            recursive: 是否递归扫描子文件夹
+            include_hidden: 是否包含隐藏文件夹
+            image_formats: 支持的图片格式列表
         """
         albums = []
         root_path = Path(root_path)
+
+        # 使用配置或默认值
+        if image_formats is None:
+            image_formats = cls.IMAGE_EXTENSIONS
 
         if not root_path.exists():
             if progress_callback:
@@ -37,6 +44,10 @@ class ImageProcessor:
         # 获取所有子文件夹
         subdirs = []
         for item in root_path.iterdir():
+            # 跳过隐藏文件夹（如果配置为不包含）
+            if not include_hidden and item.name.startswith('.'):
+                continue
+
             if item.is_dir():
                 subdirs.append(item)
 
@@ -57,7 +68,7 @@ class ImageProcessor:
             """扫描单个文件夹"""
             try:
                 # 获取图片文件
-                image_files = cls.get_image_files(str(folder_path))
+                image_files = cls.get_image_files(str(folder_path), image_formats)
 
                 if image_files:
                     # 这是一个包含图片的相册
@@ -233,9 +244,18 @@ class ImageProcessor:
             print(f"递归扫描文件夹时出错 {folder_path}: {e}")
 
     @classmethod
-    def get_image_files(cls, folder_path):
-        """获取文件夹中的所有图片文件（简化版）"""
+    def get_image_files(cls, folder_path, image_formats=None):
+        """获取文件夹中的所有图片文件（简化版）
+
+        Args:
+            folder_path: 文件夹路径
+            image_formats: 支持的图片格式列表，如果为None则使用默认格式
+        """
         image_files = []
+
+        # 使用配置或默认值
+        if image_formats is None:
+            image_formats = cls.IMAGE_EXTENSIONS
 
         try:
             folder_path = Path(folder_path)
@@ -245,7 +265,7 @@ class ImageProcessor:
             # 遍历文件夹中的所有文件
             for file_path in folder_path.iterdir():
                 if file_path.is_file():
-                    if file_path.suffix.lower() in cls.IMAGE_EXTENSIONS:
+                    if file_path.suffix.lower() in image_formats:
                         try:
                             image_files.append(str(file_path))
                         except Exception as e:

@@ -15,8 +15,9 @@ from utils.image_utils import ImageProcessor
 class AlbumScannerService:
     """漫画扫描服务 - 支持异步扫描"""
 
-    def __init__(self, app):
+    def __init__(self, app, config_manager=None):
         self.app = app
+        self.config_manager = config_manager
         self.scan_thread = None
         self.cancel_flag = False
         self.scan_progress = 0
@@ -65,8 +66,17 @@ class AlbumScannerService:
                 # 将进度更新放入队列，UI线程会定期检查队列
                 self.progress_queue.put((progress, status))
 
-            # 执行扫描
-            albums = ImageProcessor.scan_albums(folder_path, progress_callback)
+            # 获取扫描配置
+            scan_config = self._get_scan_config()
+
+            # 执行扫描 - 传递配置参数
+            albums = ImageProcessor.scan_albums(
+                folder_path,
+                progress_callback,
+                recursive=scan_config['recursive'],
+                include_hidden=scan_config['include_hidden'],
+                image_formats=scan_config['image_formats']
+            )
 
             if self.cancel_flag:
                 # 扫描被取消
@@ -212,6 +222,22 @@ class AlbumScannerService:
             traceback.print_exc()
             if hasattr(self.app, 'status_bar'):
                 self.app.status_bar.set_status("显示结果时出错", "error")
+
+    def _get_scan_config(self):
+        """获取扫描配置"""
+        if not self.config_manager:
+            # 使用默认值
+            return {
+                'recursive': True,
+                'include_hidden': False,
+                'image_formats': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff']
+            }
+
+        return {
+            'recursive': self.config_manager.get_scan_recursive(),
+            'include_hidden': self.config_manager.get_scan_hidden_folders(),
+            'image_formats': [f'.{fmt.lower()}' for fmt in self.config_manager.get_image_formats()]
+        }
 
     def _handle_scan_error(self, error):
         """处理扫描错误"""

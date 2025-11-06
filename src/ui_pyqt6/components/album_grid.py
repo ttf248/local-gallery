@@ -17,8 +17,9 @@ class AlbumGrid(QWidget):
     albumClicked = pyqtSignal(str)  # 传入相册路径
     favoriteClicked = pyqtSignal(str)  # 传入相册路径
 
-    def __init__(self, parent=None):
+    def __init__(self, config_manager=None, parent=None):
         super().__init__(parent)
+        self.config_manager = config_manager
         self.albums = []
         self.all_albums = []
         self.current_filter = "全部"
@@ -82,22 +83,36 @@ class AlbumGrid(QWidget):
         layout = QHBoxLayout(card)
         layout.setContentsMargins(16, 16, 16, 16)
 
-        # 左侧封面（占位符）
-        cover_label = QLabel()
-        cover_label.setFixedSize(120, 160)
-        cover_label.setStyleSheet("""
-            QLabel {
-                background-color: #F5F5F7;
-                border: 1px solid #D2D2D7;
-                border-radius: 8px;
-            }
-        """)
-        cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cover_label.setText("📚")
+        # 获取显示设置
+        show_thumbnails = True
+        thumbnail_size = 160  # 默认高度
+        if self.config_manager:
+            show_thumbnails = self.config_manager.get_show_thumbnails()
+            thumbnail_size = self.config_manager.get_image_thumbnail_size()
+
+        # 左侧封面
+        if show_thumbnails:
+            # 动态计算宽度：缩略图大小 + 内边距
+            thumbnail_width = min(thumbnail_size * 3 // 4, 150)  # 保持4:3比例，最大150
+            cover_label = QLabel()
+            cover_label.setFixedSize(thumbnail_width, thumbnail_size)
+            cover_label.setStyleSheet("""
+                QLabel {
+                    background-color: #F5F5F7;
+                    border: 1px solid #D2D2D7;
+                    border-radius: 8px;
+                }
+            """)
+            cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cover_label.setText("📚")
+        else:
+            # 隐藏缩略图，隐藏标签
+            cover_label = QLabel()
+            cover_label.setVisible(False)
 
         # 右侧信息
         info_layout = QVBoxLayout()
-        info_layout.setContentsMargins(16, 0, 0, 0)
+        info_layout.setContentsMargins(0 if not show_thumbnails else 16, 0, 0, 0)
 
         # 标题
         title = QLabel(album.get('name', '未知相册'))
