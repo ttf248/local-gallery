@@ -39,7 +39,7 @@ class MainWindow(QMainWindow):
         self.config_manager = config_manager
         self.logger = get_logger('ui.main_window')
         self.style_manager = StyleManager()
-        self.folder_path = ""
+        self.folder_path = config_manager.get_last_path()  # 从配置加载上次路径
         self.albums = []
         self.current_view_state = "home"
 
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         file_logger.set_config_manager(self.config_manager)
 
         log_info("MainWindow 初始化开始", 'ui.main_window')
+        log_info(f"加载上次路径: {self.folder_path}", 'ui.main_window')
 
         # 初始化UI
         self.init_ui()
@@ -314,10 +315,14 @@ class MainWindow(QMainWindow):
     def browse_folder(self):
         """浏览并选择文件夹"""
         log_info("打开文件夹选择对话框", 'ui.main_window')
+        # 从配置管理器获取上次路径，而不是使用self.folder_path
+        last_path = self.config_manager.get_last_path()
+        log_info(f"使用上次路径作为默认: {last_path}", 'ui.main_window')
+
         folder = QFileDialog.getExistingDirectory(
             self,
             "选择漫画文件夹",
-            self.folder_path or str(Path.home())
+            last_path or str(Path.home())
         )
 
         if folder:
