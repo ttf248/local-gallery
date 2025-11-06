@@ -103,6 +103,29 @@
 - 错误信息更详细
 - 提升用户体验
 
+### [2.0.8] - 2025-11-06
+**refactor(logging): 迁移日志系统到文件输出**
+- 移除控制台日志输出，所有日志写入文件
+- 日志文件位置: ~/.comic_reader/logs/comic_reader.log
+- 实现日志文件按天轮转，保留30天历史
+- UTF-8编码支持，确保中文日志正常显示
+- 日志格式: 时间 [级别] 模块名: 消息
+- 避免重复初始化，确保单例模式正确工作
+- 默认仍为DEBUG级别，记录所有详细信息
+
+技术实现:
+- 移除StreamHandler控制台输出
+- 使用TimedRotatingFileHandler替代
+- 午夜自动轮转，backupCount=30
+- 单例模式避免重复创建日志器
+- 初始化时记录日志系统启动信息
+
+效果:
+- 控制台输出完全清理，界面更清爽
+- 所有操作记录到文件，便于问题排查
+- 历史日志保留30天，支持长期跟踪
+- 日志文件自动管理，无需手动维护
+
 ### [2.0.4] - 2025-11-06
 **refactor(config): 删除5个无效配置项及对应UI控件**
 - 移除无效配置项: image_cache_size, image_zoom_mode, image_smooth, image_preload, slideshow_interval
