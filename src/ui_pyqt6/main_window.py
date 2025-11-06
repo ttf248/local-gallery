@@ -23,6 +23,7 @@ from .components.sidebar import Sidebar
 from .components.toolbar import Toolbar
 from .components.album_grid import AlbumGrid
 from .components.status_bar import StatusBar
+from utils.logger import get_logger, log_info, log_warning, log_error, log_exception, log_debug
 
 class MainWindow(QMainWindow):
     """主窗口"""
@@ -36,6 +37,7 @@ class MainWindow(QMainWindow):
     def __init__(self, config_manager):
         super().__init__()
         self.config_manager = config_manager
+        self.logger = get_logger('ui.main_window')
         self.style_manager = StyleManager()
         self.folder_path = ""
         self.albums = []
@@ -44,8 +46,11 @@ class MainWindow(QMainWindow):
         # 创建快捷键管理器
         self.shortcut_manager = None
 
+        log_info("MainWindow 初始化开始", 'ui.main_window')
+
         # 初始化UI
         self.init_ui()
+        log_info("MainWindow 初始化完成", 'ui.main_window')
 
     def init_ui(self):
         """初始化用户界面"""
@@ -302,6 +307,7 @@ class MainWindow(QMainWindow):
 
     def browse_folder(self):
         """浏览并选择文件夹"""
+        log_info("打开文件夹选择对话框", 'ui.main_window')
         folder = QFileDialog.getExistingDirectory(
             self,
             "选择漫画文件夹",
@@ -316,21 +322,33 @@ class MainWindow(QMainWindow):
                 display_name = folder_name[:27] + "..."
             else:
                 display_name = folder_name
+
+            log_info(f"选择文件夹: {folder}", 'ui.main_window')
+            log_info(f"文件夹名称: {display_name}", 'ui.main_window')
+
             self.status_bar.set_status(f"已选择: {display_name}", "success")
 
             # 自动开始扫描
+            log_info("自动开始扫描", 'ui.main_window')
             self.scan_albums()
+        else:
+            log_info("取消文件夹选择", 'ui.main_window')
 
     def scan_albums(self):
         """扫描漫画"""
+        log_info("开始扫描漫画", 'ui.main_window')
         if not self.folder_path:
+            log_warning("未选择文件夹，无法扫描", 'ui.main_window')
             self.status_bar.set_status("请先选择文件夹", "warning")
             return
 
         # 创建扫描器实例（如果不存在）
         if not hasattr(self, 'scanner'):
+            log_info("创建AlbumScannerService实例", 'ui.main_window')
             from src.core.album_scanner import AlbumScannerService
             self.scanner = AlbumScannerService(self, self.config_manager)
+
+        log_info(f"扫描路径: {self.folder_path}", 'ui.main_window')
 
         # 启动扫描
         self.status_bar.set_status("正在扫描...", "info")
@@ -338,6 +356,7 @@ class MainWindow(QMainWindow):
 
     def show_recent(self):
         """显示最近浏览"""
+        log_info("显示最近浏览", 'ui.main_window')
         from src.core.album_history import AlbumHistoryManager
         self.current_view_state = "recent"
         history_manager = AlbumHistoryManager(self)
@@ -345,6 +364,7 @@ class MainWindow(QMainWindow):
 
     def show_favorites(self):
         """显示收藏"""
+        log_info("显示收藏", 'ui.main_window')
         from src.core.album_favorites import AlbumFavoritesManager
         self.current_view_state = "favorites"
         favorites_manager = AlbumFavoritesManager(self)
@@ -352,25 +372,30 @@ class MainWindow(QMainWindow):
 
     def show_home(self):
         """返回主页"""
+        log_info("返回主页", 'ui.main_window')
         self.current_view_state = "home"
         self.status_bar.set_status("返回主页", "info")
         self.album_grid.show_empty_state()
 
     def show_settings(self):
         """显示设置"""
+        log_info("打开设置对话框", 'ui.main_window')
         from .components.settings_dialog import SettingsDialog
 
         dialog = SettingsDialog(self.config_manager, self)
         result = dialog.exec()
 
         if result == QDialog.DialogCode.Accepted:
+            log_info("设置已保存，应用新设置", 'ui.main_window')
             # 应用设置
             self.apply_settings()
             self.status_bar.set_status("设置已保存", "success")
+        else:
+            log_info("取消设置", 'ui.main_window')
 
     def apply_settings(self):
         """应用设置"""
-        # 应用主题
+        log_info("应用新设置", 'ui.main_window')
         theme = self.config_manager.get_theme()
         if theme == 'dark':
             self.style_manager.is_dark = True

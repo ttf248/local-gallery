@@ -9,6 +9,41 @@
 - 修复: shortcuts.py中的导入语句
 - 结果: 应用程序可以正常启动
 
+### [2.0.6] - 2025-11-06
+**feat(logging): 引入完善日志系统，支持多级别日志**
+- 默认级别: DEBUG (最低级别，包含所有日志)
+- 支持级别: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- 日志格式: 时间 [级别] 模块名: 消息
+- 示例: 22:05:50 [   INFO] ui.main_window: MainWindow 初始化完成
+
+主要添加位置:
+- AlbumScannerService (核心扫描器)
+  * 扫描开始/完成/错误
+  * 线程ID和进度信息
+  * 详细错误堆栈跟踪
+  * 扫描结果统计
+  * 配置信息记录
+
+- MainWindow (主界面)
+  * 窗口初始化
+  * 文件夹选择
+  * 扫描开始
+  * 视图切换
+  * 设置操作
+
+日志模块位置:
+- src/utils/logger.py (已存在，默认DEBUG级别)
+
+效果:
+- 解决扫描错误无法排查问题
+- 完整记录扫描过程
+- 详细错误信息包含堆栈跟踪
+- 可通过日志追踪所有关键操作
+
+背景问题解决:
+- 扫描完成: 共找到 11 个项目 ✅ 现在有详细统计
+- 扫描漫画时发生错误：None ✅ 现在有详细错误信息和堆栈
+
 ### [2.0.4] - 2025-11-06
 **refactor(config): 删除5个无效配置项及对应UI控件**
 - 移除无效配置项: image_cache_size, image_zoom_mode, image_smooth, image_preload, slideshow_interval
