@@ -2,9 +2,10 @@
 
 ## 问题解决
 
+### 问题1：VS Code测试适配器错误
 如果您看到错误："Test provider in adapter is not unittest. Please reload window."
 
-### 解决方案
+#### 解决方案
 
 1. **重新加载窗口**
    - 按 `Ctrl+Shift+P` (Windows/Linux) 或 `Cmd+Shift+P` (macOS)
@@ -14,6 +15,17 @@
 2. **检查测试框架配置**
    - 确保VS Code使用unittest而不是pytest
    - 配置文件已生成：`.vscode/settings.json`
+
+### 问题2：模块导入错误
+如果您看到错误："ModuleNotFoundError: No module named 'utils.image_utils'"
+
+#### 已修复 (2025-11-06)
+- ✅ 修复了测试文件中的src路径指向
+- ✅ 添加了.env文件配置PYTHONPATH
+- ✅ 添加了所有测试目录的__init__.py文件
+- ✅ 更新了VS Code设置以正确发现模块
+
+现在VS Code应该能够正确发现和运行测试。
 
 ## 运行测试
 
