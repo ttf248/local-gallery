@@ -104,7 +104,46 @@ class AlbumGrid(QWidget):
                 }
             """)
             cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            cover_label.setText("📚")
+
+            # 根据相册类型显示不同的封面
+            album_type = album.get('type', 'album')
+            if album_type == 'collection':
+                # 合集：显示合集图标和第一张图片
+                if album.get('cover_image'):
+                    # 有封面图片
+                    from PyQt6.QtGui import QPixmap
+                    pixmap = QPixmap(album.get('cover_image'))
+                    if not pixmap.isNull():
+                        scaled_pixmap = pixmap.scaled(
+                            thumbnail_width, thumbnail_size,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation
+                        )
+                        cover_label.setPixmap(scaled_pixmap)
+                    else:
+                        cover_label.setText("📚")
+                else:
+                    cover_label.setText("📚")
+            elif album_type == 'smart_collection':
+                # 智能分组
+                cover_label.setText("🧠")
+            else:
+                # 普通相册：显示第一张图片
+                image_files = album.get('image_files', [])
+                if image_files:
+                    from PyQt6.QtGui import QPixmap
+                    pixmap = QPixmap(image_files[0])
+                    if not pixmap.isNull():
+                        scaled_pixmap = pixmap.scaled(
+                            thumbnail_width, thumbnail_size,
+                            Qt.AspectRatioMode.KeepAspectRatio,
+                            Qt.TransformationMode.SmoothTransformation
+                        )
+                        cover_label.setPixmap(scaled_pixmap)
+                    else:
+                        cover_label.setText("📖")
+                else:
+                    cover_label.setText("📖")
         else:
             # 隐藏缩略图，隐藏标签
             cover_label = QLabel()
@@ -122,11 +161,39 @@ class AlbumGrid(QWidget):
         font.setBold(True)
         title.setFont(font)
 
-        # 信息
-        info_text = f"📁 {album.get('folder_name', '')}\n"
-        info_text += f"🖼️ {len(album.get('image_files', []))} 张图片"
-        info_label = QLabel(info_text)
+        # 根据相册类型显示不同的信息
+        info_label = QLabel()
         info_label.setObjectName("album_info")
+
+        album_type = album.get('type', 'album')
+        if album_type == 'collection':
+            # 合集信息
+            album_count = album.get('album_count', 0)
+            image_count = album.get('image_count', 0)
+            info_text = f"📚 合集\n"
+            info_text += f"📁 {album_count} 个相册\n"
+            info_text += f"🖼️ {image_count} 张图片"
+            info_label.setText(info_text)
+        elif album_type == 'smart_collection':
+            # 智能分组信息
+            album_count = album.get('album_count', 0)
+            image_count = album.get('image_count', 0)
+            info_text = f"🧠 智能分组\n"
+            info_text += f"📁 {album_count} 个相册\n"
+            info_text += f"🖼️ {image_count} 张图片"
+            info_label.setText(info_text)
+        else:
+            # 普通相册信息
+            folder_name = album.get('folder_name', album.get('name', ''))
+            image_count = len(album.get('image_files', []))
+            folder_size = album.get('folder_size', '')
+            info_text = f"📖 相册\n"
+            info_text += f"📁 {folder_name}\n"
+            if folder_size:
+                info_text += f"🖼️ {image_count} 张图片 ({folder_size})"
+            else:
+                info_text += f"🖼️ {image_count} 张图片"
+            info_label.setText(info_text)
 
         info_layout.addWidget(title)
         info_layout.addWidget(info_label)

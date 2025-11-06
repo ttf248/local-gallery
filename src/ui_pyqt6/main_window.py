@@ -456,12 +456,64 @@ class MainWindow(QMainWindow):
         self.status_bar.show_action_feedback(f"搜索: {text}", "成功")
 
     def open_album(self, album_path):
-        """打开相册"""
-        from src.core.album_viewer import AlbumViewerManager
-        log_info(f"打开相册: {album_path}", 'ui.main_window')
-        viewer = AlbumViewerManager(self)
-        viewer.open_album(album_path)
-        self.status_bar.show_action_feedback("打开相册", "成功")
+        """打开相册或合集"""
+        # 查找对应的相册数据
+        album_data = None
+        for album in self.albums:
+            if album.get('path') == album_path:
+                album_data = album
+                break
+
+        if not album_data:
+            log_warning(f"未找到相册数据: {album_path}", 'ui.main_window')
+            return
+
+        album_type = album_data.get('type', 'album')
+
+        if album_type == 'collection' or album_type == 'smart_collection':
+            # 打开合集查看器
+            log_info(f"打开合集: {album_path}", 'ui.main_window')
+            self.open_collection_viewer(album_data)
+            self.status_bar.show_action_feedback(f"打开{album_type}", "成功")
+        else:
+            # 打开普通相册
+            log_info(f"打开相册: {album_path}", 'ui.main_window')
+            from src.core.album_viewer import AlbumViewerManager
+            viewer = AlbumViewerManager(self)
+            viewer.open_album(album_path)
+            self.status_bar.show_action_feedback("打开相册", "成功")
+
+    def open_collection_viewer(self, collection_data):
+        """打开合集查看器"""
+        try:
+            log_info(f"创建合集查看器: {collection_data.get('name', '')}", 'ui.main_window')
+
+            # 创建合集查看器窗口
+            from .collection_viewer import CollectionViewer
+
+            # 创建一个窗口来显示合集
+            self.collection_window = QWidget()
+            self.collection_window.setWindowTitle(f"合集: {collection_data.get('name', '')}")
+            self.collection_window.setMinimumSize(900, 700)
+            self.collection_window.setObjectName("collection_window")
+
+            # 创建查看器
+            self.collection_viewer = CollectionViewer(self, collection_data, self.collection_window)
+            self.collection_viewer.albumClicked.connect(self.open_album)
+            self.collection_viewer.backClicked.connect(self.collection_window.close)
+
+            # 设置布局
+            layout = QVBoxLayout(self.collection_window)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(self.collection_viewer)
+
+            # 显示窗口
+            self.collection_window.show()
+            log_info("合集查看器窗口已创建", 'ui.main_window')
+
+        except Exception as e:
+            log_exception(f"打开合集查看器失败: {str(e)}", 'ui.main_window')
+            self.status_bar.set_status("打开合集失败", "error")
 
     def toggle_favorite(self, album_path):
         """切换收藏状态"""
