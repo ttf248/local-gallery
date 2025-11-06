@@ -128,6 +128,10 @@ class AlbumScannerService:
             log_error(f"[线程 {thread_id}] 错误详情: {traceback.format_exc()}", 'core.scanner')
             self.progress_queue.put((0, f"扫描出错: {str(e)}"))
 
+            # 使用新的状态栏功能
+            if hasattr(self.app, 'status_bar'):
+                self.app.status_bar.show_error(str(e))
+
     def _update_progress_loop(self):
         """更新进度循环 - 从线程安全队列中读取进度"""
         if self.cancel_flag:
@@ -156,10 +160,12 @@ class AlbumScannerService:
 
         # 更新状态栏（只在有更新时）
         if hasattr(self, 'scan_status') and hasattr(self.app, 'status_bar'):
-            self.app.status_bar.set_status(self.scan_status, "info")
-            if self.scan_progress > 0:
-                self.app.status_bar.set_info(f"进度: {self.scan_progress}%")
+            # 使用新的状态栏功能
+            if self.scan_progress > 0 and self.scan_progress < 100:
+                self.app.status_bar.show_scan_progress(self.scan_progress, self.scan_status)
                 log_debug(f"更新状态栏: {self.scan_status} ({self.scan_progress}%)", 'core.scanner')
+            else:
+                self.app.status_bar.set_status(self.scan_status, "info")
 
             # 如果扫描完成，更新UI
             if self.scan_progress >= 100:
@@ -252,31 +258,28 @@ class AlbumScannerService:
 
             log_info(f"统计结果: 总计 {len(self.app.albums)} 个项目, {total_images} 张图片", 'core.scanner')
 
-            # 更新状态栏
+            # 使用新的状态栏功能
             if hasattr(self.app, 'status_bar'):
-                folder_name = Path(self.app.folder_path).name
-                if len(folder_name) > 30:
-                    display_name = folder_name[:27] + "..."
-                else:
-                    display_name = folder_name
-
                 # 统计各类型中包含的相册数
                 collection_albums = sum(item.get('album_count', 0) for item in collections)
                 smart_albums = sum(item.get('album_count', 0) for item in smart_collections)
 
-                self.app.status_bar.set_status(
-                    f"扫描完成: {display_name} ({len(self.app.albums)} 个项目)", "success"
-                )
-                info_text = f"共 {total_images} 张图片"
-                if collections:
-                    info_text += f" | 📚 合集: {len(collections)} ({collection_albums} 个相册)"
-                if smart_collections:
-                    info_text += f" | 🧠 智能分组: {len(smart_collections)} ({smart_albums} 个相册)"
-                if albums:
-                    info_text += f" | 📖 相册: {len(albums)}"
-                self.app.status_bar.set_info(info_text)
+                # 使用show_scan_complete显示完成信息
+                self.app.status_bar.show_scan_complete(len(self.app.albums), total_images)
 
-                log_info(f"状态栏更新: {info_text}", 'core.scanner')
+                # 设置详细信息
+                info_parts = []
+                if collections:
+                    info_parts.append(f"📚 合集: {len(collections)} ({collection_albums} 个相册)")
+                if smart_collections:
+                    info_parts.append(f"🧠 智能分组: {len(smart_collections)} ({smart_albums} 个相册)")
+                if albums:
+                    info_parts.append(f"📖 相册: {len(albums)}")
+
+                if info_parts:
+                    info_text = " | ".join(info_parts)
+                    self.app.status_bar.set_operation(info_text, "success")
+                    log_info(f"状态栏更新: {info_text}", 'core.scanner')
 
         except Exception as e:
             log_exception(f"显示扫描结果时出错: {str(e)}", 'core.scanner')

@@ -298,7 +298,10 @@ class MainWindow(QMainWindow):
 
     def toggle_theme(self):
         """切换主题"""
+        log_info("切换主题", 'ui.main_window')
         self.style_manager.toggle_theme()
+        theme = "深色" if self.style_manager.is_dark else "浅色"
+        self.status_bar.show_action_feedback(f"切换至{theme}主题", "成功")
 
     def show_initial_state(self):
         """显示初始状态"""
@@ -326,13 +329,16 @@ class MainWindow(QMainWindow):
             log_info(f"选择文件夹: {folder}", 'ui.main_window')
             log_info(f"文件夹名称: {display_name}", 'ui.main_window')
 
-            self.status_bar.set_status(f"已选择: {display_name}", "success")
+            # 使用新的状态栏功能
+            self.status_bar.show_file_selected(folder)
 
             # 自动开始扫描
             log_info("自动开始扫描", 'ui.main_window')
+            self.status_bar.show_tip("自动开始扫描...")
             self.scan_albums()
         else:
             log_info("取消文件夹选择", 'ui.main_window')
+            self.status_bar.show_action_feedback("文件夹选择", "取消")
 
     def scan_albums(self):
         """扫描漫画"""
@@ -359,6 +365,7 @@ class MainWindow(QMainWindow):
         log_info("显示最近浏览", 'ui.main_window')
         from src.core.album_history import AlbumHistoryManager
         self.current_view_state = "recent"
+        self.status_bar.show_action_feedback("打开最近浏览", "成功")
         history_manager = AlbumHistoryManager(self)
         history_manager.show_recent_albums()
 
@@ -367,6 +374,7 @@ class MainWindow(QMainWindow):
         log_info("显示收藏", 'ui.main_window')
         from src.core.album_favorites import AlbumFavoritesManager
         self.current_view_state = "favorites"
+        self.status_bar.show_action_feedback("打开我的收藏", "成功")
         favorites_manager = AlbumFavoritesManager(self)
         favorites_manager.show_favorites()
 
@@ -374,7 +382,7 @@ class MainWindow(QMainWindow):
         """返回主页"""
         log_info("返回主页", 'ui.main_window')
         self.current_view_state = "home"
-        self.status_bar.set_status("返回主页", "info")
+        self.status_bar.show_tip("返回主页")
         self.album_grid.show_empty_state()
 
     def show_settings(self):
@@ -387,11 +395,12 @@ class MainWindow(QMainWindow):
 
         if result == QDialog.DialogCode.Accepted:
             log_info("设置已保存，应用新设置", 'ui.main_window')
+            self.status_bar.show_action_feedback("设置保存", "成功")
             # 应用设置
             self.apply_settings()
-            self.status_bar.set_status("设置已保存", "success")
         else:
             log_info("取消设置", 'ui.main_window')
+            self.status_bar.show_action_feedback("设置", "取消")
 
     def apply_settings(self):
         """应用设置"""
@@ -409,28 +418,32 @@ class MainWindow(QMainWindow):
 
     def apply_filter(self, filter_text):
         """应用筛选"""
+        log_info(f"应用筛选: {filter_text}", 'ui.main_window')
         self.album_grid.apply_filter(filter_text)
-        self.status_bar.set_status(f"筛选: {filter_text}", "info")
+        self.status_bar.show_action_feedback(f"筛选: {filter_text}", "成功")
 
     def on_search(self, text):
         """搜索处理"""
+        log_info(f"搜索: {text}", 'ui.main_window')
         # TODO: 实现搜索
-        self.status_bar.set_status(f"搜索: {text}", "info")
+        self.status_bar.show_action_feedback(f"搜索: {text}", "成功")
 
     def open_album(self, album_path):
         """打开相册"""
         from src.core.album_viewer import AlbumViewerManager
+        log_info(f"打开相册: {album_path}", 'ui.main_window')
         viewer = AlbumViewerManager(self)
         viewer.open_album(album_path)
+        self.status_bar.show_action_feedback("打开相册", "成功")
 
     def toggle_favorite(self, album_path):
         """切换收藏状态"""
         if self.config_manager.is_favorite(album_path):
             self.config_manager.remove_favorite(album_path)
-            self.status_bar.set_status(f"已从收藏中移除: {Path(album_path).name}", "warning")
+            self.status_bar.show_action_feedback("移除收藏", "成功")
         else:
             self.config_manager.add_favorite(album_path)
-            self.status_bar.set_status(f"已添加到收藏: {Path(album_path).name}", "success")
+            self.status_bar.show_action_feedback("添加收藏", "成功")
 
         # 刷新当前显示
         if self.albums:
@@ -444,7 +457,7 @@ class MainWindow(QMainWindow):
         """切换全屏模式"""
         if self.windowState() == Qt.WindowState.WindowFullScreen:
             self.showNormal()
-            self.status_bar.set_status("退出全屏", "info")
+            self.status_bar.show_action_feedback("退出全屏", "成功")
         else:
             self.showFullScreen()
-            self.status_bar.set_status("全屏模式", "info")
+            self.status_bar.show_action_feedback("全屏模式", "成功")
