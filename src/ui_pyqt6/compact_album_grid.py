@@ -120,6 +120,16 @@ class CompactAlbumGrid(QWidget):
         card.favoriteClicked.connect(self.favoriteClicked.emit)
         return card
 
+    def apply_filter(self, filter_text):
+        """应用筛选"""
+        if filter_text == "全部":
+            self.albums = self.all_albums.copy()
+        else:
+            # TODO: 实现具体的筛选逻辑
+            self.albums = self.all_albums.copy()
+
+        self.refresh_grid()
+
     def show_empty_state(self):
         """显示空状态"""
         # 清除现有内容

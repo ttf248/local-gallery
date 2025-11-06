@@ -179,6 +179,40 @@ class StyleManager(QObject):
                 }}
             """,
 
+            'compact_grid': f"""
+                QWidget#compact_album_grid {{
+                    background-color: {colors['bg_secondary']};
+                }}
+                QScrollArea#compact_scroll {{
+                    background-color: {colors['bg_secondary']};
+                    border: none;
+                }}
+                QScrollBar:vertical {{
+                    background-color: {colors['bg_secondary']};
+                    width: 10px;
+                    border-radius: 5px;
+                }}
+                QScrollBar::handle:vertical {{
+                    background-color: {colors['scrollbar']};
+                    border-radius: 5px;
+                    min-height: 20px;
+                }}
+                QScrollBar::handle:vertical:hover {{
+                    background-color: {colors['scrollbar_hover']};
+                }}
+            """,
+
+            'compact_album_card': f"""
+                QFrame#compact_album_card {{
+                    background-color: {colors['card_bg']};
+                    border: 1px solid {colors['border']};
+                    border-radius: 10px;
+                }}
+                QFrame#compact_album_card:hover {{
+                    border-color: {colors['accent']};
+                }}
+            """,
+
             'status_bar': f"""
                 QStatusBar {{
                     background-color: {colors['bg_secondary']};

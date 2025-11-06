@@ -21,7 +21,7 @@ if str(src_path) not in sys.path:
 from .style_manager import StyleManager
 from .components.sidebar import Sidebar
 from .components.toolbar import Toolbar
-from .components.album_grid import AlbumGrid
+from .compact_album_grid import CompactAlbumGrid  # 使用新的紧凑网格
 from .components.status_bar import StatusBar
 from utils.logger import get_logger, log_info, log_warning, log_error, log_exception, log_debug, file_logger
 
@@ -130,8 +130,8 @@ class MainWindow(QMainWindow):
         self.toolbar.themeClicked.connect(self.toggle_theme)
         self.toolbar.settingsClicked.connect(self.show_settings)
 
-        # 相册网格 - 传递config_manager
-        self.album_grid = AlbumGrid(self.config_manager)
+        # 相册网格 - 使用紧凑网格布局（支持多列显示）
+        self.album_grid = CompactAlbumGrid(self.config_manager)
         self.album_grid.albumClicked.connect(self.open_album)
         self.album_grid.favoriteClicked.connect(self.toggle_favorite)
 
@@ -295,7 +295,7 @@ class MainWindow(QMainWindow):
             self.toolbar.setStyleSheet(self.style_manager.get_stylesheet('toolbar'))
 
         if hasattr(self, 'album_grid'):
-            self.album_grid.setStyleSheet(self.style_manager.get_stylesheet('album_card'))
+            self.album_grid.setStyleSheet(self.style_manager.get_stylesheet('compact_grid'))
 
         if hasattr(self, 'status_bar'):
             self.status_bar.setStyleSheet(self.style_manager.get_stylesheet('status_bar'))
