@@ -89,8 +89,10 @@ class StatusBar(QStatusBar):
                 self.set_operation(f"耗时 {elapsed:.1f}s", "info")
 
     def set_info(self, text):
-        """设置附加信息"""
-        self.info_label.setText(text)
+        """设置附加信息（已弃用，使用set_operation替代）"""
+        # 此方法已弃用，使用 set_operation 来设置操作信息
+        # 保留此方法以保持向后兼容性
+        pass
 
     def set_operation(self, text, msg_type="info"):
         """设置操作信息"""
