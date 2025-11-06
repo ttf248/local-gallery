@@ -47,7 +47,7 @@ class TestConfigManager(unittest.TestCase):
     def test_default_config_items(self):
         """测试默认配置项完整性"""
         required_items = [
-            'last_path', 'window_size', 'recent_albums', 'favorites',
+            'last_path', 'recent_albums', 'favorites',
             'max_recent', 'auto_switch_album', 'show_switch_notification',
             'theme', 'window_geometry', 'sidebar_width', 'window_maximized',
             'image_zoom_mode', 'image_smooth', 'image_preload', 'shortcuts',

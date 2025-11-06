@@ -27,7 +27,6 @@ class ConfigManager:
         # 默认配置
         self.default_config = {
             'last_path': '',
-            'window_size': '1200x800',
             'recent_albums': [],
             'favorites': [],
             'max_recent': 10,
