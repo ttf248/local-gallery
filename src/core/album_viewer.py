@@ -1,12 +1,19 @@
 import os
+import sys
+from pathlib import Path
 from tkinter import messagebox, Toplevel
-from src.utils.image_utils import ImageProcessor
-from ..ui.components.image_viewer import ImageViewer  # 直接从components导入
-from ..ui.components.style_manager import get_safe_font  # 直接从components导入
-from ..utils.logger import get_logger, log_info, log_warning, log_error, log_exception
 from PIL import Image, ImageTk
 import tkinter as tk
-import os
+
+# Add src to path if not already there
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from utils.image_utils import ImageProcessor
+from ui.components.image_viewer import ImageViewer  # 直接从components导入
+from ui.components.style_manager import get_safe_font  # 直接从components导入
+from utils.logger import get_logger, log_info, log_warning, log_error, log_exception
 
 class AlbumViewerManager:
     """漫画查看器管理器"""

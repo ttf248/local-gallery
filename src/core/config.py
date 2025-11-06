@@ -1,7 +1,14 @@
 import json
 import os
+import sys
 from pathlib import Path
-from ..utils.logger import get_logger, log_info, log_warning, log_error, log_exception
+
+# Add src to path if not already there
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from utils.logger import get_logger, log_info, log_warning, log_error, log_exception
 
 class ConfigManager:
     """配置管理器，支持Unicode路径"""
