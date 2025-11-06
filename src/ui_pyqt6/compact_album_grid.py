@@ -255,7 +255,8 @@ class CompactAlbumCard(QFrame):
         """创建封面区域"""
         cover_frame = QFrame()
         cover_frame.setObjectName("cover_frame")
-        cover_frame.setFixedSize(self.card_width - 20, self.card_height * 0.65)  # 65%高度
+        cover_height = int(self.card_height * 0.65)  # 65%高度，转换为整数
+        cover_frame.setFixedSize(self.card_width - 20, cover_height)
         cover_frame.setStyleSheet("""
             QFrame#cover_frame {
                 background-color: #F5F5F7;
@@ -270,7 +271,7 @@ class CompactAlbumCard(QFrame):
         # 封面标签
         cover_label = QLabel()
         cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        cover_label.setFixedSize(self.card_width - 20, self.card_height * 0.65)
+        cover_label.setFixedSize(self.card_width - 20, cover_height)
 
         # 设置封面内容
         self.set_cover_content(cover_label)
