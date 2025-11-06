@@ -1,6 +1,5 @@
 import threading
 import queue
-from tkinter import messagebox
 from pathlib import Path
 import sys
 
@@ -25,18 +24,21 @@ class AlbumScannerService:
         """扫描漫画 - 异步版本"""
         # 防止重复扫描
         if self.scan_thread and self.scan_thread.is_alive():
-            messagebox.showinfo("提示", "扫描正在进行中，请稍候...")
+            # TODO: 迁移到PyQt6消息框
+            print("扫描正在进行中，请稍候...")
             return
 
-        folder_path = self.app.path_var.get().strip()
+        folder_path = self.app.folder_path
         if not folder_path:
-            messagebox.showwarning("提示", "请先选择漫画文件夹\n\n💡 快捷键提示：\n• Ctrl+O: 选择文件夹\n• F5: 快速扫描")
+            # TODO: 迁移到PyQt6消息框
+            print("请先选择漫画文件夹")
             return
 
         # 使用pathlib验证路径
         path_obj = Path(folder_path)
         if not path_obj.exists():
-            messagebox.showerror("错误", "所选文件夹不存在")
+            # TODO: 迁移到PyQt6消息框
+            print("所选文件夹不存在")
             return
 
         # 重置取消标志
@@ -97,7 +99,20 @@ class AlbumScannerService:
             print(f"处理进度更新时出错: {e}")
 
         # 更新状态栏（只在有更新时）
-        if hasattr(self, 'scan_status'):
+        if hasattr(self, 'scan_status') and hasattr(self.app, 'status_bar'):
+            self.app.status_bar.set_status(self.scan_status, "info")
+            if self.scan_progress > 0:
+                self.app.status_bar.set_info(f"进度: {self.scan_progress}%")
+
+            # 如果扫描完成，更新UI
+            if self.scan_progress >= 100:
+                self._on_scan_complete()
+
+        # 继续检查队列（直到扫描完成）
+        if not self.cancel_flag and self.scan_progress < 100:
+            # 使用QTimer替代tkinter的after
+            from PyQt6.QtCore import QTimer
+            QTimer.singleShot(100, self._update_progress_loop)
             self.app.status_bar.set_status(f"正在扫描漫画... {self.scan_progress}%")
             self.app.status_bar.set_info(self.scan_status)
 
