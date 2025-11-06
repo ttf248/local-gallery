@@ -33,8 +33,9 @@ class ConfigManager:
             'auto_switch_album': True,  # 是否启用自动切换相册
             'show_switch_notification': True,  # 是否显示切换提示
 
-            # 主题设置
-            'theme': 'light',  # light, dark, system
+            # 极简主题设置
+            'theme': 'light',  # light, dark
+            'use_minimal_theme': True,  # 使用极简主义主题
 
             # 窗口设置
             'window_geometry': None,  # 窗口几何信息

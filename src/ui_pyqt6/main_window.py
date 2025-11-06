@@ -283,19 +283,24 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
     def apply_theme_style(self):
-        """应用主题样式"""
+        """应用极简主题样式"""
+        colors = self.style_manager.get_colors()
+
         # 应用主窗口样式
         self.setStyleSheet(self.style_manager.get_stylesheet('main_window'))
 
         # 应用各组件样式
         if hasattr(self, 'sidebar'):
+            self.sidebar.setObjectName('sidebar')
             self.sidebar.setStyleSheet(self.style_manager.get_stylesheet('sidebar'))
 
         if hasattr(self, 'toolbar'):
+            self.toolbar.setObjectName('toolbar')
             self.toolbar.setStyleSheet(self.style_manager.get_stylesheet('toolbar'))
 
         if hasattr(self, 'album_grid'):
-            self.album_grid.setStyleSheet(self.style_manager.get_stylesheet('compact_grid'))
+            self.album_grid.setObjectName('grid-container')
+            self.album_grid.setStyleSheet(self.style_manager.get_stylesheet('grid_layout'))
 
         if hasattr(self, 'status_bar'):
             self.status_bar.setStyleSheet(self.style_manager.get_stylesheet('status_bar'))
