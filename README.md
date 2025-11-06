@@ -56,11 +56,114 @@
 - **快速访问**：快捷键快速查看最近浏览
 - **数量限制**：默认保存最近10个漫画
 
+## ⚙️ 配置系统
+
+### 📝 配置概览
+
+漫画阅读器提供23个可配置选项，支持导入/导出/重置，配置文件位于：
+
+- **Windows**: `C:\Users\[用户名]\.comic_reader\settings.json`
+- **macOS**: `~/.comic_reader/settings.json`
+- **Linux**: `~/.comic_reader/settings.json`
+
+### 🎨 界面配置
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `theme` | string | `light` | 主题模式 (light/dark/system) |
+| `window_maximized` | bool | `false` | 启动时窗口最大化 |
+| `sidebar_width` | int | `240` | 侧边栏宽度 (px) |
+| `show_thumbnails` | bool | `true` | 显示缩略图 |
+| `image_smooth` | bool | `true` | 图片平滑缩放 |
+| `image_zoom_mode` | string | `fit_window` | 默认缩放模式 |
+
+### 🖼️ 图片查看配置
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `image_preload` | bool | `true` | 预加载下一张图片 |
+| `image_cache_size` | int | `100` | 图片缓存大小 (MB) |
+| `image_thumbnail_size` | int | `200` | 缩略图大小 (px) |
+| `slideshow_interval` | int | `3` | 幻灯片间隔 (秒) |
+
+### ⌨️ 快捷键配置
+
+支持自定义13个快捷键：
+
+| 操作 | 默认快捷键 | 说明 |
+|------|-----------|------|
+| `open_folder` | `Ctrl+O` | 打开文件夹 |
+| `scan_albums` | `F5` | 扫描漫画 |
+| `open_recent` | `Ctrl+R` | 最近浏览 |
+| `open_favorites` | `Ctrl+F` | 我的收藏 |
+| `toggle_favorite` | `Ctrl+D` | 收藏/取消收藏 |
+| `fullscreen` | `F11` | 全屏 |
+| `next_image` | `Right` | 下一张图片 |
+| `prev_image` | `Left` | 上一张图片 |
+| `zoom_in` | `Ctrl++` | 放大 |
+| `zoom_out` | `Ctrl+-` | 缩小 |
+| `reset_zoom` | `Ctrl+0` | 重置缩放 |
+| `rotate_right` | `Ctrl+R` | 顺时针旋转 |
+| `rotate_left` | `Ctrl+Shift+R` | 逆时针旋转 |
+
+### 🔍 扫描配置
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `scan_recursive` | bool | `true` | 递归扫描子文件夹 |
+| `scan_hidden_folders` | bool | `false` | 扫描隐藏文件夹 |
+| `image_formats` | list | `['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff']` | 支持的图片格式 |
+
+### 📊 数据管理配置
+
+| 配置项 | 类型 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `max_recent` | int | `10` | 最近浏览最大数量 |
+| `auto_save_window_state` | bool | `true` | 自动保存窗口状态 |
+| `auto_switch_album` | bool | `true` | 启用相册间自动切换 |
+| `show_switch_notification` | bool | `true` | 显示切换提示 |
+
+### 💾 配置管理
+
+#### 访问设置
+- 点击侧边栏的 **"设置"** 按钮
+- 或使用快捷键 (如果已配置)
+
+#### 导入/导出配置
+```bash
+# 导出配置
+设置对话框 → "导出配置" → 选择JSON文件
+
+# 导入配置
+设置对话框 → "导入配置" → 选择JSON文件
+```
+
+#### 重置配置
+```bash
+# 一键恢复所有默认设置
+设置对话框 → "重置为默认"
+```
+
+### 📝 自定义配置示例
+
+```json
+{
+  "theme": "dark",
+  "max_recent": 20,
+  "image_cache_size": 200,
+  "shortcuts": {
+    "open_folder": "Ctrl+Shift+O",
+    "scan_albums": "F6"
+  }
+}
+```
+
 ## 📚 完整文档
 
 ### 📋 用户文档
 
 - ⌨️ [快捷键文档](docs/SHORTCUTS.md) - 完整的快捷键列表和使用技巧
+- ⚙️ [配置说明](README.md#-配置系统) - 详细的配置项说明
 
 ### 🏗️ 开发文档
 
