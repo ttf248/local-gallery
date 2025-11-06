@@ -2,7 +2,11 @@ import threading
 import queue
 from tkinter import messagebox
 from pathlib import Path
-from src.utils.image_utils import ImageProcessor
+import sys
+
+# Add parent directory to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+from utils.image_utils import ImageProcessor
 
 class AlbumScannerService:
     """漫画扫描服务 - 支持异步扫描"""

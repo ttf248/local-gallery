@@ -31,10 +31,10 @@ def test_image_processor():
 
         images = ImageProcessor.get_image_files(str(album_dir))
         assert len(images) == 5, f"Expected 5 images, got {len(images)}"
-        print("  ✓ PASSED")
+        print("  PASSED")
         results['passed'] += 1
     except Exception as e:
-        print(f"  ✗ FAILED: {e}")
+        print(f"  FAILED: {e}")
         results['failed'] += 1
 
     # Test 2: format_size
@@ -43,10 +43,10 @@ def test_image_processor():
         assert ImageProcessor.format_size(0) == "0B"
         assert ImageProcessor.format_size(1024) == "1.0KB"
         assert ImageProcessor.format_size(1048576) == "1.0MB"
-        print("  ✓ PASSED")
+        print("  PASSED")
         results['passed'] += 1
     except Exception as e:
-        print(f"  ✗ FAILED: {e}")
+        print(f"  FAILED: {e}")
         results['failed'] += 1
 
     # Test 3: scan_albums with diverse names
@@ -60,10 +60,10 @@ def test_image_processor():
 
         albums = ImageProcessor.scan_albums(str(test_dir))
         assert len(albums) == 4, f"Expected 4 albums, got {len(albums)}"
-        print(f"  ✓ PASSED - Found {len(albums)} albums")
+        print(f"  PASSED - Found {len(albums)} albums")
         results['passed'] += 1
     except Exception as e:
-        print(f"  ✗ FAILED: {e}")
+        print(f"  FAILED: {e}")
         results['failed'] += 1
 
     # Test 4: scan_albums performance
@@ -90,10 +90,10 @@ def test_image_processor():
 
         assert elapsed < 1.0, f"Scan took too long: {elapsed:.3f}s"
         assert len(albums) > 0, "No albums found"
-        print("  ✓ PASSED")
+        print("  PASSED")
         results['passed'] += 1
     except Exception as e:
-        print(f"  ✗ FAILED: {e}")
+        print(f"  FAILED: {e}")
         results['failed'] += 1
 
     # Test 5: Progress callback
@@ -119,10 +119,10 @@ def test_image_processor():
 
         assert len(progress_updates) > 0, "No progress updates received"
         print(f"  Received {len(progress_updates)} progress updates")
-        print("  ✓ PASSED")
+        print("  PASSED")
         results['passed'] += 1
     except Exception as e:
-        print(f"  ✗ FAILED: {e}")
+        print(f"  FAILED: {e}")
         results['failed'] += 1
 
     # Cleanup
@@ -173,10 +173,10 @@ def test_album_scanner():
         assert scanner.scan_thread is None
         assert scanner.cancel_flag == False
         assert scanner.progress_queue is not None
-        print("  ✓ PASSED")
+        print("  PASSED")
         results['passed'] += 1
     except Exception as e:
-        print(f"  ✗ FAILED: {e}")
+        print(f"  FAILED: {e}")
         results['failed'] += 1
 
     print("\n" + "="*60)
@@ -214,9 +214,9 @@ def main():
         print(f"Failed: {total_failed}")
 
         if total_failed == 0:
-            print("\n✓ ALL TESTS PASSED!")
+            print("\nALL TESTS PASSED!")
         else:
-            print(f"\n✗ {total_failed} TESTS FAILED")
+            print(f"\n{total_failed} TESTS FAILED")
 
         print("#"*60)
 
