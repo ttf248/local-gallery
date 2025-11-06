@@ -19,9 +19,9 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 from .style_manager import StyleManager
-from .components.sidebar import Sidebar
-from .components.toolbar import Toolbar
-from .compact_album_grid import CompactAlbumGrid  # 使用新的紧凑网格
+from .components.minimal_sidebar import MinimalSidebar
+from .components.minimal_toolbar import MinimalToolbar
+from .minimal_album_grid import MinimalAlbumGrid
 from .components.status_bar import StatusBar
 from utils.logger import get_logger, log_info, log_warning, log_error, log_exception, log_debug, file_logger
 
@@ -100,8 +100,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
 
     def create_sidebar(self, parent):
-        """创建侧边栏"""
-        self.sidebar = Sidebar()
+        """创建极简侧边栏"""
+        self.sidebar = MinimalSidebar()
         self.sidebar.homeClicked.connect(self.show_home)
         self.sidebar.browseClicked.connect(self.browse_folder)
         self.sidebar.scanClicked.connect(self.scan_albums)
@@ -109,7 +109,7 @@ class MainWindow(QMainWindow):
         self.sidebar.favoritesClicked.connect(self.show_favorites)
         self.sidebar.settingsClicked.connect(self.show_settings)
 
-        # 侧边栏固定宽度
+        # 侧边栏固定宽度 240px（按HTML原型）
         self.sidebar.setFixedWidth(240)
         parent.addWidget(self.sidebar)
 
@@ -121,22 +121,23 @@ class MainWindow(QMainWindow):
         content_layout.setContentsMargins(0, 0, 0, 0)
         content_layout.setSpacing(0)
 
-        # 工具栏
-        self.toolbar = Toolbar()
+        # 极简工具栏
+        self.toolbar = MinimalToolbar()
         self.toolbar.browseClicked.connect(self.browse_folder)
         self.toolbar.scanClicked.connect(self.scan_albums)
         self.toolbar.filterChanged.connect(self.apply_filter)
         self.toolbar.searchTextChanged.connect(self.on_search)
         self.toolbar.themeClicked.connect(self.toggle_theme)
         self.toolbar.settingsClicked.connect(self.show_settings)
+        self.toolbar.viewModeChanged.connect(self.on_view_mode_changed)
 
-        # 相册网格 - 使用紧凑网格布局（支持多列显示）
-        self.album_grid = CompactAlbumGrid(self.config_manager)
+        # 极简漫画网格 - 6列布局（按HTML原型）
+        self.album_grid = MinimalAlbumGrid(self.config_manager)
         self.album_grid.albumClicked.connect(self.open_album)
         self.album_grid.favoriteClicked.connect(self.toggle_favorite)
 
         content_layout.addWidget(self.toolbar)
-        content_layout.addWidget(self.album_grid)
+        content_layout.addWidget(self.album_grid, 1)
 
         parent.addWidget(content_widget)
 
@@ -286,24 +287,20 @@ class MainWindow(QMainWindow):
         """应用极简主题样式"""
         colors = self.style_manager.get_colors()
 
-        # 应用主窗口样式
-        self.setStyleSheet(self.style_manager.get_stylesheet('main_window'))
+        # 加载QSS样式表
+        qss_path = Path(__file__).parent / 'qss' / 'minimal.qss'
+        if qss_path.exists():
+            with open(qss_path, 'r', encoding='utf-8') as f:
+                qss = f.read()
+                # 替换配色变量
+                for key, value in colors.items():
+                    qss = qss.replace(f'#{key}', f'#{value}')
+                self.setStyleSheet(qss)
+        else:
+            # 回退到内联样式
+            self.setStyleSheet(self.style_manager.get_stylesheet('main_window'))
 
-        # 应用各组件样式
-        if hasattr(self, 'sidebar'):
-            self.sidebar.setObjectName('sidebar')
-            self.sidebar.setStyleSheet(self.style_manager.get_stylesheet('sidebar'))
-
-        if hasattr(self, 'toolbar'):
-            self.toolbar.setObjectName('toolbar')
-            self.toolbar.setStyleSheet(self.style_manager.get_stylesheet('toolbar'))
-
-        if hasattr(self, 'album_grid'):
-            self.album_grid.setObjectName('grid-container')
-            self.album_grid.setStyleSheet(self.style_manager.get_stylesheet('grid_layout'))
-
-        if hasattr(self, 'status_bar'):
-            self.status_bar.setStyleSheet(self.style_manager.get_stylesheet('status_bar'))
+        # 应用各组件样式（已通过QSS处理，这里无需重复设置）
 
     def toggle_theme(self):
         """切换主题"""
@@ -545,3 +542,9 @@ class MainWindow(QMainWindow):
         else:
             self.showFullScreen()
             self.status_bar.show_action_feedback("全屏模式", "成功")
+
+    def on_view_mode_changed(self, mode):
+        """视图模式切换"""
+        self.album_grid.set_view_mode(mode)
+        mode_name = "网格" if mode == 'grid' else "列表"
+        self.status_bar.show_action_feedback(f"切换到{mode_name}视图", "成功")

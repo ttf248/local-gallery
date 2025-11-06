@@ -16,54 +16,78 @@ QMainWindow {
     font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
-/* 侧边栏 */
-#sidebar {
+/* 极简侧边栏 */
+#minimal-sidebar {
     background-color: #F8F9FA;
     border-right: 1px solid #E9ECEF;
 }
 
-#sidebar QPushButton {
-    background-color: transparent;
-    color: #6C757D;
-    border: none;
-    padding: 12px 16px;
-    text-align: left;
-    font-size: 12px;
-    border-radius: 4px;
+#sidebar-header {
+    background-color: #F8F9FA;
+    border-bottom: 1px solid #E9ECEF;
 }
 
-#sidebar QPushButton:hover {
-    background-color: #F2F2F2;
+#app-title {
     color: #2C3E50;
-}
-
-#sidebar QPushButton:pressed {
-    background-color: #F2F2F2;
-}
-
-#sidebar QPushButton:checked {
-    background-color: #4A90E2;
-    color: #FFFFFF;
     font-weight: 500;
 }
 
-#sidebar QLabel {
+#section-title {
     color: #6C757D;
     font-size: 11px;
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    margin: 8px 16px 4px 16px;
+    margin: 16px;
 }
 
-/* 工具栏 */
-#toolbar {
+#nav-button {
+    background-color: transparent;
+    color: #6C757D;
+    border: none;
+    padding: 0;
+    text-align: left;
+    border-radius: 4px;
+    margin: 0 8px;
+}
+
+#nav-button:hover {
+    background-color: #F2F2F2;
+    color: #2C3E50;
+}
+
+#nav-button:pressed {
+    background-color: #F2F2F2;
+}
+
+#nav-button:checked {
+    background-color: #4A90E2;
+    color: #FFFFFF;
+}
+
+#nav-text {
+    color: inherit;
+    font-size: 14px;
+}
+
+#nav-count {
+    background-color: #E3F2FD;
+    color: #4A90E2;
+    border-radius: 8px;
+}
+
+#tag {
+    font-size: 12px;
+    padding: 0 12px;
+}
+
+/* 极简工具栏 */
+#minimal-toolbar {
     background-color: #FFFFFF;
     border-bottom: 1px solid #E9ECEF;
-    padding: 8px 16px;
 }
 
-#toolbar QPushButton {
+#toolbar-button {
     background-color: #F8F9FA;
     color: #2C3E50;
     border: 1px solid #E9ECEF;
@@ -72,17 +96,30 @@ QMainWindow {
     font-size: 14px;
 }
 
-#toolbar QPushButton:hover {
+#toolbar-button:hover {
     background-color: #F2F2F2;
     border-color: #4A90E2;
 }
 
-#toolbar QPushButton:pressed {
+#toolbar-button:pressed {
     background-color: #2A6BC5;
     color: #FFFFFF;
 }
 
-#toolbar QLineEdit {
+#toolbar-button-primary {
+    background-color: #4A90E2;
+    color: #FFFFFF;
+    border: 1px solid #4A90E2;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+#toolbar-button-primary:hover {
+    background-color: #3A7BD5;
+}
+
+#search-input {
     background-color: #F8F9FA;
     color: #2C3E50;
     border: 1px solid #E9ECEF;
@@ -92,65 +129,136 @@ QMainWindow {
     selection-background-color: #4A90E2;
 }
 
-#toolbar QLineEdit:focus {
+#search-input:focus {
     border-color: #4A90E2;
 }
 
-#toolbar QComboBox {
+#view-button {
     background-color: #F8F9FA;
     color: #2C3E50;
     border: 1px solid #E9ECEF;
     padding: 8px 12px;
     border-radius: 6px;
-    font-size: 14px;
-    min-width: 6em;
+    min-width: 40px;
 }
 
-#toolbar QComboBox:hover {
+#view-button:hover {
+    background-color: #F2F2F2;
     border-color: #4A90E2;
 }
 
-#toolbar QComboBox::drop-down {
+#view-button:checked {
+    background-color: #4A90E2;
+    color: #FFFFFF;
+    border-color: #4A90E2;
+}
+
+#toolbar-separator {
+    background-color: #E9ECEF;
+}
+
+/* 极简漫画网格 */
+#minimal-album-grid {
+    background-color: #F8F9FA;
+}
+
+#album-grid-container {
+    background-color: #F8F9FA;
+}
+
+#album-grid-scroll {
+    background-color: #F8F9FA;
     border: none;
-    width: 20px;
 }
 
-#toolbar QComboBox::down-arrow {
-    image: none;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 5px solid #6C757D;
-    margin-right: 5px;
+#album-grid-scroll QScrollBar:vertical {
+    background-color: #F8F9FA;
+    width: 10px;
+    border-radius: 5px;
 }
 
-/* 漫画卡片 */
-.album-card {
+#album-grid-scroll QScrollBar::handle:vertical {
+    background-color: #CBD5E0;
+    border-radius: 5px;
+    min-height: 20px;
+}
+
+#album-grid-scroll QScrollBar::handle:vertical:hover {
+    background-color: #A0AEC0;
+}
+
+#album-grid-scroll QScrollBar::add-line:vertical,
+#album-grid-scroll QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* 极简漫画卡片 */
+#minimal-album-card {
     background-color: #FFFFFF;
     border: 1px solid #E9ECEF;
     border-radius: 8px;
 }
 
-.album-card:hover {
+#minimal-album-card:hover {
     border-color: #4A90E2;
+    border-width: 1px;
 }
 
-.album-card QLabel {
+#album-cover {
+    background-color: #F8F9FA;
+    border-radius: 4px;
+}
+
+#cover-image {
+    background-color: #F8F9FA;
+    border: 1px solid #E9ECEF;
+    border-radius: 4px;
+}
+
+#page-count {
+    font-size: 11px;
+    color: #6C757D;
+}
+
+#album-title {
     color: #2C3E50;
     font-size: 14px;
-}
-
-.album-card QLabel#title {
     font-weight: 500;
 }
 
-.album-card QLabel#author {
+#album-author {
     color: #6C757D;
     font-size: 12px;
 }
 
-.album-card QLabel#rating {
-    color: #F39C12;
+#album-rating {
+    color: #6C757D;
     font-size: 12px;
+}
+
+#favorite-button {
+    border: none;
+    font-size: 16px;
+    color: #ADB5BD;
+}
+
+#favorite-button:checked {
+    color: #E74C3C;
+}
+
+#play-button {
+    border: none;
+    font-size: 14px;
+    color: #4A90E2;
+}
+
+#play-button:hover {
+    color: #3A7BD5;
+}
+
+#empty-state {
+    color: #ADB5BD;
+    font-size: 16px;
 }
 
 /* 按钮样式 - 主按钮 */
