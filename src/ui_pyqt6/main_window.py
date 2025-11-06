@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
-    QSplitter
+    QSplitter, QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence
@@ -269,8 +269,29 @@ class MainWindow(QMainWindow):
 
     def show_settings(self):
         """显示设置"""
-        # TODO: 实现设置对话框
-        self.status_bar.set_status("设置功能开发中...", "info")
+        from .components.settings_dialog import SettingsDialog
+
+        dialog = SettingsDialog(self.config_manager, self)
+        result = dialog.exec()
+
+        if result == QDialog.DialogCode.Accepted:
+            # 应用设置
+            self.apply_settings()
+            self.status_bar.set_status("设置已保存", "success")
+
+    def apply_settings(self):
+        """应用设置"""
+        # 应用主题
+        theme = self.config_manager.get_theme()
+        if theme == 'dark':
+            self.style_manager.is_dark = True
+        elif theme == 'light':
+            self.style_manager.is_dark = False
+
+        # 应用侧边栏宽度
+        sidebar_width = self.config_manager.get_sidebar_width()
+        if hasattr(self, 'sidebar'):
+            self.sidebar.setFixedWidth(sidebar_width)
 
     def apply_filter(self, filter_text):
         """应用筛选"""
