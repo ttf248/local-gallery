@@ -151,53 +151,67 @@ class AlbumScannerService:
 
     def _display_scan_results(self):
         """显示扫描结果 - 支持合集、智能分组和相册"""
-        if not hasattr(self.app, 'album_grid'):
-            return
+        try:
+            if not hasattr(self.app, 'album_grid'):
+                print("警告: album_grid不存在")
+                return
 
-        self.app.album_grid.update_albums(self.app.albums)
-
-        # 缓存扫描结果
-        if self.app.folder_path:
-            self.app.cached_scan_results = self.app.albums.copy()
-            self.app.cached_scan_path = self.app.folder_path
-            self.app.current_view_state = "scan"
-
-        # 统计不同类型的项目
-        collections = [item for item in self.app.albums if item.get('type') == 'collection']
-        smart_collections = [item for item in self.app.albums if item.get('type') == 'smart_collection']
-        albums = [item for item in self.app.albums if item.get('type') == 'album']
-
-        # 计算总图片数
-        total_images = 0
-        for item in self.app.albums:
-            if item.get('type') in ['collection', 'smart_collection']:
-                total_images += item.get('image_count', 0)
+            # 更新相册网格
+            if self.app.albums is not None:
+                self.app.album_grid.update_albums(self.app.albums)
             else:
-                total_images += len(item.get('image_files', []))
+                print("警告: albums为None")
+                return
 
-        # 更新状态栏
-        if hasattr(self.app, 'status_bar'):
-            folder_name = Path(self.app.folder_path).name
-            if len(folder_name) > 30:
-                display_name = folder_name[:27] + "..."
-            else:
-                display_name = folder_name
+            # 缓存扫描结果
+            if self.app.folder_path:
+                self.app.cached_scan_results = self.app.albums.copy() if self.app.albums else []
+                self.app.cached_scan_path = self.app.folder_path
+                self.app.current_view_state = "scan"
 
-            # 统计各类型中包含的相册数
-            collection_albums = sum(item.get('album_count', 0) for item in collections)
-            smart_albums = sum(item.get('album_count', 0) for item in smart_collections)
+            # 统计不同类型的项目
+            collections = [item for item in self.app.albums if item.get('type') == 'collection']
+            smart_collections = [item for item in self.app.albums if item.get('type') == 'smart_collection']
+            albums = [item for item in self.app.albums if item.get('type') == 'album']
 
-            self.app.status_bar.set_status(
-                f"扫描完成: {display_name} ({len(self.app.albums)} 个项目)", "success"
-            )
-            info_text = f"共 {total_images} 张图片"
-            if collections:
-                info_text += f" | 📚 合集: {len(collections)} ({collection_albums} 个相册)"
-            if smart_collections:
-                info_text += f" | 🧠 智能分组: {len(smart_collections)} ({smart_albums} 个相册)"
-            if albums:
-                info_text += f" | 📖 相册: {len(albums)}"
-            self.app.status_bar.set_info(info_text)
+            # 计算总图片数
+            total_images = 0
+            for item in self.app.albums:
+                if item.get('type') in ['collection', 'smart_collection']:
+                    total_images += item.get('image_count', 0)
+                else:
+                    total_images += len(item.get('image_files', []))
+
+            # 更新状态栏
+            if hasattr(self.app, 'status_bar'):
+                folder_name = Path(self.app.folder_path).name
+                if len(folder_name) > 30:
+                    display_name = folder_name[:27] + "..."
+                else:
+                    display_name = folder_name
+
+                # 统计各类型中包含的相册数
+                collection_albums = sum(item.get('album_count', 0) for item in collections)
+                smart_albums = sum(item.get('album_count', 0) for item in smart_collections)
+
+                self.app.status_bar.set_status(
+                    f"扫描完成: {display_name} ({len(self.app.albums)} 个项目)", "success"
+                )
+                info_text = f"共 {total_images} 张图片"
+                if collections:
+                    info_text += f" | 📚 合集: {len(collections)} ({collection_albums} 个相册)"
+                if smart_collections:
+                    info_text += f" | 🧠 智能分组: {len(smart_collections)} ({smart_albums} 个相册)"
+                if albums:
+                    info_text += f" | 📖 相册: {len(albums)}"
+                self.app.status_bar.set_info(info_text)
+
+        except Exception as e:
+            print(f"显示扫描结果时出错: {e}")
+            import traceback
+            traceback.print_exc()
+            if hasattr(self.app, 'status_bar'):
+                self.app.status_bar.set_status("显示结果时出错", "error")
 
     def _handle_scan_error(self, error):
         """处理扫描错误"""
