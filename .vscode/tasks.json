@@ -1,0 +1,130 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "运行所有测试",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py", "-v"],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "运行性能测试",
+            "type": "shell",
+            "command": "python",
+            "args": ["tests/test_real_world_performance.py"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "运行标准unittest",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "unittest", "tests.test_standard_unittest", "-v"],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "启动漫画阅读器",
+            "type": "shell",
+            "command": "python",
+            "args": ["main.py"],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "代码格式化 (Black)",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "black", "src", "tests"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "代码检查 (Flake8)",
+            "type": "shell",
+            "command": "python",
+            "args": ["-m", "flake8", "src", "tests"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "problemMatcher": [
+                {
+                    "owner": "python",
+                    "fileLocation": ["relative", "${workspaceFolder}"],
+                    "pattern": {
+                        "regexp": "^(.*):(\\d+):(\\d+):\\s+(\\w\\d+)\\s+(.*)$",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3,
+                        "code": 4,
+                        "message": 5
+                    }
+                }
+            ]
+        }
+    ]
+}
