@@ -2,6 +2,22 @@
 
 ## 版本 2.0 - 配置系统完善 (2025-11-06)
 
+### [2.0.4] - 2025-11-06
+**refactor(config): 删除5个无效配置项及对应UI控件**
+- 移除无效配置项: image_cache_size, image_zoom_mode, image_smooth, image_preload, slideshow_interval
+- 删除原因: AlbumViewer未实现、CacheManager未实现、幻灯片功能未实现
+- 配置项从22个减少到17个
+- 移除10个getter/setter方法
+- 简化设置对话框UI，删除无效控件
+- 100%配置项有效，无无效配置
+
+**统计信息**:
+- 总配置项: 17个 (从22减少到17)
+- 完全生效: 17/17 (100%)
+- 无效配置: 0个
+- UI控件: 已简化
+- 保持功能: 100%
+
 ### [2.0.3] - 2025-11-06
 **refactor(config): 移除无效配置项 'window_size'**
 - 清理配置系统，删除未使用的 'window_size' 配置项

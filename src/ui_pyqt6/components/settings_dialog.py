@@ -159,41 +159,6 @@ class SettingsDialog(QDialog):
 
         layout.addWidget(group)
 
-        # 图片查看设置
-        group = QGroupBox("图片查看")
-        group_layout = QVBoxLayout(group)
-
-        self.show_thumbnails = QCheckBox("显示缩略图")
-        self.show_thumbnails.setChecked(
-            self.config_manager.get_show_thumbnails()
-        )
-        group_layout.addWidget(self.show_thumbnails)
-
-        self.image_smooth = QCheckBox("图片平滑缩放")
-        self.image_smooth.setChecked(
-            self.config_manager.get_image_smooth()
-        )
-        group_layout.addWidget(self.image_smooth)
-
-        self.image_preload = QCheckBox("预加载下一张图片")
-        self.image_preload.setChecked(
-            self.config_manager.get_image_preload()
-        )
-        group_layout.addWidget(self.image_preload)
-
-        # 默认缩放模式
-        self.zoom_mode_combo = QComboBox()
-        self.zoom_mode_combo.addItems(["适应窗口", "原始大小"])
-        zoom_mode = self.config_manager.get_image_zoom_mode()
-        if zoom_mode == 'fit_window':
-            self.zoom_mode_combo.setCurrentIndex(0)
-        else:
-            self.zoom_mode_combo.setCurrentIndex(1)
-        group_layout.addWidget(QLabel("默认缩放模式:"))
-        group_layout.addWidget(self.zoom_mode_combo)
-
-        layout.addWidget(group)
-
         layout.addStretch()
 
         parent.addTab(tab, "界面")
@@ -223,17 +188,6 @@ class SettingsDialog(QDialog):
         group = QGroupBox("性能设置")
         group_layout = QVBoxLayout(group)
 
-        # 缓存大小
-        self.cache_size_spin = QSpinBox()
-        self.cache_size_spin.setRange(10, 1000)
-        self.cache_size_spin.setValue(self.config_manager.get_image_cache_size())
-        self.cache_size_spin.setSuffix(" MB")
-        self.cache_size_spin.valueChanged.connect(
-            lambda v: setattr(self, '_cache_size_changed', True)
-        )
-        group_layout.addWidget(QLabel("图片缓存大小:"))
-        group_layout.addWidget(self.cache_size_spin)
-
         # 缩略图大小
         self.thumbnail_size_spin = QSpinBox()
         self.thumbnail_size_spin.setRange(100, 500)
@@ -243,21 +197,6 @@ class SettingsDialog(QDialog):
         self.thumbnail_size_spin.setSuffix(" px")
         group_layout.addWidget(QLabel("缩略图大小:"))
         group_layout.addWidget(self.thumbnail_size_spin)
-
-        layout.addWidget(group)
-
-        # 幻灯片设置
-        group = QGroupBox("幻灯片")
-        group_layout = QVBoxLayout(group)
-
-        self.slideshow_interval_spin = QSpinBox()
-        self.slideshow_interval_spin.setRange(1, 30)
-        self.slideshow_interval_spin.setValue(
-            self.config_manager.get_slideshow_interval()
-        )
-        self.slideshow_interval_spin.setSuffix(" 秒")
-        group_layout.addWidget(QLabel("播放间隔:"))
-        group_layout.addWidget(self.slideshow_interval_spin)
 
         layout.addWidget(group)
 
@@ -391,27 +330,10 @@ class SettingsDialog(QDialog):
             self.config_manager.set_show_thumbnails(
                 self.show_thumbnails.isChecked()
             )
-            self.config_manager.set_image_smooth(
-                self.image_smooth.isChecked()
-            )
-            self.config_manager.set_image_preload(
-                self.image_preload.isChecked()
-            )
-
-            zoom_mode_map = {0: 'fit_window', 1: 'original_size'}
-            self.config_manager.set_image_zoom_mode(
-                zoom_mode_map[self.zoom_mode_combo.currentIndex()]
-            )
 
             # 保存高级设置
-            self.config_manager.set_image_cache_size(
-                self.cache_size_spin.value()
-            )
             self.config_manager.set_image_thumbnail_size(
                 self.thumbnail_size_spin.value()
-            )
-            self.config_manager.set_slideshow_interval(
-                self.slideshow_interval_spin.value()
             )
 
             # 保存扫描设置

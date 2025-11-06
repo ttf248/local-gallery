@@ -41,11 +41,6 @@ class ConfigManager:
             'sidebar_width': 240,
             'window_maximized': False,
 
-            # 图片查看器设置
-            'image_zoom_mode': 'fit_window',  # fit_window, original_size
-            'image_smooth': True,  # 图片平滑缩放
-            'image_preload': True,  # 预加载下一张图片
-
             # 快捷键设置
             'shortcuts': {
                 'open_folder': 'Ctrl+O',
@@ -64,11 +59,9 @@ class ConfigManager:
             },
 
             # 高级设置
-            'image_cache_size': 100,  # MB
             'image_thumbnail_size': 200,  # px
             'auto_save_window_state': True,
             'show_thumbnails': True,
-            'slideshow_interval': 3,  # seconds
 
             # 扫描设置
             'scan_recursive': True,
@@ -256,34 +249,6 @@ class ConfigManager:
         self.config['sidebar_width'] = width
         self.save_config()
 
-    # 图片查看器设置
-    def get_image_zoom_mode(self):
-        """获取图片缩放模式"""
-        return self.config.get('image_zoom_mode', 'fit_window')
-
-    def set_image_zoom_mode(self, mode):
-        """设置图片缩放模式"""
-        self.config['image_zoom_mode'] = mode
-        self.save_config()
-
-    def get_image_smooth(self):
-        """获取图片平滑缩放设置"""
-        return self.config.get('image_smooth', True)
-
-    def set_image_smooth(self, enabled):
-        """设置图片平滑缩放"""
-        self.config['image_smooth'] = enabled
-        self.save_config()
-
-    def get_image_preload(self):
-        """获取图片预加载设置"""
-        return self.config.get('image_preload', True)
-
-    def set_image_preload(self, enabled):
-        """设置图片预加载"""
-        self.config['image_preload'] = enabled
-        self.save_config()
-
     # 快捷键设置
     def get_shortcuts(self):
         """获取所有快捷键设置"""
@@ -307,15 +272,6 @@ class ConfigManager:
         self.save_config()
 
     # 高级设置
-    def get_image_cache_size(self):
-        """获取图片缓存大小(MB)"""
-        return self.config.get('image_cache_size', 100)
-
-    def set_image_cache_size(self, size):
-        """设置图片缓存大小(MB)"""
-        self.config['image_cache_size'] = size
-        self.save_config()
-
     def get_image_thumbnail_size(self):
         """获取缩略图大小(px)"""
         return self.config.get('image_thumbnail_size', 200)
@@ -341,15 +297,6 @@ class ConfigManager:
     def set_show_thumbnails(self, enabled):
         """设置是否显示缩略图"""
         self.config['show_thumbnails'] = enabled
-        self.save_config()
-
-    def get_slideshow_interval(self):
-        """获取幻灯片间隔(秒)"""
-        return self.config.get('slideshow_interval', 3)
-
-    def set_slideshow_interval(self, interval):
-        """设置幻灯片间隔(秒)"""
-        self.config['slideshow_interval'] = interval
         self.save_config()
 
     # 扫描设置
