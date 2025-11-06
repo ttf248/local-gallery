@@ -311,6 +311,18 @@ class MainWindow(QMainWindow):
         """显示初始状态"""
         self.album_grid.show_empty_state()
         self.status_bar.set_status("欢迎使用漫画阅读器 - 选择文件夹开始使用", "info")
+        # 更新扫描按钮状态
+        self.update_scan_button_state()
+
+    def update_scan_button_state(self):
+        """更新扫描按钮的启用/禁用状态"""
+        if hasattr(self, 'toolbar') and hasattr(self.toolbar, 'scan_btn'):
+            # 如果选择了文件夹，启用扫描按钮；否则禁用
+            is_enabled = bool(self.folder_path and Path(self.folder_path).exists())
+            self.toolbar.scan_btn.setEnabled(is_enabled)
+
+            # 记录状态变更
+            log_debug(f"扫描按钮状态: {'启用' if is_enabled else '禁用'}", 'ui.main_window')
 
     def browse_folder(self):
         """浏览并选择文件夹"""
@@ -340,13 +352,16 @@ class MainWindow(QMainWindow):
             # 使用新的状态栏功能
             self.status_bar.show_file_selected(folder)
 
-            # 自动开始扫描
-            log_info("自动开始扫描", 'ui.main_window')
-            self.status_bar.show_tip("自动开始扫描...")
-            self.scan_albums()
+            # 更新扫描按钮状态
+            self.update_scan_button_state()
+
+            # 不再自动扫描
+            log_info("选择文件夹完成，等待用户手动扫描", 'ui.main_window')
         else:
             log_info("取消文件夹选择", 'ui.main_window')
             self.status_bar.show_action_feedback("文件夹选择", "取消")
+            # 更新扫描按钮状态
+            self.update_scan_button_state()
 
     def scan_albums(self):
         """扫描漫画"""
