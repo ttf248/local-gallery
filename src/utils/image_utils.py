@@ -8,20 +8,33 @@ import time
 import difflib
 import re
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 class ImageProcessor:
     """图片处理器，负责图片的扫描、加载和处理"""
-    
+
     IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff']
+
+    # 全局扫描控制
+    _scan_lock = threading.Lock()
+    _cancel_flag = False
+    _scanned_count = 0
+    _max_albums = 1000  # 最大扫描相册数，避免长时间扫描
     
     @classmethod
     def scan_albums(cls, root_path, progress_callback=None):
-        """扫描漫画文件夹，支持合集功能
+        """扫描漫画文件夹，支持并发扫描
 
         Args:
             root_path: 根目录路径
             progress_callback: 进度回调函数，接收(progress, status)参数
         """
+        # 重置扫描状态
+        with cls._scan_lock:
+            cls._cancel_flag = False
+            cls._scanned_count = 0
+
         albums = []
 
         try:
@@ -32,69 +45,140 @@ class ImageProcessor:
                 print(f"路径不存在: {root_path}")
                 return albums
 
-            # 获取所有子文件夹
-            subdirs = [item for item in root_path.iterdir() if item.is_dir()]
-            total_items = len(subdirs)
+            # 快速获取所有子文件夹（只扫描第一层）
+            if progress_callback:
+                progress_callback(5, "正在扫描目录结构...")
 
-            # 扫描根目录的直接子文件夹
-            for index, item in enumerate(subdirs):
-                # 更新进度
-                progress = int((index / total_items) * 80)  # 扫描阶段80%
+            # 只扫描第一层子文件夹，避免深层扫描
+            subdirs = []
+            try:
+                for item in root_path.iterdir():
+                    if item.is_dir():
+                        subdirs.append(item)
+                        # 限制最大扫描数量，避免长时间扫描
+                        if len(subdirs) >= cls._max_albums:
+                            print(f"达到最大扫描数量限制：{cls._max_albums}")
+                            break
+            except Exception as e:
+                print(f"遍历目录时出错: {e}")
+
+            if not subdirs:
                 if progress_callback:
-                    progress_callback(progress, f"扫描: {item.name}")
+                    progress_callback(100, "未找到子文件夹")
+                return albums
 
-                if item.is_dir():
-                    # 检查这个文件夹是否包含图片（作为单个相册）
-                    image_files = cls.get_image_files(str(item))
+            total_items = len(subdirs)
+            if progress_callback:
+                progress_callback(10, f"找到 {total_items} 个子文件夹，开始并发扫描...")
+
+            # 使用线程池并发扫描
+            albums_lock = threading.Lock()
+            scanned_lock = threading.Lock()
+
+            def scan_single_folder(folder_path):
+                """扫描单个文件夹"""
+                # 检查是否取消
+                with cls._scan_lock:
+                    if cls._cancel_flag:
+                        return []
+
+                try:
+                    # 获取图片文件（快速模式）
+                    image_files = cls.get_image_files(str(folder_path), skip_size_check=True)
 
                     if image_files:
                         # 这是一个包含图片的相册
                         folder_size = cls.get_folder_size(image_files)
                         album_info = {
-                            'path': str(item),
-                            'name': item.name,
+                            'path': str(folder_path),
+                            'name': folder_path.name,
                             'image_files': image_files,
                             'cover_image': image_files[0],
                             'image_count': len(image_files),
                             'folder_size': folder_size,
-                            'type': 'album'  # 标记为单个相册
+                            'type': 'album'
                         }
-                        albums.append(album_info)
+
+                        # 更新扫描计数
+                        with scanned_lock:
+                            cls._scanned_count += 1
+                            current_count = cls._scanned_count
+
+                        # 更新进度
+                        if progress_callback and current_count % 10 == 0:
+                            progress = min(10 + int((current_count / total_items) * 70), 80)
+                            progress_callback(progress, f"已扫描 {current_count}/{total_items} 个文件夹")
+
+                        return [album_info]
                     else:
-                        # 检查是否包含子相册（作为合集）
+                        # 检查是否包含子相册（限制深度）
                         sub_albums = []
-                        cls._scan_folder_recursive(item, sub_albums)
+                        cls._scan_folder_recursive(folder_path, sub_albums, max_depth=2)
 
                         if sub_albums:
-                            # 这是一个合集，包含多个相册
                             total_images = sum(len(album['image_files']) for album in sub_albums)
                             total_size_bytes = sum(cls._parse_size_to_bytes(album['folder_size']) for album in sub_albums)
 
-                            # 使用第一个相册的第一张图作为合集封面
                             cover_image = sub_albums[0]['cover_image'] if sub_albums else None
 
                             collection_info = {
-                                'path': str(item),
-                                'name': item.name,
-                                'albums': sub_albums,  # 包含的相册列表
+                                'path': str(folder_path),
+                                'name': folder_path.name,
+                                'albums': sub_albums,
                                 'cover_image': cover_image,
                                 'album_count': len(sub_albums),
                                 'image_count': total_images,
                                 'folder_size': cls.format_size(total_size_bytes),
-                                'type': 'collection'  # 标记为合集
+                                'type': 'collection'
                             }
-                            albums.append(collection_info)
+
+                            with scanned_lock:
+                                cls._scanned_count += 1
+
+                            return [collection_info]
+
+                except Exception as e:
+                    print(f"扫描文件夹时出错 {folder_path}: {e}")
+
+                return []
+
+            # 使用线程池并发执行
+            max_workers = min(8, os.cpu_count() or 4)  # 限制最大线程数
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有任务
+                future_to_folder = {
+                    executor.submit(scan_single_folder, folder): folder
+                    for folder in subdirs
+                }
+
+                # 收集结果
+                for future in as_completed(future_to_folder):
+                    folder = future_to_folder[future]
+                    try:
+                        result = future.result()
+                        with albums_lock:
+                            albums.extend(result)
+
+                        # 检查是否达到上限
+                        with cls._scan_lock:
+                            if cls._cancel_flag or cls._scanned_count >= cls._max_albums:
+                                break
+
+                    except Exception as e:
+                        print(f"处理扫描结果时出错: {e}")
 
             # 智能分组阶段
             if progress_callback:
                 progress_callback(85, "正在智能分组...")
 
-            # 智能分组：对非合集的相册进行相似度分析（启用快速模式）
+            # 智能分组（启用快速模式）
             albums = cls.create_smart_groups(albums, enable_fast_mode=True)
 
             # 完成
             if progress_callback:
-                progress_callback(100, "扫描完成")
+                progress_callback(100, f"扫描完成，找到 {len(albums)} 个项目")
+
+            print(f"扫描完成：共找到 {len(albums)} 个项目（相册+合集）")
 
         except Exception as e:
             print(f"扫描根目录时出错 {root_path}: {e}")
@@ -102,7 +186,14 @@ class ImageProcessor:
                 progress_callback(0, f"扫描出错: {str(e)}")
 
         return albums
-    
+
+    @classmethod
+    def cancel_scan(cls):
+        """取消当前扫描"""
+        with cls._scan_lock:
+            cls._cancel_flag = True
+        print("扫描已取消")
+
     @classmethod
     def _scan_folder_recursive(cls, folder_path, albums, max_depth=3, current_depth=0):
         """递归扫描文件夹（优化版）
