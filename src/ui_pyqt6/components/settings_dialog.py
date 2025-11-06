@@ -5,6 +5,7 @@ PyQt6设置对话框
 """
 
 import json
+from pathlib import Path
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QCheckBox, QSpinBox, QTabWidget,
