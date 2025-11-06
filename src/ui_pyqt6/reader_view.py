@@ -1,18 +1,17 @@
 """
 PyQt6现代化图片阅读器
 支持单页/双页模式、全屏、快捷键、缩放等功能
-类似 iBooks / PDF 阅读器体验
+使用组件库：PrimaryButton, SecondaryButton, IconButton, Label等
 """
 
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QPushButton, QSlider, QFrame, QSizePolicy, QApplication,
-    QSplitter, QStackedWidget, QToolBar, QSpacerItem, QComboBox,
-    QCheckBox
+    QSlider, QFrame, QSizePolicy, QApplication,
+    QSplitter, QStackedWidget, QComboBox, QCheckBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import (
     QPixmap, QTransform, QWheelEvent, QKeyEvent, QMouseEvent,
     QPainter, QColor, QFont, QShortcut, QKeySequence
@@ -24,6 +23,10 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 from utils.image_utils import ImageProcessor
+from ui_pyqt6.style_manager import StyleManager
+from ui_pyqt6.components.library import (
+    PrimaryButton, SecondaryButton, IconButton, Label
+)
 
 class ReaderView(QWidget):
     """现代化图片阅读器组件"""
@@ -47,6 +50,7 @@ class ReaderView(QWidget):
         self.auto_play_interval = 3000  # 3秒
         self.show_controls = True
         self.controls_hide_timer = QTimer()
+        self.style_manager = StyleManager()
 
         self.init_ui()
         self.init_shortcuts()
@@ -77,26 +81,27 @@ class ReaderView(QWidget):
         self.top_bar = QFrame()
         self.top_bar.setObjectName("top_bar")
         self.top_bar.setFixedHeight(60)
-        self.top_bar.setStyleSheet("""
-            QFrame#top_bar {
+        colors = self.style_manager.get_colors()
+        self.top_bar.setStyleSheet(f"""
+            QFrame#top_bar {{
                 background-color: rgba(0, 0, 0, 0.8);
                 border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            }
+            }}
         """)
 
         layout = QHBoxLayout(self.top_bar)
         layout.setContentsMargins(16, 8, 16, 8)
 
-        # 左侧：导航按钮
+        # 左侧：导航按钮 - 使用组件库按钮
         nav_layout = QHBoxLayout()
 
-        self.prev_btn = QPushButton("◀ 上一页")
-        self.prev_btn.setObjectName("nav_button")
+        self.prev_btn = IconButton("◀", self, self.style_manager)
+        self.prev_btn.setText("上一页")
         self.prev_btn.clicked.connect(self.prev_image)
         nav_layout.addWidget(self.prev_btn)
 
-        self.next_btn = QPushButton("下一页 ▶")
-        self.next_btn.setObjectName("nav_button")
+        self.next_btn = IconButton("▶", self, self.style_manager)
+        self.next_btn.setText("下一页")
         self.next_btn.clicked.connect(self.next_image)
         nav_layout.addWidget(self.next_btn)
 
@@ -104,32 +109,37 @@ class ReaderView(QWidget):
 
         # 中间：阅读模式选择
         mode_layout = QHBoxLayout()
-        mode_label = QLabel("阅读模式:")
-        mode_label.setStyleSheet("color: white; font-size: 13px;")
+        mode_label = Label("阅读模式:", self, self.style_manager)
+        mode_label.setStyleSheet(f"""
+            QLabel {{
+                color: white;
+                font-size: {self.style_manager.font_sizes['sm']}px;
+            }}
+        """)
         mode_layout.addWidget(mode_label)
 
         self.mode_combo = QComboBox()
         self.mode_combo.addItems(["单页", "双页"])
         self.mode_combo.setCurrentText("单页")
         self.mode_combo.currentTextChanged.connect(self.on_mode_changed)
-        self.mode_combo.setStyleSheet("""
-            QComboBox {
+        self.mode_combo.setStyleSheet(f"""
+            QComboBox {{
                 background-color: rgba(255, 255, 255, 0.1);
                 color: white;
                 border: 1px solid rgba(255, 255, 255, 0.2);
                 border-radius: 4px;
                 padding: 4px 8px;
                 min-width: 80px;
-            }
-            QComboBox::drop-down {
+            }}
+            QComboBox::drop-down {{
                 border: none;
-            }
-            QComboBox::down-arrow {
+            }}
+            QComboBox::down-arrow {{
                 image: none;
                 border-left: 5px solid transparent;
                 border-right: 5px solid transparent;
                 border-top: 5px solid white;
-            }
+            }}
         """)
         mode_layout.addWidget(self.mode_combo)
 
@@ -142,19 +152,22 @@ class ReaderView(QWidget):
 
         # 自动播放
         self.auto_play_cb = QCheckBox("自动播放")
-        self.auto_play_cb.setStyleSheet("color: white; font-size: 13px;")
+        self.auto_play_cb.setStyleSheet(f"""
+            QCheckBox {{
+                color: white;
+                font-size: {self.style_manager.font_sizes['sm']}px;
+            }}
+        """)
         self.auto_play_cb.toggled.connect(self.toggle_auto_play)
         func_layout.addWidget(self.auto_play_cb)
 
-        # 全屏按钮
-        self.fullscreen_btn = QPushButton("⛶ 全屏")
-        self.fullscreen_btn.setObjectName("func_button")
+        # 全屏按钮 - 使用组件库按钮
+        self.fullscreen_btn = SecondaryButton("⛶ 全屏", self, self.style_manager)
         self.fullscreen_btn.clicked.connect(self.toggle_fullscreen)
         func_layout.addWidget(self.fullscreen_btn)
 
-        # 退出按钮
-        self.exit_btn = QPushButton("✕ 退出")
-        self.exit_btn.setObjectName("func_button")
+        # 退出按钮 - 使用组件库按钮
+        self.exit_btn = SecondaryButton("✕ 退出", self, self.style_manager)
         self.exit_btn.clicked.connect(self.exit_reader)
         func_layout.addWidget(self.exit_btn)
 
@@ -193,28 +206,39 @@ class ReaderView(QWidget):
         self.bottom_bar = QFrame()
         self.bottom_bar.setObjectName("bottom_bar")
         self.bottom_bar.setFixedHeight(80)
-        self.bottom_bar.setStyleSheet("""
-            QFrame#bottom_bar {
+        self.bottom_bar.setStyleSheet(f"""
+            QFrame#bottom_bar {{
                 background-color: rgba(0, 0, 0, 0.8);
                 border-top: 1px solid rgba(255, 255, 255, 0.1);
-            }
+            }}
         """)
 
         layout = QVBoxLayout(self.bottom_bar)
         layout.setContentsMargins(16, 8, 16, 8)
 
-        # 第一行：页面信息
+        # 第一行：页面信息 - 使用组件库Label
         info_layout = QHBoxLayout()
 
-        self.page_label = QLabel("第 1 页 / 共 1 页")
-        self.page_label.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
+        self.page_label = Label("第 1 页 / 共 1 页", self, self.style_manager)
+        self.page_label.setStyleSheet(f"""
+            QLabel {{
+                color: white;
+                font-size: {self.style_manager.font_sizes['base']}px;
+                font-weight: bold;
+            }}
+        """)
         info_layout.addWidget(self.page_label)
 
         info_layout.addStretch()
 
-        # 缩放信息
-        self.zoom_label = QLabel("100%")
-        self.zoom_label.setStyleSheet("color: white; font-size: 14px;")
+        # 缩放信息 - 使用组件库Label
+        self.zoom_label = Label("100%", self, self.style_manager)
+        self.zoom_label.setStyleSheet(f"""
+            QLabel {{
+                color: white;
+                font-size: {self.style_manager.font_sizes['base']}px;
+            }}
+        """)
         info_layout.addWidget(self.zoom_label)
 
         layout.addLayout(info_layout)
@@ -222,9 +246,8 @@ class ReaderView(QWidget):
         # 第二行：控制按钮
         control_layout = QHBoxLayout()
 
-        # 缩放控制
-        self.zoom_out_btn = QPushButton("🔍-")
-        self.zoom_out_btn.setObjectName("control_button")
+        # 缩放控制 - 使用组件库按钮
+        self.zoom_out_btn = IconButton("🔍-", self, self.style_manager)
         self.zoom_out_btn.clicked.connect(self.zoom_out)
         control_layout.addWidget(self.zoom_out_btn)
 
@@ -235,35 +258,32 @@ class ReaderView(QWidget):
         self.zoom_slider.valueChanged.connect(self.on_zoom_changed)
         control_layout.addWidget(self.zoom_slider)
 
-        self.zoom_in_btn = QPushButton("🔍+")
-        self.zoom_in_btn.setObjectName("control_button")
+        self.zoom_in_btn = IconButton("🔍+", self, self.style_manager)
         self.zoom_in_btn.clicked.connect(self.zoom_in)
         control_layout.addWidget(self.zoom_in_btn)
 
         control_layout.addWidget(self.create_separator())
 
-        # 适应窗口按钮
-        self.fit_btn = QPushButton("适应窗口")
-        self.fit_btn.setObjectName("control_button")
+        # 适应窗口按钮 - 使用组件库按钮
+        self.fit_btn = SecondaryButton("适应窗口", self, self.style_manager)
         self.fit_btn.clicked.connect(self.fit_to_window)
         control_layout.addWidget(self.fit_btn)
 
-        # 适应宽度按钮
-        self.fit_width_btn = QPushButton("适应宽度")
-        self.fit_width_btn.setObjectName("control_button")
+        # 适应宽度按钮 - 使用组件库按钮
+        self.fit_width_btn = SecondaryButton("适应宽度", self, self.style_manager)
         self.fit_width_btn.clicked.connect(self.fit_to_width)
         control_layout.addWidget(self.fit_width_btn)
 
         control_layout.addWidget(self.create_separator())
 
-        # 旋转按钮
-        self.rotate_left_btn = QPushButton("⟲ 旋转")
-        self.rotate_left_btn.setObjectName("control_button")
+        # 旋转按钮 - 使用组件库按钮
+        self.rotate_left_btn = IconButton("⟲", self, self.style_manager)
+        self.rotate_left_btn.setText("旋转")
         self.rotate_left_btn.clicked.connect(self.rotate_left)
         control_layout.addWidget(self.rotate_left_btn)
 
-        self.rotate_right_btn = QPushButton("⟳ 旋转")
-        self.rotate_right_btn.setObjectName("control_button")
+        self.rotate_right_btn = IconButton("⟳", self, self.style_manager)
+        self.rotate_right_btn.setText("旋转")
         self.rotate_right_btn.clicked.connect(self.rotate_right)
         control_layout.addWidget(self.rotate_right_btn)
 
@@ -278,7 +298,11 @@ class ReaderView(QWidget):
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.VLine)
         separator.setFrameShadow(QFrame.Shadow.Sunken)
-        separator.setStyleSheet("color: rgba(255, 255, 255, 0.2);")
+        separator.setStyleSheet(f"""
+            QFrame {{
+                color: rgba(255, 255, 255, 0.2);
+            }}
+        """)
         return separator
 
     def init_shortcuts(self):
