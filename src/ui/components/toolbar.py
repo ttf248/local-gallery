@@ -18,14 +18,24 @@ class Toolbar:
         self.view_mode_callback = None
         self.theme_callback = None
         self.settings_callback = None
+        self.search_callback = None
 
         # 搜索相关
         self.search_var = tk.StringVar()
-        self.search_callback = None
 
         # 筛选相关
         self.filter_var = tk.StringVar(value="全部")
         self.view_mode_var = tk.StringVar(value="grid")
+
+        # 按钮引用（用于后续绑定回调）
+        self.browse_btn = None
+        self.scan_btn = None
+        self.clear_search_btn = None
+        self.filter_combobox = None
+        self.grid_btn = None
+        self.list_btn = None
+        self.theme_btn = None
+        self.settings_btn = None
 
         # 使用传入的样式管理器或创建新实例
         if style_manager:
@@ -102,23 +112,23 @@ class Toolbar:
             )
             left_frame.grid(row=0, column=0, sticky='w', padx=(0, 16))
 
-            # 浏览文件夹按钮
-            browse_btn = self.create_button(
+            # 浏览文件夹按钮（暂不设置command，等待回调设置）
+            self.browse_btn = self.create_button(
                 left_frame,
                 text="📁 浏览文件夹",
-                command=self.browse_callback,
+                command=lambda: None,  # 临时空函数
                 style='primary'
             )
-            browse_btn.pack(side='left', padx=(0, 8))
+            self.browse_btn.pack(side='left', padx=(0, 8))
 
-            # 扫描按钮
-            scan_btn = self.create_button(
+            # 扫描按钮（暂不设置command，等待回调设置）
+            self.scan_btn = self.create_button(
                 left_frame,
                 text="🔍 扫描漫画",
-                command=self.scan_callback,
+                command=lambda: None,  # 临时空函数
                 style='secondary'
             )
-            scan_btn.pack(side='left')
+            self.scan_btn.pack(side='left')
 
         except Exception as e:
             print(f"创建左侧按钮时出错: {e}")
@@ -165,11 +175,11 @@ class Toolbar:
             )
             self.search_entry.pack(side='left', fill='x', expand=True, padx=(0, 8), pady=8)
 
-            # 清空搜索按钮
-            clear_btn = tk.Button(
+            # 清空搜索按钮（暂不设置command，等待回调设置）
+            self.clear_search_btn = tk.Button(
                 search_container,
                 text="✕",
-                command=self.clear_search,
+                command=lambda: None,  # 临时空函数
                 bg=self.style_manager.colors['bg_tertiary'],
                 fg=self.style_manager.colors['text_tertiary'],
                 relief='flat',
@@ -178,17 +188,17 @@ class Toolbar:
                 cursor='hand2',
                 width=2
             )
-            clear_btn.pack(side='right', padx=(0, 8), pady=8)
+            self.clear_search_btn.pack(side='right', padx=(0, 8), pady=8)
 
             # 清空按钮悬浮效果
             def on_clear_enter(event):
-                clear_btn.configure(fg=self.style_manager.colors['error'])
+                self.clear_search_btn.configure(fg=self.style_manager.colors['error'])
 
             def on_clear_leave(event):
-                clear_btn.configure(fg=self.style_manager.colors['text_tertiary'])
+                self.clear_search_btn.configure(fg=self.style_manager.colors['text_tertiary'])
 
-            clear_btn.bind('<Enter>', on_clear_enter)
-            clear_btn.bind('<Leave>', on_clear_leave)
+            self.clear_search_btn.bind('<Enter>', on_clear_enter)
+            self.clear_search_btn.bind('<Leave>', on_clear_leave)
 
         except Exception as e:
             print(f"创建搜索框时出错: {e}")
@@ -237,11 +247,11 @@ class Toolbar:
             )
             view_frame.pack(side='left', padx=8)
 
-            # 网格视图按钮
+            # 网格视图按钮（暂不设置command，等待回调设置）
             self.grid_btn = tk.Button(
                 view_frame,
                 text="▦",
-                command=lambda: self.set_view_mode('grid'),
+                command=lambda: None,  # 临时空函数
                 bg=self.style_manager.colors['bg_secondary'],
                 fg=self.style_manager.colors['text_primary'],
                 relief='flat',
@@ -253,11 +263,11 @@ class Toolbar:
             )
             self.grid_btn.pack(side='left', padx=(0, 4), pady=8)
 
-            # 列表视图按钮
+            # 列表视图按钮（暂不设置command，等待回调设置）
             self.list_btn = tk.Button(
                 view_frame,
                 text="☰",
-                command=lambda: self.set_view_mode('list'),
+                command=lambda: None,  # 临时空函数
                 bg=self.style_manager.colors['bg_tertiary'],
                 fg=self.style_manager.colors['text_secondary'],
                 relief='flat',
@@ -269,11 +279,11 @@ class Toolbar:
             )
             self.list_btn.pack(side='left', padx=4, pady=8)
 
-            # 主题切换按钮
-            theme_btn = tk.Button(
+            # 主题切换按钮（暂不设置command，等待回调设置）
+            self.theme_btn = tk.Button(
                 right_frame,
                 text="🌙",
-                command=self.toggle_theme,
+                command=lambda: None,  # 临时空函数
                 bg=self.style_manager.colors['bg_tertiary'],
                 fg=self.style_manager.colors['text_primary'],
                 relief='flat',
@@ -283,13 +293,13 @@ class Toolbar:
                 width=3,
                 height=1
             )
-            theme_btn.pack(side='left', padx=(16, 0), pady=8)
+            self.theme_btn.pack(side='left', padx=(16, 0), pady=8)
 
-            # 设置按钮
-            settings_btn = tk.Button(
+            # 设置按钮（暂不设置command，等待回调设置）
+            self.settings_btn = tk.Button(
                 right_frame,
                 text="⚙",
-                command=self.settings_callback,
+                command=lambda: None,  # 临时空函数
                 bg=self.style_manager.colors['bg_tertiary'],
                 fg=self.style_manager.colors['text_primary'],
                 relief='flat',
@@ -299,7 +309,7 @@ class Toolbar:
                 width=3,
                 height=1
             )
-            settings_btn.pack(side='left', padx=8, pady=8)
+            self.settings_btn.pack(side='left', padx=8, pady=8)
 
         except Exception as e:
             print(f"创建右侧按钮时出错: {e}")
@@ -437,6 +447,32 @@ class Toolbar:
         except Exception as e:
             print(f"切换主题时出错: {e}")
 
+    def _update_all_button_commands(self):
+        """更新所有按钮的command属性"""
+        try:
+            # 更新左侧按钮
+            if self.browse_btn and self.browse_callback:
+                self.browse_btn.configure(command=self.browse_callback)
+            if self.scan_btn and self.scan_callback:
+                self.scan_btn.configure(command=self.scan_callback)
+
+            # 更新搜索按钮
+            if self.clear_search_btn:
+                self.clear_search_btn.configure(command=self.clear_search)
+
+            # 更新右侧按钮
+            if self.grid_btn:
+                self.grid_btn.configure(command=lambda: self.set_view_mode_callback('grid'))
+            if self.list_btn:
+                self.list_btn.configure(command=lambda: self.set_view_mode_callback('list'))
+            if self.theme_btn and self.theme_callback:
+                self.theme_btn.configure(command=self.theme_callback)
+            if self.settings_btn and self.settings_callback:
+                self.settings_btn.configure(command=self.settings_callback)
+
+        except Exception as e:
+            print(f"更新按钮命令时出错: {e}")
+
     # 回调设置方法
     def set_callbacks(self, **callbacks):
         """设置所有回调函数"""
@@ -444,13 +480,20 @@ class Toolbar:
             if hasattr(self, f"{name}_callback"):
                 setattr(self, f"{name}_callback", callback)
 
+        # 更新所有按钮的command
+        self._update_all_button_commands()
+
     def set_browse_callback(self, callback):
         """设置浏览回调"""
         self.browse_callback = callback
+        if self.browse_btn:
+            self.browse_btn.configure(command=callback)
 
     def set_scan_callback(self, callback):
         """设置扫描回调"""
         self.scan_callback = callback
+        if self.scan_btn:
+            self.scan_btn.configure(command=callback)
 
     def set_search_callback(self, callback):
         """设置搜索回调"""
@@ -463,14 +506,23 @@ class Toolbar:
     def set_view_mode_callback(self, callback):
         """设置视图模式回调"""
         self.view_mode_callback = callback
+        # 更新视图模式按钮
+        if self.grid_btn:
+            self.grid_btn.configure(command=lambda: callback('grid'))
+        if self.list_btn:
+            self.list_btn.configure(command=lambda: callback('list'))
 
     def set_theme_callback(self, callback):
         """设置主题切换回调"""
         self.theme_callback = callback
+        if self.theme_btn:
+            self.theme_btn.configure(command=callback)
 
     def set_settings_callback(self, callback):
         """设置设置回调"""
         self.settings_callback = callback
+        if self.settings_btn:
+            self.settings_btn.configure(command=callback)
 
     # 公共方法
     def get_search_text(self):

@@ -19,6 +19,9 @@ class Sidebar:
         self.favorites_callback = None
         self.settings_callback = None
 
+        # 回调存储（用于后续绑定）
+        self._callbacks_store = {}  # {item_id: callback}
+
         # 使用传入的样式管理器或创建新实例
         if style_manager:
             self.style_manager = style_manager
@@ -37,6 +40,10 @@ class Sidebar:
 
         # 标签 widgets 引用
         self.label_widgets = {}
+
+        # 设置按钮引用
+        self.settings_btn = None
+        self.settings_content = None
 
         # 创建UI
         try:
@@ -139,15 +146,15 @@ class Sidebar:
             # 导航菜单项
             self.nav_items = {}
 
-            # 主要导航
+            # 主要导航（先不传递回调，暂用 None）
             main_nav = [
-                ("home", "🏠", "主页", self.home_callback),
-                ("browse", "📁", "浏览文件夹", self.browse_callback),
-                ("scan", "🔍", "扫描漫画", self.scan_callback),
+                ("home", "🏠", "主页"),
+                ("browse", "📁", "浏览文件夹"),
+                ("scan", "🔍", "扫描漫画"),
             ]
 
-            for item_id, icon, label, callback in main_nav:
-                self.create_nav_item(nav_frame, item_id, icon, label, callback)
+            for item_id, icon, label in main_nav:
+                self.create_nav_item(nav_frame, item_id, icon, label)
 
             # 分隔线
             separator1 = tk.Frame(
@@ -157,14 +164,14 @@ class Sidebar:
             )
             separator1.pack(fill='x', pady=12)
 
-            # 辅助导航
+            # 辅助导航（先不传递回调，暂用 None）
             auxiliary_nav = [
-                ("recent", "🕐", "最近访问", self.recent_callback),
-                ("favorites", "⭐", "我的收藏", self.favorites_callback),
+                ("recent", "🕐", "最近访问"),
+                ("favorites", "⭐", "我的收藏"),
             ]
 
-            for item_id, icon, label, callback in auxiliary_nav:
-                self.create_nav_item(nav_frame, item_id, icon, label, callback)
+            for item_id, icon, label in auxiliary_nav:
+                self.create_nav_item(nav_frame, item_id, icon, label)
 
             # 设置默认激活项
             self.set_active_item("home")
@@ -174,7 +181,7 @@ class Sidebar:
             import traceback
             traceback.print_exc()
 
-    def create_nav_item(self, parent, item_id, icon, label, callback):
+    def create_nav_item(self, parent, item_id, icon, label):
         """创建单个导航项"""
         try:
             # 导航项容器
@@ -234,7 +241,7 @@ class Sidebar:
             if not self.is_collapsed:
                 self.label_widgets[item_id].pack(side='left', fill='x', expand=True, padx=(12, 0))
 
-            # 绑定事件
+            # 绑定悬浮事件（点击事件稍后绑定）
             def on_enter(event, widget=click_frame):
                 widget.configure(bg=self.style_manager.colors['card_hover'])
 
@@ -242,14 +249,8 @@ class Sidebar:
                 if self.active_item != item_id:
                     widget.configure(bg=self.style_manager.colors['bg_hover'] if hasattr(self.style_manager.colors, 'bg_hover') else self.style_manager.colors['card_bg'])
 
-            def on_click(event, callback_func=callback):
-                if callback_func:
-                    callback_func()
-                self.set_active_item(item_id)
-
             click_frame.bind('<Enter>', on_enter)
             click_frame.bind('<Leave>', on_leave)
-            click_frame.bind('<Button-1>', on_click)
 
             # 保存导航项引用
             self.nav_items[item_id] = {
@@ -312,20 +313,19 @@ class Sidebar:
             if not self.is_collapsed:
                 self.settings_label.pack(side='left', fill='x', expand=True, padx=(12, 0))
 
-            # 绑定设置按钮事件
+            # 保存设置按钮引用（稍后绑定事件）
+            self.settings_btn = settings_btn
+            self.settings_content = settings_content
+
+            # 绑定悬浮事件（点击事件稍后绑定）
             def on_enter(event):
                 settings_content.configure(bg=self.style_manager.colors['card_hover'])
 
             def on_leave(event):
                 settings_content.configure(bg=self.style_manager.colors['bg_secondary'])
 
-            def on_click(event):
-                if self.settings_callback:
-                    self.settings_callback()
-
             settings_btn.bind('<Enter>', on_enter)
             settings_btn.bind('<Leave>', on_leave)
-            settings_btn.bind('<Button-1>', on_click)
 
         except Exception as e:
             print(f"创建底部区域时出错: {e}")
@@ -392,6 +392,68 @@ class Sidebar:
         except Exception as e:
             print(f"切换侧边栏状态时出错: {e}")
 
+    def _bind_nav_item_click(self, item_id):
+        """绑定导航项的点击事件"""
+        try:
+            if item_id not in self.nav_items:
+                return
+
+            item = self.nav_items[item_id]
+            click_frame = item['click_frame']
+
+            # 获取回调函数
+            callback_map = {
+                'home': self.home_callback,
+                'browse': self.browse_callback,
+                'scan': self.scan_callback,
+                'recent': self.recent_callback,
+                'favorites': self.favorites_callback,
+                'settings': self.settings_callback
+            }
+
+            callback_func = callback_map.get(item_id)
+
+            # 绑定点击事件
+            def on_click(event, cb=callback_func, item=item_id):
+                if cb:
+                    cb()
+                self.set_active_item(item)
+                return "break"  # 阻止事件传播
+
+            # 移除旧的绑定（如果有）
+            click_frame.unbind('<Button-1>')
+
+            # 绑定新的点击事件
+            click_frame.bind('<Button-1>', on_click)
+
+        except Exception as e:
+            print(f"绑定导航项点击事件时出错: {e}")
+
+    def _bind_all_nav_clicks(self):
+        """绑定所有导航项的点击事件"""
+        for item_id in self.nav_items.keys():
+            self._bind_nav_item_click(item_id)
+
+        # 绑定设置按钮
+        self._bind_settings_click()
+
+    def _bind_settings_click(self):
+        """绑定设置按钮的点击事件"""
+        try:
+            if not self.settings_btn or not self.settings_callback:
+                return
+
+            def on_click(event):
+                if self.settings_callback:
+                    self.settings_callback()
+                return "break"
+
+            self.settings_btn.unbind('<Button-1>')
+            self.settings_btn.bind('<Button-1>', on_click)
+
+        except Exception as e:
+            print(f"绑定设置按钮点击事件时出错: {e}")
+
     # 回调设置方法
     def set_callbacks(self, **callbacks):
         """设置所有回调函数"""
@@ -399,26 +461,35 @@ class Sidebar:
             if hasattr(self, f"{name}_callback"):
                 setattr(self, f"{name}_callback", callback)
 
+        # 绑定所有导航项的点击事件
+        self._bind_all_nav_clicks()
+
     def set_home_callback(self, callback):
         """设置主页回调"""
         self.home_callback = callback
+        self._bind_nav_item_click('home')
 
     def set_browse_callback(self, callback):
         """设置浏览回调"""
         self.browse_callback = callback
+        self._bind_nav_item_click('browse')
 
     def set_scan_callback(self, callback):
         """设置扫描回调"""
         self.scan_callback = callback
+        self._bind_nav_item_click('scan')
 
     def set_recent_callback(self, callback):
         """设置最近访问回调"""
         self.recent_callback = callback
+        self._bind_nav_item_click('recent')
 
     def set_favorites_callback(self, callback):
         """设置收藏回调"""
         self.favorites_callback = callback
+        self._bind_nav_item_click('favorites')
 
     def set_settings_callback(self, callback):
         """设置设置回调"""
         self.settings_callback = callback
+        self._bind_settings_click()
