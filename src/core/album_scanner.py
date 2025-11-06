@@ -1,3 +1,8 @@
+"""
+漫画扫描服务
+异步扫描文件夹中的图片
+"""
+
 import threading
 import queue
 from pathlib import Path
@@ -24,20 +29,17 @@ class AlbumScannerService:
         """扫描漫画 - 异步版本"""
         # 防止重复扫描
         if self.scan_thread and self.scan_thread.is_alive():
-            # TODO: 迁移到PyQt6消息框
             print("扫描正在进行中，请稍候...")
             return
 
         folder_path = self.app.folder_path
         if not folder_path:
-            # TODO: 迁移到PyQt6消息框
             print("请先选择漫画文件夹")
             return
 
         # 使用pathlib验证路径
         path_obj = Path(folder_path)
         if not path_obj.exists():
-            # TODO: 迁移到PyQt6消息框
             print("所选文件夹不存在")
             return
 
@@ -107,134 +109,35 @@ class AlbumScannerService:
             # 如果扫描完成，更新UI
             if self.scan_progress >= 100:
                 self._on_scan_complete()
+                return
 
         # 继续检查队列（直到扫描完成）
         if not self.cancel_flag and self.scan_progress < 100:
             # 使用QTimer替代tkinter的after
             from PyQt6.QtCore import QTimer
             QTimer.singleShot(100, self._update_progress_loop)
-            self.app.status_bar.set_status(f"正在扫描漫画... {self.scan_progress}%")
-            self.app.status_bar.set_info(self.scan_status)
-
-        # 检查扫描是否完成
-        if not self.scan_thread or not self.scan_thread.is_alive():
-            # 扫描完成，处理结果
-            self._handle_scan_complete()
-            return
-
-        # 继续更新（频率可以稍低，减少UI负担）
-        self.app.root.after(100, self._update_progress_loop)
-
-    def _handle_scan_complete(self):
-        """处理扫描完成"""
-        # 恢复鼠标指针
-        self.app.root.config(cursor="")
-
-        if self.cancel_flag:
-            # 扫描被取消
-            self.app.status_bar.set_status("扫描已取消")
-            return
-
-        # 检查是否有错误
-        if hasattr(self, 'scan_error'):
-            self._handle_scan_error(self.scan_error)
-            return
-
-        # 检查是否有结果
-        if not self.app.albums:
-            self._handle_no_albums_found()
-            return
-
-        # 显示结果
-        self._display_scan_results()
 
     def cancel_scan(self):
-        """取消扫描"""
+        """取消当前扫描"""
         self.cancel_flag = True
-        self.app.status_bar.set_status("正在取消扫描...")
-    
-    def _handle_no_albums_found(self):
-        """处理未找到漫画的情况"""
-        messagebox.showinfo("提示", "在所选文件夹中未找到包含图片的子文件夹")
-        self.app.status_bar.set_status("未找到漫画")
-        self.app.status_bar.set_info("")
-        self.app.album_grid.display_albums([])
-        
-        # 清除缓存
-        self.app.cached_scan_results = None
-        self.app.cached_scan_path = None
-    
-    def _display_scan_results(self):
-        """显示扫描结果 - 支持合集、智能分组和相册"""
-        self.app.album_grid.display_albums(self.app.albums)
+        if hasattr(self.app, 'status_bar'):
+            self.app.status_bar.set_status("扫描已取消", "warning")
 
-        # 缓存扫描结果
-        current_path = self.app.path_var.get().strip()
-        if current_path:
-            self.app.cached_scan_results = self.app.albums.copy()
-            self.app.cached_scan_path = current_path
-            self.app.current_view_state = "scan"
+    def _on_scan_complete(self):
+        """扫描完成后的处理"""
+        if hasattr(self.app, 'albums') and self.app.albums:
+            # 更新相册网格
+            if hasattr(self.app, 'album_grid'):
+                self.app.album_grid.update_albums(self.app.albums)
 
-        # 统计不同类型的项目
-        collections = [item for item in self.app.albums if item.get('type') == 'collection']
-        smart_collections = [item for item in self.app.albums if item.get('type') == 'smart_collection']
-        albums = [item for item in self.app.albums if item.get('type') == 'album']
+            # 更新状态栏
+            if hasattr(self.app, 'status_bar'):
+                folder_name = Path(self.app.folder_path).name
+                if len(folder_name) > 30:
+                    display_name = folder_name[:27] + "..."
+                else:
+                    display_name = folder_name
 
-        # 计算总图片数
-        total_images = 0
-        for item in self.app.albums:
-            if item.get('type') in ['collection', 'smart_collection']:
-                total_images += item.get('image_count', 0)
-            else:
-                total_images += len(item.get('image_files', []))
-
-        # 统计各类型中包含的相册数
-        collection_albums = sum(item.get('album_count', 0) for item in collections)
-        smart_albums = sum(item.get('album_count', 0) for item in smart_collections)
-
-        # 使用详细的状态设置方法
-        self.app.status_bar.set_detailed_scan_results(
-            collections=len(collections),
-            smart_collections=len(smart_collections),
-            albums=len(albums),
-            total_images=total_images,
-            collection_albums=collection_albums,
-            smart_albums=smart_albums
-        )
-
-        # 更新面包屑
-        folder_name = os.path.basename(current_path) if current_path else "扫描结果"
-        if hasattr(self.app, 'nav_bar'):
-            self.app.nav_bar.update_breadcrumb("scan", folder_name)
-
-        # 启动智能预加载
-        self.app.root.after(500, self.app._start_intelligent_preload)
-
-        # 如果项目很多，提示用户可以滚动和使用快捷键
-        if len(self.app.albums) > 15:
-            tip_text = f"找到 {len(self.app.albums)} 个项目！\n\n"
-
-            # 添加功能说明
-            if collections or smart_collections:
-                tip_text += "📚 功能说明：\n"
-                if collections:
-                    tip_text += "• 📚 合集：手动创建的相册集合\n"
-                if smart_collections:
-                    tip_text += "• 🧠 智能分组：基于名称相似度自动分组\n"
-                tip_text += "• 点击可查看其中的相册\n\n"
-
-            tip_text += ("📋 浏览提示：\n"
-                        "• 使用鼠标滚轮浏览所有内容\n"
-                        "• 🏠 首页按钮返回扫描结果\n"
-                        "• Ctrl+R 查看最近浏览的漫画\n"
-                        "• Ctrl+F 管理收藏的漫画\n"
-                        "• F5 重新扫描当前文件夹")
-            messagebox.showinfo("扫描完成", tip_text)
-    
-    def _handle_scan_error(self, error):
-        """处理扫描错误"""
-        error_msg = f"扫描漫画时发生错误：{str(error)}"
-        print(error_msg)
-        messagebox.showerror("错误", error_msg)
-        self.app.status_bar.set_status("扫描失败")
-        self.app.status_bar.set_info("")
+                total_images = sum(len(album.get('image_files', [])) for album in self.app.albums)
+                self.app.status_bar.set_status(f"扫描完成: {display_name} ({len(self.app.albums)} 个漫画)", "success")
+                self.app.status_bar.set_info(f"共 {total_images} 张图片")
