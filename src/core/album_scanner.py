@@ -1,46 +1,123 @@
+import threading
+import queue
 from tkinter import messagebox
 from pathlib import Path
 from src.utils.image_utils import ImageProcessor
 
 class AlbumScannerService:
-    """漫画扫描服务"""
-    
+    """漫画扫描服务 - 支持异步扫描"""
+
     def __init__(self, app):
         self.app = app
-    
+        self.scan_thread = None
+        self.cancel_flag = False
+        self.scan_progress = 0
+        self.scan_status = ""
+
     def scan_albums(self):
-        """扫描漫画"""
+        """扫描漫画 - 异步版本"""
+        # 防止重复扫描
+        if self.scan_thread and self.scan_thread.is_alive():
+            messagebox.showinfo("提示", "扫描正在进行中，请稍候...")
+            return
+
         folder_path = self.app.path_var.get().strip()
         if not folder_path:
             messagebox.showwarning("提示", "请先选择漫画文件夹\n\n💡 快捷键提示：\n• Ctrl+O: 选择文件夹\n• F5: 快速扫描")
             return
-            
+
         # 使用pathlib验证路径
         path_obj = Path(folder_path)
         if not path_obj.exists():
             messagebox.showerror("错误", "所选文件夹不存在")
             return
-            
+
+        # 重置取消标志
+        self.cancel_flag = False
+
+        # 启动异步扫描线程
+        self.scan_thread = threading.Thread(
+            target=self._scan_worker,
+            args=(str(path_obj),),
+            daemon=True
+        )
+        self.scan_thread.start()
+
+        # 启动进度更新定时器
+        self._update_progress_loop()
+
+    def _scan_worker(self, folder_path):
+        """扫描工作线程"""
         try:
-            # 显示加载状态
-            self.app.root.config(cursor="wait")
-            self.app.status_bar.set_status("正在扫描漫画，请稍候... (按 ESC 可取消)")
-            self.app.root.update()
-            
+            # 定义进度回调函数
+            def progress_callback(progress, status):
+                self.scan_progress = progress
+                self.scan_status = status
+
             # 执行扫描
-            self.app.albums = ImageProcessor.scan_albums(str(path_obj))
-            
-            if not self.app.albums:
-                self._handle_no_albums_found()
+            albums = ImageProcessor.scan_albums(folder_path, progress_callback)
+
+            if self.cancel_flag:
+                # 扫描被取消
+                self.scan_status = "扫描已取消"
                 return
-                
-            # 显示结果
-            self._display_scan_results()
-            
+
+            # 扫描完成，保存结果
+            self.app.albums = albums
+            self.scan_status = "扫描完成"
+            self.scan_progress = 100
+
         except Exception as e:
-            self._handle_scan_error(e)
-        finally:
-            self.app.root.config(cursor="")
+            # 扫描出错
+            self.scan_status = f"扫描出错: {str(e)}"
+            self.scan_error = e
+
+    def _update_progress_loop(self):
+        """更新进度循环"""
+        if self.cancel_flag:
+            return
+
+        # 更新状态栏
+        if hasattr(self, 'scan_status'):
+            self.app.status_bar.set_status(f"正在扫描漫画... {self.scan_progress}%")
+            self.app.status_bar.set_info(self.scan_status)
+
+        # 检查扫描是否完成
+        if not self.scan_thread or not self.scan_thread.is_alive():
+            # 扫描完成，处理结果
+            self._handle_scan_complete()
+            return
+
+        # 继续更新
+        self.app.root.after(100, self._update_progress_loop)
+
+    def _handle_scan_complete(self):
+        """处理扫描完成"""
+        # 恢复鼠标指针
+        self.app.root.config(cursor="")
+
+        if self.cancel_flag:
+            # 扫描被取消
+            self.app.status_bar.set_status("扫描已取消")
+            return
+
+        # 检查是否有错误
+        if hasattr(self, 'scan_error'):
+            self._handle_scan_error(self.scan_error)
+            return
+
+        # 检查是否有结果
+        if not self.app.albums:
+            self._handle_no_albums_found()
+            return
+
+        # 显示结果
+        self._display_scan_results()
+
+    def cancel_scan(self):
+        """取消扫描"""
+        self.cancel_flag = True
+        self.app.status_bar.set_status("正在取消扫描...")
     
     def _handle_no_albums_found(self):
         """处理未找到漫画的情况"""

@@ -15,24 +15,38 @@ class ImageProcessor:
     IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff']
     
     @classmethod
-    def scan_albums(cls, root_path):
-        """扫描漫画文件夹，支持合集功能"""
+    def scan_albums(cls, root_path, progress_callback=None):
+        """扫描漫画文件夹，支持合集功能
+
+        Args:
+            root_path: 根目录路径
+            progress_callback: 进度回调函数，接收(progress, status)参数
+        """
         albums = []
-        
+
         try:
             # 使用pathlib处理路径，更好地支持Unicode
             root_path = Path(root_path)
-            
+
             if not root_path.exists():
                 print(f"路径不存在: {root_path}")
                 return albums
-            
+
+            # 获取所有子文件夹
+            subdirs = [item for item in root_path.iterdir() if item.is_dir()]
+            total_items = len(subdirs)
+
             # 扫描根目录的直接子文件夹
-            for item in root_path.iterdir():
+            for index, item in enumerate(subdirs):
+                # 更新进度
+                progress = int((index / total_items) * 80)  # 扫描阶段80%
+                if progress_callback:
+                    progress_callback(progress, f"扫描: {item.name}")
+
                 if item.is_dir():
                     # 检查这个文件夹是否包含图片（作为单个相册）
                     image_files = cls.get_image_files(str(item))
-                    
+
                     if image_files:
                         # 这是一个包含图片的相册
                         folder_size = cls.get_folder_size(image_files)
@@ -50,15 +64,15 @@ class ImageProcessor:
                         # 检查是否包含子相册（作为合集）
                         sub_albums = []
                         cls._scan_folder_recursive(item, sub_albums)
-                        
+
                         if sub_albums:
                             # 这是一个合集，包含多个相册
                             total_images = sum(len(album['image_files']) for album in sub_albums)
                             total_size_bytes = sum(cls._parse_size_to_bytes(album['folder_size']) for album in sub_albums)
-                            
+
                             # 使用第一个相册的第一张图作为合集封面
                             cover_image = sub_albums[0]['cover_image'] if sub_albums else None
-                            
+
                             collection_info = {
                                 'path': str(item),
                                 'name': item.name,
@@ -70,13 +84,23 @@ class ImageProcessor:
                                 'type': 'collection'  # 标记为合集
                             }
                             albums.append(collection_info)
-                        
+
+            # 智能分组阶段
+            if progress_callback:
+                progress_callback(85, "正在智能分组...")
+
+            # 智能分组：对非合集的相册进行相似度分析
+            albums = cls.create_smart_groups(albums)
+
+            # 完成
+            if progress_callback:
+                progress_callback(100, "扫描完成")
+
         except Exception as e:
             print(f"扫描根目录时出错 {root_path}: {e}")
-        
-        # 智能分组：对非合集的相册进行相似度分析
-        albums = cls.create_smart_groups(albums)
-            
+            if progress_callback:
+                progress_callback(0, f"扫描出错: {str(e)}")
+
         return albums
     
     @classmethod
