@@ -19,16 +19,16 @@ from ..base.base_widget import BaseWidget
 from ..display.label import Label
 
 
-class NavButton(BaseWidget, QPushButton):
+class NavButton(QPushButton, BaseWidget):
     """导航按钮组件"""
 
     # 定义信号
     clicked = pyqtSignal()
 
     def __init__(self, text, icon=None, is_active=False, parent=None, style_manager=None):
-        # 初始化两个基类
-        BaseWidget.__init__(self, parent, style_manager)
+        # 初始化基类 - QPushButton先调用
         QPushButton.__init__(self, text, parent)
+        BaseWidget.__init__(self, parent, style_manager)
 
         self.text = text
         self.icon = icon

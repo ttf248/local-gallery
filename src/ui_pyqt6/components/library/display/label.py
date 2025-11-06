@@ -10,13 +10,13 @@ from PyQt6.QtGui import QFont
 from ..base.base_widget import BaseWidget
 
 
-class Label(BaseWidget, QLabel):
+class Label(QLabel, BaseWidget):
     """标签组件"""
 
     def __init__(self, text="", parent=None, style_manager=None):
-        # 初始化两个基类
-        BaseWidget.__init__(self, parent, style_manager)
+        # 初始化基类 - QLabel先调用
         QLabel.__init__(self, text, parent)
+        BaseWidget.__init__(self, parent, style_manager)
 
         self.setObjectName("label")
         self.apply_label_style()

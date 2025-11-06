@@ -9,13 +9,13 @@ from PyQt6.QtGui import QFont
 from ..base.base_widget import BaseWidget
 
 
-class LineEdit(BaseWidget, QLineEdit):
+class LineEdit(QLineEdit, BaseWidget):
     """文本输入框组件"""
 
     def __init__(self, text="", placeholder="", parent=None, style_manager=None):
-        # 初始化两个基类
-        BaseWidget.__init__(self, parent, style_manager)
+        # 初始化基类 - QLineEdit先调用
         QLineEdit.__init__(self, text, parent)
+        BaseWidget.__init__(self, parent, style_manager)
 
         self.setObjectName("line-edit")
         self.setPlaceholderText(placeholder)
