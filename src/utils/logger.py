@@ -19,7 +19,7 @@ class FileLogger:
     def __init__(self):
         if not self._initialized:
             self.config_manager = None
-            self.setup_logging()
+            self.setup_logging(force_reinit=True)
             FileLogger._initialized = True
 
     def set_config_manager(self, config_manager):
@@ -49,8 +49,13 @@ class FileLogger:
             for handler in self.logger.handlers:
                 handler.setLevel(self._get_log_level())
 
-    def setup_logging(self):
+    def setup_logging(self, force_reinit=False):
         """设置日志配置"""
+        # 清除旧的处理器（如果强制重新初始化）
+        if force_reinit and hasattr(self, 'logger') and self.logger:
+            for handler in self.logger.handlers[:]:
+                self.logger.removeHandler(handler)
+
         # 创建日志目录
         log_dir = Path.home() / '.comic_reader' / 'logs'
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -74,9 +79,9 @@ class FileLogger:
             )
             file_handler.setLevel(self._get_log_level())
 
-            # 设置日志格式
+            # 设置日志格式 (左对齐级别名称)
             formatter = logging.Formatter(
-                fmt='%(asctime)s [%(levelname)8s] %(name)s: %(message)s',
+                fmt='%(asctime)s [%(levelname)-8s] %(name)s: %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
             )
             file_handler.setFormatter(formatter)
