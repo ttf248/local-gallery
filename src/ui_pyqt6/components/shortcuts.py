@@ -3,8 +3,8 @@ PyQt6快捷键管理器
 处理全局快捷键
 """
 
-from PyQt6.QtWidgets import QWidget, QShortcut
-from PyQt6.QtGui import QKeySequence
+from PyQt6.QtWidgets import QWidget
+from PyQt6.QtGui import QShortcut, QKeySequence
 from PyQt6.QtCore import QObject, pyqtSignal
 
 class ShortcutManager(QObject):

@@ -2,6 +2,13 @@
 
 ## 版本 2.0 - 配置系统完善 (2025-11-06)
 
+### [2.0.5] - 2025-11-06
+**fix(ui): 修复PyQt6 QShortcut导入错误**
+- 修复错误: cannot import name 'QShortcut' from 'PyQt6.QtWidgets'
+- 原因: QShortcut在PyQt6中位于QtGui而非QtWidgets
+- 修复: shortcuts.py中的导入语句
+- 结果: 应用程序可以正常启动
+
 ### [2.0.4] - 2025-11-06
 **refactor(config): 删除5个无效配置项及对应UI控件**
 - 移除无效配置项: image_cache_size, image_zoom_mode, image_smooth, image_preload, slideshow_interval
