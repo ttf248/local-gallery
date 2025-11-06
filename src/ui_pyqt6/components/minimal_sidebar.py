@@ -1,13 +1,25 @@
 """
 极简主义侧边栏组件
 基于HTML原型图设计：240px宽度，导航菜单，标签系统
+使用组件库：NavButton, Tag
 """
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QPushButton, QLabel, QFrame, QScrollArea, QSizePolicy
+    QWidget, QVBoxLayout, QLabel, QFrame, QScrollArea, QSizePolicy, QHBoxLayout
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
-from PyQt6.QtGui import QFont, QPalette, QColor
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
+
+import sys
+from pathlib import Path
+
+# 添加src路径
+src_path = Path(__file__).parent.parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from ui_pyqt6.style_manager import StyleManager
+from ui_pyqt6.components.library import NavButton, Tag
 
 
 class MinimalSidebar(QWidget):
@@ -25,6 +37,7 @@ class MinimalSidebar(QWidget):
         super().__init__(parent)
         self.setFixedWidth(240)
         self.current_button = None
+        self.style_manager = StyleManager()
         self.init_ui()
 
     def init_ui(self):
@@ -99,95 +112,96 @@ class MinimalSidebar(QWidget):
         # 导航标题
         nav_title = QLabel("Navigation")
         nav_title.setObjectName("section-title")
+        nav_title.setFont(self.style_manager.get_font('sm'))
+        nav_title.setStyleSheet(f"""
+            QLabel {{
+                color: {self.style_manager.get_colors()['text-tertiary']};
+                font-size: {self.style_manager.font_sizes['xs']}px;
+                font-weight: 500;
+                padding: 16px;
+            }}
+        """)
         parent_layout.addWidget(nav_title)
 
-        # 导航按钮
-        self.nav_buttons = {
-            'home': ('🏠', '我的漫画', self.homeClicked),
-            'favorites': ('❤️', '收藏', self.favoritesClicked, 8),
-            'recent': ('⏰', '历史', self.recentClicked),
-            'categories': ('📁', '分类', None),
-            'imports': ('📥', '导入记录', None),
-        }
+        # 导航按钮 - 使用组件库的NavButton
+        self.home_btn = NavButton(
+            text="我的漫画",
+            icon="🏠",
+            is_active=True,
+            parent=self,
+            style_manager=self.style_manager
+        )
+        self.home_btn.clicked.connect(self.homeClicked)
+        self.home_btn.clicked.connect(lambda: self.set_active_button(self.home_btn))
+        parent_layout.addWidget(self.home_btn)
 
-        for key, data in self.nav_buttons.items():
-            if len(data) == 3:
-                icon, text, signal = data
-                count = None
-            else:
-                icon, text, signal, count = data
+        self.favorites_btn = NavButton(
+            text="收藏",
+            icon="❤️",
+            is_active=False,
+            parent=self,
+            style_manager=self.style_manager
+        )
+        self.favorites_btn.clicked.connect(self.favoritesClicked)
+        self.favorites_btn.clicked.connect(lambda: self.set_active_button(self.favorites_btn))
+        parent_layout.addWidget(self.favorites_btn)
 
-            btn = self.create_nav_button(icon, text, count, signal)
-            setattr(self, f"{key}_btn", btn)
-            parent_layout.addWidget(btn)
+        self.recent_btn = NavButton(
+            text="历史",
+            icon="⏰",
+            is_active=False,
+            parent=self,
+            style_manager=self.style_manager
+        )
+        self.recent_btn.clicked.connect(self.recentClicked)
+        self.recent_btn.clicked.connect(lambda: self.set_active_button(self.recent_btn))
+        parent_layout.addWidget(self.recent_btn)
+
+        # 不带信号的导航项
+        self.categories_btn = NavButton(
+            text="分类",
+            icon="📁",
+            is_active=False,
+            parent=self,
+            style_manager=self.style_manager
+        )
+        parent_layout.addWidget(self.categories_btn)
+
+        self.imports_btn = NavButton(
+            text="导入记录",
+            icon="📥",
+            is_active=False,
+            parent=self,
+            style_manager=self.style_manager
+        )
+        parent_layout.addWidget(self.imports_btn)
 
         parent_layout.addSpacing(16)
 
-    def create_nav_button(self, icon, text, count=None, signal=None):
-        """创建导航按钮"""
-        btn = QPushButton()
-        btn.setObjectName("nav-button")
-        btn.setCheckable(True)
-
-        # 布局
-        layout = QVBoxLayout(btn)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(6)
-
-        # 图标和文字布局
-        content_layout = QHBoxLayout()
-
-        # 图标
-        icon_label = QLabel(icon)
-        icon_label.setFont(QFont("Segoe UI Emoji", 16))
-        icon_label.setFixedWidth(20)
-        content_layout.addWidget(icon_label)
-
-        # 文字
-        text_label = QLabel(text)
-        text_label.setObjectName("nav-text")
-        text_label.setFont(QFont("PingFang SC", 14))
-        content_layout.addWidget(text_label, 1)
-
-        # 数量
-        if count is not None:
-            count_label = QLabel(str(count))
-            count_label.setObjectName("nav-count")
-            count_label.setFont(QFont("PingFang SC", 11))
-            count_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            count_label.setFixedSize(20, 16)
-            count_label.setStyleSheet("""
-                QLabel {
-                    background-color: #E3F2FD;
-                    color: #4A90E2;
-                    border-radius: 8px;
-                }
-            """)
-            content_layout.addWidget(count_label)
-
-        layout.addLayout(content_layout)
-
-        # 连接信号
-        if signal:
-            btn.clicked.connect(signal)
-            btn.clicked.connect(lambda: self.set_active_button(btn))
-
-        return btn
+# 删除原有create_nav_button方法，使用组件库的NavButton
 
     def create_tags_section(self, parent_layout):
         """创建标签区域"""
         # 标签标题
         tags_title = QLabel("Tags")
         tags_title.setObjectName("section-title")
+        tags_title.setFont(self.style_manager.get_font('sm'))
+        tags_title.setStyleSheet(f"""
+            QLabel {{
+                color: {self.style_manager.get_colors()['text-tertiary']};
+                font-size: {self.style_manager.font_sizes['xs']}px;
+                font-weight: 500;
+                padding: 16px;
+            }}
+        """)
         parent_layout.addWidget(tags_title)
 
         # 标签容器
         tags_layout = QHBoxLayout()
         tags_layout.setContentsMargins(16, 8, 16, 16)
         tags_layout.setSpacing(8)
-        tags_layout.setWrapMode(QSizePolicy.Policy.WrapMode.Wrap)
 
-        # 预定义标签
+        # 预定义标签 - 使用组件库的Tag
         tags = [
             ('冒险', '#E3F2FD', '#4A90E2'),
             ('爱情', '#E8F5E9', '#50C878'),
@@ -196,52 +210,25 @@ class MinimalSidebar(QWidget):
         ]
 
         for text, bg_color, text_color in tags:
-            tag = self.create_tag(text, bg_color, text_color)
+            tag = Tag(
+                text=text,
+                bg_color=bg_color,
+                text_color=text_color,
+                parent=self,
+                style_manager=self.style_manager
+            )
             tags_layout.addWidget(tag)
 
         tags_layout.addStretch()
         parent_layout.addLayout(tags_layout)
 
-    def create_tag(self, text, bg_color, text_color):
-        """创建标签"""
-        label = QLabel(text)
-        label.setObjectName("tag")
-        label.setFont(QFont("PingFang SC", 12))
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setFixedHeight(24)
-        label.setStyleSheet(f"""
-            QLabel {{
-                background-color: {bg_color};
-                color: {text_color};
-                border-radius: 12px;
-                padding: 0 12px;
-            }}
-        """)
-        return label
-
     def set_active_button(self, button):
         """设置活动按钮"""
         if self.current_button:
-            self.current_button.setChecked(False)
+            self.current_button.set_active(False)
 
-        button.setChecked(True)
+        button.set_active(True)
         self.current_button = button
-
-        # 添加点击动画
-        self.animate_click(button)
-
-    def animate_click(self, button):
-        """点击动画效果"""
-        animation = QPropertyAnimation(button, b"geometry")
-        animation.setDuration(150)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        # 获取按钮当前几何
-        geo = button.geometry()
-        # 轻微缩放效果（通过调整几何模拟）
-        animation.setStartValue(geo)
-        animation.setEndValue(geo)
-        animation.start()
 
     def set_home_active(self):
         """设置主页为活动状态"""

@@ -1,16 +1,16 @@
 """
 极简主义漫画网格组件
 基于HTML原型图设计：6列网格展示，悬停效果
+使用组件库：AlbumCard, EmptyState, Pagination
 """
 
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QGridLayout,
-    QFrame, QLabel, QPushButton, QSizePolicy, QSpacerItem
+    QWidget, QVBoxLayout, QScrollArea, QGridLayout, QFrame
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect
-from PyQt6.QtGui import QFont, QPixmap, QPainter, QColor
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont
 
 # 添加src路径
 src_path = Path(__file__).parent.parent
@@ -18,204 +18,11 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 from core.config import ConfigManager
+from ui_pyqt6.style_manager import StyleManager
+from ui_pyqt6.components.library import AlbumCard, EmptyState, Pagination
 
 
-class MinimalAlbumCard(QFrame):
-    """极简主义漫画卡片"""
-
-    # 定义信号
-    clicked = pyqtSignal(str)  # 专辑路径
-    favoriteClicked = pyqtSignal(str)  # 收藏按钮
-
-    def __init__(self, album_data, parent=None):
-        super().__init__(parent)
-        self.album_data = album_data
-        self.is_favorite = False
-        self.init_ui()
-
-    def init_ui(self):
-        """初始化UI"""
-        self.setObjectName("minimal-album-card")
-        self.setFixedSize(180, 260)
-        self.setFrameShape(QFrame.Shape.Box)
-
-        # 卡片布局
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(8)
-
-        # 封面区域
-        self.create_cover_area(layout)
-
-        # 信息区域
-        self.create_info_area(layout)
-
-        # 操作区域
-        self.create_action_area(layout)
-
-    def create_cover_area(self, parent_layout):
-        """创建封面区域"""
-        cover_frame = QFrame()
-        cover_frame.setObjectName("album-cover")
-        cover_frame.setFixedSize(164, 200)
-
-        # 封面标签
-        self.cover_label = QLabel()
-        self.cover_label.setObjectName("cover-image")
-        self.cover_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cover_label.setFixedSize(164, 200)
-        self.cover_label.setStyleSheet("""
-            QLabel {
-                background-color: #F8F9FA;
-                border: 1px solid #E9ECEF;
-                border-radius: 4px;
-            }
-        """)
-
-        # 占位符图标
-        placeholder = QLabel("🖼️")
-        placeholder.setFont(QFont("Segoe UI Emoji", 48))
-        placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        placeholder.setParent(self.cover_label)
-        placeholder.setGeometry(0, 0, 164, 200)
-
-        # 页数标签
-        self.page_count_label = QLabel("120页")
-        self.page_count_label.setObjectName("page-count")
-        self.page_count_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
-        self.page_count_label.setFixedSize(50, 20)
-        self.page_count_label.setStyleSheet("""
-            QLabel {
-                background-color: rgba(255, 255, 255, 0.9);
-                color: #6C757D;
-                border-radius: 4px;
-                padding: 2px 6px;
-                font-size: 11px;
-            }
-        """)
-        self.page_count_label.move(110, 5)
-
-        cover_layout = QVBoxLayout(cover_frame)
-        cover_layout.setContentsMargins(0, 0, 0, 0)
-        cover_layout.addWidget(self.cover_label)
-
-        parent_layout.addWidget(cover_frame)
-
-    def create_info_area(self, parent_layout):
-        """创建信息区域"""
-        info_layout = QVBoxLayout()
-        info_layout.setContentsMargins(4, 0, 4, 0)
-        info_layout.setSpacing(4)
-
-        # 标题
-        self.title_label = QLabel(self.album_data.get('name', '未命名'))
-        self.title_label.setObjectName("album-title")
-        self.title_label.setFont(QFont("PingFang SC", 14, QFont.Weight.Medium))
-        self.title_label.setMaximumHeight(20)
-        self.title_label.setStyleSheet("""
-            QLabel {
-                color: #2C3E50;
-            }
-        """)
-        info_layout.addWidget(self.title_label)
-
-        # 作者
-        self.author_label = QLabel(self.album_data.get('author', '未知作者'))
-        self.author_label.setObjectName("album-author")
-        self.author_label.setFont(QFont("PingFang SC", 12))
-        self.author_label.setMaximumHeight(18)
-        self.author_label.setStyleSheet("""
-            QLabel {
-                color: #6C757D;
-            }
-        """)
-        info_layout.addWidget(self.author_label)
-
-        parent_layout.addLayout(info_layout)
-
-    def create_action_area(self, parent_layout):
-        """创建操作区域"""
-        action_layout = QHBoxLayout()
-        action_layout.setContentsMargins(4, 0, 4, 0)
-        action_layout.setSpacing(8)
-
-        # 评分
-        rating_layout = QHBoxLayout()
-        rating_layout.setSpacing(4)
-
-        star_icon = QLabel("⭐")
-        star_icon.setFont(QFont("Segoe UI Emoji", 12))
-        rating_layout.addWidget(star_icon)
-
-        self.rating_label = QLabel("9.2")
-        self.rating_label.setObjectName("album-rating")
-        self.rating_label.setFont(QFont("PingFang SC", 12))
-        self.rating_label.setStyleSheet("""
-            QLabel {
-                color: #6C757D;
-            }
-        """)
-        rating_layout.addWidget(self.rating_label)
-
-        action_layout.addLayout(rating_layout)
-
-        action_layout.addStretch()
-
-        # 收藏按钮
-        self.favorite_btn = QPushButton()
-        self.favorite_btn.setObjectName("favorite-button")
-        self.favorite_btn.setFixedSize(24, 24)
-        self.favorite_btn.setCheckable(True)
-        self.favorite_btn.clicked.connect(self.on_favorite_clicked)
-        action_layout.addWidget(self.favorite_btn)
-
-        # 播放按钮
-        self.play_btn = QPushButton()
-        self.play_btn.setObjectName("play-button")
-        self.play_btn.setFixedSize(24, 24)
-        self.play_btn.setIcon(QIcon("▶"))
-        self.play_btn.clicked.connect(self.on_play_clicked)
-        action_layout.addWidget(self.play_btn)
-
-        parent_layout.addLayout(action_layout)
-
-    def on_favorite_clicked(self):
-        """收藏按钮点击"""
-        self.favoriteClicked.emit(self.album_data.get('path', ''))
-
-    def on_play_clicked(self):
-        """播放按钮点击"""
-        self.clicked.emit(self.album_data.get('path', ''))
-
-    def set_favorite(self, is_favorite):
-        """设置收藏状态"""
-        self.is_favorite = is_favorite
-        self.favorite_btn.setChecked(is_favorite)
-
-        if is_favorite:
-            self.favorite_btn.setStyleSheet("""
-                QPushButton {
-                    color: #E74C3C;
-                    border: none;
-                    font-size: 16px;
-                }
-            """)
-        else:
-            self.favorite_btn.setStyleSheet("""
-                QPushButton {
-                    color: #ADB5BD;
-                    border: none;
-                    font-size: 16px;
-                }
-            """)
-
-    def set_rating(self, rating):
-        """设置评分"""
-        self.rating_label.setText(f"{rating:.1f}")
-
-    def set_page_count(self, count):
-        """设置页数"""
-        self.page_count_label.setText(f"{count}页")
+# 删除原有MinimalAlbumCard类，使用组件库的AlbumCard
 
 
 class MinimalAlbumGrid(QWidget):
@@ -228,8 +35,11 @@ class MinimalAlbumGrid(QWidget):
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config_manager = config_manager
+        self.style_manager = StyleManager()
         self.albums = []
         self.current_view = 'grid'  # 'grid' or 'list'
+        self.current_page = 1
+        self.items_per_page = 24  # 每页显示24个（6列x4行）
         self.init_ui()
 
     def init_ui(self):
@@ -260,6 +70,16 @@ class MinimalAlbumGrid(QWidget):
         scroll_area.setWidget(self.grid_container)
         layout.addWidget(scroll_area, 1)
 
+        # 分页组件
+        self.pagination = Pagination(
+            current_page=1,
+            total_pages=1,
+            parent=self,
+            style_manager=self.style_manager
+        )
+        self.pagination.pageChanged.connect(self.on_page_changed)
+        layout.addWidget(self.pagination)
+
     def update_albums(self, albums):
         """更新漫画列表"""
         self.albums = albums
@@ -277,14 +97,29 @@ class MinimalAlbumGrid(QWidget):
             self.show_empty_state()
             return
 
+        # 计算分页
+        total_pages = (len(self.albums) + self.items_per_page - 1) // self.items_per_page
+        self.pagination.set_total_pages(total_pages if total_pages > 0 else 1)
+
+        # 获取当前页数据
+        start_index = (self.current_page - 1) * self.items_per_page
+        end_index = min(start_index + self.items_per_page, len(self.albums))
+        page_albums = self.albums[start_index:end_index]
+
         # 添加漫画卡片
         columns = 6 if self.current_view == 'grid' else 1
 
-        for index, album in enumerate(self.albums):
+        for index, album in enumerate(page_albums):
             row = index // columns
             col = index % columns
 
-            card = MinimalAlbumCard(album)
+            # 使用组件库的AlbumCard
+            card = AlbumCard(
+                album_data=album,
+                config_manager=self.config_manager,
+                parent=self.grid_container,
+                style_manager=self.style_manager
+            )
             card.clicked.connect(self.albumClicked.emit)
             card.favoriteClicked.connect(self.favoriteClicked.emit)
 
@@ -311,19 +146,17 @@ class MinimalAlbumGrid(QWidget):
             if child:
                 child.setParent(None)
 
-        # 空状态标签
-        empty_label = QLabel("暂无漫画\n请选择文件夹并扫描")
-        empty_label.setObjectName("empty-state")
-        empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_label.setFont(QFont("PingFang SC", 16))
-        empty_label.setStyleSheet("""
-            QLabel {
-                color: #ADB5BD;
-            }
-        """)
-        empty_label.setFixedSize(400, 200)
+        # 使用组件库的EmptyState
+        empty_state = EmptyState(
+            title="暂无漫画",
+            description="请选择文件夹并扫描以添加漫画",
+            action_text="开始扫描",
+            icon="📚",
+            parent=self.grid_container,
+            style_manager=self.style_manager
+        )
 
-        self.grid_layout.addWidget(empty_label, 0, 0, Qt.AlignmentFlag.AlignCenter)
+        self.grid_layout.addWidget(empty_state, 0, 0, Qt.AlignmentFlag.AlignCenter)
 
     def set_view_mode(self, mode):
         """设置视图模式"""
@@ -347,5 +180,18 @@ class MinimalAlbumGrid(QWidget):
         # 临时更新列表
         original_albums = self.albums
         self.albums = filtered_albums
+        self.current_page = 1  # 重置到第一页
         self.refresh_grid()
         self.albums = original_albums
+
+    def on_page_changed(self, page):
+        """页码改变处理"""
+        self.current_page = page
+        self.refresh_grid()
+
+    def set_page_size(self, size):
+        """设置每页显示数量"""
+        if size != self.items_per_page:
+            self.items_per_page = size
+            self.current_page = 1
+            self.refresh_grid()
