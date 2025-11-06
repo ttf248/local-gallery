@@ -379,14 +379,39 @@ class PhotoAlbumApp:
             else:
                 self.toolbar.theme_btn.configure(text="🌙")  # 月亮图标（暗黑模式）
 
-            # 刷新所有组件
-            if hasattr(self, 'album_grid') and self.album_grid:
-                self.album_grid.update_albums(self.albums)
+            # 延迟刷新组件，避免卡顿
+            # 使用 after 确保在UI空闲时执行
+            self.root.after_idle(self._update_theme_after_idle)
 
             self.status_bar.set_status(f"已切换到{self.style_manager.get_theme()}主题", "success")
 
         except Exception as e:
             print(f"切换主题时出错: {e}")
+
+    def _update_theme_after_idle(self):
+        """延迟更新主题（避免卡顿）"""
+        try:
+            # 如果没有相册，直接返回
+            if not self.albums:
+                return
+
+            # 如果相册数量较少，直接更新
+            if len(self.albums) < 50:
+                if hasattr(self, 'album_grid') and self.album_grid:
+                    self.album_grid.update_albums(self.albums)
+                return
+
+            # 如果相册数量很多，只更新当前可见区域
+            if hasattr(self, 'album_grid') and self.album_grid:
+                # 如果启用了虚拟化，只更新可见区域
+                if hasattr(self.album_grid, 'is_virtualized') and self.album_grid.is_virtualized:
+                    self.album_grid._update_visible_items()
+                else:
+                    # 否则更新所有，但使用after分批执行
+                    self.root.after(100, lambda: self.album_grid.update_albums(self.albums))
+
+        except Exception as e:
+            print(f"延迟更新主题时出错: {e}")
 
     def toggle_view_mode(self, mode):
         """切换视图模式"""
