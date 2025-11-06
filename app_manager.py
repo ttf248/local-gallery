@@ -312,6 +312,10 @@ class PhotoAlbumApp:
     def setup_callbacks(self):
         """设置组件回调"""
         try:
+            # 创建扫描器实例（异步扫描）
+            from src.core.album_scanner import AlbumScannerService
+            self.scanner = AlbumScannerService(self)
+
             # 设置侧边栏回调
             self.sidebar.set_callbacks(
                 home=self.return_to_scan_results,
@@ -367,6 +371,18 @@ class PhotoAlbumApp:
         """绑定事件"""
         # 窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        # ESC键取消扫描
+        self.root.bind('<Escape>', lambda e: self.cancel_scan())
+
+    def cancel_scan(self):
+        """取消当前扫描"""
+        try:
+            if hasattr(self, 'scanner') and self.scanner:
+                self.scanner.cancel_scan()
+                self.status_bar.set_status("扫描已取消")
+        except Exception as e:
+            print(f"取消扫描时出错: {e}")
 
     def toggle_theme(self):
         """切换主题（明暗模式）"""
@@ -449,27 +465,13 @@ class PhotoAlbumApp:
             self.status_bar.set_status(f"已选择: {display_name}", "success")
             
     def scan_albums(self):
-        """扫描漫画"""
-        from src.core.album_scanner import AlbumScannerService
-        
-        # 保存当前扫描路径
-        current_path = self.path_var.get().strip()
-        
-        scanner = AlbumScannerService(self)
-        scanner.scan_albums()
-        
-        # 扫描成功后缓存结果
-        if self.albums:  # 扫描成功
-            self.cached_scan_results = self.albums.copy()
-            self.cached_scan_path = current_path
-            self.current_view_state = "scan"
-            
-            # 更新面包屑
-            folder_name = os.path.basename(current_path) if current_path else "扫描结果"
-            self.nav_bar.update_breadcrumb("scan", folder_name)
-            
-            # 启动智能预加载
-            self._start_intelligent_preload()
+        """扫描漫画 - 使用异步扫描器"""
+        if not hasattr(self, 'scanner'):
+            from src.core.album_scanner import AlbumScannerService
+            self.scanner = AlbumScannerService(self)
+
+        # 启动异步扫描
+        self.scanner.scan_albums()
     
     def _start_intelligent_preload(self):
         """启动智能预加载"""
