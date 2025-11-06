@@ -161,6 +161,12 @@ class SettingsDialog(QDialog):
         )
         group_layout.addWidget(self.notification_check)
 
+        self.show_thumbnails = QCheckBox("显示缩略图")
+        self.show_thumbnails.setChecked(
+            self.config_manager.get_show_thumbnails()
+        )
+        group_layout.addWidget(self.show_thumbnails)
+
         layout.addWidget(group)
 
         layout.addStretch()
