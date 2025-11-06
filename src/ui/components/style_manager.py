@@ -18,73 +18,142 @@ def get_safe_font(font_family, size, style=None):
             return ('Arial', size)
 
 class StyleManager:
-    """现代化样式管理器"""
-    
+    """现代化样式管理器 - 支持明暗主题切换"""
+
     def __init__(self, root, style=None):
         self.root = root
         self.style = style
         self.logger = get_logger('ui.style')
-        
-        # 现代化颜色主题 - 基于 Arc 主题的配色方案
-        self.colors = {
+
+        # 主题模式：'light' 或 'dark'
+        self.current_theme = 'light'
+
+        # 定义明亮主题颜色
+        self.light_theme = {
             # 主要背景色
-            'bg_primary': '#F5F6FA',      # 主背景 - 浅灰蓝
-            'bg_secondary': '#FFFFFF',     # 次要背景 - 纯白
-            'bg_tertiary': '#FAFBFC',     # 第三背景 - 极浅灰
-            
+            'bg_primary': '#F5F6FA',
+            'bg_secondary': '#FFFFFF',
+            'bg_tertiary': '#FAFBFC',
+            'bg_hover': '#F0F2F5',
+
             # 文字颜色
-            'text_primary': '#2F3349',     # 主要文字 - 深蓝灰
-            'text_secondary': '#6C7293',   # 次要文字 - 中灰蓝
-            'text_tertiary': '#A0A3BD',    # 第三文字 - 浅灰蓝
-            'text_white': '#FFFFFF',       # 白色文字
-            
+            'text_primary': '#2F3349',
+            'text_secondary': '#6C7293',
+            'text_tertiary': '#A0A3BD',
+            'text_white': '#FFFFFF',
+
             # 强调色
-            'accent': '#5294E2',           # 主强调色 - Arc 蓝
-            'accent_hover': '#4A90E2',     # 悬浮状态
-            'accent_active': '#3B82E0',    # 激活状态
-            'accent_light': '#E3F2FD',     # 浅色强调
-            
+            'accent': '#5294E2',
+            'accent_hover': '#4A90E2',
+            'accent_active': '#3B82E0',
+            'accent_light': '#E3F2FD',
+
             # 状态色
-            'success': '#27AE60',          # 成功绿
-            'success_light': '#E8F5E8',    # 浅绿背景
-            'warning': '#F39C12',          # 警告橙
-            'warning_light': '#FFF3CD',    # 浅橙背景
-            'error': '#E74C3C',            # 错误红
-            'error_light': '#FADBD8',      # 浅红背景
-            
+            'success': '#27AE60',
+            'success_light': '#E8F5E8',
+            'warning': '#F39C12',
+            'warning_light': '#FFF3CD',
+            'error': '#E74C3C',
+            'error_light': '#FADBD8',
+
             # 卡片和容器
-            'card_bg': '#FFFFFF',          # 卡片背景
-            'card_hover': '#F8F9FA',       # 卡片悬浮
-            'card_border': '#E1E8ED',      # 卡片边框
-            'card_shadow': '#00000010',    # 卡片阴影
-            
+            'card_bg': '#FFFFFF',
+            'card_hover': '#F8F9FA',
+            'card_border': '#E1E8ED',
+            'card_shadow': '#00000010',
+
             # 边框和分割线
-            'border': '#E1E8ED',           # 主边框
-            'border_light': '#F0F3F7',     # 浅边框
-            'divider': '#EBEEF3',          # 分割线
-            
+            'border': '#E1E8ED',
+            'border_light': '#F0F3F7',
+            'divider': '#EBEEF3',
+
             # 按钮颜色
-            'button_primary': '#5294E2',   # 主按钮
+            'button_primary': '#5294E2',
             'button_primary_hover': '#4A90E2',
-            'button_secondary': '#F8F9FA', # 次要按钮
+            'button_secondary': '#F8F9FA',
             'button_secondary_hover': '#E9ECEF',
-            'button_danger': '#E74C3C',    # 危险按钮
+            'button_danger': '#E74C3C',
             'button_danger_hover': '#C0392B',
-            'button_collection': '#8E44AD', # 合集按钮 - 紫色
+            'button_collection': '#8E44AD',
             'button_collection_hover': '#7D3C98',
-            'button_smart_collection': '#E67E22', # 智能分组按钮 - 橙色
+            'button_smart_collection': '#E67E22',
             'button_smart_collection_hover': '#D35400',
-            
+
             # 输入框
             'input_bg': '#FFFFFF',
             'input_border': '#E1E8ED',
             'input_focus': '#5294E2',
-            
+
             # 滚动条
             'scrollbar_bg': '#F5F6FA',
             'scrollbar_thumb': '#C1C7D0',
             'scrollbar_thumb_hover': '#A8B2C1'
         }
+
+        # 定义暗黑主题颜色
+        self.dark_theme = {
+            # 主要背景色
+            'bg_primary': '#1E1E2E',
+            'bg_secondary': '#2A2A3E',
+            'bg_tertiary': '#333347',
+            'bg_hover': '#3D3D5C',
+
+            # 文字颜色
+            'text_primary': '#D4D4D4',
+            'text_secondary': '#B4B4B4',
+            'text_tertiary': '#888888',
+            'text_white': '#FFFFFF',
+
+            # 强调色
+            'accent': '#7AA2F7',
+            'accent_hover': '#8CB6FF',
+            'accent_active': '#6A9AF7',
+            'accent_light': '#1A2332',
+
+            # 状态色
+            'success': '#73DACA',
+            'success_light': '#1A3A35',
+            'warning': '#E0AF68',
+            'warning_light': '#3A2F1A',
+            'error': '#F7768E',
+            'error_light': '#3A1A22',
+
+            # 卡片和容器
+            'card_bg': '#2A2A3E',
+            'card_hover': '#333347',
+            'card_border': '#414158',
+            'card_shadow': '#00000030',
+
+            # 边框和分割线
+            'border': '#414158',
+            'border_light': '#3D3D5C',
+            'divider': '#3D3D5C',
+
+            # 按钮颜色
+            'button_primary': '#7AA2F7',
+            'button_primary_hover': '#8CB6FF',
+            'button_secondary': '#3D3D5C',
+            'button_secondary_hover': '#4A4A6A',
+            'button_danger': '#F7768E',
+            'button_danger_hover': '#FF8CA0',
+            'button_collection': '#BB9AF7',
+            'button_collection_hover': '#C8A9FF',
+            'button_smart_collection': '#E0AF68',
+            'button_smart_collection_hover': '#F0C278',
+
+            # 输入框
+            'input_bg': '#2A2A3E',
+            'input_border': '#414158',
+            'input_focus': '#7AA2F7',
+
+            # 滚动条
+            'scrollbar_bg': '#1E1E2E',
+            'scrollbar_thumb': '#414158',
+            'scrollbar_thumb_hover': '#505070'
+        }
+
+        # 初始化为明亮主题
+        self.colors = self.light_theme.copy()
         
         # 现代化字体配置
         self.fonts = {
@@ -131,16 +200,59 @@ class StyleManager:
         
         log_info("样式管理器初始化完成", 'ui.style')
         self.configure_styles()
-    
+
+    def toggle_theme(self):
+        """切换主题（明亮 <-> 暗黑）"""
+        try:
+            if self.current_theme == 'light':
+                self.set_theme('dark')
+            else:
+                self.set_theme('light')
+        except Exception as e:
+            log_error(f"切换主题时出错: {e}", 'ui.style')
+
+    def set_theme(self, theme_name):
+        """设置主题
+        Args:
+            theme_name: 'light' 或 'dark'
+        """
+        try:
+            if theme_name not in ['light', 'dark']:
+                log_warning(f"未知主题: {theme_name}", 'ui.style')
+                return
+
+            if theme_name == 'light':
+                self.colors = self.light_theme.copy()
+            else:
+                self.colors = self.dark_theme.copy()
+
+            self.current_theme = theme_name
+
+            # 重新配置样式
+            self.configure_styles()
+
+            log_info(f"主题已切换到: {theme_name}", 'ui.style')
+
+        except Exception as e:
+            log_error(f"设置主题时出错: {e}", 'ui.style')
+
+    def get_theme(self):
+        """获取当前主题"""
+        return self.current_theme
+
+    def is_dark_theme(self):
+        """检查是否为暗黑主题"""
+        return self.current_theme == 'dark'
+
     def configure_styles(self):
         """配置现代化样式"""
         try:
             # 设置根窗口背景
             self.root.configure(bg=self.colors['bg_primary'])
-            
+
             if self.style:
                 self.configure_ttk_styles()
-            
+
             log_info("现代化样式配置完成", 'ui.style')
         except Exception as e:
             log_error(f"配置样式时出错: {e}", 'ui.style')
