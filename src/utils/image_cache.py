@@ -2,37 +2,85 @@ import os
 import hashlib
 import threading
 import queue
+import heapq
+import itertools
 from pathlib import Path
 from PIL import Image, ImageTk
 from concurrent.futures import ThreadPoolExecutor
 from .logger import get_logger, log_info, log_error, log_exception
 
+class PriorityLoadQueue:
+    """优化的优先级加载队列 - 使用堆而不是重建队列"""
+
+    def __init__(self):
+        self.queue = []  # 最小堆
+        self.entry_finder = {}  # 快速查找
+        self.counter = itertools.count()  # 用于处理相同优先级的任务
+
+    def put(self, item, priority=0):
+        """添加任务到队列（带优先级）"""
+        if item in self.entry_finder:
+            self.remove(item)
+        count = next(self.counter)
+        entry = [priority, count, item]
+        self.entry_finder[item] = entry
+        heapq.heappush(self.queue, entry)
+
+    def remove(self, item):
+        """从队列中移除任务"""
+        entry = self.entry_finder.pop(item)
+        entry[-1] = '__removed__'
+
+    def get(self, timeout=None):
+        """从队列获取任务"""
+        if not self.queue:
+            raise queue.Empty
+        while self.queue:
+            priority, count, item = heapq.heappop(self.queue)
+            if item != '__removed__':
+                del self.entry_finder[item]
+                return item
+        raise queue.Empty
+
+    def get_nowait(self):
+        """非阻塞获取任务"""
+        return self.get(timeout=0)
+
+    def empty(self):
+        """检查队列是否为空"""
+        return len(self.entry_finder) == 0
+
+    def qsize(self):
+        """获取队列大小"""
+        return len(self.entry_finder)
+
+
 class ImageCache:
     """异步图片缓存管理器"""
-    
+
     def __init__(self, cache_dir=None, max_memory_items=100, max_workers=2):
         """初始化缓存管理器
-        
+
         Args:
             cache_dir: 磁盘缓存目录
             max_memory_items: 内存中最大缓存项数
             max_workers: 最大工作线程数
         """
         self.logger = get_logger('image_cache')
-        
+
         # 缓存目录
         if cache_dir is None:
             cache_dir = Path.home() / '.comic_reader' / 'cache'
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 内存缓存 - LRU实现
         self.memory_cache = {}
         self.access_order = []
         self.max_memory_items = max_memory_items
-        
-        # 异步加载队列
-        self.load_queue = queue.Queue()
+
+        # 异步加载队列 - 使用优化的优先级队列
+        self.load_queue = PriorityLoadQueue()
         self.executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix='ImageCache')
         
         # 回调管理
@@ -55,11 +103,11 @@ class ImageCache:
         while True:
             try:
                 task = self.load_queue.get(timeout=1)
-                if task is None:  # 退出信号
+                # 检查是否是哨兵对象（退出信号）
+                if task[0] is None and task[1] is None and task[2] is None:
                     break
-                
+
                 self._process_load_task(task)
-                self.load_queue.task_done()
             except queue.Empty:
                 continue
             except Exception as e:
@@ -263,7 +311,8 @@ class ImageCache:
             # 停止工作线程
             for _ in range(2):
                 try:
-                    self.load_queue.put(None)
+                    # 使用哨兵对象停止线程
+                    self.load_queue.put((None, None, None), priority=-999)
                 except Exception as e:
                     log_error(f"停止工作线程时出错: {e}", 'image_cache')
             
@@ -287,7 +336,7 @@ class ImageCache:
 
     def preload_images(self, image_paths, size, widget, priority=False):
         """预加载图片列表（批量加载）
-        
+
         Args:
             image_paths: 图片路径列表
             size: 目标尺寸 (width, height)
@@ -296,48 +345,36 @@ class ImageCache:
         """
         try:
             preload_count = 0
+            # 优先级：数值越小优先级越高（使用堆队列）
+            priority_value = -1 if priority else 0
+
             for image_path in image_paths:
                 try:
                     cache_key = self._generate_cache_key(image_path, size)
-                    
+
                     # 检查是否已在内存缓存中
                     if cache_key in self.memory_cache:
                         continue
-                    
+
                     # 检查是否正在加载
                     if cache_key in self.loading_set:
                         continue
-                    
+
                     # 添加到加载队列
                     self.loading_set.add(cache_key)
                     task = (image_path, size, cache_key)
-                    
-                    if priority:
-                        # 优先任务：插入到队列前面
-                        temp_queue = queue.Queue()
-                        temp_queue.put(task)
-                        
-                        # 将现有任务移到临时队列后面
-                        while not self.load_queue.empty():
-                            try:
-                                existing_task = self.load_queue.get_nowait()
-                                temp_queue.put(existing_task)
-                            except queue.Empty:
-                                break
-                        
-                        # 重新装载队列
-                        self.load_queue = temp_queue
-                    else:
-                        self.load_queue.put(task)
-                    
+
+                    # 使用优先级添加任务（O(log n)而不是O(n)）
+                    self.load_queue.put(task, priority=priority_value)
+
                     preload_count += 1
-                    
+
                 except Exception as e:
                     log_error(f"添加预加载任务失败 {image_path}: {e}", 'image_cache')
                     continue
-                
+
             log_info(f"预加载 {preload_count} 张图片，优先级: {priority}", 'image_cache')
-            
+
         except Exception as e:
             log_error(f"预加载图片失败: {e}", 'image_cache')
 
