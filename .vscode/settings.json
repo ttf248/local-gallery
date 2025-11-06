@@ -8,5 +8,8 @@
         "-p",
         "test_*.py"
     ],
-    "python.testing.autoTestDiscoverOnSaveEnabled": true
+    "python.testing.autoTestDiscoverOnSaveEnabled": true,
+    "python.terminal.activateEnvironment": true,
+    "python.defaultInterpreterPath": "./.venv/Scripts/python.exe",
+    "python.envFile": "${workspaceFolder}/.env"
 }
