@@ -1,2 +1,2 @@
 Pillow==10.1.0
-ttkthemes==3.2.2
+PyQt6==6.6.1
