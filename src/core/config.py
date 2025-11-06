@@ -67,6 +67,13 @@ class ConfigManager:
             'scan_recursive': True,
             'scan_hidden_folders': False,
             'image_formats': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff'],
+
+            # 日志设置
+            'log_level': 'DEBUG',  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+            'log_enabled': True,
+            'log_max_days': 30,  # 日志保留天数
+            'config_file_path': None,  # 配置文件路径
+            'log_file_path': None,  # 日志文件路径
         }
         
         # 加载配置
@@ -325,6 +332,67 @@ class ConfigManager:
     def set_image_formats(self, formats):
         """设置支持图片格式"""
         self.config['image_formats'] = formats
+        self.save_config()
+
+    # 日志设置
+    def get_log_level(self):
+        """获取日志级别"""
+        return self.config.get('log_level', 'DEBUG')
+
+    def set_log_level(self, level):
+        """设置日志级别"""
+        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        if level in valid_levels:
+            self.config['log_level'] = level
+            self.save_config()
+            log_info(f"日志级别已设置为: {level}", 'core.config')
+        else:
+            log_warning(f"无效的日志级别: {level}", 'core.config')
+
+    def get_log_enabled(self):
+        """获取是否启用日志"""
+        return self.config.get('log_enabled', True)
+
+    def set_log_enabled(self, enabled):
+        """设置是否启用日志"""
+        self.config['log_enabled'] = enabled
+        self.save_config()
+        log_info(f"日志功能{'启用' if enabled else '禁用'}", 'core.config')
+
+    def get_log_max_days(self):
+        """获取日志保留天数"""
+        return self.config.get('log_max_days', 30)
+
+    def set_log_max_days(self, days):
+        """设置日志保留天数"""
+        self.config['log_max_days'] = days
+        self.save_config()
+        log_info(f"日志保留天数已设置为: {days} 天", 'core.config')
+
+    def get_config_file_path(self):
+        """获取配置文件路径"""
+        if not self.config.get('config_file_path'):
+            self.config['config_file_path'] = str(self.config_file)
+            self.save_config()
+        return self.config.get('config_file_path')
+
+    def set_config_file_path(self, path):
+        """设置配置文件路径"""
+        self.config['config_file_path'] = str(path)
+        self.save_config()
+
+    def get_log_file_path(self):
+        """获取日志文件路径"""
+        if not self.config.get('log_file_path'):
+            # 默认日志路径
+            log_dir = Path.home() / '.comic_reader' / 'logs'
+            self.config['log_file_path'] = str(log_dir / 'comic_reader.log')
+            self.save_config()
+        return self.config.get('log_file_path')
+
+    def set_log_file_path(self, path):
+        """设置日志文件路径"""
+        self.config['log_file_path'] = str(path)
         self.save_config()
 
     # 配置导入导出

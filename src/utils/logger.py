@@ -18,8 +18,36 @@ class FileLogger:
 
     def __init__(self):
         if not self._initialized:
+            self.config_manager = None
             self.setup_logging()
             FileLogger._initialized = True
+
+    def set_config_manager(self, config_manager):
+        """设置配置管理器，用于读取日志级别"""
+        self.config_manager = config_manager
+        self._update_log_level()
+
+    def _get_log_level(self):
+        """从配置获取日志级别"""
+        if self.config_manager:
+            level_name = self.config_manager.get_log_level()
+            level_map = {
+                'DEBUG': logging.DEBUG,
+                'INFO': logging.INFO,
+                'WARNING': logging.WARNING,
+                'ERROR': logging.ERROR,
+                'CRITICAL': logging.CRITICAL
+            }
+            return level_map.get(level_name, logging.DEBUG)
+        return logging.DEBUG  # 默认级别
+
+    def _update_log_level(self):
+        """更新日志器级别"""
+        if hasattr(self, 'logger') and self.logger:
+            self.logger.setLevel(self._get_log_level())
+            # 同时更新所有handler的级别
+            for handler in self.logger.handlers:
+                handler.setLevel(self._get_log_level())
 
     def setup_logging(self):
         """设置日志配置"""
@@ -32,7 +60,7 @@ class FileLogger:
 
         # 创建根日志器
         self.logger = logging.getLogger('comic_reader')
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(self._get_log_level())
 
         # 避免重复添加处理器
         if not self.logger.handlers:
@@ -44,7 +72,7 @@ class FileLogger:
                 backupCount=30,
                 encoding='utf-8'
             )
-            file_handler.setLevel(logging.DEBUG)
+            file_handler.setLevel(self._get_log_level())
 
             # 设置日志格式
             formatter = logging.Formatter(

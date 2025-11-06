@@ -23,7 +23,7 @@ from .components.sidebar import Sidebar
 from .components.toolbar import Toolbar
 from .components.album_grid import AlbumGrid
 from .components.status_bar import StatusBar
-from utils.logger import get_logger, log_info, log_warning, log_error, log_exception, log_debug
+from utils.logger import get_logger, log_info, log_warning, log_error, log_exception, log_debug, file_logger
 
 class MainWindow(QMainWindow):
     """主窗口"""
@@ -45,6 +45,9 @@ class MainWindow(QMainWindow):
 
         # 创建快捷键管理器
         self.shortcut_manager = None
+
+        # 设置日志系统配置管理器
+        file_logger.set_config_manager(self.config_manager)
 
         log_info("MainWindow 初始化开始", 'ui.main_window')
 
@@ -415,6 +418,10 @@ class MainWindow(QMainWindow):
         sidebar_width = self.config_manager.get_sidebar_width()
         if hasattr(self, 'sidebar'):
             self.sidebar.setFixedWidth(sidebar_width)
+
+        # 更新日志级别
+        file_logger._update_log_level()
+        log_info(f"日志级别已更新为: {self.config_manager.get_log_level()}", 'ui.main_window')
 
     def apply_filter(self, filter_text):
         """应用筛选"""

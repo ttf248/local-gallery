@@ -52,6 +52,9 @@ class SettingsDialog(QDialog):
         # 扫描设置
         self.create_scan_tab(tab_widget)
 
+        # 日志设置
+        self.create_log_tab(tab_widget)
+
         # 按钮
         button_layout = QHBoxLayout()
         button_layout.addStretch()
@@ -344,6 +347,17 @@ class SettingsDialog(QDialog):
                 self.scan_hidden.isChecked()
             )
 
+            # 保存日志设置
+            self.config_manager.set_log_enabled(
+                self.log_enabled_check.isChecked()
+            )
+            self.config_manager.set_log_level(
+                self.log_level_combo.currentText()
+            )
+            self.config_manager.set_log_max_days(
+                self.log_max_days_spin.value()
+            )
+
             # 保存配置
             self.config_manager.save_config()
 
@@ -351,3 +365,105 @@ class SettingsDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "保存失败", f"保存设置时出错:\n{str(e)}")
+
+    def create_log_tab(self, parent):
+        """创建日志设置选项卡"""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        # 日志基本设置
+        basic_group = QGroupBox("基本设置")
+        basic_layout = QVBoxLayout(basic_group)
+
+        # 启用日志
+        self.log_enabled_check = QCheckBox("启用日志记录")
+        self.log_enabled_check.setChecked(self.config_manager.get_log_enabled())
+        basic_layout.addWidget(self.log_enabled_check)
+
+        # 日志级别
+        level_layout = QHBoxLayout()
+        level_layout.addWidget(QLabel("日志级别:"))
+        self.log_level_combo = QComboBox()
+        self.log_level_combo.addItems(['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'])
+        self.log_level_combo.setCurrentText(self.config_manager.get_log_level())
+        level_layout.addWidget(self.log_level_combo)
+        level_layout.addStretch()
+        basic_layout.addLayout(level_layout)
+
+        # 日志保留天数
+        days_layout = QHBoxLayout()
+        days_layout.addWidget(QLabel("日志保留天数:"))
+        self.log_max_days_spin = QSpinBox()
+        self.log_max_days_spin.setRange(1, 365)
+        self.log_max_days_spin.setValue(self.config_manager.get_log_max_days())
+        self.log_max_days_spin.setSuffix(" 天")
+        days_layout.addWidget(self.log_max_days_spin)
+        days_layout.addStretch()
+        basic_layout.addLayout(days_layout)
+
+        layout.addWidget(basic_group)
+
+        # 文件路径设置
+        path_group = QGroupBox("文件路径")
+        path_layout = QVBoxLayout(path_group)
+
+        # 配置文件路径
+        config_path_layout = QHBoxLayout()
+        config_path_layout.addWidget(QLabel("配置文件:"))
+        self.config_path_label = QLabel(self.config_manager.get_config_file_path())
+        self.config_path_label.setStyleSheet("color: #666;")
+        self.config_path_label.setWordWrap(True)
+        config_path_layout.addWidget(self.config_path_label, 1)
+        self.open_config_btn = QPushButton("打开")
+        self.open_config_btn.clicked.connect(self.open_config_file)
+        config_path_layout.addWidget(self.open_config_btn)
+        path_layout.addLayout(config_path_layout)
+
+        # 日志文件路径
+        log_path_layout = QHBoxLayout()
+        log_path_layout.addWidget(QLabel("日志目录:"))
+        self.log_path_label = QLabel(str(Path(self.config_manager.get_log_file_path()).parent))
+        self.log_path_label.setStyleSheet("color: #666;")
+        self.log_path_label.setWordWrap(True)
+        log_path_layout.addWidget(self.log_path_label, 1)
+        self.open_log_btn = QPushButton("打开")
+        self.open_log_btn.clicked.connect(self.open_log_directory)
+        log_path_layout.addWidget(self.open_log_btn)
+        path_layout.addLayout(log_path_layout)
+
+        layout.addWidget(path_group)
+
+        layout.addStretch()
+        parent.addTab(tab, "日志")
+
+    def open_config_file(self):
+        """打开配置文件"""
+        import subprocess
+        import platform
+
+        config_path = self.config_manager.get_config_file_path()
+        try:
+            if platform.system() == 'Windows':
+                subprocess.run(['explorer', '/select,', config_path], check=False)
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', '-R', config_path], check=False)
+            else:  # Linux
+                subprocess.run(['xdg-open', str(Path(config_path).parent)], check=False)
+        except Exception as e:
+            QMessageBox.warning(self, "打开失败", f"无法打开配置文件:\n{str(e)}")
+
+    def open_log_directory(self):
+        """打开日志目录"""
+        import subprocess
+        import platform
+
+        log_path = Path(self.config_manager.get_log_file_path()).parent
+        try:
+            if platform.system() == 'Windows':
+                subprocess.run(['explorer', str(log_path)], check=False)
+            elif platform.system() == 'Darwin':  # macOS
+                subprocess.run(['open', str(log_path)], check=False)
+            else:  # Linux
+                subprocess.run(['xdg-open', str(log_path)], check=False)
+        except Exception as e:
+            QMessageBox.warning(self, "打开失败", f"无法打开日志目录:\n{str(e)}")
