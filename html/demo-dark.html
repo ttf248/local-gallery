@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>漫画阅读软件 - 暗色主题原型</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'dark-bg': '#1e1e1e',
+                        'dark-surface': '#2d2d2d',
+                        'dark-surface-light': '#3a3a3a',
+                        'dark-border': '#4a4a4a',
+                        'accent-blue': '#0ea5e9',
+                        'accent-purple': '#8b5cf6',
+                        'accent-pink': '#ec4899'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+        }
+        .glass-effect {
+            background: rgba(45, 45, 45, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dark-card {
+            background: linear-gradient(135deg, rgba(45, 45, 45, 0.9) 0%, rgba(30, 30, 30, 0.9) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        .dark-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+            border-color: rgba(14, 165, 233, 0.3);
+        }
+        .prototype-section {
+            min-height: 100vh;
+            page-break-after: always;
+        }
+        .neon-glow {
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-dark-bg text-gray-100">
+    <!-- 主界面 - 漫画库浏览 -->
+    <div id="main-interface" class="prototype-section">
+        <div class="max-w-[1920px] mx-auto">
+            <!-- 顶部标题栏 -->
+            <div class="glass-effect p-6 flex items-center justify-between border-b border-dark-border">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-accent-blue to-accent-purple rounded-lg flex items-center justify-center">
+                        <i class="fas fa-book-open text-2xl text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold bg-gradient-to-r from-accent-blue to-accent-purple bg-clip-text text-transparent">
+                            漫画阅读器
+                        </h1>
+                        <p class="text-gray-400 text-sm">探索精彩的漫画世界</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="glass-effect px-6 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                        <i class="fas fa-cog mr-2 text-accent-blue"></i>
+                        <span>设置</span>
+                    </button>
+                    <button class="bg-gradient-to-r from-accent-blue to-accent-purple px-6 py-3 rounded-lg hover:opacity-90 transition-all duration-300 flex items-center">
+                        <i class="fas fa-plus mr-2"></i>
+                        <span>导入漫画</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex">
+                <!-- 左侧导航栏 -->
+                <div class="w-72 glass-effect p-6 border-r border-dark-border">
+                    <div class="space-y-2">
+                        <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">导航</h2>
+                        <button class="w-full text-left px-4 py-4 bg-gradient-to-r from-accent-blue to-accent-purple rounded-lg flex items-center group">
+                            <i class="fas fa-th-large w-6 text-white"></i>
+                            <span class="ml-4 text-white font-medium">我的漫画</span>
+                            <div class="ml-auto bg-white/20 px-3 py-1 rounded-full text-sm">24</div>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center group transition-all duration-200">
+                            <i class="fas fa-heart w-6 text-accent-pink"></i>
+                            <span class="ml-4 text-gray-300 group-hover:text-white">收藏</span>
+                            <div class="ml-auto bg-dark-surface-light px-3 py-1 rounded-full text-sm text-gray-400">8</div>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center group transition-all duration-200">
+                            <i class="fas fa-history w-6 text-accent-blue"></i>
+                            <span class="ml-4 text-gray-300 group-hover:text-white">阅读历史</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center group transition-all duration-200">
+                            <i class="fas fa-folder w-6 text-accent-purple"></i>
+                            <span class="ml-4 text-gray-300 group-hover:text-white">分类管理</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center group transition-all duration-200">
+                            <i class="fas fa-download w-6 text-accent-blue"></i>
+                            <span class="ml-4 text-gray-300 group-hover:text-white">导入记录</span>
+                        </button>
+                    </div>
+
+                    <div class="mt-8 space-y-2">
+                        <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">标签</h2>
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-2 bg-accent-blue/20 text-accent-blue rounded-full text-sm border border-accent-blue/30">冒险</span>
+                            <span class="px-3 py-2 bg-accent-purple/20 text-accent-purple rounded-full text-sm border border-accent-purple/30">爱情</span>
+                            <span class="px-3 py-2 bg-accent-pink/20 text-accent-pink rounded-full text-sm border border-accent-pink/30">奇幻</span>
+                            <span class="px-3 py-2 bg-accent-blue/20 text-accent-blue rounded-full text-sm border border-accent-blue/30">科幻</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 主内容区 -->
+                <div class="flex-1 p-8">
+                    <!-- 搜索栏 -->
+                    <div class="mb-8 flex space-x-4">
+                        <div class="flex-1 relative">
+                            <input type="text" placeholder="搜索漫画标题、作者..." class="w-full px-6 py-4 pl-14 glass-effect rounded-xl focus:outline-none focus:neon-glow text-lg">
+                            <i class="fas fa-search absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl"></i>
+                        </div>
+                        <button class="glass-effect px-6 py-4 rounded-xl hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-filter mr-2 text-accent-blue"></i>筛选
+                        </button>
+                        <button class="glass-effect px-6 py-4 rounded-xl hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-th-large mr-2 text-accent-blue"></i>网格
+                        </button>
+                        <button class="glass-effect px-6 py-4 rounded-xl hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-list mr-2 text-accent-blue"></i>列表
+                        </button>
+                    </div>
+
+                    <!-- 漫画网格 -->
+                    <div class="grid grid-cols-5 gap-6">
+                        <!-- 漫画卡片 1 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-accent-blue via-accent-purple to-accent-pink flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">120页</div>
+                                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">进击的巨人</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：諫山創</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.2</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 2 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-accent-pink via-red-500 to-orange-500 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">85页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">鬼灭之刃</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：吾峠呼世晴</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.5</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 3 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-emerald-500 via-accent-blue to-accent-purple flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">200页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">海贼王</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：尾田栄一郎</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.8</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 4 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-orange-500 via-yellow-500 to-red-500 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">95页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">火影忍者</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：岸本斉史</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.3</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 5 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-accent-purple via-accent-pink to-fuchsia-500 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">150页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">一拳超人</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：ONE</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.6</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 6 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-red-500 via-rose-500 to-accent-pink flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">110页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">我的英雄学院</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：堀越耕平</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.0</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 7 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-indigo-600 via-accent-purple to-violet-600 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">75页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">全职猎人</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：富樫義博</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.7</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 漫画卡片 8 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-600 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">130页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">死神</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：久保帯人</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.1</span>
+                                    </div>
+                                    <div class="flex space-x-3">
+                                        <button class="text-accent-pink hover:text-accent-pink/80 transition-colors">
+                                            <i class="fas fa-heart"></i>
+                                        </button>
+                                        <button class="text-accent-blue hover:text-accent-blue/80 transition-colors">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 阅读界面 -->
+    <div id="reading-interface" class="prototype-section" style="background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);">
+        <div class="max-w-[1920px] mx-auto">
+            <!-- 顶部工具栏 -->
+            <div class="glass-effect p-5 flex items-center justify-between border-b border-dark-border">
+                <div class="flex items-center space-x-5">
+                    <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                        <i class="fas fa-arrow-left mr-2 text-accent-blue"></i>返回
+                    </button>
+                    <h2 class="text-xl font-bold text-white">进击的巨人 - 第1话</h2>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                        <i class="fas fa-cog mr-2 text-accent-blue"></i>设置
+                    </button>
+                    <button class="bg-gradient-to-r from-accent-blue to-accent-purple px-5 py-3 rounded-lg hover:opacity-90 transition-all duration-300 flex items-center">
+                        <i class="fas fa-expand mr-2"></i>全屏
+                    </button>
+                </div>
+            </div>
+
+            <!-- 漫画阅读区域 -->
+            <div class="min-h-[700px] flex items-center justify-center relative">
+                <div class="max-w-5xl w-full px-6">
+                    <!-- 漫画页面占位符 -->
+                    <div class="aspect-[3/4] dark-card rounded-xl flex items-center justify-center mb-4 border-2 border-dark-border">
+                        <i class="fas fa-image text-9xl text-gray-600"></i>
+                    </div>
+                </div>
+
+                <!-- 悬浮控制按钮 - 左 -->
+                <div class="absolute left-6 top-1/2 transform -translate-y-1/2">
+                    <button class="w-16 h-16 glass-effect hover:neon-glow rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-300">
+                        <i class="fas fa-chevron-left text-2xl text-white"></i>
+                    </button>
+                </div>
+
+                <!-- 悬浮控制按钮 - 右 -->
+                <div class="absolute right-6 top-1/2 transform -translate-y-1/2">
+                    <button class="w-16 h-16 glass-effect hover:neon-glow rounded-full flex items-center justify-center backdrop-blur-sm transition-all duration-300">
+                        <i class="fas fa-chevron-right text-2xl text-white"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 底部工具栏 -->
+            <div class="glass-effect p-5 border-t border-dark-border">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-chevron-left text-accent-blue"></i>
+                        </button>
+                        <span class="text-sm font-medium text-gray-300">第 1 页 / 共 120 页</span>
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-chevron-right text-accent-blue"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-3">
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-search-minus mr-2 text-accent-blue"></i>缩小
+                        </button>
+                        <button class="bg-gradient-to-r from-accent-blue to-accent-purple px-5 py-3 rounded-lg transition-all duration-300 flex items-center">
+                            <i class="fas fa-expand-arrows-alt mr-2"></i>适应宽度
+                        </button>
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-search-plus mr-2 text-accent-blue"></i>放大
+                        </button>
+                    </div>
+
+                    <div class="flex items-center space-x-4">
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300 flex items-center">
+                            <i class="fas fa-list mr-2 text-accent-blue"></i>章节
+                        </button>
+                        <div class="w-40 bg-dark-surface-light rounded-full h-2">
+                            <div class="bg-gradient-to-r from-accent-blue to-accent-purple h-2 rounded-full transition-all duration-300" style="width: 8%"></div>
+                        </div>
+                        <span class="text-sm font-medium text-accent-blue">8%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜索和筛选界面 -->
+    <div id="search-interface" class="prototype-section">
+        <div class="max-w-[1920px] mx-auto">
+            <!-- 顶部标题 -->
+            <div class="glass-effect p-8 border-b border-dark-border">
+                <h1 class="text-4xl font-bold mb-3 bg-gradient-to-r from-accent-blue to-accent-purple bg-clip-text text-transparent">
+                    搜索与筛选
+                </h1>
+                <p class="text-gray-400">快速找到你喜欢的漫画</p>
+            </div>
+
+            <div class="flex">
+                <!-- 左侧筛选面板 -->
+                <div class="w-80 glass-effect p-6 border-r border-dark-border">
+                    <h2 class="text-lg font-bold mb-6 flex items-center text-white">
+                        <i class="fas fa-filter mr-3 text-accent-blue"></i>筛选条件
+                    </h2>
+
+                    <div class="space-y-6">
+                        <!-- 状态筛选 -->
+                        <div>
+                            <h3 class="font-semibold mb-4 text-gray-300">阅读状态</h3>
+                            <div class="space-y-3">
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="checkbox" class="w-5 h-5 mr-3 text-accent-blue" checked>
+                                    <span class="text-gray-300">全部</span>
+                                </label>
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="checkbox" class="w-5 h-5 mr-3 text-accent-blue">
+                                    <span class="text-gray-300">未开始</span>
+                                </label>
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="checkbox" class="w-5 h-5 mr-3 text-accent-blue">
+                                    <span class="text-gray-300">阅读中</span>
+                                </label>
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="checkbox" class="w-5 h-5 mr-3 text-accent-blue">
+                                    <span class="text-gray-300">已完结</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 评分筛选 -->
+                        <div>
+                            <h3 class="font-semibold mb-4 text-gray-300">评分</h3>
+                            <div class="space-y-3">
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="radio" name="rating" class="w-5 h-5 mr-3 text-accent-blue" checked>
+                                    <span class="text-gray-300">全部</span>
+                                </label>
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="radio" name="rating" class="w-5 h-5 mr-3 text-accent-blue">
+                                    <span class="text-gray-300">9分以上</span>
+                                </label>
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="radio" name="rating" class="w-5 h-5 mr-3 text-accent-blue">
+                                    <span class="text-gray-300">8分以上</span>
+                                </label>
+                                <label class="flex items-center p-3 glass-effect rounded-lg hover:border-accent-blue border border-transparent cursor-pointer transition-all">
+                                    <input type="radio" name="rating" class="w-5 h-5 mr-3 text-accent-blue">
+                                    <span class="text-gray-300">7分以上</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 标签筛选 -->
+                        <div>
+                            <h3 class="font-semibold mb-4 text-gray-300">标签</h3>
+                            <div class="flex flex-wrap gap-2">
+                                <label class="flex items-center px-4 py-2 glass-effect rounded-lg cursor-pointer hover:border-accent-blue border border-transparent transition-all">
+                                    <input type="checkbox" class="w-4 h-4 mr-2 text-accent-blue">
+                                    <span class="text-sm text-gray-300">冒险</span>
+                                </label>
+                                <label class="flex items-center px-4 py-2 glass-effect rounded-lg cursor-pointer hover:border-accent-purple border border-transparent transition-all">
+                                    <input type="checkbox" class="w-4 h-4 mr-2 text-accent-purple">
+                                    <span class="text-sm text-gray-300">爱情</span>
+                                </label>
+                                <label class="flex items-center px-4 py-2 glass-effect rounded-lg cursor-pointer hover:border-accent-pink border border-transparent transition-all">
+                                    <input type="checkbox" class="w-4 h-4 mr-2 text-accent-pink">
+                                    <span class="text-sm text-gray-300">奇幻</span>
+                                </label>
+                                <label class="flex items-center px-4 py-2 glass-effect rounded-lg cursor-pointer hover:border-accent-blue border border-transparent transition-all">
+                                    <input type="checkbox" class="w-4 h-4 mr-2 text-accent-blue">
+                                    <span class="text-sm text-gray-300">科幻</span>
+                                </label>
+                                <label class="flex items-center px-4 py-2 glass-effect rounded-lg cursor-pointer hover:border-accent-purple border border-transparent transition-all">
+                                    <input type="checkbox" class="w-4 h-4 mr-2 text-accent-purple">
+                                    <span class="text-sm text-gray-300">校园</span>
+                                </label>
+                                <label class="flex items-center px-4 py-2 glass-effect rounded-lg cursor-pointer hover:border-accent-pink border border-transparent transition-all">
+                                    <input type="checkbox" class="w-4 h-4 mr-2 text-accent-pink">
+                                    <span class="text-sm text-gray-300">职场</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 页数范围 -->
+                        <div>
+                            <h3 class="font-semibold mb-4 text-gray-300">页数范围</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center space-x-2">
+                                    <input type="number" placeholder="最小" class="flex-1 px-4 py-3 glass-effect rounded-lg border border-dark-border focus:neon-glow focus:outline-none text-white">
+                                    <span class="text-gray-400">-</span>
+                                    <input type="number" placeholder="最大" class="flex-1 px-4 py-3 glass-effect rounded-lg border border-dark-border focus:neon-glow focus:outline-none text-white">
+                                </div>
+                                <input type="range" min="0" max="500" value="200" class="w-full accent-accent-blue">
+                            </div>
+                        </div>
+
+                        <button class="w-full py-4 bg-gradient-to-r from-accent-blue to-accent-purple rounded-lg hover:opacity-90 transition-all duration-300 flex items-center justify-center font-medium">
+                            <i class="fas fa-check mr-2"></i>应用筛选
+                        </button>
+                        <button class="w-full py-4 glass-effect rounded-lg hover:neon-glow transition-all duration-300 flex items-center justify-center font-medium">
+                            <i class="fas fa-undo mr-2 text-accent-blue"></i>重置
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 右侧结果区域 -->
+                <div class="flex-1 p-8">
+                    <!-- 搜索栏 -->
+                    <div class="mb-8">
+                        <div class="flex space-x-4">
+                            <div class="flex-1 relative">
+                                <input type="text" placeholder="搜索漫画标题、作者..." class="w-full px-6 py-5 pl-16 glass-effect rounded-xl focus:outline-none focus:neon-glow text-lg text-white">
+                                <i class="fas fa-search absolute left-6 top-1/2 transform -translate-y-1/2 text-gray-400 text-2xl"></i>
+                            </div>
+                            <button class="bg-gradient-to-r from-accent-blue to-accent-purple px-8 py-5 rounded-xl hover:opacity-90 transition-all duration-300 text-lg font-medium">
+                                搜索
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 排序选项 -->
+                    <div class="mb-8 flex items-center justify-between">
+                        <p class="text-gray-400">找到 <span class="font-bold text-accent-blue">156</span> 部漫画</p>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-gray-400">排序方式：</span>
+                            <select class="px-4 py-3 glass-effect rounded-lg focus:neon-glow focus:outline-none text-white">
+                                <option>相关性</option>
+                                <option>最新更新</option>
+                                <option>评分最高</option>
+                                <option>页数最多</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 搜索结果网格 -->
+                    <div class="grid grid-cols-5 gap-6">
+                        <!-- 搜索结果卡片 -->
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-accent-blue to-accent-purple flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">120页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">进击的巨人</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：諫山創</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.2</span>
+                                    </div>
+                                    <span class="text-xs text-accent-blue">匹配度: 95%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-accent-pink to-red-500 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">85页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">鬼灭之刃</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：吾峠呼世晴</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.5</span>
+                                    </div>
+                                    <span class="text-xs text-accent-blue">匹配度: 88%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">95页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">火影忍者</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：岸本斉史</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.3</span>
+                                    </div>
+                                    <span class="text-xs text-accent-blue">匹配度: 82%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-accent-purple to-accent-pink flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">150页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">一拳超人</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：ONE</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.6</span>
+                                    </div>
+                                    <span class="text-xs text-accent-blue">匹配度: 78%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dark-card rounded-xl overflow-hidden">
+                            <div class="aspect-[3/4] bg-gradient-to-br from-emerald-500 to-accent-blue flex items-center justify-center relative group">
+                                <i class="fas fa-image text-7xl text-white/20 group-hover:scale-110 transition-transform duration-300"></i>
+                                <div class="absolute top-3 right-3 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">200页</div>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="font-bold text-lg mb-2 text-white">海贼王</h3>
+                                <p class="text-gray-400 text-sm mb-3">作者：尾田栄一郎</p>
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-1">
+                                        <i class="fas fa-star text-yellow-400"></i>
+                                        <span class="text-sm text-yellow-400 font-medium">9.8</span>
+                                    </div>
+                                    <span class="text-xs text-accent-blue">匹配度: 75%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 分页 -->
+                    <div class="mt-10 flex items-center justify-center space-x-2">
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300">
+                            <i class="fas fa-chevron-left text-accent-blue"></i>
+                        </button>
+                        <button class="bg-gradient-to-r from-accent-blue to-accent-purple px-5 py-3 rounded-lg">1</button>
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300">2</button>
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300">3</button>
+                        <span class="px-2 text-gray-400">...</span>
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300">15</button>
+                        <button class="glass-effect px-5 py-3 rounded-lg hover:neon-glow transition-all duration-300">
+                            <i class="fas fa-chevron-right text-accent-blue"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置界面 -->
+    <div id="settings-interface" class="prototype-section">
+        <div class="max-w-[1920px] mx-auto">
+            <!-- 顶部标题 -->
+            <div class="glass-effect p-8 border-b border-dark-border">
+                <h1 class="text-4xl font-bold mb-3 bg-gradient-to-r from-accent-blue to-accent-purple bg-clip-text text-transparent">
+                    设置
+                </h1>
+                <p class="text-gray-400">个性化你的阅读体验</p>
+            </div>
+
+            <div class="flex">
+                <!-- 左侧设置导航 -->
+                <div class="w-72 glass-effect p-6 border-r border-dark-border">
+                    <div class="space-y-2">
+                        <h2 class="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">设置分类</h2>
+                        <button class="w-full text-left px-4 py-4 bg-gradient-to-r from-accent-blue to-accent-purple rounded-lg flex items-center text-white font-medium">
+                            <i class="fas fa-book w-6"></i>
+                            <span class="ml-4">阅读设置</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center transition-all duration-200">
+                            <i class="fas fa-desktop w-6 text-accent-blue"></i>
+                            <span class="ml-4 text-gray-300 hover:text-white">显示设置</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center transition-all duration-200">
+                            <i class="fas fa-keyboard w-6 text-accent-purple"></i>
+                            <span class="ml-4 text-gray-300 hover:text-white">快捷键</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center transition-all duration-200">
+                            <i class="fas fa-hdd w-6 text-accent-pink"></i>
+                            <span class="ml-4 text-gray-300 hover:text-white">存储设置</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center transition-all duration-200">
+                            <i class="fas fa-bell w-6 text-accent-blue"></i>
+                            <span class="ml-4 text-gray-300 hover:text-white">通知设置</span>
+                        </button>
+                        <button class="w-full text-left px-4 py-4 hover:bg-dark-surface-light rounded-lg flex items-center transition-all duration-200">
+                            <i class="fas fa-info-circle w-6 text-accent-purple"></i>
+                            <span class="ml-4 text-gray-300 hover:text-white">关于</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 右侧设置内容 -->
+                <div class="flex-1 p-8">
+                    <h2 class="text-2xl font-bold mb-8 flex items-center text-white">
+                        <i class="fas fa-book mr-3 text-accent-blue"></i>阅读设置
+                    </h2>
+
+                    <div class="space-y-8">
+                        <!-- 翻页设置 -->
+                        <div class="glass-effect p-6 rounded-xl border border-dark-border">
+                            <h3 class="text-lg font-bold mb-5 flex items-center text-white">
+                                <i class="fas fa-exchange-alt mr-3 text-accent-blue"></i>翻页设置
+                            </h3>
+                            <div class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-semibold mb-3 text-gray-300">翻页方向</label>
+                                    <div class="flex space-x-4">
+                                        <label class="flex-1 p-5 glass-effect rounded-lg border border-dark-border hover:border-accent-blue cursor-pointer transition-all group">
+                                            <input type="radio" name="pageDirection" class="w-5 h-5 mr-3 text-accent-blue" checked>
+                                            <div>
+                                                <div class="font-medium text-white group-hover:text-accent-blue">从右到左</div>
+                                                <div class="text-sm text-gray-400">点击右侧翻到下一页</div>
+                                            </div>
+                                        </label>
+                                        <label class="flex-1 p-5 glass-effect rounded-lg border border-dark-border hover:border-accent-blue cursor-pointer transition-all group">
+                                            <input type="radio" name="pageDirection" class="w-5 h-5 mr-3 text-accent-blue">
+                                            <div>
+                                                <div class="font-medium text-white group-hover:text-accent-blue">从左到右</div>
+                                                <div class="text-sm text-gray-400">点击左侧翻到下一页</div>
+                                            </div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <label class="flex items-center p-4 glass-effect rounded-lg hover:border-accent-blue border border-transparent transition-all cursor-pointer">
+                                    <input type="checkbox" class="w-5 h-5 mr-4 text-accent-blue" checked>
+                                    <span class="font-medium text-white">使用鼠标滚轮翻页</span>
+                                </label>
+
+                                <label class="flex items-center p-4 glass-effect rounded-lg hover:border-accent-blue border border-transparent transition-all cursor-pointer">
+                                    <input type="checkbox" class="w-5 h-5 mr-4 text-accent-blue" checked>
+                                    <span class="font-medium text-white">启用页面过渡动画</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 缩放设置 -->
+                        <div class="glass-effect p-6 rounded-xl border border-dark-border">
+                            <h3 class="text-lg font-bold mb-5 flex items-center text-white">
+                                <i class="fas fa-search mr-3 text-accent-blue"></i>缩放设置
+                            </h3>
+                            <div class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-semibold mb-3 text-gray-300">默认缩放模式</label>
+                                    <select class="w-full px-5 py-3 glass-effect rounded-lg border border-dark-border focus:neon-glow focus:outline-none text-white">
+                                        <option>适应宽度</option>
+                                        <option>适应高度</option>
+                                        <option>实际大小</option>
+                                        <option>自定义比例</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold mb-3 text-gray-300">缩放灵敏度</label>
+                                    <input type="range" min="10" max="100" value="50" class="w-full accent-accent-blue">
+                                    <div class="flex justify-between text-sm text-gray-400 mt-2">
+                                        <span>低</span>
+                                        <span>中</span>
+                                        <span>高</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 快捷键设置 -->
+                        <div class="glass-effect p-6 rounded-xl border border-dark-border">
+                            <h3 class="text-lg font-bold mb-5 flex items-center text-white">
+                                <i class="fas fa-keyboard mr-3 text-accent-purple"></i>快捷键设置
+                            </h3>
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div class="flex items-center justify-between p-4 glass-effect rounded-lg border border-dark-border">
+                                        <span class="text-gray-300">上一页</span>
+                                        <div class="flex items-center space-x-2">
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">←</kbd>
+                                            <span class="text-gray-500">或</span>
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">A</kbd>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 glass-effect rounded-lg border border-dark-border">
+                                        <span class="text-gray-300">下一页</span>
+                                        <div class="flex items-center space-x-2">
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">→</kbd>
+                                            <span class="text-gray-500">或</span>
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">D</kbd>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 glass-effect rounded-lg border border-dark-border">
+                                        <span class="text-gray-300">放大</span>
+                                        <div class="flex items-center space-x-2">
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">+</kbd>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 glass-effect rounded-lg border border-dark-border">
+                                        <span class="text-gray-300">缩小</span>
+                                        <div class="flex items-center space-x-2">
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">-</kbd>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 glass-effect rounded-lg border border-dark-border">
+                                        <span class="text-gray-300">适应宽度</span>
+                                        <div class="flex items-center space-x-2">
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">F</kbd>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-between p-4 glass-effect rounded-lg border border-dark-border">
+                                        <span class="text-gray-300">全屏</span>
+                                        <div class="flex items-center space-x-2">
+                                            <kbd class="px-3 py-1 bg-dark-surface-light rounded text-sm text-accent-blue">F11</kbd>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 自动阅读 -->
+                        <div class="glass-effect p-6 rounded-xl border border-dark-border">
+                            <h3 class="text-lg font-bold mb-5 flex items-center text-white">
+                                <i class="fas fa-play-circle mr-3 text-accent-pink"></i>自动阅读
+                            </h3>
+                            <div class="space-y-5">
+                                <label class="flex items-center p-4 glass-effect rounded-lg hover:border-accent-blue border border-transparent transition-all cursor-pointer">
+                                    <input type="checkbox" class="w-5 h-5 mr-4 text-accent-pink">
+                                    <span class="font-medium text-white">启用自动阅读</span>
+                                </label>
+                                <div>
+                                    <label class="block text-sm font-semibold mb-3 text-gray-300">翻页间隔（秒）</label>
+                                    <input type="number" value="3" min="1" max="10" class="w-32 px-4 py-3 glass-effect rounded-lg border border-dark-border focus:neon-glow focus:outline-none text-white">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 底部操作按钮 -->
+                    <div class="mt-10 flex items-center space-x-4">
+                        <button class="bg-gradient-to-r from-accent-blue to-accent-purple px-8 py-4 rounded-lg hover:opacity-90 transition-all duration-300 flex items-center font-medium">
+                            <i class="fas fa-save mr-2"></i>保存设置
+                        </button>
+                        <button class="glass-effect px-8 py-4 rounded-lg hover:neon-glow transition-all duration-300 flex items-center font-medium">
+                            <i class="fas fa-undo mr-2 text-accent-blue"></i>恢复默认
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页面导航指示器 -->
+    <div class="fixed bottom-8 right-8 flex space-x-3">
+        <a href="#main-interface" class="w-14 h-14 bg-gradient-to-r from-accent-blue to-accent-purple text-white rounded-full flex items-center justify-center shadow-lg hover:opacity-90 transition-all duration-300 neon-glow" title="主界面">
+            <i class="fas fa-th-large text-xl"></i>
+        </a>
+        <a href="#reading-interface" class="w-14 h-14 glass-effect text-white rounded-full flex items-center justify-center shadow-lg hover:neon-glow transition-all duration-300" title="阅读界面">
+            <i class="fas fa-book text-xl"></i>
+        </a>
+        <a href="#search-interface" class="w-14 h-14 glass-effect text-white rounded-full flex items-center justify-center shadow-lg hover:neon-glow transition-all duration-300" title="搜索界面">
+            <i class="fas fa-search text-xl"></i>
+        </a>
+        <a href="#settings-interface" class="w-14 h-14 glass-effect text-white rounded-full flex items-center justify-center shadow-lg hover:neon-glow transition-all duration-300" title="设置界面">
+            <i class="fas fa-cog text-xl"></i>
+        </a>
+    </div>
+</body>
+</html>
