@@ -13,12 +13,13 @@ class Container(BaseWidget):
     """通用容器组件"""
 
     def __init__(self, parent=None, layout_type='vertical', margin=0, spacing=0, style_manager=None):
-        super().__init__(parent, style_manager)
+        # 先设置属性，再调用父类初始化
         self.layout_type = layout_type
         self.margin = margin
         self.spacing = spacing
         self._layout = None
-        self.init_ui()
+        super().__init__(parent, style_manager)
+        # 注意：init_ui()会在BaseWidget.__init__()中自动调用
 
     def init_ui(self):
         """初始化UI"""

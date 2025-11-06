@@ -26,9 +26,10 @@ class Breadcrumbs(BaseWidget):
     itemClicked = pyqtSignal(str)  # 项目点击信号
 
     def __init__(self, items=None, parent=None, style_manager=None):
-        super().__init__(parent, style_manager)
+        # 先设置属性，再调用父类初始化
         self.items = items or []
-        self.init_ui()
+        super().__init__(parent, style_manager)
+        # 注意：init_ui()会在BaseWidget.__init__()中自动调用
 
     def init_ui(self):
         """初始化UI"""

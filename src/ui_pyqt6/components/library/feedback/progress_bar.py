@@ -26,12 +26,13 @@ class ProgressBar(BaseWidget):
     valueChanged = pyqtSignal(int)  # 值改变信号
 
     def __init__(self, minimum=0, maximum=100, value=0, show_text=True, parent=None, style_manager=None):
-        super().__init__(parent, style_manager)
+        # 先设置属性，再调用父类初始化
         self.minimum = minimum
         self.maximum = maximum
         self.value = value
         self.show_text = show_text
-        self.init_ui()
+        super().__init__(parent, style_manager)
+        # 注意：init_ui()会在BaseWidget.__init__()中自动调用
 
     def init_ui(self):
         """初始化UI"""

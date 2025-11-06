@@ -31,11 +31,12 @@ class AlbumCard(BaseWidget):
     favoriteClicked = pyqtSignal(str)  # 收藏按钮
 
     def __init__(self, album_data, config_manager=None, parent=None, style_manager=None):
-        super().__init__(parent, style_manager)
+        # 先设置属性，再调用父类初始化
         self.album_data = album_data
         self.config_manager = config_manager
         self.is_favorite = False
-        self.init_ui()
+        super().__init__(parent, style_manager)
+        # 注意：init_ui()会在BaseWidget.__init__()中自动调用
 
     def init_ui(self):
         """初始化UI"""

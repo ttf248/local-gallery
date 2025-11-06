@@ -26,10 +26,11 @@ class Pagination(BaseWidget):
     pageChanged = pyqtSignal(int)  # 页码改变信号
 
     def __init__(self, current_page=1, total_pages=1, parent=None, style_manager=None):
-        super().__init__(parent, style_manager)
+        # 先设置属性，再调用父类初始化
         self.current_page = current_page
         self.total_pages = total_pages
-        self.init_ui()
+        super().__init__(parent, style_manager)
+        # 注意：init_ui()会在BaseWidget.__init__()中自动调用
         self.update()
 
     def init_ui(self):

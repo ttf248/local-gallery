@@ -16,11 +16,12 @@ class Tag(BaseWidget):
     clicked = pyqtSignal()  # 点击信号
 
     def __init__(self, text="", bg_color="#E3F2FD", text_color="#4A90E2", parent=None, style_manager=None):
-        super().__init__(parent, style_manager)
+        # 先设置属性，再调用父类初始化
         self.text = text
         self.bg_color = bg_color
         self.text_color = text_color
-        self.init_ui()
+        super().__init__(parent, style_manager)
+        # 注意：init_ui()会在BaseWidget.__init__()中自动调用
 
     def init_ui(self):
         """初始化UI"""
