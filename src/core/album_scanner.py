@@ -13,6 +13,9 @@ class AlbumScannerService:
         self.cancel_flag = False
         self.scan_progress = 0
         self.scan_status = ""
+        # 线程安全的进度更新队列
+        self.progress_queue = queue.Queue()
+        self.scan_error = None  # 扫描错误存储
 
     def scan_albums(self):
         """扫描漫画 - 异步版本"""
@@ -49,35 +52,47 @@ class AlbumScannerService:
     def _scan_worker(self, folder_path):
         """扫描工作线程"""
         try:
-            # 定义进度回调函数
+            # 定义进度回调函数 - 使用线程安全队列
             def progress_callback(progress, status):
-                self.scan_progress = progress
-                self.scan_status = status
+                # 将进度更新放入队列，UI线程会定期检查队列
+                self.progress_queue.put((progress, status))
 
             # 执行扫描
             albums = ImageProcessor.scan_albums(folder_path, progress_callback)
 
             if self.cancel_flag:
                 # 扫描被取消
-                self.scan_status = "扫描已取消"
+                self.progress_queue.put((0, "扫描已取消"))
                 return
 
             # 扫描完成，保存结果
             self.app.albums = albums
-            self.scan_status = "扫描完成"
-            self.scan_progress = 100
+            self.progress_queue.put((100, f"扫描完成，找到 {len(albums)} 个项目"))
 
         except Exception as e:
             # 扫描出错
-            self.scan_status = f"扫描出错: {str(e)}"
             self.scan_error = e
+            self.progress_queue.put((0, f"扫描出错: {str(e)}"))
 
     def _update_progress_loop(self):
-        """更新进度循环"""
+        """更新进度循环 - 从线程安全队列中读取进度"""
         if self.cancel_flag:
             return
 
-        # 更新状态栏
+        # 处理队列中的所有进度更新
+        try:
+            while True:
+                try:
+                    progress, status = self.progress_queue.get_nowait()
+                    self.scan_progress = progress
+                    self.scan_status = status
+                except queue.Empty:
+                    # 队列为空，退出循环
+                    break
+        except Exception as e:
+            print(f"处理进度更新时出错: {e}")
+
+        # 更新状态栏（只在有更新时）
         if hasattr(self, 'scan_status'):
             self.app.status_bar.set_status(f"正在扫描漫画... {self.scan_progress}%")
             self.app.status_bar.set_info(self.scan_status)
@@ -88,7 +103,7 @@ class AlbumScannerService:
             self._handle_scan_complete()
             return
 
-        # 继续更新
+        # 继续更新（频率可以稍低，减少UI负担）
         self.app.root.after(100, self._update_progress_loop)
 
     def _handle_scan_complete(self):
