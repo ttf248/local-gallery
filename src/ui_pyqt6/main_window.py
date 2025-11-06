@@ -7,7 +7,8 @@ PyQt6主窗口
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QFileDialog,
+    QSplitter
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QAction, QKeySequence
@@ -53,20 +54,8 @@ class MainWindow(QMainWindow):
         self.style_manager.themeChanged.connect(self.apply_theme_style)
         self.apply_theme_style()
 
-        # 设置中央部件
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-
-        # 创建主布局
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(0)
-
-        # 创建侧边栏
-        self.create_sidebar()
-
-        # 创建右侧内容区
-        self.create_content_area()
+        # 创建中央分割器
+        self.create_central_splitter()
 
         # 创建状态栏
         self.create_status_bar()
@@ -80,7 +69,23 @@ class MainWindow(QMainWindow):
         # 初始状态
         self.show_initial_state()
 
-    def create_sidebar(self):
+    def create_central_splitter(self):
+        """创建中央分割器 (侧边栏 + 内容区)"""
+        # 创建分割器
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+
+        # 创建侧边栏
+        self.create_sidebar(splitter)
+
+        # 创建内容区
+        self.create_content_area(splitter)
+
+        # 设置分割器初始比例
+        splitter.setSizes([240, 1160])  # 侧边栏240px，内容区自适应
+        self.setCentralWidget(splitter)
+
+    def create_sidebar(self, parent):
         """创建侧边栏"""
         self.sidebar = Sidebar()
         self.sidebar.homeClicked.connect(self.show_home)
@@ -92,8 +97,9 @@ class MainWindow(QMainWindow):
 
         # 侧边栏固定宽度
         self.sidebar.setFixedWidth(240)
+        parent.addWidget(self.sidebar)
 
-    def create_content_area(self):
+    def create_content_area(self, parent):
         """创建内容区"""
         # 垂直布局：工具栏 + 主内容
         content_widget = QWidget()
@@ -118,9 +124,7 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.toolbar)
         content_layout.addWidget(self.album_grid)
 
-        # QMainWindow需要使用setCentralWidget
-        self.setCentralWidget(content_widget)
-        self.sidebar.setParent(self)  # 侧边栏作为子窗口
+        parent.addWidget(content_widget)
 
     def create_status_bar(self):
         """创建状态栏"""
