@@ -36,6 +36,8 @@ class StyleManager(QObject):
             'error': '#FF3B30',
             'card_bg': '#FFFFFF',
             'card_shadow': 'rgba(0, 0, 0, 0.1)',
+            'scrollbar': '#C7C7CC',  # 滚动条滑块颜色
+            'scrollbar_hover': '#AFB0B5',  # 滚动条滑块悬停颜色
         }
 
         # 深色主题
@@ -54,6 +56,8 @@ class StyleManager(QObject):
             'error': '#FF453A',
             'card_bg': '#1C1C1E',
             'card_shadow': 'rgba(255, 255, 255, 0.1)',
+            'scrollbar': '#48484A',  # 滚动条滑块颜色
+            'scrollbar_hover': '#5A5A5C',  # 滚动条滑块悬停颜色
         }
 
     def get_colors(self):
