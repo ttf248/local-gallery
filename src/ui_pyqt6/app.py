@@ -5,8 +5,7 @@ PyQt6应用程序主类
 
 import sys
 from PyQt6.QtWidgets import QApplication
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QFont
+from PyQt6.QtGui import QFont
 
 class ComicReaderApp(QApplication):
     """漫画阅读器主应用程序"""
@@ -19,10 +18,7 @@ class ComicReaderApp(QApplication):
         self.setApplicationVersion("2.0.0")
         self.setOrganizationName("Comic Reader Team")
 
-        # 设置高DPI支持
-        self.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-        self.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
-
+        # PyQt6中AA_EnableHighDpiScaling默认启用，无需设置
         # 设置默认字体
         self.setFont(QFont("Microsoft YaHei", 9))
 
