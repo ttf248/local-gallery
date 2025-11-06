@@ -5,10 +5,12 @@ from pathlib import Path
 from src.core.config import ConfigManager
 from src.utils.image_utils import ImageProcessor
 from src.ui.components.style_manager import StyleManager
-from src.ui.components.navigation_bar import NavigationBar
+from src.ui.components.toolbar import Toolbar
+from src.ui.components.sidebar import Sidebar
 from src.ui.components.album_grid import AlbumGrid
 from src.ui.components.image_viewer import ImageViewer
 from src.ui.components.status_bar import StatusBar
+from src.ui.components.keyboard_shortcuts import KeyboardShortcuts
 
 class PhotoAlbumApp:
     """现代化漫画扫描器主应用程序"""
@@ -82,71 +84,38 @@ class PhotoAlbumApp:
             print(f"主题设置过程出错: {e}")
         
     def create_widgets(self):
-        """创建现代化UI组件"""
+        """创建现代化UI组件 - 侧边栏 + 工具栏布局"""
         try:
             # 创建路径变量
             self.path_var = tk.StringVar()
             self.path_var.set(self.config_manager.get_last_path())
-            
-            # 创建现代化导航栏
-            self.nav_bar = NavigationBar(
-                self.root,
-                browse_callback=self.browse_folder,
-                scan_callback=self.scan_albums,
-                path_var=self.path_var,
-                recent_callback=self.show_recent_albums,
-                favorites_callback=self.show_favorites,
-                style_manager=self.style_manager
-            )
-            
-            # 设置返回首页回调
-            self.nav_bar.home_callback = self.return_to_scan_results
-            
-            # 设置设置对话框回调
-            self.nav_bar.settings_callback = self.show_settings
-            
-            # 创建现代化漫画网格
-            self.album_grid = AlbumGrid(
-                self.root,
-                open_callback=self.open_album,
-                favorite_callback=self.toggle_favorite,
-                style_manager=self.style_manager
-            )
-            # 设置is_favorite回调
-            self.album_grid.is_favorite = self.config_manager.is_favorite
-            # AlbumGrid已经在create_widgets中自动pack了
-            
-            # 创建现代化状态栏
-            self.status_bar = StatusBar(
-                self.root,
-                style_manager=self.style_manager
-            )
-            # StatusBar已经在create_widgets中自动pack了
-            
-            # 设置组件间的引用
-            self.album_grid.nav_bar = self.nav_bar
-            
-            # 设置筛选回调
-            self.nav_bar.set_filter_callback(self.on_filter_changed)
-            
-            # 更新路径显示
-            if self.folder_path:
-                self.path_var.set(self.folder_path)
-            
-            # 初始状态 - 根据是否有上次路径显示不同消息
-            if self.folder_path and os.path.exists(self.folder_path):
-                folder_name = os.path.basename(self.folder_path)
-                # 处理长路径名称
-                if len(folder_name) > 30:
-                    display_name = folder_name[:27] + "..."
-                else:
-                    display_name = folder_name
-                self.status_bar.set_status(f"上次路径: {display_name}", "info")
-            else:
-                self.status_bar.set_status("欢迎使用漫画扫描器", "success")
-            
+
+            # 创建主容器（使用PanedWindow实现左右分栏）
+            self.create_main_container()
+
+            # 创建左侧边栏
+            self.create_sidebar()
+
+            # 创建右侧内容区
+            self.create_content_area()
+
+            # 创建顶部工具栏（在内容区内）
+            self.create_toolbar()
+
+            # 创建底部状态栏（在内容区内）
+            self.create_status_bar()
+
+            # 创建快捷键管理器
+            self.create_keyboard_shortcuts()
+
+            # 设置组件回调
+            self.setup_callbacks()
+
+            # 初始状态显示
+            self.show_initial_state()
+
             print("现代化UI组件创建成功")
-            
+
         except Exception as e:
             print(f"创建UI组件时发生错误: {e}")
             import traceback
@@ -159,18 +128,277 @@ class PhotoAlbumApp:
             except Exception as fallback_error:
                 print(f"创建回退UI也失败: {fallback_error}")
 
+    def create_main_container(self):
+        """创建主容器（左右分栏）"""
+        try:
+            # 使用PanedWindow实现左右分栏
+            self.main_paned = tk.PanedWindow(
+                self.root,
+                orient='horizontal',
+                sashrelief='raised',
+                sashwidth=2,
+                bg=self.style_manager.colors['border'],
+                showhandle=False,
+                opaqueresize=False
+            )
+            self.main_paned.pack(fill='both', expand=True)
+
+        except Exception as e:
+            print(f"创建主容器时出错: {e}")
+            # 备用方案：使用Frame
+            self.main_frame = tk.Frame(self.root, bg=self.style_manager.colors['bg_primary'])
+            self.main_frame.pack(fill='both', expand=True)
+
+    def create_sidebar(self):
+        """创建侧边栏"""
+        try:
+            # 侧边栏容器
+            sidebar_frame = tk.Frame(
+                self.main_paned,
+                bg=self.style_manager.colors['bg_secondary'],
+                width=240
+            )
+
+            # 创建侧边栏组件
+            self.sidebar = Sidebar(
+                sidebar_frame,
+                style_manager=self.style_manager
+            )
+
+            # 添加到主容器
+            self.main_paned.add(sidebar_frame, minsize=240)
+
+        except Exception as e:
+            print(f"创建侧边栏时出错: {e}")
+
+    def create_content_area(self):
+        """创建右侧内容区"""
+        try:
+            # 内容区容器
+            content_frame = tk.Frame(
+                self.main_paned,
+                bg=self.style_manager.colors['bg_primary']
+            )
+
+            # 创建内容区（垂直布局：工具栏 + 主内容 + 状态栏）
+            self.content_paned = tk.PanedWindow(
+                content_frame,
+                orient='vertical',
+                sashrelief='raised',
+                sashwidth=2,
+                bg=self.style_manager.colors['border'],
+                showhandle=False,
+                opaqueresize=False
+            )
+            self.content_paned.pack(fill='both', expand=True)
+
+            # 添加到主容器
+            self.main_paned.add(content_frame)
+
+            # 上方内容区（工具栏 + 主内容）
+            top_frame = tk.Frame(
+                self.content_paned,
+                bg=self.style_manager.colors['bg_primary']
+            )
+            self.content_paned.add(top_frame, minsize=400)
+
+            # 下方状态栏
+            self.status_bar_frame = tk.Frame(
+                self.content_paned,
+                bg=self.style_manager.colors['bg_secondary'],
+                height=32
+            )
+            self.content_paned.add(self.status_bar_frame)
+            self.status_bar_frame.pack_propagate(False)
+
+            # 上方区域再分为工具栏和主内容
+            self.top_paned = tk.PanedWindow(
+                top_frame,
+                orient='vertical',
+                sashrelief='flat',
+                sashwidth=0,
+                bg=self.style_manager.colors['bg_primary'],
+                showhandle=False
+            )
+            self.top_paned.pack(fill='both', expand=True)
+
+        except Exception as e:
+            print(f"创建内容区时出错: {e}")
+
+    def create_toolbar(self):
+        """创建顶部工具栏"""
+        try:
+            # 工具栏容器
+            toolbar_frame = tk.Frame(
+                self.top_paned,
+                bg=self.style_manager.colors['bg_primary'],
+                height=64
+            )
+
+            # 创建工具栏组件
+            self.toolbar = Toolbar(
+                toolbar_frame,
+                style_manager=self.style_manager
+            )
+
+            # 添加到上方区域
+            self.top_paned.add(toolbar_frame, minsize=64)
+
+        except Exception as e:
+            print(f"创建工具栏时出错: {e}")
+
+    def create_status_bar(self):
+        """创建底部状态栏"""
+        try:
+            # 创建状态栏组件
+            self.status_bar = StatusBar(
+                self.status_bar_frame,
+                style_manager=self.style_manager
+            )
+            self.status_bar.pack(fill='x', expand=False)
+
+        except Exception as e:
+            print(f"创建状态栏时出错: {e}")
+
+    def create_album_grid(self):
+        """创建相册网格"""
+        try:
+            # 相册网格容器
+            grid_frame = tk.Frame(
+                self.top_paned,
+                bg=self.style_manager.colors['bg_primary']
+            )
+
+            # 创建相册网格组件
+            self.album_grid = AlbumGrid(
+                grid_frame,
+                open_callback=self.open_album,
+                favorite_callback=self.toggle_favorite,
+                style_manager=self.style_manager
+            )
+            # 设置is_favorite回调
+            self.album_grid.is_favorite = self.config_manager.is_favorite
+
+            # 添加到上方区域
+            self.top_paned.add(grid_frame)
+
+        except Exception as e:
+            print(f"创建相册网格时出错: {e}")
+
+    def create_keyboard_shortcuts(self):
+        """创建快捷键管理器"""
+        try:
+            self.keyboard_shortcuts = KeyboardShortcuts(
+                self.root,
+                style_manager=self.style_manager
+            )
+
+            # 注册常用快捷键
+            self.keyboard_shortcuts.register_common_shortcuts()
+
+            # 注册自定义回调
+            self.keyboard_shortcuts.register('Ctrl+O', self.browse_folder, "打开文件夹")
+            self.keyboard_shortcuts.register('Ctrl+S', self.scan_albums, "扫描漫画")
+            self.keyboard_shortcuts.register('Ctrl+H', self.return_to_scan_results, "回到主页")
+            self.keyboard_shortcuts.register('Ctrl+R', self.show_recent_albums, "最近访问")
+            self.keyboard_shortcuts.register('Ctrl+D', self.show_favorites, "我的收藏")
+            self.keyboard_shortcuts.register('Ctrl+,', self.show_settings, "设置")
+            self.keyboard_shortcuts.register('Ctrl+/', self.keyboard_shortcuts.show_shortcuts_help, "显示快捷键")
+            self.keyboard_shortcuts.register('F5', self.scan_albums, "刷新扫描")
+
+        except Exception as e:
+            print(f"创建快捷键管理器时出错: {e}")
+
+    def setup_callbacks(self):
+        """设置组件回调"""
+        try:
+            # 设置侧边栏回调
+            self.sidebar.set_callbacks(
+                home=self.return_to_scan_results,
+                browse=self.browse_folder,
+                scan=self.scan_albums,
+                recent=self.show_recent_albums,
+                favorites=self.show_favorites,
+                settings=self.show_settings
+            )
+
+            # 设置工具栏回调
+            self.toolbar.set_callbacks(
+                browse=self.browse_folder,
+                scan=self.scan_albums,
+                filter=self.on_filter_changed,
+                theme=self.toggle_theme,
+                settings=self.show_settings
+            )
+
+            # 创建相册网格（需要先设置回调）
+            self.create_album_grid()
+
+            # 更新路径显示
+            if self.folder_path:
+                self.path_var.set(self.folder_path)
+                self.toolbar.set_search_text(self.folder_path)
+
+        except Exception as e:
+            print(f"设置回调时出错: {e}")
+
+    def show_initial_state(self):
+        """显示初始状态"""
+        try:
+            # 初始状态 - 根据是否有上次路径显示不同消息
+            if self.folder_path and os.path.exists(self.folder_path):
+                folder_name = os.path.basename(self.folder_path)
+                # 处理长路径名称
+                if len(folder_name) > 30:
+                    display_name = folder_name[:27] + "..."
+                else:
+                    display_name = folder_name
+                self.status_bar.set_status(f"上次路径: {display_name}", "info")
+            else:
+                self.status_bar.set_status("欢迎使用漫画扫描器 - 选择文件夹开始使用", "success")
+
+            # 激活主页导航项
+            self.sidebar.set_active_item("home")
+
+        except Exception as e:
+            print(f"显示初始状态时出错: {e}")
+
     def bind_events(self):
         """绑定事件"""
         # 窗口关闭事件
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        
-        # 键盘快捷键
-        self.root.bind('<Control-o>', lambda e: self.browse_folder())
-        self.root.bind('<Control-s>', lambda e: self.scan_albums())
-        self.root.bind('<Control-r>', lambda e: self.show_recent_albums())
-        self.root.bind('<Control-f>', lambda e: self.show_favorites())
-        self.root.bind('<Control-comma>', lambda e: self.show_settings())  # Ctrl+, 设置快捷键
-        self.root.bind('<F5>', lambda e: self.scan_albums())
+
+    def toggle_theme(self):
+        """切换主题（明暗模式）"""
+        try:
+            self.style_manager.toggle_theme()
+
+            # 更新工具栏主题按钮图标
+            if self.style_manager.is_dark_theme():
+                self.toolbar.theme_btn.configure(text="☀️")  # 太阳图标（明亮模式）
+            else:
+                self.toolbar.theme_btn.configure(text="🌙")  # 月亮图标（暗黑模式）
+
+            # 刷新所有组件
+            if hasattr(self, 'album_grid') and self.album_grid:
+                self.album_grid.update_albums(self.albums)
+
+            self.status_bar.set_status(f"已切换到{self.style_manager.get_theme()}主题", "success")
+
+        except Exception as e:
+            print(f"切换主题时出错: {e}")
+
+    def toggle_view_mode(self, mode):
+        """切换视图模式"""
+        try:
+            self.current_view_mode = mode
+
+            # TODO: 根据模式调整相册网格布局
+            # 目前只在工具栏显示状态
+            self.status_bar.set_status(f"视图模式: {mode}", "info")
+
+        except Exception as e:
+            print(f"切换视图模式时出错: {e}")
         
     def browse_folder(self):
         """浏览并选择文件夹"""
