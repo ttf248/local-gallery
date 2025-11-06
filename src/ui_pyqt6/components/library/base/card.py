@@ -19,11 +19,11 @@ from .base_widget import BaseWidget
 from ui_pyqt6.widgets.animated_widget import AnimatedCardMixin
 
 
-class Card(AnimatedCardMixin, BaseWidget):
+class Card(BaseWidget):
     """通用卡片组件 - 支持动画效果"""
 
     def __init__(self, parent=None, padding=16, spacing=8, style_manager=None):
-        super().__init__(parent)
+        super().__init__(parent, style_manager)
         self.padding = padding
         self.spacing = spacing
         self.layout = None

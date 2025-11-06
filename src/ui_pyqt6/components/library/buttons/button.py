@@ -20,14 +20,13 @@ from ..base.base_widget import BaseWidget
 from ui_pyqt6.widgets.animated_widget import AnimatedButtonMixin
 
 
-class Button(AnimatedButtonMixin, BaseWidget, QPushButton):
+class Button(QPushButton, BaseWidget):
     """基础按钮组件 - 支持动画效果"""
 
     def __init__(self, text="", parent=None, style_manager=None):
-        # 初始化基类（注意顺序：QWidget在最后）
+        # 初始化基类 - QPushButton先调用
         QPushButton.__init__(self, text, parent)
         BaseWidget.__init__(self, parent, style_manager)
-        AnimatedButtonMixin.__init__(self, parent)
 
         # 设置按钮属性
         self.setObjectName("button")

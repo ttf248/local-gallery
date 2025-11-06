@@ -17,15 +17,11 @@ if str(src_path) not in sys.path:
 from ui_pyqt6.animation_manager import AnimationManager
 
 
-class AnimatedWidget(QObject):
+class AnimatedWidget:
     """动画混入类 - 为Widget添加动画功能"""
 
-    # 定义信号
-    animationStarted = pyqtSignal()  # 动画开始
-    animationFinished = pyqtSignal()  # 动画结束
-
     def __init__(self, parent=None):
-        super().__init__(parent)
+        # 不调用super().__init__()以避免QObject冲突
         self.animation_manager = AnimationManager()
         self._setup_animation_support()
 
@@ -43,7 +39,6 @@ class AnimatedWidget(QObject):
         def on_finished():
             if callback:
                 callback()
-            self.animationFinished.emit()
 
         return self.animation_manager.fade_in(self, duration, easing, on_finished)
 
@@ -55,7 +50,6 @@ class AnimatedWidget(QObject):
         def on_finished():
             if callback:
                 callback()
-            self.animationFinished.emit()
 
         return self.animation_manager.fade_out(self, duration, easing, on_finished)
 
@@ -74,7 +68,6 @@ class AnimatedWidget(QObject):
         def on_finished():
             if callback:
                 callback()
-            self.animationFinished.emit()
 
         return self.animation_manager.slide_out(self, direction, duration, easing, on_finished)
 
@@ -86,7 +79,6 @@ class AnimatedWidget(QObject):
         def on_finished():
             if callback:
                 callback()
-            self.animationFinished.emit()
 
         return self.animation_manager.zoom_in(self, duration, easing, on_finished)
 
@@ -98,7 +90,6 @@ class AnimatedWidget(QObject):
         def on_finished():
             if callback:
                 callback()
-            self.animationFinished.emit()
 
         return self.animation_manager.zoom_out(self, duration, easing, on_finished)
 
@@ -110,7 +101,6 @@ class AnimatedWidget(QObject):
         def on_finished():
             if callback:
                 callback()
-            self.animationFinished.emit()
 
         return self.animation_manager.pulse(self, duration, scale, easing, on_finished)
 
@@ -224,7 +214,7 @@ class AnimatedCardMixin(AnimatedWidget):
         super().hideEvent(event)
 
 
-class TransitionManager(QObject):
+class TransitionManager:
     """页面过渡管理器"""
 
     # 定义过渡类型
@@ -234,7 +224,7 @@ class TransitionManager(QObject):
     TRANSITION_PUSH = "push"           # 推入
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        # 不调用super().__init__()以避免QObject冲突
         self.animation_manager = AnimationManager()
 
     def transition_out(self, widget, transition_type=TRANSITION_FADE, duration=400, callback=None):
