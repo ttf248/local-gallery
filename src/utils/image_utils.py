@@ -89,8 +89,8 @@ class ImageProcessor:
             if progress_callback:
                 progress_callback(85, "正在智能分组...")
 
-            # 智能分组：对非合集的相册进行相似度分析
-            albums = cls.create_smart_groups(albums)
+            # 智能分组：对非合集的相册进行相似度分析（启用快速模式）
+            albums = cls.create_smart_groups(albums, enable_fast_mode=True)
 
             # 完成
             if progress_callback:
@@ -104,22 +104,32 @@ class ImageProcessor:
         return albums
     
     @classmethod
-    def _scan_folder_recursive(cls, folder_path, albums):
-        """递归扫描文件夹"""
+    def _scan_folder_recursive(cls, folder_path, albums, max_depth=3, current_depth=0):
+        """递归扫描文件夹（优化版）
+
+        Args:
+            folder_path: 文件夹路径
+            albums: 存储结果的列表
+            max_depth: 最大递归深度（避免扫描过深）
+            current_depth: 当前递归深度
+        """
+        if current_depth >= max_depth:
+            return
+
         try:
             for item in folder_path.iterdir():
                 if item.is_dir():
                     try:
-                        # 获取当前文件夹中的图片文件
-                        image_files = cls.get_image_files(str(item))
-                        
+                        # 获取当前文件夹中的图片文件（启用快速模式）
+                        image_files = cls.get_image_files(str(item), skip_size_check=True)
+
                         if image_files and len(image_files) > 0:
                             # 计算文件夹大小
                             folder_size = cls.get_folder_size(image_files)
-                            
+
                             # 确保有封面图片
                             cover_image = image_files[0] if image_files else None
-                            
+
                             album_info = {
                                 'path': str(item),
                                 'name': item.name,
@@ -129,10 +139,10 @@ class ImageProcessor:
                                 'folder_size': folder_size
                             }
                             albums.append(album_info)
-                        
-                        # 递归扫描子文件夹
-                        cls._scan_folder_recursive(item, albums)
-                        
+
+                        # 递归扫描子文件夹（限制深度）
+                        cls._scan_folder_recursive(item, albums, max_depth, current_depth + 1)
+
                     except Exception as e:
                         print(f"处理文件夹时出错 {item}: {e}")
                         continue
@@ -141,46 +151,61 @@ class ImageProcessor:
             print(f"递归扫描文件夹时出错 {folder_path}: {e}")
     
     @classmethod
-    def create_smart_groups(cls, albums):
-        """智能分组：基于路径名称相似度和作者信息创建智能合集"""
+    def create_smart_groups(cls, albums, enable_fast_mode=True):
+        """智能分组：基于路径名称相似度和作者信息创建智能合集
+
+        Args:
+            albums: 相册列表
+            enable_fast_mode: 启用快速模式（跳过耗时的相似度计算）
+        """
         if len(albums) < 2:
             return albums
-        
+
         # 分离已有的合集和单个相册
         collections = [album for album in albums if album.get('type') == 'collection']
         single_albums = [album for album in albums if album.get('type') == 'album']
-        
+
         if len(single_albums) < 2:
             return albums
-        
-        # 首先按作者进行分组
+
+        # 快速模式：如果相册数量很多，跳过耗时的智能分组
+        if enable_fast_mode and len(single_albums) > 100:
+            print(f"相册数量较多（{len(single_albums)}），跳过智能分组以提升性能")
+            return albums + single_albums
+
+        # 首先按作者进行分组（相对快速）
         author_groups = cls._group_by_author(single_albums)
-        
+
         # 对剩余相册进行名称相似度分组
         remaining_albums = []
         for group in author_groups:
             if len(group) == 1:
                 remaining_albums.extend(group)
-        
-        name_groups = cls._group_similar_albums(remaining_albums) if remaining_albums else []
-        
-        # 合并结果：保留原有合集 + 作者分组 + 名称分组 + 未分组的单个相册
+
+        # 合并结果：保留原有合集 + 作者分组 + 未分组的单个相册
         result = collections
-        
+
         # 添加作者分组
         for group in author_groups:
             if len(group) >= 2:  # 至少2个相册才创建智能合集
                 smart_collection = cls._create_smart_collection(group)
                 result.append(smart_collection)
-        
-        # 添加名称分组
-        for group in name_groups:
-            if len(group) >= 2:  # 至少2个相册才创建智能合集
-                smart_collection = cls._create_smart_collection(group)
-                result.append(smart_collection)
-            else:
-                # 单个相册保持原样
-                result.extend(group)
+
+        # 只在相册数量不多时进行名称分组（避免O(n²)性能问题）
+        if remaining_albums and len(remaining_albums) <= 50:
+            name_groups = cls._group_similar_albums_fast(remaining_albums)
+
+            # 添加名称分组
+            for group in name_groups:
+                if len(group) >= 2:  # 至少2个相册才创建智能合集
+                    smart_collection = cls._create_smart_collection(group)
+                    result.append(smart_collection)
+                else:
+                    # 单个相册保持原样
+                    result.extend(group)
+        else:
+            # 未分组的单个相册保持原样
+            result.extend(remaining_albums)
         
         return result
     
@@ -222,31 +247,118 @@ class ImageProcessor:
     
     @classmethod
     def _group_similar_albums(cls, albums):
-        """根据名称相似度对相册进行分组"""
+        """根据名称相似度对相册进行分组（完整版，O(n²)）"""
         groups = []
         used_indices = set()
-        
+
         for i, album in enumerate(albums):
             if i in used_indices:
                 continue
-            
+
             # 创建新组，包含当前相册
             current_group = [album]
             used_indices.add(i)
-            
+
             # 查找与当前相册相似的其他相册
             for j, other_album in enumerate(albums):
                 if j in used_indices or i == j:
                     continue
-                
+
                 similarity = cls._calculate_name_similarity(album['name'], other_album['name'])
                 if similarity >= 0.6:  # 相似度阈值
                     current_group.append(other_album)
                     used_indices.add(j)
-            
+
             groups.append(current_group)
-        
+
         return groups
+
+    @classmethod
+    def _group_similar_albums_fast(cls, albums):
+        """根据名称相似度对相册进行分组（快速版，使用哈希分组）"""
+        groups = []
+        used_indices = set()
+
+        # 快速分组策略：基于关键词分组，而非逐个比较
+        # 提取每个相册名称的关键词（前3个字符或完整名称如果较短）
+        keyword_groups = {}
+
+        for i, album in enumerate(albums):
+            name = album['name']
+            # 提取前3个字符作为关键词（快速分组）
+            keyword = name[:3].lower() if len(name) >= 3 else name.lower()
+
+            if keyword not in keyword_groups:
+                keyword_groups[keyword] = []
+            keyword_groups[keyword].append((i, album))
+
+        # 处理每个关键词组
+        for keyword, album_list in keyword_groups.items():
+            if len(album_list) < 2:
+                continue
+
+            # 对组内的相册进行详细的相似度计算
+            current_group = []
+            group_indices = set()
+
+            for idx, album in album_list:
+                if idx in group_indices:
+                    continue
+
+                # 创建新组
+                subgroup = [album]
+                group_indices.add(idx)
+
+                # 与组内其他相册比较
+                for other_idx, other_album in album_list:
+                    if other_idx in group_indices or other_idx == idx:
+                        continue
+
+                    # 使用简化的相似度计算
+                    similarity = cls._calculate_name_similarity_fast(album['name'], other_album['name'])
+                    if similarity >= 0.5:  # 降低阈值以获得更多分组
+                        subgroup.append(other_album)
+                        group_indices.add(other_idx)
+
+                if len(subgroup) >= 2:
+                    current_group.extend(subgroup)
+
+            if current_group:
+                groups.append(current_group)
+
+        return groups
+
+    @classmethod
+    def _calculate_name_similarity_fast(cls, name1, name2):
+        """快速计算名称相似度（简化算法）"""
+        # 去除数字和特殊字符，只保留字母
+        import re
+        clean1 = re.sub(r'[^a-zA-Z]', '', name1.lower())
+        clean2 = re.sub(r'[^a-zA-Z]', '', name2.lower())
+
+        # 如果清理后的名称为空，返回0
+        if not clean1 or not clean2:
+            return 0.0
+
+        # 如果完全相同
+        if clean1 == clean2:
+            return 1.0
+
+        # 检查是否是子串
+        if clean1 in clean2 or clean2 in clean1:
+            return 0.8
+
+        # 计算公共前缀长度比例
+        common_prefix = 0
+        min_len = min(len(clean1), len(clean2))
+        for i in range(min_len):
+            if clean1[i] == clean2[i]:
+                common_prefix += 1
+            else:
+                break
+
+        # 基于公共前缀的相似度
+        return common_prefix / max(len(clean1), len(clean2))
     
     @classmethod
     def _calculate_name_similarity(cls, name1, name2):
@@ -421,38 +533,51 @@ class ImageProcessor:
             return 0
     
     @classmethod
-    def get_image_files(cls, folder_path):
-        """获取文件夹中的所有图片文件，支持Unicode路径"""
+    def get_image_files(cls, folder_path, skip_size_check=True):
+        """获取文件夹中的所有图片文件，优化性能
+
+        Args:
+            folder_path: 文件夹路径
+            skip_size_check: 是否跳过文件大小检查（提升性能）
+        """
         image_files = []
-        
+
         try:
             folder_path = Path(folder_path)
-            
+
             if not folder_path.exists():
                 return image_files
-            
+
+            # 预定义扩展名集合，提升查找速度
+            extensions = cls.IMAGE_EXTENSIONS
+
             # 遍历文件夹中的所有文件
             for file_path in folder_path.iterdir():
                 if file_path.is_file():
-                    # 检查文件扩展名
-                    if file_path.suffix.lower() in cls.IMAGE_EXTENSIONS:
+                    # 快速扩展名检查（使用 in 而不是 endswith）
+                    if file_path.suffix.lower() in extensions:
                         try:
-                            # 验证文件是否可读
-                            if file_path.exists() and file_path.stat().st_size > 0:
+                            # 跳过文件大小检查以提升性能
+                            # 大多数文件系统会缓存文件信息，而且检查必要性不大
+                            if skip_size_check:
                                 image_files.append(str(file_path))
+                            else:
+                                # 原有的文件大小检查逻辑（保留以备需要）
+                                if file_path.stat().st_size > 0:
+                                    image_files.append(str(file_path))
                         except Exception as e:
                             print(f"检查文件时出错 {file_path}: {e}")
                             continue
-                            
+
         except Exception as e:
             print(f"读取文件夹时出错 {folder_path}: {e}")
-            
+
         # 按文件名排序
         try:
             image_files.sort(key=lambda x: Path(x).name.lower())
         except Exception as e:
             print(f"排序文件时出错: {e}")
-            
+
         return image_files
     
     @classmethod
