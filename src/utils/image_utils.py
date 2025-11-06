@@ -5,12 +5,20 @@
 import os
 import glob
 import sys
+import traceback
 from pathlib import Path
 import threading
 import time
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import queue
+
+# Add parent directory to path
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+from utils.logger import get_logger, log_info, log_warning, log_error, log_exception, log_debug
 
 
 class ImageProcessor:
@@ -29,6 +37,9 @@ class ImageProcessor:
             include_hidden: 是否包含隐藏文件夹
             image_formats: 支持的图片格式列表
         """
+        logger = get_logger('utils.image_processor')
+        thread_id = threading.get_ident()
+
         albums = []
         root_path = Path(root_path)
 
@@ -36,9 +47,14 @@ class ImageProcessor:
         if image_formats is None:
             image_formats = cls.IMAGE_EXTENSIONS
 
+        log_info(f"[线程 {thread_id}] 开始扫描: {root_path}", 'utils.image_processor')
+        log_info(f"[线程 {thread_id}] 扫描配置: recursive={recursive}, include_hidden={include_hidden}, formats={image_formats}", 'utils.image_processor')
+
         if not root_path.exists():
+            error_msg = f"路径不存在: {root_path}"
+            log_error(f"[线程 {thread_id}] {error_msg}", 'utils.image_processor')
             if progress_callback:
-                progress_callback(0, f"路径不存在: {root_path}")
+                progress_callback(0, error_msg)
             return albums
 
         # 获取所有子文件夹
@@ -46,17 +62,20 @@ class ImageProcessor:
         for item in root_path.iterdir():
             # 跳过隐藏文件夹（如果配置为不包含）
             if not include_hidden and item.name.startswith('.'):
+                log_debug(f"[线程 {thread_id}] 跳过隐藏文件夹: {item.name}", 'utils.image_processor')
                 continue
 
             if item.is_dir():
                 subdirs.append(item)
 
         if not subdirs:
+            log_warning(f"[线程 {thread_id}] 未找到子文件夹: {root_path}", 'utils.image_processor')
             if progress_callback:
                 progress_callback(100, "未找到子文件夹")
             return albums
 
         total_items = len(subdirs)
+        log_info(f"[线程 {thread_id}] 找到 {total_items} 个子文件夹，开始并发扫描", 'utils.image_processor')
         if progress_callback:
             progress_callback(10, f"找到 {total_items} 个文件夹，开始扫描...")
 
@@ -66,13 +85,17 @@ class ImageProcessor:
 
         def scan_single_folder(folder_path):
             """扫描单个文件夹"""
+            thread_id = threading.get_ident()
             try:
+                log_debug(f"[线程 {thread_id}] 开始扫描文件夹: {folder_path.name}", 'utils.image_processor')
                 # 获取图片文件
                 image_files = cls.get_image_files(str(folder_path), image_formats)
+                log_debug(f"[线程 {thread_id}] {folder_path.name}: 找到 {len(image_files)} 个图片文件", 'utils.image_processor')
 
                 if image_files:
                     # 这是一个包含图片的相册
                     folder_size = cls.get_folder_size(image_files)
+                    log_info(f"[线程 {thread_id}] {folder_path.name}: 识别为相册 ({len(image_files)} 张图片, {folder_size})", 'utils.image_processor')
                     album_info = {
                         'path': str(folder_path),
                         'name': folder_path.name,
@@ -85,6 +108,7 @@ class ImageProcessor:
                     return [album_info]
                 else:
                     # 检查是否包含子相册（递归深度限制为2）
+                    log_debug(f"[线程 {thread_id}] {folder_path.name}: 无图片，检查子相册...", 'utils.image_processor')
                     sub_albums = []
                     cls._scan_folder_recursive(folder_path, sub_albums, max_depth=2)
 
@@ -93,6 +117,7 @@ class ImageProcessor:
                         total_size_bytes = sum(cls._parse_size_to_bytes(album['folder_size']) for album in sub_albums)
 
                         cover_image = sub_albums[0]['cover_image'] if sub_albums else None
+                        log_info(f"[线程 {thread_id}] {folder_path.name}: 识别为合集 ({len(sub_albums)} 个相册, {total_images} 张图片)", 'utils.image_processor')
 
                         collection_info = {
                             'path': str(folder_path),
@@ -105,18 +130,23 @@ class ImageProcessor:
                             'type': 'collection'
                         }
                         return [collection_info]
+                    else:
+                        log_debug(f"[线程 {thread_id}] {folder_path.name}: 无有效内容，跳过", 'utils.image_processor')
 
             except Exception as e:
-                print(f"扫描文件夹时出错 {folder_path}: {e}")
+                log_exception(f"[线程 {thread_id}] 扫描文件夹时出错 {folder_path}: {str(e)}", 'utils.image_processor')
+                log_error(f"[线程 {thread_id}] 错误详情: {traceback.format_exc()}", 'utils.image_processor')
 
             return []
 
         # 并发执行扫描任务
         max_workers = min(8, os.cpu_count() or 4)
+        log_info(f"[线程 {thread_id}] 启动线程池，最大工作线程数: {max_workers}", 'utils.image_processor')
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # 提交所有任务
             future_to_folder = {executor.submit(scan_single_folder, folder): folder
                               for folder in subdirs}
+            log_info(f"[线程 {thread_id}] 已提交 {len(future_to_folder)} 个扫描任务", 'utils.image_processor')
 
             # 收集结果
             for future in as_completed(future_to_folder):
@@ -126,17 +156,23 @@ class ImageProcessor:
                         albums.extend(result)
                     scanned_count += 1
 
+                    log_debug(f"[线程 {thread_id}] 完成扫描: {scanned_count}/{total_items}", 'utils.image_processor')
+
                     # 更新进度 - 每20%更新一次，减少开销
                     if progress_callback and scanned_count % max(1, total_items // 5) == 0:
                         progress = min(10 + int((scanned_count / total_items) * 70), 80)
                         progress_callback(progress, f"已扫描 {scanned_count}/{total_items} 个文件夹")
+                        log_info(f"[线程 {thread_id}] 进度更新: {progress}% ({scanned_count}/{total_items})", 'utils.image_processor')
 
                 except Exception as e:
-                    print(f"处理扫描结果时出错: {e}")
+                    log_exception(f"[线程 {thread_id}] 处理扫描结果时出错: {str(e)}", 'utils.image_processor')
+
+        log_info(f"[线程 {thread_id}] 文件夹扫描完成，初始结果: {len(albums)} 个项目", 'utils.image_processor')
 
         # 智能分组 - 简化版
         if progress_callback:
             progress_callback(85, "正在智能分组...")
+        log_info(f"[线程 {thread_id}] 开始智能分组...", 'utils.image_processor')
 
         albums = cls.create_smart_groups_simple(albums)
 
@@ -144,7 +180,21 @@ class ImageProcessor:
         if progress_callback:
             progress_callback(100, f"扫描完成，找到 {len(albums)} 个项目")
 
-        print(f"扫描完成：共找到 {len(albums)} 个项目（相册+合集）")
+        log_info(f"[线程 {thread_id}] 扫描完成，共找到 {len(albums)} 个项目（相册+合集+智能分组）", 'utils.image_processor')
+
+        # 详细统计
+        collections = [item for item in albums if item.get('type') == 'collection']
+        smart_collections = [item for item in albums if item.get('type') == 'smart_collection']
+        single_albums = [item for item in albums if item.get('type') == 'album']
+
+        if collections:
+            log_info(f"[线程 {thread_id}] 合集: {len(collections)} 个", 'utils.image_processor')
+        if smart_collections:
+            log_info(f"[线程 {thread_id}] 智能分组: {len(smart_collections)} 个", 'utils.image_processor')
+        if single_albums:
+            log_info(f"[线程 {thread_id}] 相册: {len(single_albums)} 个", 'utils.image_processor')
+
+        log_info(f"[线程 {thread_id}] 扫描任务完成", 'utils.image_processor')
         return albums
 
     @classmethod
