@@ -229,29 +229,37 @@ class MainWindow(QMainWindow):
                 display_name = folder_name
             self.status_bar.set_status(f"已选择: {display_name}", "success")
 
+            # 自动开始扫描
+            self.scan_albums()
+
     def scan_albums(self):
         """扫描漫画"""
         if not self.folder_path:
             self.status_bar.set_status("请先选择文件夹", "warning")
             return
 
+        # 创建扫描器实例（如果不存在）
+        if not hasattr(self, 'scanner'):
+            from src.core.album_scanner import AlbumScannerService
+            self.scanner = AlbumScannerService(self)
+
+        # 启动扫描
         self.status_bar.set_status("正在扫描...", "info")
-        # TODO: 实现实际扫描逻辑
-        self.status_bar.set_status("扫描功能开发中...", "info")
+        self.scanner.scan_albums()
 
     def show_recent(self):
         """显示最近浏览"""
+        from src.core.album_history import AlbumHistoryManager
         self.current_view_state = "recent"
-        self.status_bar.set_status("显示最近浏览的漫画", "info")
-        # TODO: 实现最近浏览
-        self.album_grid.show_empty_state()
+        history_manager = AlbumHistoryManager(self)
+        history_manager.show_recent_albums()
 
     def show_favorites(self):
         """显示收藏"""
+        from src.core.album_favorites import AlbumFavoritesManager
         self.current_view_state = "favorites"
-        self.status_bar.set_status("显示收藏的漫画", "info")
-        # TODO: 实现收藏功能
-        self.album_grid.show_empty_state()
+        favorites_manager = AlbumFavoritesManager(self)
+        favorites_manager.show_favorites()
 
     def show_home(self):
         """返回主页"""
@@ -276,10 +284,23 @@ class MainWindow(QMainWindow):
 
     def open_album(self, album_path):
         """打开相册"""
-        # TODO: 实现打开相册
-        self.status_bar.set_status(f"打开相册: {Path(album_path).name}", "info")
+        from src.core.album_viewer import AlbumViewerManager
+        viewer = AlbumViewerManager(self)
+        viewer.open_album(album_path)
 
     def toggle_favorite(self, album_path):
         """切换收藏状态"""
-        # TODO: 实现收藏功能
-        self.status_bar.set_status("收藏功能开发中...", "info")
+        if self.config_manager.is_favorite(album_path):
+            self.config_manager.remove_favorite(album_path)
+            self.status_bar.set_status(f"已从收藏中移除: {Path(album_path).name}", "warning")
+        else:
+            self.config_manager.add_favorite(album_path)
+            self.status_bar.set_status(f"已添加到收藏: {Path(album_path).name}", "success")
+
+        # 刷新当前显示
+        if self.albums:
+            self.album_grid.update_albums(self.albums)
+
+            # 如果在收藏视图中，需要重新加载收藏列表
+            if self.current_view_state == "favorites":
+                self.show_favorites()
