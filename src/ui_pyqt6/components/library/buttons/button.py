@@ -1,22 +1,33 @@
 """
 基础按钮组件
 所有按钮的基类
+支持动画效果
 """
 
 from PyQt6.QtWidgets import QPushButton, QHBoxLayout
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 
+import sys
+from pathlib import Path
+
+# 添加src路径
+src_path = Path(__file__).parent.parent.parent.parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 from ..base.base_widget import BaseWidget
+from ui_pyqt6.widgets.animated_widget import AnimatedButtonMixin
 
 
-class Button(BaseWidget, QPushButton):
-    """基础按钮组件"""
+class Button(AnimatedButtonMixin, BaseWidget, QPushButton):
+    """基础按钮组件 - 支持动画效果"""
 
     def __init__(self, text="", parent=None, style_manager=None):
-        # 初始化两个基类
-        BaseWidget.__init__(self, parent, style_manager)
+        # 初始化基类（注意顺序：QWidget在最后）
         QPushButton.__init__(self, text, parent)
+        BaseWidget.__init__(self, parent, style_manager)
+        AnimatedButtonMixin.__init__(self, parent)
 
         # 设置按钮属性
         self.setObjectName("button")
@@ -25,9 +36,6 @@ class Button(BaseWidget, QPushButton):
 
         # 应用样式
         self.apply_button_style()
-
-        # 连接信号
-        self.clicked.connect(self.on_clicked)
 
     def init_ui(self):
         """初始化UI - 按钮不需要额外的UI"""
@@ -66,9 +74,8 @@ class Button(BaseWidget, QPushButton):
         """)
 
     def on_clicked(self):
-        """点击事件处理"""
-        # 播放点击动画
-        self.animate_click()
+        """点击事件处理 - 已被动画混入类处理"""
+        pass
 
     def set_text(self, text):
         """设置按钮文字"""

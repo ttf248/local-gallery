@@ -1,20 +1,29 @@
 """
 卡片组件
-通用的卡片容器，支持悬停效果
+通用的卡片容器，支持悬停效果和动画
 """
 
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QHBoxLayout
 from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve
 from PyQt6.QtGui import QColor
 
+import sys
+from pathlib import Path
+
+# 添加src路径
+src_path = Path(__file__).parent.parent.parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 from .base_widget import BaseWidget
+from ui_pyqt6.widgets.animated_widget import AnimatedCardMixin
 
 
-class Card(BaseWidget):
-    """通用卡片组件"""
+class Card(AnimatedCardMixin, BaseWidget):
+    """通用卡片组件 - 支持动画效果"""
 
     def __init__(self, parent=None, padding=16, spacing=8, style_manager=None):
-        super().__init__(parent, style_manager)
+        super().__init__(parent)
         self.padding = padding
         self.spacing = spacing
         self.layout = None
@@ -48,22 +57,16 @@ class Card(BaseWidget):
         self.card_frame.setLineWidth(0)
 
     def on_enter(self):
-        """鼠标进入时的悬停效果"""
-        # 边框颜色动画
-        self.animate_property(
-            b"stylesheet",
-            "",
-            self.get_hover_stylesheet()
-        )
+        """鼠标进入时的悬停效果 - 已被动画混入类处理"""
+        # 悬停动画由AnimatedCardMixin的enterEvent处理
+        # 这里可以添加额外的悬停效果
+        pass
 
     def on_leave(self):
-        """鼠标离开时的效果"""
-        # 恢复原始样式
-        self.animate_property(
-            b"stylesheet",
-            "",
-            self.get_normal_stylesheet()
-        )
+        """鼠标离开时的效果 - 已被动画混入类处理"""
+        # 离开动画由AnimatedCardMixin的leaveEvent处理
+        # 这里可以添加额外的离开效果
+        pass
 
     def get_normal_stylesheet(self) -> str:
         """获取正常状态的样式表"""
