@@ -195,8 +195,8 @@ class AlbumScannerService:
             log_debug("扫描被取消，不执行完成处理", 'core.scanner')
             return
 
-        # 检查是否有错误
-        if hasattr(self, 'scan_error'):
+        # 检查是否有错误 - 正确检查None值
+        if getattr(self, 'scan_error', None) is not None:
             log_error("扫描过程中出现错误，调用错误处理", 'core.scanner')
             self._handle_scan_error(self.scan_error)
             return
@@ -307,6 +307,12 @@ class AlbumScannerService:
 
     def _handle_scan_error(self, error):
         """处理扫描错误"""
+        if error is None:
+            log_error("扫描错误信息为None，请检查代码逻辑", 'core.scanner')
+            if hasattr(self.app, 'status_bar'):
+                self.app.status_bar.set_status("扫描过程发生未知错误", "error")
+            return
+
         log_exception(f"扫描漫画时发生错误: {str(error)}", 'core.scanner')
         log_error(f"错误类型: {type(error).__name__}", 'core.scanner')
 
