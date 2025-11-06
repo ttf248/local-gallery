@@ -1,12 +1,21 @@
 import tkinter as tk
 import os
-from ...utils.image_utils import ImageProcessor, SlideshowManager
+from utils.image_utils import ImageProcessor, SlideshowManager
 from PIL import Image, ImageTk
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from .style_manager import StyleManager, get_safe_font
 from .status_bar import StatusBar
 from tkinter import messagebox
+
+import sys
+from pathlib import Path
+
+# Add src to path if not already there
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 
 
 class ImageViewer:

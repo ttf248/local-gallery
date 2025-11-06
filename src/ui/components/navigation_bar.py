@@ -1,7 +1,16 @@
 import tkinter as tk
 from tkinter import ttk
 from .style_manager import get_safe_font, StyleManager
-from ...utils.logger import get_logger, log_info, log_error, log_exception
+from utils.logger import get_logger, log_info, log_error, log_exception
+
+import sys
+from pathlib import Path
+
+# Add src to path if not already there
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 
 class NavigationBar:
     """现代化导航栏组件"""
@@ -244,7 +253,7 @@ class NavigationBar:
         """预加载最近浏览的封面"""
         try:
             # 获取图片缓存实例
-            from ...utils.image_cache import get_image_cache
+            from utils.image_cache import get_image_cache
             cache = get_image_cache()
             
             # 这里可以从历史记录中获取路径列表
@@ -252,21 +261,21 @@ class NavigationBar:
             self.parent.after(1000, lambda: self._do_preload_recent())
             
         except Exception as e:
-            from ...utils.logger import log_error
+            from utils.logger import log_error
             log_error(f"预加载最近浏览封面失败: {e}", 'ui.navigation')
     
     def _preload_favorite_covers(self):
         """预加载收藏的封面"""
         try:
             # 获取图片缓存实例
-            from ...utils.image_cache import get_image_cache
+            from utils.image_cache import get_image_cache
             cache = get_image_cache()
             
             # 延迟执行，等待实际数据加载
             self.parent.after(1000, lambda: self._do_preload_favorites())
             
         except Exception as e:
-            from ...utils.logger import log_error
+            from utils.logger import log_error
             log_error(f"预加载收藏封面失败: {e}", 'ui.navigation')
     
     def _do_preload_recent(self):

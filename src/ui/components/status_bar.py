@@ -1,6 +1,15 @@
 import tkinter as tk
 from .style_manager import get_safe_font, StyleManager
-from ...utils.logger import get_logger, log_info, log_error, log_exception
+from utils.logger import get_logger, log_info, log_error, log_exception
+
+import sys
+from pathlib import Path
+
+# Add src to path if not already there
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
 
 class StatusBar:
     """现代化状态栏组件"""
