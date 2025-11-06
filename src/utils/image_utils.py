@@ -305,3 +305,40 @@ class ImageProcessor:
             return int(value * multipliers.get(unit, 1))
         except Exception:
             return 0
+
+
+class SlideshowManager:
+    """幻灯片管理器 - 自动播放图片"""
+
+    def __init__(self, image_viewer, interval=3):
+        self.image_viewer = image_viewer
+        self.interval = interval
+        self.is_playing = False
+        self.timer = None
+
+    def start_slideshow(self):
+        """开始幻灯片播放"""
+        if not self.is_playing:
+            self.is_playing = True
+            self._next_slide()
+
+    def stop_slideshow(self):
+        """停止幻灯片播放"""
+        self.is_playing = False
+        if self.timer:
+            self.timer.cancel()
+
+    def _next_slide(self):
+        """播放下一张"""
+        if self.is_playing:
+            self.image_viewer.next_image()
+            self.timer = threading.Timer(self.interval, self._next_slide)
+            self.timer.start()
+
+    def set_interval(self, interval):
+        """设置播放间隔"""
+        self.interval = interval
+        if self.is_playing:
+            self.stop_slideshow()
+            self.start_slideshow()
+
