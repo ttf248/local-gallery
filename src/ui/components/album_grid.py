@@ -40,6 +40,20 @@ class AlbumGrid:
         # 防抖动布局参数
         self.layout_timer = None
         self.layout_delay = 300  # 300ms防抖
+
+        # 虚拟化滚动参数 - 优化大列表性能
+        self.visible_range = (0, 0)  # (start_idx, end_idx)
+        self.item_height = 580  # 固定卡片高度（420卡片 + 160间距）
+        self.buffer_size = 10  # 渲染缓冲区大小
+        self.scroll_update_timer = None
+        self.is_virtualized = False  # 启用虚拟化标记
+
+        # 缓存网格布局计算结果
+        self._layout_cache = {
+            'columns': None,
+            'card_width': 420,
+            'window_width': None
+        }
         
         # 现代化布局参数 - 优化为更大的卡片和瀑布流
         self.columns = 2  # 默认列数，会根据窗口大小动态调整
@@ -284,6 +298,9 @@ class AlbumGrid:
             
             # 绑定窗口大小变化事件 - 实现响应式瀑布流（使用防抖）
             self._bind_resize_events()
+
+            # 绑定虚拟化滚动事件
+            self._bind_virtual_scroll()
             
         except Exception as e:
             print(f"创建AlbumGrid组件时出错: {e}")
@@ -317,15 +334,32 @@ class AlbumGrid:
     def _bind_resize_events(self):
         """绑定窗口大小变化事件 - 使用防抖"""
         def _on_canvas_resize(event):
+            # 清除布局缓存，强制重新计算
+            self._layout_cache['window_width'] = None
+
             # 取消之前的定时器
             if self.layout_timer:
                 self.parent.after_cancel(self.layout_timer)
-            
+
             # 设置新的防抖定时器
             self.layout_timer = self.parent.after(self.layout_delay, self._relayout_albums)
-        
+
         if self.canvas:
             self.canvas.bind('<Configure>', _on_canvas_resize)
+
+    def _bind_virtual_scroll(self):
+        """绑定虚拟滚动事件 - 优化大列表性能"""
+        def _on_scroll(event):
+            # 使用防抖更新可见区域
+            if self.scroll_update_timer:
+                self.parent.after_cancel(self.scroll_update_timer)
+
+            self.scroll_update_timer = self.parent.after(50, self._update_visible_items)
+
+        if self.canvas:
+            # 绑定滚动条和Canvas的滚动事件
+            self.canvas.bind('<Motion>', _on_scroll)
+            self.scrollbar.bind('<Motion>', _on_scroll)
     
     def _relayout_albums(self):
         """重新布局漫画卡片（防抖后执行）"""
@@ -335,6 +369,153 @@ class AlbumGrid:
                 self._create_modern_album_cards(self.albums)
         except Exception as e:
             print(f"重新布局漫画时出错: {e}")
+
+    def _update_visible_items(self):
+        """更新可见区域的项目（虚拟滚动核心逻辑）"""
+        try:
+            self.scroll_update_timer = None  # 清除定时器引用
+
+            if not hasattr(self, 'albums') or not self.albums:
+                return
+
+            # 获取当前滚动位置
+            scroll_top = self.canvas.yview()[0]  # 0.0 到 1.0
+            total_items = len(self.albums)
+            total_height = (total_items + self.columns - 1) // self.columns * self.item_height
+
+            # 计算可见区域的起始和结束索引
+            visible_height = self.canvas.winfo_height()
+            visible_start = int(scroll_top * total_height / self.item_height)
+            visible_start = max(0, visible_start)
+
+            # 计算每行显示多少个项目
+            items_per_row = self.columns
+            start_idx = (visible_start // self.item_height) * items_per_row
+
+            # 计算可见行数和结束索引
+            visible_rows = visible_height // self.item_height + 2  # 加2作为缓冲区
+            end_idx = min(start_idx + visible_rows * items_per_row + self.buffer_size, total_items)
+
+            # 检查是否需要更新显示
+            if (start_idx, end_idx) != self.visible_range and end_idx > start_idx:
+                self.visible_range = (start_idx, end_idx)
+                self._render_visible_range(start_idx, end_idx)
+
+        except Exception as e:
+            print(f"更新可见项目时出错: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _render_visible_range(self, start_idx, end_idx):
+        """渲染可见范围内的项目"""
+        try:
+            # 清除现有内容
+            for widget in self.scrollable_frame.winfo_children():
+                widget.destroy()
+
+            if not self.albums:
+                self.show_empty_state()
+                return
+
+            self.hide_empty_state()
+
+            # 计算响应式列数 - 使用缓存
+            self._calculate_columns_cached()
+
+            # 创建网格容器
+            grid_container = tk.Frame(self.scrollable_frame, bg=self.style_manager.colors['bg_primary'])
+            grid_container.pack(fill='both', expand=True, padx=self.card_spacing, pady=self.card_spacing)
+
+            # 渲染可见范围内的卡片
+            visible_items = []
+            for i in range(start_idx, end_idx):
+                if i < len(self.albums):
+                    album = self.albums[i]
+                    row = (i - start_idx) // self.columns
+                    col = (i - start_idx) % self.columns
+                    visible_items.append((album, row, col))
+
+            # 批量创建可见卡片
+            if visible_items:
+                self._create_visible_cards_batch(grid_container, visible_items, 0)
+
+        except Exception as e:
+            print(f"渲染可见范围时出错: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _create_visible_cards_batch(self, grid_container, cards_to_create, start_index, batch_size=5):
+        """分批创建可见卡片"""
+        try:
+            end_index = min(start_index + batch_size, len(cards_to_create))
+
+            for i in range(start_index, end_index):
+                album, row, col = cards_to_create[i]
+
+                card = self._create_modern_album_card(grid_container, album)
+                card.grid(row=row, column=col,
+                         padx=self.card_spacing//2,
+                         pady=self.card_spacing//2,
+                         sticky='nsew')
+
+            # 如果还有更多卡片要创建，安排下一批
+            if end_index < len(cards_to_create):
+                self.parent.after(10, lambda: self._create_visible_cards_batch(
+                    grid_container, cards_to_create, end_index, batch_size))
+            else:
+                # 配置网格权重
+                for i in range(self.columns):
+                    grid_container.grid_columnconfigure(i, weight=1)
+
+                # 更新滚动区域 - 只更新虚拟高度
+                self._update_virtual_scrollregion()
+
+        except Exception as e:
+            print(f"分批创建可见卡片时出错: {e}")
+
+    def _update_virtual_scrollregion(self):
+        """更新虚拟滚动区域（优化滚动性能）"""
+        try:
+            if not hasattr(self, 'albums') or not self.albums:
+                return
+
+            total_items = len(self.albums)
+            total_rows = (total_items + self.columns - 1) // self.columns
+            virtual_height = total_rows * self.item_height
+
+            # 设置Canvas滚动区域（虚拟高度）
+            self.canvas.configure(scrollregion=(0, 0, 100, virtual_height))
+
+        except Exception as e:
+            print(f"更新虚拟滚动区域时出错: {e}")
+
+    def _calculate_columns_cached(self):
+        """计算响应式列数（带缓存）"""
+        try:
+            canvas_width = self.canvas.winfo_width()
+
+            # 检查缓存
+            if (self._layout_cache['window_width'] == canvas_width and
+                    self._layout_cache['columns'] is not None):
+                self.columns = self._layout_cache['columns']
+                return
+
+            # 重新计算
+            if canvas_width > 1:
+                available_width = canvas_width - (self.card_spacing * 2)
+                card_total_width = 420 + self.card_spacing
+                calculated_columns = max(self.min_columns, available_width // card_total_width)
+                self.columns = min(self.max_columns, calculated_columns)
+
+                # 更新缓存
+                self._layout_cache['window_width'] = canvas_width
+                self._layout_cache['columns'] = self.columns
+            else:
+                self.columns = 2
+
+        except Exception as e:
+            print(f"计算列数时出错: {e}")
+            self.columns = 2
     
     def create_empty_state(self):
         """创建空状态引导页面"""
@@ -770,60 +951,75 @@ class AlbumGrid:
             traceback.print_exc()
     
     def _create_modern_album_cards(self, albums):
-        """创建现代化漫画卡片 - 优化性能"""
+        """创建现代化漫画卡片 - 优化性能，支持虚拟化"""
         try:
             if not self.scrollable_frame:
                 return
-            
-            # 计算响应式列数 - 基于固定卡片宽度420px
-            canvas_width = self.canvas.winfo_width()
-            if canvas_width > 1:
-                # 根据固定卡片宽度420和间距计算最佳列数
-                available_width = canvas_width - (self.card_spacing * 2)  # 减去左右边距
-                card_total_width = 420 + self.card_spacing
-                calculated_columns = max(self.min_columns, available_width // card_total_width)
-                self.columns = min(self.max_columns, calculated_columns)
+
+            # 自动启用虚拟化（超过100个项目时）
+            if len(albums) > 100:
+                self.is_virtualized = True
+                # 使用虚拟化渲染
+                self._update_visible_items()
             else:
-                # 窗口尚未完全初始化时使用默认值
-                self.columns = 2
-            
-            # 清空现有内容 - 批量操作减少重绘
+                self.is_virtualized = False
+                # 使用传统渲染（全部渲染）
+                self._render_all_items(albums)
+
+        except Exception as e:
+            print(f"创建漫画卡片时出错: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _render_all_items(self, albums):
+        """渲染所有项目（传统模式，适用于小列表）"""
+        try:
+            # 计算响应式列数 - 使用缓存
+            self._calculate_columns_cached()
+
+            # 清空现有内容
             for widget in self.scrollable_frame.winfo_children():
                 widget.destroy()
-            
+
+            if not albums:
+                self.show_empty_state()
+                return
+
+            self.hide_empty_state()
+
             # 创建网格容器
             grid_container = tk.Frame(self.scrollable_frame, bg=self.style_manager.colors['bg_primary'])
             grid_container.pack(fill='both', expand=True, padx=self.card_spacing, pady=self.card_spacing)
-            
-            # 批量创建卡片 - 减少单次操作
+
+            # 准备所有卡片
             cards_to_create = []
             for i, album in enumerate(albums):
                 try:
                     # 验证漫画数据完整性
                     if not isinstance(album, dict):
                         continue
-                        
+
                     album_name = album.get('name', '未知漫画')
                     image_count = album.get('image_count', 0)
                     album_path = album.get('path', '')
-                    
+
                     if not album_path:
                         continue
-                    
+
                     row = i // self.columns
                     col = i % self.columns
-                    
+
                     cards_to_create.append((i, album, row, col))
-                        
+
                 except Exception as e:
                     print(f"准备漫画项时出错 {i}: {e}")
                     continue
-            
+
             # 分批创建卡片，减少UI阻塞
             self._create_cards_batch(grid_container, cards_to_create, 0)
-                
+
         except Exception as e:
-            print(f"创建漫画卡片时出错: {e}")
+            print(f"渲染所有项目时出错: {e}")
             import traceback
             traceback.print_exc()
     
@@ -1234,18 +1430,114 @@ class AlbumGrid:
         except Exception as e:
             print(f"更新封面时出错: {e}")
     
-    def __del__(self):
-        """清理资源"""
+    def cancel_timers(self):
+        """取消所有定时器，防止内存泄漏"""
         try:
             # 取消防抖定时器
             if hasattr(self, 'layout_timer') and self.layout_timer:
                 try:
                     self.parent.after_cancel(self.layout_timer)
+                    self.layout_timer = None
                 except:
                     pass
-            
-            # 注意：不再管理executor，因为使用的是全局缓存
-            # if hasattr(self, 'executor'):
-            #     self.executor.shutdown(wait=False)
+
+            # 取消滚动更新定时器
+            if hasattr(self, 'scroll_update_timer') and self.scroll_update_timer:
+                try:
+                    self.parent.after_cancel(self.scroll_update_timer)
+                    self.scroll_update_timer = None
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"取消定时器时出错: {e}")
+
+    def __del__(self):
+        """清理资源"""
+        try:
+            self.cancel_timers()
         except:
             pass
+
+    def update_albums_incremental(self, new_albums):
+        """增量更新相册，避免完全重建UI"""
+        try:
+            if not hasattr(self, 'albums'):
+                self.albums = []
+
+            old_count = len(self.albums)
+            new_count = len(new_albums)
+
+            # 如果数量变化很大，使用完全重建
+            if abs(new_count - old_count) > 50:
+                self.update_albums(new_albums)
+                return
+
+            # 增量更新
+            self.albums = new_albums
+
+            # 应用当前筛选条件
+            filtered_albums = self._apply_filter(self.all_albums, self.current_filter)
+
+            if self.is_virtualized and len(filtered_albums) > 100:
+                # 虚拟化模式下只更新可见区域
+                self._update_visible_items()
+            else:
+                # 传统模式下更新所有项目
+                self._render_all_items_incremental(filtered_albums)
+
+        except Exception as e:
+            print(f"增量更新相册时出错: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _render_all_items_incremental(self, albums):
+        """增量渲染所有项目"""
+        try:
+            # 清空现有内容
+            for widget in self.scrollable_frame.winfo_children():
+                widget.destroy()
+
+            if not albums:
+                self.show_empty_state()
+                return
+
+            self.hide_empty_state()
+
+            # 创建网格容器
+            grid_container = tk.Frame(self.scrollable_frame, bg=self.style_manager.colors['bg_primary'])
+            grid_container.pack(fill='both', expand=True, padx=self.card_spacing, pady=self.card_spacing)
+
+            # 创建卡片
+            for i, album in enumerate(albums):
+                try:
+                    if not isinstance(album, dict):
+                        continue
+
+                    album_path = album.get('path', '')
+                    if not album_path:
+                        continue
+
+                    row = i // self.columns
+                    col = i % self.columns
+
+                    card = self._create_modern_album_card(grid_container, album)
+                    card.grid(row=row, column=col,
+                             padx=self.card_spacing//2,
+                             pady=self.card_spacing//2,
+                             sticky='nsew')
+
+                except Exception as e:
+                    print(f"创建增量卡片时出错: {e}")
+                    continue
+
+            # 配置网格权重
+            for i in range(self.columns):
+                grid_container.grid_columnconfigure(i, weight=1)
+
+            # 更新滚动区域
+            self.scrollable_frame.update_idletasks()
+            self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+
+        except Exception as e:
+            print(f"增量渲染所有项目时出错: {e}")
