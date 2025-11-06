@@ -111,7 +111,7 @@ class CompactAlbumGrid(QWidget):
 
         calculated_columns = available_width // card_with_spacing
         self.columns = max(self.min_columns, min(self.max_columns, calculated_columns))
-        self.grid_layout.setColumnCount(self.columns)
+        # QGridLayout 会自动管理列数，无需显式设置
 
     def create_compact_card(self, album):
         """创建紧凑型相册卡片"""
