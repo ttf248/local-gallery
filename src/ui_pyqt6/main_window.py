@@ -118,9 +118,9 @@ class MainWindow(QMainWindow):
         content_layout.addWidget(self.toolbar)
         content_layout.addWidget(self.album_grid)
 
-        # 添加到主布局
-        self.layout().addWidget(self.sidebar)
-        self.layout().addWidget(content_widget, 1)
+        # QMainWindow需要使用setCentralWidget
+        self.setCentralWidget(content_widget)
+        self.sidebar.setParent(self)  # 侧边栏作为子窗口
 
     def create_status_bar(self):
         """创建状态栏"""
