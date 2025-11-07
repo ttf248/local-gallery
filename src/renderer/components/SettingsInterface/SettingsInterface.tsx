@@ -10,12 +10,12 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
   const [_activeSection, setActiveSection] = useState('reading')
 
   const settingsNav = [
-    { key: 'reading', icon: 'fas fa-book', text: '阅读设置', active: true },
-    { key: 'display', icon: 'fas fa-desktop', text: '显示设置', active: false },
-    { key: 'shortcuts', icon: 'fas fa-keyboard', text: '快捷键', active: false },
-    { key: 'storage', icon: 'fas fa-hdd', text: '存储设置', active: false },
-    { key: 'notification', icon: 'fas fa-bell', text: '通知设置', active: false },
-    { key: 'about', icon: 'fas fa-info-circle', text: '关于', active: false },
+    { key: 'reading', icon: '📖', text: '阅读设置', active: true },
+    { key: 'display', icon: '🖥️', text: '显示设置', active: false },
+    { key: 'shortcuts', icon: '⌨️', text: '快捷键', active: false },
+    { key: 'storage', icon: '💾', text: '存储设置', active: false },
+    { key: 'notification', icon: '🔔', text: '通知设置', active: false },
+    { key: 'about', icon: 'ℹ️', text: '关于', active: false },
   ]
 
   return (
@@ -38,7 +38,7 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
               `}
               onClick={() => setActiveSection(item.key)}
             >
-              <i className={`${item.icon} w-5 text-sm`}></i>
+              <span className="w-5 text-sm">{item.icon}</span>
               <span className="ml-3 text-sm font-medium">{item.text}</span>
             </button>
           ))}
@@ -48,14 +48,14 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
       {/* 右侧设置内容 */}
       <div className="flex-1 p-8">
         <h2 className="text-lg font-light text-minimal-text mb-6 flex items-center">
-          <i className="fas fa-book mr-2 text-minimal-blue text-sm"></i>阅读设置
+          📄阅读设置
         </h2>
 
         <div className="space-y-6">
           {/* 翻页设置 */}
           <div className="bg-minimal-gray rounded-lg p-6">
             <h3 className="text-sm font-medium text-minimal-text mb-4 flex items-center">
-              <i className="fas fa-exchange-alt mr-2 text-minimal-blue text-xs"></i>翻页设置
+              📄翻页设置
             </h3>
             <div className="space-y-4">
               <div>
@@ -95,7 +95,7 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
           {/* 缩放设置 */}
           <div className="bg-minimal-gray rounded-lg p-6">
             <h3 className="text-sm font-medium text-minimal-text mb-4 flex items-center">
-              <i className="fas fa-search mr-2 text-minimal-blue text-xs"></i>缩放设置
+              📄缩放设置
             </h3>
             <div className="space-y-4">
               <div>
@@ -133,7 +133,7 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
           {/* 快捷键设置 */}
           <div className="bg-minimal-gray rounded-lg p-6">
             <h3 className="text-sm font-medium text-minimal-text mb-4 flex items-center">
-              <i className="fas fa-keyboard mr-2 text-minimal-green text-xs"></i>快捷键设置
+              📄快捷键设置
             </h3>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
@@ -166,7 +166,7 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
           {/* 自动阅读 */}
           <div className="bg-minimal-gray rounded-lg p-6">
             <h3 className="text-sm font-medium text-minimal-text mb-4 flex items-center">
-              <i className="fas fa-play-circle mr-2 text-minimal-green text-xs"></i>自动阅读
+              📄自动阅读
             </h3>
             <div className="space-y-4">
               <label className="flex items-center p-3 bg-white border border-minimal-border rounded-md hover:border-minimal-blue cursor-pointer transition">
@@ -191,10 +191,10 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
 
         {/* 底部操作按钮 */}
         <div className="mt-8 flex items-center space-x-3">
-          <Button variant="primary" icon="fas fa-save mr-2">
+          <Button variant="primary" icon="💾 mr-2">
             保存设置
           </Button>
-          <Button variant="secondary" icon="fas fa-undo mr-2">
+          <Button variant="secondary" icon="↺ mr-2">
             恢复默认
           </Button>
         </div>

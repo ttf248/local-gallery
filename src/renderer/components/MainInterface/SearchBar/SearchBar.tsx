@@ -38,13 +38,13 @@ const SearchBar: React.FC<SearchBarProps> = ({
           onKeyPress={handleKeyPress}
           className="w-full pl-10"
         />
-        <i className="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-minimal-muted text-sm"></i>
+        📄
       </div>
 
       {/* 筛选按钮 */}
       <Button
         variant="secondary"
-        icon="fas fa-filter mr-2 text-xs"
+        icon="🔽 mr-2 text-xs"
         onClick={onFilterClick}
       >
         筛选
@@ -53,7 +53,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       {/* 网格视图按钮 */}
       <Button
         variant={currentViewMode === 'grid' ? 'primary' : 'secondary'}
-        icon="fas fa-th-large mr-2 text-xs"
+        icon="⊞ mr-2 text-xs"
         onClick={() => onViewModeChange?.('grid')}
       >
         网格
@@ -62,7 +62,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       {/* 列表视图按钮 */}
       <Button
         variant={currentViewMode === 'list' ? 'primary' : 'secondary'}
-        icon="fas fa-list mr-2 text-xs"
+        icon="☰ mr-2 text-xs"
         onClick={() => onViewModeChange?.('list')}
       >
         列表

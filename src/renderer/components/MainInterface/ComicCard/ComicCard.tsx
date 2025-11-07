@@ -23,7 +23,7 @@ const ComicCard: React.FC<ComicCardProps> = ({
     >
       {/* 封面区域 */}
       <div className="aspect-[3/4] bg-minimal-gray flex items-center justify-center relative group">
-        <i className="fas fa-image text-5xl text-minimal-muted/30"></i>
+        📄
         <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs text-minimal-muted">
           {collection.totalChapters}集
         </div>
@@ -45,7 +45,7 @@ const ComicCard: React.FC<ComicCardProps> = ({
         <div className="flex items-center justify-between">
           {/* 评分 */}
           <div className="flex items-center space-x-1">
-            <i className="fas fa-star text-xs text-minimal-yellow"></i>
+            📄
             <span className="text-xs text-minimal-muted">
               {collection.rating}
             </span>
@@ -61,7 +61,7 @@ const ComicCard: React.FC<ComicCardProps> = ({
                 onFavorite?.(collection.id)
               }}
             >
-              <i className={isFavorite ? 'fas fa-heart' : 'far fa-heart'}></i>
+              <i className={isFavorite ? '❤️' : '🤍'}></i>
             </button>
 
             {/* 阅读按钮 */}
@@ -72,7 +72,7 @@ const ComicCard: React.FC<ComicCardProps> = ({
                 onRead?.(collection.id)
               }}
             >
-              <i className="fas fa-play"></i>
+              📄
             </button>
           </div>
         </div>

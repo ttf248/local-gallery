@@ -41,13 +41,13 @@ const ComicGrid: React.FC<ComicGridProps> = ({
   if (collections.length === 0) {
     return (
       <div className="col-span-6 flex flex-col items-center justify-center py-20">
-        <i className="fas fa-folder-open text-6xl text-minimal-muted/30 mb-4"></i>
+        📄
         <p className="text-minimal-muted text-lg mb-2">还没有漫画</p>
         <p className="text-minimal-muted text-sm mb-4">
           点击"导入"按钮开始添加你的第一本漫画
         </p>
         <button className="px-6 py-2.5 bg-minimal-blue text-white rounded-md hover:bg-minimal-blue/90 transition text-sm font-medium">
-          <i className="fas fa-plus mr-2"></i>导入漫画
+          📄导入漫画
         </button>
       </div>
     )

@@ -22,7 +22,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
       {/* 左侧筛选面板 */}
       <div className="w-72 bg-minimal-gray p-6 border-r border-minimal-border">
         <h2 className="text-sm font-medium text-minimal-text mb-5 flex items-center">
-          <i className="fas fa-_filter mr-2 text-minimal-blue text-sm"></i>筛选条件
+          <span className="mr-2 text-minimal-blue text-sm">🔍</span>筛选条件
         </h2>
 
         <div className="space-y-6">
@@ -121,14 +121,14 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
           <Button
             variant="primary"
             className="w-full"
-            icon="fas fa-check mr-2"
+            icon="✓ mr-2"
           >
             应用筛选
           </Button>
           <Button
             variant="secondary"
             className="w-full"
-            icon="fas fa-undo mr-2"
+            icon="↺ mr-2"
           >
             重置
           </Button>
@@ -147,7 +147,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 className="w-full px-5 py-3 pl-12"
               />
-              <i className="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-minimal-muted text-sm"></i>
+              📄
             </div>
             <Button variant="primary" className="px-6 py-3">
               搜索
@@ -180,7 +180,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
               onClick={() => onCollectionClick(collection)}
             >
               <div className="aspect-[3/4] bg-minimal-gray flex items-center justify-center relative">
-                <i className="fas fa-image text-5xl text-minimal-muted/30"></i>
+                📄
                 <div className="absolute top-2 right-2 bg-white/90 px-2 py-1 rounded text-xs text-minimal-muted">
                   {collection.totalChapters}集
                 </div>
@@ -194,7 +194,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
                 </p>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-1">
-                    <i className="fas fa-star text-xs text-minimal-yellow"></i>
+                    📄
                     <span className="text-xs text-minimal-muted">
                       {collection.rating}
                     </span>
@@ -209,7 +209,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
         {/* 分页 */}
         <div className="mt-8 flex items-center justify-center space-x-2">
           <button className="px-4 py-2 border border-minimal-border rounded-md hover:border-minimal-blue transition">
-            <i className="fas fa-chevron-left text-minimal-blue text-sm"></i>
+            📄
           </button>
           <button className="px-4 py-2 bg-minimal-blue text-white rounded-md">1</button>
           <button className="px-4 py-2 border border-minimal-border rounded-md hover:border-minimal-blue transition">2</button>
@@ -217,7 +217,7 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
           <span className="px-2 text-minimal-muted text-sm">...</span>
           <button className="px-4 py-2 border border-minimal-border rounded-md hover:border-minimal-blue transition">15</button>
           <button className="px-4 py-2 border border-minimal-border rounded-md hover:border-minimal-blue transition">
-            <i className="fas fa-chevron-right text-minimal-blue text-sm"></i>
+            📄
           </button>
         </div>
       </div>

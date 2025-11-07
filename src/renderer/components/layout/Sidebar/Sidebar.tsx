@@ -15,13 +15,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   const navigationItems: NavigationItem[] = [
     {
       key: 'myComics',
-      icon: 'fas fa-th-large',
+      icon: '📚',
       text: '我的漫画',
       active: activeItem === 'myComics',
     },
     {
       key: 'favorites',
-      icon: 'fas fa-heart',
+      icon: '❤️',
       text: '收藏',
       count: favoriteCount,
       color: 'text-minimal-red',
@@ -29,21 +29,21 @@ const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       key: 'history',
-      icon: 'fas fa-clock',
+      icon: '🕐',
       text: '历史',
       color: 'text-minimal-blue',
       active: activeItem === 'history',
     },
     {
       key: 'categories',
-      icon: 'fas fa-folder',
+      icon: '📁',
       text: '分类',
       color: 'text-minimal-green',
       active: activeItem === 'categories',
     },
     {
       key: 'importRecords',
-      icon: 'fas fa-download',
+      icon: '⬇️',
       text: '导入记录',
       color: 'text-minimal-muted',
       active: activeItem === 'importRecords',
@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             `}
             onClick={() => onNavigate?.(item.key)}
           >
-            <i className={`${item.icon} w-5 text-sm`}></i>
+            <span className="w-5 text-sm">{item.icon}</span>
             <span className="ml-3 text-sm font-medium">{item.text}</span>
             {item.count !== undefined && (
               <div className="ml-auto text-xs text-minimal-muted">

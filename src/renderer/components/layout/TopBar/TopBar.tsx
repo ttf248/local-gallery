@@ -11,8 +11,8 @@ const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onImportClick }) => {
     <div className="bg-white border-b border-minimal-border px-8 py-6 flex items-center justify-between">
       {/* Logo 区域 */}
       <div className="flex items-center space-x-5">
-        <div className="w-10 h-10 bg-minimal-blue rounded-lg flex items-center justify-center">
-          <i className="fas fa-book-open text-white text-lg"></i>
+        <div className="w-10 h-10 bg-minimal-blue rounded-lg flex items-center justify-center text-white text-xl font-bold">
+          📚
         </div>
         <div>
           <h1 className="text-2xl font-light text-minimal-text">漫画阅读器</h1>
@@ -24,17 +24,15 @@ const TopBar: React.FC<TopBarProps> = ({ onSettingsClick, onImportClick }) => {
       <div className="flex items-center space-x-3">
         <Button
           variant="secondary"
-          icon="fas fa-cog mr-2"
           onClick={onSettingsClick}
         >
-          设置
+          ⚙️ 设置
         </Button>
         <Button
           variant="primary"
-          icon="fas fa-plus mr-2"
           onClick={onImportClick}
         >
-          导入
+          ➕ 导入
         </Button>
       </div>
     </div>
