@@ -19,7 +19,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false, // 为了安全，禁用 Node.js 集成
       contextIsolation: true, // 启用上下文隔离
-      preload: path.join(__dirname, 'preload.js'), // 预加载脚本
+      preload: path.join(__dirname, 'main/preload.cjs'), // 预加载脚本
     },
     titleBarStyle: 'default',
     autoHideMenuBar: !isDev, // 开发环境下显示菜单栏
@@ -28,12 +28,12 @@ function createWindow(): void {
   // 加载应用
   if (isDev) {
     // 开发环境：加载 Vite 开发服务器
-    mainWindow.loadURL('http://localhost:5173')
+    mainWindow.loadURL('http://localhost:8888')
     // 打开开发者工具
     mainWindow.webContents.openDevTools()
   } else {
     // 生产环境：加载构建后的文件
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'))
   }
 
   // 当 window 被关闭，这个事件会被触发
