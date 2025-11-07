@@ -19,7 +19,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false, // 为了安全，禁用 Node.js 集成
       contextIsolation: true, // 启用上下文隔离
-      preload: path.join(__dirname, 'preload.cjs'), // 预加载脚本
+      preload: path.join(__dirname, 'preload.js'), // 预加载脚本
     },
     titleBarStyle: 'default',
     autoHideMenuBar: !isDev, // 开发环境下显示菜单栏
