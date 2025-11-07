@@ -1,12 +1,13 @@
-# 漫画阅读器 - Windows 桌面版 v3.0
+# 漫画阅读器 - Linux 桌面版 v3.0
 
-[![Windows](https://img.shields.io/badge/Windows-0078D4?style=flat&logo=windows&logoColor=white)](https://www.microsoft.com/windows/)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat&logo=linux&logoColor=black)](https://www.linux.org/)
 [![Electron](https://img.shields.io/badge/Electron-47848F?style=flat&logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=flat&logo=react&logoColor=61DAFB)](https://reactjs.org/)
-[![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
 
-一个专为 Windows 平台设计的现代化漫画阅读器，采用 **极简主义** 设计理念，100% 还原原型图交互。
+一个专为 **Linux 平台** 设计的现代化漫画阅读器，采用 **极简主义** 设计理念，**100% 还原原型图交互**。
+
+> **原型图** 📄 [html/demo-minimal.html](html/demo-minimal.html) - 完整UI设计参考，包含4个核心界面的详细交互规范
 
 ## ✨ 核心特性
 
@@ -28,6 +29,7 @@
 - **收藏与历史**：快速访问喜爱的漫画和合集
 - **自定义快捷键**：13个可配置快捷键
 - **自动阅读**：可配置间隔自动翻页
+- **中文路径完美支持**：支持中文目录名和文件名（Linux）
 
 ## 🏗️ 技术栈
 
@@ -314,7 +316,203 @@ class ScanOptimizer {
 }
 ```
 
-## 🎯 原型图功能分析
+## 📱 原型图功能分析
+
+### 完整页面功能清单
+
+基于 [html/demo-minimal.html](html/demo-minimal.html) 原型图，完整实现以下 **4个核心界面**：
+
+---
+
+#### 页面 1：主界面 - 漫画库浏览
+
+**路径**: `/` 或 `/library`
+
+**顶部标题栏**
+- [x] 应用Logo：书图标 + "漫画阅读器" 文字
+- [x] 副标题："Discover Amazing Comics"
+- [x] 右侧按钮：设置按钮 + 导入按钮
+
+**左侧导航栏 (宽度：256px)**
+- [x] 标题："Navigation"
+- [x] 我的漫画（当前页面，蓝色背景）
+- [x] 收藏（红色爱心图标，显示数量 "8"）
+- [x] 历史（蓝色时钟图标）
+- [x] 分类（绿色文件夹图标）
+- [x] 导入记录（灰色下载图标）
+- [x] 标签区域标题："Tags"
+- [x] 6个标签：冒险、爱情、奇幻、科幻、校园、职场（彩色圆角标签）
+
+**主内容区**
+- [x] 搜索栏：占位符 "搜索漫画标题、作者..."
+- [x] 筛选按钮 + 网格按钮 + 列表按钮
+- [x] 6列漫画网格（响应式）
+- [x] 漫画卡片包含：
+  - [x] 封面区域（图片占位符图标）
+  - [x] 页数标签（右上角 "120页"）
+  - [x] 标题（第1行）
+  - [x] 作者（第2行）
+  - [x] 评分（星星图标 + 9.2分）
+  - [x] 收藏按钮（♥）+ 播放按钮（▶）
+
+**底部状态栏**
+- [x] 显示操作提示信息
+
+---
+
+#### 页面 2：阅读界面
+
+**路径**: `/reader/:comicId/:chapterIndex?/:pageIndex?`
+
+**顶部工具栏**
+- [x] 返回按钮（← 返回）
+- [x] 漫画标题（第1话）
+- [x] 设置按钮
+- [x] 全屏按钮
+
+**阅读区域**
+- [x] 漫画页面展示（占位符图标）
+- [x] 左侧悬浮控制按钮（◀）
+- [x] 右侧悬浮控制按钮（▶）
+
+**底部工具栏**
+- [x] 左侧：上一页按钮 + 页码信息 + 下一页按钮
+- [x] 中间：缩小按钮 + 适应宽度按钮（默认选中） + 放大按钮
+- [x] 右侧：章节按钮 + 进度条（8%）+ 进度百分比
+
+---
+
+#### 页面 3：搜索与筛选界面
+
+**路径**: `/search`
+
+**页面头部**
+- [x] 标题："搜索与筛选"
+- [x] 副标题："Find Your Favorite Comics"
+
+**左侧筛选面板 (宽度：288px)**
+- [x] 筛选条件标题 + 过滤图标
+
+**阅读状态筛选**
+- [x] 标题："阅读状态"
+- [x] 4个复选框：全部（默认勾选）、未开始、阅读中、已完结
+
+**评分筛选**
+- [x] 标题："评分"
+- [x] 4个单选框：全部（默认选中）、9分以上、8分以上、7分以上
+
+**标签筛选**
+- [x] 标题："标签"
+- [x] 6个可选择的彩色圆角标签
+
+**页数范围**
+- [x] 标题："页数范围"
+- [x] 2个数字输入框（最小、最大）
+- [x] 1个范围滑块
+- [x] 2个操作按钮：应用筛选、重置
+
+**右侧结果区域**
+- [x] 搜索输入框 + 搜索按钮
+- [x] 结果统计："找到 156 部漫画"
+- [x] 排序下拉框：相关性、最新更新、评分最高、页数最多
+- [x] 6列搜索结果网格（卡片同主界面 + 匹配度百分比）
+- [x] 分页控件：1, 2, 3, ..., 15
+
+---
+
+#### 页面 4：设置界面
+
+**路径**: `/settings`
+
+**页面头部**
+- [x] 标题："设置"
+- [x] 副标题："Customize Your Reading Experience"
+
+**左侧设置导航 (宽度：256px)**
+- [x] 标题："Settings"
+- [x] 阅读设置（当前选中，蓝色背景）
+- [x] 显示设置
+- [x] 快捷键
+- [x] 存储设置
+- [x] 通知设置
+- [x] 关于
+
+**右侧设置内容**
+
+**翻页设置**
+- [x] 标题 + 图标
+- [x] 翻页方向：2个单选框
+  - 从右到左（推荐，默认选中）
+  - 从左到右
+- [x] 使用鼠标滚轮翻页（复选框，默认勾选）
+- [x] 启用页面过渡动画（复选框，默认勾选）
+
+**缩放设置**
+- [x] 标题 + 图标
+- [x] 默认缩放模式下拉框
+- [x] 缩放灵敏度滑块（0-100，默认50）
+
+**快捷键设置**
+- [x] 标题 + 图标
+- [x] 6个快捷键显示：
+  - 上一页：← 或 A
+  - 下一页：→ 或 D
+  - 放大：+
+  - 缩小：-
+  - 适应宽度：F
+  - 全屏：F11
+
+**自动阅读**
+- [x] 标题 + 图标
+- [x] 启用自动阅读（复选框，默认不勾选）
+- [x] 翻页间隔数字输入框（3秒）
+
+**底部操作按钮**
+- [x] 保存设置按钮
+- [x] 恢复默认按钮
+
+**页面导航指示器**（右下角浮动）
+- [x] 主界面按钮（蓝色，激活状态）
+- [x] 阅读界面按钮（白色）
+- [x] 搜索界面按钮（白色）
+- [x] 设置界面按钮（白色）
+
+---
+
+### ✅ 100% 原型图实现确认
+
+**可行性分析**: **完全可行** ✅
+
+| 页面 | 功能复杂度 | 技术可行性 | 预计开发工时 | 状态 |
+|------|------------|------------|--------------|------|
+| 主界面 | ⭐⭐⭐ | ✅ Electron + React + Tailwind | 3-5天 | 可实现 |
+| 阅读界面 | ⭐⭐⭐⭐ | ✅ React 图片查看器组件 | 5-7天 | 可实现 |
+| 搜索界面 | ⭐⭐⭐ | ✅ 前端筛选 + JSON 查询 | 3-4天 | 可实现 |
+| 设置界面 | ⭐⭐ | ✅ React 表单组件 | 2-3天 | **推荐起步** |
+
+**技术难点及解决方案**：
+
+✅ **极简设计系统** - Tailwind CSS 完美支持
+✅ **6列响应式网格** - CSS Grid + React Virtualization
+✅ **悬浮控制按钮** - React 绝对定位 + 动画
+✅ **进度条显示** - HTML5 Progress 元素
+✅ **缩放功能** - CSS Transform + 图片处理
+✅ **全屏模式** - Electron Fullscreen API
+✅ **中文路径支持** - Node.js UTF-8 原生支持
+✅ **合集识别** - 自定义算法（已设计完成）
+✅ **连续阅读** - React Router + 状态管理
+
+**额外增强功能**（原型图未明确但建议实现）：
+
+💡 **快捷键支持** - 13个可配置快捷键
+💡 **自动阅读** - 定时翻页功能
+💡 **主题切换** - 浅色/深色主题
+💡 **缩略图缓存** - 提升性能
+💡 **虚拟滚动** - 大列表优化
+
+**结论**: 原型图所有功能均可通过 Electron + React + Tailwind CSS 实现，技术方案成熟，无重大障碍。
+
+---
 
 ### 界面结构 (100% 实现)
 
@@ -1249,8 +1447,95 @@ comic-reader/
 
 - **Node.js**: 20.0+ (LTS)
 - **Python**: 3.8+ (用于编译原生模块)
-- **Windows**: 10/11 (目标平台)
+- **Linux**: Ubuntu 20.04+ / CentOS 8+ / Arch Linux (目标平台)
 - **Git**: 最新版本
+
+### 开发顺序建议
+
+#### 📋 推荐开发流程（10个阶段）
+
+| 阶段 | 重点 | 页面/功能 | 说明 |
+|------|------|----------|------|
+| **1** | 核心架构 | Electron + React 搭建 | 搭建项目框架，配置开发环境 |
+| **2** | 数据层 | JSON 数据管理 | 实现 DataManager，加载/保存数据 |
+| **3** | 布局系统 | 主界面框架 | 顶部栏、侧边栏、内容区布局 |
+| **4** | 设置页面 | 完整设置界面 | **建议从这里开始！** 设置是所有功能的基础 |
+| **5** | 文件扫描 | 合集识别 | 自动扫描目录，识别合集，生成 JSON 数据 |
+| **6** | 主界面 | 漫画列表 | 漫画网格、搜索、筛选功能 |
+| **7** | 阅读界面 | 图片查看器 | 翻页、缩放、全屏功能 |
+| **8** | 连续阅读 | 合集导航 | 跨集跳转、进度同步 |
+| **9** | 搜索功能 | 搜索与筛选 | 多维度筛选、排序、分页 |
+| **10** | 优化 | 性能与体验 | 缓存、懒加载、动画优化 |
+
+**为什么要从设置页面开始？**
+
+✅ **设置是所有功能的基础**：
+- 翻页方向、缩放模式影响阅读体验
+- 快捷键配置需要提前定义
+- 存储路径、中文编码需要优先处理
+
+✅ **设置页面相对独立**：
+- 不依赖数据扫描
+- 不依赖图片加载
+- 可以独立开发和测试
+
+✅ **快速获得成就感**：
+- UI 完整，视觉效果好
+- 交互清晰，易于验证
+- 为后续功能打好基础
+
+### 中文路径兼容性
+
+**Linux 平台特殊注意事项**：
+
+```bash
+# 1. 确保系统支持 UTF-8
+# Ubuntu/Debian
+sudo apt install locales
+sudo locale-gen zh_CN.UTF-8
+
+# CentOS/RHEL
+sudo yum install glibc-langpack-zh
+
+# 2. 测试路径处理
+const testPath = "/home/用户/漫画/进击的巨人/第1话/01.jpg"
+console.log(testPath)  // 正常输出中文
+```
+
+```typescript
+// 3. Node.js 中文路径处理
+import { readdir, readFile } from 'fs/promises'
+import path from 'path'
+
+// 正确处理中文路径
+async function scanDirectory(dirPath: string): Promise<string[]> {
+  // 确保路径是 UTF-8 编码
+  const normalizedPath = path.normalize(dirPath)
+
+  try {
+    const files = await readdir(normalizedPath, { withFileTypes: true })
+    return files.map(f => f.name)  // 中文文件名保持完整
+  } catch (error) {
+    console.error('路径扫描失败:', error)
+    return []
+  }
+}
+
+// 读取文件
+async function readImage(imagePath: string): Promise<Buffer> {
+  return await readFile(imagePath)  // 无需额外编码处理
+}
+```
+
+**验证方法**：
+```bash
+# 创建中文目录测试
+mkdir -p "/tmp/测试漫画/进击的巨人/第1话"
+touch "/tmp/测试漫画/进击的巨人/第1话/01.jpg"
+
+# 在应用中测试扫描
+# 应该能正常识别并显示中文路径
+```
 
 ### 漫画存储结构
 
