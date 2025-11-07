@@ -28,7 +28,7 @@ class DataManager {
    */
   private getDataFilePath(): string {
     // 在开发环境中使用模拟路径
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       return './data.json'
     }
 

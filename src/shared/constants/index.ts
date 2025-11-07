@@ -131,10 +131,15 @@ export const ANIMATION = {
 // =============================================================================
 
 export const PATHS = {
-  // 用户数据目录
-  userData: process.platform === 'win32'
-    ? process.env.APPDATA || ''
-    : process.env.HOME || '',
+  // 获取用户数据目录 - 使用函数延迟求值避免渲染进程错误
+  get userData(): string {
+    // 在渲染进程中，使用window.api获取路径
+    if (typeof window !== 'undefined' && (window as any).api?.getPath) {
+      return (window as any).api.getPath('userData')
+    }
+    // 开发环境或主进程中使用默认值
+    return ''
+  },
 
   // 应用数据目录
   appData: '', // 将在运行时动态设置

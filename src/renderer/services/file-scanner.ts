@@ -47,7 +47,7 @@ class FileScanner {
     const _directories: Directory[] = []
 
     // 开发模式下使用模拟数据
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       return this.getMockDirectories()
     }
 
