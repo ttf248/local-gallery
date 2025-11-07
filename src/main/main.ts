@@ -28,7 +28,8 @@ function createWindow(): void {
   // 加载应用
   if (isDev) {
     // 开发环境：加载 Vite 开发服务器
-    mainWindow.loadURL('http://localhost:8888')
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:8888'
+    mainWindow.loadURL(devServerUrl)
     // 打开开发者工具
     mainWindow.webContents.openDevTools()
   } else {
