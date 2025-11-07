@@ -1,5 +1,5 @@
 import React from 'react'
-import { COLORS, BORDER_RADIUS } from '@shared/constants'
+import { COLORS } from '@shared/constants'
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'default' | 'danger'
@@ -17,7 +17,7 @@ const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   // 变体样式
-  const variantStyles = {
+  const variantStyles: Record<string, any> = {
     primary: {
       background: COLORS.primary,
       color: 'white',
@@ -25,6 +25,7 @@ const Button: React.FC<ButtonProps> = ({
       hover: {
         background: COLORS.primaryHover,
         border: COLORS.primaryHover,
+        color: 'white',
       },
     },
     secondary: {
@@ -44,6 +45,7 @@ const Button: React.FC<ButtonProps> = ({
       hover: {
         color: COLORS.primary,
         background: COLORS.background,
+        border: 'transparent',
       },
     },
     danger: {
@@ -53,6 +55,7 @@ const Button: React.FC<ButtonProps> = ({
       hover: {
         background: '#C0392B',
         border: '#C0392B',
+        color: 'white',
       },
     },
   }

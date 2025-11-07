@@ -10,7 +10,7 @@ import {
 } from '@shared/interfaces'
 import { dataManager } from '../../services/database'
 
-interface ComicState {
+export interface ComicState {
   // 数据
   collections: Collection[]
   chapters: Chapter[]

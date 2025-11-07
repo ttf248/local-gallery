@@ -77,7 +77,7 @@ app.on('window-all-closed', () => {
 // 也可以将它们分别打包然后再import进来
 
 // IPC 事件处理
-ipcMain.handle('read-data-file', async (event, filePath: string) => {
+ipcMain.handle('read-data-file', async (_event, filePath: string) => {
   try {
     const data = await fs.readFile(filePath, 'utf-8')
     return {
@@ -92,7 +92,7 @@ ipcMain.handle('read-data-file', async (event, filePath: string) => {
   }
 })
 
-ipcMain.handle('write-data-file', async (event, filePath: string, data: any) => {
+ipcMain.handle('write-data-file', async (_event, filePath: string, data: any) => {
   try {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8')
     return {
@@ -106,7 +106,7 @@ ipcMain.handle('write-data-file', async (event, filePath: string, data: any) => 
   }
 })
 
-ipcMain.handle('get-app-path', async (event, name: string) => {
+ipcMain.handle('get-app-path', async (_event, name: string) => {
   try {
     const appPath = app.getPath(name as any)
     return {
