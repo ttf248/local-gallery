@@ -16,8 +16,8 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0', // 监听所有地址
-    port: 8888,
-    strictPort: true // 强制使用指定端口，端口被占用时直接失败
+    port: 9999,
+    strictPort: false // 端口被占用时自动选择其他端口
   },
   resolve: {
     alias: {

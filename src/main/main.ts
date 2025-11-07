@@ -31,7 +31,8 @@ function createWindow(): void {
   // 加载应用
   if (isDev) {
     // 开发环境：加载 Vite 开发服务器
-    const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:8888'
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:10000'
+    console.log('开发模式，加载地址:', devServerUrl)
     mainWindow.loadURL(devServerUrl)
     // 打开开发者工具
     mainWindow.webContents.openDevTools()
@@ -51,9 +52,21 @@ function createWindow(): void {
 
   // 当页面加载完成时显示窗口
   mainWindow.once('ready-to-show', () => {
+    console.log('窗口已准备好，显示窗口')
     if (mainWindow) {
       mainWindow.show()
+      console.log('窗口已显示')
     }
+  })
+
+  // 页面加载完成事件
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('页面加载完成')
+  })
+
+  // 页面加载失败事件
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error('页面加载失败:', errorCode, errorDescription)
   })
 }
 
