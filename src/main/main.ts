@@ -19,19 +19,20 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 600,
     show: false, // 先不显示，等加载完成后再显示
+    center: true, // 窗口居中显示
     webPreferences: {
       nodeIntegration: false, // 为了安全，禁用 Node.js 集成
       contextIsolation: true, // 启用上下文隔离
       preload: path.join(path.dirname(fileURLToPath(import.meta.url)), 'preload.js'), // 预加载脚本
     },
     titleBarStyle: 'default',
-    autoHideMenuBar: !isDev, // 开发环境下显示菜单栏
+    autoHideMenuBar: true, // 隐藏菜单栏
   })
 
   // 加载应用
   if (isDev) {
     // 开发环境：加载 Vite 开发服务器
-    const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:10000'
+    const devServerUrl = process.env.VITE_DEV_SERVER_URL || 'http://localhost:9999'
     console.log('开发模式，加载地址:', devServerUrl)
     mainWindow.loadURL(devServerUrl)
     // 打开开发者工具
@@ -55,7 +56,10 @@ function createWindow(): void {
     console.log('窗口已准备好，显示窗口')
     if (mainWindow) {
       mainWindow.show()
-      console.log('窗口已显示')
+      mainWindow.focus() // 聚焦窗口
+      console.log('窗口已显示并聚焦')
+      console.log('窗口尺寸:', mainWindow.getSize())
+      console.log('窗口位置:', mainWindow.getPosition())
     }
   })
 
