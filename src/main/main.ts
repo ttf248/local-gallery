@@ -23,6 +23,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false, // 为了安全，禁用 Node.js 集成
       contextIsolation: true, // 启用上下文隔离
+      webSecurity: false, // 允许本地文件访问
       preload: path.join(path.dirname(fileURLToPath(import.meta.url)), 'preload.js'), // 预加载脚本
     },
     titleBarStyle: 'default',
@@ -38,10 +39,13 @@ function createWindow(): void {
     // 打开开发者工具
     mainWindow.webContents.openDevTools()
   } else {
-    // 生产环境：加载构建后的文件
-    const mainDir = path.dirname(fileURLToPath(import.meta.url))
-    const rendererPath = path.join(mainDir, '../renderer/index.html')
-    mainWindow.loadFile(rendererPath)
+    // 生产环境：加载独立的测试HTML
+    const mainDir = path.dirname(fileURLToPath(import.meta.url)) // dist/main
+    const appDir = path.dirname(mainDir) // dist
+    const projectRoot = path.dirname(appDir) // 项目根目录
+    const testHtmlPath = path.join(projectRoot, 'test.html')
+    console.log('加载测试HTML:', testHtmlPath)
+    mainWindow.loadFile(testHtmlPath)
   }
 
   // 当 window 被关闭，这个事件会被触发

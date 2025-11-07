@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>独立测试</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    #root {
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-size: 48px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div style="text-align: center;">
+      <div style="font-size: 80px; margin-bottom: 30px;">🎉</div>
+      <div>独立HTML测试成功！</div>
+      <div style="font-size: 24px; margin-top: 30px; opacity: 0.9;">
+        如果看到这行文字，说明Electron可以正常渲染！
+      </div>
+      <div style="font-size: 18px; margin-top: 50px; opacity: 0.7;">
+        时间: <span id="time"></span>
+      </div>
+    </div>
+  </div>
+  <script>
+    document.getElementById('time').textContent = new Date().toLocaleString()
+    console.log('JavaScript执行成功！')
+  </script>
+</body>
+</html>

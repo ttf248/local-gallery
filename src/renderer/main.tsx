@@ -1,14 +1,4 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App'
-import ErrorBoundary from './components/ErrorBoundary'
-import './styles/globals.css'
-
-// 渲染应用
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <App />
-    </ErrorBoundary>
-  </React.StrictMode>
-)
+// 不用React，不用setTimeout，直接执行
+const root = document.getElementById('root')
+root.innerHTML = '<h1 style="color:red; font-size:48px; padding:50px;">直接写入测试</h1>'
+console.log('写入完成')

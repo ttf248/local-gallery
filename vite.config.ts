@@ -4,7 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: './', // 保持相对路径用于Electron
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: true,
