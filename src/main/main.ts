@@ -39,13 +39,11 @@ function createWindow(): void {
     // 打开开发者工具
     mainWindow.webContents.openDevTools()
   } else {
-    // 生产环境：加载独立的测试HTML
+    // 生产环境：加载构建后的HTML
     const mainDir = path.dirname(fileURLToPath(import.meta.url)) // dist/main
-    const appDir = path.dirname(mainDir) // dist
-    const projectRoot = path.dirname(appDir) // 项目根目录
-    const testHtmlPath = path.join(projectRoot, 'test.html')
-    console.log('加载测试HTML:', testHtmlPath)
-    mainWindow.loadFile(testHtmlPath)
+    const rendererPath = path.join(mainDir, '../renderer/index.html')
+    console.log('加载生产环境HTML:', rendererPath)
+    mainWindow.loadFile(rendererPath)
   }
 
   // 当 window 被关闭，这个事件会被触发

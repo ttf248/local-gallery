@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useComicStore } from './store'
+import { useComicStore } from './store/slices/comicStore'
 import { fileScanner } from './services/file-scanner'
 import TopBar from './components/layout/TopBar/TopBar'
 import Sidebar from './components/layout/Sidebar/Sidebar'

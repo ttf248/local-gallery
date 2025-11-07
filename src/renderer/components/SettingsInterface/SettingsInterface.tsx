@@ -191,10 +191,10 @@ const SettingsInterface: React.FC<SettingsInterfaceProps> = ({ onClose }) => {
 
         {/* 底部操作按钮 */}
         <div className="mt-8 flex items-center space-x-3">
-          <Button variant="primary" icon="💾 mr-2">
+          <Button variant="primary" icon="💾">
             保存设置
           </Button>
-          <Button variant="secondary" icon="↺ mr-2">
+          <Button variant="secondary" icon="↺">
             恢复默认
           </Button>
         </div>

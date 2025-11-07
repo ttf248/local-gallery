@@ -61,7 +61,7 @@ const ComicCard: React.FC<ComicCardProps> = ({
                 onFavorite?.(collection.id)
               }}
             >
-              <i className={isFavorite ? '❤️' : '🤍'}></i>
+              {isFavorite ? '❤️' : '🤍'}
             </button>
 
             {/* 阅读按钮 */}

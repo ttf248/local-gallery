@@ -121,14 +121,14 @@ const SearchInterface: React.FC<SearchInterfaceProps> = ({
           <Button
             variant="primary"
             className="w-full"
-            icon="✓ mr-2"
+            icon="✓"
           >
             应用筛选
           </Button>
           <Button
             variant="secondary"
             className="w-full"
-            icon="↺ mr-2"
+            icon="↺"
           >
             重置
           </Button>
