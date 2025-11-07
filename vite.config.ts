@@ -4,7 +4,6 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  root: '.',
   base: './',
   build: {
     outDir: 'dist/renderer',
@@ -16,7 +15,9 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173
+    host: '0.0.0.0', // 监听所有地址
+    port: 5173,
+    strictPort: true // 强制使用指定端口，端口被占用时直接失败
   },
   resolve: {
     alias: {
