@@ -1,6 +1,9 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import * as path from 'path'
 import * as fs from 'fs/promises'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // 保持对窗口对象的全局引用，如果不这么做的话，当 JavaScript 对象被
 // 垃圾回收的时候，window 将会被自动关闭
@@ -19,7 +22,7 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false, // 为了安全，禁用 Node.js 集成
       contextIsolation: true, // 启用上下文隔离
-      preload: path.join(__dirname, 'preload.js'), // 预加载脚本
+      preload: path.join(path.dirname(fileURLToPath(import.meta.url)), 'preload.js'), // 预加载脚本
     },
     titleBarStyle: 'default',
     autoHideMenuBar: !isDev, // 开发环境下显示菜单栏
@@ -34,7 +37,9 @@ function createWindow(): void {
     mainWindow.webContents.openDevTools()
   } else {
     // 生产环境：加载构建后的文件
-    mainWindow.loadFile(path.join(__dirname, '../../renderer/index.html'))
+    const mainDir = path.dirname(fileURLToPath(import.meta.url))
+    const rendererPath = path.join(mainDir, '../renderer/index.html')
+    mainWindow.loadFile(rendererPath)
   }
 
   // 当 window 被关闭，这个事件会被触发
