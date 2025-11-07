@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+const { contextBridge, ipcRenderer } = require('electron')
 
 // 暴露受保护的方法，允许渲染进程使用 ipcRenderer，同时不暴露整个对象
 contextBridge.exposeInMainWorld('api', {
