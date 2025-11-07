@@ -4,7 +4,7 @@
     "module": "ESNext",
     "lib": ["ES2020"],
     "outDir": "./dist/main",
-    "rootDir": "./src",
+    "rootDir": "./src/main",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
