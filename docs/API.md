@@ -1,41 +1,253 @@
 # API 文档
 
-> 占位，将在 **T15 集成测试 + 文档定稿** 阶段完整化。
+漫画阅读器后端的 HTTP 接口手册。所有端点位于 `/api` 前缀下。
 
-## REST 端点
+## 通用约定
 
-| 方法 | 路径 | 说明 | 状态 |
-|------|------|------|------|
-| GET | `/api/health` | 健康检查 | T2 |
-| POST | `/api/scan` | 同步扫描 | T4 |
-| POST | `/api/scan/start` | 启动异步扫描 | T6 |
-| GET | `/api/scan/:id/events` | SSE 进度流 | T6 |
-| DELETE | `/api/scan/:id` | 取消扫描 | T6 |
-| GET | `/api/albums/*/images` | 相册图片列表 | T4 |
-| GET | `/api/thumbs/:key.png` | 缩略图 | T5 |
-| GET | `/api/images/*` | 全图（支持 Range） | T11 |
-| GET / POST / DELETE | `/api/favorites` | 收藏 | T7 |
-| GET / POST / DELETE | `/api/history` | 最近 | T7 |
-| GET / PATCH | `/api/prefs` | 偏好 | T7 |
-| GET | `/api/images/*/info` | 图片元数据（EXIF） | T12 |
-| GET | `/api/fs/open?path=` | 打开系统文件管理器 | T14 |
+| 项 | 值 |
+|----|----|
+| 基础地址 | `http://<host>:<port>`（默认 `http://localhost:8080`） |
+| 内容类型 | `application/json`（除缩略图/原图外） |
+| 路径参数 | URL 中的 `?path=<abs>` 必须为绝对路径，且必须位于配置的 `comicRoot` 之下 |
+| 字符编码 | UTF-8；路径中的中文/空格需 URL-encode |
+| 错误响应 | `{ "error": "<可读消息>" }`，状态码 4xx/5xx |
+| Cache-Control | 缩略图 30 天；原图 1 天 |
 
-## SSE 事件格式
+---
 
-```
-event: progress
-data: {"scanId":"abc","progress":42,"status":"running","currentPath":"..."}
+## 健康检查
 
-event: complete
-data: {"scanId":"abc","albumCount":42,"duration":1234}
+### `GET /api/health`
 
-event: error
-data: {"scanId":"abc","error":"..."}
-
-event: cancelled
-data: {"scanId":"abc"}
+```json
+{
+  "status": "ok",
+  "comicRoot": "E:\\漫画",
+  "version": "0.1.0",
+  "goVersion": "go1.22.x",
+  "goroutines": 12
+}
 ```
 
 ---
 
-详细请求/响应 schema、错误码、示例将在 T15 完成。
+## 扫描
+
+### `POST /api/scan`（同步，T4）
+
+阻塞扫描整个漫画根目录；适合小型库（<1k 卷）。
+
+```json
+{
+  "ok": true,
+  "result": {
+    "root": "E:\\漫画",
+    "albums": [
+      { "path": "...", "name": "vol1", "imageCount": 50, "author": "作者A", "coverImage": "..." }
+    ],
+    "collections": [],
+    "smartCollections": [
+      { "author": "作者A", "albumCount": 5, "coverImage": "..." }
+    ],
+    "albumCount": 50,
+    "duration": 1234
+  }
+}
+```
+
+### `POST /api/scan/start`（异步，T6）
+
+立即返回 `scanId`，扫描在后台进行。
+
+```json
+{ "scanId": "5f631a76-..." }
+```
+
+### `GET /api/scan/:id/events`（SSE）
+
+建立长连接，按事件推送进度。事件格式：
+
+```
+event: running
+data: {"scanId":"...","progress":42,"albumsFound":15,...}
+
+event: complete
+data: {"scanId":"...","progress":100,"albumsFound":50,...}
+
+event: cancelled
+data: {"scanId":"...",...}
+
+event: error
+data: {"scanId":"...","error":"permission denied",...}
+```
+
+### `GET /api/scan/:id/result`
+
+获取已完成扫描的最终结果（结构同 `/api/scan`）。
+
+### `DELETE /api/scan/:id`
+
+取消正在进行的扫描。
+
+---
+
+## 缩略图与原图
+
+### `GET /api/thumbs?path=<abs>`
+
+返回 PNG（默认 320×350，保持比例）。支持服务端 LRU + 磁盘缓存。
+
+### `GET /api/thumbs/stats`
+
+```json
+{
+  "cacheSize": 123,
+  "hitCount": 4567,
+  "missCount": 890,
+  "diskBytes": 12345678
+}
+```
+
+### `POST /api/thumbs/cleanup`
+
+清理超过 `cacheMaxAgeDays` 的磁盘缓存文件。
+
+```json
+{ "deleted": 12 }
+```
+
+### `GET /api/images?path=<abs>`
+
+返回原始图片（支持 `Range` 请求，用于分段加载大图）。
+
+### `GET /api/images/info?path=<abs>`
+
+```json
+{
+  "path": "...",
+  "name": "page1.png",
+  "dir": "...",
+  "size": 123456,
+  "mtime": "2026-08-01T12:34:56Z",
+  "width": 1200,
+  "height": 1800,
+  "format": "png",
+  "checksum": "ab12cd34ef567890"
+}
+```
+
+---
+
+## 偏好与历史
+
+### `GET /api/prefs`
+
+```json
+{
+  "favorites": ["/path1", "/path2"],
+  "history": [{ "path": "/x", "name": "X", "imageCount": 5, "openedAt": "..." }],
+  "maxRecent": 10,
+  "autoSwitchAlbum": true,
+  "showSwitchNotif": true,
+  "theme": "system",
+  "sidebarCollapsed": false
+}
+```
+
+### `PATCH /api/prefs`
+
+只覆盖传入的字段。Body 示例：
+```json
+{ "theme": "dark", "autoSwitchAlbum": false }
+```
+
+---
+
+## 收藏
+
+### `GET /api/favorites`
+
+```json
+{ "favorites": ["/path1", "/path2"] }
+```
+
+### `POST /api/favorites`
+
+```json
+{ "path": "/comic/volume1" }
+```
+幂等添加。返回最新的收藏列表。
+
+### `DELETE /api/favorites`
+
+```json
+{ "path": "/comic/volume1" }
+```
+幂等移除。
+
+### `POST /api/favorites/prune`
+
+移除磁盘上已不存在的收藏。返回 `{ "removed": ["..."] }`。
+
+---
+
+## 最近访问
+
+### `GET /api/history`
+
+### `POST /api/history`
+
+```json
+{ "path": "/x", "name": "X", "imageCount": 5 }
+```
+
+按 LRU 去重，最多 10 条（受 `maxRecent` 配置）。
+
+### `DELETE /api/history`
+
+清空历史。
+
+---
+
+## 系统集成
+
+### `GET /api/fs/open?path=<abs>`
+
+在系统文件管理器中打开指定路径（Windows 资源管理器/macOS Finder/Linux xdg-open）。
+
+- 仅当配置 `allowOsOpen=true` 时启用（默认关闭）。
+- 路径必须在 `comicRoot` 内（防越权）。
+- 403：`allowOsOpen` 禁用；400：路径越权。
+
+---
+
+## 错误码
+
+| 码 | 含义 |
+|----|------|
+| 400 | 参数缺失/路径越权 |
+| 403 | 功能未启用（`allowOsOpen`） |
+| 404 | 文件不存在 |
+| 415 | 不支持的图片格式 |
+| 500 | 服务端错误 |
+
+---
+
+## 配置项（服务端）
+
+通过 `backend/config.json` 或环境变量或 `--flag` 覆盖：
+
+```json
+{
+  "comicRoot": "E:\\漫画",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "allowOsOpen": false,
+  "cacheDir": "~/.comic_reader/cache",
+  "thumbSizeW": 320,
+  "thumbSizeH": 350,
+  "cacheMaxAgeDays": 30
+}
+```
+
+优先级：`--flag` > `ENV` > `config.json` > 默认。

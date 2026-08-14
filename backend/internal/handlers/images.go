@@ -17,13 +17,12 @@ import (
 // T14：路径安全校验在 path_safety 中间件统一处理。
 func ImageHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		path := c.Query("path")
+		path := middleware.SafePath(c)
 		if path == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'path' query parameter",
 			})
 		}
-		// T11 简化：直接 ServeFile；T14 加路径安全
 		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})

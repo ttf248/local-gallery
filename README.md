@@ -82,6 +82,7 @@ COMIC_ROOT=/path/to/comics ./bin/server
 | 启动前端 | `cd frontend && npm run dev` |
 | 后端测试 | `cd backend && go test ./...` |
 | 前端构建 | `cd frontend && npm run build` |
+| 集成测试 | `cd backend && go test ./tests/integration -v` |
 | 一键启动 | VSCode → 运行和调试 → 选择 "全栈: 后端 + 前端 (复合)" |
 
 VSCode 调试配置见 `.vscode/launch.json`，包含 4 个调试入口 + 1 个复合调试。
@@ -99,13 +100,26 @@ VSCode 调试配置见 `.vscode/launch.json`，包含 4 个调试入口 + 1 个�
 └── .vscode/           # VSCode 配置
 ```
 
-详细结构见 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)（T15 阶段定稿）。
+详细结构见 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)。
+
+```
+.
+├── backend/                     # Go + Fiber 服务
+│   ├── cmd/server/main.go       # 入口（flag/env/file 配置装配）
+│   ├── internal/                # config / models / services / store / handlers / middleware
+│   └── tests/integration/       # 端到端 HTTP 测试
+├── frontend/                    # React 18 + Vite + TypeScript
+│   └── src/                     # api/ hooks/ store/ routes/ components/ utils/
+├── docs/                        # 架构、API、快捷键文档
+├── scripts/                     # dev/build/test 脚本
+└── .vscode/                     # VSCode 配置（launch/tasks/extensions）
+```
 
 ---
 
 ## ⌨️ 快捷键
 
-完整快捷键列表见 [docs/SHORTCUTS.md](./docs/SHORTCUTS.md)（T12 阶段定稿）。
+完整快捷键列表见 [docs/SHORTCUTS.md](./docs/SHORTCUTS.md)。
 
 常用快捷键：
 
