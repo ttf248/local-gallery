@@ -1,6 +1,0 @@
-# .cnb/web_trigger.yml
-branch:
-  - buttons:
-      - name: manual_sync
-        description: 手动触发代码同步到 GitHub 仓库
-        event: web_trigger_sync
