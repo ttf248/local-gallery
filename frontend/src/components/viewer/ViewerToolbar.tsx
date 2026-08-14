@@ -5,9 +5,19 @@ interface Props {
   total: number
   onPrev: () => void
   onNext: () => void
+  showInfo?: boolean
+  onToggleInfo?: () => void
+  onToggleHelp?: () => void
 }
 
-export default function ViewerToolbar({ total, onPrev, onNext }: Props) {
+export default function ViewerToolbar({
+  total,
+  onPrev,
+  onNext,
+  showInfo,
+  onToggleInfo,
+  onToggleHelp,
+}: Props) {
   const navigate = useNavigate()
   const {
     index,
@@ -85,6 +95,24 @@ export default function ViewerToolbar({ total, onPrev, onNext }: Props) {
       <button onClick={toggleFullscreen} className="px-2 py-1 rounded hover:bg-bg-subtle" title="全屏 (F11)">
         ⛶
       </button>
+      {onToggleInfo && (
+        <button
+          onClick={onToggleInfo}
+          className={`px-2 py-1 rounded hover:bg-bg-subtle ${showInfo ? 'text-accent' : ''}`}
+          title="图片信息 (I)"
+        >
+          ℹ
+        </button>
+      )}
+      {onToggleHelp && (
+        <button
+          onClick={onToggleHelp}
+          className="px-2 py-1 rounded hover:bg-bg-subtle"
+          title="帮助 (Ctrl+/)"
+        >
+          ?
+        </button>
+      )}
     </header>
   )
 }

@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, useNavigate } from 'react-router-dom'
 import { useViewerStore } from '../store/viewerStore'
 import { useKeyboard } from '../hooks/useKeyboard'
 import ImageViewer from '../components/viewer/ImageViewer'
 import ViewerToolbar from '../components/viewer/ViewerToolbar'
+import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
+import HelpOverlay from '../components/common/HelpOverlay'
 
 // 查看器页面：从 URL ?images=<json>&index=<n> 读取图片列表和起始索引。
 export default function Viewer() {
@@ -20,10 +22,19 @@ export default function Viewer() {
   const slideshow = useViewerStore((s) => s.slideshow)
   const slideshowInterval = useViewerStore((s) => s.slideshowInterval)
 
+  const [showInfo, setShowInfo] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const current = images[index]
+
   // 初始化 index
   useEffect(() => {
     setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
   }, [initialIndex, images.length, setIndex])
+
+  // 切换图片时关闭信息面板
+  useEffect(() => {
+    setShowInfo(false)
+  }, [index])
 
   // 幻灯片计时器
   useEffect(() => {
@@ -61,16 +72,33 @@ export default function Viewer() {
       else document.documentElement.requestFullscreen()
     },
     space: () => useViewerStore.getState().toggleSlideshow(),
-    escape: () => navigate(-1),
+    i: () => setShowInfo((v) => !v),
+    'ctrl+/': () => setShowHelp((v) => !v),
+    escape: () => {
+      if (showHelp) setShowHelp(false)
+      else if (showInfo) setShowInfo(false)
+      else navigate(-1)
+    },
   })
 
   return (
     <div className="flex flex-col h-full bg-bg">
-      <ViewerToolbar total={images.length} onPrev={prev} onNext={next} />
+      <ViewerToolbar
+        total={images.length}
+        onPrev={prev}
+        onNext={next}
+        showInfo={showInfo}
+        onToggleInfo={() => setShowInfo((v) => !v)}
+        onToggleHelp={() => setShowHelp((v) => !v)}
+      />
       <div className="px-3 py-1 text-xs text-fg-subtle border-b border-border">
         {name} · {albumPath}
       </div>
-      <ImageViewer images={images} />
+      <div className="flex-1 flex min-h-0">
+        <ImageViewer images={images} />
+        {showInfo && <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />}
+      </div>
+      <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   )
 }
