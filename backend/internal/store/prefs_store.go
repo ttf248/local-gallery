@@ -64,6 +64,9 @@ func normalize(p models.Prefs) models.Prefs {
 	if p.History == nil {
 		p.History = d.History
 	}
+	if p.ReadingProgress == nil {
+		p.ReadingProgress = d.ReadingProgress
+	}
 	if p.MaxRecent <= 0 {
 		p.MaxRecent = d.MaxRecent
 	}
@@ -208,6 +211,41 @@ func (s *PrefsStore) ClearHistory() error {
 	}
 	s.cached.History = []models.HistoryEntry{}
 	return s.flushLocked()
+}
+
+// SetReadingProgress 记录某相册的阅读进度（LRU，去重）。
+func (s *PrefsStore) SetReadingProgress(entry models.ReadingProgress) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLoaded(); err != nil {
+		return err
+	}
+	out := []models.ReadingProgress{entry}
+	for _, r := range s.cached.ReadingProgress {
+		if r.Path == entry.Path {
+			continue
+		}
+		out = append(out, r)
+	}
+	// 上限 50 条，防止无限增长
+	const maxRP = 50
+	if len(out) > maxRP {
+		out = out[:maxRP]
+	}
+	s.cached.ReadingProgress = out
+	return s.flushLocked()
+}
+
+// GetReadingProgress 读取某相册的阅读进度。
+func (s *PrefsStore) GetReadingProgress(path string) (models.ReadingProgress, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, r := range s.cached.ReadingProgress {
+		if r.Path == path {
+			return r, true
+		}
+	}
+	return models.ReadingProgress{}, false
 }
 
 // ---- 内部 ----

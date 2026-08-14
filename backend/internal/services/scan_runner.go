@@ -54,11 +54,17 @@ type ScanState struct {
 type AsyncScanRunner struct {
 	mu     sync.Mutex
 	states map[string]*ScanState
+	cache  *ScanResultCache // 可选：扫描成功时写入缓存
 }
 
 // NewAsyncScanRunner 创建 runner。
 func NewAsyncScanRunner() *AsyncScanRunner {
 	return &AsyncScanRunner{states: make(map[string]*ScanState)}
+}
+
+// SetCache 绑定全局扫描结果缓存。
+func (r *AsyncScanRunner) SetCache(cache *ScanResultCache) {
+	r.cache = cache
 }
 
 // Start 启动一次新扫描，返回 scan_id 和事件通道。
@@ -190,6 +196,10 @@ func (r *AsyncScanRunner) run(state *ScanState, opts ScanOptions) {
 
 	state.Result = result
 	state.FinishedAt = time.Now()
+	// 写入全局缓存（供后续直接查询，避免再次扫描）。
+	if r.cache != nil {
+		r.cache.Set(result)
+	}
 	state.Events <- ProgressEvent{
 		ScanID:      state.ID,
 		Progress:    100,

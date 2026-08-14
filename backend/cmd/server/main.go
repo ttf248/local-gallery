@@ -27,6 +27,9 @@ import (
 	"github.com/tianlongxiang/comic-reader/internal/store"
 )
 
+// 默认前端静态资源目录（相对后端二进制位置）。
+const defaultStaticDir = "dist"
+
 const defaultConfigPath = "config.json"
 
 func main() {
@@ -35,6 +38,7 @@ func main() {
 	flagHost := flag.String("host", "", "监听地址")
 	flagPort := flag.Int("port", 0, "监听端口")
 	flagConfig := flag.String("config", defaultConfigPath, "配置文件路径")
+	flagStaticDir := flag.String("static-dir", defaultStaticDir, "前端静态资源目录（相对二进制位置；不存在则禁用）")
 	flag.Parse()
 
 	// ---- 2. 加载文件 ----
@@ -101,6 +105,16 @@ func main() {
 	runner := services.NewAsyncScanRunner()
 	prefs := store.NewPrefsStore(filepath.Join(filepath.Dir(cfg.CacheDir), "web_settings.json"))
 
+	// 扫描结果缓存（启动时从磁盘加载，供前端免扫描查看）
+	scanCache := services.NewScanResultCache(filepath.Join(filepath.Dir(cfg.CacheDir), "scan_cache.json"))
+	if err := scanCache.Load(); err != nil {
+		log.Printf("警告：加载扫描缓存失败 %v", err)
+	}
+	runner.SetCache(scanCache)
+	if r := scanCache.Get(); r != nil {
+		log.Printf("  已加载上次扫描结果：%d 相册，扫描于 %s", r.AlbumCount, r.ScannedAt.Format("2006-01-02 15:04:05"))
+	}
+
 	api := app.Group("/api")
 	api.Get("/health", handlers.HealthHandler(cfg))
 	api.Post("/scan", handlers.ScanHandler(scanner, cfg.ComicRoot))
@@ -108,6 +122,9 @@ func main() {
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
 	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
+	api.Get("/scan/latest", handlers.LatestScanHandler(scanCache))
+	api.Get("/albums", handlers.AlbumDetailHandler(scanCache))
+	api.Get("/search", handlers.SearchHandler(scanCache))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
@@ -125,6 +142,37 @@ func main() {
 	api.Get("/history", handlers.HistoryListHandler(prefs))
 	api.Post("/history", handlers.HistoryAddHandler(prefs))
 	api.Delete("/history", handlers.HistoryClearHandler(prefs))
+	api.Post("/progress", handlers.ProgressSetHandler(prefs))
+	api.Get("/progress", handlers.ProgressGetHandler(prefs))
+
+	// ---- 静态资源托管（生产模式：同端口托管前端） ----
+	if info, err := os.Stat(*flagStaticDir); err == nil && info.IsDir() {
+		app.Static("/", *flagStaticDir)
+		// SPA fallback：任何非 /api/* 的请求 → 找不到静态文件就回 index.html
+		// 使用 app.Use 的 NotFound-style 行为：放到 Static 之后，未命中时接管
+		indexPath, _ := filepath.Abs(filepath.Join(*flagStaticDir, "index.html"))
+		app.Use(func(c *fiber.Ctx) error {
+			// 只处理 GET/HEAD
+			if c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead {
+				return c.Next()
+			}
+			// API 路由不接管
+			p := c.Path()
+			if len(p) >= 5 && p[:5] == "/api/" {
+				return c.Next()
+			}
+			// 已经在响应中写过（Static 命中文件）
+			if c.Response().StatusCode() == fiber.StatusOK {
+				return nil
+			}
+			// 回退到 SPA index.html
+			c.Set("Content-Type", "text/html; charset=utf-8")
+			return c.SendFile(indexPath)
+		})
+		log.Printf("  StaticDir: %s (已托管前端 + SPA fallback)", *flagStaticDir)
+	} else {
+		log.Printf("  StaticDir: <未配置>，跳过静态托管")
+	}
 
 	// ---- 启动 ----
 	if err := app.Listen(cfg.Addr()); err != nil {

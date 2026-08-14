@@ -172,3 +172,47 @@ func FavoritesPruneHandler(s *store.PrefsStore) fiber.Handler {
 		return c.JSON(fiber.Map{"removed": removed})
 	}
 }
+
+// ProgressSetHandler POST /api/progress
+//
+// Body: {"path": "...", "index": 12, "total": 30, "scroll": 0}
+func ProgressSetHandler(s *store.PrefsStore) fiber.Handler {
+	type req struct {
+		Path   string `json:"path"`
+		Index  int    `json:"index"`
+		Total  int    `json:"total"`
+		Scroll int    `json:"scroll"`
+	}
+	return func(c *fiber.Ctx) error {
+		var r req
+		if err := c.BodyParser(&r); err != nil || r.Path == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid body"})
+		}
+		entry := models.ReadingProgress{
+			Path:    r.Path,
+			Index:   r.Index,
+			Total:   r.Total,
+			Scroll:  r.Scroll,
+			Updated: time.Now(),
+		}
+		if err := s.SetReadingProgress(entry); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+// ProgressGetHandler GET /api/progress?path=<album path>
+func ProgressGetHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		path := c.Query("path")
+		if path == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing 'path'"})
+		}
+		rp, ok := s.GetReadingProgress(path)
+		if !ok {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "no progress"})
+		}
+		return c.JSON(rp)
+	}
+}
