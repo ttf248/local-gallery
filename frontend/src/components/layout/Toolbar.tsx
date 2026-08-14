@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { scanApi } from '../../api/scan'
+import ThemeSwitcher from '../common/ThemeSwitcher'
 
 export default function Toolbar() {
   const startScan = useMutation({
@@ -25,6 +26,7 @@ export default function Toolbar() {
       <span className="text-xs text-fg-subtle">
         F5 刷新 · Ctrl+/ 帮助
       </span>
+      <ThemeSwitcher />
     </header>
   )
 }

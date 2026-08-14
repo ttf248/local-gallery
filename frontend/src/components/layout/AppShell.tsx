@@ -2,6 +2,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useUIStore } from '../../store/uiStore'
 import { useKeyboard } from '../../hooks/useKeyboard'
+import { useTheme } from '../../hooks/useTheme'
 import Sidebar from './Sidebar'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
@@ -10,6 +11,7 @@ import Breadcrumb from './Breadcrumb'
 // 应用外壳：侧边栏 + 工具栏 + 主内容 + 状态栏。
 // 所有页面（除 Viewer 全屏外）都通过这个布局渲染。
 export default function AppShell() {
+  useTheme()
   const location = useLocation()
   const setBreadcrumbs = useUIStore((s) => s.setBreadcrumbs)
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
