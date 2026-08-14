@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    // Go
+    "golang.go",
+
+    // 前端核心
+    "ms-vscode.vscode-typescript-next",
+    "bradlc.vscode-tailwindcss",
+    "esbenp.prettier-vscode",
+    "dbaeumer.vscode-eslint",
+    "formulahendry.auto-rename-tag",
+
+    // 实用工具
+    "editorconfig.editorconfig",
+    "streetsidesoftware.code-spell-checker",
+    "ms-playwright.playwright",
+
+    // 可选 Git
+    "eamodio.gitlens"
+  ],
+  "unwantedRecommendations": []
+}

@@ -1,0 +1,62 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "1) 后端: Go (Fiber)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/backend/cmd/server",
+      "cwd": "${workspaceFolder}/backend",
+      "env": {
+        "COMIC_ROOT": "${env:COMIC_ROOT:E:\\漫画}",
+        "COMIC_HOST": "127.0.0.1",
+        "COMIC_PORT": "8080"
+      },
+      "args": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "backend: tidy"
+    },
+    {
+      "name": "2) 前端: Vite Dev Server",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "${workspaceFolder}/frontend"],
+      "cwd": "${workspaceFolder}/frontend",
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "pattern": "Local:\\s+(https?://\\S+)",
+        "uriFormat": "%s",
+        "action": "openExternally"
+      }
+    },
+    {
+      "name": "3) 全栈: 后端 + 前端 (复合)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "${workspaceFolder}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "preLaunchTask": "backend: tidy"
+    },
+    {
+      "name": "4) 后端: 运行 Go 测试",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}/backend",
+      "cwd": "${workspaceFolder}/backend",
+      "args": ["-v", "./..."],
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "全栈复合调试",
+      "configurations": ["1) 后端: Go (Fiber)", "2) 前端: Vite Dev Server"],
+      "stopAll": true
+    }
+  ]
+}

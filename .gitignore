@@ -1,0 +1,80 @@
+# ============================================
+# 漫画阅读器 Web 版 - Git 忽略配置
+# ============================================
+
+# ----- Go -----
+# 编译产物
+/bin/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试覆盖率
+*.out
+coverage.html
+coverage.txt
+
+# Go workspace
+go.work
+go.work.sum
+
+# ----- Node / Frontend -----
+node_modules/
+.pnp
+.pnp.js
+
+# 构建产物
+/frontend/dist/
+/frontend/build/
+/frontend/.vite/
+/frontend/coverage/
+
+# 依赖锁（可选，按团队约定）
+# package-lock.json
+# pnpm-lock.yaml
+# yarn.lock
+
+# ----- 环境与配置 -----
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# 后端配置（实际部署时填写）
+backend/config.json
+
+# ----- IDE -----
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ----- OS -----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ----- 日志与临时 ----
+*.log
+*.tmp
+*.bak
+
+# ----- 测试与文档产物 ----
+/tmp/
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# ----- 缓存目录（运行时生成，不入仓）-----
+# 注：服务运行时会重建这些目录
+.cache/

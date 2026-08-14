@@ -1,0 +1,86 @@
+{
+  // ==================== Go ====================
+  "go.toolsEnvVars": {
+    "GOFLAGS": "-mod=mod"
+  },
+  "go.installDependenciesWhenBuilding": true,
+  "go.useLanguageServer": true,
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "gopls": {
+    "completeUnimported": true,
+    "usePlaceholders": true,
+    "staticcheck": true
+  },
+
+  // ==================== TypeScript / 前端 ====================
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "[typescript]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescriptreact]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascript]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[css]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+
+  // ==================== 文件关联 ====================
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["clsx\\(([^)]*)\\)", "([^\\s]+)"],
+    ["cn\\(([^)]*)\\)", "([^\\s]+)"]
+  ],
+
+  // ==================== 编辑器通用 ====================
+  "editor.tabSize": 2,
+  "editor.insertSpaces": true,
+  "editor.rulers": [80, 120],
+  "editor.wordWrap": "off",
+  "editor.bracketPairColorization.enabled": true,
+  "editor.guides.bracketPairs": "active",
+  "editor.minimap.enabled": false,
+
+  // ==================== 终端 ====================
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.linux": null,
+  "terminal.integrated.env.osx": null,
+  "terminal.integrated.env.windows": null,
+
+  // ==================== 工作区信任 ====================
+  "security.workspace.trust.enabled": true,
+
+  // ==================== 排除目录 ====================
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/.git": true,
+    "**/coverage": true,
+    "**/.vite": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/build": true,
+    "**/coverage": true
+  }
+}
