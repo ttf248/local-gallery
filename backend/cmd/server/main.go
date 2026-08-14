@@ -110,6 +110,7 @@ func main() {
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
+	api.Get("/images", handlers.ImageHandler())
 
 	// 偏好 / 收藏 / 历史
 	api.Get("/prefs", handlers.PrefsGetHandler(prefs))
