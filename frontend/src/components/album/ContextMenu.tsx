@@ -29,7 +29,6 @@ interface Props {
 export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
-  // 边界调整：菜单需要出现在视口内
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -65,11 +64,11 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
     <div
       ref={ref}
       style={{ position: 'fixed', top: y, left: x, zIndex: 1000 }}
-      className="min-w-[180px] bg-bg-elevated border border-border rounded shadow-lg py-1"
+      className="min-w-[180px] bg-bg-elevated border border-border rounded-md shadow-lg py-1 fade-up"
     >
       {items.map((it, i) =>
         'separator' in it ? (
-          <div key={`sep-${i}`} className="my-1 border-t border-border" />
+          <div key={`sep-${i}`} className="my-1 border-t border-border mx-1" />
         ) : (
           <button
             key={it.id}
@@ -77,7 +76,7 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
             onClick={() => {
               if (!it.disabled) onSelect(it.id)
             }}
-            className={`w-full text-left px-3 py-1.5 text-sm flex items-center gap-2 ${
+            className={`w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-2.5 transition-colors ${
               it.disabled
                 ? 'text-fg-subtle cursor-not-allowed'
                 : it.destructive
@@ -85,7 +84,9 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
                   : 'text-fg hover:bg-bg-subtle'
             }`}
           >
-            {it.icon && <span className="w-4 text-center">{it.icon}</span>}
+            {it.icon && (
+              <span className="w-4 text-center text-[12px] opacity-80">{it.icon}</span>
+            )}
             <span>{it.label}</span>
           </button>
         ),
