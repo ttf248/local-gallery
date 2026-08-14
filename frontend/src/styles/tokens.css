@@ -1,32 +1,94 @@
-/* 主题色 token。T9/T13 完善。
-   浅色为默认；[data-theme="dark"] 切换为深色。 */
+/* 主题 token。浅色为默认；[data-theme="dark"] 切换为深色。
+   设计原则：克制的色彩、克制的饱和度、更舒适的对比度与节奏。 */
+
 :root,
 :root[data-theme='light'] {
-  --bg: #ffffff;
-  --bg-elevated: #f7f7f8;
-  --bg-subtle: #eef0f3;
-  --fg: #1f2328;
-  --fg-muted: #57606a;
-  --fg-subtle: #8b949e;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --border: #e5e7eb;
-  --danger: #dc2626;
-  --success: #16a34a;
-  --warning: #d97706;
+  /* Surface */
+  --bg: #fafaf9;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f3f4f5;
+  --bg-strong: #e9eaec;
+
+  /* Foreground */
+  --fg: #1a1d22;
+  --fg-muted: #5a6270;
+  --fg-subtle: #8b919b;
+
+  /* Accent — 沉稳的中性墨蓝，强调克制 */
+  --accent: #2b3543;
+  --accent-hover: #1c2532;
+  --accent-soft: #eef1f5;
+  --accent-fg: #ffffff;
+
+  /* Semantic */
+  --danger: #c0362d;
+  --success: #1d8a4a;
+  --warning: #c47a00;
+
+  /* Borders */
+  --border: #e7e8ea;
+  --border-strong: #d4d6da;
+
+  /* Geometry */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px rgba(20, 24, 30, 0.04);
+  --shadow-md: 0 4px 12px rgba(20, 24, 30, 0.06);
+  --shadow-lg: 0 16px 40px rgba(20, 24, 30, 0.12);
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
 }
 
 :root[data-theme='dark'] {
-  --bg: #0d1117;
-  --bg-elevated: #161b22;
-  --bg-subtle: #21262d;
-  --fg: #e6edf3;
-  --fg-muted: #8b949e;
-  --fg-subtle: #6e7681;
-  --accent: #58a6ff;
-  --accent-hover: #79b8ff;
-  --border: #30363d;
-  --danger: #f85149;
-  --success: #3fb950;
-  --warning: #d29922;
+  /* Surface — 深色面板而非纯黑，减少对比刺激 */
+  --bg: #14161b;
+  --bg-elevated: #1b1e24;
+  --bg-subtle: #232730;
+  --bg-strong: #2c313b;
+
+  /* Foreground */
+  --fg: #e8eaed;
+  --fg-muted: #9aa3af;
+  --fg-subtle: #6a737d;
+
+  /* Accent — 深色下走暖白 */
+  --accent: #f3f4f5;
+  --accent-hover: #ffffff;
+  --accent-soft: #232730;
+  --accent-fg: #14161b;
+
+  --danger: #f08379;
+  --success: #6cc987;
+  --warning: #e3b341;
+
+  --border: #262a32;
+  --border-strong: #353a44;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
 }
