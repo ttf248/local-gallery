@@ -103,10 +103,10 @@ func main() {
 		log.Fatalf("初始化缩略图服务失败: %v", err)
 	}
 	runner := services.NewAsyncScanRunner()
-	prefs := store.NewPrefsStore(filepath.Join(filepath.Dir(cfg.CacheDir), "web_settings.json"))
+	prefs := store.NewPrefsStore(filepath.Join(cfg.CacheDir, "web_settings.json"))
 
 	// 扫描结果缓存（启动时从磁盘加载，供前端免扫描查看）
-	scanCache := services.NewScanResultCache(filepath.Join(filepath.Dir(cfg.CacheDir), "scan_cache.json"))
+	scanCache := services.NewScanResultCache(filepath.Join(cfg.CacheDir, "scan_cache.json"))
 	if err := scanCache.Load(); err != nil {
 		log.Printf("警告：加载扫描缓存失败 %v", err)
 	}

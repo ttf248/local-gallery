@@ -243,7 +243,7 @@ data: {"scanId":"...","error":"permission denied",...}
   "host": "0.0.0.0",
   "port": 8080,
   "allowOsOpen": false,
-  "cacheDir": "~/.comic_reader/cache",
+  "cacheDir": "&lt;repoRoot&gt;/.cache",
   "thumbSizeW": 320,
   "thumbSizeH": 350,
   "cacheMaxAgeDays": 30

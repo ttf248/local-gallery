@@ -6,8 +6,9 @@
 //   3. 配置文件（backend/config.json 字段 comicRoot 等）
 //   4. 内置默认值
 //
-// T2 阶段：基础结构 + 默认值。
-// T3 阶段：完善 flag/env/file/default 四层合并与校验。
+// 默认缓存目录解析为仓库根 `.cache/`（参见 AGENTS.md
+// "缓存目录"约定）：从进程 CWD 向上查找 `.git` 标记；
+// 命中则用仓库根，找不到则回落到 CWD。
 package config
 
 import (
@@ -21,6 +22,9 @@ import (
 
 // Version 后端版本号（编译期可通过 -ldflags 注入）。
 var Version = "0.1.0"
+
+// repoMarker 用于向上查找仓库根的标记（`.git` 目录）。
+const repoMarker = ".git"
 
 // Config 后端总配置。
 type Config struct {
@@ -36,16 +40,38 @@ type Config struct {
 
 // Default 返回内置默认配置。
 func Default() *Config {
-	home, _ := os.UserHomeDir()
 	return &Config{
 		ComicRoot:       filepath.Join(".", "comics"),
 		Host:            "0.0.0.0",
 		Port:            8080,
 		AllowOsOpen:     false,
-		CacheDir:        filepath.Join(home, ".comic_reader", "cache"),
+		CacheDir:        filepath.Join(repoRoot(), ".cache"),
 		ThumbSizeW:      320,
 		ThumbSizeH:      350,
 		CacheMaxAgeDays: 30,
+	}
+}
+
+// repoRoot 从进程 CWD 向上查找 `.git` 目录定位仓库根；
+// 找不到时回落 CWD，确保配置总能落到一个可写目录。
+func repoRoot() string {
+	cwd, err := os.Getwd()
+	if err != nil || cwd == "" {
+		return "."
+	}
+	dir, err := filepath.Abs(cwd)
+	if err != nil {
+		return cwd
+	}
+	for {
+		if info, statErr := os.Stat(filepath.Join(dir, repoMarker)); statErr == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return cwd
+		}
+		dir = parent
 	}
 }
 

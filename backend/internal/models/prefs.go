@@ -19,7 +19,7 @@ type ReadingProgress struct {
 	Updated time.Time `json:"updated"`
 }
 
-// Prefs 用户偏好（持久化在服务端 ~/.comic_reader/web_settings.json）。
+// Prefs 用户偏好（持久化在服务端 &lt;repoRoot&gt;/.cache/web_settings.json）。
 //
 // 字段语义对齐原桌面应用：
 //   - Favorites：收藏的相册路径列表
