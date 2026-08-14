@@ -24,8 +24,8 @@ interface Props {
   onClose: () => void
 }
 
-// 右键菜单：分隔符支持、边界检查、自动关闭。
-// 当菜单越出视口边界时自动调整位置，避免被遮挡。
+// 右键菜单：分隔符、边界检查、自动关闭、Esc 关闭。
+// 视觉：极细的边 + 中性背景。
 export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
@@ -64,11 +64,11 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
     <div
       ref={ref}
       style={{ position: 'fixed', top: y, left: x, zIndex: 1000 }}
-      className="min-w-[180px] bg-bg-elevated border border-border rounded-md shadow-lg py-1 fade-up"
+      className="min-w-[180px] bg-bg-elevated border border-border-faint rounded-md shadow-md py-1 fade-up text-[13px]"
     >
       {items.map((it, i) =>
         'separator' in it ? (
-          <div key={`sep-${i}`} className="my-1 border-t border-border mx-1" />
+          <div key={`sep-${i}`} className="my-1 border-t border-border-faint mx-1" />
         ) : (
           <button
             key={it.id}
@@ -76,7 +76,7 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
             onClick={() => {
               if (!it.disabled) onSelect(it.id)
             }}
-            className={`w-full text-left px-3 py-1.5 text-[13px] flex items-center gap-2.5 transition-colors ${
+            className={`w-full text-left px-3 py-1.5 flex items-center gap-2.5 transition-colors ${
               it.disabled
                 ? 'text-fg-subtle cursor-not-allowed'
                 : it.destructive
@@ -85,7 +85,7 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
             }`}
           >
             {it.icon && (
-              <span className="w-4 text-center text-[12px] opacity-80">{it.icon}</span>
+              <span className="w-3.5 text-center text-[12px] opacity-80">{it.icon}</span>
             )}
             <span>{it.label}</span>
           </button>

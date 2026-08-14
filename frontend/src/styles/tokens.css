@@ -1,41 +1,48 @@
-/* 主题 token。浅色为默认；[data-theme="dark"] 切换为深色。
-   设计原则：克制的色彩、克制的饱和度、更舒适的对比度与节奏。 */
+/* 主题 token。
+   设计原则：
+   - 极简的近黑/近白中性色，避免纯白/纯黑的视觉刺激
+   - 一种克制的强调色（墨蓝），仅用于主操作与高亮
+   - 字体节奏更紧、行高更舒展、留白更多
+   - 圆角与阴影都更克制 */
 
 :root,
 :root[data-theme='light'] {
-  /* Surface */
-  --bg: #fafaf9;
+  /* Surface — 略带温度的中性灰 */
+  --bg: #f7f6f4;
   --bg-elevated: #ffffff;
-  --bg-subtle: #f3f4f5;
-  --bg-strong: #e9eaec;
+  --bg-subtle: #efece8;
+  --bg-strong: #e3e0db;
 
-  /* Foreground */
-  --fg: #1a1d22;
-  --fg-muted: #5a6270;
-  --fg-subtle: #8b919b;
+  /* Foreground — 接近石墨而非纯黑 */
+  --fg: #1a1c1f;
+  --fg-muted: #5d6470;
+  --fg-subtle: #8b9099;
 
-  /* Accent — 沉稳的中性墨蓝，强调克制 */
-  --accent: #2b3543;
-  --accent-hover: #1c2532;
-  --accent-soft: #eef1f5;
+  /* Accent — 沉稳的墨蓝，主操作只在这里出现一次 */
+  --accent: #1f2937;
+  --accent-hover: #0f172a;
+  --accent-soft: #eef0f3;
   --accent-fg: #ffffff;
 
   /* Semantic */
-  --danger: #c0362d;
-  --success: #1d8a4a;
-  --warning: #c47a00;
+  --danger: #b04a3e;
+  --success: #1f7a4d;
+  --warning: #b48026;
 
-  /* Borders */
-  --border: #e7e8ea;
-  --border-strong: #d4d6da;
+  /* Borders — 极细，低对比 */
+  --border: #e7e5e0;
+  --border-strong: #d4d1ca;
+  --border-faint: #efedea;
 
-  /* Geometry */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --shadow-sm: 0 1px 2px rgba(20, 24, 30, 0.04);
-  --shadow-md: 0 4px 12px rgba(20, 24, 30, 0.06);
-  --shadow-lg: 0 16px 40px rgba(20, 24, 30, 0.12);
+  /* Geometry — 圆角更小、更克制 */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --shadow-xs: 0 1px 1px rgba(20, 22, 25, 0.03);
+  --shadow-sm: 0 1px 2px rgba(20, 22, 25, 0.04);
+  --shadow-md: 0 6px 18px rgba(20, 22, 25, 0.08);
+  --shadow-lg: 0 18px 40px rgba(20, 22, 25, 0.14);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
@@ -44,51 +51,57 @@
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 
-  /* Spacing */
+  /* Spacing — 增加更多档位，保留与原来 1–6 的对应 */
+  --space-0: 0;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --space-12: 48px;
-  --space-16: 64px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --space-9: 48px;
+  --space-10: 64px;
+  --space-11: 80px;
+  --space-12: 96px;
 
   /* Motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-fast: 120ms;
-  --dur: 200ms;
-  --dur-slow: 320ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-fast: 100ms;
+  --dur: 180ms;
+  --dur-slow: 280ms;
 }
 
 :root[data-theme='dark'] {
-  /* Surface — 深色面板而非纯黑，减少对比刺激 */
-  --bg: #14161b;
-  --bg-elevated: #1b1e24;
-  --bg-subtle: #232730;
-  --bg-strong: #2c313b;
+  /* Surface — 深炭而非纯黑，减少刺激 */
+  --bg: #111315;
+  --bg-elevated: #181a1d;
+  --bg-subtle: #1f2226;
+  --bg-strong: #272a2f;
 
   /* Foreground */
-  --fg: #e8eaed;
-  --fg-muted: #9aa3af;
-  --fg-subtle: #6a737d;
+  --fg: #ececec;
+  --fg-muted: #9aa1a9;
+  --fg-subtle: #6b7079;
 
-  /* Accent — 深色下走暖白 */
-  --accent: #f3f4f5;
+  /* Accent — 暗色下走暖灰白 */
+  --accent: #f3f1ee;
   --accent-hover: #ffffff;
-  --accent-soft: #232730;
-  --accent-fg: #14161b;
+  --accent-soft: #1f2226;
+  --accent-fg: #111315;
 
-  --danger: #f08379;
+  --danger: #e0877b;
   --success: #6cc987;
   --warning: #e3b341;
 
-  --border: #262a32;
-  --border-strong: #353a44;
+  --border: #25272b;
+  --border-strong: #34373c;
+  --border-faint: #1c1e21;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.55);
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 24px 50px rgba(0, 0, 0, 0.55);
 }

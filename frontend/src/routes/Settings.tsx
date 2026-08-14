@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { prefsApi } from '../api/prefs'
-import { favoritesApi, historyApi } from '../api/prefs'
+import { prefsApi, favoritesApi, historyApi } from '../api/prefs'
 import ThemeSwitcher from '../components/common/ThemeSwitcher'
 import { useUIStore } from '../store/uiStore'
 import { useLibraryStore } from '../store/libraryStore'
@@ -8,6 +7,8 @@ import {
   RefreshIcon,
   TrashIcon,
   LibraryIcon,
+  SunIcon,
+  KeyboardIcon,
 } from '../components/common/Icon'
 
 export default function Settings() {
@@ -15,6 +16,9 @@ export default function Settings() {
   const qc = useQueryClient()
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
+  const viewMode = useUIStore((s) => s.viewMode)
+  const setViewMode = useUIStore((s) => s.setViewMode)
+  const pushToast = useUIStore((s) => s.pushToast)
   const lastScanAt = useLibraryStore((s) => s.lastScanAt)
   const result = useLibraryStore((s) => s.result)
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
@@ -26,39 +30,62 @@ export default function Settings() {
 
   const pruneFav = useMutation({
     mutationFn: () => favoritesApi.prune(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['favorites'] }),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['favorites'] })
+      pushToast({ kind: 'success', message: `已清理 ${r.removed.length} 项失效收藏` })
+    },
   })
 
   const clearHist = useMutation({
     mutationFn: () => historyApi.clear(),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['history'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['history'] })
+      pushToast({ kind: 'success', message: '已清空最近访问' })
+    },
   })
 
   if (isLoading || !data) {
-    return <div className="p-6 text-fg-muted">加载中…</div>
+    return <div className="p-10 text-fg-muted text-sm">加载中…</div>
   }
 
   return (
-    <div className="px-6 lg:px-10 py-8 max-w-3xl">
-      <h1 className="font-display text-3xl font-semibold tracking-tight mb-2">设置</h1>
-      <p className="text-sm text-fg-muted mb-8">个性化你的阅读体验</p>
+    <div className="px-6 lg:px-10 py-10 max-w-3xl">
+      <h1 className="font-display text-3xl font-semibold tracking-tight mb-1">设置</h1>
+      <p className="text-sm text-fg-muted mb-10">个性化你的阅读体验</p>
 
-      <Section title="外观" icon={<RefreshIcon size={14} />}>
+      <Section title="外观" icon={<SunIcon size={13} />}>
         <Row label="主题">
           <ThemeSwitcher />
         </Row>
         <Row label="侧边栏">
           <button
             onClick={toggleSidebar}
-            className="px-3 py-1 rounded-md border border-border hover:bg-bg-subtle text-sm"
+            className="px-3 h-8 rounded-md border border-border-faint hover:bg-bg-subtle text-sm transition-colors"
           >
             {sidebarCollapsed ? '展开' : '折叠'}
           </button>
         </Row>
+        <Row label="默认视图">
+          <div className="flex items-center border border-border-faint rounded-md overflow-hidden">
+            {(['grid', 'list'] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setViewMode(k)}
+                className={`h-8 px-3 text-xs transition-colors ${
+                  viewMode === k
+                    ? 'bg-bg-subtle text-fg'
+                    : 'text-fg-muted hover:text-fg'
+                }`}
+              >
+                {k === 'grid' ? '网格' : '列表'}
+              </button>
+            ))}
+          </div>
+        </Row>
       </Section>
 
-      <Section title="阅读" icon={<LibraryIcon size={14} />}>
-        <Row label="自动切换下一本">
+      <Section title="阅读" icon={<LibraryIcon size={13} />}>
+        <Row label="阅读到末尾自动切换下一本">
           <Toggle
             checked={data.autoSwitchAlbum}
             onChange={(v) => patchPrefs.mutate({ autoSwitchAlbum: v })}
@@ -70,7 +97,7 @@ export default function Settings() {
             onChange={(v) => patchPrefs.mutate({ showSwitchNotif: v })}
           />
         </Row>
-        <Row label="最近访问上限">
+        <Row label="最近访问保留条数">
           <NumberInput
             value={data.maxRecent}
             min={1}
@@ -80,19 +107,19 @@ export default function Settings() {
         </Row>
       </Section>
 
-      <Section title="数据" icon={<LibraryIcon size={14} />}>
-        <Row label="扫描缓存">
+      <Section title="数据" icon={<LibraryIcon size={13} />}>
+        <Row label="漫画库缓存">
           <div className="flex items-center gap-3">
             <span className="text-xs text-fg-muted">
               {result
-                ? `${result.albumCount} 本 · ${lastScanAt ? new Date(lastScanAt).toLocaleString() : ''}`
+                ? `${result.albumCount} 本 · ${lastScanAt ? new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false }) : '尚未扫描'}`
                 : '尚未加载'}
             </span>
             <button
               onClick={() => loadFromBackend()}
-              className="px-3 py-1 rounded-md border border-border hover:bg-bg-subtle text-xs inline-flex items-center gap-1.5"
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border-faint hover:bg-bg-subtle text-xs transition-colors"
             >
-              <RefreshIcon size={12} />
+              <RefreshIcon size={11} />
               <span>刷新</span>
             </button>
           </div>
@@ -100,29 +127,30 @@ export default function Settings() {
         <Row label="清理失效收藏">
           <button
             onClick={() => pruneFav.mutate()}
-            className="px-3 py-1 rounded-md border border-border hover:bg-bg-subtle text-xs"
+            className="h-8 px-3 rounded-md border border-border-faint hover:bg-bg-subtle text-xs transition-colors"
           >
             {pruneFav.isPending ? '清理中…' : '清理'}
           </button>
         </Row>
-        <Row label="清空最近访问">
+        <Row label="清空最近访问" danger>
           <button
             onClick={() => clearHist.mutate()}
-            className="px-3 py-1 rounded-md border border-border hover:bg-bg-subtle text-xs inline-flex items-center gap-1.5 text-danger"
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-xs transition-colors"
           >
-            <TrashIcon size={12} />
+            <TrashIcon size={11} />
             <span>{clearHist.isPending ? '清空中…' : '清空'}</span>
           </button>
         </Row>
       </Section>
 
-      <Section title="关于" icon={<LibraryIcon size={14} />}>
+      <Section title="关于" icon={<KeyboardIcon size={13} />}>
         <div className="text-sm text-fg-muted leading-relaxed">
           <div className="font-display text-base text-fg">Manga · 漫画阅读器</div>
           <div className="mt-1">Web 版 · v0.2.0</div>
-          <div className="mt-3 text-xs text-fg-subtle">
-            按 <kbd className="font-mono px-1.5 py-0.5 rounded border border-border">?</kbd>
-            查看所有快捷键。
+          <div className="mt-4 text-xs text-fg-subtle flex items-center gap-2">
+            <span>按</span>
+            <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle">?</kbd>
+            <span>查看所有快捷键</span>
           </div>
         </div>
       </Section>
@@ -130,24 +158,42 @@ export default function Settings() {
   )
 }
 
-function Section({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) {
+function Section({
+  title,
+  icon,
+  children,
+}: {
+  title: string
+  icon?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <section className="mb-10">
       <div className="flex items-center gap-2 mb-3">
         {icon && <span className="text-fg-muted">{icon}</span>}
-        <h2 className="text-xs uppercase tracking-wider text-fg-muted font-medium">{title}</h2>
+        <h2 className="text-[11px] uppercase tracking-[0.14em] text-fg-muted font-medium">
+          {title}
+        </h2>
       </div>
-      <div className="bg-bg-elevated border border-border rounded-md divide-y divide-border overflow-hidden">
+      <div className="bg-bg-elevated border border-border-faint rounded-md divide-y divide-border-faint overflow-hidden">
         {children}
       </div>
     </section>
   )
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({
+  label,
+  children,
+  danger,
+}: {
+  label: string
+  children: React.ReactNode
+  danger?: boolean
+}) {
   return (
     <div className="flex items-center justify-between px-4 py-3 text-sm">
-      <span className="text-fg">{label}</span>
+      <span className={danger ? 'text-danger' : 'text-fg'}>{label}</span>
       {children}
     </div>
   )
@@ -184,17 +230,19 @@ function NumberInput({
   onChange: (v: number) => void
 }) {
   return (
-    <div className="inline-flex items-center border border-border rounded-md overflow-hidden">
+    <div className="inline-flex items-center border border-border-faint rounded-md overflow-hidden">
       <button
         onClick={() => onChange(Math.max(min, value - 1))}
-        className="px-2 py-1 text-fg-muted hover:bg-bg-subtle hover:text-fg"
+        className="w-8 h-8 text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
       >
         −
       </button>
-      <span className="px-3 py-1 text-sm tabular-nums min-w-[40px] text-center">{value}</span>
+      <span className="px-3 h-8 inline-flex items-center text-sm tabular-nums min-w-[40px] justify-center">
+        {value}
+      </span>
       <button
         onClick={() => onChange(Math.min(max, value + 1))}
-        className="px-2 py-1 text-fg-muted hover:bg-bg-subtle hover:text-fg"
+        className="w-8 h-8 text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
       >
         +
       </button>

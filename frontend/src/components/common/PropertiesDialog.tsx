@@ -35,48 +35,54 @@ export default function PropertiesDialog({ open, absPath, onClose }: Props) {
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] fade-in"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-bg-elevated rounded-lg shadow-lg border border-border w-[480px] max-w-[92vw] overflow-hidden fade-up"
+        className="bg-bg-elevated rounded-lg shadow-lg border border-border-faint w-[480px] max-w-[92vw] overflow-hidden fade-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between px-5 py-3 border-b border-border">
-          <h2 className="font-display font-semibold">属性</h2>
+        <header className="flex items-center justify-between px-5 h-12 border-b border-border-faint">
+          <h2 className="font-display text-sm font-medium">属性</h2>
           <button
             onClick={onClose}
-            className="text-fg-muted hover:text-fg p-1 rounded hover:bg-bg-subtle"
+            className="text-fg-muted hover:text-fg p-1 rounded hover:bg-bg-subtle transition-colors"
             aria-label="关闭"
           >
-            <CloseIcon size={16} />
+            <CloseIcon size={14} />
           </button>
         </header>
         <div className="p-5 text-sm">
-          {err && <div className="text-danger">错误: {err}</div>}
-          {!err && !info && <div className="text-fg-muted">加载中…</div>}
+          {err && <div className="text-danger text-xs">错误: {err}</div>}
+          {!err && !info && <div className="text-fg-muted text-xs">加载中…</div>}
           {info && (
-            <dl className="grid grid-cols-[80px_1fr] gap-y-2 gap-x-4">
-              <dt className="text-fg-muted text-xs uppercase tracking-wider self-center">文件名</dt>
+            <dl className="grid grid-cols-[80px_1fr] gap-y-2.5 gap-x-4">
+              <FieldLabel>文件名</FieldLabel>
               <dd className="break-all">{info.name}</dd>
-              <dt className="text-fg-muted text-xs uppercase tracking-wider self-center">类型</dt>
+              <FieldLabel>类型</FieldLabel>
               <dd>{info.format.toUpperCase()}</dd>
-              <dt className="text-fg-muted text-xs uppercase tracking-wider self-center">尺寸</dt>
-              <dd>
-                {info.width} × {info.height} px
-              </dd>
-              <dt className="text-fg-muted text-xs uppercase tracking-wider self-center">大小</dt>
+              <FieldLabel>尺寸</FieldLabel>
+              <dd>{info.width} × {info.height} px</dd>
+              <FieldLabel>大小</FieldLabel>
               <dd>{formatSize(info.size)}</dd>
-              <dt className="text-fg-muted text-xs uppercase tracking-wider self-center">修改</dt>
+              <FieldLabel>修改</FieldLabel>
               <dd>{info.mtime}</dd>
-              <dt className="text-fg-muted text-xs uppercase tracking-wider self-center">路径</dt>
-              <dd className="font-mono text-xs break-all text-fg-muted">{info.path}</dd>
+              <FieldLabel>路径</FieldLabel>
+              <dd className="font-mono text-[11px] break-all text-fg-muted">{info.path}</dd>
             </dl>
           )}
         </div>
       </div>
     </div>
+  )
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <dt className="text-fg-subtle text-[10px] uppercase tracking-[0.14em] self-center">
+      {children}
+    </dt>
   )
 }

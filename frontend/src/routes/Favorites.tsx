@@ -1,102 +1,164 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { favoritesApi } from '../api/prefs'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
+import { useUIStore } from '../store/uiStore'
+import { favoritesApi } from '../api/prefs'
+import { useFavorites } from '../hooks/useFavorites'
+import { useAllProgress } from '../hooks/useReadingProgress'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
+import { StarIcon } from '../components/common/Icon'
 import { albumRoute } from '../utils/path'
 
+// 收藏页：合并 albums + smart collections 中的收藏。
+// 支持搜索 + 排序 + 阅读进度展示。
 export default function Favorites() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['favorites'],
-    queryFn: () => favoritesApi.list(),
-  })
+  const navigate = useNavigate()
   const result = useLibraryStore((s) => s.result)
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
+  const viewMode = useUIStore((s) => s.viewMode)
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
+  const { favorites } = useFavorites()
 
-  // 首次进入拉一次扫描缓存
-  if (!result) loadFromBackend()
+  useEffect(() => {
+    if (!result) loadFromBackend()
+  }, [result, loadFromBackend])
 
-  const favs = data?.favorites ?? []
+  // 单个 favorites API 会返回 stale；这里以 useFavorites 缓存为准
+  useFavorites()
+  void useQuery({
+    queryKey: ['favorites'],
+    queryFn: () => favoritesApi.list(),
+    staleTime: 10 * 1000,
+  })
 
-  // 把收藏 path 映射成 CardData：album → 实际相册；smart:<author> → 智能集合
   const cards = useMemo<CardData[]>(() => {
     if (!result) return []
-    const items: CardData[] = []
-    const seen = new Set<string>()
-    for (const p of favs) {
-      if (seen.has(p)) continue
-      seen.add(p)
-      if (p.startsWith('smart:')) {
-        const author = p.slice(6)
+    const out: CardData[] = []
+    for (const f of favorites) {
+      if (f.startsWith('smart:')) {
+        const author = f.slice(6)
         const sc = result.smartCollections.find((s) => s.author === author)
-        if (sc) {
-          items.push({
-            id: 's:' + author,
-            variant: 'smart',
-            title: sc.author,
-            subtitle: `${sc.albumCount} 卷`,
-            count: sc.albumCount,
-            coverPath: sc.coverImage,
-            to: `/albums/${encodeURIComponent(p)}`,
-          })
-        }
-      } else {
-        const album = result.albums.find((a) => a.path === p)
-        if (album) {
-          items.push({
-            id: 'a:' + album.path,
-            variant: 'album',
-            title: album.name,
-            subtitle: album.author,
-            count: album.imageCount,
-            coverPath: album.coverImage,
-            to: albumRoute(album.path),
-          })
-        }
+        if (!sc) continue
+        out.push({
+          id: 's:' + sc.author,
+          variant: 'smart',
+          title: sc.author,
+          subtitle: `${sc.albumCount} 卷`,
+          count: sc.albumCount,
+          coverPath: sc.coverImage,
+          to: albumRoute('smart:' + sc.author),
+          isFavorite: true,
+        })
+        continue
+      }
+      const a = result.albums.find((x) => x.path === f)
+      if (a) {
+        out.push({
+          id: 'a:' + a.path,
+          variant: 'album',
+          title: a.name,
+          subtitle: a.author || undefined,
+          count: a.imageCount,
+          coverPath: a.coverImage,
+          to: albumRoute(a.path),
+          isFavorite: true,
+        })
       }
     }
-    const filtered = items.filter(
-      (it) =>
-        !query ||
-        `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(query.toLowerCase()),
-    )
+    return out
+  }, [result, favorites])
+
+  const progressPaths = useMemo(
+    () => cards.filter((c) => c.variant === 'album').map((c) => {
+      const m = c.to.match(/^\/albums\/(.+)$/)
+      if (!m) return ''
+      try {
+        return decodeURIComponent(m[1])
+      } catch {
+        return m[1]
+      }
+    }).filter(Boolean),
+    [cards],
+  )
+  const { data: progressMap } = useAllProgress(progressPaths)
+
+  const filtered = useMemo(() => {
+    const list = cards
+      .filter((it) => {
+        if (!query) return true
+        const q = query.toLowerCase()
+        return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
+      })
+      .map((c) => {
+        if (c.variant !== 'album') return c
+        const m = c.to.match(/^\/albums\/(.+)$/)
+        const k = m ? decodeURIComponent(m[1]) : ''
+        const p = progressMap?.[k]
+        if (!p) return c
+        return { ...c, progress: { index: p.index, total: p.total } }
+      })
     switch (sortBy) {
       case 'count':
-        return filtered.sort((a, b) => b.count - a.count)
+        return list.sort((a, b) => b.count - a.count)
+      case 'recent':
+        return list.sort((a, b) => a.title.localeCompare(b.title))
       default:
-        return filtered.sort((a, b) => a.title.localeCompare(b.title))
+        return list.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [result, favs, query, sortBy])
-
-  if (isLoading) {
-    return <div className="p-6 text-fg-muted">加载中…</div>
-  }
+  }, [cards, query, sortBy, progressMap])
 
   return (
-    <>
-      <section className="px-6 lg:px-10 pt-8 pb-4 border-b border-border bg-bg-elevated/40">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">收藏</h1>
-        <p className="text-sm text-fg-muted mt-1">
-          {cards.length} 项 · 在右键菜单中可以快速收藏 / 取消收藏
+    <div className="min-h-full">
+      <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px]">
+        <div className="flex items-center gap-2 mb-1">
+          <StarIcon size={13} className="text-warning" filled />
+          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">收藏</span>
+        </div>
+        <h1 className="font-display text-[32px] leading-[1.1] font-semibold tracking-tight">
+          我收藏的漫画
+        </h1>
+        <p className="text-sm text-fg-muted mt-2 tabular-nums">
+          {favorites.length} 项
         </p>
       </section>
-      {favs.length === 0 ? (
+
+      {favorites.length === 0 ? (
         <EmptyState
-          title="暂无收藏"
-          description="在漫画卡片上点击右键可以添加收藏。"
+          title="还没有收藏"
+          description="在主页或相册页右键点击卡片，或者使用卡片右上角的星标收藏喜欢的漫画。"
+          icon={<StarIcon size={20} />}
+          action={
+            <button
+              onClick={() => navigate('/')}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover text-sm"
+            >
+              去主页看看
+            </button>
+          }
         />
-      ) : cards.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <EmptyState
-          title="收藏已失效"
-          description="扫描缓存中没有对应的相册，请重新扫描后再试。"
+          title="没有匹配的收藏"
+          description={query ? `没有匹配"${query}"的结果` : ''}
+          action={
+            <button
+              onClick={() => useSearchStore.getState().reset()}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
+            >
+              清除筛选
+            </button>
+          }
         />
       ) : (
-        <AlbumGrid items={cards} />
+        <section className="max-w-[1400px]">
+          <AlbumGrid items={filtered} variant={viewMode} />
+        </section>
       )}
-    </>
+      <div className="h-12" />
+    </div>
   )
 }

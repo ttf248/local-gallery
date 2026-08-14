@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useViewerStore } from '../store/viewerStore'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { progressApi } from '../api/albums'
+import { useUIStore } from '../store/uiStore'
 import ImageViewer from '../components/viewer/ImageViewer'
 import ViewerToolbar from '../components/viewer/ViewerToolbar'
 import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
@@ -14,6 +15,7 @@ import EmptyState from '../components/common/EmptyState'
 export default function Viewer() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
+  const pushToast = useUIStore((s) => s.pushToast)
 
   const images = parseImages(params.get('images'))
   const initialIndex = Number(params.get('index') ?? 0)
@@ -25,11 +27,11 @@ export default function Viewer() {
   const slideshow = useViewerStore((s) => s.slideshow)
   const slideshowInterval = useViewerStore((s) => s.slideshowInterval)
   const setZoom = useViewerStore((s) => s.setZoom)
+  const toggleSlideshow = useViewerStore((s) => s.toggleSlideshow)
 
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
 
-  // 进入时尝试恢复阅读进度
   useEffect(() => {
     if (!album) {
       setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
@@ -45,27 +47,21 @@ export default function Viewer() {
         }
       })
       .catch(() => {})
-    // 仅在进入时执行
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album])
 
-  // 切换图片时关闭信息面板 + 防抖持久化进度
   useEffect(() => {
     setShowInfo(false)
     if (!album) return
     const t = setTimeout(() => {
-      progressApi
-        .set(album, index, images.length, 0)
-        .catch(() => {})
+      progressApi.set(album, index, images.length, 0).catch(() => {})
     }, 600)
     return () => clearTimeout(t)
   }, [index, album, images.length])
 
-  // 关闭时再持久化一次
   useEffect(() => {
     return () => {
       if (album) {
-        // 离开页面时同步触发；fire-and-forget
         navigator.sendBeacon?.(
           '/api/progress',
           new Blob(
@@ -78,7 +74,13 @@ export default function Viewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 幻灯片计时器
+  // 切换图片时关闭信息面板 + 防抖持久化进度
+  useEffect(() => {
+    const off = () => setShowHelp(true)
+    window.addEventListener('comic:open-help', off as EventListener)
+    return () => window.removeEventListener('comic:open-help', off as EventListener)
+  }, [])
+
   useEffect(() => {
     if (!slideshow) return
     const t = setInterval(() => {
@@ -96,10 +98,25 @@ export default function Viewer() {
     if (index > 0) setIndex(index - 1)
   }
   function next() {
-    if (index < images.length - 1) setIndex(index + 1)
+    if (index < images.length - 1) {
+      setIndex(index + 1)
+      // 末尾自动翻页时若启用 autoSwitchAlbum 则切换下一本
+      const prefs = useUIStore.getState()
+      // 提示信息（仅最后一张之后）
+      if (index + 1 === images.length - 1) {
+        pushToast({ kind: 'info', message: '已是最后一页', ttl: 1500 })
+      }
+      // 最后一页之后关闭幻灯片
+      if (index === images.length - 1) {
+        if (useViewerStore.getState().slideshow) {
+          toggleSlideshow()
+          pushToast({ kind: 'info', message: '幻灯片已自动停止' })
+        }
+      }
+      void prefs
+    }
   }
 
-  // 快捷键
   useKeyboard({
     arrowleft: prev,
     arrowright: next,
@@ -116,6 +133,7 @@ export default function Viewer() {
     space: () => useViewerStore.getState().toggleSlideshow(),
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),
+    'shift+/': () => setShowHelp((v) => !v),
     escape: () => {
       if (showHelp) setShowHelp(false)
       else if (showInfo) setShowInfo(false)
@@ -152,9 +170,9 @@ export default function Viewer() {
         onToggleInfo={() => setShowInfo((v) => !v)}
         onToggleHelp={() => setShowHelp((v) => !v)}
       />
-      <div className="px-4 py-1.5 text-xs text-fg-muted border-b border-border bg-bg-elevated">
-        <span className="font-medium text-fg mr-2">{name}</span>
-        <span className="text-fg-subtle">{album}</span>
+      <div className="px-4 h-9 text-xs text-fg-muted border-b border-border-faint bg-bg-elevated/60 flex items-center gap-2">
+        <span className="font-medium text-fg truncate">{name}</span>
+        {album && <span className="text-fg-subtle truncate">· {album}</span>}
       </div>
       <div className="flex-1 flex min-h-0">
         <ImageViewer images={images} />

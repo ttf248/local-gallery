@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 全局基线：去掉默认的内外边距差，统一盒模型，使用 token 中的字体。 */
+/* 全局基线 */
 html,
 body,
 #root {
@@ -27,25 +27,26 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.6;
   letter-spacing: 0.005em;
+  font-weight: 400;
 }
 
 * {
   box-sizing: border-box;
 }
 
-/* 滚动条：克制配色 */
+/* 滚动条：极细 */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 6px;
+  border-radius: 4px;
   border: 2px solid var(--bg);
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -58,39 +59,35 @@ body {
   color: var(--fg);
 }
 
-/* 系统主题初始值 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
   }
 }
 
-/* 基础工具层：超细滚动、文本辅助 */
+/* 字体类 */
 .font-display {
   font-family: var(--font-display);
-  letter-spacing: -0.012em;
+  letter-spacing: -0.018em;
 }
 .font-mono {
   font-family: var(--font-mono);
 }
 
-/* 卡片浮起：被多处复用 */
-.lift {
-  transition:
-    transform var(--dur) var(--ease),
-    box-shadow var(--dur) var(--ease),
-    border-color var(--dur) var(--ease);
+/* 极轻的 hover 浮起，去掉厚重的 lift 动画 */
+.lift-soft {
+  transition: transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
-.lift:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+.lift-soft:hover {
+  transform: translateY(-1px);
 }
 
-/* 淡入：列表进入动画 */
+/* 淡入 */
 @keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
@@ -98,17 +95,29 @@ body {
   }
 }
 .fade-up {
-  animation: fadeUp 320ms var(--ease) both;
+  animation: fadeUp 240ms var(--ease-out) both;
 }
 
-/* 焦点环 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.fade-in {
+  animation: fadeIn 180ms var(--ease-out) both;
+}
+
+/* 焦点环：去重一点 */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 1px solid var(--fg-muted);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
-/* 输入框默认样式统一 */
+/* 输入统一 */
 input,
 button,
 select,
@@ -121,4 +130,25 @@ button {
   border: 0;
   cursor: pointer;
   padding: 0;
+}
+
+/* 通用工具：细分割线 */
+.divider {
+  height: 1px;
+  background: var(--border-faint);
+  width: 100%;
+}
+
+/* 弱化滚动条容器 */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* 文本截断 */
+.truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SHORTCUTS } from '../../utils/shortcuts'
-import { CloseIcon } from './Icon'
+import { CloseIcon, SearchIcon } from './Icon'
 
 interface Props {
   open: boolean
@@ -12,8 +12,11 @@ const groups: { title: string; ids: string[] }[] = [
   { title: '查看器', ids: ['next', 'prev', 'first', 'last', 'zoomIn', 'zoomOut', 'zoomReset', 'rotate', 'fullscreen', 'slideshow', 'info'] },
 ]
 
-// 帮助浮层：左侧导航分组 + 右侧快捷键列表，背景遮罩。
+// 帮助浮层：可搜索的快捷键列表 + 分类。
+// 视觉上：更大留白，单列紧凑列表；搜索框即时过滤。
 export default function HelpOverlay({ open, onClose }: Props) {
+  const [q, setQ] = useState('')
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
@@ -23,53 +26,96 @@ export default function HelpOverlay({ open, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
+  useEffect(() => {
+    if (!open) setQ('')
+  }, [open])
+
+  const byId = useMemo(() => new Map(SHORTCUTS.map((s) => [s.id, s])), [])
+  const lc = q.trim().toLowerCase()
+
   if (!open) return null
 
-  const byId = new Map(SHORTCUTS.map((s) => [s.id, s]))
+  const matches = (s: { id: string; description: string; label: string }) => {
+    if (!lc) return true
+    return (
+      s.id.toLowerCase().includes(lc) ||
+      s.description.toLowerCase().includes(lc) ||
+      s.label.toLowerCase().includes(lc)
+    )
+  }
+
+  const filteredGroups = groups
+    .map((g) => ({ ...g, items: g.ids.map((id) => byId.get(id)).filter((s): s is NonNullable<typeof s> => !!s && matches(s)) }))
+    .filter((g) => g.items.length > 0)
+
+  const total = filteredGroups.reduce((s, g) => s + g.items.length, 0)
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm fade-up"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] fade-in"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-bg-elevated text-fg rounded-lg shadow-lg border border-border w-[720px] max-w-[94vw] max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-bg-elevated text-fg rounded-lg shadow-lg border border-border-faint w-[680px] max-w-[94vw] max-h-[80vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between px-5 py-3 border-b border-border">
+        <header className="flex items-center justify-between px-5 h-12 border-b border-border-faint">
           <div>
-            <h2 className="font-display font-semibold">快捷键</h2>
-            <p className="text-xs text-fg-muted mt-0.5">按下 Esc 或点击空白处关闭</p>
+            <h2 className="font-display text-sm font-medium">快捷键</h2>
+            <p className="text-[11px] text-fg-subtle mt-0.5">按 Esc 关闭</p>
           </div>
           <button
             onClick={onClose}
-            className="text-fg-muted hover:text-fg p-1 rounded hover:bg-bg-subtle"
+            className="text-fg-muted hover:text-fg p-1 rounded hover:bg-bg-subtle transition-colors"
             aria-label="关闭"
           >
-            <CloseIcon size={16} />
+            <CloseIcon size={14} />
           </button>
         </header>
 
-        <div className="flex-1 overflow-auto grid grid-cols-1 md:grid-cols-2 gap-x-6 p-5">
-          {groups.map((g) => (
-            <div key={g.title} className="mb-4">
-              <h3 className="text-xs font-medium text-fg-muted uppercase tracking-wider mb-2">
+        <div className="px-5 py-3 border-b border-border-faint">
+          <div className="flex items-center gap-2 bg-bg-subtle rounded-md px-3 h-9 focus-within:bg-bg-elevated focus-within:border focus-within:border-border transition-colors">
+            <SearchIcon size={13} className="text-fg-subtle shrink-0" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="搜索快捷键…"
+              className="flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-fg-subtle"
+              autoFocus
+            />
+            {q && (
+              <button
+                onClick={() => setQ('')}
+                className="text-fg-subtle hover:text-fg text-xs"
+              >
+                清除
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 scroll-thin">
+          {total === 0 && (
+            <div className="col-span-2 text-center text-fg-muted text-sm py-10">
+              没有匹配「{q}」的快捷键
+            </div>
+          )}
+          {filteredGroups.map((g) => (
+            <div key={g.title}>
+              <h3 className="text-[10px] font-medium text-fg-subtle uppercase tracking-[0.14em] mb-2">
                 {g.title}
               </h3>
               <ul className="space-y-1.5">
-                {g.ids.map((id) => {
-                  const s = byId.get(id)
-                  if (!s) return null
-                  return (
-                    <li key={s.id} className="flex items-center justify-between text-sm">
-                      <span className="text-fg-muted">{s.description}</span>
-                      <kbd className="text-[11px] font-mono px-2 py-0.5 rounded border border-border bg-bg-subtle text-fg-muted">
-                        {s.label}
-                      </kbd>
-                    </li>
-                  )
-                })}
+                {g.items.map((s) => (
+                  <li key={s.id} className="flex items-center justify-between text-[13px] py-1">
+                    <span className="text-fg-muted">{s.description}</span>
+                    <kbd className="text-[11px] font-mono px-2 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
+                      {s.label}
+                    </kbd>
+                  </li>
+                ))}
               </ul>
             </div>
           ))}

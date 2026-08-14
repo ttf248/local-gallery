@@ -39,11 +39,17 @@ export const ClockIcon = (p: IconProps) => (
   </svg>
 )
 
-export const StarIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M12 3.5l2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.9l6-.9L12 3.5z" />
-  </svg>
-)
+export const StarIcon = (p: IconProps & { filled?: boolean }) => {
+  const { filled, ...rest } = p
+  return (
+    <svg {...base(rest)}>
+      <path
+        d="M12 3.5l2.7 5.5 6 .9-4.3 4.2 1 6-5.4-2.8-5.4 2.8 1-6L3.3 9.9l6-.9L12 3.5z"
+        fill={filled ? 'currentColor' : 'none'}
+      />
+    </svg>
+  )
+}
 
 export const SettingsIcon = (p: IconProps) => (
   <svg {...base(p)}>
@@ -223,5 +229,74 @@ export const LibraryIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M4 19V6a2 2 0 0 1 2-2h12v17H6a2 2 0 0 1-2-2z" />
     <path d="M8 8h8M8 12h8M8 16h5" />
+  </svg>
+)
+
+export const GridIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="3" width="7" height="7" rx="1" />
+    <rect x="14" y="3" width="7" height="7" rx="1" />
+    <rect x="3" y="14" width="7" height="7" rx="1" />
+    <rect x="14" y="14" width="7" height="7" rx="1" />
+  </svg>
+)
+
+export const ListIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <line x1="8" y1="6" x2="20" y2="6" />
+    <line x1="8" y1="12" x2="20" y2="12" />
+    <line x1="8" y1="18" x2="20" y2="18" />
+    <circle cx="4" cy="6" r="1" fill="currentColor" />
+    <circle cx="4" cy="12" r="1" fill="currentColor" />
+    <circle cx="4" cy="18" r="1" fill="currentColor" />
+  </svg>
+)
+
+export const CheckIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m5 12 5 5L20 7" />
+  </svg>
+)
+
+export const AlertIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3 2 21h20L12 3z" />
+    <path d="M12 10v5M12 18h.01" />
+  </svg>
+)
+
+export const SortIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M7 4v16M3 8l4-4 4 4" />
+    <path d="M17 20V4M21 16l-4 4-4-4" />
+  </svg>
+)
+
+export const HeartFilledIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path
+      d="M20.8 8.6a5 5 0 0 0-7.8-.5L12 9.2l-1-1.1a5 5 0 1 0-7.1 7l1 1.1L12 21l7.1-5.8 1-1.1a5 5 0 0 0 .7-5.5z"
+      fill="currentColor"
+      stroke="none"
+    />
+  </svg>
+)
+
+export const PlayFilledIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M7 5v14l12-7z" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+export const KeyboardIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="2" y="6" width="20" height="14" rx="2" />
+    <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M6 14h.01M18 14h.01M8 17h8" />
+  </svg>
+)
+
+export const ChevronUpIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m18 15-6-6-6 6" />
   </svg>
 )

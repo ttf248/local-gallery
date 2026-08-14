@@ -7,12 +7,14 @@ import { useFavorites } from '../hooks/useFavorites'
 import { historyApi } from '../api/prefs'
 import { thumbUrl } from '../api/thumbs'
 import { imageUrl } from '../api/images'
+import { useUIStore } from '../store/uiStore'
 import type { CardData } from '../components/album/AlbumGrid'
 import AlbumGrid from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { albumsApi } from '../api/albums'
 import { decodeFavPath } from '../utils/path'
-import { ChevronLeftIcon, ReaderIcon } from '../components/common/Icon'
+import { ChevronLeftIcon, ReaderIcon, StarIcon, FolderIcon } from '../components/common/Icon'
+import { useReadingProgress } from '../hooks/useReadingProgress'
 
 interface AlbumDetail {
   type: 'album'
@@ -47,7 +49,7 @@ type Detail = AlbumDetail | CollectionDetail | SmartDetail
 // 相册视图：
 //   - 相册 → 图片网格，点击进入查看器
 //   - 集合/智能集合 → 嵌套相册列表
-//   - 缺数据时给出明确引导（重新扫描）
+//   - 缺数据时给出明确引导
 export default function Album() {
   const params = useParams()
   const navigate = useNavigate()
@@ -59,14 +61,14 @@ export default function Album() {
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
-  const { add: addFav } = useFavorites()
+  const viewMode = useUIStore((s) => s.viewMode)
+  const { add: addFav, toggle: toggleFav, favorites } = useFavorites()
+  const pushToast = useUIStore((s) => s.pushToast)
 
-  // 启动时拉一次缓存
   useEffect(() => {
     if (!result) loadFromBackend()
   }, [result, loadFromBackend])
 
-  // 从缓存推导详情（避免重复请求）
   const localDetail = useMemo<Detail | null>(() => {
     if (!result) return null
     if (isSmart) {
@@ -90,7 +92,6 @@ export default function Album() {
         coverImage: sc.coverImage,
       }
     }
-    // 先查顶层 albums
     const found = result.albums.find((a) => a.path === realPath)
     if (found) {
       return {
@@ -128,7 +129,6 @@ export default function Album() {
     return null
   }, [result, isSmart, realPath])
 
-  // 单相册缺图片列表时，请求后端详情
   const needBackendDetail =
     localDetail?.type === 'album' && localDetail.imageFiles.length === 0
   const remoteDetail = useQuery({
@@ -142,7 +142,6 @@ export default function Album() {
 
   const detail = needBackendDetail ? (remoteDetail.data ?? localDetail) : localDetail
 
-  // 触发最近访问
   useEffect(() => {
     if (!detail) return
     if (detail.type === 'album') {
@@ -164,7 +163,7 @@ export default function Album() {
         action={
           <button
             onClick={() => navigate('/')}
-            className="px-4 py-2 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-sm"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-sm"
           >
             返回主页
           </button>
@@ -181,7 +180,7 @@ export default function Album() {
         action={
           <button
             onClick={() => navigate('/')}
-            className="px-4 py-2 rounded-md border border-border hover:bg-bg-subtle text-sm"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
           >
             返回主页
           </button>
@@ -191,15 +190,31 @@ export default function Album() {
   }
 
   if (detail.type === 'collection' || detail.type === 'smartCollection') {
+    const favPath = detail.type === 'smartCollection' ? `smart:${detail.author}` : detail.path
+    const isFav = favorites.includes(favPath)
     return (
       <CollectionView
         detail={detail}
         query={query}
         sortBy={sortBy}
+        viewMode={viewMode}
         onBack={() => navigate(-1)}
-        onToggleFav={() => {
+        isFavorite={isFav}
+        onToggleFav={async () => {
           if (detail.type === 'smartCollection') {
-            addFav(`smart:${detail.author}`).catch(() => {})
+            try {
+              await toggleFav(favPath)
+              pushToast({ kind: 'success', message: isFav ? '已取消收藏' : '已加入收藏' })
+            } catch {
+              pushToast({ kind: 'error', message: '操作失败' })
+            }
+          } else {
+            try {
+              await addFav(favPath)
+              pushToast({ kind: 'success', message: '已加入收藏' })
+            } catch {
+              pushToast({ kind: 'error', message: '操作失败' })
+            }
           }
         }}
       />
@@ -209,10 +224,14 @@ export default function Album() {
   return <AlbumView detail={detail} onBack={() => navigate(-1)} />
 }
 
-// ============== 相册（图片网格 + 进入查看器） ==============
 function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void }) {
   const navigate = useNavigate()
   const [gridSize, setGridSize] = useState<'sm' | 'md' | 'lg'>('md')
+  const pushToast = useUIStore((s) => s.pushToast)
+  const { data: progress } = useReadingProgress(detail.path)
+  const startIndex = progress && progress.index > 0 && progress.index < detail.imageFiles.length
+    ? progress.index
+    : 0
 
   const openViewer = (idx: number) => {
     const qs = new URLSearchParams({
@@ -244,80 +263,117 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
 
   return (
     <div className="flex flex-col h-full">
-      <AlbumHeader
-        name={detail.name}
-        subtitle={detail.author}
-        count={detail.imageCount}
-        controls={
-          <div className="flex items-center gap-1 text-xs">
-            {(['sm', 'md', 'lg'] as const).map((k) => (
-              <button
-                key={k}
-                onClick={() => setGridSize(k)}
-                className={`px-2 py-1 rounded border ${
-                  gridSize === k
-                    ? 'bg-accent text-accent-fg border-accent'
-                    : 'border-border hover:bg-bg-subtle'
-                }`}
-              >
-                {k === 'sm' ? '小' : k === 'md' ? '中' : '大'}
-              </button>
-            ))}
+      <div className="px-6 lg:px-10 pt-8 pb-5">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1 text-xs text-fg-subtle hover:text-fg mb-4 transition-colors"
+        >
+          <ChevronLeftIcon size={12} />
+          <span>返回</span>
+        </button>
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-semibold tracking-tight truncate">
+              {detail.name}
+            </h1>
+            <div className="text-sm text-fg-muted mt-1.5">
+              {detail.author && <span className="mr-3">{detail.author}</span>}
+              <span className="tabular-nums">{detail.imageCount} 页</span>
+            </div>
           </div>
-        }
-        onBack={onBack}
-        onAction={() => openViewer(0)}
-        actionLabel="开始阅读"
-      />
-      <div className="flex-1 overflow-auto">
-        <div className={`grid ${gridCls} gap-2 p-4`}>
-          {detail.imageFiles.map((img, i) => (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border border-border-faint rounded-md overflow-hidden text-xs">
+              {(['sm', 'md', 'lg'] as const).map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setGridSize(k)}
+                  className={`h-8 px-2.5 transition-colors ${
+                    gridSize === k
+                      ? 'bg-bg-subtle text-fg'
+                      : 'text-fg-muted hover:text-fg'
+                  }`}
+                  title={k === 'sm' ? '密集' : k === 'md' ? '标准' : '宽松'}
+                >
+                  {k === 'sm' ? 'S' : k === 'md' ? 'M' : 'L'}
+                </button>
+              ))}
+            </div>
             <button
-              key={img}
-              onClick={() => openViewer(i)}
-              className="group relative aspect-[3/4] bg-bg-subtle rounded overflow-hidden border border-border hover:border-border-strong lift"
-              title={`第 ${i + 1} 页`}
+              onClick={() => {
+                openViewer(startIndex)
+                pushToast({ kind: 'info', message: '开始阅读' })
+              }}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-xs"
             >
-              <img
-                src={thumbUrl(img)}
-                alt={`page ${i + 1}`}
-                loading="lazy"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-1 left-1 text-[10px] bg-bg-elevated/90 backdrop-blur px-1.5 py-0.5 rounded text-fg-muted tabular-nums">
-                {i + 1}
-              </div>
+              <ReaderIcon size={12} />
+              <span>{progress && progress.index > 0 ? `继续 (${progress.index + 1})` : '开始阅读'}</span>
             </button>
-          ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <div className={`grid ${gridCls} gap-2 px-6 lg:px-10 pb-10`}>
+          {detail.imageFiles.map((img, i) => {
+            const isCurrent = progress && i === progress.index
+            const isPast = progress && i < progress.index
+            return (
+              <button
+                key={img}
+                onClick={() => openViewer(i)}
+                className={`group relative aspect-[3/4] bg-bg-subtle rounded overflow-hidden transition-all ${
+                  isCurrent
+                    ? 'ring-2 ring-accent'
+                    : isPast
+                      ? 'opacity-70'
+                      : ''
+                }`}
+                title={`第 ${i + 1} 页`}
+              >
+                <img
+                  src={thumbUrl(img)}
+                  alt={`page ${i + 1}`}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                />
+                {isCurrent && (
+                  <div className="absolute top-1.5 left-1.5 bg-accent text-accent-fg text-[10px] font-medium px-1.5 py-0.5 rounded">
+                    当前
+                  </div>
+                )}
+                <div className="absolute bottom-1.5 right-1.5 text-[10px] bg-bg-elevated/85 backdrop-blur px-1.5 py-0.5 rounded text-fg-muted tabular-nums">
+                  {i + 1}
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
     </div>
   )
 }
 
-// ============== 集合 / 智能集合（嵌套相册列表） ==============
 function CollectionView({
   detail,
   query,
   sortBy,
+  viewMode,
   onBack,
   onToggleFav,
+  isFavorite,
 }: {
   detail: CollectionDetail | SmartDetail
   query: string
   sortBy: 'name' | 'count' | 'recent'
+  viewMode: 'grid' | 'list'
   onBack: () => void
   onToggleFav: () => void
+  isFavorite: boolean
 }) {
   const isSmart = detail.type === 'smartCollection'
   const title = isSmart ? detail.author : detail.name
-  const subtitle = isSmart
-    ? `智能集合 · ${detail.albumCount} 卷`
-    : `集合 · ${detail.albumCount} 卷`
 
   const filtered = useMemo(() => {
-    const items = detail.albums
-      .filter((a) => !query || a.name.toLowerCase().includes(query.toLowerCase()))
+    const items = detail.albums.filter((a) => !query || a.name.toLowerCase().includes(query.toLowerCase()))
     switch (sortBy) {
       case 'count':
         return items.sort((a, b) => b.imageCount - a.imageCount)
@@ -340,80 +396,53 @@ function CollectionView({
 
   return (
     <div className="flex flex-col h-full">
-      <AlbumHeader
-        name={title}
-        subtitle={subtitle}
-        count={detail.albumCount}
-        onBack={onBack}
-        onAction={onToggleFav}
-        actionLabel="收藏"
-        controls={null}
-      />
+      <div className="px-6 lg:px-10 pt-8 pb-5">
+        <button
+          onClick={onBack}
+          className="inline-flex items-center gap-1 text-xs text-fg-subtle hover:text-fg mb-4 transition-colors"
+        >
+          <ChevronLeftIcon size={12} />
+          <span>返回</span>
+        </button>
+        <div className="flex items-end justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              {isSmart ? <StarIcon size={13} className="text-fg-muted" filled /> : <FolderIcon size={13} className="text-fg-muted" />}
+              <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
+                {isSmart ? '作者集合' : '集合'}
+              </span>
+            </div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight truncate">
+              {title}
+            </h1>
+            <div className="text-sm text-fg-muted mt-1.5">
+              <span className="tabular-nums">{detail.albumCount} 卷</span>
+            </div>
+          </div>
+          <button
+            onClick={onToggleFav}
+            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs transition-colors ${
+              isFavorite
+                ? 'bg-warning/10 text-warning hover:bg-warning/15'
+                : 'border border-border-faint hover:bg-bg-subtle text-fg-muted'
+            }`}
+          >
+            <StarIcon size={12} filled={isFavorite} />
+            <span>{isFavorite ? '已收藏' : '收藏'}</span>
+          </button>
+        </div>
+      </div>
       <div className="flex-1 overflow-auto">
         {cards.length === 0 ? (
           <EmptyState title="无匹配结果" description="试试修改搜索条件或排序。" />
         ) : (
-          <AlbumGrid items={cards} />
+          <AlbumGrid items={cards} variant={viewMode} />
         )}
       </div>
     </div>
   )
 }
 
-// ============== 相册/集合头部（统一头） ==============
-function AlbumHeader({
-  name,
-  subtitle,
-  count,
-  controls,
-  onBack,
-  onAction,
-  actionLabel,
-}: {
-  name: string
-  subtitle?: string
-  count: number
-  controls: React.ReactNode
-  onBack: () => void
-  onAction: () => void
-  actionLabel: string
-}) {
-  return (
-    <div className="px-6 pt-6 pb-4 border-b border-border bg-bg-elevated">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg mb-3"
-      >
-        <ChevronLeftIcon size={14} />
-        <span>返回</span>
-      </button>
-      <div className="flex items-end justify-between gap-4 flex-wrap">
-        <div className="min-w-0">
-          <h1 className="font-display text-2xl font-semibold tracking-tight truncate">
-            {name}
-          </h1>
-          <div className="text-sm text-fg-muted mt-1">
-            {subtitle && <span className="mr-3">{subtitle}</span>}
-            <span className="tabular-nums">{count} 张</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {controls}
-          <button
-            onClick={onAction}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-sm"
-          >
-            <ReaderIcon size={14} />
-            <span>{actionLabel}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// 兼容旧 Viewer：从 ?images=<json>&index=<n>&name=&album=
-// 这里保留一个简单 export，方便 Viewer 仍使用 query 参数工作。
 export function buildImageUrl(absPath: string): string {
   return imageUrl(absPath)
 }
