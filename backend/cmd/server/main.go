@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/tianlongxiang/comic-reader/internal/handlers"
 	"github.com/tianlongxiang/comic-reader/internal/middleware"
 	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/comic-reader/internal/store"
 )
 
 const defaultConfigPath = "config.json"
@@ -96,6 +98,7 @@ func main() {
 		log.Fatalf("初始化缩略图服务失败: %v", err)
 	}
 	runner := services.NewAsyncScanRunner()
+	prefs := store.NewPrefsStore(filepath.Join(filepath.Dir(cfg.CacheDir), "web_settings.json"))
 
 	api := app.Group("/api")
 	api.Get("/health", handlers.HealthHandler(cfg))
@@ -107,6 +110,17 @@ func main() {
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
+
+	// 偏好 / 收藏 / 历史
+	api.Get("/prefs", handlers.PrefsGetHandler(prefs))
+	api.Patch("/prefs", handlers.PrefsPatchHandler(prefs))
+	api.Get("/favorites", handlers.FavoritesListHandler(prefs))
+	api.Post("/favorites", handlers.FavoriteAddHandler(prefs))
+	api.Delete("/favorites", handlers.FavoriteRemoveHandler(prefs))
+	api.Post("/favorites/prune", handlers.FavoritesPruneHandler(prefs))
+	api.Get("/history", handlers.HistoryListHandler(prefs))
+	api.Post("/history", handlers.HistoryAddHandler(prefs))
+	api.Delete("/history", handlers.HistoryClearHandler(prefs))
 
 	// ---- 启动 ----
 	if err := app.Listen(cfg.Addr()); err != nil {

@@ -1,0 +1,174 @@
+package handlers
+
+import (
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/comic-reader/internal/store"
+)
+
+// PrefsGetHandler GET /api/prefs
+func PrefsGetHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		p, err := s.Get()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(p)
+	}
+}
+
+// PrefsPatchHandler PATCH /api/prefs
+//
+// 仅覆盖传入的非零字段。
+func PrefsPatchHandler(s *store.PrefsStore) fiber.Handler {
+	type patch struct {
+		Theme            *string `json:"theme"`
+		AutoSwitchAlbum  *bool   `json:"autoSwitchAlbum"`
+		ShowSwitchNotif  *bool   `json:"showSwitchNotif"`
+		SidebarCollapsed *bool   `json:"sidebarCollapsed"`
+		MaxRecent        *int    `json:"maxRecent"`
+	}
+
+	return func(c *fiber.Ctx) error {
+		var p patch
+		if err := c.BodyParser(&p); err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		cur, err := s.Get()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+
+		if p.Theme != nil {
+			cur.Theme = *p.Theme
+		}
+		if p.AutoSwitchAlbum != nil {
+			cur.AutoSwitchAlbum = *p.AutoSwitchAlbum
+		}
+		if p.ShowSwitchNotif != nil {
+			cur.ShowSwitchNotif = *p.ShowSwitchNotif
+		}
+		if p.SidebarCollapsed != nil {
+			cur.SidebarCollapsed = *p.SidebarCollapsed
+		}
+		if p.MaxRecent != nil && *p.MaxRecent > 0 {
+			cur.MaxRecent = *p.MaxRecent
+		}
+
+		if err := s.Update(cur); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(cur)
+	}
+}
+
+// FavoritesListHandler GET /api/favorites
+func FavoritesListHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		p, _ := s.Get()
+		return c.JSON(fiber.Map{"favorites": p.Favorites})
+	}
+}
+
+// FavoriteAddHandler POST /api/favorites
+//
+// Body: {"path": "..."}
+func FavoriteAddHandler(s *store.PrefsStore) fiber.Handler {
+	type req struct {
+		Path string `json:"path"`
+	}
+	return func(c *fiber.Ctx) error {
+		var r req
+		if err := c.BodyParser(&r); err != nil || r.Path == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "path required"})
+		}
+		out, err := s.AddFavorite(r.Path)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"favorites": out})
+	}
+}
+
+// FavoriteRemoveHandler DELETE /api/favorites
+//
+// Body: {"path": "..."}
+func FavoriteRemoveHandler(s *store.PrefsStore) fiber.Handler {
+	type req struct {
+		Path string `json:"path"`
+	}
+	return func(c *fiber.Ctx) error {
+		var r req
+		if err := c.BodyParser(&r); err != nil || r.Path == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "path required"})
+		}
+		out, err := s.RemoveFavorite(r.Path)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"favorites": out})
+	}
+}
+
+// HistoryListHandler GET /api/history
+func HistoryListHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		p, _ := s.Get()
+		return c.JSON(fiber.Map{"history": p.History})
+	}
+}
+
+// HistoryAddHandler POST /api/history
+//
+// Body: {"path": "...", "name": "...", "imageCount": 42}
+func HistoryAddHandler(s *store.PrefsStore) fiber.Handler {
+	type req struct {
+		Path       string `json:"path"`
+		Name       string `json:"name"`
+		ImageCount int    `json:"imageCount"`
+	}
+	return func(c *fiber.Ctx) error {
+		var r req
+		if err := c.BodyParser(&r); err != nil || r.Path == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "path required"})
+		}
+		entry := models.HistoryEntry{
+			Path:       r.Path,
+			Name:       r.Name,
+			ImageCount: r.ImageCount,
+			OpenedAt:   time.Now(),
+		}
+		out, err := s.AddHistory(entry)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"history": out})
+	}
+}
+
+// HistoryClearHandler DELETE /api/history
+func HistoryClearHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if err := s.ClearHistory(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+// FavoritesPruneHandler POST /api/favorites/prune
+//
+// 移除磁盘上不存在的收藏。
+func FavoritesPruneHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		removed, err := s.PruneInvalidFavorites()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"removed": removed})
+	}
+}
