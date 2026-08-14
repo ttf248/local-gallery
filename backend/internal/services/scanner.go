@@ -1,0 +1,293 @@
+// Package services 提供漫画阅读器核心业务服务。
+package services
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/tianlongxiang/comic-reader/internal/models"
+)
+
+// ScanOptions 扫描选项。
+type ScanOptions struct {
+	Root     string // 必填，绝对路径
+	MaxDepth int    // 集合（collection）最大递归深度，0 或负数视为 1
+}
+
+// ScanErrorKind 扫描过程中可恢复的错误类型。
+type ScanErrorKind int
+
+const (
+	ScanOK ScanErrorKind = iota
+	ScanRootMissing
+	ScanRootNotDir
+)
+
+func (k ScanErrorKind) String() string {
+	switch k {
+	case ScanRootMissing:
+		return "root missing"
+	case ScanRootNotDir:
+		return "root is not a directory"
+	default:
+		return "ok"
+	}
+}
+
+// ScanError 扫描失败描述。
+type ScanError struct {
+	Kind ScanErrorKind
+	Path string
+	Err  error
+}
+
+func (e *ScanError) Error() string {
+	return e.Kind.String() + ": " + e.Path + ": " + e.Err.Error()
+}
+
+func (e *ScanError) Unwrap() error { return e.Err }
+
+// Scanner 漫画扫描器。
+type Scanner struct {
+	workers int
+}
+
+// NewScanner 创建扫描器。
+func NewScanner() *Scanner {
+	return &Scanner{workers: min(8, runtime.NumCPU())}
+}
+
+// Scan 执行同步扫描。返回完整结果树。
+func (s *Scanner) Scan(opts ScanOptions) (*models.ScanResult, error) {
+	root := opts.Root
+	if root == "" {
+		return nil, errors.New("root is empty")
+	}
+	info, err := os.Stat(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, &ScanError{Kind: ScanRootMissing, Path: root, Err: err}
+		}
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, &ScanError{Kind: ScanRootNotDir, Path: root, Err: errors.New("not a directory")}
+	}
+
+	depth := opts.MaxDepth
+	if depth <= 0 {
+		depth = 1
+	}
+
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+
+	start := time.Now()
+	topAlbums, topCollections := s.scanLayer(absRoot, absRoot, depth, 0)
+
+	allAlbums := flattenAlbums(topAlbums, topCollections)
+	smart := GroupByAuthor(allAlbums)
+
+	result := &models.ScanResult{
+		Root:             absRoot,
+		Albums:           topAlbums,
+		Collections:      topCollections,
+		SmartCollections: smart,
+		AlbumCount:       len(allAlbums),
+		CollectionCount:  countCollections(topCollections),
+		Duration:         time.Since(start).Milliseconds(),
+		ScannedAt:        time.Now(),
+	}
+	return result, nil
+}
+
+// scanLayer 扫描单层目录。
+//
+//   - basePath：用于路径安全校验的根
+//   - currentPath：当前扫描的目录
+//   - maxDepth：集合最大允许深度
+//   - curDepth：当前深度（从 0 开始）
+//
+// 返回当前层的相册（直接在当前目录含图片的子文件夹）和子集合
+// （仅含子相册的子文件夹）。
+func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int) ([]models.Album, []models.Collection) {
+	entries, err := os.ReadDir(currentPath)
+	if err != nil {
+		return nil, nil
+	}
+
+	// 仅取直接子目录
+	var subdirs []os.DirEntry
+	for _, e := range entries {
+		if e.IsDir() {
+			subdirs = append(subdirs, e)
+		}
+	}
+
+	type job struct {
+		path  string
+		isAlb bool
+	}
+	type result struct {
+		album     *models.Album
+		coll      *models.Collection
+		isAlbum   bool
+	}
+
+	jobs := make(chan string, len(subdirs))
+	results := make(chan result, len(subdirs))
+	var wg sync.WaitGroup
+
+	for i := 0; i < s.workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range jobs {
+				al, co := s.classifyAndScan(basePath, p, maxDepth, curDepth)
+				if al != nil {
+					results <- result{album: al, isAlbum: true}
+				} else if co != nil {
+					results <- result{coll: co}
+				} else {
+					results <- result{} // 空目录或隐藏
+				}
+			}
+		}()
+	}
+
+	for _, d := range subdirs {
+		jobs <- filepath.Join(currentPath, d.Name())
+	}
+	close(jobs)
+	wg.Wait()
+	close(results)
+
+	var albums []models.Album
+	var colls []models.Collection
+	for r := range results {
+		if r.isAlbum && r.album != nil {
+			albums = append(albums, *r.album)
+		} else if !r.isAlbum && r.coll != nil {
+			colls = append(colls, *r.coll)
+		}
+	}
+
+	// 排序保证结果稳定
+	sort.Slice(albums, func(i, j int) bool { return albums[i].Name < albums[j].Name })
+	sort.Slice(colls, func(i, j int) bool { return colls[i].Name < colls[j].Name })
+	return albums, colls
+}
+
+// classifyAndScan 判断子目录是相册还是集合，并扫描它。
+//
+// 规则：
+//   - 含图片 → Album
+//   - 仅含子目录 → Collection（递归一层，深度+1）
+//   - 都不含或混合图片 + 子目录 → Album（图片优先，参考 Python 行为）
+func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) (*models.Album, *models.Collection) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, nil
+	}
+
+	var images []string
+	var subdirs []os.DirEntry
+	var totalSize int64
+
+	for _, e := range entries {
+		if e.IsDir() {
+			subdirs = append(subdirs, e)
+			continue
+		}
+		if models.IsImageFile(e.Name()) {
+			full := filepath.Join(dir, e.Name())
+			images = append(images, full)
+		}
+	}
+
+	// 含图片 → 当作相册
+	if len(images) > 0 {
+		sort.Strings(images)
+		for _, img := range images {
+			if fi, err := os.Stat(img); err == nil {
+				totalSize += fi.Size()
+			}
+		}
+		modTime := time.Time{}
+		if fi, err := os.Stat(dir); err == nil {
+			modTime = fi.ModTime()
+		}
+		name := filepath.Base(dir)
+		return &models.Album{
+			Type:       "album",
+			Path:       dir,
+			Name:       name,
+			ImageFiles: images,
+			CoverImage: images[0],
+			ImageCount: len(images),
+			FolderSize: totalSize,
+			Author:     ExtractAuthor(name),
+			ModTime:    modTime,
+		}, nil
+	}
+
+	// 仅含子目录且允许继续递归 → 当作集合
+	if len(subdirs) > 0 && curDepth+1 <= maxDepth {
+		childAlbums, childColls := s.scanLayer(basePath, dir, maxDepth, curDepth+1)
+		if len(childAlbums) > 0 || len(childColls) > 0 {
+			return nil, &models.Collection{
+				Type:       "collection",
+				Path:       dir,
+				Name:       filepath.Base(dir),
+				Albums:     childAlbums,
+				AlbumCount: len(childAlbums),
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+// flattenAlbums 汇总所有顶层 + 集合内含的相册。
+// 当前扫描模型下集合不嵌套集合，但保留通用性以备将来扩展。
+func flattenAlbums(topAlbums []models.Album, topCollections []models.Collection) []models.Album {
+	all := make([]models.Album, 0, len(topAlbums))
+	all = append(all, topAlbums...)
+	for _, c := range topCollections {
+		all = append(all, c.Albums...)
+	}
+	return all
+}
+
+func countCollections(colls []models.Collection) int {
+	return len(colls)
+}
+
+// ExtractAuthor 从文件夹名中提取作者：[作者] 前缀。
+// 若不含方括号，返回空字符串。
+func ExtractAuthor(name string) string {
+	i := strings.Index(name, "[")
+	if i < 0 {
+		return ""
+	}
+	j := strings.Index(name[i:], "]")
+	if j < 0 {
+		return ""
+	}
+	return strings.TrimSpace(name[i+1 : i+j])
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

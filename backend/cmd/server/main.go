@@ -22,6 +22,7 @@ import (
 	"github.com/tianlongxiang/comic-reader/internal/config"
 	"github.com/tianlongxiang/comic-reader/internal/handlers"
 	"github.com/tianlongxiang/comic-reader/internal/middleware"
+	"github.com/tianlongxiang/comic-reader/internal/services"
 )
 
 const defaultConfigPath = "config.json"
@@ -84,8 +85,11 @@ func main() {
 	app.Use(middleware.Recover())
 
 	// ---- 路由 ----
+	scanner := services.NewScanner()
+
 	api := app.Group("/api")
 	api.Get("/health", handlers.HealthHandler(cfg))
+	api.Post("/scan", handlers.ScanHandler(scanner, cfg.ComicRoot))
 
 	// ---- 启动 ----
 	if err := app.Listen(cfg.Addr()); err != nil {
