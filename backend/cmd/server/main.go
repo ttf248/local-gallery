@@ -86,10 +86,22 @@ func main() {
 
 	// ---- 路由 ----
 	scanner := services.NewScanner()
+	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
+		CacheDir:   cfg.CacheDir,
+		Width:      cfg.ThumbSizeW,
+		Height:     cfg.ThumbSizeH,
+		MaxAgeDays: cfg.CacheMaxAgeDays,
+	})
+	if err != nil {
+		log.Fatalf("初始化缩略图服务失败: %v", err)
+	}
 
 	api := app.Group("/api")
 	api.Get("/health", handlers.HealthHandler(cfg))
 	api.Post("/scan", handlers.ScanHandler(scanner, cfg.ComicRoot))
+	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
+	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
+	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
 
 	// ---- 启动 ----
 	if err := app.Listen(cfg.Addr()); err != nil {
