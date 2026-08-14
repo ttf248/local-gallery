@@ -85,6 +85,7 @@ func main() {
 
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())
+	app.Use(middleware.PathSafetyMiddleware(cfg.ComicRoot))
 
 	// ---- 路由 ----
 	scanner := services.NewScanner()
@@ -112,6 +113,7 @@ func main() {
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
+	api.Get("/fs/open", handlers.FsOpenHandler(cfg))
 
 	// 偏好 / 收藏 / 历史
 	api.Get("/prefs", handlers.PrefsGetHandler(prefs))
