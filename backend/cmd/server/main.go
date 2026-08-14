@@ -95,10 +95,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化缩略图服务失败: %v", err)
 	}
+	runner := services.NewAsyncScanRunner()
 
 	api := app.Group("/api")
 	api.Get("/health", handlers.HealthHandler(cfg))
 	api.Post("/scan", handlers.ScanHandler(scanner, cfg.ComicRoot))
+	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, cfg.ComicRoot))
+	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
+	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
+	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))

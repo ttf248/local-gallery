@@ -20,6 +20,21 @@ type ScanOptions struct {
 	MaxDepth int    // 集合（collection）最大递归深度，0 或负数视为 1
 }
 
+// ScanProgress 扫描进度回调参数。
+//
+// 由 Scanner 在扫描过程中多次调用，提供给 AsyncScanRunner 转换为 SSE 事件。
+type ScanProgress struct {
+	Phase        string         // "scanning" / "smart-grouping"
+	CurrentPath  string         // 当前处理的目录/文件
+	Processed    int            // 已处理的子目录数
+	Total        int            // 总子目录数（用于计算百分比）
+	AlbumsFound  int            // 累计发现的相册数
+	NewAlbums    []models.Album // 本轮新发现的相册
+}
+
+// ScanHook 进度回调函数。
+type ScanHook func(p ScanProgress)
+
 // ScanErrorKind 扫描过程中可恢复的错误类型。
 type ScanErrorKind int
 
@@ -65,6 +80,12 @@ func NewScanner() *Scanner {
 
 // Scan 执行同步扫描。返回完整结果树。
 func (s *Scanner) Scan(opts ScanOptions) (*models.ScanResult, error) {
+	return s.ScanWithHook(opts, nil)
+}
+
+// ScanWithHook 与 Scan 相同，但额外接受一个进度回调。
+// hook 可以为 nil，此时等同于 Scan。
+func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanResult, error) {
 	root := opts.Root
 	if root == "" {
 		return nil, errors.New("root is empty")
@@ -91,9 +112,26 @@ func (s *Scanner) Scan(opts ScanOptions) (*models.ScanResult, error) {
 	}
 
 	start := time.Now()
-	topAlbums, topCollections := s.scanLayer(absRoot, absRoot, depth, 0)
+
+	// 预计算顶层子目录总数用于进度展示（不阻塞大目录）
+	topEntries, _ := os.ReadDir(absRoot)
+	var topSubdirs []string
+	for _, e := range topEntries {
+		if e.IsDir() {
+			topSubdirs = append(topSubdirs, e.Name())
+		}
+	}
+
+	topAlbums, topCollections := s.scanLayerWithHook(absRoot, absRoot, depth, 0, hook,
+		len(topSubdirs), 0)
 
 	allAlbums := flattenAlbums(topAlbums, topCollections)
+	if hook != nil {
+		hook(ScanProgress{
+			Phase:       "smart-grouping",
+			AlbumsFound: len(allAlbums),
+		})
+	}
 	smart := GroupByAuthor(allAlbums)
 
 	result := &models.ScanResult{
@@ -109,16 +147,26 @@ func (s *Scanner) Scan(opts ScanOptions) (*models.ScanResult, error) {
 	return result, nil
 }
 
-// scanLayer 扫描单层目录。
+// scanLayer 扫描单层目录（无进度回调）。
+func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int) ([]models.Album, []models.Collection) {
+	return s.scanLayerWithHook(basePath, currentPath, maxDepth, curDepth, nil, 0, 0)
+}
+
+// scanLayerWithHook 扫描单层目录，支持进度回调。
 //
 //   - basePath：用于路径安全校验的根
 //   - currentPath：当前扫描的目录
 //   - maxDepth：集合最大允许深度
 //   - curDepth：当前深度（从 0 开始）
-//
-// 返回当前层的相册（直接在当前目录含图片的子文件夹）和子集合
-// （仅含子相册的子文件夹）。
-func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int) ([]models.Album, []models.Collection) {
+//   - hook：进度回调（可为 nil）
+//   - total：当前层总目录数（用于百分比）
+//   - processedOffset：已处理的目录数（递归累计）
+func (s *Scanner) scanLayerWithHook(
+	basePath, currentPath string,
+	maxDepth, curDepth int,
+	hook ScanHook,
+	total, processedOffset int,
+) ([]models.Album, []models.Collection) {
 	entries, err := os.ReadDir(currentPath)
 	if err != nil {
 		return nil, nil
@@ -132,19 +180,20 @@ func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int
 		}
 	}
 
-	type job struct {
-		path  string
-		isAlb bool
-	}
 	type result struct {
-		album     *models.Album
-		coll      *models.Collection
-		isAlbum   bool
+		album   *models.Album
+		coll    *models.Collection
+		isAlbum bool
 	}
 
 	jobs := make(chan string, len(subdirs))
 	results := make(chan result, len(subdirs))
 	var wg sync.WaitGroup
+
+	// 计数器：已处理子目录数
+	var processedCount int
+	var countMu sync.Mutex
+	albumsFound := 0
 
 	for i := 0; i < s.workers; i++ {
 		wg.Add(1)
@@ -157,7 +206,29 @@ func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int
 				} else if co != nil {
 					results <- result{coll: co}
 				} else {
-					results <- result{} // 空目录或隐藏
+					results <- result{}
+				}
+
+				// 更新计数 + 回调
+				countMu.Lock()
+				processedCount++
+				if al != nil {
+					albumsFound++
+				}
+				processed := processedOffset + processedCount
+				currentPath := p
+				hookAlbumsFound := albumsFound
+				countMu.Unlock()
+
+				if hook != nil {
+					hook(ScanProgress{
+						Phase:        "scanning",
+						CurrentPath:  currentPath,
+						Processed:    processed,
+						Total:        total,
+						AlbumsFound:  hookAlbumsFound,
+						NewAlbums:    nil,
+					})
 				}
 			}
 		}()
