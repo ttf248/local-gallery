@@ -1,0 +1,32 @@
+/* 主题色 token。T9/T13 完善。
+   浅色为默认；[data-theme="dark"] 切换为深色。 */
+:root,
+:root[data-theme='light'] {
+  --bg: #ffffff;
+  --bg-elevated: #f7f7f8;
+  --bg-subtle: #eef0f3;
+  --fg: #1f2328;
+  --fg-muted: #57606a;
+  --fg-subtle: #8b949e;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --border: #e5e7eb;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --warning: #d97706;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0d1117;
+  --bg-elevated: #161b22;
+  --bg-subtle: #21262d;
+  --fg: #e6edf3;
+  --fg-muted: #8b949e;
+  --fg-subtle: #6e7681;
+  --accent: #58a6ff;
+  --accent-hover: #79b8ff;
+  --border: #30363d;
+  --danger: #f85149;
+  --success: #3fb950;
+  --warning: #d29922;
+}
