@@ -1,4 +1,4 @@
-main:
+"**":
   push:
     - imports:
         - https://cnb.cool/ttf248/tokens/-/blob/main/env.yml
@@ -10,7 +10,9 @@ main:
             auth_type: https
             username: ${GIT_USERNAME}
             password: ${GIT_ACCESS_TOKEN}
-  
+            branch: ${CNB_BRANCH}
+            force: true
+
   web_trigger_sync:
     - imports:
         - https://cnb.cool/ttf248/tokens/-/blob/main/env.yml
@@ -22,3 +24,5 @@ main:
             auth_type: https
             username: ${GIT_USERNAME}
             password: ${GIT_ACCESS_TOKEN}
+            branch: ${CNB_BRANCH}
+            force: true
