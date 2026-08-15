@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SHORTCUTS } from '../../utils/shortcuts'
-import { CloseIcon, SearchIcon } from './Icon'
+import { CloseIcon, SearchIcon, KeyboardIcon } from './Icon'
 
 interface Props {
   open: boolean
@@ -8,8 +8,14 @@ interface Props {
 }
 
 const groups: { title: string; ids: string[] }[] = [
-  { title: '全局', ids: ['open', 'scan', 'refresh', 'home', 'recents', 'favorites', 'settings', 'help'] },
-  { title: '查看器', ids: ['next', 'prev', 'first', 'last', 'zoomIn', 'zoomOut', 'zoomReset', 'rotate', 'fullscreen', 'slideshow', 'info'] },
+  {
+    title: '全局',
+    ids: ['open', 'scan', 'shuffle', 'search', 'refresh', 'home', 'recents', 'favorites', 'settings', 'help'],
+  },
+  {
+    title: '查看器',
+    ids: ['next', 'prev', 'first', 'last', 'zoomIn', 'zoomOut', 'zoomReset', 'rotate', 'fullscreen', 'slideshow', 'info'],
+  },
 ]
 
 // 帮助浮层：可搜索的快捷键列表 + 分类。
@@ -45,37 +51,49 @@ export default function HelpOverlay({ open, onClose }: Props) {
   }
 
   const filteredGroups = groups
-    .map((g) => ({ ...g, items: g.ids.map((id) => byId.get(id)).filter((s): s is NonNullable<typeof s> => !!s && matches(s)) }))
+    .map((g) => ({
+      ...g,
+      items: g.ids
+        .map((id) => byId.get(id))
+        .filter((s): s is NonNullable<typeof s> => !!s && matches(s)),
+    }))
     .filter((g) => g.items.length > 0)
 
   const total = filteredGroups.reduce((s, g) => s + g.items.length, 0)
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm fade-in"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className="bg-bg-elevated text-fg rounded-lg shadow-lg border border-border-faint w-[680px] max-w-[94vw] max-h-[80vh] overflow-hidden flex flex-col"
+        className="bg-bg-elevated text-fg rounded-xl shadow-lg border border-border-faint w-[680px] max-w-[94vw] max-h-[80vh] overflow-hidden flex flex-col scale-fade"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between px-5 h-12 border-b border-border-faint">
-          <div>
-            <h2 className="font-display text-sm font-medium">快捷键</h2>
-            <p className="text-[11px] text-fg-subtle mt-0.5">按 Esc 关闭</p>
+        <header className="flex items-center justify-between px-6 h-14 border-b border-border-faint">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-md bg-accent-soft flex items-center justify-center text-accent">
+              <KeyboardIcon size={14} />
+            </div>
+            <div>
+              <h2 className="font-display text-sm font-medium">快捷键</h2>
+              <p className="text-[11px] text-fg-subtle mt-0.5">
+                按 <kbd className="font-mono px-1 py-0.5 rounded border border-border-faint">?</kbd> 随时唤起
+              </p>
+            </div>
           </div>
           <button
             onClick={onClose}
-            className="text-fg-muted hover:text-fg p-1 rounded hover:bg-bg-subtle transition-colors"
+            className="text-fg-muted hover:text-fg p-1.5 rounded hover:bg-bg-subtle transition-colors"
             aria-label="关闭"
           >
             <CloseIcon size={14} />
           </button>
         </header>
 
-        <div className="px-5 py-3 border-b border-border-faint">
+        <div className="px-6 py-3 border-b border-border-faint">
           <div className="flex items-center gap-2 bg-bg-subtle rounded-md px-3 h-9 focus-within:bg-bg-elevated focus-within:border focus-within:border-border transition-colors">
             <SearchIcon size={13} className="text-fg-subtle shrink-0" />
             <input
@@ -96,22 +114,25 @@ export default function HelpOverlay({ open, onClose }: Props) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-5 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 scroll-thin">
+        <div className="flex-1 overflow-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6 scroll-thin">
           {total === 0 && (
-            <div className="col-span-2 text-center text-fg-muted text-sm py-10">
+            <div className="col-span-2 text-center text-fg-muted text-sm py-12">
               没有匹配「{q}」的快捷键
             </div>
           )}
           {filteredGroups.map((g) => (
             <div key={g.title}>
-              <h3 className="text-[10px] font-medium text-fg-subtle uppercase tracking-[0.14em] mb-2">
+              <h3 className="text-[10px] font-medium text-fg-subtle uppercase tracking-[0.18em] mb-3">
                 {g.title}
               </h3>
-              <ul className="space-y-1.5">
+              <ul className="space-y-1">
                 {g.items.map((s) => (
-                  <li key={s.id} className="flex items-center justify-between text-[13px] py-1">
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between text-[13px] py-1.5"
+                  >
                     <span className="text-fg-muted">{s.description}</span>
-                    <kbd className="text-[11px] font-mono px-2 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
+                    <kbd className="text-[11px] font-mono px-2 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted shrink-0 ml-3">
                       {s.label}
                     </kbd>
                   </li>

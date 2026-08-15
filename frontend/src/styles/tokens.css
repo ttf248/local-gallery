@@ -1,28 +1,30 @@
 /* 主题 token。
    设计原则：
    - 极简的近黑/近白中性色，避免纯白/纯黑的视觉刺激
-   - 一种克制的强调色（墨蓝），仅用于主操作与高亮
+   - 强调色支持用户切换（5 套），与中性色搭配都很克制
    - 字体节奏更紧、行高更舒展、留白更多
    - 圆角与阴影都更克制 */
 
+/* === Light (default) === */
 :root,
 :root[data-theme='light'] {
   /* Surface — 略带温度的中性灰 */
-  --bg: #f7f6f4;
-  --bg-elevated: #ffffff;
-  --bg-subtle: #efece8;
-  --bg-strong: #e3e0db;
+  --bg: #f5f4f1;
+  --bg-elevated: #fdfcfa;
+  --bg-subtle: #ebe9e4;
+  --bg-strong: #dedbd4;
 
   /* Foreground — 接近石墨而非纯黑 */
   --fg: #1a1c1f;
   --fg-muted: #5d6470;
   --fg-subtle: #8b9099;
 
-  /* Accent — 沉稳的墨蓝，主操作只在这里出现一次 */
+  /* Accent — 默认墨蓝；通过 [data-accent] 覆盖 */
   --accent: #1f2937;
   --accent-hover: #0f172a;
   --accent-soft: #eef0f3;
   --accent-fg: #ffffff;
+  --accent-contrast: #ffffff;
 
   /* Semantic */
   --danger: #b04a3e;
@@ -30,15 +32,15 @@
   --warning: #b48026;
 
   /* Borders — 极细，低对比 */
-  --border: #e7e5e0;
-  --border-strong: #d4d1ca;
-  --border-faint: #efedea;
+  --border: #e2dfd9;
+  --border-strong: #cecbc4;
+  --border-faint: #ebe9e4;
 
   /* Geometry — 圆角更小、更克制 */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius-xl: 16px;
   --shadow-xs: 0 1px 1px rgba(20, 22, 25, 0.03);
   --shadow-sm: 0 1px 2px rgba(20, 22, 25, 0.04);
   --shadow-md: 0 6px 18px rgba(20, 22, 25, 0.08);
@@ -51,7 +53,7 @@
   --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
 
-  /* Spacing — 增加更多档位，保留与原来 1–6 的对应 */
+  /* Spacing */
   --space-0: 0;
   --space-1: 4px;
   --space-2: 8px;
@@ -69,39 +71,118 @@
   /* Motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --dur-fast: 100ms;
-  --dur: 180ms;
-  --dur-slow: 280ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
 }
 
+/* === Dark === */
 :root[data-theme='dark'] {
   /* Surface — 深炭而非纯黑，减少刺激 */
-  --bg: #111315;
-  --bg-elevated: #181a1d;
-  --bg-subtle: #1f2226;
-  --bg-strong: #272a2f;
+  --bg: #0e1012;
+  --bg-elevated: #16181b;
+  --bg-subtle: #1c1f23;
+  --bg-strong: #25282d;
 
   /* Foreground */
   --fg: #ececec;
   --fg-muted: #9aa1a9;
   --fg-subtle: #6b7079;
 
-  /* Accent — 暗色下走暖灰白 */
+  /* Accent — 暗色下默认走暖灰白 */
   --accent: #f3f1ee;
   --accent-hover: #ffffff;
   --accent-soft: #1f2226;
   --accent-fg: #111315;
+  --accent-contrast: #111315;
 
   --danger: #e0877b;
   --success: #6cc987;
   --warning: #e3b341;
 
-  --border: #25272b;
-  --border-strong: #34373c;
-  --border-faint: #1c1e21;
+  --border: #232529;
+  --border-strong: #2e3137;
+  --border-faint: #1a1c1f;
 
   --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 24px 50px rgba(0, 0, 0, 0.55);
+}
+
+/* === Accent color swatches (light) === */
+:root[data-accent='graphite'] {
+  --accent: #1f2937;
+  --accent-hover: #0f172a;
+  --accent-soft: #eef0f3;
+  --accent-contrast: #ffffff;
+}
+:root[data-accent='indigo'] {
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef2ff;
+  --accent-contrast: #ffffff;
+}
+:root[data-accent='rose'] {
+  --accent: #be3a4b;
+  --accent-hover: #a52e3e;
+  --accent-soft: #fbeaec;
+  --accent-contrast: #ffffff;
+}
+:root[data-accent='forest'] {
+  --accent: #2f6f4e;
+  --accent-hover: #245a3f;
+  --accent-soft: #e6f0ea;
+  --accent-contrast: #ffffff;
+}
+:root[data-accent='ochre'] {
+  --accent: #a86d20;
+  --accent-hover: #8a5a18;
+  --accent-soft: #f6ecdb;
+  --accent-contrast: #ffffff;
+}
+:root[data-accent='plum'] {
+  --accent: #6f3da0;
+  --accent-hover: #5d3288;
+  --accent-soft: #f0e7f7;
+  --accent-contrast: #ffffff;
+}
+
+/* === Accent color swatches (dark) === */
+:root[data-theme='dark'][data-accent='graphite'] {
+  --accent: #f3f1ee;
+  --accent-hover: #ffffff;
+  --accent-soft: #1f2226;
+  --accent-contrast: #111315;
+}
+:root[data-theme='dark'][data-accent='indigo'] {
+  --accent: #a5b4fc;
+  --accent-hover: #c7d2fe;
+  --accent-soft: #1e1b4b;
+  --accent-contrast: #0c0a1d;
+}
+:root[data-theme='dark'][data-accent='rose'] {
+  --accent: #f4a3ad;
+  --accent-hover: #fbc0c7;
+  --accent-soft: #3b1a20;
+  --accent-contrast: #1d0b0e;
+}
+:root[data-theme='dark'][data-accent='forest'] {
+  --accent: #88c9a3;
+  --accent-hover: #aedcbf;
+  --accent-soft: #142a1d;
+  --accent-contrast: #08120c;
+}
+:root[data-theme='dark'][data-accent='ochre'] {
+  --accent: #e3b577;
+  --accent-hover: #efc998;
+  --accent-soft: #2c2113;
+  --accent-contrast: #15100a;
+}
+:root[data-theme='dark'][data-accent='plum'] {
+  --accent: #c4a5e8;
+  --accent-hover: #d6bdf0;
+  --accent-soft: #251a35;
+  --accent-contrast: #11091a;
 }

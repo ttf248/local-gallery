@@ -17,6 +17,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -132,28 +133,32 @@ func main() {
 	// ---- 静态资源托管（生产模式：同端口托管前端） ----
 	if staticDir != "" {
 		if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
-			app.Static("/", staticDir)
-			// SPA fallback：任何非 /api/* 的请求 → 找不到静态文件就回 index.html
-			// 使用 app.Use 的 NotFound-style 行为：放到 Static 之后，未命中时接管
 			indexPath, _ := filepath.Abs(filepath.Join(staticDir, "index.html"))
+			// SPA fallback：先注册通配兜底（只对 GET/HEAD，且非 /api/，且静态文件不存在）
+			// 放到 Static 之前，避免 Static 内部对 404 也保留 200 状态码导致误判
 			app.Use(func(c *fiber.Ctx) error {
-				// 只处理 GET/HEAD
 				if c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead {
 					return c.Next()
 				}
-				// API 路由不接管
 				p := c.Path()
 				if len(p) >= 5 && p[:5] == "/api/" {
 					return c.Next()
 				}
-				// 已经在响应中写过（Static 命中文件）
-				if c.Response().StatusCode() == fiber.StatusOK {
-					return nil
+				// 已经是 index.html 或根路径：交给 Static
+				rel := strings.TrimPrefix(p, "/")
+				if rel == "" {
+					return c.Next()
 				}
-				// 回退到 SPA index.html
+				// 静态文件实际存在则交给 Static
+				filePath := filepath.Join(staticDir, filepath.FromSlash(rel))
+				if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
+					return c.Next()
+				}
+				// 否则回退到 SPA index.html
 				c.Set("Content-Type", "text/html; charset=utf-8")
 				return c.SendFile(indexPath)
 			})
+			app.Static("/", staticDir)
 			log.Printf("  StaticDir: %s (已托管前端 + SPA fallback)", staticDir)
 		} else {
 			log.Printf("  StaticDir: %s 不存在或不是目录，跳过静态托管", staticDir)

@@ -1,14 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { prefsApi, favoritesApi, historyApi } from '../api/prefs'
 import ThemeSwitcher from '../components/common/ThemeSwitcher'
-import { useUIStore } from '../store/uiStore'
+import { useUIStore, type AccentKey } from '../store/uiStore'
 import { useLibraryStore } from '../store/libraryStore'
+import { ACCENT_SWATCHES } from '../hooks/useTheme'
+import { useTheme } from '../hooks/useTheme'
 import {
   RefreshIcon,
   TrashIcon,
   LibraryIcon,
   SunIcon,
   KeyboardIcon,
+  InfoIcon,
+  CheckIcon,
 } from '../components/common/Icon'
 
 export default function Settings() {
@@ -18,10 +22,13 @@ export default function Settings() {
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
   const viewMode = useUIStore((s) => s.viewMode)
   const setViewMode = useUIStore((s) => s.setViewMode)
+  const accent = useUIStore((s) => s.accent)
+  const setAccent = useUIStore((s) => s.setAccent)
   const pushToast = useUIStore((s) => s.pushToast)
   const lastScanAt = useLibraryStore((s) => s.lastScanAt)
   const result = useLibraryStore((s) => s.result)
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
+  useTheme()
 
   const patchPrefs = useMutation({
     mutationFn: (p: Partial<Parameters<typeof prefsApi.patch>[0]>) => prefsApi.patch(p),
@@ -50,12 +57,35 @@ export default function Settings() {
 
   return (
     <div className="px-6 lg:px-10 py-10 max-w-3xl">
-      <h1 className="font-display text-3xl font-semibold tracking-tight mb-1">设置</h1>
-      <p className="text-sm text-fg-muted mb-10">个性化你的阅读体验</p>
+      <h1 className="font-display text-[32px] font-semibold tracking-[-0.02em]">设置</h1>
+      <p className="text-sm text-fg-muted mt-2 mb-10">个性化你的阅读体验</p>
 
       <Section title="外观" icon={<SunIcon size={13} />}>
         <Row label="主题">
           <ThemeSwitcher />
+        </Row>
+        <Row label="强调色">
+          <div className="flex items-center gap-2">
+            {ACCENT_SWATCHES.map((s) => {
+              const active = accent === s.id
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => setAccent(s.id as AccentKey)}
+                  className="relative w-7 h-7 rounded-full transition-transform hover:scale-110 focus:outline-none"
+                  style={{ background: s.light }}
+                  title={s.name}
+                  aria-label={s.name}
+                >
+                  {active && (
+                    <span className="absolute inset-0 ring-2 ring-fg ring-offset-2 ring-offset-bg-elevated rounded-full flex items-center justify-center">
+                      <CheckIcon size={12} className="text-fg" />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
         </Row>
         <Row label="侧边栏">
           <button
@@ -143,14 +173,18 @@ export default function Settings() {
         </Row>
       </Section>
 
-      <Section title="关于" icon={<KeyboardIcon size={13} />}>
+      <Section title="关于" icon={<InfoIcon size={13} />}>
         <div className="text-sm text-fg-muted leading-relaxed">
           <div className="font-display text-base text-fg">Manga · 漫画阅读器</div>
-          <div className="mt-1">Web 版 · v0.2.0</div>
+          <div className="mt-1">Web 版 · v0.3.0</div>
           <div className="mt-4 text-xs text-fg-subtle flex items-center gap-2">
             <span>按</span>
             <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle">?</kbd>
             <span>查看所有快捷键</span>
+          </div>
+          <div className="mt-3 text-xs text-fg-subtle flex items-center gap-2">
+            <KeyboardIcon size={12} />
+            <span>所有偏好（主题、强调色、视图、收藏）均存于本机</span>
           </div>
         </div>
       </Section>
@@ -171,7 +205,7 @@ function Section({
     <section className="mb-10">
       <div className="flex items-center gap-2 mb-3">
         {icon && <span className="text-fg-muted">{icon}</span>}
-        <h2 className="text-[11px] uppercase tracking-[0.14em] text-fg-muted font-medium">
+        <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
           {title}
         </h2>
       </div>

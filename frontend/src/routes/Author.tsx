@@ -1,0 +1,254 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useLibraryStore } from '../store/libraryStore'
+import { useSearchStore } from '../store/searchStore'
+import { useUIStore } from '../store/uiStore'
+import { useFavorites } from '../hooks/useFavorites'
+import { useAllProgress } from '../hooks/useReadingProgress'
+import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
+import EmptyState from '../components/common/EmptyState'
+import { ChevronLeftIcon, StarIcon, ReaderIcon, ClockIcon, FolderIcon } from '../components/common/Icon'
+import { albumRoute } from '../utils/path'
+
+interface AlbumSummary {
+  path: string
+  name: string
+  author?: string
+  coverImage: string
+  imageCount: number
+  modTime?: string
+}
+
+// 作者页：展示一位作者的全部作品，支持排序、阅读进度、收藏
+export default function Author() {
+  const params = useParams()
+  const navigate = useNavigate()
+  // react-router v6 已经对 pathname 做过一次解码；这里如果再 decode 会引发双重解码错误
+  const raw = params['*'] ?? params['author'] ?? ''
+  const author = raw ? safeDecode(raw) : ''
+
+  const result = useLibraryStore((s) => s.result)
+  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
+  const query = useSearchStore((s) => s.query)
+  const sortBy = useSearchStore((s) => s.sortBy)
+  const viewMode = useUIStore((s) => s.viewMode)
+  const { favorites, toggle } = useFavorites()
+  const pushToast = useUIStore((s) => s.pushToast)
+
+  const [coverIdx, setCoverIdx] = useState(0)
+
+  useEffect(() => {
+    if (!result) loadFromBackend()
+  }, [result, loadFromBackend])
+
+  const albums = useMemo<AlbumSummary[]>(() => {
+    if (!result) return []
+    return result.albums
+      .filter((a) => a.author === author)
+      .map((a) => ({
+        path: a.path,
+        name: a.name,
+        author: a.author,
+        coverImage: a.coverImage,
+        imageCount: a.imageCount,
+        modTime: a.modTime,
+      }))
+  }, [result, author])
+
+  const totalPages = useMemo(
+    () => albums.reduce((s, a) => s + a.imageCount, 0),
+    [albums],
+  )
+
+  const progressPaths = useMemo(() => albums.map((a) => a.path), [albums])
+  const { data: progressMap } = useAllProgress(progressPaths)
+  const readCount = useMemo(() => {
+    if (!progressMap) return 0
+    return progressPaths.filter((p) => (progressMap[p]?.index ?? 0) > 0).length
+  }, [progressMap, progressPaths])
+
+  const recentDate = useMemo(() => {
+    const dates = albums.map((a) => a.modTime).filter(Boolean) as string[]
+    if (dates.length === 0) return null
+    return dates.sort().reverse()[0]
+  }, [albums])
+
+  const filtered = useMemo(() => {
+    let list = albums
+    if (query) {
+      const q = query.toLowerCase()
+      list = list.filter((a) => a.name.toLowerCase().includes(q))
+    }
+    switch (sortBy) {
+      case 'count':
+        return [...list].sort((a, b) => b.imageCount - a.imageCount)
+      case 'recent':
+        return [...list].sort(
+          (a, b) => +new Date(b.modTime ?? '') - +new Date(a.modTime ?? ''),
+        )
+      default:
+        return [...list].sort((a, b) => a.name.localeCompare(b.name))
+    }
+  }, [albums, query, sortBy])
+
+  const cards: CardData[] = filtered.map((a) => ({
+    id: 'a:' + a.path,
+    variant: 'album',
+    title: a.name,
+    subtitle: a.author,
+    count: a.imageCount,
+    coverPath: a.coverImage,
+    to: albumRoute(a.path),
+    progress: progressMap?.[a.path]
+      ? { index: progressMap[a.path].index, total: progressMap[a.path].total }
+      : undefined,
+  }))
+
+  // 头图：随机从 6 张里挑（每隔 4s 切一张，类似走马灯）
+  useEffect(() => {
+    if (albums.length <= 1) return
+    const id = setInterval(
+      () => setCoverIdx((i) => (i + 1) % Math.min(albums.length, 6)),
+      5000,
+    )
+    return () => clearInterval(id)
+  }, [albums.length])
+
+  const cover = albums.length > 0 ? albums[coverIdx % albums.length] : null
+  const isFav = favorites.includes(`smart:${author}`)
+
+  if (!result) {
+    return (
+      <div className="p-6">
+        <EmptyState title="尚未加载漫画库" description="回到主页点击「扫描」加载漫画库。" />
+      </div>
+    )
+  }
+
+  if (albums.length === 0) {
+    return (
+      <div className="min-h-full">
+        <div className="px-6 lg:px-10 pt-8 pb-5">
+          <button
+            onClick={() => navigate(-1)}
+            className="inline-flex items-center gap-1 text-xs text-fg-subtle hover:text-fg mb-4 transition-colors"
+          >
+            <ChevronLeftIcon size={12} />
+            <span>返回</span>
+          </button>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">作者：{author}</h1>
+        </div>
+        <EmptyState
+          title="未找到该作者"
+          description="可能未扫描或作者名拼写有差异。"
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-full">
+      {/* Hero — 头图 + 概览 */}
+      <section className="relative">
+        <div className="relative h-56 lg:h-72 overflow-hidden bg-bg-elevated">
+          {cover && (
+            <img
+              key={cover.path}
+              src={cover.coverImage.startsWith('http') ? cover.coverImage : `/api/thumbs?path=${encodeURIComponent(cover.coverImage)}`}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover scale-fade"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/40 to-transparent" />
+        </div>
+
+        <div className="max-w-[1400px] mx-auto px-6 lg:px-10 -mt-20 relative z-10">
+          <div className="flex items-end gap-6 flex-wrap">
+            <div className="min-w-0">
+              <div className="text-[11px] uppercase tracking-[0.18em] text-fg-subtle font-medium mb-2">
+                作者 · Author
+              </div>
+              <h1 className="font-display text-[36px] lg:text-[44px] leading-[1.05] font-semibold tracking-[-0.02em] text-fg">
+                {author}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <button
+                onClick={() =>
+                  toggle(`smart:${author}`).then(() => {
+                    pushToast({
+                      kind: 'success',
+                      message: isFav ? '已取消收藏' : '已加入收藏',
+                    })
+                  })
+                }
+                className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md text-sm transition-colors ${
+                  isFav
+                    ? 'bg-warning/10 text-warning hover:bg-warning/15'
+                    : 'bg-bg-elevated border border-border hover:bg-bg-subtle'
+                }`}
+              >
+                <StarIcon size={13} filled={isFav} />
+                <span>{isFav ? '已收藏' : '收藏作者'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 数据条 */}
+          <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3 max-w-2xl">
+            <Stat icon={<FolderIcon size={13} />} label="作品数" value={albums.length} />
+            <Stat icon={<ReaderIcon size={13} />} label="总页数" value={totalPages} />
+            <Stat icon={<ClockIcon size={13} />} label="已读" value={`${readCount}/${albums.length}`} />
+            <Stat
+              icon={<StarIcon size={13} />}
+              label="最近更新"
+              value={recentDate ? new Date(recentDate).toLocaleDateString('zh-CN') : '—'}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 作品列表 */}
+      <section className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-10 pb-10">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+          <h2 className="font-display text-lg font-semibold">作品</h2>
+          <span className="text-xs text-fg-subtle tabular-nums">{filtered.length} 本</span>
+        </div>
+        {filtered.length === 0 ? (
+          <EmptyState title="没有匹配的作品" description="试试修改搜索或排序条件。" />
+        ) : (
+          <AlbumGrid items={cards} variant={viewMode} />
+        )}
+      </section>
+    </div>
+  )
+}
+
+function safeDecode(s: string): string {
+  try {
+    // 已解码的可能再 decode 一次会失败，因此用 try/catch 兜底
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: number | string
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.16em] text-fg-subtle">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="text-lg font-display font-semibold mt-1 tabular-nums">{value}</div>
+    </div>
+  )
+}

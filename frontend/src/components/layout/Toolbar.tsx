@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { scanApi } from '../../api/scan'
@@ -13,11 +13,14 @@ import { ScanIcon, ChevronDownIcon, GridIcon, ListIcon, HelpIcon } from '../comm
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: 'name', label: '按名称' },
   { value: 'count', label: '按张数' },
-  { value: 'recent', label: '按修改时间' },
+  { value: 'recent', label: '按最近' },
 ]
 
-// 顶部工具栏：左侧标题区、中间搜索、右侧操作。
-// 设计：克制的元素，仅在必要时显示。搜索栏与标题共存。
+// 顶部工具栏：
+// 左侧：精简的"Manga / 当前页" 字标
+// 中部：全局搜索（最常用，放大）
+// 右侧：操作组（按密度递进），用细分割线分组
+// 目标：极简但不缺功能；信息密度比之前略低
 export default function Toolbar() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -68,16 +71,27 @@ export default function Toolbar() {
   }, [sse.isComplete, sse.scanId, setResult, pushToast])
 
   return (
-    <header className="h-14 flex items-center gap-3 px-4 lg:px-6 border-b border-border-faint bg-bg-elevated/60 backdrop-blur-sm">
-      {/* 标题（窄屏隐藏） */}
-      <div className="hidden lg:flex items-center gap-2 mr-1 min-w-[200px]">
-        <span className="text-sm text-fg-muted">Manga</span>
-        <span className="text-fg-subtle">/</span>
-        <span className="text-sm font-medium">{titleOf(location.pathname)}</span>
+    <header className="h-14 flex items-center gap-4 px-5 lg:px-7 border-b border-border-faint bg-bg-elevated/50 backdrop-blur-sm">
+      {/* 左侧：极简字标（窄屏隐藏） */}
+      <div className="hidden lg:flex items-center gap-2 min-w-0">
+        <span className="font-display text-sm text-fg-muted">Manga</span>
+        <span className="text-fg-subtle/50">/</span>
+        <span className="text-sm font-medium truncate">{titleOf(location.pathname)}</span>
+      </div>
+      {/* 窄屏：返回按钮 */}
+      <div className="lg:hidden">
+        {onViewer ? (
+          <button
+            onClick={() => navigate(-1)}
+            className="text-xs h-8 px-2.5 rounded-md text-fg-muted hover:bg-bg-subtle"
+          >
+            返回
+          </button>
+        ) : null}
       </div>
 
       {!onViewer && (
-        <div className="flex-1 max-w-xl">
+        <div className="flex-1 max-w-[560px]">
           <GlobalSearch />
         </div>
       )}
@@ -89,54 +103,46 @@ export default function Toolbar() {
           <>
             <SortMenu value={sortBy} onChange={setSortBy} />
             <div className="flex items-center border border-border-faint rounded-md overflow-hidden">
-              <button
+              <ViewButton
+                active={viewMode === 'grid'}
                 onClick={() => setViewMode('grid')}
-                className={`p-1.5 transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-bg-subtle text-fg'
-                    : 'text-fg-subtle hover:text-fg'
-                }`}
                 title="网格视图"
                 aria-label="网格视图"
               >
-                <GridIcon size={14} />
-              </button>
-              <button
+                <GridIcon size={13} />
+              </ViewButton>
+              <ViewButton
+                active={viewMode === 'list'}
                 onClick={() => setViewMode('list')}
-                className={`p-1.5 transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-bg-subtle text-fg'
-                    : 'text-fg-subtle hover:text-fg'
-                }`}
                 title="列表视图"
                 aria-label="列表视图"
               >
-                <ListIcon size={14} />
-              </button>
+                <ListIcon size={13} />
+              </ViewButton>
             </div>
-            <div className="w-px h-5 bg-border-faint mx-1" />
+            <Sep />
           </>
         )}
 
         {!onViewer && (
-          <button
-            onClick={() => loadFromBackend()}
-            className="text-xs px-2.5 h-8 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-            title="刷新缓存"
-          >
-            刷新
-          </button>
-        )}
-        {!onViewer && (
-          <button
-            onClick={() => startScan.mutate()}
-            disabled={startScan.isPending || sse.isRunning}
-            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs bg-accent text-accent-fg hover:bg-accent-hover transition-colors disabled:opacity-50"
-            title="扫描 (Ctrl+S)"
-          >
-            <ScanIcon size={12} />
-            <span>{sse.isRunning ? '扫描中' : '扫描'}</span>
-          </button>
+          <>
+            <button
+              onClick={() => loadFromBackend()}
+              className="text-xs h-8 px-2.5 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+              title="刷新缓存"
+            >
+              刷新
+            </button>
+            <button
+              onClick={() => startScan.mutate()}
+              disabled={startScan.isPending || sse.isRunning}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs bg-accent text-accent-contrast hover:bg-accent-hover transition-colors disabled:opacity-50"
+              title="扫描 (Ctrl+S)"
+            >
+              <ScanIcon size={11} />
+              <span>{sse.isRunning ? '扫描中' : '扫描'}</span>
+            </button>
+          </>
         )}
         {!onViewer && (
           <button
@@ -148,14 +154,7 @@ export default function Toolbar() {
             <HelpIcon size={14} />
           </button>
         )}
-        {onViewer && (
-          <button
-            onClick={() => navigate(-1)}
-            className="text-xs h-8 px-3 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-          >
-            返回
-          </button>
-        )}
+        <Sep />
         <ThemeSwitcher compact />
       </div>
     </header>
@@ -170,6 +169,37 @@ function titleOf(pathname: string): string {
   if (pathname.startsWith('/albums')) return '相册'
   if (pathname.startsWith('/viewer')) return '阅读'
   return '漫画'
+}
+
+function ViewButton({
+  active,
+  onClick,
+  title,
+  children,
+  ...rest
+}: {
+  active: boolean
+  onClick: () => void
+  title: string
+  children: React.ReactNode
+  'aria-label'?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={rest['aria-label']}
+      className={`inline-flex items-center justify-center w-7 h-8 transition-colors ${
+        active ? 'bg-bg-subtle text-fg' : 'text-fg-subtle hover:text-fg'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function Sep() {
+  return <div className="w-px h-5 bg-border-faint mx-1" />
 }
 
 function SortMenu({
@@ -209,7 +239,7 @@ function SortMenu({
         title="排序"
       >
         <span>{cur.label}</span>
-        <ChevronDownIcon size={12} />
+        <ChevronDownIcon size={11} />
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1.5 min-w-[140px] bg-bg-elevated border border-border rounded-md shadow-md py-1 z-40 fade-up">

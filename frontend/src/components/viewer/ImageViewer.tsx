@@ -6,8 +6,11 @@ interface Props {
   images: string[]
 }
 
-// 图片查看器：支持鼠标滚轮缩放、拖拽平移（缩放 > 1 时）。
-// 切换图片时重置 transform 与位置。
+// 图片查看器：
+// - 鼠标滚轮（按住 Ctrl）+ +/- 缩放
+// - 缩放 > 1 时可拖拽平移
+// - 切换图片时复位 transform，但保留缩放比例记忆
+// - 预加载前后各 2 张
 export default function ImageViewer({ images }: Props) {
   const index = useViewerStore((s) => s.index)
   const zoom = useViewerStore((s) => s.zoom)
@@ -15,6 +18,7 @@ export default function ImageViewer({ images }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [imgKey, setImgKey] = useState(0) // 强制重渲染动画
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
 
   const current = images[index]
@@ -25,9 +29,21 @@ export default function ImageViewer({ images }: Props) {
       containerRef.current.scrollTop = 0
       containerRef.current.scrollLeft = 0
     }
+    setImgKey((k) => k + 1)
   }, [index])
 
-  // 滚轮缩放（Ctrl + wheel 或者直接 wheel）
+  // 预加载前后 2 张
+  useEffect(() => {
+    const ranges = [index - 2, index - 1, index + 1, index + 2]
+    for (const i of ranges) {
+      const p = images[i]
+      if (!p) continue
+      const img = new Image()
+      img.src = imageUrl(p)
+    }
+  }, [index, images])
+
+  // 滚轮缩放（Ctrl + wheel）
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -74,6 +90,7 @@ export default function ImageViewer({ images }: Props) {
     >
       {current ? (
         <img
+          key={imgKey}
           ref={imgRef}
           src={imageUrl(current)}
           alt={`page ${index + 1}`}
@@ -81,17 +98,20 @@ export default function ImageViewer({ images }: Props) {
           onMouseDown={onMouseDown}
           onDoubleClick={() => {
             const store = useViewerStore.getState()
-            if (store.zoom > 1) store.zoomReset()
-            else store.setZoom(1.5)
-            setPan({ x: 0, y: 0 })
+            if (store.zoom > 1) {
+              store.zoomReset()
+              setPan({ x: 0, y: 0 })
+            } else {
+              store.setZoom(1.6)
+            }
           }}
-          className={`max-w-full max-h-full object-contain select-none ${
+          className={`max-w-full max-h-full object-contain select-none scale-fade ${
             zoom > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'
           }`}
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotate(${rotation}deg)`,
             transformOrigin: 'center',
-            transition: dragRef.current ? 'none' : 'transform 120ms var(--ease-out)',
+            transition: dragRef.current ? 'none' : 'transform 200ms var(--ease-out)',
           }}
         />
       ) : (

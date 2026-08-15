@@ -120,10 +120,13 @@ export default function Viewer() {
   useKeyboard({
     arrowleft: prev,
     arrowright: next,
+    pageup: prev,
+    pagedown: next,
     Home: () => setIndex(0),
     End: () => setIndex(images.length - 1),
     '+': () => useViewerStore.getState().zoomIn(),
     '-': () => useViewerStore.getState().zoomOut(),
+    '=': () => useViewerStore.getState().zoomIn(),
     '0': () => useViewerStore.getState().zoomReset(),
     r: () => useViewerStore.getState().rotate(90),
     F11: () => {

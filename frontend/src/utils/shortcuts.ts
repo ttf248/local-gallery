@@ -11,30 +11,34 @@ export interface Shortcut {
   description: string
   /** 触发条件：包含 ctrl/alt/shift 等修饰键 */
   combo: string
+  /** 所属分组（用于 HelpOverlay） */
+  group?: 'global' | 'viewer' | 'album'
 }
 
-// 全局快捷键（T9）
+// 全局快捷键
 export const SHORTCUTS: Shortcut[] = [
-  { id: 'open', label: 'Ctrl+O', description: '打开/切换漫画目录', combo: 'ctrl+o' },
-  { id: 'scan', label: 'Ctrl+S', description: '启动扫描', combo: 'ctrl+s' },
-  { id: 'refresh', label: 'F5', description: '刷新', combo: 'F5' },
-  { id: 'home', label: 'Ctrl+H', description: '回到主页', combo: 'ctrl+h' },
-  { id: 'recents', label: 'Ctrl+R', description: '最近访问', combo: 'ctrl+r' },
-  { id: 'favorites', label: 'Ctrl+D', description: '我的收藏', combo: 'ctrl+d' },
-  { id: 'settings', label: 'Ctrl+,', description: '设置', combo: 'ctrl+,' },
-  { id: 'help', label: 'Ctrl+/', description: '显示快捷键帮助', combo: 'ctrl+/' },
-  // 查看器（T11+）
-  { id: 'next', label: '→', description: '下一张', combo: 'arrowright' },
-  { id: 'prev', label: '←', description: '上一张', combo: 'arrowleft' },
-  { id: 'first', label: 'Home', description: '第一张', combo: 'Home' },
-  { id: 'last', label: 'End', description: '最后一张', combo: 'End' },
-  { id: 'zoomIn', label: '+', description: '放大', combo: '+' },
-  { id: 'zoomOut', label: '-', description: '缩小', combo: '-' },
-  { id: 'zoomReset', label: '0', description: '实际大小', combo: '0' },
-  { id: 'rotate', label: 'R', description: '旋转 90°', combo: 'r' },
-  { id: 'fullscreen', label: 'F11', description: '全屏', combo: 'F11' },
-  { id: 'slideshow', label: 'Space', description: '幻灯片播放/暂停', combo: 'space' },
-  { id: 'info', label: 'I', description: '图片信息', combo: 'i' },
+  { id: 'open', label: 'Ctrl+O', description: '打开/切换漫画目录', combo: 'ctrl+o', group: 'global' },
+  { id: 'scan', label: 'Ctrl+S', description: '启动扫描', combo: 'ctrl+s', group: 'global' },
+  { id: 'refresh', label: 'F5', description: '刷新', combo: 'F5', group: 'global' },
+  { id: 'home', label: 'Ctrl+H', description: '回到主页', combo: 'ctrl+h', group: 'global' },
+  { id: 'recents', label: 'Ctrl+R', description: '最近访问', combo: 'ctrl+r', group: 'global' },
+  { id: 'favorites', label: 'Ctrl+D', description: '我的收藏', combo: 'ctrl+d', group: 'global' },
+  { id: 'settings', label: 'Ctrl+,', description: '设置', combo: 'ctrl+', group: 'global' },
+  { id: 'search', label: '/', description: '聚焦搜索', combo: '/', group: 'global' },
+  { id: 'shuffle', label: 'R', description: '随机一本', combo: 'r', group: 'global' },
+  { id: 'help', label: '?', description: '显示快捷键帮助', combo: 'shift+/', group: 'global' },
+  // 查看器
+  { id: 'next', label: '→ / PageDown', description: '下一张', combo: 'arrowright', group: 'viewer' },
+  { id: 'prev', label: '← / PageUp', description: '上一张', combo: 'arrowleft', group: 'viewer' },
+  { id: 'first', label: 'Home', description: '第一张', combo: 'Home', group: 'viewer' },
+  { id: 'last', label: 'End', description: '最后一张', combo: 'End', group: 'viewer' },
+  { id: 'zoomIn', label: '+ / =', description: '放大', combo: '+', group: 'viewer' },
+  { id: 'zoomOut', label: '-', description: '缩小', combo: '-', group: 'viewer' },
+  { id: 'zoomReset', label: '0', description: '实际大小 / 重置', combo: '0', group: 'viewer' },
+  { id: 'rotate', label: 'R', description: '旋转 90°', combo: 'r', group: 'viewer' },
+  { id: 'fullscreen', label: 'F11', description: '全屏', combo: 'F11', group: 'viewer' },
+  { id: 'slideshow', label: 'Space', description: '幻灯片播放/暂停', combo: 'space', group: 'viewer' },
+  { id: 'info', label: 'I', description: '图片信息', combo: 'i', group: 'viewer' },
 ]
 
 // 规范化按键名为可比较字符串：ctrl+a / shift+arrowleft / F5 / space
@@ -43,7 +47,12 @@ export function normalizeKey(e: KeyboardEvent): string {
   if (e.ctrlKey || e.metaKey) parts.push('ctrl')
   if (e.shiftKey) parts.push('shift')
   if (e.altKey) parts.push('alt')
-  const k = e.key.toLowerCase()
+  let k = e.key.toLowerCase()
+  // 兼容：shift+/ 显示为 ?，将 ? 归一为 /
+  if (k === '?') k = '/'
+  // 空格归一为 'space'
+  if (k === ' ') k = 'space'
   parts.push(k)
   return parts.join('+')
 }
+

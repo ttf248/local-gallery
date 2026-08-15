@@ -87,7 +87,7 @@ body {
 @keyframes fadeUp {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -95,7 +95,7 @@ body {
   }
 }
 .fade-up {
-  animation: fadeUp 240ms var(--ease-out) both;
+  animation: fadeUp 320ms var(--ease-out) both;
 }
 
 @keyframes fadeIn {
@@ -107,7 +107,22 @@ body {
   }
 }
 .fade-in {
-  animation: fadeIn 180ms var(--ease-out) both;
+  animation: fadeIn 200ms var(--ease-out) both;
+}
+
+/* 缩放淡入（用于图片/查看器切换） */
+@keyframes scaleFade {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.scale-fade {
+  animation: scaleFade 240ms var(--ease-out) both;
 }
 
 /* 焦点环：去重一点 */
@@ -152,3 +167,11 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* 玻璃感面板：半透明 + 模糊 */
+.glass {
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+

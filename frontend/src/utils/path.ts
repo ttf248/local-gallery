@@ -17,3 +17,8 @@ export function albumRoute(absPath: string): string {
 export function smartRoute(author: string): string {
   return `/albums/${encodeURIComponent('smart:' + author)}`
 }
+
+// 作者独立页：/authors/<encoded author>
+export function authorRoute(author: string): string {
+  return `/authors/${encodeURIComponent(author)}`
+}

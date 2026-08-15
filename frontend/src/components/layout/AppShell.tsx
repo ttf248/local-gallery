@@ -1,8 +1,10 @@
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { useUIStore } from '../../store/uiStore'
 import { useKeyboard } from '../../hooks/useKeyboard'
 import { useTheme } from '../../hooks/useTheme'
+import { useLibraryStore } from '../../store/libraryStore'
+import { albumRoute } from '../../utils/path'
 import Sidebar from './Sidebar'
 import Toolbar from './Toolbar'
 import ToastViewport from '../common/Toast'
@@ -13,10 +15,14 @@ import HelpOverlay from '../common/HelpOverlay'
 export default function AppShell() {
   useTheme()
   const location = useLocation()
+  const navigate = useNavigate()
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const setBreadcrumbs = useUIStore((s) => s.setBreadcrumbs)
+  const pushToast = useUIStore((s) => s.pushToast)
+  const result = useLibraryStore((s) => s.result)
   const [helpOpen, setHelpOpen] = useState(false)
+  const onViewer = location.pathname.startsWith('/viewer')
 
   useEffect(() => {
     const titles: Record<string, string> = {
@@ -25,18 +31,37 @@ export default function AppShell() {
       '/favorites': '收藏',
       '/settings': '设置',
     }
-    const base = titles[location.pathname] ?? '相册'
+    const path = location.pathname
+    let base = titles[path]
+    if (base === undefined) {
+      if (path.startsWith('/authors/')) {
+        const raw = decodeURIComponent(path.slice('/authors/'.length))
+        base = raw || '作者'
+      } else if (path.startsWith('/albums')) {
+        base = '相册'
+      } else {
+        base = '相册'
+      }
+    }
     document.title = `${base} · Manga`
 
-    if (location.pathname === '/') setBreadcrumbs([])
-    else if (location.pathname.startsWith('/recents'))
+    if (path === '/') setBreadcrumbs([])
+    else if (path.startsWith('/recents'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '最近' }])
-    else if (location.pathname.startsWith('/favorites'))
+    else if (path.startsWith('/favorites'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '收藏' }])
-    else if (location.pathname.startsWith('/settings'))
+    else if (path.startsWith('/settings'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '设置' }])
-    else if (location.pathname.startsWith('/albums'))
+    else if (path.startsWith('/albums'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '相册' }])
+    else if (path.startsWith('/authors/')) {
+      const raw = decodeURIComponent(path.slice('/authors/'.length))
+      setBreadcrumbs([
+        { label: '主页', to: '/' },
+        { label: '作者', to: '/' },
+        { label: raw },
+      ])
+    }
   }, [location.pathname, setBreadcrumbs])
 
   useEffect(() => {
@@ -45,15 +70,31 @@ export default function AppShell() {
     return () => window.removeEventListener('comic:open-help', fn as EventListener)
   }, [])
 
+  const goShuffle = () => {
+    if (!result || result.albums.length === 0) {
+      pushToast({ kind: 'info', message: '尚未加载漫画库' })
+      return
+    }
+    const idx = Math.floor(Math.random() * result.albums.length)
+    const a = result.albums[idx]
+    navigate(albumRoute(a.path))
+  }
+
   useKeyboard({
     'ctrl+b': () => toggleSidebar(),
-    'ctrl+h': () => (window.location.href = '/'),
-    'ctrl+d': () => (window.location.href = '/favorites'),
-    'ctrl+,': () => (window.location.href = '/settings'),
+    'ctrl+h': () => navigate('/'),
+    'ctrl+d': () => navigate('/favorites'),
+    'ctrl+,': () => navigate('/settings'),
+    'ctrl+r': () => navigate('/recents'),
     'shift+/': () => setHelpOpen((v) => !v),
     '/': () => {
       const el = document.querySelector<HTMLInputElement>('input[placeholder^="搜索"]')
       el?.focus()
+    },
+    // 随机一本：仅在非 viewer 页面生效（viewer 的 r 用于旋转）
+    r: () => {
+      if (onViewer) return
+      goShuffle()
     },
   })
 

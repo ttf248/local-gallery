@@ -300,3 +300,13 @@ export const ChevronUpIcon = (p: IconProps) => (
     <path d="m18 15-6-6-6 6" />
   </svg>
 )
+
+export const ShuffleIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M16 3h5v5" />
+    <path d="M4 20 21 3" />
+    <path d="M21 16v5h-5" />
+    <path d="m15 15 6 6" />
+    <path d="M4 4l5 5" />
+  </svg>
+)

@@ -25,10 +25,11 @@ interface Props {
 }
 
 // 通用卡片：网格（默认 3:4 封面）/ 列表（横向缩略图 + 元数据）。
-// 视觉：
-//   - 不画死板边框；hover 时仅给 cover 加一层暗化
-//   - 标题短截断 2 行；副标题只 1 行
-//   - 阅读进度以底部细线 + 数字显示
+// 设计：
+//  - 不画死板边框；hover 时给 cover 细微的明度变化 + 上浮
+//  - 标题短截断 2 行；副标题只 1 行
+//  - 阅读进度以底部细线 + 数字显示
+//  - 智能集合有专属角标
 export default function AlbumCard({ data, variant = 'grid' }: Props) {
   if (variant === 'list') return <ListCard data={data} />
   return <GridCard data={data} />
@@ -78,9 +79,9 @@ function GridCard({ data }: { data: CardData }) {
       tabIndex={0}
       onClick={onActivate}
       onKeyDown={onKey}
-      className="group block cursor-pointer fade-up focus:outline-none"
+      className="group block cursor-pointer focus:outline-none"
     >
-      <div className="relative aspect-[3/4] bg-bg-subtle rounded-md overflow-hidden">
+      <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden ring-1 ring-border-faint transition-shadow duration-200 group-hover:shadow-md group-hover:ring-border">
         {visible && data.coverPath ? (
           <>
             <img
@@ -88,33 +89,34 @@ function GridCard({ data }: { data: CardData }) {
               alt={data.title}
               loading="lazy"
               onLoad={() => setLoaded(true)}
-              className={`w-full h-full object-cover transition-opacity duration-300 ${
-                loaded ? 'opacity-100' : 'opacity-0'
-              }`}
+              className={`w-full h-full object-cover transition-all duration-500 ease-out ${
+                loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+              } group-hover:scale-[1.03]`}
             />
-            {!loaded && (
-              <div className="absolute inset-0 bg-bg-subtle animate-pulse" />
-            )}
+            {!loaded && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
           </>
         ) : (
           <div className="w-full h-full bg-bg-subtle" />
         )}
 
+        {/* 顶部变暗蒙版（仅在 hover 时出现） */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-black/0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none" />
+
         {/* 收藏角标 */}
         {data.isFavorite && (
-          <div className="absolute top-2 right-2 bg-bg-elevated/85 backdrop-blur rounded-full p-1">
+          <div className="absolute top-2 right-2 bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
             <StarIcon size={11} className="text-warning" filled />
           </div>
         )}
 
         {/* 智能集合标记 */}
         {data.variant === 'smart' && (
-          <div className="absolute top-2 left-2 bg-accent text-accent-fg text-[10px] font-medium px-1.5 py-0.5 rounded">
+          <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             作者
           </div>
         )}
         {data.variant === 'collection' && (
-          <div className="absolute top-2 left-2 bg-bg-elevated/85 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded">
+          <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
             集合
           </div>
@@ -125,9 +127,7 @@ function GridCard({ data }: { data: CardData }) {
           <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 bg-gradient-to-t from-black/55 to-transparent">
             <div className="flex items-center gap-1.5 text-white/95">
               <ReaderIcon size={11} className="shrink-0" />
-              <span className="text-[10px] font-medium tabular-nums">
-                {progressPct}%
-              </span>
+              <span className="text-[10px] font-medium tabular-nums">{progressPct}%</span>
             </div>
             <div className="mt-1.5 h-0.5 bg-white/20 rounded-full overflow-hidden">
               <div
@@ -139,7 +139,7 @@ function GridCard({ data }: { data: CardData }) {
         )}
       </div>
 
-      <div className="pt-2.5 pb-1">
+      <div className="pt-3 pb-1">
         <div
           className="text-[13px] font-medium text-fg truncate-2 leading-snug"
           title={data.title}
@@ -147,7 +147,9 @@ function GridCard({ data }: { data: CardData }) {
           {data.title}
         </div>
         <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5">
-          <span>{data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '页'}</span>
+          <span>
+            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '页'}
+          </span>
           {data.subtitle && (
             <>
               <span className="text-fg-subtle/50">·</span>
@@ -206,7 +208,7 @@ function ListCard({ data }: { data: CardData }) {
       onKeyDown={onKey}
       className="group flex items-center gap-4 py-2.5 px-2 -mx-2 rounded-md hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
     >
-      <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0">
+      <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0 ring-1 ring-border-faint">
         {visible && data.coverPath ? (
           <img
             src={thumbUrl(data.coverPath)}
@@ -239,7 +241,9 @@ function ListCard({ data }: { data: CardData }) {
             <div className="flex-1 h-0.5 bg-bg-strong rounded-full overflow-hidden">
               <div className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
             </div>
-            <span className="text-[10px] text-fg-subtle tabular-nums shrink-0">{progressPct}%</span>
+            <span className="text-[10px] text-fg-subtle tabular-nums shrink-0">
+              {progressPct}%
+            </span>
           </div>
         )}
       </div>

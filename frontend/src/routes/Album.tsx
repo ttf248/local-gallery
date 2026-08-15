@@ -200,6 +200,11 @@ export default function Album() {
         viewMode={viewMode}
         onBack={() => navigate(-1)}
         isFavorite={isFav}
+        onOpenAuthor={
+          detail.type === 'smartCollection'
+            ? (author) => navigate(`/authors/${encodeURIComponent(author)}`)
+            : undefined
+        }
         onToggleFav={async () => {
           if (detail.type === 'smartCollection') {
             try {
@@ -360,6 +365,7 @@ function CollectionView({
   onBack,
   onToggleFav,
   isFavorite,
+  onOpenAuthor,
 }: {
   detail: CollectionDetail | SmartDetail
   query: string
@@ -368,6 +374,7 @@ function CollectionView({
   onBack: () => void
   onToggleFav: () => void
   isFavorite: boolean
+  onOpenAuthor?: (author: string) => void
 }) {
   const isSmart = detail.type === 'smartCollection'
   const title = isSmart ? detail.author : detail.name
@@ -407,7 +414,11 @@ function CollectionView({
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              {isSmart ? <StarIcon size={13} className="text-fg-muted" filled /> : <FolderIcon size={13} className="text-fg-muted" />}
+              {isSmart ? (
+                <StarIcon size={13} className="text-fg-muted" filled />
+              ) : (
+                <FolderIcon size={13} className="text-fg-muted" />
+              )}
               <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
                 {isSmart ? '作者集合' : '集合'}
               </span>
@@ -419,17 +430,26 @@ function CollectionView({
               <span className="tabular-nums">{detail.albumCount} 卷</span>
             </div>
           </div>
-          <button
-            onClick={onToggleFav}
-            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs transition-colors ${
-              isFavorite
-                ? 'bg-warning/10 text-warning hover:bg-warning/15'
-                : 'border border-border-faint hover:bg-bg-subtle text-fg-muted'
-            }`}
-          >
-            <StarIcon size={12} filled={isFavorite} />
-            <span>{isFavorite ? '已收藏' : '收藏'}</span>
-          </button>
+          {isSmart && onOpenAuthor ? (
+            <button
+              onClick={() => onOpenAuthor(title)}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs bg-accent text-accent-contrast hover:bg-accent-hover transition-colors"
+            >
+              <span>查看作者页</span>
+            </button>
+          ) : (
+            <button
+              onClick={onToggleFav}
+              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs transition-colors ${
+                isFavorite
+                  ? 'bg-warning/10 text-warning hover:bg-warning/15'
+                  : 'border border-border-faint hover:bg-bg-subtle text-fg-muted'
+              }`}
+            >
+              <StarIcon size={12} filled={isFavorite} />
+              <span>{isFavorite ? '已收藏' : '收藏'}</span>
+            </button>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-auto">

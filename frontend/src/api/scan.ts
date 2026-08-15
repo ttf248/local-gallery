@@ -7,6 +7,8 @@ export interface AlbumSummary {
   coverImage: string
   imageCount: number
   author?: string
+  modTime?: string
+  folderSize?: number
 }
 
 export interface CollectionSummary {
