@@ -1,8 +1,8 @@
-// Package config 提供漫画阅读器后端的 YAML 配置加载。
+// Package config 提供图像浏览器后端的 YAML 配置加载。
 //
 // 配置来源唯一：YAML 文件（默认 ./config.yaml，可用 --config 指定）。
 // 未配置的字段走内置默认值；缓存目录默认在进程 CWD 下创建
-// `.comic-reader/`（存放缩略图、扫描结果、用户偏好）。
+// `.image-viewer/`（存放缩略图、扫描结果、用户偏好）。
 //
 // 字段优先级：YAML 文件中显式值 > 内置默认值。无任何 env / flag 覆盖。
 package config
@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,11 +22,15 @@ var Version = "0.1.0"
 const DefaultConfigName = "config.yaml"
 
 // DefaultCacheDirName 未配置 cacheDir 时使用的目录名（创建在 CWD 下）。
-const DefaultCacheDirName = ".comic-reader"
+const DefaultCacheDirName = ".image-viewer"
 
-// Config 后端总配置（YAML 字段保持 camelCase，与历史 JSON 字段一致）。
+// Config 后端总配置（YAML 字段保持 camelCase）。
+//
+// MediaRoot 优先读取 `mediaRoot` 字段；为兼容老配置也接受
+// `comicRoot` 字段（已弃用）。
 type Config struct {
-	ComicRoot       string `yaml:"comicRoot"`
+	MediaRoot       string `yaml:"mediaRoot"`
+	LegacyComicRoot string // 通过二次解析填充，不走 yaml 标签
 	Host            string `yaml:"host"`
 	Port            int    `yaml:"port"`
 	AllowOsOpen     bool   `yaml:"allowOsOpen"`
@@ -38,10 +41,24 @@ type Config struct {
 	StaticDir       string `yaml:"staticDir"`
 }
 
-// Default 返回内置默认配置（缓存目录指向 CWD/.comic-reader）。
+// Root 返回实际使用的根目录（兼容老 comicRoot 字段）。
+func (c *Config) Root() string {
+	if c.MediaRoot != "" {
+		return c.MediaRoot
+	}
+	return c.LegacyComicRoot
+}
+
+// HasLegacyRoot reports whether the source YAML used the deprecated comicRoot key.
+// 即使合并后 MediaRoot 与 LegacyComicRoot 相同，只要后者非空即认为用户用了老字段。
+func (c *Config) HasLegacyRoot() bool {
+	return c.LegacyComicRoot != ""
+}
+
+// Default 返回内置默认配置（缓存目录指向 CWD/.image-viewer）。
 func Default() *Config {
 	return &Config{
-		ComicRoot:       filepath.Join(".", "comics"),
+		MediaRoot:       filepath.Join(".", "media"),
 		Host:            "0.0.0.0",
 		Port:            8080,
 		AllowOsOpen:     false,
@@ -66,9 +83,18 @@ func LoadFile(path string) (*Config, error) {
 		return nil, fmt.Errorf("read config file: %w", err)
 	}
 
+	// 第一次解析：标准字段
 	tmp := &Config{}
 	if err := yaml.Unmarshal(data, tmp); err != nil {
 		return nil, fmt.Errorf("parse config file: %w", err)
+	}
+
+	// 第二次解析：宽松 map，单独取 comicRoot 老字段
+	raw := map[string]any{}
+	if err := yaml.Unmarshal(data, &raw); err == nil {
+		if v, ok := raw["comicRoot"].(string); ok && v != "" {
+			tmp.LegacyComicRoot = v
+		}
 	}
 
 	mergeFile(cfg, tmp)
@@ -78,11 +104,21 @@ func LoadFile(path string) (*Config, error) {
 // mergeFile 把 file 中显式值合并到 dst。零值字段保持 dst 默认。
 //
 // bool 字段特殊处理：YAML 未设置时为零值 false；只要 file 显式给出
-// true 即视为开启，false 视为未配置（沿用 dst 默认），这与历史 JSON
-// 行为一致（AllowOsOpen bool 零值也是有意义的，保留）。
+// true 即视为开启，false 视为未配置（沿用 dst 默认）。
+//
+// MediaRoot / LegacyComicRoot 的解析：
+//   - file.MediaRoot 给值  → 用 file.MediaRoot，同时清空 dst.LegacyComicRoot
+//   - 否则 file.LegacyComicRoot 给值 → 用 file.LegacyComicRoot（覆盖 dst.MediaRoot 默认值），
+//     并保留 dst.LegacyComicRoot 以便后续 HasLegacyRoot() 报告
+//   - 都没有 → 保持 dst 默认
 func mergeFile(dst, file *Config) {
-	if file.ComicRoot != "" {
-		dst.ComicRoot = file.ComicRoot
+	switch {
+	case file.MediaRoot != "":
+		dst.MediaRoot = file.MediaRoot
+		dst.LegacyComicRoot = ""
+	case file.LegacyComicRoot != "":
+		dst.MediaRoot = file.LegacyComicRoot
+		dst.LegacyComicRoot = file.LegacyComicRoot
 	}
 	if file.Host != "" {
 		dst.Host = file.Host
@@ -110,17 +146,18 @@ func mergeFile(dst, file *Config) {
 	}
 }
 
-// Validate 校验配置合法性。ComicRoot 必须是已存在的目录。
+// Validate 校验配置合法性。Root 必须是已存在的目录。
 func (c *Config) Validate() error {
-	if c.ComicRoot == "" {
-		return errors.New("comicRoot is required")
+	root := c.Root()
+	if root == "" {
+		return errors.New("mediaRoot is required (or legacy comicRoot)")
 	}
-	info, err := os.Stat(c.ComicRoot)
+	info, err := os.Stat(root)
 	if err != nil {
-		return fmt.Errorf("comicRoot %q: %w", c.ComicRoot, err)
+		return fmt.Errorf("mediaRoot %q: %w", root, err)
 	}
 	if !info.IsDir() {
-		return fmt.Errorf("comicRoot %q is not a directory", c.ComicRoot)
+		return fmt.Errorf("mediaRoot %q is not a directory", root)
 	}
 	if c.Port <= 0 || c.Port > 65535 {
 		return fmt.Errorf("invalid port %d", c.Port)

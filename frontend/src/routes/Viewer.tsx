@@ -45,11 +45,11 @@ export default function Viewer() {
           if (d && Array.isArray(d.imageFiles)) {
             setImages(d.imageFiles)
           } else {
-            pushToast({ kind: 'error', message: '无法读取相册图片' })
+            pushToast({ kind: 'error', message: '无法读取图片' })
           }
         })
         .catch(() => {
-          pushToast({ kind: 'error', message: '无法读取相册图片' })
+          pushToast({ kind: 'error', message: '无法读取图片' })
         })
       return
     }
@@ -134,7 +134,7 @@ export default function Viewer() {
       return
     }
     if (index === images.length - 1) {
-      pushToast({ kind: 'info', message: '已是最后一页', ttl: 1500 })
+      pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
       if (useViewerStore.getState().slideshow) {
         toggleSlideshow()
         pushToast({ kind: 'info', message: '幻灯片已自动停止' })

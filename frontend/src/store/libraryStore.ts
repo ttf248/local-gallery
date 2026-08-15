@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { scanApi } from '../api/scan'
 import type { ScanResult } from '../api/scan'
 
-// Library 全局漫画库状态：
+// Library 全局图像库状态：
 //   - 缓存最近一次扫描结果，所有页面共享，避免每次重新扫描
 //   - 启动时尝试拉取后端持久化的扫描缓存（/api/scan/latest）
 //   - 提供明确的 set/refresh/clear 入口

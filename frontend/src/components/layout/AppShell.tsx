@@ -26,7 +26,7 @@ export default function AppShell() {
 
   useEffect(() => {
     const titles: Record<string, string> = {
-      '/': '漫画库',
+      '/': '图像库',
       '/recents': '最近',
       '/favorites': '收藏',
       '/settings': '设置',
@@ -38,12 +38,12 @@ export default function AppShell() {
         const raw = decodeURIComponent(path.slice('/authors/'.length))
         base = raw || '作者'
       } else if (path.startsWith('/albums')) {
-        base = '相册'
+        base = '文件夹'
       } else {
-        base = '相册'
+        base = '文件夹'
       }
     }
-    document.title = `${base} · Manga`
+    document.title = `${base} · Viewer`
 
     if (path === '/') setBreadcrumbs([])
     else if (path.startsWith('/recents'))
@@ -53,7 +53,7 @@ export default function AppShell() {
     else if (path.startsWith('/settings'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '设置' }])
     else if (path.startsWith('/albums'))
-      setBreadcrumbs([{ label: '主页', to: '/' }, { label: '相册' }])
+      setBreadcrumbs([{ label: '主页', to: '/' }, { label: '文件夹' }])
     else if (path.startsWith('/authors/')) {
       const raw = decodeURIComponent(path.slice('/authors/'.length))
       setBreadcrumbs([
@@ -72,7 +72,7 @@ export default function AppShell() {
 
   const goShuffle = () => {
     if (!result || result.albums.length === 0) {
-      pushToast({ kind: 'info', message: '尚未加载漫画库' })
+      pushToast({ kind: 'info', message: '尚未加载图像库' })
       return
     }
     const idx = Math.floor(Math.random() * result.albums.length)

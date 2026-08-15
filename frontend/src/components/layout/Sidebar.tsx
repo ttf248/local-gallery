@@ -27,7 +27,7 @@ const items = [
 // 侧边栏：
 // - 极简的图标列；展开时多 8px 内边距 + 文字
 // - 透明背景，仅在 hover/active 时出现 subtle 背景
-// - 顶部的 "Manga" 文字标只在展开时显示，折叠时仅保留品牌方块
+// - 顶部的 "Viewer" 文字标只在展开时显示，折叠时仅保留品牌方块
 export default function Sidebar({ collapsed, onToggle }: Props) {
   const result = useLibraryStore((s) => s.result)
   const navigate = useNavigate()
@@ -36,7 +36,7 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
 
   const onShuffle = () => {
     if (!result || result.albums.length === 0) {
-      pushToast({ kind: 'info', message: '尚未加载漫画库' })
+      pushToast({ kind: 'info', message: '尚未加载图像库' })
       return
     }
     const idx = Math.floor(Math.random() * result.albums.length)
@@ -60,9 +60,9 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
             <Logo />
             <div className="leading-none min-w-0">
               <div className="font-display font-semibold tracking-tight text-sm truncate">
-                Manga
+                Viewer
               </div>
-              <div className="text-[10px] text-fg-subtle mt-0.5 truncate">本地漫画 · reader</div>
+              <div className="text-[10px] text-fg-subtle mt-0.5 truncate">本地图像 · viewer</div>
             </div>
           </div>
         ) : (

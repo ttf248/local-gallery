@@ -119,7 +119,7 @@ export default function Favorites() {
           <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">收藏</span>
         </div>
         <h1 className="font-display text-[32px] leading-[1.1] font-semibold tracking-tight">
-          我收藏的漫画
+          我收藏的图像
         </h1>
         <p className="text-sm text-fg-muted mt-2 tabular-nums">
           {favorites.length} 项
@@ -129,7 +129,7 @@ export default function Favorites() {
       {favorites.length === 0 ? (
         <EmptyState
           title="还没有收藏"
-          description="在主页或相册页右键点击卡片，或者使用卡片右上角的星标收藏喜欢的漫画。"
+          description="在主页或文件夹页右键点击卡片，或者使用卡片右上角的星标收藏喜欢的图像。"
           icon={<StarIcon size={20} />}
           action={
             <button

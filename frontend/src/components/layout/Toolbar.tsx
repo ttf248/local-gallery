@@ -17,7 +17,7 @@ const sortOptions: { value: SortKey; label: string }[] = [
 ]
 
 // 顶部工具栏：
-// 左侧：精简的"Manga / 当前页" 字标
+// 左侧：精简的"Viewer / 当前页" 字标
 // 中部：全局搜索（最常用，放大）
 // 右侧：操作组（按密度递进），用细分割线分组
 // 目标：极简但不缺功能；信息密度比之前略低
@@ -65,7 +65,7 @@ export default function Toolbar() {
       .result(sse.scanId)
       .then((r) => {
         setResult(r.result)
-        pushToast({ kind: 'success', message: `扫描完成 · 共 ${r.result.albumCount} 本` })
+        pushToast({ kind: 'success', message: `扫描完成 · 共 ${r.result.albumCount} 个文件夹` })
       })
       .catch(() => pushToast({ kind: 'error', message: '获取扫描结果失败' }))
   }, [sse.isComplete, sse.scanId, setResult, pushToast])
@@ -74,7 +74,7 @@ export default function Toolbar() {
     <header className="h-14 flex items-center gap-4 px-5 lg:px-7 border-b border-border-faint bg-bg-elevated/50 backdrop-blur-sm">
       {/* 左侧：极简字标（窄屏隐藏） */}
       <div className="hidden lg:flex items-center gap-2 min-w-0">
-        <span className="font-display text-sm text-fg-muted">Manga</span>
+        <span className="font-display text-sm text-fg-muted">Viewer</span>
         <span className="text-fg-subtle/50">/</span>
         <span className="text-sm font-medium truncate">{titleOf(location.pathname)}</span>
       </div>
@@ -162,13 +162,13 @@ export default function Toolbar() {
 }
 
 function titleOf(pathname: string): string {
-  if (pathname === '/' || pathname === '') return '漫画库'
+  if (pathname === '/' || pathname === '') return '图像库'
   if (pathname.startsWith('/recents')) return '最近'
   if (pathname.startsWith('/favorites')) return '收藏'
   if (pathname.startsWith('/settings')) return '设置'
-  if (pathname.startsWith('/albums')) return '相册'
-  if (pathname.startsWith('/viewer')) return '阅读'
-  return '漫画'
+  if (pathname.startsWith('/albums')) return '文件夹'
+  if (pathname.startsWith('/viewer')) return '浏览'
+  return '图像'
 }
 
 function ViewButton({

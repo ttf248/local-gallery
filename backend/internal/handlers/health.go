@@ -12,7 +12,8 @@ import (
 // HealthResponse 健康检查响应。
 type HealthResponse struct {
 	Status     string `json:"status"`
-	ComicRoot  string `json:"comicRoot"`
+	MediaRoot  string `json:"mediaRoot"`
+	ComicRoot  string `json:"comicRoot"` // 旧字段保留为 mediaRoot 的别名
 	Version    string `json:"version"`
 	GoVersion  string `json:"goVersion"`
 	Goroutines int    `json:"goroutines"`
@@ -23,7 +24,8 @@ func HealthHandler(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		return c.JSON(HealthResponse{
 			Status:     "ok",
-			ComicRoot:  cfg.ComicRoot,
+			MediaRoot:  cfg.Root(),
+			ComicRoot:  cfg.Root(),
 			Version:    config.Version,
 			GoVersion:  runtime.Version(),
 			Goroutines: runtime.NumGoroutine(),

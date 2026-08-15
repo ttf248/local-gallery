@@ -91,14 +91,14 @@ export default function Recents() {
           最近阅读
         </h1>
         <p className="text-sm text-fg-muted mt-2 tabular-nums">
-          {cards.length} 本
+          {cards.length} 个
         </p>
       </section>
 
       {cards.length === 0 ? (
         <EmptyState
           title="还没有最近阅读"
-          description="打开任意一本漫画开始阅读，它会出现在这里。"
+          description="打开任意一个文件夹开始浏览，它会出现在这里。"
           icon={<ClockIcon size={20} />}
           action={
             <button

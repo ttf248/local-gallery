@@ -138,11 +138,11 @@ export default function Settings() {
       </Section>
 
       <Section title="数据" icon={<LibraryIcon size={13} />}>
-        <Row label="漫画库缓存">
+        <Row label="图像库缓存">
           <div className="flex items-center gap-3">
             <span className="text-xs text-fg-muted">
               {result
-                ? `${result.albumCount} 本 · ${lastScanAt ? new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false }) : '尚未扫描'}`
+                ? `${result.albumCount} 个文件夹 · ${lastScanAt ? new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false }) : '尚未扫描'}`
                 : '尚未加载'}
             </span>
             <button
@@ -175,7 +175,7 @@ export default function Settings() {
 
       <Section title="关于" icon={<InfoIcon size={13} />}>
         <div className="text-sm text-fg-muted leading-relaxed">
-          <div className="font-display text-base text-fg">Manga · 漫画阅读器</div>
+          <div className="font-display text-base text-fg">Viewer · 图像浏览器</div>
           <div className="mt-1">Web 版 · v0.3.0</div>
           <div className="mt-4 text-xs text-fg-subtle flex items-center gap-2">
             <span>按</span>

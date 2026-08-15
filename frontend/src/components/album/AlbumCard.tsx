@@ -148,7 +148,7 @@ function GridCard({ data }: { data: CardData }) {
         </div>
         <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5">
           <span>
-            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '页'}
+            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
           </span>
           {data.subtitle && (
             <>
@@ -233,7 +233,7 @@ function ListCard({ data }: { data: CardData }) {
         <div className="text-[11px] text-fg-subtle mt-0.5 flex items-center gap-2">
           {data.subtitle && <span className="truncate">{data.subtitle}</span>}
           <span className="tabular-nums shrink-0">
-            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '页'}
+            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
           </span>
         </div>
         {progressPct !== null && progressPct > 0 && (

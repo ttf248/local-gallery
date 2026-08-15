@@ -55,7 +55,7 @@ func main() {
 	}
 
 	log.Printf("comic-reader 后端启动中...")
-	log.Printf("  ComicRoot: %s", cfg.ComicRoot)
+	log.Printf("  MediaRoot: %s", cfg.Root())
 	log.Printf("  CacheDir:  %s", cfg.CacheDir)
 	log.Printf("  Thumbnail: %dx%d", cfg.ThumbSizeW, cfg.ThumbSizeH)
 	log.Printf("  Listen:    %s", cfg.Addr())
@@ -74,7 +74,7 @@ func main() {
 
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())
-	app.Use(middleware.PathSafetyMiddleware(cfg.ComicRoot))
+	app.Use(middleware.PathSafetyMiddleware(cfg.Root()))
 
 	// ---- 路由 ----
 	scanner := services.NewScanner()
@@ -102,8 +102,8 @@ func main() {
 
 	api := app.Group("/api")
 	api.Get("/health", handlers.HealthHandler(cfg))
-	api.Post("/scan", handlers.ScanHandler(scanner, cfg.ComicRoot))
-	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, cfg.ComicRoot))
+	api.Post("/scan", handlers.ScanHandler(scanner, cfg.Root()))
+	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, cfg.Root()))
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
 	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))

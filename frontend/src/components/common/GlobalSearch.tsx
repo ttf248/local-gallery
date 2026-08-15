@@ -65,7 +65,7 @@ export default function GlobalSearch() {
               setQuery('')
             }
           }}
-          placeholder="搜索漫画 / 作者…"
+          placeholder="搜索文件夹 / 标签…"
           className="flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-fg-subtle"
         />
         <kbd className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded border border-border text-fg-subtle">
@@ -93,7 +93,7 @@ export default function GlobalSearch() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{h.name}</div>
                 <div className="text-[11px] text-fg-subtle truncate">
-                  {h.kind === 'album' ? '相册' : h.kind === 'smartCollection' ? '作者集合' : '集合'}
+                  {h.kind === 'album' ? '文件夹' : h.kind === 'smartCollection' ? '合集' : '集合'}
                   {' · '}
                   {h.count} {h.kind === 'album' ? '张' : '卷'}
                 </div>

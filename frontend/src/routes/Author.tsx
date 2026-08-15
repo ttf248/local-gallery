@@ -120,7 +120,7 @@ export default function Author() {
   if (!result) {
     return (
       <div className="p-6">
-        <EmptyState title="尚未加载漫画库" description="回到主页点击「扫描」加载漫画库。" />
+        <EmptyState title="尚未加载图像库" description="回到主页点击「扫描」加载图像库。" />
       </div>
     )
   }
@@ -197,7 +197,7 @@ export default function Author() {
           {/* 数据条 */}
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3 max-w-2xl">
             <Stat icon={<FolderIcon size={13} />} label="作品数" value={albums.length} />
-            <Stat icon={<ReaderIcon size={13} />} label="总页数" value={totalPages} />
+            <Stat icon={<ReaderIcon size={13} />} label="总张数" value={totalPages} />
             <Stat icon={<ClockIcon size={13} />} label="已读" value={`${readCount}/${albums.length}`} />
             <Stat
               icon={<StarIcon size={13} />}
@@ -212,7 +212,7 @@ export default function Author() {
       <section className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-10 pb-10">
         <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
           <h2 className="font-display text-lg font-semibold">作品</h2>
-          <span className="text-xs text-fg-subtle tabular-nums">{filtered.length} 本</span>
+          <span className="text-xs text-fg-subtle tabular-nums">{filtered.length} 个</span>
         </div>
         {filtered.length === 0 ? (
           <EmptyState title="没有匹配的作品" description="试试修改搜索或排序条件。" />

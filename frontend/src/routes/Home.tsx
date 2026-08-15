@@ -109,7 +109,7 @@ export default function Home() {
 
   const onShuffle = () => {
     if (!result || result.albums.length === 0) {
-      pushToast({ kind: 'info', message: '尚未加载漫画库' })
+      pushToast({ kind: 'info', message: '尚未加载图像库' })
       return
     }
     const idx = Math.floor(Math.random() * result.albums.length)
@@ -158,7 +158,7 @@ export default function Home() {
       }))
   }, [result])
 
-  // 热门作者：相册数最多
+  // 热门合集：文件夹数最多
   const topAuthors = useMemo<CardData[]>(() => {
     if (!result) return []
     return [...result.smartCollections]
@@ -225,12 +225,12 @@ export default function Home() {
               库 · Library
             </div>
             <h1 className="font-display text-[40px] leading-[1.05] font-semibold tracking-[-0.02em] mt-2">
-              漫画库
+              图像库
             </h1>
             <p className="text-sm text-fg-muted mt-3">
               {result
-                ? `${result.albumCount} 本 · ${result.smartCollections.length} 位作者`
-                : '尚未加载漫画库'}
+                ? `${result.albumCount} 个文件夹 · ${result.smartCollections.length} 个合集`
+                : '尚未加载图像库'}
               {lastScanAt && (
                 <span className="text-fg-subtle ml-2">
                   · 更新于 {new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false })}
@@ -265,7 +265,7 @@ export default function Home() {
         <div className="mt-8 flex items-center gap-1 flex-wrap">
           {[
             { key: 'all', label: '全部', count: counts.all },
-            { key: 'album', label: '相册', count: counts.album },
+            { key: 'album', label: '文件夹', count: counts.album },
             { key: 'collection', label: '集合', count: counts.collection },
             { key: 'smart', label: '作者', count: counts.smart },
           ].map((v) => {
@@ -293,7 +293,7 @@ export default function Home() {
             <button
               onClick={() => navigate('/favorites')}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] text-warning/90 hover:bg-bg-subtle transition-colors ml-2"
-              title="你已收藏的相册"
+              title="你已收藏的文件夹"
             >
               <StarIcon size={12} filled />
               <span>收藏</span>
@@ -343,7 +343,7 @@ export default function Home() {
             <div className="px-6 lg:px-10 pt-2 pb-3 flex items-center gap-2">
               <LibraryIcon size={12} className="text-fg-muted" />
               <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
-                全部漫画
+                全部图像
               </h2>
               <span className="text-[11px] text-fg-subtle tabular-nums">{filtered.length}</span>
             </div>
@@ -351,7 +351,7 @@ export default function Home() {
 
         {isLoadingInitial ? (
           <EmptyState
-            title="正在加载漫画库"
+            title="正在加载图像库"
             description="首次启动可能需要几秒钟。"
             icon={
               <div className="w-10 h-10 border-2 border-fg-subtle border-t-accent rounded-full animate-spin" />
@@ -359,8 +359,8 @@ export default function Home() {
           />
         ) : !result ? (
           <EmptyState
-            title="欢迎使用 Manga"
-            description="点击下方按钮开始扫描你的漫画目录。"
+            title="欢迎使用图像浏览器"
+            description="点击下方按钮开始扫描你的本地图像目录。"
             icon={<LibraryIcon size={20} />}
             action={
               <button
@@ -374,8 +374,8 @@ export default function Home() {
           />
         ) : cards.length === 0 ? (
           <EmptyState
-            title="暂无漫画"
-            description="未在配置目录下找到图片文件。检查 COMIC_ROOT 路径是否正确。"
+            title="暂无图像"
+            description="未在配置目录下找到图像文件。检查 mediaRoot 路径是否正确。"
             icon={<LibraryIcon size={20} />}
             action={
               <button
@@ -388,7 +388,7 @@ export default function Home() {
           />
         ) : filtered.length === 0 ? (
           <EmptyState
-            title="没有匹配的漫画"
+            title="没有匹配的图像"
             description={query ? `没有匹配"${query}"的结果` : '当前视图下没有内容'}
             icon={<ClockIcon size={20} />}
             action={

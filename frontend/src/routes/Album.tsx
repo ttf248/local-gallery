@@ -158,8 +158,8 @@ export default function Album() {
   if (!result) {
     return (
       <EmptyState
-        title="尚未扫描漫画库"
-        description="回到主页点击「扫描」加载漫画库。"
+        title="尚未扫描图像库"
+        description="回到主页点击「扫描」加载图像库。"
         action={
           <button
             onClick={() => navigate('/')}
@@ -175,7 +175,7 @@ export default function Album() {
   if (!detail) {
     return (
       <EmptyState
-        title="找不到此相册"
+        title="找不到此文件夹"
         description={`路径: ${realPath}`}
         action={
           <button
@@ -252,7 +252,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
     return (
       <div className="p-6">
         <EmptyState
-          title="该相册暂无图片"
+          title="该文件夹暂无图片"
           description="可能扫描时尚未加载到图片列表，请重新扫描。"
         />
       </div>
@@ -283,7 +283,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
             </h1>
             <div className="text-sm text-fg-muted mt-1.5">
               {detail.author && <span className="mr-3">{detail.author}</span>}
-              <span className="tabular-nums">{detail.imageCount} 页</span>
+              <span className="tabular-nums">{detail.imageCount} 张</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -306,12 +306,12 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
             <button
               onClick={() => {
                 openViewer(startIndex)
-                pushToast({ kind: 'info', message: '开始阅读' })
+                pushToast({ kind: 'info', message: '开始浏览' })
               }}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-xs"
             >
               <ReaderIcon size={12} />
-              <span>{progress && progress.index > 0 ? `继续 (${progress.index + 1})` : '开始阅读'}</span>
+              <span>{progress && progress.index > 0 ? `继续 (${progress.index + 1})` : '打开'}</span>
             </button>
           </div>
         </div>
@@ -332,11 +332,11 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                       ? 'opacity-70'
                       : ''
                 }`}
-                title={`第 ${i + 1} 页`}
+                title={`第 ${i + 1} 张`}
               >
                 <img
                   src={thumbUrl(img)}
-                  alt={`page ${i + 1}`}
+                  alt={`第 ${i + 1} 张`}
                   loading="lazy"
                   className="w-full h-full object-cover"
                 />
@@ -420,7 +420,7 @@ function CollectionView({
                 <FolderIcon size={13} className="text-fg-muted" />
               )}
               <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
-                {isSmart ? '作者集合' : '集合'}
+                {isSmart ? '合集' : '集合'}
               </span>
             </div>
             <h1 className="font-display text-2xl font-semibold tracking-tight truncate">

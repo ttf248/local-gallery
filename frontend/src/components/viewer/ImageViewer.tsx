@@ -151,7 +151,7 @@ export default function ImageViewer({ images }: Props) {
             key={imgKey}
             ref={singleRef}
             src={imageUrl(current)}
-            alt={`page ${index + 1}`}
+            alt={`第 ${index + 1} 张`}
             draggable={false}
             onMouseDown={onMouseDown}
             onDoubleClick={() => {
@@ -261,13 +261,13 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
           {p.src ? (
             <img
               src={imageUrl(p.src)}
-              alt={`page ${p.key}`}
+              alt={`第 ${p.key === 'left' ? '左' : '右'} 页`}
               draggable={false}
               loading="eager"
               className={`select-none ${pageClass()}`}
             />
           ) : (
-            <div className="text-fg-subtle text-xs">（空页）</div>
+            <div className="text-fg-subtle text-xs">（空白）</div>
           )}
         </div>
       ))}
@@ -314,7 +314,7 @@ function ContinuousImage({ src, index, aspect, nearIndex, isRotated }: Continuou
     <div className="w-full flex justify-center">
       <img
         src={imageUrl(src)}
-        alt={`page ${index + 1}`}
+        alt={`第 ${index + 1} 张`}
         draggable={false}
         loading={nearIndex ? 'eager' : 'lazy'}
         decoding={nearIndex ? 'sync' : 'async'}

@@ -4,17 +4,19 @@
 #
 # 启动顺序：YAML 显式值 > 内置默认值。
 # 未列出的字段会使用 Default() 的内置值。
-# 缓存目录未配置时自动在进程 CWD 下创建 .comic-reader/。
+# 缓存目录未配置时自动在进程 CWD 下创建 .image-viewer/。
 
-# 漫画根目录（必填，必须是已存在的目录）
-comicRoot: "E:\\漫画"
+# 媒体根目录（必填，必须是已存在的目录）
+# 包含任意层级的图像文件（JPG / PNG / WebP / HEIC / GIF …）。
+# 后端会递归扫描所有子目录，把每个非空目录视为一个"文件夹"。
+mediaRoot: "E:\\照片"
 
 # 监听地址与端口
 host: "0.0.0.0"
 port: 8080
 
-# 缩略图缓存目录（相对路径相对 CWD；留空则用 ./.comic-reader）
-cacheDir: ".comic-reader"
+# 缩略图缓存目录（相对路径相对 CWD；留空则用 ./.image-viewer）
+cacheDir: ".image-viewer"
 
 # 缩略图尺寸（像素）
 thumbSizeW: 320

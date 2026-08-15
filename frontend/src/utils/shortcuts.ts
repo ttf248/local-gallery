@@ -17,7 +17,7 @@ export interface Shortcut {
 
 // 全局快捷键
 export const SHORTCUTS: Shortcut[] = [
-  { id: 'open', label: 'Ctrl+O', description: '打开/切换漫画目录', combo: 'ctrl+o', group: 'global' },
+  { id: 'open', label: 'Ctrl+O', description: '打开/切换媒体根目录', combo: 'ctrl+o', group: 'global' },
   { id: 'scan', label: 'Ctrl+S', description: '启动扫描', combo: 'ctrl+s', group: 'global' },
   { id: 'refresh', label: 'F5', description: '刷新', combo: 'F5', group: 'global' },
   { id: 'home', label: 'Ctrl+H', description: '回到主页', combo: 'ctrl+h', group: 'global' },

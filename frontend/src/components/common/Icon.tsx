@@ -375,7 +375,7 @@ export const ArrowRightLineIcon = (p: IconProps) => (
   </svg>
 )
 
-/** 从右到左（漫画原版） */
+/** 从右到左（原版日漫等） */
 export const ArrowLeftLineIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M4 12h16" />

@@ -19,14 +19,14 @@ export default function StatusBar() {
 
   let leftLabel = '就绪'
   if (sse.isRunning) {
-    leftLabel = `扫描中 ${sse.progress?.progress ?? 0}% · 已发现 ${sse.progress?.albumsFound ?? 0} 相册`
+    leftLabel = `扫描中 ${sse.progress?.progress ?? 0}% · 已发现 ${sse.progress?.albumsFound ?? 0} 个文件夹`
   } else if (result) {
-    leftLabel = `${result.albumCount} 相册 · ${result.smartCollections.length} 作者`
+    leftLabel = `${result.albumCount} 个文件夹 · ${result.smartCollections.length} 个合集`
   }
 
   const sortLabel = sortBy === 'name' ? '名称' : sortBy === 'count' ? '张数' : '最近'
   const viewLabel =
-    view === 'all' ? '全部' : view === 'album' ? '相册' : view === 'collection' ? '集合' : '作者'
+    view === 'all' ? '全部' : view === 'album' ? '文件夹' : view === 'collection' ? '集合' : '合集'
 
   return (
     <footer className="h-7 px-4 flex items-center justify-between text-[11px] text-fg-subtle border-t border-border bg-bg-elevated/60 backdrop-blur">
