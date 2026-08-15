@@ -98,7 +98,7 @@ export default function Favorites() {
 
   return (
     <div className="min-h-full">
-      <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px]">
+      <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px] mx-auto w-full">
         <div className="flex items-center gap-2 mb-1">
           <StarIcon size={13} className="text-warning" filled />
           <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">收藏</span>
@@ -139,7 +139,7 @@ export default function Favorites() {
           }
         />
       ) : (
-        <section className="max-w-[1400px]">
+        <section className="max-w-[1400px] mx-auto w-full">
           <AlbumGrid items={filtered} variant={viewMode} />
         </section>
       )}

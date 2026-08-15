@@ -275,7 +275,7 @@ export default function Home() {
       <ScanProgress progress={sse.progress} onCancel={() => sse.scanId && scanApi.cancel(sse.scanId).catch(() => {})} />
 
       {/* 顶部 hero — 极简大字 + 关键动作 */}
-      <section className="px-6 lg:px-10 pt-12 pb-8 max-w-[1400px]">
+      <section className="px-6 lg:px-10 pt-12 pb-8 max-w-[1400px] mx-auto w-full">
         <div className="flex items-end justify-between gap-6 flex-wrap">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.18em] text-fg-subtle font-medium">
@@ -418,7 +418,7 @@ export default function Home() {
       )}
 
       {/* 全部 / 筛选结果 */}
-      <section className="max-w-[1400px]">
+      <section className="max-w-[1400px] mx-auto w-full">
         {(inProgress.length > 0 ||
           fresh.length > 0 ||
           rewind.length > 0 ||
@@ -532,7 +532,7 @@ function SectionBlock({
   children: React.ReactNode
 }) {
   return (
-    <section className="px-6 lg:px-10 pb-6 max-w-[1400px]">
+    <section className="px-6 lg:px-10 pb-6 max-w-[1400px] mx-auto w-full">
       <div className="flex items-center gap-2 mb-4">
         {icon}
         <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">

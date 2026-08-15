@@ -83,7 +83,7 @@ export default function Recents() {
 
   return (
     <div className="min-h-full">
-      <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px]">
+      <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px] mx-auto w-full">
         <div className="flex items-center gap-2 mb-1">
           <ClockIcon size={13} className="text-fg-muted" />
           <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">最近</span>
@@ -116,7 +116,7 @@ export default function Recents() {
           description={query ? `没有匹配"${query}"的结果` : ''}
         />
       ) : (
-        <section className="max-w-[1400px]">
+        <section className="max-w-[1400px] mx-auto w-full">
           <AlbumGrid items={filtered} variant={viewMode} />
         </section>
       )}

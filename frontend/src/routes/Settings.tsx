@@ -56,7 +56,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="px-6 lg:px-10 py-10 max-w-3xl">
+    <div className="px-6 lg:px-10 py-10 max-w-3xl mx-auto w-full">
       <h1 className="font-display text-[32px] font-semibold tracking-[-0.02em]">设置</h1>
       <p className="text-sm text-fg-muted mt-2 mb-10">个性化你的阅读体验</p>
 
