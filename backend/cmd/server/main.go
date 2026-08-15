@@ -109,6 +109,9 @@ func main() {
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/scan/latest", handlers.LatestScanHandler(scanCache))
 	api.Get("/albums", handlers.AlbumDetailHandler(scanCache))
+	// /api/folders 是 /api/albums 的语义化别名（图像浏览器用 "folder" 更准确）；
+	// 老客户端/历史链接仍可继续访问 /api/albums。
+	api.Get("/folders", handlers.AlbumDetailHandler(scanCache))
 	api.Get("/search", handlers.SearchHandler(scanCache))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))

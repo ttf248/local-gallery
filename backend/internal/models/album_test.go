@@ -1,6 +1,11 @@
 package models
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestIsImageFile(t *testing.T) {
 	cases := []struct {
@@ -50,6 +55,55 @@ func TestLowerExt(t *testing.T) {
 	for _, tc := range cases {
 		if got := lowerExt(tc.in); got != tc.want {
 			t.Errorf("lowerExt(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestAlbumMarshalJSON_AliasKeys 验证 Album 同时输出 imageFiles+files、
+// imageCount+fileCount 两组键，便于新旧客户端共存。
+func TestAlbumMarshalJSON_AliasKeys(t *testing.T) {
+	a := Album{
+		Type:       "album",
+		Path:       "E:/p/a",
+		Name:       "a",
+		ImageFiles: []string{"E:/p/a/1.jpg", "E:/p/a/2.jpg"},
+		ImageCount: 2,
+		ModTime:    time.Now(),
+	}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(raw)
+	for _, key := range []string{`"imageFiles"`, `"files"`, `"imageCount"`, `"fileCount"`} {
+		if !strings.Contains(s, key) {
+			t.Errorf("Album JSON 缺少键 %s：%s", key, s)
+		}
+	}
+	// files 与 imageFiles 值应相同
+	if !strings.Contains(s, `"E:/p/a/1.jpg"`) || !strings.Contains(s, `"E:/p/a/2.jpg"`) {
+		t.Errorf("Album JSON 未正确输出文件列表：%s", s)
+	}
+}
+
+// TestScanResultMarshalJSON_AliasKeys 验证 ScanResult 同时输出 albums+folders、
+// albumCount+folderCount 两组键。
+func TestScanResultMarshalJSON_AliasKeys(t *testing.T) {
+	r := ScanResult{
+		Root:            "E:/p",
+		Albums:          []Album{{Type: "album", Path: "E:/p/a", Name: "a", ImageCount: 3}},
+		AlbumCount:      1,
+		CollectionCount: 0,
+		ScannedAt:       time.Now(),
+	}
+	raw, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(raw)
+	for _, key := range []string{`"albums"`, `"folders"`, `"albumCount"`, `"folderCount"`} {
+		if !strings.Contains(s, key) {
+			t.Errorf("ScanResult JSON 缺少键 %s：%s", key, s)
 		}
 	}
 }

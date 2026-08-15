@@ -6,6 +6,9 @@ export interface AlbumSummary {
   name: string
   coverImage: string
   imageCount: number
+  // 新字段：files 优先；旧字段 imageFiles 作为兜底。
+  files?: string[]
+  imageFiles?: string[]
   author?: string
   modTime?: string
   folderSize?: number
@@ -30,9 +33,13 @@ export interface SmartCollectionSummary {
 export interface ScanResult {
   root: string
   albums: AlbumSummary[]
+  // 新字段：folders 优先（与 albums 同源）；旧字段 albums 仍保留。
+  folders?: AlbumSummary[]
   collections: CollectionSummary[]
   smartCollections: SmartCollectionSummary[]
   albumCount: number
+  // 新字段
+  folderCount?: number
   collectionCount: number
   duration: number
   scannedAt: string

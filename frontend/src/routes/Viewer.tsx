@@ -41,9 +41,10 @@ export default function Viewer() {
       albumsApi
         .detail(pathParam)
         .then((r) => {
-          const d = r.data as { imageFiles?: string[] } | undefined
-          if (d && Array.isArray(d.imageFiles)) {
-            setImages(d.imageFiles)
+          const d = r.data as { files?: string[]; imageFiles?: string[] } | undefined
+          const list = d?.files ?? d?.imageFiles
+          if (list && Array.isArray(list)) {
+            setImages(list)
           } else {
             pushToast({ kind: 'error', message: '无法读取图片' })
           }

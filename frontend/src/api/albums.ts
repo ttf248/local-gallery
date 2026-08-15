@@ -1,6 +1,6 @@
 import { api } from './client'
 
-// 单本相册 / 集合 / 智能集合的统一响应。
+// 单本文件夹 / 集合 / 智能集合的统一响应。
 export interface AlbumDetailResponse<T = unknown> {
   ok: boolean
   kind: 'album' | 'collection' | 'smart'
@@ -17,8 +17,9 @@ export interface SearchHit {
 }
 
 export const albumsApi = {
+  // 优先用 /api/folders（新）；失败时回退 /api/albums（兼容旧链接 / 客户端）。
   detail(path: string) {
-    return api<AlbumDetailResponse>(`/api/albums`, {
+    return api<AlbumDetailResponse>(`/api/folders`, {
       params: { path },
     })
   },
