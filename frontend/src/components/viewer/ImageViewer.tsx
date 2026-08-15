@@ -52,31 +52,22 @@ export default function ImageViewer({ images }: Props) {
     setImgKey((k) => k + 1)
   }, [index, mode])
 
-  // 滚轮缩放
-  //   - 连续模式：wheel 直接缩放（连续阅读的天然操作）
-  //   - 单页/双页模式：Ctrl/Cmd + wheel 缩放（保留浏览器原生滚动翻页）
+  // 滚轮缩放：所有模式统一为 Ctrl/Cmd + wheel 才触发。
+  // 普通 wheel 留给浏览器原生滚动（单/双页溢出滚动、连续模式翻页）。
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (mode === 'continuous') {
-        e.preventDefault()
-        const dir = e.deltaY > 0 ? -1 : 1
-        const store = useViewerStore.getState()
-        if (dir > 0) store.zoomIn()
-        else store.zoomOut()
-      } else {
-        if (!e.ctrlKey && !e.metaKey) return
-        e.preventDefault()
-        const dir = e.deltaY > 0 ? -1 : 1
-        const store = useViewerStore.getState()
-        if (dir > 0) store.zoomIn()
-        else store.zoomOut()
-      }
+      if (!e.ctrlKey && !e.metaKey) return
+      e.preventDefault()
+      const dir = e.deltaY > 0 ? -1 : 1
+      const store = useViewerStore.getState()
+      if (dir > 0) store.zoomIn()
+      else store.zoomOut()
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [mode])
+  }, [])
 
   // 拖拽平移
   useEffect(() => {
