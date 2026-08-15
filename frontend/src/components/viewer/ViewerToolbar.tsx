@@ -31,11 +31,11 @@ interface Props {
   onToggleHelp?: () => void
 }
 
-// 阅读模式选项
+// 显示模式选项
 const MODE_OPTIONS: { value: ReaderMode; label: string; icon: typeof SinglePageIcon }[] = [
-  { value: 'single', label: '单页', icon: SinglePageIcon },
+  { value: 'single', label: '单张', icon: SinglePageIcon },
   { value: 'continuous', label: '连续', icon: ScrollPageIcon },
-  { value: 'double', label: '双页', icon: DoublePageIcon },
+  { value: 'double', label: '并排', icon: DoublePageIcon },
 ]
 
 // 适配选项
@@ -47,7 +47,7 @@ const FIT_OPTIONS: { value: FitMode; label: string; icon: typeof FitIcon }[] = [
 ]
 
 // 查看器工具栏：
-// 左 返回 / 中 进度（连续模式改为已读 N）/ 右 阅读模式 / 适配 / 方向 / 缩放 / 旋转 / 幻灯片 / 全屏 / 信息
+// 左 返回 / 中 进度（连续模式改为已读 N）/ 右 显示模式 / 适配 / 方向 / 缩放 / 旋转 / 幻灯片 / 全屏 / 信息
 export default function ViewerToolbar({
   total,
   onPrev,

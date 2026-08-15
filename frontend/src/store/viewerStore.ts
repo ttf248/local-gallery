@@ -1,11 +1,11 @@
 import { create } from 'zustand'
 import { sessionStorage } from '../utils/storage'
 
-/** 阅读模式：单页翻页 / 连续滚动 / 双页对开 */
+/** 显示模式：单张 / 连续滚动 / 双张并排 */
 export type ReaderMode = 'single' | 'continuous' | 'double'
-/** 图片适配：contain（适应）/ width（按宽）/ height（按高）/ original（原始） */
+/** 图片适配：适应 / 按宽 / 按高 / 原始 */
 export type FitMode = 'fit' | 'width' | 'height' | 'original'
-/** 阅读方向：ltr（左→右）/ rtl（右→左，原版日漫） */
+/** 翻页方向：ltr（左→右）/ rtl（右→左） */
 export type ReadDirection = 'ltr' | 'rtl'
 
 // 查看器状态（仅 sessionStorage 持久化，关闭页面即重置）。

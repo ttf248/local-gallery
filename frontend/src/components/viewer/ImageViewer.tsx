@@ -13,9 +13,9 @@ type Aspect =
   | { mode: 'original' } // 自然尺寸
 
 // 图片查看器：
-// - 三种阅读模式：单页 / 连续滚动 / 双页对开
-// - 四种适配：contain / 按宽 / 按高 / 原始
-// - 双页模式下支持 LTR / RTL（原版日漫从右往左）
+// - 三种显示模式：单张 / 连续滚动 / 双张并排
+// - 四种适配：适应 / 按宽 / 按高 / 原始
+// - 双张并排模式下支持 LTR / RTL（右→左：从右开始翻页）
 // - 缩放 / 旋转 / 拖拽 / 预加载 ±2
 export default function ImageViewer({ images }: Props) {
   const index = useViewerStore((s) => s.index)
@@ -224,8 +224,8 @@ interface DoubleProps {
   imgKey: number
 }
 
-// 双页模式：每两页为一对，左页 = index，右页 = index+1。
-// RTL（原版日漫）右页在前，左页在后。
+// 双张并排模式：每两张为一对，左侧 = index，右侧 = index+1。
+// RTL（从右到左翻页）时右侧在前，左侧在后。
 function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
   const left = images[index]
   const right = images[index + 1]
