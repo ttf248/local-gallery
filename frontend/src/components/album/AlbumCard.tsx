@@ -117,7 +117,7 @@ function GridCard({ data }: { data: CardData }) {
         {/* 智能集合标记 */}
         {data.variant === 'smart' && (
           <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
-            作者
+            标签
           </div>
         )}
         {data.variant === 'collection' && (

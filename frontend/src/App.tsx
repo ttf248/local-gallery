@@ -16,11 +16,12 @@ export default function App() {
         <Route path="/recents" element={<Recents />} />
         <Route path="/favorites" element={<Favorites />} />
         <Route path="/albums/*" element={<Album />} />
-        <Route path="/authors/*" element={<Author />} />
+        <Route path="/tags/*" element={<Author />} />
+        {/* 旧 /authors/* 重定向到 /tags/*（保留历史链接） */}
+        <Route path="/authors/*" element={<Navigate to="/tags" replace />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-      {/* 查看器独立布局（T11 完善） */}
       <Route path="/viewer/*" element={<Viewer />} />
     </Routes>
   )

@@ -11,7 +11,7 @@ import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import ScanProgress from '../components/album/ScanProgress'
 import { useUIStore } from '../store/uiStore'
-import { albumRoute, authorRoute } from '../utils/path'
+import { albumRoute, tagRoute } from '../utils/path'
 import {
   PlayFilledIcon,
   StarIcon,
@@ -54,7 +54,7 @@ function buildCards(r: ScanResult | null): CardData[] {
       subtitle: `${s.albumCount} 卷`,
       count: s.albumCount,
       coverPath: s.coverImage,
-      to: authorRoute(s.author),
+      to: tagRoute(s.author),
     })
   }
   return items
@@ -158,7 +158,7 @@ export default function Home() {
       }))
   }, [result])
 
-  // 热门合集：文件夹数最多
+  // 热门标签：合集内文件夹数最多
   const topAuthors = useMemo<CardData[]>(() => {
     if (!result) return []
     return [...result.smartCollections]
@@ -171,7 +171,7 @@ export default function Home() {
         subtitle: `${s.albumCount} 卷`,
         count: s.albumCount,
         coverPath: s.coverImage,
-        to: authorRoute(s.author),
+        to: tagRoute(s.author),
       }))
   }, [result])
 
@@ -267,7 +267,7 @@ export default function Home() {
             { key: 'all', label: '全部', count: counts.all },
             { key: 'album', label: '文件夹', count: counts.album },
             { key: 'collection', label: '集合', count: counts.collection },
-            { key: 'smart', label: '作者', count: counts.smart },
+            { key: 'smart', label: '标签', count: counts.smart },
           ].map((v) => {
             const active = view === v.key
             return (
@@ -325,10 +325,10 @@ export default function Home() {
         </SectionBlock>
       )}
 
-      {/* 热门作者 */}
+      {/* 热门标签 */}
       {topAuthors.length > 0 && !query && view === 'all' && (
         <SectionBlock
-          title="热门作者"
+          title="热门标签"
           icon={<StarIcon size={11} className="text-fg-muted" filled />}
           count={topAuthors.length}
         >

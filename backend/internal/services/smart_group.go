@@ -6,23 +6,34 @@ import (
 	"github.com/tianlongxiang/comic-reader/internal/models"
 )
 
-// GroupByAuthor 按作者智能聚合相册。
+// GroupByTag 按标签智能聚合相册。
 //
 // 规则：
-//   - 仅对有 [作者] 标记的相册分组
-//   - 同一作者相册数 >= MinAuthorAlbums 时聚合为 SmartCollection
+//   - 一个相册可有多个标签 [tag1][tag2]，会出现在多个合集里
+//   - 同一标签下相册数 >= MinTagAlbums（默认 2）时聚合为 SmartCollection
 //   - 封面选择：图片数最多的相册的第一张图
 //
-// 与 Python 版语义一致，但阈值暴露为参数，便于测试。
-func GroupByAuthor(albums []models.Album) []models.SmartCollection {
-	const minAuthorAlbums = 2
+// 兼容说明：
+//   - 当 Album.Tags 为空但 Author 非空（老数据）时，仍按 Author 聚合
+//   - 返回的 SmartCollection 同时带 Tag 与 Author 两字段（值相同），
+//     保证旧客户端按 Author 读取还能工作
+func GroupByTag(albums []models.Album) []models.SmartCollection {
+	const minTagAlbums = 2
 
 	buckets := make(map[string][]models.Album)
 	for _, a := range albums {
-		if a.Author == "" {
-			continue
+		seen := make(map[string]bool)
+		for _, t := range a.Tags {
+			if seen[t] {
+				continue
+			}
+			seen[t] = true
+			buckets[t] = append(buckets[t], a)
 		}
-		buckets[a.Author] = append(buckets[a.Author], a)
+		// 兼容：Tags 为空时按 Author 聚合
+		if a.Author != "" && !seen[a.Author] {
+			buckets[a.Author] = append(buckets[a.Author], a)
+		}
 	}
 
 	if len(buckets) == 0 {
@@ -30,8 +41,8 @@ func GroupByAuthor(albums []models.Album) []models.SmartCollection {
 	}
 
 	var smart []models.SmartCollection
-	for author, list := range buckets {
-		if len(list) < minAuthorAlbums {
+	for tag, list := range buckets {
+		if len(list) < minTagAlbums {
 			continue
 		}
 		sort.Slice(list, func(i, j int) bool {
@@ -39,13 +50,21 @@ func GroupByAuthor(albums []models.Album) []models.SmartCollection {
 		})
 		smart = append(smart, models.SmartCollection{
 			Type:       "smartCollection",
-			Author:     author,
+			Tag:        tag,
+			Author:     tag, // 兼容：老客户端按 Author 读
 			Albums:     list,
 			AlbumCount: len(list),
 			CoverImage: list[0].CoverImage,
 		})
 	}
 
-	sort.Slice(smart, func(i, j int) bool { return smart[i].Author < smart[j].Author })
+	sort.Slice(smart, func(i, j int) bool { return smart[i].Tag < smart[j].Tag })
 	return smart
+}
+
+// GroupByAuthor 是 GroupByTag 的旧名字别名。
+//
+// 保留这个名称避免破坏老调用方。
+func GroupByAuthor(albums []models.Album) []models.SmartCollection {
+	return GroupByTag(albums)
 }

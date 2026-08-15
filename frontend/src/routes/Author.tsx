@@ -19,12 +19,14 @@ interface AlbumSummary {
   modTime?: string
 }
 
-// 作者页：展示一位作者的全部作品，支持排序、阅读进度、收藏
+// 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
+// （原"作者页"改名为"标签页"；URL 形如 /tags/<encoded>，参数名仍为
+// `*` / `author` 以兼容历史调用。）
 export default function Author() {
   const params = useParams()
   const navigate = useNavigate()
   // react-router v6 已经对 pathname 做过一次解码；这里如果再 decode 会引发双重解码错误
-  const raw = params['*'] ?? params['author'] ?? ''
+  const raw = params['*'] ?? params['author'] ?? params['tag'] ?? ''
   const author = raw ? safeDecode(raw) : ''
 
   const result = useLibraryStore((s) => s.result)
@@ -136,11 +138,11 @@ export default function Author() {
             <ChevronLeftIcon size={12} />
             <span>返回</span>
           </button>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">作者：{author}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">标签：{author}</h1>
         </div>
         <EmptyState
-          title="未找到该作者"
-          description="可能未扫描或作者名拼写有差异。"
+          title="未找到该标签"
+          description="可能未扫描或标签名拼写有差异。"
         />
       </div>
     )
@@ -166,7 +168,7 @@ export default function Author() {
           <div className="flex items-end gap-6 flex-wrap">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-[0.18em] text-fg-subtle font-medium mb-2">
-                作者 · Author
+                作者 · Tag（旧名）
               </div>
               <h1 className="font-display text-[36px] lg:text-[44px] leading-[1.05] font-semibold tracking-[-0.02em] text-fg">
                 {author}
@@ -189,7 +191,7 @@ export default function Author() {
                 }`}
               >
                 <StarIcon size={13} filled={isFav} />
-                <span>{isFav ? '已收藏' : '收藏作者'}</span>
+                <span>{isFav ? '已收藏' : '收藏标签'}</span>
               </button>
             </div>
           </div>

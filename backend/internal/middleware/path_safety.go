@@ -56,6 +56,11 @@ func PathSafetyMiddleware(comicRoot string) fiber.Handler {
 		if path == "" {
 			return c.Next()
 		}
+		// smart: 前缀不是绝对路径，但 handler 需据此查询"按标签聚合的合集"
+		if strings.HasPrefix(path, "smart:") {
+			c.Locals("safePath", path)
+			return c.Next()
+		}
 		clean, err := validatePath(root, rootWithSep, path)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{

@@ -145,15 +145,17 @@ func (c *ScanResultCache) FindCollection(path string) *models.Collection {
 	return nil
 }
 
-// FindSmartCollection 按作者名查找智能集合。
-func (c *ScanResultCache) FindSmartCollection(author string) *models.SmartCollection {
+// FindSmartCollection 按标签名查找智能集合。
+//
+// 兼容说明：同时按 Tag 与 Author 字段匹配（两者内容相同）。
+func (c *ScanResultCache) FindSmartCollection(tag string) *models.SmartCollection {
 	r := c.Get()
 	if r == nil {
 		return nil
 	}
 	for i := range r.SmartCollections {
-		if r.SmartCollections[i].Author == author {
-			s := r.SmartCollections[i]
+		s := r.SmartCollections[i]
+		if s.Tag == tag || s.Author == tag {
 			return &s
 		}
 	}

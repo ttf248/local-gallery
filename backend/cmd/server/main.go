@@ -113,6 +113,8 @@ func main() {
 	// 老客户端/历史链接仍可继续访问 /api/albums。
 	api.Get("/folders", handlers.AlbumDetailHandler(scanCache))
 	api.Get("/search", handlers.SearchHandler(scanCache))
+	// 标签聚合的语义化路由；"smart:<tag>" 仍能访问。
+	api.Get("/tags", handlers.AlbumDetailHandler(scanCache))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))

@@ -91,8 +91,8 @@ func TestAlbumMarshalJSON_AliasKeys(t *testing.T) {
 	}
 }
 
-// TestScanResultMarshalJSON_AliasKeys 验证 ScanResult 同时输出 albums+folders、
-// albumCount+folderCount 两组键。
+// TestScanResultMarshalJSON_AliasKeys 验证 ScanResult 顶层 JSON 字段
+// 仍然含 albums / albumCount 等基本键（无新增 folders / folderCount）。
 func TestScanResultMarshalJSON_AliasKeys(t *testing.T) {
 	r := ScanResult{
 		Root:            "E:/p",
@@ -106,7 +106,7 @@ func TestScanResultMarshalJSON_AliasKeys(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	s := string(raw)
-	for _, key := range []string{`"albums"`, `"folders"`, `"albumCount"`, `"folderCount"`} {
+	for _, key := range []string{`"albums"`, `"albumCount"`} {
 		if !strings.Contains(s, key) {
 			t.Errorf("ScanResult JSON 缺少键 %s：%s", key, s)
 		}

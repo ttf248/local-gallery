@@ -202,7 +202,7 @@ export default function Album() {
         isFavorite={isFav}
         onOpenAuthor={
           detail.type === 'smartCollection'
-            ? (author) => navigate(`/authors/${encodeURIComponent(author)}`)
+            ? (tag) => navigate(`/tags/${encodeURIComponent(tag)}`)
             : undefined
         }
         onToggleFav={async () => {
@@ -435,7 +435,7 @@ function CollectionView({
               onClick={() => onOpenAuthor(title)}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs bg-accent text-accent-contrast hover:bg-accent-hover transition-colors"
             >
-              <span>查看作者页</span>
+              <span>查看标签页</span>
             </button>
           ) : (
             <button

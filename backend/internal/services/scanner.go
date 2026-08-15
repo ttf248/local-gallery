@@ -306,6 +306,7 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 			ImageCount: len(images),
 			FolderSize: totalSize,
 			Author:     ExtractAuthor(name),
+			Tags:       ExtractTags(name),
 			ModTime:    modTime,
 		}, nil
 	}
@@ -342,18 +343,44 @@ func countCollections(colls []models.Collection) int {
 	return len(colls)
 }
 
-// ExtractAuthor 从文件夹名中提取作者：[作者] 前缀。
-// 若不含方括号，返回空字符串。
+// ExtractTags 从文件夹名中提取所有方括号标签。
+//
+// 规则：扫描整个名称，把每一对 `[...]` 的内容作为一个标签；
+// 标签首尾空白会被 trim；空标签会被丢弃。
+//
+// 例子：
+//   - "[作者A] 我的图集" → ["作者A"]
+//   - "[tag1][tag2] 名字"  → ["tag1", "tag2"]
+//   - "（无标签）"          → []
+func ExtractTags(name string) []string {
+	var tags []string
+	for {
+		i := strings.Index(name, "[")
+		if i < 0 {
+			break
+		}
+		rest := name[i+1:]
+		j := strings.Index(rest, "]")
+		if j < 0 {
+			break
+		}
+		if t := strings.TrimSpace(rest[:j]); t != "" {
+			tags = append(tags, t)
+		}
+		// 继续往后找（一次可能多个 [tag]）
+		name = rest[j+1:]
+	}
+	return tags
+}
+
+// ExtractAuthor 是 ExtractTags 的第一个标签别名；老调用方使用。
+// 若名称不含方括号，返回空字符串。
 func ExtractAuthor(name string) string {
-	i := strings.Index(name, "[")
-	if i < 0 {
+	tags := ExtractTags(name)
+	if len(tags) == 0 {
 		return ""
 	}
-	j := strings.Index(name[i:], "]")
-	if j < 0 {
-		return ""
-	}
-	return strings.TrimSpace(name[i+1 : i+j])
+	return tags[0]
 }
 
 func min(a, b int) int {

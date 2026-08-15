@@ -3,6 +3,7 @@ package services
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"testing"
 
@@ -255,6 +256,59 @@ func TestGroupByAuthor_BelowThreshold(t *testing.T) {
 	}
 	if got := GroupByAuthor(albums); len(got) != 0 {
 		t.Errorf("expected no smart collection with 1 album, got %d", len(got))
+	}
+}
+
+// 一本相册带多标签时应同时进入多个合集。
+func TestGroupByTag_MultiTagAlbum(t *testing.T) {
+	albums := []models.Album{
+		{Name: "[A][B] 1", Author: "A", Tags: []string{"A", "B"}, ImageCount: 5},
+		{Name: "[A] 2", Author: "A", Tags: []string{"A"}, ImageCount: 3},
+		{Name: "[B] 3", Author: "B", Tags: []string{"B"}, ImageCount: 1},
+	}
+	smart := GroupByTag(albums)
+	if len(smart) != 2 {
+		t.Fatalf("expected 2 smart collections (A and B), got %d: %+v", len(smart), smart)
+	}
+	var aCount, bCount int
+	for _, s := range smart {
+		switch s.Tag {
+		case "A":
+			aCount = s.AlbumCount
+		case "B":
+			bCount = s.AlbumCount
+		}
+	}
+	if aCount != 2 {
+		t.Errorf("tag A should have 2 albums, got %d", aCount)
+	}
+	if bCount != 2 {
+		t.Errorf("tag B should have 2 albums (第一本同时打 A+B 标签), got %d", bCount)
+	}
+}
+
+// ExtractTags 行为：返回所有 [tag] 内容，按出现顺序，去空去重 trim。
+func TestExtractTags(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"no brackets", "我的图集", nil},
+		{"single", "[A] 我的图集", []string{"A"}},
+		{"multi", "[A][B] 名字", []string{"A", "B"}},
+		{"trimmed", "[ A ] 名字", []string{"A"}},
+		{"skip empty", "[] [A] []", []string{"A"}},
+		{"unclosed", "[A 名字", nil},
+		{"comic-style author", "[作者 (A)] 标题", []string{"作者 (A)"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ExtractTags(tc.in)
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Errorf("ExtractTags(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 

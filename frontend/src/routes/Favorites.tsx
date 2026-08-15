@@ -10,7 +10,7 @@ import { useAllProgress } from '../hooks/useReadingProgress'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { StarIcon } from '../components/common/Icon'
-import { albumRoute, authorRoute } from '../utils/path'
+import { albumRoute, tagRoute } from '../utils/path'
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
@@ -50,7 +50,7 @@ export default function Favorites() {
           subtitle: `${sc.albumCount} 卷`,
           count: sc.albumCount,
           coverPath: sc.coverImage,
-          to: authorRoute(sc.author),
+          to: tagRoute(sc.author),
           isFavorite: true,
         })
         continue
