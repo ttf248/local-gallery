@@ -1,50 +1,50 @@
 /* 主题 token。
    设计原则：
-   - 极简的近黑/近白中性色，避免纯白/纯黑的视觉刺激
-   - 强调色支持用户切换（5 套），与中性色搭配都很克制
-   - 字体节奏更紧、行高更舒展、留白更多
-   - 圆角与阴影都更克制 */
+   - 冷感中性色（不偏黄/米），偏现代极简
+   - 接近纯白/纯黑但保留微对比，避免刺激
+   - 强调色更现代：靛蓝、紫罗兰、翠绿、琥珀等
+   - 字体节奏紧、留白克制，圆角与阴影更轻 */
 
 /* === Light (default) === */
 :root,
 :root[data-theme='light'] {
-  /* Surface — 略带温度的中性灰 */
-  --bg: #f5f4f1;
-  --bg-elevated: #fdfcfa;
-  --bg-subtle: #ebe9e4;
-  --bg-strong: #dedbd4;
+  /* Surface — 冷调近白 */
+  --bg: #fafafa;
+  --bg-elevated: #ffffff;
+  --bg-subtle: #f4f4f5;
+  --bg-strong: #e4e4e7;
 
-  /* Foreground — 接近石墨而非纯黑 */
-  --fg: #1a1c1f;
-  --fg-muted: #5d6470;
-  --fg-subtle: #8b9099;
+  /* Foreground — 石墨近黑 */
+  --fg: #09090b;
+  --fg-muted: #71717a;
+  --fg-subtle: #a1a1aa;
 
-  /* Accent — 默认墨蓝；通过 [data-accent] 覆盖 */
-  --accent: #1f2937;
-  --accent-hover: #0f172a;
-  --accent-soft: #eef0f3;
-  --accent-fg: #ffffff;
-  --accent-contrast: #ffffff;
+  /* Accent — 默认石墨黑；通过 [data-accent] 覆盖 */
+  --accent: #18181b;
+  --accent-hover: #27272a;
+  --accent-soft: #f4f4f5;
+  --accent-fg: #fafafa;
+  --accent-contrast: #fafafa;
 
   /* Semantic */
-  --danger: #b04a3e;
-  --success: #1f7a4d;
-  --warning: #b48026;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --warning: #d97706;
 
   /* Borders — 极细，低对比 */
-  --border: #e2dfd9;
-  --border-strong: #cecbc4;
-  --border-faint: #ebe9e4;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --border-faint: #f4f4f5;
 
-  /* Geometry — 圆角更小、更克制 */
+  /* Geometry — 圆角克制 */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 10px;
   --radius-xl: 16px;
-  --shadow-xs: 0 1px 1px rgba(20, 22, 25, 0.03);
-  --shadow-sm: 0 1px 2px rgba(20, 22, 25, 0.04);
-  --shadow-md: 0 6px 18px rgba(20, 22, 25, 0.08);
-  --shadow-lg: 0 18px 40px rgba(20, 22, 25, 0.14);
+  --shadow-xs: 0 1px 1px rgba(9, 9, 11, 0.04);
+  --shadow-sm: 0 1px 2px rgba(9, 9, 11, 0.06);
+  --shadow-md: 0 4px 12px rgba(9, 9, 11, 0.08);
+  --shadow-lg: 0 12px 32px rgba(9, 9, 11, 0.12);
 
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
@@ -79,44 +79,44 @@
 
 /* === Dark === */
 :root[data-theme='dark'] {
-  /* Surface — 深炭而非纯黑，减少刺激 */
-  --bg: #0e1012;
-  --bg-elevated: #16181b;
-  --bg-subtle: #1c1f23;
-  --bg-strong: #25282d;
+  /* Surface — 深炭，非纯黑 */
+  --bg: #09090b;
+  --bg-elevated: #18181b;
+  --bg-subtle: #1f1f23;
+  --bg-strong: #2a2a2f;
 
   /* Foreground */
-  --fg: #ececec;
-  --fg-muted: #9aa1a9;
-  --fg-subtle: #6b7079;
+  --fg: #fafafa;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
 
-  /* Accent — 暗色下默认走暖灰白 */
-  --accent: #f3f1ee;
+  /* Accent — 暗色下走近白 */
+  --accent: #fafafa;
   --accent-hover: #ffffff;
-  --accent-soft: #1f2226;
-  --accent-fg: #111315;
-  --accent-contrast: #111315;
+  --accent-soft: #1f1f23;
+  --accent-fg: #09090b;
+  --accent-contrast: #09090b;
 
-  --danger: #e0877b;
-  --success: #6cc987;
-  --warning: #e3b341;
+  --danger: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
 
-  --border: #232529;
-  --border-strong: #2e3137;
-  --border-faint: #1a1c1f;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --border-faint: #1a1a1d;
 
-  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 24px 50px rgba(0, 0, 0, 0.55);
+  --shadow-xs: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.5);
 }
 
 /* === Accent color swatches (light) === */
 :root[data-accent='graphite'] {
-  --accent: #1f2937;
-  --accent-hover: #0f172a;
-  --accent-soft: #eef0f3;
-  --accent-contrast: #ffffff;
+  --accent: #18181b;
+  --accent-hover: #27272a;
+  --accent-soft: #f4f4f5;
+  --accent-contrast: #fafafa;
 }
 :root[data-accent='indigo'] {
   --accent: #4f46e5;
@@ -125,64 +125,64 @@
   --accent-contrast: #ffffff;
 }
 :root[data-accent='rose'] {
-  --accent: #be3a4b;
-  --accent-hover: #a52e3e;
-  --accent-soft: #fbeaec;
+  --accent: #e11d48;
+  --accent-hover: #be123c;
+  --accent-soft: #fff1f2;
   --accent-contrast: #ffffff;
 }
 :root[data-accent='forest'] {
-  --accent: #2f6f4e;
-  --accent-hover: #245a3f;
-  --accent-soft: #e6f0ea;
+  --accent: #059669;
+  --accent-hover: #047857;
+  --accent-soft: #ecfdf5;
   --accent-contrast: #ffffff;
 }
 :root[data-accent='ochre'] {
-  --accent: #a86d20;
-  --accent-hover: #8a5a18;
-  --accent-soft: #f6ecdb;
+  --accent: #d97706;
+  --accent-hover: #b45309;
+  --accent-soft: #fffbeb;
   --accent-contrast: #ffffff;
 }
 :root[data-accent='plum'] {
-  --accent: #6f3da0;
-  --accent-hover: #5d3288;
-  --accent-soft: #f0e7f7;
+  --accent: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-soft: #f5f3ff;
   --accent-contrast: #ffffff;
 }
 
 /* === Accent color swatches (dark) === */
 :root[data-theme='dark'][data-accent='graphite'] {
-  --accent: #f3f1ee;
+  --accent: #fafafa;
   --accent-hover: #ffffff;
-  --accent-soft: #1f2226;
-  --accent-contrast: #111315;
+  --accent-soft: #1f1f23;
+  --accent-contrast: #09090b;
 }
 :root[data-theme='dark'][data-accent='indigo'] {
-  --accent: #a5b4fc;
-  --accent-hover: #c7d2fe;
+  --accent: #818cf8;
+  --accent-hover: #a5b4fc;
   --accent-soft: #1e1b4b;
-  --accent-contrast: #0c0a1d;
+  --accent-contrast: #0a0917;
 }
 :root[data-theme='dark'][data-accent='rose'] {
-  --accent: #f4a3ad;
-  --accent-hover: #fbc0c7;
-  --accent-soft: #3b1a20;
-  --accent-contrast: #1d0b0e;
+  --accent: #fb7185;
+  --accent-hover: #fda4af;
+  --accent-soft: #4c0519;
+  --accent-contrast: #1a0309;
 }
 :root[data-theme='dark'][data-accent='forest'] {
-  --accent: #88c9a3;
-  --accent-hover: #aedcbf;
-  --accent-soft: #142a1d;
-  --accent-contrast: #08120c;
+  --accent: #34d399;
+  --accent-hover: #6ee7b7;
+  --accent-soft: #064e3b;
+  --accent-contrast: #022c22;
 }
 :root[data-theme='dark'][data-accent='ochre'] {
-  --accent: #e3b577;
-  --accent-hover: #efc998;
-  --accent-soft: #2c2113;
-  --accent-contrast: #15100a;
+  --accent: #fbbf24;
+  --accent-hover: #fcd34d;
+  --accent-soft: #451a03;
+  --accent-contrast: #1a0a01;
 }
 :root[data-theme='dark'][data-accent='plum'] {
-  --accent: #c4a5e8;
-  --accent-hover: #d6bdf0;
-  --accent-soft: #251a35;
-  --accent-contrast: #11091a;
+  --accent: #a78bfa;
+  --accent-hover: #c4b5fd;
+  --accent-soft: #2e1065;
+  --accent-contrast: #14052a;
 }

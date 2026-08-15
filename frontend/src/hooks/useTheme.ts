@@ -31,10 +31,10 @@ export function useTheme() {
 
 // 强调色调色板（用于设置页的色块）
 export const ACCENT_SWATCHES: { id: AccentKey; name: string; light: string; dark: string }[] = [
-  { id: 'graphite', name: '石墨', light: '#1f2937', dark: '#f3f1ee' },
-  { id: 'indigo', name: '靛蓝', light: '#4f46e5', dark: '#a5b4fc' },
-  { id: 'rose', name: '绯红', light: '#be3a4b', dark: '#f4a3ad' },
-  { id: 'forest', name: '森林', light: '#2f6f4e', dark: '#88c9a3' },
-  { id: 'ochre', name: '赭石', light: '#a86d20', dark: '#e3b577' },
-  { id: 'plum', name: '紫梅', light: '#6f3da0', dark: '#c4a5e8' },
+  { id: 'graphite', name: '石墨', light: '#18181b', dark: '#fafafa' },
+  { id: 'indigo', name: '靛蓝', light: '#4f46e5', dark: '#818cf8' },
+  { id: 'rose', name: '绯红', light: '#e11d48', dark: '#fb7185' },
+  { id: 'forest', name: '森林', light: '#059669', dark: '#34d399' },
+  { id: 'ochre', name: '琥珀', light: '#d97706', dark: '#fbbf24' },
+  { id: 'plum', name: '紫罗兰', light: '#7c3aed', dark: '#a78bfa' },
 ]

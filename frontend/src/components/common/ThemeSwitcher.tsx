@@ -3,12 +3,12 @@ import { SunIcon, MoonIcon, MonitorIcon, CheckIcon } from './Icon'
 import { useState, useEffect, useRef } from 'react'
 
 const ACCENT_PREVIEWS: { id: AccentKey; color: string }[] = [
-  { id: 'graphite', color: '#1f2937' },
+  { id: 'graphite', color: '#18181b' },
   { id: 'indigo', color: '#4f46e5' },
-  { id: 'rose', color: '#be3a4b' },
-  { id: 'forest', color: '#2f6f4e' },
-  { id: 'ochre', color: '#a86d20' },
-  { id: 'plum', color: '#6f3da0' },
+  { id: 'rose', color: '#e11d48' },
+  { id: 'forest', color: '#059669' },
+  { id: 'ochre', color: '#d97706' },
+  { id: 'plum', color: '#7c3aed' },
 ]
 
 // 主题切换：
@@ -83,7 +83,7 @@ function CompactSwitch({
   const cur =
     theme === 'light' ? SunIcon : theme === 'dark' ? MoonIcon : MonitorIcon
   const Icon = cur
-  const accentColor = ACCENT_PREVIEWS.find((a) => a.id === accent)?.color ?? '#1f2937'
+  const accentColor = ACCENT_PREVIEWS.find((a) => a.id === accent)?.color ?? '#18181b'
 
   return (
     <div ref={ref} className="relative">
