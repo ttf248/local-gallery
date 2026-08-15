@@ -35,9 +35,11 @@ export default function Viewer() {
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
 
+  // 拉图 + 恢复阅读进度：依赖 pathParam 变化；images 加载完成后由内层判分支
+  const imagesReady = images.length > 0
   useEffect(() => {
-    // 通过 path 拉取图片列表（如果还没拉到）
-    if (images.length === 0 && pathParam) {
+    // path 拉取图片列表（如果还没拉到）
+    if (!imagesReady && pathParam) {
       albumsApi
         .detail(pathParam)
         .then((r) => {
@@ -52,9 +54,12 @@ export default function Viewer() {
         .catch(() => {
           pushToast({ kind: 'error', message: '无法读取图片' })
         })
-      return
     }
-    if (images.length === 0) return
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathParam])
+
+  useEffect(() => {
+    if (!imagesReady) return
     setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
     if (!pathParam) return
     progressApi
@@ -67,7 +72,7 @@ export default function Viewer() {
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathParam, images.length === 0])
+  }, [imagesReady, pathParam])
 
   useEffect(() => {
     setShowInfo(false)

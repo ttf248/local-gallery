@@ -65,6 +65,3 @@ func ImageInfoHandler() fiber.Handler {
 		return c.JSON(info)
 	}
 }
-
-// 引用 middleware 包以确保 import 路径正确
-var _ = middleware.Recover

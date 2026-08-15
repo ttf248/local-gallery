@@ -1,16 +1,14 @@
 import { useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
 import { useUIStore } from '../store/uiStore'
-import { favoritesApi } from '../api/prefs'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { StarIcon } from '../components/common/Icon'
-import { albumRoute, tagRoute } from '../utils/path'
+import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
@@ -26,14 +24,6 @@ export default function Favorites() {
   useEffect(() => {
     if (!result) loadFromBackend()
   }, [result, loadFromBackend])
-
-  // 单个 favorites API 会返回 stale；这里以 useFavorites 缓存为准
-  useFavorites()
-  void useQuery({
-    queryKey: ['favorites'],
-    queryFn: () => favoritesApi.list(),
-    staleTime: 10 * 1000,
-  })
 
   const cards = useMemo<CardData[]>(() => {
     if (!result) return []
@@ -73,15 +63,11 @@ export default function Favorites() {
   }, [result, favorites])
 
   const progressPaths = useMemo(
-    () => cards.filter((c) => c.variant === 'album').map((c) => {
-      const m = c.to.match(/^\/albums\/(.+)$/)
-      if (!m) return ''
-      try {
-        return decodeURIComponent(m[1])
-      } catch {
-        return m[1]
-      }
-    }).filter(Boolean),
+    () =>
+      cards
+        .filter((c) => c.variant === 'album')
+        .map((c) => decodeFavPath(c.to))
+        .filter(Boolean),
     [cards],
   )
   const { data: progressMap } = useAllProgress(progressPaths)
@@ -95,8 +81,7 @@ export default function Favorites() {
       })
       .map((c) => {
         if (c.variant !== 'album') return c
-        const m = c.to.match(/^\/albums\/(.+)$/)
-        const k = m ? decodeURIComponent(m[1]) : ''
+        const k = decodeFavPath(c.to)
         const p = progressMap?.[k]
         if (!p) return c
         return { ...c, progress: { index: p.index, total: p.total } }

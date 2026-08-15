@@ -120,6 +120,12 @@ func (s *PrefsStore) AddFavorite(path string) ([]string, error) {
 		}
 	}
 	s.cached.Favorites = append(s.cached.Favorites, path)
+	// 软上限：收藏超过 maxFavorites 时丢弃最旧的，避免无限增长。
+	// 用户可通过 PruneInvalidFavorites / DELETE 主动清理。
+	const maxFavorites = 500
+	if len(s.cached.Favorites) > maxFavorites {
+		s.cached.Favorites = s.cached.Favorites[len(s.cached.Favorites)-maxFavorites:]
+	}
 	if err := s.flushLocked(); err != nil {
 		return nil, err
 	}

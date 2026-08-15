@@ -266,6 +266,14 @@ export const RewindIcon = (p: IconProps) => (
   </svg>
 )
 
+// 全新 / 闪光：四角星（与重温/继续阅读的图标节奏一致）
+export const SparklesIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3l1.6 4.2L18 9l-4.4 1.8L12 15l-1.6-4.2L6 9l4.4-1.8L12 3z" />
+    <path d="M19 14l.7 1.8L21.5 17l-1.8.7L19 19.5l-.7-1.8L16.5 17l1.8-1.2L19 14z" />
+  </svg>
+)
+
 // 日历
 export const CalendarIcon = (p: IconProps) => (
   <svg {...base(p)}>

@@ -161,7 +161,8 @@ export default function ImageViewer({ images }: Props) {
                 store.zoomReset()
                 setPan({ x: 0, y: 0 })
               } else {
-                store.setZoom(1.6)
+                // 与滚轮/键盘 `+` 一致：每次 +20%
+                store.zoomIn()
               }
             }}
             className={imgClassFor()}

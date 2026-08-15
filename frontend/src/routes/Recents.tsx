@@ -9,7 +9,7 @@ import { useAllProgress } from '../hooks/useReadingProgress'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { ClockIcon } from '../components/common/Icon'
-import { albumRoute } from '../utils/path'
+import { albumRoute, decodeFavPath } from '../utils/path'
 
 // 最近访问：从后端 history 列表中读取。带阅读进度。
 export default function Recents() {
@@ -50,11 +50,10 @@ export default function Recents() {
     return out
   }, [data, result])
 
-  const progressPaths = useMemo(() => cards.map((c) => {
-    const m = c.to.match(/^\/albums\/(.+)$/)
-    if (!m) return ''
-    try { return decodeURIComponent(m[1]) } catch { return m[1] }
-  }), [cards])
+  const progressPaths = useMemo(
+    () => cards.map((c) => decodeFavPath(c.to)).filter(Boolean),
+    [cards],
+  )
   const { data: progressMap } = useAllProgress(progressPaths)
 
   const filtered = useMemo(() => {
@@ -65,8 +64,7 @@ export default function Recents() {
         return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
       })
       .map((c) => {
-        const m = c.to.match(/^\/albums\/(.+)$/)
-        const k = m ? decodeURIComponent(m[1]) : ''
+        const k = decodeFavPath(c.to)
         const p = progressMap?.[k]
         if (!p) return c
         return { ...c, progress: { index: p.index, total: p.total } }
@@ -74,8 +72,11 @@ export default function Recents() {
     switch (sortBy) {
       case 'count':
         return list.sort((a, b) => b.count - a.count)
+      case 'name':
+        return list.sort((a, b) => a.title.localeCompare(b.title))
+      case 'recent':
       default:
-        // recent：保持原顺序
+        // history API 已按 OpenedAt 倒序，直接保持原序即可
         return list
     }
   }, [cards, query, sortBy, progressMap])

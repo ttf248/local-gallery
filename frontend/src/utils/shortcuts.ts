@@ -50,13 +50,22 @@ export const SHORTCUTS: Shortcut[] = [
 export function normalizeKey(e: KeyboardEvent): string {
   const parts: string[] = []
   if (e.ctrlKey || e.metaKey) parts.push('ctrl')
-  if (e.shiftKey) parts.push('shift')
   if (e.altKey) parts.push('alt')
-  let k = e.key.toLowerCase()
+
+  let k = e.key
   // 兼容：shift+/ 显示为 ?，将 ? 归一为 /
   if (k === '?') k = '/'
   // 空格归一为 'space'
   if (k === ' ') k = 'space'
+  // shift+= 在大多数键盘产生 e.key === '+'；handler 表里只用 '+'，
+  // 旧实现会拼出 "shift+" 命中不到。这里把 + / = 统一归一为 '+'。
+  if (k === '+' || k === '=') k = '+'
+
+  // shift 前缀仅在主键是字母 / 数字时加；符号（+ / ? / 等）不参与。
+  if (e.shiftKey && k !== '+' && k !== '/' && k.length > 1) parts.push('shift')
+
+  // 其它主键统一小写
+  if (k.length === 1) k = k.toLowerCase()
   parts.push(k)
   return parts.join('+')
 }

@@ -11,7 +11,7 @@ import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import ScanProgress from '../components/album/ScanProgress'
 import { useUIStore } from '../store/uiStore'
-import { albumRoute, tagRoute } from '../utils/path'
+import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import {
   PlayFilledIcon,
   StarIcon,
@@ -20,6 +20,7 @@ import {
   ClockIcon,
   RefreshIcon,
   RewindIcon,
+  SparklesIcon,
 } from '../components/common/Icon'
 
 // 「重温」智能合集阈值：超过 N 天没看就推荐。
@@ -63,15 +64,6 @@ function buildCards(r: ScanResult | null): CardData[] {
     })
   }
   return items
-}
-
-function decodeFromRoute(to: string): string {
-  if (!to.startsWith('/albums/')) return ''
-  try {
-    return decodeURIComponent(to.replace(/^\/albums\//, ''))
-  } catch {
-    return to.replace(/^\/albums\//, '')
-  }
 }
 
 export default function Home() {
@@ -126,7 +118,10 @@ export default function Home() {
 
   // 继续阅读：拉取所有有进度的条目，关联到具体 albums
   const progressPaths = useMemo(
-    () => cards.map((c) => (c.variant === 'album' ? decodeFromRoute(c.to) : '')).filter(Boolean),
+    () =>
+      cards
+        .map((c) => (c.variant === 'album' ? decodeFavPath(c.to) : ''))
+        .filter(Boolean),
     [cards],
   )
   const { data: progressMap } = useAllProgress(progressPaths)
@@ -135,7 +130,7 @@ export default function Home() {
     const items: CardData[] = []
     for (const c of cards) {
       if (c.variant !== 'album') continue
-      const k = decodeFromRoute(c.to)
+      const k = decodeFavPath(c.to)
       const p = progressMap[k]
       if (!p || p.index <= 0) continue
       items.push({ ...c, progress: { index: p.index, total: p.total } })
@@ -212,6 +207,31 @@ export default function Home() {
     return items.sort((a, b) => a.since - b.since).slice(0, 8).map((it) => it.card)
   }, [result, progressMap])
 
+  // 「全新」：从未打开过、且 modTime 在 REWIND 阈值之前的相册。
+  //   - 没进度记录 = 没看过
+  //   - 没 modTime = 老文件，不一定"新"，优先不推
+  //   排序：按 modTime 倒序（最新加入在前）
+  const fresh = useMemo<CardData[]>(() => {
+    if (!result) return []
+    const modTimeOf = (path: string) =>
+      +new Date(result.albums.find((x) => x.path === path)?.modTime ?? '')
+    const items: CardData[] = []
+    for (const a of result.albums) {
+      if (!a.modTime) continue
+      if (progressMap?.[a.path]) continue // 已有进度，不算"全新"
+      items.push({
+        id: 'a:' + a.path,
+        variant: 'album',
+        title: a.name,
+        subtitle: a.author || undefined,
+        count: a.imageCount,
+        coverPath: a.coverImage,
+        to: albumRoute(a.path),
+      })
+    }
+    return items.sort((a, b) => modTimeOf(decodeFavPath(b.to)) - modTimeOf(decodeFavPath(a.to))).slice(0, 8)
+  }, [result, progressMap])
+
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
       if (view !== 'all' && it.variant !== view) return false
@@ -224,7 +244,7 @@ export default function Home() {
     })
     const withProgress = list.map((c) => {
       if (c.variant !== 'album') return c
-      const k = decodeFromRoute(c.to)
+      const k = decodeFavPath(c.to)
       const p = progressMap?.[k]
       if (!p) return c
       return { ...c, progress: { index: p.index, total: p.total } }
@@ -351,6 +371,18 @@ export default function Home() {
         </SectionBlock>
       )}
 
+      {/* 全新：从未打开的相册 */}
+      {fresh.length > 0 && !query && (
+        <SectionBlock
+          title="全新"
+          subtitle="还没看过"
+          icon={<SparklesIcon size={11} className="text-fg-muted" />}
+          count={fresh.length}
+        >
+          <AlbumGrid items={fresh} variant={viewMode} />
+        </SectionBlock>
+      )}
+
       {/* 重温：> 30 天没看的相册 */}
       {rewind.length > 0 && !query && (
         <SectionBlock
@@ -388,6 +420,7 @@ export default function Home() {
       {/* 全部 / 筛选结果 */}
       <section className="max-w-[1400px]">
         {(inProgress.length > 0 ||
+          fresh.length > 0 ||
           rewind.length > 0 ||
           recentAdded.length > 0 ||
           topAuthors.length > 0) &&
