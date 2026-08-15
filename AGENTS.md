@@ -93,16 +93,16 @@
 - **不要新增更多调试入口**：如确有必要，先在 PR 中说明，避免 launch 列表膨胀。
 - Go 入口固定为 `backend/cmd/server/main.go`；前端入口固定为 `frontend/src/main.tsx`（如不存在则在 PR 中确认）。
 - 配置文件：
-  - 后端真实配置：`backend/config.json`（不入仓，参考 `backend/config.example.json`）；
-  - 环境变量：`.env`（不入仓，参考 `.env.example`）；
-  - 漫画根目录优先级：CLI 参数 `--comic-root` > 环境变量 `COMIC_ROOT` > 配置文件 > 默认 `./comics`。
+  - 后端唯一配置：`backend/config.yaml`（不入仓，参考 `backend/config.example.yaml`）；
+  - 不再支持环境变量或 `--comic-root` 等 CLI 覆盖；所有运行时参数集中在 `config.yaml`。
+  - 缓存目录：`cacheDir` 未配置时自动在 CWD 下创建 `.comic-reader/`（存放缩略图、扫描结果、用户偏好）。
 
 ### 架构边界
 
 - **后端** 只负责：扫描本地目录、生成与缓存缩略图、提供 HTTP API 与 SSE 进度流、托管生产环境前端静态资源。
 - **前端** 只负责：UI 渲染、用户交互、本地偏好（主题/收藏/最近）的持久化、调用后端 API。
 - **跨域**：开发期 Vite dev server 通过代理访问后端；生产期由后端单端口同时托管 API 与静态资源，不引入额外反向代理。
-- **缓存目录**：缩略图缓存与运行时缓存统一放在仓库根 `.cache/`（不入仓，由服务运行期重建）。不允许把缓存路径硬编码进源码，必须从配置/环境变量派生。
+- **缓存目录**：未配置 `cacheDir` 时在进程 CWD 下创建 `.comic-reader/`（存放缩略图、扫描结果、用户偏好），不入仓；不要把缓存路径硬编码进源码，必须从 `config.yaml` 派生。
 - **不要引入微服务/消息队列/数据库**：当前架构是单进程 + 本地文件 + 浏览器本地存储
 
 ### 项目文档与调试配置
@@ -168,7 +168,7 @@
 - [ ] 改了 API？→ 更新 `docs/API.md` + 后端测试 + README。
 - [ ] 改了路由/页面？→ 更新 README "项目结构" + 前端测试。
 - [ ] 改了快捷键？→ 更新 `docs/SHORTCUTS.md` + 前端组件属性。
-- [ ] 改了配置项/环境变量？→ 更新 `backend/config.example.json` + `.env.example` + README。
+- [ ] 改了配置项/环境变量？→ 更新 `backend/config.example.yaml` + README。
 - [ ] 改了端口/启动命令？→ 更新 `.vscode/launch.json` + `.vscode/tasks.json` + `scripts/*.ps1`。
 - [ ] 新增依赖？→ 更新对应清单 + 锁文件 + PR 描述中列出。
 - [ ] 涉及路径/文件系统访问？→ 确认经过 `path/filepath` + 路径安全中间件 + 日志脱敏。

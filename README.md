@@ -25,34 +25,48 @@
 
 任意位置均可，例如 `E:\漫画`、`~/Pictures/comics`。
 
-### 2. 启动后端
+### 2. 配置后端
 
 ```bash
 cd backend
-go mod tidy
-go run ./cmd/server --comic-root "E:\漫画"
-# 或使用环境变量
-COMIC_ROOT="E:\漫画" go run ./cmd/server
+cp config.example.yaml config.yaml
+# 编辑 config.yaml，至少设置 comicRoot
+```
+
+后端从 `./config.yaml`（相对启动 CWD）加载配置；不存在则用内置默认值。未配置 `cacheDir` 时自动在 CWD 下创建 `.comic-reader/`。
+
+### 3. 启动后端
+
+```bash
+go run ./cmd/server
 ```
 
 后端默认监听 `http://localhost:8080`，健康检查 `http://localhost:8080/api/health`。
 
-### 3. 启动前端（开发模式）
+可选 flag：
+
+- `--config <path>`：指向其他位置的 YAML 配置文件
+- `--static-dir <dir>`：覆盖 `staticDir` 字段（生产部署前端产物路径）
+
+**不再支持环境变量或 `--comic-root` 等覆盖**，所有运行时配置集中在 `config.yaml`。
+
+### 4. 启动前端（开发模式）
 
 ```bash
-cd frontend
+cd ../frontend
 npm install
 npm run dev
 ```
 
 打开浏览器访问 `http://localhost:5173`。
 
-### 4. 生产部署（单端口）
+### 5. 生产部署（单端口）
 
 ```bash
 cd frontend && npm run build      # 产物在 frontend/dist
 cd ../backend && go build -o ../bin/server ./cmd/server
-COMIC_ROOT=/path/to/comics ./bin/server
+# 在 backend/config.yaml 中设置 comicRoot 指向漫画根目录
+./bin/server
 ```
 
 后端在同一端口（默认 8080）同时提供 API 与前端静态资源。
@@ -61,16 +75,14 @@ COMIC_ROOT=/path/to/comics ./bin/server
 
 ## ⚙️ 配置
 
-漫画根目录支持 4 种来源（优先级从高到低）：
+漫画根目录与所有运行时参数集中在 [`backend/config.yaml`](./backend/config.example.yaml)：
 
 | 来源 | 示例 |
 |------|------|
-| 命令行参数 | `--comic-root "E:\漫画"` |
-| 环境变量 | `COMIC_ROOT=E:\漫画` |
-| 配置文件 | `backend/config.json` 字段 `comicRoot` |
-| 默认值 | `./comics`（相对后端目录） |
+| YAML 配置文件 | `backend/config.yaml` 字段 `comicRoot` 等 |
+| 内置默认值 | `./comics`（相对后端 CWD），缓存目录 `<CWD>/.comic-reader/` |
 
-完整配置项见 [`backend/config.example.json`](./backend/config.example.json) 或 [`.env.example`](./.env.example)。
+完整字段见 [`backend/config.example.yaml`](./backend/config.example.yaml)。
 
 ---
 

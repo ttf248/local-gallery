@@ -1,30 +1,16 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-// resetEnv 在子测试间清理环境变量。
-func resetEnv(t *testing.T) {
-	t.Helper()
-	envs := []string{
-		"COMIC_ROOT", "COMIC_HOST", "COMIC_PORT",
-		"COMIC_CACHE_DIR", "COMIC_THUMB_W", "COMIC_THUMB_H",
-		"COMIC_CACHE_MAX_AGE_DAYS", "COMIC_ALLOW_OS_OPEN",
-	}
-	for _, e := range envs {
-		os.Unsetenv(e)
-	}
-}
-
-// writeTempJSON 写入临时 JSON 配置文件并返回路径。
-func writeTempJSON(t *testing.T, content string) string {
+// writeTempYAML 写入临时 YAML 配置文件并返回路径。
+func writeTempYAML(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "config.json")
+	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("write temp config: %v", err)
 	}
@@ -45,10 +31,17 @@ func TestDefault(t *testing.T) {
 	if d.CacheMaxAgeDays <= 0 {
 		t.Error("default cache max age must be positive")
 	}
+	if filepath.Base(d.CacheDir) != DefaultCacheDirName {
+		t.Errorf("default CacheDir must end with %q, got %q",
+			DefaultCacheDirName, d.CacheDir)
+	}
+	if d.StaticDir == "" {
+		t.Error("default StaticDir must not be empty")
+	}
 }
 
 func TestLoadFile_MissingReturnsDefault(t *testing.T) {
-	cfg, err := LoadFile(filepath.Join(t.TempDir(), "nope.json"))
+	cfg, err := LoadFile(filepath.Join(t.TempDir(), "nope.yaml"))
 	if err != nil {
 		t.Fatalf("LoadFile should not error on missing file, got: %v", err)
 	}
@@ -59,13 +52,15 @@ func TestLoadFile_MissingReturnsDefault(t *testing.T) {
 }
 
 func TestLoadFile_OverridesDefaults(t *testing.T) {
-	path := writeTempJSON(t, `{
-		"comicRoot": "D:\\manga",
-		"port": 9090,
-		"thumbSizeW": 210,
-		"thumbSizeH": 280,
-		"allowOsOpen": true
-	}`)
+	path := writeTempYAML(t, `
+comicRoot: D:\manga
+port: 9090
+thumbSizeW: 210
+thumbSizeH: 280
+allowOsOpen: true
+cacheDir: D:\custom-cache
+staticDir: build/web
+`)
 
 	cfg, err := LoadFile(path)
 	if err != nil {
@@ -83,88 +78,39 @@ func TestLoadFile_OverridesDefaults(t *testing.T) {
 	if !cfg.AllowOsOpen {
 		t.Error("allowOsOpen should be true from file")
 	}
-}
-
-func TestLoadFile_InvalidJSON(t *testing.T) {
-	path := writeTempJSON(t, `{invalid json}`)
-	_, err := LoadFile(path)
-	if err == nil {
-		t.Error("expected error on invalid JSON")
+	if cfg.CacheDir != "D:\\custom-cache" {
+		t.Errorf("cacheDir: got %q", cfg.CacheDir)
+	}
+	if cfg.StaticDir != "build/web" {
+		t.Errorf("staticDir: got %q", cfg.StaticDir)
 	}
 }
 
-func TestApplyEnv_OverridesFile(t *testing.T) {
-	resetEnv(t)
-	defer resetEnv(t)
+func TestLoadFile_PartialOverrides(t *testing.T) {
+	// 只覆盖一个字段，其余应保持 Default()
+	path := writeTempYAML(t, `port: 9090`)
 
-	// 先从文件加载一个非默认 comicRoot
-	path := writeTempJSON(t, `{"comicRoot": "from-file"}`)
 	cfg, err := LoadFile(path)
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if cfg.ComicRoot != "from-file" {
-		t.Fatalf("setup: expected from-file, got %q", cfg.ComicRoot)
+	if cfg.Port != 9090 {
+		t.Errorf("port: got %d", cfg.Port)
 	}
-
-	// env 覆盖
-	os.Setenv("COMIC_ROOT", "from-env")
-	os.Setenv("COMIC_PORT", "7777")
-	os.Setenv("COMIC_THUMB_W", "256")
-	os.Setenv("COMIC_ALLOW_OS_OPEN", "true")
-	ApplyEnv(cfg)
-
-	if cfg.ComicRoot != "from-env" {
-		t.Errorf("env should override file, got %q", cfg.ComicRoot)
+	d := Default()
+	if cfg.Host != d.Host {
+		t.Errorf("host should keep default, got %q", cfg.Host)
 	}
-	if cfg.Port != 7777 {
-		t.Errorf("port from env: got %d", cfg.Port)
-	}
-	if cfg.ThumbSizeW != 256 {
-		t.Errorf("thumbW from env: got %d", cfg.ThumbSizeW)
-	}
-	if !cfg.AllowOsOpen {
-		t.Error("allowOsOpen from env")
+	if cfg.ThumbSizeW != d.ThumbSizeW {
+		t.Errorf("thumbSizeW should keep default")
 	}
 }
 
-func TestApplyEnv_InvalidPortIgnored(t *testing.T) {
-	resetEnv(t)
-	defer resetEnv(t)
-
-	cfg := Default()
-	os.Setenv("COMIC_PORT", "not-a-number")
-	ApplyEnv(cfg)
-
-	if cfg.Port != 8080 {
-		t.Errorf("invalid env port should not change config, got %d", cfg.Port)
-	}
-}
-
-func TestApplyEnv_BoolVariants(t *testing.T) {
-	resetEnv(t)
-	defer resetEnv(t)
-
-	cases := []struct {
-		val      string
-		expected bool
-	}{
-		{"true", true},
-		{"TRUE", true},
-		{"1", true},
-		{"false", false},
-		{"0", false},
-		{"yes", false}, // 仅 1/true/TRUE 视为 true
-	}
-
-	for _, tc := range cases {
-		os.Setenv("COMIC_ALLOW_OS_OPEN", tc.val)
-		cfg := Default()
-		ApplyEnv(cfg)
-		if cfg.AllowOsOpen != tc.expected {
-			t.Errorf("COMIC_ALLOW_OS_OPEN=%q: expected %v, got %v",
-				tc.val, tc.expected, cfg.AllowOsOpen)
-		}
+func TestLoadFile_InvalidYAML(t *testing.T) {
+	path := writeTempYAML(t, `port: "not closed`)
+	_, err := LoadFile(path)
+	if err == nil {
+		t.Error("expected error on invalid YAML")
 	}
 }
 
@@ -212,59 +158,11 @@ func TestAddr(t *testing.T) {
 	}
 }
 
-// 端到端模拟 main.go 中的合并顺序：file → env → flag(由调用方手动)。
-func TestPriorityChain(t *testing.T) {
-	resetEnv(t)
-	defer resetEnv(t)
-
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "config.json")
-	os.WriteFile(cfgPath, []byte(`{"comicRoot": "from-file"}`), 0o644)
-
-	// 1) 文件
-	cfg, err := LoadFile(cfgPath)
-	if err != nil {
-		t.Fatalf("file: %v", err)
-	}
-	if cfg.ComicRoot != "from-file" {
-		t.Fatalf("file layer: %q", cfg.ComicRoot)
-	}
-
-	// 2) env 覆盖
-	os.Setenv("COMIC_ROOT", "from-env")
-	ApplyEnv(cfg)
-	if cfg.ComicRoot != "from-env" {
-		t.Fatalf("env layer: %q", cfg.ComicRoot)
-	}
-
-	// 3) flag 覆盖（模拟 main.go 中的 if *flag != ""）
-	flagVal := "from-flag"
-	cfg.ComicRoot = flagVal
-	if cfg.ComicRoot != "from-flag" {
-		t.Fatalf("flag layer: %q", cfg.ComicRoot)
-	}
-}
-
-// 演示 JSON 编解码往返。
-func TestJSONRoundTrip(t *testing.T) {
-	src := Default()
-	src.ComicRoot = "X:\\test"
-	src.Port = 12345
-	src.AllowOsOpen = true
-
-	data, err := json.MarshalIndent(src, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dst := Default()
-	if err := json.Unmarshal(data, dst); err != nil {
-		t.Fatal(err)
-	}
-
-	if dst.ComicRoot != src.ComicRoot ||
-		dst.Port != src.Port ||
-		dst.AllowOsOpen != src.AllowOsOpen {
-		t.Errorf("round-trip mismatch: %+v vs %+v", src, dst)
+// 默认缓存目录应包含 .comic-reader；不依赖环境变量。
+func TestDefault_CacheDirIsRuntimeRelative(t *testing.T) {
+	cfg := Default()
+	if filepath.Base(cfg.CacheDir) != DefaultCacheDirName {
+		t.Errorf("CacheDir must end with %q, got %q",
+			DefaultCacheDirName, cfg.CacheDir)
 	}
 }

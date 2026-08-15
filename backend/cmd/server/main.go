@@ -1,14 +1,14 @@
 // Command server 漫画阅读器后端入口。
 //
 // 启动流程：
-//  1. 解析 flag（CLI 覆盖）
-//  2. 加载 config.json（文件覆盖默认）
-//  3. 应用环境变量（env 覆盖文件）
-//  4. 校验 ComicRoot 必须存在且为目录
-//  5. 注册中间件 + 路由
-//  6. 监听 host:port
+//  1. 解析 flag：仅 --config（指定 YAML 路径）和 --static-dir（前端产物目录）
+//  2. 加载 config.yaml（缺失则用内置默认；显式字段覆盖默认）
+//  3. 校验 ComicRoot 必须存在且为目录
+//  4. 注册中间件 + 路由
+//  5. 监听 host:port
 //
-// T2 阶段仅暴露 /api/health；后续任务逐步扩展。
+// 不再支持环境变量或 --comic-root / --host / --port 等覆盖；
+// 所有运行时配置集中在 config.yaml（参考 backend/config.example.yaml）。
 package main
 
 import (
@@ -27,45 +27,29 @@ import (
 	"github.com/tianlongxiang/comic-reader/internal/store"
 )
 
-// 默认前端静态资源目录（相对后端二进制位置）。
-const defaultStaticDir = "dist"
-
-const defaultConfigPath = "config.json"
-
 func main() {
-	// ---- 1. 解析 flag ----
-	flagComicRoot := flag.String("comic-root", "", "漫画根目录（覆盖 env 和文件）")
-	flagHost := flag.String("host", "", "监听地址")
-	flagPort := flag.Int("port", 0, "监听端口")
-	flagConfig := flag.String("config", defaultConfigPath, "配置文件路径")
-	flagStaticDir := flag.String("static-dir", defaultStaticDir, "前端静态资源目录（相对二进制位置；不存在则禁用）")
+	// ---- 1. 解析 flag（仅保留部署相关：配置文件路径 + 前端静态目录）----
+	flagConfig := flag.String("config", config.DefaultConfigName, "配置文件路径（YAML，相对 CWD）")
+	flagStaticDir := flag.String("static-dir", "", "前端静态资源目录（覆盖 config.yaml 中的 staticDir；不存在则跳过托管）")
 	flag.Parse()
 
-	// ---- 2. 加载文件 ----
+	// ---- 2. 加载 YAML 配置 ----
 	cfg, err := config.LoadFile(*flagConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "加载配置失败 %s: %v\n", *flagConfig, err)
 		os.Exit(2)
 	}
 
-	// ---- 3. 应用环境变量 ----
-	config.ApplyEnv(cfg)
-
-	// ---- 4. CLI 覆盖 ----
-	if *flagComicRoot != "" {
-		cfg.ComicRoot = *flagComicRoot
-	}
-	if *flagHost != "" {
-		cfg.Host = *flagHost
-	}
-	if *flagPort > 0 {
-		cfg.Port = *flagPort
+	// ---- 3. --static-dir 覆盖 YAML 中的同名字段（部署灵活）----
+	staticDir := cfg.StaticDir
+	if *flagStaticDir != "" {
+		staticDir = *flagStaticDir
 	}
 
-	// ---- 5. 校验 ----
+	// ---- 4. 校验 ----
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "配置校验失败: %v\n", err)
-		fmt.Fprintf(os.Stderr, "提示：使用 --comic-root 或 COMIC_ROOT 指定漫画目录\n")
+		fmt.Fprintf(os.Stderr, "提示：在 config.yaml 中设置 comicRoot 指向漫画根目录\n")
 		os.Exit(2)
 	}
 
@@ -75,7 +59,7 @@ func main() {
 	log.Printf("  Thumbnail: %dx%d", cfg.ThumbSizeW, cfg.ThumbSizeH)
 	log.Printf("  Listen:    %s", cfg.Addr())
 
-	// ---- 6. 创建并启动 Fiber App ----
+	// ---- 5. 创建并启动 Fiber App ----
 	app := fiber.New(fiber.Config{
 		AppName:               "comic-reader",
 		DisableStartupMessage: true,
@@ -146,30 +130,34 @@ func main() {
 	api.Get("/progress", handlers.ProgressGetHandler(prefs))
 
 	// ---- 静态资源托管（生产模式：同端口托管前端） ----
-	if info, err := os.Stat(*flagStaticDir); err == nil && info.IsDir() {
-		app.Static("/", *flagStaticDir)
-		// SPA fallback：任何非 /api/* 的请求 → 找不到静态文件就回 index.html
-		// 使用 app.Use 的 NotFound-style 行为：放到 Static 之后，未命中时接管
-		indexPath, _ := filepath.Abs(filepath.Join(*flagStaticDir, "index.html"))
-		app.Use(func(c *fiber.Ctx) error {
-			// 只处理 GET/HEAD
-			if c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead {
-				return c.Next()
-			}
-			// API 路由不接管
-			p := c.Path()
-			if len(p) >= 5 && p[:5] == "/api/" {
-				return c.Next()
-			}
-			// 已经在响应中写过（Static 命中文件）
-			if c.Response().StatusCode() == fiber.StatusOK {
-				return nil
-			}
-			// 回退到 SPA index.html
-			c.Set("Content-Type", "text/html; charset=utf-8")
-			return c.SendFile(indexPath)
-		})
-		log.Printf("  StaticDir: %s (已托管前端 + SPA fallback)", *flagStaticDir)
+	if staticDir != "" {
+		if info, err := os.Stat(staticDir); err == nil && info.IsDir() {
+			app.Static("/", staticDir)
+			// SPA fallback：任何非 /api/* 的请求 → 找不到静态文件就回 index.html
+			// 使用 app.Use 的 NotFound-style 行为：放到 Static 之后，未命中时接管
+			indexPath, _ := filepath.Abs(filepath.Join(staticDir, "index.html"))
+			app.Use(func(c *fiber.Ctx) error {
+				// 只处理 GET/HEAD
+				if c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead {
+					return c.Next()
+				}
+				// API 路由不接管
+				p := c.Path()
+				if len(p) >= 5 && p[:5] == "/api/" {
+					return c.Next()
+				}
+				// 已经在响应中写过（Static 命中文件）
+				if c.Response().StatusCode() == fiber.StatusOK {
+					return nil
+				}
+				// 回退到 SPA index.html
+				c.Set("Content-Type", "text/html; charset=utf-8")
+				return c.SendFile(indexPath)
+			})
+			log.Printf("  StaticDir: %s (已托管前端 + SPA fallback)", staticDir)
+		} else {
+			log.Printf("  StaticDir: %s 不存在或不是目录，跳过静态托管", staticDir)
+		}
 	} else {
 		log.Printf("  StaticDir: <未配置>，跳过静态托管")
 	}

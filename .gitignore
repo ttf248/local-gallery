@@ -41,10 +41,10 @@ node_modules/
 .env
 .env.local
 .env.*.local
-!.env.example
 
-# 后端配置（实际部署时填写）
-backend/config.json
+# 后端配置（实际部署时填写，从 config.example.yaml 复制）
+backend/config.yaml
+backend/test-config.yaml
 
 # ----- IDE -----
 .idea/
@@ -77,5 +77,6 @@ $RECYCLE.BIN/
 
 # ----- 缓存目录（运行时生成，不入仓）-----
 # 注：服务运行时会重建这些目录
+.comic-reader/
 .cache/
 *.tsbuildinfo

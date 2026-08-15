@@ -235,19 +235,33 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ## 配置项（服务端）
 
-通过 `backend/config.json` 或环境变量或 `--flag` 覆盖：
+通过 `backend/config.yaml` 配置（默认相对后端 CWD 查找）。完整示例见 [`backend/config.example.yaml`](../backend/config.example.yaml)。
 
-```json
-{
-  "comicRoot": "E:\\漫画",
-  "host": "0.0.0.0",
-  "port": 8080,
-  "allowOsOpen": false,
-  "cacheDir": "&lt;repoRoot&gt;/.cache",
-  "thumbSizeW": 320,
-  "thumbSizeH": 350,
-  "cacheMaxAgeDays": 30
-}
+```yaml
+# 漫画根目录（必填，必须是已存在的目录）
+comicRoot: "E:\\漫画"
+
+# 监听地址与端口
+host: "0.0.0.0"
+port: 8080
+
+# 缩略图缓存目录（相对 CWD；未配置则在 CWD 下创建 .comic-reader/）
+cacheDir: ".comic-reader"
+
+# 缩略图尺寸
+thumbSizeW: 320
+thumbSizeH: 350
+
+# 缓存保留天数
+cacheMaxAgeDays: 30
+
+# 是否允许 /api/fs/open 在服务端打开文件管理器
+allowOsOpen: false
+
+# 前端构建产物目录（不存在则跳过静态托管）
+staticDir: "dist"
 ```
 
-优先级：`--flag` > `ENV` > `config.json` > 默认。
+启动参数仅保留 `--config <yaml-path>`（指定非默认位置的配置文件）和 `--static-dir <dir>`（覆盖 `staticDir` 字段，便于在不同环境切换前端产物路径）。**不再支持环境变量或 --comic-root / --host / --port 等覆盖。**
+
+优先级：`YAML 显式值` > `内置默认值`。

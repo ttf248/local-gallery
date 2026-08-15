@@ -23,9 +23,9 @@
 
 ```
 backend/
-├── cmd/server/main.go          # 入口：flag/env/file/default 配置装配
+├── cmd/server/main.go          # 入口：YAML 加载 + 服务装配
 ├── internal/
-│   ├── config/                 # 4 层配置合并 + 校验
+│   ├── config/                 # YAML 配置加载 + 校验
 │   ├── models/                 # 领域模型（Album、Collection、SmartCollection、Prefs）
 │   ├── services/               # 业务逻辑
 │   │   ├── scanner.go          # 文件遍历 + goroutine worker pool
@@ -72,9 +72,8 @@ frontend/src/
 
 ```
 main()
-  ├─ flag.Parse()                      # CLI 覆盖
-  ├─ config.LoadFile(config.json)      # 文件覆盖默认
-  ├─ config.ApplyEnv(cfg)              # env 覆盖文件
+  ├─ flag.Parse()                      # 仅 --config / --static-dir
+  ├─ config.LoadFile(config.yaml)      # YAML 覆盖默认
   ├─ cfg.Validate()                    # ComicRoot 必须存在且为目录
   ├─ fiber.New() + Use(logger/recover/path_safety)
   ├─ 注册 /api/* 路由
@@ -151,8 +150,10 @@ Toolbar ThemeSwitcher → useUIStore.setTheme(t)
 ```bash
 # 后端
 cd backend
+cp config.example.yaml config.yaml
+# 编辑 config.yaml，设置 comicRoot: "/data/comics"
 go build -o comic-server ./cmd/server
-./comic-server --comic-root "/data/comics"
+./comic-server
 
 # 前端
 cd frontend

@@ -1,81 +1,59 @@
-// Package config 提供漫画阅读器后端的配置加载。
+// Package config 提供漫画阅读器后端的 YAML 配置加载。
 //
-// 加载优先级（从高到低）：
-//   1. 命令行 flag（--comic-root 等）
-//   2. 环境变量（COMIC_ROOT 等）
-//   3. 配置文件（backend/config.json 字段 comicRoot 等）
-//   4. 内置默认值
+// 配置来源唯一：YAML 文件（默认 ./config.yaml，可用 --config 指定）。
+// 未配置的字段走内置默认值；缓存目录默认在进程 CWD 下创建
+// `.comic-reader/`（存放缩略图、扫描结果、用户偏好）。
 //
-// 默认缓存目录解析为仓库根 `.cache/`（参见 AGENTS.md
-// "缓存目录"约定）：从进程 CWD 向上查找 `.git` 标记；
-// 命中则用仓库根，找不到则回落到 CWD。
+// 字段优先级：YAML 文件中显式值 > 内置默认值。无任何 env / flag 覆盖。
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Version 后端版本号（编译期可通过 -ldflags 注入）。
 var Version = "0.1.0"
 
-// repoMarker 用于向上查找仓库根的标记（`.git` 目录）。
-const repoMarker = ".git"
+// DefaultConfigName 未指定 --config 时查找的文件名（相对 CWD）。
+const DefaultConfigName = "config.yaml"
 
-// Config 后端总配置。
+// DefaultCacheDirName 未配置 cacheDir 时使用的目录名（创建在 CWD 下）。
+const DefaultCacheDirName = ".comic-reader"
+
+// Config 后端总配置（YAML 字段保持 camelCase，与历史 JSON 字段一致）。
 type Config struct {
-	ComicRoot       string `json:"comicRoot"`
-	Host            string `json:"host"`
-	Port            int    `json:"port"`
-	AllowOsOpen     bool   `json:"allowOsOpen"`
-	CacheDir        string `json:"cacheDir"`
-	ThumbSizeW      int    `json:"thumbSizeW"`
-	ThumbSizeH      int    `json:"thumbSizeH"`
-	CacheMaxAgeDays int    `json:"cacheMaxAgeDays"`
+	ComicRoot       string `yaml:"comicRoot"`
+	Host            string `yaml:"host"`
+	Port            int    `yaml:"port"`
+	AllowOsOpen     bool   `yaml:"allowOsOpen"`
+	CacheDir        string `yaml:"cacheDir"`
+	ThumbSizeW      int    `yaml:"thumbSizeW"`
+	ThumbSizeH      int    `yaml:"thumbSizeH"`
+	CacheMaxAgeDays int    `yaml:"cacheMaxAgeDays"`
+	StaticDir       string `yaml:"staticDir"`
 }
 
-// Default 返回内置默认配置。
+// Default 返回内置默认配置（缓存目录指向 CWD/.comic-reader）。
 func Default() *Config {
 	return &Config{
 		ComicRoot:       filepath.Join(".", "comics"),
 		Host:            "0.0.0.0",
 		Port:            8080,
 		AllowOsOpen:     false,
-		CacheDir:        filepath.Join(repoRoot(), ".cache"),
+		CacheDir:        filepath.Join(".", DefaultCacheDirName),
 		ThumbSizeW:      320,
 		ThumbSizeH:      350,
 		CacheMaxAgeDays: 30,
+		StaticDir:       "dist",
 	}
 }
 
-// repoRoot 从进程 CWD 向上查找 `.git` 目录定位仓库根；
-// 找不到时回落 CWD，确保配置总能落到一个可写目录。
-func repoRoot() string {
-	cwd, err := os.Getwd()
-	if err != nil || cwd == "" {
-		return "."
-	}
-	dir, err := filepath.Abs(cwd)
-	if err != nil {
-		return cwd
-	}
-	for {
-		if info, statErr := os.Stat(filepath.Join(dir, repoMarker)); statErr == nil && info.IsDir() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return cwd
-		}
-		dir = parent
-	}
-}
-
-// LoadFile 从 JSON 配置文件加载并覆盖默认配置。
+// LoadFile 从 YAML 配置文件加载并覆盖默认配置。
 // 文件不存在不视为错误；解析失败或字段类型错误视为错误。
 func LoadFile(path string) (*Config, error) {
 	cfg := Default()
@@ -89,7 +67,7 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	tmp := &Config{}
-	if err := json.Unmarshal(data, tmp); err != nil {
+	if err := yaml.Unmarshal(data, tmp); err != nil {
 		return nil, fmt.Errorf("parse config file: %w", err)
 	}
 
@@ -97,7 +75,11 @@ func LoadFile(path string) (*Config, error) {
 	return cfg, nil
 }
 
-// mergeFile 将 file 中非零值合并到 dst。
+// mergeFile 把 file 中显式值合并到 dst。零值字段保持 dst 默认。
+//
+// bool 字段特殊处理：YAML 未设置时为零值 false；只要 file 显式给出
+// true 即视为开启，false 视为未配置（沿用 dst 默认），这与历史 JSON
+// 行为一致（AllowOsOpen bool 零值也是有意义的，保留）。
 func mergeFile(dst, file *Config) {
 	if file.ComicRoot != "" {
 		dst.ComicRoot = file.ComicRoot
@@ -108,7 +90,9 @@ func mergeFile(dst, file *Config) {
 	if file.Port != 0 {
 		dst.Port = file.Port
 	}
-	dst.AllowOsOpen = file.AllowOsOpen // bool 零值也是有意义的，保留
+	if file.AllowOsOpen {
+		dst.AllowOsOpen = true
+	}
 	if file.CacheDir != "" {
 		dst.CacheDir = file.CacheDir
 	}
@@ -121,41 +105,8 @@ func mergeFile(dst, file *Config) {
 	if file.CacheMaxAgeDays != 0 {
 		dst.CacheMaxAgeDays = file.CacheMaxAgeDays
 	}
-}
-
-// ApplyEnv 用环境变量覆盖配置（env 优先级高于 file，低于 flag）。
-func ApplyEnv(cfg *Config) {
-	if v := os.Getenv("COMIC_ROOT"); v != "" {
-		cfg.ComicRoot = v
-	}
-	if v := os.Getenv("COMIC_HOST"); v != "" {
-		cfg.Host = v
-	}
-	if v := os.Getenv("COMIC_PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			cfg.Port = n
-		}
-	}
-	if v := os.Getenv("COMIC_CACHE_DIR"); v != "" {
-		cfg.CacheDir = v
-	}
-	if v := os.Getenv("COMIC_THUMB_W"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			cfg.ThumbSizeW = n
-		}
-	}
-	if v := os.Getenv("COMIC_THUMB_H"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			cfg.ThumbSizeH = n
-		}
-	}
-	if v := os.Getenv("COMIC_CACHE_MAX_AGE_DAYS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			cfg.CacheMaxAgeDays = n
-		}
-	}
-	if v := os.Getenv("COMIC_ALLOW_OS_OPEN"); v != "" {
-		cfg.AllowOsOpen = v == "1" || v == "true" || v == "TRUE"
+	if file.StaticDir != "" {
+		dst.StaticDir = file.StaticDir
 	}
 }
 

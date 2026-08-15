@@ -8,12 +8,7 @@
       "mode": "auto",
       "program": "${workspaceFolder}/backend/cmd/server",
       "cwd": "${workspaceFolder}/backend",
-      "env": {
-        "COMIC_ROOT": "${env:COMIC_ROOT:E:\\漫画}",
-        "COMIC_HOST": "127.0.0.1",
-        "COMIC_PORT": "8080"
-      },
-      "args": [],
+      "args": ["--config", "config.yaml"],
       "console": "integratedTerminal",
       "preLaunchTask": "backend: tidy"
     },
