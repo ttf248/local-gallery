@@ -239,11 +239,11 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
     : 0
 
   const openViewer = (idx: number) => {
+    // 仅传 path/index/name，图片列表由 Viewer 端点拉取（避免 URL 超长）
     const qs = new URLSearchParams({
-      images: encodeURIComponent(JSON.stringify(detail.imageFiles)),
+      path: detail.path,
       index: String(idx),
       name: detail.name,
-      album: detail.path,
     })
     navigate(`/viewer?${qs.toString()}`)
   }

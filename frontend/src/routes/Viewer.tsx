@@ -2,25 +2,27 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useViewerStore } from '../store/viewerStore'
 import { useKeyboard } from '../hooks/useKeyboard'
-import { progressApi } from '../api/albums'
+import { albumsApi, progressApi } from '../api/albums'
 import { useUIStore } from '../store/uiStore'
 import ImageViewer from '../components/viewer/ImageViewer'
 import ViewerToolbar from '../components/viewer/ViewerToolbar'
 import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
 import HelpOverlay from '../components/common/HelpOverlay'
-import EmptyState from '../components/common/EmptyState'
 
-// 查看器页面：从 URL ?images=<json>&index=<n>&name=&album= 读取。
+// 查看器页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
 // 关闭时持久化阅读进度到后端。
 export default function Viewer() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const pushToast = useUIStore((s) => s.pushToast)
 
-  const images = parseImages(params.get('images'))
+  const pathParam = params.get('path') ?? params.get('album') ?? ''
   const initialIndex = Number(params.get('index') ?? 0)
   const name = params.get('name') ?? '查看器'
-  const album = params.get('album') ?? ''
+
+  // 兼容旧链接（images 数组直接传）
+  const initialImages = parseImages(params.get('images'))
+  const [images, setImages] = useState<string[]>(initialImages)
 
   const index = useViewerStore((s) => s.index)
   const setIndex = useViewerStore((s) => s.setIndex)
@@ -28,18 +30,34 @@ export default function Viewer() {
   const slideshowInterval = useViewerStore((s) => s.slideshowInterval)
   const setZoom = useViewerStore((s) => s.setZoom)
   const toggleSlideshow = useViewerStore((s) => s.toggleSlideshow)
+  const mode = useViewerStore((s) => s.mode)
 
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
 
   useEffect(() => {
-    if (!album) {
-      setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
+    // 通过 path 拉取图片列表（如果还没拉到）
+    if (images.length === 0 && pathParam) {
+      albumsApi
+        .detail(pathParam)
+        .then((r) => {
+          const d = r.data as { imageFiles?: string[] } | undefined
+          if (d && Array.isArray(d.imageFiles)) {
+            setImages(d.imageFiles)
+          } else {
+            pushToast({ kind: 'error', message: '无法读取相册图片' })
+          }
+        })
+        .catch(() => {
+          pushToast({ kind: 'error', message: '无法读取相册图片' })
+        })
       return
     }
+    if (images.length === 0) return
     setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
+    if (!pathParam) return
     progressApi
-      .get(album)
+      .get(pathParam)
       .then((rp) => {
         if (rp && rp.index >= 0 && rp.index < images.length) {
           setIndex(rp.index)
@@ -48,24 +66,25 @@ export default function Viewer() {
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [album])
+  }, [pathParam, images.length === 0])
 
   useEffect(() => {
     setShowInfo(false)
-    if (!album) return
+    if (!pathParam) return
+    if (images.length === 0) return
     const t = setTimeout(() => {
-      progressApi.set(album, index, images.length, 0).catch(() => {})
+      progressApi.set(pathParam, index, images.length, 0).catch(() => {})
     }, 600)
     return () => clearTimeout(t)
-  }, [index, album, images.length])
+  }, [index, pathParam, images.length])
 
   useEffect(() => {
     return () => {
-      if (album) {
+      if (pathParam) {
         navigator.sendBeacon?.(
           '/api/progress',
           new Blob(
-            [JSON.stringify({ path: album, index, total: images.length, scroll: 0 })],
+            [JSON.stringify({ path: pathParam, index, total: images.length, scroll: 0 })],
             { type: 'application/json' },
           ),
         )
@@ -85,35 +104,41 @@ export default function Viewer() {
     if (!slideshow) return
     const t = setInterval(() => {
       const cur = useViewerStore.getState().index
-      if (cur < images.length - 1) {
-        setIndex(cur + 1)
+      const step = mode === 'double' ? 2 : 1
+      if (cur + step < images.length) {
+        setIndex(cur + step)
       } else {
         setIndex(0)
       }
     }, slideshowInterval)
     return () => clearInterval(t)
-  }, [slideshow, slideshowInterval, images.length, setIndex])
+  }, [slideshow, slideshowInterval, images.length, setIndex, mode])
 
+  // 双页模式前进 / 后退 2 页（索引在 onSetMode 中已对齐到偶数）
   function prev() {
-    if (index > 0) setIndex(index - 1)
+    if (mode === 'double') {
+      if (index > 0) setIndex(Math.max(0, index - 2))
+    } else if (index > 0) {
+      setIndex(index - 1)
+    }
   }
   function next() {
-    if (index < images.length - 1) {
+    if (mode === 'double') {
+      // 双页：最后一对不能越界
+      if (index + 2 < images.length) setIndex(index + 2)
+      else if (index < images.length - 1) setIndex(Math.max(0, images.length - 2))
+      else return
+    } else if (index < images.length - 1) {
       setIndex(index + 1)
-      // 末尾自动翻页时若启用 autoSwitchAlbum 则切换下一本
-      const prefs = useUIStore.getState()
-      // 提示信息（仅最后一张之后）
-      if (index + 1 === images.length - 1) {
-        pushToast({ kind: 'info', message: '已是最后一页', ttl: 1500 })
+    } else {
+      return
+    }
+    if (index === images.length - 1) {
+      pushToast({ kind: 'info', message: '已是最后一页', ttl: 1500 })
+      if (useViewerStore.getState().slideshow) {
+        toggleSlideshow()
+        pushToast({ kind: 'info', message: '幻灯片已自动停止' })
       }
-      // 最后一页之后关闭幻灯片
-      if (index === images.length - 1) {
-        if (useViewerStore.getState().slideshow) {
-          toggleSlideshow()
-          pushToast({ kind: 'info', message: '幻灯片已自动停止' })
-        }
-      }
-      void prefs
     }
   }
 
@@ -137,6 +162,17 @@ export default function Viewer() {
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),
     'shift+/': () => setShowHelp((v) => !v),
+    // 阅读模式切换：1 单页 / 2 连续 / 3 双页
+    '1': () => useViewerStore.getState().setMode('single'),
+    '2': () => useViewerStore.getState().setMode('continuous'),
+    '3': () => useViewerStore.getState().setMode('double'),
+    // 适配循环：F 或 Shift+F（同一个键在原 R 旋转 / Shift+R 重置间区分）
+    f: () => useViewerStore.getState().cycleFit(),
+    // 阅读方向（双页）
+    l: () => {
+      const cur = useViewerStore.getState().direction
+      useViewerStore.getState().setDirection(cur === 'ltr' ? 'rtl' : 'ltr')
+    },
     escape: () => {
       if (showHelp) setShowHelp(false)
       else if (showInfo) setShowInfo(false)
@@ -146,25 +182,23 @@ export default function Viewer() {
 
   if (images.length === 0) {
     return (
-      <EmptyState
-        title="无可显示的图片"
-        description="请返回相册重新选择。"
-        action={
-          <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 rounded-md bg-accent text-accent-fg hover:bg-accent-hover text-sm"
-          >
-            返回
-          </button>
-        }
-      />
+      <div className="flex flex-col h-full bg-bg">
+        <div className="px-4 h-9 text-xs text-fg-muted border-b border-border-faint bg-bg-elevated/60 flex items-center gap-2">
+          <span className="font-medium text-fg truncate">{name}</span>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-fg-muted text-sm">
+            {pathParam ? '正在加载图片…' : '无可显示的图片'}
+          </div>
+        </div>
+      </div>
     )
   }
 
   const current = images[index]
 
   return (
-    <div className="flex flex-col h-full bg-bg">
+    <div className="flex flex-col bg-bg" style={{ height: '100vh' }}>
       <ViewerToolbar
         total={images.length}
         onPrev={prev}
@@ -175,7 +209,7 @@ export default function Viewer() {
       />
       <div className="px-4 h-9 text-xs text-fg-muted border-b border-border-faint bg-bg-elevated/60 flex items-center gap-2">
         <span className="font-medium text-fg truncate">{name}</span>
-        {album && <span className="text-fg-subtle truncate">· {album}</span>}
+        {pathParam && <span className="text-fg-subtle truncate">· {pathParam}</span>}
       </div>
       <div className="flex-1 flex min-h-0">
         <ImageViewer images={images} />

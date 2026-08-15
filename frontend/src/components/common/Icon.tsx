@@ -310,3 +310,75 @@ export const ShuffleIcon = (p: IconProps) => (
     <path d="M4 4l5 5" />
   </svg>
 )
+
+/** 单页：单页居中 */
+export const SinglePageIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="6" y="4" width="12" height="16" rx="1" />
+  </svg>
+)
+
+/** 连续滚动：垂直堆叠的多页 */
+export const ScrollPageIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="6" y="3" width="12" height="5" rx="1" />
+    <rect x="6" y="10" width="12" height="5" rx="1" />
+    <rect x="6" y="17" width="12" height="4" rx="1" />
+  </svg>
+)
+
+/** 双页：左右并排 */
+export const DoublePageIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="8" height="16" rx="1" />
+    <rect x="13" y="4" width="8" height="16" rx="1" />
+  </svg>
+)
+
+/** 适应：contain 缩放 */
+export const FitIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />
+    <path d="M9 9h6v6H9z" />
+  </svg>
+)
+
+/** 按宽：w-100% */
+export const FitWidthIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />
+    <path d="M9 8h6v8H9z" />
+  </svg>
+)
+
+/** 按高：h-100vh */
+export const FitHeightIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />
+    <path d="M7 9h10v6H7z" />
+  </svg>
+)
+
+/** 原始：1:1 */
+export const OriginalSizeIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />
+    <text x="12" y="14" textAnchor="middle" fontSize="7" fill="currentColor" stroke="none">1:1</text>
+  </svg>
+)
+
+/** 从左到右 */
+export const ArrowRightLineIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 12h16" />
+    <path d="m14 6 6 6-6 6" />
+  </svg>
+)
+
+/** 从右到左（漫画原版） */
+export const ArrowLeftLineIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 12h16" />
+    <path d="m10 6-6 6 6 6" />
+  </svg>
+)
