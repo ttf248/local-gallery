@@ -52,21 +52,31 @@ export default function ImageViewer({ images }: Props) {
     setImgKey((k) => k + 1)
   }, [index, mode])
 
-  // 滚轮缩放（Ctrl/Cmd + wheel）
+  // 滚轮缩放
+  //   - 连续模式：wheel 直接缩放（连续阅读的天然操作）
+  //   - 单页/双页模式：Ctrl/Cmd + wheel 缩放（保留浏览器原生滚动翻页）
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return
-      e.preventDefault()
-      const dir = e.deltaY > 0 ? -1 : 1
-      const store = useViewerStore.getState()
-      if (dir > 0) store.zoomIn()
-      else store.zoomOut()
+      if (mode === 'continuous') {
+        e.preventDefault()
+        const dir = e.deltaY > 0 ? -1 : 1
+        const store = useViewerStore.getState()
+        if (dir > 0) store.zoomIn()
+        else store.zoomOut()
+      } else {
+        if (!e.ctrlKey && !e.metaKey) return
+        e.preventDefault()
+        const dir = e.deltaY > 0 ? -1 : 1
+        const store = useViewerStore.getState()
+        if (dir > 0) store.zoomIn()
+        else store.zoomOut()
+      }
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [])
+  }, [mode])
 
   // 拖拽平移
   useEffect(() => {
@@ -191,6 +201,7 @@ export default function ImageViewer({ images }: Props) {
               aspect={aspect}
               nearIndex={Math.abs(i - index) <= 2}
               isRotated={rotation !== 0}
+              zoom={zoom}
             />
           ))}
         </div>
@@ -277,15 +288,19 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
 
 // 连续模式下的单张图：根据 fit 模式选择样式。
 // 关键：使用 maxWidth: 100% + block 布局，让图片按比例缩放并触发容器纵向滚动。
+// 缩放：用 transform: scale(zoom) 叠加在 fit 尺寸之上，
+//   transform-origin 设为 top center，缩放时从顶部对齐，
+//   整体高度随之增加 → 容器自然出现纵向滚动条，用户可继续往下看。
 interface ContinuousImageProps {
   src: string
   index: number
   aspect: Aspect
   nearIndex: boolean
   isRotated: boolean
+  zoom: number
 }
 
-function ContinuousImage({ src, index, aspect, nearIndex, isRotated }: ContinuousImageProps) {
+function ContinuousImage({ src, index, aspect, nearIndex, isRotated, zoom }: ContinuousImageProps) {
   const baseStyle: React.CSSProperties = {
     display: 'block',
     maxWidth: '100%',
@@ -306,8 +321,17 @@ function ContinuousImage({ src, index, aspect, nearIndex, isRotated }: Continuou
     style = { ...baseStyle, width: 'auto', height: 'auto', maxWidth: '100%' }
   }
 
-  if (isRotated) {
-    style = { ...style, transform: 'rotate(90deg)', transformOrigin: 'center' }
+  // 缩放：连续模式下用 transform，避免破坏流式布局。
+  // transform-origin: top center → 缩放时图片从顶部对齐，下方自然溢出形成滚动。
+  const transforms: string[] = []
+  if (zoom !== 1) transforms.push(`scale(${zoom})`)
+  if (isRotated) transforms.push('rotate(90deg)')
+  if (transforms.length) {
+    style = {
+      ...style,
+      transform: transforms.join(' '),
+      transformOrigin: isRotated ? 'center' : 'top center',
+    }
   }
 
   return (
