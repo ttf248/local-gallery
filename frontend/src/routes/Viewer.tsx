@@ -170,7 +170,12 @@ export default function Viewer() {
   }, [slideshow, slideshowInterval, images.length, setIndex, mode])
 
   // 双页模式前进 / 后退 2 页（索引在 onSetMode 中已对齐到偶数）
+  // 连续模式不切 index，而是滚动一屏（按容器高度的 90%）。
   function prev() {
+    if (mode === 'continuous') {
+      scrollStep(-1)
+      return
+    }
     if (mode === 'double') {
       if (index > 0) setIndex(Math.max(0, index - 2))
     } else if (index > 0) {
@@ -178,6 +183,10 @@ export default function Viewer() {
     }
   }
   function next() {
+    if (mode === 'continuous') {
+      scrollStep(1)
+      return
+    }
     if (mode === 'double') {
       // 双页：最后一对不能越界
       if (index + 2 < images.length) setIndex(index + 2)
@@ -195,6 +204,24 @@ export default function Viewer() {
         pushToast({ kind: 'info', message: '幻灯片已自动停止' })
       }
     }
+  }
+
+  // 连续模式：滚动一屏（不切 index）。
+  // 点击翻页和键盘 ←/→ 在连续模式下都走这里，体验一致。
+  function scrollStep(dir: -1 | 1) {
+    const container = document.querySelector(
+      '[data-image-viewer]',
+    ) as HTMLDivElement | null
+    if (!container) return
+    const delta = container.clientHeight * 0.9 * dir
+    container.scrollBy({ top: delta, behavior: 'smooth' })
+  }
+
+  // 连续模式：跳到指定 index 的图片位置（Home/End 用）。
+  function scrollContinuousTo(i: number) {
+    const target = document.querySelector(`[data-image-index="${i}"]`) as HTMLElement | null
+    if (!target) return
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   // 跳到指定页（1-based → 0-based）
@@ -275,14 +302,27 @@ export default function Viewer() {
     arrowright: next,
     pageup: prev,
     pagedown: next,
-    Home: () => setIndex(0),
-    End: () => setIndex(images.length - 1),
+    home: () => {
+      // 连续模式：scrollIntoView 而不是 setIndex（index 不动也能跳）
+      if (useViewerStore.getState().mode === 'continuous') {
+        scrollContinuousTo(0)
+      } else {
+        setIndex(0)
+      }
+    },
+    end: () => {
+      if (useViewerStore.getState().mode === 'continuous') {
+        scrollContinuousTo(images.length - 1)
+      } else {
+        setIndex(images.length - 1)
+      }
+    },
     '+': () => useViewerStore.getState().zoomIn(),
     '-': () => useViewerStore.getState().zoomOut(),
     '=': () => useViewerStore.getState().zoomIn(),
     '0': () => useViewerStore.getState().zoomReset(),
     r: () => useViewerStore.getState().rotate(90),
-    F11: () => {
+    f11: () => {
       if (document.fullscreenElement) document.exitFullscreen()
       else document.documentElement.requestFullscreen()
     },
@@ -348,7 +388,14 @@ export default function Viewer() {
         {pathParam && <span className="text-fg-subtle truncate">· {pathParam}</span>}
       </div>
       <div className="flex-1 flex min-h-0">
-        <ImageViewer images={images} />
+        <ImageViewer
+          images={images}
+          onClickNavigate={(dir) => {
+            if (dir === -1) prev()
+            else if (dir === 1) next()
+            // dir === 0 时中段不响应
+          }}
+        />
         {showInfo && (
           <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
         )}

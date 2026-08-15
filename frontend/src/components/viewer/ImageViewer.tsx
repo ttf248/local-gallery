@@ -4,6 +4,8 @@ import { imageUrl } from '../../api/images'
 
 interface Props {
   images: string[]
+  /** 点击图片时触发：根据 clickX 在容器宽度的左/中/右决定动作。父组件传入 prev/next 即可。 */
+  onClickNavigate?: (dir: -1 | 0 | 1) => void
 }
 
 type Aspect =
@@ -17,7 +19,8 @@ type Aspect =
 // - 四种适配：适应 / 按宽 / 按高 / 原始
 // - 双张并排模式下支持 LTR / RTL（右→左：从右开始翻页）
 // - 缩放 / 旋转 / 拖拽 / 预加载 ±2
-export default function ImageViewer({ images }: Props) {
+// - 点击翻页：左半区上一页 / 右半区下一页 / 中段 30% 不响应避免误触
+export default function ImageViewer({ images, onClickNavigate }: Props) {
   const index = useViewerStore((s) => s.index)
   const zoom = useViewerStore((s) => s.zoom)
   const rotation = useViewerStore((s) => s.rotation)
@@ -29,7 +32,7 @@ export default function ImageViewer({ images }: Props) {
   const singleRef = useRef<HTMLImageElement>(null)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [imgKey, setImgKey] = useState(0)
-  const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  const dragRef = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null)
 
   // 预加载前后各 2 张
   useEffect(() => {
@@ -75,6 +78,7 @@ export default function ImageViewer({ images }: Props) {
       if (!dragRef.current) return
       const dx = e.clientX - dragRef.current.x
       const dy = e.clientY - dragRef.current.y
+      if (Math.abs(dx) + Math.abs(dy) > 3) dragRef.current.moved = true
       setPan({ x: dragRef.current.px + dx, y: dragRef.current.py + dy })
     }
     const onUp = () => {
@@ -91,7 +95,26 @@ export default function ImageViewer({ images }: Props) {
   const onMouseDown = (e: React.MouseEvent) => {
     if (mode !== 'single') return
     if (zoom <= 1) return
-    dragRef.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y }
+    dragRef.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y, moved: false }
+  }
+
+  // 点击翻页：根据 clickX 在容器宽度的左/中/右决定 -1/0/+1
+  // - 中段 30% 不响应，避免用户想"瞄准"图片内容时误触翻页
+  // - 缩放 > 1 时不响应（用户想拖动图片而不是翻页）
+  // - 双击是独立事件，不会触发 click；拖拽距离 > 3px 时 click 也不触发
+  const onContainerClick = (e: React.MouseEvent) => {
+    if (!onClickNavigate) return
+    if (dragRef.current?.moved) return
+    if (mode === 'single' && zoom > 1) return
+    const el = containerRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const ratio = x / rect.width
+    let dir: -1 | 0 | 1 = 0
+    if (ratio < 0.35) dir = -1
+    else if (ratio > 0.65) dir = 1
+    if (dir !== 0) onClickNavigate(dir)
   }
 
   // 单页模式下，索引到当前页（双页模式 index 指向左页）
@@ -108,6 +131,9 @@ export default function ImageViewer({ images }: Props) {
   const containerCls = isSingle
     ? 'relative flex-1 overflow-auto bg-bg-subtle flex items-center justify-center min-h-0'
     : 'relative flex-1 overflow-auto bg-bg-subtle min-h-0'
+  // data-image-viewer 让外部（Viewer 路由）能定位连续模式下的单图
+  // （用于 Home/End 跳到首/尾图片的 scrollIntoView）。
+  const dataImageViewerProps = { 'data-image-viewer': '' } as const
 
   // 单张图片的尺寸 / object-fit 规则
   function imgStyleFor(zoomOverride?: number): React.CSSProperties {
@@ -146,6 +172,8 @@ export default function ImageViewer({ images }: Props) {
         ref={containerRef}
         className={containerCls}
         onContextMenu={(e) => e.preventDefault()}
+        onClick={onContainerClick}
+        {...dataImageViewerProps}
       >
         {current ? (
           <img
@@ -183,6 +211,8 @@ export default function ImageViewer({ images }: Props) {
         ref={containerRef}
         className={containerCls}
         onContextMenu={(e) => e.preventDefault()}
+        onClick={onContainerClick}
+        {...dataImageViewerProps}
       >
         <div className="flex flex-col items-center gap-2 py-4">
           {images.map((src, i) => (
@@ -207,6 +237,8 @@ export default function ImageViewer({ images }: Props) {
       ref={containerRef}
       className={containerCls}
       onContextMenu={(e) => e.preventDefault()}
+      onClick={onContainerClick}
+      {...dataImageViewerProps}
     >
       <DoublePage
         images={images}
@@ -327,7 +359,7 @@ function ContinuousImage({ src, index, aspect, nearIndex, isRotated, zoom }: Con
   }
 
   return (
-    <div className="w-full flex justify-center">
+    <div className="w-full flex justify-center" data-image-index={index}>
       <img
         src={imageUrl(src)}
         alt={`第 ${index + 1} 张`}

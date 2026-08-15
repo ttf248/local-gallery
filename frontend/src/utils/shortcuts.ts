@@ -19,7 +19,7 @@ export interface Shortcut {
 export const SHORTCUTS: Shortcut[] = [
   { id: 'open', label: 'Ctrl+O', description: '打开/切换媒体根目录', combo: 'ctrl+o', group: 'global' },
   { id: 'scan', label: 'Ctrl+S', description: '启动扫描', combo: 'ctrl+s', group: 'global' },
-  { id: 'refresh', label: 'F5', description: '刷新', combo: 'F5', group: 'global' },
+  { id: 'refresh', label: 'F5', description: '刷新', combo: 'f5', group: 'global' },
   { id: 'home', label: 'Ctrl+H', description: '回到主页', combo: 'ctrl+h', group: 'global' },
   { id: 'recents', label: 'Ctrl+R', description: '最近访问', combo: 'ctrl+r', group: 'global' },
   { id: 'favorites', label: 'Ctrl+D', description: '我的收藏', combo: 'ctrl+d', group: 'global' },
@@ -30,8 +30,8 @@ export const SHORTCUTS: Shortcut[] = [
   // 查看器
   { id: 'next', label: '→ / PageDown', description: '下一张', combo: 'arrowright', group: 'viewer' },
   { id: 'prev', label: '← / PageUp', description: '上一张', combo: 'arrowleft', group: 'viewer' },
-  { id: 'first', label: 'Home', description: '第一张', combo: 'Home', group: 'viewer' },
-  { id: 'last', label: 'End', description: '最后一张', combo: 'End', group: 'viewer' },
+  { id: 'first', label: 'Home', description: '第一张', combo: 'home', group: 'viewer' },
+  { id: 'last', label: 'End', description: '最后一张', combo: 'end', group: 'viewer' },
   { id: 'gotoPage', label: 'G', description: '跳到指定页', combo: 'g', group: 'viewer' },
   { id: 'nextAlbum', label: 'N', description: '下一本（来自当前列表）', combo: 'n', group: 'viewer' },
   { id: 'prevAlbum', label: 'P', description: '上一本（来自当前列表）', combo: 'p', group: 'viewer' },
@@ -45,7 +45,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'zoomOut', label: '-', description: '缩小', combo: '-', group: 'viewer' },
   { id: 'zoomReset', label: '0', description: '实际大小 / 重置', combo: '0', group: 'viewer' },
   { id: 'rotate', label: 'R', description: '旋转 90°', combo: 'r', group: 'viewer' },
-  { id: 'fullscreen', label: 'F11', description: '全屏', combo: 'F11', group: 'viewer' },
+  { id: 'fullscreen', label: 'F11', description: '全屏', combo: 'f11', group: 'viewer' },
   { id: 'slideshow', label: 'Space', description: '幻灯片播放/暂停', combo: 'space', group: 'viewer' },
   { id: 'info', label: 'I', description: '图片信息', combo: 'i', group: 'viewer' },
 ]
