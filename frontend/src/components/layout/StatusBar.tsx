@@ -21,7 +21,7 @@ export default function StatusBar() {
   if (sse.isRunning) {
     leftLabel = `扫描中 ${sse.progress?.progress ?? 0}% · 已发现 ${sse.progress?.albumsFound ?? 0} 个文件夹`
   } else if (result) {
-    leftLabel = `${result.albumCount} 个文件夹 · ${result.smartCollections.length} 个合集`
+    leftLabel = `${result.albumCount} 个文件夹 · ${(result.smartCollections ?? []).length} 个合集`
   }
 
   const sortLabel = sortBy === 'name' ? '名称' : sortBy === 'count' ? '张数' : '最近'

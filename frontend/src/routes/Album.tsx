@@ -74,7 +74,7 @@ export default function Album() {
   const localDetail = useMemo<Detail | null>(() => {
     if (!result) return null
     if (isSmart) {
-      const sc = result.smartCollections.find((s) => s.author === realPath)
+      const sc = (result.smartCollections ?? []).find((s) => s.author === realPath)
       if (!sc) return null
       return {
         type: 'smartCollection',
@@ -108,7 +108,7 @@ export default function Album() {
         modTime: (found as unknown as { modTime?: string }).modTime ?? '',
       }
     }
-    const coll = result.collections.find((c) => c.path === realPath)
+    const coll = (result.collections ?? []).find((c) => c.path === realPath)
     if (coll) {
       return {
         type: 'collection',

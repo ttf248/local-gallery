@@ -31,6 +31,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 function buildCards(r: ScanResult | null): CardData[] {
   if (!r) return []
+  // 后端在某些条件下会把 collections / smartCollections 序列化为 null，
+  // 旧代码直接迭代会抛 TypeError。统一兜底为空数组。
+  const collections = r.collections ?? []
+  const smartCollections = r.smartCollections ?? []
   const items: CardData[] = []
   for (const a of r.albums) {
     items.push({
@@ -43,7 +47,7 @@ function buildCards(r: ScanResult | null): CardData[] {
       to: albumRoute(a.path),
     })
   }
-  for (const c of r.collections) {
+  for (const c of collections) {
     items.push({
       id: 'c:' + c.path,
       variant: 'collection',
@@ -54,7 +58,7 @@ function buildCards(r: ScanResult | null): CardData[] {
       to: albumRoute(c.path),
     })
   }
-  for (const s of r.smartCollections) {
+  for (const s of smartCollections) {
     items.push({
       id: 's:' + s.author,
       variant: 'smart',
@@ -163,7 +167,7 @@ export default function Home() {
   // 热门标签：合集内文件夹数最多
   const topAuthors = useMemo<CardData[]>(() => {
     if (!result) return []
-    return [...result.smartCollections]
+    return [...(result.smartCollections ?? [])]
       .sort((a, b) => b.albumCount - a.albumCount)
       .slice(0, 8)
       .map((s) => ({
@@ -302,7 +306,7 @@ export default function Home() {
             </h1>
             <p className="text-sm text-fg-muted mt-3">
               {result
-                ? `${result.albumCount} 个文件夹 · ${result.smartCollections.length} 个合集`
+                ? `${result.albumCount} 个文件夹 · ${(result.smartCollections ?? []).length} 个合集`
                 : '尚未加载图像库'}
               {lastScanAt && (
                 <span className="text-fg-subtle ml-2">
@@ -519,11 +523,11 @@ function recentTime(result: ScanResult | null, id: string): string {
   }
   if (id.startsWith('c:')) {
     const p = id.slice(2)
-    return result.collections.find((c) => c.path === p)?.albums?.[0]?.modTime ?? ''
+    return result.collections?.find((c) => c.path === p)?.albums?.[0]?.modTime ?? ''
   }
   if (id.startsWith('s:')) {
     const author = id.slice(2)
-    const sc = result.smartCollections.find((s) => s.author === author)
+    const sc = (result.smartCollections ?? []).find((s) => s.author === author)
     if (sc) {
       const newest = [...sc.albums].sort(
         (a, b) => +new Date(b.modTime ?? '') - +new Date(a.modTime ?? ''),

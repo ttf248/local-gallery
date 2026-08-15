@@ -33,7 +33,7 @@ export default function Favorites() {
     for (const f of favorites) {
       if (f.startsWith('smart:')) {
         const author = f.slice(6)
-        const sc = result.smartCollections.find((s) => s.author === author)
+        const sc = (result.smartCollections ?? []).find((s) => s.author === author)
         if (!sc) continue
         out.push({
           id: 's:' + sc.author,
