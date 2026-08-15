@@ -46,12 +46,12 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
 
   return (
     <aside
-      className={`flex flex-col bg-bg-elevated/50 border-r border-border-faint transition-[width] duration-200 ease-out ${
+      className={`flex flex-col glass border-r border-border-faint transition-[width] duration-200 ease-out ${
         collapsed ? 'w-[60px]' : 'w-[208px]'
       }`}
     >
       <div
-        className={`h-14 relative flex items-center px-3 border-b border-border-faint ${
+        className={`h-14 relative flex items-center px-3 ${
           collapsed ? 'justify-center' : 'justify-between'
         }`}
       >
@@ -81,6 +81,9 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
       </div>
 
       <nav className="flex-1 py-3 px-2 space-y-0.5">
+        <div className="px-1.5 mb-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-fg-subtle">
+          {!collapsed ? '导航' : ''}
+        </div>
         {items.map((it) => (
           <NavLink
             key={it.to}
@@ -115,9 +118,14 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
       </nav>
 
       {!collapsed && (
-        <div className="px-3 py-3 border-t border-border-faint">
-          <div className="text-[10px] uppercase tracking-[0.16em] text-fg-subtle">
-            {location.pathname.startsWith('/viewer') ? '阅读中' : '已就绪'}
+        <div className="px-4 py-3.5">
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
+            <span
+              className={`inline-block w-1.5 h-1.5 rounded-full ${
+                location.pathname.startsWith('/viewer') ? 'bg-accent' : 'bg-success'
+              }`}
+            />
+            <span>{location.pathname.startsWith('/viewer') ? '阅读中' : '已就绪'}</span>
           </div>
         </div>
       )}

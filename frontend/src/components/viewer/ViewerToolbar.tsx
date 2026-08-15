@@ -89,7 +89,7 @@ export default function ViewerToolbar({
   })()
 
   return (
-    <header className="h-12 flex items-center gap-2 px-3 border-b border-border-faint bg-bg-elevated/85 backdrop-blur text-sm overflow-x-auto">
+    <header className="h-12 flex items-center gap-2 px-3 border-b border-border-faint glass text-sm overflow-x-auto">
       <button
         onClick={() => navigate(-1)}
         className="inline-flex items-center gap-1 h-8 px-2 rounded-md text-fg-muted hover:text-fg hover:bg-bg-subtle text-xs transition-colors shrink-0"
@@ -243,7 +243,7 @@ function IconButton({
       disabled={disabled}
       title={title}
       className={`inline-flex items-center justify-center h-7 px-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-        active ? 'bg-bg-subtle text-fg' : 'text-fg-muted hover:text-fg hover:bg-bg-subtle'
+        active ? 'bg-bg-subtle text-fg' : 'text-fg-muted hover:text-fg hover:bg-bg-subtle/60'
       }`}
     >
       {children}
@@ -252,7 +252,7 @@ function IconButton({
 }
 
 function Sep() {
-  return <div className="w-px h-5 bg-border-faint mx-0.5 shrink-0" />
+  return <div className="w-px h-5 bg-border mx-0.5 shrink-0" />
 }
 
 interface SegmentItem {
@@ -273,7 +273,7 @@ function SegmentedPicker({
   titlePrefix: string
 }) {
   return (
-    <div className="inline-flex items-center border border-border-faint rounded-md overflow-hidden shrink-0">
+    <div className="inline-flex items-center border border-border rounded-md overflow-hidden shrink-0 bg-bg-subtle/40">
       {options.map((o, i) => {
         const Icon = o.icon
         const active = o.value === value
@@ -282,9 +282,9 @@ function SegmentedPicker({
             key={o.value}
             onClick={() => onChange(o.value)}
             title={`${titlePrefix}：${o.label}`}
-            className={`inline-flex items-center justify-center h-7 w-7 transition-colors ${
+            className={`inline-flex items-center justify-center h-7 w-8 transition-colors ${
               i > 0 ? 'border-l border-border-faint' : ''
-            } ${active ? 'bg-bg-subtle text-fg' : 'text-fg-subtle hover:text-fg'}`}
+            } ${active ? 'bg-bg-elevated text-fg shadow-xs' : 'text-fg-subtle hover:text-fg'}`}
           >
             <Icon size={13} />
           </button>

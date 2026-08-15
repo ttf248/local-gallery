@@ -64,7 +64,7 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
     <div
       ref={ref}
       style={{ position: 'fixed', top: y, left: x, zIndex: 1000 }}
-      className="min-w-[180px] bg-bg-elevated border border-border-faint rounded-md shadow-md py-1 fade-up text-[13px]"
+      className="min-w-[180px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 fade-up text-[13px]"
     >
       {items.map((it, i) =>
         'separator' in it ? (
@@ -80,7 +80,7 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
               it.disabled
                 ? 'text-fg-subtle cursor-not-allowed'
                 : it.destructive
-                  ? 'text-danger hover:bg-bg-subtle'
+                  ? 'text-danger hover:bg-danger/10'
                   : 'text-fg hover:bg-bg-subtle'
             }`}
           >

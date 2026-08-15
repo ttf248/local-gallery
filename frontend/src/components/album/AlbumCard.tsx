@@ -82,7 +82,7 @@ function GridCard({ data }: { data: CardData }) {
       onKeyDown={onKey}
       className="group block cursor-pointer focus:outline-none"
     >
-      <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden ring-1 ring-border-faint transition-shadow duration-200 group-hover:shadow-md group-hover:ring-border">
+      <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
         {visible && data.coverPath && !imgError ? (
           <>
             <img
@@ -146,7 +146,7 @@ function GridCard({ data }: { data: CardData }) {
 
       <div className="pt-3 pb-1">
         <div
-          className="text-[13px] font-medium text-fg truncate-2 leading-snug"
+          className="text-[13px] font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent"
           title={data.title}
         >
           {data.title}
@@ -212,9 +212,9 @@ function ListCard({ data }: { data: CardData }) {
       tabIndex={0}
       onClick={onActivate}
       onKeyDown={onKey}
-      className="group flex items-center gap-4 py-2.5 px-2 -mx-2 rounded-md hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
+      className="group flex items-center gap-4 py-2.5 px-2.5 -mx-2.5 rounded-md hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
     >
-      <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0 ring-1 ring-border-faint">
+      <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs">
         {visible && data.coverPath && !imgError ? (
           <img
             src={thumbUrl(data.coverPath)}

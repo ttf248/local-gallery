@@ -75,10 +75,11 @@ export default function HelpOverlay({ open, onClose }: Props) {
       aria-modal="true"
     >
       <div
-        className="bg-bg-elevated text-fg rounded-xl shadow-lg border border-border-faint w-[680px] max-w-[94vw] max-h-[80vh] overflow-hidden flex flex-col scale-fade"
+        className="bg-bg-elevated text-fg rounded-xl shadow-lg border border-border w-[680px] max-w-[94vw] max-h-[80vh] overflow-hidden flex flex-col scale-fade"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between px-6 h-14 border-b border-border-faint">
+
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-md bg-accent-soft flex items-center justify-center text-accent">
               <KeyboardIcon size={14} />
@@ -86,7 +87,7 @@ export default function HelpOverlay({ open, onClose }: Props) {
             <div>
               <h2 className="font-display text-sm font-medium">快捷键</h2>
               <p className="text-[11px] text-fg-subtle mt-0.5">
-                按 <kbd className="font-mono px-1 py-0.5 rounded border border-border-faint">?</kbd> 随时唤起
+                按 <kbd className="kbd">?</kbd> 随时唤起
               </p>
             </div>
           </div>
@@ -100,7 +101,7 @@ export default function HelpOverlay({ open, onClose }: Props) {
         </header>
 
         <div className="px-6 py-3 border-b border-border-faint">
-          <div className="flex items-center gap-2 bg-bg-subtle rounded-md px-3 h-9 focus-within:bg-bg-elevated focus-within:border focus-within:border-border transition-colors">
+          <div className="input-focus-ring flex items-center gap-2 bg-bg-subtle rounded-md px-3 h-9 focus-within:bg-bg-elevated focus-within:border focus-within:border-border-strong">
             <SearchIcon size={13} className="text-fg-subtle shrink-0" />
             <input
               value={q}
@@ -138,7 +139,7 @@ export default function HelpOverlay({ open, onClose }: Props) {
                     className="flex items-center justify-between text-[13px] py-1.5"
                   >
                     <span className="text-fg-muted">{s.description}</span>
-                    <kbd className="text-[11px] font-mono px-2 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted shrink-0 ml-3">
+                    <kbd className="kbd shrink-0 ml-3">
                       {s.label}
                     </kbd>
                   </li>

@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* 全局基线 */
+/* === 全局基线 === */
 html,
 body,
 #root {
@@ -36,7 +36,7 @@ body {
   box-sizing: border-box;
 }
 
-/* 滚动条：极细 */
+/* === 滚动条：极细 === */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -53,7 +53,7 @@ body {
   background: var(--fg-subtle);
 }
 
-/* 选区色 */
+/* === 选区色 === */
 ::selection {
   background: var(--accent-soft);
   color: var(--fg);
@@ -65,7 +65,7 @@ body {
   }
 }
 
-/* 字体类 */
+/* === 字体类 === */
 .font-display {
   font-family: var(--font-display);
   letter-spacing: -0.018em;
@@ -74,16 +74,134 @@ body {
   font-family: var(--font-mono);
 }
 
-/* 极轻的 hover 浮起，去掉厚重的 lift 动画 */
+/* === 焦点环：accent 描边，更明确 === */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* 在已带 border 的元素上避免双线 */
+button:focus-visible,
+a:focus-visible,
+[role='button']:focus-visible,
+[role='link']:focus-visible {
+  outline-offset: 1px;
+}
+
+/* === 按钮 / 输入基线 === */
+input,
+button,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+/* 按钮按下微反馈（仅对非 disabled 生效） */
+button:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+
+/* === 通用工具 === */
+.divider {
+  height: 1px;
+  background: var(--border-faint);
+  width: 100%;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* 文本截断 */
+.truncate-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 玻璃感面板：半透明 + 模糊，用于顶栏 / 侧栏 / 浮层 */
+.glass {
+  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+}
+.glass-strong {
+  background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+}
+
+/* 软浮起：极轻的 hover 浮起，去掉厚重的 lift 动画 */
 .lift-soft {
   transition: transform var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 .lift-soft:hover {
   transform: translateY(-1px);
 }
 
-/* 淡入 */
+/* 卡片浮起：中等的 hover 抬升 + 阴影 */
+.lift-card {
+  transition: transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+.lift-card:hover {
+  transform: translateY(-2px);
+}
+
+/* === 统一的 kbd 样式 === */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--fg-muted);
+  box-shadow: 0 1px 0 var(--border-faint);
+  min-width: 18px;
+  justify-content: center;
+}
+
+/* === 输入框聚焦时的微妙 inset 高光（与组件 focus-within 配合） === */
+.input-focus-ring {
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.input-focus-ring:focus-within {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+/* === 主按钮（带 accent 填充）按下的微反馈 === */
+.btn-primary {
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.btn-primary:not(:disabled):active {
+  transform: translateY(0.5px);
+}
+
+/* === 动画 === */
 @keyframes fadeUp {
   from {
     opacity: 0;
@@ -110,7 +228,7 @@ body {
   animation: fadeIn 200ms var(--ease-out) both;
 }
 
-/* 缩放淡入（用于图片/查看器切换） */
+/* 缩放淡入（用于图片 / 查看器切换） */
 @keyframes scaleFade {
   from {
     opacity: 0;
@@ -124,54 +242,3 @@ body {
 .scale-fade {
   animation: scaleFade 240ms var(--ease-out) both;
 }
-
-/* 焦点环：去重一点 */
-:focus-visible {
-  outline: 1px solid var(--fg-muted);
-  outline-offset: 2px;
-  border-radius: var(--radius-sm);
-}
-
-/* 输入统一 */
-input,
-button,
-select,
-textarea {
-  font: inherit;
-  color: inherit;
-}
-button {
-  background: none;
-  border: 0;
-  cursor: pointer;
-  padding: 0;
-}
-
-/* 通用工具：细分割线 */
-.divider {
-  height: 1px;
-  background: var(--border-faint);
-  width: 100%;
-}
-
-/* 弱化滚动条容器 */
-.scroll-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-/* 文本截断 */
-.truncate-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 玻璃感面板：半透明 + 模糊 */
-.glass {
-  background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
-  backdrop-filter: blur(16px) saturate(1.2);
-  -webkit-backdrop-filter: blur(16px) saturate(1.2);
-}
-

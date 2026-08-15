@@ -12,7 +12,7 @@ export default function ScanProgress({ progress, onCancel }: Props) {
   if (!progress || progress.status === 'complete') return null
   const pct = Math.max(0, Math.min(100, progress.progress))
   return (
-    <div className="fixed bottom-5 left-5 z-40 bg-bg-elevated/95 backdrop-blur border border-border-faint rounded-md shadow-md w-72 overflow-hidden fade-up">
+    <div className="fixed bottom-5 left-5 z-40 glass-strong border border-border rounded-lg shadow-lg w-72 overflow-hidden fade-up">
       <div className="flex items-center justify-between px-3 h-9 text-[12px]">
         <div className="flex items-center gap-2 text-fg">
           <span className="font-medium">扫描中</span>

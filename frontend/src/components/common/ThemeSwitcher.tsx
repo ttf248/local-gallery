@@ -25,7 +25,7 @@ export default function ThemeSwitcher({ compact = false }: { compact?: boolean }
   }
 
   return (
-    <div className="inline-flex border border-border rounded-md overflow-hidden bg-bg-elevated">
+    <div className="inline-flex border border-border rounded-md overflow-hidden bg-bg-subtle/40">
       {[
         { value: 'light', label: '浅色', Icon: SunIcon },
         { value: 'dark', label: '深色', Icon: MoonIcon },
@@ -34,10 +34,10 @@ export default function ThemeSwitcher({ compact = false }: { compact?: boolean }
         <button
           key={o.value}
           onClick={() => setTheme(o.value as ThemePref)}
-          className={`flex items-center gap-1 px-2.5 py-1 text-xs transition-colors ${
+          className={`flex items-center gap-1 px-2.5 h-7 text-xs transition-colors ${
             theme === o.value
-              ? 'bg-accent text-accent-contrast'
-              : 'text-fg-muted hover:text-fg hover:bg-bg-subtle'
+              ? 'bg-bg-elevated text-fg shadow-xs'
+              : 'text-fg-muted hover:text-fg hover:bg-bg-subtle/60'
           }`}
         >
           <o.Icon size={12} />
@@ -99,7 +99,7 @@ function CompactSwitch({
         />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-[240px] bg-bg-elevated border border-border rounded-md shadow-md z-40 p-2 fade-up">
+        <div className="absolute right-0 top-full mt-1.5 w-[240px] bg-bg-elevated border border-border rounded-lg shadow-lg z-40 p-2 fade-up">
           <div className="text-[10px] uppercase tracking-[0.18em] text-fg-subtle px-2 py-1.5">
             主题
           </div>

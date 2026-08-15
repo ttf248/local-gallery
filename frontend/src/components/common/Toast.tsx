@@ -17,7 +17,7 @@ export default function ToastViewport() {
         return (
           <div
             key={t.id}
-            className="pointer-events-auto flex items-center gap-3 bg-bg-elevated border border-border rounded-md px-3.5 py-2.5 shadow-md min-w-[240px] max-w-[380px] fade-up text-sm"
+            className="pointer-events-auto flex items-center gap-3 glass-strong border border-border rounded-lg px-3.5 py-2.5 shadow-md min-w-[240px] max-w-[380px] fade-up text-sm"
           >
             <Icon size={15} className="shrink-0 text-fg-muted" />
             <div className="flex-1 leading-snug">{t.message}</div>

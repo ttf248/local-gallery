@@ -31,7 +31,7 @@ export default function ImageInfoPanel({ absPath, onClose }: Props) {
   if (!absPath) return null
 
   return (
-    <aside className="w-72 border-l border-border-faint bg-bg-elevated flex flex-col">
+    <aside className="w-72 border-l border-border-faint glass flex flex-col">
       <div className="flex items-center justify-between px-4 h-12 border-b border-border-faint">
         <h2 className="font-display text-[13px] font-medium">图片信息</h2>
         <button

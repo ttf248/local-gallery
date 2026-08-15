@@ -29,7 +29,7 @@ export default function StatusBar() {
     view === 'all' ? '全部' : view === 'album' ? '文件夹' : view === 'collection' ? '集合' : '合集'
 
   return (
-    <footer className="h-7 px-4 flex items-center justify-between text-[11px] text-fg-subtle border-t border-border bg-bg-elevated/60 backdrop-blur">
+    <footer className="h-7 px-4 flex items-center justify-between text-[11px] text-fg-subtle border-t border-border-faint glass">
       <div className="flex items-center gap-3 truncate">
         <span>{leftLabel}</span>
         {query && (

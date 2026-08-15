@@ -13,7 +13,7 @@ export default function EmptyState({ title, description, action, icon }: Props) 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-10 text-center fade-up">
       {icon && (
-        <div className="w-12 h-12 rounded-full bg-bg-subtle flex items-center justify-center text-fg-muted mb-5">
+        <div className="w-14 h-14 rounded-2xl bg-bg-subtle border border-border-faint flex items-center justify-center text-fg-muted mb-5 shadow-xs">
           {icon}
         </div>
       )}

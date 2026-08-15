@@ -71,7 +71,7 @@ export default function Toolbar() {
   }, [sse.isComplete, sse.scanId, setResult, pushToast])
 
   return (
-    <header className="h-14 flex items-center gap-4 px-5 lg:px-7 border-b border-border-faint bg-bg-elevated/50 backdrop-blur-sm">
+    <header className="h-14 flex items-center gap-4 px-5 lg:px-7 border-b border-border-faint glass">
       {/* 左侧：极简字标（窄屏隐藏） */}
       <div className="hidden lg:flex items-center gap-2 min-w-0">
         <span className="font-display text-sm text-fg-muted">Viewer</span>
@@ -102,7 +102,7 @@ export default function Toolbar() {
         {(onHome || onCollection) && (
           <>
             <SortMenu value={sortBy} onChange={setSortBy} />
-            <div className="flex items-center border border-border-faint rounded-md overflow-hidden">
+            <div className="flex items-center border border-border rounded-md overflow-hidden">
               <ViewButton
                 active={viewMode === 'grid'}
                 onClick={() => setViewMode('grid')}
@@ -136,7 +136,7 @@ export default function Toolbar() {
             <button
               onClick={() => startScan.mutate()}
               disabled={startScan.isPending || sse.isRunning}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs bg-accent text-accent-contrast hover:bg-accent-hover transition-colors disabled:opacity-50"
+              className="btn-primary inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium bg-accent text-accent-contrast hover:bg-accent-hover shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
               title="扫描 (Ctrl+S)"
             >
               <ScanIcon size={11} />
@@ -189,8 +189,8 @@ function ViewButton({
       onClick={onClick}
       title={title}
       aria-label={rest['aria-label']}
-      className={`inline-flex items-center justify-center w-7 h-8 transition-colors ${
-        active ? 'bg-bg-subtle text-fg' : 'text-fg-subtle hover:text-fg'
+      className={`inline-flex items-center justify-center w-8 h-8 transition-colors ${
+        active ? 'bg-bg-subtle text-fg' : 'text-fg-subtle hover:text-fg hover:bg-bg-subtle/60'
       }`}
     >
       {children}
@@ -199,7 +199,7 @@ function ViewButton({
 }
 
 function Sep() {
-  return <div className="w-px h-5 bg-border-faint mx-1" />
+  return <div className="w-px h-5 bg-border mx-1" />
 }
 
 function SortMenu({
@@ -242,7 +242,7 @@ function SortMenu({
         <ChevronDownIcon size={11} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 min-w-[140px] bg-bg-elevated border border-border rounded-md shadow-md py-1 z-40 fade-up">
+        <div className="absolute right-0 top-full mt-1.5 min-w-[140px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up">
           {sortOptions.map((o) => (
             <button
               key={o.value}

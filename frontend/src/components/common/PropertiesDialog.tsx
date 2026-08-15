@@ -41,7 +41,7 @@ export default function PropertiesDialog({ open, absPath, onClose }: Props) {
       aria-modal="true"
     >
       <div
-        className="bg-bg-elevated rounded-lg shadow-lg border border-border-faint w-[480px] max-w-[92vw] overflow-hidden fade-up"
+        className="bg-bg-elevated rounded-xl shadow-lg border border-border w-[480px] max-w-[92vw] overflow-hidden fade-up"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between px-5 h-12 border-b border-border-faint">

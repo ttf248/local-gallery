@@ -44,7 +44,7 @@ export default function GlobalSearch() {
 
   return (
     <div className="relative w-full max-w-md">
-      <div className="flex items-center gap-2 bg-bg-subtle border border-transparent rounded-md px-3 h-9 focus-within:border-border-strong focus-within:bg-bg-elevated transition-colors">
+      <div className="input-focus-ring flex items-center gap-2 bg-bg-subtle rounded-md px-3 h-9 focus-within:bg-bg-elevated focus-within:border focus-within:border-border-strong">
         <SearchIcon size={14} className="text-fg-subtle shrink-0" />
         <input
           value={query}
@@ -68,13 +68,11 @@ export default function GlobalSearch() {
           placeholder="搜索文件夹 / 标签…"
           className="flex-1 bg-transparent border-0 outline-none text-sm placeholder:text-fg-subtle"
         />
-        <kbd className="hidden sm:inline-block text-[10px] font-mono px-1.5 py-0.5 rounded border border-border text-fg-subtle">
-          /
-        </kbd>
+        <kbd className="hidden sm:inline-block kbd">/</kbd>
       </div>
 
       {open && hits.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-bg-elevated border border-border rounded-md shadow-lg overflow-hidden z-30 fade-up">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up py-1">
           {hits.map((h) => (
             <button
               key={h.path}
@@ -85,10 +83,10 @@ export default function GlobalSearch() {
                 <img
                   src={`/api/thumbs?path=${encodeURIComponent(h.coverImage)}`}
                   alt=""
-                  className="w-8 h-10 object-cover rounded"
+                  className="w-8 h-10 object-cover rounded border border-border-faint"
                 />
               ) : (
-                <div className="w-8 h-10 bg-bg-subtle rounded" />
+                <div className="w-8 h-10 bg-bg-subtle rounded border border-border-faint" />
               )}
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{h.name}</div>
