@@ -1,6 +1,6 @@
 # API 文档
 
-漫画阅读器后端的 HTTP 接口手册。所有端点位于 `/api` 前缀下。
+图像浏览器后端的 HTTP 接口手册。所有端点位于 `/api` 前缀下。
 
 ## 通用约定
 
@@ -8,10 +8,12 @@
 |----|----|
 | 基础地址 | `http://<host>:<port>`（默认 `http://localhost:8080`） |
 | 内容类型 | `application/json`（除缩略图/原图外） |
-| 路径参数 | URL 中的 `?path=<abs>` 必须为绝对路径，且必须位于配置的 `comicRoot` 之下 |
+| 路径参数 | URL 中的 `?path=<abs>` 必须为绝对路径，且必须位于配置的 `mediaRoot` 之下；`?path=smart:<tag>` 用于按标签查询智能合集 |
 | 字符编码 | UTF-8；路径中的中文/空格需 URL-encode |
 | 错误响应 | `{ "error": "<可读消息>" }`，状态码 4xx/5xx |
 | Cache-Control | 缩略图 30 天；原图 1 天 |
+
+> 兼容说明：路径根字段新名 `mediaRoot`，旧名 `comicRoot` 仍可识别；`/api/albums` 与 `/api/folders` 是同一接口的两个名称。
 
 ---
 
@@ -22,32 +24,35 @@
 ```json
 {
   "status": "ok",
-  "comicRoot": "E:\\漫画",
+  "mediaRoot": "E:\\图像",
+  "comicRoot": "E:\\图像",
   "version": "0.1.0",
-  "goVersion": "go1.22.x",
+  "goVersion": "go1.24.x",
   "goroutines": 12
 }
 ```
+
+`mediaRoot` 为当前生效根（优先用新名）；`comicRoot` 同步暴露以兼容旧客户端。
 
 ---
 
 ## 扫描
 
-### `POST /api/scan`（同步，T4）
+### `POST /api/scan`（同步）
 
-阻塞扫描整个漫画根目录；适合小型库（<1k 卷）。
+阻塞扫描整个图像根目录；适合小型库（<1k 个文件夹）。
 
 ```json
 {
   "ok": true,
   "result": {
-    "root": "E:\\漫画",
+    "root": "E:\\图像",
     "albums": [
-      { "path": "...", "name": "vol1", "imageCount": 50, "author": "作者A", "coverImage": "..." }
+      { "path": "...", "name": "卷1", "imageCount": 50, "author": "标签A", "coverImage": "..." }
     ],
     "collections": [],
     "smartCollections": [
-      { "author": "作者A", "albumCount": 5, "coverImage": "..." }
+      { "tag": "标签A", "author": "标签A", "albumCount": 5, "coverImage": "..." }
     ],
     "albumCount": 50,
     "duration": 1234
@@ -55,7 +60,9 @@
 }
 ```
 
-### `POST /api/scan/start`（异步，T6）
+`author` 字段为兼容保留，内容与 `tag`（第一个标签）相同。
+
+### `POST /api/scan/start`（异步）
 
 立即返回 `scanId`，扫描在后台进行。
 
@@ -85,9 +92,46 @@ data: {"scanId":"...","error":"permission denied",...}
 
 获取已完成扫描的最终结果（结构同 `/api/scan`）。
 
+### `GET /api/scan/latest`
+
+返回最近一次扫描的缓存结果（无需重新扫描）。`/api/scan/latest` 即前端首页启动时拉取的入口。
+
 ### `DELETE /api/scan/:id`
 
 取消正在进行的扫描。
+
+---
+
+## 文件夹 / 集合 / 智能合集
+
+### `GET /api/folders?path=<abs>`（新名；`/api/albums` 兼容）
+
+按路径返回详细信息：
+
+- 普通文件夹（Album）：`{ kind: "album", data: { path, name, imageFiles:[…], imageCount, tags:[…], author, … } }`
+- 集合（Collection）：`{ kind: "collection", data: { path, name, albums:[…], albumCount } }`
+- 智能合集：`?path=smart:<tag>` → `{ kind: "smart", data: { tag, author, albums:[…], albumCount, coverImage } }`
+
+`imageFiles` 在前端中可同时以 `files` 字段名读取（双键别名，向后兼容）。
+
+### `GET /api/tags?path=smart:<tag>`
+
+按标签名直接查询智能合集。等价于 `/api/folders?path=smart:<tag>`。
+
+### `GET /api/search?q=<keyword>&limit=<n>`
+
+按关键字模糊搜索文件夹/合集/智能合集（不区分大小写，匹配 name/author）。`limit` 默认 50，最大 500。
+
+```json
+{
+  "ok": true,
+  "results": [
+    { "kind": "album", "path": "…", "name": "卷1", "count": 50, "coverImage": "…" },
+    { "kind": "smartCollection", "path": "smart:标签A", "name": "标签A", "count": 5, "coverImage": "…" }
+  ],
+  "count": 2
+}
+```
 
 ---
 
@@ -118,14 +162,14 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ### `GET /api/images?path=<abs>`
 
-返回原始图片（支持 `Range` 请求，用于分段加载大图）。
+返回原始图片（支持 `Range` 请求，用于分段加载大图）。HEIC/HEIF 文件以 `image/heic` MIME 直出；前端浏览器需支持原生 HEIC 解码（Safari 16+，Chrome 当前不支持，会回退到下载）。
 
 ### `GET /api/images/info?path=<abs>`
 
 ```json
 {
   "path": "...",
-  "name": "page1.png",
+  "name": "image1.png",
   "dir": "...",
   "size": 123456,
   "mtime": "2026-08-01T12:34:56Z",
@@ -135,6 +179,26 @@ data: {"scanId":"...","error":"permission denied",...}
   "checksum": "ab12cd34ef567890"
 }
 ```
+
+---
+
+## 阅读进度
+
+### `GET /api/progress?path=<abs>`
+
+```json
+{ "path": "…", "index": 12, "total": 50, "scroll": 0, "updated": "2026-08-15T12:34:56Z" }
+```
+
+无记录时返回 404。
+
+### `POST /api/progress`
+
+```json
+{ "path": "…", "index": 12, "total": 50, "scroll": 0 }
+```
+
+幂等 upsert。
 
 ---
 
@@ -174,15 +238,17 @@ data: {"scanId":"...","error":"permission denied",...}
 ### `POST /api/favorites`
 
 ```json
-{ "path": "/comic/volume1" }
+{ "path": "/path/to/album" }
 ```
-幂等添加。返回最新的收藏列表。
+
+幂等添加。返回最新的收藏列表。`path` 也支持 `smart:<tag>` 形式。
 
 ### `DELETE /api/favorites`
 
 ```json
-{ "path": "/comic/volume1" }
+{ "path": "/path/to/album" }
 ```
+
 幂等移除。
 
 ### `POST /api/favorites/prune`
@@ -216,7 +282,7 @@ data: {"scanId":"...","error":"permission denied",...}
 在系统文件管理器中打开指定路径（Windows 资源管理器/macOS Finder/Linux xdg-open）。
 
 - 仅当配置 `allowOsOpen=true` 时启用（默认关闭）。
-- 路径必须在 `comicRoot` 内（防越权）。
+- 路径必须在 `mediaRoot` 内（防越权）。
 - 403：`allowOsOpen` 禁用；400：路径越权。
 
 ---
@@ -227,8 +293,8 @@ data: {"scanId":"...","error":"permission denied",...}
 |----|------|
 | 400 | 参数缺失/路径越权 |
 | 403 | 功能未启用（`allowOsOpen`） |
-| 404 | 文件不存在 |
-| 415 | 不支持的图片格式 |
+| 404 | 文件不存在 / 扫描结果不存在 / 智能合集不存在 |
+| 415 | 不支持的图片格式（仅缩略图生成） |
 | 500 | 服务端错误 |
 
 ---
@@ -238,15 +304,16 @@ data: {"scanId":"...","error":"permission denied",...}
 通过 `backend/config.yaml` 配置（默认相对后端 CWD 查找）。完整示例见 [`backend/config.example.yaml`](../backend/config.example.yaml)。
 
 ```yaml
-# 漫画根目录（必填，必须是已存在的目录）
-comicRoot: "E:\\漫画"
+# 图像根目录（必填，必须是已存在的目录）
+# 新名；旧名 comicRoot 仍可识别。
+mediaRoot: "E:\\图像"
 
 # 监听地址与端口
 host: "0.0.0.0"
 port: 8080
 
-# 缩略图缓存目录（相对 CWD；未配置则在 CWD 下创建 .comic-reader/）
-cacheDir: ".comic-reader"
+# 缩略图缓存目录（相对 CWD；未配置则在 CWD 下创建 .image-viewer/）
+cacheDir: ".image-viewer"
 
 # 缩略图尺寸
 thumbSizeW: 320
@@ -262,6 +329,6 @@ allowOsOpen: false
 staticDir: "dist"
 ```
 
-启动参数仅保留 `--config <yaml-path>`（指定非默认位置的配置文件）和 `--static-dir <dir>`（覆盖 `staticDir` 字段，便于在不同环境切换前端产物路径）。**不再支持环境变量或 --comic-root / --host / --port 等覆盖。**
+启动参数仅保留 `--config <yaml-path>`（指定非默认位置的配置文件）和 `--static-dir <dir>`（覆盖 `staticDir` 字段，便于在不同环境切换前端产物路径）。**不再支持环境变量或 --media-root / --host / --port 等覆盖。**
 
 优先级：`YAML 显式值` > `内置默认值`。

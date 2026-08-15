@@ -1,20 +1,21 @@
-# Comic Reader (Web)
+# 图像浏览器 / Viewer
 
-> 漫画阅读器 · 浏览器即开即看
+> 通用本地图像浏览器 · 浏览即开即看
 
-一个轻量的 Web 漫画阅读器。后端负责扫描本地漫画目录、生成缩略图、提供 HTTP API；前端用现代浏览器即可访问和阅读。
+一个轻量的 Web 应用：扫描本地图像目录、生成缩略图、提供 HTTP API；前端用现代浏览器即可访问和浏览。
+漫画 / 同人志只是其中一个使用场景，应用本身对图像类型与目录结构保持中性。
 
 ---
 
-## � 特性
+## 特性
 
 - 🌐 **纯浏览器访问** — 无需安装桌面客户端
-- � **异步扫描** — SSE 实时进度推送，支持取消
+- 🔄 **异步扫描** — SSE 实时进度推送，支持取消
 - 🖼️ **缩略图缓存** — 磁盘缓存 + LRU，断网复用
 - 🌗 **明暗双主题 + 6 套强调色** — 跟随系统或手动切换；graphite / indigo / rose / forest / ochre / plum
-- 📚 **作者页 / 智能合集** — `/authors/<作者名>` 一级路由，封面轮播 + 统计 + 收藏
+- 🏷️ **标签页 / 智能合集** — `/tags/<标签名>` 一级路由，封面轮播 + 统计 + 收藏
 - ⌨️ **完整快捷键** — Ctrl/方向键/F11 等桌面级操作；`?` 唤起可搜索帮助浮层
-- 📖 **三种阅读模式** — 单页翻页、连续滚动、双页对开（LTR / RTL）
+- 🪟 **三种显示模式** — 单张、连续滚动、双张并排（左右方向可切换）
 - 🖼️ **四种图片适配** — 适应 / 按宽 / 按高 / 原始，按 `F` 循环
 - 🎬 **幻灯片模式** — 自动翻页
 - ⭐ **收藏 / 最近** — 跨设备持久化
@@ -25,19 +26,22 @@
 
 ## 🚀 快速开始
 
-### 1. 准备漫画根目录
+### 1. 准备图像根目录
 
-任意位置均可，例如 `E:\漫画`、`~/Pictures/comics`。
+任意位置均可，例如 `E:\帕鲁 Mod\归档\二次元`、`~/Pictures`。
+目录结构无要求：可以是子目录各自装一组图片（每组一个"文件夹"），也可以是松散的散图。
 
 ### 2. 配置后端
 
 ```bash
 cd backend
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，至少设置 comicRoot
+# 编辑 config.yaml，至少设置 mediaRoot
 ```
 
-后端从 `./config.yaml`（相对启动 CWD）加载配置；不存在则用内置默认值。未配置 `cacheDir` 时自动在 CWD 下创建 `.comic-reader/`。
+后端从 `./config.yaml`（相对启动 CWD）加载配置；不存在则用内置默认值。未配置 `cacheDir` 时自动在 CWD 下创建 `.image-viewer/`。
+
+> 配置项 `mediaRoot` 是新名；旧名 `comicRoot` 仍可识别。`/api/health` 同时返回两者，便于排查。
 
 ### 3. 启动后端
 
@@ -52,7 +56,7 @@ go run ./cmd/server
 - `--config <path>`：指向其他位置的 YAML 配置文件
 - `--static-dir <dir>`：覆盖 `staticDir` 字段（生产部署前端产物路径）
 
-**不再支持环境变量或 `--comic-root` 等覆盖**，所有运行时配置集中在 `config.yaml`。
+**不再支持环境变量或 `--media-root` 等覆盖**，所有运行时配置集中在 `config.yaml`。
 
 ### 4. 启动前端（开发模式）
 
@@ -69,7 +73,7 @@ npm run dev
 ```bash
 cd frontend && npm run build      # 产物在 frontend/dist
 cd ../backend && go build -o ../bin/server ./cmd/server
-# 在 backend/config.yaml 中设置 comicRoot 指向漫画根目录
+# 在 backend/config.yaml 中设置 mediaRoot 指向图像根目录
 ./bin/server
 ```
 
@@ -79,18 +83,18 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 
 ## ⚙️ 配置
 
-漫画根目录与所有运行时参数集中在 [`backend/config.yaml`](./backend/config.example.yaml)：
+图像根目录与所有运行时参数集中在 [`backend/config.yaml`](./backend/config.example.yaml)：
 
 | 来源 | 示例 |
 |------|------|
-| YAML 配置文件 | `backend/config.yaml` 字段 `comicRoot` 等 |
-| 内置默认值 | `./comics`（相对后端 CWD），缓存目录 `<CWD>/.comic-reader/` |
+| YAML 配置文件 | `backend/config.yaml` 字段 `mediaRoot` 等 |
+| 内置默认值 | `./images`（相对后端 CWD），缓存目录 `<CWD>/.image-viewer/` |
 
 完整字段见 [`backend/config.example.yaml`](./backend/config.example.yaml)。
 
 ---
 
-## � 开发
+## 🛠 开发
 
 | 操作 | 命令 |
 |------|------|
@@ -141,15 +145,15 @@ VSCode 调试配置见 `.vscode/launch.json`，包含 4 个调试入口 + 1 个�
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Ctrl+O` | 打开/切换漫画目录 |
+| `Ctrl+O` | 打开/切换图像目录 |
 | `Ctrl+S` | 启动扫描 |
 | `F5` | 刷新 |
 | `Ctrl+H` | 回到主页 |
 | `Ctrl+D` | 我的收藏 |
 | `←/→` / `PageUp/PageDown` | 翻页 |
-| `1` / `2` / `3` | 单页 / 连续滚动 / 双页对开 |
+| `1` / `2` / `3` | 单张 / 连续滚动 / 双张并排 |
 | `F` | 图片适配循环（适应 → 按宽 → 按高 → 原始） |
-| `L` | 阅读方向（LTR / RTL，仅双页模式） |
+| `L` | 翻页方向（LTR / RTL，仅双张并排模式） |
 | `+/-/0` | 缩放 |
 | `R` | 旋转 |
 | `Space` | 幻灯片 |

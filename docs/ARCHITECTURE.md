@@ -14,10 +14,20 @@
                                             │
                                             ▼
                                   ┌──────────────────────────┐
-                                  │  文件系统 (漫画根目录)    │
-                                  │  E:\漫画 → ./comics       │
+                                  │  文件系统 (图像根目录)    │
+                                  │  E:\图像 → ./images       │
                                   └──────────────────────────┘
 ```
+
+## 领域模型
+
+应用对**目录与图像类型保持中性**，核心抽象是"图像组"：
+
+- **文件夹 (Album)**：一个包含若干图像文件的子目录。
+- **集合 (Collection)**：上层目录（深度可达 `MaxDepth`），把若干文件夹收作卷册。
+- **智能合集 (SmartCollection)**：按**标签**（从目录名中 `[xxx]` 段提取）聚合的所有文件夹。
+  - 一个文件夹可以属于多个智能合集（多个标签）。
+  - 兼容历史：旧字段 `Author` 仍存在，但内容等同于第一个标签。
 
 ## 后端模块（Go）
 
@@ -27,9 +37,10 @@ backend/
 ├── internal/
 │   ├── config/                 # YAML 配置加载 + 校验
 │   ├── models/                 # 领域模型（Album、Collection、SmartCollection、Prefs）
+│   │                          # Album 序列化时同时输出 files/imageFiles 兼容字段
 │   ├── services/               # 业务逻辑
 │   │   ├── scanner.go          # 文件遍历 + goroutine worker pool
-│   │   ├── smart_group.go      # [作者] 智能分组
+│   │   ├── smart_group.go      # 按标签智能分组（GroupByTag）
 │   │   ├── thumbnail.go        # LRU + 磁盘缓存 + Lanczos
 │   │   ├── scan_runner.go      # 异步扫描 + SSE 推送
 │   │   └── image_info.go       # 尺寸/格式/checksum
@@ -50,11 +61,18 @@ frontend/src/
 │   ├── useKeyboard.ts          # 全局快捷键
 │   ├── useScanSSE.ts           # 扫描 SSE 订阅
 │   ├── useTheme.ts             # 主题切换
-│   └── useAlbumActions.ts      # 右键菜单动作
+│   ├── useReadingProgress.ts   # 单条/批量阅读进度
+│   └── useFavorites.ts         # 收藏列表
 ├── store/                      # zustand
 │   ├── uiStore.ts              # 侧边栏/主题（localStorage 持久化）
+│   ├── libraryStore.ts         # 最近一次扫描结果（共享）
 │   └── viewerStore.ts          # 查看器临时状态（sessionStorage）
 ├── routes/                     # 页面
+│   ├── Home.tsx                # 主页（文件夹/合集/标签/最近）
+│   ├── Album.tsx               # 单个文件夹或合集详情
+│   ├── Author.tsx              # 标签页（/tags/<tag>）
+│   ├── Viewer.tsx              # 查看器（/viewer?path=…）
+│   ├── Recents.tsx / Favorites.tsx / Settings.tsx
 ├── components/
 │   ├── layout/                 # AppShell / Sidebar / Toolbar / StatusBar / Breadcrumb
 │   ├── album/                  # AlbumGrid / AlbumCard / ContextMenu / ScanProgress
@@ -62,6 +80,7 @@ frontend/src/
 │   └── common/                 # EmptyState / HelpOverlay / PropertiesDialog / ThemeSwitcher
 └── utils/                      # 工具
     ├── shortcuts.ts            # 快捷键清单（单一来源）
+    ├── path.ts                 # 路由与相册路径编解码（/albums/、/tags/、smart: 前缀）
     ├── storage.ts              # sessionStorage 持久化
     └── format.ts               # 字节大小格式化
 ```
@@ -74,9 +93,9 @@ frontend/src/
 main()
   ├─ flag.Parse()                      # 仅 --config / --static-dir
   ├─ config.LoadFile(config.yaml)      # YAML 覆盖默认
-  ├─ cfg.Validate()                    # ComicRoot 必须存在且为目录
+  ├─ cfg.Validate()                    # MediaRoot 必须存在且为目录
   ├─ fiber.New() + Use(logger/recover/path_safety)
-  ├─ 注册 /api/* 路由
+  ├─ 注册 /api/* 路由（含 /api/folders、/api/tags 别名）
   └─ app.Listen(cfg.Addr())
 ```
 
@@ -87,8 +106,8 @@ POST /api/scan/start
   → runner.Start(opts)
     → uuid.New() 生成 scanId
     → goroutine: scanner.ScanWithHook(opts, hook)
-      → filepath.WalkDir → worker pool → 发现相册 → 推送 ProgressEvent
-      → smart_group.GroupByAuthor()
+      → filepath.WalkDir → worker pool → 发现文件夹 → 推送 ProgressEvent
+      → smart_group.GroupByTag()           # 提取 [tag] 段并分组
       → 写 final ProgressEvent(ScanStatusComplete)
   ← { scanId }
 
@@ -100,8 +119,15 @@ GET /api/scan/:id/events (SSE)
 ### 3. 查看图片
 
 ```
+GET /api/folders?path=<abs>          # 新名（兼容 /api/albums）
+  → middleware.SafePath (path_safety 校验；smart: 前缀绕过绝对路径检查)
+  → cache.FindAlbum / FindCollection / FindSmartCollection
+  → 返回 Album 或 Collection 或 Smart 的详情
+
+GET /api/tags?path=smart:<tag>        # 按标签名直接查询智能合集
+
 GET /api/thumbs?path=<abs>
-  → middleware.SafePath (path_safety 校验)
+  → middleware.SafePath
   → thumbs.GetOrCreate(path)
     → LRU.Get(key)   ← 内存命中
     → 磁盘缓存读     ← 未命中但文件存在
@@ -115,8 +141,10 @@ GET /api/images?path=<abs>
 ### 4. 路径安全
 
 所有 `?path=` 请求经 `path_safety` 中间件：
+
 - `filepath.IsAbs(path)` 必须为真
 - `filepath.Rel(root, abs)` 结果不以 `..` 开头
+- **`smart:` 前缀**：直接放行，不做绝对路径校验（用于智能合集查询）
 - 校验失败：400
 
 ### 5. 偏好持久化
@@ -144,6 +172,7 @@ Toolbar ThemeSwitcher → useUIStore.setTheme(t)
 | 大列表 | `react-virtuoso` 虚拟滚动（>100 启用） |
 | SSE | `bufio.Writer` + flush 每事件 |
 | 主题切换 | CSS 变量 → 一次 reflow，无需重渲染组件树 |
+| 路由跳转 | 查看器通过 `?path=&index=&name=` 跳转，避免图片列表 URL 超长 |
 
 ## 部署
 
@@ -151,21 +180,21 @@ Toolbar ThemeSwitcher → useUIStore.setTheme(t)
 # 后端
 cd backend
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，设置 comicRoot: "/data/comics"
-go build -o comic-server ./cmd/server
-./comic-server
+# 编辑 config.yaml，设置 mediaRoot: "/data/images"
+go build -o image-viewer ./cmd/server
+./image-viewer
 
 # 前端
 cd frontend
 npm run build
-# 将 dist/ 静态部署到 Nginx/Caddy，并与 comic-server 反向代理在同一域
+# 将 dist/ 静态部署到 Nginx/Caddy，并与 image-viewer 反向代理在同一域
 ```
 
 生产配置示例：
 
 ```nginx
 location / {
-  root /var/www/comic-reader;
+  root /var/www/image-viewer;
   try_files $uri /index.html;
 }
 location /api/ {
@@ -173,3 +202,20 @@ location /api/ {
   proxy_buffering off;     # SSE 必需
 }
 ```
+
+## 术语对照
+
+| 旧（v1 漫画阅读器） | 新（图像浏览器 / Viewer） |
+|--------------------|--------------------------|
+| 漫画 / 本 / 卷 | 文件夹 |
+| 页 | 张 |
+| 作者 | 标签 |
+| 作者集合 | 智能合集 |
+| 阅读模式 | 显示模式 |
+| 单页 / 双页对开 | 单张 / 双张并排 |
+| 原版日漫（右→左） | 右→左（适合从右到左的出版物） |
+| 漫画根 (`comicRoot`) | 图像根 (`mediaRoot`) |
+| `.comic-reader/` 缓存 | `.image-viewer/` 缓存 |
+| `ComicReader.exe` | `image-viewer.exe` |
+
+旧名（`comicRoot`、`Author`、`<Route path="/authors/*">`）仍可识别，便于旧链接与缓存迁移。
