@@ -258,6 +258,22 @@ export const CheckIcon = (p: IconProps) => (
   </svg>
 )
 
+// 重温 / 倒带：环形箭头朝左
+export const RewindIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <path d="M3 4v5h5" />
+  </svg>
+)
+
+// 日历
+export const CalendarIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="5" width="18" height="16" rx="2" />
+    <path d="M3 9h18M8 3v4M16 3v4" />
+  </svg>
+)
+
 export const AlertIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M12 3 2 21h20L12 3z" />

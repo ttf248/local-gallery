@@ -19,7 +19,12 @@ import {
   ShuffleIcon,
   ClockIcon,
   RefreshIcon,
+  RewindIcon,
 } from '../components/common/Icon'
+
+// 「重温」智能合集阈值：超过 N 天没看就推荐。
+const REWIND_DAYS = 30
+const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 function buildCards(r: ScanResult | null): CardData[] {
   if (!r) return []
@@ -175,6 +180,38 @@ export default function Home() {
       }))
   }, [result])
 
+  // 「重温」：上次阅读（或入库时间）距今 > REWIND_DAYS 天的相册。
+  //   - 有进度：按 progress.updated 判断
+  //   - 无进度：按 album.modTime 判断（库里的"老新人"）
+  //   排序：最久没看的在前
+  const rewind = useMemo<CardData[]>(() => {
+    if (!result) return []
+    const now = Date.now()
+    const threshold = now - REWIND_DAYS * MS_PER_DAY
+    const items: { card: CardData; since: number }[] = []
+    for (const a of result.albums) {
+      const p = progressMap?.[a.path]
+      const lastTs = p?.updated ? +new Date(p.updated) : a.modTime ? +new Date(a.modTime) : 0
+      if (!lastTs || lastTs > threshold) continue
+      items.push({
+        card: {
+          id: 'a:' + a.path,
+          variant: 'album',
+          title: a.name,
+          subtitle: a.author || undefined,
+          count: a.imageCount,
+          coverPath: a.coverImage,
+          to: albumRoute(a.path),
+          progress: p ? { index: p.index, total: p.total } : undefined,
+          lastSeenAt: p?.updated ?? null,
+          badge: 'rewind',
+        },
+        since: lastTs,
+      })
+    }
+    return items.sort((a, b) => a.since - b.since).slice(0, 8).map((it) => it.card)
+  }, [result, progressMap])
+
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
       if (view !== 'all' && it.variant !== view) return false
@@ -314,6 +351,18 @@ export default function Home() {
         </SectionBlock>
       )}
 
+      {/* 重温：> 30 天没看的相册 */}
+      {rewind.length > 0 && !query && (
+        <SectionBlock
+          title="重温"
+          subtitle={`${REWIND_DAYS}+ 天没看`}
+          icon={<RewindIcon size={11} className="text-fg-muted" />}
+          count={rewind.length}
+        >
+          <AlbumGrid items={rewind} variant={viewMode} />
+        </SectionBlock>
+      )}
+
       {/* 最近加入 */}
       {recentAdded.length > 0 && !query && (
         <SectionBlock
@@ -338,7 +387,10 @@ export default function Home() {
 
       {/* 全部 / 筛选结果 */}
       <section className="max-w-[1400px]">
-        {(inProgress.length > 0 || recentAdded.length > 0 || topAuthors.length > 0) &&
+        {(inProgress.length > 0 ||
+          rewind.length > 0 ||
+          recentAdded.length > 0 ||
+          topAuthors.length > 0) &&
           !query && (
             <div className="px-6 lg:px-10 pt-2 pb-3 flex items-center gap-2">
               <LibraryIcon size={12} className="text-fg-muted" />
@@ -435,11 +487,13 @@ function recentTime(result: ScanResult | null, id: string): string {
 
 function SectionBlock({
   title,
+  subtitle,
   icon,
   count,
   children,
 }: {
   title: string
+  subtitle?: string
   icon?: React.ReactNode
   count: number
   children: React.ReactNode
@@ -451,6 +505,11 @@ function SectionBlock({
         <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
           {title}
         </h2>
+        {subtitle && (
+          <span className="text-[11px] text-fg-subtle normal-case tracking-normal">
+            {subtitle}
+          </span>
+        )}
         <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
       </div>
       {children}

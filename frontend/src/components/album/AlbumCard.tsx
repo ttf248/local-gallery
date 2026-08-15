@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { thumbUrl } from '../../api/thumbs'
-import { StarIcon, FolderIcon, ReaderIcon } from '../common/Icon'
+import { StarIcon, FolderIcon, ReaderIcon, RewindIcon } from '../common/Icon'
+import HoverPreview from '../common/HoverPreview'
 import type { ViewMode } from '../../store/uiStore'
 
 export type CardVariant = 'album' | 'collection' | 'smart'
+export type CardBadge = 'rewind' // 重温：30 天以上没看
 
 export interface CardData {
   id: string
@@ -17,6 +19,10 @@ export interface CardData {
   isFavorite?: boolean
   // 阅读进度：index + total，用于显示百分比与定位条
   progress?: { index: number; total: number }
+  // 上次阅读时间（ISO），用于悬停预览的「上次 X」展示
+  lastSeenAt?: string | null
+  // 角标：当前只支持重温；未来可扩展
+  badge?: CardBadge
 }
 
 interface Props {
@@ -39,6 +45,10 @@ function GridCard({ data }: { data: CardData }) {
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
+  // 悬停预览状态
+  const [previewOn, setPreviewOn] = useState(false)
+  const [previewRect, setPreviewRect] = useState<DOMRect | null>(null)
+  const previewTimer = useRef<number | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -73,6 +83,42 @@ function GridCard({ data }: { data: CardData }) {
       ? Math.min(100, Math.round((data.progress.index / Math.max(1, data.progress.total - 1)) * 100))
       : null
 
+  // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
+  // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
+  //   鼠标在 card→preview 的过渡中会先触发 card mouseleave。）
+  // 触摸设备不启用（pointer: coarse 才挂监听）。
+  const closeTimer = useRef<number | null>(null)
+  const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (window.matchMedia('(pointer: coarse)').matches) return
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+    const target = e.currentTarget
+    previewTimer.current = window.setTimeout(() => {
+      setPreviewRect(target.getBoundingClientRect())
+      setPreviewOn(true)
+    }, 350)
+  }
+  const onLeave = () => {
+    if (previewTimer.current !== null) {
+      window.clearTimeout(previewTimer.current)
+      previewTimer.current = null
+    }
+    // 延迟关闭：给用户时间移到预览上
+    closeTimer.current = window.setTimeout(() => {
+      setPreviewOn(false)
+      closeTimer.current = null
+    }, 150)
+  }
+  // 卸载时清理 timer
+  useEffect(() => {
+    return () => {
+      if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+    }
+  }, [])
+
   return (
     <div
       ref={ref}
@@ -80,6 +126,8 @@ function GridCard({ data }: { data: CardData }) {
       tabIndex={0}
       onClick={onActivate}
       onKeyDown={onKey}
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
@@ -114,12 +162,17 @@ function GridCard({ data }: { data: CardData }) {
           </div>
         )}
 
-        {/* 智能集合标记 */}
-        {data.variant === 'smart' && (
+        {/* 智能集合标记 / 重温角标（同一位置：根据 badge 与 variant 决定显示） */}
+        {data.badge === 'rewind' ? (
+          <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-bg-elevated/95 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-border-faint shadow-xs">
+            <RewindIcon size={10} className="text-accent" />
+            <span>重温</span>
+          </div>
+        ) : data.variant === 'smart' ? (
           <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             标签
           </div>
-        )}
+        ) : null}
         {data.variant === 'collection' && (
           <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
@@ -163,6 +216,22 @@ function GridCard({ data }: { data: CardData }) {
           )}
         </div>
       </div>
+      {/* 悬停预览（仅相册/合集；触摸设备不启用） */}
+      {previewOn && previewRect && data.variant !== 'smart' && (
+        <HoverPreview
+          data={data}
+          anchorRect={previewRect}
+          lastSeenAt={data.lastSeenAt}
+          onPointerEnter={() => {
+            // 鼠标进入预览时取消正在等待的关闭 timer
+            if (closeTimer.current !== null) {
+              window.clearTimeout(closeTimer.current)
+              closeTimer.current = null
+            }
+          }}
+          onPointerLeave={onLeave}
+        />
+      )}
     </div>
   )
 }
