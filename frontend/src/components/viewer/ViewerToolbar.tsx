@@ -20,7 +20,9 @@ import {
   OriginalSizeIcon,
   ArrowRightLineIcon,
   ArrowLeftLineIcon,
+  MoreHorizontalIcon,
 } from '../common/Icon'
+import Popover, { PopoverItem, PopoverSeparator } from '../common/Popover'
 
 interface Props {
   total: number
@@ -183,8 +185,9 @@ export default function ViewerToolbar({
         </IconButton>
       </div>
       <Sep />
-      {/* 幻灯片 / 全屏 / 信息 / 帮助 */}
+      {/* 幻灯片 / 全屏 / 信息 / 帮助：折叠到 ··· 菜单（小屏工具栏不再挤成横滚） */}
       <div className="flex items-center gap-0.5 shrink-0">
+        {/* 幻灯片 / 全屏 保留在主条（高频），间隔 / 信息 / 帮助挪到菜单 */}
         <IconButton
           onClick={toggleSlideshow}
           active={slideshow}
@@ -192,32 +195,56 @@ export default function ViewerToolbar({
         >
           {slideshow ? <PauseIcon size={13} /> : <PlayIcon size={13} />}
         </IconButton>
-        <select
-          value={slideshowInterval}
-          onChange={(e) => setSlideshowInterval(Number(e.target.value))}
-          className="bg-transparent text-[11px] text-fg-muted border border-border-faint rounded px-1.5 h-7 outline-none"
-        >
-          <option value={1000}>1s</option>
-          <option value={2000}>2s</option>
-          <option value={3000}>3s</option>
-          <option value={5000}>5s</option>
-        </select>
         <IconButton onClick={toggleFullscreen} title="全屏 (F11)">
           <FullscreenIcon size={13} />
         </IconButton>
-        {onToggleInfo && (
-          <IconButton
-            onClick={onToggleInfo}
-            active={showInfo}
-            title="图片信息 (I)"
+        {((onToggleInfo ?? false) || (onToggleHelp ?? false)) && (
+          <Popover
+            align="end"
+            trigger={
+              <IconButton title="更多">
+                <MoreHorizontalIcon size={14} />
+              </IconButton>
+            }
           >
-            <InfoIcon size={13} />
-          </IconButton>
-        )}
-        {onToggleHelp && (
-          <IconButton onClick={onToggleHelp} title="帮助 (?)">
-            <HelpIcon size={13} />
-          </IconButton>
+            {/* 幻灯片切换间隔 */}
+            <div className="px-2.5 py-1.5">
+              <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-1">
+                幻灯片间隔
+              </div>
+              <div className="flex items-center gap-1">
+                {[1000, 2000, 3000, 5000].map((ms) => (
+                  <button
+                    key={ms}
+                    type="button"
+                    onClick={() => setSlideshowInterval(ms)}
+                    className={`px-2 h-6 rounded text-[11px] tabular-nums transition-colors ${
+                      slideshowInterval === ms
+                        ? 'bg-accent text-accent-contrast'
+                        : 'text-fg-muted hover:bg-bg-subtle'
+                    }`}
+                  >
+                    {ms / 1000}s
+                  </button>
+                ))}
+              </div>
+            </div>
+            {(onToggleInfo ?? false) || (onToggleHelp ?? false) ? <PopoverSeparator /> : null}
+            {onToggleInfo && (
+              <PopoverItem onClick={onToggleInfo} active={showInfo}>
+                <InfoIcon size={12} />
+                <span>图片信息</span>
+                <span className="ml-auto text-[10px] text-fg-subtle">I</span>
+              </PopoverItem>
+            )}
+            {onToggleHelp && (
+              <PopoverItem onClick={onToggleHelp}>
+                <HelpIcon size={12} />
+                <span>快捷键帮助</span>
+                <span className="ml-auto text-[10px] text-fg-subtle">?</span>
+              </PopoverItem>
+            )}
+          </Popover>
         )}
       </div>
     </header>
@@ -232,7 +259,7 @@ function IconButton({
   active,
 }: {
   children: React.ReactNode
-  onClick: () => void
+  onClick?: () => void
   disabled?: boolean
   title?: string
   active?: boolean

@@ -274,6 +274,15 @@ export const SparklesIcon = (p: IconProps) => (
   </svg>
 )
 
+// 更多：水平三点（用于菜单折叠入口）
+export const MoreHorizontalIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+)
+
 // 日历
 export const CalendarIcon = (p: IconProps) => (
   <svg {...base(p)}>
