@@ -415,3 +415,19 @@ export const ArrowLeftLineIcon = (p: IconProps) => (
     <path d="m10 6-6 6 6 6" />
   </svg>
 )
+
+/** 上一本 / 上一项（粗箭头向上） */
+export const ArrowUpIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 4v16" />
+    <path d="m5 11 7-7 7 7" />
+  </svg>
+)
+
+/** 下一本 / 下一项（粗箭头向下） */
+export const ArrowDownIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 4v16" />
+    <path d="m5 13 7 7 7-7" />
+  </svg>
+)

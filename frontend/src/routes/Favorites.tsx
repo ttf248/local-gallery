@@ -5,10 +5,12 @@ import { useSearchStore } from '../store/searchStore'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
+import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { StarIcon } from '../components/common/Icon'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
+import type { ViewerContextEntry } from '../utils/viewerContext'
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
@@ -95,6 +97,20 @@ export default function Favorites() {
         return list.sort((a, b) => a.title.localeCompare(b.title))
     }
   }, [cards, query, sortBy, progressMap])
+
+  // 收藏页的上下文：只让真正的相册参与上一本/下一本（智能合集不是「可翻页」对象）
+  const favEntries = useMemo<ViewerContextEntry[]>(
+    () =>
+      filtered
+        .filter((c) => c.variant === 'album')
+        .map((c) => ({
+          key: decodeFavPath(c.to),
+          to: c.to,
+          name: c.title,
+        })),
+    [filtered],
+  )
+  useViewerContextSync({ type: 'favorites' }, favEntries)
 
   return (
     <div className="min-h-full">

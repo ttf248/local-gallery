@@ -86,3 +86,4 @@ $RECYCLE.BIN/
 .comic-reader/
 .cache/
 *.tsbuildinfo
+backend/config.local.yaml

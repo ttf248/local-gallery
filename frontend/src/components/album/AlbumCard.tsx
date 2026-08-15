@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { thumbUrl } from '../../api/thumbs'
-import { StarIcon, FolderIcon, ReaderIcon, RewindIcon } from '../common/Icon'
+import { StarIcon, FolderIcon, ReaderIcon, RewindIcon, CheckIcon } from '../common/Icon'
 import HoverPreview from '../common/HoverPreview'
 import type { ViewMode } from '../../store/uiStore'
 
@@ -82,6 +82,11 @@ function GridCard({ data }: { data: CardData }) {
     data.progress && data.progress.total > 0
       ? Math.min(100, Math.round((data.progress.index / Math.max(1, data.progress.total - 1)) * 100))
       : null
+  // 已读完：走到最后一页或仅差一页（最后一页常常是 endcard，差 1 也算读完了）
+  const isFinished =
+    !!data.progress &&
+    data.progress.total > 0 &&
+    data.progress.index >= data.progress.total - 1
 
   // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
   // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
@@ -195,6 +200,17 @@ function GridCard({ data }: { data: CardData }) {
             </div>
           </div>
         )}
+
+        {/* 已读：右下角徽章，封面略微提亮（叠在 cover 上时通过 mix-blend 强可读） */}
+        {isFinished && data.variant === 'album' && (
+          <div
+            className="absolute bottom-2 right-2 inline-flex items-center gap-1 bg-success/95 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
+            title="已读完"
+          >
+            <CheckIcon size={10} />
+            <span>已读</span>
+          </div>
+        )}
       </div>
 
       <div className="pt-3 pb-1">
@@ -273,6 +289,10 @@ function ListCard({ data }: { data: CardData }) {
     data.progress && data.progress.total > 0
       ? Math.min(100, Math.round((data.progress.index / Math.max(1, data.progress.total - 1)) * 100))
       : null
+  const isFinished =
+    !!data.progress &&
+    data.progress.total > 0 &&
+    data.progress.index >= data.progress.total - 1
 
   return (
     <div
@@ -306,10 +326,26 @@ function ListCard({ data }: { data: CardData }) {
             <StarIcon size={9} className="text-warning" filled />
           </div>
         )}
+        {isFinished && data.variant === 'album' && (
+          <div
+            className="absolute -bottom-1 -right-1 bg-success text-white rounded-full p-0.5 shadow-sm"
+            title="已读完"
+          >
+            <CheckIcon size={9} />
+          </div>
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-fg truncate">{data.title}</div>
+        <div className="text-[13px] font-medium text-fg truncate flex items-center gap-1.5">
+          <span className="truncate">{data.title}</span>
+          {isFinished && data.variant === 'album' && (
+            <span className="inline-flex items-center gap-0.5 text-success text-[10px] font-medium shrink-0">
+              <CheckIcon size={10} />
+              <span>已读</span>
+            </span>
+          )}
+        </div>
         <div className="text-[11px] text-fg-subtle mt-0.5 flex items-center gap-2">
           {data.subtitle && <span className="truncate">{data.subtitle}</span>}
           <span className="tabular-nums shrink-0">

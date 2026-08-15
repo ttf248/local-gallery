@@ -6,12 +6,14 @@ import { useSearchStore } from '../store/searchStore'
 import { useScanSSE } from '../hooks/useScanSSE'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
+import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import ScanProgress from '../components/album/ScanProgress'
 import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
+import type { ViewerContextEntry } from '../utils/viewerContext'
 import {
   PlayFilledIcon,
   StarIcon,
@@ -260,6 +262,20 @@ export default function Home() {
         return withProgress.sort((a, b) => a.title.localeCompare(b.title))
     }
   }, [cards, query, sortBy, view, progressMap, result])
+
+  // 主页作为上下文源：把当前过滤后的列表（最常点的那一个）作为 N/P 候选。
+  const homeEntries = useMemo<ViewerContextEntry[]>(
+    () =>
+      filtered
+        .filter((c) => c.variant === 'album') // 只让真正的相册参与上一本/下一本
+        .map((c) => ({
+          key: decodeFavPath(c.to),
+          to: c.to,
+          name: c.title,
+        })),
+    [filtered],
+  )
+  useViewerContextSync({ type: 'home' }, homeEntries)
 
   const counts = useMemo(() => {
     const c = { all: cards.length, album: 0, collection: 0, smart: 0 }

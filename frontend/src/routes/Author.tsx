@@ -5,10 +5,12 @@ import { useSearchStore } from '../store/searchStore'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
+import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { ChevronLeftIcon, StarIcon, ReaderIcon, ClockIcon, FolderIcon } from '../components/common/Icon'
 import { albumRoute } from '../utils/path'
+import type { ViewerContextEntry } from '../utils/viewerContext'
 
 interface AlbumSummary {
   path: string
@@ -105,6 +107,13 @@ export default function Author() {
       ? { index: progressMap[a.path].index, total: progressMap[a.path].total }
       : undefined,
   }))
+
+  // 标签页作为上下文源
+  const tagEntries = useMemo<ViewerContextEntry[]>(
+    () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
+    [cards],
+  )
+  useViewerContextSync({ type: 'tag', tag: author }, tagEntries)
 
   // 头图：随机从 6 张里挑（每隔 4s 切一张，类似走马灯）
   useEffect(() => {

@@ -21,6 +21,9 @@ import {
   ArrowRightLineIcon,
   ArrowLeftLineIcon,
   MoreHorizontalIcon,
+  StarIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from '../common/Icon'
 import Popover, { PopoverItem, PopoverSeparator } from '../common/Popover'
 
@@ -28,9 +31,15 @@ interface Props {
   total: number
   onPrev: () => void
   onNext: () => void
+  /** 上一本：跳到上下文列表中的上一本（仅在有上下文时显示）。 */
+  onPrevAlbum?: () => void
+  /** 下一本：跳到上下文列表中的下一本。 */
+  onNextAlbum?: () => void
   showInfo?: boolean
   onToggleInfo?: () => void
   onToggleHelp?: () => void
+  onToggleFavorite?: () => void
+  isFavorite?: boolean
 }
 
 // 显示模式选项
@@ -54,9 +63,13 @@ export default function ViewerToolbar({
   total,
   onPrev,
   onNext,
+  onPrevAlbum,
+  onNextAlbum,
   showInfo,
   onToggleInfo,
   onToggleHelp,
+  onToggleFavorite,
+  isFavorite,
 }: Props) {
   const navigate = useNavigate()
   const index = useViewerStore((s) => s.index)
@@ -89,6 +102,8 @@ export default function ViewerToolbar({
     }
     return { left: `${index + 1}`, right: total }
   })()
+
+  const hasAlbumNav = !!(onPrevAlbum || onNextAlbum)
 
   return (
     <header className="h-12 flex items-center gap-2 px-3 border-b border-border-faint glass text-sm overflow-x-auto">
@@ -133,6 +148,39 @@ export default function ViewerToolbar({
           </span>
         </div>
       </div>
+
+      {/* 上一本 / 下一本：上下文有列表时显示 */}
+      {hasAlbumNav && (
+        <>
+          <Sep />
+          <div className="flex items-center gap-0.5 shrink-0">
+            {onPrevAlbum && (
+              <IconButton onClick={onPrevAlbum} title="上一本 (P)">
+                <ArrowUpIcon size={13} />
+              </IconButton>
+            )}
+            {onNextAlbum && (
+              <IconButton onClick={onNextAlbum} title="下一本 (N)">
+                <ArrowDownIcon size={13} />
+              </IconButton>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* 收藏：仅在提供 onToggleFavorite 时渲染 */}
+      {onToggleFavorite && (
+        <>
+          <Sep />
+          <IconButton
+            onClick={onToggleFavorite}
+            active={isFavorite}
+            title={isFavorite ? '取消收藏 (S)' : '加入收藏 (S)'}
+          >
+            <StarIcon size={13} filled={isFavorite} className={isFavorite ? 'text-warning' : ''} />
+          </IconButton>
+        </>
+      )}
 
       <Sep />
       {/* 阅读模式切换 */}

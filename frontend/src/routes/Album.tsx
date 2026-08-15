@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
 import { useFavorites } from '../hooks/useFavorites'
+import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import { historyApi } from '../api/prefs'
 import { thumbUrl } from '../api/thumbs'
 import { imageUrl } from '../api/images'
@@ -15,6 +16,7 @@ import { albumsApi } from '../api/albums'
 import { decodeFavPath } from '../utils/path'
 import { ChevronLeftIcon, ReaderIcon, StarIcon, FolderIcon } from '../components/common/Icon'
 import { useReadingProgress } from '../hooks/useReadingProgress'
+import type { ViewerContextEntry } from '../utils/viewerContext'
 
 interface AlbumDetail {
   type: 'album'
@@ -400,6 +402,18 @@ function CollectionView({
     coverPath: a.coverImage,
     to: `/albums/${encodeURIComponent(a.path)}`,
   }))
+
+  // 集合/智能合集页面作为上下文源
+  const collEntries = useMemo<ViewerContextEntry[]>(
+    () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
+    [cards],
+  )
+  useViewerContextSync(
+    isSmart
+      ? { type: 'tag', tag: detail.author }
+      : { type: 'album', parentPath: detail.path },
+    collEntries,
+  )
 
   return (
     <div className="flex flex-col h-full">

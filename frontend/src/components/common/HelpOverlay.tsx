@@ -15,7 +15,8 @@ const groups: { title: string; ids: string[] }[] = [
   {
     title: '查看器',
     ids: [
-      'next', 'prev', 'first', 'last',
+      'next', 'prev', 'first', 'last', 'gotoPage',
+      'nextAlbum', 'prevAlbum', 'favorite',
       'mode1', 'mode2', 'mode3',
       'fit', 'direction',
       'zoomIn', 'zoomOut', 'zoomReset', 'rotate',

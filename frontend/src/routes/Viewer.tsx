@@ -1,14 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useViewerStore } from '../store/viewerStore'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { albumsApi } from '../api/albums'
-import { progressApi } from '../api/prefs'
+import { progressApi, historyApi } from '../api/prefs'
 import { useUIStore } from '../store/uiStore'
+import { useFavorites } from '../hooks/useFavorites'
 import ImageViewer from '../components/viewer/ImageViewer'
 import ViewerToolbar from '../components/viewer/ViewerToolbar'
+import PageSlider from '../components/viewer/PageSlider'
 import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
 import HelpOverlay from '../components/common/HelpOverlay'
+import {
+  getViewerContext,
+  type ViewerContextEntry,
+} from '../utils/viewerContext'
 
 // 查看器页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
 // 关闭时持久化阅读进度到后端。
@@ -32,9 +38,15 @@ export default function Viewer() {
   const setZoom = useViewerStore((s) => s.setZoom)
   const toggleSlideshow = useViewerStore((s) => s.toggleSlideshow)
   const mode = useViewerStore((s) => s.mode)
+  const setMode = useViewerStore((s) => s.setMode)
 
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  const [markingRead, setMarkingRead] = useState(false)
+  const finishedRef = useRef(false)
+
+  const { favorites, toggle: toggleFavorite } = useFavorites()
+  const isFav = pathParam ? favorites.includes(pathParam) : false
 
   // 拉图 + 恢复阅读进度：依赖 pathParam 变化；images 加载完成后由内层判分支
   const imagesReady = images.length > 0
@@ -75,6 +87,19 @@ export default function Viewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imagesReady, pathParam])
 
+  // 把这次打开写进 history
+  useEffect(() => {
+    if (!pathParam || images.length === 0) return
+    historyApi
+      .add({
+        path: pathParam,
+        name,
+        imageCount: images.length,
+      })
+      .catch(() => {})
+  }, [pathParam, name, images.length])
+
+  // 切换图片时关闭信息面板 + 防抖持久化进度
   useEffect(() => {
     setShowInfo(false)
     if (!pathParam) return
@@ -84,6 +109,30 @@ export default function Viewer() {
     }, 600)
     return () => clearTimeout(t)
   }, [index, pathParam, images.length])
+
+  // 滚到最后一张：自动标记为「已读」一次。
+  // - 不在连续模式用（连续模式 index 不会到达末尾）。
+  // - 用 finishedRef 防止重复触发。
+  useEffect(() => {
+    if (markingRead) return
+    if (mode === 'continuous') return
+    if (!imagesReady || images.length === 0 || !pathParam) return
+    if (index < images.length - 1) {
+      finishedRef.current = false
+      return
+    }
+    if (finishedRef.current) return
+    finishedRef.current = true
+    setMarkingRead(true)
+    progressApi
+      .set(pathParam, images.length - 1, images.length, 0)
+      .then(() => {
+        pushToast({ kind: 'success', message: '已读完 🎉', ttl: 1500 })
+      })
+      .catch(() => {})
+      .finally(() => setMarkingRead(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index, imagesReady, images.length, pathParam, mode])
 
   useEffect(() => {
     return () => {
@@ -100,7 +149,6 @@ export default function Viewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 切换图片时关闭信息面板 + 防抖持久化进度
   useEffect(() => {
     const off = () => setShowHelp(true)
     window.addEventListener('comic:open-help', off as EventListener)
@@ -149,6 +197,79 @@ export default function Viewer() {
     }
   }
 
+  // 跳到指定页（1-based → 0-based）
+  const jumpTo = useCallback(
+    (zeroBased: number) => {
+      const i = Math.max(0, Math.min(images.length - 1, zeroBased))
+      setIndex(i)
+    },
+    [images.length, setIndex],
+  )
+
+  // 上一本 / 下一本（基于上下文栈：主页、收藏、标签页等列表点开时记下）
+  const goAdjacent = useCallback(
+    (direction: 1 | -1) => {
+      const ctx = getViewerContext()
+      if (!ctx || ctx.list.length <= 1 || !pathParam) {
+        pushToast({
+          kind: 'info',
+          message: '当前无可用的「上一本 / 下一本」列表',
+          ttl: 1500,
+        })
+        return
+      }
+      // 优先用当前 key 找索引；找不到时用 ctx.index
+      const curIdx = ctx.list.findIndex((it) => it.key === pathParam)
+      const base = curIdx >= 0 ? curIdx : ctx.index
+      // 计算下一步索引（环形）
+      const n = ctx.list.length
+      const nextIdx = ((base + direction) % n + n) % n
+      const nextEntry: ViewerContextEntry | undefined = ctx.list[nextIdx]
+      if (!nextEntry) return
+      // 立刻 toast 提示
+      const dirLabel = direction === 1 ? '下一本' : '上一本'
+      pushToast({
+        kind: 'info',
+        message: `${dirLabel}：${nextEntry.name}`,
+        ttl: 1200,
+      })
+      // 跳转到新相册：保留上下文，索引更新
+      try {
+        sessionStorage.setItem(
+          'comic-reader-viewer-context',
+          JSON.stringify({
+            ...ctx,
+            index: nextIdx,
+            openedAt: Date.now(),
+          }),
+        )
+      } catch {
+        // ignore
+      }
+      // 复位 viewer 内部状态
+      setShowInfo(false)
+      setMode(useViewerStore.getState().mode)
+      // 用 location 替换而不是 push，避免 history 越来越深
+      navigate(nextEntry.to, { replace: false })
+    },
+    [pathParam, pushToast, navigate, setMode],
+  )
+
+  // 收藏切换：S 键或工具栏按钮
+  const onToggleFavorite = useCallback(() => {
+    if (!pathParam) return
+    toggleFavorite(pathParam)
+      .then(() => {
+        const was = favorites.includes(pathParam)
+        pushToast({
+          kind: 'success',
+          message: was ? '已取消收藏' : '已加入收藏',
+          ttl: 1200,
+        })
+      })
+      .catch(() => pushToast({ kind: 'error', message: '收藏失败' }))
+  }, [pathParam, favorites, toggleFavorite, pushToast])
+
   useKeyboard({
     arrowleft: prev,
     arrowright: next,
@@ -180,6 +301,10 @@ export default function Viewer() {
       const cur = useViewerStore.getState().direction
       useViewerStore.getState().setDirection(cur === 'ltr' ? 'rtl' : 'ltr')
     },
+    // 新增：上下本、收藏
+    n: () => goAdjacent(1),
+    p: () => goAdjacent(-1),
+    s: () => onToggleFavorite(),
     escape: () => {
       if (showHelp) setShowHelp(false)
       else if (showInfo) setShowInfo(false)
@@ -210,6 +335,10 @@ export default function Viewer() {
         total={images.length}
         onPrev={prev}
         onNext={next}
+        onPrevAlbum={() => goAdjacent(-1)}
+        onNextAlbum={() => goAdjacent(1)}
+        onToggleFavorite={onToggleFavorite}
+        isFavorite={isFav}
         showInfo={showInfo}
         onToggleInfo={() => setShowInfo((v) => !v)}
         onToggleHelp={() => setShowHelp((v) => !v)}
@@ -224,6 +353,7 @@ export default function Viewer() {
           <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
         )}
       </div>
+      <PageSlider total={images.length} index={index} onJump={jumpTo} images={images} />
       <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   )

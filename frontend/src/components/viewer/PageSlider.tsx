@@ -1,0 +1,199 @@
+import { useEffect, useRef, useState } from 'react'
+import { imageUrl } from '../../api/images'
+
+interface Props {
+  total: number
+  index: number
+  onJump: (i: number) => void
+  /** 可选：连续模式时用，标记「当前可视」图片列表（用于缩略图条）。 */
+  images?: string[]
+}
+
+// 页码跳转条：
+// - 左：页码输入（直接敲数字回车跳）
+// - 中：横向拖拽进度条
+// - 右：上一张 / 下一张按钮 + 「第 N / 总 M」
+// - 拖拽时浮出 5-6 张缩略图条，让翻页所见即所得
+// 设计目标：让 100+ 页的合集不再「翻到手酸」。
+export default function PageSlider({ total, index, onJump, images }: Props) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [scrubIndex, setScrubIndex] = useState<number | null>(null)
+  const trackRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  const safeIndex = Math.max(0, Math.min(total - 1, index))
+  const effective = scrubIndex ?? safeIndex
+  const pct = total > 1 ? (effective / (total - 1)) * 100 : 0
+
+  // 进入编辑态时聚焦输入框并预填当前页
+  useEffect(() => {
+    if (editing) {
+      setDraft(String(safeIndex + 1))
+      requestAnimationFrame(() => inputRef.current?.select())
+    }
+  }, [editing, safeIndex])
+
+  // 全局快捷键：G 进入输入态（与 vim/git 习惯一致）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return
+      }
+      if (e.key === 'g' && !editing) {
+        e.preventDefault()
+        setEditing(true)
+      } else if (e.key === 'Escape' && editing) {
+        e.preventDefault()
+        setEditing(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editing])
+
+  function commit() {
+    const n = parseInt(draft, 10)
+    if (!Number.isFinite(n)) {
+      setEditing(false)
+      return
+    }
+    const clamped = Math.max(1, Math.min(total, n))
+    onJump(clamped - 1)
+    setEditing(false)
+  }
+
+  function onTrackPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (total <= 1) return
+    const el = trackRef.current
+    if (!el) return
+    el.setPointerCapture(e.pointerId)
+    const rect = el.getBoundingClientRect()
+    const update = (clientX: number) => {
+      const x = Math.max(0, Math.min(rect.width, clientX - rect.left))
+      const ratio = rect.width === 0 ? 0 : x / rect.width
+      const i = Math.round(ratio * (total - 1))
+      setScrubIndex(i)
+    }
+    update(e.clientX)
+    const onMove = (ev: PointerEvent) => update(ev.clientX)
+    const onUp = (ev: PointerEvent) => {
+      // 拖拽结束时真正跳转
+      if (scrubIndex !== null) onJump(scrubIndex)
+      setScrubIndex(null)
+      el.releasePointerCapture(ev.pointerId)
+      el.removeEventListener('pointermove', onMove)
+      el.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointercancel', onUp)
+    }
+    el.addEventListener('pointermove', onMove)
+    el.addEventListener('pointerup', onUp)
+    el.addEventListener('pointercancel', onUp)
+  }
+
+  // 缩略图条：拖拽时显示 5 张（当前 ± 2）；非拖拽时用当前页 + 1/2 截图概览
+  const showStrip = scrubIndex !== null && images && images.length > 0
+  const strip = showStrip
+    ? [-2, -1, 0, 1, 2]
+        .map((d) => scrubIndex + d)
+        .filter((i) => i >= 0 && i < images.length)
+    : [safeIndex, Math.min(safeIndex + 1, total - 1)].filter((i, idx, arr) => arr.indexOf(i) === idx)
+
+  return (
+    <div className="relative h-12 border-t border-border-faint bg-bg-elevated/60 flex items-center gap-3 px-4 select-none">
+      {/* 缩略图条：拖拽时浮现 */}
+      {showStrip && (
+        <div
+          className="absolute -top-[110px] left-1/2 -translate-x-1/2 z-10 flex items-end gap-1.5 pointer-events-none"
+          aria-hidden
+        >
+          {strip.map((i) => {
+            const isCenter = i === scrubIndex
+            return (
+              <div
+                key={i}
+                className={`bg-bg-elevated border-2 rounded overflow-hidden shadow-md transition-all ${
+                  isCenter ? 'border-accent scale-105' : 'border-border opacity-80'
+                }`}
+                style={{ width: 56, height: 80 }}
+              >
+                {images[i] ? (
+                  <img
+                    src={imageUrl(images[i])}
+                    alt={`第 ${i + 1} 页`}
+                    className="w-full h-full object-cover"
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="w-full h-full bg-bg-subtle" />
+                )}
+              </div>
+            )
+          })}
+          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[11px] text-fg-muted tabular-nums">
+            第 {scrubIndex + 1} / {total} 页
+          </div>
+        </div>
+      )}
+
+      {/* 页码输入 / 显示 */}
+      {editing ? (
+        <input
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ''))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              commit()
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              setEditing(false)
+            }
+          }}
+          onBlur={commit}
+          className="w-12 h-7 px-1.5 text-center text-[12px] tabular-nums bg-bg rounded border border-accent outline-none"
+          inputMode="numeric"
+        />
+      ) : (
+        <button
+          onClick={() => setEditing(true)}
+          className="min-w-[44px] h-7 px-1.5 rounded text-[12px] tabular-nums text-fg hover:bg-bg-subtle transition-colors"
+          title="跳转到指定页 (G)"
+        >
+          {safeIndex + 1}
+        </button>
+      )}
+      <span className="text-fg-subtle text-[11px] tabular-nums">/ {total}</span>
+
+      {/* 进度条 */}
+      <div className="flex-1 relative h-9 flex items-center group">
+        <div
+          ref={trackRef}
+          onPointerDown={onTrackPointerDown}
+          className="relative h-1.5 w-full bg-bg-strong rounded-full cursor-pointer group-hover:h-2 transition-all"
+        >
+          <div
+            className="absolute left-0 top-0 h-full bg-accent rounded-full"
+            style={{ width: `${pct}%` }}
+          />
+          {/* 拖动手柄 */}
+          <div
+            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-bg-elevated border-2 border-accent rounded-full shadow-sm transition-transform"
+            style={{
+              left: `calc(${pct}% - 7px)`,
+              transform: scrubIndex !== null ? 'translateY(-50%) scale(1.2)' : 'translateY(-50%)',
+            }}
+          />
+        </div>
+      </div>
+
+      {/* 快捷键提示 */}
+      <span className="text-[10px] text-fg-subtle hidden md:inline">
+        拖拽跳转 · <kbd className="kbd">G</kbd> 跳页
+      </span>
+    </div>
+  )
+}
