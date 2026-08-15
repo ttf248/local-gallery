@@ -75,6 +75,10 @@ $RECYCLE.BIN/
 /playwright-report/
 /playwright/.cache/
 
+# ----- 烟测 / 调试脚本运行产物 ----
+# scripts/*.ps1 / curl 烟测产生的临时文件 + 进程日志
+.smoke/
+
 # ----- 缓存目录（运行时生成，不入仓）-----
 # 注：服务运行时会重建这些目录
 .image-viewer/
