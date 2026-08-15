@@ -65,25 +65,57 @@ export async function api<T>(path: string, opts: RequestOptions = {}): Promise<T
 }
 
 // 简单的 SSE 订阅：返回取消函数。
+//
+// options.events：要监听的事件名列表（后端用 `event: <name>` 推送时必须显式列出）；
+//   不传则只监听默认的 'message' 事件（无 `event:` 前缀）。
+// options.onError：连接错误回调（含网络抖动、readyState 进入 CLOSED）。
+// options.signal：外部 AbortSignal，触发时自动关闭 EventSource。
 export function sse(
   path: string,
   onEvent: (eventName: string, data: unknown) => void,
-  onError?: (err: Event) => void,
+  options: {
+    events?: string[]
+    onError?: (err: Event) => void
+    signal?: AbortSignal
+  } = {},
 ): () => void {
   const url = API_BASE ? `${API_BASE}${path}` : path
   const es = new EventSource(url)
 
-  // 通用监听：每个 event 名称都需要手动绑定
-  es.onmessage = (e) => {
+  const handler = (e: MessageEvent) => {
     try {
-      onEvent('message', JSON.parse(e.data))
+      onEvent(e.type, JSON.parse(e.data))
     } catch {
-      onEvent('message', e.data)
+      onEvent(e.type, e.data)
     }
   }
-  es.onerror = (e) => {
-    if (onError) onError(e)
+
+  // 默认监听 message（兼容不带 event: 前缀的纯 data: 流）
+  es.addEventListener('message', handler)
+  // 注册指定事件名
+  for (const name of options.events ?? []) {
+    es.addEventListener(name, handler)
   }
 
-  return () => es.close()
+  es.onerror = (e) => {
+    if (options.onError) options.onError(e)
+  }
+
+  // 外部 signal 触发时关闭
+  let onAbort: (() => void) | null = null
+  if (options.signal) {
+    if (options.signal.aborted) {
+      es.close()
+    } else {
+      onAbort = () => es.close()
+      options.signal.addEventListener('abort', onAbort, { once: true })
+    }
+  }
+
+  return () => {
+    es.close()
+    if (options.signal && onAbort) {
+      options.signal.removeEventListener('abort', onAbort)
+    }
+  }
 }
