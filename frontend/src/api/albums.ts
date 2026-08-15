@@ -30,17 +30,5 @@ export const albumsApi = {
   },
 }
 
-export const progressApi = {
-  set(path: string, index: number, total: number, scroll = 0) {
-    return api<{ ok: boolean }>(`/api/progress`, {
-      method: 'POST',
-      body: { path, index, total, scroll },
-    })
-  },
-  get(path: string) {
-    return api<{ path: string; index: number; total: number; scroll: number; updated: string }>(
-      `/api/progress`,
-      { params: { path } },
-    )
-  },
-}
+// progressApi 已在 api/prefs.ts 中定义（带 .get / .set / .batch）。
+// 旧代码请从 'api/prefs' 引入。

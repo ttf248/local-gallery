@@ -83,6 +83,7 @@ func main() {
 		Width:      cfg.ThumbSizeW,
 		Height:     cfg.ThumbSizeH,
 		MaxAgeDays: cfg.CacheMaxAgeDays,
+		LRUSize:    cfg.ThumbCacheSize,
 	})
 	if err != nil {
 		log.Fatalf("初始化缩略图服务失败: %v", err)
@@ -134,6 +135,7 @@ func main() {
 	api.Delete("/history", handlers.HistoryClearHandler(prefs))
 	api.Post("/progress", handlers.ProgressSetHandler(prefs))
 	api.Get("/progress", handlers.ProgressGetHandler(prefs))
+	api.Post("/progress/batch", handlers.ProgressBatchGetHandler(prefs))
 
 	// ---- 静态资源托管（生产模式：同端口托管前端） ----
 	if staticDir != "" {

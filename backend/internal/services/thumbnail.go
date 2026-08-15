@@ -43,7 +43,7 @@ type ThumbnailOptions struct {
 	Width      int    // 默认 320
 	Height     int    // 默认 350
 	MaxAgeDays int    // 默认 30
-	LRUSize    int    // 默认 100
+	LRUSize    int    // 默认 500
 }
 
 // NewThumbnailService 创建缩略图服务。
@@ -69,7 +69,7 @@ func NewThumbnailService(opts ThumbnailOptions) (*ThumbnailService, error) {
 	}
 	lruSize := opts.LRUSize
 	if lruSize <= 0 {
-		lruSize = 100
+		lruSize = 500
 	}
 
 	cache, err := lru.New[string, []byte](lruSize)

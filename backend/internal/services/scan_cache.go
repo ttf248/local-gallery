@@ -4,9 +4,11 @@ package services
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/tianlongxiang/comic-reader/internal/models"
 )
@@ -16,14 +18,18 @@ import (
 //   - 每次成功扫描完成后由 AsyncScanRunner 写入
 //   - 服务启动时从磁盘加载，供前端无需重新扫描即可看到上次结果
 //   - 单进程内自带线程安全（sync.RWMutex）
+//   - 写盘异步 + 防抖，避免在 SSE 完成路径上卡住事件流
 type ScanResultCache struct {
 	path string
 
-	mu      sync.RWMutex
-	latest  *models.ScanResult
-	loaded  bool
-	dirty   bool // 当前内存结果是否尚未写盘
+	mu         sync.RWMutex
+	latest     *models.ScanResult
+	loaded     bool
+	dirty      bool // 当前内存结果是否尚未写盘
+	flushTimer *time.Timer
 }
+
+const flushDebounce = 500 * time.Millisecond
 
 // NewScanResultCache 创建缓存，path 为磁盘持久化文件路径。
 func NewScanResultCache(path string) *ScanResultCache {
@@ -41,7 +47,11 @@ func (c *ScanResultCache) Get() *models.ScanResult {
 	return &cp
 }
 
-// Set 写入新的扫描结果并异步持久化。
+// Set 写入新的扫描结果并异步、防抖落盘。
+//
+// 落盘通过 timer 延迟 500ms；若在延迟窗口内再次 Set 则重置 timer，
+// 实现"连续多次写合并为一次落盘"。落盘失败不丢内存结果（下次 Set
+// 或显式 Flush 会再尝试）。
 func (c *ScanResultCache) Set(r *models.ScanResult) {
 	if r == nil {
 		return
@@ -50,8 +60,21 @@ func (c *ScanResultCache) Set(r *models.ScanResult) {
 	c.latest = r
 	c.loaded = true
 	c.dirty = true
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+	}
+	c.flushTimer = time.AfterFunc(flushDebounce, func() {
+		if err := c.flush(); err != nil {
+			fmt.Fprintf(os.Stderr, "scan_cache async flush: %v\n", err)
+		}
+	})
 	c.mu.Unlock()
-	_ = c.flush()
+}
+
+// Flush 强制立即落盘（用于服务关闭前等关键路径）。幂等：若内存已
+// 干净则什么都不做。
+func (c *ScanResultCache) Flush() error {
+	return c.flush()
 }
 
 // Load 启动时加载磁盘缓存。

@@ -37,6 +37,7 @@ type Config struct {
 	CacheDir        string `yaml:"cacheDir"`
 	ThumbSizeW      int    `yaml:"thumbSizeW"`
 	ThumbSizeH      int    `yaml:"thumbSizeH"`
+	ThumbCacheSize  int    `yaml:"thumbCacheSize"`
 	CacheMaxAgeDays int    `yaml:"cacheMaxAgeDays"`
 	StaticDir       string `yaml:"staticDir"`
 }
@@ -65,6 +66,7 @@ func Default() *Config {
 		CacheDir:        filepath.Join(".", DefaultCacheDirName),
 		ThumbSizeW:      320,
 		ThumbSizeH:      350,
+		ThumbCacheSize:  500,
 		CacheMaxAgeDays: 30,
 		StaticDir:       "dist",
 	}
@@ -140,6 +142,9 @@ func mergeFile(dst, file *Config) {
 	}
 	if file.CacheMaxAgeDays != 0 {
 		dst.CacheMaxAgeDays = file.CacheMaxAgeDays
+	}
+	if file.ThumbCacheSize > 0 {
+		dst.ThumbCacheSize = file.ThumbCacheSize
 	}
 	if file.StaticDir != "" {
 		dst.StaticDir = file.StaticDir

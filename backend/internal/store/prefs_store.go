@@ -254,6 +254,27 @@ func (s *PrefsStore) GetReadingProgress(path string) (models.ReadingProgress, bo
 	return models.ReadingProgress{}, false
 }
 
+// GetReadingProgressBatch 一次性读取多个路径的阅读进度。
+// 返回 map[path]progress，缺失项不出现在 map 中。
+// 一次加锁，避免 N 路并发 GET /api/progress?path=... 的锁竞争。
+func (s *PrefsStore) GetReadingProgressBatch(paths []string) map[string]models.ReadingProgress {
+	out := make(map[string]models.ReadingProgress, len(paths))
+	if len(paths) == 0 {
+		return out
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, path := range paths {
+		for _, r := range s.cached.ReadingProgress {
+			if r.Path == path {
+				out[path] = r
+				break
+			}
+		}
+	}
+	return out
+}
+
 // ---- 内部 ----
 
 // ensureLoaded 必须在已持锁时调用。

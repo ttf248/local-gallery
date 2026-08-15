@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -214,5 +215,30 @@ func ProgressGetHandler(s *store.PrefsStore) fiber.Handler {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "no progress"})
 		}
 		return c.JSON(rp)
+	}
+}
+
+// ProgressBatchGetHandler POST /api/progress/batch
+// Body: {"paths": ["<path1>", "<path2>", ...]}
+//
+// 一次返回多个路径的阅读进度（map[path]progress），缺失项不出现在
+// 返回值中。避免主页一次发 N 路并发 GET 的开销。
+func ProgressBatchGetHandler(s *store.PrefsStore) fiber.Handler {
+	type req struct {
+		Paths []string `json:"paths"`
+	}
+	const maxBatch = 500
+	return func(c *fiber.Ctx) error {
+		var r req
+		if err := c.BodyParser(&r); err != nil || len(r.Paths) == 0 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing 'paths'"})
+		}
+		if len(r.Paths) > maxBatch {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": fmt.Sprintf("too many paths (max %d)", maxBatch),
+			})
+		}
+		out := s.GetReadingProgressBatch(r.Paths)
+		return c.JSON(fiber.Map{"progress": out, "count": len(out)})
 	}
 }

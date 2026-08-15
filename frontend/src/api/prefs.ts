@@ -32,3 +32,27 @@ export const historyApi = {
     api<{ history: Prefs['history'] }>('/api/history', { method: 'POST', body: entry }),
   clear: () => api<{ ok: boolean }>('/api/history', { method: 'DELETE' }),
 }
+
+export interface ReadingProgress {
+  path: string
+  index: number
+  total: number
+  scroll: number
+  updated: string
+}
+
+export const progressApi = {
+  get: (path: string) =>
+    api<ReadingProgress>('/api/progress', { params: { path } }),
+  set: (path: string, index: number, total: number, scroll = 0) =>
+    api<{ ok: boolean }>('/api/progress', {
+      method: 'POST',
+      body: { path, index, total, scroll },
+    }),
+  // 批量获取：避免 N 路并发 GET /api/progress
+  batch: (paths: string[]) =>
+    api<{ progress: Record<string, ReadingProgress>; count: number }>(
+      '/api/progress/batch',
+      { method: 'POST', body: { paths } },
+    ),
+}

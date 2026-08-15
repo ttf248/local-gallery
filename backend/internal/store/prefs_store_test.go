@@ -210,6 +210,74 @@ func TestPrefsStore_UpdatePartial(t *testing.T) {
 	}
 }
 
+func TestPrefsStore_AddFavoriteCappedAtMaxFavorites(t *testing.T) {
+	s := tempStore(t)
+	// 加入 600 条，超过 500 软上限
+	for i := 0; i < 600; i++ {
+		s.AddFavorite("/p/" + itoa(i))
+	}
+	p, _ := s.Get()
+	if len(p.Favorites) != 500 {
+		t.Fatalf("expected 500 favorites after cap, got %d", len(p.Favorites))
+	}
+	// 最旧的前 100 条应该被丢弃，最新的 500 条应保留
+	if p.Favorites[0] != "/p/100" || p.Favorites[len(p.Favorites)-1] != "/p/599" {
+		t.Errorf("oldest/newest not as expected: first=%s last=%s",
+			p.Favorites[0], p.Favorites[len(p.Favorites)-1])
+	}
+}
+
+func TestPrefsStore_ReadingProgressBatch(t *testing.T) {
+	s := tempStore(t)
+	for i := 0; i < 5; i++ {
+		if err := s.SetReadingProgress(models.ReadingProgress{
+			Path: "/p/" + itoa(i), Index: i, Total: 10, Updated: time.Now(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 请求 3 个存在的 + 2 个不存在的
+	got := s.GetReadingProgressBatch([]string{"/p/1", "/p/3", "/p/999", "/p/0", "/p/404"})
+	if len(got) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(got))
+	}
+	if got["/p/1"].Index != 1 || got["/p/3"].Index != 3 || got["/p/0"].Index != 0 {
+		t.Errorf("wrong index in batch result: %+v", got)
+	}
+	if _, ok := got["/p/999"]; ok {
+		t.Error("non-existent path should not be in result")
+	}
+
+	// 空入参返回空 map
+	if m := s.GetReadingProgressBatch(nil); len(m) != 0 {
+		t.Error("empty paths should return empty map")
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	const digits = "0123456789"
+	var buf [16]byte
+	i := len(buf)
+	neg := n < 0
+	if neg {
+		n = -n
+	}
+	for n > 0 {
+		i--
+		buf[i] = digits[n%10]
+		n /= 10
+	}
+	if neg {
+		i--
+		buf[i] = '-'
+	}
+	return string(buf[i:])
+}
+
 func contains(s, substr string) bool {
 	for i := 0; i+len(substr) <= len(s); i++ {
 		if s[i:i+len(substr)] == substr {
