@@ -38,6 +38,7 @@ export default function AlbumCard({ data, variant = 'grid' }: Props) {
 function GridCard({ data }: { data: CardData }) {
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -82,13 +83,14 @@ function GridCard({ data }: { data: CardData }) {
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden ring-1 ring-border-faint transition-shadow duration-200 group-hover:shadow-md group-hover:ring-border">
-        {visible && data.coverPath ? (
+        {visible && data.coverPath && !imgError ? (
           <>
             <img
               src={thumbUrl(data.coverPath)}
               alt={data.title}
               loading="lazy"
               onLoad={() => setLoaded(true)}
+              onError={() => setImgError(true)}
               className={`w-full h-full object-cover transition-all duration-500 ease-out ${
                 loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
               } group-hover:scale-[1.03]`}
@@ -96,7 +98,10 @@ function GridCard({ data }: { data: CardData }) {
             {!loaded && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
           </>
         ) : (
-          <div className="w-full h-full bg-bg-subtle" />
+          // 缩略图加载失败（HEIC 等不支持的格式）→ 显示占位
+          <div className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-fg-subtle">
+            <FolderIcon size={28} />
+          </div>
         )}
 
         {/* 顶部变暗蒙版（仅在 hover 时出现） */}
@@ -165,6 +170,7 @@ function GridCard({ data }: { data: CardData }) {
 function ListCard({ data }: { data: CardData }) {
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [imgError, setImgError] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -209,18 +215,23 @@ function ListCard({ data }: { data: CardData }) {
       className="group flex items-center gap-4 py-2.5 px-2 -mx-2 rounded-md hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
     >
       <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0 ring-1 ring-border-faint">
-        {visible && data.coverPath ? (
+        {visible && data.coverPath && !imgError ? (
           <img
             src={thumbUrl(data.coverPath)}
             alt={data.title}
             loading="lazy"
             onLoad={() => setLoaded(true)}
+            onError={() => setImgError(true)}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
               loaded ? 'opacity-100' : 'opacity-0'
             }`}
           />
+        ) : !visible || imgError ? (
+          <div className="w-full h-full flex items-center justify-center text-fg-subtle">
+            <FolderIcon size={16} />
+          </div>
         ) : null}
-        {!loaded && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
+        {!loaded && visible && !imgError && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
         {data.isFavorite && (
           <div className="absolute -top-1 -right-1 bg-bg-elevated rounded-full p-0.5 shadow-sm">
             <StarIcon size={9} className="text-warning" filled />

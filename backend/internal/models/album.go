@@ -7,6 +7,9 @@ import (
 )
 
 // 支持的图片扩展名（小写，含点）。
+//
+// 含 iPhone 照片常用的 HEIC/HEIF；缩略图与原图解码分别由
+// `goheif` + `imaging` 处理，扫描阶段先做扩展名白名单。
 var ImageExts = map[string]bool{
 	".jpg":  true,
 	".jpeg": true,
@@ -16,6 +19,8 @@ var ImageExts = map[string]bool{
 	".webp": true,
 	".tiff": true,
 	".tif":  true,
+	".heic": true,
+	".heif": true,
 }
 
 // IsImageFile 判断文件名是否为支持的图片格式（不区分大小写）。

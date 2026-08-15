@@ -34,6 +34,9 @@ type ImageInfo struct {
 
 // GetImageInfo 读取指定图片的基本信息。
 // 文件不存在或无法解码返回错误。
+//
+// HEIC/HEIF 当前不支持尺寸探测（需要 libde265 CGO 依赖）；
+// 走 stdlib + x/image。
 func GetImageInfo(absPath string) (*ImageInfo, error) {
 	st, err := os.Stat(absPath)
 	if err != nil {
@@ -41,6 +44,38 @@ func GetImageInfo(absPath string) (*ImageInfo, error) {
 	}
 	if st.IsDir() {
 		return nil, fmt.Errorf("path is a directory")
+	}
+
+	// HEIC/HEIF：尺寸未知（返回 0），其它字段照常读取
+	ext := strings.ToLower(filepath.Ext(absPath))
+	if ext == ".heic" || ext == ".heif" {
+		h := sha256.New()
+		f2, err := os.Open(absPath)
+		if err != nil {
+			return nil, fmt.Errorf("open: %w", err)
+		}
+		defer f2.Close()
+		buf := make([]byte, 64*1024)
+		for {
+			n, e := f2.Read(buf)
+			if n > 0 {
+				h.Write(buf[:n])
+			}
+			if e != nil {
+				break
+			}
+		}
+		return &ImageInfo{
+			Path:     absPath,
+			Name:     filepath.Base(absPath),
+			Dir:      filepath.Dir(absPath),
+			Size:     st.Size(),
+			MTime:    st.ModTime().UTC().Format(time.RFC3339),
+			Width:    0,
+			Height:   0,
+			Format:   strings.TrimPrefix(ext, "."),
+			Checksum: hex.EncodeToString(h.Sum(nil))[:16],
+		}, nil
 	}
 
 	// 解码图片获取尺寸/格式

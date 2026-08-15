@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -140,7 +141,7 @@ func (s *ThumbnailService) GetOrCreate(absPath string) ([]byte, error) {
 
 // generate 解码 → 缩放 → 编码为 PNG。
 func (s *ThumbnailService) generate(absPath string) ([]byte, error) {
-	img, err := imaging.Open(absPath, imaging.AutoOrientation(true))
+	img, err := decodeImage(absPath)
 	if err != nil {
 		if errors.Is(err, imaging.ErrUnsupportedFormat) {
 			return nil, ErrUnsupportedFormat
@@ -156,6 +157,17 @@ func (s *ThumbnailService) generate(absPath string) ([]byte, error) {
 		return nil, fmt.Errorf("encode: %w", err)
 	}
 	return buf, nil
+}
+
+// decodeImage 按扩展名选择解码器：
+//   - HEIC/HEIF：当前未实现（需要 libde265 CGO 依赖），返回 ErrUnsupportedFormat
+//   - 其他：imaging（覆盖 jpg/png/gif/bmp/webp/tiff）
+func decodeImage(absPath string) (image.Image, error) {
+	ext := strings.ToLower(filepath.Ext(absPath))
+	if ext == ".heic" || ext == ".heif" {
+		return nil, ErrUnsupportedFormat
+	}
+	return imaging.Open(absPath, imaging.AutoOrientation(true))
 }
 
 // Cleanup 删除早于 maxAgeDays 天的缓存文件。

@@ -24,6 +24,11 @@ func TestIsImageFile(t *testing.T) {
 		{"a.tiff", true},
 		{"a.tif", true},
 		{"page-001.jpg", true},
+		// iPhone 照片
+		{"IMG_0001.heic", true},
+		{"IMG_0001.HEIC", true},
+		{"photo.heif", true},
+		{"photo.HEIF", true},
 		// 反例
 		{"a.txt", false},
 		{"a", false},
