@@ -202,6 +202,31 @@ export default function Viewer() {
     return () => clearTimeout(t)
   }, [index, pathParam, images.length, queryClient])
 
+  // 切到连续模式后,容器需要滚到当前 index 对应的那张图。
+  // 之前 ImageViewer 的 useEffect 会把 scrollTop 强制 0,导致用户
+  // (尤其从 saved progress 恢复)看到的是 index 0,跟 slider / 计数对不上。
+  // 这里主动调一次 scrollContinuousTo 把当前 index 滚进来 —— 用 ref 标记
+  // 只在「首次进入 continuous」时跑一次,后续切页交给 jumpTo / scrollStep。
+  // 注意:首次 mount 模式就是 continuous (viewerStore 从 localStorage 恢复)
+  // 也要触发,所以不能用 prevModeRef (初始值就是 continuous,判断失效)。
+  const continuousScrolledRef = useRef(false)
+  useEffect(() => {
+    if (
+      !continuousScrolledRef.current &&
+      mode === 'continuous' &&
+      imagesReady &&
+      images.length > 0
+    ) {
+      continuousScrolledRef.current = true
+      // queueMicrotask 让 ImageViewer 的 mode-only useEffect (scrollTop = 0)
+      // 先跑完,再 scrollIntoView,避免再次被覆盖
+      queueMicrotask(() => scrollContinuousTo(index))
+    } else if (mode !== 'continuous') {
+      // 离开 continuous 后,允许下次再进入时重新滚一次
+      continuousScrolledRef.current = false
+    }
+  }, [mode, imagesReady, images.length, index])
+
   // 滚到最后一张：自动标记为「已读」一次。
   useEffect(() => {
     if (markingRead) return

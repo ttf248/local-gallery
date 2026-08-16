@@ -44,15 +44,24 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
     }
   }, [index, images])
 
-  // 切页 / 切模式时复位 transform & 容器滚动
+  // 切页 / 切模式时复位 transform;切模式时复位容器滚动。
+  // 关键:连续模式下切页(index 变)不再重置 scrollTop,
+  // 否则 PageSlider.onJump 调的 scrollContinuousTo (target.scrollIntoView)
+  // 会立刻被这个 effect 滚回 0,导致拖动 slider 后页面又跳回第 0 张。
   useEffect(() => {
     setPan({ x: 0, y: 0 })
+    setImgKey((k) => k + 1)
+  }, [index, mode])
+
+  useEffect(() => {
+    // 只在切模式时滚回 0;切 index 不动 scroll,留给 jumpTo / scrollContinuousTo
+    // 自己管定位。连续模式切回 0 也没事 —— 切到连续时另一个 effect (Viewer.tsx)
+    // 会 scrollContinuousTo(index) 把当前 index 滚进来,用户不会停在 0。
     if (containerRef.current) {
       containerRef.current.scrollTop = 0
       containerRef.current.scrollLeft = 0
     }
-    setImgKey((k) => k + 1)
-  }, [index, mode])
+  }, [mode])
 
   // 滚轮缩放：所有模式统一为 Ctrl/Cmd + wheel 才触发。
   // 普通 wheel 留给浏览器原生滚动（单/双页溢出滚动、连续模式翻页）。
