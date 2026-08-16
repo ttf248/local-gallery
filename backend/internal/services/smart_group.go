@@ -61,10 +61,3 @@ func GroupByTag(albums []models.Album) []models.SmartCollection {
 	sort.Slice(smart, func(i, j int) bool { return smart[i].Tag < smart[j].Tag })
 	return smart
 }
-
-// GroupByAuthor 是 GroupByTag 的旧名字别名。
-//
-// 保留这个名称避免破坏老调用方。
-func GroupByAuthor(albums []models.Album) []models.SmartCollection {
-	return GroupByTag(albums)
-}

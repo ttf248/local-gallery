@@ -132,7 +132,7 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 			AlbumsFound: len(allAlbums),
 		})
 	}
-	smart := GroupByAuthor(allAlbums)
+	smart := GroupByTag(allAlbums)
 
 	result := &models.ScanResult{
 		Root:             absRoot,

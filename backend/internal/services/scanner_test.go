@@ -229,7 +229,7 @@ func TestScan_IgnoresNonImages(t *testing.T) {
 }
 
 // 集合内的相册也应进入 smart grouping。
-func TestGroupByAuthor_AcrossCollections(t *testing.T) {
+func TestGroupByTag_AcrossCollections(t *testing.T) {
 	albums := []models.Album{
 		{Name: "[A] 1", Author: "A", ImageCount: 5},
 		{Name: "[A] 2", Author: "A", ImageCount: 3},
@@ -237,7 +237,7 @@ func TestGroupByAuthor_AcrossCollections(t *testing.T) {
 		{Name: "[B] 1", Author: "B", ImageCount: 2},
 		{Name: "NoAuthor", Author: "", ImageCount: 1},
 	}
-	smart := GroupByAuthor(albums)
+	smart := GroupByTag(albums)
 	if len(smart) != 1 || smart[0].Author != "A" {
 		t.Fatalf("expected 1 smart collection for A, got %+v", smart)
 	}
@@ -250,11 +250,11 @@ func TestGroupByAuthor_AcrossCollections(t *testing.T) {
 	}
 }
 
-func TestGroupByAuthor_BelowThreshold(t *testing.T) {
+func TestGroupByTag_BelowThreshold(t *testing.T) {
 	albums := []models.Album{
 		{Name: "[A] 1", Author: "A", ImageCount: 1},
 	}
-	if got := GroupByAuthor(albums); len(got) != 0 {
+	if got := GroupByTag(albums); len(got) != 0 {
 		t.Errorf("expected no smart collection with 1 album, got %d", len(got))
 	}
 }
