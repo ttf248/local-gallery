@@ -336,7 +336,7 @@ export default function Home() {
                   <span className="tabular-nums text-fg">
                     {(result.smartCollections ?? []).length}
                   </span>{' '}
-                  个合集
+                  个标签
                   {lastScanAt && (
                     <span className="text-fg-subtle ml-1.5">
                       · 上次更新 {formatTime(lastScanAt)}
