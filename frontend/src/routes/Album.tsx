@@ -264,7 +264,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
   // 用 key 强制 PropertiesDialog 重新挂载（重新打开时）
   const [propsKey, setPropsKey] = useState(0)
   const moreRef = useRef<HTMLDivElement>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null)
 
   useEffect(() => {
     if (!moreOpen) return
@@ -587,7 +587,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                 onClick={() => openViewer(i)}
                 onContextMenu={(e) => {
                   e.preventDefault()
-                  setContextMenu({ x: e.clientX, y: e.clientY })
+                  setContextMenu({ x: e.clientX, y: e.clientY, index: i })
                 }}
                 className={`group relative aspect-[3/4] bg-bg-subtle rounded overflow-hidden transition-all ${
                   isCurrent
@@ -643,7 +643,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
           onSelect={(id) => {
             switch (id) {
               case 'open':
-                openViewer(0)
+                openViewer(contextMenu.index)
                 break
               case 'favorite':
                 toggleFavorite()
