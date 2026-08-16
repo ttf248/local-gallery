@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
-import { imageInfoApi, type ImageInfo } from '../../api/imageInfo'
+import { useEffect } from 'react'
+import { useImageInfo } from '../../hooks/useImageInfo'
 import { formatSize } from '../../utils/format'
 import { CloseIcon } from './Icon'
+import CopyButton from './CopyButton'
 
 interface Props {
   open: boolean
@@ -9,19 +10,10 @@ interface Props {
   onClose: () => void
 }
 
+// 文件/图片属性 dialog：与 ImageInfoPanel 共享 useImageInfo + CopyButton，
+// 避免在两处分别实现 fetch / 复制 / 字段展示。
 export default function PropertiesDialog({ open, absPath, onClose }: Props) {
-  const [info, setInfo] = useState<ImageInfo | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open || !absPath) return
-    setInfo(null)
-    setErr(null)
-    imageInfoApi
-      .get(absPath)
-      .then(setInfo)
-      .catch((e) => setErr(e.message ?? '加载失败'))
-  }, [open, absPath])
+  const { info, err, loading } = useImageInfo(open ? absPath : null)
 
   useEffect(() => {
     if (!open) return
@@ -54,24 +46,38 @@ export default function PropertiesDialog({ open, absPath, onClose }: Props) {
             <CloseIcon size={14} />
           </button>
         </header>
-        <div className="p-5 text-sm">
+        <div className="p-5 text-sm space-y-3">
           {err && <div className="text-danger text-xs">错误: {err}</div>}
-          {!err && !info && <div className="text-fg-muted text-xs">加载中…</div>}
+          {!err && loading && <div className="text-fg-muted text-xs">加载中…</div>}
           {info && (
-            <dl className="grid grid-cols-[80px_1fr] gap-y-2.5 gap-x-4">
-              <FieldLabel>文件名</FieldLabel>
-              <dd className="break-all">{info.name}</dd>
-              <FieldLabel>类型</FieldLabel>
-              <dd>{info.format.toUpperCase()}</dd>
-              <FieldLabel>尺寸</FieldLabel>
-              <dd>{info.width} × {info.height} px</dd>
-              <FieldLabel>大小</FieldLabel>
-              <dd>{formatSize(info.size)}</dd>
-              <FieldLabel>修改</FieldLabel>
-              <dd>{info.mtime}</dd>
-              <FieldLabel>路径</FieldLabel>
-              <dd className="font-mono text-[11px] break-all text-fg-muted">{info.path}</dd>
-            </dl>
+            <>
+              <Field label="文件名" value={info.name} copyable />
+              <Field label="类型" value={info.format.toUpperCase()} />
+              <Field
+                label="尺寸"
+                value={`${info.width} × ${info.height} px`}
+              />
+              <Field label="大小" value={formatSize(info.size)} />
+              <Field label="修改" value={info.mtime} />
+              <Field
+                label="目录"
+                value={info.dir}
+                mono
+                copyable
+              />
+              <Field
+                label="校验和"
+                value={info.checksum}
+                mono
+                copyable
+              />
+              <Field
+                label="路径"
+                value={info.path}
+                mono
+                copyable
+              />
+            </>
           )}
         </div>
       </div>
@@ -79,10 +85,26 @@ export default function PropertiesDialog({ open, absPath, onClose }: Props) {
   )
 }
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function Field({
+  label,
+  value,
+  mono,
+  copyable,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+  copyable?: boolean
+}) {
   return (
-    <dt className="text-fg-subtle text-[10px] uppercase tracking-[0.14em] self-center">
-      {children}
-    </dt>
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.14em] text-fg-subtle mb-1 flex items-center gap-1.5">
+        <span>{label}</span>
+        {copyable && <CopyButton value={value} />}
+      </div>
+      <div className={`break-all ${mono ? 'font-mono text-[11px] text-fg-muted' : ''}`}>
+        {value}
+      </div>
+    </div>
   )
 }
