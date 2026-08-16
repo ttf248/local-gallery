@@ -22,9 +22,3 @@ export function smartRoute(tag: string): string {
 export function tagRoute(tag: string): string {
   return `/tags/${encodeURIComponent(tag)}`
 }
-
-// 作者独立页：旧名 /authors/<encoded author>。新代码请用 tagRoute。
-// 保留它便于兼容老调用方。
-export function authorRoute(author: string): string {
-  return `/authors/${encodeURIComponent(author)}`
-}

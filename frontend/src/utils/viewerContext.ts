@@ -62,30 +62,3 @@ export function getViewerContext(): ViewerContext | null {
     return null
   }
 }
-
-/** 清除（一般不需要，列表页切换会自动覆盖）。 */
-export function clearViewerContext(): void {
-  try {
-    sessionStorage.removeItem(KEY)
-  } catch {
-    // ignore
-  }
-}
-
-/** 列表里「下一本」：循环回到第一本；上一本：循环到末尾。 */
-export function stepViewerContext(
-  ctx: ViewerContext,
-  direction: 1 | -1,
-): ViewerContextEntry | null {
-  if (ctx.list.length === 0) return null
-  const n = ctx.list.length
-  const next = ((ctx.index + direction) % n + n) % n
-  return ctx.list[next] ?? null
-}
-
-/** 把 `key`（绝对路径或 smart:tag）转成查看器 URL。 */
-export function contextEntryToUrl(entry: ViewerContextEntry): string {
-  // 已经包含 query 的（带 index / name）直接用
-  if (entry.to.includes('?')) return entry.to
-  return entry.to
-}

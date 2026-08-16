@@ -7,7 +7,6 @@ import { useFavorites } from '../hooks/useFavorites'
 import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import { historyApi } from '../api/prefs'
 import { thumbUrl } from '../api/thumbs'
-import { imageUrl } from '../api/images'
 import { useUIStore } from '../store/uiStore'
 import type { CardData } from '../components/album/AlbumGrid'
 import AlbumGrid from '../components/album/AlbumGrid'
@@ -801,8 +800,4 @@ function formatRelative(iso: string): string {
   if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
   if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
   return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
-}
-
-export function buildImageUrl(absPath: string): string {
-  return imageUrl(absPath)
 }

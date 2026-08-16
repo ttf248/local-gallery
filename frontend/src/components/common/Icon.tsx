@@ -147,19 +147,6 @@ export const RefreshIcon = (p: IconProps) => (
   </svg>
 )
 
-export const PlayIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M7 5v14l12-7z" fill="currentColor" stroke="none" />
-  </svg>
-)
-
-export const PauseIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <rect x="6" y="5" width="4" height="14" fill="currentColor" stroke="none" />
-    <rect x="14" y="5" width="4" height="14" fill="currentColor" stroke="none" />
-  </svg>
-)
-
 export const FullscreenIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />
@@ -187,28 +174,10 @@ export const CloseIcon = (p: IconProps) => (
   </svg>
 )
 
-export const MenuIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M4 6h16M4 12h16M4 18h16" />
-  </svg>
-)
-
-export const HeartIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M20.8 8.6a5 5 0 0 0-7.8-.5L12 9.2l-1-1.1a5 5 0 1 0-7.1 7l1 1.1L12 21l7.1-5.8 1-1.1a5 5 0 0 0 .7-5.5z" />
-  </svg>
-)
-
 export const ReaderIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M4 5a1 1 0 0 1 1-1h5v15H5a1 1 0 0 1-1-1V5z" />
     <path d="M20 5a1 1 0 0 0-1-1h-5v15h5a1 1 0 0 0 1-1V5z" />
-  </svg>
-)
-
-export const FilterIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M3 5h18M6 12h12M10 19h4" />
   </svg>
 )
 
@@ -303,23 +272,6 @@ export const AlertIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M12 3 2 21h20L12 3z" />
     <path d="M12 10v5M12 18h.01" />
-  </svg>
-)
-
-export const SortIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M7 4v16M3 8l4-4 4 4" />
-    <path d="M17 20V4M21 16l-4 4-4-4" />
-  </svg>
-)
-
-export const HeartFilledIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path
-      d="M20.8 8.6a5 5 0 0 0-7.8-.5L12 9.2l-1-1.1a5 5 0 1 0-7.1 7l1 1.1L12 21l7.1-5.8 1-1.1a5 5 0 0 0 .7-5.5z"
-      fill="currentColor"
-      stroke="none"
-    />
   </svg>
 )
 
