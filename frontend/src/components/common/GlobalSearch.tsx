@@ -100,6 +100,15 @@ export default function GlobalSearch() {
           ))}
         </div>
       )}
+
+      {/* 无结果提示：用户至少敲了 2 个字符才显示，避免抖动 */}
+      {open && debounced && debounced.length >= 2 && hits.length === 0 && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up">
+          <div className="px-3 py-2.5 text-[12px] text-fg-muted">
+            没有匹配「{debounced}」的文件夹或标签
+          </div>
+        </div>
+      )}
     </div>
   )
 }
