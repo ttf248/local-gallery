@@ -49,6 +49,13 @@ export default function ImageInfoPanel({ absPath, onClose }: Props) {
               copyValue={info.dir}
             />
             <Row
+              label="路径"
+              value={info.path}
+              mono
+              copyable
+              copyValue={info.path}
+            />
+            <Row
               label="校验和"
               value={info.checksum}
               mono

@@ -29,7 +29,6 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
   const direction = useViewerStore((s) => s.direction)
 
   const containerRef = useRef<HTMLDivElement>(null)
-  const singleRef = useRef<HTMLImageElement>(null)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [imgKey, setImgKey] = useState(0)
   const dragRef = useRef<{ x: number; y: number; px: number; py: number; moved: boolean } | null>(null)
@@ -179,7 +178,6 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
         {current ? (
           <img
             key={imgKey}
-            ref={singleRef}
             src={imageUrl(current)}
             alt={`第 ${index + 1} 张`}
             draggable={false}

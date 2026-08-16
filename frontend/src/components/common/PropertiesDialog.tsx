@@ -52,13 +52,13 @@ export default function PropertiesDialog({ open, absPath, onClose }: Props) {
           {info && (
             <>
               <Field label="文件名" value={info.name} copyable />
-              <Field label="类型" value={info.format.toUpperCase()} />
+              <Field label="格式" value={info.format.toUpperCase()} />
               <Field
                 label="尺寸"
                 value={`${info.width} × ${info.height} px`}
               />
               <Field label="大小" value={formatSize(info.size)} />
-              <Field label="修改" value={info.mtime} />
+              <Field label="修改时间" value={info.mtime} />
               <Field
                 label="目录"
                 value={info.dir}
