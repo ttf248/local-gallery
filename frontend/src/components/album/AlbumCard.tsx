@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { thumbUrl } from '../../api/thumbs'
-import { StarIcon, FolderIcon, ReaderIcon, RewindIcon, CheckIcon } from '../common/Icon'
+import { StarIcon, FolderIcon, ReaderIcon, RewindIcon, CheckIcon, ClockIcon } from '../common/Icon'
 import HoverPreview from '../common/HoverPreview'
 import type { ViewMode } from '../../store/uiStore'
+import { timeAgo } from '../../utils/date'
 
 export type CardVariant = 'album' | 'collection' | 'smart'
 export type CardBadge = 'rewind' // 重温：30 天以上没看
@@ -28,6 +29,8 @@ export interface CardData {
 interface Props {
   data: CardData
   variant?: ViewMode
+  /** 显示「上次 X · 看到 Y/Z」行（仅 Recents 列表需要）。 */
+  showLastSeen?: boolean
 }
 
 // 通用卡片：网格（默认 3:4 封面）/ 列表（横向缩略图 + 元数据）。
@@ -36,12 +39,13 @@ interface Props {
 //  - 标题短截断 2 行；副标题只 1 行
 //  - 阅读进度以底部细线 + 数字显示
 //  - 智能集合有专属角标
-export default function AlbumCard({ data, variant = 'grid' }: Props) {
-  if (variant === 'list') return <ListCard data={data} />
-  return <GridCard data={data} />
+//  - showLastSeen=true 时在标题下加一行「上次 X · 看到 Y/Z」
+export default function AlbumCard({ data, variant = 'grid', showLastSeen }: Props) {
+  if (variant === 'list') return <ListCard data={data} showLastSeen={showLastSeen} />
+  return <GridCard data={data} showLastSeen={showLastSeen} />
 }
 
-function GridCard({ data }: { data: CardData }) {
+function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
@@ -231,6 +235,23 @@ function GridCard({ data }: { data: CardData }) {
             </>
           )}
         </div>
+        {showLastSeen && data.lastSeenAt && (
+          <div
+            className="text-[11px] text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
+            title={`上次 ${timeAgo(data.lastSeenAt)}`}
+          >
+            <ClockIcon size={10} className="shrink-0 text-fg-subtle/70" />
+            {data.progress && data.progress.total > 0 && data.progress.index > 0 && (
+              <>
+                <span>
+                  看到 {data.progress.index + 1} / {data.progress.total}
+                </span>
+                <span className="text-fg-subtle/40">·</span>
+              </>
+            )}
+            <span>上次 {timeAgo(data.lastSeenAt)}</span>
+          </div>
+        )}
       </div>
       {/* 悬停预览（仅相册/合集；触摸设备不启用） */}
       {previewOn && previewRect && data.variant !== 'smart' && (
@@ -252,7 +273,7 @@ function GridCard({ data }: { data: CardData }) {
   )
 }
 
-function ListCard({ data }: { data: CardData }) {
+function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
@@ -358,8 +379,14 @@ function ListCard({ data }: { data: CardData }) {
               <div className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
             </div>
             <span className="text-[10px] text-fg-subtle tabular-nums shrink-0">
-              {progressPct}%
+              {data.progress!.index + 1} / {data.progress!.total}
             </span>
+          </div>
+        )}
+        {showLastSeen && data.lastSeenAt && (
+          <div className="text-[10px] text-fg-subtle mt-1 inline-flex items-center gap-1">
+            <ClockIcon size={10} className="shrink-0 text-fg-subtle/70" />
+            <span>上次 {timeAgo(data.lastSeenAt)}</span>
           </div>
         )}
       </div>

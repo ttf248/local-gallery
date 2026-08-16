@@ -14,12 +14,14 @@ interface Props {
   items: CardData[]
   empty?: ReactNode
   variant?: ViewMode
+  /** 把「上次 X · 看到 Y/Z」显示在每张卡上（仅 Recents 列表传 true） */
+  showLastSeen?: boolean
 }
 
 // 网格 / 列表容器。
 // 列表视图下，悬停时显示右侧 chevron。
 // 右键菜单统一：打开 / 收藏 / 资源管理器 / 复制路径 / 属性。
-export default function AlbumGrid({ items, empty, variant = 'grid' }: Props) {
+export default function AlbumGrid({ items, empty, variant = 'grid', showLastSeen }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number; item: CardData } | null>(null)
   const [propsOpen, setPropsOpen] = useState(false)
   const [propsPath, setPropsPath] = useState<string | null>(null)
@@ -41,7 +43,7 @@ export default function AlbumGrid({ items, empty, variant = 'grid' }: Props) {
           setMenu({ x: e.clientX, y: e.clientY, item: it })
         }}
       >
-        <AlbumCard data={{ ...it, isFavorite: isFav }} variant={mode} />
+        <AlbumCard data={{ ...it, isFavorite: isFav }} variant={mode} showLastSeen={showLastSeen} />
       </div>
     )
   }

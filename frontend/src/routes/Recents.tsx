@@ -144,7 +144,7 @@ export default function Recents() {
       ) : (
         <section className="max-w-[1400px] mx-auto w-full">
           <div className="px-6 lg:px-10 pb-10">
-            <AlbumGrid items={filtered} variant={viewMode} />
+            <AlbumGrid items={filtered} variant={viewMode} showLastSeen />
           </div>
         </section>
       )}
