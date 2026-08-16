@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { SHORTCUTS } from '../../utils/shortcuts'
+import { useEffect, useState } from 'react'
+import { SHORTCUTS, type Shortcut } from '../../utils/shortcuts'
 import { CloseIcon, SearchIcon, KeyboardIcon } from './Icon'
 
 interface Props {
@@ -7,26 +7,17 @@ interface Props {
   onClose: () => void
 }
 
-const groups: { title: string; ids: string[] }[] = [
-  {
-    title: '全局',
-    ids: ['open', 'scan', 'shuffle', 'search', 'refresh', 'home', 'recents', 'favorites', 'settings', 'help'],
-  },
-  {
-    title: '查看器',
-    ids: [
-      'next', 'prev', 'first', 'last', 'gotoPage',
-      'nextAlbum', 'prevAlbum', 'favorite',
-      'mode1', 'mode2', 'mode3',
-      'fit', 'direction',
-      'zoomIn', 'zoomOut', 'zoomReset', 'rotate',
-      'fullscreen', 'slideshow', 'info',
-    ],
-  },
+// 渲染顺序：先全局，再查看器。Title 单一来源。
+const GROUP_ORDER: Array<{ key: NonNullable<Shortcut['group']>; title: string }> = [
+  { key: 'global', title: '全局' },
+  { key: 'viewer', title: '查看器' },
 ]
 
 // 帮助浮层：可搜索的快捷键列表 + 分类。
 // 视觉上：更大留白，单列紧凑列表；搜索框即时过滤。
+//
+// 数据源：直接消费 SHORTCUTS（按 group 字段分组）。新增/删除快捷键时，
+// 只需修改 shortcuts.ts，HelpOverlay 自动同步。
 export default function HelpOverlay({ open, onClose }: Props) {
   const [q, setQ] = useState('')
 
@@ -43,12 +34,11 @@ export default function HelpOverlay({ open, onClose }: Props) {
     if (!open) setQ('')
   }, [open])
 
-  const byId = useMemo(() => new Map(SHORTCUTS.map((s) => [s.id, s])), [])
   const lc = q.trim().toLowerCase()
 
   if (!open) return null
 
-  const matches = (s: { id: string; description: string; label: string }) => {
+  const matches = (s: Shortcut) => {
     if (!lc) return true
     return (
       s.id.toLowerCase().includes(lc) ||
@@ -57,14 +47,11 @@ export default function HelpOverlay({ open, onClose }: Props) {
     )
   }
 
-  const filteredGroups = groups
-    .map((g) => ({
-      ...g,
-      items: g.ids
-        .map((id) => byId.get(id))
-        .filter((s): s is NonNullable<typeof s> => !!s && matches(s)),
-    }))
-    .filter((g) => g.items.length > 0)
+  // 按 group 字段分组，渲染顺序由 GROUP_ORDER 决定
+  const filteredGroups = GROUP_ORDER.map((g) => ({
+    title: g.title,
+    items: SHORTCUTS.filter((s) => s.group === g.key && matches(s)),
+  })).filter((g) => g.items.length > 0)
 
   const total = filteredGroups.reduce((s, g) => s + g.items.length, 0)
 

@@ -1,9 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
+import pkg from './package.json'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // 把 package.json 的版本号注入到前端，避免多处手写不同步
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [react()],
   resolve: {
     alias: {
