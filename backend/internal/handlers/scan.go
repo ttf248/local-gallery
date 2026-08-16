@@ -7,14 +7,16 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/tianlongxiang/comic-reader/internal/config"
 	"github.com/tianlongxiang/comic-reader/internal/services"
 )
 
 // ScanHandler 同步扫描（保留兼容）。
-func ScanHandler(scanner *services.Scanner, comicRoot string) fiber.Handler {
+// comicRoot 在每次请求时通过 mgr.Root() 读取，响应 MediaRoot 的热更新。
+func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		result, err := scanner.Scan(services.ScanOptions{
-			Root:     comicRoot,
+			Root:     mgr.Root(),
 			MaxDepth: 2,
 		})
 		if err != nil {
@@ -34,10 +36,10 @@ func ScanHandler(scanner *services.Scanner, comicRoot string) fiber.Handler {
 // AsyncScanStartHandler 启动异步扫描，返回 scan_id。
 //
 // POST /api/scan/start
-func AsyncScanStartHandler(runner *services.AsyncScanRunner, comicRoot string) fiber.Handler {
+func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _, err := runner.Start(services.ScanOptions{
-			Root:     comicRoot,
+			Root:     mgr.Root(),
 			MaxDepth: 2,
 		})
 		if err != nil {
@@ -98,20 +100,8 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 				}
 			}
 		})
-		return nil
-	}
-}
 
-// AsyncScanCancelHandler 取消扫描。
-//
-// DELETE /api/scan/:id
-func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		id := c.Params("id")
-		if !runner.Cancel(id) {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
-		}
-		return c.JSON(fiber.Map{"ok": true})
+		return nil
 	}
 }
 
@@ -121,16 +111,40 @@ func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
 func AsyncScanResultHandler(runner *services.AsyncScanRunner) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
-		result := runner.Result(id)
-		if result == nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "result not available"})
+		state := runner.Get(id)
+		if state == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
 		}
-		return c.JSON(fiber.Map{"ok": true, "result": result})
+		if state.Status != services.ScanStatusComplete {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error":  "scan not complete",
+				"status": state.Status,
+			})
+		}
+		return c.JSON(fiber.Map{"ok": true, "result": state.Result})
 	}
 }
 
-// writeSSE 写一条 SSE 事件到响应。
-func writeSSE(c *fiber.Ctx, event string, data any) {
-	raw, _ := json.Marshal(data)
-	c.WriteString(fmt.Sprintf("event: %s\ndata: %s\n\n", event, raw))
+// AsyncScanCancelHandler 取消正在进行的扫描。
+//
+// DELETE /api/scan/:id
+func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		state := runner.Get(id)
+		if state == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
+		}
+		if state.Status != services.ScanStatusRunning && state.Status != services.ScanStatusPending {
+			return c.JSON(fiber.Map{"ok": true, "alreadyDone": true})
+		}
+		state.Cancel()
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+func writeSSE(c *fiber.Ctx, event string, payload any) {
+	data, _ := json.Marshal(payload)
+	c.Set("Content-Type", "text/event-stream")
+	fmt.Fprintf(c, "event: %s\ndata: %s\n\n", event, data)
 }

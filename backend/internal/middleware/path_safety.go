@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -42,16 +43,26 @@ func OpenInOS(path string) error {
 	}
 }
 
-// PathSafetyMiddleware 返回中间件：把 ?path=<abs> 解析后校验是否在 comicRoot 之下。
-// 不在校验范围或不是绝对路径的请求返回 400。
-func PathSafetyMiddleware(comicRoot string) fiber.Handler {
-	root, err := filepath.Abs(comicRoot)
-	if err != nil {
-		root = comicRoot
-	}
-	rootWithSep := root + string(os.PathSeparator)
+// pathState 当前生效的根路径，atomic 保证读无锁。
+type pathState struct {
+	root       string
+	rootWithSep string
+}
 
-	return func(c *fiber.Ctx) error {
+type safetyState struct {
+	v atomic.Pointer[pathState]
+}
+
+// PathSafetyMiddleware 返回中间件：把 ?path=<abs> 解析后校验是否在 comicRoot 之下。
+// 根路径由 RootProvider 在每次请求时提供（支持运行中热更新）。
+// RootProvider 返回的字符串必须是绝对路径或可被 filepath.Abs 解析；返回空
+// 字符串时按"无根"处理（拒绝所有非 smart: 路径）。
+type RootProvider func() string
+
+func PathSafetyMiddleware(initial string) (fiber.Handler, *safetyState) {
+	state := &safetyState{}
+	state.set(initial)
+	handler := func(c *fiber.Ctx) error {
 		path := c.Query("path")
 		if path == "" {
 			return c.Next()
@@ -61,7 +72,13 @@ func PathSafetyMiddleware(comicRoot string) fiber.Handler {
 			c.Locals("safePath", path)
 			return c.Next()
 		}
-		clean, err := validatePath(root, rootWithSep, path)
+		ps := state.v.Load()
+		if ps == nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "mediaRoot not configured",
+			})
+		}
+		clean, err := validatePath(ps.root, ps.rootWithSep, path)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -72,6 +89,24 @@ func PathSafetyMiddleware(comicRoot string) fiber.Handler {
 		c.Locals("safePath", clean)
 		return c.Next()
 	}
+	return handler, state
+}
+
+// set 替换根路径；不合法时保持原值不变。
+func (s *safetyState) set(root string) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		abs = root
+	}
+	s.v.Store(&pathState{
+		root:       abs,
+		rootWithSep: abs + string(os.PathSeparator),
+	})
+}
+
+// SetRoot 公开方法，供 Manager 回调调用以热更新根路径。
+func (s *safetyState) SetRoot(root string) {
+	s.set(root)
 }
 
 // SafePath 从 c.Locals 取出已校验的绝对路径。

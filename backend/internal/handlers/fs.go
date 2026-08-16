@@ -8,9 +8,11 @@ import (
 )
 
 // FsOpenHandler 在系统文件管理器中打开 path。
-// 当 cfg.AllowOsOpen=false 时返回 403。
-func FsOpenHandler(cfg *config.Config) fiber.Handler {
+// 当 mgr 当前 AllowOsOpen=false 时返回 403；AllowOsOpen 可通过 /api/config
+// 在运行中切换。
+func FsOpenHandler(mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		cfg := mgr.Get()
 		if !cfg.AllowOsOpen {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
 				"error": "allowOsOpen is disabled",

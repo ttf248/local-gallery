@@ -2,13 +2,14 @@
 //
 // 启动流程：
 //  1. 解析 flag：仅 --config（指定 YAML 路径）和 --static-dir（前端产物目录）
-//  2. 加载 config.yaml（缺失则用内置默认；显式字段覆盖默认）
-//  3. 校验 ComicRoot 必须存在且为目录
-//  4. 注册中间件 + 路由
+//  2. 通过 config.Manager 加载 config.yaml（缺失则用内置默认；显式字段覆盖默认）
+//  3. 校验 MediaRoot 必须存在且为目录
+//  4. 注册中间件 + 路由（中间件和扫描 handler 都从 Manager 读最新根目录）
 //  5. 监听 host:port
 //
 // 不再支持环境变量或 --comic-root / --host / --port 等覆盖；
-// 所有运行时配置集中在 config.yaml（参考 backend/config.example.yaml）。
+// 所有运行时配置集中在 config.yaml（参考 backend/config.example.yaml），
+// 也可通过 /api/config 在网页设置页修改并自动持久化。
 package main
 
 import (
@@ -34,23 +35,29 @@ func main() {
 	flagStaticDir := flag.String("static-dir", "", "前端静态资源目录（覆盖 config.yaml 中的 staticDir；不存在则跳过托管）")
 	flag.Parse()
 
-	// ---- 2. 加载 YAML 配置 ----
-	cfg, err := config.LoadFile(*flagConfig)
+	// ---- 2. 加载 YAML 配置（通过 Manager，handler 可热更新）----
+	mgr, err := config.NewManager(*flagConfig)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "加载配置失败 %s: %v\n", *flagConfig, err)
 		os.Exit(2)
 	}
+	cfg := mgr.Get()
 
 	// ---- 3. --static-dir 覆盖 YAML 中的同名字段（部署灵活）----
 	staticDir := cfg.StaticDir
 	if *flagStaticDir != "" {
 		staticDir = *flagStaticDir
+		// 同步写回 config（让网页配置与启动 flag 一致）
+		_, _ = mgr.Update(config.ConfigPatch{
+			StaticDir:    staticDir,
+			StaticDirSet: true,
+		})
 	}
 
 	// ---- 4. 校验 ----
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "配置校验失败: %v\n", err)
-		fmt.Fprintf(os.Stderr, "提示：在 config.yaml 中设置 comicRoot 指向漫画根目录\n")
+		fmt.Fprintf(os.Stderr, "提示：在 config.yaml 中设置 mediaRoot 指向图像根目录\n")
 		os.Exit(2)
 	}
 
@@ -74,7 +81,13 @@ func main() {
 
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())
-	app.Use(middleware.PathSafetyMiddleware(cfg.Root()))
+
+	// 路径安全中间件：根目录从 Manager 动态读取，运行中可热更新
+	safetyMw, safetyState := middleware.PathSafetyMiddleware(cfg.Root())
+	app.Use(safetyMw)
+	mgr.OnChange("path_safety", func(snapshot *config.Config) {
+		safetyState.SetRoot(snapshot.Root())
+	})
 
 	// ---- 路由 ----
 	scanner := services.NewScanner()
@@ -101,10 +114,34 @@ func main() {
 		log.Printf("  已加载上次扫描结果：%d 相册，扫描于 %s", r.AlbumCount, r.ScannedAt.Format("2006-01-02 15:04:05"))
 	}
 
+	// 缩略图参数 / 缓存目录变更：热更新 ThumbnailService
+	mgr.OnChange("thumbnail", func(snapshot *config.Config) {
+		if err := thumbs.UpdateOptions(services.ThumbnailOptions{
+			CacheDir:   snapshot.CacheDir,
+			Width:      snapshot.ThumbSizeW,
+			Height:     snapshot.ThumbSizeH,
+			MaxAgeDays: snapshot.CacheMaxAgeDays,
+			LRUSize:    snapshot.ThumbCacheSize,
+		}); err != nil {
+			log.Printf("警告：缩略图服务热更新失败: %v", err)
+		}
+	})
+
+	// 当 MediaRoot 变更：清空扫描缓存，扫描器/handler 已通过 mgr.Root() 读最新值
+	onConfigUpdate := func(newCfg *config.Config, mediaRootChanged bool) error {
+		if mediaRootChanged {
+			if err := scanCache.Clear(); err != nil {
+				return fmt.Errorf("clear scan cache: %w", err)
+			}
+			log.Printf("  MediaRoot 变更为 %s，已清空扫描缓存", newCfg.Root())
+		}
+		return nil
+	}
+
 	api := app.Group("/api")
-	api.Get("/health", handlers.HealthHandler(cfg))
-	api.Post("/scan", handlers.ScanHandler(scanner, cfg.Root()))
-	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, cfg.Root()))
+	api.Get("/health", handlers.HealthHandler(mgr))
+	api.Post("/scan", handlers.ScanHandler(scanner, mgr))
+	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, mgr))
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
 	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
@@ -121,7 +158,11 @@ func main() {
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
-	api.Get("/fs/open", handlers.FsOpenHandler(cfg))
+	api.Get("/fs/open", handlers.FsOpenHandler(mgr))
+
+	// 配置读写
+	api.Get("/config", handlers.ConfigGetHandler(mgr))
+	api.Put("/config", handlers.ConfigUpdateHandler(mgr, onConfigUpdate))
 
 	// 偏好 / 收藏 / 历史
 	api.Get("/prefs", handlers.PrefsGetHandler(prefs))

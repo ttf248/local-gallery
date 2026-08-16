@@ -20,12 +20,13 @@ type HealthResponse struct {
 }
 
 // HealthHandler 返回 /api/health 处理函数。
-func HealthHandler(cfg *config.Config) fiber.Handler {
+func HealthHandler(mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		root := mgr.Root()
 		return c.JSON(HealthResponse{
 			Status:     "ok",
-			MediaRoot:  cfg.Root(),
-			ComicRoot:  cfg.Root(),
+			MediaRoot:  root,
+			ComicRoot:  root,
 			Version:    config.Version,
 			GoVersion:  runtime.Version(),
 			Goroutines: runtime.NumGoroutine(),

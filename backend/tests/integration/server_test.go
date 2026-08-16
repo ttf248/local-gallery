@@ -21,6 +21,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/tianlongxiang/comic-reader/internal/config"
 	"github.com/tianlongxiang/comic-reader/internal/handlers"
 	"github.com/tianlongxiang/comic-reader/internal/middleware"
 	"github.com/tianlongxiang/comic-reader/internal/services"
@@ -32,6 +33,7 @@ type harness struct {
 	root  string
 	cache string
 	prefs string
+	mgr   *config.Manager
 }
 
 func newHarness(t *testing.T) *harness {
@@ -68,10 +70,25 @@ func newHarness(t *testing.T) *harness {
 	writePNG(t, filepath.Join(root, "[作者A] vol1", "page2.png"), 200, 300)
 	writePNG(t, filepath.Join(root, "[作者A] vol2", "page3.png"), 200, 300)
 
+	// config.Manager 持有根路径，便于 handler 拿到动态根
+	mgr := config.NewManagerWith(&config.Config{
+		MediaRoot:       root,
+		Host:            "127.0.0.1",
+		Port:            8080,
+		AllowOsOpen:     false,
+		CacheDir:        cache,
+		ThumbSizeW:      64,
+		ThumbSizeH:      64,
+		ThumbCacheSize:  100,
+		CacheMaxAgeDays: 30,
+		StaticDir:       "",
+	}, "")
+
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())
-	app.Use(middleware.PathSafetyMiddleware(root))
+	safetyMw, _ := middleware.PathSafetyMiddleware(root)
+	app.Use(safetyMw)
 
 	scanner := services.NewScanner()
 	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
@@ -94,8 +111,8 @@ func newHarness(t *testing.T) *harness {
 			"version":   "test",
 		})
 	})
-	api.Post("/scan", handlers.ScanHandler(scanner, root))
-	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, root))
+	api.Post("/scan", handlers.ScanHandler(scanner, mgr))
+	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, mgr))
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
 	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
@@ -113,8 +130,10 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/history", handlers.HistoryListHandler(prefsStore))
 	api.Post("/history", handlers.HistoryAddHandler(prefsStore))
 	api.Delete("/history", handlers.HistoryClearHandler(prefsStore))
+	api.Get("/config", handlers.ConfigGetHandler(mgr))
+	api.Put("/config", handlers.ConfigUpdateHandler(mgr, nil))
 
-	return &harness{app, root, cache, prefs}
+	return &harness{app, root, cache, prefs, mgr}
 }
 
 func (h *harness) do(t *testing.T, method, path string, body interface{}) (*http.Response, []byte) {
@@ -342,6 +361,79 @@ func TestHistory(t *testing.T) {
 	json.Unmarshal(body, &got)
 	if len(got.History) != 2 {
 		t.Errorf("history=%d", len(got.History))
+	}
+}
+
+func TestConfig_Get(t *testing.T) {
+	h := newHarness(t)
+	res, body := h.do(t, "GET", "/api/config", nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("status=%d body=%s", res.StatusCode, body)
+	}
+	var got map[string]interface{}
+	json.Unmarshal(body, &got)
+	if got["mediaRoot"] != h.root {
+		t.Errorf("mediaRoot=%v want %q", got["mediaRoot"], h.root)
+	}
+	if got["allowOsOpen"] != false {
+		t.Errorf("allowOsOpen=%v", got["allowOsOpen"])
+	}
+}
+
+func TestConfig_Patch_AllowOsOpen(t *testing.T) {
+	h := newHarness(t)
+	res, body := h.do(t, "PUT", "/api/config", map[string]interface{}{
+		"allowOsOpen": true,
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("status=%d body=%s", res.StatusCode, body)
+	}
+	var resp struct {
+		OK     bool `json:"ok"`
+		Config struct {
+			AllowOsOpen bool `json:"allowOsOpen"`
+		} `json:"config"`
+		RequiresRestart []string `json:"requiresRestart"`
+	}
+	json.Unmarshal(body, &resp)
+	if !resp.OK {
+		t.Fatal("ok should be true")
+	}
+	if !resp.Config.AllowOsOpen {
+		t.Error("allowOsOpen should be true after PATCH")
+	}
+	if len(resp.RequiresRestart) != 0 {
+		t.Errorf("requiresRestart=%v should be empty for allowOsOpen", resp.RequiresRestart)
+	}
+	if !h.mgr.Get().AllowOsOpen {
+		t.Error("manager should reflect new state")
+	}
+}
+
+func TestConfig_Patch_Invalid(t *testing.T) {
+	h := newHarness(t)
+	res, _ := h.do(t, "PUT", "/api/config", map[string]interface{}{
+		"port": 70000,
+	})
+	if res.StatusCode != 400 {
+		t.Errorf("status=%d want 400", res.StatusCode)
+	}
+}
+
+func TestConfig_Patch_PortRequiresRestart(t *testing.T) {
+	h := newHarness(t)
+	res, body := h.do(t, "PUT", "/api/config", map[string]interface{}{
+		"port": 9090,
+	})
+	if res.StatusCode != 200 {
+		t.Fatalf("status=%d body=%s", res.StatusCode, body)
+	}
+	var resp struct {
+		RequiresRestart []string `json:"requiresRestart"`
+	}
+	json.Unmarshal(body, &resp)
+	if len(resp.RequiresRestart) != 1 || resp.RequiresRestart[0] != "port" {
+		t.Errorf("requiresRestart=%v want [port]", resp.RequiresRestart)
 	}
 }
 

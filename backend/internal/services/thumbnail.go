@@ -32,6 +32,7 @@ type ThumbnailService struct {
 	width      int
 	height     int
 	maxAgeDays int
+	lruSize    int
 
 	mu       sync.Mutex
 	memCache *lru.Cache[string, []byte]
@@ -82,6 +83,7 @@ func NewThumbnailService(opts ThumbnailOptions) (*ThumbnailService, error) {
 		width:      w,
 		height:     h,
 		maxAgeDays: days,
+		lruSize:    lruSize,
 		memCache:   cache,
 	}, nil
 }
@@ -204,19 +206,65 @@ type ThumbnailStats struct {
 	MemoryItems int    `json:"memoryItems"`
 	DiskFiles   int    `json:"diskFiles"`
 	CacheDir    string `json:"cacheDir"`
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	MaxAgeDays  int    `json:"maxAgeDays"`
+	LRUSize     int    `json:"lruSize"`
 }
 
 // Stats 返回当前缓存统计。
 func (s *ThumbnailService) Stats() ThumbnailStats {
+	s.mu.Lock()
 	stats := ThumbnailStats{
 		MemoryItems: s.memCache.Len(),
 		CacheDir:    s.cacheDir,
+		Width:       s.width,
+		Height:      s.height,
+		MaxAgeDays:  s.maxAgeDays,
+		LRUSize:     s.lruSize,
 	}
+	s.mu.Unlock()
 
 	if entries, err := os.ReadDir(s.cacheDir); err == nil {
 		stats.DiskFiles = len(entries)
 	}
 	return stats
+}
+
+// UpdateOptions 热更新部分运行参数。0 值表示"不修改"（除了 LRUSize 显式
+// 用 0 表示"不重建 LRU"）。调用方负责保证 CacheDir 已存在。
+//
+//   - Width/Height 变化：影响后续新生成的缩略图，旧的仍按旧尺寸保留在磁盘
+//   - MaxAgeDays 变化：影响后续 Cleanup 的截止时间
+//   - LRUSize 变化：重建 LRU 内存缓存（现有项全部丢弃）
+//   - CacheDir 变化：先 MkdirAll 验证新目录可创建，再切换；旧目录保留
+func (s *ThumbnailService) UpdateOptions(opts ThumbnailOptions) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if opts.Width > 0 {
+		s.width = opts.Width
+	}
+	if opts.Height > 0 {
+		s.height = opts.Height
+	}
+	if opts.MaxAgeDays > 0 {
+		s.maxAgeDays = opts.MaxAgeDays
+	}
+	if opts.LRUSize > 0 && opts.LRUSize != s.lruSize {
+		cache, err := lru.New[string, []byte](opts.LRUSize)
+		if err != nil {
+			return fmt.Errorf("rebuild lru: %w", err)
+		}
+		s.memCache = cache
+		s.lruSize = opts.LRUSize
+	}
+	if opts.CacheDir != "" && opts.CacheDir != s.cacheDir {
+		if err := os.MkdirAll(opts.CacheDir, 0o755); err != nil {
+			return fmt.Errorf("create new cache dir: %w", err)
+		}
+		s.cacheDir = opts.CacheDir
+	}
+	return nil
 }
 
 // ---- 辅助：避免引入 png encoder 时的循环依赖噪音 ----

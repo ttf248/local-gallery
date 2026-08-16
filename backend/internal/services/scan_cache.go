@@ -125,6 +125,19 @@ func (c *ScanResultCache) flush() error {
 	return os.Rename(tmp, path)
 }
 
+// Clear 清空内存中的扫描结果并立即落盘为空文件（媒体根目录变更后调用）。
+// 后续首次加载/扫描会按新根重新填充。
+func (c *ScanResultCache) Clear() error {
+	c.mu.Lock()
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+	}
+	c.latest = nil
+	c.dirty = true
+	c.mu.Unlock()
+	return c.Flush()
+}
+
 // FindAlbum 按路径查找相册（递归 Collection）。
 func (c *ScanResultCache) FindAlbum(path string) *models.Album {
 	r := c.Get()
