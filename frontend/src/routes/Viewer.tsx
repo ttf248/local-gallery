@@ -263,6 +263,15 @@ export default function Viewer() {
       setIndex(index - 1)
     }
   }
+  // 已到末尾的统一反馈：toast + 自动停幻灯片。
+  const onReachEnd = () => {
+    pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
+    if (useViewerStore.getState().slideshow) {
+      toggleSlideshow()
+      pushToast({ kind: 'info', message: '幻灯片已自动停止' })
+    }
+  }
+
   function next() {
     if (mode === 'continuous') {
       scrollStep(1)
@@ -277,24 +286,14 @@ export default function Viewer() {
         setIndex(Math.max(0, images.length - 2))
         return
       }
-      // 已在最后一组
-      pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
-      if (useViewerStore.getState().slideshow) {
-        toggleSlideshow()
-        pushToast({ kind: 'info', message: '幻灯片已自动停止' })
-      }
+      onReachEnd()
       return
     }
     if (index < images.length - 1) {
       setIndex(index + 1)
       return
     }
-    // 已是最后一张
-    pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
-    if (useViewerStore.getState().slideshow) {
-      toggleSlideshow()
-      pushToast({ kind: 'info', message: '幻灯片已自动停止' })
-    }
+    onReachEnd()
   }
 
   function scrollStep(dir: -1 | 1) {
@@ -310,6 +309,8 @@ export default function Viewer() {
     const target = document.querySelector(`[data-image-index="${i}"]`) as HTMLElement | null
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // 同步 index，否则后续按 → 会从旧 index 继续，导致视觉/状态错位
+    setIndex(i)
   }
 
   const jumpTo = useCallback(
