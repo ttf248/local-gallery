@@ -112,3 +112,73 @@ func TestScanResultMarshalJSON_AliasKeys(t *testing.T) {
 		}
 	}
 }
+
+// TestAlbumMarshalJSON_NilSlices 验证 nil 切片序列化为 `[]` 而非 `null`：
+//
+//	前端 TypeScript 把 imageFiles/files/albums 当作 string[]/Album[] 处理，
+//	null 会被当作对象，访问 .length 直接抛错 → React 整页崩溃。
+func TestAlbumMarshalJSON_NilSlices(t *testing.T) {
+	a := Album{Type: "album", Path: "E:/p/a", Name: "a", ImageCount: 0}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(raw)
+	if strings.Contains(s, `"imageFiles":null`) || strings.Contains(s, `"files":null`) {
+		t.Errorf("nil 切片未转为 []：%s", s)
+	}
+	if !strings.Contains(s, `"imageFiles":[]`) || !strings.Contains(s, `"files":[]`) {
+		t.Errorf("Album JSON 缺少空数组：%s", s)
+	}
+
+	// Collection / SmartCollection 同理
+	c := Collection{Type: "collection", Path: "E:/p/c", Name: "c"}
+	raw, _ = json.Marshal(c)
+	if strings.Contains(string(raw), `"albums":null`) {
+		t.Errorf("Collection nil albums 未转为 []：%s", string(raw))
+	}
+	sc := SmartCollection{Type: "smartCollection", Tag: "t"}
+	raw, _ = json.Marshal(sc)
+	s = string(raw)
+	if strings.Contains(s, `"albums":null`) || strings.Contains(s, `"tags":null`) {
+		t.Errorf("SmartCollection nil slices 未转为 []：%s", s)
+	}
+}
+
+// TestAlbumUnmarshalJSON_RoundTrip 验证 cache 写入 → 读回后字段还在。
+//
+// 修复前因 json:"-" 标签让默认 Unmarshal 跳过 ImageFiles/Files，
+// 重启后 albums[i].ImageFiles 永远为空，前端 detail 加载即白屏。
+func TestAlbumUnmarshalJSON_RoundTrip(t *testing.T) {
+	original := Album{
+		Type:       "album",
+		Path:       "E:/p/a",
+		Name:       "a",
+		ImageFiles: []string{"E:/p/a/1.jpg", "E:/p/a/2.jpg"},
+		ImageCount: 2,
+	}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var loaded Album
+	if err := json.Unmarshal(raw, &loaded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(loaded.ImageFiles) != 2 {
+		t.Errorf("Unmarshal 后 ImageFiles 数量 = %d, want 2", len(loaded.ImageFiles))
+	}
+	if loaded.ImageFiles[0] != "E:/p/a/1.jpg" || loaded.ImageFiles[1] != "E:/p/a/2.jpg" {
+		t.Errorf("Unmarshal 后 ImageFiles 内容错：%v", loaded.ImageFiles)
+	}
+
+	// 仅 imageFiles 键（旧 cache 文件）也要能读回
+	legacy := []byte(`{"type":"album","path":"E:/p/old","name":"old","imageFiles":["x.jpg"]}`)
+	var old Album
+	if err := json.Unmarshal(legacy, &old); err != nil {
+		t.Fatalf("legacy unmarshal: %v", err)
+	}
+	if len(old.ImageFiles) != 1 || old.ImageFiles[0] != "x.jpg" {
+		t.Errorf("legacy Unmarshal 后 ImageFiles = %v", old.ImageFiles)
+	}
+}

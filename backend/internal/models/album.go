@@ -57,10 +57,10 @@ type Album struct {
 	Type       string    `json:"type"`        // 始终为 "album"
 	Path       string    `json:"path"`        // 绝对路径
 	Name       string    `json:"name"`        // 文件夹名
-	ImageFiles []string  `json:"-"`           // 见 MarshalJSON；同时输出 imageFiles + files
+	ImageFiles []string  `json:"-"`           // 见 MarshalJSON/UnmarshalJSON；同时输出 imageFiles + files
 	CoverImage string    `json:"coverImage"`  // 封面（通常第一张）
 	ImageCount int       `json:"imageCount"`  // 兼容旧字段，同时输出 fileCount
-	Files      []string  `json:"-"`           // 见 MarshalJSON；为 0 时复用 ImageFiles
+	Files      []string  `json:"-"`           // 见 MarshalJSON/UnmarshalJSON；为 0 时复用 ImageFiles
 	FolderSize int64     `json:"folderSize"`  // 字节
 	Tags       []string  `json:"tags,omitempty"`  // 标签（从方括号解析），可能多个
 	Author     string    `json:"author,omitempty"` // 旧字段别名 = 第一个标签
@@ -68,6 +68,8 @@ type Album struct {
 }
 
 // MarshalJSON 同时输出 imageFiles（兼容）与 files（推荐）两个键。
+//
+// nil 切片序列化为 `[]`（默认 Go 行为是 `null`，前端直接 `.length` 会抛错）。
 func (a Album) MarshalJSON() ([]byte, error) {
 	type alias Album
 	files := a.Files
@@ -81,10 +83,46 @@ func (a Album) MarshalJSON() ([]byte, error) {
 		FileCount  int      `json:"fileCount"`
 	}{
 		alias:      alias(a),
-		Files:      files,
-		ImageFiles: a.ImageFiles,
+		Files:      emptyStrings(files),
+		ImageFiles: emptyStrings(a.ImageFiles),
 		FileCount:  a.ImageCount,
 	})
+}
+
+// UnmarshalJSON 反序列化 album：
+//   - 因 ImageFiles/Files 用了 `json:"-"`，需要自定义才能从 JSON 读回
+//   - `imageFiles` 与 `files` 任一存在即写入；优先 files（新字段）
+//   - 缓存文件被回填时可能只有 `imageFiles`（兼容旧版本）
+func (a *Album) UnmarshalJSON(data []byte) error {
+	type alias Album
+	aux := struct {
+		*alias
+		Files      []string `json:"files"`
+		ImageFiles []string `json:"imageFiles"`
+		FileCount  int      `json:"fileCount"`
+	}{
+		alias: (*alias)(a),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	switch {
+	case len(aux.Files) > 0:
+		a.Files = aux.Files
+		a.ImageFiles = aux.ImageFiles // 即使为空也覆盖，避免残留旧值
+	case len(aux.ImageFiles) > 0:
+		a.ImageFiles = aux.ImageFiles
+	}
+	return nil
+}
+
+// emptyStrings 把 nil 切片转换为非 nil 空切片，避免 JSON 输出 `null`。
+// 前端 TypeScript 类型期望 `string[]`，`null` 会被当作对象处理后抛错。
+func emptyStrings(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // Collection 仅含子相册（不含图片）的文件夹。
@@ -94,6 +132,19 @@ type Collection struct {
 	Name       string      `json:"name"`        // 文件夹名
 	Albums     []Album     `json:"albums"`
 	AlbumCount int         `json:"albumCount"`
+}
+
+// MarshalJSON 确保 nil Albums 序列化为 `[]`。
+func (c Collection) MarshalJSON() ([]byte, error) {
+	type alias Collection
+	albums := c.Albums
+	if albums == nil {
+		albums = []Album{}
+	}
+	return json.Marshal(struct {
+		alias
+		Albums []Album `json:"albums"`
+	}{alias: alias(c), Albums: albums})
 }
 
 // SmartCollection 基于方括号标签聚合的智能集合。
@@ -108,6 +159,24 @@ type SmartCollection struct {
 	Albums     []Album `json:"albums"`
 	AlbumCount int     `json:"albumCount"`
 	CoverImage string  `json:"coverImage"`  // 图片数最多的相册封面
+}
+
+// MarshalJSON 确保 nil Albums 序列化为 `[]`。
+func (s SmartCollection) MarshalJSON() ([]byte, error) {
+	type alias SmartCollection
+	albums := s.Albums
+	tags := s.Tags
+	if albums == nil {
+		albums = []Album{}
+	}
+	if tags == nil {
+		tags = []string{}
+	}
+	return json.Marshal(struct {
+		alias
+		Albums []Album  `json:"albums"`
+		Tags   []string `json:"tags"`
+	}{alias: alias(s), Albums: albums, Tags: tags})
 }
 
 // ScanResult 单次扫描的完整结果。
