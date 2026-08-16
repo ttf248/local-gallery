@@ -294,6 +294,23 @@ export default function Home() {
       ? '启动中…'
       : '重新扫描'
 
+  // 「继续上次」直跳查看器：进首页最大的目的是「接着看」，
+  // 中转 Album 详情会多一次点击，对随手翻翻的场景不友好。
+  // 用户想看 album 信息的话，从卡片点进去同样可达。
+  const onContinue = (card: CardData) => {
+    if (card.variant !== 'album') {
+      navigate(card.to)
+      return
+    }
+    const idx = card.progress?.index ?? 0
+    const qs = new URLSearchParams({
+      path: decodeFavPath(card.to),
+      index: String(idx),
+      name: card.title,
+    })
+    navigate(`/viewer?${qs.toString()}`)
+  }
+
   return (
     <div className="min-h-full">
       <ScanProgress
@@ -334,9 +351,7 @@ export default function Home() {
           <div className="flex items-center gap-2.5">
             {primaryAction ? (
               <button
-                onClick={() => {
-                  navigate(primaryAction.card.to)
-                }}
+                onClick={() => onContinue(primaryAction.card)}
                 className="inline-flex items-center gap-2.5 h-11 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
               >
                 <PlayFilledIcon size={14} />
