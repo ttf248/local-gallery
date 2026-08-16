@@ -5,6 +5,7 @@ import { useKeyboard } from '../../hooks/useKeyboard'
 import { useTheme } from '../../hooks/useTheme'
 import { useLibraryStore } from '../../store/libraryStore'
 import { albumRoute } from '../../utils/path'
+import { fsApi } from '../../api/fs'
 import Sidebar from './Sidebar'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
@@ -24,6 +25,12 @@ export default function AppShell() {
   const result = useLibraryStore((s) => s.result)
   const [helpOpen, setHelpOpen] = useState(false)
   const onViewer = location.pathname.startsWith('/viewer')
+
+  // 启动时同步服务端能力（fsCapabilities.allowOsOpen），
+  // 否则 Album 详情 / 右键菜单的"在资源管理器中打开"按钮永远 disabled。
+  useEffect(() => {
+    void fsApi.syncCapabilities()
+  }, [])
 
   useEffect(() => {
     const titles: Record<string, string> = {

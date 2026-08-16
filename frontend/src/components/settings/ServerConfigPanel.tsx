@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { configApi, type ServerConfig, type ServerConfigPatch } from '../../api/config'
 import { useUIStore } from '../../store/uiStore'
 import { useLibraryStore } from '../../store/libraryStore'
+import { fsApi } from '../../api/fs'
 import { useDebounce } from '../../hooks/useDebounce'
 import {
   CheckIcon,
@@ -112,6 +113,12 @@ export default function ServerConfigPanel() {
       // 标记 MediaRoot 变脏 → 提示用户重新扫描
       if (resp.mediaRootChanged) {
         setMediaRootDirty(true)
+      }
+      // allowOsOpen 变更后：让前端 fsCapabilities 立即跟上，
+      // 否则 Album 详情 / 右键菜单的"在资源管理器中打开"按钮
+      // 仍然显示 disabled 状态直到下次 App 启动。
+      if (keys.includes('allowOsOpen')) {
+        void fsApi.syncCapabilities()
       }
       // 重启字段提示
       const needRestart = resp.requiresRestart ?? []
