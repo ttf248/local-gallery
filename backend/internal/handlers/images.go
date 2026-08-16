@@ -15,8 +15,9 @@ import (
 //
 //   GET /api/images?path=<绝对路径>
 //
-// HEIC/HEIF 在浏览器原生兼容性差，会被服务端转码为 JPEG；
-// 其它格式原样返回（Fiber 内置 ServeFile 提供 Range 支持）。
+// 浏览器原生不识别的格式（HEIC/HEIF）原样返回，由浏览器自身决定
+// 能否解码（Safari 可显示；Chrome/Firefox 不能）。其它格式由
+// Fiber 内置 ServeFile 根据扩展名自动设置 Content-Type + 支持 Range。
 func ImageHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
@@ -31,13 +32,11 @@ func ImageHandler() fiber.Handler {
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
+		// HEIC/HEIF 等不常见格式显式声明 Content-Type，避免 Fiber
+		// mime 表里没有时落到 application/octet-stream。
 		ext := strings.ToLower(filepath.Ext(path))
 		if ext == ".heic" || ext == ".heif" {
-			// HEIC/HEIF 原样返回，由浏览器自身决定能否解码
-			// （Safari 可显示；Chrome/Firefox 不能）
 			c.Set("Content-Type", "image/heic")
-			c.Set("Cache-Control", "public, max-age=86400")
-			return c.SendFile(path, false)
 		}
 		c.Set("Cache-Control", "public, max-age=86400")
 		return c.SendFile(path, false)
