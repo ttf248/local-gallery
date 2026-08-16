@@ -47,6 +47,8 @@ export default function Viewer() {
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
   const [markingRead, setMarkingRead] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
   const finishedRef = useRef(false)
 
   // 浮层显隐：鼠标移动时显出，2s 无动作后自动隐藏。
@@ -79,27 +81,44 @@ export default function Viewer() {
   const { favorites, toggle: toggleFavorite } = useFavorites()
   const isFav = pathParam ? favorites.includes(pathParam) : false
 
-  // 拉图 + 恢复阅读进度：依赖 pathParam 变化；images 加载完成后由内层判分支
+  // 拉图 + 恢复阅读进度：依赖 pathParam 变化。
+  //
+  // 重要：必须在 pathParam 每次变化时都重新拉图。从 Album A 导航到 Album B 时，
+  // 旧 images 仍留在 state，会让 imagesReady=true 而跳过 fetch，结果仍是 A 的图。
+  //
+  // 唯一可以跳过的情况：URL 自带了 images= 参数（兼容旧链接），但只对首次生效 —
+  // 一旦点过「重试」（reloadKey++）或 pathParam 变化（导航到下一本），都要重新拉。
+  const skipInitialFetch = initialImages.length > 0 && reloadKey === 0
   const imagesReady = images.length > 0
   useEffect(() => {
-    if (!imagesReady && pathParam) {
-      albumsApi
-        .detail(pathParam)
-        .then((r) => {
-          const d = r.data as { files?: string[]; imageFiles?: string[] } | undefined
-          const list = d?.files ?? d?.imageFiles
-          if (list && Array.isArray(list)) {
-            setImages(list)
-          } else {
-            pushToast({ kind: 'error', message: '无法读取图片' })
-          }
-        })
-        .catch(() => {
-          pushToast({ kind: 'error', message: '无法读取图片' })
-        })
+    if (skipInitialFetch) return
+    if (!pathParam) return
+    let cancelled = false
+    setLoadError(null)
+    setImages([])
+    albumsApi
+      .detail(pathParam)
+      .then((r) => {
+        if (cancelled) return
+        const d = r.data as { files?: string[]; imageFiles?: string[] } | undefined
+        const list = d?.files ?? d?.imageFiles
+        if (list && Array.isArray(list) && list.length > 0) {
+          setImages(list)
+        } else {
+          setLoadError('EMPTY')
+        }
+      })
+      .catch((e) => {
+        if (cancelled) return
+        const msg =
+          (e as Error)?.message || '无法读取图片（网络或服务异常）'
+        setLoadError(msg)
+      })
+    return () => {
+      cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathParam])
+  }, [pathParam, reloadKey])
 
   useEffect(() => {
     if (!imagesReady) return
@@ -363,13 +382,60 @@ export default function Viewer() {
   if (images.length === 0) {
     return (
       <div className="flex flex-col h-full bg-bg">
-        <div className="px-4 h-9 text-xs text-fg-muted border-b border-border-faint bg-bg-elevated/60 flex items-center gap-2">
+        {/* 顶部条：返回 / 名称（常驻） */}
+        <div className="px-4 h-9 text-xs text-fg-muted border-b border-border-faint bg-bg-elevated/60 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="px-1.5 py-0.5 rounded hover:bg-bg-hover text-fg-muted hover:text-fg"
+            aria-label="返回"
+          >
+            ←
+          </button>
           <span className="font-medium text-fg truncate">{name}</span>
         </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-fg-muted text-sm">
-            {pathParam ? '正在加载图片…' : '无可显示的图片'}
-          </div>
+        <div className="flex-1 flex items-center justify-center px-6">
+          {!pathParam ? (
+            <div className="text-center">
+              <div className="text-fg-muted text-sm">无可显示的图片</div>
+              <div className="text-fg-subtle text-xs mt-1">未指定相册路径</div>
+            </div>
+          ) : loadError ? (
+            <div className="text-center max-w-sm">
+              <div className="text-base font-medium text-fg mb-1">
+                {loadError === 'EMPTY' ? '这个文件夹没有图片' : '加载失败'}
+              </div>
+              <div className="text-fg-muted text-sm mb-5">
+                {loadError === 'EMPTY'
+                  ? '可以换个文件夹，或检查文件是否已被移动/删除。'
+                  : loadError}
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => navigate(-1)}
+                  className="px-4 h-8 text-sm rounded border border-border bg-bg-elevated hover:bg-bg-hover text-fg"
+                >
+                  返回
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReloadKey((k) => k + 1)}
+                  className="px-4 h-8 text-sm rounded bg-accent text-white hover:opacity-90"
+                >
+                  重试
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-3 text-fg-muted text-sm">
+              <div
+                className="w-5 h-5 rounded-full border-2 border-fg-muted border-t-transparent animate-spin"
+                aria-hidden
+              />
+              <span>正在加载图片…</span>
+            </div>
+          )}
         </div>
       </div>
     )
