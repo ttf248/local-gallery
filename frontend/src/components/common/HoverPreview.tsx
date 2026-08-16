@@ -7,7 +7,6 @@ import {
   ReaderIcon,
   ImageIcon,
   CalendarIcon,
-  CheckIcon,
 } from './Icon'
 import type { CardData } from '../album/AlbumCard'
 
@@ -66,7 +65,6 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
     Math.min(idealTop, vp.h - COVER_H - MARGIN),
   )
 
-  const isSmart = data.variant === 'smart'
   const isCollection = data.variant === 'collection'
 
   return createPortal(
@@ -105,7 +103,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
             <div className="flex items-center gap-1.5 text-white/90 text-[11px] tabular-nums">
               <ImageIcon size={11} />
               <span>
-                {data.count} {isSmart || isCollection ? '卷' : '张'}
+                {data.count} {isCollection ? '卷' : '张'}
               </span>
             </div>
           </div>
@@ -163,14 +161,6 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
                   }}
                 />
               </div>
-            </div>
-          )}
-
-          {/* 智能集合的额外小提示 */}
-          {isSmart && (
-            <div className="flex items-center gap-1.5 text-[11px] text-fg-muted">
-              <CheckIcon size={11} className="text-accent" />
-              <span>点击进入标签页</span>
             </div>
           )}
         </div>

@@ -63,7 +63,7 @@ function buildCards(r: ScanResult | null): CardData[] {
       id: 's:' + s.author,
       variant: 'smart',
       title: s.author,
-      subtitle: `${s.albumCount} 卷`,
+      // 不要 subtitle:count 已经显示「X 卷」,subtitle 写「X 卷」就重复了
       count: s.albumCount,
       coverPath: s.coverImage,
       to: tagRoute(s.author),
@@ -227,7 +227,7 @@ export default function Home() {
         id: 's:' + s.author,
         variant: 'smart' as const,
         title: s.author,
-        subtitle: `${s.albumCount} 卷`,
+        // 副标题空:count 已经显示「X 卷」,再写一遍就「5 卷 · 5 卷」了
         count: s.albumCount,
         coverPath: s.coverImage,
         to: tagRoute(s.author),
