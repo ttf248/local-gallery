@@ -61,7 +61,15 @@ export const useViewerStore = create<ViewerState>()(
       rotate: (deg = 90) =>
         set({ rotation: ((get().rotation + deg) % 360 + 360) % 360 }),
       resetView: () => set({ zoom: 1, rotation: 0 }),
-      toggleFullscreen: () => set({ fullscreen: !get().fullscreen }),
+      toggleFullscreen: () => {
+        // 真正调浏览器 API；store 状态跟实际 fullscreenElement 同步
+        if (typeof document === 'undefined') return
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {})
+        } else {
+          document.documentElement.requestFullscreen().catch(() => {})
+        }
+      },
       toggleSlideshow: () => set({ slideshow: !get().slideshow }),
       setSlideshowInterval: (ms) => set({ slideshowInterval: ms }),
       setMode: (m) => {

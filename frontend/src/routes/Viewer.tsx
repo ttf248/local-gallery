@@ -423,10 +423,7 @@ export default function Viewer() {
     '=': () => useViewerStore.getState().zoomIn(),
     '0': () => useViewerStore.getState().zoomReset(),
     r: () => useViewerStore.getState().rotate(90),
-    f11: () => {
-      if (document.fullscreenElement) document.exitFullscreen()
-      else document.documentElement.requestFullscreen()
-    },
+    f11: () => useViewerStore.getState().toggleFullscreen(),
     space: () => useViewerStore.getState().toggleSlideshow(),
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),
