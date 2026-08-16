@@ -117,6 +117,11 @@ export default function ScanProgress({ progress, onCancel }: Props) {
         {isRunning ? (
           <>
             已发现 <span className="text-fg tabular-nums">{progress.albumsFound}</span> 本
+            {progress.phase && (
+              <span className="ml-1.5 text-fg-subtle">
+                · {progress.phase === 'smart-grouping' ? '聚合标签中' : '扫描目录'}
+              </span>
+            )}
             {progress.currentPath && (
               <div className="truncate mt-1 text-fg-subtle" title={progress.currentPath}>
                 {progress.currentPath.split(/[\\/]/).pop()}
