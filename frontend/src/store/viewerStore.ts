@@ -27,6 +27,8 @@ export interface ViewerState {
   zoomOut: () => void
   zoomReset: () => void
   rotate: (deg?: number) => void
+  /** 重置 zoom + rotation 到默认；切换 album 时用，避免上一个 album 的状态延续 */
+  resetView: () => void
   toggleFullscreen: () => void
   toggleSlideshow: () => void
   setSlideshowInterval: (ms: number) => void
@@ -58,6 +60,7 @@ export const useViewerStore = create<ViewerState>()(
       zoomReset: () => set({ zoom: 1 }),
       rotate: (deg = 90) =>
         set({ rotation: ((get().rotation + deg) % 360 + 360) % 360 }),
+      resetView: () => set({ zoom: 1, rotation: 0 }),
       toggleFullscreen: () => set({ fullscreen: !get().fullscreen }),
       toggleSlideshow: () => set({ slideshow: !get().slideshow }),
       setSlideshowInterval: (ms) => set({ slideshowInterval: ms }),
