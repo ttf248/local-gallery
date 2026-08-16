@@ -91,6 +91,11 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
     !!data.progress &&
     data.progress.total > 0 &&
     data.progress.index >= data.progress.total - 1
+  // 全新：没进度记录，或刚到第一张（index === 0）。
+  // 重要：仅 album 变体显示；智能集合 / 集合不适用。
+  const isFresh =
+    data.variant === 'album' &&
+    (!data.progress || data.progress.total === 0 || data.progress.index <= 0)
 
   // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
   // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
@@ -184,8 +189,18 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           </div>
         )}
 
-        {/* 智能集合标记 / 重温角标 / 集合角标（同一位置，优先级：rewind > collection > smart） */}
-        {data.badge === 'rewind' ? (
+        {/* 全新 / 重温 / 集合 / 标签 角标（同一位置，优先级：fresh > rewind > collection > smart） */}
+        {isFresh && data.badge !== 'rewind' ? (
+          // 全新：强调色 + 白圆点 + "新"字
+          // 用 accent 而非 info（tailwind 没定义 info 颜色）
+          <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
+            <span
+              className="w-1.5 h-1.5 rounded-full bg-accent-contrast"
+              aria-hidden
+            />
+            <span>新</span>
+          </div>
+        ) : data.badge === 'rewind' ? (
           <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-bg-elevated/95 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-border-faint shadow-xs">
             <RewindIcon size={10} className="text-accent" />
             <span>重温</span>
