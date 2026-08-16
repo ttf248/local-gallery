@@ -14,6 +14,8 @@ import {
   PlusIcon,
   MinusIcon,
   RotateIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
 } from '../common/Icon'
 
 interface Props {
@@ -96,14 +98,14 @@ export default function ViewerControls({
             title="上一张 (←)"
             hideOnMobile
           >
-            <PrevIcon />
+            <ChevronLeftIcon size={14} />
           </SideIconButton>
           <SideIconButton
             onClick={onNext}
             title="下一张 (→)"
             hideOnMobile
           >
-            <NextIcon />
+            <ChevronRightIcon size={14} />
           </SideIconButton>
         </ControlGroup>
 
@@ -217,20 +219,5 @@ function SideIconButton({
     >
       {children}
     </button>
-  )
-}
-
-function PrevIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M10 3 5 8l5 5" />
-    </svg>
-  )
-}
-function NextIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 3l5 5-5 5" />
-    </svg>
   )
 }
