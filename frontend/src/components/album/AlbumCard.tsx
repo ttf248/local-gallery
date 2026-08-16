@@ -349,9 +349,9 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       tabIndex={0}
       onClick={onActivate}
       onKeyDown={onKey}
-      className="group flex items-center gap-4 py-2.5 px-2.5 -mx-2.5 rounded-md hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
+      className="group flex items-center gap-4 py-2.5 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
     >
-      <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs">
+      <div className="relative w-24 h-32 rounded-md bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs">
         {visible && data.coverPath && !imgError ? (
           <img
             key={data.coverPath}
@@ -366,61 +366,62 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           />
         ) : !visible || imgError ? (
           <div className="w-full h-full flex items-center justify-center text-fg-subtle">
-            <FolderIcon size={16} />
+            <FolderIcon size={20} />
           </div>
         ) : null}
         {!loaded && visible && !imgError && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
         {data.isFavorite && (
-          <div className="absolute -top-1 -right-1 bg-bg-elevated rounded-full p-0.5 shadow-sm">
-            <StarIcon size={9} className="text-warning" filled />
+          <div className="absolute top-1 right-1 bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
+            <StarIcon size={11} className="text-warning" filled />
           </div>
         )}
         {isFinished && data.variant === 'album' && (
           <div
-            className="absolute -bottom-1 -right-1 bg-success text-white rounded-full p-0.5 shadow-sm"
+            className="absolute bottom-1 right-1 bg-success/95 text-white rounded-md px-1.5 py-0.5 text-[10px] font-medium inline-flex items-center gap-0.5 shadow-sm"
             title="已读完"
           >
-            <CheckIcon size={9} />
+            <CheckIcon size={10} />
+            <span>已读</span>
           </div>
         )}
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-fg truncate flex items-center gap-1.5">
+        <div className="text-[14px] font-medium text-fg truncate flex items-center gap-1.5">
           <span className="truncate">{data.title}</span>
           {isFinished && data.variant === 'album' && (
-            <span className="inline-flex items-center gap-0.5 text-success text-[10px] font-medium shrink-0">
-              <CheckIcon size={10} />
+            <span className="inline-flex items-center gap-0.5 text-success text-[11px] font-medium shrink-0">
+              <CheckIcon size={11} />
               <span>已读</span>
             </span>
           )}
         </div>
-        <div className="text-[11px] text-fg-subtle mt-0.5 flex items-center gap-2">
+        <div className="text-[12px] text-fg-subtle mt-1 flex items-center gap-2">
           {data.subtitle && <span className="truncate">{data.subtitle}</span>}
           <span className="tabular-nums shrink-0">
             {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
           </span>
         </div>
         {progressPct !== null && progressPct > 0 && (
-          <div className="mt-1.5 flex items-center gap-2">
-            <div className="flex-1 h-0.5 bg-bg-strong rounded-full overflow-hidden">
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex-1 h-1 bg-bg-strong rounded-full overflow-hidden">
               <div className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
             </div>
-            <span className="text-[10px] text-fg-subtle tabular-nums shrink-0">
+            <span className="text-[11px] text-fg-subtle tabular-nums shrink-0">
               {data.progress!.index + 1} / {data.progress!.total}
             </span>
           </div>
         )}
         {showLastSeen && data.lastSeenAt && (
-          <div className="text-[10px] text-fg-subtle mt-1 inline-flex items-center gap-1">
-            <ClockIcon size={10} className="shrink-0 text-fg-subtle/70" />
+          <div className="text-[11px] text-fg-subtle mt-1.5 inline-flex items-center gap-1">
+            <ClockIcon size={11} className="shrink-0 text-fg-subtle/70" />
             <span>上次 {timeAgo(data.lastSeenAt)}</span>
           </div>
         )}
       </div>
 
       <div className="text-fg-subtle opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-        <span className="text-xs">›</span>
+        <span className="text-sm">›</span>
       </div>
     </div>
   )

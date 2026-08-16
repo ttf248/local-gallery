@@ -624,7 +624,7 @@ function SubColumn({
         {subtitle && <span className="text-[11px] text-fg-subtle">{subtitle}</span>}
         <span className="text-[11px] text-fg-subtle tabular-nums ml-auto">{count}</span>
       </div>
-      <div className="space-y-1">
+      <div className="space-y-1.5">
         {items.map((it) => (
           <AlbumCard key={it.id} data={it} variant="list" />
         ))}
