@@ -9,7 +9,6 @@ beforeEach(() => {
     index: -1,
     zoom: 1,
     rotation: 0,
-    fullscreen: false,
     slideshow: false,
     slideshowInterval: 3000,
     mode: 'single',
