@@ -58,12 +58,22 @@ func ThumbStatsHandler(svc *services.ThumbnailService) fiber.Handler {
 
 // ThumbCleanupHandler 返回清理过期缓存的处理函数（POST）。
 func ThumbCleanupHandler(svc *services.ThumbnailService) fiber.Handler {
+	return ThumbCleanupHandlerWithCacheStats(svc, nil)
+}
+
+// ThumbCleanupHandlerWithCacheStats 清理过期缩略图缓存后,通知 cacheStats
+// 失效,让前端的"缓存占用"展示立即反映清理结果。
+// cacheStats 为 nil 时退化为 ThumbCleanupHandler 行为(向后兼容测试)。
+func ThumbCleanupHandlerWithCacheStats(svc *services.ThumbnailService, cacheStats *services.CacheStatsService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		n, err := svc.Cleanup()
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
+		}
+		if cacheStats != nil {
+			cacheStats.Invalidate()
 		}
 		return c.JSON(fiber.Map{"deleted": n})
 	}

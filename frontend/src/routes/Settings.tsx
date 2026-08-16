@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { prefsApi, favoritesApi, historyApi } from '../api/prefs'
 import { scanApi } from '../api/scan'
+import { cacheApi, formatBytes } from '../api/cache'
 import { useScanSSE } from '../hooks/useScanSSE'
 import ThemeSwitcher from '../components/common/ThemeSwitcher'
 import { useUIStore, type AccentKey } from '../store/uiStore'
@@ -36,6 +37,16 @@ export default function Settings() {
   const setResult = useLibraryStore((s) => s.setResult)
   const sse = useScanSSE()
   useTheme()
+
+  // 缓存占用统计(后端 30s TTL,前端 staleTime 设小一点保证手动刷新能即时看到)
+  const cacheStats = useQuery({
+    queryKey: ['cache-stats'],
+    queryFn: () => cacheApi.stats(),
+    staleTime: 5_000,
+  })
+  function refreshCacheStats() {
+    cacheStats.refetch()
+  }
 
   const patchPrefs = useMutation({
     mutationFn: (p: Partial<Parameters<typeof prefsApi.patch>[0]>) => prefsApi.patch(p),
@@ -192,6 +203,48 @@ export default function Settings() {
             >
               <RefreshIcon size={11} />
               <span>{sse.isRunning ? '扫描中…' : startScan.isPending ? '启动中…' : '重新扫描'}</span>
+            </button>
+          </div>
+        </Row>
+        <Row label="缓存占用">
+          <div className="flex items-center gap-3 text-xs text-fg-muted">
+            <span>
+              {cacheStats.isLoading
+                ? '计算中…'
+                : !cacheStats.data
+                ? '—'
+                : !cacheStats.data.available
+                ? '不可用'
+                : `${formatBytes(cacheStats.data.totalBytes)} · ${
+                    cacheStats.data.fileCount
+                  } 个文件`}
+            </span>
+            {cacheStats.data && (
+              <span
+                className="text-fg-subtle/70 tabular-nums"
+                title={
+                  cacheStats.data.scannedAt
+                    ? `扫描于 ${new Date(cacheStats.data.scannedAt).toLocaleString('zh-CN', { hour12: false })}`
+                    : ''
+                }
+              >
+                {cacheStats.data.cacheTtlSeconds > 0
+                  ? `${cacheStats.data.cacheTtlSeconds}s 内复用`
+                  : '缓存已过期'}
+              </span>
+            )}
+            <button
+              onClick={refreshCacheStats}
+              disabled={cacheStats.isFetching}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border-faint hover:bg-bg-subtle text-xs transition-colors disabled:opacity-50"
+              title="重新扫描磁盘计算缓存占用"
+            >
+              {cacheStats.isFetching ? (
+                <span className="inline-block w-3 h-3 rounded-full border-2 border-fg-muted border-t-transparent animate-spin" />
+              ) : (
+                <RefreshIcon size={11} />
+              )}
+              <span>刷新</span>
             </button>
           </div>
         </Row>

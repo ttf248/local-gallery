@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -109,6 +110,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化缩略图服务失败: %v", err)
 	}
+	cacheStats := services.NewCacheStatsService(30 * time.Second)
 	runner := services.NewAsyncScanRunner()
 	prefs := store.NewPrefsStore(filepath.Join(cfg.CacheDir, "web_settings.json"))
 
@@ -168,7 +170,8 @@ func main() {
 	api.Get("/tags", handlers.AlbumDetailHandler(scanCache))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
-	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
+	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
+	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
 	api.Get("/fs/open", handlers.FsOpenHandler(mgr))
