@@ -3,7 +3,6 @@ package services
 import (
 	"os"
 	"path/filepath"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -75,5 +74,3 @@ func TestScanResultCache_DebounceReasonable(t *testing.T) {
 		t.Fatalf("flushDebounce out of range: %v", flushDebounce)
 	}
 }
-
-var _ = atomic.Int32{}

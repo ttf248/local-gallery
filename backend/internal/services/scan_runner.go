@@ -211,13 +211,6 @@ func (r *AsyncScanRunner) run(state *ScanState, opts ScanOptions) {
 	r.setStatus(state, ScanStatusComplete)
 }
 
-func (r *AsyncScanRunner) emit(state *ScanState, ev ProgressEvent) {
-	if ev.ScanID == "" {
-		ev.ScanID = state.ID
-	}
-	state.Events <- ev
-}
-
 func (r *AsyncScanRunner) setStatus(state *ScanState, s ScanStatus) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
