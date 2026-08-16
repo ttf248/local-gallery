@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useViewerStore } from '../store/viewerStore'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { albumsApi } from '../api/albums'
@@ -26,6 +27,7 @@ export default function Viewer() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const pushToast = useUIStore((s) => s.pushToast)
+  const queryClient = useQueryClient()
 
   const pathParam = params.get('path') ?? params.get('album') ?? ''
   const initialIndex = Number(params.get('index') ?? 0)
@@ -170,8 +172,12 @@ export default function Viewer() {
         name,
         imageCount: images.length,
       })
+      .then(() => {
+        // 让 Recents 立刻刷新，而不是等 30s 缓存过期
+        queryClient.invalidateQueries({ queryKey: ['history'] })
+      })
       .catch(() => {})
-  }, [pathParam, name, images.length])
+  }, [pathParam, name, images.length, queryClient])
 
   // 切换图片时关闭信息面板 + 防抖持久化进度
   useEffect(() => {
