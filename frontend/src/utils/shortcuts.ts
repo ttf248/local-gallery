@@ -35,6 +35,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'last', label: 'End', description: '最后一张', combo: 'end', group: 'viewer' },
   { id: 'nextAlbum', label: 'N', description: '下一本（来自当前列表）', combo: 'n', group: 'viewer' },
   { id: 'prevAlbum', label: 'P', description: '上一本（来自当前列表）', combo: 'p', group: 'viewer' },
+  { id: 'gotoPage', label: 'G', description: '跳到指定页（输入数字回车）', combo: 'g', group: 'viewer' },
   { id: 'favorite', label: 'S', description: '收藏 / 取消收藏', combo: 's', group: 'viewer' },
   { id: 'mode1', label: '1', description: '显示模式：单张', combo: '1', group: 'viewer' },
   { id: 'mode2', label: '2', description: '显示模式：连续滚动', combo: '2', group: 'viewer' },
