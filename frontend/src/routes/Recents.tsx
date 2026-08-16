@@ -8,6 +8,7 @@ import { historyApi } from '../api/prefs'
 import { useAllProgress } from '../hooks/useReadingProgress'
 import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
+import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import { ClockIcon } from '../components/common/Icon'
 import { albumRoute, decodeFavPath } from '../utils/path'
@@ -32,11 +33,13 @@ export default function Recents() {
     staleTime: 30 * 1000,
   })
 
+  // history 顺序:OpenedAt 倒序
+  const history = data?.history ?? []
+
   const cards = useMemo<CardData[]>(() => {
-    const items = data?.history ?? []
     if (!result) return []
     const out: CardData[] = []
-    for (const h of items) {
+    for (const h of history) {
       const a = result.albums.find((x) => x.path === h.path)
       if (!a) continue
       out.push({
@@ -47,10 +50,11 @@ export default function Recents() {
         count: a.imageCount,
         coverPath: a.coverImage,
         to: albumRoute(a.path),
+        lastSeenAt: h.openedAt,
       })
     }
     return out
-  }, [data, result])
+  }, [history, result])
 
   const progressPaths = useMemo(
     () => cards.map((c) => decodeFavPath(c.to)).filter(Boolean),
@@ -78,7 +82,6 @@ export default function Recents() {
         return list.sort((a, b) => a.title.localeCompare(b.title))
       case 'recent':
       default:
-        // history API 已按 OpenedAt 倒序，直接保持原序即可
         return list
     }
   }, [cards, query, sortBy, progressMap])
@@ -105,11 +108,21 @@ export default function Recents() {
           最近阅读
         </h1>
         <p className="text-sm text-fg-muted mt-2 tabular-nums">
-          {cards.length} 个
+          {history.length > 0 ? (
+            <>
+              <span className="text-fg">{history.length}</span> 个
+              <span className="text-fg-subtle/60 mx-1.5">·</span>
+              最近打开 <span className="text-fg">{formatRelative(history[0]?.openedAt)}</span>
+            </>
+          ) : (
+            '还没有记录'
+          )}
         </p>
       </section>
 
-      {cards.length === 0 ? (
+      {history.length > 0 && <ListFilterBar totalCount={filtered.length} />}
+
+      {history.length === 0 ? (
         <EmptyState
           title="还没有最近阅读"
           description="打开任意一个文件夹开始浏览，它会出现在这里。"
@@ -130,10 +143,23 @@ export default function Recents() {
         />
       ) : (
         <section className="max-w-[1400px] mx-auto w-full">
-          <AlbumGrid items={filtered} variant={viewMode} />
+          <div className="px-6 lg:px-10 pb-10">
+            <AlbumGrid items={filtered} variant={viewMode} />
+          </div>
         </section>
       )}
       <div className="h-12" />
     </div>
   )
+}
+
+function formatRelative(iso: string | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  const diff = (Date.now() - d.getTime()) / 1000
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }

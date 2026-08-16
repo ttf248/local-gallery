@@ -24,6 +24,7 @@ export const useSearchStore = create<SearchState>()(
     (set) => ({
       query: '',
       sortBy: 'name',
+      // 默认 'all'，但用户最常看的是文件夹；提供 reset 入口可一键回到默认
       view: 'all',
       setQuery: (q) => set({ query: q }),
       setSortBy: (s) => set({ sortBy: s }),

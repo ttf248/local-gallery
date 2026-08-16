@@ -5,22 +5,17 @@ import { scanApi } from '../../api/scan'
 import { useScanSSE } from '../../hooks/useScanSSE'
 import { useLibraryStore } from '../../store/libraryStore'
 import { useUIStore } from '../../store/uiStore'
-import { useSearchStore, type SortKey } from '../../store/searchStore'
 import ThemeSwitcher from '../common/ThemeSwitcher'
 import GlobalSearch from '../common/GlobalSearch'
-import { ScanIcon, ChevronDownIcon, GridIcon, ListIcon, HelpIcon } from '../common/Icon'
+import { ScanIcon, MoreHorizontalIcon, RefreshIcon, HelpIcon } from '../common/Icon'
 
-const sortOptions: { value: SortKey; label: string }[] = [
-  { value: 'name', label: '按名称' },
-  { value: 'count', label: '按张数' },
-  { value: 'recent', label: '按最近' },
-]
-
-// 顶部工具栏：
-// 左侧：精简的"Viewer / 当前页" 字标
-// 中部：全局搜索（最常用，放大）
-// 右侧：操作组（按密度递进），用细分割线分组
-// 目标：极简但不缺功能；信息密度比之前略低
+// 顶部工具栏（精简后）：
+//   左侧：极简字标
+//   中部：全局搜索
+//   右侧：主题 / 帮助 / 更多(扫描 + 刷新缓存)
+//
+// 排序 / 视图模式 / 视图 chips 已迁移到各 list 页面的 filter strip,
+//  让 toolbar 只承担"全局信息 + 主题"职责,避免挤 7+ 控件。
 export default function Toolbar() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -28,14 +23,8 @@ export default function Toolbar() {
   const setResult = useLibraryStore((s) => s.setResult)
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
   const pushToast = useUIStore((s) => s.pushToast)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const setViewMode = useUIStore((s) => s.setViewMode)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const setSortBy = useSearchStore((s) => s.setSortBy)
 
   const onViewer = location.pathname.startsWith('/viewer')
-  const onHome = location.pathname === '/' || location.pathname === ''
-  const onCollection = location.pathname.startsWith('/albums')
 
   // Ctrl+S 全局触发扫描
   useEffect(() => {
@@ -97,65 +86,17 @@ export default function Toolbar() {
       )}
       {onViewer && <div className="flex-1" />}
 
-      <div className="flex items-center gap-1.5">
-        {/* 排序 + 视图切换（仅在主页 / 集合页可见） */}
-        {(onHome || onCollection) && (
-          <>
-            <SortMenu value={sortBy} onChange={setSortBy} />
-            <div className="flex items-center border border-border rounded-md overflow-hidden">
-              <ViewButton
-                active={viewMode === 'grid'}
-                onClick={() => setViewMode('grid')}
-                title="网格视图"
-                aria-label="网格视图"
-              >
-                <GridIcon size={13} />
-              </ViewButton>
-              <ViewButton
-                active={viewMode === 'list'}
-                onClick={() => setViewMode('list')}
-                title="列表视图"
-                aria-label="列表视图"
-              >
-                <ListIcon size={13} />
-              </ViewButton>
-            </div>
-            <Sep />
-          </>
-        )}
-
-        {!onViewer && (
-          <>
-            <button
-              onClick={() => loadFromBackend()}
-              className="text-xs h-8 px-2.5 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-              title="刷新缓存"
-            >
-              刷新
-            </button>
-            <button
-              onClick={() => startScan.mutate()}
-              disabled={startScan.isPending || sse.isRunning}
-              className="btn-primary inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium bg-accent text-accent-contrast hover:bg-accent-hover shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-              title="扫描 (Ctrl+S)"
-            >
-              <ScanIcon size={11} />
-              <span>{sse.isRunning ? '扫描中' : '扫描'}</span>
-            </button>
-          </>
-        )}
-        {!onViewer && (
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('comic:open-help'))}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-            title="快捷键帮助 (?)"
-            aria-label="快捷键帮助"
-          >
-            <HelpIcon size={14} />
-          </button>
-        )}
-        <Sep />
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => window.dispatchEvent(new CustomEvent('comic:open-help'))}
+          className="inline-flex items-center justify-center w-8 h-8 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+          title="快捷键帮助 (?)"
+          aria-label="快捷键帮助"
+        >
+          <HelpIcon size={14} />
+        </button>
         <ThemeSwitcher compact />
+        {!onViewer && <MoreMenu onScan={() => startScan.mutate()} onRefresh={() => loadFromBackend()} scanPending={startScan.isPending || sse.isRunning} />}
       </div>
     </header>
   )
@@ -171,43 +112,16 @@ function titleOf(pathname: string): string {
   return '图像'
 }
 
-function ViewButton({
-  active,
-  onClick,
-  title,
-  children,
-  ...rest
+// kebab 菜单: 扫描 + 刷新缓存
+// 收纳了原来 toolbar 上两个独立的次级按钮,让 toolbar 更克制。
+function MoreMenu({
+  onScan,
+  onRefresh,
+  scanPending,
 }: {
-  active: boolean
-  onClick: () => void
-  title: string
-  children: React.ReactNode
-  'aria-label'?: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      aria-label={rest['aria-label']}
-      className={`inline-flex items-center justify-center w-8 h-8 transition-colors ${
-        active ? 'bg-bg-subtle text-fg' : 'text-fg-subtle hover:text-fg hover:bg-bg-subtle/60'
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Sep() {
-  return <div className="w-px h-5 bg-border mx-1" />
-}
-
-function SortMenu({
-  value,
-  onChange,
-}: {
-  value: SortKey
-  onChange: (v: SortKey) => void
+  onScan: () => void
+  onRefresh: () => void
+  scanPending: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -229,36 +143,40 @@ function SortMenu({
     }
   }, [open])
 
-  const cur = sortOptions.find((o) => o.value === value) ?? sortOptions[0]
-
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md text-xs text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-        title="排序"
+        className="inline-flex items-center justify-center w-8 h-8 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+        title="更多"
+        aria-label="更多"
       >
-        <span>{cur.label}</span>
-        <ChevronDownIcon size={11} />
+        <MoreHorizontalIcon size={16} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 min-w-[140px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up">
-          {sortOptions.map((o) => (
-            <button
-              key={o.value}
-              onClick={() => {
-                onChange(o.value)
-                setOpen(false)
-              }}
-              className={`w-full text-left px-3 py-1.5 text-[13px] transition-colors ${
-                o.value === value
-                  ? 'text-fg font-medium'
-                  : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
+        <div className="absolute right-0 top-full mt-1.5 min-w-[180px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up">
+          <button
+            onClick={() => {
+              setOpen(false)
+              onScan()
+            }}
+            disabled={scanPending}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors disabled:opacity-50"
+          >
+            <ScanIcon size={12} />
+            <span>{scanPending ? '扫描中…' : '重新扫描'}</span>
+            <span className="ml-auto text-[10px] text-fg-subtle font-mono">Ctrl+S</span>
+          </button>
+          <button
+            onClick={() => {
+              setOpen(false)
+              onRefresh()
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+          >
+            <RefreshIcon size={12} />
+            <span>刷新缓存</span>
+          </button>
         </div>
       )}
     </div>

@@ -9,6 +9,7 @@ import { useAllProgress } from '../hooks/useReadingProgress'
 import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
+import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import ScanProgress from '../components/album/ScanProgress'
 import { useUIStore } from '../store/uiStore'
@@ -84,6 +85,7 @@ export default function Home() {
   const sortBy = useSearchStore((s) => s.sortBy)
   const view = useSearchStore((s) => s.view)
   const setView = useSearchStore((s) => s.setView)
+  const viewMode = useUIStore((s) => s.viewMode)
 
   const { favorites } = useFavorites()
 
@@ -368,41 +370,19 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Filter strip — 扁平贴主区 */}
+      {/* Filter strip — 扁平贴主区,接管原 toolbar 的视图/排序 */}
       {hasContent && (
-        <section className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full">
-          <div className="flex items-center justify-between gap-3 border-t border-border-faint py-3">
-            <div className="flex items-center gap-1 flex-wrap">
-              {(
-                [
-                  { key: 'all', label: '全部', count: counts.all },
-                  { key: 'album', label: '文件夹', count: counts.album },
-                  { key: 'collection', label: '集合', count: counts.collection },
-                  { key: 'smart', label: '标签', count: counts.smart },
-                ] as const
-              ).map((v) => {
-                const active = view === v.key
-                return (
-                  <button
-                    key={v.key}
-                    onClick={() => setView(v.key)}
-                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12.5px] transition-colors ${
-                      active
-                        ? 'bg-bg-strong text-fg'
-                        : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'
-                    }`}
-                  >
-                    <span>{v.label}</span>
-                    <span className="tabular-nums text-[10.5px] opacity-60">{v.count}</span>
-                  </button>
-                )
-              })}
-            </div>
-            <div className="text-[11px] text-fg-subtle tabular-nums">
-              共 {filtered.length} 项
-            </div>
-          </div>
-        </section>
+        <ListFilterBar
+          viewChips={[
+            { key: 'all', label: '全部', count: counts.all },
+            { key: 'album', label: '文件夹', count: counts.album },
+            { key: 'collection', label: '集合', count: counts.collection },
+            { key: 'smart', label: '标签', count: counts.smart },
+          ]}
+          activeViewKey={view}
+          onChangeView={(k) => setView(k as typeof view)}
+          totalCount={filtered.length}
+        />
       )}
 
       {/* 智能推荐：3 大区,按优先级 */}
@@ -415,7 +395,7 @@ export default function Home() {
               icon={<PlayFilledIcon size={11} className="text-fg-muted" />}
               count={inProgress.length}
             >
-              <AlbumGrid items={inProgress} variant="grid" />
+              <AlbumGrid items={inProgress} variant={viewMode} />
             </RowSection>
           )}
 
@@ -463,7 +443,7 @@ export default function Home() {
               icon={<StarIcon size={11} className="text-fg-muted" filled />}
               count={topTags.length}
             >
-              <AlbumGrid items={topTags} variant="grid" />
+              <AlbumGrid items={topTags} variant={viewMode} />
             </RowSection>
           )}
         </div>
@@ -516,7 +496,7 @@ export default function Home() {
             />
           ) : (
             <div className="px-6 lg:px-10 pb-10">
-              <AlbumGrid items={filtered} variant="grid" />
+              <AlbumGrid items={filtered} variant={viewMode} />
             </div>
           )}
         </section>

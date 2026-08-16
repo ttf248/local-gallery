@@ -7,6 +7,7 @@ import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
 import { useViewerContextSync } from '../hooks/useViewerContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
+import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import { StarIcon } from '../components/common/Icon'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
@@ -127,6 +128,8 @@ export default function Favorites() {
         </p>
       </section>
 
+      {favorites.length > 0 && <ListFilterBar totalCount={filtered.length} />}
+
       {favorites.length === 0 ? (
         <EmptyState
           title="还没有收藏"
@@ -156,7 +159,9 @@ export default function Favorites() {
         />
       ) : (
         <section className="max-w-[1400px] mx-auto w-full">
-          <AlbumGrid items={filtered} variant={viewMode} />
+          <div className="px-6 lg:px-10 pb-10">
+            <AlbumGrid items={filtered} variant={viewMode} />
+          </div>
         </section>
       )}
       <div className="h-12" />
