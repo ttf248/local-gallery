@@ -86,11 +86,15 @@ export default function Viewer() {
     markActive()
     const onMove = () => markActive()
     const onKey = () => markActive()
+    // 触屏：mousemove 不会触发，需要单独监听 touchstart / pointerdown
+    const onTouch = () => markActive()
     window.addEventListener('mousemove', onMove)
     window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onTouch)
     return () => {
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onTouch)
       if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current)
     }
   }, [markActive])
