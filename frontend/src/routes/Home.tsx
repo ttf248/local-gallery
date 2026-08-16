@@ -17,13 +17,14 @@ import type { ViewerContextEntry } from '../utils/viewerContext'
 import {
   PlayFilledIcon,
   StarIcon,
-  LibraryIcon,
   ShuffleIcon,
-  ClockIcon,
   RefreshIcon,
-  RewindIcon,
   SparklesIcon,
+  RewindIcon,
+  ClockIcon,
+  LibraryIcon,
 } from '../components/common/Icon'
+import AlbumCard from '../components/album/AlbumCard'
 
 // 「重温」智能合集阈值：超过 N 天没看就推荐。
 const REWIND_DAYS = 30
@@ -31,8 +32,6 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 
 function buildCards(r: ScanResult | null): CardData[] {
   if (!r) return []
-  // 后端在某些条件下会把 collections / smartCollections 序列化为 null，
-  // 旧代码直接迭代会抛 TypeError。统一兜底为空数组。
   const collections = r.collections ?? []
   const smartCollections = r.smartCollections ?? []
   const items: CardData[] = []
@@ -79,7 +78,6 @@ export default function Home() {
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
   const lastScanAt = useLibraryStore((s) => s.lastScanAt)
   const sse = useScanSSE()
-  const viewMode = useUIStore((s) => s.viewMode)
   const pushToast = useUIStore((s) => s.pushToast)
 
   const query = useSearchStore((s) => s.query)
@@ -122,7 +120,7 @@ export default function Home() {
 
   const cards = useMemo(() => buildCards(result), [result])
 
-  // 继续阅读：拉取所有有进度的条目，关联到具体 albums
+  // 继续阅读
   const progressPaths = useMemo(
     () =>
       cards
@@ -143,16 +141,16 @@ export default function Home() {
     }
     return items
       .sort((a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0))
-      .slice(0, 8)
+      .slice(0, 4)
   }, [cards, progressMap])
 
-  // 最近加入：按 modTime 倒序
+  // 最近加入
   const recentAdded = useMemo<CardData[]>(() => {
     if (!result) return []
     return [...result.albums]
       .filter((a) => a.modTime)
       .sort((a, b) => +new Date(b.modTime ?? '') - +new Date(a.modTime ?? ''))
-      .slice(0, 8)
+      .slice(0, 4)
       .map((a) => ({
         id: 'a:' + a.path,
         variant: 'album' as const,
@@ -164,27 +162,31 @@ export default function Home() {
       }))
   }, [result])
 
-  // 热门标签：合集内文件夹数最多
-  const topAuthors = useMemo<CardData[]>(() => {
+  // 全新：未看过
+  const fresh = useMemo<CardData[]>(() => {
     if (!result) return []
-    return [...(result.smartCollections ?? [])]
-      .sort((a, b) => b.albumCount - a.albumCount)
-      .slice(0, 8)
-      .map((s) => ({
-        id: 's:' + s.author,
-        variant: 'smart' as const,
-        title: s.author,
-        subtitle: `${s.albumCount} 卷`,
-        count: s.albumCount,
-        coverPath: s.coverImage,
-        to: tagRoute(s.author),
-      }))
-  }, [result])
+    const modTimeOf = (path: string) =>
+      +new Date(result.albums.find((x) => x.path === path)?.modTime ?? '')
+    const items: CardData[] = []
+    for (const a of result.albums) {
+      if (!a.modTime) continue
+      if (progressMap?.[a.path]) continue
+      items.push({
+        id: 'a:' + a.path,
+        variant: 'album' as const,
+        title: a.name,
+        subtitle: a.author || undefined,
+        count: a.imageCount,
+        coverPath: a.coverImage,
+        to: albumRoute(a.path),
+      })
+    }
+    return items
+      .sort((a, b) => modTimeOf(decodeFavPath(b.to)) - modTimeOf(decodeFavPath(a.to)))
+      .slice(0, 4)
+  }, [result, progressMap])
 
-  // 「重温」：上次阅读（或入库时间）距今 > REWIND_DAYS 天的相册。
-  //   - 有进度：按 progress.updated 判断
-  //   - 无进度：按 album.modTime 判断（库里的"老新人"）
-  //   排序：最久没看的在前
+  // 重温：30+ 天没看
   const rewind = useMemo<CardData[]>(() => {
     if (!result) return []
     const now = Date.now()
@@ -197,7 +199,7 @@ export default function Home() {
       items.push({
         card: {
           id: 'a:' + a.path,
-          variant: 'album',
+          variant: 'album' as const,
           title: a.name,
           subtitle: a.author || undefined,
           count: a.imageCount,
@@ -205,39 +207,32 @@ export default function Home() {
           to: albumRoute(a.path),
           progress: p ? { index: p.index, total: p.total } : undefined,
           lastSeenAt: p?.updated ?? null,
-          badge: 'rewind',
+          badge: 'rewind' as const,
         },
         since: lastTs,
       })
     }
-    return items.sort((a, b) => a.since - b.since).slice(0, 8).map((it) => it.card)
+    return items.sort((a, b) => a.since - b.since).slice(0, 4).map((it) => it.card)
   }, [result, progressMap])
 
-  // 「全新」：从未打开过、且 modTime 在 REWIND 阈值之前的相册。
-  //   - 没进度记录 = 没看过
-  //   - 没 modTime = 老文件，不一定"新"，优先不推
-  //   排序：按 modTime 倒序（最新加入在前）
-  const fresh = useMemo<CardData[]>(() => {
+  // 热门标签
+  const topTags = useMemo<CardData[]>(() => {
     if (!result) return []
-    const modTimeOf = (path: string) =>
-      +new Date(result.albums.find((x) => x.path === path)?.modTime ?? '')
-    const items: CardData[] = []
-    for (const a of result.albums) {
-      if (!a.modTime) continue
-      if (progressMap?.[a.path]) continue // 已有进度，不算"全新"
-      items.push({
-        id: 'a:' + a.path,
-        variant: 'album',
-        title: a.name,
-        subtitle: a.author || undefined,
-        count: a.imageCount,
-        coverPath: a.coverImage,
-        to: albumRoute(a.path),
-      })
-    }
-    return items.sort((a, b) => modTimeOf(decodeFavPath(b.to)) - modTimeOf(decodeFavPath(a.to))).slice(0, 8)
-  }, [result, progressMap])
+    return [...(result.smartCollections ?? [])]
+      .sort((a, b) => b.albumCount - a.albumCount)
+      .slice(0, 4)
+      .map((s) => ({
+        id: 's:' + s.author,
+        variant: 'smart' as const,
+        title: s.author,
+        subtitle: `${s.albumCount} 卷`,
+        count: s.albumCount,
+        coverPath: s.coverImage,
+        to: tagRoute(s.author),
+      }))
+  }, [result])
 
+  // 全部图像 filter
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
       if (view !== 'all' && it.variant !== view) return false
@@ -267,16 +262,11 @@ export default function Home() {
     }
   }, [cards, query, sortBy, view, progressMap, result])
 
-  // 主页作为上下文源：把当前过滤后的列表（最常点的那一个）作为 N/P 候选。
   const homeEntries = useMemo<ViewerContextEntry[]>(
     () =>
       filtered
-        .filter((c) => c.variant === 'album') // 只让真正的相册参与上一本/下一本
-        .map((c) => ({
-          key: decodeFavPath(c.to),
-          to: c.to,
-          name: c.title,
-        })),
+        .filter((c) => c.variant === 'album')
+        .map((c) => ({ key: decodeFavPath(c.to), to: c.to, name: c.title })),
     [filtered],
   )
   useViewerContextSync({ type: 'home' }, homeEntries)
@@ -289,180 +279,252 @@ export default function Home() {
 
   const favCount = favorites.length
   const isLoadingInitial = !result && (sse.isRunning || sse.scanId)
+  const hasContent = !!result && cards.length > 0
+
+  // 决定主 CTA
+  const primaryAlbum = inProgress[0]
+  const primaryAction = primaryAlbum
+    ? { kind: 'continue' as const, card: primaryAlbum }
+    : null
+  const scanLabel = sse.isRunning
+    ? '扫描中…'
+    : startScan.isPending
+      ? '启动中…'
+      : '重新扫描'
 
   return (
     <div className="min-h-full">
-      <ScanProgress progress={sse.progress} onCancel={() => sse.scanId && scanApi.cancel(sse.scanId).catch(() => {})} />
+      <ScanProgress
+        progress={sse.progress}
+        onCancel={() => sse.scanId && scanApi.cancel(sse.scanId).catch(() => {})}
+      />
 
-      {/* 顶部 hero — 极简大字 + 关键动作 */}
-      <section className="px-6 lg:px-10 pt-12 pb-8 max-w-[1400px] mx-auto w-full">
-        <div className="flex items-end justify-between gap-6 flex-wrap">
+      {/* Hero — 一个明确主入口 + 极简次动作 */}
+      <section className="px-6 lg:px-10 pt-14 pb-10 max-w-[1400px] mx-auto w-full">
+        <div className="flex items-end justify-between gap-8 flex-wrap">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.18em] text-fg-subtle font-medium">
               库 · Library
             </div>
-            <h1 className="font-display text-[40px] leading-[1.05] font-semibold tracking-[-0.02em] mt-2">
+            <h1 className="font-display text-[44px] leading-[1.04] font-semibold tracking-[-0.02em] mt-2.5">
               图像库
             </h1>
-            <p className="text-sm text-fg-muted mt-3">
-              {result
-                ? `${result.albumCount} 个文件夹 · ${(result.smartCollections ?? []).length} 个合集`
-                : '尚未加载图像库'}
-              {lastScanAt && (
-                <span className="text-fg-subtle ml-2">
-                  · 更新于 {new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false })}
-                </span>
+            <p className="text-sm text-fg-muted mt-3.5">
+              {result ? (
+                <>
+                  <span className="tabular-nums text-fg">{result.albumCount}</span> 个文件夹
+                  <span className="text-fg-subtle/60 mx-1.5">·</span>
+                  <span className="tabular-nums text-fg">
+                    {(result.smartCollections ?? []).length}
+                  </span>{' '}
+                  个合集
+                  {lastScanAt && (
+                    <span className="text-fg-subtle ml-1.5">
+                      · 上次更新 {formatTime(lastScanAt)}
+                    </span>
+                  )}
+                </>
+              ) : (
+                '尚未加载图像库'
               )}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onShuffle}
-              disabled={!result || result.albums.length === 0}
-              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md border border-border hover:bg-bg-subtle text-sm transition-colors disabled:opacity-40"
-              title="随机挑一本 (R)"
-            >
-              <ShuffleIcon size={13} />
-              <span>随机一本</span>
-            </button>
+          <div className="flex items-center gap-2.5">
+            {primaryAction ? (
+              <button
+                onClick={() => {
+                  navigate(primaryAction.card.to)
+                }}
+                className="inline-flex items-center gap-2.5 h-11 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
+              >
+                <PlayFilledIcon size={14} />
+                <span>继续上次</span>
+                <span className="text-[11px] opacity-70 tabular-nums">
+                  {primaryAction.card.progress
+                    ? `${primaryAction.card.progress.index + 1}/${primaryAction.card.progress.total}`
+                    : ''}
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={onShuffle}
+                disabled={!hasContent}
+                className="inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm disabled:opacity-40"
+              >
+                <ShuffleIcon size={14} />
+                <span>随机一本</span>
+              </button>
+            )}
             <button
               onClick={() => startScan.mutate()}
               disabled={startScan.isPending || sse.isRunning}
-              className="inline-flex items-center gap-2 h-9 px-4 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-lg text-[13px] text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors disabled:opacity-50"
+              title="扫描 (Ctrl+S)"
             >
-              <RefreshIcon size={12} />
-              <span>
-                {sse.isRunning ? '扫描中…' : startScan.isPending ? '启动中…' : '重新扫描'}
-              </span>
+              <RefreshIcon size={13} />
+              <span>{scanLabel}</span>
             </button>
           </div>
         </div>
-
-        {/* 视图切换 + 数据摘要 chips */}
-        <div className="mt-8 flex items-center gap-1 flex-wrap">
-          {[
-            { key: 'all', label: '全部', count: counts.all },
-            { key: 'album', label: '文件夹', count: counts.album },
-            { key: 'collection', label: '集合', count: counts.collection },
-            { key: 'smart', label: '标签', count: counts.smart },
-          ].map((v) => {
-            const active = view === v.key
-            return (
-              <button
-                key={v.key}
-                onClick={() => setView(v.key as typeof view)}
-                className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] transition-colors ${
-                  active
-                    ? 'bg-accent text-accent-contrast'
-                    : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'
-                }`}
-              >
-                <span>{v.label}</span>
-                <span
-                  className={`tabular-nums text-[11px] ${active ? 'opacity-70' : 'text-fg-subtle'}`}
-                >
-                  {v.count}
-                </span>
-              </button>
-            )
-          })}
-          {favCount > 0 && (
-            <button
-              onClick={() => navigate('/favorites')}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[13px] text-warning/90 hover:bg-bg-subtle transition-colors ml-2"
-              title="你已收藏的文件夹"
-            >
-              <StarIcon size={12} filled />
-              <span>收藏</span>
-              <span className="tabular-nums text-[11px] text-fg-subtle">{favCount}</span>
-            </button>
-          )}
-        </div>
       </section>
 
-      {/* 继续阅读 */}
-      {inProgress.length > 0 && !query && (
-        <SectionBlock
-          title="继续阅读"
-          icon={<PlayFilledIcon size={11} className="text-fg-muted" />}
-          count={inProgress.length}
-        >
-          <AlbumGrid items={inProgress} variant={viewMode} />
-        </SectionBlock>
-      )}
-
-      {/* 全新：从未打开的相册 */}
-      {fresh.length > 0 && !query && (
-        <SectionBlock
-          title="全新"
-          subtitle="还没看过"
-          icon={<SparklesIcon size={11} className="text-fg-muted" />}
-          count={fresh.length}
-        >
-          <AlbumGrid items={fresh} variant={viewMode} />
-        </SectionBlock>
-      )}
-
-      {/* 重温：> 30 天没看的相册 */}
-      {rewind.length > 0 && !query && (
-        <SectionBlock
-          title="重温"
-          subtitle={`${REWIND_DAYS}+ 天没看`}
-          icon={<RewindIcon size={11} className="text-fg-muted" />}
-          count={rewind.length}
-        >
-          <AlbumGrid items={rewind} variant={viewMode} />
-        </SectionBlock>
-      )}
-
-      {/* 最近加入 */}
-      {recentAdded.length > 0 && !query && (
-        <SectionBlock
-          title="最近加入"
-          icon={<ClockIcon size={11} className="text-fg-muted" />}
-          count={recentAdded.length}
-        >
-          <AlbumGrid items={recentAdded} variant={viewMode} />
-        </SectionBlock>
-      )}
-
-      {/* 热门标签 */}
-      {topAuthors.length > 0 && !query && view === 'all' && (
-        <SectionBlock
-          title="热门标签"
-          icon={<StarIcon size={11} className="text-fg-muted" filled />}
-          count={topAuthors.length}
-        >
-          <AlbumGrid items={topAuthors} variant={viewMode} />
-        </SectionBlock>
-      )}
-
-      {/* 全部 / 筛选结果 */}
-      <section className="max-w-[1400px] mx-auto w-full">
-        {(inProgress.length > 0 ||
-          fresh.length > 0 ||
-          rewind.length > 0 ||
-          recentAdded.length > 0 ||
-          topAuthors.length > 0) &&
-          !query && (
-            <div className="px-6 lg:px-10 pt-2 pb-3 flex items-center gap-2">
-              <LibraryIcon size={12} className="text-fg-muted" />
-              <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
-                全部图像
-              </h2>
-              <span className="text-[11px] text-fg-subtle tabular-nums">{filtered.length}</span>
+      {/* Filter strip — 扁平贴主区 */}
+      {hasContent && (
+        <section className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full">
+          <div className="flex items-center justify-between gap-3 border-t border-border-faint py-3">
+            <div className="flex items-center gap-1 flex-wrap">
+              {(
+                [
+                  { key: 'all', label: '全部', count: counts.all },
+                  { key: 'album', label: '文件夹', count: counts.album },
+                  { key: 'collection', label: '集合', count: counts.collection },
+                  { key: 'smart', label: '标签', count: counts.smart },
+                ] as const
+              ).map((v) => {
+                const active = view === v.key
+                return (
+                  <button
+                    key={v.key}
+                    onClick={() => setView(v.key)}
+                    className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md text-[12.5px] transition-colors ${
+                      active
+                        ? 'bg-bg-strong text-fg'
+                        : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'
+                    }`}
+                  >
+                    <span>{v.label}</span>
+                    <span className="tabular-nums text-[10.5px] opacity-60">{v.count}</span>
+                  </button>
+                )
+              })}
             </div>
+            <div className="text-[11px] text-fg-subtle tabular-nums">
+              共 {filtered.length} 项
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 智能推荐：3 大区,按优先级 */}
+      {hasContent && !query && (
+        <div className="max-w-[1400px] mx-auto w-full">
+          {/* 继续阅读 — 大横向卡,只在有进度时显示 */}
+          {inProgress.length > 0 && (
+            <RowSection
+              title="继续阅读"
+              icon={<PlayFilledIcon size={11} className="text-fg-muted" />}
+              count={inProgress.length}
+            >
+              <AlbumGrid items={inProgress} variant="grid" />
+            </RowSection>
           )}
 
-        {isLoadingInitial ? (
-          <EmptyState
-            title="正在加载图像库"
-            description="首次启动可能需要几秒钟。"
-            icon={
-              <div className="w-10 h-10 border-2 border-fg-subtle border-t-accent rounded-full animate-spin" />
-            }
-          />
-        ) : !result ? (
+          {/* 挑新的看:三组并列 (全新 / 重温 / 最近加入) */}
+          {(fresh.length > 0 || rewind.length > 0 || recentAdded.length > 0) && (
+            <RowSection
+              title="挑新的看"
+              icon={<SparklesIcon size={11} className="text-fg-muted" />}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-10">
+                {fresh.length > 0 && (
+                  <SubColumn
+                    title="全新"
+                    subtitle="还没看过"
+                    count={fresh.length}
+                    icon={<SparklesIcon size={11} />}
+                    items={fresh}
+                  />
+                )}
+                {rewind.length > 0 && (
+                  <SubColumn
+                    title="重温"
+                    subtitle={`${REWIND_DAYS}+ 天没看`}
+                    count={rewind.length}
+                    icon={<RewindIcon size={11} />}
+                    items={rewind}
+                  />
+                )}
+                {recentAdded.length > 0 && (
+                  <SubColumn
+                    title="最近加入"
+                    count={recentAdded.length}
+                    icon={<ClockIcon size={11} />}
+                    items={recentAdded}
+                  />
+                )}
+              </div>
+            </RowSection>
+          )}
+
+          {/* 热门标签 */}
+          {topTags.length > 0 && (
+            <RowSection
+              title="热门标签"
+              icon={<StarIcon size={11} className="text-fg-muted" filled />}
+              count={topTags.length}
+            >
+              <AlbumGrid items={topTags} variant="grid" />
+            </RowSection>
+          )}
+        </div>
+      )}
+
+      {/* 全部图像 */}
+      {hasContent && (
+        <section className="max-w-[1400px] mx-auto w-full">
+          <div className="px-6 lg:px-10 pt-6 pb-3 flex items-center gap-2">
+            <LibraryIcon size={12} className="text-fg-muted" />
+            <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
+              全部图像
+            </h2>
+            <span className="text-[11px] text-fg-subtle tabular-nums">{filtered.length}</span>
+            {favCount > 0 && (
+              <>
+                <span className="text-fg-subtle/40 mx-1">·</span>
+                <button
+                  onClick={() => navigate('/favorites')}
+                  className="inline-flex items-center gap-1 text-[11px] text-warning/90 hover:text-warning transition-colors"
+                >
+                  <StarIcon size={10} filled />
+                  <span>{favCount} 收藏</span>
+                </button>
+              </>
+            )}
+          </div>
+
+          {isLoadingInitial ? (
+            <EmptyState
+              title="正在加载图像库"
+              description="首次启动可能需要几秒钟。"
+              icon={
+                <div className="w-10 h-10 border-2 border-fg-subtle border-t-accent rounded-full animate-spin" />
+              }
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              title="没有匹配的图像"
+              description={query ? `没有匹配"${query}"的结果` : '当前视图下没有内容'}
+              icon={<ClockIcon size={20} />}
+              action={
+                <button
+                  onClick={() => useSearchStore.getState().reset()}
+                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
+                >
+                  清除筛选
+                </button>
+              }
+            />
+          ) : (
+            <div className="px-6 lg:px-10 pb-10">
+              <AlbumGrid items={filtered} variant="grid" />
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 空状态 — 尚未扫描 */}
+      {!hasContent && !isLoadingInitial && (
+        <section className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full">
           <EmptyState
             title="欢迎使用图像浏览器"
             description="点击下方按钮开始扫描你的本地图像目录。"
@@ -477,38 +539,8 @@ export default function Home() {
               </button>
             }
           />
-        ) : cards.length === 0 ? (
-          <EmptyState
-            title="暂无图像"
-            description="未在配置目录下找到图像文件。检查 mediaRoot 路径是否正确。"
-            icon={<LibraryIcon size={20} />}
-            action={
-              <button
-                onClick={() => startScan.mutate()}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover text-sm"
-              >
-                重新扫描
-              </button>
-            }
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            title="没有匹配的图像"
-            description={query ? `没有匹配"${query}"的结果` : '当前视图下没有内容'}
-            icon={<ClockIcon size={20} />}
-            action={
-              <button
-                onClick={() => useSearchStore.getState().reset()}
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
-              >
-                清除筛选
-              </button>
-            }
-          />
-        ) : (
-          <AlbumGrid items={filtered} variant={viewMode} />
-        )}
-      </section>
+        </section>
+      )}
 
       <div className="h-12" />
     </div>
@@ -528,44 +560,80 @@ function recentTime(result: ScanResult | null, id: string): string {
   if (id.startsWith('s:')) {
     const author = id.slice(2)
     const sc = (result.smartCollections ?? []).find((s) => s.author === author)
-    if (sc) {
-      const newest = [...sc.albums].sort(
-        (a, b) => +new Date(b.modTime ?? '') - +new Date(a.modTime ?? ''),
-      )[0]
-      return newest?.modTime ?? ''
-    }
+    return sc?.albums?.[0]?.modTime ?? ''
   }
   return ''
 }
 
-function SectionBlock({
+function formatTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diff = (now.getTime() - d.getTime()) / 1000
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
+  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+}
+
+// 横向 row section: 标题 + 计数 + 子内容
+function RowSection({
   title,
-  subtitle,
   icon,
   count,
   children,
 }: {
   title: string
-  subtitle?: string
-  icon?: React.ReactNode
-  count: number
+  icon: React.ReactNode
+  count?: number
   children: React.ReactNode
 }) {
   return (
-    <section className="px-6 lg:px-10 pb-6 max-w-[1400px] mx-auto w-full">
-      <div className="flex items-center gap-2 mb-4">
+    <section className="px-6 lg:px-10 py-8">
+      <div className="flex items-center gap-2 mb-5">
         {icon}
         <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
           {title}
         </h2>
-        {subtitle && (
-          <span className="text-[11px] text-fg-subtle normal-case tracking-normal">
-            {subtitle}
-          </span>
+        {count !== undefined && (
+          <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
         )}
-        <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
       </div>
       {children}
     </section>
+  )
+}
+
+// 3 列子栏:全新 / 重温 / 最近加入
+// 用 list 变体:每列内 4 项,横向 cover(更小) + 标题 + 元数据,信息密度更高
+function SubColumn({
+  title,
+  subtitle,
+  count,
+  icon,
+  items,
+}: {
+  title: string
+  subtitle?: string
+  count: number
+  icon: React.ReactNode
+  items: CardData[]
+}) {
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-3">
+        <div className="flex items-center gap-1.5">
+          {icon}
+          <h3 className="text-[12.5px] font-medium text-fg">{title}</h3>
+        </div>
+        {subtitle && <span className="text-[11px] text-fg-subtle">{subtitle}</span>}
+        <span className="text-[11px] text-fg-subtle tabular-nums ml-auto">{count}</span>
+      </div>
+      <div className="space-y-1">
+        {items.map((it) => (
+          <AlbumCard key={it.id} data={it} variant="list" />
+        ))}
+      </div>
+    </div>
   )
 }
