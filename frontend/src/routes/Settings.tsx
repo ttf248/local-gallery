@@ -5,6 +5,7 @@ import { useUIStore, type AccentKey } from '../store/uiStore'
 import { useLibraryStore } from '../store/libraryStore'
 import { ACCENT_SWATCHES } from '../hooks/useTheme'
 import { useTheme } from '../hooks/useTheme'
+import ServerConfigPanel from '../components/settings/ServerConfigPanel'
 import {
   RefreshIcon,
   TrashIcon,
@@ -13,6 +14,7 @@ import {
   KeyboardIcon,
   InfoIcon,
   CheckIcon,
+  ServerIcon,
 } from '../components/common/Icon'
 
 export default function Settings() {
@@ -172,6 +174,21 @@ export default function Settings() {
           </button>
         </Row>
       </Section>
+
+      <section className="mb-10">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-fg-muted">
+            <ServerIcon size={13} />
+          </span>
+          <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
+            服务端
+          </h2>
+          <span className="text-[10px] text-fg-subtle ml-2">
+            改动自动写回后端 config.yaml
+          </span>
+        </div>
+        <ServerConfigPanel />
+      </section>
 
       <Section title="关于" icon={<InfoIcon size={13} />}>
         <div className="text-sm text-fg-muted leading-relaxed">

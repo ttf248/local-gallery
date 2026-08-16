@@ -439,3 +439,37 @@ export const ArrowDownIcon = (p: IconProps) => (
     <path d="m5 13 7 7 7-7" />
   </svg>
 )
+
+/** 服务器（机柜） */
+export const ServerIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="4" y="3" width="16" height="7" rx="1" />
+    <rect x="4" y="14" width="16" height="7" rx="1" />
+    <path d="M7 6.5h.01M7 17.5h.01" />
+  </svg>
+)
+
+/** 盾牌（安全 / 隐私） */
+export const ShieldIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3 4 6v6c0 4.5 3 8.4 8 9 5-.6 8-4.5 8-9V6l-8-3z" />
+    <path d="m9 12 2 2 4-4" />
+  </svg>
+)
+
+/** 重启（循环箭头） */
+export const RestartIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <path d="M3 4v5h5" />
+  </svg>
+)
+
+/** 图片（用于缩略图相关） */
+export const ThumbIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10" r="1.5" />
+    <path d="m4 18 5-5 4 4 3-3 4 4" />
+  </svg>
+)

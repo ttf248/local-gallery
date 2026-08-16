@@ -89,8 +89,10 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 |------|------|
 | YAML 配置文件 | `backend/config.yaml` 字段 `mediaRoot` 等 |
 | 内置默认值 | `./images`（相对后端 CWD），缓存目录 `<CWD>/.image-viewer/` |
+| 网页设置页 | `/settings` → 「服务端」section；改动自动写回 YAML（部分字段需重启） |
 
 完整字段见 [`backend/config.example.yaml`](./backend/config.example.yaml)。
+HTTP 接口详见 [`docs/API.md`](./docs/API.md) 中「配置项（服务端）」一节。
 
 ---
 

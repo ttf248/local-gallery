@@ -319,6 +319,9 @@ cacheDir: ".image-viewer"
 thumbSizeW: 320
 thumbSizeH: 350
 
+# 缩略图 LRU 内存缓存项数
+thumbCacheSize: 500
+
 # 缓存保留天数
 cacheMaxAgeDays: 30
 
@@ -332,3 +335,55 @@ staticDir: "dist"
 启动参数仅保留 `--config <yaml-path>`（指定非默认位置的配置文件）和 `--static-dir <dir>`（覆盖 `staticDir` 字段，便于在不同环境切换前端产物路径）。**不再支持环境变量或 --media-root / --host / --port 等覆盖。**
 
 优先级：`YAML 显式值` > `内置默认值`。
+
+### 网页端运行时配置
+
+后端在 `config.NewManager` 中持有当前配置，handler 通过 `/api/config` 读写；改动通过 PUT 写回 YAML（原子 tmp+rename）。
+
+| 字段 | GET/PUT 行为 |
+|------|-------------|
+| `mediaRoot` | 热生效：路径安全中间件和扫描器改读新根；旧扫描结果会清空，调用方应触发重新扫描 |
+| `cacheDir` / `thumbSizeW` / `thumbSizeH` / `thumbCacheSize` / `cacheMaxAgeDays` | 热生效：缩略图服务立即使用新参数 |
+| `allowOsOpen` | 热生效：`/api/fs/open` 立即按新值放行 / 拦截 |
+| `host` / `port` / `staticDir` | **需重启后端**（监听地址 / 端口 / 静态托管都绑定在启动期）|
+
+PUT 响应里 `requiresRestart` 列出需要重启的字段；`mediaRootChanged` 指示是否清空了扫描缓存。
+
+### `GET /api/config`
+
+```json
+{
+  "mediaRoot": "E:\\图像",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "cacheDir": ".image-viewer",
+  "thumbSizeW": 320,
+  "thumbSizeH": 350,
+  "thumbCacheSize": 500,
+  "cacheMaxAgeDays": 30,
+  "allowOsOpen": false,
+  "staticDir": "dist",
+  "configPath": "C:\\path\\to\\config.yaml"
+}
+```
+
+### `PUT /api/config`
+
+请求体为部分 PATCH，未提供的字段不修改；bool 字段（如 `allowOsOpen`）必须显式传值以区分 unset / explicit false。
+
+```json
+{ "thumbSizeW": 400, "allowOsOpen": true }
+```
+
+成功响应：
+
+```json
+{
+  "ok": true,
+  "config": { "...": "更新后的完整配置" },
+  "requiresRestart": [],
+  "mediaRootChanged": false
+}
+```
+
+校验失败时返回 400：`{ "error": "validate: invalid port 0" }`。
