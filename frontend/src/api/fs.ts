@@ -11,13 +11,22 @@ export const fsApi = {
       throw e
     })
   },
+  // 拉一次 /api/health,主要用于读 allowOsOpen;也顺便返回其他字段。
+  health: () =>
+    api<{
+      status: string
+      mediaRoot: string
+      comicRoot: string
+      version: string
+      goVersion: string
+      goroutines: number
+      allowOsOpen: boolean
+    }>('/api/health'),
   // 从 /api/health 同步服务端能力（主要是 allowOsOpen）。
   // 启动时调一次；用户在 Settings 切换 allowOsOpen 后再调一次。
   async syncCapabilities(): Promise<FsCapabilities> {
     try {
-      const res = await fetch('/api/health', { headers: { Accept: 'application/json' } })
-      if (!res.ok) return fsCapabilities
-      const data = (await res.json()) as { allowOsOpen?: boolean }
+      const data = await fsApi.health()
       if (typeof data.allowOsOpen === 'boolean') {
         fsCapabilities.allowOsOpen = data.allowOsOpen
       }

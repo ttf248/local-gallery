@@ -4,7 +4,7 @@ import { useSearchStore } from '../../store/searchStore'
 import { useLibraryStore } from '../../store/libraryStore'
 import { SearchIcon } from './Icon'
 import { useDebounce } from '../../hooks/useDebounce'
-import type { SearchHit } from '../../api/albums'
+import { albumsApi, type SearchHit } from '../../api/albums'
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
 //   - 空结果时返回静默，仅同步过滤本地视图
@@ -25,8 +25,8 @@ export default function GlobalSearch() {
       return
     }
     let cancelled = false
-    fetch(`/api/search?q=${encodeURIComponent(debounced)}&limit=10`)
-      .then((r) => r.json())
+    albumsApi
+      .search(debounced, 10)
       .then((d) => {
         if (!cancelled) setHits(d.results ?? [])
       })
