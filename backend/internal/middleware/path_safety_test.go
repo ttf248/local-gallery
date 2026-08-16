@@ -1,14 +1,13 @@
 package middleware
 
 import (
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
-	"io"
-	"net/http/httptest"
 )
 
 func TestValidatePath(t *testing.T) {
@@ -91,6 +90,4 @@ func TestPathSafetyMiddleware_HotReload(t *testing.T) {
 	if res3.StatusCode != 400 {
 		t.Fatalf("dir1 path should now be rejected, got %d", res3.StatusCode)
 	}
-	// sanity: io 引用
-	_ = io.Discard
 }

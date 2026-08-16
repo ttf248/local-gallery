@@ -84,8 +84,7 @@ func PathSafetyMiddleware(initial string) (fiber.Handler, *safetyState) {
 				"error": err.Error(),
 			})
 		}
-		// 覆盖 query，便于下游 handler 直接使用
-		c.Query("path") // no-op; 保留原值
+		// 校验后的安全路径存到 c.Locals("safePath")，下游 handler 用 SafePath(c) 取
 		c.Locals("safePath", clean)
 		return c.Next()
 	}
@@ -135,12 +134,3 @@ func validatePath(root, rootWithSep, p string) (string, error) {
 	}
 	return abs, nil
 }
-
-func normalizeForCompare(p string) string {
-	if runtime.GOOS == "windows" {
-		return strings.ToLower(p)
-	}
-	return p
-}
-
-var _ = normalizeForCompare // 保留供未来使用
