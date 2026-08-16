@@ -102,7 +102,7 @@ export default function AppShell() {
     'ctrl+d': () => navigate('/favorites'),
     'ctrl+,': () => navigate('/settings'),
     'ctrl+r': () => navigate('/recents'),
-    'shift+/': () => setHelpOpen((v) => !v),
+    '?': () => setHelpOpen((v) => !v),
     '/': () => {
       const el = document.querySelector<HTMLInputElement>('input[placeholder^="搜索"]')
       el?.focus()

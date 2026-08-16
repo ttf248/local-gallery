@@ -27,7 +27,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'scan', label: 'Ctrl+S', description: '重新扫描', combo: 'ctrl+s', group: 'global' },
   { id: 'search', label: '/', description: '聚焦搜索框', combo: '/', group: 'global' },
   { id: 'shuffle', label: 'R', description: '随机一本（仅非查看器）', combo: 'r', group: 'global' },
-  { id: 'help', label: '?', description: '显示快捷键帮助', combo: 'shift+/', group: 'global' },
+  { id: 'help', label: '?', description: '显示快捷键帮助', combo: '?', group: 'global' },
   // 查看器
   { id: 'next', label: '→ / PageDown', description: '下一张', combo: 'arrowright', group: 'viewer' },
   { id: 'prev', label: '← / PageUp', description: '上一张', combo: 'arrowleft', group: 'viewer' },
@@ -60,7 +60,12 @@ export function normalizeKey(e: KeyboardEvent): string {
 
   // 先归一特殊键名（+ / = / ? / 空格），再统一小写
   let k = e.key
-  if (k === '?') k = '/'
+  // `?` 在 US 布局上是 Shift+/，但 AZERTY/QWERTZ 等布局可能是独立键。
+  // 把它视作字面字符注册，忽略 shift 前缀；这样两种布局都能命中。
+  if (k === '?') {
+    parts.push('?')
+    return parts.join('+')
+  }
   if (k === ' ') k = 'space'
   // shift+= 在大多数键盘产生 e.key === '+'；handler 表里只用 '+'，
   // 旧实现会拼出 "shift+" 命中不到。这里把 + / = 统一归一为 '+'，

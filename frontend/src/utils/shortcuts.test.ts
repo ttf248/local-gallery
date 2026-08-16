@@ -27,8 +27,10 @@ describe('normalizeKey', () => {
     expect(normalizeKey(ev({ key: 's', metaKey: true }))).toBe('ctrl+s')
   })
 
-  it('Shift + / 在大多数键盘产生 "?"，归一为 "/"，保留 shift 前缀', () => {
-    expect(normalizeKey(ev({ key: '?', shiftKey: true }))).toBe('shift+/')
+  it('Shift + / 在 US 键盘产生 "?"，归一为字面 "?"，忽略 shift 前缀（双布局兼容）', () => {
+    expect(normalizeKey(ev({ key: '?', shiftKey: true }))).toBe('?')
+    // AZERTY 等布局不按 Shift 直接按 ? 键：也应归一为 '?'
+    expect(normalizeKey(ev({ key: '?', shiftKey: false }))).toBe('?')
   })
 
   it('空格归一为 "space"', () => {
@@ -58,8 +60,8 @@ describe('normalizeKey', () => {
     expect(normalizeKey(ev({ key: 'Home' }))).toBe('home')
   })
 
-  it('shift + / 保留 shift 前缀（handler 表里有 shift+/）', () => {
-    expect(normalizeKey(ev({ key: '?', shiftKey: true }))).toBe('shift+/')
+  it('shift + / 在大多数键盘产生 "?"，handler 表里用 "?"', () => {
+    expect(normalizeKey(ev({ key: '?', shiftKey: true }))).toBe('?')
   })
 
   it('shift + 数字产生符号，保留 shift 前缀', () => {

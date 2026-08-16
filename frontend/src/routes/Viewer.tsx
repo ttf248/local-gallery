@@ -427,7 +427,7 @@ export default function Viewer() {
     space: () => useViewerStore.getState().toggleSlideshow(),
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),
-    'shift+/': () => setShowHelp((v) => !v),
+    '?': () => setShowHelp((v) => !v),
     '1': () => useViewerStore.getState().setMode('single'),
     '2': () => useViewerStore.getState().setMode('continuous'),
     '3': () => useViewerStore.getState().setMode('double'),
