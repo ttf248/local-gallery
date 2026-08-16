@@ -331,6 +331,10 @@ export default function Viewer() {
     (zeroBased: number) => {
       const i = Math.max(0, Math.min(images.length - 1, zeroBased))
       setIndex(i)
+      // continuous 模式：setIndex 不会自动滚动，单独触发一次
+      if (useViewerStore.getState().mode === 'continuous') {
+        scrollContinuousTo(i)
+      }
     },
     [images.length, setIndex],
   )
