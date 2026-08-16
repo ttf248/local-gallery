@@ -758,7 +758,7 @@ function CollectionView({
                 <FolderIcon size={13} className="text-fg-muted" />
               )}
               <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
-                {isSmart ? '合集' : '集合'}
+                {isSmart ? '标签' : '集合'}
               </span>
             </div>
             <h1 className="font-display text-2xl font-semibold tracking-tight truncate">

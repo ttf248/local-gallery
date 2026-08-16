@@ -40,7 +40,7 @@ export default function Favorites() {
           id: 's:' + sc.author,
           variant: 'smart',
           title: sc.author,
-          subtitle: `${sc.albumCount} 卷`,
+          // 不要 subtitle:count 已经显示「X 卷」,subtitle 写「X 卷」就重复了
           count: sc.albumCount,
           coverPath: sc.coverImage,
           to: tagRoute(sc.author),
