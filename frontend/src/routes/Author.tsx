@@ -177,7 +177,7 @@ export default function Author() {
           <div className="flex items-end gap-6 flex-wrap">
             <div className="min-w-0">
               <div className="text-[11px] uppercase tracking-[0.18em] text-fg-subtle font-medium mb-2">
-                作者 · Tag（旧名）
+                标签
               </div>
               <h1 className="font-display text-[36px] lg:text-[44px] leading-[1.05] font-semibold tracking-[-0.02em] text-fg">
                 {author}
