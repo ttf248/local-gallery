@@ -27,12 +27,24 @@ export default function Toolbar() {
   const onViewer = location.pathname.startsWith('/viewer')
 
   // Ctrl+S 全局触发扫描
+  // 输入框/可编辑元素中按 Ctrl+S 仍是浏览器默认行为（保存网页），
+  // 不应该被劫持——与 useKeyboard 的「输入框优先」约定一致。
   useEffect(() => {
     const fn = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key.toLowerCase() === 's') {
-        e.preventDefault()
-        startScan.mutate()
+      if (!(e.ctrlKey && e.key.toLowerCase() === 's')) return
+      const target = e.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        if (
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          target.isContentEditable
+        ) {
+          return
+        }
       }
+      e.preventDefault()
+      startScan.mutate()
     }
     window.addEventListener('keydown', fn)
     return () => window.removeEventListener('keydown', fn)

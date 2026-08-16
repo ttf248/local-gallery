@@ -442,7 +442,10 @@ export default function Viewer() {
     escape: () => {
       if (showHelp) setShowHelp(false)
       else if (showInfo) setShowInfo(false)
-      else navigate(-1)
+      // images.length === 0 时表示仍在 loading/empty/error 态：
+      // 按 ESC 不应退到上一页，避免用户误操作导致上下文丢失（特别是切 album
+      // 期间按 ESC 直接退回 Home，体验割裂）。
+      else if (images.length > 0) navigate(-1)
     },
   })
 

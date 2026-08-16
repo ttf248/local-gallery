@@ -7,6 +7,7 @@ import { useLibraryStore } from '../../store/libraryStore'
 import { albumRoute } from '../../utils/path'
 import Sidebar from './Sidebar'
 import Toolbar from './Toolbar'
+import StatusBar from './StatusBar'
 import ToastViewport from '../common/Toast'
 import HelpOverlay from '../common/HelpOverlay'
 
@@ -114,6 +115,7 @@ export default function AppShell() {
         <main className="flex-1 overflow-auto">
           <Outlet />
         </main>
+        <StatusBar />
       </div>
       <ToastViewport />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />

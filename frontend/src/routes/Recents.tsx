@@ -140,6 +140,14 @@ export default function Recents() {
         <EmptyState
           title="没有匹配的最近访问"
           description={query ? `没有匹配"${query}"的结果` : ''}
+          action={
+            <button
+              onClick={() => useSearchStore.getState().reset()}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
+            >
+              清除筛选
+            </button>
+          }
         />
       ) : (
         <section className="max-w-[1400px] mx-auto w-full">
