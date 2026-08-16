@@ -148,13 +148,14 @@ export default function Viewer() {
   useEffect(() => {
     if (!imagesReady) return
     setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
+    // 切到新 album 时先重置 zoom，避免上一个 album 的 2x 缩放延续到新图
+    setZoom(1)
     if (!pathParam) return
     progressApi
       .get(pathParam)
       .then((rp) => {
         if (rp && rp.index >= 0 && rp.index < images.length) {
           setIndex(rp.index)
-          setZoom(1)
         }
       })
       .catch(() => {})
