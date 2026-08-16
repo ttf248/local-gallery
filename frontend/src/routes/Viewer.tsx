@@ -188,8 +188,10 @@ export default function Viewer() {
       progressApi
         .set(pathParam, index, images.length, 0)
         .then(() => {
-          // 让 Home/Recents/Favorites 的 progress-batch 缓存失效
+          // 让 Home/Recents/Favorites 的 progress-batch + Album 详情 per-album
+          // 缓存都失效，回到列表/详情时立刻看到新进度
           queryClient.invalidateQueries({ queryKey: ['progress-batch'] })
+          queryClient.invalidateQueries({ queryKey: ['progress'] })
         })
         .catch(() => {})
     }, 600)
