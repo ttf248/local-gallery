@@ -1,6 +1,5 @@
 import { create } from 'zustand'
-import { scanApi } from '../api/scan'
-import type { ScanResult } from '../api/scan'
+import { scanApi, type ScanResult } from '../api/scan'
 
 // Library 全局图像库状态：
 //   - 缓存最近一次扫描结果，所有页面共享，避免每次重新扫描
@@ -38,17 +37,17 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
     if (get().isLoading) return
     set({ isLoading: true, error: null })
     try {
-      const data = await fetchLatest()
-      if (data) {
+      const r = await scanApi.latest()
+      if (r.ok && r.result) {
         set({
-          result: data,
-          lastScanAt: data.scannedAt,
+          result: r.result,
+          lastScanAt: r.result.scannedAt,
           isLoading: false,
         })
         return
       }
-    } catch (e) {
-      // 404 等都是正常情况
+    } catch {
+      // 404 等都是正常情况:尚未扫描过
     }
     set({ isLoading: false })
   },
@@ -60,13 +59,3 @@ export const useLibraryStore = create<LibraryState>((set, get) => ({
 
   clear: () => set({ result: null, lastScanAt: null }),
 }))
-
-// 单独封装 fetch，避免循环依赖；带超时与错误吞咽。
-async function fetchLatest(): Promise<ScanResult | null> {
-  const res = await fetch('/api/scan/latest', {
-    headers: { Accept: 'application/json' },
-  })
-  if (!res.ok) return null
-  const data = (await res.json()) as { ok: boolean; result: ScanResult }
-  return data.ok ? data.result : null
-}

@@ -64,4 +64,6 @@ export const scanApi = {
   start: () => api<ScanStartResponse>('/api/scan/start', { method: 'POST' }),
   result: (id: string) => api<{ ok: boolean; result: ScanResult }>(`/api/scan/${id}/result`),
   cancel: (id: string) => api<{ ok: boolean }>(`/api/scan/${id}`, { method: 'DELETE' }),
+  // 拿后端磁盘缓存的上次扫描结果；首次启动 / 还没扫过时 404,调用方应吞掉。
+  latest: () => api<{ ok: boolean; result: ScanResult }>('/api/scan/latest'),
 }
