@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { thumbUrl } from '../../api/thumbs'
-import { StarIcon, FolderIcon, ReaderIcon, RewindIcon, CheckIcon, ClockIcon } from '../common/Icon'
+import { StarIcon, FolderIcon, ReaderIcon, RewindIcon, CheckIcon, ClockIcon, ArrowUpRightIcon } from '../common/Icon'
 import HoverPreview from '../common/HoverPreview'
 import type { ViewMode } from '../../store/uiStore'
 import { timeAgo } from '../../utils/date'
@@ -161,8 +161,17 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           </div>
         )}
 
-        {/* 顶部变暗蒙版（仅在 hover 时出现） */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/0 via-transparent to-black/0 opacity-0 group-hover:opacity-20 transition-opacity duration-300 pointer-events-none" />
+        {/* 底部暗化蒙版（hover 时让「进入」提示更清晰） */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+        {/* 「进入」提示 — hover 时从右下角淡入 */}
+        <div
+          className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-2 h-6 rounded-full bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out"
+          aria-hidden
+        >
+          <span>进入</span>
+          <ArrowUpRightIcon size={10} />
+        </div>
 
         {/* 收藏角标 */}
         {data.isFavorite && (

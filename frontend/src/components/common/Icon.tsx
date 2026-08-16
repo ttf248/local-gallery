@@ -424,6 +424,14 @@ export const ArrowLeftLineIcon = (p: IconProps) => (
   </svg>
 )
 
+/** 右上箭头（hover 时暗示"点击进入"） */
+export const ArrowUpRightIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M7 17 17 7" />
+    <path d="M7 7h10v10" />
+  </svg>
+)
+
 /** 上一本 / 上一项（粗箭头向上） */
 export const ArrowUpIcon = (p: IconProps) => (
   <svg {...base(p)}>
