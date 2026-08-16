@@ -185,10 +185,16 @@ export default function Viewer() {
     if (!pathParam) return
     if (images.length === 0) return
     const t = setTimeout(() => {
-      progressApi.set(pathParam, index, images.length, 0).catch(() => {})
+      progressApi
+        .set(pathParam, index, images.length, 0)
+        .then(() => {
+          // 让 Home/Recents/Favorites 的 progress-batch 缓存失效
+          queryClient.invalidateQueries({ queryKey: ['progress-batch'] })
+        })
+        .catch(() => {})
     }, 600)
     return () => clearTimeout(t)
-  }, [index, pathParam, images.length])
+  }, [index, pathParam, images.length, queryClient])
 
   // 滚到最后一张：自动标记为「已读」一次。
   useEffect(() => {
