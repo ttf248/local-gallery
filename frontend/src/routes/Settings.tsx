@@ -144,7 +144,11 @@ export default function Settings() {
           <div className="flex items-center gap-3">
             <span className="text-xs text-fg-muted">
               {result
-                ? `${result.albumCount} 个文件夹 · ${lastScanAt ? new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false }) : '尚未扫描'}`
+                ? `${result.albumCount} 文件夹 · ${(result.smartCollections ?? []).length} 标签${
+                    lastScanAt
+                      ? ` · ${new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false })}`
+                      : ' · 尚未扫描'
+                  }`
                 : '尚未加载'}
             </span>
             <button
