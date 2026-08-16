@@ -180,23 +180,22 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           </div>
         )}
 
-        {/* 智能集合标记 / 重温角标（同一位置：根据 badge 与 variant 决定显示） */}
+        {/* 智能集合标记 / 重温角标 / 集合角标（同一位置，优先级：rewind > collection > smart） */}
         {data.badge === 'rewind' ? (
           <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-bg-elevated/95 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-border-faint shadow-xs">
             <RewindIcon size={10} className="text-accent" />
             <span>重温</span>
+          </div>
+        ) : data.variant === 'collection' ? (
+          <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
+            <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
+            集合
           </div>
         ) : data.variant === 'smart' ? (
           <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             标签
           </div>
         ) : null}
-        {data.variant === 'collection' && (
-          <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
-            <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
-            集合
-          </div>
-        )}
 
         {/* 阅读进度 */}
         {progressPct !== null && progressPct > 0 && (
