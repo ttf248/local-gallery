@@ -264,10 +264,13 @@ export default function Viewer() {
       if (cur + step < images.length) {
         setIndex(cur + step)
       } else {
-        setIndex(0)
+        // 末尾:对齐手动 next() 的反馈(避免幻灯片 loop 回 0 与
+        // 手动翻页的"已是最后一张"行为割裂),toast + 自动停。
+        onReachEnd()
       }
     }, slideshowInterval)
     return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideshow, slideshowInterval, images.length, setIndex, mode])
 
   function prev() {
@@ -282,13 +285,18 @@ export default function Viewer() {
     }
   }
   // 已到末尾的统一反馈：toast + 自动停幻灯片。
-  const onReachEnd = () => {
+  // 用 ref 持有,避免 setInterval 闭包捕获旧的 onReachEnd 引用
+  // (slideshow effect 的 deps 不包含 pushToast/toggleSlideshow,这些会
+  // 因 user 操作 stale,但回调需要读最新 store + push 最新 toast)。
+  const onReachEndRef = useRef<() => void>(() => {})
+  onReachEndRef.current = () => {
     pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
     if (useViewerStore.getState().slideshow) {
       toggleSlideshow()
       pushToast({ kind: 'info', message: '幻灯片已自动停止' })
     }
   }
+  const onReachEnd = useCallback(() => onReachEndRef.current(), [])
 
   function next() {
     if (mode === 'continuous') {
