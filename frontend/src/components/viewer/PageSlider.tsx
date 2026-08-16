@@ -65,6 +65,12 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
     setEditing(false)
   }
 
+  // 拖拽时把「最新 scrubIndex」同步写进 ref：onUp 闭包里读 ref，
+  // 而不是闭包创建时的 scrubIndex（那个永远是 null —— React setState
+  // 是异步的，el.addEventListener('pointerup', onUp) 在 pointerup 触发时
+  // 看到的还是创建时的旧值，导致「拖到中段松手不跳转」）。
+  const scrubIndexRef = useRef<number | null>(null)
+
   function onTrackPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (total <= 1) return
     const el = trackRef.current
@@ -75,13 +81,16 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
       const x = Math.max(0, Math.min(rect.width, clientX - rect.left))
       const ratio = rect.width === 0 ? 0 : x / rect.width
       const i = Math.round(ratio * (total - 1))
+      scrubIndexRef.current = i
       setScrubIndex(i)
     }
     update(e.clientX)
     const onMove = (ev: PointerEvent) => update(ev.clientX)
     const onUp = (ev: PointerEvent) => {
-      // 拖拽结束时真正跳转
-      if (scrubIndex !== null) onJump(scrubIndex)
+      // 拖拽结束时真正跳转：从 ref 读最新值，避开闭包陷阱
+      const finalIdx = scrubIndexRef.current
+      if (finalIdx !== null) onJump(finalIdx)
+      scrubIndexRef.current = null
       setScrubIndex(null)
       el.releasePointerCapture(ev.pointerId)
       el.removeEventListener('pointermove', onMove)
