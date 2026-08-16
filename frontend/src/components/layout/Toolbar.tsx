@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { scanApi } from '../../api/scan'
 import { useScanSSE } from '../../hooks/useScanSSE'
+import { useKeyboard } from '../../hooks/useKeyboard'
 import { useLibraryStore } from '../../store/libraryStore'
 import { useUIStore } from '../../store/uiStore'
 import ThemeSwitcher from '../common/ThemeSwitcher'
@@ -26,31 +27,6 @@ export default function Toolbar() {
 
   const onViewer = location.pathname.startsWith('/viewer')
 
-  // Ctrl+S 全局触发扫描
-  // 输入框/可编辑元素中按 Ctrl+S 仍是浏览器默认行为（保存网页），
-  // 不应该被劫持——与 useKeyboard 的「输入框优先」约定一致。
-  useEffect(() => {
-    const fn = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey && e.key.toLowerCase() === 's')) return
-      const target = e.target as HTMLElement | null
-      if (target) {
-        const tag = target.tagName
-        if (
-          tag === 'INPUT' ||
-          tag === 'TEXTAREA' ||
-          target.isContentEditable
-        ) {
-          return
-        }
-      }
-      e.preventDefault()
-      startScan.mutate()
-    }
-    window.addEventListener('keydown', fn)
-    return () => window.removeEventListener('keydown', fn)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const startScan = useMutation({
     mutationFn: () => scanApi.start(),
     onSuccess: (r) => {
@@ -58,6 +34,13 @@ export default function Toolbar() {
       pushToast({ kind: 'info', message: '扫描已开始' })
     },
     onError: () => pushToast({ kind: 'error', message: '启动扫描失败' }),
+  })
+
+  // Ctrl+S 全局触发扫描 — 走 useKeyboard 让 SHORTCUTS 表与实际行为
+  // 始终一致;输入框优先跳过(由 useKeyboard 内置,避免与浏览器
+  // 「保存网页」冲突)。
+  useKeyboard({
+    'ctrl+s': () => startScan.mutate(),
   })
 
   useEffect(() => {
