@@ -4,7 +4,6 @@ export interface MenuItem {
   id: string
   label: string
   icon?: string
-  destructive?: boolean
   disabled?: boolean
   separator?: never
 }
@@ -79,9 +78,7 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
             className={`w-full text-left px-3 py-1.5 flex items-center gap-2.5 transition-colors ${
               it.disabled
                 ? 'text-fg-subtle cursor-not-allowed'
-                : it.destructive
-                  ? 'text-danger hover:bg-danger/10'
-                  : 'text-fg hover:bg-bg-subtle'
+                : 'text-fg hover:bg-bg-subtle'
             }`}
           >
             {it.icon && (

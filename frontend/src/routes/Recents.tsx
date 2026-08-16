@@ -12,6 +12,7 @@ import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import { ClockIcon } from '../components/common/Icon'
 import { albumRoute, decodeFavPath } from '../utils/path'
+import { formatRelative } from '../utils/date'
 import type { ViewerContextEntry } from '../utils/viewerContext'
 
 // 最近访问：从后端 history 列表中读取。带阅读进度。
@@ -159,15 +160,4 @@ export default function Recents() {
       <div className="h-12" />
     </div>
   )
-}
-
-function formatRelative(iso: string | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const diff = (Date.now() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }

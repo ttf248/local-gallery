@@ -13,6 +13,7 @@ import AlbumGrid from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { albumsApi } from '../api/albums'
 import { decodeFavPath } from '../utils/path'
+import { formatRelative } from '../utils/date'
 import {
   ChevronLeftIcon,
   ReaderIcon,
@@ -789,15 +790,4 @@ function CollectionView({
       </div>
     </div>
   )
-}
-
-function formatRelative(iso: string): string {
-  const d = new Date(iso)
-  const now = Date.now()
-  const diff = (now - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
