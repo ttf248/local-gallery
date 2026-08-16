@@ -528,7 +528,10 @@ export default function Viewer() {
       onMouseMove={markActive}
     >
       {/* 暗色画布层：让图片有「阅读器」氛围 */}
-      <div className="absolute inset-0">
+      {/* flex flex-col 是关键：让 ImageViewer 内部的 `flex-1` + `min-h-0`
+          容器拿到约束高度,连续模式才能在容器内纵向滚动,
+          而不是被外层 overflow-hidden 裁掉。 */}
+      <div className="absolute inset-0 flex flex-col">
         <ImageViewer
           images={images}
           onClickNavigate={(dir) => {

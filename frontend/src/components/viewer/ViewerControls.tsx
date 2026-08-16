@@ -75,12 +75,12 @@ export default function ViewerControls({
         >
           {onPrevAlbum && (
             <SideIconButton onClick={onPrevAlbum} title="上一本 (P)">
-              <ArrowUpIcon size={14} />
+              <ArrowUpIcon size={16} />
             </SideIconButton>
           )}
           {onNextAlbum && (
             <SideIconButton onClick={onNextAlbum} title="下一本 (N)">
-              <ArrowDownIcon size={14} />
+              <ArrowDownIcon size={16} />
             </SideIconButton>
           )}
         </div>
@@ -98,14 +98,14 @@ export default function ViewerControls({
             title="上一张 (←)"
             hideOnMobile
           >
-            <ChevronLeftIcon size={14} />
+            <ChevronLeftIcon size={16} />
           </SideIconButton>
           <SideIconButton
             onClick={onNext}
             title="下一张 (→)"
             hideOnMobile
           >
-            <ChevronRightIcon size={14} />
+            <ChevronRightIcon size={16} />
           </SideIconButton>
         </ControlGroup>
 
@@ -117,7 +117,7 @@ export default function ViewerControls({
               title={`${o.label} (${o.value === 'single' ? '1' : o.value === 'continuous' ? '2' : '3'})`}
               active={mode === o.value}
             >
-              <o.icon size={14} />
+              <o.icon size={16} />
             </SideIconButton>
           ))}
         </ControlGroup>
@@ -130,31 +130,31 @@ export default function ViewerControls({
               title={`${o.label} (F 循环)`}
               active={fit === o.value}
             >
-              <o.icon size={14} />
+              <o.icon size={16} />
             </SideIconButton>
           ))}
         </ControlGroup>
 
         <ControlGroup label="缩放">
           <SideIconButton onClick={zoomOut} title="缩小 (-)">
-            <MinusIcon size={14} />
+            <MinusIcon size={16} />
           </SideIconButton>
           <button
             onClick={zoomReset}
             title="重置 (0)"
-            className="h-9 px-1 rounded text-[11px] tabular-nums text-white/85 hover:bg-white/10 hover:text-white transition-colors"
+            className="h-11 px-1.5 rounded text-[12px] tabular-nums text-white/85 hover:bg-white/10 hover:text-white transition-colors"
           >
             {Math.round(zoom * 100)}%
           </button>
           <SideIconButton onClick={zoomIn} title="放大 (+)">
-            <PlusIcon size={14} />
+            <PlusIcon size={16} />
           </SideIconButton>
         </ControlGroup>
 
         <ControlGroup label="旋转">
           <SideIconButton onClick={() => rotate(90)} title="旋转 90° (R)">
-            <span className="inline-flex items-center gap-0.5 text-[10px]">
-              <RotateIcon size={12} />
+            <span className="inline-flex items-center gap-0.5 text-[11px]">
+              <RotateIcon size={14} />
               <span className="tabular-nums">{rotation}°</span>
             </span>
           </SideIconButton>
@@ -166,7 +166,7 @@ export default function ViewerControls({
               onClick={() => setDirection(direction === 'ltr' ? 'rtl' : 'ltr')}
               title={`阅读方向：${direction === 'ltr' ? '左→右' : '右→左'} (L)`}
             >
-              {direction === 'ltr' ? <ArrowRightLineIcon size={14} /> : <ArrowLeftLineIcon size={14} />}
+              {direction === 'ltr' ? <ArrowRightLineIcon size={16} /> : <ArrowLeftLineIcon size={16} />}
             </SideIconButton>
           </ControlGroup>
         )}
@@ -209,7 +209,7 @@ function SideIconButton({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className={`inline-flex items-center justify-center h-9 min-w-9 px-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+      className={`inline-flex items-center justify-center h-11 min-w-11 px-2 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
         hideOnMobile ? 'hidden sm:inline-flex' : ''
       } ${
         active
