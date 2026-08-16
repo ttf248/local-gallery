@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useViewerStore } from './viewerStore'
 
-// viewerStore 用 sessionStorage 持久化，测试间要清掉
+// viewerStore 用 localStorage 持久化（仅 mode/fit/direction 三项偏好），
+// 测试间要清掉，避免上一个 case 的偏好串到这个 case
 beforeEach(() => {
-  sessionStorage.clear()
+  localStorage.clear()
   // 重置 store 到初始 state：直接 set 回去
   useViewerStore.setState({
     index: -1,
@@ -18,7 +19,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  sessionStorage.clear()
+  localStorage.clear()
 })
 
 describe('viewerStore / zoom', () => {

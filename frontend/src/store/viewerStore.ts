@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { sessionStorage } from '../utils/storage'
+import { persist } from 'zustand/middleware'
 
 /** 显示模式：单张 / 连续滚动 / 双张并排 */
 export type ReaderMode = 'single' | 'continuous' | 'double'
@@ -8,7 +8,10 @@ export type FitMode = 'fit' | 'width' | 'height' | 'original'
 /** 翻页方向：ltr（左→右）/ rtl（右→左） */
 export type ReadDirection = 'ltr' | 'rtl'
 
-// 查看器状态（仅 sessionStorage 持久化，关闭页面即重置）。
+// 查看器状态：
+// - 用户偏好（mode/fit/direction）→ localStorage 跨会话保留,关 tab 再开还是上次的选择
+// - 临时状态（index/zoom/rotation/slideshow/slideshowInterval）→ 不持久化,
+//   切换 album 时 resetView 会重置 zoom/rotation,index 由 URL 决定
 export interface ViewerState {
   // 当前图片索引（-1 = 未选择）
   index: number
@@ -45,7 +48,7 @@ export interface ViewerState {
 const FIT_CYCLE: FitMode[] = ['fit', 'width', 'height', 'original']
 
 export const useViewerStore = create<ViewerState>()(
-  sessionStorage(
+  persist(
     (set, get) => ({
       index: -1,
       zoom: 1,
@@ -93,7 +96,16 @@ export const useViewerStore = create<ViewerState>()(
         set({ fit: FIT_CYCLE[(idx + 1) % FIT_CYCLE.length] })
       },
     }),
-    'comic-reader-viewer',
+    {
+      name: 'comic-reader-viewer',
+      // 只持久化用户偏好(模式/适配/方向),其余临时态(index/zoom/rotation/slideshow)
+      // 不进 localStorage,避免换 album 时被旧状态污染,也避免 slideshow 之类跨会话遗留
+      partialize: (s) => ({
+        mode: s.mode,
+        fit: s.fit,
+        direction: s.direction,
+      }),
+    },
   ),
 )
 
