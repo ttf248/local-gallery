@@ -1,5 +1,8 @@
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { prefsApi, favoritesApi, historyApi } from '../api/prefs'
+import { scanApi } from '../api/scan'
+import { useScanSSE } from '../hooks/useScanSSE'
 import ThemeSwitcher from '../components/common/ThemeSwitcher'
 import { useUIStore, type AccentKey } from '../store/uiStore'
 import { useLibraryStore } from '../store/libraryStore'
@@ -30,6 +33,8 @@ export default function Settings() {
   const lastScanAt = useLibraryStore((s) => s.lastScanAt)
   const result = useLibraryStore((s) => s.result)
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
+  const setResult = useLibraryStore((s) => s.setResult)
+  const sse = useScanSSE()
   useTheme()
 
   const patchPrefs = useMutation({
@@ -52,6 +57,27 @@ export default function Settings() {
       pushToast({ kind: 'success', message: '已清空最近访问' })
     },
   })
+
+  // Settings 页内也能触发扫描：与 Home / Toolbar 走同一套 SSE。
+  const startScan = useMutation({
+    mutationFn: () => scanApi.start(),
+    onSuccess: (r) => {
+      sse.startWith(r.scanId)
+      pushToast({ kind: 'info', message: '扫描已开始' })
+    },
+    onError: () => pushToast({ kind: 'error', message: '启动扫描失败' }),
+  })
+  // 扫描完成时把结果写回 store
+  useEffect(() => {
+    if (!sse.isComplete || !sse.scanId) return
+    scanApi
+      .result(sse.scanId)
+      .then((r) => {
+        setResult(r.result)
+        pushToast({ kind: 'success', message: `扫描完成 · 共 ${r.result.albumCount} 个文件夹` })
+      })
+      .catch(() => pushToast({ kind: 'error', message: '获取扫描结果失败' }))
+  }, [sse.isComplete, sse.scanId, setResult, pushToast])
 
   if (isLoading || !data) {
     return <div className="p-10 text-fg-muted text-sm">加载中…</div>
@@ -157,6 +183,15 @@ export default function Settings() {
             >
               <RefreshIcon size={11} />
               <span>刷新</span>
+            </button>
+            <button
+              onClick={() => startScan.mutate()}
+              disabled={startScan.isPending || sse.isRunning}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border-faint hover:bg-bg-subtle text-xs transition-colors disabled:opacity-50"
+              title="扫描 (Ctrl+S)"
+            >
+              <RefreshIcon size={11} />
+              <span>{sse.isRunning ? '扫描中…' : startScan.isPending ? '启动中…' : '重新扫描'}</span>
             </button>
           </div>
         </Row>
