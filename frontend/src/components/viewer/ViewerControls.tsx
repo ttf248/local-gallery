@@ -1,0 +1,236 @@
+import { useViewerStore, type FitMode, type ReaderMode } from '../../store/viewerStore'
+import {
+  SinglePageIcon,
+  ScrollPageIcon,
+  DoublePageIcon,
+  FitIcon,
+  FitWidthIcon,
+  FitHeightIcon,
+  OriginalSizeIcon,
+  ArrowRightLineIcon,
+  ArrowLeftLineIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
+  PlusIcon,
+  MinusIcon,
+  RotateIcon,
+} from '../common/Icon'
+
+interface Props {
+  visible: boolean
+  onPrev: () => void
+  onNext: () => void
+  onPrevAlbum?: () => void
+  onNextAlbum?: () => void
+}
+
+const MODE_OPTIONS: { value: ReaderMode; label: string; icon: typeof SinglePageIcon }[] = [
+  { value: 'single', label: '单张', icon: SinglePageIcon },
+  { value: 'continuous', label: '连续', icon: ScrollPageIcon },
+  { value: 'double', label: '并排', icon: DoublePageIcon },
+]
+
+const FIT_OPTIONS: { value: FitMode; label: string; icon: typeof FitIcon }[] = [
+  { value: 'fit', label: '适应', icon: FitIcon },
+  { value: 'width', label: '按宽', icon: FitWidthIcon },
+  { value: 'height', label: '按高', icon: FitHeightIcon },
+  { value: 'original', label: '原始', icon: OriginalSizeIcon },
+]
+
+// 查看器右侧浮层控件：模式 / 适配 / 缩放 / 旋转 / 阅读方向
+//
+// 设计：玻璃面板 + 鼠标 idle 时整组淡出（保留顶部常驻条）；
+// 在 hover 时显出。按钮顺序自上而下：模式 / 适配 / 缩放 / 旋转 / 方向。
+export default function ViewerControls({
+  visible,
+  onPrev,
+  onNext,
+  onPrevAlbum,
+  onNextAlbum,
+}: Props) {
+  const mode = useViewerStore((s) => s.mode)
+  const fit = useViewerStore((s) => s.fit)
+  const zoom = useViewerStore((s) => s.zoom)
+  const rotation = useViewerStore((s) => s.rotation)
+  const direction = useViewerStore((s) => s.direction)
+  const setMode = useViewerStore((s) => s.setMode)
+  const setFit = useViewerStore((s) => s.setFit)
+  const setDirection = useViewerStore((s) => s.setDirection)
+  const zoomIn = useViewerStore((s) => s.zoomIn)
+  const zoomOut = useViewerStore((s) => s.zoomOut)
+  const zoomReset = useViewerStore((s) => s.zoomReset)
+  const rotate = useViewerStore((s) => s.rotate)
+
+  // 暗色画布上显示更柔和的浮层
+  return (
+    <>
+      {/* 左侧：上一本 / 下一本（小屏藏在 header 菜单里；桌面下显示） */}
+      {(onPrevAlbum || onNextAlbum) && (
+        <div
+          className={`absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 z-10 hidden md:flex flex-col gap-1 transition-opacity duration-300 ${
+            visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          {onPrevAlbum && (
+            <SideIconButton onClick={onPrevAlbum} title="上一本 (P)">
+              <ArrowUpIcon size={14} />
+            </SideIconButton>
+          )}
+          {onNextAlbum && (
+            <SideIconButton onClick={onNextAlbum} title="下一本 (N)">
+              <ArrowDownIcon size={14} />
+            </SideIconButton>
+          )}
+        </div>
+      )}
+
+      {/* 右侧：阅读模式 + 适配 + 缩放 + 旋转 */}
+      <div
+        className={`absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 z-10 flex flex-col items-stretch gap-2 transition-opacity duration-300 ${
+          visible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <ControlGroup label="翻页">
+          <SideIconButton
+            onClick={onPrev}
+            title="上一张 (←)"
+            hideOnMobile
+          >
+            <PrevIcon />
+          </SideIconButton>
+          <SideIconButton
+            onClick={onNext}
+            title="下一张 (→)"
+            hideOnMobile
+          >
+            <NextIcon />
+          </SideIconButton>
+        </ControlGroup>
+
+        <ControlGroup label="模式">
+          {MODE_OPTIONS.map((o) => (
+            <SideIconButton
+              key={o.value}
+              onClick={() => setMode(o.value)}
+              title={`${o.label} (${o.value === 'single' ? '1' : o.value === 'continuous' ? '2' : '3'})`}
+              active={mode === o.value}
+            >
+              <o.icon size={14} />
+            </SideIconButton>
+          ))}
+        </ControlGroup>
+
+        <ControlGroup label="适配">
+          {FIT_OPTIONS.map((o) => (
+            <SideIconButton
+              key={o.value}
+              onClick={() => setFit(o.value)}
+              title={`${o.label} (F 循环)`}
+              active={fit === o.value}
+            >
+              <o.icon size={14} />
+            </SideIconButton>
+          ))}
+        </ControlGroup>
+
+        <ControlGroup label="缩放">
+          <SideIconButton onClick={zoomOut} title="缩小 (-)">
+            <MinusIcon size={14} />
+          </SideIconButton>
+          <button
+            onClick={zoomReset}
+            title="重置 (0)"
+            className="h-9 px-1 rounded text-[11px] tabular-nums text-white/85 hover:bg-white/10 hover:text-white transition-colors"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <SideIconButton onClick={zoomIn} title="放大 (+)">
+            <PlusIcon size={14} />
+          </SideIconButton>
+        </ControlGroup>
+
+        <ControlGroup label="旋转">
+          <SideIconButton onClick={() => rotate(90)} title="旋转 90° (R)">
+            <span className="inline-flex items-center gap-0.5 text-[10px]">
+              <RotateIcon size={12} />
+              <span className="tabular-nums">{rotation}°</span>
+            </span>
+          </SideIconButton>
+        </ControlGroup>
+
+        {mode === 'double' && (
+          <ControlGroup label="方向">
+            <SideIconButton
+              onClick={() => setDirection(direction === 'ltr' ? 'rtl' : 'ltr')}
+              title={`阅读方向：${direction === 'ltr' ? '左→右' : '右→左'} (L)`}
+            >
+              {direction === 'ltr' ? <ArrowRightLineIcon size={14} /> : <ArrowLeftLineIcon size={14} />}
+            </SideIconButton>
+          </ControlGroup>
+        )}
+      </div>
+    </>
+  )
+}
+
+// 控件组：上方标签 + 下方按钮列。专为深色画布设计：深色玻璃面板。
+const DARK_GLASS =
+  'bg-neutral-900/70 backdrop-blur-md ring-1 ring-white/10 shadow-xl'
+
+function ControlGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col items-center">
+      <div className={`flex flex-col items-stretch rounded-lg p-1 gap-0.5 ${DARK_GLASS}`}>{children}</div>
+      <span className="mt-1 text-[9px] uppercase tracking-[0.18em] text-white/45">{label}</span>
+    </div>
+  )
+}
+
+function SideIconButton({
+  children,
+  onClick,
+  disabled,
+  title,
+  active,
+  hideOnMobile,
+}: {
+  children: React.ReactNode
+  onClick?: () => void
+  disabled?: boolean
+  title?: string
+  active?: boolean
+  hideOnMobile?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={`inline-flex items-center justify-center h-9 min-w-9 px-1.5 rounded transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
+        hideOnMobile ? 'hidden sm:inline-flex' : ''
+      } ${
+        active
+          ? 'bg-white/15 text-white'
+          : 'text-white/80 hover:text-white hover:bg-white/10'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+function PrevIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3 5 8l5 5" />
+    </svg>
+  )
+}
+function NextIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3l5 5-5 5" />
+    </svg>
+  )
+}

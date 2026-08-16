@@ -181,6 +181,22 @@ button:not(:disabled):active {
   justify-content: center;
 }
 
+/* 暗色画布上的 kbd（Viewer）：用半透明白 */
+.kbd-light {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  min-width: 16px;
+  justify-content: center;
+}
+
 /* === 输入框聚焦时的微妙 inset 高光（与组件 focus-within 配合） === */
 .input-focus-ring {
   transition: background var(--dur-fast) var(--ease-out),

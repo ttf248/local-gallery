@@ -128,9 +128,10 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
   // 容器公共类
   // 单页模式：容器自己滚动 + flex 居中
   // 连续 / 双页模式：容器滚动（避免上层 / 下层元素双层滚动）
+  // 背景用透明，让外层（Viewer 的深色画布）决定整体氛围
   const containerCls = isSingle
-    ? 'relative flex-1 overflow-auto bg-bg-subtle flex items-center justify-center min-h-0'
-    : 'relative flex-1 overflow-auto bg-bg-subtle min-h-0'
+    ? 'relative flex-1 overflow-auto flex items-center justify-center min-h-0'
+    : 'relative flex-1 overflow-auto min-h-0'
   // data-image-viewer 让外部（Viewer 路由）能定位连续模式下的单图
   // （用于 Home/End 跳到首/尾图片的 scrollIntoView）。
   const dataImageViewerProps = { 'data-image-viewer': '' } as const

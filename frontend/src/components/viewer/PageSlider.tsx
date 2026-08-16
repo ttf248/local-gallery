@@ -102,7 +102,13 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
     : [safeIndex, Math.min(safeIndex + 1, total - 1)].filter((i, idx, arr) => arr.indexOf(i) === idx)
 
   return (
-    <div className="relative h-12 border-t border-border-faint bg-bg-elevated/60 flex items-center gap-3 px-4 select-none">
+    <div
+      className="relative h-11 flex items-center gap-3 px-3 sm:px-5 text-white/85 select-none"
+      style={{
+        background:
+          'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))',
+      }}
+    >
       {/* 缩略图条：拖拽时浮现 */}
       {showStrip && (
         <div
@@ -114,8 +120,8 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
             return (
               <div
                 key={i}
-                className={`bg-bg-elevated border-2 rounded overflow-hidden shadow-md transition-all ${
-                  isCenter ? 'border-accent scale-105' : 'border-border opacity-80'
+                className={`bg-neutral-900 border-2 rounded overflow-hidden shadow-lg transition-all ${
+                  isCenter ? 'border-white scale-105' : 'border-white/30 opacity-80'
                 }`}
                 style={{ width: 56, height: 80 }}
               >
@@ -127,12 +133,12 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
                     draggable={false}
                   />
                 ) : (
-                  <div className="w-full h-full bg-bg-subtle" />
+                  <div className="w-full h-full bg-neutral-800" />
                 )}
               </div>
             )
           })}
-          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[11px] text-fg-muted tabular-nums">
+          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[11px] text-white/70 tabular-nums">
             第 {scrubIndex + 1} / {total} 页
           </div>
         </div>
@@ -154,45 +160,46 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
             }
           }}
           onBlur={commit}
-          className="w-12 h-7 px-1.5 text-center text-[12px] tabular-nums bg-bg rounded border border-accent outline-none"
+          autoFocus
+          className="w-12 h-7 px-1.5 text-center text-[12px] tabular-nums bg-neutral-900/80 text-white rounded border border-white/30 outline-none"
           inputMode="numeric"
         />
       ) : (
         <button
           onClick={() => setEditing(true)}
-          className="min-w-[44px] h-7 px-1.5 rounded text-[12px] tabular-nums text-fg hover:bg-bg-subtle transition-colors"
+          className="min-w-[44px] h-7 px-1.5 rounded text-[12px] tabular-nums text-white/85 hover:bg-white/10 transition-colors"
           title="跳转到指定页 (G)"
         >
           {safeIndex + 1}
         </button>
       )}
-      <span className="text-fg-subtle text-[11px] tabular-nums">/ {total}</span>
+      <span className="text-white/55 text-[11px] tabular-nums">/ {total}</span>
 
       {/* 进度条 */}
       <div className="flex-1 relative h-9 flex items-center group">
         <div
           ref={trackRef}
           onPointerDown={onTrackPointerDown}
-          className="relative h-1.5 w-full bg-bg-strong rounded-full cursor-pointer group-hover:h-2 transition-all"
+          className="relative h-1 w-full bg-white/15 rounded-full cursor-pointer group-hover:h-1.5 transition-all"
         >
           <div
-            className="absolute left-0 top-0 h-full bg-accent rounded-full"
+            className="absolute left-0 top-0 h-full bg-white/85 rounded-full"
             style={{ width: `${pct}%` }}
           />
           {/* 拖动手柄 */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-bg-elevated border-2 border-accent rounded-full shadow-sm transition-transform"
+            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md transition-transform"
             style={{
-              left: `calc(${pct}% - 7px)`,
-              transform: scrubIndex !== null ? 'translateY(-50%) scale(1.2)' : 'translateY(-50%)',
+              left: `calc(${pct}% - 6px)`,
+              transform: scrubIndex !== null ? 'translateY(-50%) scale(1.3)' : 'translateY(-50%)',
             }}
           />
         </div>
       </div>
 
       {/* 快捷键提示 */}
-      <span className="text-[10px] text-fg-subtle hidden md:inline">
-        拖拽跳转 · <kbd className="kbd">G</kbd> 跳页
+      <span className="text-[10px] text-white/40 hidden md:inline">
+        <kbd className="kbd-light">G</kbd> 跳页
       </span>
     </div>
   )

@@ -147,3 +147,12 @@ export function PopoverItem({ onClick, disabled, active, children }: MenuItemPro
 export function PopoverSeparator() {
   return <div className="my-1 h-px bg-border-faint" />
 }
+
+// 菜单分组标签（不可点击的灰色小标题）
+export function PopoverLabel({ children }: { children: ReactNode }) {
+  return (
+    <div className="px-2.5 pt-1.5 pb-1 text-[10px] uppercase tracking-[0.14em] text-fg-subtle">
+      {children}
+    </div>
+  )
+}

@@ -7,10 +7,11 @@ import { progressApi, historyApi } from '../api/prefs'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
 import ImageViewer from '../components/viewer/ImageViewer'
-import ViewerToolbar from '../components/viewer/ViewerToolbar'
 import PageSlider from '../components/viewer/PageSlider'
 import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
 import HelpOverlay from '../components/common/HelpOverlay'
+import ViewerHeader from '../components/viewer/ViewerHeader'
+import ViewerControls from '../components/viewer/ViewerControls'
 import {
   getViewerContext,
   type ViewerContextEntry,
@@ -18,6 +19,9 @@ import {
 
 // 查看器页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
 // 关闭时持久化阅读进度到后端。
+//
+// 视觉：沉浸式阅读器 — 暗色背景让图片突出，常驻 UI 只留顶部（返回/名称/页码）+ 顶部右侧
+//（全屏/菜单），其余控件在鼠标移动时浮出，2s 无操作后自动隐藏。
 export default function Viewer() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
@@ -45,13 +49,39 @@ export default function Viewer() {
   const [markingRead, setMarkingRead] = useState(false)
   const finishedRef = useRef(false)
 
+  // 浮层显隐：鼠标移动时显出，2s 无动作后自动隐藏。
+  // 不影响顶部常驻条（始终可见）。
+  const [chromeVisible, setChromeVisible] = useState(true)
+  const idleTimerRef = useRef<number | null>(null)
+  const markActive = useCallback(() => {
+    setChromeVisible(true)
+    if (idleTimerRef.current !== null) {
+      window.clearTimeout(idleTimerRef.current)
+    }
+    idleTimerRef.current = window.setTimeout(() => {
+      setChromeVisible(false)
+    }, 2500)
+  }, [])
+
+  useEffect(() => {
+    markActive()
+    const onMove = () => markActive()
+    const onKey = () => markActive()
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('keydown', onKey)
+      if (idleTimerRef.current !== null) window.clearTimeout(idleTimerRef.current)
+    }
+  }, [markActive])
+
   const { favorites, toggle: toggleFavorite } = useFavorites()
   const isFav = pathParam ? favorites.includes(pathParam) : false
 
   // 拉图 + 恢复阅读进度：依赖 pathParam 变化；images 加载完成后由内层判分支
   const imagesReady = images.length > 0
   useEffect(() => {
-    // path 拉取图片列表（如果还没拉到）
     if (!imagesReady && pathParam) {
       albumsApi
         .detail(pathParam)
@@ -111,8 +141,6 @@ export default function Viewer() {
   }, [index, pathParam, images.length])
 
   // 滚到最后一张：自动标记为「已读」一次。
-  // - 不在连续模式用（连续模式 index 不会到达末尾）。
-  // - 用 finishedRef 防止重复触发。
   useEffect(() => {
     if (markingRead) return
     if (mode === 'continuous') return
@@ -169,8 +197,6 @@ export default function Viewer() {
     return () => clearInterval(t)
   }, [slideshow, slideshowInterval, images.length, setIndex, mode])
 
-  // 双页模式前进 / 后退 2 页（索引在 onSetMode 中已对齐到偶数）
-  // 连续模式不切 index，而是滚动一屏（按容器高度的 90%）。
   function prev() {
     if (mode === 'continuous') {
       scrollStep(-1)
@@ -188,7 +214,6 @@ export default function Viewer() {
       return
     }
     if (mode === 'double') {
-      // 双页：最后一对不能越界
       if (index + 2 < images.length) setIndex(index + 2)
       else if (index < images.length - 1) setIndex(Math.max(0, images.length - 2))
       else return
@@ -206,8 +231,6 @@ export default function Viewer() {
     }
   }
 
-  // 连续模式：滚动一屏（不切 index）。
-  // 点击翻页和键盘 ←/→ 在连续模式下都走这里，体验一致。
   function scrollStep(dir: -1 | 1) {
     const container = document.querySelector(
       '[data-image-viewer]',
@@ -217,14 +240,12 @@ export default function Viewer() {
     container.scrollBy({ top: delta, behavior: 'smooth' })
   }
 
-  // 连续模式：跳到指定 index 的图片位置（Home/End 用）。
   function scrollContinuousTo(i: number) {
     const target = document.querySelector(`[data-image-index="${i}"]`) as HTMLElement | null
     if (!target) return
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  // 跳到指定页（1-based → 0-based）
   const jumpTo = useCallback(
     (zeroBased: number) => {
       const i = Math.max(0, Math.min(images.length - 1, zeroBased))
@@ -233,7 +254,6 @@ export default function Viewer() {
     [images.length, setIndex],
   )
 
-  // 上一本 / 下一本（基于上下文栈：主页、收藏、标签页等列表点开时记下）
   const goAdjacent = useCallback(
     (direction: 1 | -1) => {
       const ctx = getViewerContext()
@@ -245,22 +265,18 @@ export default function Viewer() {
         })
         return
       }
-      // 优先用当前 key 找索引；找不到时用 ctx.index
       const curIdx = ctx.list.findIndex((it) => it.key === pathParam)
       const base = curIdx >= 0 ? curIdx : ctx.index
-      // 计算下一步索引（环形）
       const n = ctx.list.length
       const nextIdx = ((base + direction) % n + n) % n
       const nextEntry: ViewerContextEntry | undefined = ctx.list[nextIdx]
       if (!nextEntry) return
-      // 立刻 toast 提示
       const dirLabel = direction === 1 ? '下一本' : '上一本'
       pushToast({
         kind: 'info',
         message: `${dirLabel}：${nextEntry.name}`,
         ttl: 1200,
       })
-      // 跳转到新相册：保留上下文，索引更新
       try {
         sessionStorage.setItem(
           'comic-reader-viewer-context',
@@ -273,16 +289,13 @@ export default function Viewer() {
       } catch {
         // ignore
       }
-      // 复位 viewer 内部状态
       setShowInfo(false)
       setMode(useViewerStore.getState().mode)
-      // 用 location 替换而不是 push，避免 history 越来越深
       navigate(nextEntry.to, { replace: false })
     },
     [pathParam, pushToast, navigate, setMode],
   )
 
-  // 收藏切换：S 键或工具栏按钮
   const onToggleFavorite = useCallback(() => {
     if (!pathParam) return
     toggleFavorite(pathParam)
@@ -303,7 +316,6 @@ export default function Viewer() {
     pageup: prev,
     pagedown: next,
     home: () => {
-      // 连续模式：scrollIntoView 而不是 setIndex（index 不动也能跳）
       if (useViewerStore.getState().mode === 'continuous') {
         scrollContinuousTo(0)
       } else {
@@ -330,18 +342,14 @@ export default function Viewer() {
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),
     'shift+/': () => setShowHelp((v) => !v),
-    // 阅读模式切换：1 单页 / 2 连续 / 3 双页
     '1': () => useViewerStore.getState().setMode('single'),
     '2': () => useViewerStore.getState().setMode('continuous'),
     '3': () => useViewerStore.getState().setMode('double'),
-    // 适配循环：F 或 Shift+F（同一个键在原 R 旋转 / Shift+R 重置间区分）
     f: () => useViewerStore.getState().cycleFit(),
-    // 阅读方向（双页）
     l: () => {
       const cur = useViewerStore.getState().direction
       useViewerStore.getState().setDirection(cur === 'ltr' ? 'rtl' : 'ltr')
     },
-    // 新增：上下本、收藏
     n: () => goAdjacent(1),
     p: () => goAdjacent(-1),
     s: () => onToggleFavorite(),
@@ -370,37 +378,57 @@ export default function Viewer() {
   const current = images[index]
 
   return (
-    <div className="flex flex-col bg-bg" style={{ height: '100vh' }}>
-      <ViewerToolbar
-        total={images.length}
-        onPrev={prev}
-        onNext={next}
-        onPrevAlbum={() => goAdjacent(-1)}
-        onNextAlbum={() => goAdjacent(1)}
-        onToggleFavorite={onToggleFavorite}
-        isFavorite={isFav}
-        showInfo={showInfo}
-        onToggleInfo={() => setShowInfo((v) => !v)}
-        onToggleHelp={() => setShowHelp((v) => !v)}
-      />
-      <div className="px-4 h-9 text-xs text-fg-muted border-b border-border-faint bg-bg-elevated/60 flex items-center gap-2">
-        <span className="font-medium text-fg truncate">{name}</span>
-        {pathParam && <span className="text-fg-subtle truncate">· {pathParam}</span>}
-      </div>
-      <div className="flex-1 flex min-h-0">
+    <div
+      className="relative bg-neutral-950 overflow-hidden select-none"
+      style={{ height: '100vh' }}
+      onMouseMove={markActive}
+    >
+      {/* 暗色画布层：让图片有「阅读器」氛围 */}
+      <div className="absolute inset-0">
         <ImageViewer
           images={images}
           onClickNavigate={(dir) => {
             if (dir === -1) prev()
             else if (dir === 1) next()
-            // dir === 0 时中段不响应
           }}
         />
-        {showInfo && (
-          <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
-        )}
       </div>
-      <PageSlider total={images.length} index={index} onJump={jumpTo} images={images} />
+
+      {/* 顶部常驻条：返回 / 名称 / 页码 / 全屏 / 菜单 */}
+      <ViewerHeader
+        name={name}
+        index={index}
+        total={images.length}
+        isFavorite={isFav}
+        onBack={() => navigate(-1)}
+        onToggleFavorite={onToggleFavorite}
+        onToggleInfo={() => setShowInfo((v) => !v)}
+        onToggleHelp={() => setShowHelp((v) => !v)}
+        onPrev={prev}
+        onNext={next}
+      />
+
+      {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本） */}
+      <ViewerControls
+        visible={chromeVisible}
+        onPrev={prev}
+        onNext={next}
+        onPrevAlbum={() => goAdjacent(-1)}
+        onNextAlbum={() => goAdjacent(1)}
+      />
+
+      {/* 底部进度条 + 跳转：浮在图上，chromeVisible 联动 */}
+      <div
+        className={`absolute bottom-0 inset-x-0 z-10 transition-opacity duration-300 ${
+          chromeVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <PageSlider total={images.length} index={index} onJump={jumpTo} images={images} />
+      </div>
+
+      {showInfo && (
+        <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
+      )}
       <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
     </div>
   )
