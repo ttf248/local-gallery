@@ -14,6 +14,7 @@ import EmptyState from '../components/common/EmptyState'
 import { albumsApi } from '../api/albums'
 import { decodeFavPath } from '../utils/path'
 import { formatRelative } from '../utils/date'
+import { formatSize } from '../utils/format'
 import {
   ChevronLeftIcon,
   ReaderIcon,
@@ -263,6 +264,9 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
 
   const [moreOpen, setMoreOpen] = useState(false)
   const [propsOpen, setPropsOpen] = useState(false)
+  // PropertiesDialog 打开的目标路径（具体某张图片的绝对路径）
+  // album 级的「属性」已删除（folder 不是 image,后端会拒）,这里只接受图片路径。
+  const [propsPath, setPropsPath] = useState<string | null>(null)
   // 用 key 强制 PropertiesDialog 重新挂载（重新打开时）
   const [propsKey, setPropsKey] = useState(0)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -423,6 +427,12 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                   </>
                 )}
                 <span className="tabular-nums">{detail.imageCount} 张</span>
+                {detail.folderSize > 0 && (
+                  <>
+                    <span className="text-fg-subtle/50">·</span>
+                    <span className="tabular-nums">{formatSize(detail.folderSize)}</span>
+                  </>
+                )}
                 {detail.modTime && (
                   <>
                     <span className="text-fg-subtle/50">·</span>
@@ -530,17 +540,6 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                       >
                         <CopyIcon size={12} />
                         <span>复制路径</span>
-                      </button>
-                      <div className="my-1 border-t border-border-faint" />
-                      <button
-                        onClick={() => {
-                          setMoreOpen(false)
-                          setPropsOpen(true)
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-                      >
-                        <InfoIcon size={12} />
-                        <span>属性</span>
                       </button>
                     </div>
                   )}
@@ -656,9 +655,14 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
               case 'copy':
                 copyPath()
                 break
-              case 'properties':
-                setPropsOpen(true)
+              case 'properties': {
+                const img = imageFiles[contextMenu.index]
+                if (img) {
+                  setPropsPath(img)
+                  setPropsOpen(true)
+                }
                 break
+              }
             }
             setContextMenu(null)
           }}
@@ -669,8 +673,11 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
       <PropertiesDialog
         key={propsKey}
         open={propsOpen}
-        absPath={detail.path}
-        onClose={() => setPropsOpen(false)}
+        absPath={propsPath}
+        onClose={() => {
+          setPropsOpen(false)
+          setPropsPath(null)
+        }}
       />
     </div>
   )
