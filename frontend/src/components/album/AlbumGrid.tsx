@@ -148,6 +148,10 @@ function ContextMenuWrapper({
   isFavorite: boolean
 }) {
   const a = useAlbumActions(item, onShowProperties)
+  // 「属性」目前只支持 album(单张图元数据);collection 是文件夹、smart 是聚合,
+  // 都不是 image,后端 GetImageInfo 会拒。disabled 让用户看到入口但点不动,
+  // 比点了报错友好。
+  const isAlbum = item.variant === 'album'
   const items: AnyMenuItem[] = [
     { id: 'open', label: '打开', icon: <ArrowRightLineIcon size={12} /> },
     {
@@ -164,7 +168,12 @@ function ContextMenuWrapper({
     },
     { id: 'copy', label: '复制路径', icon: <CopyIcon size={12} /> },
     { id: 'sep2', separator: true } as AnyMenuItem,
-    { id: 'properties', label: '属性', icon: <InfoIcon size={12} /> },
+    {
+      id: 'properties',
+      label: '属性',
+      icon: <InfoIcon size={12} />,
+      disabled: !isAlbum,
+    },
   ]
   return (
     <ContextMenu
