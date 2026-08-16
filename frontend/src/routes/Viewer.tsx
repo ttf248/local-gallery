@@ -51,13 +51,21 @@ export default function Viewer() {
   const [reloadKey, setReloadKey] = useState(0)
   const finishedRef = useRef(false)
   // 持有「最新」index/total；sendBeacon 关闭时从这里取最新值。
-  // 注意：仅在 images 有效时更新，images=[]（loading 中）保持上一次有效值。
-  const progressRef = useRef({ index: 0, total: 0 })
+  // 同时记录 path，只有 images 有效时才更新 — 避免切到新 album 的 loading
+  // 阶段把 path 也更新成新的，导致 sendBeacon 发往错的 album。
+  const progressRef = useRef<{ path: string; index: number; total: number }>({
+    path: '',
+    index: 0,
+    total: 0,
+  })
   useEffect(() => {
-    if (images.length > 0) {
-      progressRef.current = { index, total: images.length }
+    if (images.length > 0 && pathParam) {
+      progressRef.current = { path: pathParam, index, total: images.length }
     }
-  }, [index, images.length])
+  }, [index, images.length, pathParam])
+  // 记录「上一个」pathParam；切 album 时用它来保存上一个的进度，
+  // 而不是用 effect 闭包里的新 pathParam（会写错位置）。
+  const lastPathRef = useRef<string>('')
 
   // 浮层显隐：鼠标移动时显出，2s 无动作后自动隐藏。
   // 不影响顶部常驻条（始终可见）。
@@ -104,12 +112,13 @@ export default function Viewer() {
     let cancelled = false
     // 切到新 album 前，先把上一个 album 的进度刷一次（去抖的 save 会因为
     // images.length 变 0 而被清理掉，主动写一次更稳）。
-    if (images.length > 0 && pathParam) {
-      const lastPath = pathParam
-      const lastIndex = index
-      const lastTotal = images.length
-      progressApi.set(lastPath, lastIndex, lastTotal, 0).catch(() => {})
+    // 关键：用 lastPathRef（上一个 pathParam），不是闭包里的新 pathParam。
+    if (lastPathRef.current && images.length > 0) {
+      progressApi
+        .set(lastPathRef.current, index, images.length, 0)
+        .catch(() => {})
     }
+    lastPathRef.current = pathParam
     setLoadError(null)
     setImages([])
     albumsApi
@@ -199,28 +208,25 @@ export default function Viewer() {
 
   useEffect(() => {
     return () => {
-      if (pathParam) {
-        // 组件卸载时把「最后有效」的进度发出去：
-        // - 用 ref 取最新值（只在 images 有效时更新）
-        // - 切到下一本时（loading effect）会主动写一次进度，所以这里发的是
-        //   上一个 album 的最终值；与新 album 无关
-        const cur = progressRef.current
-        if (cur.total > 0) {
-          navigator.sendBeacon?.(
-            '/api/progress',
-            new Blob(
-              [
-                JSON.stringify({
-                  path: pathParam,
-                  index: cur.index,
-                  total: cur.total,
-                  scroll: 0,
-                }),
-              ],
-              { type: 'application/json' },
-            ),
-          )
-        }
+      // 组件卸载时把「最后有效」的进度发出去：
+      // - path/index/total 都从 ref 取，避免切到新 album 后闭包陷阱
+      // - total > 0 守卫：loading 阶段不发空进度
+      const cur = progressRef.current
+      if (cur.path && cur.total > 0) {
+        navigator.sendBeacon?.(
+          '/api/progress',
+          new Blob(
+            [
+              JSON.stringify({
+                path: cur.path,
+                index: cur.index,
+                total: cur.total,
+                scroll: 0,
+              }),
+            ],
+            { type: 'application/json' },
+          ),
+        )
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
