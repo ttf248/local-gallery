@@ -21,6 +21,7 @@ vi.mock('../../store/libraryStore', () => ({
 }))
 
 const baseConfig = {
+  mediaRoots: ['E:\\漫画'],
   mediaRoot: 'E:\\漫画',
   host: '0.0.0.0',
   port: 8080,
@@ -51,7 +52,7 @@ describe('ServerConfigPanel', () => {
       ok: true,
       config: { ...baseConfig, allowOsOpen: true },
       requiresRestart: [],
-      mediaRootChanged: false,
+      mediaRootsChanged: false,
     })
     // 重置 toasts
     useUIStore.setState({ toasts: [] })
@@ -59,6 +60,7 @@ describe('ServerConfigPanel', () => {
 
   it('渲染当前配置', async () => {
     renderPanel()
+    // mediaRoots 数组作为多 input 列表渲染
     expect(await screen.findByDisplayValue('E:\\漫画')).toBeInTheDocument()
     expect(screen.getByDisplayValue('.image-viewer')).toBeInTheDocument()
     expect(screen.getByDisplayValue('0.0.0.0')).toBeInTheDocument()
@@ -92,7 +94,7 @@ describe('ServerConfigPanel', () => {
       ok: true,
       config: { ...baseConfig, port: 9090 },
       requiresRestart: ['port'],
-      mediaRootChanged: false,
+      mediaRootsChanged: false,
     })
     renderPanel()
     const portInput = (await screen.findByDisplayValue('8080')) as HTMLInputElement
@@ -108,21 +110,54 @@ describe('ServerConfigPanel', () => {
     })
   })
 
-  it('mediaRoot 变更后提示重新扫描', async () => {
+  it('mediaRoots 变更后提示重新扫描', async () => {
     vi.mocked(configApi.update).mockResolvedValue({
       ok: true,
-      config: { ...baseConfig, mediaRoot: 'D:\\new' },
+      config: { ...baseConfig, mediaRoots: ['D:\\new'], mediaRoot: 'D:\\new' },
       requiresRestart: [],
-      mediaRootChanged: true,
+      mediaRootsChanged: true,
     })
     renderPanel()
     const input = (await screen.findByDisplayValue('E:\\漫画')) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'D:\\new' } })
     await waitFor(
-      () => expect(configApi.update).toHaveBeenCalledWith({ mediaRoot: 'D:\\new' }),
+      () => expect(configApi.update).toHaveBeenCalledWith({ mediaRoots: ['D:\\new'] }),
       { timeout: 1500 },
     )
-    expect(await screen.findByText(/图像根目录已变更/)).toBeInTheDocument()
+    expect(await screen.findByText(/媒体根目录已变更/)).toBeInTheDocument()
+  })
+
+  it('多根：添加 / 删除根目录会更新 local state（debounce 后 flush）', async () => {
+    vi.mocked(configApi.update).mockResolvedValue({
+      ok: true,
+      config: { ...baseConfig, mediaRoots: ['E:\\漫画', 'F:\\照片'] },
+      requiresRestart: [],
+      mediaRootsChanged: true,
+    })
+    renderPanel()
+    // 等待首个 input 出现
+    const firstInput = (await screen.findByDisplayValue('E:\\漫画')) as HTMLInputElement
+    // 找「添加根目录」按钮并点击
+    const addBtn = await screen.findByText(/添加根目录/)
+    fireEvent.click(addBtn)
+    // 等 React 渲染：新行 input 应该是空值
+    const allInputs = await screen.findAllByRole('textbox')
+    // 过滤出媒体根 input（placeholder 包含「照片」或「/home/user/pics」）
+    const mediaRootInputs = allInputs.filter(
+      (el) => (el as HTMLInputElement).placeholder.includes('照片') || (el as HTMLInputElement).placeholder.includes('/home/user/pics'),
+    )
+    expect(mediaRootInputs.length).toBeGreaterThanOrEqual(2)
+    // 修改第二个为空槽位 → F:\\照片
+    const secondInput = mediaRootInputs[1] as HTMLInputElement
+    fireEvent.change(secondInput, { target: { value: 'F:\\照片' } })
+    await waitFor(
+      () =>
+        expect(configApi.update).toHaveBeenCalledWith({
+          mediaRoots: ['E:\\漫画', 'F:\\照片'],
+        }),
+      { timeout: 1500 },
+    )
+    expect(firstInput).toBeInTheDocument()
   })
 
   it('保存失败时显示错误 toast', async () => {

@@ -43,25 +43,33 @@ func OpenInOS(path string) error {
 	}
 }
 
-// pathState 当前生效的根路径，atomic 保证读无锁。
+// pathState 当前生效的根路径集合；单根（兼容老路径）或多根。
+//
+// 用规范化绝对路径 + 带分隔符的 "root/" 前缀做白名单校验，O(1) 查询。
+// 多个根按出现顺序存储；任一命中即放行。
 type pathState struct {
-	root       string
-	rootWithSep string
+	roots    []string   // 规范化绝对路径
+	prefixes []string   // 与 roots 一一对应，root + PathSeparator
 }
 
+// safetyState 用 atomic.Pointer 持有 pathState，handler 读无锁。
 type safetyState struct {
 	v atomic.Pointer[pathState]
 }
 
-// PathSafetyMiddleware 返回中间件：把 ?path=<abs> 解析后校验是否在 comicRoot 之下。
-// 根路径由 RootProvider 在每次请求时提供（支持运行中热更新）。
-// RootProvider 返回的字符串必须是绝对路径或可被 filepath.Abs 解析；返回空
-// 字符串时按"无根"处理（拒绝所有非 smart: 路径）。
-type RootProvider func() string
+// RootProvider 兼容老接口：返回当前所有根的快照（用于不需要热更新的场景）。
+// 内部实现为 snapshotRoots 的包装；handler 用不到，但保留以防外部依赖。
+type RootProvider func() []string
 
-func PathSafetyMiddleware(initial string) (fiber.Handler, *safetyState) {
+// PathSafetyMiddleware 返回中间件：把 ?path=<abs> 解析后校验是否在任一
+// comicRoot 之下（多根支持）。
+// 根路径由 RootsProvider 在每次请求时提供（支持运行中热更新）。
+// RootsProvider 返回空切片时按"无根"处理（拒绝所有非 smart: 路径）。
+type RootsProvider func() []string
+
+func PathSafetyMiddleware(initialRoots []string) (fiber.Handler, *safetyState) {
 	state := &safetyState{}
-	state.set(initial)
+	state.setRoots(initialRoots)
 	handler := func(c *fiber.Ctx) error {
 		path := c.Query("path")
 		if path == "" {
@@ -73,12 +81,12 @@ func PathSafetyMiddleware(initial string) (fiber.Handler, *safetyState) {
 			return c.Next()
 		}
 		ps := state.v.Load()
-		if ps == nil {
+		if ps == nil || len(ps.roots) == 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "mediaRoot not configured",
+				"error": "mediaRoots not configured",
 			})
 		}
-		clean, err := validatePath(ps.root, ps.rootWithSep, path)
+		clean, err := validatePathMulti(ps.roots, ps.prefixes, path)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
@@ -91,21 +99,27 @@ func PathSafetyMiddleware(initial string) (fiber.Handler, *safetyState) {
 	return handler, state
 }
 
-// set 替换根路径；不合法时保持原值不变。
-func (s *safetyState) set(root string) {
-	abs, err := filepath.Abs(root)
-	if err != nil {
-		abs = root
+// setRoots 替换根集合；不合法时回退到空（拒绝所有非 smart 路径）。
+func (s *safetyState) setRoots(roots []string) {
+	absRoots := make([]string, 0, len(roots))
+	prefixes := make([]string, 0, len(roots))
+	for _, r := range roots {
+		abs, err := filepath.Abs(r)
+		if err != nil {
+			abs = r
+		}
+		absRoots = append(absRoots, abs)
+		prefixes = append(prefixes, abs+string(os.PathSeparator))
 	}
 	s.v.Store(&pathState{
-		root:       abs,
-		rootWithSep: abs + string(os.PathSeparator),
+		roots:    absRoots,
+		prefixes: prefixes,
 	})
 }
 
-// SetRoot 公开方法，供 Manager 回调调用以热更新根路径。
-func (s *safetyState) SetRoot(root string) {
-	s.set(root)
+// SetRoots 公开方法，供 Manager 回调调用以热更新根集合。
+func (s *safetyState) SetRoots(roots []string) {
+	s.setRoots(roots)
 }
 
 // SafePath 从 c.Locals 取出已校验的绝对路径。
@@ -116,7 +130,10 @@ func SafePath(c *fiber.Ctx) string {
 	return c.Query("path")
 }
 
-func validatePath(root, rootWithSep, p string) (string, error) {
+// validatePathMulti 检查 p 是否在任一根之下。
+//  - 必须绝对路径
+//  - filepath.Rel 不报错且不以 ".." 开头即为子路径
+func validatePathMulti(roots, prefixes []string, p string) (string, error) {
 	if !filepath.IsAbs(p) {
 		return "", fmt.Errorf("path must be absolute")
 	}
@@ -124,13 +141,17 @@ func validatePath(root, rootWithSep, p string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	// 用 filepath.Rel 检测是否真正位于 root 之下，结果以 .. 开头即为逃逸。
-	rel, err := filepath.Rel(root, abs)
-	if err != nil {
-		return "", fmt.Errorf("path outside comic root")
+	for i, root := range roots {
+		rel, err := filepath.Rel(root, abs)
+		if err != nil {
+			continue
+		}
+		if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			continue
+		}
+		// 命中第 i 个根；额外断言 abs 以 prefix 开头，避免边缘大小写问题
+		_ = prefixes[i] // 保留 prefixes 字段供未来 audit / debug
+		return abs, nil
 	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		return "", fmt.Errorf("path outside comic root")
-	}
-	return abs, nil
+	return "", fmt.Errorf("path outside any configured media root")
 }

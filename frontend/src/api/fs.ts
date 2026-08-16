@@ -15,7 +15,11 @@ export const fsApi = {
   health: () =>
     api<{
       status: string
+      // 多根（权威）
+      mediaRoots: string[]
+      // 兼容：mediaRoots[0]
       mediaRoot: string
+      // 兼容：mediaRoots[0]（老字段名）
       comicRoot: string
       version: string
       goVersion: string

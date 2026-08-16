@@ -68,8 +68,10 @@ func (r *AsyncScanRunner) SetCache(cache *ScanResultCache) {
 }
 
 // Start 启动一次新扫描，返回 scan_id 和事件通道。
+//
+// 至少需要一个根：opts.Roots 非空优先；否则回退到 opts.Root（兼容）。
 func (r *AsyncScanRunner) Start(opts ScanOptions) (string, <-chan ProgressEvent, error) {
-	if opts.Root == "" {
+	if len(opts.Roots) == 0 && opts.Root == "" {
 		return "", nil, errors.New("root is required")
 	}
 

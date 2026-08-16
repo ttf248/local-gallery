@@ -180,7 +180,7 @@ Toolbar ThemeSwitcher → useUIStore.setTheme(t)
 # 后端
 cd backend
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，设置 mediaRoot: "/data/images"
+# 编辑 config.yaml，设置 mediaRoots（数组，支持多个根目录）
 go build -o image-viewer ./cmd/server
 ./image-viewer
 

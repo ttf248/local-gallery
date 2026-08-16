@@ -36,12 +36,12 @@
 ```bash
 cd backend
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，至少设置 mediaRoot
+# 编辑 config.yaml，至少设置 mediaRoots（数组，支持多个目录）
 ```
 
 后端从 `./config.yaml`（相对启动 CWD）加载配置；不存在则用内置默认值。未配置 `cacheDir` 时自动在 CWD 下创建 `.image-viewer/`。
 
-> 配置项 `mediaRoot` 是新名；旧名 `comicRoot` 仍可识别。`/api/health` 同时返回两者，便于排查。
+> 配置项 `mediaRoots` 是权威字段（数组）。旧名 `mediaRoot` / `comicRoot`（单数）仍可识别，视为单元素数组。`/api/health` 同时返回 `mediaRoots`（数组）和 `mediaRoot`（首元素），便于排查。多根扫描结果会合并到一个全局库，每个相册/集合带 `sourceRoot` / `sourceName` 标识来源，UI 卡片显示「来自 XXX」badge。
 
 ### 3. 启动后端
 
@@ -73,7 +73,7 @@ npm run dev
 ```bash
 cd frontend && npm run build      # 产物在 frontend/dist
 cd ../backend && go build -o ../bin/server ./cmd/server
-# 在 backend/config.yaml 中设置 mediaRoot 指向图像根目录
+# 在 backend/config.yaml 中设置 mediaRoots 指向图像根目录（支持多个）
 ./bin/server
 ```
 
@@ -87,7 +87,7 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 
 | 来源 | 示例 |
 |------|------|
-| YAML 配置文件 | `backend/config.yaml` 字段 `mediaRoot` 等 |
+| YAML 配置文件 | `backend/config.yaml` 字段 `mediaRoots` 等 |
 | 内置默认值 | `./images`（相对后端 CWD），缓存目录 `<CWD>/.image-viewer/` |
 | 网页设置页 | `/settings` → 「服务端」section；改动自动写回 YAML（部分字段需重启） |
 

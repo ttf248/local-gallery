@@ -15,9 +15,33 @@ import (
 )
 
 // ScanOptions 扫描选项。
+//
+// Roots 优先于 Root：当 Roots 非空时扫描所有根并合并结果；否则回退到
+// 老的单根 Root 字段（兼容）。Root 仍然会作为单元素根的来源同步到 Roots
+// 用于规范化处理。
 type ScanOptions struct {
-	Root     string // 必填，绝对路径
-	MaxDepth int    // 集合（collection）最大递归深度，0 或负数视为 1
+	Root     string   // 单根（兼容）；与 Roots 二选一
+	Roots    []string // 多根（推荐）；非空时优先
+	MaxDepth int      // 集合（collection）最大递归深度，0 或负数视为 1
+}
+
+// effectiveRoots 返回本轮要扫描的根列表（去重、保序、规范化）。
+func (o ScanOptions) effectiveRoots() []string {
+	src := o.Roots
+	if len(src) == 0 && o.Root != "" {
+		src = []string{o.Root}
+	}
+	seen := make(map[string]bool, len(src))
+	out := make([]string, 0, len(src))
+	for _, r := range src {
+		r = filepath.Clean(r)
+		if r == "" || seen[r] {
+			continue
+		}
+		seen[r] = true
+		out = append(out, r)
+	}
+	return out
 }
 
 // ScanProgress 扫描进度回调参数。
@@ -85,20 +109,14 @@ func (s *Scanner) Scan(opts ScanOptions) (*models.ScanResult, error) {
 
 // ScanWithHook 与 Scan 相同，但额外接受一个进度回调。
 // hook 可以为 nil，此时等同于 Scan。
+//
+// 多根扫描：opts.Roots 非空时按顺序扫描每个根，合并所有顶层 Albums /
+// Collections，并给每个 Album/Collection 填充 SourceRoot/SourceName 字段。
+// 跨根同名时，DisplayName 会加 "[SourceName] " 前缀避免歧义。
 func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanResult, error) {
-	root := opts.Root
-	if root == "" {
+	roots := opts.effectiveRoots()
+	if len(roots) == 0 {
 		return nil, errors.New("root is empty")
-	}
-	info, err := os.Stat(root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, &ScanError{Kind: ScanRootMissing, Path: root, Err: err}
-		}
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, &ScanError{Kind: ScanRootNotDir, Path: root, Err: errors.New("not a directory")}
 	}
 
 	depth := opts.MaxDepth
@@ -106,26 +124,60 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 		depth = 1
 	}
 
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return nil, err
-	}
-
 	start := time.Now()
 
-	// 预计算顶层子目录总数用于进度展示（不阻塞大目录）
-	topEntries, _ := os.ReadDir(absRoot)
-	var topSubdirs []string
-	for _, e := range topEntries {
-		if e.IsDir() {
-			topSubdirs = append(topSubdirs, e.Name())
+	// 校验所有根并规范化
+	absRoots := make([]string, 0, len(roots))
+	for _, r := range roots {
+		abs, err := filepath.Abs(r)
+		if err != nil {
+			return nil, err
 		}
+		info, err := os.Stat(abs)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, &ScanError{Kind: ScanRootMissing, Path: r, Err: err}
+			}
+			return nil, err
+		}
+		if !info.IsDir() {
+			return nil, &ScanError{Kind: ScanRootNotDir, Path: r, Err: errors.New("not a directory")}
+		}
+		absRoots = append(absRoots, abs)
 	}
 
-	topAlbums, topCollections := s.scanLayerWithHook(absRoot, absRoot, depth, 0, hook,
-		len(topSubdirs), 0)
+	var allTopAlbums []models.Album
+	var allTopCollections []models.Collection
 
-	allAlbums := flattenAlbums(topAlbums, topCollections)
+	// 逐根扫描；进度回调累计所有根的处理数
+	for _, absRoot := range absRoots {
+		topEntries, _ := os.ReadDir(absRoot)
+		var topSubdirs []string
+		for _, e := range topEntries {
+			if e.IsDir() {
+				topSubdirs = append(topSubdirs, e.Name())
+			}
+		}
+
+		// 把当前根的顶层进度归零；多根的 progress 在 hook 内独立计算
+		// 由调用方基于 elapsedMs 自行推断
+		topAlbums, topCollections := s.scanLayerWithHook(absRoot, absRoot, depth, 0, hook,
+			len(topSubdirs), 0)
+
+		// 给所有产生的 album/collection 打 source 标签
+		srcName := filepath.Base(absRoot)
+		stampAlbumSource(&topAlbums, absRoot, srcName)
+		stampCollectionSource(&topCollections, absRoot, srcName)
+
+		allTopAlbums = append(allTopAlbums, topAlbums...)
+		allTopCollections = append(allTopCollections, topCollections...)
+	}
+
+	// 跨根同名冲突：给 DisplayName 加 [SourceName] 前缀
+	applyNamePrefixIfConflict(&allTopAlbums)
+	applyCollectionNamePrefixIfConflict(&allTopCollections)
+
+	allAlbums := flattenAlbums(allTopAlbums, allTopCollections)
 	if hook != nil {
 		hook(ScanProgress{
 			Phase:       "smart-grouping",
@@ -134,17 +186,81 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 	}
 	smart := GroupByTag(allAlbums)
 
+	rootsForResult := make([]string, len(absRoots))
+	copy(rootsForResult, absRoots)
+
 	result := &models.ScanResult{
-		Root:             absRoot,
-		Albums:           topAlbums,
-		Collections:      topCollections,
+		Root:             absRoots[0],
+		Roots:            rootsForResult,
+		Albums:           allTopAlbums,
+		Collections:      allTopCollections,
 		SmartCollections: smart,
 		AlbumCount:       len(allAlbums),
-		CollectionCount:  countCollections(topCollections),
+		CollectionCount:  countCollections(allTopCollections),
 		Duration:         time.Since(start).Milliseconds(),
 		ScannedAt:        time.Now(),
 	}
 	return result, nil
+}
+
+// stampAlbumSource 给 album 列表（含嵌套 collection 内）打 SourceRoot / SourceName
+// 并把空 DisplayName 填上 Name（基础值，后续冲突检测可能再覆盖）。
+func stampAlbumSource(albums *[]models.Album, srcRoot, srcName string) {
+	for i := range *albums {
+		(*albums)[i].SourceRoot = srcRoot
+		(*albums)[i].SourceName = srcName
+		if (*albums)[i].DisplayName == "" {
+			(*albums)[i].DisplayName = (*albums)[i].Name
+		}
+	}
+}
+
+func stampCollectionSource(collections *[]models.Collection, srcRoot, srcName string) {
+	for i := range *collections {
+		(*collections)[i].SourceRoot = srcRoot
+		(*collections)[i].SourceName = srcName
+		if (*collections)[i].DisplayName == "" {
+			(*collections)[i].DisplayName = (*collections)[i].Name
+		}
+		// 递归到子 albums
+		stampAlbumSource(&(*collections)[i].Albums, srcRoot, srcName)
+	}
+}
+
+// applyNamePrefixIfConflict 对所有 album 检测同名冲突，冲突的加来源前缀。
+// 只在顶层 + collection 内部 album 中各检测一次；不同根的同名 album 会
+// 被识别为冲突。
+func applyNamePrefixIfConflict(albums *[]models.Album) {
+	// 第一遍：统计 name 出现次数
+	counts := make(map[string]int)
+	for _, a := range *albums {
+		counts[a.Name]++
+	}
+	for i := range *albums {
+		if counts[(*albums)[i].Name] > 1 && (*albums)[i].SourceName != "" {
+			(*albums)[i].DisplayName = "[" + (*albums)[i].SourceName + "] " + (*albums)[i].Name
+		}
+	}
+}
+
+// applyCollectionNamePrefixIfConflict 对所有 collection（含嵌套的子 albums）
+// 做同名冲突检测。冲突的 collection 改名；其内部子 album 由于名字继承关系
+// 不会被全局计数重复（不同根的同名 collection 才会撞）。
+func applyCollectionNamePrefixIfConflict(collections *[]models.Collection) {
+	// 顶层冲突
+	counts := make(map[string]int)
+	for _, c := range *collections {
+		counts[c.Name]++
+	}
+	for i := range *collections {
+		if counts[(*collections)[i].Name] > 1 && (*collections)[i].SourceName != "" {
+			(*collections)[i].DisplayName = "[" + (*collections)[i].SourceName + "] " + (*collections)[i].Name
+		}
+		// 子 album 在 stampAlbumSource 已经按所在 collection 的源打了 source
+		// 但跨根同名时，stampAlbumSource 不会重新命名，需要做冲突检测
+		// 不过子 album 的路径在所在 collection 之下，不会跨根冲突
+		// 所以此处不处理子 album
+	}
 }
 
 // scanLayer 扫描单层目录（无进度回调）。

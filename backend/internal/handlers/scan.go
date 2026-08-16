@@ -12,11 +12,11 @@ import (
 )
 
 // ScanHandler 同步扫描（保留兼容）。
-// comicRoot 在每次请求时通过 mgr.Root() 读取，响应 MediaRoot 的热更新。
+// mediaRoots 在每次请求时通过 mgr.Roots() 读取，响应热更新。
 func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		result, err := scanner.Scan(services.ScanOptions{
-			Root:     mgr.Root(),
+			Roots:    mgr.Roots(),
 			MaxDepth: 2,
 		})
 		if err != nil {
@@ -39,7 +39,7 @@ func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, _, err := runner.Start(services.ScanOptions{
-			Root:     mgr.Root(),
+			Roots:    mgr.Roots(),
 			MaxDepth: 2,
 		})
 		if err != nil {

@@ -8,12 +8,12 @@
 |----|----|
 | 基础地址 | `http://<host>:<port>`（默认 `http://localhost:8080`） |
 | 内容类型 | `application/json`（除缩略图/原图外） |
-| 路径参数 | URL 中的 `?path=<abs>` 必须为绝对路径，且必须位于配置的 `mediaRoot` 之下；`?path=smart:<tag>` 用于按标签查询智能合集 |
+| 路径参数 | URL 中的 `?path=<abs>` 必须为绝对路径，且必须位于配置的任一 `mediaRoots` 之下；`?path=smart:<tag>` 用于按标签查询智能合集 |
 | 字符编码 | UTF-8；路径中的中文/空格需 URL-encode |
 | 错误响应 | `{ "error": "<可读消息>" }`，状态码 4xx/5xx |
 | Cache-Control | 缩略图 30 天；原图 1 天 |
 
-> 兼容说明：路径根字段新名 `mediaRoot`，旧名 `comicRoot` 仍可识别；`/api/albums` 与 `/api/folders` 是同一接口的两个名称。
+> 兼容说明：路径根字段新名 `mediaRoots`（数组），旧名 `mediaRoot` / `comicRoot` 仍可识别；`/api/albums` 与 `/api/folders` 是同一接口的两个名称。
 
 ---
 
@@ -24,6 +24,7 @@
 ```json
 {
   "status": "ok",
+  "mediaRoots": ["E:\\图像", "F:\\漫画"],
   "mediaRoot": "E:\\图像",
   "comicRoot": "E:\\图像",
   "version": "0.1.0",
@@ -32,7 +33,7 @@
 }
 ```
 
-`mediaRoot` 为当前生效根（优先用新名）；`comicRoot` 同步暴露以兼容旧客户端。
+`mediaRoots` 是权威字段（数组）；`mediaRoot` / `comicRoot` 保留为 `mediaRoots[0]` 的别名以兼容旧客户端。`/api/fs/open` 等所有 `?path=` 接口都接受任一根下的绝对路径。
 
 ---
 
@@ -282,7 +283,7 @@ data: {"scanId":"...","error":"permission denied",...}
 在系统文件管理器中打开指定路径（Windows 资源管理器/macOS Finder/Linux xdg-open）。
 
 - 仅当配置 `allowOsOpen=true` 时启用（默认关闭）。
-- 路径必须在 `mediaRoot` 内（防越权）。
+- 路径必须在任一 `mediaRoots` 之下（防越权）。
 - 403：`allowOsOpen` 禁用；400：路径越权。
 
 ---
@@ -304,9 +305,13 @@ data: {"scanId":"...","error":"permission denied",...}
 通过 `backend/config.yaml` 配置（默认相对后端 CWD 查找）。完整示例见 [`backend/config.example.yaml`](../backend/config.example.yaml)。
 
 ```yaml
-# 图像根目录（必填，必须是已存在的目录）
-# 新名；旧名 comicRoot 仍可识别。
-mediaRoot: "E:\\图像"
+# 媒体根目录（数组，必填；所有路径必须存在且为目录）
+# 支持配置多个目录,所有根下的子目录都会被扫描、合并到一个全局库中。
+# 旧配置 `mediaRoot: "..."` / `comicRoot: "..."` 仍然兼容（视为单元素数组）,
+# 首次保存后会被规范化成 `mediaRoots` 数组。
+mediaRoots:
+  - "E:\\照片"
+  - "F:\\漫画"
 
 # 监听地址与端口
 host: "0.0.0.0"
@@ -342,17 +347,18 @@ staticDir: "dist"
 
 | 字段 | GET/PUT 行为 |
 |------|-------------|
-| `mediaRoot` | 热生效：路径安全中间件和扫描器改读新根；旧扫描结果会清空，调用方应触发重新扫描 |
+| `mediaRoots` | 热生效：路径安全中间件和扫描器改读新根集合；旧扫描结果会清空，调用方应触发重新扫描 |
 | `cacheDir` / `thumbSizeW` / `thumbSizeH` / `thumbCacheSize` / `cacheMaxAgeDays` | 热生效：缩略图服务立即使用新参数 |
 | `allowOsOpen` | 热生效：`/api/fs/open` 立即按新值放行 / 拦截 |
 | `host` / `port` / `staticDir` | **需重启后端**（监听地址 / 端口 / 静态托管都绑定在启动期）|
 
-PUT 响应里 `requiresRestart` 列出需要重启的字段；`mediaRootChanged` 指示是否清空了扫描缓存。
+PUT 响应里 `requiresRestart` 列出需要重启的字段；`mediaRootsChanged` 指示根集合是否变化（是否清空了扫描缓存）。
 
 ### `GET /api/config`
 
 ```json
 {
+  "mediaRoots": ["E:\\图像"],
   "mediaRoot": "E:\\图像",
   "host": "0.0.0.0",
   "port": 8080,
@@ -382,7 +388,7 @@ PUT 响应里 `requiresRestart` 列出需要重启的字段；`mediaRootChanged`
   "ok": true,
   "config": { "...": "更新后的完整配置" },
   "requiresRestart": [],
-  "mediaRootChanged": false
+  "mediaRootsChanged": false
 }
 ```
 

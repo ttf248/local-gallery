@@ -138,8 +138,8 @@ func TestManager_Update_MediaRootClearsLegacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = mgr.Update(ConfigPatch{
-		MediaRoot:    newRoot,
-		MediaRootSet: true,
+		MediaRoots:    []string{newRoot},
+		MediaRootsSet: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -150,6 +150,39 @@ func TestManager_Update_MediaRootClearsLegacy(t *testing.T) {
 	}
 	if cfg.LegacyComicRoot != "" {
 		t.Errorf("LegacyComicRoot should be cleared, got %q", cfg.LegacyComicRoot)
+	}
+}
+
+// 多根 PATCH：传入数组应整体替换，LegacyComicRoot 清空。
+func TestManager_Update_MediaRootsMulti(t *testing.T) {
+	path := writeValidYAML(t, "")
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root1 := filepath.Join(t.TempDir(), "r1")
+	root2 := filepath.Join(t.TempDir(), "r2")
+	for _, r := range []string{root1, root2} {
+		if err := os.MkdirAll(r, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err = mgr.Update(ConfigPatch{
+		MediaRoots:    []string{root1, root2},
+		MediaRootsSet: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	roots := mgr.Roots()
+	if len(roots) != 2 {
+		t.Fatalf("expected 2 roots, got %d (%v)", len(roots), roots)
+	}
+	if roots[0] != root1 || roots[1] != root2 {
+		t.Errorf("roots order: %v", roots)
+	}
+	if mgr.Get().LegacyComicRoot != "" {
+		t.Errorf("legacy should be cleared")
 	}
 }
 

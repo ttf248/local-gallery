@@ -4,6 +4,12 @@ export interface AlbumSummary {
   type: 'album'
   path: string
   name: string
+  // 多根扫描时：同名冲突的 album 会加 "[SourceName] " 前缀；无冲突时与 name 相同
+  displayName?: string
+  // 来源媒体根的绝对路径（多根时填充）；单根场景可为空
+  sourceRoot?: string
+  // 来源媒体根的 basename，用于 UI badge 显示
+  sourceName?: string
   coverImage: string
   imageCount: number
   // 新字段：files 优先；旧字段 imageFiles 作为兜底。
@@ -18,6 +24,9 @@ export interface CollectionSummary {
   type: 'collection'
   path: string
   name: string
+  displayName?: string
+  sourceRoot?: string
+  sourceName?: string
   albums: AlbumSummary[]
   albumCount: number
 }
@@ -31,7 +40,10 @@ export interface SmartCollectionSummary {
 }
 
 export interface ScanResult {
+  // 第一个媒体根（兼容字段）
   root: string
+  // 全部媒体根（多根时输出）；单根时只含 1 个元素
+  roots?: string[]
   albums: AlbumSummary[]
   // 新字段：folders 优先（与 albums 同源）；旧字段 albums 仍保留。
   folders?: AlbumSummary[]

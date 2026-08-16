@@ -41,10 +41,13 @@ function buildCards(r: ScanResult | null): CardData[] {
       id: 'a:' + a.path,
       variant: 'album',
       title: a.name,
+      displayTitle: a.displayName,
       subtitle: a.author || undefined,
       count: a.imageCount,
       coverPath: a.coverImage,
       to: albumRoute(a.path),
+      sourceRoot: a.sourceRoot,
+      sourceName: a.sourceName,
     })
   }
   for (const c of collections) {
@@ -52,10 +55,13 @@ function buildCards(r: ScanResult | null): CardData[] {
       id: 'c:' + c.path,
       variant: 'collection',
       title: c.name,
+      displayTitle: c.displayName,
       subtitle: '集合',
       count: c.albumCount,
       coverPath: c.albums[0]?.coverImage ?? '',
       to: albumRoute(c.path),
+      sourceRoot: c.sourceRoot,
+      sourceName: c.sourceName,
     })
   }
   for (const s of smartCollections) {
@@ -157,10 +163,13 @@ export default function Home() {
         id: 'a:' + a.path,
         variant: 'album' as const,
         title: a.name,
+        displayTitle: a.displayName,
         subtitle: a.author || undefined,
         count: a.imageCount,
         coverPath: a.coverImage,
         to: albumRoute(a.path),
+        sourceRoot: a.sourceRoot,
+        sourceName: a.sourceName,
       }))
   }, [result])
 
@@ -177,10 +186,13 @@ export default function Home() {
         id: 'a:' + a.path,
         variant: 'album' as const,
         title: a.name,
+        displayTitle: a.displayName,
         subtitle: a.author || undefined,
         count: a.imageCount,
         coverPath: a.coverImage,
         to: albumRoute(a.path),
+        sourceRoot: a.sourceRoot,
+        sourceName: a.sourceName,
       })
     }
     return items
@@ -203,10 +215,13 @@ export default function Home() {
           id: 'a:' + a.path,
           variant: 'album' as const,
           title: a.name,
+          displayTitle: a.displayName,
           subtitle: a.author || undefined,
           count: a.imageCount,
           coverPath: a.coverImage,
           to: albumRoute(a.path),
+          sourceRoot: a.sourceRoot,
+          sourceName: a.sourceName,
           progress: p ? { index: p.index, total: p.total } : undefined,
           lastSeenAt: p?.updated ?? null,
           badge: 'rewind' as const,

@@ -12,7 +12,11 @@ export type CardBadge = 'rewind' // 重温：30 天以上没看
 export interface CardData {
   id: string
   variant: CardVariant
+  // 原始名（来自后端 album.name）
   title: string
+  // 多根冲突时显示的"处理后"名；与 title 不同时说明带来源前缀
+  displayTitle?: string
+  // 副标题（集合 / smart 通常为空；album 是 author / path basename）
   subtitle?: string
   count: number
   coverPath: string
@@ -22,6 +26,10 @@ export interface CardData {
   progress?: { index: number; total: number }
   // 上次阅读时间（ISO），用于悬停预览的「上次 X」展示
   lastSeenAt?: string | null
+  // 来源媒体根（多根扫描时填充）。前端用来显示 badge "来自 X"
+  sourceRoot?: string
+  // 来源媒体根的 basename（直接给 UI 用）
+  sourceName?: string
   // 角标：当前只支持重温；未来可扩展
   badge?: CardBadge
 }
@@ -247,9 +255,9 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       <div className="pt-3 pb-1">
         <div
           className="text-[13px] font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent"
-          title={data.title}
+          title={data.displayTitle ?? data.title}
         >
-          {data.title}
+          {data.displayTitle ?? data.title}
         </div>
         <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5">
           <span>
@@ -262,6 +270,13 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             </>
           )}
         </div>
+        {/* 多根来源 badge：与 author/副标题独立维度，作为视觉小标签放在元数据行 */}
+        {data.sourceName && (
+          <div className="text-[10px] text-fg-subtle/80 mt-0.5 inline-flex items-center gap-1">
+            <FolderIcon size={10} className="shrink-0" />
+            <span className="truncate">来自 {data.sourceName}</span>
+          </div>
+        )}
         {showLastSeen && data.lastSeenAt && (
           <div
             className="text-[11px] text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
@@ -388,7 +403,9 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
 
       <div className="flex-1 min-w-0">
         <div className="text-[14px] font-medium text-fg truncate flex items-center gap-1.5">
-          <span className="truncate">{data.title}</span>
+          <span className="truncate" title={data.displayTitle ?? data.title}>
+            {data.displayTitle ?? data.title}
+          </span>
           {isFinished && data.variant === 'album' && (
             <span className="inline-flex items-center gap-0.5 text-success text-[11px] font-medium shrink-0">
               <CheckIcon size={11} />
@@ -401,6 +418,12 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           <span className="tabular-nums shrink-0">
             {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
           </span>
+          {data.sourceName && (
+            <span className="text-fg-subtle/80 inline-flex items-center gap-0.5 shrink-0">
+              <FolderIcon size={11} className="shrink-0" />
+              <span className="truncate">来自 {data.sourceName}</span>
+            </span>
+          )}
         </div>
         {progressPct !== null && progressPct > 0 && (
           <div className="mt-2 flex items-center gap-2">

@@ -62,7 +62,15 @@ func main() {
 	}
 
 	log.Printf("comic-reader 后端启动中...")
-	log.Printf("  MediaRoot: %s", cfg.Root())
+	roots := cfg.Roots()
+	if len(roots) == 1 {
+		log.Printf("  MediaRoot: %s", roots[0])
+	} else {
+		log.Printf("  MediaRoots (%d):", len(roots))
+		for _, r := range roots {
+			log.Printf("    - %s", r)
+		}
+	}
 	log.Printf("  CacheDir:  %s", cfg.CacheDir)
 	log.Printf("  Thumbnail: %dx%d", cfg.ThumbSizeW, cfg.ThumbSizeH)
 	log.Printf("  Listen:    %s", cfg.Addr())
@@ -82,11 +90,11 @@ func main() {
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())
 
-	// 路径安全中间件：根目录从 Manager 动态读取，运行中可热更新
-	safetyMw, safetyState := middleware.PathSafetyMiddleware(cfg.Root())
+	// 路径安全中间件：根集合从 Manager 动态读取，运行中可热更新
+	safetyMw, safetyState := middleware.PathSafetyMiddleware(cfg.Roots())
 	app.Use(safetyMw)
 	mgr.OnChange("path_safety", func(snapshot *config.Config) {
-		safetyState.SetRoot(snapshot.Root())
+		safetyState.SetRoots(snapshot.Roots())
 	})
 
 	// ---- 路由 ----
@@ -127,13 +135,18 @@ func main() {
 		}
 	})
 
-	// 当 MediaRoot 变更：清空扫描缓存，扫描器/handler 已通过 mgr.Root() 读最新值
-	onConfigUpdate := func(newCfg *config.Config, mediaRootChanged bool) error {
-		if mediaRootChanged {
+	// 当 MediaRoots 变更：清空扫描缓存，扫描器/handler 已通过 mgr.Roots() 读最新值
+	onConfigUpdate := func(newCfg *config.Config, mediaRootsChanged bool) error {
+		if mediaRootsChanged {
 			if err := scanCache.Clear(); err != nil {
 				return fmt.Errorf("clear scan cache: %w", err)
 			}
-			log.Printf("  MediaRoot 变更为 %s，已清空扫描缓存", newCfg.Root())
+			roots := newCfg.Roots()
+			if len(roots) == 1 {
+				log.Printf("  MediaRoot 变更为 %s，已清空扫描缓存", roots[0])
+			} else {
+				log.Printf("  MediaRoots 变更为 %d 个目录，已清空扫描缓存", len(roots))
+			}
 		}
 		return nil
 	}

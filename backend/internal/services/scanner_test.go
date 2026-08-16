@@ -321,3 +321,93 @@ func namesOf(albums []models.Album) []string {
 	sort.Strings(out)
 	return out
 }
+
+// 多根扫描：两个独立根，扫描结果应合并到一起，Album.SourceRoot 正确填充。
+func TestScan_MultiRoots(t *testing.T) {
+	root1 := t.TempDir()
+	root2 := t.TempDir()
+
+	mkdirAll(t, filepath.Join(root1, "r1-album"))
+	touchAll(t, filepath.Join(root1, "r1-album", "1.jpg"))
+
+	mkdirAll(t, filepath.Join(root2, "r2-album"))
+	touchAll(t, filepath.Join(root2, "r2-album", "1.png"))
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Roots: []string{root1, root2}, MaxDepth: 2})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(res.Albums) != 2 {
+		t.Fatalf("expected 2 albums, got %d: %v", len(res.Albums), namesOf(res.Albums))
+	}
+	if len(res.Roots) != 2 {
+		t.Errorf("expected 2 roots in result, got %d", len(res.Roots))
+	}
+	// 检查每个 album 都有 SourceRoot / SourceName
+	for _, a := range res.Albums {
+		if a.SourceRoot == "" {
+			t.Errorf("album %s missing SourceRoot", a.Name)
+		}
+		if a.SourceName == "" {
+			t.Errorf("album %s missing SourceName", a.Name)
+		}
+		if a.DisplayName == "" {
+			t.Errorf("album %s missing DisplayName", a.Name)
+		}
+	}
+}
+
+// 跨根同名冲突：两个根下都有 "Collection A"，DisplayName 加来源前缀。
+func TestScan_MultiRoots_NameConflict(t *testing.T) {
+	root1 := t.TempDir()
+	root2 := t.TempDir()
+
+	// 两个根都有同名 album "common"
+	mkdirAll(t, filepath.Join(root1, "common"))
+	touchAll(t, filepath.Join(root1, "common", "1.jpg"))
+	mkdirAll(t, filepath.Join(root2, "common"))
+	touchAll(t, filepath.Join(root2, "common", "1.png"))
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Roots: []string{root1, root2}})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(res.Albums) != 2 {
+		t.Fatalf("expected 2 albums, got %d", len(res.Albums))
+	}
+	// 两个 DisplayName 应不同（带来源前缀）
+	if res.Albums[0].DisplayName == res.Albums[1].DisplayName {
+		t.Errorf("expected different DisplayNames, both = %q", res.Albums[0].DisplayName)
+	}
+	// 但 Name 都是 "common"
+	for _, a := range res.Albums {
+		if a.Name != "common" {
+			t.Errorf("expected Name=common, got %q", a.Name)
+		}
+	}
+}
+
+// 根为 nil/空时返回 error。
+func TestScan_MultiRoots_Empty(t *testing.T) {
+	s := NewScanner()
+	if _, err := s.Scan(ScanOptions{Roots: nil}); err == nil {
+		t.Error("expected error for empty roots")
+	}
+}
+
+// 根不存在时返回 ScanError。
+func TestScan_MultiRoots_OneMissing(t *testing.T) {
+	root1 := t.TempDir()
+	missing := filepath.Join(t.TempDir(), "nope")
+	s := NewScanner()
+	_, err := s.Scan(ScanOptions{Roots: []string{root1, missing}})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	se, ok := err.(*ScanError)
+	if !ok || se.Kind != ScanRootMissing {
+		t.Errorf("expected ScanRootMissing, got %v", err)
+	}
+}

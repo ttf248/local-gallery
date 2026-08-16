@@ -65,11 +65,22 @@ func (m *Manager) Get() *Config {
 	return cloneConfig(m.current)
 }
 
-// Root 返回当前生效的媒体根目录。便捷转发，handler 不必先 Get。
+// Root 返回当前生效的第一个媒体根目录。便捷转发，handler 不必先 Get。
+// 多根场景请改用 Roots()。
 func (m *Manager) Root() string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.current.Root()
+}
+
+// Roots 返回当前生效的所有媒体根目录（已规范化）。
+func (m *Manager) Roots() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	src := m.current.Roots()
+	out := make([]string, len(src))
+	copy(out, src)
+	return out
 }
 
 // Path 返回配置文件路径（绝对），用于错误信息展示。
@@ -198,6 +209,11 @@ func cloneConfig(c *Config) *Config {
 		return nil
 	}
 	cp := *c
+	// 深拷贝切片，避免外部修改影响内部状态
+	if c.MediaRoots != nil {
+		cp.MediaRoots = append([]string(nil), c.MediaRoots...)
+	}
+	cp.syncFirstRoot()
 	return &cp
 }
 
@@ -223,7 +239,10 @@ func saveYAML(path string, cfg *Config) error {
 
 // marshalConfig 用 yaml.Node 输出，key 顺序与 config.example.yaml 保持一致，
 // 方便用户阅读和人工编辑。
+//
+// mediaRoots 始终序列化为数组；0 个元素时序列化为空数组 []，让用户明确"已配置但为空"。
 func marshalConfig(cfg *Config) ([]byte, error) {
+	cfg.syncFirstRoot()
 	root := &yaml.Node{
 		Kind: yaml.MappingNode,
 		Tag:  "!!map",
@@ -234,7 +253,19 @@ func marshalConfig(cfg *Config) ([]byte, error) {
 			v,
 		)
 	}
-	addKV("mediaRoot", scalarString(cfg.MediaRoot))
+
+	// mediaRoots 数组
+	roots := cfg.Roots()
+	rootsNode := &yaml.Node{
+		Kind:    yaml.SequenceNode,
+		Tag:     "!!seq",
+		Content: make([]*yaml.Node, 0, len(roots)),
+	}
+	for _, r := range roots {
+		rootsNode.Content = append(rootsNode.Content, scalarString(r))
+	}
+	addKV("mediaRoots", rootsNode)
+
 	addKV("host", scalarString(cfg.Host))
 	addKV("port", scalarInt(cfg.Port))
 	addKV("cacheDir", scalarString(cfg.CacheDir))
@@ -262,10 +293,10 @@ func scalarBool(b bool) *yaml.Node {
 }
 
 // applyPatch 把 patch 中的显式字段合并到 dst。Set 标志由 ConfigPatch 提供。
-// mediaRoot 切换时同时清空 LegacyComicRoot（保持与 LoadFile 一致）。
+// mediaRoots 切换时同时清空 LegacyComicRoot（保持与 LoadFile 一致）。
 func applyPatch(dst *Config, p *ConfigPatch) {
-	if p.MediaRootSet {
-		dst.MediaRoot = p.MediaRoot
+	if p.MediaRootsSet {
+		dst.MediaRoots = append([]string(nil), p.MediaRoots...)
 		dst.LegacyComicRoot = ""
 	}
 	if p.HostSet {
@@ -295,6 +326,7 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 	if p.StaticDirSet {
 		dst.StaticDir = p.StaticDir
 	}
+	dst.syncFirstRoot()
 }
 
 // diffRequiresRestart 返回需要重启才能生效的字段名（仅在确实变化时返回）。
@@ -302,7 +334,7 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 // 当前规则：
 //   - host / port：监听地址，进程级
 //   - staticDir：Fiber 在启动时已注册 Static；运行中无法卸载
-//   - mediaRoot：路径安全中间件和扫描器可通过 Manager 热更新；扫描缓存会
+//   - mediaRoots：路径安全中间件和扫描器可通过 Manager 热更新；扫描缓存会
 //     被 onUpdate 钩子清空，调用方应主动触发重新扫描（不视为需要重启）
 //
 // 其它字段（thumbSize* / cacheMaxAgeDays / thumbCacheSize / cacheDir /
@@ -319,4 +351,23 @@ func diffRequiresRestart(old, neu *Config) []string {
 		out = append(out, "staticDir")
 	}
 	return out
+}
+
+// rootsEqual 规范化比较两个根列表是否等价（顺序无关）。
+func rootsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, r := range a {
+		seen[filepath.Clean(r)]++
+	}
+	for _, r := range b {
+		k := filepath.Clean(r)
+		if seen[k] == 0 {
+			return false
+		}
+		seen[k]--
+	}
+	return true
 }

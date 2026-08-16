@@ -72,7 +72,7 @@ func newHarness(t *testing.T) *harness {
 
 	// config.Manager 持有根路径，便于 handler 拿到动态根
 	mgr := config.NewManagerWith(&config.Config{
-		MediaRoot:       root,
+		MediaRoots:      []string{root},
 		Host:            "127.0.0.1",
 		Port:            8080,
 		AllowOsOpen:     false,
@@ -87,7 +87,7 @@ func newHarness(t *testing.T) *harness {
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())
-	safetyMw, _ := middleware.PathSafetyMiddleware(root)
+	safetyMw, _ := middleware.PathSafetyMiddleware([]string{root})
 	app.Use(safetyMw)
 
 	scanner := services.NewScanner()

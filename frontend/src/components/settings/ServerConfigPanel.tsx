@@ -10,6 +10,8 @@ import {
   AlertIcon,
   RefreshIcon,
   RestartIcon,
+  TrashIcon,
+  PlusIcon,
 } from '../common/Icon'
 
 // 单个字段的保存状态。
@@ -19,16 +21,16 @@ type FieldStatus = 'idle' | 'saving' | 'saved' | 'error'
 const REQUIRES_RESTART = new Set(['host', 'port', 'staticDir'])
 
 // 字段定义：标签、说明、是否重启字段、UI 类型。
+// mediaRoots 是特例：用 MediaRootsField 组件单独渲染，不走通用 ConfigRow。
 type FieldDef =
-  | { key: keyof ServerConfigPatch; label: string; hint?: string; kind: 'text' }
-  | { key: keyof ServerConfigPatch; label: string; hint?: string; kind: 'number'; min?: number; max?: number }
-  | { key: keyof ServerConfigPatch; label: string; hint?: string; kind: 'boolean' }
+  | { key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>; label: string; hint?: string; kind: 'text' }
+  | { key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>; label: string; hint?: string; kind: 'number'; min?: number; max?: number }
+  | { key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>; label: string; hint?: string; kind: 'boolean' }
 
 const FIELDS: { section: string; defs: FieldDef[] }[] = [
   {
     section: '媒体库',
     defs: [
-      { key: 'mediaRoot', label: '图像根目录', hint: '后端会扫描此目录下的所有子文件夹', kind: 'text' },
       { key: 'cacheDir', label: '缓存目录', hint: '存放缩略图 / 扫描结果 / 用户偏好', kind: 'text' },
     ],
   },
@@ -76,7 +78,7 @@ export default function ServerConfigPanel() {
   })
 
   const [status, setStatus] = useState<StatusMap>({})
-  const [mediaRootDirty, setMediaRootDirty] = useState(false)
+  const [mediaRootsDirty, setMediaRootsDirty] = useState(false)
   // 暂存用户输入：草稿，避免每次 onChange 都触发 PUT（输入体验更顺）
   const [draft, setDraft] = useState<ServerConfigPatch>({})
   const debouncedDraft = useDebounce(draft, 600)
@@ -110,9 +112,9 @@ export default function ServerConfigPanel() {
       setStatus(next)
       qc.setQueryData(['server-config'], resp.config)
 
-      // 标记 MediaRoot 变脏 → 提示用户重新扫描
-      if (resp.mediaRootChanged) {
-        setMediaRootDirty(true)
+      // 标记 MediaRoots 变脏 → 提示用户重新扫描
+      if (resp.mediaRootsChanged) {
+        setMediaRootsDirty(true)
       }
       // allowOsOpen 变更后：让前端 fsCapabilities 立即跟上，
       // 否则 Album 详情 / 右键菜单的"在资源管理器中打开"按钮
@@ -150,11 +152,33 @@ export default function ServerConfigPanel() {
   }
 
   const fieldValue = (key: keyof ServerConfigPatch): string | number | boolean => {
+    // draft 优先：用户正在编辑的字段实时反映，否则从后端返回的当前值读
+    if (key in draft && draft[key] !== undefined) {
+      return draft[key] as never
+    }
     return (data as ServerConfig)[key as keyof ServerConfig] as never
   }
 
   return (
     <div className="space-y-6">
+      {/* 媒体库 — 多根（独立渲染） */}
+      <div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium mb-2 px-1">
+          媒体库
+        </div>
+        <div className="bg-bg-elevated border border-border-faint rounded-md overflow-hidden">
+          <MediaRootsField
+            // 用 draft 中的 mediaRoots 覆盖 data（draft 是用户当前编辑状态）
+            roots={draft.mediaRoots ?? data.mediaRoots}
+            status={status['mediaRoots'] ?? 'idle'}
+            onChange={(next) => {
+              setDraft((d) => ({ ...d, mediaRoots: next }))
+              setStatus((s) => (s['mediaRoots'] === 'saved' ? { ...s, mediaRoots: 'idle' } : s))
+            }}
+          />
+        </div>
+      </div>
+
       {FIELDS.map((group) => (
         <div key={group.section}>
           <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium mb-2 px-1">
@@ -185,16 +209,16 @@ export default function ServerConfigPanel() {
         </div>
       ))}
 
-      {mediaRootDirty && (
+      {mediaRootsDirty && (
         <div className="bg-accent/5 border border-accent/30 rounded-md px-4 py-3 flex items-center justify-between gap-3 text-sm">
           <div className="flex items-center gap-2 text-fg">
             <RefreshIcon size={14} />
-            <span>图像根目录已变更,旧扫描结果已清空,建议重新扫描</span>
+            <span>媒体根目录已变更,旧扫描结果已清空,建议重新扫描</span>
           </div>
           <button
             onClick={async () => {
               await loadFromBackend()
-              setMediaRootDirty(false)
+              setMediaRootsDirty(false)
               pushToast({ kind: 'success', message: '已触发重新扫描' })
             }}
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-accent/40 text-accent hover:bg-accent/10 text-xs transition-colors"
@@ -209,6 +233,87 @@ export default function ServerConfigPanel() {
         配置文件路径:<code className="font-mono text-fg-muted">{data.configPath}</code>
         ; 改完自动写回 YAML,无需手动保存。
       </div>
+    </div>
+  )
+}
+
+// ---- 多根字段（独立组件）----
+
+function MediaRootsField({
+  roots,
+  status,
+  onChange,
+}: {
+  roots: string[]
+  status: FieldStatus
+  onChange: (next: string[]) => void
+}) {
+  // 始终渲染一个空槽位（即使当前为空），方便用户添加第一个根
+  const list = roots.length === 0 ? [''] : roots
+  const updateAt = (i: number, v: string) => {
+    const next = [...roots]
+    if (i < next.length) {
+      next[i] = v
+    } else {
+      // 空槽位：替换为新值
+      next[0] = v
+    }
+    onChange(next)
+  }
+  const removeAt = (i: number) => {
+    if (i >= roots.length) {
+      // 当前是空槽位：直接清空
+      onChange([])
+      return
+    }
+    const next = [...roots]
+    next.splice(i, 1)
+    onChange(next)
+  }
+  const addEmpty = () => {
+    onChange([...roots, ''])
+  }
+  return (
+    <div className="px-4 py-3 text-sm space-y-2">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col">
+          <span className="text-fg">图像根目录</span>
+          <span className="text-xs text-fg-subtle mt-0.5">
+            多个目录都会扫描;相册按"来源"分组,badge 显示来自哪个根
+          </span>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+      <div className="space-y-2">
+        {list.map((v, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              type="text"
+              value={v}
+              onChange={(e) => updateAt(i, e.target.value)}
+              placeholder="E:\照片 或 /home/user/pics"
+              className="flex-1 bg-bg-subtle border border-border-faint rounded-md h-8 px-2.5 text-sm font-mono focus:outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => removeAt(i)}
+              disabled={roots.length <= 1}
+              title={roots.length <= 1 ? '至少保留一个根目录' : '删除此根目录'}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border-faint text-fg-subtle hover:text-danger hover:border-danger/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-fg-subtle disabled:hover:border-border-faint"
+            >
+              <TrashIcon size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={addEmpty}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border-faint text-fg-muted hover:text-fg hover:border-border-strong text-xs transition-colors"
+      >
+        <PlusIcon size={12} />
+        添加根目录
+      </button>
     </div>
   )
 }

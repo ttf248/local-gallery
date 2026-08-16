@@ -7,27 +7,30 @@ import "encoding/json"
 // 每个字段配一个 "Set" 标记：true 表示"显式提供"，false 表示"未提供"。
 // 这样 PATCH 接口可以正确区分"用户清空字段"和"用户没动这个字段"。
 // bool 字段尤其需要这个机制（默认 false 不能区分 unset / explicit false）。
+//
+// MediaRoots 用数组替换语义：显式空数组 `[]` 表示"用户清空所有根"，
+// 未提供字段表示"不修改"；区分通过 MediaRootsSet 实现。
 type ConfigPatch struct {
-	MediaRoot       string `json:"mediaRoot,omitempty"`
-	MediaRootSet    bool   `json:"-"`
-	Host            string `json:"host,omitempty"`
-	HostSet         bool   `json:"-"`
-	Port            int    `json:"port,omitempty"`
-	PortSet         bool   `json:"-"`
-	CacheDir        string `json:"cacheDir,omitempty"`
-	CacheDirSet     bool   `json:"-"`
-	ThumbSizeW      int    `json:"thumbSizeW,omitempty"`
-	ThumbSizeWSet   bool   `json:"-"`
-	ThumbSizeH      int    `json:"thumbSizeH,omitempty"`
-	ThumbSizeHSet   bool   `json:"-"`
-	ThumbCacheSize  int    `json:"thumbCacheSize,omitempty"`
-	ThumbCacheSizeSet bool `json:"-"`
-	CacheMaxAgeDays int    `json:"cacheMaxAgeDays,omitempty"`
-	CacheMaxAgeDaysSet bool `json:"-"`
-	AllowOsOpen     bool   `json:"allowOsOpen,omitempty"`
-	AllowOsOpenSet  bool   `json:"-"`
-	StaticDir       string `json:"staticDir,omitempty"`
-	StaticDirSet    bool   `json:"-"`
+	MediaRoots         []string `json:"mediaRoots,omitempty"`
+	MediaRootsSet      bool     `json:"-"`
+	Host               string   `json:"host,omitempty"`
+	HostSet            bool     `json:"-"`
+	Port               int      `json:"port,omitempty"`
+	PortSet            bool     `json:"-"`
+	CacheDir           string   `json:"cacheDir,omitempty"`
+	CacheDirSet        bool     `json:"-"`
+	ThumbSizeW         int      `json:"thumbSizeW,omitempty"`
+	ThumbSizeWSet      bool     `json:"-"`
+	ThumbSizeH         int      `json:"thumbSizeH,omitempty"`
+	ThumbSizeHSet      bool     `json:"-"`
+	ThumbCacheSize     int      `json:"thumbCacheSize,omitempty"`
+	ThumbCacheSizeSet  bool     `json:"-"`
+	CacheMaxAgeDays    int      `json:"cacheMaxAgeDays,omitempty"`
+	CacheMaxAgeDaysSet bool     `json:"-"`
+	AllowOsOpen        bool     `json:"allowOsOpen,omitempty"`
+	AllowOsOpenSet     bool     `json:"-"`
+	StaticDir          string   `json:"staticDir,omitempty"`
+	StaticDirSet       bool     `json:"-"`
 }
 
 // DefaultsPatch 返回一个所有 Set 标志为 false 的空 patch（用于"读"语义）。
@@ -48,8 +51,8 @@ func (p *ConfigPatch) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*p = ConfigPatch(pp)
-	if _, ok := raw["mediaRoot"]; ok {
-		p.MediaRootSet = true
+	if _, ok := raw["mediaRoots"]; ok {
+		p.MediaRootsSet = true
 	}
 	if _, ok := raw["host"]; ok {
 		p.HostSet = true
