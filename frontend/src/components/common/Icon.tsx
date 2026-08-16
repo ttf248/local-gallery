@@ -101,6 +101,24 @@ export const FolderIcon = (p: IconProps) => (
   </svg>
 )
 
+// 「打开文件夹」图标：FolderIcon + 右下箭头,表示"在资源管理器中打开"
+export const FolderOpenIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M6 14l1.5-5h11l-1.5 5H6z" />
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H5a2 2 0 0 0-2 2V7z" />
+    <path d="M14 11l3 3m0 0l-1.5 1.5M17 14H21" />
+  </svg>
+)
+
+// 「搜索/选择文件夹」图标：FolderIcon + 放大镜,表示"用选择器选目录"
+export const FolderSearchIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+    <circle cx="11" cy="13" r="2" />
+    <path d="M12.5 14.5L14 16" />
+  </svg>
+)
+
 export const ImageIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <rect x="3" y="4" width="18" height="16" rx="2" />

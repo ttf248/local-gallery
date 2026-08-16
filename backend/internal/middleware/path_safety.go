@@ -80,6 +80,13 @@ func PathSafetyMiddleware(initialRoots []string) (fiber.Handler, *safetyState) {
 			c.Locals("safePath", path)
 			return c.Next()
 		}
+		// allowConfig 模式：跳过 path safety（handler 自己做白名单校验）。
+		// 仅当 allowConfig 显式为 "1" 时跳过；默认值是路径必须在 mediaRoots 之下。
+		// 标记存在 c.Locals("skipSafety")=true，handler 仍需读 c.Query("path") 自校验。
+		if c.Query("allowConfig") == "1" {
+			c.Locals("skipSafety", true)
+			return c.Next()
+		}
 		ps := state.v.Load()
 		if ps == nil || len(ps.roots) == 0 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -128,6 +135,13 @@ func SafePath(c *fiber.Ctx) string {
 		return v
 	}
 	return c.Query("path")
+}
+
+// IsSafetyBypassed 报告当前请求是否通过 allowConfig=1 跳过了 path safety。
+// 跳过后 handler 应自行做白名单校验（不允许直接放行任意 path）。
+func IsSafetyBypassed(c *fiber.Ctx) bool {
+	v, ok := c.Locals("skipSafety").(bool)
+	return ok && v
 }
 
 // validatePathMulti 检查 p 是否在任一根之下。

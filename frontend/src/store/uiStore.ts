@@ -11,7 +11,7 @@ export type AccentKey = 'graphite' | 'indigo' | 'rose' | 'forest' | 'ochre' | 'p
 // toast、面包屑等临时状态不进 localStorage。
 interface Toast {
   id: string
-  kind: 'info' | 'success' | 'error'
+  kind: 'info' | 'success' | 'warning' | 'error'
   message: string
   ttl: number
 }

@@ -120,6 +120,8 @@ describe('ServerConfigPanel', () => {
     renderPanel()
     const input = (await screen.findByDisplayValue('E:\\漫画')) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'D:\\new' } })
+    // 路径类字段在 blur 时保存
+    fireEvent.blur(input)
     await waitFor(
       () => expect(configApi.update).toHaveBeenCalledWith({ mediaRoots: ['D:\\new'] }),
       { timeout: 1500 },
@@ -127,7 +129,7 @@ describe('ServerConfigPanel', () => {
     expect(await screen.findByText(/媒体根目录已变更/)).toBeInTheDocument()
   })
 
-  it('多根：添加 / 删除根目录会更新 local state（debounce 后 flush）', async () => {
+  it('多根：添加 / 删除根目录会更新 local state（blur 后 flush）', async () => {
     vi.mocked(configApi.update).mockResolvedValue({
       ok: true,
       config: { ...baseConfig, mediaRoots: ['E:\\漫画', 'F:\\照片'] },
@@ -150,6 +152,8 @@ describe('ServerConfigPanel', () => {
     // 修改第二个为空槽位 → F:\\照片
     const secondInput = mediaRootInputs[1] as HTMLInputElement
     fireEvent.change(secondInput, { target: { value: 'F:\\照片' } })
+    // blur 第一个 input 触发保存（媒体根字段共用 pathDirtyRef 一次 flush）
+    fireEvent.blur(firstInput)
     await waitFor(
       () =>
         expect(configApi.update).toHaveBeenCalledWith({
