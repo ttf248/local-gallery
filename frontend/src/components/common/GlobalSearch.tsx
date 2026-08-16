@@ -91,7 +91,7 @@ export default function GlobalSearch() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{h.name}</div>
                 <div className="text-[11px] text-fg-subtle truncate">
-                  {h.kind === 'album' ? '文件夹' : h.kind === 'smartCollection' ? '合集' : '集合'}
+                  {h.kind === 'album' ? '文件夹' : h.kind === 'smartCollection' ? '标签' : '集合'}
                   {' · '}
                   {h.count} {h.kind === 'album' ? '张' : '卷'}
                 </div>
