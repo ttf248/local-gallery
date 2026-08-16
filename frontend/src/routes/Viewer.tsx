@@ -269,20 +269,31 @@ export default function Viewer() {
       return
     }
     if (mode === 'double') {
-      if (index + 2 < images.length) setIndex(index + 2)
-      else if (index < images.length - 1) setIndex(Math.max(0, images.length - 2))
-      else return
-    } else if (index < images.length - 1) {
-      setIndex(index + 1)
-    } else {
-      return
-    }
-    if (index === images.length - 1) {
+      if (index + 2 < images.length) {
+        setIndex(index + 2)
+        return
+      }
+      if (index < images.length - 1) {
+        setIndex(Math.max(0, images.length - 2))
+        return
+      }
+      // 已在最后一组
       pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
       if (useViewerStore.getState().slideshow) {
         toggleSlideshow()
         pushToast({ kind: 'info', message: '幻灯片已自动停止' })
       }
+      return
+    }
+    if (index < images.length - 1) {
+      setIndex(index + 1)
+      return
+    }
+    // 已是最后一张
+    pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
+    if (useViewerStore.getState().slideshow) {
+      toggleSlideshow()
+      pushToast({ kind: 'info', message: '幻灯片已自动停止' })
     }
   }
 
