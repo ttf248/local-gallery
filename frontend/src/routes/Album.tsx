@@ -25,7 +25,9 @@ import {
   ClockIcon,
   ImageIcon,
   CopyIcon,
-  HelpIcon,
+  ArrowUpRightIcon,
+  ArrowRightLineIcon,
+  InfoIcon,
 } from '../components/common/Icon'
 import { useReadingProgress } from '../hooks/useReadingProgress'
 import { useAlbumActions } from '../hooks/useAlbumActions'
@@ -537,7 +539,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
                       >
-                        <HelpIcon size={12} />
+                        <InfoIcon size={12} />
                         <span>属性</span>
                       </button>
                     </div>
@@ -623,22 +625,22 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
-            { id: 'open', label: '打开此页', icon: '›' },
+            { id: 'open', label: '打开此页', icon: <ArrowRightLineIcon size={12} /> },
             {
               id: 'favorite',
               label: isFav ? '取消收藏' : '收藏',
-              icon: '★',
+              icon: <StarIcon size={12} />,
             },
             { id: 'sep1', separator: true } as AnyMenuItem,
             {
               id: 'explorer',
               label: '在资源管理器中打开',
-              icon: '↗',
+              icon: <ArrowUpRightIcon size={12} />,
               disabled: !fsCapabilities.allowOsOpen,
             },
-            { id: 'copy', label: '复制路径', icon: '⧉' },
+            { id: 'copy', label: '复制路径', icon: <CopyIcon size={12} /> },
             { id: 'sep2', separator: true } as AnyMenuItem,
-            { id: 'properties', label: '属性', icon: 'ⓘ' },
+            { id: 'properties', label: '属性', icon: <InfoIcon size={12} /> },
           ]}
           onSelect={(id) => {
             switch (id) {

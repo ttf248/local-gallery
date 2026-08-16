@@ -7,6 +7,13 @@ import { fsCapabilities } from '../../api/fs'
 import { useFavorites } from '../../hooks/useFavorites'
 import { decodeFavPath } from '../../utils/path'
 import { useUIStore, type ViewMode } from '../../store/uiStore'
+import {
+  ArrowRightLineIcon,
+  StarIcon,
+  ArrowUpRightIcon,
+  CopyIcon,
+  InfoIcon,
+} from '../common/Icon'
 
 export type { CardData } from './AlbumCard'
 
@@ -142,22 +149,22 @@ function ContextMenuWrapper({
 }) {
   const a = useAlbumActions(item, onShowProperties)
   const items: AnyMenuItem[] = [
-    { id: 'open', label: '打开', icon: '›' },
+    { id: 'open', label: '打开', icon: <ArrowRightLineIcon size={12} /> },
     {
       id: 'favorite',
       label: isFavorite ? '取消收藏' : '收藏',
-      icon: '★',
+      icon: <StarIcon size={12} />,
     },
     { id: 'sep1', separator: true } as AnyMenuItem,
     {
       id: 'explorer',
       label: '在资源管理器中打开',
-      icon: '↗',
+      icon: <ArrowUpRightIcon size={12} />,
       disabled: !fsCapabilities.allowOsOpen || item.variant === 'smart',
     },
-    { id: 'copy', label: '复制路径', icon: '⧉' },
+    { id: 'copy', label: '复制路径', icon: <CopyIcon size={12} /> },
     { id: 'sep2', separator: true } as AnyMenuItem,
-    { id: 'properties', label: '属性', icon: 'ⓘ' },
+    { id: 'properties', label: '属性', icon: <InfoIcon size={12} /> },
   ]
   return (
     <ContextMenu

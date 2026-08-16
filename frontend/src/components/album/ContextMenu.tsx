@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 export interface MenuItem {
   id: string
   label: string
-  icon?: string
+  /** 左侧图标；与全站统一用 Icon.tsx 里的 SVG 组件，避免 unicode 字符渲染不一致 */
+  icon?: ReactNode
   disabled?: boolean
   separator?: never
 }
@@ -82,7 +83,9 @@ export default function ContextMenu({ x, y, items, onSelect, onClose }: Props) {
             }`}
           >
             {it.icon && (
-              <span className="w-3.5 text-center text-[12px] opacity-80">{it.icon}</span>
+              <span className="w-3.5 inline-flex items-center justify-center opacity-80">
+                {it.icon}
+              </span>
             )}
             <span>{it.label}</span>
           </button>
