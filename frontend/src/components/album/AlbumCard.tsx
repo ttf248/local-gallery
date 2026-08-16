@@ -143,6 +143,10 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         {visible && data.coverPath && !imgError ? (
           <>
             <img
+              // key 用 coverPath：切 album 时 React 卸载旧 img、重建新 img，
+              // imgError / loaded 状态自然随生命周期清零，避免上一张图加载失败
+              // 导致后续 album 永远显示占位。
+              key={data.coverPath}
               src={thumbUrl(data.coverPath)}
               alt={data.title}
               loading="lazy"
@@ -335,6 +339,7 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       <div className="relative w-12 h-16 rounded bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs">
         {visible && data.coverPath && !imgError ? (
           <img
+            key={data.coverPath}
             src={thumbUrl(data.coverPath)}
             alt={data.title}
             loading="lazy"

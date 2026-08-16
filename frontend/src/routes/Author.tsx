@@ -10,6 +10,7 @@ import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { ChevronLeftIcon, StarIcon, ReaderIcon, ClockIcon, FolderIcon } from '../components/common/Icon'
 import { albumRoute } from '../utils/path'
+import { thumbUrl } from '../api/thumbs'
 import type { ViewerContextEntry } from '../utils/viewerContext'
 
 interface AlbumSummary {
@@ -165,7 +166,7 @@ export default function Author() {
           {cover && (
             <img
               key={cover.path}
-              src={cover.coverImage.startsWith('http') ? cover.coverImage : `/api/thumbs?path=${encodeURIComponent(cover.coverImage)}`}
+              src={thumbUrl(cover.coverImage)}
               alt=""
               className="absolute inset-0 w-full h-full object-cover scale-fade"
             />

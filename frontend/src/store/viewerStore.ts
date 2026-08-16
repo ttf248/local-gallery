@@ -14,7 +14,6 @@ export interface ViewerState {
   index: number
   zoom: number // 1.0 = 100%
   rotation: number // 0/90/180/270
-  fullscreen: boolean
   slideshow: boolean
   slideshowInterval: number // ms
   mode: ReaderMode
@@ -29,6 +28,11 @@ export interface ViewerState {
   rotate: (deg?: number) => void
   /** 重置 zoom + rotation 到默认；切换 album 时用，避免上一个 album 的状态延续 */
   resetView: () => void
+  /**
+   * 全屏切换：直接调浏览器 Fullscreen API，不写 store 状态。
+   * 不在 store 里 mirror 一份 `fullscreen: boolean`：浏览器 fullscreenElement
+   * 才是真相源，store 里再写一个会被外部状态变化（F11 / 退出键）打脸。
+   */
   toggleFullscreen: () => void
   toggleSlideshow: () => void
   setSlideshowInterval: (ms: number) => void
@@ -46,7 +50,6 @@ export const useViewerStore = create<ViewerState>()(
       index: -1,
       zoom: 1,
       rotation: 0,
-      fullscreen: false,
       slideshow: false,
       slideshowInterval: 3000,
       mode: 'single',
