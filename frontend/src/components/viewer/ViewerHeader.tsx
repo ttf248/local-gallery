@@ -6,6 +6,8 @@ import {
   InfoIcon,
   MoreHorizontalIcon,
   KeyboardIcon,
+  ArrowUpIcon,
+  ArrowDownIcon,
 } from '../common/Icon'
 import Popover, { PopoverItem, PopoverSeparator, PopoverLabel } from '../common/Popover'
 import { useViewerStore } from '../../store/viewerStore'
@@ -21,6 +23,9 @@ interface Props {
   onToggleHelp: () => void
   onPrev: () => void
   onNext: () => void
+  /** 上一本/下一本（来自当前列表）。可选：没有上下文时不显示。 */
+  onPrevAlbum?: () => void
+  onNextAlbum?: () => void
 }
 
 // 查看器顶部常驻条：极简 — 返回 / 名称 / 页码 / 收藏 / 全屏 / 菜单
@@ -29,7 +34,7 @@ interface Props {
 // - 始终可见（不被 chromeVisible 影响）
 // - glass 半透明，沉浸但不抢戏
 // - 暗色背景下用浅色文字；hover 用白色
-// - 菜单里收纳：图片信息 / 快捷键帮助 / 上一本 / 下一本
+// - 菜单里收纳：图片信息 / 快捷键帮助 / 上一本/下一本 / 第一张/最后张
 export default function ViewerHeader({
   name,
   index,
@@ -41,6 +46,8 @@ export default function ViewerHeader({
   onToggleHelp,
   onPrev,
   onNext,
+  onPrevAlbum,
+  onNextAlbum,
 }: Props) {
   const mode = useViewerStore((s) => s.mode)
   const setIndex = useViewerStore((s) => s.setIndex)
@@ -57,6 +64,8 @@ export default function ViewerHeader({
 
   // 跳到首/尾（菜单里的快捷入口）
   const jumpToEnd = () => setIndex(Math.max(0, total - 1))
+
+  const hasAlbumNav = !!(onPrevAlbum || onNextAlbum)
 
   return (
     <header
@@ -128,6 +137,22 @@ export default function ViewerHeader({
           <span>快捷键</span>
           <span className="ml-auto text-[10px] text-fg-subtle">?</span>
         </PopoverItem>
+        {hasAlbumNav && <PopoverSeparator />}
+        {hasAlbumNav && <PopoverLabel>列表</PopoverLabel>}
+        {onPrevAlbum && (
+          <PopoverItem onClick={onPrevAlbum}>
+            <ArrowUpIcon size={12} />
+            <span>上一本</span>
+            <span className="ml-auto text-[10px] text-fg-subtle">P</span>
+          </PopoverItem>
+        )}
+        {onNextAlbum && (
+          <PopoverItem onClick={onNextAlbum}>
+            <ArrowDownIcon size={12} />
+            <span>下一本</span>
+            <span className="ml-auto text-[10px] text-fg-subtle">N</span>
+          </PopoverItem>
+        )}
         <PopoverSeparator />
         <PopoverLabel>跳转</PopoverLabel>
         <PopoverItem onClick={() => setIndex(0)}>

@@ -472,6 +472,8 @@ export default function Viewer() {
         onToggleHelp={() => setShowHelp((v) => !v)}
         onPrev={prev}
         onNext={next}
+        onPrevAlbum={() => goAdjacent(-1)}
+        onNextAlbum={() => goAdjacent(1)}
       />
 
       {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本） */}
