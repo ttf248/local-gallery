@@ -24,7 +24,7 @@ export default function PropertiesDialog({ open, absPath, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  if (!open) return null
+  if (!open || !absPath) return null
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/35 backdrop-blur-[2px] fade-in"
