@@ -50,6 +50,14 @@ export default function Viewer() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
   const finishedRef = useRef(false)
+  // 持有「最新」index/total；sendBeacon 关闭时从这里取最新值。
+  // 注意：仅在 images 有效时更新，images=[]（loading 中）保持上一次有效值。
+  const progressRef = useRef({ index: 0, total: 0 })
+  useEffect(() => {
+    if (images.length > 0) {
+      progressRef.current = { index, total: images.length }
+    }
+  }, [index, images.length])
 
   // 浮层显隐：鼠标移动时显出，2s 无动作后自动隐藏。
   // 不影响顶部常驻条（始终可见）。
@@ -94,6 +102,14 @@ export default function Viewer() {
     if (skipInitialFetch) return
     if (!pathParam) return
     let cancelled = false
+    // 切到新 album 前，先把上一个 album 的进度刷一次（去抖的 save 会因为
+    // images.length 变 0 而被清理掉，主动写一次更稳）。
+    if (images.length > 0 && pathParam) {
+      const lastPath = pathParam
+      const lastIndex = index
+      const lastTotal = images.length
+      progressApi.set(lastPath, lastIndex, lastTotal, 0).catch(() => {})
+    }
     setLoadError(null)
     setImages([])
     albumsApi
@@ -184,13 +200,27 @@ export default function Viewer() {
   useEffect(() => {
     return () => {
       if (pathParam) {
-        navigator.sendBeacon?.(
-          '/api/progress',
-          new Blob(
-            [JSON.stringify({ path: pathParam, index, total: images.length, scroll: 0 })],
-            { type: 'application/json' },
-          ),
-        )
+        // 组件卸载时把「最后有效」的进度发出去：
+        // - 用 ref 取最新值（只在 images 有效时更新）
+        // - 切到下一本时（loading effect）会主动写一次进度，所以这里发的是
+        //   上一个 album 的最终值；与新 album 无关
+        const cur = progressRef.current
+        if (cur.total > 0) {
+          navigator.sendBeacon?.(
+            '/api/progress',
+            new Blob(
+              [
+                JSON.stringify({
+                  path: pathParam,
+                  index: cur.index,
+                  total: cur.total,
+                  scroll: 0,
+                }),
+              ],
+              { type: 'application/json' },
+            ),
+          )
+        }
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
