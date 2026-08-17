@@ -48,6 +48,21 @@ export default function Author() {
 
   const albums = useMemo<AlbumSummary[]>(() => {
     if (!result) return []
+    // 优先从 smartCollections 取：它已经聚合了「顶层 + 集合内嵌套」
+    // 的所有匹配 album,数量与卡片数对齐(API 里中国翻訳=131)。
+    // 退回到顶层 filter 是因为:理论上 smartCollections 一定含该 tag,但
+    // 缺数据时(如旧 scan 缓存)仍要给用户一个稳定结果。
+    const sc = (result.smartCollections ?? []).find((s) => s.author === author)
+    if (sc && sc.albums && sc.albums.length > 0) {
+      return sc.albums.map((a) => ({
+        path: a.path,
+        name: a.name,
+        author: a.author,
+        coverImage: a.coverImage,
+        imageCount: a.imageCount,
+        modTime: a.modTime,
+      }))
+    }
     return result.albums
       .filter((a) => a.author === author)
       .map((a) => ({
