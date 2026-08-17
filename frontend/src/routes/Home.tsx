@@ -346,7 +346,11 @@ export default function Home() {
             <p className="text-sm text-fg-muted mt-3.5">
               {result ? (
                 <>
-                  <span className="tabular-nums text-fg">{result.albumCount}</span> 个文件夹
+                  {/* 顶部摘要用 cards 全集计数（与下方"全部 X"一致）,
+                      而非 result.albumCount：后者含集合内嵌套的 113 个卷,
+                      用户在首页实际只能直接点开 130 张卡片,出现 170 vs 130
+                      会让人怀疑数据。 */}
+                  <span className="tabular-nums text-fg">{counts.all}</span> 项
                   <span className="text-fg-subtle/60 mx-1.5">·</span>
                   <span className="tabular-nums text-fg">
                     {(result.smartCollections ?? []).length}
