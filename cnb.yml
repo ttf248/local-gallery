@@ -6,7 +6,7 @@
         - name: sync to github
           image: tencentcom/git-sync
           settings:
-            target_url: https://github.com/ttf248/notebook.git
+            target_url: https://github.com/ttf248/comic-reader.git
             auth_type: https
             username: ${GIT_USERNAME}
             password: ${GIT_ACCESS_TOKEN}
@@ -20,7 +20,7 @@
         - name: sync to github
           image: tencentcom/git-sync
           settings:
-            target_url: https://github.com/ttf248/notebook.git
+            target_url: https://github.com/ttf248/comic-reader.git
             auth_type: https
             username: ${GIT_USERNAME}
             password: ${GIT_ACCESS_TOKEN}
