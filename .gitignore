@@ -84,6 +84,8 @@ $RECYCLE.BIN/
 .image-viewer/
 # 历史遗留：老版本使用 .comic-reader/ 作为缓存目录，新版本已迁到 .image-viewer/
 .comic-reader/
+# 用户 config.yaml 写错 cacheDir 拼写(少 r)产生的实际目录
+.image-viewe/
 .cache/
 *.tsbuildinfo
 backend/config.local.yaml
