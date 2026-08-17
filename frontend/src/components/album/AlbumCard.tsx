@@ -54,33 +54,16 @@ export default function AlbumCard({ data, variant = 'grid', showLastSeen }: Prop
 }
 
 function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
-  const [visible, setVisible] = useState(false)
+  // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
+  // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
+  // 错过首次 intersect，导致大量卡片永远停在占位符上）。
   const [loaded, setLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
   // 悬停预览状态
   const [previewOn, setPreviewOn] = useState(false)
   const [previewRect, setPreviewRect] = useState<DOMRect | null>(null)
   const previewTimer = useRef<number | null>(null)
-  const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    if (!ref.current) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setVisible(true)
-            io.disconnect()
-            break
-          }
-        }
-      },
-      { rootMargin: '500px' },
-    )
-    io.observe(ref.current)
-    return () => io.disconnect()
-  }, [])
 
   const onActivate = () => navigate(data.to)
   const onKey = (e: React.KeyboardEvent) => {
@@ -143,7 +126,6 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
 
   return (
     <div
-      ref={ref}
       role="link"
       tabIndex={0}
       onClick={onActivate}
@@ -153,26 +135,31 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
-        {visible && data.coverPath && !imgError ? (
-          <>
-            <img
-              // key 用 coverPath：切 album 时 React 卸载旧 img、重建新 img，
-              // imgError / loaded 状态自然随生命周期清零，避免上一张图加载失败
-              // 导致后续 album 永远显示占位。
-              key={data.coverPath}
-              src={thumbUrl(data.coverPath)}
-              alt={data.title}
-              loading="lazy"
-              onLoad={() => setLoaded(true)}
-              onError={() => setImgError(true)}
-              className={`w-full h-full object-cover transition-all duration-500 ease-out ${
-                loaded ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
-              } group-hover:scale-[1.03]`}
-            />
-            {!loaded && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
-          </>
-        ) : (
-          // 缩略图加载失败（HEIC 等不支持的格式）→ 显示占位
+        {data.coverPath ? (
+          <img
+            // key 用 coverPath：切 album 时 React 卸载旧 img、重建新 img，
+            // imgError / loaded 状态自然随生命周期清零，避免上一张图加载失败
+            // 导致后续 album 永远显示占位。
+            key={data.coverPath}
+            src={thumbUrl(data.coverPath)}
+            alt={data.title}
+            loading="lazy"
+            decoding="async"
+            onLoad={() => setLoaded(true)}
+            onError={() => setImgError(true)}
+            className={`w-full h-full object-cover transition-opacity duration-300 ${
+              loaded ? 'opacity-100' : 'opacity-0'
+            } group-hover:scale-[1.03]`}
+          />
+        ) : null}
+        {!data.coverPath && (
+          // 没有封面图 → 显示占位
+          <div className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-fg-subtle">
+            <FolderIcon size={28} />
+          </div>
+        )}
+        {imgError && (
+          // 缩略图加载失败（路径越界、HEIC 等不支持的格式）→ 显示占位
           <div className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-fg-subtle">
             <FolderIcon size={28} />
           </div>
@@ -316,29 +303,10 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
 }
 
 function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
-  const [visible, setVisible] = useState(false)
+  // 与 GridCard 一致：直接依赖 <img loading="lazy">，不重复自写 IO。
   const [loaded, setLoaded] = useState(false)
   const [imgError, setImgError] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-
-  useEffect(() => {
-    if (!ref.current) return
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            setVisible(true)
-            io.disconnect()
-            break
-          }
-        }
-      },
-      { rootMargin: '500px' },
-    )
-    io.observe(ref.current)
-    return () => io.disconnect()
-  }, [])
 
   const onActivate = () => navigate(data.to)
   const onKey = (e: React.KeyboardEvent) => {
@@ -359,7 +327,6 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
 
   return (
     <div
-      ref={ref}
       role="link"
       tabIndex={0}
       onClick={onActivate}
@@ -367,24 +334,25 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       className="group flex items-center gap-4 py-2.5 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
     >
       <div className="relative w-24 h-32 rounded-md bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs">
-        {visible && data.coverPath && !imgError ? (
+        {data.coverPath && !imgError ? (
           <img
             key={data.coverPath}
             src={thumbUrl(data.coverPath)}
             alt={data.title}
-            loading="lazy"
+            // ListCard 出现在 hero sections（全新/重温/最近加入/热门标签）里，
+            // 默认就在首屏视口内，不需要 lazy。
+            loading="eager"
             onLoad={() => setLoaded(true)}
             onError={() => setImgError(true)}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
               loaded ? 'opacity-100' : 'opacity-0'
             }`}
           />
-        ) : !visible || imgError ? (
+        ) : (
           <div className="w-full h-full flex items-center justify-center text-fg-subtle">
             <FolderIcon size={20} />
           </div>
-        ) : null}
-        {!loaded && visible && !imgError && <div className="absolute inset-0 bg-bg-subtle animate-pulse" />}
+        )}
         {data.isFavorite && (
           <div className="absolute top-1 right-1 bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
             <StarIcon size={11} className="text-warning" filled />
