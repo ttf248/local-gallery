@@ -1,10 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { thumbUrl } from '../../api/thumbs'
-import { StarIcon, FolderIcon, ReaderIcon, RewindIcon, CheckIcon, ClockIcon, ArrowUpRightIcon } from '../common/Icon'
+import {
+  StarIcon,
+  FolderIcon,
+  ReaderIcon,
+  RewindIcon,
+  CheckIcon,
+  ClockIcon,
+  ArrowUpRightIcon,
+  PlayFilledIcon,
+} from '../common/Icon'
 import HoverPreview from '../common/HoverPreview'
+import VideoCoverImage, { isVideoCoverPath } from '../common/VideoCoverImage'
 import type { ViewMode } from '../../store/uiStore'
 import { timeAgo } from '../../utils/date'
+import { formatDuration } from '../../utils/format'
 
 export type CardVariant = 'album' | 'collection' | 'smart'
 export type CardBadge = 'rewind' // 重温：30 天以上没看
@@ -20,6 +31,16 @@ export interface CardData {
   subtitle?: string
   count: number
   coverPath: string
+  /**
+   * 封面源类型："image" / "video" / 不传（不传时由 coverPath 扩展名推断）。
+   * 视频封面由前端浏览器抽帧 → 上传后才会显示首帧静态图（见 useVideoCover）。
+   */
+  coverKind?: 'image' | 'video'
+  /**
+   * 当 cover 是视频时，可附带总时长（秒）显示在角标。
+   * 由调用方在用 <video> 探测后填入；非必填，缺省时角标只显示 ▶。
+   */
+  durationSec?: number
   to: string
   isFavorite?: boolean
   // 阅读进度：index + total，用于显示百分比与定位条
@@ -135,7 +156,14 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
-        {data.coverPath ? (
+        {isVideoCoverPath(data.coverPath) || data.coverKind === 'video' ? (
+          // 视频封面：交给 VideoCoverImage 处理"未抽帧 → 抽帧 → 上传"流程
+          <VideoCoverImage
+            videoPath={data.coverPath}
+            loading="lazy"
+            alt={data.title}
+          />
+        ) : data.coverPath ? (
           <img
             // key 用 coverPath：切 album 时 React 卸载旧 img、重建新 img，
             // imgError / loaded 状态自然随生命周期清零，避免上一张图加载失败
@@ -162,6 +190,14 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           // 缩略图加载失败（路径越界、HEIC 等不支持的格式）→ 显示占位
           <div className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-fg-subtle">
             <FolderIcon size={28} />
+          </div>
+        )}
+
+        {/* 视频角标：▶ + 可选时长（覆盖在 cover 之上） */}
+        {(isVideoCoverPath(data.coverPath) || data.coverKind === 'video') && (
+          <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
+            <PlayFilledIcon size={9} className="text-accent" />
+            <span>{formatDuration(data.durationSec)}</span>
           </div>
         )}
 
