@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -213,4 +214,119 @@ func TestStats(t *testing.T) {
 // isPNG 快速校验：PNG 头 8 字节为 89 50 4E 47 0D 0A 1A 0A。
 func isPNG(data []byte) bool {
 	return len(data) >= 8 && binary.BigEndian.Uint64(data[:8]) == 0x89504E470D0A1A0A
+}
+
+// 视频未抽帧前 GetOrCreate 返回 ErrVideoCoverMissing；
+// 源文件不存在时仍按 ErrSourceMissing。
+func TestGetOrCreate_VideoCoverMissing(t *testing.T) {
+	svc := newTestService(t)
+	srcDir := t.TempDir()
+	// 写一个空文件占位，扩展名走白名单
+	vidPath := filepath.Join(srcDir, "clip.mp4")
+	os.WriteFile(vidPath, []byte("fake"), 0o644)
+
+	_, err := svc.GetOrCreate(vidPath)
+	if err != ErrVideoCoverMissing {
+		t.Errorf("expected ErrVideoCoverMissing, got %v", err)
+	}
+
+	// 源视频不存在 → ErrSourceMissing（不是 ErrVideoCoverMissing）
+	missing := filepath.Join(srcDir, "nope.mp4")
+	_, err = svc.GetOrCreate(missing)
+	if err != ErrSourceMissing {
+		t.Errorf("expected ErrSourceMissing, got %v", err)
+	}
+}
+
+// SaveVideoCover 后，GetOrCreate 应命中缓存（返回相同字节）。
+func TestSaveVideoCover_AndReadback(t *testing.T) {
+	svc := newTestService(t)
+	srcDir := t.TempDir()
+
+	vidPath := filepath.Join(srcDir, "clip.mp4")
+	os.WriteFile(vidPath, []byte("fake-video-bytes"), 0o644)
+
+	// 准备一张 800x600 的 jpeg 给"前端"上传
+	cover := makeTestImage(t, srcDir, "cover.jpg", 800, 600)
+	coverBytes, err := os.ReadFile(cover)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.SaveVideoCover(vidPath, coverBytes); err != nil {
+		t.Fatalf("SaveVideoCover: %v", err)
+	}
+
+	// 现在 GetOrCreate 应返回 PNG（不再是 ErrVideoCoverMissing）
+	data, err := svc.GetOrCreate(vidPath)
+	if err != nil {
+		t.Fatalf("GetOrCreate after save: %v", err)
+	}
+	if !isPNG(data) {
+		t.Error("output should be valid PNG")
+	}
+	// 尺寸 ≤ 320×350
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img.Bounds().Dx() > 320 || img.Bounds().Dy() > 350 {
+		t.Errorf("thumbnail too large: %dx%d", img.Bounds().Dx(), img.Bounds().Dy())
+	}
+}
+
+// SaveVideoCover 对非视频扩展名返回错误（防御性）。
+func TestSaveVideoCover_RejectsNonVideo(t *testing.T) {
+	svc := newTestService(t)
+	imgPath := makeTestImage(t, t.TempDir(), "pic.jpg", 100, 100)
+	imgBytes, _ := os.ReadFile(imgPath)
+	if err := svc.SaveVideoCover(imgPath, imgBytes); err == nil {
+		t.Error("expected error when saving cover to non-video path")
+	}
+}
+
+// SaveVideoCover 对垃圾数据返回 ErrUnsupportedFormat。
+func TestSaveVideoCover_RejectsGarbageData(t *testing.T) {
+	svc := newTestService(t)
+	srcDir := t.TempDir()
+	vidPath := filepath.Join(srcDir, "clip.mp4")
+	os.WriteFile(vidPath, []byte("x"), 0o644)
+	err := svc.SaveVideoCover(vidPath, []byte("not an image"))
+	if err == nil {
+		t.Fatal("expected error for garbage cover data")
+	}
+	if !errors.Is(err, ErrUnsupportedFormat) {
+		t.Errorf("expected ErrUnsupportedFormat wrapped, got %v", err)
+	}
+}
+
+// 视频 mtime 变化后旧封面失效 → 再次 GetOrCreate 返回 ErrVideoCoverMissing。
+// 这是"视频被重新剪辑后前端应重新抽帧"的契约。
+func TestVideoCover_MtimeInvalidates(t *testing.T) {
+	svc := newTestService(t)
+	srcDir := t.TempDir()
+
+	vidPath := filepath.Join(srcDir, "clip.mp4")
+	os.WriteFile(vidPath, []byte("v1"), 0o644)
+
+	cover := makeTestImage(t, srcDir, "cover.jpg", 200, 200)
+	coverBytes, _ := os.ReadFile(cover)
+	if err := svc.SaveVideoCover(vidPath, coverBytes); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.GetOrCreate(vidPath); err != nil {
+		t.Fatalf("after save, GetOrCreate should succeed: %v", err)
+	}
+
+	// 改变视频文件 mtime（模拟视频被重新剪辑）
+	future := time.Now().Add(time.Hour)
+	os.Chtimes(vidPath, future, future)
+	// 改变 size（覆盖内容）让 key 一定变
+	os.WriteFile(vidPath, []byte("v2-changed"), 0o644)
+	os.Chtimes(vidPath, future, future)
+
+	_, err := svc.GetOrCreate(vidPath)
+	if err != ErrVideoCoverMissing {
+		t.Errorf("after mtime+size change, expected ErrVideoCoverMissing, got %v", err)
+	}
 }

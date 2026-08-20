@@ -16,6 +16,8 @@ import (
 
 	"github.com/disintegration/imaging"
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/tianlongxiang/comic-reader/internal/models"
 )
 
 // ErrUnsupportedFormat 图片格式不受支持。
@@ -23,6 +25,13 @@ var ErrUnsupportedFormat = errors.New("unsupported image format")
 
 // ErrSourceMissing 源图片不存在。
 var ErrSourceMissing = errors.New("source image not found")
+
+// ErrVideoCoverMissing 视频封面尚未生成。
+//
+// 流程：前端首次访问视频封面时 GetOrCreate 返回此错误，handler 透传
+// 404 + code=video_cover_missing 触发前端 `<video>` 抽帧 → SaveVideoCover
+// 回填。第二次访问直接命中磁盘缓存。
+var ErrVideoCoverMissing = errors.New("video cover not yet extracted")
 
 // ThumbnailService 缩略图服务：LRU 内存缓存 + 磁盘缓存。
 //
@@ -102,8 +111,33 @@ func CacheKeyFromStat(absPath string, fi os.FileInfo) string {
 	return CacheKey(absPath, fi.ModTime(), fi.Size())
 }
 
+// videoCoverKey 视频封面专用缓存键。
+//
+// 在普通 CacheKey 前加 "vc:" 前缀，避免与同路径下的图片缩略图键碰撞
+// （虽然一般不会同路径同时有图有视频，但显式区分更安全）。失效策略
+// 与图片一致：mtime 或 size 变化时自动重新生成。
+func videoCoverKey(absPath string, mtime time.Time, size int64) string {
+	h := md5.New()
+	fmt.Fprintf(h, "vc:%s|%d|%d", absPath, mtime.UnixNano(), size)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 // GetOrCreate 获取或生成缩略图。返回 PNG 字节。
+//
+// 按源文件类型自动分流：
+//   - 图片（jpg/png/gif/bmp/webp/tiff）：解码 → 缩放 → 缓存
+//   - 视频（mp4/webm/mov/mkv/avi/m4v）：仅查询已缓存的封面
+//     （由前端浏览器抽帧后回填到 SaveVideoCover），未命中返回
+//     ErrVideoCoverMissing，handler 端透传 404 + code 让前端触发抽帧。
 func (s *ThumbnailService) GetOrCreate(absPath string) ([]byte, error) {
+	if models.IsVideoFile(filepath.Base(absPath)) {
+		return s.getVideoCover(absPath)
+	}
+	return s.getOrCreateImage(absPath)
+}
+
+// getOrCreateImage 现有图片缩略图流程。
+func (s *ThumbnailService) getOrCreateImage(absPath string) ([]byte, error) {
 	fi, err := os.Stat(absPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -139,6 +173,76 @@ func (s *ThumbnailService) GetOrCreate(absPath string) ([]byte, error) {
 	}
 	s.memCache.Add(key, data)
 	return data, nil
+}
+
+// getVideoCover 仅查询已缓存的视频封面；未命中返回 ErrVideoCoverMissing。
+//
+// 注意：先做 Stat 校验源文件存在，避免对已删除视频返回错误状态码
+// 误导前端"以为要抽帧"。
+func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
+	fi, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrSourceMissing
+		}
+		return nil, err
+	}
+	key := videoCoverKey(absPath, fi.ModTime(), fi.Size())
+
+	if data, ok := s.memCache.Get(key); ok {
+		return data, nil
+	}
+	diskPath := filepath.Join(s.cacheDir, key+".png")
+	if data, err := os.ReadFile(diskPath); err == nil {
+		s.memCache.Add(key, data)
+		return data, nil
+	}
+	return nil, ErrVideoCoverMissing
+}
+
+// SaveVideoCover 接收前端浏览器抽帧得到的封面字节，写入缓存。
+//
+// 流程：
+//  1. 校验 absPath 是受支持的视频扩展名 + 文件存在（用于派生 cache key）
+//  2. 解码 data 为 image.Image（支持 jpeg/png，前端 canvas.toBlob 通常
+//     给出 jpeg，但允许 png）
+//  3. 缩放到 s.width × s.height（与图片缩略图同一尺寸，UI 通用）
+//  4. 编码为 PNG，写磁盘 + 加内存缓存
+//
+// 源文件不存在时返回 ErrSourceMissing（前端抽完帧视频已被删等场景）。
+// 源文件存在但 data 不是合法图片时返回 ErrUnsupportedFormat。
+func (s *ThumbnailService) SaveVideoCover(absPath string, data []byte) error {
+	if !models.IsVideoFile(filepath.Base(absPath)) {
+		return fmt.Errorf("not a video file: %s", absPath)
+	}
+	fi, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ErrSourceMissing
+		}
+		return err
+	}
+
+	// 解码前端上传的字节
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("decode cover data: %w", ErrUnsupportedFormat)
+	}
+
+	// 缩放到目标尺寸
+	thumb := imaging.Fit(img, s.width, s.height, imaging.Lanczos)
+	buf, err := encodePNG(thumb)
+	if err != nil {
+		return fmt.Errorf("encode png: %w", err)
+	}
+
+	key := videoCoverKey(absPath, fi.ModTime(), fi.Size())
+	diskPath := filepath.Join(s.cacheDir, key+".png")
+	if werr := os.WriteFile(diskPath, buf, 0o644); werr != nil {
+		return fmt.Errorf("write cover cache: %w", werr)
+	}
+	s.memCache.Add(key, buf)
+	return nil
 }
 
 // generate 解码 → 缩放 → 编码为 PNG。
