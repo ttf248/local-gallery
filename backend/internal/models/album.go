@@ -32,6 +32,29 @@ func IsImageFile(name string) bool {
 	return ImageExts[ext]
 }
 
+// VideoExts 支持的视频扩展名（小写，含点）。
+//
+// 选型：覆盖浏览器原生 `<video>` 元素能直接播放的常见容器。
+// 视频的"封面"由前端在浏览器内通过 `<video>` + canvas 抽帧后回传
+// 到 `/api/thumbs/cover`（实现见 handlers 包）；本服务不依赖 ffmpeg。
+var VideoExts = map[string]bool{
+	".mp4":  true,
+	".m4v":  true,
+	".webm": true,
+	".mov":  true,
+	".mkv":  true,
+	".avi":  true, // 部分浏览器不支持 AVI 容器（含老式 XviD/DivX），但列入白名单方便后续扩展
+}
+
+// IsVideoFile 判断文件名是否为支持的视频格式（不区分大小写）。
+func IsVideoFile(name string) bool {
+	if len(name) < 5 {
+		return false
+	}
+	ext := lowerExt(name)
+	return VideoExts[ext]
+}
+
 func lowerExt(name string) string {
 	for i := len(name) - 1; i >= 0 && i > len(name)-6; i-- {
 		if name[i] == '.' {
@@ -66,18 +89,24 @@ type Album struct {
 	SourceRoot  string    `json:"sourceRoot,omitempty"`  // 所属媒体根（绝对路径）；多根扫描时填充
 	SourceName  string    `json:"sourceName,omitempty"`  // 所属媒体根的 basename，用于 UI badge
 	ImageFiles  []string  `json:"-"`           // 见 MarshalJSON/UnmarshalJSON；同时输出 imageFiles + files
-	CoverImage  string    `json:"coverImage"`  // 封面（通常第一张）
+	VideoFiles  []string  `json:"-"`           // 同上；输出 videoFiles
+	CoverImage  string    `json:"coverImage"`  // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
 	ImageCount  int       `json:"imageCount"`  // 兼容旧字段，同时输出 fileCount
+	VideoCount  int       `json:"videoCount,omitempty"`  // 视频数量（0 时省略）
 	Files       []string  `json:"-"`           // 见 MarshalJSON/UnmarshalJSON；为 0 时复用 ImageFiles
 	FolderSize  int64     `json:"folderSize"`  // 字节
 	Tags        []string  `json:"tags,omitempty"`  // 标签（从方括号解析），可能多个
 	Author      string    `json:"author,omitempty"` // 旧字段别名 = 第一个标签
 	ModTime     time.Time `json:"modTime"`
+	// CoverKind 标识封面来源："image" / "video" / ""（未指定时按是否有视频推断）。
+	// 前端据此决定卡片样式（图卡 vs 视频▶卡）和点击进入的播放器类型。
+	CoverKind string `json:"coverKind,omitempty"`
 }
 
 // MarshalJSON 同时输出 imageFiles（兼容）与 files（推荐）两个键。
 //
 // nil 切片序列化为 `[]`（默认 Go 行为是 `null`，前端直接 `.length` 会抛错）。
+// VideoFiles 单独输出 videoFiles 键。
 func (a Album) MarshalJSON() ([]byte, error) {
 	type alias Album
 	files := a.Files
@@ -88,11 +117,13 @@ func (a Album) MarshalJSON() ([]byte, error) {
 		alias
 		Files      []string `json:"files"`
 		ImageFiles []string `json:"imageFiles"`
+		VideoFiles []string `json:"videoFiles"`
 		FileCount  int      `json:"fileCount"`
 	}{
 		alias:      alias(a),
 		Files:      emptyStrings(files),
 		ImageFiles: emptyStrings(a.ImageFiles),
+		VideoFiles: emptyStrings(a.VideoFiles),
 		FileCount:  a.ImageCount,
 	})
 }
@@ -101,12 +132,14 @@ func (a Album) MarshalJSON() ([]byte, error) {
 //   - 因 ImageFiles/Files 用了 `json:"-"`，需要自定义才能从 JSON 读回
 //   - `imageFiles` 与 `files` 任一存在即写入；优先 files（新字段）
 //   - 缓存文件被回填时可能只有 `imageFiles`（兼容旧版本）
+//   - VideoFiles 字段缺失时为零值
 func (a *Album) UnmarshalJSON(data []byte) error {
 	type alias Album
 	aux := struct {
 		*alias
 		Files      []string `json:"files"`
 		ImageFiles []string `json:"imageFiles"`
+		VideoFiles []string `json:"videoFiles"`
 		FileCount  int      `json:"fileCount"`
 	}{
 		alias: (*alias)(a),
@@ -121,6 +154,7 @@ func (a *Album) UnmarshalJSON(data []byte) error {
 	case len(aux.ImageFiles) > 0:
 		a.ImageFiles = aux.ImageFiles
 	}
+	a.VideoFiles = aux.VideoFiles
 	return nil
 }
 

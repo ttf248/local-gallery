@@ -411,3 +411,102 @@ func TestScan_MultiRoots_OneMissing(t *testing.T) {
 		t.Errorf("expected ScanRootMissing, got %v", err)
 	}
 }
+
+// 仅含视频的目录应被识别为 Album，CoverImage 指向首个视频，
+// CoverKind="video"，且 FolderSize 含视频体积。
+func TestScan_VideoOnlyAlbum(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "vids")
+	mkdirAll(t, dir)
+	touchAll(t,
+		filepath.Join(dir, "a.mp4"),
+		filepath.Join(dir, "b.mkv"),
+		filepath.Join(dir, "c.webm"),
+		filepath.Join(dir, "notes.txt"), // 非媒体应忽略
+	)
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(res.Albums) != 1 {
+		t.Fatalf("expected 1 video album, got %d", len(res.Albums))
+	}
+	a := res.Albums[0]
+	if a.ImageCount != 0 {
+		t.Errorf("ImageCount 应为 0, got %d", a.ImageCount)
+	}
+	if a.VideoCount != 3 {
+		t.Errorf("VideoCount 应为 3, got %d", a.VideoCount)
+	}
+	if a.CoverKind != "video" {
+		t.Errorf("CoverKind 应为 video, got %q", a.CoverKind)
+	}
+	if a.CoverImage != filepath.Join(dir, "a.mp4") {
+		t.Errorf("CoverImage 应为排序后的首条视频 %q, got %q", filepath.Join(dir, "a.mp4"), a.CoverImage)
+	}
+	if len(a.VideoFiles) != 3 {
+		t.Errorf("VideoFiles 应有 3 项, got %v", a.VideoFiles)
+	}
+	if a.FolderSize == 0 {
+		t.Errorf("FolderSize 应含视频体积")
+	}
+}
+
+// 图 + 视频混合相册：CoverImage 仍是首张图，CoverKind=image；
+// VideoFiles 单独列出所有视频。
+func TestScan_MixedAlbum(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "mix")
+	mkdirAll(t, dir)
+	touchAll(t,
+		filepath.Join(dir, "a.jpg"),
+		filepath.Join(dir, "b.jpg"),
+		filepath.Join(dir, "clip.mp4"),
+	)
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(res.Albums) != 1 {
+		t.Fatalf("expected 1 album, got %d", len(res.Albums))
+	}
+	a := res.Albums[0]
+	if a.ImageCount != 2 {
+		t.Errorf("ImageCount = %d, want 2", a.ImageCount)
+	}
+	if a.VideoCount != 1 {
+		t.Errorf("VideoCount = %d, want 1", a.VideoCount)
+	}
+	if a.CoverKind != "image" {
+		t.Errorf("CoverKind = %q, want image (image wins over video)", a.CoverKind)
+	}
+	if a.CoverImage != filepath.Join(dir, "a.jpg") {
+		t.Errorf("CoverImage 应为 a.jpg, got %q", a.CoverImage)
+	}
+	if len(a.VideoFiles) != 1 || a.VideoFiles[0] != filepath.Join(dir, "clip.mp4") {
+		t.Errorf("VideoFiles 内容错：%v", a.VideoFiles)
+	}
+}
+
+// 视频扩展名应不与图片冲突；扩展名归一化大小写。
+func TestScan_VideoExtsCaseInsensitive(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "x")
+	mkdirAll(t, dir)
+	touchAll(t,
+		filepath.Join(dir, "a.MP4"),
+		filepath.Join(dir, "b.WebM"),
+	)
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Albums) != 1 || res.Albums[0].VideoCount != 2 {
+		t.Fatalf("expected 1 album w/ 2 videos, got %+v", res.Albums)
+	}
+}

@@ -376,9 +376,14 @@ func (s *Scanner) scanLayerWithHook(
 // classifyAndScan 判断子目录是相册还是集合，并扫描它。
 //
 // 规则：
-//   - 含图片 → Album
+//   - 含图片或视频 → Album（图片/视频可同时存在，混合相册）
 //   - 仅含子目录 → Collection（递归一层，深度+1）
 //   - 都不含或混合图片 + 子目录 → Album（图片优先，参考 Python 行为）
+//
+// 封面选择（CoverImage / CoverKind）：
+//   - 同时含图和视频 → 封面用第一张图，CoverKind="image"
+//   - 仅含视频 → 封面用第一个视频，CoverKind="video"（封面缩略图由前端抽帧后回填）
+//   - 仅含图 → 封面用第一张图，CoverKind="image"
 func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) (*models.Album, *models.Collection) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -386,6 +391,7 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 	}
 
 	var images []string
+	var videos []string
 	var subdirs []os.DirEntry
 	var totalSize int64
 
@@ -394,17 +400,21 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 			subdirs = append(subdirs, e)
 			continue
 		}
-		if models.IsImageFile(e.Name()) {
-			full := filepath.Join(dir, e.Name())
+		full := filepath.Join(dir, e.Name())
+		switch {
+		case models.IsImageFile(e.Name()):
 			images = append(images, full)
+		case models.IsVideoFile(e.Name()):
+			videos = append(videos, full)
 		}
 	}
 
-	// 含图片 → 当作相册
-	if len(images) > 0 {
+	// 含图片或视频 → 当作相册
+	if len(images) > 0 || len(videos) > 0 {
 		sort.Strings(images)
-		for _, img := range images {
-			if fi, err := os.Stat(img); err == nil {
+		sort.Strings(videos)
+		for _, p := range append(append([]string{}, images...), videos...) {
+			if fi, err := os.Stat(p); err == nil {
 				totalSize += fi.Size()
 			}
 		}
@@ -413,13 +423,24 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 			modTime = fi.ModTime()
 		}
 		name := filepath.Base(dir)
+		// 封面选择：图片优先
+		var cover, coverKind string
+		switch {
+		case len(images) > 0:
+			cover, coverKind = images[0], "image"
+		default:
+			cover, coverKind = videos[0], "video"
+		}
 		return &models.Album{
 			Type:       "album",
 			Path:       dir,
 			Name:       name,
 			ImageFiles: images,
-			CoverImage: images[0],
+			VideoFiles: videos,
+			CoverImage: cover,
+			CoverKind:  coverKind,
 			ImageCount: len(images),
+			VideoCount: len(videos),
 			FolderSize: totalSize,
 			Author:     ExtractAuthor(name),
 			Tags:       ExtractTags(name),

@@ -182,3 +182,101 @@ func TestAlbumUnmarshalJSON_RoundTrip(t *testing.T) {
 		t.Errorf("legacy Unmarshal 后 ImageFiles = %v", old.ImageFiles)
 	}
 }
+
+// TestIsVideoFile 验证常见视频扩展名识别 + 大小写不敏感。
+func TestIsVideoFile(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		// 正例
+		{"a.mp4", true},
+		{"a.MP4", true},
+		{"a.webm", true},
+		{"a.mov", true},
+		{"a.mkv", true},
+		{"a.avi", true},
+		{"a.m4v", true},
+		{"rec-2026-08-20.m4v", true},
+		// 反例：图片/文本/无扩展名
+		{"a.jpg", false},
+		{"a.txt", false},
+		{"a", false},
+		{"noext", false},
+		{"", false},
+		{"a.mp3", false}, // 音频
+		{"a.mp4.txt", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsVideoFile(tc.name); got != tc.want {
+				t.Errorf("IsVideoFile(%q) = %v, want %v", tc.name, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAlbumMarshalVideoFields 验证 VideoFiles / videoCount / coverKind
+// 都正确序列化。
+func TestAlbumMarshalVideoFields(t *testing.T) {
+	a := Album{
+		Type:       "album",
+		Path:       "E:/p/v",
+		Name:       "v",
+		VideoFiles: []string{"E:/p/v/clip.mp4", "E:/p/v/clip2.mkv"},
+		VideoCount: 2,
+		CoverKind:  "video",
+		CoverImage: "E:/p/v/clip.mp4",
+	}
+	raw, err := json.Marshal(a)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(raw)
+	for _, key := range []string{`"videoFiles"`, `"videoCount":2`, `"coverKind":"video"`, `"coverImage":"E:/p/v/clip.mp4"`} {
+		if !strings.Contains(s, key) {
+			t.Errorf("Album JSON 缺少 %q：%s", key, s)
+		}
+	}
+	// nil VideoFiles 也序列化为 []
+	empty := Album{Type: "album", Path: "E:/p/x", Name: "x"}
+	raw2, _ := json.Marshal(empty)
+	if strings.Contains(string(raw2), `"videoFiles":null`) {
+		t.Errorf("nil VideoFiles 未转为 []：%s", string(raw2))
+	}
+}
+
+// TestAlbumUnmarshalVideoFields 验证 cache 读回时 VideoFiles 不丢。
+func TestAlbumUnmarshalVideoFields(t *testing.T) {
+	raw := []byte(`{
+		"type":"album","path":"E:/p/v","name":"v",
+		"videoFiles":["E:/p/v/a.mp4","E:/p/v/b.mkv"],
+		"videoCount":2,"coverKind":"video"
+	}`)
+	var a Album
+	if err := json.Unmarshal(raw, &a); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(a.VideoFiles) != 2 {
+		t.Fatalf("VideoFiles = %v, want 2 items", a.VideoFiles)
+	}
+	if a.VideoFiles[0] != "E:/p/v/a.mp4" || a.VideoFiles[1] != "E:/p/v/b.mkv" {
+		t.Errorf("VideoFiles 内容错：%v", a.VideoFiles)
+	}
+	if a.CoverKind != "video" {
+		t.Errorf("CoverKind = %q, want video", a.CoverKind)
+	}
+	if a.VideoCount != 2 {
+		t.Errorf("VideoCount = %d, want 2", a.VideoCount)
+	}
+
+	// 旧 cache 完全没有 video 字段时也不报错
+	legacy := []byte(`{"type":"album","path":"E:/p/old","name":"old","imageFiles":["x.jpg"]}`)
+	var old Album
+	if err := json.Unmarshal(legacy, &old); err != nil {
+		t.Fatalf("legacy unmarshal: %v", err)
+	}
+	if len(old.VideoFiles) != 0 {
+		t.Errorf("legacy VideoFiles 应为零值, got %v", old.VideoFiles)
+	}
+}
