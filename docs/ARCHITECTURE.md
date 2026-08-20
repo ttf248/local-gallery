@@ -21,13 +21,33 @@
 
 ## 领域模型
 
-应用对**目录与图像类型保持中性**，核心抽象是"图像组"：
+应用对**目录与媒体类型保持中性**，核心抽象是"媒体组"：
 
-- **文件夹 (Album)**：一个包含若干图像文件的子目录。
+- **文件夹 (Album)**：一个包含若干媒体文件（图片 + 视频）的子目录。
+  - `ImageFiles` / `imageCount` + `VideoFiles` / `videoCount` 同时记录
+  - `CoverKind` 标识封面源（"image" / "video"），`CoverImage` 指向对应文件
 - **集合 (Collection)**：上层目录（深度可达 `MaxDepth`），把若干文件夹收作卷册。
 - **智能合集 (SmartCollection)**：按**标签**（从目录名中 `[xxx]` 段提取）聚合的所有文件夹。
   - 一个文件夹可以属于多个智能合集（多个标签）。
   - 兼容历史：旧字段 `Author` 仍存在，但内容等同于第一个标签。
+
+### 视频封面流程
+
+视频（mp4/webm/mov/mkv/avi/m4v）的"封面"不在服务端生成（避免引入 ffmpeg 依赖）。完整链路：
+
+```
+[首次访问视频 cover]
+  GET /api/thumbs?path=<video>
+    → 404 { code: "video_cover_missing" }
+  前端 useVideoCover 捕获：
+    1) new Video() fetch <video> 字节（/api/videos 支持 Range）
+    2) seek 到 ~duration * 10%（夹到 1~3s）
+    3) canvas.drawImage + canvas.toBlob('image/jpeg', 0.85)
+    4) POST /api/thumbs/cover (原始字节)
+  → 后端 imaging.Fit → 缓存到 disk + LRU（同图片缩略图 key 体系）
+[后续访问]
+  GET /api/thumbs?path=<video> → 直接返回 PNG
+```
 
 ## 后端模块（Go）
 
@@ -37,15 +57,19 @@ backend/
 ├── internal/
 │   ├── config/                 # YAML 配置加载 + 校验
 │   ├── models/                 # 领域模型（Album、Collection、SmartCollection、Prefs）
-│   │                          # Album 序列化时同时输出 files/imageFiles 兼容字段
+│   │                          # Album 序列化时同时输出 files/imageFiles + videoFiles
+│   │                          # CoverKind 标识封面源（image/video）
 │   ├── services/               # 业务逻辑
-│   │   ├── scanner.go          # 文件遍历 + goroutine worker pool
+│   │   ├── scanner.go          # 文件遍历 + goroutine worker pool（图/视频同收集）
 │   │   ├── smart_group.go      # 按标签智能分组（GroupByTag）
-│   │   ├── thumbnail.go        # LRU + 磁盘缓存 + Lanczos
+│   │   ├── thumbnail.go        # LRU + 磁盘缓存 + Lanczos + 视频封面 save
 │   │   ├── scan_runner.go      # 异步扫描 + SSE 推送
 │   │   └── image_info.go       # 尺寸/格式/checksum
 │   ├── store/                  # JSON 偏好持久化（原子写）
 │   ├── handlers/               # Fiber 路由处理
+│   │   ├── thumbs.go           # GET /api/thumbs + POST /api/thumbs/cover
+│   │   ├── videos.go           # GET /api/videos + GET /api/videos/info
+│   │   └── ...                 # albums / scan / config / fs / prefs / images
 │   └── middleware/             # logger / recover / path_safety
 └── tests/integration/          # 端到端 HTTP 测试（app.Test）
 ```
@@ -76,13 +100,13 @@ frontend/src/
 ├── components/
 │   ├── layout/                 # AppShell / Sidebar / Toolbar / StatusBar / Breadcrumb
 │   ├── album/                  # AlbumGrid / AlbumCard / ContextMenu / ScanProgress
-│   ├── viewer/                 # ImageViewer / ViewerToolbar / ImageInfoPanel
-│   └── common/                 # EmptyState / HelpOverlay / PropertiesDialog / ThemeSwitcher
+│   ├── viewer/                 # ImageViewer / VideoPlayer / ViewerToolbar / ImageInfoPanel
+│   └── common/                 # EmptyState / HelpOverlay / PropertiesDialog / ThemeSwitcher / VideoCoverImage / HoverPreview
 └── utils/                      # 工具
     ├── shortcuts.ts            # 快捷键清单（单一来源）
     ├── path.ts                 # 路由与相册路径编解码（/albums/、/tags/、smart: 前缀）
     ├── storage.ts              # sessionStorage 持久化
-    └── format.ts               # 字节大小格式化
+    └── format.ts               # 字节大小 / 视频时长格式化
 ```
 
 ## 关键流程

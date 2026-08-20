@@ -109,11 +109,13 @@ data: {"scanId":"...","error":"permission denied",...}
 
 按路径返回详细信息：
 
-- 普通文件夹（Album）：`{ kind: "album", data: { path, name, imageFiles:[…], imageCount, tags:[…], author, … } }`
+- 普通文件夹（Album）：`{ kind: "album", data: { path, name, imageFiles:[…], videoFiles:[…], imageCount, videoCount, coverKind, tags:[…], author, … } }`
+  - `coverKind` 为 `"image"` / `"video"`，标识封面源（视频封面由前端抽帧后回填）
+  - 视频/图片可混在同一相册（folder 可同时含图与视频文件）
 - 集合（Collection）：`{ kind: "collection", data: { path, name, albums:[…], albumCount } }`
 - 智能合集：`?path=smart:<tag>` → `{ kind: "smart", data: { tag, author, albums:[…], albumCount, coverImage } }`
 
-`imageFiles` 在前端中可同时以 `files` 字段名读取（双键别名，向后兼容）。
+`imageFiles` 在前端中可同时以 `files` 字段名读取（双键别名，向后兼容）。`videoFiles` 是独立键。
 
 ### `GET /api/tags?path=smart:<tag>`
 
@@ -141,6 +143,18 @@ data: {"scanId":"...","error":"permission denied",...}
 ### `GET /api/thumbs?path=<abs>`
 
 返回 PNG（默认 320×350，保持比例）。支持服务端 LRU + 磁盘缓存。
+
+视频路径（`.mp4` / `.webm` / `.mov` / `.mkv` / `.avi` / `.m4v`）行为：
+
+- 封面已缓存（前端已抽帧 + 上传） → 返回 PNG
+- 封面未生成 → 返回 404 `{ "code": "video_cover_missing" }`；前端据此触发 `<video>` 抽帧
+
+### `POST /api/thumbs/cover?path=<abs_video>`
+
+接收前端浏览器抽帧得到的视频封面字节，写入缓存。Content-Type 为图片 MIME（`image/jpeg` 优先，`image/png` 兼容），body 为原始字节（典型 `canvas.toBlob('image/jpeg', 0.85)`）。
+
+成功：`{ "ok": true, "bytes": <int> }`  
+失败：`400`（path 缺失 / 非视频）/ `404`（视频文件不存在）/ `413`（> 5 MB）/ `415`（上传的字节不是合法图片）。
 
 ### `GET /api/thumbs/stats`
 
@@ -180,6 +194,33 @@ data: {"scanId":"...","error":"permission denied",...}
   "checksum": "ab12cd34ef567890"
 }
 ```
+
+---
+
+## 视频
+
+### `GET /api/videos?path=<abs>`
+
+返回原始视频字节（支持 `Range` 请求，前端 `<video>` 拖动进度条时浏览器自动按需分段）。MIME 按扩展名：`video/mp4` / `video/webm` / `video/quicktime` / `video/x-matroska` / `video/x-msvideo`。响应头包含 `Accept-Ranges: bytes`、`Cache-Control: public, max-age=86400`。
+
+非视频扩展名 → 415；视频文件不存在 → 404。
+
+### `GET /api/videos/info?path=<abs>`
+
+返回服务端可读的元数据（不依赖 ffmpeg）：
+
+```json
+{
+  "path": "E:\\存照\\video.mp4",
+  "name": "video.mp4",
+  "dir": "E:\\存照",
+  "size": 12345678,
+  "mtime": "2026-08-20T12:34:56Z",
+  "format": ".mp4"
+}
+```
+
+`duration` / `width` / `height` 服务端不解析（避免引入 ffmpeg 依赖），由前端 `<video>` 元素 `loadedmetadata` 事件在浏览器内拿到。
 
 ---
 
@@ -294,8 +335,9 @@ data: {"scanId":"...","error":"permission denied",...}
 |----|------|
 | 400 | 参数缺失/路径越权 |
 | 403 | 功能未启用（`allowOsOpen`） |
-| 404 | 文件不存在 / 扫描结果不存在 / 智能合集不存在 |
-| 415 | 不支持的图片格式（仅缩略图生成） |
+| 404 | 文件不存在 / 扫描结果不存在 / 智能合集不存在 / **视频封面未生成**（body 含 `code: "video_cover_missing"`） |
+| 413 | 上传 payload 超过限制（视频封面上传 > 5 MB） |
+| 415 | 不支持的图片格式（仅缩略图生成）/ 上传的不是合法图片 / 路径不是支持的视频格式 |
 | 500 | 服务端错误 |
 
 ---
