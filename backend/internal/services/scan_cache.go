@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -78,24 +80,76 @@ func (c *ScanResultCache) Flush() error {
 }
 
 // Load 启动时加载磁盘缓存。
+//
+// 已废弃：请使用 LoadWithRoots(currentRoots)。该方法等价于
+// LoadWithRoots(nil)，不校验缓存里的根目录与当前配置是否一致，
+// 仅在测试与历史代码路径中保留。
+//
+// Deprecated: Use LoadWithRoots instead.
 func (c *ScanResultCache) Load() error {
+	_, err := c.LoadWithRoots(nil)
+	return err
+}
+
+// LoadWithRoots 启动时加载磁盘缓存，并在缓存记录的多媒体根与 currentRoots
+// 不一致时清空缓存（清空后调用方应主动触发一次扫描，避免前端拉到旧根下的
+// 扫描结果）。
+//
+// 行为：
+//   - 缓存文件不存在：与 Load 行为一致，直接返回 nil（无错）。
+//   - 缓存文件存在但解析失败：返回错误（与 Load 行为一致）。
+//   - currentRoots 为 nil 或空：跳过根目录校验，按原样加载。
+//   - 缓存里的根集合与 currentRoots 不一致：调用 Clear() 清空内存与磁盘，
+//     并通过返回值 rootsMismatch=true 通知调用方需要重扫。
+//   - 一致：按原样加载到内存。
+//
+// 根集合比较规则：
+//   - 使用 filepath.Clean 规范化
+//   - 顺序无关（按集合比较）
+//   - 大小写：Windows 上不敏感（paths.ToLower 后比），其他平台敏感
+func (c *ScanResultCache) LoadWithRoots(currentRoots []string) (rootsMismatch bool, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	data, err := os.ReadFile(c.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.loaded = true
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 	r := &models.ScanResult{}
 	if err := json.Unmarshal(data, r); err != nil {
-		return err
+		return false, err
+	}
+	// currentRoots 为空 → 跳过校验（旧路径/调用方未启用校验）
+	if len(currentRoots) == 0 {
+		c.latest = r
+		c.loaded = true
+		return false, nil
+	}
+	if !sameRootSet(r.Roots, currentRoots) {
+		// 缓存属于另一个 mediaRoot，不能直接用——清空内存并删除磁盘文件，
+		// 避免下次启动再次读到旧根。
+		if c.flushTimer != nil {
+			c.flushTimer.Stop()
+		}
+		c.latest = nil
+		c.dirty = false
+		// 直接删除磁盘文件；删除失败时退化为写空 JSON（保持下次 Load 行为可预测）
+		if rmErr := os.Remove(c.path); rmErr != nil && !os.IsNotExist(rmErr) {
+			c.latest = &models.ScanResult{}
+			c.dirty = true
+			if ferr := c.flushLocked(); ferr != nil {
+				return true, rmErr
+			}
+		}
+		c.loaded = true
+		return true, nil
 	}
 	c.latest = r
 	c.loaded = true
-	return nil
+	return false, nil
 }
 
 // flush 把内存中的最新结果写到磁盘（原子重命名）。
@@ -123,6 +177,28 @@ func (c *ScanResultCache) flush() error {
 	c.dirty = false
 	c.mu.Unlock()
 	return os.Rename(tmp, path)
+}
+
+// flushLocked 与 flush 等价，但调用方必须已持有 c.mu 写锁。
+// 用于 LoadWithRoots 在校验失败后立即清空写盘的场景（避免与 flush 中的
+// RLock/Lock 切换出现死锁）。
+func (c *ScanResultCache) flushLocked() error {
+	if !c.dirty || c.latest == nil {
+		return nil
+	}
+	data, err := json.MarshalIndent(c.latest, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
+		return err
+	}
+	tmp := c.path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	c.dirty = false
+	return os.Rename(tmp, c.path)
 }
 
 // Clear 清空内存中的扫描结果并立即落盘为空文件（媒体根目录变更后调用）。
@@ -206,4 +282,50 @@ func findAlbumInCollection(col *models.Collection, path string) *models.Album {
 		}
 	}
 	return nil
+}
+
+// normalizeRoots 把一组根目录字符串做规范化：filepath.Clean + 去空。
+// 比较函数 sameRootSet 内部使用。
+func normalizeRoots(roots []string) []string {
+	out := make([]string, 0, len(roots))
+	for _, r := range roots {
+		r = filepath.Clean(r)
+		if r == "" || r == "." {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// sameRootSet 判断 a、b 两个根集合是否等价（顺序无关）。
+//
+// 规则：
+//   - 都先经过 filepath.Clean 规范化
+//   - 大小写：Windows 上不敏感（filepath.Clean 不会改变大小写，故此处手工 ToLower）；
+//     其他平台保持大小写敏感
+//   - 任一为空且另一个也为空 → true；任一为空但另一个非空 → false
+func sameRootSet(a, b []string) bool {
+	na := normalizeRoots(a)
+	nb := normalizeRoots(b)
+	if len(na) != len(nb) {
+		return false
+	}
+	caseInsensitive := runtime.GOOS == "windows"
+	set := make(map[string]struct{}, len(na))
+	for _, r := range na {
+		if caseInsensitive {
+			r = strings.ToLower(r)
+		}
+		set[r] = struct{}{}
+	}
+	for _, r := range nb {
+		if caseInsensitive {
+			r = strings.ToLower(r)
+		}
+		if _, ok := set[r]; !ok {
+			return false
+		}
+	}
+	return true
 }

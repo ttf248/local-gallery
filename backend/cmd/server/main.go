@@ -117,14 +117,40 @@ func main() {
 	runner := services.NewAsyncScanRunner()
 	prefs := store.NewPrefsStore(filepath.Join(cfg.CacheDir, "web_settings.json"))
 
-	// 扫描结果缓存（启动时从磁盘加载，供前端免扫描查看）
+	// 扫描结果缓存（启动时从磁盘加载，供前端免扫描查看）。
+	//
+	// 启动时校验：缓存文件里记录的 mediaRoots 必须与当前 cfg.Roots() 一致；
+	// 不一致时直接清空（删除磁盘文件）并触发一次自动扫描，避免重启后
+	// 前端拉到上一个 mediaRoot 下的扫描结果（参见 services.LoadWithRoots）。
 	scanCache := services.NewScanResultCache(filepath.Join(cfg.CacheDir, "scan_cache.json"))
-	if err := scanCache.Load(); err != nil {
+	currentRoots := cfg.Roots()
+	mismatch, err := scanCache.LoadWithRoots(currentRoots)
+	if err != nil {
 		log.Printf("警告：加载扫描缓存失败 %v", err)
 	}
 	runner.SetCache(scanCache)
 	if r := scanCache.Get(); r != nil {
 		log.Printf("  已加载上次扫描结果：%d 相册，扫描于 %s", r.AlbumCount, r.ScannedAt.Format("2006-01-02 15:04:05"))
+	} else if mismatch {
+		log.Printf("  缓存的根目录与当前 mediaRoots 不一致，已清空旧缓存")
+	}
+
+	// 启动时若缓存为空（首次启动 / 缓存根目录不匹配被清空 / 磁盘无缓存），
+	// 自动跑一次扫描，避免前端打开时看到 404 或空数据。
+	// 用 goroutine 异步执行，不阻塞服务启动；扫描进度通过 /api/scan/:id/events
+	// 暴露给前端。
+	if scanCache.Get() == nil && len(currentRoots) > 0 {
+		go func() {
+			id, _, startErr := runner.Start(services.ScanOptions{
+				Roots:    currentRoots,
+				MaxDepth: 2,
+			})
+			if startErr != nil {
+				log.Printf("启动自动扫描失败: %v", startErr)
+				return
+			}
+			log.Printf("  已自动启动扫描 id=%s，等待结果…", id)
+		}()
 	}
 
 	// 缩略图参数 / 缓存目录变更：热更新 ThumbnailService
