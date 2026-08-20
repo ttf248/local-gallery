@@ -80,6 +80,9 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:               "comic-reader",
 		DisableStartupMessage: true,
+		// BodyLimit 提到 6 MiB：默认 4 MiB 不够 /api/thumbs/cover 上传
+		// 4K canvas JPEG 封面（典型 2-4 MB）。
+		BodyLimit: 6 * 1024 * 1024,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			if fe, ok := err.(*fiber.Error); ok {
 				return c.Status(fe.Code).JSON(fiber.Map{"error": fe.Message})
@@ -174,6 +177,11 @@ func main() {
 	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
+	// 视频流 + 元信息（前端 <video> 元素 / HoverPreview / 时长显示使用）
+	api.Get("/videos", handlers.VideoHandler())
+	api.Get("/videos/info", handlers.VideoInfoHandler())
+	// 视频封面回填：前端浏览器抽帧后 POST 原始字节
+	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
 	api.Get("/fs/open", handlers.FsOpenHandler(mgr))
 
 	// 配置读写
