@@ -17,9 +17,13 @@ export default function StatusBar() {
   const sortBy = useSearchStore((s) => s.sortBy)
   const view = useSearchStore((s) => s.view)
 
+  // 进度详情（百分比 + 本数 + 阶段）已搬到顶部 ScanProgress 条；
+  // 状态栏只在「正在扫描」时给一个极简提示，方便用户瞥一眼。
   let leftLabel = '就绪'
   if (sse.isRunning) {
-    leftLabel = `扫描中 ${sse.progress?.progress ?? 0}% · 已发现 ${sse.progress?.albumsFound ?? 0} 个文件夹`
+    leftLabel = `扫描中 · 已发现 ${sse.progress?.albumsFound ?? 0} 个文件夹`
+  } else if (sse.isError) {
+    leftLabel = '扫描失败'
   } else if (result) {
     leftLabel = `${result.albumCount} 个文件夹 · ${(result.smartCollections ?? []).length} 个标签`
   }

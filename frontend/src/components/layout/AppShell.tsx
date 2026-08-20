@@ -6,9 +6,12 @@ import { useTheme } from '../../hooks/useTheme'
 import { useLibraryStore } from '../../store/libraryStore'
 import { albumRoute } from '../../utils/path'
 import { fsApi } from '../../api/fs'
+import { scanApi } from '../../api/scan'
+import { useScanSSE } from '../../hooks/useScanSSE'
 import Sidebar from './Sidebar'
 import Toolbar from './Toolbar'
 import StatusBar from './StatusBar'
+import ScanProgress from '../album/ScanProgress'
 import ToastViewport from '../common/Toast'
 import HelpOverlay from '../common/HelpOverlay'
 
@@ -25,6 +28,8 @@ export default function AppShell() {
   const result = useLibraryStore((s) => s.result)
   const [helpOpen, setHelpOpen] = useState(false)
   const onViewer = location.pathname.startsWith('/viewer')
+  // 扫描进度 + 取消（提升到 AppShell 后所有路由都能看到顶部进度条）
+  const scanSse = useScanSSE()
 
   // 启动时同步服务端能力（fsCapabilities.allowOsOpen），
   // 否则 Album 详情 / 右键菜单的"在资源管理器中打开"按钮永远 disabled。
@@ -120,6 +125,18 @@ export default function AppShell() {
       <div className="flex-1 flex flex-col min-w-0">
         <Toolbar />
         <main className="flex-1 overflow-auto">
+          {/*
+            扫描进度条：放在 main 内、放在 Outlet 之前。
+            sticky top-0 + z-30 让它在所有路由的顶部常驻，
+            视觉上紧贴在 Toolbar 下边、不抢主内容空间。
+            scanSse.startWith 由 Toolbar 在用户触发「重新扫描」/ Ctrl+S 时写 store.scanId。
+          */}
+          <ScanProgress
+            progress={scanSse.progress}
+            onCancel={() =>
+              scanSse.scanId && scanApi.cancel(scanSse.scanId).catch(() => {})
+            }
+          />
           <Outlet />
         </main>
         <StatusBar />

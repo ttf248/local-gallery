@@ -11,7 +11,6 @@ import { scanApi, type ScanResult } from '../api/scan'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
-import ScanProgress from '../components/album/ScanProgress'
 import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { ViewerContextEntry } from '../utils/viewerContext'
@@ -328,10 +327,7 @@ export default function Home() {
 
   return (
     <div className="min-h-full">
-      <ScanProgress
-        progress={sse.progress}
-        onCancel={() => sse.scanId && scanApi.cancel(sse.scanId).catch(() => {})}
-      />
+      {/* ScanProgress 已提升到 AppShell，跨路由常驻显示 */}
 
       {/* Hero — 一个明确主入口 + 极简次动作 */}
       <section className="px-6 lg:px-10 pt-14 pb-10 max-w-[1400px] mx-auto w-full">
