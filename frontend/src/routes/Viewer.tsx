@@ -8,6 +8,7 @@ import { progressApi, historyApi } from '../api/prefs'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
 import ImageViewer from '../components/viewer/ImageViewer'
+import VideoPlayer from '../components/viewer/VideoPlayer'
 import PageSlider from '../components/viewer/PageSlider'
 import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
 import HelpOverlay from '../components/common/HelpOverlay'
@@ -32,10 +33,16 @@ export default function Viewer() {
   const pathParam = params.get('path') ?? params.get('album') ?? ''
   const initialIndex = Number(params.get('index') ?? 0)
   const name = params.get('name') ?? '查看器'
+  // type=video 走 VideoPlayer；其它（含未传）走 ImageViewer。
+  // 视频模式下 progress.index 单位是秒，total 是 duration 秒数。
+  const typeParam = (params.get('type') ?? 'image') as 'image' | 'video'
+  const isVideo = typeParam === 'video'
 
   // 兼容旧链接（images 数组直接传）
   const initialImages = parseImages(params.get('images'))
   const [images, setImages] = useState<string[]>(initialImages)
+  // 视频文件列表（type=video 时使用）
+  const [videos, setVideos] = useState<string[]>([])
 
   const index = useViewerStore((s) => s.index)
   const setIndex = useViewerStore((s) => s.setIndex)
@@ -111,6 +118,8 @@ export default function Viewer() {
   // 一旦点过「重试」（reloadKey++）或 pathParam 变化（导航到下一本），都要重新拉。
   const skipInitialFetch = initialImages.length > 0 && reloadKey === 0
   const imagesReady = images.length > 0
+  const videosReady = videos.length > 0
+  const ready = isVideo ? videosReady : imagesReady
   useEffect(() => {
     if (skipInitialFetch) return
     if (!pathParam) return
@@ -118,79 +127,104 @@ export default function Viewer() {
     // 切到新 album 前，先把上一个 album 的进度刷一次（去抖的 save 会因为
     // images.length 变 0 而被清理掉，主动写一次更稳）。
     // 关键：用 lastPathRef（上一个 pathParam），不是闭包里的新 pathParam。
-    if (lastPathRef.current && images.length > 0) {
-      progressApi
-        .set(lastPathRef.current, index, images.length, 0)
-        .catch(() => {})
+    if (lastPathRef.current) {
+      const prevTotal = isVideo ? videos.length : images.length
+      if (prevTotal > 0) {
+        progressApi
+          .set(lastPathRef.current, index, prevTotal, 0)
+          .catch(() => {})
+      }
     }
     lastPathRef.current = pathParam
     setLoadError(null)
     setImages([])
+    setVideos([])
     albumsApi
       .detail(pathParam)
       .then((r) => {
         if (cancelled) return
-        const d = r.data as { files?: string[]; imageFiles?: string[] } | undefined
-        const list = d?.files ?? d?.imageFiles
-        if (list && Array.isArray(list) && list.length > 0) {
-          setImages(list)
+        // 后端 Album JSON：files（推荐）/ imageFiles（兼容），以及 videoFiles
+        const d = r.data as
+          | { files?: string[]; imageFiles?: string[]; videoFiles?: string[] }
+          | undefined
+        if (isVideo) {
+          const list = d?.videoFiles ?? []
+          if (list.length > 0) {
+            setVideos(list)
+          } else {
+            setLoadError('EMPTY')
+          }
         } else {
-          setLoadError('EMPTY')
+          const list = d?.files ?? d?.imageFiles
+          if (list && Array.isArray(list) && list.length > 0) {
+            setImages(list)
+          } else {
+            setLoadError('EMPTY')
+          }
         }
       })
       .catch((e) => {
         if (cancelled) return
         const msg =
-          (e as Error)?.message || '无法读取图片（网络或服务异常）'
+          (e as Error)?.message || '无法读取媒体（网络或服务异常）'
         setLoadError(msg)
       })
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathParam, reloadKey])
+  }, [pathParam, reloadKey, isVideo])
 
   useEffect(() => {
-    if (!imagesReady) return
-    setIndex(Math.max(0, Math.min(images.length - 1, initialIndex)))
-    // 切到新 album 时重置缩放/旋转，避免上一个 album 的状态延续过来
-    useViewerStore.getState().resetView()
+    if (!ready) return
+    const list = isVideo ? videos : images
+    setIndex(Math.max(0, Math.min(list.length - 1, initialIndex)))
+    // 切到新 album 时重置缩放/旋转（视频模式不需要；切视频时由
+    // <video key=src> 自然重挂载）
+    if (!isVideo) {
+      useViewerStore.getState().resetView()
+    }
     if (!pathParam) return
     progressApi
       .get(pathParam)
       .then((rp) => {
-        if (rp && rp.index >= 0 && rp.index < images.length) {
+        if (!rp) return
+        // 图片模式：index 视为页码；视频模式：index 是秒数，
+        // 不在这里 seek（<video onMetaLoaded> 处理）
+        if (!isVideo && rp.index >= 0 && rp.index < list.length) {
           setIndex(rp.index)
         }
       })
       .catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imagesReady, pathParam])
+  }, [ready, pathParam, isVideo])
 
   // 把这次打开写进 history
   useEffect(() => {
-    if (!pathParam || images.length === 0) return
+    if (!pathParam) return
+    if (isVideo ? videos.length === 0 : images.length === 0) return
     historyApi
       .add({
         path: pathParam,
         name,
-        imageCount: images.length,
+        imageCount: isVideo ? videos.length : images.length,
       })
       .then(() => {
         // 让 Recents 立刻刷新，而不是等 30s 缓存过期
         queryClient.invalidateQueries({ queryKey: ['history'] })
       })
       .catch(() => {})
-  }, [pathParam, name, images.length, queryClient])
+  }, [pathParam, name, videos.length, images.length, isVideo, queryClient])
 
-  // 切换图片时关闭信息面板 + 防抖持久化进度
+  // 切换图片/视频时关闭信息面板 + 防抖持久化进度
   useEffect(() => {
     setShowInfo(false)
     if (!pathParam) return
-    if (images.length === 0) return
+    const list = isVideo ? videos : images
+    if (list.length === 0) return
     const t = setTimeout(() => {
       progressApi
-        .set(pathParam, index, images.length, 0)
+        .set(pathParam, index, list.length, 0)
         .then(() => {
           // 让 Home/Recents/Favorites 的 progress-batch + Album 详情 per-album
           // 缓存都失效，回到列表/详情时立刻看到新进度
@@ -200,7 +234,7 @@ export default function Viewer() {
         .catch(() => {})
     }, 600)
     return () => clearTimeout(t)
-  }, [index, pathParam, images.length, queryClient])
+  }, [index, pathParam, videos.length, images.length, isVideo, queryClient])
 
   // 切到连续模式后,容器需要滚到当前 index 对应的那张图。
   // 之前 ImageViewer 的 useEffect 会把 scrollTop 强制 0,导致用户
@@ -482,7 +516,7 @@ export default function Viewer() {
     },
   })
 
-  if (images.length === 0) {
+  if (!ready) {
     return (
       <div className="flex flex-col h-full bg-bg">
         {/* 顶部条：返回 / 名称（常驻） */}
@@ -544,7 +578,8 @@ export default function Viewer() {
     )
   }
 
-  const current = images[index]
+  const current = isVideo ? videos[index] : images[index]
+  const total = isVideo ? videos.length : images.length
 
   return (
     <div
@@ -557,20 +592,51 @@ export default function Viewer() {
           容器拿到约束高度,连续模式才能在容器内纵向滚动,
           而不是被外层 overflow-hidden 裁掉。 */}
       <div className="absolute inset-0 flex flex-col">
-        <ImageViewer
-          images={images}
-          onClickNavigate={(dir) => {
-            if (dir === -1) prev()
-            else if (dir === 1) next()
-          }}
-        />
+        {isVideo ? (
+          <VideoPlayer
+            src={current ?? ''}
+            onProgress={(sec) => {
+              // 视频模式下 index = currentTime（秒）；防抖 600ms 落盘
+              useViewerStore.getState().setIndex(sec)
+            }}
+            onEnded={() => {
+              if (index < videos.length - 1) next()
+              else {
+                pushToast({ kind: 'success', message: '已看完 🎉', ttl: 1500 })
+              }
+            }}
+            onMetaLoaded={() => {
+              // loadedmetadata 后，尝试恢复之前的播放进度
+              if (!pathParam) return
+              progressApi
+                .get(pathParam)
+                .then((rp) => {
+                  if (rp && Number.isFinite(rp.total) && rp.total > 0) {
+                    // 仅当 total 是秒数时（视频），才用 index 当 currentTime
+                    if (rp.index > 0 && rp.index < rp.total) {
+                      useViewerStore.getState().setIndex(rp.index)
+                    }
+                  }
+                })
+                .catch(() => {})
+            }}
+          />
+        ) : (
+          <ImageViewer
+            images={images}
+            onClickNavigate={(dir) => {
+              if (dir === -1) prev()
+              else if (dir === 1) next()
+            }}
+          />
+        )}
       </div>
 
       {/* 顶部常驻条：返回 / 名称 / 页码 / 全屏 / 菜单 */}
       <ViewerHeader
         name={name}
         index={index}
-        total={images.length}
+        total={total}
         isFavorite={isFav}
         onBack={() => navigate(-1)}
         onToggleFavorite={onToggleFavorite}
@@ -582,25 +648,30 @@ export default function Viewer() {
         onNextAlbum={() => goAdjacent(1)}
       />
 
-      {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本） */}
-      <ViewerControls
-        visible={chromeVisible}
-        onPrev={prev}
-        onNext={next}
-        onPrevAlbum={() => goAdjacent(-1)}
-        onNextAlbum={() => goAdjacent(1)}
-      />
+      {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本）
+          视频模式不显示（视频有原生 controls） */}
+      {!isVideo && (
+        <ViewerControls
+          visible={chromeVisible}
+          onPrev={prev}
+          onNext={next}
+          onPrevAlbum={() => goAdjacent(-1)}
+          onNextAlbum={() => goAdjacent(1)}
+        />
+      )}
 
-      {/* 底部进度条 + 跳转：浮在图上，chromeVisible 联动 */}
-      <div
-        className={`absolute bottom-0 inset-x-0 z-10 transition-opacity duration-300 ${
-          chromeVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
-      >
-        <PageSlider total={images.length} index={index} onJump={jumpTo} images={images} />
-      </div>
+      {/* 底部进度条 + 跳转：浮在图上，chromeVisible 联动。视频模式下隐藏（<video> 自带 controls） */}
+      {!isVideo && (
+        <div
+          className={`absolute bottom-0 inset-x-0 z-10 transition-opacity duration-300 ${
+            chromeVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          <PageSlider total={images.length} index={index} onJump={jumpTo} images={images} />
+        </div>
+      )}
 
-      {showInfo && (
+      {showInfo && !isVideo && current && (
         <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
       )}
       <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />

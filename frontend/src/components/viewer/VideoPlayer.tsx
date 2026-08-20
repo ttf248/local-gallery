@@ -1,0 +1,125 @@
+import { useEffect, useRef, useState } from 'react'
+import { videoUrl } from '../../api/videos'
+
+interface Props {
+  /** 当前播放的视频绝对路径 */
+  src: string
+  /** 进度变化回调（防抖由父组件处理；以秒为单位） */
+  onProgress?: (currentTimeSec: number) => void
+  /** 视频元数据加载完成回调（用于父组件恢复进度） */
+  onMetaLoaded?: (durationSec: number) => void
+  /** 视频自然结束（ended=true）时触发 */
+  onEnded?: () => void
+  /** 父组件传入的额外 className（用于容器布局） */
+  className?: string
+}
+
+/**
+ * 视频播放器（v1 极简版）。
+ *
+ * 包装原生 <video controls>，做三件事：
+ *  1) 键盘：空格 = 播放/暂停，← / → = ±5s，↑ / ↓ = 音量 ±10%
+ *  2) 进度上报：timeupdate 触发 onProgress(currentTimeSec)
+ *  3) 元数据：loadedmetadata 触发 onMetaLoaded(durationSec)
+ *
+ * 故意不做：
+ *  - 自定义控件（用浏览器原生 controls，未来可替换为自绘）
+ *  - 倍速 / 字幕 / 画中画（依赖浏览器原生能力即可）
+ *  - 缩略图 scrub（v2）
+ */
+export default function VideoPlayer({
+  src,
+  onProgress,
+  onMetaLoaded,
+  onEnded,
+  className,
+}: Props) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // 切到下一个视频时清错
+  useEffect(() => {
+    setError(null)
+  }, [src])
+
+  // 键盘控制
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // 输入框不抢
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      const v = videoRef.current
+      if (!v) return
+      switch (e.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          e.preventDefault()
+          if (v.paused) v.play().catch(() => {})
+          else v.pause()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          v.currentTime = Math.max(0, v.currentTime - 5)
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          v.currentTime = Math.min(v.duration || v.currentTime + 5, v.currentTime + 5)
+          break
+        case 'ArrowUp':
+          e.preventDefault()
+          v.volume = Math.min(1, v.volume + 0.1)
+          break
+        case 'ArrowDown':
+          e.preventDefault()
+          v.volume = Math.max(0, v.volume - 0.1)
+          break
+        case 'm':
+        case 'M':
+          e.preventDefault()
+          v.muted = !v.muted
+          break
+        // 'F11' / 'f' / 全屏由 ViewerHeader 顶层处理；此处不重复
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  return (
+    <div className={className ?? 'relative flex-1 flex items-center justify-center min-h-0 bg-black'}>
+      <video
+        ref={videoRef}
+        key={src /* 切视频时强制重挂载，避免 src 缓存问题 */}
+        src={videoUrl(src)}
+        controls
+        autoPlay
+        playsInline
+        // poster 用 thumbnail 缓存（首次访问可能 404 + code=video_cover_missing，
+        // 浏览器对此静默处理，poster 显示空白；不阻断视频）
+        className="max-w-full max-h-full outline-none"
+        onLoadedMetadata={(e) => {
+          const v = e.currentTarget
+          if (Number.isFinite(v.duration) && v.duration > 0) {
+            onMetaLoaded?.(v.duration)
+          }
+        }}
+        onTimeUpdate={(e) => {
+          // 每秒最多 4 次（timeupdate 浏览器自己会 throttle），对 UI 足够
+          onProgress?.(e.currentTarget.currentTime)
+        }}
+        onEnded={() => {
+          onEnded?.()
+        }}
+        onError={() => {
+          setError('视频加载失败')
+        }}
+      />
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="bg-black/70 text-white/90 text-sm px-3 py-1.5 rounded">{error}</div>
+        </div>
+      )}
+    </div>
+  )
+}

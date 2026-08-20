@@ -34,6 +34,7 @@ import { useReadingProgress } from '../hooks/useReadingProgress'
 import { useAlbumActions } from '../hooks/useAlbumActions'
 import PropertiesDialog from '../components/common/PropertiesDialog'
 import ContextMenu, { type AnyMenuItem } from '../components/album/ContextMenu'
+import VideoCoverImage from '../components/common/VideoCoverImage'
 import { fsCapabilities } from '../api/fs'
 import type { ViewerContextEntry } from '../utils/viewerContext'
 
@@ -42,8 +43,11 @@ interface AlbumDetail {
   path: string
   name: string
   imageFiles: string[]
+  videoFiles?: string[]
   coverImage: string
+  coverKind?: 'image' | 'video'
   imageCount: number
+  videoCount?: number
   author?: string
   folderSize: number
   modTime: string
@@ -120,8 +124,11 @@ export default function Album() {
         path: found.path,
         name: found.name,
         imageFiles: (found as unknown as { imageFiles?: string[] }).imageFiles ?? [],
+        videoFiles: found.videoFiles,
         coverImage: found.coverImage,
+        coverKind: found.coverKind,
         imageCount: found.imageCount,
+        videoCount: found.videoCount,
         author: found.author,
         folderSize: (found as unknown as { folderSize?: number }).folderSize ?? 0,
         modTime: (found as unknown as { modTime?: string }).modTime ?? '',
@@ -247,6 +254,10 @@ export default function Album() {
     )
   }
 
+  // 纯视频专辑：imageCount=0 且 videoCount>0，走视频列表视图
+  if (detail.imageCount === 0 && (detail.videoCount ?? 0) > 0) {
+    return <VideoAlbumView detail={detail} onBack={() => navigate(-1)} />
+  }
   return <AlbumView detail={detail} onBack={() => navigate(-1)} />
 }
 
@@ -796,6 +807,172 @@ function CollectionView({
         ) : (
           <AlbumGrid items={cards} variant={viewMode} />
         )}
+      </div>
+    </div>
+  )
+}
+
+// 纯视频专辑视图：与 AlbumView 视觉骨架一致（hero + 元信息 + CTA），
+// 主体用 3:4 网格展示视频文件，每格用 VideoCoverImage（自动抽帧）。
+// 点击 → /viewer?type=video&path=<album>&index=<n>&name=<file>。
+function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void }) {
+  const navigate = useNavigate()
+  const { add: addFav, toggle: toggleFav, favorites } = useFavorites()
+  const pushToast = useUIStore((s) => s.pushToast)
+  const isFav = favorites.includes(detail.path)
+  const videos = detail.videoFiles ?? []
+  const isFinished = false // 视频专辑进度按"全部看完"算；v1 暂不显示
+
+  const openVideo = (idx: number) => {
+    const qs = new URLSearchParams({
+      path: detail.path,
+      index: String(idx),
+      name: detail.name,
+      type: 'video',
+    })
+    navigate(`/viewer?${qs.toString()}`)
+  }
+
+  const toggleFavorite = () => {
+    if (isFav) {
+      toggleFav(detail.path)
+        .then(() => pushToast({ kind: 'success', message: '已取消收藏' }))
+        .catch(() => pushToast({ kind: 'error', message: '操作失败' }))
+    } else {
+      addFav(detail.path)
+        .then(() => pushToast({ kind: 'success', message: '已加入收藏' }))
+        .catch(() => pushToast({ kind: 'error', message: '操作失败' }))
+    }
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Hero：大封面 + 标题 + CTA（与 AlbumView 视觉一致） */}
+      <section className="relative bg-bg-elevated border-b border-border-faint">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="w-full h-full bg-bg-subtle scale-110 blur-2xl opacity-25" />
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg-elevated/40 to-bg-elevated" />
+        </div>
+        <div className="relative px-6 lg:px-10 pt-6 pb-8 max-w-[1400px] mx-auto w-full">
+          <div className="flex items-center gap-3 mb-5">
+            <button
+              onClick={onBack}
+              className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg transition-colors"
+            >
+              <ChevronLeftIcon size={12} />
+              <span>返回</span>
+            </button>
+            <span className="text-fg-subtle/50 text-xs">/</span>
+            <span className="text-xs text-fg-muted truncate">{detail.name}</span>
+          </div>
+
+          <div className="flex items-end gap-8 flex-wrap">
+            {/* 大封面（视频时由 VideoCoverImage 处理抽帧） */}
+            <div className="relative w-32 h-44 sm:w-40 sm:h-56 rounded-lg overflow-hidden border border-border shadow-md shrink-0 bg-bg-subtle">
+              <VideoCoverImage videoPath={detail.coverImage} alt={detail.name} loading="eager" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <h1 className="font-display text-2xl sm:text-[28px] font-semibold tracking-[-0.01em] leading-tight">
+                {detail.name}
+              </h1>
+              <div className="flex items-center gap-2 text-sm text-fg-muted mt-2 flex-wrap">
+                {detail.author && (
+                  <>
+                    <span className="text-fg">{detail.author}</span>
+                    <span className="text-fg-subtle/50">·</span>
+                  </>
+                )}
+                <span className="tabular-nums">{videos.length} 个视频</span>
+                {detail.folderSize > 0 && (
+                  <>
+                    <span className="text-fg-subtle/50">·</span>
+                    <span className="tabular-nums">{formatSize(detail.folderSize)}</span>
+                  </>
+                )}
+                {detail.modTime && (
+                  <>
+                    <span className="text-fg-subtle/50">·</span>
+                    <span className="text-fg-subtle inline-flex items-center gap-1">
+                      <ClockIcon size={11} />
+                      {formatRelative(detail.modTime)}
+                    </span>
+                  </>
+                )}
+                {isFinished && (
+                  <>
+                    <span className="text-fg-subtle/50">·</span>
+                    <span className="inline-flex items-center gap-1 text-success text-[12px]">
+                      <CheckIcon size={11} />
+                      已看完
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-5 flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => openVideo(0)}
+                  className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
+                >
+                  <PlayFilledIcon size={13} />
+                  <span>开始播放</span>
+                </button>
+
+                <button
+                  onClick={toggleFavorite}
+                  className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] transition-colors ${
+                    isFav
+                      ? 'bg-warning/10 text-warning border border-warning/30'
+                      : 'border border-border-faint text-fg-muted hover:text-fg hover:bg-bg-subtle'
+                  }`}
+                >
+                  <StarIcon size={13} filled={isFav} />
+                  <span>{isFav ? '已收藏' : '收藏'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 视频网格 */}
+      <div className="px-6 lg:px-10 pt-5 pb-3 flex items-center gap-3 max-w-[1400px] mx-auto w-full">
+        <ImageIcon size={12} className="text-fg-muted" />
+        <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
+          全部视频
+        </h2>
+        <span className="text-[11px] text-fg-subtle tabular-nums">{videos.length} 个</span>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 px-6 lg:px-10 pb-10 max-w-[1400px] mx-auto">
+          {videos.map((video, i) => {
+            const name = video.split(/[\\/]/).pop() ?? video
+            return (
+              <button
+                key={video}
+                onClick={() => openVideo(i)}
+                className="group relative aspect-[3/4] bg-bg-subtle rounded overflow-hidden transition-all hover:ring-1 hover:ring-border-strong"
+                title={name}
+              >
+                <VideoCoverImage videoPath={video} alt={name} loading="lazy" />
+                {/* ▶ 角标（hover 时加强） */}
+                <div className="absolute top-1.5 right-1.5 bg-bg-elevated/90 backdrop-blur rounded-md p-1 shadow-sm group-hover:scale-110 transition-transform">
+                  <PlayFilledIcon size={10} className="text-accent" />
+                </div>
+                {/* 序号 */}
+                <div className="absolute bottom-1.5 right-1.5 text-[10px] bg-bg-elevated/85 backdrop-blur px-1.5 py-0.5 rounded text-fg-muted tabular-nums">
+                  {i + 1}
+                </div>
+                {/* 标题条 */}
+                <div className="absolute bottom-0 inset-x-0 px-1.5 py-1 bg-gradient-to-t from-black/60 to-transparent">
+                  <div className="text-[10px] text-white/90 truncate">{name}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

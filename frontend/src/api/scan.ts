@@ -11,10 +11,19 @@ export interface AlbumSummary {
   // 来源媒体根的 basename，用于 UI badge 显示
   sourceName?: string
   coverImage: string
+  /**
+   * 封面来源："image" / "video"；未传时由 coverImage 扩展名推断。
+   * 仅视频 cover（首帧）由前端浏览器抽帧后回传到后端。
+   */
+  coverKind?: 'image' | 'video'
   imageCount: number
+  /** 视频数量；为 0 / 缺省时该目录不含视频。 */
+  videoCount?: number
   // 新字段：files 优先；旧字段 imageFiles 作为兜底。
   files?: string[]
   imageFiles?: string[]
+  /** 视频文件绝对路径列表（imageCount=0 时 coverImage 指向这里）。 */
+  videoFiles?: string[]
   author?: string
   modTime?: string
   folderSize?: number

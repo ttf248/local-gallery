@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { thumbUrl } from '../../api/thumbs'
 import { timeAgo } from '../../utils/date'
+import { isVideoCoverPath } from './VideoCoverImage'
+import VideoCoverImage from './VideoCoverImage'
 import {
   FolderIcon,
   ReaderIcon,
   ImageIcon,
   CalendarIcon,
+  PlayFilledIcon,
 } from './Icon'
 import type { CardData } from '../album/AlbumCard'
 
@@ -86,11 +89,20 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
         {/* 封面 */}
         <div className="relative bg-bg-subtle" style={{ width: COVER_W, height: COVER_H }}>
           {data.coverPath ? (
-            <img
-              src={thumbUrl(data.coverPath)}
-              alt={data.title}
-              className="w-full h-full object-cover"
-            />
+            isVideoCoverPath(data.coverPath) || data.coverKind === 'video' ? (
+              <VideoCoverImage
+                videoPath={data.coverPath}
+                alt={data.title}
+                loading="eager"
+                showExtractingHint={false}
+              />
+            ) : (
+              <img
+                src={thumbUrl(data.coverPath)}
+                alt={data.title}
+                className="w-full h-full object-cover"
+              />
+            )
           ) : (
             <div className="w-full h-full flex items-center justify-center text-fg-subtle">
               <FolderIcon size={36} />
@@ -98,6 +110,13 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
           )}
           {/* 顶部暗角：让标题更易读 */}
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent pointer-events-none" />
+          {/* 视频角标：▶ + 数量 */}
+          {(isVideoCoverPath(data.coverPath) || data.coverKind === 'video') && (
+            <div className="absolute top-3 left-3 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[11px] font-medium px-2 py-0.5 rounded-md shadow-sm">
+              <PlayFilledIcon size={10} className="text-accent" />
+              <span>视频</span>
+            </div>
+          )}
           {/* 底部渐变：放张数 / 标签 */}
           <div className="absolute inset-x-0 bottom-0 px-3 py-2.5 bg-gradient-to-t from-black/60 to-transparent">
             <div className="flex items-center gap-1.5 text-white/90 text-[11px] tabular-nums">
