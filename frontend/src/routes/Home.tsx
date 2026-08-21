@@ -11,29 +11,25 @@ import { scanApi, type ScanResult } from '../api/scan'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
+import YearTimeline from '../components/home/YearTimeline'
 import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { ViewerContextEntry } from '../utils/viewerContext'
+import { groupByYear, type YearGroup } from '../utils/albumGrouping'
 import {
   PlayFilledIcon,
   StarIcon,
   ShuffleIcon,
   RefreshIcon,
-  SparklesIcon,
-  RewindIcon,
-  ClockIcon,
   LibraryIcon,
+  ClockIcon,
+  CloseIcon,
+  ImageIcon,
 } from '../components/common/Icon'
-import AlbumCard from '../components/album/AlbumCard'
 
-// 「重温」智能合集阈值：超过 N 天没看就推荐。
-const REWIND_DAYS = 30
-const MS_PER_DAY = 24 * 60 * 60 * 1000
-
+// 卡片全集（album + collection + smart），用于"全部图像" filter 网格
 function buildCards(r: ScanResult | null): CardData[] {
   if (!r) return []
-  const collections = r.collections ?? []
-  const smartCollections = r.smartCollections ?? []
   const items: CardData[] = []
   for (const a of r.albums) {
     items.push({
@@ -49,7 +45,7 @@ function buildCards(r: ScanResult | null): CardData[] {
       sourceName: a.sourceName,
     })
   }
-  for (const c of collections) {
+  for (const c of r.collections ?? []) {
     items.push({
       id: 'c:' + c.path,
       variant: 'collection',
@@ -63,12 +59,11 @@ function buildCards(r: ScanResult | null): CardData[] {
       sourceName: c.sourceName,
     })
   }
-  for (const s of smartCollections) {
+  for (const s of r.smartCollections ?? []) {
     items.push({
       id: 's:' + s.author,
       variant: 'smart',
       title: s.author,
-      // 不要 subtitle:count 已经显示「X 卷」,subtitle 写「X 卷」就重复了
       count: s.albumCount,
       coverPath: s.coverImage,
       to: tagRoute(s.author),
@@ -90,6 +85,8 @@ export default function Home() {
   const sortBy = useSearchStore((s) => s.sortBy)
   const view = useSearchStore((s) => s.view)
   const setView = useSearchStore((s) => s.setView)
+  const yearFilter = useSearchStore((s) => s.yearFilter)
+  const setYearFilter = useSearchStore((s) => s.setYearFilter)
   const viewMode = useUIStore((s) => s.viewMode)
 
   const { favorites } = useFavorites()
@@ -127,7 +124,7 @@ export default function Home() {
 
   const cards = useMemo(() => buildCards(result), [result])
 
-  // 继续阅读
+  // 继续上次：需要进度数据
   const progressPaths = useMemo(
     () =>
       cards
@@ -151,107 +148,30 @@ export default function Home() {
       .slice(0, 4)
   }, [cards, progressMap])
 
-  // 最近加入
-  const recentAdded = useMemo<CardData[]>(() => {
-    if (!result) return []
-    return [...result.albums]
-      .filter((a) => a.modTime)
-      .sort((a, b) => +new Date(b.modTime ?? '') - +new Date(a.modTime ?? ''))
-      .slice(0, 4)
-      .map((a) => ({
-        id: 'a:' + a.path,
-        variant: 'album' as const,
-        title: a.name,
-        displayTitle: a.displayName,
-        subtitle: a.author || undefined,
-        count: a.imageCount,
-        coverPath: a.coverImage,
-        to: albumRoute(a.path),
-        sourceRoot: a.sourceRoot,
-        sourceName: a.sourceName,
-      }))
-  }, [result])
+  // 时光轴：按年份分组（相册浏览器模式，替代漫画阅读器的"全新/重温/最近加入"）
+  const yearGroups = useMemo<YearGroup[]>(() => groupByYear(result), [result])
 
-  // 全新：未看过
-  const fresh = useMemo<CardData[]>(() => {
-    if (!result) return []
-    const modTimeOf = (path: string) =>
-      +new Date(result.albums.find((x) => x.path === path)?.modTime ?? '')
-    const items: CardData[] = []
-    for (const a of result.albums) {
-      if (!a.modTime) continue
-      if (progressMap?.[a.path]) continue
-      items.push({
-        id: 'a:' + a.path,
-        variant: 'album' as const,
-        title: a.name,
-        displayTitle: a.displayName,
-        subtitle: a.author || undefined,
-        count: a.imageCount,
-        coverPath: a.coverImage,
-        to: albumRoute(a.path),
-        sourceRoot: a.sourceRoot,
-        sourceName: a.sourceName,
-      })
+  // 切换视图到 collection/smart 时清掉 yearFilter（年份只对 album 有意义）
+  useEffect(() => {
+    if (yearFilter !== null && view !== 'all' && view !== 'album') {
+      setYearFilter(null)
     }
-    return items
-      .sort((a, b) => modTimeOf(decodeFavPath(b.to)) - modTimeOf(decodeFavPath(a.to)))
-      .slice(0, 4)
-  }, [result, progressMap])
+  }, [view, yearFilter, setYearFilter])
 
-  // 重温：30+ 天没看
-  const rewind = useMemo<CardData[]>(() => {
-    if (!result) return []
-    const now = Date.now()
-    const threshold = now - REWIND_DAYS * MS_PER_DAY
-    const items: { card: CardData; since: number }[] = []
-    for (const a of result.albums) {
-      const p = progressMap?.[a.path]
-      const lastTs = p?.updated ? +new Date(p.updated) : a.modTime ? +new Date(a.modTime) : 0
-      if (!lastTs || lastTs > threshold) continue
-      items.push({
-        card: {
-          id: 'a:' + a.path,
-          variant: 'album' as const,
-          title: a.name,
-          displayTitle: a.displayName,
-          subtitle: a.author || undefined,
-          count: a.imageCount,
-          coverPath: a.coverImage,
-          to: albumRoute(a.path),
-          sourceRoot: a.sourceRoot,
-          sourceName: a.sourceName,
-          progress: p ? { index: p.index, total: p.total } : undefined,
-          lastSeenAt: p?.updated ?? null,
-          badge: 'rewind' as const,
-        },
-        since: lastTs,
-      })
-    }
-    return items.sort((a, b) => a.since - b.since).slice(0, 4).map((it) => it.card)
-  }, [result, progressMap])
-
-  // 热门标签
-  const topTags = useMemo<CardData[]>(() => {
-    if (!result) return []
-    return [...(result.smartCollections ?? [])]
-      .sort((a, b) => b.albumCount - a.albumCount)
-      .slice(0, 4)
-      .map((s) => ({
-        id: 's:' + s.author,
-        variant: 'smart' as const,
-        title: s.author,
-        // 副标题空:count 已经显示「X 卷」,再写一遍就「5 卷 · 5 卷」了
-        count: s.albumCount,
-        coverPath: s.coverImage,
-        to: tagRoute(s.author),
-      }))
-  }, [result])
-
-  // 全部图像 filter
+  // 全部图像 filter（视图 + 搜索 + 年份筛选 + 排序）
+  const yearFilterActive = yearFilter !== null && (view === 'all' || view === 'album')
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
       if (view !== 'all' && it.variant !== view) return false
+      // 年份筛选激活时：只显示 albums（collection/smart 没有年份概念，混进来视觉割裂）
+      if (yearFilterActive) {
+        if (it.variant !== 'album') return false
+        if (yearFilter === 'other') {
+          if (extractYearOrNull(it.title) !== null) return false
+        } else if (typeof yearFilter === 'number') {
+          if (extractYearOrNull(it.title) !== yearFilter) return false
+        }
+      }
       if (query) {
         const q = query.toLowerCase()
         const hay = `${it.title} ${it.subtitle ?? ''}`.toLowerCase()
@@ -271,12 +191,13 @@ export default function Home() {
         return withProgress.sort((a, b) => b.count - a.count)
       case 'recent':
         return withProgress.sort(
-          (a, b) => +new Date(recentTime(result, b.id)) - +new Date(recentTime(result, a.id)),
+          (a, b) =>
+            +new Date(recentTime(result, b.id)) - +new Date(recentTime(result, a.id)),
         )
       default:
         return withProgress.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [cards, query, sortBy, view, progressMap, result])
+  }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result])
 
   const homeEntries = useMemo<ViewerContextEntry[]>(
     () =>
@@ -297,11 +218,8 @@ export default function Home() {
   const isLoadingInitial = !result && (sse.isRunning || sse.scanId)
   const hasContent = !!result && cards.length > 0
 
-  // 决定主 CTA
+  // 主 CTA：有进度 → 继续上次；否则 → 随机翻翻
   const primaryAlbum = inProgress[0]
-  const primaryAction = primaryAlbum
-    ? { kind: 'continue' as const, card: primaryAlbum }
-    : null
   const scanLabel = sse.isRunning
     ? '扫描中…'
     : startScan.isPending
@@ -310,7 +228,6 @@ export default function Home() {
 
   // 「继续上次」直跳查看器：进首页最大的目的是「接着看」，
   // 中转 Album 详情会多一次点击，对随手翻翻的场景不友好。
-  // 用户想看 album 信息的话，从卡片点进去同样可达。
   const onContinue = (card: CardData) => {
     if (card.variant !== 'album') {
       navigate(card.to)
@@ -325,13 +242,16 @@ export default function Home() {
     navigate(`/viewer?${qs.toString()}`)
   }
 
+  // 年份筛选的"全部图像"section 顶部 chip
+  const yearFilterLabel = yearFilter === 'other' ? '其他' : String(yearFilter)
+
   return (
     <div className="min-h-full">
       {/* ScanProgress 已提升到 AppShell，跨路由常驻显示 */}
 
-      {/* Hero — 一个明确主入口 + 极简次动作 */}
-      <section className="px-6 lg:px-10 pt-14 pb-10 max-w-[1400px] mx-auto w-full">
-        <div className="flex items-end justify-between gap-8 flex-wrap">
+      {/* === Hero: 标题 + 统计 + 4 动作卡 + 重新扫描 === */}
+      <section className="px-6 lg:px-10 pt-12 pb-8 max-w-[1400px] mx-auto w-full">
+        <div className="flex items-end justify-between gap-8 flex-wrap mb-6">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.18em] text-fg-subtle font-medium">
               库 · Library
@@ -342,16 +262,7 @@ export default function Home() {
             <p className="text-sm text-fg-muted mt-3.5">
               {result ? (
                 <>
-                  {/* 顶部摘要用 cards 全集计数（与下方"全部 X"一致）,
-                      而非 result.albumCount：后者含集合内嵌套的 113 个卷,
-                      用户在首页实际只能直接点开 130 张卡片,出现 170 vs 130
-                      会让人怀疑数据。 */}
-                  <span className="tabular-nums text-fg">{counts.all}</span> 项
-                  <span className="text-fg-subtle/60 mx-1.5">·</span>
-                  <span className="tabular-nums text-fg">
-                    {(result.smartCollections ?? []).length}
-                  </span>{' '}
-                  个标签
+                  <span className="tabular-nums text-fg">{counts.all}</span> 个文件夹
                   {lastScanAt && (
                     <span className="text-fg-subtle ml-1.5">
                       · 上次更新 {formatTime(lastScanAt)}
@@ -363,44 +274,81 @@ export default function Home() {
               )}
             </p>
           </div>
-          <div className="flex items-center gap-2.5">
-            {primaryAction ? (
-              <button
-                onClick={() => onContinue(primaryAction.card)}
-                className="inline-flex items-center gap-2.5 h-11 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
-              >
-                <PlayFilledIcon size={14} />
-                <span>继续上次</span>
-                <span className="text-[11px] opacity-70 tabular-nums">
-                  {primaryAction.card.progress
-                    ? `${primaryAction.card.progress.index + 1}/${primaryAction.card.progress.total}`
-                    : ''}
-                </span>
-              </button>
-            ) : (
-              <button
-                onClick={onShuffle}
-                disabled={!hasContent}
-                className="inline-flex items-center gap-2 h-11 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm disabled:opacity-40"
-              >
-                <ShuffleIcon size={14} />
-                <span>随机一本</span>
-              </button>
-            )}
-            <button
-              onClick={() => startScan.mutate()}
-              disabled={startScan.isPending || sse.isRunning}
-              className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-lg text-[13px] text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors disabled:opacity-50"
-              title="扫描 (Ctrl+S)"
-            >
-              <RefreshIcon size={13} />
-              <span>{scanLabel}</span>
-            </button>
-          </div>
+          <button
+            onClick={() => startScan.mutate()}
+            disabled={startScan.isPending || sse.isRunning}
+            className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-lg text-[13px] text-fg-muted hover:text-fg hover:bg-bg-subtle border border-border-faint transition-colors disabled:opacity-50"
+            title="扫描 (Ctrl+S)"
+          >
+            <RefreshIcon size={13} />
+            <span>{scanLabel}</span>
+          </button>
+        </div>
+
+        {/* === 4 动作卡（核心入口） === */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* 1. 主 CTA：继续上次（如果有进度）or 随机翻翻 */}
+          {primaryAlbum ? (
+            <ActionCard
+              icon={<PlayFilledIcon size={14} />}
+              title="继续上次"
+              subtitle={primaryAlbum.title}
+              meta={
+                primaryAlbum.progress
+                  ? `${primaryAlbum.progress.index + 1}/${primaryAlbum.progress.total}`
+                  : ''
+              }
+              variant="primary"
+              onClick={() => onContinue(primaryAlbum)}
+            />
+          ) : (
+            <ActionCard
+              icon={<ShuffleIcon size={14} />}
+              title="随机翻翻"
+              subtitle="随便看一本"
+              meta="(R)"
+              variant="primary"
+              disabled={!hasContent}
+              onClick={onShuffle}
+            />
+          )}
+
+          {/* 2. 随机翻翻（如果主 CTA 是继续上次，则并排展示） */}
+          {primaryAlbum && (
+            <ActionCard
+              icon={<ShuffleIcon size={14} />}
+              title="随机翻翻"
+              subtitle="随便看一本"
+              meta="(R)"
+              variant="secondary"
+              disabled={!hasContent}
+              onClick={onShuffle}
+            />
+          )}
+
+          {/* 3. 最近打开 */}
+          <ActionCard
+            icon={<ClockIcon size={14} />}
+            title="最近打开"
+            subtitle="按时间倒序"
+            variant="secondary"
+            onClick={() => navigate('/recents')}
+          />
+
+          {/* 4. 收藏（仅当有收藏时） */}
+          {favCount > 0 && (
+            <ActionCard
+              icon={<StarIcon size={13} filled className="text-warning" />}
+              title="收藏"
+              subtitle={`${favCount} 项`}
+              variant="secondary"
+              onClick={() => navigate('/favorites')}
+            />
+          )}
         </div>
       </section>
 
-      {/* Filter strip — 扁平贴主区,接管原 toolbar 的视图/排序 */}
+      {/* === 视图筛选 === */}
       {hasContent && (
         <ListFilterBar
           viewChips={[
@@ -415,80 +363,40 @@ export default function Home() {
         />
       )}
 
-      {/* 智能推荐：3 大区,按优先级 */}
-      {hasContent && !query && (
-        <div className="max-w-[1400px] mx-auto w-full">
-          {/* 继续阅读 — 大横向卡,只在有进度时显示 */}
-          {inProgress.length > 0 && (
-            <RowSection
-              title="继续阅读"
-              icon={<PlayFilledIcon size={11} className="text-fg-muted" />}
-              count={inProgress.length}
-            >
-              <AlbumGrid items={inProgress} variant={viewMode} />
-            </RowSection>
-          )}
-
-          {/* 挑新的看:三组并列 (全新 / 重温 / 最近加入) */}
-          {(fresh.length > 0 || rewind.length > 0 || recentAdded.length > 0) && (
-            <RowSection
-              title="挑新的看"
-              icon={<SparklesIcon size={11} className="text-fg-muted" />}
-            >
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-10">
-                {fresh.length > 0 && (
-                  <SubColumn
-                    title="全新"
-                    subtitle="还没看过"
-                    count={fresh.length}
-                    icon={<SparklesIcon size={11} />}
-                    items={fresh}
-                  />
-                )}
-                {rewind.length > 0 && (
-                  <SubColumn
-                    title="重温"
-                    subtitle={`${REWIND_DAYS}+ 天没看`}
-                    count={rewind.length}
-                    icon={<RewindIcon size={11} />}
-                    items={rewind}
-                  />
-                )}
-                {recentAdded.length > 0 && (
-                  <SubColumn
-                    title="最近加入"
-                    count={recentAdded.length}
-                    icon={<ClockIcon size={11} />}
-                    items={recentAdded}
-                  />
-                )}
-              </div>
-            </RowSection>
-          )}
-
-          {/* 热门标签 */}
-          {topTags.length > 0 && (
-            <RowSection
-              title="热门标签"
-              icon={<StarIcon size={11} className="text-fg-muted" filled />}
-              count={topTags.length}
-            >
-              <AlbumGrid items={topTags} variant={viewMode} />
-            </RowSection>
-          )}
+      {/* === 时间线（仅当有内容时显示） === */}
+      {hasContent && yearGroups.length > 0 && (
+        <div className="py-6">
+          <SectionHeader
+            title="时间线"
+            subtitle="按年份浏览 — 点击年份可筛选下方网格"
+            icon={<CalendarIconGlyph />}
+          />
+          <YearTimeline groups={yearGroups} />
         </div>
       )}
 
-      {/* 全部图像 */}
+      {/* === 全部图像 === */}
       {hasContent && (
-        <section className="max-w-[1400px] mx-auto w-full">
-          <div className="px-6 lg:px-10 pt-6 pb-3 flex items-center gap-2">
+        <section className="max-w-[1400px] mx-auto w-full pt-8 pb-4">
+          <div className="px-6 lg:px-10 flex items-center gap-2 flex-wrap">
             <LibraryIcon size={12} className="text-fg-muted" />
             <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
-              全部图像
+              {yearFilterActive ? '该年份的图像' : '全部图像'}
             </h2>
-            <span className="text-[11px] text-fg-subtle tabular-nums">{filtered.length}</span>
-            {favCount > 0 && (
+            <span className="text-[11px] text-fg-subtle tabular-nums">
+              {filtered.length}
+            </span>
+            {yearFilterActive && (
+              <button
+                onClick={() => setYearFilter(null)}
+                className="inline-flex items-center gap-1.5 h-6 px-2 rounded-md bg-accent-soft text-accent text-[11px] font-medium hover:bg-accent-soft/70 transition-colors"
+                title="清除年份筛选"
+              >
+                <span>{yearFilterLabel}</span>
+                <CloseIcon size={10} />
+              </button>
+            )}
+            {favCount > 0 && !yearFilterActive && (
               <>
                 <span className="text-fg-subtle/40 mx-1">·</span>
                 <button
@@ -512,16 +420,32 @@ export default function Home() {
             />
           ) : filtered.length === 0 ? (
             <EmptyState
-              title="没有匹配的图像"
-              description={query ? `没有匹配"${query}"的结果` : '当前视图下没有内容'}
-              icon={<ClockIcon size={20} />}
+              title={yearFilterActive ? `「${yearFilterLabel}」没有匹配的图像` : '没有匹配的图像'}
+              description={
+                query
+                  ? `没有匹配"${query}"的结果`
+                  : yearFilterActive
+                    ? '尝试切换到其他年份或清除筛选'
+                    : '当前视图下没有内容'
+              }
+              icon={<ImageIcon size={20} />}
               action={
-                <button
-                  onClick={() => useSearchStore.getState().reset()}
-                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
-                >
-                  清除筛选
-                </button>
+                <div className="flex items-center gap-2">
+                  {yearFilterActive && (
+                    <button
+                      onClick={() => setYearFilter(null)}
+                      className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
+                    >
+                      清除年份筛选
+                    </button>
+                  )}
+                  <button
+                    onClick={() => useSearchStore.getState().reset()}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
+                  >
+                    清除筛选
+                  </button>
+                </div>
               }
             />
           ) : (
@@ -557,6 +481,8 @@ export default function Home() {
   )
 }
 
+// ===== helpers =====
+
 function recentTime(result: ScanResult | null, id: string): string {
   if (!result) return ''
   if (id.startsWith('a:')) {
@@ -586,64 +512,133 @@ function formatTime(iso: string): string {
   return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
 }
 
-// 横向 row section: 标题 + 计数 + 子内容
-function RowSection({
-  title,
+// 同 albumGrouping.extractYear 但本组件独立调用，避免循环依赖
+function extractYearOrNull(name: string): number | null {
+  const m = name.match(/(\d{4})/)
+  if (!m) return null
+  const y = parseInt(m[1], 10)
+  if (y < 1900 || y > 2100) return null
+  return y
+}
+
+// ===== 复用组件 =====
+
+function ActionCard({
   icon,
-  count,
-  children,
+  title,
+  subtitle,
+  meta,
+  variant,
+  disabled,
+  onClick,
 }: {
-  title: string
   icon: React.ReactNode
-  count?: number
-  children: React.ReactNode
+  title: string
+  subtitle?: string
+  meta?: string
+  variant: 'primary' | 'secondary'
+  disabled?: boolean
+  onClick: () => void
 }) {
+  const base =
+    'group relative flex flex-col gap-2 rounded-xl border p-4 sm:p-5 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40'
+  const primaryCls =
+    'bg-accent text-accent-contrast border-transparent hover:bg-accent-hover shadow-sm hover:shadow-md'
+  const secondaryCls =
+    'bg-bg-elevated text-fg border-border hover:border-border-strong hover:-translate-y-0.5 hover:shadow-md'
+  const disabledCls = 'opacity-40 cursor-not-allowed hover:!translate-y-0 hover:!shadow-sm'
   return (
-    <section className="px-6 lg:px-10 py-8">
-      <div className="flex items-center gap-2 mb-5">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`${base} ${variant === 'primary' ? primaryCls : secondaryCls} ${
+        disabled ? disabledCls : ''
+      }`}
+    >
+      <div
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-md ${
+          variant === 'primary'
+            ? 'bg-accent-contrast/15 text-accent-contrast'
+            : 'bg-bg-subtle text-fg-muted group-hover:text-fg'
+        }`}
+      >
         {icon}
-        <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
+      </div>
+      <div className="min-w-0">
+        <div
+          className={`text-[14px] font-medium leading-tight ${
+            variant === 'primary' ? 'text-accent-contrast' : 'text-fg'
+          }`}
+        >
           {title}
-        </h2>
-        {count !== undefined && (
-          <span className="text-[11px] text-fg-subtle tabular-nums">{count}</span>
+        </div>
+        {subtitle && (
+          <div
+            className={`text-[11.5px] mt-0.5 truncate ${
+              variant === 'primary'
+                ? 'text-accent-contrast/70'
+                : 'text-fg-muted'
+            }`}
+            title={subtitle}
+          >
+            {subtitle}
+          </div>
         )}
       </div>
-      {children}
-    </section>
+      {meta && (
+        <div
+          className={`absolute top-3 right-3 text-[10px] tabular-nums ${
+            variant === 'primary'
+              ? 'text-accent-contrast/60'
+              : 'text-fg-subtle'
+          }`}
+        >
+          {meta}
+        </div>
+      )}
+    </button>
   )
 }
 
-// 3 列子栏:全新 / 重温 / 最近加入
-// 用 list 变体:每列内 4 项,横向 cover(更小) + 标题 + 元数据,信息密度更高
-function SubColumn({
+function SectionHeader({
   title,
   subtitle,
-  count,
   icon,
-  items,
 }: {
   title: string
   subtitle?: string
-  count: number
-  icon: React.ReactNode
-  items: CardData[]
+  icon?: React.ReactNode
 }) {
   return (
-    <div>
-      <div className="flex items-baseline gap-2 mb-3">
-        <div className="flex items-center gap-1.5">
-          {icon}
-          <h3 className="text-[12.5px] font-medium text-fg">{title}</h3>
-        </div>
-        {subtitle && <span className="text-[11px] text-fg-subtle">{subtitle}</span>}
-        <span className="text-[11px] text-fg-subtle tabular-nums ml-auto">{count}</span>
-      </div>
-      <div className="space-y-1.5">
-        {items.map((it) => (
-          <AlbumCard key={it.id} data={it} variant="list" />
-        ))}
-      </div>
+    <div className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full flex items-center gap-3 mb-4">
+      {icon}
+      <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
+        {title}
+      </h2>
+      {subtitle && (
+        <span className="text-[11.5px] text-fg-subtle">{subtitle}</span>
+      )}
     </div>
+  )
+}
+
+// 日历图标 (用一个内联 svg,避免再 export 一遍)
+function CalendarIconGlyph() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-fg-muted"
+    >
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M3 9h18M8 3v4M16 3v4" />
+    </svg>
   )
 }
