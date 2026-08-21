@@ -375,15 +375,18 @@ func (s *Scanner) scanLayerWithHook(
 
 // classifyAndScan 判断子目录是相册还是集合，并扫描它。
 //
-// 规则：
-//   - 含图片或视频 → Album（图片/视频可同时存在，混合相册）
-//   - 仅含子目录 → Collection（递归一层，深度+1）
-//   - 都不含或混合图片 + 子目录 → Album（图片优先，参考 Python 行为）
+// 规则（重要 — 含嵌套目录时不丢数据）：
+//   - 含子目录时先递归收集子目录里的图/视频,合并进当前相册
+//     (旧版直接 return album,子目录里的图就静默丢了 — 用户反馈:
+//      缓存数量明显不对,2024年只数到 1193 张,实际 3549 张里 2322 张在子目录)
+//   - 含图片或视频 → Album(可能来自顶层,也可能来自子目录合并)
+//   - 仅含子目录且允许继续递归 → Collection(递归子目录的 albums/collections)
+//   - 都不含 → 跳过
 //
 // 封面选择（CoverImage / CoverKind）：
-//   - 同时含图和视频 → 封面用第一张图，CoverKind="image"
-//   - 仅含视频 → 封面用第一个视频，CoverKind="video"（封面缩略图由前端抽帧后回填）
-//   - 仅含图 → 封面用第一张图，CoverKind="image"
+//   - 同时含图和视频 → 封面用第一张图,CoverKind="image"
+//   - 仅含视频 → 封面用第一个视频,CoverKind="video"（封面缩略图由前端抽帧后回填）
+//   - 仅含图 → 封面用第一张图,CoverKind="image"
 func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) (*models.Album, *models.Collection) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -393,7 +396,6 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 	var images []string
 	var videos []string
 	var subdirs []os.DirEntry
-	var totalSize int64
 
 	for _, e := range entries {
 		if e.IsDir() {
@@ -409,10 +411,41 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 		}
 	}
 
-	// 含图片或视频 → 当作相册
+	// 仅当顶层**已经有图/视频**且**也有子目录**时,才把子目录的图合并进当前相册。
+	// 旧版只判断顶层有没有图就直接 return album,子目录里的图就静默丢了
+	// — 用户反馈: 2024年 1227 顶层图 + 6 个子目录 2322 张被忽略,数量明显不对。
+	//
+	// 合并时用 mergeDepth 而非 maxDepth:maxDepth 是「集合嵌套层数」上限,
+	// 但 merge 是把所有层级的图扁平化到一个相册里,深度理论上不受限。
+	// 用户数据实测有 5 层(2024年/夏威夷-度假/相册/作品/甜片),maxDepth=2 会把
+	// 深度 ≥3 的全部丢掉。mergeDepth 设大一点(32)够覆盖任意合理深度,
+	// 又能防止真出现环状软链导致无限递归。
+	//
+	// 重要: 同时合并 childAlbums 和 childColls 里的 albums。
+	// scanLayer 对「顶层无图只有子目录」的子目录会包成 Collection 回来
+	// (例如 2024年/2024.10.1 顶层 0 张,会被识别成 Collection 包着原片+照片),
+	// 旧版只看 childAlbums 会漏掉 Collection 内的图。
+	const mergeDepth = 32
+	if (len(images) > 0 || len(videos) > 0) && len(subdirs) > 0 && curDepth+1 <= mergeDepth {
+		childAlbums, childColls := s.scanLayer(basePath, dir, mergeDepth, curDepth+1)
+		for _, sa := range childAlbums {
+			images = append(images, sa.ImageFiles...)
+			videos = append(videos, sa.VideoFiles...)
+		}
+		// Collection 内可能还有子专辑(嵌套),继续向下挖
+		for _, sc := range childColls {
+			for _, sa := range sc.Albums {
+				images = append(images, sa.ImageFiles...)
+				videos = append(videos, sa.VideoFiles...)
+			}
+		}
+	}
+
+	// 含图片或视频 → 当作相册(可能来自顶层,也可能来自子目录合并)
 	if len(images) > 0 || len(videos) > 0 {
 		sort.Strings(images)
 		sort.Strings(videos)
+		var totalSize int64
 		for _, p := range append(append([]string{}, images...), videos...) {
 			if fi, err := os.Stat(p); err == nil {
 				totalSize += fi.Size()
@@ -448,16 +481,26 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 		}, nil
 	}
 
-	// 仅含子目录且允许继续递归 → 当作集合
+	// 仅含子目录(且递归后仍无图) → 当作集合
+	//
+	// 把 childColls 的子集合也展开到当前集合里 — 避免数据丢失。
+	// 实际数据里 5 层嵌套是存在的(2024年/夏威夷-度假/相册/作品),其中
+	// "相册"会被识别成包着 [作品] 的 Collection,这个 Collection 不能
+	// 直接塞进 "夏威夷" 集合(Collection 模型里 Albums 是 []Album 不是
+	// []Collection),只能把它的 Albums 拍平。
 	if len(subdirs) > 0 && curDepth+1 <= maxDepth {
 		childAlbums, childColls := s.scanLayer(basePath, dir, maxDepth, curDepth+1)
 		if len(childAlbums) > 0 || len(childColls) > 0 {
+			allAlbums := childAlbums
+			for _, c := range childColls {
+				allAlbums = append(allAlbums, c.Albums...)
+			}
 			return nil, &models.Collection{
 				Type:       "collection",
 				Path:       dir,
 				Name:       filepath.Base(dir),
-				Albums:     childAlbums,
-				AlbumCount: len(childAlbums),
+				Albums:     allAlbums,
+				AlbumCount: len(allAlbums),
 			}
 		}
 	}

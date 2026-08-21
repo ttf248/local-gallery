@@ -149,37 +149,31 @@ func TestScan_TopLevelAlbumsAndCollections(t *testing.T) {
 	}
 }
 
-// 构造深度超过 maxDepth 的集合 → 内层应被忽略或视为相册（若无图片）。
+// 构造深度超过 maxDepth 的目录树 → 越界后的整条链都应被丢。
+// MaxDepth=1 + 3 层(L0/L1/L2, L2 有图):
+//   - L0 (curDepth=0) 试图递归到 L1: curDepth+1=1 <= maxDepth=1,OK
+//   - L1 (curDepth=1) 试图递归到 L2: curDepth+1=2 > maxDepth=1,NO
+//   - L1 没图 → 返回 nil; L0 的子集合是 [] → L0 也返回 nil
+//   - 顶层 0 albums 0 collections
 func TestScan_DepthLimit(t *testing.T) {
 	root := t.TempDir()
-
-	// 顶层集合
 	mkdirAll(t, filepath.Join(root, "L0"))
-	// L0/L1/L2 三层深度
 	mkdirAll(t, filepath.Join(root, "L0", "L1"))
 	mkdirAll(t, filepath.Join(root, "L0", "L1", "L2"))
 	touchAll(t, filepath.Join(root, "L0", "L1", "L2", "x.jpg"))
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 2})
+	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// depth 0: 扫描 root
-	// depth 1: 进入 L0 (集合)，再扫 L0 内部
-	// depth 2: 进入 L1 (集合)，再扫 L1 内部
-	// depth 3: 不会进入 L2
-	// 因此 L2/x.jpg 永远不会被发现。
 	if len(res.Albums) != 0 {
 		t.Errorf("expected 0 albums at top, got %d", len(res.Albums))
 	}
-	if len(res.Collections) != 1 || res.Collections[0].Name != "L0" {
-		t.Errorf("expected L0 collection, got %+v", res.Collections)
-	}
-	if len(res.Collections[0].Albums) != 0 {
-		t.Errorf("L0 should have no albums (L2 unreachable), got %d",
-			len(res.Collections[0].Albums))
+	if len(res.Collections) != 0 {
+		t.Errorf("expected 0 collections at top (L2 unreachable → 整条链丢), got %d: %+v",
+			len(res.Collections), namesOfCols(res.Collections))
 	}
 }
 
@@ -322,6 +316,16 @@ func namesOf(albums []models.Album) []string {
 	return out
 }
 
+// helper: 提取所有 collection 的 Name。
+func namesOfCols(cols []models.Collection) []string {
+	out := make([]string, 0, len(cols))
+	for _, c := range cols {
+		out = append(out, c.Name)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // 多根扫描：两个独立根，扫描结果应合并到一起，Album.SourceRoot 正确填充。
 func TestScan_MultiRoots(t *testing.T) {
 	root1 := t.TempDir()
@@ -409,6 +413,73 @@ func TestScan_MultiRoots_OneMissing(t *testing.T) {
 	se, ok := err.(*ScanError)
 	if !ok || se.Kind != ScanRootMissing {
 		t.Errorf("expected ScanRootMissing, got %v", err)
+	}
+}
+
+// 目录同时含顶层图片 + 嵌套子目录时,子目录里的图/视频必须合并到当前相册
+// — 旧版只数顶层图片,子目录静默丢,用户看到的图数明显少于实际。
+// 同时: 顶层没图只有子目录 → 仍是 collection(不合并,保持原行为)。
+func TestScan_MergesNestedDirectoriesWithTopLevelImages(t *testing.T) {
+	root := t.TempDir()
+
+	// 场景 A: 顶层有图 + 有子目录(子目录也有图) → 合并
+	yearDir := filepath.Join(root, "2024年")
+	mkdirAll(t, yearDir)
+	// 顶层 2 张
+	touchAll(t,
+		filepath.Join(yearDir, "top1.jpg"),
+		filepath.Join(yearDir, "top2.jpg"),
+	)
+	// 子目录里再各放几张
+	mkdirAll(t, filepath.Join(yearDir, "10.1国庆"))
+	touchAll(t,
+		filepath.Join(yearDir, "10.1国庆", "a1.jpg"),
+		filepath.Join(yearDir, "10.1国庆", "a2.jpg"),
+	)
+	mkdirAll(t, filepath.Join(yearDir, "12.13"))
+	touchAll(t,
+		filepath.Join(yearDir, "12.13", "b1.jpg"),
+	)
+
+	// 场景 B: 顶层没图 + 有子目录(子目录有图) → 仍按 collection,不合并
+	emptyYearDir := filepath.Join(root, "2025年")
+	mkdirAll(t, emptyYearDir)
+	mkdirAll(t, filepath.Join(emptyYearDir, "sub"))
+	touchAll(t, filepath.Join(emptyYearDir, "sub", "c1.jpg"))
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 顶层应 1 个相册 + 1 个集合
+	if len(res.Albums) != 1 {
+		t.Fatalf("expected 1 top-level album, got %d: %v", len(res.Albums), namesOf(res.Albums))
+	}
+	if len(res.Collections) != 1 {
+		t.Fatalf("expected 1 collection, got %d", len(res.Collections))
+	}
+
+	// 2024年: 顶层 2 张 + 10.1国庆 2 张 + 12.13 1 张 = 5 张(全部合并)
+	yearAlbum := res.Albums[0]
+	if yearAlbum.Name != "2024年" {
+		t.Errorf("album name: got %q, want %q", yearAlbum.Name, "2024年")
+	}
+	if yearAlbum.ImageCount != 5 {
+		t.Errorf("year album image count: got %d, want 5 (top 2 + nested 3)", yearAlbum.ImageCount)
+	}
+
+	// 2025年: 顶层 0 张,只一个 sub → 当 collection
+	yearCol := res.Collections[0]
+	if yearCol.Name != "2025年" {
+		t.Errorf("collection name: got %q, want %q", yearCol.Name, "2025年")
+	}
+	if yearCol.AlbumCount != 1 {
+		t.Errorf("collection album count: got %d, want 1", yearCol.AlbumCount)
+	}
+	if yearCol.Albums[0].Name != "sub" {
+		t.Errorf("collection sub-album name: got %q, want %q", yearCol.Albums[0].Name, "sub")
 	}
 }
 
