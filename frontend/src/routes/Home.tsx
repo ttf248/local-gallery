@@ -372,7 +372,7 @@ export default function Home() {
         <div className="py-6">
           <SectionHeader
             title="时间线"
-            subtitle="按年份浏览 — 点击打开该年份,点右上漏斗可筛选网格"
+            subtitle="按年份浏览 — 点击海报打开该年份,点右上漏斗可筛选下方网格"
             icon={<CalendarIconGlyph />}
           />
           <YearTimeline groups={yearGroups} gridRef={gridRef} />
