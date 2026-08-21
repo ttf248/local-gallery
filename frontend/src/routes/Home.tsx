@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useLibraryStore } from '../store/libraryStore'
@@ -80,6 +80,9 @@ export default function Home() {
   const lastScanAt = useLibraryStore((s) => s.lastScanAt)
   const sse = useScanSSE()
   const pushToast = useUIStore((s) => s.pushToast)
+
+  // "全部图像" section 的 ref：年份筛选触发后自动滚到这里
+  const gridRef = useRef<HTMLDivElement>(null)
 
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
@@ -163,9 +166,10 @@ export default function Home() {
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
       if (view !== 'all' && it.variant !== view) return false
-      // 年份筛选激活时：只显示 albums（collection/smart 没有年份概念，混进来视觉割裂）
+      // 年份筛选：用 item 自身的 title 提取年份来匹配。
+      // collection/smart 自身也可能没有年份（或有），让 extractYear 自然处理，
+      // 避免把"萍乡中学"这种没年份的 collection 因为不是 album 就被误删。
       if (yearFilterActive) {
-        if (it.variant !== 'album') return false
         if (yearFilter === 'other') {
           if (extractYearOrNull(it.title) !== null) return false
         } else if (typeof yearFilter === 'number') {
@@ -368,16 +372,19 @@ export default function Home() {
         <div className="py-6">
           <SectionHeader
             title="时间线"
-            subtitle="按年份浏览 — 点击年份可筛选下方网格"
+            subtitle="按年份浏览 — 点击打开该年份,点右上漏斗可筛选网格"
             icon={<CalendarIconGlyph />}
           />
-          <YearTimeline groups={yearGroups} />
+          <YearTimeline groups={yearGroups} gridRef={gridRef} />
         </div>
       )}
 
       {/* === 全部图像 === */}
       {hasContent && (
-        <section className="max-w-[1400px] mx-auto w-full pt-8 pb-4">
+        <section
+          ref={gridRef}
+          className="max-w-[1400px] mx-auto w-full pt-8 pb-4 scroll-mt-6"
+        >
           <div className="px-6 lg:px-10 flex items-center gap-2 flex-wrap">
             <LibraryIcon size={12} className="text-fg-muted" />
             <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
