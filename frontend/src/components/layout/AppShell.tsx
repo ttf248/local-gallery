@@ -126,21 +126,25 @@ export default function AppShell() {
         <Toolbar />
         <main className="flex-1 overflow-auto">
           {/*
-            扫描进度条：放在 main 内、放在 Outlet 之前。
-            sticky top-0 + z-30 让它在所有路由的顶部常驻，
-            视觉上紧贴在 Toolbar 下边、不抢主内容空间。
-            scanSse.startWith 由 Toolbar 在用户触发「重新扫描」/ Ctrl+S 时写 store.scanId。
+            Outlet 之前不再挂 ScanProgress — 它现在是 fixed 左下浮动卡，
+            在下面 (作为 .flex 容器直属子元素) 渲染，确保 fixed 相对 viewport
+            而不是 main。
           */}
-          <ScanProgress
-            progress={scanSse.progress}
-            onCancel={() =>
-              scanSse.scanId && scanApi.cancel(scanSse.scanId).catch(() => {})
-            }
-          />
           <Outlet />
         </main>
         <StatusBar />
       </div>
+      {/*
+        扫描进度卡：左下角浮动卡（fixed，相对 viewport）。
+        必须在 <main> 外面，否则会被 main 的 overflow-auto 影响 sticky/fixed 行为。
+        scanSse.startWith 由 Toolbar 在用户触发「重新扫描」/ Ctrl+S 时写 store.scanId。
+      */}
+      <ScanProgress
+        progress={scanSse.progress}
+        onCancel={() =>
+          scanSse.scanId && scanApi.cancel(scanSse.scanId).catch(() => {})
+        }
+      />
       <ToastViewport />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>

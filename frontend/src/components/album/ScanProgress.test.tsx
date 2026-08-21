@@ -30,24 +30,15 @@ describe('ScanProgress', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders running state with progress bar and percentage', () => {
+  it('renders running state with status text and progress percent', () => {
     render(<ScanProgress progress={makeProgress({ progress: 35 })} />)
+    // 默认展开：直接看到状态、百分比、耗时
     expect(screen.getByText('扫描中')).toBeInTheDocument()
     expect(screen.getByText('35%')).toBeInTheDocument()
-    // 本数在折叠态有 md:inline 断点（移动端隐藏），
-    // jsdom 默认窄视口所以单独验：容器 DOM 中存在对应 span
-    expect(document.querySelector('span.tabular-nums.text-fg-subtle')).toBeTruthy()
+    expect(screen.getByText('1.5s')).toBeInTheDocument()
   })
 
-  it('renders cancel button when onCancel is provided', () => {
-    const onCancel = vi.fn()
-    render(<ScanProgress progress={makeProgress()} onCancel={onCancel} />)
-    const cancelBtn = screen.getByRole('button', { name: '取消扫描' })
-    fireEvent.click(cancelBtn)
-    expect(onCancel).toHaveBeenCalledTimes(1)
-  })
-
-  it('expands details on click and shows current path / phase / elapsed', () => {
+  it('renders expanded details: phase, current path, albums found', () => {
     render(
       <ScanProgress
         progress={makeProgress({
@@ -56,18 +47,45 @@ describe('ScanProgress', () => {
         })}
       />,
     )
-    // 折叠态：点击 "展开扫描详情" 按钮
-    const toggleBtn = screen.getByRole('button', { name: '展开扫描详情' })
-    fireEvent.click(toggleBtn)
-    // 展开后：阶段 + 完整路径 + 耗时
+    // 默认展开：阶段 + 完整路径 + 已发现本数
     expect(screen.getByText('聚合标签中')).toBeInTheDocument()
     expect(
       screen.getByText('E:\\存照\\some\\deep\\folder'),
     ).toBeInTheDocument()
-    expect(screen.getByText('1.5s')).toBeInTheDocument()
+    expect(screen.getByText(/7/)).toBeInTheDocument() // albumsFound=7
   })
 
-  it('keeps terminal state visible for 3s then auto-hides', () => {
+  it('shows full-width 取消扫描 button in expanded running view', () => {
+    const onCancel = vi.fn()
+    render(<ScanProgress progress={makeProgress()} onCancel={onCancel} />)
+    const cancelBtn = screen.getByRole('button', { name: '取消扫描' })
+    expect(cancelBtn).toBeInTheDocument()
+    fireEvent.click(cancelBtn)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('can collapse to pill mode and re-expand', () => {
+    render(
+      <ScanProgress
+        progress={makeProgress({ phase: 'smart-grouping' })}
+      />,
+    )
+    // 默认展开：阶段文案 "聚合标签中" 应可见
+    expect(screen.getByText('聚合标签中')).toBeInTheDocument()
+    // 点折叠按钮
+    const collapseBtn = screen.getByRole('button', { name: '折叠扫描详情' })
+    fireEvent.click(collapseBtn)
+    // 现在应该看到 "展开扫描详情" 按钮（pill 模式）
+    expect(
+      screen.getByRole('button', { name: '展开扫描详情' }),
+    ).toBeInTheDocument()
+    // 折叠后阶段详情不再可见（pill 模式不显示 details）
+    expect(screen.queryByText('聚合标签中')).toBeNull()
+    // pill 模式下仍有百分比
+    expect(screen.getByText('42%')).toBeInTheDocument()
+  })
+
+  it('keeps terminal state visible for 5s then auto-hides', () => {
     const { rerender, container } = render(
       <ScanProgress progress={makeProgress({ status: 'running' })} />,
     )
@@ -79,16 +97,15 @@ describe('ScanProgress', () => {
       />,
     )
     expect(screen.getByText('扫描完成')).toBeInTheDocument()
-    // 折叠态文案："{albumsFound} 本 · {elapsedSec}s" → "7 本 · 3.2s"
-    expect(screen.getByText(/7.*3\.2s/)).toBeInTheDocument()
-    // 3s 后滑出
+    expect(screen.getByText('3.2s')).toBeInTheDocument()
+    // 5s 后滑出（FADE_DELAY_MS = 5000）
     act(() => {
-      vi.advanceTimersByTime(3100)
+      vi.advanceTimersByTime(5100)
     })
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders error state with the error message in expanded view', () => {
+  it('renders error state with the error message visible immediately', () => {
     render(
       <ScanProgress
         progress={makeProgress({
@@ -98,9 +115,7 @@ describe('ScanProgress', () => {
       />,
     )
     expect(screen.getByText('扫描失败')).toBeInTheDocument()
-    // error 详情只在展开后显示
-    const toggleBtn = screen.getByRole('button', { name: '展开扫描详情' })
-    fireEvent.click(toggleBtn)
+    // error 默认展开时直接显示
     expect(screen.getByText('媒体根不存在: E:\\nope')).toBeInTheDocument()
   })
 
@@ -111,16 +126,18 @@ describe('ScanProgress', () => {
       />,
     )
     expect(screen.getByText('已取消')).toBeInTheDocument()
-    // 折叠态文案："{albumsFound} 本 · {elapsedSec}s" → "7 本 · 0.8s"
-    expect(screen.getByText(/7.*0\.8s/)).toBeInTheDocument()
+    expect(screen.getByText('0.8s')).toBeInTheDocument()
   })
 
   it('clamps progress width to 100% even when value exceeds 100', () => {
     render(<ScanProgress progress={makeProgress({ progress: 150 })} />)
-    // 进度条 inner span 用 clamp 后的 pct (100)
-    const bar = document.querySelector('[style*="width"]') as HTMLElement
-    expect(bar).toBeInTheDocument()
-    expect(bar.style.width).toBe('100%')
+    // 找到所有带 width style 的元素，验证至少有一个被 clamp 到 100%
+    const bars = Array.from(
+      document.querySelectorAll<HTMLElement>('[style*="width"]'),
+    )
+    expect(bars.length).toBeGreaterThan(0)
+    const clamped = bars.some((b) => b.style.width === '100%')
+    expect(clamped).toBe(true)
   })
 
   it('has accessible role=status for screen readers', () => {
