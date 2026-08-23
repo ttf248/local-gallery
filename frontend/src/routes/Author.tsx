@@ -19,6 +19,10 @@ interface AlbumSummary {
   author?: string
   coverImage: string
   imageCount: number
+  /** 视频数；0 / 缺省按无视频处理。 */
+  videoCount?: number
+  /** 封面源类型，决定卡片走图还是走视频缩略图分支。 */
+  coverKind?: 'image' | 'video'
   modTime?: string
 }
 
@@ -117,7 +121,10 @@ export default function Author() {
     title: a.name,
     subtitle: a.author,
     count: a.imageCount,
+    imageCount: a.imageCount,
+    videoCount: a.videoCount ?? 0,
     coverPath: a.coverImage,
+    coverKind: a.coverKind,
     to: albumRoute(a.path),
     progress: progressMap?.[a.path]
       ? { index: progressMap[a.path].index, total: progressMap[a.path].total }

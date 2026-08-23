@@ -29,7 +29,22 @@ export interface CardData {
   displayTitle?: string
   // 副标题（集合 / smart 通常为空；album 是 author / path basename）
   subtitle?: string
+  /**
+   * 兼容字段：
+   *  - variant='album' 时 = imageCount（图数）
+   *  - variant='collection' / 'smart' 时 = albumCount（子相册数）
+   * 老的调用方只用 count 渲染，缺省走 imageCount ?? count。
+   * 视频数通过 imageCount / videoCount 两个字段一起提供，
+   * 渲染时按 "X 张" / "Y 个视频" / "X 张 · Y 个视频" 分支。
+   */
   count: number
+  /** 视频数（仅 album 变体有意义）。0 或缺省按"无视频"渲染。 */
+  videoCount?: number
+  /**
+   * 图片数（仅 album 变体有意义）。缺省时回退到 count。
+   * 显式提供主要是为了和 videoCount 一起让 UI 区分"纯视频相册"。
+   */
+  imageCount?: number
   coverPath: string
   /**
    * 封面源类型："image" / "video" / 不传（不传时由 coverPath 扩展名推断）。
@@ -72,6 +87,29 @@ interface Props {
 export default function AlbumCard({ data, variant = 'grid', showLastSeen }: Props) {
   if (variant === 'list') return <ListCard data={data} showLastSeen={showLastSeen} />
   return <GridCard data={data} showLastSeen={showLastSeen} />
+}
+
+// 卡片底部"X 张 / Y 个视频 / X 张 · Y 个视频"渲染。
+//
+// 仅 album 变体按图/视频分别展示；集合/smart 走 count + "卷"（语义是子相册数）。
+// 历史相册只有图时也回退到旧的 `count` 单位（"张"），不破坏既有观感。
+function formatMediaCount(
+  data: CardData,
+): { label: string; title: string } | null {
+  if (data.variant !== 'album') return null
+  const imgs = data.imageCount ?? data.count
+  const vids = data.videoCount ?? 0
+  if (imgs > 0 && vids > 0) {
+    return {
+      label: `${imgs} 张 · ${vids} 个视频`,
+      title: `${imgs} 张图片 + ${vids} 个视频`,
+    }
+  }
+  if (imgs === 0 && vids > 0) {
+    return { label: `${vids} 个视频`, title: `${vids} 个视频` }
+  }
+  // 纯图 / 空相册：维持旧的 `count 张` 写法
+  return { label: `${imgs} 张`, title: `${imgs} 张` }
 }
 
 function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
@@ -283,9 +321,19 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           {data.displayTitle ?? data.title}
         </div>
         <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5">
-          <span>
-            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
-          </span>
+          {(() => {
+            const media = formatMediaCount(data)
+            if (media) {
+              // album 变体：按图/视频分别展示
+              return <span title={media.title}>{media.label}</span>
+            }
+            // collection / smart 变体：维持 count + "卷"（语义是子相册数）
+            return (
+              <span>
+                {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
+              </span>
+            )
+          })()}
           {data.subtitle && (
             <>
               <span className="text-fg-subtle/50">·</span>
@@ -419,9 +467,17 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         </div>
         <div className="text-[12px] text-fg-subtle mt-1 flex items-center gap-2">
           {data.subtitle && <span className="truncate">{data.subtitle}</span>}
-          <span className="tabular-nums shrink-0">
-            {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
-          </span>
+          {(() => {
+            const media = formatMediaCount(data)
+            if (media) {
+              return <span className="tabular-nums shrink-0" title={media.title}>{media.label}</span>
+            }
+            return (
+              <span className="tabular-nums shrink-0">
+                {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
+              </span>
+            )
+          })()}
           {data.sourceName && (
             <span className="text-fg-subtle/80 inline-flex items-center gap-0.5 shrink-0">
               <FolderIcon size={11} className="shrink-0" />

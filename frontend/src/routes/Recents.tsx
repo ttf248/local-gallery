@@ -49,7 +49,10 @@ export default function Recents() {
         title: a.name,
         subtitle: a.author || undefined,
         count: a.imageCount,
+        imageCount: a.imageCount,
+        videoCount: a.videoCount ?? 0,
         coverPath: a.coverImage,
+        coverKind: a.coverKind,
         to: albumRoute(a.path),
         lastSeenAt: h.openedAt,
       })

@@ -115,7 +115,9 @@ export default function Album() {
           name: a.name,
           imageFiles: [],
           coverImage: a.coverImage,
+          coverKind: a.coverKind,
           imageCount: a.imageCount,
+          videoCount: a.videoCount,
           author: a.author,
           folderSize: 0,
           modTime: '',
@@ -141,7 +143,9 @@ export default function Album() {
         name: a.name,
         imageFiles: [],
         coverImage: a.coverImage,
+        coverKind: a.coverKind,
         imageCount: a.imageCount,
+        videoCount: a.videoCount,
         author: a.author,
         folderSize: 0,
         modTime: '',
@@ -462,7 +466,12 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                     <span className="text-fg-subtle/50">·</span>
                   </>
                 )}
-                <span className="tabular-nums">{detail.imageCount} 张</span>
+                <span className="tabular-nums">
+                  {detail.imageCount > 0 ? `${detail.imageCount} 张` : ''}
+                  {detail.imageCount > 0 && (detail.videoCount ?? 0) > 0 ? ' · ' : ''}
+                  {(detail.videoCount ?? 0) > 0 ? `${detail.videoCount} 个视频` : ''}
+                  {detail.imageCount === 0 && (detail.videoCount ?? 0) === 0 ? '0 张' : ''}
+                </span>
                 {detail.folderSize > 0 && (
                   <>
                     <span className="text-fg-subtle/50">·</span>
@@ -756,7 +765,10 @@ function CollectionView({
       title: a.name,
       subtitle: a.author,
       count: a.imageCount,
+      imageCount: a.imageCount,
+      videoCount: a.videoCount ?? 0,
       coverPath: a.coverImage,
+      coverKind: a.coverKind,
       to: `/albums/${encodeURIComponent(a.path)}`,
     }))
     const collCards: CardData[] = (c.collections ?? []).map((sub) => {
