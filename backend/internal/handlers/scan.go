@@ -148,6 +148,21 @@ func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
 	}
 }
 
+// ScanCacheClearHandler 强制清空扫描结果缓存（POST /api/scan/cache/clear）。
+//
+// 同时清掉 ScanResultCache 内存中的 latest 和磁盘 scan_cache.json 文件。
+// 清空后 /api/scan/latest 返回 404；前端应提示用户「建议重新扫描」。
+func ScanCacheClearHandler(scanCache *services.ScanResultCache) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if err := scanCache.Clear(); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
 func writeSSE(c *fiber.Ctx, event string, payload any) {
 	data, _ := json.Marshal(payload)
 	c.Set("Content-Type", "text/event-stream")

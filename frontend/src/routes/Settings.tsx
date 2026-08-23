@@ -35,6 +35,7 @@ export default function Settings() {
   const result = useLibraryStore((s) => s.result)
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
   const setResult = useLibraryStore((s) => s.setResult)
+  const clearLibrary = useLibraryStore((s) => s.clear)
   const sse = useScanSSE()
   useTheme()
 
@@ -59,6 +60,36 @@ export default function Settings() {
       qc.invalidateQueries({ queryKey: ['favorites'] })
       pushToast({ kind: 'success', message: `已清理 ${r.removed.length} 项失效收藏` })
     },
+  })
+
+  // 强制清空缩略图缓存。释放 0 字节时也清掉内存 LRU,让下次访问重新生成。
+  const clearThumbs = useMutation({
+    mutationFn: () => cacheApi.clearThumbs(),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['cache-stats'] })
+      const freed = r.freedBytes > 0 ? ` · 释放 ${formatBytes(r.freedBytes)}` : ''
+      pushToast({
+        kind: 'success',
+        message: `已清空 ${r.deleted} 个缩略图${freed},下次访问会重新生成`,
+      })
+    },
+    onError: () => pushToast({ kind: 'error', message: '清空缩略图缓存失败' }),
+  })
+
+  // 清空图像库缓存。不同于「重新扫描」(会立即起一次新扫描覆盖旧结果),
+  // 这里只把缓存丢掉,等用户手动点「重新扫描」——避免误清后立刻被一次
+  // 长任务占住 UI、掩盖问题。
+  const clearScanCache = useMutation({
+    mutationFn: () => scanApi.clearCache(),
+    onSuccess: () => {
+      // 清掉前端 store,让 UI 立刻反映"无数据"状态。
+      clearLibrary()
+      pushToast({
+        kind: 'success',
+        message: '已清空图像库缓存 · 建议点击「重新扫描」重建',
+      })
+    },
+    onError: () => pushToast({ kind: 'error', message: '清空图像库缓存失败' }),
   })
 
   const clearHist = useMutation({
@@ -204,6 +235,15 @@ export default function Settings() {
               <RefreshIcon size={11} />
               <span>{sse.isRunning ? '扫描中…' : startScan.isPending ? '启动中…' : '重新扫描'}</span>
             </button>
+            <button
+              onClick={() => clearScanCache.mutate()}
+              disabled={clearScanCache.isPending}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-xs transition-colors disabled:opacity-50"
+              title="清空图像库缓存（不会立即重新扫描）"
+            >
+              <TrashIcon size={11} />
+              <span>{clearScanCache.isPending ? '清空中…' : '清空缓存'}</span>
+            </button>
           </div>
         </Row>
         <Row label="缓存占用">
@@ -245,6 +285,15 @@ export default function Settings() {
                 <RefreshIcon size={11} />
               )}
               <span>刷新</span>
+            </button>
+            <button
+              onClick={() => clearThumbs.mutate()}
+              disabled={clearThumbs.isPending}
+              className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-xs transition-colors disabled:opacity-50"
+              title="清空全部缩略图缓存，下次访问会按需重新生成"
+            >
+              <TrashIcon size={11} />
+              <span>{clearThumbs.isPending ? '清空中…' : '清空'}</span>
             </button>
           </div>
         </Row>

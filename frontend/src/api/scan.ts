@@ -99,4 +99,6 @@ export const scanApi = {
   cancel: (id: string) => api<{ ok: boolean }>(`/api/scan/${id}`, { method: 'DELETE' }),
   // 拿后端磁盘缓存的上次扫描结果；首次启动 / 还没扫过时 404,调用方应吞掉。
   latest: () => api<{ ok: boolean; result: ScanResult }>('/api/scan/latest'),
+  // 强制清空图像库缓存（内存 + scan_cache.json）。清空后需用户手动重新扫描。
+  clearCache: () => api<{ ok: boolean }>('/api/scan/cache/clear', { method: 'POST' }),
 }

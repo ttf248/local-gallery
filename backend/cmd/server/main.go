@@ -190,6 +190,8 @@ func main() {
 	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/scan/latest", handlers.LatestScanHandler(scanCache))
+	// 清空扫描结果缓存（不立即扫描；前端调用后引导用户点"重新扫描"）。
+	api.Post("/scan/cache/clear", handlers.ScanCacheClearHandler(scanCache))
 	api.Get("/albums", handlers.AlbumDetailHandler(scanCache))
 	// /api/folders 是 /api/albums 的语义化别名（图像浏览器用 "folder" 更准确）；
 	// 老客户端/历史链接仍可继续访问 /api/albums。
@@ -200,6 +202,8 @@ func main() {
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
+	// 清空全部缩略图缓存（不只是过期）。前端设置页"缓存占用"行的"清空"按钮调用。
+	api.Post("/thumbs/clear", handlers.ThumbClearAllHandlerWithCacheStats(thumbs, cacheStats))
 	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())

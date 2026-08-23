@@ -362,6 +362,47 @@ func (s *ThumbnailService) Cleanup() (int, error) {
 	return count, nil
 }
 
+// ClearAll 删除缓存目录中的所有文件,并清空内存 LRU。
+//
+// 与 Cleanup 不同:不按 mtime 过滤,无条件删除所有缓存条目。
+// 行为契约:
+//   - 内存 LRU 立即清空(下一次 GetOrCreate 会重新生成)
+//   - 磁盘文件全部删除;但 cacheDir 本身保留,后续 GetOrCreate 还能写回
+//   - 调用方负责:删除后通常希望"强制重建"——即下一次访问重新生成;
+//     本方法不主动重新生成,只清空,避免阻塞 HTTP 路径
+//
+// 返回删除的文件数 + 释放的字节数(用于前端展示"已清空 N 个文件 / 释放 X MB")。
+func (s *ThumbnailService) ClearAll() (deleted int, freedBytes int64, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	entries, err := os.ReadDir(s.cacheDir)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		path := filepath.Join(s.cacheDir, e.Name())
+		fi, infoErr := e.Info()
+		var size int64
+		if infoErr == nil {
+			size = fi.Size()
+		}
+		if rmErr := os.Remove(path); rmErr == nil {
+			deleted++
+			freedBytes += size
+		}
+	}
+
+	// 清空内存 LRU(全部条目)
+	s.memCache.Purge()
+
+	return deleted, freedBytes, nil
+}
+
 // Stats 返回缓存统计信息。
 type ThumbnailStats struct {
 	MemoryItems int    `json:"memoryItems"`

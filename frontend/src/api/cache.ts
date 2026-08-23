@@ -13,8 +13,16 @@ export interface CacheStats {
   cacheTtlSeconds: number
 }
 
+// POST /api/thumbs/clear 的响应。
+export interface CacheClearResult {
+  deleted: number
+  freedBytes: number
+}
+
 export const cacheApi = {
   stats: () => api<CacheStats>('/api/cache/stats'),
+  // 强制清空全部缩略图缓存(不只过期)。下次访问会按需重新生成。
+  clearThumbs: () => api<CacheClearResult>('/api/thumbs/clear', { method: 'POST' }),
 }
 
 // 把字节数格式化为 B / KB / MB / GB / TB。
