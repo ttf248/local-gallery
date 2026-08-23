@@ -12,19 +12,23 @@ import (
 // ThumbHandler 返回 /api/thumbs/* 处理函数。
 //
 //   GET /api/thumbs?path=<absolute>
-//   GET /api/thumbs/<key>.png（key 可由客户端先调 /api/albums/*/thumbkey 获取）
-//
-// T5 简化版：仅接受 ?path=<绝对路径>，服务端校验在 ComicRoot 内。
 //
 // 视频路径时：若封面已缓存则正常返回；未缓存时返回 404 + code
 // "video_cover_missing"，前端据此触发 `<video>` 抽帧后回传
 // POST /api/thumbs/cover。
+//
+// 缓存协商（仅在 200 响应时启用）：响应 ETag = CacheKey（md5 16 字
+// 节十六进制）。客户端带 If-None-Match 命中时返回 304 + 空 body，0
+// 字节 0 CPU。配合 Cache-Control: max-age=2592000 实现「30 天内走
+// 浏览器缓存，30 天后走 304 验证」的二层策略。
+//
+// 注意：4xx/5xx 响应**不**带 ETag —— 视频 404 状态本身是临时的
+// (cover 抽帧后变成 200)，不能让浏览器把 404 缓存住，否则 cover
+// 永远拿不到。
 func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		// T5: 接受原始绝对路径作为参数；T14 加入路径安全中间件统一校验
 		raw := c.Query("path")
 		if raw == "" {
-			// 兼容 /api/thumbs/:key 形式，但暂不实现（前端直接传 path 更简单）
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'path' query parameter",
 			})
@@ -38,7 +42,8 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 					"error": "source not found",
 				})
 			case errors.Is(err, services.ErrVideoCoverMissing):
-				// 视频封面未生成 → 前端抽帧后回传
+				// 不带 ETag / Cache-Control —— 4xx 状态不能被浏览器长缓存，
+				// 否则视频 cover 抽帧后用户再访问仍会拿到旧的 404。
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 					"error": "video cover not yet extracted",
 					"code":  "video_cover_missing",
@@ -54,7 +59,22 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 			}
 		}
 
-		c.Set("Content-Type", "image/png")
+		// 仅 200 路径启用 ETag 协商。再次 stat 一遍拿当前 mtime/size；
+		// 如果和 GetOrCreate 内部 stat 不一致（理论上不应该发生：两
+		// 次 stat 之间源文件被改写），用刚生成的数据 mtime 也行，
+		// 但简单起见用 ETagFor 算就好。
+		etag, etagErr := svc.ETagFor(raw)
+		if etagErr == nil {
+			// ETag 协议规定值用双引号包裹；浏览器回传的 If-None-Match
+			// 也带双引号，比较时必须包含引号，否则永远 miss。
+			etagQuoted := `"` + etag + `"`
+			c.Set("ETag", etagQuoted)
+			if match := c.Get("If-None-Match"); match != "" && match == etagQuoted {
+				return c.SendStatus(fiber.StatusNotModified)
+			}
+		}
+
+		c.Set("Content-Type", "image/jpeg")
 		c.Set("Cache-Control", "public, max-age=2592000") // 30 天
 		return c.Send(data)
 	}

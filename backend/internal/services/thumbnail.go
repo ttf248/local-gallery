@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/png"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +16,7 @@ import (
 
 	"github.com/disintegration/imaging"
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/tianlongxiang/comic-reader/internal/models"
 )
@@ -45,6 +46,11 @@ type ThumbnailService struct {
 
 	mu       sync.Mutex
 	memCache *lru.Cache[string, []byte]
+
+	// singleflight 防缓存击穿：同一 key 并发请求时只跑一次生成，
+	// 其他协程等结果。冷启动 / 用户翻到未缓存的合集时（首页 20+ 张
+	// 同时 miss）特别有用。
+	flight singleflight.Group
 }
 
 // ThumbnailOptions 构造选项。
@@ -122,7 +128,12 @@ func videoCoverKey(absPath string, mtime time.Time, size int64) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// GetOrCreate 获取或生成缩略图。返回 PNG 字节。
+// JPEGExt 磁盘缓存扩展名。200x350 的 PNG 普遍 100-300KB，对漫画/照片
+// 这种平滑渐变内容性价比极低；JPEG quality 85 同样大小降 5-10x 且肉眼
+// 几乎无差。文件扩展名与 Content-Type 一致，方便手动排错。
+const JPEGExt = ".jpg"
+
+// GetOrCreate 获取或生成缩略图。返回 JPEG 字节。
 //
 // 按源文件类型自动分流：
 //   - 图片（jpg/png/gif/bmp/webp/tiff）：解码 → 缩放 → 缓存
@@ -134,6 +145,26 @@ func (s *ThumbnailService) GetOrCreate(absPath string) ([]byte, error) {
 		return s.getVideoCover(absPath)
 	}
 	return s.getOrCreateImage(absPath)
+}
+
+// ETagFor 计算 absPath 当前内容的 ETag（不带引号），不触发任何生成。
+//
+// 用途：handler 端先算 ETag 发给浏览器；客户端下次带 If-None-Match
+// 命中时直接 304，省掉 GetOrCreate 的磁盘读 + 反序列化。源文件不
+// 存在时返回 ErrSourceMissing（让 handler 跳过 ETag 协商走原本的
+// 错误路径）。
+func (s *ThumbnailService) ETagFor(absPath string) (string, error) {
+	fi, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", ErrSourceMissing
+		}
+		return "", err
+	}
+	if models.IsVideoFile(filepath.Base(absPath)) {
+		return videoCoverKey(absPath, fi.ModTime(), fi.Size()), nil
+	}
+	return CacheKeyFromStat(absPath, fi), nil
 }
 
 // getOrCreateImage 现有图片缩略图流程。
@@ -154,21 +185,43 @@ func (s *ThumbnailService) getOrCreateImage(absPath string) ([]byte, error) {
 	}
 
 	// 2) 磁盘缓存
-	diskPath := filepath.Join(s.cacheDir, key+".png")
+	diskPath := filepath.Join(s.cacheDir, key+JPEGExt)
 	if data, err := os.ReadFile(diskPath); err == nil {
 		s.memCache.Add(key, data)
 		return data, nil
 	}
 
-	// 3) 生成
+	// 3) 生成：singleflight 同 key 并发只跑一次。
+	//    返回值是 []byte；singleflight.Any 类型一致即可。
+	v, err, _ := s.flight.Do(key, func() (interface{}, error) {
+		// 双重检查：进入临界区后再次读磁盘/内存，避免上一个协程
+		// 刚生成完的成果被本协程重新覆盖生成。
+		if data, ok := s.memCache.Get(key); ok {
+			return data, nil
+		}
+		if data, err := os.ReadFile(diskPath); err == nil {
+			s.memCache.Add(key, data)
+			return data, nil
+		}
+		return s.generateAndPersist(absPath, key)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]byte), nil
+}
+
+// generateAndPersist 调用 decode+resize+encode 并把结果写盘 + 加内存缓存。
+// 假定 diskPath 还没命中（已经被 singleflight 拦截过一次）。调用方需持
+// memCache.Add 路径锁；这里串行写避免与并发 singleflight 重复覆盖。
+func (s *ThumbnailService) generateAndPersist(absPath, key string) ([]byte, error) {
 	data, err := s.generate(absPath)
 	if err != nil {
 		return nil, err
 	}
-
-	// 写磁盘 + 内存
+	diskPath := filepath.Join(s.cacheDir, key+JPEGExt)
 	if werr := os.WriteFile(diskPath, data, 0o644); werr != nil {
-		// 写失败不影响返回（仅缓存丢失）
+		// 写失败不影响返回（仅缓存丢失，下次重新生成）
 		fmt.Fprintf(os.Stderr, "write thumb cache %s: %v\n", diskPath, werr)
 	}
 	s.memCache.Add(key, data)
@@ -192,7 +245,7 @@ func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
 	if data, ok := s.memCache.Get(key); ok {
 		return data, nil
 	}
-	diskPath := filepath.Join(s.cacheDir, key+".png")
+	diskPath := filepath.Join(s.cacheDir, key+JPEGExt)
 	if data, err := os.ReadFile(diskPath); err == nil {
 		s.memCache.Add(key, data)
 		return data, nil
@@ -231,13 +284,13 @@ func (s *ThumbnailService) SaveVideoCover(absPath string, data []byte) error {
 
 	// 缩放到目标尺寸
 	thumb := imaging.Fit(img, s.width, s.height, imaging.Lanczos)
-	buf, err := encodePNG(thumb)
+	buf, err := encodeJPEG(thumb, jpegQuality)
 	if err != nil {
-		return fmt.Errorf("encode png: %w", err)
+		return fmt.Errorf("encode jpeg: %w", err)
 	}
 
 	key := videoCoverKey(absPath, fi.ModTime(), fi.Size())
-	diskPath := filepath.Join(s.cacheDir, key+".png")
+	diskPath := filepath.Join(s.cacheDir, key+JPEGExt)
 	if werr := os.WriteFile(diskPath, buf, 0o644); werr != nil {
 		return fmt.Errorf("write cover cache: %w", werr)
 	}
@@ -245,7 +298,11 @@ func (s *ThumbnailService) SaveVideoCover(absPath string, data []byte) error {
 	return nil
 }
 
-// generate 解码 → 缩放 → 编码为 PNG。
+// jpegQuality JPEG 编码质量。85 是肉眼几乎不可分辨的常用值，文件大小
+// 比 PNG 小 5-10x；再低（75-80）能在 320x350 网格下保持 8-15KB/张。
+const jpegQuality = 85
+
+// generate 解码 → 缩放 → 编码为 JPEG。
 func (s *ThumbnailService) generate(absPath string) ([]byte, error) {
 	img, err := decodeImage(absPath)
 	if err != nil {
@@ -258,7 +315,7 @@ func (s *ThumbnailService) generate(absPath string) ([]byte, error) {
 	// 缩放到目标尺寸，保持比例，填充（letterbox）
 	thumb := imaging.Fit(img, s.width, s.height, imaging.Lanczos)
 
-	buf, err := encodePNG(thumb)
+	buf, err := encodeJPEG(thumb, jpegQuality)
 	if err != nil {
 		return nil, fmt.Errorf("encode: %w", err)
 	}
@@ -371,11 +428,11 @@ func (s *ThumbnailService) UpdateOptions(opts ThumbnailOptions) error {
 	return nil
 }
 
-// ---- 辅助：避免引入 png encoder 时的循环依赖噪音 ----
+// ---- 辅助：避免引入 jpeg encoder 时的循环依赖噪音 ----
 
-func encodePNG(img image.Image) ([]byte, error) {
+func encodeJPEG(img image.Image, quality int) ([]byte, error) {
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

@@ -2,12 +2,10 @@ package services
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
-	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,8 +80,8 @@ func TestGetOrCreate_GeneratesAndCaches(t *testing.T) {
 	if len(data1) == 0 {
 		t.Fatal("empty thumbnail data")
 	}
-	if !isPNG(data1) {
-		t.Error("output should be valid PNG")
+	if !isJPEG(data1) {
+		t.Error("output should be valid JPEG")
 	}
 
 	// 第二次：命中（内存或磁盘），返回相同数据
@@ -95,14 +93,17 @@ func TestGetOrCreate_GeneratesAndCaches(t *testing.T) {
 		t.Error("second call should return cached bytes")
 	}
 
-	// 磁盘文件存在
+	// 磁盘文件存在（.jpg 扩展名）
 	entries, _ := os.ReadDir(svc.cacheDir)
 	if len(entries) != 1 {
 		t.Errorf("expected 1 disk file, got %d", len(entries))
 	}
+	if !strings.HasSuffix(entries[0].Name(), ".jpg") {
+		t.Errorf("disk file should be .jpg, got %q", entries[0].Name())
+	}
 
 	// 解码验证尺寸
-	img, err := png.Decode(bytes.NewReader(data1))
+	img, err := jpeg.Decode(bytes.NewReader(data1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,9 +212,9 @@ func TestStats(t *testing.T) {
 	}
 }
 
-// isPNG 快速校验：PNG 头 8 字节为 89 50 4E 47 0D 0A 1A 0A。
-func isPNG(data []byte) bool {
-	return len(data) >= 8 && binary.BigEndian.Uint64(data[:8]) == 0x89504E470D0A1A0A
+// isJPEG 快速校验：JPEG 头 3 字节为 FF D8 FF。
+func isJPEG(data []byte) bool {
+	return len(data) >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF
 }
 
 // 视频未抽帧前 GetOrCreate 返回 ErrVideoCoverMissing；
@@ -257,16 +258,16 @@ func TestSaveVideoCover_AndReadback(t *testing.T) {
 		t.Fatalf("SaveVideoCover: %v", err)
 	}
 
-	// 现在 GetOrCreate 应返回 PNG（不再是 ErrVideoCoverMissing）
+	// 现在 GetOrCreate 应返回 JPEG（不再是 ErrVideoCoverMissing）
 	data, err := svc.GetOrCreate(vidPath)
 	if err != nil {
 		t.Fatalf("GetOrCreate after save: %v", err)
 	}
-	if !isPNG(data) {
-		t.Error("output should be valid PNG")
+	if !isJPEG(data) {
+		t.Error("output should be valid JPEG")
 	}
 	// 尺寸 ≤ 320×350
-	img, err := png.Decode(bytes.NewReader(data))
+	img, err := jpeg.Decode(bytes.NewReader(data))
 	if err != nil {
 		t.Fatal(err)
 	}

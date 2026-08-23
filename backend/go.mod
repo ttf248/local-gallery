@@ -1,6 +1,6 @@
 module github.com/tianlongxiang/comic-reader
 
-go 1.24.3
+go 1.24
 
 require (
 	github.com/disintegration/imaging v1.6.2
@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	golang.org/x/image v0.0.0-20191009234506-e7c1f5e7dbb8
+	golang.org/x/sync v0.10.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
