@@ -375,12 +375,16 @@ func (s *Scanner) scanLayerWithHook(
 
 // classifyAndScan 判断子目录是相册还是集合，并扫描它。
 //
-// 规则（重要 — 含嵌套目录时不丢数据）：
-//   - 含子目录时先递归收集子目录里的图/视频,合并进当前相册
-//     (旧版直接 return album,子目录里的图就静默丢了 — 用户反馈:
-//      缓存数量明显不对,2024年只数到 1193 张,实际 3549 张里 2322 张在子目录)
-//   - 含图片或视频 → Album(可能来自顶层,也可能来自子目录合并)
-//   - 仅含子目录且允许继续递归 → Collection(递归子目录的 albums/collections)
+// 规则（含嵌套目录时严格不丢数据、不破坏导航层级）：
+//   - 仅顶层含图/视频且无子目录 → 纯 Album（最常见）
+//   - 顶层含图/视频 + 有子目录 → Collection：
+//       * 「散图」虚拟相册（Path=dir, ImageFiles=顶层文件, Name="散图"）
+//       * 每个子目录的扫描结果（Album 或 Collection）原样放进 Albums / Collections
+//     不再把子目录图合并进"散图"，否则用户点进 2024年 还是看到一坨
+//     3549 张混合图，没法继续下钻到 10.1国庆 这种子相册 —— 用户反馈
+//     「我需要保留子相册导航」。
+//   - 仅含子目录 → Collection：子目录扫描结果放进 Albums / Collections
+//     （嵌套 Collection 保持嵌套，不再拍平 —— 否则 5 层嵌套会丢结构）
 //   - 都不含 → 跳过
 //
 // 封面选择（CoverImage / CoverKind）：
@@ -411,111 +415,123 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 		}
 	}
 
-	// 仅当顶层**已经有图/视频**且**也有子目录**时,才把子目录的图合并进当前相册。
-	// 旧版只判断顶层有没有图就直接 return album,子目录里的图就静默丢了
-	// — 用户反馈: 2024年 1227 顶层图 + 6 个子目录 2322 张被忽略,数量明显不对。
-	//
-	// 合并时用 mergeDepth 而非 maxDepth:maxDepth 是「集合嵌套层数」上限,
-	// 但 merge 是把所有层级的图扁平化到一个相册里,深度理论上不受限。
-	// 用户数据实测有 5 层(2024年/夏威夷-度假/相册/作品/甜片),maxDepth=2 会把
-	// 深度 ≥3 的全部丢掉。mergeDepth 设大一点(32)够覆盖任意合理深度,
-	// 又能防止真出现环状软链导致无限递归。
-	//
-	// 重要: 同时合并 childAlbums 和 childColls 里的 albums。
-	// scanLayer 对「顶层无图只有子目录」的子目录会包成 Collection 回来
-	// (例如 2024年/2024.10.1 顶层 0 张,会被识别成 Collection 包着原片+照片),
-	// 旧版只看 childAlbums 会漏掉 Collection 内的图。
-	const mergeDepth = 32
-	if (len(images) > 0 || len(videos) > 0) && len(subdirs) > 0 && curDepth+1 <= mergeDepth {
-		childAlbums, childColls := s.scanLayer(basePath, dir, mergeDepth, curDepth+1)
-		for _, sa := range childAlbums {
-			images = append(images, sa.ImageFiles...)
-			videos = append(videos, sa.VideoFiles...)
-		}
-		// Collection 内可能还有子专辑(嵌套),继续向下挖
-		for _, sc := range childColls {
-			for _, sa := range sc.Albums {
-				images = append(images, sa.ImageFiles...)
-				videos = append(videos, sa.VideoFiles...)
-			}
+	// 子目录扫描：先把每个 subdir 单独分类，再决定本目录的最终形态。
+	// 子目录扫描深度上限是 maxDepth：它是「集合嵌套层数」上限。
+	// 用户数据实测 5 层(2024年/夏威夷-度假/相册/作品/甜片),
+	// 旧版 merge 路径在 maxDepth=2 时会丢深度 ≥3 的所有内容;新版本
+	// 不再 merge,直接用 maxDepth 控制嵌套层数,所以调用方需要把
+	// maxDepth 设大一点(目前 handlers 默认 8)。
+	var childAlbums []models.Album
+	var childColls []models.Collection
+	hasChildren := len(subdirs) > 0 && curDepth+1 <= maxDepth
+	if hasChildren {
+		childAlbums, childColls = s.scanLayer(basePath, dir, maxDepth, curDepth+1)
+	}
+
+	hasFiles := len(images) > 0 || len(videos) > 0
+	hasUsableChildren := len(childAlbums) > 0 || len(childColls) > 0
+
+	// 情形 A：仅顶层文件，无可用子目录 → 普通 Album
+	if hasFiles && !hasUsableChildren {
+		return buildAlbum(dir, images, videos), nil
+	}
+
+	// 情形 B：仅子目录，无顶层文件 → Collection
+	if !hasFiles && hasUsableChildren {
+		return nil, &models.Collection{
+			Type:        "collection",
+			Path:        dir,
+			Name:        filepath.Base(dir),
+			Albums:      childAlbums,
+			Collections: childColls,
+			AlbumCount:  len(childAlbums),
 		}
 	}
 
-	// 含图片或视频 → 当作相册(可能来自顶层,也可能来自子目录合并)
-	if len(images) > 0 || len(videos) > 0 {
-		sort.Strings(images)
-		sort.Strings(videos)
-		var totalSize int64
-		for _, p := range append(append([]string{}, images...), videos...) {
-			if fi, err := os.Stat(p); err == nil {
-				totalSize += fi.Size()
-			}
-		}
-		modTime := time.Time{}
-		if fi, err := os.Stat(dir); err == nil {
-			modTime = fi.ModTime()
-		}
-		name := filepath.Base(dir)
-		// 封面选择：图片优先
-		var cover, coverKind string
-		switch {
-		case len(images) > 0:
-			cover, coverKind = images[0], "image"
-		default:
-			cover, coverKind = videos[0], "video"
-		}
-		return &models.Album{
-			Type:       "album",
-			Path:       dir,
-			Name:       name,
-			ImageFiles: images,
-			VideoFiles: videos,
-			CoverImage: cover,
-			CoverKind:  coverKind,
-			ImageCount: len(images),
-			VideoCount: len(videos),
-			FolderSize: totalSize,
-			Author:     ExtractAuthor(name),
-			Tags:       ExtractTags(name),
-			ModTime:    modTime,
-		}, nil
-	}
-
-	// 仅含子目录(且递归后仍无图) → 当作集合
+	// 情形 C：顶层文件 + 有可用子目录 → Collection，包含「散图」+ 子目录
 	//
-	// 把 childColls 的子集合也展开到当前集合里 — 避免数据丢失。
-	// 实际数据里 5 层嵌套是存在的(2024年/夏威夷-度假/相册/作品),其中
-	// "相册"会被识别成包着 [作品] 的 Collection,这个 Collection 不能
-	// 直接塞进 "夏威夷" 集合(Collection 模型里 Albums 是 []Album 不是
-	// []Collection),只能把它的 Albums 拍平。
-	if len(subdirs) > 0 && curDepth+1 <= maxDepth {
-		childAlbums, childColls := s.scanLayer(basePath, dir, maxDepth, curDepth+1)
-		if len(childAlbums) > 0 || len(childColls) > 0 {
-			allAlbums := childAlbums
-			for _, c := range childColls {
-				allAlbums = append(allAlbums, c.Albums...)
-			}
-			return nil, &models.Collection{
-				Type:       "collection",
-				Path:       dir,
-				Name:       filepath.Base(dir),
-				Albums:     allAlbums,
-				AlbumCount: len(allAlbums),
-			}
+	// 「散图」是 Path 以 `/.loose` 结尾的虚拟相册:用它而不是直接用 dir
+	// 作为 Path,是为了避免和 Collection.Path=dir 撞 key(后端 FindAlbum
+	// 按精确 Path 查找,撞了就 404 或拿错对象)。合成路径在磁盘上不存在,
+	// 但作为 result.albums 里的 key 完全可以 — viewer 通过 albumsApi.
+	// detail(synthetic) 拿到虚拟 Album,里面 ImageFiles=顶层文件(不含
+	// 子目录图)。Collection 优先匹配路由 + albumGrouping 跳过以 .loose
+	// 结尾的 path,共同保证主页时间线不会重复显示「散图」。
+	if hasFiles && hasUsableChildren {
+		loose := buildAlbum(filepath.Join(dir, ".loose"), images, videos)
+		loose.Name = "散图"
+		allAlbums := append([]models.Album{*loose}, childAlbums...)
+		return nil, &models.Collection{
+			Type:        "collection",
+			Path:        dir,
+			Name:        filepath.Base(dir),
+			Albums:      allAlbums,
+			Collections: childColls,
+			AlbumCount:  len(allAlbums),
 		}
 	}
 
 	return nil, nil
 }
 
-// flattenAlbums 汇总所有顶层 + 集合内含的相册。
-// 当前扫描模型下集合不嵌套集合，但保留通用性以备将来扩展。
+// buildAlbum 把「图片+视频」组装成一个 Album（不含任何子目录逻辑）。
+func buildAlbum(dir string, images, videos []string) *models.Album {
+	sort.Strings(images)
+	sort.Strings(videos)
+	var totalSize int64
+	for _, p := range append(append([]string{}, images...), videos...) {
+		if fi, err := os.Stat(p); err == nil {
+			totalSize += fi.Size()
+		}
+	}
+	modTime := time.Time{}
+	if fi, err := os.Stat(dir); err == nil {
+		modTime = fi.ModTime()
+	}
+	name := filepath.Base(dir)
+	// 封面选择：图片优先
+	var cover, coverKind string
+	switch {
+	case len(images) > 0:
+		cover, coverKind = images[0], "image"
+	default:
+		cover, coverKind = videos[0], "video"
+	}
+	return &models.Album{
+		Type:       "album",
+		Path:       dir,
+		Name:       name,
+		ImageFiles: images,
+		VideoFiles: videos,
+		CoverImage: cover,
+		CoverKind:  coverKind,
+		ImageCount: len(images),
+		VideoCount: len(videos),
+		FolderSize: totalSize,
+		Author:     ExtractAuthor(name),
+		Tags:       ExtractTags(name),
+		ModTime:    modTime,
+	}
+}
+
+// flattenAlbums 汇总所有顶层 + 集合（含嵌套集合）内含的相册。
+//
+// 现在扫描模型支持 Collection 嵌套（Collection.Collections 字段），所以
+// smart grouping 要走到所有层级，否则深嵌套里的相册不会被聚合到
+// 「标签 / 主题」维度。
 func flattenAlbums(topAlbums []models.Album, topCollections []models.Collection) []models.Album {
 	all := make([]models.Album, 0, len(topAlbums))
 	all = append(all, topAlbums...)
-	for _, c := range topCollections {
-		all = append(all, c.Albums...)
+	var walk func(cols []models.Collection)
+	walk = func(cols []models.Collection) {
+		for _, c := range cols {
+			all = append(all, c.Albums...)
+			if len(c.Collections) > 0 {
+				walk(c.Collections)
+			}
+		}
 	}
+	walk(topCollections)
 	return all
 }
 

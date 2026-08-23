@@ -4,6 +4,11 @@
 // 这就是该相册代表的年份。设计成解析第一个 1900-2100 范围的 4 位数字作为年份；
 // 解析不到的（B站 / 游戏 / 微信下载 / 萍乡中学 等）归到「其他」桶，放最后。
 //
+// 子相册归属：Collection 下的子相册（无论是 Albums 直挂还是 Collections
+// 嵌套里再下钻的）都按「所属 Collection 的年份」归桶，而不是按子相册
+// 自己的名字。否则 10.1国庆 没有 4 位年份，会被丢到「其他」桶，2024年
+// 主页时间线就看不到 10.1国庆 了——用户反馈「我需要保留子相册导航」。
+//
 // 返回结果按年份倒序，每年组内按文件数倒序；这样视觉上「今年 → 去年 → 更早」自然排序。
 import type { CardData } from '../components/album/AlbumCard'
 import type { ScanResult } from '../api/scan'
@@ -67,10 +72,24 @@ function cardForCollection(c: ScanResult['collections'][number]): {
   images: number
   videos: number
 } {
-  const images =
-    c.albums?.reduce((sum, a) => sum + a.imageCount, 0) ?? 0
-  const videos =
-    c.albums?.reduce((sum, a) => sum + (a.videoCount ?? 0), 0) ?? 0
+  // 递归计算子相册的图片/视频总数,处理嵌套 Collection(深层的 Albums
+  // 也算到本 Collection 头上,这样年卡显示的总数和实际下钻后能看到的
+  // 一致)。
+  const collect = (c: ScanResult['collections'][number]): { images: number; videos: number } => {
+    let images = 0
+    let videos = 0
+    for (const a of c.albums ?? []) {
+      images += a.imageCount
+      videos += a.videoCount ?? 0
+    }
+    for (const sub of c.collections ?? []) {
+      const r = collect(sub)
+      images += r.images
+      videos += r.videos
+    }
+    return { images, videos }
+  }
+  const { images, videos } = collect(c)
   return {
     card: {
       id: 'c:' + c.path,
@@ -93,8 +112,11 @@ export function groupByYear(result: ScanResult | null): YearGroup[] {
   if (!result) return []
   const groups = new Map<number, YearGroup>()
 
-  const add = (name: string, card: CardData, images: number, videos: number) => {
-    const y = extractYear(name)
+  // 关键:Collection 下的所有子相册都按 Collection 的年份归桶。
+  // 10.1国庆 没有 4 位年份,如果不归到 2024年 就会跑到「其他」桶,
+  // 主页时间线就丢失了子相册入口。
+  const add = (yearName: string, card: CardData, images: number, videos: number) => {
+    const y = extractYear(yearName)
     const key = y ?? OTHER_KEY
     if (!groups.has(key)) {
       groups.set(key, {
@@ -115,6 +137,11 @@ export function groupByYear(result: ScanResult | null): YearGroup[] {
   }
 
   for (const a of result.albums) {
+    // 跳过「散图」虚拟相册(扫描器在 Collection 有顶层文件+子目录时
+    // 插入的虚拟相册,Path 以 /.loose 或 \\.loose 结尾)。它的图数已经
+    // 算在所属 Collection 的 imageTotal 里,不应该再独立出现在年份桶
+    // 里(否则主页会显示两个 2024年 入口)。
+    if (/\.loose(?:$|[\\/])/.test(a.path)) continue
     const { card, images, videos } = cardForAlbum(a)
     add(a.name, card, images, videos)
   }

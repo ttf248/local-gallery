@@ -168,28 +168,49 @@ func emptyStrings(s []string) []string {
 }
 
 // Collection 仅含子相册（不含图片）的文件夹。
+//
+// Albums 与 Collections 同时存在：本层「散图」或直属于本层无嵌套的子相册
+// 放在 Albums；下钻一层仍是「集合」语义的子集合（子文件夹里没有顶层图
+// 只有更深子目录）放在 Collections。这样 UI 沿 Albums/Collections 两条
+// 路径递归渲染时，可以完整保留「年 / 月 / 事件」这种多层目录结构。
 type Collection struct {
-	Type        string      `json:"type"`        // 始终为 "collection"
-	Path        string      `json:"path"`        // 绝对路径
-	Name        string      `json:"name"`        // 文件夹名
-	DisplayName string      `json:"displayName,omitempty"`
-	SourceRoot  string      `json:"sourceRoot,omitempty"`
-	SourceName  string      `json:"sourceName,omitempty"`
-	Albums      []Album     `json:"albums"`
-	AlbumCount  int         `json:"albumCount"`
+	Type        string        `json:"type"`        // 始终为 "collection"
+	Path        string        `json:"path"`        // 绝对路径
+	Name        string        `json:"name"`        // 文件夹名
+	DisplayName string        `json:"displayName,omitempty"`
+	SourceRoot  string        `json:"sourceRoot,omitempty"`
+	SourceName  string        `json:"sourceName,omitempty"`
+	Albums      []Album       `json:"albums"`
+	Collections []Collection  `json:"collections,omitempty"` // 嵌套子集合
+	AlbumCount  int           `json:"albumCount"`            // 直属于本层的相册数（不含嵌套集合）
 }
 
-// MarshalJSON 确保 nil Albums 序列化为 `[]`。
+// MarshalJSON 确保 nil Albums 序列化为 `[]`；Collections 省略字段时
+// 整段不输出，避免给前端返回大量空 `[]collections`。
 func (c Collection) MarshalJSON() ([]byte, error) {
 	type alias Collection
 	albums := c.Albums
 	if albums == nil {
 		albums = []Album{}
 	}
+	// 嵌套 collections 为空时直接省略，前端按缺省处理即可
+	hasNested := len(c.Collections) > 0
 	return json.Marshal(struct {
 		alias
-		Albums []Album `json:"albums"`
-	}{alias: alias(c), Albums: albums})
+		Albums      []Album       `json:"albums"`
+		Collections []Collection  `json:"collections,omitempty"`
+	}{
+		alias:       alias(c),
+		Albums:      albums,
+		Collections: ternaryCollections(hasNested, c.Collections),
+	})
+}
+
+func ternaryCollections(use bool, v []Collection) []Collection {
+	if !use {
+		return nil
+	}
+	return v
 }
 
 // SmartCollection 基于方括号标签聚合的智能集合。

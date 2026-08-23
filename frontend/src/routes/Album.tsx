@@ -58,6 +58,12 @@ interface CollectionDetail {
   path: string
   name: string
   albums: AlbumDetail[]
+  /**
+   * 嵌套子集合(子目录里没有顶层图/视频,继续下钻的「中间层」集合)。
+   * 旧版会拍平,新版保留嵌套以便完整显示「年→月→事件」5 层结构。
+   */
+  collections?: CollectionDetail[]
+  /** 直属于本层的子相册数(不含嵌套集合) */
   albumCount: number
 }
 
@@ -117,6 +123,33 @@ export default function Album() {
         coverImage: sc.coverImage,
       }
     }
+    // 重要:Collection 优先匹配。2024年 顶层有图+有子目录时,后端会
+    // 返回一个 Collection 包含「散图」虚拟相册(同样以 parentPath 作为
+    // 自己的 Path)。如果不先匹配 Collection,点年卡会落到"散图"
+    // 的 AlbumView 而看不到 6 个子目录,破坏「保留子相册导航」。
+    const coll = (result.collections ?? []).find((c) => c.path === realPath)
+    if (coll) {
+      const mapAlbum = (a: ScanResult['albums'][number]): AlbumDetail => ({
+        type: 'album',
+        path: a.path,
+        name: a.name,
+        imageFiles: [],
+        coverImage: a.coverImage,
+        imageCount: a.imageCount,
+        author: a.author,
+        folderSize: 0,
+        modTime: '',
+      })
+      const mapColl = (c: ScanResult['collections'][number]): CollectionDetail => ({
+        type: 'collection',
+        path: c.path,
+        name: c.name,
+        albums: (c.albums ?? []).map(mapAlbum),
+        collections: (c.collections ?? []).map(mapColl),
+        albumCount: c.albumCount,
+      })
+      return mapColl(coll)
+    }
     const found = result.albums.find((a) => a.path === realPath)
     if (found) {
       return {
@@ -132,26 +165,6 @@ export default function Album() {
         author: found.author,
         folderSize: (found as unknown as { folderSize?: number }).folderSize ?? 0,
         modTime: (found as unknown as { modTime?: string }).modTime ?? '',
-      }
-    }
-    const coll = (result.collections ?? []).find((c) => c.path === realPath)
-    if (coll) {
-      return {
-        type: 'collection',
-        path: coll.path,
-        name: coll.name,
-        albums: coll.albums.map((a) => ({
-          type: 'album',
-          path: a.path,
-          name: a.name,
-          imageFiles: [],
-          coverImage: a.coverImage,
-          imageCount: a.imageCount,
-          author: a.author,
-          folderSize: 0,
-          modTime: '',
-        })),
-        albumCount: coll.albumCount,
       }
     }
     return null
@@ -716,27 +729,56 @@ function CollectionView({
   const isSmart = detail.type === 'smartCollection'
   const title = isSmart ? detail.author : detail.name
 
+  // 集合:把直属于本层的 Albums + 嵌套子集合 Collections 都展平成统一
+  // 的 CardData 列表渲染。子集合(5 层嵌套的中间层)用 variant=
+  // 'collection' 区分,点击继续下钻。
+  const allCards: CardData[] = useMemo(() => {
+    if (isSmart) {
+      // smartCollection 不支持嵌套,按旧行为
+      return []
+    }
+    const c = detail as CollectionDetail
+    const albumCards: CardData[] = (c.albums ?? []).map((a) => ({
+      id: 'a:' + a.path,
+      variant: 'album',
+      title: a.name,
+      subtitle: a.author,
+      count: a.imageCount,
+      coverPath: a.coverImage,
+      to: `/albums/${encodeURIComponent(a.path)}`,
+    }))
+    const collCards: CardData[] = (c.collections ?? []).map((sub) => {
+      // 嵌套子集合:cover 取第一个子相册的封面;count = 直属于子集合
+      // 的子相册数(不含更深嵌套,用户能点进去看)。
+      const firstCover = sub.albums?.[0]?.coverImage
+        ?? sub.collections?.[0]?.albums?.[0]?.coverImage
+        ?? ''
+      return {
+        id: 'c:' + sub.path,
+        variant: 'collection',
+        title: sub.name,
+        subtitle: '子集合',
+        count: sub.albumCount,
+        coverPath: firstCover,
+        to: `/albums/${encodeURIComponent(sub.path)}`,
+      }
+    })
+    return [...albumCards, ...collCards]
+  }, [detail, isSmart])
+
   const filtered = useMemo(() => {
-    const items = detail.albums.filter((a) => !query || a.name.toLowerCase().includes(query.toLowerCase()))
+    const items = allCards.filter((c) => !query || c.title.toLowerCase().includes(query.toLowerCase()))
     switch (sortBy) {
       case 'count':
-        return items.sort((a, b) => b.imageCount - a.imageCount)
+        return items.sort((a, b) => b.count - a.count)
       case 'recent':
-        return items.sort((a, b) => (b.modTime || '').localeCompare(a.modTime || ''))
+        return items.sort((a, b) => (b.title || '').localeCompare(a.title || ''))
       default:
-        return items.sort((a, b) => a.name.localeCompare(b.name))
+        return items.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [detail.albums, query, sortBy])
+  }, [allCards, query, sortBy])
 
-  const cards: CardData[] = filtered.map((a) => ({
-    id: 'a:' + a.path,
-    variant: 'album',
-    title: a.name,
-    subtitle: a.author,
-    count: a.imageCount,
-    coverPath: a.coverImage,
-    to: `/albums/${encodeURIComponent(a.path)}`,
-  }))
+  const cards = filtered
 
   // 集合/智能合集页面作为上下文源
   const collEntries = useMemo<ViewerContextEntry[]>(

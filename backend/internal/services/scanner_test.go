@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/tianlongxiang/comic-reader/internal/models"
@@ -416,13 +417,16 @@ func TestScan_MultiRoots_OneMissing(t *testing.T) {
 	}
 }
 
-// 目录同时含顶层图片 + 嵌套子目录时,子目录里的图/视频必须合并到当前相册
-// — 旧版只数顶层图片,子目录静默丢,用户看到的图数明显少于实际。
-// 同时: 顶层没图只有子目录 → 仍是 collection(不合并,保持原行为)。
-func TestScan_MergesNestedDirectoriesWithTopLevelImages(t *testing.T) {
+// 目录同时含顶层图片 + 嵌套子目录时,**不**合并到单一相册,而是返回
+// Collection:含「散图」虚拟相册(只有顶层文件) + 各子目录原样作为子相册。
+// 用户反馈「我需要保留子相册导航」—— 旧版会把 1227 顶层 + 6 子目录
+// 2322 张合并成单个 album,用户没法从 2024年 继续下钻到 10.1国庆。
+//
+// 同时: 顶层没图只有子目录 → 仍是 collection(子目录直接挂为 Albums)。
+func TestScan_KeepsSubAlbumNavigation(t *testing.T) {
 	root := t.TempDir()
 
-	// 场景 A: 顶层有图 + 有子目录(子目录也有图) → 合并
+	// 场景 A: 顶层有图 + 有子目录(子目录也有图) → Collection(含散图)
 	yearDir := filepath.Join(root, "2024年")
 	mkdirAll(t, yearDir)
 	// 顶层 2 张
@@ -441,45 +445,138 @@ func TestScan_MergesNestedDirectoriesWithTopLevelImages(t *testing.T) {
 		filepath.Join(yearDir, "12.13", "b1.jpg"),
 	)
 
-	// 场景 B: 顶层没图 + 有子目录(子目录有图) → 仍按 collection,不合并
+	// 场景 B: 顶层没图 + 有子目录(子目录有图) → Collection(子目录直接挂为 Albums)
 	emptyYearDir := filepath.Join(root, "2025年")
 	mkdirAll(t, emptyYearDir)
 	mkdirAll(t, filepath.Join(emptyYearDir, "sub"))
 	touchAll(t, filepath.Join(emptyYearDir, "sub", "c1.jpg"))
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 2})
+	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 8})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// 顶层应 1 个相册 + 1 个集合
-	if len(res.Albums) != 1 {
-		t.Fatalf("expected 1 top-level album, got %d: %v", len(res.Albums), namesOf(res.Albums))
+	// 顶层应 0 个相册 + 2 个集合(2024年 顶层有图+子目录 / 2025年 顶层空+子目录)
+	if len(res.Albums) != 0 {
+		t.Errorf("expected 0 top-level albums (both years have subdirs), got %d: %v",
+			len(res.Albums), namesOf(res.Albums))
+	}
+	if len(res.Collections) != 2 {
+		t.Fatalf("expected 2 collections, got %d: %v", len(res.Collections),
+			namesOfCols(res.Collections))
+	}
+
+	// 2024年: 散图 2 张 + 10.1国庆 2 张 + 12.13 1 张 = 5 张(分到 3 个子相册)
+	var y2024, y2025 *models.Collection
+	for i := range res.Collections {
+		switch res.Collections[i].Name {
+		case "2024年":
+			y2024 = &res.Collections[i]
+		case "2025年":
+			y2025 = &res.Collections[i]
+		}
+	}
+	if y2024 == nil || y2025 == nil {
+		t.Fatalf("missing 2024年 or 2025年 collection: %+v", res.Collections)
+	}
+	if y2024.AlbumCount != 3 {
+		t.Errorf("2024年 direct album count: got %d, want 3 (散图+10.1国庆+12.13)",
+			y2024.AlbumCount)
+	}
+	// 第一个子相册应是"散图",且只含顶层 2 张;Path 用合成路径
+	// (以 /.loose 结尾)避开和 Collection.Path 的 key 冲突。
+	if y2024.Albums[0].Name != "散图" {
+		t.Errorf("first sub-album name: got %q, want %q", y2024.Albums[0].Name, "散图")
+	}
+	if y2024.Albums[0].ImageCount != 2 {
+		t.Errorf("散图 image count: got %d, want 2 (top-level only)", y2024.Albums[0].ImageCount)
+	}
+	if !strings.HasSuffix(y2024.Albums[0].Path, string(filepath.Separator)+".loose") {
+		t.Errorf("散图 should use synthetic Path ending in %q, got %q",
+			string(filepath.Separator)+".loose", y2024.Albums[0].Path)
+	}
+	// 10.1国庆: 2 张
+	sub10 := y2024.Albums[1]
+	if sub10.Name != "10.1国庆" || sub10.ImageCount != 2 {
+		t.Errorf("10.1国庆 album: got %q (%d 张), want 10.1国庆 (2 张)",
+			sub10.Name, sub10.ImageCount)
+	}
+	// 12.13: 1 张
+	sub12 := y2024.Albums[2]
+	if sub12.Name != "12.13" || sub12.ImageCount != 1 {
+		t.Errorf("12.13 album: got %q (%d 张), want 12.13 (1 张)",
+			sub12.Name, sub12.ImageCount)
+	}
+
+	// 2025年: 顶层 0 张,只一个 sub → 当 collection,挂 1 个子相册
+	if y2025.AlbumCount != 1 {
+		t.Errorf("2025年 album count: got %d, want 1", y2025.AlbumCount)
+	}
+	if y2025.Albums[0].Name != "sub" {
+		t.Errorf("2025年 sub-album name: got %q, want %q", y2025.Albums[0].Name, "sub")
+	}
+	if y2025.Albums[0].ImageCount != 1 {
+		t.Errorf("2025年 sub-album image count: got %d, want 1", y2025.Albums[0].ImageCount)
+	}
+
+	// 总相册数: 2024年含散图+10.1国庆+12.13 = 3,2025年含 sub = 1 → 共 4
+	if res.AlbumCount != 4 {
+		t.Errorf("total albums count (smart-grouping 用): got %d, want 4", res.AlbumCount)
+	}
+}
+
+// 多层嵌套 (5 层) 的 collection 树应被完整保留,不被拍平。
+// 旧版 merge 路径下,5 层数据靠 merge 强行保留;新版不再 merge,改成
+// 通过 Collection.Collections 嵌套保留层级,需要 maxDepth 足够大。
+func TestScan_PreservesDeepNestedCollections(t *testing.T) {
+	root := t.TempDir()
+	// root/2024年/夏威夷-度假/相册/作品/甜片/x.jpg
+	// root/2024年/夏威夷-度假/相册/作品/y.jpg
+	// root/2024年/夏威夷-度假/相册/作品/甜片 是「作品」下的子目录,含图
+	deep := filepath.Join(root, "2024年", "夏威夷-度假", "相册", "作品", "甜片")
+	mkdirAll(t, deep)
+	touchAll(t, filepath.Join(deep, "x.jpg"))
+	// 相册/作品/y.jpg (顶层"作品"目录里 1 张)
+	touchAll(t, filepath.Join(root, "2024年", "夏威夷-度假", "相册", "作品", "y.jpg"))
+	// 2024年顶层 0 张;夏威夷-度假顶层 0 张;相册顶层 0 张;作品顶层 1 张 + 1 子目录
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 8})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if len(res.Collections) != 1 {
-		t.Fatalf("expected 1 collection, got %d", len(res.Collections))
+		t.Fatalf("expected 1 top collection, got %d", len(res.Collections))
 	}
-
-	// 2024年: 顶层 2 张 + 10.1国庆 2 张 + 12.13 1 张 = 5 张(全部合并)
-	yearAlbum := res.Albums[0]
-	if yearAlbum.Name != "2024年" {
-		t.Errorf("album name: got %q, want %q", yearAlbum.Name, "2024年")
+	c := res.Collections[0]
+	if c.Name != "2024年" {
+		t.Fatalf("top collection name: %q", c.Name)
 	}
-	if yearAlbum.ImageCount != 5 {
-		t.Errorf("year album image count: got %d, want 5 (top 2 + nested 3)", yearAlbum.ImageCount)
+	// 2024年 → 夏威夷-度假 (Collection) - 顶层 0 张 + 1 子目录
+	if len(c.Collections) != 1 || c.Collections[0].Name != "夏威夷-度假" {
+		t.Fatalf("2024年 nested: %+v", c.Collections)
 	}
-
-	// 2025年: 顶层 0 张,只一个 sub → 当 collection
-	yearCol := res.Collections[0]
-	if yearCol.Name != "2025年" {
-		t.Errorf("collection name: got %q, want %q", yearCol.Name, "2025年")
+	// 夏威夷-度假 → 相册 (Collection) - 顶层 0 张 + 1 子目录
+	haw := c.Collections[0]
+	if len(haw.Collections) != 1 || haw.Collections[0].Name != "相册" {
+		t.Fatalf("夏威夷-度假 nested: %+v", haw.Collections)
 	}
-	if yearCol.AlbumCount != 1 {
-		t.Errorf("collection album count: got %d, want 1", yearCol.AlbumCount)
+	// 相册 → 作品 (Collection) - 顶层 0 张 + 1 子目录
+	gal := haw.Collections[0]
+	if len(gal.Collections) != 1 || gal.Collections[0].Name != "作品" {
+		t.Fatalf("相册 nested: %+v", gal.Collections)
 	}
-	if yearCol.Albums[0].Name != "sub" {
-		t.Errorf("collection sub-album name: got %q, want %q", yearCol.Albums[0].Name, "sub")
+	// 作品 → 含 y.jpg(顶层 1 张)+ 甜片(子目录,有 1 张)
+	// 顶层 1 张 + 有子目录 → Collection:散图(作品) + 甜片(子相册)
+	works := gal.Collections[0]
+	if len(works.Albums) != 2 {
+		t.Fatalf("作品 albums: %+v (want 2: 散图 + 甜片)", works.Albums)
+	}
+	if works.Albums[0].Name != "散图" || works.Albums[0].ImageCount != 1 {
+		t.Errorf("作品 散图: got %q (%d 张)", works.Albums[0].Name, works.Albums[0].ImageCount)
+	}
+	if works.Albums[1].Name != "甜片" || works.Albums[1].ImageCount != 1 {
+		t.Errorf("作品 甜片: got %q (%d 张)", works.Albums[1].Name, works.Albums[1].ImageCount)
 	}
 }
 

@@ -36,7 +36,19 @@ export interface CollectionSummary {
   displayName?: string
   sourceRoot?: string
   sourceName?: string
+  /** 直属于本层的子相册(含"散图"虚拟相册,如果有顶层文件+子目录时插入) */
   albums: AlbumSummary[]
+  /**
+   * 嵌套子集合:深层子目录(只有更深层子目录,没有顶层图/视频)
+   * 仍被识别为 collection 时挂这里,保持「年→月→事件」的多层结构。
+   * 旧版本会拍平,2024年/夏威夷-度假/相册/作品/甜片 这种 5 层目录就
+   * 没法继续下钻了。
+   */
+  collections?: CollectionSummary[]
+  /**
+   * 直属于本层的子相册数(不含嵌套集合内的子相册)。
+   * 旧版等同于 len(albums),无变化。
+   */
   albumCount: number
 }
 

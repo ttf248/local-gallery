@@ -85,12 +85,93 @@ describe('groupByYear', () => {
     expect(g.map((x) => x.label)).toEqual(['2023', '其他'])
     expect(g[1].albums[0].title).toBe('微信下载')
   })
+
+  // 用户反馈「我需要保留子相册导航」:Collection 下的子相册按所属 Collection
+  // 的年份归桶,而不是按子相册自己的名字。否则 10.1国庆 没有 4 位年份,会
+  // 被丢到「其他」桶,2024年 主页时间线就看不到 10.1国庆 这种子相册了。
+  it('Collection 下的子相册按 Collection 年份归桶,即使子相册名无 4 位年份', () => {
+    const r: ScanResult = {
+      ...baseResult([]),
+      collections: [
+        {
+          type: 'collection',
+          path: 'E:\\存照\\2024年',
+          name: '2024年',
+          albums: [
+            mk('散图', 1227, 0, 'E:\\存照\\2024年'),
+            mk('10.1国庆', 2, 0, 'E:\\存照\\2024年\\10.1国庆'),
+            mk('12.13', 1, 0, 'E:\\存照\\2024年\\12.13'),
+          ],
+          albumCount: 3,
+        },
+      ],
+    }
+    const g = groupByYear(r)
+    expect(g).toHaveLength(1)
+    expect(g[0].label).toBe('2024')
+    // 散图 + 10.1国庆 + 12.13 全部归到 2024 桶
+    expect(g[0].albums).toHaveLength(1) // Collection 自身一张卡
+    expect(g[0].imageTotal).toBe(1227 + 2 + 1)
+  })
+
+  it('嵌套子集合(深 5 层)里的子相册也按最上层 Collection 年份归桶,计数含整个子树', () => {
+    const r: ScanResult = {
+      ...baseResult([]),
+      collections: [
+        {
+          type: 'collection',
+          path: 'E:\\存照\\2024年',
+          name: '2024年',
+          albums: [mk('散图', 100, 0, 'E:\\存照\\2024年')],
+          collections: [
+            {
+              type: 'collection',
+              path: 'E:\\存照\\2024年\\夏威夷-度假',
+              name: '夏威夷-度假',
+              albums: [],
+              collections: [
+                {
+                  type: 'collection',
+                  path: 'E:\\存照\\2024年\\夏威夷-度假\\相册',
+                  name: '相册',
+                  albums: [],
+                  collections: [
+                    {
+                      type: 'collection',
+                      path: 'E:\\存照\\2024年\\夏威夷-度假\\相册\\作品',
+                      name: '作品',
+                      albums: [
+                        mk('散图', 5, 0, 'E:\\存照\\2024年\\夏威夷-度假\\相册\\作品'),
+                        mk('甜片', 1, 0, 'E:\\存照\\2024年\\夏威夷-度假\\相册\\作品\\甜片'),
+                      ],
+                      albumCount: 2,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+          albumCount: 1,
+        },
+      ],
+    }
+    const g = groupByYear(r)
+    expect(g).toHaveLength(1)
+    expect(g[0].label).toBe('2024')
+    // imageTotal 应含 5 层子树里的全部图:100 + 5 + 1 = 106
+    expect(g[0].imageTotal).toBe(106)
+  })
 })
 
-function mk(name: string, imageCount: number, videoCount: number): ScanResult['albums'][number] {
+function mk(
+  name: string,
+  imageCount: number,
+  videoCount: number,
+  path?: string,
+): ScanResult['albums'][number] {
   return {
     type: 'album',
-    path: `E:\\存照\\${name}`,
+    path: path ?? `E:\\存照\\${name}`,
     name,
     coverImage: '',
     imageCount,

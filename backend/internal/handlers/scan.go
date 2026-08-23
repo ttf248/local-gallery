@@ -13,11 +13,16 @@ import (
 
 // ScanHandler 同步扫描（保留兼容）。
 // mediaRoots 在每次请求时通过 mgr.Roots() 读取，响应热更新。
+//
+// MaxDepth 是「集合嵌套层数」上限：用户实测数据有 5 层
+// (2024年/夏威夷-度假/相册/作品/甜片),旧值 2 会把深度 ≥3 的子集合
+// 全部丢掉。这里给到 8,够覆盖任意合理层级,又能避免真出现环状软链
+// 时无限递归。
 func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		result, err := scanner.Scan(services.ScanOptions{
 			Roots:    mgr.Roots(),
-			MaxDepth: 2,
+			MaxDepth: 8,
 		})
 		if err != nil {
 			status := fiber.StatusInternalServerError
@@ -40,7 +45,7 @@ func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager
 	return func(c *fiber.Ctx) error {
 		id, _, err := runner.Start(services.ScanOptions{
 			Roots:    mgr.Roots(),
-			MaxDepth: 2,
+			MaxDepth: 8,
 		})
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
