@@ -242,16 +242,35 @@ func (c *ScanResultCache) FindAlbum(path string) *models.Album {
 	return nil
 }
 
-// FindCollection 按路径查找集合。
+// FindCollection 按路径查找集合（递归嵌套 Collection）。
+//
+// 扫描器会按目录层级产出嵌套集合（Collection.Collections），所以顶层之外的
+// 集合（"2024年/夏威夷-度假"、"2024年/夏威夷-度假/相片"）也必须能找到。
+// 旧版只在顶层 r.Collections 里线性查找，导致点击首页 401 个文件夹中的
+// 任何深层集合都返回 404 —— 反馈「文件夹里面的子文件夹无法正常加载」。
 func (c *ScanResultCache) FindCollection(path string) *models.Collection {
 	r := c.Get()
 	if r == nil {
 		return nil
 	}
 	for i := range r.Collections {
-		if r.Collections[i].Path == path {
-			c := r.Collections[i]
-			return &c
+		if found := findCollectionRecursive(&r.Collections[i], path); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// findCollectionRecursive 在 col 及其嵌套子集合中查找 path。
+// 命中时返回深拷贝（避免外部修改内部状态）。
+func findCollectionRecursive(col *models.Collection, path string) *models.Collection {
+	if col.Path == path {
+		c := *col
+		return &c
+	}
+	for i := range col.Collections {
+		if found := findCollectionRecursive(&col.Collections[i], path); found != nil {
+			return found
 		}
 	}
 	return nil
@@ -274,11 +293,22 @@ func (c *ScanResultCache) FindSmartCollection(tag string) *models.SmartCollectio
 	return nil
 }
 
+// findAlbumInCollection 在 col 及其嵌套子集合中递归查找相册。
+//
+// 旧实现只在 col.Albums 顶层线性查找，遇到嵌套 Collection（"2024年/
+// 夏威夷-度假/相片/作品" 这种 4 层结构）就找不到，导致 FindAlbum 拿不到
+// 深层相册。扫描器现在支持 Collection 嵌套（详见 scanner.go），这里
+// 也必须跟着递归。
 func findAlbumInCollection(col *models.Collection, path string) *models.Album {
 	for i := range col.Albums {
 		if col.Albums[i].Path == path {
 			a := col.Albums[i]
 			return &a
+		}
+	}
+	for i := range col.Collections {
+		if a := findAlbumInCollection(&col.Collections[i], path); a != nil {
+			return a
 		}
 	}
 	return nil

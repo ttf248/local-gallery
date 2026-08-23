@@ -12,6 +12,7 @@ import type { CardData } from '../components/album/AlbumGrid'
 import AlbumGrid from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
 import { albumsApi } from '../api/albums'
+import type { ScanResult } from '../api/scan'
 import { decodeFavPath } from '../utils/path'
 import { formatRelative } from '../utils/date'
 import { formatSize } from '../utils/format'
@@ -127,7 +128,12 @@ export default function Album() {
     // 返回一个 Collection 包含「散图」虚拟相册(同样以 parentPath 作为
     // 自己的 Path)。如果不先匹配 Collection,点年卡会落到"散图"
     // 的 AlbumView 而看不到 6 个子目录,破坏「保留子相册导航」。
-    const coll = (result.collections ?? []).find((c) => c.path === realPath)
+    //
+    // 集合查找必须递归：扫描器支持 Collection 嵌套（"2024年/夏威夷-度假"
+    // /"2024年/夏威夷-度假/相片" 这种 4-5 层结构），旧版 find 只在
+    // 顶层 r.collections 找，导致深层集合从本地缓存拿不到，必须
+    // 走到后端兜底 → 401 列表里很多子目录点进去"找不到此文件夹"。
+    const coll = findCollectionRecursive(result.collections ?? [], realPath)
     if (coll) {
       const mapAlbum = (a: ScanResult['albums'][number]): AlbumDetail => ({
         type: 'album',
@@ -170,8 +176,14 @@ export default function Album() {
     return null
   }, [result, isSmart, realPath])
 
+  // 本地缓存命中了（顶层/嵌套集合/相册）时直接用；只有 album 类型且
+  // imageFiles 为空才需要回后端补文件列表（首页只缓存了 metadata）。
+  // 如果本地完全找不到（多见于直接 URL 访问深层路径 / 缓存与扫描结果
+  // 不一致），也尝试走一次后端，让 /api/folders 兜底——后端 FindCollection
+  // / findAlbumInCollection 也是递归的，能正确返回。
   const needBackendDetail =
-    localDetail?.type === 'album' && localDetail.imageFiles.length === 0
+    localDetail === null ||
+    (localDetail?.type === 'album' && localDetail.imageFiles.length === 0)
   const remoteDetail = useQuery({
     queryKey: ['album-detail', realPath],
     queryFn: async () => {
@@ -1018,4 +1030,22 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
       </div>
     </div>
   )
+}
+
+// 在 collections 树里递归查找 path。
+//
+// 后端扫描器支持 Collection 嵌套（"2024年/夏威夷-度假/相片/作品" 这种
+// 4-5 层结构），前端必须跟着递归。旧版 `collections.find(c => c.path === ...)`
+// 只在顶层查，导致「文件夹里面的子文件夹无法正常加载」—— 401 个文件夹中
+// 任何深层集合都拿不到。
+function findCollectionRecursive(
+  collections: ScanResult['collections'],
+  path: string,
+): ScanResult['collections'][number] | null {
+  for (const c of collections) {
+    if (c.path === path) return c
+    const nested = findCollectionRecursive(c.collections ?? [], path)
+    if (nested) return nested
+  }
+  return null
 }
