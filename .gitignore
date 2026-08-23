@@ -8,6 +8,9 @@
 /build/
 *.exe
 *.exe~
+
+# 第三方可执行(由 scripts/install-ffmpeg.ps1 绿色安装)
+/bin/ffmpeg/
 *.dll
 *.so
 *.dylib

@@ -125,6 +125,43 @@ VSCode 调试配置见 `.vscode/launch.json`，包含 4 个调试入口 + 1 个�
 
 详细结构见 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)。
 
+---
+
+## 🧩 可选依赖: ffmpeg
+
+> **当前代码并不直接调用 ffmpeg**。视频封面由前端 `<video>` + `canvas` 抽帧、缓存到后端(`/api/thumbs/cover`),视频元数据由浏览器 `loadedmetadata` 派生,这是有意识的选择 —— 详见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) 「视频封面流程」一节。
+
+本仓库提供一个**绿色安装脚本**,把 `ffmpeg` / `ffprobe` / `ffplay` 放在项目内,便于后续集成(服务端抽帧 / 读真实元数据 / 转码等):
+
+```bash
+# Windows PowerShell(默认从 gyan.dev 拉 ffmpeg-release-essentials.zip,约 100MB)
+pwsh -File scripts/install-ffmpeg.ps1
+
+# 强制重装
+pwsh -File scripts/install-ffmpeg.ps1 -Force
+
+# 换源
+pwsh -File scripts/install-ffmpeg.ps1 -Url https://example.com/your.zip
+
+# 自定义安装目录
+pwsh -File scripts/install-ffmpeg.ps1 -TargetDir D:\tools\ffmpeg
+```
+
+**安装路径约定**(默认情况):
+
+```
+bin/ffmpeg/windows/amd64/
+├── ffmpeg.exe
+├── ffprobe.exe
+└── ffplay.exe
+```
+
+- 整个 `bin/` 目录已在 `.gitignore` 中被忽略,二进制不入仓,clone 仓库后跑一次脚本即可就位。
+- 脚本**幂等**:已安装且 `ffmpeg -version` 可用会直接跳过。
+- 脚本**不需要管理员权限**,不写系统目录、不修改 `PATH`。
+- 当前仅内置 Windows x64 流程;macOS / Linux 路径结构同形(`bin/ffmpeg/darwin/amd64/` 等),后续按需补 `scripts/install-ffmpeg.sh`。
+
+
 ```
 .
 ├── backend/                     # Go + Fiber 服务
