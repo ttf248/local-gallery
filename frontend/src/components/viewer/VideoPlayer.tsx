@@ -36,6 +36,7 @@ export default function VideoPlayer({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const [retryKey, setRetryKey] = useState(0)
 
   // 切到下一个视频时清错
   useEffect(() => {
@@ -86,11 +87,35 @@ export default function VideoPlayer({
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // 把 HTMLMediaElement 的 MediaError 翻译成对人友好的中文消息。
+  //
+  // 常见码(详见 https://developer.mozilla.org/docs/Web/API/MediaError/code):
+  //   1 MEDIA_ERR_ABORTED            - 用户中止(一般不应弹错)
+  //   2 MEDIA_ERR_NETWORK            - 网络错误(断网/超时/Range 失败)
+  //   3 MEDIA_ERR_DECODE             - 解码错误(编码/容器损坏,或浏览器 codec 不支持)
+  //   4 MEDIA_ERR_SRC_NOT_SUPPORTED  - 资源不支持(404/CORS/MIME 错/浏览器不支持该编码)
+  function describeError(media: HTMLVideoElement | null): string {
+    const err = media?.error
+    if (!err) return '视频加载失败'
+    switch (err.code) {
+      case 1:
+        return '播放已中止'
+      case 2:
+        return '视频加载失败(网络错误:可能是断网、Range 请求失败或服务器无响应)'
+      case 3:
+        return '视频解码失败(编码或容器不被当前浏览器支持;常见于 AV1 / H.265 / 非 faststart MP4)'
+      case 4:
+        return '视频加载失败(资源不可用:文件不存在、CORS 被拒、MIME 不匹配,或浏览器不支持该编码)'
+      default:
+        return '视频加载失败'
+    }
+  }
+
   return (
     <div className={className ?? 'relative flex-1 flex items-center justify-center min-h-0 bg-black'}>
       <video
         ref={videoRef}
-        key={src /* 切视频时强制重挂载，避免 src 缓存问题 */}
+        key={`${src}#${retryKey}` /* 切视频 / 手动重试时强制重挂载，避免 src 缓存问题 */}
         src={videoUrl(src)}
         controls
         autoPlay
@@ -111,13 +136,25 @@ export default function VideoPlayer({
         onEnded={() => {
           onEnded?.()
         }}
-        onError={() => {
-          setError('视频加载失败')
+        onError={(e) => {
+          setError(describeError(e.currentTarget))
         }}
       />
       {error && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-black/70 text-white/90 text-sm px-3 py-1.5 rounded">{error}</div>
+          <div className="max-w-md mx-4 bg-black/80 text-white/90 text-sm px-4 py-3 rounded-md flex flex-col items-center gap-2 text-center">
+            <div>{error}</div>
+            <button
+              type="button"
+              className="pointer-events-auto text-xs px-2 py-1 rounded border border-white/30 hover:bg-white/10"
+              onClick={() => {
+                setError(null)
+                setRetryKey((k) => k + 1)
+              }}
+            >
+              重试
+            </button>
+          </div>
         </div>
       )}
     </div>
