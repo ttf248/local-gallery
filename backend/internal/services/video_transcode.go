@@ -757,7 +757,7 @@ func (s *TranscodeService) Evict(maxBytes int64, maxAgeDays int) (deleted int, f
 // needsTranscode 判断"浏览器原生是否能播这个文件"。
 //
 // V1 保守策略:不在"已知支持列表"里的就转。判定表见
-// docs/TRANSCODE.md §3.2。
+// docs/ARCHITECTURE.md §2.4.1。
 func (s *TranscodeService) needsTranscode(absPath, ext string) bool {
 	// 没 info service 就保守按"需要转"
 	if s.info == nil || !s.info.Available() {

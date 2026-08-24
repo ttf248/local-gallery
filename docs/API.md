@@ -1,23 +1,63 @@
-# API 文档
+# API · HTTP 接口手册
 
-图像浏览器后端的 HTTP 接口手册。所有端点位于 `/api` 前缀下。
-
-## 通用约定
-
-| 项 | 值 |
-|----|----|
-| 基础地址 | `http://<host>:<port>`（默认 `http://localhost:8080`） |
-| 内容类型 | `application/json`（除缩略图/原图外） |
-| 路径参数 | URL 中的 `?path=<abs>` 必须为绝对路径，且必须位于配置的任一 `mediaRoots` 之下；`?path=smart:<tag>` 用于按标签查询智能合集 |
-| 字符编码 | UTF-8；路径中的中文/空格需 URL-encode |
-| 错误响应 | `{ "error": "<可读消息>" }`，状态码 4xx/5xx |
-| Cache-Control | 缩略图 30 天；原图 1 天 |
-
-> 兼容说明：路径根字段新名 `mediaRoots`（数组），旧名 `mediaRoot` / `comicRoot` 仍可识别；`/api/albums` 与 `/api/folders` 是同一接口的两个名称。
+> 图像浏览器后端的 HTTP 接口。基础前缀 `/api`，JSON 为主，缩略图 / 原图 / 视频流走二进制。
 
 ---
 
-## 健康检查
+## 0. 通用约定
+
+| 项 | 值 |
+|----|----|
+| 基础地址 | `http://<host>:<port>`（默认 `:8080`） |
+| 内容类型 | `application/json`，缩略图 `image/jpeg`，原图按扩展名 |
+| 路径参数 | `?path=<abs>` 必须是绝对路径且落在任一 `mediaRoots` 下；`?path=smart:<tag>` 查智能合集 |
+| 字符编码 | UTF-8；中文 / 空格需 URL-encode |
+| 错误响应 | `{ "error": "<可读消息>" }`，状态码 4xx / 5xx |
+| Cache-Control | 缩略图 30 天；原图 1 天；视频 1 天 |
+| Range / ETag | 原图 / 视频流都支持 |
+
+> **兼容说明**：`mediaRoots`（数组）是权威字段，旧名 `mediaRoot` / `comicRoot`（单数）仍可识别为单元素数组。`/api/albums` ≡ `/api/folders`。
+
+---
+
+## 1. 端点索引
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/health` | GET | 健康检查 + 运行时信息 |
+| `/api/scan` | POST | 同步扫描（小库） |
+| `/api/scan/start` | POST | 异步扫描，返 `scanId` |
+| `/api/scan/:id/events` | GET (SSE) | 扫描进度 |
+| `/api/scan/:id/result` | GET | 已完成扫描的结果 |
+| `/api/scan/latest` | GET | 最近一次扫描结果缓存 |
+| `/api/scan/:id` | DELETE | 取消扫描 |
+| `/api/folders` (`/api/albums`) | GET | 按路径取详情 |
+| `/api/tags` | GET | `?path=smart:<tag>` 直查 |
+| `/api/search` | GET | 模糊搜索 |
+| `/api/thumbs` | GET | 缩略图 JPEG |
+| `/api/thumbs/cover` | POST | 浏览器抽帧上传 |
+| `/api/thumbs/stats` | GET | 缩略图缓存统计 |
+| `/api/thumbs/cleanup` | POST | 清理过期 |
+| `/api/images` | GET | 原图（Range / ETag / HEIC） |
+| `/api/images/info` | GET | 原图元数据 |
+| `/api/videos` | GET | 视频流（Range / ETag / 转码决策） |
+| `/api/videos/info` | GET | 视频元数据 + 转码状态 |
+| `/api/videos/transcode/status` | GET | 单个视频转码状态 |
+| `/api/videos/transcode/events` | GET (SSE) | 转码进度 |
+| `/api/videos/transcode/cancel` | POST | 取消转码 |
+| `/api/videos/transcode/cache/stats` | GET | 转码缓存占用 |
+| `/api/videos/transcode/cache/clear` | POST | 清转码缓存 |
+| `/api/progress` | GET / POST | 阅读进度 upsert |
+| `/api/prefs` | GET / PATCH | 完整偏好 |
+| `/api/favorites` | GET / POST / DELETE | 收藏（幂等） |
+| `/api/favorites/prune` | POST | 移除失效收藏 |
+| `/api/history` | GET / POST / DELETE | 最近访问 |
+| `/api/fs/open` | GET | 系统资源管理器 |
+| `/api/config` | GET / PUT | 服务端配置 |
+
+---
+
+## 2. 健康检查
 
 ### `GET /api/health`
 
@@ -33,15 +73,15 @@
 }
 ```
 
-`mediaRoots` 是权威字段（数组）；`mediaRoot` / `comicRoot` 保留为 `mediaRoots[0]` 的别名以兼容旧客户端。`/api/fs/open` 等所有 `?path=` 接口都接受任一根下的绝对路径。
+`mediaRoots` 是权威数组；`mediaRoot` / `comicRoot` 是首元素别名。
 
 ---
 
-## 扫描
+## 3. 扫描
 
 ### `POST /api/scan`（同步）
 
-阻塞扫描整个图像根目录；适合小型库（<1k 个文件夹）。
+阻塞扫描完整结果。**只适合小库**（< 1k 个 album）。
 
 ```json
 {
@@ -49,11 +89,19 @@
   "result": {
     "root": "E:\\图像",
     "albums": [
-      { "path": "...", "name": "卷1", "imageCount": 50, "author": "标签A", "coverImage": "..." }
+      {
+        "path": "E:\\图像\\[作者A]\\卷01",
+        "name": "卷01",
+        "imageCount": 50,
+        "videoCount": 2,
+        "coverImage": "E:\\图像\\[作者A]\\卷01\\01.jpg",
+        "coverKind": "image",
+        "tags": ["作者A"]
+      }
     ],
     "collections": [],
     "smartCollections": [
-      { "tag": "标签A", "author": "标签A", "albumCount": 5, "coverImage": "..." }
+      { "tag": "作者A", "author": "作者A", "albumCount": 5 }
     ],
     "albumCount": 50,
     "duration": 1234
@@ -61,76 +109,110 @@
 }
 ```
 
-`author` 字段为兼容保留，内容与 `tag`（第一个标签）相同。
-
 ### `POST /api/scan/start`（异步）
-
-立即返回 `scanId`，扫描在后台进行。
 
 ```json
 { "scanId": "5f631a76-..." }
 ```
 
-### `GET /api/scan/:id/events`（SSE）
-
-建立长连接，按事件推送进度。事件格式：
+### `GET /api/scan/:id/events` (SSE)
 
 ```
 event: running
-data: {"scanId":"...","progress":42,"albumsFound":15,...}
+data: {"scanId":"...","progress":42,"albumsFound":15}
 
 event: complete
-data: {"scanId":"...","progress":100,"albumsFound":50,...}
+data: {"scanId":"...","progress":100,"albumsFound":50}
 
 event: cancelled
-data: {"scanId":"...",...}
+data: {"scanId":"..."}
 
 event: error
-data: {"scanId":"...","error":"permission denied",...}
+data: {"scanId":"...","error":"permission denied"}
 ```
 
 ### `GET /api/scan/:id/result`
 
-获取已完成扫描的最终结果（结构同 `/api/scan`）。
+返回结构同 `/api/scan`。`/api/scan/:id` 必须存在。
 
 ### `GET /api/scan/latest`
 
-返回最近一次扫描的缓存结果（无需重新扫描）。`/api/scan/latest` 即前端首页启动时拉取的入口。
+最近一次扫描的内存缓存（无需重扫）。首页启动时拉这个。
 
 ### `DELETE /api/scan/:id`
 
-取消正在进行的扫描。
+取消正在跑的扫描。
 
 ---
 
-## 文件夹 / 集合 / 智能合集
+## 4. 文件夹 / 集合 / 智能合集
 
-### `GET /api/folders?path=<abs>`（新名；`/api/albums` 兼容）
+### `GET /api/folders?path=<abs>` (`/api/albums` 兼容)
 
-按路径返回详细信息：
+按路径返回详情，类型由 `kind` 字段区分：
 
-- 普通文件夹（Album）：`{ kind: "album", data: { path, name, imageFiles:[…], videoFiles:[…], imageCount, videoCount, coverKind, tags:[…], author, … } }`
-  - `coverKind` 为 `"image"` / `"video"`，标识封面源（视频封面由前端抽帧后回填）
-  - 视频/图片可混在同一相册（folder 可同时含图与视频文件）
-- 集合（Collection）：`{ kind: "collection", data: { path, name, albums:[…], albumCount } }`
-- 智能合集：`?path=smart:<tag>` → `{ kind: "smart", data: { tag, author, albums:[…], albumCount, coverImage } }`
+**Album**（普通文件夹）：
+```json
+{
+  "kind": "album",
+  "data": {
+    "path": "E:\\图像\\卷01",
+    "name": "卷01",
+    "imageFiles": ["E:\\...\\01.jpg", "..."],
+    "videoFiles": ["E:\\...\\01.mp4"],
+    "imageCount": 50,
+    "videoCount": 1,
+    "coverImage": "E:\\...\\01.jpg",
+    "coverKind": "image",
+    "tags": ["作者A", "分类B"],
+    "author": "作者A"
+  }
+}
+```
 
-`imageFiles` 在前端中可同时以 `files` 字段名读取（双键别名，向后兼容）。`videoFiles` 是独立键。
+> `imageFiles` 也有 `files` 字段别名（向后兼容）。`videoFiles` 独立。
+
+**Collection**（上层目录）：
+```json
+{
+  "kind": "collection",
+  "data": {
+    "path": "E:\\图像\\[作者A]",
+    "name": "[作者A]",
+    "albums": [...],
+    "albumCount": 5
+  }
+}
+```
+
+**SmartCollection**（按标签）：
+```json
+{
+  "kind": "smart",
+  "data": {
+    "tag": "作者A",
+    "author": "作者A",
+    "albums": [...],
+    "albumCount": 5,
+    "coverImage": "E:\\...\\01.jpg"
+  }
+}
+```
 
 ### `GET /api/tags?path=smart:<tag>`
 
-按标签名直接查询智能合集。等价于 `/api/folders?path=smart:<tag>`。
+`/api/folders?path=smart:<tag>` 的同义路由。
 
-### `GET /api/search?q=<keyword>&limit=<n>`
+### `GET /api/search?q=<kw>&limit=<n>`
 
-按关键字模糊搜索文件夹/合集/智能合集（不区分大小写，匹配 name/author）。`limit` 默认 50，最大 500。
+模糊搜索 name / tag / author，`limit` 默认 50、最大 500。
 
 ```json
 {
   "ok": true,
   "results": [
-    { "kind": "album", "path": "…", "name": "卷1", "count": 50, "coverImage": "…" },
-    { "kind": "smartCollection", "path": "smart:标签A", "name": "标签A", "count": 5, "coverImage": "…" }
+    { "kind": "album", "path": "...", "name": "卷1", "count": 50, "coverImage": "..." },
+    { "kind": "smartCollection", "path": "smart:作者A", "name": "作者A", "count": 5 }
   ],
   "count": 2
 }
@@ -138,57 +220,63 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ---
 
-## 缩略图与原图
+## 5. 缩略图
 
 ### `GET /api/thumbs?path=<abs>`
 
-返回 JPEG（默认 320×350，保持比例，letterbox 黑边填充）。支持服务端 LRU + 磁盘缓存 + ETag 协商。
+JPEG（默认 320×350，比例保持，黑边 letterbox）。支持 LRU + 磁盘 + ETag。
 
-视频路径（`.mp4` / `.webm` / `.mov` / `.mkv` / `.avi` / `.m4v`）行为：
+**视频路径**（`.mp4`/`.webm`/`.mov`/`.mkv`/`.avi`/`.m4v`）：
 
-- 封面已缓存 → 直接返回 JPEG（同图片缩略图）
-- 封面未生成 + ffmpeg 可用 → **服务端用 ffmpeg 抽帧**（seek 到 duration×10%，夹到 1~3s），写入缓存后返回 JPEG
-- 封面未生成 + ffmpeg 不可用 / 抽帧失败 → 返回 404 `{ "code": "video_cover_missing" }`；前端据此触发浏览器抽帧 + 上传（v1 兼容流程）
+| 场景 | 行为 |
+|------|------|
+| 封面已缓存 | 直接返回 JPEG |
+| 封面未生成 + ffmpeg 可用 | 服务端 ffmpeg seek 抽帧，缓存后返回 |
+| 封面未生成 + ffmpeg 不可用 | 404 `{ code: "video_cover_missing" }`，前端触发浏览器抽帧 |
 
-性能：服务端 ffmpeg 抽帧对 380MB / 176s / 1280×720 H.264 视频约 339ms（首次冷启动）；二次访问命中 LRU/磁盘，< 1ms。对比浏览器抽帧：旧流程需下载整段视频到浏览器内存（30+ 秒，400MB+ 内存峰值），新方案在客户端零额外内存。
+**性能**：服务端 ffmpeg 抽帧对 380MB / 176s / 1280×720 H.264 约 **339ms**；缓存命中 < 1ms。浏览器 fallback 需下载整段（30+ 秒，400MB+ 内存）。
 
 ### `POST /api/thumbs/cover?path=<abs_video>`
 
-接收前端浏览器抽帧得到的视频封面字节，写入缓存。Content-Type 为图片 MIME（`image/jpeg` 优先，`image/png` 兼容），body 为原始字节（典型 `canvas.toBlob('image/jpeg', 0.85)`）。
+接收浏览器抽帧的字节（`canvas.toBlob('image/jpeg', 0.85)`），写入缓存。
 
-成功：`{ "ok": true, "bytes": <int> }`  
-失败：`400`（path 缺失 / 非视频）/ `404`（视频文件不存在）/ `413`（> 5 MB）/ `415`（上传的字节不是合法图片）。
+| 状态码 | 含义 |
+|--------|------|
+| 200 | `{ "ok": true, "bytes": N }` |
+| 400 | path 缺失 / 非视频 |
+| 404 | 视频文件不存在 |
+| 413 | > 5 MB |
+| 415 | 字节不是合法图片 |
 
 ### `GET /api/thumbs/stats`
 
 ```json
-{
-  "cacheSize": 123,
-  "hitCount": 4567,
-  "missCount": 890,
-  "diskBytes": 12345678
-}
+{ "cacheSize": 123, "hitCount": 4567, "missCount": 890, "diskBytes": 12345678 }
 ```
 
 ### `POST /api/thumbs/cleanup`
 
-清理超过 `cacheMaxAgeDays` 的磁盘缓存文件。
+清掉超过 `cacheMaxAgeDays` 的磁盘缓存。
 
 ```json
 { "deleted": 12 }
 ```
 
+---
+
+## 6. 原图
+
 ### `GET /api/images?path=<abs>`
 
-返回原始图片（支持 `Range` 请求，用于分段加载大图）。HEIC/HEIF 文件以 `image/heic` MIME 直出；前端浏览器需支持原生 HEIC 解码（Safari 16+，Chrome 当前不支持，会回退到下载）。
+返回原始字节。**支持 Range**（`c.SendFile(path, true)`），HEIC/HEIF 以 `image/heic` 直出（Safari 16+ 支持，Chrome 会回退到下载）。
 
 ### `GET /api/images/info?path=<abs>`
 
 ```json
 {
-  "path": "...",
-  "name": "image1.png",
-  "dir": "...",
+  "path": "E:\\...\\01.png",
+  "name": "01.png",
+  "dir": "E:\\...",
   "size": 123456,
   "mtime": "2026-08-01T12:34:56Z",
   "width": 1200,
@@ -200,25 +288,33 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ---
 
-## 视频
+## 7. 视频
 
 ### `GET /api/videos?path=<abs>`
 
-返回原始视频字节（支持 `Range` 请求，前端 `<video>` 拖动进度条时浏览器自动按需分段）。MIME 按扩展名：`video/mp4` / `video/webm` / `video/quicktime` / `video/x-matroska` / `video/x-msvideo`。响应头包含 `Accept-Ranges: bytes`、`Cache-Control: public, max-age=86400`、`ETag: "<mtime_ns>-<size>"`（基于实际发送文件的 mtime+size 派生，转码/重封装后是缓存文件的元数据）。
+**Range / ETag / 4 层 fallback**：
 
-ETag 协商：客户端带 `If-None-Match: <etag>` 命中时返回 `304 Not Modified`（空 body），浏览器会用本地缓存的 Range 请求重新拿到片段。
+```
+请求 → Transcode → Faststart → 原文件
+```
 
-非视频扩展名 → 415；视频文件不存在 → 404。
+| 响应头 | 值 |
+|--------|----|
+| `Accept-Ranges` | `bytes` |
+| `Cache-Control` | `public, max-age=86400` |
+| `ETag` | `"<mtime_ns>-<size>"`（基于实际发送文件的元数据） |
+
+ETag 命中 → `304 Not Modified`，浏览器复用本地 Range 段。
+
+非视频扩展名 → 415；不存在 → 404。
 
 ### `GET /api/videos/info?path=<abs>`
 
-返回视频文件的元数据：
-
 ```json
 {
-  "path": "E:\\存照\\video.mp4",
+  "path": "E:\\...\\video.mp4",
   "name": "video.mp4",
-  "dir": "E:\\存照",
+  "dir": "E:\\...",
   "size": 12345678,
   "mtime": "2026-08-20T12:34:56Z",
   "format": ".mp4",
@@ -231,41 +327,86 @@ ETag 协商：客户端带 `If-None-Match: <etag>` 命中时返回 `304 Not Modi
 }
 ```
 
-- 必填字段（与文件本身绑定）：`path` / `name` / `dir` / `size` / `mtime` / `format`
-- 可选字段（ffprobe 可用时填，否则缺省）：`duration` / `width` / `height` / `codec` / `container` / `bitRate`
-- 错误响应：解析失败时附带 `probeError` 字段描述失败原因（不抛 5xx；前端可继续播放用 `<video>` 兜底拿 metadata）
+`duration` / `width` / `height` / `codec` / `container` / `bitRate` 仅在 ffprobe 可用时填；解析失败时附 `probeError`（不抛 5xx，前端用 `<video>` 兜底）。
 
-性能：ffprobe 只读容器 metadata，1GB 视频典型 50-150ms；远比让前端 `<video>` 加载整个文件再拿 metadata 快（旧版延迟到点击播放之后才能拿到）。
+### `GET /api/videos/transcode/status?path=<abs>`
+
+```json
+{ "status": "running", "progress": 0.42, "etaSec": 180, "error": "" }
+```
+
+| status | 含义 |
+|--------|------|
+| `not_needed` | 浏览器支持该编码，跳过转码 |
+| `cached` | 已转码，命中缓存 |
+| `queued` | 等待全局并发名额 |
+| `running` | 转码中 |
+| `failed` | 转码失败（详细原因在 server log） |
+| `unavailable` | ffmpeg 不可用 |
+
+### `GET /api/videos/transcode/events?path=<abs>` (SSE)
+
+```
+event: progress
+data: {"status":"running","progress":0.42,"etaSec":180}
+
+event: done
+data: {"status":"cached","progress":1.0}
+```
+
+30 秒心跳（`: ping`）防代理超时；断线后服务端 cancel 订阅。
+
+### `POST /api/videos/transcode/cancel?path=<abs>`
+
+```json
+{ "ok": true, "status": "cancelled" }
+```
+
+不跑也返 200（status 反映取消后状态）。
+
+### `GET /api/videos/transcode/cache/stats`
+
+```json
+{ "path": "<cacheDir>/video-transcode", "totalBytes": 1234567890, "fileCount": 23 }
+```
+
+### `POST /api/videos/transcode/cache/clear?maxBytes=&maxAgeDays=`
+
+```json
+{ "ok": true, "deleted": 12, "freedBytes": 1234567 }
+```
+
+任一 query 留空 = 该维度不限。
 
 ---
 
-## 阅读进度
+## 8. 阅读进度
 
 ### `GET /api/progress?path=<abs>`
 
 ```json
-{ "path": "…", "index": 12, "total": 50, "scroll": 0, "updated": "2026-08-15T12:34:56Z" }
+{ "path": "...", "index": 12, "total": 50, "scroll": 0, "updated": "2026-08-15T12:34:56Z" }
 ```
 
-无记录时返回 404。
+无记录返 404。
 
 ### `POST /api/progress`
 
 ```json
-{ "path": "…", "index": 12, "total": 50, "scroll": 0 }
+{ "path": "...", "index": 12, "total": 50, "scroll": 0 }
 ```
 
-幂等 upsert。
+幂等 upsert。前端 1.5s debounce 自动写。
 
 ---
 
-## 偏好与历史
+## 9. 偏好与历史
 
 ### `GET /api/prefs`
 
 ```json
 {
-  "favorites": ["/path1", "/path2"],
+  "favorites": ["/path1"],
   "history": [{ "path": "/x", "name": "X", "imageCount": 5, "openedAt": "..." }],
   "maxRecent": 10,
   "autoSwitchAlbum": true,
@@ -277,28 +418,19 @@ ETag 协商：客户端带 `If-None-Match: <etag>` 命中时返回 `304 Not Modi
 
 ### `PATCH /api/prefs`
 
-只覆盖传入的字段。Body 示例：
-```json
-{ "theme": "dark", "autoSwitchAlbum": false }
-```
+只覆盖传入字段。body 示例：`{ "theme": "dark", "autoSwitchAlbum": false }`
 
 ---
 
-## 收藏
-
-### `GET /api/favorites`
-
-```json
-{ "favorites": ["/path1", "/path2"] }
-```
+## 10. 收藏
 
 ### `POST /api/favorites`
 
 ```json
-{ "path": "/path/to/album" }
+{ "path": "/path/to/album" }   // 也支持 smart:<tag>
 ```
 
-幂等添加。返回最新的收藏列表。`path` 也支持 `smart:<tag>` 形式。
+幂等添加，返最新收藏列表。
 
 ### `DELETE /api/favorites`
 
@@ -310,11 +442,15 @@ ETag 协商：客户端带 `If-None-Match: <etag>` 命中时返回 `304 Not Modi
 
 ### `POST /api/favorites/prune`
 
-移除磁盘上已不存在的收藏。返回 `{ "removed": ["..."] }`。
+移除磁盘上已不存在的收藏：
+
+```json
+{ "removed": ["..."] }
+```
 
 ---
 
-## 最近访问
+## 11. 最近访问
 
 ### `GET /api/history`
 
@@ -324,121 +460,72 @@ ETag 协商：客户端带 `If-None-Match: <etag>` 命中时返回 `304 Not Modi
 { "path": "/x", "name": "X", "imageCount": 5 }
 ```
 
-按 LRU 去重，最多 10 条（受 `maxRecent` 配置）。
+LRU 去重，最多 `maxRecent` 条（默认 10）。
 
 ### `DELETE /api/history`
 
-清空历史。
+清空。
 
 ---
 
-## 系统集成
+## 12. 系统集成
 
 ### `GET /api/fs/open?path=<abs>`
 
-在系统文件管理器中打开指定路径（Windows 资源管理器/macOS Finder/Linux xdg-open）。
+在系统资源管理器打开（Windows 资源管理器 / macOS Finder / Linux `xdg-open`）。
 
-- 仅当配置 `allowOsOpen=true` 时启用（默认关闭）。
-- 路径必须在任一 `mediaRoots` 之下（防越权）。
-- 403：`allowOsOpen` 禁用；400：路径越权。
+- 仅当 `allowOsOpen=true`（默认 `false`）
+- 路径必须在 `mediaRoots` 之下
+- 403：未启用；400：越权
 
 ---
 
-## 错误码
+## 13. 错误码
 
 | 码 | 含义 |
 |----|------|
-| 400 | 参数缺失/路径越权 |
+| 400 | 参数缺失 / 路径越权 |
 | 403 | 功能未启用（`allowOsOpen`） |
-| 404 | 文件不存在 / 扫描结果不存在 / 智能合集不存在 / **视频封面未生成**（body 含 `code: "video_cover_missing"`） |
-| 413 | 上传 payload 超过限制（视频封面上传 > 5 MB） |
-| 415 | 不支持的图片格式（仅缩略图生成）/ 上传的不是合法图片 / 路径不是支持的视频格式 |
+| 404 | 文件不存在 / 扫描不存在 / 智能合集不存在 / 视频封面未生成（body 含 `code: "video_cover_missing"`） |
+| 413 | 上传 > 5 MB |
+| 415 | 格式不支持（图片格式 / 视频格式 / 上传字节不是合法图片） |
 | 500 | 服务端错误 |
 
 ---
 
-## 配置项（服务端）
+## 14. 服务端配置
 
-通过 `backend/config.yaml` 配置（默认相对后端 CWD 查找）。完整示例见 [`backend/config.example.yaml`](../backend/config.example.yaml)。
+通过 `backend/config.yaml` 配置。完整示例见 [`backend/config.example.yaml`](../backend/config.example.yaml)。
 
 ```yaml
-# 媒体根目录（数组，必填；所有路径必须存在且为目录）
-# 支持配置多个目录,所有根下的子目录都会被扫描、合并到一个全局库中。
-# 旧配置 `mediaRoot: "..."` / `comicRoot: "..."` 仍然兼容（视为单元素数组）,
-# 首次保存后会被规范化成 `mediaRoots` 数组。
+# 媒体根目录（数组，必填；旧 mediaRoot / comicRoot 兼容）
 mediaRoots:
   - "E:\\照片"
   - "F:\\漫画"
 
-# 监听地址与端口
 host: "0.0.0.0"
 port: 8080
-
-# 缩略图缓存目录（相对 CWD；未配置则在 CWD 下创建 .image-viewer/）
-cacheDir: ".image-viewer"
-
-# 缩略图尺寸
+cacheDir: ".image-viewer"     # 留空 → CWD 下 .image-viewer/
 thumbSizeW: 320
 thumbSizeH: 350
-
-# 缩略图 LRU 内存缓存项数
 thumbCacheSize: 500
-
-# 缓存保留天数
 cacheMaxAgeDays: 30
-
-# 是否允许 /api/fs/open 在服务端打开文件管理器
 allowOsOpen: false
-
-# 前端构建产物目录（不存在则跳过静态托管）
-staticDir: "dist"
+staticDir: "dist"             # 前端构建产物目录
 ```
 
-启动参数仅保留 `--config <yaml-path>`（指定非默认位置的配置文件）和 `--static-dir <dir>`（覆盖 `staticDir` 字段，便于在不同环境切换前端产物路径）。**不再支持环境变量或 --media-root / --host / --port 等覆盖。**
+**启动参数只保留** `--config <yaml>` 和 `--static-dir <dir>`。**不再支持环境变量或 CLI 覆盖**。
 
-优先级：`YAML 显式值` > `内置默认值`。
+### 网页运行时改配置
 
-### 网页端运行时配置
-
-后端在 `config.NewManager` 中持有当前配置，handler 通过 `/api/config` 读写；改动通过 PUT 写回 YAML（原子 tmp+rename）。
-
-| 字段 | GET/PUT 行为 |
-|------|-------------|
-| `mediaRoots` | 热生效：路径安全中间件和扫描器改读新根集合；旧扫描结果会清空，调用方应触发重新扫描 |
-| `cacheDir` / `thumbSizeW` / `thumbSizeH` / `thumbCacheSize` / `cacheMaxAgeDays` | 热生效：缩略图服务立即使用新参数 |
-| `allowOsOpen` | 热生效：`/api/fs/open` 立即按新值放行 / 拦截 |
-| `host` / `port` / `staticDir` | **需重启后端**（监听地址 / 端口 / 静态托管都绑定在启动期）|
-
-PUT 响应里 `requiresRestart` 列出需要重启的字段；`mediaRootsChanged` 指示根集合是否变化（是否清空了扫描缓存）。
-
-### `GET /api/config`
+`GET /api/config` 读，`PUT /api/config` 部分更新（bool 字段必须显式传）。
 
 ```json
-{
-  "mediaRoots": ["E:\\图像"],
-  "mediaRoot": "E:\\图像",
-  "host": "0.0.0.0",
-  "port": 8080,
-  "cacheDir": ".image-viewer",
-  "thumbSizeW": 320,
-  "thumbSizeH": 350,
-  "thumbCacheSize": 500,
-  "cacheMaxAgeDays": 30,
-  "allowOsOpen": false,
-  "staticDir": "dist",
-  "configPath": "C:\\path\\to\\config.yaml"
-}
-```
-
-### `PUT /api/config`
-
-请求体为部分 PATCH，未提供的字段不修改；bool 字段（如 `allowOsOpen`）必须显式传值以区分 unset / explicit false。
-
-```json
+PUT /api/config
 { "thumbSizeW": 400, "allowOsOpen": true }
 ```
 
-成功响应：
+响应：
 
 ```json
 {
@@ -449,4 +536,40 @@ PUT 响应里 `requiresRestart` 列出需要重启的字段；`mediaRootsChanged
 }
 ```
 
-校验失败时返回 400：`{ "error": "validate: invalid port 0" }`。
+| 字段 | 行为 |
+|------|------|
+| `mediaRoots` | 热生效：路径安全 + 扫描器改读新根，旧扫描结果清空 |
+| `cacheDir` / `thumbSize*` / `thumbCacheSize` / `cacheMaxAgeDays` / `ffmpegPath` | 热生效 |
+| `allowOsOpen` | 热生效：`/api/fs/open` 立即按新值放行 |
+| `host` / `port` / `staticDir` | **需重启**（监听 / 静态托管启动期绑定） |
+| `mediaRootsChanged` | 提示本次是否清空了扫描缓存 |
+| `requiresRestart` | 列出需重启的字段 |
+
+校验失败 → 400：`{ "error": "validate: invalid port 0" }`。
+
+---
+
+## 15. curl 一把梭
+
+```bash
+# 健康
+curl -s http://localhost:8080/api/health | jq
+
+# 异步扫描
+SCAN=$(curl -sX POST http://localhost:8080/api/scan/start | jq -r .scanId)
+
+# 订阅进度（带过滤）
+curl -N http://localhost:8080/api/scan/$SCAN/events
+
+# 拉详情
+curl -s "http://localhost:8080/api/folders?path=$(python -c 'import urllib.parse;print(urllib.parse.quote("E:\\图像\\[作者A]\\卷01"))')" | jq
+
+# 缩略图
+curl -so /tmp/thumb.jpg "http://localhost:8080/api/thumbs?path=$(...)"
+
+# 视频元数据
+curl -s "http://localhost:8080/api/videos/info?path=$(...)" | jq
+
+# 收藏
+curl -sX POST http://localhost:8080/api/favorites -H "Content-Type: application/json" -d '{"path":"/path"}'
+```

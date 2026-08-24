@@ -1,222 +1,256 @@
-# 图像浏览器 / Viewer
+# Viewer · 图像浏览器
 
-> 通用本地图像浏览器 · 浏览即开即看
+> 本地图像 / 视频浏览器。Go + React，单二进制单端口，离线可用。
 
-一个轻量的 Web 应用：扫描本地图像目录、生成缩略图、提供 HTTP API；前端用现代浏览器即可访问和浏览。
-漫画 / 同人志只是其中一个使用场景，应用本身对图像类型与目录结构保持中性。
-
----
-
-## 特性
-
-- 🌐 **纯浏览器访问** — 无需安装桌面客户端
-- 🔄 **异步扫描** — SSE 实时进度推送，支持取消
-- 🖼️ **缩略图缓存** — 磁盘缓存 + LRU，断网复用
-- 🎞️ **视频支持** — 浏览器原生 `<video>` 播放 + 抽帧首帧做封面（不依赖 ffmpeg）
-- 🌗 **明暗双主题 + 6 套强调色** — 跟随系统或手动切换；graphite / indigo / rose / forest / ochre / plum
-- 🏷️ **标签页 / 智能合集** — `/tags/<标签名>` 一级路由，封面轮播 + 统计 + 收藏
-- ⌨️ **完整快捷键** — Ctrl/方向键/F11 等桌面级操作；`?` 唤起可搜索帮助浮层
-- 🪟 **三种显示模式** — 单张、连续滚动、双张并排（左右方向可切换）
-- 🖼️ **四种图片适配** — 适应 / 按宽 / 按高 / 原始，按 `F` 循环
-- 🎬 **幻灯片模式** — 自动翻页
-- ⭐ **收藏 / 最近** — 跨设备持久化
-- 🎨 **极简设计语言** — 米白 / 炭灰双底色，无衬线大标题 + 几何图标
-- 📦 **单二进制部署** — Go 后端，无运行时依赖
+指一下硬盘上的文件夹，按 `R` 随机翻一卷，hover 看大图，按 `?` 翻出所有快捷键。
+剩下的，让它自己跑。
 
 ---
 
-## 🚀 快速开始
+## TL;DR
 
-### 1. 准备图像根目录
+- **零客户端**：浏览器即用，无桌面安装
+- **多根目录**：`mediaRoots[]` 数组，所有根下的子目录合并成一个全局库
+- **三态标签**：`[xxx]` 从目录名自动提取 → 智能合集
+- **视频管线**：ffmpeg 抽帧 / ffprobe 元数据 / faststart 修 moov / **冷门编码自动转 H.264+AAC**
+- **缩略图**：LRU + 磁盘双层缓存，mtime 失效
+- **查看器**：单张 / 连续滚动 / 双张并排（支持 RTL），4 套 fit
+- **主题**：light / dark / system + 6 套强调色
+- **跨设备持久化**：收藏、最近、阅读进度、设置走服务端 JSON
+- **单二进制部署**：Go 后端托管前端静态资源，一个端口一把梭
 
-任意位置均可，例如 `E:\帕鲁 Mod\归档\二次元`、`~/Pictures`。
-目录结构无要求：可以是子目录各自装一组图片（每组一个"文件夹"），也可以是松散的散图。
+---
 
-### 2. 配置后端
+## 能力清单
+
+### 库与扫描
+- 多个媒体根目录并入一个全局库
+- 异步扫描 + SSE 实时进度，可取消
+- worker pool（`min(8, NumCPU)`），大库不卡
+- 扫描结果内存缓存，`/api/scan/latest` 立即返回
+
+### 缩略图
+- LRU（默认 500 项）+ 磁盘双层缓存
+- mtime 失效：源文件改了，缓存自动重生成
+- 视频封面：服务端 ffmpeg `-ss` before `-i` 抽帧，浏览器零内存负担
+- HEIC/HEIF 直出（Safari 16+ 原生解码）
+
+### 视频
+- 原生 `<video>` 播放，Range / ETag 协商
+- ffprobe 元数据，列表卡片渲染时就有时长/分辨率/码率
+- faststart：自动 remux，moov 跑到 mdat 前面，"0:00 卡死"问题自动消失
+- **自动转码**：AV1 / HEVC / ProRes / 未知编码 → H.264 + AAC 喂给浏览器
+- 冷门编码转码状态可在列表卡片上看到（转码中 X% / 已缓存 / 转码失败）
+- 转码 singleflight 去重 + 全局并发限流 + 可取消
+
+### 查看器
+- 3 种显示模式：单张 / 连续滚动 / 双张并排
+- 4 种图片适配：适应 / 按宽 / 按高 / 原始（按 `F` 循环）
+- 缩放 / 旋转 / 90° 翻转 / 全屏
+- 跳到指定页（`G` + 页码），底部页码滑块拖拽时浮出 5 张缩略图条
+- 幻灯片自动播放
+
+### 视频播放器
+- 原生 `<video controls>` + 增强快捷键
+- `Space/K` 播放暂停，`←/→` 跳 5 秒，`↑/↓` 音量 ±10%，`M` 静音
+- 视频元数据（时长 / 尺寸 / 编码 / 码率）随列表渲染，无需等加载
+
+### 主题与外观
+- light / dark / system 三态
+- 6 套强调色：graphite / indigo / rose / forest / ochre / plum
+- CSS 变量驱动，主题切换一次 reflow 不重渲组件树
+
+### 导航与搜索
+- 主页：年份时间线（海报式 4:5 卡）+ 全库网格
+- 悬停预览：240×300 放大卡，含进度条 / 上次阅读 / 张数
+- 全局搜索（`/` 聚焦）模糊匹配 name / 标签
+- 年份筛选、视图切换（grid / list）、三种排序（名称 / 张数 / 最近）
+- 随机一本（`R` / 侧边栏"随机"按钮）
+- `N` / `P` 跨卷翻页
+
+### 持久化
+- 收藏：跨设备，`POST /api/favorites` 幂等
+- 最近：LRU，去重，最多 10 条
+- 阅读进度：单张 / 双张 / 连续模式都跟踪
+- 偏好：原子写（tmp + rename），崩溃不丢
+
+### 路径安全
+- 所有 `?path=` 走 `path_safety` 中间件
+- 必须在任一 `mediaRoots` 之下
+- `smart:<tag>` 前缀单独放行（智能合集查询）
+- 越权一律 400
+
+---
+
+## 30 秒上手
 
 ```bash
+# 1. 拉代码
+git clone <repo> && cd comic-reader
+
+# 2. 写一份配置（任意本地媒体根目录）
 cd backend
 cp config.example.yaml config.yaml
-# 编辑 config.yaml，至少设置 mediaRoots（数组，支持多个目录）
+# 编辑 config.yaml，至少把 mediaRoots 改成你机器上的路径
+
+# 3. 装前端依赖
+cd ../frontend && npm install
+
+# 4. 跑起来
+# 后端
+cd ../backend && go run ./cmd/server      # 默认 :8080
+# 前端（开发模式，HMR）
+cd ../frontend && npm run dev              # 默认 :5173，反向代理到 :8080
 ```
 
-后端从 `./config.yaml`（相对启动 CWD）加载配置；不存在则用内置默认值。未配置 `cacheDir` 时自动在 CWD 下创建 `.image-viewer/`。
+打开 `http://localhost:5173`，`Ctrl+S` 扫描，按 `R` 随机翻一卷。
 
-> 配置项 `mediaRoots` 是权威字段（数组）。旧名 `mediaRoot` / `comicRoot`（单数）仍可识别，视为单元素数组。`/api/health` 同时返回 `mediaRoots`（数组）和 `mediaRoot`（首元素），便于排查。多根扫描结果会合并到一个全局库，每个相册/集合带 `sourceRoot` / `sourceName` 标识来源，UI 卡片显示「来自 XXX」badge。
+> 全栈开发首选 VSCode → 运行和调试 → **"全栈: 后端 + 前端 (复合)"**。详见 `.vscode/launch.json`。
 
-### 3. 启动后端
-
-```bash
-go run ./cmd/server
-```
-
-后端默认监听 `http://localhost:8080`，健康检查 `http://localhost:8080/api/health`。
-
-可选 flag：
-
-- `--config <path>`：指向其他位置的 YAML 配置文件
-- `--static-dir <dir>`：覆盖 `staticDir` 字段（生产部署前端产物路径）
-
-**不再支持环境变量或 `--media-root` 等覆盖**，所有运行时配置集中在 `config.yaml`。
-
-### 4. 启动前端（开发模式）
+### 生产部署
 
 ```bash
-cd ../frontend
-npm install
-npm run dev
-```
-
-打开浏览器访问 `http://localhost:5173`。
-
-### 5. 生产部署（单端口）
-
-```bash
-cd frontend && npm run build      # 产物在 frontend/dist
+cd frontend && npm run build              # 产物在 frontend/dist
 cd ../backend && go build -o ../bin/server ./cmd/server
-# 在 backend/config.yaml 中设置 mediaRoots 指向图像根目录（支持多个）
-./bin/server
+./bin/server                              # 单端口同时托管 API + 静态资源
 ```
 
-后端在同一端口（默认 8080）同时提供 API 与前端静态资源。
-
 ---
 
-## ⚙️ 配置
+## 配置
 
-图像根目录与所有运行时参数集中在 [`backend/config.yaml`](./backend/config.example.yaml)：
+所有运行时参数集中在 `backend/config.yaml`（默认相对后端 CWD 查找）。完整字段见 [`backend/config.example.yaml`](./backend/config.example.yaml)。
 
-| 来源 | 示例 |
+| 字段 | 说明 |
 |------|------|
-| YAML 配置文件 | `backend/config.yaml` 字段 `mediaRoots` 等 |
-| 内置默认值 | `./images`（相对后端 CWD），缓存目录 `<CWD>/.image-viewer/` |
-| 网页设置页 | `/settings` → 「服务端」section；改动自动写回 YAML（部分字段需重启） |
+| `mediaRoots` | 媒体根目录数组，必填。旧名 `mediaRoot` / `comicRoot` 兼容 |
+| `host` / `port` | 监听地址 / 端口 |
+| `cacheDir` | 缩略图 / 视频缓存根目录，未配置时自动 `./.image-viewer/` |
+| `thumbSizeW` / `thumbSizeH` | 缩略图尺寸 |
+| `thumbCacheSize` | LRU 内存缓存项数 |
+| `cacheMaxAgeDays` | 磁盘缓存保留天数 |
+| `ffmpegPath` | ffmpeg / ffprobe 路径，留空则自动探测 `bin/ffmpeg/<os>/<arch>/` |
+| `allowOsOpen` | 是否允许 `/api/fs/open` 在系统资源管理器里打开 |
+| `staticDir` | 前端构建产物目录（生产单端口托管用） |
 
-完整字段见 [`backend/config.example.yaml`](./backend/config.example.yaml)。
-HTTP 接口详见 [`docs/API.md`](./docs/API.md) 中「配置项（服务端）」一节。
+启动参数只保留 `--config <yaml>` 和 `--static-dir <dir>`。**不再支持环境变量或 CLI 覆盖**。
+配置项可在网页 `/settings` → 「服务端」里改，部分字段热生效（见 [`docs/API.md`](./docs/API.md)「配置项」一节）。
 
 ---
 
-## 🛠 开发
+## ffmpeg · 可选但强烈推荐
+
+视频元数据、抽帧封面、faststart 修 moov、自动转码，全部依赖 `ffmpeg` / `ffprobe`。
+**没有 ffmpeg 也能用**——只是视频封面/元数据会回退到浏览器抽帧，冷门编码视频播不了。
+
+仓库自带绿色安装脚本（不动 `PATH`、不需管理员）：
+
+```powershell
+# Windows PowerShell：默认从 gyan.dev 拉 ffmpeg-release-essentials.zip
+pwsh -File scripts/install-ffmpeg.ps1
+
+# 强制重装
+pwsh -File scripts/install-ffmpeg.ps1 -Force
+
+# 换源 / 自定义安装目录
+pwsh -File scripts/install-ffmpeg.ps1 -Url <zip-url> -TargetDir D:\tools\ffmpeg
+```
+
+默认安装到 `bin/ffmpeg/windows/amd64/`，后端启动时自动探测，**不用改配置**。脚本幂等，缺啥装啥。
+macOS / Linux 走 `bin/ffmpeg/<os>/<arch>/` 同形目录，安装脚本后续补。
+
+### 没有 ffmpeg 会怎样
+
+| 能力 | 有 ffmpeg | 无 ffmpeg |
+|------|-----------|-----------|
+| 缩略图（图片） | ✅ | ✅ |
+| 视频封面 | ffmpeg 抽帧，~339ms | 浏览器抽帧，30+ 秒，400MB+ 内存 |
+| 视频元数据 | ffprobe，~100ms | 等 `<video>` 加载完，秒级延迟 |
+| 视频播放 | ✅ | ✅ |
+| 冷门编码（AV1/HEVC/ProRes）| 自动转 H.264+AAC | 浏览器播不了就播不了 |
+| Faststart（moov 在末尾的 MP4）| 自动 remux | 浏览器可能 0:00 卡死 |
+
+---
+
+## 项目结构
+
+```
+comic-reader/
+├── backend/                # Go + Fiber
+│   ├── cmd/server/         # 入口（flag + YAML 配置装配 + 服务装配）
+│   ├── internal/
+│   │   ├── config/         # YAML 加载 + 校验 + 热更新
+│   │   ├── models/         # 领域模型（Album / Collection / SmartCollection / Prefs）
+│   │   ├── services/       # 业务（scanner / thumbnail / scan_runner / video_*）
+│   │   ├── store/          # JSON 偏好持久化（原子写）
+│   │   ├── handlers/       # Fiber 路由处理
+│   │   └── middleware/     # logger / recover / path_safety
+│   └── tests/integration/  # 端到端 HTTP 测试
+├── frontend/               # React 18 + Vite + TypeScript
+│   └── src/
+│       ├── api/            # fetch + SSE 封装，端点模块
+│       ├── hooks/          # useKeyboard / useScanSSE / useTheme / useFavorites…
+│       ├── store/          # zustand（ui / library / viewer / search）
+│       ├── routes/         # Home / Album / Author / Viewer / Recents / Favorites / Settings
+│       ├── components/     # album / viewer / layout / home / common
+│       └── utils/          # shortcuts / path / storage / format / albumGrouping
+├── docs/                   # 架构 / API / 快捷键 / 全功能清单
+├── scripts/                # dev / build / test / install-ffmpeg
+└── .vscode/                # launch / tasks / settings / extensions
+```
+
+---
+
+## 文档导航
+
+| 文档 | 看什么 |
+|------|--------|
+| [README.md](./README.md) | 30 秒上手、能力清单、配置 |
+| [docs/FEATURES.md](./docs/FEATURES.md) | 全功能清单（按域分组，每项指向代码位置） |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统设计、模块划分、数据流、性能 |
+| [docs/API.md](./docs/API.md) | HTTP 接口手册 |
+| [docs/SHORTCUTS.md](./docs/SHORTCUTS.md) | 快捷键全集（含视频播放器） |
+
+`?` 在应用里随时唤起可搜索的帮助浮层。
+
+---
+
+## 开发
 
 | 操作 | 命令 |
 |------|------|
 | 启动后端 | `cd backend && go run ./cmd/server` |
 | 启动前端 | `cd frontend && npm run dev` |
 | 后端测试 | `cd backend && go test ./...` |
-| 前端构建 | `cd frontend && npm run build` |
+| 前端单测 | `cd frontend && npm run test` |
 | 集成测试 | `cd backend && go test ./tests/integration -v` |
-| 一键启动 | VSCode → 运行和调试 → 选择 "全栈: 后端 + 前端 (复合)" |
+| e2e | `cd frontend && npm run test:e2e` 或 `scripts/test-e2e.ps1` |
+| 全栈启动 | VSCode → "全栈: 后端 + 前端 (复合)" |
+| 全栈构建 | `scripts/build.ps1` 或 VSCode 任务 `build: all` |
 
-VSCode 调试配置见 `.vscode/launch.json`，包含 4 个调试入口 + 1 个复合调试。
-
----
-
-## 📁 项目结构
-
-```
-.
-├── backend/           # Go + Fiber 服务
-├── frontend/          # React + Vite + TypeScript
-├── docs/              # 架构、API、快捷键文档
-├── scripts/           # dev/build/test 脚本
-└── .vscode/           # VSCode 配置
-```
-
-详细结构见 [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)。
+**改动业务逻辑必须同步改测试**——后端 handler / service / middleware → `go test`；前端组件 / hook / store → Vitest；跨层主链路 → integration / e2e。
 
 ---
 
-## 🧩 可选依赖: ffmpeg
+## 不做什么
 
-> **v2 起后端已直接调用 ffmpeg/ffprobe**。视频封面由服务端 `ffmpeg` 抽帧(seek 到 duration×10%,夹到 1~3s),元数据(duration/width/height/codec)由 `ffprobe` 解析。浏览器端抽帧仍然保留为降级路径,详见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) 「视频封面流程」一节。
-
-性能对比(380MB / 176s / 1280×720 H.264 实测):
-
-| 方案 | 首次抽帧 | 缓存命中 | 客户端内存 |
-|------|----------|----------|-----------|
-| 浏览器抽帧(v1) | 30+ 秒(下载整段) | < 50ms | 400MB+ 峰值 |
-| 服务端 ffmpeg(v2) | **339ms** | **< 1ms** | 0 额外内存 |
-
-ffmpeg 不在时自动回退到 v1 浏览器抽帧,功能不丢失。
-
-本仓库提供一个**绿色安装脚本**,把 `ffmpeg` / `ffprobe` / `ffplay` 放在项目内,便于集成(默认安装到 `bin/ffmpeg/windows/amd64/`,后端会**自动探测**这个位置,无需改 config):
-
-```bash
-# Windows PowerShell(默认从 gyan.dev 拉 ffmpeg-release-essentials.zip,约 100MB)
-pwsh -File scripts/install-ffmpeg.ps1
-
-# 强制重装
-pwsh -File scripts/install-ffmpeg.ps1 -Force
-
-# 换源
-pwsh -File scripts/install-ffmpeg.ps1 -Url https://example.com/your.zip
-
-# 自定义安装目录
-pwsh -File scripts/install-ffmpeg.ps1 -TargetDir D:\tools\ffmpeg
-```
-
-**安装路径约定**(默认情况):
-
-```
-bin/ffmpeg/windows/amd64/
-├── ffmpeg.exe
-├── ffprobe.exe
-└── ffplay.exe
-```
-
-- 整个 `bin/` 目录已在 `.gitignore` 中被忽略,二进制不入仓,clone 仓库后跑一次脚本即可就位。
-- 脚本**幂等**:已安装且 `ffmpeg -version` 可用会直接跳过。
-- 脚本**不需要管理员权限**,不写系统目录、不修改 `PATH`。
-- 当前仅内置 Windows x64 流程;macOS / Linux 路径结构同形(`bin/ffmpeg/darwin/amd64/` 等),后续按需补 `scripts/install-ffmpeg.sh`。
-
-
-```
-.
-├── backend/                     # Go + Fiber 服务
-│   ├── cmd/server/main.go       # 入口（flag/env/file 配置装配）
-│   ├── internal/                # config / models / services / store / handlers / middleware
-│   └── tests/integration/       # 端到端 HTTP 测试
-├── frontend/                    # React 18 + Vite + TypeScript
-│   └── src/                     # api/ hooks/ store/ routes/ components/ utils/
-├── docs/                        # 架构、API、快捷键文档
-├── scripts/                     # dev/build/test 脚本
-└── .vscode/                     # VSCode 配置（launch/tasks/extensions）
-```
+诚实声明：
+- ❌ 不维护 CI / Release workflow（手动 release）
+- ❌ 不存数据库（偏好走服务端 JSON 原子写）
+- ❌ 不引入微服务 / 消息队列
+- ❌ 不做用户系统（单用户本地工具）
+- ❌ 不支持在线分享 / 协作
+- ❌ 不解析 ZIP / RAR 漫画包（只读目录）
 
 ---
 
-## ⌨️ 快捷键
-
-完整快捷键列表见 [docs/SHORTCUTS.md](./docs/SHORTCUTS.md)。
-
-常用快捷键：
-
-| 快捷键 | 功能 |
-|--------|------|
-| `Ctrl+O` | 打开/切换图像目录 |
-| `Ctrl+S` | 启动扫描 |
-| `F5` | 刷新 |
-| `Ctrl+H` | 回到主页 |
-| `Ctrl+D` | 我的收藏 |
-| `←/→` / `PageUp/PageDown` | 翻页（连续模式为滚一屏） |
-| `G` | 跳到指定页 |
-| `N` / `P` | 上一本 / 下一本（按当前列表） |
-| `S` | 收藏 / 取消收藏 |
-| 点击图片 | 左/右 1/3 翻页（中段不响应） |
-| `1` / `2` / `3` | 单张 / 连续滚动 / 双张并排 |
-| `F` | 图片适配循环（适应 → 按宽 → 按高 → 原始） |
-| `L` | 翻页方向（LTR / RTL，仅双张并排模式） |
-| `+/-/0` | 缩放 |
-| `R` | 旋转 |
-| `Space` | 幻灯片 |
-| `F11` | 全屏 |
-| `?` / `Ctrl+/` | 快捷键帮助 |
-
-完整列表见 [`docs/SHORTCUTS.md`](docs/SHORTCUTS.md)。
-
----
-
-## 📜 许可
+## 许可
 
 仅供个人学习和非商业用途。
+
+---
+
+```
+$ cat .signature
+Mavis · Comic Reader · viewer
+```
