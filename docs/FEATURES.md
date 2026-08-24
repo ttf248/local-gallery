@@ -184,6 +184,8 @@
 | 排序 | 名称 / 张数 / 最近 | `store/searchStore.ts` `sortBy` |
 | 排序 + 视图 + 计数 | 三件套统一在 `ListFilterBar` 顶部 | `components/common/ListFilterBar.tsx` |
 | 全局搜索 | `Ctrl+P` 或 `/` 聚焦，模糊匹配 name / 标签 | `components/common/GlobalSearch.tsx` |
+| 排序：按最近看 | 用 `history.openedAt` 而非文件 mtime 排序（区别于"最近改"） | `routes/Home.tsx` + `searchStore` |
+| 全局最小图数 filter | 隐藏图数 < N 的杂物相册（0 = 不过滤） | `components/common/ListFilterBar.tsx` `MinImageFilter` |
 | 侧边栏 | 主页 / 最近 / 收藏 / 设置 + 随机一本按钮 | `components/layout/Sidebar.tsx` |
 | 折叠侧边栏 | `Ctrl+B` 切换 | `Sidebar.tsx` |
 | 随机一本 | `R` / 侧边栏按钮 → 在 `result.albums` 随机抽一个 | `Sidebar.tsx` `onShuffle` |
@@ -211,6 +213,8 @@
 | 最近访问 | `POST /api/history` LRU 去重，最多 `maxRecent` 条（默认 10） | `handlers/prefs.go` |
 | 清空历史 | `DELETE /api/history` | `handlers/prefs.go` |
 | **未读列表** | `GET /unread` 显示还没翻开过的相册,带计数 badge + 随机未读 | `frontend/src/hooks/useUnreadAlbums.ts` + `routes/Unread.tsx` |
+| **继续阅读 hero** | Home 顶部「N 本还没看完」区块,点卡直跳画廊(不经 Album 详情) | `routes/Home.tsx` `ContinueReadingHero` |
+| **未读 hero** | Home 顶部「还有 N 本没看」区块 + 随机未读按钮 | `routes/Home.tsx` `UnreadHero` |
 | 阅读进度 | `POST /api/progress` 幂等 upsert | `handlers/progress.go` |
 | 单条进度 | `GET /api/progress?path=...` | `handlers/progress.go` |
 | 进度自动上报 | 画廊每 1.5 秒 debounce 写一次 | `frontend/src/hooks/useReadingProgress.ts` |
