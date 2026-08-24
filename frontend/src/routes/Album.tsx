@@ -10,6 +10,8 @@ import { thumbUrl } from '../api/thumbs'
 import { useUIStore } from '../store/uiStore'
 import type { CardData } from '../components/album/AlbumGrid'
 import AlbumGrid from '../components/album/AlbumGrid'
+import YearTimeline from '../components/home/YearTimeline'
+import { groupAlbumsAndCollectionsByYear } from '../utils/albumGrouping'
 import EmptyState from '../components/common/EmptyState'
 import { albumsApi } from '../api/albums'
 import type { ScanResult } from '../api/scan'
@@ -30,6 +32,7 @@ import {
   ArrowUpRightIcon,
   ArrowRightLineIcon,
   InfoIcon,
+  CalendarIcon,
 } from '../components/common/Icon'
 import { useReadingProgress } from '../hooks/useReadingProgress'
 import { useAlbumActions } from '../hooks/useAlbumActions'
@@ -808,6 +811,15 @@ function CollectionView({
 
   const cards = filtered
 
+  // 子集合页时间线:对当前集合下的子 album/子 collection 重新分桶,跟首页
+  // 视觉一致(顶部 YearTimeline + 下方网格)。smartCollection 不分时间,
+  // 因为智能合集是"主题"不是"时间"。
+  const yearGroups = useMemo(() => {
+    if (isSmart) return []
+    const c = detail as CollectionDetail
+    return groupAlbumsAndCollectionsByYear(c.albums ?? [], c.collections ?? [])
+  }, [detail, isSmart])
+
   // 集合/智能合集页面作为上下文源
   const collEntries = useMemo<GalleryContextEntry[]>(
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
@@ -872,6 +884,25 @@ function CollectionView({
         </div>
       </div>
       <div className="flex-1 overflow-auto">
+        {/* 时间线只在 ≥2 个年份桶时才有意义:
+            - 大多数子集合(如 2023年、B站、散图)子相册基本不带 4 位年份,
+              全部进「其他」桶,1 张大年卡独享一整行,视觉比例严重失衡。
+            - 只有用户刻意把子相册命名成「2024国庆」之类,时间线才能
+              真正按年分组,这时显示时间线才有用。 */}
+        {yearGroups.length >= 2 && (
+          <div className="py-6">
+            <div className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full flex items-center gap-3 mb-4">
+              <CalendarIcon size={13} className="text-fg-muted" />
+              <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
+                时间线
+              </h2>
+              <span className="text-[11.5px] text-fg-subtle">
+                按年份浏览 — 当前集合下的子相册/子集合
+              </span>
+            </div>
+            <YearTimeline groups={yearGroups} />
+          </div>
+        )}
         {cards.length === 0 ? (
           <EmptyState title="无匹配结果" description="试试修改搜索条件或排序。" />
         ) : (

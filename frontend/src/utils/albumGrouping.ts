@@ -44,7 +44,34 @@ export function extractYear(name: string): number | null {
   return y
 }
 
-function cardForAlbum(a: ScanResult['albums'][number]): {
+// 专辑摘要(轻量):Album 详情页里 CollectionDetail.albums 已经被 mapAlbum 截过,
+// 缺 displayName/sourceRoot/sourceName 字段,这里提供一个兼容版,让 groupByYear
+// 在子集合页也能复用同一份桶逻辑。ScanResult['albums'] 是它的超集,直接传入也行。
+type AlbumLike = {
+  path: string
+  name: string
+  imageCount: number
+  videoCount?: number
+  coverImage: string
+  coverKind?: 'image' | 'video'
+  author?: string
+  displayName?: string
+  sourceRoot?: string
+  sourceName?: string
+}
+
+type CollectionLike = {
+  path: string
+  name: string
+  albumCount: number
+  albums?: AlbumLike[]
+  collections?: CollectionLike[]
+  displayName?: string
+  sourceRoot?: string
+  sourceName?: string
+}
+
+function cardForAlbumLike(a: AlbumLike): {
   card: CardData
   images: number
   videos: number
@@ -70,7 +97,7 @@ function cardForAlbum(a: ScanResult['albums'][number]): {
   }
 }
 
-function cardForCollection(c: ScanResult['collections'][number]): {
+function cardForCollection(c: CollectionLike): {
   card: CardData
   images: number
   videos: number
@@ -78,7 +105,7 @@ function cardForCollection(c: ScanResult['collections'][number]): {
   // 递归计算子相册的图片/视频总数,处理嵌套 Collection(深层的 Albums
   // 也算到本 Collection 头上,这样年卡显示的总数和实际下钻后能看到的
   // 一致)。
-  const collect = (c: ScanResult['collections'][number]): { images: number; videos: number } => {
+  const collect = (c: CollectionLike): { images: number; videos: number } => {
     let images = 0
     let videos = 0
     for (const a of c.albums ?? []) {
@@ -113,6 +140,20 @@ function cardForCollection(c: ScanResult['collections'][number]): {
 
 export function groupByYear(result: ScanResult | null): YearGroup[] {
   if (!result) return []
+  return groupAlbumsAndCollectionsByYear(result.albums, result.collections)
+}
+
+// 子集合页（Album.tsx CollectionView）只需要对"当前集合下的子相册/子集合"重新分桶,
+// 但 ScanResult 已经被外层包了一层。直接给一个轻量入口,避免在子页面里硬塞个伪造的
+// ScanResult。
+//
+// albums / collections 都用 *Like 是为了兼容 Album.tsx 里 CollectionDetail
+// （被 mapAlbum/mapColl 截过,缺 displayName/sourceRoot/sourceName 等字段）;
+// ScanResult['albums'] / ScanResult['collections'] 是它们的超集,直接传入也行。
+export function groupAlbumsAndCollectionsByYear(
+  albums: AlbumLike[],
+  collections?: CollectionLike[],
+): YearGroup[] {
   const groups = new Map<number, YearGroup>()
 
   // 关键:Collection 下的所有子相册都按 Collection 的年份归桶。
@@ -139,16 +180,16 @@ export function groupByYear(result: ScanResult | null): YearGroup[] {
     g.totalFiles += images + videos
   }
 
-  for (const a of result.albums) {
+  for (const a of albums) {
     // 跳过「散图」虚拟相册(扫描器在 Collection 有顶层文件+子目录时
     // 插入的虚拟相册,Path 以 /.loose 或 \\.loose 结尾)。它的图数已经
     // 算在所属 Collection 的 imageTotal 里,不应该再独立出现在年份桶
     // 里(否则主页会显示两个 2024年 入口)。
     if (/\.loose(?:$|[\\/])/.test(a.path)) continue
-    const { card, images, videos } = cardForAlbum(a)
+    const { card, images, videos } = cardForAlbumLike(a)
     add(a.name, card, images, videos)
   }
-  for (const c of result.collections ?? []) {
+  for (const c of collections ?? []) {
     const { card, images, videos } = cardForCollection(c)
     add(c.name, card, images, videos)
   }

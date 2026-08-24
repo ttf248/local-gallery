@@ -96,7 +96,7 @@ export default function AlbumGrid({ items, empty, variant = 'grid', showLastSeen
       <div
         className="px-6 lg:px-10 pt-2 pb-10
           grid gap-x-5 gap-y-7
-          grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+          grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
       >
         {items.map(renderCard)}
       </div>

@@ -30,6 +30,7 @@ import {
   CloseIcon,
   ImageIcon,
   SparkleIcon,
+  CalendarIcon,
   ArrowRightLineIcon,
   ReaderIcon,
   FolderIcon,
@@ -455,7 +456,7 @@ export default function Home() {
           <SectionHeader
             title="时间线"
             subtitle="按年份浏览 — 点击海报打开该年份,点右上漏斗可筛选下方网格"
-            icon={<CalendarIconGlyph />}
+            icon={<CalendarIcon size={13} />}
           />
           <YearTimeline groups={yearGroups} gridRef={gridRef} />
         </div>
@@ -709,26 +710,6 @@ function SectionHeader({
         <span className="text-[11.5px] text-fg-subtle">{subtitle}</span>
       )}
     </div>
-  )
-}
-
-// 日历图标 (用一个内联 svg,避免再 export 一遍)
-function CalendarIconGlyph() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="text-fg-muted"
-    >
-      <rect x="3" y="5" width="18" height="16" rx="2" />
-      <path d="M3 9h18M8 3v4M16 3v4" />
-    </svg>
   )
 }
 
