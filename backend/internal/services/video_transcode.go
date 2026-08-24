@@ -241,6 +241,12 @@ type TranscodeService struct {
 	mu       sync.Mutex
 	inflight map[string]*transcodeJob // absPath -> job
 	cached   map[string]struct{}      // absPath -> 已经成功缓存(避免重复 stat)
+
+	// 可用性探测缓存:Available() 跑 `ffmpeg -version` 50-200ms;
+	// Resolve / GetStatus / handler 热路径都调,旧实现每次都重跑,
+	// ffmpeg 在的情况下其实是浪费。sync.Once 锁住整个 service 生命周期。
+	availOnce sync.Once
+	avail     bool
 }
 
 type transcodeJob struct {
@@ -306,16 +312,20 @@ func NewTranscodeService(opts TranscodeOptions) *TranscodeService {
 	}
 }
 
-// Available 返回 ffmpeg 是否可用。
+// Available 返回 ffmpeg 是否可用(整个 service 生命周期只探测一次)。
+//
+// 旧实现每次调用都跑 `ffmpeg -version`(进程启动 50-200ms);
+// Resolve / GetStatus / SSE handler 都会调,改成 sync.Once 后
+// 同一个 service 实例只跑一次,OnChange 重建 service 时自动失效。
 func (s *TranscodeService) Available() bool {
 	if s == nil || s.ffmpeg == "" {
 		return false
 	}
-	cmd := exec.Command(s.ffmpeg, "-version")
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	return true
+	s.availOnce.Do(func() {
+		cmd := exec.Command(s.ffmpeg, "-version")
+		s.avail = cmd.Run() == nil
+	})
+	return s.avail
 }
 
 // Concurrency 返回当前配置的并发上限。

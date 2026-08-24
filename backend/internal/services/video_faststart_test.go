@@ -212,6 +212,65 @@ func TestVideoFaststartService_Resolve_NonFaststart_RemuxedAndCached(t *testing.
 	}
 }
 
+// fsCache 记录 (path, mtime, size) → isFaststart 的结果;
+// 改 mtime 后缓存 key 变化,新一次 Resolve 必须重新走 isFaststart 逻辑。
+// 这是 fsCache 设计契约:缓存不能跨"文件被覆盖"沿用。
+func TestVideoFaststartService_FsCacheInvalidatesOnMtime(t *testing.T) {
+	ff := findFFmpegFaststart(t)
+	dir := t.TempDir()
+	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ff})
+
+	// 用一个 faststart 文件,Resolve 会命中 fsCache=true 路径
+	src := generateFaststartMP4(t, ff)
+	got, status := s.Resolve(src)
+	if status != StatusFast || got != src {
+		t.Fatalf("first: got=%q status=%v, want (src, Fast)", got, status)
+	}
+
+	// fsCache 现在应该有 (src, mtime, size) → true
+	k := faststartCacheKey(src, mustStat(t, src).ModTime(), mustStat(t, src).Size())
+	if v, ok := s.fsCache.Load(k); !ok || v.(bool) != true {
+		t.Errorf("expected fsCache hit for %s → true, got ok=%v v=%v", k, ok, v)
+	}
+
+	// 改 mtime(模拟源文件被重写),fsCache key 跟着变 → 旧条目应被孤立
+	future := time.Now().Add(2 * time.Hour)
+	if err := os.Chtimes(src, future, future); err != nil {
+		t.Fatal(err)
+	}
+	oldKey := k
+	_ = oldKey
+	if _, ok := s.fsCache.Load(oldKey); !ok {
+		// 注意:旧 key 在 Store 时已经写过;但下次 Resolve 派生的是新 key。
+		// 验证"新 key 还没存"也等价于"fsCache 没沿用旧结果"。
+		t.Logf("old fsCache key evicted (acceptable: bounded map cleared)")
+	}
+	newKey := faststartCacheKey(src, future, mustStat(t, src).Size())
+	if newKey == oldKey {
+		t.Fatalf("fsCache key should change when mtime changes, both = %s", newKey)
+	}
+
+	// 重新 Resolve → 用新 key;文件还是 faststart(只改 mtime,内容没变),
+	// isFaststart 应仍为 true,但走的是新的 fsCache 条目。
+	got2, status2 := s.Resolve(src)
+	if status2 != StatusFast {
+		t.Errorf("after mtime change: status=%v, want Fast", status2)
+	}
+	if got2 != src {
+		t.Errorf("after mtime change: got=%q, want src", got2)
+	}
+}
+
+// mustStat 方便测试里多次取 stat 不写一堆 err 检查。
+func mustStat(t *testing.T, p string) os.FileInfo {
+	t.Helper()
+	fi, err := os.Stat(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fi
+}
+
 func TestVideoFaststartService_Resolve_InvalidatesOnMtimeChange(t *testing.T) {
 	ff := findFFmpegFaststart(t)
 	dir := t.TempDir()

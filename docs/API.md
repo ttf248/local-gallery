@@ -204,7 +204,9 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ### `GET /api/videos?path=<abs>`
 
-返回原始视频字节（支持 `Range` 请求，前端 `<video>` 拖动进度条时浏览器自动按需分段）。MIME 按扩展名：`video/mp4` / `video/webm` / `video/quicktime` / `video/x-matroska` / `video/x-msvideo`。响应头包含 `Accept-Ranges: bytes`、`Cache-Control: public, max-age=86400`。
+返回原始视频字节（支持 `Range` 请求，前端 `<video>` 拖动进度条时浏览器自动按需分段）。MIME 按扩展名：`video/mp4` / `video/webm` / `video/quicktime` / `video/x-matroska` / `video/x-msvideo`。响应头包含 `Accept-Ranges: bytes`、`Cache-Control: public, max-age=86400`、`ETag: "<mtime_ns>-<size>"`（基于实际发送文件的 mtime+size 派生，转码/重封装后是缓存文件的元数据）。
+
+ETag 协商：客户端带 `If-None-Match: <etag>` 命中时返回 `304 Not Modified`（空 body），浏览器会用本地缓存的 Range 请求重新拿到片段。
 
 非视频扩展名 → 415；视频文件不存在 → 404。
 

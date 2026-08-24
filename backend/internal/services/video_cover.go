@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/disintegration/imaging"
@@ -53,6 +54,12 @@ type VideoCoverExtractor struct {
 	// 单次 ffmpeg 调用超时(防止某次抽帧卡死)。10s 对 4K 文件也够:
 	// 4K H.264 seek 到 1~3s 抽一帧,典型 100~500ms。
 	timeout time.Duration
+
+	// 可用性探测缓存:thumbnail service 在视频封面路径上每次都查
+	// Available(),旧实现重跑 `ffmpeg -version` 50-200ms。sync.Once
+	// 锁住结果,service 实例重建时(main.go OnChange)自动失效。
+	availOnce sync.Once
+	avail     bool
 }
 
 // VideoCoverOptions 构造选项。
@@ -107,17 +114,20 @@ func NewVideoCoverExtractor(opts VideoCoverOptions) *VideoCoverExtractor {
 	}
 }
 
-// Available 返回 ffmpeg 是否可用(用 -version 探一次)。
-// 失败/不可执行时返回 false,调用方应回退到客户端流程。
+// Available 返回 ffmpeg 是否可用(整个 service 生命周期只探测一次)。
+//
+// 旧实现每次调用都跑 `ffmpeg -version`(进程启动 50-200ms);
+// thumbnail service 在每个视频封面请求路径上都调,改成 sync.Once
+// 后只探一次,extractor 重建时(ffmpeg 路径变更)自动失效。
 func (e *VideoCoverExtractor) Available() bool {
 	if e == nil || e.ffmpegPath == "" {
 		return false
 	}
-	cmd := exec.Command(e.ffmpegPath, "-version")
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	return true
+	e.availOnce.Do(func() {
+		cmd := exec.Command(e.ffmpegPath, "-version")
+		e.avail = cmd.Run() == nil
+	})
+	return e.avail
 }
 
 // FFmpegAvailableAt 静态辅助:不构造 extractor 也探测 ffmpeg 是否可用。

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -46,6 +47,12 @@ type VideoInfoService struct {
 	ffmpegPath  string
 	ffprobePath string
 	timeout     time.Duration
+
+	// 可用性探测缓存:Available() 跑 `ffprobe -version` 50-200ms;
+	// handler 热路径(VideoInfoHandler)每次都调,旧实现每次重跑。
+	// sync.Once 锁住结果,service 实例重建时(main.go OnChange)自动失效。
+	availOnce sync.Once
+	avail     bool
 }
 
 // VideoInfoOptions 构造选项。
@@ -77,16 +84,19 @@ func NewVideoInfoService(opts VideoInfoOptions) *VideoInfoService {
 	}
 }
 
-// Available 返回 ffprobe 是否可用。
+// Available 返回 ffprobe 是否可用(整个 service 生命周期只探测一次)。
+//
+// 旧实现每次调用都跑 `ffprobe -version`(50-200ms);VideoInfoHandler
+// 每个视频元数据请求都调,改 sync.Once 后只探一次。
 func (s *VideoInfoService) Available() bool {
 	if s == nil || s.ffprobePath == "" {
 		return false
 	}
-	cmd := exec.Command(s.ffprobePath, "-version")
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	return true
+	s.availOnce.Do(func() {
+		cmd := exec.Command(s.ffprobePath, "-version")
+		s.avail = cmd.Run() == nil
+	})
+	return s.avail
 }
 
 // FFprobePath 返回构造时设置的 ffprobe 路径(供日志 / 调试用)。

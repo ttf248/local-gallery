@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +64,20 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 		if servePath == path && faststart != nil {
 			servePath, _ = faststart.Resolve(path)
 		}
+
+		// 缓存协商:基于「实际发送的文件」派生 ETag(转码/重封装后是
+		// 另一个文件,不能拿原文件的 mtime+size)。命中 If-None-Match
+		// 时返回 304 + 空 body,1GB+ 视频可省下 206 的几 MB。
+		// 304 优先于 Range:浏览器会重新发不带 If-None-Match 的 Range
+		// 拿到实际片段,这是 HTTP 标准行为,主流浏览器都遵守。
+		if info, statErr := os.Stat(servePath); statErr == nil {
+			etag := videoETag(info)
+			c.Set("ETag", etag)
+			if match := c.Get("If-None-Match"); match != "" && match == etag {
+				return c.SendStatus(fiber.StatusNotModified)
+			}
+		}
+
 		c.Set("Content-Type", videoMime(servePath))
 		c.Set("Accept-Ranges", "bytes")
 		// 视频比图片大得多，缓存时间短一些（1 天）
@@ -166,4 +181,15 @@ func videoMime(path string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+// videoETag 基于「实际发送的文件」的 mtime+size 派生 ETag,带双引号
+// 符合 HTTP 规范(浏览器回传的 If-None-Match 也带双引号,字面相等
+// 才能命中)。
+//
+// 不使用内容的强哈希(没必要也不值得为 1GB+ 视频跑 sha256);
+// mtime+size 在源文件 / 转码 / 重封装结果稳定时也稳定,符合
+// 「弱 ETag」的语义。
+func videoETag(info os.FileInfo) string {
+	return fmt.Sprintf(`"%x-%x"`, info.ModTime().UnixNano(), info.Size())
 }

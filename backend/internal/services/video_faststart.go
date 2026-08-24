@@ -101,7 +101,25 @@ type VideoFaststartService struct {
 	// 状态计数器(原子);handler 端用 LastStatus() 查最近一次结果,
 	// 测试用 Stats() 拿累计计数。
 	statusCounters [5]atomic.Int64
+
+	// 可用性探测缓存:Available() 内部跑 `ffmpeg -version`,每次
+	// 进程启动 50-200ms;旧实现每个视频请求都跑一次,日志里也常见
+	// "faststart remux failed" 时 ffmpeg 没问题但又重跑探活的浪费。
+	// sync.Once 保证整个 service 生命周期只探一次。
+	availOnce sync.Once
+	avail     bool
+
+	// isFaststart() 读 8MiB 头部,重复命中同一文件(mtime+size 不变)
+	// 是同一视频多次 Range / 多用户轮询等场景的常见路径,每次都读 8MiB
+	// 不划算。key 用 path|mtime_ns|size 派生,源文件被覆盖自动失效。
+	// sync.Map 适合"写一次读多次"模式;为防大库下 map 无界增长,
+	// 超过 faststartCacheMax 时整体清空(下个请求重新读,符合冷启动语义)。
+	fsCache sync.Map
 }
+
+// faststartCacheMax fsCache 的容量上限。覆盖"用户翻一遍 4k+ 视频"是
+// 充足余量;超过时清空,而不是按 LRU 淘汰,避免引入额外锁和复杂度。
+const faststartCacheMax = 4096
 
 // FaststartOptions 构造选项。
 type FaststartOptions struct {
@@ -124,16 +142,21 @@ func NewVideoFaststartService(opts FaststartOptions) *VideoFaststartService {
 	}
 }
 
-// Available 返回 ffmpeg 是否可用。
+// Available 返回 ffmpeg 是否可用(整个 service 生命周期只探测一次)。
+//
+// 旧实现每次都跑 `ffmpeg -version`(50-200ms 进程启动 + stdout 解析);
+// Resolve() / GetStatus() / handler 热路径都会调,日志中"ffmpeg 明明在
+// 但每次都重跑探活"的成本很显眼。sync.Once 把结果锁在 service 内部,
+// service 实例重建时(main.go 的 OnChange 切换 ffmpeg 路径)自动失效。
 func (s *VideoFaststartService) Available() bool {
 	if s == nil || s.ffmpeg == "" {
 		return false
 	}
-	cmd := exec.Command(s.ffmpeg, "-version")
-	if err := cmd.Run(); err != nil {
-		return false
-	}
-	return true
+	s.availOnce.Do(func() {
+		cmd := exec.Command(s.ffmpeg, "-version")
+		s.avail = cmd.Run() == nil
+	})
+	return s.avail
 }
 
 // FFmpegPath 返回构造时设置的 ffmpeg 路径。
@@ -207,8 +230,17 @@ func (s *VideoFaststartService) Resolve(absPath string) (servePath string, statu
 
 	// 2) 原文件已是 faststart → 不写缓存(浪费一次磁盘 IO),
 	//    直接让 handler 发原文件,省一次 ffmpeg。
-	if isFaststart(absPath) {
+	//    isFaststart() 读 8MiB,这里走 fsCache 命中后 0 IO。
+	if cachedFast, ok := s.lookupFaststart(absPath, fi); ok {
+		if cachedFast {
+			return absPath, StatusFast
+		}
+		// cached false: 文件已确认非 faststart,落到 remux 分支
+	} else if isFaststart(absPath) {
+		s.storeFaststart(absPath, fi, true)
 		return absPath, StatusFast
+	} else {
+		s.storeFaststart(absPath, fi, false)
 	}
 
 	// 3) 缓存未命中 + 非 faststart → 重封装
@@ -432,3 +464,45 @@ func (s *VideoFaststartService) ClearCache() error {
 // 当前实现里 s 只读 ffmpeg/cacheDir,flight 自带并发安全,不需要额外锁。
 // 但保留方法签名以备未来加状态字段(已被废弃,只是为防止引用移除编译失败)。
 var _ = sync.Mutex{}
+
+// faststartCacheKey 派生 fsCache 的 key:path|mtime_ns|size。
+//
+// 与 faststartKey(磁盘缓存 key)独立 —— 磁盘 cache key 还要带前缀和
+// 编码参数,这里只关心"同一文件同一版本是否 faststart"。
+func faststartCacheKey(absPath string, mtime time.Time, size int64) string {
+	return fmt.Sprintf("%s|%d|%d", absPath, mtime.UnixNano(), size)
+}
+
+// lookupFaststart 查询 fsCache。返回 (value, hit):
+//   - hit=true, value=true  → 文件已确认 faststart,跳过 isFaststart 的 8MiB 读
+//   - hit=true, value=false → 文件已确认非 faststart,直接走 remux
+//   - hit=false              → 缓存未命中,调用方需自己跑 isFaststart + store
+func (s *VideoFaststartService) lookupFaststart(absPath string, fi os.FileInfo) (bool, bool) {
+	k := faststartCacheKey(absPath, fi.ModTime(), fi.Size())
+	if v, ok := s.fsCache.Load(k); ok {
+		return v.(bool), true
+	}
+	return false, false
+}
+
+// storeFaststart 把 isFaststart 的结果写入 fsCache。超容量时整体清空
+// (简单优于 LRU 淘汰:清空后下次访问重新读 8MiB,符合冷启动语义)。
+func (s *VideoFaststartService) storeFaststart(absPath string, fi os.FileInfo, fast bool) {
+	// 容量检查:Range 一下大概条目数,超阈值就清空。注意 sync.Map
+	// 没有 Len(),这里用 atomic 维护一个近似计数。
+	fsCacheSize.Add(1)
+	if fsCacheSize.Load() > int64(faststartCacheMax) {
+		// 重新建一个空 map 替换进去;旧 map 仍被并发 reader 引用,
+		// 不会立即被 GC,但 sync.Map 的零值是空 map,可安全替换。
+		s.fsCache = sync.Map{}
+		fsCacheSize.Store(0)
+		return
+	}
+	k := faststartCacheKey(absPath, fi.ModTime(), fi.Size())
+	s.fsCache.Store(k, fast)
+}
+
+// fsCacheSize 维护 fsCache 的近似条目数。sync.Map 没暴露 Len(),
+// 简单用一个 atomic counter;清空时归零,小幅误差可接受(超阈值再清
+// 一次即可,不会无限增长)。
+var fsCacheSize atomic.Int64
