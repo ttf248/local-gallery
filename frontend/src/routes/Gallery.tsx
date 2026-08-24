@@ -15,6 +15,10 @@ import ImageInfoPanel from '../components/gallery/ImageInfoPanel'
 import HelpOverlay from '../components/common/HelpOverlay'
 import GalleryHeader from '../components/gallery/GalleryHeader'
 import GalleryControls from '../components/gallery/GalleryControls'
+import ContextMenu, {
+  type AnyMenuItem,
+} from '../components/album/ContextMenu'
+import { ImageIcon, RefreshIcon } from '../components/common/Icon'
 import {
   getGalleryContext,
   type GalleryContextEntry,
@@ -55,6 +59,8 @@ export default function Gallery() {
 
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
+  // 右键菜单位置(阅读器内任意位置右键都触发)。
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [markingRead, setMarkingRead] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -641,6 +647,14 @@ export default function Gallery() {
       className="relative bg-neutral-950 overflow-hidden select-none"
       style={{ height: '100vh' }}
       onMouseMove={markActive}
+      onContextMenu={(e) => {
+        // 屏蔽浏览器默认右键菜单(图片另存为等),改用我们自己的。
+        // 子组件 (ImageGallery/VideoPlayer) 内部各自 preventDefault + 标记
+        // 是图片区,这里统一捕获后弹自定义菜单。
+        e.preventDefault()
+        if (!pathParam) return
+        setContextMenu({ x: e.clientX, y: e.clientY })
+      }}
     >
       {/* 暗色画布层：让图片有「画廊」氛围 */}
       {/* flex flex-col 是关键：让 ImageGallery 内部的 `flex-1` + `min-h-0`
@@ -733,6 +747,37 @@ export default function Gallery() {
         <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
       )}
       <HelpOverlay open={showHelp} onClose={() => setShowHelp(false)} />
+      {/* 右键菜单：阅读器内任意位置右键都弹出。
+          「设为封面」「清除自定义封面」用与 GalleryHeader 同一份 handler，
+          保证快捷键 U / ⇧U 与菜单行为完全一致。 */}
+      {contextMenu && pathParam && current && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={
+            [
+              {
+                id: 'set-cover',
+                label: '设为封面 (U)',
+                icon: <ImageIcon />,
+              },
+              hasCustomCover
+                ? {
+                    id: 'clear-cover',
+                    label: '清除自定义封面 (⇧U)',
+                    icon: <RefreshIcon />,
+                  }
+                : { id: 'clear-cover-disabled', label: '清除自定义封面', disabled: true },
+            ] satisfies AnyMenuItem[]
+          }
+          onSelect={(id) => {
+            setContextMenu(null)
+            if (id === 'set-cover') onSetCover()
+            else if (id === 'clear-cover') onClearCover()
+          }}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   )
 }
