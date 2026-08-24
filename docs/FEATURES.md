@@ -125,6 +125,14 @@
 | 1 天 Cache-Control | `public, max-age=86400` | `videos.go` |
 | MIME 映射 | mp4/webm/quicktime/matroska/avi/m4v | `videos.go` |
 
+### 3.5b 原图流
+
+| 功能 | 描述 | 位置 |
+|------|------|------|
+| ETag 协商 | `<mtime_ns>-<size>`，命中 304 不传 body | `handlers/images.go` `imageETag` |
+| 1 天 Cache-Control | `public, max-age=86400` | `images.go` |
+| HEIC 直出 | Safari 原生解码；Chrome/Firefox 由浏览器决定 | `images.go` |
+
 ---
 
 ## 4. 图片画廊

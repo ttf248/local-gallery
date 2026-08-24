@@ -315,6 +315,82 @@ func TestImageAndInfo(t *testing.T) {
 	releaseFile()
 }
 
+// 原图 ETag 协商:第一次带 ETag;带 If-None-Match 命中 → 304;改文件 → 新 ETag。
+//
+// 真实浏览场景里,用户从 Album 详情点开 → 进 Gallery → 返回 → 再点开,
+// 浏览器会带 If-None-Match 重拉原图;命中 304 省下几 MB 流量(尤其在
+// 局域网 / 远程桌面场景)。这条用例确保:1) ETag 一定生成,2) 304
+// 条件严格(只有完整字面相等才命中),3) 文件 mtime 变化后 ETag 变,
+// 4) 304 响应 body 为空。
+func TestImageETag(t *testing.T) {
+	h := newHarness(t)
+	img := filepath.Join(h.root, "[作者A] vol1", "page1.png")
+
+	// 1) 第一次请求:应带 ETag 头(强 ETag 格式 "<hex>-<hex>")
+	res, body := h.do(t, "GET", "/api/images?path="+escape(img), nil)
+	if res.StatusCode != 200 {
+		t.Fatalf("first status=%d body=%s", res.StatusCode, body)
+	}
+	if len(body) == 0 {
+		t.Fatal("first response should have body")
+	}
+	etag := res.Header.Get("ETag")
+	if etag == "" {
+		t.Fatal("ETag header missing")
+	}
+	if etag[0] != '"' || etag[len(etag)-1] != '"' {
+		t.Errorf("ETag should be wrapped in quotes, got %q", etag)
+	}
+
+	// 2) 带 If-None-Match 重发:应 304 + 空 body
+	req := httptest.NewRequest("GET", "/api/images?path="+escape(img), nil)
+	req.Header.Set("If-None-Match", etag)
+	res2, err := h.app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res2.Body.Close()
+	if res2.StatusCode != 304 {
+		t.Errorf("expected 304 with If-None-Match, got %d", res2.StatusCode)
+	}
+	body2, _ := io.ReadAll(res2.Body)
+	if len(body2) != 0 {
+		t.Errorf("304 should have empty body, got %d bytes", len(body2))
+	}
+
+	// 3) 不匹配的 If-None-Match:应 200 + 正常 body
+	req3 := httptest.NewRequest("GET", "/api/images?path="+escape(img), nil)
+	req3.Header.Set("If-None-Match", `"bogus-etag"`)
+	res3, err := h.app.Test(req3, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res3.Body.Close()
+	if res3.StatusCode != 200 {
+		t.Errorf("mismatched If-None-Match should be 200, got %d", res3.StatusCode)
+	}
+	body3, _ := io.ReadAll(res3.Body)
+	if len(body3) == 0 {
+		t.Error("200 with mismatched etag should have body")
+	}
+
+	// 4) 修改文件 mtime 后:ETag 应变化(原 etag 失效,新请求 200 而非 304)
+	newTime := time.Now().Add(2 * time.Hour)
+	if err := os.Chtimes(img, newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+	res4, _ := h.do(t, "GET", "/api/images?path="+escape(img), nil)
+	if res4.StatusCode != 200 {
+		t.Errorf("after mtime change status=%d", res4.StatusCode)
+	}
+	newEtag := res4.Header.Get("ETag")
+	if newEtag == etag {
+		t.Error("ETag should change after mtime change")
+	}
+
+	releaseFile()
+}
+
 func TestThumb(t *testing.T) {
 	h := newHarness(t)
 	img := filepath.Join(h.root, "[作者A] vol1", "page1.png")

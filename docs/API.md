@@ -14,7 +14,7 @@
 | 字符编码 | UTF-8；中文 / 空格需 URL-encode |
 | 错误响应 | `{ "error": "<可读消息>" }`，状态码 4xx / 5xx |
 | Cache-Control | 缩略图 30 天；原图 1 天；视频 1 天 |
-| Range / ETag | 原图 / 视频流都支持 |
+| Range / ETag | 缩略图 / 原图 / 视频流都支持 ETag 协商（304 Not Modified 不传 body） |
 
 > **兼容说明**：`mediaRoots`（数组）是权威字段，旧名 `mediaRoot` / `comicRoot`（单数）仍可识别为单元素数组。`/api/albums` ≡ `/api/folders`。
 
