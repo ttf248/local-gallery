@@ -82,18 +82,30 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
               <div className="text-[10px] text-fg-subtle mt-0.5 truncate">本地画廊 · local gallery</div>
             </div>
           </div>
-        ) : (
-          <Logo />
-        )}
+        ) : null /* 折叠态下隐藏 logo,把整行让给展开按钮(药丸样式更醒目) */}
+        {/* 折叠/展开按钮:
+            设计原则:折叠态是用户「想找回菜单」的关键时刻 — 按钮必须一眼可见,
+            所以用 accent 主色填充的"药丸"按钮(icon + 文字)悬浮在右缘。
+            展开态时侧边栏本来就在视野里,按钮保持低调(灰图标 + hover 背景)
+            即可,避免在 logo 旁和 "Local Gallery" 标题挤。 */}
         <button
           onClick={onToggle}
-          className={`text-fg-subtle hover:text-fg p-1 rounded hover:bg-bg-subtle transition-colors ${
-            collapsed ? 'absolute -right-3 top-4 bg-bg-elevated border border-border-faint shadow-sm' : ''
-          }`}
           aria-label={collapsed ? '展开侧边栏' : '折叠侧边栏'}
-          title={collapsed ? '展开' : '折叠'}
+          title={collapsed ? '展开侧边栏 (Ctrl+B)' : '折叠侧边栏 (Ctrl+B)'}
+          className={
+            collapsed
+              ? 'group/toggle relative z-10 inline-flex items-center gap-1 h-7 pl-2 pr-2.5 rounded-full bg-accent text-accent-contrast shadow-md ring-1 ring-accent/40 hover:ring-2 hover:ring-accent/70 hover:scale-105 active:scale-95 transition-all'
+              : 'shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-subtle hover:text-fg hover:bg-bg-subtle transition-colors'
+          }
         >
-          {collapsed ? <ChevronRightIcon size={12} /> : <ChevronLeftIcon size={12} />}
+          {collapsed ? (
+            <>
+              <ChevronRightIcon size={12} className="transition-transform group-hover/toggle:translate-x-0.5" />
+              <span className="text-[10px] font-semibold tracking-wide">展开</span>
+            </>
+          ) : (
+            <ChevronLeftIcon size={14} />
+          )}
         </button>
       </div>
 
