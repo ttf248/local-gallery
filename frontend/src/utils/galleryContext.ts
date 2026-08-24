@@ -9,6 +9,7 @@ export type GallerySource =
   | { type: 'home'; section?: 'inProgress' | 'fresh' | 'rewind' | 'recent' | 'topAuthors' | 'all' }
   | { type: 'favorites' }
   | { type: 'recents' }
+  | { type: 'unread' }
   | { type: 'tag'; tag: string }
   | { type: 'author'; author: string } // 旧名，等价 tag
   | { type: 'album'; parentPath: string }

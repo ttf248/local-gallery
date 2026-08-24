@@ -13,7 +13,7 @@
 - [4. 图片画廊](#4-图片画廊)
 - [5. 视频播放器](#5-视频播放器)
 - [6. 导航与发现](#6-导航与发现)
-- [7. 收藏 / 最近 / 进度](#7-收藏--最近--进度)
+- [7. 收藏 / 最近 / 未读 / 进度](#7-收藏--最近--未读--进度)
 - [8. 主题与外观](#8-主题与外观)
 - [9. 快捷键与帮助](#9-快捷键与帮助)
 - [10. 系统集成](#10-系统集成)
@@ -192,7 +192,7 @@
 
 ---
 
-## 7. 收藏 / 最近 / 进度
+## 7. 收藏 / 最近 / 未读 / 进度
 
 | 功能 | 描述 | 位置 |
 |------|------|------|
@@ -202,6 +202,7 @@
 | 跨设备持久化 | 服务端 JSON 存储（原子写 tmp + rename） | `internal/store/prefs.go` |
 | 最近访问 | `POST /api/history` LRU 去重，最多 `maxRecent` 条（默认 10） | `handlers/prefs.go` |
 | 清空历史 | `DELETE /api/history` | `handlers/prefs.go` |
+| **未读列表** | `GET /unread` 显示还没翻开过的相册,带计数 badge + 随机未读 | `frontend/src/hooks/useUnreadAlbums.ts` + `routes/Unread.tsx` |
 | 阅读进度 | `POST /api/progress` 幂等 upsert | `handlers/progress.go` |
 | 单条进度 | `GET /api/progress?path=...` | `handlers/progress.go` |
 | 进度自动上报 | 画廊每 1.5 秒 debounce 写一次 | `frontend/src/hooks/useReadingProgress.ts` |

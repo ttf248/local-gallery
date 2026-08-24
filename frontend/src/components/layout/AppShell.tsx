@@ -42,6 +42,7 @@ export default function AppShell() {
       '/': '图像库',
       '/recents': '最近',
       '/favorites': '收藏',
+      '/unread': '未读',
       '/settings': '设置',
     }
     const path = location.pathname
@@ -67,6 +68,8 @@ export default function AppShell() {
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '最近' }])
     else if (path.startsWith('/favorites'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '收藏' }])
+    else if (path.startsWith('/unread'))
+      setBreadcrumbs([{ label: '主页', to: '/' }, { label: '未读' }])
     else if (path.startsWith('/settings'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '设置' }])
     else if (path.startsWith('/albums'))
@@ -116,6 +119,11 @@ export default function AppShell() {
     r: () => {
       if (onGallery) return
       goShuffle()
+    },
+    // U → 未读页
+    u: () => {
+      if (onGallery) return
+      navigate('/unread')
     },
   })
 

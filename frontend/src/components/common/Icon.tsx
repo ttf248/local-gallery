@@ -322,6 +322,14 @@ export const ShuffleIcon = (p: IconProps) => (
   </svg>
 )
 
+/** 未读 / 新内容:四角星 + 中心点,代表"新" */
+export const SparkleIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5z" />
+    <path d="M19 16l.7 2L22 19l-2.3.7L19 22l-.7-2.3L16 19l2.3-1z" />
+  </svg>
+)
+
 /** 单页：单页居中 */
 export const SinglePageIcon = (p: IconProps) => (
   <svg {...base(p)}>

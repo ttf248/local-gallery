@@ -7,10 +7,12 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ShuffleIcon,
+  SparkleIcon,
 } from '../common/Icon'
 import { useNavigate } from 'react-router-dom'
 import { useLibraryStore } from '../../store/libraryStore'
 import { useUIStore } from '../../store/uiStore'
+import { useUnreadAlbums } from '../../hooks/useUnreadAlbums'
 
 interface Props {
   collapsed: boolean
@@ -33,6 +35,9 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
   const navigate = useNavigate()
   const location = useLocation()
   const pushToast = useUIStore((s) => s.pushToast)
+  // 未读数量用于侧边栏 badge + 决定「随机未读」按钮可用性
+  const { cards: unreadCards } = useUnreadAlbums()
+  const unreadCount = unreadCards.length
 
   const onShuffle = () => {
     if (!result || result.albums.length === 0) {
@@ -42,6 +47,18 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
     const idx = Math.floor(Math.random() * result.albums.length)
     const a = result.albums[idx]
     navigate(`/albums/${encodeURIComponent(a.path)}`)
+  }
+
+  const onShuffleUnread = () => {
+    if (unreadCount === 0) {
+      pushToast({ kind: 'info', message: '没有未读相册可跳' })
+      return
+    }
+    const pick = unreadCards[Math.floor(Math.random() * unreadCount)]
+    // pick.to 形如 /albums/<encoded>;AlbumDetail 期望 ?path= 原 path,所以走
+    // 解码还原 — 与 Recents / Favorites 里 albumRoute 的用法一致。
+    const path = decodeURIComponent(pick.to.replace(/^\/albums\//, ''))
+    navigate(`/albums/${encodeURIComponent(path)}`)
   }
 
   return (
@@ -104,7 +121,42 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
           </NavLink>
         ))}
 
-        {/* 随机一本 — 单独一行，折叠时仍可见图标 */}
+        {/* 未读 — 独立一行,有 count badge。位置放在「收藏」之后、「随机」之前,
+            跟「按重要度排列」的视觉顺序一致:主页 / 最近 / 收藏 / 未读 / 随机。 */}
+        <NavLink
+          to="/unread"
+          end={false}
+          className={({ isActive }) =>
+            `group flex items-center gap-2.5 h-9 rounded-md text-[13px] transition-colors ${
+              collapsed ? 'justify-center px-0' : 'px-2.5'
+            } ${
+              isActive
+                ? 'bg-accent-soft text-fg font-medium'
+                : 'text-fg-muted hover:bg-bg-subtle hover:text-fg'
+            }`
+          }
+          title={`未读相册 (U)${unreadCount > 0 ? ` · 还有 ${unreadCount} 本没看` : ''}`}
+        >
+          <SparkleIcon size={15} className="shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate flex-1">未读</span>
+              {unreadCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full bg-accent text-accent-contrast text-[10px] font-semibold tabular-nums"
+                  aria-label={`还有 ${unreadCount} 本未读`}
+                >
+                  {unreadCount > 999 ? '999+' : unreadCount}
+                </span>
+              )}
+            </>
+          )}
+          {collapsed && unreadCount > 0 && (
+            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent" aria-hidden />
+          )}
+        </NavLink>
+
+        {/* 随机一本 — 单独一行,折叠时仍可见图标 */}
         <button
           onClick={onShuffle}
           title="随机一本 (R)"
@@ -114,6 +166,36 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
         >
           <ShuffleIcon size={15} className="shrink-0" />
           {!collapsed && <span className="truncate">随机一本</span>}
+        </button>
+
+        {/* 随机未读 — 仅在有未读时高亮可点;没未读时变灰提示 */}
+        <button
+          onClick={onShuffleUnread}
+          disabled={unreadCount === 0}
+          title={
+            unreadCount === 0
+              ? '没有未读相册'
+              : `从 ${unreadCount} 本未读里随机挑一本`
+          }
+          className={`w-full flex items-center gap-2.5 h-9 rounded-md text-[13px] transition-colors ${
+            collapsed ? 'justify-center px-0' : 'px-2.5'
+          } ${
+            unreadCount === 0
+              ? 'text-fg-subtle/50 cursor-not-allowed'
+              : 'text-fg-muted hover:bg-accent-soft hover:text-accent'
+          }`}
+        >
+          <SparkleIcon size={15} className="shrink-0" />
+          {!collapsed && (
+            <>
+              <span className="truncate">随机未读</span>
+              {unreadCount > 0 && (
+                <span className="ml-auto text-[10px] tabular-nums text-fg-subtle">
+                  {unreadCount}
+                </span>
+              )}
+            </>
+          )}
         </button>
       </nav>
 

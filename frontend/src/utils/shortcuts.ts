@@ -27,6 +27,7 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'scan', label: 'Ctrl+S', description: '重新扫描', combo: 'ctrl+s', group: 'global' },
   { id: 'search', label: '/', description: '聚焦搜索框', combo: '/', group: 'global' },
   { id: 'shuffle', label: 'R', description: '随机一本（仅非画廊）', combo: 'r', group: 'global' },
+  { id: 'unread', label: 'U', description: '未读相册页（仅非画廊）', combo: 'u', group: 'global' },
   { id: 'help', label: '?', description: '显示快捷键帮助', combo: '?', group: 'global' },
   // 画廊
   { id: 'next', label: '→ / PageDown', description: '下一张', combo: 'arrowright', group: 'gallery' },

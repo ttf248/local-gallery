@@ -3,6 +3,7 @@ import AppShell from './components/layout/AppShell'
 import Home from './routes/Home'
 import Recents from './routes/Recents'
 import Favorites from './routes/Favorites'
+import Unread from './routes/Unread'
 import Album from './routes/Album'
 import Author from './routes/Author'
 import Gallery from './routes/Gallery'
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/recents" element={<Recents />} />
         <Route path="/favorites" element={<Favorites />} />
+        <Route path="/unread" element={<Unread />} />
         <Route path="/albums/*" element={<Album />} />
         <Route path="/tags/*" element={<Author />} />
         {/* 旧 /authors/* 重定向到 /tags/*（保留历史链接） */}
