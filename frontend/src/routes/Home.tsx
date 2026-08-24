@@ -168,13 +168,21 @@ export default function Home() {
   const cards = useMemo(() => buildCards(result), [result])
 
   // 继续上次：需要进度数据
-  const progressPaths = useMemo(
-    () =>
-      cards
-        .map((c) => (c.variant === 'album' ? decodeFavPath(c.to) : ''))
-        .filter(Boolean),
-    [cards],
-  )
+  // 关键:progressPaths 也要包含 collection 子 album 的 path,
+  // 否则 /api/progress/batch 不会带它们的进度,继续阅读就漏掉整本。
+  // 顶层 album + collection 下的子 album 一起展开,跟下面的 inProgressAll
+  // 用的「真实 album 列表」保持一致。
+  const progressPaths = useMemo<string[]>(() => {
+    if (!result) return []
+    const out: string[] = []
+    for (const a of result.albums) out.push(a.path)
+    for (const col of result.collections ?? []) {
+      for (const a of col.albums ?? []) {
+        if (a.path) out.push(a.path)
+      }
+    }
+    return out
+  }, [result])
   const { data: progressMap } = useAllProgress(progressPaths)
   const inProgress = useMemo<CardData[]>(() => {
     if (!progressMap) return []
@@ -193,18 +201,57 @@ export default function Home() {
 
   // 继续阅读的全量列表(不限 4 张),给 ContinueReadingHero 用。
   // 排序:优先按 progress.index(已读张数)降序,其次按 mTime 倒序保稳定。
+  //
+  // 关键:result.albums 只有顶层 album(media root 直接子目录),collection 下的
+  // 子 album 都在 result.collections[].albums 里。继续阅读应当覆盖"任意 album",
+  // 不论它是不是 collection 的子项 — 用户从 2023 集合点开 AIGC 后,理应在
+  // 继续阅读里能找到 AIGC。collection 视图下"主网格"是 collection 卡片,
+  // 但"继续阅读"应该把子 album 拍扁到 album 卡片维度来展示。
   const inProgressAll = useMemo<CardData[]>(() => {
-    if (!progressMap) return []
+    if (!progressMap || !result) return []
     const items: CardData[] = []
-    for (const c of cards) {
-      if (c.variant !== 'album') continue
-      const k = decodeFavPath(c.to)
-      const p = progressMap[k]
-      if (!p || p.index <= 0) continue
-      items.push({ ...c, progress: { index: p.index, total: p.total } })
+    const addAlbum = (a: {
+      path: string
+      name: string
+      displayName?: string
+      imageCount: number
+      videoCount?: number
+      coverImage: string
+      coverKind?: 'image' | 'video'
+      modTime?: string
+      sourceRoot?: string
+      sourceName?: string
+    }) => {
+      const p = progressMap[a.path]
+      if (!p || p.index <= 0) return
+      items.push({
+        id: 'c:' + a.path,
+        variant: 'album',
+        title: a.name,
+        displayTitle: a.displayName,
+        count: a.imageCount,
+        imageCount: a.imageCount,
+        videoCount: a.videoCount ?? 0,
+        coverPath: a.coverImage,
+        coverKind: a.coverKind,
+        // to 走 album 路由 — 继续阅读的"点卡片直跳画廊"onContinue 需要 path
+        to: albumRoute(a.path),
+        progress: { index: p.index, total: p.total },
+        sourceRoot: a.sourceRoot,
+        sourceName: a.sourceName,
+      })
+    }
+    // 1) 顶层 album
+    for (const a of result.albums) addAlbum(a)
+    // 2) collection 下的子 album(给 sourceName 标上 collection 名,避免
+    //    不同 collection 里有同名 album 混淆)
+    for (const col of result.collections ?? []) {
+      for (const a of col.albums ?? []) {
+        addAlbum({ ...a, sourceName: a.sourceName ?? col.name })
+      }
     }
     return items.sort((a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0))
-  }, [cards, progressMap])
+  }, [result, progressMap])
 
   // 时光轴：按年份分组（画廊模式，替代早期"全新/重温/最近加入"的分区）
   const yearGroups = useMemo<YearGroup[]>(() => groupByYear(result), [result])
