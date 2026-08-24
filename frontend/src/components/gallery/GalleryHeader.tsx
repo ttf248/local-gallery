@@ -8,6 +8,8 @@ import {
   KeyboardIcon,
   ArrowUpIcon,
   ArrowDownIcon,
+  ImageIcon,
+  RefreshIcon,
 } from '../common/Icon'
 import Popover, { PopoverItem, PopoverSeparator, PopoverLabel } from '../common/Popover'
 import { useGalleryStore } from '../../store/galleryStore'
@@ -26,6 +28,12 @@ interface Props {
   /** 上一本/下一本（来自当前列表）。可选：没有上下文时不显示。 */
   onPrevAlbum?: () => void
   onNextAlbum?: () => void
+  /** 把当前图片/视频设为本相册的封面。 */
+  onSetCover?: () => void
+  /** 清除本相册的自定义封面（回到扫描器默认）。 */
+  onClearCover?: () => void
+  /** 当前相册是否已有自定义封面（决定 Popover 显示哪种文案）。 */
+  hasCustomCover?: boolean
 }
 
 // 画廊顶部常驻条：极简 — 返回 / 名称 / 页码 / 收藏 / 全屏 / 菜单
@@ -48,6 +56,9 @@ export default function GalleryHeader({
   onNext,
   onPrevAlbum,
   onNextAlbum,
+  onSetCover,
+  onClearCover,
+  hasCustomCover,
 }: Props) {
   const mode = useGalleryStore((s) => s.mode)
   const setIndex = useGalleryStore((s) => s.setIndex)
@@ -137,6 +148,20 @@ export default function GalleryHeader({
           <span>快捷键</span>
           <span className="ml-auto text-[10px] text-fg-subtle">?</span>
         </PopoverItem>
+        {onSetCover && (
+          <PopoverItem onClick={onSetCover}>
+            <ImageIcon size={12} />
+            <span>设为封面</span>
+            <span className="ml-auto text-[10px] text-fg-subtle">U</span>
+          </PopoverItem>
+        )}
+        {onClearCover && hasCustomCover && (
+          <PopoverItem onClick={onClearCover}>
+            <RefreshIcon size={12} />
+            <span>清除自定义封面</span>
+            <span className="ml-auto text-[10px] text-fg-subtle">⇧U</span>
+          </PopoverItem>
+        )}
         {hasAlbumNav && <PopoverSeparator />}
         {hasAlbumNav && <PopoverLabel>列表</PopoverLabel>}
         {onPrevAlbum && (

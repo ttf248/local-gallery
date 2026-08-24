@@ -28,6 +28,21 @@ export const albumsApi = {
       params: { q, limit },
     })
   },
+  // 自定义封面：把 file 设为 album path 的封面（持久化到 cover_overrides.json）。
+  // 设置后立即拉 /api/scan/latest 就能看到新封面。
+  setCover(albumPath: string, file: string) {
+    return api<{ ok: boolean; albumPath: string; coverImage: string; coverKind: string }>(
+      `/api/albums/cover`,
+      { method: 'PUT', params: { path: albumPath, file } }
+    )
+  },
+  // 清除自定义封面：回退到扫描器默认（images[0]，否则 videos[0]）。
+  clearCover(albumPath: string) {
+    return api<{ ok: boolean; albumPath: string }>(`/api/albums/cover`, {
+      method: 'DELETE',
+      params: { path: albumPath },
+    })
+  },
 }
 
 // progressApi 已在 api/prefs.ts 中定义（带 .get / .set / .batch）。

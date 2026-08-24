@@ -7,6 +7,7 @@ import { albumsApi } from '../api/albums'
 import { progressApi, historyApi } from '../api/prefs'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
+import { useLibraryStore } from '../store/libraryStore'
 import ImageGallery from '../components/gallery/ImageGallery'
 import VideoPlayer from '../components/gallery/VideoPlayer'
 import PageSlider from '../components/gallery/PageSlider'
@@ -109,6 +110,14 @@ export default function Gallery() {
   const { favorites, toggle: toggleFavorite } = useFavorites()
   const isFav = pathParam ? favorites.includes(pathParam) : false
 
+  // 当前相册是否已有自定义封面。detail API 响应里带 hasCustomCover 字段。
+  const [hasCustomCover, setHasCustomCover] = useState(false)
+  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
+  // 当前展示的文件路径。Gallery 中段才计算 isVideo/images/videos/index → current，
+  // 但 onSetCover 要读这个值。放进 ref 让 callback 拿到最新值而不需要把 current
+  // 提前到 useCallback 之前（避免引入 forward reference）。
+  const currentRef = useRef<string | null>(null)
+
   // 拉图 + 恢复阅读进度：依赖 pathParam 变化。
   //
   // 重要：必须在 pathParam 每次变化时都重新拉图。从 Album A 导航到 Album B 时，
@@ -162,6 +171,7 @@ export default function Gallery() {
             setLoadError('EMPTY')
           }
         }
+        setHasCustomCover(!!(r as { hasCustomCover?: boolean }).hasCustomCover)
       })
       .catch((e) => {
         if (cancelled) return
@@ -466,6 +476,47 @@ export default function Gallery() {
       .catch(() => pushToast({ kind: 'error', message: '收藏失败' }))
   }, [pathParam, favorites, toggleFavorite, pushToast])
 
+  // 把当前展示的图片/视频设为本相册的封面。
+  // 设完后立即 loadFromBackend() 拉新 ScanResult，让卡片网格的缩略图实时换封面。
+  // hasCustomCover 也同步置 true，让「清除自定义封面」入口显示出来。
+  //
+  // 注：current 是在组件后段计算的（依赖 isVideo / images / videos / index），
+  // 因此这里在 callback 内通过 useGalleryStore.getState() 读 index、images、videos
+  // 实时算 current，避免 deps 出现 forward reference。空数组 deps 等价于「挂载时
+  // 一次性」，callback 内部读最新 state，每次按键都拿到当前真实文件。
+  const onSetCover = useCallback(() => {
+    if (!pathParam) return
+    const cur = currentRef.current
+    if (!cur) return
+    albumsApi
+      .setCover(pathParam, cur)
+      .then(() => {
+        setHasCustomCover(true)
+        loadFromBackend().catch(() => {})
+        pushToast({ kind: 'success', message: '已设为封面', ttl: 1200 })
+      })
+      .catch((e) => {
+        const msg = (e as { body?: { error?: string } })?.body?.error || '设置封面失败'
+        pushToast({ kind: 'error', message: msg })
+      })
+  }, [pathParam, loadFromBackend, pushToast])
+
+  // 清除自定义封面：回退到扫描器默认（images[0] / videos[0]）。
+  const onClearCover = useCallback(() => {
+    if (!pathParam) return
+    albumsApi
+      .clearCover(pathParam)
+      .then(() => {
+        setHasCustomCover(false)
+        loadFromBackend().catch(() => {})
+        pushToast({ kind: 'success', message: '已恢复默认封面', ttl: 1200 })
+      })
+      .catch((e) => {
+        const msg = (e as { body?: { error?: string } })?.body?.error || '清除封面失败'
+        pushToast({ kind: 'error', message: msg })
+      })
+  }, [pathParam, loadFromBackend, pushToast])
+
   useKeyboard({
     arrowleft: prev,
     arrowright: next,
@@ -506,6 +557,8 @@ export default function Gallery() {
     n: () => goAdjacent(1),
     p: () => goAdjacent(-1),
     s: () => onToggleFavorite(),
+    u: () => onSetCover(),
+    'shift+u': () => onClearCover(),
     escape: () => {
       if (showHelp) setShowHelp(false)
       else if (showInfo) setShowInfo(false)
@@ -579,6 +632,8 @@ export default function Gallery() {
   }
 
   const current = isVideo ? videos[index] : images[index]
+  // 把 current 同步进 ref,让 onSetCover (声明在前) 拿到最新值。
+  currentRef.current = current
   const total = isVideo ? videos.length : images.length
 
   return (
@@ -646,6 +701,9 @@ export default function Gallery() {
         onNext={next}
         onPrevAlbum={() => goAdjacent(-1)}
         onNextAlbum={() => goAdjacent(1)}
+        onSetCover={onSetCover}
+        onClearCover={onClearCover}
+        hasCustomCover={hasCustomCover}
       />
 
       {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本）
