@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { thumbUrl } from '../../api/thumbs'
+import { progressApi } from '../../api/prefs'
+import { useUIStore } from '../../store/uiStore'
+import { decodeFavPath } from '../../utils/path'
+import ContextMenu, { type AnyMenuItem } from './ContextMenu'
 import {
   StarIcon,
   FolderIcon,
@@ -148,6 +153,55 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
     data.variant === 'album' &&
     (!data.progress || data.progress.total === 0 || data.progress.index <= 0)
 
+  // 右键菜单：仅 album 变体有「标记为已读」语义（集合/smart 是聚合,
+  // 它们的 progress 实际是子相册聚合,不能"标已读"）。
+  // 关键：data.to 是 /albums/<encoded> 路由形式,需要 decodeFavPath 还原
+  // 成原绝对路径,再传给 progressApi.set。
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const queryClient = useQueryClient()
+  const pushToast = useUIStore((s) => s.pushToast)
+  const canMarkRead =
+    data.variant === 'album' &&
+    !!data.progress &&
+    data.progress.total > 0 &&
+    !isFinished
+  const canUnmarkRead = data.variant === 'album' && isFinished
+  const onContextMenu = (e: React.MouseEvent) => {
+    if (data.variant !== 'album') return
+    // 没「标记/取消已读」也没有「右键设置封面」之类的菜单项,不弹。
+    if (!canMarkRead && !canUnmarkRead) return
+    e.preventDefault()
+    setMenu({ x: e.clientX, y: e.clientY })
+  }
+  const albumAbsPath = data.variant === 'album' ? decodeFavPath(data.to) : null
+  const onMarkRead = () => {
+    if (!albumAbsPath || !data.progress) return
+    const total = data.progress.total
+    progressApi
+      .set(albumAbsPath, total, total, 0)
+      .then(() => {
+        // 让所有依赖 progress 的视图(UnreadHero / ContinueReadingHero /
+        // Unread 页 / Recents / Favorites / Album 详情)立刻看到新进度。
+        queryClient.invalidateQueries({ queryKey: ['progress-batch'] })
+        queryClient.invalidateQueries({ queryKey: ['progress'] })
+        pushToast({ kind: 'success', message: '已标记为已读', ttl: 1200 })
+      })
+      .catch(() => pushToast({ kind: 'error', message: '标记失败' }))
+  }
+  const onUnmarkRead = () => {
+    if (!albumAbsPath) return
+    // 重置为第 0 张:AlbumCard 的 isFresh = index<=0 算"全新",
+    // UnreadHero / Unread 页会重新把它算成"未读"。
+    progressApi
+      .set(albumAbsPath, 0, data.progress?.total ?? 0, 0)
+      .then(() => {
+        queryClient.invalidateQueries({ queryKey: ['progress-batch'] })
+        queryClient.invalidateQueries({ queryKey: ['progress'] })
+        pushToast({ kind: 'success', message: '已重置为未读', ttl: 1200 })
+      })
+      .catch(() => pushToast({ kind: 'error', message: '重置失败' }))
+  }
+
   // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
   // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
   //   鼠标在 card→preview 的过渡中会先触发 card mouseleave。）
@@ -192,6 +246,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       onKeyDown={onKey}
       onMouseEnter={onEnter}
       onMouseLeave={onLeave}
+      onContextMenu={onContextMenu}
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
@@ -388,6 +443,29 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             }
           }}
           onPointerLeave={onLeave}
+        />
+      )}
+      {/* 右键菜单:仅 album 变体有"标记/取消已读",集合/smart 不弹。 */}
+      {menu && data.variant === 'album' && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={
+            [
+              canMarkRead
+                ? { id: 'mark-read', label: '标记为已读', icon: <CheckIcon /> }
+                : { id: 'mark-read-disabled', label: '标记为已读', disabled: true },
+              canUnmarkRead
+                ? { id: 'unmark-read', label: '取消已读', icon: <RewindIcon /> }
+                : { id: 'unmark-read-disabled', label: '取消已读', disabled: true },
+            ] satisfies AnyMenuItem[]
+          }
+          onSelect={(id) => {
+            setMenu(null)
+            if (id === 'mark-read') onMarkRead()
+            else if (id === 'unmark-read') onUnmarkRead()
+          }}
+          onClose={() => setMenu(null)}
         />
       )}
     </div>

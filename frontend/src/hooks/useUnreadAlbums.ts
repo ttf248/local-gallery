@@ -48,6 +48,11 @@ export function useUnreadAlbums(): {
       const p = progressMap?.[a.path]
       const isFresh = !p || p.total === 0 || p.index <= 0
       if (!isFresh) continue
+      // 即便是 isFresh(还没读)也把 progress 字段填上 — AlbumCard 用它
+      // 决定「标记为已读」菜单项是否可点。未读卡片要能右键直接标已读,
+      // 没有 progress 字段就弹不出菜单,所以这里用图+视频总数做 total,
+      // index=0 表示还没翻。这样右键 → set(total, total) 即视为读完。
+      const total = a.imageCount + (a.videoCount ?? 0)
       out.push({
         id: 'u:' + a.path,
         variant: 'album',
@@ -60,6 +65,7 @@ export function useUnreadAlbums(): {
         coverKind: a.coverKind,
         to: albumRoute(a.path),
         isFavorite: favSet.has(a.path),
+        progress: { index: 0, total },
       })
     }
     return out

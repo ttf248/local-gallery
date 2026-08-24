@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { UnreadHero } from './Home'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
@@ -29,12 +30,17 @@ function makeCard(path: string, name: string) {
 
 function renderHero(cards: ReturnType<typeof makeCard>[], count = cards.length) {
   const onShuffle = vi.fn()
+  // AlbumCard 内部用 useQueryClient 走 progress-batch invalidate,
+  // 测试套件包一层 QueryClientProvider 避免 "No QueryClient set" 报错。
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return {
     onShuffle,
     ...render(
-      <MemoryRouter>
-        <UnreadHero cards={cards} count={count} onShuffle={onShuffle} />
-      </MemoryRouter>,
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <UnreadHero cards={cards} count={count} onShuffle={onShuffle} />
+        </MemoryRouter>
+      </QueryClientProvider>,
     ),
   }
 }
