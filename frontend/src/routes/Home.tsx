@@ -6,6 +6,7 @@ import { useSearchStore } from '../store/searchStore'
 import { useScanSSE } from '../hooks/useScanSSE'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
+import { useUnreadAlbums } from '../hooks/useUnreadAlbums'
 import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
@@ -25,6 +26,8 @@ import {
   ClockIcon,
   CloseIcon,
   ImageIcon,
+  SparkleIcon,
+  ArrowRightLineIcon,
 } from '../components/common/Icon'
 
 // 卡片全集（album + collection + smart），用于"全部图像" filter 网格
@@ -96,6 +99,10 @@ export default function Home() {
   const viewMode = useUIStore((s) => s.viewMode)
 
   const { favorites } = useFavorites()
+  // 未读列表:Home 顶部 hero 直接展示前 6 张 + 链接到 /unread
+  // 已有 useUnreadAlbums hook(见 hooks/useUnreadAlbums.ts),复用避免重新
+  // 实现 progress 派发逻辑。
+  const { cards: unreadCards, count: unreadCount } = useUnreadAlbums()
 
   useEffect(() => {
     if (!result) loadFromBackend()
@@ -126,6 +133,18 @@ export default function Home() {
     const idx = Math.floor(Math.random() * result.albums.length)
     const a = result.albums[idx]
     navigate(albumRoute(a.path))
+  }
+
+  // 随机未读:从未读列表里挑一本(若未读为空,给个 toast 引导去 /unread 看空态)
+  const onShuffleUnread = () => {
+    if (unreadCards.length === 0) {
+      pushToast({ kind: 'info', message: '没有未读相册可跳' })
+      return
+    }
+    const pick = unreadCards[Math.floor(Math.random() * unreadCards.length)]
+    // pick.to 形如 /albums/<encoded>;Gallery 期望 ?path= 原 path 形式
+    const path = decodeFavPath(pick.to)
+    navigate(albumRoute(path))
   }
 
   const cards = useMemo(() => buildCards(result), [result])
@@ -368,6 +387,11 @@ export default function Home() {
           onChangeView={(k) => setView(k as typeof view)}
           totalCount={filtered.length}
         />
+      )}
+
+      {/* === 未读 hero(有未读时置顶 6 张,直接引导用户进下一本)== */}
+      {hasContent && unreadCards.length > 0 && (
+        <UnreadHero cards={unreadCards} count={unreadCount} onShuffle={onShuffleUnread} />
       )}
 
       {/* === 时间线（仅当有内容时显示） === */}
@@ -650,5 +674,66 @@ function CalendarIconGlyph() {
       <rect x="3" y="5" width="18" height="16" rx="2" />
       <path d="M3 9h18M8 3v4M16 3v4" />
     </svg>
+  )
+}
+
+// 未读 hero:Home 主页顶部「还有 N 本没看」的引导区块。
+//
+// 设计目标:
+//   - 让用户进首页立刻看到「未读」+「随机未读」的主行动,而不是要按 U
+//     或翻到侧边栏才能找到
+//   - 用前 6 张未读卡(2x3 / 3x2 网格)作为视觉锚点,而不是纯文字数字
+//   - 「全部」按钮跳到 /unread 页看全量
+//   - 没有未读时整个区块不渲染(由调用方控制)
+export function UnreadHero({
+  cards,
+  count,
+  onShuffle,
+}: {
+  cards: CardData[]
+  count: number
+  onShuffle: () => void
+}) {
+  const navigate = useNavigate()
+  // 最多 6 张,让网格 3x2 居中显示。多于 6 张时,「全部 →」按钮引导去全量页
+  const visible = cards.slice(0, 6)
+  return (
+    <section
+      className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full pt-8 pb-2"
+      data-testid="unread-hero"
+    >
+      <div className="bg-accent-soft border border-accent/20 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-3 flex-wrap mb-3">
+          <SparkleIcon size={13} className="text-accent" />
+          <span className="text-[11px] uppercase tracking-[0.18em] text-accent font-medium">
+            未读
+          </span>
+          <span className="text-[13px] text-fg">
+            还有 <span className="font-semibold tabular-nums">{count}</span> 本没看
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={onShuffle}
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover text-xs font-medium transition-colors"
+            >
+              <ShuffleIcon size={12} />
+              随机未读
+            </button>
+            <button
+              onClick={() => navigate('/unread')}
+              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border-faint text-fg-muted hover:text-fg hover:border-border-strong text-xs transition-colors"
+            >
+              全部
+              <ArrowRightLineIcon size={11} />
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
+          {visible.map((c) => (
+            <AlbumGrid key={c.id} items={[c]} variant="grid" />
+          ))}
+        </div>
+      </div>
+    </section>
   )
 }
