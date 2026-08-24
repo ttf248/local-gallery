@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { videoUrl } from '../../api/videos'
+import { videoUrl, getTranscodeStatus, type TranscodeStatus } from '../../api/videos'
+import TranscodeProgress from './TranscodeProgress'
 
 interface Props {
   /** 当前播放的视频绝对路径 */
@@ -22,6 +23,12 @@ interface Props {
  *  2) 进度上报：timeupdate 触发 onProgress(currentTimeSec)
  *  3) 元数据：loadedmetadata 触发 onMetaLoaded(durationSec)
  *
+ * 服务端转码集成 (Phase 2):
+ *   - mount 时查 /api/videos/transcode/status
+ *   - 如果需要转码 (running/queued)，显示 TranscodeProgress 覆盖层
+ *   - 转码完成 (cached) 时强制重挂 <video>，让浏览器重新请求
+ *   - 失败 / 不可用 → 显示原有错误覆盖层
+ *
  * 故意不做：
  *  - 自定义控件（用浏览器原生 controls，未来可替换为自绘）
  *  - 倍速 / 字幕 / 画中画（依赖浏览器原生能力即可）
@@ -37,11 +44,31 @@ export default function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  const [transcodeStatus, setTranscodeStatus] = useState<TranscodeStatus | null>(null)
 
-  // 切到下一个视频时清错
+  // 切到下一个视频时清状态
   useEffect(() => {
     setError(null)
+    setTranscodeStatus(null)
   }, [src])
+
+  // 查服务端转码状态
+  useEffect(() => {
+    if (!src) return
+    let cancelled = false
+    getTranscodeStatus(src)
+      .then((s) => {
+        if (cancelled) return
+        setTranscodeStatus(s)
+      })
+      .catch(() => {
+        // status 端点失败 → 当作"无转码服务",不影响播放
+        if (!cancelled) setTranscodeStatus(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [src, retryKey])
 
   // 键盘控制
   useEffect(() => {
@@ -89,11 +116,11 @@ export default function VideoPlayer({
 
   // 把 HTMLMediaElement 的 MediaError 翻译成对人友好的中文消息。
   //
-  // 常见码(详见 https://developer.mozilla.org/docs/Web/API/MediaError/code):
-  //   1 MEDIA_ERR_ABORTED            - 用户中止(一般不应弹错)
-  //   2 MEDIA_ERR_NETWORK            - 网络错误(断网/超时/Range 失败)
-  //   3 MEDIA_ERR_DECODE             - 解码错误(编码/容器损坏,或浏览器 codec 不支持)
-  //   4 MEDIA_ERR_SRC_NOT_SUPPORTED  - 资源不支持(404/CORS/MIME 错/浏览器不支持该编码)
+  // 常见码（详见 https://developer.mozilla.org/docs/Web/API/MediaError/code）：
+  //   1 MEDIA_ERR_ABORTED        - 用户中止（一般不应弹错）
+  //   2 MEDIA_ERR_NETWORK        - 网络错误（断网/超时/Range 失败）
+  //   3 MEDIA_ERR_DECODE         - 解码错误（编码/容器损坏，或浏览器 codec 不支持）
+  //   4 MEDIA_ERR_SRC_NOT_SUPPORTED - 资源不支持（404/CORS/MIME 错/浏览器不支持该编码）
   function describeError(media: HTMLVideoElement | null): string {
     const err = media?.error
     if (!err) return '视频加载失败'
@@ -101,15 +128,22 @@ export default function VideoPlayer({
       case 1:
         return '播放已中止'
       case 2:
-        return '视频加载失败(网络错误:可能是断网、Range 请求失败或服务器无响应)'
+        return '视频加载失败（网络错误：可能是断网、Range 请求失败或服务器无响应）'
       case 3:
-        return '视频解码失败(编码或容器不被当前浏览器支持;常见于 AV1 / H.265 / 非 faststart MP4)'
+        return '视频解码失败（编码或容器不被当前浏览器支持；常见于 AV1 / H.265 / 非 faststart MP4）'
       case 4:
-        return '视频加载失败(资源不可用:文件不存在、CORS 被拒、MIME 不匹配,或浏览器不支持该编码)'
+        return '视频加载失败（资源不可用：文件不存在、CORS 被拒、MIME 不匹配，或浏览器不支持该编码）'
       default:
         return '视频加载失败'
     }
   }
+
+  // 是否在转码中？展示 TranscodeProgress 覆盖层
+  const isTranscoding =
+    transcodeStatus !== null &&
+    (transcodeStatus.status === 'running' ||
+      transcodeStatus.status === 'queued' ||
+      transcodeStatus.status === 'failed')
 
   return (
     <div className={className ?? 'relative flex-1 flex items-center justify-center min-h-0 bg-black'}>
@@ -140,7 +174,20 @@ export default function VideoPlayer({
           setError(describeError(e.currentTarget))
         }}
       />
-      {error && (
+      {/* 转码进度覆盖层（仅在转码中显示）*/}
+      {isTranscoding && (
+        <TranscodeProgress
+          src={src}
+          onReady={() => {
+            // 转码完成:刷新状态 + 重挂 <video> 让浏览器重新请求
+            setTranscodeStatus({ ...transcodeStatus, status: 'cached', progress: 1 })
+            setError(null)
+            setRetryKey((k) => k + 1)
+          }}
+        />
+      )}
+      {/* 错误覆盖层（仅在没在转码时显示;转码失败时由 TranscodeProgress 接管）*/}
+      {error && !isTranscoding && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="max-w-md mx-4 bg-black/80 text-white/90 text-sm px-4 py-3 rounded-md flex flex-col items-center gap-2 text-center">
             <div>{error}</div>

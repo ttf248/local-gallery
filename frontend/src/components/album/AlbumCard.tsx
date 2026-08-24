@@ -13,6 +13,7 @@ import {
 } from '../common/Icon'
 import HoverPreview from '../common/HoverPreview'
 import VideoCoverImage, { isVideoCoverPath } from '../common/VideoCoverImage'
+import TranscodeStatusBadge from '../common/TranscodeStatusBadge'
 import type { ViewMode } from '../../store/uiStore'
 import { timeAgo } from '../../utils/date'
 import { formatDuration } from '../../utils/format'
@@ -236,6 +237,13 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
             <PlayFilledIcon size={9} className="text-accent" />
             <span>{formatDuration(data.durationSec)}</span>
+          </div>
+        )}
+
+        {/* 服务端转码状态（仅在转码中/失败时显示；不与上面 ▶ 角标冲突） */}
+        {(isVideoCoverPath(data.coverPath) || data.coverKind === 'video') && (
+          <div className="absolute top-2 left-2">
+            <TranscodeStatusBadge videoPath={data.coverPath ?? ''} size="sm" />
           </div>
         )}
 
