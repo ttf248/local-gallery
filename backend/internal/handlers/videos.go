@@ -22,7 +22,16 @@ import (
 //
 // 重要：路径必须在任一 mediaRoots 之下（路径安全中间件统一校验），
 // 扩展名必须在 models.VideoExts 白名单内（防止把任意文件当视频流）。
-func VideoHandler() fiber.Handler {
+//
+// 视频处理 pipeline（按顺序尝试，全部可选；任一失败都回退到下一档）：
+//  1. TranscodeService.Resolve(path) — 浏览器播不了的冷门编码
+//     (AV1/HEVC/ProRes 等) 转成 H.264+AAC 缓存后发
+//  2. FaststartService.Resolve(path) — moov atom 在末尾的 MP4
+//     remux 移头(几秒)后发
+//  3. 原文件 — 兜底
+//
+// 透明调用,前端不需要知道哪个文件被转码了;Range/MIME 行为不变。
+func VideoHandler(transcode *services.TranscodeService, faststart *services.VideoFaststartService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
@@ -35,19 +44,30 @@ func VideoHandler() fiber.Handler {
 				"error": "not a supported video format",
 			})
 		}
-		info, err := os.Stat(path)
-		if err != nil {
+		if _, err := os.Stat(path); err != nil {
 			if os.IsNotExist(err) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		c.Set("Content-Type", videoMime(path))
+		// 决定实际发送哪个文件:
+		//   transcode 命中 → 发转码缓存(浏览器能直播)
+		//   否则 faststart → 发 remux 缓存(浏览器能边下边播)
+		//   都不命中      → 发原文件
+		servePath := path
+		if transcode != nil {
+			if p, st := transcode.Resolve(path); st == services.TranscodeStatusCached {
+				servePath = p
+			}
+		}
+		if servePath == path && faststart != nil {
+			servePath, _ = faststart.Resolve(path)
+		}
+		c.Set("Content-Type", videoMime(servePath))
 		c.Set("Accept-Ranges", "bytes")
 		// 视频比图片大得多，缓存时间短一些（1 天）
 		c.Set("Cache-Control", "public, max-age=86400")
-		_ = info // 预留：将来可用于记录 last-modified / content-length 头
-		return c.SendFile(path, false)
+		return c.SendFile(servePath, false)
 	}
 }
 
@@ -61,10 +81,15 @@ func VideoHandler() fiber.Handler {
 //   - duration / width / height / codec / container / bitRate：
 //     当 VideoInfoService 可用（ffprobe 装好）时填入；否则全 0/空串，
 //     前端仍可走 <video> 元素的 loadedmetadata 上报作为兜底。
+//   - transcode { needed, status, progress, error }：
+//     当 VideoTranscodeService 可用时填入。前端可以据此：
+//       - 显示「正在转码 30% 预计 3 分钟」提示
+//       - 转好后自动重挂载 <video src=...> 走缓存
+//     没装 ffmpeg / 编码浏览器能播 → 整个字段省略,前端视为「不用转」
 //
 // 性能: ffprobe 只读 metadata,1GB 视频典型 50-150ms,远快于让前端
 // <video> 加载整个文件再拿 metadata(几个 GB 流量 + 几秒解码)。
-func VideoInfoHandler(infoSvc *services.VideoInfoService) fiber.Handler {
+func VideoInfoHandler(infoSvc *services.VideoInfoService, transcode *services.TranscodeService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
@@ -105,6 +130,16 @@ func VideoInfoHandler(infoSvc *services.VideoInfoService) fiber.Handler {
 				// 解析错误:记日志但仍返回基础元数据
 				// (避免单文件坏掉让整个接口 5xx)
 				resp["probeError"] = err.Error()
+			}
+		}
+		// 转码状态(可选):仅在 service 可用 + ffmpeg 装好时填
+		if transcode != nil && transcode.Available() {
+			ts := transcode.GetStatus(path)
+			// not_needed / unavailable 字段仍带,前端可以"知道自己被服务端认作不需要转"
+			resp["transcode"] = fiber.Map{
+				"status":   ts.Status.String(),
+				"progress": ts.Progress,
+				"error":    ts.Error,
 			}
 		}
 		return c.JSON(resp)

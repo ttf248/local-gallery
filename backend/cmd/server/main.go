@@ -128,6 +128,38 @@ func main() {
 		log.Printf("  FFprobe:   %s (视频元数据已启用)", videoInfo.FFprobePath())
 	}
 
+	// 视频 faststart 化服务(可选):把 moov 移到 mdat 前面,解决
+	// "非 faststart MP4 在浏览器里无法边下边播"问题。ffmpeg 不可用
+	// 时 VideoHandler 静默回退到原文件,不阻断播放。
+	//
+	// 注意:这里传 cfg.CacheDir(让 service 内部自己拼 video-faststart
+	// 子目录),不要在 main.go 里再加一层 —— 否则会出现
+	// cacheDir/video-faststart/video-faststart/<hash>.mp4 的双层嵌套。
+	faststart := services.NewVideoFaststartService(services.FaststartOptions{
+		CacheDir: cfg.CacheDir,
+		FFmpeg:   cfg.FFmpegPath,
+	})
+	if faststart.Available() {
+		log.Printf("  VideoFaststart: %s (非 faststart MP4 自动重封装 + 缓存)", faststart.FFmpegPath())
+	} else {
+		log.Printf("  VideoFaststart: <不可用> → 非 faststart MP4 仍按原文件发送(浏览器可能播不了)")
+	}
+
+	// 视频转码服务(可选):把 AV1/HEVC/ProRes 等浏览器播不了的编码
+	// 转成 H.264 + AAC 缓存。ffmpeg 不可用时静默回退到 faststart / 原文件。
+	transcode := services.NewTranscodeService(services.TranscodeOptions{
+		CacheDir: cfg.CacheDir,
+		FFmpeg:   cfg.FFmpegPath,
+		Info:     videoInfo,
+		// timeout / concurrency 用默认(30m / NumCPU/2)
+	})
+	if transcode.Available() {
+		log.Printf("  VideoTranscode: %s profile=%s concurrency=%d (冷门编码 → H.264+AAC 自动转码 + 缓存)",
+			transcode.CacheDir(), transcode.Profile().Name, transcode.Concurrency())
+	} else {
+		log.Printf("  VideoTranscode: <不可用> → 冷门编码仍按原文件发送")
+	}
+
 	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
 		CacheDir:   cfg.CacheDir,
 		Width:      cfg.ThumbSizeW,
@@ -248,8 +280,15 @@ func main() {
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
 	// 视频流 + 元信息（前端 <video> 元素 / HoverPreview / 时长显示使用）
-	api.Get("/videos", handlers.VideoHandler())
-	api.Get("/videos/info", handlers.VideoInfoHandler(videoInfo))
+	api.Get("/videos", handlers.VideoHandler(transcode, faststart))
+	api.Get("/videos/info", handlers.VideoInfoHandler(videoInfo, transcode))
+	// 转码进度（轮询；SSE）
+	api.Get("/videos/transcode/status", handlers.TranscodeStatusHandler(transcode))
+	api.Get("/videos/transcode/events", handlers.TranscodeEventsHandler(transcode))
+	api.Post("/videos/transcode/cancel", handlers.TranscodeCancelHandler(transcode))
+	// 转码缓存管理（V1：admin 手动;V2:加 maxBytes 配置自动触发）
+	api.Get("/videos/transcode/cache/stats", handlers.TranscodeCacheStatsHandler(transcode))
+	api.Post("/videos/transcode/cache/clear", handlers.TranscodeCacheClearHandler(transcode))
 	// 视频封面回填：前端浏览器抽帧后 POST 原始字节
 	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
 	api.Get("/fs/open", handlers.FsOpenHandler(mgr))

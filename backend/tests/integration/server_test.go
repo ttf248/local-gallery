@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -125,10 +126,13 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
 	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
-	api.Get("/videos", handlers.VideoHandler())
+	api.Get("/videos", handlers.VideoHandler(nil, nil))
 	// 集成测试不依赖 ffmpeg/ffprobe:VideoInfoHandler(nil) 行为等价于老版本
 	// (只返回 path/name/dir/size/mtime/format 五个字段)。
-	api.Get("/videos/info", handlers.VideoInfoHandler(nil))
+	api.Get("/videos/info", handlers.VideoInfoHandler(nil, nil))
+	api.Get("/videos/transcode/status", handlers.TranscodeStatusHandler(nil))
+	api.Get("/videos/transcode/events", handlers.TranscodeEventsHandler(nil))
+	api.Post("/videos/transcode/cancel", handlers.TranscodeCancelHandler(nil))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
 	api.Get("/prefs", handlers.PrefsGetHandler(prefsStore))
@@ -582,6 +586,125 @@ func TestVideoInfo(t *testing.T) {
 	if info.Name != "info.mp4" {
 		t.Errorf("name=%q", info.Name)
 	}
+}
+
+// /api/videos + FaststartService: 非 faststart MP4 经 ffmpeg remux 后,
+// 浏览器就能从前往后读。需要 ffmpeg,缺失时自动 skip。
+func TestVideoStream_FaststartRemux(t *testing.T) {
+	ffmpeg := os.Getenv("FFMPEG_PATH")
+	if ffmpeg == "" {
+		if _, err := os.Stat(`C:\dev\comic-reader\bin\ffmpeg\windows\amd64\ffmpeg.exe`); err == nil {
+			ffmpeg = `C:\dev\comic-reader\bin\ffmpeg\windows\amd64\ffmpeg.exe`
+		} else if p, err := exec.LookPath("ffmpeg"); err == nil {
+			ffmpeg = p
+		}
+	}
+	if ffmpeg == "" {
+		t.Skip("ffmpeg not found; skipping faststart integration test")
+	}
+
+	// 用 harness 一样的 cfg 模板构造 faststart 服务
+	cache, _ := os.MkdirTemp("", "comic-cache-faststart-")
+	t.Cleanup(func() { os.RemoveAll(cache) })
+	prefsDir, _ := os.MkdirTemp("", "comic-prefs-faststart-")
+	prefs := filepath.Join(prefsDir, "settings.json")
+	t.Cleanup(func() { os.RemoveAll(prefsDir) })
+
+	rootDir, _ := os.MkdirTemp("", "comic-reader-it-faststart-")
+	t.Cleanup(func() { os.RemoveAll(rootDir) })
+
+	mgr := config.NewManagerWith(&config.Config{
+		MediaRoots:      []string{rootDir},
+		Host:            "127.0.0.1",
+		Port:            8080,
+		CacheDir:        cache,
+		ThumbSizeW:      64,
+		ThumbSizeH:      64,
+		ThumbCacheSize:  100,
+		CacheMaxAgeDays: 30,
+	}, "")
+	_ = prefs
+	_ = mgr
+
+	faststart := services.NewVideoFaststartService(services.FaststartOptions{
+		CacheDir: cache,
+		FFmpeg:   ffmpeg,
+	})
+	if !faststart.Available() {
+		t.Skip("ffmpeg not available; skipping")
+	}
+
+	app := fiber.New(fiber.Config{DisableStartupMessage: true})
+	safetyMw, _ := middleware.PathSafetyMiddleware([]string{rootDir})
+	app.Use(safetyMw)
+	api := app.Group("/api")
+	api.Get("/videos", handlers.VideoHandler(nil, faststart))
+
+	// 1) 生成非 faststart MP4
+	intermediate := filepath.Join(rootDir, "intermediate.mp4")
+	nonFast := filepath.Join(rootDir, "non-fast.mp4")
+	mustRun(t, ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "color=c=red:s=160x120:d=1:r=25",
+		"-c:v", "libx264", "-pix_fmt", "yuv420p", intermediate)
+	mustRun(t, ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+		"-i", intermediate, "-c", "copy", "-movflags", "-faststart", nonFast)
+
+	// 2) 第一次请求 → 应触发 remux,返回 200 + 字节数与原文件接近
+	res, body := doHTTP(t, app, "GET", "/api/videos?path="+escape(nonFast))
+	if res.StatusCode != 200 {
+		t.Fatalf("status=%d body=%s", res.StatusCode, body)
+	}
+	if res.Header.Get("Content-Type") != "video/mp4" {
+		t.Errorf("Content-Type=%q", res.Header.Get("Content-Type"))
+	}
+	if res.Header.Get("Accept-Ranges") != "bytes" {
+		t.Errorf("Accept-Ranges=%q", res.Header.Get("Accept-Ranges"))
+	}
+	// 3) Range 请求也应工作
+	origSize, _ := fileSize(nonFast)
+	req := httptest.NewRequest("GET", "/api/videos?path="+escape(nonFast), nil)
+	req.Header.Set("Range", "bytes=0-1023")
+	res2, _ := app.Test(req, -1)
+	if res2.StatusCode != 206 {
+		t.Errorf("Range status=%d want 206", res2.StatusCode)
+	}
+	if got := res2.Header.Get("Content-Range"); got == "" {
+		t.Errorf("Content-Range missing")
+	}
+	_ = origSize
+	// 4) 至少有一次 Remuxed 统计
+	_, _, remuxed, _ := faststart.Stats()
+	if remuxed == 0 {
+		t.Errorf("expected remuxed > 0, got 0")
+	}
+}
+
+func mustRun(t *testing.T, name string, args ...string) {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("cmd %s %v: %v\n%s", name, args, err, out)
+	}
+}
+
+func fileSize(p string) (int64, error) {
+	fi, err := os.Stat(p)
+	if err != nil {
+		return 0, err
+	}
+	return fi.Size(), nil
+}
+
+func doHTTP(t *testing.T, app *fiber.App, method, path string) (*http.Response, []byte) {
+	t.Helper()
+	req := httptest.NewRequest(method, path, nil)
+	res, err := app.Test(req, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	return res, body
 }
 
 // ---- helpers ----
