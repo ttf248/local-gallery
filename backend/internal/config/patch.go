@@ -33,6 +33,15 @@ type ConfigPatch struct {
 	StaticDirSet       bool     `json:"-"`
 	FFmpegPath         string   `json:"ffmpegPath,omitempty"`
 	FFmpegPathSet      bool     `json:"-"`
+
+	// 排除规则:SkipHidden 走 Set 标记(默认 true,允许 false 覆盖);
+	// SystemFiles / ExcludePatterns 用数组替换语义(显式空数组 = 清空)。
+	SkipHidden         bool     `json:"skipHidden,omitempty"`
+	SkipHiddenSet      bool     `json:"-"`
+	SystemFiles        []string `json:"systemFiles,omitempty"`
+	SystemFilesSet     bool     `json:"-"`
+	ExcludePatterns    []string `json:"excludePatterns,omitempty"`
+	ExcludePatternsSet bool     `json:"-"`
 }
 
 // DefaultsPatch 返回一个所有 Set 标志为 false 的空 patch（用于"读"语义）。
@@ -85,6 +94,15 @@ func (p *ConfigPatch) UnmarshalJSON(data []byte) error {
 	}
 	if _, ok := raw["ffmpegPath"]; ok {
 		p.FFmpegPathSet = true
+	}
+	if _, ok := raw["skipHidden"]; ok {
+		p.SkipHiddenSet = true
+	}
+	if _, ok := raw["systemFiles"]; ok {
+		p.SystemFilesSet = true
+	}
+	if _, ok := raw["excludePatterns"]; ok {
+		p.ExcludePatternsSet = true
 	}
 	return nil
 }

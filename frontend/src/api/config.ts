@@ -22,11 +22,22 @@ export interface ServerConfig {
   ffmpegPath?: string
   ffmpegAvailable?: boolean
   configPath: string
+  // 扫描排除规则:见 backend/internal/services/exclude.go
+  //   - skipHidden 决定是否跳过 .开头的隐藏目录(默认 true)
+  //   - systemFiles 是「在 Thumbs.db / desktop.ini / .DS_Store 之上追加」
+  //     的用户自定义系统噪声列表
+  //   - excludePatterns 是 glob 模式列表,匹配单个目录/文件名
+  skipHidden: boolean
+  systemFiles: string[]
+  excludePatterns: string[]
 }
 
 // PATCH /api/config 的请求体。key 缺省视为"不修改"；
 // bool 字段（如 allowOsOpen）必须显式传值以区分 unset / explicit false。
 // mediaRoots 数组用空数组 `[]` 表达"清空所有根"，不传字段表达"不修改"。
+//
+// excludePatterns / systemFiles 也是数组替换语义:空数组 = 清空,缺省 = 不改。
+// skipHidden 走 Set 语义,缺省 = 不改;传了 false 也能关掉隐藏目录跳过。
 export type ServerConfigPatch = Partial<
   Pick<
     ServerConfig,
@@ -41,6 +52,9 @@ export type ServerConfigPatch = Partial<
     | 'allowOsOpen'
     | 'staticDir'
     | 'ffmpegPath'
+    | 'skipHidden'
+    | 'systemFiles'
+    | 'excludePatterns'
   >
 >
 

@@ -37,6 +37,7 @@
 | 同步扫描（小库） | `POST /api/scan` 阻塞返回完整结果 | `handlers/scan.go` `ScanSyncHandler` |
 | 按路径取详情 | `GET /api/folders?path=<abs>` 返回 album / collection / smart | `handlers/albums.go` |
 | 智能合集查询 | `?path=smart:<tag>` 直查智能合集 | 同上 |
+| **扫描排除规则** | 跳过隐藏目录 + 系统白名单 + 用户 glob 模式列表，目录树不进库 | `internal/services/exclude.go` `ExcludeConfig` |
 | 模糊搜索 | `GET /api/search?q=<kw>` 模糊匹配 name / tag，不区分大小写 | `handlers/albums.go` `SearchHandler` |
 
 ---
@@ -273,7 +274,7 @@
 | 启动 flag | `--config <yaml>` / `--static-dir <dir>`（仅这两个） | `cmd/server/main.go` `flag.Parse` |
 | 内置默认 | 见 `config.Default()` | `config.go` |
 | 网页改配置 | `GET /api/config` 读，`PUT /api/config` 写（部分字段） | `handlers/config.go` |
-| 热生效字段 | `mediaRoots` / `cacheDir` / `thumbSize*` / `thumbCacheSize` / `cacheMaxAgeDays` / `allowOsOpen` / `ffmpegPath` | `config/manager.go` |
+| 热生效字段 | `mediaRoots` / `cacheDir` / `thumbSize*` / `thumbCacheSize` / `cacheMaxAgeDays` / `allowOsOpen` / `ffmpegPath` / `skipHidden` / `excludePatterns` / `systemFiles` | `config/manager.go` |
 | 需重启字段 | `host` / `port` / `staticDir` | `manager.go`（监听 / 静态托管在启动期绑定） |
 | 响应提示 | `requiresRestart` 列出需重启的字段；`mediaRootsChanged` 提示是否清空扫描缓存 | `handlers/config.go` |
 | 原子写 | tmp 文件 + `os.Rename` 原子替换 | `internal/config/manager.go` `Save` |

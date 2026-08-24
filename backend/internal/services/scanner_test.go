@@ -678,3 +678,149 @@ func TestScan_VideoExtsCaseInsensitive(t *testing.T) {
 		t.Fatalf("expected 1 album w/ 2 videos, got %+v", res.Albums)
 	}
 }
+
+// ---- Exclude 规则集成测试 ----
+//
+// 构造一个混合目录：
+//   root/
+//     real/                <- 应保留
+//       1.jpg
+//     .git/                <- 隐藏目录,默认跳
+//       config
+//     .cache/              <- 隐藏目录
+//       real2/             <- 即使有真图也不进
+//         x.jpg
+//     node_modules/        <- 用户 pattern 跳
+//       dep/
+//         y.jpg
+//     with_thumbsdb/       <- 文件层 Thumbs.db 命中
+//       2.jpg
+//       Thumbs.db          <- 永远被白名单命中
+//       .DS_Store          <- 永远被白名单命中
+func TestScan_ExcludeRules_Default(t *testing.T) {
+	root := t.TempDir()
+
+	mkdirAll(t, filepath.Join(root, "real"))
+	touchAll(t, filepath.Join(root, "real", "1.jpg"))
+
+	// .git(隐藏)里有任意文件,都不应该被扫到
+	mkdirAll(t, filepath.Join(root, ".git"))
+	touchAll(t, filepath.Join(root, ".git", "config"))
+
+	mkdirAll(t, filepath.Join(root, ".cache", "real2"))
+	touchAll(t, filepath.Join(root, ".cache", "real2", "x.jpg"))
+
+	mkdirAll(t, filepath.Join(root, "node_modules", "dep"))
+	touchAll(t, filepath.Join(root, "node_modules", "dep", "y.jpg"))
+
+	mkdirAll(t, filepath.Join(root, "with_thumbsdb"))
+	touchAll(t,
+		filepath.Join(root, "with_thumbsdb", "2.jpg"),
+		filepath.Join(root, "with_thumbsdb", "Thumbs.db"),
+		filepath.Join(root, "with_thumbsdb", ".DS_Store"),
+	)
+
+	s := NewScanner()
+	// 不传 Exclude → 走 handler 层 normalize 后的等价 default
+	res, err := s.Scan(ScanOptions{
+		Root:     root,
+		MaxDepth: 4,
+		Exclude:  NormalizeExcludeConfig(true, nil, nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 只剩 real + with_thumbsdb 两个顶层 album;
+	// 内部仍各 1 张图(Thumbs.db / .DS_Store 不计)
+	if len(res.Albums) != 2 {
+		names := namesOf(res.Albums)
+		t.Fatalf("expected 2 albums, got %d: %v", len(res.Albums), names)
+	}
+	for _, a := range res.Albums {
+		if a.ImageCount != 1 {
+			t.Errorf("album %s: expected 1 image, got %d (Thumbs.db / .DS_Store should not count)",
+				a.Name, a.ImageCount)
+		}
+	}
+
+	// 关键:既无 .git 也无 .cache 也无 node_modules
+	for _, n := range namesOf(res.Albums) {
+		switch n {
+		case ".git", ".cache", "node_modules":
+			t.Errorf("excluded dir leaked into result: %q", n)
+		}
+	}
+}
+
+// 用户 pattern 应能跳过自定义目录;SkipHidden 关闭时不再默认跳隐藏目录。
+func TestScan_ExcludeRules_UserPattern(t *testing.T) {
+	root := t.TempDir()
+
+	mkdirAll(t, filepath.Join(root, "real"))
+	touchAll(t, filepath.Join(root, "real", "1.jpg"))
+	mkdirAll(t, filepath.Join(root, "node_modules"))
+	touchAll(t, filepath.Join(root, "node_modules", "x.jpg"))
+	mkdirAll(t, filepath.Join(root, "Backup2024"))
+	touchAll(t, filepath.Join(root, "Backup2024", "y.jpg"))
+	// 隐藏目录,SkipHidden=false 时应被扫到
+	mkdirAll(t, filepath.Join(root, ".secret"))
+	touchAll(t, filepath.Join(root, ".secret", "z.jpg"))
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{
+		Root:     root,
+		MaxDepth: 4,
+		Exclude:  NormalizeExcludeConfig(false, nil, []string{"node_modules", "Backup*"}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 应有 real + .secret 两个 album,node_modules / Backup2024 都不见
+	if len(res.Albums) != 2 {
+		names := namesOf(res.Albums)
+		t.Fatalf("expected 2 albums (real + .secret), got %d: %v", len(res.Albums), names)
+	}
+	for _, n := range namesOf(res.Albums) {
+		switch n {
+		case "node_modules":
+			t.Errorf("user pattern 'node_modules' should have been applied")
+		}
+		if strings.HasPrefix(n, "Backup") {
+			t.Errorf("glob 'Backup*' should have skipped %q", n)
+		}
+	}
+}
+
+// 排除规则在嵌套目录树里也生效:子目录被 skip,不会进 album / collection。
+func TestScan_ExcludeRules_Nested(t *testing.T) {
+	root := t.TempDir()
+	mkdirAll(t, filepath.Join(root, "year-2024"))
+	mkdirAll(t, filepath.Join(root, "year-2024", ".git"))
+	touchAll(t, filepath.Join(root, "year-2024", ".git", "config"))
+	mkdirAll(t, filepath.Join(root, "year-2024", "march"))
+	touchAll(t, filepath.Join(root, "year-2024", "march", "1.jpg"))
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{
+		Root:     root,
+		MaxDepth: 4,
+		Exclude:  NormalizeExcludeConfig(true, nil, nil),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// year-2024 应当是 collection(因为 march 里有图);.git 不该出现
+	if len(res.Collections) != 1 || res.Collections[0].Name != "year-2024" {
+		t.Fatalf("expected 1 collection 'year-2024', got %+v", namesOfCols(res.Collections))
+	}
+	coll := res.Collections[0]
+	for _, a := range coll.Albums {
+		if a.Name == ".git" {
+			t.Error(".git nested under year-2024 should have been skipped")
+		}
+	}
+}
+

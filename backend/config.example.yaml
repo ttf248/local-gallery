@@ -40,3 +40,23 @@ allowOsOpen: false
 # 前端构建产物目录（用于生产模式单端口托管）
 # 留空或目录不存在则跳过静态资源托管
 staticDir: "dist"
+
+# 扫描时跳过的子目录(整个子树不进库)。
+# 模式只匹配单个路径段(目录名或文件名),不跨 / 边界:
+#   - `node_modules`  → 任何名为 node_modules 的子目录(任意深度)
+#   - `temp*`         → 任何以 temp 开头的目录
+#   - `*~`            → 任何以 ~ 结尾的目录
+# 内置跳过项(始终生效,无法关闭):
+#   - 以 . 开头的隐藏目录(.git / .cache / ...)   ← 除非把 skipHidden 设为 false
+#   - 系统白名单: Thumbs.db / desktop.ini / .DS_Store
+# 一行一条;空行忽略;大小写不敏感;存盘顺序稳定。
+excludePatterns: []
+
+# 是否跳过以 . 开头的隐藏目录(.git / .cache / .DS_Store / ...)。
+# 默认 true;极个别场景下(如用户的 .config 目录是合法相册)可改为 false。
+# 修改后下次扫描生效,无需重启。
+skipHidden: true
+
+# 额外的系统噪声文件(在 Thumbs.db / desktop.ini / .DS_Store 之上追加)。
+# 一行一条;大小写不敏感。空数组即「不追加,只走内置」。
+systemFiles: []

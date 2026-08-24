@@ -213,6 +213,12 @@ func cloneConfig(c *Config) *Config {
 	if c.MediaRoots != nil {
 		cp.MediaRoots = append([]string(nil), c.MediaRoots...)
 	}
+	if c.SystemFiles != nil {
+		cp.SystemFiles = append([]string(nil), c.SystemFiles...)
+	}
+	if c.ExcludePatterns != nil {
+		cp.ExcludePatterns = append([]string(nil), c.ExcludePatterns...)
+	}
 	cp.syncFirstRoot()
 	return &cp
 }
@@ -276,6 +282,9 @@ func marshalConfig(cfg *Config) ([]byte, error) {
 	addKV("allowOsOpen", scalarBool(cfg.AllowOsOpen))
 	addKV("staticDir", scalarString(cfg.StaticDir))
 	addKV("ffmpegPath", scalarString(cfg.FFmpegPath))
+	addKV("skipHidden", scalarBool(cfg.SkipHidden))
+	addKV("systemFiles", stringSliceNode(cfg.SystemFiles))
+	addKV("excludePatterns", stringSliceNode(cfg.ExcludePatterns))
 	return yaml.Marshal(root)
 }
 
@@ -291,6 +300,20 @@ func scalarBool(b bool) *yaml.Node {
 		v = "true"
 	}
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: v}
+}
+
+// stringSliceNode 序列化为 YAML 序列。nil/空都输出空数组 `[]`,
+// 让用户明确「已配置但为空」,而不是看上去缺字段。
+func stringSliceNode(s []string) *yaml.Node {
+	n := &yaml.Node{
+		Kind:    yaml.SequenceNode,
+		Tag:     "!!seq",
+		Content: make([]*yaml.Node, 0, len(s)),
+	}
+	for _, v := range s {
+		n.Content = append(n.Content, scalarString(v))
+	}
+	return n
 }
 
 // applyPatch 把 patch 中的显式字段合并到 dst。Set 标志由 ConfigPatch 提供。
@@ -329,6 +352,16 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 	}
 	if p.FFmpegPathSet {
 		dst.FFmpegPath = p.FFmpegPath
+	}
+	if p.SkipHiddenSet {
+		dst.SkipHidden = p.SkipHidden
+	}
+	if p.SystemFilesSet {
+		// 显式空数组 = 清空用户追加的白名单(内置依然由 services 层兜底)
+		dst.SystemFiles = append([]string(nil), p.SystemFiles...)
+	}
+	if p.ExcludePatternsSet {
+		dst.ExcludePatterns = append([]string(nil), p.ExcludePatterns...)
 	}
 	dst.syncFirstRoot()
 }

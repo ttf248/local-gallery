@@ -27,6 +27,12 @@ type ConfigResponse struct {
 	FFmpegPath      string   `json:"ffmpegPath"`
 	FFmpegAvailable bool     `json:"ffmpegAvailable"`
 	ConfigPath      string   `json:"configPath"`
+
+	// 排除规则:对外暴露完整三件套(SkipHidden + SystemFiles + ExcludePatterns),
+	// 让前端能完整还原当前配置;而不是只暴露 ExcludePatterns 一项。
+	SkipHidden      bool     `json:"skipHidden"`
+	SystemFiles     []string `json:"systemFiles"`
+	ExcludePatterns []string `json:"excludePatterns"`
 }
 
 // ConfigUpdateResponse PUT /api/config 的响应体。
@@ -83,6 +89,9 @@ func ConfigGetHandler(mgr *config.Manager) fiber.Handler {
 			FFmpegPath:      ffPath,
 			FFmpegAvailable: ffAvailable,
 			ConfigPath:      mgr.Path(),
+			SkipHidden:      cfg.SkipHidden,
+			SystemFiles:     cfg.SystemFiles,
+			ExcludePatterns: cfg.ExcludePatterns,
 		})
 	}
 }
@@ -140,6 +149,9 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 				FFmpegPath:      newCfg.FFmpegPath,
 				FFmpegAvailable: newCfg.FFmpegPath != "" && services.FFmpegAvailableAt(newCfg.FFmpegPath),
 				ConfigPath:      mgr.Path(),
+				SkipHidden:      newCfg.SkipHidden,
+				SystemFiles:     newCfg.SystemFiles,
+				ExcludePatterns: newCfg.ExcludePatterns,
 			},
 			RequiresRestart:   requiresRestart,
 			MediaRootsChanged: mediaRootsChanged,

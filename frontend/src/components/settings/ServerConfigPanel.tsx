@@ -24,7 +24,17 @@ const REQUIRES_RESTART = new Set(['host', 'port', 'staticDir'])
 
 // 哪些字段是路径类（用 onBlur 自动保存,不用 debounce）。
 // 理由:路径输错一个字符就触发保存体验差;按 Enter / 离开输入框再保存更稳。
-const PATH_FIELDS = new Set(['mediaRoots', 'cacheDir', 'staticDir'])
+//
+// excludePatterns / systemFiles 同样按 onBlur 保存 — 它们虽不是路径,
+// 但都是「类数组文本」(一行一项),用户经常连续粘贴多行;debounce 会
+// 把多次按键当作一次输入,体感很怪,所以走 pathDirtyRef 同一条路径。
+const PATH_FIELDS = new Set([
+  'mediaRoots',
+  'cacheDir',
+  'staticDir',
+  'excludePatterns',
+  'systemFiles',
+])
 
 // 字段定义:标签、说明、是否重启字段、UI 类型。
 // mediaRoots 是特例:用 MediaRootsField 组件单独渲染,不走通用 ConfigRow。
@@ -225,6 +235,39 @@ export default function ServerConfigPanel() {
             }}
             onCommit={() => flushPathField('mediaRoots')}
             onOpenInExplorer={openMediaRoot}
+          />
+        </div>
+      </div>
+
+      {/* 扫描 — 排除规则(独立渲染,行为与 MediaRootsField 类似但用 textarea) */}
+      <div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium mb-2 px-1">
+          扫描
+        </div>
+        <div className="bg-bg-elevated border border-border-faint rounded-md overflow-hidden">
+          <ExcludeRulesField
+            patterns={draft.excludePatterns ?? data.excludePatterns}
+            systemFiles={draft.systemFiles ?? data.systemFiles}
+            skipHidden={draft.skipHidden ?? data.skipHidden}
+            patternsStatus={status['excludePatterns'] ?? 'idle'}
+            systemFilesStatus={status['systemFiles'] ?? 'idle'}
+            skipHiddenStatus={status['skipHidden'] ?? 'idle'}
+            onPatternsChange={(next) => {
+              setDraft((d) => ({ ...d, excludePatterns: next }))
+              pathDirtyRef.current.excludePatterns = next
+              setStatus((s) => (s['excludePatterns'] === 'saved' ? { ...s, excludePatterns: 'idle' } : s))
+            }}
+            onSystemFilesChange={(next) => {
+              setDraft((d) => ({ ...d, systemFiles: next }))
+              pathDirtyRef.current.systemFiles = next
+              setStatus((s) => (s['systemFiles'] === 'saved' ? { ...s, systemFiles: 'idle' } : s))
+            }}
+            onSkipHiddenChange={(v) => {
+              setDraft((d) => ({ ...d, skipHidden: v }))
+              setStatus((s) => (s['skipHidden'] === 'saved' ? { ...s, skipHidden: 'idle' } : s))
+            }}
+            onPatternsCommit={() => flushPathField('excludePatterns')}
+            onSystemFilesCommit={() => flushPathField('systemFiles')}
           />
         </div>
       </div>
@@ -468,10 +511,122 @@ function ConfigRow({
             className="bg-bg-subtle border border-border-faint rounded-md h-8 px-2.5 text-sm font-mono w-24 text-right tabular-nums focus:outline-none focus:border-accent"
           />
         ) : (
-          <Toggle checked={Boolean(value)} onChange={onChange} />
+          <Toggle checked={Boolean(value)} onChange={onChange} ariaLabel={def.label} />
         )}
         {/* 状态指示:只在非路径/非紧凑模式单独显示(紧凑模式由 PathField 内部带) */}
         {!(def.kind === 'text' && isPath) && <StatusBadge status={status} />}
+      </div>
+    </div>
+  )
+}
+
+// ---- 排除规则字段(独立组件)----
+//
+// 一个「扫描」section 同时管三个相关设置:
+//   - excludePatterns: glob 模式列表(每行一条,按 basename 匹配)
+//   - systemFiles: 额外的系统噪声文件(每行一条,内置 Thumbs.db 不可关闭)
+//   - skipHidden: 是否跳过 . 开头的隐藏目录
+//
+// 之所以做成一个组件:三者在概念上紧密相关(都是「扫描时跳过什么」),
+// 拆三个组件反而让用户困惑「这俩啥关系」。
+function ExcludeRulesField({
+  patterns,
+  systemFiles,
+  skipHidden,
+  patternsStatus,
+  systemFilesStatus,
+  skipHiddenStatus,
+  onPatternsChange,
+  onSystemFilesChange,
+  onSkipHiddenChange,
+  onPatternsCommit,
+  onSystemFilesCommit,
+}: {
+  patterns: string[]
+  systemFiles: string[]
+  skipHidden: boolean
+  patternsStatus: FieldStatus
+  systemFilesStatus: FieldStatus
+  skipHiddenStatus: FieldStatus
+  onPatternsChange: (next: string[]) => void
+  onSystemFilesChange: (next: string[]) => void
+  onSkipHiddenChange: (v: boolean) => void
+  onPatternsCommit: () => void
+  onSystemFilesCommit: () => void
+}) {
+  // 多行文本 → string[]:split 时 trim + 去空行(用户经常多打空行)
+  function linesToList(s: string): string[] {
+    return s
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l !== '')
+  }
+  // 反向:string[] → 多行文本(末尾不加多余空行,让光标自然停在最后一行)
+  function listToLines(arr: string[]): string {
+    return arr.join('\n')
+  }
+  return (
+    <div className="px-4 py-3 text-sm space-y-4">
+      <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="text-fg">排除模式</span>
+            <span className="text-xs text-fg-subtle mt-0.5">
+              一行一条,glob 匹配单个目录/文件名(任意深度)。例如
+              <code className="font-mono mx-1 text-fg-muted">node_modules</code>
+              <code className="font-mono mx-1 text-fg-muted">temp*</code>
+              <code className="font-mono mx-1 text-fg-muted">~*</code>
+            </span>
+          </div>
+          <StatusBadge status={patternsStatus} />
+        </div>
+        <textarea
+          value={listToLines(patterns)}
+          spellCheck={false}
+          rows={Math.max(3, Math.min(8, patterns.length + 1))}
+          placeholder="node_modules&#10;temp*&#10;~$*"
+          onChange={(e) => onPatternsChange(linesToList(e.target.value))}
+          onBlur={onPatternsCommit}
+          className="mt-2 w-full bg-bg-subtle border border-border-faint rounded-md px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-accent resize-y min-h-[80px]"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-fg">跳过隐藏目录</span>
+          <span className="text-xs text-fg-subtle mt-0.5">
+            任何以 <code className="font-mono text-fg-muted">.</code> 开头的子目录(.{' '}
+            <code className="font-mono text-fg-muted">.git</code> /{' '}
+            <code className="font-mono text-fg-muted">.cache</code> 等) 整体不进库
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Toggle checked={skipHidden} onChange={onSkipHiddenChange} ariaLabel="跳过隐藏目录" />
+          <StatusBadge status={skipHiddenStatus} />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="text-fg">额外的系统白名单</span>
+            <span className="text-xs text-fg-subtle mt-0.5">
+              在内置 <code className="font-mono text-fg-muted">Thumbs.db</code> /{' '}
+              <code className="font-mono text-fg-muted">desktop.ini</code> /{' '}
+              <code className="font-mono text-fg-muted">.DS_Store</code> 之上追加
+            </span>
+          </div>
+          <StatusBadge status={systemFilesStatus} />
+        </div>
+        <textarea
+          value={listToLines(systemFiles)}
+          spellCheck={false}
+          rows={Math.max(2, Math.min(4, systemFiles.length + 1))}
+          placeholder=".Spotlight-V100&#10;~$*"
+          onChange={(e) => onSystemFilesChange(linesToList(e.target.value))}
+          onBlur={onSystemFilesCommit}
+          className="mt-2 w-full bg-bg-subtle border border-border-faint rounded-md px-2.5 py-2 text-sm font-mono focus:outline-none focus:border-accent resize-y min-h-[60px]"
+        />
       </div>
     </div>
   )
@@ -658,11 +813,21 @@ async function openConfigPath(path: string, fieldKey: string): Promise<void> {
   }
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  /** 给屏幕阅读器 / 测试用 — 多开关时区分哪个对应哪个设置 */
+  ariaLabel?: string
+}) {
   return (
     <button
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
         checked ? 'bg-accent' : 'bg-bg-strong'

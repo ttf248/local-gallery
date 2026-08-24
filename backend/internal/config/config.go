@@ -61,6 +61,20 @@ type Config struct {
 	// 留空且 DefaultFFmpegPath 不存在 → 服务端抽帧关闭,视频封面仍由浏览器
 	// 抽帧 + 上传(fallback 路径完整保留)。
 	FFmpegPath string `yaml:"ffmpegPath"`
+
+	// 扫描排除规则：详见 services.ExcludeConfig / services.DefaultExclude。
+	//
+	//   - SkipHidden (默认 true):跳过任何以 `.` 开头的子目录(.git / .cache / ...)
+	//   - SystemFiles (内置白名单 + 用户追加):永远跳过的系统噪声文件
+	//     (Thumbs.db / desktop.ini / .DS_Store 等)
+	//   - ExcludePatterns:用户自定义 glob 模式列表,匹配单个目录/文件名
+	//     (basename 粒度,不分跨层)。`*` / `?` 走 Go filepath.Match 语义。
+	//
+	// 这些规则在扫描时直接生效,无需重启;配置变更后下一次扫描就用新规则。
+	SkipHidden      bool     `yaml:"skipHidden"`
+	SkipHiddenSet   bool     `yaml:"-"` // YAML 显式提供标记(支持 false 覆盖)
+	SystemFiles     []string `yaml:"systemFiles"`
+	ExcludePatterns []string `yaml:"excludePatterns"`
 }
 
 // Roots 返回规范化后的所有媒体根目录（绝对路径、去空、去重、保序）。
@@ -121,6 +135,12 @@ func Default() *Config {
 		CacheMaxAgeDays: 30,
 		StaticDir:       "dist",
 		FFmpegPath:      DefaultFFmpegPath,
+		// 排除规则默认值:跳隐藏目录 + 内置系统白名单
+		// (Thumbs.db / desktop.ini / .DS_Store);用户可继续追加 patterns。
+		// nil slice 序列化为 `[]` 在 PATCH 语义里就保留默认,无需特别处理。
+		SkipHidden:      true,
+		SystemFiles:     nil,
+		ExcludePatterns: nil,
 	}
 	c.syncFirstRoot()
 	return c
@@ -149,6 +169,10 @@ func LoadFile(path string) (*Config, error) {
 	// 第二次解析：宽松 map，单独取老字段（comicRoot 兼容）。
 	// mediaRoot 单数字段也兼容：临时存到 tmp.LegacyMediaRoot（一个不被
 	// mergeFile 当作"显式新格式"看待的字段），Validate 时合并校验。
+	//
+	// 同时：探测 skipHidden 字段是否显式给出。默认是 true，用户 YAML 里
+	// 写 `skipHidden: false` 应当能关掉 —— 不能用「零值视为未配置」的
+	// 简化约定(那只会让用户能开不能关)。
 	raw := map[string]any{}
 	if err := yaml.Unmarshal(data, &raw); err == nil {
 		if v, ok := raw["mediaRoot"].(string); ok && v != "" {
@@ -156,6 +180,12 @@ func LoadFile(path string) (*Config, error) {
 		}
 		if v, ok := raw["comicRoot"].(string); ok && v != "" {
 			tmp.LegacyComicRoot = v
+		}
+		if _, ok := raw["skipHidden"]; ok {
+			if b, ok := raw["skipHidden"].(bool); ok {
+				tmp.SkipHiddenSet = true
+				tmp.SkipHidden = b
+			}
 		}
 	}
 
@@ -221,6 +251,18 @@ func mergeFile(dst, file *Config) {
 	// 把默认路径"清空"。
 	if file.FFmpegPath != "" {
 		dst.FFmpegPath = file.FFmpegPath
+	}
+	// 排除规则:
+	//   - SkipHidden 通过 SkipHiddenSet 显式覆盖(默认 true 也能被 false 覆盖)
+	//   - SystemFiles / ExcludePatterns:非 nil 即替换(包含显式空数组 → 清空)
+	if file.SkipHiddenSet {
+		dst.SkipHidden = file.SkipHidden
+	}
+	if file.SystemFiles != nil {
+		dst.SystemFiles = append([]string(nil), file.SystemFiles...)
+	}
+	if file.ExcludePatterns != nil {
+		dst.ExcludePatterns = append([]string(nil), file.ExcludePatterns...)
 	}
 }
 

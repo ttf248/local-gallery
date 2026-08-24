@@ -512,6 +512,15 @@ thumbCacheSize: 500
 cacheMaxAgeDays: 30
 allowOsOpen: false
 staticDir: "dist"             # 前端构建产物目录
+
+# ---- 扫描排除规则（v3.1 引入）----
+# 模式仅匹配单个路径段(basename),不跨 / 边界。
+# 内置:skipHidden=true 时所有 .开头的目录(.git / .cache / ...)整体不进;
+#       Thumbs.db / desktop.ini / .DS_Store 永远不进（不可关闭）;
+# 下面三项用户可改 / 追加。
+skipHidden: true              # 跳隐藏目录
+excludePatterns: []           # 用户 glob 列表(任意深度),如 [node_modules, "temp*"]
+systemFiles: []               # 在内置白名单之上追加系统噪声
 ```
 
 **启动参数只保留** `--config <yaml>` 和 `--static-dir <dir>`。**不再支持环境变量或 CLI 覆盖**。
@@ -541,6 +550,7 @@ PUT /api/config
 | `mediaRoots` | 热生效：路径安全 + 扫描器改读新根，旧扫描结果清空 |
 | `cacheDir` / `thumbSize*` / `thumbCacheSize` / `cacheMaxAgeDays` / `ffmpegPath` | 热生效 |
 | `allowOsOpen` | 热生效：`/api/fs/open` 立即按新值放行 |
+| `skipHidden` / `excludePatterns` / `systemFiles` | 热生效：下次扫描按新规则；旧扫描结果不自动清空（建议点「重新扫描」） |
 | `host` / `port` / `staticDir` | **需重启**（监听 / 静态托管启动期绑定） |
 | `mediaRootsChanged` | 提示本次是否清空了扫描缓存 |
 | `requiresRestart` | 列出需重启的字段 |

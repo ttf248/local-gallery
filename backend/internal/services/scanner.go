@@ -23,6 +23,13 @@ type ScanOptions struct {
 	Root     string   // 单根（兼容）；与 Roots 二选一
 	Roots    []string // 多根（推荐）；非空时优先
 	MaxDepth int      // 集合（collection）最大递归深度，0 或负数视为 1
+	// Exclude 扫描排除规则（详见 ExcludeConfig）。nil 时走 DefaultExclude()
+	// 兜底,等价于「跳隐藏 + 跳系统文件」的内置默认。
+	//
+	// 设计:把规则放在 ScanOptions 而不是构造函数里,让同进程多次扫描能
+	// 用不同规则(handler 每次都用最新 config 构造);同时测试也可以
+	// 方便地构造空规则 / 严格规则的 ScanOptions。
+	Exclude ExcludeConfig
 }
 
 // effectiveRoots 返回本轮要扫描的根列表（去重、保序、规范化）。
@@ -162,7 +169,7 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 		// 把当前根的顶层进度归零；多根的 progress 在 hook 内独立计算
 		// 由调用方基于 elapsedMs 自行推断
 		topAlbums, topCollections := s.scanLayerWithHook(absRoot, absRoot, depth, 0, hook,
-			len(topSubdirs), 0)
+			len(topSubdirs), 0, opts.Exclude)
 
 		// 给所有产生的 album/collection 打 source 标签
 		srcName := filepath.Base(absRoot)
@@ -264,8 +271,8 @@ func applyCollectionNamePrefixIfConflict(collections *[]models.Collection) {
 }
 
 // scanLayer 扫描单层目录（无进度回调）。
-func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int) ([]models.Album, []models.Collection) {
-	return s.scanLayerWithHook(basePath, currentPath, maxDepth, curDepth, nil, 0, 0)
+func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int, exclude ExcludeConfig) ([]models.Album, []models.Collection) {
+	return s.scanLayerWithHook(basePath, currentPath, maxDepth, curDepth, nil, 0, 0, exclude)
 }
 
 // scanLayerWithHook 扫描单层目录，支持进度回调。
@@ -282,18 +289,28 @@ func (s *Scanner) scanLayerWithHook(
 	maxDepth, curDepth int,
 	hook ScanHook,
 	total, processedOffset int,
+	exclude ExcludeConfig,
 ) ([]models.Album, []models.Collection) {
 	entries, err := os.ReadDir(currentPath)
 	if err != nil {
 		return nil, nil
 	}
 
-	// 仅取直接子目录
+	// 仅取直接子目录 + 应用排除规则。
+	// 排除命中的子目录(及其整个子树)不进 worker 队列 → 不会产生空
+	// collection、不会让 hook 误以为「这里有条进度」、不会浪费时间 stat。
+	// SystemFiles 列表只对文件生效(目录不会被它命中),但为了代码对称,
+	// 一起调 ShouldSkipDir 也无害(目录白名单命中通常表示该目录命名像
+	// "Thumbs.db",本来就是异常情况)。
 	var subdirs []os.DirEntry
 	for _, e := range entries {
-		if e.IsDir() {
-			subdirs = append(subdirs, e)
+		if !e.IsDir() {
+			continue
 		}
+		if exclude.ShouldSkipDir(e.Name()) {
+			continue
+		}
+		subdirs = append(subdirs, e)
 	}
 
 	type result struct {
@@ -316,7 +333,7 @@ func (s *Scanner) scanLayerWithHook(
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
-				al, co := s.classifyAndScan(basePath, p, maxDepth, curDepth)
+				al, co := s.classifyAndScan(basePath, p, maxDepth, curDepth, exclude)
 				if al != nil {
 					results <- result{album: al, isAlbum: true}
 				} else if co != nil {
@@ -391,7 +408,7 @@ func (s *Scanner) scanLayerWithHook(
 //   - 同时含图和视频 → 封面用第一张图,CoverKind="image"
 //   - 仅含视频 → 封面用第一个视频,CoverKind="video"（封面缩略图由前端抽帧后回填）
 //   - 仅含图 → 封面用第一张图,CoverKind="image"
-func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) (*models.Album, *models.Collection) {
+func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, exclude ExcludeConfig) (*models.Album, *models.Collection) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil
@@ -403,7 +420,15 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 
 	for _, e := range entries {
 		if e.IsDir() {
+			// 子目录先收集,实际跳过与否在 scanLayer 里再判(集中逻辑,
+			// 避免这里和那里各写一遍 ShouldSkipDir)。
 			subdirs = append(subdirs, e)
+			continue
+		}
+		// 文件:系统白名单命中 → 完全不计入(图片/视频分类都跳过)。
+		// 否则再判断扩展名。这样 Thumbs.db / desktop.ini / .DS_Store
+		// 不会污染图片列表,也不会被错误地当视频/图片。
+		if exclude.ShouldSkipFile(e.Name()) {
 			continue
 		}
 		full := filepath.Join(dir, e.Name())
@@ -425,7 +450,7 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int) 
 	var childColls []models.Collection
 	hasChildren := len(subdirs) > 0 && curDepth+1 <= maxDepth
 	if hasChildren {
-		childAlbums, childColls = s.scanLayer(basePath, dir, maxDepth, curDepth+1)
+		childAlbums, childColls = s.scanLayer(basePath, dir, maxDepth, curDepth+1, exclude)
 	}
 
 	hasFiles := len(images) > 0 || len(videos) > 0

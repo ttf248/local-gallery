@@ -23,6 +23,7 @@ func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 		result, err := scanner.Scan(services.ScanOptions{
 			Roots:    mgr.Roots(),
 			MaxDepth: 8,
+			Exclude:  excludeFromConfig(mgr),
 		})
 		if err != nil {
 			status := fiber.StatusInternalServerError
@@ -46,12 +47,25 @@ func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager
 		id, _, err := runner.Start(services.ScanOptions{
 			Roots:    mgr.Roots(),
 			MaxDepth: 8,
+			Exclude:  excludeFromConfig(mgr),
 		})
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"scanId": id})
 	}
+}
+
+// excludeFromConfig 把 Manager 当前配置转成归一化的 ExcludeConfig。
+// 抽成 helper 是为了 ScanHandler / AsyncScanStartHandler 共用,避免两处
+// 各写一遍(否则改天加字段容易漏改)。
+func excludeFromConfig(mgr *config.Manager) services.ExcludeConfig {
+	cfg := mgr.Get()
+	return services.NormalizeExcludeConfig(
+		cfg.SkipHidden,
+		cfg.SystemFiles,
+		cfg.ExcludePatterns,
+	)
 }
 
 // AsyncScanEventsHandler SSE 事件流。

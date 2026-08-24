@@ -202,6 +202,11 @@ func main() {
 			id, _, startErr := runner.Start(services.ScanOptions{
 				Roots:    currentRoots,
 				MaxDepth: 2,
+				Exclude: services.NormalizeExcludeConfig(
+					cfg.SkipHidden,
+					cfg.SystemFiles,
+					cfg.ExcludePatterns,
+				),
 			})
 			if startErr != nil {
 				log.Printf("启动自动扫描失败: %v", startErr)

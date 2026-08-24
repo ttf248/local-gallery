@@ -28,6 +28,7 @@
 - 异步扫描 + SSE 实时进度，可取消
 - worker pool（`min(8, NumCPU)`），大库不卡
 - 扫描结果内存缓存，`/api/scan/latest` 立即返回
+- **扫描排除规则**：跳过隐藏目录 + 系统白名单 + 用户 glob 模式（`node_modules` / `temp*` 等）
 
 ### 缩略图
 - LRU（默认 500 项）+ 磁盘双层缓存
@@ -132,6 +133,9 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 | `ffmpegPath` | ffmpeg / ffprobe 路径，留空则自动探测 `bin/ffmpeg/<os>/<arch>/` |
 | `allowOsOpen` | 是否允许 `/api/fs/open` 在系统资源管理器里打开 |
 | `staticDir` | 前端构建产物目录（生产单端口托管用） |
+| `skipHidden` | 是否跳过以 `.` 开头的隐藏目录（默认 true） |
+| `excludePatterns` | 扫描时跳过的目录/文件名 glob 模式列表，每行一条；按 basename 匹配任意深度 |
+| `systemFiles` | 在内置白名单（Thumbs.db / desktop.ini / .DS_Store）之上追加跳过的系统文件 |
 
 启动参数只保留 `--config <yaml>` 和 `--static-dir <dir>`。**不再支持环境变量或 CLI 覆盖**。
 配置项可在网页 `/settings` → 「服务端」里改，部分字段热生效（见 [`docs/API.md`](./docs/API.md)「配置项」一节）。

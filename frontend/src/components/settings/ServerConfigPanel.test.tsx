@@ -33,6 +33,10 @@ const baseConfig = {
   allowOsOpen: false,
   staticDir: 'dist',
   configPath: 'C:\\cfg.yaml',
+  // 排除规则三件套:与后端 Config 字段一一对应
+  skipHidden: true,
+  systemFiles: [],
+  excludePatterns: [],
 }
 
 function renderPanel() {
@@ -69,7 +73,8 @@ describe('ServerConfigPanel', () => {
 
   it('切换 boolean 立即保存', async () => {
     renderPanel()
-    const toggle = await screen.findByRole('switch')
+    // 现在有多个 switch（allowOsOpen + skipHidden）;用 label 文本锁定目标
+    const toggle = await screen.findByRole('switch', { name: /允许在系统文件管理器中打开/ })
     fireEvent.click(toggle)
     await waitFor(() => {
       expect(configApi.update).toHaveBeenCalledWith({ allowOsOpen: true })
@@ -167,11 +172,38 @@ describe('ServerConfigPanel', () => {
   it('保存失败时显示错误 toast', async () => {
     vi.mocked(configApi.update).mockRejectedValueOnce(new Error('invalid port'))
     renderPanel()
-    const toggle = await screen.findByRole('switch')
+    const toggle = await screen.findByRole('switch', { name: /允许在系统文件管理器中打开/ })
     fireEvent.click(toggle)
     await waitFor(() => {
       const toasts = useUIStore.getState().toasts
       expect(toasts.some((t) => t.message.includes('invalid port'))).toBe(true)
+    })
+  })
+
+  it('排除模式：编辑+blur 触发 PATCH,空行 trim 掉', async () => {
+    renderPanel()
+    // 找到「排除模式」textarea。给它一段内容,验证:onBlur 后空行被丢、
+    // 单条非空 pattern 走 PATCH。
+    const textarea = (await screen.findByPlaceholderText(/node_modules/)) as HTMLTextAreaElement
+    fireEvent.change(textarea, {
+      target: { value: 'node_modules\n\n  \nbackup_*' },
+    })
+    fireEvent.blur(textarea)
+    await waitFor(() => {
+      expect(configApi.update).toHaveBeenCalledWith({
+        excludePatterns: ['node_modules', 'backup_*'],
+      })
+    })
+  })
+
+  it('skipHidden toggle 切换立即 PATCH', async () => {
+    renderPanel()
+    const toggle = await screen.findByRole('switch', { name: '跳过隐藏目录' })
+    // 默认 baseConfig.skipHidden=true;点一下应变为 false
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(toggle)
+    await waitFor(() => {
+      expect(configApi.update).toHaveBeenCalledWith({ skipHidden: false })
     })
   })
 })
