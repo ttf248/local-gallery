@@ -11,6 +11,7 @@ import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
 import { historyApi } from '../api/prefs'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
+import AlbumCard from '../components/album/AlbumCard'
 import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import YearTimeline from '../components/home/YearTimeline'
@@ -749,6 +750,10 @@ export function UnreadHero({
   onShuffle: () => void
 }) {
   const navigate = useNavigate()
+  // 收藏状态:AlbumCard 自己不知道,这里把 favorites 也合并到每张 card 上,
+  // 让 hero 卡片跟全库 grid 视觉一致(收藏角标)。
+  const { favorites } = useFavorites()
+  const favSet = useMemo(() => new Set(favorites), [favorites])
   // 最多 6 张,让网格 3x2 居中显示。多于 6 张时,「全部 →」按钮引导去全量页
   const visible = cards.slice(0, 6)
   return (
@@ -784,7 +789,15 @@ export function UnreadHero({
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
           {visible.map((c) => (
-            <AlbumGrid key={c.id} items={[c]} variant="grid" />
+            // 直接渲染 AlbumCard,而不是再套 AlbumGrid ——
+            // AlbumGrid 自己又是一个 grid 容器(items.length=1 时退化成 1 列),
+            // 在 1/6 父格宽度里又铺一个 grid,实际让卡变成 1/6 父格宽,
+            // 文字被压成竖排单字符(每行 1 个汉字)。直接用 AlbumCard 让卡占满
+            // 父级 grid 的整列,正常显示。
+            <AlbumCard
+              key={c.id}
+              data={{ ...c, isFavorite: favSet.has(decodeFavPath(c.to)) }}
+            />
           ))}
         </div>
       </div>

@@ -321,14 +321,14 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
       </div>
 
-      <div className="pt-3 pb-1">
+      <div className="pt-3 pb-1 min-w-0">
         <div
           className="text-[13px] font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent"
           title={data.displayTitle ?? data.title}
         >
           {data.displayTitle ?? data.title}
         </div>
-        <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5">
+        <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5 min-w-0">
           {(() => {
             const media = formatMediaCount(data)
             if (media) {
