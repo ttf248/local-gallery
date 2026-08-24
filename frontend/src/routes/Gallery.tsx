@@ -201,6 +201,12 @@ export default function Gallery() {
       useGalleryStore.getState().resetView()
     }
     if (!pathParam) return
+    // URL 显式带 index= 时表示「用户点了某张图/某条链接」,跳过 progress 恢复
+    // — 否则会从后端 /api/progress 拉出上次位置把 initialIndex 顶掉,
+    // 导致「点任意图都跳到上次看到的那张」(Album 详情缩略图 / AlbumCard
+    // hover preview 跳进来都会撞这个)。
+    const hasExplicitIndex = params.has('index')
+    if (hasExplicitIndex) return
     progressApi
       .get(pathParam)
       .then((rp) => {
