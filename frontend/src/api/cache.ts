@@ -11,6 +11,20 @@ export interface CacheStats {
   available: boolean
   // 缓存剩余秒数(后端 30s TTL),前端可据此显示"30s 前更新"
   cacheTtlSeconds: number
+  // 按子目录细分 — 后端独立扫描 thumbs / video-faststart / video-transcode。
+  // 子目录不存在时 Available=false,bytes/fileCount 为 0(还没产生过该类缓存)。
+  thumbs: SubUsage
+  videoFaststart: SubUsage
+  videoTranscode: SubUsage
+}
+
+// 单个子目录的占用快照。
+export interface SubUsage {
+  /** 绝对路径;前端可提供「在资源管理器中打开」快捷按钮(需要 allowOsOpen) */
+  path: string
+  bytes: number
+  fileCount: number
+  available: boolean
 }
 
 // POST /api/thumbs/clear 的响应。

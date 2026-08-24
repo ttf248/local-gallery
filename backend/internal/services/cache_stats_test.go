@@ -118,3 +118,83 @@ func TestCacheStatsService_PathChange(t *testing.T) {
 		t.Error("different file sizes should produce different totals")
 	}
 }
+
+// 子目录细分:thumbs / video-faststart / video-transcode 三类独立统计。
+// 验证:
+//  1. 子目录不存在 → Available=false,bytes/count=0(没产生过该类缓存)
+//  2. 子目录存在 → Available=true,bytes/count 与目录内实际相符
+//  3. 顶层 TotalBytes 包含三个子目录(主 + 三 sub 各自独立)
+func TestCacheStatsService_SubDir(t *testing.T) {
+	dir := t.TempDir()
+	// 模拟三个子目录各有不同字节数
+	mkFile := func(rel string, sz int) {
+		full := filepath.Join(dir, rel)
+		os.MkdirAll(filepath.Dir(full), 0o755)
+		os.WriteFile(full, make([]byte, sz), 0o644)
+	}
+	mkFile("thumbs/abc.jpg", 1000)
+	mkFile("thumbs/def.jpg", 2000)
+	mkFile("video-faststart/xyz.mp4", 5000)
+	mkFile("video-transcode/pqr.mp4", 8000)
+	mkFile("prefs.json", 100) // 顶层小文件,不计入 sub
+
+	svc := NewCacheStatsService(time.Second)
+	u, _, err := svc.Usage(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 顶层 5 文件 16.1 KB
+	if u.FileCount != 5 {
+		t.Errorf("FileCount: got %d want 5", u.FileCount)
+	}
+	if u.TotalBytes != 16100 {
+		t.Errorf("TotalBytes: got %d want 16100", u.TotalBytes)
+	}
+
+	// Thumbs:2 文件 3KB
+	if !u.Thumbs.Available {
+		t.Error("Thumbs.Available should be true")
+	}
+	if u.Thumbs.FileCount != 2 || u.Thumbs.Bytes != 3000 {
+		t.Errorf("Thumbs: got %+v want 2 files / 3000 bytes", u.Thumbs)
+	}
+
+	// VideoFaststart:1 文件 5KB
+	if !u.VideoFaststart.Available {
+		t.Error("VideoFaststart.Available should be true")
+	}
+	if u.VideoFaststart.FileCount != 1 || u.VideoFaststart.Bytes != 5000 {
+		t.Errorf("VideoFaststart: got %+v want 1 file / 5000 bytes", u.VideoFaststart)
+	}
+
+	// VideoTranscode:1 文件 8KB
+	if !u.VideoTranscode.Available {
+		t.Error("VideoTranscode.Available should be true")
+	}
+	if u.VideoTranscode.FileCount != 1 || u.VideoTranscode.Bytes != 8000 {
+		t.Errorf("VideoTranscode: got %+v want 1 file / 8000 bytes", u.VideoTranscode)
+	}
+}
+
+// 子目录不存在:Available=false(用户没产生过该类缓存),不报错
+func TestCacheStatsService_SubDirMissing(t *testing.T) {
+	dir := t.TempDir()
+	// 顶层空 — 整个 dir 存在但无子目录
+	svc := NewCacheStatsService(time.Second)
+	u, _, err := svc.Usage(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, sub := range map[string]SubUsage{
+		"Thumbs":         u.Thumbs,
+		"VideoFaststart": u.VideoFaststart,
+		"VideoTranscode": u.VideoTranscode,
+	} {
+		if sub.Available {
+			t.Errorf("%s.Available should be false when subdir missing", name)
+		}
+		if sub.Bytes != 0 || sub.FileCount != 0 {
+			t.Errorf("%s should be empty when subdir missing, got %+v", name, sub)
+		}
+	}
+}

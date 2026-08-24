@@ -296,6 +296,14 @@ export default function Settings() {
               <span>{clearThumbs.isPending ? '清空中…' : '清空'}</span>
             </button>
           </div>
+          {/* 按类型细分 — 大头一目了然,转码缓存过大时可手动清 */}
+          {cacheStats.data && cacheStats.data.available && (
+            <div className="mt-2 grid grid-cols-3 gap-2 text-[10.5px]">
+              <SubUsageBadge label="缩略图" sub={cacheStats.data.thumbs} />
+              <SubUsageBadge label="faststart" sub={cacheStats.data.videoFaststart} />
+              <SubUsageBadge label="转码" sub={cacheStats.data.videoTranscode} />
+            </div>
+          )}
         </Row>
         <Row label="清理失效收藏">
           <button
@@ -438,6 +446,49 @@ function NumberInput({
       >
         +
       </button>
+    </div>
+  )
+}
+
+// 缓存细分 badge:展示单个子目录(thumbs / faststart / transcode)的占用。
+// 不可用(子目录还没产生)时整块灰显;可用且 allowOsOpen 时整块可点
+// 「在资源管理器中打开」,方便用户快速找到大头清理。
+function SubUsageBadge({
+  label,
+  sub,
+  onOpen,
+}: {
+  label: string
+  sub: { path: string; bytes: number; fileCount: number; available: boolean }
+  onOpen?: () => void
+}) {
+  const body = sub.available ? (
+    <>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-fg tabular-nums font-medium">{formatBytes(sub.bytes)}</span>
+        <span className="text-fg-subtle/70 tabular-nums">{sub.fileCount} 个</span>
+      </div>
+    </>
+  ) : (
+    <span className="text-fg-subtle/60">—</span>
+  )
+  const cls = `flex flex-col gap-0.5 px-2.5 py-1.5 rounded border border-border-faint bg-bg-subtle/40 ${
+    onOpen
+      ? 'cursor-pointer hover:border-border-strong hover:bg-bg-subtle transition-colors'
+      : ''
+  }`
+  if (onOpen) {
+    return (
+      <button onClick={onOpen} className={cls} title={`在资源管理器中打开 ${sub.path}`}>
+        <span className="text-fg-muted text-[10px] uppercase tracking-wider">{label}</span>
+        {body}
+      </button>
+    )
+  }
+  return (
+    <div className={cls}>
+      <span className="text-fg-muted text-[10px] uppercase tracking-wider">{label}</span>
+      {body}
     </div>
   )
 }
