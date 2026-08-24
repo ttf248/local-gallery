@@ -208,6 +208,23 @@ describe('ServerConfigPanel', () => {
       expect(configApi.update).toHaveBeenCalledWith({ skipHidden: false })
     })
   })
+
+  // 回归:之前 `draft.systemFiles ?? data.systemFiles` 在 data.systemFiles
+  // 自身是 null (后端没显式设过该字段时返回 null) 时,直接把 null 传给了
+  // listToLines,导致 .join('\n') 在 null 上炸,整个 Settings 页空白。
+  it('排除模式/系统白名单/mediaRoots 为 null 时也能正常渲染', async () => {
+    vi.mocked(configApi.get).mockResolvedValueOnce({
+      ...baseConfig,
+      systemFiles: null as unknown as string[],
+      excludePatterns: null as unknown as string[],
+      mediaRoots: null as unknown as string[],
+    })
+    expect(() => renderPanel()).not.toThrow()
+    await waitFor(() => {
+      expect(screen.getByText('排除模式')).toBeTruthy()
+      expect(screen.getByText('额外的系统白名单')).toBeTruthy()
+    })
+  })
 })
 
 // sort menu 的 'viewed' 选项出现(用 store 直接改 sortBy 验证)

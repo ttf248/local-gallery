@@ -225,7 +225,9 @@ export default function ServerConfigPanel() {
         <div className="bg-bg-elevated border border-border-faint rounded-md overflow-hidden">
           <MediaRootsField
             // 用 draft 中的 mediaRoots 覆盖 data(draft 是用户当前编辑状态)
-            roots={draft.mediaRoots ?? data.mediaRoots}
+            // data.mediaRoots 在新装 / 没显式设过媒体库时是 null,不能传给下游
+            // MediaRootsField(其内部对 roots 做 .join / .length 等操作,直接炸)
+            roots={draft.mediaRoots ?? data.mediaRoots ?? []}
             status={status['mediaRoots'] ?? 'idle'}
             allowOsOpen={data.allowOsOpen}
             onChange={(next) => {
@@ -246,8 +248,8 @@ export default function ServerConfigPanel() {
         </div>
         <div className="bg-bg-elevated border border-border-faint rounded-md overflow-hidden">
           <ExcludeRulesField
-            patterns={draft.excludePatterns ?? data.excludePatterns}
-            systemFiles={draft.systemFiles ?? data.systemFiles}
+            patterns={draft.excludePatterns ?? data.excludePatterns ?? []}
+            systemFiles={draft.systemFiles ?? data.systemFiles ?? []}
             skipHidden={draft.skipHidden ?? data.skipHidden}
             patternsStatus={status['excludePatterns'] ?? 'idle'}
             systemFilesStatus={status['systemFiles'] ?? 'idle'}
