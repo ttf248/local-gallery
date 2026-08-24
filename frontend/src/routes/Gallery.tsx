@@ -1,30 +1,30 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { useViewerStore } from '../store/viewerStore'
+import { useGalleryStore } from '../store/galleryStore'
 import { useKeyboard } from '../hooks/useKeyboard'
 import { albumsApi } from '../api/albums'
 import { progressApi, historyApi } from '../api/prefs'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
-import ImageViewer from '../components/viewer/ImageViewer'
-import VideoPlayer from '../components/viewer/VideoPlayer'
-import PageSlider from '../components/viewer/PageSlider'
-import ImageInfoPanel from '../components/viewer/ImageInfoPanel'
+import ImageGallery from '../components/gallery/ImageGallery'
+import VideoPlayer from '../components/gallery/VideoPlayer'
+import PageSlider from '../components/gallery/PageSlider'
+import ImageInfoPanel from '../components/gallery/ImageInfoPanel'
 import HelpOverlay from '../components/common/HelpOverlay'
-import ViewerHeader from '../components/viewer/ViewerHeader'
-import ViewerControls from '../components/viewer/ViewerControls'
+import GalleryHeader from '../components/gallery/GalleryHeader'
+import GalleryControls from '../components/gallery/GalleryControls'
 import {
-  getViewerContext,
-  type ViewerContextEntry,
-} from '../utils/viewerContext'
+  getGalleryContext,
+  type GalleryContextEntry,
+} from '../utils/galleryContext'
 
-// 查看器页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
+// 画廊页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
 // 关闭时持久化阅读进度到后端。
 //
-// 视觉：沉浸式阅读器 — 暗色背景让图片突出，常驻 UI 只留顶部（返回/名称/页码）+ 顶部右侧
+// 视觉：沉浸式画廊 — 暗色背景让图片突出，常驻 UI 只留顶部（返回/名称/页码）+ 顶部右侧
 //（全屏/菜单），其余控件在鼠标移动时浮出，2s 无操作后自动隐藏。
-export default function Viewer() {
+export default function Gallery() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const pushToast = useUIStore((s) => s.pushToast)
@@ -32,8 +32,8 @@ export default function Viewer() {
 
   const pathParam = params.get('path') ?? params.get('album') ?? ''
   const initialIndex = Number(params.get('index') ?? 0)
-  const name = params.get('name') ?? '查看器'
-  // type=video 走 VideoPlayer；其它（含未传）走 ImageViewer。
+  const name = params.get('name') ?? '画廊'
+  // type=video 走 VideoPlayer；其它（含未传）走 ImageGallery。
   // 视频模式下 progress.index 单位是秒，total 是 duration 秒数。
   const typeParam = (params.get('type') ?? 'image') as 'image' | 'video'
   const isVideo = typeParam === 'video'
@@ -44,13 +44,13 @@ export default function Viewer() {
   // 视频文件列表（type=video 时使用）
   const [videos, setVideos] = useState<string[]>([])
 
-  const index = useViewerStore((s) => s.index)
-  const setIndex = useViewerStore((s) => s.setIndex)
-  const slideshow = useViewerStore((s) => s.slideshow)
-  const slideshowInterval = useViewerStore((s) => s.slideshowInterval)
-  const toggleSlideshow = useViewerStore((s) => s.toggleSlideshow)
-  const mode = useViewerStore((s) => s.mode)
-  const setMode = useViewerStore((s) => s.setMode)
+  const index = useGalleryStore((s) => s.index)
+  const setIndex = useGalleryStore((s) => s.setIndex)
+  const slideshow = useGalleryStore((s) => s.slideshow)
+  const slideshowInterval = useGalleryStore((s) => s.slideshowInterval)
+  const toggleSlideshow = useGalleryStore((s) => s.toggleSlideshow)
+  const mode = useGalleryStore((s) => s.mode)
+  const setMode = useGalleryStore((s) => s.setMode)
 
   const [showInfo, setShowInfo] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
@@ -182,7 +182,7 @@ export default function Viewer() {
     // 切到新 album 时重置缩放/旋转（视频模式不需要；切视频时由
     // <video key=src> 自然重挂载）
     if (!isVideo) {
-      useViewerStore.getState().resetView()
+      useGalleryStore.getState().resetView()
     }
     if (!pathParam) return
     progressApi
@@ -237,11 +237,11 @@ export default function Viewer() {
   }, [index, pathParam, videos.length, images.length, isVideo, queryClient])
 
   // 切到连续模式后,容器需要滚到当前 index 对应的那张图。
-  // 之前 ImageViewer 的 useEffect 会把 scrollTop 强制 0,导致用户
+  // 之前 ImageGallery 的 useEffect 会把 scrollTop 强制 0,导致用户
   // (尤其从 saved progress 恢复)看到的是 index 0,跟 slider / 计数对不上。
   // 这里主动调一次 scrollContinuousTo 把当前 index 滚进来 —— 用 ref 标记
   // 只在「首次进入 continuous」时跑一次,后续切页交给 jumpTo / scrollStep。
-  // 注意:首次 mount 模式就是 continuous (viewerStore 从 localStorage 恢复)
+  // 注意:首次 mount 模式就是 continuous (galleryStore 从 localStorage 恢复)
   // 也要触发,所以不能用 prevModeRef (初始值就是 continuous,判断失效)。
   const continuousScrolledRef = useRef(false)
   useEffect(() => {
@@ -252,7 +252,7 @@ export default function Viewer() {
       images.length > 0
     ) {
       continuousScrolledRef.current = true
-      // queueMicrotask 让 ImageViewer 的 mode-only useEffect (scrollTop = 0)
+      // queueMicrotask 让 ImageGallery 的 mode-only useEffect (scrollTop = 0)
       // 先跑完,再 scrollIntoView,避免再次被覆盖
       queueMicrotask(() => scrollContinuousTo(index))
     } else if (mode !== 'continuous') {
@@ -311,14 +311,14 @@ export default function Viewer() {
 
   useEffect(() => {
     const off = () => setShowHelp(true)
-    window.addEventListener('comic:open-help', off as EventListener)
-    return () => window.removeEventListener('comic:open-help', off as EventListener)
+    window.addEventListener('gallery:open-help', off as EventListener)
+    return () => window.removeEventListener('gallery:open-help', off as EventListener)
   }, [])
 
   useEffect(() => {
     if (!slideshow) return
     const t = setInterval(() => {
-      const cur = useViewerStore.getState().index
+      const cur = useGalleryStore.getState().index
       const step = mode === 'double' ? 2 : 1
       if (cur + step < images.length) {
         setIndex(cur + step)
@@ -350,7 +350,7 @@ export default function Viewer() {
   const onReachEndRef = useRef<() => void>(() => {})
   onReachEndRef.current = () => {
     pushToast({ kind: 'info', message: '已是最后一张', ttl: 1500 })
-    if (useViewerStore.getState().slideshow) {
+    if (useGalleryStore.getState().slideshow) {
       toggleSlideshow()
       pushToast({ kind: 'info', message: '幻灯片已自动停止' })
     }
@@ -383,7 +383,7 @@ export default function Viewer() {
 
   function scrollStep(dir: -1 | 1) {
     const container = document.querySelector(
-      '[data-image-viewer]',
+      '[data-image-gallery]',
     ) as HTMLDivElement | null
     if (!container) return
     const delta = container.clientHeight * 0.9 * dir
@@ -403,7 +403,7 @@ export default function Viewer() {
       const i = Math.max(0, Math.min(images.length - 1, zeroBased))
       setIndex(i)
       // continuous 模式：setIndex 不会自动滚动，单独触发一次
-      if (useViewerStore.getState().mode === 'continuous') {
+      if (useGalleryStore.getState().mode === 'continuous') {
         scrollContinuousTo(i)
       }
     },
@@ -412,7 +412,7 @@ export default function Viewer() {
 
   const goAdjacent = useCallback(
     (direction: 1 | -1) => {
-      const ctx = getViewerContext()
+      const ctx = getGalleryContext()
       if (!ctx || ctx.list.length <= 1 || !pathParam) {
         pushToast({
           kind: 'info',
@@ -425,7 +425,7 @@ export default function Viewer() {
       const base = curIdx >= 0 ? curIdx : ctx.index
       const n = ctx.list.length
       const nextIdx = ((base + direction) % n + n) % n
-      const nextEntry: ViewerContextEntry | undefined = ctx.list[nextIdx]
+      const nextEntry: GalleryContextEntry | undefined = ctx.list[nextIdx]
       if (!nextEntry) return
       const dirLabel = direction === 1 ? '下一本' : '上一本'
       pushToast({
@@ -435,7 +435,7 @@ export default function Viewer() {
       })
       try {
         sessionStorage.setItem(
-          'comic-reader-viewer-context',
+          'local-gallery-context',
           JSON.stringify({
             ...ctx,
             index: nextIdx,
@@ -446,7 +446,7 @@ export default function Viewer() {
         // ignore
       }
       setShowInfo(false)
-      setMode(useViewerStore.getState().mode)
+      setMode(useGalleryStore.getState().mode)
       navigate(nextEntry.to, { replace: false })
     },
     [pathParam, pushToast, navigate, setMode],
@@ -472,36 +472,36 @@ export default function Viewer() {
     pageup: prev,
     pagedown: next,
     home: () => {
-      if (useViewerStore.getState().mode === 'continuous') {
+      if (useGalleryStore.getState().mode === 'continuous') {
         scrollContinuousTo(0)
       } else {
         setIndex(0)
       }
     },
     end: () => {
-      if (useViewerStore.getState().mode === 'continuous') {
+      if (useGalleryStore.getState().mode === 'continuous') {
         scrollContinuousTo(images.length - 1)
       } else {
         setIndex(images.length - 1)
       }
     },
-    '+': () => useViewerStore.getState().zoomIn(),
-    '-': () => useViewerStore.getState().zoomOut(),
-    '=': () => useViewerStore.getState().zoomIn(),
-    '0': () => useViewerStore.getState().zoomReset(),
-    r: () => useViewerStore.getState().rotate(90),
-    f11: () => useViewerStore.getState().toggleFullscreen(),
-    space: () => useViewerStore.getState().toggleSlideshow(),
+    '+': () => useGalleryStore.getState().zoomIn(),
+    '-': () => useGalleryStore.getState().zoomOut(),
+    '=': () => useGalleryStore.getState().zoomIn(),
+    '0': () => useGalleryStore.getState().zoomReset(),
+    r: () => useGalleryStore.getState().rotate(90),
+    f11: () => useGalleryStore.getState().toggleFullscreen(),
+    space: () => useGalleryStore.getState().toggleSlideshow(),
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),
     '?': () => setShowHelp((v) => !v),
-    '1': () => useViewerStore.getState().setMode('single'),
-    '2': () => useViewerStore.getState().setMode('continuous'),
-    '3': () => useViewerStore.getState().setMode('double'),
-    f: () => useViewerStore.getState().cycleFit(),
+    '1': () => useGalleryStore.getState().setMode('single'),
+    '2': () => useGalleryStore.getState().setMode('continuous'),
+    '3': () => useGalleryStore.getState().setMode('double'),
+    f: () => useGalleryStore.getState().cycleFit(),
     l: () => {
-      const cur = useViewerStore.getState().direction
-      useViewerStore.getState().setDirection(cur === 'ltr' ? 'rtl' : 'ltr')
+      const cur = useGalleryStore.getState().direction
+      useGalleryStore.getState().setDirection(cur === 'ltr' ? 'rtl' : 'ltr')
     },
     n: () => goAdjacent(1),
     p: () => goAdjacent(-1),
@@ -587,8 +587,8 @@ export default function Viewer() {
       style={{ height: '100vh' }}
       onMouseMove={markActive}
     >
-      {/* 暗色画布层：让图片有「阅读器」氛围 */}
-      {/* flex flex-col 是关键：让 ImageViewer 内部的 `flex-1` + `min-h-0`
+      {/* 暗色画布层：让图片有「画廊」氛围 */}
+      {/* flex flex-col 是关键：让 ImageGallery 内部的 `flex-1` + `min-h-0`
           容器拿到约束高度,连续模式才能在容器内纵向滚动,
           而不是被外层 overflow-hidden 裁掉。 */}
       <div className="absolute inset-0 flex flex-col">
@@ -597,7 +597,7 @@ export default function Viewer() {
             src={current ?? ''}
             onProgress={(sec) => {
               // 视频模式下 index = currentTime（秒）；防抖 600ms 落盘
-              useViewerStore.getState().setIndex(sec)
+              useGalleryStore.getState().setIndex(sec)
             }}
             onEnded={() => {
               if (index < videos.length - 1) next()
@@ -614,7 +614,7 @@ export default function Viewer() {
                   if (rp && Number.isFinite(rp.total) && rp.total > 0) {
                     // 仅当 total 是秒数时（视频），才用 index 当 currentTime
                     if (rp.index > 0 && rp.index < rp.total) {
-                      useViewerStore.getState().setIndex(rp.index)
+                      useGalleryStore.getState().setIndex(rp.index)
                     }
                   }
                 })
@@ -622,7 +622,7 @@ export default function Viewer() {
             }}
           />
         ) : (
-          <ImageViewer
+          <ImageGallery
             images={images}
             onClickNavigate={(dir) => {
               if (dir === -1) prev()
@@ -633,7 +633,7 @@ export default function Viewer() {
       </div>
 
       {/* 顶部常驻条：返回 / 名称 / 页码 / 全屏 / 菜单 */}
-      <ViewerHeader
+      <GalleryHeader
         name={name}
         index={index}
         total={total}
@@ -651,7 +651,7 @@ export default function Viewer() {
       {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本）
           视频模式不显示（视频有原生 controls） */}
       {!isVideo && (
-        <ViewerControls
+        <GalleryControls
           visible={chromeVisible}
           onPrev={prev}
           onNext={next}

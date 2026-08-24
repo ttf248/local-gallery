@@ -6,14 +6,14 @@ import { useUIStore } from '../store/uiStore'
 import { useQuery } from '@tanstack/react-query'
 import { historyApi } from '../api/prefs'
 import { useAllProgress } from '../hooks/useReadingProgress'
-import { useViewerContextSync } from '../hooks/useViewerContextSync'
+import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import { ClockIcon } from '../components/common/Icon'
 import { albumRoute, decodeFavPath } from '../utils/path'
 import { formatRelative } from '../utils/date'
-import type { ViewerContextEntry } from '../utils/viewerContext'
+import type { GalleryContextEntry } from '../utils/galleryContext'
 
 // 最近访问：从后端 history 列表中读取。带阅读进度。
 export default function Recents() {
@@ -90,7 +90,7 @@ export default function Recents() {
     }
   }, [cards, query, sortBy, progressMap])
 
-  const recentsEntries = useMemo<ViewerContextEntry[]>(
+  const recentsEntries = useMemo<GalleryContextEntry[]>(
     () =>
       filtered.map((c) => ({
         key: decodeFavPath(c.to),
@@ -99,7 +99,7 @@ export default function Recents() {
       })),
     [filtered],
   )
-  useViewerContextSync({ type: 'recents' }, recentsEntries)
+  useGalleryContextSync({ type: 'recents' }, recentsEntries)
 
   return (
     <div className="min-h-full">

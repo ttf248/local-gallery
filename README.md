@@ -1,6 +1,6 @@
-# Viewer · 图像浏览器
+# Local Gallery · 本地画廊
 
-> 本地图像 / 视频浏览器。Go + React，单二进制单端口，离线可用。
+> 本地图像 / 视频画廊。Go + React，单二进制单端口，离线可用。
 
 指一下硬盘上的文件夹，按 `R` 随机翻一卷，hover 看大图，按 `?` 翻出所有快捷键。
 剩下的，让它自己跑。
@@ -14,7 +14,7 @@
 - **三态标签**：`[xxx]` 从目录名自动提取 → 智能合集
 - **视频管线**：ffmpeg 抽帧 / ffprobe 元数据 / faststart 修 moov / **冷门编码自动转 H.264+AAC**
 - **缩略图**：LRU + 磁盘双层缓存，mtime 失效
-- **查看器**：单张 / 连续滚动 / 双张并排（支持 RTL），4 套 fit
+- **画廊**：单张 / 连续滚动 / 双张并排（支持 RTL），4 套 fit
 - **主题**：light / dark / system + 6 套强调色
 - **跨设备持久化**：收藏、最近、阅读进度、设置走服务端 JSON
 - **单二进制部署**：Go 后端托管前端静态资源，一个端口一把梭
@@ -43,7 +43,7 @@
 - 冷门编码转码状态可在列表卡片上看到（转码中 X% / 已缓存 / 转码失败）
 - 转码 singleflight 去重 + 全局并发限流 + 可取消
 
-### 查看器
+### 画廊
 - 3 种显示模式：单张 / 连续滚动 / 双张并排
 - 4 种图片适配：适应 / 按宽 / 按高 / 原始（按 `F` 循环）
 - 缩放 / 旋转 / 90° 翻转 / 全屏
@@ -86,7 +86,7 @@
 
 ```bash
 # 1. 拉代码
-git clone <repo> && cd comic-reader
+git clone <repo> && cd local-gallery
 
 # 2. 写一份配置（任意本地媒体根目录）
 cd backend
@@ -123,9 +123,9 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 
 | 字段 | 说明 |
 |------|------|
-| `mediaRoots` | 媒体根目录数组，必填。旧名 `mediaRoot` / `comicRoot` 兼容 |
+| `mediaRoots` | 媒体根目录数组，必填。旧名 `mediaRoot` / `comicRoot` 仍可识别（首次保存后会被规范化为 `mediaRoots[]`） |
 | `host` / `port` | 监听地址 / 端口 |
-| `cacheDir` | 缩略图 / 视频缓存根目录，未配置时自动 `./.image-viewer/` |
+| `cacheDir` | 缩略图 / 视频缓存根目录，未配置时自动 `./.local-gallery/` |
 | `thumbSizeW` / `thumbSizeH` | 缩略图尺寸 |
 | `thumbCacheSize` | LRU 内存缓存项数 |
 | `cacheMaxAgeDays` | 磁盘缓存保留天数 |
@@ -175,7 +175,7 @@ macOS / Linux 走 `bin/ffmpeg/<os>/<arch>/` 同形目录，安装脚本后续补
 ## 项目结构
 
 ```
-comic-reader/
+local-gallery/
 ├── backend/                # Go + Fiber
 │   ├── cmd/server/         # 入口（flag + YAML 配置装配 + 服务装配）
 │   ├── internal/
@@ -190,9 +190,9 @@ comic-reader/
 │   └── src/
 │       ├── api/            # fetch + SSE 封装，端点模块
 │       ├── hooks/          # useKeyboard / useScanSSE / useTheme / useFavorites…
-│       ├── store/          # zustand（ui / library / viewer / search）
-│       ├── routes/         # Home / Album / Author / Viewer / Recents / Favorites / Settings
-│       ├── components/     # album / viewer / layout / home / common
+│       ├── store/          # zustand（ui / library / gallery / search）
+│       ├── routes/         # Home / Album / Author / Gallery / Recents / Favorites / Settings
+│       ├── components/     # album / gallery / layout / home / common
 │       └── utils/          # shortcuts / path / storage / format / albumGrouping
 ├── docs/                   # 架构 / API / 快捷键 / 全功能清单
 ├── scripts/                # dev / build / test / install-ffmpeg
@@ -232,6 +232,18 @@ comic-reader/
 
 ---
 
+## 命名历史
+
+| 时期 | 项目名 | Go module | 默认缓存目录 | 查看器路由 |
+|------|--------|-----------|-------------|-----------|
+| v1（最初） | comic-reader | `tianlongxiang/comic-reader` | `.comic-reader/` | `/reader` |
+| v2（2026 早期） | image-viewer / 图像浏览器 | `tianlongxiang/comic-reader` | `.image-viewer/` | `/viewer` |
+| v3（当前） | local-gallery / 本地画廊 | `tianlongxiang/local-gallery` | `.local-gallery/` | `/gallery` |
+
+`config.yaml` 中的 `comicRoot` / `mediaRoot`（单数）仍可识别为单元素根目录，首次保存后被规范化为 `mediaRoots[]` —— 现有用户的旧配置不爆。
+
+---
+
 ## 不做什么
 
 诚实声明：
@@ -252,5 +264,5 @@ comic-reader/
 
 ```
 $ cat .signature
-Mavis · Comic Reader · viewer
+Mavis · Local Gallery · 本地画廊
 ```

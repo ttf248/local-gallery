@@ -5,7 +5,7 @@ import Recents from './routes/Recents'
 import Favorites from './routes/Favorites'
 import Album from './routes/Album'
 import Author from './routes/Author'
-import Viewer from './routes/Viewer'
+import Gallery from './routes/Gallery'
 import Settings from './routes/Settings'
 
 export default function App() {
@@ -22,7 +22,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-      <Route path="/viewer/*" element={<Viewer />} />
+      <Route path="/gallery/*" element={<Gallery />} />
     </Routes>
   )
 }

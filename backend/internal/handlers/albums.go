@@ -6,9 +6,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/middleware"
-	"github.com/tianlongxiang/comic-reader/internal/models"
-	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // walkCollections 递归把 Collection（含嵌套子集合）按 name 关键字搜索命中。

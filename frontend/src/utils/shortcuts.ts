@@ -12,11 +12,11 @@ export interface Shortcut {
   /** 触发条件：包含 ctrl/alt/shift 等修饰键 */
   combo: string
   /** 所属分组（用于 HelpOverlay） */
-  group?: 'global' | 'viewer' | 'album'
+  group?: 'global' | 'gallery' | 'album'
 }
 
 // 全局快捷键
-// 注意：列表必须与实际注册的处理函数保持一致（Toolbar/AppShell/Viewer）。
+// 注意：列表必须与实际注册的处理函数保持一致（Toolbar/AppShell/Gallery）。
 // HelpOverlay 直接消费此表作为单一事实来源。
 export const SHORTCUTS: Shortcut[] = [
   { id: 'sidebar', label: 'Ctrl+B', description: '折叠/展开侧边栏', combo: 'ctrl+b', group: 'global' },
@@ -26,30 +26,30 @@ export const SHORTCUTS: Shortcut[] = [
   { id: 'settings', label: 'Ctrl+,', description: '设置', combo: 'ctrl+,', group: 'global' },
   { id: 'scan', label: 'Ctrl+S', description: '重新扫描', combo: 'ctrl+s', group: 'global' },
   { id: 'search', label: '/', description: '聚焦搜索框', combo: '/', group: 'global' },
-  { id: 'shuffle', label: 'R', description: '随机一本（仅非查看器）', combo: 'r', group: 'global' },
+  { id: 'shuffle', label: 'R', description: '随机一本（仅非画廊）', combo: 'r', group: 'global' },
   { id: 'help', label: '?', description: '显示快捷键帮助', combo: '?', group: 'global' },
-  // 查看器
-  { id: 'next', label: '→ / PageDown', description: '下一张', combo: 'arrowright', group: 'viewer' },
-  { id: 'prev', label: '← / PageUp', description: '上一张', combo: 'arrowleft', group: 'viewer' },
-  { id: 'first', label: 'Home', description: '第一张', combo: 'home', group: 'viewer' },
-  { id: 'last', label: 'End', description: '最后一张', combo: 'end', group: 'viewer' },
-  { id: 'nextAlbum', label: 'N', description: '下一本（来自当前列表）', combo: 'n', group: 'viewer' },
-  { id: 'prevAlbum', label: 'P', description: '上一本（来自当前列表）', combo: 'p', group: 'viewer' },
-  { id: 'gotoPage', label: 'G', description: '跳到指定页（输入数字回车）', combo: 'g', group: 'viewer' },
-  { id: 'favorite', label: 'S', description: '收藏 / 取消收藏', combo: 's', group: 'viewer' },
-  { id: 'mode1', label: '1', description: '显示模式：单张', combo: '1', group: 'viewer' },
-  { id: 'mode2', label: '2', description: '显示模式：连续滚动', combo: '2', group: 'viewer' },
-  { id: 'mode3', label: '3', description: '显示模式：双张并排', combo: '3', group: 'viewer' },
-  { id: 'fit', label: 'F', description: '图片适配循环（适应→按宽→按高→原始）', combo: 'f', group: 'viewer' },
-  { id: 'direction', label: 'L', description: '翻页方向（左→右 / 右→左）', combo: 'l', group: 'viewer' },
-  { id: 'zoomIn', label: '+ / =', description: '放大', combo: '+', group: 'viewer' },
-  { id: 'zoomOut', label: '-', description: '缩小', combo: '-', group: 'viewer' },
-  { id: 'zoomReset', label: '0', description: '实际大小 / 重置', combo: '0', group: 'viewer' },
-  { id: 'rotate', label: 'R', description: '旋转 90°（仅查看器）', combo: 'r', group: 'viewer' },
-  { id: 'fullscreen', label: 'F11', description: '全屏', combo: 'f11', group: 'viewer' },
-  { id: 'slideshow', label: 'Space', description: '幻灯片播放/暂停', combo: 'space', group: 'viewer' },
-  { id: 'info', label: 'I', description: '图片信息', combo: 'i', group: 'viewer' },
-  { id: 'escape', label: 'Esc', description: '关闭浮层 / 退出查看器', combo: 'escape', group: 'viewer' },
+  // 画廊
+  { id: 'next', label: '→ / PageDown', description: '下一张', combo: 'arrowright', group: 'gallery' },
+  { id: 'prev', label: '← / PageUp', description: '上一张', combo: 'arrowleft', group: 'gallery' },
+  { id: 'first', label: 'Home', description: '第一张', combo: 'home', group: 'gallery' },
+  { id: 'last', label: 'End', description: '最后一张', combo: 'end', group: 'gallery' },
+  { id: 'nextAlbum', label: 'N', description: '下一本（来自当前列表）', combo: 'n', group: 'gallery' },
+  { id: 'prevAlbum', label: 'P', description: '上一本（来自当前列表）', combo: 'p', group: 'gallery' },
+  { id: 'gotoPage', label: 'G', description: '跳到指定页（输入数字回车）', combo: 'g', group: 'gallery' },
+  { id: 'favorite', label: 'S', description: '收藏 / 取消收藏', combo: 's', group: 'gallery' },
+  { id: 'mode1', label: '1', description: '显示模式：单张', combo: '1', group: 'gallery' },
+  { id: 'mode2', label: '2', description: '显示模式：连续滚动', combo: '2', group: 'gallery' },
+  { id: 'mode3', label: '3', description: '显示模式：双张并排', combo: '3', group: 'gallery' },
+  { id: 'fit', label: 'F', description: '图片适配循环（适应→按宽→按高→原始）', combo: 'f', group: 'gallery' },
+  { id: 'direction', label: 'L', description: '翻页方向（左→右 / 右→左）', combo: 'l', group: 'gallery' },
+  { id: 'zoomIn', label: '+ / =', description: '放大', combo: '+', group: 'gallery' },
+  { id: 'zoomOut', label: '-', description: '缩小', combo: '-', group: 'gallery' },
+  { id: 'zoomReset', label: '0', description: '实际大小 / 重置', combo: '0', group: 'gallery' },
+  { id: 'rotate', label: 'R', description: '旋转 90°（仅画廊）', combo: 'r', group: 'gallery' },
+  { id: 'fullscreen', label: 'F11', description: '全屏', combo: 'f11', group: 'gallery' },
+  { id: 'slideshow', label: 'Space', description: '幻灯片播放/暂停', combo: 'space', group: 'gallery' },
+  { id: 'info', label: 'I', description: '图片信息', combo: 'i', group: 'gallery' },
+  { id: 'escape', label: 'Esc', description: '关闭浮层 / 退出画廊', combo: 'escape', group: 'gallery' },
 ]
 
 // 规范化按键名为可比较字符串：ctrl+a / shift+arrowleft / F5 / space

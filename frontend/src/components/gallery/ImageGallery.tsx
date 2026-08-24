@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useViewerStore } from '../../store/viewerStore'
+import { useGalleryStore } from '../../store/galleryStore'
 import { imageUrl } from '../../api/images'
 
 interface Props {
@@ -14,19 +14,19 @@ type Aspect =
   | { mode: 'height' } // 100vh 高，水平居中
   | { mode: 'original' } // 自然尺寸
 
-// 图片查看器：
+// 图片画廊：
 // - 三种显示模式：单张 / 连续滚动 / 双张并排
 // - 四种适配：适应 / 按宽 / 按高 / 原始
 // - 双张并排模式下支持 LTR / RTL（右→左：从右开始翻页）
 // - 缩放 / 旋转 / 拖拽 / 预加载 ±2
 // - 点击翻页：左半区上一页 / 右半区下一页 / 中段 30% 不响应避免误触
-export default function ImageViewer({ images, onClickNavigate }: Props) {
-  const index = useViewerStore((s) => s.index)
-  const zoom = useViewerStore((s) => s.zoom)
-  const rotation = useViewerStore((s) => s.rotation)
-  const mode = useViewerStore((s) => s.mode)
-  const fit = useViewerStore((s) => s.fit)
-  const direction = useViewerStore((s) => s.direction)
+export default function ImageGallery({ images, onClickNavigate }: Props) {
+  const index = useGalleryStore((s) => s.index)
+  const zoom = useGalleryStore((s) => s.zoom)
+  const rotation = useGalleryStore((s) => s.rotation)
+  const mode = useGalleryStore((s) => s.mode)
+  const fit = useGalleryStore((s) => s.fit)
+  const direction = useGalleryStore((s) => s.direction)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [pan, setPan] = useState({ x: 0, y: 0 })
@@ -55,7 +55,7 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
 
   useEffect(() => {
     // 只在切模式时滚回 0;切 index 不动 scroll,留给 jumpTo / scrollContinuousTo
-    // 自己管定位。连续模式切回 0 也没事 —— 切到连续时另一个 effect (Viewer.tsx)
+    // 自己管定位。连续模式切回 0 也没事 —— 切到连续时另一个 effect (Gallery.tsx)
     // 会 scrollContinuousTo(index) 把当前 index 滚进来,用户不会停在 0。
     if (containerRef.current) {
       containerRef.current.scrollTop = 0
@@ -72,7 +72,7 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
       if (!e.ctrlKey && !e.metaKey) return
       e.preventDefault()
       const dir = e.deltaY > 0 ? -1 : 1
-      const store = useViewerStore.getState()
+      const store = useGalleryStore.getState()
       if (dir > 0) store.zoomIn()
       else store.zoomOut()
     }
@@ -136,13 +136,13 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
   // 容器公共类
   // 单页模式：容器自己滚动 + flex 居中
   // 连续 / 双页模式：容器滚动（避免上层 / 下层元素双层滚动）
-  // 背景用透明，让外层（Viewer 的深色画布）决定整体氛围
+  // 背景用透明，让外层（Gallery 的深色画布）决定整体氛围
   const containerCls = isSingle
     ? 'relative flex-1 overflow-auto flex items-center justify-center min-h-0'
     : 'relative flex-1 overflow-auto min-h-0'
-  // data-image-viewer 让外部（Viewer 路由）能定位连续模式下的单图
+  // data-image-gallery 让外部（Gallery 路由）能定位连续模式下的单图
   // （用于 Home/End 跳到首/尾图片的 scrollIntoView）。
-  const dataImageViewerProps = { 'data-image-viewer': '' } as const
+  const dataImageGalleryProps = { 'data-image-gallery': '' } as const
 
   // 单张图片的尺寸 / object-fit 规则
   function imgStyleFor(zoomOverride?: number): React.CSSProperties {
@@ -182,7 +182,7 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
         className={containerCls}
         onContextMenu={(e) => e.preventDefault()}
         onClick={onContainerClick}
-        {...dataImageViewerProps}
+        {...dataImageGalleryProps}
       >
         {current ? (
           <img
@@ -192,7 +192,7 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
             draggable={false}
             onMouseDown={onMouseDown}
             onDoubleClick={() => {
-              const store = useViewerStore.getState()
+              const store = useGalleryStore.getState()
               if (store.zoom > 1) {
                 store.zoomReset()
                 setPan({ x: 0, y: 0 })
@@ -220,7 +220,7 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
         className={containerCls}
         onContextMenu={(e) => e.preventDefault()}
         onClick={onContainerClick}
-        {...dataImageViewerProps}
+        {...dataImageGalleryProps}
       >
         <div className="flex flex-col items-center gap-2 py-4">
           {images.map((src, i) => (
@@ -246,7 +246,7 @@ export default function ImageViewer({ images, onClickNavigate }: Props) {
       className={containerCls}
       onContextMenu={(e) => e.preventDefault()}
       onClick={onContainerClick}
-      {...dataImageViewerProps}
+      {...dataImageGalleryProps}
     >
       <DoublePage
         images={images}

@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void
 }
 
-// 查看器右侧图片信息面板。
+// 画廊右侧图片信息面板。
 export default function ImageInfoPanel({ absPath, onClose }: Props) {
   const { info, err, loading } = useImageInfo(absPath)
 

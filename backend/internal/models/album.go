@@ -73,7 +73,7 @@ func lowerExt(name string) string {
 
 // Album 含有图片的文件夹。
 //
-// 历史命名：原 "相册" 概念；为了贴合"图像浏览器"产品定位，结构上也支持
+// 历史命名：原 "相册" 概念；为了贴合"本地画廊"产品定位，结构上也支持
 // "folder" 概念（同一对象）。JSON 输出同时暴露新字段 `files`（推荐）与
 // 旧字段 `imageFiles`（兼容）。
 //
@@ -215,7 +215,7 @@ func ternaryCollections(use bool, v []Collection) []Collection {
 
 // SmartCollection 基于方括号标签聚合的智能集合。
 //
-// 历史命名：原本只把第一个方括号当"作者"；图像浏览器产品语义下统称为
+// 历史命名：原本只把第一个方括号当"作者"；本地画廊产品语义下统称为
 // "标签 / Tag"——一个文件夹可挂多个标签。
 type SmartCollection struct {
 	Type       string  `json:"type"`        // 始终为 "smartCollection"

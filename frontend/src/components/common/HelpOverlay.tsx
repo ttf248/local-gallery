@@ -7,10 +7,10 @@ interface Props {
   onClose: () => void
 }
 
-// 渲染顺序：先全局，再查看器。Title 单一来源。
+// 渲染顺序：先全局，再画廊。Title 单一来源。
 const GROUP_ORDER: Array<{ key: NonNullable<Shortcut['group']>; title: string }> = [
   { key: 'global', title: '全局' },
-  { key: 'viewer', title: '查看器' },
+  { key: 'gallery', title: '画廊' },
 ]
 
 // 帮助浮层：可搜索的快捷键列表 + 分类。

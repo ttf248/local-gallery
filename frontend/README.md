@@ -1,6 +1,8 @@
-# Frontend - React + Vite + TypeScript
+# Frontend · React + Vite + TypeScript
 
-漫画阅读器前端 SPA。
+> 本地画廊（Local Gallery）前端 SPA。
+
+主文档见仓库根 [README.md](../README.md) / [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)。本文件只写前端本地开发相关的速查。
 
 ## 启动
 

@@ -107,7 +107,7 @@ export default function VideoPlayer({
           e.preventDefault()
           v.muted = !v.muted
           break
-        // 'F11' / 'f' / 全屏由 ViewerHeader 顶层处理；此处不重复
+        // 'F11' / 'f' / 全屏由 GalleryHeader 顶层处理；此处不重复
       }
     }
     window.addEventListener('keydown', onKey)

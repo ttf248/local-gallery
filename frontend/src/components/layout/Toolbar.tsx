@@ -25,7 +25,7 @@ export default function Toolbar() {
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
   const pushToast = useUIStore((s) => s.pushToast)
 
-  const onViewer = location.pathname.startsWith('/viewer')
+  const onGallery = location.pathname.startsWith('/gallery')
 
   const startScan = useMutation({
     mutationFn: () => scanApi.start(),
@@ -58,13 +58,13 @@ export default function Toolbar() {
     <header className="h-14 flex items-center gap-4 px-5 lg:px-7 border-b border-border-faint glass">
       {/* 左侧：极简字标（窄屏隐藏） */}
       <div className="hidden lg:flex items-center gap-2 min-w-0">
-        <span className="font-display text-sm text-fg-muted">Viewer</span>
+        <span className="font-display text-sm text-fg-muted">Local Gallery</span>
         <span className="text-fg-subtle/50">/</span>
         <span className="text-sm font-medium truncate">{titleOf(location.pathname)}</span>
       </div>
       {/* 窄屏：返回按钮 */}
       <div className="lg:hidden">
-        {onViewer ? (
+        {onGallery ? (
           <button
             onClick={() => navigate(-1)}
             className="text-xs h-8 px-2.5 rounded-md text-fg-muted hover:bg-bg-subtle"
@@ -74,12 +74,12 @@ export default function Toolbar() {
         ) : null}
       </div>
 
-      {!onViewer && (
+      {!onGallery && (
         <div className="flex-1 max-w-[560px]">
           <GlobalSearch />
         </div>
       )}
-      {onViewer && <div className="flex-1" />}
+      {onGallery && <div className="flex-1" />}
 
       <div className="flex items-center gap-1">
         <button
@@ -91,7 +91,7 @@ export default function Toolbar() {
           <HelpIcon size={14} />
         </button>
         <ThemeSwitcher compact />
-        {!onViewer && <MoreMenu onScan={() => startScan.mutate()} onRefresh={() => loadFromBackend()} scanPending={startScan.isPending || sse.isRunning} />}
+        {!onGallery && <MoreMenu onScan={() => startScan.mutate()} onRefresh={() => loadFromBackend()} scanPending={startScan.isPending || sse.isRunning} />}
       </div>
     </header>
   )
@@ -103,7 +103,7 @@ function titleOf(pathname: string): string {
   if (pathname.startsWith('/favorites')) return '收藏'
   if (pathname.startsWith('/settings')) return '设置'
   if (pathname.startsWith('/albums')) return '文件夹'
-  if (pathname.startsWith('/viewer')) return '浏览'
+  if (pathname.startsWith('/gallery')) return '浏览'
   return '图像'
 }
 

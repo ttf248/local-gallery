@@ -5,8 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/middleware"
-	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // ThumbHandler 返回 /api/thumbs/* 处理函数。

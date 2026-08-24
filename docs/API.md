@@ -1,6 +1,6 @@
 # API · HTTP 接口手册
 
-> 图像浏览器后端的 HTTP 接口。基础前缀 `/api`，JSON 为主，缩略图 / 原图 / 视频流走二进制。
+> 本地画廊（Local Gallery）后端的 HTTP 接口。基础前缀 `/api`，JSON 为主，缩略图 / 原图 / 视频流走二进制。
 
 ---
 
@@ -505,7 +505,7 @@ mediaRoots:
 
 host: "0.0.0.0"
 port: 8080
-cacheDir: ".image-viewer"     # 留空 → CWD 下 .image-viewer/
+cacheDir: ".local-gallery"     # 留空 → CWD 下 .local-gallery/
 thumbSizeW: 320
 thumbSizeH: 350
 thumbCacheSize: 500

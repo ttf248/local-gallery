@@ -6,7 +6,7 @@ import { useSearchStore } from '../store/searchStore'
 import { useScanSSE } from '../hooks/useScanSSE'
 import { useFavorites } from '../hooks/useFavorites'
 import { useAllProgress } from '../hooks/useReadingProgress'
-import { useViewerContextSync } from '../hooks/useViewerContextSync'
+import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import { ListFilterBar } from '../components/common/ListFilterBar'
@@ -14,7 +14,7 @@ import EmptyState from '../components/common/EmptyState'
 import YearTimeline from '../components/home/YearTimeline'
 import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
-import type { ViewerContextEntry } from '../utils/viewerContext'
+import type { GalleryContextEntry } from '../utils/galleryContext'
 import { groupByYear, type YearGroup } from '../utils/albumGrouping'
 import {
   PlayFilledIcon,
@@ -154,7 +154,7 @@ export default function Home() {
       .slice(0, 4)
   }, [cards, progressMap])
 
-  // 时光轴：按年份分组（相册浏览器模式，替代漫画阅读器的"全新/重温/最近加入"）
+  // 时光轴：按年份分组（画廊模式，替代早期"全新/重温/最近加入"的分区）
   const yearGroups = useMemo<YearGroup[]>(() => groupByYear(result), [result])
 
   // 切换视图到 collection/smart 时清掉 yearFilter（年份只对 album 有意义）
@@ -206,14 +206,14 @@ export default function Home() {
     }
   }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result])
 
-  const homeEntries = useMemo<ViewerContextEntry[]>(
+  const homeEntries = useMemo<GalleryContextEntry[]>(
     () =>
       filtered
         .filter((c) => c.variant === 'album')
         .map((c) => ({ key: decodeFavPath(c.to), to: c.to, name: c.title })),
     [filtered],
   )
-  useViewerContextSync({ type: 'home' }, homeEntries)
+  useGalleryContextSync({ type: 'home' }, homeEntries)
 
   const counts = useMemo(() => {
     const c = { all: cards.length, album: 0, collection: 0, smart: 0 }
@@ -233,7 +233,7 @@ export default function Home() {
       ? '启动中…'
       : '重新扫描'
 
-  // 「继续上次」直跳查看器：进首页最大的目的是「接着看」，
+  // 「继续上次」直跳画廊：进首页最大的目的是「接着看」，
   // 中转 Album 详情会多一次点击，对随手翻翻的场景不友好。
   const onContinue = (card: CardData) => {
     if (card.variant !== 'album') {
@@ -246,7 +246,7 @@ export default function Home() {
       index: String(idx),
       name: card.title,
     })
-    navigate(`/viewer?${qs.toString()}`)
+    navigate(`/gallery?${qs.toString()}`)
   }
 
   // 年份筛选的"全部图像"section 顶部 chip
@@ -470,7 +470,7 @@ export default function Home() {
       {!hasContent && !isLoadingInitial && (
         <section className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full">
           <EmptyState
-            title="欢迎使用图像浏览器"
+            title="欢迎使用本地画廊"
             description="点击下方按钮开始扫描你的本地图像目录。"
             icon={<LibraryIcon size={20} />}
             action={

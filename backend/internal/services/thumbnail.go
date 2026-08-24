@@ -18,7 +18,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/singleflight"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // ErrUnsupportedFormat 图片格式不受支持。

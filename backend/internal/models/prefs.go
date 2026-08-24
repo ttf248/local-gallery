@@ -26,7 +26,7 @@ type ReadingProgress struct {
 //   - History：最近访问（LRU，上限 MaxRecent）
 //   - ReadingProgress：阅读进度（按相册路径）
 //   - Theme：light / dark / system
-//   - AutoSwitchAlbum：查看器末尾自动跳到下个相册
+//   - AutoSwitchAlbum：画廊末尾自动跳到下个相册
 //   - ShowSwitchNotif：跨相册切换时显示通知
 type Prefs struct {
 	Favorites        []string          `json:"favorites"`

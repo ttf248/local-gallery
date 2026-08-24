@@ -1,6 +1,6 @@
 # ARCHITECTURE · 系统设计
 
-> 面向工程师的架构说明。讲清楚组件怎么连、数据怎么流、瓶颈在哪、为什么这样选。
+> 本地画廊（Local Gallery）的架构说明。讲清楚组件怎么连、数据怎么流、瓶颈在哪、为什么这样选。
 
 ---
 
@@ -14,7 +14,7 @@
 │    │           │                    │                       │
 │    ├── layout: AppShell / Sidebar / Toolbar / StatusBar     │
 │    ├── home:   YearTimeline / AlbumGrid / AlbumCard         │
-│    ├── viewer: ImageViewer / VideoPlayer / PageSlider       │
+│    ├── gallery: ImageGallery / VideoPlayer / PageSlider     │
 │    └── common: HelpOverlay / HoverPreview / ThemeSwitcher   │
 │                                                             │
 │  IntersectionObserver lazy-load · react-virtuoso 虚拟滚动   │
@@ -44,7 +44,7 @@
         ┌────────────────────────────┐
         │ 文件系统（一个或多个根）    │
         │  E:\图像  F:\漫画  ~/pic   │
-        │  ── 媒体文件 + 缓存目录    │
+        │  ── 媒体文件 + .local-gallery/ 缓存目录 │
         └────────────────────────────┘
 ```
 
@@ -408,20 +408,20 @@ frontend/src/
 ├── store/                              # zustand
 │   ├── uiStore.ts                      # 主题 / 强调色 / 侧边栏 / 视图模式（localStorage）
 │   ├── libraryStore.ts                 # 最近一次扫描结果（内存）
-│   ├── viewerStore.ts                  # 查看器临时状态（sessionStorage）
+│   ├── viewerStore.ts                  # 画廊临时状态（sessionStorage）
 │   └── searchStore.ts                  # 排序 / 视图 / 年份筛选（localStorage）
 ├── routes/                             # 页面
 │   ├── Home.tsx                        # 主页（年份时间线 + 全库网格）
 │   ├── Album.tsx                       # 单个 album / collection
 │   ├── Author.tsx                      # 标签页 /tags/<tag>
-│   ├── Viewer.tsx                      # 查看器 /viewer?type=&path=&index=
+│   ├── Gallery.tsx                     # 画廊 /gallery?type=&path=&index=
 │   ├── Recents.tsx / Favorites.tsx     # 最近 / 收藏
 │   └── Settings.tsx                    # 设置（含服务端配置）
 ├── components/
 │   ├── layout/                         # AppShell / Sidebar / Toolbar / StatusBar / Breadcrumb
 │   ├── album/                          # AlbumGrid / AlbumCard / ContextMenu / ScanProgress
 │   ├── home/                           # YearTimeline（海报式 4:5 卡片）
-│   ├── viewer/                         # ImageViewer / VideoPlayer / ViewerToolbar / ImageInfoPanel / PageSlider / TranscodeProgress
+│   ├── gallery/                        # ImageGallery / VideoPlayer / GalleryHeader / GalleryControls / ImageInfoPanel / PageSlider / TranscodeProgress
 │   └── common/                         # EmptyState / HelpOverlay / PropertiesDialog / ThemeSwitcher / VideoCoverImage / HoverPreview / TranscodeStatusBadge / GlobalSearch / ListFilterBar / Popover / CopyButton / Toast / Icon
 └── utils/
     ├── shortcuts.ts                    # 单一来源
@@ -439,7 +439,7 @@ frontend/src/
 |------|------|--------|
 | 主题 / 强调色 / 侧边栏 / 视图模式 | localStorage | ❌ |
 | 排序 / 年份筛选 / 搜索词 | localStorage | ❌ |
-| 查看器当前页码 / 缩放 | sessionStorage | ❌（关标签页清） |
+| 画廊当前页码 / 缩放 | sessionStorage | ❌（关标签页清） |
 | 收藏 / 最近 / 阅读进度 | 服务端 JSON | ✅ |
 | 扫描结果 | 内存（`libraryStore`） | ❌（重启清） |
 | 偏好（主题 / maxRecent / autoSwitchAlbum） | 服务端 JSON | ✅ |
@@ -453,14 +453,14 @@ frontend/src/
 /albums/<encoded-path>     Album 详情
 /albums/                   集合（多 album 上层目录）
 /tags/<tag>                Author / 智能合集
-/viewer?type=image&...     Image Viewer
-/viewer?type=video&...     Video Player
+/gallery?type=image&...     Image Gallery
+/gallery?type=video&...     Video Player
 /recents                   最近
 /favorites                 收藏
 /settings                  设置
 ```
 
-查看器用 query string 而不是 path param，因为图片列表 URL 太长会超 8KB（nginx 默认）。
+画廊用 query string 而不是 path param，因为图片列表 URL 太长会超 8KB（nginx 默认）。
 
 ### 3.3 主题实现
 
@@ -651,7 +651,7 @@ if dir := cfg.StaticDir; dir != "" {
 
 ```nginx
 location / {
-    root /var/www/image-viewer;
+    root /var/www/local-gallery;
     try_files $uri /index.html;
 }
 location /api/ {
@@ -667,17 +667,17 @@ location /api/ {
 ### 6.3 systemd（可选）
 
 ```ini
-# /etc/systemd/system/image-viewer.service
+# /etc/systemd/system/local-gallery.service
 [Unit]
-Description=Image Viewer
+Description=Local Gallery
 After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/image-viewer
-ExecStart=/opt/image-viewer/server
+WorkingDirectory=/opt/local-gallery
+ExecStart=/opt/local-gallery/server
 Restart=on-failure
-Environment=CONFIG_PATH=/etc/image-viewer/config.yaml
+Environment=CONFIG_PATH=/etc/local-gallery/config.yaml
 
 [Install]
 WantedBy=multi-user.target
@@ -685,19 +685,13 @@ WantedBy=multi-user.target
 
 ---
 
-## 7. 域对照（v1 → v2）
+## 7. 命名历史（v1 → v2 → v3）
 
-| v1 漫画阅读器 | v2 图像浏览器 |
-|---------------|---------------|
-| 漫画 / 本 / 卷 | 文件夹 |
-| 页 | 张 |
-| 作者 | 标签 |
-| 作者集合 | 智能合集 |
-| 阅读模式 | 显示模式 |
-| 单页 / 双页对开 | 单张 / 双张并排 |
-| 漫画根 `comicRoot` | 媒体根 `mediaRoots[]` |
-| `.comic-reader/` 缓存 | `.image-viewer/` 缓存 |
-| `ComicReader.exe` | `image-viewer` / `server` |
-| `<Route path="/authors/*">` | `<Route path="/tags/:tag">` |
+| 时期 | 项目名 | Go module | 缓存目录 | 画廊路由 |
+|------|--------|-----------|----------|---------|
+| v1（最初） | comic-reader / 漫画阅读器 | `tianlongxiang/comic-reader` | `.comic-reader/` | `/reader` |
+| v2（2026 早期） | image-viewer / 图像浏览器 | `tianlongxiang/comic-reader` | `.image-viewer/` | `/viewer` |
+| v3（当前） | local-gallery / 本地画廊 | `tianlongxiang/local-gallery` | `.local-gallery/` | `/gallery` |
 
-旧名（`comicRoot` / `Author` / `/authors/*`）仍可识别，便于旧链接与缓存迁移。
+`config.yaml` 中 `comicRoot` / `mediaRoot`（单数）仍可识别为单元素根目录，首次保存后被规范化为 `mediaRoots[]`。
+`/authors/*` 仍重定向到 `/tags/*`，保留旧链接。

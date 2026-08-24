@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // ScanStatus 扫描状态机。

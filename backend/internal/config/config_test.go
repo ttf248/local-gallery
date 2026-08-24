@@ -206,7 +206,7 @@ func TestAddr(t *testing.T) {
 	}
 }
 
-// 默认缓存目录应使用 .image-viewer；不依赖环境变量。
+// 默认缓存目录应使用 .local-gallery；不依赖环境变量。
 func TestDefault_CacheDirIsRuntimeRelative(t *testing.T) {
 	cfg := Default()
 	if filepath.Base(cfg.CacheDir) != DefaultCacheDirName {

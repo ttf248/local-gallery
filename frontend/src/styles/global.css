@@ -181,7 +181,7 @@ button:not(:disabled):active {
   justify-content: center;
 }
 
-/* 暗色画布上的 kbd（Viewer）：用半透明白 */
+/* 暗色画布上的 kbd（Gallery）：用半透明白 */
 .kbd-light {
   display: inline-flex;
   align-items: center;
@@ -244,7 +244,7 @@ button:not(:disabled):active {
   animation: fadeIn 200ms var(--ease-out) both;
 }
 
-/* 缩放淡入（用于图片 / 查看器切换） */
+/* 缩放淡入（用于图片 / 画廊切换） */
 @keyframes scaleFade {
   from {
     opacity: 0;

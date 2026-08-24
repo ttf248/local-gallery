@@ -1,4 +1,4 @@
-// Package services 提供漫画阅读器核心业务服务。
+// Package services 提供本地画廊核心业务服务。
 package services
 
 import (
@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // ScanOptions 扫描选项。

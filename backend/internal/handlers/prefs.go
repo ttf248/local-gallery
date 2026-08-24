@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
-	"github.com/tianlongxiang/comic-reader/internal/store"
+	"github.com/tianlongxiang/local-gallery/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/store"
 )
 
 // PrefsGetHandler GET /api/prefs

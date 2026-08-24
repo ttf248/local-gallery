@@ -7,8 +7,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
-	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // ScanHandler 同步扫描（保留兼容）。

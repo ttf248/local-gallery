@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // mkdirAll / touchAll 是测试辅助：创建多层级目录结构与空图片占位文件。

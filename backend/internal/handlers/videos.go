@@ -9,9 +9,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/middleware"
-	"github.com/tianlongxiang/comic-reader/internal/models"
-	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // VideoHandler 返回 /api/videos 原视频流（支持 Range 请求）。

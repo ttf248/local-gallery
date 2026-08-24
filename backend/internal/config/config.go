@@ -1,8 +1,8 @@
-// Package config 提供图像浏览器后端的 YAML 配置加载。
+// Package config 提供本地画廊后端的 YAML 配置加载。
 //
 // 配置来源唯一：YAML 文件（默认 ./config.yaml，可用 --config 指定）。
 // 未配置的字段走内置默认值；缓存目录默认在进程 CWD 下创建
-// `.image-viewer/`（存放缩略图、扫描结果、用户偏好）。
+// `.local-gallery/`（存放缩略图、扫描结果、用户偏好）。
 //
 // 字段优先级：YAML 文件中显式值 > 内置默认值。无任何 env / flag 覆盖。
 package config
@@ -23,7 +23,7 @@ var Version = "0.1.0"
 const DefaultConfigName = "config.yaml"
 
 // DefaultCacheDirName 未配置 cacheDir 时使用的目录名（创建在 CWD 下）。
-const DefaultCacheDirName = ".image-viewer"
+const DefaultCacheDirName = ".local-gallery"
 
 // DefaultFFmpegPath ffmpeg 默认可执行文件位置。
 //
@@ -107,7 +107,7 @@ func (c *Config) syncFirstRoot() {
 	}
 }
 
-// Default 返回内置默认配置（缓存目录指向 CWD/.image-viewer）。
+// Default 返回内置默认配置（缓存目录指向 CWD/.local-gallery）。
 func Default() *Config {
 	c := &Config{
 		MediaRoots:      []string{filepath.Join(".", "media")},

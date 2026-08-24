@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
-	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // CacheStatsResponse GET /api/cache/stats 的响应体。

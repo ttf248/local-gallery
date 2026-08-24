@@ -3,7 +3,7 @@ package services
 import (
 	"sort"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // GroupByTag 按标签智能聚合相册。

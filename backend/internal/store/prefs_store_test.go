@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 func tempStore(t *testing.T) *PrefsStore {

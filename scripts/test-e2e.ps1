@@ -1,14 +1,12 @@
 # scripts/test-e2e.ps1
 # 端到端测试
-# 占位脚本，将在 T15 阶段完善
 #
-# 准备临时测试漫画目录，写入临时 backend/config.yaml 指向该目录；
-# 不再依赖 COMIC_ROOT 等环境变量。
+# 准备临时测试媒体目录，写入临时 backend/config.yaml 指向该目录。
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "[1/3] 准备测试漫画与临时 config.yaml..." -ForegroundColor Cyan
-$testRoot = Join-Path $env:TEMP "comic-reader-e2e-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+Write-Host "[1/3] 准备测试媒体与临时 config.yaml..." -ForegroundColor Cyan
+$testRoot = Join-Path $env:TEMP "local-gallery-e2e-$([guid]::NewGuid().ToString('N').Substring(0,8))"
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 
 $sampleDir = Join-Path $testRoot "sample-album"
@@ -23,7 +21,8 @@ $pngBytes = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC
 
 # 临时配置写入仓库根的 backend/test-config.yaml，端口避开 8080
 $testCfg = @"
-comicRoot: "$testRoot"
+mediaRoots:
+  - "$testRoot"
 port: 18080
 staticDir: ""
 "@

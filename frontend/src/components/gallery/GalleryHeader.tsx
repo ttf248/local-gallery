@@ -10,7 +10,7 @@ import {
   ArrowDownIcon,
 } from '../common/Icon'
 import Popover, { PopoverItem, PopoverSeparator, PopoverLabel } from '../common/Popover'
-import { useViewerStore } from '../../store/viewerStore'
+import { useGalleryStore } from '../../store/galleryStore'
 
 interface Props {
   name: string
@@ -28,14 +28,14 @@ interface Props {
   onNextAlbum?: () => void
 }
 
-// 查看器顶部常驻条：极简 — 返回 / 名称 / 页码 / 收藏 / 全屏 / 菜单
+// 画廊顶部常驻条：极简 — 返回 / 名称 / 页码 / 收藏 / 全屏 / 菜单
 //
 // 设计要点：
 // - 始终可见（不被 chromeVisible 影响）
 // - glass 半透明，沉浸但不抢戏
 // - 暗色背景下用浅色文字；hover 用白色
 // - 菜单里收纳：图片信息 / 快捷键帮助 / 上一本/下一本 / 第一张/最后张
-export default function ViewerHeader({
+export default function GalleryHeader({
   name,
   index,
   total,
@@ -49,9 +49,9 @@ export default function ViewerHeader({
   onPrevAlbum,
   onNextAlbum,
 }: Props) {
-  const mode = useViewerStore((s) => s.mode)
-  const setIndex = useViewerStore((s) => s.setIndex)
-  const toggleFullscreen = useViewerStore((s) => s.toggleFullscreen)
+  const mode = useGalleryStore((s) => s.mode)
+  const setIndex = useGalleryStore((s) => s.setIndex)
+  const toggleFullscreen = useGalleryStore((s) => s.toggleFullscreen)
 
   // 双页模式显示「L-R / total」；否则「N / total」
   const counterText = (() => {

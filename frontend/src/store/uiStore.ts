@@ -75,7 +75,7 @@ export const useUIStore = create<UIState>()(
       dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
     }),
     {
-      name: 'comic-reader-ui',
+      name: 'local-gallery-ui',
       partialize: (s) => ({
         sidebarCollapsed: s.sidebarCollapsed,
         theme: s.theme,

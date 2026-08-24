@@ -48,7 +48,7 @@ export const useSearchStore = create<SearchState>()(
         set({ query: '', sortBy: 'name', view: 'all', yearFilter: null }),
     }),
     {
-      name: 'comic-reader-search',
+      name: 'local-gallery-search',
     },
   ),
 )

@@ -1,4 +1,4 @@
-import { useViewerStore, type FitMode, type ReaderMode } from '../../store/viewerStore'
+import { useGalleryStore, type FitMode, type ReaderMode } from '../../store/galleryStore'
 import {
   SinglePageIcon,
   ScrollPageIcon,
@@ -39,29 +39,29 @@ const FIT_OPTIONS: { value: FitMode; label: string; icon: typeof FitIcon }[] = [
   { value: 'original', label: '原始', icon: OriginalSizeIcon },
 ]
 
-// 查看器右侧浮层控件：模式 / 适配 / 缩放 / 旋转 / 阅读方向
+// 画廊右侧浮层控件：模式 / 适配 / 缩放 / 旋转 / 阅读方向
 //
 // 设计：玻璃面板 + 鼠标 idle 时整组淡出（保留顶部常驻条）；
 // 在 hover 时显出。按钮顺序自上而下：模式 / 适配 / 缩放 / 旋转 / 方向。
-export default function ViewerControls({
+export default function GalleryControls({
   visible,
   onPrev,
   onNext,
   onPrevAlbum,
   onNextAlbum,
 }: Props) {
-  const mode = useViewerStore((s) => s.mode)
-  const fit = useViewerStore((s) => s.fit)
-  const zoom = useViewerStore((s) => s.zoom)
-  const rotation = useViewerStore((s) => s.rotation)
-  const direction = useViewerStore((s) => s.direction)
-  const setMode = useViewerStore((s) => s.setMode)
-  const setFit = useViewerStore((s) => s.setFit)
-  const setDirection = useViewerStore((s) => s.setDirection)
-  const zoomIn = useViewerStore((s) => s.zoomIn)
-  const zoomOut = useViewerStore((s) => s.zoomOut)
-  const zoomReset = useViewerStore((s) => s.zoomReset)
-  const rotate = useViewerStore((s) => s.rotate)
+  const mode = useGalleryStore((s) => s.mode)
+  const fit = useGalleryStore((s) => s.fit)
+  const zoom = useGalleryStore((s) => s.zoom)
+  const rotation = useGalleryStore((s) => s.rotation)
+  const direction = useGalleryStore((s) => s.direction)
+  const setMode = useGalleryStore((s) => s.setMode)
+  const setFit = useGalleryStore((s) => s.setFit)
+  const setDirection = useGalleryStore((s) => s.setDirection)
+  const zoomIn = useGalleryStore((s) => s.zoomIn)
+  const zoomOut = useGalleryStore((s) => s.zoomOut)
+  const zoomReset = useGalleryStore((s) => s.zoomReset)
+  const rotate = useGalleryStore((s) => s.rotate)
 
   // 暗色画布上显示更柔和的浮层
   return (

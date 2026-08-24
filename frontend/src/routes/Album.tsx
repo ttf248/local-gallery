@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
 import { useFavorites } from '../hooks/useFavorites'
-import { useViewerContextSync } from '../hooks/useViewerContextSync'
+import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { historyApi } from '../api/prefs'
 import { thumbUrl } from '../api/thumbs'
 import { useUIStore } from '../store/uiStore'
@@ -37,7 +37,7 @@ import PropertiesDialog from '../components/common/PropertiesDialog'
 import ContextMenu, { type AnyMenuItem } from '../components/album/ContextMenu'
 import VideoCoverImage from '../components/common/VideoCoverImage'
 import { fsCapabilities } from '../api/fs'
-import type { ViewerContextEntry } from '../utils/viewerContext'
+import type { GalleryContextEntry } from '../utils/galleryContext'
 
 interface AlbumDetail {
   type: 'album'
@@ -79,7 +79,7 @@ interface SmartDetail {
 type Detail = AlbumDetail | CollectionDetail | SmartDetail
 
 // 相册视图：
-//   - 相册 → 图片网格，点击进入查看器
+//   - 相册 → 图片网格，点击进入画廊
 //   - 集合/智能集合 → 嵌套相册列表
 //   - 缺数据时给出明确引导
 export default function Album() {
@@ -332,13 +332,13 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
     }
   }, [moreOpen])
 
-  const openViewer = (idx: number) => {
+  const openGallery = (idx: number) => {
     const qs = new URLSearchParams({
       path: detail.path,
       index: String(idx),
       name: detail.name,
     })
-    navigate(`/viewer?${qs.toString()}`)
+    navigate(`/gallery?${qs.toString()}`)
   }
 
   // 用 AlbumActions 钩子,实现菜单里的复制路径 / 资源管理器 / 属性
@@ -520,7 +520,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
               <div className="mt-5 flex items-center gap-2 flex-wrap">
                 {progressPct !== null && progressPct > 0 ? (
                   <button
-                    onClick={() => openViewer(startIndex)}
+                    onClick={() => openGallery(startIndex)}
                     className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
                   >
                     <PlayFilledIcon size={13} />
@@ -532,7 +532,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                 ) : (
                   <button
                     onClick={() => {
-                      openViewer(0)
+                      openGallery(0)
                       pushToast({ kind: 'info', message: '开始浏览' })
                     }}
                     className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
@@ -630,7 +630,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
             return (
               <button
                 key={img}
-                onClick={() => openViewer(i)}
+                onClick={() => openGallery(i)}
                 onContextMenu={(e) => {
                   e.preventDefault()
                   setContextMenu({ x: e.clientX, y: e.clientY, index: i })
@@ -689,7 +689,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
           onSelect={(id) => {
             switch (id) {
               case 'open':
-                openViewer(contextMenu.index)
+                openGallery(contextMenu.index)
                 break
               case 'favorite':
                 toggleFavorite()
@@ -805,11 +805,11 @@ function CollectionView({
   const cards = filtered
 
   // 集合/智能合集页面作为上下文源
-  const collEntries = useMemo<ViewerContextEntry[]>(
+  const collEntries = useMemo<GalleryContextEntry[]>(
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [cards],
   )
-  useViewerContextSync(
+  useGalleryContextSync(
     isSmart
       ? { type: 'tag', tag: detail.author }
       : { type: 'album', parentPath: detail.path },
@@ -880,7 +880,7 @@ function CollectionView({
 
 // 纯视频专辑视图：与 AlbumView 视觉骨架一致（hero + 元信息 + CTA），
 // 主体用 3:4 网格展示视频文件，每格用 VideoCoverImage（自动抽帧）。
-// 点击 → /viewer?type=video&path=<album>&index=<n>&name=<file>。
+// 点击 → /gallery?type=video&path=<album>&index=<n>&name=<file>。
 function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void }) {
   const navigate = useNavigate()
   const { add: addFav, toggle: toggleFav, favorites } = useFavorites()
@@ -896,7 +896,7 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
       name: detail.name,
       type: 'video',
     })
-    navigate(`/viewer?${qs.toString()}`)
+    navigate(`/gallery?${qs.toString()}`)
   }
 
   const toggleFavorite = () => {

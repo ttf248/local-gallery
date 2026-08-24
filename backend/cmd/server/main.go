@@ -1,4 +1,4 @@
-// Command server 漫画阅读器后端入口。
+// Command server 本地画廊后端入口。
 //
 // 启动流程：
 //  1. 解析 flag：仅 --config（指定 YAML 路径）和 --static-dir（前端产物目录）
@@ -23,11 +23,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
-	"github.com/tianlongxiang/comic-reader/internal/handlers"
-	"github.com/tianlongxiang/comic-reader/internal/middleware"
-	"github.com/tianlongxiang/comic-reader/internal/services"
-	"github.com/tianlongxiang/comic-reader/internal/store"
+	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/handlers"
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/store"
 )
 
 func main() {
@@ -58,11 +58,11 @@ func main() {
 	// ---- 4. 校验 ----
 	if err := cfg.Validate(); err != nil {
 		fmt.Fprintf(os.Stderr, "配置校验失败: %v\n", err)
-		fmt.Fprintf(os.Stderr, "提示：在 config.yaml 中设置 mediaRoot 指向图像根目录\n")
+		fmt.Fprintf(os.Stderr, "提示：在 config.yaml 中设置 mediaRoots 指向媒体根目录\n")
 		os.Exit(2)
 	}
 
-	log.Printf("comic-reader 后端启动中...")
+	log.Printf("local-gallery 后端启动中...")
 	roots := cfg.Roots()
 	if len(roots) == 1 {
 		log.Printf("  MediaRoot: %s", roots[0])
@@ -78,7 +78,7 @@ func main() {
 
 	// ---- 5. 创建并启动 Fiber App ----
 	app := fiber.New(fiber.Config{
-		AppName:               "comic-reader",
+		AppName:               "local-gallery",
 		DisableStartupMessage: true,
 		// BodyLimit 提到 6 MiB：默认 4 MiB 不够 /api/thumbs/cover 上传
 		// 4K canvas JPEG 封面（典型 2-4 MB）。
@@ -265,7 +265,7 @@ func main() {
 	// 清空扫描结果缓存（不立即扫描；前端调用后引导用户点"重新扫描"）。
 	api.Post("/scan/cache/clear", handlers.ScanCacheClearHandler(scanCache))
 	api.Get("/albums", handlers.AlbumDetailHandler(scanCache))
-	// /api/folders 是 /api/albums 的语义化别名（图像浏览器用 "folder" 更准确）；
+	// /api/folders 是 /api/albums 的语义化别名（本地画廊用 "folder" 更准确）；
 	// 老客户端/历史链接仍可继续访问 /api/albums。
 	api.Get("/folders", handlers.AlbumDetailHandler(scanCache))
 	api.Get("/search", handlers.SearchHandler(scanCache))

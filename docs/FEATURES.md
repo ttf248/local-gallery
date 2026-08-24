@@ -1,6 +1,6 @@
 # FEATURES · 全功能清单
 
-> 项目所有功能的权威清单，按域分组。每一项指向代码位置。
+> 本地画廊（Local Gallery）所有功能的权威清单，按域分组。每一项指向代码位置。
 > 想加新功能？先在这里找定位，再决定属于哪个域。
 
 ---
@@ -10,7 +10,7 @@
 - [1. 库与扫描](#1-库与扫描)
 - [2. 缩略图与缓存](#2-缩略图与缓存)
 - [3. 视频处理](#3-视频处理)
-- [4. 图片查看器](#4-图片查看器)
+- [4. 图片画廊](#4-图片画廊)
 - [5. 视频播放器](#5-视频播放器)
 - [6. 导航与发现](#6-导航与发现)
 - [7. 收藏 / 最近 / 进度](#7-收藏--最近--进度)
@@ -126,27 +126,27 @@
 
 ---
 
-## 4. 图片查看器
+## 4. 图片画廊
 
 | 功能 | 描述 | 位置 |
 |------|------|------|
-| 3 种显示模式 | 单张 / 连续滚动 / 双张并排（`1` / `2` / `3` 切换） | `routes/Viewer.tsx` `components/viewer/ImageViewer.tsx` |
-| 4 套 fit | 适应 / 按宽 / 按高 / 原始（`F` 循环） | `ImageViewer.tsx` `fitMode` |
-| 翻页方向 LTR/RTL | 双张并排模式按 `L` 切换 | `ImageViewer.tsx` |
-| 缩放 | `+` / `-` / `0`（实际大小） | `ImageViewer.tsx` |
-| 旋转 | `R` 90° | `ImageViewer.tsx` |
-| 跳到指定页 | `G` 唤起输入框 + 回车 | `Viewer.tsx` |
-| 跳到首/尾 | `Home` / `End` | `ImageViewer.tsx` |
-| 翻页 | `←` / `→` / `PageUp` / `PageDown`，连续模式为滚一屏 | `ImageViewer.tsx` |
-| 点击图片分区域 | 左 1/3 上一张 / 右 1/3 下一张 / 中段无响应（防误触） | `ImageViewer.tsx` `onClick` |
+| 3 种显示模式 | 单张 / 连续滚动 / 双张并排（`1` / `2` / `3` 切换） | `routes/Gallery.tsx` `components/gallery/ImageGallery.tsx` |
+| 4 套 fit | 适应 / 按宽 / 按高 / 原始（`F` 循环） | `ImageGallery.tsx` `fitMode` |
+| 翻页方向 LTR/RTL | 双张并排模式按 `L` 切换 | `ImageGallery.tsx` |
+| 缩放 | `+` / `-` / `0`（实际大小） | `ImageGallery.tsx` |
+| 旋转 | `R` 90° | `ImageGallery.tsx` |
+| 跳到指定页 | `G` 唤起输入框 + 回车 | `Gallery.tsx` |
+| 跳到首/尾 | `Home` / `End` | `ImageGallery.tsx` |
+| 翻页 | `←` / `→` / `PageUp` / `PageDown`，连续模式为滚一屏 | `ImageGallery.tsx` |
+| 点击图片分区域 | 左 1/3 上一张 / 右 1/3 下一张 / 中段无响应（防误触） | `ImageGallery.tsx` `onClick` |
 | 缩略图跳页 | 底部滑块拖拽时浮出 5 张缩略图条 | `components/viewer/PageSlider.tsx` |
-| 幻灯片 | `Space` 启停，自动翻页 | `ImageViewer.tsx` `slideshowTimer` |
-| 全屏 | `F11`（也走原生 Fullscreen API） | `ImageViewer.tsx` |
+| 幻灯片 | `Space` 启停，自动翻页 | `ImageGallery.tsx` `slideshowTimer` |
+| 全屏 | `F11`（也走原生 Fullscreen API） | `ImageGallery.tsx` |
 | 信息面板 | `I` 切换：路径 / 尺寸 / 格式 / 大小 / mtime | `components/viewer/ImageInfoPanel.tsx` |
-| 跨卷翻页 | `N` / `P` 按当前列表顺序（主页 / 收藏 / 标签 / 集合） | `Viewer.tsx` |
-| 收藏切换 | `S` 收藏 / 取消收藏 | `Viewer.tsx` |
-| 错误兜底 | 加载失败显示重试按钮 + 中文 MediaError 翻译 | `components/viewer/ImageViewer.tsx` |
-| 退出优先级 | `Esc` 链：退出全屏 → 关信息面板 → 关帮助 → 返回上一页 | `Viewer.tsx` |
+| 跨卷翻页 | `N` / `P` 按当前列表顺序（主页 / 收藏 / 标签 / 集合） | `Gallery.tsx` |
+| 收藏切换 | `S` 收藏 / 取消收藏 | `Gallery.tsx` |
+| 错误兜底 | 加载失败显示重试按钮 + 中文 MediaError 翻译 | `components/gallery/ImageGallery.tsx` |
+| 退出优先级 | `Esc` 链：退出全屏 → 关信息面板 → 关帮助 → 返回上一页 | `Gallery.tsx` |
 
 ---
 
@@ -180,7 +180,7 @@
 | 随机一本 | `R` / 侧边栏按钮 → 在 `result.albums` 随机抽一个 | `Sidebar.tsx` `onShuffle` |
 | 悬停预览 | 240×300 portal 大卡，进度条 / 上次阅读 / 张数 | `components/common/HoverPreview.tsx` |
 | 智能避让 | 悬停预览自动避让视口边缘（左 / 右、上 / 下） | `HoverPreview.tsx` |
-| 面包屑 | 主页 / 集合 / 专辑 / 查看器四级 | `components/layout/Breadcrumb.tsx` |
+| 面包屑 | 主页 / 集合 / 专辑 / 画廊四级 | `components/layout/Breadcrumb.tsx` |
 | 状态栏 | 底部显示"已就绪 / 阅读中"指示 | `components/layout/StatusBar.tsx` |
 | 面包屑 / 工具栏 | 顶部导航条 | `components/layout/Toolbar.tsx` `AppShell.tsx` |
 | 文件夹详情 | `/albums/<path>` 单 album 全部文件 + 视频混合 | `routes/Album.tsx` |
@@ -203,7 +203,7 @@
 | 清空历史 | `DELETE /api/history` | `handlers/prefs.go` |
 | 阅读进度 | `POST /api/progress` 幂等 upsert | `handlers/progress.go` |
 | 单条进度 | `GET /api/progress?path=...` | `handlers/progress.go` |
-| 进度自动上报 | 查看器每 1.5 秒 debounce 写一次 | `frontend/src/hooks/useReadingProgress.ts` |
+| 进度自动上报 | 画廊每 1.5 秒 debounce 写一次 | `frontend/src/hooks/useReadingProgress.ts` |
 | 偏好读取 | `GET /api/prefs` 返回完整对象 | `handlers/prefs.go` |
 | 偏好更新 | `PATCH /api/prefs` 只覆盖传入字段 | `handlers/prefs.go` |
 
@@ -232,8 +232,8 @@
 | 跨布局兼容 | `?` / `+` / `=` 字面字符忽略 shift 前缀（AZERTY / QWERTZ 也能命中） | `utils/shortcuts.ts` `normalizeKey` |
 | 输入框失效 | input / textarea / contentEditable 获得焦点时全局 hook 自动跳过 | `hooks/useKeyboard.ts` |
 | 可搜索帮助浮层 | `?` 唤起，输入即过滤；按 Esc 关闭 | `components/common/HelpOverlay.tsx` |
-| 分组渲染 | global / viewer 两栏 | `HelpOverlay.tsx` |
-| 查看器独立注册 | `Viewer.tsx` 内的快捷键不与全局冲突 | `routes/Viewer.tsx` |
+| 分组渲染 | global / gallery 两栏 | `HelpOverlay.tsx` |
+| 画廊独立注册 | `Gallery.tsx` 内的快捷键不与全局冲突 | `routes/Gallery.tsx` |
 | 完整列表 | 见 [`docs/SHORTCUTS.md`](./SHORTCUTS.md) | — |
 
 ---
@@ -292,24 +292,28 @@
 | 扫描结果 | 内存（`internal/services/scan_cache.go`） | 重启清空，`/api/scan/latest` 立即返 |
 | 偏好 / 收藏 / 历史 | `<cacheDir>/prefs.json` | atomic tmp+rename |
 | 前端 UI 状态（主题 / 侧边栏 / 视图） | 浏览器 localStorage | 跨设备不共享 |
-| 查看器临时状态（页码 / 缩放） | 浏览器 sessionStorage | 标签页关闭清空 |
+| 画廊临时状态（页码 / 缩放） | 浏览器 sessionStorage | 标签页关闭清空 |
 
 ---
 
-## 14. 域对照（v1 → v2 迁移）
+## 14. 命名历史（v1 → v2 → v3）
 
-v1 是漫画阅读器，v2 通用化为图像浏览器。语义升级：
+| 时期 | 项目名 | Go module | 缓存目录 | 画廊路由 |
+|------|--------|-----------|----------|---------|
+| v1（最初） | comic-reader / 漫画阅读器 | `tianlongxiang/comic-reader` | `.comic-reader/` | `/reader` |
+| v2（2026 早期） | image-viewer / 图像浏览器 | `tianlongxiang/comic-reader` | `.image-viewer/` | `/viewer` |
+| v3（当前） | local-gallery / 本地画廊 | `tianlongxiang/local-gallery` | `.local-gallery/` | `/gallery` |
 
-| v1 | v2 | 说明 |
-|----|----|------|
-| 漫画 / 本 / 卷 | 文件夹 / Album | 抽象层级上移一格 |
-| 页 | 张 | 去掉"叙事"暗示 |
-| 作者 / Author | 标签 / Tag | `[xxx]` 自动提取，Album 可有多个标签 |
-| 作者集合 | 智能合集 | 按标签跨 album 聚合 |
-| 阅读模式 | 显示模式 | 单张 / 连续 / 双张并排 |
-| 单页 / 双页对开 | 单张 / 双张并排 | LTR / RTL 由 `L` 切换 |
-| 漫画根 `comicRoot` | 媒体根 `mediaRoots[]` | 数组化，多根并存 |
-| `.comic-reader/` 缓存 | `.image-viewer/` 缓存 | 旧路径仍可识别 |
-| `ComicReader.exe` | `image-viewer` / `server` | 二进制改名 |
+语义升级路径：
+
+| v1 漫画 | v2 图像 | v3 画廊 |
+|---------|---------|---------|
+| 漫画 / 本 / 卷 | 文件夹 | 文件夹 |
+| 页 | 张 | 张 |
+| 作者 / Author | 标签 / Tag | 标签 / Tag |
+| 作者集合 | 智能合集 | 智能合集 |
+| 阅读模式 | 显示模式 | 显示模式 |
+| 单页 / 双页对开 | 单张 / 双张并排 | 单张 / 双张并排 |
+| 漫画根 `comicRoot` | 媒体根 `mediaRoots[]` | 媒体根 `mediaRoots[]` |
 
 旧字段 / 旧路径 / 旧路由（`/authors/*`）仍可识别，便于旧链接与缓存迁移。

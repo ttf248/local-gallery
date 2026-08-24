@@ -333,7 +333,7 @@ export default function Settings() {
 
       <Section title="关于" icon={<InfoIcon size={13} />}>
         <div className="text-sm text-fg-muted leading-relaxed">
-          <div className="font-display text-base text-fg">Viewer · 图像浏览器</div>
+          <div className="font-display text-base text-fg">Local Gallery · 本地画廊</div>
           <div className="mt-1">Web 版 · v{__APP_VERSION__}</div>
           <div className="mt-4 text-xs text-fg-subtle flex items-center gap-2">
             <span>按</span>

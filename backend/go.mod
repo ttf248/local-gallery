@@ -1,4 +1,4 @@
-module github.com/tianlongxiang/comic-reader
+module github.com/tianlongxiang/local-gallery
 
 go 1.24
 

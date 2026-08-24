@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tianlongxiang/comic-reader/internal/models"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // PrefsStore 文件型偏好存储。

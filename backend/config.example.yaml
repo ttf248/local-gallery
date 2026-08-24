@@ -4,7 +4,7 @@
 #
 # 启动顺序：YAML 显式值 > 内置默认值。
 # 未列出的字段会使用 Default() 的内置值。
-# 缓存目录未配置时自动在进程 CWD 下创建 .image-viewer/。
+# 缓存目录未配置时自动在进程 CWD 下创建 .local-gallery/。
 
 # 媒体根目录（数组，推荐）
 # 支持配置多个目录,所有根下的子目录都会被扫描、合并到一个全局库中。
@@ -19,8 +19,8 @@ mediaRoots:
 host: "0.0.0.0"
 port: 8080
 
-# 缩略图缓存目录（相对路径相对 CWD；留空则用 ./.image-viewer）
-cacheDir: ".image-viewer"
+# 缩略图缓存目录（相对路径相对 CWD；留空则用 ./.local-gallery）
+cacheDir: ".local-gallery"
 
 # 缩略图尺寸（像素）
 thumbSizeW: 320

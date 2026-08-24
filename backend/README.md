@@ -1,6 +1,6 @@
 # Backend · Go + Fiber
 
-> 图像浏览器的 Go 后端。Fiber v2 路由，扫描 + 缩略图 + 视频管线 + 偏好持久化。
+> 本地画廊（Local Gallery）的 Go 后端。Fiber v2 路由，扫描 + 缩略图 + 视频管线 + 偏好持久化。
 
 主文档见仓库根 [README.md](../README.md) / [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) / [docs/API.md](../docs/API.md)。本文件只写后端本地开发相关的速查。
 

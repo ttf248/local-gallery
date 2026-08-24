@@ -62,7 +62,7 @@ type safetyState struct {
 type RootProvider func() []string
 
 // PathSafetyMiddleware 返回中间件：把 ?path=<abs> 解析后校验是否在任一
-// comicRoot 之下（多根支持）。
+// mediaRoots 之下（多根支持）。
 // 根路径由 RootsProvider 在每次请求时提供（支持运行中热更新）。
 // RootsProvider 返回空切片时按"无根"处理（拒绝所有非 smart: 路径）。
 type RootsProvider func() []string

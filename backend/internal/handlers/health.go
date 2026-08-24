@@ -6,7 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/config"
 )
 
 // HealthResponse 健康检查响应。

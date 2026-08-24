@@ -27,7 +27,7 @@ export default function AppShell() {
   const pushToast = useUIStore((s) => s.pushToast)
   const result = useLibraryStore((s) => s.result)
   const [helpOpen, setHelpOpen] = useState(false)
-  const onViewer = location.pathname.startsWith('/viewer')
+  const onGallery = location.pathname.startsWith('/gallery')
   // 扫描进度 + 取消（提升到 AppShell 后所有路由都能看到顶部进度条）
   const scanSse = useScanSSE()
 
@@ -60,7 +60,7 @@ export default function AppShell() {
         base = '文件夹'
       }
     }
-    document.title = `${base} · Viewer`
+    document.title = `${base} · Local Gallery`
 
     if (path === '/') setBreadcrumbs([])
     else if (path.startsWith('/recents'))
@@ -112,9 +112,9 @@ export default function AppShell() {
       const el = document.querySelector<HTMLInputElement>('input[placeholder^="搜索"]')
       el?.focus()
     },
-    // 随机一本：仅在非 viewer 页面生效（viewer 的 r 用于旋转）
+    // 随机一本：仅在非 gallery 页面生效（gallery 的 r 用于旋转）
     r: () => {
-      if (onViewer) return
+      if (onGallery) return
       goShuffle()
     },
   })

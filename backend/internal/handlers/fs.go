@@ -6,8 +6,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
-	"github.com/tianlongxiang/comic-reader/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
 )
 
 // FsOpenHandler 在系统文件管理器中打开 path。

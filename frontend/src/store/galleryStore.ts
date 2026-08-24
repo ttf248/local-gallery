@@ -8,11 +8,11 @@ export type FitMode = 'fit' | 'width' | 'height' | 'original'
 /** 翻页方向：ltr（左→右）/ rtl（右→左） */
 export type ReadDirection = 'ltr' | 'rtl'
 
-// 查看器状态：
+// 画廊状态：
 // - 用户偏好（mode/fit/direction）→ localStorage 跨会话保留,关 tab 再开还是上次的选择
 // - 临时状态（index/zoom/rotation/slideshow/slideshowInterval）→ 不持久化,
 //   切换 album 时 resetView 会重置 zoom/rotation,index 由 URL 决定
-export interface ViewerState {
+export interface GalleryState {
   // 当前图片索引（-1 = 未选择）
   index: number
   zoom: number // 1.0 = 100%
@@ -47,7 +47,7 @@ export interface ViewerState {
 
 const FIT_CYCLE: FitMode[] = ['fit', 'width', 'height', 'original']
 
-export const useViewerStore = create<ViewerState>()(
+export const useGalleryStore = create<GalleryState>()(
   persist(
     (set, get) => ({
       index: -1,
@@ -97,7 +97,7 @@ export const useViewerStore = create<ViewerState>()(
       },
     }),
     {
-      name: 'comic-reader-viewer',
+      name: 'local-gallery',
       // 只持久化用户偏好(模式/适配/方向),其余临时态(index/zoom/rotation/slideshow)
       // 不进 localStorage,避免换 album 时被旧状态污染,也避免 slideshow 之类跨会话遗留
       partialize: (s) => ({

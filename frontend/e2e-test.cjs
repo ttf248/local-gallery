@@ -26,7 +26,7 @@ async function main() {
   })
   page.on('pageerror', (e) => console.log('  [pageerror]', e.message))
 
-  console.log('\n=== 1. 主页（漫画库） ===')
+  console.log('\n=== 1. 主页（本地图库） ===')
   await page.goto(BASE + '/', { waitUntil: 'networkidle' })
   await page.waitForTimeout(500)
   await shot(page, '01-home')
@@ -84,24 +84,24 @@ async function main() {
     await page.waitForTimeout(1500)
     await shot(page, '07-album-detail')
 
-    // 找到第一张图片点击进入查看器
+    // 找到第一张图片点击进入画廊
     const img = await page.$('.grid > button')
     if (img) {
       await img.click()
       await page.waitForTimeout(1500)
-      await shot(page, '08-viewer')
+      await shot(page, '08-gallery')
 
       // 触发信息面板
       await page.keyboard.press('i')
       await page.waitForTimeout(300)
-      await shot(page, '09-viewer-info')
+      await shot(page, '09-gallery-info')
 
       // 触发帮助
       await page.keyboard.press('Escape')
       await page.waitForTimeout(200)
       await page.keyboard.press('Control+/')
       await page.waitForTimeout(500)
-      await shot(page, '10-viewer-help')
+      await shot(page, '10-gallery-help')
 
       // 关闭
       await page.keyboard.press('Escape')

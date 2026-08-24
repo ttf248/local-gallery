@@ -4,8 +4,8 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
-	"github.com/tianlongxiang/comic-reader/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // ConfigResponse GET /api/config 的响应体。

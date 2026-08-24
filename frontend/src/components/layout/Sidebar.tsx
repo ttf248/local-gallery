@@ -27,7 +27,7 @@ const items = [
 // 侧边栏：
 // - 极简的图标列；展开时多 8px 内边距 + 文字
 // - 透明背景，仅在 hover/active 时出现 subtle 背景
-// - 顶部的 "Viewer" 文字标只在展开时显示，折叠时仅保留品牌方块
+// - 顶部的 "Local Gallery" 文字标只在展开时显示，折叠时仅保留品牌方块
 export default function Sidebar({ collapsed, onToggle }: Props) {
   const result = useLibraryStore((s) => s.result)
   const navigate = useNavigate()
@@ -60,9 +60,9 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
             <Logo />
             <div className="leading-none min-w-0">
               <div className="font-display font-semibold tracking-tight text-sm truncate">
-                Viewer
+                Local Gallery
               </div>
-              <div className="text-[10px] text-fg-subtle mt-0.5 truncate">本地图像 · viewer</div>
+              <div className="text-[10px] text-fg-subtle mt-0.5 truncate">本地画廊 · local gallery</div>
             </div>
           </div>
         ) : (
@@ -122,10 +122,10 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-fg-subtle">
             <span
               className={`inline-block w-1.5 h-1.5 rounded-full ${
-                location.pathname.startsWith('/viewer') ? 'bg-accent' : 'bg-success'
+                location.pathname.startsWith('/gallery') ? 'bg-accent' : 'bg-success'
               }`}
             />
-            <span>{location.pathname.startsWith('/viewer') ? '阅读中' : '已就绪'}</span>
+            <span>{location.pathname.startsWith('/gallery') ? '阅读中' : '已就绪'}</span>
           </div>
         </div>
       )}
@@ -139,7 +139,7 @@ function Logo() {
     <div className="relative w-7 h-7 shrink-0">
       <div className="absolute inset-0 rounded-md bg-accent" />
       <div className="absolute inset-0 flex items-center justify-center text-accent-contrast font-display font-semibold text-[13px] tracking-tighter">
-        M
+        L
       </div>
     </div>
   )

@@ -1,17 +1,16 @@
 # scripts/dev.ps1
 # 一键启动开发环境（后端 + 前端）
-# 占位脚本，将在 T15 阶段完善
 #
 # 后端读取 backend/config.yaml（不存在则用内置默认值）。
-# 缓存目录默认创建在 backend/.comic-reader/。
+# 缓存目录默认创建在 backend/.local-gallery/。
 
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host " Comic Reader - Dev Launcher" -ForegroundColor Cyan
+Write-Host " Local Gallery - Dev Launcher" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 
 if (-not (Test-Path "backend/config.yaml")) {
   Write-Host "未找到 backend/config.yaml，使用内置默认值启动。" -ForegroundColor Yellow
-  Write-Host "（提示：复制 backend/config.example.yaml 为 backend/config.yaml 并设置 comicRoot）" -ForegroundColor Yellow
+  Write-Host "（提示：复制 backend/config.example.yaml 为 backend/config.yaml 并设置 mediaRoots）" -ForegroundColor Yellow
 }
 
 # 并行启动后端和前端

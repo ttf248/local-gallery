@@ -25,7 +25,7 @@ const baseConfig = {
   mediaRoot: 'E:\\漫画',
   host: '0.0.0.0',
   port: 8080,
-  cacheDir: '.image-viewer',
+  cacheDir: '.local-gallery',
   thumbSizeW: 320,
   thumbSizeH: 350,
   thumbCacheSize: 500,
@@ -62,7 +62,7 @@ describe('ServerConfigPanel', () => {
     renderPanel()
     // mediaRoots 数组作为多 input 列表渲染
     expect(await screen.findByDisplayValue('E:\\漫画')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('.image-viewer')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('.local-gallery')).toBeInTheDocument()
     expect(screen.getByDisplayValue('0.0.0.0')).toBeInTheDocument()
     expect(screen.getByDisplayValue('8080')).toBeInTheDocument()
   })

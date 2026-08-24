@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { imageInfoApi, type ImageInfo } from '../api/imageInfo'
 
-// 共享的图片元数据 fetch：ImageInfoPanel（查看器右侧）和
+// 共享的图片元数据 fetch：ImageInfoPanel（画廊右侧）和
 // PropertiesDialog（album/grid 右键菜单）原本各自 useState + useEffect
 // 拉同一份数据。统一到这里避免重复实现 + 重复请求。
 //

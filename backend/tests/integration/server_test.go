@@ -23,11 +23,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/tianlongxiang/comic-reader/internal/config"
-	"github.com/tianlongxiang/comic-reader/internal/handlers"
-	"github.com/tianlongxiang/comic-reader/internal/middleware"
-	"github.com/tianlongxiang/comic-reader/internal/services"
-	"github.com/tianlongxiang/comic-reader/internal/store"
+	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/handlers"
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/store"
 )
 
 type harness struct {
@@ -42,7 +42,7 @@ func newHarness(t *testing.T) *harness {
 	t.Helper()
 	// 使用自定义可清理的临时目录，避开 fasthttp 文件句柄延迟释放导致的
 	// t.TempDir 清理失败（仅 Windows）。
-	rootDir, err := os.MkdirTemp("", "comic-reader-it-")
+	rootDir, err := os.MkdirTemp("", "local-gallery-it-")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -593,8 +593,8 @@ func TestVideoInfo(t *testing.T) {
 func TestVideoStream_FaststartRemux(t *testing.T) {
 	ffmpeg := os.Getenv("FFMPEG_PATH")
 	if ffmpeg == "" {
-		if _, err := os.Stat(`C:\dev\comic-reader\bin\ffmpeg\windows\amd64\ffmpeg.exe`); err == nil {
-			ffmpeg = `C:\dev\comic-reader\bin\ffmpeg\windows\amd64\ffmpeg.exe`
+		if _, err := os.Stat(`C:\dev\local-gallery\bin\ffmpeg\windows\amd64\ffmpeg.exe`); err == nil {
+			ffmpeg = `C:\dev\local-gallery\bin\ffmpeg\windows\amd64\ffmpeg.exe`
 		} else if p, err := exec.LookPath("ffmpeg"); err == nil {
 			ffmpeg = p
 		}
@@ -610,7 +610,7 @@ func TestVideoStream_FaststartRemux(t *testing.T) {
 	prefs := filepath.Join(prefsDir, "settings.json")
 	t.Cleanup(func() { os.RemoveAll(prefsDir) })
 
-	rootDir, _ := os.MkdirTemp("", "comic-reader-it-faststart-")
+	rootDir, _ := os.MkdirTemp("", "local-gallery-it-faststart-")
 	t.Cleanup(func() { os.RemoveAll(rootDir) })
 
 	mgr := config.NewManagerWith(&config.Config{
