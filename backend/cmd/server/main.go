@@ -186,6 +186,19 @@ func main() {
 	if err != nil {
 		log.Printf("警告：加载扫描缓存失败 %v", err)
 	}
+	// 加载用户自定义封面覆盖（每个 album 可独立设置封面），启动时
+	// 一次性应用到 ScanResult 上（之后 SetWithOverrideApplied 在用户
+	// 修改时增量更新）。
+	coverOverrides := services.NewCoverOverrideStore(filepath.Join(cfg.CacheDir, "cover_overrides.json"))
+	if err := coverOverrides.Load(); err != nil {
+		log.Printf("警告：加载封面覆盖失败 %v", err)
+	}
+	if r := scanCache.Get(); r != nil {
+		applied := scanCache.ApplyCoverOverrides(coverOverrides.Snapshot())
+		if applied > 0 {
+			log.Printf("  应用了 %d 条用户封面覆盖", applied)
+		}
+	}
 	runner.SetCache(scanCache)
 	if r := scanCache.Get(); r != nil {
 		log.Printf("  已加载上次扫描结果：%d 相册，扫描于 %s", r.AlbumCount, r.ScannedAt.Format("2006-01-02 15:04:05"))
@@ -269,13 +282,17 @@ func main() {
 	api.Get("/scan/latest", handlers.LatestScanHandler(scanCache))
 	// 清空扫描结果缓存（不立即扫描；前端调用后引导用户点"重新扫描"）。
 	api.Post("/scan/cache/clear", handlers.ScanCacheClearHandler(scanCache))
-	api.Get("/albums", handlers.AlbumDetailHandler(scanCache))
+	api.Get("/albums", handlers.AlbumDetailHandler(scanCache, coverOverrides))
+	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。
+	// file 必须是 path 子路径 + 真实存在的文件；越权请求会被 400 拒绝。
+	api.Put("/albums/cover", handlers.AlbumSetCoverHandler(scanCache, coverOverrides))
+	api.Delete("/albums/cover", handlers.AlbumClearCoverHandler(scanCache, coverOverrides))
 	// /api/folders 是 /api/albums 的语义化别名（本地画廊用 "folder" 更准确）；
 	// 老客户端/历史链接仍可继续访问 /api/albums。
-	api.Get("/folders", handlers.AlbumDetailHandler(scanCache))
+	api.Get("/folders", handlers.AlbumDetailHandler(scanCache, coverOverrides))
 	api.Get("/search", handlers.SearchHandler(scanCache))
 	// 标签聚合的语义化路由；"smart:<tag>" 仍能访问。
-	api.Get("/tags", handlers.AlbumDetailHandler(scanCache))
+	api.Get("/tags", handlers.AlbumDetailHandler(scanCache, coverOverrides))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))

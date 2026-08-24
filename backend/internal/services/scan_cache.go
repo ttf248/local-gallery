@@ -359,3 +359,213 @@ func sameRootSet(a, b []string) bool {
 	}
 	return true
 }
+
+// ApplyCoverOverrides 把用户设置的封面覆盖应用到当前缓存结果上。
+//
+// 处理流程：
+//  1. 遍历 ScanResult.Albums 和嵌套 Collection.Albums
+//  2. 对每条 cover override：确认 coverFile 仍在对应 album 目录里（防
+//     越权 + 防止文件已被删/移走），否则静默跳过
+//  3. 替换 CoverImage + CoverKind（按文件扩展名推断 image/video）
+//
+// 原地修改缓存内容（持锁）。返回被应用的 override 数量。
+//
+// 必须在 ScanResultCache 持锁状态下调用（这里是读路径，但底下会
+// 触发 dirty 标记，外部调用方应在 Get() 拿深拷贝之后修改并 Set 回去）。
+func (c *ScanResultCache) ApplyCoverOverrides(overrides map[string]CoverOverride) int {
+	if len(overrides) == 0 {
+		return 0
+	}
+	applied := 0
+	caseInsensitive := runtime.GOOS == "windows"
+	apply := func(a *models.Album) {
+		ov, ok := overrides[filepath.Clean(a.Path)]
+		if !ok {
+			return
+		}
+		if !fileInsideDir(ov.File, a.Path, caseInsensitive) {
+			// cover 文件不在 album 内（被移走/删除/越权），静默跳过
+			return
+		}
+		kind := coverKindFromExt(ov.File)
+		if kind == "" {
+			return
+		}
+		a.CoverImage = ov.File
+		a.CoverKind = kind
+		applied++
+	}
+	for i := range c.latest.Albums {
+		apply(&c.latest.Albums[i])
+	}
+	var walk func(cs []models.Collection)
+	walk = func(cs []models.Collection) {
+		for i := range cs {
+			for j := range cs[i].Albums {
+				apply(&cs[i].Albums[j])
+			}
+			if len(cs[i].Collections) > 0 {
+				walk(cs[i].Collections)
+			}
+		}
+	}
+	if len(c.latest.Collections) > 0 {
+		walk(c.latest.Collections)
+	}
+	return applied
+}
+
+// fileInsideDir 检查 file 路径是否在 dir 目录内（file 的父目录 = dir，
+// 或 file 父目录以 dir 为前缀）。用于验证 cover override 没越权。
+func fileInsideDir(file, dir string, caseInsensitive bool) bool {
+	fp := filepath.Clean(file)
+	dp := filepath.Clean(dir)
+	if caseInsensitive {
+		fp = strings.ToLower(fp)
+		dp = strings.ToLower(dp)
+	}
+	if fp == dp {
+		return false // 文件不能等于目录
+	}
+	rel, err := filepath.Rel(dp, fp)
+	if err != nil {
+		return false
+	}
+	if rel == "." || rel == ".." {
+		return false
+	}
+	if strings.HasPrefix(rel, "..") {
+		return false
+	}
+	return true
+}
+
+// coverKindFromExt 按文件扩展名推断 "image" / "video"。
+func coverKindFromExt(p string) string {
+	ext := strings.ToLower(filepath.Ext(p))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".heif", ".avif":
+		return "image"
+	case ".mp4", ".webm", ".mov", ".mkv", ".avi":
+		return "video"
+	}
+	return ""
+}
+
+// SetWithOverrideApplied 把用户设置的 cover 立即应用到缓存结果中的
+// 对应 album（在顶层 albums 与嵌套 collections 内都找），并标记 dirty
+// 让异步 flush 落盘 scan_cache.json。找不到匹配的 album 时静默成功
+// （下一次扫描器跑或加载时 ApplyCoverOverrides 会按 store 重新填上）。
+func (c *ScanResultCache) SetWithOverrideApplied(albumPath, coverFile, coverKind string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.latest == nil {
+		return
+	}
+	albumPath = filepath.Clean(albumPath)
+	caseInsensitive := runtime.GOOS == "windows"
+	var walkAlbums func(a *models.Album) bool
+	walkAlbums = func(a *models.Album) bool {
+		ap := filepath.Clean(a.Path)
+		if caseInsensitive {
+			if strings.EqualFold(ap, albumPath) {
+				a.CoverImage = coverFile
+				a.CoverKind = coverKind
+				return true
+			}
+		} else if ap == albumPath {
+			a.CoverImage = coverFile
+			a.CoverKind = coverKind
+			return true
+		}
+		return false
+	}
+	// 顶层
+	for i := range c.latest.Albums {
+		if walkAlbums(&c.latest.Albums[i]) {
+			c.dirty = true
+			return
+		}
+	}
+	// 嵌套
+	var walk func(cs []models.Collection) bool
+	walk = func(cs []models.Collection) bool {
+		for i := range cs {
+			for j := range cs[i].Albums {
+				if walkAlbums(&cs[i].Albums[j]) {
+					return true
+				}
+			}
+			if len(cs[i].Collections) > 0 {
+				if walk(cs[i].Collections) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if walk(c.latest.Collections) {
+		c.dirty = true
+	}
+}
+
+// RebuildCoverForAlbum 清除 override 后让该 album 的封面回到扫描器默认：
+// 图片优先 → images[0]，否则 videos[0]。
+//
+// 找不到该 album 路径时静默成功（同 SetWithOverrideApplied）。
+func (c *ScanResultCache) RebuildCoverForAlbum(albumPath string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.latest == nil {
+		return
+	}
+	albumPath = filepath.Clean(albumPath)
+	caseInsensitive := runtime.GOOS == "windows"
+	var rebuild func(a *models.Album) bool
+	rebuild = func(a *models.Album) bool {
+		ap := filepath.Clean(a.Path)
+		match := ap == albumPath
+		if !match && caseInsensitive {
+			match = strings.EqualFold(ap, albumPath)
+		}
+		if !match {
+			return false
+		}
+		if len(a.ImageFiles) > 0 {
+			a.CoverImage = a.ImageFiles[0]
+			a.CoverKind = "image"
+		} else if len(a.VideoFiles) > 0 {
+			a.CoverImage = a.VideoFiles[0]
+			a.CoverKind = "video"
+		} else {
+			a.CoverImage = ""
+			a.CoverKind = ""
+		}
+		return true
+	}
+	for i := range c.latest.Albums {
+		if rebuild(&c.latest.Albums[i]) {
+			c.dirty = true
+			return
+		}
+	}
+	var walk func(cs []models.Collection) bool
+	walk = func(cs []models.Collection) bool {
+		for i := range cs {
+			for j := range cs[i].Albums {
+				if rebuild(&cs[i].Albums[j]) {
+					return true
+				}
+			}
+			if len(cs[i].Collections) > 0 {
+				if walk(cs[i].Collections) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	if walk(c.latest.Collections) {
+		c.dirty = true
+	}
+}
