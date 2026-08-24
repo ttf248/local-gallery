@@ -73,6 +73,12 @@ export default function Recents() {
         const q = query.toLowerCase()
         return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
       })
+      // 最小图数过滤(全局 filter)
+      .filter((it) => {
+        if (useSearchStore.getState().minImageCount <= 0) return true
+        if (it.variant !== 'album') return true
+        return (it.count ?? 0) >= useSearchStore.getState().minImageCount
+      })
       .map((c) => {
         const k = decodeFavPath(c.to)
         const p = progressMap?.[k]

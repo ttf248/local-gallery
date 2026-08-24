@@ -330,6 +330,13 @@ export const SparkleIcon = (p: IconProps) => (
   </svg>
 )
 
+/** 漏斗:filter / 过滤 通用图标(用于 ListFilterBar 最小图数控件) */
+export const FilterIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M3 5h18l-7 9v6l-4-2v-4z" />
+  </svg>
+)
+
 /** 单页：单页居中 */
 export const SinglePageIcon = (p: IconProps) => (
   <svg {...base(p)}>

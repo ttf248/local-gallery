@@ -34,11 +34,17 @@ export default function Unread() {
   }, [result, loadFromBackend])
 
   const filtered = useMemo(() => {
-    const list = cards.filter((it) => {
-      if (!query) return true
-      const q = query.toLowerCase()
-      return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
-    })
+    const list = cards
+      .filter((it) => {
+        if (!query) return true
+        const q = query.toLowerCase()
+        return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
+      })
+      // 最小图数过滤(全局 filter)
+      .filter((it) => {
+        if (useSearchStore.getState().minImageCount <= 0) return true
+        return (it.count ?? 0) >= useSearchStore.getState().minImageCount
+      })
     switch (sortBy) {
       case 'count':
         return list.sort((a, b) => b.count - a.count)

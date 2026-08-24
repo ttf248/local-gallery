@@ -214,11 +214,17 @@ export default function Home() {
     }
   }, [view, yearFilter, setYearFilter])
 
-  // 全部图像 filter（视图 + 搜索 + 年份筛选 + 排序）
+  // 全部图像 filter（视图 + 搜索 + 年份筛选 + 最小图数 + 排序）
   const yearFilterActive = yearFilter !== null && (view === 'all' || view === 'album')
+  const minImageCount = useSearchStore((s) => s.minImageCount)
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
       if (view !== 'all' && it.variant !== view) return false
+      // 最小图数过滤:仅对 album 变体生效;collection / smart 走 albumCount 概念,
+      // 不参与图数过滤(它们的「张数」语义不同)。
+      if (minImageCount > 0 && it.variant === 'album' && (it.count ?? 0) < minImageCount) {
+        return false
+      }
       // 年份筛选：用 item 自身的 title 提取年份来匹配。
       // collection/smart 自身也可能没有年份（或有），让 extractYear 自然处理，
       // 避免把"萍乡中学"这种没年份的 collection 因为不是 album 就被误删。
@@ -266,7 +272,7 @@ export default function Home() {
       default:
         return withProgress.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result, viewedAtMap])
+  }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result, viewedAtMap, minImageCount])
 
   const homeEntries = useMemo<GalleryContextEntry[]>(
     () =>

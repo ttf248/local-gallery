@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchStore, type SortKey } from '../../store/searchStore'
 import { useUIStore } from '../../store/uiStore'
-import { ChevronDownIcon, GridIcon, ListIcon } from './Icon'
+import { ChevronDownIcon, GridIcon, ListIcon, FilterIcon } from './Icon'
 
 // 共享 filter strip: 视图 chips (可选) + 总数 + 排序 + 视图模式
 // 取代原 toolbar 上分散的 4-5 个控件,让 list 页面更克制。
@@ -13,6 +13,9 @@ interface ListFilterBarProps {
   onChangeView?: (key: string) => void
   // 总数(用于 "共 N 项")
   totalCount: number
+  // 显示「最少图数」过滤(默认 true)。如果某页不希望显示(如纯 smart
+  // 集合页,过滤不适用),传 false。
+  showMinImageFilter?: boolean
 }
 
 export function ListFilterBar({
@@ -20,11 +23,14 @@ export function ListFilterBar({
   activeViewKey,
   onChangeView,
   totalCount,
+  showMinImageFilter = true,
 }: ListFilterBarProps) {
   const sortBy = useSearchStore((s) => s.sortBy)
   const setSortBy = useSearchStore((s) => s.setSortBy)
   const viewMode = useUIStore((s) => s.viewMode)
   const setViewMode = useUIStore((s) => s.setViewMode)
+  const minImageCount = useSearchStore((s) => s.minImageCount)
+  const setMinImageCount = useSearchStore((s) => s.setMinImageCount)
 
   return (
     <div className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full">
@@ -49,6 +55,9 @@ export function ListFilterBar({
           })}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {showMinImageFilter && (
+            <MinImageFilter value={minImageCount} onChange={setMinImageCount} />
+          )}
           <span className="text-[11px] text-fg-subtle tabular-nums">共 {totalCount} 项</span>
           <SortMenu value={sortBy} onChange={setSortBy} />
           <div className="flex items-center border border-border-faint rounded-md overflow-hidden">
@@ -149,6 +158,76 @@ function SortMenu({
             </button>
           ))}
         </div>
+      )}
+    </div>
+  )
+}
+
+// 最少图数过滤:小尺寸 inline 控件,带「≥」前缀和 Filter 图标。
+//
+// 0 = 不生效(灰色),N ≥ 1 = 激活态(accent)。点「×」一键回到 0。
+// 用 popover 数字步进 vs 直接 inline input:本项目用户调这个值的频次
+// 极低(设一次就忘),inline 1 个 input 足够,不必为它做一个完整 popover。
+function MinImageFilter({
+  value,
+  onChange,
+}: {
+  value: number
+  onChange: (v: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+  const active = value > 0
+  // 关闭编辑时把 draft 写回 store(允许"键入数字后点别处"这种 commit)
+  function commit() {
+    const n = parseInt(draft, 10)
+    if (Number.isFinite(n) && n >= 0) onChange(n)
+    else setDraft(String(value))
+    setEditing(false)
+  }
+  return (
+    <div
+      className={`inline-flex items-center gap-1 h-7 px-2 rounded-md border transition-colors ${
+        active
+          ? 'border-accent/40 bg-accent-soft text-accent'
+          : 'border-border-faint text-fg-muted hover:bg-bg-subtle'
+      }`}
+      title="隐藏图数少于 N 的相册(0 = 不过滤)"
+    >
+      <FilterIcon size={10} className="shrink-0" />
+      <span className="text-[11px] whitespace-nowrap">≥</span>
+      <input
+        type="number"
+        min={0}
+        max={9999}
+        value={editing ? draft : value}
+        onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ''))}
+        onFocus={() => {
+          setEditing(true)
+          setDraft(String(value))
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            ;(e.target as HTMLInputElement).blur()
+          } else if (e.key === 'Escape') {
+            setEditing(false)
+            setDraft(String(value))
+          }
+        }}
+        className="w-10 bg-transparent border-0 outline-none text-[12px] tabular-nums text-right focus:outline-none"
+        aria-label="最少图数"
+      />
+      {active && (
+        <button
+          onClick={() => onChange(0)}
+          className="text-fg-subtle hover:text-fg text-[12px] leading-none px-0.5"
+          title="清除"
+          aria-label="清除最小图数"
+        >
+          ×
+        </button>
       )}
     </div>
   )
