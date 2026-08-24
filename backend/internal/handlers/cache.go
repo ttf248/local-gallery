@@ -11,6 +11,11 @@ import (
 )
 
 // CacheStatsResponse GET /api/cache/stats 的响应体。
+//
+// 与 services.CacheUsage 字段一一对应,前端 Settings 缓存占用行需要
+// 三个子项(thumbs / videoFaststart / videoTranscode)来告诉用户大头在哪。
+// 任何字段缺失都会让前端的 SubUsageBadge 拿到 undefined,直接读 .available
+// 时炸掉整页。
 type CacheStatsResponse struct {
 	Path       string `json:"path"`
 	TotalBytes int64  `json:"totalBytes"`
@@ -20,6 +25,11 @@ type CacheStatsResponse struct {
 	Available  bool   `json:"available"`
 	// CacheTTLSeconds 缓存剩余秒数(前端可据此显示"30s 前更新"等提示)
 	CacheTTLSeconds int `json:"cacheTtlSeconds"`
+	// 按子目录细分:thumbs / video-faststart / video-transcode。
+	// 子目录不存在时 Available=false,前端灰显。
+	Thumbs         services.SubUsage `json:"thumbs"`
+	VideoFaststart services.SubUsage `json:"videoFaststart"`
+	VideoTranscode services.SubUsage `json:"videoTranscode"`
 }
 
 // CacheStatsHandler 返回 /api/cache/stats 处理函数。
@@ -36,13 +46,16 @@ func CacheStatsHandler(mgr *config.Manager, stats *services.CacheStatsService) f
 			})
 		}
 		resp := CacheStatsResponse{
-			Path:       usage.Path,
-			TotalBytes: usage.TotalBytes,
-			FileCount:  usage.FileCount,
-			ScannedAt:  usage.ScannedAt.UTC().Format("2006-01-02T15:04:05Z"),
-			DurationMs: usage.DurationMs,
-			Available:  usage.Available,
+			Path:            usage.Path,
+			TotalBytes:      usage.TotalBytes,
+			FileCount:       usage.FileCount,
+			ScannedAt:       usage.ScannedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			DurationMs:      usage.DurationMs,
+			Available:       usage.Available,
 			CacheTTLSeconds: 0,
+			Thumbs:          usage.Thumbs,
+			VideoFaststart:  usage.VideoFaststart,
+			VideoTranscode:  usage.VideoTranscode,
 		}
 		if expiresAt != nil {
 			left := int(time.Until(*expiresAt).Seconds())
