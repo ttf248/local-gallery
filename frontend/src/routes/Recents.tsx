@@ -85,7 +85,10 @@ export default function Recents() {
       case 'name':
         return list.sort((a, b) => a.title.localeCompare(b.title))
       case 'recent':
+      case 'viewed':
       default:
+        // Recents 本身就是按 openedAt 倒序的列表,所以 'viewed' 与
+        // 'recent' 等价(history 项就是 recents 列表本身)
         return list
     }
   }, [cards, query, sortBy, progressMap])

@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
@@ -12,6 +13,7 @@ import EmptyState from '../components/common/EmptyState'
 import { StarIcon } from '../components/common/Icon'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { GalleryContextEntry } from '../utils/galleryContext'
+import { historyApi } from '../api/prefs'
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
@@ -23,6 +25,17 @@ export default function Favorites() {
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
   const { favorites } = useFavorites()
+  // 历史记录:sortBy='viewed' 时用最近「看过」时间排序
+  const { data: historyData } = useQuery({
+    queryKey: ['history'],
+    queryFn: () => historyApi.list(),
+    staleTime: 30_000,
+  })
+  const viewedAtMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const h of historyData?.history ?? []) m.set(h.path, h.openedAt)
+    return m
+  }, [historyData])
 
   useEffect(() => {
     if (!result) loadFromBackend()
@@ -95,12 +108,23 @@ export default function Favorites() {
     switch (sortBy) {
       case 'count':
         return list.sort((a, b) => b.count - a.count)
+      case 'viewed':
+        return list.sort((a, b) => {
+          const aViewed =
+            a.variant === 'album' ? viewedAtMap.get(decodeFavPath(a.to)) : undefined
+          const bViewed =
+            b.variant === 'album' ? viewedAtMap.get(decodeFavPath(b.to)) : undefined
+          if (aViewed && bViewed) return +new Date(bViewed) - +new Date(aViewed)
+          if (aViewed) return -1
+          if (bViewed) return 1
+          return a.title.localeCompare(b.title)
+        })
       case 'recent':
         return list.sort((a, b) => a.title.localeCompare(b.title))
       default:
         return list.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [cards, query, sortBy, progressMap])
+  }, [cards, query, sortBy, progressMap, viewedAtMap])
 
   // 收藏页的上下文：只让真正的相册参与上一本/下一本（智能合集不是「可翻页」对象）
   const favEntries = useMemo<GalleryContextEntry[]>(

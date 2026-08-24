@@ -28,7 +28,14 @@ export default function StatusBar() {
     leftLabel = `${result.albumCount} 个文件夹 · ${(result.smartCollections ?? []).length} 个标签`
   }
 
-  const sortLabel = sortBy === 'name' ? '名称' : sortBy === 'count' ? '张数' : '最近'
+  const sortLabel =
+    sortBy === 'name'
+      ? '名称'
+      : sortBy === 'count'
+        ? '张数'
+        : sortBy === 'viewed'
+          ? '最近看'
+          : '最近改'
   const viewLabel =
     view === 'all' ? '全部' : view === 'album' ? '文件夹' : view === 'collection' ? '集合' : '标签'
 

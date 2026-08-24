@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import ServerConfigPanel from './ServerConfigPanel'
 import { configApi } from '../../api/config'
 import { useUIStore } from '../../store/uiStore'
+import { ListFilterBar } from '../common/ListFilterBar'
+import { useSearchStore } from '../../store/searchStore'
 
 // Mock the config API
 vi.mock('../../api/config', () => ({
@@ -204,6 +206,22 @@ describe('ServerConfigPanel', () => {
     fireEvent.click(toggle)
     await waitFor(() => {
       expect(configApi.update).toHaveBeenCalledWith({ skipHidden: false })
+    })
+  })
+})
+
+// sort menu 的 'viewed' 选项出现(用 store 直接改 sortBy 验证)
+describe('ListFilterBar - sort menu', () => {
+  beforeEach(() => {
+    useSearchStore.setState({ sortBy: 'name', query: '', view: 'all', yearFilter: null })
+  })
+  it('包含「按最近看」选项', async () => {
+    render(<ListFilterBar totalCount={10} />)
+    // 打开 sort menu
+    const sortBtn = screen.getByRole('button', { name: /排序/ })
+    fireEvent.click(sortBtn)
+    await waitFor(() => {
+      expect(screen.getByText('按最近看')).toBeInTheDocument()
     })
   })
 })

@@ -740,7 +740,8 @@ function CollectionView({
 }: {
   detail: CollectionDetail | SmartDetail
   query: string
-  sortBy: 'name' | 'count' | 'recent'
+  // 复用全局 SortKey:Album 详情也支持「最近看」('viewed' 用 history 排序)
+  sortBy: 'name' | 'count' | 'recent' | 'viewed'
   viewMode: 'grid' | 'list'
   onBack: () => void
   onToggleFav: () => void
@@ -797,6 +798,9 @@ function CollectionView({
         return items.sort((a, b) => b.count - a.count)
       case 'recent':
         return items.sort((a, b) => (b.title || '').localeCompare(a.title || ''))
+      case 'viewed':
+        // Album 详情没有完整 history 数据(子卡片可能很多),按 title 兜底
+        return items.sort((a, b) => a.title.localeCompare(b.title))
       default:
         return items.sort((a, b) => a.title.localeCompare(b.title))
     }

@@ -86,7 +86,8 @@ export function ListFilterBar({
 const sortOptions: { value: SortKey; label: string }[] = [
   { value: 'name', label: '按名称' },
   { value: 'count', label: '按张数' },
-  { value: 'recent', label: '按最近' },
+  { value: 'recent', label: '按最近改' },
+  { value: 'viewed', label: '按最近看' },
 ]
 
 function SortMenu({

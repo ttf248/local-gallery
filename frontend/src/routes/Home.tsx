@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
@@ -9,6 +9,7 @@ import { useAllProgress } from '../hooks/useReadingProgress'
 import { useUnreadAlbums } from '../hooks/useUnreadAlbums'
 import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
+import { historyApi } from '../api/prefs'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
@@ -106,6 +107,18 @@ export default function Home() {
   // 已有 useUnreadAlbums hook(见 hooks/useUnreadAlbums.ts),复用避免重新
   // 实现 progress 派发逻辑。
   const { cards: unreadCards, count: unreadCount } = useUnreadAlbums()
+  // history 用于 sortBy='viewed':用最近「看过」时间(而非文件 mtime)排序。
+  // 注意:history 顺序是 openedAt 倒序,所以可以直接走 batch 缓存。
+  const { data: historyData } = useQuery({
+    queryKey: ['history'],
+    queryFn: () => historyApi.list(),
+    staleTime: 30_000,
+  })
+  const viewedAtMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const h of historyData?.history ?? []) m.set(h.path, h.openedAt)
+    return m
+  }, [historyData])
 
   useEffect(() => {
     if (!result) loadFromBackend()
@@ -238,10 +251,22 @@ export default function Home() {
           (a, b) =>
             +new Date(recentTime(result, b.id)) - +new Date(recentTime(result, a.id)),
         )
+      case 'viewed':
+        // history 命中按 openedAt 倒序;未命中(从未打开)排到末尾,
+        // 用 title 排序保稳定。album 变体才有「最近看过」的概念;
+        // collection/smart 走 title 兜底(没 history 概念)。
+        return withProgress.sort((a, b) => {
+          const aViewed = viewedAtMap.get(decodeFavPath(a.to))
+          const bViewed = viewedAtMap.get(decodeFavPath(b.to))
+          if (aViewed && bViewed) return +new Date(bViewed) - +new Date(aViewed)
+          if (aViewed) return -1
+          if (bViewed) return 1
+          return a.title.localeCompare(b.title)
+        })
       default:
         return withProgress.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result])
+  }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result, viewedAtMap])
 
   const homeEntries = useMemo<GalleryContextEntry[]>(
     () =>

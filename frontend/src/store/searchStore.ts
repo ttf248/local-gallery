@@ -8,7 +8,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type SortKey = 'name' | 'count' | 'recent'
+export type SortKey = 'name' | 'count' | 'recent' | 'viewed'
 export type ViewKey = 'all' | 'album' | 'collection' | 'smart'
 
 interface SearchState {

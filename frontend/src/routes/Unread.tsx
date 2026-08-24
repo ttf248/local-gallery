@@ -45,7 +45,10 @@ export default function Unread() {
       case 'name':
         return list.sort((a, b) => a.title.localeCompare(b.title))
       case 'recent':
+      case 'viewed':
       default:
+        // Unread 都是「没看过」的,'viewed' 与 'recent' 都无意义,
+        // 直接走默认(保持入站顺序)或走 name。
         return list
     }
   }, [cards, query, sortBy])
