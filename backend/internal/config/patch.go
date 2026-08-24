@@ -31,6 +31,8 @@ type ConfigPatch struct {
 	AllowOsOpenSet     bool     `json:"-"`
 	StaticDir          string   `json:"staticDir,omitempty"`
 	StaticDirSet       bool     `json:"-"`
+	FFmpegPath         string   `json:"ffmpegPath,omitempty"`
+	FFmpegPathSet      bool     `json:"-"`
 }
 
 // DefaultsPatch 返回一个所有 Set 标志为 false 的空 patch（用于"读"语义）。
@@ -80,6 +82,9 @@ func (p *ConfigPatch) UnmarshalJSON(data []byte) error {
 	}
 	if _, ok := raw["staticDir"]; ok {
 		p.StaticDirSet = true
+	}
+	if _, ok := raw["ffmpegPath"]; ok {
+		p.FFmpegPathSet = true
 	}
 	return nil
 }

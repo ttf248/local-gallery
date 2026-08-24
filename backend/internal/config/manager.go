@@ -275,6 +275,7 @@ func marshalConfig(cfg *Config) ([]byte, error) {
 	addKV("cacheMaxAgeDays", scalarInt(cfg.CacheMaxAgeDays))
 	addKV("allowOsOpen", scalarBool(cfg.AllowOsOpen))
 	addKV("staticDir", scalarString(cfg.StaticDir))
+	addKV("ffmpegPath", scalarString(cfg.FFmpegPath))
 	return yaml.Marshal(root)
 }
 
@@ -325,6 +326,9 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 	}
 	if p.StaticDirSet {
 		dst.StaticDir = p.StaticDir
+	}
+	if p.FFmpegPathSet {
+		dst.FFmpegPath = p.FFmpegPath
 	}
 	dst.syncFirstRoot()
 }

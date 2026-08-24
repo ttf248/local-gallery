@@ -8,8 +8,15 @@ export function videoUrl(absPath: string): string {
   return API_BASE ? `${API_BASE}${p}` : p
 }
 
-// 视频元信息（服务端可读字段；duration/width/height 由浏览器 <video>
-// 元素加载后从 MediaError/currentTime 派生，不依赖 ffmpeg）。
+// 视频元信息。
+//
+// 必填字段：path/name/dir/size/mtime/format。
+// 可选字段（服务端 ffprobe 可用时填,否则缺省）：
+//   - duration / width / height / codec / container / bitRate
+//   - probeError:解析失败时,后端会把错误消息塞这里（不抛 5xx）
+//
+// 旧版(v1)由前端 <video> 元素 loadedmetadata 派生,延迟到点击播放
+// 之后;v2 服务端 ffprobe 一次性返回,UI 在列表就能展示时长。
 export interface VideoInfo {
   path: string
   name: string
@@ -17,6 +24,14 @@ export interface VideoInfo {
   size: number
   mtime: string
   format: string // 含点，如 ".mp4"
+  // ffprobe 元数据(可选)
+  duration?: number
+  width?: number
+  height?: number
+  codec?: string
+  container?: string
+  bitRate?: number
+  probeError?: string
 }
 
 export async function getVideoInfo(absPath: string): Promise<VideoInfo> {

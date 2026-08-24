@@ -126,7 +126,9 @@ func newHarness(t *testing.T) *harness {
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
 	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
 	api.Get("/videos", handlers.VideoHandler())
-	api.Get("/videos/info", handlers.VideoInfoHandler())
+	// 集成测试不依赖 ffmpeg/ffprobe:VideoInfoHandler(nil) 行为等价于老版本
+	// (只返回 path/name/dir/size/mtime/format 五个字段)。
+	api.Get("/videos/info", handlers.VideoInfoHandler(nil))
 	api.Get("/images", handlers.ImageHandler())
 	api.Get("/images/info", handlers.ImageInfoHandler())
 	api.Get("/prefs", handlers.PrefsGetHandler(prefsStore))

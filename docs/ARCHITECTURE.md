@@ -33,21 +33,38 @@
 
 ### 视频封面流程
 
-视频（mp4/webm/mov/mkv/avi/m4v）的"封面"不在服务端生成（避免引入 ffmpeg 依赖）。完整链路：
+视频（mp4/webm/mov/mkv/avi/m4v）的"封面"v2 改在服务端用 ffmpeg 抽帧，浏览器只负责展示：
 
 ```
-[首次访问视频 cover]
+[首次访问视频 cover + ffmpeg 可用]
   GET /api/thumbs?path=<video>
-    → 404 { code: "video_cover_missing" }
-  前端 useVideoCover 捕获：
-    1) new Video() fetch <video> 字节（/api/videos 支持 Range）
-    2) seek 到 ~duration * 10%（夹到 1~3s）
+    → 缓存未命中,ThumbnailService 调 VideoCoverExtractor.Extract
+    → ffmpeg 子进程: -ss <seek> -i <input> -frames:v 1 -vf "scale+pad" -f image2pipe mjpeg
+    → 服务端 imaging.Fit 标准化 + 写盘 + LRU 入库
+    → 返回 JPEG
+[首次访问视频 cover + ffmpeg 不可用]
+  GET /api/thumbs?path=<video>
+    → 缓存未命中 + ffmpeg 抽帧失败 → 404 { code: "video_cover_missing" }
+  前端 useVideoCover 捕获:
+    1) fetch <video> 字节（/api/videos 支持 Range）
+    2) <video> 元素 seek 到 ~duration * 10%（夹到 1~3s）
     3) canvas.drawImage + canvas.toBlob('image/jpeg', 0.85)
     4) POST /api/thumbs/cover (原始字节)
-  → 后端 imaging.Fit → 缓存到 disk + LRU（同图片缩略图 key 体系）
+  → 后端 imaging.Fit → 缓存到 disk + LRU
 [后续访问]
-  GET /api/thumbs?path=<video> → 直接返回 PNG
+  GET /api/thumbs?path=<video> → 命中缓存,直接返回 JPEG
 ```
+
+**为什么服务端 ffmpeg 比浏览器抽帧快？**
+
+- 浏览器抽帧需要先把整段视频下载到内存(几百 MB-几 GB),然后再 seek、drawImage、toBlob、上传;IO + 内存占用 + 多次跨进程都是瓶颈
+- ffmpeg `-ss` 在 `-i` 之前(快速 seek):只解码目标位置附近的几帧,不必解析整段容器。对 380MB / 176s / 1280×720 H.264 视频实测 339ms;缓存命中 < 1ms
+- 服务端集中式抽帧可以利用 ffmpeg 的多线程解码、H.264 硬件加速(NVENC/QSV/VideoToolbox) 等浏览器拿不到的能力
+
+### 视频元数据
+
+`/api/videos/info` 现在用 ffprobe 一次性返回 duration / width / height / codec / container / bitRate;
+旧版本完全依赖前端 `<video>` 元素的 `loadedmetadata` 事件,延迟到点击播放之后。新版本在列表卡片渲染时就能拿到时长,无需等视频加载。
 
 ## 后端模块（Go）
 

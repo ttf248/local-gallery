@@ -145,8 +145,8 @@ Write-Host "       ffmpeg:  $ffmpegVer"
 Write-Host "       ffprobe: $ffprobeVer"
 Write-Host "       路径:    $TargetDir"
 Write-Host ""
-Write-Host "注: ffmpeg 当前未被本项目代码直接调用(视频封面由前端浏览器抽帧)," -ForegroundColor DarkGray
-Write-Host "    此安装仅为后续服务端集成(ffprobe 元数据 / 后端抽帧等)未雨绸缪。" -ForegroundColor DarkGray
-Write-Host "    详见 README「可选依赖」小节。" -ForegroundColor DarkGray
+Write-Host "注: ffmpeg/ffprobe 现已被后端直接调用(视频服务端抽帧 + 元数据)。" -ForegroundColor DarkGray
+Write-Host "    不安装时系统回退到浏览器端抽帧,功能不丢但首次封面慢很多。" -ForegroundColor DarkGray
+Write-Host "    详见 README「可选依赖」小节 + docs/ARCHITECTURE.md「视频封面流程」。" -ForegroundColor DarkGray
 Write-Host ""
 exit 0

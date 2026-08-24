@@ -129,9 +129,18 @@ VSCode 调试配置见 `.vscode/launch.json`，包含 4 个调试入口 + 1 个�
 
 ## 🧩 可选依赖: ffmpeg
 
-> **当前代码并不直接调用 ffmpeg**。视频封面由前端 `<video>` + `canvas` 抽帧、缓存到后端(`/api/thumbs/cover`),视频元数据由浏览器 `loadedmetadata` 派生,这是有意识的选择 —— 详见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) 「视频封面流程」一节。
+> **v2 起后端已直接调用 ffmpeg/ffprobe**。视频封面由服务端 `ffmpeg` 抽帧(seek 到 duration×10%,夹到 1~3s),元数据(duration/width/height/codec)由 `ffprobe` 解析。浏览器端抽帧仍然保留为降级路径,详见 [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md) 「视频封面流程」一节。
 
-本仓库提供一个**绿色安装脚本**,把 `ffmpeg` / `ffprobe` / `ffplay` 放在项目内,便于后续集成(服务端抽帧 / 读真实元数据 / 转码等):
+性能对比(380MB / 176s / 1280×720 H.264 实测):
+
+| 方案 | 首次抽帧 | 缓存命中 | 客户端内存 |
+|------|----------|----------|-----------|
+| 浏览器抽帧(v1) | 30+ 秒(下载整段) | < 50ms | 400MB+ 峰值 |
+| 服务端 ffmpeg(v2) | **339ms** | **< 1ms** | 0 额外内存 |
+
+ffmpeg 不在时自动回退到 v1 浏览器抽帧,功能不丢失。
+
+本仓库提供一个**绿色安装脚本**,把 `ffmpeg` / `ffprobe` / `ffplay` 放在项目内,便于集成(默认安装到 `bin/ffmpeg/windows/amd64/`,后端会**自动探测**这个位置,无需改 config):
 
 ```bash
 # Windows PowerShell(默认从 gyan.dev 拉 ffmpeg-release-essentials.zip,约 100MB)

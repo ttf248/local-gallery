@@ -122,18 +122,21 @@ describe('groupByYear', () => {
           type: 'collection',
           path: 'E:\\存照\\2024年',
           name: '2024年',
+          albumCount: 0,
           albums: [mk('散图', 100, 0, 'E:\\存照\\2024年')],
           collections: [
             {
               type: 'collection',
               path: 'E:\\存照\\2024年\\夏威夷-度假',
               name: '夏威夷-度假',
+              albumCount: 0,
               albums: [],
               collections: [
                 {
                   type: 'collection',
                   path: 'E:\\存照\\2024年\\夏威夷-度假\\相册',
                   name: '相册',
+                  albumCount: 0,
                   albums: [],
                   collections: [
                     {
@@ -151,7 +154,6 @@ describe('groupByYear', () => {
               ],
             },
           ],
-          albumCount: 1,
         },
       ],
     }

@@ -25,6 +25,14 @@ const DefaultConfigName = "config.yaml"
 // DefaultCacheDirName 未配置 cacheDir 时使用的目录名（创建在 CWD 下）。
 const DefaultCacheDirName = ".image-viewer"
 
+// DefaultFFmpegPath ffmpeg 默认可执行文件位置。
+//
+// 解析规则由 services.NewVideoCoverExtractor 内部处理:
+// 1) 优先用 config.yaml 里显式写的 ffmpegPath
+// 2) 否则用本常量(<RepoRoot>/bin/ffmpeg/windows/amd64/ffmpeg.exe)
+// 3) 都没有 → Available()=false,视频封面回退到客户端抽帧
+const DefaultFFmpegPath = "../bin/ffmpeg/windows/amd64/ffmpeg.exe"
+
 // Config 后端总配置（YAML 字段保持 camelCase）。
 //
 // 媒体根支持多目录：
@@ -48,6 +56,11 @@ type Config struct {
 	ThumbCacheSize  int      `yaml:"thumbCacheSize"`
 	CacheMaxAgeDays int      `yaml:"cacheMaxAgeDays"`
 	StaticDir       string   `yaml:"staticDir"`
+
+	// FFmpegPath ffmpeg 可执行文件绝对路径。空 → 走 DefaultFFmpegPath。
+	// 留空且 DefaultFFmpegPath 不存在 → 服务端抽帧关闭,视频封面仍由浏览器
+	// 抽帧 + 上传(fallback 路径完整保留)。
+	FFmpegPath string `yaml:"ffmpegPath"`
 }
 
 // Roots 返回规范化后的所有媒体根目录（绝对路径、去空、去重、保序）。
@@ -107,6 +120,7 @@ func Default() *Config {
 		ThumbCacheSize:  500,
 		CacheMaxAgeDays: 30,
 		StaticDir:       "dist",
+		FFmpegPath:      DefaultFFmpegPath,
 	}
 	c.syncFirstRoot()
 	return c
@@ -201,6 +215,12 @@ func mergeFile(dst, file *Config) {
 	}
 	if file.StaticDir != "" {
 		dst.StaticDir = file.StaticDir
+	}
+	// FFmpegPath:空串(用户没写)→保留 dst 的 DefaultFFmpegPath。
+	// 显式空串仍然视为未配置,避免用户在 YAML 写 ffmpegPath: "" 时
+	// 把默认路径"清空"。
+	if file.FFmpegPath != "" {
+		dst.FFmpegPath = file.FFmpegPath
 	}
 }
 

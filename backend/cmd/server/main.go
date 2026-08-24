@@ -103,12 +103,38 @@ func main() {
 
 	// ---- 路由 ----
 	scanner := services.NewScanner()
+
+	// 服务端 ffmpeg 抽帧器(可选):ffmpeg 不在/坏掉时 Available()=false,
+	// ThumbnailService 会自动回退到原"客户端抽帧 + 上传"流程。
+	videoCover := services.NewVideoCoverExtractor(services.VideoCoverOptions{
+		FFmpegPath: cfg.FFmpegPath,
+		Width:      cfg.ThumbSizeW,
+		Height:     cfg.ThumbSizeH,
+		Quality:    85,
+		Timeout:    10 * time.Second,
+	})
+	if videoCover.Available() {
+		log.Printf("  FFmpeg:    %s (服务端视频封面已启用)", videoCover.FFmpegPath())
+	} else {
+		log.Printf("  FFmpeg:    <不可用 / 未配置> → 视频封面回退到客户端浏览器抽帧")
+	}
+
+	// ffprobe 元数据服务(可选)
+	videoInfo := services.NewVideoInfoService(services.VideoInfoOptions{
+		FFmpegPath: cfg.FFmpegPath,
+		Timeout:    5 * time.Second,
+	})
+	if videoInfo.Available() {
+		log.Printf("  FFprobe:   %s (视频元数据已启用)", videoInfo.FFprobePath())
+	}
+
 	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
 		CacheDir:   cfg.CacheDir,
 		Width:      cfg.ThumbSizeW,
 		Height:     cfg.ThumbSizeH,
 		MaxAgeDays: cfg.CacheMaxAgeDays,
 		LRUSize:    cfg.ThumbCacheSize,
+		VideoCover: videoCover,
 	})
 	if err != nil {
 		log.Fatalf("初始化缩略图服务失败: %v", err)
@@ -153,7 +179,7 @@ func main() {
 		}()
 	}
 
-	// 缩略图参数 / 缓存目录变更：热更新 ThumbnailService
+	// 缩略图参数 / 缓存目录 / ffmpeg 路径变更：热更新 ThumbnailService
 	mgr.OnChange("thumbnail", func(snapshot *config.Config) {
 		if err := thumbs.UpdateOptions(services.ThumbnailOptions{
 			CacheDir:   snapshot.CacheDir,
@@ -164,6 +190,20 @@ func main() {
 		}); err != nil {
 			log.Printf("警告：缩略图服务热更新失败: %v", err)
 		}
+		// ffmpeg 路径变了：重新构造抽帧器 + 元数据服务
+		newCover := services.NewVideoCoverExtractor(services.VideoCoverOptions{
+			FFmpegPath: snapshot.FFmpegPath,
+			Width:      snapshot.ThumbSizeW,
+			Height:     snapshot.ThumbSizeH,
+			Quality:    85,
+			Timeout:    10 * time.Second,
+		})
+		thumbs.SetVideoCover(newCover)
+		newInfo := services.NewVideoInfoService(services.VideoInfoOptions{
+			FFmpegPath: snapshot.FFmpegPath,
+			Timeout:    5 * time.Second,
+		})
+		videoInfo = newInfo
 	})
 
 	// 当 MediaRoots 变更：清空扫描缓存，扫描器/handler 已通过 mgr.Roots() 读最新值
@@ -209,7 +249,7 @@ func main() {
 	api.Get("/images/info", handlers.ImageInfoHandler())
 	// 视频流 + 元信息（前端 <video> 元素 / HoverPreview / 时长显示使用）
 	api.Get("/videos", handlers.VideoHandler())
-	api.Get("/videos/info", handlers.VideoInfoHandler())
+	api.Get("/videos/info", handlers.VideoInfoHandler(videoInfo))
 	// 视频封面回填：前端浏览器抽帧后 POST 原始字节
 	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
 	api.Get("/fs/open", handlers.FsOpenHandler(mgr))

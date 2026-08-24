@@ -142,12 +142,15 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ### `GET /api/thumbs?path=<abs>`
 
-返回 PNG（默认 320×350，保持比例）。支持服务端 LRU + 磁盘缓存。
+返回 JPEG（默认 320×350，保持比例，letterbox 黑边填充）。支持服务端 LRU + 磁盘缓存 + ETag 协商。
 
 视频路径（`.mp4` / `.webm` / `.mov` / `.mkv` / `.avi` / `.m4v`）行为：
 
-- 封面已缓存（前端已抽帧 + 上传） → 返回 PNG
-- 封面未生成 → 返回 404 `{ "code": "video_cover_missing" }`；前端据此触发 `<video>` 抽帧
+- 封面已缓存 → 直接返回 JPEG（同图片缩略图）
+- 封面未生成 + ffmpeg 可用 → **服务端用 ffmpeg 抽帧**（seek 到 duration×10%，夹到 1~3s），写入缓存后返回 JPEG
+- 封面未生成 + ffmpeg 不可用 / 抽帧失败 → 返回 404 `{ "code": "video_cover_missing" }`；前端据此触发浏览器抽帧 + 上传（v1 兼容流程）
+
+性能：服务端 ffmpeg 抽帧对 380MB / 176s / 1280×720 H.264 视频约 339ms（首次冷启动）；二次访问命中 LRU/磁盘，< 1ms。对比浏览器抽帧：旧流程需下载整段视频到浏览器内存（30+ 秒，400MB+ 内存峰值），新方案在客户端零额外内存。
 
 ### `POST /api/thumbs/cover?path=<abs_video>`
 
@@ -207,7 +210,7 @@ data: {"scanId":"...","error":"permission denied",...}
 
 ### `GET /api/videos/info?path=<abs>`
 
-返回服务端可读的元数据（不依赖 ffmpeg）：
+返回视频文件的元数据：
 
 ```json
 {
@@ -216,11 +219,21 @@ data: {"scanId":"...","error":"permission denied",...}
   "dir": "E:\\存照",
   "size": 12345678,
   "mtime": "2026-08-20T12:34:56Z",
-  "format": ".mp4"
+  "format": ".mp4",
+  "duration": 176.704,
+  "width": 1280,
+  "height": 720,
+  "codec": "h264",
+  "container": "mov,mp4,m4a,3gp,3g2,mj2",
+  "bitRate": 18103993
 }
 ```
 
-`duration` / `width` / `height` 服务端不解析（避免引入 ffmpeg 依赖），由前端 `<video>` 元素 `loadedmetadata` 事件在浏览器内拿到。
+- 必填字段（与文件本身绑定）：`path` / `name` / `dir` / `size` / `mtime` / `format`
+- 可选字段（ffprobe 可用时填，否则缺省）：`duration` / `width` / `height` / `codec` / `container` / `bitRate`
+- 错误响应：解析失败时附带 `probeError` 字段描述失败原因（不抛 5xx；前端可继续播放用 `<video>` 兜底拿 metadata）
+
+性能：ffprobe 只读容器 metadata，1GB 视频典型 50-150ms；远比让前端 `<video>` 加载整个文件再拿 metadata 快（旧版延迟到点击播放之后才能拿到）。
 
 ---
 

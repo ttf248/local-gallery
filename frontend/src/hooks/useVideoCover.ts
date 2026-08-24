@@ -4,9 +4,9 @@ import { thumbUrl, uploadVideoCover } from '../api/thumbs'
 // 视频封面状态机：
 //   idle      — 未启动
 //   loading   — 正在检查后端是否已有缓存封面（HEAD）
-//   missing   — 后端无封面，需要浏览器抽帧
-//   extracting— 正在 <video>+canvas 抽帧 + POST
-//   ready     — 封面已就绪（命中缓存 / 上传成功）
+//   missing   — 后端无封面(ffmpeg 也抽不到,需要降级到浏览器抽帧)
+//   extracting— 正在 <video>+canvas 抽帧 + POST(仅 ffmpeg 不可用时走)
+//   ready     — 封面已就绪（命中缓存 / 上传成功 / 服务端 ffmpeg 已生成）
 //   error     — 抽帧失败（用户可在 UI 触发重试）
 export type VideoCoverStatus =
   | 'idle'
@@ -36,16 +36,30 @@ const SEEK_MIN = 1.0 // 最少 1s，避免取到片头黑场
 const SEEK_MAX = 3.0 // 最多 3s，避免长片抽过开场
 const FRAME_MAX_W = 1920 // canvas 导出最大宽（防止超大视频爆内存）
 
+// 服务端 ffmpeg 抽帧通常 < 500ms 就能拿到首字节;给个 1.5s 轮询窗口。
+// 真实情况更常见的是 50-200ms(head 探测 + 服务端生成 + 返回)，
+// 因此这里用较短的轮询间隔让用户更快看到封面。
+const SERVER_POLL_INITIAL_MS = 200
+const SERVER_POLL_MAX_MS = 1500
+const SERVER_POLL_TIMEOUT_MS = 20_000
+
 /**
  * 视频封面状态管理 hook。
  *
- * 流程：
- *   1) 挂载时 HEAD 探测 /api/thumbs?path=<video>；200 → ready
- *   2) 404 + code=video_cover_missing → 进入 extracting
- *   3) extracting：<video> 元素 hidden 加载，seek 到 ~10% 位置，drawImage 到
- *      canvas，toBlob → POST /api/thumbs/cover；成功后 bust 计数 +1 让
- *      <img> 重新请求，状态切到 ready
- *   4) 失败：error；调用方可通过 retry() 重试
+ * v2 流程（服务端有 ffmpeg 时）:
+ *   1) 挂载时 HEAD 探测 /api/thumbs?path=<video>
+ *   2) 200 → ready (秒出)
+ *   3) 404 + code=video_cover_missing → 服务端在后台异步抽帧,前端用
+ *      短轮询重试 HEAD;超时仍未命中 → 进入 missing/extracting 状态,
+ *      走老 fallback(浏览器抽帧)
+ *
+ * v1 兼容流程（服务端无 ffmpeg 时）:
+ *   1) HEAD 404 → extracting
+ *   2) <video>+canvas 抽帧 + POST
+ *   3) bust + 重新 HEAD → ready
+ *
+ * 这个 hook 保持向后兼容:即使服务端没有 ffmpeg,浏览器抽帧路径仍然
+ * 完整工作,只是慢一些(对 1GB+ 视频首次封面要几秒到十几秒)。
  */
 export function useVideoCover(videoPath: string | null | undefined, opts: Options = {}): Result {
   const [status, setStatus] = useState<VideoCoverStatus>(videoPath ? 'loading' : 'idle')
@@ -63,7 +77,7 @@ export function useVideoCover(videoPath: string | null | undefined, opts: Option
     [opts],
   )
 
-  // 检查封面是否存在
+  // 检查封面是否存在(可服务端的轮询探针)
   useEffect(() => {
     if (!videoPath) {
       setSt('idle')
@@ -72,23 +86,45 @@ export function useVideoCover(videoPath: string | null | undefined, opts: Option
     let cancelled = false
     startedRef.current = false
     setSt('loading')
-    fetch(thumbUrl(videoPath), { method: 'HEAD' })
-      .then((r) => {
+
+    // 短轮询:服务端 ffmpeg 抽帧是同步的(在我们 GET 的时候才触发),
+    // 但 1) 多个用户同时 GET 时 ffmpeg 进程池可能忙;2) 大视频抽帧偶尔
+    // 超过 500ms。所以这里给一个最多 20s 的递增轮询,覆盖服务端慢启动场景。
+    const start = Date.now()
+    let delay = SERVER_POLL_INITIAL_MS
+    let stopped = false
+
+    const poll = async (): Promise<void> => {
+      while (!stopped && !cancelled) {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await fetch(thumbUrl(videoPath), { method: 'HEAD' })
         if (cancelled) return
-        setSt(r.ok ? 'ready' : 'missing')
-      })
-      .catch(() => {
-        if (cancelled) return
-        setSt('missing')
-      })
+        if (r.ok) {
+          setSt('ready')
+          return
+        }
+        if (Date.now() - start > SERVER_POLL_TIMEOUT_MS) {
+          // 超时:服务端抽帧很久还没好,降级到浏览器抽帧
+          // (浏览器抽帧仍可能工作,只是慢)
+          setSt('missing')
+          return
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((res) => setTimeout(res, delay))
+        delay = Math.min(delay * 1.5, SERVER_POLL_MAX_MS)
+      }
+    }
+    void poll()
+
     return () => {
       cancelled = true
+      stopped = true
     }
     // bust 变化时（上传成功后）也再检查一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoPath, bust, retryNonce])
 
-  // 抽帧 + 上传
+  // 抽帧 + 上传(浏览器侧,作为服务端不可用时的降级)
   const extract = useCallback(async () => {
     if (!videoPath) return
     setSt('extracting')
@@ -103,7 +139,7 @@ export function useVideoCover(videoPath: string | null | undefined, opts: Option
     }
   }, [videoPath, setSt])
 
-  // 状态为 missing 时自动启动抽帧
+  // 状态为 missing 时(服务端超时 / 抽帧一直失败)自动启动浏览器抽帧
   useEffect(() => {
     if (status !== 'missing') return
     if (startedRef.current) return
@@ -132,6 +168,9 @@ export function useVideoCover(videoPath: string | null | undefined, opts: Option
  * 注意：需要传入"绝对路径"，函数内部用 fetch 先把视频流拉成 Blob
  * URL（走 /api/videos，带 Range 支持）。这样跨域 / Range 协商都
  * 交给后端处理。
+ *
+ * v2 起这个函数降级为"服务端 ffmpeg 不可用时的兜底"——对 1GB+ 视频
+ * 会拉整段到内存,比较慢;v1 时代是主路径。
  */
 export async function captureVideoFrame(videoPath: string): Promise<Blob> {
   // 1) 拉取视频作为 Blob（避免直接 src=URL 在某些环境 Range 行为不一致）

@@ -77,6 +77,9 @@ $RECYCLE.BIN/
 /test-results/
 /playwright-report/
 /playwright/.cache/
+# 集成测试夹具(视频/图片)不进仓 — 在 .gitignore 里屏蔽整个 testdata 目录,
+# 真要保留 fixture 的话用专门的 git-lfs 或独立 fixtures 仓库。
+/tests/integration/testdata/
 
 # ----- 烟测 / 调试脚本运行产物 ----
 # scripts/*.ps1 / curl 烟测产生的临时文件 + 进程日志

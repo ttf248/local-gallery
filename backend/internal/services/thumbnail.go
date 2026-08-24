@@ -51,6 +51,12 @@ type ThumbnailService struct {
 	// 其他协程等结果。冷启动 / 用户翻到未缓存的合集时（首页 20+ 张
 	// 同时 miss）特别有用。
 	flight singleflight.Group
+
+	// videoCover 用于服务端 FFmpeg 抽帧（可选）。为 nil 时,
+	// 视频封面维持原"客户端抽帧 + 上传"流程(见 getVideoCover)。
+	// FFmpeg 抽帧失败时同样回退到 ErrVideoCoverMissing,
+	// 让前端继续走原有 fallback。
+	videoCover *VideoCoverExtractor
 }
 
 // ThumbnailOptions 构造选项。
@@ -60,6 +66,10 @@ type ThumbnailOptions struct {
 	Height     int    // 默认 350
 	MaxAgeDays int    // 默认 30
 	LRUSize    int    // 默认 500
+
+	// VideoCover 可选:传入后,视频封面在服务端用 ffmpeg 抽帧;
+	// 不传则维持原"客户端抽帧 + 上传"流程。
+	VideoCover *VideoCoverExtractor
 }
 
 // NewThumbnailService 创建缩略图服务。
@@ -100,6 +110,7 @@ func NewThumbnailService(opts ThumbnailOptions) (*ThumbnailService, error) {
 		maxAgeDays: days,
 		lruSize:    lruSize,
 		memCache:   cache,
+		videoCover: opts.VideoCover,
 	}, nil
 }
 
@@ -228,9 +239,16 @@ func (s *ThumbnailService) generateAndPersist(absPath, key string) ([]byte, erro
 	return data, nil
 }
 
-// getVideoCover 仅查询已缓存的视频封面；未命中返回 ErrVideoCoverMissing。
+// getVideoCover 查询视频封面缓存。优先级:
 //
-// 注意：先做 Stat 校验源文件存在，避免对已删除视频返回错误状态码
+//  1. 内存 LRU 命中 → 直接返回
+//  2. 磁盘缓存命中 → 返回并回填 LRU
+//  3. 配置了 VideoCover(ffmpeg) → 尝试服务端抽帧
+//     - 成功:写入磁盘 + LRU,返回
+//     - 失败:回退到 ErrVideoCoverMissing,让前端继续走浏览器抽帧
+//  4. 未配置 ffmpeg / 抽帧失败 → ErrVideoCoverMissing
+//
+// 注意:先做 Stat 校验源文件存在,避免对已删除视频返回错误状态码
 // 误导前端"以为要抽帧"。
 func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
 	fi, err := os.Stat(absPath)
@@ -250,6 +268,25 @@ func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
 		s.memCache.Add(key, data)
 		return data, nil
 	}
+
+	// 缓存都未命中:尝试服务端 FFmpeg 抽帧
+	if s.videoCover != nil && s.videoCover.Available() {
+		data, err := s.videoCover.Extract(absPath)
+		if err == nil && len(data) > 0 {
+			if werr := os.WriteFile(diskPath, data, 0o644); werr != nil {
+				// 写盘失败不影响返回
+				fmt.Fprintf(os.Stderr, "write video cover cache %s: %v\n", diskPath, werr)
+			}
+			s.memCache.Add(key, data)
+			return data, nil
+		}
+		// 抽帧失败(包括 ErrFFmpegUnavailable),回退到原契约:
+		// 返回 ErrVideoCoverMissing,让前端继续用浏览器抽帧。
+		if err != nil && !errors.Is(err, ErrFFmpegUnavailable) {
+			fmt.Fprintf(os.Stderr, "video cover extract failed for %s: %v\n", absPath, err)
+		}
+	}
+
 	return nil, ErrVideoCoverMissing
 }
 
@@ -431,6 +468,17 @@ func (s *ThumbnailService) Stats() ThumbnailStats {
 		stats.DiskFiles = len(entries)
 	}
 	return stats
+}
+
+// SetVideoCover 注入（或清空）服务端 ffmpeg 抽帧器。传 nil 表示
+// 退回"客户端抽帧 + 上传"流程。
+//
+// 这是为运行期切换保留的入口；构造期通过 ThumbnailOptions.VideoCover
+// 一次性传入更简洁。
+func (s *ThumbnailService) SetVideoCover(vc *VideoCoverExtractor) {
+	s.mu.Lock()
+	s.videoCover = vc
+	s.mu.Unlock()
 }
 
 // UpdateOptions 热更新部分运行参数。0 值表示"不修改"（除了 LRUSize 显式

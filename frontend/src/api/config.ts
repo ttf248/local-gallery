@@ -17,6 +17,10 @@ export interface ServerConfig {
   cacheMaxAgeDays: number
   allowOsOpen: boolean
   staticDir: string
+  // ffmpegPath:服务端 ffmpeg 可执行文件路径;空 = 客户端抽帧 fallback
+  // ffmpegAvailable:运行时探测 -version 是否可用
+  ffmpegPath?: string
+  ffmpegAvailable?: boolean
   configPath: string
 }
 
@@ -36,6 +40,7 @@ export type ServerConfigPatch = Partial<
     | 'cacheMaxAgeDays'
     | 'allowOsOpen'
     | 'staticDir'
+    | 'ffmpegPath'
   >
 >
 

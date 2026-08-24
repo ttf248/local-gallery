@@ -5,6 +5,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/tianlongxiang/comic-reader/internal/config"
+	"github.com/tianlongxiang/comic-reader/internal/services"
 )
 
 // ConfigResponse GET /api/config 的响应体。
@@ -23,6 +24,8 @@ type ConfigResponse struct {
 	CacheMaxAgeDays int      `json:"cacheMaxAgeDays"`
 	AllowOsOpen     bool     `json:"allowOsOpen"`
 	StaticDir       string   `json:"staticDir"`
+	FFmpegPath      string   `json:"ffmpegPath"`
+	FFmpegAvailable bool     `json:"ffmpegAvailable"`
 	ConfigPath      string   `json:"configPath"`
 }
 
@@ -57,6 +60,14 @@ func ConfigGetHandler(mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		cfg := mgr.Get()
 		roots := cfg.Roots()
+		// ffmpegAvailable 在 handler 层做一次探测,避免前端再发请求。
+		// 注意:这里的探测是每次 GET 都跑的(成本 < 50ms),但 Config 页
+		// 打开频次极低,影响可忽略。如果将来要 hot path 也用,可以加 30s TTL。
+		ffPath := cfg.FFmpegPath
+		ffAvailable := false
+		if ffPath != "" {
+			ffAvailable = services.FFmpegAvailableAt(ffPath)
+		}
 		return c.JSON(ConfigResponse{
 			MediaRoots:      roots,
 			MediaRoot:       cfg.Root(),
@@ -69,6 +80,8 @@ func ConfigGetHandler(mgr *config.Manager) fiber.Handler {
 			CacheMaxAgeDays: cfg.CacheMaxAgeDays,
 			AllowOsOpen:     cfg.AllowOsOpen,
 			StaticDir:       cfg.StaticDir,
+			FFmpegPath:      ffPath,
+			FFmpegAvailable: ffAvailable,
 			ConfigPath:      mgr.Path(),
 		})
 	}
@@ -124,6 +137,8 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 				CacheMaxAgeDays: newCfg.CacheMaxAgeDays,
 				AllowOsOpen:     newCfg.AllowOsOpen,
 				StaticDir:       newCfg.StaticDir,
+				FFmpegPath:      newCfg.FFmpegPath,
+				FFmpegAvailable: newCfg.FFmpegPath != "" && services.FFmpegAvailableAt(newCfg.FFmpegPath),
 				ConfigPath:      mgr.Path(),
 			},
 			RequiresRestart:   requiresRestart,
