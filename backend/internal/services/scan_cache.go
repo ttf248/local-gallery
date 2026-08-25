@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,14 +25,25 @@ import (
 type ScanResultCache struct {
 	path string
 
-	mu         sync.RWMutex
-	latest     *models.ScanResult
-	loaded     bool
-	dirty      bool // 当前内存结果是否尚未写盘
+	mu      sync.RWMutex
+	latest  *models.ScanResult
+	dirty   bool
+	version uint64
+
+	flushMu    sync.Mutex
 	flushTimer *time.Timer
 }
 
-const flushDebounce = 500 * time.Millisecond
+const (
+	flushDebounce          = 500 * time.Millisecond
+	scanCacheSchemaVersion = 2
+)
+
+type scanCacheEnvelope struct {
+	SchemaVersion int                `json:"schemaVersion"`
+	RootIDs       []string           `json:"rootIds"`
+	Result        *models.ScanResult `json:"result"`
+}
 
 // NewScanResultCache 创建缓存，path 为磁盘持久化文件路径。
 func NewScanResultCache(path string) *ScanResultCache {
@@ -42,11 +54,7 @@ func NewScanResultCache(path string) *ScanResultCache {
 func (c *ScanResultCache) Get() *models.ScanResult {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	if c.latest == nil {
-		return nil
-	}
-	cp := *c.latest
-	return &cp
+	return cloneScanResult(c.latest)
 }
 
 // Set 写入新的扫描结果并异步、防抖落盘。
@@ -59,17 +67,8 @@ func (c *ScanResultCache) Set(r *models.ScanResult) {
 		return
 	}
 	c.mu.Lock()
-	c.latest = r
-	c.loaded = true
-	c.dirty = true
-	if c.flushTimer != nil {
-		c.flushTimer.Stop()
-	}
-	c.flushTimer = time.AfterFunc(flushDebounce, func() {
-		if err := c.flush(); err != nil {
-			fmt.Fprintf(os.Stderr, "scan_cache async flush: %v\n", err)
-		}
-	})
+	c.latest = cloneScanResult(r)
+	c.markDirtyLocked()
 	c.mu.Unlock()
 }
 
@@ -79,18 +78,6 @@ func (c *ScanResultCache) Flush() error {
 	return c.flush()
 }
 
-// Load 启动时加载磁盘缓存。
-//
-// 已废弃：请使用 LoadWithRoots(currentRoots)。该方法等价于
-// LoadWithRoots(nil)，不校验缓存里的根目录与当前配置是否一致，
-// 仅在测试与历史代码路径中保留。
-//
-// Deprecated: Use LoadWithRoots instead.
-func (c *ScanResultCache) Load() error {
-	_, err := c.LoadWithRoots(nil)
-	return err
-}
-
 // LoadWithRoots 启动时加载磁盘缓存，并在缓存记录的多媒体根与 currentRoots
 // 不一致时清空缓存（清空后调用方应主动触发一次扫描，避免前端拉到旧根下的
 // 扫描结果）。
@@ -98,7 +85,7 @@ func (c *ScanResultCache) Load() error {
 // 行为：
 //   - 缓存文件不存在：与 Load 行为一致，直接返回 nil（无错）。
 //   - 缓存文件存在但解析失败：返回错误（与 Load 行为一致）。
-//   - currentRoots 为 nil 或空：跳过根目录校验，按原样加载。
+//   - currentRoots 为 nil 或空：拒绝加载，因为脱敏快照无法还原内部路径。
 //   - 缓存里的根集合与 currentRoots 不一致：调用 Clear() 清空内存与磁盘，
 //     并通过返回值 rootsMismatch=true 通知调用方需要重扫。
 //   - 一致：按原样加载到内存。
@@ -108,110 +95,405 @@ func (c *ScanResultCache) Load() error {
 //   - 顺序无关（按集合比较）
 //   - 大小写：Windows 上不敏感（paths.ToLower 后比），其他平台敏感
 func (c *ScanResultCache) LoadWithRoots(currentRoots []string) (rootsMismatch bool, err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if len(currentRoots) == 0 {
+		return false, errors.New("current media roots are required to load scan cache")
+	}
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
 	data, err := os.ReadFile(c.path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			c.loaded = true
 			return false, nil
 		}
 		return false, err
 	}
-	r := &models.ScanResult{}
-	if err := json.Unmarshal(data, r); err != nil {
+	envelope := &scanCacheEnvelope{}
+	if err := json.Unmarshal(data, envelope); err != nil {
 		return false, err
 	}
-	// currentRoots 为空 → 跳过校验（旧路径/调用方未启用校验）
-	if len(currentRoots) == 0 {
-		c.latest = r
-		c.loaded = true
-		return false, nil
-	}
-	if !sameRootSet(r.Roots, currentRoots) {
-		// 缓存属于另一个 mediaRoot，不能直接用——清空内存并删除磁盘文件，
-		// 避免下次启动再次读到旧根。
-		if c.flushTimer != nil {
-			c.flushTimer.Stop()
+	if envelope.SchemaVersion != scanCacheSchemaVersion || envelope.Result == nil {
+		c.resetMemory()
+		if err := removeCacheFile(c.path); err != nil {
+			return true, err
 		}
-		c.latest = nil
-		c.dirty = false
-		// 直接删除磁盘文件；删除失败时退化为写空 JSON（保持下次 Load 行为可预测）
-		if rmErr := os.Remove(c.path); rmErr != nil && !os.IsNotExist(rmErr) {
-			c.latest = &models.ScanResult{}
-			c.dirty = true
-			if ferr := c.flushLocked(); ferr != nil {
-				return true, rmErr
-			}
-		}
-		c.loaded = true
 		return true, nil
 	}
-	c.latest = r
-	c.loaded = true
+	currentRootIDs := make([]string, 0, len(currentRoots))
+	for _, root := range currentRoots {
+		abs, absErr := filepath.Abs(root)
+		if absErr != nil {
+			return false, absErr
+		}
+		currentRootIDs = append(currentRootIDs, rootIDFor(abs))
+	}
+	if !sameRootSet(envelope.RootIDs, currentRootIDs) {
+		c.resetMemory()
+		if err := removeCacheFile(c.path); err != nil {
+			return true, err
+		}
+		return true, nil
+	}
+	result, err := decodeScanResultFromDisk(envelope.Result, currentRoots)
+	if err != nil {
+		return false, fmt.Errorf("decode scan cache: %w", err)
+	}
+	c.mu.Lock()
+	c.latest = result
+	c.dirty = false
+	c.version++
+	c.mu.Unlock()
 	return false, nil
 }
 
-// flush 把内存中的最新结果写到磁盘（原子重命名）。
-// 必须在持锁或已知无并发时调用，本实现 Get/Set 通过锁保证安全。
+// flush 把内存中的最新结果写到磁盘（原子重命名）。版本号保证写盘期间
+// 到达的新 Set 不会被错误标记为已持久化。
 func (c *ScanResultCache) flush() error {
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
+
 	c.mu.RLock()
 	if !c.dirty || c.latest == nil {
 		c.mu.RUnlock()
 		return nil
 	}
-	data, err := json.MarshalIndent(c.latest, "", "  ")
+	snapshot := cloneScanResult(c.latest)
+	version := c.version
 	path := c.path
 	c.mu.RUnlock()
+
+	envelope, err := encodeScanResultForDisk(snapshot)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	data, err := json.MarshalIndent(envelope, "", "  ")
+	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	if err := writeScanCacheAtomic(path, data); err != nil {
 		return err
 	}
 	c.mu.Lock()
-	c.dirty = false
+	if c.version == version {
+		c.dirty = false
+	}
 	c.mu.Unlock()
-	return os.Rename(tmp, path)
+	return nil
 }
 
-// flushLocked 与 flush 等价，但调用方必须已持有 c.mu 写锁。
-// 用于 LoadWithRoots 在校验失败后立即清空写盘的场景（避免与 flush 中的
-// RLock/Lock 切换出现死锁）。
-func (c *ScanResultCache) flushLocked() error {
-	if !c.dirty || c.latest == nil {
-		return nil
-	}
-	data, err := json.MarshalIndent(c.latest, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(c.path), 0o755); err != nil {
-		return err
-	}
-	tmp := c.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
-		return err
-	}
-	c.dirty = false
-	return os.Rename(tmp, c.path)
-}
-
-// Clear 清空内存中的扫描结果并立即落盘为空文件（媒体根目录变更后调用）。
+// Clear 清空内存中的扫描结果并删除磁盘文件（媒体根目录变更后调用）。
 // 后续首次加载/扫描会按新根重新填充。
 func (c *ScanResultCache) Clear() error {
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
 	c.mu.Lock()
 	if c.flushTimer != nil {
 		c.flushTimer.Stop()
+		c.flushTimer = nil
 	}
 	c.latest = nil
-	c.dirty = true
+	c.dirty = false
+	c.version++
 	c.mu.Unlock()
-	return c.Flush()
+	return removeCacheFile(c.path)
+}
+
+func (c *ScanResultCache) markDirtyLocked() {
+	c.dirty = true
+	c.version++
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+	}
+	c.flushTimer = time.AfterFunc(flushDebounce, func() {
+		if err := c.flush(); err != nil {
+			fmt.Fprintf(os.Stderr, "scan_cache async flush: %v\n", err)
+		}
+	})
+}
+
+func (c *ScanResultCache) resetMemory() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+		c.flushTimer = nil
+	}
+	c.latest = nil
+	c.dirty = false
+	c.version++
+}
+
+func cloneScanResult(result *models.ScanResult) *models.ScanResult {
+	if result == nil {
+		return nil
+	}
+	out := *result
+	out.Roots = append([]string(nil), result.Roots...)
+	out.Albums = cloneAlbums(result.Albums)
+	out.Collections = cloneCollections(result.Collections)
+	out.SmartCollections = make([]models.SmartCollection, len(result.SmartCollections))
+	for i := range result.SmartCollections {
+		out.SmartCollections[i] = result.SmartCollections[i]
+		out.SmartCollections[i].Tags = append([]string(nil), result.SmartCollections[i].Tags...)
+		out.SmartCollections[i].Albums = cloneAlbums(result.SmartCollections[i].Albums)
+	}
+	return &out
+}
+
+func cloneAlbums(albums []models.Album) []models.Album {
+	if albums == nil {
+		return nil
+	}
+	out := make([]models.Album, len(albums))
+	for i := range albums {
+		out[i] = albums[i]
+		out[i].ImageFiles = append([]string(nil), albums[i].ImageFiles...)
+		out[i].VideoFiles = append([]string(nil), albums[i].VideoFiles...)
+		out[i].Files = append([]string(nil), albums[i].Files...)
+		out[i].Tags = append([]string(nil), albums[i].Tags...)
+	}
+	return out
+}
+
+func cloneCollections(collections []models.Collection) []models.Collection {
+	if collections == nil {
+		return nil
+	}
+	out := make([]models.Collection, len(collections))
+	for i := range collections {
+		out[i] = collections[i]
+		out[i].Albums = cloneAlbums(collections[i].Albums)
+		out[i].Collections = cloneCollections(collections[i].Collections)
+	}
+	return out
+}
+
+type scanCacheRoot struct {
+	id   string
+	path string
+}
+
+func encodeScanResultForDisk(result *models.ScanResult) (*scanCacheEnvelope, error) {
+	if result == nil {
+		return nil, errors.New("scan result is empty")
+	}
+	roots := append([]string(nil), result.Roots...)
+	if len(roots) == 0 && result.Root != "" {
+		roots = []string{result.Root}
+	}
+	refs := make([]scanCacheRoot, 0, len(roots))
+	rootIDs := make([]string, 0, len(roots))
+	for _, root := range roots {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			return nil, err
+		}
+		abs = filepath.Clean(abs)
+		id := rootIDFor(abs)
+		refs = append(refs, scanCacheRoot{id: id, path: abs})
+		rootIDs = append(rootIDs, id)
+	}
+	if len(refs) == 0 {
+		return nil, errors.New("scan result has no roots")
+	}
+	// 嵌套根优先匹配更具体的路径；RootIDs 仍保持配置顺序。
+	sort.Slice(refs, func(i, j int) bool { return len(refs[i].path) > len(refs[j].path) })
+
+	out := cloneScanResult(result)
+	encode := func(path string) (string, error) { return encodeScanCachePath(path, refs) }
+	if err := transformScanResultPaths(out, encode); err != nil {
+		return nil, err
+	}
+	return &scanCacheEnvelope{
+		SchemaVersion: scanCacheSchemaVersion,
+		RootIDs:       rootIDs,
+		Result:        out,
+	}, nil
+}
+
+func decodeScanResultFromDisk(result *models.ScanResult, roots []string) (*models.ScanResult, error) {
+	rootByID := make(map[string]string, len(roots))
+	for _, root := range roots {
+		abs, err := filepath.Abs(root)
+		if err != nil {
+			return nil, err
+		}
+		abs = filepath.Clean(abs)
+		rootByID[rootIDFor(abs)] = abs
+	}
+	out := cloneScanResult(result)
+	decode := func(path string) (string, error) { return decodeScanCachePath(path, rootByID) }
+	if err := transformScanResultPaths(out, decode); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func transformScanResultPaths(result *models.ScanResult, transform func(string) (string, error)) error {
+	var err error
+	if result.Root, err = transform(result.Root); err != nil {
+		return err
+	}
+	if result.Roots, err = transformScanCachePaths(result.Roots, transform); err != nil {
+		return err
+	}
+	for i := range result.Albums {
+		if err := transformAlbumPaths(&result.Albums[i], transform); err != nil {
+			return err
+		}
+	}
+	for i := range result.Collections {
+		if err := transformCollectionPaths(&result.Collections[i], transform); err != nil {
+			return err
+		}
+	}
+	for i := range result.SmartCollections {
+		if result.SmartCollections[i].CoverImage, err = transform(result.SmartCollections[i].CoverImage); err != nil {
+			return err
+		}
+		for j := range result.SmartCollections[i].Albums {
+			if err := transformAlbumPaths(&result.SmartCollections[i].Albums[j], transform); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func transformAlbumPaths(album *models.Album, transform func(string) (string, error)) error {
+	var err error
+	if album.Path, err = transform(album.Path); err != nil {
+		return err
+	}
+	if album.SourceRoot, err = transform(album.SourceRoot); err != nil {
+		return err
+	}
+	if album.CoverImage, err = transform(album.CoverImage); err != nil {
+		return err
+	}
+	if album.ImageFiles, err = transformScanCachePaths(album.ImageFiles, transform); err != nil {
+		return err
+	}
+	if album.VideoFiles, err = transformScanCachePaths(album.VideoFiles, transform); err != nil {
+		return err
+	}
+	if album.Files, err = transformScanCachePaths(album.Files, transform); err != nil {
+		return err
+	}
+	return nil
+}
+
+func transformCollectionPaths(collection *models.Collection, transform func(string) (string, error)) error {
+	var err error
+	if collection.Path, err = transform(collection.Path); err != nil {
+		return err
+	}
+	if collection.SourceRoot, err = transform(collection.SourceRoot); err != nil {
+		return err
+	}
+	for i := range collection.Albums {
+		if err := transformAlbumPaths(&collection.Albums[i], transform); err != nil {
+			return err
+		}
+	}
+	for i := range collection.Collections {
+		if err := transformCollectionPaths(&collection.Collections[i], transform); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func transformScanCachePaths(paths []string, transform func(string) (string, error)) ([]string, error) {
+	if paths == nil {
+		return nil, nil
+	}
+	out := make([]string, len(paths))
+	for i, path := range paths {
+		mapped, err := transform(path)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = mapped
+	}
+	return out, nil
+}
+
+func encodeScanCachePath(path string, roots []scanCacheRoot) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	for _, root := range roots {
+		rel, relErr := filepath.Rel(root.path, abs)
+		if relErr != nil || relEscapesRoot(rel) {
+			continue
+		}
+		if rel == "." {
+			return root.id, nil
+		}
+		return root.id + "/" + filepath.ToSlash(rel), nil
+	}
+	return "", errors.New("scan result contains a path outside configured roots")
+}
+
+func decodeScanCachePath(ref string, roots map[string]string) (string, error) {
+	if ref == "" {
+		return "", nil
+	}
+	rootID, rel, hasRel := strings.Cut(ref, "/")
+	root, ok := roots[rootID]
+	if !ok {
+		return "", errors.New("scan cache references an unknown root")
+	}
+	if !hasRel {
+		return root, nil
+	}
+	rel = filepath.Clean(filepath.FromSlash(rel))
+	if relEscapesRoot(rel) {
+		return "", errors.New("scan cache path escapes its root")
+	}
+	path := filepath.Join(root, rel)
+	check, err := filepath.Rel(root, path)
+	if err != nil || relEscapesRoot(check) {
+		return "", errors.New("scan cache path escapes its root")
+	}
+	return path, nil
+}
+
+func writeScanCacheAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(dir, ".scan-cache-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, path)
+}
+
+func removeCacheFile(path string) error {
+	err := os.Remove(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return err
 }
 
 // FindAlbum 按路径查找相册（递归 Collection）。
@@ -368,12 +650,14 @@ func sameRootSet(a, b []string) bool {
 //     越权 + 防止文件已被删/移走），否则静默跳过
 //  3. 替换 CoverImage + CoverKind（按文件扩展名推断 image/video）
 //
-// 原地修改缓存内容（持锁）。返回被应用的 override 数量。
-//
-// 必须在 ScanResultCache 持锁状态下调用（这里是读路径，但底下会
-// 触发 dirty 标记，外部调用方应在 Get() 拿深拷贝之后修改并 Set 回去）。
+// 原地修改缓存内容并在有变化时安排异步落盘。返回被应用的 override 数量。
 func (c *ScanResultCache) ApplyCoverOverrides(overrides map[string]CoverOverride) int {
 	if len(overrides) == 0 {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.latest == nil {
 		return 0
 	}
 	applied := 0
@@ -411,6 +695,9 @@ func (c *ScanResultCache) ApplyCoverOverrides(overrides map[string]CoverOverride
 	}
 	if len(c.latest.Collections) > 0 {
 		walk(c.latest.Collections)
+	}
+	if applied > 0 {
+		c.markDirtyLocked()
 	}
 	return applied
 }
@@ -483,7 +770,7 @@ func (c *ScanResultCache) SetWithOverrideApplied(albumPath, coverFile, coverKind
 	// 顶层
 	for i := range c.latest.Albums {
 		if walkAlbums(&c.latest.Albums[i]) {
-			c.dirty = true
+			c.markDirtyLocked()
 			return
 		}
 	}
@@ -505,7 +792,7 @@ func (c *ScanResultCache) SetWithOverrideApplied(albumPath, coverFile, coverKind
 		return false
 	}
 	if walk(c.latest.Collections) {
-		c.dirty = true
+		c.markDirtyLocked()
 	}
 }
 
@@ -545,7 +832,7 @@ func (c *ScanResultCache) RebuildCoverForAlbum(albumPath string) {
 	}
 	for i := range c.latest.Albums {
 		if rebuild(&c.latest.Albums[i]) {
-			c.dirty = true
+			c.markDirtyLocked()
 			return
 		}
 	}
@@ -566,6 +853,6 @@ func (c *ScanResultCache) RebuildCoverForAlbum(albumPath string) {
 		return false
 	}
 	if walk(c.latest.Collections) {
-		c.dirty = true
+		c.markDirtyLocked()
 	}
 }
