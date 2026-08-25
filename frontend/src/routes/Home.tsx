@@ -352,16 +352,25 @@ export default function Home() {
 
   // 「继续上次」直跳画廊：进首页最大的目的是「接着看」，
   // 中转 Album 详情会多一次点击，对随手翻翻的场景不友好。
+  //
+  // type 推断：
+  //  - imageCount > 0（混合 / 纯图）→ type=image（Gallery 缺省值，显式传更稳）
+  //  - imageCount === 0 && videoCount > 0（纯视频相册）→ type=video
+  // 不传 type 时 Gallery 把当前相册当图库,纯视频相册会显示「这个文件夹没有图片」。
   const onContinue = (card: CardData) => {
     if (card.variant !== 'album') {
       navigate(card.to)
       return
     }
     const idx = card.progress?.index ?? 0
+    const imgs = card.imageCount ?? card.count
+    const vids = card.videoCount ?? 0
+    const galleryType: 'image' | 'video' = imgs > 0 ? 'image' : vids > 0 ? 'video' : 'image'
     const qs = new URLSearchParams({
       path: decodeFavPath(card.to),
       index: String(idx),
       name: card.title,
+      type: galleryType,
     })
     navigate(`/gallery?${qs.toString()}`)
   }
