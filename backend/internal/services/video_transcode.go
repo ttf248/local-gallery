@@ -905,6 +905,14 @@ func (s *TranscodeService) ensureRunning(absPath, cachePath string, fi os.FileIn
 // progress 通过 -progress pipe:1 走 stdout,ffmpeg 每隔 ~0.5s 输出一行
 // progress=continue / out_time_ms=N;V1 只取 out_time_ms / duration 算比值,
 // 写回 job.progress 字段并广播给订阅者(SSE)。
+//
+// 写盘策略:ffmpeg 直接写 dstPath,失败时 cleanup 阶段删除。
+// 但如果 ffmpeg 进程在 cmd.Wait() 返回非 0 时**还没释放文件句柄**(Windows 上
+// 偶发),os.Remove 会失败,下次 stat 又看到半截文件,被错判为 cached →
+// 浏览器拿到 moov atom 缺失的 MP4 报 "MEDIA_ERR_SRC_NOT_SUPPORTED"。
+//
+// 改用 .tmp 中间文件 + 成功后 os.Rename(原子)的写法,保证 cachePath 永远
+// 要么不存在、要么是完整的 MP4。
 func (s *TranscodeService) transcode(
 	ctx context.Context,
 	srcPath, dstPath string,
@@ -914,6 +922,9 @@ func (s *TranscodeService) transcode(
 	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
 		return fmt.Errorf("create cache dir: %w", err)
 	}
+	tmpPath := dstPath + ".tmp"
+	// 清理可能残留的旧 .tmp(上次的转码失败留下的)
+	_ = os.Remove(tmpPath)
 
 	// 估算总时长,用于算 progress
 	var totalDurNS float64
@@ -944,7 +955,7 @@ func (s *TranscodeService) transcode(
 		"-movflags", "+faststart",
 		"-progress", "pipe:1",
 		"-f", "mp4",
-		dstPath,
+		tmpPath, // 先写 .tmp,成功后原子 rename 到 dstPath
 	)
 	if s.profile.VideoBitrate != "" {
 		// CRF + bitrate 同时给 ffmpeg 时,bitrate 是目标上限;V1 简化,
@@ -1010,9 +1021,15 @@ func (s *TranscodeService) transcode(
 	}
 
 	// 校验输出文件
-	outInfo, statErr := os.Stat(dstPath)
+	outInfo, statErr := os.Stat(tmpPath)
 	if statErr != nil || outInfo.Size() == 0 {
+		os.Remove(tmpPath) // 清理半截文件
 		return fmt.Errorf("transcode produced empty output: stat=%v", statErr)
+	}
+	// 原子 rename:dstPath 只会以完整形式出现,不会被读到半截文件
+	if err := os.Rename(tmpPath, dstPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename transcode output: %w", err)
 	}
 	return nil
 }
