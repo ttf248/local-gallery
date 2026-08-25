@@ -332,6 +332,13 @@ func main() {
 	api.Post("/progress", handlers.ProgressSetHandler(prefs))
 	api.Get("/progress", handlers.ProgressGetHandler(prefs))
 	api.Post("/progress/batch", handlers.ProgressBatchGetHandler(prefs))
+	// 「继续阅读」管理：单本删除 + 一键清空
+	// - DELETE /api/progress?path=... → 删单条（幂等）
+	// - DELETE /api/progress            → 清空所有进度
+	// Fiber 同 path 不同 method 共存 OK；query string 区分也可行（POST/GET 已经有），
+	// 但为了清晰，单条删除单独走子路径 /progress/item。
+	api.Delete("/progress", handlers.ProgressClearHandler(prefs))
+	api.Delete("/progress/item", handlers.ProgressDeleteHandler(prefs))
 
 	// ---- 静态资源托管（生产模式：同端口托管前端） ----
 	if staticDir != "" {

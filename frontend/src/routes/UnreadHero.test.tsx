@@ -30,15 +30,25 @@ function makeCard(path: string, name: string) {
 
 function renderHero(cards: ReturnType<typeof makeCard>[], count = cards.length) {
   const onShuffle = vi.fn()
+  const onMarkRead = vi.fn()
+  const onMarkAllRead = vi.fn()
   // AlbumCard 内部用 useQueryClient 走 progress-batch invalidate,
   // 测试套件包一层 QueryClientProvider 避免 "No QueryClient set" 报错。
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return {
     onShuffle,
+    onMarkRead,
+    onMarkAllRead,
     ...render(
       <QueryClientProvider client={qc}>
         <MemoryRouter>
-          <UnreadHero cards={cards} count={count} onShuffle={onShuffle} />
+          <UnreadHero
+            cards={cards}
+            count={count}
+            onShuffle={onShuffle}
+            onMarkRead={onMarkRead}
+            onMarkAllRead={onMarkAllRead}
+          />
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -100,5 +110,25 @@ describe('UnreadHero', () => {
     const heroSection = screen.getByTestId('unread-hero')
     // 计数 0 仍然显示「还有 0 本没看」— 由 Home 条件 {unreadCards.length > 0} 隐藏
     expect(heroSection.textContent).toMatch(/还有\s*0\s*本没看/)
+  })
+
+  it('点 X 触发 onMarkRead 且不触发 onShuffle(未冒泡到其它 handler)', () => {
+    const { onMarkRead, onShuffle } = renderHero([
+      makeCard('/a', 'A'),
+      makeCard('/b', 'B'),
+    ])
+    // 第一张「A」卡上的 X 按钮
+    const xBtnA = screen.getByLabelText('将A标记为已读')
+    fireEvent.click(xBtnA)
+    expect(onMarkRead).toHaveBeenCalledTimes(1)
+    expect(onMarkRead.mock.calls[0][0].title).toBe('A')
+    expect(onShuffle).not.toHaveBeenCalled()
+  })
+
+  it('点 清空 链接触发 onMarkAllRead', () => {
+    const { onMarkAllRead } = renderHero([makeCard('/a', 'A')])
+    const clearBtn = screen.getByTitle(/将所有未读相册标记为已读/)
+    fireEvent.click(clearBtn)
+    expect(onMarkAllRead).toHaveBeenCalledTimes(1)
   })
 })

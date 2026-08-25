@@ -255,6 +255,102 @@ func TestPrefsStore_ReadingProgressBatch(t *testing.T) {
 	}
 }
 
+func TestPrefsStore_DeleteReadingProgress(t *testing.T) {
+	s := tempStore(t)
+	// 准备 3 条
+	for i := 0; i < 3; i++ {
+		if err := s.SetReadingProgress(models.ReadingProgress{
+			Path: "/p/" + itoa(i), Index: i, Total: 10, Updated: time.Now(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 删除中间那条
+	removed, err := s.DeleteReadingProgress("/p/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !removed {
+		t.Error("expected removed=true for existing path")
+	}
+
+	// 校验只剩 2 条，且 1 确实没了
+	all := s.GetReadingProgressBatch([]string{"/p/0", "/p/1", "/p/2"})
+	if len(all) != 2 {
+		t.Fatalf("expected 2 entries after delete, got %d", len(all))
+	}
+	if _, ok := all["/p/1"]; ok {
+		t.Error("/p/1 should be deleted")
+	}
+	if all["/p/0"].Index != 0 || all["/p/2"].Index != 2 {
+		t.Errorf("other entries corrupted: %+v", all)
+	}
+
+	// 幂等：删第二次返回 false，但不出错
+	removed, err = s.DeleteReadingProgress("/p/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed {
+		t.Error("second delete should be idempotent (removed=false)")
+	}
+
+	// 删不存在的 path 也是幂等
+	removed, err = s.DeleteReadingProgress("/p/never-existed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed {
+		t.Error("deleting never-existed path should be removed=false")
+	}
+}
+
+func TestPrefsStore_ClearAllReadingProgress(t *testing.T) {
+	s := tempStore(t)
+	// 空 store：清空返回 0
+	n, err := s.ClearAllReadingProgress()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("empty clear should return 0, got %d", n)
+	}
+
+	// 准备 4 条
+	for i := 0; i < 4; i++ {
+		if err := s.SetReadingProgress(models.ReadingProgress{
+			Path: "/p/" + itoa(i), Index: i, Total: 10, Updated: time.Now(),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// 清空
+	n, err = s.ClearAllReadingProgress()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 4 {
+		t.Errorf("expected 4 removed, got %d", n)
+	}
+
+	// 再清空应该返回 0
+	n, err = s.ClearAllReadingProgress()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Errorf("second clear should return 0, got %d", n)
+	}
+
+	// 校验 GetReadingProgressBatch 也空了
+	all := s.GetReadingProgressBatch([]string{"/p/0", "/p/1", "/p/2", "/p/3"})
+	if len(all) != 0 {
+		t.Errorf("expected 0 after clear, got %d", len(all))
+	}
+}
+
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

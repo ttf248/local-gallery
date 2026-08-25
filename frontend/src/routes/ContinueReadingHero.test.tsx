@@ -30,9 +30,20 @@ function makeCard(path: string, name: string, index: number, total: number) {
 
 function renderHero(cards: ReturnType<typeof makeCard>[]) {
   const onContinue = vi.fn()
+  const onRemove = vi.fn()
+  const onClearAll = vi.fn()
   return {
     onContinue,
-    ...render(<ContinueReadingHero cards={cards} onContinue={onContinue} />),
+    onRemove,
+    onClearAll,
+    ...render(
+      <ContinueReadingHero
+        cards={cards}
+        onContinue={onContinue}
+        onRemove={onRemove}
+        onClearAll={onClearAll}
+      />,
+    ),
   }
 }
 
@@ -67,8 +78,10 @@ describe('ContinueReadingHero', () => {
       makeCard('/a', 'A', 5, 20),
       makeCard('/b', 'B', 12, 30),
     ])
-    // 点第二张的「B」卡(用 title 行所在 button)
-    const bCard = screen.getByText('B').closest('button')!
+    // 外层是 role=button 的 div，div 内部有 X 真 button。
+    // 找 "13 / 30" 那个 progress 文本（标记第 2 张 B 的卡），回溯到 role=button 容器。
+    const progressText = screen.getByText(/看到\s*13\s*\/\s*30/)
+    const bCard = progressText.closest('[role="button"]') as HTMLElement
     fireEvent.click(bCard)
     expect(onContinue).toHaveBeenCalledTimes(1)
     expect(onContinue.mock.calls[0][0].title).toBe('B')
@@ -80,14 +93,33 @@ describe('ContinueReadingHero', () => {
       makeCard(`/p${i}`, `P${i}`, i, 30),
     )
     const { container } = renderHero(eight)
-    const renderedButtons = container.querySelectorAll('button')
-    // 8 张里网格渲染只取前 6。button 数 = 6 张 ContinueCard (0 个其它)
-    expect(renderedButtons.length).toBe(6)
+    const cardButtons = container.querySelectorAll('button[aria-label^="从继续阅读移除"]')
+    // 8 张里网格渲染只取前 6。每张卡有 1 个 X button 标 aria-label
+    // "从继续阅读移除X"，所以正好 6 个
+    expect(cardButtons.length).toBe(6)
   })
 
   it('空 cards 仍渲染(由 Home 条件决定是否显示)', () => {
     renderHero([])
     const heroSection = screen.getByTestId('continue-hero')
     expect(heroSection.textContent).toMatch(/0\s*本还没看完/)
+  })
+
+  it('点 X 触发 onRemove 且不冒泡到外层 onContinue', () => {
+    const { onContinue, onRemove } = renderHero([
+      makeCard('/a', 'A', 5, 20),
+    ])
+    const xBtn = screen.getByLabelText('从继续阅读移除A')
+    fireEvent.click(xBtn)
+    expect(onRemove).toHaveBeenCalledTimes(1)
+    expect(onRemove.mock.calls[0][0].title).toBe('A')
+    expect(onContinue).not.toHaveBeenCalled()
+  })
+
+  it('点 清空 链接触发 onClearAll', () => {
+    const { onClearAll } = renderHero([makeCard('/a', 'A', 1, 10)])
+    const clearBtn = screen.getByTitle(/清空所有继续阅读记录/)
+    fireEvent.click(clearBtn)
+    expect(onClearAll).toHaveBeenCalledTimes(1)
   })
 })

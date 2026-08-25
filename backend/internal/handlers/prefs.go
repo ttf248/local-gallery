@@ -242,3 +242,35 @@ func ProgressBatchGetHandler(s *store.PrefsStore) fiber.Handler {
 		return c.JSON(fiber.Map{"progress": out, "count": len(out)})
 	}
 }
+
+// ProgressDeleteHandler DELETE /api/progress/item?path=<album path>
+//
+// 删除某相册的阅读进度。用于首页「继续阅读」里用户主动移出某一本。
+// 幂等：原本没有也返回 ok。
+func ProgressDeleteHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		path := c.Query("path")
+		if path == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing 'path'"})
+		}
+		removed, err := s.DeleteReadingProgress(path)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"ok": true, "removed": removed})
+	}
+}
+
+// ProgressClearHandler DELETE /api/progress
+//
+// 清空所有阅读进度。用于首页「继续阅读」一键清空。
+// 不影响 favorites / history / prefs 等其它数据。
+func ProgressClearHandler(s *store.PrefsStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		n, err := s.ClearAllReadingProgress()
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(fiber.Map{"ok": true, "removed": n})
+	}
+}

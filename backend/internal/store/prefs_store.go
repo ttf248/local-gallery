@@ -254,6 +254,53 @@ func (s *PrefsStore) GetReadingProgress(path string) (models.ReadingProgress, bo
 	return models.ReadingProgress{}, false
 }
 
+// DeleteReadingProgress 删除某相册的阅读进度。
+// 用于首页「继续阅读」移除单项：用户看了几页后想从列表里移出，不想再被记录。
+// 返回 (true) 表示该 path 原本存在并被删除；(false) 表示原本就不存在，幂等。
+func (s *PrefsStore) DeleteReadingProgress(path string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLoaded(); err != nil {
+		return false, err
+	}
+	before := len(s.cached.ReadingProgress)
+	out := s.cached.ReadingProgress[:0]
+	for _, r := range s.cached.ReadingProgress {
+		if r.Path == path {
+			continue
+		}
+		out = append(out, r)
+	}
+	s.cached.ReadingProgress = out
+	if len(out) == before {
+		return false, nil
+	}
+	if err := s.flushLocked(); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+// ClearAllReadingProgress 清空所有阅读进度。
+// 用于首页「继续阅读」一键清空：用户已经看完或不想再被旧进度打扰。
+// 返回删除的条数。
+func (s *PrefsStore) ClearAllReadingProgress() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLoaded(); err != nil {
+		return 0, err
+	}
+	n := len(s.cached.ReadingProgress)
+	s.cached.ReadingProgress = nil
+	if n == 0 {
+		return 0, nil
+	}
+	if err := s.flushLocked(); err != nil {
+		return n, err
+	}
+	return n, nil
+}
+
 // GetReadingProgressBatch 一次性读取多个路径的阅读进度。
 // 返回 map[path]progress，缺失项不出现在 map 中。
 // 一次加锁，避免 N 路并发 GET /api/progress?path=... 的锁竞争。

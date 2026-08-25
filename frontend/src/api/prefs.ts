@@ -55,4 +55,15 @@ export const progressApi = {
       '/api/progress/batch',
       { method: 'POST', body: { paths } },
     ),
+  // 「继续阅读」管理：
+  // - delete(path) 移除单条（首页"继续阅读"上的 X 按钮）
+  // - clearAll()   清空所有（首页"继续阅读"头部的"清空"链接）
+  // 都不影响 favorites / history / prefs。
+  delete: (path: string) =>
+    api<{ ok: boolean; removed: boolean }>('/api/progress/item', {
+      params: { path },
+      method: 'DELETE',
+    }),
+  clearAll: () =>
+    api<{ ok: boolean; removed: number }>('/api/progress', { method: 'DELETE' }),
 }

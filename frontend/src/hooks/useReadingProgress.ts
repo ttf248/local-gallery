@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { progressApi, type ReadingProgress } from '../api/prefs'
 
 // 单条进度查询：给 Album 详情页用。
@@ -42,5 +42,75 @@ export function useAllProgress(paths: string[]) {
     },
     enabled: paths.length > 0,
     staleTime: 30 * 1000,
+  })
+}
+
+// 「继续阅读」单本删除：进度用 key=['progress', path]，批量用 ['progress-batch', ...]，
+// 还有 Recents/Favorites 里 per-album 详情也用 ['progress', path]，
+// invalidate 这三组足以让所有视图同步。
+export function useDeleteProgress() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (path: string) => progressApi.delete(path),
+    onSuccess: (_data, path) => {
+      qc.invalidateQueries({ queryKey: ['progress-batch'] })
+      qc.invalidateQueries({ queryKey: ['progress', path] })
+      qc.invalidateQueries({ queryKey: ['progress'] })
+    },
+  })
+}
+
+// 「继续阅读」一键清空：所有 path 都失效。invalidateQueries 不带 predicate
+// 会匹配 ['progress-batch', ...] / ['progress', path] / ['progress'] 全部。
+export function useClearAllProgress() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => progressApi.clearAll(),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['progress-batch'] })
+      qc.invalidateQueries({ queryKey: ['progress'] })
+    },
+  })
+}
+
+// 「未读」单本标记已读：把 progress.index 推到 total（= 视作已读完）。
+// 首页「未读」hero 的 X 按钮和 AlbumCard 右键菜单的「标记为已读」都走这个。
+// 复用 progressApi.set 而非 progressApi.delete 的考虑：
+//   - 「未读」的语义是 progress.index<=0，最干净的"读完"是把 index 推到 total，
+//     这样未来 Recents / Favorites / Album 详情里也能看到"看完了"的轨迹；
+//   - 完全删除 progress 记录会丢失历史，跟右键「标记为已读」行为不一致。
+//   失效范围与 useDeleteProgress 一致（progress-batch + progress）。
+export function useMarkAsRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ path, total }: { path: string; total: number }) =>
+      progressApi.set(path, total, total, 0),
+    onSuccess: (_data, { path }) => {
+      qc.invalidateQueries({ queryKey: ['progress-batch'] })
+      qc.invalidateQueries({ queryKey: ['progress', path] })
+      qc.invalidateQueries({ queryKey: ['progress'] })
+    },
+  })
+}
+
+// 「未读」一键全部标记已读：并行 N 个 set。
+// 没有专门后端端点 — N 本相册的标记已读各自独立，并行即可。
+// Promise.allSettled 比 all 稳：个别失败不会让整批回滚。
+export function useMarkAllAsRead() {
+  const qc = useQueryClient()
+  const mark = useMarkAsRead()
+  return useMutation({
+    mutationFn: async (items: { path: string; total: number }[]) => {
+      const results = await Promise.allSettled(
+        items.map((it) => mark.mutateAsync(it)),
+      )
+      const ok = results.filter((r) => r.status === 'fulfilled').length
+      const failed = items.length - ok
+      return { ok, failed, total: items.length }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['progress-batch'] })
+      qc.invalidateQueries({ queryKey: ['progress'] })
+    },
   })
 }

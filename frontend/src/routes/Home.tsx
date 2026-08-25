@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
 import { useScanSSE } from '../hooks/useScanSSE'
 import { useFavorites } from '../hooks/useFavorites'
-import { useAllProgress } from '../hooks/useReadingProgress'
+import {
+  useAllProgress,
+  useDeleteProgress,
+  useClearAllProgress,
+  useMarkAsRead,
+  useMarkAllAsRead,
+} from '../hooks/useReadingProgress'
 import { useUnreadAlbums } from '../hooks/useUnreadAlbums'
 import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
@@ -34,6 +40,7 @@ import {
   ArrowRightLineIcon,
   ReaderIcon,
   FolderIcon,
+  CheckIcon,
 } from '../components/common/Icon'
 
 // 卡片全集（album + collection + smart），用于"全部图像" filter 网格
@@ -164,6 +171,87 @@ export default function Home() {
     const path = decodeFavPath(pick.to)
     navigate(albumRoute(path))
   }
+
+  // 「继续阅读」管理：单本删除 / 一键清空。
+  // 复用 useReadingProgress 里已经提供的两个 mutation hook。
+  // 选 DELETE API（而非 reset to 0）的原因：
+  //   1. 「继续阅读」的语义就是用户已经看完了 / 不想再被记着，
+  //      真删比「重置进度」更贴近用户意图；
+  //   2. 这样 history 等其它数据不会被影响（reset to 0 也只动 progress，不会污染），
+  //      主要是 (1) 符合预期。
+  const qc = useQueryClient()
+  const removeContinue = useDeleteProgress()
+  const clearContinue = useClearAllProgress()
+  const onRemoveContinue = (card: CardData) => {
+    const path = decodeFavPath(card.to)
+    removeContinue.mutate(path, {
+      onSuccess: () =>
+        pushToast({ kind: 'info', message: `已从继续阅读移除「${card.title}」` }),
+      onError: () => pushToast({ kind: 'error', message: '移除失败,请重试' }),
+    })
+  }
+  const onClearContinue = () => {
+    if (!inProgressAll.length) return
+    const ok = window.confirm(
+      `清空所有继续阅读记录？\n\n将删除 ${inProgressAll.length} 本相册的阅读进度。\n此操作不影响收藏 / 最近 / 已读图。`,
+    )
+    if (!ok) return
+    clearContinue.mutate(undefined, {
+      onSuccess: (r) => {
+        pushToast({ kind: 'info', message: `已清空 ${r.removed} 条继续阅读记录` })
+      },
+      onError: () => pushToast({ kind: 'error', message: '清空失败,请重试' }),
+    })
+  }
+
+  // 「未读」管理：单本标记已读 / 一键全部标记已读。
+  // 语义上「标记已读」= 把 progress 推到 index=total（与 AlbumCard 右键
+  // 「标记为已读」一致）。不是删除 record — 保留"已读完"的痕迹，未来
+  // Recents / Favorites / 历史面板能继续看到。
+  const markReadOne = useMarkAsRead()
+  const markReadAll = useMarkAllAsRead()
+  const onMarkReadUnread = (card: CardData) => {
+    const path = decodeFavPath(card.to)
+    const total = card.progress?.total ?? 0
+    if (total <= 0) {
+      pushToast({ kind: 'error', message: '该相册为空,无法标记' })
+      return
+    }
+    markReadOne.mutate(
+      { path, total },
+      {
+        onSuccess: () =>
+          pushToast({ kind: 'info', message: `已将「${card.title}」标记为已读` }),
+        onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
+      },
+    )
+  }
+  const onMarkAllReadUnread = () => {
+    if (!unreadCards.length) return
+    const ok = window.confirm(
+      `将 ${unreadCards.length} 本相册全部标记为已读？\n\n操作不会删除文件,只是把阅读进度推到末尾。`,
+    )
+    if (!ok) return
+    const items = unreadCards.map((c) => ({
+      path: decodeFavPath(c.to),
+      total: c.progress?.total ?? 0,
+    }))
+    markReadAll.mutate(items, {
+      onSuccess: (r) => {
+        if (r.failed === 0) {
+          pushToast({ kind: 'info', message: `已将 ${r.ok} 本标记为已读` })
+        } else {
+          pushToast({
+            kind: 'error',
+            message: `已标记 ${r.ok} 本,失败 ${r.failed} 本`,
+          })
+        }
+      },
+      onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
+    })
+  }
+  // qc 引用保留以便将来其它 progress 失效场景用
+  void qc
 
   const cards = useMemo(() => buildCards(result), [result])
 
@@ -498,12 +586,23 @@ export default function Home() {
 
       {/* === 未读 hero(有未读时置顶 6 张,直接引导用户进下一本)== */}
       {hasContent && unreadCards.length > 0 && (
-        <UnreadHero cards={unreadCards} count={unreadCount} onShuffle={onShuffleUnread} />
+        <UnreadHero
+          cards={unreadCards}
+          count={unreadCount}
+          onShuffle={onShuffleUnread}
+          onMarkRead={onMarkReadUnread}
+          onMarkAllRead={onMarkAllReadUnread}
+        />
       )}
 
       {/* === 继续阅读 hero(有进行中的相册时,展示前 6 张)== */}
       {hasContent && inProgressAll.length > 0 && (
-        <ContinueReadingHero cards={inProgressAll} onContinue={onContinue} />
+        <ContinueReadingHero
+          cards={inProgressAll}
+          onContinue={onContinue}
+          onRemove={onRemoveContinue}
+          onClearAll={onClearContinue}
+        />
       )}
 
       {/* === 时间线（仅当有内容时显示） === */}
@@ -776,15 +875,23 @@ function SectionHeader({
 //     或翻到侧边栏才能找到
 //   - 用前 6 张未读卡(2x3 / 3x2 网格)作为视觉锚点,而不是纯文字数字
 //   - 「全部」按钮跳到 /unread 页看全量
+//   - 单本 X 按钮：标记该本为已读(进度推到末尾)。hover 在卡片右上角露出
+//     一个深色圆 X,不破坏 AlbumCard 自身布局 — 我们用外层 wrapper 放 X
+//     而不是改 AlbumCard(AlbumCard 还要在主网格继续用)
+//   - 标题区右侧"清空"链接：一键全部标记已读(带 confirm 二次确认)。
 //   - 没有未读时整个区块不渲染(由调用方控制)
 export function UnreadHero({
   cards,
   count,
   onShuffle,
+  onMarkRead,
+  onMarkAllRead,
 }: {
   cards: CardData[]
   count: number
   onShuffle: () => void
+  onMarkRead: (card: CardData) => void
+  onMarkAllRead: () => void
 }) {
   const navigate = useNavigate()
   // 收藏状态:AlbumCard 自己不知道,这里把 favorites 也合并到每张 card 上,
@@ -809,6 +916,14 @@ export function UnreadHero({
           </span>
           <div className="ml-auto flex items-center gap-2">
             <button
+              onClick={onMarkAllRead}
+              className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors"
+              title="将所有未读相册标记为已读"
+            >
+              <CloseIcon size={10} />
+              清空
+            </button>
+            <button
               onClick={onShuffle}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover text-xs font-medium transition-colors"
             >
@@ -826,15 +941,29 @@ export function UnreadHero({
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
           {visible.map((c) => (
-            // 直接渲染 AlbumCard,而不是再套 AlbumGrid ——
-            // AlbumGrid 自己又是一个 grid 容器(items.length=1 时退化成 1 列),
-            // 在 1/6 父格宽度里又铺一个 grid,实际让卡变成 1/6 父格宽,
-            // 文字被压成竖排单字符(每行 1 个汉字)。直接用 AlbumCard 让卡占满
-            // 父级 grid 的整列,正常显示。
-            <AlbumCard
-              key={c.id}
-              data={{ ...c, isFavorite: favSet.has(decodeFavPath(c.to)) }}
-            />
+            // 外层 wrapper div 是 relative，让右上角的 X 按钮能绝对定位。
+            // 不直接给 AlbumCard 加 prop，避免改动 AlbumCard 自身接口
+            // （AlbumCard 还要在全库主网格继续用，那里没有 X 按钮的语义）。
+            <div key={c.id} className="relative group">
+              <AlbumCard
+                data={{ ...c, isFavorite: favSet.has(decodeFavPath(c.to)) }}
+              />
+              {/* 单本标记已读：进度推到末尾。等价于 AlbumCard 右键的
+                  「标记为已读」,但只需一次点击,不需要打开右键菜单。 */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onMarkRead(c)
+                }}
+                className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded-full bg-black/55 text-white/90 hover:bg-accent hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+                title={`将「${c.title}」标记为已读`}
+                aria-label={`将${c.title}标记为已读`}
+              >
+                <CheckIcon size={12} />
+              </button>
+            </div>
           ))}
         </div>
       </div>
@@ -853,12 +982,18 @@ export function UnreadHero({
 //   - 卡片上沿用 AlbumCard 的"已读进度条"+ 数字,
 //     用户一眼看到「这本还没看完」+ 「看到 23/50」
 //   - 点卡片直跳画廊(同 onContinue)— 不中转 Album 详情,减少 1 次点击
+//   - 单卡 hover 时露出 X,用来从继续阅读里移除某一本(不删图,只清该本进度)
+//   - 标题右侧有「清空」,一键清空所有继续阅读进度(带 confirm 二次确认)
 export function ContinueReadingHero({
   cards,
   onContinue,
+  onRemove,
+  onClearAll,
 }: {
   cards: CardData[]
   onContinue: (card: CardData) => void
+  onRemove: (card: CardData) => void
+  onClearAll: () => void
 }) {
   // 限制 6 张展示,多出的不挡用户视线
   const visible = cards.slice(0, 6)
@@ -876,10 +1011,24 @@ export function ContinueReadingHero({
           <span className="text-[13px] text-fg-muted">
             <span className="tabular-nums text-fg">{cards.length}</span> 本还没看完
           </span>
+          <span className="flex-1" />
+          <button
+            onClick={onClearAll}
+            className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors"
+            title="清空所有继续阅读记录(不影响收藏 / 最近)"
+          >
+            <CloseIcon size={10} />
+            清空
+          </button>
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
           {visible.map((c) => (
-            <ContinueCard key={c.id} card={c} onClick={() => onContinue(c)} />
+            <ContinueCard
+              key={c.id}
+              card={c}
+              onClick={() => onContinue(c)}
+              onRemove={() => onRemove(c)}
+            />
           ))}
         </div>
       </div>
@@ -893,16 +1042,36 @@ export function ContinueReadingHero({
 //   1. 进度数字"X / Y"在 hero 里更醒目(标题下方一行,而不是底部窄条)
 //   2. 整张卡可点(onContinue 走 navigate 不需要路径细节)
 //   3. hover 态用 accent 边框而非默认边框,与其他 hero 视觉一致
-function ContinueCard({ card, onClick }: { card: CardData; onClick: () => void }) {
+//   4. 卡片右上 hover 露出的 X 按钮:点 X 只触发 onRemove(并 stopPropagation,
+//     避免冒泡到外层 <button> 又跳进画廊)
+function ContinueCard({
+  card,
+  onClick,
+  onRemove,
+}: {
+  card: CardData
+  onClick: () => void
+  onRemove: () => void
+}) {
   const progress = card.progress
   const progressPct =
     progress && progress.total > 1
       ? Math.min(100, Math.round((progress.index / Math.max(1, progress.total - 1)) * 100))
       : null
   return (
-    <button
+    // 用 <div role="button"> 而不是 <button>，因为里面还要放 X 删除按钮。
+    // <button> 不能嵌套 <button>（HTML 规范），改 div + role + 键盘支持。
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="group block text-left rounded-lg border border-border-faint bg-bg-elevated overflow-hidden hover:border-border-strong hover:shadow-md transition-all"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
+      className="group block text-left rounded-lg border border-border-faint bg-bg-elevated overflow-hidden hover:border-border-strong hover:shadow-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle overflow-hidden">
         {card.coverPath ? (
@@ -918,6 +1087,21 @@ function ContinueCard({ card, onClick }: { card: CardData; onClick: () => void }
             <FolderIcon size={20} />
           </div>
         )}
+        {/* 移除按钮：仅 hover/focus-visible 时显示。stopPropagation + preventDefault
+            避免点击 X 时也触发外层 div 的 onClick（跳画廊）。 */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onRemove()
+          }}
+          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/55 text-white/90 hover:bg-danger hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
+          title={`从继续阅读移除「${card.title}」`}
+          aria-label={`从继续阅读移除${card.title}`}
+        >
+          <CloseIcon size={12} />
+        </button>
         {/* 进度条覆盖在 cover 底部 */}
         {progressPct !== null && progress && (
           <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/65 to-transparent">
@@ -940,6 +1124,6 @@ function ContinueCard({ card, onClick }: { card: CardData; onClick: () => void }
           {card.title}
         </div>
       </div>
-    </button>
+    </div>
   )
 }
