@@ -643,10 +643,19 @@ export default function Gallery() {
     )
   }
 
-  const current = isVideo ? videos[index] : images[index]
+  // 显示给用户看的 item index（1 / 2 那种）。
+  // 视频模式下 store.index 被 VideoPlayer.onProgress 反复写成播放秒数（浮点），
+  // 跟「item 编号」不再同义。视频模式下 current / itemIndex 都基于
+  // initialIndex（带 URL 显式覆盖的语义），不跟 store.index 走。
+  const videoItemIndex = isVideo
+    ? Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
+    : Math.floor(index)
+
+  const current = isVideo ? videos[videoItemIndex] : images[index]
   // 把 current 同步进 ref,让 onSetCover (声明在前) 拿到最新值。
   currentRef.current = current
   const total = isVideo ? videos.length : images.length
+  const itemIndex = videoItemIndex
 
   return (
     <div
@@ -711,6 +720,7 @@ export default function Gallery() {
       <GalleryHeader
         name={name}
         index={index}
+        itemIndex={isVideo ? itemIndex : undefined}
         total={total}
         isFavorite={isFav}
         onBack={() => navigate(-1)}

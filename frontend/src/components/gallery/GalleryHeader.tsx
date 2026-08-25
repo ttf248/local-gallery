@@ -16,7 +16,19 @@ import { useGalleryStore } from '../../store/galleryStore'
 
 interface Props {
   name: string
+  /**
+   * store 中的 `index`。视频模式下被 VideoPlayer.onProgress 反复写成
+   * 当前播放秒数（浮点），跟「item index」不再是同一个语义。
+   *
+   * 推荐传 `itemIndex`；不传时回退到 `index`（仅图库模式安全）。
+   */
   index: number
+  /**
+   * 当前 item 在列表中的 0-based 索引（用于头部计数 + 翻页禁用判断）。
+   * 视频模式下 Gallery.tsx 必须显式传这个，因为 store.index 已被
+   * onProgress 覆盖成播放秒数。
+   */
+  itemIndex?: number
   total: number
   isFavorite: boolean
   onBack: () => void
@@ -46,6 +58,7 @@ interface Props {
 export default function GalleryHeader({
   name,
   index,
+  itemIndex,
   total,
   isFavorite,
   onBack,
@@ -64,13 +77,17 @@ export default function GalleryHeader({
   const setIndex = useGalleryStore((s) => s.setIndex)
   const toggleFullscreen = useGalleryStore((s) => s.toggleFullscreen)
 
+  // 显示 / 翻页禁用都用 item index；未传时回退到 index（仅图库模式安全）
+  const displayIndex =
+    itemIndex !== undefined ? itemIndex : Math.floor(index)
+
   // 双页模式显示「L-R / total」；否则「N / total」
   const counterText = (() => {
     if (mode === 'double') {
-      const hi = Math.min(index + 2, total)
-      return `${index + 1}–${hi} / ${total}`
+      const hi = Math.min(displayIndex + 2, total)
+      return `${displayIndex + 1}–${hi} / ${total}`
     }
-    return `${index + 1} / ${total}`
+    return `${displayIndex + 1} / ${total}`
   })()
 
   // 跳到首/尾（菜单里的快捷入口）
@@ -105,10 +122,10 @@ export default function GalleryHeader({
 
       {/* 上一张 / 下一张：常驻小按钮，沉浸模式不挡住图片 */}
       <div className="hidden md:flex items-center gap-0.5">
-        <HeaderIconButton onClick={onPrev} disabled={index <= 0} title="上一张 (←)">
+        <HeaderIconButton onClick={onPrev} disabled={displayIndex <= 0} title="上一张 (←)">
           <ChevronLeftIcon size={13} />
         </HeaderIconButton>
-        <HeaderIconButton onClick={onNext} disabled={index >= total - 1} title="下一张 (→)">
+        <HeaderIconButton onClick={onNext} disabled={displayIndex >= total - 1} title="下一张 (→)">
           <ChevronRightIcon size={13} />
         </HeaderIconButton>
       </div>
