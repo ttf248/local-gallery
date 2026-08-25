@@ -1,46 +1,78 @@
 # scripts/test-e2e.ps1
-# 端到端测试
-#
-# 准备临时测试媒体目录，写入临时 backend/config.yaml 指向该目录。
+# 使用临时媒体目录与临时二进制运行真实全栈 Playwright 测试。
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "[1/3] 准备测试媒体与临时 config.yaml..." -ForegroundColor Cyan
-$testRoot = Join-Path $env:TEMP "local-gallery-e2e-$([guid]::NewGuid().ToString('N').Substring(0,8))"
-New-Item -ItemType Directory -Path $testRoot | Out-Null
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$backendRoot = Join-Path $repoRoot "backend"
+$frontendRoot = Join-Path $repoRoot "frontend"
+$testRoot = Join-Path $env:TEMP "local-gallery-e2e-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+$sampleDir = Join-Path $testRoot "media\sample-album"
+$serverName = if ($IsWindows -or $env:OS -eq "Windows_NT") { "server.exe" } else { "server" }
+$serverPath = Join-Path $testRoot $serverName
+$cfgPath = Join-Path $testRoot "config.yaml"
+$stdoutPath = Join-Path $testRoot "server.stdout.log"
+$stderrPath = Join-Path $testRoot "server.stderr.log"
+$backendProcess = $null
 
-$sampleDir = Join-Path $testRoot "sample-album"
-New-Item -ItemType Directory -Path $sampleDir | Out-Null
-
-# 占位图片（PNG 1x1 透明）
+New-Item -ItemType Directory -Path $sampleDir -Force | Out-Null
 $pngBytes = [Convert]::FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
 1..3 | ForEach-Object {
-  $imgPath = Join-Path $sampleDir "page-$_.png"
-  [System.IO.File]::WriteAllBytes($imgPath, $pngBytes)
+  [System.IO.File]::WriteAllBytes((Join-Path $sampleDir "page-$_.png"), $pngBytes)
 }
 
-# 临时配置写入仓库根的 backend/test-config.yaml，端口避开 8080
-$testCfg = @"
+$mediaPathYaml = (Join-Path $testRoot "media").Replace("\", "/")
+$cachePathYaml = (Join-Path $testRoot "cache").Replace("\", "/")
+$staticPathYaml = (Join-Path $frontendRoot "dist").Replace("\", "/")
+$config = @"
 mediaRoots:
-  - "$testRoot"
+  - "$mediaPathYaml"
+host: "127.0.0.1"
 port: 18080
-staticDir: ""
+cacheDir: "$cachePathYaml"
+staticDir: "$staticPathYaml"
 "@
-$cfgPath = Join-Path (Resolve-Path "backend").Path "test-config.yaml"
-Set-Content -Path $cfgPath -Value $testCfg -Encoding UTF8
-
-$backend = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd backend; go run ./cmd/server --config test-config.yaml" -PassThru
-Start-Sleep -Seconds 3
+[System.IO.File]::WriteAllText($cfgPath, $config, [System.Text.UTF8Encoding]::new($false))
 
 try {
-  Write-Host "[2/3] 运行 Playwright e2e..." -ForegroundColor Cyan
-  Push-Location frontend
-  npx playwright install --with-deps chromium | Out-Null
-  npx playwright test
-  Pop-Location
+  Write-Host "[1/4] 构建前端与临时后端..." -ForegroundColor Cyan
+  Push-Location $frontendRoot
+  try { npm run build } finally { Pop-Location }
+  Push-Location $backendRoot
+  try { go build -o $serverPath ./cmd/server } finally { Pop-Location }
+
+  Write-Host "[2/4] 启动临时服务..." -ForegroundColor Cyan
+  $backendProcess = Start-Process -FilePath $serverPath -ArgumentList "--config", $cfgPath -WorkingDirectory $backendRoot -WindowStyle Hidden -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -PassThru
+  $ready = $false
+  $curlCommand = if (Get-Command curl.exe -ErrorAction SilentlyContinue) { "curl.exe" } else { "curl" }
+  for ($attempt = 0; $attempt -lt 60; $attempt++) {
+    & $curlCommand --noproxy "*" --silent --fail --max-time 1 "http://127.0.0.1:18080/api/health" | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      $ready = $true
+      break
+    }
+    Start-Sleep -Milliseconds 250
+  }
+  if (-not $ready) {
+    $stderr = if (Test-Path $stderrPath) { Get-Content $stderrPath -Raw } else { "" }
+    throw "临时服务启动失败。$stderr"
+  }
+
+  Write-Host "[3/4] 运行 Playwright..." -ForegroundColor Cyan
+  Push-Location $frontendRoot
+  try {
+    npx playwright test
+    if ($LASTEXITCODE -ne 0) {
+      throw "Playwright 测试失败，退出码 $LASTEXITCODE"
+    }
+  } finally { Pop-Location }
 } finally {
-  Write-Host "[3/3] 清理..." -ForegroundColor Cyan
-  Stop-Process -Id $backend.Id -Force -ErrorAction SilentlyContinue
-  Remove-Item -Recurse -Force $testRoot -ErrorAction SilentlyContinue
-  Remove-Item -Force $cfgPath -ErrorAction SilentlyContinue
+  Write-Host "[4/4] 清理临时进程与测试目录..." -ForegroundColor Cyan
+  if ($null -ne $backendProcess -and -not $backendProcess.HasExited) {
+    Stop-Process -Id $backendProcess.Id -Force -ErrorAction SilentlyContinue
+    $backendProcess.WaitForExit(5000) | Out-Null
+  }
+  if (Test-Path $testRoot) {
+    Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+  }
 }

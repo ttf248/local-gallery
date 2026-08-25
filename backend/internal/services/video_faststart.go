@@ -74,14 +74,14 @@ func (s FaststartStatus) String() string {
 //
 // 工作流:
 //
-//	 1. 客户端 GET /api/videos?path=<abs> 触发
-//	 2. handler 调 Resolve(abs) 得到 (servePath, status)
-//	 3. 缓存命中: 立刻返回缓存文件路径
-//	    缓存未命中且 ffmpeg 可用: ffmpeg -c copy -movflags +faststart 重封装,
-//	                                  结果写盘,下次直接命中
-//	    缓存未命中且 ffmpeg 不可用: 回退到发原文件 (StatusFallback),
-//	                                  不阻断播放只是没有 faststart 优化
-//	    非 MP4/M4V 容器: 跳过 (StatusSkipped)
+//  1. 客户端 GET /api/videos?path=<abs> 触发
+//  2. handler 调 Resolve(abs) 得到 (servePath, status)
+//  3. 缓存命中: 立刻返回缓存文件路径
+//     缓存未命中且 ffmpeg 可用: ffmpeg -c copy -movflags +faststart 重封装,
+//     结果写盘,下次直接命中
+//     缓存未命中且 ffmpeg 不可用: 回退到发原文件 (StatusFallback),
+//     不阻断播放只是没有 faststart 优化
+//     非 MP4/M4V 容器: 跳过 (StatusSkipped)
 //
 // 失效策略: 缓存 key = md5(abs_path + "|" + mtime_ns + "|" + size),
 // 源文件 mtime/size 变化时 (重新下载/重编码) 自动重新生成。
@@ -123,8 +123,8 @@ const faststartCacheMax = 4096
 
 // FaststartOptions 构造选项。
 type FaststartOptions struct {
-	CacheDir string // 必填,缩略图/封面同级目录
-	FFmpeg   string // ffmpeg 可执行文件绝对路径;为空时 Available()=false
+	CacheDir string        // 必填,缩略图/封面同级目录
+	FFmpeg   string        // ffmpeg 可执行文件绝对路径;为空时 Available()=false
 	Timeout  time.Duration // 单次 ffmpeg 超时,默认 20s
 }
 
@@ -276,8 +276,8 @@ func (s *VideoFaststartService) LastStatus() FaststartStatus {
 	// 找最新 Add 过的那个(近似,不严格)
 	var best FaststartStatus = StatusUnknown
 	var bestVal int64
-	for i, c := range &s.statusCounters {
-		v := c.Load()
+	for i := range s.statusCounters {
+		v := s.statusCounters[i].Load()
 		if v >= bestVal {
 			bestVal = v
 			best = FaststartStatus(i)
@@ -310,10 +310,10 @@ func faststartKey(absPath string, mtime time.Time, size int64) string {
 // MP4 是 box 序列,每个 box = [4 字节 size][4 字节 type][payload...]。
 // 顶层 box 顺次扫描:
 //
-//	- 先遇到 moov: 视为 faststart
-//	- 先遇到 mdat: 视为非 faststart(moov 在 mdat 后,典型录屏/手机录制产物)
-//	- 探测 buffer 用完还没遇到任一关键 box: 保守视为"非 faststart",
-//	  触发一次 remux(下次访问走缓存,白跑一次成本可忽略)
+//   - 先遇到 moov: 视为 faststart
+//   - 先遇到 mdat: 视为非 faststart(moov 在 mdat 后,典型录屏/手机录制产物)
+//   - 探测 buffer 用完还没遇到任一关键 box: 保守视为"非 faststart",
+//     触发一次 remux(下次访问走缓存,白跑一次成本可忽略)
 //
 // 为节省 IO,只读前 8 MiB。实际 faststart 文件的 moov box 一般远小于
 // 此值(几十 KB ~ 几 MB,极端 4K HDR 长视频可能更大但仍远小于 8 MiB);

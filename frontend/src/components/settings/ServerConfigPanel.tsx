@@ -39,43 +39,113 @@ const PATH_FIELDS = new Set([
 // 字段定义:标签、说明、是否重启字段、UI 类型。
 // mediaRoots 是特例:用 MediaRootsField 组件单独渲染,不走通用 ConfigRow。
 type FieldDef =
-  | { key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>; label: string; hint?: string; kind: 'text' }
-  | { key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>; label: string; hint?: string; kind: 'number'; min?: number; max?: number }
-  | { key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>; label: string; hint?: string; kind: 'boolean' }
+  | {
+      key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>
+      label: string
+      hint?: string
+      kind: 'text'
+    }
+  | {
+      key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>
+      label: string
+      hint?: string
+      kind: 'number'
+      min?: number
+      max?: number
+    }
+  | {
+      key: Exclude<keyof ServerConfigPatch, 'mediaRoots'>
+      label: string
+      hint?: string
+      kind: 'boolean'
+    }
 
 const FIELDS: { section: string; defs: FieldDef[] }[] = [
   {
     section: '媒体库',
     defs: [
-      { key: 'cacheDir', label: '缓存目录', hint: '存放缩略图 / 扫描结果 / 用户偏好', kind: 'text' },
+      {
+        key: 'cacheDir',
+        label: '缓存目录',
+        hint: '存放缩略图 / 扫描结果 / 用户偏好',
+        kind: 'text',
+      },
     ],
   },
   {
     section: '缩略图',
     defs: [
-      { key: 'thumbSizeW', label: '缩略图宽度', kind: 'number', min: 50, max: 2000 },
-      { key: 'thumbSizeH', label: '缩略图高度', kind: 'number', min: 50, max: 2000 },
-      { key: 'thumbCacheSize', label: 'LRU 缓存项数', hint: '内存中保留多少张已生成的缩略图', kind: 'number', min: 50, max: 5000 },
-      { key: 'cacheMaxAgeDays', label: '缓存保留天数', hint: '超出后被清理', kind: 'number', min: 1, max: 365 },
+      {
+        key: 'thumbSizeW',
+        label: '缩略图宽度',
+        kind: 'number',
+        min: 50,
+        max: 2000,
+      },
+      {
+        key: 'thumbSizeH',
+        label: '缩略图高度',
+        kind: 'number',
+        min: 50,
+        max: 2000,
+      },
+      {
+        key: 'thumbCacheSize',
+        label: 'LRU 缓存项数',
+        hint: '内存中保留多少张已生成的缩略图',
+        kind: 'number',
+        min: 50,
+        max: 5000,
+      },
+      {
+        key: 'cacheMaxAgeDays',
+        label: '缓存保留天数',
+        hint: '超出后被清理',
+        kind: 'number',
+        min: 1,
+        max: 365,
+      },
     ],
   },
   {
     section: '网络',
     defs: [
-      { key: 'host', label: '监听地址', hint: '修改后需要重启后端', kind: 'text' },
-      { key: 'port', label: '监听端口', hint: '修改后需要重启后端', kind: 'number', min: 1, max: 65535 },
+      {
+        key: 'host',
+        label: '监听地址',
+        hint: '修改后需要重启后端',
+        kind: 'text',
+      },
+      {
+        key: 'port',
+        label: '监听端口',
+        hint: '修改后需要重启后端',
+        kind: 'number',
+        min: 1,
+        max: 65535,
+      },
     ],
   },
   {
     section: '静态资源',
     defs: [
-      { key: 'staticDir', label: '前端构建目录', hint: '修改后需要重启后端', kind: 'text' },
+      {
+        key: 'staticDir',
+        label: '前端构建目录',
+        hint: '修改后需要重启后端',
+        kind: 'text',
+      },
     ],
   },
   {
     section: '安全',
     defs: [
-      { key: 'allowOsOpen', label: '允许在系统文件管理器中打开', hint: '仅建议在受信环境开启', kind: 'boolean' },
+      {
+        key: 'allowOsOpen',
+        label: '允许在系统文件管理器中打开',
+        hint: '仅建议在受信环境开启',
+        kind: 'boolean',
+      },
     ],
   },
 ]
@@ -100,7 +170,7 @@ export default function ServerConfigPanel() {
   // 路径类字段用 onBlur 触发(不走 debounce);非路径类才用 debounce
   const debouncedDraft = useDebounce(draft, 600)
   // 当前"路径类草稿"按字段拆,onBlur 时取对应字段提交
-  const pathDirtyRef = useRef<Partial<Record<keyof ServerConfigPatch, any>>>({})
+  const pathDirtyRef = useRef<Partial<Record<keyof ServerConfigPatch, unknown>>>({})
 
   // 把 debounced 草稿 flush 到后端(仅限非路径类字段)
   const firstFlush = useRef(true)
@@ -121,10 +191,9 @@ export default function ServerConfigPanel() {
       })
       return
     }
-    const payload: ServerConfigPatch = {}
-    nonPathKeys.forEach((k) => {
-      ;(payload as any)[k] = (debouncedDraft as any)[k]
-    })
+    const payload = Object.fromEntries(
+      nonPathKeys.map((k) => [k, debouncedDraft[k as keyof ServerConfigPatch]]),
+    ) as ServerConfigPatch
     flush(payload)
     // 清掉已 flush 的字段
     setDraft((d) => {
@@ -257,7 +326,9 @@ export default function ServerConfigPanel() {
             onPatternsChange={(next) => {
               setDraft((d) => ({ ...d, excludePatterns: next }))
               pathDirtyRef.current.excludePatterns = next
-              setStatus((s) => (s['excludePatterns'] === 'saved' ? { ...s, excludePatterns: 'idle' } : s))
+              setStatus((s) =>
+                s['excludePatterns'] === 'saved' ? { ...s, excludePatterns: 'idle' } : s,
+              )
             }}
             onSystemFilesChange={(next) => {
               setDraft((d) => ({ ...d, systemFiles: next }))
@@ -300,9 +371,13 @@ export default function ServerConfigPanel() {
                     setDraft((d) => ({ ...d, [def.key]: v as never }))
                     if (isPath) {
                       pathDirtyRef.current[def.key] = v
-                      setStatus((s) => (s[statusKey] === 'saved' ? { ...s, [statusKey]: 'idle' } : s))
+                      setStatus((s) =>
+                        s[statusKey] === 'saved' ? { ...s, [statusKey]: 'idle' } : s,
+                      )
                     } else {
-                      setStatus((s) => (s[statusKey] === 'saved' ? { ...s, [statusKey]: 'idle' } : s))
+                      setStatus((s) =>
+                        s[statusKey] === 'saved' ? { ...s, [statusKey]: 'idle' } : s,
+                      )
                     }
                   }}
                   onCommit={isPath ? () => flushPathField(def.key) : undefined}
@@ -334,8 +409,9 @@ export default function ServerConfigPanel() {
       )}
 
       <div className="text-xs text-fg-subtle leading-relaxed px-1">
-        配置文件路径:<code className="font-mono text-fg-muted">{data.configPath}</code>
-        ; 改完自动写回 YAML,无需手动保存。
+        配置文件路径:
+        <code className="font-mono text-fg-muted">{data.configPath}</code>; 改完自动写回
+        YAML,无需手动保存。
       </div>
     </div>
   )
@@ -346,10 +422,13 @@ async function openMediaRoot(path: string): Promise<void> {
   const ui = useUIStore.getState()
   try {
     await fsApi.openInExplorer(path)
-  } catch (e: any) {
-    const msg = e?.message ?? '打开失败'
+  } catch (e: unknown) {
+    const msg = errorMessage(e, '打开失败')
     if (msg.includes('403') || msg.includes('disabled')) {
-      ui.pushToast({ kind: 'warning', message: '请先在「安全」里开启「允许在系统文件管理器中打开」' })
+      ui.pushToast({
+        kind: 'warning',
+        message: '请先在「安全」里开启「允许在系统文件管理器中打开」',
+      })
     } else {
       ui.pushToast({ kind: 'error', message: '打开失败:' + msg })
     }
@@ -417,9 +496,7 @@ function MediaRootsField({
             placeholder="E:\照片 或 /home/user/pics"
             // 只在已存在的根上提供"打开资源管理器"(空槽位不算)
             onOpenInExplorer={
-              i < roots.length && v && allowOsOpen
-                ? () => onOpenInExplorer(v)
-                : undefined
+              i < roots.length && v && allowOsOpen ? () => onOpenInExplorer(v) : undefined
             }
             onPick={(picked) => updateAt(i, picked)}
             onChange={(nv) => updateAt(i, nv)}
@@ -676,8 +753,7 @@ function PathField({
   // 只能取 handle.name(basename)+ 父目录名。降级时提示用户复制粘贴。
   async function handlePick() {
     if (picking) return
-    const w = window as any
-    if (typeof w.showDirectoryPicker !== 'function') {
+    if (typeof window.showDirectoryPicker !== 'function') {
       pushToast({
         kind: 'info',
         message: '当前浏览器不支持「选择目录」API,请直接复制粘贴路径到输入框',
@@ -688,10 +764,10 @@ function PathField({
     }
     setPicking(true)
     try {
-      const handle = await w.showDirectoryPicker({ mode: 'read' })
+      const handle = await window.showDirectoryPicker({ mode: 'read' })
       // handle.name 是目录 basename;无法拿到完整绝对路径(浏览器安全限制)
       // 仍然把 basename 填入,并保留旧路径前缀,降低用户输入量
-      const baseName = (handle as any).name as string
+      const baseName = handle.name
       // 尝试从旧 value 推断父目录;如果旧值也是 basename,就直接替换
       const parts = value.split(/[\\/]/).filter(Boolean)
       let newValue: string
@@ -709,10 +785,13 @@ function PathField({
         message: `已填入目录名「${baseName}」;浏览器为安全只暴露 basename,完整路径请手动补全`,
         ttl: 5000,
       })
-    } catch (e: any) {
+    } catch (e: unknown) {
       // 用户取消选择:不报错
-      if (e?.name !== 'AbortError') {
-        pushToast({ kind: 'error', message: '选择目录失败:' + (e?.message ?? '未知错误') })
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        pushToast({
+          kind: 'error',
+          message: '选择目录失败:' + errorMessage(e, '未知错误'),
+        })
       }
     } finally {
       setPicking(false)
@@ -799,20 +878,36 @@ async function openConfigPath(path: string, fieldKey: string): Promise<void> {
       const body = await res.text().catch(() => '')
       if (res.status === 403) {
         if (body.includes('allowOsOpen')) {
-          ui.pushToast({ kind: 'warning', message: '请先在「安全」里开启「允许在系统文件管理器中打开」' })
+          ui.pushToast({
+            kind: 'warning',
+            message: '请先在「安全」里开启「允许在系统文件管理器中打开」',
+          })
         } else {
-          ui.pushToast({ kind: 'error', message: '该路径不在可打开白名单(cacheDir/staticDir/mediaRoots)' })
+          ui.pushToast({
+            kind: 'error',
+            message: '该路径不在可打开白名单(cacheDir/staticDir/mediaRoots)',
+          })
         }
       } else {
-        ui.pushToast({ kind: 'error', message: `打开失败 (${res.status}): ${body}` })
+        ui.pushToast({
+          kind: 'error',
+          message: `打开失败 (${res.status}): ${body}`,
+        })
       }
       return
     }
     // 200:成功,不做额外提示
     void fieldKey // 暂时无额外用途
-  } catch (e: any) {
-    ui.pushToast({ kind: 'error', message: '网络错误:' + (e?.message ?? '未知') })
+  } catch (e: unknown) {
+    ui.pushToast({
+      kind: 'error',
+      message: '网络错误:' + errorMessage(e, '未知'),
+    })
   }
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback
 }
 
 function Toggle({
