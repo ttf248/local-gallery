@@ -8,6 +8,7 @@ import (
 
 	"github.com/tianlongxiang/local-gallery/internal/config"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // FsOpenHandler 在系统文件管理器中打开 path。
@@ -59,6 +60,39 @@ func FsOpenHandler(mgr *config.Manager) fiber.Handler {
 		if err := middleware.OpenInOS(path); err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
+			})
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	}
+}
+
+// FsOpenResourceHandler 使用脱敏资源 ID 打开媒体目录。
+func FsOpenResourceHandler(mgr *config.Manager, catalog *services.ResourceCatalog) fiber.Handler {
+	type request struct {
+		ID string `json:"id"`
+	}
+	return func(c *fiber.Ctx) error {
+		cfg := mgr.Get()
+		if !cfg.AllowOsOpen {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
+				"code": "os_open_disabled", "message": "allowOsOpen is disabled",
+			})
+		}
+		var body request
+		if err := c.BodyParser(&body); err != nil || body.ID == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code": "invalid_resource_id", "message": "resource id is required",
+			})
+		}
+		path, ok := catalog.Resolve(body.ID)
+		if !ok {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"code": "resource_not_found", "message": "resource id is invalid or stale",
+			})
+		}
+		if err := middleware.OpenInOS(path); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"code": "os_open_failed", "message": "failed to open the resource",
 			})
 		}
 		return c.JSON(fiber.Map{"ok": true})

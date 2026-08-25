@@ -11,13 +11,13 @@ import (
 func writeValidYAML(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
-	// 准备一个真实存在的 mediaRoot（避免 Validate 失败）
+	// 准备一个真实存在的 mediaRoots（避免 Validate 失败）
 	root := filepath.Join(dir, "media")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	// 用 filepath.Join 替换占位符，使 root 一定存在
-	content = "mediaRoot: \"" + filepath.ToSlash(root) + "\"\n" + content
+	content = "mediaRoots:\n  - \"" + filepath.ToSlash(root) + "\"\n" + content
 	path := filepath.Join(dir, "config.yaml")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -48,9 +48,9 @@ func TestManager_Update_Persists(t *testing.T) {
 	}
 
 	restart, err := mgr.Update(ConfigPatch{
-		Port:        8888,
-		PortSet:     true,
-		AllowOsOpen: true,
+		Port:           8888,
+		PortSet:        true,
+		AllowOsOpen:    true,
 		AllowOsOpenSet: true,
 	})
 	if err != nil {
@@ -123,16 +123,12 @@ func TestManager_Update_RejectsInvalid(t *testing.T) {
 	}
 }
 
-func TestManager_Update_MediaRootClearsLegacy(t *testing.T) {
+func TestManager_Update_MediaRoot(t *testing.T) {
 	path := writeValidYAML(t, "")
 	mgr, err := NewManager(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mgr.mu.Lock()
-	mgr.current.LegacyComicRoot = "D:\\old"
-	mgr.mu.Unlock()
-
 	newRoot := filepath.Join(t.TempDir(), "new")
 	if err := os.MkdirAll(newRoot, 0o755); err != nil {
 		t.Fatal(err)
@@ -145,15 +141,12 @@ func TestManager_Update_MediaRootClearsLegacy(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := mgr.Get()
-	if cfg.MediaRoot != newRoot {
-		t.Errorf("mediaRoot=%q want %q", cfg.MediaRoot, newRoot)
-	}
-	if cfg.LegacyComicRoot != "" {
-		t.Errorf("LegacyComicRoot should be cleared, got %q", cfg.LegacyComicRoot)
+	if cfg.Root() != newRoot {
+		t.Errorf("media root=%q want %q", cfg.Root(), newRoot)
 	}
 }
 
-// 多根 PATCH：传入数组应整体替换，LegacyComicRoot 清空。
+// 多根 PATCH：传入数组应整体替换。
 func TestManager_Update_MediaRootsMulti(t *testing.T) {
 	path := writeValidYAML(t, "")
 	mgr, err := NewManager(path)
@@ -180,9 +173,6 @@ func TestManager_Update_MediaRootsMulti(t *testing.T) {
 	}
 	if roots[0] != root1 || roots[1] != root2 {
 		t.Errorf("roots order: %v", roots)
-	}
-	if mgr.Get().LegacyComicRoot != "" {
-		t.Errorf("legacy should be cleared")
 	}
 }
 

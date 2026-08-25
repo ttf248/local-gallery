@@ -46,7 +46,7 @@ func CacheStatsHandler(mgr *config.Manager, stats *services.CacheStatsService) f
 			})
 		}
 		resp := CacheStatsResponse{
-			Path:            usage.Path,
+			Path:            "cache",
 			TotalBytes:      usage.TotalBytes,
 			FileCount:       usage.FileCount,
 			ScannedAt:       usage.ScannedAt.UTC().Format("2006-01-02T15:04:05Z"),
@@ -57,6 +57,9 @@ func CacheStatsHandler(mgr *config.Manager, stats *services.CacheStatsService) f
 			VideoFaststart:  usage.VideoFaststart,
 			VideoTranscode:  usage.VideoTranscode,
 		}
+		resp.Thumbs.Path = "thumbs"
+		resp.VideoFaststart.Path = "video-faststart"
+		resp.VideoTranscode.Path = "video-transcode"
 		if expiresAt != nil {
 			left := int(time.Until(*expiresAt).Seconds())
 			if left > 0 {

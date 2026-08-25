@@ -1,9 +1,9 @@
 // Command server 本地画廊后端入口。
 //
 // 启动流程：
-//  1. 解析 flag：仅 --config（指定 YAML 路径）和 --static-dir（前端产物目录）
+//  1. 解析 flag：仅 --config（指定 YAML 路径）
 //  2. 通过 config.Manager 加载 config.yaml（缺失则用内置默认；显式字段覆盖默认）
-//  3. 校验 MediaRoot 必须存在且为目录
+//  3. 校验 MediaRoots 必须存在且均为目录
 //  4. 注册中间件 + 路由（中间件和扫描 handler 都从 Manager 读最新根目录）
 //  5. 监听 host:port
 //
@@ -31,33 +31,24 @@ import (
 )
 
 func main() {
-	// ---- 1. 解析 flag（仅保留部署相关：配置文件路径 + 前端静态目录）----
+	// ---- 1. 解析 flag（仅保留配置文件路径）----
 	flagConfig := flag.String("config", config.DefaultConfigName, "配置文件路径（YAML，相对 CWD）")
-	flagStaticDir := flag.String("static-dir", "", "前端静态资源目录（覆盖 config.yaml 中的 staticDir；不存在则跳过托管）")
 	flag.Parse()
 
 	// ---- 2. 加载 YAML 配置（通过 Manager，handler 可热更新）----
 	mgr, err := config.NewManager(*flagConfig)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "加载配置失败 %s: %v\n", *flagConfig, err)
+		fmt.Fprintf(os.Stderr, "加载配置失败 %s\n", filepath.Base(*flagConfig))
 		os.Exit(2)
 	}
 	cfg := mgr.Get()
 
-	// ---- 3. --static-dir 覆盖 YAML 中的同名字段（部署灵活）----
+	// ---- 3. 运行时参数全部来自 YAML ----
 	staticDir := cfg.StaticDir
-	if *flagStaticDir != "" {
-		staticDir = *flagStaticDir
-		// 同步写回 config（让网页配置与启动 flag 一致）
-		_, _ = mgr.Update(config.ConfigPatch{
-			StaticDir:    staticDir,
-			StaticDirSet: true,
-		})
-	}
 
 	// ---- 4. 校验 ----
 	if err := cfg.Validate(); err != nil {
-		fmt.Fprintf(os.Stderr, "配置校验失败: %v\n", err)
+		fmt.Fprintf(os.Stderr, "配置校验失败，请检查 config.yaml 中的目录与参数\n")
 		fmt.Fprintf(os.Stderr, "提示：在 config.yaml 中设置 mediaRoots 指向媒体根目录\n")
 		os.Exit(2)
 	}
@@ -65,14 +56,14 @@ func main() {
 	log.Printf("local-gallery 后端启动中...")
 	roots := cfg.Roots()
 	if len(roots) == 1 {
-		log.Printf("  MediaRoot: %s", roots[0])
+		log.Printf("  MediaRoot: %s", filepath.Base(roots[0]))
 	} else {
 		log.Printf("  MediaRoots (%d):", len(roots))
 		for _, r := range roots {
-			log.Printf("    - %s", r)
+			log.Printf("    - %s", filepath.Base(r))
 		}
 	}
-	log.Printf("  CacheDir:  %s", cfg.CacheDir)
+	log.Printf("  CacheDir:  <configured>")
 	log.Printf("  Thumbnail: %dx%d", cfg.ThumbSizeW, cfg.ThumbSizeH)
 	log.Printf("  Listen:    %s", cfg.Addr())
 
@@ -87,7 +78,7 @@ func main() {
 			if fe, ok := err.(*fiber.Error); ok {
 				return c.Status(fe.Code).JSON(fiber.Map{"error": fe.Message})
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
 		},
 	})
 
@@ -95,15 +86,14 @@ func main() {
 	app.Use(middleware.Recover())
 
 	// 路径安全中间件：根集合从 Manager 动态读取，运行中可热更新
-	safetyMw, safetyState := middleware.PathSafetyMiddleware(cfg.Roots())
+	resourceCatalog := services.NewResourceCatalog()
+	safetyMw, safetyState := middleware.PathSafetyMiddleware(cfg.Roots(), resourceCatalog)
 	app.Use(safetyMw)
 	mgr.OnChange("path_safety", func(snapshot *config.Config) {
 		safetyState.SetRoots(snapshot.Roots())
 	})
 
 	// ---- 路由 ----
-	scanner := services.NewScanner()
-
 	// 服务端 ffmpeg 抽帧器(可选):ffmpeg 不在/坏掉时 Available()=false,
 	// ThumbnailService 会自动回退到原"客户端抽帧 + 上传"流程。
 	videoCover := services.NewVideoCoverExtractor(services.VideoCoverOptions{
@@ -114,7 +104,7 @@ func main() {
 		Timeout:    10 * time.Second,
 	})
 	if videoCover.Available() {
-		log.Printf("  FFmpeg:    %s (服务端视频封面已启用)", videoCover.FFmpegPath())
+		log.Printf("  FFmpeg:    <可用> (服务端视频封面已启用)")
 	} else {
 		log.Printf("  FFmpeg:    <不可用 / 未配置> → 视频封面回退到客户端浏览器抽帧")
 	}
@@ -125,7 +115,7 @@ func main() {
 		Timeout:    5 * time.Second,
 	})
 	if videoInfo.Available() {
-		log.Printf("  FFprobe:   %s (视频元数据已启用)", videoInfo.FFprobePath())
+		log.Printf("  FFprobe:   <可用> (视频元数据已启用)")
 	}
 
 	// 视频 faststart 化服务(可选):把 moov 移到 mdat 前面,解决
@@ -140,7 +130,7 @@ func main() {
 		FFmpeg:   cfg.FFmpegPath,
 	})
 	if faststart.Available() {
-		log.Printf("  VideoFaststart: %s (非 faststart MP4 自动重封装 + 缓存)", faststart.FFmpegPath())
+		log.Printf("  VideoFaststart: <可用> (非 faststart MP4 自动重封装 + 缓存)")
 	} else {
 		log.Printf("  VideoFaststart: <不可用> → 非 faststart MP4 仍按原文件发送(浏览器可能播不了)")
 	}
@@ -154,8 +144,8 @@ func main() {
 		// timeout / concurrency 用默认(30m / NumCPU/2)
 	})
 	if transcode.Available() {
-		log.Printf("  VideoTranscode: %s profile=%s concurrency=%d (冷门编码 → H.264+AAC 自动转码 + 缓存)",
-			transcode.CacheDir(), transcode.Profile().Name, transcode.Concurrency())
+		log.Printf("  VideoTranscode: <可用> profile=%s concurrency=%d (冷门编码 → H.264+AAC 自动转码 + 缓存)",
+			transcode.Profile().Name, transcode.Concurrency())
 	} else {
 		log.Printf("  VideoTranscode: <不可用> → 冷门编码仍按原文件发送")
 	}
@@ -194,12 +184,14 @@ func main() {
 		log.Printf("警告：加载封面覆盖失败 %v", err)
 	}
 	if r := scanCache.Get(); r != nil {
+		resourceCatalog.Rebuild(r, currentRoots)
 		applied := scanCache.ApplyCoverOverrides(coverOverrides.Snapshot())
 		if applied > 0 {
 			log.Printf("  应用了 %d 条用户封面覆盖", applied)
 		}
 	}
 	runner.SetCache(scanCache)
+	runner.SetCatalog(resourceCatalog)
 	if r := scanCache.Get(); r != nil {
 		log.Printf("  已加载上次扫描结果：%d 相册，扫描于 %s", r.AlbumCount, r.ScannedAt.Format("2006-01-02 15:04:05"))
 	} else if mismatch {
@@ -208,7 +200,7 @@ func main() {
 
 	// 启动时若缓存为空（首次启动 / 缓存根目录不匹配被清空 / 磁盘无缓存），
 	// 自动跑一次扫描，避免前端打开时看到 404 或空数据。
-	// 用 goroutine 异步执行，不阻塞服务启动；扫描进度通过 /api/scan/:id/events
+	// 用 goroutine 异步执行，不阻塞服务启动；扫描进度通过 /api/scans/:id/events
 	// 暴露给前端。
 	if scanCache.Get() == nil && len(currentRoots) > 0 {
 		go func() {
@@ -264,7 +256,7 @@ func main() {
 			}
 			roots := newCfg.Roots()
 			if len(roots) == 1 {
-				log.Printf("  MediaRoot 变更为 %s，已清空扫描缓存", roots[0])
+				log.Printf("  MediaRoot 变更为 %s，已清空扫描缓存", filepath.Base(roots[0]))
 			} else {
 				log.Printf("  MediaRoots 变更为 %d 个目录，已清空扫描缓存", len(roots))
 			}
@@ -273,51 +265,46 @@ func main() {
 	}
 
 	api := app.Group("/api")
-	api.Get("/health", handlers.HealthHandler(mgr))
-	api.Post("/scan", handlers.ScanHandler(scanner, mgr))
-	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, mgr))
-	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
-	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
-	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
-	api.Get("/scan/latest", handlers.LatestScanHandler(scanCache))
-	// 清空扫描结果缓存（不立即扫描；前端调用后引导用户点"重新扫描"）。
-	api.Post("/scan/cache/clear", handlers.ScanCacheClearHandler(scanCache))
-	api.Get("/albums", handlers.AlbumDetailHandler(scanCache, coverOverrides))
+	api.Get("/health", handlers.HealthHandler(mgr, resourceCatalog))
+	api.Post("/scans", handlers.AsyncScanStartHandler(runner, mgr))
+	api.Get("/scans/:id/events", handlers.AsyncScanEventsHandler(runner))
+	api.Get("/scans/:id", handlers.AsyncScanResultHandler(runner, resourceCatalog))
+	api.Delete("/scans/:id", handlers.AsyncScanCancelHandler(runner))
+	api.Get("/library", handlers.LatestScanHandler(scanCache, resourceCatalog))
+	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache))
+	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
+	api.Get("/albums/:id", resourceParam, handlers.AlbumDetailHandler(scanCache, coverOverrides, resourceCatalog))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。
 	// file 必须是 path 子路径 + 真实存在的文件；越权请求会被 400 拒绝。
-	api.Put("/albums/cover", handlers.AlbumSetCoverHandler(scanCache, coverOverrides))
-	api.Delete("/albums/cover", handlers.AlbumClearCoverHandler(scanCache, coverOverrides))
-	// /api/folders 是 /api/albums 的语义化别名（本地画廊用 "folder" 更准确）；
-	// 老客户端/历史链接仍可继续访问 /api/albums。
-	api.Get("/folders", handlers.AlbumDetailHandler(scanCache, coverOverrides))
-	api.Get("/search", handlers.SearchHandler(scanCache))
-	// 标签聚合的语义化路由；"smart:<tag>" 仍能访问。
-	api.Get("/tags", handlers.AlbumDetailHandler(scanCache, coverOverrides))
-	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
+	api.Put("/albums/:id/cover", resourceParam, handlers.AlbumSetCoverHandler(scanCache, coverOverrides, resourceCatalog))
+	api.Delete("/albums/:id/cover", resourceParam, handlers.AlbumClearCoverHandler(scanCache, coverOverrides, resourceCatalog))
+	api.Get("/search", handlers.SearchHandler(scanCache, resourceCatalog))
+	api.Get("/tags/:tag", handlers.TagDetailHandler(scanCache, resourceCatalog))
+	api.Get("/thumbs/:id", resourceParam, handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
 	// 清空全部缩略图缓存（不只是过期）。前端设置页"缓存占用"行的"清空"按钮调用。
 	api.Post("/thumbs/clear", handlers.ThumbClearAllHandlerWithCacheStats(thumbs, cacheStats))
 	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
-	api.Get("/images", handlers.ImageHandler())
-	api.Get("/images/info", handlers.ImageInfoHandler())
+	api.Get("/media/:id", resourceParam, handlers.MediaHandler(transcode, faststart))
+	api.Get("/images/:id/info", resourceParam, handlers.ImageInfoHandler(resourceCatalog))
 	// 视频流 + 元信息（前端 <video> 元素 / HoverPreview / 时长显示使用）
-	api.Get("/videos", handlers.VideoHandler(transcode, faststart))
-	api.Get("/videos/info", handlers.VideoInfoHandler(videoInfo, transcode))
+	api.Get("/videos/:id/info", resourceParam, handlers.VideoInfoHandler(videoInfo, transcode, resourceCatalog))
 	// 转码进度（轮询；SSE）
-	api.Get("/videos/transcode/status", handlers.TranscodeStatusHandler(transcode))
-	api.Get("/videos/transcode/events", handlers.TranscodeEventsHandler(transcode))
-	api.Post("/videos/transcode/cancel", handlers.TranscodeCancelHandler(transcode))
+	api.Get("/videos/:id/transcode/status", resourceParam, handlers.TranscodeStatusHandler(transcode))
+	api.Get("/videos/:id/transcode/events", resourceParam, handlers.TranscodeEventsHandler(transcode))
+	api.Post("/videos/:id/transcode/cancel", resourceParam, handlers.TranscodeCancelHandler(transcode))
 	// 转码缓存管理（V1：admin 手动;V2:加 maxBytes 配置自动触发）
 	api.Get("/videos/transcode/cache/stats", handlers.TranscodeCacheStatsHandler(transcode))
-	api.Post("/videos/transcode/cache/clear", handlers.TranscodeCacheClearHandler(transcode))
+	api.Post("/videos/transcode/cache/clear", middleware.LoopbackOnly(), handlers.TranscodeCacheClearHandler(transcode))
 	// 视频封面回填：前端浏览器抽帧后 POST 原始字节
-	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
-	api.Get("/fs/open", handlers.FsOpenHandler(mgr))
+	api.Post("/thumbs/:id/cover", resourceParam, handlers.ThumbCoverHandler(thumbs))
+	api.Post("/fs/open", middleware.LoopbackOnly(), handlers.FsOpenResourceHandler(mgr, resourceCatalog))
+	api.Get("/admin/fs/open", middleware.LoopbackOnly(), handlers.FsOpenHandler(mgr))
 
 	// 配置读写
-	api.Get("/config", handlers.ConfigGetHandler(mgr))
-	api.Put("/config", handlers.ConfigUpdateHandler(mgr, onConfigUpdate))
+	api.Get("/config", middleware.LoopbackOnly(), handlers.ConfigGetHandler(mgr))
+	api.Put("/config", middleware.LoopbackOnly(), handlers.ConfigUpdateHandler(mgr, onConfigUpdate))
 
 	// 偏好 / 收藏 / 历史
 	api.Get("/prefs", handlers.PrefsGetHandler(prefs))
@@ -369,9 +356,9 @@ func main() {
 				return c.SendFile(indexPath)
 			})
 			app.Static("/", staticDir)
-			log.Printf("  StaticDir: %s (已托管前端 + SPA fallback)", staticDir)
+			log.Printf("  StaticDir: <configured> (已托管前端 + SPA fallback)")
 		} else {
-			log.Printf("  StaticDir: %s 不存在或不是目录，跳过静态托管", staticDir)
+			log.Printf("  StaticDir: <configured> 不存在或不是目录，跳过静态托管")
 		}
 	} else {
 		log.Printf("  StaticDir: <未配置>，跳过静态托管")

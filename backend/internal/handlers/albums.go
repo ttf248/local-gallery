@@ -34,17 +34,21 @@ func walkCollections(col models.Collection, out *[]searchHit, match func(string)
 		walkCollections(col.Collections[i], out, match)
 	}
 }
-//
+
 //	GET /api/scan/latest
 //
 // 没有缓存结果时返回 404。前端可在启动时直接调用此接口拉取上次扫描结果。
-func LatestScanHandler(cache *services.ScanResultCache) fiber.Handler {
+func LatestScanHandler(cache *services.ScanResultCache, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		r := cache.Get()
 		if r == nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": "no cached scan result; please run a scan first",
 			})
+		}
+		if catalog != nil {
+			r = catalog.PublicScanResult(r)
 		}
 		return c.JSON(fiber.Map{"ok": true, "result": r})
 	}
@@ -60,9 +64,10 @@ func LatestScanHandler(cache *services.ScanResultCache) fiber.Handler {
 // 自定义封面），前端根据它决定 Popover 菜单里是否显示「清除自定义封面」入口。
 // 判定依据是 CoverOverrideStore 里是否有这条 path（而不是比较 coverImage
 // 和默认首张 — 因为用户可能恰好选了首张）。
-func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.CoverOverrideStore) fiber.Handler {
+func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.CoverOverrideStore, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
-		raw := c.Query("path")
+		raw := middleware.ResourceID(c)
 		if raw == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'path' query parameter",
@@ -85,24 +90,69 @@ func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.Co
 					"error": "smart collection not found",
 				})
 			}
-			return c.JSON(fiber.Map{"ok": true, "kind": "smart", "data": s})
+			data := *s
+			if catalog != nil {
+				data.CoverImage = catalog.ExternalID(data.CoverImage, services.ResourceFile)
+				data.Albums = append([]models.Album(nil), data.Albums...)
+				for i := range data.Albums {
+					data.Albums[i] = catalog.PublicAlbum(data.Albums[i])
+				}
+			}
+			return c.JSON(fiber.Map{"ok": true, "kind": "smart", "data": data})
 		}
-		album := cache.FindAlbum(raw)
+		internalPath := middleware.SafePath(c)
+		album := cache.FindAlbum(internalPath)
 		if album != nil {
+			data := *album
+			if catalog != nil {
+				data = catalog.PublicAlbum(data)
+			}
 			return c.JSON(fiber.Map{
 				"ok":             true,
 				"kind":           "album",
-				"data":           album,
+				"data":           data,
 				"hasCustomCover": coverStore != nil && coverStore.Get(album.Path) != nil,
 			})
 		}
-		coll := cache.FindCollection(raw)
+		coll := cache.FindCollection(internalPath)
 		if coll != nil {
-			return c.JSON(fiber.Map{"ok": true, "kind": "collection", "data": coll})
+			data := *coll
+			if catalog != nil {
+				data = catalog.PublicCollection(data)
+			}
+			return c.JSON(fiber.Map{"ok": true, "kind": "collection", "data": data})
 		}
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "album/collection not found in cached scan",
 		})
+	}
+}
+
+// TagDetailHandler 返回标签聚合详情；标签来自路由参数，不参与文件路径解析。
+func TagDetailHandler(cache *services.ScanResultCache, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
+	return func(c *fiber.Ctx) error {
+		tag := strings.TrimSpace(c.Params("tag"))
+		if tag == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"code": "missing_tag", "message": "tag is required",
+			})
+		}
+		smart := cache.FindSmartCollection(tag)
+		if smart == nil {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+				"code": "tag_not_found", "message": "tag was not found",
+			})
+		}
+		data := *smart
+		if catalog != nil {
+			data.CoverImage = catalog.ExternalID(data.CoverImage, services.ResourceFile)
+			data.Albums = append([]models.Album(nil), data.Albums...)
+			for i := range data.Albums {
+				data.Albums[i] = catalog.PublicAlbum(data.Albums[i])
+			}
+		}
+		return c.JSON(fiber.Map{"ok": true, "kind": "smart", "data": data})
 	}
 }
 
@@ -111,7 +161,7 @@ func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.Co
 // album / smartCollection / collection 三种 kind 共用同一个 schema，
 // 提到包级方便 walkCollections 等辅助函数复用。
 type searchHit struct {
-	Kind   string `json:"kind"`             // album / smartCollection / collection
+	Kind   string `json:"kind"` // album / smartCollection / collection
 	Path   string `json:"path"`
 	Name   string `json:"name"`
 	Author string `json:"author,omitempty"`
@@ -129,7 +179,8 @@ type searchHit struct {
 //
 // 行为：写入 cover_overrides.json，更新内存 ScanResult，标记 dirty 异步落盘。
 // 返回新的 CoverImage + CoverKind，前端立即拿来刷缩略图。
-func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore) fiber.Handler {
+func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		albumPath := middleware.SafePath(c)
 		if albumPath == "" {
@@ -137,11 +188,15 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 				"error": "missing 'path' query parameter",
 			})
 		}
-		file := strings.TrimSpace(c.Query("file"))
-		if file == "" {
+		fileID := strings.TrimSpace(c.Query("file"))
+		if fileID == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'file' query parameter",
 			})
+		}
+		file, ok := resolveResource(c, catalog, fileID, services.ResourceFile)
+		if !ok {
+			return nil
 		}
 		if !isFileInsideAlbum(file, albumPath) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -167,8 +222,8 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 		cache.SetWithOverrideApplied(albumPath, file, kind)
 		return c.JSON(fiber.Map{
 			"ok":         true,
-			"albumPath":  albumPath,
-			"coverImage": file,
+			"albumPath":  rawResourceID(c),
+			"coverImage": publicID(catalog, file, services.ResourceFile),
 			"coverKind":  kind,
 		})
 	}
@@ -182,7 +237,7 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 // CoverImage / CoverKind 重置为 images[0] / videos[0]（图片优先）。
 // 不触发全库扫描 — 单条 album 的封面回退是确定的（来自同一份
 // ScanResult 内的 ImageFiles / VideoFiles）。
-func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore) fiber.Handler {
+func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore, catalogs ...*services.ResourceCatalog) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		albumPath := middleware.SafePath(c)
 		if albumPath == "" {
@@ -198,7 +253,7 @@ func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.Cov
 		cache.RebuildCoverForAlbum(albumPath)
 		return c.JSON(fiber.Map{
 			"ok":        true,
-			"albumPath": albumPath,
+			"albumPath": rawResourceID(c),
 		})
 	}
 }
@@ -238,12 +293,13 @@ func coverKindFromExt(p string) string {
 	}
 	return ""
 }
-//
+
 //	GET /api/search?q=<keyword>&limit=<n>
 //
 // 关键字匹配 name/author 子串（不区分大小写）。limit 默认 50。
 // 集合（collection）搜索递归遍历所有嵌套子集合。
-func SearchHandler(cache *services.ScanResultCache) fiber.Handler {
+func SearchHandler(cache *services.ScanResultCache, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		q := strings.ToLower(strings.TrimSpace(c.Query("q")))
 		if q == "" {
@@ -285,6 +341,21 @@ func SearchHandler(cache *services.ScanResultCache) fiber.Handler {
 		if len(out) > limit {
 			out = out[:limit]
 		}
+		if catalog != nil {
+			for i := range out {
+				switch out[i].Kind {
+				case "album":
+					out[i].Path = catalog.ExternalID(out[i].Path, services.ResourceAlbum)
+				case "collection":
+					out[i].Path = catalog.ExternalID(out[i].Path, services.ResourceCollection)
+				}
+				out[i].Cover = catalog.ExternalID(out[i].Cover, services.ResourceFile)
+			}
+		}
 		return c.JSON(fiber.Map{"ok": true, "results": out, "count": len(out)})
 	}
+}
+
+func rawResourceID(c *fiber.Ctx) string {
+	return strings.TrimSpace(middleware.ResourceID(c))
 }

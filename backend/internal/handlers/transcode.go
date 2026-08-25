@@ -16,7 +16,7 @@ import (
 
 // TranscodeStatusHandler 返回指定视频的转码状态。
 //
-//   GET /api/videos/transcode/status?path=<absolute>
+//	GET /api/videos/transcode/status?path=<absolute>
 //
 // 响应:
 //
@@ -64,7 +64,7 @@ func TranscodeStatusHandler(svc *services.TranscodeService) fiber.Handler {
 
 // TranscodeCancelHandler 取消正在跑的转码。
 //
-//   POST /api/videos/transcode/cancel?path=<absolute>
+//	POST /api/videos/transcode/cancel?path=<absolute>
 //
 // 响应:
 //
@@ -98,7 +98,7 @@ func TranscodeCancelHandler(svc *services.TranscodeService) fiber.Handler {
 
 // TranscodeCacheClearHandler 清空整个转码缓存(管理用)。
 //
-//   POST /api/videos/transcode/cache/clear
+//	POST /api/videos/transcode/cache/clear
 //
 // 响应: { "ok": true, "deleted": N, "freedBytes": N }
 //
@@ -131,19 +131,19 @@ func TranscodeCacheClearHandler(svc *services.TranscodeService) fiber.Handler {
 
 // TranscodeCacheStatsHandler 返回转码缓存占用(给前端 / 设置页)。
 //
-//   GET /api/videos/transcode/cache/stats
+//	GET /api/videos/transcode/cache/stats
 func TranscodeCacheStatsHandler(svc *services.TranscodeService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if svc == nil {
 			return c.JSON(fiber.Map{
-				"path":       "",
+				"path":       "video-transcode",
 				"totalBytes": 0,
 				"fileCount":  0,
 			})
 		}
 		stats := svc.CacheStats()
 		return c.JSON(fiber.Map{
-			"path":       stats.Path,
+			"path":       "video-transcode",
 			"totalBytes": stats.TotalBytes,
 			"fileCount":  stats.FileCount,
 		})
@@ -152,7 +152,7 @@ func TranscodeCacheStatsHandler(svc *services.TranscodeService) fiber.Handler {
 
 // TranscodeEventsHandler SSE 推送转码进度事件。
 //
-//   GET /api/videos/transcode/events?path=<absolute>
+//	GET /api/videos/:id/transcode/events
 //
 // 事件类型(`event:` 字段):
 //   - "progress"  { status, progress, etaSec, error }   任何状态变更

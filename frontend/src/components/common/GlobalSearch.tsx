@@ -1,45 +1,46 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useSearchStore } from '../../store/searchStore'
-import { useLibraryStore } from '../../store/libraryStore'
-import { SearchIcon } from './Icon'
-import { useDebounce } from '../../hooks/useDebounce'
-import { albumsApi, type SearchHit } from '../../api/albums'
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSearchStore } from "../../store/searchStore";
+import { useLibraryStore } from "../../store/libraryStore";
+import { SearchIcon } from "./Icon";
+import { useDebounce } from "../../hooks/useDebounce";
+import { albumsApi, type SearchHit } from "../../api/albums";
+import { thumbUrl } from "../../api/thumbs";
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
 //   - 空结果时返回静默，仅同步过滤本地视图
 //   - 回车跳转主页
 export default function GlobalSearch() {
-  const query = useSearchStore((s) => s.query)
-  const setQuery = useSearchStore((s) => s.setQuery)
-  const navigate = useNavigate()
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const [open, setOpen] = useState(false)
-  const [hits, setHits] = useState<SearchHit[]>([])
-  const debounced = useDebounce(query, 200)
+  const query = useSearchStore((s) => s.query);
+  const setQuery = useSearchStore((s) => s.setQuery);
+  const navigate = useNavigate();
+  const result = useLibraryStore((s) => s.result);
+  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
+  const [open, setOpen] = useState(false);
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const debounced = useDebounce(query, 200);
 
   useEffect(() => {
     if (!debounced || debounced.length < 2) {
-      setHits([])
-      return
+      setHits([]);
+      return;
     }
-    let cancelled = false
+    let cancelled = false;
     albumsApi
       .search(debounced, 10)
       .then((d) => {
-        if (!cancelled) setHits(d.results ?? [])
+        if (!cancelled) setHits(d.results ?? []);
       })
-      .catch(() => {})
+      .catch(() => {});
     return () => {
-      cancelled = true
-    }
-  }, [debounced])
+      cancelled = true;
+    };
+  }, [debounced]);
 
   function onPick(hit: SearchHit) {
-    setOpen(false)
-    setQuery('')
-    navigate(`/albums/${encodeURIComponent(hit.path)}`)
+    setOpen(false);
+    setQuery("");
+    navigate(`/albums/${encodeURIComponent(hit.path)}`);
   }
 
   return (
@@ -49,20 +50,20 @@ export default function GlobalSearch() {
         <input
           value={query}
           onChange={(e) => {
-            setQuery(e.target.value)
-            if (!result) loadFromBackend()
-            setOpen(true)
+            setQuery(e.target.value);
+            if (!result) loadFromBackend();
+            setOpen(true);
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              setOpen(false)
-              navigate('/')
+            if (e.key === "Enter") {
+              setOpen(false);
+              navigate("/");
             }
-            if (e.key === 'Escape') {
-              setOpen(false)
-              setQuery('')
+            if (e.key === "Escape") {
+              setOpen(false);
+              setQuery("");
             }
           }}
           placeholder="搜索文件夹 / 标签…"
@@ -81,7 +82,7 @@ export default function GlobalSearch() {
             >
               {h.coverImage ? (
                 <img
-                  src={`/api/thumbs?path=${encodeURIComponent(h.coverImage)}`}
+                  src={thumbUrl(h.coverImage)}
                   alt=""
                   className="w-8 h-10 object-cover rounded border border-border-faint"
                 />
@@ -91,9 +92,13 @@ export default function GlobalSearch() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm truncate">{h.name}</div>
                 <div className="text-[11px] text-fg-subtle truncate">
-                  {h.kind === 'album' ? '文件夹' : h.kind === 'smartCollection' ? '标签' : '集合'}
-                  {' · '}
-                  {h.count} {h.kind === 'album' ? '张' : '卷'}
+                  {h.kind === "album"
+                    ? "文件夹"
+                    : h.kind === "smartCollection"
+                      ? "标签"
+                      : "集合"}
+                  {" · "}
+                  {h.count} {h.kind === "album" ? "张" : "卷"}
                 </div>
               </div>
             </button>
@@ -110,5 +115,5 @@ export default function GlobalSearch() {
         </div>
       )}
     </div>
-  )
+  );
 }

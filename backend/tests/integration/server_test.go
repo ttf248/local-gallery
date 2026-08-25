@@ -485,8 +485,9 @@ func TestConfig_Get(t *testing.T) {
 	}
 	var got map[string]interface{}
 	json.Unmarshal(body, &got)
-	if got["mediaRoot"] != h.root {
-		t.Errorf("mediaRoot=%v want %q", got["mediaRoot"], h.root)
+	roots, ok := got["mediaRoots"].([]interface{})
+	if !ok || len(roots) != 1 || roots[0] != h.root {
+		t.Errorf("mediaRoots=%v want [%q]", got["mediaRoots"], h.root)
 	}
 	if got["allowOsOpen"] != false {
 		t.Errorf("allowOsOpen=%v", got["allowOsOpen"])

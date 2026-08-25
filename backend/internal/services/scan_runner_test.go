@@ -86,11 +86,10 @@ func TestAsyncScanRunner_Cancel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 立即取消
-	go func() {
-		time.Sleep(1 * time.Millisecond)
-		runner.Cancel(id)
-	}()
+	// 立即取消；取消必须贯穿扫描器，不能在后台继续跑完并发布 complete。
+	if !runner.Cancel(id) {
+		t.Fatal("Cancel returned false")
+	}
 
 	deadline := time.After(5 * time.Second)
 	var sawCancelled, sawComplete bool
@@ -113,13 +112,72 @@ func TestAsyncScanRunner_Cancel(t *testing.T) {
 		}
 	}
 check:
-	// 接受两种结果：扫描太快完成，或者真的被取消
-	if !sawCancelled && !sawComplete {
-		t.Error("expected cancelled or complete event")
+	if !sawCancelled || sawComplete {
+		t.Fatalf("cancelled=%v complete=%v", sawCancelled, sawComplete)
 	}
-	if sawCancelled {
-		// 验证：取消后状态应标记为 cancelled
+	runner.Wait(id)
+	if got := runner.Get(id); got == nil || got.Status != ScanStatusCancelled || got.Result != nil {
+		t.Fatalf("state after cancel=%+v", got)
+	}
+}
+
+func TestAsyncScanRunner_ReusesActiveScanAndBroadcasts(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 300; i++ {
+		dir := filepathJoin(root, "album-"+itoa(i))
+		mkdirAll(t, dir)
+		touchAll(t, filepathJoin(dir, "1.jpg"))
+	}
+	runner := NewAsyncScanRunner()
+	id1, events1, reused1, err := runner.StartOrReuse(ScanOptions{Root: root})
+	if err != nil || reused1 {
+		t.Fatalf("first start reused=%v err=%v", reused1, err)
+	}
+	id2, events2, reused2, err := runner.StartOrReuse(ScanOptions{Root: root})
+	if err != nil || !reused2 || id1 != id2 {
+		t.Fatalf("second start id=%q reused=%v err=%v", id2, reused2, err)
+	}
+
+	for index, events := range []<-chan ProgressEvent{events1, events2} {
+		deadline := time.After(5 * time.Second)
+		for {
+			select {
+			case event, ok := <-events:
+				if !ok {
+					t.Fatalf("subscriber %d closed before terminal event", index)
+				}
+				if event.Status == ScanStatusComplete {
+					goto nextSubscriber
+				}
+			case <-deadline:
+				t.Fatalf("subscriber %d timed out", index)
+			}
+		}
+	nextSubscriber:
+	}
+}
+
+func TestAsyncScanRunner_DoesNotBlockWithoutEventConsumer(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 200; i++ {
+		dir := filepathJoin(root, "album-"+itoa(i))
+		mkdirAll(t, dir)
+		touchAll(t, filepathJoin(dir, "1.jpg"))
+	}
+	runner := NewAsyncScanRunner()
+	id, _, err := runner.Start(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
 		runner.Wait(id)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("scan blocked because nobody consumed progress events")
 	}
 }
 

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { thumbUrl, uploadVideoCover } from '../api/thumbs'
+import { useCallback, useEffect, useRef, useState } from "react";
+import { thumbUrl, uploadVideoCover } from "../api/thumbs";
 
 // 视频封面状态机：
 //   idle      — 未启动
@@ -9,45 +9,40 @@ import { thumbUrl, uploadVideoCover } from '../api/thumbs'
 //   ready     — 封面已就绪（命中缓存 / 上传成功 / 服务端 ffmpeg 已生成）
 //   error     — 抽帧失败（用户可在 UI 触发重试）
 export type VideoCoverStatus =
-  | 'idle'
-  | 'loading'
-  | 'missing'
-  | 'extracting'
-  | 'ready'
-  | 'error'
+  "idle" | "loading" | "missing" | "extracting" | "ready" | "error";
 
 interface Options {
   /** 状态变化时回调（父组件可据此显示 spinner / 错误提示） */
-  onStatusChange?: (status: VideoCoverStatus) => void
+  onStatusChange?: (status: VideoCoverStatus) => void;
 }
 
 interface Result {
-  status: VideoCoverStatus
+  status: VideoCoverStatus;
   /** 给 <img src=...> 用的 URL。bust 是为了"抽帧完成"后强制 reload。 */
-  url: string
+  url: string;
   /** 手动重试（用于 UI 上的"重试"按钮）。 */
-  retry: () => void
+  retry: () => void;
   /** 当前为视频（path 非空） */
-  enabled: boolean
+  enabled: boolean;
 }
 
-const SEEK_RATIO = 0.1 // 抽帧位置 = duration * 10%（太靠前常是黑屏）
-const SEEK_MIN = 1.0 // 最少 1s，避免取到片头黑场
-const SEEK_MAX = 3.0 // 最多 3s，避免长片抽过开场
-const FRAME_MAX_W = 1920 // canvas 导出最大宽（防止超大视频爆内存）
+const SEEK_RATIO = 0.1; // 抽帧位置 = duration * 10%（太靠前常是黑屏）
+const SEEK_MIN = 1.0; // 最少 1s，避免取到片头黑场
+const SEEK_MAX = 3.0; // 最多 3s，避免长片抽过开场
+const FRAME_MAX_W = 1920; // canvas 导出最大宽（防止超大视频爆内存）
 
 // 服务端 ffmpeg 抽帧通常 < 500ms 就能拿到首字节;给个 1.5s 轮询窗口。
 // 真实情况更常见的是 50-200ms(head 探测 + 服务端生成 + 返回)，
 // 因此这里用较短的轮询间隔让用户更快看到封面。
-const SERVER_POLL_INITIAL_MS = 200
-const SERVER_POLL_MAX_MS = 1500
-const SERVER_POLL_TIMEOUT_MS = 20_000
+const SERVER_POLL_INITIAL_MS = 200;
+const SERVER_POLL_MAX_MS = 1500;
+const SERVER_POLL_TIMEOUT_MS = 20_000;
 
 /**
  * 视频封面状态管理 hook。
  *
  * v2 流程（服务端有 ffmpeg 时）:
- *   1) 挂载时 HEAD 探测 /api/thumbs?path=<video>
+ *   1) 挂载时 HEAD 探测 /api/thumbs/:fileId
  *   2) 200 → ready (秒出)
  *   3) 404 + code=video_cover_missing → 服务端在后台异步抽帧,前端用
  *      短轮询重试 HEAD;超时仍未命中 → 进入 missing/extracting 状态,
@@ -61,99 +56,106 @@ const SERVER_POLL_TIMEOUT_MS = 20_000
  * 这个 hook 保持向后兼容:即使服务端没有 ffmpeg,浏览器抽帧路径仍然
  * 完整工作,只是慢一些(对 1GB+ 视频首次封面要几秒到十几秒)。
  */
-export function useVideoCover(videoPath: string | null | undefined, opts: Options = {}): Result {
-  const [status, setStatus] = useState<VideoCoverStatus>(videoPath ? 'loading' : 'idle')
-  const [bust, setBust] = useState(0)
+export function useVideoCover(
+  videoPath: string | null | undefined,
+  opts: Options = {},
+): Result {
+  const [status, setStatus] = useState<VideoCoverStatus>(
+    videoPath ? "loading" : "idle",
+  );
+  const [bust, setBust] = useState(0);
   // 防止 effect 重复触发 extracting（StrictMode 双 mount 时尤其需要）
-  const startedRef = useRef(false)
+  const startedRef = useRef(false);
   // retry() 调用时递增，强制重抽
-  const [retryNonce, setRetryNonce] = useState(0)
+  const [retryNonce, setRetryNonce] = useState(0);
 
   const setSt = useCallback(
     (s: VideoCoverStatus) => {
-      setStatus(s)
-      opts.onStatusChange?.(s)
+      setStatus(s);
+      opts.onStatusChange?.(s);
     },
     [opts],
-  )
+  );
 
   // 检查封面是否存在(可服务端的轮询探针)
   useEffect(() => {
     if (!videoPath) {
-      setSt('idle')
-      return
+      setSt("idle");
+      return;
     }
-    let cancelled = false
-    startedRef.current = false
-    setSt('loading')
+    let cancelled = false;
+    startedRef.current = false;
+    setSt("loading");
 
     // 短轮询:服务端 ffmpeg 抽帧是同步的(在我们 GET 的时候才触发),
     // 但 1) 多个用户同时 GET 时 ffmpeg 进程池可能忙;2) 大视频抽帧偶尔
     // 超过 500ms。所以这里给一个最多 20s 的递增轮询,覆盖服务端慢启动场景。
-    const start = Date.now()
-    let delay = SERVER_POLL_INITIAL_MS
-    let stopped = false
+    const start = Date.now();
+    let delay = SERVER_POLL_INITIAL_MS;
+    let stopped = false;
 
     const poll = async (): Promise<void> => {
       while (!stopped && !cancelled) {
         // eslint-disable-next-line no-await-in-loop
-        const r = await fetch(thumbUrl(videoPath), { method: 'HEAD' })
-        if (cancelled) return
+        const r = await fetch(thumbUrl(videoPath), { method: "HEAD" });
+        if (cancelled) return;
         if (r.ok) {
-          setSt('ready')
-          return
+          setSt("ready");
+          return;
         }
         if (Date.now() - start > SERVER_POLL_TIMEOUT_MS) {
           // 超时:服务端抽帧很久还没好,降级到浏览器抽帧
           // (浏览器抽帧仍可能工作,只是慢)
-          setSt('missing')
-          return
+          setSt("missing");
+          return;
         }
         // eslint-disable-next-line no-await-in-loop
-        await new Promise((res) => setTimeout(res, delay))
-        delay = Math.min(delay * 1.5, SERVER_POLL_MAX_MS)
+        await new Promise((res) => setTimeout(res, delay));
+        delay = Math.min(delay * 1.5, SERVER_POLL_MAX_MS);
       }
-    }
-    void poll()
+    };
+    void poll();
 
     return () => {
-      cancelled = true
-      stopped = true
-    }
+      cancelled = true;
+      stopped = true;
+    };
     // bust 变化时（上传成功后）也再检查一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoPath, bust, retryNonce])
+  }, [videoPath, bust, retryNonce]);
 
   // 抽帧 + 上传(浏览器侧,作为服务端不可用时的降级)
   const extract = useCallback(async () => {
-    if (!videoPath) return
-    setSt('extracting')
+    if (!videoPath) return;
+    setSt("extracting");
     try {
-      const blob = await captureVideoFrame(videoPath)
-      await uploadVideoCover(videoPath, blob)
-      setBust((b) => b + 1)
+      const blob = await captureVideoFrame(videoPath);
+      await uploadVideoCover(videoPath, blob);
+      setBust((b) => b + 1);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('[useVideoCover] extract failed:', err)
-      setSt('error')
+      console.error("[useVideoCover] extract failed:", err);
+      setSt("error");
     }
-  }, [videoPath, setSt])
+  }, [videoPath, setSt]);
 
   // 状态为 missing 时(服务端超时 / 抽帧一直失败)自动启动浏览器抽帧
   useEffect(() => {
-    if (status !== 'missing') return
-    if (startedRef.current) return
-    startedRef.current = true
-    void extract()
-  }, [status, extract])
+    if (status !== "missing") return;
+    if (startedRef.current) return;
+    startedRef.current = true;
+    void extract();
+  }, [status, extract]);
 
   const retry = useCallback(() => {
-    startedRef.current = false
-    setRetryNonce((n) => n + 1)
-  }, [])
+    startedRef.current = false;
+    setRetryNonce((n) => n + 1);
+  }, []);
 
-  const url = videoPath ? `${thumbUrl(videoPath)}${bust ? `&_=${bust}` : ''}` : ''
-  return { status, url, retry, enabled: !!videoPath }
+  const url = videoPath
+    ? `${thumbUrl(videoPath)}${bust ? `&_=${bust}` : ""}`
+    : "";
+  return { status, url, retry, enabled: !!videoPath };
 }
 
 /**
@@ -165,8 +167,8 @@ export function useVideoCover(videoPath: string | null | undefined, opts: Option
  *   3) 监听 seeked → drawImage → canvas.toBlob
  *   4) 释放 video.src（revokeObjectURL）
  *
- * 注意：需要传入"绝对路径"，函数内部用 fetch 先把视频流拉成 Blob
- * URL（走 /api/videos，带 Range 支持）。这样跨域 / Range 协商都
+ * 注意：传入视频资源 ID，函数内部用 fetch 先把视频流拉成 Blob
+ * URL（走 /api/media/:id，带 Range 支持）。这样跨域 / Range 协商都
  * 交给后端处理。
  *
  * v2 起这个函数降级为"服务端 ffmpeg 不可用时的兜底"——对 1GB+ 视频
@@ -174,92 +176,92 @@ export function useVideoCover(videoPath: string | null | undefined, opts: Option
  */
 export async function captureVideoFrame(videoPath: string): Promise<Blob> {
   // 1) 拉取视频作为 Blob（避免直接 src=URL 在某些环境 Range 行为不一致）
-  const resp = await fetch(`/api/videos?path=${encodeURIComponent(videoPath)}`)
+  const resp = await fetch(`/api/media/${encodeURIComponent(videoPath)}`);
   if (!resp.ok) {
-    throw new Error(`fetch video: HTTP ${resp.status}`)
+    throw new Error(`fetch video: HTTP ${resp.status}`);
   }
-  const blob = await resp.blob()
-  const objectUrl = URL.createObjectURL(blob)
+  const blob = await resp.blob();
+  const objectUrl = URL.createObjectURL(blob);
   try {
     const frame = await new Promise<Blob>((resolve, reject) => {
-      const video = document.createElement('video')
-      video.preload = 'auto'
-      video.muted = true
-      video.playsInline = true
-      video.crossOrigin = 'anonymous'
-      video.src = objectUrl
+      const video = document.createElement("video");
+      video.preload = "auto";
+      video.muted = true;
+      video.playsInline = true;
+      video.crossOrigin = "anonymous";
+      video.src = objectUrl;
 
       const cleanup = () => {
-        video.removeAttribute('src')
-        video.load()
-      }
+        video.removeAttribute("src");
+        video.load();
+      };
 
       video.addEventListener(
-        'loadedmetadata',
+        "loadedmetadata",
         () => {
           // 计算抽帧位置
-          const d = video.duration
+          const d = video.duration;
           if (!Number.isFinite(d) || d <= 0) {
             // 兜底：取第 0 帧
-            drawFrame(video, 0).then(resolve, reject)
-            return
+            drawFrame(video, 0).then(resolve, reject);
+            return;
           }
-          const target = Math.min(SEEK_MAX, Math.max(SEEK_MIN, d * SEEK_RATIO))
+          const target = Math.min(SEEK_MAX, Math.max(SEEK_MIN, d * SEEK_RATIO));
           const onSeeked = () => {
-            video.removeEventListener('seeked', onSeeked)
-            drawFrame(video, target).then(resolve, reject)
-          }
-          video.addEventListener('seeked', onSeeked)
-          video.currentTime = target
+            video.removeEventListener("seeked", onSeeked);
+            drawFrame(video, target).then(resolve, reject);
+          };
+          video.addEventListener("seeked", onSeeked);
+          video.currentTime = target;
         },
         { once: true },
-      )
+      );
 
       video.addEventListener(
-        'error',
+        "error",
         () => {
-          cleanup()
-          reject(new Error('video load error'))
+          cleanup();
+          reject(new Error("video load error"));
         },
         { once: true },
-      )
-    })
-    return frame
+      );
+    });
+    return frame;
   } finally {
-    URL.revokeObjectURL(objectUrl)
+    URL.revokeObjectURL(objectUrl);
   }
 }
 
 function drawFrame(video: HTMLVideoElement, at: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    const vw = video.videoWidth || 1280
-    const vh = video.videoHeight || 720
-    const scale = Math.min(1, FRAME_MAX_W / vw)
-    const w = Math.round(vw * scale)
-    const h = Math.round(vh * scale)
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')
+    const vw = video.videoWidth || 1280;
+    const vh = video.videoHeight || 720;
+    const scale = Math.min(1, FRAME_MAX_W / vw);
+    const w = Math.round(vw * scale);
+    const h = Math.round(vh * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
     if (!ctx) {
-      reject(new Error('canvas 2d not available'))
-      return
+      reject(new Error("canvas 2d not available"));
+      return;
     }
     try {
-      ctx.drawImage(video, 0, 0, w, h)
+      ctx.drawImage(video, 0, 0, w, h);
     } catch (err) {
-      reject(err)
-      return
+      reject(err);
+      return;
     }
     canvas.toBlob(
       (blob) => {
-        if (blob) resolve(blob)
-        else reject(new Error('canvas.toBlob returned null'))
+        if (blob) resolve(blob);
+        else reject(new Error("canvas.toBlob returned null"));
       },
-      'image/jpeg',
+      "image/jpeg",
       0.85,
-    )
+    );
     // at 是 currentTime 值的副本，留作未来调试
-    void at
-  })
+    void at;
+  });
 }

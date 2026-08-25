@@ -18,7 +18,8 @@ import (
 // (2024年/夏威夷-度假/相册/作品/甜片),旧值 2 会把深度 ≥3 的子集合
 // 全部丢掉。这里给到 8,够覆盖任意合理层级,又能避免真出现环状软链
 // 时无限递归。
-func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
+func ScanHandler(scanner *services.Scanner, mgr *config.Manager, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		result, err := scanner.Scan(services.ScanOptions{
 			Roots:    mgr.Roots(),
@@ -35,6 +36,10 @@ func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 			}
 			return c.Status(status).JSON(fiber.Map{"error": err.Error()})
 		}
+		if catalog != nil {
+			catalog.Rebuild(result, mgr.Roots())
+			result = catalog.PublicScanResult(result)
+		}
 		return c.JSON(fiber.Map{"ok": true, "result": result})
 	}
 }
@@ -44,7 +49,7 @@ func ScanHandler(scanner *services.Scanner, mgr *config.Manager) fiber.Handler {
 // POST /api/scan/start
 func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		id, _, err := runner.Start(services.ScanOptions{
+		id, _, reused, err := runner.StartOrReuse(services.ScanOptions{
 			Roots:    mgr.Roots(),
 			MaxDepth: 8,
 			Exclude:  excludeFromConfig(mgr),
@@ -52,7 +57,7 @@ func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
-		return c.JSON(fiber.Map{"scanId": id})
+		return c.JSON(fiber.Map{"scanId": id, "reused": reused})
 	}
 }
 
@@ -107,10 +112,16 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 			return nil
 		}
 
-		// 流式推送
+		events, unsubscribe, ok := runner.Subscribe(id)
+		if !ok {
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
+		}
+
+		// 流式推送；每个连接使用独立订阅，不会与其它客户端竞争消费。
 		c.Response().SetBodyStreamWriter(func(w *bufio.Writer) {
+			defer unsubscribe()
 			defer w.Flush()
-			for ev := range state.Events {
+			for ev := range events {
 				data, _ := json.Marshal(ev)
 				fmt.Fprintf(w, "event: %s\ndata: %s\n\n", ev.Status, data)
 				w.Flush()
@@ -127,7 +138,8 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 // AsyncScanResultHandler 获取扫描最终结果。
 //
 // GET /api/scan/:id/result
-func AsyncScanResultHandler(runner *services.AsyncScanRunner) fiber.Handler {
+func AsyncScanResultHandler(runner *services.AsyncScanRunner, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		state := runner.Get(id)
@@ -140,7 +152,11 @@ func AsyncScanResultHandler(runner *services.AsyncScanRunner) fiber.Handler {
 				"status": state.Status,
 			})
 		}
-		return c.JSON(fiber.Map{"ok": true, "result": state.Result})
+		result := state.Result
+		if catalog != nil {
+			result = catalog.PublicScanResult(result)
+		}
+		return c.JSON(fiber.Map{"ok": true, "result": result})
 	}
 }
 

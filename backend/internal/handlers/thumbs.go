@@ -11,7 +11,7 @@ import (
 
 // ThumbHandler 返回 /api/thumbs/* 处理函数。
 //
-//   GET /api/thumbs?path=<absolute>
+//	GET /api/thumbs?path=<absolute>
 //
 // 视频路径时：若封面已缓存则正常返回；未缓存时返回 404 + code
 // "video_cover_missing"，前端据此触发 `<video>` 抽帧后回传
@@ -27,14 +27,14 @@ import (
 // 永远拿不到。
 func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		raw := c.Query("path")
-		if raw == "" {
+		path := middleware.SafePath(c)
+		if path == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'path' query parameter",
 			})
 		}
 
-		data, err := svc.GetOrCreate(raw)
+		data, err := svc.GetOrCreate(path)
 		if err != nil {
 			switch {
 			case errors.Is(err, services.ErrSourceMissing):
@@ -63,7 +63,7 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 		// 如果和 GetOrCreate 内部 stat 不一致（理论上不应该发生：两
 		// 次 stat 之间源文件被改写），用刚生成的数据 mtime 也行，
 		// 但简单起见用 ETagFor 算就好。
-		etag, etagErr := svc.ETagFor(raw)
+		etag, etagErr := svc.ETagFor(path)
 		if etagErr == nil {
 			// ETag 协议规定值用双引号包裹；浏览器回传的 If-None-Match
 			// 也带双引号，比较时必须包含引号，否则永远 miss。
@@ -137,9 +137,9 @@ func ThumbCleanupHandlerWithCacheStats(svc *services.ThumbnailService, cacheStat
 
 // ThumbCoverHandler 接收前端浏览器抽帧后的视频封面字节，写入缓存。
 //
-//   POST /api/thumbs/cover?path=<absolute_video_path>
-//   Content-Type: image/jpeg | image/png
-//   Body: 原始图片字节（canvas.toBlob('image/jpeg', 0.85) 典型）
+//	POST /api/thumbs/cover?path=<absolute_video_path>
+//	Content-Type: image/jpeg | image/png
+//	Body: 原始图片字节（canvas.toBlob('image/jpeg', 0.85) 典型）
 //
 // 成功：200 + { ok: true, bytes: <int> }
 // 失败：

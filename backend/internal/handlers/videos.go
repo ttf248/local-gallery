@@ -14,9 +14,9 @@ import (
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
-// VideoHandler 返回 /api/videos 原视频流（支持 Range 请求）。
+// VideoHandler 返回资源 ID 指向的视频流（支持 Range 请求）。
 //
-//   GET /api/videos?path=<absolute>
+//	GET /api/media/:id
 //
 // 浏览器 `<video>` 元素拖动进度条时会自动发 Range 请求；Fiber 的
 // SendFile 默认支持 Range，依赖源文件大小返回 206 Partial Content。
@@ -49,7 +49,7 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 			if os.IsNotExist(err) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read media resource"})
 		}
 		// 决定实际发送哪个文件:
 		//   transcode 命中 → 发转码缓存(浏览器能直播)
@@ -88,7 +88,7 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 
 // VideoInfoHandler 返回视频文件的元数据。
 //
-//   GET /api/videos/info?path=<absolute>
+//	GET /api/videos/:id/info
 //
 // 字段：
 //   - path / name / dir / size / mtime：与服务端文件信息一致
@@ -98,14 +98,16 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 //     前端仍可走 <video> 元素的 loadedmetadata 上报作为兜底。
 //   - transcode { needed, status, progress, error }：
 //     当 VideoTranscodeService 可用时填入。前端可以据此：
-//       - 显示「正在转码 30% 预计 3 分钟」提示
-//       - 转好后自动重挂载 <video src=...> 走缓存
+//   - 显示「正在转码 30% 预计 3 分钟」提示
+//   - 转好后自动重挂载 <video src=...> 走缓存
 //     没装 ffmpeg / 编码浏览器能播 → 整个字段省略,前端视为「不用转」
 //
 // 性能: ffprobe 只读 metadata,1GB 视频典型 50-150ms,远快于让前端
 // <video> 加载整个文件再拿 metadata(几个 GB 流量 + 几秒解码)。
-func VideoInfoHandler(infoSvc *services.VideoInfoService, transcode *services.TranscodeService) fiber.Handler {
+func VideoInfoHandler(infoSvc *services.VideoInfoService, transcode *services.TranscodeService, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
+		resourceID := middleware.ResourceID(c)
 		path := middleware.SafePath(c)
 		if path == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
@@ -124,10 +126,16 @@ func VideoInfoHandler(infoSvc *services.VideoInfoService, transcode *services.Tr
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
+		publicPath := path
+		publicDir := filepath.Dir(path)
+		if catalog != nil {
+			publicPath = resourceID
+			publicDir = catalog.RelativeLabel(resourceID)
+		}
 		resp := fiber.Map{
-			"path":   path,
+			"path":   publicPath,
 			"name":   filepath.Base(path),
-			"dir":    filepath.Dir(path),
+			"dir":    publicDir,
 			"size":   info.Size(),
 			"mtime":  info.ModTime().UTC().Format("2006-01-02T15:04:05Z"),
 			"format": strings.ToLower(filepath.Ext(path)),

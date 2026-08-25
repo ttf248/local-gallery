@@ -1,35 +1,31 @@
-import { api } from './client'
+import { api } from "./client";
 
 // 后端 /api/config 的响应结构。所有字段都来自 config.yaml；
 // 当前生效值在 GetConfig 时返回。
-//
-// mediaRoots 数组是权威字段；mediaRoot 保留为 mediaRoots[0] 的别名，
-// 兼容老调用方（健康检查、错误提示等）。
 export interface ServerConfig {
-  mediaRoots: string[]
-  mediaRoot: string
-  host: string
-  port: number
-  cacheDir: string
-  thumbSizeW: number
-  thumbSizeH: number
-  thumbCacheSize: number
-  cacheMaxAgeDays: number
-  allowOsOpen: boolean
-  staticDir: string
+  mediaRoots: string[];
+  host: string;
+  port: number;
+  cacheDir: string;
+  thumbSizeW: number;
+  thumbSizeH: number;
+  thumbCacheSize: number;
+  cacheMaxAgeDays: number;
+  allowOsOpen: boolean;
+  staticDir: string;
   // ffmpegPath:服务端 ffmpeg 可执行文件路径;空 = 客户端抽帧 fallback
   // ffmpegAvailable:运行时探测 -version 是否可用
-  ffmpegPath?: string
-  ffmpegAvailable?: boolean
-  configPath: string
+  ffmpegPath?: string;
+  ffmpegAvailable?: boolean;
+  configPath: string;
   // 扫描排除规则:见 backend/internal/services/exclude.go
   //   - skipHidden 决定是否跳过 .开头的隐藏目录(默认 true)
   //   - systemFiles 是「在 Thumbs.db / desktop.ini / .DS_Store 之上追加」
   //     的用户自定义系统噪声列表
   //   - excludePatterns 是 glob 模式列表,匹配单个目录/文件名
-  skipHidden: boolean
-  systemFiles: string[]
-  excludePatterns: string[]
+  skipHidden: boolean;
+  systemFiles: string[];
+  excludePatterns: string[];
 }
 
 // PATCH /api/config 的请求体。key 缺省视为"不修改"；
@@ -41,37 +37,37 @@ export interface ServerConfig {
 export type ServerConfigPatch = Partial<
   Pick<
     ServerConfig,
-    | 'mediaRoots'
-    | 'host'
-    | 'port'
-    | 'cacheDir'
-    | 'thumbSizeW'
-    | 'thumbSizeH'
-    | 'thumbCacheSize'
-    | 'cacheMaxAgeDays'
-    | 'allowOsOpen'
-    | 'staticDir'
-    | 'ffmpegPath'
-    | 'skipHidden'
-    | 'systemFiles'
-    | 'excludePatterns'
+    | "mediaRoots"
+    | "host"
+    | "port"
+    | "cacheDir"
+    | "thumbSizeW"
+    | "thumbSizeH"
+    | "thumbCacheSize"
+    | "cacheMaxAgeDays"
+    | "allowOsOpen"
+    | "staticDir"
+    | "ffmpegPath"
+    | "skipHidden"
+    | "systemFiles"
+    | "excludePatterns"
   >
->
+>;
 
 export interface ServerConfigUpdateResponse {
-  ok: boolean
-  config: ServerConfig
-  requiresRestart: string[]
+  ok: boolean;
+  config: ServerConfig;
+  requiresRestart: string[];
   // 根集合是否变化（顺序无关）；前端据此决定是否提示"重新扫描"
-  mediaRootsChanged: boolean
+  mediaRootsChanged: boolean;
 }
 
 export const configApi = {
-  get: () => api<ServerConfig>('/api/config'),
+  get: () => api<ServerConfig>("/api/config"),
 
   update: (patch: ServerConfigPatch) =>
-    api<ServerConfigUpdateResponse>('/api/config', {
-      method: 'PUT',
+    api<ServerConfigUpdateResponse>("/api/config", {
+      method: "PUT",
       body: patch,
     }),
-}
+};

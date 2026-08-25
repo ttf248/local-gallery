@@ -10,11 +10,9 @@ import (
 
 // ConfigResponse GET /api/config 的响应体。
 //
-// mediaRoots 数组是权威字段；mediaRoot 保留为 mediaRoots[0] 的别名，
-// 老前端 / 健康检查 / 路径安全中间件回退逻辑继续可用。
+// 配置接口是唯一允许返回本机绝对配置路径的回环接口。
 type ConfigResponse struct {
 	MediaRoots      []string `json:"mediaRoots"`
-	MediaRoot       string   `json:"mediaRoot"` // 兼容：mediaRoots[0]
 	Host            string   `json:"host"`
 	Port            int      `json:"port"`
 	CacheDir        string   `json:"cacheDir"`
@@ -76,7 +74,6 @@ func ConfigGetHandler(mgr *config.Manager) fiber.Handler {
 		}
 		return c.JSON(ConfigResponse{
 			MediaRoots:      roots,
-			MediaRoot:       cfg.Root(),
 			Host:            cfg.Host,
 			Port:            cfg.Port,
 			CacheDir:        cfg.CacheDir,
@@ -136,7 +133,6 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 			OK: true,
 			Config: ConfigResponse{
 				MediaRoots:      newRoots,
-				MediaRoot:       newCfg.Root(),
 				Host:            newCfg.Host,
 				Port:            newCfg.Port,
 				CacheDir:        newCfg.CacheDir,

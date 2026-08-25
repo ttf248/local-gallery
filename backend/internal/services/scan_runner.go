@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
-// ScanStatus 扫描状态机。
 type ScanStatus string
 
 const (
@@ -22,19 +22,17 @@ const (
 	ScanStatusError     ScanStatus = "error"
 )
 
-// ProgressEvent SSE 推送的进度事件。
 type ProgressEvent struct {
 	ScanID      string     `json:"scanId"`
-	Progress    int        `json:"progress"`         // 0-100
-	Status      ScanStatus `json:"status"`           // running / complete / cancelled / error
-	Phase       string     `json:"phase,omitempty"`  // "scanning" / "smart-grouping" / "done"
+	Progress    int        `json:"progress"`
+	Status      ScanStatus `json:"status"`
+	Phase       string     `json:"phase,omitempty"`
 	CurrentPath string     `json:"currentPath,omitempty"`
 	AlbumsFound int        `json:"albumsFound"`
 	Error       string     `json:"error,omitempty"`
 	ElapsedMs   int64      `json:"elapsedMs"`
 }
 
-// ScanState 单次扫描的运行时状态。
 type ScanState struct {
 	ID         string
 	Ctx        context.Context
@@ -43,178 +41,277 @@ type ScanState struct {
 	StartedAt  time.Time
 	FinishedAt time.Time
 	Progress   int
-	Albums     []models.Album // 已发现的相册（用于进度展示）
+	Albums     []models.Album
 	Result     *models.ScanResult
 	Err        error
-	Events     chan ProgressEvent
 	done       chan struct{}
+	lastEvent  ProgressEvent
+	subs       map[chan ProgressEvent]struct{}
 }
 
-// AsyncScanRunner 管理并发运行的扫描任务。
 type AsyncScanRunner struct {
-	mu     sync.Mutex
-	states map[string]*ScanState
-	cache  *ScanResultCache // 可选：扫描成功时写入缓存
+	mu        sync.Mutex
+	states    map[string]*ScanState
+	activeID  string
+	cache     *ScanResultCache
+	catalog   *ResourceCatalog
+	retention time.Duration
 }
 
-// NewAsyncScanRunner 创建 runner。
 func NewAsyncScanRunner() *AsyncScanRunner {
-	return &AsyncScanRunner{states: make(map[string]*ScanState)}
+	return &AsyncScanRunner{
+		states:    make(map[string]*ScanState),
+		retention: 10 * time.Minute,
+	}
 }
 
-// SetCache 绑定全局扫描结果缓存。
-func (r *AsyncScanRunner) SetCache(cache *ScanResultCache) {
-	r.cache = cache
-}
+func (r *AsyncScanRunner) SetCache(cache *ScanResultCache)     { r.cache = cache }
+func (r *AsyncScanRunner) SetCatalog(catalog *ResourceCatalog) { r.catalog = catalog }
 
-// Start 启动一次新扫描，返回 scan_id 和事件通道。
-//
-// 至少需要一个根：opts.Roots 非空优先；否则回退到 opts.Root（兼容）。
+// Start 保持原有调用形式；重复启动时复用当前任务。
 func (r *AsyncScanRunner) Start(opts ScanOptions) (string, <-chan ProgressEvent, error) {
+	id, events, _, err := r.StartOrReuse(opts)
+	return id, events, err
+}
+
+// StartOrReuse 保证全进程同一时间只有一个扫描任务。
+func (r *AsyncScanRunner) StartOrReuse(opts ScanOptions) (string, <-chan ProgressEvent, bool, error) {
 	if len(opts.Roots) == 0 && opts.Root == "" {
-		return "", nil, errors.New("root is required")
+		return "", nil, false, errors.New("root is required")
+	}
+
+	r.mu.Lock()
+	if active := r.states[r.activeID]; active != nil && isActiveScan(active.Status) {
+		ch := r.subscribeLocked(active)
+		id := active.ID
+		r.mu.Unlock()
+		return id, ch, true, nil
 	}
 
 	id := uuid.New().String()
 	ctx, cancel := context.WithCancel(context.Background())
-
 	state := &ScanState{
 		ID:        id,
 		Ctx:       ctx,
 		Cancel:    cancel,
 		Status:    ScanStatusPending,
 		StartedAt: time.Now(),
-		Events:    make(chan ProgressEvent, 64),
 		done:      make(chan struct{}),
+		subs:      make(map[chan ProgressEvent]struct{}),
 	}
-
-	r.mu.Lock()
+	state.lastEvent = ProgressEvent{ScanID: id, Status: ScanStatusPending}
 	r.states[id] = state
+	r.activeID = id
+	ch := r.subscribeLocked(state)
 	r.mu.Unlock()
 
 	go r.run(state, opts)
-	return id, state.Events, nil
+	return id, ch, false, nil
 }
 
-// Cancel 取消指定扫描。
 func (r *AsyncScanRunner) Cancel(id string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s, ok := r.states[id]; ok {
-		s.Cancel()
-		return true
+	state := r.states[id]
+	if state == nil || !isActiveScan(state.Status) {
+		return false
 	}
-	return false
+	state.Cancel()
+	return true
 }
 
-// Get 返回扫描当前状态（拷贝）。
 func (r *AsyncScanRunner) Get(id string) *ScanState {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s, ok := r.states[id]; ok {
-		cp := *s
-		return &cp
+	state := r.states[id]
+	if state == nil {
+		return nil
 	}
-	return nil
+	cp := *state
+	cp.Albums = append([]models.Album(nil), state.Albums...)
+	cp.subs = nil
+	return &cp
 }
 
-// Result 返回扫描最终结果（完成态才有）。
 func (r *AsyncScanRunner) Result(id string) *models.ScanResult {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if s, ok := r.states[id]; ok {
-		return s.Result
+	if state := r.states[id]; state != nil {
+		return state.Result
 	}
 	return nil
 }
 
-// Wait 阻塞等待扫描完成（用于测试）。
 func (r *AsyncScanRunner) Wait(id string) {
 	r.mu.Lock()
-	s, ok := r.states[id]
+	state := r.states[id]
 	r.mu.Unlock()
-	if !ok {
-		return
+	if state != nil {
+		<-state.done
 	}
-	<-s.done
+}
+
+// Subscribe 为每个 SSE 客户端创建独立缓冲通道，并立即发送最新快照。
+func (r *AsyncScanRunner) Subscribe(id string) (<-chan ProgressEvent, func(), bool) {
+	r.mu.Lock()
+	state := r.states[id]
+	if state == nil {
+		r.mu.Unlock()
+		return nil, func() {}, false
+	}
+	ch := r.subscribeLocked(state)
+	terminal := !isActiveScan(state.Status)
+	if terminal {
+		close(ch)
+	}
+	r.mu.Unlock()
+	cancel := func() {
+		r.mu.Lock()
+		if current := r.states[id]; current != nil {
+			if _, ok := current.subs[ch]; ok {
+				delete(current.subs, ch)
+				close(ch)
+			}
+		}
+		r.mu.Unlock()
+	}
+	return ch, cancel, true
+}
+
+func (r *AsyncScanRunner) subscribeLocked(state *ScanState) chan ProgressEvent {
+	ch := make(chan ProgressEvent, 8)
+	ch <- state.lastEvent
+	if isActiveScan(state.Status) {
+		state.subs[ch] = struct{}{}
+	}
+	return ch
 }
 
 func (r *AsyncScanRunner) run(state *ScanState, opts ScanOptions) {
-	defer close(state.Events)
 	defer close(state.done)
-
-	r.setStatus(state, ScanStatusRunning)
+	r.publish(state, ProgressEvent{ScanID: state.ID, Status: ScanStatusRunning})
 
 	scanner := NewScanner()
 	hook := func(ev ScanProgress) {
-		// ctx 已取消则不再发事件
 		if state.Ctx.Err() != nil {
 			return
 		}
 		pct := 0
 		if ev.Total > 0 {
-			pct = ev.Processed * 100 / ev.Total
-			if pct > 99 {
-				pct = 99
-			}
+			pct = min(99, ev.Processed*100/ev.Total)
 		}
-		state.Progress = pct
-		state.Albums = append(state.Albums, ev.NewAlbums...)
-		state.Events <- ProgressEvent{
+		r.publish(state, ProgressEvent{
 			ScanID:      state.ID,
 			Progress:    pct,
 			Status:      ScanStatusRunning,
 			Phase:       ev.Phase,
-			CurrentPath: ev.CurrentPath,
+			CurrentPath: relativeScanPath(ev.CurrentPath, opts.effectiveRoots()),
 			AlbumsFound: ev.AlbumsFound,
 			ElapsedMs:   time.Since(state.StartedAt).Milliseconds(),
-		}
+		})
 	}
 
-	result, err := scanner.ScanWithHook(opts, hook)
+	result, err := scanner.ScanWithContext(state.Ctx, opts, hook)
+	if errors.Is(err, context.Canceled) || state.Ctx.Err() != nil {
+		r.finish(state, ProgressEvent{
+			ScanID: state.ID, Status: ScanStatusCancelled,
+			ElapsedMs: time.Since(state.StartedAt).Milliseconds(),
+		}, nil, context.Canceled)
+		return
+	}
 	if err != nil {
-		if state.Ctx.Err() == context.Canceled {
-			state.Events <- ProgressEvent{
-				ScanID:      state.ID,
-				Progress:    state.Progress,
-				Status:      ScanStatusCancelled,
-				AlbumsFound: len(state.Albums),
-				ElapsedMs:   time.Since(state.StartedAt).Milliseconds(),
-			}
-			r.setStatus(state, ScanStatusCancelled)
-			return
-		}
-		state.Events <- ProgressEvent{
-			ScanID:      state.ID,
-			Progress:    state.Progress,
-			Status:      ScanStatusError,
-			Error:       err.Error(),
-			ElapsedMs:   time.Since(state.StartedAt).Milliseconds(),
-		}
-		r.setStatus(state, ScanStatusError)
-		state.Err = err
+		r.finish(state, ProgressEvent{
+			ScanID: state.ID, Status: ScanStatusError,
+			Error: "scan failed", ElapsedMs: time.Since(state.StartedAt).Milliseconds(),
+		}, nil, err)
 		return
 	}
 
-	state.Result = result
-	state.FinishedAt = time.Now()
-	// 写入全局缓存（供后续直接查询，避免再次扫描）。
+	if r.catalog != nil {
+		r.catalog.Rebuild(result, opts.effectiveRoots())
+	}
 	if r.cache != nil {
 		r.cache.Set(result)
 	}
-	state.Events <- ProgressEvent{
-		ScanID:      state.ID,
-		Progress:    100,
-		Status:      ScanStatusComplete,
-		Phase:       "done",
-		AlbumsFound: result.AlbumCount,
-		ElapsedMs:   time.Since(state.StartedAt).Milliseconds(),
-	}
-	r.setStatus(state, ScanStatusComplete)
+	r.finish(state, ProgressEvent{
+		ScanID: state.ID, Progress: 100, Status: ScanStatusComplete, Phase: "done",
+		AlbumsFound: result.AlbumCount, ElapsedMs: time.Since(state.StartedAt).Milliseconds(),
+	}, result, nil)
 }
 
-func (r *AsyncScanRunner) setStatus(state *ScanState, s ScanStatus) {
+func (r *AsyncScanRunner) publish(state *ScanState, event ProgressEvent) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	state.Status = s
+	state.Status = event.Status
+	state.Progress = event.Progress
+	state.lastEvent = event
+	for ch := range state.subs {
+		select {
+		case ch <- event:
+		default:
+			// 慢客户端只需要最新进度；丢弃最旧事件后补入当前事件。
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- event:
+			default:
+			}
+		}
+	}
+}
+
+func (r *AsyncScanRunner) finish(state *ScanState, event ProgressEvent, result *models.ScanResult, err error) {
+	r.mu.Lock()
+	state.Status = event.Status
+	state.Progress = event.Progress
+	state.Result = result
+	state.Err = err
+	state.FinishedAt = time.Now()
+	state.lastEvent = event
+	if r.activeID == state.ID {
+		r.activeID = ""
+	}
+	for ch := range state.subs {
+		select {
+		case ch <- event:
+		default:
+			select {
+			case <-ch:
+			default:
+			}
+			ch <- event
+		}
+		close(ch)
+		delete(state.subs, ch)
+	}
+	retention := r.retention
+	r.mu.Unlock()
+
+	if retention > 0 {
+		time.AfterFunc(retention, func() {
+			r.mu.Lock()
+			delete(r.states, state.ID)
+			r.mu.Unlock()
+		})
+	}
+}
+
+func isActiveScan(status ScanStatus) bool {
+	return status == ScanStatusPending || status == ScanStatusRunning
+}
+
+func relativeScanPath(path string, roots []string) string {
+	for _, root := range roots {
+		rel, err := filepath.Rel(root, path)
+		if err == nil && !relEscapesRoot(rel) {
+			name := filepath.Base(filepath.Clean(root))
+			if rel == "." {
+				return name
+			}
+			return filepath.ToSlash(filepath.Join(name, rel))
+		}
+	}
+	return ""
 }

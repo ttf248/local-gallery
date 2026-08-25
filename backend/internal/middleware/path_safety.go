@@ -48,8 +48,8 @@ func OpenInOS(path string) error {
 // 用规范化绝对路径 + 带分隔符的 "root/" 前缀做白名单校验，O(1) 查询。
 // 多个根按出现顺序存储；任一命中即放行。
 type pathState struct {
-	roots    []string   // 规范化绝对路径
-	prefixes []string   // 与 roots 一一对应，root + PathSeparator
+	roots    []string // 规范化绝对路径
+	prefixes []string // 与 roots 一一对应，root + PathSeparator
 }
 
 // safetyState 用 atomic.Pointer 持有 pathState，handler 读无锁。
@@ -67,9 +67,23 @@ type RootProvider func() []string
 // RootsProvider 返回空切片时按"无根"处理（拒绝所有非 smart: 路径）。
 type RootsProvider func() []string
 
-func PathSafetyMiddleware(initialRoots []string) (fiber.Handler, *safetyState) {
+// ResourceResolver 把业务资源 ID 解析为内部绝对路径。
+type ResourceResolver interface {
+	Resolve(id string) (string, bool)
+}
+
+// PathValidator 对资源目录解析出的内部路径执行当前根集合校验。
+type PathValidator interface {
+	Validate(path string) (string, error)
+}
+
+func PathSafetyMiddleware(initialRoots []string, resolvers ...ResourceResolver) (fiber.Handler, *safetyState) {
 	state := &safetyState{}
 	state.setRoots(initialRoots)
+	var resolver ResourceResolver
+	if len(resolvers) > 0 {
+		resolver = resolvers[0]
+	}
 	handler := func(c *fiber.Ctx) error {
 		path := c.Query("path")
 		if path == "" {
@@ -80,12 +94,19 @@ func PathSafetyMiddleware(initialRoots []string) (fiber.Handler, *safetyState) {
 			c.Locals("safePath", path)
 			return c.Next()
 		}
-		// allowConfig 模式：跳过 path safety（handler 自己做白名单校验）。
-		// 仅当 allowConfig 显式为 "1" 时跳过；默认值是路径必须在 mediaRoots 之下。
-		// 标记存在 c.Locals("skipSafety")=true，handler 仍需读 c.Query("path") 自校验。
+		// 设置页是唯一允许直接提交配置路径的入口；handler 会再次按配置白名单校验。
 		if c.Query("allowConfig") == "1" {
 			c.Locals("skipSafety", true)
 			return c.Next()
+		}
+		if resolver != nil {
+			resolved, ok := resolver.Resolve(path)
+			if !ok {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+					"code": "invalid_resource_id", "message": "resource id is invalid or stale",
+				})
+			}
+			path = resolved
 		}
 		ps := state.v.Load()
 		if ps == nil || len(ps.roots) == 0 {
@@ -129,6 +150,15 @@ func (s *safetyState) SetRoots(roots []string) {
 	s.setRoots(roots)
 }
 
+// Validate 使用当前原子快照校验路径，供资源参数中间件复用。
+func (s *safetyState) Validate(path string) (string, error) {
+	ps := s.v.Load()
+	if ps == nil || len(ps.roots) == 0 {
+		return "", fmt.Errorf("mediaRoots not configured")
+	}
+	return validatePathMulti(ps.roots, ps.prefixes, path)
+}
+
 // SafePath 从 c.Locals 取出已校验的绝对路径。
 func SafePath(c *fiber.Ctx) string {
 	if v, ok := c.Locals("safePath").(string); ok && v != "" {
@@ -145,8 +175,8 @@ func IsSafetyBypassed(c *fiber.Ctx) bool {
 }
 
 // validatePathMulti 检查 p 是否在任一根之下。
-//  - 必须绝对路径
-//  - filepath.Rel 不报错且不以 ".." 开头即为子路径
+//   - 必须绝对路径
+//   - filepath.Rel 不报错且不以 ".." 开头即为子路径
 func validatePathMulti(roots, prefixes []string, p string) (string, error) {
 	if !filepath.IsAbs(p) {
 		return "", fmt.Errorf("path must be absolute")

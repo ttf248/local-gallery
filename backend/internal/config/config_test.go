@@ -19,8 +19,8 @@ func writeTempYAML(t *testing.T, content string) string {
 
 func TestDefault(t *testing.T) {
 	d := Default()
-	if d.MediaRoot == "" {
-		t.Error("default MediaRoot must not be empty")
+	if len(d.Roots()) == 0 {
+		t.Error("default MediaRoots must not be empty")
 	}
 	if d.Port <= 0 || d.Port > 65535 {
 		t.Errorf("default Port out of range: %d", d.Port)
@@ -46,14 +46,15 @@ func TestLoadFile_MissingReturnsDefault(t *testing.T) {
 		t.Fatalf("LoadFile should not error on missing file, got: %v", err)
 	}
 	d := Default()
-	if cfg.MediaRoot != d.MediaRoot {
-		t.Errorf("expected default MediaRoot, got %q", cfg.MediaRoot)
+	if cfg.Root() != d.Root() {
+		t.Errorf("expected default media root, got %q", cfg.Root())
 	}
 }
 
 func TestLoadFile_OverridesDefaults(t *testing.T) {
 	path := writeTempYAML(t, `
-mediaRoot: D:\photos
+mediaRoots:
+  - 'D:\photos'
 port: 9090
 thumbSizeW: 210
 thumbSizeH: 280
@@ -66,8 +67,8 @@ staticDir: build/web
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if cfg.MediaRoot != "D:\\photos" {
-		t.Errorf("mediaRoot: got %q", cfg.MediaRoot)
+	if cfg.Root() != "D:\\photos" {
+		t.Errorf("mediaRoots: got %q", cfg.Root())
 	}
 	if cfg.Port != 9090 {
 		t.Errorf("port: got %d", cfg.Port)
@@ -86,47 +87,14 @@ staticDir: build/web
 	}
 }
 
-// 老配置中只有 comicRoot 字段时，应被识别为 Root()。
-func TestLoadFile_LegacyComicRoot(t *testing.T) {
+func TestLoadFile_RejectsRemovedRootAliases(t *testing.T) {
 	path := writeTempYAML(t, `
 comicRoot: D:\legacy
 port: 7070
 `)
 
-	cfg, err := LoadFile(path)
-	if err != nil {
-		t.Fatalf("LoadFile: %v", err)
-	}
-	if cfg.LegacyComicRoot != "D:\\legacy" {
-		t.Errorf("LegacyComicRoot: got %q", cfg.LegacyComicRoot)
-	}
-	if cfg.Root() != "D:\\legacy" {
-		t.Errorf("Root(): got %q", cfg.Root())
-	}
-	if !cfg.HasLegacyRoot() {
-		t.Error("HasLegacyRoot should be true")
-	}
-}
-
-// 同时给出 mediaRoot 和 comicRoot 时，以 mediaRoot 为准。
-func TestLoadFile_MediaRootWinsOverComicRoot(t *testing.T) {
-	path := writeTempYAML(t, `
-mediaRoot: D:\new
-comicRoot: D:\old
-`)
-
-	cfg, err := LoadFile(path)
-	if err != nil {
-		t.Fatalf("LoadFile: %v", err)
-	}
-	if cfg.MediaRoot != "D:\\new" {
-		t.Errorf("MediaRoot: got %q", cfg.MediaRoot)
-	}
-	if cfg.Root() != "D:\\new" {
-		t.Errorf("Root() should prefer MediaRoot, got %q", cfg.Root())
-	}
-	if cfg.HasLegacyRoot() {
-		t.Error("HasLegacyRoot should be false when MediaRoot is set")
+	if _, err := LoadFile(path); err == nil {
+		t.Error("expected removed comicRoot field to be rejected")
 	}
 }
 
@@ -166,22 +134,18 @@ func TestValidate(t *testing.T) {
 		mutate  func(c *Config)
 		wantErr bool
 	}{
-		{"empty_root", func(c *Config) { c.MediaRoot = ""; c.LegacyComicRoot = "" }, true},
-		{"missing_root", func(c *Config) { c.MediaRoot = filepath.Join(dir, "nope") }, true},
-		{"legacy_root_works", func(c *Config) {
-			c.MediaRoot = ""
-			c.LegacyComicRoot = dir
-		}, false},
+		{"empty_root", func(c *Config) { c.MediaRoots = nil }, true},
+		{"missing_root", func(c *Config) { c.MediaRoots = []string{filepath.Join(dir, "nope")} }, true},
 		{"file_not_dir", func(c *Config) {
 			f := filepath.Join(dir, "f.txt")
 			os.WriteFile(f, []byte("x"), 0o644)
-			c.MediaRoot = f
+			c.MediaRoots = []string{f}
 		}, true},
 		{"bad_port_low", func(c *Config) { c.Port = 0 }, true},
 		{"bad_port_high", func(c *Config) { c.Port = 70000 }, true},
 		{"bad_thumb_w", func(c *Config) { c.ThumbSizeW = 0 }, true},
 		{"bad_thumb_h", func(c *Config) { c.ThumbSizeH = -1 }, true},
-		{"ok", func(c *Config) { c.MediaRoot = dir }, false},
+		{"ok", func(c *Config) { c.MediaRoots = []string{dir} }, false},
 	}
 
 	for _, tc := range cases {

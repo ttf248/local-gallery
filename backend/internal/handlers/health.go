@@ -7,17 +7,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
-// HealthResponse 健康检查响应。
-//
-// mediaRoots 是权威字段（数组）；mediaRoot / comicRoot 保留为 mediaRoots[0]
-// 的别名以兼容老调用方。
+// HealthResponse 健康检查响应。MediaRoots 仅包含不可逆的根资源 ID。
 type HealthResponse struct {
 	Status     string   `json:"status"`
 	MediaRoots []string `json:"mediaRoots"`
-	MediaRoot  string   `json:"mediaRoot"` // 兼容：mediaRoots[0]
-	ComicRoot  string   `json:"comicRoot"` // 旧字段保留为 mediaRoot 的别名
 	Version    string   `json:"version"`
 	GoVersion  string   `json:"goVersion"`
 	Goroutines int      `json:"goroutines"`
@@ -27,19 +23,23 @@ type HealthResponse struct {
 }
 
 // HealthHandler 返回 /api/health 处理函数。
-func HealthHandler(mgr *config.Manager) fiber.Handler {
+func HealthHandler(mgr *config.Manager, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		roots := mgr.Roots()
-		first := ""
-		if len(roots) > 0 {
-			first = roots[0]
+		if catalog != nil {
+			publicRoots := make([]string, 0, len(roots))
+			for _, root := range roots {
+				if id := catalog.ExternalID(root, services.ResourceRoot); id != "" {
+					publicRoots = append(publicRoots, id)
+				}
+			}
+			roots = publicRoots
 		}
 		cfg := mgr.Get()
 		return c.JSON(HealthResponse{
 			Status:      "ok",
 			MediaRoots:  roots,
-			MediaRoot:   first,
-			ComicRoot:   first,
 			Version:     config.Version,
 			GoVersion:   runtime.Version(),
 			Goroutines:  runtime.NumGoroutine(),

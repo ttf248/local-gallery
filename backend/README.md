@@ -17,12 +17,11 @@ go run ./cmd/server                     # 默认 :8080
 
 启动后访问 `http://localhost:8080/api/health` 健康检查。
 
-可用 flag（仅这两个）：
+可用 flag（仅一个）：
 
-| flag | 说明 |
-|------|------|
+| flag              | 说明                                     |
+| ----------------- | ---------------------------------------- |
 | `--config <yaml>` | 非默认位置配置文件（默认 `config.yaml`） |
-| `--static-dir <dir>` | 覆盖 `staticDir`（生产单端口托管前端产物） |
 
 **不再支持环境变量或 CLI 覆盖**，所有运行时参数集中在 `config.yaml`。
 
@@ -68,16 +67,16 @@ go test ./internal/services -run TestScanner -v
 
 完整契约见 [docs/API.md](../docs/API.md)。
 
-| 类别 | 端点 |
-|------|------|
-| 健康 | `GET /api/health` |
-| 扫描 | `POST /api/scan` · `POST /api/scan/start` · `GET /api/scan/:id/events` (SSE) · `GET /api/scan/latest` |
-| 库 | `GET /api/folders` · `GET /api/tags` · `GET /api/search` |
-| 缩略图 | `GET /api/thumbs` · `POST /api/thumbs/cover` · `GET /api/thumbs/stats` |
-| 原图 | `GET /api/images` · `GET /api/images/info` |
-| 视频 | `GET /api/videos` · `GET /api/videos/info` · `/api/videos/transcode/{status,events,cancel,cache/*}` |
-| 偏好 | `GET/PATCH /api/prefs` · `GET/POST/DELETE /api/favorites` · `GET/POST/DELETE /api/history` · `GET/POST /api/progress` |
-| 系统 | `GET /api/fs/open` · `GET/PUT /api/config` |
+| 类别   | 端点                                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------------------- |
+| 健康   | `GET /api/health`                                                                                                     |
+| 扫描   | `POST /api/scans` · `GET /api/scans/:id/events` (SSE) · `GET/DELETE /api/scans/:id` · `GET/DELETE /api/library`       |
+| 库     | `GET /api/albums/:id` · `GET /api/tags/:tag` · `GET /api/search`                                                      |
+| 缩略图 | `GET /api/thumbs/:id` · `POST /api/thumbs/:id/cover` · `GET /api/thumbs/stats`                                        |
+| 媒体   | `GET /api/media/:id` · `GET /api/images/:id/info`                                                                     |
+| 视频   | `GET /api/videos/:id/info` · `/api/videos/:id/transcode/{status,events,cancel}`                                       |
+| 偏好   | `GET/PATCH /api/prefs` · `GET/POST/DELETE /api/favorites` · `GET/POST/DELETE /api/history` · `GET/POST /api/progress` |
+| 系统   | `POST /api/fs/open` · `GET/PUT /api/config`（仅本机）                                                                 |
 
 ---
 

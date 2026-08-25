@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
@@ -24,9 +25,9 @@ func imageETag(info os.FileInfo) string {
 	return fmt.Sprintf(`"%x-%x"`, info.ModTime().UnixNano(), info.Size())
 }
 
-// ImageHandler 返回 /api/images 原图（支持 Range 请求 + ETag 协商）。
+// ImageHandler 返回资源 ID 指向的原图（支持 Range 请求 + ETag 协商）。
 //
-//   GET /api/images?path=<绝对路径>
+//	GET /api/media/:id
 //
 // 浏览器原生不识别的格式（HEIC/HEIF）原样返回，由浏览器自身决定
 // 能否解码（Safari 可显示；Chrome/Firefox 不能）。其它格式由
@@ -50,7 +51,7 @@ func ImageHandler() fiber.Handler {
 			if os.IsNotExist(err) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read media resource"})
 		}
 		// ETag + 304 协商(命中 If-None-Match 时直接返回,不发 body)
 		etag := imageETag(info)
@@ -69,12 +70,32 @@ func ImageHandler() fiber.Handler {
 	}
 }
 
+// MediaHandler 根据文件类型分派到图片或视频发送管线。
+func MediaHandler(transcode *services.TranscodeService, faststart *services.VideoFaststartService) fiber.Handler {
+	imageHandler := ImageHandler()
+	videoHandler := VideoHandler(transcode, faststart)
+	return func(c *fiber.Ctx) error {
+		path := middleware.SafePath(c)
+		if models.IsVideoFile(filepath.Base(path)) {
+			return videoHandler(c)
+		}
+		if models.IsImageFile(filepath.Base(path)) {
+			return imageHandler(c)
+		}
+		return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
+			"code": "unsupported_media", "message": "resource is not a supported media file",
+		})
+	}
+}
+
 // ImageInfoHandler 返回图片元数据（尺寸、格式、大小、修改时间、checksum）。
 //
-//   GET /api/images/info?path=<绝对路径>
-func ImageInfoHandler() fiber.Handler {
+//	GET /api/images/:id/info
+func ImageInfoHandler(catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
-		path := c.Query("path")
+		resourceID := middleware.ResourceID(c)
+		path := middleware.SafePath(c)
 		if path == "" {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'path' query parameter",
@@ -85,7 +106,11 @@ func ImageInfoHandler() fiber.Handler {
 			if os.IsNotExist(err) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read image metadata"})
+		}
+		if catalog != nil {
+			info.Path = resourceID
+			info.Dir = catalog.RelativeLabel(resourceID)
 		}
 		return c.JSON(info)
 	}

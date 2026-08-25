@@ -1,34 +1,41 @@
-import { useEffect, useState } from 'react'
-import { getTranscodeStatus, type TranscodeStatus, type TranscodeStatusValue } from '../../api/videos'
+import { useEffect, useState } from "react";
+import {
+  getTranscodeStatus,
+  type TranscodeStatus,
+  type TranscodeStatusValue,
+} from "../../api/videos";
 
 interface Props {
-  /** 视频文件绝对路径 */
-  videoPath: string
+  /** 视频文件资源 ID */
+  videoPath: string;
   /** 卡片尺寸: sm = album card(小), lg = hover preview(大) */
-  size?: 'sm' | 'lg'
+  size?: "sm" | "lg";
   /** 轮询间隔(毫秒);默认 3s。Phase 3 改成 SSE 后会去掉这个 */
-  pollIntervalMs?: number
+  pollIntervalMs?: number;
 }
 
 const SIZE_CLASS = {
-  sm: { box: 'h-4 px-1 text-[9px] gap-0.5', icon: 8 },
-  lg: { box: 'h-5 px-1.5 text-[10px] gap-1', icon: 10 },
-} as const
+  sm: { box: "h-4 px-1 text-[9px] gap-0.5", icon: 8 },
+  lg: { box: "h-5 px-1.5 text-[10px] gap-1", icon: 10 },
+} as const;
 
 // 状态 → 用户可见的简短文本 + 颜色
 // running / queued → 蓝色 (处理中)
 // cached → 绿色 (完成,直接隐藏就行;这里主要是兜底)
 // failed → 红色
-const STATUS_STYLE: Record<TranscodeStatusValue, { text: string; cls: string } | null> = {
+const STATUS_STYLE: Record<
+  TranscodeStatusValue,
+  { text: string; cls: string } | null
+> = {
   unknown: null,
   skipped: null,
   unavailable: null,
   not_needed: null,
   cached: null, // 缓存命中时直接不显示
-  queued: { text: '排队', cls: 'bg-blue-500/85 text-white' },
-  running: { text: '转码中', cls: 'bg-blue-500/85 text-white' },
-  failed: { text: '转码失败', cls: 'bg-red-500/85 text-white' },
-}
+  queued: { text: "排队", cls: "bg-blue-500/85 text-white" },
+  running: { text: "转码中", cls: "bg-blue-500/85 text-white" },
+  failed: { text: "转码失败", cls: "bg-red-500/85 text-white" },
+};
 
 /**
  * 视频卡片上的转码状态小角标。
@@ -42,41 +49,41 @@ const STATUS_STYLE: Record<TranscodeStatusValue, { text: string; cls: string } |
  */
 export default function TranscodeStatusBadge({
   videoPath,
-  size = 'sm',
+  size = "sm",
   pollIntervalMs = 3000,
 }: Props) {
-  const [status, setStatus] = useState<TranscodeStatus | null>(null)
+  const [status, setStatus] = useState<TranscodeStatus | null>(null);
 
   useEffect(() => {
-    if (!videoPath) return
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
+    if (!videoPath) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const tick = async () => {
       try {
-        const s = await getTranscodeStatus(videoPath)
-        if (!cancelled) setStatus(s)
+        const s = await getTranscodeStatus(videoPath);
+        if (!cancelled) setStatus(s);
       } catch {
         // status 端点失败 → 当作没服务,隐藏
-        if (!cancelled) setStatus(null)
+        if (!cancelled) setStatus(null);
       }
       if (!cancelled) {
-        timer = setTimeout(tick, pollIntervalMs)
+        timer = setTimeout(tick, pollIntervalMs);
       }
-    }
-    tick()
+    };
+    tick();
     return () => {
-      cancelled = true
-      if (timer) clearTimeout(timer)
-    }
-  }, [videoPath, pollIntervalMs])
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [videoPath, pollIntervalMs]);
 
-  if (!status) return null
-  const style = STATUS_STYLE[status.status]
-  if (!style) return null
+  if (!status) return null;
+  const style = STATUS_STYLE[status.status];
+  if (!style) return null;
 
-  const sz = SIZE_CLASS[size]
-  const pct = Math.round(status.progress * 100)
+  const sz = SIZE_CLASS[size];
+  const pct = Math.round(status.progress * 100);
 
   return (
     <div
@@ -84,9 +91,9 @@ export default function TranscodeStatusBadge({
       title={status.error || style.text}
     >
       <span>{style.text}</span>
-      {status.status === 'running' && pct > 0 && (
+      {status.status === "running" && pct > 0 && (
         <span className="tabular-nums opacity-80">{pct}%</span>
       )}
     </div>
-  )
+  );
 }

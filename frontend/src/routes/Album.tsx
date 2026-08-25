@@ -1,23 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { useLibraryStore } from '../store/libraryStore'
-import { useSearchStore } from '../store/searchStore'
-import { useFavorites } from '../hooks/useFavorites'
-import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
-import { historyApi } from '../api/prefs'
-import { thumbUrl } from '../api/thumbs'
-import { useUIStore } from '../store/uiStore'
-import type { CardData } from '../components/album/AlbumGrid'
-import AlbumGrid from '../components/album/AlbumGrid'
-import YearTimeline from '../components/home/YearTimeline'
-import { groupAlbumsAndCollectionsByYear } from '../utils/albumGrouping'
-import EmptyState from '../components/common/EmptyState'
-import { albumsApi } from '../api/albums'
-import type { ScanResult } from '../api/scan'
-import { decodeFavPath } from '../utils/path'
-import { formatRelative } from '../utils/date'
-import { formatSize } from '../utils/format'
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { useLibraryStore } from "../store/libraryStore";
+import { useSearchStore } from "../store/searchStore";
+import { useFavorites } from "../hooks/useFavorites";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
+import { historyApi } from "../api/prefs";
+import { thumbUrl } from "../api/thumbs";
+import { useUIStore } from "../store/uiStore";
+import type { CardData } from "../components/album/AlbumGrid";
+import AlbumGrid from "../components/album/AlbumGrid";
+import YearTimeline from "../components/home/YearTimeline";
+import { groupAlbumsAndCollectionsByYear } from "../utils/albumGrouping";
+import EmptyState from "../components/common/EmptyState";
+import { albumsApi } from "../api/albums";
+import type { ScanResult } from "../api/scan";
+import { decodeFavPath } from "../utils/path";
+import { formatRelative } from "../utils/date";
+import { formatSize } from "../utils/format";
 import {
   ChevronLeftIcon,
   ReaderIcon,
@@ -33,87 +33,89 @@ import {
   ArrowRightLineIcon,
   InfoIcon,
   CalendarIcon,
-} from '../components/common/Icon'
-import { useReadingProgress } from '../hooks/useReadingProgress'
-import { useAlbumActions } from '../hooks/useAlbumActions'
-import PropertiesDialog from '../components/common/PropertiesDialog'
-import ContextMenu, { type AnyMenuItem } from '../components/album/ContextMenu'
-import VideoCoverImage from '../components/common/VideoCoverImage'
-import { fsCapabilities } from '../api/fs'
-import type { GalleryContextEntry } from '../utils/galleryContext'
+} from "../components/common/Icon";
+import { useReadingProgress } from "../hooks/useReadingProgress";
+import { useAlbumActions } from "../hooks/useAlbumActions";
+import PropertiesDialog from "../components/common/PropertiesDialog";
+import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
+import VideoCoverImage from "../components/common/VideoCoverImage";
+import { fsCapabilities } from "../api/fs";
+import type { GalleryContextEntry } from "../utils/galleryContext";
 
 interface AlbumDetail {
-  type: 'album'
-  path: string
-  name: string
-  imageFiles: string[]
-  videoFiles?: string[]
-  coverImage: string
-  coverKind?: 'image' | 'video'
-  imageCount: number
-  videoCount?: number
-  author?: string
-  folderSize: number
-  modTime: string
+  type: "album";
+  path: string;
+  name: string;
+  imageFiles: string[];
+  videoFiles?: string[];
+  coverImage: string;
+  coverKind?: "image" | "video";
+  imageCount: number;
+  videoCount?: number;
+  author?: string;
+  folderSize: number;
+  modTime: string;
 }
 
 interface CollectionDetail {
-  type: 'collection'
-  path: string
-  name: string
-  albums: AlbumDetail[]
+  type: "collection";
+  path: string;
+  name: string;
+  albums: AlbumDetail[];
   /**
    * 嵌套子集合(子目录里没有顶层图/视频,继续下钻的「中间层」集合)。
    * 旧版会拍平,新版保留嵌套以便完整显示「年→月→事件」5 层结构。
    */
-  collections?: CollectionDetail[]
+  collections?: CollectionDetail[];
   /** 直属于本层的子相册数(不含嵌套集合) */
-  albumCount: number
+  albumCount: number;
 }
 
 interface SmartDetail {
-  type: 'smartCollection'
-  author: string
-  albums: AlbumDetail[]
-  albumCount: number
-  coverImage: string
+  type: "smartCollection";
+  author: string;
+  albums: AlbumDetail[];
+  albumCount: number;
+  coverImage: string;
 }
 
-type Detail = AlbumDetail | CollectionDetail | SmartDetail
+type Detail = AlbumDetail | CollectionDetail | SmartDetail;
 
 // 相册视图：
 //   - 相册 → 图片网格，点击进入画廊
 //   - 集合/智能集合 → 嵌套相册列表
 //   - 缺数据时给出明确引导
 export default function Album() {
-  const params = useParams()
-  const navigate = useNavigate()
-  const rawPath = decodeFavPath('/albums/' + (params['*'] ?? ''))
-  const isSmart = rawPath.startsWith('smart:')
-  const realPath = isSmart ? rawPath.slice(6) : rawPath
+  const params = useParams();
+  const navigate = useNavigate();
+  const rawPath = decodeFavPath("/albums/" + (params["*"] ?? ""));
+  const isSmart = rawPath.startsWith("smart:");
+  const realPath = isSmart ? rawPath.slice(6) : rawPath;
 
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const { add: addFav, toggle: toggleFav, favorites } = useFavorites()
-  const pushToast = useUIStore((s) => s.pushToast)
+  const result = useLibraryStore((s) => s.result);
+  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const viewMode = useUIStore((s) => s.viewMode);
+  const { add: addFav, toggle: toggleFav, favorites } = useFavorites();
+  const pushToast = useUIStore((s) => s.pushToast);
 
   useEffect(() => {
-    if (!result) loadFromBackend()
-  }, [result, loadFromBackend])
+    if (!result) loadFromBackend();
+  }, [result, loadFromBackend]);
 
   const localDetail = useMemo<Detail | null>(() => {
-    if (!result) return null
+    if (!result) return null;
     if (isSmart) {
-      const sc = (result.smartCollections ?? []).find((s) => s.author === realPath)
-      if (!sc) return null
+      const sc = (result.smartCollections ?? []).find(
+        (s) => s.author === realPath,
+      );
+      if (!sc) return null;
       return {
-        type: 'smartCollection',
+        type: "smartCollection",
         author: sc.author,
         albums: sc.albums.map((a) => ({
-          type: 'album',
+          type: "album",
           path: a.path,
           name: a.name,
           imageFiles: [],
@@ -123,11 +125,11 @@ export default function Album() {
           videoCount: a.videoCount,
           author: a.author,
           folderSize: 0,
-          modTime: '',
+          modTime: "",
         })),
         albumCount: sc.albumCount,
         coverImage: sc.coverImage,
-      }
+      };
     }
     // 重要:Collection 优先匹配。2024年 顶层有图+有子目录时,后端会
     // 返回一个 Collection 包含「散图」虚拟相册(同样以 parentPath 作为
@@ -138,10 +140,10 @@ export default function Album() {
     // /"2024年/夏威夷-度假/相片" 这种 4-5 层结构），旧版 find 只在
     // 顶层 r.collections 找，导致深层集合从本地缓存拿不到，必须
     // 走到后端兜底 → 401 列表里很多子目录点进去"找不到此文件夹"。
-    const coll = findCollectionRecursive(result.collections ?? [], realPath)
+    const coll = findCollectionRecursive(result.collections ?? [], realPath);
     if (coll) {
-      const mapAlbum = (a: ScanResult['albums'][number]): AlbumDetail => ({
-        type: 'album',
+      const mapAlbum = (a: ScanResult["albums"][number]): AlbumDetail => ({
+        type: "album",
         path: a.path,
         name: a.name,
         imageFiles: [],
@@ -151,69 +153,75 @@ export default function Album() {
         videoCount: a.videoCount,
         author: a.author,
         folderSize: 0,
-        modTime: '',
-      })
-      const mapColl = (c: ScanResult['collections'][number]): CollectionDetail => ({
-        type: 'collection',
+        modTime: "",
+      });
+      const mapColl = (
+        c: ScanResult["collections"][number],
+      ): CollectionDetail => ({
+        type: "collection",
         path: c.path,
         name: c.name,
         albums: (c.albums ?? []).map(mapAlbum),
         collections: (c.collections ?? []).map(mapColl),
         albumCount: c.albumCount,
-      })
-      return mapColl(coll)
+      });
+      return mapColl(coll);
     }
-    const found = result.albums.find((a) => a.path === realPath)
+    const found = result.albums.find((a) => a.path === realPath);
     if (found) {
       return {
-        type: 'album',
+        type: "album",
         path: found.path,
         name: found.name,
-        imageFiles: (found as unknown as { imageFiles?: string[] }).imageFiles ?? [],
+        imageFiles:
+          (found as unknown as { imageFiles?: string[] }).imageFiles ?? [],
         videoFiles: found.videoFiles,
         coverImage: found.coverImage,
         coverKind: found.coverKind,
         imageCount: found.imageCount,
         videoCount: found.videoCount,
         author: found.author,
-        folderSize: (found as unknown as { folderSize?: number }).folderSize ?? 0,
-        modTime: (found as unknown as { modTime?: string }).modTime ?? '',
-      }
+        folderSize:
+          (found as unknown as { folderSize?: number }).folderSize ?? 0,
+        modTime: (found as unknown as { modTime?: string }).modTime ?? "",
+      };
     }
-    return null
-  }, [result, isSmart, realPath])
+    return null;
+  }, [result, isSmart, realPath]);
 
   // 本地缓存命中了（顶层/嵌套集合/相册）时直接用；只有 album 类型且
   // imageFiles 为空才需要回后端补文件列表（首页只缓存了 metadata）。
   // 如果本地完全找不到（多见于直接 URL 访问深层路径 / 缓存与扫描结果
-  // 不一致），也尝试走一次后端，让 /api/folders 兜底——后端 FindCollection
+  // 不一致），也尝试走一次后端，让 /api/albums/:id 兜底——后端 FindCollection
   // / findAlbumInCollection 也是递归的，能正确返回。
   const needBackendDetail =
     localDetail === null ||
-    (localDetail?.type === 'album' && localDetail.imageFiles.length === 0)
+    (localDetail?.type === "album" && localDetail.imageFiles.length === 0);
   const remoteDetail = useQuery({
-    queryKey: ['album-detail', realPath],
+    queryKey: ["album-detail", realPath],
     queryFn: async () => {
-      const r = await albumsApi.detail(rawPath)
-      return r.data as Detail
+      const r = await albumsApi.detail(rawPath);
+      return r.data as Detail;
     },
     enabled: !!needBackendDetail,
-  })
+  });
 
-  const detail = needBackendDetail ? (remoteDetail.data ?? localDetail) : localDetail
+  const detail = needBackendDetail
+    ? (remoteDetail.data ?? localDetail)
+    : localDetail;
 
   useEffect(() => {
-    if (!detail) return
-    if (detail.type === 'album') {
+    if (!detail) return;
+    if (detail.type === "album") {
       historyApi
         .add({
           path: detail.path,
           name: detail.name,
           imageCount: detail.imageCount,
         })
-        .catch(() => {})
+        .catch(() => {});
     }
-  }, [detail?.type === 'album' ? detail.path : null])
+  }, [detail?.type === "album" ? detail.path : null]);
 
   if (!result) {
     return (
@@ -222,14 +230,14 @@ export default function Album() {
         description="回到主页点击「扫描」加载图像库。"
         action={
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate("/")}
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-sm"
           >
             返回主页
           </button>
         }
       />
-    )
+    );
   }
 
   if (!detail) {
@@ -239,19 +247,22 @@ export default function Album() {
         description={`路径: ${realPath}`}
         action={
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate("/")}
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
           >
             返回主页
           </button>
         }
       />
-    )
+    );
   }
 
-  if (detail.type === 'collection' || detail.type === 'smartCollection') {
-    const favPath = detail.type === 'smartCollection' ? `smart:${detail.author}` : detail.path
-    const isFav = favorites.includes(favPath)
+  if (detail.type === "collection" || detail.type === "smartCollection") {
+    const favPath =
+      detail.type === "smartCollection"
+        ? `smart:${detail.author}`
+        : detail.path;
+    const isFav = favorites.includes(favPath);
     return (
       <CollectionView
         detail={detail}
@@ -261,94 +272,109 @@ export default function Album() {
         onBack={() => navigate(-1)}
         isFavorite={isFav}
         onOpenAuthor={
-          detail.type === 'smartCollection'
+          detail.type === "smartCollection"
             ? (tag) => navigate(`/tags/${encodeURIComponent(tag)}`)
             : undefined
         }
         onToggleFav={async () => {
-          if (detail.type === 'smartCollection') {
+          if (detail.type === "smartCollection") {
             try {
-              await toggleFav(favPath)
-              pushToast({ kind: 'success', message: isFav ? '已取消收藏' : '已加入收藏' })
+              await toggleFav(favPath);
+              pushToast({
+                kind: "success",
+                message: isFav ? "已取消收藏" : "已加入收藏",
+              });
             } catch {
-              pushToast({ kind: 'error', message: '操作失败' })
+              pushToast({ kind: "error", message: "操作失败" });
             }
           } else {
             try {
-              await addFav(favPath)
-              pushToast({ kind: 'success', message: '已加入收藏' })
+              await addFav(favPath);
+              pushToast({ kind: "success", message: "已加入收藏" });
             } catch {
-              pushToast({ kind: 'error', message: '操作失败' })
+              pushToast({ kind: "error", message: "操作失败" });
             }
           }
         }}
       />
-    )
+    );
   }
 
   // 纯视频专辑：imageCount=0 且 videoCount>0，走视频列表视图
   if (detail.imageCount === 0 && (detail.videoCount ?? 0) > 0) {
-    return <VideoAlbumView detail={detail} onBack={() => navigate(-1)} />
+    return <VideoAlbumView detail={detail} onBack={() => navigate(-1)} />;
   }
-  return <AlbumView detail={detail} onBack={() => navigate(-1)} />
+  return <AlbumView detail={detail} onBack={() => navigate(-1)} />;
 }
 
 // Album 详情页:大封面 hero + 进度条 + 动态 CTA + 缩略图网格
-function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void }) {
-  const navigate = useNavigate()
-  const [gridSize, setGridSize] = useState<'sm' | 'md' | 'lg'>('md')
-  const pushToast = useUIStore((s) => s.pushToast)
-  const { data: progress } = useReadingProgress(detail.path)
-  const { add: addFav, toggle: toggleFav, favorites } = useFavorites()
-  const isFav = favorites.includes(detail.path)
-  const startIndex = progress && progress.index > 0 && progress.index < detail.imageFiles.length
-    ? progress.index
-    : 0
+function AlbumView({
+  detail,
+  onBack,
+}: {
+  detail: AlbumDetail;
+  onBack: () => void;
+}) {
+  const navigate = useNavigate();
+  const [gridSize, setGridSize] = useState<"sm" | "md" | "lg">("md");
+  const pushToast = useUIStore((s) => s.pushToast);
+  const { data: progress } = useReadingProgress(detail.path);
+  const { add: addFav, toggle: toggleFav, favorites } = useFavorites();
+  const isFav = favorites.includes(detail.path);
+  const startIndex =
+    progress && progress.index > 0 && progress.index < detail.imageFiles.length
+      ? progress.index
+      : 0;
 
-  const [moreOpen, setMoreOpen] = useState(false)
-  const [propsOpen, setPropsOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [propsOpen, setPropsOpen] = useState(false);
   // PropertiesDialog 打开的目标路径（具体某张图片的绝对路径）
   // album 级的「属性」已删除（folder 不是 image,后端会拒）,这里只接受图片路径。
-  const [propsPath, setPropsPath] = useState<string | null>(null)
+  const [propsPath, setPropsPath] = useState<string | null>(null);
   // 用 key 强制 PropertiesDialog 重新挂载（重新打开时）
-  const [propsKey, setPropsKey] = useState(0)
-  const moreRef = useRef<HTMLDivElement>(null)
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; index: number } | null>(null)
+  const [propsKey, setPropsKey] = useState(0);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    index: number;
+  } | null>(null);
 
   useEffect(() => {
-    if (!moreOpen) return
+    if (!moreOpen) return;
     const onClick = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setMoreOpen(false)
-    }
+      if (moreRef.current && !moreRef.current.contains(e.target as Node))
+        setMoreOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreOpen(false)
-    }
+      if (e.key === "Escape") setMoreOpen(false);
+    };
     // 下一 tick 注册，避免本次点击事件冒泡到 window 后立即关闭
     const id = window.setTimeout(() => {
-      window.addEventListener('mousedown', onClick)
-      window.addEventListener('keydown', onKey)
-    }, 0)
+      window.addEventListener("mousedown", onClick);
+      window.addEventListener("keydown", onKey);
+    }, 0);
     return () => {
-      window.clearTimeout(id)
-      window.removeEventListener('mousedown', onClick)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [moreOpen])
+      window.clearTimeout(id);
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [moreOpen]);
 
   const openGallery = (idx: number) => {
     const qs = new URLSearchParams({
       path: detail.path,
       index: String(idx),
       name: detail.name,
-    })
-    navigate(`/gallery?${qs.toString()}`)
-  }
+    });
+    navigate(`/gallery?${qs.toString()}`);
+  };
 
   // 用 AlbumActions 钩子,实现菜单里的复制路径 / 资源管理器 / 属性
   const actions = useAlbumActions(
     {
       id: detail.path,
-      variant: 'album',
+      variant: "album",
       title: detail.name,
       subtitle: detail.author,
       count: detail.imageCount,
@@ -357,36 +383,37 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
       isFavorite: isFav,
     },
     () => setPropsKey((k) => k + 1),
-  )
+  );
 
   const openInExplorer = () => {
     if (!fsCapabilities.allowOsOpen) {
-      pushToast({ kind: 'info', message: 'allowOsOpen 已关闭,可在设置中开启' })
-      return
+      pushToast({ kind: "info", message: "allowOsOpen 已关闭,可在设置中开启" });
+      return;
     }
-    actions.openInExplorer().catch(() => {})
-  }
+    actions.openInExplorer().catch(() => {});
+  };
 
   const copyPath = () => {
-    actions.copyPath()
-      .then(() => pushToast({ kind: 'success', message: '路径已复制' }))
-      .catch(() => pushToast({ kind: 'error', message: '复制失败' }))
-  }
+    actions
+      .copyPath()
+      .then(() => pushToast({ kind: "success", message: "路径已复制" }))
+      .catch(() => pushToast({ kind: "error", message: "复制失败" }));
+  };
 
   const toggleFavorite = () => {
     if (isFav) {
       toggleFav(detail.path)
-        .then(() => pushToast({ kind: 'success', message: '已取消收藏' }))
-        .catch(() => pushToast({ kind: 'error', message: '操作失败' }))
+        .then(() => pushToast({ kind: "success", message: "已取消收藏" }))
+        .catch(() => pushToast({ kind: "error", message: "操作失败" }));
     } else {
       addFav(detail.path)
-        .then(() => pushToast({ kind: 'success', message: '已加入收藏' }))
-        .catch(() => pushToast({ kind: 'error', message: '操作失败' }))
+        .then(() => pushToast({ kind: "success", message: "已加入收藏" }))
+        .catch(() => pushToast({ kind: "error", message: "操作失败" }));
     }
-  }
+  };
 
   // 防御：API 可能返回 null
-  const imageFiles = detail.imageFiles ?? []
+  const imageFiles = detail.imageFiles ?? [];
 
   if (imageFiles.length === 0) {
     return (
@@ -396,22 +423,25 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
           description="可能扫描时尚未加载到图片列表，请重新扫描。"
         />
       </div>
-    )
+    );
   }
 
   const gridCls =
-    gridSize === 'sm'
-      ? 'grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10'
-      : gridSize === 'lg'
-        ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5'
-        : 'grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6'
+    gridSize === "sm"
+      ? "grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10"
+      : gridSize === "lg"
+        ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+        : "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6";
 
   const progressPct =
     progress && progress.total > 0
-      ? Math.min(100, Math.round((progress.index / Math.max(1, progress.total - 1)) * 100))
-      : null
+      ? Math.min(
+          100,
+          Math.round((progress.index / Math.max(1, progress.total - 1)) * 100),
+        )
+      : null;
   const isFinished =
-    !!progress && progress.total > 0 && progress.index >= progress.total - 1
+    !!progress && progress.total > 0 && progress.index >= progress.total - 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -436,7 +466,9 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
               <span>返回</span>
             </button>
             <span className="text-fg-subtle/50 text-xs">/</span>
-            <span className="text-xs text-fg-muted truncate">{detail.name}</span>
+            <span className="text-xs text-fg-muted truncate">
+              {detail.name}
+            </span>
           </div>
 
           <div className="flex items-end gap-8 flex-wrap">
@@ -470,15 +502,23 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                   </>
                 )}
                 <span className="tabular-nums">
-                  {detail.imageCount > 0 ? `${detail.imageCount} 张` : ''}
-                  {detail.imageCount > 0 && (detail.videoCount ?? 0) > 0 ? ' · ' : ''}
-                  {(detail.videoCount ?? 0) > 0 ? `${detail.videoCount} 个视频` : ''}
-                  {detail.imageCount === 0 && (detail.videoCount ?? 0) === 0 ? '0 张' : ''}
+                  {detail.imageCount > 0 ? `${detail.imageCount} 张` : ""}
+                  {detail.imageCount > 0 && (detail.videoCount ?? 0) > 0
+                    ? " · "
+                    : ""}
+                  {(detail.videoCount ?? 0) > 0
+                    ? `${detail.videoCount} 个视频`
+                    : ""}
+                  {detail.imageCount === 0 && (detail.videoCount ?? 0) === 0
+                    ? "0 张"
+                    : ""}
                 </span>
                 {detail.folderSize > 0 && (
                   <>
                     <span className="text-fg-subtle/50">·</span>
-                    <span className="tabular-nums">{formatSize(detail.folderSize)}</span>
+                    <span className="tabular-nums">
+                      {formatSize(detail.folderSize)}
+                    </span>
                   </>
                 )}
                 {detail.modTime && (
@@ -535,8 +575,8 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                 ) : (
                   <button
                     onClick={() => {
-                      openGallery(0)
-                      pushToast({ kind: 'info', message: '开始浏览' })
+                      openGallery(0);
+                      pushToast({ kind: "info", message: "开始浏览" });
                     }}
                     className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-accent text-accent-contrast hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
                   >
@@ -549,12 +589,12 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                   onClick={toggleFavorite}
                   className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] transition-colors ${
                     isFav
-                      ? 'bg-warning/10 text-warning border border-warning/30'
-                      : 'border border-border-faint text-fg-muted hover:text-fg hover:bg-bg-subtle'
+                      ? "bg-warning/10 text-warning border border-warning/30"
+                      : "border border-border-faint text-fg-muted hover:text-fg hover:bg-bg-subtle"
                   }`}
                 >
                   <StarIcon size={13} filled={isFav} />
-                  <span>{isFav ? '已收藏' : '收藏'}</span>
+                  <span>{isFav ? "已收藏" : "收藏"}</span>
                 </button>
 
                 <div ref={moreRef} className="relative">
@@ -570,8 +610,8 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                     <div className="absolute right-0 top-full mt-1.5 min-w-[180px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up">
                       <button
                         onClick={() => {
-                          setMoreOpen(false)
-                          openInExplorer()
+                          setMoreOpen(false);
+                          openInExplorer();
                         }}
                         disabled={!fsCapabilities.allowOsOpen}
                         className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -581,8 +621,8 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                       </button>
                       <button
                         onClick={() => {
-                          setMoreOpen(false)
-                          copyPath()
+                          setMoreOpen(false);
+                          copyPath();
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
                       >
@@ -604,46 +644,46 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
         <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
           所有页面
         </h2>
-        <span className="text-[11px] text-fg-subtle tabular-nums">{imageFiles.length} 张</span>
+        <span className="text-[11px] text-fg-subtle tabular-nums">
+          {imageFiles.length} 张
+        </span>
         <span className="text-fg-subtle/40">·</span>
         <div className="flex items-center border border-border-faint rounded-md overflow-hidden text-xs ml-auto">
-          {(['sm', 'md', 'lg'] as const).map((k) => (
+          {(["sm", "md", "lg"] as const).map((k) => (
             <button
               key={k}
               onClick={() => setGridSize(k)}
               className={`h-7 px-2.5 transition-colors ${
                 gridSize === k
-                  ? 'bg-bg-subtle text-fg'
-                  : 'text-fg-muted hover:text-fg'
+                  ? "bg-bg-subtle text-fg"
+                  : "text-fg-muted hover:text-fg"
               }`}
-              title={k === 'sm' ? '密集' : k === 'md' ? '标准' : '宽松'}
-              aria-label={k === 'sm' ? '密集' : k === 'md' ? '标准' : '宽松'}
+              title={k === "sm" ? "密集" : k === "md" ? "标准" : "宽松"}
+              aria-label={k === "sm" ? "密集" : k === "md" ? "标准" : "宽松"}
             >
-              {(k === 'sm' ? 'S' : k === 'md' ? 'M' : 'L')}
+              {k === "sm" ? "S" : k === "md" ? "M" : "L"}
             </button>
           ))}
         </div>
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className={`grid ${gridCls} gap-2 px-6 lg:px-10 pb-10 max-w-[1400px] mx-auto`}>
+        <div
+          className={`grid ${gridCls} gap-2 px-6 lg:px-10 pb-10 max-w-[1400px] mx-auto`}
+        >
           {imageFiles.map((img, i) => {
-            const isCurrent = progress && i === progress.index
-            const isPast = progress && i < progress.index
+            const isCurrent = progress && i === progress.index;
+            const isPast = progress && i < progress.index;
             return (
               <button
                 key={img}
                 onClick={() => openGallery(i)}
                 onContextMenu={(e) => {
-                  e.preventDefault()
-                  setContextMenu({ x: e.clientX, y: e.clientY, index: i })
+                  e.preventDefault();
+                  setContextMenu({ x: e.clientX, y: e.clientY, index: i });
                 }}
                 className={`group relative aspect-[3/4] bg-bg-subtle rounded overflow-hidden transition-all ${
-                  isCurrent
-                    ? 'ring-2 ring-accent'
-                    : isPast
-                      ? 'opacity-70'
-                      : ''
+                  isCurrent ? "ring-2 ring-accent" : isPast ? "opacity-70" : ""
                 }`}
                 title={`第 ${i + 1} 张`}
               >
@@ -662,7 +702,7 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
                   {i + 1}
                 </div>
               </button>
-            )
+            );
           })}
         </div>
       </div>
@@ -672,47 +712,51 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
           x={contextMenu.x}
           y={contextMenu.y}
           items={[
-            { id: 'open', label: '打开此页', icon: <ArrowRightLineIcon size={12} /> },
             {
-              id: 'favorite',
-              label: isFav ? '取消收藏' : '收藏',
+              id: "open",
+              label: "打开此页",
+              icon: <ArrowRightLineIcon size={12} />,
+            },
+            {
+              id: "favorite",
+              label: isFav ? "取消收藏" : "收藏",
               icon: <StarIcon size={12} />,
             },
-            { id: 'sep1', separator: true } as AnyMenuItem,
+            { id: "sep1", separator: true } as AnyMenuItem,
             {
-              id: 'explorer',
-              label: '在资源管理器中打开',
+              id: "explorer",
+              label: "在资源管理器中打开",
               icon: <ArrowUpRightIcon size={12} />,
               disabled: !fsCapabilities.allowOsOpen,
             },
-            { id: 'copy', label: '复制路径', icon: <CopyIcon size={12} /> },
-            { id: 'sep2', separator: true } as AnyMenuItem,
-            { id: 'properties', label: '属性', icon: <InfoIcon size={12} /> },
+            { id: "copy", label: "复制路径", icon: <CopyIcon size={12} /> },
+            { id: "sep2", separator: true } as AnyMenuItem,
+            { id: "properties", label: "属性", icon: <InfoIcon size={12} /> },
           ]}
           onSelect={(id) => {
             switch (id) {
-              case 'open':
-                openGallery(contextMenu.index)
-                break
-              case 'favorite':
-                toggleFavorite()
-                break
-              case 'explorer':
-                openInExplorer()
-                break
-              case 'copy':
-                copyPath()
-                break
-              case 'properties': {
-                const img = imageFiles[contextMenu.index]
+              case "open":
+                openGallery(contextMenu.index);
+                break;
+              case "favorite":
+                toggleFavorite();
+                break;
+              case "explorer":
+                openInExplorer();
+                break;
+              case "copy":
+                copyPath();
+                break;
+              case "properties": {
+                const img = imageFiles[contextMenu.index];
                 if (img) {
-                  setPropsPath(img)
-                  setPropsOpen(true)
+                  setPropsPath(img);
+                  setPropsOpen(true);
                 }
-                break
+                break;
               }
             }
-            setContextMenu(null)
+            setContextMenu(null);
           }}
           onClose={() => setContextMenu(null)}
         />
@@ -723,12 +767,12 @@ function AlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void
         open={propsOpen}
         absPath={propsPath}
         onClose={() => {
-          setPropsOpen(false)
-          setPropsPath(null)
+          setPropsOpen(false);
+          setPropsPath(null);
         }}
       />
     </div>
-  )
+  );
 }
 
 function CollectionView({
@@ -741,18 +785,18 @@ function CollectionView({
   isFavorite,
   onOpenAuthor,
 }: {
-  detail: CollectionDetail | SmartDetail
-  query: string
+  detail: CollectionDetail | SmartDetail;
+  query: string;
   // 复用全局 SortKey:Album 详情也支持「最近看」('viewed' 用 history 排序)
-  sortBy: 'name' | 'count' | 'recent' | 'viewed'
-  viewMode: 'grid' | 'list'
-  onBack: () => void
-  onToggleFav: () => void
-  isFavorite: boolean
-  onOpenAuthor?: (author: string) => void
+  sortBy: "name" | "count" | "recent" | "viewed";
+  viewMode: "grid" | "list";
+  onBack: () => void;
+  onToggleFav: () => void;
+  isFavorite: boolean;
+  onOpenAuthor?: (author: string) => void;
 }) {
-  const isSmart = detail.type === 'smartCollection'
-  const title = isSmart ? detail.author : detail.name
+  const isSmart = detail.type === "smartCollection";
+  const title = isSmart ? detail.author : detail.name;
 
   // 集合:把直属于本层的 Albums + 嵌套子集合 Collections 都展平成统一
   // 的 CardData 列表渲染。子集合(5 层嵌套的中间层)用 variant=
@@ -760,12 +804,12 @@ function CollectionView({
   const allCards: CardData[] = useMemo(() => {
     if (isSmart) {
       // smartCollection 不支持嵌套,按旧行为
-      return []
+      return [];
     }
-    const c = detail as CollectionDetail
+    const c = detail as CollectionDetail;
     const albumCards: CardData[] = (c.albums ?? []).map((a) => ({
-      id: 'a:' + a.path,
-      variant: 'album',
+      id: "a:" + a.path,
+      variant: "album",
       title: a.name,
       subtitle: a.author,
       count: a.imageCount,
@@ -774,63 +818,68 @@ function CollectionView({
       coverPath: a.coverImage,
       coverKind: a.coverKind,
       to: `/albums/${encodeURIComponent(a.path)}`,
-    }))
+    }));
     const collCards: CardData[] = (c.collections ?? []).map((sub) => {
       // 嵌套子集合:cover 取第一个子相册的封面;count = 直属于子集合
       // 的子相册数(不含更深嵌套,用户能点进去看)。
-      const firstCover = sub.albums?.[0]?.coverImage
-        ?? sub.collections?.[0]?.albums?.[0]?.coverImage
-        ?? ''
+      const firstCover =
+        sub.albums?.[0]?.coverImage ??
+        sub.collections?.[0]?.albums?.[0]?.coverImage ??
+        "";
       return {
-        id: 'c:' + sub.path,
-        variant: 'collection',
+        id: "c:" + sub.path,
+        variant: "collection",
         title: sub.name,
-        subtitle: '子集合',
+        subtitle: "子集合",
         count: sub.albumCount,
         coverPath: firstCover,
         to: `/albums/${encodeURIComponent(sub.path)}`,
-      }
-    })
-    return [...albumCards, ...collCards]
-  }, [detail, isSmart])
+      };
+    });
+    return [...albumCards, ...collCards];
+  }, [detail, isSmart]);
 
   const filtered = useMemo(() => {
-    const items = allCards.filter((c) => !query || c.title.toLowerCase().includes(query.toLowerCase()))
+    const items = allCards.filter(
+      (c) => !query || c.title.toLowerCase().includes(query.toLowerCase()),
+    );
     switch (sortBy) {
-      case 'count':
-        return items.sort((a, b) => b.count - a.count)
-      case 'recent':
-        return items.sort((a, b) => (b.title || '').localeCompare(a.title || ''))
-      case 'viewed':
+      case "count":
+        return items.sort((a, b) => b.count - a.count);
+      case "recent":
+        return items.sort((a, b) =>
+          (b.title || "").localeCompare(a.title || ""),
+        );
+      case "viewed":
         // Album 详情没有完整 history 数据(子卡片可能很多),按 title 兜底
-        return items.sort((a, b) => a.title.localeCompare(b.title))
+        return items.sort((a, b) => a.title.localeCompare(b.title));
       default:
-        return items.sort((a, b) => a.title.localeCompare(b.title))
+        return items.sort((a, b) => a.title.localeCompare(b.title));
     }
-  }, [allCards, query, sortBy])
+  }, [allCards, query, sortBy]);
 
-  const cards = filtered
+  const cards = filtered;
 
   // 子集合页时间线:对当前集合下的子 album/子 collection 重新分桶,跟首页
   // 视觉一致(顶部 YearTimeline + 下方网格)。smartCollection 不分时间,
   // 因为智能合集是"主题"不是"时间"。
   const yearGroups = useMemo(() => {
-    if (isSmart) return []
-    const c = detail as CollectionDetail
-    return groupAlbumsAndCollectionsByYear(c.albums ?? [], c.collections ?? [])
-  }, [detail, isSmart])
+    if (isSmart) return [];
+    const c = detail as CollectionDetail;
+    return groupAlbumsAndCollectionsByYear(c.albums ?? [], c.collections ?? []);
+  }, [detail, isSmart]);
 
   // 集合/智能合集页面作为上下文源
   const collEntries = useMemo<GalleryContextEntry[]>(
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [cards],
-  )
+  );
   useGalleryContextSync(
     isSmart
-      ? { type: 'tag', tag: detail.author }
-      : { type: 'album', parentPath: detail.path },
+      ? { type: "tag", tag: detail.author }
+      : { type: "album", parentPath: detail.path },
     collEntries,
-  )
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -851,7 +900,7 @@ function CollectionView({
                 <FolderIcon size={13} className="text-fg-muted" />
               )}
               <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
-                {isSmart ? '标签' : '集合'}
+                {isSmart ? "标签" : "集合"}
               </span>
             </div>
             <h1 className="font-display text-2xl font-semibold tracking-tight truncate">
@@ -873,12 +922,12 @@ function CollectionView({
               onClick={onToggleFav}
               className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs transition-colors ${
                 isFavorite
-                  ? 'bg-warning/10 text-warning hover:bg-warning/15'
-                  : 'border border-border-faint hover:bg-bg-subtle text-fg-muted'
+                  ? "bg-warning/10 text-warning hover:bg-warning/15"
+                  : "border border-border-faint hover:bg-bg-subtle text-fg-muted"
               }`}
             >
               <StarIcon size={12} filled={isFavorite} />
-              <span>{isFavorite ? '已收藏' : '收藏'}</span>
+              <span>{isFavorite ? "已收藏" : "收藏"}</span>
             </button>
           )}
         </div>
@@ -904,47 +953,56 @@ function CollectionView({
           </div>
         )}
         {cards.length === 0 ? (
-          <EmptyState title="无匹配结果" description="试试修改搜索条件或排序。" />
+          <EmptyState
+            title="无匹配结果"
+            description="试试修改搜索条件或排序。"
+          />
         ) : (
           <AlbumGrid items={cards} variant={viewMode} />
         )}
       </div>
     </div>
-  )
+  );
 }
 
 // 纯视频专辑视图：与 AlbumView 视觉骨架一致（hero + 元信息 + CTA），
 // 主体用 3:4 网格展示视频文件，每格用 VideoCoverImage（自动抽帧）。
 // 点击 → /gallery?type=video&path=<album>&index=<n>&name=<file>。
-function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () => void }) {
-  const navigate = useNavigate()
-  const { add: addFav, toggle: toggleFav, favorites } = useFavorites()
-  const pushToast = useUIStore((s) => s.pushToast)
-  const isFav = favorites.includes(detail.path)
-  const videos = detail.videoFiles ?? []
-  const isFinished = false // 视频专辑进度按"全部看完"算；v1 暂不显示
+function VideoAlbumView({
+  detail,
+  onBack,
+}: {
+  detail: AlbumDetail;
+  onBack: () => void;
+}) {
+  const navigate = useNavigate();
+  const { add: addFav, toggle: toggleFav, favorites } = useFavorites();
+  const pushToast = useUIStore((s) => s.pushToast);
+  const isFav = favorites.includes(detail.path);
+  const videos = detail.videoFiles ?? [];
+  const isFinished = false; // 视频专辑进度按"全部看完"算；v1 暂不显示
 
   const openVideo = (idx: number) => {
     const qs = new URLSearchParams({
       path: detail.path,
       index: String(idx),
       name: detail.name,
-      type: 'video',
-    })
-    navigate(`/gallery?${qs.toString()}`)
-  }
+      type: "video",
+    });
+    navigate(`/gallery?${qs.toString()}`);
+  };
 
   const toggleFavorite = () => {
     if (isFav) {
       toggleFav(detail.path)
-        .then(() => pushToast({ kind: 'success', message: '已取消收藏' }))
-        .catch(() => pushToast({ kind: 'error', message: '操作失败' }))
+        .then(() => pushToast({ kind: "success", message: "已取消收藏" }))
+        .catch(() => pushToast({ kind: "error", message: "操作失败" }));
     } else {
       addFav(detail.path)
-        .then(() => pushToast({ kind: 'success', message: '已加入收藏' }))
-        .catch(() => pushToast({ kind: 'error', message: '操作失败' }))
+        .then(() => pushToast({ kind: "success", message: "已加入收藏" }))
+        .catch(() => pushToast({ kind: "error", message: "操作失败" }));
     }
-  }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -964,13 +1022,19 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
               <span>返回</span>
             </button>
             <span className="text-fg-subtle/50 text-xs">/</span>
-            <span className="text-xs text-fg-muted truncate">{detail.name}</span>
+            <span className="text-xs text-fg-muted truncate">
+              {detail.name}
+            </span>
           </div>
 
           <div className="flex items-end gap-8 flex-wrap">
             {/* 大封面（视频时由 VideoCoverImage 处理抽帧） */}
             <div className="relative w-32 h-44 sm:w-40 sm:h-56 rounded-lg overflow-hidden border border-border shadow-md shrink-0 bg-bg-subtle">
-              <VideoCoverImage videoPath={detail.coverImage} alt={detail.name} loading="eager" />
+              <VideoCoverImage
+                videoPath={detail.coverImage}
+                alt={detail.name}
+                loading="eager"
+              />
             </div>
 
             <div className="min-w-0 flex-1">
@@ -988,7 +1052,9 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
                 {detail.folderSize > 0 && (
                   <>
                     <span className="text-fg-subtle/50">·</span>
-                    <span className="tabular-nums">{formatSize(detail.folderSize)}</span>
+                    <span className="tabular-nums">
+                      {formatSize(detail.folderSize)}
+                    </span>
                   </>
                 )}
                 {detail.modTime && (
@@ -1024,12 +1090,12 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
                   onClick={toggleFavorite}
                   className={`inline-flex items-center gap-1.5 h-10 px-3.5 rounded-lg text-[13px] transition-colors ${
                     isFav
-                      ? 'bg-warning/10 text-warning border border-warning/30'
-                      : 'border border-border-faint text-fg-muted hover:text-fg hover:bg-bg-subtle'
+                      ? "bg-warning/10 text-warning border border-warning/30"
+                      : "border border-border-faint text-fg-muted hover:text-fg hover:bg-bg-subtle"
                   }`}
                 >
                   <StarIcon size={13} filled={isFav} />
-                  <span>{isFav ? '已收藏' : '收藏'}</span>
+                  <span>{isFav ? "已收藏" : "收藏"}</span>
                 </button>
               </div>
             </div>
@@ -1043,13 +1109,15 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
         <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
           全部视频
         </h2>
-        <span className="text-[11px] text-fg-subtle tabular-nums">{videos.length} 个</span>
+        <span className="text-[11px] text-fg-subtle tabular-nums">
+          {videos.length} 个
+        </span>
       </div>
 
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 px-6 lg:px-10 pb-10 max-w-[1400px] mx-auto">
           {videos.map((video, i) => {
-            const name = video.split(/[\\/]/).pop() ?? video
+            const name = video.split(/[\\/]/).pop() ?? video;
             return (
               <button
                 key={video}
@@ -1068,15 +1136,17 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
                 </div>
                 {/* 标题条 */}
                 <div className="absolute bottom-0 inset-x-0 px-1.5 py-1 bg-gradient-to-t from-black/60 to-transparent">
-                  <div className="text-[10px] text-white/90 truncate">{name}</div>
+                  <div className="text-[10px] text-white/90 truncate">
+                    {name}
+                  </div>
                 </div>
               </button>
-            )
+            );
           })}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // 在 collections 树里递归查找 path。
@@ -1086,13 +1156,13 @@ function VideoAlbumView({ detail, onBack }: { detail: AlbumDetail; onBack: () =>
 // 只在顶层查，导致「文件夹里面的子文件夹无法正常加载」—— 401 个文件夹中
 // 任何深层集合都拿不到。
 function findCollectionRecursive(
-  collections: ScanResult['collections'],
+  collections: ScanResult["collections"],
   path: string,
-): ScanResult['collections'][number] | null {
+): ScanResult["collections"][number] | null {
   for (const c of collections) {
-    if (c.path === path) return c
-    const nested = findCollectionRecursive(c.collections ?? [], path)
-    if (nested) return nested
+    if (c.path === path) return c;
+    const nested = findCollectionRecursive(c.collections ?? [], path);
+    if (nested) return nested;
   }
-  return null
+  return null;
 }

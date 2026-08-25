@@ -24,19 +24,22 @@
 ## 能力清单
 
 ### 库与扫描
+
 - 多个媒体根目录并入一个全局库
 - 异步扫描 + SSE 实时进度，可取消
 - worker pool（`min(8, NumCPU)`），大库不卡
-- 扫描结果内存缓存，`/api/scan/latest` 立即返回
+- 扫描结果内存 + 磁盘缓存，`GET /api/library` 立即返回
 - **扫描排除规则**：跳过隐藏目录 + 系统白名单 + 用户 glob 模式（`node_modules` / `temp*` 等）
 
 ### 缩略图
+
 - LRU（默认 500 项）+ 磁盘双层缓存
 - mtime 失效：源文件改了，缓存自动重生成
 - 视频封面：服务端 ffmpeg `-ss` before `-i` 抽帧，浏览器零内存负担
 - HEIC/HEIF 直出（Safari 16+ 原生解码）
 
 ### 视频
+
 - 原生 `<video>` 播放，Range / ETag 协商
 - ffprobe 元数据，列表卡片渲染时就有时长/分辨率/码率
 - faststart：自动 remux，moov 跑到 mdat 前面，"0:00 卡死"问题自动消失
@@ -45,6 +48,7 @@
 - 转码 singleflight 去重 + 全局并发限流 + 可取消
 
 ### 画廊
+
 - 3 种显示模式：单张 / 连续滚动 / 双张并排
 - 4 种图片适配：适应 / 按宽 / 按高 / 原始（按 `F` 循环）
 - 缩放 / 旋转 / 90° 翻转 / 全屏
@@ -52,16 +56,19 @@
 - 幻灯片自动播放
 
 ### 视频播放器
+
 - 原生 `<video controls>` + 增强快捷键
 - `Space/K` 播放暂停，`←/→` 跳 5 秒，`↑/↓` 音量 ±10%，`M` 静音
 - 视频元数据（时长 / 尺寸 / 编码 / 码率）随列表渲染，无需等加载
 
 ### 主题与外观
+
 - light / dark / system 三态
 - 6 套强调色：graphite / indigo / rose / forest / ochre / plum
 - CSS 变量驱动，主题切换一次 reflow 不重渲组件树
 
 ### 导航与搜索
+
 - 主页：年份时间线（海报式 4:5 卡）+ 全库网格
 - 悬停预览：240×300 放大卡，含进度条 / 上次阅读 / 张数
 - 全局搜索（`/` 聚焦）模糊匹配 name / 标签
@@ -73,16 +80,18 @@
 - `N` / `P` 跨卷翻页
 
 ### 持久化
+
 - 收藏：跨设备，`POST /api/favorites` 幂等
 - 最近：LRU，去重，最多 10 条
 - 阅读进度：单张 / 双张 / 连续模式都跟踪
 - 偏好：原子写（tmp + rename），崩溃不丢
 
-### 路径安全
-- 所有 `?path=` 走 `path_safety` 中间件
-- 必须在任一 `mediaRoots` 之下
-- `smart:<tag>` 前缀单独放行（智能合集查询）
-- 越权一律 400
+### 资源安全
+
+- 公共 API 只接受 `r_` / `a_` / `c_` / `f_` 稳定资源 ID
+- 绝对路径只存在于后端进程内部；库快照、URL、日志和浏览器 store 均不暴露
+- ID 解析后仍由 `path_safety` 校验必须位于配置根目录内
+- 配置与系统打开接口仅允许回环地址访问，越权请求一律拒绝
 
 ---
 
@@ -125,22 +134,22 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 
 所有运行时参数集中在 `backend/config.yaml`（默认相对后端 CWD 查找）。完整字段见 [`backend/config.example.yaml`](./backend/config.example.yaml)。
 
-| 字段 | 说明 |
-|------|------|
-| `mediaRoots` | 媒体根目录数组，必填。旧名 `mediaRoot` / `comicRoot` 仍可识别（首次保存后会被规范化为 `mediaRoots[]`） |
-| `host` / `port` | 监听地址 / 端口 |
-| `cacheDir` | 缩略图 / 视频缓存根目录，未配置时自动 `./.local-gallery/` |
-| `thumbSizeW` / `thumbSizeH` | 缩略图尺寸 |
-| `thumbCacheSize` | LRU 内存缓存项数 |
-| `cacheMaxAgeDays` | 磁盘缓存保留天数 |
-| `ffmpegPath` | ffmpeg / ffprobe 路径，留空则自动探测 `bin/ffmpeg/<os>/<arch>/` |
-| `allowOsOpen` | 是否允许 `/api/fs/open` 在系统资源管理器里打开 |
-| `staticDir` | 前端构建产物目录（生产单端口托管用） |
-| `skipHidden` | 是否跳过以 `.` 开头的隐藏目录（默认 true） |
-| `excludePatterns` | 扫描时跳过的目录/文件名 glob 模式列表，每行一条；按 basename 匹配任意深度 |
-| `systemFiles` | 在内置白名单（Thumbs.db / desktop.ini / .DS_Store）之上追加跳过的系统文件 |
+| 字段                        | 说明                                                                      |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `mediaRoots`                | 媒体根目录数组，必填；这是唯一的媒体根配置字段                            |
+| `host` / `port`             | 监听地址 / 端口                                                           |
+| `cacheDir`                  | 缩略图 / 视频缓存根目录，未配置时自动 `./.local-gallery/`                 |
+| `thumbSizeW` / `thumbSizeH` | 缩略图尺寸                                                                |
+| `thumbCacheSize`            | LRU 内存缓存项数                                                          |
+| `cacheMaxAgeDays`           | 磁盘缓存保留天数                                                          |
+| `ffmpegPath`                | ffmpeg / ffprobe 路径，留空则自动探测 `bin/ffmpeg/<os>/<arch>/`           |
+| `allowOsOpen`               | 是否允许 `/api/fs/open` 在系统资源管理器里打开                            |
+| `staticDir`                 | 前端构建产物目录（生产单端口托管用）                                      |
+| `skipHidden`                | 是否跳过以 `.` 开头的隐藏目录（默认 true）                                |
+| `excludePatterns`           | 扫描时跳过的目录/文件名 glob 模式列表，每行一条；按 basename 匹配任意深度 |
+| `systemFiles`               | 在内置白名单（Thumbs.db / desktop.ini / .DS_Store）之上追加跳过的系统文件 |
 
-启动参数只保留 `--config <yaml>` 和 `--static-dir <dir>`。**不再支持环境变量或 CLI 覆盖**。
+启动参数只保留 `--config <yaml>`；`staticDir` 也从配置文件读取。**不支持环境变量或其他 CLI 覆盖**。
 配置项可在网页 `/settings` → 「服务端」里改，部分字段热生效（见 [`docs/API.md`](./docs/API.md)「配置项」一节）。
 
 ---
@@ -168,14 +177,14 @@ macOS / Linux 走 `bin/ffmpeg/<os>/<arch>/` 同形目录，安装脚本后续补
 
 ### 没有 ffmpeg 会怎样
 
-| 能力 | 有 ffmpeg | 无 ffmpeg |
-|------|-----------|-----------|
-| 缩略图（图片） | ✅ | ✅ |
-| 视频封面 | ffmpeg 抽帧，~339ms | 浏览器抽帧，30+ 秒，400MB+ 内存 |
-| 视频元数据 | ffprobe，~100ms | 等 `<video>` 加载完，秒级延迟 |
-| 视频播放 | ✅ | ✅ |
-| 冷门编码（AV1/HEVC/ProRes）| 自动转 H.264+AAC | 浏览器播不了就播不了 |
-| Faststart（moov 在末尾的 MP4）| 自动 remux | 浏览器可能 0:00 卡死 |
+| 能力                           | 有 ffmpeg           | 无 ffmpeg                       |
+| ------------------------------ | ------------------- | ------------------------------- |
+| 缩略图（图片）                 | ✅                  | ✅                              |
+| 视频封面                       | ffmpeg 抽帧，~339ms | 浏览器抽帧，30+ 秒，400MB+ 内存 |
+| 视频元数据                     | ffprobe，~100ms     | 等 `<video>` 加载完，秒级延迟   |
+| 视频播放                       | ✅                  | ✅                              |
+| 冷门编码（AV1/HEVC/ProRes）    | 自动转 H.264+AAC    | 浏览器播不了就播不了            |
+| Faststart（moov 在末尾的 MP4） | 自动 remux          | 浏览器可能 0:00 卡死            |
 
 ---
 
@@ -210,13 +219,13 @@ local-gallery/
 
 ## 文档导航
 
-| 文档 | 看什么 |
-|------|--------|
-| [README.md](./README.md) | 30 秒上手、能力清单、配置 |
-| [docs/FEATURES.md](./docs/FEATURES.md) | 全功能清单（按域分组，每项指向代码位置） |
-| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统设计、模块划分、数据流、性能 |
-| [docs/API.md](./docs/API.md) | HTTP 接口手册 |
-| [docs/SHORTCUTS.md](./docs/SHORTCUTS.md) | 快捷键全集（含视频播放器） |
+| 文档                                           | 看什么                                   |
+| ---------------------------------------------- | ---------------------------------------- |
+| [README.md](./README.md)                       | 30 秒上手、能力清单、配置                |
+| [docs/FEATURES.md](./docs/FEATURES.md)         | 全功能清单（按域分组，每项指向代码位置） |
+| [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统设计、模块划分、数据流、性能         |
+| [docs/API.md](./docs/API.md)                   | HTTP 接口手册                            |
+| [docs/SHORTCUTS.md](./docs/SHORTCUTS.md)       | 快捷键全集（含视频播放器）               |
 
 `?` 在应用里随时唤起可搜索的帮助浮层。
 
@@ -224,16 +233,16 @@ local-gallery/
 
 ## 开发
 
-| 操作 | 命令 |
-|------|------|
-| 启动后端 | `cd backend && go run ./cmd/server` |
-| 启动前端 | `cd frontend && npm run dev` |
-| 后端测试 | `cd backend && go test ./...` |
-| 前端单测 | `cd frontend && npm run test` |
-| 集成测试 | `cd backend && go test ./tests/integration -v` |
-| e2e | `cd frontend && npm run test:e2e` 或 `scripts/test-e2e.ps1` |
-| 全栈启动 | VSCode → "全栈: 后端 + 前端 (复合)" |
-| 全栈构建 | `scripts/build.ps1` 或 VSCode 任务 `build: all` |
+| 操作     | 命令                                                        |
+| -------- | ----------------------------------------------------------- |
+| 启动后端 | `cd backend && go run ./cmd/server`                         |
+| 启动前端 | `cd frontend && npm run dev`                                |
+| 后端测试 | `cd backend && go test ./...`                               |
+| 前端单测 | `cd frontend && npm run test`                               |
+| 集成测试 | `cd backend && go test ./tests/integration -v`              |
+| e2e      | `cd frontend && npm run test:e2e` 或 `scripts/test-e2e.ps1` |
+| 全栈启动 | VSCode → "全栈: 后端 + 前端 (复合)"                         |
+| 全栈构建 | `scripts/build.ps1` 或 VSCode 任务 `build: all`             |
 
 **改动业务逻辑必须同步改测试**——后端 handler / service / middleware → `go test`；前端组件 / hook / store → Vitest；跨层主链路 → integration / e2e。
 
@@ -241,19 +250,20 @@ local-gallery/
 
 ## 命名历史
 
-| 时期 | 项目名 | Go module | 默认缓存目录 | 查看器路由 |
-|------|--------|-----------|-------------|-----------|
-| v1（最初） | comic-reader | `tianlongxiang/comic-reader` | `.comic-reader/` | `/reader` |
-| v2（2026 早期） | image-viewer / 图像浏览器 | `tianlongxiang/comic-reader` | `.image-viewer/` | `/viewer` |
-| v3（当前） | local-gallery / 本地画廊 | `tianlongxiang/local-gallery` | `.local-gallery/` | `/gallery` |
+| 时期            | 项目名                    | Go module                     | 默认缓存目录      | 查看器路由 |
+| --------------- | ------------------------- | ----------------------------- | ----------------- | ---------- |
+| v1（最初）      | comic-reader              | `tianlongxiang/comic-reader`  | `.comic-reader/`  | `/reader`  |
+| v2（2026 早期） | image-viewer / 图像浏览器 | `tianlongxiang/comic-reader`  | `.image-viewer/`  | `/viewer`  |
+| v3（当前）      | local-gallery / 本地画廊  | `tianlongxiang/local-gallery` | `.local-gallery/` | `/gallery` |
 
-`config.yaml` 中的 `comicRoot` / `mediaRoot`（单数）仍可识别为单元素根目录，首次保存后被规范化为 `mediaRoots[]` —— 现有用户的旧配置不爆。
+配置仅保留当前 `mediaRoots[]` 契约，不维护已废弃的单数根目录别名。
 
 ---
 
 ## 不做什么
 
 诚实声明：
+
 - ❌ 不维护 CI / Release workflow（手动 release）
 - ❌ 不存数据库（偏好走服务端 JSON 原子写）
 - ❌ 不引入微服务 / 消息队列

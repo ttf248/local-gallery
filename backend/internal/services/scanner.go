@@ -2,6 +2,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -55,12 +56,12 @@ func (o ScanOptions) effectiveRoots() []string {
 //
 // 由 Scanner 在扫描过程中多次调用，提供给 AsyncScanRunner 转换为 SSE 事件。
 type ScanProgress struct {
-	Phase        string         // "scanning" / "smart-grouping"
-	CurrentPath  string         // 当前处理的目录/文件
-	Processed    int            // 已处理的子目录数
-	Total        int            // 总子目录数（用于计算百分比）
-	AlbumsFound  int            // 累计发现的相册数
-	NewAlbums    []models.Album // 本轮新发现的相册
+	Phase       string         // "scanning" / "smart-grouping"
+	CurrentPath string         // 当前处理的目录/文件
+	Processed   int            // 已处理的子目录数
+	Total       int            // 总子目录数（用于计算百分比）
+	AlbumsFound int            // 累计发现的相册数
+	NewAlbums   []models.Album // 本轮新发现的相册
 }
 
 // ScanHook 进度回调函数。
@@ -102,16 +103,27 @@ func (e *ScanError) Unwrap() error { return e.Err }
 // Scanner 漫画扫描器。
 type Scanner struct {
 	workers int
+	ctx     context.Context
 }
 
 // NewScanner 创建扫描器。
 func NewScanner() *Scanner {
-	return &Scanner{workers: min(8, runtime.NumCPU())}
+	return &Scanner{workers: min(8, runtime.NumCPU()), ctx: context.Background()}
 }
 
 // Scan 执行同步扫描。返回完整结果树。
 func (s *Scanner) Scan(opts ScanOptions) (*models.ScanResult, error) {
 	return s.ScanWithHook(opts, nil)
+}
+
+// ScanWithContext 执行可取消扫描；取消后不再继续读取新目录。
+func (s *Scanner) ScanWithContext(ctx context.Context, opts ScanOptions, hook ScanHook) (*models.ScanResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	scoped := *s
+	scoped.ctx = ctx
+	return scoped.ScanWithHook(opts, hook)
 }
 
 // ScanWithHook 与 Scan 相同，但额外接受一个进度回调。
@@ -158,6 +170,9 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 
 	// 逐根扫描；进度回调累计所有根的处理数
 	for _, absRoot := range absRoots {
+		if err := s.contextErr(); err != nil {
+			return nil, err
+		}
 		topEntries, _ := os.ReadDir(absRoot)
 		var topSubdirs []string
 		for _, e := range topEntries {
@@ -170,6 +185,9 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 		// 由调用方基于 elapsedMs 自行推断
 		topAlbums, topCollections := s.scanLayerWithHook(absRoot, absRoot, depth, 0, hook,
 			len(topSubdirs), 0, opts.Exclude)
+		if err := s.contextErr(); err != nil {
+			return nil, err
+		}
 
 		// 给所有产生的 album/collection 打 source 标签
 		srcName := filepath.Base(absRoot)
@@ -291,6 +309,9 @@ func (s *Scanner) scanLayerWithHook(
 	total, processedOffset int,
 	exclude ExcludeConfig,
 ) ([]models.Album, []models.Collection) {
+	if s.contextErr() != nil {
+		return nil, nil
+	}
 	entries, err := os.ReadDir(currentPath)
 	if err != nil {
 		return nil, nil
@@ -333,6 +354,9 @@ func (s *Scanner) scanLayerWithHook(
 		go func() {
 			defer wg.Done()
 			for p := range jobs {
+				if s.contextErr() != nil {
+					return
+				}
 				al, co := s.classifyAndScan(basePath, p, maxDepth, curDepth, exclude)
 				if al != nil {
 					results <- result{album: al, isAlbum: true}
@@ -355,20 +379,25 @@ func (s *Scanner) scanLayerWithHook(
 
 				if hook != nil {
 					hook(ScanProgress{
-						Phase:        "scanning",
-						CurrentPath:  currentPath,
-						Processed:    processed,
-						Total:        total,
-						AlbumsFound:  hookAlbumsFound,
-						NewAlbums:    nil,
+						Phase:       "scanning",
+						CurrentPath: currentPath,
+						Processed:   processed,
+						Total:       total,
+						AlbumsFound: hookAlbumsFound,
+						NewAlbums:   nil,
 					})
 				}
 			}
 		}()
 	}
 
+feedJobs:
 	for _, d := range subdirs {
-		jobs <- filepath.Join(currentPath, d.Name())
+		select {
+		case jobs <- filepath.Join(currentPath, d.Name()):
+		case <-s.ctx.Done():
+			break feedJobs
+		}
 	}
 	close(jobs)
 	wg.Wait()
@@ -395,8 +424,8 @@ func (s *Scanner) scanLayerWithHook(
 // 规则（含嵌套目录时严格不丢数据、不破坏导航层级）：
 //   - 仅顶层含图/视频且无子目录 → 纯 Album（最常见）
 //   - 顶层含图/视频 + 有子目录 → Collection：
-//       * 「散图」虚拟相册（Path=dir, ImageFiles=顶层文件, Name="散图"）
-//       * 每个子目录的扫描结果（Album 或 Collection）原样放进 Albums / Collections
+//   - 「散图」虚拟相册（Path=dir, ImageFiles=顶层文件, Name="散图"）
+//   - 每个子目录的扫描结果（Album 或 Collection）原样放进 Albums / Collections
 //     不再把子目录图合并进"散图"，否则用户点进 2024年 还是看到一坨
 //     3549 张混合图，没法继续下钻到 10.1国庆 这种子相册 —— 用户反馈
 //     「我需要保留子相册导航」。
@@ -409,6 +438,9 @@ func (s *Scanner) scanLayerWithHook(
 //   - 仅含视频 → 封面用第一个视频,CoverKind="video"（封面缩略图由前端抽帧后回填）
 //   - 仅含图 → 封面用第一张图,CoverKind="image"
 func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, exclude ExcludeConfig) (*models.Album, *models.Collection) {
+	if s.contextErr() != nil {
+		return nil, nil
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil
@@ -419,6 +451,9 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, 
 	var subdirs []os.DirEntry
 
 	for _, e := range entries {
+		if s.contextErr() != nil {
+			return nil, nil
+		}
 		if e.IsDir() {
 			// 子目录先收集,实际跳过与否在 scanLayer 里再判(集中逻辑,
 			// 避免这里和那里各写一遍 ShouldSkipDir)。
@@ -497,6 +532,13 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, 
 	}
 
 	return nil, nil
+}
+
+func (s *Scanner) contextErr() error {
+	if s == nil || s.ctx == nil {
+		return nil
+	}
+	return s.ctx.Err()
 }
 
 // buildAlbum 把「图片+视频」组装成一个 Album（不含任何子目录逻辑）。

@@ -219,7 +219,6 @@ func cloneConfig(c *Config) *Config {
 	if c.ExcludePatterns != nil {
 		cp.ExcludePatterns = append([]string(nil), c.ExcludePatterns...)
 	}
-	cp.syncFirstRoot()
 	return &cp
 }
 
@@ -248,7 +247,6 @@ func saveYAML(path string, cfg *Config) error {
 //
 // mediaRoots 始终序列化为数组；0 个元素时序列化为空数组 []，让用户明确"已配置但为空"。
 func marshalConfig(cfg *Config) ([]byte, error) {
-	cfg.syncFirstRoot()
 	root := &yaml.Node{
 		Kind: yaml.MappingNode,
 		Tag:  "!!map",
@@ -317,11 +315,9 @@ func stringSliceNode(s []string) *yaml.Node {
 }
 
 // applyPatch 把 patch 中的显式字段合并到 dst。Set 标志由 ConfigPatch 提供。
-// mediaRoots 切换时同时清空 LegacyComicRoot（保持与 LoadFile 一致）。
 func applyPatch(dst *Config, p *ConfigPatch) {
 	if p.MediaRootsSet {
 		dst.MediaRoots = append([]string(nil), p.MediaRoots...)
-		dst.LegacyComicRoot = ""
 	}
 	if p.HostSet {
 		dst.Host = p.Host
@@ -363,7 +359,6 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 	if p.ExcludePatternsSet {
 		dst.ExcludePatterns = append([]string(nil), p.ExcludePatterns...)
 	}
-	dst.syncFirstRoot()
 }
 
 // diffRequiresRestart 返回需要重启才能生效的字段名（仅在确实变化时返回）。

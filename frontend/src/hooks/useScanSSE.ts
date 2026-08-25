@@ -1,11 +1,11 @@
-import { useEffect } from 'react'
-import { useScanStore } from '../store/scanStore'
-import { sse } from '../api/client'
-import type { ProgressEvent } from '../api/scan'
+import { useEffect } from "react";
+import { useScanStore } from "../store/scanStore";
+import { sse } from "../api/client";
+import type { ProgressEvent } from "../api/scan";
 
 // 后端用 `event: <status>` 推送，所以前端必须显式列出要监听的 event 名称。
 // 与 backend/services 里的 ScanStatus 对齐。
-const SCAN_EVENTS = ['pending', 'running', 'complete', 'cancelled', 'error']
+const SCAN_EVENTS = ["pending", "running", "complete", "cancelled", "error"];
 
 // 扫描进度订阅（模块级单 EventSource + 引用计数 + 共享 store）。
 //
@@ -18,88 +18,88 @@ const SCAN_EVENTS = ['pending', 'running', 'complete', 'cancelled', 'error']
 //   - 模块第一次被 import 时立即挂 store watcher：保证启动扫描不依赖任何 hook
 //     已经挂载，store.setActive() 触发的进度会立刻被推送到所有读 store 的视图。
 
-let currentAbort: AbortController | null = null
-let subscriberCount = 0
-let storeUnsub: (() => void) | null = null
+let currentAbort: AbortController | null = null;
+let subscriberCount = 0;
+let storeUnsub: (() => void) | null = null;
 
 function ensureStoreWatch() {
-  if (storeUnsub) return
+  if (storeUnsub) return;
   storeUnsub = useScanStore.subscribe((state, prev) => {
-    if (state.scanId === prev.scanId) return
-    if (state.scanId) startSubscription(state.scanId)
-    else teardownConnection()
-  })
+    if (state.scanId === prev.scanId) return;
+    if (state.scanId) startSubscription(state.scanId);
+    else teardownConnection();
+  });
 }
 
 function startSubscription(scanId: string) {
   // 切到新 scanId 前先关旧连接
   if (currentAbort) {
-    currentAbort.abort()
-    currentAbort = null
+    currentAbort.abort();
+    currentAbort = null;
   }
-  const ac = new AbortController()
-  currentAbort = ac
+  const ac = new AbortController();
+  currentAbort = ac;
 
   sse(
-    `/api/scan/${scanId}/events`,
+    `/api/scans/${scanId}/events`,
     (_eventName, data) => {
-      const ev = data as ProgressEvent
-      useScanStore.getState().setProgress(ev)
+      const ev = data as ProgressEvent;
+      useScanStore.getState().setProgress(ev);
       if (
-        ev.status === 'complete' ||
-        ev.status === 'cancelled' ||
-        ev.status === 'error'
+        ev.status === "complete" ||
+        ev.status === "cancelled" ||
+        ev.status === "error"
       ) {
         // 终态：关连接 + 清 store.scanId（保留 progress 供 UI 读最后状态）
         if (currentAbort === ac) {
-          currentAbort = null
+          currentAbort = null;
         }
-        ac.abort()
-        useScanStore.setState({ scanId: null })
+        ac.abort();
+        useScanStore.setState({ scanId: null });
       }
     },
     {
       events: SCAN_EVENTS,
       signal: ac.signal,
     },
-  )
+  );
 }
 
 function teardownConnection() {
   if (currentAbort) {
-    currentAbort.abort()
-    currentAbort = null
+    currentAbort.abort();
+    currentAbort = null;
   }
-  useScanStore.getState().clear()
+  useScanStore.getState().clear();
 }
 
 export function useScanSSE() {
   // 第一次渲染时确保 store watcher 已挂上，并参与引用计数
   useEffect(() => {
-    ensureStoreWatch()
-    subscriberCount++
+    ensureStoreWatch();
+    subscriberCount++;
     return () => {
-      subscriberCount--
+      subscriberCount--;
       // 最后一个订阅者卸载时关连接 + 清 store
       if (subscriberCount === 0) {
-        teardownConnection()
+        teardownConnection();
       }
-    }
-  }, [])
+    };
+  }, []);
 
   // 直接读 zustand store（reactive：scanId/progress 变化自动 re-render 调用方）
-  const scanId = useScanStore((s) => s.scanId)
-  const progress = useScanStore((s) => s.progress)
+  const scanId = useScanStore((s) => s.scanId);
+  const progress = useScanStore((s) => s.progress);
 
   return {
     scanId,
     progress,
-    isRunning: progress?.status === 'running' || progress?.status === 'pending',
-    isComplete: progress?.status === 'complete',
-    isCancelled: progress?.status === 'cancelled',
-    isError: progress?.status === 'error',
+    isRunning: progress?.status === "running" || progress?.status === "pending",
+    isComplete: progress?.status === "complete",
+    isCancelled: progress?.status === "cancelled",
+    isError: progress?.status === "error",
     // 启动扫描：写 store.scanId，模块级 watcher 自动开 EventSource。
     startWith: (id: string) => useScanStore.getState().setActive(id),
     reset: () => useScanStore.getState().clear(),
-  }
+  };
 }
