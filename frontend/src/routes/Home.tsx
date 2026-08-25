@@ -7,8 +7,6 @@ import { useScanSSE } from '../hooks/useScanSSE'
 import { useFavorites } from '../hooks/useFavorites'
 import {
   useAllProgress,
-  useDeleteProgress,
-  useClearAllProgress,
   useMarkAsRead,
   useMarkAllAsRead,
 } from '../hooks/useReadingProgress'
@@ -25,6 +23,7 @@ import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { GalleryContextEntry } from '../utils/galleryContext'
 import { groupByYear, type YearGroup } from '../utils/albumGrouping'
+import { isInProgress } from '../utils/progress'
 import { thumbUrl } from '../api/thumbs'
 import {
   PlayFilledIcon,
@@ -172,35 +171,57 @@ export default function Home() {
     navigate(albumRoute(path))
   }
 
-  // 「继续阅读」管理：单本删除 / 一键清空。
-  // 复用 useReadingProgress 里已经提供的两个 mutation hook。
-  // 选 DELETE API（而非 reset to 0）的原因：
-  //   1. 「继续阅读」的语义就是用户已经看完了 / 不想再被记着，
-  //      真删比「重置进度」更贴近用户意图；
-  //   2. 这样 history 等其它数据不会被影响（reset to 0 也只动 progress，不会污染），
-  //      主要是 (1) 符合预期。
+  // 「继续阅读」管理：单本标记已读 / 一键全部标记已读。
+  //
+  // 关键决策：这里也走 mark-as-read（与「未读」一致），不走 DELETE。
+  // 原因：DELETE 删完 record 会变成「无 record」状态，立刻被「未读」判定
+  // 收编，给人「清空换皮出现」的错觉。mark-as-read 把 progress 推到 total，
+  // 配合 isInProgress 过滤（index < total 才算在读），这本就直接从首页两
+  // 个 hero 都消失。
+  //
+  // 真要「忘记这本」时仍可调 DELETE（后端保留），但 UI 上不再用。
   const qc = useQueryClient()
-  const removeContinue = useDeleteProgress()
-  const clearContinue = useClearAllProgress()
+  void qc
+  const markReadContinue = useMarkAsRead()
+  const markReadAllContinue = useMarkAllAsRead()
   const onRemoveContinue = (card: CardData) => {
     const path = decodeFavPath(card.to)
-    removeContinue.mutate(path, {
-      onSuccess: () =>
-        pushToast({ kind: 'info', message: `已从继续阅读移除「${card.title}」` }),
-      onError: () => pushToast({ kind: 'error', message: '移除失败,请重试' }),
-    })
+    const total = card.progress?.total ?? 0
+    if (total <= 0) {
+      pushToast({ kind: 'error', message: '该相册为空,无法标记' })
+      return
+    }
+    markReadContinue.mutate(
+      { path, total },
+      {
+        onSuccess: () =>
+          pushToast({ kind: 'info', message: `已将「${card.title}」标记为已读` }),
+        onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
+      },
+    )
   }
   const onClearContinue = () => {
     if (!inProgressAll.length) return
     const ok = window.confirm(
-      `清空所有继续阅读记录？\n\n将删除 ${inProgressAll.length} 本相册的阅读进度。\n此操作不影响收藏 / 最近 / 已读图。`,
+      `将 ${inProgressAll.length} 本相册全部标记为已读？\n\n操作不会删除文件,只是把阅读进度推到末尾。`,
     )
     if (!ok) return
-    clearContinue.mutate(undefined, {
+    const items = inProgressAll.map((c) => ({
+      path: decodeFavPath(c.to),
+      total: c.progress?.total ?? 0,
+    }))
+    markReadAllContinue.mutate(items, {
       onSuccess: (r) => {
-        pushToast({ kind: 'info', message: `已清空 ${r.removed} 条继续阅读记录` })
+        if (r.failed === 0) {
+          pushToast({ kind: 'info', message: `已将 ${r.ok} 本标记为已读` })
+        } else {
+          pushToast({
+            kind: 'error',
+            message: `已标记 ${r.ok} 本,失败 ${r.failed} 本`,
+          })
+        }
       },
-      onError: () => pushToast({ kind: 'error', message: '清空失败,请重试' }),
+      onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
     })
   }
 
@@ -272,15 +293,17 @@ export default function Home() {
     return out
   }, [result])
   const { data: progressMap } = useAllProgress(progressPaths)
+  // 「继续阅读」= 开始了但还没读完。已读完（index >= total）不再占位,
+  // 否则「未读 清空」会把同一本推进到 total,从「未读」滑到「继续阅读」,
+  // 视觉上是换皮出现。
   const inProgress = useMemo<CardData[]>(() => {
     if (!progressMap) return []
     const items: CardData[] = []
     for (const c of cards) {
       if (c.variant !== 'album') continue
       const k = decodeFavPath(c.to)
-      const p = progressMap[k]
-      if (!p || p.index <= 0) continue
-      items.push({ ...c, progress: { index: p.index, total: p.total } })
+      if (!isInProgress(progressMap[k])) continue
+      items.push({ ...c, progress: { index: progressMap[k].index, total: progressMap[k].total } })
     }
     return items
       .sort((a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0))
@@ -311,7 +334,8 @@ export default function Home() {
       sourceName?: string
     }) => {
       const p = progressMap[a.path]
-      if (!p || p.index <= 0) return
+      // 跟 inProgress 同语义:已开始但未读完。已读完不再占位(见 inProgress 注释)。
+      if (!isInProgress(p)) return
       items.push({
         id: 'c:' + a.path,
         variant: 'album',
@@ -983,7 +1007,12 @@ export function UnreadHero({
 //     用户一眼看到「这本还没看完」+ 「看到 23/50」
 //   - 点卡片直跳画廊(同 onContinue)— 不中转 Album 详情,减少 1 次点击
 //   - 单卡 hover 时露出 X,用来从继续阅读里移除某一本(不删图,只清该本进度)
-//   - 标题右侧有「清空」,一键清空所有继续阅读进度(带 confirm 二次确认)
+//   - 标题右侧有「清空」,一键把当前所有继续阅读相册标记为已读(带 confirm 二次确认)
+//
+// 「标记已读」vs「真删」:这里跟 UnreadHero 一致,全部走 mark-as-read。
+// 这样 progress 推到 total 后,既不进「未读」,也不进「继续阅读」,从首页
+// 两个 hero 都消失 — 用户不会再有「清空换皮出现」的错觉。后端 DELETE 接口
+// 仍保留供其它场景调用,UI 上不再走。
 export function ContinueReadingHero({
   cards,
   onContinue,
@@ -1015,7 +1044,7 @@ export function ContinueReadingHero({
           <button
             onClick={onClearAll}
             className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors"
-            title="清空所有继续阅读记录(不影响收藏 / 最近)"
+            title="把当前所有继续阅读相册标记为已读(不影响收藏 / 最近)"
           >
             <CloseIcon size={10} />
             清空
@@ -1087,8 +1116,9 @@ function ContinueCard({
             <FolderIcon size={20} />
           </div>
         )}
-        {/* 移除按钮：仅 hover/focus-visible 时显示。stopPropagation + preventDefault
-            避免点击 X 时也触发外层 div 的 onClick（跳画廊）。 */}
+        {/* 标记已读按钮：仅 hover/focus-visible 时显示。stopPropagation + preventDefault
+            避免点击 X 时也触发外层 div 的 onClick（跳画廊）。
+            语义:把 progress 推到 total,从「继续阅读」消失(也不再进「未读」)。 */}
         <button
           type="button"
           onClick={(e) => {
@@ -1097,8 +1127,8 @@ function ContinueCard({
             onRemove()
           }}
           className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/55 text-white/90 hover:bg-danger hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
-          title={`从继续阅读移除「${card.title}」`}
-          aria-label={`从继续阅读移除${card.title}`}
+          title={`将「${card.title}」标记为已读`}
+          aria-label={`将${card.title}标记为已读`}
         >
           <CloseIcon size={12} />
         </button>

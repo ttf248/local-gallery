@@ -93,9 +93,9 @@ describe('ContinueReadingHero', () => {
       makeCard(`/p${i}`, `P${i}`, i, 30),
     )
     const { container } = renderHero(eight)
-    const cardButtons = container.querySelectorAll('button[aria-label^="从继续阅读移除"]')
+    const cardButtons = container.querySelectorAll('button[aria-label^="将"][aria-label$="标记为已读"]')
     // 8 张里网格渲染只取前 6。每张卡有 1 个 X button 标 aria-label
-    // "从继续阅读移除X"，所以正好 6 个
+    // "将X标记为已读"，所以正好 6 个
     expect(cardButtons.length).toBe(6)
   })
 
@@ -109,7 +109,7 @@ describe('ContinueReadingHero', () => {
     const { onContinue, onRemove } = renderHero([
       makeCard('/a', 'A', 5, 20),
     ])
-    const xBtn = screen.getByLabelText('从继续阅读移除A')
+    const xBtn = screen.getByLabelText('将A标记为已读')
     fireEvent.click(xBtn)
     expect(onRemove).toHaveBeenCalledTimes(1)
     expect(onRemove.mock.calls[0][0].title).toBe('A')
@@ -118,7 +118,7 @@ describe('ContinueReadingHero', () => {
 
   it('点 清空 链接触发 onClearAll', () => {
     const { onClearAll } = renderHero([makeCard('/a', 'A', 1, 10)])
-    const clearBtn = screen.getByTitle(/清空所有继续阅读记录/)
+    const clearBtn = screen.getByTitle(/把当前所有继续阅读相册标记为已读/)
     fireEvent.click(clearBtn)
     expect(onClearAll).toHaveBeenCalledTimes(1)
   })

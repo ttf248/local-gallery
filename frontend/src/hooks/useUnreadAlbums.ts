@@ -4,14 +4,16 @@ import { useAllProgress } from './useReadingProgress'
 import { useFavorites } from './useFavorites'
 import type { CardData } from '../components/album/AlbumGrid'
 import { albumRoute } from '../utils/path'
+import { isUnread } from '../utils/progress'
 
 // useUnreadAlbums 给出当前未读(还没看 / 刚打开)的所有相册,按需携带
 // 收藏状态。返回值与 AlbumGrid 直接对接。
 //
-// 「未读」语义与 AlbumCard 里的 isFresh 保持一致:
+// 「未读」语义集中在 utils/progress.isUnread:
 //   - 没有 progress 记录
 //   - 或 progress.total === 0
 //   - 或 progress.index <= 0(刚翻到第 0 张算刚开始,不算「已读」)
+//   - index >= total(已读完) 不算未读,也不该再进「继续阅读」
 //
 // 调用方拿到 cards 后可自由 sort / filter(各 page 行为不同)。
 //
@@ -46,7 +48,10 @@ export function useUnreadAlbums(): {
     const out: CardData[] = []
     for (const a of result.albums) {
       const p = progressMap?.[a.path]
-      const isFresh = !p || p.total === 0 || p.index <= 0
+      // 跟 utils/progress.isInProgress 互斥:这里「未读」= 既不在读、也非已读完
+      // (实际就是 isUnread 的反义,但 isUnread 也把「total=0 空相册」算进去 —
+      //  空相册不丢,继续按未读展示)。
+      const isFresh = isUnread(p)
       if (!isFresh) continue
       // 即便是 isFresh(还没读)也把 progress 字段填上 — AlbumCard 用它
       // 决定「标记为已读」菜单项是否可点。未读卡片要能右键直接标已读,
