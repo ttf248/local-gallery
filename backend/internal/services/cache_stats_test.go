@@ -119,24 +119,26 @@ func TestCacheStatsService_PathChange(t *testing.T) {
 	}
 }
 
-// 子目录细分:thumbs / video-faststart / video-transcode 三类独立统计。
+// 子目录细分:thumbs(顶层 jpg)+ video-faststart / video-transcode(子目录)三类独立统计。
 // 验证:
-//  1. 子目录不存在 → Available=false,bytes/count=0(没产生过该类缓存)
-//  2. 子目录存在 → Available=true,bytes/count 与目录内实际相符
-//  3. 顶层 TotalBytes 包含三个子目录(主 + 三 sub 各自独立)
+//  1. thumbs:cacheDir 顶层 .jpg,Available=true,bytes/count 与实际相符
+//  2. 子目录不存在 → Available=false,bytes/count=0
+//  3. 子目录存在 → Available=true,bytes/count 与目录内实际相符
+//  4. 顶层 TotalBytes 包含 thumbs + 两个子目录 + 顶层元数据(主 + 三 sub 各自独立)
 func TestCacheStatsService_SubDir(t *testing.T) {
 	dir := t.TempDir()
-	// 模拟三个子目录各有不同字节数
+	// 模拟三种缓存各有不同字节数 + 顶层放一个非 jpg 元数据
 	mkFile := func(rel string, sz int) {
 		full := filepath.Join(dir, rel)
 		os.MkdirAll(filepath.Dir(full), 0o755)
 		os.WriteFile(full, make([]byte, sz), 0o644)
 	}
-	mkFile("thumbs/abc.jpg", 1000)
-	mkFile("thumbs/def.jpg", 2000)
+	// thumbs:实际写在 cacheDir 顶层(<md5>.jpg 命名),不放在 thumbs/ 子目录
+	mkFile("abc.jpg", 1000)
+	mkFile("def.jpg", 2000)
 	mkFile("video-faststart/xyz.mp4", 5000)
 	mkFile("video-transcode/pqr.mp4", 8000)
-	mkFile("prefs.json", 100) // 顶层小文件,不计入 sub
+	mkFile("prefs.json", 100) // 顶层 json 元数据,不该被 thumbs 算进去
 
 	svc := NewCacheStatsService(time.Second)
 	u, _, err := svc.Usage(dir)
@@ -176,7 +178,9 @@ func TestCacheStatsService_SubDir(t *testing.T) {
 	}
 }
 
-// 子目录不存在:Available=false(用户没产生过该类缓存),不报错
+// 顶层空:faststart/transcode 走子目录扫描 → Available=false;
+// thumbs 改走 cacheDir 顶层 jpg 扫描(目录在)→ Available=true 但文件数 0。
+// —— 详见 scanThumbsTopLevel 注释。
 func TestCacheStatsService_SubDirMissing(t *testing.T) {
 	dir := t.TempDir()
 	// 顶层空 — 整个 dir 存在但无子目录
@@ -185,8 +189,15 @@ func TestCacheStatsService_SubDirMissing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Thumbs:cacheDir 顶层扫描,目录存在 → Available=true,文件数 0
+	if !u.Thumbs.Available {
+		t.Errorf("Thumbs.Available should be true when cacheDir exists, got false")
+	}
+	if u.Thumbs.FileCount != 0 || u.Thumbs.Bytes != 0 {
+		t.Errorf("Thumbs should be empty in fresh dir, got %+v", u.Thumbs)
+	}
+	// Faststart / Transcode:子目录不存在 → Available=false
 	for name, sub := range map[string]SubUsage{
-		"Thumbs":         u.Thumbs,
 		"VideoFaststart": u.VideoFaststart,
 		"VideoTranscode": u.VideoTranscode,
 	} {
@@ -196,5 +207,57 @@ func TestCacheStatsService_SubDirMissing(t *testing.T) {
 		if sub.Bytes != 0 || sub.FileCount != 0 {
 			t.Errorf("%s should be empty when subdir missing, got %+v", name, sub)
 		}
+	}
+}
+
+// 回归测试:thumbs 统计 cacheDir 顶层的 .jpg/.jpeg 文件,
+// 跳过子目录(由 faststart/transcode 各自扫)和顶层元数据(.json 等)。
+// 这是修 scanSubDir("thumbs") 永远返回空 bug 的核心场景。
+func TestCacheStatsService_ThumbsTopLevel(t *testing.T) {
+	dir := t.TempDir()
+	// 三个 jpg,一个 jpeg,一个 png(应被忽略),一个 .json 元数据(应被忽略)
+	if err := os.WriteFile(filepath.Join(dir, "aa01.jpg"), make([]byte, 100), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "bb02.jpg"), make([]byte, 200), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "cc03.JPEG"), make([]byte, 300), 0o644); err != nil { // 大写扩展名也要认
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "thumb.png"), make([]byte, 999), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "scan_cache.json"), make([]byte, 50), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 子目录里的 jpg(应被忽略,不是顶层;faststart 子目录是合法子目录)
+	if err := os.MkdirAll(filepath.Join(dir, "video-faststart"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "video-faststart", "nested.jpg"), make([]byte, 888), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewCacheStatsService(100 * time.Millisecond)
+	u, _, err := svc.Usage(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !u.Thumbs.Available {
+		t.Error("Thumbs.Available should be true")
+	}
+	if u.Thumbs.FileCount != 3 {
+		t.Errorf("Thumbs.FileCount: got %d want 3 (3 .jpg/.jpeg at top level)", u.Thumbs.FileCount)
+	}
+	if u.Thumbs.Bytes != 600 {
+		t.Errorf("Thumbs.Bytes: got %d want 600 (100+200+300)", u.Thumbs.Bytes)
+	}
+	// 关键不变量:thumbs 不应误数子目录里的 jpg(nested.jpg 在
+	// video-faststart/ 下,只有 scanSubDir 才会数;scanThumbsTopLevel
+	// 只看顶层 ReadDir)。faststart 子目录里这个 nested.jpg 不会进 thumbs。
+	// 如果未来有人把 scanThumbsTopLevel 改成递归,这条断言会抓住。
+	if u.Thumbs.FileCount != 3 {
+		t.Errorf("nested.jpg leaked into thumbs.FileCount: %+v", u.Thumbs)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -142,8 +143,10 @@ func (s *CacheStatsService) Usage(cacheDir string) (*CacheUsage, *time.Time, err
 		ScannedAt:  time.Now(),
 		DurationMs: time.Since(start).Milliseconds(),
 		Available:  walkErr == nil,
-		// 按子目录细分:各自独立 WalkDir 一次,失败不影响主统计
-		Thumbs:         scanSubDir(filepath.Join(cacheDir, "thumbs")),
+		// 按子目录细分:thumbs 走顶层 .jpg(实际存放在 cacheDir 顶层),
+		// faststart / transcode 走子目录(由各自 service 写入子目录)。
+		// 详见 scanThumbsTopLevel 的注释。
+		Thumbs:         scanThumbsTopLevel(cacheDir),
 		VideoFaststart: scanSubDir(filepath.Join(cacheDir, "video-faststart")),
 		VideoTranscode: scanSubDir(filepath.Join(cacheDir, "video-transcode")),
 	}
@@ -194,5 +197,50 @@ func scanSubDir(path string) SubUsage {
 		su.FileCount++
 		return nil
 	})
+	return su
+}
+
+// scanThumbsTopLevel 统计 cacheDir 顶层缩略图文件。
+//
+// 历史背景:ThumbnailService 把每张缩略图直接以 <md5>.jpg 存在
+// cacheDir 顶层,不放在 thumbs/ 子目录里(早期 cache.go 也用这个路径
+// 写 cacheDir/sub/<file> 这样的双层嵌套,后续被修正)。但 cache stats
+// 一直按"thumbs/ 子目录"去 scanSubDir,导致子目录不存在 → Available=false
+// → UI 永远显示"—",即便用户其实有几百 MB 缩略图。
+//
+// 修法:在 cacheDir 顶层只统计扩展名为 .jpg / .jpeg 的文件,跳过:
+//   - 顶层子目录(video-faststart / video-transcode 等由 scanSubDir 接管)
+//   - 顶层元数据文件(scan_cache.json / web_settings.json / cover_overrides.json
+//     等,扩展名非图片)
+//
+// 单层 ReadDir 而不递归,避免误把子目录里的 jpg 算进来
+// (子目录的扫描由 scanSubDir 单独负责)。
+func scanThumbsTopLevel(cacheDir string) SubUsage {
+	su := SubUsage{Path: cacheDir, Available: false}
+	info, err := os.Stat(cacheDir)
+	if err != nil || !info.IsDir() {
+		return su
+	}
+	entries, err := os.ReadDir(cacheDir)
+	if err != nil {
+		// 目录存在但读不到(权限等):available 仍为 false
+		return su
+	}
+	su.Available = true
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		ext := strings.ToLower(filepath.Ext(e.Name()))
+		if ext != ".jpg" && ext != ".jpeg" {
+			continue
+		}
+		fi, infoErr := e.Info()
+		if infoErr != nil {
+			continue
+		}
+		su.Bytes += fi.Size()
+		su.FileCount++
+	}
 	return su
 }
