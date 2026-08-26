@@ -207,9 +207,9 @@ local-gallery/
 │       ├── api/            # fetch + SSE 封装，端点模块
 │       ├── hooks/          # useKeyboard / useScanSSE / useTheme / useFavorites…
 │       ├── store/          # zustand（ui / library / gallery / search）
-│       ├── routes/         # Home / Album / Author / Gallery / Recents / Favorites / Settings
+│       ├── routes/         # 按需加载的 Home / Album / 标签 / Gallery / Recents / Favorites / Unread / Settings
 │       ├── components/     # album / gallery / layout / home / common
-│       └── utils/          # shortcuts / path / storage / format / albumGrouping
+│       └── utils/          # shortcuts / path / storage / format / albumGrouping / libraryIndex
 ├── docs/                   # 架构 / API / 快捷键 / 全功能清单
 ├── scripts/                # dev / build / test / install-ffmpeg
 └── .vscode/                # launch / tasks / settings / extensions

@@ -96,7 +96,6 @@ export function useVideoCover(
 
     const poll = async (): Promise<void> => {
       while (!stopped && !cancelled) {
-        // eslint-disable-next-line no-await-in-loop
         const r = await fetch(thumbUrl(videoPath), { method: "HEAD" });
         if (cancelled) return;
         if (r.ok) {
@@ -109,7 +108,6 @@ export function useVideoCover(
           setSt("missing");
           return;
         }
-        // eslint-disable-next-line no-await-in-loop
         await new Promise((res) => setTimeout(res, delay));
         delay = Math.min(delay * 1.5, SERVER_POLL_MAX_MS);
       }
@@ -133,7 +131,6 @@ export function useVideoCover(
       await uploadVideoCover(videoPath, blob);
       setBust((b) => b + 1);
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error("[useVideoCover] extract failed:", err);
       setSt("error");
     }

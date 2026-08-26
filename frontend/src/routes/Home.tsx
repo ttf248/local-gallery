@@ -15,16 +15,19 @@ import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
 import { historyApi } from '../api/prefs'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
-import AlbumCard from '../components/album/AlbumCard'
 import { ListFilterBar } from '../components/common/ListFilterBar'
 import EmptyState from '../components/common/EmptyState'
 import YearTimeline from '../components/home/YearTimeline'
+import {
+  ContinueReadingHero,
+  UnreadHero,
+} from '../components/home/HomeHeroes'
 import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { GalleryContextEntry } from '../utils/galleryContext'
 import { groupByYear, type YearGroup } from '../utils/albumGrouping'
 import { isInProgress } from '../utils/progress'
-import { thumbUrl } from '../api/thumbs'
+import { buildLibraryIndex } from '../utils/libraryIndex'
 import {
   PlayFilledIcon,
   StarIcon,
@@ -34,12 +37,7 @@ import {
   ClockIcon,
   CloseIcon,
   ImageIcon,
-  SparkleIcon,
   CalendarIcon,
-  ArrowRightLineIcon,
-  ReaderIcon,
-  FolderIcon,
-  CheckIcon,
 } from '../components/common/Icon'
 
 // 卡片全集（album + collection + smart），用于"全部图像" filter 网格
@@ -111,10 +109,16 @@ export default function Home() {
   const viewMode = useUIStore((s) => s.viewMode)
 
   const { favorites } = useFavorites()
+  // 首页的未读区与继续阅读区共享同一份全库进度，避免两个近似 batch 请求。
+  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
+  const { data: progressMap } = useAllProgress(libraryIndex.albumIds)
   // 未读列表:Home 顶部 hero 直接展示前 6 张 + 链接到 /unread
   // 已有 useUnreadAlbums hook(见 hooks/useUnreadAlbums.ts),复用避免重新
   // 实现 progress 派发逻辑。
-  const { cards: unreadCards, count: unreadCount } = useUnreadAlbums()
+  const { cards: unreadCards, count: unreadCount } = useUnreadAlbums({
+    progressMap,
+    loadProgress: false,
+  })
   // history 用于 sortBy='viewed':用最近「看过」时间(而非文件 mtime)排序。
   // 注意:history 顺序是 openedAt 倒序,所以可以直接走 batch 缓存。
   const { data: historyData } = useQuery({
@@ -271,68 +275,17 @@ export default function Home() {
   }
   const cards = useMemo(() => buildCards(result), [result])
 
-  // 继续上次：需要进度数据
-  // 关键:progressPaths 也要包含 collection 子 album 的 path,
-  // 否则 /api/progress/batch 不会带它们的进度,继续阅读就漏掉整本。
-  // 顶层 album + collection 下的子 album 一起展开,跟下面的 inProgressAll
-  // 用的「真实 album 列表」保持一致。
-  const progressPaths = useMemo<string[]>(() => {
-    if (!result) return []
-    const out: string[] = []
-    for (const a of result.albums) out.push(a.path)
-    for (const col of result.collections ?? []) {
-      for (const a of col.albums ?? []) {
-        if (a.path) out.push(a.path)
-      }
-    }
-    return out
-  }, [result])
-  const { data: progressMap } = useAllProgress(progressPaths)
-  // 「继续阅读」= 开始了但还没读完。已读完（index >= total）不再占位,
-  // 否则「未读 清空」会把同一本推进到 total,从「未读」滑到「继续阅读」,
-  // 视觉上是换皮出现。
-  const inProgress = useMemo<CardData[]>(() => {
-    if (!progressMap) return []
-    const items: CardData[] = []
-    for (const c of cards) {
-      if (c.variant !== 'album') continue
-      const k = decodeFavPath(c.to)
-      if (!isInProgress(progressMap[k])) continue
-      items.push({ ...c, progress: { index: progressMap[k].index, total: progressMap[k].total } })
-    }
-    return items
-      .sort((a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0))
-      .slice(0, 4)
-  }, [cards, progressMap])
-
   // 继续阅读的全量列表(不限 4 张),给 ContinueReadingHero 用。
   // 排序:优先按 progress.index(已读张数)降序,其次按 mTime 倒序保稳定。
-  //
-  // 关键:result.albums 只有顶层 album(media root 直接子目录),collection 下的
-  // 子 album 都在 result.collections[].albums 里。继续阅读应当覆盖"任意 album",
-  // 不论它是不是 collection 的子项 — 用户从 2023 集合点开 AIGC 后,理应在
-  // 继续阅读里能找到 AIGC。collection 视图下"主网格"是 collection 卡片,
-  // 但"继续阅读"应该把子 album 拍扁到 album 卡片维度来展示。
+  // 递归索引已包含任意深度集合内的相册，避免深层内容漏出继续阅读。
   const inProgressAll = useMemo<CardData[]>(() => {
-    if (!progressMap || !result) return []
+    if (!progressMap) return []
     const items: CardData[] = []
-    const addAlbum = (a: {
-      path: string
-      name: string
-      displayName?: string
-      imageCount: number
-      videoCount?: number
-      coverImage: string
-      coverKind?: 'image' | 'video'
-      modTime?: string
-      sourceRoot?: string
-      sourceName?: string
-    }) => {
+    for (const a of libraryIndex.albumsById.values()) {
       const p = progressMap[a.path]
-      // 跟 inProgress 同语义:已开始但未读完。已读完不再占位(见 inProgress 注释)。
-      if (!isInProgress(p)) return
+      if (!isInProgress(p)) continue
       items.push({
-        id: 'c:' + a.path,
+        id: 'a:' + a.path,
         variant: 'album',
         title: a.name,
         displayTitle: a.displayName,
@@ -348,17 +301,8 @@ export default function Home() {
         sourceName: a.sourceName,
       })
     }
-    // 1) 顶层 album
-    for (const a of result.albums) addAlbum(a)
-    // 2) collection 下的子 album(给 sourceName 标上 collection 名,避免
-    //    不同 collection 里有同名 album 混淆)
-    for (const col of result.collections ?? []) {
-      for (const a of col.albums ?? []) {
-        addAlbum({ ...a, sourceName: a.sourceName ?? col.name })
-      }
-    }
     return items.sort((a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0))
-  }, [result, progressMap])
+  }, [libraryIndex, progressMap])
 
   // 时光轴：按年份分组（画廊模式，替代早期"全新/重温/最近加入"的分区）
   const yearGroups = useMemo<YearGroup[]>(() => groupByYear(result), [result])
@@ -450,7 +394,7 @@ export default function Home() {
   const hasContent = !!result && cards.length > 0
 
   // 主 CTA：有进度 → 继续上次；否则 → 随机翻翻
-  const primaryAlbum = inProgress[0]
+  const primaryAlbum = inProgressAll[0]
   const scanLabel = sse.isRunning
     ? '扫描中…'
     : startScan.isPending
@@ -883,272 +827,6 @@ function SectionHeader({
       {subtitle && (
         <span className="text-[11.5px] text-fg-subtle">{subtitle}</span>
       )}
-    </div>
-  )
-}
-
-// 未读 hero:Home 主页顶部「还有 N 本没看」的引导区块。
-//
-// 设计目标:
-//   - 让用户进首页立刻看到「未读」+「随机未读」的主行动,而不是要按 U
-//     或翻到侧边栏才能找到
-//   - 用前 6 张未读卡(2x3 / 3x2 网格)作为视觉锚点,而不是纯文字数字
-//   - 「全部」按钮跳到 /unread 页看全量
-//   - 单本 X 按钮：标记该本为已读(进度推到末尾)。hover 在卡片右上角露出
-//     一个深色圆 X,不破坏 AlbumCard 自身布局 — 我们用外层 wrapper 放 X
-//     而不是改 AlbumCard(AlbumCard 还要在主网格继续用)
-//   - 标题区右侧"清空"链接：一键全部标记已读(带 confirm 二次确认)。
-//   - 没有未读时整个区块不渲染(由调用方控制)
-export function UnreadHero({
-  cards,
-  count,
-  onShuffle,
-  onMarkRead,
-  onMarkAllRead,
-}: {
-  cards: CardData[]
-  count: number
-  onShuffle: () => void
-  onMarkRead: (card: CardData) => void
-  onMarkAllRead: () => void
-}) {
-  const navigate = useNavigate()
-  // 收藏状态:AlbumCard 自己不知道,这里把 favorites 也合并到每张 card 上,
-  // 让 hero 卡片跟全库 grid 视觉一致(收藏角标)。
-  const { favorites } = useFavorites()
-  const favSet = useMemo(() => new Set(favorites), [favorites])
-  // 最多 6 张,让网格 3x2 居中显示。多于 6 张时,「全部 →」按钮引导去全量页
-  const visible = cards.slice(0, 6)
-  return (
-    <section
-      className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full pt-8 pb-2"
-      data-testid="unread-hero"
-    >
-      <div className="bg-accent-soft border border-accent/20 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-3 flex-wrap mb-3">
-          <SparkleIcon size={13} className="text-accent" />
-          <span className="text-[11px] uppercase tracking-[0.18em] text-accent font-medium">
-            未读
-          </span>
-          <span className="text-[13px] text-fg">
-            还有 <span className="font-semibold tabular-nums">{count}</span> 本没看
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={onMarkAllRead}
-              className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors"
-              title="将所有未读相册标记为已读"
-            >
-              <CloseIcon size={10} />
-              清空
-            </button>
-            <button
-              onClick={onShuffle}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover text-xs font-medium transition-colors"
-            >
-              <ShuffleIcon size={12} />
-              随机未读
-            </button>
-            <button
-              onClick={() => navigate('/unread')}
-              className="inline-flex items-center gap-1 h-8 px-2.5 rounded-md border border-border-faint text-fg-muted hover:text-fg hover:border-border-strong text-xs transition-colors"
-            >
-              全部
-              <ArrowRightLineIcon size={11} />
-            </button>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
-          {visible.map((c) => (
-            // 外层 wrapper div 是 relative，让右上角的 X 按钮能绝对定位。
-            // 不直接给 AlbumCard 加 prop，避免改动 AlbumCard 自身接口
-            // （AlbumCard 还要在全库主网格继续用，那里没有 X 按钮的语义）。
-            <div key={c.id} className="relative group">
-              <AlbumCard
-                data={{ ...c, isFavorite: favSet.has(decodeFavPath(c.to)) }}
-              />
-              {/* 单本标记已读：进度推到末尾。等价于 AlbumCard 右键的
-                  「标记为已读」,但只需一次点击,不需要打开右键菜单。 */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onMarkRead(c)
-                }}
-                className="absolute top-1.5 right-1.5 z-10 w-6 h-6 rounded-full bg-black/55 text-white/90 hover:bg-accent hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
-                title={`将「${c.title}」标记为已读`}
-                aria-label={`将${c.title}标记为已读`}
-              >
-                <CheckIcon size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// 继续阅读 hero:展示「有进度的相册」+「继续上次」CTA。
-//
-// 与 UnreadHero 的关系:Unread = 还没开始,Continue = 开始过但没看完。
-// 两者配齐,主页就覆盖了「怎么从这里开始」+「在哪里继续」的核心场景。
-//
-// 设计:
-//   - 不限于 CTA 的 1 本(那只能"接着上次",不能选别本)
-//   - 排序按 progress.index 降序,最近的进度在前面(在 H1 之后)
-//   - 卡片上沿用 AlbumCard 的"已读进度条"+ 数字,
-//     用户一眼看到「这本还没看完」+ 「看到 23/50」
-//   - 点卡片直跳画廊(同 onContinue)— 不中转 Album 详情,减少 1 次点击
-//   - 单卡 hover 时露出 X,用来从继续阅读里移除某一本(不删图,只清该本进度)
-//   - 标题右侧有「清空」,一键把当前所有继续阅读相册标记为已读(带 confirm 二次确认)
-//
-// 「标记已读」vs「真删」:这里跟 UnreadHero 一致,全部走 mark-as-read。
-// 这样 progress 推到 total 后,既不进「未读」,也不进「继续阅读」,从首页
-// 两个 hero 都消失 — 用户不会再有「清空换皮出现」的错觉。后端 DELETE 接口
-// 仍保留供其它场景调用,UI 上不再走。
-export function ContinueReadingHero({
-  cards,
-  onContinue,
-  onRemove,
-  onClearAll,
-}: {
-  cards: CardData[]
-  onContinue: (card: CardData) => void
-  onRemove: (card: CardData) => void
-  onClearAll: () => void
-}) {
-  // 限制 6 张展示,多出的不挡用户视线
-  const visible = cards.slice(0, 6)
-  return (
-    <section
-      className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full pt-4 pb-2"
-      data-testid="continue-hero"
-    >
-      <div className="border border-border-faint rounded-xl px-5 py-4 bg-bg-subtle/40">
-        <div className="flex items-center gap-3 flex-wrap mb-3">
-          <ReaderIcon size={13} className="text-fg-muted" />
-          <span className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
-            继续阅读
-          </span>
-          <span className="text-[13px] text-fg-muted">
-            <span className="tabular-nums text-fg">{cards.length}</span> 本还没看完
-          </span>
-          <span className="flex-1" />
-          <button
-            onClick={onClearAll}
-            className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors"
-            title="把当前所有继续阅读相册标记为已读(不影响收藏 / 最近)"
-          >
-            <CloseIcon size={10} />
-            清空
-          </button>
-        </div>
-        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2.5">
-          {visible.map((c) => (
-            <ContinueCard
-              key={c.id}
-              card={c}
-              onClick={() => onContinue(c)}
-              onRemove={() => onRemove(c)}
-            />
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// 继续阅读 hero 里的单卡:复用 AlbumGrid 的"已读进度"渲染逻辑。
-//
-// 单独定义而非直接用 AlbumGrid 包裹卡片,因为:
-//   1. 进度数字"X / Y"在 hero 里更醒目(标题下方一行,而不是底部窄条)
-//   2. 整张卡可点(onContinue 走 navigate 不需要路径细节)
-//   3. hover 态用 accent 边框而非默认边框,与其他 hero 视觉一致
-//   4. 卡片右上 hover 露出的 X 按钮:点 X 只触发 onRemove(并 stopPropagation,
-//     避免冒泡到外层 <button> 又跳进画廊)
-function ContinueCard({
-  card,
-  onClick,
-  onRemove,
-}: {
-  card: CardData
-  onClick: () => void
-  onRemove: () => void
-}) {
-  const progress = card.progress
-  const progressPct =
-    progress && progress.total > 1
-      ? Math.min(100, Math.round((progress.index / Math.max(1, progress.total - 1)) * 100))
-      : null
-  return (
-    // 用 <div role="button"> 而不是 <button>，因为里面还要放 X 删除按钮。
-    // <button> 不能嵌套 <button>（HTML 规范），改 div + role + 键盘支持。
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onClick()
-        }
-      }}
-      className="group block text-left rounded-lg border border-border-faint bg-bg-elevated overflow-hidden hover:border-border-strong hover:shadow-md transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <div className="relative aspect-[3/4] bg-bg-subtle overflow-hidden">
-        {card.coverPath ? (
-          <img
-            src={thumbUrl(card.coverPath)}
-            alt={card.title}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-fg-subtle">
-            <FolderIcon size={20} />
-          </div>
-        )}
-        {/* 标记已读按钮：仅 hover/focus-visible 时显示。stopPropagation + preventDefault
-            避免点击 X 时也触发外层 div 的 onClick（跳画廊）。
-            语义:把 progress 推到 total,从「继续阅读」消失(也不再进「未读」)。 */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onRemove()
-          }}
-          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/55 text-white/90 hover:bg-danger hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-all"
-          title={`将「${card.title}」标记为已读`}
-          aria-label={`将${card.title}标记为已读`}
-        >
-          <CloseIcon size={12} />
-        </button>
-        {/* 进度条覆盖在 cover 底部 */}
-        {progressPct !== null && progress && (
-          <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-black/65 to-transparent">
-            <div className="flex items-center gap-1.5 text-white/95 text-[10px] font-medium tabular-nums">
-              <span>
-                看到 {progress.index + 1} / {progress.total}
-              </span>
-            </div>
-            <div className="mt-1 h-0.5 bg-white/20 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent"
-                style={{ width: `${progressPct}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </div>
-      <div className="px-2 py-1.5">
-        <div className="text-[12px] font-medium text-fg line-clamp-1 group-hover:text-accent transition-colors">
-          {card.title}
-        </div>
-      </div>
     </div>
   )
 }

@@ -3,8 +3,10 @@ import { useLibraryStore } from '../store/libraryStore'
 import { useAllProgress } from './useReadingProgress'
 import { useFavorites } from './useFavorites'
 import type { CardData } from '../components/album/AlbumGrid'
+import type { ReadingProgress } from '../api/prefs'
 import { albumRoute } from '../utils/path'
 import { isUnread } from '../utils/progress'
+import { buildLibraryIndex } from '../utils/libraryIndex'
 
 // useUnreadAlbums 给出当前未读(还没看 / 刚打开)的所有相册,按需携带
 // 收藏状态。返回值与 AlbumGrid 直接对接。
@@ -23,7 +25,12 @@ import { isUnread } from '../utils/progress'
 //     这里不抢公共状态,避免「A 改了 unread list,B 的 progress 也被刷」这种
 //     隐式耦合。
 //  3. 收藏状态在 cards 阶段就合并,调用方不用再处理 (path → fav) 映射。
-export function useUnreadAlbums(): {
+interface UseUnreadAlbumsOptions {
+  progressMap?: Record<string, ReadingProgress>
+  loadProgress?: boolean
+}
+
+export function useUnreadAlbums(options: UseUnreadAlbumsOptions = {}): {
   cards: CardData[]
   count: number
   total: number
@@ -32,21 +39,20 @@ export function useUnreadAlbums(): {
   const result = useLibraryStore((s) => s.result)
   const { favorites } = useFavorites()
   const favSet = useMemo(() => new Set(favorites), [favorites])
+  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
 
-  // 批量拿全库的 progress。注意:只发「当前库里的 path」过去,避免传一堆
-  // 已被 prune 掉的旧路径(后端 batch 会跳过不存在的 key,但前端少发点
+  // 批量拿全库的 progress。注意:只发当前库里的相册 ID,避免传一堆
+  // 已被 prune 掉的旧 ID(后端 batch 会跳过不存在的 key,但前端少发点
   // payload 也好)。
-  const paths = useMemo(() => {
-    if (!result) return []
-    return result.albums.map((a) => a.path)
-  }, [result])
+  const albumIds = libraryIndex.albumIds
 
-  const { data: progressMap, isLoading } = useAllProgress(paths)
+  const progressQuery = useAllProgress(albumIds, options.loadProgress ?? true)
+  const progressMap = options.progressMap ?? progressQuery.data
 
   const cards = useMemo<CardData[]>(() => {
     if (!result) return []
     const out: CardData[] = []
-    for (const a of result.albums) {
+    for (const a of libraryIndex.albumsById.values()) {
       const p = progressMap?.[a.path]
       // 跟 utils/progress.isInProgress 互斥:这里「未读」= 既不在读、也非已读完
       // (实际就是 isUnread 的反义,但 isUnread 也把「total=0 空相册」算进去 —
@@ -74,12 +80,15 @@ export function useUnreadAlbums(): {
       })
     }
     return out
-  }, [result, progressMap, favSet])
+  }, [result, libraryIndex, progressMap, favSet])
 
   return {
     cards,
     count: cards.length,
-    total: result?.albums.length ?? 0,
-    isLoading: isLoading && cards.length === 0,
+    total: libraryIndex.albumIds.length,
+    isLoading:
+      (options.loadProgress === false
+        ? options.progressMap === undefined
+        : progressQuery.isLoading) && cards.length === 0,
   }
 }

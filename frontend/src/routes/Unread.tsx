@@ -26,6 +26,7 @@ export default function Unread() {
   const viewMode = useUIStore((s) => s.viewMode)
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
+  const minImageCount = useSearchStore((s) => s.minImageCount)
   const pushToast = useUIStore((s) => s.pushToast)
   const { cards, count, total, isLoading } = useUnreadAlbums()
 
@@ -42,8 +43,8 @@ export default function Unread() {
       })
       // 最小图数过滤(全局 filter)
       .filter((it) => {
-        if (useSearchStore.getState().minImageCount <= 0) return true
-        return (it.count ?? 0) >= useSearchStore.getState().minImageCount
+        if (minImageCount <= 0) return true
+        return (it.count ?? 0) >= minImageCount
       })
     switch (sortBy) {
       case 'count':
@@ -57,7 +58,7 @@ export default function Unread() {
         // 直接走默认(保持入站顺序)或走 name。
         return list
     }
-  }, [cards, query, sortBy])
+  }, [cards, query, sortBy, minImageCount])
 
   // 跨卷翻页(N / P)需要这个 list,跟 Recents/Favorites 一致
   const entries = useMemo<GalleryContextEntry[]>(

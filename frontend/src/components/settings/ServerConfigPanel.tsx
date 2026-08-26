@@ -183,6 +183,7 @@ export default function ServerConfigPanel() {
   const pathDirtyRef = useRef<
     Partial<Record<keyof ServerConfigPatch, unknown>>
   >({});
+  const flushRef = useRef<(patch: ServerConfigPatch) => void>(() => {});
 
   // 把 debounced 草稿 flush 到后端(仅限非路径类字段)
   const firstFlush = useRef(true);
@@ -206,7 +207,7 @@ export default function ServerConfigPanel() {
     const payload = Object.fromEntries(
       nonPathKeys.map((k) => [k, debouncedDraft[k as keyof ServerConfigPatch]]),
     ) as ServerConfigPatch;
-    flush(payload);
+    flushRef.current(payload);
     // 清掉已 flush 的字段
     setDraft((d) => {
       const next = { ...d };
@@ -270,6 +271,7 @@ export default function ServerConfigPanel() {
   function flush(patch: ServerConfigPatch) {
     update.mutate(patch);
   }
+  flushRef.current = flush;
 
   // 路径类字段保存:onBlur 时调用
   function flushPathField(key: keyof ServerConfigPatch) {

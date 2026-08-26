@@ -83,20 +83,3 @@ export default function VideoCoverImage({
     />
   );
 }
-
-/**
- * 纯函数：判断一个 coverPath 是否为视频（用于 AlbumCard 等场景决定走
- * 图片分支还是视频分支）。避免重复散落各处的扩展名判断。
- */
-export function isVideoCoverPath(path: string | undefined | null): boolean {
-  if (!path) return false;
-  const lower = path.toLowerCase();
-  return (
-    lower.endsWith(".mp4") ||
-    lower.endsWith(".m4v") ||
-    lower.endsWith(".webm") ||
-    lower.endsWith(".mov") ||
-    lower.endsWith(".mkv") ||
-    lower.endsWith(".avi")
-  );
-}

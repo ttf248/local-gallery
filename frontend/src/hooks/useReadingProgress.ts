@@ -2,6 +2,8 @@ import { useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { progressApi, type ReadingProgress } from '../api/prefs'
 
+const PROGRESS_BATCH_SIZE = 1_000
+
 // 单条进度查询：给 Album 详情页用。
 export function useReadingProgress(albumId: string | null | undefined) {
   return useQuery({
@@ -22,25 +24,27 @@ export function useReadingProgress(albumId: string | null | undefined) {
 // 批量进度查询：给 Home/Recents/Favorites 列表用。
 // 一次 POST /api/progress/batch 拿全部，避免 N 路并发 GET。
 //
-// queryKey 必须对「内容相同、引用不同」的 albumIds 数组保持稳定。
-// 早期实现用 ['progress-batch', albumIds]，但 React Query 的 hashKey 对 array
-// 是按引用比较的（v5.62 之前），导致每次 Home/Recents/Favorites 重渲染时
-// 父组件 progressPaths 都是新引用 → 触发重复 re-fetch。
-// 改用排序后 join 的字符串作为 key，并按长度补充防碰撞。
-export function useAllProgress(albumIds: string[]) {
-  const stableKey = useMemo(() => {
-    if (albumIds.length === 0) return ''
-    // 排序后 join 保证顺序无关；加 length 前缀防止「[a,b]」和「[ab]」撞 key
-    return `${albumIds.length}|${albumIds.slice().sort().join('|')}`
+// 排序并去重后作为 queryKey，保证相同 ID 集合复用缓存；分块请求避免超出
+// 后端单次 10,000 条限制，也限制单个请求体积。
+export function useAllProgress(albumIds: string[], enabled = true) {
+  const canonicalAlbumIds = useMemo(() => {
+    return Array.from(new Set(albumIds)).sort()
   }, [albumIds])
+
   return useQuery({
-    queryKey: ['progress-batch', stableKey],
+    queryKey: ['progress-batch', canonicalAlbumIds],
     queryFn: async () => {
-      if (albumIds.length === 0) return {} as Record<string, ReadingProgress>
-      const r = await progressApi.batch(albumIds)
-      return r.progress
+      const chunks: string[][] = []
+      for (let offset = 0; offset < canonicalAlbumIds.length; offset += PROGRESS_BATCH_SIZE) {
+        chunks.push(canonicalAlbumIds.slice(offset, offset + PROGRESS_BATCH_SIZE))
+      }
+      const responses = await Promise.all(chunks.map((chunk) => progressApi.batch(chunk)))
+      return responses.reduce<Record<string, ReadingProgress>>((all, response) => {
+        Object.assign(all, response.progress)
+        return all
+      }, {})
     },
-    enabled: albumIds.length > 0,
+    enabled: enabled && canonicalAlbumIds.length > 0,
     staleTime: 30 * 1000,
   })
 }

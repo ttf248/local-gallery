@@ -17,7 +17,7 @@ import {
   PlayFilledIcon,
 } from '../common/Icon'
 import HoverPreview from '../common/HoverPreview'
-import VideoCoverImage, { isVideoCoverPath } from '../common/VideoCoverImage'
+import VideoCoverImage from '../common/VideoCoverImage'
 import TranscodeStatusBadge from '../common/TranscodeStatusBadge'
 import type { ViewMode } from '../../store/uiStore'
 import { timeAgo } from '../../utils/date'
@@ -250,7 +250,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
-        {isVideoCoverPath(data.coverPath) || data.coverKind === 'video' ? (
+        {data.coverKind === 'video' ? (
           // 视频封面：交给 VideoCoverImage 处理"未抽帧 → 抽帧 → 上传"流程
           <VideoCoverImage
             videoPath={data.coverPath}
@@ -288,7 +288,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
 
         {/* 视频角标：▶ + 可选时长（覆盖在 cover 之上） */}
-        {(isVideoCoverPath(data.coverPath) || data.coverKind === 'video') && (
+        {data.coverKind === 'video' && (
           <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
             <PlayFilledIcon size={9} className="text-accent" />
             <span>{formatDuration(data.durationSec)}</span>
@@ -296,7 +296,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
 
         {/* 服务端转码状态（仅在转码中/失败时显示；不与上面 ▶ 角标冲突） */}
-        {(isVideoCoverPath(data.coverPath) || data.coverKind === 'video') && (
+        {data.coverKind === 'video' && (
           <div className="absolute top-2 left-2">
             <TranscodeStatusBadge videoPath={data.coverPath ?? ''} size="sm" />
           </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 interface Props {
@@ -27,10 +27,13 @@ export default function Popover({
 }: Props) {
   const [internal, setInternal] = useState(false)
   const open = controlled ?? internal
-  const setOpen = (v: boolean) => {
-    if (controlled === undefined) setInternal(v)
-    onOpenChange?.(v)
-  }
+  const setOpen = useCallback(
+    (value: boolean) => {
+      if (controlled === undefined) setInternal(value)
+      onOpenChange?.(value)
+    },
+    [controlled, onOpenChange],
+  )
   const triggerRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -78,7 +81,7 @@ export default function Popover({
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, setOpen])
 
   const handleTriggerClick = (e: React.MouseEvent) => {
     e.stopPropagation()

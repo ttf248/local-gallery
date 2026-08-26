@@ -2,16 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { UnreadHero } from './Home'
+import { UnreadHero } from '../components/home/HomeHeroes'
 import { useFavorites } from '../hooks/useFavorites'
-import { useAllProgress } from '../hooks/useReadingProgress'
 
-// 这两个被 Home 调用,但本测试只关心 UnreadHero 自身 → mock 掉减少间接依赖
 vi.mock('../hooks/useFavorites', () => ({
   useFavorites: vi.fn(),
-}))
-vi.mock('../hooks/useReadingProgress', () => ({
-  useAllProgress: vi.fn(),
 }))
 
 function makeCard(path: string, name: string) {
@@ -64,10 +59,6 @@ describe('UnreadHero', () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     })
-    vi.mocked(useAllProgress).mockReturnValue({
-      data: {},
-      isLoading: false,
-    } as never)
   })
 
   it('显示计数 + 随机未读按钮 + 全部链接', () => {

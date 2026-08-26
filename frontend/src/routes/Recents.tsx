@@ -14,6 +14,9 @@ import { ClockIcon } from '../components/common/Icon'
 import { albumRoute, decodeFavPath } from '../utils/path'
 import { formatRelative } from '../utils/date'
 import type { GalleryContextEntry } from '../utils/galleryContext'
+import { buildLibraryIndex } from '../utils/libraryIndex'
+
+const EMPTY_HISTORY: Awaited<ReturnType<typeof historyApi.list>>['history'] = []
 
 // 最近访问：从后端 history 列表中读取。带阅读进度。
 export default function Recents() {
@@ -23,6 +26,7 @@ export default function Recents() {
   const viewMode = useUIStore((s) => s.viewMode)
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
+  const minImageCount = useSearchStore((s) => s.minImageCount)
 
   useEffect(() => {
     if (!result) loadFromBackend()
@@ -35,13 +39,14 @@ export default function Recents() {
   })
 
   // history 顺序:OpenedAt 倒序
-  const history = data?.history ?? []
+  const history = data?.history ?? EMPTY_HISTORY
+  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
 
   const cards = useMemo<CardData[]>(() => {
     if (!result) return []
     const out: CardData[] = []
     for (const h of history) {
-      const a = result.albums.find((x) => x.path === h.albumId)
+      const a = libraryIndex.albumsById.get(h.albumId)
       if (!a) continue
       out.push({
         id: 'a:' + a.path,
@@ -58,7 +63,7 @@ export default function Recents() {
       })
     }
     return out
-  }, [history, result])
+  }, [history, result, libraryIndex])
 
   const progressPaths = useMemo(
     () => cards.map((c) => decodeFavPath(c.to)).filter(Boolean),
@@ -75,9 +80,9 @@ export default function Recents() {
       })
       // 最小图数过滤(全局 filter)
       .filter((it) => {
-        if (useSearchStore.getState().minImageCount <= 0) return true
+        if (minImageCount <= 0) return true
         if (it.variant !== 'album') return true
-        return (it.count ?? 0) >= useSearchStore.getState().minImageCount
+        return (it.count ?? 0) >= minImageCount
       })
       .map((c) => {
         const k = decodeFavPath(c.to)
@@ -97,7 +102,7 @@ export default function Recents() {
         // 'recent' 等价(history 项就是 recents 列表本身)
         return list
     }
-  }, [cards, query, sortBy, progressMap])
+  }, [cards, query, sortBy, progressMap, minImageCount])
 
   const recentsEntries = useMemo<GalleryContextEntry[]>(
     () =>

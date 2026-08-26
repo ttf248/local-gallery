@@ -221,7 +221,7 @@ export default function Album() {
         })
         .catch(() => {});
     }
-  }, [detail?.type === "album" ? detail.path : null]);
+  }, [detail]);
 
   if (!result) {
     return (

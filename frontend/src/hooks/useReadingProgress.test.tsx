@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { progressApi } from '../api/prefs'
-import { useMarkAllAsRead } from './useReadingProgress'
+import { useAllProgress, useMarkAllAsRead } from './useReadingProgress'
 
 vi.mock('../api/prefs', () => ({
   progressApi: {
@@ -57,5 +57,38 @@ describe('useMarkAllAsRead', () => {
     ])
     expect(progressApi.set).not.toHaveBeenCalled()
     expect(response).toEqual({ ok: 2, failed: 0, total: 2 })
+  })
+})
+
+describe('useAllProgress', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(progressApi.batch).mockImplementation(async (albumIds) => ({
+      count: albumIds.length,
+      progress: Object.fromEntries(
+        albumIds.map((albumId) => [
+          albumId,
+          { albumId, index: 1, total: 10, scroll: 0, updated: '' },
+        ]),
+      ),
+    }))
+  })
+
+  it('去重并分块读取大批量进度', async () => {
+    const albumIds = Array.from(
+      { length: 1_001 },
+      (_, index) => `a_${index.toString().padStart(22, '0')}`,
+    )
+    albumIds.push(albumIds[0])
+
+    const { result } = renderHook(() => useAllProgress(albumIds), { wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(progressApi.batch).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(progressApi.batch).mock.calls.map(([ids]) => ids.length)).toEqual([
+      1_000,
+      1,
+    ])
+    expect(Object.keys(result.current.data ?? {})).toHaveLength(1_001)
   })
 })

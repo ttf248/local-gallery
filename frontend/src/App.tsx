@@ -1,30 +1,39 @@
+import { lazy, Suspense, type ComponentType } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
-import Home from './routes/Home'
-import Recents from './routes/Recents'
-import Favorites from './routes/Favorites'
-import Unread from './routes/Unread'
-import Album from './routes/Album'
-import Author from './routes/Author'
-import Gallery from './routes/Gallery'
-import Settings from './routes/Settings'
+import RouteLoading from './components/common/RouteLoading'
+
+const Home = lazy(() => import('./routes/Home'))
+const Recents = lazy(() => import('./routes/Recents'))
+const Favorites = lazy(() => import('./routes/Favorites'))
+const Unread = lazy(() => import('./routes/Unread'))
+const Album = lazy(() => import('./routes/Album'))
+const Author = lazy(() => import('./routes/Author'))
+const Gallery = lazy(() => import('./routes/Gallery'))
+const Settings = lazy(() => import('./routes/Settings'))
+
+function lazyPage(Page: ComponentType) {
+  return (
+    <Suspense fallback={<RouteLoading />}>
+      <Page />
+    </Suspense>
+  )
+}
 
 export default function App() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route path="/" element={<Home />} />
-        <Route path="/recents" element={<Recents />} />
-        <Route path="/favorites" element={<Favorites />} />
-        <Route path="/unread" element={<Unread />} />
-        <Route path="/albums/*" element={<Album />} />
-        <Route path="/tags/*" element={<Author />} />
-        {/* 旧 /authors/* 重定向到 /tags/*（保留历史链接） */}
-        <Route path="/authors/*" element={<Navigate to="/tags" replace />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/" element={lazyPage(Home)} />
+        <Route path="/recents" element={lazyPage(Recents)} />
+        <Route path="/favorites" element={lazyPage(Favorites)} />
+        <Route path="/unread" element={lazyPage(Unread)} />
+        <Route path="/albums/*" element={lazyPage(Album)} />
+        <Route path="/tags/*" element={lazyPage(Author)} />
+        <Route path="/settings" element={lazyPage(Settings)} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
-      <Route path="/gallery/*" element={<Gallery />} />
+      <Route path="/gallery/*" element={lazyPage(Gallery)} />
     </Routes>
   )
 }

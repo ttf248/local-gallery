@@ -1,17 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { ContinueReadingHero } from './Home'
-import { useFavorites } from '../hooks/useFavorites'
-import { useAllProgress } from '../hooks/useReadingProgress'
-
-// ContinueReadingHero 不直接调这些 hook, 但 Home 父组件会, 这里 mock 避免
-// 整个链路被触发出意外副作用。
-vi.mock('../hooks/useFavorites', () => ({
-  useFavorites: vi.fn(),
-}))
-vi.mock('../hooks/useReadingProgress', () => ({
-  useAllProgress: vi.fn(),
-}))
+import { ContinueReadingHero } from '../components/home/HomeHeroes'
 
 function makeCard(path: string, name: string, index: number, total: number) {
   return {
@@ -50,16 +39,6 @@ function renderHero(cards: ReturnType<typeof makeCard>[]) {
 describe('ContinueReadingHero', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useFavorites).mockReturnValue({
-      favorites: [],
-      add: vi.fn(),
-      remove: vi.fn(),
-      toggle: vi.fn(),
-    })
-    vi.mocked(useAllProgress).mockReturnValue({
-      data: {},
-      isLoading: false,
-    } as never)
   })
 
   it('显示进度中相册数 + 第一张的进度文本', () => {

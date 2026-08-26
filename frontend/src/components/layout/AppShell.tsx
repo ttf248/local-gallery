@@ -51,10 +51,6 @@ export default function AppShell() {
       if (path.startsWith('/tags/')) {
         const raw = decodeURIComponent(path.slice('/tags/'.length))
         base = raw || '标签'
-      } else if (path.startsWith('/authors/')) {
-        // 旧路由已重定向；保留兜底以防外部直链
-        const raw = decodeURIComponent(path.slice('/authors/'.length))
-        base = raw || '标签'
       } else if (path.startsWith('/albums')) {
         base = '文件夹'
       } else {
@@ -74,12 +70,8 @@ export default function AppShell() {
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '设置' }])
     else if (path.startsWith('/albums'))
       setBreadcrumbs([{ label: '主页', to: '/' }, { label: '文件夹' }])
-    else if (path.startsWith('/tags/') || path.startsWith('/authors/')) {
-      const raw = decodeURIComponent(
-        path.startsWith('/tags/')
-          ? path.slice('/tags/'.length)
-          : path.slice('/authors/'.length),
-      )
+    else if (path.startsWith('/tags/')) {
+      const raw = decodeURIComponent(path.slice('/tags/'.length))
       setBreadcrumbs([
         { label: '主页', to: '/' },
         { label: '标签', to: '/' },

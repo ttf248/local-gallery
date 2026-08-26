@@ -14,6 +14,7 @@ import { StarIcon } from '../components/common/Icon'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { GalleryContextEntry } from '../utils/galleryContext'
 import { historyApi } from '../api/prefs'
+import { buildLibraryIndex } from '../utils/libraryIndex'
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
@@ -24,6 +25,7 @@ export default function Favorites() {
   const viewMode = useUIStore((s) => s.viewMode)
   const query = useSearchStore((s) => s.query)
   const sortBy = useSearchStore((s) => s.sortBy)
+  const minImageCount = useSearchStore((s) => s.minImageCount)
   const { favorites } = useFavorites()
   // 历史记录:sortBy='viewed' 时用最近「看过」时间排序
   const { data: historyData } = useQuery({
@@ -41,13 +43,25 @@ export default function Favorites() {
     if (!result) loadFromBackend()
   }, [result, loadFromBackend])
 
+  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
+  const smartCollectionsByAuthor = useMemo(
+    () =>
+      new Map(
+        (result?.smartCollections ?? []).map((collection) => [
+          collection.author,
+          collection,
+        ]),
+      ),
+    [result],
+  )
+
   const cards = useMemo<CardData[]>(() => {
     if (!result) return []
     const out: CardData[] = []
     for (const f of favorites) {
       if (f.startsWith('smart:')) {
         const author = f.slice(6)
-        const sc = (result.smartCollections ?? []).find((s) => s.author === author)
+        const sc = smartCollectionsByAuthor.get(author)
         if (!sc) continue
         out.push({
           id: 's:' + sc.author,
@@ -61,7 +75,7 @@ export default function Favorites() {
         })
         continue
       }
-      const a = result.albums.find((x) => x.path === f)
+      const a = libraryIndex.albumsById.get(f)
       if (a) {
         out.push({
           id: 'a:' + a.path,
@@ -76,10 +90,31 @@ export default function Favorites() {
           to: albumRoute(a.path),
           isFavorite: true,
         })
+        continue
+      }
+      const collection = libraryIndex.collectionsById.get(f)
+      if (collection) {
+        out.push({
+          id: 'c:' + collection.path,
+          variant: 'collection',
+          title: collection.name,
+          subtitle: '集合',
+          count: collection.albumCount,
+          coverPath: collection.albums[0]?.coverImage ?? '',
+          to: albumRoute(collection.path),
+          isFavorite: true,
+          sourceRoot: collection.sourceRoot,
+          sourceName: collection.sourceName,
+        })
       }
     }
     return out
-  }, [result, favorites])
+  }, [
+    result,
+    favorites,
+    libraryIndex,
+    smartCollectionsByAuthor,
+  ])
 
   const progressPaths = useMemo(
     () =>
@@ -100,9 +135,9 @@ export default function Favorites() {
       })
       // 最小图数过滤(全局 filter)
       .filter((it) => {
-        if (useSearchStore.getState().minImageCount <= 0) return true
+        if (minImageCount <= 0) return true
         if (it.variant !== 'album') return true
-        return (it.count ?? 0) >= useSearchStore.getState().minImageCount
+        return (it.count ?? 0) >= minImageCount
       })
       .map((c) => {
         if (c.variant !== 'album') return c
@@ -130,7 +165,7 @@ export default function Favorites() {
       default:
         return list.sort((a, b) => a.title.localeCompare(b.title))
     }
-  }, [cards, query, sortBy, progressMap, viewedAtMap])
+  }, [cards, query, sortBy, progressMap, viewedAtMap, minImageCount])
 
   // 收藏页的上下文：只让真正的相册参与上一本/下一本（智能合集不是「可翻页」对象）
   const favEntries = useMemo<GalleryContextEntry[]>(

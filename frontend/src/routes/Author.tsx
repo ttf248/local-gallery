@@ -27,13 +27,11 @@ interface AlbumSummary {
 }
 
 // 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
-// （原"作者页"改名为"标签页"；URL 形如 /tags/<encoded>，参数名仍为
-// `*` / `author` 以兼容历史调用。）
 export default function Author() {
   const params = useParams()
   const navigate = useNavigate()
   // react-router v6 已经对 pathname 做过一次解码；这里如果再 decode 会引发双重解码错误
-  const raw = params['*'] ?? params['author'] ?? params['tag'] ?? ''
+  const raw = params['*'] ?? ''
   const author = raw ? safeDecode(raw) : ''
 
   const result = useLibraryStore((s) => s.result)

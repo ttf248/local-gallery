@@ -170,4 +170,36 @@ describe('useUnreadAlbums', () => {
     expect(byTitle['A']).toBeFalsy()
     expect(byTitle['B']).toBe(true)
   })
+
+  it('可复用调用方的进度快照且不重复查询', () => {
+    seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B')])
+    vi.mocked(useFavorites).mockReturnValue({
+      favorites: [],
+      add: vi.fn(),
+      remove: vi.fn(),
+      toggle: vi.fn(),
+    })
+    vi.mocked(useAllProgress).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    } as never)
+
+    const { result } = renderHook(() =>
+      useUnreadAlbums({
+        progressMap: {
+          '/a': {
+            albumId: '/a',
+            index: 3,
+            total: 10,
+            scroll: 0,
+            updated: '',
+          },
+        },
+        loadProgress: false,
+      }),
+    )
+
+    expect(useAllProgress).toHaveBeenCalledWith(['/a', '/b'], false)
+    expect(result.current.cards.map((card) => card.title)).toEqual(['B'])
+  })
 })

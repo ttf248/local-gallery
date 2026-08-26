@@ -242,11 +242,11 @@ export default function Gallery() {
   useEffect(() => {
     setShowInfo(false)
     if (!pathParam) return
-    const list = isVideo ? videos : images
-    if (list.length === 0) return
+    const total = isVideo ? videos.length : images.length
+    if (total === 0) return
     const t = setTimeout(() => {
       progressApi
-        .set(pathParam, index, list.length, 0)
+        .set(pathParam, index, total, 0)
         .then(() => {
           // 让 Home/Recents/Favorites 的 progress-batch + Album 详情 per-album
           // 缓存都失效，回到列表/详情时立刻看到新进度
@@ -257,6 +257,18 @@ export default function Gallery() {
     }, 600)
     return () => clearTimeout(t)
   }, [index, pathParam, videos.length, images.length, isVideo, queryClient])
+
+  const scrollContinuousTo = useCallback(
+    (targetIndex: number) => {
+      const target = document.querySelector(
+        `[data-image-index="${targetIndex}"]`,
+      ) as HTMLElement | null
+      if (!target) return
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setIndex(targetIndex)
+    },
+    [setIndex],
+  )
 
   // 切到连续模式后,容器需要滚到当前 index 对应的那张图。
   // 之前 ImageGallery 的 useEffect 会把 scrollTop 强制 0,导致用户
@@ -281,7 +293,7 @@ export default function Gallery() {
       // 离开 continuous 后,允许下次再进入时重新滚一次
       continuousScrolledRef.current = false
     }
-  }, [mode, imagesReady, images.length, index])
+  }, [mode, imagesReady, images.length, index, scrollContinuousTo])
 
   // 滚到最后一张：自动标记为「已读」一次。
   useEffect(() => {
@@ -302,8 +314,15 @@ export default function Gallery() {
       })
       .catch(() => {})
       .finally(() => setMarkingRead(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, imagesReady, images.length, pathParam, mode])
+  }, [
+    index,
+    imagesReady,
+    images.length,
+    pathParam,
+    mode,
+    markingRead,
+    pushToast,
+  ])
 
   useEffect(() => {
     return () => {
@@ -317,7 +336,7 @@ export default function Gallery() {
           new Blob(
             [
               JSON.stringify({
-                path: cur.path,
+                albumId: cur.path,
                 index: cur.index,
                 total: cur.total,
                 scroll: 0,
@@ -328,7 +347,6 @@ export default function Gallery() {
         )
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -412,14 +430,6 @@ export default function Gallery() {
     container.scrollBy({ top: delta, behavior: 'smooth' })
   }
 
-  function scrollContinuousTo(i: number) {
-    const target = document.querySelector(`[data-image-index="${i}"]`) as HTMLElement | null
-    if (!target) return
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    // 同步 index，否则后续按 → 会从旧 index 继续，导致视觉/状态错位
-    setIndex(i)
-  }
-
   const jumpTo = useCallback(
     (zeroBased: number) => {
       const i = Math.max(0, Math.min(images.length - 1, zeroBased))
@@ -429,7 +439,7 @@ export default function Gallery() {
         scrollContinuousTo(i)
       }
     },
-    [images.length, setIndex],
+    [images.length, scrollContinuousTo, setIndex],
   )
 
   const goAdjacent = useCallback(

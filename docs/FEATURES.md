@@ -50,12 +50,12 @@
 
 ## 浏览与交互
 
-| 能力       | 当前行为                                     | 主要实现                                   |
-| ---------- | -------------------------------------------- | ------------------------------------------ |
-| 首页       | 年份时间线、网格/列表、筛选、排序和随机      | `routes/Home.tsx`                          |
-| 相册       | 集合下钻、智能合集、封面选择和属性查看       | `routes/Album.tsx`                         |
-| 画廊       | 单张、连续、双张、RTL、缩放、旋转、全屏      | `routes/Gallery.tsx`、`components/gallery` |
-| 视频播放器 | 原生 controls 与播放、跳转、音量、静音快捷键 | `VideoPlayer.tsx`                          |
+| 能力       | 当前行为                                     | 主要实现                                           |
+| ---------- | -------------------------------------------- | -------------------------------------------------- |
+| 首页       | 年份时间线、网格/列表、筛选、排序和随机      | `routes/Home.tsx`、`components/home/HomeHeroes.tsx` |
+| 相册       | 集合下钻、智能合集、封面选择和属性查看       | `routes/Album.tsx`                                 |
+| 画廊       | 单张、连续、双张、RTL、缩放、旋转、全屏      | `routes/Gallery.tsx`、`components/gallery`         |
+| 视频播放器 | 原生 controls 与播放、跳转、音量、静音快捷键 | `VideoPlayer.tsx`                                  |
 | 搜索       | 名称、标签模糊搜索；`/` 聚焦                 | `GlobalSearch.tsx`                         |
 | 主题       | light/dark/system 和六套强调色               | `useTheme`、`themeStore`                   |
 | 键盘       | 阅读、导航、显示模式和帮助快捷键             | [SHORTCUTS.md](./SHORTCUTS.md)             |

@@ -105,7 +105,8 @@ ffprobe 提供元数据；不兼容编码按需转为 H.264 + AAC；MP4 的 moov
 - TanStack Query 管理 library、album、metadata、prefs 等服务端状态和失效。
 - Zustand 管理主题、筛选、画廊模式、键盘交互等客户端状态。
 - URL 保存可分享的导航状态，只包含资源 ID 或 `smart:<tag>`。
-- Home、Album、Gallery、Settings 按路由懒加载；大页面按领域组件和 hooks 拆分。
+- 全部业务页面按路由懒加载，应用外壳保持常驻；首页 Hero 等大页面区块按领域组件和 hooks 拆分。
+- 图像库快照按任意深度集合递归构建 ID 索引，未读、最近、收藏和进度查询共享该索引，避免逐项扫描目录树。
 
 前端不得把服务端快照再复制成第二份长期 store。写操作成功后以查询失效或精确的乐观更新同步，避免双数据源漂移。
 
