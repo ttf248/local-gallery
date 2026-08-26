@@ -14,11 +14,14 @@ import (
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
-// walkCollections 递归把 Collection（含嵌套子集合）按 name 关键字搜索命中。
+// walkCollections 递归把 Collection（含嵌套子集合 + 内部 albums）按 name 关键字搜索命中。
 //
 // 扫描器支持 Collection 嵌套（"2024年/夏威夷-度假/相片"），搜索也要跟着
 // 走到所有层级，否则用户搜「相片」这种常见关键词时，4-5 层结构里的
 // 子集合一个都搜不到。
+//
+// 同时：collection 直属的 album（如「2024年」下的「散图」或「学校的某次画展」）
+// 也要参与匹配；只搜 collection 名字会漏掉「搜子相册名」的场景。
 func walkCollections(col models.Collection, out *[]searchHit, match func(string) bool) {
 	if match(col.Name) {
 		var cover string
@@ -29,6 +32,15 @@ func walkCollections(col models.Collection, out *[]searchHit, match func(string)
 			Kind: "collection", Path: col.Path, Name: col.Name,
 			Count: col.AlbumCount, Cover: cover,
 		})
+	}
+	for i := range col.Albums {
+		if match(col.Albums[i].Name) || match(col.Albums[i].Author) {
+			*out = append(*out, searchHit{
+				Kind: "album", Path: col.Albums[i].Path, Name: col.Albums[i].Name,
+				Author: col.Albums[i].Author, Count: col.Albums[i].ImageCount,
+				Cover: col.Albums[i].CoverImage,
+			})
+		}
 	}
 	for i := range col.Collections {
 		walkCollections(col.Collections[i], out, match)

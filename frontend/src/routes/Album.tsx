@@ -7,6 +7,7 @@ import { useFavorites } from "../hooks/useFavorites";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { historyApi } from "../api/prefs";
 import { thumbUrl } from "../api/thumbs";
+import { getVideoInfo } from "../api/videos";
 import { useUIStore } from "../store/uiStore";
 import type { CardData } from "../components/album/AlbumGrid";
 import AlbumGrid from "../components/album/AlbumGrid";
@@ -17,7 +18,7 @@ import { albumsApi } from "../api/albums";
 import type { ScanResult } from "../api/scan";
 import { decodeFavPath } from "../utils/path";
 import { formatRelative } from "../utils/date";
-import { formatSize } from "../utils/format";
+import { formatSize, formatDuration } from "../utils/format";
 import {
   ChevronLeftIcon,
   ReaderIcon,
@@ -982,6 +983,32 @@ function VideoAlbumView({
   const videos = detail.videoFiles ?? [];
   const isFinished = false; // 视频专辑进度按"全部看完"算；v1 暂不显示
 
+  // 解析 file ID → 真实文件名（视频列表项展示需要）
+  //
+  // 后端把扫描到的所有文件统一改成 "f_XXX" 这种外部资源 ID,前端拿不到
+  // 原文件名。`videos[i]` 就是这种 ID,直接 `split('/').pop()` 还是 ID 本身,
+  // UI 上就会出现 "f_abc123..." 这种"乱码"标题。
+  //
+  // 走 /api/videos/:id/info 一次拿全元数据(name / dir / 时长 / 码率),
+  // 顺带在卡片上展示时长,而不是只有"视频 1 / 视频 2"序号。
+  const videoInfos = useQuery({
+    queryKey: ["video-infos", detail.path, videos],
+    queryFn: async () => {
+      const results = await Promise.all(
+        videos.map(async (vid) => {
+          try {
+            return await getVideoInfo(vid);
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return results;
+    },
+    enabled: videos.length > 0,
+    staleTime: 5 * 60_000,
+  });
+
   const openVideo = (idx: number) => {
     const qs = new URLSearchParams({
       path: detail.path,
@@ -1117,7 +1144,9 @@ function VideoAlbumView({
       <div className="flex-1 overflow-auto">
         <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 px-6 lg:px-10 pb-10 max-w-[1400px] mx-auto">
           {videos.map((video, i) => {
-            const name = video.split(/[\\/]/).pop() ?? video;
+            const info = videoInfos.data?.[i];
+            const name = info?.name ?? video;
+            const duration = info?.duration;
             return (
               <button
                 key={video}
@@ -1134,10 +1163,15 @@ function VideoAlbumView({
                 <div className="absolute bottom-1.5 right-1.5 text-[10px] bg-bg-elevated/85 backdrop-blur px-1.5 py-0.5 rounded text-fg-muted tabular-nums">
                   {i + 1}
                 </div>
-                {/* 标题条 */}
+                {/* 标题条（文件名 + 时长,基于服务端 info 解析） */}
                 <div className="absolute bottom-0 inset-x-0 px-1.5 py-1 bg-gradient-to-t from-black/60 to-transparent">
-                  <div className="text-[10px] text-white/90 truncate">
-                    {name}
+                  <div className="text-[10px] text-white/90 truncate flex items-center gap-1.5">
+                    <span className="truncate">{name}</span>
+                    {duration && duration > 0 && (
+                      <span className="shrink-0 text-white/70 tabular-nums">
+                        {formatDuration(duration)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </button>
