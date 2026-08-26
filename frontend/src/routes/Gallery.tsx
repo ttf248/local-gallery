@@ -372,7 +372,26 @@ export default function Gallery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideshow, slideshowInterval, images.length, setIndex, mode])
 
+  // 视频模式下 store.index 是「当前播放秒数」,不能用来切视频。
+  // 切视频必须改 URL 的 index 参数(以 initialIndex 为真相源),
+  // 用 replace:true 避免一路 next 把 history 撑爆。
+  const goToVideo = useCallback(
+    (targetIdx: number) => {
+      if (!isVideo) return
+      const i = Math.max(0, Math.min(videos.length - 1, targetIdx))
+      const next = new URLSearchParams(params)
+      next.set('index', String(i))
+      navigate(`/gallery?${next.toString()}`, { replace: true })
+    },
+    [isVideo, videos.length, params, navigate],
+  )
+
   function prev() {
+    if (isVideo) {
+      const cur = Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
+      if (cur > 0) goToVideo(cur - 1)
+      return
+    }
     if (mode === 'continuous') {
       scrollStep(-1)
       return
@@ -398,6 +417,15 @@ export default function Gallery() {
   const onReachEnd = useCallback(() => onReachEndRef.current(), [])
 
   function next() {
+    if (isVideo) {
+      const cur = Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
+      if (cur < videos.length - 1) {
+        goToVideo(cur + 1)
+        return
+      }
+      onReachEnd()
+      return
+    }
     if (mode === 'continuous') {
       scrollStep(1)
       return
@@ -432,6 +460,10 @@ export default function Gallery() {
 
   const jumpTo = useCallback(
     (zeroBased: number) => {
+      if (isVideo) {
+        goToVideo(zeroBased)
+        return
+      }
       const i = Math.max(0, Math.min(images.length - 1, zeroBased))
       setIndex(i)
       // continuous 模式：setIndex 不会自动滚动，单独触发一次
@@ -439,7 +471,7 @@ export default function Gallery() {
         scrollContinuousTo(i)
       }
     },
-    [images.length, scrollContinuousTo, setIndex],
+    [isVideo, images.length, scrollContinuousTo, setIndex, goToVideo],
   )
 
   const goAdjacent = useCallback(
@@ -547,6 +579,8 @@ export default function Gallery() {
     home: () => {
       if (useGalleryStore.getState().mode === 'continuous') {
         scrollContinuousTo(0)
+      } else if (isVideo) {
+        goToVideo(0)
       } else {
         setIndex(0)
       }
@@ -554,6 +588,8 @@ export default function Gallery() {
     end: () => {
       if (useGalleryStore.getState().mode === 'continuous') {
         scrollContinuousTo(images.length - 1)
+      } else if (isVideo) {
+        if (videos.length > 0) goToVideo(videos.length - 1)
       } else {
         setIndex(images.length - 1)
       }
@@ -694,8 +730,13 @@ export default function Gallery() {
               useGalleryStore.getState().setIndex(sec)
             }}
             onEnded={() => {
-              if (index < videos.length - 1) next()
-              else {
+              // onEnded 只会在视频模式下触发（<VideoPlayer> 仅在 isVideo 时渲染）。
+              // 视频模式下 store.index 是 currentTime,不能用来判断是否还有下一段,
+              // 必须从 initialIndex 派生当前 item 索引。
+              const cur = Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
+              if (cur < videos.length - 1) {
+                goToVideo(cur + 1)
+              } else {
                 pushToast({ kind: 'success', message: '已看完 🎉', ttl: 1500 })
               }
             }}
@@ -744,6 +785,16 @@ export default function Gallery() {
         onSetCover={onSetCover}
         onClearCover={onClearCover}
         hasCustomCover={hasCustomCover}
+        onJumpToFirst={
+          isVideo ? () => goToVideo(0) : () => setIndex(0)
+        }
+        onJumpToLast={
+          isVideo
+            ? () => {
+                if (videos.length > 0) goToVideo(videos.length - 1)
+              }
+            : () => setIndex(Math.max(0, images.length - 1))
+        }
       />
 
       {/* 浮层控件：右侧（模式 / 适配 / 缩放 / 旋转 / 方向）+ 左下（上一本/下一本）

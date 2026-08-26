@@ -40,6 +40,9 @@ interface Props {
   /** 上一本/下一本（来自当前列表）。可选：没有上下文时不显示。 */
   onPrevAlbum?: () => void
   onNextAlbum?: () => void
+  /** 跳到列表首/尾（视频模式下需要走 URL 切视频，不能用 setIndex）。 */
+  onJumpToFirst?: () => void
+  onJumpToLast?: () => void
   /** 把当前图片/视频设为本相册的封面。 */
   onSetCover?: () => void
   /** 清除本相册的自定义封面（回到扫描器默认）。 */
@@ -72,6 +75,8 @@ export default function GalleryHeader({
   onSetCover,
   onClearCover,
   hasCustomCover,
+  onJumpToFirst,
+  onJumpToLast,
 }: Props) {
   const mode = useGalleryStore((s) => s.mode)
   const setIndex = useGalleryStore((s) => s.setIndex)
@@ -90,8 +95,11 @@ export default function GalleryHeader({
     return `${displayIndex + 1} / ${total}`
   })()
 
-  // 跳到首/尾（菜单里的快捷入口）
-  const jumpToEnd = () => setIndex(Math.max(0, total - 1))
+  // 跳到首/尾（菜单里的快捷入口）。视频模式必须用父组件传的
+  // onJumpToFirst/Last（基于 URL 切视频）；图片模式回退到 setIndex。
+  const jumpToFirst = onJumpToFirst ?? (() => setIndex(0))
+  const jumpToLast =
+    onJumpToLast ?? (() => setIndex(Math.max(0, total - 1)))
 
   const hasAlbumNav = !!(onPrevAlbum || onNextAlbum)
 
@@ -197,11 +205,11 @@ export default function GalleryHeader({
         )}
         <PopoverSeparator />
         <PopoverLabel>跳转</PopoverLabel>
-        <PopoverItem onClick={() => setIndex(0)}>
+        <PopoverItem onClick={jumpToFirst}>
           <span>第一张</span>
           <span className="ml-auto text-[10px] text-fg-subtle">Home</span>
         </PopoverItem>
-        <PopoverItem onClick={jumpToEnd}>
+        <PopoverItem onClick={jumpToLast}>
           <span>最后张</span>
           <span className="ml-auto text-[10px] text-fg-subtle">End</span>
         </PopoverItem>
