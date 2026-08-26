@@ -18,11 +18,11 @@ GitHub 上已有的 `v1.0.0`～`v1.9.0` 是旧 Python/PyInstaller 架构的历�
 本地改动
   → scripts/publish.ps1
   → 构建/测试/提交/推送当前分支
-  → CNB .cnb.yml 同步到 GitHub（当前 origin 为 CNB 时）
-  → GitHub CI（每个分支 push、main PR）
+  → CNB .cnb.yml 同步到 GitHub，并发送 cnb_sync dispatch（当前 origin 为 CNB 时）
+  → GitHub CI（每个分支 push、CNB dispatch、main PR）
 ```
 
-GitHub 直接收到分支 push 时也会触发同一个 CI。CI 会运行后端测试、前端 lint、前端测试，并构建一个 Linux 验证包；构建包仅保留 7 天，不作为正式 Release。
+GitHub 直接收到分支 push 时也会触发同一个 CI。CNB 同步成功后额外发送 `repository_dispatch`，并携带分支与提交 SHA；CI 会按该 SHA 检出代码，避免镜像 push 没有生成 run 时漏掉构建。CNB 机密仓库中的 `GIT_ACCESS_TOKEN` 除了需要能推送 GitHub 仓库，还需要具备发送 repository dispatch 的权限；缺少该权限时 CNB 阶段会失败并明确暴露配置问题。CI 会运行后端测试、前端 lint、前端测试，并构建一个 Linux 验证包；构建包仅保留 7 天，不作为正式 Release。
 
 运行自动提交、推送和状态轮询：
 

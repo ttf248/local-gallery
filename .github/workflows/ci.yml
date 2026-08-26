@@ -7,13 +7,16 @@ on:
   pull_request:
     branches:
       - main
+  repository_dispatch:
+    types:
+      - cnb_sync
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,6 +26,8 @@ jobs:
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.sha || github.ref }}
 
       - name: 设置 Go
         uses: actions/setup-go@v5

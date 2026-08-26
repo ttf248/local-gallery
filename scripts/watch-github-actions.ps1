@@ -62,7 +62,13 @@ while ($true) {
     $pending = @($runs | Where-Object { $_.status -ne "completed" })
     $failed = @($runs | Where-Object {
         $_.status -eq "completed" -and
-        $_.conclusion -in @("failure", "cancelled", "timed_out", "action_required", "stale")
+        $_.conclusion -in @("failure", "timed_out", "action_required", "stale")
+      })
+    $cancelled = @($runs | Where-Object {
+        $_.status -eq "completed" -and $_.conclusion -eq "cancelled"
+      })
+    $successful = @($runs | Where-Object {
+        $_.status -eq "completed" -and $_.conclusion -eq "success"
       })
     $states = ($runs | Sort-Object name, id | ForEach-Object {
         "$($_.name)#$($_.id):$($_.status)/$($_.conclusion)"
@@ -74,9 +80,16 @@ while ($true) {
       Write-Error "GitHub Actions 执行失败：$failedLinks"
       exit 1
     }
-    if ($pending.Count -eq 0) {
+    # CNB 兜底 dispatch 与原生 push 可能短暂产生两个 run；若其中一个
+    # 被 concurrency 取消而另一个成功，不把这次正常去重误判为失败。
+    if ($pending.Count -eq 0 -and $successful.Count -gt 0) {
       Write-Host "GitHub Actions 全部成功：$summary" -ForegroundColor Green
       exit 0
+    }
+    if ($pending.Count -eq 0 -and $cancelled.Count -gt 0) {
+      $cancelledLinks = ($cancelled | ForEach-Object { "$($_.name)#$($_.id) $($_.html_url)" }) -join "; "
+      Write-Error "GitHub Actions 被取消且没有成功 run：$cancelledLinks"
+      exit 1
     }
   }
 
