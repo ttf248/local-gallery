@@ -215,7 +215,7 @@ export default function Album() {
     if (detail.type === "album") {
       historyApi
         .add({
-          path: detail.path,
+          albumId: detail.path,
           name: detail.name,
           imageCount: detail.imageCount,
         })

@@ -24,7 +24,13 @@ func TestResourceCatalog_PublicSnapshotDoesNotExposeAbsolutePaths(t *testing.T) 
 		}},
 	}
 	catalog := NewResourceCatalog()
+	if catalog.Ready() {
+		t.Fatal("new catalog should not be ready")
+	}
 	catalog.Rebuild(result, []string{root})
+	if !catalog.Ready() {
+		t.Fatal("rebuilt catalog should be ready")
+	}
 
 	public := catalog.PublicScanResult(result)
 	if public.Root == root || public.Albums[0].Path == albumPath || public.Albums[0].CoverImage == filePath {

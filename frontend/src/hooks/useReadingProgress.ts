@@ -3,18 +3,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { progressApi, type ReadingProgress } from '../api/prefs'
 
 // 单条进度查询：给 Album 详情页用。
-export function useReadingProgress(path: string | null | undefined) {
+export function useReadingProgress(albumId: string | null | undefined) {
   return useQuery({
-    queryKey: ['progress', path],
+    queryKey: ['progress', albumId],
     queryFn: async () => {
-      if (!path) return null
+      if (!albumId) return null
       try {
-        return await progressApi.get(path)
+        return await progressApi.get(albumId)
       } catch {
         return null
       }
     },
-    enabled: !!path,
+    enabled: !!albumId,
     staleTime: 30 * 1000,
   })
 }
@@ -22,46 +22,46 @@ export function useReadingProgress(path: string | null | undefined) {
 // 批量进度查询：给 Home/Recents/Favorites 列表用。
 // 一次 POST /api/progress/batch 拿全部，避免 N 路并发 GET。
 //
-// queryKey 必须对「内容相同、引用不同」的 paths 数组保持稳定。
-// 早期实现用 ['progress-batch', paths]，但 React Query 的 hashKey 对 array
+// queryKey 必须对「内容相同、引用不同」的 albumIds 数组保持稳定。
+// 早期实现用 ['progress-batch', albumIds]，但 React Query 的 hashKey 对 array
 // 是按引用比较的（v5.62 之前），导致每次 Home/Recents/Favorites 重渲染时
 // 父组件 progressPaths 都是新引用 → 触发重复 re-fetch。
 // 改用排序后 join 的字符串作为 key，并按长度补充防碰撞。
-export function useAllProgress(paths: string[]) {
+export function useAllProgress(albumIds: string[]) {
   const stableKey = useMemo(() => {
-    if (paths.length === 0) return ''
+    if (albumIds.length === 0) return ''
     // 排序后 join 保证顺序无关；加 length 前缀防止「[a,b]」和「[ab]」撞 key
-    return `${paths.length}|${paths.slice().sort().join('|')}`
-  }, [paths])
+    return `${albumIds.length}|${albumIds.slice().sort().join('|')}`
+  }, [albumIds])
   return useQuery({
     queryKey: ['progress-batch', stableKey],
     queryFn: async () => {
-      if (paths.length === 0) return {} as Record<string, ReadingProgress>
-      const r = await progressApi.batch(paths)
+      if (albumIds.length === 0) return {} as Record<string, ReadingProgress>
+      const r = await progressApi.batch(albumIds)
       return r.progress
     },
-    enabled: paths.length > 0,
+    enabled: albumIds.length > 0,
     staleTime: 30 * 1000,
   })
 }
 
-// 「继续阅读」单本删除：进度用 key=['progress', path]，批量用 ['progress-batch', ...]，
-// 还有 Recents/Favorites 里 per-album 详情也用 ['progress', path]，
+// 「继续阅读」单本删除：进度用 key=['progress', albumId]，批量用 ['progress-batch', ...]，
+// 还有 Recents/Favorites 里 per-album 详情也用 ['progress', albumId]，
 // invalidate 这三组足以让所有视图同步。
 export function useDeleteProgress() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (path: string) => progressApi.delete(path),
-    onSuccess: (_data, path) => {
+    mutationFn: (albumId: string) => progressApi.delete(albumId),
+    onSuccess: (_data, albumId) => {
       qc.invalidateQueries({ queryKey: ['progress-batch'] })
-      qc.invalidateQueries({ queryKey: ['progress', path] })
+      qc.invalidateQueries({ queryKey: ['progress', albumId] })
       qc.invalidateQueries({ queryKey: ['progress'] })
     },
   })
 }
 
-// 「继续阅读」一键清空：所有 path 都失效。invalidateQueries 不带 predicate
-// 会匹配 ['progress-batch', ...] / ['progress', path] / ['progress'] 全部。
+// 「继续阅读」一键清空：所有 albumId 都失效。invalidateQueries 不带 predicate
+// 会匹配 ['progress-batch', ...] / ['progress', albumId] / ['progress'] 全部。
 export function useClearAllProgress() {
   const qc = useQueryClient()
   return useMutation({
@@ -83,30 +83,30 @@ export function useClearAllProgress() {
 export function useMarkAsRead() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ path, total }: { path: string; total: number }) =>
-      progressApi.set(path, total, total, 0),
-    onSuccess: (_data, { path }) => {
+    mutationFn: ({ albumId, total }: { albumId: string; total: number }) =>
+      progressApi.set(albumId, total, total, 0),
+    onSuccess: (_data, { albumId }) => {
       qc.invalidateQueries({ queryKey: ['progress-batch'] })
-      qc.invalidateQueries({ queryKey: ['progress', path] })
+      qc.invalidateQueries({ queryKey: ['progress', albumId] })
       qc.invalidateQueries({ queryKey: ['progress'] })
     },
   })
 }
 
-// 「未读」一键全部标记已读：并行 N 个 set。
-// 没有专门后端端点 — N 本相册的标记已读各自独立，并行即可。
-// Promise.allSettled 比 all 稳：个别失败不会让整批回滚。
+// 「未读」一键全部标记已读：单请求、单次原子落盘。
 export function useMarkAllAsRead() {
   const qc = useQueryClient()
-  const mark = useMarkAsRead()
   return useMutation({
-    mutationFn: async (items: { path: string; total: number }[]) => {
-      const results = await Promise.allSettled(
-        items.map((it) => mark.mutateAsync(it)),
+    mutationFn: async (items: { albumId: string; total: number }[]) => {
+      const result = await progressApi.setBatch(
+        items.map((item) => ({
+          albumId: item.albumId,
+          index: item.total,
+          total: item.total,
+          scroll: 0,
+        })),
       )
-      const ok = results.filter((r) => r.status === 'fulfilled').length
-      const failed = items.length - ok
-      return { ok, failed, total: items.length }
+      return { ok: result.updated, failed: 0, total: items.length }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['progress-batch'] })

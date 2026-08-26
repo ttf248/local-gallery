@@ -41,7 +41,7 @@ export default function Recents() {
     if (!result) return []
     const out: CardData[] = []
     for (const h of history) {
-      const a = result.albums.find((x) => x.path === h.path)
+      const a = result.albums.find((x) => x.path === h.albumId)
       if (!a) continue
       out.push({
         id: 'a:' + a.path,

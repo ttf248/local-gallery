@@ -227,7 +227,7 @@ export default function Gallery() {
     if (isVideo ? videos.length === 0 : images.length === 0) return
     historyApi
       .add({
-        path: pathParam,
+        albumId: pathParam,
         name,
         imageCount: isVideo ? videos.length : images.length,
       })

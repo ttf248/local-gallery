@@ -96,7 +96,7 @@ describe('Unread', () => {
     seedLibrary([baseAlbum('/a', 'A')])
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { path: '/a', index: 9, total: 10, scroll: 0, updated: '' },
+        '/a': { albumId: '/a', index: 9, total: 10, scroll: 0, updated: '' },
       },
       isLoading: false,
     } as never)

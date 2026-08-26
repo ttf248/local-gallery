@@ -26,6 +26,7 @@ import (
 	"github.com/tianlongxiang/local-gallery/internal/config"
 	"github.com/tianlongxiang/local-gallery/internal/handlers"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
+	"github.com/tianlongxiang/local-gallery/internal/models"
 	"github.com/tianlongxiang/local-gallery/internal/services"
 	"github.com/tianlongxiang/local-gallery/internal/store"
 )
@@ -140,10 +141,16 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/favorites", handlers.FavoritesListHandler(prefsStore))
 	api.Post("/favorites", handlers.FavoriteAddHandler(prefsStore))
 	api.Delete("/favorites", handlers.FavoriteRemoveHandler(prefsStore))
-	api.Post("/favorites/prune", handlers.FavoritesPruneHandler(prefsStore))
+	api.Post("/favorites/prune", handlers.FavoritesPruneHandler(prefsStore, nil))
 	api.Get("/history", handlers.HistoryListHandler(prefsStore))
 	api.Post("/history", handlers.HistoryAddHandler(prefsStore))
 	api.Delete("/history", handlers.HistoryClearHandler(prefsStore))
+	api.Post("/progress", handlers.ProgressSetHandler(prefsStore))
+	api.Get("/progress", handlers.ProgressGetHandler(prefsStore))
+	api.Post("/progress/batch", handlers.ProgressBatchGetHandler(prefsStore))
+	api.Put("/progress/batch", handlers.ProgressBatchSetHandler(prefsStore))
+	api.Delete("/progress", handlers.ProgressClearHandler(prefsStore))
+	api.Delete("/progress/item", handlers.ProgressDeleteHandler(prefsStore))
 	api.Get("/config", handlers.ConfigGetHandler(mgr))
 	api.Put("/config", handlers.ConfigUpdateHandler(mgr, nil))
 
@@ -411,9 +418,9 @@ func TestThumb(t *testing.T) {
 
 func TestFavorites(t *testing.T) {
 	h := newHarness(t)
-	path := "/some/album"
+	resourceID := "a_0000000000000000000001"
 
-	res, _ := h.do(t, "POST", "/api/favorites", map[string]string{"path": path})
+	res, _ := h.do(t, "POST", "/api/favorites", map[string]string{"resourceId": resourceID})
 	if res.StatusCode != 200 {
 		t.Fatalf("add status=%d", res.StatusCode)
 	}
@@ -422,12 +429,12 @@ func TestFavorites(t *testing.T) {
 		Favorites []string `json:"favorites"`
 	}
 	json.Unmarshal(body, &got)
-	if len(got.Favorites) != 1 || got.Favorites[0] != path {
+	if len(got.Favorites) != 1 || got.Favorites[0] != resourceID {
 		t.Errorf("favorites=%v", got.Favorites)
 	}
 
 	// DELETE handler expects JSON body, not query
-	res, _ = h.do(t, "DELETE", "/api/favorites", map[string]string{"path": path})
+	res, _ = h.do(t, "DELETE", "/api/favorites", map[string]string{"resourceId": resourceID})
 	if res.StatusCode != 200 {
 		t.Fatalf("del status=%d", res.StatusCode)
 	}
@@ -465,8 +472,12 @@ func TestPathSafetyRejectsEscape(t *testing.T) {
 
 func TestHistory(t *testing.T) {
 	h := newHarness(t)
-	h.do(t, "POST", "/api/history", map[string]interface{}{"path": "/x", "name": "X", "imageCount": 5})
-	h.do(t, "POST", "/api/history", map[string]interface{}{"path": "/y", "name": "Y", "imageCount": 3})
+	h.do(t, "POST", "/api/history", map[string]interface{}{
+		"albumId": "a_0000000000000000000001", "name": "X", "imageCount": 5,
+	})
+	h.do(t, "POST", "/api/history", map[string]interface{}{
+		"albumId": "a_0000000000000000000002", "name": "Y", "imageCount": 3,
+	})
 	_, body := h.do(t, "GET", "/api/history", nil)
 	var got struct {
 		History []map[string]interface{} `json:"history"`
@@ -474,6 +485,44 @@ func TestHistory(t *testing.T) {
 	json.Unmarshal(body, &got)
 	if len(got.History) != 2 {
 		t.Errorf("history=%d", len(got.History))
+	}
+	if _, leaked := got.History[0]["path"]; leaked {
+		t.Fatal("history response still exposes legacy path field")
+	}
+}
+
+func TestProgressBatchWriteAndRead(t *testing.T) {
+	h := newHarness(t)
+	entries := []map[string]interface{}{
+		{"albumId": "a_0000000000000000000001", "index": 4, "total": 10},
+		{"albumId": "a_0000000000000000000002", "index": 8, "total": 8},
+	}
+	res, body := h.do(t, "PUT", "/api/progress/batch", map[string]interface{}{"entries": entries})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("batch set status=%d body=%s", res.StatusCode, body)
+	}
+	res, body = h.do(t, "POST", "/api/progress/batch", map[string]interface{}{
+		"albumIds": []string{"a_0000000000000000000001", "a_0000000000000000000002"},
+	})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("batch get status=%d body=%s", res.StatusCode, body)
+	}
+	var got struct {
+		Progress map[string]models.ReadingProgress `json:"progress"`
+		Count    int                               `json:"count"`
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Count != 2 || got.Progress["a_0000000000000000000001"].Index != 4 {
+		t.Fatalf("unexpected batch result: %+v", got)
+	}
+
+	res, _ = h.do(t, "PUT", "/api/progress/batch", map[string]interface{}{
+		"entries": []map[string]interface{}{{"albumId": h.root, "index": 1, "total": 2}},
+	})
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("absolute path batch status=%d, want 400", res.StatusCode)
 	}
 }
 

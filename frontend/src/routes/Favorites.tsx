@@ -33,7 +33,7 @@ export default function Favorites() {
   })
   const viewedAtMap = useMemo(() => {
     const m = new Map<string, string>()
-    for (const h of historyData?.history ?? []) m.set(h.path, h.openedAt)
+    for (const h of historyData?.history ?? []) m.set(h.albumId, h.openedAt)
     return m
   }, [historyData])
 

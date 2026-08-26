@@ -93,7 +93,7 @@ ffprobe 提供元数据；不兼容编码按需转为 H.264 + AAC；MP4 的 moov
 - 配置：`backend/config.yaml`，`mediaRoots` 是唯一媒体根字段。
 - 默认缓存：进程 CWD 下 `.local-gallery/`。
 - 扫描缓存：版本化的 `scan_cache.json`，只保存根 ID 与相对引用；启动时用当前根还原内部路径，旧格式或根集合变化时直接失效。
-- 偏好：`web_settings.json`，通过临时文件 + rename 原子落盘。
+- 偏好：`web_settings.json`，只保存稳定资源 ID，通过临时文件 + rename 原子落盘；批量阅读进度一次合并、一次写盘。
 - 缩略图、faststart、转码：按内容派生键写入独立子目录。
 
 `host`、`port`、`staticDir`、`cacheDir` 和 `ffmpegPath` 属于启动期资源，修改后重启。扫描根、扫描排除规则、缩略图尺寸/LRU/保留天数和 `allowOsOpen` 可热更新。

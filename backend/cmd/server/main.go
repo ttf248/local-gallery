@@ -316,15 +316,16 @@ func main() {
 	api.Get("/favorites", handlers.FavoritesListHandler(prefs))
 	api.Post("/favorites", handlers.FavoriteAddHandler(prefs))
 	api.Delete("/favorites", handlers.FavoriteRemoveHandler(prefs))
-	api.Post("/favorites/prune", handlers.FavoritesPruneHandler(prefs))
+	api.Post("/favorites/prune", handlers.FavoritesPruneHandler(prefs, resourceCatalog))
 	api.Get("/history", handlers.HistoryListHandler(prefs))
 	api.Post("/history", handlers.HistoryAddHandler(prefs))
 	api.Delete("/history", handlers.HistoryClearHandler(prefs))
 	api.Post("/progress", handlers.ProgressSetHandler(prefs))
 	api.Get("/progress", handlers.ProgressGetHandler(prefs))
 	api.Post("/progress/batch", handlers.ProgressBatchGetHandler(prefs))
+	api.Put("/progress/batch", handlers.ProgressBatchSetHandler(prefs))
 	// 「继续阅读」管理：单本删除 + 一键清空
-	// - DELETE /api/progress?path=... → 删单条（幂等）
+	// - DELETE /api/progress/item?albumId=... → 删单条（幂等）
 	// - DELETE /api/progress            → 清空所有进度
 	// Fiber 同 path 不同 method 共存 OK；query string 区分也可行（POST/GET 已经有），
 	// 但为了清晰，单条删除单独走子路径 /progress/item。

@@ -53,7 +53,7 @@ describe('progress 语义边界', () => {
     it('ReadingProgress → 收敛到 ProgressLike', () => {
       expect(
         asProgressLike({
-          path: '/a',
+          albumId: 'a_0000000000000000000001',
           index: 5,
           total: 50,
           scroll: 0,

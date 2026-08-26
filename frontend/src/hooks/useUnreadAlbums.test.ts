@@ -78,7 +78,7 @@ describe('useUnreadAlbums', () => {
     })
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { path: '/a', index: 3, total: 10, scroll: 0, updated: '' },
+        '/a': { albumId: '/a', index: 3, total: 10, scroll: 0, updated: '' },
       },
       isLoading: false,
     } as never)
@@ -98,7 +98,7 @@ describe('useUnreadAlbums', () => {
     })
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { path: '/a', index: 0, total: 10, scroll: 0, updated: '' },
+        '/a': { albumId: '/a', index: 0, total: 10, scroll: 0, updated: '' },
       },
       isLoading: false,
     } as never)
@@ -117,7 +117,7 @@ describe('useUnreadAlbums', () => {
     })
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { path: '/a', index: 5, total: 0, scroll: 0, updated: '' },
+        '/a': { albumId: '/a', index: 5, total: 0, scroll: 0, updated: '' },
       },
       isLoading: false,
     } as never)
@@ -127,7 +127,11 @@ describe('useUnreadAlbums', () => {
   })
 
   it('total 反映全库总数,不是未读数', () => {
-    seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B'), baseAlbum('/c', 'C')])
+    seedLibrary([
+      baseAlbum('/a', 'A'),
+      baseAlbum('/b', 'B'),
+      baseAlbum('/c', 'C'),
+    ])
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
@@ -136,7 +140,7 @@ describe('useUnreadAlbums', () => {
     })
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { path: '/a', index: 3, total: 10, scroll: 0, updated: '' },
+        '/a': { albumId: '/a', index: 3, total: 10, scroll: 0, updated: '' },
       },
       isLoading: false,
     } as never)
@@ -160,7 +164,9 @@ describe('useUnreadAlbums', () => {
     } as never)
 
     const { result } = renderHook(() => useUnreadAlbums())
-    const byTitle = Object.fromEntries(result.current.cards.map((c) => [c.title, c.isFavorite]))
+    const byTitle = Object.fromEntries(
+      result.current.cards.map((c) => [c.title, c.isFavorite]),
+    )
     expect(byTitle['A']).toBeFalsy()
     expect(byTitle['B']).toBe(true)
   })

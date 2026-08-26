@@ -104,15 +104,19 @@
 
 ## 收藏、历史与阅读进度
 
-以下接口中的 `path` 字段保存相册 ID 或 `smart:<tag>`，不接受文件系统路径：
+偏好文件只保存稳定资源 ID。旧版 `path` 字段和绝对路径记录在加载时丢弃，不再提供兼容解析。
 
-- `GET /api/prefs`、`PATCH /api/prefs`
-- `GET /api/favorites`、`POST /api/favorites`、`DELETE /api/favorites`
-- `POST /api/favorites/prune`
-- `GET /api/history`、`POST /api/history`、`DELETE /api/history`
-- `GET /api/progress`、`POST /api/progress`、`DELETE /api/progress`
-- `DELETE /api/progress/item`
-- `POST /api/progress/batch`
+- `GET /api/prefs`、`PATCH /api/prefs`：读取或修改界面偏好；历史和进度项使用 `albumId`。
+- `GET /api/favorites`：返回 `{ "favorites": ["<resourceId>"] }`。
+- `POST /api/favorites`、`DELETE /api/favorites`：body 为 `{ "resourceId": "a_... | c_... | smart:<tag>" }`。
+- `POST /api/favorites/prune`：按当前资源目录移除已失效相册/集合 ID，不访问 ID 对应的文件路径；智能标签保留。资源目录尚未完成首次加载时返回 `409`，不会删除收藏。
+- `GET /api/history`、`DELETE /api/history`。
+- `POST /api/history`：body 为 `{ "albumId": "a_...", "name": "...", "imageCount": 42 }`。
+- `GET /api/progress?albumId=<albumId>`。
+- `POST /api/progress`：body 为 `{ "albumId": "a_...", "index": 12, "total": 30, "scroll": 0 }`。
+- `DELETE /api/progress/item?albumId=<albumId>`；`DELETE /api/progress` 清空全部。
+- `POST /api/progress/batch`：body 为 `{ "albumIds": ["a_...", "..."] }`，批量读取。
+- `PUT /api/progress/batch`：body 为 `{ "entries": [{ "albumId": "a_...", "index": 30, "total": 30, "scroll": 0 }] }`，整批校验后一次原子落盘；单批最多 10000 条。
 
 ## 缓存与系统操作
 

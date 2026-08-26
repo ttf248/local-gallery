@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
@@ -124,7 +124,7 @@ export default function Home() {
   })
   const viewedAtMap = useMemo(() => {
     const m = new Map<string, string>()
-    for (const h of historyData?.history ?? []) m.set(h.path, h.openedAt)
+    for (const h of historyData?.history ?? []) m.set(h.albumId, h.openedAt)
     return m
   }, [historyData])
 
@@ -180,19 +180,17 @@ export default function Home() {
   // 个 hero 都消失。
   //
   // 真要「忘记这本」时仍可调 DELETE（后端保留），但 UI 上不再用。
-  const qc = useQueryClient()
-  void qc
   const markReadContinue = useMarkAsRead()
   const markReadAllContinue = useMarkAllAsRead()
   const onRemoveContinue = (card: CardData) => {
-    const path = decodeFavPath(card.to)
+    const albumId = decodeFavPath(card.to)
     const total = card.progress?.total ?? 0
     if (total <= 0) {
       pushToast({ kind: 'error', message: '该相册为空,无法标记' })
       return
     }
     markReadContinue.mutate(
-      { path, total },
+      { albumId, total },
       {
         onSuccess: () =>
           pushToast({ kind: 'info', message: `已将「${card.title}」标记为已读` }),
@@ -207,7 +205,7 @@ export default function Home() {
     )
     if (!ok) return
     const items = inProgressAll.map((c) => ({
-      path: decodeFavPath(c.to),
+      albumId: decodeFavPath(c.to),
       total: c.progress?.total ?? 0,
     }))
     markReadAllContinue.mutate(items, {
@@ -232,14 +230,14 @@ export default function Home() {
   const markReadOne = useMarkAsRead()
   const markReadAll = useMarkAllAsRead()
   const onMarkReadUnread = (card: CardData) => {
-    const path = decodeFavPath(card.to)
+    const albumId = decodeFavPath(card.to)
     const total = card.progress?.total ?? 0
     if (total <= 0) {
       pushToast({ kind: 'error', message: '该相册为空,无法标记' })
       return
     }
     markReadOne.mutate(
-      { path, total },
+      { albumId, total },
       {
         onSuccess: () =>
           pushToast({ kind: 'info', message: `已将「${card.title}」标记为已读` }),
@@ -254,7 +252,7 @@ export default function Home() {
     )
     if (!ok) return
     const items = unreadCards.map((c) => ({
-      path: decodeFavPath(c.to),
+      albumId: decodeFavPath(c.to),
       total: c.progress?.total ?? 0,
     }))
     markReadAll.mutate(items, {
@@ -271,9 +269,6 @@ export default function Home() {
       onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
     })
   }
-  // qc 引用保留以便将来其它 progress 失效场景用
-  void qc
-
   const cards = useMemo(() => buildCards(result), [result])
 
   // 继续上次：需要进度数据

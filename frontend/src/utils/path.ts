@@ -1,4 +1,4 @@
-// 解析收藏路径：to="/albums/<encoded path>" → "<decoded path>"
+// 从相册路由提取不透明资源 ID。
 export function decodeFavPath(to: string): string {
   if (!to.startsWith('/albums/')) return to
   try {
@@ -8,9 +8,9 @@ export function decodeFavPath(to: string): string {
   }
 }
 
-// 把相册绝对路径编码成 /albums/<encoded path> 形式。
-export function albumRoute(absPath: string): string {
-  return `/albums/${encodeURIComponent(absPath)}`
+// 把相册资源 ID 编码成 /albums/<encoded-id> 形式。
+export function albumRoute(albumId: string): string {
+  return `/albums/${encodeURIComponent(albumId)}`
 }
 
 // 智能集合（按标签聚合）路由：smart:<tag> → /albums/smart:<tag> 编码后

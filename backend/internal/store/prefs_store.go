@@ -21,9 +21,9 @@ import (
 type PrefsStore struct {
 	path string
 
-	mu      sync.RWMutex
-	cached  models.Prefs
-	loaded  bool
+	mu     sync.RWMutex
+	cached models.Prefs
+	loaded bool
 }
 
 // NewPrefsStore 创建存储（不立即读盘）。
@@ -73,6 +73,57 @@ func normalize(p models.Prefs) models.Prefs {
 	if p.Theme == "" {
 		p.Theme = d.Theme
 	}
+
+	// 偏好文件是 API 可直接读取的数据，旧版绝对路径或畸形标识不得重新
+	// 暴露。升级后只保留当前不透明资源 ID 契约。
+	favorites := make([]string, 0, len(p.Favorites))
+	seenFavorites := make(map[string]struct{}, len(p.Favorites))
+	for _, id := range p.Favorites {
+		if !models.IsFavoriteResourceID(id) {
+			continue
+		}
+		if _, exists := seenFavorites[id]; exists {
+			continue
+		}
+		seenFavorites[id] = struct{}{}
+		favorites = append(favorites, id)
+	}
+	const maxFavorites = 500
+	if len(favorites) > maxFavorites {
+		favorites = favorites[len(favorites)-maxFavorites:]
+	}
+	p.Favorites = favorites
+
+	history := make([]models.HistoryEntry, 0, min(len(p.History), p.MaxRecent))
+	seenHistory := make(map[string]struct{}, len(p.History))
+	for _, entry := range p.History {
+		if !models.IsAlbumID(entry.AlbumID) {
+			continue
+		}
+		if _, exists := seenHistory[entry.AlbumID]; exists {
+			continue
+		}
+		seenHistory[entry.AlbumID] = struct{}{}
+		history = append(history, entry)
+		if len(history) == p.MaxRecent {
+			break
+		}
+	}
+	p.History = history
+
+	progress := make([]models.ReadingProgress, 0, len(p.ReadingProgress))
+	seenProgress := make(map[string]struct{}, len(p.ReadingProgress))
+	for _, entry := range p.ReadingProgress {
+		if !models.IsAlbumID(entry.AlbumID) {
+			continue
+		}
+		if _, exists := seenProgress[entry.AlbumID]; exists {
+			continue
+		}
+		seenProgress[entry.AlbumID] = struct{}{}
+		progress = append(progress, entry)
+	}
+	p.ReadingProgress = progress
 	return p
 }
 
@@ -80,7 +131,7 @@ func normalize(p models.Prefs) models.Prefs {
 func (s *PrefsStore) Get() (models.Prefs, error) {
 	s.mu.RLock()
 	if s.loaded {
-		p := s.cached
+		p := clonePrefs(s.cached)
 		s.mu.RUnlock()
 		return p, nil
 	}
@@ -93,7 +144,7 @@ func (s *PrefsStore) Get() (models.Prefs, error) {
 			return models.DefaultPrefs(), err
 		}
 	}
-	return s.cached, nil
+	return clonePrefs(s.cached), nil
 }
 
 // Update 全量覆盖（用于 PATCH）。
@@ -103,75 +154,81 @@ func (s *PrefsStore) Update(p models.Prefs) error {
 	if err := s.ensureLoaded(); err != nil {
 		return err
 	}
-	s.cached = normalize(p)
-	return s.flushLocked()
+	return s.commitLocked(normalize(clonePrefs(p)))
 }
 
 // AddFavorite 添加收藏（幂等）。返回更新后的列表。
-func (s *PrefsStore) AddFavorite(path string) ([]string, error) {
+func (s *PrefsStore) AddFavorite(resourceID string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {
 		return nil, err
 	}
+	if !models.IsFavoriteResourceID(resourceID) {
+		return nil, errors.New("invalid favorite resource id")
+	}
 	for _, f := range s.cached.Favorites {
-		if f == path {
-			return s.cached.Favorites, nil
+		if f == resourceID {
+			return append([]string(nil), s.cached.Favorites...), nil
 		}
 	}
-	s.cached.Favorites = append(s.cached.Favorites, path)
+	next := clonePrefs(s.cached)
+	next.Favorites = append(next.Favorites, resourceID)
 	// 软上限：收藏超过 maxFavorites 时丢弃最旧的，避免无限增长。
 	// 用户可通过 PruneInvalidFavorites / DELETE 主动清理。
 	const maxFavorites = 500
-	if len(s.cached.Favorites) > maxFavorites {
-		s.cached.Favorites = s.cached.Favorites[len(s.cached.Favorites)-maxFavorites:]
+	if len(next.Favorites) > maxFavorites {
+		next.Favorites = next.Favorites[len(next.Favorites)-maxFavorites:]
 	}
-	if err := s.flushLocked(); err != nil {
+	if err := s.commitLocked(next); err != nil {
 		return nil, err
 	}
-	return s.cached.Favorites, nil
+	return append([]string(nil), s.cached.Favorites...), nil
 }
 
 // RemoveFavorite 移除收藏。
-func (s *PrefsStore) RemoveFavorite(path string) ([]string, error) {
+func (s *PrefsStore) RemoveFavorite(resourceID string) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {
 		return nil, err
 	}
-	out := s.cached.Favorites[:0]
+	next := clonePrefs(s.cached)
+	out := next.Favorites[:0]
 	for _, f := range s.cached.Favorites {
-		if f != path {
+		if f != resourceID {
 			out = append(out, f)
 		}
 	}
-	s.cached.Favorites = out
-	if err := s.flushLocked(); err != nil {
+	next.Favorites = out
+	if err := s.commitLocked(next); err != nil {
 		return nil, err
 	}
-	return s.cached.Favorites, nil
+	return append([]string(nil), s.cached.Favorites...), nil
 }
 
-// PruneInvalidFavorites 移除磁盘上已不存在的路径。
-func (s *PrefsStore) PruneInvalidFavorites() (removed []string, err error) {
+// PruneInvalidFavorites 按调用方提供的当前资源目录移除已失效收藏。
+// smart:<tag> 等非文件系统引用也由 predicate 判断，不再对 ID 执行 os.Stat。
+func (s *PrefsStore) PruneInvalidFavorites(predicate func(string) bool) (removed []string, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {
 		return nil, err
 	}
-	out := s.cached.Favorites[:0]
+	next := clonePrefs(s.cached)
+	out := next.Favorites[:0]
 	for _, f := range s.cached.Favorites {
-		if _, statErr := os.Stat(f); statErr == nil {
+		if predicate != nil && predicate(f) {
 			out = append(out, f)
 		} else {
 			removed = append(removed, f)
 		}
 	}
-	s.cached.Favorites = out
+	next.Favorites = out
 	if len(removed) == 0 {
 		return nil, nil
 	}
-	if err := s.flushLocked(); err != nil {
+	if err := s.commitLocked(next); err != nil {
 		return removed, err
 	}
 	return removed, nil
@@ -186,9 +243,12 @@ func (s *PrefsStore) AddHistory(entry models.HistoryEntry) ([]models.HistoryEntr
 	}
 
 	// 去重（最新优先）
+	if !models.IsAlbumID(entry.AlbumID) {
+		return nil, errors.New("invalid history album id")
+	}
 	out := []models.HistoryEntry{entry}
 	for _, h := range s.cached.History {
-		if h.Path == entry.Path {
+		if h.AlbumID == entry.AlbumID {
 			continue
 		}
 		out = append(out, h)
@@ -201,11 +261,12 @@ func (s *PrefsStore) AddHistory(entry models.HistoryEntry) ([]models.HistoryEntr
 	if len(out) > s.cached.MaxRecent {
 		out = out[:s.cached.MaxRecent]
 	}
-	s.cached.History = out
-	if err := s.flushLocked(); err != nil {
+	next := clonePrefs(s.cached)
+	next.History = out
+	if err := s.commitLocked(next); err != nil {
 		return nil, err
 	}
-	return s.cached.History, nil
+	return append([]models.HistoryEntry(nil), s.cached.History...), nil
 }
 
 // ClearHistory 清空历史。
@@ -215,67 +276,98 @@ func (s *PrefsStore) ClearHistory() error {
 	if err := s.ensureLoaded(); err != nil {
 		return err
 	}
-	s.cached.History = []models.HistoryEntry{}
-	return s.flushLocked()
+	next := clonePrefs(s.cached)
+	next.History = []models.HistoryEntry{}
+	return s.commitLocked(next)
 }
 
-// SetReadingProgress 记录某相册的阅读进度（LRU，去重）。
+// SetReadingProgress 记录某相册的阅读进度（最新优先，去重）。
 func (s *PrefsStore) SetReadingProgress(entry models.ReadingProgress) error {
+	return s.SetReadingProgressBatch([]models.ReadingProgress{entry})
+}
+
+// SetReadingProgressBatch 原子合并多条阅读进度并只落盘一次。
+//
+// 输入中同一 albumId 重复时最后一条生效；新记录按请求顺序排在旧记录前。
+// 阅读进度同时承担“已读”状态，不再裁剪到 50 条，否则大库批量标记后旧条目
+// 会重新变成未读。
+func (s *PrefsStore) SetReadingProgressBatch(entries []models.ReadingProgress) error {
+	if len(entries) == 0 {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {
 		return err
 	}
-	out := []models.ReadingProgress{entry}
-	for _, r := range s.cached.ReadingProgress {
-		if r.Path == entry.Path {
+
+	seen := make(map[string]struct{}, len(entries))
+	incomingReverse := make([]models.ReadingProgress, 0, len(entries))
+	for i := len(entries) - 1; i >= 0; i-- {
+		entry := entries[i]
+		if !models.IsAlbumID(entry.AlbumID) {
+			return errors.New("invalid progress album id")
+		}
+		if _, exists := seen[entry.AlbumID]; exists {
 			continue
 		}
-		out = append(out, r)
+		seen[entry.AlbumID] = struct{}{}
+		incomingReverse = append(incomingReverse, entry)
 	}
-	// 上限 50 条，防止无限增长
-	const maxRP = 50
-	if len(out) > maxRP {
-		out = out[:maxRP]
+	incoming := make([]models.ReadingProgress, len(incomingReverse))
+	for i := range incomingReverse {
+		incoming[len(incomingReverse)-1-i] = incomingReverse[i]
 	}
-	s.cached.ReadingProgress = out
-	return s.flushLocked()
+	out := append([]models.ReadingProgress(nil), incoming...)
+	for _, current := range s.cached.ReadingProgress {
+		if _, replaced := seen[current.AlbumID]; replaced {
+			continue
+		}
+		out = append(out, current)
+	}
+	next := clonePrefs(s.cached)
+	next.ReadingProgress = out
+	return s.commitLocked(next)
 }
 
 // GetReadingProgress 读取某相册的阅读进度。
-func (s *PrefsStore) GetReadingProgress(path string) (models.ReadingProgress, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *PrefsStore) GetReadingProgress(albumID string) (models.ReadingProgress, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLoaded(); err != nil {
+		return models.ReadingProgress{}, false, err
+	}
 	for _, r := range s.cached.ReadingProgress {
-		if r.Path == path {
-			return r, true
+		if r.AlbumID == albumID {
+			return r, true, nil
 		}
 	}
-	return models.ReadingProgress{}, false
+	return models.ReadingProgress{}, false, nil
 }
 
 // DeleteReadingProgress 删除某相册的阅读进度。
 // 用于首页「继续阅读」移除单项：用户看了几页后想从列表里移出，不想再被记录。
-// 返回 (true) 表示该 path 原本存在并被删除；(false) 表示原本就不存在，幂等。
-func (s *PrefsStore) DeleteReadingProgress(path string) (bool, error) {
+// 返回 true 表示该 albumId 原本存在并被删除；false 表示原本就不存在，幂等。
+func (s *PrefsStore) DeleteReadingProgress(albumID string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.ensureLoaded(); err != nil {
 		return false, err
 	}
 	before := len(s.cached.ReadingProgress)
-	out := s.cached.ReadingProgress[:0]
+	next := clonePrefs(s.cached)
+	out := next.ReadingProgress[:0]
 	for _, r := range s.cached.ReadingProgress {
-		if r.Path == path {
+		if r.AlbumID == albumID {
 			continue
 		}
 		out = append(out, r)
 	}
-	s.cached.ReadingProgress = out
+	next.ReadingProgress = out
 	if len(out) == before {
 		return false, nil
 	}
-	if err := s.flushLocked(); err != nil {
+	if err := s.commitLocked(next); err != nil {
 		return true, err
 	}
 	return true, nil
@@ -291,35 +383,40 @@ func (s *PrefsStore) ClearAllReadingProgress() (int, error) {
 		return 0, err
 	}
 	n := len(s.cached.ReadingProgress)
-	s.cached.ReadingProgress = nil
+	next := clonePrefs(s.cached)
+	next.ReadingProgress = []models.ReadingProgress{}
 	if n == 0 {
 		return 0, nil
 	}
-	if err := s.flushLocked(); err != nil {
+	if err := s.commitLocked(next); err != nil {
 		return n, err
 	}
 	return n, nil
 }
 
-// GetReadingProgressBatch 一次性读取多个路径的阅读进度。
-// 返回 map[path]progress，缺失项不出现在 map 中。
-// 一次加锁，避免 N 路并发 GET /api/progress?path=... 的锁竞争。
-func (s *PrefsStore) GetReadingProgressBatch(paths []string) map[string]models.ReadingProgress {
-	out := make(map[string]models.ReadingProgress, len(paths))
-	if len(paths) == 0 {
-		return out
+// GetReadingProgressBatch 一次性读取多个相册 ID 的阅读进度。
+// 返回 map[albumId]progress，缺失项不出现在 map 中。
+// 一次加锁，避免 N 路并发 GET /api/progress?albumId=... 的锁竞争。
+func (s *PrefsStore) GetReadingProgressBatch(albumIDs []string) (map[string]models.ReadingProgress, error) {
+	out := make(map[string]models.ReadingProgress, len(albumIDs))
+	if len(albumIDs) == 0 {
+		return out, nil
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for _, path := range paths {
-		for _, r := range s.cached.ReadingProgress {
-			if r.Path == path {
-				out[path] = r
-				break
-			}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.ensureLoaded(); err != nil {
+		return nil, err
+	}
+	requested := make(map[string]struct{}, len(albumIDs))
+	for _, albumID := range albumIDs {
+		requested[albumID] = struct{}{}
+	}
+	for _, entry := range s.cached.ReadingProgress {
+		if _, ok := requested[entry.AlbumID]; ok {
+			out[entry.AlbumID] = entry
 		}
 	}
-	return out
+	return out, nil
 }
 
 // ---- 内部 ----
@@ -332,12 +429,13 @@ func (s *PrefsStore) ensureLoaded() error {
 	return s.load()
 }
 
-// flushLocked 必须在已持锁时调用。原子写入。
-func (s *PrefsStore) flushLocked() error {
+// commitLocked 必须在已持锁时调用。磁盘替换成功后才发布新的内存快照。
+func (s *PrefsStore) commitLocked(next models.Prefs) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(s.cached, "", "  ")
+	next = normalize(next)
+	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -348,5 +446,14 @@ func (s *PrefsStore) flushLocked() error {
 	if err := os.Rename(tmp, s.path); err != nil {
 		return fmt.Errorf("rename %s -> %s: %w", tmp, s.path, err)
 	}
+	s.cached = next
 	return nil
+}
+
+func clonePrefs(p models.Prefs) models.Prefs {
+	out := p
+	out.Favorites = append([]string(nil), p.Favorites...)
+	out.History = append([]models.HistoryEntry(nil), p.History...)
+	out.ReadingProgress = append([]models.ReadingProgress(nil), p.ReadingProgress...)
+	return out
 }

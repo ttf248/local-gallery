@@ -115,6 +115,11 @@ func (c *ResourceCatalog) Lookup(id string) (ResourceRef, bool) {
 	return ref, ok
 }
 
+// Ready 表示资源目录已经由磁盘快照或一次完整扫描构建完成。
+func (c *ResourceCatalog) Ready() bool {
+	return c != nil && len(c.state.Load().roots) > 0
+}
+
 // ExternalID 返回内部路径对应的业务 ID；未知路径返回空，避免意外泄露。
 func (c *ResourceCatalog) ExternalID(path string, kind ResourceKind) string {
 	if c == nil || path == "" {
