@@ -1,0 +1,206 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v2.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 要发布的已存在 v2.x 标签，例如 v2.0.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: 校验版本
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: 检出标签
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: 校验 v2 版本标签
+        id: version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v2\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "仅允许发布 v2.x.y 或 v2.x.y-rc.1 标签，收到：$RELEASE_TAG" >&2
+            exit 1
+          fi
+          git rev-parse "$RELEASE_TAG^{commit}" >/dev/null
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+  frontend:
+    name: 构建前端
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出标签
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: npm ci
+
+      - name: 构建前端
+        working-directory: frontend
+        env:
+          LOCAL_GALLERY_VERSION: ${{ needs.prepare.outputs.version }}
+        run: npm run build
+
+      - name: 上传前端产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  package:
+    name: 打包 ${{ matrix.target }}
+    needs: [prepare, frontend]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            os: linux
+            arch: amd64
+          - target: linux-arm64
+            os: linux
+            arch: arm64
+          - target: windows-amd64
+            os: windows
+            arch: amd64
+          - target: darwin-amd64
+            os: darwin
+            arch: amd64
+          - target: darwin-arm64
+            os: darwin
+            arch: arm64
+    env:
+      CGO_ENABLED: "0"
+    steps:
+      - name: 检出标签
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: 下载前端产物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - name: 生成发布包
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $outputDir = Join-Path $env:RUNNER_TEMP 'release-assets'
+          pwsh -NoProfile -File scripts/package-release.ps1 `
+            -Version $env:RELEASE_VERSION `
+            -TargetOS '${{ matrix.os }}' `
+            -TargetArch '${{ matrix.arch }}' `
+            -OutputDir $outputDir `
+            -SkipFrontend
+
+      - name: 上传平台发布包
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ runner.temp }}/release-assets/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    name: 创建 GitHub Release
+    needs: [prepare, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 检出标签
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: 下载所有平台包
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: 生成 SHA256 校验文件
+        working-directory: release-assets
+        run: sha256sum local-gallery-* > SHA256SUMS
+
+      - name: 创建或更新 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            exit 0
+          fi
+
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            prerelease_args=(--prerelease)
+          else
+            prerelease_args=()
+          fi
+
+          if [[ "$RELEASE_TAG" == "v2.0.0" && -f "docs/release-notes/v2.0.0.md" ]]; then
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Local Gallery $RELEASE_TAG" \
+              --notes-file "docs/release-notes/v2.0.0.md" \
+              "${prerelease_args[@]}"
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Local Gallery $RELEASE_TAG" \
+              --generate-notes \
+              "${prerelease_args[@]}"
+          fi

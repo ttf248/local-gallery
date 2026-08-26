@@ -33,6 +33,7 @@ node_modules/
 /frontend/dist/
 /frontend/build/
 /frontend/.vite/
+/artifacts/
 /frontend/coverage/
 /frontend/test-results/
 /frontend/playwright-report/

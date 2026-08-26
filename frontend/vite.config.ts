@@ -3,11 +3,13 @@ import react from '@vitejs/plugin-react'
 import path from 'node:path'
 import pkg from './package.json'
 
+const appVersion = process.env.LOCAL_GALLERY_VERSION ?? pkg.version
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  // 把 package.json 的版本号注入到前端，避免多处手写不同步
+  // 开发构建使用 package.json；发布工作流用环境变量注入标签版本。
   define: {
-    __APP_VERSION__: JSON.stringify(pkg.version),
+    __APP_VERSION__: JSON.stringify(appVersion),
   },
   plugins: [react()],
   resolve: {

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: 验证与构建
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安装前端依赖
+        working-directory: frontend
+        run: npm ci
+
+      - name: 后端测试
+        working-directory: backend
+        run: go test ./...
+
+      - name: 前端静态检查
+        working-directory: frontend
+        run: npm run lint
+
+      - name: 前端测试
+        working-directory: frontend
+        run: npm run test
+
+      - name: 构建可运行包
+        shell: pwsh
+        run: |
+          $outputDir = Join-Path $env:RUNNER_TEMP 'local-gallery-ci-build'
+          pwsh -NoProfile -File scripts/build.ps1 `
+            -SkipInstall `
+            -Version '0.0.0-dev' `
+            -OutputDir $outputDir
+
+          $packageDir = Join-Path $env:RUNNER_TEMP 'local-gallery-ci-package'
+          New-Item -ItemType Directory -Path (Join-Path $packageDir 'dist') -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path $outputDir 'local-gallery') -Destination $packageDir
+          Copy-Item -Path (Join-Path $env:GITHUB_WORKSPACE 'frontend/dist/*') `
+            -Destination (Join-Path $packageDir 'dist') -Recurse -Force
+          Copy-Item -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'backend/config.example.yaml') `
+            -Destination (Join-Path $packageDir 'config.example.yaml')
+          tar -czf (Join-Path $env:RUNNER_TEMP 'local-gallery-ci.tar.gz') `
+            -C $env:RUNNER_TEMP local-gallery-ci-package
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-gallery-ci-${{ github.sha }}
+          path: ${{ runner.temp }}/local-gallery-ci.tar.gz
+          if-no-files-found: error
+          retention-days: 7

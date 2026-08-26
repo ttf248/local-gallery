@@ -1,6 +1,8 @@
 # Local Gallery · 本地画廊
 
-> 本地图像 / 视频画廊。Go + React，单二进制单端口，离线可用。
+> 本地图像 / 视频画廊。Go + React，单进程单端口，离线可用。
+
+> 协作与自动化规则见 [AGENTS.md](./AGENTS.md)；构建、推送和发布流程见 [docs/RELEASE.md](./docs/RELEASE.md)。
 
 指一下硬盘上的文件夹，按 `R` 随机翻一卷，hover 看大图，按 `?` 翻出所有快捷键。
 剩下的，让它自己跑。
@@ -17,7 +19,8 @@
 - **画廊**：单张 / 连续滚动 / 双张并排（支持 RTL），4 套 fit
 - **主题**：light / dark / system + 6 套强调色
 - **跨设备持久化**：收藏、最近、阅读进度、设置走服务端 JSON
-- **单二进制部署**：Go 后端托管前端静态资源，一个端口一把梭
+- **单进程单端口部署**：Go 后端托管前端静态资源，一个端口一把梭
+- **自动构建发布**：分支 push 自动 CI，`v2.*` 标签生成跨平台发布包
 
 ---
 
@@ -129,6 +132,8 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 ./bin/server                              # 单端口同时托管 API + 静态资源
 ```
 
+生产发布包、版本线和自动推送流程见 [`docs/RELEASE.md`](./docs/RELEASE.md)。当前 Go + React 架构从 `v2.0.0` 开始；GitHub 上已有的 `v1.x` Release 属于旧 Python 架构，仅作为历史版本保留。
+
 ---
 
 ## 配置
@@ -212,7 +217,8 @@ local-gallery/
 │       ├── components/     # album / gallery / layout / home / common
 │       └── utils/          # shortcuts / path / storage / format / albumGrouping / libraryIndex
 ├── docs/                   # 架构 / API / 快捷键 / 全功能清单
-├── scripts/                # dev / build / test / install-ffmpeg
+├── scripts/                # dev / build / package / publish / monitor / install-ffmpeg
+├── .github/workflows/      # CI 与 v2 发布工作流
 └── .vscode/                # launch / tasks / settings / extensions
 ```
 
@@ -227,6 +233,7 @@ local-gallery/
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 系统设计、模块划分、数据流、性能         |
 | [docs/API.md](./docs/API.md)                   | HTTP 接口手册                            |
 | [docs/SHORTCUTS.md](./docs/SHORTCUTS.md)       | 快捷键全集（含视频播放器）               |
+| [docs/RELEASE.md](./docs/RELEASE.md)            | 自动构建、推送、版本线与发布包             |
 
 `?` 在应用里随时唤起可搜索的帮助浮层。
 
@@ -244,6 +251,7 @@ local-gallery/
 | e2e      | `cd frontend && npm run test:e2e` 或 `scripts/test-e2e.ps1` |
 | 全栈启动 | VSCode → "全栈: 后端 + 前端 (复合)"                         |
 | 全栈构建 | `scripts/build.ps1` 或 VSCode 任务 `build: all`             |
+| 自动提交推送 | `pwsh -File scripts/publish.ps1 -Message "feat: ..."`      |
 
 **改动业务逻辑必须同步改测试**——后端 handler / service / middleware → `go test`；前端组件 / hook / store → Vitest；跨层主链路 → integration / e2e。
 
@@ -265,7 +273,7 @@ local-gallery/
 
 诚实声明：
 
-- ❌ 不维护 CI / Release workflow（手动 release）
+- ✅ 分支 push / PR 自动 CI；`v2.*` 标签自动生成 GitHub Release
 - ❌ 不存数据库（偏好走服务端 JSON 原子写）
 - ❌ 不引入微服务 / 消息队列
 - ❌ 不做用户系统（单用户本地工具）
