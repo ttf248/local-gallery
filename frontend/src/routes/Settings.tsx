@@ -62,18 +62,62 @@ export default function Settings() {
     },
   })
 
-  // 强制清空缩略图缓存。释放 0 字节时也清掉内存 LRU,让下次访问重新生成。
-  const clearThumbs = useMutation({
-    mutationFn: () => cacheApi.clearThumbs(),
+  // 单 scope 清空(thumbs / faststart / transcode)。三个独立 mutation
+  // 实例让每个按钮的 isPending 互不干扰,UI 状态干净;公共逻辑收敛
+  // 在 onSuccessScope 里。
+  const onSuccessScope = (
+    r: Awaited<ReturnType<typeof cacheApi.clearCache>>,
+    scope: 'thumbs' | 'faststart' | 'transcode'
+  ) => {
+    qc.invalidateQueries({ queryKey: ['cache-stats'] })
+    const sub = r[scope]
+    if (!sub || sub.deleted === 0) {
+      pushToast({ kind: 'info', message: `${scopeLabel(scope)} 缓存本就是空的` })
+      return
+    }
+    const freed = sub.freedBytes > 0 ? ` · 释放 ${formatBytes(sub.freedBytes)}` : ''
+    pushToast({
+      kind: 'success',
+      message: `已清空 ${scopeLabel(scope)} ${sub.deleted} 个文件${freed}`,
+    })
+  }
+  const onErrorScope = (scope: 'thumbs' | 'faststart' | 'transcode') =>
+    pushToast({ kind: 'error', message: `清空 ${scopeLabel(scope)} 缓存失败` })
+
+  const clearThumbsScope = useMutation({
+    mutationFn: () => cacheApi.clearCache('thumbs'),
+    onSuccess: (r) => onSuccessScope(r, 'thumbs'),
+    onError: () => onErrorScope('thumbs'),
+  })
+  const clearFaststart = useMutation({
+    mutationFn: () => cacheApi.clearCache('faststart'),
+    onSuccess: (r) => onSuccessScope(r, 'faststart'),
+    onError: () => onErrorScope('faststart'),
+  })
+  const clearTranscode = useMutation({
+    mutationFn: () => cacheApi.clearCache('transcode'),
+    onSuccess: (r) => onSuccessScope(r, 'transcode'),
+    onError: () => onErrorScope('transcode'),
+  })
+
+  // 一键全清:thumbs + faststart + transcode 一起清。
+  // 解决「3 GB 缓存只点了一个缩略图清空按钮,数据纹丝不动」的痛点。
+  const clearAll = useMutation({
+    mutationFn: () => cacheApi.clearCache('all'),
     onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['cache-stats'] })
-      const freed = r.freedBytes > 0 ? ` · 释放 ${formatBytes(r.freedBytes)}` : ''
+      if (r.totalDeleted === 0) {
+        pushToast({ kind: 'info', message: '缓存本就是空的' })
+        return
+      }
       pushToast({
         kind: 'success',
-        message: `已清空 ${r.deleted} 个缩略图${freed},下次访问会重新生成`,
+        message: `已清空全部缓存 · ${r.totalDeleted} 个文件 · 释放 ${formatBytes(
+          r.totalFreedBytes
+        )}`,
       })
     },
-    onError: () => pushToast({ kind: 'error', message: '清空缩略图缓存失败' }),
+    onError: () => pushToast({ kind: 'error', message: '清空全部缓存失败' }),
   })
 
   // 清空图像库缓存。不同于「重新扫描」(会立即起一次新扫描覆盖旧结果),
@@ -287,21 +331,36 @@ export default function Settings() {
               <span>刷新</span>
             </button>
             <button
-              onClick={() => clearThumbs.mutate()}
-              disabled={clearThumbs.isPending}
+              onClick={() => clearAll.mutate()}
+              disabled={clearAll.isPending}
               className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-xs transition-colors disabled:opacity-50"
-              title="清空全部缩略图缓存，下次访问会按需重新生成"
+              title="清空全部缓存（缩略图 + faststart + 转码）"
             >
               <TrashIcon size={11} />
-              <span>{clearThumbs.isPending ? '清空中…' : '清空'}</span>
+              <span>{clearAll.isPending ? '清空中…' : '一键全清'}</span>
             </button>
           </div>
-          {/* 按类型细分 — 大头一目了然,转码缓存过大时可手动清 */}
+          {/* 按类型细分 — 大头一目了然,转码缓存过大时可单独清 */}
           {cacheStats.data && cacheStats.data.available && (
             <div className="mt-2 grid grid-cols-3 gap-2 text-[10.5px]">
-              <SubUsageBadge label="缩略图" sub={cacheStats.data.thumbs} />
-              <SubUsageBadge label="faststart" sub={cacheStats.data.videoFaststart} />
-              <SubUsageBadge label="转码" sub={cacheStats.data.videoTranscode} />
+              <SubUsageBadge
+                label="缩略图"
+                sub={cacheStats.data.thumbs}
+                onClear={() => clearThumbsScope.mutate()}
+                clearPending={clearThumbsScope.isPending}
+              />
+              <SubUsageBadge
+                label="faststart"
+                sub={cacheStats.data.videoFaststart}
+                onClear={() => clearFaststart.mutate()}
+                clearPending={clearFaststart.isPending}
+              />
+              <SubUsageBadge
+                label="转码"
+                sub={cacheStats.data.videoTranscode}
+                onClear={() => clearTranscode.mutate()}
+                clearPending={clearTranscode.isPending}
+              />
             </div>
           )}
         </Row>
@@ -451,44 +510,81 @@ function NumberInput({
 }
 
 // 缓存细分 badge:展示单个子目录(thumbs / faststart / transcode)的占用。
-// 不可用(子目录还没产生)时整块灰显;可用且 allowOsOpen 时整块可点
-// 「在资源管理器中打开」,方便用户快速找到大头清理。
+// 不可用(子目录还没产生)时整块灰显;可用时右上角带「清空」按钮(只清
+// 这一类,不影响其他子项),方便定位"大头"快速清理。
 function SubUsageBadge({
   label,
   sub,
   onOpen,
+  onClear,
+  clearPending,
 }: {
   label: string
   sub: { path: string; bytes: number; fileCount: number; available: boolean }
   onOpen?: () => void
+  onClear?: () => void
+  clearPending?: boolean
 }) {
   const body = sub.available ? (
-    <>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-fg tabular-nums font-medium">{formatBytes(sub.bytes)}</span>
-        <span className="text-fg-subtle/70 tabular-nums">{sub.fileCount} 个</span>
-      </div>
-    </>
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-fg tabular-nums font-medium">{formatBytes(sub.bytes)}</span>
+      <span className="text-fg-subtle/70 tabular-nums">{sub.fileCount} 个</span>
+    </div>
   ) : (
     <span className="text-fg-subtle/60">—</span>
   )
+  // 只有"可用 + 有数据 + 提供 onClear"时显示清空按钮;0 字节的子项
+  // 没必要再点一次(后端也是 no-op)。
+  const showClear = !!onClear && sub.available && sub.bytes > 0
   const cls = `flex flex-col gap-0.5 px-2.5 py-1.5 rounded border border-border-faint bg-bg-subtle/40 ${
     onOpen
       ? 'cursor-pointer hover:border-border-strong hover:bg-bg-subtle transition-colors'
       : ''
   }`
+  const inner = (
+    <>
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="text-fg-muted text-[10px] uppercase tracking-wider">{label}</span>
+        {showClear && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation() // 防止冒泡到外层 onOpen
+              onClear!()
+            }}
+            disabled={clearPending}
+            className="inline-flex items-center justify-center w-4 h-4 rounded text-fg-subtle hover:text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
+            title={`清空 ${label} 缓存`}
+            aria-label={`清空 ${label} 缓存`}
+          >
+            {clearPending ? (
+              <span className="inline-block w-2 h-2 rounded-full border border-fg-muted border-t-transparent animate-spin" />
+            ) : (
+              <TrashIcon size={9} />
+            )}
+          </button>
+        )}
+      </div>
+      {body}
+    </>
+  )
   if (onOpen) {
     return (
       <button onClick={onOpen} className={cls} title={`在资源管理器中打开 ${sub.path}`}>
-        <span className="text-fg-muted text-[10px] uppercase tracking-wider">{label}</span>
-        {body}
+        {inner}
       </button>
     )
   }
-  return (
-    <div className={cls}>
-      <span className="text-fg-muted text-[10px] uppercase tracking-wider">{label}</span>
-      {body}
-    </div>
-  )
+  return <div className={cls}>{inner}</div>
+}
+
+// 缓存 scope 中文标签(toast 复用)。
+function scopeLabel(s: 'thumbs' | 'faststart' | 'transcode'): string {
+  switch (s) {
+    case 'thumbs':
+      return '缩略图'
+    case 'faststart':
+      return 'faststart'
+    case 'transcode':
+      return '转码'
+  }
 }

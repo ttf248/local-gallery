@@ -471,7 +471,10 @@ func TestTranscodeService_ClearCache(t *testing.T) {
 	if !ok {
 		t.Fatal("transcode did not finish")
 	}
-	if err := s.ClearCache(); err != nil {
+	if err := func() error {
+		_, _, err := s.ClearCache()
+		return err
+	}(); err != nil {
 		t.Fatalf("ClearCache: %v", err)
 	}
 	entries, _ := os.ReadDir(filepath.Join(cache, "video-transcode"))

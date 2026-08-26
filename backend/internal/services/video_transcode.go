@@ -630,19 +630,41 @@ func (s *TranscodeService) Subscribe(absPath string) (<-chan TranscodeInfo, func
 	return events, cancel
 }
 
-// ClearCache 清空整个转码缓存目录(测试 / 管理用)。
-func (s *TranscodeService) ClearCache() error {
+// ClearCache 清空整个转码缓存目录,返回删除文件数和释放字节数。
+//
+// 与 VideoFaststartService.ClearCache / ThumbnailService.ClearAll 对齐:
+// 即使目录为空也返回 (0, 0, nil),前端能拿到确定的"无操作"结果。
+//
+// 关键差异:除了删盘,还要清掉内存 cached map(已 transcode 完成的
+// 路径集合,避免下次访问时 stat 命中后被误判为"已缓存"而读不到文件
+// ——stat 是会读盘,但 cached 命中跳过 stat 也可能踩到刚删的窗口)。
+func (s *TranscodeService) ClearCache() (deleted int, freedBytes int64, err error) {
 	if s == nil || s.cacheDir == "" {
-		return nil
+		return 0, 0, nil
 	}
 	dir := filepath.Join(s.cacheDir, "video-transcode")
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return nil
+	if _, statErr := os.Stat(dir); os.IsNotExist(statErr) {
+		return 0, 0, nil
 	}
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil
+		}
+		fi, infoErr := d.Info()
+		if infoErr != nil {
+			return nil
+		}
+		freedBytes += fi.Size()
+		deleted++
+		return nil
+	})
 	s.mu.Lock()
 	s.cached = make(map[string]struct{})
 	s.mu.Unlock()
-	return os.RemoveAll(dir)
+	if rmErr := os.RemoveAll(dir); rmErr != nil {
+		return deleted, freedBytes, rmErr
+	}
+	return deleted, freedBytes, nil
 }
 
 // CacheStats 当前转码缓存的占用快照(给前端 / 调试用)。

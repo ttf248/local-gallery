@@ -423,11 +423,27 @@ func TestVideoFaststartService_ClearCache(t *testing.T) {
 		t.Fatal("expected cache files after resolve")
 	}
 
-	if err := s.ClearCache(); err != nil {
+	deleted, freed, err := s.ClearCache()
+	if err != nil {
 		t.Fatalf("ClearCache: %v", err)
+	}
+	if deleted == 0 {
+		t.Error("expected deleted > 0")
+	}
+	if freed == 0 {
+		t.Error("expected freedBytes > 0")
 	}
 	entries, _ = os.ReadDir(filepath.Join(dir, "video-faststart"))
 	if len(entries) != 0 {
 		t.Errorf("expected empty cache after clear, got %d entries", len(entries))
+	}
+
+	// 二次清空(目录已不存在)应返回 0, 0, nil,而非报错
+	deleted2, freed2, err2 := s.ClearCache()
+	if err2 != nil {
+		t.Fatalf("ClearCache on empty dir: %v", err2)
+	}
+	if deleted2 != 0 || freed2 != 0 {
+		t.Errorf("expected (0, 0) on empty, got (%d, %d)", deleted2, freed2)
 	}
 }

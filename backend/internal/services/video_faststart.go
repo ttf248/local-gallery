@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -445,19 +446,45 @@ func (s *VideoFaststartService) remux(srcPath, dstPath string) error {
 	return nil
 }
 
-// ClearCache 清空 faststart 缓存目录(测试用)。
+// ClearCache 清空 faststart 缓存目录,返回删除文件数和释放字节数。
 //
-// 真实场景下不需要主动调:缓存 key 已带 mtime+size,源文件变化即自动
-// 失效;此处主要用于测试隔离。
-func (s *VideoFaststartService) ClearCache() error {
+// 与 ThumbnailService.ClearAll 对齐:即便目录为空(返回 0, 0, nil),
+// 调用方也能拿到确定的"无操作"结果,前端展示更稳定。
+//
+// 设计:先 WalkDir 累加字节数,再 RemoveAll —— 一次遍历拿到统计,避免
+// 删完文件后 stat 拿不到 size 的尴尬。失败不返回 partial 数字,而是
+// 直接把错误往外抛,让 handler 决定如何向用户反馈。
+func (s *VideoFaststartService) ClearCache() (deleted int, freedBytes int64, err error) {
 	if s == nil || s.cacheDir == "" {
-		return nil
+		return 0, 0, nil
 	}
 	dir := filepath.Join(s.cacheDir, "video-faststart")
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return nil
+	info, statErr := os.Stat(dir)
+	if os.IsNotExist(statErr) {
+		return 0, 0, nil
 	}
-	return os.RemoveAll(dir)
+	if statErr != nil {
+		return 0, 0, statErr
+	}
+	if !info.IsDir() {
+		return 0, 0, fmt.Errorf("faststart cache path is not a directory: %s", dir)
+	}
+	_ = filepath.WalkDir(dir, func(_ string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil || d.IsDir() {
+			return nil
+		}
+		fi, infoErr := d.Info()
+		if infoErr != nil {
+			return nil
+		}
+		freedBytes += fi.Size()
+		deleted++
+		return nil
+	})
+	if rmErr := os.RemoveAll(dir); rmErr != nil {
+		return deleted, freedBytes, rmErr
+	}
+	return deleted, freedBytes, nil
 }
 
 // 并发安全验证:Resolve 在多协程下不能破坏 s 内部状态。

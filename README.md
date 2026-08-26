@@ -46,6 +46,7 @@
 - **自动转码**：AV1 / HEVC / ProRes / 未知编码 → H.264 + AAC 喂给浏览器
 - 冷门编码转码状态可在列表卡片上看到（转码中 X% / 已缓存 / 转码失败）
 - 转码 singleflight 去重 + 全局并发限流 + 可取消
+- **缓存清理**：设置页按 thumbs / faststart / transcode 三个 scope 独立清理 + 一键全清（`POST /api/cache/clear?scope=…`）
 
 ### 画廊
 

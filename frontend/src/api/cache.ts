@@ -33,11 +33,33 @@ export interface CacheClearResult {
   freedBytes: number;
 }
 
+// POST /api/cache/clear 的响应(scope 化清空)。
+//
+// 与 CacheClearResult 区别:CacheScopeClearResult 的响应结构按 scope 区分
+// 字段(scope=thumbs 时只有 thumbs 非空,scope=all 时 thumbs/faststart/
+// transcode 全非空,totalDeleted/totalFreedBytes 是三者和)。
+// 前端 toast "已清空 X" 优先用 total* 字段(scope=all 路径下)。
+export interface CacheScopeClearResult {
+  scope: 'thumbs' | 'faststart' | 'transcode' | 'all'
+  thumbs?: { deleted: number; freedBytes: number }
+  faststart?: { deleted: number; freedBytes: number }
+  transcode?: { deleted: number; freedBytes: number }
+  totalDeleted: number
+  totalFreedBytes: number
+}
+
 export const cacheApi = {
   stats: () => api<CacheStats>("/api/cache/stats"),
   // 强制清空全部缩略图缓存(不只过期)。下次访问会按需重新生成。
+  // 旧接口保留,主要用于调试/脚本;UI 已切换到 clearCache(scope=thumbs)。
   clearThumbs: () =>
     api<CacheClearResult>("/api/thumbs/clear", { method: "POST" }),
+  // 统一清空入口(scope=thumbs|faststart|transcode|all)。
+  // scope=thumbs 等价旧 clearThumbs;scope=faststart/transcode 解决
+  // "清空按钮只清缩略图,faststart/transcode 大头没动"的历史问题;
+  // scope=all 一键全清,响应里有 totalDeleted/totalFreedBytes 便于 toast。
+  clearCache: (scope: 'thumbs' | 'faststart' | 'transcode' | 'all') =>
+    api<CacheScopeClearResult>(`/api/cache/clear?scope=${scope}`, { method: "POST" }),
 };
 
 // 把字节数格式化为 B / KB / MB / GB / TB。

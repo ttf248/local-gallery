@@ -154,6 +154,12 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/config", handlers.ConfigGetHandler(mgr))
 	api.Put("/config", handlers.ConfigUpdateHandler(mgr, nil))
 
+	// cache/clear 统一入口:集成测试用 ffmpeg 不可用场景(faststart/transcode 传 nil),
+	// 但 thumbs 是真服务,可测 scope=thumbs 与 scope=all 的 thumbs 分支。
+	cacheStats := services.NewCacheStatsService(50 * time.Millisecond)
+	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
+	api.Post("/cache/clear", handlers.CacheClearHandler(thumbs, nil, nil, cacheStats))
+
 	return &harness{app, root, cache, prefs, mgr}
 }
 

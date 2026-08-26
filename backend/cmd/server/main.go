@@ -289,6 +289,12 @@ func main() {
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
 	// 清空全部缩略图缓存（不只是过期）。前端设置页"缓存占用"行的"清空"按钮调用。
 	api.Post("/thumbs/clear", handlers.ThumbClearAllHandlerWithCacheStats(thumbs, cacheStats))
+	// 统一清空入口:scope=thumbs|faststart|transcode|all。
+	// 替代分散的 /api/thumbs/clear 和 /api/videos/transcode/cache/clear 调用方
+	// 在 Settings 页的"缓存占用"面板下,逐 scope 给用户一个按钮。
+	// 旧 /api/thumbs/clear 与 /api/videos/transcode/cache/clear 保留供
+	// 调试 / 脚本调用(也避免破坏既有集成测试)。
+	api.Post("/cache/clear", handlers.CacheClearHandler(thumbs, faststart, transcode, cacheStats))
 	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
 	api.Get("/media/:id", resourceParam, handlers.MediaHandler(transcode, faststart))
 	api.Get("/images/:id/info", resourceParam, handlers.ImageInfoHandler(resourceCatalog))
