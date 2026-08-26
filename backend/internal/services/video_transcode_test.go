@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -167,6 +169,60 @@ func TestTranscodeService_Resolve_NoFFmpeg_Unavailable(t *testing.T) {
 	got, status := s.Resolve(mp4)
 	if got != mp4 || status != TranscodeStatusUnavailable {
 		t.Errorf("no ffmpeg: got (%q, %v), want (orig, Unavailable)", got, status)
+	}
+}
+
+func TestTranscodeService_ShutdownCancelsJobsAndRejectsNewWork(t *testing.T) {
+	s := NewTranscodeService(TranscodeOptions{CacheDir: t.TempDir(), FFmpeg: "missing"})
+	jobCtx, cancel := context.WithCancel(context.Background())
+	job := &transcodeJob{
+		cancel: cancel,
+		done:   make(chan struct{}),
+		status: TranscodeStatusQueued,
+	}
+	s.inflight["queued.mp4"] = job
+	go func() {
+		<-jobCtx.Done()
+		close(job.done)
+	}()
+
+	ctx, stop := context.WithTimeout(context.Background(), time.Second)
+	defer stop()
+	if err := s.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown: %v", err)
+	}
+	if jobCtx.Err() == nil {
+		t.Fatal("Shutdown did not cancel queued job")
+	}
+	if got, status := s.Resolve("queued.mp4"); got != "queued.mp4" || status != TranscodeStatusUnavailable {
+		t.Fatalf("Resolve after Shutdown = (%q, %v), want original/unavailable", got, status)
+	}
+	if s.Available() {
+		t.Fatal("Available after Shutdown = true")
+	}
+}
+
+func TestTranscodeService_ShutdownHonorsContext(t *testing.T) {
+	s := NewTranscodeService(TranscodeOptions{CacheDir: t.TempDir(), FFmpeg: "missing"})
+	s.inflight["stuck.mp4"] = &transcodeJob{
+		cancel: func() {},
+		done:   make(chan struct{}),
+		status: TranscodeStatusRunning,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := s.Shutdown(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Shutdown error = %v, want context.Canceled", err)
+	}
+}
+
+func TestPublicTranscodeErrorDoesNotExposePaths(t *testing.T) {
+	privatePath := `C:\\Users\\reader\\secret.mp4`
+	if got := publicTranscodeError(fmt.Errorf("ffmpeg input %s failed", privatePath)); got != "transcode failed" {
+		t.Fatalf("publicTranscodeError = %q", got)
+	}
+	if got := publicTranscodeError(fmt.Errorf("wrapped: %w", context.Canceled)); got != "transcode cancelled" {
+		t.Fatalf("cancel error = %q", got)
 	}
 }
 
@@ -536,6 +592,42 @@ func TestTranscodeService_Subscribe_NotStarted(t *testing.T) {
 	// channel should close after the immediate event
 	if _, ok := <-events; ok {
 		t.Error("expected channel to be closed")
+	}
+}
+
+func TestTranscodeService_SubscribeTerminalEventIsSanitizedAndCloses(t *testing.T) {
+	s := NewTranscodeService(TranscodeOptions{CacheDir: t.TempDir(), FFmpeg: "missing"})
+	job := &transcodeJob{
+		done:   make(chan struct{}),
+		status: TranscodeStatusRunning,
+	}
+	s.inflight["secret.mp4"] = job
+	events, cancel := s.Subscribe("secret.mp4")
+	defer cancel()
+	<-events // 初始快照
+
+	// 填满订阅缓冲，验证终态仍会替换最旧进度并进入队列。
+	for range cap(events) {
+		s.broadcast(job)
+	}
+	job.mu.Lock()
+	job.status = TranscodeStatusFailed
+	job.err = fmt.Errorf(`ffmpeg failed for C:\\Users\\reader\\secret.mp4`)
+	job.mu.Unlock()
+	s.broadcast(job)
+
+	foundTerminal := false
+	for info := range events {
+		if info.Status != TranscodeStatusFailed {
+			continue
+		}
+		foundTerminal = true
+		if info.Error != "transcode failed" {
+			t.Fatalf("terminal error = %q", info.Error)
+		}
+	}
+	if !foundTerminal {
+		t.Fatal("terminal event was dropped")
 	}
 }
 

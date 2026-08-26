@@ -240,6 +240,37 @@ func TestManager_GetReturnsCopy(t *testing.T) {
 	}
 }
 
+func TestDiffRequiresRestartKeepsServiceGraphsConsistent(t *testing.T) {
+	base := Default()
+	tests := []struct {
+		name   string
+		mutate func(*Config)
+		want   string
+	}{
+		{name: "cache directory", mutate: func(c *Config) { c.CacheDir = "other-cache" }, want: "cacheDir"},
+		{name: "ffmpeg path", mutate: func(c *Config) { c.FFmpegPath = "other-ffmpeg" }, want: "ffmpegPath"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			changed := cloneConfig(base)
+			tc.mutate(changed)
+			got := diffRequiresRestart(base, changed)
+			if len(got) != 1 || got[0] != tc.want {
+				t.Fatalf("diffRequiresRestart=%v, want [%s]", got, tc.want)
+			}
+		})
+	}
+
+	hot := cloneConfig(base)
+	hot.ThumbSizeW++
+	hot.ThumbCacheSize++
+	hot.CacheMaxAgeDays++
+	hot.AllowOsOpen = !hot.AllowOsOpen
+	if got := diffRequiresRestart(base, hot); len(got) != 0 {
+		t.Fatalf("hot fields unexpectedly require restart: %v", got)
+	}
+}
+
 func TestConfigPatch_UnmarshalJSON(t *testing.T) {
 	// 显式 false
 	var p ConfigPatch

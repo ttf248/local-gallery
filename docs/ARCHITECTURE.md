@@ -96,7 +96,9 @@ ffprobe 提供元数据；不兼容编码按需转为 H.264 + AAC；MP4 的 moov
 - 偏好：`web_settings.json`，通过临时文件 + rename 原子落盘。
 - 缩略图、faststart、转码：按内容派生键写入独立子目录。
 
-`host`、`port` 和 `staticDir` 属于启动期资源，修改后重启。扫描根和缩略图参数可热更新。
+`host`、`port`、`staticDir`、`cacheDir` 和 `ffmpegPath` 属于启动期资源，修改后重启。扫描根、扫描排除规则、缩略图尺寸/LRU/保留天数和 `allowOsOpen` 可热更新。
+
+进程收到 `SIGINT` / `SIGTERM` 后先停止接收新连接，同时取消活动扫描和视频转码；退出前强制刷新扫描快照。HTTP 连接最多等待 5 秒，后台任务与缓存清理共用 10 秒退出窗口。
 
 ## 前端状态边界
 

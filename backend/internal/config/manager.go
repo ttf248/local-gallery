@@ -366,11 +366,12 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 // 当前规则：
 //   - host / port：监听地址，进程级
 //   - staticDir：Fiber 在启动时已注册 Static；运行中无法卸载
+//   - cacheDir：扫描缓存、偏好、缩略图与视频服务必须作为整体切换
+//   - ffmpegPath：抽帧、元数据、faststart 与转码服务必须作为整体切换
 //   - mediaRoots：路径安全中间件和扫描器可通过 Manager 热更新；扫描缓存会
 //     被 onUpdate 钩子清空，调用方应主动触发重新扫描（不视为需要重启）
 //
-// 其它字段（thumbSize* / cacheMaxAgeDays / thumbCacheSize / cacheDir /
-// allowOsOpen）均可热生效。
+// 其它字段（thumbSize* / cacheMaxAgeDays / thumbCacheSize / allowOsOpen）可热生效。
 func diffRequiresRestart(old, neu *Config) []string {
 	var out []string
 	if old.Host != neu.Host {
@@ -381,6 +382,12 @@ func diffRequiresRestart(old, neu *Config) []string {
 	}
 	if old.StaticDir != neu.StaticDir {
 		out = append(out, "staticDir")
+	}
+	if old.CacheDir != neu.CacheDir {
+		out = append(out, "cacheDir")
+	}
+	if old.FFmpegPath != neu.FFmpegPath {
+		out = append(out, "ffmpegPath")
 	}
 	return out
 }

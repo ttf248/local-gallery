@@ -56,6 +56,7 @@ type AsyncScanRunner struct {
 	cache     *ScanResultCache
 	catalog   *ResourceCatalog
 	retention time.Duration
+	closed    bool
 }
 
 func NewAsyncScanRunner() *AsyncScanRunner {
@@ -81,6 +82,10 @@ func (r *AsyncScanRunner) StartOrReuse(opts ScanOptions) (string, <-chan Progres
 	}
 
 	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return "", nil, false, errors.New("scan runner is shutting down")
+	}
 	if active := r.states[r.activeID]; active != nil && isActiveScan(active.Status) {
 		ch := r.subscribeLocked(active)
 		id := active.ID
@@ -149,6 +154,33 @@ func (r *AsyncScanRunner) Wait(id string) {
 	if state != nil {
 		<-state.done
 	}
+}
+
+// Shutdown 拒绝新任务、取消所有活动扫描并等待退出。
+func (r *AsyncScanRunner) Shutdown(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r.mu.Lock()
+	r.closed = true
+	waits := make([]<-chan struct{}, 0, len(r.states))
+	for _, state := range r.states {
+		if !isActiveScan(state.Status) {
+			continue
+		}
+		state.Cancel()
+		waits = append(waits, state.done)
+	}
+	r.mu.Unlock()
+
+	for _, done := range waits {
+		select {
+		case <-done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 // Subscribe 为每个 SSE 客户端创建独立缓冲通道，并立即发送最新快照。

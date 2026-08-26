@@ -138,11 +138,11 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 | --------------------------- | ------------------------------------------------------------------------- |
 | `mediaRoots`                | 媒体根目录数组，必填；这是唯一的媒体根配置字段                            |
 | `host` / `port`             | 监听地址 / 端口                                                           |
-| `cacheDir`                  | 缩略图 / 视频缓存根目录，未配置时自动 `./.local-gallery/`                 |
+| `cacheDir`                  | 缩略图 / 视频缓存根目录，未配置时自动 `./.local-gallery/`；修改需重启     |
 | `thumbSizeW` / `thumbSizeH` | 缩略图尺寸                                                                |
 | `thumbCacheSize`            | LRU 内存缓存项数                                                          |
 | `cacheMaxAgeDays`           | 磁盘缓存保留天数                                                          |
-| `ffmpegPath`                | ffmpeg / ffprobe 路径，留空则自动探测 `bin/ffmpeg/<os>/<arch>/`           |
+| `ffmpegPath`                | ffmpeg / ffprobe 路径，留空则自动探测 `bin/ffmpeg/<os>/<arch>/`；修改需重启 |
 | `allowOsOpen`               | 是否允许 `/api/fs/open` 在系统资源管理器里打开                            |
 | `staticDir`                 | 前端构建产物目录（生产单端口托管用）                                      |
 | `skipHidden`                | 是否跳过以 `.` 开头的隐藏目录（默认 true）                                |

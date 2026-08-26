@@ -22,7 +22,7 @@
 
 可更新字段：`mediaRoots`、`host`、`port`、`cacheDir`、`thumbSizeW`、`thumbSizeH`、`thumbCacheSize`、`cacheMaxAgeDays`、`ffmpegPath`、`allowOsOpen`、`staticDir`、`skipHidden`、`excludePatterns`、`systemFiles`。
 
-`host`、`port`、`cacheDir`、缩略图参数、`ffmpegPath` 和 `staticDir` 修改后需要重启；媒体根和扫描排除规则在下一次扫描生效。
+`host`、`port`、`cacheDir`、`ffmpegPath` 和 `staticDir` 修改后需要重启；缩略图尺寸、LRU、保留天数和 `allowOsOpen` 可热更新，媒体根和扫描排除规则在下一次扫描生效。
 
 ## 图像库与扫描
 

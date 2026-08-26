@@ -190,7 +190,7 @@ func presetForCodec(codec, userPreset string) string {
 	// 硬解 preset 可能不兼容,这里不做转换,留 false 让 ffmpeg 报错
 	return userPreset
 }
-//
+
 // 选择理由:
 //   - H.264: 浏览器/移动设备/电视盒子最大公约数;VP9/AV1 输出虽然更小但
 //     浏览器兼容范围更窄,不选
@@ -241,6 +241,7 @@ type TranscodeService struct {
 	mu       sync.Mutex
 	inflight map[string]*transcodeJob // absPath -> job
 	cached   map[string]struct{}      // absPath -> 已经成功缓存(避免重复 stat)
+	closed   bool
 
 	// 可用性探测缓存:Available() 跑 `ffmpeg -version` 50-200ms;
 	// Resolve / GetStatus / handler 热路径都调,旧实现每次都重跑,
@@ -256,18 +257,18 @@ type transcodeJob struct {
 	err    error
 
 	mu       sync.Mutex
-	progress float64            // 最新进度(0-1)
+	progress float64              // 最新进度(0-1)
 	subs     []chan TranscodeInfo // SSE 订阅者;job 结束时全部关闭
 }
 
 // TranscodeOptions 构造选项。
 type TranscodeOptions struct {
-	CacheDir    string          // 必填
-	FFmpeg      string          // 必填
+	CacheDir    string // 必填
+	FFmpeg      string // 必填
 	Info        *VideoInfoService
 	Profile     TranscodeProfile
-	Timeout     time.Duration   // 单文件超时,默认 30m
-	Concurrency int             // 并发上限,0 = auto
+	Timeout     time.Duration // 单文件超时,默认 30m
+	Concurrency int           // 并发上限,0 = auto
 }
 
 // NewTranscodeService 构造。
@@ -321,6 +322,9 @@ func (s *TranscodeService) Available() bool {
 	if s == nil || s.ffmpeg == "" {
 		return false
 	}
+	if s.isClosed() {
+		return false
+	}
 	s.availOnce.Do(func() {
 		cmd := exec.Command(s.ffmpeg, "-version")
 		s.avail = cmd.Run() == nil
@@ -367,6 +371,9 @@ func (s *TranscodeService) CacheDir() string {
 func (s *TranscodeService) Resolve(absPath string) (servePath string, status TranscodeStatus) {
 	if s == nil {
 		return absPath, TranscodeStatusSkipped
+	}
+	if s.isClosed() {
+		return absPath, TranscodeStatusUnavailable
 	}
 	defer func() {
 		if servePath == "" {
@@ -428,6 +435,10 @@ func (s *TranscodeService) GetStatus(absPath string) TranscodeInfo {
 		info.Status = TranscodeStatusSkipped
 		return info
 	}
+	if s.isClosed() {
+		info.Status = TranscodeStatusUnavailable
+		return info
+	}
 
 	fi, err := os.Stat(absPath)
 	if err != nil {
@@ -474,7 +485,7 @@ func (s *TranscodeService) GetStatus(absPath string) TranscodeInfo {
 		case TranscodeStatusFailed:
 			info.Status = TranscodeStatusFailed
 			if jobErr != nil {
-				info.Error = jobErr.Error()
+				info.Error = publicTranscodeError(jobErr)
 			}
 		case TranscodeStatusCached:
 			// job 标 cached 但可能文件还没完全落盘;查一下 stat 兜底
@@ -518,13 +529,41 @@ func (s *TranscodeService) Cancel(absPath string) {
 	}
 	s.mu.Lock()
 	job, ok := s.inflight[absPath]
-	if ok {
-		delete(s.inflight, absPath)
-	}
 	s.mu.Unlock()
 	if ok && job.cancel != nil {
 		job.cancel()
 	}
+}
+
+// Shutdown 拒绝新转码、取消所有排队或运行中的 ffmpeg，并等待任务回收。
+func (s *TranscodeService) Shutdown(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.mu.Lock()
+	s.closed = true
+	jobs := make([]*transcodeJob, 0, len(s.inflight))
+	for _, job := range s.inflight {
+		jobs = append(jobs, job)
+	}
+	s.mu.Unlock()
+
+	for _, job := range jobs {
+		if job.cancel != nil {
+			job.cancel()
+		}
+	}
+	for _, job := range jobs {
+		select {
+		case <-job.done:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 // Subscribe 订阅一次转码任务的进度事件(用于 SSE 推送)。
@@ -551,14 +590,12 @@ func (s *TranscodeService) Subscribe(absPath string) (<-chan TranscodeInfo, func
 	if !ok {
 		s.mu.Unlock()
 		// 当前没任务:立刻 emit failed,关闭
-		go func() {
-			events <- TranscodeInfo{
-				Status:   TranscodeStatusFailed,
-				Progress: 0,
-				Error:    "no transcode task for this path",
-			}
-			close(events)
-		}()
+		events <- TranscodeInfo{
+			Status:   TranscodeStatusFailed,
+			Progress: 0,
+			Error:    "no transcode task for this path",
+		}
+		close(events)
 		return events, cancel
 	}
 
@@ -569,15 +606,13 @@ func (s *TranscodeService) Subscribe(absPath string) (<-chan TranscodeInfo, func
 		Progress: job.progress,
 	}
 	if job.status == TranscodeStatusFailed && job.err != nil {
-		snap.Error = job.err.Error()
+		snap.Error = publicTranscodeError(job.err)
 	}
 	job.subs = append(job.subs, events)
+	// 在 job 锁内投递初始快照，避免终态广播关闭 channel 后再发送。
+	events <- snap
 	job.mu.Unlock()
 	s.mu.Unlock()
-
-	go func() {
-		events <- snap
-	}()
 
 	// 取消订阅:从 subs 里删除自己
 	cancel = func() {
@@ -820,8 +855,8 @@ func (s *TranscodeService) markCached(absPath string) {
 // ensureRunning 启动或复用一次转码任务。
 //
 // 并发闸:
-//   1. sem 槽位空 → 立刻开 ffmpeg 进程
-//   2. sem 满   → 状态 TranscodeStatusQueued,等前面的让出槽位
+//  1. sem 槽位空 → 立刻开 ffmpeg 进程
+//  2. sem 满   → 状态 TranscodeStatusQueued,等前面的让出槽位
 //
 // singleflight 防止同一 key 在 10 个并发请求下启动 10 个 ffmpeg 进程。
 // 第一次调用开 ffmpeg,后续调用复用同一个 inflight job。
@@ -831,36 +866,52 @@ func (s *TranscodeService) markCached(absPath string) {
 // 如果到这里发现 inflight 已 done,等价于没有 inflight,直接开新任务。
 func (s *TranscodeService) ensureRunning(absPath, cachePath string, fi os.FileInfo) (string, TranscodeStatus) {
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return absPath, TranscodeStatusUnavailable
+	}
 	if job, ok := s.inflight[absPath]; ok {
 		// 已结束?清掉重新开(防止 mtime 变了之后用旧 job 误导状态)
 		select {
 		case <-job.done:
 			delete(s.inflight, absPath)
 		default:
+			job.mu.Lock()
+			status := job.status
+			job.mu.Unlock()
 			s.mu.Unlock()
-			return absPath, job.status
+			return absPath, status
 		}
 	}
 	s.mu.Unlock()
 
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	// 占位(防止 race:两个 ensureRunning 同时进来都会拿到 inflight=nil)
 	job := &transcodeJob{
+		cancel: cancel,
 		done:   make(chan struct{}),
 		status: TranscodeStatusQueued,
 	}
 	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		cancel()
+		return absPath, TranscodeStatusUnavailable
+	}
 	if existing, ok := s.inflight[absPath]; ok {
 		s.mu.Unlock()
-		return absPath, existing.status
+		cancel()
+		existing.mu.Lock()
+		status := existing.status
+		existing.mu.Unlock()
+		return absPath, status
 	}
 	s.inflight[absPath] = job
 	s.mu.Unlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
-	job.cancel = cancel
-
 	// 异步执行
 	go func() {
+		defer cancel()
 		defer close(job.done)
 		defer s.broadcast(job)
 
@@ -868,23 +919,31 @@ func (s *TranscodeService) ensureRunning(absPath, cachePath string, fi os.FileIn
 		select {
 		case s.sem <- struct{}{}:
 		case <-ctx.Done():
+			job.mu.Lock()
 			job.status = TranscodeStatusFailed
 			job.err = ctx.Err()
+			job.mu.Unlock()
 			return
 		}
 		defer func() { <-s.sem }()
 
 		// 拿到槽位,开始转码
+		job.mu.Lock()
 		job.status = TranscodeStatusRunning
+		job.mu.Unlock()
 		s.broadcast(job) // 状态变 Running,推给订阅者
 		err := s.transcode(ctx, absPath, cachePath, fi, job)
 		if err != nil {
+			job.mu.Lock()
 			job.status = TranscodeStatusFailed
 			job.err = err
+			job.mu.Unlock()
 			// 失败时尝试删除半截文件,避免下次 stat 误判 cached
 			os.Remove(cachePath)
 		} else {
+			job.mu.Lock()
 			job.status = TranscodeStatusCached
+			job.mu.Unlock()
 			s.markCached(absPath)
 		}
 		// 进度置 1.0 让 GetStatus / SSE 看到完成
@@ -894,10 +953,23 @@ func (s *TranscodeService) ensureRunning(absPath, cachePath string, fi os.FileIn
 	}()
 
 	// 第一次进来:从 job 拿当前 status
-	if job.status == TranscodeStatusQueued {
+	job.mu.Lock()
+	status := job.status
+	job.mu.Unlock()
+	if status == TranscodeStatusQueued {
 		return absPath, TranscodeStatusQueued
 	}
 	return absPath, TranscodeStatusRunning
+}
+
+func (s *TranscodeService) isClosed() bool {
+	if s == nil {
+		return true
+	}
+	s.mu.Lock()
+	closed := s.closed
+	s.mu.Unlock()
+	return closed
 }
 
 // transcode 跑 ffmpeg 真正转码。
@@ -925,6 +997,8 @@ func (s *TranscodeService) transcode(
 	tmpPath := dstPath + ".tmp"
 	// 清理可能残留的旧 .tmp(上次的转码失败留下的)
 	_ = os.Remove(tmpPath)
+	// 成功 rename 后为 no-op；取消、超时或 ffmpeg 失败时清理半成品。
+	defer os.Remove(tmpPath)
 
 	// 估算总时长,用于算 progress
 	var totalDurNS float64
@@ -981,8 +1055,11 @@ func (s *TranscodeService) transcode(
 		return fmt.Errorf("%w: %s", ErrTranscodeUnavailable, err.Error())
 	}
 
-	// 解析 -progress 输出
+	// 解析 -progress 输出。必须等待读取协程退出后才能发布终态并关闭
+	// subscriber，否则最后一条进度可能向已关闭 channel 发送。
+	progressDone := make(chan struct{})
 	go func() {
+		defer close(progressDone)
 		buf := make([]byte, 4096)
 		var carry strings.Builder
 		for {
@@ -1006,6 +1083,7 @@ func (s *TranscodeService) transcode(
 	}()
 
 	err = cmd.Wait()
+	<-progressDone
 	if err != nil {
 		if ctx.Err() != nil {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
@@ -1099,44 +1177,55 @@ func parseProgressLine(line string, totalDurSec float64, job *transcodeJob, svc 
 //     broadcast 内部判断 job.done 关闭后会关掉所有 sub channel
 func (s *TranscodeService) broadcast(job *transcodeJob) {
 	job.mu.Lock()
-	subs := append([]chan TranscodeInfo(nil), job.subs...)
 	info := TranscodeInfo{
 		Status:   job.status,
 		Progress: job.progress,
 	}
 	if job.status == TranscodeStatusFailed && job.err != nil {
-		info.Error = job.err.Error()
+		info.Error = publicTranscodeError(job.err)
 	}
-	done := job.done
-	job.mu.Unlock()
-
-	// 终态(cached / failed)时关闭订阅者 channel
 	isTerminal := info.Status == TranscodeStatusCached || info.Status == TranscodeStatusFailed
+	if isTerminal {
+		// 终态投递和关闭都在 job 锁内完成，Subscribe/取消订阅无法与之
+		// 交错。缓冲区满时丢弃最旧进度，保证终态一定进入队列。
+		for _, ch := range job.subs {
+			select {
+			case ch <- info:
+			default:
+				select {
+				case <-ch:
+				default:
+				}
+				ch <- info
+			}
+			close(ch)
+		}
+		job.subs = nil
+		job.mu.Unlock()
+		return
+	}
 
+	subs := append([]chan TranscodeInfo(nil), job.subs...)
+	job.mu.Unlock()
 	for _, ch := range subs {
 		select {
 		case ch <- info:
 		default:
 			// 订阅者慢,丢掉这次更新;下次更新会覆盖
 		}
-		if isTerminal {
-			// 单独一个 goroutine 关闭,避免长时间持锁
-			// 实际上 isTerminal 之后不会再有 broadcast,所以直接 close 也行
-		}
 	}
-	if isTerminal {
-		// 等到下一次有人读 done channel 时再 close subscriber channels,
-		// 这样能保证订阅者拿到最后一条消息。
-		// 用一个 goroutine 等 done 然后再 close
-		go func() {
-			<-done
-			job.mu.Lock()
-			closing := job.subs
-			job.subs = nil
-			job.mu.Unlock()
-			for _, ch := range closing {
-				close(ch)
-			}
-		}()
+}
+
+// publicTranscodeError 将内部命令错误映射为稳定且不包含本地路径的公开文案。
+func publicTranscodeError(err error) string {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "transcode cancelled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "transcode timeout"
+	case errors.Is(err, ErrTranscodeUnavailable):
+		return "transcode unavailable"
+	default:
+		return "transcode failed"
 	}
 }

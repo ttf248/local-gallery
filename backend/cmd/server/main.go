@@ -13,12 +13,17 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -71,6 +76,10 @@ func main() {
 	app := fiber.New(fiber.Config{
 		AppName:               "local-gallery",
 		DisableStartupMessage: true,
+		// ShutdownWithTimeout 无法主动关闭 keep-alive 连接；设置读取和空闲
+		// 超时，确保退出窗口有明确上界。SSE 不设置 WriteTimeout。
+		ReadTimeout: 30 * time.Second,
+		IdleTimeout: 60 * time.Second,
 		// BodyLimit 提到 6 MiB：默认 4 MiB 不够 /api/thumbs/cover 上传
 		// 4K canvas JPEG 封面（典型 2-4 MB）。
 		BodyLimit: 6 * 1024 * 1024,
@@ -221,10 +230,10 @@ func main() {
 		}()
 	}
 
-	// 缩略图参数 / 缓存目录 / ffmpeg 路径变更：热更新 ThumbnailService
+	// 仅缩略图参数热更新。cacheDir / ffmpegPath 涉及多个协作服务，配置接口
+	// 会明确返回 requiresRestart，避免只切换部分实例造成缓存与元数据分裂。
 	mgr.OnChange("thumbnail", func(snapshot *config.Config) {
 		if err := thumbs.UpdateOptions(services.ThumbnailOptions{
-			CacheDir:   snapshot.CacheDir,
 			Width:      snapshot.ThumbSizeW,
 			Height:     snapshot.ThumbSizeH,
 			MaxAgeDays: snapshot.CacheMaxAgeDays,
@@ -232,20 +241,15 @@ func main() {
 		}); err != nil {
 			log.Printf("警告：缩略图服务热更新失败: %v", err)
 		}
-		// ffmpeg 路径变了：重新构造抽帧器 + 元数据服务
+		// 尺寸变化时同步更新抽帧器，但仍使用启动期 ffmpeg 配置。
 		newCover := services.NewVideoCoverExtractor(services.VideoCoverOptions{
-			FFmpegPath: snapshot.FFmpegPath,
+			FFmpegPath: cfg.FFmpegPath,
 			Width:      snapshot.ThumbSizeW,
 			Height:     snapshot.ThumbSizeH,
 			Quality:    85,
 			Timeout:    10 * time.Second,
 		})
 		thumbs.SetVideoCover(newCover)
-		newInfo := services.NewVideoInfoService(services.VideoInfoOptions{
-			FFmpegPath: snapshot.FFmpegPath,
-			Timeout:    5 * time.Second,
-		})
-		videoInfo = newInfo
 	})
 
 	// 当 MediaRoots 变更：清空扫描缓存，扫描器/handler 已通过 mgr.Roots() 读最新值
@@ -364,8 +368,74 @@ func main() {
 		log.Printf("  StaticDir: <未配置>，跳过静态托管")
 	}
 
-	// ---- 启动 ----
-	if err := app.Listen(cfg.Addr()); err != nil {
-		log.Fatalf("监听失败: %v", err)
+	// ---- 启动与优雅退出 ----
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := runServer(ctx, app, cfg.Addr(), runner, transcode, scanCache); err != nil {
+		log.Printf("服务退出异常: %v", err)
+		os.Exit(1)
 	}
+}
+
+// runServer 在接收退出信号后停止接收新连接，同时取消后台扫描/转码并
+// 强制刷新扫描缓存。信号本身属于正常退出，不作为错误返回。
+func runServer(
+	ctx context.Context,
+	app *fiber.App,
+	addr string,
+	runner *services.AsyncScanRunner,
+	transcode *services.TranscodeService,
+	scanCache *services.ScanResultCache,
+) error {
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return errors.Join(fmt.Errorf("监听失败: %w", err), shutdownRuntime(cleanupCtx, runner, transcode, scanCache))
+	}
+
+	listenDone := make(chan error, 1)
+	go func() {
+		listenDone <- app.Listener(listener)
+	}()
+
+	select {
+	case listenErr := <-listenDone:
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return errors.Join(listenErr, shutdownRuntime(cleanupCtx, runner, transcode, scanCache))
+	case <-ctx.Done():
+		log.Printf("收到退出信号，正在停止后台任务并刷新缓存…")
+	}
+
+	cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	runtimeDone := make(chan error, 1)
+	go func() {
+		runtimeDone <- shutdownRuntime(cleanupCtx, runner, transcode, scanCache)
+	}()
+
+	httpErr := app.ShutdownWithTimeout(5 * time.Second)
+	runtimeErr := <-runtimeDone
+	listenErr := <-listenDone
+	return errors.Join(httpErr, runtimeErr, listenErr)
+}
+
+func shutdownRuntime(
+	ctx context.Context,
+	runner *services.AsyncScanRunner,
+	transcode *services.TranscodeService,
+	scanCache *services.ScanResultCache,
+) error {
+	var scanErr, transcodeErr, cacheErr error
+	if runner != nil {
+		scanErr = runner.Shutdown(ctx)
+	}
+	if transcode != nil {
+		transcodeErr = transcode.Shutdown(ctx)
+	}
+	if scanCache != nil {
+		cacheErr = scanCache.Flush()
+	}
+	return errors.Join(scanErr, transcodeErr, cacheErr)
 }

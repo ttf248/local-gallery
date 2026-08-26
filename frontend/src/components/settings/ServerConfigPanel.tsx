@@ -24,7 +24,13 @@ import {
 type FieldStatus = "idle" | "saving" | "saved" | "error";
 
 // 哪些字段改动后需要重启才生效。
-const REQUIRES_RESTART = new Set(["host", "port", "staticDir"]);
+const REQUIRES_RESTART = new Set([
+  "host",
+  "port",
+  "staticDir",
+  "cacheDir",
+  "ffmpegPath",
+]);
 
 // 哪些字段是路径类（用 onBlur 自动保存,不用 debounce）。
 // 理由:路径输错一个字符就触发保存体验差;按 Enter / 离开输入框再保存更稳。
@@ -71,7 +77,7 @@ const FIELDS: { section: string; defs: FieldDef[] }[] = [
       {
         key: "cacheDir",
         label: "缓存目录",
-        hint: "存放缩略图 / 扫描结果 / 用户偏好",
+        hint: "存放缩略图 / 扫描结果 / 用户偏好，修改后需重启",
         kind: "text",
       },
     ],

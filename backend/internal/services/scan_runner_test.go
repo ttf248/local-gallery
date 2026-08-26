@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -200,6 +201,32 @@ func TestAsyncScanRunner_GetUnknown(t *testing.T) {
 	runner := NewAsyncScanRunner()
 	if runner.Get("nope") != nil {
 		t.Error("Get of unknown id should return nil")
+	}
+}
+
+func TestAsyncScanRunner_ShutdownCancelsAndRejectsNewScans(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 500; i++ {
+		dir := filepathJoin(root, "album-"+itoa(i))
+		mkdirAll(t, dir)
+		touchAll(t, filepathJoin(dir, "1.jpg"))
+	}
+	runner := NewAsyncScanRunner()
+	id, _, err := runner.Start(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := runner.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+	state := runner.Get(id)
+	if state == nil || state.Status != ScanStatusCancelled {
+		t.Fatalf("state after shutdown=%+v", state)
+	}
+	if _, _, err := runner.Start(ScanOptions{Root: root}); err == nil {
+		t.Fatal("Start should reject new scans after shutdown")
 	}
 }
 

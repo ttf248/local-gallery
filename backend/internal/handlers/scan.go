@@ -105,8 +105,10 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 			if state.Result != nil {
 				ev.AlbumsFound = state.Result.AlbumCount
 			}
-			if state.Err != nil {
-				ev.Error = state.Err.Error()
+			if state.Err != nil && state.Status == services.ScanStatusError {
+				// 扫描器内部错误可能包含本地绝对路径，公共响应只返回
+				// 稳定错误类型；详细原因保留在服务端诊断范围内。
+				ev.Error = "scan failed"
 			}
 			writeSSE(c, string(ev.Status), ev)
 			return nil

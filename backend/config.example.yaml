@@ -18,6 +18,7 @@ host: "127.0.0.1"
 port: 8080
 
 # 缩略图缓存目录（相对路径相对 CWD；留空则用 ./.local-gallery）
+# 缓存服务在启动时共同绑定此目录，修改后需重启。
 cacheDir: ".local-gallery"
 
 # 缩略图尺寸（像素）
