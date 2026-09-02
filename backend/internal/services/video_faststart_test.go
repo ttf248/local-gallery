@@ -113,7 +113,7 @@ func TestVideoFaststartService_Available(t *testing.T) {
 
 func TestVideoFaststartService_Resolve_NilReceiver(t *testing.T) {
 	var s *VideoFaststartService
-	got, status := s.Resolve("/some/path.mp4")
+	got, status := s.Resolve("/some/path.mp4", nil)
 	if got != "/some/path.mp4" {
 		t.Errorf("nil receiver should return original path, got %q", got)
 	}
@@ -128,7 +128,7 @@ func TestVideoFaststartService_Resolve_NonMP4_Skipped(t *testing.T) {
 	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ff})
 	for _, ext := range []string{".mkv", ".webm", ".avi", ".mov", ".jpg"} {
 		path := "/some/file" + ext
-		got, status := s.Resolve(path)
+		got, status := s.Resolve(path, nil)
 		if got != path {
 			t.Errorf("ext=%s: got path=%q, want original", ext, got)
 		}
@@ -144,7 +144,7 @@ func TestVideoFaststartService_Resolve_NoFFmpeg_Fallback(t *testing.T) {
 	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ""})
 	path := filepath.Join(dir, "any.mp4")
 	os.WriteFile(path, []byte("not a real mp4"), 0o644)
-	got, status := s.Resolve(path)
+	got, status := s.Resolve(path, nil)
 	if got != path || status != StatusFallback {
 		t.Errorf("no ffmpeg: got (%q, %v), want (orig, Fallback)", got, status)
 	}
@@ -154,7 +154,7 @@ func TestVideoFaststartService_Resolve_SourceMissing_Fallback(t *testing.T) {
 	ff := findFFmpegFaststart(t)
 	dir := t.TempDir()
 	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ff})
-	got, status := s.Resolve(filepath.Join(dir, "ghost.mp4"))
+	got, status := s.Resolve(filepath.Join(dir, "ghost.mp4"), nil)
 	if got == "" || status != StatusFallback {
 		t.Errorf("missing source: got (%q, %v), want (orig, Fallback)", got, status)
 	}
@@ -165,7 +165,7 @@ func TestVideoFaststartService_Resolve_AlreadyFaststart(t *testing.T) {
 	dir := t.TempDir()
 	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ff})
 	src := generateFaststartMP4(t, ff)
-	got, status := s.Resolve(src)
+	got, status := s.Resolve(src, nil)
 	if got != src {
 		t.Errorf("faststart source: got %q, want original (no cache write)", got)
 	}
@@ -186,7 +186,7 @@ func TestVideoFaststartService_Resolve_NonFaststart_RemuxedAndCached(t *testing.
 	src := generateNonFaststartMP4(t, ff)
 
 	// 第一次:应 remux
-	got, status := s.Resolve(src)
+	got, status := s.Resolve(src, nil)
 	if status != StatusRemuxed {
 		t.Fatalf("first resolve: status=%v, want Remuxed", status)
 	}
@@ -203,7 +203,7 @@ func TestVideoFaststartService_Resolve_NonFaststart_RemuxedAndCached(t *testing.
 	}
 
 	// 第二次:应命中缓存(仍 Remuxed,但路径不变)
-	got2, status2 := s.Resolve(src)
+	got2, status2 := s.Resolve(src, nil)
 	if status2 != StatusRemuxed {
 		t.Errorf("second resolve: status=%v, want Remuxed (cache hit)", status2)
 	}
@@ -222,7 +222,7 @@ func TestVideoFaststartService_FsCacheInvalidatesOnMtime(t *testing.T) {
 
 	// 用一个 faststart 文件,Resolve 会命中 fsCache=true 路径
 	src := generateFaststartMP4(t, ff)
-	got, status := s.Resolve(src)
+	got, status := s.Resolve(src, nil)
 	if status != StatusFast || got != src {
 		t.Fatalf("first: got=%q status=%v, want (src, Fast)", got, status)
 	}
@@ -252,7 +252,7 @@ func TestVideoFaststartService_FsCacheInvalidatesOnMtime(t *testing.T) {
 
 	// 重新 Resolve → 用新 key;文件还是 faststart(只改 mtime,内容没变),
 	// isFaststart 应仍为 true,但走的是新的 fsCache 条目。
-	got2, status2 := s.Resolve(src)
+	got2, status2 := s.Resolve(src, nil)
 	if status2 != StatusFast {
 		t.Errorf("after mtime change: status=%v, want Fast", status2)
 	}
@@ -278,7 +278,7 @@ func TestVideoFaststartService_Resolve_InvalidatesOnMtimeChange(t *testing.T) {
 	src := generateNonFaststartMP4(t, ff)
 
 	// 第一次 remux
-	got1, status1 := s.Resolve(src)
+	got1, status1 := s.Resolve(src, nil)
 	if status1 != StatusRemuxed {
 		t.Fatalf("first: status=%v, want Remuxed", status1)
 	}
@@ -291,7 +291,7 @@ func TestVideoFaststartService_Resolve_InvalidatesOnMtimeChange(t *testing.T) {
 	}
 
 	// 第二次:cache key 变了,应重新 remux,旧缓存孤立但不影响正确性
-	got2, status2 := s.Resolve(src)
+	got2, status2 := s.Resolve(src, nil)
 	if status2 != StatusRemuxed {
 		t.Errorf("after mtime change: status=%v, want Remuxed", status2)
 	}
@@ -307,7 +307,7 @@ func TestVideoFaststartService_Resolve_CorruptCacheRebuilds(t *testing.T) {
 	src := generateNonFaststartMP4(t, ff)
 
 	// 第一次:正常 remux 出缓存
-	got1, status1 := s.Resolve(src)
+	got1, status1 := s.Resolve(src, nil)
 	if status1 != StatusRemuxed {
 		t.Fatalf("first: status=%v, want Remuxed", status1)
 	}
@@ -321,7 +321,7 @@ func TestVideoFaststartService_Resolve_CorruptCacheRebuilds(t *testing.T) {
 	// 我们的 isFaststart 路径只对"完全没缓存"生效,size=0 的文件
 	// Resolve 当前实现会视为"缓存命中但内容是垃圾",不重新 remux。
 	// 此测试先记当前行为,作为未来改进的触发点(已知限制,不影响主流程)。
-	got2, _ := s.Resolve(src)
+	got2, _ := s.Resolve(src, nil)
 	_ = got2
 	// 主断言:行为可预测即可(不强制 re-remux;生产环境坏缓存极少出现)
 }
@@ -332,15 +332,15 @@ func TestVideoFaststartService_StatsCounters(t *testing.T) {
 	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ff})
 
 	// 1 次 Skipped
-	s.Resolve("/some/file.mkv")
+	s.Resolve("/some/file.mkv", nil)
 	// 1 次 Fallback(不存在的 mp4)
-	s.Resolve(filepath.Join(dir, "ghost.mp4"))
+	s.Resolve(filepath.Join(dir, "ghost.mp4"), nil)
 	// 1 次 Fast
 	fast := generateFaststartMP4(t, ff)
-	s.Resolve(fast)
+	s.Resolve(fast, nil)
 	// 1 次 Remuxed(非 faststart)
 	nonFast := generateNonFaststartMP4(t, ff)
-	s.Resolve(nonFast)
+	s.Resolve(nonFast, nil)
 
 	skipped, fastN, remuxed, fallback := s.Stats()
 	if skipped != 1 || fastN != 1 || remuxed != 1 || fallback != 1 {
@@ -363,7 +363,7 @@ func TestVideoFaststartService_ConcurrentSafe(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			results[i], statuses[i] = s.Resolve(src)
+			results[i], statuses[i] = s.Resolve(src, nil)
 		}(i)
 	}
 	wg.Wait()
@@ -415,7 +415,7 @@ func TestVideoFaststartService_ClearCache(t *testing.T) {
 	dir := t.TempDir()
 	s := NewVideoFaststartService(FaststartOptions{CacheDir: dir, FFmpeg: ff})
 	src := generateNonFaststartMP4(t, ff)
-	s.Resolve(src)
+	s.Resolve(src, nil)
 
 	// 缓存目录应该有文件
 	entries, _ := os.ReadDir(filepath.Join(dir, "video-faststart"))

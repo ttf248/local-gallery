@@ -190,7 +190,11 @@ func (s *VideoFaststartService) CacheDir() string {
 //
 // 调用方拿到 servePath 后直接 c.SendFile(servePath) 即可;Range/MIME 等
 // 头仍由 handler 端按原逻辑设置,因为 faststart 化只改字节布局、不动容器格式。
-func (s *VideoFaststartService) Resolve(absPath string) (servePath string, status FaststartStatus) {
+// Resolve 决定 /api/media 是否要 remux,以及 remux 缓存是否命中。
+//
+// info 可选非 nil:handler 端已 stat 过源文件,这里复用,省一次 syscall。
+// 传 nil 时本函数内部 stat(向后兼容)。
+func (s *VideoFaststartService) Resolve(absPath string, info os.FileInfo) (servePath string, status FaststartStatus) {
 	if s == nil {
 		return absPath, StatusFallback
 	}
@@ -216,9 +220,13 @@ func (s *VideoFaststartService) Resolve(absPath string) (servePath string, statu
 	}
 
 	// 源文件不存在: 退化(handler 会自己 Stat 失败返回 404,这里不必预校验)
-	fi, err := os.Stat(absPath)
-	if err != nil {
-		return absPath, StatusFallback
+	fi := info
+	if fi == nil {
+		var err error
+		fi, err = os.Stat(absPath)
+		if err != nil {
+			return absPath, StatusFallback
+		}
 	}
 
 	key := faststartKey(absPath, fi.ModTime(), fi.Size())

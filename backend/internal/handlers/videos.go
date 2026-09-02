@@ -46,7 +46,8 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 				"error": "not a supported video format",
 			})
 		}
-		if _, err := os.Stat(path); err != nil {
+		srcInfo, err := os.Stat(path)
+		if err != nil {
 			if os.IsNotExist(err) {
 				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
 			}
@@ -56,14 +57,25 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 		//   transcode 命中 → 发转码缓存(浏览器能直播)
 		//   否则 faststart → 发 remux 缓存(浏览器能边下边播)
 		//   都不命中      → 发原文件
+		// info 复用入口的 stat,两个 Resolve 内部就不再 stat 一次。
 		servePath := path
+		serveInfo := srcInfo
 		if transcode != nil {
-			if p, st := transcode.Resolve(path); st == services.TranscodeStatusCached {
+			if p, st := transcode.Resolve(path, srcInfo); st == services.TranscodeStatusCached {
 				servePath = p
+				// 转码缓存是新文件,需要重新 stat 拿 mtime/size
+				if fi, err := os.Stat(p); err == nil {
+					serveInfo = fi
+				}
 			}
 		}
 		if servePath == path && faststart != nil {
-			servePath, _ = faststart.Resolve(path)
+			if p, _ := faststart.Resolve(path, srcInfo); p != path {
+				servePath = p
+				if fi, err := os.Stat(p); err == nil {
+					serveInfo = fi
+				}
+			}
 		}
 
 		// 缓存协商:基于「实际发送的文件」派生 ETag(转码/重封装后是
@@ -71,12 +83,10 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 		// 时返回 304 + 空 body,1GB+ 视频可省下 206 的几 MB。
 		// 304 优先于 Range:浏览器会重新发不带 If-None-Match 的 Range
 		// 拿到实际片段,这是 HTTP 标准行为,主流浏览器都遵守。
-		if info, statErr := os.Stat(servePath); statErr == nil {
-			etag := videoETag(info)
-			c.Set("ETag", etag)
-			if match := c.Get("If-None-Match"); match != "" && match == etag {
-				return c.SendStatus(fiber.StatusNotModified)
-			}
+		etag := videoETag(serveInfo)
+		c.Set("ETag", etag)
+		if match := c.Get("If-None-Match"); match != "" && match == etag {
+			return c.SendStatus(fiber.StatusNotModified)
 		}
 
 		c.Set("Content-Type", videoMime(servePath))

@@ -151,6 +151,23 @@ func SelectVideoCodec(ffmpegPath string) string {
 	return "libx264"
 }
 
+// resolveCodec 懒加载选 codec:首次 ensureRunning 触发,选好后写回
+// s.profile.VideoCodec 复用。选 auto 或空时调用;用户显式指定时不调。
+//
+// 关键:启动期不再跑 6 次 ffmpeg -h encoder=*(每个 50ms 共 300ms+),
+// 那些 ffmpeg 调用是浪费 — 用户没看视频时根本用不上。
+func (s *TranscodeService) resolveCodec() string {
+	if s.profile.VideoCodec != "" && s.profile.VideoCodec != "auto" {
+		return s.profile.VideoCodec
+	}
+	s.selectedCodecOnce.Do(func() {
+		s.selectedCodec = SelectVideoCodec(s.ffmpeg)
+		// 写回 profile,后续直接读 profile.VideoCodec 即可
+		s.profile.VideoCodec = s.selectedCodec
+	})
+	return s.selectedCodec
+}
+
 // probeCodec 用 ffmpeg -h encoder=<name> 探测编码器是否可用。
 //
 // 不真跑 encode;ffmpeg 启动后会立刻检查 encoder 名字是否存在 + 必要参数。
@@ -248,6 +265,12 @@ type TranscodeService struct {
 	// ffmpeg 在的情况下其实是浪费。sync.Once 锁住整个 service 生命周期。
 	availOnce sync.Once
 	avail     bool
+
+	// 编码器自动选择懒加载:启动期不跑 ffmpeg -h encoder=* 探测(6 次
+	// 各 50ms 共 300ms+),延后到首次 ensureRunning 调用时再跑。sync.Once
+	// 锁住结果;service 重建(OnChange)时自动失效。
+	selectedCodec     string
+	selectedCodecOnce sync.Once
 }
 
 type transcodeJob struct {
@@ -275,8 +298,10 @@ type TranscodeOptions struct {
 //
 // 不会因为 ffmpeg 不可用而失败;ffmpeg 路径会在 Available() 探测。
 //
-// 自动检测:如果 opts.Profile.VideoCodec 是空或 "auto",会按硬件优先
-// 顺序选一个 H.264 编码器(参见 SelectVideoCodec)。显式指定就尊重用户。
+// 自动检测:如果 opts.Profile.VideoCodec 是空或 "auto",**不在启动期**
+// 跑 SelectVideoCodec(6 次 ffmpeg -h encoder=* 各 50ms),延后到首次
+// ensureRunning 调用时再跑。懒加载由 selectedCodecOnce 保证只探一次,
+// OnChange 重建 service 时自动失效。
 func NewTranscodeService(opts TranscodeOptions) *TranscodeService {
 	if opts.CacheDir == "" {
 		panic("services: NewTranscodeService requires CacheDir")
@@ -285,10 +310,8 @@ func NewTranscodeService(opts TranscodeOptions) *TranscodeService {
 	if profile.Name == "" {
 		profile = DefaultTranscodeProfile()
 	}
-	// 编码器自动选择
-	if profile.VideoCodec == "" || profile.VideoCodec == "auto" {
-		profile.VideoCodec = SelectVideoCodec(opts.FFmpeg)
-	}
+	// 编码器选择延后到 first use;这里只把"是否要自动选"信息记下。
+	// resolveCodec() 是懒加载入口。
 	timeout := opts.Timeout
 	if timeout <= 0 {
 		timeout = 30 * time.Minute
@@ -368,7 +391,10 @@ func (s *TranscodeService) CacheDir() string {
 //
 // 设计原则:任何内部失败都退到 TranscodeStatusFailed + absPath,绝不让
 // Resolve 返回 error 让 handler 500。
-func (s *TranscodeService) Resolve(absPath string) (servePath string, status TranscodeStatus) {
+//
+// info 可选非 nil:handler 端已 stat 过源文件,这里复用,省一次 syscall。
+// 传 nil 时本函数内部 stat(向后兼容)。
+func (s *TranscodeService) Resolve(absPath string, info os.FileInfo) (servePath string, status TranscodeStatus) {
 	if s == nil {
 		return absPath, TranscodeStatusSkipped
 	}
@@ -397,9 +423,13 @@ func (s *TranscodeService) Resolve(absPath string) (servePath string, status Tra
 		return absPath, TranscodeStatusUnavailable
 	}
 
-	fi, err := os.Stat(absPath)
-	if err != nil {
-		return absPath, TranscodeStatusFailed
+	fi := info
+	if fi == nil {
+		var err error
+		fi, err = os.Stat(absPath)
+		if err != nil {
+			return absPath, TranscodeStatusFailed
+		}
 	}
 
 	// 浏览器已经能播 → 不需要转码
@@ -608,7 +638,17 @@ func (s *TranscodeService) Subscribe(absPath string) (<-chan TranscodeInfo, func
 	if job.status == TranscodeStatusFailed && job.err != nil {
 		snap.Error = publicTranscodeError(job.err)
 	}
-	job.subs = append(job.subs, events)
+	// dedup:同一个 channel 不重复加入,避免终态广播多次 close。
+	already := false
+	for _, ch := range job.subs {
+		if ch == events {
+			already = true
+			break
+		}
+	}
+	if !already {
+		job.subs = append(job.subs, events)
+	}
 	// 在 job 锁内投递初始快照，避免终态广播关闭 channel 后再发送。
 	events <- snap
 	job.mu.Unlock()
@@ -954,6 +994,8 @@ func (s *TranscodeService) ensureRunning(absPath, cachePath string, fi os.FileIn
 		job.status = TranscodeStatusRunning
 		job.mu.Unlock()
 		s.broadcast(job) // 状态变 Running,推给订阅者
+		// 懒加载:首次转码时再选编码器
+		_ = s.resolveCodec()
 		err := s.transcode(ctx, absPath, cachePath, fi, job)
 		if err != nil {
 			job.mu.Lock()
