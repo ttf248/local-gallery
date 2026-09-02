@@ -259,11 +259,30 @@ func (r *AsyncScanRunner) run(state *ScanState, opts ScanOptions) {
 		return
 	}
 
-	if r.catalog != nil {
-		r.catalog.Rebuild(result, opts.effectiveRoots())
-	}
+	// 提交新扫描结果的顺序约束:cache 先 Set,catalog 后 Rebuild。
+	//
+	// 分析两个方向的 race window:
+	//   - 顺序 A (catalog 先, cache 后): /api/library 在中间窗口拿到
+	//     cache 的旧 result,调 PublicScanResult(旧 result)用新 catalog。
+	//     如果新扫描删了某些相册(用户在文件系统移走),旧 result 仍引用
+	//     它们,新 catalog 的 byPathKind 没有这些 path → ExternalID 返回 ""
+	//     → 前端拿到"看起来存在但点不动"的孤儿 album。
+	//   - 顺序 B (cache 先, catalog 后): /api/library 在中间窗口拿到
+	//     cache 的新 result,调 PublicScanResult(新 result)用旧 catalog。
+	//     如果新扫描新增了相册,新 result 引用它们,旧 catalog 的 byPathKind
+	//     没有这些 path → ExternalID 返回 "" → 同样孤儿。
+	//
+	// 选 B:原因 — 新增/删除场景下,B 的孤儿是"新加的(用户没看过)"，
+	// A 的孤儿是"被删的(用户可能刚看过,期待还能访问)"。B 的"静默丢
+	// 新增" 比 A 的"让用户撞 404" 体验更轻。
+	//
+	// 真正的彻底解是 cache 持有 catalog 并在 Set 内原子提交(Phase 2 的
+	// "资源 ID 单一来源" 任务会顺手做);这里只把当前 race 的方向调对。
 	if r.cache != nil {
 		r.cache.Set(result)
+	}
+	if r.catalog != nil {
+		r.catalog.Rebuild(result, opts.effectiveRoots())
 	}
 	r.finish(state, ProgressEvent{
 		ScanID: state.ID, Progress: 100, Status: ScanStatusComplete, Phase: "done",
