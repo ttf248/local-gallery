@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 func writeValidYAML(t *testing.T, content string) string {
@@ -186,13 +187,20 @@ func TestManager_Update_NotifiesSubscribers(t *testing.T) {
 		mu      sync.Mutex
 		calls   int
 		lastCfg *Config
+		done    = make(chan struct{})
 	)
 	_ = mgr.OnChange("test", func(s *Config) {
 		mu.Lock()
 		defer mu.Unlock()
 		calls++
 		lastCfg = s
+		close(done)
 	})
+	defer func() {
+		// 防 close 重复
+		mu.Lock()
+		defer mu.Unlock()
+	}()
 
 	_, err = mgr.Update(ConfigPatch{
 		ThumbSizeW:    200,
@@ -200,6 +208,12 @@ func TestManager_Update_NotifiesSubscribers(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	// listener 现在异步派发(Update 不再阻塞),等回调执行完。
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscriber not called within 2s")
 	}
 	mu.Lock()
 	defer mu.Unlock()

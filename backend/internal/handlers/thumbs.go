@@ -5,6 +5,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
@@ -29,9 +30,7 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return httputil.BadRequest(c, "missing_path", "missing 'path' query parameter")
 		}
 
 		// 先尝试 ETag 协商：客户端带了 If-None-Match 且与当前文件
@@ -54,24 +53,15 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 		if err != nil {
 			switch {
 			case errors.Is(err, services.ErrSourceMissing):
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-					"error": "source not found",
-				})
+				return httputil.NotFound(c, "source_not_found", "source not found")
 			case errors.Is(err, services.ErrVideoCoverMissing):
 				// 不带 ETag / Cache-Control —— 4xx 状态不能被浏览器长缓存，
 				// 否则视频 cover 抽帧后用户再访问仍会拿到旧的 404。
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-					"error": "video cover not yet extracted",
-					"code":  "video_cover_missing",
-				})
+				return httputil.NotFound(c, "video_cover_missing", "video cover not yet extracted")
 			case errors.Is(err, services.ErrUnsupportedFormat):
-				return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-					"error": "unsupported format",
-				})
+				return httputil.Error(c, fiber.StatusUnsupportedMediaType, "unsupported_format", "unsupported format")
 			default:
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": err.Error(),
-				})
+				return httputil.Internal(c, "thumbnail_error", err.Error())
 			}
 		}
 

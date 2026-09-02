@@ -10,6 +10,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
 	"github.com/tianlongxiang/local-gallery/internal/models"
 	"github.com/tianlongxiang/local-gallery/internal/services"
@@ -37,21 +38,17 @@ func VideoHandler(transcode *services.TranscodeService, faststart *services.Vide
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return httputil.BadRequest(c, "missing_path", "missing 'path' query parameter")
 		}
 		if !models.IsVideoFile(filepath.Base(path)) {
-			return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-				"error": "not a supported video format",
-			})
+			return httputil.Error(c, fiber.StatusUnsupportedMediaType, "unsupported_video_format", "not a supported video format")
 		}
 		srcInfo, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
+				return httputil.NotFound(c, "video_not_found", "video file not found")
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read media resource"})
+			return httputil.Internal(c, "stat_failed", "failed to read media resource")
 		}
 		// 决定实际发送哪个文件:
 		//   transcode 命中 → 发转码缓存(浏览器能直播)

@@ -153,17 +153,23 @@ func (m *Manager) Update(patch ConfigPatch) (requiresRestart []string, err error
 
 	requiresRestart = diffRequiresRestart(old, merged)
 
-	// 通知订阅者；errs 不影响主流程返回
+	// 通知订阅者。**异步派发**:
+	//   - 同步 notify 会让 listener 慢/panic 拖死 Update 主路径
+	//   - goroutine 派发 + 串行化(每 listener 一次 fn)既保持可观察
+	//     性(调用方拿到 snapshot 那一刻还能看 m.current 已是新值),
+	//     又不让 listener 阻塞主流程
+	//   - panic recover 保留,避免某个订阅者协程崩溃污染进程
 	listeners := m.snapshotListeners()
 	for _, e := range listeners {
-		func(entry subEntry) {
+		listener := e
+		go func() {
 			defer func() {
 				if r := recover(); r != nil {
-					fmt.Fprintf(os.Stderr, "config subscriber %q panic: %v\n", entry.token, r)
+					fmt.Fprintf(os.Stderr, "config subscriber %q panic: %v\n", listener.token, r)
 				}
 			}()
-			entry.fn(merged)
-		}(e)
+			listener.fn(merged)
+		}()
 	}
 
 	return requiresRestart, nil
