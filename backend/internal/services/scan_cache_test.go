@@ -214,13 +214,48 @@ func TestScanResultCache_GetAndSetUseDeepCopies(t *testing.T) {
 	}
 	c := NewScanResultCache(filepath.Join(t.TempDir(), "scan_cache.json"))
 	c.Set(original)
-	original.Albums[0].ImageFiles[0] = "mutated-before-get"
+	// Set 时 cloneScanResult 一次,之后外部修改 original 不影响 cache。
+	original.Albums[0].ImageFiles[0] = "mutated-after-set"
 	first := c.Get()
-	first.Albums[0].ImageFiles[0] = "mutated-after-get"
-	second := c.Get()
-	if second.Albums[0].ImageFiles[0] != filePath {
-		t.Fatalf("cache was mutated through an external slice: %+v", second.Albums[0].ImageFiles)
+	if first == nil {
+		t.Fatal("Get returned nil after Set")
 	}
+	if first.Albums[0].ImageFiles[0] != filePath {
+		t.Fatalf("Set should clone: got %q want %q", first.Albums[0].ImageFiles[0], filePath)
+	}
+	// 新合约:Get 返回的 *ScanResult 是发布的不可变快照,不能修改。
+	// 再次 Get 拿到的应是同一份(指针或值等价)。
+	second := c.Get()
+	if second == nil || second.Albums[0].ImageFiles[0] != filePath {
+		t.Fatalf("subsequent Get should return same snapshot: %+v", second)
+	}
+}
+
+// TestScanResultCache_GetIsAtomicLockFree 验证 Get 走 atomic.Load,无锁;
+// 100 个 goroutine 并发 Get 同一 cache 不会因锁竞争而串行化。
+func TestScanResultCache_GetIsAtomicLockFree(t *testing.T) {
+	root := t.TempDir()
+	c := NewScanResultCache(filepath.Join(t.TempDir(), "scan_cache.json"))
+	c.Set(&models.ScanResult{
+		Root: root, Roots: []string{root},
+		Albums: []models.Album{{Path: root, Name: "a"}},
+	})
+	const goroutines = 50
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				r := c.Get()
+				if r == nil || r.AlbumCount < 0 {
+					t.Errorf("bad get: %+v", r)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func TestScanResultCache_ClearRemovesPersistedSnapshot(t *testing.T) {

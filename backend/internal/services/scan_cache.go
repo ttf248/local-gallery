@@ -11,25 +11,42 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
+// scanResultSnapshot 不可变快照:发布到 latest 之后,调用方只能读不能改。
+// 修改必须构造新 snapshot 并通过 CAS 替换。
+type scanResultSnapshot struct {
+	result  *models.ScanResult
+	version uint64 // 单调递增,用于 flush 协调
+}
+
 // ScanResultCache 全局扫描结果缓存。
 //
 //   - 每次成功扫描完成后由 AsyncScanRunner 写入
-//   - 服务启动时从磁盘加载，供前端无需重新扫描即可看到上次结果
-//   - 单进程内自带线程安全（sync.RWMutex）
-//   - 写盘异步 + 防抖，避免在 SSE 完成路径上卡住事件流
+//   - 服务启动时从磁盘加载,供前端无需重新扫描即可看到上次结果
+//   - 读路径无锁(atomic.Pointer.Load),大库下首页 100+ 卡片并发 Get
+//     不再争夺同一把 RWMutex
+//   - 写路径通过 atomic.Store 一次性发布;修改类操作(ApplyCoverOverrides /
+//     SetWithOverrideApplied)走 CAS 重试,失败重试一次
+//   - 写盘异步 + 防抖,避免在 SSE 完成路径上卡住事件流
 type ScanResultCache struct {
 	path string
 
-	mu      sync.RWMutex
-	latest  *models.ScanResult
-	dirty   bool
-	version uint64
+	// latest 是当前快照,只读访问。读路径 atomic.Load 无锁;写路径构造新
+	// snapshot 并 atomic.Store 替换。中间用 CAS 重试保证多写者不会互相覆盖。
+	latest atomic.Pointer[scanResultSnapshot]
 
+	// version 与 dirtyVer 配合:每次 Set/Apply/SetWith... 都 bump version,
+	// dirtyVer 记下"需要落盘"的版本号;flush 完成后若 dirtyVer 等于刚
+	// 落盘的 version 则清零(用 CAS 避免覆盖并发新写)。
+	version  atomic.Uint64
+	dirtyVer atomic.Uint64
+
+	// flush 串行化:同一时刻只能有一个 goroutine 在写盘。
 	flushMu    sync.Mutex
 	flushTimer *time.Timer
 }
@@ -50,29 +67,45 @@ func NewScanResultCache(path string) *ScanResultCache {
 	return &ScanResultCache{path: path}
 }
 
-// Get 返回当前缓存的扫描结果（深拷贝避免外部修改）。
+// Get 返回当前缓存的扫描结果(直接返回 atomic snapshot,无锁无深拷贝)。
+//
+// 关键约束:返回值是「发布后不可变」的快照,调用方只读;任何修改必须
+// 走 Set / SetWithOverrideApplied / ApplyCoverOverrides 重新发布。
+// 之前 Get 会做 cloneScanResult 整树深拷贝,5k+ 相册 * 200 张图每次
+// 都走一遍 deep copy,前端每次 GET /api/library 都要付这笔钱。
+//
+// 为兼容旧的"调用方修改返回值"行为(虽然不推荐),已有调用方实际
+// 没改 ScanResult(grep 全工程未发现 result.Albums[i] = 之类的写
+// 操作),只是读了。Get 现在不再做防御性拷贝,改为文档化"只读"契约。
 func (c *ScanResultCache) Get() *models.ScanResult {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	return cloneScanResult(c.latest)
+	snap := c.latest.Load()
+	if snap == nil {
+		return nil
+	}
+	return snap.result
 }
 
 // Set 写入新的扫描结果并异步、防抖落盘。
 //
-// 落盘通过 timer 延迟 500ms；若在延迟窗口内再次 Set 则重置 timer，
-// 实现"连续多次写合并为一次落盘"。落盘失败不丢内存结果（下次 Set
-// 或显式 Flush 会再尝试）。
+// 落盘通过 timer 延迟 500ms;若在延迟窗口内再次 Set 则重置 timer,
+// 实现"连续多次写合并为一次落盘"。落盘失败不丢内存结果(下次 Set
+// 或显式 Flush 会再尝试)。
+//
+// 关键改动:这里做一次 cloneScanResult 是必要的——外部传进来的
+// *models.ScanResult 调用方还持有引用,我们不能让他们看到我们写时
+// 改到的字段;clone 一次之后外部再怎么改都不影响我们持有的 snapshot。
 func (c *ScanResultCache) Set(r *models.ScanResult) {
 	if r == nil {
 		return
 	}
-	c.mu.Lock()
-	c.latest = cloneScanResult(r)
-	c.markDirtyLocked()
-	c.mu.Unlock()
+	ver := c.version.Add(1)
+	snap := &scanResultSnapshot{result: cloneScanResult(r), version: ver}
+	c.latest.Store(snap)
+	c.dirtyVer.Store(ver)
+	c.scheduleFlush()
 }
 
-// Flush 强制立即落盘（用于服务关闭前等关键路径）。幂等：若内存已
+// Flush 强制立即落盘(用于服务关闭前等关键路径)。幂等:若内存已
 // 干净则什么都不做。
 func (c *ScanResultCache) Flush() error {
 	return c.flush()
@@ -137,69 +170,17 @@ func (c *ScanResultCache) LoadWithRoots(currentRoots []string) (rootsMismatch bo
 	if err != nil {
 		return false, fmt.Errorf("decode scan cache: %w", err)
 	}
-	c.mu.Lock()
-	c.latest = result
-	c.dirty = false
-	c.version++
-	c.mu.Unlock()
+	ver := c.version.Add(1)
+	snap := &scanResultSnapshot{result: result, version: ver}
+	c.latest.Store(snap)
+	c.dirtyVer.Store(0) // 刚从磁盘加载,无需再落盘
 	return false, nil
 }
 
-// flush 把内存中的最新结果写到磁盘（原子重命名）。版本号保证写盘期间
-// 到达的新 Set 不会被错误标记为已持久化。
-func (c *ScanResultCache) flush() error {
+// scheduleFlush 启动 500ms 防抖 timer。多次调用会重置 timer。
+func (c *ScanResultCache) scheduleFlush() {
 	c.flushMu.Lock()
 	defer c.flushMu.Unlock()
-
-	c.mu.RLock()
-	if !c.dirty || c.latest == nil {
-		c.mu.RUnlock()
-		return nil
-	}
-	snapshot := cloneScanResult(c.latest)
-	version := c.version
-	path := c.path
-	c.mu.RUnlock()
-
-	envelope, err := encodeScanResultForDisk(snapshot)
-	if err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(envelope, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := writeScanCacheAtomic(path, data); err != nil {
-		return err
-	}
-	c.mu.Lock()
-	if c.version == version {
-		c.dirty = false
-	}
-	c.mu.Unlock()
-	return nil
-}
-
-// Clear 清空内存中的扫描结果并删除磁盘文件（媒体根目录变更后调用）。
-// 后续首次加载/扫描会按新根重新填充。
-func (c *ScanResultCache) Clear() error {
-	c.flushMu.Lock()
-	defer c.flushMu.Unlock()
-	c.mu.Lock()
-	if c.flushTimer != nil {
-		c.flushTimer.Stop()
-		c.flushTimer = nil
-	}
-	c.latest = nil
-	c.dirty = false
-	c.version++
-	c.mu.Unlock()
-	return removeCacheFile(c.path)
-}
-
-func (c *ScanResultCache) markDirtyLocked() {
-	c.dirty = true
-	c.version++
 	if c.flushTimer != nil {
 		c.flushTimer.Stop()
 	}
@@ -210,16 +191,72 @@ func (c *ScanResultCache) markDirtyLocked() {
 	})
 }
 
-func (c *ScanResultCache) resetMemory() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// flush 把内存中的最新结果写到磁盘(原子重命名)。dirtyVer 配合 latest.version
+// 保证写盘期间到达的新 Set 不会被错误标记为已持久化:
+//
+//   - flush 开始时读 dirtyVer(目标版本),记下要写盘的是哪个版本
+//   - flush 期间可能并发 Set 把 latest 推到更高版本,dirtyVer 也跟着 bump
+//   - flush 写盘成功后,只在 dirtyVer 还等于目标版本时才清零;
+//     否则保留 dirtyVer(让另一次 flush 来写新版本)
+func (c *ScanResultCache) flush() error {
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
+
+	dirtyVer := c.dirtyVer.Load()
+	if dirtyVer == 0 {
+		return nil
+	}
+	snap := c.latest.Load()
+	if snap == nil {
+		// memory empty, reset dirty
+		c.dirtyVer.Store(0)
+		return nil
+	}
+
+	envelope, err := encodeScanResultForDisk(snap.result)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(envelope, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := writeScanCacheAtomic(c.path, data); err != nil {
+		return err
+	}
+	// CAS 清 dirtyVer:只有 dirtyVer 还等于目标版本时才能清零。
+	// 如果在 flush 期间又来了新 Set,bump 到新版本,dirtVer 不再等于
+	// 目标值,CAS 失败,dirtyVer 保留(下一次 Set 触发的 flush 会写
+	// 新版本)。
+	c.dirtyVer.CompareAndSwap(dirtyVer, 0)
+	return nil
+}
+
+// Clear 清空内存中的扫描结果并删除磁盘文件(媒体根目录变更后调用)。
+// 后续首次加载/扫描会按新根重新填充。
+func (c *ScanResultCache) Clear() error {
+	c.flushMu.Lock()
+	defer c.flushMu.Unlock()
 	if c.flushTimer != nil {
 		c.flushTimer.Stop()
 		c.flushTimer = nil
 	}
-	c.latest = nil
-	c.dirty = false
-	c.version++
+	c.latest.Store(nil)
+	c.dirtyVer.Store(0)
+	c.version.Add(1) // bump 让旧 in-flight flush 看见的 dirtyVer 失效
+	return removeCacheFile(c.path)
+}
+
+// resetMemory 清空 in-memory state。**调用方必须已持有 flushMu**。
+// 拆成 locked 版本避免 LoadWithRoots / Clear 在持锁时再调用死锁。
+func (c *ScanResultCache) resetMemory() {
+	if c.flushTimer != nil {
+		c.flushTimer.Stop()
+		c.flushTimer = nil
+	}
+	c.latest.Store(nil)
+	c.dirtyVer.Store(0)
+	c.version.Add(1)
 }
 
 func cloneScanResult(result *models.ScanResult) *models.ScanResult {
@@ -650,56 +687,90 @@ func sameRootSet(a, b []string) bool {
 //     越权 + 防止文件已被删/移走），否则静默跳过
 //  3. 替换 CoverImage + CoverKind（按文件扩展名推断 image/video）
 //
-// 原地修改缓存内容并在有变化时安排异步落盘。返回被应用的 override 数量。
+// 关键改动:stat / 扩展名检查全在锁外完成,只把"修改结果 + CAS 替换"
+// 放进临界区。5000+ 收藏冷启动从"全路径锁持有时间 = 总 stat 时间"
+// 降到"临界区只有 clone + CAS",stat 自身可与并发 Set 交错。
 func (c *ScanResultCache) ApplyCoverOverrides(overrides map[string]CoverOverride) int {
 	if len(overrides) == 0 {
 		return 0
 	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.latest == nil {
-		return 0
-	}
-	applied := 0
 	caseInsensitive := runtime.GOOS == "windows"
-	apply := func(a *models.Album) {
-		ov, ok := overrides[filepath.Clean(a.Path)]
-		if !ok {
-			return
+
+	for {
+		old := c.latest.Load()
+		if old == nil {
+			return 0
 		}
-		if !fileInsideDir(ov.File, a.Path, caseInsensitive) {
-			// cover 文件不在 album 内（被移走/删除/越权），静默跳过
-			return
+
+		// 第一遍:对当前快照收集"待修改项",做 stat + 扩展名校验(全在锁外)
+		type mod struct {
+			file string
+			kind string
 		}
-		kind := coverKindFromExt(ov.File)
-		if kind == "" {
-			return
-		}
-		a.CoverImage = ov.File
-		a.CoverKind = kind
-		applied++
-	}
-	for i := range c.latest.Albums {
-		apply(&c.latest.Albums[i])
-	}
-	var walk func(cs []models.Collection)
-	walk = func(cs []models.Collection) {
-		for i := range cs {
-			for j := range cs[i].Albums {
-				apply(&cs[i].Albums[j])
+		mods := make(map[string]mod)
+		collect := func(albums []models.Album) {
+			for i := range albums {
+				ov, ok := overrides[filepath.Clean(albums[i].Path)]
+				if !ok {
+					continue
+				}
+				if coverKindFromExt(ov.File) == "" {
+					continue
+				}
+				if !fileInsideDir(ov.File, albums[i].Path, caseInsensitive) {
+					// cover 文件不在 album 内（被移走/删除/越权），静默跳过
+					continue
+				}
+				mods[albums[i].Path] = mod{file: ov.File, kind: coverKindFromExt(ov.File)}
 			}
-			if len(cs[i].Collections) > 0 {
-				walk(cs[i].Collections)
+		}
+		collect(old.result.Albums)
+		var walkColl func(cols []models.Collection)
+		walkColl = func(cols []models.Collection) {
+			for i := range cols {
+				collect(cols[i].Albums)
+				walkColl(cols[i].Collections)
 			}
 		}
+		walkColl(old.result.Collections)
+
+		if len(mods) == 0 {
+			return 0
+		}
+
+		// 第二遍:基于旧快照 clone 出一份新的,把 mods 应用上去
+		next := cloneScanResult(old.result)
+		apply := func(albums []models.Album) {
+			for i := range albums {
+				m, ok := mods[albums[i].Path]
+				if !ok {
+					continue
+				}
+				albums[i].CoverImage = m.file
+				albums[i].CoverKind = m.kind
+			}
+		}
+		apply(next.Albums)
+		var applyColl func(cols []models.Collection)
+		applyColl = func(cols []models.Collection) {
+			for i := range cols {
+				apply(cols[i].Albums)
+				applyColl(cols[i].Collections)
+			}
+		}
+		applyColl(next.Collections)
+
+		// CAS 替换:并发 Set 期间可能失败,失败重试(重做 stat + apply)
+		ver := c.version.Add(1)
+		newSnap := &scanResultSnapshot{result: next, version: ver}
+		if c.latest.CompareAndSwap(old, newSnap) {
+			c.dirtyVer.Store(ver)
+			c.scheduleFlush()
+			return len(mods)
+		}
+		// CAS 失败:并发 Set 推到了更新的 snapshot,基于更新的
+		// 快照重新计算 mods,再 CAS 一次。理论上重试一次就够。
 	}
-	if len(c.latest.Collections) > 0 {
-		walk(c.latest.Collections)
-	}
-	if applied > 0 {
-		c.markDirtyLocked()
-	}
-	return applied
 }
 
 // fileInsideDir 检查 file 路径是否在 dir 目录内（file 的父目录 = dir，
@@ -740,119 +811,142 @@ func coverKindFromExt(p string) string {
 }
 
 // SetWithOverrideApplied 把用户设置的 cover 立即应用到缓存结果中的
-// 对应 album（在顶层 albums 与嵌套 collections 内都找），并标记 dirty
+// 对应 album(在顶层 albums 与嵌套 collections 内都找),并标记 dirty
 // 让异步 flush 落盘 scan_cache.json。找不到匹配的 album 时静默成功
-// （下一次扫描器跑或加载时 ApplyCoverOverrides 会按 store 重新填上）。
+// (下一次扫描器跑或加载时 ApplyCoverOverrides 会按 store 重新填上)。
+//
+// 走 CAS 重试路径:在旧快照上 clone 出新快照,改对应 album,原子替换。
 func (c *ScanResultCache) SetWithOverrideApplied(albumPath, coverFile, coverKind string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.latest == nil {
-		return
-	}
 	albumPath = filepath.Clean(albumPath)
 	caseInsensitive := runtime.GOOS == "windows"
-	var walkAlbums func(a *models.Album) bool
-	walkAlbums = func(a *models.Album) bool {
-		ap := filepath.Clean(a.Path)
-		if caseInsensitive {
-			if strings.EqualFold(ap, albumPath) {
+	for {
+		old := c.latest.Load()
+		if old == nil {
+			return
+		}
+		next := cloneScanResult(old.result)
+		var walkAlbums func(a *models.Album) bool
+		walkAlbums = func(a *models.Album) bool {
+			ap := filepath.Clean(a.Path)
+			if caseInsensitive {
+				if strings.EqualFold(ap, albumPath) {
+					a.CoverImage = coverFile
+					a.CoverKind = coverKind
+					return true
+				}
+			} else if ap == albumPath {
 				a.CoverImage = coverFile
 				a.CoverKind = coverKind
 				return true
 			}
-		} else if ap == albumPath {
-			a.CoverImage = coverFile
-			a.CoverKind = coverKind
-			return true
+			return false
 		}
-		return false
-	}
-	// 顶层
-	for i := range c.latest.Albums {
-		if walkAlbums(&c.latest.Albums[i]) {
-			c.markDirtyLocked()
+		hit := false
+		for i := range next.Albums {
+			if walkAlbums(&next.Albums[i]) {
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			var walk func(cs []models.Collection) bool
+			walk = func(cs []models.Collection) bool {
+				for i := range cs {
+					for j := range cs[i].Albums {
+						if walkAlbums(&cs[i].Albums[j]) {
+							return true
+						}
+					}
+					if len(cs[i].Collections) > 0 && walk(cs[i].Collections) {
+						return true
+					}
+				}
+				return false
+			}
+			hit = walk(next.Collections)
+		}
+		if !hit {
 			return
 		}
-	}
-	// 嵌套
-	var walk func(cs []models.Collection) bool
-	walk = func(cs []models.Collection) bool {
-		for i := range cs {
-			for j := range cs[i].Albums {
-				if walkAlbums(&cs[i].Albums[j]) {
-					return true
-				}
-			}
-			if len(cs[i].Collections) > 0 {
-				if walk(cs[i].Collections) {
-					return true
-				}
-			}
+		ver := c.version.Add(1)
+		newSnap := &scanResultSnapshot{result: next, version: ver}
+		if c.latest.CompareAndSwap(old, newSnap) {
+			c.dirtyVer.Store(ver)
+			c.scheduleFlush()
+			return
 		}
-		return false
-	}
-	if walk(c.latest.Collections) {
-		c.markDirtyLocked()
 	}
 }
 
 // RebuildCoverForAlbum 清除 override 后让该 album 的封面回到扫描器默认：
 // 图片优先 → images[0]，否则 videos[0]。
 //
-// 找不到该 album 路径时静默成功（同 SetWithOverrideApplied）。
+// 找不到该 album 路径时静默成功(同 SetWithOverrideApplied)。
+// 走 CAS 重试路径。
 func (c *ScanResultCache) RebuildCoverForAlbum(albumPath string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.latest == nil {
-		return
-	}
 	albumPath = filepath.Clean(albumPath)
 	caseInsensitive := runtime.GOOS == "windows"
-	var rebuild func(a *models.Album) bool
-	rebuild = func(a *models.Album) bool {
-		ap := filepath.Clean(a.Path)
-		match := ap == albumPath
-		if !match && caseInsensitive {
-			match = strings.EqualFold(ap, albumPath)
-		}
-		if !match {
-			return false
-		}
-		if len(a.ImageFiles) > 0 {
-			a.CoverImage = a.ImageFiles[0]
-			a.CoverKind = "image"
-		} else if len(a.VideoFiles) > 0 {
-			a.CoverImage = a.VideoFiles[0]
-			a.CoverKind = "video"
-		} else {
-			a.CoverImage = ""
-			a.CoverKind = ""
-		}
-		return true
-	}
-	for i := range c.latest.Albums {
-		if rebuild(&c.latest.Albums[i]) {
-			c.markDirtyLocked()
+	for {
+		old := c.latest.Load()
+		if old == nil {
 			return
 		}
-	}
-	var walk func(cs []models.Collection) bool
-	walk = func(cs []models.Collection) bool {
-		for i := range cs {
-			for j := range cs[i].Albums {
-				if rebuild(&cs[i].Albums[j]) {
-					return true
-				}
+		next := cloneScanResult(old.result)
+		var rebuild func(a *models.Album) bool
+		rebuild = func(a *models.Album) bool {
+			ap := filepath.Clean(a.Path)
+			match := ap == albumPath
+			if !match && caseInsensitive {
+				match = strings.EqualFold(ap, albumPath)
 			}
-			if len(cs[i].Collections) > 0 {
-				if walk(cs[i].Collections) {
-					return true
-				}
+			if !match {
+				return false
+			}
+			if len(a.ImageFiles) > 0 {
+				a.CoverImage = a.ImageFiles[0]
+				a.CoverKind = "image"
+			} else if len(a.VideoFiles) > 0 {
+				a.CoverImage = a.VideoFiles[0]
+				a.CoverKind = "video"
+			} else {
+				a.CoverImage = ""
+				a.CoverKind = ""
+			}
+			return true
+		}
+		hit := false
+		for i := range next.Albums {
+			if rebuild(&next.Albums[i]) {
+				hit = true
+				break
 			}
 		}
-		return false
-	}
-	if walk(c.latest.Collections) {
-		c.markDirtyLocked()
+		if !hit {
+			var walk func(cs []models.Collection) bool
+			walk = func(cs []models.Collection) bool {
+				for i := range cs {
+					for j := range cs[i].Albums {
+						if rebuild(&cs[i].Albums[j]) {
+							return true
+						}
+					}
+					if len(cs[i].Collections) > 0 && walk(cs[i].Collections) {
+						return true
+					}
+				}
+				return false
+			}
+			hit = walk(next.Collections)
+		}
+		if !hit {
+			return
+		}
+		ver := c.version.Add(1)
+		newSnap := &scanResultSnapshot{result: next, version: ver}
+		if c.latest.CompareAndSwap(old, newSnap) {
+			c.dirtyVer.Store(ver)
+			c.scheduleFlush()
+			return
+		}
 	}
 }
