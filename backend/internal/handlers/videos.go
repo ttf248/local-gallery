@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -198,6 +199,13 @@ func videoMime(path string) string {
 // 不使用内容的强哈希(没必要也不值得为 1GB+ 视频跑 sha256);
 // mtime+size 在源文件 / 转码 / 重封装结果稳定时也稳定,符合
 // 「弱 ETag」的语义。
+//
+// 与 thumbs.ThumbHandler 的 ETag 行为保持一致(都带双引号,十六进制
+// mtime+size),保证 304 协商在两个端点都能命中。
+//
+// 不能用 fmt.Sprintf("%q...", int64) — %q 会把整数当 Unicode 码点
+// 处理,UnixNano() 这种大数会输出乱码。改用 strconv.Quote 包装。
 func videoETag(info os.FileInfo) string {
-	return fmt.Sprintf(`"%x-%x"`, info.ModTime().UnixNano(), info.Size())
+	raw := fmt.Sprintf("%x-%x", info.ModTime().UnixNano(), info.Size())
+	return strconv.Quote(raw)
 }
