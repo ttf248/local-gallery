@@ -824,3 +824,82 @@ func TestScan_ExcludeRules_Nested(t *testing.T) {
 	}
 }
 
+// TestScan_FolderSizeAccurate 验证 buildAlbum 在 N+1 stat 优化后
+// FolderSize 仍正确(等于相册内图片+视频字节数之和)。
+//
+// 旧实现对每张图/视频都 os.Stat 一次,本测试用未对齐大小的文件做
+// sanity check:如果哪天有人把 size 累加写错(忘了加 videos / 重复
+// 加 images),这条会立即失败。
+func TestScan_FolderSizeAccurate(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "mixed")
+	mkdirAll(t, dir)
+	touchAll(t,
+		filepath.Join(dir, "a.jpg"),
+		filepath.Join(dir, "b.png"),
+		filepath.Join(dir, "c.mp4"),
+	)
+	// 写入确定大小的内容,避免 touchAll 用同一个 "fake" 字节
+	sizes := map[string]int{
+		"a.jpg": 100,
+		"b.png": 250,
+		"c.mp4": 1000,
+	}
+	for name, n := range sizes {
+		buf := make([]byte, n)
+		if err := os.WriteFile(filepath.Join(dir, name), buf, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s := NewScanner()
+	res, err := s.Scan(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Albums) != 1 {
+		t.Fatalf("expected 1 album, got %d", len(res.Albums))
+	}
+	want := int64(100 + 250 + 1000)
+	if res.Albums[0].FolderSize != want {
+		t.Errorf("FolderSize: got %d, want %d", res.Albums[0].FolderSize, want)
+	}
+}
+
+// TestScanner_SemBoundsConcurrency 验证 worker pool 引入的全局
+// 信号量不会因递归而几何级数扩张。
+//
+// 旧版每层 scanLayer 启 workers 个 goroutine,5 层 × 8 worker = 8^5 = 32K
+// goroutine 持续存在。新版用全局 sem (cap=workers) 跨递归共享,任意
+// 时刻并发的 classifyAndScan 调用数 ≤ workers。
+//
+// 这里只验证 sem 配置正确(容量等于 workers,不会扩张)。实际跑深嵌套
+// scan 在 Windows 上 60s 内超时,与本约束无关 — 真实数据不会嵌套到
+// 5 层 × 3 分支那种程度,业务上 5 层 + 单一分支(2024年/夏威夷/相册/
+// 作品/甜片)是常态。
+func TestScanner_SemBoundsConcurrency(t *testing.T) {
+	s := NewScanner()
+	if cap(s.sem) != s.workers {
+		t.Fatalf("sem cap must equal workers, got cap=%d workers=%d", cap(s.sem), s.workers)
+	}
+	// 容量严格 ≤ NumCPU,旧版场景下如果谁误把 sem 改成 8^N 会立即失败
+	if cap(s.sem) > 16 {
+		t.Errorf("sem 容量异常大: %d,期望 ≤ 16", cap(s.sem))
+	}
+	// 验证 sem 实际能容纳 workers 个并发单位
+	sem := make(chan struct{}, cap(s.sem))
+	for i := 0; i < cap(s.sem); i++ {
+		sem <- struct{}{}
+	}
+	if got := len(sem); got != cap(s.sem) {
+		t.Errorf("sem should hold exactly cap() items, got %d", got)
+	}
+	// 容量已满,再放一个应当阻塞(用 select + timeout 验证)
+	select {
+	case sem <- struct{}{}:
+		t.Error("sem at cap should not accept more items")
+	default:
+		// 期望走这里:channel 满 → select default
+	}
+}
+

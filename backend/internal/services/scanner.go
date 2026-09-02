@@ -101,14 +101,28 @@ func (e *ScanError) Error() string {
 func (e *ScanError) Unwrap() error { return e.Err }
 
 // Scanner 漫画扫描器。
+//
+// 并发模型：worker pool + 跨递归共享信号量。任一层 scanLayer 都会启
+// workers 个 goroutine 跑 jobs,每层递归又是新一组 workers → 嵌套 5 层
+// 时旧版会创建 8^5 = 32K goroutine 持续存在。引入 sem chan struct{}
+// (容量 = workers) 跨递归共享,让"任意时刻并发的 classifyAndScan
+// 调用" 严格 ≤ workers。深嵌套树会变慢一点(因为浅层可能占满 sem),
+// 但 goroutine 数稳定,适合大库 + 嵌套深的真实用户数据(2024年/夏威夷/
+// 相册/作品/甜片 这种 5 层结构实测)。
 type Scanner struct {
 	workers int
+	sem     chan struct{}
 	ctx     context.Context
 }
 
 // NewScanner 创建扫描器。
 func NewScanner() *Scanner {
-	return &Scanner{workers: min(8, runtime.NumCPU()), ctx: context.Background()}
+	n := min(8, runtime.NumCPU())
+	return &Scanner{
+		workers: n,
+		sem:     make(chan struct{}, n),
+		ctx:     context.Background(),
+	}
 }
 
 // Scan 执行同步扫描。返回完整结果树。
@@ -357,6 +371,9 @@ func (s *Scanner) scanLayerWithHook(
 				if s.contextErr() != nil {
 					return
 				}
+				// classifyAndScan 内部用全局 sem 跨递归控制并发。
+				// 这里不再额外取 sem,否则父调用持锁期间子层 scanLayer
+				// 的 worker 会全阻塞,退化成串行执行。
 				al, co := s.classifyAndScan(basePath, p, maxDepth, curDepth, exclude)
 				if al != nil {
 					results <- result{album: al, isAlbum: true}
@@ -437,17 +454,36 @@ feedJobs:
 //   - 同时含图和视频 → 封面用第一张图,CoverKind="image"
 //   - 仅含视频 → 封面用第一个视频,CoverKind="video"（封面缩略图由前端抽帧后回填）
 //   - 仅含图 → 封面用第一张图,CoverKind="image"
+// fileEntry 把目录项的 size 提前算好,避免 buildAlbum 阶段再次
+// os.Stat 整本相册(每张图/视频一次 syscall)。在 1k+ 张图的相册上,
+// 这把 FolderSize 的 N+1 syscall 减到 0 次。
+type fileEntry struct {
+	path string
+	size int64
+}
+
 func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, exclude ExcludeConfig) (*models.Album, *models.Collection) {
 	if s.contextErr() != nil {
 		return nil, nil
 	}
+	// 全局信号量:跨递归共享,严格限制"任意时刻并发的 classifyAndScan
+	// 调用数" ≤ workers。如果在 worker 外面取,父调用持锁期间子层
+	// scanLayer 的 worker 全在阻塞 → 退化成串行。必须让递归的每层
+	// 各自独立计数,合在一起仍受 workers 上限约束。
+	select {
+	case s.sem <- struct{}{}:
+	case <-s.ctx.Done():
+		return nil, nil
+	}
+	defer func() { <-s.sem }()
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, nil
 	}
 
-	var images []string
-	var videos []string
+	var images []fileEntry
+	var videos []fileEntry
 	var subdirs []os.DirEntry
 
 	for _, e := range entries {
@@ -469,9 +505,22 @@ func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, 
 		full := filepath.Join(dir, e.Name())
 		switch {
 		case models.IsImageFile(e.Name()):
-			images = append(images, full)
+			// 只对图片/视频调 Info() 拿 size;系统白名单或非媒体文件
+			// 一次 Info 都不浪费。DirEntry.Info() 在 Windows 上首次
+			// 调用是一次 syscall,后续命中同一 entry 的 Info 会被 runtime
+			// 缓存(go 1.18+),但 buildAlbum 阶段不再二次 stat 才
+			// 是真正的优化点。
+			size := int64(0)
+			if fi, ierr := e.Info(); ierr == nil {
+				size = fi.Size()
+			}
+			images = append(images, fileEntry{path: full, size: size})
 		case models.IsVideoFile(e.Name()):
-			videos = append(videos, full)
+			size := int64(0)
+			if fi, verr := e.Info(); verr == nil {
+				size = fi.Size()
+			}
+			videos = append(videos, fileEntry{path: full, size: size})
 		}
 	}
 
@@ -542,15 +591,24 @@ func (s *Scanner) contextErr() error {
 }
 
 // buildAlbum 把「图片+视频」组装成一个 Album（不含任何子目录逻辑）。
-func buildAlbum(dir string, images, videos []string) *models.Album {
-	sort.Strings(images)
-	sort.Strings(videos)
+//
+// images/videos 的 size 由 classifyAndScan 在收集时通过 DirEntry.Info()
+// 拿到,这里直接累加,不再 N+1 stat。N+1 在 1k+ 张图的相册上是几百毫秒
+// 级别的浪费(每张 stat 一次),改完后整本相册只多一次 dir stat 拿 modTime。
+func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
+	imagePaths := make([]string, len(images))
 	var totalSize int64
-	for _, p := range append(append([]string{}, images...), videos...) {
-		if fi, err := os.Stat(p); err == nil {
-			totalSize += fi.Size()
-		}
+	for i, e := range images {
+		imagePaths[i] = e.path
+		totalSize += e.size
 	}
+	videoPaths := make([]string, len(videos))
+	for i, e := range videos {
+		videoPaths[i] = e.path
+		totalSize += e.size
+	}
+	sort.Strings(imagePaths)
+	sort.Strings(videoPaths)
 	modTime := time.Time{}
 	if fi, err := os.Stat(dir); err == nil {
 		modTime = fi.ModTime()
@@ -559,21 +617,21 @@ func buildAlbum(dir string, images, videos []string) *models.Album {
 	// 封面选择：图片优先
 	var cover, coverKind string
 	switch {
-	case len(images) > 0:
-		cover, coverKind = images[0], "image"
+	case len(imagePaths) > 0:
+		cover, coverKind = imagePaths[0], "image"
 	default:
-		cover, coverKind = videos[0], "video"
+		cover, coverKind = videoPaths[0], "video"
 	}
 	return &models.Album{
 		Type:       "album",
 		Path:       dir,
 		Name:       name,
-		ImageFiles: images,
-		VideoFiles: videos,
+		ImageFiles: imagePaths,
+		VideoFiles: videoPaths,
 		CoverImage: cover,
 		CoverKind:  coverKind,
-		ImageCount: len(images),
-		VideoCount: len(videos),
+		ImageCount: len(imagePaths),
+		VideoCount: len(videoPaths),
 		FolderSize: totalSize,
 		Author:     ExtractAuthor(name),
 		Tags:       ExtractTags(name),
