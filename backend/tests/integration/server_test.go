@@ -97,7 +97,6 @@ func newHarness(t *testing.T) *harness {
 	safetyMw, _ := middleware.PathSafetyMiddleware([]string{root})
 	app.Use(safetyMw)
 
-	scanner := services.NewScanner()
 	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
 		CacheDir:   cache,
 		Width:      64,
@@ -118,7 +117,6 @@ func newHarness(t *testing.T) *harness {
 			"version":   "test",
 		})
 	})
-	api.Post("/scan", handlers.ScanHandler(scanner, mgr))
 	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, mgr))
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
 	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
@@ -227,42 +225,7 @@ func TestHealth(t *testing.T) {
 	}
 }
 
-func TestSyncScan(t *testing.T) {
-	h := newHarness(t)
-	res, body := h.do(t, "POST", "/api/scan", nil)
-	if res.StatusCode != 200 {
-		t.Fatalf("status=%d body=%s", res.StatusCode, body)
-	}
-	var resp struct {
-		OK     bool `json:"ok"`
-		Result struct {
-			Albums []struct {
-				Name       string `json:"name"`
-				Author     string `json:"author"`
-				ImageCount int    `json:"imageCount"`
-			} `json:"albums"`
-			SmartCollections []struct {
-				Author     string `json:"author"`
-				AlbumCount int    `json:"albumCount"`
-			} `json:"smartCollections"`
-		} `json:"result"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		t.Fatal(err)
-	}
-	if !resp.OK {
-		t.Fatal("ok != true")
-	}
-	if len(resp.Result.Albums) != 2 {
-		t.Errorf("albums=%d want 2", len(resp.Result.Albums))
-	}
-	if len(resp.Result.SmartCollections) != 1 {
-		t.Errorf("smart=%d want 1", len(resp.Result.SmartCollections))
-	}
-	if resp.Result.SmartCollections[0].Author != "作者A" {
-		t.Errorf("smart author=%q", resp.Result.SmartCollections[0].Author)
-	}
-}
+
 
 func TestAsyncScanAndSSE(t *testing.T) {
 	h := newHarness(t)

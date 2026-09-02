@@ -11,39 +11,6 @@ import (
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
-// ScanHandler 同步扫描（保留兼容）。
-// mediaRoots 在每次请求时通过 mgr.Roots() 读取，响应热更新。
-//
-// MaxDepth 是「集合嵌套层数」上限：用户实测数据有 5 层
-// (2024年/夏威夷-度假/相册/作品/甜片),旧值 2 会把深度 ≥3 的子集合
-// 全部丢掉。这里给到 8,够覆盖任意合理层级,又能避免真出现环状软链
-// 时无限递归。
-func ScanHandler(scanner *services.Scanner, mgr *config.Manager, catalogs ...*services.ResourceCatalog) fiber.Handler {
-	catalog := optionalCatalog(catalogs)
-	return func(c *fiber.Ctx) error {
-		result, err := scanner.Scan(services.ScanOptions{
-			Roots:    mgr.Roots(),
-			MaxDepth: 8,
-			Exclude:  excludeFromConfig(mgr),
-		})
-		if err != nil {
-			status := fiber.StatusInternalServerError
-			if se, ok := err.(*services.ScanError); ok {
-				switch se.Kind {
-				case services.ScanRootMissing, services.ScanRootNotDir:
-					status = fiber.StatusBadRequest
-				}
-			}
-			return c.Status(status).JSON(fiber.Map{"error": err.Error()})
-		}
-		if catalog != nil {
-			catalog.Rebuild(result, mgr.Roots())
-			result = catalog.PublicScanResult(result)
-		}
-		return c.JSON(fiber.Map{"ok": true, "result": result})
-	}
-}
-
 // AsyncScanStartHandler 启动异步扫描，返回 scan_id。
 //
 // POST /api/scan/start
