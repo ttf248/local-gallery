@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { Virtuoso } from 'react-virtuoso'
 import { useGalleryStore } from '../../store/galleryStore'
 import { imageUrl } from '../../api/images'
 
@@ -212,8 +213,15 @@ export default function ImageGallery({ images, onClickNavigate }: Props) {
   }
 
   if (isContinuous) {
-    // 连续滚动模式：每张图按比例显示，超大图使用 fit 模式自适应。
-    // 关键：每张图使用 block 元素 + 最大宽度 100%，让浏览器自然堆叠可滚动。
+    // 连续滚动模式:用 react-virtuoso 的 Virtuoso 做窗口化,只渲染视口
+    // 上下 ±overscan 范围内的图。1000+ 张大本连续模式不再一次性挂 1000+
+    // 个 <img>,DOM 节点数稳定在视口高度相关的小常数。
+    //
+    // 兼容性:
+    //   - click 翻页 / contextmenu 阻止 / data-image-gallery 属性挂在外层
+    //   - 缩放(zoom)变化时 virtuoso 通过 overscan 重新计算可视窗口
+    //   - rotate 同理
+    //   - 切页 index 变时 Virtuoso 用 itemContent 重新计算,大本下应能正确跟随
     return (
       <div
         ref={containerRef}
@@ -222,10 +230,12 @@ export default function ImageGallery({ images, onClickNavigate }: Props) {
         onClick={onContainerClick}
         {...dataImageGalleryProps}
       >
-        <div className="flex flex-col items-center gap-2 py-4">
-          {images.map((src, i) => (
+        <Virtuoso
+          style={{ height: '100%' }}
+          data={images}
+          overscan={3}
+          itemContent={(i, src) => (
             <ContinuousImage
-              key={i}
               src={src}
               index={i}
               aspect={aspect}
@@ -233,8 +243,8 @@ export default function ImageGallery({ images, onClickNavigate }: Props) {
               isRotated={rotation !== 0}
               zoom={zoom}
             />
-          ))}
-        </div>
+          )}
+        />
       </div>
     )
   }
@@ -332,7 +342,18 @@ interface ContinuousImageProps {
   zoom: number
 }
 
-function ContinuousImage({ src, index, aspect, nearIndex, isRotated, zoom }: ContinuousImageProps) {
+// 用 React.memo 包:1000+ 张大本里,父 re-render(切 index/zoom)时
+// 1000 个子组件一起 re-render 是真实瓶颈。memo 走 props 浅比较,只
+// 真正发生变化的子组件(nearIndex 翻转 / 自己的 zoom 变 / 自己的
+// isRotated 变)会 re-render。
+const ContinuousImage = memo(function ContinuousImage({
+  src,
+  index,
+  aspect,
+  nearIndex,
+  isRotated,
+  zoom,
+}: ContinuousImageProps) {
   const baseStyle: React.CSSProperties = {
     display: 'block',
     maxWidth: '100%',
@@ -379,4 +400,4 @@ function ContinuousImage({ src, index, aspect, nearIndex, isRotated, zoom }: Con
       />
     </div>
   )
-}
+})
