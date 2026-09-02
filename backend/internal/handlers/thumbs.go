@@ -34,6 +34,22 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 			})
 		}
 
+		// 先尝试 ETag 协商：客户端带了 If-None-Match 且与当前文件
+		// mtime/size 派生的 ETag 一致时直接 304,省掉 GetOrCreate 的
+		// 磁盘读 + 解码 + 缩放 + JPEG 编码。这是冷启动 / 翻到未缓存合集
+		// 时最常见的路径(20+ 张同时 miss,1 张命中都省好几 ms)。
+		//
+		// ETagFor 内部只调一次 os.Stat,失败时 (源文件不存在等) 返回
+		// ErrSourceMissing,这种情况下必须走 GetOrCreate 让它返回 404
+		// 而不是 304。
+		if etag, etagErr := svc.ETagFor(path); etagErr == nil {
+			etagQuoted := `"` + etag + `"`
+			if match := c.Get("If-None-Match"); match != "" && match == etagQuoted {
+				c.Set("ETag", etagQuoted)
+				return c.SendStatus(fiber.StatusNotModified)
+			}
+		}
+
 		data, err := svc.GetOrCreate(path)
 		if err != nil {
 			switch {
@@ -59,19 +75,11 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 			}
 		}
 
-		// 仅 200 路径启用 ETag 协商。再次 stat 一遍拿当前 mtime/size；
-		// 如果和 GetOrCreate 内部 stat 不一致（理论上不应该发生：两
-		// 次 stat 之间源文件被改写），用刚生成的数据 mtime 也行，
-		// 但简单起见用 ETagFor 算就好。
-		etag, etagErr := svc.ETagFor(path)
-		if etagErr == nil {
-			// ETag 协议规定值用双引号包裹；浏览器回传的 If-None-Match
-			// 也带双引号，比较时必须包含引号，否则永远 miss。
+		// 走到这里说明客户端没带 If-None-Match(或带但不匹配),
+		// 需要把 ETag 带上方便客户端下次走 304。
+		if etag, etagErr := svc.ETagFor(path); etagErr == nil {
 			etagQuoted := `"` + etag + `"`
 			c.Set("ETag", etagQuoted)
-			if match := c.Get("If-None-Match"); match != "" && match == etagQuoted {
-				return c.SendStatus(fiber.StatusNotModified)
-			}
 		}
 
 		c.Set("Content-Type", "image/jpeg")
