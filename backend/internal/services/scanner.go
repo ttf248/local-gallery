@@ -203,6 +203,22 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 			return nil, err
 		}
 
+		// 关键修复:scanLayer 只处理 subdirs。如果顶层 root 目录直接放了
+		// 文件(用户常见的"一打开 media root 就是 100 张图"场景),原实现
+		// 永远返回 0 album,这里补一次 classifyAndScan 顶层。只在以下条件
+		// 触发,避免与已有 subdir 路径重复:
+		//   - root 下有顶层文件 AND 没有可用 subdir(只有"散图"场景)
+		//   - root 下有顶层文件 AND subdir 已被 scanLayer 处理(此处不再
+		//     重叠,顶层文件丢失;这是已存在的设计限制,本修复不触及)
+		// 实际行为:情形 A(只有顶层文件)→ 顶层 root 自己变成 album;
+		// 情形 C(顶层文件+subdir)→ 顶层 root 的文件仍然丢失(已知问题,
+		// 计划未来引入"root loose album"模式)
+		if hasLooseFilesAtRoot(absRoot, len(topSubdirs)) {
+			if al, _ := s.classifyAndScan(absRoot, absRoot, depth, 0, opts.Exclude); al != nil {
+				topAlbums = append([]models.Album{*al}, topAlbums...)
+			}
+		}
+
 		// 给所有产生的 album/collection 打 source 标签
 		srcName := filepath.Base(absRoot)
 		stampAlbumSource(&topAlbums, absRoot, srcName)
@@ -588,6 +604,32 @@ func (s *Scanner) contextErr() error {
 		return nil
 	}
 	return s.ctx.Err()
+}
+
+// hasLooseFilesAtRoot 判断 root 顶层是否含可直接被分类的图/视频文件。
+//
+// 仅用于"顶层 root 直接放文件"那种场景(情形 A),与 scanLayer 处理的
+// subdir 路径不重叠。如果 root 既有 subdir 又有顶层文件,这里返回
+// false — 顶层文件仍会被丢失(已知设计限制,见 ScanWithHook 注释)。
+func hasLooseFilesAtRoot(root string, subdirCount int) bool {
+	if subdirCount > 0 {
+		// 避免与 scanLayer 已处理的子目录重复;后续可改成总是处理顶层文件
+		return false
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return false
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if models.IsImageFile(name) || models.IsVideoFile(name) {
+			return true
+		}
+	}
+	return false
 }
 
 // buildAlbum 把「图片+视频」组装成一个 Album（不含任何子目录逻辑）。

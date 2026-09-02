@@ -102,3 +102,7 @@ backend/config.local.yaml
 
 # 临时 API 导出 / 调试快照(无对应代码写入,但确实会出现在仓库根)
 .library.json
+
+# 本地扫描测试用的临时媒体根(100 张 hash 文件名 jpg) — 不入仓
+# 真要保留 fixture 放 tests/integration/testdata/ 并用 git-lfs
+/testdata-comics/
