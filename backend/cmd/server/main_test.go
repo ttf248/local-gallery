@@ -34,7 +34,7 @@ func TestRunServerGracefulShutdownFlushesRuntime(t *testing.T) {
 	if _, _, _, err := runner.StartOrReuse(services.ScanOptions{Root: root}); err == nil {
 		t.Fatal("scan runner accepted work after shutdown")
 	}
-	if _, status := transcode.Resolve("video.mp4"); status != services.TranscodeStatusUnavailable {
+	if _, status := transcode.Resolve("video.mp4", nil); status != services.TranscodeStatusUnavailable {
 		t.Fatalf("transcode status after shutdown = %v", status)
 	}
 }
