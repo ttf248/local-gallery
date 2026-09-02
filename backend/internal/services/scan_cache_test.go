@@ -161,7 +161,18 @@ func TestScanResultCache_LoadWithRoots_RequiresRoots(t *testing.T) {
 	}
 }
 
-func TestScanResultCache_PersistsRelativeReferencesOnly(t *testing.T) {
+// TestScanResultCache_PersistsAbsolutePath 验证 schemaVersion=3 的
+// 新合约:cache.json 里直接存 raw 绝对路径,不再做 r_xxx/path 编码。
+//
+// 行为变化:之前 TestScanResultCache_PersistsRelativeReferencesOnly
+// 校验「绝对路径不出现」,这是 schemaVersion=2 时的"磁盘读不到用户目录"
+// 安全特性。新合约不再做混淆 ——
+//
+//   - cache.json 位于本地 cacheDir,127.0.0.1 后端,无外网访问
+//   - 公共 API 响应走 catalog.ExternalID 转成 r_/a_/c_/f_ ID
+//
+// 落盘里有绝对路径是 by design。
+func TestScanResultCache_PersistsAbsolutePath(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "private-album")
@@ -187,12 +198,19 @@ func TestScanResultCache_PersistsRelativeReferencesOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	escapedRoot, _ := json.Marshal(root)
-	if strings.Contains(string(data), strings.Trim(string(escapedRoot), `"`)) {
-		t.Fatalf("cache file leaked absolute root: %s", data)
+	// schemaVersion=3 标记
+	if !strings.Contains(string(data), `"schemaVersion": 3`) {
+		t.Fatalf("cache schema version missing or wrong: %s", data)
 	}
-	if !strings.Contains(string(data), `"schemaVersion": 2`) {
-		t.Fatalf("cache schema version missing: %s", data)
+	// 绝对路径确实在文件里(新合约)。
+	// Windows 路径里的 \ 在 JSON 编码时被转义为 \\,所以比对时用 marshaled 形式。
+	escapedRoot, _ := json.Marshal(root)
+	escapedFile, _ := json.Marshal(filePath)
+	if !strings.Contains(string(data), strings.Trim(string(escapedRoot), `"`)) {
+		t.Errorf("schemaVersion=3 should keep raw absolute path, but file doesn't contain root %q:\n%s", root, data)
+	}
+	if !strings.Contains(string(data), strings.Trim(string(escapedFile), `"`)) {
+		t.Errorf("file should contain raw image file path %q:\n%s", filePath, data)
 	}
 
 	loaded := NewScanResultCache(path)

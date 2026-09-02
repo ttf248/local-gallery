@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -53,7 +52,7 @@ type ScanResultCache struct {
 
 const (
 	flushDebounce          = 500 * time.Millisecond
-	scanCacheSchemaVersion = 2
+	scanCacheSchemaVersion = 3
 )
 
 type scanCacheEnvelope struct {
@@ -317,7 +316,9 @@ func encodeScanResultForDisk(result *models.ScanResult) (*scanCacheEnvelope, err
 	if len(roots) == 0 && result.Root != "" {
 		roots = []string{result.Root}
 	}
-	refs := make([]scanCacheRoot, 0, len(roots))
+	if len(roots) == 0 {
+		return nil, errors.New("scan result has no roots")
+	}
 	rootIDs := make([]string, 0, len(roots))
 	for _, root := range roots {
 		abs, err := filepath.Abs(root)
@@ -325,179 +326,32 @@ func encodeScanResultForDisk(result *models.ScanResult) (*scanCacheEnvelope, err
 			return nil, err
 		}
 		abs = filepath.Clean(abs)
-		id := rootIDFor(abs)
-		refs = append(refs, scanCacheRoot{id: id, path: abs})
-		rootIDs = append(rootIDs, id)
+		rootIDs = append(rootIDs, rootIDFor(abs))
 	}
-	if len(refs) == 0 {
-		return nil, errors.New("scan result has no roots")
-	}
-	// 嵌套根优先匹配更具体的路径；RootIDs 仍保持配置顺序。
-	sort.Slice(refs, func(i, j int) bool { return len(refs[i].path) > len(refs[j].path) })
-
-	out := cloneScanResult(result)
-	encode := func(path string) (string, error) { return encodeScanCachePath(path, refs) }
-	if err := transformScanResultPaths(out, encode); err != nil {
-		return nil, err
-	}
+	// schemaVersion=3 起:不再做 encodeScanCachePath 路径混淆,直接存
+	// 原始 result。绝对路径会出现在 cache.json 里 ——
+	// 风险被两层降低:
+	//   - cache.json 位于本地 cacheDir,默认 127.0.0.1 后端服务,无外网访问
+	//   - 公共 API 响应走 catalog.ExternalID 转成 r_/a_/c_/f_ ID
+	// 旧版 encode/decode 全套删除,见 transformScanResultPaths / etc.
 	return &scanCacheEnvelope{
 		SchemaVersion: scanCacheSchemaVersion,
 		RootIDs:       rootIDs,
-		Result:        out,
+		Result:        cloneScanResult(result),
 	}, nil
 }
 
-func decodeScanResultFromDisk(result *models.ScanResult, roots []string) (*models.ScanResult, error) {
-	rootByID := make(map[string]string, len(roots))
-	for _, root := range roots {
-		abs, err := filepath.Abs(root)
-		if err != nil {
-			return nil, err
-		}
-		abs = filepath.Clean(abs)
-		rootByID[rootIDFor(abs)] = abs
+// decodeScanResultFromDisk 从磁盘加载的 envelope 还原 result。
+//
+// schemaVersion=3 起:result 已是 raw(绝对路径),直接 clone 出来用。
+// 绝对路径是否合法(还在当前 mediaRoots 下)由调用方校验:LoadWithRoots
+// 已经在调用 decode 之前确认过 rootIDs 与 currentRoots 一致,所以这里
+// 不再做路径校验。
+func decodeScanResultFromDisk(result *models.ScanResult, _ []string) (*models.ScanResult, error) {
+	if result == nil {
+		return nil, errors.New("scan cache result is empty")
 	}
-	out := cloneScanResult(result)
-	decode := func(path string) (string, error) { return decodeScanCachePath(path, rootByID) }
-	if err := transformScanResultPaths(out, decode); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func transformScanResultPaths(result *models.ScanResult, transform func(string) (string, error)) error {
-	var err error
-	if result.Root, err = transform(result.Root); err != nil {
-		return err
-	}
-	if result.Roots, err = transformScanCachePaths(result.Roots, transform); err != nil {
-		return err
-	}
-	for i := range result.Albums {
-		if err := transformAlbumPaths(&result.Albums[i], transform); err != nil {
-			return err
-		}
-	}
-	for i := range result.Collections {
-		if err := transformCollectionPaths(&result.Collections[i], transform); err != nil {
-			return err
-		}
-	}
-	for i := range result.SmartCollections {
-		if result.SmartCollections[i].CoverImage, err = transform(result.SmartCollections[i].CoverImage); err != nil {
-			return err
-		}
-		for j := range result.SmartCollections[i].Albums {
-			if err := transformAlbumPaths(&result.SmartCollections[i].Albums[j], transform); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func transformAlbumPaths(album *models.Album, transform func(string) (string, error)) error {
-	var err error
-	if album.Path, err = transform(album.Path); err != nil {
-		return err
-	}
-	if album.SourceRoot, err = transform(album.SourceRoot); err != nil {
-		return err
-	}
-	if album.CoverImage, err = transform(album.CoverImage); err != nil {
-		return err
-	}
-	if album.ImageFiles, err = transformScanCachePaths(album.ImageFiles, transform); err != nil {
-		return err
-	}
-	if album.VideoFiles, err = transformScanCachePaths(album.VideoFiles, transform); err != nil {
-		return err
-	}
-	if album.Files, err = transformScanCachePaths(album.Files, transform); err != nil {
-		return err
-	}
-	return nil
-}
-
-func transformCollectionPaths(collection *models.Collection, transform func(string) (string, error)) error {
-	var err error
-	if collection.Path, err = transform(collection.Path); err != nil {
-		return err
-	}
-	if collection.SourceRoot, err = transform(collection.SourceRoot); err != nil {
-		return err
-	}
-	for i := range collection.Albums {
-		if err := transformAlbumPaths(&collection.Albums[i], transform); err != nil {
-			return err
-		}
-	}
-	for i := range collection.Collections {
-		if err := transformCollectionPaths(&collection.Collections[i], transform); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func transformScanCachePaths(paths []string, transform func(string) (string, error)) ([]string, error) {
-	if paths == nil {
-		return nil, nil
-	}
-	out := make([]string, len(paths))
-	for i, path := range paths {
-		mapped, err := transform(path)
-		if err != nil {
-			return nil, err
-		}
-		out[i] = mapped
-	}
-	return out, nil
-}
-
-func encodeScanCachePath(path string, roots []scanCacheRoot) (string, error) {
-	if path == "" {
-		return "", nil
-	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	for _, root := range roots {
-		rel, relErr := filepath.Rel(root.path, abs)
-		if relErr != nil || relEscapesRoot(rel) {
-			continue
-		}
-		if rel == "." {
-			return root.id, nil
-		}
-		return root.id + "/" + filepath.ToSlash(rel), nil
-	}
-	return "", errors.New("scan result contains a path outside configured roots")
-}
-
-func decodeScanCachePath(ref string, roots map[string]string) (string, error) {
-	if ref == "" {
-		return "", nil
-	}
-	rootID, rel, hasRel := strings.Cut(ref, "/")
-	root, ok := roots[rootID]
-	if !ok {
-		return "", errors.New("scan cache references an unknown root")
-	}
-	if !hasRel {
-		return root, nil
-	}
-	rel = filepath.Clean(filepath.FromSlash(rel))
-	if relEscapesRoot(rel) {
-		return "", errors.New("scan cache path escapes its root")
-	}
-	path := filepath.Join(root, rel)
-	check, err := filepath.Rel(root, path)
-	if err != nil || relEscapesRoot(check) {
-		return "", errors.New("scan cache path escapes its root")
-	}
-	return path, nil
+	return cloneScanResult(result), nil
 }
 
 func writeScanCacheAtomic(path string, data []byte) error {
