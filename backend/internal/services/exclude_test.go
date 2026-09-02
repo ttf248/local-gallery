@@ -126,3 +126,50 @@ func TestNormalizeExcludeConfig_PatternSort(t *testing.T) {
 		}
 	}
 }
+
+// TestExcludeConfig_Precompiled 验证 normalize 时一次性预编译 patterns,
+// 而非每次 matchAnyPattern 临时计算。
+//
+// 行为:NormalizeExcludeConfig 后 len(e.compiled) == len(e.Patterns),
+// 每条 compiledPattern 的 lower 字段 == strings.ToLower(原 pattern),
+// isGlob 反映是否含 * ? [ 元字符。
+func TestExcludeConfig_Precompiled(t *testing.T) {
+	e := NormalizeExcludeConfig(true, nil, []string{
+		"node_modules",  // 字面量
+		".DS_Store",     // 字面量
+		"thumb.*",       // glob
+		"[A-Z]*.tmp",    // glob(字符类)
+		"  ",            // 去空
+		"node_modules",  // 重复(去重)
+	})
+	if len(e.compiled) != 4 {
+		t.Fatalf("expected 4 unique patterns, got %d (raw=%v)", len(e.compiled), e.Patterns)
+	}
+	wantGlob := map[string]bool{
+		"node_modules": false,
+		".DS_Store":    false,
+		"thumb.*":      true,
+		"[A-Z]*.tmp":   true,
+	}
+	for _, c := range e.compiled {
+		want, ok := wantGlob[c.pattern]
+		if !ok {
+			t.Errorf("unexpected compiled pattern: %q", c.pattern)
+			continue
+		}
+		if c.isGlob != want {
+			t.Errorf("%q: isGlob=%v want %v", c.pattern, c.isGlob, want)
+		}
+		wantLower := ""
+		for _, r := range c.pattern {
+			if r >= 'A' && r <= 'Z' {
+				wantLower += string(r + 32)
+			} else {
+				wantLower += string(r)
+			}
+		}
+		if c.lower != wantLower {
+			t.Errorf("%q: lower=%q want %q", c.pattern, c.lower, wantLower)
+		}
+	}
+}

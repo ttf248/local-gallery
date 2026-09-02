@@ -29,6 +29,23 @@ type ExcludeConfig struct {
 	SkipHidden  bool
 	SystemFiles map[string]bool // 强制跳过的文件名(小写)
 	Patterns    []string
+
+	// 预编译的 patterns。NormalizeExcludeConfig 时编译一次,matchAnyPattern
+	// 走这里,而不是每个文件/目录都重新 strings.ToLower + filepath.Match。
+	// 在百万级目录 × 几十个 pattern 的库里,这一项省的时间很可观。
+	// 老代码在 matchAnyPattern 内对每个 name 都 strings.ToLower(p) 一次,
+	// 等价于把 N 个 pattern 各自低格化 N 次 → O(N²) 字符串扫描。
+	compiled []compiledPattern
+}
+
+// compiledPattern 预编译后的 pattern。
+//   - lower:小写化后的 pattern(命中时无需再 ToLower)
+//   - isGlob:是否含 * 或 ? 元字符;非 glob 走精确字符串比较,跳过
+//     filepath.Match 的开销
+type compiledPattern struct {
+	pattern string
+	lower   string
+	isGlob  bool
 }
 
 // DefaultExclude 默认排除规则:跨平台「系统噪声」+ 隐藏目录。
@@ -54,11 +71,16 @@ func DefaultExclude() ExcludeConfig {
 //
 // 用户输入经常含空格或多余空行(尤其是从 Settings UI 多行文本框读到的),
 // 不规范化会让 match 行为不可预测。
+//
+// 这里同时把 Patterns 预编译:对每个 pattern 算一次 lower + hasMeta,
+// matchAnyPattern 直接用预编译结果,省掉每个文件都 ToLower 一遍 pattern
+// 的 O(N²) 开销。
 func (e ExcludeConfig) normalize() ExcludeConfig {
 	out := ExcludeConfig{
 		SkipHidden:  e.SkipHidden,
 		SystemFiles: e.SystemFiles,
 		Patterns:    make([]string, 0, len(e.Patterns)),
+		compiled:    make([]compiledPattern, 0, len(e.Patterns)),
 	}
 	if out.SystemFiles == nil {
 		out.SystemFiles = map[string]bool{}
@@ -72,6 +94,7 @@ func (e ExcludeConfig) normalize() ExcludeConfig {
 	}
 	// 去空 + trim + 大小写无关去重(保留首次出现的大小写)
 	seen := make(map[string]bool, len(e.Patterns))
+	unique := make([]string, 0, len(e.Patterns))
 	for _, p := range e.Patterns {
 		p = strings.TrimSpace(p)
 		if p == "" {
@@ -82,15 +105,26 @@ func (e ExcludeConfig) normalize() ExcludeConfig {
 			continue
 		}
 		seen[key] = true
-		out.Patterns = append(out.Patterns, p)
+		unique = append(unique, p)
 	}
-	sort.SliceStable(out.Patterns, func(i, j int) bool {
-		li, lj := len(out.Patterns[i]), len(out.Patterns[j])
+	sort.SliceStable(unique, func(i, j int) bool {
+		li, lj := len(unique[i]), len(unique[j])
 		if li != lj {
 			return li < lj
 		}
-		return out.Patterns[i] < out.Patterns[j]
+		return unique[i] < unique[j]
 	})
+	out.Patterns = unique
+	// 预编译:同时算 lower 和 hasMeta
+	for _, p := range unique {
+		lower := strings.ToLower(p)
+		isGlob := strings.ContainsAny(p, "*?[")
+		out.compiled = append(out.compiled, compiledPattern{
+			pattern: p,
+			lower:   lower,
+			isGlob:  isGlob,
+		})
+	}
 	return out
 }
 
@@ -132,21 +166,36 @@ func (e ExcludeConfig) ShouldSkipFile(name string) bool {
 
 // matchAnyPattern 对单个名字做 glob 匹配(不区分大小写)。任意一条
 // 模式命中即返回 true。
+//
+// 走预编译结果:非 glob pattern 走精确字符串比较(常量级),glob pattern
+// 走 filepath.Match + 预低格化的 pattern 字符串。
+// 老代码每次都对 name 和 pattern 各 ToLower 一次,百万级目录的扫描
+// 里 O(N²) 的字符串处理改成 O(N) + O(N) 各一次。
 func (e ExcludeConfig) matchAnyPattern(name string) bool {
-	for _, p := range e.Patterns {
-		ok, err := filepath.Match(p, name)
-		if err != nil {
-			// 非法 pattern(用户写错)→ 静默跳过该条,不要让一次坏 pattern
-			// 把整次扫描的过滤功能废掉。但要可被外部察觉:返回 err 由调用方
-			// 决定是否打日志。这里简化为:返回 false,继续匹配下一条。
-			continue
-		}
-		if ok {
-			return true
-		}
-		// 不区分大小写再试一次,避免用户写 `Node_Modules` 漏掉 `node_modules`
-		if ok, _ = filepath.Match(strings.ToLower(p), strings.ToLower(name)); ok {
-			return true
+	if len(e.compiled) == 0 {
+		return false
+	}
+	nameLower := strings.ToLower(name)
+	for _, p := range e.compiled {
+		if p.isGlob {
+			// glob:走 filepath.Match 两次(原始 case + 小写 case),
+			// 仍走预低格化的 pattern,省掉对 pattern 的 ToLower。
+			ok, err := filepath.Match(p.pattern, name)
+			if err != nil {
+				continue
+			}
+			if ok {
+				return true
+			}
+			ok, _ = filepath.Match(p.lower, nameLower)
+			if ok {
+				return true
+			}
+		} else {
+			// 字面量:精确字符串比较,O(len)
+			if p.lower == nameLower {
+				return true
+			}
 		}
 	}
 	return false
