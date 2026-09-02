@@ -10,6 +10,24 @@
 - 资源 ID 在根目录和相对路径不变时保持稳定，不包含可逆的绝对路径信息。
 - SSE 响应使用 `text/event-stream`，客户端断开后服务端必须清理订阅。
 
+### ETag / 304 协商
+
+`/api/thumbs/:fileId` 和 `/api/media/:fileId` 在 200 响应中带 `ETag` 头，值为**双引号包裹**的派生哈希：
+
+- 缩略图：`"<md5(abs_path|mtime_ns|size)>"`
+- 媒体文件：`"<hex_mtime_ns>-<hex_size>"`
+
+客户端带 `If-None-Match` 命中相同 ETag 时直接返回 `304 Not Modified` + 空 body，节省磁盘读、解码、网络流量。`If-None-Match` 比较是字面相等（**必须**包含双引号），否则永远不命中。
+
+4xx 响应（视频 `video_cover_missing` 404、源文件不存在等）**不**带 ETag —— 4xx 状态本身是临时的（cover 抽帧后变 200），不能让浏览器把 404 缓存住。
+
+服务端在以下事件时 ETag 必然变化（缓存自动失效）：
+
+- 源文件 `mtime` 变化（修改、覆盖、抽取新封面）
+- 源文件 `size` 变化
+- 视频经转码后由转码缓存文件代替原文件，ETag 派生的是实际发送文件
+- 视频经 faststart remux 后同上
+
 ## 健康与配置
 
 ### `GET /api/health`
