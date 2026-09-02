@@ -5,10 +5,30 @@
 ## 通用约定
 
 - 基础地址：`http://127.0.0.1:8080`。
-- 资源校验错误使用 `{ "code": "...", "message": "..." }`；媒体不存在或 ID 已过期时重新扫描。现有业务接口的校验错误仍可能使用 `{ "error": "..." }`。
+- 资源校验错误使用 `{ "code": "...", "message": "..." }`；媒体不存在或 ID 已过期时重新扫描。所有 4xx/5xx 响应统一为：
+
+  ```json
+  { "code": "snake_case_id", "message": "...", "error": "...", "details": { } }
+  ```
+
+  老字段 `error` 仍保留为 message 别名（前端兼容）。`code` 是稳定字符串，
+  前端用此做 `if (err.code === 'video_cover_missing')` 区分。
 - `r_`、`a_`、`c_`、`f_` 分别表示根、相册、集合和文件资源 ID。
 - 资源 ID 在根目录和相对路径不变时保持稳定，不包含可逆的绝对路径信息。
 - SSE 响应使用 `text/event-stream`，客户端断开后服务端必须清理订阅。
+- SSE 事件名：扫描用 `pending / running / complete / cancelled / error`，
+  转码用 `progress / done`（与扫描命名空间分离，避免命名冲突）。
+- 错误响应 code 速查（持续扩充）：
+  - `missing_path` (400) - 缺少 `path` query 参数
+  - `unsupported_video_format` (415) - 视频扩展名不在白名单
+  - `unsupported_format` (415) - 缩略图不支持的图片格式
+  - `video_not_found` (404) - 视频文件不存在
+  - `source_not_found` (404) - 缩略图源文件不存在
+  - `video_cover_missing` (404) - 视频封面未生成，前端抽帧后回传
+  - `stat_failed` (500) - os.Stat 系统错误
+  - `thumbnail_error` (500) - 缩略图生成失败
+  - `invalid_resource_id` (400) - 资源 ID 解析失败
+  - `album_not_found` (404) - 相册路径不在当前扫描结果中
 
 ### ETag / 304 协商
 

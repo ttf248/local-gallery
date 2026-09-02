@@ -58,12 +58,37 @@ ID 由根标识、资源类型和相对路径哈希生成；根目录与相对�
 ```text
 POST /api/scans
   → StartOrReuse（全局最多一个活动任务）
-  → Scanner.ScanWithContext（有界 worker pool）
+  → Scanner.ScanWithContext（有界 worker pool + 全局信号量）
   → per-subscriber SSE broadcast
-  → complete: 重建 ResourceCatalog
-  → 原子发布 ScanResultCache
-  → GET /api/library
+  → complete: cache.Set（atomic.Pointer 替换）→ catalog.Rebuild（ID 化）
+  → GET /api/library（cache.Get 无锁 + catalog.PublicScanResult 翻译 ID）
 ```
+
+### 扫描器并发模型
+
+`Scanner` 持有一个 `sem chan struct{}`（容量 = `min(8, NumCPU)`）跨递归共享。
+每层 `scanLayer` 启 `min(8, NumCPU)` 个 worker goroutine，worker 调
+`classifyAndScan` 时先 `sem <- struct{}{}` 进入、`defer { <-sem }` 释放。
+任意时刻并发的 `classifyAndScan` 调用数 ≤ `min(8, NumCPU)`，与递归深度
+无关。5 层嵌套树不再产生 8⁵ = 32K goroutine。
+
+### 资源 ID 翻译
+
+`scan_cache.json` (schemaVersion=3) 直接存 raw 绝对路径 + 根 ID 列表；
+`ResourceCatalog` 是**唯一**负责把绝对路径翻译为 `r_/a_/c_/f_` 不透明 ID
+的组件，每次 `Rebuild` 一次性生成全树 ID 化视图。
+handler 端走 `cache.Get() + catalog.PublicScanResult()` 双步翻译，
+或未来可走 `catalog.GetPublic()` 单步返回。
+
+## 缓存读路径
+
+`ScanResultCache` 内部用 `atomic.Pointer[scanResultSnapshot]`。
+`Get` 走 `atomic.Load` 无锁，5k 相册 100+ 并发请求不再争夺 RWMutex。
+写路径（`Set` / `ApplyCoverOverrides` / `SetWithOverrideApplied` /
+`RebuildCoverForAlbum`）走 `atomic.Store` 或 CAS，CAS 失败重试基于最新
+snapshot。stat 全部移到锁外，`flushDebounce=500ms` 异步落盘。
+`dirtyVer` 与 `version` 配合（CAS 清零）保证 flush 期间并发 Set 不会
+被错误标记为已持久化。
 
 - 重复启动复用活动任务，不制造重复 I/O。
 - 每个 SSE 连接有独立缓冲，慢客户端不能阻塞扫描或抢走其他客户端事件。

@@ -38,7 +38,20 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // 'hidden' 而非 true:源码映射生成但不上传到生产 bundle(stack trace 仍
+    // 可读,但 .map 文件不带 sourceMappingURL),节省体积且不暴露源码结构。
+    sourcemap: 'hidden',
     target: 'es2022',
+    // 拆 vendor 把 react / query / virtuoso 单独 chunk,提升缓存命中 —
+    // 业务代码改动时 vendor 不动,用户浏览器只需重新下载业务 chunk。
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          query: ['@tanstack/react-query'],
+          virtuoso: ['react-virtuoso'],
+        },
+      },
+    },
   },
 })
