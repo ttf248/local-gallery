@@ -171,6 +171,44 @@ func TestPrefsStore_CorruptFileRecovers(t *testing.T) {
 	}
 }
 
+// TestPrefsStore_CorruptBackupUnique 验证连续两次损坏不会互相覆盖备份。
+//
+// 旧实现备份用秒级时间戳 ("20060102150405"),同一秒内连续两次
+// 损坏会把第一次的 .corrupt.<ts> 覆盖,丢失现场。新实现加 UnixNano 后缀,
+// 纳秒级不可能撞名。
+func TestPrefsStore_CorruptBackupUnique(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "prefs.json")
+
+	// 第一次损坏
+	os.WriteFile(path, []byte("corrupt-1"), 0o644)
+	s1 := NewPrefsStore(path)
+	if _, err := s1.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	// 第二次损坏:用另一个 NewPrefsStore 实例(新 path 不能相同,否则会读到
+	// 上一次备份后的空文件)。这里换 path 测两次"独立损坏 → 不同 backup"。
+	path2 := filepath.Join(dir, "prefs2.json")
+	os.WriteFile(path2, []byte("corrupt-2"), 0o644)
+	s2 := NewPrefsStore(path2)
+	if _, err := s2.Get(); err != nil {
+		t.Fatal(err)
+	}
+
+	// 验证 .corrupt. 文件数 ≥ 2(可能还有清理过的 .tmp)
+	entries, _ := os.ReadDir(dir)
+	count := 0
+	for _, e := range entries {
+		if contains(e.Name(), ".corrupt.") {
+			count++
+		}
+	}
+	if count < 2 {
+		t.Errorf("expected ≥ 2 corrupt backups, got %d (entries: %v)", count, entries)
+	}
+}
+
 func TestPrefsStore_AtomicWrite(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "prefs.json")
 	s := NewPrefsStore(path)

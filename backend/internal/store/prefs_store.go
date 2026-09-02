@@ -46,7 +46,10 @@ func (s *PrefsStore) load() error {
 	}
 	p := models.DefaultPrefs()
 	if err := json.Unmarshal(data, &p); err != nil {
-		_ = os.Rename(s.path, s.path+".corrupt."+time.Now().Format("20060102150405"))
+		// 备份用时间戳 + 纳秒后缀,避免连续两次损坏互相覆盖。
+		// 旧实现只用秒级时间戳,同一秒内连续两次坏文件会覆盖第一次的备份。
+		stamp := time.Now().Format("20060102150405") + "-" + fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000)
+		_ = os.Rename(s.path, s.path+".corrupt."+stamp)
 		s.cached = models.DefaultPrefs()
 		s.loaded = true
 		return nil
@@ -174,12 +177,7 @@ func (s *PrefsStore) AddFavorite(resourceID string) ([]string, error) {
 	}
 	next := clonePrefs(s.cached)
 	next.Favorites = append(next.Favorites, resourceID)
-	// 软上限：收藏超过 maxFavorites 时丢弃最旧的，避免无限增长。
-	// 用户可通过 PruneInvalidFavorites / DELETE 主动清理。
-	const maxFavorites = 500
-	if len(next.Favorites) > maxFavorites {
-		next.Favorites = next.Favorites[len(next.Favorites)-maxFavorites:]
-	}
+	// 软上限由 normalize 在 commitLocked 里统一裁剪,这里不重复。
 	if err := s.commitLocked(next); err != nil {
 		return nil, err
 	}
@@ -289,7 +287,7 @@ func (s *PrefsStore) SetReadingProgress(entry models.ReadingProgress) error {
 // SetReadingProgressBatch 原子合并多条阅读进度并只落盘一次。
 //
 // 输入中同一 albumId 重复时最后一条生效；新记录按请求顺序排在旧记录前。
-// 阅读进度同时承担“已读”状态，不再裁剪到 50 条，否则大库批量标记后旧条目
+// 阅读进度同时承担"已读"状态,不再裁剪到 50 条,否则大库批量标记后旧条目
 // 会重新变成未读。
 func (s *PrefsStore) SetReadingProgressBatch(entries []models.ReadingProgress) error {
 	if len(entries) == 0 {
@@ -301,9 +299,11 @@ func (s *PrefsStore) SetReadingProgressBatch(entries []models.ReadingProgress) e
 		return err
 	}
 
+	// 单次去重 + 按请求顺序保留(后者覆盖前者,等同"最后一条生效"):
+	// 一遍 forward 走完,O(N),无双重倒序。
 	seen := make(map[string]struct{}, len(entries))
-	incomingReverse := make([]models.ReadingProgress, 0, len(entries))
-	for i := len(entries) - 1; i >= 0; i-- {
+	incoming := make([]models.ReadingProgress, 0, len(entries))
+	for i := range entries {
 		entry := entries[i]
 		if !models.IsAlbumID(entry.AlbumID) {
 			return errors.New("invalid progress album id")
@@ -312,11 +312,7 @@ func (s *PrefsStore) SetReadingProgressBatch(entries []models.ReadingProgress) e
 			continue
 		}
 		seen[entry.AlbumID] = struct{}{}
-		incomingReverse = append(incomingReverse, entry)
-	}
-	incoming := make([]models.ReadingProgress, len(incomingReverse))
-	for i := range incomingReverse {
-		incoming[len(incomingReverse)-1-i] = incomingReverse[i]
+		incoming = append(incoming, entry)
 	}
 	out := append([]models.ReadingProgress(nil), incoming...)
 	for _, current := range s.cached.ReadingProgress {
@@ -430,6 +426,10 @@ func (s *PrefsStore) ensureLoaded() error {
 }
 
 // commitLocked 必须在已持锁时调用。磁盘替换成功后才发布新的内存快照。
+//
+// 关键：tmp.Sync() + Close + Rename 三步走,保证崩溃时磁盘要么是旧
+// 文件、要么是新文件,绝不会是半截。旧实现只 WriteFile + Rename,
+// 进程在两步之间被杀会出现"目标文件丢失 + 残留 .tmp"的双输。
 func (s *PrefsStore) commitLocked(next models.Prefs) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
@@ -440,10 +440,28 @@ func (s *PrefsStore) commitLocked(next models.Prefs) error {
 		return err
 	}
 	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	// Sync 把数据刷到磁盘(过文件系统 cache),然后 Close 释放 fd。
+	// Rename 是原子的,跨平台保证 s.path 完整切换。
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, s.path); err != nil {
+		_ = os.Remove(tmp)
 		return fmt.Errorf("rename %s -> %s: %w", tmp, s.path, err)
 	}
 	s.cached = next
