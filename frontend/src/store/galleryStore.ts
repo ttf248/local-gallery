@@ -12,6 +12,9 @@ export type ReadDirection = 'ltr' | 'rtl'
 // - 用户偏好（mode/fit/direction）→ localStorage 跨会话保留,关 tab 再开还是上次的选择
 // - 临时状态（index/zoom/rotation/slideshow/slideshowInterval）→ 不持久化,
 //   切换 album 时 resetView 会重置 zoom/rotation,index 由 URL 决定
+//
+// 注:全屏 toggle 以前在 store 里(action 不写 state,只调浏览器 API),
+// 实际上是死代码。已迁到 utils/fullscreen.ts,调用方直接用。
 export interface GalleryState {
   // 当前图片索引（-1 = 未选择）
   index: number
@@ -31,12 +34,6 @@ export interface GalleryState {
   rotate: (deg?: number) => void
   /** 重置 zoom + rotation 到默认；切换 album 时用，避免上一个 album 的状态延续 */
   resetView: () => void
-  /**
-   * 全屏切换：直接调浏览器 Fullscreen API，不写 store 状态。
-   * 不在 store 里 mirror 一份 `fullscreen: boolean`：浏览器 fullscreenElement
-   * 才是真相源，store 里再写一个会被外部状态变化（F11 / 退出键）打脸。
-   */
-  toggleFullscreen: () => void
   toggleSlideshow: () => void
   setSlideshowInterval: (ms: number) => void
   setMode: (m: ReaderMode) => void
@@ -67,15 +64,6 @@ export const useGalleryStore = create<GalleryState>()(
       rotate: (deg = 90) =>
         set({ rotation: ((get().rotation + deg) % 360 + 360) % 360 }),
       resetView: () => set({ zoom: 1, rotation: 0 }),
-      toggleFullscreen: () => {
-        // 真正调浏览器 API；store 状态跟实际 fullscreenElement 同步
-        if (typeof document === 'undefined') return
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {})
-        } else {
-          document.documentElement.requestFullscreen().catch(() => {})
-        }
-      },
       toggleSlideshow: () => set({ slideshow: !get().slideshow }),
       setSlideshowInterval: (ms) => set({ slideshowInterval: ms }),
       setMode: (m) => {

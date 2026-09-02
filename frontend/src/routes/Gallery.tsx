@@ -8,6 +8,7 @@ import { progressApi, historyApi } from '../api/prefs'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
 import { useLibraryStore } from '../store/libraryStore'
+import { toggleFullscreen as toggleFullscreenImpl } from '../utils/fullscreen'
 import ImageGallery from '../components/gallery/ImageGallery'
 import VideoPlayer from '../components/gallery/VideoPlayer'
 import PageSlider from '../components/gallery/PageSlider'
@@ -599,7 +600,7 @@ export default function Gallery() {
     '=': () => useGalleryStore.getState().zoomIn(),
     '0': () => useGalleryStore.getState().zoomReset(),
     r: () => useGalleryStore.getState().rotate(90),
-    f11: () => useGalleryStore.getState().toggleFullscreen(),
+    f11: () => toggleFullscreenImpl(),
     space: () => useGalleryStore.getState().toggleSlideshow(),
     i: () => setShowInfo((v) => !v),
     'ctrl+/': () => setShowHelp((v) => !v),

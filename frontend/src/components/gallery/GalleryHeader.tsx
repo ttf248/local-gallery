@@ -13,6 +13,7 @@ import {
 } from '../common/Icon'
 import Popover, { PopoverItem, PopoverSeparator, PopoverLabel } from '../common/Popover'
 import { useGalleryStore } from '../../store/galleryStore'
+import { toggleFullscreen as toggleFullscreenImpl } from '../../utils/fullscreen'
 
 interface Props {
   name: string
@@ -80,7 +81,11 @@ export default function GalleryHeader({
 }: Props) {
   const mode = useGalleryStore((s) => s.mode)
   const setIndex = useGalleryStore((s) => s.setIndex)
-  const toggleFullscreen = useGalleryStore((s) => s.toggleFullscreen)
+  // 全屏走 utils/fullscreen.toggFullscreen() 直接调浏览器 API,不再
+  // 走 store(老 store.toggleFullscreen 是空 set action,已删除)。
+  const toggleFullscreen = () => {
+    toggleFullscreenImpl()
+  }
 
   // 显示 / 翻页禁用都用 item index；未传时回退到 index（仅图库模式安全）
   const displayIndex =

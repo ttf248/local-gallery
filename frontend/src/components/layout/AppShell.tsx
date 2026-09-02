@@ -14,6 +14,7 @@ import StatusBar from './StatusBar'
 import ScanProgress from '../album/ScanProgress'
 import ToastViewport from '../common/Toast'
 import HelpOverlay from '../common/HelpOverlay'
+import ErrorBoundary from '../common/ErrorBoundary'
 
 // 应用外壳：侧边栏 + 工具栏 + 主内容。
 // 全局帮助浮层通过 comic:open-help 事件触发（所有页面 ? 都能唤起）。
@@ -125,12 +126,10 @@ export default function AppShell() {
       <div className="flex-1 flex flex-col min-w-0">
         <Toolbar />
         <main className="flex-1 overflow-auto">
-          {/*
-            Outlet 之前不再挂 ScanProgress — 它现在是 fixed 左下浮动卡，
-            在下面 (作为 .flex 容器直属子元素) 渲染，确保 fixed 相对 viewport
-            而不是 main。
-          */}
-          <Outlet />
+          {/* 路由层错误兜底:任意子组件 render 抛错都不会让整个 SPA 白屏。 */}
+          <ErrorBoundary key={location.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
         <StatusBar />
       </div>
