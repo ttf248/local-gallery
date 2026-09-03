@@ -127,15 +127,20 @@ func main() {
 		log.Printf("  FFprobe:   <可用> (视频元数据已启用)")
 	}
 
+	cacheLayout, err := services.EnsureCacheLayout(cfg.CacheDir)
+	if err != nil {
+		log.Fatalf("初始化缓存目录失败: %v", err)
+	}
+
 	// 视频 faststart 化服务(可选):把 moov 移到 mdat 前面,解决
 	// "非 faststart MP4 在浏览器里无法边下边播"问题。ffmpeg 不可用
 	// 时 VideoHandler 静默回退到原文件,不阻断播放。
 	//
-	// 注意:这里传 cfg.CacheDir(让 service 内部自己拼 video-faststart
+	// 注意:这里传 derived 根(让 service 内部自己拼 video-faststart
 	// 子目录),不要在 main.go 里再加一层 —— 否则会出现
 	// cacheDir/video-faststart/video-faststart/<hash>.mp4 的双层嵌套。
 	faststart := services.NewVideoFaststartService(services.FaststartOptions{
-		CacheDir: cfg.CacheDir,
+		CacheDir: cacheLayout.DerivedDir,
 		FFmpeg:   cfg.FFmpegPath,
 	})
 	if faststart.Available() {
@@ -147,7 +152,7 @@ func main() {
 	// 视频转码服务(可选):把 AV1/HEVC/ProRes 等浏览器播不了的编码
 	// 转成 H.264 + AAC 缓存。ffmpeg 不可用时静默回退到 faststart / 原文件。
 	transcode := services.NewTranscodeService(services.TranscodeOptions{
-		CacheDir: cfg.CacheDir,
+		CacheDir: cacheLayout.DerivedDir,
 		FFmpeg:   cfg.FFmpegPath,
 		Info:     videoInfo,
 		// timeout / concurrency 用默认(30m / NumCPU/2)
@@ -160,7 +165,7 @@ func main() {
 	}
 
 	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
-		CacheDir:   cfg.CacheDir,
+		CacheDir:   cacheLayout.ThumbnailDir,
 		Width:      cfg.ThumbSizeW,
 		Height:     cfg.ThumbSizeH,
 		MaxAgeDays: cfg.CacheMaxAgeDays,
@@ -172,14 +177,14 @@ func main() {
 	}
 	cacheStats := services.NewCacheStatsService(30 * time.Second)
 	runner := services.NewAsyncScanRunner()
-	prefs := store.NewPrefsStore(filepath.Join(cfg.CacheDir, "web_settings.json"))
+	prefs := store.NewPrefsStore(cacheLayout.PreferencesPath)
 
 	// 扫描结果缓存（启动时从磁盘加载，供前端免扫描查看）。
 	//
 	// 启动时校验：缓存文件里记录的 mediaRoots 必须与当前 cfg.Roots() 一致；
 	// 不一致时直接清空（删除磁盘文件）并触发一次自动扫描，避免重启后
 	// 前端拉到上一个 mediaRoot 下的扫描结果（参见 services.LoadWithRoots）。
-	scanCache := services.NewScanResultCache(filepath.Join(cfg.CacheDir, "scan_cache.json"))
+	scanCache := services.NewScanResultCache(cacheLayout.ScanCachePath)
 	currentRoots := cfg.Roots()
 	mismatch, err := scanCache.LoadWithRoots(currentRoots)
 	if err != nil {
@@ -188,7 +193,7 @@ func main() {
 	// 加载用户自定义封面覆盖（每个 album 可独立设置封面），启动时
 	// 一次性应用到 ScanResult 上（之后 SetWithOverrideApplied 在用户
 	// 修改时增量更新）。
-	coverOverrides := services.NewCoverOverrideStore(filepath.Join(cfg.CacheDir, "cover_overrides.json"))
+	coverOverrides := services.NewCoverOverrideStore(cacheLayout.CoverOverridesPath)
 	if err := coverOverrides.Load(); err != nil {
 		log.Printf("警告：加载封面覆盖失败 %v", err)
 	}

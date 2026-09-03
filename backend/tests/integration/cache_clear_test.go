@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
 // TestCacheClear_InvalidScope scope 非法时返回 400,且不做任何删盘动作。
@@ -26,22 +28,19 @@ func TestCacheClear_MissingScope(t *testing.T) {
 	}
 }
 
-// TestCacheClear_ThumbsScope scope=thumbs 删 thumbs 顶层文件,不动其他。
+// TestCacheClear_ThumbsScope scope=thumbs 只删 derived/thumbnails，不动状态。
 //
 // harness 没有 ffmpeg(faststart/transcode 传 nil),所以 scope=faststart 或
 // transcode 走 nil 兜底,刚好验证"service 不可用"时不会崩。
-//
-// 注意:ThumbnailService.cacheDir 是顶层目录(thumbs 文件直接 <md5>.jpg 存在
-// 顶层,不放在 thumbs/ 子目录里),所以 dummy 必须放在 h.cache 顶层。
 func TestCacheClear_ThumbsScope(t *testing.T) {
 	h := newHarness(t)
-	// 顶层放一个"假缩略图"
-	dummy := filepath.Join(h.cache, "deadbeef.jpg")
+	layout := services.ResolveCacheLayout(h.cache)
+	dummy := filepath.Join(layout.ThumbnailDir, "deadbeefdeadbeefdeadbeefdeadbeef.jpg")
 	if err := os.WriteFile(dummy, make([]byte, 1234), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// faststart/transcode 子目录同样塞一个文件,scope=thumbs 不该动它们
-	fsDir := filepath.Join(h.cache, "video-faststart")
+	fsDir := filepath.Join(layout.DerivedDir, "video-faststart")
 	if err := os.MkdirAll(fsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -49,21 +48,27 @@ func TestCacheClear_ThumbsScope(t *testing.T) {
 	if err := os.WriteFile(fsFile, make([]byte, 5678), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	stateFiles := []string{layout.PreferencesPath, layout.ScanCachePath, layout.CoverOverridesPath}
+	for _, stateFile := range stateFiles {
+		if err := os.WriteFile(stateFile, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	res, body := h.do(t, "POST", "/api/cache/clear?scope=thumbs", nil)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("scope=thumbs: expected 200, got %d body=%s", res.StatusCode, body)
 	}
 	var resp struct {
-		Scope           string `json:"scope"`
-		Thumbs          *struct {
+		Scope  string `json:"scope"`
+		Thumbs *struct {
 			Deleted    int   `json:"deleted"`
 			FreedBytes int64 `json:"freedBytes"`
 		} `json:"thumbs,omitempty"`
-		Faststart   *struct{} `json:"faststart,omitempty"`
-		Transcode   *struct{} `json:"transcode,omitempty"`
-		TotalDeleted int   `json:"totalDeleted"`
-		TotalFreedBytes int64 `json:"totalFreedBytes"`
+		Faststart       *struct{} `json:"faststart,omitempty"`
+		Transcode       *struct{} `json:"transcode,omitempty"`
+		TotalDeleted    int       `json:"totalDeleted"`
+		TotalFreedBytes int64     `json:"totalFreedBytes"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("unmarshal: %v body=%s", err, body)
@@ -88,14 +93,20 @@ func TestCacheClear_ThumbsScope(t *testing.T) {
 	if _, err := os.Stat(fsFile); err != nil {
 		t.Errorf("faststart file should be preserved, stat err=%v", err)
 	}
+	for _, stateFile := range stateFiles {
+		if _, err := os.Stat(stateFile); err != nil {
+			t.Errorf("state file should be preserved: %v", err)
+		}
+	}
 }
 
 // TestCacheClear_AllScope scope=all:thumbs 真清;faststart/transcode service 为
 // nil,hander 内部 if nil 兜底,响应里这俩字段应保持 nil(不影响响应结构)。
 func TestCacheClear_AllScope(t *testing.T) {
 	h := newHarness(t)
-	// 顶层放一个"假缩略图"
-	if err := os.WriteFile(filepath.Join(h.cache, "a.jpg"), make([]byte, 100), 0o644); err != nil {
+	layout := services.ResolveCacheLayout(h.cache)
+	thumb := filepath.Join(layout.ThumbnailDir, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg")
+	if err := os.WriteFile(thumb, make([]byte, 100), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -104,12 +115,12 @@ func TestCacheClear_AllScope(t *testing.T) {
 		t.Fatalf("scope=all: expected 200, got %d body=%s", res.StatusCode, body)
 	}
 	var resp struct {
-		Scope            string `json:"scope"`
-		Thumbs           *struct{ Deleted int } `json:"thumbs,omitempty"`
-		Faststart        *struct{ Deleted int } `json:"faststart,omitempty"`
-		Transcode        *struct{ Deleted int } `json:"transcode,omitempty"`
-		TotalDeleted     int   `json:"totalDeleted"`
-		TotalFreedBytes  int64 `json:"totalFreedBytes"`
+		Scope           string                 `json:"scope"`
+		Thumbs          *struct{ Deleted int } `json:"thumbs,omitempty"`
+		Faststart       *struct{ Deleted int } `json:"faststart,omitempty"`
+		Transcode       *struct{ Deleted int } `json:"transcode,omitempty"`
+		TotalDeleted    int                    `json:"totalDeleted"`
+		TotalFreedBytes int64                  `json:"totalFreedBytes"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
 		t.Fatalf("unmarshal: %v body=%s", err, body)
@@ -127,9 +138,9 @@ func TestCacheClear_AllScope(t *testing.T) {
 		t.Errorf("transcode service is nil, response should be nil, got %+v", resp.Transcode)
 	}
 	// 顶层 thumbs 文件应被删
-	entries, _ := os.ReadDir(h.cache)
+	entries, _ := os.ReadDir(layout.ThumbnailDir)
 	for _, e := range entries {
-		if e.Name() == "a.jpg" {
+		if e.Name() == filepath.Base(thumb) {
 			t.Error("thumbs dummy should be gone")
 		}
 	}
@@ -139,7 +150,8 @@ func TestCacheClear_AllScope(t *testing.T) {
 // 而非继续返回 30s 内的旧值(回归用例:cacheStats.Invalidate 必须在 handler 内调用)。
 func TestCacheClear_InvalidatesCacheStats(t *testing.T) {
 	h := newHarness(t)
-	if err := os.WriteFile(filepath.Join(h.cache, "x.jpg"), make([]byte, 2048), 0o644); err != nil {
+	layout := services.ResolveCacheLayout(h.cache)
+	if err := os.WriteFile(filepath.Join(layout.ThumbnailDir, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"), make([]byte, 2048), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

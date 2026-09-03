@@ -144,7 +144,7 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 | --------------------------- | ------------------------------------------------------------------------- |
 | `mediaRoots`                | 媒体根目录数组，必填；这是唯一的媒体根配置字段                            |
 | `host` / `port`             | 监听地址 / 端口                                                           |
-| `cacheDir`                  | 缩略图 / 视频缓存根目录，未配置时自动 `./.local-gallery/`；修改需重启     |
+| `cacheDir`                  | 应用工作目录；`state/` 保存状态，`derived/` 保存可清缓存，默认 `./.local-gallery/`；修改需重启 |
 | `thumbSizeW` / `thumbSizeH` | 缩略图尺寸                                                                |
 | `thumbCacheSize`            | LRU 内存缓存项数                                                          |
 | `cacheMaxAgeDays`           | 磁盘缓存保留天数                                                          |

@@ -171,14 +171,17 @@ func TestCleanup_RemovesOldFiles(t *testing.T) {
 	}
 
 	// 写入一个"旧"文件
-	oldFile := filepath.Join(cacheDir, "old.png")
+	oldFile := filepath.Join(cacheDir, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg")
 	os.WriteFile(oldFile, []byte("x"), 0o644)
 	past := time.Now().AddDate(0, 0, -60) // 60 天前
 	os.Chtimes(oldFile, past, past)
 
 	// 一个新的
-	newFile := filepath.Join(cacheDir, "new.png")
+	newFile := filepath.Join(cacheDir, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg")
 	os.WriteFile(newFile, []byte("x"), 0o644)
+	unknownOldFile := filepath.Join(cacheDir, "web_settings.json")
+	os.WriteFile(unknownOldFile, []byte("{}"), 0o644)
+	os.Chtimes(unknownOldFile, past, past)
 
 	n, err := svc.Cleanup()
 	if err != nil {
@@ -192,6 +195,9 @@ func TestCleanup_RemovesOldFiles(t *testing.T) {
 	}
 	if _, err := os.Stat(newFile); err != nil {
 		t.Error("new file should remain")
+	}
+	if _, err := os.Stat(unknownOldFile); err != nil {
+		t.Error("old non-thumbnail file should remain")
 	}
 }
 

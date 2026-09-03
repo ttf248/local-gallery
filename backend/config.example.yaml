@@ -17,8 +17,9 @@ mediaRoots:
 host: "127.0.0.1"
 port: 8080
 
-# 缩略图缓存目录（相对路径相对 CWD；留空则用 ./.local-gallery）
-# 缓存服务在启动时共同绑定此目录，修改后需重启。
+# 应用工作目录（相对路径相对 CWD；留空则用 ./.local-gallery）。
+# 持久状态写入 state/，可重建的缩略图与视频缓存写入 derived/；
+# “清空缓存”只会操作 derived/。修改后需重启。
 cacheDir: ".local-gallery"
 
 # 缩略图尺寸（像素）

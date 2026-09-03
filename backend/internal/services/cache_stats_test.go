@@ -23,21 +23,25 @@ func TestCacheStatsService_Usage_Missing(t *testing.T) {
 
 func TestCacheStatsService_Usage_Basic(t *testing.T) {
 	dir := t.TempDir()
+	layout, err := EnsureCacheLayout(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	files := map[string]int{
 		"a.txt": 100,
 		"b.txt": 200,
 		"c.txt": 300,
 	}
 	for n, sz := range files {
-		if err := os.WriteFile(filepath.Join(dir, n), make([]byte, sz), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(layout.ThumbnailDir, n), make([]byte, sz), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// 子目录里的文件也应计入
-	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(layout.DerivedDir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "sub", "d.txt"), make([]byte, 50), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(layout.DerivedDir, "sub", "d.txt"), make([]byte, 50), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,8 +110,10 @@ func TestCacheStatsService_PathChange(t *testing.T) {
 	// 切换到不同路径时应重算(即使在 TTL 内)
 	d1 := t.TempDir()
 	d2 := t.TempDir()
-	os.WriteFile(filepath.Join(d1, "a.txt"), []byte("12345"), 0o644)
-	os.WriteFile(filepath.Join(d2, "a.txt"), []byte("1234567890"), 0o644)
+	l1, _ := EnsureCacheLayout(d1)
+	l2, _ := EnsureCacheLayout(d2)
+	os.WriteFile(filepath.Join(l1.ThumbnailDir, "a.txt"), []byte("12345"), 0o644)
+	os.WriteFile(filepath.Join(l2.ThumbnailDir, "a.txt"), []byte("1234567890"), 0o644)
 	svc := NewCacheStatsService(10 * time.Second)
 	u1, _, _ := svc.Usage(d1)
 	u2, _, _ := svc.Usage(d2)
@@ -119,7 +125,7 @@ func TestCacheStatsService_PathChange(t *testing.T) {
 	}
 }
 
-// 子目录细分:thumbs(顶层 jpg)+ video-faststart / video-transcode(子目录)三类独立统计。
+// 子目录细分:derived/thumbnails + video-faststart / video-transcode 三类独立统计。
 // 验证:
 //  1. thumbs:cacheDir 顶层 .jpg,Available=true,bytes/count 与实际相符
 //  2. 子目录不存在 → Available=false,bytes/count=0
@@ -127,30 +133,34 @@ func TestCacheStatsService_PathChange(t *testing.T) {
 //  4. 顶层 TotalBytes 包含 thumbs + 两个子目录 + 顶层元数据(主 + 三 sub 各自独立)
 func TestCacheStatsService_SubDir(t *testing.T) {
 	dir := t.TempDir()
+	layout, err := EnsureCacheLayout(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// 模拟三种缓存各有不同字节数 + 顶层放一个非 jpg 元数据
 	mkFile := func(rel string, sz int) {
 		full := filepath.Join(dir, rel)
 		os.MkdirAll(filepath.Dir(full), 0o755)
 		os.WriteFile(full, make([]byte, sz), 0o644)
 	}
-	// thumbs:实际写在 cacheDir 顶层(<md5>.jpg 命名),不放在 thumbs/ 子目录
-	mkFile("abc.jpg", 1000)
-	mkFile("def.jpg", 2000)
-	mkFile("video-faststart/xyz.mp4", 5000)
-	mkFile("video-transcode/pqr.mp4", 8000)
-	mkFile("prefs.json", 100) // 顶层 json 元数据,不该被 thumbs 算进去
+	mkFile(filepath.Join("derived", "thumbnails", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"), 1000)
+	mkFile(filepath.Join("derived", "thumbnails", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"), 2000)
+	mkFile(filepath.Join("derived", "video-faststart", "xyz.mp4"), 5000)
+	mkFile(filepath.Join("derived", "video-transcode", "pqr.mp4"), 8000)
+	mkFile(filepath.Join("state", "prefs.json"), 100)
+	_ = layout
 
 	svc := NewCacheStatsService(time.Second)
 	u, _, err := svc.Usage(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 顶层 5 文件 16.1 KB
-	if u.FileCount != 5 {
-		t.Errorf("FileCount: got %d want 5", u.FileCount)
+	// 只统计 derived 下的 4 个派生文件，state 不属于可清理缓存。
+	if u.FileCount != 4 {
+		t.Errorf("FileCount: got %d want 4", u.FileCount)
 	}
-	if u.TotalBytes != 16100 {
-		t.Errorf("TotalBytes: got %d want 16100", u.TotalBytes)
+	if u.TotalBytes != 16000 {
+		t.Errorf("TotalBytes: got %d want 16000", u.TotalBytes)
 	}
 
 	// Thumbs:2 文件 3KB
@@ -178,12 +188,12 @@ func TestCacheStatsService_SubDir(t *testing.T) {
 	}
 }
 
-// 顶层空:faststart/transcode 走子目录扫描 → Available=false;
-// thumbs 改走 cacheDir 顶层 jpg 扫描(目录在)→ Available=true 但文件数 0。
-// —— 详见 scanThumbsTopLevel 注释。
+// 新布局创建 thumbnails，其他派生目录尚不存在。
 func TestCacheStatsService_SubDirMissing(t *testing.T) {
 	dir := t.TempDir()
-	// 顶层空 — 整个 dir 存在但无子目录
+	if _, err := EnsureCacheLayout(dir); err != nil {
+		t.Fatal(err)
+	}
 	svc := NewCacheStatsService(time.Second)
 	u, _, err := svc.Usage(dir)
 	if err != nil {
@@ -210,32 +220,34 @@ func TestCacheStatsService_SubDirMissing(t *testing.T) {
 	}
 }
 
-// 回归测试:thumbs 统计 cacheDir 顶层的 .jpg/.jpeg 文件,
-// 跳过子目录(由 faststart/transcode 各自扫)和顶层元数据(.json 等)。
-// 这是修 scanSubDir("thumbs") 永远返回空 bug 的核心场景。
-func TestCacheStatsService_ThumbsTopLevel(t *testing.T) {
+// 回归测试:thumbs 只统计 derived/thumbnails 子树。
+func TestCacheStatsService_ThumbsDirectory(t *testing.T) {
 	dir := t.TempDir()
+	layout, err := EnsureCacheLayout(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// 三个 jpg,一个 jpeg,一个 png(应被忽略),一个 .json 元数据(应被忽略)
-	if err := os.WriteFile(filepath.Join(dir, "aa01.jpg"), make([]byte, 100), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(layout.ThumbnailDir, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg"), make([]byte, 100), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "bb02.jpg"), make([]byte, 200), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(layout.ThumbnailDir, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.jpg"), make([]byte, 200), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "cc03.JPEG"), make([]byte, 300), 0o644); err != nil { // 大写扩展名也要认
+	if err := os.WriteFile(filepath.Join(layout.ThumbnailDir, "cccccccccccccccccccccccccccccccc.JPG"), make([]byte, 300), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "thumb.png"), make([]byte, 999), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(layout.ThumbnailDir, "thumb.png"), make([]byte, 999), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "scan_cache.json"), make([]byte, 50), 0o644); err != nil {
+	if err := os.WriteFile(layout.ScanCachePath, make([]byte, 50), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	// 子目录里的 jpg(应被忽略,不是顶层;faststart 子目录是合法子目录)
-	if err := os.MkdirAll(filepath.Join(dir, "video-faststart"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(layout.DerivedDir, "video-faststart"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "video-faststart", "nested.jpg"), make([]byte, 888), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(layout.DerivedDir, "video-faststart", "nested.jpg"), make([]byte, 888), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -253,10 +265,7 @@ func TestCacheStatsService_ThumbsTopLevel(t *testing.T) {
 	if u.Thumbs.Bytes != 600 {
 		t.Errorf("Thumbs.Bytes: got %d want 600 (100+200+300)", u.Thumbs.Bytes)
 	}
-	// 关键不变量:thumbs 不应误数子目录里的 jpg(nested.jpg 在
-	// video-faststart/ 下,只有 scanSubDir 才会数;scanThumbsTopLevel
-	// 只看顶层 ReadDir)。faststart 子目录里这个 nested.jpg 不会进 thumbs。
-	// 如果未来有人把 scanThumbsTopLevel 改成递归,这条断言会抓住。
+	// video-faststart 下的 nested.jpg 不应泄漏进 thumbnails 统计。
 	if u.Thumbs.FileCount != 3 {
 		t.Errorf("nested.jpg leaked into thumbs.FileCount: %+v", u.Thumbs)
 	}

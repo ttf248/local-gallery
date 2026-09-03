@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 )
@@ -19,16 +18,13 @@ type CacheUsage struct {
 	// 目录存在但还没被扫描/磁盘读取出错时给 false
 	Available bool `json:"available"`
 
-	// 按子目录细分的占用。子目录在 ConfigCacheDir 下:
-	//   - thumbs/<md5>.jpg      → Thumbs(图片 + 视频封面缩略图)
-	//   - video-faststart/<md5>.mp4 → 非 faststart MP4 的 remux 缓存
-	//   - video-transcode/<md5>.mp4 → 冷门编码 → H.264+AAC 转码缓存
+	// 按子目录细分的占用。所有可清理资源都位于 cacheDir/derived 下，
+	// cacheDir/state 中的扫描结果、偏好和封面设置不计入缓存占用。
 	//
 	// Settings 页面用这些数据告诉用户「大头在哪」,让用户知道
 	// 转码缓存过大时可以批量清理。totalBytes = 三个子目录之和
-	// (顶层 scan_cache.json / web_settings.json 忽略,体量小且跟
-	// 用户数据无关)。
-	Thumbs        SubUsage `json:"thumbs"`
+	// totalBytes 只统计 derived 子树。
+	Thumbs         SubUsage `json:"thumbs"`
 	VideoFaststart SubUsage `json:"videoFaststart"`
 	VideoTranscode SubUsage `json:"videoTranscode"`
 }
@@ -79,6 +75,7 @@ func (s *CacheStatsService) Usage(cacheDir string) (*CacheUsage, *time.Time, err
 	s.mu.Unlock()
 
 	start := time.Now()
+	layout := ResolveCacheLayout(cacheDir)
 	// 先用 Stat 探测顶层:WalkDir 自身对根目录不存在的错误包装不稳定,
 	// 显式 stat 一次更可靠。
 	info, statErr := os.Stat(cacheDir)
@@ -119,8 +116,11 @@ func (s *CacheStatsService) Usage(cacheDir string) (*CacheUsage, *time.Time, err
 	)
 	// filepath.WalkDir 单次遍历;err 走 visit 的 err 参数(单文件读不到 stat 时
 	// 跳过,不让整个遍历失败)
-	walkErr = filepath.WalkDir(cacheDir, func(_ string, d fs.DirEntry, err error) error {
+	walkErr = filepath.WalkDir(layout.DerivedDir, func(_ string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
 			// 跳过单个错误,继续扫描
 			return nil
 		}
@@ -137,18 +137,15 @@ func (s *CacheStatsService) Usage(cacheDir string) (*CacheUsage, *time.Time, err
 	})
 
 	usage := &CacheUsage{
-		Path:       cacheDir,
-		TotalBytes: total,
-		FileCount:  count,
-		ScannedAt:  time.Now(),
-		DurationMs: time.Since(start).Milliseconds(),
-		Available:  walkErr == nil,
-		// 按子目录细分:thumbs 走顶层 .jpg(实际存放在 cacheDir 顶层),
-		// faststart / transcode 走子目录(由各自 service 写入子目录)。
-		// 详见 scanThumbsTopLevel 的注释。
-		Thumbs:         scanThumbsTopLevel(cacheDir),
-		VideoFaststart: scanSubDir(filepath.Join(cacheDir, "video-faststart")),
-		VideoTranscode: scanSubDir(filepath.Join(cacheDir, "video-transcode")),
+		Path:           cacheDir,
+		TotalBytes:     total,
+		FileCount:      count,
+		ScannedAt:      time.Now(),
+		DurationMs:     time.Since(start).Milliseconds(),
+		Available:      walkErr == nil,
+		Thumbs:         scanThumbnailDir(layout.ThumbnailDir),
+		VideoFaststart: scanSubDir(filepath.Join(layout.DerivedDir, "video-faststart")),
+		VideoTranscode: scanSubDir(filepath.Join(layout.DerivedDir, "video-transcode")),
 	}
 
 	// 缓存(只有没错误的快照才缓存,避免权限错误被锁住)
@@ -200,46 +197,28 @@ func scanSubDir(path string) SubUsage {
 	return su
 }
 
-// scanThumbsTopLevel 统计 cacheDir 顶层缩略图文件。
-//
-// 历史背景:ThumbnailService 把每张缩略图直接以 <md5>.jpg 存在
-// cacheDir 顶层,不放在 thumbs/ 子目录里(早期 cache.go 也用这个路径
-// 写 cacheDir/sub/<file> 这样的双层嵌套,后续被修正)。但 cache stats
-// 一直按"thumbs/ 子目录"去 scanSubDir,导致子目录不存在 → Available=false
-// → UI 永远显示"—",即便用户其实有几百 MB 缩略图。
-//
-// 修法:在 cacheDir 顶层只统计扩展名为 .jpg / .jpeg 的文件,跳过:
-//   - 顶层子目录(video-faststart / video-transcode 等由 scanSubDir 接管)
-//   - 顶层元数据文件(scan_cache.json / web_settings.json / cover_overrides.json
-//     等,扩展名非图片)
-//
-// 单层 ReadDir 而不递归,避免误把子目录里的 jpg 算进来
-// (子目录的扫描由 scanSubDir 单独负责)。
-func scanThumbsTopLevel(cacheDir string) SubUsage {
-	su := SubUsage{Path: cacheDir, Available: false}
-	info, err := os.Stat(cacheDir)
+// scanThumbnailDir 只统计 ThumbnailService 能识别并清理的缓存文件。
+// 即使目录里被误放了其他文件，统计和清理也不会把它们当成派生缩略图。
+func scanThumbnailDir(path string) SubUsage {
+	su := SubUsage{Path: path, Available: false}
+	info, err := os.Stat(path)
 	if err != nil || !info.IsDir() {
 		return su
 	}
-	entries, err := os.ReadDir(cacheDir)
+	entries, err := os.ReadDir(path)
 	if err != nil {
-		// 目录存在但读不到(权限等):available 仍为 false
 		return su
 	}
 	su.Available = true
-	for _, e := range entries {
-		if e.IsDir() {
+	for _, entry := range entries {
+		if entry.IsDir() || !isThumbnailCacheFile(entry.Name()) {
 			continue
 		}
-		ext := strings.ToLower(filepath.Ext(e.Name()))
-		if ext != ".jpg" && ext != ".jpeg" {
+		info, err := entry.Info()
+		if err != nil {
 			continue
 		}
-		fi, infoErr := e.Info()
-		if infoErr != nil {
-			continue
-		}
-		su.Bytes += fi.Size()
+		su.Bytes += info.Size()
 		su.FileCount++
 	}
 	return su

@@ -233,7 +233,7 @@ func (s *ThumbnailService) generateAndPersist(absPath, key string) ([]byte, erro
 	diskPath := filepath.Join(s.cacheDir, key+JPEGExt)
 	if werr := os.WriteFile(diskPath, data, 0o644); werr != nil {
 		// 写失败不影响返回（仅缓存丢失，下次重新生成）
-		fmt.Fprintf(os.Stderr, "write thumb cache %s: %v\n", diskPath, werr)
+		fmt.Fprintf(os.Stderr, "write thumbnail cache key=%s: %v\n", key, werr)
 	}
 	s.memCache.Add(key, data)
 	return data, nil
@@ -275,7 +275,7 @@ func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
 		if err == nil && len(data) > 0 {
 			if werr := os.WriteFile(diskPath, data, 0o644); werr != nil {
 				// 写盘失败不影响返回
-				fmt.Fprintf(os.Stderr, "write video cover cache %s: %v\n", diskPath, werr)
+				fmt.Fprintf(os.Stderr, "write video cover cache key=%s: %v\n", key, werr)
 			}
 			s.memCache.Add(key, data)
 			return data, nil
@@ -283,7 +283,7 @@ func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
 		// 抽帧失败(包括 ErrFFmpegUnavailable),回退到原契约:
 		// 返回 ErrVideoCoverMissing,让前端继续用浏览器抽帧。
 		if err != nil && !errors.Is(err, ErrFFmpegUnavailable) {
-			fmt.Fprintf(os.Stderr, "video cover extract failed for %s: %v\n", absPath, err)
+			fmt.Fprintf(os.Stderr, "video cover extract failed key=%s: %v\n", key, err)
 		}
 	}
 
@@ -303,7 +303,7 @@ func (s *ThumbnailService) getVideoCover(absPath string) ([]byte, error) {
 // 源文件存在但 data 不是合法图片时返回 ErrUnsupportedFormat。
 func (s *ThumbnailService) SaveVideoCover(absPath string, data []byte) error {
 	if !models.IsVideoFile(filepath.Base(absPath)) {
-		return fmt.Errorf("not a video file: %s", absPath)
+		return errors.New("source is not a supported video file")
 	}
 	fi, err := os.Stat(absPath)
 	if err != nil {
@@ -382,7 +382,7 @@ func (s *ThumbnailService) Cleanup() (int, error) {
 
 	count := 0
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !isThumbnailCacheFile(e.Name()) {
 			continue
 		}
 		path := filepath.Join(s.cacheDir, e.Name())
@@ -419,7 +419,7 @@ func (s *ThumbnailService) ClearAll() (deleted int, freedBytes int64, err error)
 	}
 
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !isThumbnailCacheFile(e.Name()) {
 			continue
 		}
 		path := filepath.Join(s.cacheDir, e.Name())

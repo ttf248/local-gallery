@@ -64,9 +64,11 @@ func newHarness(t *testing.T) *harness {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(cache) })
-	prefsDir, _ := os.MkdirTemp("", "comic-prefs-")
-	prefs := filepath.Join(prefsDir, "settings.json")
-	t.Cleanup(func() { os.RemoveAll(prefsDir) })
+	cacheLayout, err := services.EnsureCacheLayout(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prefs := cacheLayout.PreferencesPath
 
 	// 准备 2 卷、3 张图：[作者A] vol1/page1.png, page2.png / vol2/page3.png
 	writePNG(t, filepath.Join(root, "[作者A] vol1", "page1.png"), 200, 300)
@@ -98,7 +100,7 @@ func newHarness(t *testing.T) *harness {
 	app.Use(safetyMw)
 
 	thumbs, err := services.NewThumbnailService(services.ThumbnailOptions{
-		CacheDir:   cache,
+		CacheDir:   cacheLayout.ThumbnailDir,
 		Width:      64,
 		Height:     64,
 		MaxAgeDays: 30,
@@ -224,8 +226,6 @@ func TestHealth(t *testing.T) {
 		t.Errorf("status=%v want ok", got["status"])
 	}
 }
-
-
 
 func TestAsyncScanAndSSE(t *testing.T) {
 	h := newHarness(t)
