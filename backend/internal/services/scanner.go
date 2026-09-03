@@ -6,8 +6,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -283,10 +285,11 @@ func applyCollectionNamePrefixIfConflict(collections *[]models.Collection) {
 	}
 }
 
-// fileEntry 在枚举目录时缓存大小，构建相册时不再逐文件 Stat。
+// fileEntry 在枚举目录时缓存大小和修改时间，构建相册时不再逐文件 Stat。
 type fileEntry struct {
-	path string
-	size int64
+	path    string
+	size    int64
+	modTime time.Time
 }
 
 type directoryTask struct {
@@ -436,14 +439,16 @@ func (s *Scanner) inspectDirectory(
 		}
 		fullPath := filepath.Join(task.path, entry.Name())
 		size := int64(0)
+		modTime := time.Time{}
 		if info, infoErr := entry.Info(); infoErr == nil {
 			size = info.Size()
+			modTime = info.ModTime()
 		} else {
 			result.warnings = append(result.warnings, models.ScanWarning{
 				Code: "metadata_unavailable", Path: scanWarningPath(root, fullPath), Message: "无法读取媒体元数据",
 			})
 		}
-		file := fileEntry{path: fullPath, size: size}
+		file := fileEntry{path: fullPath, size: size, modTime: modTime}
 		if kind == "image" {
 			result.record.images = append(result.record.images, file)
 		} else {
@@ -594,6 +599,10 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 	if fi, err := os.Stat(dir); err == nil {
 		modTime = fi.ModTime()
 	}
+	allFiles := make([]fileEntry, 0, len(images)+len(videos))
+	allFiles = append(allFiles, images...)
+	allFiles = append(allFiles, videos...)
+	date, dateSource := resolveAlbumDate(dir, time.Time{}, allFiles, modTime)
 	name := filepath.Base(dir)
 	// 封面选择：图片优先
 	var cover, coverKind string
@@ -617,7 +626,99 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 		Author:     ExtractAuthor(name),
 		Tags:       ExtractTags(name),
 		ModTime:    modTime,
+		Date:       date,
+		DateSource: dateSource,
 	}
+}
+
+var strictFolderDate = regexp.MustCompile(`^(\d{4})(?:[-_.](\d{2})(?:[-_.](\d{2}))?)?$|^(\d{4})(\d{2})(\d{2})$`)
+
+// resolveAlbumDate 将时间语义收口在扫描层，避免不同页面以各自的正则
+// 重复推断。captured 由后续的懒元数据富化传入；当前扫描主链路不读取
+// 每个文件的 EXIF，避免百万媒体库被随机 I/O 拖慢。
+func resolveAlbumDate(dir string, captured time.Time, files []fileEntry, dirModified time.Time) (time.Time, string) {
+	if !captured.IsZero() {
+		return captured, "captured"
+	}
+	if folderDate, ok := strictDateFromPath(dir); ok {
+		return folderDate, "folder"
+	}
+	latest := dirModified
+	for _, file := range files {
+		if file.modTime.After(latest) {
+			latest = file.modTime
+		}
+	}
+	return latest, "modified"
+}
+
+func strictDateFromPath(path string) (time.Time, bool) {
+	cleaned := filepath.Clean(path)
+	volume := filepath.VolumeName(cleaned)
+	withoutVolume := strings.TrimPrefix(cleaned, volume)
+	parts := strings.FieldsFunc(withoutVolume, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	for i := len(parts) - 1; i >= 0; i-- {
+		if parsed, ok := parseStrictDateSegment(parts[i]); ok {
+			return parsed, true
+		}
+		if i >= 2 {
+			year, yearOK := parseBoundedInt(parts[i-2], 1900, 2199)
+			month, monthOK := parseBoundedInt(parts[i-1], 1, 12)
+			day, dayOK := parseBoundedInt(parts[i], 1, 31)
+			if yearOK && monthOK && dayOK {
+				if parsed, valid := makeStrictDate(year, month, day); valid {
+					return parsed, true
+				}
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+func parseStrictDateSegment(segment string) (time.Time, bool) {
+	match := strictFolderDate.FindStringSubmatch(segment)
+	if match == nil {
+		return time.Time{}, false
+	}
+	yearText, monthText, dayText := match[1], match[2], match[3]
+	if match[4] != "" {
+		yearText, monthText, dayText = match[4], match[5], match[6]
+	}
+	year, yearOK := parseBoundedInt(yearText, 1900, 2199)
+	if !yearOK {
+		return time.Time{}, false
+	}
+	month, day := 1, 1
+	if monthText != "" {
+		var ok bool
+		month, ok = parseBoundedInt(monthText, 1, 12)
+		if !ok {
+			return time.Time{}, false
+		}
+	}
+	if dayText != "" {
+		var ok bool
+		day, ok = parseBoundedInt(dayText, 1, 31)
+		if !ok {
+			return time.Time{}, false
+		}
+	}
+	return makeStrictDate(year, month, day)
+}
+
+func parseBoundedInt(value string, low, high int) (int, bool) {
+	parsed, err := strconv.Atoi(value)
+	return parsed, err == nil && parsed >= low && parsed <= high
+}
+
+func makeStrictDate(year, month, day int) (time.Time, bool) {
+	parsed := time.Date(year, time.Month(month), day, 12, 0, 0, 0, time.UTC)
+	if parsed.Year() != year || int(parsed.Month()) != month || parsed.Day() != day {
+		return time.Time{}, false
+	}
+	return parsed, true
 }
 
 // flattenAlbums 汇总所有顶层 + 集合（含嵌套集合）内含的相册。

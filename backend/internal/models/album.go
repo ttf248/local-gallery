@@ -98,6 +98,11 @@ type Album struct {
 	Tags        []string  `json:"tags,omitempty"`        // 标签（从方括号解析），可能多个
 	Author      string    `json:"author,omitempty"`      // 旧字段别名 = 第一个标签
 	ModTime     time.Time `json:"modTime"`
+	// Date 是相册在时间轴上的统一业务时间；DateSource 说明该时间的
+	// 来源，前端不再根据文件夹名自行猜测。优先级固定为
+	// captured > folder > modified。
+	Date       time.Time `json:"date"`
+	DateSource string    `json:"dateSource"` // captured / folder / modified
 	// CoverKind 标识封面来源："image" / "video" / ""（未指定时按是否有视频推断）。
 	// 前端据此决定卡片样式（图卡 vs 视频▶卡）和点击进入的播放器类型。
 	CoverKind string `json:"coverKind,omitempty"`

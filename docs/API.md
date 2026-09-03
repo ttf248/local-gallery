@@ -84,6 +84,8 @@
 
 扫描结果可包含 `warnings`：每项只有稳定 `code`、根别名/相对 `path` 和用户可读 `message`，不会暴露绝对路径。混合目录中的“本目录媒体”相册带 `virtual: true`，其相册 ID 与集合 ID 不同，但二者解析到同一真实目录。`collection.albumCount` 统计全部后代相册。
 
+相册同时返回 `date` 与 `dateSource`。`dateSource` 取值为 `captured` / `folder` / `modified`，服务端按该顺序降级；目录日期只接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`、`YYYYMMDD` 或严格的 `YYYY/MM/DD` 路径分段，不会从任意名称子串中猜测。
+
 返回最近一次扫描快照。相册、集合、封面和媒体文件均使用资源 ID。
 
 ### `DELETE /api/library`
