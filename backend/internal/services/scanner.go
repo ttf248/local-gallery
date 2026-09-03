@@ -23,7 +23,7 @@ import (
 type ScanOptions struct {
 	Root     string   // 单根（兼容）；与 Roots 二选一
 	Roots    []string // 多根（推荐）；非空时优先
-	MaxDepth int      // 集合（collection）最大递归深度，0 或负数视为 1
+	MaxDepth int      // 可选显式上限；0 或负数表示完整递归
 	// Exclude 扫描排除规则（详见 ExcludeConfig）。nil 时走 DefaultExclude()
 	// 兜底,等价于「跳隐藏 + 跳系统文件」的内置默认。
 	//
@@ -100,18 +100,11 @@ func (e *ScanError) Error() string {
 
 func (e *ScanError) Unwrap() error { return e.Err }
 
-// Scanner 漫画扫描器。
-//
-// 并发模型：worker pool + 跨递归共享信号量。任一层 scanLayer 都会启
-// workers 个 goroutine 跑 jobs,每层递归又是新一组 workers → 嵌套 5 层
-// 时旧版会创建 8^5 = 32K goroutine 持续存在。引入 sem chan struct{}
-// (容量 = workers) 跨递归共享,让"任意时刻并发的 classifyAndScan
-// 调用" 严格 ≤ workers。深嵌套树会变慢一点(因为浅层可能占满 sem),
-// 但 goroutine 数稳定,适合大库 + 嵌套深的真实用户数据(2024年/夏威夷/
-// 相册/作品/甜片 这种 5 层结构实测)。
+// Scanner 使用单个固定工作池读取目录；目录树在读取完成后再构建。
+// worker 不递归等待子任务，因此并发数与目录深度无关，也不会出现父任务
+// 占满信号量后等待子任务的死锁。
 type Scanner struct {
 	workers int
-	sem     chan struct{}
 	ctx     context.Context
 }
 
@@ -120,7 +113,6 @@ func NewScanner() *Scanner {
 	n := min(8, runtime.NumCPU())
 	return &Scanner{
 		workers: n,
-		sem:     make(chan struct{}, n),
 		ctx:     context.Background(),
 	}
 }
@@ -152,11 +144,6 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 		return nil, errors.New("root is empty")
 	}
 
-	depth := opts.MaxDepth
-	if depth <= 0 {
-		depth = 1
-	}
-
 	start := time.Now()
 
 	// 校验所有根并规范化
@@ -181,43 +168,19 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 
 	var allTopAlbums []models.Album
 	var allTopCollections []models.Collection
+	var allWarnings []models.ScanWarning
 
 	// 逐根扫描；进度回调累计所有根的处理数
 	for _, absRoot := range absRoots {
 		if err := s.contextErr(); err != nil {
 			return nil, err
 		}
-		topEntries, _ := os.ReadDir(absRoot)
-		var topSubdirs []string
-		for _, e := range topEntries {
-			if e.IsDir() {
-				topSubdirs = append(topSubdirs, e.Name())
-			}
-		}
-
-		// 把当前根的顶层进度归零；多根的 progress 在 hook 内独立计算
-		// 由调用方基于 elapsedMs 自行推断
-		topAlbums, topCollections := s.scanLayerWithHook(absRoot, absRoot, depth, 0, hook,
-			len(topSubdirs), 0, opts.Exclude)
-		if err := s.contextErr(); err != nil {
+		records, warnings, err := s.scanDirectoryTree(absRoot, opts.MaxDepth, opts.Exclude, hook)
+		if err != nil {
 			return nil, err
 		}
-
-		// 关键修复:scanLayer 只处理 subdirs。如果顶层 root 目录直接放了
-		// 文件(用户常见的"一打开 media root 就是 100 张图"场景),原实现
-		// 永远返回 0 album,这里补一次 classifyAndScan 顶层。只在以下条件
-		// 触发,避免与已有 subdir 路径重复:
-		//   - root 下有顶层文件 AND 没有可用 subdir(只有"散图"场景)
-		//   - root 下有顶层文件 AND subdir 已被 scanLayer 处理(此处不再
-		//     重叠,顶层文件丢失;这是已存在的设计限制,本修复不触及)
-		// 实际行为:情形 A(只有顶层文件)→ 顶层 root 自己变成 album;
-		// 情形 C(顶层文件+subdir)→ 顶层 root 的文件仍然丢失(已知问题,
-		// 计划未来引入"root loose album"模式)
-		if hasLooseFilesAtRoot(absRoot, len(topSubdirs)) {
-			if al, _ := s.classifyAndScan(absRoot, absRoot, depth, 0, opts.Exclude); al != nil {
-				topAlbums = append([]models.Album{*al}, topAlbums...)
-			}
-		}
+		topAlbums, topCollections := buildRootResult(absRoot, records)
+		allWarnings = append(allWarnings, warnings...)
 
 		// 给所有产生的 album/collection 打 source 标签
 		srcName := filepath.Base(absRoot)
@@ -254,6 +217,7 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 		CollectionCount:  countCollections(allTopCollections),
 		Duration:         time.Since(start).Milliseconds(),
 		ScannedAt:        time.Now(),
+		Warnings:         allWarnings,
 	}
 	return result, nil
 }
@@ -277,8 +241,9 @@ func stampCollectionSource(collections *[]models.Collection, srcRoot, srcName st
 		if (*collections)[i].DisplayName == "" {
 			(*collections)[i].DisplayName = (*collections)[i].Name
 		}
-		// 递归到子 albums
+		// 递归到全部后代，确保深层节点的来源和展示名一致。
 		stampAlbumSource(&(*collections)[i].Albums, srcRoot, srcName)
+		stampCollectionSource(&(*collections)[i].Collections, srcRoot, srcName)
 	}
 }
 
@@ -318,285 +283,281 @@ func applyCollectionNamePrefixIfConflict(collections *[]models.Collection) {
 	}
 }
 
-// scanLayer 扫描单层目录（无进度回调）。
-func (s *Scanner) scanLayer(basePath, currentPath string, maxDepth, curDepth int, exclude ExcludeConfig) ([]models.Album, []models.Collection) {
-	return s.scanLayerWithHook(basePath, currentPath, maxDepth, curDepth, nil, 0, 0, exclude)
-}
-
-// scanLayerWithHook 扫描单层目录，支持进度回调。
-//
-//   - basePath：用于路径安全校验的根
-//   - currentPath：当前扫描的目录
-//   - maxDepth：集合最大允许深度
-//   - curDepth：当前深度（从 0 开始）
-//   - hook：进度回调（可为 nil）
-//   - total：当前层总目录数（用于百分比）
-//   - processedOffset：已处理的目录数（递归累计）
-func (s *Scanner) scanLayerWithHook(
-	basePath, currentPath string,
-	maxDepth, curDepth int,
-	hook ScanHook,
-	total, processedOffset int,
-	exclude ExcludeConfig,
-) ([]models.Album, []models.Collection) {
-	if s.contextErr() != nil {
-		return nil, nil
-	}
-	entries, err := os.ReadDir(currentPath)
-	if err != nil {
-		return nil, nil
-	}
-
-	// 仅取直接子目录 + 应用排除规则。
-	// 排除命中的子目录(及其整个子树)不进 worker 队列 → 不会产生空
-	// collection、不会让 hook 误以为「这里有条进度」、不会浪费时间 stat。
-	// SystemFiles 列表只对文件生效(目录不会被它命中),但为了代码对称,
-	// 一起调 ShouldSkipDir 也无害(目录白名单命中通常表示该目录命名像
-	// "Thumbs.db",本来就是异常情况)。
-	var subdirs []os.DirEntry
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		if exclude.ShouldSkipDir(e.Name()) {
-			continue
-		}
-		subdirs = append(subdirs, e)
-	}
-
-	type result struct {
-		album   *models.Album
-		coll    *models.Collection
-		isAlbum bool
-	}
-
-	jobs := make(chan string, len(subdirs))
-	results := make(chan result, len(subdirs))
-	var wg sync.WaitGroup
-
-	// 计数器：已处理子目录数
-	var processedCount int
-	var countMu sync.Mutex
-	albumsFound := 0
-
-	for i := 0; i < s.workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for p := range jobs {
-				if s.contextErr() != nil {
-					return
-				}
-				// classifyAndScan 内部用全局 sem 跨递归控制并发。
-				// 这里不再额外取 sem,否则父调用持锁期间子层 scanLayer
-				// 的 worker 会全阻塞,退化成串行执行。
-				al, co := s.classifyAndScan(basePath, p, maxDepth, curDepth, exclude)
-				if al != nil {
-					results <- result{album: al, isAlbum: true}
-				} else if co != nil {
-					results <- result{coll: co}
-				} else {
-					results <- result{}
-				}
-
-				// 更新计数 + 回调
-				countMu.Lock()
-				processedCount++
-				if al != nil {
-					albumsFound++
-				}
-				processed := processedOffset + processedCount
-				currentPath := p
-				hookAlbumsFound := albumsFound
-				countMu.Unlock()
-
-				if hook != nil {
-					hook(ScanProgress{
-						Phase:       "scanning",
-						CurrentPath: currentPath,
-						Processed:   processed,
-						Total:       total,
-						AlbumsFound: hookAlbumsFound,
-						NewAlbums:   nil,
-					})
-				}
-			}
-		}()
-	}
-
-feedJobs:
-	for _, d := range subdirs {
-		select {
-		case jobs <- filepath.Join(currentPath, d.Name()):
-		case <-s.ctx.Done():
-			break feedJobs
-		}
-	}
-	close(jobs)
-	wg.Wait()
-	close(results)
-
-	var albums []models.Album
-	var colls []models.Collection
-	for r := range results {
-		if r.isAlbum && r.album != nil {
-			albums = append(albums, *r.album)
-		} else if !r.isAlbum && r.coll != nil {
-			colls = append(colls, *r.coll)
-		}
-	}
-
-	// 排序保证结果稳定
-	sort.Slice(albums, func(i, j int) bool { return albums[i].Name < albums[j].Name })
-	sort.Slice(colls, func(i, j int) bool { return colls[i].Name < colls[j].Name })
-	return albums, colls
-}
-
-// classifyAndScan 判断子目录是相册还是集合，并扫描它。
-//
-// 规则（含嵌套目录时严格不丢数据、不破坏导航层级）：
-//   - 仅顶层含图/视频且无子目录 → 纯 Album（最常见）
-//   - 顶层含图/视频 + 有子目录 → Collection：
-//   - 「散图」虚拟相册（Path=dir, ImageFiles=顶层文件, Name="散图"）
-//   - 每个子目录的扫描结果（Album 或 Collection）原样放进 Albums / Collections
-//     不再把子目录图合并进"散图"，否则用户点进 2024年 还是看到一坨
-//     3549 张混合图，没法继续下钻到 10.1国庆 这种子相册 —— 用户反馈
-//     「我需要保留子相册导航」。
-//   - 仅含子目录 → Collection：子目录扫描结果放进 Albums / Collections
-//     （嵌套 Collection 保持嵌套，不再拍平 —— 否则 5 层嵌套会丢结构）
-//   - 都不含 → 跳过
-//
-// 封面选择（CoverImage / CoverKind）：
-//   - 同时含图和视频 → 封面用第一张图,CoverKind="image"
-//   - 仅含视频 → 封面用第一个视频,CoverKind="video"（封面缩略图由前端抽帧后回填）
-//   - 仅含图 → 封面用第一张图,CoverKind="image"
-// fileEntry 把目录项的 size 提前算好,避免 buildAlbum 阶段再次
-// os.Stat 整本相册(每张图/视频一次 syscall)。在 1k+ 张图的相册上,
-// 这把 FolderSize 的 N+1 syscall 减到 0 次。
+// fileEntry 在枚举目录时缓存大小，构建相册时不再逐文件 Stat。
 type fileEntry struct {
 	path string
 	size int64
 }
 
-func (s *Scanner) classifyAndScan(basePath, dir string, maxDepth, curDepth int, exclude ExcludeConfig) (*models.Album, *models.Collection) {
-	if s.contextErr() != nil {
-		return nil, nil
-	}
-	// 全局信号量:跨递归共享,严格限制"任意时刻并发的 classifyAndScan
-	// 调用数" ≤ workers。如果在 worker 外面取,父调用持锁期间子层
-	// scanLayer 的 worker 全在阻塞 → 退化成串行。必须让递归的每层
-	// 各自独立计数,合在一起仍受 workers 上限约束。
-	select {
-	case s.sem <- struct{}{}:
-	case <-s.ctx.Done():
-		return nil, nil
-	}
-	defer func() { <-s.sem }()
+type directoryTask struct {
+	path  string
+	depth int
+}
 
-	entries, err := os.ReadDir(dir)
+type directoryRecord struct {
+	path     string
+	images   []fileEntry
+	videos   []fileEntry
+	children []string
+}
+
+type directoryScanResult struct {
+	record   directoryRecord
+	children []directoryTask
+	warnings []models.ScanWarning
+}
+
+// scanDirectoryTree 用一个固定工作池读取整棵目录树。协调器是唯一会向
+// jobs 写入的协程，worker 永远不等待自己派生的子任务，因而不会死锁。
+func (s *Scanner) scanDirectoryTree(
+	root string,
+	maxDepth int,
+	exclude ExcludeConfig,
+	hook ScanHook,
+) (map[string]directoryRecord, []models.ScanWarning, error) {
+	workerCount := max(1, s.workers)
+	jobs := make(chan directoryTask)
+	results := make(chan directoryScanResult, workerCount)
+	var wg sync.WaitGroup
+	for range workerCount {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for task := range jobs {
+				result := s.inspectDirectory(root, task, maxDepth, exclude)
+				select {
+				case results <- result:
+				case <-s.ctx.Done():
+					return
+				}
+			}
+		}()
+	}
+
+	queue := []directoryTask{{path: root}}
+	records := make(map[string]directoryRecord)
+	var warnings []models.ScanWarning
+	active := 0
+	processed := 0
+	albumsFound := 0
+
+	for len(queue) > 0 || active > 0 {
+		var send chan directoryTask
+		var next directoryTask
+		if len(queue) > 0 {
+			send = jobs
+			next = queue[0]
+		}
+		select {
+		case send <- next:
+			queue = queue[1:]
+			active++
+		case result := <-results:
+			active--
+			processed++
+			records[result.record.path] = result.record
+			warnings = append(warnings, result.warnings...)
+			queue = append(queue, result.children...)
+			if len(result.record.images)+len(result.record.videos) > 0 {
+				albumsFound++
+			}
+			if hook != nil {
+				hook(ScanProgress{
+					Phase:       "scanning",
+					CurrentPath: result.record.path,
+					Processed:   processed,
+					Total:       processed + active + len(queue),
+					AlbumsFound: albumsFound,
+				})
+			}
+		case <-s.ctx.Done():
+			close(jobs)
+			wg.Wait()
+			return nil, nil, s.ctx.Err()
+		}
+	}
+	close(jobs)
+	wg.Wait()
+	return records, warnings, nil
+}
+
+func (s *Scanner) inspectDirectory(
+	root string,
+	task directoryTask,
+	maxDepth int,
+	exclude ExcludeConfig,
+) directoryScanResult {
+	result := directoryScanResult{record: directoryRecord{path: task.path}}
+	entries, err := os.ReadDir(task.path)
 	if err != nil {
+		result.warnings = append(result.warnings, models.ScanWarning{
+			Code: "directory_unreadable", Path: scanWarningPath(root, task.path), Message: "目录无法读取，已跳过",
+		})
+		return result
+	}
+
+	depthLimited := maxDepth > 0 && task.depth >= maxDepth
+	for _, entry := range entries {
+		if s.contextErr() != nil {
+			break
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			result.warnings = append(result.warnings, models.ScanWarning{
+				Code: "symlink_skipped", Path: scanWarningPath(root, filepath.Join(task.path, entry.Name())), Message: "符号链接默认不跟随",
+			})
+			continue
+		}
+		if entry.IsDir() {
+			if exclude.ShouldSkipDir(entry.Name()) {
+				continue
+			}
+			if depthLimited {
+				result.warnings = append(result.warnings, models.ScanWarning{
+					Code: "max_depth_reached", Path: scanWarningPath(root, task.path), Message: "已达到显式扫描深度上限",
+				})
+				continue
+			}
+			childPath := filepath.Join(task.path, entry.Name())
+			result.record.children = append(result.record.children, childPath)
+			result.children = append(result.children, directoryTask{path: childPath, depth: task.depth + 1})
+			continue
+		}
+		if exclude.ShouldSkipFile(entry.Name()) {
+			continue
+		}
+		kind := ""
+		switch {
+		case models.IsImageFile(entry.Name()):
+			kind = "image"
+		case models.IsVideoFile(entry.Name()):
+			kind = "video"
+		default:
+			continue
+		}
+		fullPath := filepath.Join(task.path, entry.Name())
+		size := int64(0)
+		if info, infoErr := entry.Info(); infoErr == nil {
+			size = info.Size()
+		} else {
+			result.warnings = append(result.warnings, models.ScanWarning{
+				Code: "metadata_unavailable", Path: scanWarningPath(root, fullPath), Message: "无法读取媒体元数据",
+			})
+		}
+		file := fileEntry{path: fullPath, size: size}
+		if kind == "image" {
+			result.record.images = append(result.record.images, file)
+		} else {
+			result.record.videos = append(result.record.videos, file)
+		}
+	}
+	sort.Slice(result.record.children, func(i, j int) bool {
+		return naturalLess(filepath.Base(result.record.children[i]), filepath.Base(result.record.children[j]))
+	})
+	sort.Slice(result.children, func(i, j int) bool {
+		return naturalLess(filepath.Base(result.children[i].path), filepath.Base(result.children[j].path))
+	})
+	return result
+}
+
+func buildRootResult(root string, records map[string]directoryRecord) ([]models.Album, []models.Collection) {
+	record, ok := records[root]
+	if !ok {
 		return nil, nil
 	}
-
-	var images []fileEntry
-	var videos []fileEntry
-	var subdirs []os.DirEntry
-
-	for _, e := range entries {
-		if s.contextErr() != nil {
-			return nil, nil
+	var albums []models.Album
+	var collections []models.Collection
+	for _, child := range record.children {
+		album, collection := buildDirectoryResult(child, records)
+		if album != nil {
+			albums = append(albums, *album)
 		}
-		if e.IsDir() {
-			// 子目录先收集,实际跳过与否在 scanLayer 里再判(集中逻辑,
-			// 避免这里和那里各写一遍 ShouldSkipDir)。
-			subdirs = append(subdirs, e)
-			continue
-		}
-		// 文件:系统白名单命中 → 完全不计入(图片/视频分类都跳过)。
-		// 否则再判断扩展名。这样 Thumbs.db / desktop.ini / .DS_Store
-		// 不会污染图片列表,也不会被错误地当视频/图片。
-		if exclude.ShouldSkipFile(e.Name()) {
-			continue
-		}
-		full := filepath.Join(dir, e.Name())
-		switch {
-		case models.IsImageFile(e.Name()):
-			// 只对图片/视频调 Info() 拿 size;系统白名单或非媒体文件
-			// 一次 Info 都不浪费。DirEntry.Info() 在 Windows 上首次
-			// 调用是一次 syscall,后续命中同一 entry 的 Info 会被 runtime
-			// 缓存(go 1.18+),但 buildAlbum 阶段不再二次 stat 才
-			// 是真正的优化点。
-			size := int64(0)
-			if fi, ierr := e.Info(); ierr == nil {
-				size = fi.Size()
-			}
-			images = append(images, fileEntry{path: full, size: size})
-		case models.IsVideoFile(e.Name()):
-			size := int64(0)
-			if fi, verr := e.Info(); verr == nil {
-				size = fi.Size()
-			}
-			videos = append(videos, fileEntry{path: full, size: size})
+		if collection != nil {
+			collections = append(collections, *collection)
 		}
 	}
+	if len(record.images)+len(record.videos) > 0 {
+		album := buildAlbum(root, record.images, record.videos)
+		if len(albums)+len(collections) > 0 {
+			album.Name = "本目录媒体"
+			album.DisplayName = album.Name
+			album.Virtual = true
+		}
+		albums = append([]models.Album{*album}, albums...)
+	}
+	sortLibraryNodes(albums, collections)
+	return albums, collections
+}
 
-	// 子目录扫描：先把每个 subdir 单独分类，再决定本目录的最终形态。
-	// 子目录扫描深度上限是 maxDepth：它是「集合嵌套层数」上限。
-	// 用户数据实测 5 层(2024年/夏威夷-度假/相册/作品/甜片),
-	// 旧版 merge 路径在 maxDepth=2 时会丢深度 ≥3 的所有内容;新版本
-	// 不再 merge,直接用 maxDepth 控制嵌套层数,所以调用方需要把
-	// maxDepth 设大一点(目前 handlers 默认 8)。
+func buildDirectoryResult(path string, records map[string]directoryRecord) (*models.Album, *models.Collection) {
+	record, ok := records[path]
+	if !ok {
+		return nil, nil
+	}
 	var childAlbums []models.Album
-	var childColls []models.Collection
-	hasChildren := len(subdirs) > 0 && curDepth+1 <= maxDepth
-	if hasChildren {
-		childAlbums, childColls = s.scanLayer(basePath, dir, maxDepth, curDepth+1, exclude)
-	}
-
-	hasFiles := len(images) > 0 || len(videos) > 0
-	hasUsableChildren := len(childAlbums) > 0 || len(childColls) > 0
-
-	// 情形 A：仅顶层文件，无可用子目录 → 普通 Album
-	if hasFiles && !hasUsableChildren {
-		return buildAlbum(dir, images, videos), nil
-	}
-
-	// 情形 B：仅子目录，无顶层文件 → Collection
-	if !hasFiles && hasUsableChildren {
-		return nil, &models.Collection{
-			Type:        "collection",
-			Path:        dir,
-			Name:        filepath.Base(dir),
-			Albums:      childAlbums,
-			Collections: childColls,
-			AlbumCount:  len(childAlbums),
+	var childCollections []models.Collection
+	for _, child := range record.children {
+		album, collection := buildDirectoryResult(child, records)
+		if album != nil {
+			childAlbums = append(childAlbums, *album)
+		}
+		if collection != nil {
+			childCollections = append(childCollections, *collection)
 		}
 	}
-
-	// 情形 C：顶层文件 + 有可用子目录 → Collection，包含「散图」+ 子目录
-	//
-	// 「散图」是 Path 以 `/.loose` 结尾的虚拟相册:用它而不是直接用 dir
-	// 作为 Path,是为了避免和 Collection.Path=dir 撞 key(后端 FindAlbum
-	// 按精确 Path 查找,撞了就 404 或拿错对象)。合成路径在磁盘上不存在,
-	// 但作为 result.albums 里的 key 完全可以 — viewer 通过 albumsApi.
-	// detail(synthetic) 拿到虚拟 Album,里面 ImageFiles=顶层文件(不含
-	// 子目录图)。Collection 优先匹配路由 + albumGrouping 跳过以 .loose
-	// 结尾的 path,共同保证主页时间线不会重复显示「散图」。
-	if hasFiles && hasUsableChildren {
-		loose := buildAlbum(filepath.Join(dir, ".loose"), images, videos)
-		loose.Name = "散图"
-		allAlbums := append([]models.Album{*loose}, childAlbums...)
-		return nil, &models.Collection{
-			Type:        "collection",
-			Path:        dir,
-			Name:        filepath.Base(dir),
-			Albums:      allAlbums,
-			Collections: childColls,
-			AlbumCount:  len(allAlbums),
-		}
+	hasFiles := len(record.images)+len(record.videos) > 0
+	hasChildren := len(childAlbums)+len(childCollections) > 0
+	if hasFiles && !hasChildren {
+		return buildAlbum(path, record.images, record.videos), nil
 	}
+	if !hasFiles && !hasChildren {
+		return nil, nil
+	}
+	if hasFiles {
+		loose := buildAlbum(path, record.images, record.videos)
+		loose.Name = "本目录媒体"
+		loose.DisplayName = loose.Name
+		loose.Virtual = true
+		childAlbums = append([]models.Album{*loose}, childAlbums...)
+	}
+	sortLibraryNodes(childAlbums, childCollections)
+	return nil, &models.Collection{
+		Type:        "collection",
+		Path:        path,
+		Name:        filepath.Base(path),
+		DisplayName: filepath.Base(path),
+		Albums:      childAlbums,
+		Collections: childCollections,
+		AlbumCount:  descendantAlbumCount(childAlbums, childCollections),
+	}
+}
 
-	return nil, nil
+func sortLibraryNodes(albums []models.Album, collections []models.Collection) {
+	sort.SliceStable(albums, func(i, j int) bool {
+		if albums[i].Virtual != albums[j].Virtual {
+			return albums[i].Virtual
+		}
+		return naturalLess(albums[i].Name, albums[j].Name)
+	})
+	sort.SliceStable(collections, func(i, j int) bool {
+		return naturalLess(collections[i].Name, collections[j].Name)
+	})
+}
+
+func descendantAlbumCount(albums []models.Album, collections []models.Collection) int {
+	count := len(albums)
+	for i := range collections {
+		count += collections[i].AlbumCount
+	}
+	return count
+}
+
+func scanWarningPath(root, path string) string {
+	rootName := filepath.Base(root)
+	relative, err := filepath.Rel(root, path)
+	if err != nil || relEscapesRoot(relative) || relative == "." {
+		return rootName
+	}
+	return rootName + "/" + filepath.ToSlash(relative)
 }
 
 func (s *Scanner) contextErr() error {
@@ -604,32 +565,6 @@ func (s *Scanner) contextErr() error {
 		return nil
 	}
 	return s.ctx.Err()
-}
-
-// hasLooseFilesAtRoot 判断 root 顶层是否含可直接被分类的图/视频文件。
-//
-// 仅用于"顶层 root 直接放文件"那种场景(情形 A),与 scanLayer 处理的
-// subdir 路径不重叠。如果 root 既有 subdir 又有顶层文件,这里返回
-// false — 顶层文件仍会被丢失(已知设计限制,见 ScanWithHook 注释)。
-func hasLooseFilesAtRoot(root string, subdirCount int) bool {
-	if subdirCount > 0 {
-		// 避免与 scanLayer 已处理的子目录重复;后续可改成总是处理顶层文件
-		return false
-	}
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return false
-	}
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		if models.IsImageFile(name) || models.IsVideoFile(name) {
-			return true
-		}
-	}
-	return false
 }
 
 // buildAlbum 把「图片+视频」组装成一个 Album（不含任何子目录逻辑）。
@@ -649,8 +584,12 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 		videoPaths[i] = e.path
 		totalSize += e.size
 	}
-	sort.Strings(imagePaths)
-	sort.Strings(videoPaths)
+	sort.SliceStable(imagePaths, func(i, j int) bool {
+		return naturalLess(filepath.Base(imagePaths[i]), filepath.Base(imagePaths[j]))
+	})
+	sort.SliceStable(videoPaths, func(i, j int) bool {
+		return naturalLess(filepath.Base(videoPaths[i]), filepath.Base(videoPaths[j]))
+	})
 	modTime := time.Time{}
 	if fi, err := os.Stat(dir); err == nil {
 		modTime = fi.ModTime()
@@ -703,7 +642,61 @@ func flattenAlbums(topAlbums []models.Album, topCollections []models.Collection)
 }
 
 func countCollections(colls []models.Collection) int {
-	return len(colls)
+	count := len(colls)
+	for i := range colls {
+		count += countCollections(colls[i].Collections)
+	}
+	return count
+}
+
+// naturalLess 比较文件名中的 ASCII 数字段，使 page2 排在 page10 前。
+// 非数字部分不区分大小写；完全相同时用原字符串保证稳定顺序。
+func naturalLess(left, right string) bool {
+	a := strings.ToLower(left)
+	b := strings.ToLower(right)
+	for i, j := 0, 0; i < len(a) && j < len(b); {
+		if isASCIIDigit(a[i]) && isASCIIDigit(b[j]) {
+			iEnd, jEnd := i, j
+			for iEnd < len(a) && isASCIIDigit(a[iEnd]) {
+				iEnd++
+			}
+			for jEnd < len(b) && isASCIIDigit(b[jEnd]) {
+				jEnd++
+			}
+			aDigits := strings.TrimLeft(a[i:iEnd], "0")
+			bDigits := strings.TrimLeft(b[j:jEnd], "0")
+			if aDigits == "" {
+				aDigits = "0"
+			}
+			if bDigits == "" {
+				bDigits = "0"
+			}
+			if len(aDigits) != len(bDigits) {
+				return len(aDigits) < len(bDigits)
+			}
+			if aDigits != bDigits {
+				return aDigits < bDigits
+			}
+			if iEnd-i != jEnd-j {
+				return iEnd-i < jEnd-j
+			}
+			i, j = iEnd, jEnd
+			continue
+		}
+		if a[i] != b[j] {
+			return a[i] < b[j]
+		}
+		i++
+		j++
+	}
+	if len(a) != len(b) {
+		return len(a) < len(b)
+	}
+	return left < right
+}
+
+func isASCIIDigit(value byte) bool {
+	return value >= '0' && value <= '9'
 }
 
 // ExtractTags 从文件夹名中提取所有方括号标签。

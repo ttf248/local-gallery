@@ -82,25 +82,28 @@ func lowerExt(name string) string {
 // DisplayName 会加 "[SourceName] " 前缀避免歧义，否则与 Name 相同。
 // 旧扫描缓存没有这几个字段时，handler 端兜底。
 type Album struct {
-	Type        string    `json:"type"`        // 始终为 "album"
-	Path        string    `json:"path"`        // 绝对路径
-	Name        string    `json:"name"`        // 文件夹名（原始名）
+	Type        string    `json:"type"`                  // 始终为 "album"
+	Path        string    `json:"path"`                  // 绝对路径
+	Name        string    `json:"name"`                  // 文件夹名（原始名）
 	DisplayName string    `json:"displayName,omitempty"` // 同名冲突时加来源前缀；否则等于 Name
 	SourceRoot  string    `json:"sourceRoot,omitempty"`  // 所属媒体根（绝对路径）；多根扫描时填充
 	SourceName  string    `json:"sourceName,omitempty"`  // 所属媒体根的 basename，用于 UI badge
-	ImageFiles  []string  `json:"-"`           // 见 MarshalJSON/UnmarshalJSON；同时输出 imageFiles + files
-	VideoFiles  []string  `json:"-"`           // 同上；输出 videoFiles
-	CoverImage  string    `json:"coverImage"`  // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
-	ImageCount  int       `json:"imageCount"`  // 兼容旧字段，同时输出 fileCount
+	ImageFiles  []string  `json:"-"`                     // 见 MarshalJSON/UnmarshalJSON；同时输出 imageFiles + files
+	VideoFiles  []string  `json:"-"`                     // 同上；输出 videoFiles
+	CoverImage  string    `json:"coverImage"`            // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
+	ImageCount  int       `json:"imageCount"`            // 兼容旧字段，同时输出 fileCount
 	VideoCount  int       `json:"videoCount,omitempty"`  // 视频数量（0 时省略）
-	Files       []string  `json:"-"`           // 见 MarshalJSON/UnmarshalJSON；为 0 时复用 ImageFiles
-	FolderSize  int64     `json:"folderSize"`  // 字节
-	Tags        []string  `json:"tags,omitempty"`  // 标签（从方括号解析），可能多个
-	Author      string    `json:"author,omitempty"` // 旧字段别名 = 第一个标签
+	Files       []string  `json:"-"`                     // 见 MarshalJSON/UnmarshalJSON；为 0 时复用 ImageFiles
+	FolderSize  int64     `json:"folderSize"`            // 字节
+	Tags        []string  `json:"tags,omitempty"`        // 标签（从方括号解析），可能多个
+	Author      string    `json:"author,omitempty"`      // 旧字段别名 = 第一个标签
 	ModTime     time.Time `json:"modTime"`
 	// CoverKind 标识封面来源："image" / "video" / ""（未指定时按是否有视频推断）。
 	// 前端据此决定卡片样式（图卡 vs 视频▶卡）和点击进入的播放器类型。
 	CoverKind string `json:"coverKind,omitempty"`
+	// Virtual 表示“本目录媒体”视图。它与所属 Collection 共享物理目录，
+	// 但使用不同资源类型 ID，不再伪造磁盘上不存在的 .loose 路径。
+	Virtual bool `json:"virtual,omitempty"`
 }
 
 // MarshalJSON 同时输出 imageFiles（兼容）与 files（推荐）两个键。
@@ -174,15 +177,15 @@ func emptyStrings(s []string) []string {
 // 只有更深子目录）放在 Collections。这样 UI 沿 Albums/Collections 两条
 // 路径递归渲染时，可以完整保留「年 / 月 / 事件」这种多层目录结构。
 type Collection struct {
-	Type        string        `json:"type"`        // 始终为 "collection"
-	Path        string        `json:"path"`        // 绝对路径
-	Name        string        `json:"name"`        // 文件夹名
-	DisplayName string        `json:"displayName,omitempty"`
-	SourceRoot  string        `json:"sourceRoot,omitempty"`
-	SourceName  string        `json:"sourceName,omitempty"`
-	Albums      []Album       `json:"albums"`
-	Collections []Collection  `json:"collections,omitempty"` // 嵌套子集合
-	AlbumCount  int           `json:"albumCount"`            // 直属于本层的相册数（不含嵌套集合）
+	Type        string       `json:"type"` // 始终为 "collection"
+	Path        string       `json:"path"` // 绝对路径
+	Name        string       `json:"name"` // 文件夹名
+	DisplayName string       `json:"displayName,omitempty"`
+	SourceRoot  string       `json:"sourceRoot,omitempty"`
+	SourceName  string       `json:"sourceName,omitempty"`
+	Albums      []Album      `json:"albums"`
+	Collections []Collection `json:"collections,omitempty"` // 嵌套子集合
+	AlbumCount  int          `json:"albumCount"`            // 直属于本层的相册数（不含嵌套集合）
 }
 
 // MarshalJSON 确保 nil Albums 序列化为 `[]`；Collections 省略字段时
@@ -197,8 +200,8 @@ func (c Collection) MarshalJSON() ([]byte, error) {
 	hasNested := len(c.Collections) > 0
 	return json.Marshal(struct {
 		alias
-		Albums      []Album       `json:"albums"`
-		Collections []Collection  `json:"collections,omitempty"`
+		Albums      []Album      `json:"albums"`
+		Collections []Collection `json:"collections,omitempty"`
 	}{
 		alias:       alias(c),
 		Albums:      albums,
@@ -218,13 +221,13 @@ func ternaryCollections(use bool, v []Collection) []Collection {
 // 历史命名：原本只把第一个方括号当"作者"；本地画廊产品语义下统称为
 // "标签 / Tag"——一个文件夹可挂多个标签。
 type SmartCollection struct {
-	Type       string  `json:"type"`        // 始终为 "smartCollection"
-	Tag        string  `json:"tag"`         // 标签（首个标签；当个智能合集的主键）
-	Tags       []string `json:"tags,omitempty"`  // 同义时省略
-	Author     string  `json:"author,omitempty"` // 旧字段别名 = Tag（兼容）
-	Albums     []Album `json:"albums"`
-	AlbumCount int     `json:"albumCount"`
-	CoverImage string  `json:"coverImage"`  // 图片数最多的相册封面
+	Type       string   `json:"type"`             // 始终为 "smartCollection"
+	Tag        string   `json:"tag"`              // 标签（首个标签；当个智能合集的主键）
+	Tags       []string `json:"tags,omitempty"`   // 同义时省略
+	Author     string   `json:"author,omitempty"` // 旧字段别名 = Tag（兼容）
+	Albums     []Album  `json:"albums"`
+	AlbumCount int      `json:"albumCount"`
+	CoverImage string   `json:"coverImage"` // 图片数最多的相册封面
 }
 
 // MarshalJSON 确保 nil Albums 序列化为 `[]`。
@@ -251,8 +254,8 @@ func (s SmartCollection) MarshalJSON() ([]byte, error) {
 // 旧字段 Root 取第一个根用于向后兼容。AlbumCount / CollectionCount 包含所有
 // 根的合并统计。
 type ScanResult struct {
-	Root             string            `json:"root"`             // 第一个根（兼容字段）
-	Roots            []string          `json:"roots,omitempty"`  // 所有根（多根时输出）
+	Root             string            `json:"root"`            // 第一个根（兼容字段）
+	Roots            []string          `json:"roots,omitempty"` // 所有根（多根时输出）
 	Albums           []Album           `json:"albums"`
 	Collections      []Collection      `json:"collections"`
 	SmartCollections []SmartCollection `json:"smartCollections"`
@@ -260,4 +263,13 @@ type ScanResult struct {
 	CollectionCount  int               `json:"collectionCount"`
 	Duration         int64             `json:"duration"` // 毫秒
 	ScannedAt        time.Time         `json:"scannedAt"`
+	Warnings         []ScanWarning     `json:"warnings,omitempty"`
+}
+
+// ScanWarning 是不会中断整次扫描的可恢复问题。Path 只能是根别名和
+// 相对路径，禁止写入用户绝对路径。
+type ScanWarning struct {
+	Code    string `json:"code"`
+	Path    string `json:"path,omitempty"`
+	Message string `json:"message"`
 }

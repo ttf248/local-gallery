@@ -11,7 +11,9 @@
 | 实时进度 | 每个 SSE 客户端独立订阅，慢客户端不阻塞扫描        | `handlers.AsyncScanEventsHandler`   |
 | 可取消   | context 传入目录扫描；取消结果不发布               | `Scanner.ScanWithContext`           |
 | 扫描排除 | 隐藏目录、系统文件和 basename glob                 | `services.ExcludeConfig`            |
-| 层级识别 | 纯媒体目录为相册；混合目录保留集合和“散图”         | `Scanner.classifyAndScan`           |
+| 层级识别 | 纯媒体目录为相册；混合目录保留集合和“本目录媒体”   | `Scanner.scanDirectoryTree`         |
+| 自然排序 | 文件和目录按数字片段排序（`2` 在 `10` 前）         | `naturalLess`                       |
+| 扫描告警 | 不可读目录、元数据失败和符号链接不会静默丢失       | `ScanResult.warnings`               |
 | 智能合集 | 从目录名提取标签并聚合                             | `services.BuildSmartCollections`    |
 | 快照缓存 | 版本化相对引用、原子替换、深拷贝；根集合变化时失效 | `services.ScanResultCache`          |
 

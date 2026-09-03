@@ -218,15 +218,7 @@ func main() {
 	// 暴露给前端。
 	if scanCache.Get() == nil && len(currentRoots) > 0 {
 		go func() {
-			id, _, startErr := runner.Start(services.ScanOptions{
-				Roots:    currentRoots,
-				MaxDepth: 2,
-				Exclude: services.NormalizeExcludeConfig(
-					cfg.SkipHidden,
-					cfg.SystemFiles,
-					cfg.ExcludePatterns,
-				),
-			})
+			id, _, startErr := runner.Start(handlers.ScanOptionsFromConfig(mgr))
 			if startErr != nil {
 				log.Printf("启动自动扫描失败: %v", startErr)
 				return

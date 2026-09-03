@@ -58,3 +58,33 @@ func TestResourceCatalog_RejectsOutsideRoot(t *testing.T) {
 		t.Fatalf("outside path received id %q", got)
 	}
 }
+
+func TestResourceCatalog_VirtualAlbumAndCollectionSharePhysicalPath(t *testing.T) {
+	root := t.TempDir()
+	directory := filepath.Join(root, "mixed")
+	file := filepath.Join(directory, "page.jpg")
+	result := &models.ScanResult{
+		Root: root, Roots: []string{root},
+		Collections: []models.Collection{{
+			Type: "collection", Path: directory,
+			Albums: []models.Album{{
+				Type: "album", Path: directory, Virtual: true,
+				ImageFiles: []string{file}, CoverImage: file,
+			}},
+		}},
+	}
+	catalog := NewResourceCatalog()
+	catalog.Rebuild(result, []string{root})
+
+	albumID := catalog.ExternalID(directory, ResourceAlbum)
+	collectionID := catalog.ExternalID(directory, ResourceCollection)
+	if albumID == "" || collectionID == "" || albumID == collectionID {
+		t.Fatalf("albumID=%q collectionID=%q", albumID, collectionID)
+	}
+	for _, id := range []string{albumID, collectionID} {
+		resolved, ok := catalog.Resolve(id)
+		if !ok || resolved != directory {
+			t.Fatalf("Resolve(%q)=(%q,%v), want %q", id, resolved, ok, directory)
+		}
+	}
+}

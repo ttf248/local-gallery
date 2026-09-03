@@ -264,6 +264,7 @@ func cloneScanResult(result *models.ScanResult) *models.ScanResult {
 	}
 	out := *result
 	out.Roots = append([]string(nil), result.Roots...)
+	out.Warnings = append([]models.ScanWarning(nil), result.Warnings...)
 	out.Albums = cloneAlbums(result.Albums)
 	out.Collections = cloneCollections(result.Collections)
 	out.SmartCollections = make([]models.SmartCollection, len(result.SmartCollections))

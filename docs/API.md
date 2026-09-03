@@ -82,6 +82,8 @@
 
 ### `GET /api/library`
 
+扫描结果可包含 `warnings`：每项只有稳定 `code`、根别名/相对 `path` 和用户可读 `message`，不会暴露绝对路径。混合目录中的“本目录媒体”相册带 `virtual: true`，其相册 ID 与集合 ID 不同，但二者解析到同一真实目录。`collection.albumCount` 统计全部后代相册。
+
 返回最近一次扫描快照。相册、集合、封面和媒体文件均使用资源 ID。
 
 ### `DELETE /api/library`

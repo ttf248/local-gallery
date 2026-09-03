@@ -58,7 +58,7 @@ ID 由根标识、资源类型和相对路径哈希生成；根目录与相对�
 ```text
 POST /api/scans
   → StartOrReuse（全局最多一个活动任务）
-  → Scanner.ScanWithContext（有界 worker pool + 全局信号量）
+  → Scanner.ScanWithContext（固定目录工作池 + 两阶段建树）
   → per-subscriber SSE broadcast
   → complete: cache.Set（atomic.Pointer 替换）→ catalog.Rebuild（ID 化）
   → GET /api/library（cache.Get 无锁 + catalog.PublicScanResult 翻译 ID）
@@ -66,11 +66,11 @@ POST /api/scans
 
 ### 扫描器并发模型
 
-`Scanner` 持有一个 `sem chan struct{}`（容量 = `min(8, NumCPU)`）跨递归共享。
-每层 `scanLayer` 启 `min(8, NumCPU)` 个 worker goroutine，worker 调
-`classifyAndScan` 时先 `sem <- struct{}{}` 进入、`defer { <-sem }` 释放。
-任意时刻并发的 `classifyAndScan` 调用数 ≤ `min(8, NumCPU)`，与递归深度
-无关。5 层嵌套树不再产生 8⁵ = 32K goroutine。
+`Scanner` 只启动 `min(8, NumCPU)` 个目录读取 worker。协调器动态派发发现的
+子目录，worker 只返回目录记录，不递归等待子任务；枚举结束后再按路径关系
+构建相册/集合树。因此并发数不随深度增长，也不存在父任务占满令牌后等待
+子任务的死锁。默认完整递归；仅测试或内部调用显式给出 `MaxDepth` 时截断，
+并在结果的 `warnings` 中说明。
 
 ### 资源 ID 翻译
 
@@ -96,7 +96,7 @@ snapshot。stat 全部移到锁外，`flushDebounce=500ms` 异步落盘。
 - 终态任务短期保留供重连查询，随后自动回收。
 - SSE 中的 `currentPath` 只使用根别名和相对路径。
 
-扫描器保留目录层级：纯媒体目录形成相册；同时包含媒体和子目录时形成集合，并以“散图”相册表示当前层媒体。标签从文件夹名提取并生成智能合集。
+扫描器保留目录层级：纯媒体目录形成相册；同时包含媒体和子目录时形成集合，并以“本目录媒体”虚拟相册表示当前层媒体。虚拟相册与集合共享真实物理目录，由资源 kind 生成不同 ID，不再使用不存在的 `.loose` 路径。文件和目录均使用自然排序；不可读目录、元数据失败和符号链接以脱敏告警返回。
 
 ## 媒体管线
 

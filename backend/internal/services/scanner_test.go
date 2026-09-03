@@ -1,12 +1,14 @@
 package services
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tianlongxiang/local-gallery/internal/models"
 )
@@ -78,20 +80,21 @@ func TestScan_FileNotDir(t *testing.T) {
 }
 
 // 构造：
-//   root/
-//     single/                 <- album
-//       1.jpg
-//     [作者A] vol1/           <- album
-//       p1.png
-//     [作者A] vol2/           <- album
-//       p2.jpg
-//     [作者B] single/         <- album
-//       p3.gif
-//     coll/                   <- collection
-//       albumX/
-//         a.jpg
-//       albumY/               <- 子目录但无图片 → 应忽略
-//     empty/
+//
+//	root/
+//	  single/                 <- album
+//	    1.jpg
+//	  [作者A] vol1/           <- album
+//	    p1.png
+//	  [作者A] vol2/           <- album
+//	    p2.jpg
+//	  [作者B] single/         <- album
+//	    p3.gif
+//	  coll/                   <- collection
+//	    albumX/
+//	      a.jpg
+//	    albumY/               <- 子目录但无图片 → 应忽略
+//	  empty/
 func TestScan_TopLevelAlbumsAndCollections(t *testing.T) {
 	root := t.TempDir()
 	mkdirAll(t, filepath.Join(root, "single"))
@@ -484,17 +487,15 @@ func TestScan_KeepsSubAlbumNavigation(t *testing.T) {
 		t.Errorf("2024年 direct album count: got %d, want 3 (散图+10.1国庆+12.13)",
 			y2024.AlbumCount)
 	}
-	// 第一个子相册应是"散图",且只含顶层 2 张;Path 用合成路径
-	// (以 /.loose 结尾)避开和 Collection.Path 的 key 冲突。
-	if y2024.Albums[0].Name != "散图" {
-		t.Errorf("first sub-album name: got %q, want %q", y2024.Albums[0].Name, "散图")
+	// 第一个子相册是“本目录媒体”，与集合共享真实目录并靠资源 kind 区分。
+	if y2024.Albums[0].Name != "本目录媒体" {
+		t.Errorf("first sub-album name: got %q, want %q", y2024.Albums[0].Name, "本目录媒体")
 	}
 	if y2024.Albums[0].ImageCount != 2 {
 		t.Errorf("散图 image count: got %d, want 2 (top-level only)", y2024.Albums[0].ImageCount)
 	}
-	if !strings.HasSuffix(y2024.Albums[0].Path, string(filepath.Separator)+".loose") {
-		t.Errorf("散图 should use synthetic Path ending in %q, got %q",
-			string(filepath.Separator)+".loose", y2024.Albums[0].Path)
+	if y2024.Albums[0].Path != y2024.Path || !y2024.Albums[0].Virtual {
+		t.Errorf("本目录媒体 should share the collection path and be virtual, got %+v", y2024.Albums[0])
 	}
 	// 10.1国庆: 2 张
 	sub10 := y2024.Albums[1]
@@ -572,7 +573,7 @@ func TestScan_PreservesDeepNestedCollections(t *testing.T) {
 	if len(works.Albums) != 2 {
 		t.Fatalf("作品 albums: %+v (want 2: 散图 + 甜片)", works.Albums)
 	}
-	if works.Albums[0].Name != "散图" || works.Albums[0].ImageCount != 1 {
+	if works.Albums[0].Name != "本目录媒体" || works.Albums[0].ImageCount != 1 {
 		t.Errorf("作品 散图: got %q (%d 张)", works.Albums[0].Name, works.Albums[0].ImageCount)
 	}
 	if works.Albums[1].Name != "甜片" || works.Albums[1].ImageCount != 1 {
@@ -682,21 +683,22 @@ func TestScan_VideoExtsCaseInsensitive(t *testing.T) {
 // ---- Exclude 规则集成测试 ----
 //
 // 构造一个混合目录：
-//   root/
-//     real/                <- 应保留
-//       1.jpg
-//     .git/                <- 隐藏目录,默认跳
-//       config
-//     .cache/              <- 隐藏目录
-//       real2/             <- 即使有真图也不进
-//         x.jpg
-//     node_modules/        <- 用户 pattern 跳
-//       dep/
-//         y.jpg
-//     with_thumbsdb/       <- 文件层 Thumbs.db 命中
-//       2.jpg
-//       Thumbs.db          <- 永远被白名单命中
-//       .DS_Store          <- 永远被白名单命中
+//
+//	root/
+//	  real/                <- 应保留
+//	    1.jpg
+//	  .git/                <- 隐藏目录,默认跳
+//	    config
+//	  .cache/              <- 隐藏目录
+//	    real2/             <- 即使有真图也不进
+//	      x.jpg
+//	  node_modules/        <- 用户 pattern 跳
+//	    dep/
+//	      y.jpg
+//	  with_thumbsdb/       <- 文件层 Thumbs.db 命中
+//	    2.jpg
+//	    Thumbs.db          <- 永远被白名单命中
+//	    .DS_Store          <- 永远被白名单命中
 func TestScan_ExcludeRules_Default(t *testing.T) {
 	root := t.TempDir()
 
@@ -866,40 +868,84 @@ func TestScan_FolderSizeAccurate(t *testing.T) {
 	}
 }
 
-// TestScanner_SemBoundsConcurrency 验证 worker pool 引入的全局
-// 信号量不会因递归而几何级数扩张。
-//
-// 旧版每层 scanLayer 启 workers 个 goroutine,5 层 × 8 worker = 8^5 = 32K
-// goroutine 持续存在。新版用全局 sem (cap=workers) 跨递归共享,任意
-// 时刻并发的 classifyAndScan 调用数 ≤ workers。
-//
-// 这里只验证 sem 配置正确(容量等于 workers,不会扩张)。实际跑深嵌套
-// scan 在 Windows 上 60s 内超时,与本约束无关 — 真实数据不会嵌套到
-// 5 层 × 3 分支那种程度,业务上 5 层 + 单一分支(2024年/夏威夷/相册/
-// 作品/甜片)是常态。
-func TestScanner_SemBoundsConcurrency(t *testing.T) {
-	s := NewScanner()
-	if cap(s.sem) != s.workers {
-		t.Fatalf("sem cap must equal workers, got cap=%d workers=%d", cap(s.sem), s.workers)
+// TestScanner_BranchedDeepTreeCompletes 回归旧递归信号量死锁：多个父目录
+// 同时占满令牌并等待子层时，子任务永远无法开始。
+func TestScanner_BranchedDeepTreeCompletes(t *testing.T) {
+	root := t.TempDir()
+	var create func(parent string, depth int)
+	create = func(parent string, depth int) {
+		if depth == 0 {
+			touchAll(t, filepath.Join(parent, "page.jpg"))
+			return
+		}
+		for i := 1; i <= 3; i++ {
+			child := filepath.Join(parent, fmt.Sprintf("level-%d", i))
+			mkdirAll(t, child)
+			create(child, depth-1)
+		}
 	}
-	// 容量严格 ≤ NumCPU,旧版场景下如果谁误把 sem 改成 8^N 会立即失败
-	if cap(s.sem) > 16 {
-		t.Errorf("sem 容量异常大: %d,期望 ≤ 16", cap(s.sem))
+	create(root, 5)
+
+	type outcome struct {
+		result *models.ScanResult
+		err    error
 	}
-	// 验证 sem 实际能容纳 workers 个并发单位
-	sem := make(chan struct{}, cap(s.sem))
-	for i := 0; i < cap(s.sem); i++ {
-		sem <- struct{}{}
-	}
-	if got := len(sem); got != cap(s.sem) {
-		t.Errorf("sem should hold exactly cap() items, got %d", got)
-	}
-	// 容量已满,再放一个应当阻塞(用 select + timeout 验证)
+	done := make(chan outcome, 1)
+	go func() {
+		result, err := NewScanner().Scan(ScanOptions{Root: root})
+		done <- outcome{result: result, err: err}
+	}()
 	select {
-	case sem <- struct{}{}:
-		t.Error("sem at cap should not accept more items")
-	default:
-		// 期望走这里:channel 满 → select default
+	case got := <-done:
+		if got.err != nil {
+			t.Fatal(got.err)
+		}
+		if got.result.AlbumCount != 243 {
+			t.Fatalf("AlbumCount=%d, want 243", got.result.AlbumCount)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("branched deep scan timed out; worker pool may be deadlocked")
 	}
 }
 
+func TestScan_RootMixedContentKeepsLooseMedia(t *testing.T) {
+	root := t.TempDir()
+	touchAll(t, filepath.Join(root, "root-page.jpg"))
+	mkdirAll(t, filepath.Join(root, "child"))
+	touchAll(t, filepath.Join(root, "child", "page.jpg"))
+
+	result, err := NewScanner().Scan(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Albums) != 2 {
+		t.Fatalf("top albums=%d, want loose root + child", len(result.Albums))
+	}
+	if !result.Albums[0].Virtual || result.Albums[0].Name != "本目录媒体" {
+		t.Fatalf("root loose album=%+v", result.Albums[0])
+	}
+	if result.Albums[0].Path != root {
+		t.Fatalf("virtual album must resolve to physical root: %q", result.Albums[0].Path)
+	}
+}
+
+func TestScan_NaturalMediaOrder(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "album")
+	mkdirAll(t, dir)
+	touchAll(t,
+		filepath.Join(dir, "page10.jpg"),
+		filepath.Join(dir, "page2.jpg"),
+		filepath.Join(dir, "page1.jpg"),
+	)
+	result, err := NewScanner().Scan(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"page1.jpg", "page2.jpg", "page10.jpg"}
+	for i, path := range result.Albums[0].ImageFiles {
+		if filepath.Base(path) != want[i] {
+			t.Fatalf("natural order[%d]=%q, want %q", i, filepath.Base(path), want[i])
+		}
+	}
+}

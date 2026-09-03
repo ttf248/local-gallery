@@ -16,15 +16,20 @@ import (
 // POST /api/scan/start
 func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		id, _, reused, err := runner.StartOrReuse(services.ScanOptions{
-			Roots:    mgr.Roots(),
-			MaxDepth: 8,
-			Exclude:  excludeFromConfig(mgr),
-		})
+		id, _, reused, err := runner.StartOrReuse(ScanOptionsFromConfig(mgr))
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.JSON(fiber.Map{"scanId": id, "reused": reused})
+	}
+}
+
+// ScanOptionsFromConfig 是启动自动扫描与 HTTP 手动扫描的唯一策略入口。
+// 默认不设置 MaxDepth，完整递归所有可访问目录。
+func ScanOptionsFromConfig(mgr *config.Manager) services.ScanOptions {
+	return services.ScanOptions{
+		Roots:   mgr.Roots(),
+		Exclude: excludeFromConfig(mgr),
 	}
 }
 

@@ -113,8 +113,13 @@ func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.Co
 			return c.JSON(fiber.Map{"ok": true, "kind": "smart", "data": data})
 		}
 		internalPath := middleware.SafePath(c)
-		album := cache.FindAlbum(internalPath)
-		if album != nil {
+		requestedKind := services.ResourceKind("")
+		if catalog != nil {
+			if ref, ok := catalog.Lookup(raw); ok {
+				requestedKind = ref.Kind
+			}
+		}
+		writeAlbum := func(album *models.Album) error {
 			data := *album
 			if catalog != nil {
 				data = catalog.PublicAlbum(data)
@@ -126,13 +131,30 @@ func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.Co
 				"hasCustomCover": coverStore != nil && coverStore.Get(album.Path) != nil,
 			})
 		}
-		coll := cache.FindCollection(internalPath)
-		if coll != nil {
+		writeCollection := func(coll *models.Collection) error {
 			data := *coll
 			if catalog != nil {
 				data = catalog.PublicCollection(data)
 			}
 			return c.JSON(fiber.Map{"ok": true, "kind": "collection", "data": data})
+		}
+		// “本目录媒体”与其 Collection 共享物理路径；资源 ID 的 kind
+		// 是唯一判别依据。无 catalog 的旧测试路径按 Collection 优先。
+		if requestedKind == services.ResourceCollection {
+			if coll := cache.FindCollection(internalPath); coll != nil {
+				return writeCollection(coll)
+			}
+		}
+		if requestedKind == services.ResourceAlbum {
+			if album := cache.FindAlbum(internalPath); album != nil {
+				return writeAlbum(album)
+			}
+		}
+		if coll := cache.FindCollection(internalPath); coll != nil {
+			return writeCollection(coll)
+		}
+		if album := cache.FindAlbum(internalPath); album != nil {
+			return writeAlbum(album)
 		}
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 			"error": "album/collection not found in cached scan",
