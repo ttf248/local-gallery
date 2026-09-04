@@ -1,11 +1,11 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, type ErrorInfo, type ReactNode } from "react";
 
 interface Props {
-  children: ReactNode
+  children: ReactNode;
 }
 
 interface State {
-  error: Error | null
+  error: Error | null;
 }
 
 // 全局 React 错误边界,包在 <Outlet> 外,渲染期未捕获的异常落到这里。
@@ -13,21 +13,24 @@ interface State {
 // 仅 catch 同步 render 错误 + lifecycle 错误;event handler 内的
 // 异常需要单独 try/catch。reset 按钮清状态重新渲染子树(重置 key)。
 export default class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null }
+  state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
-    return { error }
+    return { error };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     // 不在生产环境上报(没有 telemetry);本地用 console 即可
-    // eslint-disable-next-line no-console
-    console.error('[ErrorBoundary] uncaught render error:', error, info.componentStack)
+    console.error(
+      "[ErrorBoundary] uncaught render error:",
+      error,
+      info.componentStack,
+    );
   }
 
   handleRetry = (): void => {
-    this.setState({ error: null })
-  }
+    this.setState({ error: null });
+  };
 
   render(): ReactNode {
     if (this.state.error) {
@@ -38,7 +41,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         >
           <div className="text-2xl font-semibold text-fg">图像库加载异常</div>
           <div className="max-w-md text-sm text-fg-muted">
-            {this.state.error.message || '未知错误,详见浏览器控制台'}
+            {this.state.error.message || "未知错误,详见浏览器控制台"}
           </div>
           <button
             type="button"
@@ -48,8 +51,8 @@ export default class ErrorBoundary extends Component<Props, State> {
             重试
           </button>
         </div>
-      )
+      );
     }
-    return this.props.children
+    return this.props.children;
   }
 }

@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useQueryClient } from '@tanstack/react-query'
-import { thumbUrl } from '../../api/thumbs'
-import { progressApi } from '../../api/prefs'
-import { useUIStore } from '../../store/uiStore'
-import { decodeFavPath } from '../../utils/path'
-import ContextMenu, { type AnyMenuItem } from './ContextMenu'
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { thumbUrl } from "../../api/thumbs";
+import { progressApi } from "../../api/prefs";
+import { useUIStore } from "../../store/uiStore";
+import { decodeFavPath } from "../../utils/path";
+import ContextMenu, { type AnyMenuItem } from "./ContextMenu";
 import {
   StarIcon,
   FolderIcon,
@@ -15,26 +15,27 @@ import {
   ClockIcon,
   ArrowUpRightIcon,
   PlayFilledIcon,
-} from '../common/Icon'
-import HoverPreview from '../common/HoverPreview'
-import VideoCoverImage from '../common/VideoCoverImage'
-import TranscodeStatusBadge from '../common/TranscodeStatusBadge'
-import type { ViewMode } from '../../store/uiStore'
-import { timeAgo } from '../../utils/date'
-import { formatDuration } from '../../utils/format'
+} from "../common/Icon";
+import HoverPreview from "../common/HoverPreview";
+import VideoCoverImage from "../common/VideoCoverImage";
+import TranscodeStatusBadge from "../common/TranscodeStatusBadge";
+import type { ViewMode } from "../../store/uiStore";
+import { timeAgo } from "../../utils/date";
+import { formatDuration } from "../../utils/format";
+import { isCompleted, isUnread, progressPercent } from "../../utils/progress";
 
-export type CardVariant = 'album' | 'collection' | 'smart'
-export type CardBadge = 'rewind' // 重温：30 天以上没看
+export type CardVariant = "album" | "collection" | "smart";
+export type CardBadge = "rewind"; // 重温：30 天以上没看
 
 export interface CardData {
-  id: string
-  variant: CardVariant
+  id: string;
+  variant: CardVariant;
   // 原始名（来自后端 album.name）
-  title: string
+  title: string;
   // 多根冲突时显示的"处理后"名；与 title 不同时说明带来源前缀
-  displayTitle?: string
+  displayTitle?: string;
   // 副标题（集合 / smart 通常为空；album 是 author / path basename）
-  subtitle?: string
+  subtitle?: string;
   /**
    * 兼容字段：
    *  - variant='album' 时 = imageCount（图数）
@@ -43,44 +44,44 @@ export interface CardData {
    * 视频数通过 imageCount / videoCount 两个字段一起提供，
    * 渲染时按 "X 张" / "Y 个视频" / "X 张 · Y 个视频" 分支。
    */
-  count: number
+  count: number;
   /** 视频数（仅 album 变体有意义）。0 或缺省按"无视频"渲染。 */
-  videoCount?: number
+  videoCount?: number;
   /**
    * 图片数（仅 album 变体有意义）。缺省时回退到 count。
    * 显式提供主要是为了和 videoCount 一起让 UI 区分"纯视频相册"。
    */
-  imageCount?: number
-  coverPath: string
+  imageCount?: number;
+  coverPath: string;
   /**
    * 封面源类型："image" / "video" / 不传（不传时由 coverPath 扩展名推断）。
    * 视频封面由前端浏览器抽帧 → 上传后才会显示首帧静态图（见 useVideoCover）。
    */
-  coverKind?: 'image' | 'video'
+  coverKind?: "image" | "video";
   /**
    * 当 cover 是视频时，可附带总时长（秒）显示在角标。
    * 由调用方在用 <video> 探测后填入；非必填，缺省时角标只显示 ▶。
    */
-  durationSec?: number
-  to: string
-  isFavorite?: boolean
+  durationSec?: number;
+  to: string;
+  isFavorite?: boolean;
   // 阅读进度：index + total，用于显示百分比与定位条
-  progress?: { index: number; total: number }
+  progress?: { index: number; total: number };
   // 上次阅读时间（ISO），用于悬停预览的「上次 X」展示
-  lastSeenAt?: string | null
+  lastSeenAt?: string | null;
   // 来源媒体根（多根扫描时填充）。前端用来显示 badge "来自 X"
-  sourceRoot?: string
+  sourceRoot?: string;
   // 来源媒体根的 basename（直接给 UI 用）
-  sourceName?: string
+  sourceName?: string;
   // 角标：当前只支持重温；未来可扩展
-  badge?: CardBadge
+  badge?: CardBadge;
 }
 
 interface Props {
-  data: CardData
-  variant?: ViewMode
+  data: CardData;
+  variant?: ViewMode;
   /** 显示「上次 X · 看到 Y/Z」行（仅 Recents 列表需要）。 */
-  showLastSeen?: boolean
+  showLastSeen?: boolean;
 }
 
 // 通用卡片：网格（默认 3:4 封面）/ 列表（横向缩略图 + 元数据）。
@@ -90,9 +91,14 @@ interface Props {
 //  - 阅读进度以底部细线 + 数字显示
 //  - 智能集合有专属角标
 //  - showLastSeen=true 时在标题下加一行「上次 X · 看到 Y/Z」
-export default function AlbumCard({ data, variant = 'grid', showLastSeen }: Props) {
-  if (variant === 'list') return <ListCard data={data} showLastSeen={showLastSeen} />
-  return <GridCard data={data} showLastSeen={showLastSeen} />
+export default function AlbumCard({
+  data,
+  variant = "grid",
+  showLastSeen,
+}: Props) {
+  if (variant === "list")
+    return <ListCard data={data} showLastSeen={showLastSeen} />;
+  return <GridCard data={data} showLastSeen={showLastSeen} />;
 }
 
 // 卡片底部"X 张 / Y 个视频 / X 张 · Y 个视频"渲染。
@@ -102,141 +108,139 @@ export default function AlbumCard({ data, variant = 'grid', showLastSeen }: Prop
 function formatMediaCount(
   data: CardData,
 ): { label: string; title: string } | null {
-  if (data.variant !== 'album') return null
-  const imgs = data.imageCount ?? data.count
-  const vids = data.videoCount ?? 0
+  if (data.variant !== "album") return null;
+  const imgs = data.imageCount ?? data.count;
+  const vids = data.videoCount ?? 0;
   if (imgs > 0 && vids > 0) {
     return {
       label: `${imgs} 张 · ${vids} 个视频`,
       title: `${imgs} 张图片 + ${vids} 个视频`,
-    }
+    };
   }
   if (imgs === 0 && vids > 0) {
-    return { label: `${vids} 个视频`, title: `${vids} 个视频` }
+    return { label: `${vids} 个视频`, title: `${vids} 个视频` };
   }
   // 纯图 / 空相册：维持旧的 `count 张` 写法
-  return { label: `${imgs} 张`, title: `${imgs} 张` }
+  return { label: `${imgs} 张`, title: `${imgs} 张` };
 }
 
-function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
+function GridCard({
+  data,
+  showLastSeen,
+}: {
+  data: CardData;
+  showLastSeen?: boolean;
+}) {
   // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
   // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
   // 错过首次 intersect，导致大量卡片永远停在占位符上）。
-  const [loaded, setLoaded] = useState(false)
-  const [imgError, setImgError] = useState(false)
+  const [loaded, setLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
   // 悬停预览状态
-  const [previewOn, setPreviewOn] = useState(false)
-  const [previewRect, setPreviewRect] = useState<DOMRect | null>(null)
-  const previewTimer = useRef<number | null>(null)
-  const navigate = useNavigate()
+  const [previewOn, setPreviewOn] = useState(false);
+  const [previewRect, setPreviewRect] = useState<DOMRect | null>(null);
+  const previewTimer = useRef<number | null>(null);
+  const navigate = useNavigate();
 
-  const onActivate = () => navigate(data.to)
+  const onActivate = () => navigate(data.to);
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      onActivate()
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onActivate();
     }
-  }
+  };
 
-  const progressPct =
-    data.progress && data.progress.total > 0
-      ? Math.min(100, Math.round((data.progress.index / Math.max(1, data.progress.total - 1)) * 100))
-      : null
-  // 已读完：走到最后一页或仅差一页（最后一页常常是 endcard，差 1 也算读完了）
-  const isFinished =
-    !!data.progress &&
-    data.progress.total > 0 &&
-    data.progress.index >= data.progress.total - 1
-  // 全新：没进度记录，或刚到第一张（index === 0）。
+  const progressPct = progressPercent(data.progress);
+  // 0-based 页码到达 total - 1 即已读完；兼容旧数据中 index=total 的值。
+  const isFinished = isCompleted(data.progress);
+  // 全新：没有有效进度记录。保存过 index=0 说明已经打开第一张，属于在读。
   // 重要：仅 album 变体显示；智能集合 / 集合不适用。
-  const isFresh =
-    data.variant === 'album' &&
-    (!data.progress || data.progress.total === 0 || data.progress.index <= 0)
+  const isFresh = data.variant === "album" && isUnread(data.progress);
 
   // 右键菜单：仅 album 变体有「标记为已读」语义（集合/smart 是聚合,
   // 它们的 progress 实际是子相册聚合,不能"标已读"）。
   // 关键：data.to 是 /albums/<encoded> 路由形式,需要 decodeFavPath 还原
   // 成原绝对路径,再传给 progressApi.set。
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
-  const queryClient = useQueryClient()
-  const pushToast = useUIStore((s) => s.pushToast)
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const queryClient = useQueryClient();
+  const pushToast = useUIStore((s) => s.pushToast);
   const canMarkRead =
-    data.variant === 'album' &&
+    data.variant === "album" &&
     !!data.progress &&
     data.progress.total > 0 &&
-    !isFinished
-  const canUnmarkRead = data.variant === 'album' && isFinished
+    !isFinished;
+  const canUnmarkRead = data.variant === "album" && isFinished;
   const onContextMenu = (e: React.MouseEvent) => {
-    if (data.variant !== 'album') return
+    if (data.variant !== "album") return;
     // 没「标记/取消已读」也没有「右键设置封面」之类的菜单项,不弹。
-    if (!canMarkRead && !canUnmarkRead) return
-    e.preventDefault()
-    setMenu({ x: e.clientX, y: e.clientY })
-  }
-  const albumAbsPath = data.variant === 'album' ? decodeFavPath(data.to) : null
+    if (!canMarkRead && !canUnmarkRead) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+  const albumAbsPath = data.variant === "album" ? decodeFavPath(data.to) : null;
   const onMarkRead = () => {
-    if (!albumAbsPath || !data.progress) return
-    const total = data.progress.total
+    if (!albumAbsPath || !data.progress) return;
+    const total = data.progress.total;
     progressApi
-      .set(albumAbsPath, total, total, 0)
+      .set(albumAbsPath, Math.max(0, total - 1), total, 0)
       .then(() => {
         // 让所有依赖 progress 的视图(UnreadHero / ContinueReadingHero /
         // Unread 页 / Recents / Favorites / Album 详情)立刻看到新进度。
-        queryClient.invalidateQueries({ queryKey: ['progress-batch'] })
-        queryClient.invalidateQueries({ queryKey: ['progress'] })
-        pushToast({ kind: 'success', message: '已标记为已读', ttl: 1200 })
+        queryClient.invalidateQueries({ queryKey: ["progress-batch"] });
+        queryClient.invalidateQueries({ queryKey: ["progress"] });
+        pushToast({ kind: "success", message: "已标记为已读", ttl: 1200 });
       })
-      .catch(() => pushToast({ kind: 'error', message: '标记失败' }))
-  }
+      .catch(() => pushToast({ kind: "error", message: "标记失败" }));
+  };
   const onUnmarkRead = () => {
-    if (!albumAbsPath) return
-    // 重置为第 0 张:AlbumCard 的 isFresh = index<=0 算"全新",
-    // UnreadHero / Unread 页会重新把它算成"未读"。
+    if (!albumAbsPath) return;
+    // 未读由「没有进度记录」表达；index=0 是已经打开第一张，不能拿来重置。
     progressApi
-      .set(albumAbsPath, 0, data.progress?.total ?? 0, 0)
+      .delete(albumAbsPath)
       .then(() => {
-        queryClient.invalidateQueries({ queryKey: ['progress-batch'] })
-        queryClient.invalidateQueries({ queryKey: ['progress'] })
-        pushToast({ kind: 'success', message: '已重置为未读', ttl: 1200 })
+        queryClient.invalidateQueries({ queryKey: ["progress-batch"] });
+        queryClient.invalidateQueries({ queryKey: ["progress"] });
+        pushToast({ kind: "success", message: "已重置为未读", ttl: 1200 });
       })
-      .catch(() => pushToast({ kind: 'error', message: '重置失败' }))
-  }
+      .catch(() => pushToast({ kind: "error", message: "重置失败" }));
+  };
 
   // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
   // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
   //   鼠标在 card→preview 的过渡中会先触发 card mouseleave。）
   // 触摸设备不启用（pointer: coarse 才挂监听）。
-  const closeTimer = useRef<number | null>(null)
+  const closeTimer = useRef<number | null>(null);
   const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (window.matchMedia('(pointer: coarse)').matches) return
+    if (window.matchMedia("(pointer: coarse)").matches) return;
     if (closeTimer.current !== null) {
-      window.clearTimeout(closeTimer.current)
-      closeTimer.current = null
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
     }
-    const target = e.currentTarget
+    const target = e.currentTarget;
     previewTimer.current = window.setTimeout(() => {
-      setPreviewRect(target.getBoundingClientRect())
-      setPreviewOn(true)
-    }, 350)
-  }
+      setPreviewRect(target.getBoundingClientRect());
+      setPreviewOn(true);
+    }, 350);
+  };
   const onLeave = () => {
     if (previewTimer.current !== null) {
-      window.clearTimeout(previewTimer.current)
-      previewTimer.current = null
+      window.clearTimeout(previewTimer.current);
+      previewTimer.current = null;
     }
     // 延迟关闭：给用户时间移到预览上
     closeTimer.current = window.setTimeout(() => {
-      setPreviewOn(false)
-      closeTimer.current = null
-    }, 150)
-  }
+      setPreviewOn(false);
+      closeTimer.current = null;
+    }, 150);
+  };
   // 卸载时清理 timer
   useEffect(() => {
     return () => {
-      if (previewTimer.current !== null) window.clearTimeout(previewTimer.current)
-      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
-    }
-  }, [])
+      if (previewTimer.current !== null)
+        window.clearTimeout(previewTimer.current);
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    };
+  }, []);
 
   return (
     <div
@@ -250,7 +254,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
       className="group block cursor-pointer focus:outline-none"
     >
       <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
-        {data.coverKind === 'video' ? (
+        {data.coverKind === "video" ? (
           // 视频封面：交给 VideoCoverImage 处理"未抽帧 → 抽帧 → 上传"流程
           <VideoCoverImage
             videoPath={data.coverPath}
@@ -270,7 +274,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             onLoad={() => setLoaded(true)}
             onError={() => setImgError(true)}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
-              loaded ? 'opacity-100' : 'opacity-0'
+              loaded ? "opacity-100" : "opacity-0"
             } group-hover:scale-[1.03]`}
           />
         ) : null}
@@ -288,7 +292,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
 
         {/* 视频角标：▶ + 可选时长（覆盖在 cover 之上） */}
-        {data.coverKind === 'video' && (
+        {data.coverKind === "video" && (
           <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
             <PlayFilledIcon size={9} className="text-accent" />
             <span>{formatDuration(data.durationSec)}</span>
@@ -296,9 +300,9 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
 
         {/* 服务端转码状态（仅在转码中/失败时显示；不与上面 ▶ 角标冲突） */}
-        {data.coverKind === 'video' && (
+        {data.coverKind === "video" && (
           <div className="absolute top-2 left-2">
-            <TranscodeStatusBadge videoPath={data.coverPath ?? ''} size="sm" />
+            <TranscodeStatusBadge videoPath={data.coverPath ?? ""} size="sm" />
           </div>
         )}
 
@@ -322,7 +326,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
 
         {/* 全新 / 重温 / 集合 / 标签 角标（同一位置，优先级：fresh > rewind > collection > smart） */}
-        {isFresh && data.badge !== 'rewind' ? (
+        {isFresh && data.badge !== "rewind" ? (
           // 全新：强调色 + 白圆点 + "新"字
           // 用 accent 而非 info（tailwind 没定义 info 颜色）
           <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
@@ -332,17 +336,17 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             />
             <span>新</span>
           </div>
-        ) : data.badge === 'rewind' ? (
+        ) : data.badge === "rewind" ? (
           <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-bg-elevated/95 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-border-faint shadow-xs">
             <RewindIcon size={10} className="text-accent" />
             <span>重温</span>
           </div>
-        ) : data.variant === 'collection' ? (
+        ) : data.variant === "collection" ? (
           <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
             集合
           </div>
-        ) : data.variant === 'smart' ? (
+        ) : data.variant === "smart" ? (
           <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
             标签
           </div>
@@ -353,7 +357,9 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 bg-gradient-to-t from-black/55 to-transparent">
             <div className="flex items-center gap-1.5 text-white/95">
               <ReaderIcon size={11} className="shrink-0" />
-              <span className="text-[10px] font-medium tabular-nums">{progressPct}%</span>
+              <span className="text-[10px] font-medium tabular-nums">
+                {progressPct}%
+              </span>
             </div>
             <div className="mt-1.5 h-0.5 bg-white/20 rounded-full overflow-hidden">
               <div
@@ -365,7 +371,7 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         )}
 
         {/* 已读：右下角徽章，封面略微提亮（叠在 cover 上时通过 mix-blend 强可读） */}
-        {isFinished && data.variant === 'album' && (
+        {isFinished && data.variant === "album" && (
           <div
             className="absolute bottom-2 right-2 inline-flex items-center gap-1 bg-success/95 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
             title="已读完"
@@ -385,17 +391,22 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         </div>
         <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5 min-w-0">
           {(() => {
-            const media = formatMediaCount(data)
+            const media = formatMediaCount(data);
             if (media) {
               // album 变体：按图/视频分别展示
-              return <span title={media.title}>{media.label}</span>
+              return <span title={media.title}>{media.label}</span>;
             }
             // collection / smart 变体：维持 count + "卷"（语义是子相册数）
             return (
               <span>
-                {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
+                {data.count}{" "}
+                {data.variant === "collection"
+                  ? "卷"
+                  : data.variant === "smart"
+                    ? "卷"
+                    : "张"}
               </span>
-            )
+            );
           })()}
           {data.subtitle && (
             <>
@@ -417,20 +428,22 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             title={`上次 ${timeAgo(data.lastSeenAt)}`}
           >
             <ClockIcon size={10} className="shrink-0 text-fg-subtle/70" />
-            {data.progress && data.progress.total > 0 && data.progress.index > 0 && (
-              <>
-                <span>
-                  看到 {data.progress.index + 1} / {data.progress.total}
-                </span>
-                <span className="text-fg-subtle/40">·</span>
-              </>
-            )}
+            {data.progress &&
+              data.progress.total > 0 &&
+              data.progress.index >= 0 && (
+                <>
+                  <span>
+                    看到 {data.progress.index + 1} / {data.progress.total}
+                  </span>
+                  <span className="text-fg-subtle/40">·</span>
+                </>
+              )}
             <span>上次 {timeAgo(data.lastSeenAt)}</span>
           </div>
         )}
       </div>
       {/* 悬停预览（仅相册/合集；触摸设备不启用） */}
-      {previewOn && previewRect && data.variant !== 'smart' && (
+      {previewOn && previewRect && data.variant !== "smart" && (
         <HoverPreview
           data={data}
           anchorRect={previewRect}
@@ -438,62 +451,70 @@ function GridCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           onPointerEnter={() => {
             // 鼠标进入预览时取消正在等待的关闭 timer
             if (closeTimer.current !== null) {
-              window.clearTimeout(closeTimer.current)
-              closeTimer.current = null
+              window.clearTimeout(closeTimer.current);
+              closeTimer.current = null;
             }
           }}
           onPointerLeave={onLeave}
         />
       )}
       {/* 右键菜单:仅 album 变体有"标记/取消已读",集合/smart 不弹。 */}
-      {menu && data.variant === 'album' && (
+      {menu && data.variant === "album" && (
         <ContextMenu
           x={menu.x}
           y={menu.y}
           items={
             [
               canMarkRead
-                ? { id: 'mark-read', label: '标记为已读', icon: <CheckIcon /> }
-                : { id: 'mark-read-disabled', label: '标记为已读', disabled: true },
+                ? { id: "mark-read", label: "标记为已读", icon: <CheckIcon /> }
+                : {
+                    id: "mark-read-disabled",
+                    label: "标记为已读",
+                    disabled: true,
+                  },
               canUnmarkRead
-                ? { id: 'unmark-read', label: '取消已读', icon: <RewindIcon /> }
-                : { id: 'unmark-read-disabled', label: '取消已读', disabled: true },
+                ? { id: "unmark-read", label: "取消已读", icon: <RewindIcon /> }
+                : {
+                    id: "unmark-read-disabled",
+                    label: "取消已读",
+                    disabled: true,
+                  },
             ] satisfies AnyMenuItem[]
           }
           onSelect={(id) => {
-            setMenu(null)
-            if (id === 'mark-read') onMarkRead()
-            else if (id === 'unmark-read') onUnmarkRead()
+            setMenu(null);
+            if (id === "mark-read") onMarkRead();
+            else if (id === "unmark-read") onUnmarkRead();
           }}
           onClose={() => setMenu(null)}
         />
       )}
     </div>
-  )
+  );
 }
 
-function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boolean }) {
+function ListCard({
+  data,
+  showLastSeen,
+}: {
+  data: CardData;
+  showLastSeen?: boolean;
+}) {
   // 与 GridCard 一致：直接依赖 <img loading="lazy">，不重复自写 IO。
-  const [loaded, setLoaded] = useState(false)
-  const [imgError, setImgError] = useState(false)
-  const navigate = useNavigate()
+  const [loaded, setLoaded] = useState(false);
+  const [imgError, setImgError] = useState(false);
+  const navigate = useNavigate();
 
-  const onActivate = () => navigate(data.to)
+  const onActivate = () => navigate(data.to);
   const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault()
-      onActivate()
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onActivate();
     }
-  }
+  };
 
-  const progressPct =
-    data.progress && data.progress.total > 0
-      ? Math.min(100, Math.round((data.progress.index / Math.max(1, data.progress.total - 1)) * 100))
-      : null
-  const isFinished =
-    !!data.progress &&
-    data.progress.total > 0 &&
-    data.progress.index >= data.progress.total - 1
+  const progressPct = progressPercent(data.progress);
+  const isFinished = isCompleted(data.progress);
 
   return (
     <div
@@ -515,7 +536,7 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             onLoad={() => setLoaded(true)}
             onError={() => setImgError(true)}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
-              loaded ? 'opacity-100' : 'opacity-0'
+              loaded ? "opacity-100" : "opacity-0"
             }`}
           />
         ) : (
@@ -528,7 +549,7 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
             <StarIcon size={11} className="text-warning" filled />
           </div>
         )}
-        {isFinished && data.variant === 'album' && (
+        {isFinished && data.variant === "album" && (
           <div
             className="absolute bottom-1 right-1 bg-success/95 text-white rounded-md px-1.5 py-0.5 text-[10px] font-medium inline-flex items-center gap-0.5 shadow-sm"
             title="已读完"
@@ -544,7 +565,7 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
           <span className="truncate" title={data.displayTitle ?? data.title}>
             {data.displayTitle ?? data.title}
           </span>
-          {isFinished && data.variant === 'album' && (
+          {isFinished && data.variant === "album" && (
             <span className="inline-flex items-center gap-0.5 text-success text-[11px] font-medium shrink-0">
               <CheckIcon size={11} />
               <span>已读</span>
@@ -554,15 +575,24 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         <div className="text-[12px] text-fg-subtle mt-1 flex items-center gap-2">
           {data.subtitle && <span className="truncate">{data.subtitle}</span>}
           {(() => {
-            const media = formatMediaCount(data)
+            const media = formatMediaCount(data);
             if (media) {
-              return <span className="tabular-nums shrink-0" title={media.title}>{media.label}</span>
+              return (
+                <span className="tabular-nums shrink-0" title={media.title}>
+                  {media.label}
+                </span>
+              );
             }
             return (
               <span className="tabular-nums shrink-0">
-                {data.count} {data.variant === 'collection' ? '卷' : data.variant === 'smart' ? '卷' : '张'}
+                {data.count}{" "}
+                {data.variant === "collection"
+                  ? "卷"
+                  : data.variant === "smart"
+                    ? "卷"
+                    : "张"}
               </span>
-            )
+            );
           })()}
           {data.sourceName && (
             <span className="text-fg-subtle/80 inline-flex items-center gap-0.5 shrink-0">
@@ -574,7 +604,10 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         {progressPct !== null && progressPct > 0 && (
           <div className="mt-2 flex items-center gap-2">
             <div className="flex-1 h-1 bg-bg-strong rounded-full overflow-hidden">
-              <div className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
+              <div
+                className="h-full bg-accent"
+                style={{ width: `${progressPct}%` }}
+              />
             </div>
             <span className="text-[11px] text-fg-subtle tabular-nums shrink-0">
               {data.progress!.index + 1} / {data.progress!.total}
@@ -593,5 +626,5 @@ function ListCard({ data, showLastSeen }: { data: CardData; showLastSeen?: boole
         <span className="text-sm">›</span>
       </div>
     </div>
-  )
+  );
 }

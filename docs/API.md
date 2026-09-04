@@ -155,10 +155,10 @@
 - `GET /api/history`、`DELETE /api/history`。
 - `POST /api/history`：body 为 `{ "albumId": "a_...", "name": "...", "imageCount": 42 }`。
 - `GET /api/progress?albumId=<albumId>`。
-- `POST /api/progress`：body 为 `{ "albumId": "a_...", "index": 12, "total": 30, "scroll": 0 }`。
+- `POST /api/progress`：body 为 `{ "albumId": "a_...", "index": 12, "total": 30, "scroll": 0 }`。`index` 是从 0 开始的当前页；无记录表示未读，到达 `total - 1` 表示已读完。
 - `DELETE /api/progress/item?albumId=<albumId>`；`DELETE /api/progress` 清空全部。
 - `POST /api/progress/batch`：body 为 `{ "albumIds": ["a_...", "..."] }`，批量读取。
-- `PUT /api/progress/batch`：body 为 `{ "entries": [{ "albumId": "a_...", "index": 30, "total": 30, "scroll": 0 }] }`，整批校验后一次原子落盘；单批最多 10000 条。
+- `PUT /api/progress/batch`：body 为 `{ "entries": [{ "albumId": "a_...", "index": 29, "total": 30, "scroll": 0 }] }`，整批校验后一次原子落盘；单批最多 10000 条。
 
 ## 缓存与系统操作
 

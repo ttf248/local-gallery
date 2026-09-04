@@ -1,38 +1,38 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { renderHook } from '@testing-library/react'
-import { useUnreadAlbums } from './useUnreadAlbums'
-import { useLibraryStore } from '../store/libraryStore'
-import { useFavorites } from './useFavorites'
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { renderHook } from "@testing-library/react";
+import { useUnreadAlbums } from "./useUnreadAlbums";
+import { useLibraryStore } from "../store/libraryStore";
+import { useFavorites } from "./useFavorites";
 
 // 这些 hook 同时被 useUnreadAlbums 使用,所以 mock 掉,避免触发网络。
-vi.mock('./useFavorites', () => ({
+vi.mock("./useFavorites", () => ({
   useFavorites: vi.fn(),
-}))
-vi.mock('./useReadingProgress', () => ({
+}));
+vi.mock("./useReadingProgress", () => ({
   useAllProgress: vi.fn(),
-}))
+}));
 
-import { useAllProgress } from './useReadingProgress'
+import { useAllProgress } from "./useReadingProgress";
 
 const baseAlbum = (path: string, name: string, imageCount = 10) => ({
-  type: 'album' as const,
+  type: "album" as const,
   path,
   name,
   imageCount,
   videoCount: 0,
   files: [],
   imageFiles: [],
-  coverImage: path + '/cover.jpg',
+  coverImage: path + "/cover.jpg",
   folderSize: 0,
   tags: [] as string[],
-  modTime: '',
-})
+  modTime: "",
+});
 
 function seedLibrary(albums: ReturnType<typeof baseAlbum>[]) {
   useLibraryStore.setState({
     result: {
-      root: '/',
-      roots: ['/'],
+      root: "/",
+      roots: ["/"],
       albums,
       collections: [],
       smartCollections: [],
@@ -41,165 +41,165 @@ function seedLibrary(albums: ReturnType<typeof baseAlbum>[]) {
       duration: 0,
       scannedAt: new Date().toISOString(),
     },
-  })
+  });
 }
 
-describe('useUnreadAlbums', () => {
+describe("useUnreadAlbums", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    useLibraryStore.setState({ result: null })
-  })
+    vi.clearAllMocks();
+    useLibraryStore.setState({ result: null });
+  });
 
-  it('没有 progress 的相册视为未读', () => {
-    seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B')])
+  it("没有 progress 的相册视为未读", () => {
+    seedLibrary([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: {},
       isLoading: false,
-    } as never)
+    } as never);
 
-    const { result } = renderHook(() => useUnreadAlbums())
-    expect(result.current.count).toBe(2)
-    expect(result.current.cards.map((c) => c.title)).toEqual(['A', 'B'])
-  })
+    const { result } = renderHook(() => useUnreadAlbums());
+    expect(result.current.count).toBe(2);
+    expect(result.current.cards.map((c) => c.title)).toEqual(["A", "B"]);
+  });
 
-  it('progress.index > 0 视为已开始,不算未读', () => {
-    seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B')])
+  it("progress.index > 0 视为已开始,不算未读", () => {
+    seedLibrary([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { albumId: '/a', index: 3, total: 10, scroll: 0, updated: '' },
+        "/a": { albumId: "/a", index: 3, total: 10, scroll: 0, updated: "" },
       },
       isLoading: false,
-    } as never)
+    } as never);
 
-    const { result } = renderHook(() => useUnreadAlbums())
-    expect(result.current.count).toBe(1)
-    expect(result.current.cards.map((c) => c.title)).toEqual(['B'])
-  })
+    const { result } = renderHook(() => useUnreadAlbums());
+    expect(result.current.count).toBe(1);
+    expect(result.current.cards.map((c) => c.title)).toEqual(["B"]);
+  });
 
-  it('progress.index === 0 视为未读(刚开始)', () => {
-    seedLibrary([baseAlbum('/a', 'A')])
+  it("已保存的 progress.index === 0 视为在读而非未读", () => {
+    seedLibrary([baseAlbum("/a", "A")]);
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { albumId: '/a', index: 0, total: 10, scroll: 0, updated: '' },
+        "/a": { albumId: "/a", index: 0, total: 10, scroll: 0, updated: "" },
       },
       isLoading: false,
-    } as never)
+    } as never);
 
-    const { result } = renderHook(() => useUnreadAlbums())
-    expect(result.current.count).toBe(1)
-  })
+    const { result } = renderHook(() => useUnreadAlbums());
+    expect(result.current.count).toBe(0);
+  });
 
-  it('progress.total === 0 视为未读(老格式进度数据)', () => {
-    seedLibrary([baseAlbum('/a', 'A')])
+  it("progress.total === 0 视为未读(老格式进度数据)", () => {
+    seedLibrary([baseAlbum("/a", "A")]);
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { albumId: '/a', index: 5, total: 0, scroll: 0, updated: '' },
+        "/a": { albumId: "/a", index: 5, total: 0, scroll: 0, updated: "" },
       },
       isLoading: false,
-    } as never)
+    } as never);
 
-    const { result } = renderHook(() => useUnreadAlbums())
-    expect(result.current.count).toBe(1)
-  })
+    const { result } = renderHook(() => useUnreadAlbums());
+    expect(result.current.count).toBe(1);
+  });
 
-  it('total 反映全库总数,不是未读数', () => {
+  it("total 反映全库总数,不是未读数", () => {
     seedLibrary([
-      baseAlbum('/a', 'A'),
-      baseAlbum('/b', 'B'),
-      baseAlbum('/c', 'C'),
-    ])
+      baseAlbum("/a", "A"),
+      baseAlbum("/b", "B"),
+      baseAlbum("/c", "C"),
+    ]);
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: {
-        '/a': { albumId: '/a', index: 3, total: 10, scroll: 0, updated: '' },
+        "/a": { albumId: "/a", index: 3, total: 10, scroll: 0, updated: "" },
       },
       isLoading: false,
-    } as never)
+    } as never);
 
-    const { result } = renderHook(() => useUnreadAlbums())
-    expect(result.current.count).toBe(2) // 未读
-    expect(result.current.total).toBe(3) // 全库
-  })
+    const { result } = renderHook(() => useUnreadAlbums());
+    expect(result.current.count).toBe(2); // 未读
+    expect(result.current.total).toBe(3); // 全库
+  });
 
-  it('isFavorite 从 favorites Set 派生', () => {
-    seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B')])
+  it("isFavorite 从 favorites Set 派生", () => {
+    seedLibrary([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
     vi.mocked(useFavorites).mockReturnValue({
-      favorites: ['/b'],
+      favorites: ["/b"],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: {},
       isLoading: false,
-    } as never)
+    } as never);
 
-    const { result } = renderHook(() => useUnreadAlbums())
+    const { result } = renderHook(() => useUnreadAlbums());
     const byTitle = Object.fromEntries(
       result.current.cards.map((c) => [c.title, c.isFavorite]),
-    )
-    expect(byTitle['A']).toBeFalsy()
-    expect(byTitle['B']).toBe(true)
-  })
+    );
+    expect(byTitle["A"]).toBeFalsy();
+    expect(byTitle["B"]).toBe(true);
+  });
 
-  it('可复用调用方的进度快照且不重复查询', () => {
-    seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B')])
+  it("可复用调用方的进度快照且不重复查询", () => {
+    seedLibrary([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       add: vi.fn(),
       remove: vi.fn(),
       toggle: vi.fn(),
-    })
+    });
     vi.mocked(useAllProgress).mockReturnValue({
       data: undefined,
       isLoading: false,
-    } as never)
+    } as never);
 
     const { result } = renderHook(() =>
       useUnreadAlbums({
         progressMap: {
-          '/a': {
-            albumId: '/a',
+          "/a": {
+            albumId: "/a",
             index: 3,
             total: 10,
             scroll: 0,
-            updated: '',
+            updated: "",
           },
         },
         loadProgress: false,
       }),
-    )
+    );
 
-    expect(useAllProgress).toHaveBeenCalledWith(['/a', '/b'], false)
-    expect(result.current.cards.map((card) => card.title)).toEqual(['B'])
-  })
-})
+    expect(useAllProgress).toHaveBeenCalledWith(["/a", "/b"], false);
+    expect(result.current.cards.map((card) => card.title)).toEqual(["B"]);
+  });
+});
