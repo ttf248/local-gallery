@@ -15,7 +15,17 @@ func ResourceParam(resolver ResourceResolver, validators ...PathValidator) fiber
 				"code": "missing_resource_id", "message": "resource id is required",
 			})
 		}
-		path, ok := resolver.Resolve(id)
+		path := ""
+		ok := false
+		if snapshotResolver, supportsSnapshot := resolver.(SnapshotResourceResolver); supportsSnapshot {
+			var snapshot any
+			path, snapshot, ok = snapshotResolver.ResolveWithSnapshot(id)
+			if ok {
+				c.Locals("resourceSnapshot", snapshot)
+			}
+		} else {
+			path, ok = resolver.Resolve(id)
+		}
 		if !ok {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"code": "resource_not_found", "message": "resource id is invalid or stale",
@@ -36,6 +46,11 @@ func ResourceParam(resolver ResourceResolver, validators ...PathValidator) fiber
 		c.Locals("resourceID", id)
 		return c.Next()
 	}
+}
+
+// ResourceSnapshot 返回 ResourceParam 解析 ID 时固定的不可变快照。
+func ResourceSnapshot(c *fiber.Ctx) any {
+	return c.Locals("resourceSnapshot")
 }
 
 // ResourceID 返回当前请求的公开资源 ID。

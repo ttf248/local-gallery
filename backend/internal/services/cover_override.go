@@ -2,8 +2,8 @@
 //
 // 持久化位置：cacheDir/cover_overrides.json。
 //
-//   key:   album 绝对路径（与 ScanResult.albums[i].path 一致）
-//   value: 用户指定的封面文件绝对路径（必须在对应 album 目录里）
+//	key:   album 绝对路径（与 ScanResult.albums[i].path 一致）
+//	value: 用户指定的封面文件绝对路径（必须在对应 album 目录里）
 //
 // 运行时每次从 ScanResult 拉数据都把 override 应用上；前端
 // PUT/DELETE 改变 override 后，store 会重新生成应用后的 ScanResult
@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // CoverOverride 一条用户封面覆盖记录。
@@ -148,6 +150,118 @@ func (s *CoverOverrideStore) HasFile(file string) bool {
 	for _, v := range s.data {
 		if strings.EqualFold(v.File, target) {
 			return true
+		}
+	}
+	return false
+}
+
+// ApplyCoverOverridesToResult 将持久化的封面覆盖应用到一次新扫描结果。
+// 只接受仍存在且已被该相册媒体列表收录的文件，旧记录不会把任意路径
+// 带回资源索引。返回值是独立快照，可直接交给 catalog/cache 发布。
+func ApplyCoverOverridesToResult(result *models.ScanResult, overrides map[string]CoverOverride) (*models.ScanResult, int) {
+	if result == nil || len(overrides) == 0 {
+		return result, 0
+	}
+	next := cloneScanResult(result)
+	appliedPaths := make(map[string]struct{})
+	replacedCovers := make(map[string]string)
+	applyAlbum := func(album *models.Album) {
+		key := filepath.Clean(album.Path)
+		override, ok := overrides[key]
+		if !ok || !albumContainsMedia(*album, override.File) {
+			return
+		}
+		info, err := os.Stat(override.File)
+		if err != nil || info.IsDir() {
+			return
+		}
+		kind := coverKindFromExt(override.File)
+		if kind == "" {
+			return
+		}
+		oldCover := album.CoverImage
+		album.CoverImage = filepath.Clean(override.File)
+		album.CoverKind = kind
+		appliedPaths[key] = struct{}{}
+		if oldCover != "" {
+			replacedCovers[pathKindKey(oldCover, ResourceFile)] = album.CoverImage
+		}
+	}
+	for i := range next.Albums {
+		applyAlbum(&next.Albums[i])
+	}
+	var walkCollections func([]models.Collection)
+	walkCollections = func(collections []models.Collection) {
+		for i := range collections {
+			for j := range collections[i].Albums {
+				applyAlbum(&collections[i].Albums[j])
+			}
+			walkCollections(collections[i].Collections)
+		}
+	}
+	walkCollections(next.Collections)
+	for i := range next.SmartCollections {
+		for j := range next.SmartCollections[i].Albums {
+			applyAlbum(&next.SmartCollections[i].Albums[j])
+		}
+		if cover, ok := replacedCovers[pathKindKey(next.SmartCollections[i].CoverImage, ResourceFile)]; ok {
+			next.SmartCollections[i].CoverImage = cover
+		}
+	}
+	return next, len(appliedPaths)
+}
+
+// RebuildCoverView 先将所有相册恢复为扫描器的确定性默认封面，再叠加当前
+// 覆盖集合。设置和清除封面因此共用同一条路径，不会遗留标签视图的旧封面。
+func RebuildCoverView(result *models.ScanResult, overrides map[string]CoverOverride) (*models.ScanResult, int) {
+	if result == nil {
+		return nil, 0
+	}
+	base := cloneScanResult(result)
+	resetAlbum := func(album *models.Album) {
+		switch {
+		case len(album.ImageFiles) > 0:
+			album.CoverImage = album.ImageFiles[0]
+			album.CoverKind = "image"
+		case len(album.VideoFiles) > 0:
+			album.CoverImage = album.VideoFiles[0]
+			album.CoverKind = "video"
+		default:
+			album.CoverImage = ""
+			album.CoverKind = ""
+		}
+	}
+	for i := range base.Albums {
+		resetAlbum(&base.Albums[i])
+	}
+	var walkCollections func([]models.Collection)
+	walkCollections = func(collections []models.Collection) {
+		for i := range collections {
+			for j := range collections[i].Albums {
+				resetAlbum(&collections[i].Albums[j])
+			}
+			walkCollections(collections[i].Collections)
+		}
+	}
+	walkCollections(base.Collections)
+	for i := range base.SmartCollections {
+		for j := range base.SmartCollections[i].Albums {
+			resetAlbum(&base.SmartCollections[i].Albums[j])
+		}
+		if len(base.SmartCollections[i].Albums) > 0 {
+			base.SmartCollections[i].CoverImage = base.SmartCollections[i].Albums[0].CoverImage
+		}
+	}
+	return ApplyCoverOverridesToResult(base, overrides)
+}
+
+func albumContainsMedia(album models.Album, candidate string) bool {
+	target := pathKindKey(candidate, ResourceFile)
+	for _, files := range [][]string{album.ImageFiles, album.VideoFiles, album.Files} {
+		for _, file := range files {
+			if pathKindKey(file, ResourceFile) == target {
+				return true
+			}
 		}
 	}
 	return false

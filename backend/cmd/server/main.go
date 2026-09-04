@@ -198,14 +198,16 @@ func main() {
 		log.Printf("警告：加载封面覆盖失败 %v", err)
 	}
 	if r := scanCache.Get(); r != nil {
-		resourceCatalog.Rebuild(r, currentRoots)
-		applied := scanCache.ApplyCoverOverrides(coverOverrides.Snapshot())
+		published, applied := services.ApplyCoverOverridesToResult(r, coverOverrides.Snapshot())
 		if applied > 0 {
+			scanCache.Set(published)
 			log.Printf("  应用了 %d 条用户封面覆盖", applied)
 		}
+		resourceCatalog.Publish(published, currentRoots)
 	}
 	runner.SetCache(scanCache)
 	runner.SetCatalog(resourceCatalog)
+	runner.SetCoverOverrides(coverOverrides)
 	if r := scanCache.Get(); r != nil {
 		log.Printf("  已加载上次扫描结果：%d 相册，扫描于 %s", r.AlbumCount, r.ScannedAt.Format("2006-01-02 15:04:05"))
 	} else if mismatch {
@@ -252,7 +254,8 @@ func main() {
 	// 当 MediaRoots 变更：清空扫描缓存，扫描器/handler 已通过 mgr.Roots() 读最新值
 	onConfigUpdate := func(newCfg *config.Config, mediaRootsChanged bool) error {
 		if mediaRootsChanged {
-			if err := scanCache.Clear(); err != nil {
+			runner.Invalidate()
+			if err := resourceCatalog.ClearWithCache(scanCache); err != nil {
 				return fmt.Errorf("clear scan cache: %w", err)
 			}
 			roots := newCfg.Roots()
@@ -272,7 +275,7 @@ func main() {
 	api.Get("/scans/:id", handlers.AsyncScanResultHandler(runner, resourceCatalog))
 	api.Delete("/scans/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/library", handlers.LatestScanHandler(scanCache, resourceCatalog))
-	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache))
+	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache, resourceCatalog, runner))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
 	api.Get("/albums/:id", resourceParam, handlers.AlbumDetailHandler(scanCache, coverOverrides, resourceCatalog))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。

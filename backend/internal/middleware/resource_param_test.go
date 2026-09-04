@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
@@ -13,6 +14,19 @@ type fixedResolver map[string]string
 func (r fixedResolver) Resolve(id string) (string, bool) {
 	path, ok := r[id]
 	return path, ok
+}
+
+type snapshotResolver struct {
+	path     string
+	snapshot any
+}
+
+func (r snapshotResolver) Resolve(id string) (string, bool) {
+	return r.path, id == "a_valid"
+}
+
+func (r snapshotResolver) ResolveWithSnapshot(id string) (string, any, bool) {
+	return r.path, r.snapshot, id == "a_valid"
 }
 
 func TestResourceParamRevalidatesCurrentRoots(t *testing.T) {
@@ -36,5 +50,29 @@ func TestResourceParamRevalidatesCurrentRoots(t *testing.T) {
 	}
 	if outsideResponse.StatusCode != fiber.StatusNotFound {
 		t.Fatalf("outside status=%d", outsideResponse.StatusCode)
+	}
+}
+
+func TestResourceParamPinsResolverSnapshot(t *testing.T) {
+	root := t.TempDir()
+	marker := &struct{ revision int }{revision: 7}
+	app := fiber.New()
+	_, validator := PathSafetyMiddleware([]string{root})
+	app.Get("/albums/:id", ResourceParam(snapshotResolver{
+		path: filepath.Join(root, "album"), snapshot: marker,
+	}, validator), func(c *fiber.Ctx) error {
+		if ResourceSnapshot(c) != marker {
+			return fiber.ErrInternalServerError
+		}
+		return c.SendStatus(fiber.StatusNoContent)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/albums/a_valid", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("status=%d", resp.StatusCode)
 	}
 }

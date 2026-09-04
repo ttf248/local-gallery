@@ -28,9 +28,10 @@ func HealthHandler(mgr *config.Manager, catalogs ...*services.ResourceCatalog) f
 	return func(c *fiber.Ctx) error {
 		roots := mgr.Roots()
 		if catalog != nil {
+			snapshot := catalog.Acquire()
 			publicRoots := make([]string, 0, len(roots))
 			for _, root := range roots {
-				if id := catalog.ExternalID(root, services.ResourceRoot); id != "" {
+				if id := snapshot.ExternalID(root, services.ResourceRoot); id != "" {
 					publicRoots = append(publicRoots, id)
 				}
 			}

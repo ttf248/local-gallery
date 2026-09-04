@@ -72,6 +72,12 @@ type ResourceResolver interface {
 	Resolve(id string) (string, bool)
 }
 
+// SnapshotResourceResolver 在解析资源时固定它所属的库快照。
+// snapshot 作为不透明值传给 handler，中间件不依赖具体服务类型。
+type SnapshotResourceResolver interface {
+	ResolveWithSnapshot(id string) (path string, snapshot any, ok bool)
+}
+
 // PathValidator 对资源目录解析出的内部路径执行当前根集合校验。
 type PathValidator interface {
 	Validate(path string) (string, error)

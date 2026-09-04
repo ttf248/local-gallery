@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/tianlongxiang/local-gallery/internal/middleware"
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
@@ -11,6 +12,16 @@ func optionalCatalog(catalogs []*services.ResourceCatalog) *services.ResourceCat
 		return nil
 	}
 	return catalogs[0]
+}
+
+func requestCatalogSnapshot(c *fiber.Ctx, catalog *services.ResourceCatalog) services.CatalogSnapshot {
+	if pinned, ok := middleware.ResourceSnapshot(c).(services.CatalogSnapshot); ok {
+		return pinned
+	}
+	if catalog == nil {
+		return services.CatalogSnapshot{}
+	}
+	return catalog.Acquire()
 }
 
 func publicID(catalog *services.ResourceCatalog, path string, kind services.ResourceKind) string {

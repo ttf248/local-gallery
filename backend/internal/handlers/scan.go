@@ -69,10 +69,11 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 		if state.Status != services.ScanStatusRunning &&
 			state.Status != services.ScanStatusPending {
 			ev := services.ProgressEvent{
-				ScanID:      id,
-				Progress:    100,
-				Status:      state.Status,
-				AlbumsFound: len(state.Albums),
+				ScanID:          id,
+				Progress:        100,
+				Status:          state.Status,
+				AlbumsFound:     len(state.Albums),
+				LibraryRevision: state.Revision,
 			}
 			if state.Result != nil {
 				ev.AlbumsFound = state.Result.AlbumCount
@@ -127,10 +128,17 @@ func AsyncScanResultHandler(runner *services.AsyncScanRunner, catalogs ...*servi
 			})
 		}
 		result := state.Result
+		revision := state.Revision
 		if catalog != nil {
-			result = catalog.PublicScanResult(result)
+			snapshot := catalog.Acquire()
+			if revision == 0 || revision != snapshot.Revision() {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"code": "scan_result_superseded", "message": "scan result has been superseded by a newer library revision",
+				})
+			}
+			result = snapshot.PublicResult()
 		}
-		return c.JSON(fiber.Map{"ok": true, "result": result})
+		return c.JSON(fiber.Map{"ok": true, "revision": revision, "result": result})
 	}
 }
 
@@ -156,9 +164,22 @@ func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
 //
 // 同时清掉 ScanResultCache 内存中的 latest 和磁盘 scan_cache.json 文件。
 // 清空后 /api/scan/latest 返回 404；前端应提示用户「建议重新扫描」。
-func ScanCacheClearHandler(scanCache *services.ScanResultCache) fiber.Handler {
+func ScanCacheClearHandler(
+	scanCache *services.ScanResultCache,
+	catalog *services.ResourceCatalog,
+	runner *services.AsyncScanRunner,
+) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if err := scanCache.Clear(); err != nil {
+		if runner != nil {
+			runner.Invalidate()
+		}
+		var err error
+		if catalog != nil {
+			err = catalog.ClearWithCache(scanCache)
+		} else {
+			err = scanCache.Clear()
+		}
+		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})

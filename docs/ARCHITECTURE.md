@@ -60,8 +60,9 @@ POST /api/scans
   → StartOrReuse（全局最多一个活动任务）
   → Scanner.ScanWithContext（固定目录工作池 + 两阶段建树）
   → per-subscriber SSE broadcast
-  → complete: cache.Set（atomic.Pointer 替换）→ catalog.Rebuild（ID 化）
-  → GET /api/library（cache.Get 无锁 + catalog.PublicScanResult 翻译 ID）
+  → complete: 验证 scan generation → ResourceCatalog.Publish（结果 + ID 索引单指针发布）
+  → ScanResultCache.Set（仅负责持久化）→ SSE complete(libraryRevision)
+  → GET /api/library（单次 Acquire 读取固定 revision）
 ```
 
 ### 扫描器并发模型
@@ -74,11 +75,11 @@ POST /api/scans
 
 ### 资源 ID 翻译
 
-`scan_cache.json` (schemaVersion=3) 直接存 raw 绝对路径 + 根 ID 列表；
-`ResourceCatalog` 是**唯一**负责把绝对路径翻译为 `r_/a_/c_/f_` 不透明 ID
-的组件，每次 `Rebuild` 一次性生成全树 ID 化视图。
-handler 端走 `cache.Get() + catalog.PublicScanResult()` 双步翻译，
-或未来可走 `catalog.GetPublic()` 单步返回。
+`scan_cache.json` (schemaVersion=3) 直接存 raw 绝对路径 + 根 ID 列表，但它只是重启恢复仓库，不再作为 HTTP 请求的数据源。`ResourceCatalog` 是**唯一**负责把绝对路径翻译为 `r_/a_/c_/f_` 不透明 ID 的组件；它在私有内存中同时构建 raw 结果、对外 DTO 和 ID 表，然后通过一次 `atomic.Store` 发布。
+
+`CatalogSnapshot` 在请求开始时只 Acquire 一次。资源参数中间件解析 ID 时会把该快照 pin 到 Fiber Locals，handler 继续使用同一值。因此重扫可以在请求中途发布，但已开始的请求仍能完整解析旧快照。媒体根变更或清空库会递增 scan generation，取消旧任务并拒绝它稍后提交。
+
+自定义封面在扫描产出候选结果后、库快照发布前叠加。覆盖文件必须仍在该相册的媒体索引中且真实存在；同一份覆盖会同步到顶层、嵌套集合和标签视图，因此重扫不会让卡片与详情封面分裂。
 
 ## 缓存读路径
 

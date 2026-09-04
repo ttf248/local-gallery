@@ -27,7 +27,7 @@ func TestResourceCatalog_PublicSnapshotDoesNotExposeAbsolutePaths(t *testing.T) 
 	if catalog.Ready() {
 		t.Fatal("new catalog should not be ready")
 	}
-	catalog.Rebuild(result, []string{root})
+	catalog.Publish(result, []string{root})
 	if !catalog.Ready() {
 		t.Fatal("rebuilt catalog should be ready")
 	}
@@ -53,7 +53,7 @@ func TestResourceCatalog_RejectsOutsideRoot(t *testing.T) {
 		CoverImage: outside,
 	}}}
 	catalog := NewResourceCatalog()
-	catalog.Rebuild(result, []string{root})
+	catalog.Publish(result, []string{root})
 	if got := catalog.ExternalID(outside, ResourceFile); got != "" {
 		t.Fatalf("outside path received id %q", got)
 	}
@@ -74,7 +74,7 @@ func TestResourceCatalog_VirtualAlbumAndCollectionSharePhysicalPath(t *testing.T
 		}},
 	}
 	catalog := NewResourceCatalog()
-	catalog.Rebuild(result, []string{root})
+	catalog.Publish(result, []string{root})
 
 	albumID := catalog.ExternalID(directory, ResourceAlbum)
 	collectionID := catalog.ExternalID(directory, ResourceCollection)
@@ -86,5 +86,63 @@ func TestResourceCatalog_VirtualAlbumAndCollectionSharePhysicalPath(t *testing.T
 		if !ok || resolved != directory {
 			t.Fatalf("Resolve(%q)=(%q,%v), want %q", id, resolved, ok, directory)
 		}
+	}
+}
+
+func TestResourceCatalog_AcquiredSnapshotRemainsVersionConsistent(t *testing.T) {
+	rootA := t.TempDir()
+	rootB := t.TempDir()
+	albumA := filepath.Join(rootA, "album-a")
+	fileA := filepath.Join(albumA, "1.jpg")
+	albumB := filepath.Join(rootB, "album-b")
+	fileB := filepath.Join(albumB, "1.jpg")
+
+	catalog := NewResourceCatalog()
+	revisionA := catalog.Publish(&models.ScanResult{
+		Root: rootA, Roots: []string{rootA},
+		Albums: []models.Album{{Path: albumA, ImageFiles: []string{fileA}, CoverImage: fileA}},
+	}, []string{rootA})
+	snapshotA := catalog.Acquire()
+	albumAID := snapshotA.ExternalID(albumA, ResourceAlbum)
+
+	revisionB := catalog.Publish(&models.ScanResult{
+		Root: rootB, Roots: []string{rootB},
+		Albums: []models.Album{{Path: albumB, ImageFiles: []string{fileB}, CoverImage: fileB}},
+	}, []string{rootB})
+	snapshotB := catalog.Acquire()
+
+	if revisionB <= revisionA || snapshotA.Revision() != revisionA || snapshotB.Revision() != revisionB {
+		t.Fatalf("revisions A=%d/%d B=%d/%d", revisionA, snapshotA.Revision(), revisionB, snapshotB.Revision())
+	}
+	if path, ok := snapshotA.Resolve(albumAID); !ok || path != albumA {
+		t.Fatalf("pinned snapshot lost album A: (%q, %v)", path, ok)
+	}
+	if _, ok := snapshotB.Resolve(albumAID); ok {
+		t.Fatal("new snapshot unexpectedly resolves removed album A")
+	}
+	if got := snapshotA.PublicResult(); got == nil || len(got.Albums) != 1 || got.Albums[0].Path != albumAID {
+		t.Fatalf("snapshot A public result drifted: %+v", got)
+	}
+}
+
+func TestResourceCatalog_ClearInvalidatesPublishedIDs(t *testing.T) {
+	root := t.TempDir()
+	album := filepath.Join(root, "album")
+	catalog := NewResourceCatalog()
+	catalog.Publish(&models.ScanResult{
+		Root: root, Roots: []string{root}, Albums: []models.Album{{Path: album}},
+	}, []string{root})
+	id := catalog.ExternalID(album, ResourceAlbum)
+	pinned := catalog.Acquire()
+
+	clearRevision := catalog.Clear()
+	if catalog.Ready() || catalog.Acquire().Revision() != clearRevision {
+		t.Fatal("catalog should expose an empty revision after Clear")
+	}
+	if _, ok := catalog.Resolve(id); ok {
+		t.Fatal("old id remained available after Clear")
+	}
+	if path, ok := pinned.Resolve(id); !ok || path != album {
+		t.Fatal("an already acquired request snapshot must remain immutable")
 	}
 }

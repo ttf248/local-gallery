@@ -173,14 +173,18 @@ func HistoryClearHandler(s *store.PrefsStore) fiber.Handler {
 // 移除当前资源目录中已不存在的收藏；智能标签保留，避免临时空标签丢失。
 func FavoritesPruneHandler(s *store.PrefsStore, catalog *services.ResourceCatalog) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		if catalog == nil || !catalog.Ready() {
+		if catalog == nil {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+		}
+		snapshot := catalog.Acquire()
+		if !snapshot.Ready() {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
 		}
 		removed, err := s.PruneInvalidFavorites(func(id string) bool {
 			if len(id) > len("smart:") && id[:len("smart:")] == "smart:" {
 				return true
 			}
-			ref, ok := catalog.Lookup(id)
+			ref, ok := snapshot.Lookup(id)
 			return ok && (ref.Kind == services.ResourceAlbum || ref.Kind == services.ResourceCollection)
 		})
 		if err != nil {

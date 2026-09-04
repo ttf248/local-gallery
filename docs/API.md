@@ -74,7 +74,7 @@
 
 ### `GET /api/scans/:scanId`
 
-扫描完成后返回 `{ "ok": true, "result": LibrarySnapshot }`；未完成返回 400。
+扫描完成后返回 `{ "ok": true, "revision": 42, "result": LibrarySnapshot }`；未完成返回 400。如果该任务的库版本已被后续扫描取代，返回 `409 scan_result_superseded`，不会用新 ID 索引翻译旧结果。
 
 ### `DELETE /api/scans/:scanId`
 
@@ -86,11 +86,11 @@
 
 相册同时返回 `date` 与 `dateSource`。`dateSource` 取值为 `captured` / `folder` / `modified`，服务端按该顺序降级；目录日期只接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`、`YYYYMMDD` 或严格的 `YYYY/MM/DD` 路径分段，不会从任意名称子串中猜测。
 
-返回最近一次扫描快照。相册、集合、封面和媒体文件均使用资源 ID。
+返回最近一次扫描快照，包含单调递增的 `revision`。相册、集合、封面和媒体文件均使用与该 revision 同次发布的资源 ID，单次响应不会混入其他扫描版本。
 
 ### `DELETE /api/library`
 
-清除内存和磁盘扫描缓存；不会立即发起新扫描。
+取消活动扫描，使它的提交令牌失效，并清除内存资源快照与磁盘扫描缓存；不会立即发起新扫描。
 
 ## 相册与搜索
 
@@ -108,7 +108,7 @@
 
 ### `PUT /api/albums/:albumId/cover?file=<fileId>`
 
-设置自定义封面。文件必须属于相册且为受支持图片或视频。
+设置自定义封面。文件必须属于相册、已被本次扫描收录，且为受支持图片或视频。覆盖在每次新扫描发布前重新验证和应用，不会因重扫丢失；已移动/删除的封面记录会被忽略。
 
 ### `DELETE /api/albums/:albumId/cover`
 

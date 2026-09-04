@@ -23,14 +23,15 @@ const (
 )
 
 type ProgressEvent struct {
-	ScanID      string     `json:"scanId"`
-	Progress    int        `json:"progress"`
-	Status      ScanStatus `json:"status"`
-	Phase       string     `json:"phase,omitempty"`
-	CurrentPath string     `json:"currentPath,omitempty"`
-	AlbumsFound int        `json:"albumsFound"`
-	Error       string     `json:"error,omitempty"`
-	ElapsedMs   int64      `json:"elapsedMs"`
+	ScanID          string     `json:"scanId"`
+	Progress        int        `json:"progress"`
+	Status          ScanStatus `json:"status"`
+	Phase           string     `json:"phase,omitempty"`
+	CurrentPath     string     `json:"currentPath,omitempty"`
+	AlbumsFound     int        `json:"albumsFound"`
+	Error           string     `json:"error,omitempty"`
+	ElapsedMs       int64      `json:"elapsedMs"`
+	LibraryRevision uint64     `json:"libraryRevision,omitempty"`
 }
 
 type ScanState struct {
@@ -44,19 +45,23 @@ type ScanState struct {
 	Albums     []models.Album
 	Result     *models.ScanResult
 	Err        error
+	Generation uint64
+	Revision   uint64
 	done       chan struct{}
 	lastEvent  ProgressEvent
 	subs       map[chan ProgressEvent]struct{}
 }
 
 type AsyncScanRunner struct {
-	mu        sync.Mutex
-	states    map[string]*ScanState
-	activeID  string
-	cache     *ScanResultCache
-	catalog   *ResourceCatalog
-	retention time.Duration
-	closed    bool
+	mu         sync.Mutex
+	states     map[string]*ScanState
+	activeID   string
+	cache      *ScanResultCache
+	catalog    *ResourceCatalog
+	covers     *CoverOverrideStore
+	retention  time.Duration
+	closed     bool
+	generation uint64
 }
 
 func NewAsyncScanRunner() *AsyncScanRunner {
@@ -66,8 +71,9 @@ func NewAsyncScanRunner() *AsyncScanRunner {
 	}
 }
 
-func (r *AsyncScanRunner) SetCache(cache *ScanResultCache)     { r.cache = cache }
-func (r *AsyncScanRunner) SetCatalog(catalog *ResourceCatalog) { r.catalog = catalog }
+func (r *AsyncScanRunner) SetCache(cache *ScanResultCache)              { r.cache = cache }
+func (r *AsyncScanRunner) SetCatalog(catalog *ResourceCatalog)          { r.catalog = catalog }
+func (r *AsyncScanRunner) SetCoverOverrides(covers *CoverOverrideStore) { r.covers = covers }
 
 // Start 保持原有调用形式；重复启动时复用当前任务。
 func (r *AsyncScanRunner) Start(opts ScanOptions) (string, <-chan ProgressEvent, error) {
@@ -96,13 +102,14 @@ func (r *AsyncScanRunner) StartOrReuse(opts ScanOptions) (string, <-chan Progres
 	id := uuid.New().String()
 	ctx, cancel := context.WithCancel(context.Background())
 	state := &ScanState{
-		ID:        id,
-		Ctx:       ctx,
-		Cancel:    cancel,
-		Status:    ScanStatusPending,
-		StartedAt: time.Now(),
-		done:      make(chan struct{}),
-		subs:      make(map[chan ProgressEvent]struct{}),
+		ID:         id,
+		Ctx:        ctx,
+		Cancel:     cancel,
+		Status:     ScanStatusPending,
+		StartedAt:  time.Now(),
+		Generation: r.generation,
+		done:       make(chan struct{}),
+		subs:       make(map[chan ProgressEvent]struct{}),
 	}
 	state.lastEvent = ProgressEvent{ScanID: id, Status: ScanStatusPending}
 	r.states[id] = state
@@ -123,6 +130,17 @@ func (r *AsyncScanRunner) Cancel(id string) bool {
 	}
 	state.Cancel()
 	return true
+}
+
+// Invalidate 使当前任务的提交令牌失效并发出取消信号。
+// 媒体根变更或用户清空库时必须先调用，防止旧任务稍后复活。
+func (r *AsyncScanRunner) Invalidate() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.generation++
+	if active := r.states[r.activeID]; active != nil && isActiveScan(active.Status) {
+		active.Cancel()
+	}
 }
 
 func (r *AsyncScanRunner) Get(id string) *ScanState {
@@ -258,36 +276,35 @@ func (r *AsyncScanRunner) run(state *ScanState, opts ScanOptions) {
 		}, nil, err)
 		return
 	}
-
-	// 提交新扫描结果的顺序约束:cache 先 Set,catalog 后 Rebuild。
-	//
-	// 分析两个方向的 race window:
-	//   - 顺序 A (catalog 先, cache 后): /api/library 在中间窗口拿到
-	//     cache 的旧 result,调 PublicScanResult(旧 result)用新 catalog。
-	//     如果新扫描删了某些相册(用户在文件系统移走),旧 result 仍引用
-	//     它们,新 catalog 的 byPathKind 没有这些 path → ExternalID 返回 ""
-	//     → 前端拿到"看起来存在但点不动"的孤儿 album。
-	//   - 顺序 B (cache 先, catalog 后): /api/library 在中间窗口拿到
-	//     cache 的新 result,调 PublicScanResult(新 result)用旧 catalog。
-	//     如果新扫描新增了相册,新 result 引用它们,旧 catalog 的 byPathKind
-	//     没有这些 path → ExternalID 返回 "" → 同样孤儿。
-	//
-	// 选 B:原因 — 新增/删除场景下,B 的孤儿是"新加的(用户没看过)"，
-	// A 的孤儿是"被删的(用户可能刚看过,期待还能访问)"。B 的"静默丢
-	// 新增" 比 A 的"让用户撞 404" 体验更轻。
-	//
-	// 真正的彻底解是 cache 持有 catalog 并在 Set 内原子提交(Phase 2 的
-	// "资源 ID 单一来源" 任务会顺手做);这里只把当前 race 的方向调对。
-	if r.cache != nil {
+	// 检查 generation、发布对外视图和替换持久化快照共用一把写锁。
+	// 媒体根变更时 Invalidate 会等待本段完成后再清空库；若它先发生，
+	// 旧任务则无法再把结果复活。
+	r.mu.Lock()
+	if state.Generation != r.generation || state.Ctx.Err() != nil {
+		r.mu.Unlock()
+		r.finish(state, ProgressEvent{
+			ScanID: state.ID, Status: ScanStatusCancelled,
+			ElapsedMs: time.Since(state.StartedAt).Milliseconds(),
+		}, nil, context.Canceled)
+		return
+	}
+	revision := uint64(0)
+	if r.catalog != nil {
+		result, revision = r.catalog.CommitScan(
+			result, opts.effectiveRoots(), r.cache, r.covers,
+		)
+	} else if r.cache != nil {
 		r.cache.Set(result)
 	}
-	if r.catalog != nil {
-		r.catalog.Rebuild(result, opts.effectiveRoots())
-	}
-	r.finish(state, ProgressEvent{
+	state.Revision = revision
+	event := ProgressEvent{
 		ScanID: state.ID, Progress: 100, Status: ScanStatusComplete, Phase: "done",
 		AlbumsFound: result.AlbumCount, ElapsedMs: time.Since(state.StartedAt).Milliseconds(),
-	}, result, nil)
+		LibraryRevision: revision,
+	}
+	retention := r.finishLocked(state, event, result, nil)
+	r.mu.Unlock()
+	r.scheduleRemoval(state, retention)
 }
 
 func (r *AsyncScanRunner) publish(state *ScanState, event ProgressEvent) {
@@ -315,6 +332,13 @@ func (r *AsyncScanRunner) publish(state *ScanState, event ProgressEvent) {
 
 func (r *AsyncScanRunner) finish(state *ScanState, event ProgressEvent, result *models.ScanResult, err error) {
 	r.mu.Lock()
+	retention := r.finishLocked(state, event, result, err)
+	r.mu.Unlock()
+	r.scheduleRemoval(state, retention)
+}
+
+// finishLocked 更新终态并广播；调用方必须已持有 r.mu。
+func (r *AsyncScanRunner) finishLocked(state *ScanState, event ProgressEvent, result *models.ScanResult, err error) time.Duration {
 	state.Status = event.Status
 	state.Progress = event.Progress
 	state.Result = result
@@ -338,8 +362,10 @@ func (r *AsyncScanRunner) finish(state *ScanState, event ProgressEvent, result *
 		delete(state.subs, ch)
 	}
 	retention := r.retention
-	r.mu.Unlock()
+	return retention
+}
 
+func (r *AsyncScanRunner) scheduleRemoval(state *ScanState, retention time.Duration) {
 	if retention > 0 {
 		time.AfterFunc(retention, func() {
 			r.mu.Lock()

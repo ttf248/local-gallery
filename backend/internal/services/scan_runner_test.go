@@ -230,6 +230,34 @@ func TestAsyncScanRunner_ShutdownCancelsAndRejectsNewScans(t *testing.T) {
 	}
 }
 
+func TestAsyncScanRunner_InvalidatePreventsOldLibraryRevival(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < 300; i++ {
+		dir := filepathJoin(root, "album-"+itoa(i))
+		mkdirAll(t, dir)
+		touchAll(t, filepathJoin(dir, "1.jpg"))
+	}
+	catalog := NewResourceCatalog()
+	cache := NewScanResultCache(filepathJoin(t.TempDir(), "scan.json"))
+	runner := NewAsyncScanRunner()
+	runner.SetCatalog(catalog)
+	runner.SetCache(cache)
+	id, _, err := runner.Start(ScanOptions{Root: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner.Invalidate()
+	runner.Wait(id)
+
+	state := runner.Get(id)
+	if state == nil || state.Status != ScanStatusCancelled {
+		t.Fatalf("state=%+v, want cancelled", state)
+	}
+	if catalog.Ready() || cache.Get() != nil {
+		t.Fatal("invalidated scan republished an obsolete library")
+	}
+}
+
 // helpers（避免引入 strconv/filepath 到测试包根）
 func filepathJoin(parts ...string) string {
 	return filepath.Join(parts...)

@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -53,6 +54,17 @@ func walkCollections(col models.Collection, out *[]searchHit, match func(string)
 func LatestScanHandler(cache *services.ScanResultCache, catalogs ...*services.ResourceCatalog) fiber.Handler {
 	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
+		if catalog != nil {
+			snapshot := catalog.Acquire()
+			r := snapshot.PublicResult()
+			if r == nil {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"error": "no cached scan result; please run a scan first",
+				})
+			}
+			c.Set("ETag", fmt.Sprintf(`W/"library-%d"`, snapshot.Revision()))
+			return c.JSON(fiber.Map{"ok": true, "revision": snapshot.Revision(), "result": r})
+		}
 		r := cache.Get()
 		if r == nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -84,6 +96,40 @@ func AlbumDetailHandler(cache *services.ScanResultCache, coverStore *services.Co
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "missing 'path' query parameter",
 			})
+		}
+		if catalog != nil {
+			snapshot := requestCatalogSnapshot(c, catalog)
+			if strings.HasPrefix(raw, "smart:") {
+				smart, ok := snapshot.Smart(strings.TrimPrefix(raw, "smart:"))
+				if !ok {
+					return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "smart collection not found"})
+				}
+				return c.JSON(fiber.Map{"ok": true, "kind": "smart", "data": smart, "revision": snapshot.Revision()})
+			}
+			ref, ok := snapshot.Lookup(raw)
+			if !ok {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "album/collection not found in cached scan"})
+			}
+			switch ref.Kind {
+			case services.ResourceAlbum:
+				album, exists := snapshot.Album(raw)
+				if !exists {
+					return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "album not found in cached scan"})
+				}
+				return c.JSON(fiber.Map{
+					"ok": true, "kind": "album", "data": album,
+					"hasCustomCover": coverStore != nil && coverStore.Get(ref.AbsolutePath) != nil,
+					"revision":       snapshot.Revision(),
+				})
+			case services.ResourceCollection:
+				collection, exists := snapshot.Collection(raw)
+				if !exists {
+					return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "collection not found in cached scan"})
+				}
+				return c.JSON(fiber.Map{"ok": true, "kind": "collection", "data": collection, "revision": snapshot.Revision()})
+			default:
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "resource is not an album or collection"})
+			}
 		}
 		// 路径安全校验（仅在确实是绝对路径时执行）
 		if !strings.HasPrefix(raw, "smart:") {
@@ -172,6 +218,16 @@ func TagDetailHandler(cache *services.ScanResultCache, catalogs ...*services.Res
 				"code": "missing_tag", "message": "tag is required",
 			})
 		}
+		if catalog != nil {
+			snapshot := catalog.Acquire()
+			smart, ok := snapshot.Smart(tag)
+			if !ok {
+				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+					"code": "tag_not_found", "message": "tag was not found",
+				})
+			}
+			return c.JSON(fiber.Map{"ok": true, "kind": "smart", "data": smart, "revision": snapshot.Revision()})
+		}
 		smart := cache.FindSmartCollection(tag)
 		if smart == nil {
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
@@ -253,7 +309,13 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 				"error": "save cover override: " + err.Error(),
 			})
 		}
-		cache.SetWithOverrideApplied(albumPath, file, kind)
+		if catalog != nil {
+			if _, _, ok := catalog.RefreshCovers(cache, store); !ok {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+			}
+		} else {
+			cache.SetWithOverrideApplied(albumPath, file, kind)
+		}
 		return c.JSON(fiber.Map{
 			"ok":         true,
 			"albumPath":  rawResourceID(c),
@@ -272,6 +334,7 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 // 不触发全库扫描 — 单条 album 的封面回退是确定的（来自同一份
 // ScanResult 内的 ImageFiles / VideoFiles）。
 func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore, catalogs ...*services.ResourceCatalog) fiber.Handler {
+	catalog := optionalCatalog(catalogs)
 	return func(c *fiber.Ctx) error {
 		albumPath := middleware.SafePath(c)
 		if albumPath == "" {
@@ -284,7 +347,13 @@ func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.Cov
 				"error": "clear cover override: " + err.Error(),
 			})
 		}
-		cache.RebuildCoverForAlbum(albumPath)
+		if catalog != nil {
+			if _, _, ok := catalog.RefreshCovers(cache, store); !ok {
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+			}
+		} else {
+			cache.RebuildCoverForAlbum(albumPath)
+		}
 		return c.JSON(fiber.Map{
 			"ok":        true,
 			"albumPath": rawResourceID(c),
@@ -344,7 +413,16 @@ func SearchHandler(cache *services.ScanResultCache, catalogs ...*services.Resour
 			limit = 50
 		}
 
-		r := cache.Get()
+		var (
+			r        *models.ScanResult
+			snapshot services.CatalogSnapshot
+		)
+		if catalog != nil {
+			snapshot = catalog.Acquire()
+			r = snapshot.Result()
+		} else {
+			r = cache.Get()
+		}
 		if r == nil {
 			return c.JSON(fiber.Map{"ok": true, "results": []searchHit{}, "scanned": false})
 		}
@@ -379,14 +457,14 @@ func SearchHandler(cache *services.ScanResultCache, catalogs ...*services.Resour
 			for i := range out {
 				switch out[i].Kind {
 				case "album":
-					out[i].Path = catalog.ExternalID(out[i].Path, services.ResourceAlbum)
+					out[i].Path = snapshot.ExternalID(out[i].Path, services.ResourceAlbum)
 				case "collection":
-					out[i].Path = catalog.ExternalID(out[i].Path, services.ResourceCollection)
+					out[i].Path = snapshot.ExternalID(out[i].Path, services.ResourceCollection)
 				}
-				out[i].Cover = catalog.ExternalID(out[i].Cover, services.ResourceFile)
+				out[i].Cover = snapshot.ExternalID(out[i].Cover, services.ResourceFile)
 			}
 		}
-		return c.JSON(fiber.Map{"ok": true, "results": out, "count": len(out)})
+		return c.JSON(fiber.Map{"ok": true, "results": out, "count": len(out), "revision": snapshot.Revision()})
 	}
 }
 
