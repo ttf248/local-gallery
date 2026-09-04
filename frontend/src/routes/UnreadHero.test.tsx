@@ -83,7 +83,7 @@ describe('UnreadHero', () => {
     const eight = Array.from({ length: 8 }, (_, i) => makeCard(`/p${i}`, `P${i}`))
     const { container } = renderHero(eight, 8)
     // 8 张里 grid 渲染只取前 6
-    const renderedCards = container.querySelectorAll('[role="link"]')
+    const renderedCards = container.querySelectorAll('a[href^="/albums/"]')
     expect(renderedCards.length).toBe(6)
   })
 
@@ -92,7 +92,7 @@ describe('UnreadHero', () => {
     const { container } = renderHero([makeCard('/a', 'A')], 7)
     const heroSection = screen.getByTestId('unread-hero')
     expect(heroSection.textContent).toMatch(/还有\s*7\s*本没看/)
-    expect(container.querySelectorAll('[role="link"]').length).toBe(1)
+    expect(container.querySelectorAll('a[href^="/albums/"]').length).toBe(1)
   })
 
   it('空 cards 数组仍渲染(调用方决定是否隐藏)', () => {

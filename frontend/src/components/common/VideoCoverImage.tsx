@@ -11,6 +11,8 @@ interface Props {
   onRetry?: () => void;
   /** 是否显示 "正在生成预览" 文字（默认 true） */
   showExtractingHint?: boolean;
+  /** 是否显示可点击的重试操作；卡片链接内应关闭，避免嵌套交互元素。 */
+  showRetryAction?: boolean;
 }
 
 /**
@@ -26,6 +28,7 @@ export default function VideoCoverImage({
   alt = "",
   onRetry,
   showExtractingHint = true,
+  showRetryAction = true,
 }: Props) {
   const { status, url, retry, enabled } = useVideoCover(videoPath);
 
@@ -57,17 +60,19 @@ export default function VideoCoverImage({
       <div className="w-full h-full flex flex-col items-center justify-center bg-bg-subtle text-fg-subtle gap-1.5">
         <FolderIcon size={22} />
         <span className="text-[10px]">封面生成失败</span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onRetry) onRetry();
-            else retry();
-          }}
-          className="text-[10px] text-accent hover:underline"
-        >
-          重试
-        </button>
+        {showRetryAction ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onRetry) onRetry();
+              else retry();
+            }}
+            className="text-[10px] text-accent hover:underline"
+          >
+            重试
+          </button>
+        ) : null}
       </div>
     );
   }

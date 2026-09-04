@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { thumbUrl } from "../../api/thumbs";
 import { progressApi } from "../../api/prefs";
 import { useUIStore } from "../../store/uiStore";
 import { decodeFavPath } from "../../utils/path";
@@ -17,12 +16,12 @@ import {
   PlayFilledIcon,
 } from "../common/Icon";
 import HoverPreview from "../common/HoverPreview";
-import VideoCoverImage from "../common/VideoCoverImage";
 import TranscodeStatusBadge from "../common/TranscodeStatusBadge";
 import type { ViewMode } from "../../store/uiStore";
 import { timeAgo } from "../../utils/date";
 import { formatDuration } from "../../utils/format";
 import { isCompleted, isUnread, progressPercent } from "../../utils/progress";
+import CardCover from "./CardCover";
 
 export type CardVariant = "album" | "collection" | "smart";
 export type CardBadge = "rewind"; // 重温：30 天以上没看
@@ -53,6 +52,8 @@ export interface CardData {
    */
   imageCount?: number;
   coverPath: string;
+  /** 集合 / 智能视图的代表封面，按顺序最多展示四张；为空时回退到 coverPath。 */
+  covers?: string[];
   /**
    * 封面源类型："image" / "video" / 不传（不传时由 coverPath 扩展名推断）。
    * 视频封面由前端浏览器抽帧 → 上传后才会显示首帧静态图（见 useVideoCover）。
@@ -84,7 +85,7 @@ interface Props {
   showLastSeen?: boolean;
 }
 
-// 通用卡片：网格（默认 3:4 封面）/ 列表（横向缩略图 + 元数据）。
+// 通用卡片：网格（统一 4:5 封面）/ 列表（横向缩略图 + 元数据）。
 // 设计：
 //  - 不画死板边框；hover 时给 cover 细微的明度变化 + 上浮
 //  - 标题短截断 2 行；副标题只 1 行
@@ -134,22 +135,10 @@ function GridCard({
   // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
   // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
   // 错过首次 intersect，导致大量卡片永远停在占位符上）。
-  const [loaded, setLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
   // 悬停预览状态
   const [previewOn, setPreviewOn] = useState(false);
   const [previewRect, setPreviewRect] = useState<DOMRect | null>(null);
   const previewTimer = useRef<number | null>(null);
-  const navigate = useNavigate();
-
-  const onActivate = () => navigate(data.to);
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onActivate();
-    }
-  };
-
   const progressPct = progressPercent(data.progress);
   // 0-based 页码到达 total - 1 即已读完；兼容旧数据中 index=total 的值。
   const isFinished = isCompleted(data.progress);
@@ -243,205 +232,174 @@ function GridCard({
   }, []);
 
   return (
-    <div
-      role="link"
-      tabIndex={0}
-      onClick={onActivate}
-      onKeyDown={onKey}
-      onMouseEnter={onEnter}
-      onMouseLeave={onLeave}
-      onContextMenu={onContextMenu}
-      className="group block cursor-pointer focus:outline-none"
-    >
-      <div className="relative aspect-[3/4] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong">
-        {data.coverKind === "video" ? (
-          // 视频封面：交给 VideoCoverImage 处理"未抽帧 → 抽帧 → 上传"流程
-          <VideoCoverImage
-            videoPath={data.coverPath}
-            loading="lazy"
-            alt={data.title}
-          />
-        ) : data.coverPath ? (
-          <img
-            // key 用 coverPath：切 album 时 React 卸载旧 img、重建新 img，
-            // imgError / loaded 状态自然随生命周期清零，避免上一张图加载失败
-            // 导致后续 album 永远显示占位。
-            key={data.coverPath}
-            src={thumbUrl(data.coverPath)}
-            alt={data.title}
-            loading="lazy"
-            decoding="async"
-            onLoad={() => setLoaded(true)}
-            onError={() => setImgError(true)}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              loaded ? "opacity-100" : "opacity-0"
-            } group-hover:scale-[1.03]`}
-          />
-        ) : null}
-        {!data.coverPath && (
-          // 没有封面图 → 显示占位
-          <div className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-fg-subtle">
-            <FolderIcon size={28} />
-          </div>
-        )}
-        {imgError && (
-          // 缩略图加载失败（路径越界、HEIC 等不支持的格式）→ 显示占位
-          <div className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-fg-subtle">
-            <FolderIcon size={28} />
-          </div>
-        )}
-
-        {/* 视频角标：▶ + 可选时长（覆盖在 cover 之上） */}
-        {data.coverKind === "video" && (
-          <div className="absolute top-2 right-2 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
-            <PlayFilledIcon size={9} className="text-accent" />
-            <span>{formatDuration(data.durationSec)}</span>
-          </div>
-        )}
-
-        {/* 服务端转码状态（仅在转码中/失败时显示；不与上面 ▶ 角标冲突） */}
-        {data.coverKind === "video" && (
-          <div className="absolute top-2 left-2">
-            <TranscodeStatusBadge videoPath={data.coverPath ?? ""} size="sm" />
-          </div>
-        )}
-
-        {/* 底部暗化蒙版（hover 时让「进入」提示更清晰） */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-        {/* 「进入」提示 — hover 时从右下角淡入 */}
+    <div onMouseEnter={onEnter} onMouseLeave={onLeave} className="relative">
+      <Link
+        to={data.to}
+        aria-label={`打开${data.variant === "album" ? "相册" : data.variant === "collection" ? "集合" : "智能视图"}“${data.displayTitle ?? data.title}”`}
+        onContextMenu={onContextMenu}
+        className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      >
         <div
-          className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-2 h-6 rounded-full bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out"
-          aria-hidden
+          className="relative aspect-[4/5] bg-bg-subtle rounded-lg overflow-hidden border border-border lift-card shadow-xs group-hover:shadow-lg group-hover:border-border-strong"
+          data-testid="card-cover"
         >
-          <span>进入</span>
-          <ArrowUpRightIcon size={10} />
-        </div>
+          <CardCover data={data} />
 
-        {/* 收藏角标 */}
-        {data.isFavorite && (
-          <div className="absolute top-2 right-2 bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
-            <StarIcon size={11} className="text-warning" filled />
+          {/* 视频角标：▶ + 可选时长（覆盖在 cover 之上） */}
+          <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+            {data.coverKind === "video" && (
+              <div className="inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
+                <PlayFilledIcon size={9} className="text-accent" />
+                <span>{formatDuration(data.durationSec)}</span>
+              </div>
+            )}
+            {data.isFavorite && (
+              <div className="bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
+                <StarIcon size={11} className="text-warning" filled />
+              </div>
+            )}
           </div>
-        )}
 
-        {/* 全新 / 重温 / 集合 / 标签 角标（同一位置，优先级：fresh > rewind > collection > smart） */}
-        {isFresh && data.badge !== "rewind" ? (
-          // 全新：强调色 + 白圆点 + "新"字
-          // 用 accent 而非 info（tailwind 没定义 info 颜色）
-          <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
-            <span
-              className="w-1.5 h-1.5 rounded-full bg-accent-contrast"
-              aria-hidden
-            />
-            <span>新</span>
-          </div>
-        ) : data.badge === "rewind" ? (
-          <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-bg-elevated/95 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-border-faint shadow-xs">
-            <RewindIcon size={10} className="text-accent" />
-            <span>重温</span>
-          </div>
-        ) : data.variant === "collection" ? (
-          <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
-            <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
-            集合
-          </div>
-        ) : data.variant === "smart" ? (
-          <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
-            标签
-          </div>
-        ) : null}
-
-        {/* 阅读进度 */}
-        {progressPct !== null && progressPct > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 bg-gradient-to-t from-black/55 to-transparent">
-            <div className="flex items-center gap-1.5 text-white/95">
-              <ReaderIcon size={11} className="shrink-0" />
-              <span className="text-[10px] font-medium tabular-nums">
-                {progressPct}%
-              </span>
-            </div>
-            <div className="mt-1.5 h-0.5 bg-white/20 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-white/90"
-                style={{ width: `${progressPct}%` }}
+          {/* 服务端转码状态（仅在转码中/失败时显示；不与上面 ▶ 角标冲突） */}
+          {data.coverKind === "video" && (
+            <div className="absolute top-2 left-2">
+              <TranscodeStatusBadge
+                videoPath={data.coverPath ?? ""}
+                size="sm"
               />
             </div>
-          </div>
-        )}
+          )}
 
-        {/* 已读：右下角徽章，封面略微提亮（叠在 cover 上时通过 mix-blend 强可读） */}
-        {isFinished && data.variant === "album" && (
+          {/* 底部暗化蒙版（hover 时让「进入」提示更清晰） */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+          {/* 「进入」提示 — hover 时从右下角淡入 */}
           <div
-            className="absolute bottom-2 right-2 inline-flex items-center gap-1 bg-success/95 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
-            title="已读完"
+            className="absolute bottom-2.5 right-2.5 inline-flex items-center gap-1 px-2 h-6 rounded-full bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium shadow-sm opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out"
+            aria-hidden
           >
-            <CheckIcon size={10} />
-            <span>已读</span>
+            <span>进入</span>
+            <ArrowUpRightIcon size={10} />
           </div>
-        )}
-      </div>
 
-      <div className="pt-3 pb-1 min-w-0">
-        <div
-          className="text-[13px] font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent"
-          title={data.displayTitle ?? data.title}
-        >
-          {data.displayTitle ?? data.title}
-        </div>
-        <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5 min-w-0">
-          {(() => {
-            const media = formatMediaCount(data);
-            if (media) {
-              // album 变体：按图/视频分别展示
-              return <span title={media.title}>{media.label}</span>;
-            }
-            // collection / smart 变体：维持 count + "卷"（语义是子相册数）
-            return (
-              <span>
-                {data.count}{" "}
-                {data.variant === "collection"
-                  ? "卷"
-                  : data.variant === "smart"
-                    ? "卷"
-                    : "张"}
-              </span>
-            );
-          })()}
-          {data.subtitle && (
-            <>
-              <span className="text-fg-subtle/50">·</span>
-              <span className="truncate">{data.subtitle}</span>
-            </>
+          {/* 全新 / 重温 / 集合 / 标签 角标（同一位置，优先级：fresh > rewind > collection > smart） */}
+          {isFresh && data.badge !== "rewind" ? (
+            // 全新：强调色 + 白圆点 + "新"字
+            // 用 accent 而非 info（tailwind 没定义 info 颜色）
+            <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-accent-contrast"
+                aria-hidden
+              />
+              <span>新</span>
+            </div>
+          ) : data.badge === "rewind" ? (
+            <div className="absolute top-2 left-2 inline-flex items-center gap-1 bg-bg-elevated/95 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md border border-border-faint shadow-xs">
+              <RewindIcon size={10} className="text-accent" />
+              <span>重温</span>
+            </div>
+          ) : data.variant === "collection" ? (
+            <div className="absolute top-2 left-2 bg-bg-elevated/90 backdrop-blur text-fg-muted text-[10px] font-medium px-1.5 py-0.5 rounded-md">
+              <FolderIcon size={10} className="inline -mt-0.5 mr-0.5" />
+              集合
+            </div>
+          ) : data.variant === "smart" ? (
+            <div className="absolute top-2 left-2 bg-accent text-accent-contrast text-[10px] font-medium px-1.5 py-0.5 rounded-md">
+              标签
+            </div>
+          ) : null}
+
+          {/* 阅读进度 */}
+          {progressPct !== null && progressPct > 0 && (
+            <div className="absolute bottom-0 left-0 right-0 px-2.5 py-2 bg-gradient-to-t from-black/55 to-transparent">
+              <div className="flex items-center gap-1.5 text-white/95">
+                <ReaderIcon size={11} className="shrink-0" />
+                <span className="text-[10px] font-medium tabular-nums">
+                  {progressPct}%
+                </span>
+              </div>
+              <div className="mt-1.5 h-0.5 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-white/90"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 已读：右下角徽章，封面略微提亮（叠在 cover 上时通过 mix-blend 强可读） */}
+          {isFinished && data.variant === "album" && (
+            <div
+              className="absolute bottom-2 right-2 inline-flex items-center gap-1 bg-success/95 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm"
+              title="已读完"
+            >
+              <CheckIcon size={10} />
+              <span>已读</span>
+            </div>
           )}
         </div>
-        {/* 多根来源 badge：与 author/副标题独立维度，作为视觉小标签放在元数据行 */}
-        {data.sourceName && (
-          <div className="text-[10px] text-fg-subtle/80 mt-0.5 inline-flex items-center gap-1">
-            <FolderIcon size={10} className="shrink-0" />
-            <span className="truncate">来自 {data.sourceName}</span>
-          </div>
-        )}
-        {showLastSeen && data.lastSeenAt && (
+
+        <div className="pt-3 pb-1 min-w-0">
           <div
-            className="text-[11px] text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
-            title={`上次 ${timeAgo(data.lastSeenAt)}`}
+            className="text-[13px] font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent"
+            title={data.displayTitle ?? data.title}
           >
-            <ClockIcon size={10} className="shrink-0 text-fg-subtle/70" />
-            {data.progress &&
-              data.progress.total > 0 &&
-              data.progress.index >= 0 && (
-                <>
-                  <span>
-                    看到 {data.progress.index + 1} / {data.progress.total}
-                  </span>
-                  <span className="text-fg-subtle/40">·</span>
-                </>
-              )}
-            <span>上次 {timeAgo(data.lastSeenAt)}</span>
+            {data.displayTitle ?? data.title}
           </div>
-        )}
-      </div>
+          <div className="text-[11px] text-fg-subtle mt-1 tabular-nums flex items-center gap-1.5 min-w-0">
+            {(() => {
+              const media = formatMediaCount(data);
+              if (media) {
+                // album 变体：按图/视频分别展示
+                return <span title={media.title}>{media.label}</span>;
+              }
+              // collection / smart 变体：维持 count + "卷"（语义是子相册数）
+              return (
+                <span>
+                  {data.count}{" "}
+                  {data.variant === "collection"
+                    ? "卷"
+                    : data.variant === "smart"
+                      ? "卷"
+                      : "张"}
+                </span>
+              );
+            })()}
+            {data.subtitle && (
+              <>
+                <span className="text-fg-subtle/50">·</span>
+                <span className="truncate">{data.subtitle}</span>
+              </>
+            )}
+          </div>
+          {/* 多根来源 badge：与 author/副标题独立维度，作为视觉小标签放在元数据行 */}
+          {data.sourceName && (
+            <div className="text-[10px] text-fg-subtle/80 mt-0.5 inline-flex items-center gap-1">
+              <FolderIcon size={10} className="shrink-0" />
+              <span className="truncate">来自 {data.sourceName}</span>
+            </div>
+          )}
+          {showLastSeen && data.lastSeenAt && (
+            <div
+              className="text-[11px] text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
+              title={`上次 ${timeAgo(data.lastSeenAt)}`}
+            >
+              <ClockIcon size={10} className="shrink-0 text-fg-subtle/70" />
+              {data.progress &&
+                data.progress.total > 0 &&
+                data.progress.index >= 0 && (
+                  <>
+                    <span>
+                      看到 {data.progress.index + 1} / {data.progress.total}
+                    </span>
+                    <span className="text-fg-subtle/40">·</span>
+                  </>
+                )}
+              <span>上次 {timeAgo(data.lastSeenAt)}</span>
+            </div>
+          )}
+        </div>
+      </Link>
       {/* 悬停预览（仅相册/合集；触摸设备不启用） */}
       {previewOn && previewRect && data.variant !== "smart" && (
         <HoverPreview
@@ -501,54 +459,33 @@ function ListCard({
   showLastSeen?: boolean;
 }) {
   // 与 GridCard 一致：直接依赖 <img loading="lazy">，不重复自写 IO。
-  const [loaded, setLoaded] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const navigate = useNavigate();
-
-  const onActivate = () => navigate(data.to);
-  const onKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onActivate();
-    }
-  };
-
   const progressPct = progressPercent(data.progress);
   const isFinished = isCompleted(data.progress);
 
   return (
-    <div
-      role="link"
-      tabIndex={0}
-      onClick={onActivate}
-      onKeyDown={onKey}
-      className="group flex items-center gap-4 py-2.5 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors cursor-pointer focus:outline-none"
+    <Link
+      to={data.to}
+      aria-label={`打开${data.variant === "album" ? "相册" : data.variant === "collection" ? "集合" : "智能视图"}“${data.displayTitle ?? data.title}”`}
+      className="group flex items-center gap-4 py-2.5 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
-      <div className="relative w-24 h-32 rounded-md bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs">
-        {data.coverPath && !imgError ? (
-          <img
-            key={data.coverPath}
-            src={thumbUrl(data.coverPath)}
-            alt={data.title}
-            // ListCard 出现在 hero sections（全新/重温/最近加入/热门标签）里，
-            // 默认就在首屏视口内，不需要 lazy。
-            loading="eager"
-            onLoad={() => setLoaded(true)}
-            onError={() => setImgError(true)}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              loaded ? "opacity-100" : "opacity-0"
-            }`}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-fg-subtle">
-            <FolderIcon size={20} />
-          </div>
-        )}
-        {data.isFavorite && (
-          <div className="absolute top-1 right-1 bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
-            <StarIcon size={11} className="text-warning" filled />
-          </div>
-        )}
+      <div
+        className="relative w-24 aspect-[4/5] rounded-md bg-bg-subtle overflow-hidden shrink-0 border border-border shadow-xs"
+        data-testid="card-cover"
+      >
+        <CardCover data={data} loading="eager" />
+        <div className="absolute top-1 right-1 flex flex-col items-end gap-1">
+          {data.coverKind === "video" && (
+            <div className="inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-[10px] font-medium px-1.5 py-0.5 rounded-md shadow-sm">
+              <PlayFilledIcon size={9} className="text-accent" />
+              <span>{formatDuration(data.durationSec)}</span>
+            </div>
+          )}
+          {data.isFavorite && (
+            <div className="bg-bg-elevated/90 backdrop-blur rounded-full p-1 shadow-sm">
+              <StarIcon size={11} className="text-warning" filled />
+            </div>
+          )}
+        </div>
         {isFinished && data.variant === "album" && (
           <div
             className="absolute bottom-1 right-1 bg-success/95 text-white rounded-md px-1.5 py-0.5 text-[10px] font-medium inline-flex items-center gap-0.5 shadow-sm"
@@ -625,6 +562,6 @@ function ListCard({
       <div className="text-fg-subtle opacity-0 group-hover:opacity-100 transition-opacity pr-1">
         <span className="text-sm">›</span>
       </div>
-    </div>
+    </Link>
   );
 }
