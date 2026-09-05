@@ -36,6 +36,7 @@ import {
 interface Props {
   progress: ProgressEvent | null
   onCancel?: () => void
+  isCancelling?: boolean
   /** 强制展开（例如首次出现时；之后交由用户折叠） */
   defaultExpanded?: boolean
 }
@@ -43,6 +44,7 @@ interface Props {
 export default function ScanProgress({
   progress,
   onCancel,
+  isCancelling = false,
   defaultExpanded = true,
 }: Props) {
   const [collapsed, setCollapsed] = useState(!defaultExpanded)
@@ -146,62 +148,54 @@ export default function ScanProgress({
     >
       {/* 折叠态 pill：单行（status + 进度条 + 百分比 + 耗时 + 展开 + 取消） */}
       {collapsed ? (
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[12px] text-left hover:bg-bg-subtle/30 transition-colors rounded-xl"
-          aria-expanded={false}
-          aria-label="展开扫描详情"
-        >
-          <StatusIcon size={13} className={statusColor} />
-          <span className={`font-medium ${statusColor} shrink-0`}>
-            {statusText}
-          </span>
-
-          {/* 进度条（accent 渐变） — flex-1 占据中间最大空间 */}
-          <span className="flex-1 relative h-1 rounded-full bg-bg-subtle overflow-hidden min-w-0">
-            <span
-              className={`absolute inset-y-0 left-0 ${barColor} transition-[width] duration-200 ease-out`}
-              style={{ width: `${isComplete ? 100 : pct}%` }}
-            />
-          </span>
-
-          {/* 百分比 + 耗时 */}
-          {isRunning && (
-            <span className="tabular-nums text-fg-muted shrink-0">{pct}%</span>
-          )}
-          {!isRunning && (
-            <span className="tabular-nums text-fg-subtle shrink-0">
-              {elapsedSec}s
+        <div className="flex items-center h-10 rounded-xl">
+          <button
+            type="button"
+            onClick={() => setCollapsed(false)}
+            className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5 h-full text-[12px] text-left hover:bg-bg-subtle/30 transition-colors rounded-l-xl"
+            aria-expanded={false}
+            aria-label="展开扫描详情"
+          >
+            <StatusIcon size={13} className={statusColor} />
+            <span className={`font-medium ${statusColor} shrink-0`}>
+              {statusText}
             </span>
-          )}
 
-          <ChevronUpIcon size={12} className="text-fg-subtle shrink-0" />
+            {/* 进度条（accent 渐变） — flex-1 占据中间最大空间 */}
+            <span className="flex-1 relative h-1 rounded-full bg-bg-subtle overflow-hidden min-w-0">
+              <span
+                className={`absolute inset-y-0 left-0 ${barColor} transition-[width] duration-200 ease-out`}
+                style={{ width: `${isComplete ? 100 : pct}%` }}
+              />
+            </span>
 
-          {/* 取消按钮 */}
+            {/* 百分比 + 耗时 */}
+            {isRunning && (
+              <span className="tabular-nums text-fg-muted shrink-0">{pct}%</span>
+            )}
+            {!isRunning && (
+              <span className="tabular-nums text-fg-subtle shrink-0">
+                {elapsedSec}s
+              </span>
+            )}
+
+            <ChevronUpIcon size={12} className="text-fg-subtle shrink-0" />
+          </button>
+
           {isRunning && onCancel && (
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation()
-                onCancel()
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onCancel()
-                }
-              }}
-              className="p-1 rounded text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors cursor-pointer shrink-0"
-              title="取消扫描"
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={isCancelling}
+              className="mr-2 p-1 rounded text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors disabled:cursor-wait disabled:opacity-50 shrink-0"
+              title={isCancelling ? '正在取消扫描' : '取消扫描'}
               aria-label="取消扫描"
+              aria-busy={isCancelling}
             >
               <CloseIcon size={12} />
-            </span>
+            </button>
           )}
-        </button>
+        </div>
       ) : (
         // 展开态：完整详情
         <div>
@@ -292,9 +286,12 @@ export default function ScanProgress({
               <button
                 type="button"
                 onClick={onCancel}
-                className="w-full h-8 rounded-md border border-border bg-bg-subtle/40 hover:bg-bg-subtle text-fg-muted hover:text-fg text-[12px] transition-colors"
+                disabled={isCancelling}
+                aria-label="取消扫描"
+                aria-busy={isCancelling}
+                className="w-full h-8 rounded-md border border-border bg-bg-subtle/40 hover:bg-bg-subtle text-fg-muted hover:text-fg text-[12px] transition-colors disabled:cursor-wait disabled:opacity-50"
               >
-                取消扫描
+                {isCancelling ? '正在取消…' : '取消扫描'}
               </button>
             </div>
           )}

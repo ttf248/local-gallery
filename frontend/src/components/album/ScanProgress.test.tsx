@@ -85,6 +85,38 @@ describe('ScanProgress', () => {
     expect(screen.getByText('42%')).toBeInTheDocument()
   })
 
+  it('keeps collapsed cancel action separate from the expand button', () => {
+    const onCancel = vi.fn()
+    render(
+      <ScanProgress
+        progress={makeProgress()}
+        onCancel={onCancel}
+        defaultExpanded={false}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '取消扫描' }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    expect(
+      screen.getByRole('button', { name: '展开扫描详情' }),
+    ).toBeInTheDocument()
+  })
+
+  it('disables cancellation while the request is pending', () => {
+    const onCancel = vi.fn()
+    render(
+      <ScanProgress
+        progress={makeProgress()}
+        onCancel={onCancel}
+        isCancelling
+      />,
+    )
+
+    const cancelButton = screen.getByRole('button', { name: '取消扫描' })
+    expect(cancelButton).toBeDisabled()
+    expect(screen.getByText('正在取消…')).toBeInTheDocument()
+  })
+
   it('keeps terminal state visible for 5s then auto-hides', () => {
     const { rerender, container } = render(
       <ScanProgress progress={makeProgress({ status: 'running' })} />,

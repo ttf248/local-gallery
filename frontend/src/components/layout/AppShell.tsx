@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useUIStore } from "../../store/uiStore";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { useTheme } from "../../hooks/useTheme";
@@ -28,6 +28,7 @@ export default function AppShell() {
   const pushToast = useUIStore((s) => s.pushToast);
   const albums = useLibraryAlbums().data?.items ?? [];
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isCancellingScan, setIsCancellingScan] = useState(false);
   const onGallery = location.pathname.startsWith("/gallery");
   // 扫描进度 + 取消（提升到 AppShell 后所有路由都能看到顶部进度条）
   const scanSse = useScanSSE();
@@ -97,6 +98,20 @@ export default function AppShell() {
     navigate(albumRoute(album.id));
   };
 
+  const cancelScan = useCallback(async () => {
+    if (!scanSse.scanId || isCancellingScan) return;
+
+    setIsCancellingScan(true);
+    try {
+      await scanApi.cancel(scanSse.scanId);
+      pushToast({ kind: "info", message: "已请求取消扫描" });
+    } catch {
+      pushToast({ kind: "error", message: "取消扫描失败，请稍后重试" });
+    } finally {
+      setIsCancellingScan(false);
+    }
+  }, [isCancellingScan, pushToast, scanSse.scanId]);
+
   useKeyboard({
     "ctrl+b": () => toggleSidebar(),
     "ctrl+h": () => navigate("/"),
@@ -142,9 +157,8 @@ export default function AppShell() {
       */}
       <ScanProgress
         progress={scanSse.progress}
-        onCancel={() =>
-          scanSse.scanId && scanApi.cancel(scanSse.scanId).catch(() => {})
-        }
+        onCancel={cancelScan}
+        isCancelling={isCancellingScan}
       />
       <ToastViewport />
       <HelpOverlay open={helpOpen} onClose={() => setHelpOpen(false)} />
