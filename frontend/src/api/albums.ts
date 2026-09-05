@@ -57,5 +57,5 @@ export const albumsApi = {
   },
 };
 
-// progressApi 已在 api/prefs.ts 中定义（带 .get / .set / .batch）。
+// 阅读/播放活动由 api/activity.ts 独立管理。
 // 旧代码请从 'api/prefs' 引入。

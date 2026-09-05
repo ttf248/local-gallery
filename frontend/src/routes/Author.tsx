@@ -4,7 +4,7 @@ import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
-import { useAllProgress } from '../hooks/useReadingProgress'
+import { useImageActivities } from '../hooks/useImageActivity'
 import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import EmptyState from '../components/common/EmptyState'
@@ -83,10 +83,11 @@ export default function Author() {
   )
 
   const progressPaths = useMemo(() => albums.map((a) => a.path), [albums])
-  const { data: progressMap } = useAllProgress(progressPaths)
+  const { data: progressMap } = useImageActivities(progressPaths)
   const readCount = useMemo(() => {
     if (!progressMap) return 0
-    return progressPaths.filter((p) => (progressMap[p]?.index ?? 0) > 0).length
+    return progressPaths.filter((p) => (progressMap[p]?.pageIndex ?? 0) > 0)
+      .length
   }, [progressMap, progressPaths])
 
   const recentDate = useMemo(() => {
@@ -125,7 +126,10 @@ export default function Author() {
     coverKind: a.coverKind,
     to: albumRoute(a.path),
     progress: progressMap?.[a.path]
-      ? { index: progressMap[a.path].index, total: progressMap[a.path].total }
+      ? {
+          index: progressMap[a.path].pageIndex,
+          total: a.imageCount,
+        }
       : undefined,
   }))
 

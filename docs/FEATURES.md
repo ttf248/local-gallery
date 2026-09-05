@@ -69,7 +69,7 @@
 | -------- | -------------------------------------- | -------------------------------- |
 | 收藏     | 添加幂等、删除、清理失效项             | `PrefsStore`、favorites handlers |
 | 最近     | 去重 LRU，最多十条                     | history handlers                 |
-| 阅读进度 | 保存、批量读取、单条删除和全部清空     | progress handlers                |
+| 媒体活动 | 图片页码与视频毫秒位置分键恢复，批量原子写 | activity handlers / ActivityStore |
 | UI 偏好  | 服务端 JSON 与浏览器本地偏好按用途分离 | prefs API、Zustand stores        |
 | 原子写   | 临时文件完成后 rename，避免半写文件    | `store.PrefsStore`               |
 

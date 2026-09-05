@@ -54,20 +54,20 @@ describe("ImageGallery 连续模式", () => {
   });
 
   it("把顶部可见图片索引上报给父组件且不产生反向滚动", () => {
-    const onVisibleIndexChange = vi.fn((index: number) => {
-      useGalleryStore.getState().setIndex(index);
+    const onVisibleRangeChange = vi.fn((startIndex: number) => {
+      useGalleryStore.getState().setIndex(startIndex);
     });
     render(
       <ImageGallery
         images={["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg"]}
-        onVisibleIndexChange={onVisibleIndexChange}
+        onVisibleRangeChange={onVisibleRangeChange}
       />,
     );
     virtuosoMocks.scrollToIndex.mockClear();
 
     fireEvent.click(screen.getByTestId("virtuoso-range"));
 
-    expect(onVisibleIndexChange).toHaveBeenCalledWith(2);
+    expect(onVisibleRangeChange).toHaveBeenCalledWith(2, 3);
     expect(useGalleryStore.getState().index).toBe(2);
     expect(virtuosoMocks.scrollToIndex).not.toHaveBeenCalled();
   });

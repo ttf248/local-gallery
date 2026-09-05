@@ -178,6 +178,10 @@ func main() {
 	cacheStats := services.NewCacheStatsService(30 * time.Second)
 	runner := services.NewAsyncScanRunner()
 	prefs := store.NewPrefsStore(cacheLayout.PreferencesPath)
+	activities := store.NewActivityStore(cacheLayout.ActivityPath, cacheLayout.PreferencesPath)
+	if err := activities.Load(); err != nil {
+		log.Fatalf("加载媒体活动状态失败: %v", err)
+	}
 
 	// 扫描结果缓存（启动时从磁盘加载，供前端免扫描查看）。
 	//
@@ -333,17 +337,12 @@ func main() {
 	api.Get("/history", handlers.HistoryListHandler(prefs))
 	api.Post("/history", handlers.HistoryAddHandler(prefs))
 	api.Delete("/history", handlers.HistoryClearHandler(prefs))
-	api.Post("/progress", handlers.ProgressSetHandler(prefs))
-	api.Get("/progress", handlers.ProgressGetHandler(prefs))
-	api.Post("/progress/batch", handlers.ProgressBatchGetHandler(prefs))
-	api.Put("/progress/batch", handlers.ProgressBatchSetHandler(prefs))
-	// 「继续阅读」管理：单本删除 + 一键清空
-	// - DELETE /api/progress/item?albumId=... → 删单条（幂等）
-	// - DELETE /api/progress            → 清空所有进度
-	// Fiber 同 path 不同 method 共存 OK；query string 区分也可行（POST/GET 已经有），
-	// 但为了清晰，单条删除单独走子路径 /progress/item。
-	api.Delete("/progress", handlers.ProgressClearHandler(prefs))
-	api.Delete("/progress/item", handlers.ProgressDeleteHandler(prefs))
+	api.Get("/activity", handlers.ActivityGetHandler(activities))
+	api.Put("/activity", handlers.ActivityPutHandler(activities))
+	api.Delete("/activity", handlers.ActivityDeleteHandler(activities))
+	api.Post("/activity/query", handlers.ActivityQueryHandler(activities))
+	api.Put("/activity/batch", handlers.ActivityBatchPutHandler(activities))
+	api.Delete("/activity/all", handlers.ActivityClearHandler(activities))
 
 	// ---- 静态资源托管（生产模式：同端口托管前端） ----
 	if staticDir != "" {

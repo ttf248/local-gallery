@@ -67,9 +67,6 @@ func normalize(p models.Prefs) models.Prefs {
 	if p.History == nil {
 		p.History = d.History
 	}
-	if p.ReadingProgress == nil {
-		p.ReadingProgress = d.ReadingProgress
-	}
 	if p.MaxRecent <= 0 {
 		p.MaxRecent = d.MaxRecent
 	}
@@ -114,19 +111,6 @@ func normalize(p models.Prefs) models.Prefs {
 	}
 	p.History = history
 
-	progress := make([]models.ReadingProgress, 0, len(p.ReadingProgress))
-	seenProgress := make(map[string]struct{}, len(p.ReadingProgress))
-	for _, entry := range p.ReadingProgress {
-		if !models.IsAlbumID(entry.AlbumID) {
-			continue
-		}
-		if _, exists := seenProgress[entry.AlbumID]; exists {
-			continue
-		}
-		seenProgress[entry.AlbumID] = struct{}{}
-		progress = append(progress, entry)
-	}
-	p.ReadingProgress = progress
 	return p
 }
 
@@ -279,142 +263,6 @@ func (s *PrefsStore) ClearHistory() error {
 	return s.commitLocked(next)
 }
 
-// SetReadingProgress 记录某相册的阅读进度（最新优先，去重）。
-func (s *PrefsStore) SetReadingProgress(entry models.ReadingProgress) error {
-	return s.SetReadingProgressBatch([]models.ReadingProgress{entry})
-}
-
-// SetReadingProgressBatch 原子合并多条阅读进度并只落盘一次。
-//
-// 输入中同一 albumId 重复时最后一条生效；新记录按请求顺序排在旧记录前。
-// 阅读进度同时承担"已读"状态,不再裁剪到 50 条,否则大库批量标记后旧条目
-// 会重新变成未读。
-func (s *PrefsStore) SetReadingProgressBatch(entries []models.ReadingProgress) error {
-	if len(entries) == 0 {
-		return nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.ensureLoaded(); err != nil {
-		return err
-	}
-
-	// 单次去重 + 按请求顺序保留(后者覆盖前者,等同"最后一条生效"):
-	// 一遍 forward 走完,O(N),无双重倒序。
-	seen := make(map[string]struct{}, len(entries))
-	incoming := make([]models.ReadingProgress, 0, len(entries))
-	for i := range entries {
-		entry := entries[i]
-		if !models.IsAlbumID(entry.AlbumID) {
-			return errors.New("invalid progress album id")
-		}
-		if _, exists := seen[entry.AlbumID]; exists {
-			continue
-		}
-		seen[entry.AlbumID] = struct{}{}
-		incoming = append(incoming, entry)
-	}
-	out := append([]models.ReadingProgress(nil), incoming...)
-	for _, current := range s.cached.ReadingProgress {
-		if _, replaced := seen[current.AlbumID]; replaced {
-			continue
-		}
-		out = append(out, current)
-	}
-	next := clonePrefs(s.cached)
-	next.ReadingProgress = out
-	return s.commitLocked(next)
-}
-
-// GetReadingProgress 读取某相册的阅读进度。
-func (s *PrefsStore) GetReadingProgress(albumID string) (models.ReadingProgress, bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.ensureLoaded(); err != nil {
-		return models.ReadingProgress{}, false, err
-	}
-	for _, r := range s.cached.ReadingProgress {
-		if r.AlbumID == albumID {
-			return r, true, nil
-		}
-	}
-	return models.ReadingProgress{}, false, nil
-}
-
-// DeleteReadingProgress 删除某相册的阅读进度。
-// 用于首页「继续阅读」移除单项：用户看了几页后想从列表里移出，不想再被记录。
-// 返回 true 表示该 albumId 原本存在并被删除；false 表示原本就不存在，幂等。
-func (s *PrefsStore) DeleteReadingProgress(albumID string) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.ensureLoaded(); err != nil {
-		return false, err
-	}
-	before := len(s.cached.ReadingProgress)
-	next := clonePrefs(s.cached)
-	out := next.ReadingProgress[:0]
-	for _, r := range s.cached.ReadingProgress {
-		if r.AlbumID == albumID {
-			continue
-		}
-		out = append(out, r)
-	}
-	next.ReadingProgress = out
-	if len(out) == before {
-		return false, nil
-	}
-	if err := s.commitLocked(next); err != nil {
-		return true, err
-	}
-	return true, nil
-}
-
-// ClearAllReadingProgress 清空所有阅读进度。
-// 用于首页「继续阅读」一键清空：用户已经看完或不想再被旧进度打扰。
-// 返回删除的条数。
-func (s *PrefsStore) ClearAllReadingProgress() (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.ensureLoaded(); err != nil {
-		return 0, err
-	}
-	n := len(s.cached.ReadingProgress)
-	next := clonePrefs(s.cached)
-	next.ReadingProgress = []models.ReadingProgress{}
-	if n == 0 {
-		return 0, nil
-	}
-	if err := s.commitLocked(next); err != nil {
-		return n, err
-	}
-	return n, nil
-}
-
-// GetReadingProgressBatch 一次性读取多个相册 ID 的阅读进度。
-// 返回 map[albumId]progress，缺失项不出现在 map 中。
-// 一次加锁，避免 N 路并发 GET /api/progress?albumId=... 的锁竞争。
-func (s *PrefsStore) GetReadingProgressBatch(albumIDs []string) (map[string]models.ReadingProgress, error) {
-	out := make(map[string]models.ReadingProgress, len(albumIDs))
-	if len(albumIDs) == 0 {
-		return out, nil
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.ensureLoaded(); err != nil {
-		return nil, err
-	}
-	requested := make(map[string]struct{}, len(albumIDs))
-	for _, albumID := range albumIDs {
-		requested[albumID] = struct{}{}
-	}
-	for _, entry := range s.cached.ReadingProgress {
-		if _, ok := requested[entry.AlbumID]; ok {
-			out[entry.AlbumID] = entry
-		}
-	}
-	return out, nil
-}
-
 // ---- 内部 ----
 
 // ensureLoaded 必须在已持锁时调用。
@@ -472,6 +320,5 @@ func clonePrefs(p models.Prefs) models.Prefs {
 	out := p
 	out.Favorites = append([]string(nil), p.Favorites...)
 	out.History = append([]models.HistoryEntry(nil), p.History...)
-	out.ReadingProgress = append([]models.ReadingProgress(nil), p.ReadingProgress...)
 	return out
 }

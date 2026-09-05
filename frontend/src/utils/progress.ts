@@ -12,11 +12,36 @@
 //
 // 「已读完」既不算未读,也不该算继续阅读 — 后者只覆盖「开始了但还没
 // 看完」的真实在读状态。
-import type { ReadingProgress } from "../api/prefs";
+import type { ImageActivity } from "../api/activity";
 
 export interface ProgressLike {
   index: number;
   total: number;
+}
+
+export type GalleryDisplayMode = "single" | "continuous" | "double";
+
+export interface VisiblePageRange {
+  startIndex: number;
+  endIndex: number;
+}
+
+// 活动页码表示当前视图中已展示的最末页；UI 的 index 在双页/连续模式下
+// 只是左页或可见区首项，不能直接用于完成判定。
+export function displayedPageIndex(
+  mode: GalleryDisplayMode,
+  index: number,
+  total: number,
+  visibleRange?: VisiblePageRange,
+): number {
+  if (total <= 0) return 0;
+  let pageIndex = index;
+  if (mode === "double") {
+    pageIndex = index + 1;
+  } else if (mode === "continuous" && visibleRange?.startIndex === index) {
+    pageIndex = visibleRange.endIndex;
+  }
+  return Math.max(0, Math.min(total - 1, Math.floor(pageIndex)));
 }
 
 export function isUnread(p: ProgressLike | null | undefined): boolean {
@@ -50,8 +75,14 @@ export function progressPercent(
 // 类型守卫:给 useUnreadAlbums 之类已经过滤一次的代码用,避免再展开
 // ProgressLike 各字段。
 export function asProgressLike(
-  p: ReadingProgress | undefined,
+  activity: ImageActivity | undefined,
+  currentTotal?: number,
 ): ProgressLike | null {
-  if (!p) return null;
-  return { index: p.index, total: p.total };
+  // 服务端不会返回 pageCount <= 0；这里仍拒绝异常/旧缓存响应，避免当前
+  // 相册总数把一条无效活动“修复”成已开始状态。
+  if (!activity || activity.pageCount <= 0) return null;
+  return {
+    index: activity.pageIndex,
+    total: currentTotal ?? activity.pageCount,
+  };
 }

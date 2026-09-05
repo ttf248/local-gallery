@@ -18,7 +18,7 @@
 - **缩略图**：LRU + 磁盘双层缓存，mtime 失效
 - **画廊**：单张 / 连续滚动 / 双张并排（支持 RTL），4 套 fit
 - **主题**：light / dark / system + 6 套强调色
-- **跨设备持久化**：收藏、最近、阅读进度、设置走服务端 JSON
+- **跨设备持久化**：收藏、最近、图片阅读/视频播放活动、设置走服务端 JSON
 - **单进程单端口部署**：Go 后端托管前端静态资源，一个端口一把梭
 - **自动构建发布**：分支 push 自动 CI，`v2.*` 标签生成跨平台发布包
 
@@ -88,7 +88,7 @@
 
 - 收藏：跨设备，按稳定资源 ID 保存，`POST /api/favorites` 幂等
 - 最近：LRU，去重，最多 10 条
-- 阅读进度：单张 / 双张 / 连续模式都跟踪；批量标记只触发一次原子落盘
+- 媒体活动：图片保存 0-based 页码，每个视频独立恢复毫秒位置；批量标记只触发一次原子落盘
 - 偏好：原子写（tmp + rename），崩溃不丢
 
 ### 资源安全
@@ -207,7 +207,7 @@ local-gallery/
 │   │   ├── config/         # YAML 加载 + 校验 + 热更新
 │   │   ├── models/         # 领域模型（Album / Collection / SmartCollection / Prefs）
 │   │   ├── services/       # 业务（scanner / thumbnail / scan_runner / video_*）
-│   │   ├── store/          # JSON 偏好持久化（原子写）
+│   │   ├── store/          # JSON 偏好/媒体活动持久化（原子写）
 │   │   ├── handlers/       # Fiber 路由处理
 │   │   └── middleware/     # logger / recover / path_safety
 │   └── tests/integration/  # 端到端 HTTP 测试

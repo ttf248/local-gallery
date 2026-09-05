@@ -5,7 +5,7 @@ import { useLibraryStore } from '../store/libraryStore'
 import { useSearchStore } from '../store/searchStore'
 import { useUIStore } from '../store/uiStore'
 import { useFavorites } from '../hooks/useFavorites'
-import { useAllProgress } from '../hooks/useReadingProgress'
+import { useImageActivities } from '../hooks/useImageActivity'
 import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
 import { ListFilterBar } from '../components/common/ListFilterBar'
@@ -124,7 +124,7 @@ export default function Favorites() {
         .filter(Boolean),
     [cards],
   )
-  const { data: progressMap } = useAllProgress(progressPaths)
+  const { data: progressMap } = useImageActivities(progressPaths)
 
   const filtered = useMemo(() => {
     const list = cards
@@ -144,7 +144,10 @@ export default function Favorites() {
         const k = decodeFavPath(c.to)
         const p = progressMap?.[k]
         if (!p) return c
-        return { ...c, progress: { index: p.index, total: p.total } }
+        return {
+          ...c,
+          progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
+        }
       })
     switch (sortBy) {
       case 'count':

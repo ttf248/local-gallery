@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useGalleryStore } from "../store/galleryStore";
 import { useKeyboard } from "../hooks/useKeyboard";
 import { albumsApi } from "../api/albums";
-import { progressApi, historyApi } from "../api/prefs";
+import { historyApi } from "../api/prefs";
+import { activityApi, isActivityNotFound } from "../api/activity";
 import { useUIStore } from "../store/uiStore";
 import { useFavorites } from "../hooks/useFavorites";
 import { useLibraryStore } from "../store/libraryStore";
@@ -18,10 +19,42 @@ import GalleryHeader from "../components/gallery/GalleryHeader";
 import GalleryControls from "../components/gallery/GalleryControls";
 import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
 import { ImageIcon, RefreshIcon } from "../components/common/Icon";
+import { displayedPageIndex } from "../utils/progress";
 import {
   getGalleryContext,
   type GalleryContextEntry,
 } from "../utils/galleryContext";
+
+type VideoActivityPhase = "pending" | "writable" | "blocked";
+
+interface VideoActivitySession {
+  key: string;
+  albumId: string;
+  itemId: string;
+  positionMs: number;
+  durationMs: number;
+  phase: VideoActivityPhase;
+  dirty: boolean;
+}
+
+function flushVideoSession(session: VideoActivitySession | null) {
+  if (
+    !session ||
+    session.phase !== "writable" ||
+    !session.dirty ||
+    session.durationMs <= 0
+  ) {
+    return;
+  }
+  session.dirty = false;
+  activityApi.keepalive({
+    albumId: session.albumId,
+    mediaKind: "video",
+    itemId: session.itemId,
+    positionMs: session.positionMs,
+    durationMs: session.durationMs,
+  });
+}
 
 // 画廊页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
 // 关闭时持久化阅读进度到后端。
@@ -35,12 +68,17 @@ export default function Gallery() {
   const queryClient = useQueryClient();
 
   const pathParam = params.get("path") ?? params.get("album") ?? "";
-  const initialIndex = Number(params.get("index") ?? 0);
+  const initialIndex = Math.max(
+    0,
+    Math.floor(Number(params.get("index") ?? 0) || 0),
+  );
   const name = params.get("name") ?? "画廊";
   // type=video 走 VideoPlayer；其它（含未传）走 ImageGallery。
   // 视频播放进度将在独立模型中持久化，不能复用相册的页码进度。
   const typeParam = (params.get("type") ?? "image") as "image" | "video";
   const isVideo = typeParam === "video";
+  const isVideoRef = useRef(isVideo);
+  isVideoRef.current = isVideo;
 
   // 兼容旧链接（images 数组直接传）
   const initialImages = parseImages(params.get("images"));
@@ -48,8 +86,18 @@ export default function Gallery() {
     initialImages.length > 0 ? pathParam : "",
   );
   const [images, setImages] = useState<string[]>(initialImages);
+  const [loadedImagePath, setLoadedImagePath] = useState(
+    initialImages.length > 0 ? pathParam : "",
+  );
   // 视频文件列表（type=video 时使用）
   const [videos, setVideos] = useState<string[]>([]);
+  const [loadedVideoPath, setLoadedVideoPath] = useState("");
+  const [imageActivityReadyPath, setImageActivityReadyPath] = useState("");
+  const [continuousRange, setContinuousRange] = useState({
+    path: "",
+    startIndex: 0,
+    endIndex: 0,
+  });
 
   const index = useGalleryStore((s) => s.index);
   const setIndex = useGalleryStore((s) => s.setIndex);
@@ -78,19 +126,6 @@ export default function Gallery() {
     index: 0,
     total: 0,
   });
-  // images state 在路由切换后的首个 render 仍可能属于上一本；单独记录它实际
-  // 对应的路径，避免用新 pathParam 把旧相册的最后进度覆盖掉。
-  const loadedImagePathRef = useRef(initialImages.length > 0 ? pathParam : "");
-  useEffect(() => {
-    if (
-      !isVideo &&
-      images.length > 0 &&
-      pathParam &&
-      loadedImagePathRef.current === pathParam
-    ) {
-      progressRef.current = { path: pathParam, index, total: images.length };
-    }
-  }, [index, images.length, pathParam, isVideo]);
   // 记录「上一个」pathParam；切 album 时用它来保存上一个的进度，
   // 而不是用 effect 闭包里的新 pathParam（会写错位置）。
   const lastPathRef = useRef<string>("");
@@ -149,11 +184,39 @@ export default function Gallery() {
     initialImages.length > 0 &&
     reloadKey === 0 &&
     initialImagesPathRef.current === pathParam;
-  const imagesReady = images.length > 0;
-  const videosReady = videos.length > 0;
+  const imagesReady = images.length > 0 && loadedImagePath === pathParam;
+  const videosReady = videos.length > 0 && loadedVideoPath === pathParam;
   const ready = isVideo ? videosReady : imagesReady;
+  const videoItemIndex = isVideo
+    ? Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
+    : 0;
+  const currentVideo = isVideo ? videos[videoItemIndex] : undefined;
+  const videoActivityKey =
+    isVideo && pathParam && currentVideo
+      ? JSON.stringify([pathParam, currentVideo])
+      : "";
+  const imageActivityPageIndex = displayedPageIndex(
+    mode,
+    index,
+    images.length,
+    continuousRange.path === pathParam ? continuousRange : undefined,
+  );
+  const imageActivityWritable =
+    !isVideo &&
+    imagesReady &&
+    imageActivityReadyPath === pathParam &&
+    images.length > 0;
+
   useEffect(() => {
-    if (skipInitialFetch) return;
+    if (!imageActivityWritable) return;
+    progressRef.current = {
+      path: pathParam,
+      index: imageActivityPageIndex,
+      total: images.length,
+    };
+  }, [imageActivityPageIndex, imageActivityWritable, images.length, pathParam]);
+
+  useEffect(() => {
     if (!pathParam) return;
     let cancelled = false;
     // 切到新 album 前，先把上一个 album 的进度刷一次（去抖的 save 会因为
@@ -162,13 +225,19 @@ export default function Gallery() {
     if (lastPathRef.current) {
       const previous = progressRef.current;
       if (previous.path === lastPathRef.current && previous.total > 0) {
-        progressApi
-          .set(previous.path, previous.index, previous.total, 0)
+        activityApi
+          .setImage(previous.path, previous.index, previous.total)
           .catch(() => {});
       }
     }
     lastPathRef.current = pathParam;
+    if (skipInitialFetch) return;
     setLoadError(null);
+    setImageActivityReadyPath("");
+    setLoadedImagePath("");
+    setLoadedVideoPath("");
+    setContinuousRange({ path: "", startIndex: 0, endIndex: 0 });
+    finishedRef.current = false;
     setImages([]);
     setVideos([]);
     albumsApi
@@ -182,6 +251,7 @@ export default function Gallery() {
         if (isVideo) {
           const list = d?.videoFiles ?? [];
           if (list.length > 0) {
+            setLoadedVideoPath(pathParam);
             setVideos(list);
           } else {
             setLoadError("EMPTY");
@@ -189,7 +259,7 @@ export default function Gallery() {
         } else {
           const list = d?.files ?? d?.imageFiles;
           if (list && Array.isArray(list) && list.length > 0) {
-            loadedImagePathRef.current = pathParam;
+            setLoadedImagePath(pathParam);
             setImages(list);
           } else {
             setLoadError("EMPTY");
@@ -221,30 +291,43 @@ export default function Gallery() {
     }
     if (!pathParam) return;
     // URL 显式带 index= 时表示「用户点了某张图/某条链接」,跳过 progress 恢复
-    // — 否则会从后端 /api/progress 拉出上次位置把 initialIndex 顶掉,
+    // — 否则会从后端图片活动拉出上次位置把 initialIndex 顶掉,
     // 导致「点任意图都跳到上次看到的那张」(Album 详情缩略图 / AlbumCard
     // hover preview 跳进来都会撞这个)。
     const hasExplicitIndex = params.has("index");
-    if (hasExplicitIndex) return;
-    // 视频不能读取相册页码进度作为播放秒数，独立播放模型落地前从头播放。
+    if (hasExplicitIndex) {
+      if (!isVideo) setImageActivityReadyPath(pathParam);
+      return;
+    }
     if (isVideo) return;
-    progressApi
-      .get(pathParam)
+    let cancelled = false;
+    activityApi
+      .getImage(pathParam)
       .then((rp) => {
-        if (!rp) return;
-        // 图片模式：index 是 0-based 页码。
-        if (rp.index >= 0 && rp.index < list.length) {
-          setIndex(rp.index);
-        }
+        if (cancelled) return;
+        // pageIndex 表示已展示的最末页；双页模式恢复时对齐到跨页左侧。
+        const pageIndex = Math.max(0, Math.min(list.length - 1, rp.pageIndex));
+        const anchorIndex =
+          useGalleryStore.getState().mode === "double"
+            ? pageIndex - (pageIndex % 2)
+            : pageIndex;
+        setIndex(anchorIndex);
+        setImageActivityReadyPath(pathParam);
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (!cancelled && isActivityNotFound(error)) {
+          setImageActivityReadyPath(pathParam);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, pathParam, isVideo]);
 
   // 把这次打开写进 history
   useEffect(() => {
-    if (!pathParam) return;
-    if (isVideo ? videos.length === 0 : images.length === 0) return;
+    if (!pathParam || !ready) return;
     historyApi
       .add({
         albumId: pathParam,
@@ -256,29 +339,163 @@ export default function Gallery() {
         queryClient.invalidateQueries({ queryKey: ["history"] });
       })
       .catch(() => {});
-  }, [pathParam, name, videos.length, images.length, isVideo, queryClient]);
+  }, [
+    pathParam,
+    name,
+    videos.length,
+    images.length,
+    isVideo,
+    queryClient,
+    ready,
+  ]);
 
   // 切换图片/视频时关闭信息面板 + 防抖持久化进度
   useEffect(() => {
     setShowInfo(false);
-    // 视频的 currentTime 不是相册页码，禁止写入 ReadingProgress。
-    if (isVideo) return;
-    if (!pathParam) return;
+    // 视频的 currentTime 不是相册页码，写入独立的 video activity。
+    if (!imageActivityWritable || !pathParam) return;
     const total = images.length;
-    if (total === 0) return;
     const t = setTimeout(() => {
-      progressApi
-        .set(pathParam, index, total, 0)
+      activityApi
+        .setImage(pathParam, imageActivityPageIndex, total)
         .then(() => {
-          // 让 Home/Recents/Favorites 的 progress-batch + Album 详情 per-album
+          // 让 Home/Recents/Favorites 的批量活动 + Album 详情
           // 缓存都失效，回到列表/详情时立刻看到新进度
-          queryClient.invalidateQueries({ queryKey: ["progress-batch"] });
-          queryClient.invalidateQueries({ queryKey: ["progress"] });
+          queryClient.invalidateQueries({
+            queryKey: ["activity-query", "image"],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["activity", "image", pathParam],
+          });
         })
         .catch(() => {});
     }, 600);
     return () => clearTimeout(t);
-  }, [index, pathParam, images.length, isVideo, queryClient]);
+  }, [
+    imageActivityPageIndex,
+    imageActivityWritable,
+    pathParam,
+    images.length,
+    queryClient,
+  ]);
+
+  // 视频以「相册 ID + 文件 ID」独立保存毫秒位置。播放过程最多
+  // 每 10 秒落盘一次，切换文件或卸载时再用 keepalive 补写最后位置。
+  const [videoResume, setVideoResume] = useState<{
+    key: string;
+    seconds?: number;
+  }>({ key: "" });
+  const videoActivityRef = useRef<VideoActivitySession | null>(null);
+  const lastVideoWriteAtRef = useRef(0);
+
+  const onVideoMetaLoaded = useCallback(
+    (durationSec: number) => {
+      if (!pathParam || !currentVideo) return;
+      const durationMs = Math.max(1, Math.round(durationSec * 1000));
+      const session = videoActivityRef.current;
+      if (!session || session.key !== videoActivityKey) return;
+      session.durationMs = durationMs;
+      session.positionMs = Math.min(session.positionMs, durationMs);
+    },
+    [pathParam, currentVideo, videoActivityKey],
+  );
+
+  const onVideoProgress = useCallback(
+    (currentTimeSec: number) => {
+      if (!pathParam || !currentVideo) return;
+      const session = videoActivityRef.current;
+      if (
+        !session ||
+        session.key !== videoActivityKey ||
+        session.durationMs <= 0
+      ) {
+        return;
+      }
+      session.positionMs = Math.max(
+        0,
+        Math.min(session.durationMs, Math.round(currentTimeSec * 1000)),
+      );
+      // 查询完成前只记本次会话位置，不能用自动播放产生的 timeupdate
+      // 覆盖服务端已有恢复点。
+      if (session.phase !== "writable") return;
+      session.dirty = true;
+      const now = Date.now();
+      if (now - lastVideoWriteAtRef.current < 10_000) return;
+      lastVideoWriteAtRef.current = now;
+      const savedPositionMs = session.positionMs;
+      activityApi
+        .setVideo(
+          session.albumId,
+          session.itemId,
+          savedPositionMs,
+          session.durationMs,
+        )
+        .then(() => {
+          if (
+            videoActivityRef.current === session &&
+            session.positionMs === savedPositionMs
+          ) {
+            session.dirty = false;
+          }
+        })
+        .catch(() => {});
+    },
+    [pathParam, currentVideo, videoActivityKey],
+  );
+
+  useEffect(() => {
+    setVideoResume({ key: "" });
+    lastVideoWriteAtRef.current = 0;
+    if (!isVideo || !pathParam || !currentVideo || !videosReady) {
+      videoActivityRef.current = null;
+      return;
+    }
+    const session: VideoActivitySession = {
+      key: videoActivityKey,
+      albumId: pathParam,
+      itemId: currentVideo,
+      positionMs: 0,
+      durationMs: 0,
+      phase: "pending",
+      dirty: false,
+    };
+    videoActivityRef.current = session;
+    let cancelled = false;
+    activityApi
+      .getVideo(pathParam, currentVideo)
+      .then((activity) => {
+        if (cancelled || videoActivityRef.current !== session) return;
+        const positionMs =
+          activity.status === "completed" ? 0 : activity.positionMs;
+        const durationMs = session.durationMs || activity.durationMs;
+        session.positionMs = Math.min(positionMs, durationMs);
+        session.durationMs = durationMs;
+        session.phase = "writable";
+        session.dirty = false;
+        lastVideoWriteAtRef.current = Date.now();
+        setVideoResume({
+          key: videoActivityKey,
+          seconds:
+            session.positionMs > 0 ? session.positionMs / 1000 : undefined,
+        });
+      })
+      .catch((error) => {
+        if (cancelled || videoActivityRef.current !== session) return;
+        if (isActivityNotFound(error)) {
+          session.phase = "writable";
+          session.dirty = false;
+          lastVideoWriteAtRef.current = Date.now();
+          setVideoResume({ key: videoActivityKey });
+          return;
+        }
+        session.phase = "blocked";
+        session.dirty = false;
+      });
+    return () => {
+      cancelled = true;
+      if (videoActivityRef.current === session) flushVideoSession(session);
+    };
+  }, [isVideo, pathParam, currentVideo, videoActivityKey, videosReady]);
 
   const scrollContinuousTo = useCallback(
     (targetIndex: number) => {
@@ -290,17 +507,28 @@ export default function Gallery() {
     [images.length, setIndex],
   );
 
-  const onContinuousVisibleIndexChange = useCallback(
-    (visibleIndex: number) => {
+  const onContinuousVisibleRangeChange = useCallback(
+    (startIndex: number, endIndex: number) => {
       if (useGalleryStore.getState().mode !== "continuous") return;
       if (images.length === 0) return;
-      const nextIndex = Math.max(
+      const nextStartIndex = Math.max(
         0,
-        Math.min(images.length - 1, Math.floor(visibleIndex)),
+        Math.min(images.length - 1, Math.floor(startIndex)),
       );
-      if (useGalleryStore.getState().index !== nextIndex) setIndex(nextIndex);
+      const nextEndIndex = Math.max(
+        nextStartIndex,
+        Math.min(images.length - 1, Math.floor(endIndex)),
+      );
+      setContinuousRange({
+        path: pathParam,
+        startIndex: nextStartIndex,
+        endIndex: nextEndIndex,
+      });
+      if (useGalleryStore.getState().index !== nextStartIndex) {
+        setIndex(nextStartIndex);
+      }
     },
-    [images.length, setIndex],
+    [images.length, pathParam, setIndex],
   );
 
   // 切到连续模式后,容器需要滚到当前 index 对应的那张图。
@@ -330,24 +558,24 @@ export default function Gallery() {
   useEffect(() => {
     if (isVideo) return;
     if (markingRead) return;
-    if (!imagesReady || images.length === 0 || !pathParam) return;
-    if (index < images.length - 1) {
+    if (!imageActivityWritable || !pathParam) return;
+    if (imageActivityPageIndex < images.length - 1) {
       finishedRef.current = false;
       return;
     }
     if (finishedRef.current) return;
     finishedRef.current = true;
     setMarkingRead(true);
-    progressApi
-      .set(pathParam, images.length - 1, images.length, 0)
+    activityApi
+      .setImage(pathParam, images.length - 1, images.length)
       .then(() => {
         pushToast({ kind: "success", message: "已读完 🎉", ttl: 1500 });
       })
       .catch(() => {})
       .finally(() => setMarkingRead(false));
   }, [
-    index,
-    imagesReady,
+    imageActivityPageIndex,
+    imageActivityWritable,
     images.length,
     pathParam,
     isVideo,
@@ -356,27 +584,28 @@ export default function Gallery() {
   ]);
 
   useEffect(() => {
-    return () => {
-      // 组件卸载时把「最后有效」的进度发出去：
-      // - path/index/total 都从 ref 取，避免切到新 album 后闭包陷阱
-      // - total > 0 守卫：loading 阶段不发空进度
+    const flushCurrentActivity = () => {
+      if (isVideoRef.current) {
+        flushVideoSession(videoActivityRef.current);
+        return;
+      }
+      // pagehide 覆盖刷新/关闭页签；cleanup 覆盖 SPA 卸载。
+      // 只发送已完成恢复、且属于当前相册的最后有效图片活动。
       const cur = progressRef.current;
       if (cur.path && cur.total > 0) {
-        navigator.sendBeacon?.(
-          "/api/progress",
-          new Blob(
-            [
-              JSON.stringify({
-                albumId: cur.path,
-                index: cur.index,
-                total: cur.total,
-                scroll: 0,
-              }),
-            ],
-            { type: "application/json" },
-          ),
-        );
+        activityApi.keepalive({
+          albumId: cur.path,
+          mediaKind: "image",
+          pageIndex: cur.index,
+          pageCount: cur.total,
+        });
+        progressRef.current = { path: "", index: 0, total: 0 };
       }
+    };
+    window.addEventListener("pagehide", flushCurrentActivity);
+    return () => {
+      window.removeEventListener("pagehide", flushCurrentActivity);
+      flushCurrentActivity();
     };
   }, []);
 
@@ -732,11 +961,7 @@ export default function Gallery() {
   // 显示给用户看的 item index（1 / 2 那种）。
   // 视频模式下 current / itemIndex 基于 URL 的 initialIndex，和图片阅读页码
   // 状态保持隔离。
-  const videoItemIndex = isVideo
-    ? Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
-    : Math.floor(index);
-
-  const current = isVideo ? videos[videoItemIndex] : images[index];
+  const current = (isVideo ? currentVideo : images[index]) ?? null;
   // 把 current 同步进 ref,让 onSetCover (声明在前) 拿到最新值。
   currentRef.current = current;
   const total = isVideo ? videos.length : images.length;
@@ -764,9 +989,43 @@ export default function Gallery() {
         {isVideo ? (
           <VideoPlayer
             src={current ?? ""}
+            initialPositionSec={
+              videoResume.key === videoActivityKey
+                ? videoResume.seconds
+                : undefined
+            }
+            onMetaLoaded={onVideoMetaLoaded}
+            onProgress={onVideoProgress}
             onEnded={() => {
               // onEnded 只会在视频模式下触发（<VideoPlayer> 仅在 isVideo 时渲染）。
               // 从 URL 的 initialIndex 派生当前 item 索引。
+              const completed = videoActivityRef.current;
+              if (
+                completed &&
+                completed.key === videoActivityKey &&
+                completed.phase === "writable" &&
+                completed.durationMs > 0
+              ) {
+                completed.positionMs = completed.durationMs;
+                completed.dirty = true;
+                const savedPositionMs = completed.positionMs;
+                activityApi
+                  .setVideo(
+                    completed.albumId,
+                    completed.itemId,
+                    savedPositionMs,
+                    completed.durationMs,
+                  )
+                  .then(() => {
+                    if (
+                      videoActivityRef.current === completed &&
+                      completed.positionMs === savedPositionMs
+                    ) {
+                      completed.dirty = false;
+                    }
+                  })
+                  .catch(() => {});
+              }
               const cur = Math.max(
                 0,
                 Math.min(initialIndex, Math.max(0, videos.length - 1)),
@@ -781,7 +1040,7 @@ export default function Gallery() {
         ) : (
           <ImageGallery
             images={images}
-            onVisibleIndexChange={onContinuousVisibleIndexChange}
+            onVisibleRangeChange={onContinuousVisibleRangeChange}
             onClickNavigate={(dir) => {
               if (dir === -1) prev();
               else if (dir === 1) next();

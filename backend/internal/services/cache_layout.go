@@ -24,6 +24,7 @@ type CacheLayout struct {
 	ThumbnailDir       string
 	ScanCachePath      string
 	PreferencesPath    string
+	ActivityPath       string
 	CoverOverridesPath string
 }
 
@@ -40,6 +41,7 @@ func ResolveCacheLayout(root string) CacheLayout {
 		ThumbnailDir:       filepath.Join(derivedDir, thumbnailDirName),
 		ScanCachePath:      filepath.Join(stateDir, "scan_cache.json"),
 		PreferencesPath:    filepath.Join(stateDir, "web_settings.json"),
+		ActivityPath:       filepath.Join(stateDir, "activity.json"),
 		CoverOverridesPath: filepath.Join(stateDir, "cover_overrides.json"),
 	}
 }
@@ -60,6 +62,7 @@ func EnsureCacheLayout(root string) (CacheLayout, error) {
 	stateFiles := map[string]string{
 		"scan_cache.json":      layout.ScanCachePath,
 		"web_settings.json":    layout.PreferencesPath,
+		"activity.json":        layout.ActivityPath,
 		"cover_overrides.json": layout.CoverOverridesPath,
 	}
 	for legacyName, target := range stateFiles {

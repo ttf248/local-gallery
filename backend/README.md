@@ -76,7 +76,7 @@ go test ./internal/services -run TestScanner -v
 | 缩略图 | `GET /api/thumbs/:id` · `POST /api/thumbs/:id/cover` · `GET /api/thumbs/stats`                                        |
 | 媒体   | `GET /api/media/:id` · `GET /api/images/:id/info`                                                                     |
 | 视频   | `GET /api/videos/:id/info` · `/api/videos/:id/transcode/{status,events,cancel}`                                       |
-| 偏好   | `GET/PATCH /api/prefs` · `GET/POST/DELETE /api/favorites` · `GET/POST/DELETE /api/history` · `GET/POST /api/progress` |
+| 用户状态 | `GET/PATCH /api/prefs` · `GET/POST/DELETE /api/favorites` · `GET/POST/DELETE /api/history` · `GET/PUT/DELETE /api/activity` |
 | 系统   | `POST /api/fs/open` · `GET/PUT /api/config`（仅本机）                                                                 |
 
 ---

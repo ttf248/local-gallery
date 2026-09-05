@@ -8,11 +8,11 @@ import { useFavorites } from "./useFavorites";
 vi.mock("./useFavorites", () => ({
   useFavorites: vi.fn(),
 }));
-vi.mock("./useReadingProgress", () => ({
-  useAllProgress: vi.fn(),
+vi.mock("./useImageActivity", () => ({
+  useImageActivities: vi.fn(),
 }));
 
-import { useAllProgress } from "./useReadingProgress";
+import { useImageActivities } from "./useImageActivity";
 
 const baseAlbum = (path: string, name: string, imageCount = 10) => ({
   type: "album" as const,
@@ -58,7 +58,7 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {},
       isLoading: false,
     } as never);
@@ -76,9 +76,16 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {
-        "/a": { albumId: "/a", index: 3, total: 10, scroll: 0, updated: "" },
+        "/a": {
+          albumId: "/a",
+          mediaKind: "image",
+          pageIndex: 3,
+          pageCount: 10,
+          status: "in_progress",
+          updated: "",
+        },
       },
       isLoading: false,
     } as never);
@@ -96,9 +103,16 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {
-        "/a": { albumId: "/a", index: 0, total: 10, scroll: 0, updated: "" },
+        "/a": {
+          albumId: "/a",
+          mediaKind: "image",
+          pageIndex: 0,
+          pageCount: 10,
+          status: "in_progress",
+          updated: "",
+        },
       },
       isLoading: false,
     } as never);
@@ -115,9 +129,16 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {
-        "/a": { albumId: "/a", index: 5, total: 0, scroll: 0, updated: "" },
+        "/a": {
+          albumId: "/a",
+          mediaKind: "image",
+          pageIndex: 5,
+          pageCount: 0,
+          status: "in_progress",
+          updated: "",
+        },
       },
       isLoading: false,
     } as never);
@@ -138,9 +159,16 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {
-        "/a": { albumId: "/a", index: 3, total: 10, scroll: 0, updated: "" },
+        "/a": {
+          albumId: "/a",
+          mediaKind: "image",
+          pageIndex: 3,
+          pageCount: 10,
+          status: "in_progress",
+          updated: "",
+        },
       },
       isLoading: false,
     } as never);
@@ -158,7 +186,7 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {},
       isLoading: false,
     } as never);
@@ -179,7 +207,7 @@ describe("useUnreadAlbums", () => {
       remove: vi.fn(),
       toggle: vi.fn(),
     });
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: undefined,
       isLoading: false,
     } as never);
@@ -189,9 +217,10 @@ describe("useUnreadAlbums", () => {
         progressMap: {
           "/a": {
             albumId: "/a",
-            index: 3,
-            total: 10,
-            scroll: 0,
+            mediaKind: "image",
+            pageIndex: 3,
+            pageCount: 10,
+            status: "in_progress",
             updated: "",
           },
         },
@@ -199,7 +228,7 @@ describe("useUnreadAlbums", () => {
       }),
     );
 
-    expect(useAllProgress).toHaveBeenCalledWith(["/a", "/b"], false);
+    expect(useImageActivities).toHaveBeenCalledWith(["/a", "/b"], false);
     expect(result.current.cards.map((card) => card.title)).toEqual(["B"]);
   });
 });

@@ -156,21 +156,35 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `GET /api/videos/transcode/cache/stats`
 - `POST /api/videos/transcode/cache/clear`（仅本机）
 
-## 收藏、历史与阅读进度
+## 收藏、历史与媒体活动
 
 偏好文件只保存稳定资源 ID。旧版 `path` 字段和绝对路径记录在加载时丢弃，不再提供兼容解析。
 
-- `GET /api/prefs`、`PATCH /api/prefs`：读取或修改界面偏好；历史和进度项使用 `albumId`。
+- `GET /api/prefs`、`PATCH /api/prefs`：读取或修改界面偏好。高频媒体活动不再混入偏好响应。
 - `GET /api/favorites`：返回 `{ "favorites": ["<resourceId>"] }`。
 - `POST /api/favorites`、`DELETE /api/favorites`：body 为 `{ "resourceId": "a_... | c_... | smart:<tag>" }`。
 - `POST /api/favorites/prune`：按当前资源目录移除已失效相册/集合 ID，不访问 ID 对应的文件路径；智能标签保留。资源目录尚未完成首次加载时返回 `409`，不会删除收藏。
 - `GET /api/history`、`DELETE /api/history`。
 - `POST /api/history`：body 为 `{ "albumId": "a_...", "name": "...", "imageCount": 42 }`。
-- `GET /api/progress?albumId=<albumId>`。
-- `POST /api/progress`：body 为 `{ "albumId": "a_...", "index": 12, "total": 30, "scroll": 0 }`。`index` 是从 0 开始的当前页；无记录表示未读，到达 `total - 1` 表示已读完。
-- `DELETE /api/progress/item?albumId=<albumId>`；`DELETE /api/progress` 清空全部。
-- `POST /api/progress/batch`：body 为 `{ "albumIds": ["a_...", "..."] }`，批量读取。
-- `PUT /api/progress/batch`：body 为 `{ "entries": [{ "albumId": "a_...", "index": 29, "total": 30, "scroll": 0 }] }`，整批校验后一次原子落盘；单批最多 10000 条。
+
+媒体活动使用复合标识：图片为 `albumId + mediaKind=image`，视频为
+`albumId + mediaKind=video + itemId`。图片页码与每个视频的播放位置不会互相覆盖。
+
+- `GET /api/activity?albumId=<albumId>&mediaKind=image`：读取图片活动。视频查询还必须传 `itemId=<fileId>`。
+- `PUT /api/activity`：幂等写入单条活动。图片 body 为 `{ "albumId": "a_...", "mediaKind": "image", "pageIndex": 12, "pageCount": 30 }`；视频 body 为 `{ "albumId": "a_...", "mediaKind": "video", "itemId": "f_...", "positionMs": 42000, "durationMs": 120000 }`。
+- `POST /api/activity/query`：body 为 `{ "items": [{ "albumId": "a_...", "mediaKind": "image" }] }`，按精确标识批量读取，返回 `{ "activities": [], "count": 0 }`。
+- `PUT /api/activity/batch`：body 为 `{ "activities": [...] }`，整批校验后一次原子落盘；单批最多 10000 条。
+- `DELETE /api/activity?...`：幂等删除单条；`DELETE /api/activity/all` 清空全部图片和视频活动。
+
+响应中 `status` 为 `in_progress` / `completed`，由服务端按实际位置派生。图片到达
+`pageCount - 1` 完成；视频到达 98% 完成。旧 `readingProgress` 只在首次升级时迁移，
+`/api/progress` 不再提供。
+
+图片 `pageIndex` 表示当前视图实际展示的最末页：单页模式为当前页，双页模式为跨页
+右侧页，连续模式为可见区末页。读取不存在的记录返回 `404 activity_not_found`；标识或
+数值非法返回 `400 invalid_activity_identity` / `400 invalid_activity`；持久化不可用返回
+`500 activity_unavailable`。前端只把明确的 `activity_not_found` 当作新记录，其他错误
+不会开放自动写入，避免恢复失败时覆盖已有位置。
 
 ## 缓存与系统操作
 

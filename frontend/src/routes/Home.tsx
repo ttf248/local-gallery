@@ -6,10 +6,10 @@ import { useSearchStore } from '../store/searchStore'
 import { useScanSSE } from '../hooks/useScanSSE'
 import { useFavorites } from '../hooks/useFavorites'
 import {
-  useAllProgress,
-  useMarkAsRead,
-  useMarkAllAsRead,
-} from '../hooks/useReadingProgress'
+  useImageActivities,
+  useMarkAlbumRead,
+  useMarkAlbumsRead,
+} from '../hooks/useImageActivity'
 import { useUnreadAlbums } from '../hooks/useUnreadAlbums'
 import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
 import { scanApi, type ScanResult } from '../api/scan'
@@ -26,7 +26,7 @@ import { useUIStore } from '../store/uiStore'
 import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
 import type { GalleryContextEntry } from '../utils/galleryContext'
 import { groupByYear, type YearGroup } from '../utils/albumGrouping'
-import { isInProgress } from '../utils/progress'
+import { asProgressLike, isInProgress } from '../utils/progress'
 import { buildLibraryIndex } from '../utils/libraryIndex'
 import {
   PlayFilledIcon,
@@ -111,7 +111,7 @@ export default function Home() {
   const { favorites } = useFavorites()
   // 首页的未读区与继续阅读区共享同一份全库进度，避免两个近似 batch 请求。
   const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
-  const { data: progressMap } = useAllProgress(libraryIndex.albumIds)
+  const { data: progressMap } = useImageActivities(libraryIndex.albumIds)
   // 未读列表:Home 顶部 hero 直接展示前 6 张 + 链接到 /unread
   // 已有 useUnreadAlbums hook(见 hooks/useUnreadAlbums.ts),复用避免重新
   // 实现 progress 派发逻辑。
@@ -184,8 +184,8 @@ export default function Home() {
   // 个 hero 都消失。
   //
   // 真要「忘记这本」时仍可调 DELETE（后端保留），但 UI 上不再用。
-  const markReadContinue = useMarkAsRead()
-  const markReadAllContinue = useMarkAllAsRead()
+  const markReadContinue = useMarkAlbumRead()
+  const markReadAllContinue = useMarkAlbumsRead()
   const onRemoveContinue = (card: CardData) => {
     const albumId = decodeFavPath(card.to)
     const total = card.progress?.total ?? 0
@@ -231,8 +231,8 @@ export default function Home() {
   // 语义上「标记已读」= 把 progress 推到 index=total（与 AlbumCard 右键
   // 「标记为已读」一致）。不是删除 record — 保留"已读完"的痕迹，未来
   // Recents / Favorites / 历史面板能继续看到。
-  const markReadOne = useMarkAsRead()
-  const markReadAll = useMarkAllAsRead()
+  const markReadOne = useMarkAlbumRead()
+  const markReadAll = useMarkAlbumsRead()
   const onMarkReadUnread = (card: CardData) => {
     const albumId = decodeFavPath(card.to)
     const total = card.progress?.total ?? 0
@@ -283,7 +283,7 @@ export default function Home() {
     const items: CardData[] = []
     for (const a of libraryIndex.albumsById.values()) {
       const p = progressMap[a.path]
-      if (!isInProgress(p)) continue
+      if (!isInProgress(asProgressLike(p, a.imageCount))) continue
       items.push({
         id: 'a:' + a.path,
         variant: 'album',
@@ -296,7 +296,7 @@ export default function Home() {
         coverKind: a.coverKind,
         // to 走 album 路由 — 继续阅读的"点卡片直跳画廊"onContinue 需要 path
         to: albumRoute(a.path),
-        progress: { index: p.index, total: p.total },
+        progress: { index: p.pageIndex, total: a.imageCount },
         sourceRoot: a.sourceRoot,
         sourceName: a.sourceName,
       })
@@ -347,7 +347,10 @@ export default function Home() {
       const k = decodeFavPath(c.to)
       const p = progressMap?.[k]
       if (!p) return c
-      return { ...c, progress: { index: p.index, total: p.total } }
+      return {
+        ...c,
+        progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
+      }
     })
     switch (sortBy) {
       case 'count':

@@ -111,6 +111,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	runner := services.NewAsyncScanRunner()
 	prefsStore := store.NewPrefsStore(prefs)
+	activityStore := store.NewActivityStore(cacheLayout.ActivityPath, prefs)
 
 	api := app.Group("/api")
 	api.Get("/health", func(c *fiber.Ctx) error {
@@ -146,12 +147,12 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/history", handlers.HistoryListHandler(prefsStore))
 	api.Post("/history", handlers.HistoryAddHandler(prefsStore))
 	api.Delete("/history", handlers.HistoryClearHandler(prefsStore))
-	api.Post("/progress", handlers.ProgressSetHandler(prefsStore))
-	api.Get("/progress", handlers.ProgressGetHandler(prefsStore))
-	api.Post("/progress/batch", handlers.ProgressBatchGetHandler(prefsStore))
-	api.Put("/progress/batch", handlers.ProgressBatchSetHandler(prefsStore))
-	api.Delete("/progress", handlers.ProgressClearHandler(prefsStore))
-	api.Delete("/progress/item", handlers.ProgressDeleteHandler(prefsStore))
+	api.Get("/activity", handlers.ActivityGetHandler(activityStore))
+	api.Put("/activity", handlers.ActivityPutHandler(activityStore))
+	api.Delete("/activity", handlers.ActivityDeleteHandler(activityStore))
+	api.Post("/activity/query", handlers.ActivityQueryHandler(activityStore))
+	api.Put("/activity/batch", handlers.ActivityBatchPutHandler(activityStore))
+	api.Delete("/activity/all", handlers.ActivityClearHandler(activityStore))
 	api.Get("/config", handlers.ConfigGetHandler(mgr))
 	api.Put("/config", handlers.ConfigUpdateHandler(mgr, nil))
 
@@ -461,35 +462,38 @@ func TestHistory(t *testing.T) {
 	}
 }
 
-func TestProgressBatchWriteAndRead(t *testing.T) {
+func TestActivityBatchWriteAndRead(t *testing.T) {
 	h := newHarness(t)
-	entries := []map[string]interface{}{
-		{"albumId": "a_0000000000000000000001", "index": 4, "total": 10},
-		{"albumId": "a_0000000000000000000002", "index": 8, "total": 8},
+	activities := []map[string]interface{}{
+		{"albumId": "a_0000000000000000000001", "mediaKind": "image", "pageIndex": 4, "pageCount": 10},
+		{"albumId": "a_0000000000000000000002", "mediaKind": "video", "itemId": "f_0000000000000000000002", "positionMs": 98_000, "durationMs": 100_000},
 	}
-	res, body := h.do(t, "PUT", "/api/progress/batch", map[string]interface{}{"entries": entries})
+	res, body := h.do(t, "PUT", "/api/activity/batch", map[string]interface{}{"activities": activities})
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("batch set status=%d body=%s", res.StatusCode, body)
 	}
-	res, body = h.do(t, "POST", "/api/progress/batch", map[string]interface{}{
-		"albumIds": []string{"a_0000000000000000000001", "a_0000000000000000000002"},
+	res, body = h.do(t, "POST", "/api/activity/query", map[string]interface{}{
+		"items": []map[string]interface{}{
+			{"albumId": "a_0000000000000000000001", "mediaKind": "image"},
+			{"albumId": "a_0000000000000000000002", "mediaKind": "video", "itemId": "f_0000000000000000000002"},
+		},
 	})
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("batch get status=%d body=%s", res.StatusCode, body)
 	}
 	var got struct {
-		Progress map[string]models.ReadingProgress `json:"progress"`
-		Count    int                               `json:"count"`
+		Activities []models.Activity `json:"activities"`
+		Count      int               `json:"count"`
 	}
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Count != 2 || got.Progress["a_0000000000000000000001"].Index != 4 {
+	if got.Count != 2 || got.Activities[0].PageIndex != 4 || got.Activities[1].Status != models.ActivityCompleted {
 		t.Fatalf("unexpected batch result: %+v", got)
 	}
 
-	res, _ = h.do(t, "PUT", "/api/progress/batch", map[string]interface{}{
-		"entries": []map[string]interface{}{{"albumId": h.root, "index": 1, "total": 2}},
+	res, _ = h.do(t, "PUT", "/api/activity/batch", map[string]interface{}{
+		"activities": []map[string]interface{}{{"albumId": h.root, "mediaKind": "image", "pageIndex": 1, "pageCount": 2}},
 	})
 	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("absolute path batch status=%d, want 400", res.StatusCode)

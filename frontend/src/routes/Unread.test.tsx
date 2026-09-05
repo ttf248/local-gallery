@@ -11,8 +11,8 @@ import { useSearchStore } from '../store/searchStore'
 vi.mock('../hooks/useFavorites', () => ({
   useFavorites: vi.fn(),
 }))
-vi.mock('../hooks/useReadingProgress', () => ({
-  useAllProgress: vi.fn(),
+vi.mock('../hooks/useImageActivity', () => ({
+  useImageActivities: vi.fn(),
 }))
 vi.mock('../hooks/useGalleryContextSync', () => ({
   useGalleryContextSync: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('../components/common/ListFilterBar', () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }))
 
-import { useAllProgress } from '../hooks/useReadingProgress'
+import { useImageActivities } from '../hooks/useImageActivity'
 
 const baseAlbum = (path: string, name: string, imageCount = 10) => ({
   type: 'album' as const,
@@ -79,7 +79,7 @@ describe('Unread', () => {
 
   it('有未读时显示计数 + 随机按钮', async () => {
     seedLibrary([baseAlbum('/a', 'A'), baseAlbum('/b', 'B')])
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {},
       isLoading: false,
     } as never)
@@ -96,9 +96,16 @@ describe('Unread', () => {
 
   it('全部看完时显示「看完了」空态', async () => {
     seedLibrary([baseAlbum('/a', 'A')])
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {
-        '/a': { albumId: '/a', index: 9, total: 10, scroll: 0, updated: '' },
+        '/a': {
+          albumId: '/a',
+          mediaKind: 'image',
+          pageIndex: 9,
+          pageCount: 10,
+          status: 'completed',
+          updated: '',
+        },
       },
       isLoading: false,
     } as never)
@@ -110,7 +117,7 @@ describe('Unread', () => {
 
   it('全库为空时引导去设置', async () => {
     // 不 seedLibrary → result=null
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {},
       isLoading: false,
     } as never)
@@ -123,7 +130,7 @@ describe('Unread', () => {
 
   it('最小图数变化后立即重新筛选', async () => {
     seedLibrary([baseAlbum('/a', 'A', 2), baseAlbum('/b', 'B', 10)])
-    vi.mocked(useAllProgress).mockReturnValue({
+    vi.mocked(useImageActivities).mockReturnValue({
       data: {},
       isLoading: false,
     } as never)

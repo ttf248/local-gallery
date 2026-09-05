@@ -1,18 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
-import { videoUrl, getTranscodeStatus, type TranscodeStatus } from '../../api/videos'
-import TranscodeProgress from './TranscodeProgress'
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  videoUrl,
+  getTranscodeStatus,
+  type TranscodeStatus,
+} from "../../api/videos";
+import TranscodeProgress from "./TranscodeProgress";
 
 interface Props {
-  /** 当前播放的视频绝对路径 */
-  src: string
+  /** 当前播放的不透明视频文件 ID */
+  src: string;
   /** 进度变化回调（防抖由父组件处理；以秒为单位） */
-  onProgress?: (currentTimeSec: number) => void
+  onProgress?: (currentTimeSec: number) => void;
   /** 视频元数据加载完成回调（用于父组件恢复进度） */
-  onMetaLoaded?: (durationSec: number) => void
+  onMetaLoaded?: (durationSec: number) => void;
+  /** 每个 src 只恢复一次的初始播放位置（秒） */
+  initialPositionSec?: number;
   /** 视频自然结束（ended=true）时触发 */
-  onEnded?: () => void
+  onEnded?: () => void;
   /** 父组件传入的额外 className（用于容器布局） */
-  className?: string
+  className?: string;
 }
 
 /**
@@ -38,81 +44,122 @@ export default function VideoPlayer({
   src,
   onProgress,
   onMetaLoaded,
+  initialPositionSec,
   onEnded,
   className,
 }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [retryKey, setRetryKey] = useState(0)
-  const [transcodeStatus, setTranscodeStatus] = useState<TranscodeStatus | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const restoredSourceRef = useRef<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
+  const [transcodeStatus, setTranscodeStatus] =
+    useState<TranscodeStatus | null>(null);
 
   // 切到下一个视频时清状态
   useEffect(() => {
-    setError(null)
-    setTranscodeStatus(null)
-  }, [src])
+    setError(null);
+    setTranscodeStatus(null);
+    restoredSourceRef.current = null;
+  }, [src]);
+
+  const restorePosition = useCallback(
+    (video: HTMLVideoElement | null) => {
+      const restoreKey = `${src}#${retryKey}`;
+      if (!video || restoredSourceRef.current === restoreKey) return;
+      if (
+        initialPositionSec === undefined ||
+        !Number.isFinite(initialPositionSec) ||
+        initialPositionSec <= 0 ||
+        !Number.isFinite(video.duration) ||
+        video.duration <= 0
+      ) {
+        return;
+      }
+      // 不定位到精确片尾，否则某些浏览器会立即触发 ended。
+      video.currentTime = Math.min(
+        initialPositionSec,
+        Math.max(0, video.duration - 0.1),
+      );
+      restoredSourceRef.current = restoreKey;
+    },
+    [initialPositionSec, retryKey, src],
+  );
+
+  // 活动查询通常晚于 loadedmetadata，因此 prop 到达时也要尝试恢复。
+  useEffect(() => {
+    restorePosition(videoRef.current);
+  }, [restorePosition, retryKey]);
 
   // 查服务端转码状态
   useEffect(() => {
-    if (!src) return
-    let cancelled = false
+    if (!src) return;
+    let cancelled = false;
     getTranscodeStatus(src)
       .then((s) => {
-        if (cancelled) return
-        setTranscodeStatus(s)
+        if (cancelled) return;
+        setTranscodeStatus(s);
       })
       .catch(() => {
         // status 端点失败 → 当作"无转码服务",不影响播放
-        if (!cancelled) setTranscodeStatus(null)
-      })
+        if (!cancelled) setTranscodeStatus(null);
+      });
     return () => {
-      cancelled = true
-    }
-  }, [src, retryKey])
+      cancelled = true;
+    };
+  }, [src, retryKey]);
 
   // 键盘控制
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // 输入框不抢
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      const v = videoRef.current
-      if (!v) return
+      const t = e.target as HTMLElement | null;
+      if (
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable)
+      )
+        return;
+      const v = videoRef.current;
+      if (!v) return;
       switch (e.key) {
-        case ' ':
-        case 'k':
-        case 'K':
-          e.preventDefault()
-          if (v.paused) v.play().catch(() => {})
-          else v.pause()
-          break
-        case 'ArrowLeft':
-          e.preventDefault()
-          v.currentTime = Math.max(0, v.currentTime - 5)
-          break
-        case 'ArrowRight':
-          e.preventDefault()
-          v.currentTime = Math.min(v.duration || v.currentTime + 5, v.currentTime + 5)
-          break
-        case 'ArrowUp':
-          e.preventDefault()
-          v.volume = Math.min(1, v.volume + 0.1)
-          break
-        case 'ArrowDown':
-          e.preventDefault()
-          v.volume = Math.max(0, v.volume - 0.1)
-          break
-        case 'm':
-        case 'M':
-          e.preventDefault()
-          v.muted = !v.muted
-          break
+        case " ":
+        case "k":
+        case "K":
+          e.preventDefault();
+          if (v.paused) v.play().catch(() => {});
+          else v.pause();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          v.currentTime = Math.max(0, v.currentTime - 5);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          v.currentTime = Math.min(
+            v.duration || v.currentTime + 5,
+            v.currentTime + 5,
+          );
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          v.volume = Math.min(1, v.volume + 0.1);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          v.volume = Math.max(0, v.volume - 0.1);
+          break;
+        case "m":
+        case "M":
+          e.preventDefault();
+          v.muted = !v.muted;
+          break;
         // 'F11' / 'f' / 全屏由 GalleryHeader 顶层处理；此处不重复
       }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // 把 HTMLMediaElement 的 MediaError 翻译成对人友好的中文消息。
   //
@@ -122,34 +169,41 @@ export default function VideoPlayer({
   //   3 MEDIA_ERR_DECODE         - 解码错误（编码/容器损坏，或浏览器 codec 不支持）
   //   4 MEDIA_ERR_SRC_NOT_SUPPORTED - 资源不支持（404/CORS/MIME 错/浏览器不支持该编码）
   function describeError(media: HTMLVideoElement | null): string {
-    const err = media?.error
-    if (!err) return '视频加载失败'
+    const err = media?.error;
+    if (!err) return "视频加载失败";
     switch (err.code) {
       case 1:
-        return '播放已中止'
+        return "播放已中止";
       case 2:
-        return '视频加载失败（网络错误：可能是断网、Range 请求失败或服务器无响应）'
+        return "视频加载失败（网络错误：可能是断网、Range 请求失败或服务器无响应）";
       case 3:
-        return '视频解码失败（编码或容器不被当前浏览器支持；常见于 AV1 / H.265 / 非 faststart MP4）'
+        return "视频解码失败（编码或容器不被当前浏览器支持；常见于 AV1 / H.265 / 非 faststart MP4）";
       case 4:
-        return '视频加载失败（资源不可用：文件不存在、CORS 被拒、MIME 不匹配，或浏览器不支持该编码）'
+        return "视频加载失败（资源不可用：文件不存在、CORS 被拒、MIME 不匹配，或浏览器不支持该编码）";
       default:
-        return '视频加载失败'
+        return "视频加载失败";
     }
   }
 
   // 是否在转码中？展示 TranscodeProgress 覆盖层
   const isTranscoding =
     transcodeStatus !== null &&
-    (transcodeStatus.status === 'running' ||
-      transcodeStatus.status === 'queued' ||
-      transcodeStatus.status === 'failed')
+    (transcodeStatus.status === "running" ||
+      transcodeStatus.status === "queued" ||
+      transcodeStatus.status === "failed");
 
   return (
-    <div className={className ?? 'relative flex-1 flex items-center justify-center min-h-0 bg-black'}>
+    <div
+      className={
+        className ??
+        "relative flex-1 flex items-center justify-center min-h-0 bg-black"
+      }
+    >
       <video
         ref={videoRef}
-        key={`${src}#${retryKey}` /* 切视频 / 手动重试时强制重挂载，避免 src 缓存问题 */}
+        key={
+          `${src}#${retryKey}` /* 切视频 / 手动重试时强制重挂载，避免 src 缓存问题 */
+        }
         src={videoUrl(src)}
         controls
         autoPlay
@@ -158,20 +212,21 @@ export default function VideoPlayer({
         // 浏览器对此静默处理，poster 显示空白；不阻断视频）
         className="max-w-full max-h-full outline-none"
         onLoadedMetadata={(e) => {
-          const v = e.currentTarget
+          const v = e.currentTarget;
+          restorePosition(v);
           if (Number.isFinite(v.duration) && v.duration > 0) {
-            onMetaLoaded?.(v.duration)
+            onMetaLoaded?.(v.duration);
           }
         }}
         onTimeUpdate={(e) => {
           // 每秒最多 4 次（timeupdate 浏览器自己会 throttle），对 UI 足够
-          onProgress?.(e.currentTarget.currentTime)
+          onProgress?.(e.currentTarget.currentTime);
         }}
         onEnded={() => {
-          onEnded?.()
+          onEnded?.();
         }}
         onError={(e) => {
-          setError(describeError(e.currentTarget))
+          setError(describeError(e.currentTarget));
         }}
       />
       {/* 转码进度覆盖层（仅在转码中显示）*/}
@@ -180,9 +235,13 @@ export default function VideoPlayer({
           src={src}
           onReady={() => {
             // 转码完成:刷新状态 + 重挂 <video> 让浏览器重新请求
-            setTranscodeStatus({ ...transcodeStatus, status: 'cached', progress: 1 })
-            setError(null)
-            setRetryKey((k) => k + 1)
+            setTranscodeStatus({
+              ...transcodeStatus,
+              status: "cached",
+              progress: 1,
+            });
+            setError(null);
+            setRetryKey((k) => k + 1);
           }}
         />
       )}
@@ -195,8 +254,8 @@ export default function VideoPlayer({
               type="button"
               className="pointer-events-auto text-xs px-2 py-1 rounded border border-white/30 hover:bg-white/10"
               onClick={() => {
-                setError(null)
-                setRetryKey((k) => k + 1)
+                setError(null);
+                setRetryKey((k) => k + 1);
               }}
             >
               重试
@@ -205,5 +264,5 @@ export default function VideoPlayer({
         </div>
       )}
     </div>
-  )
+  );
 }

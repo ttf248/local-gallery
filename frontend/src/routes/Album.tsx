@@ -35,7 +35,7 @@ import {
   InfoIcon,
   CalendarIcon,
 } from "../components/common/Icon";
-import { useReadingProgress } from "../hooks/useReadingProgress";
+import { useImageActivity } from "../hooks/useImageActivity";
 import { useAlbumActions } from "../hooks/useAlbumActions";
 import PropertiesDialog from "../components/common/PropertiesDialog";
 import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
@@ -319,12 +319,14 @@ function AlbumView({
   const navigate = useNavigate();
   const [gridSize, setGridSize] = useState<"sm" | "md" | "lg">("md");
   const pushToast = useUIStore((s) => s.pushToast);
-  const { data: progress } = useReadingProgress(detail.path);
+  const { data: progress } = useImageActivity(detail.path);
   const { add: addFav, toggle: toggleFav, favorites } = useFavorites();
   const isFav = favorites.includes(detail.path);
   const startIndex =
-    progress && progress.index > 0 && progress.index < detail.imageFiles.length
-      ? progress.index
+    progress &&
+    progress.pageIndex > 0 &&
+    progress.pageIndex < detail.imageFiles.length
+      ? progress.pageIndex
       : 0;
 
   const [moreOpen, setMoreOpen] = useState(false);
@@ -434,15 +436,20 @@ function AlbumView({
         ? "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
         : "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6";
 
+  const currentPageCount = detail.imageFiles.length;
   const progressPct =
-    progress && progress.total > 0
-      ? Math.min(
-          100,
-          Math.round((progress.index / Math.max(1, progress.total - 1)) * 100),
-        )
+    progress && currentPageCount > 0
+      ? currentPageCount === 1
+        ? 100
+        : Math.min(
+            100,
+            Math.round((progress.pageIndex / (currentPageCount - 1)) * 100),
+          )
       : null;
   const isFinished =
-    !!progress && progress.total > 0 && progress.index >= progress.total - 1;
+    !!progress &&
+    currentPageCount > 0 &&
+    progress.pageIndex >= currentPageCount - 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -548,7 +555,9 @@ function AlbumView({
                   <div className="flex items-center justify-between text-[11px] text-fg-muted mb-1.5 tabular-nums">
                     <span>阅读进度</span>
                     <span>
-                      {progress!.index + 1} / {progress!.total} · {progressPct}%
+                      {Math.min(progress!.pageIndex + 1, currentPageCount)} /{' '}
+                      {currentPageCount} ·{' '}
+                      {progressPct}%
                     </span>
                   </div>
                   <div className="h-1.5 bg-bg-strong rounded-full overflow-hidden">
@@ -570,7 +579,8 @@ function AlbumView({
                     <PlayFilledIcon size={13} />
                     <span>继续上次</span>
                     <span className="text-[11px] opacity-70 tabular-nums">
-                      {progress!.index + 1}/{progress!.total}
+                      {Math.min(progress!.pageIndex + 1, currentPageCount)}/
+                      {currentPageCount}
                     </span>
                   </button>
                 ) : (
@@ -673,8 +683,8 @@ function AlbumView({
           className={`grid ${gridCls} gap-2 px-6 lg:px-10 pb-10 max-w-[1400px] mx-auto`}
         >
           {imageFiles.map((img, i) => {
-            const isCurrent = progress && i === progress.index;
-            const isPast = progress && i < progress.index;
+            const isCurrent = progress && i === progress.pageIndex;
+            const isPast = progress && i < progress.pageIndex;
             return (
               <button
                 key={img}

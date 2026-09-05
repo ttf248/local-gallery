@@ -27,7 +27,7 @@ function renderHero(cards: ReturnType<typeof makeCard>[], count = cards.length) 
   const onShuffle = vi.fn()
   const onMarkRead = vi.fn()
   const onMarkAllRead = vi.fn()
-  // AlbumCard 内部用 useQueryClient 走 progress-batch invalidate,
+  // AlbumCard 内部用 useQueryClient 失效图片活动查询，
   // 测试套件包一层 QueryClientProvider 避免 "No QueryClient set" 报错。
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return {

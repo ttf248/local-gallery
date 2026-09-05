@@ -11,6 +11,7 @@ func TestEnsureCacheLayoutMigratesKnownLegacyEntries(t *testing.T) {
 	legacyState := map[string]string{
 		"scan_cache.json":      `{"schemaVersion":3}`,
 		"web_settings.json":    `{"theme":"dark"}`,
+		"activity.json":        `{"version":1,"activities":[]}`,
 		"cover_overrides.json": `{"covers":{}}`,
 	}
 	for name, content := range legacyState {
@@ -34,6 +35,7 @@ func TestEnsureCacheLayoutMigratesKnownLegacyEntries(t *testing.T) {
 	for name, target := range map[string]string{
 		"scan_cache.json":      layout.ScanCachePath,
 		"web_settings.json":    layout.PreferencesPath,
+		"activity.json":        layout.ActivityPath,
 		"cover_overrides.json": layout.CoverOverridesPath,
 	} {
 		if _, err := os.Stat(target); err != nil {

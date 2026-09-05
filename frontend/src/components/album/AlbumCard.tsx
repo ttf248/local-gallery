@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { progressApi } from "../../api/prefs";
+import { activityApi } from "../../api/activity";
 import { useUIStore } from "../../store/uiStore";
 import { decodeFavPath } from "../../utils/path";
 import ContextMenu, { type AnyMenuItem } from "./ContextMenu";
@@ -148,8 +148,8 @@ function GridCard({
 
   // 右键菜单：仅 album 变体有「标记为已读」语义（集合/smart 是聚合,
   // 它们的 progress 实际是子相册聚合,不能"标已读"）。
-  // 关键：data.to 是 /albums/<encoded> 路由形式,需要 decodeFavPath 还原
-  // 成原绝对路径,再传给 progressApi.set。
+  // 关键：data.to 是 /albums/<encoded> 路由形式，需要 decodeFavPath 还原
+  // 成不透明相册 ID，再写入图片活动。
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -166,29 +166,37 @@ function GridCard({
     e.preventDefault();
     setMenu({ x: e.clientX, y: e.clientY });
   };
-  const albumAbsPath = data.variant === "album" ? decodeFavPath(data.to) : null;
+  const albumId = data.variant === "album" ? decodeFavPath(data.to) : null;
   const onMarkRead = () => {
-    if (!albumAbsPath || !data.progress) return;
+    if (!albumId || !data.progress) return;
     const total = data.progress.total;
-    progressApi
-      .set(albumAbsPath, Math.max(0, total - 1), total, 0)
+    activityApi
+      .setImage(albumId, Math.max(0, total - 1), total)
       .then(() => {
         // 让所有依赖 progress 的视图(UnreadHero / ContinueReadingHero /
         // Unread 页 / Recents / Favorites / Album 详情)立刻看到新进度。
-        queryClient.invalidateQueries({ queryKey: ["progress-batch"] });
-        queryClient.invalidateQueries({ queryKey: ["progress"] });
+        queryClient.invalidateQueries({
+          queryKey: ["activity-query", "image"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["activity", "image", albumId],
+        });
         pushToast({ kind: "success", message: "已标记为已读", ttl: 1200 });
       })
       .catch(() => pushToast({ kind: "error", message: "标记失败" }));
   };
   const onUnmarkRead = () => {
-    if (!albumAbsPath) return;
+    if (!albumId) return;
     // 未读由「没有进度记录」表达；index=0 是已经打开第一张，不能拿来重置。
-    progressApi
-      .delete(albumAbsPath)
+    activityApi
+      .removeImage(albumId)
       .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["progress-batch"] });
-        queryClient.invalidateQueries({ queryKey: ["progress"] });
+        queryClient.invalidateQueries({
+          queryKey: ["activity-query", "image"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["activity", "image", albumId],
+        });
         pushToast({ kind: "success", message: "已重置为未读", ttl: 1200 });
       })
       .catch(() => pushToast({ kind: "error", message: "重置失败" }));

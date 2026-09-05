@@ -7,8 +7,8 @@ interface Props {
   images: string[];
   /** 点击图片时触发：根据 clickX 在容器宽度的左/中/右决定动作。父组件传入 prev/next 即可。 */
   onClickNavigate?: (dir: -1 | 0 | 1) => void;
-  /** 连续模式可见范围变化时，上报当前顶部图片的 0-based 索引。 */
-  onVisibleIndexChange?: (index: number) => void;
+  /** 连续模式可见范围变化时，上报首尾两个 0-based 索引。 */
+  onVisibleRangeChange?: (startIndex: number, endIndex: number) => void;
 }
 
 type Aspect =
@@ -26,7 +26,7 @@ type Aspect =
 export default function ImageGallery({
   images,
   onClickNavigate,
-  onVisibleIndexChange,
+  onVisibleRangeChange,
 }: Props) {
   const index = useGalleryStore((s) => s.index);
   const zoom = useGalleryStore((s) => s.zoom);
@@ -278,12 +278,16 @@ export default function ImageGallery({
           overscan={3}
           rangeChanged={(range) => {
             if (images.length === 0) return;
-            const visibleIndex = Math.max(
+            const startIndex = Math.max(
               0,
               Math.min(images.length - 1, range.startIndex),
             );
-            continuousVisibleIndexRef.current = visibleIndex;
-            onVisibleIndexChange?.(visibleIndex);
+            const endIndex = Math.max(
+              startIndex,
+              Math.min(images.length - 1, range.endIndex),
+            );
+            continuousVisibleIndexRef.current = startIndex;
+            onVisibleRangeChange?.(startIndex, endIndex);
           }}
           itemContent={(i, src) => (
             <ContinuousImage

@@ -32,7 +32,7 @@ Fiber middleware → handlers → services → local files/cache
 - `backend/internal/middleware`：日志、恢复、local/LAN 访问门禁、资源 ID 解析和路径安全。
 - `backend/internal/handlers`：HTTP/SSE 契约、输入校验、状态码和公共 DTO。
 - `backend/internal/services`：扫描、资源目录、缓存、缩略图、faststart、转码和元数据。
-- `backend/internal/store`：偏好 JSON 的并发访问和原子落盘。
+- `backend/internal/store`：低频偏好与高频媒体活动分文件并发访问，均使用原子落盘。
 - `frontend/src/api`：唯一网络访问层；组件不手写端点。
 - `frontend/src/store`：仅保存 UI 与会话状态；服务端数据由查询层管理。
 
@@ -128,7 +128,7 @@ ffprobe 提供元数据；不兼容编码按需转为 H.264 + AAC；MP4 的 moov
 
 - 配置：`backend/config.yaml`，`mediaRoots` 是唯一媒体根字段。
 - 默认工作目录：进程 CWD 下 `.local-gallery/`。启动时把旧版顶层文件迁移到新布局。
-- 持久状态：`state/scan_cache.json`、`state/web_settings.json`、`state/cover_overrides.json`；任何缓存清理接口都不得进入 `state/`。
+- 持久状态：`state/scan_cache.json`、`state/web_settings.json`、`state/activity.json`、`state/cover_overrides.json`；任何缓存清理接口都不得进入 `state/`。
 - 派生缓存：`derived/thumbnails/`、`derived/video-faststart/`、`derived/video-transcode/`；按内容派生键写入，可安全重建。
 - 临时文件：统一写入 `temp/`，不与状态和派生缓存混放。
 
@@ -143,7 +143,7 @@ ffprobe 提供元数据；不兼容编码按需转为 H.264 + AAC；MP4 的 moov
 - URL 保存可分享的导航状态，只包含资源 ID 或 `smart:<tag>`。
 - 全部业务页面按路由懒加载，应用外壳保持常驻；首页 Hero 等大页面区块按领域组件和 hooks 拆分。
 - 图像库快照按任意深度集合递归构建 ID 索引，未读、最近、收藏和进度查询共享该索引，避免逐项扫描目录树。
-- 扫描 SSE 终态保留到用户显式重置，路由切换不会丢失完成/失败结果。阅读进度统一使用 0-based 页码：无记录为未读，`index=0` 表示已打开第一页，`index>=total-1` 为已完成。视频播放时间不写入图片页码状态。
+- 扫描 SSE 终态保留到用户显式重置，路由切换不会丢失完成/失败结果。活动模型同时承载 0-based 图片页码和毫秒视频位置，但使用不同复合键；图片到达最后一页、视频到达 98% 时由服务端派生完成状态。
 
 前端不得把服务端快照再复制成第二份长期 store。写操作成功后以查询失效或精确的乐观更新同步，避免双数据源漂移。
 

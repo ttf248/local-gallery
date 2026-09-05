@@ -1,21 +1,18 @@
 import { useMemo } from 'react'
 import { useLibraryStore } from '../store/libraryStore'
-import { useAllProgress } from './useReadingProgress'
+import { useImageActivities } from './useImageActivity'
 import { useFavorites } from './useFavorites'
 import type { CardData } from '../components/album/AlbumGrid'
-import type { ReadingProgress } from '../api/prefs'
+import type { ImageActivity } from '../api/activity'
 import { albumRoute } from '../utils/path'
-import { isUnread } from '../utils/progress'
+import { asProgressLike, isUnread } from '../utils/progress'
 import { buildLibraryIndex } from '../utils/libraryIndex'
 
 // useUnreadAlbums 给出当前未读(还没看 / 刚打开)的所有相册,按需携带
 // 收藏状态。返回值与 AlbumGrid 直接对接。
 //
-// 「未读」语义集中在 utils/progress.isUnread:
-//   - 没有 progress 记录
-//   - 或 progress.total === 0
-//   - 或 progress.index <= 0(刚翻到第 0 张算刚开始,不算「已读」)
-//   - index >= total(已读完) 不算未读,也不该再进「继续阅读」
+// 「未读」语义集中在 utils/progress.isUnread：没有图片活动才算未读；
+// 一旦打开第 0 页即是在读，到达 pageCount - 1 后是已完成。
 //
 // 调用方拿到 cards 后可自由 sort / filter(各 page 行为不同)。
 //
@@ -26,7 +23,7 @@ import { buildLibraryIndex } from '../utils/libraryIndex'
 //     隐式耦合。
 //  3. 收藏状态在 cards 阶段就合并,调用方不用再处理 (path → fav) 映射。
 interface UseUnreadAlbumsOptions {
-  progressMap?: Record<string, ReadingProgress>
+  progressMap?: Record<string, ImageActivity>
   loadProgress?: boolean
 }
 
@@ -41,12 +38,12 @@ export function useUnreadAlbums(options: UseUnreadAlbumsOptions = {}): {
   const favSet = useMemo(() => new Set(favorites), [favorites])
   const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
 
-  // 批量拿全库的 progress。注意:只发当前库里的相册 ID,避免传一堆
+  // 批量拿全库的图片活动。只发当前库里的相册 ID，避免传一堆
   // 已被 prune 掉的旧 ID(后端 batch 会跳过不存在的 key,但前端少发点
   // payload 也好)。
   const albumIds = libraryIndex.albumIds
 
-  const progressQuery = useAllProgress(albumIds, options.loadProgress ?? true)
+  const progressQuery = useImageActivities(albumIds, options.loadProgress ?? true)
   const progressMap = options.progressMap ?? progressQuery.data
 
   const cards = useMemo<CardData[]>(() => {
@@ -57,13 +54,14 @@ export function useUnreadAlbums(options: UseUnreadAlbumsOptions = {}): {
       // 跟 utils/progress.isInProgress 互斥:这里「未读」= 既不在读、也非已读完
       // (实际就是 isUnread 的反义,但 isUnread 也把「total=0 空相册」算进去 —
       //  空相册不丢,继续按未读展示)。
-      const isFresh = isUnread(p)
+      const isFresh = isUnread(asProgressLike(p, a.imageCount))
       if (!isFresh) continue
       // 即便是 isFresh(还没读)也把 progress 字段填上 — AlbumCard 用它
       // 决定「标记为已读」菜单项是否可点。未读卡片要能右键直接标已读,
-      // 没有 progress 字段就弹不出菜单,所以这里用图+视频总数做 total,
-      // index=0 表示还没翻。这样右键 → set(total, total) 即视为读完。
-      const total = a.imageCount + (a.videoCount ?? 0)
+      // 没有 progress 字段就弹不出菜单，因此图片相册用当前图片数构造
+      // 可标记状态。视频数量绝不能混入图片 pageCount；纯视频相册不
+      // 构造伪图片页，播放位置仍由独立的视频活动保存。
+      const total = a.imageCount
       out.push({
         id: 'u:' + a.path,
         variant: 'album',
