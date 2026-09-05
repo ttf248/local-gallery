@@ -19,17 +19,24 @@ test("扫描并打开示例相册", async ({ page }) => {
     timeout: 20_000,
   });
 
-  const response = await page.request.get("/api/library");
+  const response = await page.request.get("/api/albums?limit=1");
   expect(response.ok()).toBeTruthy();
   const body = (await response.json()) as {
-    result: {
-      root: string;
-      albums: Array<{ path: string; coverImage: string }>;
+    page: {
+      items: Array<{
+        id: string;
+        coverImages: string[];
+      }>;
     };
   };
-  expect(body.result.root).toMatch(/^r_[0-9a-f]{12}$/);
-  expect(body.result.albums[0]?.path).toMatch(/^a_/);
-  expect(body.result.albums[0]?.coverImage).toMatch(/^f_/);
+  expect(body.page.items[0]?.id).toMatch(/^a_[A-Za-z0-9_-]+$/);
+  expect(body.page.items[0]?.coverImages[0]).toMatch(/^f_/);
+
+  await page
+    .getByRole("link", { name: /打开相册“sample-album”/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/albums\/a_[A-Za-z0-9_-]+$/);
 });
 
 test("设置页可加载服务端配置", async ({ page }) => {
