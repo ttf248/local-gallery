@@ -6,11 +6,13 @@ import {
   type ServerConfigPatch,
 } from "../../api/config";
 import { useUIStore } from "../../store/uiStore";
-import { useLibraryStore } from "../../store/libraryStore";
 import { fsApi } from "../../api/fs";
 import { authApi } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { useDebounce } from "../../hooks/useDebounce";
+import { useScanSSE } from "../../hooks/useScanSSE";
+import { scanApi } from "../../api/scan";
+import { libraryQueryKeys } from "../../hooks/useLibrary";
 import {
   CheckIcon,
   AlertIcon,
@@ -168,7 +170,7 @@ type StatusMap = Record<string, FieldStatus>;
 export default function ServerConfigPanel() {
   const qc = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
+  const scanSSE = useScanSSE();
 
   const {
     data,
@@ -242,6 +244,8 @@ export default function ServerConfigPanel() {
 
       // 标记 MediaRoots 变脏 → 提示用户重新扫描
       if (resp.mediaRootsChanged) {
+        // 后端会丢弃旧扫描快照；同步删除所有前端摘要，不能让旧库短暂回显。
+        qc.removeQueries({ queryKey: libraryQueryKeys.root });
         setMediaRootsDirty(true);
       }
       // allowOsOpen 变更后:让前端 fsCapabilities 立即跟上,
@@ -562,9 +566,14 @@ export default function ServerConfigPanel() {
           </div>
           <button
             onClick={async () => {
-              await loadFromBackend();
-              setMediaRootsDirty(false);
-              pushToast({ kind: "success", message: "已触发重新扫描" });
+              try {
+                const { scanId } = await scanApi.start();
+                scanSSE.startWith(scanId);
+                setMediaRootsDirty(false);
+                pushToast({ kind: "success", message: "已开始重新扫描" });
+              } catch {
+                pushToast({ kind: "error", message: "启动扫描失败" });
+              }
             }}
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-accent/40 text-accent hover:bg-accent/10 text-xs transition-colors"
           >

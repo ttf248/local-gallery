@@ -11,6 +11,7 @@
 //
 // 返回结果按年份倒序，每年组内按文件数倒序；这样视觉上「今年 → 去年 → 更早」自然排序。
 import type { CardData } from "../components/album/AlbumCard";
+import type { LibraryNodeSummary } from "../api/library";
 import type { ScanResult } from "../api/scan";
 import { albumRoute } from "./path";
 
@@ -58,6 +59,7 @@ type AlbumLike = {
   displayName?: string;
   sourceRoot?: string;
   sourceName?: string;
+  virtual?: boolean;
 };
 
 type CollectionLike = {
@@ -197,7 +199,7 @@ export function groupAlbumsAndCollectionsByYear(
     // 插入的虚拟相册,Path 以 /.loose 或 \\.loose 结尾)。它的图数已经
     // 算在所属 Collection 的 imageTotal 里,不应该再独立出现在年份桶
     // 里(否则主页会显示两个 2024年 入口)。
-    if (/\.loose(?:$|[\\/])/.test(a.path)) continue;
+    if (a.virtual || /\.loose(?:$|[\\/])/.test(a.path)) continue;
     const { card, images, videos } = cardForAlbumLike(a);
     add(a.name, card, images, videos);
   }
@@ -222,4 +224,44 @@ export function groupAlbumsAndCollectionsByYear(
       .slice(0, 4);
   }
   return arr;
+}
+
+// 首页分页数据只包含顶层节点摘要。集合的媒体数量已由服务端递归聚合，
+// 因此前端无需为了时间线重新展开整个子树。
+export function groupLibraryNodesByYear(
+  nodes: LibraryNodeSummary[],
+): YearGroup[] {
+  const albums: AlbumLike[] = [];
+  const collections: CollectionLike[] = [];
+  for (const node of nodes) {
+    if (node.kind === "album") {
+      albums.push({
+        path: node.id,
+        name: node.name,
+        imageCount: node.imageCount ?? 0,
+        videoCount: node.videoCount,
+        coverImage: node.coverImage ?? "",
+        coverKind: node.coverKind,
+        author: node.author,
+        displayName: node.displayName,
+        sourceRoot: node.sourceRoot,
+        sourceName: node.sourceName,
+        virtual: node.virtual,
+      });
+      continue;
+    }
+    collections.push({
+      path: node.id,
+      name: node.name,
+      albumCount: node.albumCount ?? 0,
+      imageCount: node.imageCount,
+      videoCount: node.videoCount,
+      coverImage: node.coverImage,
+      coverImages: node.coverImages,
+      displayName: node.displayName,
+      sourceRoot: node.sourceRoot,
+      sourceName: node.sourceName,
+    });
+  }
+  return groupAlbumsAndCollectionsByYear(albums, collections);
 }

@@ -1,14 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
-import { scanApi } from '../../api/scan'
-import { useScanSSE } from '../../hooks/useScanSSE'
-import { useKeyboard } from '../../hooks/useKeyboard'
-import { useLibraryStore } from '../../store/libraryStore'
-import { useUIStore } from '../../store/uiStore'
-import ThemeSwitcher from '../common/ThemeSwitcher'
-import GlobalSearch from '../common/GlobalSearch'
-import { ScanIcon, MoreHorizontalIcon, RefreshIcon, HelpIcon } from '../common/Icon'
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { scanApi } from "../../api/scan";
+import { useScanSSE } from "../../hooks/useScanSSE";
+import { useKeyboard } from "../../hooks/useKeyboard";
+import { useUIStore } from "../../store/uiStore";
+import { libraryApi } from "../../api/library";
+import { libraryQueryKeys } from "../../hooks/useLibrary";
+import ThemeSwitcher from "../common/ThemeSwitcher";
+import GlobalSearch from "../common/GlobalSearch";
+import {
+  ScanIcon,
+  MoreHorizontalIcon,
+  RefreshIcon,
+  HelpIcon,
+} from "../common/Icon";
 
 // 顶部工具栏（精简后）：
 //   左侧：极简字标
@@ -18,49 +24,58 @@ import { ScanIcon, MoreHorizontalIcon, RefreshIcon, HelpIcon } from '../common/I
 // 排序 / 视图模式 / 视图 chips 已迁移到各 list 页面的 filter strip,
 //  让 toolbar 只承担"全局信息 + 主题"职责,避免挤 7+ 控件。
 export default function Toolbar() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const sse = useScanSSE()
-  const setResult = useLibraryStore((s) => s.setResult)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const pushToast = useUIStore((s) => s.pushToast)
+  const navigate = useNavigate();
+  const location = useLocation();
+  const sse = useScanSSE();
+  const queryClient = useQueryClient();
+  const pushToast = useUIStore((s) => s.pushToast);
 
-  const onGallery = location.pathname.startsWith('/gallery')
+  const onGallery = location.pathname.startsWith("/gallery");
 
   const startScan = useMutation({
     mutationFn: () => scanApi.start(),
     onSuccess: (r) => {
-      sse.startWith(r.scanId)
-      pushToast({ kind: 'info', message: '扫描已开始' })
+      sse.startWith(r.scanId);
+      pushToast({ kind: "info", message: "扫描已开始" });
     },
-    onError: () => pushToast({ kind: 'error', message: '启动扫描失败' }),
-  })
+    onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
+  });
 
   // Ctrl+S 全局触发扫描 — 走 useKeyboard 让 SHORTCUTS 表与实际行为
   // 始终一致;输入框优先跳过(由 useKeyboard 内置,避免与浏览器
   // 「保存网页」冲突)。
   useKeyboard({
-    'ctrl+s': () => startScan.mutate(),
-  })
+    "ctrl+s": () => startScan.mutate(),
+  });
 
   useEffect(() => {
-    if (!sse.isComplete || !sse.scanId) return
-    scanApi
-      .result(sse.scanId)
-      .then((r) => {
-        setResult(r.result)
-        pushToast({ kind: 'success', message: `扫描完成 · 共 ${r.result.albumCount} 个文件夹` })
+    if (!sse.isComplete || !sse.scanId) return;
+    void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.root });
+    void queryClient
+      .fetchQuery({
+        queryKey: libraryQueryKeys.manifest(),
+        queryFn: () => libraryApi.manifest(),
       })
-      .catch(() => pushToast({ kind: 'error', message: '获取扫描结果失败' }))
-  }, [sse.isComplete, sse.scanId, setResult, pushToast])
+      .then((response) => {
+        pushToast({
+          kind: "success",
+          message: `扫描完成 · 共 ${response.manifest.statistics.albumCount} 个文件夹`,
+        });
+      })
+      .catch(() => pushToast({ kind: "error", message: "刷新媒体库失败" }));
+  }, [queryClient, sse.isComplete, sse.scanId, pushToast]);
 
   return (
     <header className="h-14 flex items-center gap-4 px-5 lg:px-7 border-b border-border-faint glass">
       {/* 左侧：极简字标（窄屏隐藏） */}
       <div className="hidden lg:flex items-center gap-2 min-w-0">
-        <span className="font-display text-sm text-fg-muted">Local Gallery</span>
+        <span className="font-display text-sm text-fg-muted">
+          Local Gallery
+        </span>
         <span className="text-fg-subtle/50">/</span>
-        <span className="text-sm font-medium truncate">{titleOf(location.pathname)}</span>
+        <span className="text-sm font-medium truncate">
+          {titleOf(location.pathname)}
+        </span>
       </div>
       {/* 窄屏：返回按钮 */}
       <div className="lg:hidden">
@@ -83,7 +98,9 @@ export default function Toolbar() {
 
       <div className="flex items-center gap-1">
         <button
-          onClick={() => window.dispatchEvent(new CustomEvent('comic:open-help'))}
+          onClick={() =>
+            window.dispatchEvent(new CustomEvent("comic:open-help"))
+          }
           className="inline-flex items-center justify-center w-8 h-8 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
           title="快捷键帮助 (?)"
           aria-label="快捷键帮助"
@@ -91,22 +108,33 @@ export default function Toolbar() {
           <HelpIcon size={14} />
         </button>
         <ThemeSwitcher compact />
-        {!onGallery && <MoreMenu onScan={() => startScan.mutate()} onRefresh={() => loadFromBackend()} scanPending={startScan.isPending || sse.isRunning} />}
+        {!onGallery && (
+          <MoreMenu
+            onScan={() => startScan.mutate()}
+            onRefresh={() =>
+              void queryClient.invalidateQueries({
+                queryKey: libraryQueryKeys.root,
+              })
+            }
+            scanPending={startScan.isPending || sse.isRunning}
+          />
+        )}
       </div>
     </header>
-  )
+  );
 }
 
 function titleOf(pathname: string): string {
-  if (pathname === '/' || pathname === '') return '图像库'
-  if (pathname.startsWith('/recents')) return '最近'
-  if (pathname.startsWith('/favorites')) return '收藏'
-  if (pathname.startsWith('/settings')) return '设置'
-  if (pathname.startsWith('/albums')) return '文件夹'
-  if (pathname.startsWith('/gallery')) return '浏览'
-  if (pathname.startsWith('/tags') || pathname.startsWith('/authors')) return '标签'
-  if (pathname.startsWith('/unread')) return '未读'
-  return '图像'
+  if (pathname === "/" || pathname === "") return "图像库";
+  if (pathname.startsWith("/recents")) return "最近";
+  if (pathname.startsWith("/favorites")) return "收藏";
+  if (pathname.startsWith("/settings")) return "设置";
+  if (pathname.startsWith("/albums")) return "文件夹";
+  if (pathname.startsWith("/gallery")) return "浏览";
+  if (pathname.startsWith("/tags") || pathname.startsWith("/authors"))
+    return "标签";
+  if (pathname.startsWith("/unread")) return "未读";
+  return "图像";
 }
 
 // kebab 菜单: 扫描 + 刷新缓存
@@ -116,29 +144,30 @@ function MoreMenu({
   onRefresh,
   scanPending,
 }: {
-  onScan: () => void
-  onRefresh: () => void
-  scanPending: boolean
+  onScan: () => void;
+  onRefresh: () => void;
+  scanPending: boolean;
 }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
+      if (e.key === "Escape") setOpen(false);
+    };
     setTimeout(() => {
-      window.addEventListener('mousedown', onClick)
-      window.addEventListener('keydown', onKey)
-    }, 0)
+      window.addEventListener("mousedown", onClick);
+      window.addEventListener("keydown", onKey);
+    }, 0);
     return () => {
-      window.removeEventListener('mousedown', onClick)
-      window.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+      window.removeEventListener("mousedown", onClick);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   return (
     <div ref={ref} className="relative">
@@ -154,20 +183,22 @@ function MoreMenu({
         <div className="absolute right-0 top-full mt-1.5 min-w-[180px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up">
           <button
             onClick={() => {
-              setOpen(false)
-              onScan()
+              setOpen(false);
+              onScan();
             }}
             disabled={scanPending}
             className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors disabled:opacity-50"
           >
             <ScanIcon size={12} />
-            <span>{scanPending ? '扫描中…' : '重新扫描'}</span>
-            <span className="ml-auto text-[10px] text-fg-subtle font-mono">Ctrl+S</span>
+            <span>{scanPending ? "扫描中…" : "重新扫描"}</span>
+            <span className="ml-auto text-[10px] text-fg-subtle font-mono">
+              Ctrl+S
+            </span>
           </button>
           <button
             onClick={() => {
-              setOpen(false)
-              onRefresh()
+              setOpen(false);
+              onRefresh();
             }}
             className="w-full flex items-center gap-2.5 px-3 py-1.5 text-[13px] text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
           >
@@ -177,5 +208,5 @@ function MoreMenu({
         </div>
       )}
     </div>
-  )
+  );
 }

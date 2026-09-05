@@ -1,33 +1,33 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { useLibraryStore } from '../store/libraryStore'
-import { useSearchStore } from '../store/searchStore'
-import { useScanSSE } from '../hooks/useScanSSE'
-import { useFavorites } from '../hooks/useFavorites'
+import { useEffect, useMemo, useRef } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useSearchStore } from "../store/searchStore";
+import { useScanSSE } from "../hooks/useScanSSE";
+import { useFavorites } from "../hooks/useFavorites";
 import {
   useImageActivities,
   useMarkAlbumRead,
   useMarkAlbumsRead,
-} from '../hooks/useImageActivity'
-import { useUnreadAlbums } from '../hooks/useUnreadAlbums'
-import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
-import { scanApi, type ScanResult } from '../api/scan'
-import { historyApi } from '../api/prefs'
-import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
-import { ListFilterBar } from '../components/common/ListFilterBar'
-import EmptyState from '../components/common/EmptyState'
-import YearTimeline from '../components/home/YearTimeline'
+} from "../hooks/useImageActivity";
+import { useUnreadAlbums } from "../hooks/useUnreadAlbums";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
+import { scanApi } from "../api/scan";
+import { historyApi } from "../api/prefs";
+import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
+import { ListFilterBar } from "../components/common/ListFilterBar";
+import EmptyState from "../components/common/EmptyState";
+import YearTimeline from "../components/home/YearTimeline";
+import { ContinueReadingHero, UnreadHero } from "../components/home/HomeHeroes";
+import { useUIStore } from "../store/uiStore";
+import { albumRoute, decodeFavPath } from "../utils/path";
+import type { GalleryContextEntry } from "../utils/galleryContext";
 import {
-  ContinueReadingHero,
-  UnreadHero,
-} from '../components/home/HomeHeroes'
-import { useUIStore } from '../store/uiStore'
-import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
-import type { GalleryContextEntry } from '../utils/galleryContext'
-import { groupByYear, type YearGroup } from '../utils/albumGrouping'
-import { asProgressLike, isInProgress } from '../utils/progress'
-import { buildLibraryIndex } from '../utils/libraryIndex'
+  groupLibraryNodesByYear,
+  type YearGroup,
+} from "../utils/albumGrouping";
+import { asProgressLike, isInProgress } from "../utils/progress";
+import { useLibraryAlbums, useLibraryOverview } from "../hooks/useLibrary";
+import { libraryOverviewCards, nodeSummaryToCard } from "../utils/libraryCard";
 import {
   PlayFilledIcon,
   StarIcon,
@@ -38,142 +38,88 @@ import {
   CloseIcon,
   ImageIcon,
   CalendarIcon,
-} from '../components/common/Icon'
-
-// 卡片全集（album + collection + smart），用于"全部图像" filter 网格
-function buildCards(r: ScanResult | null): CardData[] {
-  if (!r) return []
-  const items: CardData[] = []
-  for (const a of r.albums) {
-    items.push({
-      id: 'a:' + a.path,
-      variant: 'album',
-      title: a.name,
-      displayTitle: a.displayName,
-      subtitle: a.author || undefined,
-      count: a.imageCount,
-      imageCount: a.imageCount,
-      videoCount: a.videoCount ?? 0,
-      coverPath: a.coverImage,
-      coverKind: a.coverKind,
-      to: albumRoute(a.path),
-      sourceRoot: a.sourceRoot,
-      sourceName: a.sourceName,
-    })
-  }
-  for (const c of r.collections ?? []) {
-    items.push({
-      id: 'c:' + c.path,
-      variant: 'collection',
-      title: c.name,
-      displayTitle: c.displayName,
-      subtitle: '集合',
-      count: c.albumCount,
-      coverPath: c.albums[0]?.coverImage ?? '',
-      to: albumRoute(c.path),
-      sourceRoot: c.sourceRoot,
-      sourceName: c.sourceName,
-    })
-  }
-  for (const s of r.smartCollections ?? []) {
-    items.push({
-      id: 's:' + s.author,
-      variant: 'smart',
-      title: s.author,
-      count: s.albumCount,
-      coverPath: s.coverImage,
-      to: tagRoute(s.author),
-    })
-  }
-  return items
-}
+} from "../components/common/Icon";
 
 export default function Home() {
-  const navigate = useNavigate()
-  const result = useLibraryStore((s) => s.result)
-  const setResult = useLibraryStore((s) => s.setResult)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const lastScanAt = useLibraryStore((s) => s.lastScanAt)
-  const sse = useScanSSE()
-  const pushToast = useUIStore((s) => s.pushToast)
+  const navigate = useNavigate();
+  const overview = useLibraryOverview();
+  const manifest = overview.manifest;
+  const libraryAlbumsQuery = useLibraryAlbums();
+  const libraryAlbums = useMemo(
+    () => libraryAlbumsQuery.data?.items ?? [],
+    [libraryAlbumsQuery.data],
+  );
+  const sse = useScanSSE();
+  const pushToast = useUIStore((s) => s.pushToast);
 
   // "全部图像" section 的 ref：年份筛选触发后自动滚到这里
-  const gridRef = useRef<HTMLDivElement>(null)
+  const gridRef = useRef<HTMLDivElement>(null);
 
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const view = useSearchStore((s) => s.view)
-  const setView = useSearchStore((s) => s.setView)
-  const yearFilter = useSearchStore((s) => s.yearFilter)
-  const setYearFilter = useSearchStore((s) => s.setYearFilter)
-  const viewMode = useUIStore((s) => s.viewMode)
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const view = useSearchStore((s) => s.view);
+  const setView = useSearchStore((s) => s.setView);
+  const yearFilter = useSearchStore((s) => s.yearFilter);
+  const setYearFilter = useSearchStore((s) => s.setYearFilter);
+  const viewMode = useUIStore((s) => s.viewMode);
 
-  const { favorites } = useFavorites()
+  const { favorites } = useFavorites();
   // 首页的未读区与继续阅读区共享同一份全库进度，避免两个近似 batch 请求。
-  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
-  const { data: progressMap } = useImageActivities(libraryIndex.albumIds)
+  const albumIds = useMemo(
+    () => libraryAlbums.map((album) => album.id),
+    [libraryAlbums],
+  );
+  const { data: progressMap } = useImageActivities(albumIds);
   // 未读列表:Home 顶部 hero 直接展示前 6 张 + 链接到 /unread
   // 已有 useUnreadAlbums hook(见 hooks/useUnreadAlbums.ts),复用避免重新
   // 实现 progress 派发逻辑。
   const { cards: unreadCards, count: unreadCount } = useUnreadAlbums({
     progressMap,
     loadProgress: false,
-  })
+  });
   // history 用于 sortBy='viewed':用最近「看过」时间(而非文件 mtime)排序。
   // 注意:history 顺序是 openedAt 倒序,所以可以直接走 batch 缓存。
   const { data: historyData } = useQuery({
-    queryKey: ['history'],
+    queryKey: ["history"],
     queryFn: () => historyApi.list(),
     staleTime: 30_000,
-  })
+  });
   const viewedAtMap = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const h of historyData?.history ?? []) m.set(h.albumId, h.openedAt)
-    return m
-  }, [historyData])
-
-  useEffect(() => {
-    if (!result) loadFromBackend()
-  }, [result, loadFromBackend])
-
-  useEffect(() => {
-    if (!sse.isComplete || !sse.scanId) return
-    scanApi
-      .result(sse.scanId)
-      .then((r) => setResult(r.result))
-      .catch(() => pushToast({ kind: 'error', message: '获取扫描结果失败' }))
-  }, [sse.isComplete, sse.scanId, setResult, pushToast])
+    const m = new Map<string, string>();
+    for (const h of historyData?.history ?? []) m.set(h.albumId, h.openedAt);
+    return m;
+  }, [historyData]);
 
   const startScan = useMutation({
     mutationFn: () => scanApi.start(),
     onSuccess: (r) => {
-      sse.startWith(r.scanId)
-      pushToast({ kind: 'info', message: '扫描已开始' })
+      sse.startWith(r.scanId);
+      pushToast({ kind: "info", message: "扫描已开始" });
     },
-    onError: () => pushToast({ kind: 'error', message: '启动扫描失败' }),
-  })
+    onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
+  });
 
   const onShuffle = () => {
-    if (!result || result.albums.length === 0) {
-      pushToast({ kind: 'info', message: '尚未加载图像库' })
-      return
+    if (libraryAlbums.length === 0) {
+      pushToast({ kind: "info", message: "尚未加载图像库" });
+      return;
     }
-    const idx = Math.floor(Math.random() * result.albums.length)
-    const a = result.albums[idx]
-    navigate(albumRoute(a.path))
-  }
+    const album =
+      libraryAlbums[Math.floor(Math.random() * libraryAlbums.length)];
+    navigate(albumRoute(album.id));
+  };
 
   // 随机未读:从未读列表里挑一本(若未读为空,给个 toast 引导去 /unread 看空态)
   const onShuffleUnread = () => {
     if (unreadCards.length === 0) {
-      pushToast({ kind: 'info', message: '没有未读相册可跳' })
-      return
+      pushToast({ kind: "info", message: "没有未读相册可跳" });
+      return;
     }
-    const pick = unreadCards[Math.floor(Math.random() * unreadCards.length)]
+    const pick = unreadCards[Math.floor(Math.random() * unreadCards.length)];
     // pick.to 形如 /albums/<encoded>;Gallery 期望 ?path= 原 path 形式
-    const path = decodeFavPath(pick.to)
-    navigate(albumRoute(path))
-  }
+    const path = decodeFavPath(pick.to);
+    navigate(albumRoute(path));
+  };
 
   // 「继续阅读」管理：单本标记已读 / 一键全部标记已读。
   //
@@ -184,225 +130,260 @@ export default function Home() {
   // 个 hero 都消失。
   //
   // 真要「忘记这本」时仍可调 DELETE（后端保留），但 UI 上不再用。
-  const markReadContinue = useMarkAlbumRead()
-  const markReadAllContinue = useMarkAlbumsRead()
+  const markReadContinue = useMarkAlbumRead();
+  const markReadAllContinue = useMarkAlbumsRead();
   const onRemoveContinue = (card: CardData) => {
-    const albumId = decodeFavPath(card.to)
-    const total = card.progress?.total ?? 0
+    const albumId = decodeFavPath(card.to);
+    const total = card.progress?.total ?? 0;
     if (total <= 0) {
-      pushToast({ kind: 'error', message: '该相册为空,无法标记' })
-      return
+      pushToast({ kind: "error", message: "该相册为空,无法标记" });
+      return;
     }
     markReadContinue.mutate(
       { albumId, total },
       {
         onSuccess: () =>
-          pushToast({ kind: 'info', message: `已将「${card.title}」标记为已读` }),
-        onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
+          pushToast({
+            kind: "info",
+            message: `已将「${card.title}」标记为已读`,
+          }),
+        onError: () => pushToast({ kind: "error", message: "标记失败,请重试" }),
       },
-    )
-  }
+    );
+  };
   const onClearContinue = () => {
-    if (!inProgressAll.length) return
+    if (!inProgressAll.length) return;
     const ok = window.confirm(
       `将 ${inProgressAll.length} 本相册全部标记为已读？\n\n操作不会删除文件,只是把阅读进度推到末尾。`,
-    )
-    if (!ok) return
+    );
+    if (!ok) return;
     const items = inProgressAll.map((c) => ({
       albumId: decodeFavPath(c.to),
       total: c.progress?.total ?? 0,
-    }))
+    }));
     markReadAllContinue.mutate(items, {
       onSuccess: (r) => {
         if (r.failed === 0) {
-          pushToast({ kind: 'info', message: `已将 ${r.ok} 本标记为已读` })
+          pushToast({ kind: "info", message: `已将 ${r.ok} 本标记为已读` });
         } else {
           pushToast({
-            kind: 'error',
+            kind: "error",
             message: `已标记 ${r.ok} 本,失败 ${r.failed} 本`,
-          })
+          });
         }
       },
-      onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
-    })
-  }
+      onError: () => pushToast({ kind: "error", message: "标记失败,请重试" }),
+    });
+  };
 
   // 「未读」管理：单本标记已读 / 一键全部标记已读。
   // 语义上「标记已读」= 把 progress 推到 index=total（与 AlbumCard 右键
   // 「标记为已读」一致）。不是删除 record — 保留"已读完"的痕迹，未来
   // Recents / Favorites / 历史面板能继续看到。
-  const markReadOne = useMarkAlbumRead()
-  const markReadAll = useMarkAlbumsRead()
+  const markReadOne = useMarkAlbumRead();
+  const markReadAll = useMarkAlbumsRead();
   const onMarkReadUnread = (card: CardData) => {
-    const albumId = decodeFavPath(card.to)
-    const total = card.progress?.total ?? 0
+    const albumId = decodeFavPath(card.to);
+    const total = card.progress?.total ?? 0;
     if (total <= 0) {
-      pushToast({ kind: 'error', message: '该相册为空,无法标记' })
-      return
+      pushToast({ kind: "error", message: "该相册为空,无法标记" });
+      return;
     }
     markReadOne.mutate(
       { albumId, total },
       {
         onSuccess: () =>
-          pushToast({ kind: 'info', message: `已将「${card.title}」标记为已读` }),
-        onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
+          pushToast({
+            kind: "info",
+            message: `已将「${card.title}」标记为已读`,
+          }),
+        onError: () => pushToast({ kind: "error", message: "标记失败,请重试" }),
       },
-    )
-  }
+    );
+  };
   const onMarkAllReadUnread = () => {
-    if (!unreadCards.length) return
+    if (!unreadCards.length) return;
     const ok = window.confirm(
       `将 ${unreadCards.length} 本相册全部标记为已读？\n\n操作不会删除文件,只是把阅读进度推到末尾。`,
-    )
-    if (!ok) return
+    );
+    if (!ok) return;
     const items = unreadCards.map((c) => ({
       albumId: decodeFavPath(c.to),
       total: c.progress?.total ?? 0,
-    }))
+    }));
     markReadAll.mutate(items, {
       onSuccess: (r) => {
         if (r.failed === 0) {
-          pushToast({ kind: 'info', message: `已将 ${r.ok} 本标记为已读` })
+          pushToast({ kind: "info", message: `已将 ${r.ok} 本标记为已读` });
         } else {
           pushToast({
-            kind: 'error',
+            kind: "error",
             message: `已标记 ${r.ok} 本,失败 ${r.failed} 本`,
-          })
+          });
         }
       },
-      onError: () => pushToast({ kind: 'error', message: '标记失败,请重试' }),
-    })
-  }
-  const cards = useMemo(() => buildCards(result), [result])
+      onError: () => pushToast({ kind: "error", message: "标记失败,请重试" }),
+    });
+  };
+  const cards = useMemo(
+    () => libraryOverviewCards(overview.nodes, overview.tags),
+    [overview.nodes, overview.tags],
+  );
 
   // 继续阅读的全量列表(不限 4 张),给 ContinueReadingHero 用。
   // 排序:优先按 progress.index(已读张数)降序,其次按 mTime 倒序保稳定。
-  // 递归索引已包含任意深度集合内的相册，避免深层内容漏出继续阅读。
+  // 全局相册摘要包含任意深度的相册，避免深层内容漏出继续阅读。
   const inProgressAll = useMemo<CardData[]>(() => {
-    if (!progressMap) return []
-    const items: CardData[] = []
-    for (const a of libraryIndex.albumsById.values()) {
-      const p = progressMap[a.path]
-      if (!isInProgress(asProgressLike(p, a.imageCount))) continue
+    if (!progressMap) return [];
+    const items: CardData[] = [];
+    for (const album of libraryAlbums) {
+      const p = progressMap[album.id];
+      const imageCount = album.imageCount ?? 0;
+      if (!isInProgress(asProgressLike(p, imageCount))) continue;
       items.push({
-        id: 'a:' + a.path,
-        variant: 'album',
-        title: a.name,
-        displayTitle: a.displayName,
-        count: a.imageCount,
-        imageCount: a.imageCount,
-        videoCount: a.videoCount ?? 0,
-        coverPath: a.coverImage,
-        coverKind: a.coverKind,
-        // to 走 album 路由 — 继续阅读的"点卡片直跳画廊"onContinue 需要 path
-        to: albumRoute(a.path),
-        progress: { index: p.pageIndex, total: a.imageCount },
-        sourceRoot: a.sourceRoot,
-        sourceName: a.sourceName,
-      })
+        ...nodeSummaryToCard(album),
+        progress: { index: p.pageIndex, total: imageCount },
+      });
     }
-    return items.sort((a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0))
-  }, [libraryIndex, progressMap])
+    return items.sort(
+      (a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0),
+    );
+  }, [libraryAlbums, progressMap]);
 
   // 时光轴：按年份分组（画廊模式，替代早期"全新/重温/最近加入"的分区）
-  const yearGroups = useMemo<YearGroup[]>(() => groupByYear(result), [result])
+  const yearGroups = useMemo<YearGroup[]>(
+    () => groupLibraryNodesByYear(overview.nodes),
+    [overview.nodes],
+  );
+
+  const recentByCardID = useMemo(() => {
+    const dates = new Map<string, string>();
+    for (const node of overview.nodes) {
+      dates.set(
+        `${node.kind === "album" ? "a" : "c"}:${node.id}`,
+        node.date ?? node.modTime ?? "",
+      );
+    }
+    return dates;
+  }, [overview.nodes]);
 
   // 切换视图到 collection/smart 时清掉 yearFilter（年份只对 album 有意义）
   useEffect(() => {
-    if (yearFilter !== null && view !== 'all' && view !== 'album') {
-      setYearFilter(null)
+    if (yearFilter !== null && view !== "all" && view !== "album") {
+      setYearFilter(null);
     }
-  }, [view, yearFilter, setYearFilter])
+  }, [view, yearFilter, setYearFilter]);
 
   // 全部图像 filter（视图 + 搜索 + 年份筛选 + 最小图数 + 排序）
-  const yearFilterActive = yearFilter !== null && (view === 'all' || view === 'album')
-  const minImageCount = useSearchStore((s) => s.minImageCount)
+  const yearFilterActive =
+    yearFilter !== null && (view === "all" || view === "album");
+  const minImageCount = useSearchStore((s) => s.minImageCount);
   const filtered = useMemo(() => {
     const list = cards.filter((it) => {
-      if (view !== 'all' && it.variant !== view) return false
+      if (view !== "all" && it.variant !== view) return false;
       // 最小图数过滤:仅对 album 变体生效;collection / smart 走 albumCount 概念,
       // 不参与图数过滤(它们的「张数」语义不同)。
-      if (minImageCount > 0 && it.variant === 'album' && (it.count ?? 0) < minImageCount) {
-        return false
+      if (
+        minImageCount > 0 &&
+        it.variant === "album" &&
+        (it.count ?? 0) < minImageCount
+      ) {
+        return false;
       }
       // 年份筛选：用 item 自身的 title 提取年份来匹配。
       // collection/smart 自身也可能没有年份（或有），让 extractYear 自然处理，
       // 避免把"萍乡中学"这种没年份的 collection 因为不是 album 就被误删。
       if (yearFilterActive) {
-        if (yearFilter === 'other') {
-          if (extractYearOrNull(it.title) !== null) return false
-        } else if (typeof yearFilter === 'number') {
-          if (extractYearOrNull(it.title) !== yearFilter) return false
+        if (yearFilter === "other") {
+          if (extractYearOrNull(it.title) !== null) return false;
+        } else if (typeof yearFilter === "number") {
+          if (extractYearOrNull(it.title) !== yearFilter) return false;
         }
       }
       if (query) {
-        const q = query.toLowerCase()
-        const hay = `${it.title} ${it.subtitle ?? ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
+        const q = query.toLowerCase();
+        const hay = `${it.title} ${it.subtitle ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
       }
-      return true
-    })
+      return true;
+    });
     const withProgress = list.map((c) => {
-      if (c.variant !== 'album') return c
-      const k = decodeFavPath(c.to)
-      const p = progressMap?.[k]
-      if (!p) return c
+      if (c.variant !== "album") return c;
+      const k = decodeFavPath(c.to);
+      const p = progressMap?.[k];
+      if (!p) return c;
       return {
         ...c,
         progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
-      }
-    })
+      };
+    });
     switch (sortBy) {
-      case 'count':
-        return withProgress.sort((a, b) => b.count - a.count)
-      case 'recent':
+      case "count":
+        return withProgress.sort((a, b) => b.count - a.count);
+      case "recent":
         return withProgress.sort(
           (a, b) =>
-            +new Date(recentTime(result, b.id)) - +new Date(recentTime(result, a.id)),
-        )
-      case 'viewed':
+            +new Date(recentByCardID.get(b.id) ?? "") -
+            +new Date(recentByCardID.get(a.id) ?? ""),
+        );
+      case "viewed":
         // history 命中按 openedAt 倒序;未命中(从未打开)排到末尾,
         // 用 title 排序保稳定。album 变体才有「最近看过」的概念;
         // collection/smart 走 title 兜底(没 history 概念)。
         return withProgress.sort((a, b) => {
-          const aViewed = viewedAtMap.get(decodeFavPath(a.to))
-          const bViewed = viewedAtMap.get(decodeFavPath(b.to))
-          if (aViewed && bViewed) return +new Date(bViewed) - +new Date(aViewed)
-          if (aViewed) return -1
-          if (bViewed) return 1
-          return a.title.localeCompare(b.title)
-        })
+          const aViewed = viewedAtMap.get(decodeFavPath(a.to));
+          const bViewed = viewedAtMap.get(decodeFavPath(b.to));
+          if (aViewed && bViewed)
+            return +new Date(bViewed) - +new Date(aViewed);
+          if (aViewed) return -1;
+          if (bViewed) return 1;
+          return a.title.localeCompare(b.title);
+        });
       default:
-        return withProgress.sort((a, b) => a.title.localeCompare(b.title))
+        return withProgress.sort((a, b) => a.title.localeCompare(b.title));
     }
-  }, [cards, query, sortBy, view, yearFilter, yearFilterActive, progressMap, result, viewedAtMap, minImageCount])
+  }, [
+    cards,
+    query,
+    sortBy,
+    view,
+    yearFilter,
+    yearFilterActive,
+    progressMap,
+    recentByCardID,
+    viewedAtMap,
+    minImageCount,
+  ]);
 
   const homeEntries = useMemo<GalleryContextEntry[]>(
     () =>
       filtered
-        .filter((c) => c.variant === 'album')
+        .filter((c) => c.variant === "album")
         .map((c) => ({ key: decodeFavPath(c.to), to: c.to, name: c.title })),
     [filtered],
-  )
-  useGalleryContextSync({ type: 'home' }, homeEntries)
+  );
+  useGalleryContextSync({ type: "home" }, homeEntries);
 
   const counts = useMemo(() => {
-    const c = { all: cards.length, album: 0, collection: 0, smart: 0 }
-    for (const it of cards) c[it.variant]++
-    return c
-  }, [cards])
+    const c = { all: cards.length, album: 0, collection: 0, smart: 0 };
+    for (const it of cards) c[it.variant]++;
+    return c;
+  }, [cards]);
 
-  const favCount = favorites.length
-  const isLoadingInitial = !result && (sse.isRunning || sse.scanId)
-  const hasContent = !!result && cards.length > 0
+  const favCount = favorites.length;
+  const isLoadingInitial =
+    overview.isLoading ||
+    libraryAlbumsQuery.isLoading ||
+    (!manifest && !!(sse.isRunning || sse.scanId));
+  const hasContent = !!manifest && cards.length > 0;
 
   // 主 CTA：有进度 → 继续上次；否则 → 随机翻翻
-  const primaryAlbum = inProgressAll[0]
+  const primaryAlbum = inProgressAll[0];
   const scanLabel = sse.isRunning
-    ? '扫描中…'
+    ? "扫描中…"
     : startScan.isPending
-      ? '启动中…'
-      : '重新扫描'
+      ? "启动中…"
+      : "重新扫描";
 
   // 「继续上次」直跳画廊：进首页最大的目的是「接着看」，
   // 中转 Album 详情会多一次点击，对随手翻翻的场景不友好。
@@ -412,25 +393,26 @@ export default function Home() {
   //  - imageCount === 0 && videoCount > 0（纯视频相册）→ type=video
   // 不传 type 时 Gallery 把当前相册当图库,纯视频相册会显示「这个文件夹没有图片」。
   const onContinue = (card: CardData) => {
-    if (card.variant !== 'album') {
-      navigate(card.to)
-      return
+    if (card.variant !== "album") {
+      navigate(card.to);
+      return;
     }
-    const idx = card.progress?.index ?? 0
-    const imgs = card.imageCount ?? card.count
-    const vids = card.videoCount ?? 0
-    const galleryType: 'image' | 'video' = imgs > 0 ? 'image' : vids > 0 ? 'video' : 'image'
+    const idx = card.progress?.index ?? 0;
+    const imgs = card.imageCount ?? card.count;
+    const vids = card.videoCount ?? 0;
+    const galleryType: "image" | "video" =
+      imgs > 0 ? "image" : vids > 0 ? "video" : "image";
     const qs = new URLSearchParams({
       path: decodeFavPath(card.to),
       index: String(idx),
       name: card.title,
       type: galleryType,
-    })
-    navigate(`/gallery?${qs.toString()}`)
-  }
+    });
+    navigate(`/gallery?${qs.toString()}`);
+  };
 
   // 年份筛选的"全部图像"section 顶部 chip
-  const yearFilterLabel = yearFilter === 'other' ? '其他' : String(yearFilter)
+  const yearFilterLabel = yearFilter === "other" ? "其他" : String(yearFilter);
 
   return (
     <div className="min-h-full">
@@ -447,17 +429,18 @@ export default function Home() {
               图像库
             </h1>
             <p className="text-sm text-fg-muted mt-3.5">
-              {result ? (
+              {manifest ? (
                 <>
-                  <span className="tabular-nums text-fg">{counts.all}</span> 个文件夹
-                  {lastScanAt && (
+                  <span className="tabular-nums text-fg">{counts.all}</span>{" "}
+                  个文件夹
+                  {manifest.scannedAt && (
                     <span className="text-fg-subtle ml-1.5">
-                      · 上次更新 {formatTime(lastScanAt)}
+                      · 上次更新 {formatTime(manifest.scannedAt)}
                     </span>
                   )}
                 </>
               ) : (
-                '尚未加载图像库'
+                "尚未加载图像库"
               )}
             </p>
           </div>
@@ -483,7 +466,7 @@ export default function Home() {
               meta={
                 primaryAlbum.progress
                   ? `${primaryAlbum.progress.index + 1}/${primaryAlbum.progress.total}`
-                  : ''
+                  : ""
               }
               variant="primary"
               onClick={() => onContinue(primaryAlbum)}
@@ -519,7 +502,7 @@ export default function Home() {
             title="最近打开"
             subtitle="按时间倒序"
             variant="secondary"
-            onClick={() => navigate('/recents')}
+            onClick={() => navigate("/recents")}
           />
 
           {/* 4. 收藏（仅当有收藏时） */}
@@ -529,7 +512,7 @@ export default function Home() {
               title="收藏"
               subtitle={`${favCount} 项`}
               variant="secondary"
-              onClick={() => navigate('/favorites')}
+              onClick={() => navigate("/favorites")}
             />
           )}
         </div>
@@ -539,10 +522,10 @@ export default function Home() {
       {hasContent && (
         <ListFilterBar
           viewChips={[
-            { key: 'all', label: '全部', count: counts.all },
-            { key: 'album', label: '文件夹', count: counts.album },
-            { key: 'collection', label: '集合', count: counts.collection },
-            { key: 'smart', label: '标签', count: counts.smart },
+            { key: "all", label: "全部", count: counts.all },
+            { key: "album", label: "文件夹", count: counts.album },
+            { key: "collection", label: "集合", count: counts.collection },
+            { key: "smart", label: "标签", count: counts.smart },
           ]}
           activeViewKey={view}
           onChangeView={(k) => setView(k as typeof view)}
@@ -592,7 +575,7 @@ export default function Home() {
           <div className="px-6 lg:px-10 flex items-center gap-2 flex-wrap">
             <LibraryIcon size={12} className="text-fg-muted" />
             <h2 className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium">
-              {yearFilterActive ? '该年份的图像' : '全部图像'}
+              {yearFilterActive ? "该年份的图像" : "全部图像"}
             </h2>
             <span className="text-[11px] text-fg-subtle tabular-nums">
               {filtered.length}
@@ -611,7 +594,7 @@ export default function Home() {
               <>
                 <span className="text-fg-subtle/40 mx-1">·</span>
                 <button
-                  onClick={() => navigate('/favorites')}
+                  onClick={() => navigate("/favorites")}
                   className="inline-flex items-center gap-1 text-[11px] text-warning/90 hover:text-warning transition-colors"
                 >
                   <StarIcon size={10} filled />
@@ -631,13 +614,17 @@ export default function Home() {
             />
           ) : filtered.length === 0 ? (
             <EmptyState
-              title={yearFilterActive ? `「${yearFilterLabel}」没有匹配的图像` : '没有匹配的图像'}
+              title={
+                yearFilterActive
+                  ? `「${yearFilterLabel}」没有匹配的图像`
+                  : "没有匹配的图像"
+              }
               description={
                 query
                   ? `没有匹配"${query}"的结果`
                   : yearFilterActive
-                    ? '尝试切换到其他年份或清除筛选'
-                    : '当前视图下没有内容'
+                    ? "尝试切换到其他年份或清除筛选"
+                    : "当前视图下没有内容"
               }
               icon={<ImageIcon size={20} />}
               action={
@@ -680,7 +667,7 @@ export default function Home() {
                 disabled={startScan.isPending}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover text-sm disabled:opacity-50"
               >
-                {startScan.isPending ? '启动中…' : '开始扫描'}
+                {startScan.isPending ? "启动中…" : "开始扫描"}
               </button>
             }
           />
@@ -689,47 +676,29 @@ export default function Home() {
 
       <div className="h-12" />
     </div>
-  )
+  );
 }
 
 // ===== helpers =====
 
-function recentTime(result: ScanResult | null, id: string): string {
-  if (!result) return ''
-  if (id.startsWith('a:')) {
-    const p = id.slice(2)
-    return result.albums.find((a) => a.path === p)?.modTime ?? ''
-  }
-  if (id.startsWith('c:')) {
-    const p = id.slice(2)
-    return result.collections?.find((c) => c.path === p)?.albums?.[0]?.modTime ?? ''
-  }
-  if (id.startsWith('s:')) {
-    const author = id.slice(2)
-    const sc = (result.smartCollections ?? []).find((s) => s.author === author)
-    return sc?.albums?.[0]?.modTime ?? ''
-  }
-  return ''
-}
-
 function formatTime(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date()
-  const diff = (now.getTime() - d.getTime()) / 1000
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
-  return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = (now.getTime() - d.getTime()) / 1000;
+  if (diff < 60) return "刚刚";
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`;
+  return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
 }
 
 // 同 albumGrouping.extractYear 但本组件独立调用，避免循环依赖
 function extractYearOrNull(name: string): number | null {
-  const m = name.match(/(\d{4})/)
-  if (!m) return null
-  const y = parseInt(m[1], 10)
-  if (y < 1900 || y > 2100) return null
-  return y
+  const m = name.match(/(\d{4})/);
+  if (!m) return null;
+  const y = parseInt(m[1], 10);
+  if (y < 1900 || y > 2100) return null;
+  return y;
 }
 
 // ===== 复用组件 =====
@@ -743,35 +712,36 @@ function ActionCard({
   disabled,
   onClick,
 }: {
-  icon: React.ReactNode
-  title: string
-  subtitle?: string
-  meta?: string
-  variant: 'primary' | 'secondary'
-  disabled?: boolean
-  onClick: () => void
+  icon: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  meta?: string;
+  variant: "primary" | "secondary";
+  disabled?: boolean;
+  onClick: () => void;
 }) {
   const base =
-    'group relative flex flex-col gap-2 rounded-xl border p-4 sm:p-5 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40'
+    "group relative flex flex-col gap-2 rounded-xl border p-4 sm:p-5 text-left transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40";
   const primaryCls =
-    'bg-accent text-accent-contrast border-transparent hover:bg-accent-hover shadow-sm hover:shadow-md'
+    "bg-accent text-accent-contrast border-transparent hover:bg-accent-hover shadow-sm hover:shadow-md";
   const secondaryCls =
-    'bg-bg-elevated text-fg border-border hover:border-border-strong hover:-translate-y-0.5 hover:shadow-md'
-  const disabledCls = 'opacity-40 cursor-not-allowed hover:!translate-y-0 hover:!shadow-sm'
+    "bg-bg-elevated text-fg border-border hover:border-border-strong hover:-translate-y-0.5 hover:shadow-md";
+  const disabledCls =
+    "opacity-40 cursor-not-allowed hover:!translate-y-0 hover:!shadow-sm";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${base} ${variant === 'primary' ? primaryCls : secondaryCls} ${
-        disabled ? disabledCls : ''
+      className={`${base} ${variant === "primary" ? primaryCls : secondaryCls} ${
+        disabled ? disabledCls : ""
       }`}
     >
       <div
         className={`inline-flex items-center justify-center w-7 h-7 rounded-md ${
-          variant === 'primary'
-            ? 'bg-accent-contrast/15 text-accent-contrast'
-            : 'bg-bg-subtle text-fg-muted group-hover:text-fg'
+          variant === "primary"
+            ? "bg-accent-contrast/15 text-accent-contrast"
+            : "bg-bg-subtle text-fg-muted group-hover:text-fg"
         }`}
       >
         {icon}
@@ -779,7 +749,7 @@ function ActionCard({
       <div className="min-w-0">
         <div
           className={`text-[14px] font-medium leading-tight ${
-            variant === 'primary' ? 'text-accent-contrast' : 'text-fg'
+            variant === "primary" ? "text-accent-contrast" : "text-fg"
           }`}
         >
           {title}
@@ -787,9 +757,9 @@ function ActionCard({
         {subtitle && (
           <div
             className={`text-[11.5px] mt-0.5 truncate ${
-              variant === 'primary'
-                ? 'text-accent-contrast/70'
-                : 'text-fg-muted'
+              variant === "primary"
+                ? "text-accent-contrast/70"
+                : "text-fg-muted"
             }`}
             title={subtitle}
           >
@@ -800,16 +770,14 @@ function ActionCard({
       {meta && (
         <div
           className={`absolute top-3 right-3 text-[10px] tabular-nums ${
-            variant === 'primary'
-              ? 'text-accent-contrast/60'
-              : 'text-fg-subtle'
+            variant === "primary" ? "text-accent-contrast/60" : "text-fg-subtle"
           }`}
         >
           {meta}
         </div>
       )}
     </button>
-  )
+  );
 }
 
 function SectionHeader({
@@ -817,9 +785,9 @@ function SectionHeader({
   subtitle,
   icon,
 }: {
-  title: string
-  subtitle?: string
-  icon?: React.ReactNode
+  title: string;
+  subtitle?: string;
+  icon?: React.ReactNode;
 }) {
   return (
     <div className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full flex items-center gap-3 mb-4">
@@ -831,5 +799,5 @@ function SectionHeader({
         <span className="text-[11.5px] text-fg-subtle">{subtitle}</span>
       )}
     </div>
-  )
+  );
 }

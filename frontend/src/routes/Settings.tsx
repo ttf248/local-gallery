@@ -1,15 +1,14 @@
-import { useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { prefsApi, favoritesApi, historyApi } from '../api/prefs'
-import { scanApi } from '../api/scan'
-import { cacheApi, formatBytes } from '../api/cache'
-import { useScanSSE } from '../hooks/useScanSSE'
-import ThemeSwitcher from '../components/common/ThemeSwitcher'
-import { useUIStore, type AccentKey } from '../store/uiStore'
-import { useLibraryStore } from '../store/libraryStore'
-import { ACCENT_SWATCHES } from '../hooks/useTheme'
-import { useTheme } from '../hooks/useTheme'
-import ServerConfigPanel from '../components/settings/ServerConfigPanel'
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { prefsApi, favoritesApi, historyApi } from "../api/prefs";
+import { scanApi } from "../api/scan";
+import { cacheApi, formatBytes } from "../api/cache";
+import { useScanSSE } from "../hooks/useScanSSE";
+import ThemeSwitcher from "../components/common/ThemeSwitcher";
+import { useUIStore, type AccentKey } from "../store/uiStore";
+import { libraryQueryKeys, useLibraryManifest } from "../hooks/useLibrary";
+import { ACCENT_SWATCHES } from "../hooks/useTheme";
+import { useTheme } from "../hooks/useTheme";
+import ServerConfigPanel from "../components/settings/ServerConfigPanel";
 import {
   RefreshIcon,
   TrashIcon,
@@ -19,106 +18,113 @@ import {
   InfoIcon,
   CheckIcon,
   ServerIcon,
-} from '../components/common/Icon'
+} from "../components/common/Icon";
 
 export default function Settings() {
-  const { data, isLoading } = useQuery({ queryKey: ['prefs'], queryFn: () => prefsApi.get() })
-  const qc = useQueryClient()
-  const toggleSidebar = useUIStore((s) => s.toggleSidebar)
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const setViewMode = useUIStore((s) => s.setViewMode)
-  const accent = useUIStore((s) => s.accent)
-  const setAccent = useUIStore((s) => s.setAccent)
-  const pushToast = useUIStore((s) => s.pushToast)
-  const lastScanAt = useLibraryStore((s) => s.lastScanAt)
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const setResult = useLibraryStore((s) => s.setResult)
-  const clearLibrary = useLibraryStore((s) => s.clear)
-  const sse = useScanSSE()
-  useTheme()
+  const { data, isLoading } = useQuery({
+    queryKey: ["prefs"],
+    queryFn: () => prefsApi.get(),
+  });
+  const qc = useQueryClient();
+  const toggleSidebar = useUIStore((s) => s.toggleSidebar);
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const viewMode = useUIStore((s) => s.viewMode);
+  const setViewMode = useUIStore((s) => s.setViewMode);
+  const accent = useUIStore((s) => s.accent);
+  const setAccent = useUIStore((s) => s.setAccent);
+  const pushToast = useUIStore((s) => s.pushToast);
+  const manifest = useLibraryManifest().data?.manifest;
+  const sse = useScanSSE();
+  useTheme();
 
   // 缓存占用统计(后端 30s TTL,前端 staleTime 设小一点保证手动刷新能即时看到)
   const cacheStats = useQuery({
-    queryKey: ['cache-stats'],
+    queryKey: ["cache-stats"],
     queryFn: () => cacheApi.stats(),
     staleTime: 5_000,
-  })
+  });
   function refreshCacheStats() {
-    cacheStats.refetch()
+    cacheStats.refetch();
   }
 
   const patchPrefs = useMutation({
-    mutationFn: (p: Partial<Parameters<typeof prefsApi.patch>[0]>) => prefsApi.patch(p),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['prefs'] }),
-  })
+    mutationFn: (p: Partial<Parameters<typeof prefsApi.patch>[0]>) =>
+      prefsApi.patch(p),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["prefs"] }),
+  });
 
   const pruneFav = useMutation({
     mutationFn: () => favoritesApi.prune(),
     onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ['favorites'] })
-      pushToast({ kind: 'success', message: `已清理 ${r.removed.length} 项失效收藏` })
+      qc.invalidateQueries({ queryKey: ["favorites"] });
+      pushToast({
+        kind: "success",
+        message: `已清理 ${r.removed.length} 项失效收藏`,
+      });
     },
-  })
+  });
 
   // 单 scope 清空(thumbs / faststart / transcode)。三个独立 mutation
   // 实例让每个按钮的 isPending 互不干扰,UI 状态干净;公共逻辑收敛
   // 在 onSuccessScope 里。
   const onSuccessScope = (
     r: Awaited<ReturnType<typeof cacheApi.clearCache>>,
-    scope: 'thumbs' | 'faststart' | 'transcode'
+    scope: "thumbs" | "faststart" | "transcode",
   ) => {
-    qc.invalidateQueries({ queryKey: ['cache-stats'] })
-    const sub = r[scope]
+    qc.invalidateQueries({ queryKey: ["cache-stats"] });
+    const sub = r[scope];
     if (!sub || sub.deleted === 0) {
-      pushToast({ kind: 'info', message: `${scopeLabel(scope)} 缓存本就是空的` })
-      return
+      pushToast({
+        kind: "info",
+        message: `${scopeLabel(scope)} 缓存本就是空的`,
+      });
+      return;
     }
-    const freed = sub.freedBytes > 0 ? ` · 释放 ${formatBytes(sub.freedBytes)}` : ''
+    const freed =
+      sub.freedBytes > 0 ? ` · 释放 ${formatBytes(sub.freedBytes)}` : "";
     pushToast({
-      kind: 'success',
+      kind: "success",
       message: `已清空 ${scopeLabel(scope)} ${sub.deleted} 个文件${freed}`,
-    })
-  }
-  const onErrorScope = (scope: 'thumbs' | 'faststart' | 'transcode') =>
-    pushToast({ kind: 'error', message: `清空 ${scopeLabel(scope)} 缓存失败` })
+    });
+  };
+  const onErrorScope = (scope: "thumbs" | "faststart" | "transcode") =>
+    pushToast({ kind: "error", message: `清空 ${scopeLabel(scope)} 缓存失败` });
 
   const clearThumbsScope = useMutation({
-    mutationFn: () => cacheApi.clearCache('thumbs'),
-    onSuccess: (r) => onSuccessScope(r, 'thumbs'),
-    onError: () => onErrorScope('thumbs'),
-  })
+    mutationFn: () => cacheApi.clearCache("thumbs"),
+    onSuccess: (r) => onSuccessScope(r, "thumbs"),
+    onError: () => onErrorScope("thumbs"),
+  });
   const clearFaststart = useMutation({
-    mutationFn: () => cacheApi.clearCache('faststart'),
-    onSuccess: (r) => onSuccessScope(r, 'faststart'),
-    onError: () => onErrorScope('faststart'),
-  })
+    mutationFn: () => cacheApi.clearCache("faststart"),
+    onSuccess: (r) => onSuccessScope(r, "faststart"),
+    onError: () => onErrorScope("faststart"),
+  });
   const clearTranscode = useMutation({
-    mutationFn: () => cacheApi.clearCache('transcode'),
-    onSuccess: (r) => onSuccessScope(r, 'transcode'),
-    onError: () => onErrorScope('transcode'),
-  })
+    mutationFn: () => cacheApi.clearCache("transcode"),
+    onSuccess: (r) => onSuccessScope(r, "transcode"),
+    onError: () => onErrorScope("transcode"),
+  });
 
   // 一键全清:thumbs + faststart + transcode 一起清。
   // 解决「3 GB 缓存只点了一个缩略图清空按钮,数据纹丝不动」的痛点。
   const clearAll = useMutation({
-    mutationFn: () => cacheApi.clearCache('all'),
+    mutationFn: () => cacheApi.clearCache("all"),
     onSuccess: (r) => {
-      qc.invalidateQueries({ queryKey: ['cache-stats'] })
+      qc.invalidateQueries({ queryKey: ["cache-stats"] });
       if (r.totalDeleted === 0) {
-        pushToast({ kind: 'info', message: '缓存本就是空的' })
-        return
+        pushToast({ kind: "info", message: "缓存本就是空的" });
+        return;
       }
       pushToast({
-        kind: 'success',
+        kind: "success",
         message: `已清空全部缓存 · ${r.totalDeleted} 个文件 · 释放 ${formatBytes(
-          r.totalFreedBytes
+          r.totalFreedBytes,
         )}`,
-      })
+      });
     },
-    onError: () => pushToast({ kind: 'error', message: '清空全部缓存失败' }),
-  })
+    onError: () => pushToast({ kind: "error", message: "清空全部缓存失败" }),
+  });
 
   // 清空图像库缓存。不同于「重新扫描」(会立即起一次新扫描覆盖旧结果),
   // 这里只把缓存丢掉,等用户手动点「重新扫描」——避免误清后立刻被一次
@@ -126,52 +132,42 @@ export default function Settings() {
   const clearScanCache = useMutation({
     mutationFn: () => scanApi.clearCache(),
     onSuccess: () => {
-      // 清掉前端 store,让 UI 立刻反映"无数据"状态。
-      clearLibrary()
+      // 丢弃所有摘要页，避免旧媒体根数据在下一次扫描前短暂回显。
+      qc.removeQueries({ queryKey: libraryQueryKeys.root });
       pushToast({
-        kind: 'success',
-        message: '已清空图像库缓存 · 建议点击「重新扫描」重建',
-      })
+        kind: "success",
+        message: "已清空图像库缓存 · 建议点击「重新扫描」重建",
+      });
     },
-    onError: () => pushToast({ kind: 'error', message: '清空图像库缓存失败' }),
-  })
+    onError: () => pushToast({ kind: "error", message: "清空图像库缓存失败" }),
+  });
 
   const clearHist = useMutation({
     mutationFn: () => historyApi.clear(),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['history'] })
-      pushToast({ kind: 'success', message: '已清空最近访问' })
+      qc.invalidateQueries({ queryKey: ["history"] });
+      pushToast({ kind: "success", message: "已清空最近访问" });
     },
-  })
+  });
 
   // Settings 页内也能触发扫描：与 Home / Toolbar 走同一套 SSE。
   const startScan = useMutation({
     mutationFn: () => scanApi.start(),
     onSuccess: (r) => {
-      sse.startWith(r.scanId)
-      pushToast({ kind: 'info', message: '扫描已开始' })
+      sse.startWith(r.scanId);
+      pushToast({ kind: "info", message: "扫描已开始" });
     },
-    onError: () => pushToast({ kind: 'error', message: '启动扫描失败' }),
-  })
-  // 扫描完成时把结果写回 store
-  useEffect(() => {
-    if (!sse.isComplete || !sse.scanId) return
-    scanApi
-      .result(sse.scanId)
-      .then((r) => {
-        setResult(r.result)
-        pushToast({ kind: 'success', message: `扫描完成 · 共 ${r.result.albumCount} 个文件夹` })
-      })
-      .catch(() => pushToast({ kind: 'error', message: '获取扫描结果失败' }))
-  }, [sse.isComplete, sse.scanId, setResult, pushToast])
-
+    onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
+  });
   if (isLoading || !data) {
-    return <div className="p-10 text-fg-muted text-sm">加载中…</div>
+    return <div className="p-10 text-fg-muted text-sm">加载中…</div>;
   }
 
   return (
     <div className="px-6 lg:px-10 py-10 max-w-3xl mx-auto w-full">
-      <h1 className="font-display text-[32px] font-semibold tracking-[-0.02em]">设置</h1>
+      <h1 className="font-display text-[32px] font-semibold tracking-[-0.02em]">
+        设置
+      </h1>
       <p className="text-sm text-fg-muted mt-2 mb-10">个性化你的阅读体验</p>
 
       <Section title="外观" icon={<SunIcon size={13} />}>
@@ -181,7 +177,7 @@ export default function Settings() {
         <Row label="强调色">
           <div className="flex items-center gap-2">
             {ACCENT_SWATCHES.map((s) => {
-              const active = accent === s.id
+              const active = accent === s.id;
               return (
                 <button
                   key={s.id}
@@ -197,7 +193,7 @@ export default function Settings() {
                     </span>
                   )}
                 </button>
-              )
+              );
             })}
           </div>
         </Row>
@@ -206,22 +202,22 @@ export default function Settings() {
             onClick={toggleSidebar}
             className="px-3 h-8 rounded-md border border-border-faint hover:bg-bg-subtle text-sm transition-colors"
           >
-            {sidebarCollapsed ? '展开' : '折叠'}
+            {sidebarCollapsed ? "展开" : "折叠"}
           </button>
         </Row>
         <Row label="默认视图">
           <div className="flex items-center border border-border-faint rounded-md overflow-hidden">
-            {(['grid', 'list'] as const).map((k) => (
+            {(["grid", "list"] as const).map((k) => (
               <button
                 key={k}
                 onClick={() => setViewMode(k)}
                 className={`h-8 px-3 text-xs transition-colors ${
                   viewMode === k
-                    ? 'bg-bg-subtle text-fg'
-                    : 'text-fg-muted hover:text-fg'
+                    ? "bg-bg-subtle text-fg"
+                    : "text-fg-muted hover:text-fg"
                 }`}
               >
-                {k === 'grid' ? '网格' : '列表'}
+                {k === "grid" ? "网格" : "列表"}
               </button>
             ))}
           </div>
@@ -255,16 +251,18 @@ export default function Settings() {
         <Row label="图像库缓存">
           <div className="flex items-center gap-3">
             <span className="text-xs text-fg-muted">
-              {result
-                ? `${result.albumCount} 文件夹 · ${(result.smartCollections ?? []).length} 标签${
-                    lastScanAt
-                      ? ` · ${new Date(lastScanAt).toLocaleString('zh-CN', { hour12: false })}`
-                      : ' · 尚未扫描'
+              {manifest
+                ? `${manifest.statistics.albumCount} 文件夹 · ${manifest.statistics.tagCount} 标签${
+                    manifest.scannedAt
+                      ? ` · ${new Date(manifest.scannedAt).toLocaleString("zh-CN", { hour12: false })}`
+                      : " · 尚未扫描"
                   }`
-                : '尚未加载'}
+                : "尚未加载"}
             </span>
             <button
-              onClick={() => loadFromBackend()}
+              onClick={() =>
+                void qc.invalidateQueries({ queryKey: libraryQueryKeys.root })
+              }
               className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border-faint hover:bg-bg-subtle text-xs transition-colors"
             >
               <RefreshIcon size={11} />
@@ -277,7 +275,13 @@ export default function Settings() {
               title="扫描 (Ctrl+S)"
             >
               <RefreshIcon size={11} />
-              <span>{sse.isRunning ? '扫描中…' : startScan.isPending ? '启动中…' : '重新扫描'}</span>
+              <span>
+                {sse.isRunning
+                  ? "扫描中…"
+                  : startScan.isPending
+                    ? "启动中…"
+                    : "重新扫描"}
+              </span>
             </button>
             <button
               onClick={() => clearScanCache.mutate()}
@@ -286,7 +290,7 @@ export default function Settings() {
               title="清空图像库缓存（不会立即重新扫描）"
             >
               <TrashIcon size={11} />
-              <span>{clearScanCache.isPending ? '清空中…' : '清空缓存'}</span>
+              <span>{clearScanCache.isPending ? "清空中…" : "清空缓存"}</span>
             </button>
           </div>
         </Row>
@@ -294,27 +298,27 @@ export default function Settings() {
           <div className="flex items-center gap-3 text-xs text-fg-muted">
             <span>
               {cacheStats.isLoading
-                ? '计算中…'
+                ? "计算中…"
                 : !cacheStats.data
-                ? '—'
-                : !cacheStats.data.available
-                ? '不可用'
-                : `${formatBytes(cacheStats.data.totalBytes)} · ${
-                    cacheStats.data.fileCount
-                  } 个文件`}
+                  ? "—"
+                  : !cacheStats.data.available
+                    ? "不可用"
+                    : `${formatBytes(cacheStats.data.totalBytes)} · ${
+                        cacheStats.data.fileCount
+                      } 个文件`}
             </span>
             {cacheStats.data && (
               <span
                 className="text-fg-subtle/70 tabular-nums"
                 title={
                   cacheStats.data.scannedAt
-                    ? `扫描于 ${new Date(cacheStats.data.scannedAt).toLocaleString('zh-CN', { hour12: false })}`
-                    : ''
+                    ? `扫描于 ${new Date(cacheStats.data.scannedAt).toLocaleString("zh-CN", { hour12: false })}`
+                    : ""
                 }
               >
                 {cacheStats.data.cacheTtlSeconds > 0
                   ? `${cacheStats.data.cacheTtlSeconds}s 内复用`
-                  : '缓存已过期'}
+                  : "缓存已过期"}
               </span>
             )}
             <button
@@ -337,7 +341,7 @@ export default function Settings() {
               title="清空全部缓存（缩略图 + faststart + 转码）"
             >
               <TrashIcon size={11} />
-              <span>{clearAll.isPending ? '清空中…' : '一键全清'}</span>
+              <span>{clearAll.isPending ? "清空中…" : "一键全清"}</span>
             </button>
           </div>
           {/* 按类型细分 — 大头一目了然,转码缓存过大时可单独清 */}
@@ -369,7 +373,7 @@ export default function Settings() {
             onClick={() => pruneFav.mutate()}
             className="h-8 px-3 rounded-md border border-border-faint hover:bg-bg-subtle text-xs transition-colors"
           >
-            {pruneFav.isPending ? '清理中…' : '清理'}
+            {pruneFav.isPending ? "清理中…" : "清理"}
           </button>
         </Row>
         <Row label="清空最近访问" danger>
@@ -378,7 +382,7 @@ export default function Settings() {
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-xs transition-colors"
           >
             <TrashIcon size={11} />
-            <span>{clearHist.isPending ? '清空中…' : '清空'}</span>
+            <span>{clearHist.isPending ? "清空中…" : "清空"}</span>
           </button>
         </Row>
       </Section>
@@ -400,11 +404,15 @@ export default function Settings() {
 
       <Section title="关于" icon={<InfoIcon size={13} />}>
         <div className="text-sm text-fg-muted leading-relaxed">
-          <div className="font-display text-base text-fg">Local Gallery · 本地画廊</div>
+          <div className="font-display text-base text-fg">
+            Local Gallery · 本地画廊
+          </div>
           <div className="mt-1">Web 版 · v{__APP_VERSION__}</div>
           <div className="mt-4 text-xs text-fg-subtle flex items-center gap-2">
             <span>按</span>
-            <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle">?</kbd>
+            <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle">
+              ?
+            </kbd>
             <span>查看所有快捷键</span>
           </div>
           <div className="mt-3 text-xs text-fg-subtle flex items-center gap-2">
@@ -414,7 +422,7 @@ export default function Settings() {
         </div>
       </Section>
     </div>
-  )
+  );
 }
 
 function Section({
@@ -422,9 +430,9 @@ function Section({
   icon,
   children,
 }: {
-  title: string
-  icon?: React.ReactNode
-  children: React.ReactNode
+  title: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <section className="mb-10">
@@ -438,7 +446,7 @@ function Section({
         {children}
       </div>
     </section>
-  )
+  );
 }
 
 function Row({
@@ -446,35 +454,41 @@ function Row({
   children,
   danger,
 }: {
-  label: string
-  children: React.ReactNode
-  danger?: boolean
+  label: string;
+  children: React.ReactNode;
+  danger?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 text-sm">
-      <span className={danger ? 'text-danger' : 'text-fg'}>{label}</span>
+      <span className={danger ? "text-danger" : "text-fg"}>{label}</span>
       {children}
     </div>
-  )
+  );
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
   return (
     <button
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${
-        checked ? 'bg-accent' : 'bg-bg-strong'
+        checked ? "bg-accent" : "bg-bg-strong"
       }`}
     >
       <span
         className={`absolute top-0.5 left-0.5 w-4 h-4 bg-bg-elevated rounded-full shadow transition-transform ${
-          checked ? 'translate-x-4' : ''
+          checked ? "translate-x-4" : ""
         }`}
       />
     </button>
-  )
+  );
 }
 
 function NumberInput({
@@ -483,10 +497,10 @@ function NumberInput({
   max,
   onChange,
 }: {
-  value: number
-  min: number
-  max: number
-  onChange: (v: number) => void
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
 }) {
   return (
     <div className="inline-flex items-center border border-border-faint rounded-md overflow-hidden">
@@ -506,7 +520,7 @@ function NumberInput({
         +
       </button>
     </div>
-  )
+  );
 }
 
 // 缓存细分 badge:展示单个子目录(thumbs / faststart / transcode)的占用。
@@ -519,37 +533,41 @@ function SubUsageBadge({
   onClear,
   clearPending,
 }: {
-  label: string
-  sub: { path: string; bytes: number; fileCount: number; available: boolean }
-  onOpen?: () => void
-  onClear?: () => void
-  clearPending?: boolean
+  label: string;
+  sub: { path: string; bytes: number; fileCount: number; available: boolean };
+  onOpen?: () => void;
+  onClear?: () => void;
+  clearPending?: boolean;
 }) {
   const body = sub.available ? (
     <div className="flex items-baseline gap-1.5">
-      <span className="text-fg tabular-nums font-medium">{formatBytes(sub.bytes)}</span>
+      <span className="text-fg tabular-nums font-medium">
+        {formatBytes(sub.bytes)}
+      </span>
       <span className="text-fg-subtle/70 tabular-nums">{sub.fileCount} 个</span>
     </div>
   ) : (
     <span className="text-fg-subtle/60">—</span>
-  )
+  );
   // 只有"可用 + 有数据 + 提供 onClear"时显示清空按钮;0 字节的子项
   // 没必要再点一次(后端也是 no-op)。
-  const showClear = !!onClear && sub.available && sub.bytes > 0
+  const showClear = !!onClear && sub.available && sub.bytes > 0;
   const cls = `flex flex-col gap-0.5 px-2.5 py-1.5 rounded border border-border-faint bg-bg-subtle/40 ${
     onOpen
-      ? 'cursor-pointer hover:border-border-strong hover:bg-bg-subtle transition-colors'
-      : ''
-  }`
+      ? "cursor-pointer hover:border-border-strong hover:bg-bg-subtle transition-colors"
+      : ""
+  }`;
   const inner = (
     <>
       <div className="flex items-center justify-between gap-1.5">
-        <span className="text-fg-muted text-[10px] uppercase tracking-wider">{label}</span>
+        <span className="text-fg-muted text-[10px] uppercase tracking-wider">
+          {label}
+        </span>
         {showClear && (
           <button
             onClick={(e) => {
-              e.stopPropagation() // 防止冒泡到外层 onOpen
-              onClear!()
+              e.stopPropagation(); // 防止冒泡到外层 onOpen
+              onClear!();
             }}
             disabled={clearPending}
             className="inline-flex items-center justify-center w-4 h-4 rounded text-fg-subtle hover:text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
@@ -566,25 +584,29 @@ function SubUsageBadge({
       </div>
       {body}
     </>
-  )
+  );
   if (onOpen) {
     return (
-      <button onClick={onOpen} className={cls} title={`在资源管理器中打开 ${sub.path}`}>
+      <button
+        onClick={onOpen}
+        className={cls}
+        title={`在资源管理器中打开 ${sub.path}`}
+      >
         {inner}
       </button>
-    )
+    );
   }
-  return <div className={cls}>{inner}</div>
+  return <div className={cls}>{inner}</div>;
 }
 
 // 缓存 scope 中文标签(toast 复用)。
-function scopeLabel(s: 'thumbs' | 'faststart' | 'transcode'): string {
+function scopeLabel(s: "thumbs" | "faststart" | "transcode"): string {
   switch (s) {
-    case 'thumbs':
-      return '缩略图'
-    case 'faststart':
-      return 'faststart'
-    case 'transcode':
-      return '转码'
+    case "thumbs":
+      return "缩略图";
+    case "faststart":
+      return "faststart";
+    case "transcode":
+      return "转码";
   }
 }

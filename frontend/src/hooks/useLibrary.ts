@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import { LibraryRevisionChangedError, libraryApi } from "../api/library";
 
 export const libraryQueryKeys = {
@@ -67,10 +68,19 @@ export function useAlbumMedia(albumId: string, expectedRevision?: number) {
   });
 }
 
-export function useLibraryTags(enabled = true) {
+export function useLibraryTags(enabled = true, expectedRevision?: number) {
   return useQuery({
-    queryKey: libraryQueryKeys.tags(),
-    queryFn: () => libraryApi.allTags(),
+    queryKey: [...libraryQueryKeys.tags(), expectedRevision],
+    queryFn: async () => {
+      const page = await libraryApi.allTags();
+      if (
+        expectedRevision !== undefined &&
+        page.revision !== expectedRevision
+      ) {
+        throw new LibraryRevisionChangedError();
+      }
+      return page;
+    },
     enabled,
   });
 }
@@ -89,4 +99,45 @@ export function useLibraryNodes(ids: string[]) {
     queryFn: () => libraryApi.queryNodes(ids),
     enabled: ids.length > 0,
   });
+}
+
+// 首页只装配 manifest、各根直属节点与标签摘要，不加载嵌套树或媒体数组。
+export function useLibraryOverview() {
+  const manifestQuery = useLibraryManifest();
+  const manifest = manifestQuery.data?.manifest;
+  const roots = manifest?.roots ?? [];
+  const childrenQueries = useQueries({
+    queries: roots.map((root) => ({
+      queryKey: [
+        ...libraryQueryKeys.children(root.id),
+        manifest?.revision,
+      ] as const,
+      queryFn: async () => {
+        const page = await libraryApi.allChildren(root.id);
+        if (page.revision !== manifest?.revision) {
+          throw new LibraryRevisionChangedError();
+        }
+        return page;
+      },
+    })),
+  });
+  const tagsQuery = useLibraryTags(!!manifest, manifest?.revision);
+  const nodes = useMemo(
+    () => childrenQueries.flatMap((query) => query.data?.items ?? []),
+    [childrenQueries],
+  );
+
+  return {
+    manifest,
+    nodes,
+    tags: tagsQuery.data?.items ?? [],
+    isLoading:
+      manifestQuery.isLoading ||
+      childrenQueries.some((query) => query.isLoading) ||
+      tagsQuery.isLoading,
+    isError:
+      manifestQuery.isError ||
+      childrenQueries.some((query) => query.isError) ||
+      tagsQuery.isError,
+  };
 }

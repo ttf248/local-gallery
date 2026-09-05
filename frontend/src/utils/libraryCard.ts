@@ -36,3 +36,17 @@ export function tagSummaryToCard(tag: LibraryTagSummary): CardData {
     to: tagRoute(tag.tag),
   };
 }
+
+// 首页根视图隐藏“本目录媒体”虚拟节点：它属于同路径集合的内部入口，
+// 同时展示会形成两张看似重复的卡片。进入集合后仍会正常显示该相册。
+export function libraryOverviewCards(
+  nodes: LibraryNodeSummary[],
+  tags: LibraryTagSummary[],
+): CardData[] {
+  return [
+    ...nodes
+      .filter((node) => !node.virtual)
+      .map((node) => nodeSummaryToCard(node)),
+    ...tags.map(tagSummaryToCard),
+  ];
+}
