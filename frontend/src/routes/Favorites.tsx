@@ -1,195 +1,162 @@
-import { useEffect, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
-import { useLibraryStore } from '../store/libraryStore'
-import { useSearchStore } from '../store/searchStore'
-import { useUIStore } from '../store/uiStore'
-import { useFavorites } from '../hooks/useFavorites'
-import { useImageActivities } from '../hooks/useImageActivity'
-import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
-import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
-import { ListFilterBar } from '../components/common/ListFilterBar'
-import EmptyState from '../components/common/EmptyState'
-import { StarIcon } from '../components/common/Icon'
-import { albumRoute, tagRoute, decodeFavPath } from '../utils/path'
-import type { GalleryContextEntry } from '../utils/galleryContext'
-import { historyApi } from '../api/prefs'
-import { buildLibraryIndex } from '../utils/libraryIndex'
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useSearchStore } from "../store/searchStore";
+import { useUIStore } from "../store/uiStore";
+import { useFavorites } from "../hooks/useFavorites";
+import { useImageActivities } from "../hooks/useImageActivity";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
+import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
+import { ListFilterBar } from "../components/common/ListFilterBar";
+import EmptyState from "../components/common/EmptyState";
+import { StarIcon } from "../components/common/Icon";
+import { decodeFavPath } from "../utils/path";
+import type { GalleryContextEntry } from "../utils/galleryContext";
+import { historyApi } from "../api/prefs";
+import { useLibraryNodes, useLibraryTags } from "../hooks/useLibrary";
+import { nodeSummaryToCard, tagSummaryToCard } from "../utils/libraryCard";
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
 export default function Favorites() {
-  const navigate = useNavigate()
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const minImageCount = useSearchStore((s) => s.minImageCount)
-  const { favorites } = useFavorites()
+  const navigate = useNavigate();
+  const viewMode = useUIStore((s) => s.viewMode);
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const minImageCount = useSearchStore((s) => s.minImageCount);
+  const { favorites } = useFavorites();
   // 历史记录:sortBy='viewed' 时用最近「看过」时间排序
   const { data: historyData } = useQuery({
-    queryKey: ['history'],
+    queryKey: ["history"],
     queryFn: () => historyApi.list(),
     staleTime: 30_000,
-  })
+  });
   const viewedAtMap = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const h of historyData?.history ?? []) m.set(h.albumId, h.openedAt)
-    return m
-  }, [historyData])
+    const m = new Map<string, string>();
+    for (const h of historyData?.history ?? []) m.set(h.albumId, h.openedAt);
+    return m;
+  }, [historyData]);
 
-  useEffect(() => {
-    if (!result) loadFromBackend()
-  }, [result, loadFromBackend])
-
-  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
-  const smartCollectionsByAuthor = useMemo(
+  const nodeIds = useMemo(
+    () => favorites.filter((id) => !id.startsWith("smart:")),
+    [favorites],
+  );
+  const smartNames = useMemo(
     () =>
-      new Map(
-        (result?.smartCollections ?? []).map((collection) => [
-          collection.author,
-          collection,
-        ]),
-      ),
-    [result],
-  )
+      favorites
+        .filter((id) => id.startsWith("smart:"))
+        .map((id) => id.slice(6)),
+    [favorites],
+  );
+  const nodesQuery = useLibraryNodes(nodeIds);
+  const tagsQuery = useLibraryTags(smartNames.length > 0);
+  const nodesById = useMemo(
+    () =>
+      new Map((nodesQuery.data?.items ?? []).map((node) => [node.id, node])),
+    [nodesQuery.data],
+  );
+  const tagsByName = useMemo(
+    () => new Map((tagsQuery.data?.items ?? []).map((tag) => [tag.tag, tag])),
+    [tagsQuery.data],
+  );
 
   const cards = useMemo<CardData[]>(() => {
-    if (!result) return []
-    const out: CardData[] = []
+    const out: CardData[] = [];
     for (const f of favorites) {
-      if (f.startsWith('smart:')) {
-        const author = f.slice(6)
-        const sc = smartCollectionsByAuthor.get(author)
-        if (!sc) continue
-        out.push({
-          id: 's:' + sc.author,
-          variant: 'smart',
-          title: sc.author,
-          // 不要 subtitle:count 已经显示「X 卷」,subtitle 写「X 卷」就重复了
-          count: sc.albumCount,
-          coverPath: sc.coverImage,
-          to: tagRoute(sc.author),
-          isFavorite: true,
-        })
-        continue
+      if (f.startsWith("smart:")) {
+        const author = f.slice(6);
+        const tag = tagsByName.get(author);
+        if (!tag) continue;
+        out.push({ ...tagSummaryToCard(tag), isFavorite: true });
+        continue;
       }
-      const a = libraryIndex.albumsById.get(f)
-      if (a) {
-        out.push({
-          id: 'a:' + a.path,
-          variant: 'album',
-          title: a.name,
-          subtitle: a.author || undefined,
-          count: a.imageCount,
-          imageCount: a.imageCount,
-          videoCount: a.videoCount ?? 0,
-          coverPath: a.coverImage,
-          coverKind: a.coverKind,
-          to: albumRoute(a.path),
-          isFavorite: true,
-        })
-        continue
-      }
-      const collection = libraryIndex.collectionsById.get(f)
-      if (collection) {
-        out.push({
-          id: 'c:' + collection.path,
-          variant: 'collection',
-          title: collection.name,
-          subtitle: '集合',
-          count: collection.albumCount,
-          coverPath: collection.albums[0]?.coverImage ?? '',
-          to: albumRoute(collection.path),
-          isFavorite: true,
-          sourceRoot: collection.sourceRoot,
-          sourceName: collection.sourceName,
-        })
-      }
+      const node = nodesById.get(f);
+      if (node) out.push({ ...nodeSummaryToCard(node), isFavorite: true });
     }
-    return out
-  }, [
-    result,
-    favorites,
-    libraryIndex,
-    smartCollectionsByAuthor,
-  ])
+    return out;
+  }, [favorites, nodesById, tagsByName]);
 
   const progressPaths = useMemo(
     () =>
       cards
-        .filter((c) => c.variant === 'album')
+        .filter((c) => c.variant === "album")
         .map((c) => decodeFavPath(c.to))
         .filter(Boolean),
     [cards],
-  )
-  const { data: progressMap } = useImageActivities(progressPaths)
+  );
+  const { data: progressMap } = useImageActivities(progressPaths);
 
   const filtered = useMemo(() => {
     const list = cards
       .filter((it) => {
-        if (!query) return true
-        const q = query.toLowerCase()
-        return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return `${it.title} ${it.subtitle ?? ""}`.toLowerCase().includes(q);
       })
       // 最小图数过滤(全局 filter)
       .filter((it) => {
-        if (minImageCount <= 0) return true
-        if (it.variant !== 'album') return true
-        return (it.count ?? 0) >= minImageCount
+        if (minImageCount <= 0) return true;
+        if (it.variant !== "album") return true;
+        return (it.count ?? 0) >= minImageCount;
       })
       .map((c) => {
-        if (c.variant !== 'album') return c
-        const k = decodeFavPath(c.to)
-        const p = progressMap?.[k]
-        if (!p) return c
+        if (c.variant !== "album") return c;
+        const k = decodeFavPath(c.to);
+        const p = progressMap?.[k];
+        if (!p) return c;
         return {
           ...c,
           progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
-        }
-      })
+        };
+      });
     switch (sortBy) {
-      case 'count':
-        return list.sort((a, b) => b.count - a.count)
-      case 'viewed':
+      case "count":
+        return list.sort((a, b) => b.count - a.count);
+      case "viewed":
         return list.sort((a, b) => {
           const aViewed =
-            a.variant === 'album' ? viewedAtMap.get(decodeFavPath(a.to)) : undefined
+            a.variant === "album"
+              ? viewedAtMap.get(decodeFavPath(a.to))
+              : undefined;
           const bViewed =
-            b.variant === 'album' ? viewedAtMap.get(decodeFavPath(b.to)) : undefined
-          if (aViewed && bViewed) return +new Date(bViewed) - +new Date(aViewed)
-          if (aViewed) return -1
-          if (bViewed) return 1
-          return a.title.localeCompare(b.title)
-        })
-      case 'recent':
-        return list.sort((a, b) => a.title.localeCompare(b.title))
+            b.variant === "album"
+              ? viewedAtMap.get(decodeFavPath(b.to))
+              : undefined;
+          if (aViewed && bViewed)
+            return +new Date(bViewed) - +new Date(aViewed);
+          if (aViewed) return -1;
+          if (bViewed) return 1;
+          return a.title.localeCompare(b.title);
+        });
+      case "recent":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
       default:
-        return list.sort((a, b) => a.title.localeCompare(b.title))
+        return list.sort((a, b) => a.title.localeCompare(b.title));
     }
-  }, [cards, query, sortBy, progressMap, viewedAtMap, minImageCount])
+  }, [cards, query, sortBy, progressMap, viewedAtMap, minImageCount]);
 
   // 收藏页的上下文：只让真正的相册参与上一本/下一本（智能合集不是「可翻页」对象）
   const favEntries = useMemo<GalleryContextEntry[]>(
     () =>
       filtered
-        .filter((c) => c.variant === 'album')
+        .filter((c) => c.variant === "album")
         .map((c) => ({
           key: decodeFavPath(c.to),
           to: c.to,
           name: c.title,
         })),
     [filtered],
-  )
-  useGalleryContextSync({ type: 'favorites' }, favEntries)
+  );
+  useGalleryContextSync({ type: "favorites" }, favEntries);
 
   return (
     <div className="min-h-full">
       <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px] mx-auto w-full">
         <div className="flex items-center gap-2 mb-1">
           <StarIcon size={13} className="text-warning" filled />
-          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">收藏</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
+            收藏
+          </span>
         </div>
         <h1 className="font-display text-[32px] leading-[1.1] font-semibold tracking-tight">
           我收藏的图像
@@ -208,17 +175,22 @@ export default function Favorites() {
           icon={<StarIcon size={20} />}
           action={
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate("/")}
               className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover text-sm"
             >
               去主页看看
             </button>
           }
         />
+      ) : (nodesQuery.isLoading || tagsQuery.isLoading) &&
+        cards.length === 0 ? (
+        <div className="px-6 lg:px-10 max-w-[1400px] mx-auto text-sm text-fg-muted">
+          正在解析收藏…
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           title="没有匹配的收藏"
-          description={query ? `没有匹配"${query}"的结果` : ''}
+          description={query ? `没有匹配"${query}"的结果` : ""}
           action={
             <button
               onClick={() => useSearchStore.getState().reset()}
@@ -237,5 +209,5 @@ export default function Favorites() {
       )}
       <div className="h-12" />
     </div>
-  )
+  );
 }

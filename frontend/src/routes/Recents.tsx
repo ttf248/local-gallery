@@ -1,111 +1,102 @@
-import { useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useLibraryStore } from '../store/libraryStore'
-import { useSearchStore } from '../store/searchStore'
-import { useUIStore } from '../store/uiStore'
-import { useQuery } from '@tanstack/react-query'
-import { historyApi } from '../api/prefs'
-import { useImageActivities } from '../hooks/useImageActivity'
-import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
-import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
-import { ListFilterBar } from '../components/common/ListFilterBar'
-import EmptyState from '../components/common/EmptyState'
-import { ClockIcon } from '../components/common/Icon'
-import { albumRoute, decodeFavPath } from '../utils/path'
-import { formatRelative } from '../utils/date'
-import type { GalleryContextEntry } from '../utils/galleryContext'
-import { buildLibraryIndex } from '../utils/libraryIndex'
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSearchStore } from "../store/searchStore";
+import { useUIStore } from "../store/uiStore";
+import { useQuery } from "@tanstack/react-query";
+import { historyApi } from "../api/prefs";
+import { useImageActivities } from "../hooks/useImageActivity";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
+import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
+import { ListFilterBar } from "../components/common/ListFilterBar";
+import EmptyState from "../components/common/EmptyState";
+import { ClockIcon } from "../components/common/Icon";
+import { decodeFavPath } from "../utils/path";
+import { formatRelative } from "../utils/date";
+import type { GalleryContextEntry } from "../utils/galleryContext";
+import { useLibraryNodes } from "../hooks/useLibrary";
+import { nodeSummaryToCard } from "../utils/libraryCard";
 
-const EMPTY_HISTORY: Awaited<ReturnType<typeof historyApi.list>>['history'] = []
+const EMPTY_HISTORY: Awaited<ReturnType<typeof historyApi.list>>["history"] =
+  [];
 
 // 最近访问：从后端 history 列表中读取。带阅读进度。
 export default function Recents() {
-  const navigate = useNavigate()
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const minImageCount = useSearchStore((s) => s.minImageCount)
-
-  useEffect(() => {
-    if (!result) loadFromBackend()
-  }, [result, loadFromBackend])
+  const navigate = useNavigate();
+  const viewMode = useUIStore((s) => s.viewMode);
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const minImageCount = useSearchStore((s) => s.minImageCount);
 
   const { data } = useQuery({
-    queryKey: ['history'],
+    queryKey: ["history"],
     queryFn: () => historyApi.list(),
     staleTime: 30 * 1000,
-  })
+  });
 
   // history 顺序:OpenedAt 倒序
-  const history = data?.history ?? EMPTY_HISTORY
-  const libraryIndex = useMemo(() => buildLibraryIndex(result), [result])
+  const history = data?.history ?? EMPTY_HISTORY;
+  const historyIds = useMemo(
+    () => history.map((item) => item.albumId),
+    [history],
+  );
+  const nodesQuery = useLibraryNodes(historyIds);
+  const nodesById = useMemo(
+    () =>
+      new Map((nodesQuery.data?.items ?? []).map((node) => [node.id, node])),
+    [nodesQuery.data],
+  );
 
   const cards = useMemo<CardData[]>(() => {
-    if (!result) return []
-    const out: CardData[] = []
+    const out: CardData[] = [];
     for (const h of history) {
-      const a = libraryIndex.albumsById.get(h.albumId)
-      if (!a) continue
-      out.push({
-        id: 'a:' + a.path,
-        variant: 'album',
-        title: a.name,
-        subtitle: a.author || undefined,
-        count: a.imageCount,
-        imageCount: a.imageCount,
-        videoCount: a.videoCount ?? 0,
-        coverPath: a.coverImage,
-        coverKind: a.coverKind,
-        to: albumRoute(a.path),
-        lastSeenAt: h.openedAt,
-      })
+      const node = nodesById.get(h.albumId);
+      if (!node || node.kind !== "album") continue;
+      out.push({ ...nodeSummaryToCard(node), lastSeenAt: h.openedAt });
     }
-    return out
-  }, [history, result, libraryIndex])
+    return out;
+  }, [history, nodesById]);
 
   const progressPaths = useMemo(
     () => cards.map((c) => decodeFavPath(c.to)).filter(Boolean),
     [cards],
-  )
-  const { data: progressMap } = useImageActivities(progressPaths)
+  );
+  const { data: progressMap } = useImageActivities(progressPaths);
 
   const filtered = useMemo(() => {
     const list = cards
       .filter((it) => {
-        if (!query) return true
-        const q = query.toLowerCase()
-        return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return `${it.title} ${it.subtitle ?? ""}`.toLowerCase().includes(q);
       })
       // 最小图数过滤(全局 filter)
       .filter((it) => {
-        if (minImageCount <= 0) return true
-        if (it.variant !== 'album') return true
-        return (it.count ?? 0) >= minImageCount
+        if (minImageCount <= 0) return true;
+        if (it.variant !== "album") return true;
+        return (it.count ?? 0) >= minImageCount;
       })
       .map((c) => {
-        const k = decodeFavPath(c.to)
-        const p = progressMap?.[k]
-        if (!p) return c
+        const k = decodeFavPath(c.to);
+        const p = progressMap?.[k];
+        if (!p) return c;
         return {
           ...c,
           progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
-        }
-      })
+        };
+      });
     switch (sortBy) {
-      case 'count':
-        return list.sort((a, b) => b.count - a.count)
-      case 'name':
-        return list.sort((a, b) => a.title.localeCompare(b.title))
-      case 'recent':
-      case 'viewed':
+      case "count":
+        return list.sort((a, b) => b.count - a.count);
+      case "name":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      case "recent":
+      case "viewed":
       default:
         // Recents 本身就是按 openedAt 倒序的列表,所以 'viewed' 与
         // 'recent' 等价(history 项就是 recents 列表本身)
-        return list
+        return list;
     }
-  }, [cards, query, sortBy, progressMap, minImageCount])
+  }, [cards, query, sortBy, progressMap, minImageCount]);
 
   const recentsEntries = useMemo<GalleryContextEntry[]>(
     () =>
@@ -115,15 +106,17 @@ export default function Recents() {
         name: c.title,
       })),
     [filtered],
-  )
-  useGalleryContextSync({ type: 'recents' }, recentsEntries)
+  );
+  useGalleryContextSync({ type: "recents" }, recentsEntries);
 
   return (
     <div className="min-h-full">
       <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px] mx-auto w-full">
         <div className="flex items-center gap-2 mb-1">
           <ClockIcon size={13} className="text-fg-muted" />
-          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">最近</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
+            最近
+          </span>
         </div>
         <h1 className="font-display text-[32px] leading-[1.1] font-semibold tracking-tight">
           最近阅读
@@ -133,10 +126,13 @@ export default function Recents() {
             <>
               <span className="text-fg">{history.length}</span> 个
               <span className="text-fg-subtle/60 mx-1.5">·</span>
-              最近打开 <span className="text-fg">{formatRelative(history[0]?.openedAt)}</span>
+              最近打开{" "}
+              <span className="text-fg">
+                {formatRelative(history[0]?.openedAt)}
+              </span>
             </>
           ) : (
-            '还没有记录'
+            "还没有记录"
           )}
         </p>
       </section>
@@ -150,17 +146,21 @@ export default function Recents() {
           icon={<ClockIcon size={20} />}
           action={
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate("/")}
               className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover text-sm"
             >
               去主页看看
             </button>
           }
         />
+      ) : nodesQuery.isLoading && cards.length === 0 ? (
+        <div className="px-6 lg:px-10 max-w-[1400px] mx-auto text-sm text-fg-muted">
+          正在解析最近浏览…
+        </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           title="没有匹配的最近访问"
-          description={query ? `没有匹配"${query}"的结果` : ''}
+          description={query ? `没有匹配"${query}"的结果` : ""}
           action={
             <button
               onClick={() => useSearchStore.getState().reset()}
@@ -179,5 +179,5 @@ export default function Recents() {
       )}
       <div className="h-12" />
     </div>
-  )
+  );
 }

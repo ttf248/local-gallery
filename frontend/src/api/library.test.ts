@@ -1,0 +1,101 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  LIBRARY_NODE_BATCH_LIMIT,
+  LibraryRevisionChangedError,
+  libraryApi,
+} from "./library";
+
+function jsonResponse(body: unknown) {
+  return Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
+  );
+}
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("libraryApi", () => {
+  it("合并游标分页并保持同一 revision", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          page: {
+            revision: 7,
+            items: [{ tag: "A", albumCount: 1, coverImages: [] }],
+            total: 2,
+            nextCursor: "next-page",
+          },
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          page: {
+            revision: 7,
+            items: [{ tag: "B", albumCount: 1, coverImages: [] }],
+            total: 2,
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await libraryApi.allTags();
+
+    expect(result.items.map((item) => item.tag)).toEqual(["A", "B"]);
+    expect(result.revision).toBe(7);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("cursor=next-page");
+  });
+
+  it("批量解析会按服务端上限拆分请求", async () => {
+    const ids = Array.from(
+      { length: LIBRARY_NODE_BATCH_LIMIT + 1 },
+      (_, index) => `a_${index}`,
+    );
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { ids: string[] };
+      return jsonResponse({
+        ok: true,
+        result: { revision: 9, items: [], missing: body.ids },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await libraryApi.queryNodes(ids);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.missing).toEqual(ids);
+    expect(result.revision).toBe(9);
+  });
+
+  it("拒绝合并跨 revision 的分页结果", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          page: {
+            revision: 10,
+            items: [],
+            total: 1,
+            nextCursor: "next-page",
+          },
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          page: { revision: 11, items: [], total: 1 },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(libraryApi.allAlbums()).rejects.toBeInstanceOf(
+      LibraryRevisionChangedError,
+    );
+  });
+});

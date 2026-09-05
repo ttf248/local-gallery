@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSearchStore } from "../../store/searchStore";
-import { useLibraryStore } from "../../store/libraryStore";
 import { SearchIcon } from "./Icon";
 import { useDebounce } from "../../hooks/useDebounce";
 import { albumsApi, type SearchHit } from "../../api/albums";
@@ -14,8 +13,6 @@ export default function GlobalSearch() {
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
   const navigate = useNavigate();
-  const result = useLibraryStore((s) => s.result);
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
   const [open, setOpen] = useState(false);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const debounced = useDebounce(query, 200);
@@ -51,7 +48,6 @@ export default function GlobalSearch() {
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
-            if (!result) loadFromBackend();
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
