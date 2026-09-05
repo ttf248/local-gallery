@@ -121,7 +121,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/search?q=<keyword>&limit=50`
 
-搜索相册、集合和标签，结果中的 `path` 是相册/集合 ID；标签结果使用 `smart:<tag>` 作为前端导航标识。
+搜索相册、集合和标签，结果中的 `path` 是相册/集合 ID；标签结果使用 `smart:<tag>` 作为前端导航标识。搜索条目在每次媒体库 revision 发布时预计算，查询不会递归读取完整目录树。
 
 ### `PUT /api/albums/:albumId/cover?file=<fileId>`
 

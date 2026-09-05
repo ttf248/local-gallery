@@ -216,7 +216,7 @@ local-gallery/
 │   └── src/
 │       ├── api/            # fetch + SSE 封装，端点模块
 │       ├── hooks/          # useKeyboard / useScanSSE / useTheme / useFavorites…
-│       ├── store/          # zustand（ui / library / gallery / search）
+│       ├── store/          # zustand（ui / gallery / search）
 │       ├── routes/         # 按需加载的 Home / Album / 标签 / Gallery / Recents / Favorites / Unread / Settings
 │       ├── components/     # album / gallery / layout / home / common
 │       └── utils/          # shortcuts / path / storage / format / albumGrouping / libraryCard

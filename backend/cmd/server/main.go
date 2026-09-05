@@ -295,7 +295,7 @@ func main() {
 	// file 必须是 path 子路径 + 真实存在的文件；越权请求会被 400 拒绝。
 	api.Put("/albums/:id/cover", resourceParam, handlers.AlbumSetCoverHandler(scanCache, coverOverrides, resourceCatalog))
 	api.Delete("/albums/:id/cover", resourceParam, handlers.AlbumClearCoverHandler(scanCache, coverOverrides, resourceCatalog))
-	api.Get("/search", handlers.SearchHandler(scanCache, resourceCatalog))
+	api.Get("/search", handlers.SearchHandler(resourceCatalog))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(resourceCatalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(resourceCatalog))
 	api.Get("/thumbs/:id", resourceParam, handlers.ThumbHandler(thumbs))

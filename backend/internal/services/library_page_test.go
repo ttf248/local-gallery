@@ -190,6 +190,25 @@ func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, resolved)
 }
 
+func TestLibrarySearchUsesPrecomputedPathSafeIndex(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	hits := SearchLibrary(fixture.catalog.Acquire(), "旅行", 10)
+	if len(hits) != 2 || hits[0].Kind != "album" || hits[0].Path != fixture.albumID ||
+		hits[1].Kind != "smartCollection" || hits[1].Path != "smart:旅行" {
+		t.Fatalf("search hits=%+v", hits)
+	}
+	if collectionHits := SearchLibrary(fixture.catalog.Acquire(), "collection3", 10); len(collectionHits) != 1 ||
+		collectionHits[0].Kind != "collection" || collectionHits[0].Path != fixture.collectionID {
+		t.Fatalf("collection search hits=%+v", collectionHits)
+	}
+	assertNoAbsolutePathInJSON(t, hits)
+
+	empty := NewResourceCatalog()
+	if hits := SearchLibrary(empty.Acquire(), "旅行", 10); len(hits) != 0 {
+		t.Fatalf("unready library search hits=%+v", hits)
+	}
+}
+
 func TestLibraryAlbumSummaryTracksOnlyActiveCustomCovers(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album")

@@ -47,6 +47,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog))
 	app.Get("/api/tags", LibraryTagsPageHandler(catalog))
 	app.Get("/api/tags/:tag/albums", TagAlbumsPageHandler(catalog))
+	app.Get("/api/search", SearchHandler(catalog))
 
 	manifestResp, err := app.Test(httptest.NewRequest("GET", "/api/library/manifest", nil))
 	if err != nil {
@@ -117,6 +118,15 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	if len(queryBody.Result.Items) != 1 || len(queryBody.Result.Missing) != 1 {
 		t.Fatalf("node query=%+v", queryBody.Result)
 	}
+
+	searchResp, err := app.Test(httptest.NewRequest("GET", "/api/search?q=album1", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if searchResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("search status=%d", searchResp.StatusCode)
+	}
+	assertHandlerBodyHasNoAbsolutePath(t, searchResp.Body)
 
 	invalidResp, err := app.Test(httptest.NewRequest("GET", "/api/tags?cursor=not-a-cursor", nil))
 	if err != nil {

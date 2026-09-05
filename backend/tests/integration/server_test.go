@@ -134,6 +134,7 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(catalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(catalog))
+	api.Get("/search", handlers.SearchHandler(catalog))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
@@ -324,6 +325,11 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 	}
 	if bytes.Contains(body, []byte(h.root)) {
 		t.Fatalf("children page exposed absolute root: %s", body)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/search?q=作者A", nil)
+	if res.StatusCode != http.StatusOK || bytes.Contains(body, []byte(h.root)) {
+		t.Fatalf("search status=%d body=%s", res.StatusCode, body)
 	}
 
 	res, body = h.do(t, http.MethodGet, "/api/albums/"+firstAlbum.ID+"/media?limit=1", nil)

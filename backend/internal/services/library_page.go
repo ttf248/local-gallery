@@ -89,6 +89,16 @@ type LibraryTagSummary struct {
 	CoverImages []string `json:"coverImages"`
 }
 
+// LibrarySearchHit 是预计算搜索索引的对外条目，不包含目录树或绝对路径。
+type LibrarySearchHit struct {
+	Kind       string `json:"kind"`
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	Author     string `json:"author,omitempty"`
+	Count      int    `json:"count"`
+	CoverImage string `json:"coverImage,omitempty"`
+}
+
 // LibraryPage 在每页都回传 revision；客户端合并分页结果前可再次确认版本。
 type LibraryPage[T any] struct {
 	Revision   uint64 `json:"revision"`
@@ -118,6 +128,7 @@ type libraryPageIndex struct {
 	nodes     map[string]LibraryNodeSummary
 	tags      []LibraryTagSummary
 	tagAlbums map[string][]LibraryNodeSummary
+	search    []LibrarySearchHit
 }
 
 func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
@@ -213,9 +224,48 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 			index.tagAlbums[smart.Author] = summaries
 		}
 	}
+	index.search = buildLibrarySearchIndex(index)
 
 	index.manifest = buildIndexedLibraryManifest(state, index)
 	return index
+}
+
+func buildLibrarySearchIndex(index *libraryPageIndex) []LibrarySearchHit {
+	hits := make([]LibrarySearchHit, 0, len(index.albums)+len(index.nodes)+len(index.tags))
+	for _, album := range index.albums {
+		hits = append(hits, LibrarySearchHit{
+			Kind: "album", Path: album.ID, Name: album.DisplayName, Author: album.Author,
+			Count: album.ImageCount, CoverImage: album.CoverImage,
+		})
+	}
+	collections := make([]LibraryNodeSummary, 0, len(index.nodes))
+	for _, node := range index.nodes {
+		if node.Kind == string(ResourceCollection) {
+			collections = append(collections, node)
+		}
+	}
+	sort.SliceStable(collections, func(i, j int) bool {
+		if naturalLess(collections[i].DisplayName, collections[j].DisplayName) {
+			return true
+		}
+		if naturalLess(collections[j].DisplayName, collections[i].DisplayName) {
+			return false
+		}
+		return collections[i].ID < collections[j].ID
+	})
+	for _, collection := range collections {
+		hits = append(hits, LibrarySearchHit{
+			Kind: "collection", Path: collection.ID, Name: collection.DisplayName,
+			Count: collection.AlbumCount, CoverImage: collection.CoverImage,
+		})
+	}
+	for _, tag := range index.tags {
+		hits = append(hits, LibrarySearchHit{
+			Kind: "smartCollection", Path: "smart:" + tag.Tag, Name: tag.Tag, Author: tag.Tag,
+			Count: tag.AlbumCount, CoverImage: tag.CoverImage,
+		})
+	}
+	return hits
 }
 
 func buildNodeIndex(state *resourceCatalogState, albums []models.Album, collections []models.Collection) []LibraryNodeSummary {
@@ -432,6 +482,29 @@ func PageTagAlbums(snapshot CatalogSnapshot, tag, cursor string, limit int) (Lib
 	return LibraryPage[LibraryNodeSummary]{
 		Revision: snapshot.Revision(), Items: cloneNodePage(albums, start, end), Total: len(albums), NextCursor: next,
 	}, nil
+}
+
+// SearchLibrary 从当前不可变 revision 的预计算摘要中进行大小写不敏感匹配。
+// 搜索请求不再递归遍历完整扫描树，也不会触发路径转换。
+func SearchLibrary(snapshot CatalogSnapshot, query string, limit int) []LibrarySearchHit {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return []LibrarySearchHit{}
+	}
+	needle := strings.ToLower(strings.TrimSpace(query))
+	if needle == "" || limit <= 0 {
+		return []LibrarySearchHit{}
+	}
+	results := make([]LibrarySearchHit, 0, min(limit, len(snapshot.state.library.search)))
+	for _, hit := range snapshot.state.library.search {
+		if !strings.Contains(strings.ToLower(hit.Name), needle) && !strings.Contains(strings.ToLower(hit.Author), needle) {
+			continue
+		}
+		results = append(results, hit)
+		if len(results) == limit {
+			break
+		}
+	}
+	return results
 }
 
 func clonePage[T any](items []T, start, end int) []T {
