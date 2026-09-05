@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCallback, useEffect, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { useUIStore } from "../../store/uiStore";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { useTheme } from "../../hooks/useTheme";
@@ -14,7 +15,7 @@ import ScanProgress from "../album/ScanProgress";
 import ToastViewport from "../common/Toast";
 import HelpOverlay from "../common/HelpOverlay";
 import ErrorBoundary from "../common/ErrorBoundary";
-import { useLibraryAlbums } from "../../hooks/useLibrary";
+import { libraryApi } from "../../api/library";
 
 // 应用外壳：侧边栏 + 工具栏 + 主内容。
 // 全局帮助浮层通过 comic:open-help 事件触发（所有页面 ? 都能唤起）。
@@ -26,7 +27,6 @@ export default function AppShell() {
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setBreadcrumbs = useUIStore((s) => s.setBreadcrumbs);
   const pushToast = useUIStore((s) => s.pushToast);
-  const albums = useLibraryAlbums().data?.items ?? [];
   const [helpOpen, setHelpOpen] = useState(false);
   const [isCancellingScan, setIsCancellingScan] = useState(false);
   const onGallery = location.pathname.startsWith("/gallery");
@@ -89,13 +89,15 @@ export default function AppShell() {
       window.removeEventListener("comic:open-help", fn as EventListener);
   }, []);
 
+  const randomAlbum = useMutation({
+    mutationFn: () => libraryApi.randomAlbum(),
+    onSuccess: ({ album }) => navigate(albumRoute(album.id)),
+    onError: () =>
+      pushToast({ kind: "info", message: "没有可随机打开的相册" }),
+  });
+
   const goShuffle = () => {
-    if (albums.length === 0) {
-      pushToast({ kind: "info", message: "尚未加载图像库" });
-      return;
-    }
-    const album = albums[Math.floor(Math.random() * albums.length)];
-    navigate(albumRoute(album.id));
+    if (!randomAlbum.isPending) randomAlbum.mutate();
   };
 
   const cancelScan = useCallback(async () => {

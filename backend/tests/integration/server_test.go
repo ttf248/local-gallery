@@ -130,7 +130,9 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/library/manifest", handlers.LibraryManifestHandler(catalog))
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(catalog))
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(catalog))
+	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(catalog, activityStore))
 	api.Get("/albums", handlers.LibraryAlbumsPageHandler(catalog))
+	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(catalog, activityStore))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(catalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(catalog))
@@ -325,6 +327,22 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 	}
 	if bytes.Contains(body, []byte(h.root)) {
 		t.Fatalf("children page exposed absolute root: %s", body)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/library/activity-summary", nil)
+	if res.StatusCode != http.StatusOK || bytes.Contains(body, []byte(h.root)) {
+		t.Fatalf("activity summary status=%d body=%s", res.StatusCode, body)
+	}
+	var activitySummary struct {
+		Summary services.LibraryActivitySummary `json:"summary"`
+	}
+	if err := json.Unmarshal(body, &activitySummary); err != nil || activitySummary.Summary.UnreadCount != 2 {
+		t.Fatalf("invalid activity summary: %s err=%v", body, err)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/albums/random?scope=unread", nil)
+	if res.StatusCode != http.StatusOK || bytes.Contains(body, []byte(h.root)) {
+		t.Fatalf("random unread status=%d body=%s", res.StatusCode, body)
 	}
 
 	res, body = h.do(t, http.MethodGet, "/api/search?q=作者A", nil)

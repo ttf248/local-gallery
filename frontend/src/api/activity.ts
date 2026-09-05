@@ -1,5 +1,22 @@
 import { API_BASE, ApiError, api } from "./client";
 
+export const ACTIVITY_CHANGED_EVENT = "local-gallery:activity-changed";
+
+function notifyActivityChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(ACTIVITY_CHANGED_EVENT));
+  }
+}
+
+async function withActivityChanged<T>(
+  request: Promise<T>,
+  affectsUnread = true,
+): Promise<T> {
+  const result = await request;
+  if (affectsUnread) notifyActivityChanged();
+  return result;
+}
+
 export function isActivityNotFound(error: unknown): boolean {
   return (
     error instanceof ApiError &&
@@ -75,13 +92,18 @@ export const activityApi = {
     }),
 
   set: (activity: ActivityInput) =>
-    api<Activity>("/api/activity", { method: "PUT", body: activity }),
+    withActivityChanged(
+      api<Activity>("/api/activity", { method: "PUT", body: activity }),
+      activity.mediaKind === "image",
+    ),
 
   setImage: (albumId: string, pageIndex: number, pageCount: number) =>
-    api<ImageActivity>("/api/activity", {
-      method: "PUT",
-      body: { albumId, mediaKind: "image", pageIndex, pageCount },
-    }),
+    withActivityChanged(
+      api<ImageActivity>("/api/activity", {
+        method: "PUT",
+        body: { albumId, mediaKind: "image", pageIndex, pageCount },
+      }),
+    ),
 
   setVideo: (
     albumId: string,
@@ -123,31 +145,41 @@ export const activityApi = {
   },
 
   setBatch: (activities: ActivityInput[]) =>
-    api<{ ok: boolean; updated: number }>("/api/activity/batch", {
-      method: "PUT",
-      body: { activities },
-    }),
+    withActivityChanged(
+      api<{ ok: boolean; updated: number }>("/api/activity/batch", {
+        method: "PUT",
+        body: { activities },
+      }),
+      activities.some((activity) => activity.mediaKind === "image"),
+    ),
 
   remove: (identity: ActivityIdentity) =>
-    api<{ ok: boolean; removed: boolean }>("/api/activity", {
-      method: "DELETE",
-      params: {
-        albumId: identity.albumId,
-        mediaKind: identity.mediaKind,
-        itemId: identity.itemId,
-      },
-    }),
+    withActivityChanged(
+      api<{ ok: boolean; removed: boolean }>("/api/activity", {
+        method: "DELETE",
+        params: {
+          albumId: identity.albumId,
+          mediaKind: identity.mediaKind,
+          itemId: identity.itemId,
+        },
+      }),
+      identity.mediaKind === "image",
+    ),
 
   removeImage: (albumId: string) =>
-    api<{ ok: boolean; removed: boolean }>("/api/activity", {
-      method: "DELETE",
-      params: { albumId, mediaKind: "image" },
-    }),
+    withActivityChanged(
+      api<{ ok: boolean; removed: boolean }>("/api/activity", {
+        method: "DELETE",
+        params: { albumId, mediaKind: "image" },
+      }),
+    ),
 
   clear: () =>
-    api<{ ok: boolean; removed: number }>("/api/activity/all", {
-      method: "DELETE",
-    }),
+    withActivityChanged(
+      api<{ ok: boolean; removed: number }>("/api/activity/all", {
+        method: "DELETE",
+      }),
+    ),
 
   // 页面卸载时的最后一次写入不等待响应；会话仍只通过 HttpOnly cookie 携带。
   keepalive: (activity: ActivityInput) => {
@@ -160,6 +192,10 @@ export const activityApi = {
       credentials: "include",
       keepalive: true,
       body: JSON.stringify(activity),
-    });
+    }).then((response) => {
+      if (response.ok && activity.mediaKind === "image") {
+        notifyActivityChanged();
+      }
+    }).catch(() => {});
   },
 };

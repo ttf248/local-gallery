@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
 import {
   HomeIcon,
   ClockIcon,
@@ -11,8 +12,8 @@ import {
 } from "../common/Icon";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "../../store/uiStore";
-import { useUnreadAlbums } from "../../hooks/useUnreadAlbums";
-import { useLibraryAlbums } from "../../hooks/useLibrary";
+import { useLibraryActivitySummary } from "../../hooks/useLibrary";
+import { libraryApi } from "../../api/library";
 import { albumRoute } from "../../utils/path";
 
 interface Props {
@@ -35,30 +36,28 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const pushToast = useUIStore((s) => s.pushToast);
-  // 未读数量用于侧边栏 badge + 决定「随机未读」按钮可用性
-  const { cards: unreadCards } = useUnreadAlbums();
-  const unreadCount = unreadCards.length;
-  const albums = useLibraryAlbums().data?.items ?? [];
+  // 常驻导航只消费服务端派生的计数，不能为 badge 常驻下载全库相册摘要。
+  const activitySummary = useLibraryActivitySummary();
+  const unreadCount = activitySummary.data?.summary.unreadCount ?? 0;
+  const randomAlbum = useMutation({
+    mutationFn: (scope: "all" | "unread") => libraryApi.randomAlbum(scope),
+    onSuccess: ({ album }) => navigate(albumRoute(album.id)),
+    onError: (_error, scope) =>
+      pushToast({
+        kind: "info",
+        message:
+          scope === "unread" ? "没有未读相册可跳" : "尚未加载图像库",
+      }),
+  });
 
   const onShuffle = () => {
-    if (albums.length === 0) {
-      pushToast({ kind: "info", message: "尚未加载图像库" });
-      return;
-    }
-    const album = albums[Math.floor(Math.random() * albums.length)];
-    navigate(albumRoute(album.id));
+    if (!randomAlbum.isPending) randomAlbum.mutate("all");
   };
 
   const onShuffleUnread = () => {
-    if (unreadCount === 0) {
-      pushToast({ kind: "info", message: "没有未读相册可跳" });
-      return;
+    if (!randomAlbum.isPending && unreadCount > 0) {
+      randomAlbum.mutate("unread");
     }
-    const pick = unreadCards[Math.floor(Math.random() * unreadCount)];
-    // pick.to 形如 /albums/<encoded>;AlbumDetail 期望 ?path= 原 path,所以走
-    // 解码还原 — 与 Recents / Favorites 里 albumRoute 的用法一致。
-    const path = decodeURIComponent(pick.to.replace(/^\/albums\//, ""));
-    navigate(`/albums/${encodeURIComponent(path)}`);
   };
 
   return (
@@ -183,10 +182,11 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
         {/* 随机一本 — 单独一行,折叠时仍可见图标 */}
         <button
           onClick={onShuffle}
+          disabled={randomAlbum.isPending}
           title="随机一本 (R)"
           className={`w-full flex items-center gap-2.5 h-9 rounded-md text-[13px] transition-colors ${
             collapsed ? "justify-center px-0" : "px-2.5"
-          } text-fg-muted hover:bg-accent-soft hover:text-accent`}
+          } text-fg-muted hover:bg-accent-soft hover:text-accent disabled:opacity-50`}
         >
           <ShuffleIcon size={15} className="shrink-0" />
           {!collapsed && <span className="truncate">随机一本</span>}
@@ -195,7 +195,7 @@ export default function Sidebar({ collapsed, onToggle }: Props) {
         {/* 随机未读 — 仅在有未读时高亮可点;没未读时变灰提示 */}
         <button
           onClick={onShuffleUnread}
-          disabled={unreadCount === 0}
+          disabled={unreadCount === 0 || randomAlbum.isPending}
           title={
             unreadCount === 0
               ? "没有未读相册"

@@ -9,6 +9,7 @@ import (
 
 	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/store"
 )
 
 // LibraryManifestHandler 返回库启动所需的轻量 manifest，不再传输完整目录树。
@@ -82,6 +83,47 @@ func LibraryAlbumsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
 		}
 		setLibraryRevisionETag(c, snapshot.Revision())
 		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+// LibraryRandomAlbumHandler 返回一个随机相册摘要。scope=unread 时只从未开始阅读的相册中抽取。
+func LibraryRandomAlbumHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		scope := strings.TrimSpace(c.Query("scope"))
+		if scope != "" && scope != "unread" {
+			return httputil.BadRequest(c, "invalid_random_scope", "scope must be empty or unread")
+		}
+		excluded := map[string]struct{}{}
+		if scope == "unread" {
+			var err error
+			excluded, err = activities.StartedImageAlbumIDs()
+			if err != nil {
+				return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
+			}
+		}
+		snapshot := catalog.Acquire()
+		album, err := services.RandomLibraryAlbum(snapshot, excluded)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "album": album, "revision": snapshot.Revision()})
+	}
+}
+
+// LibraryActivitySummaryHandler 为常驻侧边栏返回未读计数，避免下载全量相册摘要。
+func LibraryActivitySummaryHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		started, err := activities.StartedImageAlbumIDs()
+		if err != nil {
+			return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
+		}
+		snapshot := catalog.Acquire()
+		summary, err := services.BuildLibraryActivitySummary(snapshot, started)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		return c.JSON(fiber.Map{"ok": true, "summary": summary})
 	}
 }
 
@@ -184,6 +226,8 @@ func writeLibraryPageError(c *fiber.Ctx, err error, revision uint64) error {
 		return httputil.BadRequest(c, "invalid_resource_kind", "resource type does not support this operation")
 	case errors.Is(err, services.ErrLibraryTagNotFound):
 		return httputil.NotFound(c, "tag_not_found", "tag was not found")
+	case errors.Is(err, services.ErrLibraryNoMatchingAlbum):
+		return httputil.NotFound(c, "no_matching_album", "no album matches this request")
 	default:
 		return httputil.Internal(c, "library_page_failed", "unable to build library page")
 	}

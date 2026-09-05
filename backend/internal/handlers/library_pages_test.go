@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/tianlongxiang/local-gallery/internal/models"
 	"github.com/tianlongxiang/local-gallery/internal/services"
+	"github.com/tianlongxiang/local-gallery/internal/store"
 )
 
 func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
@@ -44,6 +46,9 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app.Get("/api/library/:id/children", LibraryChildrenPageHandler(catalog))
 	app.Post("/api/library/nodes/query", LibraryNodesQueryHandler(catalog))
 	app.Get("/api/albums", LibraryAlbumsPageHandler(catalog))
+	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"), "")
+	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities))
+	app.Get("/api/library/activity-summary", LibraryActivitySummaryHandler(catalog, activities))
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog))
 	app.Get("/api/tags", LibraryTagsPageHandler(catalog))
 	app.Get("/api/tags/:tag/albums", TagAlbumsPageHandler(catalog))
@@ -95,6 +100,38 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 		t.Fatalf("albums status=%d", albumsResp.StatusCode)
 	}
 	assertHandlerBodyHasNoAbsolutePath(t, albumsResp.Body)
+
+	randomResp, err := app.Test(httptest.NewRequest("GET", "/api/albums/random", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if randomResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("random album status=%d", randomResp.StatusCode)
+	}
+	assertHandlerBodyHasNoAbsolutePath(t, randomResp.Body)
+
+	if err := activities.Set(models.Activity{
+		AlbumID: albumID, MediaKind: models.MediaKindImage, PageIndex: 0, PageCount: 1, Updated: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	summaryResp, err := app.Test(httptest.NewRequest("GET", "/api/library/activity-summary", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summaryResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("activity summary status=%d", summaryResp.StatusCode)
+	}
+	var summaryBody struct {
+		Summary services.LibraryActivitySummary `json:"summary"`
+	}
+	if err := json.NewDecoder(summaryResp.Body).Decode(&summaryBody); err != nil {
+		t.Fatal(err)
+	}
+	_ = summaryResp.Body.Close()
+	if summaryBody.Summary.AlbumCount != 2 || summaryBody.Summary.UnreadCount != 1 {
+		t.Fatalf("activity summary=%+v", summaryBody.Summary)
+	}
 
 	queryRequest := httptest.NewRequest("POST", "/api/library/nodes/query", strings.NewReader(`{"ids":["`+albumID+`","a_missing"]}`))
 	queryRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)

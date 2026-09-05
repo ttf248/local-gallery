@@ -209,6 +209,41 @@ func TestLibrarySearchUsesPrecomputedPathSafeIndex(t *testing.T) {
 	}
 }
 
+func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	snapshot := fixture.catalog.Acquire()
+
+	random, err := RandomLibraryAlbum(snapshot, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if random.Kind != string(ResourceAlbum) || random.ID == "" {
+		t.Fatalf("random album=%+v", random)
+	}
+
+	started := map[string]struct{}{fixture.albumID: {}}
+	summary, err := BuildLibraryActivitySummary(snapshot, started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.Revision != snapshot.Revision() || summary.AlbumCount != 4 || summary.UnreadCount != 3 {
+		t.Fatalf("activity summary=%+v", summary)
+	}
+
+	albums, err := PageLibraryAlbums(snapshot, "", MaxLibraryPageLimit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	excludeAll := make(map[string]struct{}, len(albums.Items))
+	for _, album := range albums.Items {
+		excludeAll[album.ID] = struct{}{}
+	}
+	if _, err := RandomLibraryAlbum(snapshot, excludeAll); !errors.Is(err, ErrLibraryNoMatchingAlbum) {
+		t.Fatalf("all albums excluded error=%v, want ErrLibraryNoMatchingAlbum", err)
+	}
+	assertNoAbsolutePathInJSON(t, summary)
+}
+
 func TestLibraryAlbumSummaryTracksOnlyActiveCustomCovers(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album")

@@ -1,8 +1,10 @@
 package services
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -22,6 +24,7 @@ var (
 	ErrLibraryResourceNotFound  = errors.New("library resource not found")
 	ErrLibraryResourceWrongKind = errors.New("library resource has wrong kind")
 	ErrLibraryTagNotFound       = errors.New("library tag not found")
+	ErrLibraryNoMatchingAlbum   = errors.New("library has no matching album")
 )
 
 // LibraryManifest 是首页启动所需的轻量目录描述，不包含相册树或媒体列表。
@@ -97,6 +100,13 @@ type LibrarySearchHit struct {
 	Author     string `json:"author,omitempty"`
 	Count      int    `json:"count"`
 	CoverImage string `json:"coverImage,omitempty"`
+}
+
+// LibraryActivitySummary 是常驻导航所需的轻量阅读计数，不携带相册清单或活动详情。
+type LibraryActivitySummary struct {
+	Revision    uint64 `json:"revision"`
+	AlbumCount  int    `json:"albumCount"`
+	UnreadCount int    `json:"unreadCount"`
 }
 
 // LibraryPage 在每页都回传 revision；客户端合并分页结果前可再次确认版本。
@@ -505,6 +515,49 @@ func SearchLibrary(snapshot CatalogSnapshot, query string, limit int) []LibraryS
 		}
 	}
 	return results
+}
+
+// RandomLibraryAlbum 从当前 revision 的预计算相册摘要中安全地抽取一项。
+// excludeIDs 用于排除已经有图片阅读活动的相册，从而支持随机未读。
+func RandomLibraryAlbum(snapshot CatalogSnapshot, excludeIDs map[string]struct{}) (LibraryNodeSummary, error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryNodeSummary{}, ErrLibraryNotReady
+	}
+	albums := snapshot.state.library.albums
+	candidates := make([]int, 0, len(albums))
+	for index, album := range albums {
+		if _, excluded := excludeIDs[album.ID]; excluded {
+			continue
+		}
+		candidates = append(candidates, index)
+	}
+	if len(candidates) == 0 {
+		return LibraryNodeSummary{}, ErrLibraryNoMatchingAlbum
+	}
+	picked, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+	if err != nil {
+		return LibraryNodeSummary{}, fmt.Errorf("select random library album: %w", err)
+	}
+	return cloneNodeSummary(albums[candidates[picked.Int64()]]), nil
+}
+
+// BuildLibraryActivitySummary 将当前 catalog 与已开始的图片活动合并为导航计数。
+// 没有图片活动记录的相册即为未读；视频活动不影响相册阅读语义。
+func BuildLibraryActivitySummary(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}) (LibraryActivitySummary, error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryActivitySummary{}, ErrLibraryNotReady
+	}
+	albums := snapshot.state.library.albums
+	summary := LibraryActivitySummary{
+		Revision:   snapshot.Revision(),
+		AlbumCount: len(albums),
+	}
+	for _, album := range albums {
+		if _, started := startedImageAlbumIDs[album.ID]; !started {
+			summary.UnreadCount++
+		}
+	}
+	return summary, nil
 }
 
 func clonePage[T any](items []T, start, end int) []T {

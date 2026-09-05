@@ -98,4 +98,43 @@ describe("libraryApi", () => {
       LibraryRevisionChangedError,
     );
   });
+
+  it("为常驻导航请求轻量阅读摘要和随机未读相册", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          summary: { revision: 12, albumCount: 320, unreadCount: 18 },
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          revision: 12,
+          album: {
+            id: "a_random",
+            kind: "album",
+            name: "随机相册",
+            displayName: "随机相册",
+            coverImages: [],
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const [summary, random] = await Promise.all([
+      libraryApi.activitySummary(),
+      libraryApi.randomAlbum("unread"),
+    ]);
+
+    expect(summary.summary).toMatchObject({ albumCount: 320, unreadCount: 18 });
+    expect(random.album.id).toBe("a_random");
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/library/activity-summary",
+    );
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/api/albums/random?scope=unread",
+    );
+  });
 });

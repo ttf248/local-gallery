@@ -65,6 +65,12 @@ export interface LibraryTagSummary {
   coverImages: string[];
 }
 
+export interface LibraryActivitySummary {
+  revision: number;
+  albumCount: number;
+  unreadCount: number;
+}
+
 export interface LibraryPage<T> {
   revision: number;
   items: T[];
@@ -140,6 +146,10 @@ async function queryNodes(ids: string[]): Promise<LibraryNodeQueryResult> {
 export const libraryApi = {
   manifest: () =>
     api<{ ok: boolean; manifest: LibraryManifest }>("/api/library/manifest"),
+  activitySummary: () =>
+    api<{ ok: boolean; summary: LibraryActivitySummary }>(
+      "/api/library/activity-summary",
+    ),
   albumPage: (cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
     api<PageResponse<LibraryNodeSummary>>("/api/albums", {
       params: { cursor, limit },
@@ -167,6 +177,14 @@ export const libraryApi = {
       `/api/tags/${encodeURIComponent(tag)}/albums`,
       { params: { cursor, limit } },
     ),
+  randomAlbum: (scope: "all" | "unread" = "all") =>
+    api<{
+      ok: boolean;
+      album: LibraryNodeSummary;
+      revision: number;
+    }>("/api/albums/random", {
+      params: { scope: scope === "unread" ? "unread" : undefined },
+    }),
   allAlbums: () => collectPages((cursor) => libraryApi.albumPage(cursor)),
   allChildren: (parentId: string) =>
     collectPages((cursor) => libraryApi.childrenPage(parentId, cursor)),

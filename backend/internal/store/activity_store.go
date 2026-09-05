@@ -91,6 +91,23 @@ func (s *ActivityStore) Query(identities []models.ActivityIdentity) ([]models.Ac
 	return out, nil
 }
 
+// StartedImageAlbumIDs 返回至少保存过一条图片阅读活动的相册 ID 集合。
+// 该派生结果只用于图像库的未读统计，不会暴露活动位置、时间或视频记录。
+func (s *ActivityStore) StartedImageAlbumIDs() (map[string]struct{}, error) {
+	if err := s.ensureLoaded(); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	ids := make(map[string]struct{})
+	for _, activity := range s.items {
+		if activity.MediaKind == models.MediaKindImage {
+			ids[activity.AlbumID] = struct{}{}
+		}
+	}
+	return ids, nil
+}
+
 // Set 新增或覆盖单条活动。
 func (s *ActivityStore) Set(activity models.Activity) error {
 	return s.SetBatch([]models.Activity{activity})
