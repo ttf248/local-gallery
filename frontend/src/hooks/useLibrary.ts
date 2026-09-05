@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { libraryApi } from "../api/library";
+import { LibraryRevisionChangedError, libraryApi } from "../api/library";
 
 export const libraryQueryKeys = {
   root: ["library"] as const,
@@ -30,18 +30,39 @@ export function useLibraryAlbums() {
   });
 }
 
-export function useLibraryChildren(parentId: string) {
+export function useLibraryChildren(
+  parentId: string,
+  expectedRevision?: number,
+) {
   return useQuery({
-    queryKey: libraryQueryKeys.children(parentId),
-    queryFn: () => libraryApi.allChildren(parentId),
+    queryKey: [...libraryQueryKeys.children(parentId), expectedRevision],
+    queryFn: async () => {
+      const page = await libraryApi.allChildren(parentId);
+      if (
+        expectedRevision !== undefined &&
+        page.revision !== expectedRevision
+      ) {
+        throw new LibraryRevisionChangedError();
+      }
+      return page;
+    },
     enabled: parentId.length > 0,
   });
 }
 
-export function useAlbumMedia(albumId: string) {
+export function useAlbumMedia(albumId: string, expectedRevision?: number) {
   return useQuery({
-    queryKey: libraryQueryKeys.media(albumId),
-    queryFn: () => libraryApi.allMedia(albumId),
+    queryKey: [...libraryQueryKeys.media(albumId), expectedRevision],
+    queryFn: async () => {
+      const page = await libraryApi.allMedia(albumId);
+      if (
+        expectedRevision !== undefined &&
+        page.revision !== expectedRevision
+      ) {
+        throw new LibraryRevisionChangedError();
+      }
+      return page;
+    },
     enabled: albumId.length > 0,
   });
 }

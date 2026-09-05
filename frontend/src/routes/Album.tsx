@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useLibraryStore } from "../store/libraryStore";
 import { useSearchStore } from "../store/searchStore";
 import { useFavorites } from "../hooks/useFavorites";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
@@ -14,8 +13,6 @@ import AlbumGrid from "../components/album/AlbumGrid";
 import YearTimeline from "../components/home/YearTimeline";
 import { groupAlbumsAndCollectionsByYear } from "../utils/albumGrouping";
 import EmptyState from "../components/common/EmptyState";
-import { albumsApi } from "../api/albums";
-import type { ScanResult } from "../api/scan";
 import { decodeFavPath } from "../utils/path";
 import { formatRelative } from "../utils/date";
 import { formatSize, formatDuration } from "../utils/format";
@@ -42,6 +39,17 @@ import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
 import VideoCoverImage from "../components/common/VideoCoverImage";
 import { fsCapabilities } from "../api/fs";
 import type { GalleryContextEntry } from "../utils/galleryContext";
+import {
+  useAlbumMedia,
+  useLibraryChildren,
+  useLibraryNodes,
+  useTagAlbums,
+} from "../hooks/useLibrary";
+import {
+  LibraryRevisionChangedError,
+  type LibraryMediaItem,
+  type LibraryNodeSummary,
+} from "../api/library";
 
 interface AlbumDetail {
   type: "album";
@@ -62,6 +70,14 @@ interface CollectionDetail {
   type: "collection";
   path: string;
   name: string;
+  displayName?: string;
+  sourceRoot?: string;
+  sourceName?: string;
+  coverImage: string;
+  coverImages?: string[];
+  imageCount: number;
+  videoCount: number;
+  folderSize: number;
   albums: AlbumDetail[];
   /**
    * 嵌套子集合(子目录里没有顶层图/视频,继续下钻的「中间层」集合)。
@@ -82,6 +98,51 @@ interface SmartDetail {
 
 type Detail = AlbumDetail | CollectionDetail | SmartDetail;
 
+function albumDetailFromSummary(
+  summary: LibraryNodeSummary,
+  media: LibraryMediaItem[] = [],
+): AlbumDetail {
+  return {
+    type: "album",
+    path: summary.id,
+    name: summary.displayName || summary.name,
+    imageFiles: media
+      .filter((item) => item.kind === "image")
+      .map((item) => item.id),
+    videoFiles: media
+      .filter((item) => item.kind === "video")
+      .map((item) => item.id),
+    coverImage: summary.coverImage ?? "",
+    coverKind: summary.coverKind,
+    imageCount: summary.imageCount ?? 0,
+    videoCount: summary.videoCount ?? 0,
+    author: summary.author,
+    folderSize: summary.folderSize ?? 0,
+    modTime: summary.modTime ?? "",
+  };
+}
+
+function collectionDetailFromSummary(
+  summary: LibraryNodeSummary,
+): CollectionDetail {
+  return {
+    type: "collection",
+    path: summary.id,
+    name: summary.name,
+    displayName: summary.displayName,
+    sourceRoot: summary.sourceRoot,
+    sourceName: summary.sourceName,
+    coverImage: summary.coverImage ?? "",
+    coverImages: summary.coverImages,
+    imageCount: summary.imageCount ?? 0,
+    videoCount: summary.videoCount ?? 0,
+    folderSize: summary.folderSize ?? 0,
+    albums: [],
+    collections: [],
+    albumCount: summary.albumCount ?? 0,
+  };
+}
+
 // 相册视图：
 //   - 相册 → 图片网格，点击进入画廊
 //   - 集合/智能集合 → 嵌套相册列表
@@ -93,123 +154,82 @@ export default function Album() {
   const isSmart = rawPath.startsWith("smart:");
   const realPath = isSmart ? rawPath.slice(6) : rawPath;
 
-  const result = useLibraryStore((s) => s.result);
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
   const query = useSearchStore((s) => s.query);
   const sortBy = useSearchStore((s) => s.sortBy);
   const viewMode = useUIStore((s) => s.viewMode);
   const { add: addFav, toggle: toggleFav, favorites } = useFavorites();
   const pushToast = useUIStore((s) => s.pushToast);
 
-  useEffect(() => {
-    if (!result) loadFromBackend();
-  }, [result, loadFromBackend]);
+  const nodeIds = useMemo(
+    () => (!isSmart && realPath ? [realPath] : []),
+    [isSmart, realPath],
+  );
+  const nodeQuery = useLibraryNodes(nodeIds);
+  const refetchNode = nodeQuery.refetch;
+  const node = nodeQuery.data?.items[0];
+  const childrenQuery = useLibraryChildren(
+    node?.kind === "collection" ? node.id : "",
+    nodeQuery.data?.revision,
+  );
+  const mediaQuery = useAlbumMedia(
+    node?.kind === "album" ? node.id : "",
+    nodeQuery.data?.revision,
+  );
+  const tagAlbumsQuery = useTagAlbums(isSmart ? realPath : "");
+  const revisionChanged =
+    childrenQuery.error instanceof LibraryRevisionChangedError ||
+    mediaQuery.error instanceof LibraryRevisionChangedError;
 
-  const localDetail = useMemo<Detail | null>(() => {
-    if (!result) return null;
+  useEffect(() => {
+    if (revisionChanged) void refetchNode();
+  }, [refetchNode, revisionChanged]);
+
+  const detail = useMemo<Detail | null>(() => {
     if (isSmart) {
-      const sc = (result.smartCollections ?? []).find(
-        (s) => s.author === realPath,
+      if (!tagAlbumsQuery.data) return null;
+      const albums = tagAlbumsQuery.data.items.map((album) =>
+        albumDetailFromSummary(album),
       );
-      if (!sc) return null;
       return {
         type: "smartCollection",
-        author: sc.author,
-        albums: sc.albums.map((a) => ({
-          type: "album",
-          path: a.path,
-          name: a.name,
-          imageFiles: [],
-          coverImage: a.coverImage,
-          coverKind: a.coverKind,
-          imageCount: a.imageCount,
-          videoCount: a.videoCount,
-          author: a.author,
-          folderSize: 0,
-          modTime: "",
-        })),
-        albumCount: sc.albumCount,
-        coverImage: sc.coverImage,
+        author: realPath,
+        albums,
+        albumCount: tagAlbumsQuery.data.total,
+        coverImage: albums[0]?.coverImage ?? "",
       };
     }
-    // 重要:Collection 优先匹配。2024年 顶层有图+有子目录时,后端会
-    // 返回一个 Collection 包含「散图」虚拟相册(同样以 parentPath 作为
-    // 自己的 Path)。如果不先匹配 Collection,点年卡会落到"散图"
-    // 的 AlbumView 而看不到 6 个子目录,破坏「保留子相册导航」。
-    //
-    // 集合查找必须递归：扫描器支持 Collection 嵌套（"2024年/夏威夷-度假"
-    // /"2024年/夏威夷-度假/相片" 这种 4-5 层结构），旧版 find 只在
-    // 顶层 r.collections 找，导致深层集合从本地缓存拿不到，必须
-    // 走到后端兜底 → 401 列表里很多子目录点进去"找不到此文件夹"。
-    const coll = findCollectionRecursive(result.collections ?? [], realPath);
-    if (coll) {
-      const mapAlbum = (a: ScanResult["albums"][number]): AlbumDetail => ({
-        type: "album",
-        path: a.path,
-        name: a.name,
-        imageFiles: [],
-        coverImage: a.coverImage,
-        coverKind: a.coverKind,
-        imageCount: a.imageCount,
-        videoCount: a.videoCount,
-        author: a.author,
-        folderSize: 0,
-        modTime: "",
-      });
-      const mapColl = (
-        c: ScanResult["collections"][number],
-      ): CollectionDetail => ({
-        type: "collection",
-        path: c.path,
-        name: c.name,
-        albums: (c.albums ?? []).map(mapAlbum),
-        collections: (c.collections ?? []).map(mapColl),
-        albumCount: c.albumCount,
-      });
-      return mapColl(coll);
+    if (!node) return null;
+    if (node.kind === "album") {
+      if (!mediaQuery.data) return null;
+      return albumDetailFromSummary(node, mediaQuery.data.items);
     }
-    const found = result.albums.find((a) => a.path === realPath);
-    if (found) {
-      return {
-        type: "album",
-        path: found.path,
-        name: found.name,
-        imageFiles:
-          (found as unknown as { imageFiles?: string[] }).imageFiles ?? [],
-        videoFiles: found.videoFiles,
-        coverImage: found.coverImage,
-        coverKind: found.coverKind,
-        imageCount: found.imageCount,
-        videoCount: found.videoCount,
-        author: found.author,
-        folderSize:
-          (found as unknown as { folderSize?: number }).folderSize ?? 0,
-        modTime: (found as unknown as { modTime?: string }).modTime ?? "",
-      };
+    if (!childrenQuery.data) return null;
+    const albums: AlbumDetail[] = [];
+    const collections: CollectionDetail[] = [];
+    for (const child of childrenQuery.data.items) {
+      if (child.kind === "album") albums.push(albumDetailFromSummary(child));
+      else collections.push(collectionDetailFromSummary(child));
     }
-    return null;
-  }, [result, isSmart, realPath]);
+    return {
+      ...collectionDetailFromSummary(node),
+      albums,
+      collections,
+    };
+  }, [
+    childrenQuery.data,
+    isSmart,
+    mediaQuery.data,
+    node,
+    realPath,
+    tagAlbumsQuery.data,
+  ]);
 
-  // 本地缓存命中了（顶层/嵌套集合/相册）时直接用；只有 album 类型且
-  // imageFiles 为空才需要回后端补文件列表（首页只缓存了 metadata）。
-  // 如果本地完全找不到（多见于直接 URL 访问深层路径 / 缓存与扫描结果
-  // 不一致），也尝试走一次后端，让 /api/albums/:id 兜底——后端 FindCollection
-  // / findAlbumInCollection 也是递归的，能正确返回。
-  const needBackendDetail =
-    localDetail === null ||
-    (localDetail?.type === "album" && localDetail.imageFiles.length === 0);
-  const remoteDetail = useQuery({
-    queryKey: ["album-detail", realPath],
-    queryFn: async () => {
-      const r = await albumsApi.detail(rawPath);
-      return r.data as Detail;
-    },
-    enabled: !!needBackendDetail,
-  });
-
-  const detail = needBackendDetail
-    ? (remoteDetail.data ?? localDetail)
-    : localDetail;
+  const isDetailLoading = isSmart
+    ? tagAlbumsQuery.isLoading
+    : revisionChanged ||
+      nodeQuery.isLoading ||
+      (node?.kind === "album" && mediaQuery.isLoading) ||
+      (node?.kind === "collection" && childrenQuery.isLoading);
 
   useEffect(() => {
     if (!detail) return;
@@ -224,19 +244,11 @@ export default function Album() {
     }
   }, [detail]);
 
-  if (!result) {
+  if (isDetailLoading) {
     return (
       <EmptyState
-        title="尚未扫描图像库"
-        description="回到主页点击「扫描」加载图像库。"
-        action={
-          <button
-            onClick={() => navigate("/")}
-            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover transition-colors text-sm"
-          >
-            返回主页
-          </button>
-        }
+        title="正在加载文件夹"
+        description="正在读取节点与媒体摘要…"
       />
     );
   }
@@ -245,7 +257,7 @@ export default function Album() {
     return (
       <EmptyState
         title="找不到此文件夹"
-        description={`路径: ${realPath}`}
+        description="资源可能已移动，或者媒体库尚未完成扫描。"
         action={
           <button
             onClick={() => navigate("/")}
@@ -555,9 +567,8 @@ function AlbumView({
                   <div className="flex items-center justify-between text-[11px] text-fg-muted mb-1.5 tabular-nums">
                     <span>阅读进度</span>
                     <span>
-                      {Math.min(progress!.pageIndex + 1, currentPageCount)} /{' '}
-                      {currentPageCount} ·{' '}
-                      {progressPct}%
+                      {Math.min(progress!.pageIndex + 1, currentPageCount)} /{" "}
+                      {currentPageCount} · {progressPct}%
                     </span>
                   </div>
                   <div className="h-1.5 bg-bg-strong rounded-full overflow-hidden">
@@ -813,12 +824,8 @@ function CollectionView({
   // 的 CardData 列表渲染。子集合(5 层嵌套的中间层)用 variant=
   // 'collection' 区分,点击继续下钻。
   const allCards: CardData[] = useMemo(() => {
-    if (isSmart) {
-      // smartCollection 不支持嵌套,按旧行为
-      return [];
-    }
-    const c = detail as CollectionDetail;
-    const albumCards: CardData[] = (c.albums ?? []).map((a) => ({
+    const albums = detail.albums ?? [];
+    const albumCards: CardData[] = albums.map((a) => ({
       id: "a:" + a.path,
       variant: "album",
       title: a.name,
@@ -830,21 +837,21 @@ function CollectionView({
       coverKind: a.coverKind,
       to: `/albums/${encodeURIComponent(a.path)}`,
     }));
+    if (isSmart) return albumCards;
+    const c = detail as CollectionDetail;
     const collCards: CardData[] = (c.collections ?? []).map((sub) => {
-      // 嵌套子集合:cover 取第一个子相册的封面;count = 直属于子集合
-      // 的子相册数(不含更深嵌套,用户能点进去看)。
-      const firstCover =
-        sub.albums?.[0]?.coverImage ??
-        sub.collections?.[0]?.albums?.[0]?.coverImage ??
-        "";
       return {
         id: "c:" + sub.path,
         variant: "collection",
         title: sub.name,
+        displayTitle: sub.displayName,
         subtitle: "子集合",
         count: sub.albumCount,
-        coverPath: firstCover,
+        coverPath: sub.coverImage,
+        covers: sub.coverImages,
         to: `/albums/${encodeURIComponent(sub.path)}`,
+        sourceRoot: sub.sourceRoot,
+        sourceName: sub.sourceName,
       };
     });
     return [...albumCards, ...collCards];
@@ -1191,22 +1198,4 @@ function VideoAlbumView({
       </div>
     </div>
   );
-}
-
-// 在 collections 树里递归查找 path。
-//
-// 后端扫描器支持 Collection 嵌套（"2024年/夏威夷-度假/相片/作品" 这种
-// 4-5 层结构），前端必须跟着递归。旧版 `collections.find(c => c.path === ...)`
-// 只在顶层查，导致「文件夹里面的子文件夹无法正常加载」—— 401 个文件夹中
-// 任何深层集合都拿不到。
-function findCollectionRecursive(
-  collections: ScanResult["collections"],
-  path: string,
-): ScanResult["collections"][number] | null {
-  for (const c of collections) {
-    if (c.path === path) return c;
-    const nested = findCollectionRecursive(c.collections ?? [], path);
-    if (nested) return nested;
-  }
-  return null;
 }
