@@ -17,6 +17,10 @@ type ConfigPatch struct {
 	HostSet            bool     `json:"-"`
 	Port               int      `json:"port,omitempty"`
 	PortSet            bool     `json:"-"`
+	AccessMode         string   `json:"accessMode,omitempty"`
+	AccessModeSet      bool     `json:"-"`
+	AccessToken        string   `json:"accessToken,omitempty"`
+	AccessTokenSet     bool     `json:"-"`
 	CacheDir           string   `json:"cacheDir,omitempty"`
 	CacheDirSet        bool     `json:"-"`
 	ThumbSizeW         int      `json:"thumbSizeW,omitempty"`
@@ -70,6 +74,12 @@ func (p *ConfigPatch) UnmarshalJSON(data []byte) error {
 	}
 	if _, ok := raw["port"]; ok {
 		p.PortSet = true
+	}
+	if _, ok := raw["accessMode"]; ok {
+		p.AccessModeSet = true
+	}
+	if _, ok := raw["accessToken"]; ok {
+		p.AccessTokenSet = true
 	}
 	if _, ok := raw["cacheDir"]; ok {
 		p.CacheDirSet = true

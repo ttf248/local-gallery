@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -25,6 +26,20 @@ const DefaultConfigName = "config.yaml"
 
 // DefaultCacheDirName 未配置 cacheDir 时使用的目录名（创建在 CWD 下）。
 const DefaultCacheDirName = ".local-gallery"
+
+// AccessMode 控制 API 的网络访问边界。
+//
+// local 是默认且最安全的模式：只接受回环地址请求；lan 用于受信局域网，
+// 所有非健康检查 API 都必须通过访问令牌或由令牌换取的短期会话认证。
+const (
+	AccessModeLocal = "local"
+	AccessModeLAN   = "lan"
+
+	// MinAccessTokenLength 防止把容易猜测的短口令当作局域网访问令牌。
+	// 推荐使用密码学安全随机源生成至少 32 个 ASCII 字符。
+	MinAccessTokenLength = 32
+	MaxAccessTokenLength = 256
+)
 
 // DefaultFFmpegPath ffmpeg 默认可执行文件位置。
 //
@@ -41,6 +56,8 @@ type Config struct {
 	MediaRoots      []string `yaml:"mediaRoots"`
 	Host            string   `yaml:"host"`
 	Port            int      `yaml:"port"`
+	AccessMode      string   `yaml:"accessMode"`
+	AccessToken     string   `yaml:"accessToken" json:"-"`
 	AllowOsOpen     bool     `yaml:"allowOsOpen"`
 	CacheDir        string   `yaml:"cacheDir"`
 	ThumbSizeW      int      `yaml:"thumbSizeW"`
@@ -102,6 +119,8 @@ func Default() *Config {
 		MediaRoots:      []string{filepath.Join(".", "media")},
 		Host:            "127.0.0.1",
 		Port:            8080,
+		AccessMode:      AccessModeLocal,
+		AccessToken:     "",
 		AllowOsOpen:     false,
 		CacheDir:        filepath.Join(".", DefaultCacheDirName),
 		ThumbSizeW:      320,
@@ -154,6 +173,9 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	mergeFile(cfg, tmp)
+	if err := secureConfigFile(path); err != nil {
+		return nil, fmt.Errorf("secure config file: %w", err)
+	}
 	return cfg, nil
 }
 
@@ -172,6 +194,12 @@ func mergeFile(dst, file *Config) {
 	}
 	if file.Port != 0 {
 		dst.Port = file.Port
+	}
+	if file.AccessMode != "" {
+		dst.AccessMode = file.AccessMode
+	}
+	if file.AccessToken != "" {
+		dst.AccessToken = file.AccessToken
 	}
 	if file.AllowOsOpen {
 		dst.AllowOsOpen = true
@@ -231,6 +259,23 @@ func (c *Config) Validate() error {
 	}
 	if c.Port <= 0 || c.Port > 65535 {
 		return fmt.Errorf("invalid port %d", c.Port)
+	}
+	switch c.AccessMode {
+	case AccessModeLocal:
+	case AccessModeLAN:
+		if len(c.AccessToken) < MinAccessTokenLength {
+			return fmt.Errorf("accessToken must contain at least %d characters in lan mode", MinAccessTokenLength)
+		}
+		if len(c.AccessToken) > MaxAccessTokenLength {
+			return fmt.Errorf("accessToken must contain at most %d characters in lan mode", MaxAccessTokenLength)
+		}
+		if strings.IndexFunc(c.AccessToken, func(r rune) bool {
+			return unicode.IsSpace(r) || unicode.IsControl(r)
+		}) >= 0 {
+			return errors.New("accessToken must not contain whitespace or control characters")
+		}
+	default:
+		return fmt.Errorf("invalid accessMode %q (must be %q or %q)", c.AccessMode, AccessModeLocal, AccessModeLAN)
 	}
 	if c.ThumbSizeW <= 0 || c.ThumbSizeH <= 0 {
 		return errors.New("thumb size must be positive")

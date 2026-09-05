@@ -12,19 +12,21 @@ import (
 //
 // 配置接口是唯一允许返回本机绝对配置路径的回环接口。
 type ConfigResponse struct {
-	MediaRoots      []string `json:"mediaRoots"`
-	Host            string   `json:"host"`
-	Port            int      `json:"port"`
-	CacheDir        string   `json:"cacheDir"`
-	ThumbSizeW      int      `json:"thumbSizeW"`
-	ThumbSizeH      int      `json:"thumbSizeH"`
-	ThumbCacheSize  int      `json:"thumbCacheSize"`
-	CacheMaxAgeDays int      `json:"cacheMaxAgeDays"`
-	AllowOsOpen     bool     `json:"allowOsOpen"`
-	StaticDir       string   `json:"staticDir"`
-	FFmpegPath      string   `json:"ffmpegPath"`
-	FFmpegAvailable bool     `json:"ffmpegAvailable"`
-	ConfigPath      string   `json:"configPath"`
+	MediaRoots            []string `json:"mediaRoots"`
+	Host                  string   `json:"host"`
+	Port                  int      `json:"port"`
+	AccessMode            string   `json:"accessMode"`
+	AccessTokenConfigured bool     `json:"accessTokenConfigured"`
+	CacheDir              string   `json:"cacheDir"`
+	ThumbSizeW            int      `json:"thumbSizeW"`
+	ThumbSizeH            int      `json:"thumbSizeH"`
+	ThumbCacheSize        int      `json:"thumbCacheSize"`
+	CacheMaxAgeDays       int      `json:"cacheMaxAgeDays"`
+	AllowOsOpen           bool     `json:"allowOsOpen"`
+	StaticDir             string   `json:"staticDir"`
+	FFmpegPath            string   `json:"ffmpegPath"`
+	FFmpegAvailable       bool     `json:"ffmpegAvailable"`
+	ConfigPath            string   `json:"configPath"`
 
 	// 排除规则:对外暴露完整三件套(SkipHidden + SystemFiles + ExcludePatterns),
 	// 让前端能完整还原当前配置;而不是只暴露 ExcludePatterns 一项。
@@ -35,10 +37,10 @@ type ConfigResponse struct {
 
 // ConfigUpdateResponse PUT /api/config 的响应体。
 type ConfigUpdateResponse struct {
-	OK                bool            `json:"ok"`
-	Config            ConfigResponse  `json:"config"`
-	RequiresRestart   []string        `json:"requiresRestart,omitempty"`
-	MediaRootsChanged bool            `json:"mediaRootsChanged"` // 根集合是否变化（顺序无关）
+	OK                bool           `json:"ok"`
+	Config            ConfigResponse `json:"config"`
+	RequiresRestart   []string       `json:"requiresRestart,omitempty"`
+	MediaRootsChanged bool           `json:"mediaRootsChanged"` // 根集合是否变化（顺序无关）
 }
 
 // rootsEqual 规范化比较两个根列表（顺序无关）。
@@ -73,22 +75,24 @@ func ConfigGetHandler(mgr *config.Manager) fiber.Handler {
 			ffAvailable = services.FFmpegAvailableAt(ffPath)
 		}
 		return c.JSON(ConfigResponse{
-			MediaRoots:      roots,
-			Host:            cfg.Host,
-			Port:            cfg.Port,
-			CacheDir:        cfg.CacheDir,
-			ThumbSizeW:      cfg.ThumbSizeW,
-			ThumbSizeH:      cfg.ThumbSizeH,
-			ThumbCacheSize:  cfg.ThumbCacheSize,
-			CacheMaxAgeDays: cfg.CacheMaxAgeDays,
-			AllowOsOpen:     cfg.AllowOsOpen,
-			StaticDir:       cfg.StaticDir,
-			FFmpegPath:      ffPath,
-			FFmpegAvailable: ffAvailable,
-			ConfigPath:      mgr.Path(),
-			SkipHidden:      cfg.SkipHidden,
-			SystemFiles:     cfg.SystemFiles,
-			ExcludePatterns: cfg.ExcludePatterns,
+			MediaRoots:            roots,
+			Host:                  cfg.Host,
+			Port:                  cfg.Port,
+			AccessMode:            cfg.AccessMode,
+			AccessTokenConfigured: cfg.AccessToken != "",
+			CacheDir:              cfg.CacheDir,
+			ThumbSizeW:            cfg.ThumbSizeW,
+			ThumbSizeH:            cfg.ThumbSizeH,
+			ThumbCacheSize:        cfg.ThumbCacheSize,
+			CacheMaxAgeDays:       cfg.CacheMaxAgeDays,
+			AllowOsOpen:           cfg.AllowOsOpen,
+			StaticDir:             cfg.StaticDir,
+			FFmpegPath:            ffPath,
+			FFmpegAvailable:       ffAvailable,
+			ConfigPath:            mgr.Path(),
+			SkipHidden:            cfg.SkipHidden,
+			SystemFiles:           cfg.SystemFiles,
+			ExcludePatterns:       cfg.ExcludePatterns,
 		})
 	}
 }
@@ -132,22 +136,24 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 		return c.JSON(ConfigUpdateResponse{
 			OK: true,
 			Config: ConfigResponse{
-				MediaRoots:      newRoots,
-				Host:            newCfg.Host,
-				Port:            newCfg.Port,
-				CacheDir:        newCfg.CacheDir,
-				ThumbSizeW:      newCfg.ThumbSizeW,
-				ThumbSizeH:      newCfg.ThumbSizeH,
-				ThumbCacheSize:  newCfg.ThumbCacheSize,
-				CacheMaxAgeDays: newCfg.CacheMaxAgeDays,
-				AllowOsOpen:     newCfg.AllowOsOpen,
-				StaticDir:       newCfg.StaticDir,
-				FFmpegPath:      newCfg.FFmpegPath,
-				FFmpegAvailable: newCfg.FFmpegPath != "" && services.FFmpegAvailableAt(newCfg.FFmpegPath),
-				ConfigPath:      mgr.Path(),
-				SkipHidden:      newCfg.SkipHidden,
-				SystemFiles:     newCfg.SystemFiles,
-				ExcludePatterns: newCfg.ExcludePatterns,
+				MediaRoots:            newRoots,
+				Host:                  newCfg.Host,
+				Port:                  newCfg.Port,
+				AccessMode:            newCfg.AccessMode,
+				AccessTokenConfigured: newCfg.AccessToken != "",
+				CacheDir:              newCfg.CacheDir,
+				ThumbSizeW:            newCfg.ThumbSizeW,
+				ThumbSizeH:            newCfg.ThumbSizeH,
+				ThumbCacheSize:        newCfg.ThumbCacheSize,
+				CacheMaxAgeDays:       newCfg.CacheMaxAgeDays,
+				AllowOsOpen:           newCfg.AllowOsOpen,
+				StaticDir:             newCfg.StaticDir,
+				FFmpegPath:            newCfg.FFmpegPath,
+				FFmpegAvailable:       newCfg.FFmpegPath != "" && services.FFmpegAvailableAt(newCfg.FFmpegPath),
+				ConfigPath:            mgr.Path(),
+				SkipHidden:            newCfg.SkipHidden,
+				SystemFiles:           newCfg.SystemFiles,
+				ExcludePatterns:       newCfg.ExcludePatterns,
 			},
 			RequiresRestart:   requiresRestart,
 			MediaRootsChanged: mediaRootsChanged,

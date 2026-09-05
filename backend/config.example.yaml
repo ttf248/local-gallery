@@ -17,6 +17,22 @@ mediaRoots:
 host: "127.0.0.1"
 port: 8080
 
+# API 访问边界：
+#   - local（默认）：只接受本机回环地址请求，即使 host 监听到局域网也不会放行远端 API。
+#   - lan：允许局域网访问；除最小健康检查和认证会话端点外，均需 Bearer
+#     令牌或由令牌换取的短期会话。
+# 切换模式与轮换令牌可热生效。浏览器使用 HttpOnly 同源会话 Cookie，
+# SSE 不通过 URL 传令牌，避免令牌进入访问日志、历史记录和 Referer。
+# local 模式请使用 localhost/回环 IP；LAN 模式请使用 IP 或 host 中明确配置的
+# 主机名。任意域名 Host 与跨源请求会被拒绝，以阻断 DNS rebinding 和 CSRF。
+# 服务本身不终止 TLS：LAN 模式只适用于可信家庭网络，不要暴露到互联网或
+# 不可信 Wi-Fi；同网段监听者仍可能窃取首次提交的令牌或 HTTP 会话。
+accessMode: "local"
+
+# 仅 accessMode=lan 时必填；32-256 个无空白字符，建议由安全随机源生成。
+# 示例保持为空，不能直接用于 lan 模式。
+accessToken: ""
+
 # 应用工作目录（相对路径相对 CWD；留空则用 ./.local-gallery）。
 # 持久状态写入 state/，可重建的缩略图与视频缓存写入 derived/；
 # “清空缓存”只会操作 derived/。修改后需重启。

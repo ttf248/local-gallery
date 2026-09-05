@@ -80,6 +80,7 @@ func newHarness(t *testing.T) *harness {
 		MediaRoots:      []string{root},
 		Host:            "127.0.0.1",
 		Port:            8080,
+		AccessMode:      config.AccessModeLocal,
 		AllowOsOpen:     false,
 		CacheDir:        cache,
 		ThumbSizeW:      64,

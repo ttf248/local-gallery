@@ -13,7 +13,7 @@ npm run dev
 
 默认开发服务器：<http://localhost:5173>
 
-通过 Vite proxy 转发 `/api` 到后端 `http://localhost:8080`。
+通过 Vite proxy 转发 `/api` 到后端 `http://127.0.0.1:8080`；代理会同步改写 Host 与 Origin，以满足后端的同源访问门禁。
 
 ## 构建
 
@@ -33,6 +33,6 @@ npx playwright test  # e2e 测试
 
 复制 `.env.example` 为 `.env` 修改。
 
-| 变量 | 用途 |
-|------|------|
+| 变量            | 用途                                        |
+| --------------- | ------------------------------------------- |
 | `VITE_API_BASE` | API 基础路径（默认空，同源或经 Vite proxy） |

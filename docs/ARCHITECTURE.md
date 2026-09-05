@@ -29,7 +29,7 @@ Fiber middleware → handlers → services → local files/cache
 ```
 
 - `backend/cmd/server`：组合配置、服务、中间件、路由和进程生命周期，不承载业务规则。
-- `backend/internal/middleware`：日志、恢复、回环限制、资源 ID 解析和路径安全。
+- `backend/internal/middleware`：日志、恢复、local/LAN 访问门禁、资源 ID 解析和路径安全。
 - `backend/internal/handlers`：HTTP/SSE 契约、输入校验、状态码和公共 DTO。
 - `backend/internal/services`：扫描、资源目录、缓存、缩略图、faststart、转码和元数据。
 - `backend/internal/store`：偏好 JSON 的并发访问和原子落盘。
@@ -52,6 +52,14 @@ Fiber middleware → handlers → services → local files/cache
 ID 由根标识、资源类型和相对路径哈希生成；根目录与相对路径不变时 ID 稳定，且不能逆推出绝对路径。请求进入 `/api/media/:id` 等路由后，资源中间件先解析 ID，再由路径安全中间件确认目标仍位于当前 `mediaRoots` 内。未知、过期或越权 ID 不进入文件服务。
 
 配置页是明确的管理例外：`/api/config` 和 `/api/admin/fs/open` 可处理配置路径，但只接受回环请求。日志只输出目录 basename、逻辑缓存名和能力状态。
+
+## 访问边界
+
+`AccessGate` 是 `/api` 的首个业务中间件，先于路径和资源 ID 解析。它校验 Host 与浏览器 Origin / Fetch Metadata，阻断 DNS rebinding 和跨源请求；`local` 模式随后失败关闭为回环限制，`lan` 模式只允许未认证访问最小化健康检查和会话端点。长连接使用同源 HttpOnly Cookie，不在 SSE URL 中放置令牌。会话只存在服务器内存中，8 小时过期，最多 256 个；令牌轮换通过摘要绑定使旧会话立即失效。配置管理器串行执行完整读改写事务，避免并发 PATCH 把新令牌覆盖回旧值。
+
+`config.yaml` 含访问令牌和本机路径：Unix 启动加载与每次写入都会收紧为 `0600`；Windows 使用受保护 DACL，仅授权当前进程用户。无法收紧权限时配置加载或保存失败，避免凭据以宽松权限继续运行。
+
+当前单端口服务器不终止 TLS，`lan` 的威胁边界是可信家庭网络；访问门禁防止误开放、未授权调用与浏览器跨源攻击，但不声称抵御同网段被动监听。面向不可信网络部署需要在未来显式加入 TLS，而不是把当前端口直接映射到公网。
 
 ## 扫描数据流
 

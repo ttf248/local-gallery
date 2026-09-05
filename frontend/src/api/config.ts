@@ -6,6 +6,8 @@ export interface ServerConfig {
   mediaRoots: string[];
   host: string;
   port: number;
+  accessMode: "local" | "lan";
+  accessTokenConfigured: boolean;
   cacheDir: string;
   thumbSizeW: number;
   thumbSizeH: number;
@@ -34,12 +36,13 @@ export interface ServerConfig {
 //
 // excludePatterns / systemFiles 也是数组替换语义:空数组 = 清空,缺省 = 不改。
 // skipHidden 走 Set 语义,缺省 = 不改;传了 false 也能关掉隐藏目录跳过。
-export type ServerConfigPatch = Partial<
+type ServerConfigFields = Partial<
   Pick<
     ServerConfig,
     | "mediaRoots"
     | "host"
     | "port"
+    | "accessMode"
     | "cacheDir"
     | "thumbSizeW"
     | "thumbSizeH"
@@ -53,6 +56,11 @@ export type ServerConfigPatch = Partial<
     | "excludePatterns"
   >
 >;
+
+export type ServerConfigPatch = ServerConfigFields & {
+  /** 只写字段，服务端响应永不回显。 */
+  accessToken?: string;
+};
 
 export interface ServerConfigUpdateResponse {
   ok: boolean;

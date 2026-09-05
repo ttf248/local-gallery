@@ -5,6 +5,8 @@
 ## 通用约定
 
 - 基础地址：`http://127.0.0.1:8080`。
+- `accessMode=local` 时所有 API 只接受回环请求和 `localhost`/回环 IP Host；`accessMode=lan` 时可使用 IP 或 `host` 中明确配置的主机名，仅健康检查与会话端点公开，其余 API 必须带 Bearer 令牌或有效 HttpOnly 会话 Cookie。令牌不接受 query 参数。所有模式都会拒绝任意域名 Host 与浏览器跨源请求。
+- 内置服务器不终止 TLS；LAN 模式只面向可信家庭网络，不应直接暴露到互联网或不可信 Wi-Fi。同网段监听者仍可能看到首次登录令牌或明文 HTTP 会话。
 - 资源校验错误使用 `{ "code": "...", "message": "..." }`；媒体不存在或 ID 已过期时重新扫描。所有 4xx/5xx 响应统一为：
 
   ```json
@@ -52,15 +54,25 @@
 
 ### `GET /api/health`
 
-返回版本、Go 版本、goroutine 数、脱敏根 ID 和能力位。`mediaRoots` 中只包含 `r_` ID。
+LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开根 ID 和运行时指纹。local 模式或 LAN 已认证请求还返回版本、Go 版本、goroutine 数、脱敏根 ID 和能力位；`mediaRoots` 中只包含 `r_` ID。
+
+### `/api/auth/session`
+
+- `GET`：返回 `{ "authenticated": true|false, "mode": "local|lan" }`，不返回凭据。
+- `POST`：body 为 `{ "token": "..." }`，成功后设置 8 小时、`HttpOnly`、`SameSite=Strict`、`Path=/api` 会话 Cookie。也可用 `Authorization: Bearer <token>`。
+- `DELETE`：删除当前服务端会话并清理 Cookie。
+
+轮换 `accessToken` 后，用旧令牌签发的会话立即失效。前端只把令牌提交给会话端点，不写入 URL、localStorage 或业务 store。
+
+认证请求体最大 1 KiB，令牌最大 256 字符；同一来源 5 分钟内超过 8 次失败返回 `429 too_many_auth_attempts`。正确令牌不会被失败计数锁死，并会清理该来源计数。
 
 ### `GET /api/config` / `PUT /api/config`
 
 读取或更新 `config.yaml`。这是唯一允许返回绝对配置路径的接口，只接受服务端回环地址请求；远程请求返回 `403 local_access_required`。
 
-可更新字段：`mediaRoots`、`host`、`port`、`cacheDir`、`thumbSizeW`、`thumbSizeH`、`thumbCacheSize`、`cacheMaxAgeDays`、`ffmpegPath`、`allowOsOpen`、`staticDir`、`skipHidden`、`excludePatterns`、`systemFiles`。
+可更新字段：`mediaRoots`、`host`、`port`、`accessMode`、`accessToken`、`cacheDir`、`thumbSizeW`、`thumbSizeH`、`thumbCacheSize`、`cacheMaxAgeDays`、`ffmpegPath`、`allowOsOpen`、`staticDir`、`skipHidden`、`excludePatterns`、`systemFiles`。`accessToken` 永不在 GET/PUT 响应中回显，只返回 `accessTokenConfigured`。
 
-`host`、`port`、`cacheDir`、`ffmpegPath` 和 `staticDir` 修改后需要重启；缩略图尺寸、LRU、保留天数和 `allowOsOpen` 可热更新，媒体根和扫描排除规则在下一次扫描生效。
+`host`、`port`、`cacheDir`、`ffmpegPath` 和 `staticDir` 修改后需要重启；`accessMode` 与 `accessToken` 可热更新，其中 LAN 令牌必须是 32-256 个无空白字符。缩略图尺寸、LRU、保留天数和 `allowOsOpen` 也可热更新，媒体根和扫描排除规则在下一次扫描生效。
 
 ## 图像库与扫描
 

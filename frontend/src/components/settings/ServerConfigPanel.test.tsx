@@ -6,12 +6,21 @@ import { configApi } from "../../api/config";
 import { useUIStore } from "../../store/uiStore";
 import { ListFilterBar } from "../common/ListFilterBar";
 import { useSearchStore } from "../../store/searchStore";
+import { authApi } from "../../api/auth";
+import { ApiError } from "../../api/client";
 
 // Mock the config API
 vi.mock("../../api/config", () => ({
   configApi: {
     get: vi.fn(),
     update: vi.fn(),
+  },
+}));
+
+vi.mock("../../api/auth", () => ({
+  authApi: {
+    login: vi.fn(),
+    logout: vi.fn(),
   },
 }));
 
@@ -26,6 +35,8 @@ const baseConfig = {
   mediaRoots: ["E:\\漫画"],
   host: "0.0.0.0",
   port: 8080,
+  accessMode: "local" as const,
+  accessTokenConfigured: false,
   cacheDir: ".local-gallery",
   thumbSizeW: 320,
   thumbSizeH: 350,
@@ -59,6 +70,11 @@ describe("ServerConfigPanel", () => {
       requiresRestart: [],
       mediaRootsChanged: false,
     });
+    vi.mocked(authApi.login).mockResolvedValue({
+      authenticated: true,
+      mode: "lan",
+    });
+    vi.mocked(authApi.logout).mockResolvedValue(undefined);
     // 重置 toasts
     useUIStore.setState({ toasts: [] });
   });
@@ -70,6 +86,47 @@ describe("ServerConfigPanel", () => {
     expect(screen.getByDisplayValue(".local-gallery")).toBeInTheDocument();
     expect(screen.getByDisplayValue("0.0.0.0")).toBeInTheDocument();
     expect(screen.getByDisplayValue("8080")).toBeInTheDocument();
+  });
+
+  it("远程访问设置时显示仅本机提示而不是永久加载", async () => {
+    vi.mocked(configApi.get).mockRejectedValue(
+      new ApiError(
+        403,
+        "this management endpoint is local-only",
+        undefined,
+        "local_access_required",
+      ),
+    );
+    renderPanel();
+    expect(
+      await screen.findByText("服务端设置仅可在运行服务的计算机上管理"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("加载中…")).not.toBeInTheDocument();
+  });
+
+  it("开启 LAN 时同步写入强令牌并立即换取会话", async () => {
+    const token = "0123456789abcdef0123456789abcdef";
+    vi.mocked(configApi.update).mockResolvedValue({
+      ok: true,
+      config: {
+        ...baseConfig,
+        accessMode: "lan",
+        accessTokenConfigured: true,
+      },
+      requiresRestart: [],
+      mediaRootsChanged: false,
+    });
+    renderPanel();
+    const input = await screen.findByLabelText("LAN 访问令牌");
+    fireEvent.change(input, { target: { value: token } });
+    fireEvent.click(screen.getByRole("button", { name: "开启 LAN 访问" }));
+    await waitFor(() =>
+      expect(configApi.update).toHaveBeenCalledWith({
+        accessMode: "lan",
+        accessToken: token,
+      }),
+    );
+    expect(authApi.login).toHaveBeenCalledWith(token);
   });
 
   it("切换 boolean 立即保存", async () => {

@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentType } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import RouteLoading from './components/common/RouteLoading'
+import AccessGate from './components/auth/AccessGate'
 
 const Home = lazy(() => import('./routes/Home'))
 const Recents = lazy(() => import('./routes/Recents'))
@@ -22,18 +23,20 @@ function lazyPage(Page: ComponentType) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route path="/" element={lazyPage(Home)} />
-        <Route path="/recents" element={lazyPage(Recents)} />
-        <Route path="/favorites" element={lazyPage(Favorites)} />
-        <Route path="/unread" element={lazyPage(Unread)} />
-        <Route path="/albums/*" element={lazyPage(Album)} />
-        <Route path="/tags/*" element={lazyPage(Author)} />
-        <Route path="/settings" element={lazyPage(Settings)} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-      <Route path="/gallery/*" element={lazyPage(Gallery)} />
-    </Routes>
+    <AccessGate>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/" element={lazyPage(Home)} />
+          <Route path="/recents" element={lazyPage(Recents)} />
+          <Route path="/favorites" element={lazyPage(Favorites)} />
+          <Route path="/unread" element={lazyPage(Unread)} />
+          <Route path="/albums/*" element={lazyPage(Album)} />
+          <Route path="/tags/*" element={lazyPage(Author)} />
+          <Route path="/settings" element={lazyPage(Settings)} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+        <Route path="/gallery/*" element={lazyPage(Gallery)} />
+      </Routes>
+    </AccessGate>
   )
 }

@@ -8,6 +8,8 @@ import {
 import { useUIStore } from "../../store/uiStore";
 import { useLibraryStore } from "../../store/libraryStore";
 import { fsApi } from "../../api/fs";
+import { authApi } from "../../api/auth";
+import { ApiError } from "../../api/client";
 import { useDebounce } from "../../hooks/useDebounce";
 import {
   CheckIcon,
@@ -168,7 +170,12 @@ export default function ServerConfigPanel() {
   const pushToast = useUIStore((s) => s.pushToast);
   const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    error: queryError,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["server-config"],
     queryFn: () => configApi.get(),
   });
@@ -177,6 +184,8 @@ export default function ServerConfigPanel() {
   const [mediaRootsDirty, setMediaRootsDirty] = useState(false);
   // 暂存用户输入:草稿,避免每次 onChange 都触发 PUT(输入体验更顺)
   const [draft, setDraft] = useState<ServerConfigPatch>({});
+  const [accessTokenDraft, setAccessTokenDraft] = useState("");
+  const [accessError, setAccessError] = useState("");
   // 路径类字段用 onBlur 触发(不走 debounce);非路径类才用 debounce
   const debouncedDraft = useDebounce(draft, 600);
   // 当前"路径类草稿"按字段拆,onBlur 时取对应字段提交
@@ -273,6 +282,35 @@ export default function ServerConfigPanel() {
   }
   flushRef.current = flush;
 
+  async function enableLANAccess() {
+    const token = accessTokenDraft.trim();
+    if (token.length < 32 || token.length > 256 || /\s/u.test(token)) {
+      setAccessError("访问令牌必须是 32-256 个无空白字符");
+      return;
+    }
+    setAccessError("");
+    try {
+      await update.mutateAsync({ accessMode: "lan", accessToken: token });
+      // 配置热更新后旧会话立即失效；用同一令牌立即换取新会话，
+      // 避免设置页下一个请求才突然跳到解锁页。
+      await authApi.login(token);
+      setAccessTokenDraft("");
+    } catch {
+      setAccessError("访问配置未完成，请确认令牌后重试");
+    }
+  }
+
+  async function disableLANAccess() {
+    setAccessError("");
+    try {
+      await update.mutateAsync({ accessMode: "local", accessToken: "" });
+      await authApi.logout().catch(() => {});
+      setAccessTokenDraft("");
+    } catch {
+      setAccessError("无法切换为仅本机访问");
+    }
+  }
+
   // 路径类字段保存:onBlur 时调用
   function flushPathField(key: keyof ServerConfigPatch) {
     const v = pathDirtyRef.current[key];
@@ -286,8 +324,32 @@ export default function ServerConfigPanel() {
     flush({ [key]: v } as ServerConfigPatch);
   }
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <div className="text-sm text-fg-muted">加载中…</div>;
+  }
+
+  if (!data) {
+    const localOnly =
+      queryError instanceof ApiError &&
+      queryError.code === "local_access_required";
+    return (
+      <div className="rounded-md border border-border-faint bg-bg-elevated px-4 py-4">
+        <p className="text-sm text-fg">
+          {localOnly
+            ? "服务端设置仅可在运行服务的计算机上管理"
+            : "无法读取服务端设置"}
+        </p>
+        {!localOnly && (
+          <button
+            type="button"
+            className="mt-3 h-8 px-3 rounded-md border border-border text-xs hover:bg-bg-hover"
+            onClick={() => void refetch()}
+          >
+            重试
+          </button>
+        )}
+      </div>
+    );
   }
 
   const fieldValue = (
@@ -368,6 +430,80 @@ export default function ServerConfigPanel() {
             onPatternsCommit={() => flushPathField("excludePatterns")}
             onSystemFilesCommit={() => flushPathField("systemFiles")}
           />
+        </div>
+      </div>
+
+      <div>
+        <div className="text-[11px] uppercase tracking-[0.18em] text-fg-muted font-medium mb-2 px-1">
+          访问控制
+        </div>
+        <div className="bg-bg-elevated border border-border-faint rounded-md px-4 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-sm text-fg">
+                {data.accessMode === "lan" ? "局域网令牌保护" : "仅本机访问"}
+              </div>
+              <p className="text-xs text-fg-subtle mt-1 leading-5 max-w-xl">
+                {data.accessMode === "lan"
+                  ? "远程浏览器必须用令牌换取 8 小时会话；令牌不会回显。"
+                  : "默认模式，所有 API 只允许运行服务的计算机访问。"}
+              </p>
+            </div>
+            <span className="shrink-0 rounded-full border border-border px-2 py-1 text-[10px] uppercase tracking-wider text-fg-muted">
+              {data.accessMode === "lan" ? "LAN" : "LOCAL"}
+            </span>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <input
+              type="password"
+              value={accessTokenDraft}
+              onChange={(event) => {
+                setAccessTokenDraft(event.target.value);
+                setAccessError("");
+              }}
+              autoComplete="new-password"
+              spellCheck={false}
+              maxLength={256}
+              aria-label={
+                data.accessMode === "lan" ? "新访问令牌" : "LAN 访问令牌"
+              }
+              placeholder={
+                data.accessMode === "lan" && data.accessTokenConfigured
+                  ? "输入至少 32 位新令牌以轮换"
+                  : "至少 32 个无空白字符"
+              }
+              className="h-9 min-w-72 flex-1 rounded-md border border-border-faint bg-bg-subtle px-3 font-mono text-sm focus:outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              disabled={update.isPending || accessTokenDraft.trim().length < 32}
+              onClick={() => void enableLANAccess()}
+              className="h-9 px-3 rounded-md bg-accent text-accent-contrast text-xs font-medium disabled:opacity-50"
+            >
+              {data.accessMode === "lan" ? "轮换令牌" : "开启 LAN 访问"}
+            </button>
+            {data.accessMode === "lan" && (
+              <button
+                type="button"
+                disabled={update.isPending}
+                onClick={() => void disableLANAccess()}
+                className="h-9 px-3 rounded-md border border-border text-xs text-fg-muted hover:bg-bg-hover disabled:opacity-50"
+              >
+                切换为仅本机
+              </button>
+            )}
+          </div>
+          {accessError && (
+            <p role="alert" className="mt-2 text-xs text-danger">
+              {accessError}
+            </p>
+          )}
+          <p className="mt-2 text-[11px] text-fg-subtle">
+            对外访问还需将监听地址设为局域网 IP 或
+            0.0.0.0；修改监听地址需重启。内置服务不提供
+            TLS，请仅用于可信家庭网络。
+          </p>
         </div>
       </div>
 

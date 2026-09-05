@@ -13,6 +13,8 @@ const RUNTIME_BASE =
 const ENV_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
 export const API_BASE = RUNTIME_BASE || ENV_BASE || "";
+export const AUTH_REQUIRED_EVENT = "local-gallery:auth-required";
+export const AUTH_ESTABLISHED_EVENT = "local-gallery:auth-established";
 
 export class ApiError extends Error {
   constructor(
@@ -85,6 +87,7 @@ export async function api<T>(
   const { body, params, headers, retries, nonIdempotent, ...rest } = opts;
   const init: RequestInit = {
     ...rest,
+    credentials: rest.credentials ?? "include",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
@@ -132,6 +135,11 @@ export async function api<T>(
           }
         }
         const err = new ApiError(res.status, message, parsed, code);
+        if (res.status === 401 && typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent(AUTH_REQUIRED_EVENT, { detail: { code } }),
+          );
+        }
         // 4xx 业务错误不重试;5xx/408/429 在剩余次数内重试
         if (attempt < maxAttempts && isRetryableStatus(res.status)) {
           await sleep(100 * attempt); // 简单线性 backoff

@@ -71,6 +71,7 @@ func main() {
 	log.Printf("  CacheDir:  <configured>")
 	log.Printf("  Thumbnail: %dx%d", cfg.ThumbSizeW, cfg.ThumbSizeH)
 	log.Printf("  Listen:    %s", cfg.Addr())
+	log.Printf("  Access:    %s", cfg.AccessMode)
 
 	// ---- 5. 创建并启动 Fiber App ----
 	app := fiber.New(fiber.Config{
@@ -97,7 +98,6 @@ func main() {
 	// 路径安全中间件：根集合从 Manager 动态读取，运行中可热更新
 	resourceCatalog := services.NewResourceCatalog()
 	safetyMw, safetyState := middleware.PathSafetyMiddleware(cfg.Roots(), resourceCatalog)
-	app.Use(safetyMw)
 	mgr.OnChange("path_safety", func(snapshot *config.Config) {
 		safetyState.SetRoots(snapshot.Roots())
 	})
@@ -268,7 +268,14 @@ func main() {
 		return nil
 	}
 
+	accessGate := middleware.NewAccessGate(mgr.Get)
 	api := app.Group("/api")
+	api.Use(accessGate.Middleware())
+	// 认证必须先于资源 ID / path 解析，避免未认证请求借错误差异探测目录。
+	api.Use(safetyMw)
+	api.Get("/auth/session", accessGate.SessionStatusHandler())
+	api.Post("/auth/session", accessGate.SessionCreateHandler())
+	api.Delete("/auth/session", accessGate.SessionDeleteHandler())
 	api.Get("/health", handlers.HealthHandler(mgr, resourceCatalog))
 	api.Post("/scans", handlers.AsyncScanStartHandler(runner, mgr))
 	api.Get("/scans/:id/events", handlers.AsyncScanEventsHandler(runner))

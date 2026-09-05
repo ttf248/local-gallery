@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError } from "./client";
+import { api, ApiError, AUTH_REQUIRED_EVENT } from "./client";
 
 function failedResponse(status: number, body: string): Response {
   return {
@@ -58,5 +58,31 @@ describe("api error response", () => {
       message: "HTTP 400",
       body: "Bad Request",
     });
+  });
+
+  it("默认携带同源会话并在 401 时广播认证失效", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        failedResponse(
+          401,
+          JSON.stringify({ code: "authentication_required", message: "登录" }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const listener = vi.fn();
+    window.addEventListener(AUTH_REQUIRED_EVENT, listener);
+
+    await expect(api("/api/private", { retries: 0 })).rejects.toMatchObject({
+      status: 401,
+      code: "authentication_required",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/private",
+      expect.objectContaining({ credentials: "include" }),
+    );
+    expect(listener).toHaveBeenCalledOnce();
+    window.removeEventListener(AUTH_REQUIRED_EVENT, listener);
   });
 });

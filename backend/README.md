@@ -70,6 +70,7 @@ go test ./internal/services -run TestScanner -v
 | 类别   | 端点                                                                                                                  |
 | ------ | --------------------------------------------------------------------------------------------------------------------- |
 | 健康   | `GET /api/health`                                                                                                     |
+| 认证   | `GET/POST/DELETE /api/auth/session`（LAN 令牌换取 8 小时 HttpOnly 会话）                              |
 | 扫描   | `POST /api/scans` · `GET /api/scans/:id/events` (SSE) · `GET/DELETE /api/scans/:id` · `GET/DELETE /api/library`       |
 | 库     | `GET /api/albums/:id` · `GET /api/tags/:tag` · `GET /api/search`                                                      |
 | 缩略图 | `GET /api/thumbs/:id` · `POST /api/thumbs/:id/cover` · `GET /api/thumbs/stats`                                        |

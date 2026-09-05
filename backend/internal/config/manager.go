@@ -19,8 +19,11 @@ import (
 type Manager struct {
 	path atomic.Pointer[string]
 
-	mu      sync.RWMutex
-	current *Config
+	// updateMu 串行化完整的读-改-写事务，避免两个非重叠 PATCH 从同一旧快照
+	// 出发，后落盘的一方覆盖另一方（访问令牌轮换尤其不能被旧值回写）。
+	updateMu sync.Mutex
+	mu       sync.RWMutex
+	current  *Config
 
 	subsMu sync.Mutex
 	subs   []subEntry
@@ -127,10 +130,13 @@ func (m *Manager) OnChange(name string, fn ChangeListener) func() {
 // 返回 RequiresRestart 中包含的字段名集合（需要重启才能真正生效的字段）。
 // 调用方应据此向用户提示。
 func (m *Manager) Update(patch ConfigPatch) (requiresRestart []string, err error) {
+	m.updateMu.Lock()
+	defer m.updateMu.Unlock()
+
 	// 1. 合并
-	m.mu.Lock()
+	m.mu.RLock()
 	merged := cloneConfig(m.current)
-	m.mu.Unlock()
+	m.mu.RUnlock()
 	applyPatch(merged, &patch)
 
 	// 2. 校验
@@ -153,23 +159,11 @@ func (m *Manager) Update(patch ConfigPatch) (requiresRestart []string, err error
 
 	requiresRestart = diffRequiresRestart(old, merged)
 
-	// 通知订阅者。**异步派发**:
-	//   - 同步 notify 会让 listener 慢/panic 拖死 Update 主路径
-	//   - goroutine 派发 + 串行化(每 listener 一次 fn)既保持可观察
-	//     性(调用方拿到 snapshot 那一刻还能看 m.current 已是新值),
-	//     又不让 listener 阻塞主流程
-	//   - panic recover 保留,避免某个订阅者协程崩溃污染进程
+	// 配置更新频率很低，同步、按提交顺序通知能保证连续 PATCH 不会让旧快照
+	// 后到并覆盖新服务状态。每个 listener 收到独立深拷贝，且 panic 被隔离。
 	listeners := m.snapshotListeners()
 	for _, e := range listeners {
-		listener := e
-		go func() {
-			defer func() {
-				if r := recover(); r != nil {
-					fmt.Fprintf(os.Stderr, "config subscriber %q panic: %v\n", listener.token, r)
-				}
-			}()
-			listener.fn(merged)
-		}()
+		notifyListener(e, merged)
 	}
 
 	return requiresRestart, nil
@@ -178,6 +172,9 @@ func (m *Manager) Update(patch ConfigPatch) (requiresRestart []string, err error
 // Reload 从磁盘重新加载（管理员可手动重置被外部编辑的 config）。
 // 同样会触发 OnChange 通知。
 func (m *Manager) Reload() error {
+	m.updateMu.Lock()
+	defer m.updateMu.Unlock()
+
 	path := m.Path()
 	if path == "" {
 		return errors.New("no config path set")
@@ -197,9 +194,18 @@ func (m *Manager) Reload() error {
 	listeners := m.snapshotListeners()
 	_ = diffRequiresRestart(old, cfg) // Reload 不返回该字段
 	for _, e := range listeners {
-		e.fn(cfg)
+		notifyListener(e, cfg)
 	}
 	return nil
+}
+
+func notifyListener(listener subEntry, snapshot *Config) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "config subscriber %q panic: %v\n", listener.token, r)
+		}
+	}()
+	listener.fn(cloneConfig(snapshot))
 }
 
 func (m *Manager) snapshotListeners() []subEntry {
@@ -238,12 +244,21 @@ func saveYAML(path string, cfg *Config) error {
 		return err
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
+	// config.yaml 可能包含访问令牌与本机路径。Unix 创建模式先限制为
+	// owner-only；随后由平台实现统一收紧现有文件权限（Windows 使用 DACL）。
+	if err := os.WriteFile(tmp, out, 0o600); err != nil {
+		return err
+	}
+	if err := secureConfigFile(tmp); err != nil {
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	if err := secureConfigFile(path); err != nil {
+		return err
 	}
 	return nil
 }
@@ -278,6 +293,8 @@ func marshalConfig(cfg *Config) ([]byte, error) {
 
 	addKV("host", scalarString(cfg.Host))
 	addKV("port", scalarInt(cfg.Port))
+	addKV("accessMode", scalarString(cfg.AccessMode))
+	addKV("accessToken", scalarString(cfg.AccessToken))
 	addKV("cacheDir", scalarString(cfg.CacheDir))
 	addKV("thumbSizeW", scalarInt(cfg.ThumbSizeW))
 	addKV("thumbSizeH", scalarInt(cfg.ThumbSizeH))
@@ -331,6 +348,12 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 	if p.PortSet {
 		dst.Port = p.Port
 	}
+	if p.AccessModeSet {
+		dst.AccessMode = p.AccessMode
+	}
+	if p.AccessTokenSet {
+		dst.AccessToken = p.AccessToken
+	}
 	if p.CacheDirSet {
 		dst.CacheDir = p.CacheDir
 	}
@@ -377,7 +400,8 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 //   - mediaRoots：路径安全中间件和扫描器可通过 Manager 热更新；扫描缓存会
 //     被 onUpdate 钩子清空，调用方应主动触发重新扫描（不视为需要重启）
 //
-// 其它字段（thumbSize* / cacheMaxAgeDays / thumbCacheSize / allowOsOpen）可热生效。
+// 其它字段（accessMode / accessToken / thumbSize* / cacheMaxAgeDays /
+// thumbCacheSize / allowOsOpen）可热生效。
 func diffRequiresRestart(old, neu *Config) []string {
 	var out []string
 	if old.Host != neu.Host {

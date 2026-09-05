@@ -1,8 +1,10 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,6 +40,24 @@ func TestDefault(t *testing.T) {
 	if d.StaticDir == "" {
 		t.Error("default StaticDir must not be empty")
 	}
+	if d.AccessMode != AccessModeLocal {
+		t.Errorf("default AccessMode=%q want %q", d.AccessMode, AccessModeLocal)
+	}
+	if d.AccessToken != "" {
+		t.Error("default AccessToken must be empty")
+	}
+}
+
+func TestConfigJSONNeverContainsAccessToken(t *testing.T) {
+	cfg := Default()
+	cfg.AccessToken = "must-not-be-serialized"
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), cfg.AccessToken) || strings.Contains(string(data), "AccessToken") {
+		t.Fatalf("JSON leaked access token: %s", data)
+	}
 }
 
 func TestLoadFile_MissingReturnsDefault(t *testing.T) {
@@ -56,6 +76,8 @@ func TestLoadFile_OverridesDefaults(t *testing.T) {
 mediaRoots:
   - 'D:\photos'
 port: 9090
+accessMode: lan
+accessToken: 0123456789abcdef0123456789abcdef
 thumbSizeW: 210
 thumbSizeH: 280
 allowOsOpen: true
@@ -72,6 +94,9 @@ staticDir: build/web
 	}
 	if cfg.Port != 9090 {
 		t.Errorf("port: got %d", cfg.Port)
+	}
+	if cfg.AccessMode != AccessModeLAN || cfg.AccessToken != "0123456789abcdef0123456789abcdef" {
+		t.Errorf("access configuration was not loaded")
 	}
 	if cfg.ThumbSizeW != 210 || cfg.ThumbSizeH != 280 {
 		t.Errorf("thumb size: got %dx%d", cfg.ThumbSizeW, cfg.ThumbSizeH)
@@ -143,6 +168,25 @@ func TestValidate(t *testing.T) {
 		}, true},
 		{"bad_port_low", func(c *Config) { c.Port = 0 }, true},
 		{"bad_port_high", func(c *Config) { c.Port = 70000 }, true},
+		{"bad_access_mode", func(c *Config) { c.AccessMode = "public" }, true},
+		{"lan_without_token", func(c *Config) { c.AccessMode = AccessModeLAN }, true},
+		{"lan_short_token", func(c *Config) {
+			c.AccessMode = AccessModeLAN
+			c.AccessToken = "too-short"
+		}, true},
+		{"lan_token_with_whitespace", func(c *Config) {
+			c.AccessMode = AccessModeLAN
+			c.AccessToken = "0123456789abcdef 123456789abcdef0"
+		}, true},
+		{"lan_token_too_long", func(c *Config) {
+			c.AccessMode = AccessModeLAN
+			c.AccessToken = strings.Repeat("x", MaxAccessTokenLength+1)
+		}, true},
+		{"lan_with_strong_token", func(c *Config) {
+			c.AccessMode = AccessModeLAN
+			c.AccessToken = "0123456789abcdef0123456789abcdef"
+			c.MediaRoots = []string{dir}
+		}, false},
 		{"bad_thumb_w", func(c *Config) { c.ThumbSizeW = 0 }, true},
 		{"bad_thumb_h", func(c *Config) { c.ThumbSizeH = -1 }, true},
 		{"ok", func(c *Config) { c.MediaRoots = []string{dir} }, false},

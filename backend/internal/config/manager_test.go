@@ -104,6 +104,54 @@ func TestManager_Update_AllowOsOpenFalse(t *testing.T) {
 	}
 }
 
+func TestManager_Update_AccessConfiguration(t *testing.T) {
+	path := writeValidYAML(t, "")
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restart, err := mgr.Update(ConfigPatch{
+		AccessMode:     AccessModeLAN,
+		AccessModeSet:  true,
+		AccessToken:    "0123456789abcdef0123456789abcdef",
+		AccessTokenSet: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restart) != 0 {
+		t.Fatalf("access configuration should hot-update, requiresRestart=%v", restart)
+	}
+	got := mgr.Get()
+	if got.AccessMode != AccessModeLAN || got.AccessToken != "0123456789abcdef0123456789abcdef" {
+		t.Fatalf("access config not applied: mode=%q tokenLength=%d", got.AccessMode, len(got.AccessToken))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(data, "accessMode: \"lan\"") || !contains(data, "accessToken: \"0123456789abcdef0123456789abcdef\"") {
+		t.Fatalf("access config not persisted: %s", data)
+	}
+}
+
+func TestManager_Update_RejectsLANWithoutStrongToken(t *testing.T) {
+	path := writeValidYAML(t, "")
+	mgr, err := NewManager(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = mgr.Update(ConfigPatch{AccessMode: AccessModeLAN, AccessModeSet: true})
+	if err == nil {
+		t.Fatal("expected lan mode without token to be rejected")
+	}
+	if mgr.Get().AccessMode != AccessModeLocal {
+		t.Fatal("invalid update must not mutate current config")
+	}
+}
+
 func TestManager_Update_RejectsInvalid(t *testing.T) {
 	path := writeValidYAML(t, "")
 	mgr, err := NewManager(path)
@@ -121,6 +169,46 @@ func TestManager_Update_RejectsInvalid(t *testing.T) {
 	// 内存应未变
 	if mgr.Get().Port == 70000 {
 		t.Error("port should not be applied on validation failure")
+	}
+}
+
+func TestManager_Update_SerializesConcurrentPatches(t *testing.T) {
+	for attempt := 0; attempt < 64; attempt++ {
+		cfg := Default()
+		cfg.MediaRoots = []string{t.TempDir()}
+		cfg.AccessMode = AccessModeLAN
+		cfg.AccessToken = "0123456789abcdef0123456789abcdef"
+		mgr := NewManagerWith(cfg, "")
+
+		start := make(chan struct{})
+		errs := make(chan error, 2)
+		go func() {
+			<-start
+			_, err := mgr.Update(ConfigPatch{
+				AccessToken:    "fedcba9876543210fedcba9876543210",
+				AccessTokenSet: true,
+			})
+			errs <- err
+		}()
+		go func() {
+			<-start
+			_, err := mgr.Update(ConfigPatch{
+				ThumbSizeW:    640,
+				ThumbSizeWSet: true,
+			})
+			errs <- err
+		}()
+		close(start)
+
+		for range 2 {
+			if err := <-errs; err != nil {
+				t.Fatal(err)
+			}
+		}
+		got := mgr.Get()
+		if got.AccessToken != "fedcba9876543210fedcba9876543210" || got.ThumbSizeW != 640 {
+			t.Fatalf("concurrent update lost at attempt %d: token=%q thumbSizeW=%d", attempt, got.AccessToken, got.ThumbSizeW)
+		}
 	}
 }
 
@@ -209,7 +297,7 @@ func TestManager_Update_NotifiesSubscribers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// listener 现在异步派发(Update 不再阻塞),等回调执行完。
+	// listener 按配置提交顺序同步派发；channel 仍用于断言确已调用。
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
@@ -280,6 +368,8 @@ func TestDiffRequiresRestartKeepsServiceGraphsConsistent(t *testing.T) {
 	hot.ThumbCacheSize++
 	hot.CacheMaxAgeDays++
 	hot.AllowOsOpen = !hot.AllowOsOpen
+	hot.AccessMode = AccessModeLAN
+	hot.AccessToken = "0123456789abcdef0123456789abcdef"
 	if got := diffRequiresRestart(base, hot); len(got) != 0 {
 		t.Fatalf("hot fields unexpectedly require restart: %v", got)
 	}
@@ -308,6 +398,14 @@ func TestConfigPatch_UnmarshalJSON(t *testing.T) {
 	}
 	if !p.PortSet || p.Port != 1234 {
 		t.Error("port not picked up")
+	}
+
+	p = ConfigPatch{}
+	if err := json.Unmarshal([]byte(`{"accessMode":"lan","accessToken":"0123456789abcdef0123456789abcdef"}`), &p); err != nil {
+		t.Fatal(err)
+	}
+	if !p.AccessModeSet || p.AccessMode != AccessModeLAN || !p.AccessTokenSet {
+		t.Fatalf("access patch not picked up: %+v", p)
 	}
 }
 

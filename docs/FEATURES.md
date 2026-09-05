@@ -26,6 +26,7 @@
 | 路径安全     | ID 解析后仍检查目标位于当前媒体根内                | `middleware.ResourceParam`、`PathSafetyMiddleware` |
 | 本机管理     | 配置、系统打开、转码清理由回环中间件保护           | `middleware.LoopbackOnly`                          |
 | 日志脱敏     | 根目录只记录 basename，缓存和工具只记录能力状态    | `cmd/server`、`middleware.Logger`                  |
+| 访问门禁     | 回环/IP/Host/Origin 分层校验；LAN 强令牌换短会话 | `middleware.AccessGate`                            |
 | 默认监听     | 默认绑定 `127.0.0.1:8080`                          | `config.Default`                                   |
 
 ## 缩略图与媒体
