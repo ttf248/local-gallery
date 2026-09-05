@@ -1,164 +1,123 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useLibraryStore } from '../store/libraryStore'
-import { useSearchStore } from '../store/searchStore'
-import { useUIStore } from '../store/uiStore'
-import { useFavorites } from '../hooks/useFavorites'
-import { useImageActivities } from '../hooks/useImageActivity'
-import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
-import AlbumGrid, { type CardData } from '../components/album/AlbumGrid'
-import EmptyState from '../components/common/EmptyState'
-import { ChevronLeftIcon, StarIcon, ReaderIcon, ClockIcon, FolderIcon } from '../components/common/Icon'
-import { albumRoute } from '../utils/path'
-import { thumbUrl } from '../api/thumbs'
-import type { GalleryContextEntry } from '../utils/galleryContext'
-
-interface AlbumSummary {
-  path: string
-  name: string
-  author?: string
-  coverImage: string
-  imageCount: number
-  /** 视频数；0 / 缺省按无视频处理。 */
-  videoCount?: number
-  /** 封面源类型，决定卡片走图还是走视频缩略图分支。 */
-  coverKind?: 'image' | 'video'
-  modTime?: string
-}
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useSearchStore } from "../store/searchStore";
+import { useUIStore } from "../store/uiStore";
+import { useFavorites } from "../hooks/useFavorites";
+import { useImageActivities } from "../hooks/useImageActivity";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
+import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
+import EmptyState from "../components/common/EmptyState";
+import {
+  ChevronLeftIcon,
+  StarIcon,
+  ReaderIcon,
+  ClockIcon,
+  FolderIcon,
+} from "../components/common/Icon";
+import { thumbUrl } from "../api/thumbs";
+import type { GalleryContextEntry } from "../utils/galleryContext";
+import { useTagAlbums } from "../hooks/useLibrary";
+import { nodeSummaryToCard } from "../utils/libraryCard";
 
 // 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
 export default function Author() {
-  const params = useParams()
-  const navigate = useNavigate()
+  const params = useParams();
+  const navigate = useNavigate();
   // react-router v6 已经对 pathname 做过一次解码；这里如果再 decode 会引发双重解码错误
-  const raw = params['*'] ?? ''
-  const author = raw ? safeDecode(raw) : ''
+  const raw = params["*"] ?? "";
+  const author = raw ? safeDecode(raw) : "";
 
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const { favorites, toggle } = useFavorites()
-  const pushToast = useUIStore((s) => s.pushToast)
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const viewMode = useUIStore((s) => s.viewMode);
+  const { favorites, toggle } = useFavorites();
+  const pushToast = useUIStore((s) => s.pushToast);
 
-  const [coverIdx, setCoverIdx] = useState(0)
-
-  useEffect(() => {
-    if (!result) loadFromBackend()
-  }, [result, loadFromBackend])
-
-  const albums = useMemo<AlbumSummary[]>(() => {
-    if (!result) return []
-    // 优先从 smartCollections 取：它已经聚合了「顶层 + 集合内嵌套」
-    // 的所有匹配 album,数量与卡片数对齐(API 里中国翻訳=131)。
-    // 退回到顶层 filter 是因为:理论上 smartCollections 一定含该 tag,但
-    // 缺数据时(如旧 scan 缓存)仍要给用户一个稳定结果。
-    const sc = (result.smartCollections ?? []).find((s) => s.author === author)
-    if (sc && sc.albums && sc.albums.length > 0) {
-      return sc.albums.map((a) => ({
-        path: a.path,
-        name: a.name,
-        author: a.author,
-        coverImage: a.coverImage,
-        imageCount: a.imageCount,
-        modTime: a.modTime,
-      }))
-    }
-    return result.albums
-      .filter((a) => a.author === author)
-      .map((a) => ({
-        path: a.path,
-        name: a.name,
-        author: a.author,
-        coverImage: a.coverImage,
-        imageCount: a.imageCount,
-        modTime: a.modTime,
-      }))
-  }, [result, author])
+  const [coverIdx, setCoverIdx] = useState(0);
+  const albumsQuery = useTagAlbums(author);
+  const albums = useMemo(
+    () => albumsQuery.data?.items ?? [],
+    [albumsQuery.data],
+  );
 
   const totalPages = useMemo(
-    () => albums.reduce((s, a) => s + a.imageCount, 0),
+    () => albums.reduce((sum, album) => sum + (album.imageCount ?? 0), 0),
     [albums],
-  )
+  );
 
-  const progressPaths = useMemo(() => albums.map((a) => a.path), [albums])
-  const { data: progressMap } = useImageActivities(progressPaths)
+  const progressPaths = useMemo(
+    () => albums.map((album) => album.id),
+    [albums],
+  );
+  const { data: progressMap } = useImageActivities(progressPaths);
   const readCount = useMemo(() => {
-    if (!progressMap) return 0
-    return progressPaths.filter((p) => (progressMap[p]?.pageIndex ?? 0) > 0)
-      .length
-  }, [progressMap, progressPaths])
+    if (!progressMap) return 0;
+    return progressPaths.filter((id) => progressMap[id]?.status === "completed")
+      .length;
+  }, [progressMap, progressPaths]);
 
   const recentDate = useMemo(() => {
-    const dates = albums.map((a) => a.modTime).filter(Boolean) as string[]
-    if (dates.length === 0) return null
-    return dates.sort().reverse()[0]
-  }, [albums])
+    const dates = albums.map((a) => a.modTime).filter(Boolean) as string[];
+    if (dates.length === 0) return null;
+    return dates.sort().reverse()[0];
+  }, [albums]);
 
   const filtered = useMemo(() => {
-    let list = albums
+    let list = albums;
     if (query) {
-      const q = query.toLowerCase()
-      list = list.filter((a) => a.name.toLowerCase().includes(q))
+      const q = query.toLowerCase();
+      list = list.filter((a) => a.name.toLowerCase().includes(q));
     }
     switch (sortBy) {
-      case 'count':
-        return [...list].sort((a, b) => b.imageCount - a.imageCount)
-      case 'recent':
+      case "count":
         return [...list].sort(
-          (a, b) => +new Date(b.modTime ?? '') - +new Date(a.modTime ?? ''),
-        )
+          (a, b) => (b.imageCount ?? 0) - (a.imageCount ?? 0),
+        );
+      case "recent":
+        return [...list].sort(
+          (a, b) => +new Date(b.modTime ?? "") - +new Date(a.modTime ?? ""),
+        );
       default:
-        return [...list].sort((a, b) => a.name.localeCompare(b.name))
+        return [...list].sort((a, b) => a.name.localeCompare(b.name));
     }
-  }, [albums, query, sortBy])
+  }, [albums, query, sortBy]);
 
-  const cards: CardData[] = filtered.map((a) => ({
-    id: 'a:' + a.path,
-    variant: 'album',
-    title: a.name,
-    subtitle: a.author,
-    count: a.imageCount,
-    imageCount: a.imageCount,
-    videoCount: a.videoCount ?? 0,
-    coverPath: a.coverImage,
-    coverKind: a.coverKind,
-    to: albumRoute(a.path),
-    progress: progressMap?.[a.path]
+  const cards: CardData[] = filtered.map((album) => ({
+    ...nodeSummaryToCard(album),
+    progress: progressMap?.[album.id]
       ? {
-          index: progressMap[a.path].pageIndex,
-          total: a.imageCount,
+          index: progressMap[album.id].pageIndex,
+          total: album.imageCount ?? 0,
         }
       : undefined,
-  }))
+  }));
 
   // 标签页作为上下文源
   const tagEntries = useMemo<GalleryContextEntry[]>(
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [cards],
-  )
-  useGalleryContextSync({ type: 'tag', tag: author }, tagEntries)
+  );
+  useGalleryContextSync({ type: "tag", tag: author }, tagEntries);
 
   // 头图：随机从 6 张里挑（每隔 4s 切一张，类似走马灯）
   useEffect(() => {
-    if (albums.length <= 1) return
+    if (albums.length <= 1) return;
     const id = setInterval(
       () => setCoverIdx((i) => (i + 1) % Math.min(albums.length, 6)),
       5000,
-    )
-    return () => clearInterval(id)
-  }, [albums.length])
+    );
+    return () => clearInterval(id);
+  }, [albums.length]);
 
-  const cover = albums.length > 0 ? albums[coverIdx % albums.length] : null
-  const isFav = favorites.includes(`smart:${author}`)
+  const cover = albums.length > 0 ? albums[coverIdx % albums.length] : null;
+  const isFav = favorites.includes(`smart:${author}`);
 
-  if (!result) {
+  if (albumsQuery.isLoading) {
     return (
       <div className="p-6">
-        <EmptyState title="尚未加载图像库" description="回到主页点击「扫描」加载图像库。" />
+        <EmptyState title="正在加载标签" description="正在读取相册摘要…" />
       </div>
-    )
+    );
   }
 
   if (albums.length === 0) {
@@ -172,14 +131,16 @@ export default function Author() {
             <ChevronLeftIcon size={12} />
             <span>返回</span>
           </button>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">标签：{author}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight">
+            标签：{author}
+          </h1>
         </div>
         <EmptyState
           title="未找到该标签"
           description="可能未扫描或标签名拼写有差异。"
         />
       </div>
-    )
+    );
   }
 
   return (
@@ -187,9 +148,9 @@ export default function Author() {
       {/* Hero — 头图 + 概览 */}
       <section className="relative">
         <div className="relative h-56 lg:h-72 overflow-hidden bg-bg-elevated">
-          {cover && (
+          {cover?.coverImage && (
             <img
-              key={cover.path}
+              key={cover.id}
               src={thumbUrl(cover.coverImage)}
               alt=""
               className="absolute inset-0 w-full h-full object-cover scale-fade"
@@ -213,32 +174,48 @@ export default function Author() {
                 onClick={() =>
                   toggle(`smart:${author}`).then(() => {
                     pushToast({
-                      kind: 'success',
-                      message: isFav ? '已取消收藏' : '已加入收藏',
-                    })
+                      kind: "success",
+                      message: isFav ? "已取消收藏" : "已加入收藏",
+                    });
                   })
                 }
                 className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md text-sm transition-colors ${
                   isFav
-                    ? 'bg-warning/10 text-warning hover:bg-warning/15'
-                    : 'bg-bg-elevated border border-border hover:bg-bg-subtle'
+                    ? "bg-warning/10 text-warning hover:bg-warning/15"
+                    : "bg-bg-elevated border border-border hover:bg-bg-subtle"
                 }`}
               >
                 <StarIcon size={13} filled={isFav} />
-                <span>{isFav ? '已收藏' : '收藏标签'}</span>
+                <span>{isFav ? "已收藏" : "收藏标签"}</span>
               </button>
             </div>
           </div>
 
           {/* 数据条 */}
           <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-3 max-w-2xl">
-            <Stat icon={<FolderIcon size={13} />} label="作品数" value={albums.length} />
-            <Stat icon={<ReaderIcon size={13} />} label="总张数" value={totalPages} />
-            <Stat icon={<ClockIcon size={13} />} label="已读" value={`${readCount}/${albums.length}`} />
+            <Stat
+              icon={<FolderIcon size={13} />}
+              label="作品数"
+              value={albums.length}
+            />
+            <Stat
+              icon={<ReaderIcon size={13} />}
+              label="总张数"
+              value={totalPages}
+            />
+            <Stat
+              icon={<ClockIcon size={13} />}
+              label="已读"
+              value={`${readCount}/${albums.length}`}
+            />
             <Stat
               icon={<StarIcon size={13} />}
               label="最近更新"
-              value={recentDate ? new Date(recentDate).toLocaleDateString('zh-CN') : '—'}
+              value={
+                recentDate
+                  ? new Date(recentDate).toLocaleDateString("zh-CN")
+                  : "—"
+              }
             />
           </div>
         </div>
@@ -248,24 +225,29 @@ export default function Author() {
       <section className="max-w-[1400px] mx-auto px-6 lg:px-10 pt-10 pb-10">
         <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
           <h2 className="font-display text-lg font-semibold">作品</h2>
-          <span className="text-xs text-fg-subtle tabular-nums">{filtered.length} 个</span>
+          <span className="text-xs text-fg-subtle tabular-nums">
+            {filtered.length} 个
+          </span>
         </div>
         {filtered.length === 0 ? (
-          <EmptyState title="没有匹配的作品" description="试试修改搜索或排序条件。" />
+          <EmptyState
+            title="没有匹配的作品"
+            description="试试修改搜索或排序条件。"
+          />
         ) : (
           <AlbumGrid items={cards} variant={viewMode} />
         )}
       </section>
     </div>
-  )
+  );
 }
 
 function safeDecode(s: string): string {
   try {
     // 已解码的可能再 decode 一次会失败，因此用 try/catch 兜底
-    return decodeURIComponent(s)
+    return decodeURIComponent(s);
   } catch {
-    return s
+    return s;
   }
 }
 
@@ -274,9 +256,9 @@ function Stat({
   label,
   value,
 }: {
-  icon: React.ReactNode
-  label: string
-  value: number | string
+  icon: React.ReactNode;
+  label: string;
+  value: number | string;
 }) {
   return (
     <div>
@@ -284,7 +266,9 @@ function Stat({
         {icon}
         <span>{label}</span>
       </div>
-      <div className="text-lg font-display font-semibold mt-1 tabular-nums">{value}</div>
+      <div className="text-lg font-display font-semibold mt-1 tabular-nums">
+        {value}
+      </div>
     </div>
-  )
+  );
 }
