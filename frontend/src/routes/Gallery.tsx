@@ -8,7 +8,8 @@ import { historyApi } from "../api/prefs";
 import { activityApi, isActivityNotFound } from "../api/activity";
 import { useUIStore } from "../store/uiStore";
 import { useFavorites } from "../hooks/useFavorites";
-import { useLibraryStore } from "../store/libraryStore";
+import { libraryApi } from "../api/library";
+import { libraryQueryKeys, useLibraryNodes } from "../hooks/useLibrary";
 import { toggleFullscreen as toggleFullscreenImpl } from "../utils/fullscreen";
 import ImageGallery from "../components/gallery/ImageGallery";
 import VideoPlayer from "../components/gallery/VideoPlayer";
@@ -165,13 +166,21 @@ export default function Gallery() {
   const { favorites, toggle: toggleFavorite } = useFavorites();
   const isFav = pathParam ? favorites.includes(pathParam) : false;
 
-  // 当前相册是否已有自定义封面。detail API 响应里带 hasCustomCover 字段。
+  // 当前相册是否已有自定义封面。摘要索引和媒体清单都来自同一份目录快照，
+  // 因此阅读器无需为这个小状态额外请求含完整媒体数组的相册详情。
   const [hasCustomCover, setHasCustomCover] = useState(false);
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend);
+  const albumSummaryQuery = useLibraryNodes(pathParam ? [pathParam] : []);
   // 当前展示的文件路径。Gallery 中段才计算 isVideo/images/videos/index → current，
   // 但 onSetCover 要读这个值。放进 ref 让 callback 拿到最新值而不需要把 current
   // 提前到 useCallback 之前（避免引入 forward reference）。
   const currentRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const summary = albumSummaryQuery.data?.items.find(
+      (item) => item.id === pathParam,
+    );
+    setHasCustomCover(Boolean(summary?.hasCustomCover));
+  }, [albumSummaryQuery.data, pathParam]);
 
   // 拉图 + 恢复阅读进度：依赖 pathParam 变化。
   //
@@ -240,16 +249,14 @@ export default function Gallery() {
     finishedRef.current = false;
     setImages([]);
     setVideos([]);
-    albumsApi
-      .detail(pathParam)
-      .then((r) => {
+    libraryApi
+      .allMedia(pathParam)
+      .then((page) => {
         if (cancelled) return;
-        // 后端 Album JSON：files（推荐）/ imageFiles（兼容），以及 videoFiles
-        const d = r.data as
-          | { files?: string[]; imageFiles?: string[]; videoFiles?: string[] }
-          | undefined;
         if (isVideo) {
-          const list = d?.videoFiles ?? [];
+          const list = page.items
+            .filter((item) => item.kind === "video")
+            .map((item) => item.id);
           if (list.length > 0) {
             setLoadedVideoPath(pathParam);
             setVideos(list);
@@ -257,15 +264,16 @@ export default function Gallery() {
             setLoadError("EMPTY");
           }
         } else {
-          const list = d?.files ?? d?.imageFiles;
-          if (list && Array.isArray(list) && list.length > 0) {
+          const list = page.items
+            .filter((item) => item.kind === "image")
+            .map((item) => item.id);
+          if (list.length > 0) {
             setLoadedImagePath(pathParam);
             setImages(list);
           } else {
             setLoadError("EMPTY");
           }
         }
-        setHasCustomCover(!!(r as { hasCustomCover?: boolean }).hasCustomCover);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -797,14 +805,12 @@ export default function Gallery() {
       .catch(() => pushToast({ kind: "error", message: "收藏失败" }));
   }, [pathParam, favorites, toggleFavorite, pushToast]);
 
-  // 把当前展示的图片/视频设为本相册的封面。
-  // 设完后立即 loadFromBackend() 拉新 ScanResult，让卡片网格的缩略图实时换封面。
-  // hasCustomCover 也同步置 true，让「清除自定义封面」入口显示出来。
+  // 把当前展示的图片/视频设为本相册的封面。成功后统一失效摘要查询，
+  // 卡片、搜索和阅读器的封面状态会从同一个新 revision 重新读取。
   //
   // 注：current 是在组件后段计算的（依赖 isVideo / images / videos / index），
   // 因此这里在 callback 内通过 useGalleryStore.getState() 读 index、images、videos
-  // 实时算 current，避免 deps 出现 forward reference。空数组 deps 等价于「挂载时
-  // 一次性」，callback 内部读最新 state，每次按键都拿到当前真实文件。
+  // 实时算 current，避免依赖数组出现 forward reference；每次按键都拿到当前真实文件。
   const onSetCover = useCallback(() => {
     if (!pathParam) return;
     const cur = currentRef.current;
@@ -813,7 +819,7 @@ export default function Gallery() {
       .setCover(pathParam, cur)
       .then(() => {
         setHasCustomCover(true);
-        loadFromBackend().catch(() => {});
+        void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.root });
         pushToast({ kind: "success", message: "已设为封面", ttl: 1200 });
       })
       .catch((e) => {
@@ -821,7 +827,7 @@ export default function Gallery() {
           (e as { body?: { error?: string } })?.body?.error || "设置封面失败";
         pushToast({ kind: "error", message: msg });
       });
-  }, [pathParam, loadFromBackend, pushToast]);
+  }, [pathParam, queryClient, pushToast]);
 
   // 清除自定义封面：回退到扫描器默认（images[0] / videos[0]）。
   const onClearCover = useCallback(() => {
@@ -830,7 +836,7 @@ export default function Gallery() {
       .clearCover(pathParam)
       .then(() => {
         setHasCustomCover(false);
-        loadFromBackend().catch(() => {});
+        void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.root });
         pushToast({ kind: "success", message: "已恢复默认封面", ttl: 1200 });
       })
       .catch((e) => {
@@ -838,7 +844,7 @@ export default function Gallery() {
           (e as { body?: { error?: string } })?.body?.error || "清除封面失败";
         pushToast({ kind: "error", message: msg });
       });
-  }, [pathParam, loadFromBackend, pushToast]);
+  }, [pathParam, queryClient, pushToast]);
 
   useKeyboard({
     arrowleft: prev,

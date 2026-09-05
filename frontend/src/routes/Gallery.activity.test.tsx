@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { activityApi } from "../api/activity";
-import { albumsApi } from "../api/albums";
+import { libraryApi } from "../api/library";
 import { useGalleryStore } from "../store/galleryStore";
 import Gallery from "./Gallery";
 
@@ -16,7 +16,8 @@ interface MockVideoProps {
 }
 
 const mocks = vi.hoisted(() => ({
-  detail: vi.fn(),
+  media: vi.fn(),
+  nodes: vi.fn(),
   getImage: vi.fn(),
   getVideo: vi.fn(),
   setImage: vi.fn(),
@@ -26,13 +27,17 @@ const mocks = vi.hoisted(() => ({
   videoProps: null as unknown,
 }));
 
-vi.mock("../api/albums", () => ({
-  albumsApi: {
-    detail: mocks.detail,
-    setCover: vi.fn(),
-    clearCover: vi.fn(),
-  },
-}));
+vi.mock("../api/library", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../api/library")>();
+  return {
+    ...actual,
+    libraryApi: {
+      ...actual.libraryApi,
+      allMedia: mocks.media,
+      queryNodes: mocks.nodes,
+    },
+  };
+});
 
 vi.mock("../api/activity", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../api/activity")>();
@@ -118,6 +123,11 @@ describe("Gallery 媒体活动恢复门禁", () => {
     mocks.setImage.mockResolvedValue({});
     mocks.setVideo.mockResolvedValue({});
     mocks.historyAdd.mockResolvedValue({});
+    mocks.nodes.mockResolvedValue({
+      revision: 1,
+      items: [],
+      missing: [albumId],
+    });
     useGalleryStore.setState({ index: -1, mode: "single" });
   });
 
@@ -132,8 +142,16 @@ describe("Gallery 媒体活动恢复门禁", () => {
       status: "in_progress";
       updated: string;
     }>();
-    mocks.detail.mockResolvedValue({
-      data: { files: ["f_1", "f_2", "f_3", "f_4"] },
+    mocks.media.mockResolvedValue({
+      revision: 1,
+      items: ["f_1", "f_2", "f_3", "f_4"].map((id, index) => ({
+        id,
+        kind: "image",
+        name: `${index}.jpg`,
+        index,
+        kindIndex: index,
+      })),
+      total: 4,
     });
     mocks.getImage.mockReturnValue(lookup.promise);
 
@@ -163,11 +181,23 @@ describe("Gallery 媒体活动恢复门禁", () => {
 
   it("活动查询失败时快速离开不会写入初始图片位置", async () => {
     const lookup = deferred<never>();
-    mocks.detail.mockResolvedValue({ data: { files: ["f_1", "f_2"] } });
+    mocks.media.mockResolvedValue({
+      revision: 1,
+      items: ["f_1", "f_2"].map((id, index) => ({
+        id,
+        kind: "image",
+        name: `${index}.jpg`,
+        index,
+        kindIndex: index,
+      })),
+      total: 2,
+    });
     mocks.getImage.mockReturnValue(lookup.promise);
 
     const view = renderGallery();
-    await waitFor(() => expect(albumsApi.detail).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(libraryApi.allMedia).toHaveBeenCalledWith(albumId),
+    );
     await waitFor(() => expect(activityApi.getImage).toHaveBeenCalled());
     view.unmount();
 
@@ -180,7 +210,19 @@ describe("Gallery 媒体活动恢复门禁", () => {
 
   it("视频查询完成前不保存自动播放位置，快速离开也不写零值", async () => {
     const lookup = deferred<never>();
-    mocks.detail.mockResolvedValue({ data: { videoFiles: [videoId] } });
+    mocks.media.mockResolvedValue({
+      revision: 1,
+      items: [
+        {
+          id: videoId,
+          kind: "video",
+          name: "video.mp4",
+          index: 0,
+          kindIndex: 0,
+        },
+      ],
+      total: 1,
+    });
     mocks.getVideo.mockReturnValue(lookup.promise);
 
     const view = renderGallery(`path=${albumId}&type=video&index=0`);
@@ -211,7 +253,19 @@ describe("Gallery 媒体活动恢复门禁", () => {
       status: "in_progress";
       updated: string;
     }>();
-    mocks.detail.mockResolvedValue({ data: { videoFiles: [videoId] } });
+    mocks.media.mockResolvedValue({
+      revision: 1,
+      items: [
+        {
+          id: videoId,
+          kind: "video",
+          name: "video.mp4",
+          index: 0,
+          kindIndex: 0,
+        },
+      ],
+      total: 1,
+    });
     mocks.getVideo.mockReturnValue(lookup.promise);
 
     renderGallery(`path=${albumId}&type=video&index=0`);
