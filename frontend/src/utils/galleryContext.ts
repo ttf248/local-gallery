@@ -19,7 +19,7 @@ export type GallerySource =
   | { type: 'direct' }
 
 export interface GalleryContextEntry {
-  /** 列表元素的「标识路径」：用于与当前画廊 path 对比。专辑是绝对路径；智能合集是 `smart:<tag>`。 */
+  /** 列表元素的稳定资源 ID：用于与当前画廊 path 对比。 */
   key: string
   /** 跳转 URL（相对路径）。 */
   to: string

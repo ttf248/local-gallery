@@ -13,11 +13,6 @@ export function albumRoute(albumId: string): string {
   return `/albums/${encodeURIComponent(albumId)}`
 }
 
-// 智能集合（按标签聚合）路由：smart:<tag> → /albums/smart:<tag> 编码后
-export function smartRoute(tag: string): string {
-  return `/albums/${encodeURIComponent('smart:' + tag)}`
-}
-
 // 标签页（新名）：/tags/<encoded tag>
 export function tagRoute(tag: string): string {
   return `/tags/${encodeURIComponent(tag)}`

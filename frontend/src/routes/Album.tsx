@@ -43,7 +43,6 @@ import {
   useAlbumMedia,
   useLibraryChildren,
   useLibraryNodes,
-  useTagAlbums,
 } from "../hooks/useLibrary";
 import {
   LibraryRevisionChangedError,
@@ -88,15 +87,7 @@ interface CollectionDetail {
   albumCount: number;
 }
 
-interface SmartDetail {
-  type: "smartCollection";
-  author: string;
-  albums: AlbumDetail[];
-  albumCount: number;
-  coverImage: string;
-}
-
-type Detail = AlbumDetail | CollectionDetail | SmartDetail;
+type Detail = AlbumDetail | CollectionDetail;
 
 function albumDetailFromSummary(
   summary: LibraryNodeSummary,
@@ -145,24 +136,22 @@ function collectionDetailFromSummary(
 
 // 相册视图：
 //   - 相册 → 图片网格，点击进入画廊
-//   - 集合/智能集合 → 嵌套相册列表
+//   - 集合 → 嵌套相册列表
 //   - 缺数据时给出明确引导
 export default function Album() {
   const params = useParams();
   const navigate = useNavigate();
-  const rawPath = decodeFavPath("/albums/" + (params["*"] ?? ""));
-  const isSmart = rawPath.startsWith("smart:");
-  const realPath = isSmart ? rawPath.slice(6) : rawPath;
+  const resourceID = decodeFavPath("/albums/" + (params["*"] ?? ""));
 
   const query = useSearchStore((s) => s.query);
   const sortBy = useSearchStore((s) => s.sortBy);
   const viewMode = useUIStore((s) => s.viewMode);
-  const { add: addFav, toggle: toggleFav, favorites } = useFavorites();
+  const { toggle: toggleFav, favorites } = useFavorites();
   const pushToast = useUIStore((s) => s.pushToast);
 
   const nodeIds = useMemo(
-    () => (!isSmart && realPath ? [realPath] : []),
-    [isSmart, realPath],
+    () => (resourceID ? [resourceID] : []),
+    [resourceID],
   );
   const nodeQuery = useLibraryNodes(nodeIds);
   const refetchNode = nodeQuery.refetch;
@@ -175,7 +164,6 @@ export default function Album() {
     node?.kind === "album" ? node.id : "",
     nodeQuery.data?.revision,
   );
-  const tagAlbumsQuery = useTagAlbums(isSmart ? realPath : "");
   const revisionChanged =
     childrenQuery.error instanceof LibraryRevisionChangedError ||
     mediaQuery.error instanceof LibraryRevisionChangedError;
@@ -185,19 +173,6 @@ export default function Album() {
   }, [refetchNode, revisionChanged]);
 
   const detail = useMemo<Detail | null>(() => {
-    if (isSmart) {
-      if (!tagAlbumsQuery.data) return null;
-      const albums = tagAlbumsQuery.data.items.map((album) =>
-        albumDetailFromSummary(album),
-      );
-      return {
-        type: "smartCollection",
-        author: realPath,
-        albums,
-        albumCount: tagAlbumsQuery.data.total,
-        coverImage: albums[0]?.coverImage ?? "",
-      };
-    }
     if (!node) return null;
     if (node.kind === "album") {
       if (!mediaQuery.data) return null;
@@ -217,19 +192,15 @@ export default function Album() {
     };
   }, [
     childrenQuery.data,
-    isSmart,
     mediaQuery.data,
     node,
-    realPath,
-    tagAlbumsQuery.data,
   ]);
 
-  const isDetailLoading = isSmart
-    ? tagAlbumsQuery.isLoading
-    : revisionChanged ||
-      nodeQuery.isLoading ||
-      (node?.kind === "album" && mediaQuery.isLoading) ||
-      (node?.kind === "collection" && childrenQuery.isLoading);
+  const isDetailLoading =
+    revisionChanged ||
+    nodeQuery.isLoading ||
+    (node?.kind === "album" && mediaQuery.isLoading) ||
+    (node?.kind === "collection" && childrenQuery.isLoading);
 
   useEffect(() => {
     if (!detail) return;
@@ -270,12 +241,8 @@ export default function Album() {
     );
   }
 
-  if (detail.type === "collection" || detail.type === "smartCollection") {
-    const favPath =
-      detail.type === "smartCollection"
-        ? `smart:${detail.author}`
-        : detail.path;
-    const isFav = favorites.includes(favPath);
+  if (detail.type === "collection") {
+    const isFav = favorites.includes(detail.path);
     return (
       <CollectionView
         detail={detail}
@@ -284,29 +251,15 @@ export default function Album() {
         viewMode={viewMode}
         onBack={() => navigate(-1)}
         isFavorite={isFav}
-        onOpenAuthor={
-          detail.type === "smartCollection"
-            ? (tag) => navigate(`/tags/${encodeURIComponent(tag)}`)
-            : undefined
-        }
         onToggleFav={async () => {
-          if (detail.type === "smartCollection") {
-            try {
-              await toggleFav(favPath);
-              pushToast({
-                kind: "success",
-                message: isFav ? "已取消收藏" : "已加入收藏",
-              });
-            } catch {
-              pushToast({ kind: "error", message: "操作失败" });
-            }
-          } else {
-            try {
-              await addFav(favPath);
-              pushToast({ kind: "success", message: "已加入收藏" });
-            } catch {
-              pushToast({ kind: "error", message: "操作失败" });
-            }
+          try {
+            await toggleFav(detail.path);
+            pushToast({
+              kind: "success",
+              message: isFav ? "已取消收藏" : "已加入收藏",
+            });
+          } catch {
+            pushToast({ kind: "error", message: "操作失败" });
           }
         }}
       />
@@ -805,9 +758,8 @@ function CollectionView({
   onBack,
   onToggleFav,
   isFavorite,
-  onOpenAuthor,
 }: {
-  detail: CollectionDetail | SmartDetail;
+  detail: CollectionDetail;
   query: string;
   // 复用全局 SortKey:Album 详情也支持「最近看」('viewed' 用 history 排序)
   sortBy: "name" | "count" | "recent" | "viewed";
@@ -815,11 +767,7 @@ function CollectionView({
   onBack: () => void;
   onToggleFav: () => void;
   isFavorite: boolean;
-  onOpenAuthor?: (author: string) => void;
 }) {
-  const isSmart = detail.type === "smartCollection";
-  const title = isSmart ? detail.author : detail.name;
-
   // 集合:把直属于本层的 Albums + 嵌套子集合 Collections 都展平成统一
   // 的 CardData 列表渲染。子集合(5 层嵌套的中间层)用 variant=
   // 'collection' 区分,点击继续下钻。
@@ -837,9 +785,7 @@ function CollectionView({
       coverKind: a.coverKind,
       to: `/albums/${encodeURIComponent(a.path)}`,
     }));
-    if (isSmart) return albumCards;
-    const c = detail as CollectionDetail;
-    const collCards: CardData[] = (c.collections ?? []).map((sub) => {
+    const collCards: CardData[] = (detail.collections ?? []).map((sub) => {
       return {
         id: "c:" + sub.path,
         variant: "collection",
@@ -855,7 +801,7 @@ function CollectionView({
       };
     });
     return [...albumCards, ...collCards];
-  }, [detail, isSmart]);
+  }, [detail]);
 
   const filtered = useMemo(() => {
     const items = allCards.filter(
@@ -878,26 +824,20 @@ function CollectionView({
 
   const cards = filtered;
 
-  // 子集合页时间线:对当前集合下的子 album/子 collection 重新分桶,跟首页
-  // 视觉一致(顶部 YearTimeline + 下方网格)。smartCollection 不分时间,
-  // 因为智能合集是"主题"不是"时间"。
+  // 子集合页时间线:对当前集合下的子 album/子 collection 重新分桶,跟首页视觉一致。
   const yearGroups = useMemo(() => {
-    if (isSmart) return [];
-    const c = detail as CollectionDetail;
-    return groupAlbumsAndCollectionsByYear(c.albums ?? [], c.collections ?? []);
-  }, [detail, isSmart]);
+    return groupAlbumsAndCollectionsByYear(
+      detail.albums ?? [],
+      detail.collections ?? [],
+    );
+  }, [detail]);
 
-  // 集合/智能合集页面作为上下文源
+  // 集合页面作为上下文源
   const collEntries = useMemo<GalleryContextEntry[]>(
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [cards],
   );
-  useGalleryContextSync(
-    isSmart
-      ? { type: "tag", tag: detail.author }
-      : { type: "album", parentPath: detail.path },
-    collEntries,
-  );
+  useGalleryContextSync({ type: "collection", parentPath: detail.path }, collEntries);
 
   return (
     <div className="flex flex-col h-full">
@@ -912,42 +852,29 @@ function CollectionView({
         <div className="flex items-end justify-between gap-4 flex-wrap">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              {isSmart ? (
-                <StarIcon size={13} className="text-fg-muted" filled />
-              ) : (
-                <FolderIcon size={13} className="text-fg-muted" />
-              )}
+              <FolderIcon size={13} className="text-fg-muted" />
               <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
-                {isSmart ? "标签" : "集合"}
+                集合
               </span>
             </div>
             <h1 className="font-display text-2xl font-semibold tracking-tight truncate">
-              {title}
+              {detail.name}
             </h1>
             <div className="text-sm text-fg-muted mt-1.5">
               <span className="tabular-nums">{detail.albumCount} 卷</span>
             </div>
           </div>
-          {isSmart && onOpenAuthor ? (
-            <button
-              onClick={() => onOpenAuthor(title)}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs bg-accent text-accent-contrast hover:bg-accent-hover transition-colors"
-            >
-              <span>查看标签页</span>
-            </button>
-          ) : (
-            <button
-              onClick={onToggleFav}
-              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs transition-colors ${
-                isFavorite
-                  ? "bg-warning/10 text-warning hover:bg-warning/15"
-                  : "border border-border-faint hover:bg-bg-subtle text-fg-muted"
-              }`}
-            >
-              <StarIcon size={12} filled={isFavorite} />
-              <span>{isFavorite ? "已收藏" : "收藏"}</span>
-            </button>
-          )}
+          <button
+            onClick={onToggleFav}
+            className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs transition-colors ${
+              isFavorite
+                ? "bg-warning/10 text-warning hover:bg-warning/15"
+                : "border border-border-faint hover:bg-bg-subtle text-fg-muted"
+            }`}
+          >
+            <StarIcon size={12} filled={isFavorite} />
+            <span>{isFavorite ? "已收藏" : "收藏"}</span>
+          </button>
         </div>
       </div>
       <div className="flex-1 overflow-auto">

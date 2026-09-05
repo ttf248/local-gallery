@@ -14,8 +14,10 @@ interface Actions {
 export function useAlbumActions(item: CardData, onShowProperties?: (path: string) => void) {
   const navigate = useNavigate()
 
-  // 把 /albums/<encoded> 解码回相册路径；smart: 前缀照旧。
+  // 收藏标签没有文件系统资源，复制它的内部标签标识而不是 /tags 路由。
+  // 其余卡片把 /albums/<encoded> 解码回不透明资源 ID。
   const decodedPath = (() => {
+    if (item.variant === 'smart') return `smart:${item.title}`
     if (!item.to.startsWith('/albums/')) return item.to
     try {
       return decodeURIComponent(item.to.replace(/^\/albums\//, ''))
