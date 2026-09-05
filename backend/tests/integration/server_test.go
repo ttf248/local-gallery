@@ -32,11 +32,12 @@ import (
 )
 
 type harness struct {
-	app   *fiber.App
-	root  string
-	cache string
-	prefs string
-	mgr   *config.Manager
+	app     *fiber.App
+	root    string
+	cache   string
+	prefs   string
+	mgr     *config.Manager
+	catalog *services.ResourceCatalog
 }
 
 func newHarness(t *testing.T) *harness {
@@ -110,6 +111,8 @@ func newHarness(t *testing.T) *harness {
 		t.Fatalf("thumbnail: %v", err)
 	}
 	runner := services.NewAsyncScanRunner()
+	catalog := services.NewResourceCatalog()
+	runner.SetCatalog(catalog)
 	prefsStore := store.NewPrefsStore(prefs)
 	activityStore := store.NewActivityStore(cacheLayout.ActivityPath, prefs)
 
@@ -123,8 +126,13 @@ func newHarness(t *testing.T) *harness {
 	})
 	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, mgr))
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
-	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner))
+	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner, catalog))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
+	api.Get("/library/manifest", handlers.LibraryManifestHandler(catalog))
+	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(catalog))
+	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
+	api.Get("/tags", handlers.LibraryTagsPageHandler(catalog))
+	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(catalog))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
@@ -162,7 +170,7 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
 	api.Post("/cache/clear", handlers.CacheClearHandler(thumbs, nil, nil, cacheStats))
 
-	return &harness{app, root, cache, prefs, mgr}
+	return &harness{app, root, cache, prefs, mgr, catalog}
 }
 
 func (h *harness) do(t *testing.T, method, path string, body interface{}) (*http.Response, []byte) {
@@ -259,6 +267,97 @@ func TestAsyncScanAndSSE(t *testing.T) {
 		time.Sleep(150 * time.Millisecond)
 	}
 	t.Fatal("scan did not complete in 3s")
+}
+
+func TestPagedLibraryFlowAfterScan(t *testing.T) {
+	h := newHarness(t)
+	res, body := h.do(t, http.MethodPost, "/api/scan/start", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("start status=%d body=%s", res.StatusCode, body)
+	}
+	var started struct {
+		ScanID string `json:"scanId"`
+	}
+	if err := json.Unmarshal(body, &started); err != nil || started.ScanID == "" {
+		t.Fatalf("invalid scan response: %s err=%v", body, err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		res, body = h.do(t, http.MethodGet, "/api/scan/"+started.ScanID+"/result", nil)
+		if res.StatusCode == http.StatusOK {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("scan result timeout: status=%d body=%s", res.StatusCode, body)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/library/manifest", nil)
+	if res.StatusCode != http.StatusOK || res.Header.Get(fiber.HeaderETag) == "" {
+		t.Fatalf("manifest status=%d etag=%q body=%s", res.StatusCode, res.Header.Get(fiber.HeaderETag), body)
+	}
+	var manifest struct {
+		Manifest services.LibraryManifest `json:"manifest"`
+	}
+	if err := json.Unmarshal(body, &manifest); err != nil || len(manifest.Manifest.Roots) != 1 {
+		t.Fatalf("invalid manifest: %s err=%v", body, err)
+	}
+	rootID := manifest.Manifest.Roots[0].ID
+	if manifest.Manifest.Statistics.AlbumCount != 2 || rootID == "" {
+		t.Fatalf("unexpected manifest: %+v", manifest.Manifest)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/library/"+rootID+"/children?limit=1", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("children status=%d body=%s", res.StatusCode, body)
+	}
+	var children struct {
+		Page services.LibraryPage[services.LibraryNodeSummary] `json:"page"`
+	}
+	if err := json.Unmarshal(body, &children); err != nil || len(children.Page.Items) != 1 {
+		t.Fatalf("invalid children page: %s err=%v", body, err)
+	}
+	firstAlbum := children.Page.Items[0]
+	if children.Page.Total != 2 || children.Page.NextCursor == "" || firstAlbum.SourceRoot != rootID {
+		t.Fatalf("unexpected children page: %+v", children.Page)
+	}
+	if bytes.Contains(body, []byte(h.root)) {
+		t.Fatalf("children page exposed absolute root: %s", body)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/albums/"+firstAlbum.ID+"/media?limit=1", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("media status=%d body=%s", res.StatusCode, body)
+	}
+	var media struct {
+		Page services.LibraryPage[services.LibraryMediaItem] `json:"page"`
+	}
+	if err := json.Unmarshal(body, &media); err != nil || len(media.Page.Items) != 1 {
+		t.Fatalf("invalid media page: %s err=%v", body, err)
+	}
+	if media.Page.Items[0].Kind != "image" || media.Page.Items[0].KindIndex != 0 {
+		t.Fatalf("unexpected media item: %+v", media.Page.Items[0])
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/tags?limit=1", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("tags status=%d body=%s", res.StatusCode, body)
+	}
+	var tags struct {
+		Page services.LibraryPage[services.LibraryTagSummary] `json:"page"`
+	}
+	if err := json.Unmarshal(body, &tags); err != nil || len(tags.Page.Items) != 1 || tags.Page.Items[0].Tag != "作者A" {
+		t.Fatalf("invalid tags page: %s err=%v", body, err)
+	}
+
+	// 一次扫描只发布一个 revision，所有分页端点必须保持一致。
+	if manifest.Manifest.Revision != children.Page.Revision || children.Page.Revision != media.Page.Revision ||
+		media.Page.Revision != tags.Page.Revision || h.catalog.Acquire().Revision() != tags.Page.Revision {
+		t.Fatalf("revision mismatch: manifest=%d children=%d media=%d tags=%d catalog=%d",
+			manifest.Manifest.Revision, children.Page.Revision, media.Page.Revision, tags.Page.Revision,
+			h.catalog.Acquire().Revision())
+	}
 }
 
 func TestImageAndInfo(t *testing.T) {

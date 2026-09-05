@@ -1,0 +1,244 @@
+package services
+
+import (
+	"encoding/json"
+	"errors"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/tianlongxiang/local-gallery/internal/models"
+)
+
+type libraryPageFixture struct {
+	catalog      *ResourceCatalog
+	root         string
+	rootID       string
+	collectionID string
+	albumID      string
+}
+
+func newLibraryPageFixture(t *testing.T) libraryPageFixture {
+	t.Helper()
+	root := t.TempDir()
+	virtualPath := root
+	album2Path := filepath.Join(root, "album2")
+	album10Path := filepath.Join(root, "album10")
+	collectionPath := filepath.Join(root, "collection3")
+	nestedAlbumPath := filepath.Join(collectionPath, "nested1")
+	virtualCover := filepath.Join(root, "cover.jpg")
+	page1 := filepath.Join(album2Path, "page1.jpg")
+	page2 := filepath.Join(album2Path, "page2.mp4")
+	page3 := filepath.Join(album2Path, "page3.jpg")
+	page10 := filepath.Join(album2Path, "page10.jpg")
+	nestedCover := filepath.Join(nestedAlbumPath, "nested.jpg")
+	album10Cover := filepath.Join(album10Path, "cover.jpg")
+
+	virtual := models.Album{
+		Type: "album", Path: virtualPath, Name: "本目录媒体", DisplayName: "本目录媒体",
+		SourceRoot: root, SourceName: filepath.Base(root), Virtual: true,
+		ImageFiles: []string{virtualCover}, ImageCount: 1, CoverImage: virtualCover, CoverKind: "image",
+	}
+	album2 := models.Album{
+		Type: "album", Path: album2Path, Name: "album2", DisplayName: "album2",
+		SourceRoot: root, SourceName: filepath.Base(root),
+		ImageFiles: []string{page10, page1, page3}, VideoFiles: []string{page2},
+		ImageCount: 3, VideoCount: 1, CoverImage: page1, CoverKind: "image",
+		Tags: []string{"旅行"}, Author: "旅行", Date: time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC), DateSource: "folder",
+	}
+	album10 := models.Album{
+		Type: "album", Path: album10Path, Name: "album10", DisplayName: "album10",
+		SourceRoot: root, ImageFiles: []string{album10Cover}, ImageCount: 1,
+		CoverImage: album10Cover, CoverKind: "image", Tags: []string{"旅行"},
+	}
+	nested := models.Album{
+		Type: "album", Path: nestedAlbumPath, Name: "nested1", DisplayName: "nested1",
+		SourceRoot: root, ImageFiles: []string{nestedCover}, ImageCount: 1,
+		CoverImage: nestedCover, CoverKind: "image",
+	}
+	collection := models.Collection{
+		Type: "collection", Path: collectionPath, Name: "collection3", DisplayName: "collection3",
+		SourceRoot: root, Albums: []models.Album{nested}, AlbumCount: 1,
+	}
+	result := &models.ScanResult{
+		Root: root, Roots: []string{root}, Albums: []models.Album{virtual, album2, album10},
+		Collections: []models.Collection{collection}, AlbumCount: 4, CollectionCount: 1,
+		ScannedAt: time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC), Duration: 123,
+		SmartCollections: []models.SmartCollection{{
+			Type: "smartCollection", Tag: "旅行", Author: "旅行",
+			Albums: []models.Album{album10, album2}, AlbumCount: 2, CoverImage: page1,
+		}},
+	}
+	catalog := NewResourceCatalog()
+	catalog.Publish(result, []string{root})
+	return libraryPageFixture{
+		catalog: catalog, root: root,
+		rootID:       catalog.ExternalID(root, ResourceRoot),
+		collectionID: catalog.ExternalID(collectionPath, ResourceCollection),
+		albumID:      catalog.ExternalID(album2Path, ResourceAlbum),
+	}
+}
+
+func TestLibraryManifestIsLightweightAndPathSafe(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	manifest, err := BuildLibraryManifest(fixture.catalog.Acquire())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Revision == 0 || len(manifest.Roots) != 1 || manifest.Roots[0].ID != fixture.rootID {
+		t.Fatalf("manifest=%+v", manifest)
+	}
+	if manifest.Roots[0].ChildCount != 4 || manifest.Statistics.AlbumCount != 4 || manifest.Statistics.TagCount != 1 {
+		t.Fatalf("manifest statistics=%+v roots=%+v", manifest.Statistics, manifest.Roots)
+	}
+	assertNoAbsolutePathInJSON(t, manifest)
+}
+
+func TestLibraryChildrenUsesRevisionBoundCursorAndNaturalOrder(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	snapshot := fixture.catalog.Acquire()
+	first, err := PageLibraryChildren(snapshot, fixture.rootID, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Total != 4 || len(first.Items) != 2 || first.NextCursor == "" {
+		t.Fatalf("first page=%+v", first)
+	}
+	if first.Items[0].Name != "本目录媒体" || first.Items[1].Name != "album2" {
+		t.Fatalf("first page order=%q, %q", first.Items[0].Name, first.Items[1].Name)
+	}
+	if first.Items[1].SourceRoot != fixture.rootID || first.Items[1].Author != "旅行" {
+		t.Fatalf("album summary lost source/author metadata: %+v", first.Items[1])
+	}
+	second, err := PageLibraryChildren(snapshot, fixture.rootID, first.NextCursor, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Items) != 2 || second.Items[0].Name != "album10" || second.Items[1].Name != "collection3" || second.NextCursor != "" {
+		t.Fatalf("second page=%+v", second)
+	}
+
+	nested, err := PageLibraryChildren(snapshot, fixture.collectionID, "", 60)
+	if err != nil || len(nested.Items) != 1 || nested.Items[0].Name != "nested1" {
+		t.Fatalf("collection children=(%+v, %v)", nested, err)
+	}
+	assertNoAbsolutePathInJSON(t, first)
+	assertNoAbsolutePathInJSON(t, second)
+
+	fixture.catalog.Publish(&models.ScanResult{Root: fixture.root, Roots: []string{fixture.root}}, []string{fixture.root})
+	if _, err := PageLibraryChildren(fixture.catalog.Acquire(), fixture.rootID, first.NextCursor, 2); !errors.Is(err, ErrStalePageCursor) {
+		t.Fatalf("stale cursor error=%v, want ErrStalePageCursor", err)
+	}
+}
+
+func TestAlbumMediaPageMergesImageAndVideoNaturalOrder(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	first, err := PageAlbumMedia(fixture.catalog.Acquire(), fixture.albumID, "", 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Total != 4 || len(first.Items) != 3 || first.NextCursor == "" {
+		t.Fatalf("first media page=%+v", first)
+	}
+	wantNames := []string{"page1.jpg", "page2.mp4", "page3.jpg"}
+	wantKinds := []string{"image", "video", "image"}
+	wantKindIndexes := []int{0, 0, 1}
+	for i := range wantNames {
+		if first.Items[i].Name != wantNames[i] || first.Items[i].Kind != wantKinds[i] ||
+			first.Items[i].Index != i || first.Items[i].KindIndex != wantKindIndexes[i] {
+			t.Fatalf("media[%d]=%+v, want name=%q kind=%q", i, first.Items[i], wantNames[i], wantKinds[i])
+		}
+	}
+	second, err := PageAlbumMedia(fixture.catalog.Acquire(), fixture.albumID, first.NextCursor, 3)
+	if err != nil || len(second.Items) != 1 || second.Items[0].Name != "page10.jpg" || second.Items[0].Index != 3 {
+		t.Fatalf("second media page=(%+v, %v)", second, err)
+	}
+	assertNoAbsolutePathInJSON(t, first)
+}
+
+func TestLibraryPageResponsesDoNotMutatePublishedIndex(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	snapshot := fixture.catalog.Acquire()
+	if snapshot.state.library == nil || len(snapshot.state.library.children[fixture.rootID]) != 4 {
+		t.Fatalf("page index was not precomputed: %+v", snapshot.state.library)
+	}
+	first, err := PageLibraryChildren(snapshot, fixture.rootID, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first.Items[0].Name = "mutated by caller"
+	again, err := PageLibraryChildren(snapshot, fixture.rootID, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.Items[0].Name == "mutated by caller" {
+		t.Fatal("page response shared its backing array with the immutable catalog")
+	}
+}
+
+func TestTagsAndTagAlbumsArePagedWithoutFullAlbums(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	tags, err := PageLibraryTags(fixture.catalog.Acquire(), "", 60)
+	if err != nil || len(tags.Items) != 1 || tags.Items[0].Tag != "旅行" || tags.Items[0].AlbumCount != 2 {
+		t.Fatalf("tags=(%+v, %v)", tags, err)
+	}
+	albums, err := PageTagAlbums(fixture.catalog.Acquire(), "旅行", "", 1)
+	if err != nil || len(albums.Items) != 1 || albums.Items[0].Name != "album2" || albums.NextCursor == "" {
+		t.Fatalf("tag albums=(%+v, %v)", albums, err)
+	}
+	if _, err := PageTagAlbums(fixture.catalog.Acquire(), "不存在", "", 60); !errors.Is(err, ErrLibraryTagNotFound) {
+		t.Fatalf("missing tag error=%v", err)
+	}
+	assertNoAbsolutePathInJSON(t, tags)
+	assertNoAbsolutePathInJSON(t, albums)
+}
+
+func TestLibraryPageRejectsCursorFromAnotherScope(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	children, err := PageLibraryChildren(fixture.catalog.Acquire(), fixture.rootID, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PageAlbumMedia(fixture.catalog.Acquire(), fixture.albumID, children.NextCursor, 1); !errors.Is(err, ErrInvalidPageCursor) {
+		t.Fatalf("cross-scope cursor error=%v, want ErrInvalidPageCursor", err)
+	}
+}
+
+func TestNormalizeLibraryPageLimit(t *testing.T) {
+	if got := NormalizeLibraryPageLimit(0); got != 60 {
+		t.Fatalf("default limit=%d", got)
+	}
+	if got := NormalizeLibraryPageLimit(999); got != 200 {
+		t.Fatalf("maximum limit=%d", got)
+	}
+}
+
+func assertNoAbsolutePathInJSON(t *testing.T, value any) {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	var visit func(any)
+	visit = func(current any) {
+		switch typed := current.(type) {
+		case string:
+			if filepath.IsAbs(typed) {
+				t.Fatalf("response exposed absolute path %q in %s", typed, data)
+			}
+		case []any:
+			for _, item := range typed {
+				visit(item)
+			}
+		case map[string]any:
+			for _, item := range typed {
+				visit(item)
+			}
+		}
+	}
+	visit(decoded)
+}

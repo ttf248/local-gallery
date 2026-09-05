@@ -43,6 +43,7 @@ type resourceCatalogState struct {
 	albums      map[string]models.Album
 	collections map[string]models.Collection
 	smart       map[string]models.SmartCollection
+	library     *libraryPageIndex
 }
 
 // CatalogSnapshot 是一次请求期间固定的资源视图。它把扫描结果、
@@ -197,6 +198,7 @@ func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string) uin
 			}
 		}
 		state.public = publicScanResult(state, state.result)
+		state.library = buildLibraryPageIndex(state)
 	}
 	c.state.Store(state)
 	return revision

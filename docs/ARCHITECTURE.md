@@ -49,7 +49,7 @@ Fiber middleware → handlers → services → local files/cache
 | `c_` | 集合     |
 | `f_` | 媒体文件 |
 
-ID 由根标识、资源类型和相对路径哈希生成；根目录与相对路径不变时 ID 稳定，且不能逆推出绝对路径。请求进入 `/api/media/:id` 等路由后，资源中间件先解析 ID，再由路径安全中间件确认目标仍位于当前 `mediaRoots` 内。未知、过期或越权 ID 不进入文件服务。
+ID 由根标识、资源类型和相对路径哈希生成；根目录与相对路径不变时 ID 稳定，且不能逆推出绝对路径。扫描发布时同时预计算 manifest、每个根/集合的直属子节点、每本相册的自然排序媒体、标签及标签相册索引；分页请求只校验游标并复制当前页，不再遍历或重排完整目录树。请求进入 `/api/media/:id` 等路由后，资源中间件先解析 ID，再由路径安全中间件确认目标仍位于当前 `mediaRoots` 内。未知、过期或越权 ID 不进入文件服务。
 
 配置页是明确的管理例外：`/api/config` 和 `/api/admin/fs/open` 可处理配置路径，但只接受回环请求。日志只输出目录 basename、逻辑缓存名和能力状态。
 
@@ -68,9 +68,9 @@ POST /api/scans
   → StartOrReuse（全局最多一个活动任务）
   → Scanner.ScanWithContext（固定目录工作池 + 两阶段建树）
   → per-subscriber SSE broadcast
-  → complete: 验证 scan generation → ResourceCatalog.Publish（结果 + ID 索引单指针发布）
+  → complete: 验证 scan generation → ResourceCatalog.Publish（结果 + ID/分页索引单指针发布）
   → ScanResultCache.Set（仅负责持久化）→ SSE complete(libraryRevision)
-  → GET /api/library（单次 Acquire 读取固定 revision）
+  → GET /api/library/manifest + cursor pages（单次 Acquire 读取固定 revision）
 ```
 
 ### 扫描器并发模型

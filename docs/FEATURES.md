@@ -16,6 +16,7 @@
 | 扫描告警 | 不可读目录、元数据失败和符号链接不会静默丢失       | `ScanResult.warnings`               |
 | 智能合集 | 从目录名提取标签并聚合                             | `services.BuildSmartCollections`    |
 | 快照缓存 | 版本化相对引用、原子替换、深拷贝；根集合变化时失效 | `services.ScanResultCache`          |
+| 大库分页 | 发布时预计算目录/媒体/标签顺序，游标绑定 revision  | `services.libraryPageIndex`         |
 
 ## 资源与安全
 

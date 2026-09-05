@@ -100,6 +100,20 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 返回最近一次扫描快照，包含单调递增的 `revision`。相册、集合、封面和媒体文件均使用与该 revision 同次发布的资源 ID，单次响应不会混入其他扫描版本。
 
+完整快照接口保留给当前兼容调用方；新页面应使用下列轻量分页接口：
+
+- `GET /api/library/manifest`：返回根列表、扫描时间和相册/集合/标签/告警统计，不包含目录树或媒体数组。
+- `GET /api/library/:rootOrCollectionId/children?limit=60&cursor=...`：分页返回直属相册与子集合摘要。
+- `GET /api/albums/:albumId/media?limit=60&cursor=...`：按统一自然顺序返回媒体；`index` 是相册内总序号，`kindIndex` 是图片或视频各自序号。
+- `GET /api/tags?limit=60&cursor=...`：分页返回标签摘要。
+- `GET /api/tags/:tag/albums?limit=60&cursor=...`：分页返回标签下的相册摘要。
+
+`limit` 默认 60、最大 200。响应统一为 `{ "ok": true, "page": { "revision": 42,
+"items": [], "total": 0, "nextCursor": "..." } }`；manifest 和分页响应都带
+`ETag: W/"library-<revision>"`。游标带签名并绑定资源作用域与 revision，篡改或跨资源
+复用返回 `400 invalid_cursor`，扫描发布新版本后返回 `409 stale_cursor`，客户端应丢弃
+已合并页面并从 manifest 重试。
+
 ### `DELETE /api/library`
 
 取消活动扫描，使它的提交令牌失效，并清除内存资源快照与磁盘扫描缓存；不会立即发起新扫描。

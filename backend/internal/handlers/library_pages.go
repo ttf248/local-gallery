@@ -1,0 +1,145 @@
+package handlers
+
+import (
+	"errors"
+	"strconv"
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
+	"github.com/tianlongxiang/local-gallery/internal/services"
+)
+
+// LibraryManifestHandler 返回库启动所需的轻量 manifest，不再传输完整目录树。
+func LibraryManifestHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		snapshot := catalog.Acquire()
+		manifest, err := services.BuildLibraryManifest(snapshot)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "manifest": manifest})
+	}
+}
+
+// LibraryChildrenPageHandler 分页返回 root 或 collection 的直属子节点。
+// 推荐路由：GET /api/library/:id/children。
+func LibraryChildrenPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, ok := parseLibraryPageLimit(c)
+		if !ok {
+			return nil
+		}
+		parentID := strings.TrimSpace(c.Params("id"))
+		if parentID == "" {
+			return httputil.BadRequest(c, "missing_resource_id", "resource id is required")
+		}
+		snapshot := requestCatalogSnapshot(c, catalog)
+		page, err := services.PageLibraryChildren(snapshot, parentID, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+// AlbumMediaPageHandler 按统一自然顺序分页返回图片和视频。
+// 推荐路由：GET /api/albums/:id/media。
+func AlbumMediaPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, ok := parseLibraryPageLimit(c)
+		if !ok {
+			return nil
+		}
+		albumID := strings.TrimSpace(c.Params("id"))
+		if albumID == "" {
+			return httputil.BadRequest(c, "missing_resource_id", "resource id is required")
+		}
+		snapshot := requestCatalogSnapshot(c, catalog)
+		page, err := services.PageAlbumMedia(snapshot, albumID, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+// LibraryTagsPageHandler 分页返回标签摘要，不携带标签下的完整相册数组。
+func LibraryTagsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, ok := parseLibraryPageLimit(c)
+		if !ok {
+			return nil
+		}
+		snapshot := catalog.Acquire()
+		page, err := services.PageLibraryTags(snapshot, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+// TagAlbumsPageHandler 分页返回指定标签下的相册摘要。
+func TagAlbumsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, ok := parseLibraryPageLimit(c)
+		if !ok {
+			return nil
+		}
+		tag := strings.TrimSpace(c.Params("tag"))
+		if tag == "" {
+			return httputil.BadRequest(c, "missing_tag", "tag is required")
+		}
+		snapshot := catalog.Acquire()
+		page, err := services.PageTagAlbums(snapshot, tag, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+func parseLibraryPageLimit(c *fiber.Ctx) (int, bool) {
+	raw := strings.TrimSpace(c.Query("limit"))
+	if raw == "" {
+		return services.DefaultLibraryPageLimit, true
+	}
+	limit, err := strconv.Atoi(raw)
+	if err != nil || limit <= 0 {
+		_ = httputil.BadRequest(c, "invalid_page_limit", "limit must be a positive integer")
+		return 0, false
+	}
+	return services.NormalizeLibraryPageLimit(limit), true
+}
+
+func writeLibraryPageError(c *fiber.Ctx, err error, revision uint64) error {
+	switch {
+	case errors.Is(err, services.ErrInvalidPageCursor):
+		return httputil.BadRequest(c, "invalid_cursor", "page cursor is invalid for this resource")
+	case errors.Is(err, services.ErrStalePageCursor):
+		return httputil.Error(c, fiber.StatusConflict, "stale_cursor", "library changed; restart pagination", fiber.Map{
+			"currentRevision": revision,
+		})
+	case errors.Is(err, services.ErrLibraryNotReady):
+		return httputil.Error(c, fiber.StatusConflict, "library_not_ready", "scan the library before requesting pages")
+	case errors.Is(err, services.ErrLibraryResourceNotFound):
+		return httputil.NotFound(c, "resource_not_found", "resource id is invalid or stale")
+	case errors.Is(err, services.ErrLibraryResourceWrongKind):
+		return httputil.BadRequest(c, "invalid_resource_kind", "resource type does not support this operation")
+	case errors.Is(err, services.ErrLibraryTagNotFound):
+		return httputil.NotFound(c, "tag_not_found", "tag was not found")
+	default:
+		return httputil.Internal(c, "library_page_failed", "unable to build library page")
+	}
+}
+
+func setLibraryRevisionETag(c *fiber.Ctx, revision uint64) {
+	c.Set(fiber.HeaderETag, `W/"library-`+strconv.FormatUint(revision, 10)+`"`)
+}
