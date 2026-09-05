@@ -14,6 +14,7 @@ import (
 const (
 	DefaultLibraryPageLimit = 60
 	MaxLibraryPageLimit     = 200
+	MaxLibraryNodeQuery     = 500
 )
 
 var (
@@ -112,6 +113,8 @@ type libraryPageIndex struct {
 	manifest  LibraryManifest
 	children  map[string][]LibraryNodeSummary
 	media     map[string][]LibraryMediaItem
+	albums    []LibraryNodeSummary
+	nodes     map[string]LibraryNodeSummary
 	tags      []LibraryTagSummary
 	tagAlbums map[string][]LibraryNodeSummary
 }
@@ -120,6 +123,8 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 	index := &libraryPageIndex{
 		children:  make(map[string][]LibraryNodeSummary),
 		media:     make(map[string][]LibraryMediaItem),
+		albums:    []LibraryNodeSummary{},
+		nodes:     make(map[string]LibraryNodeSummary),
 		tags:      []LibraryTagSummary{},
 		tagAlbums: make(map[string][]LibraryNodeSummary),
 	}
@@ -151,6 +156,9 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 	}
 
 	for id, album := range state.albums {
+		summary := albumSummary(state, album)
+		index.nodes[id] = summary
+		index.albums = append(index.albums, summary)
 		sources := albumMediaSources(state, album)
 		items := make([]LibraryMediaItem, 0, len(sources))
 		kindIndexes := map[string]int{"image": 0, "video": 0}
@@ -166,6 +174,22 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 		}
 		index.media[id] = items
 	}
+	for id, collection := range state.collections {
+		index.nodes[id] = collectionSummary(state, collection)
+	}
+	sort.SliceStable(index.albums, func(i, j int) bool {
+		left, right := index.albums[i], index.albums[j]
+		if left.Virtual != right.Virtual {
+			return left.Virtual
+		}
+		if naturalLess(left.DisplayName, right.DisplayName) {
+			return true
+		}
+		if naturalLess(right.DisplayName, left.DisplayName) {
+			return false
+		}
+		return left.ID < right.ID
+	})
 
 	smartCollections := append([]models.SmartCollection(nil), state.result.SmartCollections...)
 	sort.SliceStable(smartCollections, func(i, j int) bool {
@@ -319,6 +343,54 @@ func PageAlbumMedia(snapshot CatalogSnapshot, albumID, cursor string, limit int)
 	}, nil
 }
 
+// PageLibraryAlbums 返回整个媒体库中的相册摘要，包含所有嵌套层级，但不携带媒体文件。
+func PageLibraryAlbums(snapshot CatalogSnapshot, cursor string, limit int) (LibraryPage[LibraryNodeSummary], error) {
+	const scope = "library-albums"
+	offset, err := pageOffset(snapshot, cursor, scope)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryPage[LibraryNodeSummary]{}, ErrLibraryNotReady
+	}
+	albums := snapshot.state.library.albums
+	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(albums), limit)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	return LibraryPage[LibraryNodeSummary]{
+		Revision: snapshot.Revision(), Items: cloneNodePage(albums, start, end), Total: len(albums), NextCursor: next,
+	}, nil
+}
+
+// ResolveLibraryNodes 按调用方给定顺序批量解析相册或集合摘要。不存在、已过期
+// 或不是可展示节点的 ID 会进入 Missing，避免收藏/最近浏览逐个发请求。
+func ResolveLibraryNodes(snapshot CatalogSnapshot, ids []string) (LibraryNodeQueryResult, error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryNodeQueryResult{}, ErrLibraryNotReady
+	}
+	result := LibraryNodeQueryResult{
+		Revision: snapshot.Revision(),
+		Items:    make([]LibraryNodeSummary, 0, len(ids)),
+		Missing:  make([]string, 0),
+	}
+	for _, id := range ids {
+		summary, exists := snapshot.state.library.nodes[id]
+		if !exists {
+			result.Missing = append(result.Missing, id)
+			continue
+		}
+		result.Items = append(result.Items, cloneNodeSummary(summary))
+	}
+	return result, nil
+}
+
+type LibraryNodeQueryResult struct {
+	Revision uint64               `json:"revision"`
+	Items    []LibraryNodeSummary `json:"items"`
+	Missing  []string             `json:"missing"`
+}
+
 func PageLibraryTags(snapshot CatalogSnapshot, cursor string, limit int) (LibraryPage[LibraryTagSummary], error) {
 	const scope = "library-tags"
 	offset, err := pageOffset(snapshot, cursor, scope)
@@ -371,10 +443,15 @@ func clonePage[T any](items []T, start, end int) []T {
 func cloneNodePage(items []LibraryNodeSummary, start, end int) []LibraryNodeSummary {
 	out := clonePage(items, start, end)
 	for i := range out {
-		out[i].CoverImages = append([]string(nil), out[i].CoverImages...)
-		out[i].Tags = append([]string(nil), out[i].Tags...)
+		out[i] = cloneNodeSummary(out[i])
 	}
 	return out
+}
+
+func cloneNodeSummary(item LibraryNodeSummary) LibraryNodeSummary {
+	item.CoverImages = append([]string(nil), item.CoverImages...)
+	item.Tags = append([]string(nil), item.Tags...)
+	return item
 }
 
 func cloneTagPage(items []LibraryTagSummary, start, end int) []LibraryTagSummary {
@@ -521,6 +598,7 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 	if len(covers) > 0 {
 		cover = covers[0]
 	}
+	albumCount, imageCount, videoCount, folderSize := collectionTotals(collection)
 	return LibraryNodeSummary{
 		ID:          id,
 		Kind:        string(ResourceCollection),
@@ -531,9 +609,30 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 		CoverImage:  cover,
 		CoverImages: covers,
 		CoverKind:   coverKind,
-		AlbumCount:  collection.AlbumCount,
+		ImageCount:  imageCount,
+		VideoCount:  videoCount,
+		MediaCount:  imageCount + videoCount,
+		AlbumCount:  albumCount,
 		ChildCount:  len(collection.Albums) + len(collection.Collections),
+		FolderSize:  folderSize,
 	}
+}
+
+func collectionTotals(collection models.Collection) (albumCount, imageCount, videoCount int, folderSize int64) {
+	for _, album := range collection.Albums {
+		albumCount++
+		imageCount += album.ImageCount
+		videoCount += album.VideoCount
+		folderSize += album.FolderSize
+	}
+	for _, child := range collection.Collections {
+		childAlbums, childImages, childVideos, childSize := collectionTotals(child)
+		albumCount += childAlbums
+		imageCount += childImages
+		videoCount += childVideos
+		folderSize += childSize
+	}
+	return albumCount, imageCount, videoCount, folderSize
 }
 
 func nodeSource(state *resourceCatalogState, id, configuredRoot, configuredName string) (string, string) {

@@ -287,9 +287,11 @@ func main() {
 	api.Delete("/scans/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/library/manifest", handlers.LibraryManifestHandler(resourceCatalog))
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(resourceCatalog))
+	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(resourceCatalog))
 	api.Get("/library", handlers.LatestScanHandler(scanCache, resourceCatalog))
 	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache, resourceCatalog, runner))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
+	api.Get("/albums", handlers.LibraryAlbumsPageHandler(resourceCatalog))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(resourceCatalog))
 	api.Get("/albums/:id", resourceParam, handlers.AlbumDetailHandler(scanCache, coverOverrides, resourceCatalog))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。

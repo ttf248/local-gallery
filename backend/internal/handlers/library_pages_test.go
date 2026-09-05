@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
@@ -41,6 +42,8 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app := fiber.New()
 	app.Get("/api/library/manifest", LibraryManifestHandler(catalog))
 	app.Get("/api/library/:id/children", LibraryChildrenPageHandler(catalog))
+	app.Post("/api/library/nodes/query", LibraryNodesQueryHandler(catalog))
+	app.Get("/api/albums", LibraryAlbumsPageHandler(catalog))
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog))
 	app.Get("/api/tags", LibraryTagsPageHandler(catalog))
 	app.Get("/api/tags/:tag/albums", TagAlbumsPageHandler(catalog))
@@ -82,6 +85,38 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 		t.Fatalf("media status=%d", mediaResp.StatusCode)
 	}
 	assertHandlerBodyHasNoAbsolutePath(t, mediaResp.Body)
+
+	albumsResp, err := app.Test(httptest.NewRequest("GET", "/api/albums?limit=1", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if albumsResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("albums status=%d", albumsResp.StatusCode)
+	}
+	assertHandlerBodyHasNoAbsolutePath(t, albumsResp.Body)
+
+	queryRequest := httptest.NewRequest("POST", "/api/library/nodes/query", strings.NewReader(`{"ids":["`+albumID+`","a_missing"]}`))
+	queryRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	queryResp, err := app.Test(queryRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queryResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("query status=%d", queryResp.StatusCode)
+	}
+	var queryBody struct {
+		Result struct {
+			Items   []services.LibraryNodeSummary `json:"items"`
+			Missing []string                      `json:"missing"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(queryResp.Body).Decode(&queryBody); err != nil {
+		t.Fatal(err)
+	}
+	_ = queryResp.Body.Close()
+	if len(queryBody.Result.Items) != 1 || len(queryBody.Result.Missing) != 1 {
+		t.Fatalf("node query=%+v", queryBody.Result)
+	}
 
 	invalidResp, err := app.Test(httptest.NewRequest("GET", "/api/tags?cursor=not-a-cursor", nil))
 	if err != nil {

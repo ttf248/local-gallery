@@ -130,6 +130,8 @@ func newHarness(t *testing.T) *harness {
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/library/manifest", handlers.LibraryManifestHandler(catalog))
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(catalog))
+	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(catalog))
+	api.Get("/albums", handlers.LibraryAlbumsPageHandler(catalog))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(catalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(catalog))
@@ -340,6 +342,30 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 		t.Fatalf("unexpected media item: %+v", media.Page.Items[0])
 	}
 
+	res, body = h.do(t, http.MethodGet, "/api/albums?limit=1", nil)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("albums status=%d body=%s", res.StatusCode, body)
+	}
+	var albums struct {
+		Page services.LibraryPage[services.LibraryNodeSummary] `json:"page"`
+	}
+	if err := json.Unmarshal(body, &albums); err != nil || len(albums.Page.Items) != 1 || albums.Page.Total != 2 {
+		t.Fatalf("invalid albums page: %s err=%v", body, err)
+	}
+
+	res, body = h.do(t, http.MethodPost, "/api/library/nodes/query", map[string]any{
+		"ids": []string{firstAlbum.ID, "a_missing"},
+	})
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("node query status=%d body=%s", res.StatusCode, body)
+	}
+	var nodes struct {
+		Result services.LibraryNodeQueryResult `json:"result"`
+	}
+	if err := json.Unmarshal(body, &nodes); err != nil || len(nodes.Result.Items) != 1 || len(nodes.Result.Missing) != 1 {
+		t.Fatalf("invalid node query: %s err=%v", body, err)
+	}
+
 	res, body = h.do(t, http.MethodGet, "/api/tags?limit=1", nil)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("tags status=%d body=%s", res.StatusCode, body)
@@ -353,9 +379,10 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 
 	// 一次扫描只发布一个 revision，所有分页端点必须保持一致。
 	if manifest.Manifest.Revision != children.Page.Revision || children.Page.Revision != media.Page.Revision ||
-		media.Page.Revision != tags.Page.Revision || h.catalog.Acquire().Revision() != tags.Page.Revision {
-		t.Fatalf("revision mismatch: manifest=%d children=%d media=%d tags=%d catalog=%d",
-			manifest.Manifest.Revision, children.Page.Revision, media.Page.Revision, tags.Page.Revision,
+		media.Page.Revision != albums.Page.Revision || albums.Page.Revision != nodes.Result.Revision ||
+		nodes.Result.Revision != tags.Page.Revision || h.catalog.Acquire().Revision() != tags.Page.Revision {
+		t.Fatalf("revision mismatch: manifest=%d children=%d media=%d albums=%d nodes=%d tags=%d catalog=%d",
+			manifest.Manifest.Revision, children.Page.Revision, media.Page.Revision, albums.Page.Revision, nodes.Result.Revision, tags.Page.Revision,
 			h.catalog.Acquire().Revision())
 	}
 }

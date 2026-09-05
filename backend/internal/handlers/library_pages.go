@@ -68,6 +68,55 @@ func AlbumMediaPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	}
 }
 
+// LibraryAlbumsPageHandler 分页返回跨根、跨层级的全部相册摘要。
+func LibraryAlbumsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, ok := parseLibraryPageLimit(c)
+		if !ok {
+			return nil
+		}
+		snapshot := catalog.Acquire()
+		page, err := services.PageLibraryAlbums(snapshot, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+// LibraryNodesQueryHandler 将收藏、最近浏览等本地 ID 列表批量解析为轻量摘要。
+func LibraryNodesQueryHandler(catalog *services.ResourceCatalog) fiber.Handler {
+	type request struct {
+		IDs []string `json:"ids"`
+	}
+	return func(c *fiber.Ctx) error {
+		var body request
+		if err := c.BodyParser(&body); err != nil || len(body.IDs) == 0 {
+			return httputil.BadRequest(c, "invalid_resource_ids", "ids must be a non-empty array")
+		}
+		if len(body.IDs) > services.MaxLibraryNodeQuery {
+			return httputil.BadRequest(c, "too_many_resource_ids", "ids exceeds the batch limit")
+		}
+		ids := make([]string, 0, len(body.IDs))
+		for _, id := range body.IDs {
+			if id = strings.TrimSpace(id); id != "" {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) == 0 {
+			return httputil.BadRequest(c, "invalid_resource_ids", "ids must contain a resource id")
+		}
+		snapshot := catalog.Acquire()
+		result, err := services.ResolveLibraryNodes(snapshot, ids)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "result": result})
+	}
+}
+
 // LibraryTagsPageHandler 分页返回标签摘要，不携带标签下的完整相册数组。
 func LibraryTagsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	return func(c *fiber.Ctx) error {

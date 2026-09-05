@@ -104,7 +104,9 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 - `GET /api/library/manifest`：返回根列表、扫描时间和相册/集合/标签/告警统计，不包含目录树或媒体数组。
 - `GET /api/library/:rootOrCollectionId/children?limit=60&cursor=...`：分页返回直属相册与子集合摘要。
+- `GET /api/albums?limit=60&cursor=...`：分页返回跨根、跨嵌套层级的全部相册摘要，供首页和未读视图消费。
 - `GET /api/albums/:albumId/media?limit=60&cursor=...`：按统一自然顺序返回媒体；`index` 是相册内总序号，`kindIndex` 是图片或视频各自序号。
+- `POST /api/library/nodes/query`：body 为 `{ "ids": ["a_...", "c_..."] }`，按输入顺序批量解析相册/集合摘要；单批最多 500 项，失效 ID 返回在 `missing` 中。
 - `GET /api/tags?limit=60&cursor=...`：分页返回标签摘要。
 - `GET /api/tags/:tag/albums?limit=60&cursor=...`：分页返回标签下的相册摘要。
 
@@ -113,6 +115,9 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 `ETag: W/"library-<revision>"`。游标带签名并绑定资源作用域与 revision，篡改或跨资源
 复用返回 `400 invalid_cursor`，扫描发布新版本后返回 `409 stale_cursor`，客户端应丢弃
 已合并页面并从 manifest 重试。
+
+节点摘要不携带媒体数组。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
+`mediaCount` 和 `folderSize` 均包含所有后代，`childCount` 仍只表示直属子项数量。
 
 ### `DELETE /api/library`
 
