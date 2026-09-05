@@ -161,7 +161,6 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `GET /api/videos/:fileId/transcode/status`
 - `GET /api/videos/:fileId/transcode/events`
 - `POST /api/videos/:fileId/transcode/cancel`
-- `GET /api/videos/transcode/cache/stats`
 
 ## 收藏、历史与媒体活动
 
@@ -198,7 +197,6 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 ## 缓存与系统操作
 
 - `GET /api/cache/stats`：返回脱敏缓存名称、占用和文件数。
-- `GET /api/thumbs/stats`
 - `POST /api/thumbs/cleanup`
 - `POST /api/cache/clear?scope=thumbs|faststart|transcode|all`：统一清空入口，按 scope 删 thumbs / faststart / transcode 缓存中对应的一类；scope=all 等价三者都清。响应 `{ scope, thumbs?, faststart?, transcode?, totalDeleted, totalFreedBytes }`，未涉及的 scope 字段为 null。
 - `POST /api/fs/open`：本机接口，body 为 `{ "id": "<resourceId>" }`。

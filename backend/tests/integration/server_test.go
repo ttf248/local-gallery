@@ -138,7 +138,6 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(catalog))
 	api.Get("/search", handlers.SearchHandler(catalog))
 	api.Get("/thumbs", handlers.ThumbHandler(thumbs))
-	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandler(thumbs))
 	api.Post("/thumbs/cover", handlers.ThumbCoverHandler(thumbs))
 	api.Get("/videos", handlers.VideoHandler(nil, nil))

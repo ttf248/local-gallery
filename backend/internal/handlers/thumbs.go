@@ -78,13 +78,6 @@ func ThumbHandler(svc *services.ThumbnailService) fiber.Handler {
 	}
 }
 
-// ThumbStatsHandler 返回缩略图缓存统计。
-func ThumbStatsHandler(svc *services.ThumbnailService) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		return c.JSON(svc.Stats())
-	}
-}
-
 // ThumbCleanupHandler 返回清理过期缓存的处理函数（POST）。
 func ThumbCleanupHandler(svc *services.ThumbnailService) fiber.Handler {
 	return ThumbCleanupHandlerWithCacheStats(svc, nil)

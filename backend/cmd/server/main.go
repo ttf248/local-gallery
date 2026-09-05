@@ -301,7 +301,6 @@ func main() {
 	api.Get("/tags", handlers.LibraryTagsPageHandler(resourceCatalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(resourceCatalog))
 	api.Get("/thumbs/:id", resourceParam, handlers.ThumbHandler(thumbs))
-	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
 	// 统一清空入口:scope=thumbs|faststart|transcode|all。
 	// Settings 页在"缓存占用"面板中按 scope 提供独立清理和一键全清。
@@ -315,8 +314,6 @@ func main() {
 	api.Get("/videos/:id/transcode/status", resourceParam, handlers.TranscodeStatusHandler(transcode))
 	api.Get("/videos/:id/transcode/events", resourceParam, handlers.TranscodeEventsHandler(transcode))
 	api.Post("/videos/:id/transcode/cancel", resourceParam, handlers.TranscodeCancelHandler(transcode))
-	// 转码缓存统计。
-	api.Get("/videos/transcode/cache/stats", handlers.TranscodeCacheStatsHandler(transcode))
 	// 视频封面回填：前端浏览器抽帧后 POST 原始字节
 	api.Post("/thumbs/:id/cover", resourceParam, handlers.ThumbCoverHandler(thumbs))
 	api.Post("/fs/open", middleware.LoopbackOnly(), handlers.FsOpenResourceHandler(mgr, resourceCatalog))

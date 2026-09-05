@@ -96,27 +96,6 @@ func TranscodeCancelHandler(svc *services.TranscodeService) fiber.Handler {
 	}
 }
 
-// TranscodeCacheStatsHandler 返回转码缓存占用(给前端 / 设置页)。
-//
-//	GET /api/videos/transcode/cache/stats
-func TranscodeCacheStatsHandler(svc *services.TranscodeService) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		if svc == nil {
-			return c.JSON(fiber.Map{
-				"path":       "video-transcode",
-				"totalBytes": 0,
-				"fileCount":  0,
-			})
-		}
-		stats := svc.CacheStats()
-		return c.JSON(fiber.Map{
-			"path":       "video-transcode",
-			"totalBytes": stats.TotalBytes,
-			"fileCount":  stats.FileCount,
-		})
-	}
-}
-
 // TranscodeEventsHandler SSE 推送转码进度事件。
 //
 //	GET /api/videos/:id/transcode/events
