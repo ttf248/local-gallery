@@ -1,16 +1,15 @@
-import { useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useLibraryStore } from '../store/libraryStore'
-import { useSearchStore } from '../store/searchStore'
-import { useUIStore } from '../store/uiStore'
-import { useUnreadAlbums } from '../hooks/useUnreadAlbums'
-import { useGalleryContextSync } from '../hooks/useGalleryContextSync'
-import AlbumGrid from '../components/album/AlbumGrid'
-import { ListFilterBar } from '../components/common/ListFilterBar'
-import EmptyState from '../components/common/EmptyState'
-import { SparkleIcon, ShuffleIcon } from '../components/common/Icon'
-import type { GalleryContextEntry } from '../utils/galleryContext'
-import { albumRoute } from '../utils/path'
+import { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { useSearchStore } from "../store/searchStore";
+import { useUIStore } from "../store/uiStore";
+import { useUnreadAlbums } from "../hooks/useUnreadAlbums";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
+import AlbumGrid from "../components/album/AlbumGrid";
+import { ListFilterBar } from "../components/common/ListFilterBar";
+import EmptyState from "../components/common/EmptyState";
+import { SparkleIcon, ShuffleIcon } from "../components/common/Icon";
+import type { GalleryContextEntry } from "../utils/galleryContext";
+import { albumRoute } from "../utils/path";
 
 // 未读列表:跟 Recents / Favorites 同形,但源数据是「还没翻开过的相册」。
 //
@@ -20,60 +19,54 @@ import { albumRoute } from '../utils/path'
 //     的核心场景
 //  3. 全部看完时给一个明确「🎉 看完了」空态,而不是灰底 placeholder
 export default function Unread() {
-  const navigate = useNavigate()
-  const result = useLibraryStore((s) => s.result)
-  const loadFromBackend = useLibraryStore((s) => s.loadFromBackend)
-  const viewMode = useUIStore((s) => s.viewMode)
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const minImageCount = useSearchStore((s) => s.minImageCount)
-  const pushToast = useUIStore((s) => s.pushToast)
-  const { cards, count, total, isLoading } = useUnreadAlbums()
-
-  useEffect(() => {
-    if (!result) loadFromBackend()
-  }, [result, loadFromBackend])
+  const navigate = useNavigate();
+  const viewMode = useUIStore((s) => s.viewMode);
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const minImageCount = useSearchStore((s) => s.minImageCount);
+  const pushToast = useUIStore((s) => s.pushToast);
+  const { cards, count, total, isLoading } = useUnreadAlbums();
 
   const filtered = useMemo(() => {
     const list = cards
       .filter((it) => {
-        if (!query) return true
-        const q = query.toLowerCase()
-        return `${it.title} ${it.subtitle ?? ''}`.toLowerCase().includes(q)
+        if (!query) return true;
+        const q = query.toLowerCase();
+        return `${it.title} ${it.subtitle ?? ""}`.toLowerCase().includes(q);
       })
       // 最小图数过滤(全局 filter)
       .filter((it) => {
-        if (minImageCount <= 0) return true
-        return (it.count ?? 0) >= minImageCount
-      })
+        if (minImageCount <= 0) return true;
+        return (it.count ?? 0) >= minImageCount;
+      });
     switch (sortBy) {
-      case 'count':
-        return list.sort((a, b) => b.count - a.count)
-      case 'name':
-        return list.sort((a, b) => a.title.localeCompare(b.title))
-      case 'recent':
-      case 'viewed':
+      case "count":
+        return list.sort((a, b) => b.count - a.count);
+      case "name":
+        return list.sort((a, b) => a.title.localeCompare(b.title));
+      case "recent":
+      case "viewed":
       default:
         // Unread 都是「没看过」的,'viewed' 与 'recent' 都无意义,
         // 直接走默认(保持入站顺序)或走 name。
-        return list
+        return list;
     }
-  }, [cards, query, sortBy, minImageCount])
+  }, [cards, query, sortBy, minImageCount]);
 
   // 跨卷翻页(N / P)需要这个 list,跟 Recents/Favorites 一致
   const entries = useMemo<GalleryContextEntry[]>(
     () => filtered.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [filtered],
-  )
-  useGalleryContextSync({ type: 'unread' }, entries)
+  );
+  useGalleryContextSync({ type: "unread" }, entries);
 
   function onShuffleUnread() {
     if (filtered.length === 0) {
-      pushToast({ kind: 'info', message: '没有未读相册可跳' })
-      return
+      pushToast({ kind: "info", message: "没有未读相册可跳" });
+      return;
     }
-    const pick = filtered[Math.floor(Math.random() * filtered.length)]
-    navigate(albumRoute(pick.to.replace(/^\/albums\//, '')))
+    const pick = filtered[Math.floor(Math.random() * filtered.length)];
+    navigate(albumRoute(pick.to.replace(/^\/albums\//, "")));
   }
 
   return (
@@ -81,7 +74,9 @@ export default function Unread() {
       <section className="px-6 lg:px-10 pt-10 pb-6 max-w-[1400px] mx-auto w-full">
         <div className="flex items-center gap-2 mb-1">
           <SparkleIcon size={13} className="text-fg-muted" />
-          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">未读</span>
+          <span className="text-[11px] uppercase tracking-[0.14em] text-fg-muted">
+            未读
+          </span>
         </div>
         <h1 className="font-display text-[32px] leading-[1.1] font-semibold tracking-tight">
           未读相册
@@ -113,24 +108,24 @@ export default function Unread() {
         </div>
       ) : count === 0 ? (
         <EmptyState
-          title={total === 0 ? '尚未加载图像库' : '全部看完啦 🎉'}
+          title={total === 0 ? "尚未加载图像库" : "全部看完啦 🎉"}
           description={
             total === 0
-              ? '先去设置里指定一个媒体根目录,然后回来扫一遍就有了。'
-              : '未读列表为空,可以在「主页」随机翻一卷,或去「收藏」里找回老朋友。'
+              ? "先去设置里指定一个媒体根目录,然后回来扫一遍就有了。"
+              : "未读列表为空,可以在「主页」随机翻一卷,或去「收藏」里找回老朋友。"
           }
           icon={<SparkleIcon size={20} />}
           action={
             total === 0 ? (
               <button
-                onClick={() => navigate('/settings')}
+                onClick={() => navigate("/settings")}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md bg-accent text-accent-fg hover:bg-accent-hover text-sm"
               >
                 去设置
               </button>
             ) : (
               <button
-                onClick={() => navigate('/')}
+                onClick={() => navigate("/")}
                 className="inline-flex items-center gap-1.5 h-9 px-4 rounded-md border border-border hover:bg-bg-subtle text-sm"
               >
                 回主页
@@ -141,7 +136,7 @@ export default function Unread() {
       ) : filtered.length === 0 ? (
         <EmptyState
           title="没有匹配的未读相册"
-          description={query ? `没有匹配"${query}"的结果` : ''}
+          description={query ? `没有匹配"${query}"的结果` : ""}
           action={
             <button
               onClick={() => useSearchStore.getState().reset()}
@@ -160,5 +155,5 @@ export default function Unread() {
       )}
       <div className="h-12" />
     </div>
-  )
+  );
 }

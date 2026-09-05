@@ -1,43 +1,48 @@
-import { useEffect, useState } from 'react'
-import { useLibraryStore } from '../../store/libraryStore'
-import { useScanSSE } from '../../hooks/useScanSSE'
-import { useSearchStore } from '../../store/searchStore'
+import { useEffect, useState } from "react";
+import { useScanSSE } from "../../hooks/useScanSSE";
+import { useSearchStore } from "../../store/searchStore";
+import { useLibraryManifest } from "../../hooks/useLibrary";
 
 export default function StatusBar() {
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(id)
-  }, [])
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  const result = useLibraryStore((s) => s.result)
-  const lastScanAt = useLibraryStore((s) => s.lastScanAt)
-  const sse = useScanSSE()
-  const query = useSearchStore((s) => s.query)
-  const sortBy = useSearchStore((s) => s.sortBy)
-  const view = useSearchStore((s) => s.view)
+  const manifest = useLibraryManifest().data?.manifest;
+  const sse = useScanSSE();
+  const query = useSearchStore((s) => s.query);
+  const sortBy = useSearchStore((s) => s.sortBy);
+  const view = useSearchStore((s) => s.view);
 
   // 进度详情（百分比 + 本数 + 阶段）已搬到顶部 ScanProgress 条；
   // 状态栏只在「正在扫描」时给一个极简提示，方便用户瞥一眼。
-  let leftLabel = '就绪'
+  let leftLabel = "就绪";
   if (sse.isRunning) {
-    leftLabel = `扫描中 · 已发现 ${sse.progress?.albumsFound ?? 0} 个文件夹`
+    leftLabel = `扫描中 · 已发现 ${sse.progress?.albumsFound ?? 0} 个文件夹`;
   } else if (sse.isError) {
-    leftLabel = '扫描失败'
-  } else if (result) {
-    leftLabel = `${result.albumCount} 个文件夹 · ${(result.smartCollections ?? []).length} 个标签`
+    leftLabel = "扫描失败";
+  } else if (manifest) {
+    leftLabel = `${manifest.statistics.albumCount} 个文件夹 · ${manifest.statistics.tagCount} 个标签`;
   }
 
   const sortLabel =
-    sortBy === 'name'
-      ? '名称'
-      : sortBy === 'count'
-        ? '张数'
-        : sortBy === 'viewed'
-          ? '最近看'
-          : '最近改'
+    sortBy === "name"
+      ? "名称"
+      : sortBy === "count"
+        ? "张数"
+        : sortBy === "viewed"
+          ? "最近看"
+          : "最近改";
   const viewLabel =
-    view === 'all' ? '全部' : view === 'album' ? '文件夹' : view === 'collection' ? '集合' : '标签'
+    view === "all"
+      ? "全部"
+      : view === "album"
+        ? "文件夹"
+        : view === "collection"
+          ? "集合"
+          : "标签";
 
   return (
     <footer className="h-7 px-4 flex items-center justify-between text-[11px] text-fg-subtle border-t border-border-faint glass">
@@ -52,13 +57,13 @@ export default function StatusBar() {
         <span className="hidden md:inline">排序: {sortLabel}</span>
       </div>
       <div className="flex items-center gap-3">
-        {lastScanAt && (
+        {manifest?.scannedAt && (
           <span className="hidden md:inline">
-            上次扫描 {new Date(lastScanAt).toLocaleTimeString()}
+            上次扫描 {new Date(manifest.scannedAt).toLocaleTimeString()}
           </span>
         )}
         <span className="tabular-nums">{now.toLocaleTimeString()}</span>
       </div>
     </footer>
-  )
+  );
 }

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook } from "@testing-library/react";
 import { useUnreadAlbums } from "./useUnreadAlbums";
-import { useLibraryStore } from "../store/libraryStore";
 import { useFavorites } from "./useFavorites";
 
 // 这些 hook 同时被 useUnreadAlbums 使用,所以 mock 掉,避免触发网络。
@@ -11,43 +10,42 @@ vi.mock("./useFavorites", () => ({
 vi.mock("./useImageActivity", () => ({
   useImageActivities: vi.fn(),
 }));
+vi.mock("./useLibrary", () => ({
+  useLibraryAlbums: vi.fn(),
+}));
 
 import { useImageActivities } from "./useImageActivity";
+import { useLibraryAlbums } from "./useLibrary";
 
-const baseAlbum = (path: string, name: string, imageCount = 10) => ({
-  type: "album" as const,
-  path,
+const baseAlbum = (id: string, name: string, imageCount = 10) => ({
+  id,
+  kind: "album" as const,
   name,
+  displayName: name,
   imageCount,
   videoCount: 0,
-  files: [],
-  imageFiles: [],
-  coverImage: path + "/cover.jpg",
+  mediaCount: imageCount,
+  coverImage: id + "-cover",
+  coverImages: [id + "-cover"],
   folderSize: 0,
   tags: [] as string[],
   modTime: "",
 });
 
 function seedLibrary(albums: ReturnType<typeof baseAlbum>[]) {
-  useLibraryStore.setState({
-    result: {
-      root: "/",
-      roots: ["/"],
-      albums,
-      collections: [],
-      smartCollections: [],
-      albumCount: albums.length,
-      collectionCount: 0,
-      duration: 0,
-      scannedAt: new Date().toISOString(),
-    },
-  });
+  vi.mocked(useLibraryAlbums).mockReturnValue({
+    data: { revision: 1, items: albums, total: albums.length },
+    isLoading: false,
+  } as never);
 }
 
 describe("useUnreadAlbums", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useLibraryStore.setState({ result: null });
+    vi.mocked(useLibraryAlbums).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+    } as never);
   });
 
   it("没有 progress 的相册视为未读", () => {
