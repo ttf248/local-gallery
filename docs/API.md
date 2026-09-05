@@ -183,7 +183,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `PUT /api/activity/batch`：body 为 `{ "activities": [...] }`，整批校验后一次原子落盘；单批最多 10000 条。
 - `DELETE /api/activity?...`：幂等删除单条；`DELETE /api/activity/all` 清空全部图片和视频活动。
 
-`/api/library/activity-summary` 仅以是否存在图片阅读活动判定未读，视频播放记录不会改变相册未读状态；它用于常驻导航，完整未读列表仍通过相册摘要分页加载。
+`/api/library/activity-summary` 以是否存在图片阅读活动判定未读；当前没有图片页的相册始终视为未读，视频播放记录不会改变该语义。它用于常驻导航，完整未读列表仍通过相册摘要分页加载。
 
 响应中 `status` 为 `in_progress` / `completed`，由服务端按实际位置派生。图片到达
 `pageCount - 1` 完成；视频到达 98% 完成。旧 `readingProgress` 只在首次升级时迁移，

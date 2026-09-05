@@ -244,6 +244,33 @@ func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, summary)
 }
 
+func TestLibraryActivitySummaryKeepsCurrentEmptyAlbumUnreadAfterRescan(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "video-only")
+	videoPath := filepath.Join(albumPath, "clip.mp4")
+	catalog := NewResourceCatalog()
+	catalog.Publish(&models.ScanResult{
+		Root:  root,
+		Roots: []string{root},
+		Albums: []models.Album{{
+			Type: "album", Path: albumPath, Name: "video-only",
+			VideoFiles: []string{videoPath}, VideoCount: 1, CoverImage: videoPath, CoverKind: "video",
+		}},
+	}, []string{root})
+	albumID := catalog.ExternalID(albumPath, ResourceAlbum)
+
+	snapshot := catalog.Acquire()
+	started := map[string]struct{}{albumID: {}}
+	summary, err := BuildLibraryActivitySummary(snapshot, started)
+	if err != nil || summary.UnreadCount != 1 {
+		t.Fatalf("summary=(%+v, %v)", summary, err)
+	}
+	random, err := RandomLibraryAlbum(snapshot, started)
+	if err != nil || random.ID != albumID {
+		t.Fatalf("random unread=(%+v, %v)", random, err)
+	}
+}
+
 func TestLibraryAlbumSummaryTracksOnlyActiveCustomCovers(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album")

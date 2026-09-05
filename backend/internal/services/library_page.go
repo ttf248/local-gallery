@@ -526,7 +526,9 @@ func RandomLibraryAlbum(snapshot CatalogSnapshot, excludeIDs map[string]struct{}
 	albums := snapshot.state.library.albums
 	candidates := make([]int, 0, len(albums))
 	for index, album := range albums {
-		if _, excluded := excludeIDs[album.ID]; excluded {
+		// 与前端 isUnread 保持同一语义：没有当前图片页的相册总是未读，
+		// 即便它在上一个 revision 曾留下图片阅读活动。
+		if _, excluded := excludeIDs[album.ID]; excluded && album.ImageCount > 0 {
 			continue
 		}
 		candidates = append(candidates, index)
@@ -542,7 +544,7 @@ func RandomLibraryAlbum(snapshot CatalogSnapshot, excludeIDs map[string]struct{}
 }
 
 // BuildLibraryActivitySummary 将当前 catalog 与已开始的图片活动合并为导航计数。
-// 没有图片活动记录的相册即为未读；视频活动不影响相册阅读语义。
+// 没有图片活动或当前没有图片页的相册即为未读；视频活动不影响相册阅读语义。
 func BuildLibraryActivitySummary(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}) (LibraryActivitySummary, error) {
 	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
 		return LibraryActivitySummary{}, ErrLibraryNotReady
@@ -553,7 +555,7 @@ func BuildLibraryActivitySummary(snapshot CatalogSnapshot, startedImageAlbumIDs 
 		AlbumCount: len(albums),
 	}
 	for _, album := range albums {
-		if _, started := startedImageAlbumIDs[album.ID]; !started {
+		if _, started := startedImageAlbumIDs[album.ID]; !started || album.ImageCount <= 0 {
 			summary.UnreadCount++
 		}
 	}
