@@ -12,7 +12,6 @@
 // 返回结果按年份倒序，每年组内按文件数倒序；这样视觉上「今年 → 去年 → 更早」自然排序。
 import type { CardData } from "../components/album/AlbumCard";
 import type { LibraryNodeSummary } from "../api/library";
-import type { ScanResult } from "../api/scan";
 import { albumRoute } from "./path";
 
 const OTHER_KEY = -1;
@@ -45,10 +44,8 @@ export function extractYear(name: string): number | null {
   return y;
 }
 
-// 专辑摘要(轻量):Album 详情页里 CollectionDetail.albums 已经被 mapAlbum 截过,
-// 缺 displayName/sourceRoot/sourceName 字段,这里提供一个兼容版,让 groupByYear
-// 在子集合页也能复用同一份桶逻辑。ScanResult['albums'] 是它的超集,直接传入也行。
-type AlbumLike = {
+// Album 页与分页节点都投影到这两个轻量结构，时间线无需依赖扫描结果树。
+export type AlbumLike = {
   path: string;
   name: string;
   imageCount: number;
@@ -62,7 +59,7 @@ type AlbumLike = {
   virtual?: boolean;
 };
 
-type CollectionLike = {
+export type CollectionLike = {
   path: string;
   name: string;
   albumCount: number;
@@ -147,18 +144,7 @@ function cardForCollection(c: CollectionLike): {
   };
 }
 
-export function groupByYear(result: ScanResult | null): YearGroup[] {
-  if (!result) return [];
-  return groupAlbumsAndCollectionsByYear(result.albums, result.collections);
-}
-
-// 子集合页（Album.tsx CollectionView）只需要对"当前集合下的子相册/子集合"重新分桶,
-// 但 ScanResult 已经被外层包了一层。直接给一个轻量入口,避免在子页面里硬塞个伪造的
-// ScanResult。
-//
-// albums / collections 都用 *Like 是为了兼容 Album.tsx 里 CollectionDetail
-// （被 mapAlbum/mapColl 截过,缺 displayName/sourceRoot/sourceName 等字段）;
-// ScanResult['albums'] / ScanResult['collections'] 是它们的超集,直接传入也行。
+// 子集合页只需要对当前集合的直属节点重新分桶；不展开完整扫描树。
 export function groupAlbumsAndCollectionsByYear(
   albums: AlbumLike[],
   collections?: CollectionLike[],

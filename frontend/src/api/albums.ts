@@ -1,12 +1,5 @@
 import { api } from "./client";
 
-// 单本文件夹 / 集合 / 智能集合的统一响应。
-export interface AlbumDetailResponse<T = unknown> {
-  ok: boolean;
-  kind: "album" | "collection" | "smart";
-  data: T;
-}
-
 export interface SearchHit {
   kind: "album" | "collection" | "smartCollection";
   path: string;
@@ -17,14 +10,6 @@ export interface SearchHit {
 }
 
 export const albumsApi = {
-  detail(id: string) {
-    if (id.startsWith("smart:")) {
-      return api<AlbumDetailResponse>(
-        `/api/tags/${encodeURIComponent(id.slice(6))}`,
-      );
-    }
-    return api<AlbumDetailResponse>(`/api/albums/${encodeURIComponent(id)}`);
-  },
   search(q: string, limit = 50) {
     return api<{ ok: boolean; results: SearchHit[]; count: number }>(
       `/api/search`,
@@ -34,7 +19,7 @@ export const albumsApi = {
     );
   },
   // 自定义封面：把 file 设为 album path 的封面（持久化到 cover_overrides.json）。
-  // 设置后立即拉 /api/library 就能看到新封面。
+  // 成功后调用方失效媒体库摘要，即可看到新封面。
   setCover(albumId: string, file: string) {
     return api<{
       ok: boolean;

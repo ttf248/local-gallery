@@ -24,13 +24,6 @@ vi.mock("../../api/auth", () => ({
   },
 }));
 
-// Mock the library store (loadFromBackend)
-vi.mock("../../store/libraryStore", () => ({
-  useLibraryStore: () => ({
-    loadFromBackend: vi.fn().mockResolvedValue(undefined),
-  }),
-}));
-
 const baseConfig = {
   mediaRoots: ["E:\\漫画"],
   host: "0.0.0.0",

@@ -126,7 +126,6 @@ func newHarness(t *testing.T) *harness {
 	})
 	api.Post("/scan/start", handlers.AsyncScanStartHandler(runner, mgr))
 	api.Get("/scan/:id/events", handlers.AsyncScanEventsHandler(runner))
-	api.Get("/scan/:id/result", handlers.AsyncScanResultHandler(runner, catalog))
 	api.Delete("/scan/:id", handlers.AsyncScanCancelHandler(runner))
 	api.Get("/library/manifest", handlers.LibraryManifestHandler(catalog))
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(catalog))
@@ -285,18 +284,17 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for {
-		res, body = h.do(t, http.MethodGet, "/api/scan/"+started.ScanID+"/result", nil)
+		res, body = h.do(t, http.MethodGet, "/api/library/manifest", nil)
 		if res.StatusCode == http.StatusOK {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("scan result timeout: status=%d body=%s", res.StatusCode, body)
+			t.Fatalf("library manifest timeout: status=%d body=%s", res.StatusCode, body)
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
 
-	res, body = h.do(t, http.MethodGet, "/api/library/manifest", nil)
-	if res.StatusCode != http.StatusOK || res.Header.Get(fiber.HeaderETag) == "" {
+	if res.Header.Get(fiber.HeaderETag) == "" {
 		t.Fatalf("manifest status=%d etag=%q body=%s", res.StatusCode, res.Header.Get(fiber.HeaderETag), body)
 	}
 	var manifest struct {

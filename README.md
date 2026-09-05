@@ -219,7 +219,7 @@ local-gallery/
 │       ├── store/          # zustand（ui / library / gallery / search）
 │       ├── routes/         # 按需加载的 Home / Album / 标签 / Gallery / Recents / Favorites / Unread / Settings
 │       ├── components/     # album / gallery / layout / home / common
-│       └── utils/          # shortcuts / path / storage / format / albumGrouping / libraryIndex
+│       └── utils/          # shortcuts / path / storage / format / albumGrouping / libraryCard
 ├── docs/                   # 架构 / API / 快捷键 / 全功能清单
 ├── scripts/                # dev / build / package / publish / monitor / install-ffmpeg
 ├── .github/workflows/      # CI 与 v2 发布工作流

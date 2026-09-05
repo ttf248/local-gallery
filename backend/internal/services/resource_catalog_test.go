@@ -2,13 +2,12 @@ package services
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
-func TestResourceCatalog_PublicSnapshotDoesNotExposeAbsolutePaths(t *testing.T) {
+func TestResourceCatalogIndexesOpaqueResourceIDs(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album")
 	filePath := filepath.Join(albumPath, "page.jpg")
@@ -32,14 +31,12 @@ func TestResourceCatalog_PublicSnapshotDoesNotExposeAbsolutePaths(t *testing.T) 
 		t.Fatal("rebuilt catalog should be ready")
 	}
 
-	public := catalog.PublicScanResult(result)
-	if public.Root == root || public.Albums[0].Path == albumPath || public.Albums[0].CoverImage == filePath {
-		t.Fatal("public snapshot leaked an absolute path")
+	albumID := catalog.ExternalID(albumPath, ResourceAlbum)
+	if len(albumID) < 3 || albumID[:2] != "a_" {
+		t.Fatalf("album id=%q", albumID)
 	}
-	if !strings.HasPrefix(public.Albums[0].Path, "a_") {
-		t.Fatalf("album id=%q", public.Albums[0].Path)
-	}
-	resolved, ok := catalog.Resolve(public.Albums[0].CoverImage)
+	fileID := catalog.ExternalID(filePath, ResourceFile)
+	resolved, ok := catalog.Resolve(fileID)
 	if !ok || resolved != filePath {
 		t.Fatalf("Resolve()=(%q,%v), want %q", resolved, ok, filePath)
 	}
@@ -120,8 +117,8 @@ func TestResourceCatalog_AcquiredSnapshotRemainsVersionConsistent(t *testing.T) 
 	if _, ok := snapshotB.Resolve(albumAID); ok {
 		t.Fatal("new snapshot unexpectedly resolves removed album A")
 	}
-	if got := snapshotA.PublicResult(); got == nil || len(got.Albums) != 1 || got.Albums[0].Path != albumAID {
-		t.Fatalf("snapshot A public result drifted: %+v", got)
+	if got := snapshotA.Result(); got == nil || len(got.Albums) != 1 || got.Albums[0].Path != albumA {
+		t.Fatalf("snapshot A result drifted: %+v", got)
 	}
 }
 

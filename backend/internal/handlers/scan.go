@@ -110,38 +110,6 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 	}
 }
 
-// AsyncScanResultHandler 获取扫描最终结果。
-//
-// GET /api/scan/:id/result
-func AsyncScanResultHandler(runner *services.AsyncScanRunner, catalogs ...*services.ResourceCatalog) fiber.Handler {
-	catalog := optionalCatalog(catalogs)
-	return func(c *fiber.Ctx) error {
-		id := c.Params("id")
-		state := runner.Get(id)
-		if state == nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
-		}
-		if state.Status != services.ScanStatusComplete {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error":  "scan not complete",
-				"status": state.Status,
-			})
-		}
-		result := state.Result
-		revision := state.Revision
-		if catalog != nil {
-			snapshot := catalog.Acquire()
-			if revision == 0 || revision != snapshot.Revision() {
-				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-					"code": "scan_result_superseded", "message": "scan result has been superseded by a newer library revision",
-				})
-			}
-			result = snapshot.PublicResult()
-		}
-		return c.JSON(fiber.Map{"ok": true, "revision": revision, "result": result})
-	}
-}
-
 // AsyncScanCancelHandler 取消正在进行的扫描。
 //
 // DELETE /api/scan/:id
@@ -162,8 +130,8 @@ func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
 
 // ScanCacheClearHandler 强制清空扫描结果缓存（POST /api/scan/cache/clear）。
 //
-// 同时清掉 ScanResultCache 内存中的 latest 和磁盘 scan_cache.json 文件。
-// 清空后 /api/scan/latest 返回 404；前端应提示用户「建议重新扫描」。
+// 同时清掉 ScanResultCache 内存和磁盘 scan_cache.json 文件。
+// 清空后 manifest 不再可用；前端应提示用户「建议重新扫描」。
 func ScanCacheClearHandler(
 	scanCache *services.ScanResultCache,
 	catalog *services.ResourceCatalog,

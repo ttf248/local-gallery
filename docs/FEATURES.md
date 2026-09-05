@@ -23,7 +23,7 @@
 | 能力         | 当前行为                                           | 主要实现                                           |
 | ------------ | -------------------------------------------------- | -------------------------------------------------- |
 | 稳定 ID      | 根、相册、集合、文件使用 `r_` / `a_` / `c_` / `f_` | `services.ResourceCatalog`                         |
-| 公共数据脱敏 | library、相册、搜索、元数据响应不含绝对路径        | `ResourceCatalog.PublicScanResult`、handlers       |
+| 公共数据脱敏 | 媒体库分页、搜索、元数据响应不含绝对路径          | `ResourceCatalog`、handlers                         |
 | 路径安全     | ID 解析后仍检查目标位于当前媒体根内                | `middleware.ResourceParam`、`PathSafetyMiddleware` |
 | 本机管理     | 配置、系统打开、转码清理由回环中间件保护           | `middleware.LoopbackOnly`                          |
 | 日志脱敏     | 根目录只记录 basename，缓存和工具只记录能力状态    | `cmd/server`、`middleware.Logger`                  |

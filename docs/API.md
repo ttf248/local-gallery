@@ -84,23 +84,15 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 订阅扫描事件。事件名为 `pending`、`running`、`complete`、`cancelled` 或 `error`；`currentPath` 仅包含根别名和相对路径。
 
-### `GET /api/scans/:scanId`
-
-扫描完成后返回 `{ "ok": true, "revision": 42, "result": LibrarySnapshot }`；未完成返回 400。如果该任务的库版本已被后续扫描取代，返回 `409 scan_result_superseded`，不会用新 ID 索引翻译旧结果。
-
 ### `DELETE /api/scans/:scanId`
 
 取消扫描。取消信号会终止目录读取，取消后的任务不得写入图像库缓存。
-
-### `GET /api/library`
 
 扫描结果可包含 `warnings`：每项只有稳定 `code`、根别名/相对 `path` 和用户可读 `message`，不会暴露绝对路径。混合目录中的“本目录媒体”相册带 `virtual: true`，其相册 ID 与集合 ID 不同，但二者解析到同一真实目录。`collection.albumCount` 统计全部后代相册。
 
 相册同时返回 `date` 与 `dateSource`。`dateSource` 取值为 `captured` / `folder` / `modified`，服务端按该顺序降级；目录日期只接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`、`YYYYMMDD` 或严格的 `YYYY/MM/DD` 路径分段，不会从任意名称子串中猜测。
 
-返回最近一次扫描快照，包含单调递增的 `revision`。相册、集合、封面和媒体文件均使用与该 revision 同次发布的资源 ID，单次响应不会混入其他扫描版本。
-
-完整快照接口保留给当前兼容调用方；新页面应使用下列轻量分页接口：
+媒体库浏览只使用下列 revision 分页接口：
 
 - `GET /api/library/manifest`：返回根列表、扫描时间和相册/集合/标签/告警统计，不包含目录树或媒体数组。
 - `GET /api/library/:rootOrCollectionId/children?limit=60&cursor=...`：分页返回直属相册与子集合摘要。
@@ -126,14 +118,6 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 取消活动扫描，使它的提交令牌失效，并清除内存资源快照与磁盘扫描缓存；不会立即发起新扫描。
 
 ## 相册与搜索
-
-### `GET /api/albums/:albumId`
-
-返回相册或集合详情。相册的 `imageFiles`、`videoFiles` 和 `coverImage` 均为 `f_` 文件 ID。
-
-### `GET /api/tags/:tag`
-
-返回标签聚合详情。
 
 ### `GET /api/search?q=<keyword>&limit=50`
 

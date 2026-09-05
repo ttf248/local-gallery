@@ -39,10 +39,8 @@ type resourceCatalogState struct {
 	byPathKind   map[string]string
 	roots        []ResourceRef
 	result       *models.ScanResult
-	public       *models.ScanResult
 	albums       map[string]models.Album
 	collections  map[string]models.Collection
-	smart        map[string]models.SmartCollection
 	customCovers map[string]bool
 	library      *libraryPageIndex
 }
@@ -75,7 +73,6 @@ func emptyCatalogState(revision uint64) *resourceCatalogState {
 		byPathKind:   map[string]string{},
 		albums:       map[string]models.Album{},
 		collections:  map[string]models.Collection{},
-		smart:        map[string]models.SmartCollection{},
 		customCovers: map[string]bool{},
 	}
 }
@@ -158,7 +155,6 @@ func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string, cus
 		byPathKind:   make(map[string]string),
 		albums:       make(map[string]models.Album),
 		collections:  make(map[string]models.Collection),
-		smart:        make(map[string]models.SmartCollection),
 		customCovers: cloneCustomCoverPaths(customCovers),
 	}
 	for _, root := range roots {
@@ -191,18 +187,10 @@ func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string, cus
 			indexCollection(state, &state.result.Collections[i])
 		}
 		for i := range state.result.SmartCollections {
-			smart := state.result.SmartCollections[i]
-			if smart.Tag != "" {
-				state.smart[smart.Tag] = smart
-			}
-			if smart.Author != "" {
-				state.smart[smart.Author] = smart
-			}
 			for j := range state.result.SmartCollections[i].Albums {
 				indexAlbum(state, &state.result.SmartCollections[i].Albums[j])
 			}
 		}
-		state.public = publicScanResult(state, state.result)
 		state.library = buildLibraryPageIndex(state)
 	}
 	c.state.Store(state)
@@ -364,132 +352,12 @@ func (s CatalogSnapshot) RelativeLabel(id string) string {
 	return rootName + "/" + filepath.ToSlash(ref.RelativePath)
 }
 
-// PublicResult 返回与当前 ID 索引同次发布的对外扫描结果。
-func (s CatalogSnapshot) PublicResult() *models.ScanResult {
-	if s.state == nil {
-		return nil
-	}
-	return s.state.public
-}
-
 // Result 返回内部路径快照，仅供需要文件系统路径的服务端代码只读使用。
 func (s CatalogSnapshot) Result() *models.ScanResult {
 	if s.state == nil {
 		return nil
 	}
 	return s.state.result
-}
-
-func (s CatalogSnapshot) Album(id string) (models.Album, bool) {
-	if s.state == nil {
-		return models.Album{}, false
-	}
-	album, ok := s.state.albums[id]
-	if !ok {
-		return models.Album{}, false
-	}
-	return publicAlbum(s.state, album), true
-}
-
-func (s CatalogSnapshot) Collection(id string) (models.Collection, bool) {
-	if s.state == nil {
-		return models.Collection{}, false
-	}
-	collection, ok := s.state.collections[id]
-	if !ok {
-		return models.Collection{}, false
-	}
-	return publicCollection(s.state, collection), true
-}
-
-func (s CatalogSnapshot) Smart(tag string) (models.SmartCollection, bool) {
-	if s.state == nil {
-		return models.SmartCollection{}, false
-	}
-	smart, ok := s.state.smart[tag]
-	if !ok {
-		return models.SmartCollection{}, false
-	}
-	smart.CoverImage = externalID(s.state, smart.CoverImage, ResourceFile)
-	for i := range smart.Albums {
-		smart.Albums[i] = publicAlbum(s.state, smart.Albums[i])
-	}
-	return smart, true
-}
-
-// PublicScanResult 仅供将与当前快照同版本的任务结果转为对外 DTO。
-func (c *ResourceCatalog) PublicScanResult(result *models.ScanResult) *models.ScanResult {
-	return publicScanResult(c.Acquire().state, result)
-}
-
-func (c *ResourceCatalog) PublicAlbum(album models.Album) models.Album {
-	return publicAlbum(c.Acquire().state, album)
-}
-
-func (c *ResourceCatalog) PublicCollection(collection models.Collection) models.Collection {
-	return publicCollection(c.Acquire().state, collection)
-}
-
-func publicScanResult(state *resourceCatalogState, result *models.ScanResult) *models.ScanResult {
-	if state == nil || result == nil {
-		return nil
-	}
-	out := *result
-	out.Root = externalID(state, result.Root, ResourceRoot)
-	out.Roots = mapPaths(result.Roots, func(path string) string {
-		return externalID(state, path, ResourceRoot)
-	})
-	out.Albums = make([]models.Album, len(result.Albums))
-	for i := range result.Albums {
-		out.Albums[i] = publicAlbum(state, result.Albums[i])
-	}
-	out.Collections = make([]models.Collection, len(result.Collections))
-	for i := range result.Collections {
-		out.Collections[i] = publicCollection(state, result.Collections[i])
-	}
-	out.SmartCollections = make([]models.SmartCollection, len(result.SmartCollections))
-	for i := range result.SmartCollections {
-		smart := result.SmartCollections[i]
-		smart.CoverImage = externalID(state, smart.CoverImage, ResourceFile)
-		smart.Albums = make([]models.Album, len(result.SmartCollections[i].Albums))
-		for j := range result.SmartCollections[i].Albums {
-			smart.Albums[j] = publicAlbum(state, result.SmartCollections[i].Albums[j])
-		}
-		out.SmartCollections[i] = smart
-	}
-	return &out
-}
-
-func publicAlbum(state *resourceCatalogState, album models.Album) models.Album {
-	out := album
-	out.Path = externalID(state, album.Path, ResourceAlbum)
-	out.SourceRoot = externalID(state, album.SourceRoot, ResourceRoot)
-	out.CoverImage = externalID(state, album.CoverImage, ResourceFile)
-	out.ImageFiles = mapPaths(album.ImageFiles, func(path string) string {
-		return externalID(state, path, ResourceFile)
-	})
-	out.VideoFiles = mapPaths(album.VideoFiles, func(path string) string {
-		return externalID(state, path, ResourceFile)
-	})
-	out.Files = mapPaths(album.Files, func(path string) string {
-		return externalID(state, path, ResourceFile)
-	})
-	return out
-}
-
-func publicCollection(state *resourceCatalogState, collection models.Collection) models.Collection {
-	out := collection
-	out.Path = externalID(state, collection.Path, ResourceCollection)
-	out.SourceRoot = externalID(state, collection.SourceRoot, ResourceRoot)
-	out.Albums = make([]models.Album, len(collection.Albums))
-	for i := range collection.Albums {
-		out.Albums[i] = publicAlbum(state, collection.Albums[i])
-	}
-	out.Collections = make([]models.Collection, len(collection.Collections))
-	for i := range collection.Collections {
-		out.Collections[i] = publicCollection(state, collection.Collections[i])
-	}
-	return out
 }
 
 func indexCollection(state *resourceCatalogState, collection *models.Collection) {
@@ -595,17 +463,4 @@ func pathKindKey(path string, kind ResourceKind) string {
 
 func relEscapesRoot(rel string) bool {
 	return rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-func mapPaths(paths []string, mapper func(string) string) []string {
-	if paths == nil {
-		return nil
-	}
-	out := make([]string, 0, len(paths))
-	for _, path := range paths {
-		if mapped := mapper(path); mapped != "" {
-			out = append(out, mapped)
-		}
-	}
-	return out
 }
