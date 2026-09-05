@@ -34,16 +34,17 @@ type ResourceRef struct {
 }
 
 type resourceCatalogState struct {
-	revision    uint64
-	byID        map[string]ResourceRef
-	byPathKind  map[string]string
-	roots       []ResourceRef
-	result      *models.ScanResult
-	public      *models.ScanResult
-	albums      map[string]models.Album
-	collections map[string]models.Collection
-	smart       map[string]models.SmartCollection
-	library     *libraryPageIndex
+	revision     uint64
+	byID         map[string]ResourceRef
+	byPathKind   map[string]string
+	roots        []ResourceRef
+	result       *models.ScanResult
+	public       *models.ScanResult
+	albums       map[string]models.Album
+	collections  map[string]models.Collection
+	smart        map[string]models.SmartCollection
+	customCovers map[string]bool
+	library      *libraryPageIndex
 }
 
 // CatalogSnapshot 是一次请求期间固定的资源视图。它把扫描结果、
@@ -69,12 +70,13 @@ func NewResourceCatalog() *ResourceCatalog {
 
 func emptyCatalogState(revision uint64) *resourceCatalogState {
 	return &resourceCatalogState{
-		revision:    revision,
-		byID:        map[string]ResourceRef{},
-		byPathKind:  map[string]string{},
-		albums:      map[string]models.Album{},
-		collections: map[string]models.Collection{},
-		smart:       map[string]models.SmartCollection{},
+		revision:     revision,
+		byID:         map[string]ResourceRef{},
+		byPathKind:   map[string]string{},
+		albums:       map[string]models.Album{},
+		collections:  map[string]models.Collection{},
+		smart:        map[string]models.SmartCollection{},
+		customCovers: map[string]bool{},
 	}
 }
 
@@ -83,7 +85,7 @@ func emptyCatalogState(revision uint64) *resourceCatalogState {
 func (c *ResourceCatalog) Publish(result *models.ScanResult, roots []string) uint64 {
 	c.publishMu.Lock()
 	defer c.publishMu.Unlock()
-	return c.publish(result, roots)
+	return c.publish(result, roots, nil)
 }
 
 // CommitScan 把封面覆盖、资源视图与磁盘恢复快照置于同一提交锁下。
@@ -97,10 +99,12 @@ func (c *ResourceCatalog) CommitScan(
 	c.publishMu.Lock()
 	defer c.publishMu.Unlock()
 	published := result
+	overrides := map[string]CoverOverride{}
 	if covers != nil {
-		published, _ = ApplyCoverOverridesToResult(result, covers.Snapshot())
+		overrides = covers.Snapshot()
+		published, _ = ApplyCoverOverridesToResult(result, overrides)
 	}
-	revision := c.publish(published, roots)
+	revision := c.publish(published, roots, activeCustomCoverPaths(published, overrides))
 	if cache != nil {
 		cache.Set(published)
 	}
@@ -125,7 +129,7 @@ func (c *ResourceCatalog) RefreshCovers(cache *ScanResultCache, covers *CoverOve
 	for _, root := range current.roots {
 		roots = append(roots, root.AbsolutePath)
 	}
-	revision := c.publish(next, roots)
+	revision := c.publish(next, roots, activeCustomCoverPaths(next, overrides))
 	if cache != nil {
 		cache.Set(next)
 	}
@@ -146,15 +150,16 @@ func (c *ResourceCatalog) ClearWithCache(cache *ScanResultCache) error {
 	return nil
 }
 
-func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string) uint64 {
+func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string, customCovers map[string]bool) uint64 {
 	revision := c.revision.Add(1)
 	state := &resourceCatalogState{
-		revision:    revision,
-		byID:        make(map[string]ResourceRef),
-		byPathKind:  make(map[string]string),
-		albums:      make(map[string]models.Album),
-		collections: make(map[string]models.Collection),
-		smart:       make(map[string]models.SmartCollection),
+		revision:     revision,
+		byID:         make(map[string]ResourceRef),
+		byPathKind:   make(map[string]string),
+		albums:       make(map[string]models.Album),
+		collections:  make(map[string]models.Collection),
+		smart:        make(map[string]models.SmartCollection),
+		customCovers: cloneCustomCoverPaths(customCovers),
 	}
 	for _, root := range roots {
 		abs, err := filepath.Abs(root)
@@ -202,6 +207,61 @@ func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string) uin
 	}
 	c.state.Store(state)
 	return revision
+}
+
+// activeCustomCoverPaths 只保留已经应用到当前扫描结果的人工封面。
+// 覆盖记录可能指向已删除或不再属于相册的文件；这些失效记录不能污染
+// 面向客户端的摘要状态。
+func activeCustomCoverPaths(result *models.ScanResult, overrides map[string]CoverOverride) map[string]bool {
+	active := make(map[string]bool)
+	if result == nil || len(overrides) == 0 {
+		return active
+	}
+	seen := make(map[string]bool)
+	mark := func(album models.Album) {
+		albumPath := filepath.Clean(album.Path)
+		if seen[albumPath] {
+			return
+		}
+		seen[albumPath] = true
+		override, exists := overrides[albumPath]
+		if !exists || !albumContainsMedia(album, override.File) {
+			return
+		}
+		if pathKindKey(album.CoverImage, ResourceFile) != pathKindKey(override.File, ResourceFile) {
+			return
+		}
+		active[albumPath] = true
+	}
+	for _, album := range result.Albums {
+		mark(album)
+	}
+	var walkCollections func([]models.Collection)
+	walkCollections = func(collections []models.Collection) {
+		for _, collection := range collections {
+			for _, album := range collection.Albums {
+				mark(album)
+			}
+			walkCollections(collection.Collections)
+		}
+	}
+	walkCollections(result.Collections)
+	for _, smart := range result.SmartCollections {
+		for _, album := range smart.Albums {
+			mark(album)
+		}
+	}
+	return active
+}
+
+func cloneCustomCoverPaths(paths map[string]bool) map[string]bool {
+	cloned := make(map[string]bool, len(paths))
+	for path, active := range paths {
+		if active {
+			cloned[path] = true
+		}
+	}
+	return cloned
 }
 
 // Clear 立即使所有旧资源 ID 失效。

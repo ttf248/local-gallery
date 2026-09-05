@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -187,6 +188,52 @@ func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
 	}
 	assertNoAbsolutePathInJSON(t, first)
 	assertNoAbsolutePathInJSON(t, resolved)
+}
+
+func TestLibraryAlbumSummaryTracksOnlyActiveCustomCovers(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "album")
+	if err := os.MkdirAll(albumPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	defaultCover := filepath.Join(albumPath, "default.jpg")
+	customCover := filepath.Join(albumPath, "custom.jpg")
+	for _, file := range []string{defaultCover, customCover} {
+		if err := os.WriteFile(file, []byte("cover"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	result := &models.ScanResult{
+		Root:  root,
+		Roots: []string{root},
+		Albums: []models.Album{{
+			Type: "album", Path: albumPath, Name: "album",
+			ImageFiles: []string{defaultCover, customCover}, ImageCount: 2,
+			CoverImage: defaultCover, CoverKind: "image",
+		}},
+	}
+	catalog := NewResourceCatalog()
+	coverStore := NewCoverOverrideStore(filepath.Join(t.TempDir(), "cover_overrides.json"))
+	if err := coverStore.Set(albumPath, customCover); err != nil {
+		t.Fatal(err)
+	}
+	catalog.CommitScan(result, []string{root}, nil, coverStore)
+	albumID := catalog.ExternalID(albumPath, ResourceAlbum)
+
+	first, err := ResolveLibraryNodes(catalog.Acquire(), []string{albumID})
+	if err != nil || len(first.Items) != 1 || !first.Items[0].HasCustomCover {
+		t.Fatalf("custom cover summary=(%+v, %v)", first, err)
+	}
+	if err := coverStore.Clear(albumPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := catalog.RefreshCovers(nil, coverStore); !ok {
+		t.Fatal("expected catalog cover refresh")
+	}
+	second, err := ResolveLibraryNodes(catalog.Acquire(), []string{albumID})
+	if err != nil || len(second.Items) != 1 || second.Items[0].HasCustomCover {
+		t.Fatalf("cleared cover summary=(%+v, %v)", second, err)
+	}
 }
 
 func TestLibraryPageResponsesDoNotMutatePublishedIndex(t *testing.T) {

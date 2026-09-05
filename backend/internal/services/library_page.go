@@ -50,27 +50,28 @@ type LibraryRootSummary struct {
 // LibraryNodeSummary 是 root/collection 直属子节点的统一卡片 DTO。
 // CoverImages 最多四项，可直接用于 collection 的拼贴封面。
 type LibraryNodeSummary struct {
-	ID          string    `json:"id"`
-	Kind        string    `json:"kind"`
-	Name        string    `json:"name"`
-	DisplayName string    `json:"displayName"`
-	SourceRoot  string    `json:"sourceRoot,omitempty"`
-	SourceName  string    `json:"sourceName,omitempty"`
-	Author      string    `json:"author,omitempty"`
-	CoverImage  string    `json:"coverImage,omitempty"`
-	CoverImages []string  `json:"coverImages"`
-	CoverKind   string    `json:"coverKind,omitempty"`
-	ImageCount  int       `json:"imageCount,omitempty"`
-	VideoCount  int       `json:"videoCount,omitempty"`
-	MediaCount  int       `json:"mediaCount,omitempty"`
-	AlbumCount  int       `json:"albumCount,omitempty"`
-	ChildCount  int       `json:"childCount,omitempty"`
-	FolderSize  int64     `json:"folderSize,omitempty"`
-	Tags        []string  `json:"tags,omitempty"`
-	ModTime     time.Time `json:"modTime,omitempty"`
-	Date        time.Time `json:"date,omitempty"`
-	DateSource  string    `json:"dateSource,omitempty"`
-	Virtual     bool      `json:"virtual,omitempty"`
+	ID             string    `json:"id"`
+	Kind           string    `json:"kind"`
+	Name           string    `json:"name"`
+	DisplayName    string    `json:"displayName"`
+	SourceRoot     string    `json:"sourceRoot,omitempty"`
+	SourceName     string    `json:"sourceName,omitempty"`
+	Author         string    `json:"author,omitempty"`
+	CoverImage     string    `json:"coverImage,omitempty"`
+	CoverImages    []string  `json:"coverImages"`
+	CoverKind      string    `json:"coverKind,omitempty"`
+	ImageCount     int       `json:"imageCount,omitempty"`
+	VideoCount     int       `json:"videoCount,omitempty"`
+	MediaCount     int       `json:"mediaCount,omitempty"`
+	AlbumCount     int       `json:"albumCount,omitempty"`
+	ChildCount     int       `json:"childCount,omitempty"`
+	FolderSize     int64     `json:"folderSize,omitempty"`
+	Tags           []string  `json:"tags,omitempty"`
+	ModTime        time.Time `json:"modTime,omitempty"`
+	Date           time.Time `json:"date,omitempty"`
+	DateSource     string    `json:"dateSource,omitempty"`
+	Virtual        bool      `json:"virtual,omitempty"`
+	HasCustomCover bool      `json:"hasCustomCover,omitempty"`
 }
 
 type LibraryMediaItem struct {
@@ -568,25 +569,26 @@ func albumSummary(state *resourceCatalogState, album models.Album) LibraryNodeSu
 	}
 	tags := append([]string(nil), album.Tags...)
 	return LibraryNodeSummary{
-		ID:          id,
-		Kind:        string(ResourceAlbum),
-		Name:        album.Name,
-		DisplayName: nodeDisplayName(album.DisplayName, album.Name),
-		SourceRoot:  sourceRoot,
-		SourceName:  sourceName,
-		Author:      album.Author,
-		CoverImage:  cover,
-		CoverImages: covers,
-		CoverKind:   album.CoverKind,
-		ImageCount:  album.ImageCount,
-		VideoCount:  album.VideoCount,
-		MediaCount:  len(album.ImageFiles) + len(album.VideoFiles),
-		FolderSize:  album.FolderSize,
-		Tags:        tags,
-		ModTime:     album.ModTime,
-		Date:        album.Date,
-		DateSource:  album.DateSource,
-		Virtual:     album.Virtual,
+		ID:             id,
+		Kind:           string(ResourceAlbum),
+		Name:           album.Name,
+		DisplayName:    nodeDisplayName(album.DisplayName, album.Name),
+		SourceRoot:     sourceRoot,
+		SourceName:     sourceName,
+		Author:         album.Author,
+		CoverImage:     cover,
+		CoverImages:    covers,
+		CoverKind:      album.CoverKind,
+		ImageCount:     album.ImageCount,
+		VideoCount:     album.VideoCount,
+		MediaCount:     len(album.ImageFiles) + len(album.VideoFiles),
+		FolderSize:     album.FolderSize,
+		Tags:           tags,
+		ModTime:        album.ModTime,
+		Date:           album.Date,
+		DateSource:     album.DateSource,
+		Virtual:        album.Virtual,
+		HasCustomCover: state.customCovers[filepath.Clean(album.Path)],
 	}
 }
 

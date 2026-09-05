@@ -47,6 +47,7 @@ export interface LibraryNodeSummary {
   date?: string;
   dateSource?: "captured" | "folder" | "modified";
   virtual?: boolean;
+  hasCustomCover?: boolean;
 }
 
 export interface LibraryMediaItem {

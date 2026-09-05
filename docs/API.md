@@ -118,6 +118,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 节点摘要不携带媒体数组。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
 `mediaCount` 和 `folderSize` 均包含所有后代，`childCount` 仍只表示直属子项数量。
+相册摘要的 `hasCustomCover` 为 `true` 时表示当前 revision 已应用用户设置的人工封面；
+失效的覆盖记录不会出现在此字段中。
 
 ### `DELETE /api/library`
 
