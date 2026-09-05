@@ -623,7 +623,6 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 		ImageCount: len(imagePaths),
 		VideoCount: len(videoPaths),
 		FolderSize: totalSize,
-		Author:     ExtractAuthor(name),
 		Tags:       ExtractTags(name),
 		ModTime:    modTime,
 		Date:       date,
@@ -828,14 +827,4 @@ func ExtractTags(name string) []string {
 		name = rest[j+1:]
 	}
 	return tags
-}
-
-// ExtractAuthor 是 ExtractTags 的第一个标签别名；老调用方使用。
-// 若名称不含方括号，返回空字符串。
-func ExtractAuthor(name string) string {
-	tags := ExtractTags(name)
-	if len(tags) == 0 {
-		return ""
-	}
-	return tags[0]
 }

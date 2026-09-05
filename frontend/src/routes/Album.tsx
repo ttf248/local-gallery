@@ -60,7 +60,7 @@ interface AlbumDetail {
   coverKind?: "image" | "video";
   imageCount: number;
   videoCount?: number;
-  author?: string;
+  tags: string[];
   folderSize: number;
   modTime: string;
 }
@@ -107,7 +107,7 @@ function albumDetailFromSummary(
     coverKind: summary.coverKind,
     imageCount: summary.imageCount ?? 0,
     videoCount: summary.videoCount ?? 0,
-    author: summary.author,
+    tags: summary.tags ?? [],
     folderSize: summary.folderSize ?? 0,
     modTime: summary.modTime ?? "",
   };
@@ -149,10 +149,7 @@ export default function Album() {
   const { toggle: toggleFav, favorites } = useFavorites();
   const pushToast = useUIStore((s) => s.pushToast);
 
-  const nodeIds = useMemo(
-    () => (resourceID ? [resourceID] : []),
-    [resourceID],
-  );
+  const nodeIds = useMemo(() => (resourceID ? [resourceID] : []), [resourceID]);
   const nodeQuery = useLibraryNodes(nodeIds);
   const refetchNode = nodeQuery.refetch;
   const node = nodeQuery.data?.items[0];
@@ -190,11 +187,7 @@ export default function Album() {
       albums,
       collections,
     };
-  }, [
-    childrenQuery.data,
-    mediaQuery.data,
-    node,
-  ]);
+  }, [childrenQuery.data, mediaQuery.data, node]);
 
   const isDetailLoading =
     revisionChanged ||
@@ -344,7 +337,7 @@ function AlbumView({
       id: detail.path,
       variant: "album",
       title: detail.name,
-      subtitle: detail.author,
+      subtitle: detail.tags.join(" · "),
       count: detail.imageCount,
       coverPath: detail.coverImage,
       to: `/albums/${encodeURIComponent(detail.path)}`,
@@ -468,9 +461,9 @@ function AlbumView({
                 {detail.name}
               </h1>
               <div className="flex items-center gap-2 text-sm text-fg-muted mt-2 flex-wrap">
-                {detail.author && (
+                {detail.tags.length > 0 && (
                   <>
-                    <span className="text-fg">{detail.author}</span>
+                    <span className="text-fg">{detail.tags.join(" · ")}</span>
                     <span className="text-fg-subtle/50">·</span>
                   </>
                 )}
@@ -777,7 +770,7 @@ function CollectionView({
       id: "a:" + a.path,
       variant: "album",
       title: a.name,
-      subtitle: a.author,
+      subtitle: a.tags.join(" · "),
       count: a.imageCount,
       imageCount: a.imageCount,
       videoCount: a.videoCount ?? 0,
@@ -837,7 +830,10 @@ function CollectionView({
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [cards],
   );
-  useGalleryContextSync({ type: "collection", parentPath: detail.path }, collEntries);
+  useGalleryContextSync(
+    { type: "collection", parentPath: detail.path },
+    collEntries,
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -1013,9 +1009,9 @@ function VideoAlbumView({
                 {detail.name}
               </h1>
               <div className="flex items-center gap-2 text-sm text-fg-muted mt-2 flex-wrap">
-                {detail.author && (
+                {detail.tags.length > 0 && (
                   <>
-                    <span className="text-fg">{detail.author}</span>
+                    <span className="text-fg">{detail.tags.join(" · ")}</span>
                     <span className="text-fg-subtle/50">·</span>
                   </>
                 )}

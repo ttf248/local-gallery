@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import Author from "./Author";
+import Tag from "./Tag";
 import { useTagAlbums } from "../hooks/useLibrary";
 import { useFavorites } from "../hooks/useFavorites";
 import { useImageActivities } from "../hooks/useImageActivity";
@@ -25,17 +25,17 @@ vi.mock("../components/album/AlbumGrid", () => ({
   ),
 }));
 
-function renderAuthor() {
+function renderTag() {
   return render(
     <MemoryRouter initialEntries={["/tags/%E6%97%85%E8%A1%8C"]}>
       <Routes>
-        <Route path="/tags/*" element={<Author />} />
+        <Route path="/tags/*" element={<Tag />} />
       </Routes>
     </MemoryRouter>,
   );
 }
 
-describe("Author", () => {
+describe("Tag", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useSearchStore.getState().reset();
@@ -62,7 +62,7 @@ describe("Author", () => {
             kind: "album",
             name: "旅行册",
             displayName: "旅行册",
-            author: "旅行",
+            tags: ["旅行"],
             coverImage: "f_cover",
             coverImages: ["f_cover"],
             imageCount: 12,
@@ -73,7 +73,7 @@ describe("Author", () => {
       isLoading: false,
     } as never);
 
-    renderAuthor();
+    renderTag();
 
     expect(useTagAlbums).toHaveBeenCalledWith("旅行");
     expect(screen.getByText("旅行册")).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe("Author", () => {
       isLoading: true,
     } as never);
 
-    renderAuthor();
+    renderTag();
 
     expect(screen.getByText("正在加载标签")).toBeInTheDocument();
     expect(screen.queryByText("未找到该标签")).not.toBeInTheDocument();

@@ -52,7 +52,7 @@ type ScanResultCache struct {
 
 const (
 	flushDebounce          = 500 * time.Millisecond
-	scanCacheSchemaVersion = 3
+	scanCacheSchemaVersion = 4
 )
 
 type scanCacheEnvelope struct {
@@ -329,7 +329,7 @@ func encodeScanResultForDisk(result *models.ScanResult) (*scanCacheEnvelope, err
 		abs = filepath.Clean(abs)
 		rootIDs = append(rootIDs, rootIDFor(abs))
 	}
-	// schemaVersion=3 起:不再做 encodeScanCachePath 路径混淆,直接存
+	// 当前 schema 直接存原始 result，不再做路径混淆。
 	// 原始 result。绝对路径会出现在 cache.json 里 ——
 	// 风险被两层降低:
 	//   - cache.json 位于本地 cacheDir,默认 127.0.0.1 后端服务,无外网访问
@@ -344,7 +344,7 @@ func encodeScanResultForDisk(result *models.ScanResult) (*scanCacheEnvelope, err
 
 // decodeScanResultFromDisk 从磁盘加载的 envelope 还原 result。
 //
-// schemaVersion=3 起:result 已是 raw(绝对路径),直接 clone 出来用。
+// 当前 schema 的 result 已是 raw(绝对路径)，直接 clone 出来用。
 // 绝对路径是否合法(还在当前 mediaRoots 下)由调用方校验:LoadWithRoots
 // 已经在调用 decode 之前确认过 rootIDs 与 currentRoots 一致,所以这里
 // 不再做路径校验。
@@ -451,8 +451,6 @@ func findCollectionRecursive(col *models.Collection, path string) *models.Collec
 }
 
 // FindSmartCollection 按标签名查找智能集合。
-//
-// 兼容说明：同时按 Tag 与 Author 字段匹配（两者内容相同）。
 func (c *ScanResultCache) FindSmartCollection(tag string) *models.SmartCollection {
 	r := c.Get()
 	if r == nil {
@@ -460,7 +458,7 @@ func (c *ScanResultCache) FindSmartCollection(tag string) *models.SmartCollectio
 	}
 	for i := range r.SmartCollections {
 		s := r.SmartCollections[i]
-		if s.Tag == tag || s.Author == tag {
+		if s.Tag == tag {
 			return &s
 		}
 	}

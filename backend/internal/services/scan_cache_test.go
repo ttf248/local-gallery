@@ -161,7 +161,7 @@ func TestScanResultCache_LoadWithRoots_RequiresRoots(t *testing.T) {
 	}
 }
 
-// TestScanResultCache_PersistsAbsolutePath 验证 schemaVersion=3 的
+// TestScanResultCache_PersistsAbsolutePath 验证当前 schema 的
 // 新合约:cache.json 里直接存 raw 绝对路径,不再做 r_xxx/path 编码。
 //
 // 行为变化:之前 TestScanResultCache_PersistsRelativeReferencesOnly
@@ -198,8 +198,8 @@ func TestScanResultCache_PersistsAbsolutePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// schemaVersion=3 标记
-	if !strings.Contains(string(data), `"schemaVersion": 3`) {
+	// schemaVersion=4 标记
+	if !strings.Contains(string(data), `"schemaVersion": 4`) {
 		t.Fatalf("cache schema version missing or wrong: %s", data)
 	}
 	// 绝对路径确实在文件里(新合约)。
@@ -207,7 +207,7 @@ func TestScanResultCache_PersistsAbsolutePath(t *testing.T) {
 	escapedRoot, _ := json.Marshal(root)
 	escapedFile, _ := json.Marshal(filePath)
 	if !strings.Contains(string(data), strings.Trim(string(escapedRoot), `"`)) {
-		t.Errorf("schemaVersion=3 should keep raw absolute path, but file doesn't contain root %q:\n%s", root, data)
+		t.Errorf("schemaVersion=4 should keep raw absolute path, but file doesn't contain root %q:\n%s", root, data)
 	}
 	if !strings.Contains(string(data), strings.Trim(string(escapedFile), `"`)) {
 		t.Errorf("file should contain raw image file path %q:\n%s", filePath, data)

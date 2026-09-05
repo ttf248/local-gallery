@@ -153,7 +153,7 @@ func coverKindFromExt(p string) string {
 
 //	GET /api/search?q=<keyword>&limit=<n>
 //
-// 关键字匹配 name/author 子串（不区分大小写）。limit 默认 50。
+// 关键字匹配 name/tag 子串（不区分大小写）。limit 默认 50。
 // 搜索索引与分页摘要随同一个 catalog revision 一次性发布。
 func SearchHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	return func(c *fiber.Ctx) error {

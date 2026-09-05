@@ -29,7 +29,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 			{Type: "album", Path: album2Path, Name: "album2", VideoFiles: []string{file2}, VideoCount: 1, CoverImage: file2, CoverKind: "video"},
 		},
 		SmartCollections: []models.SmartCollection{{
-			Type: "smartCollection", Tag: "收藏", Author: "收藏", AlbumCount: 2,
+			Type: "smartCollection", Tag: "收藏", AlbumCount: 2,
 			Albums: []models.Album{
 				{Type: "album", Path: album1Path, Name: "album1", ImageFiles: []string{file1}, ImageCount: 1, CoverImage: file1},
 				{Type: "album", Path: album2Path, Name: "album2", VideoFiles: []string{file2}, VideoCount: 1, CoverImage: file2},

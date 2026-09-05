@@ -33,7 +33,7 @@ export interface CardData {
   title: string;
   // 多根冲突时显示的"处理后"名；与 title 不同时说明带来源前缀
   displayTitle?: string;
-  // 副标题（集合 / smart 通常为空；album 是 author / path basename）
+  // 副标题（集合 / smart 通常为空；album 显示标签或路径 basename）
   subtitle?: string;
   /**
    * 兼容字段：
@@ -380,7 +380,7 @@ function GridCard({
               </>
             )}
           </div>
-          {/* 多根来源 badge：与 author/副标题独立维度，作为视觉小标签放在元数据行 */}
+          {/* 多根来源 badge：与标签副标题独立，作为视觉小标签放在元数据行 */}
           {data.sourceName && (
             <div className="text-[10px] text-fg-subtle/80 mt-0.5 inline-flex items-center gap-1">
               <FolderIcon size={10} className="shrink-0" />

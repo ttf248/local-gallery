@@ -27,7 +27,7 @@ func TestApplyCoverOverridesToResultUpdatesEveryView(t *testing.T) {
 	result := &models.ScanResult{
 		Root: root, Roots: []string{root}, Albums: []models.Album{album},
 		SmartCollections: []models.SmartCollection{{
-			Tag: "tag", Author: "tag", CoverImage: first, Albums: []models.Album{album},
+			Tag: "tag", CoverImage: first, Albums: []models.Album{album},
 		}},
 	}
 

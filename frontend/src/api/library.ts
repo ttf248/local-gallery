@@ -32,7 +32,6 @@ export interface LibraryNodeSummary {
   displayName: string;
   sourceRoot?: string;
   sourceName?: string;
-  author?: string;
   coverImage?: string;
   coverImages: string[];
   coverKind?: "image" | "video";

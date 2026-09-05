@@ -18,6 +18,14 @@ function node(
 }
 
 describe("libraryCard", () => {
+  it("相册卡片以全部标签作为副标题", () => {
+    const card = nodeSummaryToCard(
+      node("a_trip", "album", { tags: ["旅行", "2025"] }),
+    );
+
+    expect(card.subtitle).toBe("旅行 · 2025");
+  });
+
   it("集合卡片使用聚合数量与拼贴封面", () => {
     const card = nodeSummaryToCard(
       node("c_year", "collection", {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,7 +46,7 @@ func newLibraryPageFixture(t *testing.T) libraryPageFixture {
 		SourceRoot: root, SourceName: filepath.Base(root),
 		ImageFiles: []string{page10, page1, page3}, VideoFiles: []string{page2},
 		ImageCount: 3, VideoCount: 1, CoverImage: page1, CoverKind: "image",
-		Tags: []string{"旅行"}, Author: "旅行", Date: time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC), DateSource: "folder",
+		Tags: []string{"旅行"}, Date: time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC), DateSource: "folder",
 	}
 	album10 := models.Album{
 		Type: "album", Path: album10Path, Name: "album10", DisplayName: "album10",
@@ -66,7 +67,7 @@ func newLibraryPageFixture(t *testing.T) libraryPageFixture {
 		Collections: []models.Collection{collection}, AlbumCount: 4, CollectionCount: 1,
 		ScannedAt: time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC), Duration: 123,
 		SmartCollections: []models.SmartCollection{{
-			Type: "smartCollection", Tag: "旅行", Author: "旅行",
+			Type: "smartCollection", Tag: "旅行",
 			Albums: []models.Album{album10, album2}, AlbumCount: 2, CoverImage: page1,
 		}},
 	}
@@ -108,8 +109,15 @@ func TestLibraryChildrenUsesRevisionBoundCursorAndNaturalOrder(t *testing.T) {
 	if first.Items[0].Name != "本目录媒体" || first.Items[1].Name != "album2" {
 		t.Fatalf("first page order=%q, %q", first.Items[0].Name, first.Items[1].Name)
 	}
-	if first.Items[1].SourceRoot != fixture.rootID || first.Items[1].Author != "旅行" {
-		t.Fatalf("album summary lost source/author metadata: %+v", first.Items[1])
+	if first.Items[1].SourceRoot != fixture.rootID || len(first.Items[1].Tags) != 1 || first.Items[1].Tags[0] != "旅行" {
+		t.Fatalf("album summary lost source/tag metadata: %+v", first.Items[1])
+	}
+	encoded, err := json.Marshal(first.Items[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"author"`) {
+		t.Fatalf("album summary must not expose removed author alias: %s", encoded)
 	}
 	second, err := PageLibraryChildren(snapshot, fixture.rootID, first.NextCursor, 2)
 	if err != nil {
@@ -193,8 +201,9 @@ func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
 func TestLibrarySearchUsesPrecomputedPathSafeIndex(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	hits := SearchLibrary(fixture.catalog.Acquire(), "旅行", 10)
-	if len(hits) != 2 || hits[0].Kind != "album" || hits[0].Path != fixture.albumID ||
-		hits[1].Kind != "smartCollection" || hits[1].Path != "smart:旅行" {
+	if len(hits) != 3 || hits[0].Kind != "album" || hits[0].Path != fixture.albumID ||
+		hits[1].Kind != "album" || hits[1].Name != "album10" ||
+		hits[2].Kind != "smartCollection" || hits[2].Path != "smart:旅行" {
 		t.Fatalf("search hits=%+v", hits)
 	}
 	if collectionHits := SearchLibrary(fixture.catalog.Acquire(), "collection3", 10); len(collectionHits) != 1 ||

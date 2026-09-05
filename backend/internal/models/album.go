@@ -96,7 +96,6 @@ type Album struct {
 	Files       []string  `json:"-"`                     // 见 MarshalJSON/UnmarshalJSON；为 0 时复用 ImageFiles
 	FolderSize  int64     `json:"folderSize"`            // 字节
 	Tags        []string  `json:"tags,omitempty"`        // 标签（从方括号解析），可能多个
-	Author      string    `json:"author,omitempty"`      // 旧字段别名 = 第一个标签
 	ModTime     time.Time `json:"modTime"`
 	// Date 是相册在时间轴上的统一业务时间；DateSource 说明该时间的
 	// 来源，前端不再根据文件夹名自行猜测。优先级固定为
@@ -226,10 +225,9 @@ func ternaryCollections(use bool, v []Collection) []Collection {
 // 历史命名：原本只把第一个方括号当"作者"；本地画廊产品语义下统称为
 // "标签 / Tag"——一个文件夹可挂多个标签。
 type SmartCollection struct {
-	Type       string   `json:"type"`             // 始终为 "smartCollection"
-	Tag        string   `json:"tag"`              // 标签（首个标签；当个智能合集的主键）
-	Tags       []string `json:"tags,omitempty"`   // 同义时省略
-	Author     string   `json:"author,omitempty"` // 旧字段别名 = Tag（兼容）
+	Type       string   `json:"type"`           // 始终为 "smartCollection"
+	Tag        string   `json:"tag"`            // 标签（首个标签；当个智能合集的主键）
+	Tags       []string `json:"tags,omitempty"` // 同义时省略
 	Albums     []Album  `json:"albums"`
 	AlbumCount int      `json:"albumCount"`
 	CoverImage string   `json:"coverImage"` // 图片数最多的相册封面

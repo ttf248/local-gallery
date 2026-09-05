@@ -30,27 +30,6 @@ func touchAll(t *testing.T, paths ...string) {
 	}
 }
 
-func TestExtractAuthor(t *testing.T) {
-	cases := []struct {
-		in, want string
-	}{
-		{"[作者A] Vol.1", "作者A"},
-		{"[ 作者B ] Chapter 3", "作者B"},
-		{"[作者 C] Book", "作者 C"},
-		{"[Unclosed", ""},
-		{"Unbracketed", ""},
-		{"prefix[]empty", ""},
-		{"", ""},
-		{"[ ]", ""},
-		{"[a][b]", "a"},
-	}
-	for _, tc := range cases {
-		if got := ExtractAuthor(tc.in); got != tc.want {
-			t.Errorf("ExtractAuthor(%q) = %q, want %q", tc.in, got, tc.want)
-		}
-	}
-}
-
 func TestScan_MissingRoot(t *testing.T) {
 	s := NewScanner()
 	_, err := s.Scan(ScanOptions{Root: filepath.Join(t.TempDir(), "nope")})
@@ -140,8 +119,8 @@ func TestScan_TopLevelAlbumsAndCollections(t *testing.T) {
 	if len(res.SmartCollections) != 1 {
 		t.Fatalf("expected 1 smartCollection, got %d", len(res.SmartCollections))
 	}
-	if res.SmartCollections[0].Author != "作者A" {
-		t.Errorf("smart author: got %q", res.SmartCollections[0].Author)
+	if res.SmartCollections[0].Tag != "作者A" {
+		t.Errorf("smart tag: got %q", res.SmartCollections[0].Tag)
 	}
 	if res.SmartCollections[0].AlbumCount != 2 {
 		t.Errorf("smart album count: got %d", res.SmartCollections[0].AlbumCount)
@@ -229,14 +208,14 @@ func TestScan_IgnoresNonImages(t *testing.T) {
 // 集合内的相册也应进入 smart grouping。
 func TestGroupByTag_AcrossCollections(t *testing.T) {
 	albums := []models.Album{
-		{Name: "[A] 1", Author: "A", ImageCount: 5},
-		{Name: "[A] 2", Author: "A", ImageCount: 3},
-		{Name: "[A] 3", Author: "A", ImageCount: 1},
-		{Name: "[B] 1", Author: "B", ImageCount: 2},
-		{Name: "NoAuthor", Author: "", ImageCount: 1},
+		{Name: "[A] 1", Tags: []string{"A"}, ImageCount: 5},
+		{Name: "[A] 2", Tags: []string{"A"}, ImageCount: 3},
+		{Name: "[A] 3", Tags: []string{"A"}, ImageCount: 1},
+		{Name: "[B] 1", Tags: []string{"B"}, ImageCount: 2},
+		{Name: "无标签", ImageCount: 1},
 	}
 	smart := GroupByTag(albums)
-	if len(smart) != 1 || smart[0].Author != "A" {
+	if len(smart) != 1 || smart[0].Tag != "A" {
 		t.Fatalf("expected 1 smart collection for A, got %+v", smart)
 	}
 	if smart[0].AlbumCount != 3 {
@@ -250,7 +229,7 @@ func TestGroupByTag_AcrossCollections(t *testing.T) {
 
 func TestGroupByTag_BelowThreshold(t *testing.T) {
 	albums := []models.Album{
-		{Name: "[A] 1", Author: "A", ImageCount: 1},
+		{Name: "[A] 1", Tags: []string{"A"}, ImageCount: 1},
 	}
 	if got := GroupByTag(albums); len(got) != 0 {
 		t.Errorf("expected no smart collection with 1 album, got %d", len(got))
@@ -260,9 +239,9 @@ func TestGroupByTag_BelowThreshold(t *testing.T) {
 // 一本相册带多标签时应同时进入多个合集。
 func TestGroupByTag_MultiTagAlbum(t *testing.T) {
 	albums := []models.Album{
-		{Name: "[A][B] 1", Author: "A", Tags: []string{"A", "B"}, ImageCount: 5},
-		{Name: "[A] 2", Author: "A", Tags: []string{"A"}, ImageCount: 3},
-		{Name: "[B] 3", Author: "B", Tags: []string{"B"}, ImageCount: 1},
+		{Name: "[A][B] 1", Tags: []string{"A", "B"}, ImageCount: 5},
+		{Name: "[A] 2", Tags: []string{"A"}, ImageCount: 3},
+		{Name: "[B] 3", Tags: []string{"B"}, ImageCount: 1},
 	}
 	smart := GroupByTag(albums)
 	if len(smart) != 2 {
@@ -298,7 +277,7 @@ func TestExtractTags(t *testing.T) {
 		{"trimmed", "[ A ] 名字", []string{"A"}},
 		{"skip empty", "[] [A] []", []string{"A"}},
 		{"unclosed", "[A 名字", nil},
-		{"comic-style author", "[作者 (A)] 标题", []string{"作者 (A)"}},
+		{"带括号的标签", "[作者 (A)] 标题", []string{"作者 (A)"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

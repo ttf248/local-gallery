@@ -110,7 +110,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 复用返回 `400 invalid_cursor`，扫描发布新版本后返回 `409 stale_cursor`，客户端应丢弃
 已合并页面并从 manifest 重试。
 
-节点摘要不携带媒体数组。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
+节点摘要不携带媒体数组。相册摘要通过 `tags: string[]` 返回目录名解析出的全部标签，
+不再提供单标签别名字段。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
 `mediaCount` 和 `folderSize` 均包含所有后代，`childCount` 仍只表示直属子项数量。
 相册摘要的 `hasCustomCover` 为 `true` 时表示当前 revision 已应用用户设置的人工封面；
 失效的覆盖记录不会出现在此字段中。
@@ -123,7 +124,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/search?q=<keyword>&limit=50`
 
-搜索相册、集合和标签，结果中的 `path` 是相册/集合 ID；标签结果使用 `smart:<tag>` 作为内部标签标识，前端统一转换到 `/tags/<tag>`。搜索条目在每次媒体库 revision 发布时预计算，查询不会递归读取完整目录树。
+搜索按名称和标签匹配相册、集合和标签，结果中的 `path` 是相册/集合 ID；相册与标签结果可带 `tags: string[]`。标签结果使用 `smart:<tag>` 作为内部标签标识，前端统一转换到 `/tags/<tag>`。搜索条目在每次媒体库 revision 发布时预计算，查询不会递归读取完整目录树。
 
 ### `PUT /api/albums/:albumId/cover?file=<fileId>`
 

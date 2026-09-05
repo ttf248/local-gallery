@@ -4,7 +4,7 @@ export interface SearchHit {
   kind: "album" | "collection" | "smartCollection";
   path: string;
   name: string;
-  author?: string;
+  tags?: string[];
   count: number;
   coverImage?: string;
 }

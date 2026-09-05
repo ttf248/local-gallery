@@ -52,7 +52,7 @@ export type AlbumLike = {
   videoCount?: number;
   coverImage: string;
   coverKind?: "image" | "video";
-  author?: string;
+  tags?: string[];
   displayName?: string;
   sourceRoot?: string;
   sourceName?: string;
@@ -85,7 +85,7 @@ function cardForAlbumLike(a: AlbumLike): {
       variant: "album",
       title: a.name,
       displayTitle: a.displayName,
-      subtitle: a.author || undefined,
+      subtitle: a.tags?.join(" · ") || undefined,
       count: a.imageCount,
       imageCount: a.imageCount,
       videoCount: a.videoCount ?? 0,
@@ -228,7 +228,7 @@ export function groupLibraryNodesByYear(
         videoCount: node.videoCount,
         coverImage: node.coverImage ?? "",
         coverKind: node.coverKind,
-        author: node.author,
+        tags: node.tags,
         displayName: node.displayName,
         sourceRoot: node.sourceRoot,
         sourceName: node.sourceName,

@@ -59,7 +59,6 @@ type LibraryNodeSummary struct {
 	DisplayName    string    `json:"displayName"`
 	SourceRoot     string    `json:"sourceRoot,omitempty"`
 	SourceName     string    `json:"sourceName,omitempty"`
-	Author         string    `json:"author,omitempty"`
 	CoverImage     string    `json:"coverImage,omitempty"`
 	CoverImages    []string  `json:"coverImages"`
 	CoverKind      string    `json:"coverKind,omitempty"`
@@ -94,12 +93,12 @@ type LibraryTagSummary struct {
 
 // LibrarySearchHit 是预计算搜索索引的对外条目，不包含目录树或绝对路径。
 type LibrarySearchHit struct {
-	Kind       string `json:"kind"`
-	Path       string `json:"path"`
-	Name       string `json:"name"`
-	Author     string `json:"author,omitempty"`
-	Count      int    `json:"count"`
-	CoverImage string `json:"coverImage,omitempty"`
+	Kind       string   `json:"kind"`
+	Path       string   `json:"path"`
+	Name       string   `json:"name"`
+	Tags       []string `json:"tags,omitempty"`
+	Count      int      `json:"count"`
+	CoverImage string   `json:"coverImage,omitempty"`
 }
 
 // LibraryActivitySummary 是常驻导航所需的轻量阅读计数，不携带相册清单或活动详情。
@@ -215,7 +214,7 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 
 	smartCollections := append([]models.SmartCollection(nil), state.result.SmartCollections...)
 	sort.SliceStable(smartCollections, func(i, j int) bool {
-		return naturalLess(tagName(smartCollections[i]), tagName(smartCollections[j]))
+		return naturalLess(smartCollections[i].Tag, smartCollections[j].Tag)
 	})
 	for _, smart := range smartCollections {
 		index.tags = append(index.tags, tagSummary(state, smart))
@@ -230,9 +229,6 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 		if smart.Tag != "" {
 			index.tagAlbums[smart.Tag] = summaries
 		}
-		if smart.Author != "" {
-			index.tagAlbums[smart.Author] = summaries
-		}
 	}
 	index.search = buildLibrarySearchIndex(index)
 
@@ -244,8 +240,8 @@ func buildLibrarySearchIndex(index *libraryPageIndex) []LibrarySearchHit {
 	hits := make([]LibrarySearchHit, 0, len(index.albums)+len(index.nodes)+len(index.tags))
 	for _, album := range index.albums {
 		hits = append(hits, LibrarySearchHit{
-			Kind: "album", Path: album.ID, Name: album.DisplayName, Author: album.Author,
-			Count: album.ImageCount, CoverImage: album.CoverImage,
+			Kind: "album", Path: album.ID, Name: album.DisplayName,
+			Tags: append([]string(nil), album.Tags...), Count: album.ImageCount, CoverImage: album.CoverImage,
 		})
 	}
 	collections := make([]LibraryNodeSummary, 0, len(index.nodes))
@@ -271,8 +267,8 @@ func buildLibrarySearchIndex(index *libraryPageIndex) []LibrarySearchHit {
 	}
 	for _, tag := range index.tags {
 		hits = append(hits, LibrarySearchHit{
-			Kind: "smartCollection", Path: "smart:" + tag.Tag, Name: tag.Tag, Author: tag.Tag,
-			Count: tag.AlbumCount, CoverImage: tag.CoverImage,
+			Kind: "smartCollection", Path: "smart:" + tag.Tag, Name: tag.Tag,
+			Tags: []string{tag.Tag}, Count: tag.AlbumCount, CoverImage: tag.CoverImage,
 		})
 	}
 	return hits
@@ -506,7 +502,7 @@ func SearchLibrary(snapshot CatalogSnapshot, query string, limit int) []LibraryS
 	}
 	results := make([]LibrarySearchHit, 0, min(limit, len(snapshot.state.library.search)))
 	for _, hit := range snapshot.state.library.search {
-		if !strings.Contains(strings.ToLower(hit.Name), needle) && !strings.Contains(strings.ToLower(hit.Author), needle) {
+		if !strings.Contains(strings.ToLower(hit.Name), needle) && !containsTag(hit.Tags, needle) {
 			continue
 		}
 		results = append(results, hit)
@@ -515,6 +511,15 @@ func SearchLibrary(snapshot CatalogSnapshot, query string, limit int) []LibraryS
 		}
 	}
 	return results
+}
+
+func containsTag(tags []string, needle string) bool {
+	for _, tag := range tags {
+		if strings.Contains(strings.ToLower(tag), needle) {
+			return true
+		}
+	}
+	return false
 }
 
 // RandomLibraryAlbum 从当前 revision 的预计算相册摘要中安全地抽取一项。
@@ -703,7 +708,6 @@ func albumSummary(state *resourceCatalogState, album models.Album) LibraryNodeSu
 		DisplayName:    nodeDisplayName(album.DisplayName, album.Name),
 		SourceRoot:     sourceRoot,
 		SourceName:     sourceName,
-		Author:         album.Author,
 		CoverImage:     cover,
 		CoverImages:    covers,
 		CoverKind:      album.CoverKind,
@@ -865,13 +869,6 @@ func albumMediaSources(state *resourceCatalogState, album models.Album) []albumM
 	return media
 }
 
-func tagName(smart models.SmartCollection) string {
-	if smart.Tag != "" {
-		return smart.Tag
-	}
-	return smart.Author
-}
-
 func tagSummary(state *resourceCatalogState, smart models.SmartCollection) LibraryTagSummary {
 	covers := make([]string, 0, 4)
 	for i := range smart.Albums {
@@ -887,6 +884,6 @@ func tagSummary(state *resourceCatalogState, smart models.SmartCollection) Libra
 		cover = covers[0]
 	}
 	return LibraryTagSummary{
-		Tag: tagName(smart), AlbumCount: smart.AlbumCount, CoverImage: cover, CoverImages: covers,
+		Tag: smart.Tag, AlbumCount: smart.AlbumCount, CoverImage: cover, CoverImages: covers,
 	}
 }

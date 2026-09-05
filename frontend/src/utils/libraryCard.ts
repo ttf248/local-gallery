@@ -12,7 +12,7 @@ export function nodeSummaryToCard(
     variant: node.kind,
     title: node.name,
     displayTitle: node.displayName,
-    subtitle: isAlbum ? node.author || undefined : "集合",
+    subtitle: isAlbum ? node.tags?.join(" · ") || undefined : "集合",
     count: isAlbum ? (node.imageCount ?? 0) : (node.albumCount ?? 0),
     imageCount: isAlbum ? (node.imageCount ?? 0) : undefined,
     videoCount: isAlbum ? (node.videoCount ?? 0) : undefined,

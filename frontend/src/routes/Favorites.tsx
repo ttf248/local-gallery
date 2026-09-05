@@ -64,8 +64,8 @@ export default function Favorites() {
     const out: CardData[] = [];
     for (const f of favorites) {
       if (f.startsWith("smart:")) {
-        const author = f.slice(6);
-        const tag = tagsByName.get(author);
+        const tagName = f.slice(6);
+        const tag = tagsByName.get(tagName);
         if (!tag) continue;
         out.push({ ...tagSummaryToCard(tag), isFavorite: true });
         continue;

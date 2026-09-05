@@ -20,12 +20,12 @@ import { useTagAlbums } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
 
 // 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
-export default function Author() {
+export default function Tag() {
   const params = useParams();
   const navigate = useNavigate();
   // react-router v6 已经对 pathname 做过一次解码；这里如果再 decode 会引发双重解码错误
   const raw = params["*"] ?? "";
-  const author = raw ? safeDecode(raw) : "";
+  const tag = raw ? safeDecode(raw) : "";
 
   const query = useSearchStore((s) => s.query);
   const sortBy = useSearchStore((s) => s.sortBy);
@@ -34,7 +34,7 @@ export default function Author() {
   const pushToast = useUIStore((s) => s.pushToast);
 
   const [coverIdx, setCoverIdx] = useState(0);
-  const albumsQuery = useTagAlbums(author);
+  const albumsQuery = useTagAlbums(tag);
   const albums = useMemo(
     () => albumsQuery.data?.items ?? [],
     [albumsQuery.data],
@@ -97,7 +97,7 @@ export default function Author() {
     () => cards.map((c) => ({ key: c.to, to: c.to, name: c.title })),
     [cards],
   );
-  useGalleryContextSync({ type: "tag", tag: author }, tagEntries);
+  useGalleryContextSync({ type: "tag", tag }, tagEntries);
 
   // 头图：随机从 6 张里挑（每隔 4s 切一张，类似走马灯）
   useEffect(() => {
@@ -110,7 +110,7 @@ export default function Author() {
   }, [albums.length]);
 
   const cover = albums.length > 0 ? albums[coverIdx % albums.length] : null;
-  const isFav = favorites.includes(`smart:${author}`);
+  const isFav = favorites.includes(`smart:${tag}`);
 
   if (albumsQuery.isLoading) {
     return (
@@ -132,7 +132,7 @@ export default function Author() {
             <span>返回</span>
           </button>
           <h1 className="font-display text-2xl font-semibold tracking-tight">
-            标签：{author}
+            标签：{tag}
           </h1>
         </div>
         <EmptyState
@@ -166,13 +166,13 @@ export default function Author() {
                 标签
               </div>
               <h1 className="font-display text-[36px] lg:text-[44px] leading-[1.05] font-semibold tracking-[-0.02em] text-fg">
-                {author}
+                {tag}
               </h1>
             </div>
             <div className="flex items-center gap-2 mb-3">
               <button
                 onClick={() =>
-                  toggle(`smart:${author}`).then(() => {
+                  toggle(`smart:${tag}`).then(() => {
                     pushToast({
                       kind: "success",
                       message: isFav ? "已取消收藏" : "已加入收藏",
