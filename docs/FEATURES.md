@@ -39,7 +39,7 @@
 | 图片发送     | ETag、304、24 小时浏览器缓存                    | `handlers.ImageHandler`                      |
 | 统一媒体路由 | `GET /api/media/:fileId` 按白名单分派图片或视频 | `handlers.MediaHandler`                      |
 | 元数据       | 图片尺寸/checksum；视频 ffprobe 元数据          | `ImageInfoHandler`、`VideoInfoHandler`       |
-| 缓存管理     | 统计、过期清理、缩略图全清和转码缓存清理        | `handlers/cache.go`、`handlers/transcode.go` |
+| 缓存管理     | 统计、过期清理，以及按 scope 的统一缓存清空      | `handlers/cache.go`                           |
 
 ## 视频
 

@@ -96,39 +96,6 @@ func TranscodeCancelHandler(svc *services.TranscodeService) fiber.Handler {
 	}
 }
 
-// TranscodeCacheClearHandler 清空整个转码缓存(管理用)。
-//
-//	POST /api/videos/transcode/cache/clear
-//
-// 响应: { "ok": true, "deleted": N, "freedBytes": N }
-//
-// V1 不做权限控制(本地工具);V2 加 allowConfig/role-based 校验。
-func TranscodeCacheClearHandler(svc *services.TranscodeService) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		if svc == nil {
-			return c.JSON(fiber.Map{"ok": false, "error": "transcode service not initialized"})
-		}
-		// query: ?maxBytes=N&maxAgeDays=N
-		var maxBytes int64
-		var maxAgeDays int
-		if s := c.Query("maxBytes"); s != "" {
-			fmt.Sscanf(s, "%d", &maxBytes)
-		}
-		if s := c.Query("maxAgeDays"); s != "" {
-			fmt.Sscanf(s, "%d", &maxAgeDays)
-		}
-		deleted, freed, err := svc.Evict(maxBytes, maxAgeDays)
-		if err != nil {
-			return c.JSON(fiber.Map{"ok": false, "error": err.Error()})
-		}
-		return c.JSON(fiber.Map{
-			"ok":         true,
-			"deleted":    deleted,
-			"freedBytes": freed,
-		})
-	}
-}
-
 // TranscodeCacheStatsHandler 返回转码缓存占用(给前端 / 设置页)。
 //
 //	GET /api/videos/transcode/cache/stats

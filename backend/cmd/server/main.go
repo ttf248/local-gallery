@@ -303,13 +303,8 @@ func main() {
 	api.Get("/thumbs/:id", resourceParam, handlers.ThumbHandler(thumbs))
 	api.Get("/thumbs/stats", handlers.ThumbStatsHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
-	// 清空全部缩略图缓存（不只是过期）。前端设置页"缓存占用"行的"清空"按钮调用。
-	api.Post("/thumbs/clear", handlers.ThumbClearAllHandlerWithCacheStats(thumbs, cacheStats))
 	// 统一清空入口:scope=thumbs|faststart|transcode|all。
-	// 替代分散的 /api/thumbs/clear 和 /api/videos/transcode/cache/clear 调用方
-	// 在 Settings 页的"缓存占用"面板下,逐 scope 给用户一个按钮。
-	// 旧 /api/thumbs/clear 与 /api/videos/transcode/cache/clear 保留供
-	// 调试 / 脚本调用(也避免破坏既有集成测试)。
+	// Settings 页在"缓存占用"面板中按 scope 提供独立清理和一键全清。
 	api.Post("/cache/clear", handlers.CacheClearHandler(thumbs, faststart, transcode, cacheStats))
 	api.Get("/cache/stats", handlers.CacheStatsHandler(mgr, cacheStats))
 	api.Get("/media/:id", resourceParam, handlers.MediaHandler(transcode, faststart))
@@ -320,9 +315,8 @@ func main() {
 	api.Get("/videos/:id/transcode/status", resourceParam, handlers.TranscodeStatusHandler(transcode))
 	api.Get("/videos/:id/transcode/events", resourceParam, handlers.TranscodeEventsHandler(transcode))
 	api.Post("/videos/:id/transcode/cancel", resourceParam, handlers.TranscodeCancelHandler(transcode))
-	// 转码缓存管理（V1：admin 手动;V2:加 maxBytes 配置自动触发）
+	// 转码缓存统计。
 	api.Get("/videos/transcode/cache/stats", handlers.TranscodeCacheStatsHandler(transcode))
-	api.Post("/videos/transcode/cache/clear", middleware.LoopbackOnly(), handlers.TranscodeCacheClearHandler(transcode))
 	// 视频封面回填：前端浏览器抽帧后 POST 原始字节
 	api.Post("/thumbs/:id/cover", resourceParam, handlers.ThumbCoverHandler(thumbs))
 	api.Post("/fs/open", middleware.LoopbackOnly(), handlers.FsOpenResourceHandler(mgr, resourceCatalog))

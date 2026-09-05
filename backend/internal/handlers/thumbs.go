@@ -90,31 +90,6 @@ func ThumbCleanupHandler(svc *services.ThumbnailService) fiber.Handler {
 	return ThumbCleanupHandlerWithCacheStats(svc, nil)
 }
 
-// ThumbClearAllHandler 强制清空全部缩略图缓存（POST /api/thumbs/clear）。
-//
-// 与 /api/thumbs/cleanup 的区别:cleanup 只删过期(maxAgeDays 天前),
-// clear 不管 mtime,全部删除。响应包含删除文件数和释放字节数,
-// 前端用于 toast「已清空 N 个文件 / 释放 X MB」。调用方在清空后通常
-// 期望"强制重建"——清空只删数据,不会主动重新生成,下次访问
-// GetOrCreate 会按需生成。
-func ThumbClearAllHandlerWithCacheStats(svc *services.ThumbnailService, cacheStats *services.CacheStatsService) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		deleted, freed, err := svc.ClearAll()
-		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
-		}
-		if cacheStats != nil {
-			cacheStats.Invalidate()
-		}
-		return c.JSON(fiber.Map{
-			"deleted":    deleted,
-			"freedBytes": freed,
-		})
-	}
-}
-
 // ThumbCleanupHandlerWithCacheStats 清理过期缩略图缓存后,通知 cacheStats
 // 失效,让前端的"缓存占用"展示立即反映清理结果。
 // cacheStats 为 nil 时退化为 ThumbCleanupHandler 行为(向后兼容测试)。

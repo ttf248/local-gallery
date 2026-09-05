@@ -77,10 +77,10 @@ func CacheStatsHandler(mgr *config.Manager, stats *services.CacheStatsService) f
 // 之类的)时,前端 / API / 文档改一处即可,不需要 server 端做魔法反射。
 // 非法 scope 直接 400,让前端尽早发现错别字。
 const (
-	CacheClearScopeThumbs     = "thumbs"
-	CacheClearScopeFaststart  = "faststart"
-	CacheClearScopeTranscode  = "transcode"
-	CacheClearScopeAll        = "all"
+	CacheClearScopeThumbs    = "thumbs"
+	CacheClearScopeFaststart = "faststart"
+	CacheClearScopeTranscode = "transcode"
+	CacheClearScopeAll       = "all"
 )
 
 // CacheClearResult POST /api/cache/clear 的响应。
@@ -98,11 +98,11 @@ type CacheClearResult struct {
 	// 三个子项,各自 pointer 允许 nil(JSON 序列化为 null 即可,
 	// 前端用 ?? 兜底)。三个 service 都可能为 nil(ffmpeg 缺失场景),
 	// 此时 bytes/fileCount 为 0。
-	Thumbs     *CacheScopeResult `json:"thumbs,omitempty"`
-	Faststart  *CacheScopeResult `json:"faststart,omitempty"`
-	Transcode  *CacheScopeResult `json:"transcode,omitempty"`
-	TotalDeleted   int   `json:"totalDeleted"`
-	TotalFreedBytes int64 `json:"totalFreedBytes"`
+	Thumbs          *CacheScopeResult `json:"thumbs,omitempty"`
+	Faststart       *CacheScopeResult `json:"faststart,omitempty"`
+	Transcode       *CacheScopeResult `json:"transcode,omitempty"`
+	TotalDeleted    int               `json:"totalDeleted"`
+	TotalFreedBytes int64             `json:"totalFreedBytes"`
 }
 
 // CacheScopeResult 单个 scope 的清空结果。
@@ -116,15 +116,11 @@ type CacheScopeResult struct {
 //	POST /api/cache/clear?scope=thumbs|faststart|transcode|all
 //
 // 行为:
-//   - scope=thumbs     调 ThumbnailService.ClearAll()(对应旧 /api/thumbs/clear)
+//   - scope=thumbs     调 ThumbnailService.ClearAll()
 //   - scope=faststart  调 VideoFaststartService.ClearCache()(本接口新增能力)
 //   - scope=transcode  调 TranscodeService.ClearCache()(转码缓存全清)
 //   - scope=all        上面三件事都做
 //   - 无效 scope → 400
-//
-// 与旧 /api/thumbs/clear 的关系:旧接口继续保留(向后兼容 + 单独
-// 调试用),本接口是统一入口。两者都通过 cacheStats.Invalidate() 让
-// 后续 stats 立即重算,避免 30s TTL 期间 UI 看不到效果。
 //
 // 注意:fiber.Path 不带 query string,scope 从 c.Query("scope") 读。
 // 未传 scope 视为 invalid,避免"清空所有 / 哪个都不清"的歧义。
