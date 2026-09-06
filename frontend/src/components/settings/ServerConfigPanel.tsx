@@ -37,7 +37,8 @@ const REQUIRES_RESTART = new Set([
 ]);
 
 // 哪些字段是路径类（用 onBlur 自动保存,不用 debounce）。
-// 理由:路径输错一个字符就触发保存体验差;按 Enter / 离开输入框再保存更稳。
+// mediaRoots 是例外:它在用户停止输入后自动保存,避免刷新页面时丢失
+// 尚未失焦的修改。其余路径输入仍须按 Enter 或离开输入框确认。
 //
 // excludePatterns / systemFiles 同样按 onBlur 保存 — 它们虽不是路径,
 // 但都是「类数组文本」(一行一项),用户经常连续粘贴多行;debounce 会
@@ -49,6 +50,10 @@ const PATH_FIELDS = new Set([
   "excludePatterns",
   "systemFiles",
 ]);
+
+// 媒体根目录在用户停止输入后的自动保存等待时间。不能逐字符提交：后端会
+// 校验目录必须存在，输入中的不完整路径不应产生错误提示或污染当前配置。
+const MEDIA_ROOTS_AUTOSAVE_DELAY = 450;
 
 // 字段定义:标签、说明、是否重启字段、UI 类型。
 // mediaRoots 是特例:用 MediaRootsField 组件单独渲染,不走通用 ConfigRow。
@@ -186,6 +191,10 @@ export default function ServerConfigPanel() {
   const [mediaRootsDirty, setMediaRootsDirty] = useState(false);
   // 暂存用户输入:草稿,避免每次 onChange 都触发 PUT(输入体验更顺)
   const [draft, setDraft] = useState<ServerConfigPatch>({});
+  const debouncedMediaRoots = useDebounce(
+    draft.mediaRoots,
+    MEDIA_ROOTS_AUTOSAVE_DELAY,
+  );
   const [accessTokenDraft, setAccessTokenDraft] = useState("");
   const [accessError, setAccessError] = useState("");
   // 路径类字段用 onBlur 触发(不走 debounce);非路径类才用 debounce
@@ -285,6 +294,26 @@ export default function ServerConfigPanel() {
     update.mutate(patch);
   }
   flushRef.current = flush;
+
+  // 媒体根目录输入后自动保存，而非等待 blur。pathDirtyRef 保存的是最近
+  // 一次输入的数组引用；借此忽略已被新输入替换的过期 debounce 结果。
+  useEffect(() => {
+    if (debouncedMediaRoots === undefined) return;
+    if (pathDirtyRef.current.mediaRoots !== debouncedMediaRoots) return;
+
+    // "添加根目录"会先插入空输入槽位。目录尚未补全时不发无效 PATCH，
+    // 待所有输入槽位都有值后再自动提交。
+    if (debouncedMediaRoots.some((root) => root.trim() === "")) return;
+
+    delete pathDirtyRef.current.mediaRoots;
+    setDraft((current) => {
+      if (current.mediaRoots !== debouncedMediaRoots) return current;
+      const next = { ...current };
+      delete next.mediaRoots;
+      return next;
+    });
+    flushRef.current({ mediaRoots: debouncedMediaRoots });
+  }, [debouncedMediaRoots]);
 
   async function enableLANAccess() {
     const token = accessTokenDraft.trim();
@@ -388,7 +417,6 @@ export default function ServerConfigPanel() {
                 s["mediaRoots"] === "saved" ? { ...s, mediaRoots: "idle" } : s,
               );
             }}
-            onCommit={() => flushPathField("mediaRoots")}
             onOpenInExplorer={openMediaRoot}
           />
         </div>
@@ -617,14 +645,12 @@ function MediaRootsField({
   status,
   allowOsOpen,
   onChange,
-  onCommit,
   onOpenInExplorer,
 }: {
   roots: string[];
   status: FieldStatus;
   allowOsOpen: boolean;
   onChange: (next: string[]) => void;
-  onCommit: () => void;
   onOpenInExplorer: (path: string) => void;
 }) {
   // 始终渲染一个空槽位(即使当前为空),方便用户添加第一个根
@@ -677,7 +703,6 @@ function MediaRootsField({
             }
             onPick={(picked) => updateAt(i, picked)}
             onChange={(nv) => updateAt(i, nv)}
-            onCommit={onCommit}
             removable={roots.length > 1}
             onRemove={() => removeAt(i)}
           />

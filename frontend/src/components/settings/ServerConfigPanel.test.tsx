@@ -174,7 +174,7 @@ describe("ServerConfigPanel", () => {
     });
   });
 
-  it("mediaRoots 变更后提示重新扫描", async () => {
+  it("媒体根目录停止输入后自动保存并提示重新扫描", async () => {
     vi.mocked(configApi.update).mockResolvedValue({
       ok: true,
       config: { ...baseConfig, mediaRoots: ["D:\\new"] },
@@ -186,8 +186,7 @@ describe("ServerConfigPanel", () => {
       "E:\\漫画",
     )) as HTMLInputElement;
     fireEvent.change(input, { target: { value: "D:\\new" } });
-    // 路径类字段在 blur 时保存
-    fireEvent.blur(input);
+    // 媒体根目录不依赖 blur；停止输入后自动保存。
     await waitFor(
       () =>
         expect(configApi.update).toHaveBeenCalledWith({
@@ -198,7 +197,7 @@ describe("ServerConfigPanel", () => {
     expect(await screen.findByText(/媒体根目录已变更/)).toBeInTheDocument();
   });
 
-  it("多根：添加 / 删除根目录会更新 local state（blur 后 flush）", async () => {
+  it("多根：补全新增根目录后自动保存", async () => {
     vi.mocked(configApi.update).mockResolvedValue({
       ok: true,
       config: { ...baseConfig, mediaRoots: ["E:\\漫画", "F:\\照片"] },
@@ -225,8 +224,7 @@ describe("ServerConfigPanel", () => {
     // 修改第二个为空槽位 → F:\\照片
     const secondInput = mediaRootInputs[1] as HTMLInputElement;
     fireEvent.change(secondInput, { target: { value: "F:\\照片" } });
-    // blur 第一个 input 触发保存（媒体根字段共用 pathDirtyRef 一次 flush）
-    fireEvent.blur(firstInput);
+    // 媒体根目录停止输入后自动保存，无需 blur。
     await waitFor(
       () =>
         expect(configApi.update).toHaveBeenCalledWith({
