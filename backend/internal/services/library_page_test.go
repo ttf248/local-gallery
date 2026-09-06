@@ -201,7 +201,9 @@ func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
 func TestUnreadLibraryAlbumsUsesActivityIndexAndRevisionCursor(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	snapshot := fixture.catalog.Acquire()
-	first, err := PageUnreadLibraryAlbums(snapshot, map[string]struct{}{fixture.albumID: {}}, "", 2)
+	index := NewUnreadLibraryIndex()
+	started := map[string]struct{}{fixture.albumID: {}}
+	first, err := index.Page(snapshot, started, 1, "", 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +215,7 @@ func TestUnreadLibraryAlbumsUsesActivityIndexAndRevisionCursor(t *testing.T) {
 			t.Fatalf("started image album appeared in unread page=%+v", first)
 		}
 	}
-	second, err := PageUnreadLibraryAlbums(snapshot, map[string]struct{}{fixture.albumID: {}}, first.NextCursor, 2)
+	second, err := index.Page(snapshot, started, 1, first.NextCursor, 2)
 	if err != nil || len(second.Items) != 1 || second.NextCursor != "" {
 		t.Fatalf("second unread page=(%+v, %v)", second, err)
 	}
@@ -266,8 +268,9 @@ func TestLibrarySearchUsesPrecomputedPathSafeIndex(t *testing.T) {
 func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	snapshot := fixture.catalog.Acquire()
+	unreadIndex := NewUnreadLibraryIndex()
 
-	random, err := RandomLibraryAlbum(snapshot, nil)
+	random, err := RandomLibraryAlbum(snapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +279,7 @@ func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 	}
 
 	started := map[string]struct{}{fixture.albumID: {}}
-	summary, err := BuildLibraryActivitySummary(snapshot, started)
+	summary, err := unreadIndex.Summary(snapshot, started, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +295,7 @@ func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 	for _, album := range albums.Items {
 		excludeAll[album.ID] = struct{}{}
 	}
-	if _, err := RandomLibraryAlbum(snapshot, excludeAll); !errors.Is(err, ErrLibraryNoMatchingAlbum) {
+	if _, err := unreadIndex.Random(snapshot, excludeAll, 2); !errors.Is(err, ErrLibraryNoMatchingAlbum) {
 		t.Fatalf("all albums excluded error=%v, want ErrLibraryNoMatchingAlbum", err)
 	}
 	assertNoAbsolutePathInJSON(t, summary)
@@ -301,11 +304,13 @@ func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 func TestLibraryHomeDashboardUsesCurrentImageCountAndLimitedUnreadPreview(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	snapshot := fixture.catalog.Acquire()
+	unreadIndex := NewUnreadLibraryIndex()
+	started := map[string]struct{}{fixture.albumID: {}}
 
-	dashboard, err := BuildLibraryHomeDashboard(snapshot, []models.Activity{{
+	dashboard, err := unreadIndex.Dashboard(snapshot, []models.Activity{{
 		AlbumID: fixture.albumID, MediaKind: models.MediaKindImage,
 		PageIndex: 1, PageCount: 99, Updated: time.Now().UTC(),
-	}})
+	}}, started, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,15 +344,16 @@ func TestLibraryActivitySummaryKeepsCurrentEmptyAlbumUnreadAfterRescan(t *testin
 
 	snapshot := catalog.Acquire()
 	started := map[string]struct{}{albumID: {}}
-	summary, err := BuildLibraryActivitySummary(snapshot, started)
+	unreadIndex := NewUnreadLibraryIndex()
+	summary, err := unreadIndex.Summary(snapshot, started, 1)
 	if err != nil || summary.UnreadCount != 1 {
 		t.Fatalf("summary=(%+v, %v)", summary, err)
 	}
-	random, err := RandomLibraryAlbum(snapshot, started)
+	random, err := unreadIndex.Random(snapshot, started, 1)
 	if err != nil || random.ID != albumID {
 		t.Fatalf("random unread=(%+v, %v)", random, err)
 	}
-	unread, err := PageUnreadLibraryAlbums(snapshot, started, "", 60)
+	unread, err := unreadIndex.Page(snapshot, started, 1, "", 60)
 	if err != nil || unread.Total != 1 || len(unread.Items) != 1 || unread.Items[0].ID != albumID {
 		t.Fatalf("unread page=(%+v, %v)", unread, err)
 	}

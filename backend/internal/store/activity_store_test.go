@@ -163,7 +163,7 @@ func TestActivityStoreStartedImageAlbumIDsSnapshotTracksActivityRevision(t *test
 	}
 }
 
-func TestActivityStoreImageActivitiesExcludesVideoRecords(t *testing.T) {
+func TestActivityStoreImageActivitySnapshotExcludesVideoRecords(t *testing.T) {
 	store, _ := newTestActivityStore(t)
 	image := imageActivity(1, 1, 3)
 	video := models.Activity{
@@ -176,12 +176,21 @@ func TestActivityStoreImageActivitiesExcludesVideoRecords(t *testing.T) {
 	if err := store.SetBatch([]models.Activity{image, video}); err != nil {
 		t.Fatal(err)
 	}
-	activities, err := store.ImageActivities()
+	activities, ids, revision, err := store.ImageActivitySnapshot()
 	if err != nil {
 		t.Fatal(err)
 	}
+	if revision == 0 {
+		t.Fatal("image activity snapshot revision was not advanced")
+	}
 	if len(activities) != 1 || activities[0].AlbumID != image.AlbumID || activities[0].MediaKind != models.MediaKindImage {
 		t.Fatalf("image activities=%+v", activities)
+	}
+	if len(ids) != 1 {
+		t.Fatalf("image album IDs=%v", ids)
+	}
+	if _, exists := ids[image.AlbumID]; !exists {
+		t.Fatalf("missing image album ID %q", image.AlbumID)
 	}
 }
 

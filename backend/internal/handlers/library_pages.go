@@ -108,22 +108,26 @@ func LibraryUnreadAlbumsPageHandler(catalog *services.ResourceCatalog, activitie
 }
 
 // LibraryRandomAlbumHandler 返回一个随机相册摘要。scope=unread 时只从未开始阅读的相册中抽取。
-func LibraryRandomAlbumHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+func LibraryRandomAlbumHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore, unreadIndex *services.UnreadLibraryIndex) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		scope := strings.TrimSpace(c.Query("scope"))
 		if scope != "" && scope != "unread" {
 			return httputil.BadRequest(c, "invalid_random_scope", "scope must be empty or unread")
 		}
-		excluded := map[string]struct{}{}
+		snapshot := catalog.Acquire()
 		if scope == "unread" {
-			var err error
-			excluded, err = activities.StartedImageAlbumIDs()
+			started, activityRevision, err := activities.StartedImageAlbumIDsSnapshot()
 			if err != nil {
 				return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
 			}
+			album, pageErr := unreadIndex.Random(snapshot, started, activityRevision)
+			if pageErr != nil {
+				return writeLibraryPageError(c, pageErr, snapshot.Revision())
+			}
+			setLibraryRevisionETag(c, snapshot.Revision())
+			return c.JSON(fiber.Map{"ok": true, "album": album, "revision": snapshot.Revision()})
 		}
-		snapshot := catalog.Acquire()
-		album, err := services.RandomLibraryAlbum(snapshot, excluded)
+		album, err := services.RandomLibraryAlbum(snapshot)
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}
@@ -133,14 +137,14 @@ func LibraryRandomAlbumHandler(catalog *services.ResourceCatalog, activities *st
 }
 
 // LibraryActivitySummaryHandler 为常驻侧边栏返回未读计数，避免下载全量相册摘要。
-func LibraryActivitySummaryHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+func LibraryActivitySummaryHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore, unreadIndex *services.UnreadLibraryIndex) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		started, err := activities.StartedImageAlbumIDs()
+		started, activityRevision, err := activities.StartedImageAlbumIDsSnapshot()
 		if err != nil {
 			return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
 		}
 		snapshot := catalog.Acquire()
-		summary, err := services.BuildLibraryActivitySummary(snapshot, started)
+		summary, err := unreadIndex.Summary(snapshot, started, activityRevision)
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}
@@ -150,14 +154,14 @@ func LibraryActivitySummaryHandler(catalog *services.ResourceCatalog, activities
 
 // LibraryHomeDashboardHandler 为首页提供未读计数、有限预览和全部在读摘要。
 // 它避免首页为了几个入口下载跨根的完整相册列表和活动映射。
-func LibraryHomeDashboardHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+func LibraryHomeDashboardHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore, unreadIndex *services.UnreadLibraryIndex) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		imageActivities, err := activities.ImageActivities()
+		imageActivities, started, activityRevision, err := activities.ImageActivitySnapshot()
 		if err != nil {
 			return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
 		}
 		snapshot := catalog.Acquire()
-		dashboard, err := services.BuildLibraryHomeDashboard(snapshot, imageActivities)
+		dashboard, err := unreadIndex.Dashboard(snapshot, imageActivities, started, activityRevision)
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}

@@ -441,41 +441,6 @@ func PageLibraryAlbums(snapshot CatalogSnapshot, cursor string, limit int) (Libr
 	}, nil
 }
 
-// PageUnreadLibraryAlbums 分页返回当前未开始图片阅读的相册摘要。
-// 已保存图片活动的相册不传给客户端；当前没有图片页的相册始终保留为未读。
-func PageUnreadLibraryAlbums(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}, cursor string, limit int) (LibraryPage[LibraryNodeSummary], error) {
-	const scope = "library-unread"
-	offset, err := pageOffset(snapshot, cursor, scope)
-	if err != nil {
-		return LibraryPage[LibraryNodeSummary]{}, err
-	}
-	unread, err := buildUnreadLibraryAlbums(snapshot, startedImageAlbumIDs)
-	if err != nil {
-		return LibraryPage[LibraryNodeSummary]{}, err
-	}
-	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(unread), limit)
-	if err != nil {
-		return LibraryPage[LibraryNodeSummary]{}, err
-	}
-	return LibraryPage[LibraryNodeSummary]{
-		Revision: snapshot.Revision(), Items: cloneNodePage(unread, start, end), Total: len(unread), NextCursor: next,
-	}, nil
-}
-
-func buildUnreadLibraryAlbums(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}) ([]LibraryNodeSummary, error) {
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
-		return nil, ErrLibraryNotReady
-	}
-	unread := make([]LibraryNodeSummary, 0, len(snapshot.state.library.albums))
-	for _, album := range snapshot.state.library.albums {
-		if _, started := startedImageAlbumIDs[album.ID]; started && album.ImageCount > 0 {
-			continue
-		}
-		unread = append(unread, album)
-	}
-	return unread, nil
-}
-
 // ResolveLibraryNodes 按调用方给定顺序批量解析相册或集合摘要。不存在、已过期
 // 或不是可展示节点的 ID 会进入 Missing，避免收藏/最近浏览逐个发请求。
 func ResolveLibraryNodes(snapshot CatalogSnapshot, ids []string) (LibraryNodeQueryResult, error) {
@@ -579,99 +544,27 @@ func containsTag(tags []string, needle string) bool {
 }
 
 // RandomLibraryAlbum 从当前 revision 的预计算相册摘要中安全地抽取一项。
-// excludeIDs 用于排除已经有图片阅读活动的相册，从而支持随机未读。
-func RandomLibraryAlbum(snapshot CatalogSnapshot, excludeIDs map[string]struct{}) (LibraryNodeSummary, error) {
+func RandomLibraryAlbum(snapshot CatalogSnapshot) (LibraryNodeSummary, error) {
 	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
 		return LibraryNodeSummary{}, ErrLibraryNotReady
 	}
 	albums := snapshot.state.library.albums
-	candidates := make([]int, 0, len(albums))
-	for index, album := range albums {
-		// 与前端 isUnread 保持同一语义：没有当前图片页的相册总是未读，
-		// 即便它在上一个 revision 曾留下图片阅读活动。
-		if _, excluded := excludeIDs[album.ID]; excluded && album.ImageCount > 0 {
-			continue
-		}
-		candidates = append(candidates, index)
-	}
-	if len(candidates) == 0 {
+	if len(albums) == 0 {
 		return LibraryNodeSummary{}, ErrLibraryNoMatchingAlbum
 	}
-	picked, err := rand.Int(rand.Reader, big.NewInt(int64(len(candidates))))
+	picked, err := randomLibraryIndex(len(albums))
 	if err != nil {
 		return LibraryNodeSummary{}, fmt.Errorf("select random library album: %w", err)
 	}
-	return cloneNodeSummary(albums[candidates[picked.Int64()]]), nil
+	return cloneNodeSummary(albums[picked]), nil
 }
 
-// BuildLibraryActivitySummary 将当前 catalog 与已开始的图片活动合并为导航计数。
-// 没有图片活动或当前没有图片页的相册即为未读；视频活动不影响相册阅读语义。
-func BuildLibraryActivitySummary(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}) (LibraryActivitySummary, error) {
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
-		return LibraryActivitySummary{}, ErrLibraryNotReady
+func randomLibraryIndex(total int) (int, error) {
+	picked, err := rand.Int(rand.Reader, big.NewInt(int64(total)))
+	if err != nil {
+		return 0, err
 	}
-	albums := snapshot.state.library.albums
-	summary := LibraryActivitySummary{
-		Revision:   snapshot.Revision(),
-		AlbumCount: len(albums),
-	}
-	for _, album := range albums {
-		if _, started := startedImageAlbumIDs[album.ID]; !started || album.ImageCount <= 0 {
-			summary.UnreadCount++
-		}
-	}
-	return summary, nil
-}
-
-// BuildLibraryHomeDashboard 以当前 revision 和图片阅读活动生成首页仪表盘。
-// 这条路径只遍历服务端不可变索引和本地活动记录，响应不会携带全量相册清单。
-func BuildLibraryHomeDashboard(snapshot CatalogSnapshot, imageActivities []models.Activity) (LibraryHomeDashboard, error) {
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
-		return LibraryHomeDashboard{}, ErrLibraryNotReady
-	}
-
-	activitiesByAlbum := make(map[string]models.Activity, len(imageActivities))
-	for _, activity := range imageActivities {
-		if activity.MediaKind != models.MediaKindImage {
-			continue
-		}
-		if current, exists := activitiesByAlbum[activity.AlbumID]; !exists || activity.Updated.After(current.Updated) {
-			activitiesByAlbum[activity.AlbumID] = activity
-		}
-	}
-
-	dashboard := LibraryHomeDashboard{
-		Revision:   snapshot.Revision(),
-		AlbumCount: len(snapshot.state.library.albums),
-		Unread:     []LibraryNodeSummary{},
-		InProgress: []LibraryDashboardProgress{},
-	}
-	for _, album := range snapshot.state.library.albums {
-		activity, started := activitiesByAlbum[album.ID]
-		if !started || album.ImageCount == 0 {
-			dashboard.UnreadCount++
-			if len(dashboard.Unread) < libraryDashboardUnreadPreviewLimit {
-				dashboard.Unread = append(dashboard.Unread, cloneNodeSummary(album))
-			}
-			continue
-		}
-		if activity.PageIndex >= 0 && activity.PageIndex < album.ImageCount-1 {
-			dashboard.InProgress = append(dashboard.InProgress, LibraryDashboardProgress{
-				Album:     cloneNodeSummary(album),
-				PageIndex: activity.PageIndex,
-				PageCount: album.ImageCount,
-				Updated:   activity.Updated,
-			})
-		}
-	}
-	sort.SliceStable(dashboard.InProgress, func(i, j int) bool {
-		left, right := dashboard.InProgress[i], dashboard.InProgress[j]
-		if !left.Updated.Equal(right.Updated) {
-			return left.Updated.After(right.Updated)
-		}
-		return left.Album.ID < right.Album.ID
-	})
-	return dashboard, nil
+	return int(picked.Int64()), nil
 }
 
 func clonePage[T any](items []T, start, end int) []T {

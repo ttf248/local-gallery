@@ -48,9 +48,9 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app.Get("/api/albums", LibraryAlbumsPageHandler(catalog))
 	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"), "")
 	unreadIndex := services.NewUnreadLibraryIndex()
-	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities))
-	app.Get("/api/library/activity-summary", LibraryActivitySummaryHandler(catalog, activities))
-	app.Get("/api/library/dashboard", LibraryHomeDashboardHandler(catalog, activities))
+	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities, unreadIndex))
+	app.Get("/api/library/activity-summary", LibraryActivitySummaryHandler(catalog, activities, unreadIndex))
+	app.Get("/api/library/dashboard", LibraryHomeDashboardHandler(catalog, activities, unreadIndex))
 	app.Get("/api/library/unread", LibraryUnreadAlbumsPageHandler(catalog, activities, unreadIndex))
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog))
 	app.Get("/api/tags", LibraryTagsPageHandler(catalog))
@@ -134,6 +134,24 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	_ = summaryResp.Body.Close()
 	if summaryBody.Summary.AlbumCount != 2 || summaryBody.Summary.UnreadCount != 1 {
 		t.Fatalf("activity summary=%+v", summaryBody.Summary)
+	}
+
+	randomUnreadResp, err := app.Test(httptest.NewRequest("GET", "/api/albums/random?scope=unread", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if randomUnreadResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("random unread status=%d", randomUnreadResp.StatusCode)
+	}
+	var randomUnreadBody struct {
+		Album services.LibraryNodeSummary `json:"album"`
+	}
+	if err := json.NewDecoder(randomUnreadResp.Body).Decode(&randomUnreadBody); err != nil {
+		t.Fatal(err)
+	}
+	_ = randomUnreadResp.Body.Close()
+	if randomUnreadBody.Album.ID == albumID {
+		t.Fatalf("started album appeared in random unread=%+v", randomUnreadBody.Album)
 	}
 
 	dashboardResp, err := app.Test(httptest.NewRequest("GET", "/api/library/dashboard", nil))

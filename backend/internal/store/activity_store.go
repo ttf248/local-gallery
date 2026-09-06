@@ -118,21 +118,24 @@ func (s *ActivityStore) StartedImageAlbumIDsSnapshot() (map[string]struct{}, uin
 	return ids, s.revision, nil
 }
 
-// ImageActivities 返回全部图片阅读活动的值副本。它只服务于首页仪表盘的
-// 在读摘要；不会返回视频播放记录，也不读取媒体库或文件系统路径。
-func (s *ActivityStore) ImageActivities() ([]models.Activity, error) {
+// ImageActivitySnapshot 返回全部图片阅读活动、对应相册 ID 集合和当前活动版本。
+// 首页仪表盘使用这一致性快照构建在读与未读摘要；它不会返回视频播放记录，
+// 也不读取媒体库或文件系统路径。
+func (s *ActivityStore) ImageActivitySnapshot() ([]models.Activity, map[string]struct{}, uint64, error) {
 	if err := s.ensureLoaded(); err != nil {
-		return nil, err
+		return nil, nil, 0, err
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	activities := make([]models.Activity, 0, len(s.items))
+	ids := make(map[string]struct{})
 	for _, activity := range s.items {
 		if activity.MediaKind == models.MediaKindImage {
 			activities = append(activities, activity)
+			ids[activity.AlbumID] = struct{}{}
 		}
 	}
-	return activities, nil
+	return activities, ids, s.revision, nil
 }
 
 // Set 新增或覆盖单条活动。

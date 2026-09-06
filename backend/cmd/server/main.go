@@ -288,13 +288,13 @@ func main() {
 	api.Get("/library/manifest", handlers.LibraryManifestHandler(resourceCatalog))
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(resourceCatalog))
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(resourceCatalog))
-	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(resourceCatalog, activities))
-	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(resourceCatalog, activities))
+	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(resourceCatalog, activities, unreadIndex))
+	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(resourceCatalog, activities, unreadIndex))
 	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(resourceCatalog, activities, unreadIndex))
 	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache, resourceCatalog, runner))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
 	api.Get("/albums", handlers.LibraryAlbumsPageHandler(resourceCatalog))
-	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(resourceCatalog, activities))
+	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(resourceCatalog, activities, unreadIndex))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(resourceCatalog))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。
 	// file 必须是 path 子路径 + 真实存在的文件；越权请求会被 400 拒绝。
