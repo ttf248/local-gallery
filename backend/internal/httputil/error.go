@@ -16,9 +16,6 @@ import (
 //	  "message": "人可读的描述",
 //	  "details": { ... }  // 可选,具体上下文
 //	}
-//
-// 老字段 `error` 仍作为 message 的别名保留,前端不感知。
-// 详见 docs/API.md。
 type errorResponse struct {
 	Code    string         `json:"code"`
 	Message string         `json:"message"`
@@ -38,12 +35,7 @@ func Error(c *fiber.Ctx, status int, code, message string, details ...map[string
 	if len(details) > 0 && details[0] != nil {
 		resp.Details = details[0]
 	}
-	return c.Status(status).JSON(fiber.Map{
-		"code":    resp.Code,
-		"message": resp.Message,
-		"error":   message, // 兼容老前端 + 后台脚本
-		"details": resp.Details,
-	})
+	return c.Status(status).JSON(resp)
 }
 
 // BadRequest 400 + code 快捷方式。

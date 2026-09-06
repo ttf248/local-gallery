@@ -106,7 +106,7 @@ export default function Favorites() {
         if (!p) return c;
         return {
           ...c,
-          progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
+          progress: { index: p.pageIndex, total: c.imageCount ?? 0 },
         };
       });
     switch (sortBy) {

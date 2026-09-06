@@ -5,6 +5,8 @@ import (
 	"runtime/debug"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 )
 
 // Recover 捕获 panic，返回 500 + 简短错误。
@@ -14,9 +16,7 @@ func Recover() fiber.Handler {
 		defer func() {
 			if r := recover(); r != nil {
 				log.Printf("PANIC: %v\n%s", r, debug.Stack())
-				err = c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error": "internal server error",
-				})
+				err = httputil.Internal(c, "internal_error", "internal server error")
 			}
 		}()
 		return c.Next()

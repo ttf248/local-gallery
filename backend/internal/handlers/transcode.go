@@ -36,14 +36,10 @@ func TranscodeStatusHandler(svc *services.TranscodeService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		if !models.IsVideoFile(filepath.Base(path)) {
-			return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-				"error": "not a supported video format",
-			})
+			return writeError(c, fiber.StatusUnsupportedMediaType, "unsupported_video_format", "not a supported video format")
 		}
 		if svc == nil {
 			return c.JSON(fiber.Map{
@@ -75,14 +71,10 @@ func TranscodeCancelHandler(svc *services.TranscodeService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		if !models.IsVideoFile(filepath.Base(path)) {
-			return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-				"error": "not a supported video format",
-			})
+			return writeError(c, fiber.StatusUnsupportedMediaType, "unsupported_video_format", "not a supported video format")
 		}
 		if svc == nil {
 			return c.JSON(fiber.Map{"ok": false, "error": "transcode service not initialized"})
@@ -110,19 +102,13 @@ func TranscodeEventsHandler(svc *services.TranscodeService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		if !models.IsVideoFile(filepath.Base(path)) {
-			return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-				"error": "not a supported video format",
-			})
+			return writeError(c, fiber.StatusUnsupportedMediaType, "unsupported_video_format", "not a supported video format")
 		}
 		if svc == nil {
-			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
-				"error": "transcode service not initialized",
-			})
+			return writeError(c, fiber.StatusServiceUnavailable, "transcode_unavailable", "transcode service not initialized")
 		}
 
 		c.Set("Content-Type", "text/event-stream")

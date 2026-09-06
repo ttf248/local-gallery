@@ -107,17 +107,13 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 	return func(c *fiber.Ctx) error {
 		var patch config.ConfigPatch
 		if err := c.BodyParser(&patch); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid JSON body: " + err.Error(),
-			})
+			return writeError(c, fiber.StatusBadRequest, "invalid_config_body", "invalid JSON body")
 		}
 
 		prevRoots := mgr.Roots()
 		requiresRestart, err := mgr.Update(patch)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return writeError(c, fiber.StatusBadRequest, "invalid_config", "configuration is invalid")
 		}
 		newCfg := mgr.Get()
 		newRoots := newCfg.Roots()
@@ -126,10 +122,7 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 		if onUpdate != nil {
 			if err := onUpdate(newCfg, mediaRootsChanged); err != nil {
 				// 通知失败：内存已是新值但下游没跟上；返回 500 提示用户回滚或重启
-				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-					"error":   "config saved, but applying to running services failed: " + err.Error(),
-					"applied": true,
-				})
+				return writeError(c, fiber.StatusInternalServerError, "config_apply_failed", "config saved, but applying to running services failed", fiber.Map{"applied": true})
 			}
 		}
 

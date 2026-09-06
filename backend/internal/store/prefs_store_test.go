@@ -265,16 +265,15 @@ func TestPrefsStore_AddFavoriteCappedAtMaxFavorites(t *testing.T) {
 	}
 }
 
-func TestPrefsStore_GetReturnsDeepCopyAndDropsLegacyPaths(t *testing.T) {
+func TestPrefsStore_GetReturnsDeepCopyAndDropsInvalidResourceIDs(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "prefs.json")
-	legacy := `{
+	stored := `{
   "favorites": ["C:\\\\Users\\\\reader\\\\secret", "a_0000000000000000000001"],
-  "history": [{"path": "C:\\\\secret", "name": "legacy"}],
-  "readingProgress": [{"path": "C:\\\\secret", "index": 1, "total": 2}],
+  "history": [{"albumId": "C:\\\\secret", "name": "invalid"}],
   "maxRecent": 10,
   "theme": "system"
 }`
-	if err := os.WriteFile(path, []byte(legacy), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(stored), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	s := NewPrefsStore(path)
@@ -283,7 +282,7 @@ func TestPrefsStore_GetReturnsDeepCopyAndDropsLegacyPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(prefs.Favorites) != 1 || len(prefs.History) != 0 {
-		t.Fatalf("legacy paths were not filtered: %+v", prefs)
+		t.Fatalf("invalid resource ids were not filtered: %+v", prefs)
 	}
 	prefs.Favorites[0] = testAlbumID(99)
 	again, _ := s.Get()

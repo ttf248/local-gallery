@@ -10,11 +10,10 @@
 - 资源校验错误使用 `{ "code": "...", "message": "..." }`；媒体不存在或 ID 已过期时重新扫描。所有 4xx/5xx 响应统一为：
 
   ```json
-  { "code": "snake_case_id", "message": "...", "error": "...", "details": { } }
+  { "code": "snake_case_id", "message": "...", "details": { } }
   ```
 
-  老字段 `error` 仍保留为 message 别名（前端兼容）。`code` 是稳定字符串，
-  前端用此做 `if (err.code === 'video_cover_missing')` 区分。
+  `code` 是稳定字符串，前端用此做 `if (err.code === 'video_cover_missing')` 区分。
 - `r_`、`a_`、`c_`、`f_` 分别表示根、相册、集合和文件资源 ID。
 - 资源 ID 在根目录和相对路径不变时保持稳定，不包含可逆的绝对路径信息。
 - SSE 响应使用 `text/event-stream`，客户端断开后服务端必须清理订阅。
@@ -165,7 +164,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ## 收藏、历史与媒体活动
 
-偏好文件只保存稳定资源 ID。旧版 `path` 字段和绝对路径记录在加载时丢弃，不再提供兼容解析。
+偏好文件只保存稳定资源 ID。加载时会丢弃不符合当前资源 ID 格式的记录，避免暴露本机路径。
 
 - `GET /api/prefs`、`PATCH /api/prefs`：读取或修改界面偏好。高频媒体活动不再混入偏好响应。
 - `GET /api/favorites`：返回 `{ "favorites": ["<resourceId>"] }`。
@@ -186,8 +185,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 `/api/library/activity-summary`、`/api/library/dashboard` 与 `/api/library/unread` 均以是否存在图片阅读活动判定未读；当前没有图片页的相册始终视为未读，视频播放记录不会改变该语义。前者用于常驻导航，仪表盘用于首页，专用分页端点用于完整未读列表。
 
 响应中 `status` 为 `in_progress` / `completed`，由服务端按实际位置派生。图片到达
-`pageCount - 1` 完成；视频到达 98% 完成。旧 `readingProgress` 只在首次升级时迁移，
-`/api/progress` 不再提供。
+`pageCount - 1` 完成；视频到达 98% 完成。`/api/progress` 不提供。
 
 图片 `pageIndex` 表示当前视图实际展示的最末页：单页模式为当前页，双页模式为跨页
 右侧页，连续模式为可见区末页。读取不存在的记录返回 `404 activity_not_found`；标识或

@@ -52,7 +52,7 @@ type ScanResultCache struct {
 
 const (
 	flushDebounce          = 500 * time.Millisecond
-	scanCacheSchemaVersion = 4
+	scanCacheSchemaVersion = 5
 )
 
 type scanCacheEnvelope struct {

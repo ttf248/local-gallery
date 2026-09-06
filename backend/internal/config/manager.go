@@ -68,14 +68,6 @@ func (m *Manager) Get() *Config {
 	return cloneConfig(m.current)
 }
 
-// Root 返回当前生效的第一个媒体根目录。便捷转发，handler 不必先 Get。
-// 多根场景请改用 Roots()。
-func (m *Manager) Root() string {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return m.current.Root()
-}
-
 // Roots 返回当前生效的所有媒体根目录（已规范化）。
 func (m *Manager) Roots() []string {
 	m.mu.RLock()

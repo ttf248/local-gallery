@@ -78,10 +78,7 @@ interface CollectionDetail {
   videoCount: number;
   folderSize: number;
   albums: AlbumDetail[];
-  /**
-   * 嵌套子集合(子目录里没有顶层图/视频,继续下钻的「中间层」集合)。
-   * 旧版会拍平,新版保留嵌套以便完整显示「年→月→事件」5 层结构。
-   */
+  /** 嵌套子集合（子目录里没有顶层媒体时继续下钻的中间层）。 */
   collections?: CollectionDetail[];
   /** 直属于本层的子相册数(不含嵌套集合) */
   albumCount: number;

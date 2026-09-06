@@ -150,7 +150,7 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 | `host` / `port`             | 监听地址 / 端口                                                           |
 | `accessMode`                | `local` 仅回环访问（默认）；`lan` 开启可信家庭网络令牌保护         |
 | `accessToken`               | LAN 模式必填，32-256 个无空白字符；只用于换取 HttpOnly 会话       |
-| `cacheDir`                  | 应用工作目录；`state/` 保存状态，`derived/` 保存可清缓存，默认 `./.local-gallery/`；修改需重启 |
+| `cacheDir`                  | 应用工作目录；`state/` 保存状态，`derived/` 保存可清缓存，默认 `./.local-gallery/`；旧顶层文件不读取、不移动；修改需重启 |
 | `thumbSizeW` / `thumbSizeH` | 缩略图尺寸                                                                |
 | `thumbCacheSize`            | LRU 内存缓存项数                                                          |
 | `cacheMaxAgeDays`           | 磁盘缓存保留天数                                                          |
@@ -163,6 +163,8 @@ cd ../backend && go build -o ../bin/server ./cmd/server
 
 启动参数只保留 `--config <yaml>`；`staticDir` 也从配置文件读取。**不支持环境变量或其他 CLI 覆盖**。
 配置项可在网页 `/settings` → 「服务端」里改，部分字段热生效（见 [`docs/API.md`](./docs/API.md)「配置项」一节）。
+
+开发版只接受当前 API 与持久化 schema：所有 HTTP 失败响应固定为 `{ code, message, details? }`；扫描缓存 schema 不匹配时会隔离原文件并以空缓存启动。
 
 ---
 

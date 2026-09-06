@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 )
 
 // OpenInOS 在系统文件管理器中打开给定路径。
@@ -103,23 +105,17 @@ func PathSafetyMiddleware(initialRoots []string, resolvers ...ResourceResolver) 
 		if resolver != nil {
 			resolved, ok := resolver.Resolve(path)
 			if !ok {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"code": "invalid_resource_id", "message": "resource id is invalid or stale",
-				})
+				return httputil.BadRequest(c, "invalid_resource_id", "resource id is invalid or stale")
 			}
 			path = resolved
 		}
 		ps := state.v.Load()
 		if ps == nil || len(ps.roots) == 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "mediaRoots not configured",
-			})
+			return httputil.BadRequest(c, "media_roots_unconfigured", "mediaRoots not configured")
 		}
 		clean, err := validatePathMulti(ps.roots, ps.prefixes, path)
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return httputil.BadRequest(c, "invalid_media_path", "media path is invalid")
 		}
 		// 校验后的安全路径存到 c.Locals("safePath")，下游 handler 用 SafePath(c) 取
 		c.Locals("safePath", clean)

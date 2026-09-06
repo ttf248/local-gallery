@@ -3,6 +3,7 @@ package handlers
 import (
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
@@ -37,9 +38,7 @@ func resolveResource(c *fiber.Ctx, catalog *services.ResourceCatalog, id string,
 	}
 	ref, ok := catalog.Lookup(id)
 	if !ok || ref.Kind != kind {
-		_ = c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"code": "invalid_resource_id", "message": "resource id is invalid or has the wrong type",
-		})
+		_ = httputil.BadRequest(c, "invalid_resource_id", "resource id is invalid or has the wrong type")
 		return "", false
 	}
 	return ref.AbsolutePath, true

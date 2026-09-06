@@ -195,8 +195,8 @@ func TestScanResultCache_PersistsAbsolutePath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// schemaVersion=4 标记
-	if !strings.Contains(string(data), `"schemaVersion": 4`) {
+	// schemaVersion=5 标记
+	if !strings.Contains(string(data), `"schemaVersion": 5`) {
 		t.Fatalf("cache schema version missing or wrong: %s", data)
 	}
 	// 绝对路径确实在文件里(新合约)。
@@ -204,7 +204,7 @@ func TestScanResultCache_PersistsAbsolutePath(t *testing.T) {
 	escapedRoot, _ := json.Marshal(root)
 	escapedFile, _ := json.Marshal(filePath)
 	if !strings.Contains(string(data), strings.Trim(string(escapedRoot), `"`)) {
-		t.Errorf("schemaVersion=4 should keep raw absolute path, but file doesn't contain root %q:\n%s", root, data)
+		t.Errorf("schemaVersion=5 should keep raw absolute path, but file doesn't contain root %q:\n%s", root, data)
 	}
 	if !strings.Contains(string(data), strings.Trim(string(escapedFile), `"`)) {
 		t.Errorf("file should contain raw image file path %q:\n%s", filePath, data)

@@ -258,7 +258,7 @@ export default function ImageGallery({
     // 上下 ±overscan 范围内的图。1000+ 张大本连续模式不再一次性挂 1000+
     // 个 <img>,DOM 节点数稳定在视口高度相关的小常数。
     //
-    // 兼容性:
+    // 交互约束:
     //   - click 翻页 / contextmenu 阻止 / data-image-gallery 属性挂在外层
     //   - 缩放(zoom)变化时 virtuoso 通过 overscan 重新计算可视窗口
     //   - rotate 同理

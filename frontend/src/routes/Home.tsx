@@ -4,10 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useSearchStore } from "../store/searchStore";
 import { useScanSSE } from "../hooks/useScanSSE";
 import { useFavorites } from "../hooks/useFavorites";
-import {
-  useMarkAlbumRead,
-  useMarkAlbumsRead,
-} from "../hooks/useImageActivity";
+import { useMarkAlbumRead, useMarkAlbumsRead } from "../hooks/useImageActivity";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { scanApi } from "../api/scan";
 import { historyApi } from "../api/prefs";
@@ -353,7 +350,7 @@ export default function Home() {
       return;
     }
     const idx = card.progress?.index ?? 0;
-    const imgs = card.imageCount ?? card.count;
+    const imgs = card.imageCount ?? 0;
     const vids = card.videoCount ?? 0;
     const galleryType: "image" | "video" =
       imgs > 0 ? "image" : vids > 0 ? "video" : "image";

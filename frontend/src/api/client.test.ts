@@ -14,12 +14,10 @@ describe("api error response", () => {
     vi.unstubAllGlobals();
   });
 
-  it("只读取一次响应体并解析嵌套错误", async () => {
+  it("只读取一次响应体并解析标准扁平错误", async () => {
     const response = failedResponse(
       400,
-      JSON.stringify({
-        error: { code: "invalid_request", message: "请求无效" },
-      }),
+      JSON.stringify({ code: "invalid_request", message: "请求无效" }),
     );
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
 
@@ -34,7 +32,7 @@ describe("api error response", () => {
     });
   });
 
-  it("兼容扁平错误与非 JSON 错误文本", async () => {
+  it("保留非 JSON 错误文本供诊断", async () => {
     vi.stubGlobal(
       "fetch",
       vi

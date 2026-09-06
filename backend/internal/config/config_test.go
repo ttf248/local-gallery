@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -66,8 +67,8 @@ func TestLoadFile_MissingReturnsDefault(t *testing.T) {
 		t.Fatalf("LoadFile should not error on missing file, got: %v", err)
 	}
 	d := Default()
-	if cfg.Root() != d.Root() {
-		t.Errorf("expected default media root, got %q", cfg.Root())
+	if got, want := cfg.Roots(), d.Roots(); !slices.Equal(got, want) {
+		t.Errorf("expected default media roots %q, got %q", want, got)
 	}
 }
 
@@ -89,8 +90,8 @@ staticDir: build/web
 	if err != nil {
 		t.Fatalf("LoadFile: %v", err)
 	}
-	if cfg.Root() != "D:\\photos" {
-		t.Errorf("mediaRoots: got %q", cfg.Root())
+	if got := cfg.Roots(); len(got) != 1 || got[0] != "D:\\photos" {
+		t.Errorf("mediaRoots: got %q", got)
 	}
 	if cfg.Port != 9090 {
 		t.Errorf("port: got %d", cfg.Port)

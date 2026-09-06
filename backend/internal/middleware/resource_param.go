@@ -1,6 +1,10 @@
 package middleware
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
+)
 
 // ResourceParam 把路由中的 :id 解析为内部路径，按当前媒体根再次校验后写入 safePath。
 func ResourceParam(resolver ResourceResolver, validators ...PathValidator) fiber.Handler {
@@ -11,9 +15,7 @@ func ResourceParam(resolver ResourceResolver, validators ...PathValidator) fiber
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		if id == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"code": "missing_resource_id", "message": "resource id is required",
-			})
+			return httputil.BadRequest(c, "missing_resource_id", "resource id is required")
 		}
 		path := ""
 		ok := false
@@ -27,16 +29,12 @@ func ResourceParam(resolver ResourceResolver, validators ...PathValidator) fiber
 			path, ok = resolver.Resolve(id)
 		}
 		if !ok {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"code": "resource_not_found", "message": "resource id is invalid or stale",
-			})
+			return httputil.NotFound(c, "resource_not_found", "resource id is invalid or stale")
 		}
 		if validator != nil {
 			path, err := validator.Validate(path)
 			if err != nil {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-					"code": "resource_not_found", "message": "resource id is invalid or stale",
-				})
+				return httputil.NotFound(c, "resource_not_found", "resource id is invalid or stale")
 			}
 			c.Locals("safePath", path)
 		}

@@ -30,6 +30,7 @@ import (
 
 	"github.com/tianlongxiang/local-gallery/internal/config"
 	"github.com/tianlongxiang/local-gallery/internal/handlers"
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
 	"github.com/tianlongxiang/local-gallery/internal/services"
 	"github.com/tianlongxiang/local-gallery/internal/store"
@@ -86,9 +87,9 @@ func main() {
 		BodyLimit: 6 * 1024 * 1024,
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			if fe, ok := err.(*fiber.Error); ok {
-				return c.Status(fe.Code).JSON(fiber.Map{"error": fe.Message})
+				return httputil.Error(c, fe.Code, "http_error", fe.Message)
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal server error"})
+			return httputil.Internal(c, "internal_error", "internal server error")
 		},
 	})
 

@@ -42,9 +42,7 @@ func CacheStatsHandler(mgr *config.Manager, stats *services.CacheStatsService) f
 		cfg := mgr.Get()
 		usage, expiresAt, err := stats.Usage(cfg.CacheDir)
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return writeError(c, fiber.StatusInternalServerError, "cache_stats_unavailable", "cache statistics are unavailable")
 		}
 		resp := CacheStatsResponse{
 			Path:            "cache",
@@ -133,17 +131,13 @@ func CacheClearHandler(
 	return func(c *fiber.Ctx) error {
 		scope := strings.ToLower(strings.TrimSpace(c.Query("scope")))
 		if scope == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'scope' query parameter (thumbs|faststart|transcode|all)",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_cache_scope", "missing 'scope' query parameter (thumbs|faststart|transcode|all)")
 		}
 		if scope != CacheClearScopeThumbs &&
 			scope != CacheClearScopeFaststart &&
 			scope != CacheClearScopeTranscode &&
 			scope != CacheClearScopeAll {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "invalid scope: must be one of thumbs|faststart|transcode|all",
-			})
+			return writeError(c, fiber.StatusBadRequest, "invalid_cache_scope", "invalid scope: must be one of thumbs|faststart|transcode|all")
 		}
 
 		result := CacheClearResult{Scope: scope}
@@ -154,9 +148,7 @@ func CacheClearHandler(
 			if thumbs != nil {
 				deleted, freed, err := thumbs.ClearAll()
 				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": "clear thumbs: " + err.Error(),
-					})
+					return writeError(c, fiber.StatusInternalServerError, "cache_clear_failed", "clear thumbnails")
 				}
 				result.Thumbs = &CacheScopeResult{Deleted: deleted, FreedBytes: freed}
 				result.TotalDeleted += deleted
@@ -167,9 +159,7 @@ func CacheClearHandler(
 			if faststart != nil {
 				deleted, freed, err := faststart.ClearCache()
 				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": "clear faststart: " + err.Error(),
-					})
+					return writeError(c, fiber.StatusInternalServerError, "cache_clear_failed", "clear faststart cache")
 				}
 				result.Faststart = &CacheScopeResult{Deleted: deleted, FreedBytes: freed}
 				result.TotalDeleted += deleted
@@ -182,9 +172,7 @@ func CacheClearHandler(
 				// (后者要 maxBytes / maxAgeDays 任一为正才生效)。
 				deleted, freed, err := transcode.ClearCache()
 				if err != nil {
-					return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-						"error": "clear transcode: " + err.Error(),
-					})
+					return writeError(c, fiber.StatusInternalServerError, "cache_clear_failed", "clear transcode cache")
 				}
 				result.Transcode = &CacheScopeResult{Deleted: deleted, FreedBytes: freed}
 				result.TotalDeleted += deleted

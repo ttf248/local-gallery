@@ -85,14 +85,12 @@ func ThumbCleanupHandler(svc *services.ThumbnailService) fiber.Handler {
 
 // ThumbCleanupHandlerWithCacheStats 清理过期缩略图缓存后,通知 cacheStats
 // 失效,让前端的"缓存占用"展示立即反映清理结果。
-// cacheStats 为 nil 时退化为 ThumbCleanupHandler 行为(向后兼容测试)。
+// cacheStats 可选；缺省时只执行缩略图清理。
 func ThumbCleanupHandlerWithCacheStats(svc *services.ThumbnailService, cacheStats *services.CacheStatsService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		n, err := svc.Cleanup()
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return writeError(c, fiber.StatusInternalServerError, "thumbnail_cleanup_failed", "thumbnail cleanup failed")
 		}
 		if cacheStats != nil {
 			cacheStats.Invalidate()
@@ -129,34 +127,24 @@ func ThumbCoverHandler(svc *services.ThumbnailService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		body := c.Body()
 		if len(body) == 0 {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "empty body",
-			})
+			return writeError(c, fiber.StatusBadRequest, "empty_cover_body", "cover body is empty")
 		}
 		if len(body) > maxCoverBytes {
-			return c.Status(fiber.StatusRequestEntityTooLarge).JSON(fiber.Map{
-				"error": "cover payload too large",
-			})
+			return writeError(c, fiber.StatusRequestEntityTooLarge, "cover_payload_too_large", "cover payload too large")
 		}
 		if err := svc.SaveVideoCover(path, body); err != nil {
 			switch {
 			case errors.Is(err, services.ErrSourceMissing):
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "source video not found"})
+				return writeError(c, fiber.StatusNotFound, "source_not_found", "source video not found")
 			case errors.Is(err, services.ErrUnsupportedFormat):
-				return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-					"error": "cover data is not a valid image",
-				})
+				return writeError(c, fiber.StatusUnsupportedMediaType, "unsupported_cover_format", "cover data is not a valid image")
 			default:
 				// 非视频路径会落到这里（fmt.Errorf），返回 400 更准确
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": err.Error(),
-				})
+				return writeError(c, fiber.StatusBadRequest, "invalid_video_cover", "video cover cannot be saved")
 			}
 		}
 		return c.JSON(fiber.Map{"ok": true, "bytes": len(body)})

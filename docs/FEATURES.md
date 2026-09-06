@@ -47,7 +47,7 @@
 | -------------- | ---------------------------------------------- | ---------------------------------- |
 | 原生播放       | 支持 Range、ETag 和常见 MIME                   | `handlers.VideoHandler`            |
 | faststart      | 非 faststart MP4 使用 ffmpeg copy-remux 并缓存 | `services.VideoFaststartService`   |
-| 兼容转码       | AV1/HEVC/ProRes 等按需转 H.264 + AAC           | `services.TranscodeService`        |
+| 按需转码       | AV1/HEVC/ProRes 等按需转 H.264 + AAC           | `services.TranscodeService`        |
 | 并发控制       | 同文件 singleflight，全局有界转码              | `TranscodeService.Resolve`         |
 | 进度与取消     | 状态查询、SSE 和取消接口均使用文件 ID          | `handlers/transcode.go`            |
 | 无 ffmpeg 降级 | 回退原文件和浏览器封面，不影响图片浏览         | 各视频 service 的 `Available` 分支 |

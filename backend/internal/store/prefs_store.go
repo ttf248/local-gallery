@@ -74,8 +74,8 @@ func normalize(p models.Prefs) models.Prefs {
 		p.Theme = d.Theme
 	}
 
-	// 偏好文件是 API 可直接读取的数据，旧版绝对路径或畸形标识不得重新
-	// 暴露。升级后只保留当前不透明资源 ID 契约。
+	// 偏好文件会直接通过 API 返回，绝对路径或畸形标识不得暴露；
+	// 仅保留当前不透明资源 ID 契约。
 	favorites := make([]string, 0, len(p.Favorites))
 	seenFavorites := make(map[string]struct{}, len(p.Favorites))
 	for _, id := range p.Favorites {

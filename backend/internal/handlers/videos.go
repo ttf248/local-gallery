@@ -118,21 +118,17 @@ func VideoInfoHandler(infoSvc *services.VideoInfoService, transcode *services.Tr
 		resourceID := middleware.ResourceID(c)
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		if !models.IsVideoFile(filepath.Base(path)) {
-			return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-				"error": "not a supported video format",
-			})
+			return writeError(c, fiber.StatusUnsupportedMediaType, "unsupported_video_format", "not a supported video format")
 		}
 		info, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
+				return writeError(c, fiber.StatusNotFound, "video_not_found", "video file not found")
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+			return writeError(c, fiber.StatusInternalServerError, "video_info_failed", "failed to read video metadata")
 		}
 		publicPath := path
 		publicDir := filepath.Dir(path)

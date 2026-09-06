@@ -28,44 +28,32 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 	return func(c *fiber.Ctx) error {
 		albumPath := middleware.SafePath(c)
 		if albumPath == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		fileID := strings.TrimSpace(c.Query("file"))
 		if fileID == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'file' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_file", "missing 'file' query parameter")
 		}
 		file, ok := resolveResource(c, catalog, fileID, services.ResourceFile)
 		if !ok {
 			return nil
 		}
 		if !isFileInsideAlbum(file, albumPath) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "file is not inside the album directory",
-			})
+			return writeError(c, fiber.StatusBadRequest, "file_outside_album", "file is not inside the album directory")
 		}
 		if fi, err := os.Stat(file); err != nil || fi.IsDir() {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "file does not exist or is a directory",
-			})
+			return writeError(c, fiber.StatusBadRequest, "invalid_cover_file", "file does not exist or is a directory")
 		}
 		kind := coverKindFromExt(file)
 		if kind == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "file extension not supported (need image or video)",
-			})
+			return writeError(c, fiber.StatusBadRequest, "unsupported_cover_format", "file extension not supported (need image or video)")
 		}
 		if err := store.Set(albumPath, file); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "save cover override: " + err.Error(),
-			})
+			return writeError(c, fiber.StatusInternalServerError, "cover_override_save_failed", "save cover override")
 		}
 		if catalog != nil {
 			if _, _, ok := catalog.RefreshCovers(cache, store); !ok {
-				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+				return writeError(c, fiber.StatusConflict, "library_not_ready", "library not ready")
 			}
 		} else {
 			cache.SetWithOverrideApplied(albumPath, file, kind)
@@ -92,18 +80,14 @@ func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.Cov
 	return func(c *fiber.Ctx) error {
 		albumPath := middleware.SafePath(c)
 		if albumPath == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		if err := store.Clear(albumPath); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "clear cover override: " + err.Error(),
-			})
+			return writeError(c, fiber.StatusInternalServerError, "cover_override_clear_failed", "clear cover override")
 		}
 		if catalog != nil {
 			if _, _, ok := catalog.RefreshCovers(cache, store); !ok {
-				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+				return writeError(c, fiber.StatusConflict, "library_not_ready", "library not ready")
 			}
 		} else {
 			cache.RebuildCoverForAlbum(albumPath)

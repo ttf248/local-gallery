@@ -28,9 +28,7 @@ func FsOpenHandler(mgr *config.Manager) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		cfg := mgr.Get()
 		if !cfg.AllowOsOpen {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"error": "allowOsOpen is disabled",
-			})
+			return writeError(c, fiber.StatusForbidden, "os_open_disabled", "allowOsOpen is disabled")
 		}
 
 		var path string
@@ -38,29 +36,21 @@ func FsOpenHandler(mgr *config.Manager) fiber.Handler {
 			// allowConfig 模式：跳过 path safety，handler 自己校验白名单
 			path = c.Query("path")
 			if path == "" {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "missing 'path' query parameter",
-				})
+				return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 			}
 			if !isAllowedConfigPath(path, cfg) {
-				return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-					"error": "path is not one of the configured cfg paths (cacheDir/staticDir/mediaRoots)",
-				})
+				return writeError(c, fiber.StatusForbidden, "config_path_not_allowed", "path is not one of the configured paths")
 			}
 		} else {
 			// 常规模式：path 必须已经过 path safety 中间件校验
 			path = middleware.SafePath(c)
 			if path == "" {
-				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-					"error": "missing 'path' query parameter",
-				})
+				return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 			}
 		}
 
 		if err := middleware.OpenInOS(path); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return writeError(c, fiber.StatusInternalServerError, "os_open_failed", "failed to open the resource")
 		}
 		return c.JSON(fiber.Map{"ok": true})
 	}
@@ -74,26 +64,18 @@ func FsOpenResourceHandler(mgr *config.Manager, catalog *services.ResourceCatalo
 	return func(c *fiber.Ctx) error {
 		cfg := mgr.Get()
 		if !cfg.AllowOsOpen {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"code": "os_open_disabled", "message": "allowOsOpen is disabled",
-			})
+			return writeError(c, fiber.StatusForbidden, "os_open_disabled", "allowOsOpen is disabled")
 		}
 		var body request
 		if err := c.BodyParser(&body); err != nil || body.ID == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"code": "invalid_resource_id", "message": "resource id is required",
-			})
+			return writeError(c, fiber.StatusBadRequest, "invalid_resource_id", "resource id is required")
 		}
 		path, ok := catalog.Resolve(body.ID)
 		if !ok {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"code": "resource_not_found", "message": "resource id is invalid or stale",
-			})
+			return writeError(c, fiber.StatusNotFound, "resource_not_found", "resource id is invalid or stale")
 		}
 		if err := middleware.OpenInOS(path); err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"code": "os_open_failed", "message": "failed to open the resource",
-			})
+			return writeError(c, fiber.StatusInternalServerError, "os_open_failed", "failed to open the resource")
 		}
 		return c.JSON(fiber.Map{"ok": true})
 	}

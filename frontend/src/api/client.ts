@@ -114,25 +114,14 @@ export async function api<T>(
           // 非 JSON 响应保留原始文本，便于调用方诊断代理或网关错误。
         }
 
-        // 同时支持当前扁平结构与新版嵌套结构：
-        // {"code":"...","message":"..."} / {"error":{"code":"...","message":"..."}}
+        // 当前 API 统一使用扁平错误结构：
+        // {"code":"...","message":"...","details":{...}}
         let code: string | undefined;
         let message = `HTTP ${res.status}`;
         if (parsed && typeof parsed === "object") {
           const obj = parsed as Record<string, unknown>;
-          const nestedError =
-            obj.error && typeof obj.error === "object"
-              ? (obj.error as Record<string, unknown>)
-              : null;
-          if (nestedError) {
-            if (typeof nestedError.code === "string") code = nestedError.code;
-            if (typeof nestedError.message === "string")
-              message = nestedError.message;
-          } else {
-            if (typeof obj.code === "string") code = obj.code;
-            if (typeof obj.message === "string") message = obj.message;
-            else if (typeof obj.error === "string") message = obj.error;
-          }
+          if (typeof obj.code === "string") code = obj.code;
+          if (typeof obj.message === "string") message = obj.message;
         }
         const err = new ApiError(res.status, message, parsed, code);
         if (res.status === 401 && typeof window !== "undefined") {
@@ -190,7 +179,7 @@ export function sse(
     }
   };
 
-  // 默认监听 message（兼容不带 event: 前缀的纯 data: 流）
+  // 默认监听 EventSource 的 message 事件（服务端未声明 event: 时使用）。
   es.addEventListener("message", handler);
   // 注册指定事件名
   for (const name of options.events ?? []) {

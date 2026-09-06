@@ -4,6 +4,8 @@ import (
 	"net"
 
 	"github.com/gofiber/fiber/v2"
+
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 )
 
 // LoopbackOnly 限制敏感管理接口只能由服务端本机访问。
@@ -13,9 +15,7 @@ func LoopbackOnly() fiber.Handler {
 		ip := net.ParseIP(c.Context().RemoteIP().String())
 		// fasthttp 的进程内 app.Test 使用未指定地址；它不代表真实远程连接。
 		if !isLocalIP(ip) {
-			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{
-				"code": "local_access_required", "message": "this management endpoint is local-only",
-			})
+			return httputil.Error(c, fiber.StatusForbidden, "local_access_required", "this management endpoint is local-only")
 		}
 		return c.Next()
 	}

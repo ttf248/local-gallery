@@ -35,21 +35,11 @@ export interface CardData {
   displayTitle?: string;
   // 副标题（集合 / smart 通常为空；album 显示标签或路径 basename）
   subtitle?: string;
-  /**
-   * 兼容字段：
-   *  - variant='album' 时 = imageCount（图数）
-   *  - variant='collection' / 'smart' 时 = albumCount（子相册数）
-   * 老的调用方只用 count 渲染，缺省走 imageCount ?? count。
-   * 视频数通过 imageCount / videoCount 两个字段一起提供，
-   * 渲染时按 "X 张" / "Y 个视频" / "X 张 · Y 个视频" 分支。
-   */
+  /** variant='album' 时为图片数，其他变体时为子相册数。 */
   count: number;
   /** 视频数（仅 album 变体有意义）。0 或缺省按"无视频"渲染。 */
   videoCount?: number;
-  /**
-   * 图片数（仅 album 变体有意义）。缺省时回退到 count。
-   * 显式提供主要是为了和 videoCount 一起让 UI 区分"纯视频相册"。
-   */
+  /** 图片数（仅 album 变体有意义），与 videoCount 一起区分纯视频相册。 */
   imageCount?: number;
   coverPath: string;
   /** 集合 / 智能视图的代表封面，按顺序最多展示四张；为空时回退到 coverPath。 */
@@ -105,12 +95,11 @@ export default function AlbumCard({
 // 卡片底部"X 张 / Y 个视频 / X 张 · Y 个视频"渲染。
 //
 // 仅 album 变体按图/视频分别展示；集合/smart 走 count + "卷"（语义是子相册数）。
-// 历史相册只有图时也回退到旧的 `count` 单位（"张"），不破坏既有观感。
 function formatMediaCount(
   data: CardData,
 ): { label: string; title: string } | null {
   if (data.variant !== "album") return null;
-  const imgs = data.imageCount ?? data.count;
+  const imgs = data.imageCount ?? 0;
   const vids = data.videoCount ?? 0;
   if (imgs > 0 && vids > 0) {
     return {
@@ -121,7 +110,7 @@ function formatMediaCount(
   if (imgs === 0 && vids > 0) {
     return { label: `${vids} 个视频`, title: `${vids} 个视频` };
   }
-  // 纯图 / 空相册：维持旧的 `count 张` 写法
+  // 纯图 / 空相册。
   return { label: `${imgs} 张`, title: `${imgs} 张` };
 }
 
@@ -140,7 +129,7 @@ function GridCard({
   const [previewRect, setPreviewRect] = useState<DOMRect | null>(null);
   const previewTimer = useRef<number | null>(null);
   const progressPct = progressPercent(data.progress);
-  // 0-based 页码到达 total - 1 即已读完；兼容旧数据中 index=total 的值。
+  // 0-based 页码到达 total - 1 即已读完。
   const isFinished = isCompleted(data.progress);
   // 全新：没有有效进度记录。保存过 index=0 说明已经打开第一张，属于在读。
   // 重要：仅 album 变体显示；智能集合 / 集合不适用。

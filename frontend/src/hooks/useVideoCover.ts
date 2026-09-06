@@ -46,15 +46,15 @@ const SERVER_POLL_TIMEOUT_MS = 20_000;
  *   2) 200 → ready (秒出)
  *   3) 404 + code=video_cover_missing → 服务端在后台异步抽帧,前端用
  *      短轮询重试 HEAD;超时仍未命中 → 进入 missing/extracting 状态,
- *      走老 fallback(浏览器抽帧)
+ *      改由浏览器抽帧
  *
- * v1 兼容流程（服务端无 ffmpeg 时）:
+ * 浏览器抽帧流程（服务端无 ffmpeg 时）:
  *   1) HEAD 404 → extracting
  *   2) <video>+canvas 抽帧 + POST
  *   3) bust + 重新 HEAD → ready
  *
- * 这个 hook 保持向后兼容:即使服务端没有 ffmpeg,浏览器抽帧路径仍然
- * 完整工作,只是慢一些(对 1GB+ 视频首次封面要几秒到十几秒)。
+ * 即使服务端没有 ffmpeg，浏览器抽帧路径仍可用，只是对 1GB+ 视频的
+ * 首次封面生成可能需要数秒。
  */
 export function useVideoCover(
   videoPath: string | null | undefined,

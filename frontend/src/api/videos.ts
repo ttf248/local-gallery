@@ -16,8 +16,7 @@ export function videoUrl(fileId: string): string {
 //   - probeError:解析失败时,后端会把错误消息塞这里（不抛 5xx）
 //   - transcode:服务端转码状态(Phase 2 新增);后端 ffmpeg 不可用时整个字段省略
 //
-// 旧版(v1)由前端 <video> 元素 loadedmetadata 派生,延迟到点击播放
-// 之后;v2 服务端 ffprobe 一次性返回,UI 在列表就能展示时长。
+// 服务端 ffprobe 可一次性返回元数据，UI 可在列表中展示时长。
 export interface VideoInfo {
   path: string;
   name: string;

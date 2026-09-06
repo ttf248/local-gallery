@@ -18,7 +18,7 @@ func AsyncScanStartHandler(runner *services.AsyncScanRunner, mgr *config.Manager
 	return func(c *fiber.Ctx) error {
 		id, _, reused, err := runner.StartOrReuse(ScanOptionsFromConfig(mgr))
 		if err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+			return writeError(c, fiber.StatusBadRequest, "scan_start_failed", "unable to start scan")
 		}
 		return c.JSON(fiber.Map{"scanId": id, "reused": reused})
 	}
@@ -52,12 +52,12 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		if id == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "missing scan id"})
+			return writeError(c, fiber.StatusBadRequest, "missing_scan_id", "missing scan id")
 		}
 
 		state := runner.Get(id)
 		if state == nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
+			return writeError(c, fiber.StatusNotFound, "scan_not_found", "scan not found")
 		}
 
 		c.Set("Content-Type", "text/event-stream")
@@ -89,7 +89,7 @@ func AsyncScanEventsHandler(runner *services.AsyncScanRunner) fiber.Handler {
 
 		events, unsubscribe, ok := runner.Subscribe(id)
 		if !ok {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
+			return writeError(c, fiber.StatusNotFound, "scan_not_found", "scan not found")
 		}
 
 		// 流式推送；每个连接使用独立订阅，不会与其它客户端竞争消费。
@@ -118,7 +118,7 @@ func AsyncScanCancelHandler(runner *services.AsyncScanRunner) fiber.Handler {
 		id := c.Params("id")
 		state := runner.Get(id)
 		if state == nil {
-			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "scan not found"})
+			return writeError(c, fiber.StatusNotFound, "scan_not_found", "scan not found")
 		}
 		if state.Status != services.ScanStatusRunning && state.Status != services.ScanStatusPending {
 			return c.JSON(fiber.Map{"ok": true, "alreadyDone": true})
@@ -148,9 +148,7 @@ func ScanCacheClearHandler(
 			err = scanCache.Clear()
 		}
 		if err != nil {
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": err.Error(),
-			})
+			return writeError(c, fiber.StatusInternalServerError, "scan_cancel_failed", "unable to cancel scan")
 		}
 		return c.JSON(fiber.Map{"ok": true})
 	}

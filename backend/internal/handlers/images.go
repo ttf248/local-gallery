@@ -42,16 +42,14 @@ func ImageHandler() fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		info, err := os.Stat(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
+				return writeError(c, fiber.StatusNotFound, "media_not_found", "media resource was not found")
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read media resource"})
+			return writeError(c, fiber.StatusInternalServerError, "media_read_failed", "failed to read media resource")
 		}
 		// ETag + 304 协商(命中 If-None-Match 时直接返回,不发 body)
 		etag := imageETag(info)
@@ -82,9 +80,7 @@ func MediaHandler(transcode *services.TranscodeService, faststart *services.Vide
 		if models.IsImageFile(filepath.Base(path)) {
 			return imageHandler(c)
 		}
-		return c.Status(fiber.StatusUnsupportedMediaType).JSON(fiber.Map{
-			"code": "unsupported_media", "message": "resource is not a supported media file",
-		})
+		return writeError(c, fiber.StatusUnsupportedMediaType, "unsupported_media", "resource is not a supported media file")
 	}
 }
 
@@ -97,16 +93,14 @@ func ImageInfoHandler(catalogs ...*services.ResourceCatalog) fiber.Handler {
 		resourceID := middleware.ResourceID(c)
 		path := middleware.SafePath(c)
 		if path == "" {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing 'path' query parameter",
-			})
+			return writeError(c, fiber.StatusBadRequest, "missing_path", "missing 'path' query parameter")
 		}
 		info, err := services.GetImageInfo(path)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not found"})
+				return writeError(c, fiber.StatusNotFound, "media_not_found", "media resource was not found")
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to read image metadata"})
+			return writeError(c, fiber.StatusInternalServerError, "image_info_failed", "failed to read image metadata")
 		}
 		if catalog != nil {
 			info.Path = resourceID

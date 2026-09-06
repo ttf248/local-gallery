@@ -230,8 +230,8 @@ func TestManager_Update_MediaRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := mgr.Get()
-	if cfg.Root() != newRoot {
-		t.Errorf("media root=%q want %q", cfg.Root(), newRoot)
+	if got := cfg.Roots(); len(got) != 1 || got[0] != newRoot {
+		t.Errorf("media roots=%q want [%q]", got, newRoot)
 	}
 }
 

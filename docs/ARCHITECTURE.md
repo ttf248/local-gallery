@@ -83,7 +83,7 @@ POST /api/scans
 
 ### 资源 ID 翻译
 
-`scan_cache.json` (schemaVersion=3) 直接存 raw 绝对路径 + 根 ID 列表，但它只是重启恢复仓库，不再作为 HTTP 请求的数据源。`ResourceCatalog` 是**唯一**负责把绝对路径翻译为 `r_/a_/c_/f_` 不透明 ID 的组件；它在私有内存中同时构建 raw 结果、ID 表和轻量分页索引，然后通过一次 `atomic.Store` 发布。
+`scan_cache.json`（schemaVersion=5）直接存 raw 绝对路径和根 ID 列表，但它只是重启恢复仓库，不作为 HTTP 请求的数据源。schema 不匹配时会隔离旧文件并冷启动。`ResourceCatalog` 是**唯一**负责把绝对路径翻译为 `r_/a_/c_/f_` 不透明 ID 的组件；它在私有内存中同时构建 raw 结果、ID 表和轻量分页索引，然后通过一次 `atomic.Store` 发布。
 
 `CatalogSnapshot` 在请求开始时只 Acquire 一次。资源参数中间件解析 ID 时会把该快照 pin 到 Fiber Locals，handler 继续使用同一值。因此重扫可以在请求中途发布，但已开始的请求仍能完整解析旧快照。媒体根变更或清空库会递增 scan generation，取消旧任务并拒绝它稍后提交。
 
@@ -117,17 +117,17 @@ snapshot。stat 全部移到锁外，`flushDebounce=500ms` 异步落盘。
 
 ```text
 浏览器请求
-  → 已缓存的兼容转码
+  → 已缓存的按需转码
   → MP4 faststart remux
   → 原始视频
 ```
 
-ffprobe 提供元数据；不兼容编码按需转为 H.264 + AAC；MP4 的 moov atom 不在前部时仅 remux。转码采用 singleflight 和全局并发限制，SSE 订阅断开时释放订阅资源。ffmpeg 不可用时能力降级而不阻断图片和原生兼容视频。
+ffprobe 提供元数据；浏览器不支持的编码按需转为 H.264 + AAC；MP4 的 moov atom 不在前部时仅 remux。转码采用 singleflight 和全局并发限制，SSE 订阅断开时释放订阅资源。ffmpeg 不可用时能力降级而不阻断图片和原生可播放视频。
 
 ## 配置与持久化
 
 - 配置：`backend/config.yaml`，`mediaRoots` 是唯一媒体根字段。
-- 默认工作目录：进程 CWD 下 `.local-gallery/`。启动时把旧版顶层文件迁移到新布局。
+- 默认工作目录：进程 CWD 下 `.local-gallery/`。启动时只创建当前分层布局；旧顶层文件不会被读取、移动或删除。
 - 持久状态：`state/scan_cache.json`、`state/web_settings.json`、`state/activity.json`、`state/cover_overrides.json`；任何缓存清理接口都不得进入 `state/`。
 - 派生缓存：`derived/thumbnails/`、`derived/video-faststart/`、`derived/video-transcode/`；按内容派生键写入，可安全重建。
 - 临时文件：统一写入 `temp/`，不与状态和派生缓存混放。

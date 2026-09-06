@@ -36,7 +36,7 @@ func PrefsPatchHandler(s *store.PrefsStore) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var p patch
 		if err := c.BodyParser(&p); err != nil {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid body"})
+			return writeError(c, fiber.StatusBadRequest, "invalid_prefs_body", "invalid preferences body")
 		}
 
 		cur, err := s.Get()
@@ -88,7 +88,7 @@ func FavoriteAddHandler(s *store.PrefsStore) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var r req
 		if err := c.BodyParser(&r); err != nil || !models.IsFavoriteResourceID(r.ResourceID) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid resourceId"})
+			return writeError(c, fiber.StatusBadRequest, "invalid_resource_id", "resource id is invalid")
 		}
 		out, err := s.AddFavorite(r.ResourceID)
 		if err != nil {
@@ -108,7 +108,7 @@ func FavoriteRemoveHandler(s *store.PrefsStore) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var r req
 		if err := c.BodyParser(&r); err != nil || !models.IsFavoriteResourceID(r.ResourceID) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid resourceId"})
+			return writeError(c, fiber.StatusBadRequest, "invalid_resource_id", "resource id is invalid")
 		}
 		out, err := s.RemoveFavorite(r.ResourceID)
 		if err != nil {
@@ -141,7 +141,7 @@ func HistoryAddHandler(s *store.PrefsStore) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var r req
 		if err := c.BodyParser(&r); err != nil || !models.IsAlbumID(r.AlbumID) {
-			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid albumId"})
+			return writeError(c, fiber.StatusBadRequest, "invalid_album_id", "album id is invalid")
 		}
 		entry := models.HistoryEntry{
 			AlbumID:    r.AlbumID,
@@ -173,11 +173,11 @@ func HistoryClearHandler(s *store.PrefsStore) fiber.Handler {
 func FavoritesPruneHandler(s *store.PrefsStore, catalog *services.ResourceCatalog) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if catalog == nil {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+			return writeError(c, fiber.StatusConflict, "library_not_ready", "library not ready")
 		}
 		snapshot := catalog.Acquire()
 		if !snapshot.Ready() {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "library not ready"})
+			return writeError(c, fiber.StatusConflict, "library_not_ready", "library not ready")
 		}
 		removed, err := s.PruneInvalidFavorites(func(id string) bool {
 			if len(id) > len("smart:") && id[:len("smart:")] == "smart:" {
@@ -194,5 +194,5 @@ func FavoritesPruneHandler(s *store.PrefsStore, catalog *services.ResourceCatalo
 }
 
 func prefsInternalError(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "preferences unavailable"})
+	return writeError(c, fiber.StatusInternalServerError, "preferences_unavailable", "preferences unavailable")
 }

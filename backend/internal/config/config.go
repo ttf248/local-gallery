@@ -103,16 +103,6 @@ func (c *Config) Roots() []string {
 	return out
 }
 
-// Root 返回第一个根目录。等价于 Roots()[0]；只在至少有一个根时非空。
-// 供只需要主根目录的内部逻辑使用。
-func (c *Config) Root() string {
-	rs := c.Roots()
-	if len(rs) == 0 {
-		return ""
-	}
-	return rs[0]
-}
-
 // Default 返回内置默认配置（缓存目录指向 CWD/.local-gallery）。
 func Default() *Config {
 	return &Config{

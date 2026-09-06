@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/tianlongxiang/local-gallery/internal/config"
+	"github.com/tianlongxiang/local-gallery/internal/httputil"
 )
 
 const (
@@ -441,9 +442,5 @@ func sameOriginBrowserRequest(c *fiber.Ctx) bool {
 }
 
 func accessError(c *fiber.Ctx, status int, code, message string) error {
-	return c.Status(status).JSON(fiber.Map{
-		"code":    code,
-		"message": message,
-		"error":   message,
-	})
+	return httputil.Error(c, status, code, message)
 }
