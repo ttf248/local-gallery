@@ -132,6 +132,7 @@ func newHarness(t *testing.T) *harness {
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(catalog))
 	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(catalog, activityStore))
 	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(catalog, activityStore))
+	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(catalog, activityStore))
 	api.Get("/albums", handlers.LibraryAlbumsPageHandler(catalog))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(catalog, activityStore))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
@@ -349,6 +350,17 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 	}
 	if err := json.Unmarshal(body, &dashboard); err != nil || dashboard.Dashboard.AlbumCount != 2 || dashboard.Dashboard.UnreadCount != 2 || len(dashboard.Dashboard.Unread) != 2 {
 		t.Fatalf("invalid library dashboard: %s err=%v", body, err)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/library/unread?limit=1", nil)
+	if res.StatusCode != http.StatusOK || bytes.Contains(body, []byte(h.root)) {
+		t.Fatalf("unread page status=%d body=%s", res.StatusCode, body)
+	}
+	var unread struct {
+		Page services.LibraryPage[services.LibraryNodeSummary] `json:"page"`
+	}
+	if err := json.Unmarshal(body, &unread); err != nil || unread.Page.Total != 2 || len(unread.Page.Items) != 1 || unread.Page.NextCursor == "" {
+		t.Fatalf("invalid unread page: %s err=%v", body, err)
 	}
 
 	res, body = h.do(t, http.MethodGet, "/api/albums/random?scope=unread", nil)

@@ -441,6 +441,33 @@ func PageLibraryAlbums(snapshot CatalogSnapshot, cursor string, limit int) (Libr
 	}, nil
 }
 
+// PageUnreadLibraryAlbums 分页返回当前未开始图片阅读的相册摘要。
+// 已保存图片活动的相册不传给客户端；当前没有图片页的相册始终保留为未读。
+func PageUnreadLibraryAlbums(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}, cursor string, limit int) (LibraryPage[LibraryNodeSummary], error) {
+	const scope = "library-unread"
+	offset, err := pageOffset(snapshot, cursor, scope)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryPage[LibraryNodeSummary]{}, ErrLibraryNotReady
+	}
+	unread := make([]LibraryNodeSummary, 0, len(snapshot.state.library.albums))
+	for _, album := range snapshot.state.library.albums {
+		if _, started := startedImageAlbumIDs[album.ID]; started && album.ImageCount > 0 {
+			continue
+		}
+		unread = append(unread, album)
+	}
+	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(unread), limit)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	return LibraryPage[LibraryNodeSummary]{
+		Revision: snapshot.Revision(), Items: cloneNodePage(unread, start, end), Total: len(unread), NextCursor: next,
+	}, nil
+}
+
 // ResolveLibraryNodes 按调用方给定顺序批量解析相册或集合摘要。不存在、已过期
 // 或不是可展示节点的 ID 会进入 Missing，避免收藏/最近浏览逐个发请求。
 func ResolveLibraryNodes(snapshot CatalogSnapshot, ids []string) (LibraryNodeQueryResult, error) {

@@ -72,7 +72,7 @@ go test ./internal/services -run TestScanner -v
 | 健康   | `GET /api/health`                                                                                                     |
 | 认证   | `GET/POST/DELETE /api/auth/session`（LAN 令牌换取 8 小时 HttpOnly 会话）                              |
 | 扫描   | `POST /api/scans` · `GET /api/scans/:id/events` (SSE) · `GET/DELETE /api/scans/:id` · `GET/DELETE /api/library`       |
-| 库     | `GET /api/library/manifest` · `GET /api/library/dashboard` · `GET /api/library/:id/children` · `GET /api/albums` · `GET /api/albums/:id/media` · `POST /api/library/nodes/query` · `GET /api/tags` |
+| 库     | `GET /api/library/manifest` · `GET /api/library/dashboard` · `GET /api/library/unread` · `GET /api/library/:id/children` · `GET /api/albums` · `GET /api/albums/:id/media` · `POST /api/library/nodes/query` · `GET /api/tags` |
 | 缩略图 | `GET /api/thumbs/:id` · `POST /api/thumbs/:id/cover` · `POST /api/thumbs/cleanup`                                     |
 | 媒体   | `GET /api/media/:id` · `GET /api/images/:id/info`                                                                     |
 | 视频   | `GET /api/videos/:id/info` · `/api/videos/:id/transcode/{status,events,cancel}`                                       |

@@ -198,6 +198,28 @@ func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, resolved)
 }
 
+func TestUnreadLibraryAlbumsUsesActivityIndexAndRevisionCursor(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	snapshot := fixture.catalog.Acquire()
+	first, err := PageUnreadLibraryAlbums(snapshot, map[string]struct{}{fixture.albumID: {}}, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Total != 3 || len(first.Items) != 2 || first.NextCursor == "" {
+		t.Fatalf("first unread page=%+v", first)
+	}
+	for _, item := range first.Items {
+		if item.ID == fixture.albumID {
+			t.Fatalf("started image album appeared in unread page=%+v", first)
+		}
+	}
+	second, err := PageUnreadLibraryAlbums(snapshot, map[string]struct{}{fixture.albumID: {}}, first.NextCursor, 2)
+	if err != nil || len(second.Items) != 1 || second.NextCursor != "" {
+		t.Fatalf("second unread page=(%+v, %v)", second, err)
+	}
+	assertNoAbsolutePathInJSON(t, first)
+}
+
 func TestLibrarySearchUsesPrecomputedPathSafeIndex(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	hits := SearchLibrary(fixture.catalog.Acquire(), "旅行", 10)
@@ -301,6 +323,10 @@ func TestLibraryActivitySummaryKeepsCurrentEmptyAlbumUnreadAfterRescan(t *testin
 	random, err := RandomLibraryAlbum(snapshot, started)
 	if err != nil || random.ID != albumID {
 		t.Fatalf("random unread=(%+v, %v)", random, err)
+	}
+	unread, err := PageUnreadLibraryAlbums(snapshot, started, "", 60)
+	if err != nil || unread.Total != 1 || len(unread.Items) != 1 || unread.Items[0].ID != albumID {
+		t.Fatalf("unread page=(%+v, %v)", unread, err)
 	}
 }
 

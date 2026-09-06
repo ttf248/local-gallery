@@ -10,11 +10,9 @@ import { useSearchStore } from "../store/searchStore";
 vi.mock("../hooks/useFavorites", () => ({
   useFavorites: vi.fn(),
 }));
-vi.mock("../hooks/useImageActivity", () => ({
-  useImageActivities: vi.fn(),
-}));
 vi.mock("../hooks/useLibrary", () => ({
-  useLibraryAlbums: vi.fn(),
+  useLibraryManifest: vi.fn(),
+  useLibraryUnreadAlbums: vi.fn(),
 }));
 vi.mock("../hooks/useGalleryContextSync", () => ({
   useGalleryContextSync: vi.fn(),
@@ -23,8 +21,10 @@ vi.mock("../components/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
 
-import { useImageActivities } from "../hooks/useImageActivity";
-import { useLibraryAlbums } from "../hooks/useLibrary";
+import {
+  useLibraryManifest,
+  useLibraryUnreadAlbums,
+} from "../hooks/useLibrary";
 
 const baseAlbum = (id: string, name: string, imageCount = 10) => ({
   id,
@@ -41,9 +41,16 @@ const baseAlbum = (id: string, name: string, imageCount = 10) => ({
   modTime: "",
 });
 
-function seedLibrary(albums: ReturnType<typeof baseAlbum>[]) {
-  vi.mocked(useLibraryAlbums).mockReturnValue({
+function seedUnread(
+  albums: ReturnType<typeof baseAlbum>[],
+  albumCount = albums.length,
+) {
+  vi.mocked(useLibraryUnreadAlbums).mockReturnValue({
     data: { revision: 1, items: albums, total: albums.length },
+    isLoading: false,
+  } as never);
+  vi.mocked(useLibraryManifest).mockReturnValue({
+    data: { manifest: { statistics: { albumCount } } },
     isLoading: false,
   } as never);
 }
@@ -62,8 +69,12 @@ function renderUnread() {
 describe("Unread", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(useLibraryAlbums).mockReturnValue({
+    vi.mocked(useLibraryUnreadAlbums).mockReturnValue({
       data: { revision: 1, items: [], total: 0 },
+      isLoading: false,
+    } as never);
+    vi.mocked(useLibraryManifest).mockReturnValue({
+      data: { manifest: { statistics: { albumCount: 0 } } },
       isLoading: false,
     } as never);
     useSearchStore.getState().reset();
@@ -76,11 +87,7 @@ describe("Unread", () => {
   });
 
   it("有未读时显示计数 + 随机按钮", async () => {
-    seedLibrary([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
-    vi.mocked(useImageActivities).mockReturnValue({
-      data: {},
-      isLoading: false,
-    } as never);
+    seedUnread([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
     renderUnread();
     await waitFor(() => {
       // 页头 counter:还有 X 本没看。直接用 queryAllByText 扫整个 DOM,
@@ -93,20 +100,7 @@ describe("Unread", () => {
   });
 
   it("全部看完时显示「看完了」空态", async () => {
-    seedLibrary([baseAlbum("/a", "A")]);
-    vi.mocked(useImageActivities).mockReturnValue({
-      data: {
-        "/a": {
-          albumId: "/a",
-          mediaKind: "image",
-          pageIndex: 9,
-          pageCount: 10,
-          status: "completed",
-          updated: "",
-        },
-      },
-      isLoading: false,
-    } as never);
+    seedUnread([], 1);
     renderUnread();
     await waitFor(() => {
       expect(screen.getByText(/全部看完啦/)).toBeInTheDocument();
@@ -114,11 +108,7 @@ describe("Unread", () => {
   });
 
   it("全库为空时引导去设置", async () => {
-    // 不 seedLibrary → 相册摘要为空
-    vi.mocked(useImageActivities).mockReturnValue({
-      data: {},
-      isLoading: false,
-    } as never);
+    // 不 seedUnread → 相册摘要为空
     renderUnread();
     await waitFor(() => {
       expect(screen.getByText(/尚未加载图像库/)).toBeInTheDocument();
@@ -127,11 +117,7 @@ describe("Unread", () => {
   });
 
   it("最小图数变化后立即重新筛选", async () => {
-    seedLibrary([baseAlbum("/a", "A", 2), baseAlbum("/b", "B", 10)]);
-    vi.mocked(useImageActivities).mockReturnValue({
-      data: {},
-      isLoading: false,
-    } as never);
+    seedUnread([baseAlbum("/a", "A", 2), baseAlbum("/b", "B", 10)]);
     renderUnread();
 
     expect(await screen.findByText("A")).toBeInTheDocument();

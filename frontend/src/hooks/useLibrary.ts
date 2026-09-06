@@ -10,6 +10,7 @@ export const libraryQueryKeys = {
     [...libraryQueryKeys.root, "activity-summary"] as const,
   dashboard: () => [...libraryQueryKeys.root, "dashboard"] as const,
   albums: () => [...libraryQueryKeys.root, "albums"] as const,
+  unreadAlbums: () => [...libraryQueryKeys.root, "unread-albums"] as const,
   children: (parentId: string) =>
     [...libraryQueryKeys.root, "children", parentId] as const,
   media: (albumId: string) =>
@@ -73,6 +74,26 @@ export function useLibraryAlbums() {
   return useQuery({
     queryKey: libraryQueryKeys.albums(),
     queryFn: () => libraryApi.allAlbums(),
+  });
+}
+
+// 未读页直接取得服务端筛好的相册，不能先下载全库再批量查询每条阅读活动。
+export function useLibraryUnreadAlbums() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({
+        queryKey: libraryQueryKeys.unreadAlbums(),
+      });
+    };
+    window.addEventListener(ACTIVITY_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(ACTIVITY_CHANGED_EVENT, refresh);
+  }, [queryClient]);
+
+  return useQuery({
+    queryKey: libraryQueryKeys.unreadAlbums(),
+    queryFn: () => libraryApi.allUnreadAlbums(),
+    staleTime: 30_000,
   });
 }
 

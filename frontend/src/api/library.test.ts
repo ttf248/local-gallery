@@ -72,6 +72,57 @@ describe("libraryApi", () => {
     expect(result.revision).toBe(9);
   });
 
+  it("合并服务端筛选后的未读分页", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          page: {
+            revision: 8,
+            items: [
+              {
+                id: "a_1",
+                kind: "album",
+                name: "未读一",
+                displayName: "未读一",
+                coverImages: [],
+              },
+            ],
+            total: 2,
+            nextCursor: "next-unread-page",
+          },
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          page: {
+            revision: 8,
+            items: [
+              {
+                id: "a_2",
+                kind: "album",
+                name: "未读二",
+                displayName: "未读二",
+                coverImages: [],
+              },
+            ],
+            total: 2,
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await libraryApi.allUnreadAlbums();
+
+    expect(result.items.map((item) => item.id)).toEqual(["a_1", "a_2"]);
+    expect(result.total).toBe(2);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
+      "/api/library/unread",
+    );
+  });
+
   it("拒绝合并跨 revision 的分页结果", async () => {
     const fetchMock = vi
       .fn()

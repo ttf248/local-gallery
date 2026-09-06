@@ -168,6 +168,10 @@ export const libraryApi = {
     api<{ ok: boolean; dashboard: LibraryHomeDashboard }>(
       "/api/library/dashboard",
     ),
+  unreadAlbumPage: (cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
+    api<PageResponse<LibraryNodeSummary>>("/api/library/unread", {
+      params: { cursor, limit },
+    }),
   albumPage: (cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
     api<PageResponse<LibraryNodeSummary>>("/api/albums", {
       params: { cursor, limit },
@@ -204,6 +208,8 @@ export const libraryApi = {
       params: { scope: scope === "unread" ? "unread" : undefined },
     }),
   allAlbums: () => collectPages((cursor) => libraryApi.albumPage(cursor)),
+  allUnreadAlbums: () =>
+    collectPages((cursor) => libraryApi.unreadAlbumPage(cursor)),
   allChildren: (parentId: string) =>
     collectPages((cursor) => libraryApi.childrenPage(parentId, cursor)),
   allMedia: (albumId: string) =>

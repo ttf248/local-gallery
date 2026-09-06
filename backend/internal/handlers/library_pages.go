@@ -86,6 +86,27 @@ func LibraryAlbumsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	}
 }
 
+// LibraryUnreadAlbumsPageHandler 分页返回未读相册，避免前端下载全库后再批量筛选活动。
+func LibraryUnreadAlbumsPageHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, ok := parseLibraryPageLimit(c)
+		if !ok {
+			return nil
+		}
+		started, err := activities.StartedImageAlbumIDs()
+		if err != nil {
+			return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
+		}
+		snapshot := catalog.Acquire()
+		page, err := services.PageUnreadLibraryAlbums(snapshot, started, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
 // LibraryRandomAlbumHandler 返回一个随机相册摘要。scope=unread 时只从未开始阅读的相册中抽取。
 func LibraryRandomAlbumHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
 	return func(c *fiber.Ctx) error {

@@ -289,6 +289,7 @@ func main() {
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(resourceCatalog))
 	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(resourceCatalog, activities))
 	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(resourceCatalog, activities))
+	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(resourceCatalog, activities))
 	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache, resourceCatalog, runner))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
 	api.Get("/albums", handlers.LibraryAlbumsPageHandler(resourceCatalog))

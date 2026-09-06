@@ -50,6 +50,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities))
 	app.Get("/api/library/activity-summary", LibraryActivitySummaryHandler(catalog, activities))
 	app.Get("/api/library/dashboard", LibraryHomeDashboardHandler(catalog, activities))
+	app.Get("/api/library/unread", LibraryUnreadAlbumsPageHandler(catalog, activities))
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog))
 	app.Get("/api/tags", LibraryTagsPageHandler(catalog))
 	app.Get("/api/tags/:tag/albums", TagAlbumsPageHandler(catalog))
@@ -150,6 +151,24 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	_ = dashboardResp.Body.Close()
 	if dashboardBody.Dashboard.AlbumCount != 2 || dashboardBody.Dashboard.UnreadCount != 1 || len(dashboardBody.Dashboard.Unread) != 1 || len(dashboardBody.Dashboard.InProgress) != 0 {
 		t.Fatalf("dashboard=%+v", dashboardBody.Dashboard)
+	}
+
+	unreadResp, err := app.Test(httptest.NewRequest("GET", "/api/library/unread", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unreadResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("unread status=%d", unreadResp.StatusCode)
+	}
+	var unreadBody struct {
+		Page services.LibraryPage[services.LibraryNodeSummary] `json:"page"`
+	}
+	if err := json.NewDecoder(unreadResp.Body).Decode(&unreadBody); err != nil {
+		t.Fatal(err)
+	}
+	_ = unreadResp.Body.Close()
+	if unreadBody.Page.Total != 1 || len(unreadBody.Page.Items) != 1 || unreadBody.Page.Items[0].ID == albumID {
+		t.Fatalf("unread page=%+v", unreadBody.Page)
 	}
 
 	queryRequest := httptest.NewRequest("POST", "/api/library/nodes/query", strings.NewReader(`{"ids":["`+albumID+`","a_missing"]}`))
