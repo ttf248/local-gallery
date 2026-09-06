@@ -57,7 +57,7 @@ function flushVideoSession(session: VideoActivitySession | null) {
   });
 }
 
-// 画廊页面：从 URL 读取 path/index/name（也兼容旧的 images= 形式）。
+// 画廊页面：从 URL 读取 path/index/name。
 // 关闭时持久化阅读进度到后端。
 //
 // 视觉：沉浸式画廊 — 暗色背景让图片突出，常驻 UI 只留顶部（返回/名称/页码）+ 顶部右侧
@@ -68,7 +68,7 @@ export default function Gallery() {
   const pushToast = useUIStore((s) => s.pushToast);
   const queryClient = useQueryClient();
 
-  const pathParam = params.get("path") ?? params.get("album") ?? "";
+  const pathParam = params.get("path") ?? "";
   const initialIndex = Math.max(
     0,
     Math.floor(Number(params.get("index") ?? 0) || 0),
@@ -81,15 +81,8 @@ export default function Gallery() {
   const isVideoRef = useRef(isVideo);
   isVideoRef.current = isVideo;
 
-  // 兼容旧链接（images 数组直接传）
-  const initialImages = parseImages(params.get("images"));
-  const initialImagesPathRef = useRef(
-    initialImages.length > 0 ? pathParam : "",
-  );
-  const [images, setImages] = useState<string[]>(initialImages);
-  const [loadedImagePath, setLoadedImagePath] = useState(
-    initialImages.length > 0 ? pathParam : "",
-  );
+  const [images, setImages] = useState<string[]>([]);
+  const [loadedImagePath, setLoadedImagePath] = useState("");
   // 视频文件列表（type=video 时使用）
   const [videos, setVideos] = useState<string[]>([]);
   const [loadedVideoPath, setLoadedVideoPath] = useState("");
@@ -185,14 +178,8 @@ export default function Gallery() {
   // 拉图 + 恢复阅读进度：依赖 pathParam 变化。
   //
   // 重要：必须在 pathParam 每次变化时都重新拉图。从 Album A 导航到 Album B 时，
-  // 旧 images 仍留在 state，会让 imagesReady=true 而跳过 fetch，结果仍是 A 的图。
-  //
-  // 唯一可以跳过的情况：URL 自带了 images= 参数（兼容旧链接），但只对首次生效 —
-  // 一旦点过「重试」（reloadKey++）或 pathParam 变化（导航到下一本），都要重新拉。
-  const skipInitialFetch =
-    initialImages.length > 0 &&
-    reloadKey === 0 &&
-    initialImagesPathRef.current === pathParam;
+  // 旧 images 在切换相册时不能继续作为当前页：每次 path 变化或显式重试都
+  // 必须重新拉取当前相册的媒体清单。
   const imagesReady = images.length > 0 && loadedImagePath === pathParam;
   const videosReady = videos.length > 0 && loadedVideoPath === pathParam;
   const ready = isVideo ? videosReady : imagesReady;
@@ -240,7 +227,6 @@ export default function Gallery() {
       }
     }
     lastPathRef.current = pathParam;
-    if (skipInitialFetch) return;
     setLoadError(null);
     setImageActivityReadyPath("");
     setLoadedImagePath("");
@@ -283,7 +269,6 @@ export default function Gallery() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathParam, reloadKey, isVideo]);
 
   useEffect(() => {
@@ -367,8 +352,8 @@ export default function Gallery() {
       activityApi
         .setImage(pathParam, imageActivityPageIndex, total)
         .then(() => {
-        // 活动 API 会通知首页仪表盘刷新；这里同时让 Recents / Favorites
-        // 的批量活动和 Album 详情缓存失效，回到列表/详情时立刻看到新进度。
+          // 活动 API 会通知首页仪表盘刷新；这里同时让 Recents / Favorites
+          // 的批量活动和 Album 详情缓存失效，回到列表/详情时立刻看到新进度。
           queryClient.invalidateQueries({
             queryKey: ["activity-query", "image"],
           });
@@ -1152,16 +1137,4 @@ export default function Gallery() {
       )}
     </div>
   );
-}
-
-function parseImages(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(decodeURIComponent(raw));
-    return Array.isArray(arr)
-      ? arr.filter((x): x is string => typeof x === "string")
-      : [];
-  } catch {
-    return [];
-  }
 }
