@@ -30,6 +30,9 @@ type ActivityStore struct {
 	mu     sync.RWMutex
 	items  map[string]models.Activity
 	loaded bool
+	// revision 仅在成功持久化活动变更后递增，供依赖活动派生结果的内存索引失效。
+	// 它是进程内版本号，不会写入活动文件或暴露给 HTTP 客户端。
+	revision uint64
 }
 
 // NewActivityStore 创建活动存储。legacyPrefsPath 仅用于首次升级时
@@ -94,8 +97,15 @@ func (s *ActivityStore) Query(identities []models.ActivityIdentity) ([]models.Ac
 // StartedImageAlbumIDs 返回至少保存过一条图片阅读活动的相册 ID 集合。
 // 该派生结果只用于图像库的未读统计，不会暴露活动位置、时间或视频记录。
 func (s *ActivityStore) StartedImageAlbumIDs() (map[string]struct{}, error) {
+	ids, _, err := s.StartedImageAlbumIDsSnapshot()
+	return ids, err
+}
+
+// StartedImageAlbumIDsSnapshot 返回图片活动派生的相册 ID 集合及当前进程内
+// 活动版本。调用方可用版本安全复用只依赖该集合的派生索引。
+func (s *ActivityStore) StartedImageAlbumIDsSnapshot() (map[string]struct{}, uint64, error) {
 	if err := s.ensureLoaded(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -105,7 +115,7 @@ func (s *ActivityStore) StartedImageAlbumIDs() (map[string]struct{}, error) {
 			ids[activity.AlbumID] = struct{}{}
 		}
 	}
-	return ids, nil
+	return ids, s.revision, nil
 }
 
 // ImageActivities 返回全部图片阅读活动的值副本。它只服务于首页仪表盘的
@@ -152,14 +162,23 @@ func (s *ActivityStore) SetBatch(activities []models.Activity) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := cloneActivityMap(s.items)
+	changed := false
 	for _, activity := range normalized {
 		key, _ := activity.Identity().Key()
 		if current, exists := next[key]; exists && current.Updated.After(activity.Updated) {
 			continue
 		}
 		next[key] = activity
+		changed = true
 	}
-	return s.commitLocked(next)
+	if !changed {
+		return nil
+	}
+	if err := s.commitLocked(next); err != nil {
+		return err
+	}
+	s.revision++
+	return nil
 }
 
 // Delete 删除单条活动，不存在时保持幂等。
@@ -181,6 +200,7 @@ func (s *ActivityStore) Delete(identity models.ActivityIdentity) (bool, error) {
 	if err := s.commitLocked(next); err != nil {
 		return false, err
 	}
+	s.revision++
 	return true, nil
 }
 
@@ -198,6 +218,7 @@ func (s *ActivityStore) Clear() (int, error) {
 	if err := s.commitLocked(map[string]models.Activity{}); err != nil {
 		return 0, err
 	}
+	s.revision++
 	return count, nil
 }
 

@@ -449,15 +449,9 @@ func PageUnreadLibraryAlbums(snapshot CatalogSnapshot, startedImageAlbumIDs map[
 	if err != nil {
 		return LibraryPage[LibraryNodeSummary]{}, err
 	}
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
-		return LibraryPage[LibraryNodeSummary]{}, ErrLibraryNotReady
-	}
-	unread := make([]LibraryNodeSummary, 0, len(snapshot.state.library.albums))
-	for _, album := range snapshot.state.library.albums {
-		if _, started := startedImageAlbumIDs[album.ID]; started && album.ImageCount > 0 {
-			continue
-		}
-		unread = append(unread, album)
+	unread, err := buildUnreadLibraryAlbums(snapshot, startedImageAlbumIDs)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
 	}
 	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(unread), limit)
 	if err != nil {
@@ -466,6 +460,20 @@ func PageUnreadLibraryAlbums(snapshot CatalogSnapshot, startedImageAlbumIDs map[
 	return LibraryPage[LibraryNodeSummary]{
 		Revision: snapshot.Revision(), Items: cloneNodePage(unread, start, end), Total: len(unread), NextCursor: next,
 	}, nil
+}
+
+func buildUnreadLibraryAlbums(snapshot CatalogSnapshot, startedImageAlbumIDs map[string]struct{}) ([]LibraryNodeSummary, error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return nil, ErrLibraryNotReady
+	}
+	unread := make([]LibraryNodeSummary, 0, len(snapshot.state.library.albums))
+	for _, album := range snapshot.state.library.albums {
+		if _, started := startedImageAlbumIDs[album.ID]; started && album.ImageCount > 0 {
+			continue
+		}
+		unread = append(unread, album)
+	}
+	return unread, nil
 }
 
 // ResolveLibraryNodes 按调用方给定顺序批量解析相册或集合摘要。不存在、已过期

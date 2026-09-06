@@ -112,6 +112,7 @@ func newHarness(t *testing.T) *harness {
 	}
 	runner := services.NewAsyncScanRunner()
 	catalog := services.NewResourceCatalog()
+	unreadIndex := services.NewUnreadLibraryIndex()
 	runner.SetCatalog(catalog)
 	prefsStore := store.NewPrefsStore(prefs)
 	activityStore := store.NewActivityStore(cacheLayout.ActivityPath, prefs)
@@ -132,7 +133,7 @@ func newHarness(t *testing.T) *harness {
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(catalog))
 	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(catalog, activityStore))
 	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(catalog, activityStore))
-	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(catalog, activityStore))
+	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(catalog, activityStore, unreadIndex))
 	api.Get("/albums", handlers.LibraryAlbumsPageHandler(catalog))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(catalog, activityStore))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))

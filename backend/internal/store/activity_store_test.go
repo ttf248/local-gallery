@@ -123,6 +123,46 @@ func TestActivityStoreStartedImageAlbumIDsExcludesVideoOnlyRecords(t *testing.T)
 	}
 }
 
+func TestActivityStoreStartedImageAlbumIDsSnapshotTracksActivityRevision(t *testing.T) {
+	store, _ := newTestActivityStore(t)
+	ids, initialRevision, err := store.StartedImageAlbumIDsSnapshot()
+	if err != nil || initialRevision != 0 || len(ids) != 0 {
+		t.Fatalf("initial snapshot=(ids=%v revision=%d err=%v)", ids, initialRevision, err)
+	}
+
+	video := models.Activity{
+		AlbumID:    testAlbumID(2),
+		MediaKind:  models.MediaKindVideo,
+		ItemID:     testFileID(2),
+		PositionMS: 10_000,
+		DurationMS: 20_000,
+	}
+	if err := store.Set(video); err != nil {
+		t.Fatal(err)
+	}
+	ids, videoRevision, err := store.StartedImageAlbumIDsSnapshot()
+	if err != nil || videoRevision <= initialRevision || len(ids) != 0 {
+		t.Fatalf("video snapshot=(ids=%v revision=%d err=%v)", ids, videoRevision, err)
+	}
+
+	image := imageActivity(1, 1, 3)
+	if err := store.Set(image); err != nil {
+		t.Fatal(err)
+	}
+	ids, imageRevision, err := store.StartedImageAlbumIDsSnapshot()
+	if err != nil || imageRevision <= videoRevision || len(ids) != 1 {
+		t.Fatalf("image snapshot=(ids=%v revision=%d err=%v)", ids, imageRevision, err)
+	}
+	delete(ids, image.AlbumID)
+	ids, unchangedRevision, err := store.StartedImageAlbumIDsSnapshot()
+	if err != nil || unchangedRevision != imageRevision {
+		t.Fatalf("copied snapshot revision=(%d, %v), want %d", unchangedRevision, err, imageRevision)
+	}
+	if _, exists := ids[image.AlbumID]; !exists {
+		t.Fatalf("mutating returned IDs changed store snapshot: %v", ids)
+	}
+}
+
 func TestActivityStoreImageActivitiesExcludesVideoRecords(t *testing.T) {
 	store, _ := newTestActivityStore(t)
 	image := imageActivity(1, 1, 3)

@@ -220,6 +220,29 @@ func TestUnreadLibraryAlbumsUsesActivityIndexAndRevisionCursor(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, first)
 }
 
+func TestUnreadLibraryIndexCachesByCatalogAndActivityRevision(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	snapshot := fixture.catalog.Acquire()
+	index := NewUnreadLibraryIndex()
+	started := map[string]struct{}{fixture.albumID: {}}
+
+	first, err := index.Page(snapshot, started, 1, "", 2)
+	if err != nil || first.Total != 3 || len(first.Items) != 2 || first.NextCursor == "" {
+		t.Fatalf("first unread page=(%+v, %v)", first, err)
+	}
+	// 同一活动版本意味着调用方提供的是同一不可变活动快照；即使后续调用
+	// 传入了不同 map，缓存也必须保持第一次构建的索引，不能重复筛全库。
+	second, err := index.Page(snapshot, map[string]struct{}{}, 1, first.NextCursor, 2)
+	if err != nil || second.Total != 3 || len(second.Items) != 1 || second.NextCursor != "" {
+		t.Fatalf("cached unread page=(%+v, %v)", second, err)
+	}
+
+	refreshed, err := index.Page(snapshot, map[string]struct{}{}, 2, "", 2)
+	if err != nil || refreshed.Total != 4 || len(refreshed.Items) != 2 || refreshed.NextCursor == "" {
+		t.Fatalf("refreshed unread page=(%+v, %v)", refreshed, err)
+	}
+}
+
 func TestLibrarySearchUsesPrecomputedPathSafeIndex(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	hits := SearchLibrary(fixture.catalog.Acquire(), "旅行", 10)
