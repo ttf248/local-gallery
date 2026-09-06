@@ -20,6 +20,15 @@ vi.mock("../hooks/useGalleryContextSync", () => ({
 vi.mock("../components/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
+vi.mock("../components/album/AlbumGrid", () => ({
+  default: ({ items }: { items: { id: string; title: string }[] }) => (
+    <div data-testid="album-grid">
+      {items.map((item) => (
+        <span key={item.id}>{item.title}</span>
+      ))}
+    </div>
+  ),
+}));
 
 import {
   useLibraryManifest,
