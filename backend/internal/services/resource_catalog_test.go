@@ -12,7 +12,6 @@ func TestResourceCatalogIndexesOpaqueResourceIDs(t *testing.T) {
 	albumPath := filepath.Join(root, "album")
 	filePath := filepath.Join(albumPath, "page.jpg")
 	result := &models.ScanResult{
-		Root:  root,
 		Roots: []string{root},
 		Albums: []models.Album{{
 			Type:       "album",
@@ -45,7 +44,7 @@ func TestResourceCatalogIndexesOpaqueResourceIDs(t *testing.T) {
 func TestResourceCatalog_RejectsOutsideRoot(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "secret.jpg")
-	result := &models.ScanResult{Root: root, Roots: []string{root}, Albums: []models.Album{{
+	result := &models.ScanResult{Roots: []string{root}, Albums: []models.Album{{
 		Path:       filepath.Join(root, "album"),
 		CoverImage: outside,
 	}}}
@@ -61,7 +60,7 @@ func TestResourceCatalog_VirtualAlbumAndCollectionSharePhysicalPath(t *testing.T
 	directory := filepath.Join(root, "mixed")
 	file := filepath.Join(directory, "page.jpg")
 	result := &models.ScanResult{
-		Root: root, Roots: []string{root},
+		Roots: []string{root},
 		Collections: []models.Collection{{
 			Type: "collection", Path: directory,
 			Albums: []models.Album{{
@@ -96,14 +95,14 @@ func TestResourceCatalog_AcquiredSnapshotRemainsVersionConsistent(t *testing.T) 
 
 	catalog := NewResourceCatalog()
 	revisionA := catalog.Publish(&models.ScanResult{
-		Root: rootA, Roots: []string{rootA},
+		Roots:  []string{rootA},
 		Albums: []models.Album{{Path: albumA, ImageFiles: []string{fileA}, CoverImage: fileA}},
 	}, []string{rootA})
 	snapshotA := catalog.Acquire()
 	albumAID := snapshotA.ExternalID(albumA, ResourceAlbum)
 
 	revisionB := catalog.Publish(&models.ScanResult{
-		Root: rootB, Roots: []string{rootB},
+		Roots:  []string{rootB},
 		Albums: []models.Album{{Path: albumB, ImageFiles: []string{fileB}, CoverImage: fileB}},
 	}, []string{rootB})
 	snapshotB := catalog.Acquire()
@@ -127,7 +126,7 @@ func TestResourceCatalog_ClearInvalidatesPublishedIDs(t *testing.T) {
 	album := filepath.Join(root, "album")
 	catalog := NewResourceCatalog()
 	catalog.Publish(&models.ScanResult{
-		Root: root, Roots: []string{root}, Albums: []models.Album{{Path: album}},
+		Roots: []string{root}, Albums: []models.Album{{Path: album}},
 	}, []string{root})
 	id := catalog.ExternalID(album, ResourceAlbum)
 	pinned := catalog.Acquire()

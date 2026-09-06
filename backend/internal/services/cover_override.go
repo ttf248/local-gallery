@@ -257,7 +257,7 @@ func RebuildCoverView(result *models.ScanResult, overrides map[string]CoverOverr
 
 func albumContainsMedia(album models.Album, candidate string) bool {
 	target := pathKindKey(candidate, ResourceFile)
-	for _, files := range [][]string{album.ImageFiles, album.VideoFiles, album.Files} {
+	for _, files := range [][]string{album.ImageFiles, album.VideoFiles} {
 		for _, file := range files {
 			if pathKindKey(file, ResourceFile) == target {
 				return true

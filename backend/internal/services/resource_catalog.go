@@ -382,9 +382,6 @@ func indexAlbum(state *resourceCatalogState, album *models.Album) {
 	for _, path := range album.VideoFiles {
 		indexPath(state, path, ResourceFile)
 	}
-	for _, path := range album.Files {
-		indexPath(state, path, ResourceFile)
-	}
 	if album.CoverImage != "" {
 		indexPath(state, album.CoverImage, ResourceFile)
 	}

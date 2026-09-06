@@ -23,7 +23,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	file1 := filepath.Join(album1Path, "1.jpg")
 	file2 := filepath.Join(album2Path, "2.mp4")
 	result := &models.ScanResult{
-		Root: root, Roots: []string{root}, AlbumCount: 2,
+		Roots: []string{root}, AlbumCount: 2,
 		Albums: []models.Album{
 			{Type: "album", Path: album1Path, Name: "album1", ImageFiles: []string{file1}, ImageCount: 1, CoverImage: file1, CoverKind: "image"},
 			{Type: "album", Path: album2Path, Name: "album2", VideoFiles: []string{file2}, VideoCount: 1, CoverImage: file2, CoverKind: "video"},
@@ -45,7 +45,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app.Get("/api/library/manifest", LibraryManifestHandler(catalog))
 	app.Get("/api/library/:id/children", LibraryChildrenPageHandler(catalog))
 	app.Post("/api/library/nodes/query", LibraryNodesQueryHandler(catalog))
-	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"), "")
+	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"))
 	unreadIndex := services.NewUnreadLibraryIndex()
 	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities, unreadIndex))
 	app.Get("/api/library/activity-summary", LibraryActivitySummaryHandler(catalog, activities, unreadIndex))
@@ -230,7 +230,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 
 	// 资源已从新 revision 消失时，也必须先识别旧游标并返回 409；因此
 	// 这两条纯目录读取路由不应挂 ResourceParam 文件系统中间件。
-	catalog.Publish(&models.ScanResult{Root: root, Roots: []string{root}}, []string{root})
+	catalog.Publish(&models.ScanResult{Roots: []string{root}}, []string{root})
 	staleResp, err := app.Test(httptest.NewRequest("GET", "/api/library/"+rootID+"/children?limit=1&cursor="+first.Page.NextCursor, nil))
 	if err != nil {
 		t.Fatal(err)

@@ -16,7 +16,7 @@ func TestAsyncScanRunner_HappyPath(t *testing.T) {
 	touchAll(t, filepathJoin(root, "album2", "1.png"))
 
 	runner := NewAsyncScanRunner()
-	id, events, err := runner.Start(ScanOptions{Root: root})
+	id, events, err := runner.Start(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestAsyncScanRunner_Cancel(t *testing.T) {
 	}
 
 	runner := NewAsyncScanRunner()
-	id, events, err := runner.Start(ScanOptions{Root: root})
+	id, events, err := runner.Start(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,11 +130,11 @@ func TestAsyncScanRunner_ReusesActiveScanAndBroadcasts(t *testing.T) {
 		touchAll(t, filepathJoin(dir, "1.jpg"))
 	}
 	runner := NewAsyncScanRunner()
-	id1, events1, reused1, err := runner.StartOrReuse(ScanOptions{Root: root})
+	id1, events1, reused1, err := runner.StartOrReuse(ScanOptions{Roots: []string{root}})
 	if err != nil || reused1 {
 		t.Fatalf("first start reused=%v err=%v", reused1, err)
 	}
-	id2, events2, reused2, err := runner.StartOrReuse(ScanOptions{Root: root})
+	id2, events2, reused2, err := runner.StartOrReuse(ScanOptions{Roots: []string{root}})
 	if err != nil || !reused2 || id1 != id2 {
 		t.Fatalf("second start id=%q reused=%v err=%v", id2, reused2, err)
 	}
@@ -166,7 +166,7 @@ func TestAsyncScanRunner_DoesNotBlockWithoutEventConsumer(t *testing.T) {
 		touchAll(t, filepathJoin(dir, "1.jpg"))
 	}
 	runner := NewAsyncScanRunner()
-	id, _, err := runner.Start(ScanOptions{Root: root})
+	id, _, err := runner.Start(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +184,7 @@ func TestAsyncScanRunner_DoesNotBlockWithoutEventConsumer(t *testing.T) {
 
 func TestAsyncScanRunner_MissingRoot(t *testing.T) {
 	runner := NewAsyncScanRunner()
-	_, _, err := runner.Start(ScanOptions{Root: ""})
+	_, _, err := runner.Start(ScanOptions{Roots: nil})
 	if err == nil {
 		t.Error("expected error for empty root")
 	}
@@ -212,7 +212,7 @@ func TestAsyncScanRunner_ShutdownCancelsAndRejectsNewScans(t *testing.T) {
 		touchAll(t, filepathJoin(dir, "1.jpg"))
 	}
 	runner := NewAsyncScanRunner()
-	id, _, err := runner.Start(ScanOptions{Root: root})
+	id, _, err := runner.Start(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestAsyncScanRunner_ShutdownCancelsAndRejectsNewScans(t *testing.T) {
 	if state == nil || state.Status != ScanStatusCancelled {
 		t.Fatalf("state after shutdown=%+v", state)
 	}
-	if _, _, err := runner.Start(ScanOptions{Root: root}); err == nil {
+	if _, _, err := runner.Start(ScanOptions{Roots: []string{root}}); err == nil {
 		t.Fatal("Start should reject new scans after shutdown")
 	}
 }
@@ -242,7 +242,7 @@ func TestAsyncScanRunner_InvalidatePreventsOldLibraryRevival(t *testing.T) {
 	runner := NewAsyncScanRunner()
 	runner.SetCatalog(catalog)
 	runner.SetCache(cache)
-	id, _, err := runner.Start(ScanOptions{Root: root})
+	id, _, err := runner.Start(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}

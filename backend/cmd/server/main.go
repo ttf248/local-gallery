@@ -179,7 +179,7 @@ func main() {
 	runner := services.NewAsyncScanRunner()
 	unreadIndex := services.NewUnreadLibraryIndex()
 	prefs := store.NewPrefsStore(cacheLayout.PreferencesPath)
-	activities := store.NewActivityStore(cacheLayout.ActivityPath, cacheLayout.PreferencesPath)
+	activities := store.NewActivityStore(cacheLayout.ActivityPath)
 	if err := activities.Load(); err != nil {
 		log.Fatalf("加载媒体活动状态失败: %v", err)
 	}

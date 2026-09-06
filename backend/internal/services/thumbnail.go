@@ -370,6 +370,24 @@ func decodeImage(absPath string) (image.Image, error) {
 	return imaging.Open(absPath, imaging.AutoOrientation(true))
 }
 
+// isThumbnailCacheFile 只识别当前 ThumbnailService 按源路径 MD5 生成的 JPEG。
+// 它用于缓存统计与清理，避免误删目录中的非缓存文件。
+func isThumbnailCacheFile(name string) bool {
+	if !strings.EqualFold(filepath.Ext(name), JPEGExt) {
+		return false
+	}
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	if len(base) != 32 {
+		return false
+	}
+	for _, char := range base {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f') || (char >= 'A' && char <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 // Cleanup 删除早于 maxAgeDays 天的缓存文件。
 // 返回被删除的文件数。
 func (s *ThumbnailService) Cleanup() (int, error) {

@@ -115,7 +115,7 @@ func newHarness(t *testing.T) *harness {
 	unreadIndex := services.NewUnreadLibraryIndex()
 	runner.SetCatalog(catalog)
 	prefsStore := store.NewPrefsStore(prefs)
-	activityStore := store.NewActivityStore(cacheLayout.ActivityPath, prefs)
+	activityStore := store.NewActivityStore(cacheLayout.ActivityPath)
 
 	api := app.Group("/api")
 	api.Get("/health", func(c *fiber.Ctx) error {

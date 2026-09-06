@@ -323,9 +323,6 @@ func buildIndexedLibraryManifest(state *resourceCatalogState, index *libraryPage
 	for _, root := range result.Roots {
 		appendRoot(root)
 	}
-	if len(result.Roots) == 0 {
-		appendRoot(result.Root)
-	}
 	// 旧扫描快照可能缺少 Roots；补齐配置根，同时保持路径脱敏。
 	for _, root := range state.roots {
 		if _, exists := seenRoots[root.ID]; exists {
@@ -821,17 +818,6 @@ func albumMediaSources(state *resourceCatalogState, album models.Album) []albumM
 	}
 	for _, path := range album.VideoFiles {
 		appendMedia(path, "video")
-	}
-	// 兼容仅包含 Files 的旧快照；当前扫描器始终填充分类后的两个字段。
-	if len(album.ImageFiles) == 0 && len(album.VideoFiles) == 0 {
-		for _, path := range album.Files {
-			switch {
-			case models.IsImageFile(path):
-				appendMedia(path, "image")
-			case models.IsVideoFile(path):
-				appendMedia(path, "video")
-			}
-		}
 	}
 	sort.SliceStable(media, func(i, j int) bool {
 		leftName, rightName := filepath.Base(media[i].path), filepath.Base(media[j].path)

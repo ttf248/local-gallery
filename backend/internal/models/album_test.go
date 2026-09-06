@@ -64,9 +64,7 @@ func TestLowerExt(t *testing.T) {
 	}
 }
 
-// TestAlbumMarshalJSON_AliasKeys 验证 Album 同时输出 imageFiles+files、
-// imageCount+fileCount 两组键，便于新旧客户端共存。
-func TestAlbumMarshalJSON_AliasKeys(t *testing.T) {
+func TestAlbumMarshalJSON_UsesCurrentMediaKeysOnly(t *testing.T) {
 	a := Album{
 		Type:       "album",
 		Path:       "E:/p/a",
@@ -80,22 +78,24 @@ func TestAlbumMarshalJSON_AliasKeys(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	s := string(raw)
-	for _, key := range []string{`"imageFiles"`, `"files"`, `"imageCount"`, `"fileCount"`} {
+	for _, key := range []string{`"imageFiles"`, `"videoFiles"`, `"imageCount"`} {
 		if !strings.Contains(s, key) {
 			t.Errorf("Album JSON 缺少键 %s：%s", key, s)
 		}
 	}
-	// files 与 imageFiles 值应相同
+	for _, legacyKey := range []string{`"files"`, `"fileCount"`} {
+		if strings.Contains(s, legacyKey) {
+			t.Errorf("Album JSON 不应输出旧键 %s：%s", legacyKey, s)
+		}
+	}
 	if !strings.Contains(s, `"E:/p/a/1.jpg"`) || !strings.Contains(s, `"E:/p/a/2.jpg"`) {
 		t.Errorf("Album JSON 未正确输出文件列表：%s", s)
 	}
 }
 
-// TestScanResultMarshalJSON_AliasKeys 验证 ScanResult 顶层 JSON 字段
-// 仍然含 albums / albumCount 等基本键（无新增 folders / folderCount）。
-func TestScanResultMarshalJSON_AliasKeys(t *testing.T) {
+func TestScanResultMarshalJSON_UsesRootsOnly(t *testing.T) {
 	r := ScanResult{
-		Root:            "E:/p",
+		Roots:           []string{"E:/p"},
 		Albums:          []Album{{Type: "album", Path: "E:/p/a", Name: "a", ImageCount: 3}},
 		AlbumCount:      1,
 		CollectionCount: 0,
@@ -106,17 +106,14 @@ func TestScanResultMarshalJSON_AliasKeys(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	s := string(raw)
-	for _, key := range []string{`"albums"`, `"albumCount"`} {
+	for _, key := range []string{`"roots"`, `"albums"`, `"albumCount"`} {
 		if !strings.Contains(s, key) {
 			t.Errorf("ScanResult JSON 缺少键 %s：%s", key, s)
 		}
 	}
 }
 
-// TestAlbumMarshalJSON_NilSlices 验证 nil 切片序列化为 `[]` 而非 `null`：
-//
-//	前端 TypeScript 把 imageFiles/files/albums 当作 string[]/Album[] 处理，
-//	null 会被当作对象，访问 .length 直接抛错 → React 整页崩溃。
+// TestAlbumMarshalJSON_NilSlices 验证当前媒体列表始终输出 []。
 func TestAlbumMarshalJSON_NilSlices(t *testing.T) {
 	a := Album{Type: "album", Path: "E:/p/a", Name: "a", ImageCount: 0}
 	raw, err := json.Marshal(a)
@@ -124,10 +121,10 @@ func TestAlbumMarshalJSON_NilSlices(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	s := string(raw)
-	if strings.Contains(s, `"imageFiles":null`) || strings.Contains(s, `"files":null`) {
+	if strings.Contains(s, `"imageFiles":null`) || strings.Contains(s, `"videoFiles":null`) {
 		t.Errorf("nil 切片未转为 []：%s", s)
 	}
-	if !strings.Contains(s, `"imageFiles":[]`) || !strings.Contains(s, `"files":[]`) {
+	if !strings.Contains(s, `"imageFiles":[]`) || !strings.Contains(s, `"videoFiles":[]`) {
 		t.Errorf("Album JSON 缺少空数组：%s", s)
 	}
 
@@ -145,11 +142,7 @@ func TestAlbumMarshalJSON_NilSlices(t *testing.T) {
 	}
 }
 
-// TestAlbumUnmarshalJSON_RoundTrip 验证 cache 写入 → 读回后字段还在。
-//
-// 修复前因 json:"-" 标签让默认 Unmarshal 跳过 ImageFiles/Files，
-// 重启后 albums[i].ImageFiles 永远为空，前端 detail 加载即白屏。
-func TestAlbumUnmarshalJSON_RoundTrip(t *testing.T) {
+func TestAlbumJSONRoundTrip(t *testing.T) {
 	original := Album{
 		Type:       "album",
 		Path:       "E:/p/a",
@@ -172,14 +165,13 @@ func TestAlbumUnmarshalJSON_RoundTrip(t *testing.T) {
 		t.Errorf("Unmarshal 后 ImageFiles 内容错：%v", loaded.ImageFiles)
 	}
 
-	// 仅 imageFiles 键（旧 cache 文件）也要能读回
-	legacy := []byte(`{"type":"album","path":"E:/p/old","name":"old","imageFiles":["x.jpg"]}`)
-	var old Album
-	if err := json.Unmarshal(legacy, &old); err != nil {
-		t.Fatalf("legacy unmarshal: %v", err)
+	current := []byte(`{"type":"album","path":"E:/p/current","name":"current","imageFiles":["x.jpg"]}`)
+	var decoded Album
+	if err := json.Unmarshal(current, &decoded); err != nil {
+		t.Fatalf("current unmarshal: %v", err)
 	}
-	if len(old.ImageFiles) != 1 || old.ImageFiles[0] != "x.jpg" {
-		t.Errorf("legacy Unmarshal 后 ImageFiles = %v", old.ImageFiles)
+	if len(decoded.ImageFiles) != 1 || decoded.ImageFiles[0] != "x.jpg" {
+		t.Errorf("current Unmarshal 后 ImageFiles = %v", decoded.ImageFiles)
 	}
 }
 

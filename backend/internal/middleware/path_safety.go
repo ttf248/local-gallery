@@ -43,8 +43,7 @@ func OpenInOS(path string) error {
 	}
 }
 
-// pathState 当前生效的根路径集合；单根（兼容老路径）或多根。
-//
+// pathState 当前生效的根路径集合。
 // 用规范化绝对路径 + 带分隔符的 "root/" 前缀做白名单校验，O(1) 查询。
 // 多个根按出现顺序存储；任一命中即放行。
 type pathState struct {
@@ -56,10 +55,6 @@ type pathState struct {
 type safetyState struct {
 	v atomic.Pointer[pathState]
 }
-
-// RootProvider 兼容老接口：返回当前所有根的快照（用于不需要热更新的场景）。
-// 内部实现为 snapshotRoots 的包装；handler 用不到，但保留以防外部依赖。
-type RootProvider func() []string
 
 // PathSafetyMiddleware 返回中间件：把 ?path=<abs> 解析后校验是否在任一
 // mediaRoots 之下（多根支持）。

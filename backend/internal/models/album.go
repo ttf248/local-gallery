@@ -73,14 +73,9 @@ func lowerExt(name string) string {
 
 // Album 含有图片的文件夹。
 //
-// 历史命名：原 "相册" 概念；为了贴合"本地画廊"产品定位，结构上也支持
-// "folder" 概念（同一对象）。JSON 输出同时暴露新字段 `files`（推荐）与
-// 旧字段 `imageFiles`（兼容）。
-//
 // 多根场景（mediaRoots 配置多个目录）下，扫描器会填充 SourceRoot（绝对路径）/
 // SourceName（根的 basename，用于 badge 显示）；若不同根下出现同名相册，
 // DisplayName 会加 "[SourceName] " 前缀避免歧义，否则与 Name 相同。
-// 旧扫描缓存没有这几个字段时，handler 端兜底。
 type Album struct {
 	Type        string    `json:"type"`                  // 始终为 "album"
 	Path        string    `json:"path"`                  // 绝对路径
@@ -88,14 +83,13 @@ type Album struct {
 	DisplayName string    `json:"displayName,omitempty"` // 同名冲突时加来源前缀；否则等于 Name
 	SourceRoot  string    `json:"sourceRoot,omitempty"`  // 所属媒体根（绝对路径）；多根扫描时填充
 	SourceName  string    `json:"sourceName,omitempty"`  // 所属媒体根的 basename，用于 UI badge
-	ImageFiles  []string  `json:"-"`                     // 见 MarshalJSON/UnmarshalJSON；同时输出 imageFiles + files
-	VideoFiles  []string  `json:"-"`                     // 同上；输出 videoFiles
-	CoverImage  string    `json:"coverImage"`            // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
-	ImageCount  int       `json:"imageCount"`            // 兼容旧字段，同时输出 fileCount
-	VideoCount  int       `json:"videoCount,omitempty"`  // 视频数量（0 时省略）
-	Files       []string  `json:"-"`                     // 见 MarshalJSON/UnmarshalJSON；为 0 时复用 ImageFiles
-	FolderSize  int64     `json:"folderSize"`            // 字节
-	Tags        []string  `json:"tags,omitempty"`        // 标签（从方括号解析），可能多个
+	ImageFiles  []string  `json:"imageFiles"`
+	VideoFiles  []string  `json:"videoFiles"`
+	CoverImage  string    `json:"coverImage"` // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
+	ImageCount  int       `json:"imageCount"`
+	VideoCount  int       `json:"videoCount,omitempty"` // 视频数量（0 时省略）
+	FolderSize  int64     `json:"folderSize"`           // 字节
+	Tags        []string  `json:"tags,omitempty"`       // 标签（从方括号解析），可能多个
 	ModTime     time.Time `json:"modTime"`
 	// Date 是相册在时间轴上的统一业务时间；DateSource 说明该时间的
 	// 来源，前端不再根据文件夹名自行猜测。优先级固定为
@@ -110,68 +104,25 @@ type Album struct {
 	Virtual bool `json:"virtual,omitempty"`
 }
 
-// MarshalJSON 同时输出 imageFiles（兼容）与 files（推荐）两个键。
-//
-// nil 切片序列化为 `[]`（默认 Go 行为是 `null`，前端直接 `.length` 会抛错）。
-// VideoFiles 单独输出 videoFiles 键。
+// MarshalJSON 保证当前 API 的媒体列表始终是数组，避免调用方区分 null 与 []。
 func (a Album) MarshalJSON() ([]byte, error) {
 	type alias Album
-	files := a.Files
-	if len(files) == 0 {
-		files = a.ImageFiles
-	}
 	return json.Marshal(struct {
 		alias
-		Files      []string `json:"files"`
 		ImageFiles []string `json:"imageFiles"`
 		VideoFiles []string `json:"videoFiles"`
-		FileCount  int      `json:"fileCount"`
 	}{
 		alias:      alias(a),
-		Files:      emptyStrings(files),
-		ImageFiles: emptyStrings(a.ImageFiles),
-		VideoFiles: emptyStrings(a.VideoFiles),
-		FileCount:  a.ImageCount,
+		ImageFiles: nonNilStrings(a.ImageFiles),
+		VideoFiles: nonNilStrings(a.VideoFiles),
 	})
 }
 
-// UnmarshalJSON 反序列化 album：
-//   - 因 ImageFiles/Files 用了 `json:"-"`，需要自定义才能从 JSON 读回
-//   - `imageFiles` 与 `files` 任一存在即写入；优先 files（新字段）
-//   - 缓存文件被回填时可能只有 `imageFiles`（兼容旧版本）
-//   - VideoFiles 字段缺失时为零值
-func (a *Album) UnmarshalJSON(data []byte) error {
-	type alias Album
-	aux := struct {
-		*alias
-		Files      []string `json:"files"`
-		ImageFiles []string `json:"imageFiles"`
-		VideoFiles []string `json:"videoFiles"`
-		FileCount  int      `json:"fileCount"`
-	}{
-		alias: (*alias)(a),
-	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	switch {
-	case len(aux.Files) > 0:
-		a.Files = aux.Files
-		a.ImageFiles = aux.ImageFiles // 即使为空也覆盖，避免残留旧值
-	case len(aux.ImageFiles) > 0:
-		a.ImageFiles = aux.ImageFiles
-	}
-	a.VideoFiles = aux.VideoFiles
-	return nil
-}
-
-// emptyStrings 把 nil 切片转换为非 nil 空切片，避免 JSON 输出 `null`。
-// 前端 TypeScript 类型期望 `string[]`，`null` 会被当作对象处理后抛错。
-func emptyStrings(s []string) []string {
-	if s == nil {
+func nonNilStrings(values []string) []string {
+	if values == nil {
 		return []string{}
 	}
-	return s
+	return values
 }
 
 // Collection 仅含子相册（不含图片）的文件夹。
@@ -253,12 +204,10 @@ func (s SmartCollection) MarshalJSON() ([]byte, error) {
 
 // ScanResult 单次扫描的完整结果。
 //
-// 多根场景下，Roots 列出所有参与扫描的根（按调用方传入顺序）；
-// 旧字段 Root 取第一个根用于向后兼容。AlbumCount / CollectionCount 包含所有
-// 根的合并统计。
+// Roots 列出所有参与扫描的根（按调用方传入顺序）。AlbumCount /
+// CollectionCount 包含所有根的合并统计。
 type ScanResult struct {
-	Root             string            `json:"root"`            // 第一个根（兼容字段）
-	Roots            []string          `json:"roots,omitempty"` // 所有根（多根时输出）
+	Roots            []string          `json:"roots"`
 	Albums           []Album           `json:"albums"`
 	Collections      []Collection      `json:"collections"`
 	SmartCollections []SmartCollection `json:"smartCollections"`

@@ -25,7 +25,7 @@ func TestApplyCoverOverridesToResultUpdatesEveryView(t *testing.T) {
 		Path: albumPath, ImageFiles: []string{first, custom}, CoverImage: first, CoverKind: "image",
 	}
 	result := &models.ScanResult{
-		Root: root, Roots: []string{root}, Albums: []models.Album{album},
+		Roots: []string{root}, Albums: []models.Album{album},
 		SmartCollections: []models.SmartCollection{{
 			Tag: "tag", CoverImage: first, Albums: []models.Album{album},
 		}},

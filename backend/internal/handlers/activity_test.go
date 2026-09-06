@@ -17,7 +17,7 @@ const testActivityAlbumID = "a_0000000000000000000001"
 
 func newActivityHandlerApp(t *testing.T) *fiber.App {
 	t.Helper()
-	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"), "")
+	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"))
 	app := fiber.New()
 	app.Get("/api/activity", ActivityGetHandler(activities))
 	app.Put("/api/activity", ActivityPutHandler(activities))

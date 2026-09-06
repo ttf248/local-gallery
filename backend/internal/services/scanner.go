@@ -18,13 +18,8 @@ import (
 )
 
 // ScanOptions 扫描选项。
-//
-// Roots 优先于 Root：当 Roots 非空时扫描所有根并合并结果；否则回退到
-// 老的单根 Root 字段（兼容）。Root 仍然会作为单元素根的来源同步到 Roots
-// 用于规范化处理。
 type ScanOptions struct {
-	Root     string   // 单根（兼容）；与 Roots 二选一
-	Roots    []string // 多根（推荐）；非空时优先
+	Roots    []string // 多媒体根目录
 	MaxDepth int      // 可选显式上限；0 或负数表示完整递归
 	// Exclude 扫描排除规则（详见 ExcludeConfig）。nil 时走 DefaultExclude()
 	// 兜底,等价于「跳隐藏 + 跳系统文件」的内置默认。
@@ -38,9 +33,6 @@ type ScanOptions struct {
 // effectiveRoots 返回本轮要扫描的根列表（去重、保序、规范化）。
 func (o ScanOptions) effectiveRoots() []string {
 	src := o.Roots
-	if len(src) == 0 && o.Root != "" {
-		src = []string{o.Root}
-	}
 	seen := make(map[string]bool, len(src))
 	out := make([]string, 0, len(src))
 	for _, r := range src {
@@ -210,7 +202,6 @@ func (s *Scanner) ScanWithHook(opts ScanOptions, hook ScanHook) (*models.ScanRes
 	copy(rootsForResult, absRoots)
 
 	result := &models.ScanResult{
-		Root:             absRoots[0],
 		Roots:            rootsForResult,
 		Albums:           allTopAlbums,
 		Collections:      allTopCollections,

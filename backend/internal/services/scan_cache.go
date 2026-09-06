@@ -145,7 +145,7 @@ func (c *ScanResultCache) LoadWithRoots(currentRoots []string) (rootsMismatch bo
 	}
 	if envelope.SchemaVersion != scanCacheSchemaVersion || envelope.Result == nil {
 		c.resetMemory()
-		if err := removeCacheFile(c.path); err != nil {
+		if err := isolateUnsupportedScanCache(c.path); err != nil {
 			return true, err
 		}
 		return true, nil
@@ -285,7 +285,6 @@ func cloneAlbums(albums []models.Album) []models.Album {
 		out[i] = albums[i]
 		out[i].ImageFiles = append([]string(nil), albums[i].ImageFiles...)
 		out[i].VideoFiles = append([]string(nil), albums[i].VideoFiles...)
-		out[i].Files = append([]string(nil), albums[i].Files...)
 		out[i].Tags = append([]string(nil), albums[i].Tags...)
 	}
 	return out
@@ -314,9 +313,6 @@ func encodeScanResultForDisk(result *models.ScanResult) (*scanCacheEnvelope, err
 		return nil, errors.New("scan result is empty")
 	}
 	roots := append([]string(nil), result.Roots...)
-	if len(roots) == 0 && result.Root != "" {
-		roots = []string{result.Root}
-	}
 	if len(roots) == 0 {
 		return nil, errors.New("scan result has no roots")
 	}
@@ -386,6 +382,11 @@ func removeCacheFile(path string) error {
 		return nil
 	}
 	return err
+}
+
+func isolateUnsupportedScanCache(path string) error {
+	stamp := time.Now().Format("20060102150405") + "-" + fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000)
+	return os.Rename(path, path+".unsupported."+stamp)
 }
 
 // FindAlbum 按路径查找相册（递归 Collection）。

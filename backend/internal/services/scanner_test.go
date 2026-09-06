@@ -32,7 +32,7 @@ func touchAll(t *testing.T, paths ...string) {
 
 func TestScan_MissingRoot(t *testing.T) {
 	s := NewScanner()
-	_, err := s.Scan(ScanOptions{Root: filepath.Join(t.TempDir(), "nope")})
+	_, err := s.Scan(ScanOptions{Roots: []string{filepath.Join(t.TempDir(), "nope")}})
 	if err == nil {
 		t.Fatal("expected error for missing root")
 	}
@@ -51,7 +51,7 @@ func TestScan_FileNotDir(t *testing.T) {
 	os.WriteFile(file, []byte("x"), 0o644)
 
 	s := NewScanner()
-	_, err := s.Scan(ScanOptions{Root: file})
+	_, err := s.Scan(ScanOptions{Roots: []string{file}})
 	se, ok := err.(*ScanError)
 	if !ok || se.Kind != ScanRootNotDir {
 		t.Fatalf("expected ScanRootNotDir, got %v", err)
@@ -96,7 +96,7 @@ func TestScan_TopLevelAlbumsAndCollections(t *testing.T) {
 	mkdirAll(t, filepath.Join(root, "empty")) // 完全空
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 2})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}, MaxDepth: 2})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestScan_DepthLimit(t *testing.T) {
 	touchAll(t, filepath.Join(root, "L0", "L1", "L2", "x.jpg"))
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 1})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}, MaxDepth: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestScan_CoverSelection(t *testing.T) {
 	)
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestScan_IgnoresNonImages(t *testing.T) {
 	)
 
 	s := NewScanner()
-	res, _ := s.Scan(ScanOptions{Root: root})
+	res, _ := s.Scan(ScanOptions{Roots: []string{root}})
 	if res.Albums[0].ImageCount != 1 {
 		t.Errorf("expected 1 image, got %d", res.Albums[0].ImageCount)
 	}
@@ -434,7 +434,7 @@ func TestScan_KeepsSubAlbumNavigation(t *testing.T) {
 	touchAll(t, filepath.Join(emptyYearDir, "sub", "c1.jpg"))
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 8})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}, MaxDepth: 8})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,7 +521,7 @@ func TestScan_PreservesDeepNestedCollections(t *testing.T) {
 	touchAll(t, filepath.Join(root, "2024年", "夏威夷-度假", "相册", "作品", "y.jpg"))
 	// 2024年顶层 0 张;夏威夷-度假顶层 0 张;相册顶层 0 张;作品顶层 1 张 + 1 子目录
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root, MaxDepth: 8})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}, MaxDepth: 8})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -574,7 +574,7 @@ func TestScan_VideoOnlyAlbum(t *testing.T) {
 	)
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -615,7 +615,7 @@ func TestScan_MixedAlbum(t *testing.T) {
 	)
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
@@ -650,7 +650,7 @@ func TestScan_VideoExtsCaseInsensitive(t *testing.T) {
 		filepath.Join(dir, "b.WebM"),
 	)
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -704,7 +704,7 @@ func TestScan_ExcludeRules_Default(t *testing.T) {
 	s := NewScanner()
 	// 不传 Exclude → 走 handler 层 normalize 后的等价 default
 	res, err := s.Scan(ScanOptions{
-		Root:     root,
+		Roots:    []string{root},
 		MaxDepth: 4,
 		Exclude:  NormalizeExcludeConfig(true, nil, nil),
 	})
@@ -750,7 +750,7 @@ func TestScan_ExcludeRules_UserPattern(t *testing.T) {
 
 	s := NewScanner()
 	res, err := s.Scan(ScanOptions{
-		Root:     root,
+		Roots:    []string{root},
 		MaxDepth: 4,
 		Exclude:  NormalizeExcludeConfig(false, nil, []string{"node_modules", "Backup*"}),
 	})
@@ -785,7 +785,7 @@ func TestScan_ExcludeRules_Nested(t *testing.T) {
 
 	s := NewScanner()
 	res, err := s.Scan(ScanOptions{
-		Root:     root,
+		Roots:    []string{root},
 		MaxDepth: 4,
 		Exclude:  NormalizeExcludeConfig(true, nil, nil),
 	})
@@ -834,7 +834,7 @@ func TestScan_FolderSizeAccurate(t *testing.T) {
 	}
 
 	s := NewScanner()
-	res, err := s.Scan(ScanOptions{Root: root})
+	res, err := s.Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +871,7 @@ func TestScanner_BranchedDeepTreeCompletes(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := NewScanner().Scan(ScanOptions{Root: root})
+		result, err := NewScanner().Scan(ScanOptions{Roots: []string{root}})
 		done <- outcome{result: result, err: err}
 	}()
 	select {
@@ -893,7 +893,7 @@ func TestScan_RootMixedContentKeepsLooseMedia(t *testing.T) {
 	mkdirAll(t, filepath.Join(root, "child"))
 	touchAll(t, filepath.Join(root, "child", "page.jpg"))
 
-	result, err := NewScanner().Scan(ScanOptions{Root: root})
+	result, err := NewScanner().Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -917,7 +917,7 @@ func TestScan_NaturalMediaOrder(t *testing.T) {
 		filepath.Join(dir, "page2.jpg"),
 		filepath.Join(dir, "page1.jpg"),
 	)
-	result, err := NewScanner().Scan(ScanOptions{Root: root})
+	result, err := NewScanner().Scan(ScanOptions{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}

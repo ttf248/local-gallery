@@ -17,7 +17,7 @@ func TestScanResultCache_AsyncFlushDebounce(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	c := NewScanResultCache(path)
 	root := t.TempDir()
-	r := &models.ScanResult{Root: root, Roots: []string{root}, ScannedAt: time.Now(), AlbumCount: 1}
+	r := &models.ScanResult{Roots: []string{root}, ScannedAt: time.Now(), AlbumCount: 1}
 
 	// 连写三次：debounce 应该只触发一次落盘
 	for i := 0; i < 3; i++ {
@@ -43,7 +43,7 @@ func TestScanResultCache_LoadFromDisk(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	c := NewScanResultCache(path)
 	root := t.TempDir()
-	r := &models.ScanResult{Root: root, Roots: []string{root}, ScannedAt: time.Now(), AlbumCount: 42}
+	r := &models.ScanResult{Roots: []string{root}, ScannedAt: time.Now(), AlbumCount: 42}
 	c.Set(r)
 	// 强制立即落盘，避免依赖 timer
 	if err := c.Flush(); err != nil {
@@ -86,7 +86,6 @@ func TestScanResultCache_LoadWithRoots_Match(t *testing.T) {
 	root := t.TempDir()
 	c := NewScanResultCache(path)
 	r := &models.ScanResult{
-		Root:       root,
 		Roots:      []string{root},
 		ScannedAt:  time.Now(),
 		AlbumCount: 7,
@@ -117,7 +116,6 @@ func TestScanResultCache_LoadWithRoots_Mismatch(t *testing.T) {
 
 	c := NewScanResultCache(path)
 	c.Set(&models.ScanResult{
-		Root:       oldRoot,
 		Roots:      []string{oldRoot},
 		ScannedAt:  time.Now(),
 		AlbumCount: 9,
@@ -147,7 +145,7 @@ func TestScanResultCache_LoadWithRoots_RequiresRoots(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	c := NewScanResultCache(path)
 	root := t.TempDir()
-	c.Set(&models.ScanResult{Root: root, Roots: []string{root}, AlbumCount: 3})
+	c.Set(&models.ScanResult{Roots: []string{root}, AlbumCount: 3})
 	if err := c.Flush(); err != nil {
 		t.Fatalf("Flush: %v", err)
 	}
@@ -179,7 +177,6 @@ func TestScanResultCache_PersistsAbsolutePath(t *testing.T) {
 	filePath := filepath.Join(albumPath, "page.jpg")
 	c := NewScanResultCache(path)
 	c.Set(&models.ScanResult{
-		Root:  root,
 		Roots: []string{root},
 		Albums: []models.Album{{
 			Path:        albumPath,
@@ -227,7 +224,7 @@ func TestScanResultCache_GetAndSetUseDeepCopies(t *testing.T) {
 	root := t.TempDir()
 	filePath := filepath.Join(root, "album", "page.jpg")
 	original := &models.ScanResult{
-		Root: root, Roots: []string{root},
+		Roots:  []string{root},
 		Albums: []models.Album{{Path: filepath.Dir(filePath), ImageFiles: []string{filePath}}},
 	}
 	c := NewScanResultCache(filepath.Join(t.TempDir(), "scan_cache.json"))
@@ -255,7 +252,7 @@ func TestScanResultCache_GetIsAtomicLockFree(t *testing.T) {
 	root := t.TempDir()
 	c := NewScanResultCache(filepath.Join(t.TempDir(), "scan_cache.json"))
 	c.Set(&models.ScanResult{
-		Root: root, Roots: []string{root},
+		Roots:  []string{root},
 		Albums: []models.Album{{Path: root, Name: "a"}},
 	})
 	const goroutines = 50
@@ -280,7 +277,7 @@ func TestScanResultCache_ClearRemovesPersistedSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	root := t.TempDir()
 	c := NewScanResultCache(path)
-	c.Set(&models.ScanResult{Root: root, Roots: []string{root}})
+	c.Set(&models.ScanResult{Roots: []string{root}})
 	if err := c.Flush(); err != nil {
 		t.Fatal(err)
 	}
@@ -299,11 +296,11 @@ func TestScanResultCache_FlushReplacesExistingSnapshot(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	root := t.TempDir()
 	c := NewScanResultCache(path)
-	c.Set(&models.ScanResult{Root: root, Roots: []string{root}, AlbumCount: 1})
+	c.Set(&models.ScanResult{Roots: []string{root}, AlbumCount: 1})
 	if err := c.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	c.Set(&models.ScanResult{Root: root, Roots: []string{root}, AlbumCount: 2})
+	c.Set(&models.ScanResult{Roots: []string{root}, AlbumCount: 2})
 	if err := c.Flush(); err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +325,7 @@ func TestScanResultCache_ConcurrentSetGetFlush(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < 25; i++ {
 				c.Set(&models.ScanResult{
-					Root: root, Roots: []string{root}, AlbumCount: offset*100 + i,
+					Roots: []string{root}, AlbumCount: offset*100 + i,
 				})
 				_ = c.Get()
 				if err := c.Flush(); err != nil {
@@ -339,7 +336,7 @@ func TestScanResultCache_ConcurrentSetGetFlush(t *testing.T) {
 		}(worker)
 	}
 	wg.Wait()
-	c.Set(&models.ScanResult{Root: root, Roots: []string{root}, AlbumCount: 999})
+	c.Set(&models.ScanResult{Roots: []string{root}, AlbumCount: 999})
 	if err := c.Flush(); err != nil {
 		t.Fatal(err)
 	}
@@ -352,10 +349,10 @@ func TestScanResultCache_ConcurrentSetGetFlush(t *testing.T) {
 	}
 }
 
-func TestScanResultCache_InvalidatesLegacySchema(t *testing.T) {
+func TestScanResultCache_IsolatesUnsupportedSchema(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "scan_cache.json")
 	root := t.TempDir()
-	legacy, err := json.Marshal(&models.ScanResult{Root: root, Roots: []string{root}})
+	legacy, err := json.Marshal(&models.ScanResult{Roots: []string{root}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,10 +362,14 @@ func TestScanResultCache_InvalidatesLegacySchema(t *testing.T) {
 	c := NewScanResultCache(path)
 	mismatch, err := c.LoadWithRoots([]string{root})
 	if err != nil || !mismatch {
-		t.Fatalf("LoadWithRoots=(%v,%v), want legacy invalidation", mismatch, err)
+		t.Fatalf("LoadWithRoots=(%v,%v), want unsupported schema isolation", mismatch, err)
 	}
 	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("legacy file should be removed: %v", err)
+		t.Fatalf("unsupported cache should be isolated: %v", err)
+	}
+	matches, _ := filepath.Glob(path + ".unsupported.*")
+	if len(matches) != 1 {
+		t.Fatalf("unsupported cache backup missing: %v", matches)
 	}
 }
 
@@ -379,7 +380,6 @@ func TestScanResultCache_LoadWithRoots_MultiRootsOrderInsensitive(t *testing.T) 
 	b := t.TempDir()
 	c := NewScanResultCache(path)
 	c.Set(&models.ScanResult{
-		Root:       a,
 		Roots:      []string{a, b},
 		ScannedAt:  time.Now(),
 		AlbumCount: 5,

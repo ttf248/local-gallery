@@ -24,8 +24,7 @@ type activityFile struct {
 // ActivityStore 将高频阅读/播放活动与低频偏好文件分离，避免
 // GET /prefs 携带不受限的活动列表。内存中按不透明 ID 组合键索引。
 type ActivityStore struct {
-	path            string
-	legacyPrefsPath string
+	path string
 
 	mu     sync.RWMutex
 	items  map[string]models.Activity
@@ -35,14 +34,12 @@ type ActivityStore struct {
 	revision uint64
 }
 
-// NewActivityStore 创建活动存储。legacyPrefsPath 仅用于首次升级时
-// 迁移旧 readingProgress；新文件一旦存在就不再读取旧字段。
-func NewActivityStore(path, legacyPrefsPath string) *ActivityStore {
-	return &ActivityStore{path: path, legacyPrefsPath: legacyPrefsPath}
+// NewActivityStore 创建活动存储。
+func NewActivityStore(path string) *ActivityStore {
+	return &ActivityStore{path: path}
 }
 
-// Load 提前加载活动文件并完成旧 readingProgress 迁移。服务启动时应在任何
-// PrefsStore 写入之前调用，避免旧偏好首次保存时先丢弃尚未迁移的字段。
+// Load 提前加载活动文件。
 func (s *ActivityStore) Load() error {
 	return s.ensureLoaded()
 }
@@ -247,12 +244,9 @@ func (s *ActivityStore) loadLocked() error {
 		if !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
-		s.items = s.loadLegacyActivities()
-		if len(s.items) == 0 {
-			s.loaded = true
-			return nil
-		}
-		return s.commitLocked(s.items)
+		s.items = map[string]models.Activity{}
+		s.loaded = true
+		return nil
 	}
 	var disk activityFile
 	if err := json.Unmarshal(data, &disk); err != nil {
@@ -266,7 +260,12 @@ func (s *ActivityStore) loadLocked() error {
 		return nil
 	}
 	if disk.Version != activityFileVersion {
-		return fmt.Errorf("unsupported activity store version %d", disk.Version)
+		if err := isolateUnsupportedFile(s.path); err != nil {
+			return fmt.Errorf("isolate unsupported activity store version %d: %w", disk.Version, err)
+		}
+		s.items = map[string]models.Activity{}
+		s.loaded = true
+		return nil
 	}
 	s.items = make(map[string]models.Activity, len(disk.Activities))
 	for _, activity := range disk.Activities {
@@ -283,52 +282,9 @@ func (s *ActivityStore) loadLocked() error {
 	return nil
 }
 
-// loadLegacyActivities 只识别旧偏好文件中以 albumId 存储的有效记录。
-// path 形式的历史数据可能含绝对路径，严禁迁移或暴露。
-func (s *ActivityStore) loadLegacyActivities() map[string]models.Activity {
-	out := map[string]models.Activity{}
-	if s.legacyPrefsPath == "" {
-		return out
-	}
-	data, err := os.ReadFile(s.legacyPrefsPath)
-	if err != nil {
-		return out
-	}
-	var legacy struct {
-		ReadingProgress []struct {
-			AlbumID string    `json:"albumId"`
-			Index   int       `json:"index"`
-			Total   int       `json:"total"`
-			Updated time.Time `json:"updated"`
-		} `json:"readingProgress"`
-	}
-	if json.Unmarshal(data, &legacy) != nil {
-		return out
-	}
-	for _, old := range legacy.ReadingProgress {
-		if !models.IsAlbumID(old.AlbumID) || old.Total <= 0 || old.Index < 0 {
-			continue
-		}
-		index := min(old.Index, old.Total-1)
-		activity, err := models.NormalizeActivity(models.Activity{
-			AlbumID:   old.AlbumID,
-			MediaKind: models.MediaKindImage,
-			PageIndex: index,
-			PageCount: old.Total,
-			Updated:   old.Updated,
-		})
-		if err != nil {
-			continue
-		}
-		if activity.Updated.IsZero() {
-			activity.Updated = time.Now().UTC()
-		}
-		key, _ := activity.Identity().Key()
-		if current, exists := out[key]; !exists || activity.Updated.After(current.Updated) {
-			out[key] = activity
-		}
-	}
-	return out
+func isolateUnsupportedFile(path string) error {
+	stamp := time.Now().Format("20060102150405") + "-" + fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000)
+	return os.Rename(path, path+".unsupported."+stamp)
 }
 
 func (s *ActivityStore) commitLocked(items map[string]models.Activity) error {

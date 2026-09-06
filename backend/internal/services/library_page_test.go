@@ -63,7 +63,7 @@ func newLibraryPageFixture(t *testing.T) libraryPageFixture {
 		SourceRoot: root, Albums: []models.Album{nested}, AlbumCount: 1,
 	}
 	result := &models.ScanResult{
-		Root: root, Roots: []string{root}, Albums: []models.Album{virtual, album2, album10},
+		Roots: []string{root}, Albums: []models.Album{virtual, album2, album10},
 		Collections: []models.Collection{collection}, AlbumCount: 4, CollectionCount: 1,
 		ScannedAt: time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC), Duration: 123,
 		SmartCollections: []models.SmartCollection{{
@@ -134,7 +134,7 @@ func TestLibraryChildrenUsesRevisionBoundCursorAndNaturalOrder(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, first)
 	assertNoAbsolutePathInJSON(t, second)
 
-	fixture.catalog.Publish(&models.ScanResult{Root: fixture.root, Roots: []string{fixture.root}}, []string{fixture.root})
+	fixture.catalog.Publish(&models.ScanResult{Roots: []string{fixture.root}}, []string{fixture.root})
 	if _, err := PageLibraryChildren(fixture.catalog.Acquire(), fixture.rootID, first.NextCursor, 2); !errors.Is(err, ErrStalePageCursor) {
 		t.Fatalf("stale cursor error=%v, want ErrStalePageCursor", err)
 	}
@@ -316,7 +316,6 @@ func TestLibraryActivitySummaryKeepsCurrentEmptyAlbumUnreadAfterRescan(t *testin
 	videoPath := filepath.Join(albumPath, "clip.mp4")
 	catalog := NewResourceCatalog()
 	catalog.Publish(&models.ScanResult{
-		Root:  root,
 		Roots: []string{root},
 		Albums: []models.Album{{
 			Type: "album", Path: albumPath, Name: "video-only",
@@ -356,7 +355,6 @@ func TestLibraryAlbumSummaryTracksOnlyActiveCustomCovers(t *testing.T) {
 		}
 	}
 	result := &models.ScanResult{
-		Root:  root,
 		Roots: []string{root},
 		Albums: []models.Album{{
 			Type: "album", Path: albumPath, Name: "album",

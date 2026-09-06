@@ -83,7 +83,7 @@ func (r *AsyncScanRunner) Start(opts ScanOptions) (string, <-chan ProgressEvent,
 
 // StartOrReuse 保证全进程同一时间只有一个扫描任务。
 func (r *AsyncScanRunner) StartOrReuse(opts ScanOptions) (string, <-chan ProgressEvent, bool, error) {
-	if len(opts.Roots) == 0 && opts.Root == "" {
+	if len(opts.Roots) == 0 {
 		return "", nil, false, errors.New("root is required")
 	}
 

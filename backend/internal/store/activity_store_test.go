@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,7 +26,7 @@ func testIDDigits(n int) string {
 func newTestActivityStore(t *testing.T) (*ActivityStore, string) {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "activity.json")
-	return NewActivityStore(path, ""), path
+	return NewActivityStore(path), path
 }
 
 func imageActivity(album int, page, count int) models.Activity {
@@ -55,7 +54,7 @@ func TestActivityStorePersistsIndependentImageAndVideoActivities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened := NewActivityStore(path, "")
+	reopened := NewActivityStore(path)
 	got, err := reopened.Query([]models.ActivityIdentity{image.Identity(), video.Identity()})
 	if err != nil {
 		t.Fatal(err)
@@ -219,70 +218,6 @@ func TestActivityStoreDeleteAndClearAreIdempotent(t *testing.T) {
 	}
 }
 
-func TestActivityStoreMigratesOpaqueLegacyProgressOnce(t *testing.T) {
-	dir := t.TempDir()
-	activityPath := filepath.Join(dir, "activity.json")
-	prefsPath := filepath.Join(dir, "web_settings.json")
-	legacy := map[string]any{
-		"readingProgress": []map[string]any{
-			{"albumId": testAlbumID(1), "index": 12, "total": 10, "updated": "2026-01-01T00:00:00Z"},
-			{"path": `C:\\secret`, "index": 1, "total": 2},
-		},
-	}
-	data, _ := json.Marshal(legacy)
-	if err := os.WriteFile(prefsPath, data, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	store := NewActivityStore(activityPath, prefsPath)
-	identity := models.ActivityIdentity{AlbumID: testAlbumID(1), MediaKind: models.MediaKindImage}
-	activity, exists, err := store.Get(identity)
-	if err != nil || !exists {
-		t.Fatalf("legacy activity was not migrated: exists=%v err=%v", exists, err)
-	}
-	if activity.PageIndex != 9 || activity.Status != models.ActivityCompleted {
-		t.Fatalf("legacy overflow was not clamped: %+v", activity)
-	}
-	if _, err := os.Stat(activityPath); err != nil {
-		t.Fatalf("migration was not persisted: %v", err)
-	}
-
-	// 新文件是唯一真相源；修改旧偏好不得让已删除记录复活。
-	if _, err := store.Clear(); err != nil {
-		t.Fatal(err)
-	}
-	reopened := NewActivityStore(activityPath, prefsPath)
-	if _, exists, err := reopened.Get(identity); err != nil || exists {
-		t.Fatalf("legacy data revived after migration: exists=%v err=%v", exists, err)
-	}
-}
-
-func TestActivityStoreEagerLoadProtectsMigrationFromLaterPrefsRewrite(t *testing.T) {
-	dir := t.TempDir()
-	activityPath := filepath.Join(dir, "activity.json")
-	prefsPath := filepath.Join(dir, "web_settings.json")
-	legacy := []byte(`{"theme":"dark","readingProgress":[{"albumId":"a_0000000000000000000001","index":2,"total":5,"updated":"2026-01-01T00:00:00Z"}]}`)
-	if err := os.WriteFile(prefsPath, legacy, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	activities := NewActivityStore(activityPath, prefsPath)
-	if err := activities.Load(); err != nil {
-		t.Fatal(err)
-	}
-	// PrefsStore 的新模型不再保留 readingProgress；模拟它在启动后改写偏好。
-	if err := os.WriteFile(prefsPath, []byte(`{"theme":"light"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	reopened := NewActivityStore(activityPath, prefsPath)
-	activity, exists, err := reopened.Get(models.ActivityIdentity{
-		AlbumID: testAlbumID(1), MediaKind: models.MediaKindImage,
-	})
-	if err != nil || !exists || activity.PageIndex != 2 || activity.PageCount != 5 {
-		t.Fatalf("eager migration was not durable: activity=%+v exists=%v err=%v", activity, exists, err)
-	}
-}
-
 func TestActivityStoreRecoversFromCorruptFileWithoutExposingIt(t *testing.T) {
 	store, path := newTestActivityStore(t)
 	if err := os.WriteFile(path, []byte(`{"version":`), 0o644); err != nil {
@@ -300,26 +235,22 @@ func TestActivityStoreRecoversFromCorruptFileWithoutExposingIt(t *testing.T) {
 	}
 }
 
-func TestActivityStoreKeepsUnsupportedFutureVersion(t *testing.T) {
+func TestActivityStoreIsolatesUnsupportedVersionAndColdStarts(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "activity.json")
 	future := []byte(`{"version":2,"activities":[]}`)
 	if err := os.WriteFile(path, future, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	store := NewActivityStore(path, "")
-	if err := store.Load(); err == nil {
-		t.Fatal("future activity version was accepted")
+	store := NewActivityStore(path)
+	if err := store.Load(); err != nil {
+		t.Fatalf("unsupported version should cold start: %v", err)
 	}
-	got, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("unsupported activity file should be isolated: %v", err)
 	}
-	if string(got) != string(future) {
-		t.Fatalf("future activity file was modified: %s", got)
-	}
-	matches, _ := filepath.Glob(path + ".corrupt.*")
-	if len(matches) != 0 {
-		t.Fatalf("future activity file was treated as corrupt: %v", matches)
+	matches, _ := filepath.Glob(path + ".unsupported.*")
+	if len(matches) != 1 {
+		t.Fatalf("unsupported activity backup missing: %v", matches)
 	}
 }

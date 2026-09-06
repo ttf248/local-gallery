@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestEnsureCacheLayoutMigratesKnownLegacyEntries(t *testing.T) {
+func TestEnsureCacheLayoutCreatesCurrentLayoutAndLeavesLegacyEntries(t *testing.T) {
 	root := t.TempDir()
 	legacyState := map[string]string{
 		"scan_cache.json":      `{"schemaVersion":3}`,
@@ -32,21 +32,18 @@ func TestEnsureCacheLayoutMigratesKnownLegacyEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for name, target := range map[string]string{
-		"scan_cache.json":      layout.ScanCachePath,
-		"web_settings.json":    layout.PreferencesPath,
-		"activity.json":        layout.ActivityPath,
-		"cover_overrides.json": layout.CoverOverridesPath,
-	} {
-		if _, err := os.Stat(target); err != nil {
-			t.Errorf("legacy state %s was not migrated: %v", name, err)
-		}
-		if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
-			t.Errorf("legacy state %s should no longer remain at cache root", name)
+	for _, dir := range []string{layout.StateDir, layout.DerivedDir, layout.TempDir, layout.ThumbnailDir} {
+		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+			t.Errorf("current cache directory missing: %s (%v)", dir, err)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(layout.ThumbnailDir, filepath.Base(legacyThumb))); err != nil {
-		t.Fatalf("legacy thumbnail was not migrated: %v", err)
+	for name := range legacyState {
+		if _, err := os.Stat(filepath.Join(root, name)); err != nil {
+			t.Errorf("legacy state %s should remain untouched: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(legacyThumb); err != nil {
+		t.Fatalf("legacy thumbnail should remain untouched: %v", err)
 	}
 	if _, err := os.Stat(unknown); err != nil {
 		t.Fatalf("unknown cache-root file must be preserved: %v", err)

@@ -16,7 +16,7 @@ func TestRunServerGracefulShutdownFlushesRuntime(t *testing.T) {
 	root := t.TempDir()
 	cachePath := filepath.Join(t.TempDir(), "scan_cache.json")
 	cache := services.NewScanResultCache(cachePath)
-	cache.Set(&models.ScanResult{Root: root, Roots: []string{root}})
+	cache.Set(&models.ScanResult{Roots: []string{root}})
 	runner := services.NewAsyncScanRunner()
 	transcode := services.NewTranscodeService(services.TranscodeOptions{
 		CacheDir: t.TempDir(),
@@ -31,7 +31,7 @@ func TestRunServerGracefulShutdownFlushesRuntime(t *testing.T) {
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("scan cache was not flushed: %v", err)
 	}
-	if _, _, _, err := runner.StartOrReuse(services.ScanOptions{Root: root}); err == nil {
+	if _, _, _, err := runner.StartOrReuse(services.ScanOptions{Roots: []string{root}}); err == nil {
 		t.Fatal("scan runner accepted work after shutdown")
 	}
 	if _, status := transcode.Resolve("video.mp4", nil); status != services.TranscodeStatusUnavailable {
