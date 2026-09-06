@@ -131,8 +131,7 @@ function titleOf(pathname: string): string {
   if (pathname.startsWith("/settings")) return "设置";
   if (pathname.startsWith("/albums")) return "文件夹";
   if (pathname.startsWith("/gallery")) return "浏览";
-  if (pathname.startsWith("/tags") || pathname.startsWith("/authors"))
-    return "标签";
+  if (pathname.startsWith("/tags")) return "标签";
   if (pathname.startsWith("/unread")) return "未读";
   return "图像";
 }
