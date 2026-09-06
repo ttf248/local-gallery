@@ -69,23 +69,6 @@ func AlbumMediaPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	}
 }
 
-// LibraryAlbumsPageHandler 分页返回跨根、跨层级的全部相册摘要。
-func LibraryAlbumsPageHandler(catalog *services.ResourceCatalog) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		limit, ok := parseLibraryPageLimit(c)
-		if !ok {
-			return nil
-		}
-		snapshot := catalog.Acquire()
-		page, err := services.PageLibraryAlbums(snapshot, c.Query("cursor"), limit)
-		if err != nil {
-			return writeLibraryPageError(c, err, snapshot.Revision())
-		}
-		setLibraryRevisionETag(c, snapshot.Revision())
-		return c.JSON(fiber.Map{"ok": true, "page": page})
-	}
-}
-
 // LibraryUnreadAlbumsPageHandler 分页返回未读相册，避免前端下载全库后再批量筛选活动。
 func LibraryUnreadAlbumsPageHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore, unreadIndex *services.UnreadLibraryIndex) fiber.Handler {
 	return func(c *fiber.Ctx) error {

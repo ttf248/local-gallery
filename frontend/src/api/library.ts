@@ -172,10 +172,6 @@ export const libraryApi = {
     api<PageResponse<LibraryNodeSummary>>("/api/library/unread", {
       params: { cursor, limit },
     }),
-  albumPage: (cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
-    api<PageResponse<LibraryNodeSummary>>("/api/albums", {
-      params: { cursor, limit },
-    }),
   childrenPage: (
     parentId: string,
     cursor?: string,
@@ -207,7 +203,6 @@ export const libraryApi = {
     }>("/api/albums/random", {
       params: { scope: scope === "unread" ? "unread" : undefined },
     }),
-  allAlbums: () => collectPages((cursor) => libraryApi.albumPage(cursor)),
   allUnreadAlbums: () =>
     collectPages((cursor) => libraryApi.unreadAlbumPage(cursor)),
   allChildren: (parentId: string) =>

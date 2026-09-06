@@ -293,7 +293,6 @@ func main() {
 	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(resourceCatalog, activities, unreadIndex))
 	api.Delete("/library", handlers.ScanCacheClearHandler(scanCache, resourceCatalog, runner))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
-	api.Get("/albums", handlers.LibraryAlbumsPageHandler(resourceCatalog))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(resourceCatalog, activities, unreadIndex))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(resourceCatalog))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。

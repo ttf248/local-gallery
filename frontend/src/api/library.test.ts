@@ -145,7 +145,7 @@ describe("libraryApi", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(libraryApi.allAlbums()).rejects.toBeInstanceOf(
+    await expect(libraryApi.allUnreadAlbums()).rejects.toBeInstanceOf(
       LibraryRevisionChangedError,
     );
   });

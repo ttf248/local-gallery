@@ -19,7 +19,17 @@ test("扫描并打开示例相册", async ({ page }) => {
     timeout: 20_000,
   });
 
-  const response = await page.request.get("/api/albums?limit=1");
+  const manifestResponse = await page.request.get("/api/library/manifest");
+  expect(manifestResponse.ok()).toBeTruthy();
+  const manifest = (await manifestResponse.json()) as {
+    manifest: { roots: Array<{ id: string }> };
+  };
+  const rootID = manifest.manifest.roots[0]?.id;
+  expect(rootID).toBeTruthy();
+
+  const response = await page.request.get(
+    `/api/library/${encodeURIComponent(rootID ?? "")}/children?limit=1`,
+  );
   expect(response.ok()).toBeTruthy();
   const body = (await response.json()) as {
     page: {

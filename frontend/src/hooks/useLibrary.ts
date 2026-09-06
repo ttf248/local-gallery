@@ -9,7 +9,6 @@ export const libraryQueryKeys = {
   activitySummary: () =>
     [...libraryQueryKeys.root, "activity-summary"] as const,
   dashboard: () => [...libraryQueryKeys.root, "dashboard"] as const,
-  albums: () => [...libraryQueryKeys.root, "albums"] as const,
   unreadAlbums: () => [...libraryQueryKeys.root, "unread-albums"] as const,
   children: (parentId: string) =>
     [...libraryQueryKeys.root, "children", parentId] as const,
@@ -67,13 +66,6 @@ export function useLibraryDashboard() {
     queryKey: libraryQueryKeys.dashboard(),
     queryFn: () => libraryApi.dashboard(),
     staleTime: 30_000,
-  });
-}
-
-export function useLibraryAlbums() {
-  return useQuery({
-    queryKey: libraryQueryKeys.albums(),
-    queryFn: () => libraryApi.allAlbums(),
   });
 }
 

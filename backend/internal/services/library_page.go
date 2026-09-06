@@ -421,26 +421,6 @@ func PageAlbumMedia(snapshot CatalogSnapshot, albumID, cursor string, limit int)
 	}, nil
 }
 
-// PageLibraryAlbums 返回整个媒体库中的相册摘要，包含所有嵌套层级，但不携带媒体文件。
-func PageLibraryAlbums(snapshot CatalogSnapshot, cursor string, limit int) (LibraryPage[LibraryNodeSummary], error) {
-	const scope = "library-albums"
-	offset, err := pageOffset(snapshot, cursor, scope)
-	if err != nil {
-		return LibraryPage[LibraryNodeSummary]{}, err
-	}
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
-		return LibraryPage[LibraryNodeSummary]{}, ErrLibraryNotReady
-	}
-	albums := snapshot.state.library.albums
-	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(albums), limit)
-	if err != nil {
-		return LibraryPage[LibraryNodeSummary]{}, err
-	}
-	return LibraryPage[LibraryNodeSummary]{
-		Revision: snapshot.Revision(), Items: cloneNodePage(albums, start, end), Total: len(albums), NextCursor: next,
-	}, nil
-}
-
 // ResolveLibraryNodes 按调用方给定顺序批量解析相册或集合摘要。不存在、已过期
 // 或不是可展示节点的 ID 会进入 Missing，避免收藏/最近浏览逐个发请求。
 func ResolveLibraryNodes(snapshot CatalogSnapshot, ids []string) (LibraryNodeQueryResult, error) {

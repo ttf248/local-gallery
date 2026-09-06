@@ -165,21 +165,9 @@ func TestAlbumMediaPageMergesImageAndVideoNaturalOrder(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, first)
 }
 
-func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
+func TestLibraryNodeQueryUsesLightweightIndex(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
 	snapshot := fixture.catalog.Acquire()
-	first, err := PageLibraryAlbums(snapshot, "", 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if first.Total != 4 || len(first.Items) != 2 || first.Items[0].Name != "本目录媒体" || first.NextCursor == "" {
-		t.Fatalf("album page=%+v", first)
-	}
-	second, err := PageLibraryAlbums(snapshot, first.NextCursor, 2)
-	if err != nil || len(second.Items) != 2 || second.NextCursor != "" {
-		t.Fatalf("second album page=(%+v, %v)", second, err)
-	}
-
 	resolved, err := ResolveLibraryNodes(snapshot, []string{fixture.collectionID, "a_missing", fixture.albumID})
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +182,6 @@ func TestLibraryAlbumsAndNodeQueryUseLightweightIndex(t *testing.T) {
 	if collection.AlbumCount != 1 || collection.ImageCount != 1 || collection.MediaCount != 1 {
 		t.Fatalf("collection aggregate=%+v", collection)
 	}
-	assertNoAbsolutePathInJSON(t, first)
 	assertNoAbsolutePathInJSON(t, resolved)
 }
 
@@ -287,12 +274,8 @@ func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 		t.Fatalf("activity summary=%+v", summary)
 	}
 
-	albums, err := PageLibraryAlbums(snapshot, "", MaxLibraryPageLimit)
-	if err != nil {
-		t.Fatal(err)
-	}
-	excludeAll := make(map[string]struct{}, len(albums.Items))
-	for _, album := range albums.Items {
+	excludeAll := make(map[string]struct{}, len(snapshot.state.library.albums))
+	for _, album := range snapshot.state.library.albums {
 		excludeAll[album.ID] = struct{}{}
 	}
 	if _, err := unreadIndex.Random(snapshot, excludeAll, 2); !errors.Is(err, ErrLibraryNoMatchingAlbum) {

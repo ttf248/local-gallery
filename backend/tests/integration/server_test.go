@@ -134,7 +134,6 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(catalog, activityStore, unreadIndex))
 	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(catalog, activityStore, unreadIndex))
 	api.Get("/library/unread", handlers.LibraryUnreadAlbumsPageHandler(catalog, activityStore, unreadIndex))
-	api.Get("/albums", handlers.LibraryAlbumsPageHandler(catalog))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(catalog, activityStore, unreadIndex))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(catalog))
@@ -388,17 +387,6 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 		t.Fatalf("unexpected media item: %+v", media.Page.Items[0])
 	}
 
-	res, body = h.do(t, http.MethodGet, "/api/albums?limit=1", nil)
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("albums status=%d body=%s", res.StatusCode, body)
-	}
-	var albums struct {
-		Page services.LibraryPage[services.LibraryNodeSummary] `json:"page"`
-	}
-	if err := json.Unmarshal(body, &albums); err != nil || len(albums.Page.Items) != 1 || albums.Page.Total != 2 {
-		t.Fatalf("invalid albums page: %s err=%v", body, err)
-	}
-
 	res, body = h.do(t, http.MethodPost, "/api/library/nodes/query", map[string]any{
 		"ids": []string{firstAlbum.ID, "a_missing"},
 	})
@@ -423,12 +411,12 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 		t.Fatalf("invalid tags page: %s err=%v", body, err)
 	}
 
-	// 一次扫描只发布一个 revision，所有分页端点必须保持一致。
+	// 一次扫描只发布一个 revision，所有当前目录分页端点必须保持一致。
 	if manifest.Manifest.Revision != children.Page.Revision || children.Page.Revision != media.Page.Revision ||
-		media.Page.Revision != albums.Page.Revision || albums.Page.Revision != nodes.Result.Revision ||
+		media.Page.Revision != nodes.Result.Revision ||
 		nodes.Result.Revision != tags.Page.Revision || h.catalog.Acquire().Revision() != tags.Page.Revision {
-		t.Fatalf("revision mismatch: manifest=%d children=%d media=%d albums=%d nodes=%d tags=%d catalog=%d",
-			manifest.Manifest.Revision, children.Page.Revision, media.Page.Revision, albums.Page.Revision, nodes.Result.Revision, tags.Page.Revision,
+		t.Fatalf("revision mismatch: manifest=%d children=%d media=%d nodes=%d tags=%d catalog=%d",
+			manifest.Manifest.Revision, children.Page.Revision, media.Page.Revision, nodes.Result.Revision, tags.Page.Revision,
 			h.catalog.Acquire().Revision())
 	}
 }

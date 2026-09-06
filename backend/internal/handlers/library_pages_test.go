@@ -45,7 +45,6 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	app.Get("/api/library/manifest", LibraryManifestHandler(catalog))
 	app.Get("/api/library/:id/children", LibraryChildrenPageHandler(catalog))
 	app.Post("/api/library/nodes/query", LibraryNodesQueryHandler(catalog))
-	app.Get("/api/albums", LibraryAlbumsPageHandler(catalog))
 	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"), "")
 	unreadIndex := services.NewUnreadLibraryIndex()
 	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities, unreadIndex))
@@ -94,15 +93,6 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 		t.Fatalf("media status=%d", mediaResp.StatusCode)
 	}
 	assertHandlerBodyHasNoAbsolutePath(t, mediaResp.Body)
-
-	albumsResp, err := app.Test(httptest.NewRequest("GET", "/api/albums?limit=1", nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if albumsResp.StatusCode != fiber.StatusOK {
-		t.Fatalf("albums status=%d", albumsResp.StatusCode)
-	}
-	assertHandlerBodyHasNoAbsolutePath(t, albumsResp.Body)
 
 	randomResp, err := app.Test(httptest.NewRequest("GET", "/api/albums/random", nil))
 	if err != nil {
