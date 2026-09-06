@@ -173,8 +173,8 @@ function GridCard({
     activityApi
       .setImage(albumId, Math.max(0, total - 1), total)
       .then(() => {
-        // 让所有依赖 progress 的视图(UnreadHero / ContinueReadingHero /
-        // Unread 页 / Recents / Favorites / Album 详情)立刻看到新进度。
+        // 活动 API 会通知首页仪表盘刷新；这里同时让完整列表和详情的
+        // 活动查询缓存失效，保证 Unread / Recents / Favorites 同步更新。
         queryClient.invalidateQueries({
           queryKey: ["activity-query", "image"],
         });

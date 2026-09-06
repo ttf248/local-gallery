@@ -70,6 +70,21 @@ export interface LibraryActivitySummary {
   unreadCount: number;
 }
 
+export interface LibraryDashboardProgress {
+  album: LibraryNodeSummary;
+  pageIndex: number;
+  pageCount: number;
+  updated: string;
+}
+
+export interface LibraryHomeDashboard {
+  revision: number;
+  albumCount: number;
+  unreadCount: number;
+  unread: LibraryNodeSummary[];
+  inProgress: LibraryDashboardProgress[];
+}
+
 export interface LibraryPage<T> {
   revision: number;
   items: T[];
@@ -148,6 +163,10 @@ export const libraryApi = {
   activitySummary: () =>
     api<{ ok: boolean; summary: LibraryActivitySummary }>(
       "/api/library/activity-summary",
+    ),
+  dashboard: () =>
+    api<{ ok: boolean; dashboard: LibraryHomeDashboard }>(
+      "/api/library/dashboard",
     ),
   albumPage: (cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
     api<PageResponse<LibraryNodeSummary>>("/api/albums", {

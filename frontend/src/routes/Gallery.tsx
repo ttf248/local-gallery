@@ -367,8 +367,8 @@ export default function Gallery() {
       activityApi
         .setImage(pathParam, imageActivityPageIndex, total)
         .then(() => {
-          // 让 Home/Recents/Favorites 的批量活动 + Album 详情
-          // 缓存都失效，回到列表/详情时立刻看到新进度
+        // 活动 API 会通知首页仪表盘刷新；这里同时让 Recents / Favorites
+        // 的批量活动和 Album 详情缓存失效，回到列表/详情时立刻看到新进度。
           queryClient.invalidateQueries({
             queryKey: ["activity-query", "image"],
           });

@@ -20,7 +20,6 @@ interface UnreadHeroProps {
   count: number
   onShuffle: () => void
   onMarkRead: (card: CardData) => void
-  onMarkAllRead: () => void
 }
 
 // 首页未读入口：只展示前六本，完整列表交给 /unread 页面。
@@ -29,7 +28,6 @@ export function UnreadHero({
   count,
   onShuffle,
   onMarkRead,
-  onMarkAllRead,
 }: UnreadHeroProps) {
   const navigate = useNavigate()
   const { favorites } = useFavorites()
@@ -51,14 +49,6 @@ export function UnreadHero({
             还有 <span className="font-semibold tabular-nums">{count}</span> 本没看
           </span>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={onMarkAllRead}
-              className="inline-flex items-center gap-1 h-6 px-2 rounded-md text-[11px] text-fg-subtle hover:text-danger hover:bg-danger-soft transition-colors"
-              title="将所有未读相册标记为已读"
-            >
-              <CloseIcon size={10} />
-              清空
-            </button>
             <button
               onClick={onShuffle}
               className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-accent text-accent-contrast hover:bg-accent-hover text-xs font-medium transition-colors"

@@ -5,14 +5,13 @@ import { useSearchStore } from "../store/searchStore";
 import { useScanSSE } from "../hooks/useScanSSE";
 import { useFavorites } from "../hooks/useFavorites";
 import {
-  useImageActivities,
   useMarkAlbumRead,
   useMarkAlbumsRead,
 } from "../hooks/useImageActivity";
-import { useUnreadAlbums } from "../hooks/useUnreadAlbums";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { scanApi } from "../api/scan";
 import { historyApi } from "../api/prefs";
+import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
@@ -25,8 +24,7 @@ import {
   groupLibraryNodesByYear,
   type YearGroup,
 } from "../utils/albumGrouping";
-import { asProgressLike, isInProgress } from "../utils/progress";
-import { useLibraryAlbums, useLibraryOverview } from "../hooks/useLibrary";
+import { useLibraryDashboard, useLibraryOverview } from "../hooks/useLibrary";
 import { libraryOverviewCards, nodeSummaryToCard } from "../utils/libraryCard";
 import {
   PlayFilledIcon,
@@ -44,11 +42,8 @@ export default function Home() {
   const navigate = useNavigate();
   const overview = useLibraryOverview();
   const manifest = overview.manifest;
-  const libraryAlbumsQuery = useLibraryAlbums();
-  const libraryAlbums = useMemo(
-    () => libraryAlbumsQuery.data?.items ?? [],
-    [libraryAlbumsQuery.data],
-  );
+  const dashboardQuery = useLibraryDashboard();
+  const dashboard = dashboardQuery.data?.dashboard;
   const sse = useScanSSE();
   const pushToast = useUIStore((s) => s.pushToast);
 
@@ -64,19 +59,26 @@ export default function Home() {
   const viewMode = useUIStore((s) => s.viewMode);
 
   const { favorites } = useFavorites();
-  // 首页的未读区与继续阅读区共享同一份全库进度，避免两个近似 batch 请求。
-  const albumIds = useMemo(
-    () => libraryAlbums.map((album) => album.id),
-    [libraryAlbums],
+  // 首页只展示服务端预先限制为六本的未读预览；完整未读库交给 /unread 分页加载。
+  const unreadCards = useMemo<CardData[]>(
+    () =>
+      (dashboard?.unread ?? []).map((album) => ({
+        ...nodeSummaryToCard(album, "u:"),
+        progress: { index: 0, total: album.imageCount ?? 0 },
+      })),
+    [dashboard],
   );
-  const { data: progressMap } = useImageActivities(albumIds);
-  // 未读列表:Home 顶部 hero 直接展示前 6 张 + 链接到 /unread
-  // 已有 useUnreadAlbums hook(见 hooks/useUnreadAlbums.ts),复用避免重新
-  // 实现 progress 派发逻辑。
-  const { cards: unreadCards, count: unreadCount } = useUnreadAlbums({
-    progressMap,
-    loadProgress: false,
-  });
+  const unreadCount = dashboard?.unreadCount ?? 0;
+  const dashboardProgressByID = useMemo(
+    () =>
+      new Map(
+        (dashboard?.inProgress ?? []).map((progress) => [
+          progress.album.id,
+          progress,
+        ]),
+      ),
+    [dashboard],
+  );
   // history 用于 sortBy='viewed':用最近「看过」时间(而非文件 mtime)排序。
   // 注意:history 顺序是 openedAt 倒序,所以可以直接走 batch 缓存。
   const { data: historyData } = useQuery({
@@ -99,27 +101,17 @@ export default function Home() {
     onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
   });
 
-  const onShuffle = () => {
-    if (libraryAlbums.length === 0) {
-      pushToast({ kind: "info", message: "尚未加载图像库" });
-      return;
-    }
-    const album =
-      libraryAlbums[Math.floor(Math.random() * libraryAlbums.length)];
-    navigate(albumRoute(album.id));
-  };
-
-  // 随机未读:从未读列表里挑一本(若未读为空,给个 toast 引导去 /unread 看空态)
-  const onShuffleUnread = () => {
-    if (unreadCards.length === 0) {
-      pushToast({ kind: "info", message: "没有未读相册可跳" });
-      return;
-    }
-    const pick = unreadCards[Math.floor(Math.random() * unreadCards.length)];
-    // pick.to 形如 /albums/<encoded>;Gallery 期望 ?path= 原 path 形式
-    const path = decodeFavPath(pick.to);
-    navigate(albumRoute(path));
-  };
+  const randomAlbum = useMutation({
+    mutationFn: (scope: "all" | "unread") => libraryApi.randomAlbum(scope),
+    onSuccess: ({ album }) => navigate(albumRoute(album.id)),
+    onError: (_error, scope) =>
+      pushToast({
+        kind: "info",
+        message: scope === "unread" ? "没有未读相册可跳" : "尚未加载图像库",
+      }),
+  });
+  const onShuffle = () => randomAlbum.mutate("all");
+  const onShuffleUnread = () => randomAlbum.mutate("unread");
 
   // 「继续阅读」管理：单本标记已读 / 一键全部标记已读。
   //
@@ -176,12 +168,11 @@ export default function Home() {
     });
   };
 
-  // 「未读」管理：单本标记已读 / 一键全部标记已读。
+  // 「未读」管理：单本标记已读。
   // 语义上「标记已读」= 把 progress 推到 index=total（与 AlbumCard 右键
   // 「标记为已读」一致）。不是删除 record — 保留"已读完"的痕迹，未来
   // Recents / Favorites / 历史面板能继续看到。
   const markReadOne = useMarkAlbumRead();
-  const markReadAll = useMarkAlbumsRead();
   const onMarkReadUnread = (card: CardData) => {
     const albumId = decodeFavPath(card.to);
     const total = card.progress?.total ?? 0;
@@ -201,54 +192,18 @@ export default function Home() {
       },
     );
   };
-  const onMarkAllReadUnread = () => {
-    if (!unreadCards.length) return;
-    const ok = window.confirm(
-      `将 ${unreadCards.length} 本相册全部标记为已读？\n\n操作不会删除文件,只是把阅读进度推到末尾。`,
-    );
-    if (!ok) return;
-    const items = unreadCards.map((c) => ({
-      albumId: decodeFavPath(c.to),
-      total: c.progress?.total ?? 0,
-    }));
-    markReadAll.mutate(items, {
-      onSuccess: (r) => {
-        if (r.failed === 0) {
-          pushToast({ kind: "info", message: `已将 ${r.ok} 本标记为已读` });
-        } else {
-          pushToast({
-            kind: "error",
-            message: `已标记 ${r.ok} 本,失败 ${r.failed} 本`,
-          });
-        }
-      },
-      onError: () => pushToast({ kind: "error", message: "标记失败,请重试" }),
-    });
-  };
   const cards = useMemo(
     () => libraryOverviewCards(overview.nodes, overview.tags),
     [overview.nodes, overview.tags],
   );
 
-  // 继续阅读的全量列表(不限 4 张),给 ContinueReadingHero 用。
-  // 排序:优先按 progress.index(已读张数)降序,其次按 mTime 倒序保稳定。
-  // 全局相册摘要包含任意深度的相册，避免深层内容漏出继续阅读。
+  // 在读列表由首页仪表盘提供，按最后阅读时间倒序且包含任意层级的相册。
   const inProgressAll = useMemo<CardData[]>(() => {
-    if (!progressMap) return [];
-    const items: CardData[] = [];
-    for (const album of libraryAlbums) {
-      const p = progressMap[album.id];
-      const imageCount = album.imageCount ?? 0;
-      if (!isInProgress(asProgressLike(p, imageCount))) continue;
-      items.push({
-        ...nodeSummaryToCard(album),
-        progress: { index: p.pageIndex, total: imageCount },
-      });
-    }
-    return items.sort(
-      (a, b) => (b.progress?.index ?? 0) - (a.progress?.index ?? 0),
-    );
-  }, [libraryAlbums, progressMap]);
+    return (dashboard?.inProgress ?? []).map((progress) => ({
+      ...nodeSummaryToCard(progress.album),
+      progress: { index: progress.pageIndex, total: progress.pageCount },
+    }));
+  }, [dashboard]);
 
   // 时光轴：按年份分组（画廊模式，替代早期"全新/重温/最近加入"的分区）
   const yearGroups = useMemo<YearGroup[]>(
@@ -310,11 +265,11 @@ export default function Home() {
     const withProgress = list.map((c) => {
       if (c.variant !== "album") return c;
       const k = decodeFavPath(c.to);
-      const p = progressMap?.[k];
+      const p = dashboardProgressByID.get(k);
       if (!p) return c;
       return {
         ...c,
-        progress: { index: p.pageIndex, total: c.imageCount ?? c.count },
+        progress: { index: p.pageIndex, total: p.pageCount },
       };
     });
     switch (sortBy) {
@@ -349,7 +304,7 @@ export default function Home() {
     view,
     yearFilter,
     yearFilterActive,
-    progressMap,
+    dashboardProgressByID,
     recentByCardID,
     viewedAtMap,
     minImageCount,
@@ -373,7 +328,7 @@ export default function Home() {
   const favCount = favorites.length;
   const isLoadingInitial =
     overview.isLoading ||
-    libraryAlbumsQuery.isLoading ||
+    dashboardQuery.isLoading ||
     (!manifest && !!(sse.isRunning || sse.scanId));
   const hasContent = !!manifest && cards.length > 0;
 
@@ -540,7 +495,6 @@ export default function Home() {
           count={unreadCount}
           onShuffle={onShuffleUnread}
           onMarkRead={onMarkReadUnread}
-          onMarkAllRead={onMarkAllReadUnread}
         />
       )}
 

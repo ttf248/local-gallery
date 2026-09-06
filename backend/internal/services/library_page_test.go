@@ -253,6 +253,30 @@ func TestRandomLibraryAlbumAndActivitySummaryUsePublishedIndex(t *testing.T) {
 	assertNoAbsolutePathInJSON(t, summary)
 }
 
+func TestLibraryHomeDashboardUsesCurrentImageCountAndLimitedUnreadPreview(t *testing.T) {
+	fixture := newLibraryPageFixture(t)
+	snapshot := fixture.catalog.Acquire()
+
+	dashboard, err := BuildLibraryHomeDashboard(snapshot, []models.Activity{{
+		AlbumID: fixture.albumID, MediaKind: models.MediaKindImage,
+		PageIndex: 1, PageCount: 99, Updated: time.Now().UTC(),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dashboard.Revision != snapshot.Revision() || dashboard.AlbumCount != 4 || dashboard.UnreadCount != 3 || len(dashboard.Unread) != 3 {
+		t.Fatalf("dashboard=%+v", dashboard)
+	}
+	if len(dashboard.InProgress) != 1 {
+		t.Fatalf("in-progress=%+v", dashboard.InProgress)
+	}
+	progress := dashboard.InProgress[0]
+	if progress.Album.ID != fixture.albumID || progress.PageIndex != 1 || progress.PageCount != 3 {
+		t.Fatalf("progress=%+v", progress)
+	}
+	assertNoAbsolutePathInJSON(t, dashboard)
+}
+
 func TestLibraryActivitySummaryKeepsCurrentEmptyAlbumUnreadAfterRescan(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "video-only")

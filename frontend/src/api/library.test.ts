@@ -99,13 +99,25 @@ describe("libraryApi", () => {
     );
   });
 
-  it("为常驻导航请求轻量阅读摘要和随机未读相册", async () => {
+  it("为常驻导航和首页请求轻量阅读数据", async () => {
     const fetchMock = vi
       .fn()
       .mockImplementationOnce(() =>
         jsonResponse({
           ok: true,
           summary: { revision: 12, albumCount: 320, unreadCount: 18 },
+        }),
+      )
+      .mockImplementationOnce(() =>
+        jsonResponse({
+          ok: true,
+          dashboard: {
+            revision: 12,
+            albumCount: 320,
+            unreadCount: 18,
+            unread: [],
+            inProgress: [],
+          },
         }),
       )
       .mockImplementationOnce(() =>
@@ -123,17 +135,25 @@ describe("libraryApi", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    const [summary, random] = await Promise.all([
+    const [summary, dashboard, random] = await Promise.all([
       libraryApi.activitySummary(),
+      libraryApi.dashboard(),
       libraryApi.randomAlbum("unread"),
     ]);
 
     expect(summary.summary).toMatchObject({ albumCount: 320, unreadCount: 18 });
+    expect(dashboard.dashboard).toMatchObject({
+      albumCount: 320,
+      unreadCount: 18,
+    });
     expect(random.album.id).toBe("a_random");
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain(
       "/api/library/activity-summary",
     );
     expect(String(fetchMock.mock.calls[1]?.[0])).toContain(
+      "/api/library/dashboard",
+    );
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
       "/api/albums/random?scope=unread",
     );
   });

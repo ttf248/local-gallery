@@ -108,6 +108,27 @@ type LibraryActivitySummary struct {
 	UnreadCount int    `json:"unreadCount"`
 }
 
+const libraryDashboardUnreadPreviewLimit = 6
+
+// LibraryDashboardProgress 是首页继续阅读所需的一条相册摘要与当前位置。
+// PageCount 始终以当前 catalog 中的图片数为准，旧阅读记录不会覆盖重扫后的计数。
+type LibraryDashboardProgress struct {
+	Album     LibraryNodeSummary `json:"album"`
+	PageIndex int                `json:"pageIndex"`
+	PageCount int                `json:"pageCount"`
+	Updated   time.Time          `json:"updated"`
+}
+
+// LibraryHomeDashboard 只包含首页立即可见的阅读状态：未读总数及最多六本预览，
+// 加上真实在读的相册。它避免首页下载全量相册摘要后再批量查询每本活动记录。
+type LibraryHomeDashboard struct {
+	Revision    uint64                     `json:"revision"`
+	AlbumCount  int                        `json:"albumCount"`
+	UnreadCount int                        `json:"unreadCount"`
+	Unread      []LibraryNodeSummary       `json:"unread"`
+	InProgress  []LibraryDashboardProgress `json:"inProgress"`
+}
+
 // LibraryPage 在每页都回传 revision；客户端合并分页结果前可再次确认版本。
 type LibraryPage[T any] struct {
 	Revision   uint64 `json:"revision"`
@@ -565,6 +586,57 @@ func BuildLibraryActivitySummary(snapshot CatalogSnapshot, startedImageAlbumIDs 
 		}
 	}
 	return summary, nil
+}
+
+// BuildLibraryHomeDashboard 以当前 revision 和图片阅读活动生成首页仪表盘。
+// 这条路径只遍历服务端不可变索引和本地活动记录，响应不会携带全量相册清单。
+func BuildLibraryHomeDashboard(snapshot CatalogSnapshot, imageActivities []models.Activity) (LibraryHomeDashboard, error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryHomeDashboard{}, ErrLibraryNotReady
+	}
+
+	activitiesByAlbum := make(map[string]models.Activity, len(imageActivities))
+	for _, activity := range imageActivities {
+		if activity.MediaKind != models.MediaKindImage {
+			continue
+		}
+		if current, exists := activitiesByAlbum[activity.AlbumID]; !exists || activity.Updated.After(current.Updated) {
+			activitiesByAlbum[activity.AlbumID] = activity
+		}
+	}
+
+	dashboard := LibraryHomeDashboard{
+		Revision:   snapshot.Revision(),
+		AlbumCount: len(snapshot.state.library.albums),
+		Unread:     []LibraryNodeSummary{},
+		InProgress: []LibraryDashboardProgress{},
+	}
+	for _, album := range snapshot.state.library.albums {
+		activity, started := activitiesByAlbum[album.ID]
+		if !started || album.ImageCount == 0 {
+			dashboard.UnreadCount++
+			if len(dashboard.Unread) < libraryDashboardUnreadPreviewLimit {
+				dashboard.Unread = append(dashboard.Unread, cloneNodeSummary(album))
+			}
+			continue
+		}
+		if activity.PageIndex >= 0 && activity.PageIndex < album.ImageCount-1 {
+			dashboard.InProgress = append(dashboard.InProgress, LibraryDashboardProgress{
+				Album:     cloneNodeSummary(album),
+				PageIndex: activity.PageIndex,
+				PageCount: album.ImageCount,
+				Updated:   activity.Updated,
+			})
+		}
+	}
+	sort.SliceStable(dashboard.InProgress, func(i, j int) bool {
+		left, right := dashboard.InProgress[i], dashboard.InProgress[j]
+		if !left.Updated.Equal(right.Updated) {
+			return left.Updated.After(right.Updated)
+		}
+		return left.Album.ID < right.Album.ID
+	})
+	return dashboard, nil
 }
 
 func clonePage[T any](items []T, start, end int) []T {

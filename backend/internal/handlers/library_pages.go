@@ -127,6 +127,24 @@ func LibraryActivitySummaryHandler(catalog *services.ResourceCatalog, activities
 	}
 }
 
+// LibraryHomeDashboardHandler 为首页提供未读计数、有限预览和全部在读摘要。
+// 它避免首页为了几个入口下载跨根的完整相册列表和活动映射。
+func LibraryHomeDashboardHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		imageActivities, err := activities.ImageActivities()
+		if err != nil {
+			return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
+		}
+		snapshot := catalog.Acquire()
+		dashboard, err := services.BuildLibraryHomeDashboard(snapshot, imageActivities)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		setLibraryRevisionETag(c, snapshot.Revision())
+		return c.JSON(fiber.Map{"ok": true, "dashboard": dashboard})
+	}
+}
+
 // LibraryNodesQueryHandler 将收藏、最近浏览等本地 ID 列表批量解析为轻量摘要。
 func LibraryNodesQueryHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	type request struct {

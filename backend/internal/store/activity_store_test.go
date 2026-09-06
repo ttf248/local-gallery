@@ -123,6 +123,28 @@ func TestActivityStoreStartedImageAlbumIDsExcludesVideoOnlyRecords(t *testing.T)
 	}
 }
 
+func TestActivityStoreImageActivitiesExcludesVideoRecords(t *testing.T) {
+	store, _ := newTestActivityStore(t)
+	image := imageActivity(1, 1, 3)
+	video := models.Activity{
+		AlbumID:    testAlbumID(2),
+		MediaKind:  models.MediaKindVideo,
+		ItemID:     testFileID(2),
+		PositionMS: 10_000,
+		DurationMS: 20_000,
+	}
+	if err := store.SetBatch([]models.Activity{image, video}); err != nil {
+		t.Fatal(err)
+	}
+	activities, err := store.ImageActivities()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activities) != 1 || activities[0].AlbumID != image.AlbumID || activities[0].MediaKind != models.MediaKindImage {
+		t.Fatalf("image activities=%+v", activities)
+	}
+}
+
 func TestActivityStoreDeleteAndClearAreIdempotent(t *testing.T) {
 	store, _ := newTestActivityStore(t)
 	first := imageActivity(1, 1, 3)

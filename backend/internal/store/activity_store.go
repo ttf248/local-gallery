@@ -108,6 +108,23 @@ func (s *ActivityStore) StartedImageAlbumIDs() (map[string]struct{}, error) {
 	return ids, nil
 }
 
+// ImageActivities 返回全部图片阅读活动的值副本。它只服务于首页仪表盘的
+// 在读摘要；不会返回视频播放记录，也不读取媒体库或文件系统路径。
+func (s *ActivityStore) ImageActivities() ([]models.Activity, error) {
+	if err := s.ensureLoaded(); err != nil {
+		return nil, err
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	activities := make([]models.Activity, 0, len(s.items))
+	for _, activity := range s.items {
+		if activity.MediaKind == models.MediaKindImage {
+			activities = append(activities, activity)
+		}
+	}
+	return activities, nil
+}
+
 // Set 新增或覆盖单条活动。
 func (s *ActivityStore) Set(activity models.Activity) error {
 	return s.SetBatch([]models.Activity{activity})

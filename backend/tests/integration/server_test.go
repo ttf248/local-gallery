@@ -131,6 +131,7 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(catalog))
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(catalog))
 	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(catalog, activityStore))
+	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(catalog, activityStore))
 	api.Get("/albums", handlers.LibraryAlbumsPageHandler(catalog))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(catalog, activityStore))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog))
@@ -337,6 +338,17 @@ func TestPagedLibraryFlowAfterScan(t *testing.T) {
 	}
 	if err := json.Unmarshal(body, &activitySummary); err != nil || activitySummary.Summary.UnreadCount != 2 {
 		t.Fatalf("invalid activity summary: %s err=%v", body, err)
+	}
+
+	res, body = h.do(t, http.MethodGet, "/api/library/dashboard", nil)
+	if res.StatusCode != http.StatusOK || bytes.Contains(body, []byte(h.root)) {
+		t.Fatalf("library dashboard status=%d body=%s", res.StatusCode, body)
+	}
+	var dashboard struct {
+		Dashboard services.LibraryHomeDashboard `json:"dashboard"`
+	}
+	if err := json.Unmarshal(body, &dashboard); err != nil || dashboard.Dashboard.AlbumCount != 2 || dashboard.Dashboard.UnreadCount != 2 || len(dashboard.Dashboard.Unread) != 2 {
+		t.Fatalf("invalid library dashboard: %s err=%v", body, err)
 	}
 
 	res, body = h.do(t, http.MethodGet, "/api/albums/random?scope=unread", nil)

@@ -8,6 +8,7 @@ export const libraryQueryKeys = {
   manifest: () => [...libraryQueryKeys.root, "manifest"] as const,
   activitySummary: () =>
     [...libraryQueryKeys.root, "activity-summary"] as const,
+  dashboard: () => [...libraryQueryKeys.root, "dashboard"] as const,
   albums: () => [...libraryQueryKeys.root, "albums"] as const,
   children: (parentId: string) =>
     [...libraryQueryKeys.root, "children", parentId] as const,
@@ -44,6 +45,26 @@ export function useLibraryActivitySummary() {
   return useQuery({
     queryKey: libraryQueryKeys.activitySummary(),
     queryFn: () => libraryApi.activitySummary(),
+    staleTime: 30_000,
+  });
+}
+
+// 首页仪表盘包含有限未读预览和在读摘要；活动变更后立即刷新，避免进度卡滞后。
+export function useLibraryDashboard() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const refresh = () => {
+      void queryClient.invalidateQueries({
+        queryKey: libraryQueryKeys.dashboard(),
+      });
+    };
+    window.addEventListener(ACTIVITY_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(ACTIVITY_CHANGED_EVENT, refresh);
+  }, [queryClient]);
+
+  return useQuery({
+    queryKey: libraryQueryKeys.dashboard(),
+    queryFn: () => libraryApi.dashboard(),
     staleTime: 30_000,
   });
 }

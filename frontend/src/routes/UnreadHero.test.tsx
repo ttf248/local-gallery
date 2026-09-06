@@ -26,14 +26,12 @@ function makeCard(path: string, name: string) {
 function renderHero(cards: ReturnType<typeof makeCard>[], count = cards.length) {
   const onShuffle = vi.fn()
   const onMarkRead = vi.fn()
-  const onMarkAllRead = vi.fn()
   // AlbumCard 内部用 useQueryClient 失效图片活动查询，
   // 测试套件包一层 QueryClientProvider 避免 "No QueryClient set" 报错。
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return {
     onShuffle,
     onMarkRead,
-    onMarkAllRead,
     ...render(
       <QueryClientProvider client={qc}>
         <MemoryRouter>
@@ -42,7 +40,6 @@ function renderHero(cards: ReturnType<typeof makeCard>[], count = cards.length) 
             count={count}
             onShuffle={onShuffle}
             onMarkRead={onMarkRead}
-            onMarkAllRead={onMarkAllRead}
           />
         </MemoryRouter>
       </QueryClientProvider>,
@@ -116,10 +113,8 @@ describe('UnreadHero', () => {
     expect(onShuffle).not.toHaveBeenCalled()
   })
 
-  it('点 清空 链接触发 onMarkAllRead', () => {
-    const { onMarkAllRead } = renderHero([makeCard('/a', 'A')])
-    const clearBtn = screen.getByTitle(/将所有未读相册标记为已读/)
-    fireEvent.click(clearBtn)
-    expect(onMarkAllRead).toHaveBeenCalledTimes(1)
+  it('首页预览不提供批量清空，避免只清除已展示的前六本', () => {
+    renderHero([makeCard('/a', 'A')])
+    expect(screen.queryByTitle(/将所有未读相册标记为已读/)).not.toBeInTheDocument()
   })
 })

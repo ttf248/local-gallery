@@ -49,6 +49,7 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	activities := store.NewActivityStore(filepath.Join(t.TempDir(), "activity.json"), "")
 	app.Get("/api/albums/random", LibraryRandomAlbumHandler(catalog, activities))
 	app.Get("/api/library/activity-summary", LibraryActivitySummaryHandler(catalog, activities))
+	app.Get("/api/library/dashboard", LibraryHomeDashboardHandler(catalog, activities))
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog))
 	app.Get("/api/tags", LibraryTagsPageHandler(catalog))
 	app.Get("/api/tags/:tag/albums", TagAlbumsPageHandler(catalog))
@@ -131,6 +132,24 @@ func TestLibraryPageHandlersCursorStatusAndResponseShape(t *testing.T) {
 	_ = summaryResp.Body.Close()
 	if summaryBody.Summary.AlbumCount != 2 || summaryBody.Summary.UnreadCount != 1 {
 		t.Fatalf("activity summary=%+v", summaryBody.Summary)
+	}
+
+	dashboardResp, err := app.Test(httptest.NewRequest("GET", "/api/library/dashboard", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dashboardResp.StatusCode != fiber.StatusOK {
+		t.Fatalf("dashboard status=%d", dashboardResp.StatusCode)
+	}
+	var dashboardBody struct {
+		Dashboard services.LibraryHomeDashboard `json:"dashboard"`
+	}
+	if err := json.NewDecoder(dashboardResp.Body).Decode(&dashboardBody); err != nil {
+		t.Fatal(err)
+	}
+	_ = dashboardResp.Body.Close()
+	if dashboardBody.Dashboard.AlbumCount != 2 || dashboardBody.Dashboard.UnreadCount != 1 || len(dashboardBody.Dashboard.Unread) != 1 || len(dashboardBody.Dashboard.InProgress) != 0 {
+		t.Fatalf("dashboard=%+v", dashboardBody.Dashboard)
 	}
 
 	queryRequest := httptest.NewRequest("POST", "/api/library/nodes/query", strings.NewReader(`{"ids":["`+albumID+`","a_missing"]}`))
