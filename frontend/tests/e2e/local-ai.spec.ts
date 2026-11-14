@@ -38,7 +38,11 @@ test.describe("本机智能照片功能", () => {
 
   test("Chinese-CLIP 不可用时仍能从智能搜索提交 OCR 条件", async ({ page }) => {
     await page.goto("/photo/semantic");
-    await page.getByLabel("搜索内容").fill("入口");
+    await expect(page.getByLabel("搜索相册或标签")).toHaveCount(0);
+    const searchInput = page.getByLabel("搜索内容");
+    await page.keyboard.press("/");
+    await expect(searchInput).toBeFocused();
+    await searchInput.fill("入口");
     await page.getByRole("button", { name: "搜索照片" }).click();
     await expect(page.getByText("还没有可搜索的文字结果")).toBeVisible();
   });

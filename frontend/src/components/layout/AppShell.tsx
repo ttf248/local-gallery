@@ -137,9 +137,13 @@ export default function AppShell() {
     "ctrl+r": () => navigate(recentsRoute(mode)),
     "?": () => setHelpOpen((v) => !v),
     "/": () => {
-      const el = document.querySelector<HTMLInputElement>(
-        'input[placeholder^="搜索"]',
-      );
+      const el =
+        document.querySelector<HTMLInputElement>(
+          'input[placeholder^="搜索"]',
+        ) ??
+        document.querySelector<HTMLInputElement>(
+          'input[aria-label="搜索内容"]',
+        );
       el?.focus();
     },
     // 随机一卷：仅在非沉浸场景生效（阅读器与大图预览的 r 有别的含义）

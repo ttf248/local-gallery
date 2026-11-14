@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { scanApi } from "../../api/scan";
 import { useScanSSE } from "../../hooks/useScanSSE";
@@ -41,6 +41,7 @@ export default function Toolbar({
   mobileMenuButtonRef?: RefObject<HTMLButtonElement>;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const sse = useScanSSE();
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -49,6 +50,8 @@ export default function Toolbar({
   // 收起来更干净。阅读器整屏脱离 AppShell，不经过这里。
   const immersiveOverlay = useUIStore((s) => s.immersiveOverlay);
   const onGallery = immersiveOverlay;
+  // 智能搜索页已有自己的主输入框，顶栏不重复显示目录/标签搜索。
+  const onSemanticSearch = location.pathname === "/photo/semantic";
   const manifest = useLibraryManifest().data?.manifest;
   const warningCount = manifest?.statistics.warningCount ?? 0;
   const { mode, setMode } = useAppMode();
@@ -139,14 +142,14 @@ export default function Toolbar({
 
         {/* 中槽：搜索。整条顶栏里它是最主要的功能，左对齐放在模式切换
             之后；动作组靠右。 */}
-        {!onGallery && (
+        {!onGallery && !onSemanticSearch && (
           <div className="flex-1 min-w-0 flex justify-start">
             <div className="w-full max-w-[620px]">
               <GlobalSearch />
             </div>
           </div>
         )}
-        {onGallery && <div className="flex-1 min-w-0" />}
+        {(onGallery || onSemanticSearch) && <div className="flex-1 min-w-0" />}
 
         <div className="flex items-center gap-1 shrink-0 ml-auto">
           {/* 扫描问题：全局条件，平时没有，只有真有未读干净的目录时才出现。

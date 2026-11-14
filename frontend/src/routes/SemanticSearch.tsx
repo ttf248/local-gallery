@@ -116,13 +116,9 @@ export default function SemanticSearch() {
       ? Boolean(text.trim() && embeddingReady)
       : Boolean(similarResourceId || imageFile);
   const hasOCRQuery =
-    mode === "text"
-      ? Boolean(text.trim())
-      : Boolean(imageOCRText.trim());
+    mode === "text" ? Boolean(text.trim()) : Boolean(imageOCRText.trim());
   const usesSemanticSearch =
-    mode === "image"
-      ? Boolean(similarResourceId || imageFile)
-      : true;
+    mode === "image" ? Boolean(similarResourceId || imageFile) : true;
   const hasSearchCondition = Boolean(
     hasSemanticQuery ||
     hasOCRQuery ||
@@ -148,9 +144,9 @@ export default function SemanticSearch() {
         ? { text: text.trim(), ocrText: text.trim(), matchMode: "any" as const }
         : mode === "text" && !resourceId && text.trim()
           ? { ocrText: text.trim() }
-        : mode === "image" && imageOCRText.trim()
-          ? { ocrText: imageOCRText.trim() }
-          : {}),
+          : mode === "image" && imageOCRText.trim()
+            ? { ocrText: imageOCRText.trim() }
+            : {}),
       ...(resourceId ? { resourceId } : {}),
       ...(album ? { albumId: album.path } : {}),
       ...(year.trim() ? { year: year.trim() } : {}),
@@ -165,6 +161,7 @@ export default function SemanticSearch() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (hasSemanticQuery && !embeddingReady) return;
     if (similarResourceId) {
       search(similarResourceId);
       return;
@@ -188,8 +185,8 @@ export default function SemanticSearch() {
     void submittedQuery.fetchNextPage({ cancelRefetch: false });
   const selected = viewerIndex === null ? undefined : items[viewerIndex];
   const textHelp = embeddingReady
-    ? "一个词同时检索画面语义与图片文字，任一匹配就会显示；文字匹配会归一化标点和断行。"
-    : "Chinese-CLIP 不可用时仍可按图片文字搜索；文字匹配会归一化标点和断行。";
+    ? "一个词同时检索画面语义与图片文字，任一匹配就会显示；文字会归一化标点、断行并修正常见误识。"
+    : "Chinese-CLIP 不可用时仍可按图片文字搜索；OCR 会归一化标点、断行并修正常见误识。";
   const submittedHasSemanticSource = Boolean(
     submitted?.request.text ||
     submitted?.request.resourceId ||
@@ -457,6 +454,7 @@ export default function SemanticSearch() {
                 type="submit"
                 disabled={
                   submittedQuery.isFetching ||
+                  (hasSemanticQuery && !embeddingReady) ||
                   !hasSearchCondition
                 }
                 className="btn btn-primary"
@@ -556,9 +554,13 @@ export default function SemanticSearch() {
             title={
               total === 0 && submittedMatchesAny
                 ? "没有匹配的照片"
-                : total === 0 && submittedHasSemanticSource && !submittedHasOCRSource
+                : total === 0 &&
+                    submittedHasSemanticSource &&
+                    !submittedHasOCRSource
                   ? "还没有可搜索的向量"
-                  : total === 0 && submittedHasOCRSource && !submittedHasSemanticSource
+                  : total === 0 &&
+                      submittedHasOCRSource &&
+                      !submittedHasSemanticSource
                     ? "还没有可搜索的文字结果"
                     : "没有匹配的照片"
             }

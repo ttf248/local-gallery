@@ -383,6 +383,16 @@ func SemanticSearchHandler(
 			if err != nil {
 				return writeError(c, fiber.StatusInternalServerError, "semantic_search_failed", "semantic search failed")
 			}
+			sort.Slice(oCROnlyHits, func(i, j int) bool {
+				left, right := ocrPriorities[oCROnlyHits[i].ResourceID], ocrPriorities[oCROnlyHits[j].ResourceID]
+				if left != right {
+					return left > right
+				}
+				return oCROnlyHits[i].ResourceID < oCROnlyHits[j].ResourceID
+			})
+			if len(oCROnlyHits) > vectorLimit {
+				oCROnlyHits = oCROnlyHits[:vectorLimit]
+			}
 			pageHits = append(vectorHits, oCROnlyHits...)
 			total = semanticTotal + len(oCROnlyHits)
 			sort.SliceStable(pageHits, func(i, j int) bool {

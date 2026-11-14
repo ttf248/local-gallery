@@ -60,11 +60,11 @@ vi.mock("../../hooks/useMediaQuery", () => ({
   useMediaQuery: () => true,
 }));
 
-function renderToolbar() {
+function renderToolbar(route = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[route]}>
         <Toolbar />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -85,7 +85,9 @@ describe("Toolbar", () => {
 
   it("宽屏时左槽是工作台模式切换", () => {
     renderToolbar();
-    expect(screen.getByRole("group", { name: "工作台模式" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "工作台模式" }),
+    ).toBeInTheDocument();
   });
 
   it("中槽是搜索，右槽是全局动作", () => {
@@ -95,12 +97,22 @@ describe("Toolbar", () => {
     expect(screen.getByLabelText("更多")).toBeInTheDocument();
   });
 
+  it("智能搜索页只显示页面自己的搜索框", () => {
+    renderToolbar("/photo/semantic");
+    expect(screen.queryByLabelText("搜索文件夹或标签")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("快捷键帮助")).toBeInTheDocument();
+  });
+
   // 「重新扫描」已经有一个可见入口（页头）+ Ctrl+S，kebab 菜单里
   // 只留刷新缓存。
   it("更多菜单里不再重复「重新扫描」", () => {
     renderToolbar();
     fireEvent.click(screen.getByLabelText("更多"));
-    expect(screen.getByRole("menuitem", { name: "刷新缓存" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: /重新扫描/ })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("menuitem", { name: "刷新缓存" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("menuitem", { name: /重新扫描/ }),
+    ).not.toBeInTheDocument();
   });
 });
