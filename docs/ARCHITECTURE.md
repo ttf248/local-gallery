@@ -87,6 +87,8 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 
 AI Worker 使用独立 `backend/aiworker/.venv`（Python 3.11）。Windows/Linux 安装 PyTorch 2.7.1 + CUDA 12.6 与 Chinese-CLIP 1.6.0；macOS 使用 PyTorch CPU 版。RapidOCR 3.10.0 + ONNX Runtime 1.20.2 处理文字，OpenCV 4.12.0 + YuNet/SFace ONNX 权重处理人脸。Windows/Linux 使用 ONNX Runtime GPU 版，macOS 使用 CPU 版。Go 通过 stdin/stdout JSON Lines 调用并将 stderr 接入服务日志，Worker 常驻并复用 OCR/人脸模型。每个模块独立报告依赖与权重状态；缺失时任务中心不会把它显示为可运行。所有权重只从 `cacheDir/derived/ai/models/` 读取，模型下载脚本固定来源 revision 并校验 SHA256，不在服务启动时联网下载。新建的 embedding、OCR 和 face 任务默认强制使用 GPU；任务保存创建时的 `cpu` / `gpu` 选择，关闭 GPU 偏好后新任务使用 CPU。强制 GPU 不回退到 CPU，硬件不可用与推理失败分别进入任务错误码。Chinese-CLIP 遇到 CUDA OOM 时减半批量，单张仍 OOM 则将该图片记录为失败；语义搜索请求仍使用 Worker 的自动设备模式。搜索与建库推理共享同一串行 Worker。
 
+Windows 上 Worker 将 CUDA DLL 目录加入进程 DLL 搜索路径和 `PATH`，避免 ONNX Runtime 找不到 PyTorch 附带的 CUDA/cuDNN DLL。RapidOCR 按需加载检测、分类和识别模型；GPU 推理后逐个检查已加载 session 的首选 provider，若实际回退到 CPU 则丢弃 GPU 引擎并记录 `gpu_inference_failed`，避免后续图片继续走 CPU。这项 session 检查参考 [LibrePhotos ONNX session helper](https://raw.githubusercontent.com/LibrePhotos/librephotos/dev/apps/backend/service/onnx_session.py)。GPU OCR 分类器批次为 16，CPU-only 分类器和 PP-OCRv6 识别器保持 6；识别批次16在当前 ONNX Runtime/CUDA 环境会触发 CPU 回退。
+
 Chinese-CLIP 图像嵌入每次最多接收 32 张；最多 4 个线程并行解码和执行图像变换，再按输入顺序送入同一条 GPU 推理路径。文本嵌入不创建线程池；图像预处理失败仍按单张记为 `image_unreadable`，不会中止同批其他照片。
 
 向量以 512 维 Float16 保存在 `derived/ai/vectors/shards/`，每片有 JSONL 元数据与 SHA256，manifest 原子发布并标记已压实分片；元数据只含资源 ID、文件指纹、模型版本和片内位置，不保存文件路径。应用启动时将 Float16 shard 装入内存，完整校验哈希后才用于检索；模型/索引版本不兼容时重建派生索引。索引增量追加，累计 128 个未压实 shard 后由独立后台压实，每片最多 512 条；达到压实门槛后不因已有分片数量重复排队。检索将查询向量归一化一次，用半精度解码查表和有界 Top-K 堆代替逐条解码后的全量排序。Windows RTX 3060、本地 Go 基准 100,000 向量、512 维、31 次测量：p50 从 193.2 ms 降至 73.3 ms，p95 从 222.3 ms 降至 79.8 ms，每次搜索分配从约 2.4 MB 降至约 2.5 KB；索引堆约 129.8 MB。复现命令：`go test ./internal/services -run '^$' -bench '^BenchmarkVectorIndexSearch100K$' -benchtime=31x -benchmem`。
@@ -348,6 +350,10 @@ Go 单元测试按服务/中间件/handler 就近维护；`backend/tests/integra
 ### AI 图像嵌入预处理对照
 
 2026-11-15，Windows / NVIDIA RTX 3060 12GB，同一固定合成集 180 张、9 条查询，使用当前 Chinese-CLIP 权重分别运行串行与 4 线程图像解码/预处理。一个最多 32 张的图像嵌入请求 p50 从 161.37 ms 降到 134.53 ms（约快 16.6%），6 次请求的 p95 从 3,257.20 ms 降到 2,566.49 ms；GPU 峰值分配均为 447,369,728 B。Top-10 精确率均为 1.0、召回率均为 0.5，OCR 固定集仍为 8/8 精确。p95 包含第一次加载与预热，合成集不代表个人照片库；性能对照用来确认没有回退，不作为实际媒体吞吐承诺。
+
+### OCR 分类与识别批次对照
+
+同日使用 RTX 3060 12GB、8 张合成页（每页 32 行，共 256 行），先预热 2 次，再测 7 轮完整批次。修复 DLL 搜索路径前，GPU 请求静默使用 CPU，中位耗时 23,716 ms、吞吐 10.79 行/秒；修复后同一默认批次下实际使用 CUDA，中位耗时 6,208 ms、吞吐 41.23 行/秒，约快 3.8 倍。RapidOCR 默认分类/识别批次均为 6 时，7 轮最大值 6,402 ms；GPU 分类批次改为 16、识别批次保持 6 后，中位耗时降至 5,111 ms（再快约 17.7%），最大值 5,236 ms，吞吐 50.09 行/秒，8/8 页面完全匹配、字符错误率为 0，三个已加载 session 都使用 CUDA。分类批次32中位耗时 5,155 ms，没有继续提速；识别批次16会使 PP-OCRv6 session 回退到 CPU。`nvidia-smi` 系统级已用显存增量分别约为 1,499、1,534 和 1,543 MiB（批次6、16、32），不按进程隔离，仅用于同机粗略比较。CPU-only 单页 32 行的 7 次测量中，分类批次6/16中位数分别为 3,026/2,986 ms，差距处于轮间波动内，因此 CPU 保持默认值6。合成页不代表个人媒体库，结果不作为实际吞吐承诺。
 
 复现（在仓库根目录）：
 

@@ -2,8 +2,9 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(__file__))
 original_argv = sys.argv
@@ -64,6 +65,7 @@ class WorkerTests(unittest.TestCase):
             "runtime_error": worker.runtime_error,
             "torch": worker.torch,
             "rapid_ocr": worker.rapid_ocr,
+            "ocr_gpu_runtime_failed": worker.ocr_gpu_runtime_failed,
             "face_models": worker.face_models,
         }
         worker.device = "cuda"
@@ -72,6 +74,7 @@ class WorkerTests(unittest.TestCase):
         worker.model_validation = None
         worker.runtime_error = ""
         worker.torch = FakeTorch()
+        worker.ocr_gpu_runtime_failed = False
 
     def tearDown(self):
         for name, value in self.originals.items():
@@ -127,6 +130,97 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(available)
         self.assertTrue(state["cudaAvailable"])
         self.assertTrue(state["cudaExecutionProviderAvailable"])
+
+    def test_dll_search_path_is_prepended_once(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"PATH": "existing"}):
+            worker.prepend_dll_search_path(directory)
+            worker.prepend_dll_search_path(directory)
+
+            entries = os.environ["PATH"].split(os.pathsep)
+
+        self.assertEqual(os.path.abspath(directory), entries[0])
+        self.assertEqual(["existing"], entries[1:])
+
+    def test_ocr_gpu_mode_sets_tested_microbatch_sizes(self):
+        engine = object()
+        rapid_ocr = SimpleNamespace(RapidOCR=lambda **kwargs: engine)
+        with patch.object(worker, "rapid_ocr", {}), patch.object(
+            worker, "ocr_module_status", return_value={"ready": True}
+        ), patch.object(worker, "gpu_available", return_value=True), patch.dict(
+            sys.modules, {"rapidocr": rapid_ocr}
+        ), patch.object(rapid_ocr, "RapidOCR", wraps=rapid_ocr.RapidOCR) as create_engine:
+            loaded = worker.load_ocr_engine("gpu")
+
+        self.assertIs(engine, loaded)
+        params = create_engine.call_args.kwargs["params"]
+        self.assertTrue(params["EngineConfig.onnxruntime.use_cuda"])
+        self.assertEqual(16, params["Cls.cls_batch_num"])
+        self.assertEqual(6, params["Rec.rec_batch_num"])
+
+    def test_ocr_cpu_mode_keeps_default_microbatch_sizes(self):
+        engine = object()
+        rapid_ocr = SimpleNamespace(RapidOCR=lambda **kwargs: engine)
+        with patch.object(worker, "rapid_ocr", {}), patch.object(
+            worker, "ocr_module_status", return_value={"ready": True}
+        ), patch.dict(sys.modules, {"rapidocr": rapid_ocr}), patch.object(
+            rapid_ocr, "RapidOCR", wraps=rapid_ocr.RapidOCR
+        ) as create_engine:
+            loaded = worker.load_ocr_engine("cpu")
+
+        self.assertIs(engine, loaded)
+        params = create_engine.call_args.kwargs["params"]
+        self.assertFalse(params["EngineConfig.onnxruntime.use_cuda"])
+        self.assertEqual(6, params["Cls.cls_batch_num"])
+        self.assertEqual(6, params["Rec.rec_batch_num"])
+
+    def test_ocr_gpu_verification_checks_loaded_sessions(self):
+        def model(providers):
+            session = SimpleNamespace(get_providers=lambda: providers)
+            return SimpleNamespace(session=SimpleNamespace(session=session))
+
+        engine = SimpleNamespace(
+            text_det=model(["CUDAExecutionProvider", "CPUExecutionProvider"]),
+            text_cls=None,
+            text_rec=None,
+        )
+
+        self.assertTrue(worker.ocr_engine_uses_cuda(engine))
+
+        engine.text_rec = model(["CPUExecutionProvider"])
+        self.assertFalse(worker.ocr_engine_uses_cuda(engine))
+
+    def test_ocr_gpu_inference_reports_provider_fallback(self):
+        session = SimpleNamespace(get_providers=lambda: ["CPUExecutionProvider"])
+        model = SimpleNamespace(session=SimpleNamespace(session=session))
+
+        class Engine:
+            text_det = model
+            text_cls = None
+            text_rec = None
+
+            def __call__(self, _image):
+                return SimpleNamespace(txts=[], scores=[], boxes=[])
+
+        engine = Engine()
+
+        engine_cache = {"gpu": engine}
+        with patch.object(worker, "rapid_ocr", engine_cache), patch.object(
+            worker, "read_cv_image", return_value=object()
+        ), patch.object(worker, "load_ocr_engine", return_value=engine):
+            result = worker.analyze_ocr_image("image.jpg", "gpu")
+
+        self.assertEqual("gpu_inference_failed", result["error"])
+        self.assertTrue(worker.ocr_gpu_runtime_failed)
+        self.assertNotIn("gpu", engine_cache)
+
+    def test_failed_ocr_gpu_session_is_not_loaded_again(self):
+        with patch.object(worker, "ocr_gpu_runtime_failed", True), patch.object(
+            worker, "ocr_module_status"
+        ) as module_status:
+            with self.assertRaisesRegex(RuntimeError, "gpu_inference_failed"):
+                worker.load_ocr_engine("gpu")
+
+        module_status.assert_not_called()
 
     def test_cuda_oom_reduces_image_batch_size(self):
         batch_sizes = []

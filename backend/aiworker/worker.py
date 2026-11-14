@@ -19,6 +19,9 @@ MODEL_VERSION = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7"
 DIMENSION = 512
 INITIAL_BATCH_SIZE = 8
 IMAGE_PREPROCESS_WORKERS = 4
+OCR_CLASSIFIER_BATCH_SIZE = 16
+OCR_DEFAULT_BATCH_SIZE = 6
+OCR_RECOGNIZER_BATCH_SIZE = 6
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
@@ -42,6 +45,7 @@ cuda_dll_handles = []
 cv2 = None
 np = None
 ocr_runtime_error = ""
+ocr_gpu_runtime_failed = False
 face_runtime_error = ""
 face_model_validation = {}
 
@@ -209,9 +213,20 @@ def configure_cuda_dlls() -> None:
     for directory in candidates:
         if directory.is_dir():
             try:
+                prepend_dll_search_path(directory)
                 cuda_dll_handles.append(os.add_dll_directory(str(directory)))
             except OSError:
                 continue
+
+
+def prepend_dll_search_path(directory) -> None:
+    resolved = os.path.abspath(os.fspath(directory))
+    normalized = os.path.normcase(resolved)
+    existing = os.environ.get("PATH", "").split(os.pathsep)
+    for entry in existing:
+        if entry and os.path.normcase(os.path.abspath(entry.strip('"'))) == normalized:
+            return
+    os.environ["PATH"] = os.pathsep.join([resolved, *existing])
 
 
 def gpu_available(require_onnx: bool = False) -> bool:
@@ -393,17 +408,25 @@ def read_cv_image(path: str):
 
 def load_ocr_engine(device_mode="cpu"):
     global rapid_ocr, ocr_runtime_error
+    mode = "gpu" if device_mode == "gpu" else "cpu"
+    if mode == "gpu" and ocr_gpu_runtime_failed:
+        raise RuntimeError("gpu_inference_failed")
     state = ocr_module_status()
     if not state["ready"]:
         ocr_runtime_error = state.get("error", "ocr_dependencies_missing")
         raise RuntimeError(ocr_runtime_error)
-    mode = "gpu" if device_mode == "gpu" else "cpu"
     if mode == "gpu" and not gpu_available(require_onnx=True):
         raise RuntimeError("gpu_unavailable")
     if mode not in rapid_ocr:
         try:
             from rapidocr import RapidOCR
-            params = {"EngineConfig.onnxruntime.use_cuda": mode == "gpu"}
+            params = {
+                "EngineConfig.onnxruntime.use_cuda": mode == "gpu",
+                "Cls.cls_batch_num": (
+                    OCR_CLASSIFIER_BATCH_SIZE if mode == "gpu" else OCR_DEFAULT_BATCH_SIZE
+                ),
+                "Rec.rec_batch_num": OCR_RECOGNIZER_BATCH_SIZE,
+            }
             with contextlib.redirect_stdout(sys.stderr):
                 rapid_ocr[mode] = RapidOCR(params=params)
         except Exception:
@@ -412,6 +435,32 @@ def load_ocr_engine(device_mode="cpu"):
             ocr_runtime_error = "ocr_model_load_failed"
             raise RuntimeError(ocr_runtime_error) from None
     return rapid_ocr[mode]
+
+
+def ocr_engine_uses_cuda(engine) -> bool:
+    loaded_sessions = 0
+    for model_name in ("text_det", "text_cls", "text_rec"):
+        model = getattr(engine, model_name, None)
+        if model is None:
+            continue
+        inference = getattr(model, "session", None)
+        session = getattr(inference, "session", None)
+        if session is None:
+            return False
+        try:
+            providers = session.get_providers()
+        except Exception:
+            return False
+        if not providers or providers[0] != "CUDAExecutionProvider":
+            return False
+        loaded_sessions += 1
+    return loaded_sessions > 0
+
+
+def invalidate_gpu_ocr_engine() -> None:
+    global ocr_gpu_runtime_failed
+    ocr_gpu_runtime_failed = True
+    rapid_ocr.pop("gpu", None)
 
 
 def load_face_models(device_mode="cpu"):
@@ -467,8 +516,12 @@ def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
     if image is None:
         return {"data": None, "error": "image_unreadable"}
     try:
+        engine = load_ocr_engine(device_mode)
         with contextlib.redirect_stdout(sys.stderr):
-            result = load_ocr_engine(device_mode)(image)
+            result = engine(image)
+        if device_mode == "gpu" and not ocr_engine_uses_cuda(engine):
+            invalidate_gpu_ocr_engine()
+            return {"data": None, "error": "gpu_inference_failed"}
         texts = list(result.txts) if result.txts is not None else []
         scores = list(result.scores) if result.scores is not None else []
         boxes = list(result.boxes) if result.boxes is not None else []
@@ -488,9 +541,13 @@ def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
     except RuntimeError as error:
         code = str(error)
         if code in ("gpu_unavailable", "gpu_inference_failed"):
+            if code == "gpu_inference_failed":
+                invalidate_gpu_ocr_engine()
             return {"data": None, "error": code}
         return {"data": None, "error": "ocr_inference_failed"}
     except Exception:
+        if device_mode == "gpu":
+            invalidate_gpu_ocr_engine()
         return {"data": None, "error": "gpu_inference_failed" if device_mode == "gpu" else "ocr_inference_failed"}
 
 
