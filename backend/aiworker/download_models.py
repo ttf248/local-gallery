@@ -14,6 +14,24 @@ from model_cache import resolve_model_dir
 
 MODELS = (
     (
+        "RapidOCR PP-OCRv6 检测",
+        "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx",
+        "ocr/PP-OCRv6_det_small.onnx",
+        "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f",
+    ),
+    (
+        "RapidOCR 方向分类",
+        "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv4/cls/ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+        "ocr/ch_ppocr_mobile_v2.0_cls_mobile.onnx",
+        "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+    ),
+    (
+        "RapidOCR PP-OCRv6 识别",
+        "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_small.onnx",
+        "ocr/PP-OCRv6_rec_small.onnx",
+        "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884",
+    ),
+    (
         "Chinese-CLIP",
         "https://huggingface.co/OFA-Sys/chinese-clip-vit-base-patch16/resolve/957be8390cef5bab9ddd2dd36ca81a8622f966e7/clip_cn_vit-b-16.pt?download=true",
         "clip_cn_vit-b-16.pt",

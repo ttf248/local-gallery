@@ -24,6 +24,13 @@ IMAGE_PREPROCESS_WORKERS = 4
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
+OCR_MODEL_DIRECTORY = "ocr"
+OCR_DETECTOR_FILE = "PP-OCRv6_det_small.onnx"
+OCR_DETECTOR_SHA256 = "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
+OCR_CLASSIFIER_FILE = "ch_ppocr_mobile_v2.0_cls_mobile.onnx"
+OCR_CLASSIFIER_SHA256 = "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c"
+OCR_RECOGNIZER_FILE = "PP-OCRv6_rec_small.onnx"
+OCR_RECOGNIZER_SHA256 = "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
 # YuNet and SFace accept one image each; overlap calls across photos instead.
 FACE_GPU_WORKERS = 4
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
@@ -52,7 +59,7 @@ np = None
 ocr_runtime_error = ""
 ocr_gpu_runtime_failed = False
 face_runtime_error = ""
-face_model_validation = {}
+model_file_validation = {}
 
 
 def file_sha256(path: Path) -> str:
@@ -148,6 +155,15 @@ def ocr_module_status() -> dict:
                 runtime_version = importlib.metadata.version("onnxruntime")
             if version != "3.10.0" or runtime_version != "1.20.2":
                 error = "ocr_dependency_version_mismatch"
+            else:
+                ocr_model_dir = model_dir / OCR_MODEL_DIRECTORY
+                ocr_models = (
+                    (ocr_model_dir / OCR_DETECTOR_FILE, OCR_DETECTOR_SHA256),
+                    (ocr_model_dir / OCR_CLASSIFIER_FILE, OCR_CLASSIFIER_SHA256),
+                    (ocr_model_dir / OCR_RECOGNIZER_FILE, OCR_RECOGNIZER_SHA256),
+                )
+                if not all(file_state(path, digest) for path, digest in ocr_models):
+                    error = "ocr_model_missing_or_checksum_invalid"
     except Exception:
         error = "ocr_dependencies_missing"
     return {
@@ -164,11 +180,11 @@ def file_state(path: Path, expected_sha256: str) -> bool:
         if not path.is_file():
             return False
         signature = (info.st_size, info.st_mtime_ns)
-        cached = face_model_validation.get(key)
+        cached = model_file_validation.get(key)
         if cached and cached[0] == signature:
             return cached[1]
         valid = file_sha256(path) == expected_sha256
-        face_model_validation[key] = (signature, valid)
+        model_file_validation[key] = (signature, valid)
         return valid
     except OSError:
         return False
@@ -426,6 +442,7 @@ def load_ocr_engine(device_mode="cpu"):
         try:
             from rapidocr import RapidOCR
             params = {
+                "Global.model_root_dir": str(model_dir / OCR_MODEL_DIRECTORY),
                 "EngineConfig.onnxruntime.use_cuda": mode == "gpu",
                 "Cls.cls_batch_num": (
                     OCR_CLASSIFIER_BATCH_SIZE if mode == "gpu" else OCR_DEFAULT_BATCH_SIZE

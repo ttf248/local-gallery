@@ -66,9 +66,11 @@ class WorkerTests(unittest.TestCase):
             "model_dir": worker.model_dir,
             "model_validation": worker.model_validation,
             "runtime_error": worker.runtime_error,
+            "ocr_runtime_error": worker.ocr_runtime_error,
             "torch": worker.torch,
             "rapid_ocr": worker.rapid_ocr,
             "ocr_gpu_runtime_failed": worker.ocr_gpu_runtime_failed,
+            "model_file_validation": worker.model_file_validation,
             "face_models": worker.face_models,
         }
         worker.device = "cuda"
@@ -76,8 +78,10 @@ class WorkerTests(unittest.TestCase):
         worker.model_cache = {}
         worker.model_validation = None
         worker.runtime_error = ""
+        worker.ocr_runtime_error = ""
         worker.torch = FakeTorch()
         worker.ocr_gpu_runtime_failed = False
+        worker.model_file_validation = {}
 
     def tearDown(self):
         for name, value in self.originals.items():
@@ -156,6 +160,7 @@ class WorkerTests(unittest.TestCase):
 
         self.assertIs(engine, loaded)
         params = create_engine.call_args.kwargs["params"]
+        self.assertEqual(str(worker.model_dir / worker.OCR_MODEL_DIRECTORY), params["Global.model_root_dir"])
         self.assertTrue(params["EngineConfig.onnxruntime.use_cuda"])
         self.assertEqual(16, params["Cls.cls_batch_num"])
         self.assertEqual(6, params["Rec.rec_batch_num"])
@@ -172,9 +177,45 @@ class WorkerTests(unittest.TestCase):
 
         self.assertIs(engine, loaded)
         params = create_engine.call_args.kwargs["params"]
+        self.assertEqual(str(worker.model_dir / worker.OCR_MODEL_DIRECTORY), params["Global.model_root_dir"])
         self.assertFalse(params["EngineConfig.onnxruntime.use_cuda"])
         self.assertEqual(6, params["Cls.cls_batch_num"])
         self.assertEqual(6, params["Rec.rec_batch_num"])
+
+    def test_ocr_status_verifies_models_in_the_derived_cache(self):
+        def version(package):
+            return "3.10.0" if package == "rapidocr" else "1.20.2"
+
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            worker, "model_dir", Path(directory)
+        ), patch.object(worker.importlib.util, "find_spec", return_value=object()), patch.object(
+            worker.importlib.metadata, "version", side_effect=version
+        ), patch.object(worker, "file_state", return_value=True) as verify_file:
+            result = worker.ocr_module_status()
+
+        self.assertTrue(result["ready"])
+        self.assertEqual(
+            [
+                Path(directory) / worker.OCR_MODEL_DIRECTORY / worker.OCR_DETECTOR_FILE,
+                Path(directory) / worker.OCR_MODEL_DIRECTORY / worker.OCR_CLASSIFIER_FILE,
+                Path(directory) / worker.OCR_MODEL_DIRECTORY / worker.OCR_RECOGNIZER_FILE,
+            ],
+            [call.args[0] for call in verify_file.call_args_list],
+        )
+
+    def test_ocr_status_rejects_a_missing_cached_model(self):
+        def version(package):
+            return "3.10.0" if package == "rapidocr" else "1.20.2"
+
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            worker, "model_dir", Path(directory)
+        ), patch.object(worker.importlib.util, "find_spec", return_value=object()), patch.object(
+            worker.importlib.metadata, "version", side_effect=version
+        ), patch.object(worker, "file_state", side_effect=[True, False]):
+            result = worker.ocr_module_status()
+
+        self.assertFalse(result["ready"])
+        self.assertEqual("ocr_model_missing_or_checksum_invalid", result["error"])
 
     def test_ocr_gpu_verification_checks_loaded_sessions(self):
         def model(providers):
