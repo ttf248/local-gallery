@@ -19,8 +19,9 @@ test("侧栏的足迹入口打开的是新的地点页", async ({ page }) => {
 
   await page.getByRole("link", { name: "足迹" }).click();
   await expect(page).toHaveURL(/\/photo\/travels$/);
-  // 页面名不再显示在内容区，进来看到的是时间轴与地图。
-  await expect(page.getByRole("region", { name: "时间轴" })).toBeVisible();
+  // 页面名不再显示在内容区，进来看到的是跨度筛选与右栏的地图。
+  await expect(page.getByRole("radiogroup", { name: "时间跨度" })).toBeVisible();
+  await expect(page.locator(".travel-layout__aside")).toBeVisible();
 });
 
 test("地图在正文右栏，照片位置画成点云", async ({ page }) => {
@@ -35,32 +36,21 @@ test("地图在正文右栏，照片位置画成点云", async ({ page }) => {
   await expect(page.locator(".travel-mini-map__point")).toHaveCount(3);
 });
 
-test("时间轴是一排月格，两端能拖出一个区间", async ({ page }) => {
+test("时间跨度是一排分段，切换后写进地址并收窄行程", async ({ page }) => {
   await page.goto("/photo/travels");
 
-  const timeline = page.getByRole("region", { name: "时间轴" });
-  await expect(timeline).toBeVisible();
-  const handles = timeline.getByRole("slider");
-  await expect(handles).toHaveCount(2);
-  // 临时库的照片拍在 2024-05 与 2025-09：尺子量的是整条历史。
-  await expect(handles.first()).toHaveAttribute("aria-valuetext", "2024-05");
+  const span = page.getByRole("radiogroup", { name: "时间跨度" });
+  await expect(span).toBeVisible();
+  // 缺省是最近五年，不写进地址。
+  await expect(page).not.toHaveURL(/span=/);
 
-  // 一格一个月：2024-05 到 2025-09 共 17 个月，空档的月份也占位。
-  await expect(page.locator(".travel-timeline__cell")).toHaveCount(17);
+  await page.getByRole("radio", { name: "1年" }).click();
+  await expect(page).toHaveURL(/span=1y/);
 
-  // 拖右端的手柄：区间写进地址。
-  // 时间轴在页面下半屏，先滚到可见处 —— 否则鼠标坐标落在视口之外。
-  const end = handles.nth(1);
-  await end.scrollIntoViewIfNeeded();
-  const box = await end.boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(box!.x - 60, box!.y + box!.height / 2, { steps: 8 });
-  await page.mouse.up();
-
-  await expect(page).toHaveURL(/from=/);
-  await expect(page).toHaveURL(/to=/);
+  // 临时库的照片拍在 2024-05 与 2025-09：跨度锚在最后一月（2025-09），
+  // 最近一年只剩 2025 年那一段行程。
+  await expect(page.locator(".travel-trips__year")).toHaveCount(1);
+  await expect(page.locator(".travel-trips__year").first()).toHaveText("2025");
 });
 
 test("行程按年份倒序，两栏并排", async ({ page }) => {
