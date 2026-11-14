@@ -191,15 +191,13 @@ describe("智能搜索", () => {
       "false",
     );
     expect(screen.queryByLabelText("GPS 地点")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "中文描述" })).toHaveClass(
+    expect(screen.getByRole("button", { name: "文字搜索" })).toHaveClass(
       "text-accent-contrast",
     );
-    fireEvent.change(
-      await screen.findByPlaceholderText(
-        "例如：夜晚街道上的霓虹灯、海边散步的人",
-      ),
-      { target: { value: "海边散步的人" } },
-    );
+    expect(screen.getAllByRole("textbox")).toHaveLength(1);
+    fireEvent.change(await screen.findByLabelText("搜索内容"), {
+      target: { value: "海边散步的人" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "搜索照片" }));
 
     await waitFor(() =>
@@ -229,10 +227,12 @@ describe("智能搜索", () => {
     });
     renderSearch();
 
-    fireEvent.change(
-      screen.getByPlaceholderText("例如：车站名称、招牌或照片里的日期"),
-      { target: { value: "入口" } },
-    );
+    fireEvent.change(screen.getByLabelText("匹配范围"), {
+      target: { value: "ocr" },
+    });
+    fireEvent.change(screen.getByLabelText("搜索内容"), {
+      target: { value: "入口" },
+    });
     const submit = screen.getByRole("button", { name: "搜索照片" });
     expect(submit).toBeEnabled();
     fireEvent.click(submit);
@@ -253,25 +253,52 @@ describe("智能搜索", () => {
     ).toBeInTheDocument();
   });
 
+  it("以图搜图模式可以用 OCR 词单独筛选，且不依赖 Chinese-CLIP", async () => {
+    mocks.embeddingStatus.mockResolvedValue({
+      ok: true,
+      status: {
+        runtimeReady: false,
+        modelValid: false,
+        device: "cpu",
+        coverage: { indexed: 0, total: 0 },
+      },
+    });
+    renderSearch();
+    fireEvent.click(screen.getByRole("button", { name: "以图搜图" }));
+    fireEvent.change(screen.getByLabelText("图片文字筛选（可选）"), {
+      target: { value: "入口" },
+    });
+
+    const submit = screen.getByRole("button", { name: "搜索照片" });
+    expect(submit).toBeEnabled();
+    fireEvent.click(submit);
+
+    await waitFor(() =>
+      expect(mocks.semanticSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ocrText: "入口",
+          kind: "photo",
+          offset: 0,
+          limit: 60,
+        }),
+        undefined,
+      ),
+    );
+  });
+
   it("将语义、OCR、相册、年份、地点、人物、收藏和精选条件一起提交", async () => {
     mocks.albumSearch.mockResolvedValue({
       results: [{ kind: "album", path: "a_album123", name: "旅行相册" }],
     });
     renderSearch();
+    fireEvent.change(screen.getByLabelText("匹配范围"), {
+      target: { value: "both" },
+    });
     fireEvent.click(screen.getByRole("button", { name: /高级筛选/ }));
 
-    fireEvent.change(
-      await screen.findByPlaceholderText(
-        "例如：夜晚街道上的霓虹灯、海边散步的人",
-      ),
-      { target: { value: "海边散步" } },
-    );
-    fireEvent.change(
-      screen.getByPlaceholderText("例如：车站名称、招牌或照片里的日期"),
-      {
-        target: { value: "入口" },
-      },
-    );
+    fireEvent.change(await screen.findByLabelText("搜索内容"), {
+      target: { value: "海边散步" },
+    });
     fireEvent.change(screen.getByPlaceholderText("输入相册名搜索"), {
       target: { value: "旅行" },
     });
@@ -293,7 +320,7 @@ describe("智能搜索", () => {
       expect(mocks.semanticSearch).toHaveBeenCalledWith(
         expect.objectContaining({
           text: "海边散步",
-          ocrText: "入口",
+          ocrText: "海边散步",
           albumId: "a_album123",
           year: "2024",
           adcode: 110000,
@@ -335,16 +362,12 @@ describe("智能搜索", () => {
       revision: 1,
     });
     renderSearch();
-    fireEvent.change(
-      await screen.findByPlaceholderText(
-        "例如：夜晚街道上的霓虹灯、海边散步的人",
-      ),
-      { target: { value: "车站" } },
-    );
-    fireEvent.change(
-      screen.getByPlaceholderText("例如：车站名称、招牌或照片里的日期"),
-      { target: { value: "中关村科技园" } },
-    );
+    fireEvent.change(screen.getByLabelText("匹配范围"), {
+      target: { value: "both" },
+    });
+    fireEvent.change(await screen.findByLabelText("搜索内容"), {
+      target: { value: "车站" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "搜索照片" }));
 
     expect(await screen.findByText("语义 0.42 · 文字近似")).toBeInTheDocument();
