@@ -1,7 +1,6 @@
 package services
 
 import (
-	"container/heap"
 	"math"
 	"math/rand"
 	"sort"
@@ -36,22 +35,53 @@ type peopleANNQueue struct {
 	max   bool
 }
 
-func (q peopleANNQueue) Len() int { return len(q.items) }
-func (q peopleANNQueue) Less(i, j int) bool {
-	left, right := q.items[i], q.items[j]
+func (q *peopleANNQueue) Len() int { return len(q.items) }
+
+func (q *peopleANNQueue) precedes(left, right peopleANNCandidate) bool {
 	if q.max {
 		return peopleANNBetter(left, right)
 	}
 	return peopleANNBetter(right, left)
 }
-func (q peopleANNQueue) Swap(i, j int) { q.items[i], q.items[j] = q.items[j], q.items[i] }
-func (q *peopleANNQueue) Push(value any) {
-	q.items = append(q.items, value.(peopleANNCandidate))
+
+func (q *peopleANNQueue) push(candidate peopleANNCandidate) {
+	q.items = append(q.items, candidate)
+	index := len(q.items) - 1
+	for index > 0 {
+		parent := (index - 1) / 2
+		if !q.precedes(q.items[index], q.items[parent]) {
+			break
+		}
+		q.items[index], q.items[parent] = q.items[parent], q.items[index]
+		index = parent
+	}
 }
-func (q *peopleANNQueue) Pop() any {
+
+func (q *peopleANNQueue) pop() peopleANNCandidate {
+	value := q.items[0]
 	last := len(q.items) - 1
-	value := q.items[last]
+	lastValue := q.items[last]
 	q.items = q.items[:last]
+	if last == 0 {
+		return value
+	}
+	q.items[0] = lastValue
+	for index := 0; ; {
+		left := index*2 + 1
+		if left >= len(q.items) {
+			break
+		}
+		best := left
+		right := left + 1
+		if right < len(q.items) && q.precedes(q.items[right], q.items[left]) {
+			best = right
+		}
+		if !q.precedes(q.items[best], q.items[index]) {
+			break
+		}
+		q.items[index], q.items[best] = q.items[best], q.items[index]
+		index = best
+	}
 	return value
 }
 
@@ -194,13 +224,15 @@ func (index *peopleANNIndex) searchLayer(query []float32, entry, limit, layer in
 		limit = 1
 	}
 	first := peopleANNCandidate{index: entry, score: peopleANNDot(query, index.nodes[entry].vector)}
-	candidates := &peopleANNQueue{items: []peopleANNCandidate{first}, max: true}
-	results := &peopleANNQueue{items: []peopleANNCandidate{first}}
-	heap.Init(candidates)
-	heap.Init(results)
-	visited := map[int]struct{}{entry: {}}
+	capacity := min(limit*4, len(index.nodes))
+	candidates := &peopleANNQueue{items: make([]peopleANNCandidate, 0, capacity), max: true}
+	results := &peopleANNQueue{items: make([]peopleANNCandidate, 0, min(limit, len(index.nodes)))}
+	candidates.push(first)
+	results.push(first)
+	visited := make(map[int]struct{}, capacity)
+	visited[entry] = struct{}{}
 	for candidates.Len() > 0 {
-		current := heap.Pop(candidates).(peopleANNCandidate)
+		current := candidates.pop()
 		worst := results.items[0]
 		if results.Len() >= limit && !peopleANNBetter(current, worst) {
 			break
@@ -212,19 +244,18 @@ func (index *peopleANNIndex) searchLayer(query []float32, entry, limit, layer in
 			visited[neighbor] = struct{}{}
 			candidate := peopleANNCandidate{index: neighbor, score: peopleANNDot(query, index.nodes[neighbor].vector)}
 			if results.Len() < limit || peopleANNBetter(candidate, results.items[0]) {
-				heap.Push(candidates, candidate)
-				heap.Push(results, candidate)
+				candidates.push(candidate)
+				results.push(candidate)
 				if results.Len() > limit {
-					heap.Pop(results)
+					results.pop()
 				}
 			}
 		}
 	}
-	ordered := append([]peopleANNCandidate(nil), results.items...)
-	sort.Slice(ordered, func(i, j int) bool {
-		return peopleANNBetter(ordered[i], ordered[j])
+	sort.Slice(results.items, func(i, j int) bool {
+		return peopleANNBetter(results.items[i], results.items[j])
 	})
-	return ordered
+	return results.items
 }
 
 func (index *peopleANNIndex) selectNeighbors(query []float32, candidates []peopleANNCandidate, limit int) []int {

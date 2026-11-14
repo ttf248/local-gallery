@@ -3,6 +3,7 @@ package services
 import (
 	"math"
 	"math/rand"
+	"runtime"
 	"strconv"
 	"testing"
 )
@@ -81,6 +82,45 @@ func TestPeopleANNIndexIsDeterministicAndReadsUpdatedCentroids(t *testing.T) {
 	updatedHits := index.Search(peopleTestVector(1, 0), 1)
 	if len(updatedHits) != 1 || updatedHits[0].id != "mutable" || updatedHits[0].score < 0.99 {
 		t.Fatalf("updated centroid search = %+v, want the mutated vector", updatedHits)
+	}
+}
+
+func BenchmarkPeopleGroupingAppend5000(b *testing.B) {
+	const (
+		clusterCount = 1000
+		facesPerID   = 5
+	)
+	rng := rand.New(rand.NewSource(20261115))
+	faces := make([]PersonFace, clusterCount*facesPerID)
+	for clusterIndex := 0; clusterIndex < clusterCount; clusterIndex++ {
+		center := peopleTestRandomVector(rng)
+		for faceIndex := 0; faceIndex < facesPerID; faceIndex++ {
+			vector := append([]float32(nil), center...)
+			for component := range vector {
+				vector[component] += float32(rng.NormFloat64() * 0.04)
+			}
+			vector = peopleANNTestNormalize(vector)
+			position := clusterIndex*facesPerID + faceIndex
+			resourceID := "r-" + strconv.Itoa(position)
+			faces[position] = PersonFace{
+				Key: PersonFaceKey(resourceID, 0), ResourceID: resourceID, embedding: vector,
+			}
+		}
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		service := &PeopleService{
+			faces:    make(map[string]PersonFace, len(faces)),
+			clusters: make(map[string]*peopleCluster),
+			ann:      newPeopleANNIndex(),
+		}
+		for _, face := range faces {
+			service.addFaceLocked(face)
+		}
+		b.ReportMetric(float64(len(service.clusters)), "groups/op")
+		runtime.KeepAlive(service)
 	}
 }
 

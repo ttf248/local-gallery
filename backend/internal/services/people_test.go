@@ -220,6 +220,41 @@ func TestPeopleServiceRequiresCentroidAndExemplarThresholds(t *testing.T) {
 	}
 }
 
+func TestPeopleServiceRechecksANNScoreNearCentroidThreshold(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		score       float32
+		wantCompare int
+	}{
+		{name: "above threshold inside safety margin", score: 0.5205, wantCompare: 1},
+		{name: "below threshold inside safety margin", score: 0.5195, wantCompare: 1},
+		{name: "below threshold outside safety margin", score: 0.5185, wantCompare: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			anchor := make([]float32, peopleEmbeddingDimension)
+			anchor[0] = 1
+			candidate := make([]float32, peopleEmbeddingDimension)
+			candidate[0] = test.score
+			candidate[1] = float32(math.Sqrt(float64(1 - test.score*test.score)))
+			people.addFaceLocked(PersonFace{Key: "anchor#0", ResourceID: "anchor", embedding: anchor})
+			people.addFaceLocked(PersonFace{Key: "candidate#0", ResourceID: "candidate", embedding: candidate})
+
+			if people.comparisons != test.wantCompare {
+				t.Fatalf("exact centroid comparisons = %d, want %d", people.comparisons, test.wantCompare)
+			}
+			if people.faces["candidate#0"].PersonID == people.faces["anchor#0"].PersonID {
+				t.Fatal("candidate merged despite failing the stable exemplar threshold")
+			}
+		})
+	}
+}
+
 func TestPeopleServiceUsesCurrentImageVectorsForAmbiguousMatches(t *testing.T) {
 	root := t.TempDir()
 	vectorIndex, err := OpenVectorIndex(filepath.Join(root, "vectors"), "clip-v1")
@@ -425,8 +460,8 @@ func TestPeopleServiceReclustersWhenCachedFaceRecordChanges(t *testing.T) {
 	if err := restarted.Sync([]AIAnalysisRecord{records[0], changed, records[2]}); err != nil {
 		t.Fatal(err)
 	}
-	if restarted.comparisons == 0 {
-		t.Fatal("changed face record reused cached grouping without reclustering")
+	if restarted.faces["cache_b#0"].PersonID == restarted.faces["cache_a#0"].PersonID {
+		t.Fatal("changed face record reused its cached grouping instead of reclustering")
 	}
 }
 

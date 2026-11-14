@@ -29,6 +29,10 @@ const PeopleImageEmbeddingDimension = AIEmbeddingDimension
 // PeopleGroupingCentroidThreshold keeps approximate group lookup focused on nearby centers.
 const PeopleGroupingCentroidThreshold = 0.52
 
+// peopleGroupingANNScoreMargin keeps borderline float32 ANN scores on the
+// exact float64 centroid path before applying the grouping threshold.
+const peopleGroupingANNScoreMargin = 0.001
+
 // PeopleGroupingExemplarThreshold prevents a drifting center from merging
 // faces that do not match any stable high-confidence member of a cluster.
 const PeopleGroupingExemplarThreshold = 0.72
@@ -584,6 +588,9 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 		id := candidate.id
 		cluster := s.clusters[id]
 		if cluster == nil {
+			continue
+		}
+		if candidate.score <= float32(PeopleGroupingCentroidThreshold-peopleGroupingANNScoreMargin) {
 			continue
 		}
 		s.comparisons++
