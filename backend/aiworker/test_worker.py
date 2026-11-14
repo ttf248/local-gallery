@@ -644,6 +644,56 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual(["first", "second"], [item["data"]["path"] for item in result["items"]])
 
+    def test_cpu_ocr_warms_engine_before_parallelizing_remaining_images(self):
+        barrier = threading.Barrier(2)
+        main_thread = threading.current_thread().name
+        call_threads = {}
+
+        def analyze(path, _device_mode):
+            call_threads[path] = threading.current_thread().name
+            if path == "broken.jpg":
+                return {"data": None, "error": "image_unreadable"}
+            if path == "warm.jpg":
+                return {"data": {"path": path}}
+            barrier.wait(timeout=2)
+            return {"data": {"path": path}}
+
+        with patch.object(worker, "analyze_ocr_image", side_effect=analyze), patch.object(
+            worker, "status", return_value={"modules": {}}
+        ):
+            result = worker.run_ocr_image_analysis(
+                ["broken.jpg", "warm.jpg", "one.jpg", "two.jpg"], "cpu"
+            )
+
+        self.assertEqual(
+            ["image_unreadable", None, None, None],
+            [item.get("error") for item in result["items"]],
+        )
+        self.assertEqual(
+            ["warm.jpg", "one.jpg", "two.jpg"],
+            [item["data"]["path"] for item in result["items"][1:]],
+        )
+        self.assertEqual(main_thread, call_threads["broken.jpg"])
+        self.assertEqual(main_thread, call_threads["warm.jpg"])
+        self.assertTrue(call_threads["one.jpg"].startswith("ThreadPoolExecutor"))
+        self.assertTrue(call_threads["two.jpg"].startswith("ThreadPoolExecutor"))
+
+    def test_cpu_ocr_keeps_processing_serial_after_runtime_failure(self):
+        call_threads = []
+
+        def analyze(path, _device_mode):
+            call_threads.append((path, threading.current_thread().name))
+            return {"data": None, "error": "ocr_inference_failed"}
+
+        with patch.object(worker, "analyze_ocr_image", side_effect=analyze), patch.object(
+            worker, "status", return_value={"modules": {}}
+        ):
+            result = worker.run_ocr_image_analysis(["one.jpg", "two.jpg", "three.jpg"], "cpu")
+
+        self.assertEqual(["one.jpg", "two.jpg", "three.jpg"], [item[0] for item in call_threads])
+        self.assertEqual(1, len({thread_name for _, thread_name in call_threads}))
+        self.assertTrue(all(item["error"] == "ocr_inference_failed" for item in result["items"]))
+
     def test_gpu_ocr_warms_engine_before_parallelizing_remaining_images(self):
         barrier = threading.Barrier(2)
         main_thread = threading.current_thread().name

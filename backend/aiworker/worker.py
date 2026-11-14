@@ -28,6 +28,7 @@ IMAGE_PREPROCESS_WORKERS = 4
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
+OCR_CPU_IMAGE_WORKERS = 2
 OCR_GPU_IMAGE_WORKERS = 4
 OCR_MAX_INPUT_PIXELS = 16_000_000
 FACE_MAX_INPUT_DIMENSION = 2048
@@ -947,10 +948,15 @@ def run_ocr_image_analysis(paths, device_mode):
     def analyze(path):
         return analyze_ocr_image(path, device_mode)
 
-    if device_mode != "gpu" or not isinstance(paths, list) or len(paths) < 2:
-        return run_image_analysis(paths, analyze)
-    if len(paths) > 32 or not all(isinstance(path, str) for path in paths):
+    max_workers = OCR_GPU_IMAGE_WORKERS if device_mode == "gpu" else OCR_CPU_IMAGE_WORKERS
+    return run_warmed_image_analysis(paths, analyze, max_workers)
+
+
+def run_warmed_image_analysis(paths, analyze, max_workers):
+    if not isinstance(paths, list) or not paths or len(paths) > 32 or not all(isinstance(path, str) for path in paths):
         return {"error": "invalid_image_batch"}
+    if max_workers <= 1 or len(paths) < 2:
+        return run_image_analysis(paths, analyze)
 
     items = [None] * len(paths)
     ready_index = None
@@ -968,7 +974,7 @@ def run_ocr_image_analysis(paths, device_mode):
     if ready_index is not None and ready_index + 1 < len(paths):
         indices = range(ready_index + 1, len(paths))
         with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min(OCR_GPU_IMAGE_WORKERS, len(paths) - ready_index - 1)
+            max_workers=min(max_workers, len(paths) - ready_index - 1)
         ) as executor:
             for index, result in zip(indices, executor.map(analyze, paths[ready_index + 1:]), strict=True):
                 items[index] = result
