@@ -104,80 +104,84 @@ export default function TaskEstimatePanel({
         </p>
       </div>
 
-      {/* 表格按内容收紧：三个列头各自挨着它的数字，摊满整幅会读成三处孤立的数据。 */}
-      <div className="mt-2 w-fit max-w-full overflow-x-auto rounded-lg border border-border-faint sm:overflow-hidden">
-        <table className="w-max min-w-full border-collapse text-left sm:w-auto sm:min-w-0">
-          <thead>
-            <tr className="border-b border-border-faint bg-bg-subtle/50">
-              <th
-                scope="col"
-                className="whitespace-nowrap px-3.5 py-2 text-meta font-medium text-fg-subtle"
-              >
-                模式
-              </th>
-              <th
-                scope="col"
-                className="whitespace-nowrap px-3.5 py-2 text-meta font-medium text-fg-subtle"
-              >
-                本次张数
-              </th>
-              <th
-                scope="col"
-                className="whitespace-nowrap px-3.5 py-2 text-meta font-medium text-fg-subtle"
-              >
-                预计耗时
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const selected = row.mode === mode;
-              return (
-                <tr
-                  key={row.mode}
-                  className={
-                    selected
-                      ? "bg-brand-soft/50"
-                      : "border-t border-border-faint"
-                  }
+      {/* 表格按内容收紧：三个列头各自挨着它的数字，摊满整幅会读成三处孤立的数据。
+          表格与那一句估算口径并排：卡片很宽，表格却只有三百来像素，
+          右边空着一大片纸；把口径挪到右侧，空出来的地方就有话说。 */}
+      <div className="mt-2 flex flex-wrap items-start gap-x-8 gap-y-2">
+        <div className="w-fit max-w-full overflow-x-auto rounded-lg border border-border-faint sm:overflow-hidden">
+          <table className="w-max min-w-full border-collapse text-left sm:w-auto sm:min-w-0">
+            <thead>
+              <tr className="border-b border-border-faint bg-bg-subtle/50">
+                <th
+                  scope="col"
+                  className="whitespace-nowrap px-3.5 py-2 text-meta font-medium text-fg-subtle"
                 >
-                  <th
-                    scope="row"
-                    className="whitespace-nowrap px-3.5 py-2 text-label font-normal text-fg"
+                  模式
+                </th>
+                <th
+                  scope="col"
+                  className="whitespace-nowrap px-3.5 py-2 text-meta font-medium text-fg-subtle"
+                >
+                  本次张数
+                </th>
+                <th
+                  scope="col"
+                  className="whitespace-nowrap px-3.5 py-2 text-meta font-medium text-fg-subtle"
+                >
+                  预计耗时
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const selected = row.mode === mode;
+                return (
+                  <tr
+                    key={row.mode}
+                    className={
+                      selected
+                        ? "bg-brand-soft/50"
+                        : "border-t border-border-faint"
+                    }
                   >
-                    <span className="flex items-center gap-2">
-                      {selected ? (
-                        <span
-                          aria-hidden="true"
-                          className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                        />
-                      ) : (
-                        <span aria-hidden="true" className="w-1.5 shrink-0" />
-                      )}
-                      {taskModeLabel(row.mode)}
-                    </span>
-                  </th>
-                  <td className="whitespace-nowrap px-3.5 py-2 font-mono text-label tabular-nums text-fg">
-                    {formatCount(row.value.count)} 张
-                  </td>
-                  <td className="whitespace-nowrap px-3.5 py-2 font-mono text-label tabular-nums text-fg">
-                    {row.value.estimatedDurationMs === null
-                      ? "暂不可估"
-                      : formatEstimateDuration(row.value.estimatedDurationMs)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                    <th
+                      scope="row"
+                      className="whitespace-nowrap px-3.5 py-2 text-label font-normal text-fg"
+                    >
+                      <span className="flex items-center gap-2">
+                        {selected ? (
+                          <span
+                            aria-hidden="true"
+                            className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
+                          />
+                        ) : (
+                          <span aria-hidden="true" className="w-1.5 shrink-0" />
+                        )}
+                        {taskModeLabel(row.mode)}
+                      </span>
+                    </th>
+                    <td className="whitespace-nowrap px-3.5 py-2 font-mono text-label tabular-nums text-fg">
+                      {formatCount(row.value.count)} 张
+                    </td>
+                    <td className="whitespace-nowrap px-3.5 py-2 font-mono text-label tabular-nums text-fg">
+                      {row.value.estimatedDurationMs === null
+                        ? "暂不可估"
+                        : formatEstimateDuration(row.value.estimatedDurationMs)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      <p className="mt-2 text-meta text-fg-subtle">
-        {active && active.value.sampleCount > 0
-          ? `按最近 ${active.value.sampleCount} 次${entry.name}历史任务的速度估算，共 ${formatCount(active.value.sampleImages)} 张`
-          : "这个模块还没有跑过，耗时算不出来"}
-        {"；以启动时的实际清单为准。"}
-      </p>
+        <p className="min-w-[15rem] flex-1 text-meta text-fg-subtle">
+          {active && active.value.sampleCount > 0
+            ? `按最近 ${active.value.sampleCount} 次${entry.name}历史任务的速度估算，共 ${formatCount(active.value.sampleImages)} 张`
+            : "这个模块还没有跑过，耗时算不出来"}
+          {"；以启动时的实际清单为准。"}
+        </p>
+      </div>
     </div>
   );
 }

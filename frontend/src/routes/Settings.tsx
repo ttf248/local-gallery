@@ -25,7 +25,7 @@ import {
   KeyboardIcon,
   InfoIcon,
   ServerIcon,
-  ReaderIcon,
+  ScrollPageIcon,
 } from "../components/common/Icon";
 
 /**
@@ -241,7 +241,9 @@ export default function Settings() {
         </section>
 
         <section id="reading" className="mb-10 break-inside-avoid scroll-mt-14">
-          <Section title="阅读" icon={<ReaderIcon size={13} />}>
+          /* 这一段讲的是阅读与翻页：图标用「连续滚动的页面」而不是打开的书 ——
+             书页图标在 13px 下是两团墨，读起来像「00」。 */
+          <Section title="阅读" icon={<ScrollPageIcon size={13} />}>
             <GroupLabel>照片</GroupLabel>
             <Row label="照片墙密度">
               <Segmented
