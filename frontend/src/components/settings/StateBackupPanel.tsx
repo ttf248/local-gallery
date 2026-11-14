@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { LibraryIcon } from "../common/Icon";
 import { ApiError } from "../../api/client";
 import { prefsApi } from "../../api/prefs";
 import {
@@ -172,73 +171,66 @@ export default function StateBackupPanel() {
   }
 
   return (
-    <section
-      aria-labelledby="state-backup-heading"
-      className="settings-section"
-    >
-      <div className="settings-section__heading">
-        <span className="settings-section__icon text-fg-muted">
-          <LibraryIcon size={13} />
-        </span>
-        <h2 id="state-backup-heading" className="section-title">
-          备份与恢复
-        </h2>
-        <span className="section-rule" />
-      </div>
-      <div className="settings-section__body p-5 space-y-4">
+    // 标题与卡片由设置页给（那边是统一的分区卡片），这里只出内容。
+    // 备份这一段通栏，说明与操作分成两栏：左边讲备份什么，右边是动作。
+    <div className="p-4 space-y-4">
+      <div className="grid gap-4 @lg:grid-cols-[minmax(0,1fr)_auto] @lg:items-start">
         <p className="text-body text-fg-muted">
           备份收藏、最近访问、服务端偏好、阅读/播放活动、自定义封面、照片精选与人物分组修正。不会备份人脸特征向量、媒体文件、服务配置或此浏览器的阅读器偏好。
         </p>
-        <button
-          className="btn btn-outline"
-          onClick={() => void exportBackup()}
-          disabled={pending}
-        >
-          导出状态备份
-        </button>
-        <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-brand">
-          <span className="btn btn-outline">选择备份文件</span>
-          <span className="block mt-2 text-meta text-fg-muted break-all">
-            {fileName || "JSON 格式，最大 32 MB"}
-          </span>
-          <input
-            aria-label="状态备份文件"
-            className="sr-only"
-            type="file"
-            accept=".json,application/json"
+        <div className="flex flex-wrap items-start gap-3">
+          <button
+            className="btn btn-outline"
+            onClick={() => void exportBackup()}
             disabled={pending}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (!file) return;
-              setFileName(file.name);
-              setNotice("");
-              setResult(undefined);
-              setPreview(undefined);
-              setBackup(undefined);
-              if (file.size > 32 * 1024 * 1024) {
-                setError("备份文件超过 32 MB，请选择较小文件。");
-                return;
-              }
-              setPending(true);
-              void file
-                .text()
-                .then((text) => {
-                  const parsed: unknown = JSON.parse(text);
-                  if (!mounted.current) return;
-                  setBackup(parsed);
-                  return previewBackup(parsed);
-                })
-                .catch(() => {
-                  if (mounted.current) {
-                    setError("无法读取 JSON 备份文件。");
-                    setPending(false);
-                  }
-                });
-            }}
-          />
-        </label>
-        {backup !== undefined && !preview && !pending && (
+          >
+            导出状态备份
+          </button>
+          <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-brand">
+            <span className="btn btn-outline">选择备份文件</span>
+            <span className="block mt-2 text-meta text-fg-muted break-all">
+              {fileName || "JSON 格式，最大 32 MB"}
+            </span>
+            <input
+              aria-label="状态备份文件"
+              className="sr-only"
+              type="file"
+              accept=".json,application/json"
+              disabled={pending}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                setFileName(file.name);
+                setNotice("");
+                setResult(undefined);
+                setPreview(undefined);
+                setBackup(undefined);
+                if (file.size > 32 * 1024 * 1024) {
+                  setError("备份文件超过 32 MB，请选择较小文件。");
+                  return;
+                }
+                setPending(true);
+                void file
+                  .text()
+                  .then((text) => {
+                    const parsed: unknown = JSON.parse(text);
+                    if (!mounted.current) return;
+                    setBackup(parsed);
+                    return previewBackup(parsed);
+                  })
+                  .catch(() => {
+                    if (mounted.current) {
+                      setError("无法读取 JSON 备份文件。");
+                      setPending(false);
+                    }
+                  });
+              }}
+            />
+          </label>
+        </div>
+      </div>
+      {backup !== undefined && !preview && !pending && (
           <button
             className="btn btn-outline"
             onClick={() => void previewBackup(backup)}
@@ -343,7 +335,6 @@ export default function StateBackupPanel() {
             )}
           </div>
         )}
-      </div>
-    </section>
+    </div>
   );
 }

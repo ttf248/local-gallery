@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -301,8 +302,39 @@ it("读取设置失败提供重试，恢复后可操作", async () => {
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
-it("后台读取失败保留上次设置", async () => {
-  const client = clientForTest();
+// 设置页重新排版之后，每个分区仍是一块有名字的区域：侧栏的分区跳转
+// 按 id 定位，读屏按名字播报，两处说的必须是同一批分区。
+it("每个分区都是一块有名字的区域", async () => {
+  renderSettings();
+  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  for (const name of [
+    "外观",
+    "导航",
+    "阅读",
+    "数据",
+    "备份与恢复",
+    "服务端",
+    "关于",
+  ]) {
+    expect(screen.getByRole("region", { name })).toBeInTheDocument();
+  }
+});
+
+// 导航分区按工作台分两组列出：两组各是一块，照片那一组在左。
+it("导航分区按工作台分成照片与漫画两组", async () => {
+  renderSettings();
+  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  const nav = screen.getByRole("region", { name: "导航" });
+  expect(within(nav).getByText("照片")).toBeInTheDocument();
+  expect(within(nav).getByText("漫画")).toBeInTheDocument();
+  // 照片组的入口在漫画组之前：读下来先是照片那一套。
+  const labels = [...nav.querySelectorAll(".settings-group")].map(
+    (group) => group.querySelector(".settings-group__label")?.textContent,
+  );
+  expect(labels).toEqual(["照片", "漫画"]);
+});
+
+it("后台读取失败保留上次设置", async () => {  const client = clientForTest();
   client.setQueryData(["prefs"], basePrefs);
   vi.mocked(prefsApi.get).mockRejectedValue(new Error("offline"));
   renderSettings(client);

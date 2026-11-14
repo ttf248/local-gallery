@@ -992,8 +992,109 @@
     background: var(--bg-elevated);
     box-shadow: var(--shadow-xs);
   }
+  /* --- 设置页：两列卡片网格 ---
+     分区在 DOM 里的顺序仍是语义顺序（外观 → 导航 → 阅读 → 数据 → 备份
+     → 服务端 → 关于），宽屏排成两列：外观与导航一行、阅读与数据一行，
+     备份与服务端各占一整行。窄屏回到一列，读下来仍与侧栏的分区清单
+     一致 —— 视觉顺序与阅读顺序不分开。 */
+  .settings-grid {
+    display: grid;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (min-width: 1280px) {
+    .settings-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /* 通栏分区（备份与服务端）跨过两列。 */
+    .settings-grid > .settings-span {
+      grid-column: 1 / -1;
+    }
+  }
+  /* 卡片：标题在顶栏，正文在下面 —— 与服务端分组面板同一套语言，
+     一页里只有一种「一块设置」的样子。 */
+  .settings-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+  }
+  .settings-card__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--border-faint);
+    background: var(--bg-subtle);
+  }
+  .settings-card__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--fg-muted);
+  }
+  .settings-card__title {
+    font-family: var(--font-display);
+    font-size: var(--text-label);
+    font-weight: 600;
+    color: var(--fg);
+  }
+  /* 顶栏右侧的一句话说明：撑满剩余宽度，贴着右边。 */
+  .settings-card__desc {
+    margin-left: auto;
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+  /* 卡里的分组（照片 / 漫画）。宽屏并排，中间一条竖线；窄屏上下叠。 */
+  .settings-split {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .settings-group + .settings-group {
+    border-top: 1px solid var(--border-faint);
+  }
+  .settings-split > .settings-group + .settings-group {
+    border-top: 1px solid var(--border-faint);
+  }
+  @media (min-width: 1280px) {
+    .settings-split {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .settings-split > .settings-group + .settings-group {
+      border-top: none;
+      border-left: 1px solid var(--border-faint);
+    }
+  }
+  .settings-group__label {
+    padding: 9px 14px 5px;
+    font-size: var(--text-meta);
+    color: var(--fg-muted);
+  }
+  /* 卡里一块内容多的小节（媒体库索引）：标签在上，内容在下。 */
+  .settings-block {
+    padding: 12px 14px;
+  }
+  /* 卡末尾的一句话说明。 */
+  .settings-note {
+    padding: 9px 14px 11px;
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+  /* 页脚一行（关于）：版本与提示，不再占一张卡。 */
+  .settings-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-faint);
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
   .settings-row {
-    min-height: 68px;
+    min-height: 48px;
   }
   /* 运行中的状态点：缓慢呼吸，提醒任务还在跑。
      颜色之外还有动效，色觉障碍的用户也能看出状态在变化。 */
@@ -1241,6 +1342,13 @@
     .settings-page .settings-row {
       flex-direction: column;
       align-items: flex-start;
+      gap: 8px;
+    }
+    /* 导航项那几行例外：右边只是一枚开关，标签与它并排放得下，
+       折成上下两行会把开关推得更远，也白占一行高度。 */
+    .settings-page .settings-row--inline {
+      flex-direction: row;
+      align-items: center;
       gap: 12px;
     }
     .settings-row > :last-child {
