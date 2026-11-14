@@ -244,7 +244,9 @@ export default function SemanticSearch() {
                 ]}
               />
               {mode === "text" ? (
-                <>
+                /* 输入框与提交按钮是一组：窄屏上整组换到下一行，
+                   输入框不会被挤成一个字的宽。 */
+                <div className="flex min-w-0 flex-1 basis-56 items-center gap-2">
                   <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
                     <label className="sr-only" htmlFor="semantic-search-query">
                       搜索内容
@@ -260,7 +262,7 @@ export default function SemanticSearch() {
                     />
                   </div>
                   {submitButton}
-                </>
+                </div>
               ) : null}
             </div>
 
