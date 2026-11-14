@@ -31,7 +31,7 @@ export default function TaskCenter() {
         title="任务中心"
         description="查看本机分析进度，管理等待队列与任务记录，安排每日增量更新。分析完全在本机运行。"
         action={
-          <Link className="btn btn-outline" to="/settings">
+          <Link className="btn btn-sm btn-outline" to="/settings">
             服务设置
           </Link>
         }

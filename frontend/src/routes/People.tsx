@@ -51,7 +51,7 @@ function PeopleList() {
         title="人物相册"
         description="按本机人脸特征生成可编辑的候选分组。应用不会识别真实姓名；你可以改名、合并、拆分或隐藏分组。"
         action={
-          <Link className="btn btn-outline" to="/tasks">
+          <Link className="btn btn-sm btn-outline" to="/tasks">
             人物分析设置
           </Link>
         }
@@ -120,7 +120,10 @@ function PeopleList() {
               清除失败。请确认没有人脸识别任务正在运行后重试。
             </p>
           ) : null}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {/* 密度跟着相册网格走（列宽下限 260px）：固定三列时一张脸
+              占掉四百像素，一屏只看得到六个人；这一页有五十个候选组，
+              它要的是一面能扫完的墙。 */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {groups.map((person) => (
               <PersonCard key={person.id} person={person} />
             ))}
@@ -135,7 +138,7 @@ function PersonCard({ person }: { person: PersonGroup }) {
   return (
     <Link
       to={peopleRoute(person.id)}
-      className="group overflow-hidden rounded-xl border border-border-faint bg-bg-elevated transition-colors hover:border-border-strong"
+      className="group overflow-hidden rounded-lg border border-border-faint bg-bg-elevated transition-colors hover:border-border-strong"
     >
       <div className="relative aspect-[1.7/1] overflow-hidden bg-bg-subtle">
         {person.coverResourceId ? (
@@ -150,17 +153,22 @@ function PersonCard({ person }: { person: PersonGroup }) {
           {person.photoCount.toLocaleString()} 张
         </span>
       </div>
-      <div className="flex items-start justify-between gap-3 p-4">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="min-w-0">
           <h2 className="truncate font-display text-label font-medium text-fg">
             {person.name}
           </h2>
-          <p className="mt-1 text-meta text-fg-muted">
+          <p className="mt-0.5 text-meta text-fg-muted">
             {person.faceCount.toLocaleString()} 张脸
             {person.hidden ? " · 已隐藏" : ""}
           </p>
         </div>
-        <span className="text-meta text-fg-subtle">打开相册 →</span>
+        {/* 整张卡就是入口，不必每张都写一遍「打开相册 →」：
+            一屏十几张卡各写一句，那句话成了噪音。方向键与列表卡
+            同一套语言 —— 悬停才出现，触屏设备常驻。 */}
+        <span className="shrink-0 text-body text-fg-subtle opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+          ›
+        </span>
       </div>
     </Link>
   );
