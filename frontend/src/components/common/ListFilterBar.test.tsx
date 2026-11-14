@@ -148,3 +148,18 @@ it("启用后显示当前阈值并可一键清除", () => {
   expect(useSearchStore.getState().minImageCount).toBe(0);
   expect(screen.queryByRole("spinbutton")).toBeNull();
 });
+
+it("trailing 槽位的控件排在工具条右端，与排序同排", () => {
+  render(
+    <ListFilterBar
+      totalCount={10}
+      trailing={<button type="button">选择</button>}
+    />,
+  );
+  const bar = screen.getByRole("button", { name: "排序" }).closest(
+    ".filter-strip",
+  ) as HTMLElement;
+  expect(bar).not.toBeNull();
+  // 「选择」与排序、视图切换同在一条工具条里，不再单独占一行。
+  expect(within(bar).getByRole("button", { name: "选择" })).toBeInTheDocument();
+});

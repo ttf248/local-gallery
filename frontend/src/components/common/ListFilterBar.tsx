@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useSearchStore, type SortKey } from "../../store/searchStore";
 import { useUIStore } from "../../store/uiStore";
 import { ChevronDownIcon, GridIcon, ListIcon, FilterIcon } from "./Icon";
@@ -32,6 +32,13 @@ interface ListFilterBarProps {
    * 按名称排会把时刻打乱，左边那一列时间就不再是一条轴。
    */
   defaultSort?: SortKey;
+  /**
+   * 工具条最右端的附加控件（批量选择的「选择」按钮）。
+   *
+   * 它原来单独占一整行浮在网格上方，一排列表页都多出一枚孤零零的
+   * 按钮。放进这条工具条，列表页顶部就只有一行控件。
+   */
+  trailing?: ReactNode;
 }
 
 export function ListFilterBar({
@@ -42,6 +49,7 @@ export function ListFilterBar({
   showMinImageFilter = true,
   hideViewToggle = false,
   defaultSort = "name",
+  trailing,
 }: ListFilterBarProps) {
   const sortBy = useSearchStore((s) => s.sortBy);
   const sortTouched = useSearchStore((s) => s.sortTouched);
@@ -138,6 +146,7 @@ export function ListFilterBar({
               </button>
             </div>
           )}
+          {trailing}
         </div>
       </div>
     </div>

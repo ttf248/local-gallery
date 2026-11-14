@@ -25,6 +25,7 @@ import {
 } from "../hooks/useLibrary";
 import { useFavoritesByMode } from "../hooks/useFavoritesByMode";
 import { nodeSummaryToCard, cardMatchesQuery } from "../utils/libraryCard";
+import { SelectionToggle } from "../components/album/BulkActions";
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。
@@ -249,7 +250,12 @@ export default function Favorites() {
           </div>
         </div>
       )}
-      {cards.length > 0 && <ListFilterBar totalCount={filtered.length} />}
+      {cards.length > 0 && (
+        <ListFilterBar
+          totalCount={filtered.length}
+          trailing={<SelectionToggle />}
+        />
+      )}
 
       {favoritesQuery.isLoading ? (
         <AlbumGridSkeleton variant={viewMode} label="正在加载收藏…" />

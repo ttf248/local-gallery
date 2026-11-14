@@ -14,6 +14,32 @@ import { useAppMode } from "../../hooks/useAppMode";
 interface Props {
   loaded: SelectionItem[];
 }
+
+/**
+ * 「选择」入口：进入批量选择模式。
+ *
+ * 它挂在列表页工具条的最右端（ListFilterBar 的 trailing 槽），不再
+ * 单独占一整行浮在网格上方 —— 一排列表页顶部只留一行控件，那枚
+ * 孤零零的按钮读起来像网格的一部分。
+ *
+ * 进入选择模式后这个按钮消失：工具条右端换成一整排批量动作
+ * （BulkActions），位置不变，动作不换地方。
+ */
+export function SelectionToggle() {
+  const active = useSelectionStore((s) => s.active);
+  const busy = useSelectionStore((s) => s.busy);
+  if (active) return null;
+  return (
+    <button
+      className="btn btn-sm btn-outline"
+      disabled={busy}
+      onClick={() => useSelectionStore.getState().start()}
+    >
+      选择
+    </button>
+  );
+}
+
 export default function BulkActions({ loaded }: Props) {
   const client = useQueryClient();
   const errorToast = useRef<string>();
@@ -102,83 +128,73 @@ export default function BulkActions({ loaded }: Props) {
     }
   }
 
+  if (!active) return null;
+
   return (
     <div
-      className={`flex flex-wrap items-center gap-2 py-3 ${active ? "sticky top-0 z-20 bg-bg/95 backdrop-blur" : ""}`}
+      className="sticky top-0 z-20 flex flex-wrap items-center gap-2 py-3 bg-bg/95 backdrop-blur"
       aria-label="批量操作"
     >
-      {!active ? (
-        <button
-          className="btn btn-sm btn-outline"
-          disabled={busy}
-          onClick={() => useSelectionStore.getState().start()}
-        >
-          选择
-        </button>
-      ) : (
+      <span role="status" className="text-body text-fg-muted">
+        已选 {count} 项
+        {mode === "comic" ? ` · ${readable.length} 卷可标记` : ""}
+      </span>
+      <button
+        className="btn btn-sm btn-outline"
+        disabled={busy}
+        onClick={() => {
+          if (!useSelectionStore.getState().selectLoaded(loaded))
+            toast({
+              kind: "info",
+              message: "最多选择 1,000 项，请减少选择范围。",
+            });
+        }}
+      >
+        选择已加载项
+      </button>
+      <button
+        className="btn btn-sm btn-outline"
+        disabled={busy || count === 0}
+        onClick={() => void execute("add")}
+      >
+        批量收藏
+      </button>
+      <button
+        className="btn btn-sm btn-outline"
+        disabled={busy || count === 0}
+        onClick={() => void execute("remove")}
+      >
+        批量取消收藏
+      </button>
+      {mode === "comic" && (
         <>
-          <span role="status" className="text-body text-fg-muted">
-            已选 {count} 项
-            {mode === "comic" ? ` · ${readable.length} 卷可标记` : ""}
-          </span>
           <button
             className="btn btn-sm btn-outline"
-            disabled={busy}
-            onClick={() => {
-              if (!useSelectionStore.getState().selectLoaded(loaded))
-                toast({
-                  kind: "info",
-                  message: "最多选择 1,000 项，请减少选择范围。",
-                });
-            }}
+            disabled={busy || readable.length === 0}
+            onClick={() => void execute("read")}
           >
-            选择已加载项
+            标记已读
           </button>
           <button
             className="btn btn-sm btn-outline"
-            disabled={busy || count === 0}
-            onClick={() => void execute("add")}
+            disabled={busy || readable.length === 0}
+            onClick={() => void execute("unread")}
           >
-            批量收藏
+            重置未读
           </button>
-          <button
-            className="btn btn-sm btn-outline"
-            disabled={busy || count === 0}
-            onClick={() => void execute("remove")}
-          >
-            批量取消收藏
-          </button>
-          {mode === "comic" && (
-            <>
-              <button
-                className="btn btn-sm btn-outline"
-                disabled={busy || readable.length === 0}
-                onClick={() => void execute("read")}
-              >
-                标记已读
-              </button>
-              <button
-                className="btn btn-sm btn-outline"
-                disabled={busy || readable.length === 0}
-                onClick={() => void execute("unread")}
-              >
-                重置未读
-              </button>
-            </>
-          )}
-          <button
-            className="btn btn-sm btn-ghost"
-            disabled={busy}
-            onClick={() => useSelectionStore.getState().clear()}
-          >
-            退出选择
-          </button>
-          {busy && (
-            <span role="status" className="text-meta text-fg-muted">
-              正在提交…
-            </span>
-          )}
         </>
+      )}
+      <button
+        className="btn btn-sm btn-ghost"
+        disabled={busy}
+        onClick={() => useSelectionStore.getState().clear()}
+      >
+        退出选择
+      </button>
+      {busy && (
+        <span role="status" className="text-meta text-fg-muted">
+          正在提交…
+        </span>
       )}
     </div>
   );

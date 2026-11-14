@@ -23,6 +23,7 @@ import { comicCopy } from "../utils/workbench";
 
 import { cardMatchesQuery } from "../utils/libraryCard";
 import ViewedSortNotice from "../components/common/ViewedSortNotice";
+import { SelectionToggle } from "../components/album/BulkActions";
 
 // 未读列表:跟 Recents / Favorites 同形,但源数据是「还没翻开过的相册」。
 //
@@ -139,7 +140,12 @@ export default function Unread() {
       />
 
       {needsHistory && <ViewedSortNotice query={historyQuery} />}
-      {count > 0 && <ListFilterBar totalCount={filtered.length} />}
+      {count > 0 && (
+        <ListFilterBar
+          totalCount={filtered.length}
+          trailing={<SelectionToggle />}
+        />
+      )}
 
       {isLoading && count === 0 ? (
         <AlbumGridSkeleton variant={viewMode} label="正在加载未读相册…" />

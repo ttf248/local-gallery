@@ -923,11 +923,14 @@
     color: var(--fg);
     background: var(--bg-elevated);
   }
+  /* 工具条：列表页顶部那一行控件（视图 chip · 计数 · 排序 · 视图模式）。
+     上下各一条细线把它与页头、与内容分开；线用 faint 色，band 因此
+     只是「一行控件」，不是一块面板。 */
   .filter-strip {
-    margin-bottom: 16px;
-    border-top: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-    padding-block: 13px;
+    margin-bottom: var(--block-gap);
+    border-top: 1px solid var(--border-faint);
+    border-bottom: 1px solid var(--border-faint);
+    padding-block: 10px;
   }
   .reader-shell {
     background: var(--reader-bg);

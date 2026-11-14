@@ -40,6 +40,7 @@ import {
 } from "../api/library";
 import { useLibraryAncestors, useLibraryNodes } from "../hooks/useLibrary";
 import type { GalleryContextEntry } from "../utils/galleryContext";
+import { SelectionToggle } from "../components/album/BulkActions";
 
 interface CollectionDetail {
   albumCount: number;
@@ -569,6 +570,7 @@ function CollectionView({
         <ListFilterBar
           totalCount={list.summary?.total ?? 0}
           showMinImageFilter={false}
+          trailing={<SelectionToggle />}
         />
         {/* 时间线只在 ≥2 个真实年份桶时才有意义:
             - 大多数子集合(如 2023年、B站、散图)子相册基本不带 4 位年份,

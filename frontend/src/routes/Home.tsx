@@ -51,6 +51,7 @@ import {
   ImageIcon,
   SparkleIcon,
 } from "../components/common/Icon";
+import { SelectionToggle } from "../components/album/BulkActions";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -595,6 +596,7 @@ export default function Home() {
               网格时控件早已不在视野里。 */}
           {!isLoadingInitial && (
             <ListFilterBar
+              trailing={<SelectionToggle />}
               viewChips={[
                 { key: "all", label: "全部", count: counts.all },
                 {

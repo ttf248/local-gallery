@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, expect, it, vi } from "vitest";
 import { favoritesApi } from "../../api/prefs";
@@ -9,7 +9,7 @@ import {
   type SelectionItem,
 } from "../../store/selectionStore";
 import { useUIStore } from "../../store/uiStore";
-import BulkActions from "./BulkActions";
+import BulkActions, { SelectionToggle } from "./BulkActions";
 
 const mode = vi.hoisted(() => ({ value: "comic" as "photo" | "comic" }));
 vi.mock("../../hooks/useAppMode", () => ({
@@ -132,4 +132,35 @@ it("提交中禁用重复操作，迟到确认仍写入共享收藏缓存", asyn
     }),
   );
   expect(useSelectionStore.getState().scope).toBe("other");
+});
+
+it("未进入选择模式时动作条不渲染，选择入口由工具条承担", () => {
+  act(() => useSelectionStore.setState({ active: false, items: {} }));
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <BulkActions loaded={items} />
+      <SelectionToggle />
+    </QueryClientProvider>,
+  );
+  expect(
+    screen.queryByRole("button", { name: "批量收藏" }),
+  ).not.toBeInTheDocument();
+  const toggle = screen.getByRole("button", { name: "选择" });
+  fireEvent.click(toggle);
+  expect(useSelectionStore.getState().active).toBe(true);
+});
+
+it("进入选择模式后入口消失，避免同一动作出现两次", () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <SelectionToggle />
+    </QueryClientProvider>,
+  );
+  expect(screen.queryByRole("button", { name: "选择" })).toBeNull();
 });
