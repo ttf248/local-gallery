@@ -29,6 +29,7 @@ OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
 OCR_CPU_IMAGE_WORKERS = 2
+OCR_CPU_ONNX_THREADS = 2
 OCR_GPU_IMAGE_WORKERS = 4
 OCR_MAX_INPUT_PIXELS = 16_000_000
 FACE_MAX_INPUT_DIMENSION = 2048
@@ -638,6 +639,8 @@ def load_ocr_engine(device_mode="cpu"):
                 ),
                 "Rec.rec_batch_num": OCR_RECOGNIZER_BATCH_SIZE,
             }
+            if mode == "cpu":
+                params["EngineConfig.onnxruntime.intra_op_num_threads"] = OCR_CPU_ONNX_THREADS
             with contextlib.redirect_stdout(sys.stderr):
                 rapid_ocr[mode] = RapidOCR(params=params)
         except Exception:

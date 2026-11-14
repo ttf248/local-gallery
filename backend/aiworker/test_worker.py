@@ -216,7 +216,7 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(16, params["Cls.cls_batch_num"])
         self.assertEqual(6, params["Rec.rec_batch_num"])
 
-    def test_ocr_cpu_mode_keeps_default_microbatch_sizes(self):
+    def test_ocr_cpu_mode_limits_intra_op_threads_and_keeps_microbatch_sizes(self):
         engine = object()
         rapid_ocr = SimpleNamespace(RapidOCR=lambda **kwargs: engine)
         with patch.object(worker, "rapid_ocr", {}), patch.object(
@@ -230,6 +230,7 @@ class WorkerTests(unittest.TestCase):
         params = create_engine.call_args.kwargs["params"]
         self.assertEqual(str(worker.model_dir / worker.OCR_MODEL_DIRECTORY), params["Global.model_root_dir"])
         self.assertFalse(params["EngineConfig.onnxruntime.use_cuda"])
+        self.assertEqual(worker.OCR_CPU_ONNX_THREADS, params["EngineConfig.onnxruntime.intra_op_num_threads"])
         self.assertEqual(6, params["Cls.cls_batch_num"])
         self.assertEqual(6, params["Rec.rec_batch_num"])
 
