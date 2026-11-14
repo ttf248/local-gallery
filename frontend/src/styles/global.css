@@ -728,7 +728,9 @@
   }
   .detail-head__title {
     font-family: var(--font-display);
-    font-size: clamp(22px, 2.1vw, 30px);
+    /* 集合页是导航级页面，标题与其它列表页同档（28px），不跟着
+       视口缩放。 */
+    font-size: var(--text-page-sm);
     line-height: 1.25;
     font-weight: 600;
     letter-spacing: -0.02em;
@@ -794,7 +796,9 @@
   }
   .album-bar__title {
     font-family: var(--font-display);
-    font-size: clamp(20px, 1.8vw, 25px);
+    /* 固定一档，不跟着视口走：同一个页面在 1440 与 1920 下应当长得
+       一样，标题大小随宽度漂移会让「这一套界面」没有统一口径。 */
+    font-size: var(--text-bar);
     line-height: 1.25;
     font-weight: 600;
     letter-spacing: -0.02em;

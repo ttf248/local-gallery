@@ -89,6 +89,7 @@
   --text-body: 14px; /* 正文、元信息行、按钮与输入的文字 */
   --text-label: 16px; /* 卡片标题、列表行标题 */
   --text-section: 21px; /* 区块标题 */
+  --text-bar: 22px; /* 沉浸窄条页头的标题：压在内容上，比列表页标题小一档 */
   --text-page-sm: 28px; /* 次级页标题：最近 / 收藏 / 未读 / 设置 */
   --text-page: 42px; /* 工作台首页标题 */
   /* 间距不另立 token：Tailwind 的 4px 栅格已经是全局唯一阶梯，

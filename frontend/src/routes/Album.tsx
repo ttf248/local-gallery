@@ -435,17 +435,22 @@ function CollectionHead({
           <div className="detail-head__row">
             <h1 className="detail-head__title mt-2">{detail.name}</h1>
             <div className="detail-head__actions">
+              {/* 收藏是一枚星标，不是一行字：标题旁边挂一个写着
+                  「收藏」的胶囊，短标题读起来像给标题加了个标签。
+                  星标与卡片角上、相册页条上是同一枚控件。 */}
               <button
                 type="button"
                 onClick={onToggleFav}
-                className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-body transition-colors ${
+                title={isFavorite ? "取消收藏" : "收藏"}
+                aria-label={isFavorite ? "取消收藏" : "收藏"}
+                aria-pressed={isFavorite}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                   isFavorite
                     ? "bg-favorite/10 text-favorite hover:bg-favorite/15"
-                    : "border border-border hover:bg-bg-subtle text-fg"
+                    : "border border-border text-fg-muted hover:bg-bg-subtle hover:text-fg"
                 }`}
               >
-                <StarIcon size={13} filled={isFavorite} />
-                <span>{isFavorite ? "已收藏" : "收藏"}</span>
+                <StarIcon size={14} filled={isFavorite} />
               </button>
             </div>
           </div>
