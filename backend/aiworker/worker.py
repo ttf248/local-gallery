@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextlib
+import gc
 import hashlib
 import importlib.metadata
 import importlib.util
@@ -12,6 +13,7 @@ import math
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 
 
@@ -29,6 +31,7 @@ OCR_RECOGNIZER_BATCH_SIZE = 6
 OCR_GPU_IMAGE_WORKERS = 4
 OCR_MAX_INPUT_PIXELS = 16_000_000
 FACE_MAX_INPUT_DIMENSION = 2048
+MODEL_IDLE_RELEASE_SECONDS = 300
 image_header_lock = threading.Lock()
 OCR_MODEL_DIRECTORY = "ocr"
 OCR_DETECTOR_FILE = "PP-OCRv6_det_small.onnx"
@@ -66,6 +69,49 @@ ocr_runtime_error = ""
 ocr_gpu_runtime_failed = False
 face_runtime_error = ""
 model_file_validation = {}
+last_model_activity = None
+
+
+def has_loaded_models() -> bool:
+    return model is not None or bool(model_cache) or bool(rapid_ocr) or bool(face_models)
+
+
+def release_idle_models(now=None) -> bool:
+    global model, model_device, preprocess, device, last_model_activity
+    if now is None:
+        now = time.monotonic()
+    if last_model_activity is None or now - last_model_activity < MODEL_IDLE_RELEASE_SECONDS:
+        return False
+    if not has_loaded_models():
+        last_model_activity = None
+        return False
+
+    cuda_models_loaded = (
+        model_device == "cuda"
+        or "cuda" in model_cache
+        or "gpu" in rapid_ocr
+        or "gpu" in face_models
+    )
+    model = None
+    model_device = None
+    preprocess = None
+    model_cache.clear()
+    rapid_ocr.clear()
+    face_models.clear()
+    device = "cpu"
+    last_model_activity = None
+    gc.collect()
+    if cuda_models_loaded and torch is not None:
+        try:
+            torch.cuda.empty_cache()
+        except Exception:
+            pass
+    return True
+
+
+def mark_model_activity() -> None:
+    global last_model_activity
+    last_model_activity = time.monotonic()
 
 
 def file_sha256(path: Path) -> str:
@@ -971,7 +1017,7 @@ def verify_installation() -> None:
     }, ensure_ascii=False))
 
 
-def process(request: dict) -> dict:
+def _process_request(request: dict) -> dict:
     action = request.get("action")
     if action == "status":
         return {"status": status()}
@@ -1025,6 +1071,17 @@ def process(request: dict) -> dict:
     if not isinstance(texts, list) or not texts or len(texts) > 64 or not all(isinstance(text, str) for text in texts):
         return {"error": "invalid_text_batch"}
     return {"items": run_with_fallback(texts, encode_text_batch, lambda text: text, device_mode), "status": status()}
+
+
+def process(request: dict) -> dict:
+    release_idle_models()
+    action = request.get("action")
+    try:
+        return _process_request(request)
+    finally:
+        inference_actions = ("embed_images", "embed_texts", "ocr_images", "face_images")
+        if action in inference_actions and has_loaded_models():
+            mark_model_activity()
 
 
 def configure_worker_stdio() -> None:

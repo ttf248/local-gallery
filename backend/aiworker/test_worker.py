@@ -75,6 +75,7 @@ class WorkerTests(unittest.TestCase):
             "ocr_gpu_runtime_failed": worker.ocr_gpu_runtime_failed,
             "model_file_validation": worker.model_file_validation,
             "face_models": worker.face_models,
+            "last_model_activity": worker.last_model_activity,
         }
         worker.device = "cuda"
         worker.model = FakeModel()
@@ -85,6 +86,7 @@ class WorkerTests(unittest.TestCase):
         worker.torch = FakeTorch()
         worker.ocr_gpu_runtime_failed = False
         worker.model_file_validation = {}
+        worker.last_model_activity = None
 
     def tearDown(self):
         for name, value in self.originals.items():
@@ -131,6 +133,52 @@ class WorkerTests(unittest.TestCase):
         self.assertIs(worker.model, cached)
         self.assertEqual("cached-preprocess", worker.preprocess)
         load_from_name.assert_not_called()
+
+    def test_worker_releases_model_caches_after_idle_before_next_request(self):
+        empty_cache_calls = []
+        worker.device = "cuda"
+        worker.model_device = "cuda"
+        worker.model_cache = {
+            "cuda": (worker.model, "cuda-preprocess"),
+            "cpu": (FakeModel(), "cpu-preprocess"),
+        }
+        worker.rapid_ocr = {"gpu": object(), "cpu": object()}
+        worker.face_models = {"gpu": object(), "cpu": object()}
+        worker.torch = SimpleNamespace(
+            cuda=SimpleNamespace(empty_cache=lambda: empty_cache_calls.append(True))
+        )
+        worker.last_model_activity = time.monotonic() - worker.MODEL_IDLE_RELEASE_SECONDS - 1
+
+        with patch.object(
+            worker,
+            "_process_request",
+            side_effect=lambda _request: {"released": worker.model is None},
+        ):
+            response = worker.process({"action": "status"})
+
+        self.assertTrue(response["released"])
+        self.assertIsNone(worker.model)
+        self.assertIsNone(worker.model_device)
+        self.assertIsNone(worker.preprocess)
+        self.assertEqual("cpu", worker.device)
+        self.assertEqual({}, worker.model_cache)
+        self.assertEqual({}, worker.rapid_ocr)
+        self.assertEqual({}, worker.face_models)
+        self.assertIsNone(worker.last_model_activity)
+        self.assertEqual([True], empty_cache_calls)
+
+    def test_worker_keeps_models_during_idle_timeout(self):
+        current_model = worker.model
+        worker.model_cache = {"cuda": (current_model, "preprocess")}
+        worker.last_model_activity = 100.0
+
+        released = worker.release_idle_models(
+            now=100.0 + worker.MODEL_IDLE_RELEASE_SECONDS - 1
+        )
+
+        self.assertFalse(released)
+        self.assertIs(current_model, worker.model)
+        self.assertIn("cuda", worker.model_cache)
 
     def test_onnx_cuda_provider_is_available_without_torch_cuda(self):
         with patch.object(worker, "cuda_provider_available", return_value=True):
