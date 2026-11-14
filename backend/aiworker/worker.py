@@ -24,6 +24,7 @@ IMAGE_PREPROCESS_WORKERS = 4
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
+OCR_GPU_IMAGE_WORKERS = 4
 OCR_MODEL_DIRECTORY = "ocr"
 OCR_DETECTOR_FILE = "PP-OCRv6_det_small.onnx"
 OCR_DETECTOR_SHA256 = "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
@@ -743,6 +744,38 @@ def run_image_analysis(paths, analyze, max_workers=1):
     return {"items": items, "status": status()}
 
 
+def run_ocr_image_analysis(paths, device_mode):
+    def analyze(path):
+        return analyze_ocr_image(path, device_mode)
+
+    if device_mode != "gpu" or not isinstance(paths, list) or len(paths) < 2:
+        return run_image_analysis(paths, analyze)
+    if len(paths) > 32 or not all(isinstance(path, str) for path in paths):
+        return {"error": "invalid_image_batch"}
+
+    items = [None] * len(paths)
+    ready_index = None
+    for index, path in enumerate(paths):
+        items[index] = analyze(path)
+        error = items[index].get("error")
+        if not error:
+            ready_index = index
+            break
+        if error != "image_unreadable":
+            for later_index in range(index + 1, len(paths)):
+                items[later_index] = analyze(paths[later_index])
+            return {"items": items, "status": status()}
+
+    if ready_index is not None and ready_index + 1 < len(paths):
+        indices = range(ready_index + 1, len(paths))
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=min(OCR_GPU_IMAGE_WORKERS, len(paths) - ready_index - 1)
+        ) as executor:
+            for index, result in zip(indices, executor.map(analyze, paths[ready_index + 1:]), strict=True):
+                items[index] = result
+    return {"items": items, "status": status()}
+
+
 def verify_installation() -> None:
     global cv2, np
     modules = status()["modules"]
@@ -809,7 +842,7 @@ def process(request: dict) -> dict:
             return {"error": ocr_module_status().get("error", "ocr_dependencies_missing")}
         if device_mode == "gpu" and not gpu_available(require_onnx=True):
             return {"error": "gpu_unavailable", "status": status()}
-        return run_image_analysis(request.get("paths"), lambda path: analyze_ocr_image(path, device_mode))
+        return run_ocr_image_analysis(request.get("paths"), device_mode)
     if action == "face_images":
         if not face_module_status()["ready"]:
             return {"error": face_module_status().get("error", "face_dependencies_missing")}
