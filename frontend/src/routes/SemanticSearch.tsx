@@ -17,6 +17,7 @@ import { SearchIcon } from "../components/common/Icon";
 import { usePicks } from "../hooks/usePicks";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { useUIStore } from "../store/uiStore";
+import Segmented from "../components/common/Segmented";
 import { albumRoute } from "../utils/path";
 
 type ScoredFeedItem = LibraryFeedItem & {
@@ -195,6 +196,23 @@ export default function SemanticSearch() {
   const submittedHasOCRSource = Boolean(submitted?.request.ocrText);
   const submittedMatchesAny = submitted?.request.matchMode === "any";
 
+  // 提交按钮在文字搜索里与输入框同行，在以图搜图里另起一行 —— 两种
+  // 模式都用同一枚按钮。
+  const submitButton = (
+    <button
+      type="submit"
+      disabled={
+        submittedQuery.isFetching ||
+        (hasSemanticQuery && !embeddingReady) ||
+        !hasSearchCondition
+      }
+      className="btn btn-primary"
+    >
+      <SearchIcon size={14} />
+      {submittedQuery.isFetching ? "搜索中…" : "搜索照片"}
+    </button>
+  );
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 overflow-y-auto pb-4">
@@ -208,50 +226,46 @@ export default function SemanticSearch() {
             className="rounded-xl border border-border bg-bg-elevated p-4 shadow-xs sm:p-5"
             onSubmit={onSubmit}
           >
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="搜索方式"
-            >
-              <button
-                type="button"
-                aria-pressed={mode === "text"}
-                onClick={() => {
-                  setMode("text");
-                  setSimilarResourceId("");
+            {/* 检索框、搜索方式与提交按钮在同一行：输入框不必横跨整张
+                卡片 —— 一千多像素宽的输入框为一个词准备了半个页面的空白；
+                提交按钮也不再单独占一行。搜索方式用共享的分段控件，
+                与主题切换、视图切换同一套语言。 */}
+            <div className="flex flex-wrap items-center gap-3">
+              <Segmented
+                label="搜索方式"
+                value={mode}
+                onChange={(next) => {
+                  setMode(next);
+                  if (next === "text") setSimilarResourceId("");
                 }}
-                className={`rounded-full px-3.5 py-2 text-meta transition-colors ${mode === "text" ? "bg-accent text-accent-contrast" : "bg-bg-subtle text-fg-muted hover:text-fg"}`}
-              >
-                文字搜索
-              </button>
-              <button
-                type="button"
-                aria-pressed={mode === "image"}
-                onClick={() => setMode("image")}
-                className={`rounded-full px-3.5 py-2 text-meta transition-colors ${mode === "image" ? "bg-accent text-accent-contrast" : "bg-bg-subtle text-fg-muted hover:text-fg"}`}
-              >
-                以图搜图
-              </button>
+                options={[
+                  { value: "text", label: "文字搜索" },
+                  { value: "image", label: "以图搜图" },
+                ]}
+              />
+              {mode === "text" ? (
+                <>
+                  <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
+                    <label className="sr-only" htmlFor="semantic-search-query">
+                      搜索内容
+                    </label>
+                    <input
+                      id="semantic-search-query"
+                      aria-label="搜索内容"
+                      value={text}
+                      onChange={(event) => setText(event.target.value)}
+                      maxLength={200}
+                      placeholder="描述画面，或输入照片里的文字"
+                      className="h-full min-w-0 flex-1 rounded-lg border-0 bg-transparent px-3 text-body text-fg outline-none placeholder:text-fg-subtle"
+                    />
+                  </div>
+                  {submitButton}
+                </>
+              ) : null}
             </div>
 
             {mode === "text" ? (
-              <div className="mt-4">
-                <div className="flex h-12 min-w-0 items-center rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
-                  <label className="sr-only" htmlFor="semantic-search-query">
-                    搜索内容
-                  </label>
-                  <input
-                    id="semantic-search-query"
-                    aria-label="搜索内容"
-                    value={text}
-                    onChange={(event) => setText(event.target.value)}
-                    maxLength={200}
-                    placeholder="描述画面，或输入照片里的文字"
-                    className="h-full min-w-0 flex-1 rounded-lg border-0 bg-transparent px-3 text-body text-fg outline-none placeholder:text-fg-subtle"
-                  />
-                </div>
-                <p className="mt-1.5 text-meta text-fg-subtle">{textHelp}</p>
-              </div>
+              <p className="mt-2 text-meta text-fg-subtle">{textHelp}</p>
             ) : (
               <div className="mt-4 rounded-lg border border-dashed border-border-strong bg-bg-subtle px-4 py-4">
                 {similarResourceId ? (
@@ -294,6 +308,7 @@ export default function SemanticSearch() {
                 <p className="mt-1.5 text-meta text-fg-subtle">
                   需先运行文字识别；不需要 Chinese-CLIP。
                 </p>
+                <div className="mt-4">{submitButton}</div>
               </div>
             )}
 
@@ -449,32 +464,20 @@ export default function SemanticSearch() {
               ) : null}
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={
-                  submittedQuery.isFetching ||
-                  (hasSemanticQuery && !embeddingReady) ||
-                  !hasSearchCondition
-                }
-                className="btn btn-primary"
-              >
-                <SearchIcon size={14} />
-                {submittedQuery.isFetching ? "搜索中…" : "搜索照片"}
-              </button>
-              {status && usesSemanticSearch ? (
-                <span className="text-meta text-fg-subtle">
-                  {status.device === "cuda"
-                    ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
-                    : status.runtimeReady
-                      ? "CPU 推理"
-                      : "本机运行环境未就绪"}
-                  {" · "}
-                  {status.coverage.indexed.toLocaleString()} /{" "}
-                  {status.coverage.total.toLocaleString()} 张已索引
-                </span>
-              ) : null}
-            </div>
+            {/* 运行环境是这一页的备注，不是与提交按钮并列的动作：
+                放在卡片底部单独一行，状态随字数变化也不会把按钮顶歪。 */}
+            {status && usesSemanticSearch ? (
+              <p className="mt-3 border-t border-border-faint pt-2 text-meta text-fg-subtle">
+                {status.device === "cuda"
+                  ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
+                  : status.runtimeReady
+                    ? "CPU 推理"
+                    : "本机运行环境未就绪"}
+                {" · "}
+                {status.coverage.indexed.toLocaleString()} /{" "}
+                {status.coverage.total.toLocaleString()} 张已索引
+              </p>
+            ) : null}
           </form>
 
           {statusQuery.isError && usesSemanticSearch ? (

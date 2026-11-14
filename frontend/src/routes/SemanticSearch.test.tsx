@@ -192,8 +192,11 @@ describe("智能搜索", () => {
       "false",
     );
     expect(screen.queryByLabelText("GPS 地点")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "文字搜索" })).toHaveClass(
-      "text-accent-contrast",
+    // 搜索方式是一枚分段控件（与主题切换、视图切换同一套语言），
+    // 互斥选项用 radio 语义。
+    expect(screen.getByRole("radio", { name: "文字搜索" })).toHaveAttribute(
+      "aria-checked",
+      "true",
     );
     expect(screen.queryByLabelText("匹配范围")).not.toBeInTheDocument();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
@@ -268,7 +271,7 @@ describe("智能搜索", () => {
       },
     });
     renderSearch();
-    fireEvent.click(screen.getByRole("button", { name: "以图搜图" }));
+    fireEvent.click(screen.getByRole("radio", { name: "以图搜图" }));
     fireEvent.change(screen.getByLabelText("图片文字筛选（可选）"), {
       target: { value: "入口" },
     });
