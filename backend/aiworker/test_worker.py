@@ -259,6 +259,96 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(previous_limit, PILImage.MAX_IMAGE_PIXELS)
         open_image.assert_called_once_with("large.jpg")
 
+    def test_face_large_jpeg_uses_reduced_decode_and_source_scales(self):
+        from PIL import Image as PILImage
+
+        class Header:
+            size = (1024, 512)
+            format = "JPEG"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            @staticmethod
+            def getexif():
+                return {}
+
+        decoded = np.zeros((64, 128, 3), dtype=np.uint8)
+        decode_flags = []
+        fake_cv2 = SimpleNamespace(
+            IMREAD_COLOR=1,
+            IMREAD_REDUCED_COLOR_2=2,
+            IMREAD_REDUCED_COLOR_4=4,
+            IMREAD_REDUCED_COLOR_8=8,
+            imdecode=lambda _encoded, flag: decode_flags.append(flag) or decoded,
+        )
+        fake_np = SimpleNamespace(uint8=object(), fromfile=lambda *_args, **_kwargs: b"encoded")
+        previous_limit = PILImage.MAX_IMAGE_PIXELS
+
+        def open_header(path):
+            self.assertIsNone(PILImage.MAX_IMAGE_PIXELS)
+            self.assertEqual("large.jpg", path)
+            return Header()
+
+        with patch.object(PILImage, "open", side_effect=open_header), patch.object(
+            worker, "cv2", fake_cv2
+        ), patch.object(worker, "np", fake_np):
+            image, scale_x, scale_y = worker.read_face_image("large.jpg", max_dimension=128)
+
+        self.assertIs(decoded, image)
+        self.assertEqual([8], decode_flags)
+        self.assertEqual((8.0, 8.0), (scale_x, scale_y))
+        self.assertEqual(previous_limit, PILImage.MAX_IMAGE_PIXELS)
+
+    def test_face_reduced_decode_keeps_exif_orientation_and_source_scale(self):
+        from PIL import Image as PILImage
+
+        exif = PILImage.Exif()
+        exif[274] = 6
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "turned.jpg"
+            PILImage.new("RGB", (800, 400), (120, 160, 200)).save(path, exif=exif)
+            with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np):
+                image, scale_x, scale_y = worker.read_face_image(str(path), max_dimension=200)
+
+        self.assertEqual((200, 100), image.shape[:2])
+        self.assertEqual((4.0, 4.0), (scale_x, scale_y))
+
+    def test_face_boxes_map_from_reduced_input_to_source_dimensions(self):
+        class Detector:
+            @staticmethod
+            def setInputSize(_size):
+                return None
+
+            @staticmethod
+            def detect(_image):
+                detection = np.asarray(
+                    [[10, 20, 30, 40, 15, 25, 35, 25, 25, 30, 18, 40, 32, 40, 0.9]],
+                    dtype=np.float32,
+                )
+                return None, detection
+
+        class Recognizer:
+            @staticmethod
+            def alignCrop(_image, _detection):
+                return np.zeros((112, 112, 3), dtype=np.uint8)
+
+            @staticmethod
+            def feature(_aligned):
+                return np.ones((128,), dtype=np.float32)
+
+        image = np.zeros((256, 512, 3), dtype=np.uint8)
+        runtime = {"device": "cpu", "detector": Detector(), "recognizer": Recognizer()}
+        with patch.object(worker, "read_face_image", return_value=(image, 4.0, 2.0)), patch.object(
+            worker, "load_face_models", return_value=runtime
+        ), patch.object(worker, "np", np):
+            result = worker.analyze_face_image("face.jpg")
+
+        self.assertEqual([40.0, 40.0, 120.0, 80.0], result["data"]["faces"][0]["box"])
+
     def test_ocr_status_verifies_models_in_the_derived_cache(self):
         def version(package):
             return "3.10.0" if package == "rapidocr" else "1.20.2"

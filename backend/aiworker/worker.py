@@ -8,6 +8,7 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import os
 import sys
 import threading
@@ -26,7 +27,8 @@ OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
 OCR_GPU_IMAGE_WORKERS = 4
 OCR_MAX_INPUT_PIXELS = 40_000_000
-ocr_image_header_lock = threading.Lock()
+FACE_MAX_INPUT_DIMENSION = 2048
+image_header_lock = threading.Lock()
 OCR_MODEL_DIRECTORY = "ocr"
 OCR_DETECTOR_FILE = "PP-OCRv6_det_small.onnx"
 OCR_DETECTOR_SHA256 = "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
@@ -430,6 +432,69 @@ def read_cv_image(path: str):
         return None
 
 
+def read_face_image(path: str, max_dimension=FACE_MAX_INPUT_DIMENSION):
+    """Decode large JPEG faces near the detector input size and return source scales."""
+    global cv2, np
+    if cv2 is None or np is None:
+        import cv2 as cv2_module
+        import numpy as numpy_module
+        cv2, np = cv2_module, numpy_module
+
+    max_dimension = max(1, int(max_dimension))
+    try:
+        from PIL import Image as PILImage
+
+        # Read dimensions without decoding the image. OpenCV performs the reduced JPEG decode.
+        with image_header_lock:
+            max_image_pixels = PILImage.MAX_IMAGE_PIXELS
+            try:
+                PILImage.MAX_IMAGE_PIXELS = None
+                with PILImage.open(path) as source:
+                    original_width, original_height = source.size
+                    image_format = source.format
+                    orientation = source.getexif().get(274, 1)
+            finally:
+                PILImage.MAX_IMAGE_PIXELS = max_image_pixels
+        if orientation in (5, 6, 7, 8):
+            original_width, original_height = original_height, original_width
+
+        encoded = np.fromfile(path, dtype=np.uint8)
+        decode_flag = cv2.IMREAD_COLOR
+        longest_side = max(original_width, original_height)
+        if image_format == "JPEG" and longest_side > max_dimension:
+            # Keep enough long-edge pixels for the final detector-sized resize.
+            for factor, flag in (
+                (8, cv2.IMREAD_REDUCED_COLOR_8),
+                (4, cv2.IMREAD_REDUCED_COLOR_4),
+                (2, cv2.IMREAD_REDUCED_COLOR_2),
+            ):
+                if math.ceil(longest_side / factor) >= max_dimension:
+                    decode_flag = flag
+                    break
+        image = cv2.imdecode(encoded, decode_flag)
+        if image is None and decode_flag != cv2.IMREAD_COLOR:
+            image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    except Exception:
+        image = read_cv_image(path)
+        if image is None:
+            return None, 1.0, 1.0
+        original_height, original_width = image.shape[:2]
+
+    if image is None:
+        return None, 1.0, 1.0
+
+    height, width = image.shape[:2]
+    if max(height, width) > max_dimension:
+        scale = max_dimension / float(max(height, width))
+        image = cv2.resize(
+            image,
+            (max(1, int(round(width * scale))), max(1, int(round(height * scale)))),
+            interpolation=cv2.INTER_AREA,
+        )
+        height, width = image.shape[:2]
+    return image, original_width / width, original_height / height
+
+
 def read_ocr_image(path: str, max_pixels=OCR_MAX_INPUT_PIXELS):
     """Decode OCR input at a bounded size and return source-to-input scale."""
     global cv2, np
@@ -443,7 +508,7 @@ def read_ocr_image(path: str, max_pixels=OCR_MAX_INPUT_PIXELS):
 
         # Pillow checks decompression limits while reading headers. Disable that check
         # only during this metadata-only probe; OpenCV performs the bounded pixel decode.
-        with ocr_image_header_lock:
+        with image_header_lock:
             max_image_pixels = PILImage.MAX_IMAGE_PIXELS
             try:
                 PILImage.MAX_IMAGE_PIXELS = None
@@ -758,15 +823,11 @@ def align_sface_crop(image, detection):
 
 
 def analyze_face_image(path: str, device_mode="cpu") -> dict:
-    image = read_cv_image(path)
+    image, scale_x, scale_y = read_face_image(path)
     if image is None:
         return {"data": None, "error": "image_unreadable"}
     try:
         runtime = load_face_models(device_mode)
-        original_height, original_width = image.shape[:2]
-        scale = min(1.0, 2048.0 / max(original_width, original_height))
-        if scale < 1.0:
-            image = cv2.resize(image, (round(original_width * scale), round(original_height * scale)), interpolation=cv2.INTER_AREA)
         if runtime["device"] == "gpu":
             detections = detect_yunet_gpu(image, runtime["detector"])
         else:
@@ -789,7 +850,10 @@ def analyze_face_image(path: str, device_mode="cpu") -> dict:
                 if not norm or not np.isfinite(norm):
                     continue
                 embedding = (feature / norm).tolist()
-                x, y, box_width, box_height = [float(value) / scale for value in detection[:4]]
+                x = float(detection[0]) * scale_x
+                y = float(detection[1]) * scale_y
+                box_width = float(detection[2]) * scale_x
+                box_height = float(detection[3]) * scale_y
                 faces.append({
                     "box": [x, y, box_width, box_height],
                     "score": float(detection[-1]),
