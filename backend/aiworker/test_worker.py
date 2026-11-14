@@ -519,6 +519,21 @@ class WorkerTests(unittest.TestCase):
         )
         self.assertEqual("image_unreadable", results[1]["error"])
 
+    def test_clip_preparation_uses_reduced_jpeg_decode(self):
+        from PIL import Image as PILImage
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "large.jpg"
+            PILImage.new("RGB", (1600, 800), (40, 120, 200)).save(path)
+            with patch.object(worker, "Image", PILImage), patch.object(
+                worker, "preprocess", side_effect=lambda image: image.size
+            ):
+                prepared_size = worker.prepare_image(str(path))
+
+        self.assertLess(prepared_size[0], 1600)
+        self.assertLess(prepared_size[1], 800)
+        self.assertGreaterEqual(min(prepared_size), worker.CLIP_IMAGE_SIZE)
+
     def test_image_analysis_preserves_success_and_failure_per_item(self):
         results = worker.run_image_analysis(
             ["one.jpg", "two.jpg"],
