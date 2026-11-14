@@ -397,6 +397,46 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual([40.0, 40.0, 120.0, 80.0], result["data"]["faces"][0]["box"])
 
+    def test_yunet_nms_matches_score_ordered_reference(self):
+        rng = np.random.default_rng(42)
+        faces = []
+        for _ in range(300):
+            x, y = rng.uniform(-20, 300, size=2)
+            width, height = rng.uniform(0, 120, size=2)
+            landmarks = rng.uniform(0, 320, size=10).tolist()
+            score = float(rng.integers(65, 100)) / 100
+            faces.append([float(x), float(y), float(width), float(height), *landmarks, score])
+
+        def reference_nms(candidates, threshold, limit):
+            ordered = sorted(candidates, key=lambda face: face[14], reverse=True)
+            kept = []
+            for face in ordered:
+                x, y, box_width, box_height = face[:4]
+                area = max(0.0, box_width) * max(0.0, box_height)
+                for selected in kept:
+                    sx, sy, selected_width, selected_height = selected[:4]
+                    left, top = max(x, sx), max(y, sy)
+                    right = min(x + box_width, sx + selected_width)
+                    bottom = min(y + box_height, sy + selected_height)
+                    intersection = max(0.0, right - left) * max(0.0, bottom - top)
+                    selected_area = max(0.0, selected_width) * max(0.0, selected_height)
+                    union = area + selected_area - intersection
+                    if union > 0 and intersection / union > threshold:
+                        break
+                else:
+                    kept.append(face)
+                    if len(kept) >= max(1, limit):
+                        break
+            return kept
+
+        with patch.object(worker, "np", np):
+            for threshold, limit in ((0.3, 5000), (0.55, 40), (0.3, 0)):
+                with self.subTest(threshold=threshold, limit=limit):
+                    self.assertEqual(
+                        reference_nms(faces, threshold, limit),
+                        worker.yunet_nms(faces, threshold, limit),
+                    )
+
     def test_ocr_status_verifies_models_in_the_derived_cache(self):
         def version(package):
             return "3.10.0" if package == "rapidocr" else "1.20.2"

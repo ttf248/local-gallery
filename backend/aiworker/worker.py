@@ -777,27 +777,39 @@ def tile_offsets(length, tile_size=640):
 
 
 def yunet_nms(faces, threshold=0.3, limit=5000):
-    faces.sort(key=lambda face: face[14], reverse=True)
+    if not faces:
+        return []
+
+    boxes = np.asarray([face[:4] for face in faces], dtype=np.float64)
+    scores = np.asarray([face[14] for face in faces], dtype=np.float64)
+    x1, y1 = boxes[:, 0], boxes[:, 1]
+    x2, y2 = x1 + boxes[:, 2], y1 + boxes[:, 3]
+    areas = np.maximum(0.0, boxes[:, 2]) * np.maximum(0.0, boxes[:, 3])
+    order = np.argsort(-scores, kind="stable")
     kept = []
-    for face in faces:
-        x, y, width, height = face[:4]
-        area = max(0.0, width) * max(0.0, height)
-        suppressed = False
-        for selected in kept:
-            sx, sy, sw, sh = selected[:4]
-            left, top = max(x, sx), max(y, sy)
-            right, bottom = min(x + width, sx + sw), min(y + height, sy + sh)
-            intersection = max(0.0, right - left) * max(0.0, bottom - top)
-            selected_area = max(0.0, sw) * max(0.0, sh)
-            union = area + selected_area - intersection
-            if union > 0 and intersection / union > threshold:
-                suppressed = True
-                break
-        if not suppressed:
-            kept.append(face)
-            if len(kept) >= limit:
-                break
-    return kept
+    max_kept = max(1, limit)
+    while order.size and len(kept) < max_kept:
+        selected = int(order[0])
+        kept.append(selected)
+        candidates = order[1:]
+        if not candidates.size:
+            break
+
+        left = np.maximum(x1[selected], x1[candidates])
+        top = np.maximum(y1[selected], y1[candidates])
+        right = np.minimum(x2[selected], x2[candidates])
+        bottom = np.minimum(y2[selected], y2[candidates])
+        intersection = np.maximum(0.0, right - left) * np.maximum(0.0, bottom - top)
+        union = areas[selected] + areas[candidates] - intersection
+        overlaps = np.divide(
+            intersection,
+            union,
+            out=np.zeros_like(intersection),
+            where=union > 0,
+        )
+        order = candidates[overlaps <= threshold]
+
+    return [faces[index] for index in kept]
 
 
 def detect_yunet_gpu(image, session):
