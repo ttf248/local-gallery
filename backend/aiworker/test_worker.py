@@ -9,6 +9,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import cv2
+import numpy as np
+
 sys.path.insert(0, os.path.dirname(__file__))
 original_argv = sys.argv
 sys.argv = [str(Path(__file__).with_name("worker.py")), tempfile.gettempdir()]
@@ -182,6 +185,80 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(6, params["Cls.cls_batch_num"])
         self.assertEqual(6, params["Rec.rec_batch_num"])
 
+    def test_ocr_input_pixel_cap_resizes_and_maps_boxes_to_source(self):
+        pixels = np.full((100, 100, 3), 255, dtype=np.uint8)
+        with tempfile.TemporaryDirectory() as directory:
+            for extension in ("jpg", "png"):
+                ok, encoded = cv2.imencode(f".{extension}", pixels)
+                self.assertTrue(ok)
+                path = Path(directory) / f"page.{extension}"
+                path.write_bytes(encoded.tobytes())
+
+                image, scale_x, scale_y = worker.read_ocr_image(str(path), max_pixels=2500)
+                self.assertEqual((50, 50), image.shape[:2])
+                self.assertAlmostEqual(2.0, scale_x)
+                self.assertAlmostEqual(2.0, scale_y)
+                self.assertEqual(
+                    [[2, 4], [10, 4], [10, 16], [2, 16]],
+                    worker.scale_ocr_box([[1, 2], [5, 2], [5, 8], [1, 8]], scale_x, scale_y),
+                )
+
+                original, original_scale_x, original_scale_y = worker.read_ocr_image(
+                    str(path), max_pixels=10000
+                )
+                self.assertEqual((100, 100), original.shape[:2])
+                self.assertEqual((1.0, 1.0), (original_scale_x, original_scale_y))
+
+    def test_large_jpeg_header_uses_reduced_decode_above_pillow_limit(self):
+        from PIL import Image as PILImage
+
+        class Header:
+            size = (50_000, 20_000)
+            format = "JPEG"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            @staticmethod
+            def getexif():
+                return {}
+
+        decoded = SimpleNamespace(shape=(2_500, 6_250, 3))
+        decode_flags = []
+
+        def decode(_encoded, flag):
+            decode_flags.append(flag)
+            return decoded if flag == 8 else None
+
+        fake_cv2 = SimpleNamespace(
+            IMREAD_COLOR=1,
+            IMREAD_REDUCED_COLOR_2=2,
+            IMREAD_REDUCED_COLOR_4=4,
+            IMREAD_REDUCED_COLOR_8=8,
+            imdecode=decode,
+        )
+        fake_np = SimpleNamespace(uint8=object(), fromfile=lambda *_args, **_kwargs: b"encoded")
+        previous_limit = PILImage.MAX_IMAGE_PIXELS
+
+        def open_header(path):
+            self.assertIsNone(PILImage.MAX_IMAGE_PIXELS)
+            self.assertEqual("large.jpg", path)
+            return Header()
+
+        with patch.object(PILImage, "open", side_effect=open_header) as open_image, patch.object(
+            worker, "cv2", fake_cv2
+        ), patch.object(worker, "np", fake_np):
+            image, scale_x, scale_y = worker.read_ocr_image("large.jpg")
+
+        self.assertIs(decoded, image)
+        self.assertEqual([8], decode_flags)
+        self.assertEqual((8.0, 8.0), (scale_x, scale_y))
+        self.assertEqual(previous_limit, PILImage.MAX_IMAGE_PIXELS)
+        open_image.assert_called_once_with("large.jpg")
+
     def test_ocr_status_verifies_models_in_the_derived_cache(self):
         def version(package):
             return "3.10.0" if package == "rapidocr" else "1.20.2"
@@ -249,7 +326,7 @@ class WorkerTests(unittest.TestCase):
 
         engine_cache = {"gpu": engine}
         with patch.object(worker, "rapid_ocr", engine_cache), patch.object(
-            worker, "read_cv_image", return_value=object()
+            worker, "read_ocr_image", return_value=(object(), 1.0, 1.0)
         ), patch.object(worker, "load_ocr_engine", return_value=engine):
             result = worker.analyze_ocr_image("image.jpg", "gpu")
 
@@ -407,6 +484,28 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(main_thread, call_threads["warm.jpg"])
         self.assertTrue(call_threads["one.jpg"].startswith("ThreadPoolExecutor"))
         self.assertTrue(call_threads["two.jpg"].startswith("ThreadPoolExecutor"))
+
+    def test_parallel_gpu_ocr_inference_does_not_redirect_worker_stdout(self):
+        result = SimpleNamespace(
+            txts=["recognized"],
+            scores=[0.9],
+            boxes=[[[0, 0], [10, 0], [10, 5], [0, 5]]],
+        )
+        engine = lambda _image: result
+
+        with patch.object(worker, "read_ocr_image", side_effect=lambda path: (path, 1.0, 1.0)), patch.object(
+            worker, "load_ocr_engine", return_value=engine
+        ), patch.object(worker, "ocr_engine_uses_cuda", return_value=True), patch.object(
+            worker, "status", return_value={"modules": {}}
+        ), patch.object(
+            worker.contextlib,
+            "redirect_stdout",
+            side_effect=AssertionError("parallel inference must not replace process stdout"),
+        ) as redirect_stdout:
+            response = worker.run_ocr_image_analysis(["warm.jpg", "one.jpg", "two.jpg"], "gpu")
+
+        self.assertTrue(all(item["data"]["text"] == "recognized" for item in response["items"]))
+        redirect_stdout.assert_not_called()
 
     def test_gpu_ocr_keeps_processing_serial_after_runtime_failure(self):
         call_threads = []

@@ -25,6 +25,8 @@ OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
 OCR_GPU_IMAGE_WORKERS = 4
+OCR_MAX_INPUT_PIXELS = 40_000_000
+ocr_image_header_lock = threading.Lock()
 OCR_MODEL_DIRECTORY = "ocr"
 OCR_DETECTOR_FILE = "PP-OCRv6_det_small.onnx"
 OCR_DETECTOR_SHA256 = "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
@@ -428,6 +430,77 @@ def read_cv_image(path: str):
         return None
 
 
+def read_ocr_image(path: str, max_pixels=OCR_MAX_INPUT_PIXELS):
+    """Decode OCR input at a bounded size and return source-to-input scale."""
+    global cv2, np
+    if cv2 is None or np is None:
+        import cv2 as cv2_module
+        import numpy as numpy_module
+        cv2, np = cv2_module, numpy_module
+
+    try:
+        from PIL import Image as PILImage
+
+        # Pillow checks decompression limits while reading headers. Disable that check
+        # only during this metadata-only probe; OpenCV performs the bounded pixel decode.
+        with ocr_image_header_lock:
+            max_image_pixels = PILImage.MAX_IMAGE_PIXELS
+            try:
+                PILImage.MAX_IMAGE_PIXELS = None
+                with PILImage.open(path) as source:
+                    original_width, original_height = source.size
+                    image_format = source.format
+                    orientation = source.getexif().get(274, 1)
+            finally:
+                PILImage.MAX_IMAGE_PIXELS = max_image_pixels
+        if orientation in (5, 6, 7, 8):
+            original_width, original_height = original_height, original_width
+
+        encoded = np.fromfile(path, dtype=np.uint8)
+        decode_flag = cv2.IMREAD_COLOR
+        if original_width * original_height > max_pixels and image_format == "JPEG":
+            for factor, flag in (
+                (2, cv2.IMREAD_REDUCED_COLOR_2),
+                (4, cv2.IMREAD_REDUCED_COLOR_4),
+                (8, cv2.IMREAD_REDUCED_COLOR_8),
+            ):
+                decode_flag = flag
+                if original_width * original_height // (factor * factor) <= max_pixels:
+                    break
+        image = cv2.imdecode(encoded, decode_flag)
+        if image is None and decode_flag != cv2.IMREAD_COLOR:
+            image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+    except Exception:
+        image = read_cv_image(path)
+        if image is None:
+            return None, 1.0, 1.0
+        original_height, original_width = image.shape[:2]
+
+    if image is None:
+        return None, 1.0, 1.0
+
+    height, width = image.shape[:2]
+    if height * width > max_pixels:
+        scale = (max_pixels / float(height * width)) ** 0.5
+        image = cv2.resize(
+            image,
+            (max(1, int(width * scale)), max(1, int(height * scale))),
+            interpolation=cv2.INTER_AREA,
+        )
+        height, width = image.shape[:2]
+    return image, original_width / width, original_height / height
+
+
+def scale_ocr_box(box, scale_x, scale_y):
+    """Map OCR polygon coordinates back to the decoded source image."""
+    if scale_x == 1.0 and scale_y == 1.0:
+        return box
+    return [
+        [int(round(float(point[0]) * scale_x)), int(round(float(point[1]) * scale_y))]
+        for point in box
+    ]
+
+
 def load_ocr_engine(device_mode="cpu"):
     global rapid_ocr, ocr_runtime_error
     mode = "gpu" if device_mode == "gpu" else "cpu"
@@ -538,13 +611,12 @@ def load_face_models(device_mode="cpu"):
 
 
 def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
-    image = read_cv_image(path)
+    image, scale_x, scale_y = read_ocr_image(path)
     if image is None:
         return {"data": None, "error": "image_unreadable"}
     try:
         engine = load_ocr_engine(device_mode)
-        with contextlib.redirect_stdout(sys.stderr):
-            result = engine(image)
+        result = engine(image)
         if device_mode == "gpu" and not ocr_engine_uses_cuda(engine):
             invalidate_gpu_ocr_engine()
             return {"data": None, "error": "gpu_inference_failed"}
@@ -557,6 +629,8 @@ def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
             if not normalized:
                 continue
             box = boxes[index].tolist() if index < len(boxes) and hasattr(boxes[index], "tolist") else boxes[index] if index < len(boxes) else []
+            if box and (scale_x != 1.0 or scale_y != 1.0):
+                box = scale_ocr_box(box, scale_x, scale_y)
             try:
                 confidence = float(scores[index]) if index < len(scores) else 0.0
             except (TypeError, ValueError):
