@@ -184,8 +184,9 @@ describe("智能搜索", () => {
     mocks.albumSearch.mockResolvedValue({ results: [] });
   });
 
-  it("提交中文描述并显示空索引引导", async () => {
+  it("一个词同时搜索画面与图片文字", async () => {
     renderSearch();
+    await screen.findByText(/NVIDIA GeForce RTX 3060/);
     expect(screen.getByRole("button", { name: /高级筛选/ })).toHaveAttribute(
       "aria-expanded",
       "false",
@@ -194,6 +195,7 @@ describe("智能搜索", () => {
     expect(screen.getByRole("button", { name: "文字搜索" })).toHaveClass(
       "text-accent-contrast",
     );
+    expect(screen.queryByLabelText("匹配范围")).not.toBeInTheDocument();
     expect(screen.getAllByRole("textbox")).toHaveLength(1);
     fireEvent.change(await screen.findByLabelText("搜索内容"), {
       target: { value: "海边散步的人" },
@@ -204,6 +206,8 @@ describe("智能搜索", () => {
       expect(mocks.semanticSearch).toHaveBeenCalledWith(
         expect.objectContaining({
           text: "海边散步的人",
+          ocrText: "海边散步的人",
+          matchMode: "any",
           kind: "photo",
           offset: 0,
           limit: 60,
@@ -211,7 +215,7 @@ describe("智能搜索", () => {
         undefined,
       ),
     );
-    expect(await screen.findByText("还没有可搜索的向量")).toBeInTheDocument();
+    expect(await screen.findByText("没有匹配的照片")).toBeInTheDocument();
     expect(screen.getByText(/NVIDIA GeForce RTX 3060/)).toBeInTheDocument();
   });
 
@@ -227,9 +231,6 @@ describe("智能搜索", () => {
     });
     renderSearch();
 
-    fireEvent.change(screen.getByLabelText("匹配范围"), {
-      target: { value: "ocr" },
-    });
     fireEvent.change(screen.getByLabelText("搜索内容"), {
       target: { value: "入口" },
     });
@@ -247,6 +248,9 @@ describe("智能搜索", () => {
         }),
         undefined,
       ),
+    );
+    expect(mocks.semanticSearch.mock.calls[0][0]).not.toHaveProperty(
+      "matchMode",
     );
     expect(
       await screen.findByText("还没有可搜索的文字结果"),
@@ -291,9 +295,7 @@ describe("智能搜索", () => {
       results: [{ kind: "album", path: "a_album123", name: "旅行相册" }],
     });
     renderSearch();
-    fireEvent.change(screen.getByLabelText("匹配范围"), {
-      target: { value: "both" },
-    });
+    await screen.findByText(/NVIDIA GeForce RTX 3060/);
     fireEvent.click(screen.getByRole("button", { name: /高级筛选/ }));
 
     fireEvent.change(await screen.findByLabelText("搜索内容"), {
@@ -321,6 +323,7 @@ describe("智能搜索", () => {
         expect.objectContaining({
           text: "海边散步",
           ocrText: "海边散步",
+          matchMode: "any",
           albumId: "a_album123",
           year: "2024",
           adcode: 110000,
@@ -362,9 +365,7 @@ describe("智能搜索", () => {
       revision: 1,
     });
     renderSearch();
-    fireEvent.change(screen.getByLabelText("匹配范围"), {
-      target: { value: "both" },
-    });
+    await screen.findByText(/NVIDIA GeForce RTX 3060/);
     fireEvent.change(await screen.findByLabelText("搜索内容"), {
       target: { value: "车站" },
     });

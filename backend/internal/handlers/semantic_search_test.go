@@ -60,6 +60,10 @@ func (handlerSemanticWorker) Status(context.Context) (services.AIWorkerStatus, e
 func (handlerSemanticWorker) EmbedImages(_ context.Context, paths []string) ([]services.AIWorkerVector, error) {
 	results := make([]services.AIWorkerVector, len(paths))
 	for index, path := range paths {
+		if filepath.Base(path) == "ocr-only.jpg" {
+			results[index].Error = "fixture_embedding_failed"
+			continue
+		}
 		vector := make([]float32, services.AIEmbeddingDimension)
 		if filepath.Base(path) == "first.jpg" {
 			vector[0] = 1
@@ -89,6 +93,8 @@ func (handlerSemanticWorker) AnalyzeOCR(_ context.Context, paths []string) ([]se
 			text = "入口 大门"
 		} else if filepath.Base(path) == "second.jpg" {
 			text = "中关村科技圆"
+		} else if filepath.Base(path) == "ocr-only.jpg" {
+			text = "展览 门票"
 		}
 		data, _ := json.Marshal(map[string]string{"text": text})
 		results[index].Data = data
@@ -129,7 +135,11 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 	if err := os.MkdirAll(albumPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	files := []string{filepath.Join(albumPath, "first.jpg"), filepath.Join(albumPath, "second.jpg")}
+	files := []string{
+		filepath.Join(albumPath, "first.jpg"),
+		filepath.Join(albumPath, "second.jpg"),
+		filepath.Join(albumPath, "ocr-only.jpg"),
+	}
 	for _, path := range files {
 		if err := os.WriteFile(path, []byte("test image bytes"), 0o600); err != nil {
 			t.Fatal(err)
@@ -206,14 +216,14 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 	for time.Now().Before(deadline) {
 		current, exists := jobs.Get(job.ID)
 		if exists && (current.Status == services.AIJobStatusCompleted || current.Status == services.AIJobStatusFailed) {
-			if current.Status != services.AIJobStatusCompleted {
+			if current.Status != services.AIJobStatusFailed || current.Failed != 1 || len(current.Errors) != 1 || current.Errors[0].ResourceID != catalog.ExternalID(files[2], services.ResourceFile) {
 				t.Fatalf("index job failed: %+v", current)
 			}
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	if current, _ := jobs.Get(job.ID); current.Status != services.AIJobStatusCompleted {
+	if current, _ := jobs.Get(job.ID); current.Status != services.AIJobStatusFailed || current.Failed != 1 {
 		t.Fatalf("index job did not complete: %+v", current)
 	}
 	ocrJob, _, err := jobs.Start(services.AIJobTypeOCR, services.AIJobModeFull)
@@ -309,6 +319,42 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 		t.Fatalf("semantic search response = %+v", body)
 	}
 
+	thirdID := catalog.ExternalID(files[2], services.ResourceFile)
+	anyRequest := httptest.NewRequest("POST", "/api/ai/search", strings.NewReader(`{"text":"蓝色山景","ocrText":"展览","matchMode":"any","kind":"photo","limit":10}`))
+	anyRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	anyResponse, err := app.Test(anyRequest, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer anyResponse.Body.Close()
+	if anyResponse.StatusCode != fiber.StatusOK {
+		t.Fatalf("union search status = %d", anyResponse.StatusCode)
+	}
+	var anyBody struct {
+		Results []struct {
+			Item struct {
+				ID string `json:"id"`
+			} `json:"item"`
+			Similarity   *float64 `json:"similarity"`
+			MatchReasons []string `json:"matchReasons"`
+		} `json:"results"`
+		Total      int `json:"total"`
+		NextOffset int `json:"nextOffset"`
+	}
+	if err := json.NewDecoder(anyResponse.Body).Decode(&anyBody); err != nil {
+		t.Fatal(err)
+	}
+	if anyBody.Total != 3 || len(anyBody.Results) != 3 || anyBody.Results[0].Item.ID != thirdID || anyBody.Results[0].Similarity != nil || len(anyBody.Results[0].MatchReasons) != 1 || anyBody.Results[0].MatchReasons[0] != "ocr_exact" {
+		t.Fatalf("union search OCR-only result = %+v", anyBody)
+	}
+	if anyBody.Results[1].Item.ID != firstID || anyBody.Results[1].Similarity == nil || len(anyBody.Results[1].MatchReasons) != 1 || anyBody.Results[1].MatchReasons[0] != "semantic" {
+		t.Fatalf("union search semantic result = %+v", anyBody.Results[1])
+	}
+	secondID := catalog.ExternalID(files[1], services.ResourceFile)
+	if anyBody.Results[2].Item.ID != secondID || len(anyBody.Results[2].MatchReasons) != 1 || anyBody.Results[2].MatchReasons[0] != "semantic" || anyBody.NextOffset != 3 {
+		t.Fatalf("union search final result = %+v", anyBody.Results[2])
+	}
+
 	ocrRequest := httptest.NewRequest("POST", "/api/ai/search", strings.NewReader(`{"ocrText":"入口","kind":"photo","limit":10}`))
 	ocrRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	ocrResponse, err := app.Test(ocrRequest, -1)
@@ -336,7 +382,6 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 		t.Fatalf("OCR search response = %+v", ocrBody)
 	}
 
-	secondID := catalog.ExternalID(files[1], services.ResourceFile)
 	approximateRequest := httptest.NewRequest("POST", "/api/ai/search", strings.NewReader(`{"ocrText":"中关村科技园","kind":"photo","limit":10}`))
 	approximateRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	approximateResponse, err := app.Test(approximateRequest, -1)

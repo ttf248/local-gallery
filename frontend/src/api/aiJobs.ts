@@ -203,6 +203,7 @@ export interface FaceSearchResponse {
 export interface SemanticSearchRequest {
   text?: string;
   ocrText?: string;
+  matchMode?: "all" | "any";
   resourceId?: string;
   kind: AppMode;
   albumId?: string;

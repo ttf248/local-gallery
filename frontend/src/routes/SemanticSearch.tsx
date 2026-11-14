@@ -24,11 +24,6 @@ type ScoredFeedItem = LibraryFeedItem & {
   matchReasons?: SemanticSearchHit["matchReasons"];
 };
 type SearchMode = "text" | "image";
-type TextSearchScope = "visual" | "ocr" | "both";
-
-function isTextSearchScope(value: string): value is TextSearchScope {
-  return value === "visual" || value === "ocr" || value === "both";
-}
 
 interface SubmittedSearch {
   request: SemanticSearchRequest;
@@ -42,7 +37,6 @@ export default function SemanticSearch() {
   const pushToast = useUIStore((state) => state.pushToast);
   const [mode, setMode] = useState<SearchMode>("text");
   const [text, setText] = useState("");
-  const [textScope, setTextScope] = useState<TextSearchScope>("visual");
   const [imageOCRText, setImageOCRText] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [similarResourceId, setSimilarResourceId] = useState("");
@@ -119,16 +113,16 @@ export default function SemanticSearch() {
   const embeddingReady = Boolean(status?.runtimeReady && status.modelValid);
   const hasSemanticQuery =
     mode === "text"
-      ? Boolean(text.trim() && textScope !== "ocr")
+      ? Boolean(text.trim() && embeddingReady)
       : Boolean(similarResourceId || imageFile);
   const hasOCRQuery =
     mode === "text"
-      ? Boolean(text.trim() && textScope !== "visual")
+      ? Boolean(text.trim())
       : Boolean(imageOCRText.trim());
   const usesSemanticSearch =
     mode === "image"
       ? Boolean(similarResourceId || imageFile)
-      : textScope !== "ocr";
+      : true;
   const hasSearchCondition = Boolean(
     hasSemanticQuery ||
     hasOCRQuery ||
@@ -150,11 +144,10 @@ export default function SemanticSearch() {
   const search = (resourceId?: string, file?: File) => {
     const request: SemanticSearchRequest = {
       kind: "photo",
-      ...(mode === "text" && !resourceId && text.trim() && textScope !== "ocr"
-        ? { text: text.trim() }
-        : {}),
-      ...(mode === "text" && text.trim() && textScope !== "visual"
-        ? { ocrText: text.trim() }
+      ...(mode === "text" && !resourceId && text.trim() && embeddingReady
+        ? { text: text.trim(), ocrText: text.trim(), matchMode: "any" as const }
+        : mode === "text" && !resourceId && text.trim()
+          ? { ocrText: text.trim() }
         : mode === "image" && imageOCRText.trim()
           ? { ocrText: imageOCRText.trim() }
           : {}),
@@ -172,7 +165,6 @@ export default function SemanticSearch() {
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (hasSemanticQuery && !embeddingReady) return;
     if (similarResourceId) {
       search(similarResourceId);
       return;
@@ -195,24 +187,16 @@ export default function SemanticSearch() {
   const loadMore = () =>
     void submittedQuery.fetchNextPage({ cancelRefetch: false });
   const selected = viewerIndex === null ? undefined : items[viewerIndex];
-  const textPlaceholder =
-    textScope === "visual"
-      ? "描述照片画面，例如：夜晚街道上的霓虹灯"
-      : textScope === "ocr"
-        ? "输入照片里的文字，例如：车站名称或招牌"
-        : "输入同一个词，匹配画面和照片文字";
-  const textHelp =
-    textScope === "visual"
-      ? "按画面含义匹配照片。"
-      : textScope === "ocr"
-        ? "按照片中识别出的文字匹配；标点与断行会自动归一化，长中文短语可容忍一次常见错字，无需 Chinese-CLIP。"
-        : "同一搜索词必须同时匹配画面和照片文字；需要语义向量与 OCR 识别结果。";
+  const textHelp = embeddingReady
+    ? "一个词同时检索画面语义与图片文字，任一匹配就会显示；文字匹配会归一化标点和断行。"
+    : "Chinese-CLIP 不可用时仍可按图片文字搜索；文字匹配会归一化标点和断行。";
   const submittedHasSemanticSource = Boolean(
     submitted?.request.text ||
     submitted?.request.resourceId ||
     submitted?.image,
   );
   const submittedHasOCRSource = Boolean(submitted?.request.ocrText);
+  const submittedMatchesAny = submitted?.request.matchMode === "any";
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -220,7 +204,7 @@ export default function SemanticSearch() {
         <PageHeading
           eyebrow="本地 AI · 组合检索"
           title="智能搜索"
-          description="组合中文语义、图片文字、相册、年份与 GPS 条件，在本机照片库中查找。"
+          description="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"
         />
         <section className="page-shell mt-5">
           <form
@@ -256,27 +240,6 @@ export default function SemanticSearch() {
             {mode === "text" ? (
               <div className="mt-4">
                 <div className="flex h-12 min-w-0 items-center rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
-                  <label className="sr-only" htmlFor="semantic-search-scope">
-                    匹配范围
-                  </label>
-                  <select
-                    id="semantic-search-scope"
-                    aria-label="匹配范围"
-                    value={textScope}
-                    onChange={(event) => {
-                      const nextScope = event.target.value;
-                      if (!isTextSearchScope(nextScope)) return;
-                      setTextScope(nextScope);
-                      if (nextScope !== "visual") {
-                        setText((current) => current.slice(0, 200));
-                      }
-                    }}
-                    className="h-full max-w-[42%] shrink-0 rounded-l-lg border-0 border-r border-border bg-bg-subtle px-3 text-meta font-medium text-fg outline-none sm:max-w-none"
-                  >
-                    <option value="visual">画面内容</option>
-                    <option value="ocr">图片文字</option>
-                    <option value="both">画面与文字</option>
-                  </select>
                   <label className="sr-only" htmlFor="semantic-search-query">
                     搜索内容
                   </label>
@@ -285,9 +248,9 @@ export default function SemanticSearch() {
                     aria-label="搜索内容"
                     value={text}
                     onChange={(event) => setText(event.target.value)}
-                    maxLength={textScope === "visual" ? 512 : 200}
-                    placeholder={textPlaceholder}
-                    className="h-full min-w-0 flex-1 rounded-r-lg border-0 bg-transparent px-3 text-body text-fg outline-none placeholder:text-fg-subtle"
+                    maxLength={200}
+                    placeholder="描述画面，或输入照片里的文字"
+                    className="h-full min-w-0 flex-1 rounded-lg border-0 bg-transparent px-3 text-body text-fg outline-none placeholder:text-fg-subtle"
                   />
                 </div>
                 <p className="mt-1.5 text-meta text-fg-subtle">{textHelp}</p>
@@ -494,7 +457,6 @@ export default function SemanticSearch() {
                 type="submit"
                 disabled={
                   submittedQuery.isFetching ||
-                  (hasSemanticQuery && !embeddingReady) ||
                   !hasSearchCondition
                 }
                 className="btn btn-primary"
@@ -530,7 +492,7 @@ export default function SemanticSearch() {
                 {!status.runtimeReady
                   ? "Chinese-CLIP 运行环境尚未就绪。"
                   : "Chinese-CLIP 权重缺失或校验未通过。"}{" "}
-                权重目录：cacheDir/derived/ai/models/。
+                文字搜索仍可用；权重目录：cacheDir/derived/ai/models/。
               </span>
               <Link to="/tasks" className="btn btn-sm btn-outline">
                 查看任务中心
@@ -592,18 +554,18 @@ export default function SemanticSearch() {
         ) : submitted && !submittedQuery.isLoading ? (
           <EmptyState
             title={
-              total === 0 && submittedHasSemanticSource && submittedHasOCRSource
-                ? "没有同时匹配的照片"
-                : total === 0 && submittedHasSemanticSource
+              total === 0 && submittedMatchesAny
+                ? "没有匹配的照片"
+                : total === 0 && submittedHasSemanticSource && !submittedHasOCRSource
                   ? "还没有可搜索的向量"
-                  : total === 0 && submittedHasOCRSource
+                  : total === 0 && submittedHasOCRSource && !submittedHasSemanticSource
                     ? "还没有可搜索的文字结果"
                     : "没有匹配的照片"
             }
             description={
               total === 0
-                ? submittedHasSemanticSource && submittedHasOCRSource
-                  ? "这是交集搜索，照片需同时符合画面和文字条件；也可以切换为单一匹配范围。"
+                ? submittedMatchesAny
+                  ? "已同时检查画面内容与图片文字，照片命中任一项即可显示；可以换个词或放宽筛选。"
                   : submittedHasSemanticSource
                     ? "请先到任务中心运行语义向量任务。"
                     : submittedHasOCRSource

@@ -20,6 +20,7 @@ import (
 type semanticSearchRequest struct {
 	Text       string `json:"text"`
 	OCRText    string `json:"ocrText"`
+	MatchMode  string `json:"matchMode"`
 	ResourceID string `json:"resourceId"`
 	Kind       string `json:"kind"`
 	AlbumID    string `json:"albumId"`
@@ -93,7 +94,8 @@ func SemanticSearchHandler(
 		if strings.HasPrefix(strings.ToLower(c.Get(fiber.HeaderContentType)), "multipart/form-data") {
 			request = semanticSearchRequest{
 				Text: c.FormValue("text"), OCRText: c.FormValue("ocrText"), ResourceID: c.FormValue("resourceId"),
-				Kind: c.FormValue("kind"), AlbumID: c.FormValue("albumId"),
+				MatchMode: c.FormValue("matchMode"),
+				Kind:      c.FormValue("kind"), AlbumID: c.FormValue("albumId"),
 				Year: c.FormValue("year"), Adcode: parseSemanticInt(c.FormValue("adcode"), 0), PersonID: c.FormValue("personId"),
 				FavoriteOnly: c.FormValue("favoriteOnly") == "true", PickedOnly: c.FormValue("pickedOnly") == "true",
 				Offset: parseSemanticInt(c.FormValue("offset"), 0), Limit: parseSemanticInt(c.FormValue("limit"), 60),
@@ -122,6 +124,12 @@ func SemanticSearchHandler(
 		}
 		request.Text = strings.TrimSpace(request.Text)
 		request.OCRText = strings.TrimSpace(request.OCRText)
+		if request.MatchMode == "" {
+			request.MatchMode = "all"
+		}
+		if request.MatchMode != "all" && request.MatchMode != "any" {
+			return writeError(c, fiber.StatusBadRequest, "invalid_semantic_search", "matchMode must be all or any")
+		}
 		if len(request.Text) > 512 {
 			return writeError(c, fiber.StatusBadRequest, "invalid_semantic_search", "text query must be at most 512 characters")
 		}
@@ -131,6 +139,10 @@ func SemanticSearchHandler(
 		semanticQuery := request.Text != "" || request.ResourceID != "" || uploadedPath != ""
 		if request.Text != "" && (request.ResourceID != "" || uploadedPath != "") || request.ResourceID != "" && uploadedPath != "" {
 			return writeError(c, fiber.StatusBadRequest, "invalid_semantic_search", "provide either one text or one image query")
+		}
+		matchAny := request.MatchMode == "any"
+		if matchAny && (request.Text == "" || request.OCRText == "" || request.ResourceID != "" || uploadedPath != "") {
+			return writeError(c, fiber.StatusBadRequest, "invalid_semantic_search", "matchMode any requires both text and ocrText")
 		}
 		if !semanticQuery && request.OCRText == "" && request.AlbumID == "" && request.Year == "" && request.Adcode == 0 && request.PersonID == "" && !request.FavoriteOnly && !request.PickedOnly {
 			return writeError(c, fiber.StatusBadRequest, "invalid_semantic_search", "provide a search query or at least one filter")
@@ -222,21 +234,27 @@ func SemanticSearchHandler(
 			}
 		}
 		candidateByID := make(map[string]services.VectorMetadata)
+		semanticCandidateByID := make(map[string]services.VectorMetadata)
 		ocrMatchKinds := make(map[string]string)
 		if semanticQuery {
 			for _, metadata := range analyzer.Index().Metadata() {
 				record, exists := embeddingRecords[metadata.ResourceID]
 				if exists && analyzer.RecordCurrent(record) && record.Size == metadata.Size && record.MTimeNs == metadata.MTimeNs {
 					candidateByID[metadata.ResourceID] = metadata
+					semanticCandidateByID[metadata.ResourceID] = metadata
 				}
 			}
-		} else if request.OCRText != "" {
+		}
+		if request.OCRText != "" && (!semanticQuery || matchAny) {
 			for _, resourceID := range ocrIndex.Candidates(request.OCRText) {
 				if record, exists := ocrRecords[resourceID]; exists && record.Status == "recognized" && record.ModuleVersion == services.OCRAnalyzerVersion {
-					candidateByID[resourceID] = services.VectorMetadata{ResourceID: resourceID, Size: record.Size, MTimeNs: record.MTimeNs}
+					if _, exists := candidateByID[resourceID]; !exists {
+						candidateByID[resourceID] = services.VectorMetadata{ResourceID: resourceID, Size: record.Size, MTimeNs: record.MTimeNs}
+					}
 				}
 			}
-		} else {
+		}
+		if !semanticQuery && request.OCRText == "" {
 			for _, resourceID := range snapshot.FileIDs() {
 				ref, exists := snapshot.Lookup(resourceID)
 				if !exists || ref.Kind != services.ResourceFile || !models.IsImageFile(ref.AbsolutePath) {
@@ -303,22 +321,27 @@ func SemanticSearchHandler(
 					}
 				}
 			}
+			matchKind := ""
 			if request.OCRText != "" {
 				ocrRecord, exists := ocrRecords[metadata.ResourceID]
-				if !exists || ocrRecord.Status != "recognized" || ocrRecord.ModuleVersion != services.OCRAnalyzerVersion || ocrRecord.Size != metadata.Size || ocrRecord.MTimeNs != metadata.MTimeNs {
+				if exists && ocrRecord.Status == "recognized" && ocrRecord.ModuleVersion == services.OCRAnalyzerVersion && ocrRecord.Size == metadata.Size && ocrRecord.MTimeNs == metadata.MTimeNs {
+					var ocrResult struct {
+						Text string `json:"text"`
+					}
+					if json.Unmarshal(ocrRecord.Data, &ocrResult) == nil {
+						matchKind = services.MatchOCRSearchText(request.OCRText, ocrResult.Text)
+					}
+				}
+				if matchKind != "" {
+					ocrMatchKinds[metadata.ResourceID] = matchKind
+				} else if !matchAny {
 					continue
 				}
-				var ocrResult struct {
-					Text string `json:"text"`
-				}
-				if json.Unmarshal(ocrRecord.Data, &ocrResult) != nil {
+			}
+			if matchAny {
+				if _, hasSemanticMatch := semanticCandidateByID[metadata.ResourceID]; !hasSemanticMatch && matchKind == "" {
 					continue
 				}
-				matchKind := services.MatchOCRSearchText(request.OCRText, ocrResult.Text)
-				if matchKind == "" {
-					continue
-				}
-				ocrMatchKinds[metadata.ResourceID] = matchKind
 			}
 			candidates = append(candidates, metadata)
 		}
@@ -345,7 +368,45 @@ func SemanticSearchHandler(
 		}
 		var pageHits []services.VectorHit
 		var total int
-		if semanticQuery {
+		if semanticQuery && matchAny {
+			vectorCandidates := make([]services.VectorMetadata, 0, len(semanticCandidateByID))
+			oCROnlyHits := make([]services.VectorHit, 0)
+			for _, candidate := range candidates {
+				if _, hasSemanticMatch := semanticCandidateByID[candidate.ResourceID]; hasSemanticMatch {
+					vectorCandidates = append(vectorCandidates, candidate)
+				} else if ocrMatchKinds[candidate.ResourceID] != "" {
+					oCROnlyHits = append(oCROnlyHits, services.VectorHit{ResourceID: candidate.ResourceID})
+				}
+			}
+			vectorLimit := start + request.Limit
+			vectorHits, semanticTotal, err := analyzer.Index().SearchWithPriority(queryVector, vectorCandidates, 0, vectorLimit, ocrPriorities)
+			if err != nil {
+				return writeError(c, fiber.StatusInternalServerError, "semantic_search_failed", "semantic search failed")
+			}
+			pageHits = append(vectorHits, oCROnlyHits...)
+			total = semanticTotal + len(oCROnlyHits)
+			sort.SliceStable(pageHits, func(i, j int) bool {
+				left, right := pageHits[i], pageHits[j]
+				leftPriority, rightPriority := ocrPriorities[left.ResourceID], ocrPriorities[right.ResourceID]
+				if leftPriority != rightPriority {
+					return leftPriority > rightPriority
+				}
+				_, leftHasVector := semanticCandidateByID[left.ResourceID]
+				_, rightHasVector := semanticCandidateByID[right.ResourceID]
+				if leftHasVector != rightHasVector {
+					return leftHasVector
+				}
+				if leftHasVector && left.Score != right.Score {
+					return left.Score > right.Score
+				}
+				return left.ResourceID < right.ResourceID
+			})
+			if start > len(pageHits) {
+				start = len(pageHits)
+			}
+			end := min(start+request.Limit, len(pageHits))
+			pageHits = pageHits[start:end]
+		} else if semanticQuery {
 			var err error
 			pageHits, total, err = analyzer.Index().SearchWithPriority(queryVector, candidates, start, request.Limit, ocrPriorities)
 			if err != nil {
@@ -363,7 +424,7 @@ func SemanticSearchHandler(
 		fingerprints := make(map[string]services.VectorMetadata, len(pageHits))
 		for _, hit := range pageHits {
 			ids = append(ids, hit.ResourceID)
-			if semanticQuery {
+			if _, hasSemanticMatch := semanticCandidateByID[hit.ResourceID]; hasSemanticMatch {
 				score := hit.Score
 				scores[hit.ResourceID] = &score
 			}
@@ -386,7 +447,7 @@ func SemanticSearchHandler(
 				continue
 			}
 			matchReasons := make([]string, 0, 2)
-			if request.Text != "" {
+			if request.Text != "" && scores[item.ID] != nil {
 				matchReasons = append(matchReasons, "semantic")
 			}
 			if request.ResourceID != "" || uploadedPath != "" {
