@@ -19,6 +19,7 @@ MODEL_SHA256 = "5997ef32c50de18f3ac06eb5d746c324a639053c3bed8f2986f97ebb22b2ecde
 MODEL_VERSION = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7"
 DIMENSION = 512
 INITIAL_BATCH_SIZE = 8
+GPU_INITIAL_BATCH_SIZE = 32
 IMAGE_PREPROCESS_WORKERS = 4
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
@@ -328,7 +329,7 @@ def is_cuda_oom(error: Exception) -> bool:
 
 def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_workers=1):
     global device, model, model_device
-    batch_size = INITIAL_BATCH_SIZE
+    batch_size = GPU_INITIAL_BATCH_SIZE if device == "cuda" else INITIAL_BATCH_SIZE
     results = [None] * len(items)
     errors = [""] * len(items)
     prepared = {}

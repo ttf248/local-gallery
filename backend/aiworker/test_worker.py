@@ -240,6 +240,25 @@ class WorkerTests(unittest.TestCase):
         self.assertTrue(all(not item["error"] and len(item["vector"]) == worker.DIMENSION for item in results))
         self.assertEqual("cuda", worker.device)
 
+    def test_gpu_embedding_batch_starts_larger_than_cpu_batch(self):
+        images = [str(index) for index in range(33)]
+        batch_sizes = []
+
+        def encode(items):
+            batch_sizes.append(len(items))
+            return [[1.0] + [0.0] * (worker.DIMENSION - 1) for _ in items]
+
+        gpu_results = worker.run_with_fallback(images, encode, lambda item: item)
+        self.assertEqual([32, 1], batch_sizes)
+        self.assertTrue(all(not item["error"] for item in gpu_results))
+
+        batch_sizes.clear()
+        with patch.object(worker, "device", "cpu"):
+            cpu_results = worker.run_with_fallback(images, encode, lambda item: item)
+
+        self.assertEqual([8, 8, 8, 8, 1], batch_sizes)
+        self.assertTrue(all(not item["error"] for item in cpu_results))
+
     def test_single_item_cuda_oom_retries_on_cpu(self):
         def encode(items):
             if worker.device == "cuda":
