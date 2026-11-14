@@ -178,6 +178,23 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual("image_unreadable", results[0]["error"])
         self.assertEqual(worker.DIMENSION, len(results[1]["vector"]))
 
+    def test_parallel_image_preparation_preserves_input_order(self):
+        def encode(items):
+            return [[float(ord(item))] + [0.0] * (worker.DIMENSION - 1) for item in items]
+
+        results = worker.run_with_fallback(
+            ["c", "bad", "a", "b"],
+            encode,
+            lambda item: (_ for _ in ()).throw(ValueError()) if item == "bad" else item,
+            prepare_workers=3,
+        )
+
+        self.assertEqual(
+            [float(ord("c")), None, float(ord("a")), float(ord("b"))],
+            [item["vector"][0] if item["vector"] else None for item in results],
+        )
+        self.assertEqual("image_unreadable", results[1]["error"])
+
     def test_image_analysis_preserves_success_and_failure_per_item(self):
         results = worker.run_image_analysis(
             ["one.jpg", "two.jpg"],

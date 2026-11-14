@@ -87,6 +87,8 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 
 AI Worker 使用独立 `backend/aiworker/.venv`（Python 3.11）。Windows/Linux 安装 PyTorch 2.7.1 + CUDA 12.6 与 Chinese-CLIP 1.6.0；macOS 使用 PyTorch CPU 版。RapidOCR 3.10.0 + ONNX Runtime 1.20.2 处理文字，OpenCV 4.12.0 + YuNet/SFace ONNX 权重处理人脸。Windows/Linux 使用 ONNX Runtime GPU 版，macOS 使用 CPU 版。Go 通过 stdin/stdout JSON Lines 调用并将 stderr 接入服务日志，Worker 常驻并复用 OCR/人脸模型。每个模块独立报告依赖与权重状态；缺失时任务中心不会把它显示为可运行。所有权重只从 `cacheDir/derived/ai/models/` 读取，模型下载脚本固定来源 revision 并校验 SHA256，不在服务启动时联网下载。新建的 embedding、OCR 和 face 任务默认强制使用 GPU；任务保存创建时的 `cpu` / `gpu` 选择，关闭 GPU 偏好后新任务使用 CPU。强制 GPU 不回退到 CPU，硬件不可用与推理失败分别进入任务错误码。Chinese-CLIP 遇到 CUDA OOM 时减半批量，单张仍 OOM 则将该图片记录为失败；语义搜索请求仍使用 Worker 的自动设备模式。搜索与建库推理共享同一串行 Worker。
 
+Chinese-CLIP 图像嵌入每次最多接收 32 张；最多 4 个线程并行解码和执行图像变换，再按输入顺序送入同一条 GPU 推理路径。文本嵌入不创建线程池；图像预处理失败仍按单张记为 `image_unreadable`，不会中止同批其他照片。
+
 向量以 512 维 Float16 保存在 `derived/ai/vectors/shards/`，每片有 JSONL 元数据与 SHA256，manifest 原子发布并标记已压实分片；元数据只含资源 ID、文件指纹、模型版本和片内位置，不保存文件路径。应用启动时将 Float16 shard 装入内存，完整校验哈希后才用于检索；模型/索引版本不兼容时重建派生索引。索引增量追加，累计 128 个未压实 shard 后由独立后台压实，每片最多 512 条；达到压实门槛后不因已有分片数量重复排队。检索将查询向量归一化一次，用半精度解码查表和有界 Top-K 堆代替逐条解码后的全量排序。Windows RTX 3060、本地 Go 基准 100,000 向量、512 维、31 次测量：p50 从 193.2 ms 降至 73.3 ms，p95 从 222.3 ms 降至 79.8 ms，每次搜索分配从约 2.4 MB 降至约 2.5 KB；索引堆约 129.8 MB。复现命令：`go test ./internal/services -run '^$' -bench '^BenchmarkVectorIndexSearch100K$' -benchtime=31x -benchmem`。
 
 OCR 额外维护 `derived/ai/ocr-search-index.json` 倒排索引，索引项仅存 OCR 词元、模块版本和文件指纹，启动时从已提交的 OCR 批次核对并修复，任务批次提交后增量更新。查询会归一化全半角、CJK 空格/断行与中文标点，并在长中文短语上允许一个受限的常见混淆字或插入/遗漏；最终仍与当前 OCR 原文核验，精确结果排在近似结果之前。中文 OCR 回归集 8 个正例和近似负例，改动前精确率/召回率为 0/0，改动后均为 1.0（8/8 正例、0 假阳性）；该数字只代表固定合成文本夹具。向量查询支持 OCR 优先级，API 的 `matchReasons` 说明语义、以图、文字精确或近似命中。
@@ -342,6 +344,16 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 Go 单元测试按服务/中间件/handler 就近维护；`backend/tests/integration` 用真实 HTTP 路由验证扫描、ID、媒体缓存与 SSE。Vitest 覆盖前端组件/hooks/store，Playwright 使用独立临时媒体与真实后端验证跨层主链路。标准命令集中在 README，界面审计与探针集中在设计文档。
 
 端到端用例按浏览、阅读器、设置和状态拆分，媒体扫描、根配置、路由和素材生成复用 `frontend/tests/e2e/helpers/library.ts`。各文件共享一个临时后端与 JSON 状态，因此使用单 worker 顺序运行；每个修改状态的用例负责恢复自己持有的夹具。
+
+### AI 图像嵌入预处理对照
+
+2026-11-15，Windows / NVIDIA RTX 3060 12GB，同一固定合成集 180 张、9 条查询，使用当前 Chinese-CLIP 权重分别运行串行与 4 线程图像解码/预处理。一个最多 32 张的图像嵌入请求 p50 从 161.37 ms 降到 134.53 ms（约快 16.6%），6 次请求的 p95 从 3,257.20 ms 降到 2,566.49 ms；GPU 峰值分配均为 447,369,728 B。Top-10 精确率均为 1.0、召回率均为 0.5，OCR 固定集仍为 8/8 精确。p95 包含第一次加载与预热，合成集不代表个人照片库；性能对照用来确认没有回退，不作为实际媒体吞吐承诺。
+
+复现（在仓库根目录）：
+
+```powershell
+backend\aiworker\.venv\Scripts\python.exe backend\aiworker\evaluate_quality.py --model-dir <cacheDir>\derived\ai\models --device gpu --profile-device-switches --output frontend\.smoke\ai-rework\metrics.json
+```
 
 ### 活动重复写入对照
 

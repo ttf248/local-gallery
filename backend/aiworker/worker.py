@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import contextlib
 import hashlib
 import importlib.metadata
@@ -17,6 +18,7 @@ MODEL_SHA256 = "5997ef32c50de18f3ac06eb5d746c324a639053c3bed8f2986f97ebb22b2ecde
 MODEL_VERSION = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7"
 DIMENSION = 512
 INITIAL_BATCH_SIZE = 8
+IMAGE_PREPROCESS_WORKERS = 4
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
@@ -305,17 +307,35 @@ def is_cuda_oom(error: Exception) -> bool:
     return bool(torch is not None and isinstance(error, torch.cuda.OutOfMemoryError)) or "out of memory" in str(error).lower()
 
 
-def run_with_fallback(items, encode, prepare, device_mode="auto"):
+def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_workers=1):
     global device, model, model_device
     batch_size = INITIAL_BATCH_SIZE
     results = [None] * len(items)
     errors = [""] * len(items)
     prepared = {}
-    for index, item in enumerate(items):
+
+    def prepare_one(item):
         try:
-            prepared[index] = prepare(item)
+            return prepare(item), ""
         except Exception:
-            errors[index] = "image_unreadable"
+            return None, "image_unreadable"
+
+    worker_count = min(max(1, prepare_workers), len(items))
+    if worker_count > 1:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+            prepared_items = executor.map(prepare_one, items)
+            for index, (value, error) in enumerate(prepared_items):
+                if error:
+                    errors[index] = error
+                else:
+                    prepared[index] = value
+    else:
+        for index, item in enumerate(items):
+            value, error = prepare_one(item)
+            if error:
+                errors[index] = error
+            else:
+                prepared[index] = value
 
     pending = list(prepared)
     while pending:
@@ -726,7 +746,16 @@ def process(request: dict) -> dict:
         paths = request.get("paths")
         if not isinstance(paths, list) or len(paths) > 32 or not all(isinstance(path, str) for path in paths):
             return {"error": "invalid_image_batch"}
-        return {"items": run_with_fallback(paths, encode_image_batch, prepare_image, device_mode), "status": status()}
+        return {
+            "items": run_with_fallback(
+                paths,
+                encode_image_batch,
+                prepare_image,
+                device_mode,
+                prepare_workers=IMAGE_PREPROCESS_WORKERS,
+            ),
+            "status": status(),
+        }
     texts = request.get("texts")
     if not isinstance(texts, list) or not texts or len(texts) > 64 or not all(isinstance(text, str) for text in texts):
         return {"error": "invalid_text_batch"}
