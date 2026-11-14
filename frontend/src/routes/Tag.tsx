@@ -31,6 +31,26 @@ import { ListFilterBar } from "../components/common/ListFilterBar";
 import { SelectionToggle } from "../components/album/BulkActions";
 
 // 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
+/**
+ * 页头：返回 + 眉标 + 标签名。
+ *
+ * 有内容、出错、空态三种情况共用它：眉标说这是什么，标题就是标签名。
+ * 原来写成「标签：xxx」——冒号加前缀像是表单字段，与有内容时的页头
+ * 也不是一套。
+ */
+function TagHead({ tag, onBack }: { tag: string; onBack: () => void }) {
+  return (
+    <div className="page-shell page-section pb-5">
+      <button onClick={onBack} className="btn btn-sm btn-ghost mb-4">
+        <ChevronLeftIcon size={13} />
+        <span>返回</span>
+      </button>
+      <p className="page-eyebrow">由标签串起的故事</p>
+      <h1 className="page-title page-title--sm break-words mt-1">{tag}</h1>
+    </div>
+  );
+}
+
 export default function Tag() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -133,25 +153,39 @@ export default function Tag() {
 
   if (albumsQuery.isLoading) {
     return (
-      <div className="p-6">
-        <EmptyState title="正在加载标签" description="正在读取相册摘要…" />
+      <div className="min-h-full">
+        {/* 加载中同样留着页头：这一页从头到尾都是「眉标 + 标签名 + 内容」，
+            中间换一张没有名字的白纸，读起来像跳到了别处。 */}
+        <TagHead tag={tag} onBack={() => navigate(-1)} />
+        <EmptyState
+          title="正在加载标签"
+          description="正在读取相册摘要…"
+          dense
+        />
       </div>
     );
   }
 
   if (albumsQuery.isError && !albumsQuery.summary)
     return (
-      <EmptyState
-        title="标签加载失败"
-        action={
-          <button
-            className="btn btn-outline"
-            onClick={() => void albumsQuery.refetch()}
-          >
-            重试
-          </button>
-        }
-      />
+      <div className="min-h-full">
+        {/* 出错时也留着页头：页面知道自己是谁，报错才不至于变成一张
+            没有名字的白纸（这一屏此前只有一句居中的话，左缘与其它
+            页面全对不上）。 */}
+        <TagHead tag={tag} onBack={() => navigate(-1)} />
+        <EmptyState
+          title="标签加载失败"
+          description="没能读到这个标签下的相册。"
+          action={
+            <button
+              className="btn btn-outline"
+              onClick={() => void albumsQuery.refetch()}
+            >
+              重试
+            </button>
+          }
+        />
+      </div>
     );
 
   if (
@@ -160,20 +194,7 @@ export default function Tag() {
   ) {
     return (
       <div className="min-h-full">
-        <div className="page-shell page-section pb-5">
-          <button
-            onClick={() => navigate(-1)}
-            className="btn btn-sm btn-ghost mb-4"
-          >
-            <ChevronLeftIcon size={13} />
-            <span>返回</span>
-          </button>
-          {/* 页头与有内容时同一套：眉标说这是什么，标题就是标签名。
-              原来写成「标签：xxx」——冒号加前缀像是表单字段，
-              与有内容时的页头也不是一套。 */}
-          <p className="page-eyebrow">由标签串起的故事</p>
-          <h1 className="page-title page-title--sm break-words mt-1">{tag}</h1>
-        </div>
+        <TagHead tag={tag} onBack={() => navigate(-1)} />
         {/* 页头已经写着是哪个标签，空态再说一遍「未找到该标签」是同一句话
             说两次。这里只说结论，并给出下一步。 */}
         <EmptyState
@@ -211,14 +232,16 @@ export default function Tag() {
                     });
                   })
                 }
-                className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-md text-body transition-colors ${
+                title={isFav ? "取消收藏标签" : "收藏标签"}
+                aria-label={isFav ? "取消收藏标签" : "收藏标签"}
+                aria-pressed={isFav}
+                className={`inline-flex items-center justify-center h-9 w-9 rounded-md transition-colors ${
                   isFav
                     ? "bg-favorite/10 text-favorite hover:bg-favorite/15"
-                    : "bg-bg-elevated border border-border hover:bg-bg-subtle"
+                    : "bg-bg-elevated border border-border text-fg-muted hover:bg-bg-subtle hover:text-fg"
                 }`}
               >
-                <StarIcon size={13} filled={isFav} />
-                <span>{isFav ? "已收藏" : "收藏标签"}</span>
+                <StarIcon size={14} filled={isFav} />
               </button>
             </div>
             <div
