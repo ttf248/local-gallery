@@ -19,6 +19,7 @@ const savedPrefs = {
   theme: "system",
   sidebarCollapsed: false,
   appMode: "comic",
+  hiddenNavItems: [] as string[],
 } satisfies Prefs;
 
 describe("appModeStore", () => {

@@ -744,6 +744,11 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
   `appMode` 是全局工作台模式，取值 `photo` / `comic`（缺省 `photo`），决定列表呈现哪一类相册；
   非法值返回 `400 invalid_app_mode`。两个模式互斥且完整覆盖媒体库：目录属性把媒体库分成
   照片与漫画两半，工作台一次只面对其中一半。
+  `hiddenNavItems` 是侧栏里被收起的导航项 key 列表，存的是生效的清单：不在列表里的入口
+  才显示在侧栏。key 形如 `photo.recents`、`comic.unread`，字符集限定为小写字母、数字、
+  点与连字符；非法 key 返回 `400 invalid_nav_item`，超过 32 项返回 `400 invalid_nav_items`。
+  服务端只保存与透传 key，不解释它的含义：新增导航项不必改后端。缺省收起照片侧的
+  `photo.recents`、`photo.favorites`、`photo.picks` 三项。
 - `GET /api/favorites`：返回 `{ "favorites": ["<resourceId>"] }`。
 - `POST /api/favorites`、`DELETE /api/favorites`：body 为 `{ "resourceId": "a_... | c_... | smart:<tag>" }`。
 - `POST /api/favorites/prune`：按当前资源目录移除已失效相册/集合 ID，返回 `{ "removed": ["<resourceId>"] }`，不访问 ID 对应的文件路径；智能标签保留。资源目录尚未完成首次加载时返回 `409`，不会删除收藏。

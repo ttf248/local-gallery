@@ -4,12 +4,15 @@ import {
   albumUrl,
   albumUrlPattern,
   resetWorkbenchMode,
+  resetNavItems,
+  showNavItems,
   type CopyAuditWindow,
   installCopyAudit,
 } from "./helpers/library";
 
 test.beforeEach(async ({ request }) => {
   await resetWorkbenchMode(request);
+  await resetNavItems(request);
 });
 
 test("空收藏返回数组且无失效项时清理显示零项成功", async ({ page }) => {
@@ -31,6 +34,8 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
   const album = nodes.find((node) => node.name === "sample-paged-images");
   expect(album).toBeDefined();
   expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
+  // 侧栏入口默认收起：这条用例要从侧栏点进「最近浏览」，先把它放出来。
+  await showNavItems(page.request, ["photo.recents"]);
   let historyWrites = 0;
   page.on("request", (request) => {
     if (
@@ -257,6 +262,8 @@ test("收藏写入成功后列表刷新失败仍保留已确认的状态", async
   const album = nodes.find((node) => node.name === "sample-album");
   expect(album).toBeDefined();
   const resourceId = album!.id;
+  // 侧栏入口默认收起：这条用例要从侧栏点进「收藏照片」，先把它放出来。
+  await showNavItems(page.request, ["photo.favorites"]);
   const original = (await (
     await page.request.get("/api/favorites")
   ).json()) as { favorites: string[] };
@@ -334,6 +341,8 @@ for (const operation of ["limit", "clear", "visit"] as const) {
         ).ok(),
       ).toBeTruthy();
       expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
+      // 侧栏入口默认收起：这条用例要从侧栏点进「最近浏览」，先把它放出来。
+      await showNavItems(page.request, ["photo.recents"]);
       for (const node of operation === "visit" ? [first] : [second, first]) {
         expect(
           (
@@ -434,6 +443,8 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
       favorites: string[];
     };
   const original = (await list()).favorites;
+  // 侧栏入口默认收起：这条用例要从侧栏点进「收藏照片」，先把它放出来。
+  await showNavItems(page.request, ["photo.favorites"]);
   try {
     for (const resourceId of [album.id, missing])
       expect(

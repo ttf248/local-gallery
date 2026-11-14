@@ -28,6 +28,8 @@ type BackupPreferences struct {
 	Theme            string         `json:"theme"`
 	SidebarCollapsed bool           `json:"sidebarCollapsed"`
 	AppMode          models.AppMode `json:"appMode"`
+	// HiddenNavItems 是侧栏里被收起的导航项（与偏好里的同名字段一致）。
+	HiddenNavItems []string `json:"hiddenNavItems"`
 }
 type BackupCover struct {
 	AlbumID string `json:"albumId"`
@@ -113,7 +115,7 @@ func (state backupSnapshot) versions() map[string]string {
 }
 func (state backupSnapshot) export() StateBackup {
 	p := state.prefs
-	backup := StateBackup{Version: 1, ExportedAt: time.Now().UTC(), Favorites: append([]string{}, p.Favorites...), History: append([]models.HistoryEntry{}, p.History...), Activities: state.activities, Covers: []BackupCover{}, Picks: append([]string{}, state.picks...), People: state.people, Preferences: &BackupPreferences{p.MaxRecent, p.AutoSwitchAlbum, p.ShowSwitchNotif, p.Theme, p.SidebarCollapsed, p.AppMode}}
+	backup := StateBackup{Version: 1, ExportedAt: time.Now().UTC(), Favorites: append([]string{}, p.Favorites...), History: append([]models.HistoryEntry{}, p.History...), Activities: state.activities, Covers: []BackupCover{}, Picks: append([]string{}, state.picks...), People: state.people, Preferences: &BackupPreferences{p.MaxRecent, p.AutoSwitchAlbum, p.ShowSwitchNotif, p.Theme, p.SidebarCollapsed, p.AppMode, append([]string{}, p.HiddenNavItems...)}}
 	for album, cover := range state.covers {
 		aid := state.catalog.ExternalID(album, ResourceAlbum)
 		fid := state.catalog.ExternalID(cover.File, ResourceFile)
@@ -143,6 +145,13 @@ func ValidateStateBackup(backup StateBackup) error {
 		return ErrInvalidBackup
 	}
 	seen := map[string]bool{}
+	for _, key := range p.HiddenNavItems {
+		if !models.IsValidNavItemKey(key) || seen[key] {
+			return ErrInvalidBackup
+		}
+		seen[key] = true
+	}
+	seen = map[string]bool{}
 	for _, id := range backup.Favorites {
 		if !models.IsFavoriteResourceID(id) || seen[id] {
 			return ErrInvalidBackup
@@ -391,6 +400,10 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 				next.Theme = p.Theme
 				next.SidebarCollapsed = p.SidebarCollapsed
 				next.AppMode = p.AppMode
+				// 旧备份没有这一项：保留当前的隐藏清单，不当成「全部显示」。
+				if p.HiddenNavItems != nil {
+					next.HiddenNavItems = append([]string{}, p.HiddenNavItems...)
+				}
 			}
 			if selected["favorites"] {
 				next.Favorites = append([]string{}, backup.Favorites...)

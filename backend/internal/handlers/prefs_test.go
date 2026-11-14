@@ -83,3 +83,82 @@ func patchReq(body string) *http.Request {
 	req.Header.Set("Content-Type", "application/json")
 	return req
 }
+
+// 侧栏的隐藏清单：默认收起照片侧的三项，改动后整份写回，非法 key 被拒绝。
+func TestPrefsHiddenNavItemsRoundTrip(t *testing.T) {
+	prefs := store.NewPrefsStore(filepath.Join(t.TempDir(), "web_settings.json"))
+	app := fiber.New()
+	app.Get("/api/prefs", PrefsGetHandler(prefs))
+	app.Patch("/api/prefs", PrefsPatchHandler(prefs))
+
+	get := func() []string {
+		t.Helper()
+		resp, err := app.Test(httptest.NewRequest("GET", "/api/prefs", nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != fiber.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("status=%d body=%s", resp.StatusCode, body)
+		}
+		var payload struct {
+			HiddenNavItems []string `json:"hiddenNavItems"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			t.Fatal(err)
+		}
+		return payload.HiddenNavItems
+	}
+
+	hidden := get()
+	want := []string{"photo.recents", "photo.favorites", "photo.picks"}
+	if len(hidden) != len(want) {
+		t.Fatalf("default hiddenNavItems=%v, want %v", hidden, want)
+	}
+	for i, key := range want {
+		if hidden[i] != key {
+			t.Fatalf("default hiddenNavItems=%v, want %v", hidden, want)
+		}
+	}
+
+	resp, err := app.Test(patchReq(`{"hiddenNavItems":["photo.travels"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("patch status=%d body=%s", resp.StatusCode, body)
+	}
+	if got := get(); len(got) != 1 || got[0] != "photo.travels" {
+		t.Fatalf("hiddenNavItems=%v, want [photo.travels]", got)
+	}
+
+	// 空清单表示全部显示，与默认的三项收起不同，必须原样存下来。
+	resp, err = app.Test(patchReq(`{"hiddenNavItems":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("patch status=%d body=%s", resp.StatusCode, body)
+	}
+	if got := get(); len(got) != 0 {
+		t.Fatalf("hiddenNavItems=%v, want empty", got)
+	}
+
+	// 非法 key 不得写进偏好。
+	resp, err = app.Test(patchReq(`{"hiddenNavItems":["Photo Recents"]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("invalid nav item status=%d, want 400", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "invalid_nav_item") {
+		t.Fatalf("body=%s", body)
+	}
+	if got := get(); len(got) != 0 {
+		t.Fatalf("hiddenNavItems=%v after rejected patch, want empty", got)
+	}
+}

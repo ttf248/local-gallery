@@ -26,12 +26,13 @@ func PrefsGetHandler(s *store.PrefsStore) fiber.Handler {
 // 仅覆盖传入的非零字段。
 func PrefsPatchHandler(s *store.PrefsStore) fiber.Handler {
 	type patch struct {
-		Theme            *string `json:"theme"`
-		AutoSwitchAlbum  *bool   `json:"autoSwitchAlbum"`
-		ShowSwitchNotif  *bool   `json:"showSwitchNotif"`
-		SidebarCollapsed *bool   `json:"sidebarCollapsed"`
-		MaxRecent        *int    `json:"maxRecent"`
-		AppMode          *string `json:"appMode"`
+		Theme            *string   `json:"theme"`
+		AutoSwitchAlbum  *bool     `json:"autoSwitchAlbum"`
+		ShowSwitchNotif  *bool     `json:"showSwitchNotif"`
+		SidebarCollapsed *bool     `json:"sidebarCollapsed"`
+		MaxRecent        *int      `json:"maxRecent"`
+		AppMode          *string   `json:"appMode"`
+		HiddenNavItems   *[]string `json:"hiddenNavItems"`
 	}
 
 	return func(c *fiber.Ctx) error {
@@ -41,6 +42,16 @@ func PrefsPatchHandler(s *store.PrefsStore) fiber.Handler {
 		}
 		if p.AppMode != nil && !models.IsValidAppMode(*p.AppMode) {
 			return writeError(c, fiber.StatusBadRequest, "invalid_app_mode", "appMode must be photo or comic")
+		}
+		if p.HiddenNavItems != nil {
+			if len(*p.HiddenNavItems) > models.MaxHiddenNavItems {
+				return writeError(c, fiber.StatusBadRequest, "invalid_nav_items", "too many hidden nav items")
+			}
+			for _, key := range *p.HiddenNavItems {
+				if !models.IsValidNavItemKey(key) {
+					return writeError(c, fiber.StatusBadRequest, "invalid_nav_item", "nav item key is invalid")
+				}
+			}
 		}
 
 		cur, err := s.Patch(func(cur *models.Prefs) {
@@ -61,6 +72,9 @@ func PrefsPatchHandler(s *store.PrefsStore) fiber.Handler {
 			}
 			if p.AppMode != nil {
 				cur.AppMode = models.NormalizeAppMode(*p.AppMode)
+			}
+			if p.HiddenNavItems != nil {
+				cur.HiddenNavItems = append([]string{}, (*p.HiddenNavItems)...)
 			}
 
 		})

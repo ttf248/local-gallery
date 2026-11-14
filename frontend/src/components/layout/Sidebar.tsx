@@ -3,18 +3,11 @@ import { useEffect, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   HomeIcon,
-  ClockIcon,
-  StarIcon,
-  PickIcon,
   SettingsIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   ShuffleIcon,
-  SparkleIcon,
-  MapPinIcon,
-  PeopleIcon,
   TasksIcon,
-  FolderSearchIcon,
 } from "../common/Icon";
 import { useNavigate } from "react-router-dom";
 import { useUIStore } from "../../store/uiStore";
@@ -25,17 +18,15 @@ import {
 import { useHistoryCards } from "../../hooks/useHistory";
 import { useAppMode } from "../../hooks/useAppMode";
 import { useMediaQuery, WIDE_LAYOUT_QUERY } from "../../hooks/useMediaQuery";
+import { useNavVisibility } from "../../hooks/useNavVisibility";
 import { libraryApi } from "../../api/library";
 import {
   albumRoute,
-  favoritesRoute,
   homeRoute,
-  travelsRoute,
-  semanticSearchRoute,
-  picksRoute,
   recentsRoute,
   unreadRoute,
 } from "../../utils/path";
+import { navEntriesFor } from "../../utils/navEntries";
 import RenditionImage from "../common/RenditionImage";
 import { nodeSummaryToCard } from "../../utils/libraryCard";
 import type { CardData } from "../album/AlbumGrid";
@@ -61,41 +52,17 @@ interface Props {
   mobileOpen?: boolean;
 }
 
-interface NavEntry {
+/** 侧栏里渲染一个入口所需的字段。 */
+interface SidebarEntry {
   to: string;
   label: string;
   Icon: typeof HomeIcon;
-  /** 徽标数字（未读计数）。 */
-  badge?: number;
 }
-
-// 侧栏只呈现当前工作台的那一组。
-//
-// 两个模式是完全独立的界面：照片这边只有浏览、收藏与最近；
-// 漫画这边才有未读与继续阅读。菜单不混排，操作也不互相沾边。
-//
-// 两组的路径也各属一侧（/photo/… 与 /comic/…）：菜单项不是同一个
-// 页面换了个名字，而是两套互不相干的路由。
-const PHOTO_GROUP: NavEntry[] = [
-  { to: homeRoute("photo"), label: "照片库", Icon: HomeIcon },
-  { to: recentsRoute("photo"), label: "最近浏览", Icon: ClockIcon },
-  { to: favoritesRoute("photo"), label: "收藏照片", Icon: StarIcon },
-  { to: picksRoute(), label: "精选照片", Icon: PickIcon },
-  { to: travelsRoute(), label: "足迹", Icon: MapPinIcon },
-  { to: "/photo/people", label: "人物相册", Icon: PeopleIcon },
-  { to: semanticSearchRoute(), label: "智能搜索", Icon: FolderSearchIcon },
-];
-
-const COMIC_GROUP: NavEntry[] = [
-  { to: homeRoute("comic"), label: "漫画库", Icon: HomeIcon },
-  { to: unreadRoute(), label: "未读", Icon: SparkleIcon },
-  { to: recentsRoute("comic"), label: "最近阅读", Icon: ClockIcon },
-  { to: favoritesRoute("comic"), label: "收藏漫画", Icon: StarIcon },
-];
 
 // 本机组：任务中心与设置。它们不属于当前工作台，单独成组，
 // 放在浏览组下面 —— 看完照片再管机器上的事，顺序不能反。
-const SECONDARY_GROUP: NavEntry[] = [
+// 这两项不属于任何一侧，也不在设置页的开关范围内。
+const SECONDARY_GROUP: SidebarEntry[] = [
   { to: "/tasks", label: "任务中心", Icon: TasksIcon },
   { to: "/settings", label: "设置", Icon: SettingsIcon },
 ];
@@ -114,6 +81,23 @@ export default function Sidebar({
   const pushToast = useUIStore((s) => s.pushToast);
   const { mode, setMode } = useAppMode();
   const copy = workbenchCopy(mode);
+  // 侧栏入口可按需收起（设置页的「导航」分区）：被收起的项不在侧栏占位，
+  // 页面本身照样能通过别的链接到达 —— 收起的只是入口，不是功能。
+  const { isVisible } = useNavVisibility();
+  const photoGroup = useMemo(
+    () =>
+      navEntriesFor("photo").filter(
+        (entry) => entry.locked || isVisible(entry.key),
+      ),
+    [isVisible],
+  );
+  const comicGroup = useMemo(
+    () =>
+      navEntriesFor("comic").filter(
+        (entry) => entry.locked || isVisible(entry.key),
+      ),
+    [isVisible],
+  );
   // 宽屏时模式切换在顶栏；窄屏侧栏就是抽屉，切模式留在抽屉里。
   const isWide = useMediaQuery(WIDE_LAYOUT_QUERY);
   // 折叠态（72px 的窄栏）只属于宽屏：窄屏侧栏是抽屉，宽度不由折叠决定。
@@ -191,15 +175,15 @@ export default function Sidebar({
   // 两个模式的路径互为前缀（/photo 与 /photo/recents），用 startsWith
   // 会让「照片库」和「最近浏览」同时亮起来。首页是精确匹配，
   // 其余条目靠前缀命中（/photo/albums/… 归属于相册入口）。
-  const isEntryActive = (entry: NavEntry) =>
+  const isEntryActive = (entry: SidebarEntry) =>
     entry.to === homeRoute(mode)
       ? location.pathname === entry.to
       : location.pathname.startsWith(entry.to);
 
   const renderGroup = (
     title: string,
-    group: NavEntry[],
-    badgeFor: (entry: NavEntry) => number,
+    group: SidebarEntry[],
+    badgeFor: (entry: SidebarEntry) => number,
   ) => {
     return (
       <div className="mt-5 first:mt-0">
@@ -368,10 +352,10 @@ export default function Sidebar({
 
       <nav ref={navRef} className="pt-5 pb-3 px-4 space-y-1.5">
         {mode === "comic"
-          ? renderGroup("漫画", COMIC_GROUP, (entry) =>
+          ? renderGroup("漫画", comicGroup, (entry) =>
               entry.to === unreadRoute() ? unreadCount : 0,
             )
-          : renderGroup("照片", PHOTO_GROUP, () => 0)}
+          : renderGroup("照片", photoGroup, () => 0)}
       </nav>
 
       {/* 「继续」区：紧跟浏览导航，填掉侧栏中段的空白。

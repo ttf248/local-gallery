@@ -12,6 +12,7 @@ import {
   albumUrlPattern,
   setWorkbenchMode,
   resetWorkbenchMode,
+  resetNavItems,
   taggedSortPrefix,
   sortFixture,
   restoreHistory,
@@ -24,6 +25,7 @@ import {
 
 test.beforeEach(async ({ request }) => {
   await resetWorkbenchMode(request);
+  await resetNavItems(request);
 });
 
 test("工作台模式切换：两套菜单完全隔离，模式持久化在服务端偏好里", async ({
@@ -34,10 +36,13 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   const sidebar = page.locator('aside[aria-label="主导航"]');
   // 照片工作台只列照片那边的东西：漫画的未读、阅读措辞都不在。
   await expect(sidebar.getByRole("link", { name: "照片库" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "最近浏览" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "收藏照片" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "足迹" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "漫画库" })).toHaveCount(0);
+  // 默认收起的三项不在侧栏里：它们在设置页的「导航」分区里能打开。
+  await expect(sidebar.getByRole("link", { name: "最近浏览" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "收藏照片" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "照片库" })).toBeVisible();
 
   const switcher = page.getByRole("group", { name: "工作台模式" });
@@ -51,6 +56,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "照片库" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "最近浏览" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "收藏照片" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
 
   // 模式写在服务端偏好里，刷新后仍然是漫画工作台。
   await expect
@@ -68,6 +74,42 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "全部相册" })).toHaveCount(0);
   // 用例结束时把模式复位，别把状态留给后面的用例。
   await page.request.patch("/api/prefs", { data: { appMode: "photo" } });
+});
+
+// 设置页的「导航」分区管的就是侧栏显示哪些入口：开关写进服务端偏好，
+// 侧栏随即变化，刷新后也还是这一套。
+test("设置页的导航分区开关侧栏入口", async ({ page }) => {
+  await page.goto("/settings");
+  const sidebar = page.locator('aside[aria-label="主导航"]');
+  // 默认收起的三项：侧栏里没有，设置页里开关是关着的。
+  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
+  const picksSwitch = page.getByRole("switch", { name: "在导航栏显示精选照片" });
+  await expect(picksSwitch).toHaveAttribute("aria-checked", "false");
+
+  await picksSwitch.click();
+  await expect(sidebar.getByRole("link", { name: "精选照片" })).toBeVisible();
+  // 写进服务端偏好：换台设备打开也是这一套。
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/prefs");
+      if (!response.ok()) return "";
+      const prefs = (await response.json()) as { hiddenNavItems?: string[] };
+      return (prefs.hiddenNavItems ?? []).join(",");
+    })
+    .toBe("photo.recents,photo.favorites");
+
+  // 刷新后仍然显示：侧栏读的是服务端偏好，不是本机状态。
+  await page.reload();
+  await expect(sidebar.getByRole("link", { name: "精选照片" })).toBeVisible();
+
+  // 再关掉，侧栏里随之消失。
+  await page.getByRole("switch", { name: "在导航栏显示精选照片" }).click();
+  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
+
+  // 工作台首页固定显示，不给开关。
+  await expect(
+    page.getByRole("switch", { name: "在导航栏显示照片库" }),
+  ).toHaveCount(0);
 });
 
 // 隔离不只在菜单上：两侧共用的卡片、预览与计数单位也各归各。

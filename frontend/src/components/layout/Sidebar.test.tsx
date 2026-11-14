@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Sidebar from "./Sidebar";
-import { historyApi } from "../../api/prefs";
+import { historyApi, prefsApi } from "../../api/prefs";
 import { useSectionNavStore } from "../../store/sectionNavStore";
 
 const dashboard = {
@@ -31,7 +31,26 @@ vi.mock("../../hooks/useLibrary", () => ({
 
 vi.mock("../../api/prefs", () => ({
   historyApi: { list: vi.fn().mockResolvedValue({ history: [] }) },
+  prefsApi: { get: vi.fn() },
 }));
+
+// 侧栏入口的可见性来自服务端偏好。默认清单之外全显示，
+// 单个用例可以改写它来验证「收起的入口不出现在侧栏」。
+let hiddenNavItems: string[] = [];
+
+const prefsFixture = () => ({
+  favorites: [],
+  history: [],
+  maxRecent: 10,
+  autoSwitchAlbum: true,
+  showSwitchNotif: true,
+  theme: "system" as const,
+  sidebarCollapsed: false,
+  appMode: "photo" as const,
+  hiddenNavItems,
+});
+
+vi.mocked(prefsApi.get).mockImplementation(async () => prefsFixture());
 
 // 工作台模式：默认覆盖漫画工作台（侧栏分组与「继续阅读」措辞），
 // 单个用例可以改写 mode 切到照片工作台。
@@ -79,6 +98,9 @@ beforeAll(() => {
 
 function renderSidebar(collapsed = false, path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  // 偏好先入缓存：侧栏的入口清单随偏好变化，首帧就该是最终状态，
+  // 不必等一次请求回来。
+  qc.setQueryData(["prefs"], prefsFixture());
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
@@ -94,6 +116,7 @@ describe("Sidebar", () => {
     appMode.mode = "comic";
     appMode.setMode.mockClear();
     nodes.items = [];
+    hiddenNavItems = [];
     vi.mocked(historyApi.list).mockResolvedValue({ history: [] });
   });
 
@@ -223,8 +246,20 @@ describe("Sidebar", () => {
     expect(screen.queryByText("继续阅读")).not.toBeInTheDocument();
   });
 
-  it("不再有「全部相册」入口：两个模式互斥，没有第三档", () => {
+  // 侧栏入口可按需收起（设置页的「导航」分区）。收起的只是入口，
+  // 页面本身照样能通过别的链接到达。
+  it("被收起的入口不出现在侧栏里", () => {
+    appMode.mode = "photo";
+    hiddenNavItems = ["photo.recents", "photo.favorites"];
     renderSidebar();
+    expect(screen.queryByText("最近浏览")).not.toBeInTheDocument();
+    expect(screen.queryByText("收藏照片")).not.toBeInTheDocument();
+    // 没收起的照旧在列，首页永远在。
+    expect(screen.getByText("精选照片")).toBeInTheDocument();
+    expect(screen.getByText("照片库")).toBeInTheDocument();
+  });
+
+  it("不再有「全部相册」入口：两个模式互斥，没有第三档", () => {    renderSidebar();
     expect(screen.queryByText("全部相册")).not.toBeInTheDocument();
   });
 

@@ -1,4 +1,5 @@
 import PageHeading from "../components/common/PageHeading";
+import { useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { prefsApi, favoritesApi, historyApi, type Prefs } from "../api/prefs";
 import { scanApi } from "../api/scan";
@@ -26,7 +27,14 @@ import {
   InfoIcon,
   ServerIcon,
   ScrollPageIcon,
+  MenuIcon,
 } from "../components/common/Icon";
+import {
+  COMIC_NAV,
+  DEFAULT_HIDDEN_NAV_ITEMS,
+  PHOTO_NAV,
+  type NavEntry,
+} from "../utils/navEntries";
 
 /**
  * 设置页的分区。
@@ -44,6 +52,12 @@ export default function Settings() {
     queryFn: () => prefsApi.get(),
   });
   const { data } = prefsQuery;
+  // 被收起的导航项。偏好还没读回来时用前端默认清单兜底 —— 它与服务端
+  // 的默认值一致，所以开关不会出现「先全开再收掉」的闪动。
+  const hiddenNavItems = useMemo(
+    () => new Set(data?.hiddenNavItems ?? DEFAULT_HIDDEN_NAV_ITEMS),
+    [data?.hiddenNavItems],
+  );
   const qc = useQueryClient();
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -78,6 +92,36 @@ export default function Settings() {
       void qc.invalidateQueries({ queryKey: ["prefs"] });
     },
     onError: () => pushToast({ kind: "error", message: "保存阅读设置失败" }),
+  });
+
+  // 导航项开关：服务端存的是「生效的隐藏清单」，所以每次改动都把整份
+  // 清单写回去，而不是只写差量 —— 差量在并发改动时会互相覆盖。
+  const patchNavItem = useMutation({
+    mutationFn: (payload: { key: string; visible: boolean }) => {
+      const hidden = new Set(data?.hiddenNavItems ?? []);
+      if (payload.visible) hidden.delete(payload.key);
+      else hidden.add(payload.key);
+      return prefsApi.patch({ hiddenNavItems: [...hidden] });
+    },
+    onMutate: (payload) => {
+      // 乐观更新：开关立刻到位，侧栏随之变化；请求失败再回滚。
+      const previous = qc.getQueryData<Prefs>(["prefs"]);
+      const hidden = new Set(previous?.hiddenNavItems ?? []);
+      if (payload.visible) hidden.delete(payload.key);
+      else hidden.add(payload.key);
+      qc.setQueryData<Prefs>(["prefs"], (current) =>
+        current ? { ...current, hiddenNavItems: [...hidden] } : current,
+      );
+      return { previous };
+    },
+    onSuccess: (saved) => {
+      // 侧栏读的是同一份偏好缓存：写回去即生效，不必等重新拉取。
+      qc.setQueryData(["prefs"], saved);
+    },
+    onError: (_error, _payload, context) => {
+      if (context?.previous) qc.setQueryData(["prefs"], context.previous);
+      pushToast({ kind: "error", message: "保存导航设置失败" });
+    },
   });
 
   const pruneFav = useMutation({
@@ -237,6 +281,42 @@ export default function Settings() {
                 ]}
               />
             </Row>
+          </Section>
+        </section>
+
+        <section id="nav" className="mb-10 break-inside-avoid scroll-mt-14">
+          <Section
+            title="导航"
+            icon={<MenuIcon size={13} />}
+            description="选择左侧导航栏显示哪些入口"
+          >
+            <GroupLabel>照片</GroupLabel>
+            {PHOTO_NAV.map((entry) => (
+              <NavRow
+                key={entry.key}
+                entry={entry}
+                visible={!hiddenNavItems.has(entry.key)}
+                disabled={patchNavItem.isPending}
+                onChange={(visible) =>
+                  patchNavItem.mutate({ key: entry.key, visible })
+                }
+              />
+            ))}
+            <GroupLabel>漫画</GroupLabel>
+            {COMIC_NAV.map((entry) => (
+              <NavRow
+                key={entry.key}
+                entry={entry}
+                visible={!hiddenNavItems.has(entry.key)}
+                disabled={patchNavItem.isPending}
+                onChange={(visible) =>
+                  patchNavItem.mutate({ key: entry.key, visible })
+                }
+              />
+            ))}
+            <p className="px-5 pb-4 text-meta text-fg-subtle -mt-2">
+              收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入。
+            </p>
           </Section>
         </section>
 
@@ -531,6 +611,46 @@ function Row({
         {label}
       </span>
       {children}
+    </div>
+  );
+}
+
+/**
+ * 导航项一行：一个入口名 + 一个开关。
+ *
+ * 工作台首页固定显示，不给开关 —— 收起它，那一侧的侧栏就空了。固定项
+ * 写「固定显示」而不是摆一个置灰的开关：置灰的开关读起来像「暂时不能
+ * 改」，而这里本来就不该改。这行字紧跟在名字后面，窄屏下设置项会折成
+ * 上下两行，它跟着名字走才不会变成一行没有来由的孤字。
+ */
+function NavRow({
+  entry,
+  visible,
+  disabled,
+  onChange,
+}: {
+  entry: NavEntry;
+  visible: boolean;
+  disabled: boolean;
+  onChange: (visible: boolean) => void;
+}) {
+  return (
+    <div className="settings-row flex items-center justify-between gap-4 px-5 py-4 text-body">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <entry.Icon size={15} className="shrink-0 text-fg-muted" />
+        <span className="truncate">{entry.label}</span>
+        {entry.locked && (
+          <span className="shrink-0 text-meta text-fg-subtle">固定显示</span>
+        )}
+      </span>
+      {!entry.locked && (
+        <Toggle
+          label={`在导航栏显示${entry.label}`}
+          checked={visible}
+          disabled={disabled}
+          onChange={onChange}
+        />
+      )}
     </div>
   );
 }

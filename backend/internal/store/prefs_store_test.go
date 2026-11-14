@@ -106,6 +106,53 @@ func TestPrefsStore_GetDefaultsWhenMissing(t *testing.T) {
 	}
 }
 
+// 隐藏导航项：默认收起照片侧三项；旧偏好文件没有这个字段时补上默认值；
+// 写进文件的是生效清单，重开仍是它。
+func TestPrefsStore_HiddenNavItems(t *testing.T) {
+	s := tempStore(t)
+	p, err := s.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"photo.recents", "photo.favorites", "photo.picks"}
+	if len(p.HiddenNavItems) != len(want) {
+		t.Fatalf("defaults=%v, want %v", p.HiddenNavItems, want)
+	}
+	for i, key := range want {
+		if p.HiddenNavItems[i] != key {
+			t.Fatalf("defaults=%v, want %v", p.HiddenNavItems, want)
+		}
+	}
+
+	// 旧偏好文件没有 hiddenNavItems 字段：读回来时补上默认清单。
+	path := filepath.Join(t.TempDir(), "prefs.json")
+	if err := os.WriteFile(path, []byte(`{"theme":"dark","maxRecent":5}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	legacy := NewPrefsStore(path)
+	p, err = legacy.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.HiddenNavItems) != len(want) || p.HiddenNavItems[0] != want[0] {
+		t.Fatalf("legacy file defaults=%v, want %v", p.HiddenNavItems, want)
+	}
+
+	if _, err := s.Patch(func(cur *models.Prefs) {
+		cur.HiddenNavItems = []string{"photo.travels"}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reopened := NewPrefsStore(s.path)
+	p, err = reopened.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.HiddenNavItems) != 1 || p.HiddenNavItems[0] != "photo.travels" {
+		t.Fatalf("persisted=%v, want [photo.travels]", p.HiddenNavItems)
+	}
+}
+
 func TestPrefsStore_Persistence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "prefs.json")
 	s := NewPrefsStore(path)

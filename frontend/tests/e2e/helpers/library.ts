@@ -166,6 +166,35 @@ export async function resetWorkbenchMode(request: APIRequestContext) {
   await setWorkbenchMode(request, "photo");
 }
 
+// 侧栏入口的显示状态存在服务端偏好里，与模式一样是整条用例链共享的。
+// 每条用例开始前把它复位成默认（照片侧收起最近浏览 / 收藏照片 / 精选照片），
+// 免得上一条用例留下的状态污染这一条的侧栏断言。
+export const defaultHiddenNavItems = [
+  "photo.recents",
+  "photo.favorites",
+  "photo.picks",
+];
+
+export async function resetNavItems(request: APIRequestContext) {
+  const response = await request.patch("/api/prefs", {
+    data: { hiddenNavItems: defaultHiddenNavItems },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+/** 让指定的几项重新出现在侧栏里（其余保持收起的状态）。 */
+export async function showNavItems(
+  request: APIRequestContext,
+  keys: string[],
+) {
+  const response = await request.patch("/api/prefs", {
+    data: {
+      hiddenNavItems: defaultHiddenNavItems.filter((key) => !keys.includes(key)),
+    },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
 export const taggedSortPrefix =
   "zz-[测试][空 格][C++][100%][字面%20][字面%2F][字面%25] tagged-";
 

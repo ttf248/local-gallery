@@ -80,6 +80,26 @@ func normalize(p models.Prefs) models.Prefs {
 	if !models.IsValidAppMode(string(p.AppMode)) {
 		p.AppMode = d.AppMode
 	}
+	// 隐藏导航项同理：旧文件与空值都回到默认清单。
+	if p.HiddenNavItems == nil {
+		p.HiddenNavItems = d.HiddenNavItems
+	}
+	hiddenNav := make([]string, 0, len(p.HiddenNavItems))
+	seenHiddenNav := make(map[string]struct{}, len(p.HiddenNavItems))
+	for _, key := range p.HiddenNavItems {
+		if !models.IsValidNavItemKey(key) {
+			continue
+		}
+		if _, exists := seenHiddenNav[key]; exists {
+			continue
+		}
+		seenHiddenNav[key] = struct{}{}
+		hiddenNav = append(hiddenNav, key)
+	}
+	if len(hiddenNav) > models.MaxHiddenNavItems {
+		hiddenNav = hiddenNav[:models.MaxHiddenNavItems]
+	}
+	p.HiddenNavItems = hiddenNav
 
 	// 偏好文件会直接通过 API 返回，绝对路径或畸形标识不得暴露；
 	// 仅保留当前不透明资源 ID 契约。
@@ -373,5 +393,6 @@ func clonePrefs(p models.Prefs) models.Prefs {
 	out := p
 	out.Favorites = append([]string{}, p.Favorites...)
 	out.History = append([]models.HistoryEntry{}, p.History...)
+	out.HiddenNavItems = append([]string{}, p.HiddenNavItems...)
 	return out
 }

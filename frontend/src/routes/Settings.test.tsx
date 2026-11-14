@@ -36,6 +36,7 @@ const basePrefs: Prefs = {
   theme: "system",
   sidebarCollapsed: false,
   appMode: "photo",
+  hiddenNavItems: ["photo.recents", "photo.favorites", "photo.picks"],
 };
 const clientForTest = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -211,8 +212,77 @@ it("修改其他阅读偏好不覆盖更晚加载的历史快照", async () => {
   expect(client.getQueryData(["history"])).toEqual({ history: savedHistory });
 });
 
-it("读取设置期间显示加载状态", () => {
-  vi.mocked(prefsApi.get).mockReturnValue(new Promise(() => {}));
+// 导航分区：逐项开关侧栏入口，存的是生效的隐藏清单。
+it("导航分区按当前偏好显示每一项的开关状态", async () => {
+  renderSettings();
+  // 默认收起的三项在设置页里也是关着的。
+  expect(
+    await screen.findByRole("switch", { name: "在导航栏显示最近浏览" }),
+  ).toHaveAttribute("aria-checked", "false");
+  expect(
+    screen.getByRole("switch", { name: "在导航栏显示收藏照片" }),
+  ).toHaveAttribute("aria-checked", "false");
+  expect(
+    screen.getByRole("switch", { name: "在导航栏显示精选照片" }),
+  ).toHaveAttribute("aria-checked", "false");
+  expect(
+    screen.getByRole("switch", { name: "在导航栏显示足迹" }),
+  ).toHaveAttribute("aria-checked", "true");
+  // 漫画侧独立：漫画库的入口照旧开着。
+  expect(
+    screen.getByRole("switch", { name: "在导航栏显示未读" }),
+  ).toHaveAttribute("aria-checked", "true");
+});
+
+it("工作台首页固定显示，不提供开关", async () => {
+  renderSettings();
+  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  expect(
+    screen.queryByRole("switch", { name: "在导航栏显示照片库" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getAllByText("固定显示")).toHaveLength(2);
+});
+
+it("打开导航项后把生效的隐藏清单写回服务端", async () => {
+  const client = clientForTest();
+  vi.mocked(prefsApi.patch).mockImplementation(async (patch) => ({
+    ...basePrefs,
+    ...patch,
+  }));
+  renderSettings(client);
+  fireEvent.click(
+    await screen.findByRole("switch", { name: "在导航栏显示精选照片" }),
+  );
+  await waitFor(() =>
+    expect(prefsApi.patch).toHaveBeenCalledWith({
+      hiddenNavItems: ["photo.recents", "photo.favorites"],
+    }),
+  );
+  // 写回后开关立刻变成开着的，不需要刷新页面。
+  await waitFor(() =>
+    expect(
+      screen.getByRole("switch", { name: "在导航栏显示精选照片" }),
+    ).toHaveAttribute("aria-checked", "true"),
+  );
+});
+
+it("保存导航设置失败保留原值并提示", async () => {
+  vi.mocked(prefsApi.patch).mockRejectedValueOnce(new Error("offline"));
+  renderSettings();
+  fireEvent.click(
+    await screen.findByRole("switch", { name: "在导航栏显示足迹" }),
+  );
+  await waitFor(() =>
+    expect(useUIStore.getState().toasts).toContainEqual(
+      expect.objectContaining({ kind: "error", message: "保存导航设置失败" }),
+    ),
+  );
+  expect(
+    screen.getByRole("switch", { name: "在导航栏显示足迹" }),
+  ).toHaveAttribute("aria-checked", "true");
+});
+
+it("读取设置期间显示加载状态", () => {  vi.mocked(prefsApi.get).mockReturnValue(new Promise(() => {}));
   renderSettings();
   expect(screen.getByRole("status")).toHaveTextContent("正在加载设置");
 });

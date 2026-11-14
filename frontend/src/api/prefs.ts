@@ -19,6 +19,13 @@ export interface Prefs {
    * 两档互斥：没有不过滤的「全部」。
    */
   appMode: AppMode;
+  /**
+   * 侧栏里被收起的导航项 key 列表（见 utils/navEntries.ts）。
+   *
+   * 存的是生效的清单：不在列表里的入口才显示在侧栏。服务端不知道
+   * 这些 key 的含义，只保存与透传。
+   */
+  hiddenNavItems: string[];
 }
 
 export const prefsApi = {

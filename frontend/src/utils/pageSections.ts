@@ -22,6 +22,7 @@ export const TASK_SECTIONS: PageSection[] = [
 
 export const SETTINGS_SECTIONS: PageSection[] = [
   { id: "appearance", label: "外观" },
+  { id: "nav", label: "导航" },
   { id: "reading", label: "阅读" },
   { id: "data", label: "数据" },
   { id: "backup", label: "备份与恢复" },
