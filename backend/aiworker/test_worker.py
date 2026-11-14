@@ -213,7 +213,7 @@ class WorkerTests(unittest.TestCase):
         from PIL import Image as PILImage
 
         class Header:
-            size = (50_000, 20_000)
+            size = (14_000, 7_000)
             format = "JPEG"
 
             def __enter__(self):
@@ -226,12 +226,12 @@ class WorkerTests(unittest.TestCase):
             def getexif():
                 return {}
 
-        decoded = SimpleNamespace(shape=(2_500, 6_250, 3))
+        decoded = SimpleNamespace(shape=(1_750, 3_500, 3))
         decode_flags = []
 
         def decode(_encoded, flag):
             decode_flags.append(flag)
-            return decoded if flag == 8 else None
+            return decoded if flag == 4 else None
 
         fake_cv2 = SimpleNamespace(
             IMREAD_COLOR=1,
@@ -254,8 +254,8 @@ class WorkerTests(unittest.TestCase):
             image, scale_x, scale_y = worker.read_ocr_image("large.jpg")
 
         self.assertIs(decoded, image)
-        self.assertEqual([8], decode_flags)
-        self.assertEqual((8.0, 8.0), (scale_x, scale_y))
+        self.assertEqual([4], decode_flags)
+        self.assertEqual((4.0, 4.0), (scale_x, scale_y))
         self.assertEqual(previous_limit, PILImage.MAX_IMAGE_PIXELS)
         open_image.assert_called_once_with("large.jpg")
 
