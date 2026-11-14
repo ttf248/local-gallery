@@ -1,8 +1,8 @@
 import { api } from "./client";
 import type { AnalysisType } from "./aiJobs";
 
-/** 模型权重的位置类别：none 无权重，cache 在缓存根目录内，python 在 Python 环境内。 */
-export type StorageModelLocation = "none" | "cache" | "python";
+/** 模型权重的位置类别：none 无权重，cache 在缓存根目录内。 */
+export type StorageModelLocation = "none" | "cache";
 
 /** 产物目录的种类：批次结果随每次任务新增，索引是全局共享的。 */
 export type StorageOutputKind = "batches" | "vectors" | "index";
@@ -10,8 +10,7 @@ export type StorageOutputKind = "batches" | "vectors" | "index";
 /**
  * 一个模型权重文件。
  *
- * path 是相对路径：location 为 cache 时相对缓存根目录，为 python 时相对
- * Python 环境目录。相对基准写在 location 里。
+ * path 是相对缓存根目录的路径；相对基准由 location 指明。
  */
 export interface StorageModelFile {
   name: string;

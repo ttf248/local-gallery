@@ -90,13 +90,13 @@ const usage: StorageUsage = {
     {
       type: "ocr",
       name: "文字识别",
-      modelDirectory: "Lib/site-packages/rapidocr/models",
-      modelLocation: "python",
+      modelDirectory: "derived/ai/models/ocr",
+      modelLocation: "cache",
       modelFiles: [
         {
           name: "detector.onnx",
-          path: "Lib/site-packages/rapidocr/models/detector.onnx",
-          location: "python",
+          path: "derived/ai/models/ocr/detector.onnx",
+          location: "cache",
           sizeBytes: 512,
           exists: true,
         },
@@ -249,15 +249,17 @@ describe("本机存储", () => {
     expect(
       screen.getByText("derived/ai/models/clip_cn_vit-b-16.pt"),
     ).toBeInTheDocument();
+    expect(
+      screen.getByText("derived/ai/models/ocr/detector.onnx"),
+    ).toBeInTheDocument();
     expect(screen.getByText("state/ai_jobs.json")).toBeInTheDocument();
   });
 
-  it("OCR 权重标注在 Python 环境内，元数据模块说明无需权重", async () => {
+  it("OCR 权重来自派生缓存，元数据模块说明无需权重", async () => {
     renderSection();
 
-    expect(
-      await screen.findByText(/detector\.onnx（位于 Python 环境内）/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("detector.onnx")).toBeInTheDocument();
+    expect(screen.queryByText(/位于 Python 环境内/)).not.toBeInTheDocument();
     expect(
       screen.getByText("使用 Go 内置 EXIF/GPS 解析器，无需权重。"),
     ).toBeInTheDocument();

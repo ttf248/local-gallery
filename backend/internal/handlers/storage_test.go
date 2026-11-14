@@ -32,14 +32,15 @@ func TestStorageUsageHandlerReturnsRelativePathsOnly(t *testing.T) {
 	cacheRoot := filepath.Join(root, "cache")
 	workerDir := filepath.Join(root, "backend", "aiworker")
 	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", services.ChineseCLIPModelFile), "clip-model")
+	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "ocr", "PP-OCRv6_det_small.onnx"), "ocr-detector")
+	writeStorageTestFile(t, filepath.Join(workerDir, ".venv", "Lib", "site-packages", "rapidocr", "models", "legacy-detector.onnx"), "legacy-model")
 	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "metadata", "ocr", "batches", "job", "00000001.json"), "batch")
 
 	service := services.NewAIStorageService(0)
 	app := fiber.New()
 	api := app.Group("/api")
 	api.Get("/storage/usage", StorageUsageHandler(service, StorageHandlerOptions{
-		CacheRoot:       cacheRoot,
-		WorkerDirectory: workerDir,
+		CacheRoot: cacheRoot,
 	}))
 
 	response, err := app.Test(httptest.NewRequest("GET", "/api/storage/usage", nil), -1)
@@ -64,6 +65,15 @@ func TestStorageUsageHandlerReturnsRelativePathsOnly(t *testing.T) {
 	}
 	if body.Usage.Paths.JobsFile != "state/ai_jobs.json" {
 		t.Fatalf("jobs file = %q", body.Usage.Paths.JobsFile)
+	}
+	ocr := body.Usage.Modules[2]
+	if ocr.ModelLocation != services.AIStorageModelCache || ocr.ModelFiles[0].Path != "derived/ai/models/ocr/PP-OCRv6_det_small.onnx" {
+		t.Fatalf("OCR model storage = %+v", ocr)
+	}
+	for _, file := range ocr.ModelFiles {
+		if file.Name == "legacy-detector.onnx" {
+			t.Fatalf("legacy Python package model was reported: %+v", file)
+		}
 	}
 
 	// 占用快照是给所有设备看的，里面不能出现本机绝对路径。

@@ -43,14 +43,9 @@ export default function StorageModuleGrid({ modules }: Props) {
               {module.modelFiles.length > 0 ? (
                 <p
                   className="mt-1 truncate font-mono text-meta text-fg-subtle"
-                  title={
-                    module.modelLocation === "python"
-                      ? `${modelNames}（位于 Python 环境内）`
-                      : modelNames
-                  }
+                  title={modelNames}
                 >
                   {modelNames}
-                  {module.modelLocation === "python" ? "（位于 Python 环境内）" : ""}
                 </p>
               ) : module.modelLocation === "none" ? (
                 <p className="mt-1 text-meta text-fg-subtle">

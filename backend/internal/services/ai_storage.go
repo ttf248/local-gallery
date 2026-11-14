@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -14,13 +13,10 @@ import (
 
 // 模型权重的位置类别。
 //
-// 缓存根目录内的权重用相对缓存根的路径表示；Python 环境内的权重不在
-// 缓存根目录里，只能用相对 Python 环境的路径表示。绝对路径只由回环
-// 保护的本机接口给出。
+// 模型权重只存放在缓存根目录内。绝对路径只由回环保护的本机接口给出。
 const (
-	AIStorageModelNone   = "none"
-	AIStorageModelCache  = "cache"
-	AIStorageModelPython = "python"
+	AIStorageModelNone  = "none"
+	AIStorageModelCache = "cache"
 )
 
 // 产物目录的种类：批次结果随每次任务新增，索引是所有任务共享的。
@@ -32,8 +28,7 @@ const (
 
 // AIStorageFile 一个模型权重文件。
 //
-// Path 是相对路径：location 为 cache 时相对缓存根目录，为 python 时相对
-// Python 环境目录。相对基准写在 location 里，不另设字段。
+// Path 是相对缓存根目录的路径；相对基准由 location 指明。
 type AIStorageFile struct {
 	Name      string `json:"name"`
 	Path      string `json:"path"`
@@ -105,21 +100,21 @@ type AIStorageAbsoluteFile struct {
 
 // AIStorageAbsoluteModule 一个分析模块的本机绝对位置。
 type AIStorageAbsoluteModule struct {
-	Type           string                 `json:"type"`
-	Name           string                 `json:"name"`
-	ModelDirectory string                 `json:"modelDirectory"`
+	Type           string                  `json:"type"`
+	Name           string                  `json:"name"`
+	ModelDirectory string                  `json:"modelDirectory"`
 	ModelFiles     []AIStorageAbsoluteFile `json:"modelFiles"`
 }
 
 // AIStorageAbsolutePaths 本机绝对路径。只由回环保护的本机接口给出。
 type AIStorageAbsolutePaths struct {
-	WorkingDirectory  string                   `json:"workingDirectory"`
-	ConfigFile        string                   `json:"configFile"`
-	CacheRoot         string                   `json:"cacheRoot"`
-	StateDirectory    string                   `json:"stateDirectory"`
-	JobsFile          string                   `json:"jobsFile"`
-	PythonEnvironment string                   `json:"pythonEnvironment"`
-	PythonExecutable  string                   `json:"pythonExecutable"`
+	WorkingDirectory  string                    `json:"workingDirectory"`
+	ConfigFile        string                    `json:"configFile"`
+	CacheRoot         string                    `json:"cacheRoot"`
+	StateDirectory    string                    `json:"stateDirectory"`
+	JobsFile          string                    `json:"jobsFile"`
+	PythonEnvironment string                    `json:"pythonEnvironment"`
+	PythonExecutable  string                    `json:"pythonExecutable"`
 	Modules           []AIStorageAbsoluteModule `json:"modules"`
 }
 
@@ -160,7 +155,7 @@ func (s *AIStorageService) Invalidate() {
 }
 
 // Usage 返回本机分析存储的占用快照。路径一律相对缓存根目录。
-func (s *AIStorageService) Usage(cacheRoot string, workerDirectory string) (*AIStorageUsage, *time.Time, error) {
+func (s *AIStorageService) Usage(cacheRoot string) (*AIStorageUsage, *time.Time, error) {
 	s.mu.Lock()
 	if s.cache != nil && time.Now().Before(s.expiry) {
 		cached := *s.cache
@@ -171,7 +166,7 @@ func (s *AIStorageService) Usage(cacheRoot string, workerDirectory string) (*AIS
 	s.mu.Unlock()
 
 	start := time.Now()
-	usage := scanAIStorage(cacheRoot, workerDirectory)
+	usage := scanAIStorage(cacheRoot)
 	usage.DurationMs = time.Since(start).Milliseconds()
 	s.mu.Lock()
 	s.cache = &usage
@@ -201,7 +196,7 @@ func (s *AIStorageService) AbsolutePaths(options AIStoragePathOptions) AIStorage
 		PythonEnvironment: pythonEnvironment,
 		PythonExecutable:  resolveExecutablePath(options.PythonPath),
 	}
-	for _, module := range aiStorageModules(layout, pythonEnvironment) {
+	for _, module := range aiStorageModules(layout) {
 		statModelFiles(&module)
 		absolute := AIStorageAbsoluteModule{
 			Type:           module.Type,
@@ -241,8 +236,8 @@ func statModelFiles(module *AIStorageModule) {
 //
 // 模型文件与产物目录都用绝对路径先落地，扫描完再统一相对化，这样相对
 // 基准只有一个（缓存根目录），不会出现一半相对一半绝对。
-func aiStorageModules(layout CacheLayout, pythonEnvironment string) []AIStorageModule {
-	ocrModelDirectory := findRapidOCRModelDirectory(pythonEnvironment)
+func aiStorageModules(layout CacheLayout) []AIStorageModule {
+	ocrModelDirectory := filepath.Join(layout.AIModelsDir, "ocr")
 	return []AIStorageModule{
 		{
 			Type:           AIJobTypeMetadata,
@@ -282,7 +277,7 @@ func aiStorageModules(layout CacheLayout, pythonEnvironment string) []AIStorageM
 		{
 			Type:           AIJobTypeOCR,
 			Name:           aiJobModuleName(AIJobTypeOCR),
-			ModelLocation:  AIStorageModelPython,
+			ModelLocation:  AIStorageModelCache,
 			ModelDirectory: ocrModelDirectory,
 			ModelFiles:     scanAIModelFiles(ocrModelDirectory),
 			Outputs: []AIStorageOutput{
@@ -324,29 +319,20 @@ func aiStorageModules(layout CacheLayout, pythonEnvironment string) []AIStorageM
 }
 
 // scanAIStorage 统计模型权重与各模块产物。
-func scanAIStorage(cacheRoot string, workerDirectory string) AIStorageUsage {
+func scanAIStorage(cacheRoot string) AIStorageUsage {
 	root := absolutePath(cacheRoot)
 	layout := ResolveCacheLayout(root)
-	workerDirectory = absolutePath(workerDirectory)
-	pythonEnvironment := filepath.Join(workerDirectory, ".venv")
-
-	modules := aiStorageModules(layout, pythonEnvironment)
+	modules := aiStorageModules(layout)
 	summary := AIStorageSummary{}
 	for index := range modules {
 		module := &modules[index]
 		statModelFiles(module)
-		// 模型文件按位置类别选相对基准：缓存内的相对缓存根，
-		// Python 环境里的相对 Python 环境。
-		modelBase := root
-		if module.ModelLocation == AIStorageModelPython {
-			modelBase = pythonEnvironment
-		}
 		for fileIndex := range module.ModelFiles {
 			file := &module.ModelFiles[fileIndex]
-			file.Path = relativePath(modelBase, file.Path)
+			file.Path = relativePath(root, file.Path)
 			module.ModelBytes += file.SizeBytes
 		}
-		module.ModelDirectory = relativePath(modelBase, module.ModelDirectory)
+		module.ModelDirectory = relativePath(root, module.ModelDirectory)
 		summary.ModelBytes += module.ModelBytes
 		summary.ModelFileCount += len(module.ModelFiles)
 
@@ -371,9 +357,9 @@ func scanAIStorage(cacheRoot string, workerDirectory string) AIStorageUsage {
 
 	return AIStorageUsage{
 		ScannedAt: time.Now(),
-		Available:  available,
-		Summary:    summary,
-		Modules:    modules,
+		Available: available,
+		Summary:   summary,
+		Modules:   modules,
 		Paths: AIStorageRelativePaths{
 			RelativeTo:         "cacheRoot",
 			StateDirectory:     relativePath(root, layout.StateDir),
@@ -487,28 +473,8 @@ func scanAIModelFiles(directory string) []AIStorageFile {
 		if entry.IsDir() || strings.ToLower(filepath.Ext(entry.Name())) != ".onnx" {
 			continue
 		}
-		files = append(files, modelFile(filepath.Join(directory, entry.Name()), AIStorageModelPython))
+		files = append(files, modelFile(filepath.Join(directory, entry.Name()), AIStorageModelCache))
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
 	return files
-}
-
-// findRapidOCRModelDirectory 找到 RapidOCR 的权重目录。
-//
-// OCR 权重随 pip 包安装，不在缓存根目录里；它跟着 Python 环境走，
-// 因此位置类别是 python 而不是 cache。
-func findRapidOCRModelDirectory(pythonEnvironment string) string {
-	candidates := []string{filepath.Join(pythonEnvironment, "Lib", "site-packages", "rapidocr", "models")}
-	if matches, err := filepath.Glob(filepath.Join(pythonEnvironment, "lib", "python*", "site-packages", "rapidocr", "models")); err == nil {
-		candidates = append(candidates, matches...)
-	}
-	if runtime.GOOS != "windows" {
-		candidates = append(candidates, filepath.Join(pythonEnvironment, "lib", "python3.11", "site-packages", "rapidocr", "models"))
-	}
-	for _, candidate := range candidates {
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return absolutePath(candidate)
-		}
-	}
-	return absolutePath(candidates[0])
 }

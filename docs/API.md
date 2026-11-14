@@ -378,7 +378,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 ```
 
 - `modules` 按 `metadata`、`embedding`、`ocr`、`face` 固定顺序给出，与模块清单一致。
-- `modelLocation` 为 `none`（无权重）、`cache`（权重在缓存根目录内，`path` 相对缓存根目录）或 `python`（权重随 RapidOCR 安装在 Python 环境里，`path` 相对该环境）。
+- `modelLocation` 为 `none`（无权重）或 `cache`（权重在缓存根目录内，`path` 相对缓存根目录）。OCR 权重位于 `derived/ai/models/ocr/`。
 - `outputs[].kind` 为 `batches`（每次任务新增的批次结果）、`vectors`（向量分片）或 `index`（模块共享的搜索索引）。产物目录尚未产生时 `available=false`、`bytes` 与 `fileCount` 为 0。
 - 照片元数据由 Go 内置 EXIF/GPS 解析器处理，没有独立模型权重；Chinese-CLIP、RapidOCR 与 YuNet/SFace 按各自实际权重文件统计。
 - 占用统计带 30 秒内存 TTL，批次提交与人物分析结果清理后失效重算。

@@ -143,7 +143,7 @@ face/face_detection_yunet_2023mar.onnx
 face/face_recognition_sface_2021dec.onnx
 ~~~
 
-默认 `cacheDir` 是进程工作目录下的 `.local-gallery`。虚拟环境位于 Worker 目录的 `.venv/`；模型保存在 `<cacheDir>/derived/ai/models/`，不包含在发布压缩包中。Chinese-CLIP 权重约 753 MB；OCR 模型随 RapidOCR 安装。
+默认 `cacheDir` 是进程工作目录下的 `.local-gallery`。虚拟环境位于 Worker 目录的 `.venv/`；模型保存在 `<cacheDir>/derived/ai/models/`，不包含在发布压缩包中。Chinese-CLIP 权重约 753 MB；OCR 模型保存在 `derived/ai/models/ocr/`。
 
 macOS / Linux 用户自行用 Python 3.11 创建 `.venv` 并安装平台对应依赖，然后在 `backend/aiworker/` 中运行 `python download_models.py`。Linux 可使用 CUDA 版 PyTorch，macOS 使用 CPU 版。Windows 单独重下模型可运行 `backend/aiworker/download-model.bat`。
 

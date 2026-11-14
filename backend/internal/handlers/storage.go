@@ -10,8 +10,7 @@ import (
 
 // StorageHandlerOptions 存储接口需要的本机位置。
 type StorageHandlerOptions struct {
-	CacheRoot       string
-	WorkerDirectory string
+	CacheRoot string
 }
 
 // StorageUsageHandler 返回本机分析任务的模型权重与产物占用。
@@ -24,7 +23,7 @@ func StorageUsageHandler(service *services.AIStorageService, options StorageHand
 		if service == nil {
 			return writeError(c, fiber.StatusServiceUnavailable, "storage_unavailable", "storage information is unavailable")
 		}
-		usage, expiresAt, err := service.Usage(options.CacheRoot, options.WorkerDirectory)
+		usage, expiresAt, err := service.Usage(options.CacheRoot)
 		if err != nil {
 			return writeError(c, fiber.StatusInternalServerError, "storage_unavailable", "storage information is unavailable")
 		}

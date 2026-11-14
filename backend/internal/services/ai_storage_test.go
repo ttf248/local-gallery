@@ -24,13 +24,22 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	root := t.TempDir()
 	cacheRoot := filepath.Join(root, "cache")
 	workerDir := filepath.Join(root, "backend", "aiworker")
-	ocrModels := filepath.Join(workerDir, ".venv", "Lib", "site-packages", "rapidocr", "models")
+	ocrModels := filepath.Join(cacheRoot, "derived", "ai", "models", "ocr")
+	legacyOCRModels := filepath.Join(workerDir, ".venv", "Lib", "site-packages", "rapidocr", "models")
 
 	clipBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", ChineseCLIPModelFile), "clip-model")
 	yunetBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "face", "face_detection_yunet_2023mar.onnx"), "yunet")
 	sfaceBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "face", "face_recognition_sface_2021dec.onnx"), "sface-model")
-	ocrBytes := writeAIStorageFile(t, filepath.Join(ocrModels, "detector.onnx"), "ocr-detector")
+	ocrBytes := int64(0)
+	for _, model := range []struct{ name, content string }{
+		{name: "PP-OCRv6_det_small.onnx", content: "ocr-detector"},
+		{name: "PP-OCRv6_rec_small.onnx", content: "ocr-recognizer"},
+		{name: "ch_ppocr_mobile_v2.0_cls_mobile.onnx", content: "ocr-classifier"},
+	} {
+		ocrBytes += writeAIStorageFile(t, filepath.Join(ocrModels, model.name), model.content)
+	}
 	_ = writeAIStorageFile(t, filepath.Join(ocrModels, "readme.txt"), "ignored")
+	_ = writeAIStorageFile(t, filepath.Join(legacyOCRModels, "legacy-detector.onnx"), "ignored")
 
 	metadataBytes := int64(0)
 	for _, module := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace} {
@@ -41,7 +50,7 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	peopleIndexBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "people-index.json"), "people-index")
 
 	service := NewAIStorageService(0)
-	usage, _, err := service.Usage(cacheRoot, workerDir)
+	usage, _, err := service.Usage(cacheRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,14 +85,19 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	}
 
 	ocr := usage.Modules[2]
-	if ocr.ModelLocation != AIStorageModelPython {
+	if ocr.ModelLocation != AIStorageModelCache {
 		t.Fatalf("ocr model location = %q", ocr.ModelLocation)
 	}
-	if len(ocr.ModelFiles) != 1 || ocr.ModelFiles[0].Name != "detector.onnx" {
+	if ocr.ModelDirectory != "derived/ai/models/ocr" || len(ocr.ModelFiles) != 3 {
 		t.Fatalf("ocr model files = %+v", ocr.ModelFiles)
 	}
-	if !strings.Contains(ocr.ModelFiles[0].Path, "rapidocr/models/detector.onnx") {
-		t.Fatalf("ocr model path = %q", ocr.ModelFiles[0].Path)
+	for _, file := range ocr.ModelFiles {
+		if file.Location != AIStorageModelCache || !strings.HasPrefix(file.Path, "derived/ai/models/ocr/") {
+			t.Fatalf("ocr model file is outside the derived cache: %+v", file)
+		}
+		if file.Name == "legacy-detector.onnx" {
+			t.Fatalf("legacy Python package model was reported: %+v", file)
+		}
 	}
 	if ocr.ModelBytes != ocrBytes {
 		t.Fatalf("ocr model bytes = %d, want %d", ocr.ModelBytes, ocrBytes)
@@ -128,7 +142,7 @@ func TestAIStorageUsageCachesUntilInvalidated(t *testing.T) {
 	writeAIStorageFile(t, batch, "batch")
 
 	service := NewAIStorageService(0)
-	usage, _, err := service.Usage(cacheRoot, filepath.Join(root, "aiworker"))
+	usage, _, err := service.Usage(cacheRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +152,7 @@ func TestAIStorageUsageCachesUntilInvalidated(t *testing.T) {
 
 	// TTL 内的第二次读取走缓存：文件变大也不立刻反映。
 	writeAIStorageFile(t, batch, "batch-and-more")
-	cached, _, err := service.Usage(cacheRoot, filepath.Join(root, "aiworker"))
+	cached, _, err := service.Usage(cacheRoot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +161,7 @@ func TestAIStorageUsageCachesUntilInvalidated(t *testing.T) {
 	}
 
 	service.Invalidate()
-	fresh, _, err := service.Usage(cacheRoot, filepath.Join(root, "aiworker"))
+	fresh, _, err := service.Usage(cacheRoot)
 	if err != nil {
 		t.Fatal(err)
 	}

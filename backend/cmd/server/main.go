@@ -502,8 +502,7 @@ func main() {
 	api.Post("/admin/state/import/preview", middleware.LoopbackOnly(), handlers.StatePreviewHandler(backupService))
 	api.Post("/admin/state/import", middleware.LoopbackOnly(), handlers.StateImportHandler(backupService))
 	api.Get("/storage/usage", handlers.StorageUsageHandler(storageUsage, handlers.StorageHandlerOptions{
-		CacheRoot:       cacheLayout.Root,
-		WorkerDirectory: filepath.Dir(workerOptions.ScriptPath),
+		CacheRoot: cacheLayout.Root,
 	}))
 	api.Get("/storage/paths", middleware.LoopbackOnly(), handlers.StoragePathsHandler(storageUsage, services.AIStoragePathOptions{
 		ConfigPath:       mgr.Path(),
