@@ -413,6 +413,9 @@ func (s *VectorIndexStore) SearchWithPriority(query []float32, candidates []Vect
 	if len(query) != AIEmbeddingDimension {
 		return nil, 0, ErrVectorDimension
 	}
+	if len(priorities) == 0 {
+		priorities = nil
+	}
 	if offset < 0 || limit <= 0 {
 		return []VectorHit{}, 0, nil
 	}
@@ -451,13 +454,22 @@ func (s *VectorIndexStore) SearchWithPriority(query []float32, candidates []Vect
 		if !exists || metadata.Position < 0 || (metadata.Position+1)*AIEmbeddingDimension > len(shard.values) {
 			continue
 		}
+		priority := 0
+		if priorities != nil {
+			priority = priorities[metadata.ResourceID]
+		}
+		total++
+		// Once the heap is full, a lower-priority hit cannot displace its root,
+		// regardless of its cosine score, so skip the expensive vector dot.
+		if usePartialSort && len(hits) == retainCount && priority < hits[0].priority {
+			continue
+		}
 		score := 0.0
 		start := metadata.Position * AIEmbeddingDimension
 		for column, component := range normalizedQuery {
 			score += float64(component) * float64(halfToFloat32Lookup[shard.values[start+column]])
 		}
-		hit := VectorHit{ResourceID: metadata.ResourceID, Score: score, priority: priorities[metadata.ResourceID]}
-		total++
+		hit := VectorHit{ResourceID: metadata.ResourceID, Score: score, priority: priority}
 		if !usePartialSort || len(hits) < retainCount {
 			hits = append(hits, hit)
 			if usePartialSort {

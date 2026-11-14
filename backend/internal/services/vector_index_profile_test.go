@@ -53,12 +53,42 @@ func BenchmarkVectorIndexSearch100K(b *testing.B) {
 	runtime.ReadMemStats(&memory)
 	indexHeapBytes := memory.HeapAlloc
 
+	priorities := make(map[string]int, vectorCount/100)
+	for _, item := range candidates {
+		if item.Position%100 == 0 {
+			priorities[item.ResourceID] = 2
+		}
+	}
+	b.Run("plain", func(b *testing.B) {
+		benchmarkVectorIndexSearch100K(b, index, candidates, query, nil, indexHeapBytes)
+	})
+	b.Run("priority_tier", func(b *testing.B) {
+		benchmarkVectorIndexSearch100K(b, index, candidates, query, priorities, indexHeapBytes)
+	})
+}
+
+func benchmarkVectorIndexSearch100K(
+	b *testing.B,
+	index *VectorIndexStore,
+	candidates []VectorMetadata,
+	query []float32,
+	priorities map[string]int,
+	indexHeapBytes uint64,
+) {
+	const vectorCount = 100_000
 	b.ReportAllocs()
 	b.ResetTimer()
 	durations := make([]time.Duration, 0, b.N)
 	for iteration := 0; iteration < b.N; iteration++ {
 		started := time.Now()
-		hits, total, err := index.Search(query, candidates, 0, 10)
+		var hits []VectorHit
+		var total int
+		var err error
+		if priorities == nil {
+			hits, total, err = index.Search(query, candidates, 0, 10)
+		} else {
+			hits, total, err = index.SearchWithPriority(query, candidates, 0, 10, priorities)
+		}
 		durations = append(durations, time.Since(started))
 		if err != nil || total != vectorCount || len(hits) != 10 {
 			b.Fatalf("Search() returned total=%d, hits=%d, error=%v", total, len(hits), err)

@@ -96,6 +96,59 @@ func TestVectorIndexPartialSearchKeepsStableTieOrderAcrossPages(t *testing.T) {
 	}
 }
 
+func TestVectorIndexPriorityTierSearchPreservesTotalAndPageOrder(t *testing.T) {
+	entries := []struct {
+		id         string
+		similarity float32
+		priority   int
+	}{
+		{id: "low-1", similarity: 1.0},
+		{id: "low-2", similarity: 0.99},
+		{id: "high-1", similarity: 0.8, priority: 2},
+		{id: "low-3", similarity: 0.98},
+		{id: "high-2", similarity: 0.7, priority: 2},
+		{id: "low-4", similarity: 0.97},
+	}
+	values := make([]uint16, len(entries)*AIEmbeddingDimension)
+	metadata := make(map[string]VectorMetadata, len(entries))
+	candidates := make([]VectorMetadata, 0, len(entries))
+	priorities := make(map[string]int, 2)
+	for position, entry := range entries {
+		start := position * AIEmbeddingDimension
+		values[start] = float32ToHalf(entry.similarity)
+		values[start+1] = float32ToHalf(float32(math.Sqrt(float64(1 - entry.similarity*entry.similarity))))
+		item := VectorMetadata{
+			ResourceID: entry.id, Size: 1, MTimeNs: 1, ModelVersion: "clip-v1",
+			ShardID: "all", Position: position,
+		}
+		metadata[entry.id] = item
+		candidates = append(candidates, item)
+		if entry.priority > 0 {
+			priorities[entry.id] = entry.priority
+		}
+	}
+	index := &VectorIndexStore{
+		modelVersion: "clip-v1",
+		shards:       map[string]vectorShardData{"all": {values: values}},
+		latest:       metadata,
+	}
+	query := make([]float32, AIEmbeddingDimension)
+	query[0] = 1
+
+	hits, total, err := index.SearchWithPriority(query, candidates, 0, 2, priorities)
+	if err != nil || total != len(entries) || len(hits) != 2 {
+		t.Fatalf("SearchWithPriority() = (%+v, %d, %v), want two hits from %d candidates", hits, total, err, len(entries))
+	}
+	if hits[0].ResourceID != "high-1" || hits[1].ResourceID != "high-2" {
+		t.Fatalf("priority tier hits = [%s %s], want [high-1 high-2]", hits[0].ResourceID, hits[1].ResourceID)
+	}
+
+	page, pageTotal, err := index.SearchWithPriority(query, candidates, 1, 1, priorities)
+	if err != nil || pageTotal != len(entries) || len(page) != 1 || page[0].ResourceID != "high-2" {
+		t.Fatalf("second priority page = (%+v, %d, %v), want [high-2] of %d", page, pageTotal, err, len(entries))
+	}
+}
+
 func TestVectorIndexInvalidatesWhenModelVersionChanges(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "vectors")
 	index, err := OpenVectorIndex(dir, "clip-v1")
