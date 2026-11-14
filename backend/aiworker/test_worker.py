@@ -234,6 +234,24 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(6, params["Cls.cls_batch_num"])
         self.assertEqual(6, params["Rec.rec_batch_num"])
 
+    def test_ocr_cpu_image_worker_count_scales_with_logical_processors(self):
+        cases = ((None, 2), (1, 1), (4, 1), (8, 2), (12, 3), (16, 4), (32, 4))
+        for logical_processors, expected in cases:
+            with self.subTest(logical_processors=logical_processors), patch.object(
+                worker.os, "cpu_count", return_value=logical_processors
+            ):
+                self.assertEqual(expected, worker.ocr_cpu_image_worker_count())
+
+    def test_ocr_cpu_analysis_uses_scaled_worker_count(self):
+        result = {"items": []}
+        with patch.object(worker, "ocr_cpu_image_worker_count", return_value=3), patch.object(
+            worker, "run_warmed_image_analysis", return_value=result
+        ) as run_batch:
+            response = worker.run_ocr_image_analysis(["page.png"], "cpu")
+
+        self.assertIs(result, response)
+        self.assertEqual(3, run_batch.call_args.args[2])
+
     def test_ocr_input_pixel_cap_resizes_and_maps_boxes_to_source(self):
         pixels = np.full((100, 100, 3), 255, dtype=np.uint8)
         with tempfile.TemporaryDirectory() as directory:

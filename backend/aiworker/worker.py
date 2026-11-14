@@ -28,8 +28,8 @@ IMAGE_PREPROCESS_WORKERS = 4
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
-OCR_CPU_IMAGE_WORKERS = 2
 OCR_CPU_ONNX_THREADS = 2
+OCR_CPU_MAX_IMAGE_WORKERS = 4
 OCR_GPU_IMAGE_WORKERS = 4
 OCR_MAX_INPUT_PIXELS = 16_000_000
 FACE_MAX_INPUT_DIMENSION = 2048
@@ -769,6 +769,16 @@ def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
         return {"data": None, "error": "gpu_inference_failed" if device_mode == "gpu" else "ocr_inference_failed"}
 
 
+def ocr_cpu_image_worker_count() -> int:
+    logical_processors = os.cpu_count()
+    if logical_processors is None:
+        return 2
+    return min(
+        OCR_CPU_MAX_IMAGE_WORKERS,
+        max(1, logical_processors // (OCR_CPU_ONNX_THREADS * 2)),
+    )
+
+
 def tile_offsets(length, tile_size=640):
     if length <= tile_size:
         return [0]
@@ -951,7 +961,7 @@ def run_ocr_image_analysis(paths, device_mode):
     def analyze(path):
         return analyze_ocr_image(path, device_mode)
 
-    max_workers = OCR_GPU_IMAGE_WORKERS if device_mode == "gpu" else OCR_CPU_IMAGE_WORKERS
+    max_workers = OCR_GPU_IMAGE_WORKERS if device_mode == "gpu" else ocr_cpu_image_worker_count()
     return run_warmed_image_analysis(paths, analyze, max_workers)
 
 
