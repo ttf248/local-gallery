@@ -1,6 +1,9 @@
+import concurrent.futures
 import os
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -300,6 +303,52 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual("入口", results["items"][0]["data"]["text"])
         self.assertEqual("image_unreadable", results["items"][1]["error"])
         self.assertIn("modules", results["status"])
+
+    def test_parallel_image_analysis_preserves_input_order(self):
+        barrier = threading.Barrier(2)
+        result = worker.run_image_analysis(
+            ["first", "second"],
+            lambda path: (barrier.wait(timeout=2), {"data": {"path": path}})[1],
+            max_workers=2,
+        )
+
+        self.assertEqual(["first", "second"], [item["data"]["path"] for item in result["items"]])
+
+    def test_gpu_face_action_requests_bounded_parallel_workers(self):
+        response = {"items": []}
+        with patch.object(worker, "face_module_status", return_value={"ready": True}), patch.object(
+            worker, "gpu_available", return_value=True
+        ), patch.object(worker, "run_image_analysis", return_value=response) as run_analysis:
+            result = worker.process({"action": "face_images", "device": "gpu", "paths": ["one", "two"]})
+
+        self.assertIs(response, result)
+        self.assertEqual(worker.FACE_GPU_WORKERS, run_analysis.call_args.kwargs["max_workers"])
+
+    def test_face_model_initialization_is_shared_by_parallel_workers(self):
+        sessions = []
+
+        class Session:
+            @staticmethod
+            def get_providers():
+                return ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+        class FakeOnnxRuntime:
+            @staticmethod
+            def InferenceSession(_path, providers):
+                time.sleep(0.02)
+                sessions.append(tuple(providers))
+                return Session()
+
+        with patch.object(worker, "face_models", {}), patch.object(
+            worker, "face_module_status", return_value={"ready": True}
+        ), patch.object(worker, "gpu_available", return_value=True), patch.dict(
+            sys.modules, {"onnxruntime": FakeOnnxRuntime}
+        ):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+                models = list(executor.map(lambda _: worker.load_face_models("gpu"), range(4)))
+
+        self.assertEqual(2, len(sessions))
+        self.assertTrue(all(model is models[0] for model in models))
 
     def test_image_analysis_rejects_invalid_batches(self):
         self.assertEqual("invalid_image_batch", worker.run_image_analysis([], lambda _: {})["error"])

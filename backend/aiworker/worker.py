@@ -10,6 +10,7 @@ import importlib.util
 import json
 import os
 import sys
+import threading
 from pathlib import Path
 
 
@@ -22,6 +23,8 @@ IMAGE_PREPROCESS_WORKERS = 4
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
+# YuNet and SFace accept one image each; overlap calls across photos instead.
+FACE_GPU_WORKERS = 4
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
@@ -41,6 +44,7 @@ runtime_error = ""
 model_validation = None
 rapid_ocr = {}
 face_models = {}
+face_models_lock = threading.Lock()
 cuda_dll_handles = []
 cv2 = None
 np = None
@@ -474,41 +478,44 @@ def load_face_models(device_mode="cpu"):
         raise RuntimeError("gpu_unavailable")
     if mode in face_models:
         return face_models[mode]
-    try:
-        import cv2 as cv2_module
-        import numpy as numpy_module
-        cv2, np = cv2_module, numpy_module
-        detector_path = str(model_dir / "face" / YUNET_FILE)
-        recognizer_path = str(model_dir / "face" / SFACE_FILE)
-        if mode == "gpu":
-            import onnxruntime
-            detector = onnxruntime.InferenceSession(
-                detector_path, providers=["CUDAExecutionProvider"]
-            )
-            recognizer = onnxruntime.InferenceSession(
-                recognizer_path, providers=["CUDAExecutionProvider"]
-            )
-            if any(
-                not session.get_providers()
-                or session.get_providers()[0] != "CUDAExecutionProvider"
-                for session in (detector, recognizer)
-            ):
-                raise RuntimeError("gpu_unavailable")
-            face_models[mode] = {"device": mode, "detector": detector, "recognizer": recognizer}
-        else:
-            face_models[mode] = {
-                "device": mode,
-                "detector": cv2.FaceDetectorYN_create(detector_path, "", (320, 320), 0.65, 0.3, 5000),
-                "recognizer": cv2.FaceRecognizerSF_create(recognizer_path, ""),
-            }
-    except RuntimeError:
-        raise
-    except Exception:
-        if mode == "gpu":
-            raise RuntimeError("gpu_inference_failed") from None
-        face_runtime_error = "face_model_load_failed"
-        raise RuntimeError(face_runtime_error) from None
-    return face_models[mode]
+    with face_models_lock:
+        if mode in face_models:
+            return face_models[mode]
+        try:
+            import cv2 as cv2_module
+            import numpy as numpy_module
+            cv2, np = cv2_module, numpy_module
+            detector_path = str(model_dir / "face" / YUNET_FILE)
+            recognizer_path = str(model_dir / "face" / SFACE_FILE)
+            if mode == "gpu":
+                import onnxruntime
+                detector = onnxruntime.InferenceSession(
+                    detector_path, providers=["CUDAExecutionProvider"]
+                )
+                recognizer = onnxruntime.InferenceSession(
+                    recognizer_path, providers=["CUDAExecutionProvider"]
+                )
+                if any(
+                    not session.get_providers()
+                    or session.get_providers()[0] != "CUDAExecutionProvider"
+                    for session in (detector, recognizer)
+                ):
+                    raise RuntimeError("gpu_unavailable")
+                face_models[mode] = {"device": mode, "detector": detector, "recognizer": recognizer}
+            else:
+                face_models[mode] = {
+                    "device": mode,
+                    "detector": cv2.FaceDetectorYN_create(detector_path, "", (320, 320), 0.65, 0.3, 5000),
+                    "recognizer": cv2.FaceRecognizerSF_create(recognizer_path, ""),
+                }
+        except RuntimeError:
+            raise
+        except Exception:
+            if mode == "gpu":
+                raise RuntimeError("gpu_inference_failed") from None
+            face_runtime_error = "face_model_load_failed"
+            raise RuntimeError(face_runtime_error) from None
+        return face_models[mode]
 
 
 def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
@@ -707,10 +714,15 @@ def analyze_face_image(path: str, device_mode="cpu") -> dict:
         return {"data": None, "error": "gpu_inference_failed" if device_mode == "gpu" else "face_inference_failed"}
 
 
-def run_image_analysis(paths, analyze):
+def run_image_analysis(paths, analyze, max_workers=1):
     if not isinstance(paths, list) or not paths or len(paths) > 32 or not all(isinstance(path, str) for path in paths):
         return {"error": "invalid_image_batch"}
-    return {"items": [analyze(path) for path in paths], "status": status()}
+    if max_workers > 1 and len(paths) > 1:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(max_workers, len(paths))) as executor:
+            items = list(executor.map(analyze, paths))
+    else:
+        items = [analyze(path) for path in paths]
+    return {"items": items, "status": status()}
 
 
 def verify_installation() -> None:
@@ -785,7 +797,11 @@ def process(request: dict) -> dict:
             return {"error": face_module_status().get("error", "face_dependencies_missing")}
         if device_mode == "gpu" and not gpu_available(require_onnx=True):
             return {"error": "gpu_unavailable", "status": status()}
-        return run_image_analysis(request.get("paths"), lambda path: analyze_face_image(path, device_mode))
+        return run_image_analysis(
+            request.get("paths"),
+            lambda path: analyze_face_image(path, device_mode),
+            max_workers=FACE_GPU_WORKERS if device_mode == "gpu" else 1,
+        )
     if action not in ("embed_images", "embed_texts"):
         return {"error": "unknown_action"}
     if runtime_error:
