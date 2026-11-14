@@ -27,7 +27,10 @@ interface Props {
 export default function ResumeHero({ cards }: Props) {
   const copy = photoCopy();
   const featured = cards[0];
-  const rest = useMemo(() => cards.slice(1, 4), [cards]);
+  // 主角一件 + 次级展品五件。面板写的是「N 本相册」，只摆三件时
+  // 宽屏上那三件会被拉到比主角那枚裱框还大 —— 次级展品比主角还
+  // 大，主次就反了；五件摆在同一排，宽窄屏都是一排小一号的作品。
+  const rest = useMemo(() => cards.slice(1, 6), [cards]);
 
   if (!featured) return null;
 
@@ -47,12 +50,12 @@ export default function ResumeHero({ cards }: Props) {
         <span className="hero-panel__muted tabular-nums">
           {cards.length} {copy.resumeCountLabel}
         </span>
-        {cards.length > 4 && (
+        {cards.length > 6 && (
           <Link
             to={recentsRoute("photo")}
             className="hero-panel__muted ml-auto inline-flex items-center gap-1.5 min-h-7 hover:text-fg transition-colors"
           >
-            还有 {cards.length - 4} 本最近看过 <ArrowRightLineIcon size={12} />
+            还有 {cards.length - 6} 本最近看过 <ArrowRightLineIcon size={12} />
           </Link>
         )}
       </div>

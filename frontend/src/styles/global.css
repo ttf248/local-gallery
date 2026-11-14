@@ -165,8 +165,10 @@
     .resume-body {
       display: grid;
       /* 主角与队列并排。队列那一列给得比主角宽：它摆的是一排方照，
-         窄一截就每张都小一号，与主角那枚裱框差得太远。 */
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+         窄一截就每张都小一号，与主角那枚裱框差得太远。
+         比例不是 1 : 1 —— 主角那列是「一枚裱框 + 一段话」，话很
+         短；等分两列会在主角与队列之间留出一大片空纸。 */
+      grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
       gap: clamp(16px, 2vw, 32px);
       align-items: start;
     }
@@ -291,12 +293,19 @@
   /* 「接着看」的次级展品：一排小方照。
      它们与主角那枚裱好的方照是同一套展陈语言 —— 挂在同一面墙上，
      主件裱框、次件裸挂。排成一排而不是一列：一列三行只占住面板的
-     右上角，中间与右下都空着，一块展品读起来像半张空纸。 */
+     右上角，中间与右下都空着，一块展品读起来像半张空纸。
+     五件：面板说「10 本相册」，摆四件就有一半的量藏在面板外；
+     宽屏上三件还会被拉得比主角那枚裱框还大，主次反了。 */
   .resume-shelf {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: clamp(12px, 1.4vw, 20px);
     align-content: start;
+  }
+  @media (max-width: 639px) {
+    .resume-shelf {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
   }
   .resume-shelf__item {
     display: block;

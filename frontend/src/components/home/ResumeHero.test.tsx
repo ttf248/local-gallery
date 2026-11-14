@@ -68,6 +68,25 @@ describe("照片工作台的「接着看」专区", () => {
   });
 
   it("还有几本最近看过的出口写在标题行，不飘在面板底下", () => {
+    // 面板摆得下六本（主角一件 + 次级展品五件）：七本时才有「还有」。
+    renderHero(
+      <ResumeHero
+        cards={[
+          card(),
+          card({ id: "a_2", title: "海边", to: "/photo/albums/a_2" }),
+          card({ id: "a_3", title: "山里", to: "/photo/albums/a_3" }),
+          card({ id: "a_4", title: "公司", to: "/photo/albums/a_4" }),
+          card({ id: "a_5", title: "路上", to: "/photo/albums/a_5" }),
+          card({ id: "a_6", title: "家里", to: "/photo/albums/a_6" }),
+          card({ id: "a_7", title: "学校", to: "/photo/albums/a_7" }),
+        ]}
+      />,
+    );
+    const link = screen.getByRole("link", { name: /还有 1 本最近看过/ });
+    expect(link).toHaveAttribute("href", "/photo/recents");
+  });
+
+  it("摆得下的相册不再挂「还有」出口", () => {
     renderHero(
       <ResumeHero
         cards={[
@@ -79,8 +98,9 @@ describe("照片工作台的「接着看」专区", () => {
         ]}
       />,
     );
-    const link = screen.getByRole("link", { name: /还有 1 本最近看过/ });
-    expect(link).toHaveAttribute("href", "/photo/recents");
+    expect(
+      screen.queryByRole("link", { name: /还有 .* 本最近看过/ }),
+    ).toBeNull();
   });
 
   it("不出现漫画侧的进度措辞", () => {
