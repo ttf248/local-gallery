@@ -52,7 +52,7 @@ export default function PhotoFeedHero() {
   const refreshing = feed.isFetching && feed.items.length > 0;
 
   return (
-    <section className="page-shell pt-9" data-testid="photo-feed-hero">
+    <section className="page-shell page-section" data-testid="photo-feed-hero">
       <div className="section-heading">
         <h2 className="section-title">随手看看</h2>
         <span className="section-meta">跨相册的照片</span>

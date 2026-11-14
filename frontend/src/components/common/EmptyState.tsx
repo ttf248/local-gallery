@@ -7,8 +7,8 @@ interface Props {
   icon?: ReactNode;
   /**
    * 紧凑模式：下方还有内容（推荐位、说明列表）时用。
-   * 默认的 52vh 最小高度是为"整页只有这一块"准备的；下面还接着内容时
-   * 再撑 52vh，会把下面的东西推到首屏之外。
+   * 默认高度是给"整页只有这一块"准备的；下面还接着内容时不再撑高，
+   * 否则会把下面的东西推到首屏之外。
    */
   dense?: boolean;
   /**
@@ -40,16 +40,16 @@ export default function EmptyState({
   }
   return (
     <div
-      className={`page-shell empty-state flex flex-col items-center justify-center py-14 text-center fade-up ${
-        dense ? "min-h-[30vh] pb-8" : "min-h-[52vh]"
+      className={`page-shell empty-state flex flex-col items-center justify-center py-10 text-center fade-up ${
+        dense ? "pb-6" : "min-h-[26vh]"
       }`}
     >
       {icon && (
-        <div className="empty-state__icon flex items-center justify-center mb-6">
+        <div className="empty-state__icon flex items-center justify-center mb-4">
           {icon}
         </div>
       )}
-      <h2 className="font-display text-page-sm font-semibold text-fg">
+      <h2 className="font-display text-section font-semibold text-fg">
         {title}
       </h2>
       {description && (
@@ -57,7 +57,7 @@ export default function EmptyState({
           {description}
         </div>
       )}
-      {action && <div className="mt-6">{action}</div>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }

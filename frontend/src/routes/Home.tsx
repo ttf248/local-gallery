@@ -515,7 +515,7 @@ export default function Home() {
         <>
           <PhotoFeedHero />
           {resumeCards.length > 0 && (
-            <div className="page-shell pt-9">
+            <div className="page-shell page-section">
               <div className="home-overview">
                 <ResumeHero cards={resumeCards} />
               </div>
@@ -529,7 +529,7 @@ export default function Home() {
           好几年，按年份分会把同一部作品拆散。年份索引两边都留着 ——
           它筛的是下方网格，不只服务索引条本身。 */}
       {hasContent && isComic && seriesGroups.length > 0 && (
-        <section className="page-shell pt-9">
+        <section className="page-shell page-section">
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.series)}</span>
             <h2 className="section-title">作品</h2>
@@ -547,7 +547,7 @@ export default function Home() {
         />
       )}
       {hasYearIndex && (
-        <section className="page-shell pt-9">
+        <section className="page-shell page-section">
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.year)}</span>
             <h2 className="section-title">按年份浏览</h2>
@@ -562,7 +562,7 @@ export default function Home() {
           四个动作按钮，数据到达后整页内容一次性长出来，视线要重新找
           一次位置。骨架占住网格的位置，数据回来时是"填满"而不是"重排"。 */}
       {(hasContent || isLoadingInitial) && (
-        <section ref={gridRef} className="page-shell pt-10 pb-4 scroll-mt-6">
+        <section ref={gridRef} className="page-shell page-section pb-4 scroll-mt-6">
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.library)}</span>
             <h2 className="section-title">

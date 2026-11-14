@@ -47,7 +47,7 @@ export default function CollectionPhotoBand({
   if (items.length === 0) return null;
 
   return (
-    <section className="page-shell pt-8">
+    <section className="page-shell page-section">
       <div className="section-heading">
         <h2 className="section-title">照片带</h2>
         <span className="section-meta">

@@ -159,7 +159,7 @@ export default function Tag() {
   ) {
     return (
       <div className="min-h-full">
-        <div className="page-shell pt-8 pb-5">
+        <div className="page-shell page-section pb-5">
           <button
             onClick={() => navigate(-1)}
             className="btn btn-sm btn-ghost mb-4"
@@ -291,7 +291,7 @@ export default function Tag() {
       </section>
 
       {/* 标签下的相册列表 */}
-      <section aria-label="相册列表" className="page-shell pt-8 pb-10">
+      <section aria-label="相册列表" className="page-shell page-section pb-10">
         <ListFilterBar
           totalCount={albumsQuery.summary?.total ?? 0}
           showMinImageFilter={false}

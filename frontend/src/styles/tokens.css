@@ -62,6 +62,18 @@
   --shadow-sm: 0 3px 12px rgba(0, 0, 0, 0.06);
   --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.16);
+  /* === 版式骨架 ===
+     页面只有三层，纵向节奏在这里定一次，组件里不再各写各的
+     pt-9 / pt-10 / pb-14：
+       页头（眉标 · 标题 · 说明）→ 区块标题（序号 · 标题 · 说明）→ 内容。
+     三个间距分别对应「头与头」「段与段」「段内」三种关系，数值成倍进位，
+     段与段的间距明显大于段内，一眼能分出层级。 */
+  --page-gutter: clamp(20px, 3vw, 48px); /* 页面左右留白 */
+  --page-max: 1720px; /* 内容最大宽度：超过这个宽度不再拉长，读起来更好 */
+  --page-head-pad-top: 28px; /* 页头与工具栏之间 */
+  --page-head-pad-bottom: 20px; /* 页头与第一个内容块之间 */
+  --section-gap: 32px; /* 区块与区块之间 */
+  --block-gap: 16px; /* 区块标题与该区块内容之间 */
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;

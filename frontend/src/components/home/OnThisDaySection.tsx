@@ -66,7 +66,7 @@ export default function OnThisDaySection({
       ? `${month} 月 ${day} 日 · 往年这天拍过 ${photoCount} 张`
       : `${month} 月 ${day} 日 · 往年这天有 ${cards.length} 本相册拍过照`;
   return (
-    <section className="page-shell pt-9" data-testid="on-this-day-section">
+    <section className="page-shell page-section" data-testid="on-this-day-section">
       <div className="section-heading">
         <span className="section-index">{sectionIndex}</span>
         <h2 className="section-title">那年今日</h2>

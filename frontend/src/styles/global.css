@@ -29,11 +29,18 @@
     background: var(--brand);
   }
   .page-heading {
-    padding-top: 34px;
-    padding-bottom: 28px;
+    padding-top: var(--page-head-pad-top);
+    padding-bottom: var(--page-head-pad-bottom);
   }
   .page-heading .page-title {
     margin-top: 10px;
+  }
+  /* 区块：页面里一段自成一体的内容（一个网格、一列清单、一个面板）。
+     区块与区块之间的间距统一由 --section-gap 决定，组件里不再写
+     pt-9 / pt-10 这样的具体数值 —— 那几处数值彼此不等，页面因此
+     每个区块之间的呼吸深浅不一。 */
+  .page-section {
+    padding-top: var(--section-gap);
   }
   .app-sidebar {
     background: var(--rail-bg);
@@ -362,7 +369,7 @@
     align-items: baseline;
     flex-wrap: wrap;
     gap: 12px;
-    margin-bottom: 18px;
+    margin-bottom: var(--block-gap);
   }
   .section-index {
     color: var(--brand-ink);
@@ -1000,8 +1007,8 @@
   .empty-state__icon {
     position: relative;
     isolation: isolate;
-    width: 70px;
-    height: 76px;
+    width: 56px;
+    height: 60px;
     color: var(--brand-ink);
     transform: rotate(-5deg);
   }
@@ -1011,9 +1018,9 @@
     position: absolute;
     inset: 0;
     z-index: -1;
-    border-radius: 18px 18px 18px 4px;
+    border-radius: 14px 14px 14px 3px;
     background: var(--bg-strong);
-    transform: translate(10px, 10px);
+    transform: translate(8px, 8px);
   }
   /* 前面一本 */
   .empty-state__icon::after {
@@ -1021,7 +1028,7 @@
     position: absolute;
     inset: 0;
     z-index: 0;
-    border-radius: 18px 18px 18px 4px;
+    border-radius: 14px 14px 14px 3px;
     border: 1px solid var(--border);
     background: var(--brand-soft);
   }
@@ -1274,8 +1281,8 @@
       height: 56px;
     }
     .page-heading {
-      padding-top: 26px;
-      padding-bottom: 22px;
+      padding-top: 20px;
+      padding-bottom: 16px;
     }
     .home-overview {
       gap: 18px;
@@ -1581,9 +1588,9 @@ button:not(:disabled):active {
   /* 当前共享容器：限宽与流体留白可随视觉系统调整，页面也可使用不同布局。 */
   .page-shell {
     width: 100%;
-    max-width: 1720px;
+    max-width: var(--page-max);
     margin-inline: auto;
-    padding-inline: clamp(20px, 3vw, 48px);
+    padding-inline: var(--page-gutter);
   }
   /* 设置页在宽屏（≥1280）改成两列：一列的分区按顺序读，另一列接着排。
      分区不能被列切断，所以 break-inside: avoid。 */
@@ -1993,7 +2000,7 @@ button:not(:disabled):active {
      页面一律通栏，这里把这个做法收成一个类。 */
   .page-bleed {
     width: 100%;
-    padding-inline: clamp(20px, 3vw, 48px);
+    padding-inline: var(--page-gutter);
   }
 
   /* --- 地图：正文右栏的那一块 ---
