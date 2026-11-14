@@ -9,6 +9,10 @@ import {
 } from "react";
 import { previewUrl } from "../../api/images";
 import {
+  useVisitRecorder,
+  VISIT_COOLDOWN_MS,
+} from "../../hooks/useVisitRecorder";
+import {
   devicePixelRatio,
   fitPreviewWidth,
   pickRenditionWidth,
@@ -35,12 +39,24 @@ import {
 } from "../common/Icon";
 
 interface Props {
-  /** 照片墙上的媒体序列（图片与视频混合）。 */
-  items: LibraryMediaItem[];
+  /**
+   * 照片墙上的媒体序列（图片与视频混合）。
+   *
+   * 跨相册的序列（首页照片墙、年份墙、足迹、精选）里的每一项带着它
+   * 出自哪本相册：翻到哪一张，「最近浏览」就记哪一本。
+   */
+  items: (LibraryMediaItem & { albumId?: string; albumName?: string })[];
   /** 当前查看的序号（0 基）。 */
   index: number;
   /** 相册名，用于标题与信息。 */
   albumName: string;
+  /**
+   * 这一串照片属于哪本相册。
+   *
+   * 相册内的照片墙里每一项都出自同一本，序列本身不携带出处，用这个
+   * 补上；跨相册的序列不用传 —— 每一项自己知道出处。
+   */
+  albumId?: string;
   /**
    * 回到相册的地址。
    *
@@ -127,6 +143,7 @@ export default function PhotoViewer({
   items,
   index,
   albumName,
+  albumId,
   albumHref,
   totalCount,
   onIndexChange,
@@ -193,6 +210,24 @@ export default function PhotoViewer({
 
   const current = items[index];
   const isVideo = current?.kind === "video";
+
+  // 看照片＝看过那本相册。
+  //
+  // 「最近浏览」记的是相册：照片侧没有阅读位置，用户翻的是照片，
+  // 落点却是相册 —— 他刚在看哪一本相册，是这一页要回答的问题。
+  // 翻到哪一张就记它出自的那本；相册内的照片墙每一张都出自同一本，
+  // 序列不携带出处时用 albumId 补上。
+  const recordVisit = useVisitRecorder();
+  const currentAlbumId = current?.albumId ?? albumId;
+  const currentAlbumName = current?.albumName ?? albumName;
+  useEffect(() => {
+    if (!currentAlbumId) return;
+    recordVisit(
+      currentAlbumId,
+      { name: currentAlbumName },
+      { cooldownMs: VISIT_COOLDOWN_MS },
+    );
+  }, [currentAlbumId, currentAlbumName, recordVisit]);
 
   // 舞台尺寸：图片真正显示多大由它决定。
   //

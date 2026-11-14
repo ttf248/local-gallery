@@ -768,6 +768,8 @@ export default function PhotoAlbum({ album }: Props) {
           items={mediaItems}
           index={viewerIndex}
           albumName={title}
+          /* 这一页的每一张都出自这本相册：最近浏览据此记它。 */
+          albumId={album.id}
           totalCount={total}
           /* 连续浏览：相册里的照片是分页取的，翻到已加载的末尾时
              自动接下一页，而不是停在两百张。 */

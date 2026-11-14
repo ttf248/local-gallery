@@ -12,7 +12,7 @@ import { useAppMode } from "../hooks/useAppMode";
 import { workbenchCopy } from "../utils/workbench";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import AlbumGrid from "../components/album/AlbumGrid";
-import FootprintTimeline from "../components/photo/FootprintTimeline";
+import VisitStamp from "../components/photo/VisitStamp";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
@@ -216,9 +216,10 @@ export default function Recents() {
       {cards.length > 0 && (
         <ListFilterBar
           totalCount={filtered.length}
-          /* 照片侧只有足迹这一种形态，摆一个切不动的视图开关只是噪音。 */
+          /* 照片侧只有卡片墙这一种形态，摆一个切不动的视图开关只是噪音。 */
           hideViewToggle={mode === "photo"}
-          /* 这一页按时间排：浏览足迹是一份日记，时刻要能排成一条轴。 */
+          /* 这一页按时间排：这一页问的是「我刚才在翻什么」，
+             时刻是它的天然顺序。 */
           defaultSort="viewed"
         />
       )}
@@ -288,10 +289,14 @@ export default function Recents() {
         <section className="page-shell">
           <div className="pb-10">
             {mode === "photo" ? (
-              /* 照片侧按时间排：这一页问的是「我刚才在翻什么」，
-                 网格把时间压到卡片角落的小字里，时间线才读得出来。 */
-              <FootprintTimeline
-                cards={filtered}
+              /* 照片侧是一面卡片墙：这一页问的是「我刚才在翻什么」，
+                 答的是一份清单 —— 十几条一次摆出来，一屏扫得完。
+                 时刻压在封面角上：网格里只有角标还扫得读。 */
+              <AlbumGrid
+                items={filtered}
+                variant="grid"
+                density="dense"
+                coverBadge={(card) => <VisitStamp at={card.lastSeenAt} />}
                 onRemoveHistory={removeHistory}
               />
             ) : (

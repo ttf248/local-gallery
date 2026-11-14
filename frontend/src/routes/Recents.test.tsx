@@ -13,6 +13,10 @@ import { useLibraryNodes } from "../hooks/useLibrary";
 import { useSearchStore } from "../store/searchStore";
 import Recents from "./Recents";
 
+const mocks = vi.hoisted(() => ({
+  gridProps: [] as unknown[],
+}));
+
 vi.mock("../api/prefs", () => ({ historyApi: { list: vi.fn() } }));
 vi.mock("../hooks/useLibrary", () => ({ useLibraryNodes: vi.fn() }));
 vi.mock("../hooks/useImageActivity", () => ({
@@ -23,13 +27,22 @@ vi.mock("../hooks/useGalleryContextSync", () => ({
   useGalleryContextSync: vi.fn(),
 }));
 vi.mock("../components/album/AlbumGrid", () => ({
-  default: ({ items }: { items: { title: string }[] }) => (
-    <div>
-      {items.map((item) => (
-        <span key={item.title}>{item.title}</span>
-      ))}
-    </div>
-  ),
+  default: (props: {
+    items: { title: string; lastSeenAt?: string }[];
+    coverBadge?: (item: unknown) => React.ReactNode;
+  }) => {
+    mocks.gridProps.push(props);
+    return (
+      <div>
+        {props.items.map((item) => (
+          <span key={item.title}>
+            <span>{item.title}</span>
+            {props.coverBadge?.(item)}
+          </span>
+        ))}
+      </div>
+    );
+  },
 }));
 
 const history = [
@@ -65,6 +78,7 @@ function renderRecents(client = clientForTest()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.gridProps.length = 0;
   useSearchStore.getState().reset();
   vi.mocked(historyApi.list).mockResolvedValue({ history });
   vi.mocked(useLibraryNodes).mockReturnValue({
@@ -160,6 +174,20 @@ it("已加载记录确实被筛选掉时仍可清除筛选", async () => {
   expect(await screen.findByText("没有匹配的最近访问")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "清除筛选" }));
   expect(await screen.findByText("春游相册")).toBeInTheDocument();
+});
+
+// 照片侧是一面密集卡片墙：单列一条时间线在宽屏上只占左边一条，
+// 右半屏全是空白。时刻压在封面角上 —— 网格里只有角标还扫得读。
+it("照片侧排成密集卡片墙，时刻压在封面角上", async () => {
+  renderRecents();
+  await waitFor(() => expect(screen.getByText("春游相册")).toBeInTheDocument());
+  const props = mocks.gridProps.at(-1) as {
+    density?: string;
+    coverBadge?: (item: unknown) => React.ReactNode;
+  };
+  expect(props.density).toBe("dense");
+  const stamp = screen.getByTestId("visit-stamp");
+  expect(stamp.textContent).toMatch(/\d/);
 });
 
 // 这一页的天然顺序是「按最近看」：浏览足迹是一份日记，时刻要能排成一条轴。

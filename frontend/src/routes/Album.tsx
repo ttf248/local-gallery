@@ -1,14 +1,12 @@
 import { Fragment, useEffect, useMemo } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
 import { useSearchStore } from "../store/searchStore";
 import { useFavorites } from "../hooks/useFavorites";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
-import { historyApi } from "../api/prefs";
+import { useVisitRecorder } from "../hooks/useVisitRecorder";
 import { useLibraryList, listYearGroups } from "../hooks/useLibraryList";
 import ListPagination from "../components/common/ListPagination";
 import { ListFilterBar } from "../components/common/ListFilterBar";
-import { syncHistoryCache } from "../utils/historyCache";
 import { useUIStore } from "../store/uiStore";
 import AlbumGrid from "../components/album/AlbumGrid";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
@@ -126,7 +124,6 @@ export default function Album() {
   // 返回：应用内还有历史就回退，否则回主页（直接打开相册链接时
   // navigate(-1) 会一路退出应用，停在空白页）。
   const goBack = useSafeBack(homeRoute(mode));
-  const queryClient = useQueryClient();
   // 资源 ID 从原始路径切段并解码一次：useParams 已经解过一次，
   // 再解会把 ID 里的字面 %xx 破坏掉。
   const resourceID = decodePathTail(location.pathname, "/albums/");
@@ -212,17 +209,16 @@ export default function Album() {
         : node.displayName || node.name
       : "";
   const historyImageCount = node?.kind === "album" ? (node.imageCount ?? 0) : 0;
+  // 打开相册一定要记一条（不走冷却）：刚打开的这本就该排在最近浏览
+  // 的最前，哪怕几十秒前刚看过同一本。
+  const recordVisit = useVisitRecorder();
   useEffect(() => {
     if (!historyAlbumId) return;
-    historyApi
-      .add({
-        albumId: historyAlbumId,
-        name: historyAlbumName,
-        imageCount: historyImageCount,
-      })
-      .then(({ history }) => syncHistoryCache(queryClient, history))
-      .catch(() => {});
-  }, [historyAlbumId, historyAlbumName, historyImageCount, queryClient]);
+    recordVisit(historyAlbumId, {
+      name: historyAlbumName,
+      imageCount: historyImageCount,
+    });
+  }, [historyAlbumId, historyAlbumName, historyImageCount, recordVisit]);
 
   // 相册页必须带资源 ID（/albums/<id>）。只到 /albums 时没有具体的东西
   // 可打开，回到工作台首页 —— 与其摆一个「找不到此文件夹」，不如给个

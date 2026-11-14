@@ -71,6 +71,45 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
   expect(historyWrites).toBe(1);
 });
 
+/**
+ * 看照片＝看过那本相册。
+ *
+ * 访问记录原先只在打开相册页时写一条，于是首页照片墙、年份墙、足迹里
+ * 翻过的那些照片全都不算数，「最近浏览」看着像坏了。这条用例走首页
+ * 「随手看看」的照片墙：不进相册页，只看一张照片，那本相册同样要进
+ * 最近浏览。
+ */
+test("看照片也记一次访问：照片出处的那本相册进最近浏览", async ({ page }) => {
+  await scannedNodes(page.request);
+  expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
+  await page.goto("/photo");
+  const feed = page.locator('[data-testid="photo-feed-hero"]');
+  const photo = feed
+    .locator('button[aria-label^="查看"], button[aria-label^="播放"]')
+    .first();
+  await expect(photo).toBeVisible();
+  await photo.click();
+  await expect(page.getByTestId("photo-viewer")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/history");
+      const result = (await response.json()) as {
+        history: Array<{ albumId: string }>;
+      };
+      return result.history.length;
+    })
+    .toBe(1);
+  const result = (await (
+    await page.request.get("/api/history")
+  ).json()) as { history: Array<{ albumId: string }> };
+  const albumId = result.history[0].albumId;
+  expect(albumId).toMatch(/^a_/);
+  await page.goto("/photo/recents");
+  await expect(
+    page.locator(`a[href="/photo/albums/${albumId}"]`).first(),
+  ).toBeVisible();
+});
+
 for (const failure of ["history", "nodes"] as const) {
   test(`最近浏览 ${failure} 读取失败不显示为空且可重试`, async ({ page }) => {
     const nodes = await scannedNodes(page.request);

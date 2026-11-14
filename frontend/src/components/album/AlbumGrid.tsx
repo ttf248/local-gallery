@@ -46,10 +46,16 @@ interface Props {
    * 网格密度：越疏朗，一行放的相册越少。
    *
    * 真正的列宽由 CSS 的 `.library-grid` 家族决定（列宽下限 210px /
-   * 250px / 168px），这里只选哪一套 —— 名字里带具体像素会让读代码的
+   * 250px / 176px），这里只选哪一套 —— 名字里带具体像素会让读代码的
    * 人以为列宽在这里定，改宽度时改错地方。
    */
-  density?: "default" | "spacious";
+  density?: "default" | "spacious" | "dense";
+  /**
+   * 封面角上的徽章（最近浏览的时刻）。
+   *
+   * 按卡片给：每张卡上要写的东西不一样（时刻各不相同）。
+   */
+  coverBadge?: (item: CardData) => ReactNode;
 }
 
 // 列表视图每一列的最小宽度。列数由可用宽度除以它得到 ——
@@ -85,6 +91,7 @@ export default function AlbumGrid({
   showUnreadBadge = true,
   coverRatio,
   density = "default",
+  coverBadge,
 }: Props) {
   const selectionActive = useSelectionStore((s) => s.active);
   const selectionItems = useSelectionStore((s) => s.items);
@@ -139,9 +146,11 @@ export default function AlbumGrid({
   const gridColsClass =
     density === "spacious"
       ? "library-grid library-grid--spacious"
-      : workbench === "comic"
-        ? "library-grid library-grid--comic"
-        : "library-grid";
+      : density === "dense"
+        ? "library-grid library-grid--dense"
+        : workbench === "comic"
+          ? "library-grid library-grid--comic"
+          : "library-grid";
 
   // 列表按列数分组：一列时每组一张卡，多列时每组并排。
   // 分组后交给 Virtuoso 渲染，行高一致（列表行固定高度），
@@ -193,6 +202,7 @@ export default function AlbumGrid({
         showLastSeen={showLastSeen}
         showUnreadBadge={showUnreadBadge}
         coverRatio={ratio}
+        coverBadge={coverBadge?.(it)}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY, item: it });

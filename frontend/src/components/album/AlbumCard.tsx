@@ -139,6 +139,13 @@ interface Props {
    * 点星标，指着一个 hover 才出现的东西等于没说。
    */
   alwaysShowFavorite?: boolean;
+  /**
+   * 封面角上的徽章（最近浏览的时刻）。
+   *
+   * 压在封面左上角那一列：状态槽与它同列，两处信息不会互相盖住。
+   * 徽章自己带底板，浅色封面上也读得清。
+   */
+  coverBadge?: ReactNode;
 }
 
 export type CoverRatio = "4/5" | "2/3" | "16/9" | "4/3" | "1/1";
@@ -169,6 +176,7 @@ export default function AlbumCard({
   coverRatio = "4/3",
   alwaysShowFavorite = false,
   note,
+  coverBadge,
 }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
@@ -222,6 +230,7 @@ export default function AlbumCard({
           coverRatio={coverRatio}
           alwaysShowFavorite={alwaysShowFavorite}
           note={note}
+          coverBadge={coverBadge}
         />
       )}
       {menu && (
@@ -260,6 +269,7 @@ function GridCard({
   coverRatio,
   alwaysShowFavorite,
   note,
+  coverBadge,
 }: {
   data: CardData;
   showLastSeen?: boolean;
@@ -270,6 +280,7 @@ function GridCard({
   coverRatio: CoverRatio;
   alwaysShowFavorite: boolean;
   note?: ReactNode;
+  coverBadge?: ReactNode;
 }) {
   // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
   // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
@@ -430,6 +441,7 @@ function GridCard({
               深色蒙版材质压在任何封面上都读得清（原来的实心绿块在
               深色主题 / 浅色封面上都会糊掉）。 */}
           <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+            {coverBadge}
             {data.coverKind === "video" && (
               <TranscodeStatusBadge
                 videoPath={data.coverPath ?? ""}

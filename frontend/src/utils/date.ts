@@ -82,3 +82,29 @@ export function timeAgo(isoStr: string | undefined | null): string {
   const years = Math.floor(days / 365);
   return `${years} 年前`;
 }
+
+/**
+ * 时刻徽章上的短时刻：今天给到分钟，昨天给「昨天 HH:MM」，更早给月日。
+ *
+ * 固定格式而不是「N 分钟前」：相对时间越排越短，读起来像一列长度
+ * 不一的字符串。跨年的条目补上年份 —— 「11/11」分不清是去年还是
+ * 今年。
+ */
+export function stampLabel(iso?: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(+d)) return "";
+  const now = new Date();
+  const time = d.toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  if (d.toDateString() === now.toDateString()) return time;
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  if (d.toDateString() === yesterday.toDateString()) return `昨天 ${time}`;
+  if (d.getFullYear() !== now.getFullYear()) {
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}

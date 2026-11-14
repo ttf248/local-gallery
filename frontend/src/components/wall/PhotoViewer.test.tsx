@@ -10,6 +10,8 @@ import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LibraryMediaItem } from "../../api/library";
+import { historyApi } from "../../api/prefs";
+import { resetVisitRecorder } from "../../hooks/useVisitRecorder";
 import PhotoViewer from "./PhotoViewer";
 
 // 图片信息面板自己去取属性；这里只需要它出现 / 消失。
@@ -27,6 +29,10 @@ vi.mock("../../hooks/useImageInfo", () => ({
     loading: false,
     refetch: vi.fn(),
   }),
+}));
+
+vi.mock("../../api/prefs", () => ({
+  historyApi: { add: vi.fn().mockResolvedValue({ history: [] }) },
 }));
 
 vi.mock("../../api/aiJobs", () => ({
@@ -414,5 +420,121 @@ describe("大图预览的连续浏览", () => {
     await waitFor(() =>
       expect(onIndexChange.mock.calls.map((call) => call[0])).toEqual([1, 3]),
     );
+  });
+});
+
+/**
+ * 看照片＝看过那本相册。
+ *
+ * 「最近浏览」记的是相册：照片侧没有阅读位置，用户翻的是照片，
+ * 落点却是相册。少了这一步，最近浏览只认得「打开过相册」，
+ * 在照片墙、年份墙、足迹里翻过的那些照片全都不算数。
+ */
+describe("看照片即记一次访问", () => {
+  const feedItems = [
+    {
+      ...items[0],
+      albumId: "a_one",
+      albumName: "第一本",
+    },
+    {
+      ...items[1],
+      albumId: "a_two",
+      albumName: "第二本",
+    },
+  ];
+
+  beforeEach(() => {
+    // 冷却表跨用例活着：不清干净，后一条用例会以为刚记过。
+    resetVisitRecorder();
+  });
+
+  it("记下当前这张照片出自的那本相册", async () => {
+    render(
+      <PhotoViewer
+        items={feedItems}
+        index={0}
+        albumName="第一本"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(historyApi.add).toHaveBeenCalledWith(
+        expect.objectContaining({ albumId: "a_one" }),
+      ),
+    );
+  });
+
+  it("翻到另一本相册的照片就改记那一本", async () => {
+    const { rerender } = render(
+      <PhotoViewer
+        items={feedItems}
+        index={0}
+        albumName="第一本"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(historyApi.add).toHaveBeenCalledTimes(1));
+    rerender(
+      <PhotoViewer
+        items={feedItems}
+        index={1}
+        albumName="第二本"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(historyApi.add).toHaveBeenCalledWith(
+        expect.objectContaining({ albumId: "a_two" }),
+      ),
+    );
+  });
+
+  it("相册内的照片墙用相册 ID 记：序列本身不携带出处", async () => {
+    render(
+      <PhotoViewer
+        items={items}
+        index={0}
+        albumName="测试相册"
+        albumId="a_album"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() =>
+      expect(historyApi.add).toHaveBeenCalledWith(
+        expect.objectContaining({ albumId: "a_album" }),
+      ),
+    );
+  });
+
+  it("同一本相册连着翻只记一次：写盘次数不跟着照片数走", async () => {
+    const sameAlbum = [
+      { ...items[0], albumId: "a_one", albumName: "第一本" },
+      { ...items[1], albumId: "a_one", albumName: "第一本" },
+    ];
+    const { rerender } = render(
+      <PhotoViewer
+        items={sameAlbum}
+        index={0}
+        albumName="第一本"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(historyApi.add).toHaveBeenCalledTimes(1));
+    rerender(
+      <PhotoViewer
+        items={sameAlbum}
+        index={1}
+        albumName="第一本"
+        onIndexChange={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(historyApi.add).toHaveBeenCalledTimes(1));
   });
 });

@@ -109,6 +109,8 @@ export default function OnThisDaySection({
           items={[viewing.photo]}
           index={0}
           albumName={viewing.albumName}
+          /* 这一张出自哪本相册：最近浏览据此记它。 */
+          albumId={viewing.albumId}
           /* 标题点一下就回到那本相册：这一段是照片，出去的路却是相册。 */
           albumHref={albumRoute("photo", viewing.albumId)}
           totalCount={1}
