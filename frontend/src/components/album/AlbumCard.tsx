@@ -21,11 +21,10 @@ import TranscodeStatusBadge from "../common/TranscodeStatusBadge";
 import { useUIStore, type ViewMode } from "../../store/uiStore";
 import { timeAgo } from "../../utils/date";
 import { formatDuration } from "../../utils/format";
-import { isCompleted, isUnread, progressPercent } from "../../utils/progress";
 import { favoriteResourceId } from "../../utils/path";
 import { useToggleFavorite } from "../../hooks/useFavorites";
 import { albumCountUnit, comicCopy } from "../../utils/workbench";
-import { mediaCountParts } from "../../utils/mediaCount";
+import { useCardState } from "./useCardState";
 import type { ContentKind } from "../../api/library";
 import CardCover from "./CardCover";
 
@@ -289,38 +288,17 @@ function GridCard({
   const [previewOn, setPreviewOn] = useState(false);
   const [previewRect, setPreviewRect] = useState<DOMRect | null>(null);
   const previewTimer = useRef<number | null>(null);
-  const progressPct = progressPercent(data.progress);
-  // 0-based 页码到达 total - 1 即已读完。
-  const isFinished = isCompleted(data.progress);
-  // 阅读进度只属于漫画相册：照片相册没有进度条、没有「已读完」。
-  const isComicAlbum =
-    data.variant === "album" && data.contentKind === "comic";
-  const cardCopy = comicCopy();
+  // 进度、是否读完、未读标记、计数与作品名：网格与列表共用一份推导。
+  const card = useCardState(data, showUnreadBadge);
+  const { progressPct, isFinished, isComicAlbum, cardCopy, unread, multiRoot, hasDuration, label } = card;
   // 标题印在封面上：漫画工作台的默认形态。书架上的书在封面上写着
   // 书名，一排封面才读得出「一排书」；照片工作台是展陈墙，标题仍然
   // 压在封面下方（展品说明牌）。
   const showTitleOnCover = titleOnCover ?? data.contentKind === "comic";
-  const label = data.displayTitle ?? data.title;
   // 作品名印在书名上方：漫画侧的卷名只写「第1卷」，一屏里两本「第1卷」
   // 分属不同作品，光看封面分不出谁是谁。真实书封就是这么排的 ——
   // 作品名在上，卷名在下。
-  const coverSeries =
-    showTitleOnCover &&
-    data.variant === "album" &&
-    data.contentKind === "comic" &&
-    data.parentName &&
-    data.parentName !== label
-      ? data.parentName
-      : undefined;
-  // 未读标记（见文件底部 showUnreadMark）：只对漫画相册、且页面不是「整页未读」时出现。
-  const unread = showUnreadMark(data, showUnreadBadge);
-  // 只有配置了多个媒体根才需要标来源。
-  const multiRoot = useUIStore((s) => s.multiRoot);
-  // 时长是否已知：视频角标只在有真实时长时才显示数字。
-  const hasDuration =
-    typeof data.durationSec === "number" &&
-    Number.isFinite(data.durationSec) &&
-    data.durationSec >= 0;
+  const coverSeries = showTitleOnCover ? card.series : undefined;
 
   // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
   // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
@@ -532,8 +510,7 @@ function GridCard({
           >
             <TypeChip variant={data.variant} />
             {(() => {
-              const media =
-                data.variant === "album" ? mediaCountParts(data) : null;
+              const media = card.counts;
               if (media) {
                 // album 变体：按图/视频分别展示。
                 // 不允许换行 —— 「384 张 · 19 个视 频」这种断字很难看，
@@ -680,34 +657,14 @@ function ListCard({
   showUnreadBadge: boolean;
 }) {
   // 与 GridCard 一致：直接依赖 <img loading="lazy">，不重复自写 IO。
-  const progressPct = progressPercent(data.progress);
-  const isFinished = isCompleted(data.progress);
-  // 阅读进度只属于漫画相册。
-  const isComicAlbum =
-    data.variant === "album" && data.contentKind === "comic";
-  const cardCopy = comicCopy();
-  // 未读标记与网格视图同源。
-  const unread = showUnreadMark(data, showUnreadBadge);
-  // 只有配置了多个媒体根才需要标来源。
-  const multiRoot = useUIStore((s) => s.multiRoot);
-  // 时长是否已知：视频角标只在有真实时长时才显示数字。
-  const hasDuration =
-    typeof data.durationSec === "number" &&
-    Number.isFinite(data.durationSec) &&
-    data.durationSec >= 0;
+  // 进度、是否读完、未读标记、计数与作品名：与网格视图同源。
+  const card = useCardState(data, showUnreadBadge);
+  const { progressPct, isFinished, isComicAlbum, cardCopy, unread, multiRoot, hasDuration, label } = card;
   // 漫画侧的列表行也是书架：缩略图是一本书（竖版 + 装订边）。
   const isComicContent = data.contentKind === "comic";
   // 作品名补在卷名前面：列表行写「第1卷」时，这一卷属于哪部作品
   // 看不出来 —— 与网格的书封、阅读器顶栏同一套写法。
-  const label = data.displayTitle ?? data.title;
-  const series =
-    data.variant === "album" &&
-    data.contentKind === "comic" &&
-    data.parentName &&
-    data.parentName !== label
-      ? data.parentName
-      : undefined;
-  const rowTitle = series ? `${series} · ${label}` : label;
+  const rowTitle = card.series ? `${card.series} · ${label}` : label;
 
   return (
     // 列表行：缩略图压到 48px，行高固定 86px —— 一屏能扫到更多条目。
@@ -820,8 +777,7 @@ function ListCard({
         <div className="shrink-0 w-24 sm:w-32 text-right flex flex-col items-end gap-1">
           <span className="text-body text-fg tabular-nums font-medium">
             {(() => {
-              const media =
-                data.variant === "album" ? mediaCountParts(data) : null;
+              const media = card.counts;
               if (media) {
                 return <span title={media.title}>{media.label}</span>;
               }
@@ -881,15 +837,6 @@ function ListCard({
  *  集合 / 智能视图是聚合视图，同样谈不上"翻开过"。
  *  showUnreadBadge=false 用于"整页都是未读"的列表：那里每张卡挂同一个
  *  标记纯属重复，未读状态由服务端筛选保证。 */
-function showUnreadMark(data: CardData, showUnreadBadge: boolean): boolean {
-  return (
-    showUnreadBadge &&
-    data.variant === "album" &&
-    data.contentKind === "comic" &&
-    isUnread(data.progress)
-  );
-}
-
 /** 未读：一颗白点 + 深色描边。
  *  白心在深色封面上直接可见，深色描边在白色封面上把点的轮廓兜住 ——
  *  两边都不需要额外的底板，也不会像一个空心的圆环按钮。 */

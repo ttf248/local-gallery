@@ -20,6 +20,7 @@ import { scanApi } from "../api/scan";
 import { useScanSSE } from "../hooks/useScanSSE";
 import ThemeSwitcher from "../components/common/ThemeSwitcher";
 import Segmented from "../components/common/Segmented";
+import DensityControl from "../components/wall/DensityControl";
 import { useUIStore } from "../store/uiStore";
 import { useLibraryManifest } from "../hooks/useLibrary";
 import StateBackupPanel from "../components/settings/StateBackupPanel";
@@ -30,7 +31,7 @@ import ScanWarnings from "../components/common/ScanWarnings";
 import Toggle from "../components/common/Toggle";
 import { syncHistoryCache } from "../utils/historyCache";
 import { useAppMode } from "../hooks/useAppMode";
-import { usePhotoStore, WALL_DENSITY_LABEL } from "../store/photoStore";
+import { usePhotoStore } from "../store/photoStore";
 import { useGalleryStore } from "../store/galleryStore";
 import {
   RefreshIcon,
@@ -419,17 +420,7 @@ export function SettingsView({
             <div className="settings-split">
             <Group title="照片">
               <Row label="照片墙密度">
-                <Segmented
-                  label="照片墙密度"
-                  value={density}
-                  onChange={setDensity}
-                  options={(
-                    ["auto", "compact", "cozy", "large"] as const
-                  ).map((key) => ({
-                    value: key,
-                    label: WALL_DENSITY_LABEL[key],
-                  }))}
-                />
+                <DensityControl value={density} onChange={setDensity} />
               </Row>
               <Row label="大图预览显示信息">
                 <Toggle

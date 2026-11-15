@@ -21,13 +21,9 @@ import {
   usePhotoSelectionStore,
   type PhotoSelectionEntry,
 } from "../store/photoSelectionStore";
-import {
-  usePhotoStore,
-  WALL_DENSITY_LABEL,
-  wallTargetHeight,
-  type WallDensity,
-} from "../store/photoStore";
+import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
+import DensityControl from "../components/wall/DensityControl";
 import ErrorBanner from "../components/common/ErrorBanner";
 import EmptyState from "../components/common/EmptyState";
 import PhotoViewer from "../components/wall/PhotoViewer";
@@ -63,91 +59,6 @@ import { mediaCountParts } from "../utils/mediaCount";
 interface Props {
   /** 相册摘要（含内容用途与封面）。 */
   album: LibraryNodeSummary;
-}
-
-/** 每档手动密度用多少个小方块示意疏密。 */
-const DENSITY_GRID: Record<
-  Exclude<WallDensity, "auto">,
-  { cols: number; rows: number }
-> = {
-  compact: { cols: 5, rows: 4 },
-  cozy: { cols: 4, rows: 3 },
-  large: { cols: 3, rows: 2 },
-};
-
-/**
- * 密度示意：方块排得越密，读数就是越紧凑。
- *
- * 原来的 S / M / L 三个字母要求读者先建立「字母 = 档位」的对应关系，
- * 而档位名（密集 / 标准 / 宽松）已经写在提示里；图形直接说出疏密。
- */
-function DensityGlyph({ level }: { level: Exclude<WallDensity, "auto"> }) {
-  const { cols, rows } = DENSITY_GRID[level];
-  const cell = 16 / cols;
-  const gap = 1.2;
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width={15}
-      height={15}
-      aria-hidden="true"
-      focusable="false"
-    >
-      {Array.from({ length: rows }).map((_, r) =>
-        Array.from({ length: cols }).map((__, c) => (
-          <rect
-            key={`${r}-${c}`}
-            x={c * cell}
-            y={r * cell}
-            width={cell - gap}
-            height={cell - gap}
-            rx={0.6}
-            fill="currentColor"
-          />
-        )),
-      )}
-    </svg>
-  );
-}
-
-/**
- * 自适应档位的示意：屏幕里几块大小不一。
- *
- * 手动档位用「方块多寡」说疏密，自适应没有固定疏密 —— 它跟着照片
- * 数量与视口变。画一块大小不一的版面，比再添一个疏密格子更贴切。
- */
-function AutoDensityGlyph() {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      width={15}
-      height={15}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect
-        x={0.9}
-        y={1.9}
-        width={14.2}
-        height={12.2}
-        rx={2}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.1}
-        opacity={0.55}
-      />
-      <rect x={2.8} y={3.6} width={5.8} height={8.8} rx={0.8} fill="currentColor" />
-      <rect
-        x={9.7}
-        y={3.6}
-        width={3.5}
-        height={5.2}
-        rx={0.8}
-        fill="currentColor"
-        opacity={0.6}
-      />
-    </svg>
-  );
 }
 
 /**
@@ -615,37 +526,7 @@ export default function PhotoAlbum({ album }: Props) {
             <div className="flex items-center gap-2">
               <div className="hidden items-center gap-2 md:flex">
                 <span className="text-meta text-fg-subtle">密度</span>
-                <div className="flex items-center overflow-hidden rounded-md border border-border bg-bg-subtle/40 text-meta">
-                  {(["auto", "compact", "cozy", "large"] as const).map(
-                    (key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setDensity(key)}
-                      /* 选中的一段抬起来成为白底深色字：与筛选条上的
-                         网格 / 列表分段控件、主题切换同一套语言。原来
-                         选中态只是底色深一档，在浅色画布上几乎看不出
-                         差别 —— 三枚方块悬在那儿，读不出选中了哪一档。 */
-                      className={`inline-flex h-7 w-8 items-center justify-center transition-colors ${
-                        density === key
-                          ? "bg-bg-elevated text-fg shadow-xs"
-                          : "text-fg-muted hover:text-fg"
-                      }`}
-                      title={WALL_DENSITY_LABEL[key]}
-                      aria-label={WALL_DENSITY_LABEL[key]}
-                      aria-pressed={density === key}
-                    >
-                      {/* 密度用排布示意，不写 S/M/L 三个字母：
-                          字母要读者先知道它对应哪一档，图形直接说「疏 / 密」。 */}
-                      {key === "auto" ? (
-                        <AutoDensityGlyph />
-                      ) : (
-                        <DensityGlyph level={key} />
-                      )}
-                    </button>
-                    ),
-                  )}
-                </div>
+                <DensityControl value={density} onChange={setDensity} />
               </div>
 
               {/* 多选：批量加入精选、并排对比都从这里进。
