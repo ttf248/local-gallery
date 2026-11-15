@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -11,6 +13,7 @@ import (
 
 type fakeEmbeddingWorker struct {
 	imageBatches atomic.Int32
+	textBatches  atomic.Int32
 }
 
 func (w *fakeEmbeddingWorker) Status(context.Context) (AIWorkerStatus, error) {
@@ -29,6 +32,7 @@ func (w *fakeEmbeddingWorker) EmbedImages(_ context.Context, paths []string) ([]
 }
 
 func (w *fakeEmbeddingWorker) EmbedTexts(_ context.Context, texts []string) ([]AIWorkerVector, error) {
+	w.textBatches.Add(1)
 	results := make([]AIWorkerVector, len(texts))
 	for index := range results {
 		vector := make([]float32, AIEmbeddingDimension)
@@ -36,6 +40,49 @@ func (w *fakeEmbeddingWorker) EmbedTexts(_ context.Context, texts []string) ([]A
 		results[index].Vector = vector
 	}
 	return results, nil
+}
+
+func TestEmbeddingAnalyzerCachesTextQueriesWithBoundedLRU(t *testing.T) {
+	index, err := OpenVectorIndex(filepath.Join(t.TempDir(), "vectors"), ChineseCLIPModelVersion)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker := &fakeEmbeddingWorker{}
+	analyzer, err := NewEmbeddingAnalyzer(worker, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer analyzer.Close()
+
+	first, err := analyzer.SearchText(context.Background(), "mountain at sunset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first[0] = -1
+	second, err := analyzer.SearchText(context.Background(), "mountain at sunset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if worker.textBatches.Load() != 1 || second[0] != 1 {
+		t.Fatalf("repeated query calls=%d vector[0]=%g; want one call and an isolated cached vector", worker.textBatches.Load(), second[0])
+	}
+	cancelledContext, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := analyzer.SearchText(cancelledContext, "mountain at sunset"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("SearchText() with a cancelled context = %v", err)
+	}
+
+	for query := 0; query < semanticTextEmbeddingCacheCapacity; query++ {
+		if _, err := analyzer.SearchText(context.Background(), fmt.Sprintf("query-%d", query)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := analyzer.SearchText(context.Background(), "mountain at sunset"); err != nil {
+		t.Fatal(err)
+	}
+	if calls := worker.textBatches.Load(); calls != semanticTextEmbeddingCacheCapacity+2 {
+		t.Fatalf("worker calls after LRU eviction = %d; want %d", calls, semanticTextEmbeddingCacheCapacity+2)
+	}
 }
 
 func (*fakeEmbeddingWorker) Close() error { return nil }

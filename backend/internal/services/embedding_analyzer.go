@@ -1,22 +1,39 @@
 package services
 
 import (
+	"container/list"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"sync"
 )
+
+const semanticTextEmbeddingCacheCapacity = 32
+
+type semanticTextEmbeddingCacheEntry struct {
+	text   string
+	vector []float32
+}
 
 type EmbeddingAnalyzer struct {
 	worker AIEmbeddingWorker
 	index  *VectorIndexStore
+
+	textCacheMu    sync.Mutex
+	textCache      map[string]*list.Element
+	textCacheOrder list.List
 }
 
 func NewEmbeddingAnalyzer(worker AIEmbeddingWorker, index *VectorIndexStore) (*EmbeddingAnalyzer, error) {
 	if worker == nil || index == nil {
 		return nil, errors.New("embedding analyzer requires a local worker and vector index")
 	}
-	return &EmbeddingAnalyzer{worker: worker, index: index}, nil
+	return &EmbeddingAnalyzer{
+		worker:    worker,
+		index:     index,
+		textCache: make(map[string]*list.Element),
+	}, nil
 }
 
 func (EmbeddingAnalyzer) Type() string    { return AIJobTypeEmbedding }
@@ -131,6 +148,18 @@ func (a *EmbeddingAnalyzer) Index() *VectorIndexStore {
 }
 
 func (a *EmbeddingAnalyzer) SearchText(ctx context.Context, text string) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	a.textCacheMu.Lock()
+	if element, exists := a.textCache[text]; exists {
+		a.textCacheOrder.MoveToFront(element)
+		vector := append([]float32(nil), element.Value.(semanticTextEmbeddingCacheEntry).vector...)
+		a.textCacheMu.Unlock()
+		return vector, nil
+	}
+	a.textCacheMu.Unlock()
+
 	results, err := a.worker.EmbedTexts(ctx, []string{text})
 	if err != nil {
 		return nil, err
@@ -138,7 +167,28 @@ func (a *EmbeddingAnalyzer) SearchText(ctx context.Context, text string) ([]floa
 	if len(results) != 1 || results[0].Error != "" || len(results[0].Vector) != AIEmbeddingDimension {
 		return nil, errors.New("text embedding failed")
 	}
-	return results[0].Vector, nil
+	vector := append([]float32(nil), results[0].Vector...)
+	a.cacheTextEmbedding(text, vector)
+	return append([]float32(nil), vector...), nil
+}
+
+func (a *EmbeddingAnalyzer) cacheTextEmbedding(text string, vector []float32) {
+	a.textCacheMu.Lock()
+	defer a.textCacheMu.Unlock()
+	if element, exists := a.textCache[text]; exists {
+		element.Value = semanticTextEmbeddingCacheEntry{text: text, vector: vector}
+		a.textCacheOrder.MoveToFront(element)
+		return
+	}
+	element := a.textCacheOrder.PushFront(semanticTextEmbeddingCacheEntry{text: text, vector: vector})
+	a.textCache[text] = element
+	if a.textCacheOrder.Len() <= semanticTextEmbeddingCacheCapacity {
+		return
+	}
+	oldest := a.textCacheOrder.Back()
+	entry := oldest.Value.(semanticTextEmbeddingCacheEntry)
+	delete(a.textCache, entry.text)
+	a.textCacheOrder.Remove(oldest)
 }
 
 func (a *EmbeddingAnalyzer) SearchImage(ctx context.Context, path string) ([]float32, error) {
@@ -153,6 +203,10 @@ func (a *EmbeddingAnalyzer) SearchImage(ctx context.Context, path string) ([]flo
 }
 
 func (a *EmbeddingAnalyzer) Close() error {
+	a.textCacheMu.Lock()
+	clear(a.textCache)
+	a.textCacheOrder.Init()
+	a.textCacheMu.Unlock()
 	workerErr := a.worker.Close()
 	a.index.Close()
 	return workerErr
