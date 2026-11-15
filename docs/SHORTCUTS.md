@@ -1,6 +1,6 @@
 # SHORTCUTS · 快捷键全集
 
-> 全局与阅读器快捷键来源：`frontend/src/utils/shortcuts.ts`；控件内的键盘操作由对应组件处理。
+> 全局与阅读器快捷键来源：`frontend/src/utils/shortcutsTable.ts`（清单）与 `frontend/src/utils/shortcuts.ts`（按键匹配）；控件内的键盘操作由对应组件处理。
 > 在应用里按 `?` 唤起可搜索帮助浮层，查看当前页面或媒体类型的操作。
 
 ---
@@ -13,7 +13,7 @@
 - **按键规范化**：`normalizeKey()` 把 `ctrl` / `alt` / `shift` 拼成 `+` 分隔的字符串
 - **跨键盘布局**：`?` / `+` / `=` 字面字符忽略 shift 前缀（AZERTY / QWERTZ 也能命中）
 - **分组**：`global` 为主页面，`photo` 为照片墙与大图预览，`reader` 为阅读器共用，`image` / `video` 为对应媒体操作。`HelpOverlay` 必须接收 `library` / `photo` / `image` / `video` 场景，先筛选分组再执行搜索
-- **修改流程**：改 `utils/shortcuts.ts` 的 `SHORTCUTS` 数组 → 同步核对 handler 注册（`Toolbar` / `AppShell` / `Reader` / `PhotoViewer` / `VideoPlayer` / `PageSlider`）→ 更新测试和本文件
+- **修改流程**：改 `utils/shortcutsTable.ts` 的 `SHORTCUTS` 数组 → 同步核对 handler 注册（`Toolbar` / `AppShell` / `Reader` / `PhotoViewer` / `VideoPlayer` / `PageSlider`）→ 更新测试和本文件。`utils/shortcutsTable.test.ts` 会逐条核对清单里的组合键是否真有处理函数 —— 写了却没人处理，用户按下没反应，比不写这一行更糟
 
 ---
 
