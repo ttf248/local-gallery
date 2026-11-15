@@ -13,7 +13,7 @@ import type { AppMode } from "../../api/library";
 // - 控件之间用 gap-2 分组，不画分隔线，避免视觉噪声
 export interface ListFilterBarProps {
   // 视图 chips (全部 / 文件夹 / 集合 / 标签),不需要就传 undefined
-  viewChips?: { key: string; label: string; count: number }[];
+  viewChips?: { key: string; label: string; count?: number }[];
   // 当前激活的 view chip key
   activeViewKey?: string;
   onChangeView?: (key: string) => void;
@@ -25,6 +25,10 @@ export interface ListFilterBarProps {
   // 隐藏「网格 / 列表」切换。某些页面只有一种形态（例如照片侧的
   // 「最近浏览」按时间排成一条足迹），摆一个切不动的开关只是噪音。
   hideViewToggle?: boolean;
+  /** 隐藏排序。内容自带顺序、或排序不适用于当前视图时使用。 */
+  hideSort?: boolean;
+  /** 隐藏右侧重复总数。当前视图已有自己的计数口径时使用。 */
+  hideTotalCount?: boolean;
   /**
    * 生效的排序与最少图数。
    *
@@ -51,6 +55,8 @@ export function ListFilterBar({
   totalCount,
   showMinImageFilter = true,
   hideViewToggle = false,
+  hideSort = false,
+  hideTotalCount = false,
   sort,
   onSortChange,
   minImageCount,
@@ -74,9 +80,11 @@ export function ListFilterBar({
                 className="chip"
               >
                 <span>{v.label}</span>
-                <span className="tabular-nums text-meta opacity-70">
-                  {v.count}
-                </span>
+                {typeof v.count === "number" && (
+                  <span className="tabular-nums text-meta opacity-70">
+                    {v.count}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -98,7 +106,8 @@ export function ListFilterBar({
               onChange={onMinImageCountChange}
             />
           )}
-          {viewChips?.length &&
+          {!hideTotalCount &&
+          viewChips?.length &&
           totalCount !== viewChips.find((c) => c.key === "all")?.count ? (
             <span
               className="text-meta text-fg-muted tabular-nums"
@@ -107,7 +116,7 @@ export function ListFilterBar({
               共 {totalCount} 项
             </span>
           ) : null}
-          <SortMenu value={sort} onChange={onSortChange} />
+          {!hideSort && <SortMenu value={sort} onChange={onSortChange} />}
           {/* 网格 / 列表：一条分段控件（跟主题切换同一套语言）。
               早先两个 30px 的方块各自带一圈边框，激活态只是把底色改成
               --bg-subtle，在浅色画布上几乎看不出差别 —— 两个图标悬在

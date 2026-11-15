@@ -4,7 +4,36 @@ vi.mock("../hooks/useLibraryList", async (original) => ({
   ...(await original<typeof import("../hooks/useLibraryList")>()),
   useLibraryList: vi.fn(),
 }));
-import { render, screen, waitFor } from "@testing-library/react";
+vi.mock("../hooks/useSmartAlbums", () => ({
+  useSmartAlbumDirectory: () => ({
+    items: [
+      {
+        albumId: "a_1",
+        albumName: "2023年测试相册",
+        parentName: "家庭照片",
+        group: {
+          id: "sg_0123456789abcdef0123",
+          dimension: "time",
+          name: "2024年春游",
+          suggestedName: "2024年春游",
+          customName: false,
+          photoCount: 3,
+          coverResourceId: "f_cover",
+          coverVersion: "v1",
+          hidden: false,
+        },
+      },
+    ],
+    total: 1,
+    isLoading: false,
+    isError: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    refetch: vi.fn(),
+    fetchNextPage: vi.fn(),
+  }),
+}));
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -83,10 +112,16 @@ vi.mock("../components/home/HomeHeroes", () => ({
   UnreadHero: () => <div data-testid="unread-hero" />,
 }));
 vi.mock("../components/album/AlbumGrid", () => ({
-  default: ({ items }: { items: { id: string; title: string }[] }) => (
+  default: ({
+    items,
+  }: {
+    items: { id: string; title: string; to: string }[];
+  }) => (
     <ol data-testid="album-grid">
       {items.map((item) => (
-        <li key={item.id}>{item.title}</li>
+        <li key={item.id} data-to={item.to}>
+          {item.title}
+        </li>
       ))}
     </ol>
   ),
@@ -351,6 +386,32 @@ it("照片工作台显示「接着看」专区", async () => {
   expect(screen.getByTestId("resume-hero").textContent).toContain(
     "2023年测试相册",
   );
+});
+
+it("首页智能相册汇总已生成的分组并直达来源相册中的分组", async () => {
+  useAppModeStore.setState({ preference: "photo", hydrated: true });
+  renderHome();
+
+  fireEvent.click(screen.getByRole("button", { name: /^智能相册/ }));
+
+  const smartGroupLink = await screen.findByRole("link", {
+    name: /打开智能相册 2024年春游/,
+  });
+  expect(screen.getByRole("button", { name: /^智能相册/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(useLibraryList).toHaveBeenLastCalledWith(
+    expect.objectContaining({ kind: "photo", view: "all" }),
+    true,
+  );
+  expect(smartGroupLink).toHaveAttribute(
+    "href",
+    "/photo/albums/a_1?view=smart&dimension=time&group=sg_0123456789abcdef0123",
+  );
+  expect(smartGroupLink).toHaveTextContent("来自 家庭照片 / 2023年测试相册");
+  expect(screen.queryByTestId("album-grid")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("filter-bar-count")).not.toBeInTheDocument();
 });
 
 it("漫画工作台不显示「接着看」专区", async () => {

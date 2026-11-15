@@ -1,7 +1,21 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { albumsApi, type SmartAlbumDimension } from "../api/albums";
+import { useEffect, useMemo } from "react";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import {
+  albumsApi,
+  type SmartAlbumDimension,
+  type SmartAlbumDirectoryDimension,
+} from "../api/albums";
+import { ApiError, isRetryableStatus } from "../api/client";
+import { useAppMode } from "./useAppMode";
 
 export const smartAlbumQueryKeys = {
+  directoryRoot: ["smart-album-directory"] as const,
+  directory: (dimension: SmartAlbumDirectoryDimension) =>
+    ["smart-album-directory", dimension] as const,
   summary: (albumId: string, dimension: SmartAlbumDimension) =>
     ["smart-albums", albumId, dimension, "summary"] as const,
   media: (
@@ -11,6 +25,47 @@ export const smartAlbumQueryKeys = {
     snapshotKey: string,
   ) => ["smart-albums", albumId, dimension, groupId, snapshotKey] as const,
 };
+
+export function useSmartAlbumDirectory(
+  dimension: SmartAlbumDirectoryDimension,
+  enabled: boolean,
+) {
+  const client = useQueryClient();
+  const { ready } = useAppMode();
+  const key = useMemo(
+    () => smartAlbumQueryKeys.directory(dimension),
+    [dimension],
+  );
+  const result = useInfiniteQuery({
+    queryKey: key,
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      albumsApi
+        .smartDirectory(dimension, pageParam, signal)
+        .then((response) => response.page),
+    getNextPageParam: (page) => page.nextCursor || undefined,
+    enabled: ready && enabled,
+    staleTime: 30_000,
+    retry: (count, error) =>
+      !(error instanceof ApiError && !isRetryableStatus(error.status)) &&
+      count < 1,
+  });
+
+  useEffect(() => {
+    if (
+      result.error instanceof ApiError &&
+      ["stale_cursor", "invalid_cursor"].includes(result.error.code ?? "")
+    ) {
+      void client.resetQueries({ queryKey: key, exact: true });
+    }
+  }, [result.error, client, key]);
+
+  return {
+    ...result,
+    items: result.data?.pages.flatMap((page) => page.items) ?? [],
+    total: result.data?.pages[0]?.total,
+  };
+}
 
 export function useSmartAlbumGroups(
   albumId: string,

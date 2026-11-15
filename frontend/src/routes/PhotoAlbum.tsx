@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LibraryMediaItem, LibraryNodeSummary } from "../api/library";
 import { albumsApi, type SmartAlbumDimension } from "../api/albums";
@@ -61,6 +61,18 @@ interface Props {
   album: LibraryNodeSummary;
 }
 
+function parseSmartAlbumDimension(value: string | null): SmartAlbumDimension {
+  switch (value) {
+    case "place":
+    case "people":
+    case "scene":
+      return value;
+    case "time":
+    default:
+      return "time";
+  }
+}
+
 /**
  * 照片相册页：打开即是照片墙。
  *
@@ -74,9 +86,52 @@ export default function PhotoAlbum({ album }: Props) {
   const pushToast = useUIStore((s) => s.pushToast);
   const density = usePhotoStore((s) => s.density);
   const setDensity = usePhotoStore((s) => s.setDensity);
-  const [smartMode, setSmartMode] = useState(false);
-  const [dimension, setDimension] = useState<SmartAlbumDimension>("time");
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const smartMode = searchParams.get("view") === "smart";
+  const setSmartMode = useCallback(
+    (enabled: boolean) => {
+      const next = new URLSearchParams(searchParams);
+      if (enabled) next.set("view", "smart");
+      else {
+        next.delete("view");
+        next.delete("dimension");
+        next.delete("group");
+      }
+      if (next.toString() !== searchParams.toString()) {
+        setSearchParams(next, { replace: true });
+      }
+    },
+    [searchParams, setSearchParams],
+  );
+  const dimension = parseSmartAlbumDimension(searchParams.get("dimension"));
+  const selectedGroupId = searchParams.get("group");
+  const setDimension = useCallback(
+    (nextDimension: SmartAlbumDimension) => {
+      const next = new URLSearchParams(searchParams);
+      next.set("view", "smart");
+      next.set("dimension", nextDimension);
+      next.delete("group");
+      if (next.toString() !== searchParams.toString()) {
+        setSearchParams(next, { replace: true });
+      }
+    },
+    [searchParams, setSearchParams],
+  );
+  const setSelectedGroupId = useCallback(
+    (groupId: string | null) => {
+      const next = new URLSearchParams(searchParams);
+      if (groupId === null) next.delete("group");
+      else {
+        next.set("view", "smart");
+        next.set("dimension", dimension);
+        next.set("group", groupId);
+      }
+      if (next.toString() !== searchParams.toString()) {
+        setSearchParams(next, { replace: true });
+      }
+    },
+    [dimension, searchParams, setSearchParams],
+  );
   const [analyzingJobIds, setAnalyzingJobIds] = useState<string[]>([]);
   const [rebuilding, setRebuilding] = useState(false);
   const { toggle: toggleFav, favorites } = useFavorites();
@@ -102,6 +157,15 @@ export default function PhotoAlbum({ album }: Props) {
     [mediaQuery.data],
   );
   const total = mediaQuery.data?.pages[0]?.total ?? mediaItems.length;
+
+  useEffect(() => {
+    if (smartSummary && !smartSummary.cacheHit) {
+      void queryClient.invalidateQueries({
+        queryKey: smartAlbumQueryKeys.directoryRoot,
+      });
+    }
+  }, [queryClient, smartSummary]);
+
   const analysisJobsQuery = useQuery({
     queryKey: ["ai-jobs"],
     queryFn: aiJobsApi.list,
@@ -154,7 +218,7 @@ export default function PhotoAlbum({ album }: Props) {
     ) {
       setSelectedGroupId(null);
     }
-  }, [selectedGroupId, smartMode, smartSummary]);
+  }, [selectedGroupId, setSelectedGroupId, smartMode, smartSummary]);
 
   useEffect(() => {
     const jobs = analysisJobsQuery.data?.snapshot.jobs;
@@ -176,6 +240,9 @@ export default function PhotoAlbum({ album }: Props) {
     setAnalyzingJobIds([]);
     void queryClient.invalidateQueries({
       queryKey: ["smart-albums", album.id],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: smartAlbumQueryKeys.directoryRoot,
     });
     pushToast({
       kind: failed ? "info" : "success",
@@ -238,6 +305,9 @@ export default function PhotoAlbum({ album }: Props) {
         smartAlbumQueryKeys.summary(album.id, dimension),
         response,
       );
+      void queryClient.invalidateQueries({
+        queryKey: smartAlbumQueryKeys.directoryRoot,
+      });
       setSelectedGroupId(null);
       pushToast({ kind: "success", message: "已按当前分析结果重建分组" });
     } catch {
@@ -245,7 +315,7 @@ export default function PhotoAlbum({ album }: Props) {
     } finally {
       setRebuilding(false);
     }
-  }, [album.id, dimension, pushToast, queryClient]);
+  }, [album.id, dimension, pushToast, queryClient, setSelectedGroupId]);
 
   const saveGroupOverride = useCallback(
     async (groupId: string, override: { name?: string; hidden?: boolean }) => {
@@ -260,6 +330,9 @@ export default function PhotoAlbum({ album }: Props) {
           smartAlbumQueryKeys.summary(album.id, dimension),
           response,
         );
+        void queryClient.invalidateQueries({
+          queryKey: smartAlbumQueryKeys.directoryRoot,
+        });
         pushToast({
           kind: "success",
           message:
@@ -610,10 +683,7 @@ export default function PhotoAlbum({ album }: Props) {
           >
             <button
               type="button"
-              onClick={() => {
-                setSmartMode(false);
-                setSelectedGroupId(null);
-              }}
+              onClick={() => setSmartMode(false)}
               className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
                 !smartMode
                   ? "bg-bg-elevated text-fg shadow-xs"
@@ -644,7 +714,33 @@ export default function PhotoAlbum({ album }: Props) {
         </div>
       </header>
 
-      {smartMode && !showingSmartGroup ? (
+      {smartMode && showingSmartGroup && !selectedGroup ? (
+        <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] py-6">
+          {smartGroupsQuery.isLoading ? (
+            <div className="rounded-xl border border-border bg-bg-elevated p-6 text-body text-fg-muted">
+              正在读取智能分组…
+            </div>
+          ) : smartGroupsQuery.isError ? (
+            <ErrorBanner onRetry={() => void smartGroupsQuery.refetch()}>
+              智能分组读取失败，请重试。
+            </ErrorBanner>
+          ) : (
+            <EmptyState
+              title="找不到这个智能分组"
+              description="该分组可能已被重建、隐藏或移除。"
+              action={
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => setSelectedGroupId(null)}
+                >
+                  返回智能相册
+                </button>
+              }
+            />
+          )}
+        </div>
+      ) : smartMode && !showingSmartGroup ? (
         <SmartAlbumBrowser
           summary={smartSummary}
           loading={smartGroupsQuery.isLoading}
@@ -652,10 +748,7 @@ export default function PhotoAlbum({ album }: Props) {
           dimension={dimension}
           analyzing={analyzingJobIds.length > 0}
           rebuilding={rebuilding}
-          onDimensionChange={(nextDimension) => {
-            setDimension(nextDimension);
-            setSelectedGroupId(null);
-          }}
+          onDimensionChange={setDimension}
           onAnalyze={() => void analyzeAlbum()}
           onRebuild={() => void rebuildSmartGroups()}
           onSaveOverride={saveGroupOverride}

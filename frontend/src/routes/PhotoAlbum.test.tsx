@@ -87,13 +87,13 @@ function Location() {
   );
 }
 
-function renderPhotoAlbum(node = album) {
+function renderPhotoAlbum(node = album, entry = `/albums/${node.id}`) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[`/albums/${node.id}`]}>
+      <MemoryRouter initialEntries={[entry]}>
         <Location />
         <Routes>
           <Route
@@ -251,6 +251,53 @@ describe("PhotoAlbum", () => {
       "time",
       "sg_0123456789abcdef0123",
       "smart-snapshot",
+    );
+  });
+
+  it("从智能相册直达链接进入分组浏览并可返回原始照片墙", () => {
+    renderPhotoAlbum(album, `/albums/${album.id}?view=smart`);
+
+    expect(screen.getByRole("button", { name: "智能相册" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "原始照片墙" }));
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      `/albums/${album.id}`,
+    );
+    expect(screen.getByRole("button", { name: "智能相册" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    expect(screen.getByTestId("photo-wall")).toBeInTheDocument();
+  });
+
+  it("支持首页汇总卡片直达对应维度的智能分组", () => {
+    const groupId = "sg_0123456789abcdef0123";
+    renderPhotoAlbum(
+      album,
+      `/albums/${album.id}?view=smart&dimension=time&group=${groupId}`,
+    );
+
+    expect(screen.getByTestId("photo-wall")).toHaveTextContent(
+      "group-photo.jpg",
+    );
+    expect(useSmartAlbumGroups).toHaveBeenLastCalledWith(
+      album.id,
+      "time",
+      true,
+    );
+    expect(useSmartAlbumGroupMedia).toHaveBeenLastCalledWith(
+      album.id,
+      "time",
+      groupId,
+      "smart-snapshot",
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      `/albums/${album.id}?view=smart&dimension=time&group=${groupId}`,
     );
   });
 

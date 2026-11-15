@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
 import { useScanSSE } from "../hooks/useScanSSE";
 import { useFavoritesByMode } from "../hooks/useFavoritesByMode";
@@ -10,6 +10,7 @@ import { scanApi } from "../api/scan";
 import { useHistoryCards } from "../hooks/useHistory";
 import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
+import SmartAlbumDirectory from "../components/album/SmartAlbumDirectory";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
@@ -41,6 +42,7 @@ import {
   useOnThisDayAlbums,
 } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
+import { LIST_PARAM } from "../utils/listFilterParams";
 import {
   StarIcon,
   ShuffleIcon,
@@ -52,9 +54,30 @@ import {
   SparkleIcon,
 } from "../components/common/Icon";
 import { SelectionToggle } from "../components/album/BulkActions";
+import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
+import type { SmartAlbumDirectoryDimension } from "../api/albums";
+
+const HOME_SMART_ALBUMS_PARAM = "smartAlbums";
+const HOME_SMART_ALBUM_DIMENSION_PARAM = "smartDimension";
+const HOME_SMART_ALBUMS_VIEW = "smartAlbums";
+
+function parseSmartAlbumDimension(
+  value: string | null,
+): SmartAlbumDirectoryDimension {
+  switch (value) {
+    case "time":
+    case "place":
+    case "people":
+    case "scene":
+      return value;
+    default:
+      return "all";
+  }
+}
 
 export default function Home() {
   const navigate = useNavigate();
+  const [homeSearchParams, setHomeSearchParams] = useSearchParams();
   const manifestQuery = useLibraryManifest();
   const manifest = manifestQuery.data?.manifest;
   const dashboardQuery = useLibraryDashboard();
@@ -73,7 +96,6 @@ export default function Home() {
     sortBy,
     setSortBy,
     view,
-    setView,
     yearFilter,
     setYearFilter,
     minImageCount,
@@ -86,6 +108,39 @@ export default function Home() {
   const { count: favCount } = useFavoritesByMode(mode);
   // 未读与继续阅读只属于漫画工作台：照片这边不出现这两个区。
   const isComic = mode === "comic";
+  const smartAlbumDirectory =
+    !isComic && homeSearchParams.get(HOME_SMART_ALBUMS_PARAM) === "1";
+  const smartDimension = parseSmartAlbumDimension(
+    homeSearchParams.get(HOME_SMART_ALBUM_DIMENSION_PARAM),
+  );
+  const smartDirectory = useSmartAlbumDirectory(
+    smartDimension,
+    smartAlbumDirectory && !!manifest,
+  );
+  const listView = view;
+  const activeViewKey = smartAlbumDirectory ? HOME_SMART_ALBUMS_VIEW : view;
+  const setHomeView = (key: string) => {
+    const next = new URLSearchParams(homeSearchParams);
+    if (key === HOME_SMART_ALBUMS_VIEW) {
+      next.set(HOME_SMART_ALBUMS_PARAM, "1");
+    } else {
+      next.delete(HOME_SMART_ALBUMS_PARAM);
+      next.delete(HOME_SMART_ALBUM_DIMENSION_PARAM);
+      if (key === "all") next.delete(LIST_PARAM.view);
+      else next.set(LIST_PARAM.view, key);
+    }
+    if (next.toString() !== homeSearchParams.toString()) {
+      setHomeSearchParams(next);
+    }
+  };
+  const setSmartDimension = (dimension: SmartAlbumDirectoryDimension) => {
+    const next = new URLSearchParams(homeSearchParams);
+    if (dimension === "all") next.delete(HOME_SMART_ALBUM_DIMENSION_PARAM);
+    else next.set(HOME_SMART_ALBUM_DIMENSION_PARAM, dimension);
+    if (next.toString() !== homeSearchParams.toString()) {
+      setHomeSearchParams(next, { replace: true });
+    }
+  };
   // 首页只展示服务端预先限制为六本的未读预览；完整未读库交给 /unread 分页加载。
   const unreadCards = useMemo<CardData[]>(
     () =>
@@ -227,18 +282,20 @@ export default function Home() {
 
   // 切换视图到 collection/smart 时清掉 yearFilter（年份只对 album 有意义）
   useEffect(() => {
-    if (yearFilter !== null && view !== "all" && view !== "album") {
+    if (yearFilter !== null && listView !== "all" && listView !== "album") {
       setYearFilter(null);
     }
-  }, [view, yearFilter, setYearFilter]);
+  }, [listView, yearFilter, setYearFilter]);
 
   // 全部图像 filter（视图 + 搜索 + 年份筛选 + 最小图数 + 排序）
   const yearFilterActive =
-    yearFilter !== null && (view === "all" || view === "album");
+    !smartAlbumDirectory &&
+    yearFilter !== null &&
+    (listView === "all" || listView === "album");
   const listQuery = useMemo(
     () => ({
       kind: mode,
-      view,
+      view: listView,
       q: query,
       sort: sortBy,
       year: yearFilterActive ? String(yearFilter) : undefined,
@@ -247,7 +304,15 @@ export default function Home() {
       // 重复摆一遍：同一批内容摆两处，用户只会以为看错了。
       excludeYearTargets: true,
     }),
-    [mode, view, query, sortBy, yearFilterActive, yearFilter, minImageCount],
+    [
+      mode,
+      listView,
+      query,
+      sortBy,
+      yearFilterActive,
+      yearFilter,
+      minImageCount,
+    ],
   );
   const overview = useLibraryList(listQuery, !!manifest);
   const filtered = overview.cards;
@@ -270,7 +335,7 @@ export default function Home() {
 
   const homeEntries = useMemo<GalleryContextEntry[]>(
     () =>
-      filtered
+      (smartAlbumDirectory ? [] : filtered)
         .filter((c) => c.variant === "album")
         .map((c) => ({
           key: decodeFavPath(c.to),
@@ -281,7 +346,7 @@ export default function Home() {
           videoCount: c.videoCount,
           contentKind: c.contentKind,
         })),
-    [filtered],
+    [filtered, smartAlbumDirectory],
   );
   useGalleryContextSync({ type: "home" }, homeEntries, undefined, {
     query: listQuery,
@@ -375,18 +440,20 @@ export default function Home() {
   const yearFilterLabel = yearFilter === "other" ? "其他" : String(yearFilter);
 
   // 当前视图的名字（空结果时要说清是哪个筛选把内容筛没了）。
-  const viewLabel =
-    view === "album"
+  const viewLabel = smartAlbumDirectory
+    ? "智能相册"
+    : view === "album"
       ? copy.albumTypeLabel
       : view === "collection"
         ? copy.collectionTypeLabel
         : "标签";
   // 真正生效的筛选有几条：空结果时每条都给一个单独的手柄。
-  const activeFilterCount =
-    (yearFilterActive ? 1 : 0) +
-    (view !== "all" ? 1 : 0) +
-    (query ? 1 : 0) +
-    (minImageCount > 0 ? 1 : 0);
+  const activeFilterCount = smartAlbumDirectory
+    ? 0
+    : (yearFilterActive ? 1 : 0) +
+      (listView !== "all" ? 1 : 0) +
+      (query ? 1 : 0) +
+      (minImageCount > 0 ? 1 : 0);
 
   return (
     <div className="home-page min-h-full">
@@ -567,7 +634,10 @@ export default function Home() {
           四个动作按钮，数据到达后整页内容一次性长出来，视线要重新找
           一次位置。骨架占住网格的位置，数据回来时是"填满"而不是"重排"。 */}
       {(hasContent || isLoadingInitial) && (
-        <section ref={gridRef} className="page-shell page-section pb-4 scroll-mt-6">
+        <section
+          ref={gridRef}
+          className="page-shell page-section pb-4 scroll-mt-6"
+        >
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.library)}</span>
             <h2 className="section-title">
@@ -600,7 +670,6 @@ export default function Home() {
               网格时控件早已不在视野里。 */}
           {!isLoadingInitial && (
             <ListFilterBar
-              trailing={<SelectionToggle />}
               viewChips={[
                 { key: "all", label: "全部", count: counts.all },
                 {
@@ -614,10 +683,27 @@ export default function Home() {
                   count: counts.collection,
                 },
                 { key: "smart", label: "标签", count: counts.smart },
+                ...(!isComic
+                  ? [
+                      {
+                        key: HOME_SMART_ALBUMS_VIEW,
+                        label: "智能相册",
+                        count: smartDirectory.total,
+                      },
+                    ]
+                  : []),
               ]}
-              activeViewKey={view}
-              onChangeView={(k) => setView(k as typeof view)}
-              totalCount={overview.summary?.total ?? 0}
+              activeViewKey={activeViewKey}
+              onChangeView={setHomeView}
+              totalCount={
+                smartAlbumDirectory
+                  ? (smartDirectory.total ?? 0)
+                  : (overview.summary?.total ?? 0)
+              }
+              showMinImageFilter={!smartAlbumDirectory}
+              hideSort={smartAlbumDirectory}
+              hideTotalCount={smartAlbumDirectory}
+              trailing={smartAlbumDirectory ? undefined : <SelectionToggle />}
               sort={sortBy}
               onSortChange={setSortBy}
               minImageCount={minImageCount}
@@ -625,11 +711,32 @@ export default function Home() {
             />
           )}
 
-          {isLoadingInitial || overview.isLoading ? (
+          {isLoadingInitial ||
+          (smartAlbumDirectory
+            ? smartDirectory.isLoading
+            : overview.isLoading) ? (
             <AlbumGridSkeleton
               variant={viewMode}
               bare
-              label="正在加载图像库…"
+              label={
+                smartAlbumDirectory
+                  ? "正在汇总已生成的智能相册…"
+                  : "正在加载图像库…"
+              }
+            />
+          ) : smartAlbumDirectory ? (
+            <SmartAlbumDirectory
+              dimension={smartDimension}
+              items={smartDirectory.items}
+              total={smartDirectory.total}
+              viewMode={viewMode}
+              isLoading={smartDirectory.isLoading}
+              isError={smartDirectory.isError}
+              hasNextPage={smartDirectory.hasNextPage}
+              isFetchingNextPage={smartDirectory.isFetchingNextPage}
+              onDimensionChange={setSmartDimension}
+              onRetry={() => void smartDirectory.refetch()}
+              onLoadMore={() => void smartDirectory.fetchNextPage()}
             />
           ) : overview.isError && !overview.summary ? (
             <EmptyState
@@ -654,7 +761,7 @@ export default function Home() {
               description={
                 query
                   ? `没有匹配"${query}"的结果`
-                  : yearFilterActive && view !== "all"
+                  : yearFilterActive && listView !== "all"
                     ? `当前视图是「${viewLabel}」，${yearFilterLabel} 这一年下没有${viewLabel}。换成「全部」再看看。`
                     : yearFilterActive
                       ? "尝试切换到其他年份或清除筛选"
@@ -677,9 +784,9 @@ export default function Home() {
                       清除年份筛选
                     </button>
                   )}
-                  {view !== "all" && (
+                  {listView !== "all" && (
                     <button
-                      onClick={() => setView("all")}
+                      onClick={() => setHomeView("all")}
                       className="btn btn-outline"
                     >
                       看全部
@@ -702,10 +809,7 @@ export default function Home() {
                     </button>
                   )}
                   {activeFilterCount === 0 && (
-                    <button
-                      onClick={resetFilters}
-                      className="btn btn-outline"
-                    >
+                    <button onClick={resetFilters} className="btn btn-outline">
                       清除筛选
                     </button>
                   )}

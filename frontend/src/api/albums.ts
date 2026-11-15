@@ -7,6 +7,7 @@ import type {
 } from "./library";
 
 export type SmartAlbumDimension = "time" | "place" | "people" | "scene";
+export type SmartAlbumDirectoryDimension = "all" | SmartAlbumDimension;
 
 export interface SmartAlbumGroup {
   id: string;
@@ -46,6 +47,15 @@ export interface SmartAlbumSummary {
   cacheHit: boolean;
 }
 
+export interface SmartAlbumDirectoryItem {
+  albumId: string;
+  albumName: string;
+  parentName?: string;
+  group: SmartAlbumGroup;
+}
+
+export type SmartAlbumDirectoryPage = LibraryPage<SmartAlbumDirectoryItem>;
+
 export interface SmartAlbumOverride {
   name?: string;
   hidden?: boolean;
@@ -77,6 +87,16 @@ export const albumsApi = {
       {
         params: { q, limit, kind },
       },
+    );
+  },
+  smartDirectory(
+    dimension: SmartAlbumDirectoryDimension,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
+    return api<{ ok: boolean; page: SmartAlbumDirectoryPage }>(
+      "/api/smart-albums",
+      { params: { dimension, cursor, limit: 60 }, signal },
     );
   },
   // 自定义封面：把 file 设为 album path 的封面（持久化到 cover_overrides.json）。
