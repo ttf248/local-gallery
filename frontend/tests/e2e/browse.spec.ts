@@ -2880,6 +2880,29 @@ test("首页「随手看看」换一批换掉的是照片本身", async ({ page,
     .toBe(false);
 });
 
+test("首页「随手看看」的标题进随机照片专页，那一页全是随机照片", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+  await page.goto("/photo");
+
+  const title = page.getByRole("link", { name: /随手看看/ });
+  await expect(title).toBeVisible();
+  await title.click();
+
+  await expect(page).toHaveURL(/\/photo\/random$/);
+  await expect(page.getByRole("heading", { name: "随机照片" })).toBeVisible();
+  // 这一页只有照片：墙上铺的是随机抽来的跨相册照片。
+  const wall = page.locator("[data-virtuoso-scroller]");
+  await expect(wall).toBeAttached();
+  await expect
+    .poll(async () => wall.locator("img").count(), { timeout: 20_000 })
+    .toBeGreaterThan(0);
+  // 页面上没有按时间或最近的筛选：这一页只有一个「换一批」。
+  await expect(page.getByRole("button", { name: /换一批/ })).toBeVisible();
+});
+
 test("分页浏览明暗主题与四个断点实际截图", async ({ page, request }) => {
   test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: "reduce" });

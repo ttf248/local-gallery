@@ -82,4 +82,10 @@ describe("随手看看的换一批", () => {
       expect(document.querySelectorAll("img").length).toBeGreaterThan(0),
     );
   });
+
+  it("标题是一个入口，指向随机照片专页", () => {
+    renderHero();
+    const link = screen.getByRole("link", { name: /随手看看/ });
+    expect(link).toHaveAttribute("href", "/photo/random");
+  });
 });

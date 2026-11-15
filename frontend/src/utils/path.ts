@@ -87,6 +87,16 @@ export function semanticSearchRoute(): string {
 }
 
 /**
+ * 随手看看：全库随机抽出的照片墙。
+ *
+ * 只属于照片工作台：首页那面「随手看看」的照片墙是照片侧的入口，
+ * 漫画那边没有对应的东西。
+ */
+export function randomPhotosRoute(): string {
+  return `${MODE_PREFIX.photo}/random`;
+}
+
+/**
  * 按年份浏览照片。
  *
  * 年份只属于照片工作台：漫画按作品与卷组织，年份对它没有意义。

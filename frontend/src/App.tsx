@@ -27,6 +27,7 @@ const Travels = lazy(() => import("./routes/Travels"));
 const TravelPlace = lazy(() => import("./routes/TravelPlace"));
 const People = lazy(() => import("./routes/People"));
 const SemanticSearch = lazy(() => import("./routes/SemanticSearch"));
+const RandomPhotos = lazy(() => import("./routes/RandomPhotos"));
 
 function lazyPage(Page: ComponentType) {
   return (
@@ -89,6 +90,8 @@ export default function App() {
             <Route path="/photo/semantic" element={lazyPage(SemanticSearch)} />
             <Route path="/photo/people" element={lazyPage(People)} />
             <Route path="/photo/people/:personId" element={lazyPage(People)} />
+            {/* 随手看看：全库随机抽出的照片墙，只属于照片侧。 */}
+            <Route path="/photo/random" element={lazyPage(RandomPhotos)} />
             {/* 设置页与任务中心的页签在路径段里：切页签是一次普通导航，
                 前进后退能跨页签，深链也能直接分享。没有页签的那条路径
                 落到缺省页签。 */}

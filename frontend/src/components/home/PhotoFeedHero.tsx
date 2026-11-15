@@ -1,12 +1,13 @@
 import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMediaFeed } from "../../hooks/useMediaFeed";
 import { usePicks } from "../../hooks/usePicks";
 import { useUIStore } from "../../store/uiStore";
 import PhotoStrip from "../wall/PhotoStrip";
 // 大图预览按需加载：首屏用不到它，代码不该跟着首屏一起下来。
 const PhotoViewer = lazy(() => import("../wall/PhotoViewer"));
-import { ShuffleIcon } from "../common/Icon";
-import { albumRoute } from "../../utils/path";
+import { ArrowUpRightIcon, ShuffleIcon } from "../common/Icon";
+import { albumRoute, randomPhotosRoute } from "../../utils/path";
 
 /**
  * 首页的照片墙：跨相册随手取一批照片铺成一面墙。
@@ -55,7 +56,21 @@ export default function PhotoFeedHero() {
   return (
     <section className="page-shell page-section" data-testid="photo-feed-hero">
       <div className="section-heading">
-        <h2 className="section-title">随手看看</h2>
+        {/* 标题是一个入口：点它进「随手看看」专页，那里是一整面随机
+            照片墙。首页这一条只是让人看见照片，不是让人看完照片。 */}
+        <h2 className="section-title">
+          <Link
+            to={randomPhotosRoute()}
+            className="group inline-flex items-center gap-1.5 rounded transition-colors hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            title="打开随机照片页"
+          >
+            随手看看
+            <ArrowUpRightIcon
+              size={13}
+              className="text-fg-subtle transition-colors group-hover:text-brand"
+            />
+          </Link>
+        </h2>
         <span className="section-meta">跨相册的照片</span>
         <button
           type="button"
