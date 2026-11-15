@@ -24,7 +24,9 @@ DIMENSION = 512
 CLIP_IMAGE_SIZE = 224
 INITIAL_BATCH_SIZE = 8
 GPU_INITIAL_BATCH_SIZE = 32
-IMAGE_PREPROCESS_WORKERS = 4
+IMAGE_PREPROCESS_WORKERS = 8
+IMAGE_PREPROCESS_LARGE_IMAGE_WORKERS = 4
+IMAGE_PREPROCESS_EIGHT_WORKER_PIXEL_LIMIT = 4_000_000
 OCR_CLASSIFIER_BATCH_SIZE = 16
 OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
@@ -468,6 +470,23 @@ def prepare_image(path: str):
             source.draft("RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE))
         source.load()
         return preprocess(source.convert("RGB"))
+
+
+def image_preprocess_worker_count(paths):
+    for path in paths:
+        try:
+            with open(path, "rb") as image_file:
+                is_jpeg = image_file.read(2) == b"\xff\xd8"
+            if is_jpeg:
+                continue
+            with Image.open(path) as source:
+                if source.format != "JPEG" and (
+                    source.width * source.height > IMAGE_PREPROCESS_EIGHT_WORKER_PIXEL_LIMIT
+                ):
+                    return IMAGE_PREPROCESS_LARGE_IMAGE_WORKERS
+        except Exception:
+            return IMAGE_PREPROCESS_LARGE_IMAGE_WORKERS
+    return IMAGE_PREPROCESS_WORKERS
 
 
 def read_cv_image(path: str):
@@ -1097,13 +1116,14 @@ def _process_request(request: dict) -> dict:
         paths = request.get("paths")
         if not isinstance(paths, list) or len(paths) > 32 or not all(isinstance(path, str) for path in paths):
             return {"error": "invalid_image_batch"}
+        prepare_workers = image_preprocess_worker_count(paths)
         return {
             "items": run_with_fallback(
                 paths,
                 encode_image_batch,
                 prepare_image,
                 device_mode,
-                prepare_workers=IMAGE_PREPROCESS_WORKERS,
+                prepare_workers=prepare_workers,
             ),
             "status": status(),
         }

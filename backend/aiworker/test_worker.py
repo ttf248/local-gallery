@@ -698,6 +698,39 @@ class WorkerTests(unittest.TestCase):
         self.assertLess(prepared_size[1], 800)
         self.assertGreaterEqual(min(prepared_size), worker.CLIP_IMAGE_SIZE)
 
+    def test_image_preprocess_worker_count_bounds_large_non_jpeg_inputs(self):
+        from PIL import Image as PILImage
+
+        with tempfile.TemporaryDirectory() as directory:
+            small_png = Path(directory) / "small.png"
+            large_png = Path(directory) / "large.png"
+            large_jpeg = Path(directory) / "large.jpg"
+            PILImage.new("RGB", (100, 100)).save(small_png)
+            PILImage.new("RGB", (2200, 1900)).save(large_png)
+            PILImage.new("RGB", (2200, 1900)).save(large_jpeg)
+
+            with patch.object(worker, "Image", PILImage):
+                self.assertEqual(8, worker.image_preprocess_worker_count([str(small_png)]))
+                self.assertEqual(4, worker.image_preprocess_worker_count([str(large_png)]))
+                self.assertEqual(8, worker.image_preprocess_worker_count([str(large_jpeg)]))
+                self.assertEqual(4, worker.image_preprocess_worker_count([str(small_png), str(large_png)]))
+
+    def test_embed_image_action_uses_adaptive_preprocessing_workers(self):
+        paths = ["one.png", "two.jpg"]
+        items = [{"vector": [1.0], "error": ""}]
+        with patch.object(worker, "runtime_error", ""), patch.object(
+            worker, "gpu_available", return_value=True
+        ), patch.object(worker, "load_model"), patch.object(
+            worker, "image_preprocess_worker_count", return_value=8
+        ) as choose_workers, patch.object(
+            worker, "run_with_fallback", return_value=items
+        ) as run_batch, patch.object(worker, "status", return_value={"device": "cuda"}):
+            result = worker._process_request({"action": "embed_images", "device": "gpu", "paths": paths})
+
+        self.assertIs(items, result["items"])
+        choose_workers.assert_called_once_with(paths)
+        self.assertEqual(8, run_batch.call_args.kwargs["prepare_workers"])
+
     def test_image_analysis_preserves_success_and_failure_per_item(self):
         results = worker.run_image_analysis(
             ["one.jpg", "two.jpg"],
