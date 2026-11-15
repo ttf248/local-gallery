@@ -25,6 +25,23 @@ describe("ErrorBoundary", () => {
     expect(screen.getByRole("button", { name: /重试/ })).toBeInTheDocument();
   });
 
+  it("应用根上的边界说「应用起不来了」，与路由内的说法不同", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    function Boom(): React.ReactElement {
+      throw new Error("启动炸了");
+    }
+
+    render(
+      <ErrorBoundary title="应用起不来了">
+        <Boom />
+      </ErrorBoundary>,
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("应用起不来了");
+    expect(alert).not.toHaveTextContent("图像库加载异常");
+  });
+
   it("点击重试会重新渲染子树", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     let boom = true;

@@ -160,7 +160,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={checkSession}
-              className="mt-4 h-9 px-4 rounded-lg border border-border text-body hover:bg-bg-hover"
+              className="mt-4 h-9 px-4 rounded-lg border border-border text-body hover:bg-bg-subtle"
             >
               重试
             </button>

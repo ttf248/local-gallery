@@ -3,7 +3,42 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 原生控件（滚动条、下拉、表单）跟着主题走：用户选了深色，
+         浏览器画的控件还是浅色，会在页面里显得像另一个产品。 -->
+    <meta name="color-scheme" content="light dark" />
     <title>本地画廊 · Local Gallery</title>
+    <script>
+      // 首屏之前把主题与工作台模式写上根元素。
+      //
+      // 这两个属性决定整页配色，等 React 挂载再写就会闪一下：暗色主题
+      // 在冷启动时先亮一屏白，漫画工作台也会先亮出照片侧的材质。
+      // 脚本放在 <head> 里，首帧绘制之前就跑完。
+      //
+      // 之后的真相源仍是 React：useTheme 与 WorkbenchModeProvider 会
+      // 重新写这两个属性（用户改主题、切换模式时立刻生效）。
+      (function () {
+        var root = document.documentElement;
+        var theme = "light";
+        try {
+          // zustand 的 persist 把状态放在 { state: {...}, version } 里。
+          var raw = localStorage.getItem("local-gallery-ui");
+          var pref = raw ? (JSON.parse(raw).state || {}).theme : null;
+          if (pref === "light" || pref === "dark") {
+            theme = pref;
+          } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+            theme = "dark";
+          }
+        } catch (e) {
+          // localStorage 不可用（隐私模式、被策略禁用）时退回浅色。
+        }
+        root.setAttribute("data-theme", theme);
+        // 模式由 URL 前缀决定：两侧各有一套材质（照片冷、漫画暖）。
+        root.setAttribute(
+          "data-mode",
+          location.pathname.indexOf("/comic") === 0 ? "comic" : "photo",
+        );
+      })();
+    </script>
   </head>
   <body class="bg-bg text-fg">
     <div id="root"></div>

@@ -388,7 +388,7 @@ export default function ServerConfigPanel() {
         {!localOnly && (
           <button
             type="button"
-            className="mt-3 h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-hover"
+            className="mt-3 h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-subtle"
             onClick={() => void refetch()}
           >
             重试
@@ -437,7 +437,7 @@ export default function ServerConfigPanel() {
                 <button
                   type="button"
                   onClick={save.cancelRead}
-                  className="h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-hover"
+                  className="h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-subtle"
                 >
                   取消读取
                 </button>
@@ -456,7 +456,7 @@ export default function ServerConfigPanel() {
                   type="button"
                   disabled={save.hasPending}
                   onClick={() => void save.readCurrent()}
-                  className="h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-hover disabled:opacity-50"
+                  className="h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-subtle disabled:opacity-50"
                 >
                   重新读取配置
                 </button>
@@ -611,7 +611,7 @@ export default function ServerConfigPanel() {
                   type="button"
                   disabled={update.isPending}
                   onClick={() => void disableLANAccess()}
-                  className="h-9 px-3 rounded-md border border-border text-meta text-fg-muted hover:bg-bg-hover disabled:opacity-50"
+                  className="h-9 px-3 rounded-md border border-border text-meta text-fg-muted hover:bg-bg-subtle disabled:opacity-50"
                 >
                   切换为仅本机
                 </button>

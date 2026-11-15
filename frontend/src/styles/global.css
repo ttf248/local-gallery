@@ -1202,6 +1202,13 @@ button:not(:disabled):active {
   .btn-primary:not(:disabled):hover {
     background: var(--accent-hover);
   }
+  /* 按下时微微下沉：主按钮是唯一带填充的那一枚，给它一点触觉反馈。
+     过渡沿用 .btn 的那一份（背景、文字、描边、阴影、位移一起动），
+     不在这里另写一条 —— 未分层的声明会盖掉分层里的 transition，
+     主按钮就会比别的按钮少过渡两项颜色。 */
+  .btn-primary:not(:disabled):active {
+    transform: translateY(0.5px);
+  }
 
   /* 次级操作：描边 */
   .btn-outline {
@@ -1375,17 +1382,6 @@ button:not(:disabled):active {
   outline: none;
 }
 
-/* === 主按钮（带 accent 填充）按下的微反馈 === */
-.btn-primary {
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-}
-.btn-primary:not(:disabled):active {
-  transform: translateY(0.5px);
-}
-
 /* === 动画 === */
 @keyframes fadeUp {
   from {
@@ -1435,6 +1431,12 @@ button:not(:disabled):active {
 /* 尊重系统的减少动态效果设置，同时保留状态变化本身。 */
 @media (prefers-reduced-motion: reduce) {
   html {
+    scroll-behavior: auto !important;
+  }
+
+  /* 真正滚动的是内容区，不是 html：只关掉 html 的平滑滚动，
+     页面里的滚动仍然会缓缓滑过去。 */
+  .app-main {
     scroll-behavior: auto !important;
   }
 
