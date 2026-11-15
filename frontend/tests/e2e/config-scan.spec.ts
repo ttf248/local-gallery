@@ -13,7 +13,7 @@ test("保存媒体根后自动扫描，等价配置不重扫", async ({ page,req
   page.on("request",req=>{ if(new URL(req.url()).pathname==="/api/scans" && req.method()==="POST") starts.push(req.url()); });
   try {
     await request.put("/api/config",{data:{mediaRoots:live}});
-    await page.goto("/settings");
+    await page.goto("/settings/server");
     const saved=page.waitForResponse(response=>new URL(response.url()).pathname==="/api/config" && response.request().method()==="PUT");
     await page.getByRole("textbox",{name:"媒体根目录 1",exact:true}).fill(root);
     await page.getByRole("textbox",{name:"媒体根目录 1",exact:true}).press("Enter");

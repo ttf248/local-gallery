@@ -22,7 +22,7 @@ test("本机备份下载、仅恢复收藏、过期预览拒绝覆盖", async ({
     expect(
       (await request.post("/api/favorites", { data: { resourceId: id } })).ok(),
     ).toBeTruthy();
-    await page.goto("/settings");
+    await page.goto("/settings/data");
     const panel = page.getByRole("region", { name: "备份与恢复" });
     await panel.scrollIntoViewIfNeeded();
     const downloaded = page.waitForEvent("download");

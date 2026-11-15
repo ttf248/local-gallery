@@ -744,7 +744,7 @@ export default function Home() {
               icon={<LibraryIcon size={20} />}
               action={
                 <div className="flex items-center gap-3">
-                  <Link to="/settings" className="btn btn-outline">
+                  <Link to="/settings/server" className="btn btn-outline">
                     去设置里改属性
                   </Link>
                   {otherSideHasContent && (
@@ -765,7 +765,7 @@ export default function Home() {
               icon={<LibraryIcon size={20} />}
               action={
                 <div className="flex items-center gap-3">
-                  <Link to="/settings" className="btn btn-outline">
+                  <Link to="/settings/server" className="btn btn-outline">
                     设置媒体目录
                   </Link>
                   <button

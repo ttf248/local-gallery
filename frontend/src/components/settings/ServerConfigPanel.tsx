@@ -944,10 +944,9 @@ function ConfigGroup({
   children: React.ReactNode;
 }) {
   return (
-    // @container：组内的字段行按「这一组有多宽」决定并排还是上下堆，
-    // 而不是按视口。三栏排布时每一组只有三百多像素，标签与输入框并排
-    // 会把标签挤成一列竖字。
-    <section className="@container mb-4 break-inside-avoid overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
+    // 组内的字段行固定上下堆：这一段是三栏排布，每组只有三百多像素，
+    // 标签与输入框并排会把标签挤成一列竖字。
+    <section className="mb-4 break-inside-avoid overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
       <h3 className="border-b border-border-faint bg-bg-subtle px-4 py-2.5 text-meta font-medium text-fg-muted">
         {title}
       </h3>
@@ -992,8 +991,8 @@ function ConfigRow({
     }
   }, onCompositionChange);
   return (
-    // 组窄时上下堆叠：标签与控件并排时，路径输入框会把标签挤成一列竖排文字。
-    <div className="flex flex-col items-stretch @md:flex-row @md:items-center justify-between gap-2 @md:gap-4 px-4 py-3 text-body">
+    // 字段行上下堆叠：标签与控件并排时，路径输入框会把标签挤成一列竖排文字。
+    <div className="flex flex-col items-stretch justify-between gap-2 px-4 py-3 text-body">
       <div className="flex flex-col min-w-0">
         <span className="text-fg flex items-center gap-2">
           {def.label}
@@ -1010,7 +1009,7 @@ function ConfigRow({
           </span>
         )}
       </div>
-      <div className="flex items-center gap-2 min-w-0 @md:shrink-0">
+      <div className="flex items-center gap-2 min-w-0">
         {def.kind === "text" && isPath ? (
           <PathField
             value={String(value)}
@@ -1040,7 +1039,7 @@ function ConfigRow({
             onCompositionStart={composition.start}
             onCompositionEnd={(e) => composition.finish(e.currentTarget.value)}
             onBlur={(e) => composition.finish(e.currentTarget.value)}
-            className="bg-bg-subtle border border-border-faint rounded-md h-8 px-2.5 text-body font-mono w-full @md:w-72 @md:max-w-[40vw] focus:outline-none focus:border-accent"
+            className="bg-bg-subtle border border-border-faint rounded-md h-8 px-2.5 text-body font-mono w-full max-w-[40vw] focus:outline-none focus:border-accent"
           />
         ) : def.kind === "number" ? (
           <input

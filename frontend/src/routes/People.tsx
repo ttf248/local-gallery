@@ -51,7 +51,7 @@ function PeopleList() {
         title="人物相册"
         description="按本机人脸特征生成可编辑的候选分组。应用不会识别真实姓名；你可以改名、合并、拆分或隐藏分组。"
         action={
-          <Link className="btn btn-sm btn-outline" to="/tasks">
+          <Link className="btn btn-sm btn-outline" to="/tasks/plan">
             人物分析设置
           </Link>
         }
@@ -74,7 +74,7 @@ function PeopleList() {
               : "前往任务中心显式启用人物分析，再启动人脸识别任务。"
           }
           action={
-            <Link className="btn btn-outline" to="/tasks">
+            <Link className="btn btn-outline" to="/tasks/plan">
               打开任务中心
             </Link>
           }

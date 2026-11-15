@@ -4,7 +4,6 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Sidebar from "./Sidebar";
 import { historyApi, prefsApi } from "../../api/prefs";
-import { useSectionNavStore } from "../../store/sectionNavStore";
 
 const dashboard = {
   dashboard: {
@@ -165,27 +164,35 @@ describe("Sidebar", () => {
     expect(screen.queryByText("继续阅读")).not.toBeInTheDocument();
   });
 
-  // 侧栏与应用级导航是一套：进入设置页后，条目下方补一行当前分区，
-  // 用户在左边随时知道自己停在这一页的哪一段。
-  // 页面级分区挂在侧栏里自己的入口下面：进入设置页，分区就展开在
-  // 「设置」下面，当前分区高亮。导航只有一条竖轴。
-  it("在分区页里展开该页的分区并标出当前分区", () => {
-    useSectionNavStore.getState().setActive("/settings", "data");
-    const { unmount } = renderSidebar(false, "/settings");
-    expect(screen.getByText("设置")).toBeInTheDocument();
-    // 分区清单：外观 / 阅读 / 数据 / 服务端 / 备份 / 关于。
-    expect(screen.getByRole("button", { name: /外观/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /关于/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /数据/ })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
-    // 别的页面不展开分区。
+  // 页面级分区搬进了页面内的页签条：侧栏不再展开二级菜单，
+  // 只在条目右边挂一枚当前页签名 —— 侧栏仍然能回答「我在这一页的哪一段」。
+  it("分区页不再展开二级菜单，只在条目上标出当前页签", () => {
+    const { unmount } = renderSidebar(false, "/settings/data");
+    const entry = screen.getByRole("link", { name: /设置/ });
+    expect(entry).toHaveAttribute("href", "/settings/data");
+    // 页签名写在链接外面：链接的名字始终是「设置」。
+    expect(entry).toHaveTextContent("设置");
+    expect(screen.getByTestId("nav-tab-label")).toHaveTextContent("数据");
+    // 旧的分区入口没有了。
+    expect(
+      screen.queryByRole("button", { name: /外观/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /关于/ })).not.toBeInTheDocument();
+    // 别的页面上不挂页签名。
     unmount();
     renderSidebar(false, "/");
-    expect(
-      screen.queryByRole("button", { name: /关于/ }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("nav-tab-label")).not.toBeInTheDocument();
+  });
+
+  // 侧栏在设置页与任务中心也摆「接着看」：这两页的分区搬进页内页签之后，
+  // 侧栏空出来了，而「接着看」是浏览的上下文，从任何页面都能跳回去。
+  it("设置页里也显示「接着读」迷你卡", () => {
+    dashboard.dashboard.inProgress = [
+      { album: albumNode, pageIndex: 5, pageCount: 20 },
+    ];
+    renderSidebar(false, "/settings/interface");
+    expect(screen.getByText("继续阅读")).toBeInTheDocument();
+    expect(screen.getByText("某本漫画")).toBeInTheDocument();
   });
 
   // 窄屏时侧栏是抽屉：抽屉宽度不由「折叠」决定，抽屉里再摆一枚

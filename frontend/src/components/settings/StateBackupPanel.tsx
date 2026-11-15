@@ -173,8 +173,9 @@ export default function StateBackupPanel() {
   return (
     // 标题与卡片由设置页给（那边是统一的分区卡片），这里只出内容。
     // 备份这一段通栏，说明与操作分成两栏：左边讲备份什么，右边是动作。
+    // 断点按视口算（sm）—— 备份卡在「数据」页签的宽列里，宽屏下够宽。
     <div className="p-4 space-y-4">
-      <div className="grid gap-4 @lg:grid-cols-[minmax(0,1fr)_auto] @lg:items-start">
+      <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
         <p className="text-body text-fg-muted">
           备份收藏、最近访问、服务端偏好、阅读/播放活动、自定义封面、照片精选与人物分组修正。不会备份人脸特征向量、媒体文件、服务配置或此浏览器的阅读器偏好。
         </p>

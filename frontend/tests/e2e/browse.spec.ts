@@ -79,7 +79,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
 // 设置页的「导航」分区管的就是侧栏显示哪些入口：开关写进服务端偏好，
 // 侧栏随即变化，刷新后也还是这一套。
 test("设置页的导航分区开关侧栏入口", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/interface");
   const sidebar = page.locator('aside[aria-label="主导航"]');
   // 默认收起的三项：侧栏里没有，设置页里开关是关着的。
   await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
@@ -617,7 +617,7 @@ test("离开相册会取消浏览器抽帧且不继续上传封面", async ({ pa
     // 设置页没有视频卡片，避免新页面的抽帧上传混入旧任务的取消断言。
     // 使用 SPA 导航，确保中止来自组件清理，而非整页卸载。
     await page.getByRole("link", { name: "设置", exact: true }).click();
-    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page).toHaveURL(/\/settings\/interface$/);
     // URL 更新后懒加载页面可能尚未提交，等旧相册卸载后再放行媒体响应。
     await expect(
       page.getByRole("heading", { name: "设置", level: 1, exact: true }),
@@ -742,7 +742,7 @@ test("视频信息重复访问后移除媒体根仍拒绝旧文件ID", async ({ 
 test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清空搜索", async ({
   page,
 }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/interface");
   const opener = page.getByRole("button", { name: "快捷键帮助", exact: true });
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "快捷键", exact: true });
@@ -778,7 +778,7 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
   await close.focus();
   await page.keyboard.press("u");
   await page.keyboard.press("/");
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings\/interface$/);
   await expect(close).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
@@ -864,7 +864,7 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   page,
 }) => {
   await scannedNodes(page.request);
-  await page.goto("/settings");
+  await page.goto("/settings/interface");
   const trigger = page.getByRole("button", { name: /^主题:/ });
   const menu = page.getByRole("menu", { name: "主题" });
   await trigger.click();
@@ -891,7 +891,7 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   }
   // 未读页只属于漫画工作台：照片模式下按 U 不跳转，切到漫画模式才跳。
   await page.keyboard.press("u");
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings\/interface$/);
   await page
     .getByRole("group", { name: "工作台模式" })
     .getByRole("button", { name: "漫画" })
@@ -901,7 +901,7 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
 });
 
 test("主题令牌在明暗模式下保持边框及透明背景", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/interface");
   const root = page.locator("html");
   const themeSwitcher = page
     .getByRole("button", { name: "浅色", exact: true })
@@ -2409,7 +2409,7 @@ test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ pa
 
 test("窄屏设置项的标签保持一行，不被挤成竖排", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   // 标签与控件并排时，路径输入框会把中文标签挤成一列竖排文字。
   await expect
     .poll(async () =>

@@ -85,7 +85,7 @@ describe("人物相册", () => {
     expect(await screen.findByText("人物分析默认关闭")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "打开任务中心" })).toHaveAttribute(
       "href",
-      "/tasks",
+      "/tasks/plan",
     );
   });
 

@@ -41,9 +41,7 @@ import {
   continueReadingTarget,
   readingPercent,
 } from "../../utils/continueReading";
-import { sectionsForPath } from "../../utils/pageSections";
-import { useSectionNavStore } from "../../store/sectionNavStore";
-import { scrollToSection } from "../../hooks/useSectionSpy";
+import { currentTabRoute, tabLabelFor } from "../../utils/pageTabs";
 import ModeSwitch from "./ModeSwitch";
 
 interface Props {
@@ -163,12 +161,13 @@ export default function Sidebar({
   const navItemClass = (isActive: boolean) =>
     `nav-entry group ${collapsed ? "nav-entry--compact" : ""} ${isActive ? "is-active" : ""}`;
 
-  // 当前所在分区：路由 → 分区 id。
-  //
-  // 任务中心与设置页都有页面级分区，它们挂在侧栏里自己的入口下面。
-  const activeSections = useSectionNavStore((state) => state.active);
-  // 当前页面有没有自己的分区（任务中心 / 设置）。
-  const hasPageSections = sectionsForPath(location.pathname).length > 0;
+  // 当前所在页签：设置页与任务中心把分区放在页内的 tab 条上，
+  // 侧栏不再挂二级菜单 —— 只在条目右边挂一枚当前页签名，
+  // 让侧栏仍然能回答「我现在在这一页的哪一段」。
+  const currentTabLabel = tabLabelFor(location.pathname);
+  // 已经站在这一页时，入口指向当前页签：再点一次自己的入口不该把页签
+  // 打回缺省那个。
+  const tabRouteHere = currentTabRoute(location.pathname);
 
   // 选中态：路径完全相等才算命中。
   //
@@ -199,13 +198,22 @@ export default function Sidebar({
         {group.map((entry) => {
           const isActive = isEntryActive(entry);
           const badge = badgeFor(entry);
+          // 当前页签名只挂在这一页真正激活时：别的条目上写它会误导。
+          const tabLabel = isActive ? currentTabLabel : undefined;
+          const to =
+            tabRouteHere && tabRouteHere.startsWith(`${entry.to}/`)
+              ? tabRouteHere
+              : entry.to;
           return (
-            <div key={`${entry.to}-${entry.label}`}>
+            <div
+              key={`${entry.to}-${entry.label}`}
+              className="flex items-center gap-2"
+            >
               <Link
-                to={entry.to}
-                className={navItemClass(isActive)}
+                to={to}
+                className={`${navItemClass(isActive)} flex-1`}
                 aria-current={isActive ? "page" : undefined}
-                title={`${entry.label}${badge > 0 ? ` · 还有 ${badge} ${albumCountUnit(mode)}` : ""}`}
+                title={`${entry.label}${tabLabel ? ` · ${tabLabel}` : ""}${badge > 0 ? ` · 还有 ${badge} ${albumCountUnit(mode)}` : ""}`}
               >
                 <entry.Icon size={16} className="shrink-0" />
                 {!collapsed && <span className="truncate">{entry.label}</span>}
@@ -224,53 +232,20 @@ export default function Sidebar({
                   />
                 )}
               </Link>
-              {isActive ? renderPageSections(entry.to) : null}
+              {/* 当前页签写在链接外面：它是这一页的状态，不是入口的名字。
+                  链接的可访问名因此始终是「设置」「任务中心」。 */}
+              {!collapsed && tabLabel && (
+                <span
+                  data-testid="nav-tab-label"
+                  className="shrink-0 text-meta text-rail-muted"
+                >
+                  {tabLabel}
+                </span>
+              )}
             </div>
           );
         })}
       </div>
-    );
-  };
-
-  /**
-   * 当前页面的分区，挂在它的入口下面。
-   *
-   * 页面级分区之前是内容顶上的一条横导航：它跟左侧的应用级导航并排站着，
-   * 像两套互不相干的菜单，宽屏上又是一条孤零零的细字。搬进侧栏之后，
-   * 导航只有一条竖轴，分区从属于它所在的页面；内容区也腾出了宽度，
-   * 宽屏上可以排两列。
-   */
-  const renderPageSections = (path: string) => {
-    const sections = sectionsForPath(path);
-    if (sections.length === 0 || collapsed) return null;
-    const current = activeSections[path];
-    return (
-      <ul className="mb-1 ml-5 mt-0.5 border-l border-rail-line pl-1">
-        {sections.map((section) => {
-          const isCurrent = section.id === current;
-          return (
-            <li key={section.id}>
-              <button
-                type="button"
-                onClick={() => scrollToSection(section.id, path)}
-                aria-current={isCurrent ? "true" : undefined}
-                className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
-                  isCurrent
-                    ? "font-medium text-rail-accent"
-                    : "text-rail-muted hover:bg-rail-hover hover:text-rail-fg"
-                }`}
-              >
-                {section.index ? (
-                  <span className="font-mono text-meta tabular-nums text-rail-muted">
-                    {section.index}
-                  </span>
-                ) : null}
-                <span className="truncate">{section.label}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     );
   };
 
@@ -365,9 +340,10 @@ export default function Sidebar({
           这里只留当前这一本：完整列表由首页的首屏专区与「最近浏览 /
           最近阅读」页承担。侧栏再挂一份，既重复又把侧栏中段塞满。
 
-          在任务中心与设置页不摆这一块：那里展开的是页面自己的分区，
-          侧栏已经被占满，而「接着看」是浏览的上下文，与当前页面无关。 */}
-      {!collapsed && resumeFirst && !hasPageSections && (
+          设置页与任务中心也摆这一块：它们的分区已经搬进页面内的 tab
+          条，侧栏不再被二级菜单占满，而「接着看」是浏览的上下文，
+          从任何页面都能跳回去接着翻。 */}
+      {!collapsed && resumeFirst && (
         <div className="px-4 pt-1 pb-2 min-h-0">
           <div className="px-1 pb-2 flex items-baseline gap-2">
             <span className="text-meta text-rail-muted">{resumeTitle}</span>

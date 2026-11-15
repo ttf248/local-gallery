@@ -156,7 +156,7 @@ export default function Toolbar({
               点进去是设置页里的扫描告警明细。 */}
           {warningCount > 0 && (
             <Link
-              to="/settings"
+              to="/settings/data"
               className="inline-flex items-center gap-1 h-9 px-2.5 rounded-md text-meta text-warning hover:bg-bg-subtle transition-colors"
               title="扫描完成但有部分目录或媒体未能完整读取"
             >

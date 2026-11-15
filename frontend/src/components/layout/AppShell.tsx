@@ -9,9 +9,11 @@ import {
   favoritesRoute,
   homeRoute,
   isReaderPath,
+  pageBoundaryKey,
   recentsRoute,
   unreadRoute,
 } from "../../utils/path";
+import { tabLabelFor } from "../../utils/pageTabs";
 import { workbenchCopy } from "../../utils/workbench";
 import { useFsCapabilities } from "../../hooks/useFsCapabilities";
 import { useAppMode } from "../../hooks/useAppMode";
@@ -89,10 +91,18 @@ export default function AppShell() {
       } else if (path.startsWith("/photo/people/")) {
         base = "人物相册";
       } else {
-        base = workbenchCopy(mode).albumTypeLabel;
+        // 设置页与任务中心的页签也在路径里（/settings/data）：这两页按首段
+        // 查表，再补上当前页签的名字，否则标题会掉进工作台的兜底文案。
+        // 其余页面仍走兜底（相册页是「相册」，不是「照片库」）。
+        const segment = path.split("/")[1] ?? "";
+        if (segment === "settings" || segment === "tasks") {
+          base = titles[`/${segment}`];
+        }
+        if (base === undefined) base = workbenchCopy(mode).albumTypeLabel;
       }
     }
-    document.title = `${base} · Local Gallery`;
+    const tab = tabLabelFor(path);
+    document.title = `${base}${tab ? ` · ${tab}` : ""} · Local Gallery`;
   }, [location.pathname, mode]);
 
   useEffect(() => {
@@ -171,8 +181,10 @@ export default function AppShell() {
           mobileMenuButtonRef={mobileMenuButtonRef}
         />
         <main className="app-main flex-1 overflow-auto">
-          {/* 路由层错误兜底:任意子组件 render 抛错都不会让整个 SPA 白屏。 */}
-          <ErrorBoundary key={location.pathname}>
+          {/* 路由层错误兜底:任意子组件 render 抛错都不会让整个 SPA 白屏。
+              key 用 pageBoundaryKey：设置页与任务中心切页签时不重挂整页
+              （页面状态与未保存的草稿都在里面），其余页面仍逐页重挂。 */}
+          <ErrorBoundary key={pageBoundaryKey(location.pathname)}>
             <Outlet />
           </ErrorBoundary>
         </main>

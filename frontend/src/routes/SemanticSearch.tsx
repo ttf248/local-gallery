@@ -497,7 +497,7 @@ export default function SemanticSearch() {
                   : "Chinese-CLIP 权重缺失或校验未通过。"}{" "}
                 文字搜索仍可用；权重目录：cacheDir/derived/ai/models/。
               </span>
-              <Link to="/tasks" className="btn btn-sm btn-outline">
+              <Link to="/tasks/storage" className="btn btn-sm btn-outline">
                 查看任务中心
               </Link>
             </div>
@@ -583,7 +583,7 @@ export default function SemanticSearch() {
             action={
               total === 0 &&
               (submittedHasSemanticSource || submittedHasOCRSource) ? (
-                <Link to="/tasks" className="btn btn-outline">
+                <Link to="/tasks/run" className="btn btn-outline">
                   打开任务中心
                 </Link>
               ) : undefined

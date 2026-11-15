@@ -15,7 +15,7 @@ import path from "node:path";
 
 const BASE = process.env.LG_BASE ?? "http://127.0.0.1:5173";
 const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",").filter(Boolean);
-const PAGES = (process.env.LG_PAGES ?? "/,/recents,/favorites,/unread")
+const PAGES = (process.env.LG_PAGES ?? "/,/recents,/favorites,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage")
   .split(",")
   .map((p) => p.trim())
   .filter(Boolean);

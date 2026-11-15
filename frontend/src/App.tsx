@@ -89,8 +89,19 @@ export default function App() {
             <Route path="/photo/semantic" element={lazyPage(SemanticSearch)} />
             <Route path="/photo/people" element={lazyPage(People)} />
             <Route path="/photo/people/:personId" element={lazyPage(People)} />
-            <Route path="/tasks" element={lazyPage(TaskCenter)} />
-            <Route path="/settings" element={lazyPage(Settings)} />
+            {/* 设置页与任务中心的页签在路径段里：切页签是一次普通导航，
+                前进后退能跨页签，深链也能直接分享。没有页签的那条路径
+                落到缺省页签。 */}
+            <Route
+              path="/tasks"
+              element={<Navigate to="/tasks/run" replace />}
+            />
+            <Route path="/tasks/:tab" element={lazyPage(TaskCenter)} />
+            <Route
+              path="/settings"
+              element={<Navigate to="/settings/interface" replace />}
+            />
+            <Route path="/settings/:tab" element={lazyPage(Settings)} />
           </Route>
           {/* 漫画阅读器：/comic/read/<album id>。它不在 AppShell 下，
               没有侧栏也没有工具栏，沉浸在一张画布里。 */}

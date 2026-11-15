@@ -2,12 +2,14 @@ import { expect, test } from "@playwright/test";
 import { scannedNodes } from "./helpers/library";
 
 test.describe("任务中心", () => {
-  test("按区块呈现运行、任务记录、每日计划与本机存储", async ({ page }) => {
-    await page.goto("/tasks");
-    await expect(page.getByRole("heading", { name: "运行" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "任务记录" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "每日计划" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "本机存储" })).toBeVisible();
+  test("四个页签各自承载一段内容，切页签写进 URL", async ({ page }) => {
+    await page.goto("/tasks/run");
+    const tablist = page.getByRole("tablist", { name: "任务中心分区" });
+    await expect(tablist).toBeVisible();
+    await expect(page.getByRole("tab", { name: "运行" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     // 空闲态给出开始分析的入口：模块芯片 + 处理方式 + 开始按钮。
     await expect(
       page.getByRole("group", { name: "分析模块" }).getByRole("button", {
@@ -18,16 +20,28 @@ test.describe("任务中心", () => {
     await expect(page.getByRole("radio", { name: "全量" })).toBeVisible();
     // 按钮文案带上本次张数，所以按正则找。
     await expect(page.getByRole("button", { name: /开始分析/ })).toBeVisible();
-    // 页面级分区挂在侧栏里自己的入口下面：点过去，当前分区就标出来。
+
+    // 侧栏不再挂二级菜单，只在条目上标出当前页签。
     const sidebar = page.locator('aside[aria-label="主导航"]');
-    await sidebar.getByRole("button", { name: /本机存储/ }).click();
     await expect(
       sidebar.getByRole("button", { name: /本机存储/ }),
-    ).toHaveAttribute("aria-current", "true");
+    ).toHaveCount(0);
+    await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("运行");
+
+    await page.getByRole("tab", { name: "本机存储" }).click();
+    await expect(page).toHaveURL(/\/tasks\/storage$/);
+    await expect(
+      page.getByRole("heading", { name: "派生缓存" }),
+    ).toBeVisible();
+    await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("本机存储");
+
+    // 深链直接落在那一屏。
+    await page.goto("/tasks/plan");
+    await expect(page.getByLabel("每日分析开始时间")).toBeVisible();
   });
 
   test("空闲时给出增量与全量的规模对比，并带上本次张数", async ({ page }) => {
-    await page.goto("/tasks");
+    await page.goto("/tasks/run");
     await scannedNodes(page.request);
     await expect(page.getByText("本次规模")).toBeVisible();
     await expect(page.getByRole("rowheader", { name: "增量" })).toBeVisible();
@@ -50,7 +64,7 @@ test.describe("任务中心", () => {
   });
 
   test("本机存储给出派生缓存占用、模型与产物路径", async ({ page }) => {
-    await page.goto("/tasks");
+    await page.goto("/tasks/storage");
     await expect(page.getByRole("heading", { name: "派生缓存" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "AI 模型与产物" })).toBeVisible();
     // 「缩略图」在重建范围勾选项里也有一份，这里认的是占用行。
@@ -65,7 +79,7 @@ test.describe("任务中心", () => {
   });
 
   test("每日计划的时间可以保存并在刷新后保留", async ({ page }) => {
-    await page.goto("/tasks");
+    await page.goto("/tasks/plan");
     const timeInput = page.getByLabel("每日分析开始时间");
     await expect(timeInput).toBeEnabled();
     await timeInput.fill("04:15");
@@ -78,7 +92,7 @@ test.describe("任务中心", () => {
 
   test("跑完一次分析后任务记录里出现新的任务与产出明细", async ({ page }) => {
     test.setTimeout(180_000);
-    await page.goto("/tasks");
+    await page.goto("/tasks/run");
     await scannedNodes(page.request);
     await expect(page.getByRole("radio", { name: "全量" })).toBeVisible();
     const start = page.getByRole("button", { name: /开始分析/ });
@@ -113,6 +127,7 @@ test.describe("任务中心", () => {
       .toMatch(/^(completed|failed|cancelled)$/);
 
     // 任务结束后任务记录里多出一行，展开后有产出明细。
+    await page.getByRole("tab", { name: "任务记录" }).click();
     const history = page.locator(
       `[data-testid="task-history-row"][data-job-id="${startedJob.id}"]`,
     );

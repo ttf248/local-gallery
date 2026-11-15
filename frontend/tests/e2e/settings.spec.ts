@@ -171,7 +171,7 @@ for (const recovery of ["manual", "automatic"] as const) {
     });
     try {
       await page.clock.install();
-      await page.goto("/settings");
+      await page.goto("/settings/data");
       const scan = page.getByTitle("扫描 (Ctrl+S)", { exact: true });
       await scan.click();
       const card = page.getByTestId("scan-progress");
@@ -247,7 +247,7 @@ test("扫描进度任务无法读取时可停止跟踪，停止操作不取消�
       json: { code: "scan_not_found", message: "scan not found" },
     }),
   );
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   const scan = page.getByTitle("扫描 (Ctrl+S)", { exact: true });
   await scan.click();
   const card = page.getByTestId("scan-progress");
@@ -275,7 +275,7 @@ test("扫描 error 业务事件显示任务失败，连接错误不混入业务�
       body: `event: error\ndata: ${JSON.stringify({ scanId, status: "error", progress: 0, albumsFound: 0, elapsedMs: 500, error: "root_missing" })}\n\n`,
     });
   });
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   const scan = page.getByRole("button", { name: "重新扫描", exact: true });
   await scan.click();
   const card = page.getByTestId("scan-progress");
@@ -291,7 +291,7 @@ test("扫描 error 业务事件显示任务失败，连接错误不混入业务�
 });
 
 test("设置页可加载服务端配置", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   await expect(
     page.getByText("服务端", { exact: false }).first(),
   ).toBeVisible();
@@ -317,7 +317,7 @@ test("设置页可加载服务端配置", async ({ page }) => {
 
 // 存储信息搬到任务中心之后，设置页不再摆这些。
 test("设置页不再展示模型路径与派生缓存占用", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings/data");
   await expect(page.getByText("媒体库索引")).toBeVisible();
   await expect(page.getByText("本机 AI 与存储")).toHaveCount(0);
   await expect(page.getByText("模型与缓存路径")).toHaveCount(0);
@@ -325,18 +325,29 @@ test("设置页不再展示模型路径与派生缓存占用", async ({ page }) 
   await expect(page.getByText("一键全清")).toHaveCount(0);
 });
 
-// 页面级分区挂在侧栏里自己的入口下面：进入设置页，分区就展开在
-// 「设置」下面，点过去当前分区就标出来。
-test("设置页的分区挂在侧栏入口下并联动", async ({ page }) => {
-  await page.goto("/settings");
-  const sidebar = page.locator('aside[aria-label="主导航"]');
-  await expect(sidebar.getByRole("button", { name: "数据" })).toBeVisible();
-
-  await sidebar.getByRole("button", { name: "数据" }).click();
-  await expect(sidebar.getByRole("button", { name: "数据" })).toHaveAttribute(
-    "aria-current",
+// 分区改成页面内的页签：点页签换内容，页签的 id 写进 URL，
+// 前进后退与深链都跟着走。侧栏不再挂二级菜单，只标出当前页签。
+test("设置页的分区改成页签，切页签写进 URL 并换内容", async ({ page }) => {
+  await page.goto("/settings/interface");
+  const tablist = page.getByRole("tablist", { name: "设置页分区" });
+  await expect(tablist).toBeVisible();
+  await expect(page.getByRole("tab", { name: "界面" })).toHaveAttribute(
+    "aria-selected",
     "true",
   );
+  // 侧栏里没有二级菜单了，只在条目上标出当前页签。
+  const sidebar = page.locator('aside[aria-label="主导航"]');
+  await expect(sidebar.getByRole("button", { name: "数据" })).toHaveCount(0);
+  await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("界面");
+
+  await page.getByRole("tab", { name: "数据" }).click();
+  await expect(page).toHaveURL(/\/settings\/data$/);
+  await expect(page.getByText("媒体库索引")).toBeVisible();
+  await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("数据");
+
+  // 深链直接落在那一屏。
+  await page.goto("/settings/server");
+  await expect(page.getByText("媒体根目录").first()).toBeVisible();
 });
 
 test("设置读取失败可重试，恢复后显示阅读设置", async ({ page }) => {
@@ -349,7 +360,7 @@ test("设置读取失败可重试，恢复后显示阅读设置", async ({ page 
       });
     else await route.continue();
   });
-  await page.goto("/settings");
+  await page.goto("/settings/reading");
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("设置加载失败", { timeout: 15_000 });
   await expect(page.getByText("加载中…", { exact: true })).toHaveCount(0);
@@ -417,7 +428,9 @@ for (const operation of ["prefs", "prune", "history"] as const) {
       },
     );
     try {
-      await page.goto("/settings");
+      await page.goto(
+        operation === "prefs" ? "/settings/reading" : "/settings/data",
+      );
       const action =
         operation === "prefs"
           ? page.getByRole("switch", { name: "阅读到末尾自动切换下一卷" })
@@ -430,9 +443,12 @@ for (const operation of ["prefs", "prune", "history"] as const) {
         await expect(
           page.getByRole("switch", { name: "切换时显示通知" }),
         ).toBeDisabled();
+        // 这次保存也压着数据页签里的输入：切过去看，它同样不能动。
+        await page.getByRole("tab", { name: "数据" }).click();
         await expect(
           page.getByRole("button", { name: "增加最近访问保留条数" }),
         ).toBeDisabled();
+        await page.getByRole("tab", { name: "阅读" }).click();
       }
       release();
       const message = {
@@ -538,6 +554,7 @@ for (const health of ["late", "error"] as const) {
       await page.goto("/");
       await initialHealth;
       await page.getByRole("link", { name: "设置", exact: true }).click();
+      await page.getByRole("tab", { name: "服务端" }).click();
       const toggle = page.getByRole("switch", {
         name: "允许在系统文件管理器中打开",
         exact: true,
@@ -622,7 +639,7 @@ test("设置目录选择使用真实路径，取消不保存且焦点留在弹�
       json: { code: "test_blocked", message: "audit: no config write" },
     });
   });
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   const rootInput = page
     .getByPlaceholder("E:\\照片 或 /home/user/pics")
     .first();
@@ -650,7 +667,7 @@ test("设置目录选择使用真实路径，取消不保存且焦点留在弹�
   await page.keyboard.press("Shift+Tab");
   await expect(useDirectory).toBeFocused();
   await page.keyboard.press("Control+h");
-  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page).toHaveURL(/\/settings\/server$/);
   await dialog
     .getByRole("button", { name: actual.items[0].name, exact: true })
     .click();
@@ -763,7 +780,7 @@ test("设置目录选择可分页和错误重试，完整保留 POSIX 路径", a
           };
     return route.fulfill({ json: result });
   });
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   const rootInput = page.getByPlaceholder("E:\\照片 或 /home/user/pics");
   await rootInput
     .locator("..")
@@ -817,7 +834,7 @@ test("设置缓存与静态目录按 Esc 撤销，Enter 和失焦只提交确认
       },
     });
   });
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   for (const field of ["cacheDir", "staticDir"] as const) {
     const original = String(config[field]);
     const placeholder = await page
@@ -876,7 +893,7 @@ test("设置媒体根按 Esc 撤销整组未提交内容并保留已经确认的
     return route.fulfill({ json: current });
   });
   await page.clock.install();
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   const inputs = page.getByPlaceholder("E:\\照片 或 /home/user/pics");
   await expect(inputs.first()).toBeVisible();
   await page.clock.pauseAt(new Date("2030-01-01T00:00:00.000Z"));
@@ -981,7 +998,7 @@ test("设置自动保存等待组合输入确认，其他字段仍可保存", as
     );
   };
   await page.clock.install();
-  await page.goto("/settings");
+  await page.goto("/settings/server");
   const root = page.getByPlaceholder("E:\\照片 或 /home/user/pics").first();
   await compose(root, "start", "/photos/候选目录");
   await page.clock.runFor(1000);
@@ -1129,7 +1146,7 @@ for (const failFirst of [false, true]) {
     });
     try {
       await page.clock.install();
-      await page.goto("/settings");
+      await page.goto("/settings/server");
       const input = page.getByPlaceholder("E:\\照片 或 /home/user/pics");
       await input.fill("/queue/first");
       await page.clock.runFor(500);
@@ -1141,6 +1158,7 @@ for (const failFirst of [false, true]) {
       await expect(input).toHaveValue("/queue/latest");
       await page.getByRole("link", { name: "照片库", exact: true }).click();
       await page.getByRole("link", { name: "设置", exact: true }).click();
+      await page.getByRole("tab", { name: "服务端" }).click();
       await expect(input).toHaveValue("/queue/latest");
       release[0]();
       await expect.poll(() => writes.length).toBe(2);
@@ -1218,7 +1236,7 @@ test("配置保存失败离开后仍保留输入，按 Enter 显式重试且不�
   });
   try {
     await page.clock.install();
-    await page.goto("/settings");
+    await page.goto("/settings/server");
     const input = page.getByPlaceholder("E:\\照片 或 /home/user/pics");
     await input.fill("/retry/photos");
     await page.clock.runFor(500);
@@ -1232,6 +1250,7 @@ test("配置保存失败离开后仍保留输入，按 Enter 显式重试且不�
     release();
     expect((await failed).status()).toBe(500);
     await page.getByRole("link", { name: "设置", exact: true }).click();
+    await page.getByRole("tab", { name: "服务端" }).click();
     await expect(input).toHaveValue("/retry/photos");
     await expect(page.getByRole("button", { name: "重试保存" })).toBeVisible();
     await page.clock.runFor(1500);
@@ -1304,7 +1323,7 @@ test("配置失败后可取消重新读取，迟到结果不覆盖新读取且�
   });
   try {
     await page.clock.install();
-    await page.goto("/settings");
+    await page.goto("/settings/server");
     const cache = page.getByPlaceholder(
       "存放缩略图 / 扫描结果 / 用户偏好，修改后需重启",
       { exact: true },
@@ -1394,7 +1413,7 @@ test("配置保存等待 LAN 会话建立后再发送后续写入", async ({ pag
   });
   try {
     await page.clock.install();
-    await page.goto("/settings");
+    await page.goto("/settings/server");
     await page
       .getByLabel("LAN 访问令牌")
       .fill("0123456789abcdef0123456789abcdef");

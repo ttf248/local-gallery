@@ -90,15 +90,6 @@
     justify-content: center;
     padding-inline: 0;
   }
-  /* 条目下挂一行（当前所在分区）时不再固定高度，两行自己撑开。 */
-  .nav-entry--stacked {
-    height: auto;
-    min-height: 46px;
-    padding-block: 7px;
-  }
-  .nav-entry--stacked .text-meta {
-    line-height: 1.35;
-  }
   .app-sidebar :focus-visible {
     outline-color: var(--rail-fg);
   }
@@ -992,11 +983,11 @@
     background: var(--bg-elevated);
     box-shadow: var(--shadow-xs);
   }
-  /* --- 设置页：两列卡片网格 ---
-     分区在 DOM 里的顺序仍是语义顺序（外观 → 导航 → 阅读 → 数据 → 备份
-     → 服务端 → 关于），宽屏排成两列：外观与导航一行、阅读与数据一行，
-     备份与服务端各占一整行。窄屏回到一列，读下来仍与侧栏的分区清单
-     一致 —— 视觉顺序与阅读顺序不分开。 */
+  /* --- 设置页：卡片网格 ---
+     设置页按页签分区，每个页签独占整幅内容宽度，按自己的内容排：
+     「界面」是两列卡片（外观 + 导航），「阅读」是一张整幅的卡，
+     「数据」是短卡与长卡 1:2 分栏，「服务端」是一列面板。
+     DOM 顺序仍是语义顺序，读下来与视觉顺序一致。 */
   .settings-grid {
     display: grid;
     gap: 24px;
@@ -1006,9 +997,11 @@
     .settings-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-    /* 通栏分区（备份与服务端）跨过两列。 */
-    .settings-grid > .settings-span {
-      grid-column: 1 / -1;
+    /* 短卡与长卡 1:2 分栏：数据卡内容短，备份卡内容长（段落 + 两个动作
+       + 预览后的类别勾选与恢复报告）。长内容占宽列，读下来的顺序与视觉
+       顺序一致。 */
+    .settings-grid--aside {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
     }
   }
   /* 卡片：标题在顶栏，正文在下面 —— 与服务端分组面板同一套语言，
@@ -1092,6 +1085,64 @@
     border-top: 1px solid var(--border-faint);
     font-size: var(--text-meta);
     color: var(--fg-subtle);
+  }
+  /* --- 页面内页签（设置 / 任务中心）---
+     页签是这一页自己的分区开关，不是第二条菜单轴：它贴在页头下面，
+     选中项字色变深并带一条强调色下划线，面板用 role="tabpanel" 与它
+     关联。下划线用 --accent —— 明暗两套主题下都压得住，且不引入第二个
+     彩色。 */
+  .page-tabs {
+    display: flex;
+    align-items: stretch;
+    gap: 2px;
+    border-bottom: 1px solid var(--border-faint);
+  }
+  .page-tabs__tab {
+    position: relative;
+    padding: 9px 12px 11px;
+    font-size: var(--text-body);
+    color: var(--fg-muted);
+    white-space: nowrap;
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .page-tabs__tab:hover {
+    color: var(--fg);
+  }
+  .page-tabs__tab[aria-selected="true"] {
+    color: var(--fg);
+    font-weight: 500;
+  }
+  .page-tabs__tab[aria-selected="true"]::after {
+    content: "";
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: -1px;
+    height: 2px;
+    background: var(--accent);
+  }
+  .page-tabs__tab:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+  /* 页签右侧的一句补充：这一屏在做什么。 */
+  .page-tabs__meta {
+    margin-left: auto;
+    align-self: center;
+    padding-right: 4px;
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+    white-space: nowrap;
+  }
+  /* 窄屏：字与内边距各收一档，四个页签挤得下，不必横向滚动。 */
+  @media (max-width: 479px) {
+    .page-tabs__tab {
+      padding: 8px 8px 10px;
+      font-size: var(--text-meta);
+    }
+    .page-tabs__meta {
+      display: none;
+    }
   }
   .settings-row {
     min-height: 48px;

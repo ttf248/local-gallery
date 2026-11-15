@@ -10,6 +10,7 @@ import {
   isReaderPath,
   modeFromPath,
   modeRoutePaths,
+  pageBoundaryKey,
   recentsRoute,
   readerRoute,
   tagRoute,
@@ -151,5 +152,24 @@ describe("modeRoutePaths", () => {
         expect(modeFromPath(path)).toBe(mode);
       }
     }
+  });
+});
+
+describe("pageBoundaryKey", () => {
+  // 设置页与任务中心的页签在路径里（/settings/data）。切页签不该重挂
+  // 整页 —— 任务中心里已选的分析模块与没保存的每日计划草稿都在页面状态里。
+  it("设置页与任务中心的各个页签共用一个键", () => {
+    expect(pageBoundaryKey("/settings")).toBe("settings");
+    expect(pageBoundaryKey("/settings/interface")).toBe("settings");
+    expect(pageBoundaryKey("/settings/server")).toBe("settings");
+    expect(pageBoundaryKey("/tasks")).toBe("tasks");
+    expect(pageBoundaryKey("/tasks/storage")).toBe("tasks");
+  });
+
+  // 其余页面仍然逐页重挂：换相册就是换一份数据。
+  it("其余路径一字不动", () => {
+    expect(pageBoundaryKey("/photo")).toBe("/photo");
+    expect(pageBoundaryKey("/photo/albums/a_1")).toBe("/photo/albums/a_1");
+    expect(pageBoundaryKey("/comic/read/c_1")).toBe("/comic/read/c_1");
   });
 });

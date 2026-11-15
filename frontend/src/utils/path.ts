@@ -213,3 +213,20 @@ export function favoriteResourceId(item: {
     ? `smart:${item.title}`
     : decodeFavPath(item.to);
 }
+
+/**
+ * 错误边界的重置键。
+ *
+ * 路由层用路径当 key：路径一变，整页重挂，渲染出错时兜底一次就干净。
+ * 但设置页与任务中心的页签也在路径里（`/settings/data`），切页签不该
+ * 重挂整页 —— 任务中心里已选的分析模块与没保存的每日计划草稿都在页面
+ * 状态里，重挂一次就丢了。
+ *
+ * 因此只把这两页的子路径折叠成同一个 key，其余路径一字不动：相册页
+ * 之间仍然逐页重挂（换相册就是换一份数据）。
+ */
+export function pageBoundaryKey(pathname: string): string {
+  const segment = pathname.split("/")[1] ?? "";
+  if (segment === "settings" || segment === "tasks") return segment;
+  return pathname;
+}

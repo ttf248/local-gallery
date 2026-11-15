@@ -9,7 +9,7 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import TaskCenter from "./TaskCenter";
+import { TaskCenterView } from "./TaskCenter";
 import {
   aiJobsApi,
   type AIJob,
@@ -184,17 +184,34 @@ function estimateFixture(
   };
 }
 
-function renderCenter() {
+/**
+ * 渲染任务中心的内容。
+ *
+ * 页签切换由外层接住，内容自己不依赖路由 —— 测试直接给页签 id。
+ * 面板按页签条件渲染，所以每个用例都要指明自己在哪一屏。
+ */
+function renderCenter(tab = "run") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <TaskCenter />
+        <TaskCenterView tab={tab} onSelectTab={vi.fn()} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return {
+    ...view,
+    rerenderWithTab: (next: string) =>
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <TaskCenterView tab={next} onSelectTab={vi.fn()} />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      ),
+  };
 }
 
 const emptySubUsage = {
@@ -367,39 +384,78 @@ describe("任务中心", () => {
     });
   });
 
-  it("按编号区块呈现运行、任务记录、每日计划与本机存储", async () => {
-    renderCenter();
+  it("页签条有四个页签，只有当前这一个被选中", async () => {
+    renderCenter("run");
 
+    const tablist = await screen.findByRole("tablist", { name: "任务中心分区" });
+    const tabs = within(tablist).getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual([
+      "运行",
+      "每日计划",
+      "任务记录",
+      "本机存储",
+    ]);
     expect(
-      await screen.findByRole("heading", { name: "运行" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "任务记录" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "每日计划" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "本机存储" }),
-    ).toBeInTheDocument();
-    // 编号写在各自的区块标题里。
-    ["run", "history", "plan", "storage"].forEach((id, index) => {
-      const section = document.getElementById(id);
-      expect(section).toBeInTheDocument();
-      expect(
-        within(section as HTMLElement).getByText(
-          String(index + 1).padStart(2, "0"),
-        ),
-      ).toBeInTheDocument();
-    });
-    // 页面级分区挂在左侧栏自己的入口下面，不再有顶上那条横导航。
+      tabs.filter((tab) => tab.getAttribute("aria-selected") === "true"),
+    ).toHaveLength(1);
+    expect(within(tablist).getByRole("tab", { name: "运行" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    // 页面级分区不再有编号区块，也没有侧栏二级菜单那种独立导航。
     expect(
       screen.queryByRole("navigation", { name: "页面分区" }),
     ).not.toBeInTheDocument();
   });
 
+  it("当前页签的面板以页签名为可访问名，其余页签的面板不在 DOM 里", async () => {
+    renderCenter("plan");
+
+    expect(
+      await screen.findByRole("tabpanel", { name: "每日计划" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tabpanel", { name: "运行" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tabpanel", { name: "任务记录" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("tabpanel", { name: "本机存储" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("每个页签各自承载对应的一段内容", async () => {
+    const view = renderCenter("run");
+    // 运行：控制台、等待队列与硬件方案。
+    expect(await screen.findByText("读取照片元数据")).toBeInTheDocument();
+    expect(screen.getByText("等待队列 · 0 项")).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "强制使用 GPU" }),
+    ).toBeInTheDocument();
+
+    // 每日计划：开关与时间输入。
+    view.rerenderWithTab("plan");
+    expect(
+      await screen.findByRole("switch", { name: "每天自动检查变化" }),
+    ).toBeInTheDocument();
+
+    // 任务记录：历史列表（此刻没有已结束的任务，只有空状态）。
+    view.rerenderWithTab("history");
+    expect(
+      await screen.findByText("还没有已结束的任务"),
+    ).toBeInTheDocument();
+
+    // 本机存储：派生缓存与路径。
+    view.rerenderWithTab("storage");
+    expect(
+      await screen.findByRole("heading", { name: "派生缓存" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("工作目录")).toBeInTheDocument();
+  });
+
   it("运行中显示阶段、进度口径、速度与预计剩余，并支持暂停", async () => {
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText("读取照片元数据")).toBeInTheDocument();
     // 百分比按本次待处理量算：43 / 45。
@@ -425,7 +481,7 @@ describe("任务中心", () => {
       snapshot: snapshot({ jobs: [gpuFaceJob], active: gpuFaceJob }),
     });
 
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText("设备：NVIDIA GPU")).toBeInTheDocument();
   });
@@ -435,7 +491,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText("队列空闲")).toBeInTheDocument();
     const moduleGroup = within(screen.getByRole("group", { name: "分析模块" }));
@@ -457,7 +513,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText("本次规模")).toBeInTheDocument();
     const table = screen.getByRole("table");
@@ -479,7 +535,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("run");
 
     expect(
       await screen.findByRole("button", { name: /开始分析 · 320 张/ }),
@@ -523,7 +579,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("run");
 
     // 表格用紧凑标签，说明与按钮仍明确提示无法预估。
     expect(await screen.findAllByText("暂不可估")).toHaveLength(2);
@@ -537,7 +593,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText(/本次规模核算失败/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /开始分析/ })).toBeEnabled();
@@ -558,7 +614,7 @@ describe("任务中心", () => {
         },
       }),
     });
-    renderCenter();
+    renderCenter("plan");
 
     expect(
       await screen.findByText("预计下次运行：320 张 · 约 45 秒"),
@@ -580,7 +636,7 @@ describe("任务中心", () => {
         queue: [pendingJob.id],
       }),
     });
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText("队列等待中 · 1 项")).toBeInTheDocument();
     expect(screen.getByText("等待队列 · 1 项")).toBeInTheDocument();
@@ -592,7 +648,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined, queue: [] }),
     });
-    renderCenter();
+    renderCenter("run");
 
     expect(await screen.findByText("等待队列 · 0 项")).toBeInTheDocument();
     expect(
@@ -613,7 +669,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot(),
     });
-    renderCenter();
+    renderCenter("run");
 
     const pauseButton = await screen.findByRole("button", { name: "暂停" });
     const gpuToggle = await screen.findByRole("checkbox", {
@@ -634,12 +690,13 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("run");
 
     await screen.findByText("队列空闲");
+    // 服务设置直接落到设置页的服务端页签，不用先点两下。
     expect(screen.getByRole("link", { name: "服务设置" })).toHaveAttribute(
       "href",
-      "/settings",
+      "/settings/server",
     );
     fireEvent.click(screen.getByRole("radio", { name: "全量" }));
     fireEvent.click(screen.getByRole("button", { name: "按序启动全部任务" }));
@@ -672,7 +729,7 @@ describe("任务中心", () => {
             : snapshot({ jobs: [nextJob, currentJob], active: nextJob }),
       };
     });
-    renderCenter();
+    renderCenter("run");
 
     await screen.findByText("读取照片元数据");
     const completedJob = { ...currentJob, status: "completed" as const };
@@ -708,12 +765,15 @@ describe("任务中心", () => {
         queue: [queuedOCR.id, queuedFace.id],
       }),
     });
-    renderCenter();
+    const view = renderCenter("run");
 
     const rows = await screen.findAllByTestId("task-queue-row");
     expect(rows[0].textContent).toContain("文字识别");
     expect(rows[1].textContent).toContain("人脸识别");
-    expect(screen.getAllByTestId("task-history-row")).toHaveLength(1);
+    // 任务记录在另一个页签上：切过去才看得见那一条已完成的任务。
+    view.rerenderWithTab("history");
+    expect(await screen.findAllByTestId("task-history-row")).toHaveLength(1);
+    view.rerenderWithTab("run");
     fireEvent.click(
       within(rows[1]).getByRole("button", { name: "上移 手动 人脸识别" }),
     );
@@ -745,7 +805,7 @@ describe("任务中心", () => {
       }),
     });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    renderCenter();
+    renderCenter("run");
 
     await screen.findByText("等待队列 · 1 项");
     const clearButton = await screen.findByRole("button", {
@@ -781,7 +841,7 @@ describe("任务中心", () => {
       }),
     });
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    renderCenter();
+    renderCenter("history");
 
     fireEvent.click(await screen.findByRole("button", { name: "失败 1" }));
     const rows = await screen.findAllByTestId("task-history-row");
@@ -808,7 +868,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [cancelledJob], active: undefined }),
     });
-    renderCenter();
+    renderCenter("history");
 
     const row = (await screen.findAllByTestId("task-history-row"))[0];
     fireEvent.click(within(row).getByText("手动 元数据分析"));
@@ -832,7 +892,7 @@ describe("任务中心", () => {
       snapshot: snapshot({ jobs: [completedJob], active: undefined }),
     });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    renderCenter();
+    renderCenter("history");
 
     fireEvent.click(
       await screen.findByRole("button", { name: "清理已结束记录" }),
@@ -855,7 +915,7 @@ describe("任务中心", () => {
         ],
       }),
     });
-    renderCenter();
+    renderCenter("run");
 
     await screen.findByText("队列空闲");
     fireEvent.click(
@@ -932,7 +992,7 @@ describe("任务中心", () => {
         },
       },
     });
-    renderCenter();
+    renderCenter("run");
 
     await screen.findByText("队列空闲");
     const moduleGroup = within(screen.getByRole("group", { name: "分析模块" }));
@@ -955,7 +1015,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [], active: undefined }),
     });
-    renderCenter();
+    renderCenter("plan");
 
     const toggle = await screen.findByRole("switch", {
       name: "每天自动检查变化",
@@ -988,7 +1048,7 @@ describe("任务中心", () => {
         ],
       }),
     });
-    renderCenter();
+    renderCenter("plan");
 
     fireEvent.click(
       within(await screen.findByRole("group", { name: "运行模块" })).getByRole(
@@ -1024,7 +1084,7 @@ describe("任务中心", () => {
         ],
       }),
     });
-    renderCenter();
+    renderCenter("plan");
 
     const planGroup = within(
       await screen.findByRole("group", { name: "运行模块" }),
@@ -1077,7 +1137,7 @@ describe("任务中心", () => {
         active: undefined,
       }),
     });
-    renderCenter();
+    renderCenter("history");
 
     fireEvent.click(await screen.findByText("手动 元数据分析"));
     const group = (await screen.findByText("EXIF 数据损坏或无法解析")).closest(
@@ -1114,7 +1174,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [failedJob], active: undefined }),
     });
-    renderCenter();
+    renderCenter("history");
 
     fireEvent.click(await screen.findByText("手动 元数据分析"));
     const group = (await screen.findByText("EXIF 数据损坏或无法解析")).closest(
@@ -1143,7 +1203,7 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [completedJob], active: undefined }),
     });
-    renderCenter();
+    renderCenter("history");
 
     const row = (await screen.findAllByTestId("task-history-row"))[0];
     // 还没展开：一次请求都不该发。
