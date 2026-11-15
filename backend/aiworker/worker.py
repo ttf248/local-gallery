@@ -19,7 +19,7 @@ from pathlib import Path
 
 MODEL_FILE = "clip_cn_vit-b-16.pt"
 MODEL_SHA256 = "5997ef32c50de18f3ac06eb5d746c324a639053c3bed8f2986f97ebb22b2ecde"
-MODEL_VERSION = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7"
+MODEL_VERSION = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7+exif-orientation-v1"
 DIMENSION = 512
 CLIP_IMAGE_SIZE = 224
 INITIAL_BATCH_SIZE = 8
@@ -469,11 +469,15 @@ def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_worker
 
 
 def prepare_image(path: str):
+    from PIL import ImageOps
+
     with Image.open(path) as source:
         if source.format == "JPEG":
             source.draft("RGB", (CLIP_IMAGE_SIZE, CLIP_IMAGE_SIZE))
         source.load()
-        return preprocess(source.convert("RGB"))
+        orientation = source.getexif().get(274, 1)
+        image = ImageOps.exif_transpose(source) if orientation in range(2, 9) else source
+        return preprocess(image.convert("RGB"))
 
 
 def image_preprocess_worker_count(paths):

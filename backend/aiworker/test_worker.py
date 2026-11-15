@@ -748,6 +748,35 @@ class WorkerTests(unittest.TestCase):
         self.assertLess(prepared_size[1], 800)
         self.assertGreaterEqual(min(prepared_size), worker.CLIP_IMAGE_SIZE)
 
+    def test_clip_preparation_applies_exif_orientation(self):
+        from PIL import Image as PILImage
+        from PIL import ImageDraw
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "oriented.png"
+            source = PILImage.new("RGB", (120, 80), "black")
+            draw = ImageDraw.Draw(source)
+            draw.rectangle((0, 0, 59, 79), fill=(240, 20, 20))
+            draw.rectangle((60, 0, 119, 79), fill=(20, 20, 240))
+            exif = PILImage.Exif()
+            exif[274] = 6
+            source.save(path, exif=exif)
+
+            with patch.object(worker, "Image", PILImage), patch.object(
+                worker,
+                "preprocess",
+                side_effect=lambda image: (
+                    image.size,
+                    image.getpixel((40, 20)),
+                    image.getpixel((40, 100)),
+                ),
+            ):
+                prepared = worker.prepare_image(str(path))
+
+        self.assertEqual((80, 120), prepared[0])
+        self.assertGreater(prepared[1][0], prepared[1][2])
+        self.assertGreater(prepared[2][2], prepared[2][0])
+
     def test_image_preprocess_worker_count_bounds_large_non_jpeg_inputs(self):
         from PIL import Image as PILImage
 

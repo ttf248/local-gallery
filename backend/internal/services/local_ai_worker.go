@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ChineseCLIPModelVersion = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7"
+	ChineseCLIPModelVersion = "chinese-clip-vit-b-16@957be8390cef5bab9ddd2dd36ca81a8622f966e7+exif-orientation-v1"
 	ChineseCLIPModelFile    = "clip_cn_vit-b-16.pt"
 	ChineseCLIPSHA256       = "5997ef32c50de18f3ac06eb5d746c324a639053c3bed8f2986f97ebb22b2ecde"
 )

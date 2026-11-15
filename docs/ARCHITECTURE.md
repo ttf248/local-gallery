@@ -91,7 +91,7 @@ Windows 上 Worker 将 CUDA DLL 目录加入进程 DLL 搜索路径和 `PATH`，
 
 GPU 人脸任务最多用 4 个线程并行处理不同照片，同一 YuNet/SFace session 可由这些线程共享，返回项仍按输入顺序排列。首个请求的模型加载由锁保护，避免并发建库时重复创建 GPU session；CPU 人脸任务保持串行，因为 OpenCV 的 YuNet 检测器会逐图修改输入尺寸。
 
-Chinese-CLIP 图像嵌入每次最多接收 32 张；最多 4 个线程并行解码和执行图像变换，再按输入顺序送入同一条 GPU 推理路径。GPU 初始推理批次为 32，CPU 为 8；CUDA OOM 时沿用减半重试，保持低显存显卡的适配。文本嵌入不创建线程池；图像预处理失败仍按单张记为 `image_unreadable`，不会中止同批其他照片。[LibrePhotos 为 OpenCLIP 提供动态批次 ONNX 导出](https://raw.githubusercontent.com/LibrePhotos/librephotos/dev/apps/backend/scripts/build_openclip_onnx.py)；这里利用 Chinese-CLIP 原生批量输入和已有 OOM 回退，继续使用当前 PyTorch 权重与运行时，不增加第二份模型产物。
+Chinese-CLIP 图像嵌入每次最多接收 32 张；常规图片最多 8 个线程并行解码和执行图像变换，超过 4MP 的非 JPEG 批次收敛到 4 个线程，再按输入顺序送入同一条 GPU 推理路径。GPU 初始推理批次为 32，CPU 为 8；CUDA OOM 时沿用减半重试，保持低显存显卡的适配。图像预处理会先应用 EXIF Orientation，再生成向量；该规则纳入模块版本，变更时既有嵌入会失效并按需重建。文本嵌入不创建线程池；图像预处理失败仍按单张记为 `image_unreadable`，不会中止同批其他照片。[LibrePhotos 为 OpenCLIP 提供动态批次 ONNX 导出](https://raw.githubusercontent.com/LibrePhotos/librephotos/dev/apps/backend/scripts/build_openclip_onnx.py)，并将方向归一化的大缩略图作为机器学习图像输入（[缩略图处理说明](https://github.com/LibrePhotos/librephotos/blob/dev/apps/docs/docs/development/contribution/backend/thumbnails.md)）；这里先在原图预处理阶段修正方向，保留现有 Chinese-CLIP 权重与运行时。
 
 向量以 512 维 Float16 保存在 `derived/ai/vectors/shards/`，每片有 JSONL 元数据与 SHA256，manifest 原子发布并标记已压实分片；元数据只含资源 ID、文件指纹、模型版本和片内位置，不保存文件路径。应用启动时将 Float16 shard 装入内存，完整校验哈希后才用于检索；模型/索引版本不兼容时重建派生索引。索引增量追加，累计 128 个未压实 shard 后由独立后台压实，每片最多 512 条；达到压实门槛后不因已有分片数量重复排队。检索将查询向量归一化一次，用半精度解码查表和有界 Top-K 堆代替逐条解码后的全量排序。Windows RTX 3060、本地 Go 基准 100,000 向量、512 维、31 次测量：p50 从 193.2 ms 降至 73.3 ms，p95 从 222.3 ms 降至 79.8 ms，每次搜索分配从约 2.4 MB 降至约 2.5 KB；索引堆约 129.8 MB。复现命令：`go test ./internal/services -run '^$' -bench '^BenchmarkVectorIndexSearch100K$' -benchtime=31x -benchmem`。
 
