@@ -1,6 +1,5 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "node:path";
 import pkg from "./package.json";
 
 const appVersion = process.env.LOCAL_GALLERY_VERSION ?? pkg.version;
@@ -17,11 +16,6 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
   server: {
     port: 5173,
     host: "127.0.0.1",
@@ -51,9 +45,16 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
-    // 'hidden' 而非 true:源码映射生成但不上传到生产 bundle(stack trace 仍
-    // 可读,但 .map 文件不带 sourceMappingURL),节省体积且不暴露源码结构。
-    sourcemap: "hidden",
+    // 发布构建默认不产出源码映射。
+    //
+    // 'hidden' 只是不给 .map 挂 sourceMappingURL，映射文件本身照样写进
+    // dist/assets —— 那是一份完整的 TS/TSX 源码，发行包把它整份带出去，
+    // 任何人都能 GET /assets/index-<hash>.js.map 读回源码。构建产物首屏
+    // 才 828 KB，映射却有 3.1 MB。
+    //
+    // 本地排查堆栈时用 LOCAL_GALLERY_SOURCEMAP=hidden npm run build，
+    // 映射会生成在 dist 里但不随发行包分发。
+    sourcemap: process.env.LOCAL_GALLERY_SOURCEMAP === "hidden" ? "hidden" : false,
     target: "es2022",
     // 拆 vendor 把 react / query / virtuoso 单独 chunk,提升缓存命中 —
     // 业务代码改动时 vendor 不动,用户浏览器只需重新下载业务 chunk。

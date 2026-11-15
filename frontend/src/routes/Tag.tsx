@@ -29,6 +29,7 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { workbenchCopy } from "../utils/workbench";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import { SelectionToggle } from "../components/album/BulkActions";
+import "../styles/tag.css";
 
 // 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
 /**

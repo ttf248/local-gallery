@@ -19,10 +19,17 @@
     "noFallthroughCasesInSwitch": true,
 
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    },
     "types": ["vite/client"]
   },
-  "include": ["src"]
+
+  "include": ["src"],
+  // 测试文件与测试夹具不进应用工程：它们引入 vitest（devDependency），
+  // 让生产构建的依赖图里混进开发期依赖。测试由 tsconfig.test.json 单独
+  // 类型检查，npm run typecheck 会把它一起过一遍。
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/test-setup.ts",
+    "src/test-library-list.ts"
+  ]
 }

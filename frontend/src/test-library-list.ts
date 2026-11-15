@@ -5,9 +5,37 @@ import type {
   LibraryListPage,
 } from "./api/library";
 import { listItemToCard } from "./hooks/useLibraryList";
-import { groupLibraryNodesByYear } from "./utils/albumGrouping";
 
 // 路由测试使用服务端已分页结果；筛选排序规则由后端测试覆盖。
+//
+// 年份分组在生产里由服务端算好（/api/library/overview 的 years 字段），
+// 这里按节点名里的 4 位年份造出等价的分桶，让首页时间线在测试里有内容。
+function yearBuckets(nodes: LibraryNodeSummary[]) {
+  const buckets = new Map<number | null, LibraryNodeSummary[]>();
+  for (const node of nodes) {
+    const match = node.name.match(/(\d{4})/);
+    const parsed = match ? Number.parseInt(match[1], 10) : NaN;
+    const year =
+      Number.isFinite(parsed) && parsed >= 1900 && parsed <= 2100 ? parsed : null;
+    const list = buckets.get(year);
+    if (list) list.push(node);
+    else buckets.set(year, [node]);
+  }
+  return [...buckets.entries()]
+    .sort((a, b) => {
+      if (a[0] === null) return 1;
+      if (b[0] === null) return -1;
+      return b[0] - a[0];
+    })
+    .map(([year, group]) => ({
+      year,
+      count: group.length,
+      imageTotal: group.reduce((sum, n) => sum + (n.imageCount ?? 0), 0),
+      videoTotal: group.reduce((sum, n) => sum + (n.videoCount ?? 0), 0),
+      group,
+    }));
+}
+
 export function listFixture(
   fixture: {
     data?: { items: LibraryNodeSummary[]; total?: number; revision?: number };
@@ -29,13 +57,13 @@ export function listFixture(
         items,
         total: fixture.data.total ?? nodes.length,
         counts,
-        years: groupLibraryNodesByYear(nodes).map((group) => ({
-          year: group.year,
-          count: group.albums.length,
-          imageTotal: group.imageTotal,
-          videoTotal: group.videoTotal,
+        years: yearBuckets(nodes).map((bucket) => ({
+          year: bucket.year,
+          count: bucket.count,
+          imageTotal: bucket.imageTotal,
+          videoTotal: bucket.videoTotal,
           target:
-            items.find((i) => i.node.id === group.albums[0]?.id.slice(2)) ??
+            items.find((i) => i.node.id === bucket.group[0]?.id.slice(2)) ??
             items[0],
         })),
         series: [],

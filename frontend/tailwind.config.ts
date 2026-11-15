@@ -94,6 +94,8 @@ export default {
       },
     },
   },
-  darkMode: ["class", '[data-theme="dark"]'],
+  // 明暗主题不走 Tailwind 的 dark: 变体，全部由 tokens.css 的 CSS 变量
+  // 与 :root[data-theme="dark"] 承担。因此这里不配 darkMode —— 配了
+  // 会让人以为存在 dark: 工具类的工作流，实际一条都用不上。
   plugins: [],
 } satisfies Config;

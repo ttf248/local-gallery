@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  asProgressLike,
   displayedPageIndex,
   isCompleted,
   isInProgress,
@@ -95,54 +94,6 @@ describe("progress 语义边界", () => {
       expect(progressPercent({ index: 2, total: 5 })).toBe(50);
       expect(progressPercent({ index: 4, total: 5 })).toBe(100);
       expect(progressPercent({ index: 99, total: 5 })).toBe(100);
-    });
-  });
-
-  describe("asProgressLike", () => {
-    it("undefined → null", () => {
-      expect(asProgressLike(undefined)).toBeNull();
-    });
-    it("图片活动 → 收敛到 ProgressLike", () => {
-      expect(
-        asProgressLike({
-          albumId: "a_0000000000000000000001",
-          mediaKind: "image",
-          pageIndex: 5,
-          pageCount: 50,
-          status: "in_progress",
-          updated: "2026-01-01T00:00:00Z",
-        }),
-      ).toEqual({ index: 5, total: 50 });
-    });
-    it("媒体库图片数变化后使用当前总数重算状态", () => {
-      expect(
-        asProgressLike(
-          {
-            albumId: "a_0000000000000000000001",
-            mediaKind: "image",
-            pageIndex: 9,
-            pageCount: 10,
-            status: "completed",
-            updated: "2026-01-01T00:00:00Z",
-          },
-          12,
-        ),
-      ).toEqual({ index: 9, total: 12 });
-    });
-    it("拒绝把旧缓存中的无效总数套用到当前相册", () => {
-      expect(
-        asProgressLike(
-          {
-            albumId: "a_0000000000000000000001",
-            mediaKind: "image",
-            pageIndex: 0,
-            pageCount: 0,
-            status: "in_progress",
-            updated: "2026-01-01T00:00:00Z",
-          },
-          12,
-        ),
-      ).toBeNull();
     });
   });
 });

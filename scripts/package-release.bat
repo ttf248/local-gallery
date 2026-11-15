@@ -41,6 +41,9 @@ copy /y "%WORK_DIR%\bin\%BINARY%" "%PACKAGE_DIR%\%BINARY%" >nul
 if errorlevel 1 goto cleanup_failed
 xcopy "frontend\dist\*" "%PACKAGE_DIR%\dist\" /e /i /q /y >nul
 if errorlevel 2 goto cleanup_failed
+rem 源码映射不进发行包：.map 里是完整的 TS/TSX 源码。本地排查时
+rem 可以用 LOCAL_GALLERY_SOURCEMAP=hidden 构建，这里再兜一次底。
+del /q "%PACKAGE_DIR%\dist\assets\*.map" >nul 2>nul
 copy /y "backend\config.example.yaml" "%PACKAGE_DIR%\config.example.yaml" >nul
 copy /y "backend\config.example.yaml" "%PACKAGE_DIR%\backend\config.example.yaml" >nul
 xcopy "docs" "%PACKAGE_DIR%\docs\" /e /i /q /y >nul

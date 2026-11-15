@@ -1,0 +1,64 @@
+/* 阅读器（/comic/read/*）的顶栏与浮动控件。
+ *
+ * 这些规则原来写在 styles/global.css 里 —— 那是每个页面首屏都要
+ * 下载的一张表。拆出来跟着各自的懒加载路由走，首屏样式表小了一圈。
+ *
+ * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由样式表
+ * 的先后决定，拆出来不影响任何一条既有规则。
+ *
+ * @tailwind components 只为把这一份样式挂进 components 层：Tailwind 的
+ * 工具类在 utilities 层，components 层在它之前，工具类才盖得住组件层。
+ * 没有这条指令，PostCSS 会报「no matching @tailwind components
+ * directive」。
+ */
+@tailwind components;
+
+@layer components {
+.reader-shell {
+    background: var(--reader-bg);
+  }
+.reader-header {
+    /* 顶栏拆成左右两块浮层，而不是一条通栏。
+       通栏浮层会一直压住画面顶端：漫画页的上缘因此永远看不见，
+       而「这一页从头到尾都在屏幕上」正是阅读时最基本的一条。
+       拆开后中间留白直接透到画面上，点空白处还能翻页。 */
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    right: 16px;
+    z-index: 20;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    pointer-events: none;
+  }
+.reader-header__group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    height: 48px;
+    padding-inline: 12px;
+    border: 1px solid var(--overlay-border);
+    border-radius: var(--radius-control);
+    background: color-mix(in srgb, var(--reader-panel) 95%, transparent);
+    box-shadow: 0 4px 20px rgb(0 0 0 / 12%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    pointer-events: auto;
+  }
+.reader-header__group--main {
+    /* 贴着内容收紧，不拉成一条长条：名字短的时候浮层就只有那么宽，
+       画面上留出来的空隙才真的空。 */
+    flex: 0 1 auto;
+    max-width: 62%;
+  }
+.reader-header__group--actions {
+    flex: 0 0 auto;
+  }
+.reader-control-panel {
+    border-radius: var(--radius-tile);
+    background: color-mix(in srgb, var(--reader-panel) 94%, transparent);
+  }
+}

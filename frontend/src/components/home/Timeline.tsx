@@ -3,6 +3,7 @@ import RenditionImage from "../common/RenditionImage";
 import { useAppMode } from "../../hooks/useAppMode";
 import { useEdgeFade } from "../../hooks/useEdgeFade";
 import { FolderIcon } from "../common/Icon";
+import "../../styles/home.css";
 
 export interface TimelineEntry {
   /** 稳定键。 */

@@ -72,6 +72,11 @@ scripts\package-release.bat 2.0.0 windows amd64
 
 发布包包含可运行程序、`dist/`、示例配置、文档和 `aiworker/` 源码；不包含 Python 虚拟环境和模型。Windows 用户运行 `aiworker\setup.bat` 安装 AI 环境。macOS / Linux 需安装 Python 3.11 与平台对应依赖，再运行 Worker。
 
+**发布包不含源码映射。** 前端构建默认不产出 `.map` —— 那是一份完整的
+TS/TSX 源码，随包分发等于把源码公开。需要排查线上堆栈时用
+`LOCAL_GALLERY_SOURCEMAP=hidden npm run build` 单独构建；打包脚本会再删
+一次 `dist/assets/*.map` 兜底。
+
 版本号由发布标签注入后端和前端。不要为普通提交修改版本，也不要提交 `frontend/dist`、`bin/`、发布包或运行时缓存。
 
 \n

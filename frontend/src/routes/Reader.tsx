@@ -47,6 +47,7 @@ import { usePrefs } from "../hooks/usePrefs";
 import { useVideoActivity } from "../hooks/useVideoActivity";
 import { useAppMode } from "../hooks/useAppMode";
 import type { AppMode } from "../api/library";
+import "../styles/reader.css";
 
 /**
  * 在画廊上下文里找出相邻的一卷。

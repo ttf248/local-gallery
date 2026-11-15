@@ -78,7 +78,7 @@ const MAP_MAX_HEIGHT = 1400;
 const EMPTY_VIEW_BOX = "0 0 1000 750";
 
 /** 视口最多能放大到铺满的多少倍。 */
-export const MAX_MAP_ZOOM = 32;
+const MAX_MAP_ZOOM = 32;
 
 /**
  * 造一个投影。
@@ -167,22 +167,12 @@ export function fitViewport(
 }
 
 /**
- * 视口的缩放倍数：1 是铺满。
- */
-export function viewportZoom(
-  projection: MapProjection,
-  viewport: MapViewport,
-): number {
-  return projection.worldWidth / Math.max(viewport.width, 1);
-}
-
-/**
  * 把视口夹在合理范围内。
  *
  * 放大有上限（再推行政区已经糊了），缩小不下于铺满；中心也不许拖出
  * 基坐标太远，否则会拖到一片空白里。
  */
-export function clampViewport(
+function clampViewport(
   projection: MapProjection,
   viewport: MapViewport,
   aspect?: number,
@@ -204,63 +194,6 @@ export function clampViewport(
     ),
     width,
   };
-}
-
-/**
- * 以某个屏幕位置为锚点缩放。
- *
- * anchorX 与 anchorY 是该位置在容器里的比例（0 到 1）。缩放时那个位置
- * 下的地物不动 —— 滚轮缩放要跟着指针走，不是跟着中心走。
- */
-export function zoomViewportAt(
-  projection: MapProjection,
-  viewport: MapViewport,
-  factor: number,
-  anchorX = 0.5,
-  anchorY = 0.5,
-  aspect?: number,
-): MapViewport {
-  const ratio = aspect ?? worldAspect(projection);
-  const worldX = viewport.centerX + (anchorX - 0.5) * viewport.width;
-  const worldY = viewport.centerY + (anchorY - 0.5) * viewport.width * ratio;
-  const next = clampViewport(
-    projection,
-    {
-      centerX: viewport.centerX,
-      centerY: viewport.centerY,
-      width: viewport.width / factor,
-    },
-    ratio,
-  );
-  return {
-    centerX: worldX - (anchorX - 0.5) * next.width,
-    centerY: worldY - (anchorY - 0.5) * next.width * ratio,
-    width: next.width,
-  };
-}
-
-/**
- * 平移视口。
- *
- * deltaX 与 deltaY 是位移占容器宽高的比例，正数表示内容往右 / 往下移。
- */
-export function panViewportBy(
-  projection: MapProjection,
-  viewport: MapViewport,
-  deltaX: number,
-  deltaY: number,
-  aspect?: number,
-): MapViewport {
-  const ratio = aspect ?? worldAspect(projection);
-  return clampViewport(
-    projection,
-    {
-      centerX: viewport.centerX - deltaX * viewport.width,
-      centerY: viewport.centerY - deltaY * viewport.width * ratio,
-      width: viewport.width,
-    },
-    ratio,
-  );
 }
 
 /**
@@ -319,23 +252,6 @@ export function photoViewport(
     },
     ratio,
   );
-}
-
-/**
- * 点的半径（基坐标单位）。
- *
- * 张数按开方缩放：差十倍的张数不该差十倍的面积。半径随视口一起缩，
- * 屏幕上的大小不变 —— 放大地图时点不会糊成一坨。
- */
-export function pointRadius(
-  count: number,
-  maxCount: number,
-  viewportWidth: number,
-  worldWidth: number,
-): number {
-  const share = maxCount > 0 ? Math.sqrt(count / maxCount) : 0;
-  const units = 2.5 + 7 * share;
-  return units * (viewportWidth / Math.max(worldWidth, 1));
 }
 
 /**

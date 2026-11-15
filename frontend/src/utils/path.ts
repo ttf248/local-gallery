@@ -139,11 +139,6 @@ export const MODE_ROUTE_PATHS = [
   "/tags/*",
 ] as const;
 
-/** 某一侧的全部页面路径。 */
-export function modeRoutePaths(mode: AppMode): string[] {
-  return MODE_ROUTE_PATHS.map((path) => `${MODE_PREFIX[mode]}${path}`);
-}
-
 /**
  * 切到另一侧时该去的页面。
  *

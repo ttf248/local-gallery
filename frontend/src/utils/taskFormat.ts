@@ -141,7 +141,7 @@ export function taskModeLabel(mode: AIJob["mode"]): string {
   return mode === "full" ? "全量" : "增量";
 }
 
-export function taskModuleLabel(type: AIJob["type"]): string {
+function taskModuleLabel(type: AIJob["type"]): string {
   switch (type) {
     case "metadata":
       return "元数据分析";

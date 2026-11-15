@@ -93,7 +93,7 @@ export default function Toolbar({
         });
       })
       .catch(() => pushToast({ kind: "error", message: "刷新媒体库失败" }));
-  }, [queryClient, sse.isComplete, sse.scanId, pushToast]);
+  }, [queryClient, sse.isComplete, sse.scanId, pushToast, mode]);
 
   return (
     // 当前顶栏内层复用 .page-shell；可随导航与页面布局方案调整。

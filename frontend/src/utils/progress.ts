@@ -12,7 +12,6 @@
 //
 // 「已读完」既不算未读,也不该算继续阅读 — 后者只覆盖「开始了但还没
 // 看完」的真实在读状态。
-import type { ImageActivity } from "../api/activity";
 
 export interface ProgressLike {
   index: number;
@@ -70,19 +69,4 @@ export function progressPercent(
   if (lastIndex === 0) return 100;
   const boundedIndex = Math.max(0, Math.min(lastIndex, p.index));
   return Math.round((boundedIndex / lastIndex) * 100);
-}
-
-// 类型守卫:给 useUnreadAlbums 之类已经过滤一次的代码用,避免再展开
-// ProgressLike 各字段。
-export function asProgressLike(
-  activity: ImageActivity | undefined,
-  currentTotal?: number,
-): ProgressLike | null {
-  // 服务端不会返回 pageCount <= 0；这里仍拒绝异常/旧缓存响应，避免当前
-  // 相册总数把一条无效活动“修复”成已开始状态。
-  if (!activity || activity.pageCount <= 0) return null;
-  return {
-    index: activity.pageIndex,
-    total: currentTotal ?? activity.pageCount,
-  };
 }

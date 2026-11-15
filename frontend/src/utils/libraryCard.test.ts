@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { LibraryNodeSummary, LibraryTagSummary } from "../api/library";
-import { libraryOverviewCards, nodeSummaryToCard, cardMatchesQuery } from "./libraryCard";
+import type { LibraryNodeSummary } from "../api/library";
+import { nodeSummaryToCard, cardMatchesQuery } from "./libraryCard";
 
 function node(
   id: string,
@@ -39,27 +39,6 @@ describe("libraryCard", () => {
     expect(card.count).toBe(12);
     expect(card.coverPath).toBe("f_cover");
     expect(card.covers).toEqual(["f_cover", "f_second"]);
-  });
-
-  it("首页隐藏虚拟相册并追加标签卡片", () => {
-    const tags: LibraryTagSummary[] = [
-      {
-        tag: "旅行",
-        albumCount: 3,
-        coverImage: "f_tag",
-        coverImages: ["f_tag"],
-      },
-    ];
-    const cards = libraryOverviewCards(
-      [
-        node("a_loose", "album", { virtual: true }),
-        node("c_root", "collection", { albumCount: 1 }),
-      ],
-      tags,
-      "photo",
-    );
-
-    expect(cards.map((card) => card.id)).toEqual(["c:c_root", "s:旅行"]);
   });
 
   it("散图卡片用归属目录做标题并把类型降级为副标题", () => {

@@ -86,6 +86,10 @@ export default function ContextMenu({
         return;
       }
       window.setTimeout(() => {
+        // 这里必须读「当前」的 ref.current，不能在 effect 里先拷一份：
+        // 拷贝的是挂载时的节点，判断不出组件此刻还挂不挂着。延后到下一
+        // 个任务再读，读到的才是当下的状态。
+        // eslint-disable-next-line react-hooks/exhaustive-deps
         if (ref.current) return; // 还挂着 → 只是 StrictMode 的假卸载
         restoreFocus();
       }, 0);

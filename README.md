@@ -190,7 +190,8 @@ scripts\install-ffmpeg.bat
 | backend/aiworker/ | `python evaluate_quality.py --model-dir <cacheDir>/derived/ai/models --device gpu --profile-device-switches --output <ignored-path>.json` | 确定性中文语义/OCR 质量集与设备切换基准；输出写仓库忽略路径，不读取用户媒体 |
 | frontend/ | npm run lint | 前端静态检查 |
 | frontend/ | npm run test | Vitest 单元与组件测试 |
-| frontend/ | npm run build | TypeScript 检查与生产构建 |
+| frontend/ | npm run typecheck | TypeScript 检查（含测试文件） |
+| frontend/ | npm run build | 应用工程类型检查与生产构建 |
 | frontend/ | npm run test:e2e | 独立临时媒体库的全栈浏览器测试 |
 | 仓库根 | `build.bat` | Windows 全栈构建 |
 | 仓库根 | `scripts/package-release.bat 2.0.0 windows amd64` | 生成 Windows 发布包 |

@@ -13,6 +13,7 @@ import {
   CloseIcon,
   ShuffleIcon,
 } from "../common/Icon";
+import "../../styles/home.css";
 
 interface UnreadHeroProps {
   cards: CardData[];

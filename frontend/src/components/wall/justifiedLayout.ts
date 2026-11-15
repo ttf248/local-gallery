@@ -254,3 +254,19 @@ function averageTileArea(rows: WallRow[]): number {
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
+
+/**
+ * 窄屏上把目标行高压下来。
+ *
+ * 桌面宽度下这个上限远大于密度设定值，不生效；手机上却差别很大：
+ * 容器只有三百多像素宽，「标准」的行高放得下一张就放不下第二张，
+ * 一百多张照片排下来要滚几十屏 —— 手机相册该是一屏两三张。
+ * 取容器的三分之一左右，一行正好排下两张常见比例的照片。
+ */
+export function effectiveTargetHeight(
+  targetHeight: number,
+  width: number,
+): number {
+  if (width <= 0) return targetHeight;
+  return Math.min(targetHeight, Math.max(96, Math.round(width / 3.2)));
+}

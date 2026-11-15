@@ -3,7 +3,7 @@ import {
   SHORTCUTS,
   type Shortcut,
   type ShortcutContext,
-} from "../../utils/shortcuts";
+} from "../../utils/shortcutsTable";
 import { useAppMode } from "../../hooks/useAppMode";
 import { CloseIcon, SearchIcon, KeyboardIcon } from "./Icon";
 

@@ -14,15 +14,3 @@ export function toggleFullscreen(): void {
   }
   document.documentElement.requestFullscreen().catch(() => {})
 }
-
-export function enterFullscreen(): void {
-  if (typeof document === 'undefined') return
-  if (document.fullscreenElement) return
-  document.documentElement.requestFullscreen().catch(() => {})
-}
-
-export function exitFullscreen(): void {
-  if (typeof document === 'undefined') return
-  if (!document.fullscreenElement) return
-  document.exitFullscreen().catch(() => {})
-}

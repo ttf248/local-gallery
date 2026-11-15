@@ -59,7 +59,7 @@ export const TAB_PAGES: Record<string, TabbedPage> = {
 };
 
 /** 路径落在哪个带页签的页面上；不在就返回 null。 */
-export function tabbedPageFor(pathname: string): TabbedPage | null {
+function tabbedPageFor(pathname: string): TabbedPage | null {
   const segment = pathname.split("/")[1] ?? "";
   return TAB_PAGES[segment] ?? null;
 }

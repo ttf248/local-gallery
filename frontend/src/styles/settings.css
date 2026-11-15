@@ -1,0 +1,154 @@
+/* 设置页与任务中心的分区面板样式。
+ *
+ * 这些规则原来写在 styles/global.css 里 —— 那是每个页面首屏都要
+ * 下载的一张表。拆出来跟着各自的懒加载路由走，首屏样式表小了一圈。
+ *
+ * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由样式表
+ * 的先后决定，拆出来不影响任何一条既有规则。
+ *
+ * @tailwind components 只为把这一份样式挂进 components 层：Tailwind 的
+ * 工具类在 utilities 层，components 层在它之前，工具类才盖得住组件层。
+ * 没有这条指令，PostCSS 会报「no matching @tailwind components
+ * directive」。
+ */
+@tailwind components;
+
+@layer components {
+.settings-columns {
+    max-width: 860px;
+  }
+.settings-section {
+    break-inside: avoid;
+    margin-bottom: 28px;
+  }
+.settings-section__heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+.settings-section__icon {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: var(--radius-media);
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--brand) 26%, transparent);
+  }
+.settings-section__desc {
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+.settings-section__body {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-xs);
+  }
+.settings-grid {
+    display: grid;
+    gap: 24px;
+    align-items: start;
+  }
+@media (min-width: 1280px) {
+    .settings-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    /* 短卡与长卡 1:2 分栏：数据卡内容短，备份卡内容长（段落 + 两个动作
+       + 预览后的类别勾选与恢复报告）。长内容占宽列，读下来的顺序与视觉
+       顺序一致。 */
+    .settings-grid--aside {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+  }
+.settings-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+  }
+.settings-card__head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    border-bottom: 1px solid var(--border-faint);
+    background: var(--bg-subtle);
+  }
+.settings-card__icon {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    color: var(--fg-muted);
+  }
+.settings-card__title {
+    font-family: var(--font-display);
+    font-size: var(--text-label);
+    font-weight: 600;
+    color: var(--fg);
+  }
+.settings-card__desc {
+    margin-left: auto;
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+.settings-split {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+.settings-group + .settings-group {
+    border-top: 1px solid var(--border-faint);
+  }
+.settings-split > .settings-group + .settings-group {
+    border-top: 1px solid var(--border-faint);
+  }
+@media (min-width: 1280px) {
+    .settings-split {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .settings-split > .settings-group + .settings-group {
+      border-top: none;
+      border-left: 1px solid var(--border-faint);
+    }
+  }
+.settings-group__label {
+    padding: 9px 14px 5px;
+    font-size: var(--text-meta);
+    color: var(--fg-muted);
+  }
+.settings-block {
+    padding: 12px 14px;
+  }
+.settings-note {
+    padding: 9px 14px 11px;
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+.settings-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 18px;
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-faint);
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+.settings-row {
+    min-height: 48px;
+  }
+@media (min-width: 1280px) {
+    .settings-columns {
+      max-width: none;
+      columns: 2;
+      column-gap: 28px;
+    }
+  }
+}

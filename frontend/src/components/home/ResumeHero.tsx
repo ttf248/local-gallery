@@ -7,6 +7,7 @@ import { photoCopy } from "../../utils/workbench";
 import { mediaCountCompact, mediaCountLabel } from "../../utils/mediaCount";
 import { recentsRoute } from "../../utils/path";
 import { timeAgo } from "../../utils/date";
+import "../../styles/home.css";
 
 /**
  * 照片工作台的「接着看」专区。

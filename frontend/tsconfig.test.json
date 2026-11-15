@@ -1,0 +1,20 @@
+{
+  // 测试专用工程：vitest 用例与测试夹具。
+  //
+  // 应用工程（tsconfig.app.json）把测试排除在外，生产构建因此不必
+  // 类型检查 124 个测试文件，也不必把 vitest 这个 devDependency
+  // 拉进应用的依赖图。这个工程补上那一层检查 —— npm run typecheck
+  // 会把它与应用工程一起过一遍。
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": [
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/globals.d.ts",
+    "src/test-setup.ts",
+    "src/test-library-list.ts"
+  ],
+  "exclude": []
+}

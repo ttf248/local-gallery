@@ -72,21 +72,6 @@ export function tagSummaryToCard(tag: LibraryTagSummary, mode: AppMode): CardDat
   };
 }
 
-// 首页根视图隐藏“本目录媒体”虚拟节点：它属于同路径集合的内部入口，
-// 同时展示会形成两张看似重复的卡片。进入集合后仍会正常显示该相册。
-export function libraryOverviewCards(
-  nodes: LibraryNodeSummary[],
-  tags: LibraryTagSummary[],
-  mode: AppMode,
-): CardData[] {
-  return [
-    ...nodes
-      .filter((node) => !node.virtual)
-      .map((node) => nodeSummaryToCard(node)),
-    ...tags.map((tag) => tagSummaryToCard(tag, mode)),
-  ];
-}
-
 // 列表页搜索：标题与副标题一起匹配。
 // 各列表页（未读 / 最近 / 收藏 / 首页）共用这一份语义，避免同一处搜索
 // 在不同页面结果不同。标题对散图相册来说是归属目录，所以搜目录名能命中。

@@ -32,6 +32,9 @@ export default [
     rules: {
       ...tsPlugin.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // 依赖数组写错是 React 里最难查的一类 bug（闭包拿到旧值、effect
+      // 不重跑、监听重复注册），默认只当警告就等于不管。
+      'react-hooks/exhaustive-deps': 'error',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],

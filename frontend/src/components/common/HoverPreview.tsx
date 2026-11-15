@@ -62,12 +62,15 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
   const progressPct = progressPercent(data.progress)
   const coverH = isComic ? COVER_H_COMIC : COVER_H_PHOTO
 
+  // 量预览整体高度：内容变了（标题行数、有无进度条）就重量一次。
+  // setBoxHeight 里带着「高度没变就不改」的判断，所以多跑一次不会
+  // 引发连续渲染。
   useLayoutEffect(() => {
     const el = boxRef.current
     if (!el) return
     const h = el.offsetHeight
     setBoxHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h))
-  })
+  }, [data])
 
   useEffect(() => {
     const update = () => setVp({ w: window.innerWidth, h: window.innerHeight })

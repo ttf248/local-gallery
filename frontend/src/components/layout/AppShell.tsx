@@ -1,5 +1,5 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useUIStore } from "../../store/uiStore";
 import { useKeyboard } from "../../hooks/useKeyboard";
@@ -21,10 +21,16 @@ import { scanApi } from "../../api/scan";
 import { useScanSSE } from "../../hooks/useScanSSE";
 import Sidebar from "./Sidebar";
 import Toolbar from "./Toolbar";
-import ScanProgress from "../album/ScanProgress";
-import HelpOverlay from "../common/HelpOverlay";
 import ErrorBoundary from "../common/ErrorBoundary";
 import { libraryApi } from "../../api/library";
+
+// 扫描浮卡与帮助浮层按需加载。
+//
+// 两者都是「有事才出现」的东西：扫描浮卡只在有扫描进度时可见，帮助浮层
+// 只在用户按下 ? 时打开。放在外壳里静态引入，等于让每个页面的首屏都为
+// 它们付钱 —— 扫描浮卡约 3.4 KB、帮助浮层约 2.9 KB 源码。
+const ScanProgress = lazy(() => import("../album/ScanProgress"));
+const HelpOverlay = lazy(() => import("../common/HelpOverlay"));
 
 // 应用外壳：侧边栏 + 工具栏 + 主内容。
 // 全局帮助浮层通过 comic:open-help 事件触发（所有页面 ? 都能唤起）。
@@ -38,6 +44,10 @@ export default function AppShell() {
   const immersiveOverlay = useUIStore((s) => s.immersiveOverlay);
   const helpContext = useUIStore((s) => s.helpContext);
   const [helpOpen, setHelpOpen] = useState(false);
+  // 扫描浮卡挂载过就一直留着：终态时它要播一段淡出动画，progress 一空
+  // 就卸载会让这段动画消失。第一次有扫描进度时才挂载 —— 在那之前这块
+  // 浮层什么都不显示，代码却已经进了首屏。
+  const [scanCardMounted, setScanCardMounted] = useState(false);
   const [isCancellingScan, setIsCancellingScan] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -53,6 +63,10 @@ export default function AppShell() {
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (scanSse.progress) setScanCardMounted(true);
+  }, [scanSse.progress]);
 
   useEffect(() => {
     if (!mobileNavOpen) {
@@ -202,19 +216,25 @@ export default function AppShell() {
         必须在 <main> 外面，否则会被 main 的 overflow-auto 影响 sticky/fixed 行为。
         scanSse.startWith 由 Toolbar 在用户触发「重新扫描」/ Ctrl+S 时写 store.scanId。
       */}
-      <ScanProgress
-        progress={scanSse.progress}
-        onCancel={cancelScan}
-        isCancelling={isCancellingScan}
-        connectionState={scanSse.connectionState}
-        onReconnect={scanSse.reconnect}
-        onStopTracking={scanSse.reset}
-      />
-      <HelpOverlay
-        context={helpContext}
-        open={helpOpen}
-        onClose={() => setHelpOpen(false)}
-      />
+      <Suspense fallback={null}>
+        {scanCardMounted ? (
+          <ScanProgress
+            progress={scanSse.progress}
+            onCancel={cancelScan}
+            isCancelling={isCancellingScan}
+            connectionState={scanSse.connectionState}
+            onReconnect={scanSse.reconnect}
+            onStopTracking={scanSse.reset}
+          />
+        ) : null}
+        {helpOpen ? (
+          <HelpOverlay
+            context={helpContext}
+            open
+            onClose={() => setHelpOpen(false)}
+          />
+        ) : null}
+      </Suspense>
     </div>
   );
 }

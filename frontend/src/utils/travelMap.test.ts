@@ -8,15 +8,11 @@ import {
   monthBuckets,
   monthIndex,
   monthKey,
-  MAX_MAP_ZOOM,
-  panViewportBy,
   photoViewport,
-  pointRadius,
   polygonMaximumLatitude,
   regionLabelPoint,
   regionPath,
   shareOf,
-  zoomViewportAt,
   type MapRegion,
 } from "./travelMap";
 
@@ -186,56 +182,6 @@ describe("离线地图几何", () => {
       projection.worldHeight / projection.worldWidth,
       6,
     );
-  });
-
-  it("以指针为锚点缩放时，指针下的地物不动", () => {
-    const projection = createMapProjection([region()]);
-    const viewport = fitViewport(projection);
-    const zoomed = zoomViewportAt(projection, viewport, 4, 0.75, 0.25);
-    // 锚点在缩放前后的基坐标位置应当一致。
-    const before = {
-      x: viewport.centerX + (0.75 - 0.5) * viewport.width,
-      y:
-        viewport.centerY +
-        (0.25 - 0.5) *
-          viewport.width *
-          (projection.worldHeight / projection.worldWidth),
-    };
-    const after = {
-      x: zoomed.centerX + (0.75 - 0.5) * zoomed.width,
-      y:
-        zoomed.centerY +
-        (0.25 - 0.5) *
-          zoomed.width *
-          (projection.worldHeight / projection.worldWidth),
-    };
-    expect(after.x).toBeCloseTo(before.x, 6);
-    expect(after.y).toBeCloseTo(before.y, 6);
-    expect(zoomed.width).toBeCloseTo(viewport.width / 4, 6);
-  });
-
-  it("缩放有上下限，拖不出基坐标", () => {
-    const projection = createMapProjection([region()]);
-    const fit = fitViewport(projection);
-    const zoomedOut = zoomViewportAt(projection, fit, 0.01);
-    expect(zoomedOut.width).toBeCloseTo(fit.width, 6);
-    const zoomedIn = zoomViewportAt(projection, fit, 1000);
-    expect(zoomedIn.width).toBeGreaterThanOrEqual(
-      projection.worldWidth / MAX_MAP_ZOOM - 1e-6,
-    );
-    const panned = panViewportBy(projection, fit, 100, 100);
-    expect(panned.centerX).toBeLessThanOrEqual(projection.worldWidth * 1.25 + 1e-6);
-  });
-
-  it("点的半径按张数开方缩放", () => {
-    const world = 1000;
-    const small = pointRadius(10, 100, world, world);
-    const large = pointRadius(100, 100, world, world);
-    // 十倍的张数不该有十倍的面积。
-    expect(large / small).toBeLessThan(3);
-    expect(large).toBeGreaterThan(small);
-    // 视口放大时半径按比例缩小，屏幕上的大小不变。
-    expect(pointRadius(100, 100, world / 4, world)).toBeCloseTo(large / 4, 6);
   });
 
   it("月份序号能来回换", () => {

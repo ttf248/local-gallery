@@ -5,6 +5,7 @@ import { ApiError } from "../../api/client";
 import { cacheApi, type CacheRebuildScope } from "../../api/cache";
 import { useCacheRebuild } from "../../hooks/useCacheRebuild";
 import { useUIStore } from "../../store/uiStore";
+import "../../styles/settings.css";
 
 /**
  * 预览图重建的档位宽度。

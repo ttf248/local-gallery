@@ -35,6 +35,7 @@ import {
   PHOTO_NAV,
   type NavEntry,
 } from "../utils/navEntries";
+import "../styles/settings.css";
 
 /**
  * 设置页。
