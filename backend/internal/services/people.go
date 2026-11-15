@@ -68,6 +68,14 @@ type PersonGroup struct {
 	Hidden          bool   `json:"hidden"`
 }
 
+// PeopleAlbumGroup is a person's current photo membership inside one album.
+// It contains no face embedding or file path.
+type PeopleAlbumGroup struct {
+	Group       PersonGroup
+	ResourceIDs []string
+	Fingerprint string
+}
+
 // PeopleCorrections contains user-owned labels and assignments, never embeddings.
 type PeopleCorrections struct {
 	Version     int               `json:"version"`
@@ -115,18 +123,19 @@ type peopleClusterExemplar struct {
 // PeopleService keeps a rebuildable face grouping index separate from the small
 // user-owned names, visibility flags, and corrections stored under state/.
 type PeopleService struct {
-	mu           sync.RWMutex
-	persistMu    sync.Mutex
-	statePath    string
-	derivedPath  string
-	faces        map[string]PersonFace
-	clusters     map[string]*peopleCluster
-	ann          *peopleANNIndex
-	previousIDs  map[string]string
-	cachedIDs    map[string]string
-	cachedHashes map[string]string
-	manual       peopleManualState
-	comparisons  int
+	mu              sync.RWMutex
+	persistMu       sync.Mutex
+	statePath       string
+	derivedPath     string
+	faces           map[string]PersonFace
+	facesByResource map[string][]string
+	clusters        map[string]*peopleCluster
+	ann             *peopleANNIndex
+	previousIDs     map[string]string
+	cachedIDs       map[string]string
+	cachedHashes    map[string]string
+	manual          peopleManualState
+	comparisons     int
 }
 
 func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
@@ -135,7 +144,8 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 	}
 	service := &PeopleService{
 		statePath: statePath, derivedPath: derivedPath,
-		faces: make(map[string]PersonFace), clusters: make(map[string]*peopleCluster), ann: newPeopleANNIndex(),
+		faces: make(map[string]PersonFace), facesByResource: make(map[string][]string),
+		clusters: make(map[string]*peopleCluster), ann: newPeopleANNIndex(),
 		previousIDs:  make(map[string]string),
 		cachedIDs:    make(map[string]string),
 		cachedHashes: make(map[string]string),
@@ -258,10 +268,12 @@ func (s *PeopleService) matchesCachedAssignmentsLocked(faces map[string]PersonFa
 
 func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 	s.faces = make(map[string]PersonFace, len(faces))
+	s.facesByResource = make(map[string][]string, len(faces))
 	s.clusters = make(map[string]*peopleCluster)
 	for key, face := range faces {
 		face.PersonID = s.cachedIDs[key]
 		s.faces[key] = face
+		s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], key)
 		cluster := s.clusters[face.PersonID]
 		if cluster == nil {
 			cluster = &peopleCluster{
@@ -282,6 +294,9 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 	}
 	for _, cluster := range s.clusters {
 		updatePeopleCentroid(cluster)
+	}
+	for resourceID := range s.facesByResource {
+		sort.Strings(s.facesByResource[resourceID])
 	}
 	// The ANN graph is only needed when new faces arrive. Deferring its build
 	// keeps warm application startup from rebuilding a large in-memory index.
@@ -318,6 +333,7 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		}
 		for _, face := range current {
 			delete(s.faces, face.Key)
+			s.removeResourceFaceKeyLocked(face.ResourceID, face.Key)
 			appendOnly = false
 		}
 		for _, face := range incoming {
@@ -365,6 +381,7 @@ func (s *PeopleService) rebuildLocked(faces map[string]PersonFace, previousIDs m
 	}
 	sort.Slice(keys, func(i, j int) bool { return personFaceLess(faces[keys[i]], faces[keys[j]]) })
 	s.faces = make(map[string]PersonFace, len(faces))
+	s.facesByResource = make(map[string][]string, len(faces))
 	s.clusters = make(map[string]*peopleCluster)
 	s.ann = newPeopleANNIndex()
 	s.comparisons = 0
@@ -582,6 +599,10 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 	}
 	face.PersonID = bestID
 	s.faces[face.Key] = face
+	if s.facesByResource == nil {
+		s.facesByResource = make(map[string][]string)
+	}
+	s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], face.Key)
 }
 
 func addPeopleClusterExemplar(cluster *peopleCluster, face PersonFace) {
@@ -660,6 +681,7 @@ func (s *PeopleService) removeFaceLocked(key string) {
 		return
 	}
 	delete(s.faces, key)
+	s.removeResourceFaceKeyLocked(face.ResourceID, key)
 	cluster := s.clusters[face.PersonID]
 	if cluster == nil {
 		return
@@ -699,13 +721,29 @@ func (s *PeopleService) rebuildPeopleANNLocked() {
 }
 
 func (s *PeopleService) facesForResourceLocked(resourceID string) []PersonFace {
-	result := make([]PersonFace, 0)
-	for _, face := range s.faces {
-		if face.ResourceID == resourceID {
+	keys := s.facesByResource[resourceID]
+	result := make([]PersonFace, 0, len(keys))
+	for _, key := range keys {
+		if face, exists := s.faces[key]; exists {
 			result = append(result, face)
 		}
 	}
 	return result
+}
+
+func (s *PeopleService) removeResourceFaceKeyLocked(resourceID, key string) {
+	keys := s.facesByResource[resourceID]
+	for index, current := range keys {
+		if current == key {
+			keys = append(keys[:index], keys[index+1:]...)
+			break
+		}
+	}
+	if len(keys) == 0 {
+		delete(s.facesByResource, resourceID)
+	} else {
+		s.facesByResource[resourceID] = keys
+	}
 }
 
 func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
@@ -853,6 +891,72 @@ func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 			return result[i].ID < result[j].ID
 		}
 		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
+	})
+	return result
+}
+
+// AlbumGroups returns only people represented by files in the supplied album
+// whose indexed file fingerprints still match the current media snapshot.
+func (s *PeopleService) AlbumGroups(fingerprints map[string]smartAlbumFileFingerprint) []PeopleAlbumGroup {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	type albumGroupState struct {
+		group        PersonGroup
+		photos       map[string]struct{}
+		fingerprints []string
+	}
+	groups := make(map[string]*albumGroupState)
+	for resourceID, fingerprint := range fingerprints {
+		for _, faceKey := range s.facesByResource[resourceID] {
+			face, exists := s.faces[faceKey]
+			if !exists || fingerprint.Size != face.Size || fingerprint.MTimeNs != face.MTimeNs {
+				continue
+			}
+			personID := s.effectivePersonIDLocked(face)
+			group := groups[personID]
+			if group == nil {
+				name := s.manual.Names[personID]
+				if name == "" {
+					suffix := strings.TrimPrefix(personID, "p_")
+					name = "人物 " + suffix[:min(6, len(suffix))]
+				}
+				group = &albumGroupState{
+					group:  PersonGroup{ID: personID, Name: name, Hidden: s.manual.Hidden[personID]},
+					photos: make(map[string]struct{}),
+				}
+				groups[personID] = group
+			}
+			group.group.FaceCount++
+			group.photos[face.ResourceID] = struct{}{}
+			if group.group.CoverResourceID == "" || face.ResourceID < group.group.CoverResourceID {
+				group.group.CoverResourceID = face.ResourceID
+			}
+			group.fingerprints = append(group.fingerprints, face.Key+"\x00"+face.recordHash)
+		}
+	}
+	result := make([]PeopleAlbumGroup, 0, len(groups))
+	for _, group := range groups {
+		group.group.PhotoCount = len(group.photos)
+		resourceIDs := make([]string, 0, len(group.photos))
+		for resourceID := range group.photos {
+			resourceIDs = append(resourceIDs, resourceID)
+		}
+		sort.Strings(resourceIDs)
+		sort.Strings(group.fingerprints)
+		hash := sha256.New()
+		for _, value := range group.fingerprints {
+			_, _ = hash.Write([]byte(value))
+			_, _ = hash.Write([]byte{0})
+		}
+		result = append(result, PeopleAlbumGroup{
+			Group: group.group, ResourceIDs: resourceIDs, Fingerprint: hex.EncodeToString(hash.Sum(nil)),
+		})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Group.Name == result[j].Group.Name {
+			return result[i].Group.ID < result[j].Group.ID
+		}
+		return strings.ToLower(result[i].Group.Name) < strings.ToLower(result[j].Group.Name)
 	})
 	return result
 }
@@ -1287,6 +1391,7 @@ func (s *PeopleService) Clear() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.faces = make(map[string]PersonFace)
+	s.facesByResource = make(map[string][]string)
 	s.clusters = make(map[string]*peopleCluster)
 	s.ann = newPeopleANNIndex()
 	s.previousIDs = make(map[string]string)

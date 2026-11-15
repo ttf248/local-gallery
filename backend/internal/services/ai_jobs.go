@@ -61,6 +61,7 @@ var ErrAIJobActive = errors.New("an analysis job is already active")
 var ErrAIJobNotFound = errors.New("analysis job not found")
 var ErrAIJobNotManageable = errors.New("analysis job cannot be managed in its current state")
 var ErrAIJobInvalidDirection = errors.New("invalid queue direction")
+var ErrAIJobInvalidAlbum = errors.New("analysis album is unavailable or is not a photo album")
 var ErrAIAnalyzerUnavailable = errors.New("analysis module runtime or model is unavailable")
 var ErrPeopleAnalysisDisabled = errors.New("people analysis is disabled")
 
@@ -184,6 +185,7 @@ type AIJobError struct {
 // AIJob 是用户可查看的持久化任务记录。
 type AIJob struct {
 	ID                string          `json:"id"`
+	AlbumID           string          `json:"albumId,omitempty"`
 	Type              string          `json:"type"`
 	Mode              string          `json:"mode"`
 	Status            string          `json:"status"`
@@ -279,6 +281,17 @@ type AIAnalysisRecord struct {
 	UpdatedAt     time.Time       `json:"updatedAt"`
 	// Fields 记录这条结果里实际有值的字段；批次重放要靠它还原任务产出。
 	Fields []string `json:"fields,omitempty"`
+}
+
+// AIAnalysisRecordSummary exposes only the small freshness fields needed by a
+// folder-scoped index; it deliberately omits the potentially large face data.
+type AIAnalysisRecordSummary struct {
+	Type          string `json:"type"`
+	ResourceID    string `json:"resourceId"`
+	Size          int64  `json:"size"`
+	MTimeNs       int64  `json:"mtimeNs"`
+	ModuleVersion string `json:"moduleVersion"`
+	Status        string `json:"status"`
 }
 
 type AIJobServiceOptions struct {
@@ -426,9 +439,18 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 }
 
 // Start 创建并启动已注册分析模块的全量或增量任务。
-func (s *AIJobService) Start(moduleType, mode string) (AIJob, bool, error) {
+func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob, bool, error) {
+	albumID, err := s.analysisAlbumID(albumIDs)
+	if err != nil {
+		return AIJob{}, false, err
+	}
 	if mode != AIJobModeFull && mode != AIJobModeIncremental {
 		return AIJob{}, false, errors.New("unknown analysis mode")
+	}
+	if albumID != "" {
+		if err := s.validateAnalysisAlbum(albumID); err != nil {
+			return AIJob{}, false, err
+		}
 	}
 	if moduleType == AIJobTypeFace && !s.PeopleEnabled() {
 		return AIJob{}, false, ErrPeopleAnalysisDisabled
@@ -467,7 +489,7 @@ func (s *AIJobService) Start(moduleType, mode string) (AIJob, bool, error) {
 	}
 	if s.activeID != "" {
 		active := s.jobs[s.activeID]
-		if active != nil && active.Type == moduleType && active.Mode == mode && isAIJobActive(active.Status) {
+		if active != nil && active.Type == moduleType && active.Mode == mode && active.AlbumID == albumID && isAIJobActive(active.Status) {
 			return s.snapshotLocked(active), true, nil
 		}
 		return AIJob{}, false, ErrAIJobActive
@@ -476,6 +498,7 @@ func (s *AIJobService) Start(moduleType, mode string) (AIJob, bool, error) {
 		return AIJob{}, false, ErrAIJobActive
 	}
 	job := s.newJobLocked(moduleType, mode)
+	job.AlbumID = albumID
 	s.jobs[job.ID] = &job
 	s.order = append(s.order, job.ID)
 	s.activeID = job.ID
@@ -490,11 +513,25 @@ func (s *AIJobService) Start(moduleType, mode string) (AIJob, bool, error) {
 }
 
 // StartAll 按固定模块顺序把所有已就绪的分析任务写入现有任务队列。
-func (s *AIJobService) StartAll(mode string) ([]AIJob, []AIJobModule, error) {
+func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJobModule, error) {
+	albumID, err := s.analysisAlbumID(albumIDs)
+	if err != nil {
+		return nil, nil, err
+	}
 	if mode != AIJobModeFull && mode != AIJobModeIncremental {
 		return nil, nil, errors.New("unknown analysis mode")
 	}
+	if albumID != "" {
+		if err := s.validateAnalysisAlbum(albumID); err != nil {
+			return nil, nil, err
+		}
+	}
 	moduleTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
+	if albumID != "" {
+		// Album regrouping only needs EXIF/GPS, scene vectors, and face groups.
+		// OCR remains a separate user-requested task.
+		moduleTypes = []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeFace}
+	}
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -567,6 +604,7 @@ func (s *AIJobService) StartAll(mode string) ([]AIJob, []AIJobModule, error) {
 	jobIDs := make([]string, 0, len(readyModules))
 	for _, moduleType := range readyModules {
 		job := s.newJobLocked(moduleType, mode)
+		job.AlbumID = albumID
 		s.jobs[job.ID] = &job
 		s.order = append(s.order, job.ID)
 		jobIDs = append(jobIDs, job.ID)
@@ -883,6 +921,7 @@ func (s *AIJobService) Retry(id string) (AIJob, error) {
 		return AIJob{}, errors.New("only failed or cancelled jobs can be retried")
 	}
 	job := s.newJobLocked(previous.Type, previous.Mode)
+	job.AlbumID = previous.AlbumID
 	job.RetryOf = previous.ID
 	job.RetryFailedOnly = true
 	job.RetryFromOffset = previous.Checkpoint.Offset
@@ -1212,6 +1251,67 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 	return result
 }
 
+// RecordsForResources returns current-version analysis records only for the
+// supplied resource IDs. Album-scoped features use this instead of copying a
+// library-wide analysis table into their own working set.
+func (s *AIJobService) RecordsForResources(moduleType string, resourceIDs []string) map[string]AIAnalysisRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make(map[string]AIAnalysisRecord, len(resourceIDs))
+	analyzer, installed := s.analyzers[moduleType]
+	if !installed {
+		return result
+	}
+	for _, resourceID := range resourceIDs {
+		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+		if !exists || record.ModuleVersion != analyzer.Version() {
+			continue
+		}
+		record.Data = append(json.RawMessage(nil), record.Data...)
+		record.Fields = append([]string(nil), record.Fields...)
+		result[resourceID] = record
+	}
+	return result
+}
+
+// RecordSummariesForResources returns freshness metadata for the requested
+// files without copying their analysis payloads.
+func (s *AIJobService) RecordSummariesForResources(moduleType string, resourceIDs []string) map[string]AIAnalysisRecordSummary {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make(map[string]AIAnalysisRecordSummary, len(resourceIDs))
+	analyzer, installed := s.analyzers[moduleType]
+	if !installed {
+		return result
+	}
+	for _, resourceID := range resourceIDs {
+		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+		if !exists || record.ModuleVersion != analyzer.Version() {
+			continue
+		}
+		result[resourceID] = AIAnalysisRecordSummary{
+			Type: record.Type, ResourceID: record.ResourceID, Size: record.Size,
+			MTimeNs: record.MTimeNs, ModuleVersion: record.ModuleVersion, Status: record.Status,
+		}
+	}
+	return result
+}
+
+// ModuleStatus returns the local installation state and current version of one
+// analysis module without copying task history or all analysis records.
+func (s *AIJobService) ModuleStatus(moduleType string) AIJobModule {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	module := AIJobModule{Type: moduleType, Name: aiJobModuleName(moduleType)}
+	if analyzer, exists := s.analyzers[moduleType]; exists {
+		module.Installed, module.Reason = aiAnalyzerAvailability(analyzer)
+		if module.Installed {
+			module.Version = analyzer.Version()
+		}
+	}
+	return module
+}
+
 // RecordsIncludingStaleVersions supplies persisted results to derived-index
 // migrations while a module version is being recomputed.
 func (s *AIJobService) RecordsIncludingStaleVersions(moduleType string) []AIAnalysisRecord {
@@ -1457,8 +1557,15 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 		s.finishJob(id, AIJobStatusFailed, "failed", "任务状态未能持久化")
 		return
 	}
-	targets := s.buildTargets(runtimeState.ctx, snapshot)
-	digest := digestAITargets(targets)
+	s.mu.Lock()
+	job = s.jobs[id]
+	albumID := ""
+	if job != nil {
+		albumID = job.AlbumID
+	}
+	s.mu.Unlock()
+	targets := s.buildTargets(runtimeState.ctx, snapshot, albumID)
+	digest := digestAITargets(targets, albumID)
 	candidates, err := s.selectTargets(id, targets, digest)
 	if err != nil {
 		s.finishJob(id, AIJobStatusFailed, "failed", "任务检查点未能持久化")
@@ -1551,8 +1658,17 @@ func (s *AIJobService) waitForCatalog(ctx context.Context) (CatalogSnapshot, err
 	}
 }
 
-func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot) []aiJobTarget {
+func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, albumIDs ...string) []aiJobTarget {
 	ids := snapshot.FileIDs()
+	if albumID, err := s.analysisAlbumID(albumIDs); err != nil {
+		return nil
+	} else if albumID != "" {
+		var exists bool
+		ids, exists = snapshot.AlbumImageIDs(albumID)
+		if !exists {
+			return nil
+		}
+	}
 	targets := make([]aiJobTarget, 0, len(ids))
 	for _, id := range ids {
 		ref, ok := snapshot.Lookup(id)
@@ -1568,6 +1684,34 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 	}
 	s.statTargets(ctx, targets)
 	return targets
+}
+
+func (s *AIJobService) analysisAlbumID(albumIDs []string) (string, error) {
+	if len(albumIDs) > 1 {
+		return "", ErrAIJobInvalidAlbum
+	}
+	if len(albumIDs) == 0 {
+		return "", nil
+	}
+	return strings.TrimSpace(albumIDs[0]), nil
+}
+
+func (s *AIJobService) validateAnalysisAlbum(albumID string) error {
+	if albumID == "" {
+		return ErrAIJobInvalidAlbum
+	}
+	snapshot := s.catalog.Acquire()
+	if !snapshot.Ready() {
+		return ErrAIJobInvalidAlbum
+	}
+	album, exists := snapshot.AlbumSummary(albumID)
+	if !exists || album.ContentKind != string(models.ContentKindPhoto) {
+		return ErrAIJobInvalidAlbum
+	}
+	if _, exists := snapshot.AlbumImageIDs(albumID); !exists {
+		return ErrAIJobInvalidAlbum
+	}
+	return nil
 }
 
 // statTargets 并发补齐每个目标的路径校验、大小与纳秒修改时间。
@@ -2569,8 +2713,12 @@ func writeAIJSONAtomic(path string, value any) error {
 	return renameErr
 }
 
-func digestAITargets(targets []aiJobTarget) string {
+func digestAITargets(targets []aiJobTarget, albumIDs ...string) string {
 	hashValue := sha256.New()
+	if len(albumIDs) > 0 && albumIDs[0] != "" {
+		_, _ = hashValue.Write([]byte(albumIDs[0]))
+		_, _ = hashValue.Write([]byte{0})
+	}
 	for _, target := range targets {
 		_, _ = fmt.Fprintf(hashValue, "%s\x00%d\x00%d\x00%s\n", target.resourceID, target.size, target.mtimeNs, target.statCode)
 	}

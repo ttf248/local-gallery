@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LibraryMediaItem, LibraryNodeSummary } from "../api/library";
-import { albumsApi } from "../api/albums";
+import { albumsApi, type SmartAlbumDimension } from "../api/albums";
+import { aiJobsApi } from "../api/aiJobs";
 import { useAlbumMedia } from "../hooks/useLibrary";
+import {
+  smartAlbumQueryKeys,
+  useSmartAlbumGroupMedia,
+  useSmartAlbumGroups,
+} from "../hooks/useSmartAlbums";
 import { useFavorites } from "../hooks/useFavorites";
 import { usePicks } from "../hooks/usePicks";
 import { useAlbumActions } from "../hooks/useAlbumActions";
@@ -22,6 +28,7 @@ import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoCompare, { type CompareItem } from "../components/wall/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
+import SmartAlbumBrowser from "../components/album/SmartAlbumBrowser";
 import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
 import PropertiesDialog from "../components/common/PropertiesDialog";
 import Popover, {
@@ -151,17 +158,40 @@ export default function PhotoAlbum({ album }: Props) {
   const pushToast = useUIStore((s) => s.pushToast);
   const density = usePhotoStore((s) => s.density);
   const setDensity = usePhotoStore((s) => s.setDensity);
+  const [smartMode, setSmartMode] = useState(false);
+  const [dimension, setDimension] = useState<SmartAlbumDimension>("time");
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [analyzingJobIds, setAnalyzingJobIds] = useState<string[]>([]);
+  const [rebuilding, setRebuilding] = useState(false);
   const { toggle: toggleFav, favorites } = useFavorites();
   const isFavorite = favorites.includes(album.id);
   // 媒体根数量：单根时不必在页头上重复来源。
   const multiRoot = useUIStore((s) => s.multiRoot);
 
-  const mediaQuery = useAlbumMedia(album.id);
+  const rawMediaQuery = useAlbumMedia(album.id, undefined, !smartMode);
+  const smartGroupsQuery = useSmartAlbumGroups(album.id, dimension, smartMode);
+  const smartSummary = smartGroupsQuery.data?.summary;
+  const selectedGroup =
+    smartSummary?.groups.find((group) => group.id === selectedGroupId) ?? null;
+  const smartGroupMediaQuery = useSmartAlbumGroupMedia(
+    album.id,
+    dimension,
+    selectedGroupId ?? "",
+    smartSummary?.snapshotKey ?? "",
+  );
+  const showingSmartGroup = smartMode && selectedGroupId !== null;
+  const mediaQuery = showingSmartGroup ? smartGroupMediaQuery : rawMediaQuery;
   const mediaItems = useMemo<LibraryMediaItem[]>(
     () => mediaQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [mediaQuery.data],
   );
   const total = mediaQuery.data?.pages[0]?.total ?? mediaItems.length;
+  const analysisJobsQuery = useQuery({
+    queryKey: ["ai-jobs"],
+    queryFn: aiJobsApi.list,
+    enabled: analyzingJobIds.length > 0,
+    refetchInterval: analyzingJobIds.length > 0 ? 2_000 : false,
+  });
 
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   // 关掉大图预览后回到刚才看的那张。
@@ -209,6 +239,52 @@ export default function PhotoAlbum({ album }: Props) {
     ? album.location || album.displayName || album.name
     : album.displayName || album.name;
 
+  useEffect(() => {
+    if (
+      smartMode &&
+      selectedGroupId &&
+      smartSummary &&
+      !smartSummary.groups.some((group) => group.id === selectedGroupId)
+    ) {
+      setSelectedGroupId(null);
+    }
+  }, [selectedGroupId, smartMode, smartSummary]);
+
+  useEffect(() => {
+    const jobs = analysisJobsQuery.data?.snapshot.jobs;
+    if (!jobs || analyzingJobIds.length === 0) return;
+    const jobsByID = new Map(jobs.map((job) => [job.id, job]));
+    const selectedJobs = analyzingJobIds.map((id) => jobsByID.get(id));
+    if (
+      selectedJobs.some(
+        (job) =>
+          !job ||
+          job.status === "pending" ||
+          job.status === "running" ||
+          job.status === "paused",
+      )
+    ) {
+      return;
+    }
+    const failed = selectedJobs.some((job) => job?.status === "failed");
+    setAnalyzingJobIds([]);
+    void queryClient.invalidateQueries({
+      queryKey: ["smart-albums", album.id],
+    });
+    pushToast({
+      kind: failed ? "info" : "success",
+      message: failed
+        ? "相册分析已结束，部分任务未完成"
+        : "相册分析完成，分组已更新",
+    });
+  }, [
+    album.id,
+    analysisJobsQuery.data,
+    analyzingJobIds,
+    pushToast,
+    queryClient,
+  ]);
+
   const actions = useAlbumActions({
     id: "a:" + album.id,
     variant: "album",
@@ -232,6 +308,69 @@ export default function PhotoAlbum({ album }: Props) {
   const loadMore = useCallback(() => {
     void mediaQuery.fetchNextPage({ cancelRefetch: false });
   }, [mediaQuery]);
+
+  const analyzeAlbum = useCallback(async () => {
+    try {
+      const result = await aiJobsApi.startAll("incremental", album.id);
+      const ids = result.jobs.map((job) => job.id);
+      if (ids.length === 0) {
+        pushToast({ kind: "info", message: "当前相册没有可启动的分析模块" });
+        return;
+      }
+      setAnalyzingJobIds(ids);
+      pushToast({ kind: "success", message: "已加入当前相册的分析队列" });
+    } catch {
+      pushToast({ kind: "error", message: "分析任务未能启动，请检查任务中心" });
+    }
+  }, [album.id, pushToast]);
+
+  const rebuildSmartGroups = useCallback(async () => {
+    setRebuilding(true);
+    try {
+      const response = await albumsApi.rebuildSmartGroups(album.id, dimension);
+      queryClient.setQueryData(
+        smartAlbumQueryKeys.summary(album.id, dimension),
+        response,
+      );
+      setSelectedGroupId(null);
+      pushToast({ kind: "success", message: "已按当前分析结果重建分组" });
+    } catch {
+      pushToast({ kind: "error", message: "分组重建失败，请稍后重试" });
+    } finally {
+      setRebuilding(false);
+    }
+  }, [album.id, dimension, pushToast, queryClient]);
+
+  const saveGroupOverride = useCallback(
+    async (groupId: string, override: { name?: string; hidden?: boolean }) => {
+      try {
+        const response = await albumsApi.updateSmartGroup(
+          album.id,
+          dimension,
+          groupId,
+          override,
+        );
+        queryClient.setQueryData(
+          smartAlbumQueryKeys.summary(album.id, dimension),
+          response,
+        );
+        pushToast({
+          kind: "success",
+          message:
+            override.name !== undefined
+              ? "分组名称已保存"
+              : override.hidden
+                ? "分组已隐藏"
+                : "已取消隐藏",
+        });
+        return true;
+      } catch {
+        pushToast({ kind: "error", message: "智能分组修改失败" });
+        return false;
+      }
+    },
+    [album.id, dimension, pushToast, queryClient],
+  );
 
   const onOpen = useCallback((item: LibraryMediaItem, index: number) => {
     // 打开前先把「回到哪张」清掉：关掉预览时重新对一次位置，
@@ -633,39 +772,111 @@ export default function PhotoAlbum({ album }: Props) {
               </Popover>
             </div>
           </div>
+          <nav
+            aria-label="相册视图"
+            className="flex items-center gap-1 border-t border-border-faint py-2"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setSmartMode(false);
+                setSelectedGroupId(null);
+              }}
+              className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
+                !smartMode
+                  ? "bg-bg-elevated text-fg shadow-xs"
+                  : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+              }`}
+              aria-pressed={!smartMode}
+            >
+              原始照片墙
+            </button>
+            <button
+              type="button"
+              onClick={() => setSmartMode(true)}
+              className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
+                smartMode
+                  ? "bg-bg-elevated text-fg shadow-xs"
+                  : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+              }`}
+              aria-pressed={smartMode}
+            >
+              智能相册
+            </button>
+            {showingSmartGroup && selectedGroup && (
+              <span className="ml-2 truncate text-meta text-fg-muted">
+                {selectedGroup.name} · {selectedGroup.photoCount} 张
+              </span>
+            )}
+          </nav>
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
-        {/* 只有第一页就没加载出来才整页报错：后续分页失败时已加载的内容
+      {smartMode && !showingSmartGroup ? (
+        <SmartAlbumBrowser
+          summary={smartSummary}
+          loading={smartGroupsQuery.isLoading}
+          error={smartGroupsQuery.isError}
+          dimension={dimension}
+          analyzing={analyzingJobIds.length > 0}
+          rebuilding={rebuilding}
+          onDimensionChange={(nextDimension) => {
+            setDimension(nextDimension);
+            setSelectedGroupId(null);
+          }}
+          onAnalyze={() => void analyzeAlbum()}
+          onRebuild={() => void rebuildSmartGroups()}
+          onSaveOverride={saveGroupOverride}
+          onOpenGroup={setSelectedGroupId}
+        />
+      ) : (
+        <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
+          {showingSmartGroup && selectedGroup && (
+            <div className="flex items-center gap-2 py-3 text-meta">
+              <button
+                type="button"
+                onClick={() => setSelectedGroupId(null)}
+                className="inline-flex items-center gap-1 text-brand hover:underline"
+              >
+                <ChevronLeftIcon size={13} /> 智能分组
+              </button>
+              <span className="text-fg-subtle">/</span>
+              <span className="truncate text-fg">{selectedGroup.name}</span>
+              <span className="shrink-0 text-fg-muted">
+                {selectedGroup.photoCount} 张
+              </span>
+            </div>
+          )}
+          {/* 只有第一页就没加载出来才整页报错：后续分页失败时已加载的内容
             仍然能翻，页头的提示条已经说明了失败与重试。 */}
-        {mediaQuery.isError && mediaItems.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-body text-fg-muted">
-            媒体加载失败，请重试。
-          </div>
-        ) : (
-          <PhotoWall
-            items={mediaItems}
-            total={total}
-            targetHeight={wallTargetHeight(density)}
-            hasNextPage={mediaQuery.hasNextPage ?? false}
-            isLoadingMore={mediaQuery.isFetchingNextPage}
-            onLoadMore={loadMore}
-            onOpen={onOpen}
-            selecting={selectionActive}
-            isSelected={isSelected}
-            onToggleSelect={toggleSelect}
-            isPicked={isPicked}
-            onTogglePick={togglePick}
-            scrollToIndex={focusIndex}
-            onContextMenu={(item, event) => {
-              event.preventDefault();
-              event.currentTarget.focus({ preventScroll: true });
-              setContextMenu({ x: event.clientX, y: event.clientY, item });
-            }}
-          />
-        )}
-      </div>
+          {mediaQuery.isError && mediaItems.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-body text-fg-muted">
+              媒体加载失败，请重试。
+            </div>
+          ) : (
+            <PhotoWall
+              items={mediaItems}
+              total={total}
+              targetHeight={wallTargetHeight(density)}
+              hasNextPage={mediaQuery.hasNextPage ?? false}
+              isLoadingMore={mediaQuery.isFetchingNextPage}
+              onLoadMore={loadMore}
+              onOpen={onOpen}
+              selecting={selectionActive}
+              isSelected={isSelected}
+              onToggleSelect={toggleSelect}
+              isPicked={isPicked}
+              onTogglePick={togglePick}
+              scrollToIndex={focusIndex}
+              onContextMenu={(item, event) => {
+                event.preventDefault();
+                event.currentTarget.focus({ preventScroll: true });
+                setContextMenu({ x: event.clientX, y: event.clientY, item });
+              }}
+            />
+          )}
+        </div>
+      )}
 
       {selectionActive && (
         <PhotoSelectionBar

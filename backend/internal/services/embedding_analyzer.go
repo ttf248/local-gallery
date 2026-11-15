@@ -148,28 +148,65 @@ func (a *EmbeddingAnalyzer) Index() *VectorIndexStore {
 }
 
 func (a *EmbeddingAnalyzer) SearchText(ctx context.Context, text string) ([]float32, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	a.textCacheMu.Lock()
-	if element, exists := a.textCache[text]; exists {
-		a.textCacheOrder.MoveToFront(element)
-		vector := append([]float32(nil), element.Value.(semanticTextEmbeddingCacheEntry).vector...)
-		a.textCacheMu.Unlock()
-		return vector, nil
-	}
-	a.textCacheMu.Unlock()
-
-	results, err := a.worker.EmbedTexts(ctx, []string{text})
+	vectors, err := a.SearchTexts(ctx, []string{text})
 	if err != nil {
 		return nil, err
 	}
-	if len(results) != 1 || results[0].Error != "" || len(results[0].Vector) != AIEmbeddingDimension {
+	if len(vectors) != 1 {
 		return nil, errors.New("text embedding failed")
 	}
-	vector := append([]float32(nil), results[0].Vector...)
-	a.cacheTextEmbedding(text, vector)
-	return append([]float32(nil), vector...), nil
+	return vectors[0], nil
+}
+
+// SearchTexts embeds a small set of text prompts with one local Worker request.
+// Cached entries are reused, which keeps optional CLIP labels cheap on later
+// folder views.
+func (a *EmbeddingAnalyzer) SearchTexts(ctx context.Context, texts []string) ([][]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if len(texts) == 0 {
+		return [][]float32{}, nil
+	}
+	result := make([][]float32, len(texts))
+	missingPositions := make(map[string][]int)
+	missing := make([]string, 0, len(texts))
+	a.textCacheMu.Lock()
+	for index, text := range texts {
+		if element, exists := a.textCache[text]; exists {
+			a.textCacheOrder.MoveToFront(element)
+			result[index] = append([]float32(nil), element.Value.(semanticTextEmbeddingCacheEntry).vector...)
+			continue
+		}
+		if _, exists := missingPositions[text]; !exists {
+			missing = append(missing, text)
+		}
+		missingPositions[text] = append(missingPositions[text], index)
+	}
+	a.textCacheMu.Unlock()
+	if len(missing) == 0 {
+		return result, nil
+	}
+
+	embeddings, err := a.worker.EmbedTexts(ctx, missing)
+	if err != nil {
+		return nil, err
+	}
+	if len(embeddings) != len(missing) {
+		return nil, errors.New("text embedding failed")
+	}
+	for index, embedding := range embeddings {
+		if embedding.Error != "" || len(embedding.Vector) != AIEmbeddingDimension {
+			return nil, errors.New("text embedding failed")
+		}
+		vector := append([]float32(nil), embedding.Vector...)
+		text := missing[index]
+		a.cacheTextEmbedding(text, vector)
+		for _, position := range missingPositions[text] {
+			result[position] = append([]float32(nil), vector...)
+		}
+	}
+	return result, nil
 }
 
 func (a *EmbeddingAnalyzer) cacheTextEmbedding(text string, vector []float32) {

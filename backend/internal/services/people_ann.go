@@ -88,6 +88,7 @@ func (q *peopleANNQueue) pop() peopleANNCandidate {
 type peopleANNIndex struct {
 	nodes          []peopleANNNode
 	nodeByID       map[string]int
+	dimension      int
 	entry          int
 	maxLevel       int
 	rng            *rand.Rand
@@ -97,8 +98,13 @@ type peopleANNIndex struct {
 }
 
 func newPeopleANNIndex() *peopleANNIndex {
+	return newPeopleANNIndexForDimension(peopleEmbeddingDimension)
+}
+
+func newPeopleANNIndexForDimension(dimension int) *peopleANNIndex {
 	return &peopleANNIndex{
 		nodeByID:       make(map[string]int),
+		dimension:      dimension,
 		entry:          -1,
 		maxLevel:       -1,
 		rng:            rand.New(rand.NewSource(42)),
@@ -113,6 +119,9 @@ func (index *peopleANNIndex) Len() int {
 }
 
 func (index *peopleANNIndex) Add(id string, vector []float32) {
+	if len(vector) != index.dimension {
+		return
+	}
 	if existing, exists := index.nodeByID[id]; exists {
 		index.nodes[existing].vector = vector
 		return
@@ -156,7 +165,7 @@ func (index *peopleANNIndex) Add(id string, vector []float32) {
 }
 
 func (index *peopleANNIndex) Search(query []float32, limit int) []peopleANNHit {
-	if index.entry < 0 || limit <= 0 || len(query) != peopleEmbeddingDimension {
+	if index.entry < 0 || limit <= 0 || len(query) != index.dimension {
 		return nil
 	}
 	if len(index.nodes) <= limit {

@@ -18,12 +18,14 @@ import (
 )
 
 type aiJobStartRequest struct {
-	Type string `json:"type"`
-	Mode string `json:"mode"`
+	Type    string `json:"type"`
+	Mode    string `json:"mode"`
+	AlbumID string `json:"albumId,omitempty"`
 }
 
 type aiJobSequenceStartRequest struct {
-	Mode string `json:"mode"`
+	Mode    string `json:"mode"`
+	AlbumID string `json:"albumId,omitempty"`
 }
 
 type aiJobQueueMoveRequest struct {
@@ -87,8 +89,11 @@ func AIJobStartHandler(service *services.AIJobService) fiber.Handler {
 		if err := c.BodyParser(&body); err != nil {
 			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_request", "request body is not valid JSON")
 		}
-		job, reused, err := service.Start(strings.TrimSpace(body.Type), strings.TrimSpace(body.Mode))
+		job, reused, err := service.Start(strings.TrimSpace(body.Type), strings.TrimSpace(body.Mode), body.AlbumID)
 		if err != nil {
+			if errors.Is(err, services.ErrAIJobInvalidAlbum) {
+				return writeError(c, fiber.StatusBadRequest, "invalid_analysis_album", "albumId must identify a current photo album")
+			}
 			if errors.Is(err, services.ErrPeopleAnalysisDisabled) {
 				return writeError(c, fiber.StatusForbidden, "people_analysis_disabled", "enable people analysis before starting face tasks")
 			}
@@ -120,8 +125,11 @@ func AIJobSequenceStartHandler(service *services.AIJobService) fiber.Handler {
 		if err := c.BodyParser(&body); err != nil {
 			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_request", "request body is not valid JSON")
 		}
-		jobs, skipped, err := service.StartAll(strings.TrimSpace(body.Mode))
+		jobs, skipped, err := service.StartAll(strings.TrimSpace(body.Mode), body.AlbumID)
 		if err != nil {
+			if errors.Is(err, services.ErrAIJobInvalidAlbum) {
+				return writeError(c, fiber.StatusBadRequest, "invalid_analysis_album", "albumId must identify a current photo album")
+			}
 			if errors.Is(err, services.ErrAIJobActive) {
 				return writeError(c, fiber.StatusConflict, "analysis_job_active", "another analysis task is active")
 			}

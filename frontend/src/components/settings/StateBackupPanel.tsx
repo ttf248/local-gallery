@@ -146,6 +146,7 @@ export default function StateBackupPanel() {
             "library",
             "picks",
             "people",
+            "smart-albums",
           ].includes(String(query.queryKey[0])),
       });
       if (restored.completed.includes("preferences")) {
@@ -177,7 +178,7 @@ export default function StateBackupPanel() {
     <div className="p-4 space-y-4">
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
         <p className="text-body text-fg-muted">
-          备份收藏、最近访问、服务端偏好、阅读/播放活动、自定义封面、照片精选与人物分组修正。不会备份人脸特征向量、媒体文件、服务配置或此浏览器的阅读器偏好。
+          备份收藏、最近访问、服务端偏好、阅读/播放活动、自定义封面、照片精选、人物分组与智能相册修正。不会备份人脸特征向量、媒体文件、服务配置或此浏览器的阅读器偏好。
         </p>
         <div className="flex flex-wrap items-start gap-3">
           <button

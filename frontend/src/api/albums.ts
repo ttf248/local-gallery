@@ -1,5 +1,55 @@
 import { api } from "./client";
-import type { AppMode, ContentKind } from "./library";
+import type {
+  AppMode,
+  ContentKind,
+  LibraryMediaItem,
+  LibraryPage,
+} from "./library";
+
+export type SmartAlbumDimension = "time" | "place" | "people" | "scene";
+
+export interface SmartAlbumGroup {
+  id: string;
+  dimension: SmartAlbumDimension;
+  name: string;
+  suggestedName: string;
+  customName: boolean;
+  photoCount: number;
+  coverResourceId?: string;
+  coverVersion?: string;
+  hidden: boolean;
+}
+
+export interface SmartAlbumCoverage {
+  module: string;
+  total: number;
+  analyzed: number;
+  missing: number;
+  failed: number;
+  withEvidence: number;
+  available: boolean;
+  reason?: string;
+}
+
+export interface SmartAlbumSummary {
+  albumId: string;
+  dimension: SmartAlbumDimension;
+  revision: number;
+  snapshotKey: string;
+  totalPhotos: number;
+  availablePhotos: number;
+  unavailablePhotos: number;
+  ungroupedPhotos: number;
+  hiddenGroupCount: number;
+  coverage: SmartAlbumCoverage;
+  groups: SmartAlbumGroup[];
+  cacheHit: boolean;
+}
+
+export interface SmartAlbumOverride {
+  name?: string;
+  hidden?: boolean;
+}
 
 export interface SearchHit {
   kind: "album" | "collection" | "smartCollection";
@@ -49,6 +99,46 @@ export const albumsApi = {
       {
         method: "DELETE",
       },
+    );
+  },
+  smartGroups(
+    albumId: string,
+    dimension: SmartAlbumDimension,
+    signal?: AbortSignal,
+  ) {
+    return api<{ ok: boolean; summary: SmartAlbumSummary }>(
+      `/api/albums/${encodeURIComponent(albumId)}/smart-groups`,
+      { params: { dimension }, signal },
+    );
+  },
+  rebuildSmartGroups(albumId: string, dimension: SmartAlbumDimension) {
+    return api<{ ok: boolean; summary: SmartAlbumSummary }>(
+      `/api/albums/${encodeURIComponent(albumId)}/smart-groups/rebuild`,
+      { method: "POST", params: { dimension } },
+    );
+  },
+  updateSmartGroup(
+    albumId: string,
+    dimension: SmartAlbumDimension,
+    groupId: string,
+    override: SmartAlbumOverride,
+  ) {
+    return api<{ ok: boolean; summary: SmartAlbumSummary }>(
+      `/api/albums/${encodeURIComponent(albumId)}/smart-groups/${encodeURIComponent(groupId)}`,
+      { method: "PUT", params: { dimension }, body: override },
+    );
+  },
+  smartGroupMedia(
+    albumId: string,
+    dimension: SmartAlbumDimension,
+    groupId: string,
+    snapshot: string,
+    cursor?: string,
+    signal?: AbortSignal,
+  ) {
+    return api<{ ok: boolean; page: LibraryPage<LibraryMediaItem> }>(
+      `/api/albums/${encodeURIComponent(albumId)}/smart-groups/${encodeURIComponent(groupId)}/media`,
+      { params: { dimension, snapshot, cursor, limit: 200 }, signal },
     );
   },
 };

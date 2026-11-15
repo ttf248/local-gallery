@@ -49,8 +49,9 @@ type StateBackup struct {
 	// 它与相册级收藏是两份数据，恢复其中一份不动另一份。
 	Picks []string `json:"picks,omitempty"`
 	// People backs up only names, hidden groups, and manual face assignments.
-	People           *PeopleCorrections `json:"people,omitempty"`
-	UnresolvedCovers int                `json:"unresolvedCovers,omitempty"`
+	People           *PeopleCorrections     `json:"people,omitempty"`
+	SmartAlbums      *SmartAlbumCorrections `json:"smartAlbums,omitempty"`
+	UnresolvedCovers int                    `json:"unresolvedCovers,omitempty"`
 }
 type BackupPreview struct {
 	Versions        map[string]string `json:"versions"`
@@ -68,12 +69,13 @@ type RestoreResult struct {
 	SkippedCovers int      `json:"skippedCovers"`
 }
 type backupSnapshot struct {
-	prefs      models.Prefs
-	activities []models.Activity
-	covers     map[string]CoverOverride
-	picks      []string
-	people     *PeopleCorrections
-	catalog    CatalogSnapshot
+	prefs       models.Prefs
+	activities  []models.Activity
+	covers      map[string]CoverOverride
+	picks       []string
+	people      *PeopleCorrections
+	smartAlbums *SmartAlbumCorrections
+	catalog     CatalogSnapshot
 }
 
 // StateBackupService 的路径验证由装配层注入，service 不依赖 HTTP 或中间件。
@@ -83,6 +85,7 @@ type StateBackupService struct {
 	Covers       *CoverOverrideStore
 	Picks        *store.PickStore
 	People       *PeopleService
+	SmartAlbums  *SmartAlbumService
 	Catalog      *ResourceCatalog
 	ScanCache    *ScanResultCache
 	ValidatePath func(string) (string, error)
@@ -103,6 +106,10 @@ func (s *StateBackupService) snapshot() (backupSnapshot, error) {
 		corrections := s.People.Corrections()
 		snapshot.people = &corrections
 	}
+	if s.SmartAlbums != nil {
+		corrections := s.SmartAlbums.Corrections()
+		snapshot.smartAlbums = &corrections
+	}
 	return snapshot, nil
 }
 func backupDigest(value interface{}) string {
@@ -111,11 +118,11 @@ func backupDigest(value interface{}) string {
 	return hex.EncodeToString(sum[:])
 }
 func (state backupSnapshot) versions() map[string]string {
-	return map[string]string{"preferences": backupDigest(state.prefs), "activities": backupDigest(state.activities), "covers": backupDigest(state.covers), "picks": backupDigest(state.picks), "people": backupDigest(state.people)}
+	return map[string]string{"preferences": backupDigest(state.prefs), "activities": backupDigest(state.activities), "covers": backupDigest(state.covers), "picks": backupDigest(state.picks), "people": backupDigest(state.people), "smartAlbums": backupDigest(state.smartAlbums)}
 }
 func (state backupSnapshot) export() StateBackup {
 	p := state.prefs
-	backup := StateBackup{Version: 1, ExportedAt: time.Now().UTC(), Favorites: append([]string{}, p.Favorites...), History: append([]models.HistoryEntry{}, p.History...), Activities: state.activities, Covers: []BackupCover{}, Picks: append([]string{}, state.picks...), People: state.people, Preferences: &BackupPreferences{p.MaxRecent, p.AutoSwitchAlbum, p.ShowSwitchNotif, p.Theme, p.SidebarCollapsed, p.AppMode, append([]string{}, p.HiddenNavItems...)}}
+	backup := StateBackup{Version: 1, ExportedAt: time.Now().UTC(), Favorites: append([]string{}, p.Favorites...), History: append([]models.HistoryEntry{}, p.History...), Activities: state.activities, Covers: []BackupCover{}, Picks: append([]string{}, state.picks...), People: state.people, SmartAlbums: state.smartAlbums, Preferences: &BackupPreferences{p.MaxRecent, p.AutoSwitchAlbum, p.ShowSwitchNotif, p.Theme, p.SidebarCollapsed, p.AppMode, append([]string{}, p.HiddenNavItems...)}}
 	for album, cover := range state.covers {
 		aid := state.catalog.ExternalID(album, ResourceAlbum)
 		fid := state.catalog.ExternalID(cover.File, ResourceFile)
@@ -217,6 +224,9 @@ func ValidateStateBackup(backup StateBackup) error {
 			}
 		}
 	}
+	if backup.SmartAlbums != nil && !validSmartAlbumCorrections(*backup.SmartAlbums) {
+		return ErrInvalidBackup
+	}
 	return nil
 }
 
@@ -266,7 +276,11 @@ func (s *StateBackupService) Preview(backup StateBackup) (BackupPreview, error) 
 	if backup.People != nil {
 		peopleCount = len(backup.People.Names) + len(backup.People.Hidden) + len(backup.People.Assignments)
 	}
-	preview := BackupPreview{Versions: state.versions(), LibraryRevision: state.catalog.Revision(), Ready: state.catalog.Ready(), Counts: map[string]int{"favorites": len(backup.Favorites), "history": len(backup.History), "preferences": 1, "activities": len(backup.Activities), "covers": len(backup.Covers), "picks": len(backup.Picks), "people": peopleCount}, Missing: map[string]int{}, SkippedCovers: skipped}
+	smartAlbumCount := 0
+	if backup.SmartAlbums != nil {
+		smartAlbumCount = len(backup.SmartAlbums.Overrides)
+	}
+	preview := BackupPreview{Versions: state.versions(), LibraryRevision: state.catalog.Revision(), Ready: state.catalog.Ready(), Counts: map[string]int{"favorites": len(backup.Favorites), "history": len(backup.History), "preferences": 1, "activities": len(backup.Activities), "covers": len(backup.Covers), "picks": len(backup.Picks), "people": peopleCount, "smartAlbums": smartAlbumCount}, Missing: map[string]int{}, SkippedCovers: skipped}
 	missing := func(id string) bool { _, ok := state.catalog.Lookup(id); return !ok }
 	for _, id := range backup.Favorites {
 		if strings.HasPrefix(id, "smart:") {
@@ -305,7 +319,7 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 	}
 	selected := map[string]bool{}
 	for _, category := range categories {
-		if selected[category] || (category != "favorites" && category != "history" && category != "preferences" && category != "activities" && category != "covers" && category != "picks" && category != "people") {
+		if selected[category] || (category != "favorites" && category != "history" && category != "preferences" && category != "activities" && category != "covers" && category != "picks" && category != "people" && category != "smartAlbums") {
 			return RestoreResult{}, ErrInvalidBackup
 		}
 		selected[category] = true
@@ -375,7 +389,7 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 		return RestoreResult{}, err
 	}
 	result := RestoreResult{Completed: []string{}, Pending: []string{}}
-	order := []string{"favorites", "history", "preferences", "activities", "covers", "picks", "people"}
+	order := []string{"favorites", "history", "preferences", "activities", "covers", "picks", "people", "smartAlbums"}
 	fail := func(category string, err error) (RestoreResult, error) {
 		result.Failed = category
 		result.Code = "state_restore_failed"
@@ -466,6 +480,20 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 		}
 		result.Completed = append(result.Completed, "people")
 		delete(selected, "people")
+	}
+	if selected["smartAlbums"] {
+		if s.SmartAlbums == nil {
+			return fail("smartAlbums", ErrInvalidBackup)
+		}
+		corrections := SmartAlbumCorrections{Version: smartAlbumStateVersion, Overrides: map[string]SmartAlbumOverride{}}
+		if backup.SmartAlbums != nil {
+			corrections = *backup.SmartAlbums
+		}
+		if err = s.SmartAlbums.ReplaceCorrections(corrections); err != nil {
+			return fail("smartAlbums", err)
+		}
+		result.Completed = append(result.Completed, "smartAlbums")
+		delete(selected, "smartAlbums")
 	}
 	return result, nil
 }

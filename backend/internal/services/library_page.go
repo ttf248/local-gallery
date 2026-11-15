@@ -263,6 +263,30 @@ func (s CatalogSnapshot) LibraryNode(id string) (LibraryNodeSummary, bool) {
 	return cloneNodeSummary(node), true
 }
 
+// AlbumImageIDs returns only the image resources that belong directly to one
+// album. It is used by folder-scoped analysis and views so they do not need to
+// enumerate the whole catalog and filter it in a caller.
+func (s CatalogSnapshot) AlbumImageIDs(albumID string) ([]string, bool) {
+	if s.state == nil || s.state.library == nil {
+		return nil, false
+	}
+	ref, exists := s.state.byID[albumID]
+	if !exists || ref.Kind != ResourceAlbum {
+		return nil, false
+	}
+	items, exists := s.state.library.media[albumID]
+	if !exists {
+		return nil, false
+	}
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.Kind == "image" {
+			ids = append(ids, item.ID)
+		}
+	}
+	return ids, true
+}
+
 // NormalizeLibraryPageLimit 提供服务层的安全默认值与硬上限。
 func NormalizeLibraryPageLimit(limit int) int {
 	if limit <= 0 {

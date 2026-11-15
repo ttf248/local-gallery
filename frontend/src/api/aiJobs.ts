@@ -27,6 +27,7 @@ export interface AIJob {
   id: string;
   type: AnalysisType;
   mode: AnalysisMode;
+  albumId?: string;
   status: AnalysisStatus;
   stage: string;
   moduleVersion: string;
@@ -602,14 +603,14 @@ export const aiJobsApi = {
       method: "POST",
       body: { type, mode },
     }),
-  startAll: (mode: AnalysisMode) =>
+  startAll: (mode: AnalysisMode, albumId?: string) =>
     api<{
       ok: boolean;
       jobs: AIJob[];
       skippedModules: AIJobModule[];
     }>("/api/ai/jobs/sequence", {
       method: "POST",
-      body: { mode },
+      body: { mode, albumId },
     }),
   action: (id: string, action: "pause" | "resume" | "cancel" | "retry") =>
     api<{ ok: boolean; job?: AIJob }>(

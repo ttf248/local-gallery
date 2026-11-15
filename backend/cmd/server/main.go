@@ -351,6 +351,19 @@ func main() {
 		}
 	}
 	aiJobs.StartPending()
+	smartAlbums, err := services.OpenSmartAlbumService(services.SmartAlbumServiceOptions{
+		StatePath:    filepath.Join(cacheLayout.StateDir, "smart_album_overrides.json"),
+		CacheDir:     filepath.Join(cacheLayout.AIDerivedDir, "smart-albums"),
+		Catalog:      resourceCatalog,
+		Jobs:         aiJobs,
+		People:       peopleService,
+		Vectors:      vectorIndex,
+		TextEmbedder: embeddingAnalyzer,
+		ValidatePath: safetyState.Validate,
+	})
+	if err != nil {
+		log.Fatalf("初始化智能相册服务失败: %v", err)
+	}
 
 	// 启动时若缓存为空（首次启动 / 缓存根目录不匹配被清空 / 磁盘无缓存），
 	// 自动跑一次扫描，避免前端打开时看到 404 或空数据。
@@ -457,6 +470,10 @@ func main() {
 	api.Post("/ai/jobs/:id/cancel", handlers.AIJobActionHandler(aiJobs, "cancel"))
 	api.Post("/ai/jobs/:id/retry", handlers.AIJobActionHandler(aiJobs, "retry"))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
+	api.Get("/albums/:id/smart-groups", resourceParam, handlers.SmartAlbumGroupsHandler(smartAlbums, false))
+	api.Post("/albums/:id/smart-groups/rebuild", resourceParam, handlers.SmartAlbumGroupsHandler(smartAlbums, true))
+	api.Put("/albums/:id/smart-groups/:groupId", resourceParam, handlers.SmartAlbumOverrideHandler(smartAlbums))
+	api.Get("/albums/:id/smart-groups/:groupId/media", resourceParam, handlers.SmartAlbumGroupMediaHandler(smartAlbums, resourceCatalog, mediaDimensions, picks))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(resourceCatalog, activities, unreadIndex))
 	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(resourceCatalog, mediaDimensions, picks))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。
@@ -496,7 +513,7 @@ func main() {
 	api.Post("/admin/fs/directories", middleware.LoopbackOnly(), handlers.DirectoriesHandler())
 
 	// 配置读写
-	backupService := &services.StateBackupService{Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
+	backupService := &services.StateBackupService{Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, SmartAlbums: smartAlbums, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
 	api.Get("/admin/state/export", middleware.LoopbackOnly(), handlers.StateExportHandler(backupService))
 	api.Post("/admin/state/import/preview", middleware.LoopbackOnly(), handlers.StatePreviewHandler(backupService))
 	api.Post("/admin/state/import", middleware.LoopbackOnly(), handlers.StateImportHandler(backupService))

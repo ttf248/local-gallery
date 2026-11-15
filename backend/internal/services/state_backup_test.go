@@ -169,6 +169,61 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	}
 }
 
+func TestStateBackupRestoresSmartAlbumOverrides(t *testing.T) {
+	s, albumID, root := newBackupFixture(t)
+	cacheRoot := t.TempDir()
+	jobs := newTestAIJobService(
+		t,
+		filepath.Join(cacheRoot, "state", "ai-jobs.json"),
+		filepath.Join(cacheRoot, "derived", "metadata"),
+		s.Catalog,
+		MetadataAnalyzer{},
+	)
+	smartAlbums, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(cacheRoot, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(cacheRoot, "derived", "smart-albums"),
+		Catalog:   s.Catalog, Jobs: jobs, ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SmartAlbums = smartAlbums
+	groupID := "sg_0123456789abcdef0123"
+	key := smartOverrideKey(albumID, SmartAlbumDimensionTime, groupID)
+	if err := smartAlbums.ReplaceCorrections(SmartAlbumCorrections{
+		Version:   smartAlbumStateVersion,
+		Overrides: map[string]SmartAlbumOverride{key: {Name: "自定义分组", Hidden: true}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := s.Export()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backup.SmartAlbums == nil || len(backup.SmartAlbums.Overrides) != 1 {
+		t.Fatalf("backup smart albums=%+v", backup.SmartAlbums)
+	}
+	if err := smartAlbums.ReplaceCorrections(SmartAlbumCorrections{
+		Version: smartAlbumStateVersion, Overrides: map[string]SmartAlbumOverride{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := s.Preview(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Counts["smartAlbums"] != 1 {
+		t.Fatalf("smart album preview counts=%+v", preview.Counts)
+	}
+	result, err := s.Restore(backup, []string{"smartAlbums"}, preview.Versions, preview.LibraryRevision)
+	if err != nil || result.Failed != "" || len(result.Completed) != 1 {
+		t.Fatalf("smart album restore=%+v, %v", result, err)
+	}
+	if got := smartAlbums.Corrections().Overrides[key]; got.Name != "自定义分组" || !got.Hidden {
+		t.Fatalf("restored smart album override=%+v", got)
+	}
+}
+
 func TestStateBackupRejectsInvalidPicks(t *testing.T) {
 	s, _, _ := newBackupFixture(t)
 	backup, _ := s.Export()
