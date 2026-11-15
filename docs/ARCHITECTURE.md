@@ -292,6 +292,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 前端查询键带模式段（`["library", ..., "mode", mode]`），切模式即换键自动重取，旧模式缓存保留。媒体清单与 `nodes/query` 与模式无关，键不带模式。收藏与历史的资源 ID 集合不分类型，由前端按摘要里的 `contentKind` 客户端过滤；`hooks/useFavoritesByMode.ts` 把「当前侧可见的卡片 / 本侧计数 / 真失效的条目」收在一处，收藏页与首页共用它，口径不再分叉。
 - 收藏里的智能标签按名解析（`POST /api/tags/query`），接口同时给出两侧的册数：客户端据此区分「这个标签在库里不存在」（失效，可清理）与「它只属于另一侧」（不可见，但不是失效）。把两者混为一谈会导致用户在另一侧点一次「清理失效收藏」就删掉自己的收藏。
 - 阅读器整屏脱离 AppShell，侧栏不可见，顶部提供工作台 chip 切模式（切模式即离开阅读器回到外壳）。
+- **阅读器的媒体清单与相册页共用同一份查询缓存。** `hooks/useReaderMedia.ts` 走 `useAlbumMedia`（同一个查询键），并把剩下的页依次取完 —— 进阅读器不必重下整本，再次进入时先出图、刷新在后台进行。阅读器页面只留「怎么摆」的部分：取数在 `useReaderMedia`、键盘在 `useReaderKeys`、跨卷导航在 `useAdjacentAlbum`、浮动控件显隐在 `useIdleChrome`。
 - 模式也决定视觉基调：`<html data-mode>` 由 `WorkbenchModeProvider` 写入，CSS token 按 `:root[data-theme][data-mode]` 组合覆盖（`--brand*` / `--feature-bg` / `--mode-tint`），画布与文字保持中性灰阶。封面画幅同样按侧取默认值（照片 1:1、漫画 2:3），见 `utils/workbench.ts` 的 `coverRatioForMode`。
 - 首页首屏按侧各成一套：漫画是「继续阅读 / 未读」两块面板，照片是「随手看看」的跨相册照片墙加「接着看」一块面板。照片墙的数据源是 `GET /api/library/media-feed?kind=photo&scope=random`（随机几本相册的照片，服务端交错排列），组件在 `components/home/PhotoFeedHero.tsx` 与 `components/wall/PhotoStrip.tsx`（只铺给定张数、不滚动的静态照片条），翻页由 `hooks/useMediaFeed.ts` 负责。
 - 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，组件 `components/home/ResumeHero.tsx`（首页首屏专区）、侧栏的「继续」区与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。

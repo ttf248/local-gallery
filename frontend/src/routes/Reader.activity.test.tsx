@@ -39,7 +39,11 @@ vi.mock("../api/library", async (importOriginal) => {
     ...actual,
     libraryApi: {
       ...actual.libraryApi,
-      allMedia: mocks.media,
+      // 阅读器走的是分页媒体接口（与相册页共用同一份缓存）。
+      mediaPage: async (...args: unknown[]) => ({
+        ok: true,
+        page: await mocks.media(...args),
+      }),
       queryNodes: mocks.nodes,
     },
   };
@@ -433,7 +437,7 @@ describe("Reader 媒体活动恢复门禁", () => {
 
     const view = renderReader();
     await waitFor(() =>
-      expect(libraryApi.allMedia).toHaveBeenCalledWith(albumId),
+      expect(mocks.media.mock.calls[0]?.[0]).toBe(albumId),
     );
     await waitFor(() => expect(activityApi.getImage).toHaveBeenCalled());
     view.unmount();

@@ -1,23 +1,20 @@
 import { useImageProgressSync } from "../hooks/useImageProgressSync";
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGalleryStore } from "../store/galleryStore";
-import { useKeyboard } from "../hooks/useKeyboard";
 import { albumsApi } from "../api/albums";
 import { historyApi } from "../api/prefs";
 import { syncHistoryCache } from "../utils/historyCache";
 import { activityApi, isActivityNotFound } from "../api/activity";
 import { useUIStore } from "../store/uiStore";
 import { useFavorites } from "../hooks/useFavorites";
-import { libraryApi } from "../api/library";
 import { libraryQueryKeys } from "../api/queryKeys";
 import { useLibraryNodes } from "../hooks/useLibrary";
 import { fsApi } from "../api/fs";
 import { useFsCapabilities } from "../hooks/useFsCapabilities";
 import { fileManagerErrorMessage } from "../utils/fileManager";
 import { apiErrorMessage } from "../utils/apiError";
-import { toggleFullscreen as toggleFullscreenImpl } from "../utils/fullscreen";
 import ImageGallery from "../components/gallery/ImageGallery";
 import VideoPlayer from "../components/gallery/VideoPlayer";
 import PageSlider from "../components/gallery/PageSlider";
@@ -37,61 +34,24 @@ import {
 import { displayedPageIndex } from "../utils/progress";
 import { albumRoute, homeRoute, readerRoute } from "../utils/path";
 import { useSafeBack } from "../utils/navigation";
-import {
-  getGalleryContext,
-  setGalleryContext,
-  entryReaderUrl,
-  type GalleryContextEntry,
-  entryDisplayName,
-} from "../utils/galleryContext";
 import { usePrefs } from "../hooks/usePrefs";
 import { useVideoActivity } from "../hooks/useVideoActivity";
 import { useAppMode } from "../hooks/useAppMode";
+import { useIdleChrome } from "../hooks/useIdleChrome";
+import { useAdjacentAlbum } from "../hooks/useAdjacentAlbum";
+import { useReaderMedia } from "../hooks/useReaderMedia";
+import { useReaderKeys } from "../hooks/useReaderKeys";
 import type { AppMode } from "../api/library";
 import "../styles/reader.css";
-
-/**
- * 在画廊上下文里找出相邻的一卷。
- *
- * 跳卷按钮与它悬停时显示的目标卷名用的是同一套查找 —— 两处各写一遍
- * 的话，按钮上的名字和实际跳去的卷迟早会对不上。
- *
- * 找不到阅读器入口的条目一律跳过：集合没有，照片相册也没有
- * （照片要进照片墙，把一卷照片丢进漫画阅读器是一次真实的错位）。
- */
-function resolveAdjacentEntry(
-  ctx: ReturnType<typeof getGalleryContext>,
-  pathParam: string | undefined,
-  direction: 1 | -1,
-  options: { albumsOnly: boolean; isVideo: boolean },
-): { entry: GalleryContextEntry; index: number } | null {
-  if (!ctx || ctx.list.length <= 1 || !pathParam) return null;
-  const curIdx = ctx.list.findIndex((it) => it.key === pathParam);
-  const base = curIdx >= 0 ? curIdx : ctx.index;
-  const n = ctx.list.length;
-  for (let step = 1; step <= n; step++) {
-    const nextIdx = (((base + direction * step) % n) + n) % n;
-    const nextEntry: GalleryContextEntry | undefined = ctx.list[nextIdx];
-    if (!nextEntry) continue;
-    if (!entryReaderUrl(nextEntry)) continue;
-    if (options.albumsOnly) {
-      // 跳到没有可读媒体的相册没有意义：图片模式跳进纯视频相册只会
-      // 看到「没有图片」。数量未知（undefined）时不跳过。
-      const count = options.isVideo
-        ? nextEntry.videoCount
-        : nextEntry.imageCount;
-      if (count === 0) continue;
-    }
-    return { entry: nextEntry, index: nextIdx };
-  }
-  return null;
-}
 
 // 画廊页面：从 URL 读取 path/index/name。
 // 关闭时持久化阅读进度到后端。
 //
 // 视觉：沉浸式画廊 — 暗色背景让图片突出，常驻 UI 只留顶部（返回/名称/页码）+ 顶部右侧
 //（全屏/菜单），其余控件在鼠标移动时浮出，2s 无操作后自动隐藏。
+//
+// 页面只留「怎么摆」的部分：取数在 useReaderMedia，键盘在 useReaderKeys，
+// 跨卷导航在 useAdjacentAlbum，控件显隐在 useIdleChrome。
 export default function Reader() {
   const [params] = useSearchParams();
   const routeParams = useParams();
@@ -112,20 +72,16 @@ export default function Reader() {
   const isVideoRef = useRef(isVideo);
   isVideoRef.current = isVideo;
 
-  const [images, setImages] = useState<string[]>([]);
-  const [loadedImagePath, setLoadedImagePath] = useState("");
-  // 视频文件列表（type=video 时使用）
-  const [videos, setVideos] = useState<string[]>([]);
-  const [loadedVideoPath, setLoadedVideoPath] = useState("");
-  // 相册里"另一种媒体"的数量：图片模式 = 视频数，视频模式 = 图片数。
-  // 序列播完时用它提示相册里还有别的媒体，避免用户误以为已经看完。
-  const [siblingCount, setSiblingCount] = useState(0);
-  const [imageActivityReadyPath, setImageActivityReadyPath] = useState("");
+  const media = useReaderMedia(pathParam, isVideo);
+  const { images, videos, reload: reloadMedia } = media;
+  const ready = media.status === "ready";
+
   const [continuousRange, setContinuousRange] = useState({
     path: "",
     startIndex: 0,
     endIndex: 0,
   });
+  const [imageActivityReadyPath, setImageActivityReadyPath] = useState("");
 
   const index = useGalleryStore((s) => s.index);
   const setIndex = useGalleryStore((s) => s.setIndex);
@@ -133,7 +89,6 @@ export default function Reader() {
   const slideshowInterval = useGalleryStore((s) => s.slideshowInterval);
   const toggleSlideshow = useGalleryStore((s) => s.toggleSlideshow);
   const mode = useGalleryStore((s) => s.mode);
-  const setMode = useGalleryStore((s) => s.setMode);
 
   const [showInfo, setShowInfo] = useState(false);
   const { mode: workbenchMode, setMode: setWorkbenchMode } = useAppMode();
@@ -153,7 +108,6 @@ export default function Reader() {
   const autoSwitchAlbum = prefs?.autoSwitchAlbum ?? true;
   const showSwitchNotif = prefs?.showSwitchNotif ?? true;
   const [markingRead, setMarkingRead] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [progressFailure, setProgressFailure] = useState<{
     key: string;
@@ -175,65 +129,7 @@ export default function Reader() {
 
   // 浮层显隐：鼠标移动时显出，2s 无动作后自动隐藏。
   // 不影响顶部常驻条（始终可见）。
-  const [chromeVisible, setChromeVisible] = useState(true);
-  const idleTimerRef = useRef<number | null>(null);
-  const markActive = useCallback(() => {
-    setChromeVisible(true);
-    if (idleTimerRef.current !== null) {
-      window.clearTimeout(idleTimerRef.current);
-    }
-    idleTimerRef.current = window.setTimeout(() => {
-      setChromeVisible(false);
-    }, 2500);
-  }, []);
-
-  // 底部工具条的显隐：它压在画面上，常驻会一直挡着画。空闲后淡出，
-  // 鼠标靠近底部（或按下任意键）就回来。
-  //
-  // 顶部条与底部页码进度条仍然常驻，所以「现在读到第几页」永远不需要
-  // 先找到工具条 —— 淡出的是操作入口，不是位置信息。
-  const [toolbarVisible, setToolbarVisible] = useState(true);
-  const toolbarTimerRef = useRef<number | null>(null);
-  const markToolbarActive = useCallback(() => {
-    setToolbarVisible(true);
-    if (toolbarTimerRef.current !== null) {
-      window.clearTimeout(toolbarTimerRef.current);
-    }
-    toolbarTimerRef.current = window.setTimeout(() => {
-      setToolbarVisible(false);
-    }, 2500);
-  }, []);
-
-  useEffect(() => {
-    markActive();
-    markToolbarActive();
-    const onMove = (event: MouseEvent) => {
-      markActive();
-      // 鼠标靠近画面底部时唤回工具条（工具条在进度条上方约 52px）。
-      if (event.clientY > window.innerHeight - 160) markToolbarActive();
-    };
-    const onKey = () => {
-      markActive();
-      markToolbarActive();
-    };
-    // 触屏：mousemove 不会触发，需要单独监听 touchstart / pointerdown
-    const onTouch = () => {
-      markActive();
-      markToolbarActive();
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("pointerdown", onTouch);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("pointerdown", onTouch);
-      if (idleTimerRef.current !== null)
-        window.clearTimeout(idleTimerRef.current);
-      if (toolbarTimerRef.current !== null)
-        window.clearTimeout(toolbarTimerRef.current);
-    };
-  }, [markActive, markToolbarActive]);
+  const { chromeVisible, toolbarVisible, markActive } = useIdleChrome();
 
   const { favorites, toggle: toggleFavorite } = useFavorites();
   const isFav = pathParam ? favorites.includes(pathParam) : false;
@@ -279,14 +175,25 @@ export default function Reader() {
     setHasCustomCover(Boolean(albumSummary?.hasCustomCover));
   }, [albumSummary?.hasCustomCover, pathParam]);
 
-  // 拉图 + 恢复阅读进度：依赖 pathParam 变化。
+  // 切到新相册：把上一卷的进度刷一次，并清掉上一卷留下的读取状态。
   //
-  // 重要：必须在 pathParam 每次变化时都重新拉图。从 Album A 导航到 Album B 时，
-  // 旧 images 在切换相册时不能继续作为当前页：每次 path 变化或显式重试都
-  // 必须重新拉取当前相册的媒体清单。
-  const imagesReady = images.length > 0 && loadedImagePath === pathParam;
-  const videosReady = videos.length > 0 && loadedVideoPath === pathParam;
-  const ready = isVideo ? videosReady : imagesReady;
+  // 刷进度用 lastPathRef（上一个 pathParam），不是闭包里的新 pathParam。
+  useEffect(() => {
+    if (!pathParam) return;
+    if (lastPathRef.current) {
+      const previous = progressRef.current;
+      if (previous.path === lastPathRef.current && previous.total > 0) {
+        activityApi
+          .setImage(previous.path, previous.index, previous.total)
+          .catch(() => {});
+      }
+    }
+    lastPathRef.current = pathParam;
+    setImageActivityReadyPath("");
+    setContinuousRange({ path: "", startIndex: 0, endIndex: 0 });
+    finishedRef.current = false;
+  }, [pathParam]);
+
   const videoItemIndex = isVideo
     ? Math.max(0, Math.min(initialIndex, Math.max(0, videos.length - 1)))
     : 0;
@@ -323,10 +230,7 @@ export default function Reader() {
     continuousRange.path === pathParam ? continuousRange : undefined,
   );
   const imageActivityWritable =
-    !isVideo &&
-    imagesReady &&
-    imageActivityReadyPath === pathParam &&
-    images.length > 0;
+    !isVideo && ready && imageActivityReadyPath === pathParam && images.length > 0;
 
   useEffect(() => {
     if (!imageActivityWritable) return;
@@ -337,67 +241,10 @@ export default function Reader() {
     };
   }, [imageActivityPageIndex, imageActivityWritable, images.length, pathParam]);
 
-  useEffect(() => {
-    if (!pathParam) return;
-    let cancelled = false;
-    // 切到新 album 前，先把上一个 album 的进度刷一次（去抖的 save 会因为
-    // images.length 变 0 而被清理掉，主动写一次更稳）。
-    // 关键：用 lastPathRef（上一个 pathParam），不是闭包里的新 pathParam。
-    if (lastPathRef.current) {
-      const previous = progressRef.current;
-      if (previous.path === lastPathRef.current && previous.total > 0) {
-        activityApi
-          .setImage(previous.path, previous.index, previous.total)
-          .catch(() => {});
-      }
-    }
-    lastPathRef.current = pathParam;
-    setLoadError(null);
-    setImageActivityReadyPath("");
-    setLoadedImagePath("");
-    setLoadedVideoPath("");
-    setContinuousRange({ path: "", startIndex: 0, endIndex: 0 });
-    finishedRef.current = false;
-    setImages([]);
-    setVideos([]);
-    setSiblingCount(0);
-    libraryApi
-      .allMedia(pathParam)
-      .then((page) => {
-        if (cancelled) return;
-        const imageList = page.items
-          .filter((item) => item.kind === "image")
-          .map((item) => item.id);
-        const videoList = page.items
-          .filter((item) => item.kind === "video")
-          .map((item) => item.id);
-        setSiblingCount(isVideo ? imageList.length : videoList.length);
-        if (isVideo) {
-          if (videoList.length > 0) {
-            setLoadedVideoPath(pathParam);
-            setVideos(videoList);
-          } else {
-            setLoadError("EMPTY");
-          }
-        } else {
-          if (imageList.length > 0) {
-            setLoadedImagePath(pathParam);
-            setImages(imageList);
-          } else {
-            setLoadError("EMPTY");
-          }
-        }
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        // 后端 message 是英文机器文案：按错误码翻成中文，未知错误用兜底文案。
-        setLoadError(apiErrorMessage(e, "无法读取媒体（网络或服务异常）"));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [pathParam, reloadKey, isVideo]);
-
+  // 恢复阅读进度：媒体就绪后按 URL 里的 index 或服务端记录定位。
+  //
+  // reloadKey 参与依赖：重试时要再恢复一次（失败提示里的「重试进度」
+  // 走的就是这条路）。
   useEffect(() => {
     if (!ready) return;
     const list = isVideo ? videos : images;
@@ -447,7 +294,7 @@ export default function Reader() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, pathParam, isVideo]);
+  }, [ready, pathParam, isVideo, reloadKey]);
 
   // 标题和图片总数来自相册摘要，不用 URL 提示或当前视频列表改写访问记录。
   const historyReady = ready && albumSummary?.kind === "album";
@@ -494,7 +341,7 @@ export default function Reader() {
     isVideo,
     albumId: pathParam,
     itemId: currentVideo,
-    ready: videosReady,
+    ready,
     activityKey: videoActivityKey,
     onRestored: () => clearProgressFailure("restore"),
     onRestoreFailed: () => reportProgressFailure("restore"),
@@ -502,10 +349,16 @@ export default function Reader() {
     onSaveFailed: () => reportProgressFailure("save"),
   });
 
+  // 重新拉这一卷：媒体清单与阅读进度都重来一遍。
+  const reload = useCallback(() => {
+    setReloadKey((key) => key + 1);
+    reloadMedia();
+  }, [reloadMedia]);
+
   async function retryProgress() {
     if (retryingProgress) return;
     if (progressFailure?.operation === "restore") {
-      setReloadKey((key) => key + 1);
+      reload();
       return;
     }
     setRetryingProgress(true);
@@ -570,7 +423,7 @@ export default function Reader() {
     if (
       !continuousScrolledRef.current &&
       mode === "continuous" &&
-      imagesReady &&
+      ready &&
       images.length > 0
     ) {
       continuousScrolledRef.current = true;
@@ -580,7 +433,7 @@ export default function Reader() {
       // 离开 continuous 后,允许下次再进入时重新滚一次
       continuousScrolledRef.current = false;
     }
-  }, [mode, imagesReady, images.length, index, scrollContinuousTo]);
+  }, [mode, ready, images.length, index, scrollContinuousTo]);
 
   // 滚到最后一张：自动标记为「已读」一次。
   useEffect(() => {
@@ -678,25 +531,14 @@ export default function Reader() {
     [isVideo, videos.length, params, navigate, pathParam],
   );
 
-  function prev() {
-    if (isVideo) {
-      const cur = Math.max(
-        0,
-        Math.min(initialIndex, Math.max(0, videos.length - 1)),
-      );
-      if (cur > 0) goToVideo(cur - 1);
-      return;
-    }
-    if (mode === "continuous") {
-      scrollStep(-1);
-      return;
-    }
-    if (mode === "double") {
-      if (index > 0) setIndex(Math.max(0, index - 2));
-    } else if (index > 0) {
-      setIndex(index - 1);
-    }
-  }
+  // 跳卷：上一卷 / 下一卷。
+  const closeInfo = useCallback(() => setShowInfo(false), []);
+  const { goAdjacent, adjacentNames } = useAdjacentAlbum({
+    pathParam,
+    isVideo,
+    onBeforeNavigate: closeInfo,
+  });
+
   // 已到末尾的统一反馈：toast + 自动停幻灯片。
   // 用 ref 持有,避免 setInterval 闭包捕获旧的 onReachEnd 引用
   // (slideshow effect 的 deps 不包含 pushToast/toggleSlideshow,这些会
@@ -714,11 +556,11 @@ export default function Reader() {
     pushToast({
       kind: "info",
       message: isVideo
-        ? siblingCount > 0
-          ? `已是最后一个视频 · 相册里另有 ${siblingCount} 页图片`
+        ? media.siblingCount > 0
+          ? `已是最后一个视频 · 相册里另有 ${media.siblingCount} 页图片`
           : "已是最后一个视频"
-        : siblingCount > 0
-          ? `图片已看完 · 还有 ${siblingCount} 个视频`
+        : media.siblingCount > 0
+          ? `图片已看完 · 还有 ${media.siblingCount} 个视频`
           : "已是最后一页",
       ttl: 1500,
     });
@@ -731,7 +573,36 @@ export default function Reader() {
   };
   const onReachEnd = useCallback(() => onReachEndRef.current(), []);
 
-  function next() {
+  const scrollStep = useCallback((dir: -1 | 1) => {
+    const container = document.querySelector(
+      "[data-image-gallery]",
+    ) as HTMLDivElement | null;
+    if (!container) return;
+    const delta = container.clientHeight * 0.9 * dir;
+    container.scrollBy({ top: delta, behavior: "smooth" });
+  }, []);
+
+  const prev = useCallback(() => {
+    if (isVideo) {
+      const cur = Math.max(
+        0,
+        Math.min(initialIndex, Math.max(0, videos.length - 1)),
+      );
+      if (cur > 0) goToVideo(cur - 1);
+      return;
+    }
+    if (mode === "continuous") {
+      scrollStep(-1);
+      return;
+    }
+    if (mode === "double") {
+      if (index > 0) setIndex(Math.max(0, index - 2));
+    } else if (index > 0) {
+      setIndex(index - 1);
+    }
+  }, [isVideo, initialIndex, videos.length, goToVideo, mode, scrollStep, index, setIndex]);
+
+  const next = useCallback(() => {
     if (isVideo) {
       const cur = Math.max(
         0,
@@ -765,16 +636,7 @@ export default function Reader() {
       return;
     }
     onReachEnd();
-  }
-
-  function scrollStep(dir: -1 | 1) {
-    const container = document.querySelector(
-      "[data-image-gallery]",
-    ) as HTMLDivElement | null;
-    if (!container) return;
-    const delta = container.clientHeight * 0.9 * dir;
-    container.scrollBy({ top: delta, behavior: "smooth" });
-  }
+  }, [isVideo, initialIndex, videos.length, goToVideo, mode, scrollStep, index, setIndex, images.length, onReachEnd]);
 
   const jumpTo = useCallback(
     (zeroBased: number) => {
@@ -791,145 +653,6 @@ export default function Reader() {
     },
     [isVideo, images.length, scrollContinuousTo, setIndex, goToVideo],
   );
-
-  // 跳卷：上一卷 / 下一卷。
-  //
-  // - 相册继续在阅读器里读（不必回到相册首页再点「开始浏览」）；
-  //   集合没有阅读器入口，回到它的首页。
-  // - notify=false 时不弹「下一卷：xxx」提示（跟随「切换时显示通知」设置）。
-  // - albumsOnly=true 时跳过集合，只找相册（自动切换下一卷用）。
-  const adjacentPending = useRef(false);
-  const adjacentController = useRef<AbortController>();
-  useEffect(() => () => adjacentController.current?.abort(), [pathParam]);
-  const goAdjacent = useCallback(
-    async (
-      direction: 1 | -1,
-      options?: { notify?: boolean; albumsOnly?: boolean },
-    ) => {
-      const notify = options?.notify ?? true;
-      const albumsOnly = options?.albumsOnly ?? false;
-      if (adjacentPending.current) return false;
-      adjacentPending.current = true;
-      const controller = new AbortController();
-      adjacentController.current = controller;
-      let ctx = getGalleryContext();
-      try {
-        // 前向到达已加载边界时继续取页；反向环绕需要找到真正的末尾。
-        while (ctx?.pagination?.nextCursor) {
-          const current = ctx.list.findIndex(
-            (entry) => entry.key === pathParam,
-          );
-          const remaining = ctx.list
-            .slice(current + 1)
-            .some(
-              (entry) =>
-                entryReaderUrl(entry) &&
-                (!albumsOnly ||
-                  (isVideo ? entry.videoCount : entry.imageCount) !== 0),
-            );
-          if (
-            (direction === 1 && remaining) ||
-            (direction === -1 && current > 0)
-          )
-            break;
-          const page = await libraryApi.overview(
-            ctx.pagination.query,
-            ctx.pagination.nextCursor,
-            controller.signal,
-          );
-          const entries = page.page.items.flatMap((item) =>
-            item.kind !== "album"
-              ? []
-              : [
-                  {
-                    key: item.node.id,
-                    to: albumRoute(item.node.contentKind, item.node.id),
-                    name: item.node.name,
-                    parentName: item.node.parentName,
-                    imageCount: item.node.imageCount ?? 0,
-                    videoCount: item.node.videoCount ?? 0,
-                    contentKind: item.node.contentKind,
-                  },
-                ],
-          );
-          ctx = {
-            ...ctx,
-            list: [...ctx.list, ...entries],
-            pagination: { ...ctx.pagination, nextCursor: page.page.nextCursor },
-          };
-          setGalleryContext(ctx);
-        }
-      } catch {
-        if (controller.signal.aborted) return false;
-        pushToast({
-          kind: "error",
-          message: "无法加载下一批相册，请返回列表刷新后重试",
-        });
-        return false;
-      } finally {
-        adjacentPending.current = false;
-      }
-      if (controller.signal.aborted) return false;
-      const found = resolveAdjacentEntry(ctx, pathParam, direction, {
-        albumsOnly,
-        isVideo,
-      });
-      if (!found) {
-        if (notify) {
-          pushToast({
-            kind: "info",
-            message: "当前无可用的「上一卷 / 下一卷」列表",
-            ttl: 1500,
-          });
-        }
-        return false;
-      }
-      const { entry: nextEntry, index: nextIdx } = found;
-      const readerUrl = entryReaderUrl(nextEntry);
-      if (!readerUrl) return false;
-      const dirLabel = direction === 1 ? "下一卷" : "上一卷";
-      if (notify) {
-        pushToast({
-          kind: "info",
-          message: `${dirLabel}：${entryDisplayName(nextEntry)}`,
-          ttl: 1200,
-        });
-      }
-      try {
-        sessionStorage.setItem(
-          "local-gallery-context",
-          JSON.stringify({
-            ...ctx,
-            index: nextIdx,
-            openedAt: Date.now(),
-          }),
-        );
-      } catch {
-        // ignore
-      }
-      setShowInfo(false);
-      setMode(useGalleryStore.getState().mode);
-      navigate(readerUrl, { replace: false });
-      return true;
-    },
-    [pathParam, pushToast, navigate, setMode, isVideo],
-  );
-
-  // 跨卷导航按钮上的目标卷名。
-  //
-  // 光有两枚箭头，用户不知道点下去会翻到哪一卷 —— 名称在悬停时浮出，
-  // 箭头本身仍然只是箭头，不抢画面的注意力。
-  const adjacentNames = useMemo(() => {
-    const ctx = getGalleryContext();
-    const pick = (direction: 1 | -1) =>
-      resolveAdjacentEntry(ctx, pathParam, direction, {
-        albumsOnly: false,
-        isVideo,
-      })?.entry;
-    const nameOf = (entry: GalleryContextEntry | undefined) =>
-      entry ? entryDisplayName(entry) : "";
-    return { prev: nameOf(pick(-1)), next: nameOf(pick(1)) };
-  }, [pathParam, isVideo]);
 
   const onToggleFavorite = useCallback(() => {
     if (!pathParam) return;
@@ -1021,69 +744,52 @@ export default function Reader() {
     [navigate, setWorkbenchMode],
   );
 
-  useKeyboard({
-    // 视频方向键和空格由 VideoPlayer 处理，不注册图片操作。
-    ...(isVideo
-      ? {}
-      : {
-          arrowleft: prev,
-          arrowright: next,
-          "+": () => useGalleryStore.getState().zoomIn(),
-          "-": () => useGalleryStore.getState().zoomOut(),
-          "=": () => useGalleryStore.getState().zoomIn(),
-          "0": () => useGalleryStore.getState().zoomReset(),
-          r: () => useGalleryStore.getState().rotate(90),
-          space: () => useGalleryStore.getState().toggleSlideshow(),
-          i: () => setShowInfo((v) => !v),
-          t: () => setShowOverview((v) => !v),
-          "1": () => useGalleryStore.getState().setMode("single"),
-          "2": () => useGalleryStore.getState().setMode("continuous"),
-          "3": () => useGalleryStore.getState().setMode("double"),
-          f: () => useGalleryStore.getState().cycleFit(),
-          l: () => {
-            const cur = useGalleryStore.getState().direction;
-            useGalleryStore
-              .getState()
-              .setDirection(cur === "ltr" ? "rtl" : "ltr");
-          },
-        }),
-    pageup: prev,
-    pagedown: next,
-    home: () => {
-      if (isVideo) {
-        goToVideo(0);
-      } else if (useGalleryStore.getState().mode === "continuous") {
-        scrollContinuousTo(0);
-      } else {
-        setIndex(0);
-      }
+  useReaderKeys(
+    {
+      isVideo,
+      prev,
+      next,
+      jumpToFirst: () => {
+        if (isVideo) {
+          goToVideo(0);
+        } else if (useGalleryStore.getState().mode === "continuous") {
+          scrollContinuousTo(0);
+        } else {
+          setIndex(0);
+        }
+      },
+      jumpToLast: () => {
+        if (isVideo) {
+          if (videos.length > 0) goToVideo(videos.length - 1);
+        } else if (useGalleryStore.getState().mode === "continuous") {
+          scrollContinuousTo(images.length - 1);
+        } else {
+          setIndex(images.length - 1);
+        }
+      },
+      toggleInfo: () => setShowInfo((v) => !v),
+      toggleOverview: () => setShowOverview((v) => !v),
+      toggleHelp: () => setShowHelp((v) => !v),
+      toggleFinished: () => setShowFinished((v) => !v),
+      toggleFavorite: onToggleFavorite,
+      setCover: onSetCover,
+      clearCover: onClearCover,
+      nextAlbum: () => {
+        void goAdjacent(1, { notify: showSwitchNotif });
+      },
+      prevAlbum: () => {
+        void goAdjacent(-1, { notify: showSwitchNotif });
+      },
+      onEscape: goBack,
     },
-    end: () => {
-      if (isVideo) {
-        if (videos.length > 0) goToVideo(videos.length - 1);
-      } else if (useGalleryStore.getState().mode === "continuous") {
-        scrollContinuousTo(images.length - 1);
-      } else {
-        setIndex(images.length - 1);
-      }
+    {
+      showHelp,
+      showOverview,
+      showInfo,
+      showFinished,
+      ready,
     },
-    f11: () => toggleFullscreenImpl(),
-    "ctrl+/": () => setShowHelp((v) => !v),
-    "?": () => setShowHelp((v) => !v),
-    n: () => goAdjacent(1, { notify: showSwitchNotif }),
-    p: () => goAdjacent(-1, { notify: showSwitchNotif }),
-    s: () => onToggleFavorite(),
-    u: () => onSetCover(),
-    "shift+u": () => onClearCover(),
-    escape: () => {
-      if (showHelp) setShowHelp(false);
-      else if (showOverview) setShowOverview(false);
-      else if (showInfo) setShowInfo(false);
-      else if (showFinished) setShowFinished(false);
-      // 仅在当前媒体就绪后返回；视频不依赖图片列表。
-      else if (ready) goBack();
-    },
-  });
+  );
 
   if (!ready) {
     return (
@@ -1105,7 +811,7 @@ export default function Reader() {
           </span>
         </div>
         <div className="flex-1 flex items-center justify-center px-6">
-          {!pathParam ? (
+          {media.status === "no-album" ? (
             <div className="text-center">
               <div className="font-display text-section font-semibold text-white/90">
                 无可显示的图片
@@ -1114,21 +820,21 @@ export default function Reader() {
                 未指定相册路径
               </div>
             </div>
-          ) : loadError ? (
+          ) : media.status === "empty" || media.status === "error" ? (
             <div className="text-center max-w-sm">
               <div className="font-display text-section font-semibold text-white/90 mb-2">
-                {loadError === "EMPTY"
+                {media.status === "empty"
                   ? isVideo
                     ? "这个相册没有视频"
                     : "这个相册没有图片"
                   : "加载失败"}
               </div>
               <div className="text-body leading-relaxed text-white/60 mb-6">
-                {loadError === "EMPTY"
+                {media.status === "empty"
                   ? isVideo
                     ? "可以换个相册，或检查视频是否已被移动/删除。"
                     : "可以换个相册，或检查文件是否已被移动/删除。"
-                  : loadError}
+                  : media.error}
               </div>
               <div className="flex items-center justify-center gap-2">
                 <button
@@ -1140,7 +846,7 @@ export default function Reader() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setReloadKey((k) => k + 1)}
+                  onClick={reload}
                   className="px-4 h-9 text-body rounded-md bg-accent text-accent-contrast hover:opacity-90 transition-opacity"
                 >
                   重试
@@ -1278,8 +984,8 @@ export default function Reader() {
           onToggleHelp={() => setShowHelp((v) => !v)}
           onPrev={prev}
           onNext={next}
-          onPrevAlbum={() => goAdjacent(-1, { notify: showSwitchNotif })}
-          onNextAlbum={() => goAdjacent(1, { notify: showSwitchNotif })}
+          onPrevAlbum={() => void goAdjacent(-1, { notify: showSwitchNotif })}
+          onNextAlbum={() => void goAdjacent(1, { notify: showSwitchNotif })}
           onSetCover={onSetCover}
           onClearCover={onClearCover}
           hasCustomCover={hasCustomCover}
@@ -1314,8 +1020,8 @@ export default function Reader() {
         {!isVideo && (
           <GalleryAlbumNav
             visible={chromeVisible}
-            onPrevAlbum={() => goAdjacent(-1, { notify: showSwitchNotif })}
-            onNextAlbum={() => goAdjacent(1, { notify: showSwitchNotif })}
+            onPrevAlbum={() => void goAdjacent(-1, { notify: showSwitchNotif })}
+            onNextAlbum={() => void goAdjacent(1, { notify: showSwitchNotif })}
             prevLabel={adjacentNames.prev}
             nextLabel={adjacentNames.next}
           />

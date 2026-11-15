@@ -25,16 +25,19 @@ vi.mock("../api/library", async (importOriginal) => {
     libraryApi: {
       ...actual.libraryApi,
       overview: mocks.overview,
-      allMedia: vi.fn(async () => ({
-        revision: 1,
-        total: 3,
-        items: [0, 1, 2].map((index) => ({
-          id: `f_image_${index}`,
-          kind: "image",
-          index,
-          kindIndex: index,
-          name: `${index}.png`,
-        })),
+      mediaPage: vi.fn(async () => ({
+        ok: true,
+        page: {
+          revision: 1,
+          total: 3,
+          items: [0, 1, 2].map((index) => ({
+            id: `f_image_${index}`,
+            kind: "image",
+            index,
+            kindIndex: index,
+            name: `${index}.png`,
+          })),
+        },
       })),
       queryNodes: vi.fn(async () => ({
         revision: 1,

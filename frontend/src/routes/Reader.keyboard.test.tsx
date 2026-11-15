@@ -26,18 +26,21 @@ vi.mock("../api/library", async (importOriginal) => {
     ...actual,
     libraryApi: {
       ...actual.libraryApi,
-      allMedia: vi.fn(async () => ({
-        revision: 1,
-        total: 6,
-        items: ["image", "video"].flatMap((kind) =>
-          [0, 1, 2].map((index) => ({
-            id: `f_${kind}_${index}`,
-            kind,
-            index,
-            kindIndex: index,
-            name: `${index}.${kind === "image" ? "png" : "webm"}`,
-          })),
-        ),
+      mediaPage: vi.fn(async () => ({
+        ok: true,
+        page: {
+          revision: 1,
+          total: 6,
+          items: ["image", "video"].flatMap((kind) =>
+            [0, 1, 2].map((index) => ({
+              id: `f_${kind}_${index}`,
+              kind,
+              index,
+              kindIndex: index,
+              name: `${index}.${kind === "image" ? "png" : "webm"}`,
+            })),
+          ),
+        },
       })),
       queryNodes: vi.fn(async () => ({
         revision: 1,
