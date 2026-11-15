@@ -1,4 +1,5 @@
 import PageHeading from "../components/common/PageHeading";
+import ErrorBanner from "../components/common/ErrorBanner";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -261,23 +262,11 @@ export function SettingsView({
     onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
   });
   const prefsError = prefsQuery.isError && (
-    <div
-      role="alert"
-      className="flex items-center justify-between gap-3 rounded-md border border-danger/30 bg-danger/5 px-4 py-3 mb-6 text-body"
-    >
-      <p>
-        设置加载失败。
-        {data ? "仍显示上次加载的设置。" : "请重试加载。"}
-      </p>
-      <button
-        type="button"
-        onClick={() => void prefsQuery.refetch()}
-        disabled={prefsQuery.isFetching}
-        className="shrink-0 text-accent hover:underline disabled:opacity-50"
-      >
-        {prefsQuery.isFetching ? "正在重试…" : "重试加载"}
-      </button>
-    </div>
+    <ErrorBanner onRetry={() => void prefsQuery.refetch()} retrying={prefsQuery.isFetching} className="mb-6">
+      设置加载失败。
+      {data ? "仍显示上次加载的设置。" : "请重试加载。"}
+
+    </ErrorBanner>
   );
   if (!data) {
     return (

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api/client";
 import { fsApi, type DirectoryPage } from "../../api/fs";
 import { CloseIcon, FolderOpenIcon } from "../common/Icon";
+import ErrorBanner from "../common/ErrorBanner";
 
 interface Props {
   initialDirectory: string;
@@ -183,16 +184,9 @@ export default function DirectoryPicker({
           aria-busy={loading}
         >
           {error && (
-            <div role="alert" className="p-4 space-y-2">
-              <p className="text-body text-danger">{error}</p>
-              <button
-                type="button"
-                className={buttonClass}
-                onClick={() => void browse(request.directory, request.after)}
-              >
-                重试
-              </button>
-            </div>
+            <ErrorBanner className="p-4" onRetry={() => void browse(request.directory, request.after)}>
+              {error}
+            </ErrorBanner>
           )}
           {page && (
             <ul aria-label="子目录" className="divide-y divide-border-faint">

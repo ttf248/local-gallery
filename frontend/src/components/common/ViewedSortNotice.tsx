@@ -1,4 +1,5 @@
 import type { useHistory } from "../../hooks/useHistory";
+import ErrorBanner from "./ErrorBanner";
 
 export default function ViewedSortNotice({
   query,
@@ -8,23 +9,11 @@ export default function ViewedSortNotice({
   if (query.isError) {
     return (
       <div className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full mb-4">
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-3 rounded-md border border-danger/30 bg-danger/5 px-4 py-3 text-body"
-        >
-          <p>
-            最近访问加载失败。
-            {query.data ? "仍使用已加载的访问记录。" : "暂按名称排序。"}
-          </p>
-          <button
-            type="button"
-            onClick={() => void query.refetch()}
-            disabled={query.isFetching}
-            className="shrink-0 text-accent hover:underline disabled:opacity-50"
-          >
-            {query.isFetching ? "正在重试…" : "重试加载"}
-          </button>
-        </div>
+        <ErrorBanner onRetry={() => void query.refetch()} retrying={query.isFetching}>
+          最近访问加载失败。
+          {query.data ? "仍使用已加载的访问记录。" : "暂按名称排序。"}
+
+        </ErrorBanner>
       </div>
     );
   }

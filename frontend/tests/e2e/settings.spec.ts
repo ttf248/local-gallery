@@ -801,7 +801,7 @@ test("设置目录选择可分页和错误重试，完整保留 POSIX 路径", a
   ).toBeDisabled();
   expect(writes).toEqual([]);
   fail = false;
-  await dialog.getByRole("button", { name: "重试", exact: true }).click();
+  await dialog.getByRole("button", { name: "重试加载", exact: true }).click();
   await expect(
     dialog.getByRole("textbox", { name: "目录路径", exact: true }),
   ).toHaveValue(selected);

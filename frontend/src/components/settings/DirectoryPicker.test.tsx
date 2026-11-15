@@ -108,7 +108,7 @@ it("读取失败不暴露原始错误，可重试且不会确认旧目录", asyn
   const { onPick } = setup();
   expect(await screen.findByRole("alert")).not.toHaveTextContent("private");
   expect(screen.getByRole("button", { name: "使用此目录" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
   await screen.findByDisplayValue(home.directory);
   expect(onPick).not.toHaveBeenCalled();
 });

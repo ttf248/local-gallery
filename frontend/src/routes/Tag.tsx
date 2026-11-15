@@ -7,6 +7,7 @@ import { useImageActivities } from "../hooks/useImageActivity";
 import type { LibraryNodeSummary } from "../api/library";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
+import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
 import {
   ChevronLeftIcon,
@@ -157,11 +158,7 @@ export default function Tag() {
         {/* 加载中同样留着页头：这一页从头到尾都是「眉标 + 标签名 + 内容」，
             中间换一张没有名字的白纸，读起来像跳到了别处。 */}
         <TagHead tag={tag} onBack={() => navigate(-1)} />
-        <EmptyState
-          title="正在加载标签"
-          description="正在读取相册摘要…"
-          dense
-        />
+        <AlbumGridSkeleton variant={viewMode} label="正在加载标签…" />
       </div>
     );
   }

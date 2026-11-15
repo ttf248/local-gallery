@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 // 卡片的样式会被每个页面首屏捎带着下载。
 import "../styles/travels.css";
 import Segmented from "../components/common/Segmented";
+import ErrorBanner from "../components/common/ErrorBanner";
 import TravelMiniMap from "../components/travels/TravelMiniMap";
 import type { MapScope } from "../components/travels/TravelMiniMap";
 import TravelStats from "../components/travels/TravelStats";
@@ -289,22 +290,16 @@ export default function Travels() {
 
       {error ? (
         <div className="page-bleed">
-          <div
-            role="alert"
-            className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-bg-elevated px-4 py-3 text-body text-danger"
-          >
-            <span>足迹数据加载失败，请稍后重试。</span>
-            <button
-              type="button"
-              className="btn btn-sm btn-outline"
-              onClick={() => {
-                void wholeQuery.refetch();
-                void tripsQuery.refetch();
-              }}
+          <ErrorBanner
+            className="mt-4"
+            onRetry={() => {
+            void wholeQuery.refetch();
+            void tripsQuery.refetch();
+            }}
+            retryLabel="重新加载"
             >
-              重新加载
-            </button>
-          </div>
+            足迹数据加载失败，请稍后重试。
+          </ErrorBanner>
         </div>
       ) : null}
 

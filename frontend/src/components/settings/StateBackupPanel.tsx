@@ -299,7 +299,7 @@ export default function StateBackupPanel() {
           </p>
         )}
         {error && (
-          <p role="alert" className="text-body text-danger">
+          <p role="alert" className="text-meta text-danger">
             {error}
           </p>
         )}

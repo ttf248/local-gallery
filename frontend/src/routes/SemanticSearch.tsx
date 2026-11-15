@@ -490,7 +490,7 @@ export default function SemanticSearch() {
           </form>
 
           {statusQuery.isError && usesSemanticSearch ? (
-            <p role="alert" className="mt-3 text-meta text-danger">
+            <p role="alert" className="mt-2 text-meta text-danger">
               本机 AI 状态读取失败，请检查后端服务。
             </p>
           ) : null}
@@ -514,12 +514,19 @@ export default function SemanticSearch() {
 
       <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
         {submittedQuery.isError ? (
-          <div
-            role="alert"
-            className="flex h-full items-center justify-center text-body text-danger"
-          >
-            {semanticErrorMessage(submittedQuery.error)}
-          </div>
+          <EmptyState
+            title="搜索失败"
+            description={semanticErrorMessage(submittedQuery.error)}
+            action={
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => void submittedQuery.refetch()}
+              >
+                重新搜索
+              </button>
+            }
+          />
         ) : items.length > 0 ? (
           <PhotoWall
             items={items}

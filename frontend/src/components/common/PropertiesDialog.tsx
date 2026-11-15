@@ -7,6 +7,7 @@ import { formatDateTime } from "../../utils/date";
 import { collectionUnit, comicCopy, mediaUnit } from "../../utils/workbench";
 import { isCompleted } from "../../utils/progress";
 import { CloseIcon } from "./Icon";
+import ErrorBanner from "./ErrorBanner";
 import CopyButton from "./CopyButton";
 
 export type PropertiesTarget =
@@ -262,27 +263,20 @@ function LoadError({
   retrying: boolean;
 }) {
   return (
-    <div
-      role="alert"
-      className="flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-meta"
-    >
-      <p>{message}</p>
-      <button
-        type="button"
-        onClick={(event) => {
-          // 重试会暂时移除错误提示，将焦点留在仍可操作的关闭按钮上。
-          event.currentTarget
-            .closest("dialog")
-            ?.querySelector<HTMLButtonElement>('button[aria-label="关闭"]')
-            ?.focus({ preventScroll: true });
-          retry();
-        }}
-        disabled={retrying}
-        className="shrink-0 text-accent hover:underline disabled:opacity-50"
+    <ErrorBanner
+      className="rounded-lg p-3 text-meta"
+      onRetry={(event) => {
+      // 重试会暂时移除错误提示，将焦点留在仍可操作的关闭按钮上。
+      event.currentTarget
+      .closest("dialog")
+      ?.querySelector<HTMLButtonElement>('button[aria-label="关闭"]')
+      ?.focus({ preventScroll: true });
+      retry();
+      }}
+      retrying={retrying}
       >
-        {retrying ? "正在重试…" : "重试加载"}
-      </button>
-    </div>
+      {message}
+    </ErrorBanner>
   );
 }
 

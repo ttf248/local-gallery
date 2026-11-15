@@ -1,4 +1,5 @@
 import PageHeading from "../components/common/PageHeading";
+import ErrorBanner from "../components/common/ErrorBanner";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -232,27 +233,14 @@ export default function Favorites() {
 
       {loadFailed && (
         <div className="page-shell mb-4">
-          <div
-            role="alert"
-            className="flex items-center justify-between gap-3 rounded-md border border-danger/30 bg-danger/5 px-4 py-3 text-body"
-          >
-            <p>
-              {favoritesFailed
-                ? "收藏加载失败。"
-                : nodesFailed || tagsFailed
-                  ? "收藏详情加载失败。"
-                  : "最近访问加载失败，无法更新最近看排序。"}
-              {cards.length > 0 ? "仍显示已加载的收藏。" : "请重试加载。"}
-            </p>
-            <button
-              type="button"
-              onClick={retryLoad}
-              disabled={retrying}
-              className="shrink-0 text-accent hover:underline disabled:opacity-50"
-            >
-              {retrying ? "正在重试…" : "重试加载"}
-            </button>
-          </div>
+          <ErrorBanner onRetry={retryLoad} retrying={retrying}>
+            {favoritesFailed
+              ? "收藏加载失败。"
+              : nodesFailed || tagsFailed
+                ? "收藏详情加载失败。"
+                : "最近访问加载失败，无法更新最近看排序。"}
+            {cards.length > 0 ? "仍显示已加载的收藏。" : "请重试加载。"}
+          </ErrorBanner>
         </div>
       )}
       {cards.length > 0 && (

@@ -28,6 +28,8 @@ import {
   type WallDensity,
 } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
+import ErrorBanner from "../components/common/ErrorBanner";
+import EmptyState from "../components/common/EmptyState";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoCompare from "../components/wall/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
@@ -518,20 +520,14 @@ export default function PhotoAlbum({ album }: Props) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {mediaQuery.isFetchNextPageError && (
-        <div
-          role="alert"
-          className="flex shrink-0 items-center justify-between gap-3 bg-warning/10 px-4 py-2.5 text-body text-fg sm:px-6"
-        >
-          <span>后续媒体加载失败，已加载内容仍可浏览。</span>
-          <button
-            type="button"
-            onClick={loadMore}
-            disabled={mediaQuery.isFetchingNextPage}
-            className="shrink-0 text-accent hover:underline disabled:opacity-50"
+        <ErrorBanner
+          kind="warning"
+          className="shrink-0"
+          onRetry={loadMore}
+          retrying={mediaQuery.isFetchingNextPage}
           >
-            {mediaQuery.isFetchingNextPage ? "正在重试…" : "重试加载"}
-          </button>
-        </div>
+          后续媒体加载失败，已加载内容仍可浏览。
+        </ErrorBanner>
       )}
       <header className="shrink-0 border-b border-border-faint bg-bg">
         {/* 照片墙与其它页面的内容左缘保持一致：留白用同一套 gutter，
@@ -805,9 +801,19 @@ export default function PhotoAlbum({ album }: Props) {
           {/* 只有第一页就没加载出来才整页报错：后续分页失败时已加载的内容
             仍然能翻，页头的提示条已经说明了失败与重试。 */}
           {mediaQuery.isError && mediaItems.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-body text-fg-muted">
-              媒体加载失败，请重试。
-            </div>
+            <EmptyState
+              title="媒体加载失败"
+              description="这一本相册暂时读不出来。"
+              action={
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => void mediaQuery.refetch()}
+                >
+                  重新加载
+                </button>
+              }
+            />
           ) : (
             <PhotoWall
               items={mediaItems}

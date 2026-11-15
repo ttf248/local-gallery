@@ -5,6 +5,7 @@ import type {
   SmartAlbumSummary,
 } from "../../api/albums";
 import RenditionImage from "../common/RenditionImage";
+import ErrorBanner from "../common/ErrorBanner";
 
 interface Props {
   summary?: SmartAlbumSummary;
@@ -116,12 +117,9 @@ export default function SmartAlbumBrowser({
         </div>
 
         {error ? (
-          <div
-            role="alert"
-            className="rounded-xl border border-border bg-bg-elevated p-6 text-body text-fg-muted"
-          >
+          <ErrorBanner className="rounded-xl p-6">
             智能分组读取失败，请重试。
-          </div>
+          </ErrorBanner>
         ) : loading || !summary ? (
           <div className="rounded-xl border border-border bg-bg-elevated p-6 text-body text-fg-muted">
             正在读取这本相册的分析线索…

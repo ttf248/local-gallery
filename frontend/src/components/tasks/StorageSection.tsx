@@ -7,6 +7,7 @@ import StorageMediaCache from "./StorageMediaCache";
 import StorageModuleGrid from "./StorageModuleGrid";
 import StoragePaths from "./StoragePaths";
 import StorageUsage from "./StorageUsage";
+import ErrorBanner from "../common/ErrorBanner";
 
 /**
  * 本机存储：派生缓存、AI 模型与分析产物、以及它们各自的位置。
@@ -35,12 +36,9 @@ export default function StorageSection() {
           正在读取本机存储信息…
         </div>
       ) : usage.isError ? (
-        <div
-          role="alert"
-          className="rounded-xl border border-danger/30 bg-danger/5 p-4 text-body text-fg-muted"
-        >
+        <ErrorBanner className="rounded-xl p-4">
           本机存储信息读取失败，请检查后端是否运行，然后刷新页面。
-        </div>
+        </ErrorBanner>
       ) : usage.data ? (
         <StorageUsage
           mediaBytes={stats?.mediaBytes ?? 0}

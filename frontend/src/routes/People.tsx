@@ -58,9 +58,19 @@ function PeopleList() {
         }
       />
       {query.isError ? (
-        <p role="alert" className="page-shell mt-5 text-meta text-danger">
-          人物列表加载失败，请稍后重试。
-        </p>
+        <EmptyState
+          title="人物列表加载失败"
+          description="请稍后重试。"
+          action={
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => void query.refetch()}
+            >
+              重新加载
+            </button>
+          }
+        />
       ) : null}
       {groups.length === 0 && !query.isLoading ? (
         <EmptyState

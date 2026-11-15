@@ -1,4 +1,5 @@
 import PageHeading from "../components/common/PageHeading";
+import ErrorBanner from "../components/common/ErrorBanner";
 import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -198,25 +199,12 @@ export default function Recents() {
 
       {loadFailed && (
         <div className="page-shell mb-4">
-          <div
-            role="alert"
-            className="flex items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 text-body"
-          >
-            <p>
-              {historyFailed
-                ? copy.recentsLoadError
-                : copy.recentsAlbumsLoadError}
-              {cards.length > 0 ? "仍显示已加载的记录。" : "请重试加载。"}
-            </p>
-            <button
-              type="button"
-              onClick={retryLoad}
-              disabled={retrying}
-              className="shrink-0 text-accent hover:underline disabled:opacity-50"
-            >
-              {retrying ? "正在重试…" : "重试加载"}
-            </button>
-          </div>
+          <ErrorBanner onRetry={retryLoad} retrying={retrying}>
+            {historyFailed
+              ? copy.recentsLoadError
+              : copy.recentsAlbumsLoadError}
+            {cards.length > 0 ? "仍显示已加载的记录。" : "请重试加载。"}
+          </ErrorBanner>
         </div>
       )}
       {cards.length > 0 && (
