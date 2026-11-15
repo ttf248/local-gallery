@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMediaFeed } from "../hooks/useMediaFeed";
 import { usePicks } from "../hooks/usePicks";
@@ -8,6 +8,9 @@ import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import ContextMenu from "../components/album/ContextMenu";
 import EmptyState from "../components/common/EmptyState";
+import { useWallViewer } from "../hooks/useWallViewer";
+import { useContextMenu } from "../hooks/useContextMenu";
+import type { LibraryFeedItem } from "../api/library";
 import { FolderIcon, GridIcon } from "../components/common/Icon";
 import { albumRoute, homeRoute } from "../utils/path";
 
@@ -28,16 +31,8 @@ export default function YearPhotos() {
   const density = usePhotoStore((s) => s.density);
   const picks = usePicks();
 
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  // 关掉大图预览后，墙要回到刚才看的那张：跨相册连续翻了几百张之后，
-  // 墙还停在顶上等于让用户自己滚回去找。
-  const [focusIndex, setFocusIndex] = useState<number | null>(null);
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    itemId: string;
-    albumId: string;
-  } | null>(null);
+  // 右键菜单：年份墙上的照片同样能跳回原来那本。
+  const menu = useContextMenu<LibraryFeedItem>();
 
   const feedQuery = useMemo(
     () => ({ kind: "photo" as const, scope: "year" as const, year }),
@@ -61,6 +56,21 @@ export default function YearPhotos() {
   const loadMore = useCallback(() => {
     void feed.fetchNextPage({ cancelRefetch: false });
   }, [feed]);
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items,
+    total,
+    albumName: (item) => item.albumName || label,
+    albumHref: (item) => albumRoute("photo", item.albumId),
+    hasNextPage: feed.hasNextPage ?? false,
+    isLoadingMore: feed.isFetchingNextPage,
+    loadMoreError: feed.isFetchNextPageError,
+    onLoadMore: loadMore,
+    isPicked: picks.isPicked,
+    onTogglePick: (item) => togglePick(item.id),
+  });
+  const viewer = wall.viewer;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -154,34 +164,22 @@ export default function YearPhotos() {
             hasNextPage={feed.hasNextPage ?? false}
             isLoadingMore={feed.isFetchingNextPage}
             onLoadMore={loadMore}
-            onOpen={(_item, index) => {
-              setFocusIndex(null);
-              setViewerIndex(index);
-            }}
+            onOpen={(_item, index) => wall.open(index)}
             /* 跨相册的墙：照片要说出自己出自哪本相册，
                用户才知道自己看的是哪一本里的哪一张。 */
             albumLabel={(item) => item.albumName}
             isPicked={picks.isPicked}
             onTogglePick={(item) => togglePick(item.id)}
-            scrollToIndex={focusIndex}
-            onContextMenu={(item, event) => {
-              event.preventDefault();
-              event.currentTarget.focus({ preventScroll: true });
-              setContextMenu({
-                x: event.clientX,
-                y: event.clientY,
-                itemId: item.id,
-                albumId: item.albumId,
-              });
-            }}
+            scrollToIndex={wall.focusIndex}
+            onContextMenu={menu.open}
           />
         )}
       </div>
 
-      {contextMenu && (
+      {menu.menu && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          x={menu.menu.x}
+          y={menu.menu.y}
           items={[
             {
               id: "open",
@@ -195,46 +193,26 @@ export default function YearPhotos() {
             },
           ]}
           onSelect={(id) => {
-            const menu = contextMenu;
-            setContextMenu(null);
+            const target = menu.menu!.item;
+            menu.close();
             if (id === "open") {
-              const index = items.findIndex((it) => it.id === menu.itemId);
-              if (index >= 0) {
-                setFocusIndex(null);
-                setViewerIndex(index);
-              }
+              const index = items.findIndex((it) => it.id === target.id);
+              if (index >= 0) wall.open(index);
               return;
             }
             if (id === "album") {
-              navigate(albumRoute("photo", menu.albumId));
+              navigate(albumRoute("photo", target.albumId));
             }
           }}
-          onClose={() => setContextMenu(null)}
+          onClose={menu.close}
         />
       )}
 
-      {viewerIndex !== null && items[viewerIndex] && (
+      {viewer && (
         <PhotoViewer
-          items={items}
-          index={viewerIndex}
-          /* 年份墙的照片来自不同相册：标题给当前这张的出处。 */
-          albumName={items[viewerIndex].albumName || label}
-          /* 标题点一下就回到那本：这是「看年份」与「看相册」之间的桥。 */
-          albumHref={albumRoute("photo", items[viewerIndex].albumId)}
-          totalCount={total}
-          /* 连续浏览：翻到已加载的末尾就自动接下一页，
-             这一年有几千张时不必回到墙上继续。 */
-          hasNextPage={feed.hasNextPage ?? false}
-          isLoadingMore={feed.isFetchingNextPage}
-          loadMoreError={feed.isFetchNextPageError}
-          onLoadMore={loadMore}
-          onIndexChange={(index) => setViewerIndex(index)}
-          onClose={() => {
-            setFocusIndex(viewerIndex);
-            setViewerIndex(null);
-          }}
-          isPicked={picks.isPicked(items[viewerIndex].id)}
-          onTogglePick={() => togglePick(items[viewerIndex].id)}
+          {...viewer}
+          /* 年份墙的照片来自不同相册：标题给当前这张的出处；
+             标题点一下就回到那本 —— 这是「看年份」与「看相册」之间的桥。 */
         />
       )}
     </div>

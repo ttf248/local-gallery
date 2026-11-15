@@ -14,10 +14,10 @@ import PageHeading from "../components/common/PageHeading";
 import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import { SearchIcon } from "../components/common/Icon";
-import { usePicks } from "../hooks/usePicks";
+import { usePickToggle } from "../hooks/usePickToggle";
 import { useChinaPlacesAll } from "../hooks/useChinaLocations";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
-import { useUIStore } from "../store/uiStore";
+import { useWallViewer } from "../hooks/useWallViewer";
 import Segmented from "../components/common/Segmented";
 import { albumRoute } from "../utils/path";
 
@@ -35,8 +35,7 @@ interface SubmittedSearch {
 
 export default function SemanticSearch() {
   const density = usePhotoStore((state) => state.density);
-  const picks = usePicks();
-  const pushToast = useUIStore((state) => state.pushToast);
+  const picks = usePickToggle();
   const [mode, setMode] = useState<SearchMode>("text");
   const [text, setText] = useState("");
   const [imageOCRText, setImageOCRText] = useState("");
@@ -51,7 +50,6 @@ export default function SemanticSearch() {
   const [pickedOnly, setPickedOnly] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const statusQuery = useQuery({
     queryKey: ["ai-embedding-status"],
@@ -105,6 +103,23 @@ export default function SemanticSearch() {
     [hits],
   );
   const total = submittedQuery.data?.pages[0]?.total ?? 0;
+  const loadMore = () =>
+    void submittedQuery.fetchNextPage({ cancelRefetch: false });
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items,
+    total,
+    albumName: (item) => item.albumName,
+    albumHref: (item) => albumRoute("photo", item.albumId),
+    hasNextPage: submittedQuery.hasNextPage ?? false,
+    isLoadingMore: submittedQuery.isFetchingNextPage,
+    loadMoreError: submittedQuery.isFetchNextPageError,
+    onLoadMore: loadMore,
+    isPicked: picks.isPicked,
+    onTogglePick: (item) => picks.toggle(item.id),
+  });
+  const viewer = wall.viewer;
   const status = statusQuery.data?.status;
   const embeddingReady = Boolean(status?.runtimeReady && status.modelValid);
   const hasSemanticQuery =
@@ -152,7 +167,7 @@ export default function SemanticSearch() {
       ...(pickedOnly ? { pickedOnly: true } : {}),
     };
     setSubmitted({ request, image: file, token: Date.now() });
-    setViewerIndex(null);
+    wall.reset();
   };
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -177,9 +192,6 @@ export default function SemanticSearch() {
     search(item.id);
   };
 
-  const loadMore = () =>
-    void submittedQuery.fetchNextPage({ cancelRefetch: false });
-  const selected = viewerIndex === null ? undefined : items[viewerIndex];
   const textHelp = embeddingReady
     ? "一个词同时检索画面语义与图片文字，任一匹配就会显示；文字会归一化标点、断行并修正常见误识。"
     : "Chinese-CLIP 不可用时仍可按图片文字搜索；OCR 会归一化标点、断行并修正常见误识。";
@@ -516,7 +528,7 @@ export default function SemanticSearch() {
             hasNextPage={submittedQuery.hasNextPage ?? false}
             isLoadingMore={submittedQuery.isFetchingNextPage}
             onLoadMore={loadMore}
-            onOpen={(_item, index) => setViewerIndex(index)}
+            onOpen={(_item, index) => wall.open(index)}
             albumLabel={(item) => item.albumName}
             itemBadge={(item) => {
               const reasons = item.matchReasons ?? [];
@@ -541,13 +553,10 @@ export default function SemanticSearch() {
                   : `相似度 ${item.similarity.toFixed(2)}`;
             }}
             isPicked={picks.isPicked}
-            onTogglePick={(item) => {
-              void picks
-                .toggle(item.id)
-                .catch(() =>
-                  pushToast({ kind: "error", message: "精选操作失败" }),
-                );
-            }}
+            onTogglePick={(item) => picks.toggle(item.id)}
+            /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
+               不该把人丢回墙的顶上。 */
+            scrollToIndex={wall.focusIndex}
           />
         ) : submitted && !submittedQuery.isLoading ? (
           <EmptyState
@@ -594,28 +603,14 @@ export default function SemanticSearch() {
         )}
       </div>
 
-      {selected && (
+      {viewer && (
         <PhotoViewer
-          items={items}
-          index={viewerIndex ?? 0}
-          albumName={selected.albumName}
-          albumHref={albumRoute("photo", selected.albumId)}
-          totalCount={total}
-          hasNextPage={submittedQuery.hasNextPage ?? false}
-          isLoadingMore={submittedQuery.isFetchingNextPage}
-          loadMoreError={submittedQuery.isFetchNextPageError}
-          onLoadMore={loadMore}
-          onIndexChange={setViewerIndex}
-          onClose={() => setViewerIndex(null)}
-          isPicked={picks.isPicked(selected.id)}
-          onTogglePick={() => {
-            void picks
-              .toggle(selected.id)
-              .catch(() =>
-                pushToast({ kind: "error", message: "精选操作失败" }),
-              );
+          {...viewer}
+          /* 以这张为查询图找相似照片。 */
+          onFindSimilar={() => {
+            const item = items[viewer.index];
+            if (item) findSimilar(item);
           }}
-          onFindSimilar={() => findSimilar(selected)}
         />
       )}
     </div>

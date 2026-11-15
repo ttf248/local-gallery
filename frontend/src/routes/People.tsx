@@ -13,7 +13,8 @@ import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoWall from "../components/wall/PhotoWall";
 import PeopleMergeDialog from "../components/people/PeopleMergeDialog";
 import { aiJobsApi, type PersonFace, type PersonGroup } from "../api/aiJobs";
-import { usePicks } from "../hooks/usePicks";
+import { usePickToggle } from "../hooks/usePickToggle";
+import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { useUIStore } from "../store/uiStore";
 import { albumRoute, homeRoute, peopleRoute } from "../utils/path";
@@ -179,9 +180,8 @@ function PersonAlbum({ personId }: { personId: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const density = usePhotoStore((state) => state.density);
-  const picks = usePicks();
+  const picks = usePickToggle();
   const pushToast = useUIStore((state) => state.pushToast);
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedFaces, setSelectedFaces] = useState<string[]>([]);
@@ -244,6 +244,22 @@ function PersonAlbum({ personId }: { personId: string }) {
     onError: () => pushToast({ kind: "error", message: "拆分选中人脸失败" }),
   });
   const loadMore = () => void query.fetchNextPage({ cancelRefetch: false });
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items,
+    total,
+    albumName: (item) => item.albumName,
+    albumHref: (item) => albumRoute("photo", item.albumId),
+    hasNextPage: query.hasNextPage ?? false,
+    isLoadingMore: query.isFetchingNextPage,
+    loadMoreError: query.isFetchNextPageError,
+    onLoadMore: loadMore,
+    isPicked: picks.isPicked,
+    onTogglePick: (item) => picks.toggle(item.id),
+  });
+  const viewer = wall.viewer;
+
   const toggleFace = (key: string) =>
     setSelectedFaces((current) =>
       current.includes(key)
@@ -408,7 +424,7 @@ function PersonAlbum({ personId }: { personId: string }) {
             hasNextPage={query.hasNextPage ?? false}
             isLoadingMore={query.isFetchingNextPage}
             onLoadMore={loadMore}
-            onOpen={(_item, index) => setViewerIndex(index)}
+            onOpen={(_item, index) => wall.open(index)}
             itemOverlay={(item, tile) => {
               const itemFaces = facesByResource.get(item.id);
               if (!itemFaces?.length) return null;
@@ -439,39 +455,14 @@ function PersonAlbum({ personId }: { personId: string }) {
             }}
             albumLabel={(item) => item.albumName}
             isPicked={picks.isPicked}
-            onTogglePick={(item) => {
-              void picks
-                .toggle(item.id)
-                .catch(() =>
-                  pushToast({ kind: "error", message: "精选操作失败" }),
-                );
-            }}
+            onTogglePick={(item) => picks.toggle(item.id)}
+            /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
+               不该把人丢回墙的顶上。 */
+            scrollToIndex={wall.focusIndex}
           />
         </div>
       )}
-      {viewerIndex !== null && items[viewerIndex] ? (
-        <PhotoViewer
-          items={items}
-          index={viewerIndex}
-          albumName={items[viewerIndex].albumName}
-          albumHref={albumRoute("photo", items[viewerIndex].albumId)}
-          totalCount={total}
-          hasNextPage={query.hasNextPage ?? false}
-          isLoadingMore={query.isFetchingNextPage}
-          loadMoreError={query.isFetchNextPageError}
-          onLoadMore={loadMore}
-          onIndexChange={setViewerIndex}
-          onClose={() => setViewerIndex(null)}
-          isPicked={picks.isPicked(items[viewerIndex].id)}
-          onTogglePick={() => {
-            void picks
-              .toggle(items[viewerIndex].id)
-              .catch(() =>
-                pushToast({ kind: "error", message: "精选操作失败" }),
-              );
-          }}
-        />
-      ) : null}
+      {viewer ? <PhotoViewer {...viewer} /> : null}
       {mergeDialogOpen ? (
         <PeopleMergeDialog
           personId={personId}

@@ -1,12 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import PhotoWall from "../wall/PhotoWall";
 import PhotoViewer from "../wall/PhotoViewer";
 import type { ChinaTimeRange } from "../../api/aiJobs";
 import type { LibraryFeedItem } from "../../api/library";
 import { useChinaRegionMedia } from "../../hooks/useChinaLocations";
-import { usePicks } from "../../hooks/usePicks";
+import { usePickToggle } from "../../hooks/usePickToggle";
+import { useWallViewer } from "../../hooks/useWallViewer";
 import { usePhotoStore, wallTargetHeight } from "../../store/photoStore";
-import { useUIStore } from "../../store/uiStore";
 import { albumRoute } from "../../utils/path";
 
 interface TravelPhotoWallProps {
@@ -32,9 +32,7 @@ export default function TravelPhotoWall({
   timeRange,
 }: TravelPhotoWallProps) {
   const density = usePhotoStore((state) => state.density);
-  const picks = usePicks();
-  const pushToast = useUIStore((state) => state.pushToast);
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const picks = usePickToggle();
   const query = useChinaRegionMedia(adcode, timeRange, visit);
 
   const items = useMemo<LibraryFeedItem[]>(
@@ -43,6 +41,21 @@ export default function TravelPhotoWall({
   );
   const total = query.data?.pages[0]?.total ?? items.length;
   const loadMore = () => void query.fetchNextPage({ cancelRefetch: false });
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items,
+    total,
+    albumName: (item) => item.albumName,
+    albumHref: (item) => albumRoute("photo", item.albumId),
+    hasNextPage: query.hasNextPage ?? false,
+    isLoadingMore: query.isFetchingNextPage,
+    loadMoreError: query.isFetchNextPageError,
+    onLoadMore: loadMore,
+    isPicked: picks.isPicked,
+    onTogglePick: (item) => picks.toggle(item.id),
+  });
+  const viewer = wall.viewer;
 
   return (
     <div className="flex h-[min(84vh,980px)] min-h-[460px] flex-col">
@@ -71,42 +84,17 @@ export default function TravelPhotoWall({
             hasNextPage={query.hasNextPage ?? false}
             isLoadingMore={query.isFetchingNextPage}
             onLoadMore={loadMore}
-            onOpen={(_item, index) => setViewerIndex(index)}
+            onOpen={(_item, index) => wall.open(index)}
             albumLabel={(item) => item.albumName}
             isPicked={picks.isPicked}
-            onTogglePick={(item) => {
-              void picks
-                .toggle(item.id)
-                .catch(() =>
-                  pushToast({ kind: "error", message: "精选操作失败" }),
-                );
-            }}
+            onTogglePick={(item) => picks.toggle(item.id)}
+            /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
+               不该把人丢回墙的顶上。 */
+            scrollToIndex={wall.focusIndex}
           />
         </div>
       )}
-      {viewerIndex !== null && items[viewerIndex] && (
-        <PhotoViewer
-          items={items}
-          index={viewerIndex}
-          albumName={items[viewerIndex].albumName}
-          albumHref={albumRoute("photo", items[viewerIndex].albumId)}
-          totalCount={total}
-          hasNextPage={query.hasNextPage ?? false}
-          isLoadingMore={query.isFetchingNextPage}
-          loadMoreError={query.isFetchNextPageError}
-          onLoadMore={loadMore}
-          onIndexChange={setViewerIndex}
-          onClose={() => setViewerIndex(null)}
-          isPicked={picks.isPicked(items[viewerIndex].id)}
-          onTogglePick={() => {
-            void picks
-              .toggle(items[viewerIndex].id)
-              .catch(() =>
-                pushToast({ kind: "error", message: "精选操作失败" }),
-              );
-          }}
-        />
-      )}
+      {viewer && <PhotoViewer {...viewer} />}
     </div>
   );
 }

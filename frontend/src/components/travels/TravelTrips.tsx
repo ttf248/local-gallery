@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChinaTrip } from "../../api/aiJobs";
 import { useChinaTripMedia } from "../../hooks/useChinaLocations";
-import { usePicks } from "../../hooks/usePicks";
+import { usePickToggle } from "../../hooks/usePickToggle";
 import { usePhotoStore, wallTargetHeight } from "../../store/photoStore";
-import { useUIStore } from "../../store/uiStore";
 import PhotoViewer from "../wall/PhotoViewer";
+import { useWallViewer } from "../../hooks/useWallViewer";
 import PhotoWall from "../wall/PhotoWall";
 import { ChevronRightIcon } from "../common/Icon";
 import ThumbImage from "../common/ThumbImage";
@@ -147,13 +147,11 @@ function TravelTripCard({
   regions,
   backdrop,
 }: TravelTripCardProps) {
-  const [viewerResourceId, setViewerResourceId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewAbove, setPreviewAbove] = useState(false);
   const cardRef = useRef<HTMLElement | null>(null);
   const density = usePhotoStore((state) => state.density);
-  const picks = usePicks();
-  const pushToast = useUIStore((state) => state.pushToast);
+  const picks = usePickToggle();
 
   // 浮层往下展开还是往上翻：卡片靠下时往下会掉出视口。
   const openPreview = () => {
@@ -170,8 +168,11 @@ function TravelTripCard({
   //
   // 取照片不能带时间区间：段是按「粒度 + 间隔」切出来的，列表与照片
   // 端点必须用同一套口径，否则按下标取到的不是这一段。
+  // 预览开着时这一段的媒体要留着：用户可能先看照片再取消选中这一段，
+  // 媒体一撤，照片就没了。
+  const [viewerHeld, setViewerHeld] = useState(false);
   const media = useChinaTripMedia(
-    selected || viewerResourceId !== null ? trip.index : null,
+    selected || viewerHeld ? trip.index : null,
     granularity,
   );
   const items = useMemo(
@@ -179,24 +180,34 @@ function TravelTripCard({
     [media.data],
   );
   const total = media.data?.pages[0]?.total ?? items.length;
-  const viewerIndex =
-    viewerResourceId === null
-      ? null
-      : items.findIndex((item) => item.id === viewerResourceId);
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items,
+    total,
+    albumName: (item) => item.albumName,
+    hasNextPage: media.hasNextPage ?? false,
+    isLoadingMore: media.isFetchingNextPage,
+    loadMoreError: media.isFetchNextPageError,
+    onLoadMore: () => void media.fetchNextPage({ cancelRefetch: false }),
+    isPicked: picks.isPicked,
+    onTogglePick: (item) => picks.toggle(item.id),
+  });
+  const viewer = wall.viewer;
 
   // 照片带是整段均匀取样的，可能落在第一页之外：还没取到就继续取下一页，
   // 否则点后半段的照片会毫无反应。
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = media;
   useEffect(() => {
-    if (viewerResourceId === null || (viewerIndex ?? -1) >= 0) return;
+    if (wall.openId === null || wall.index !== null) return;
     if (!hasNextPage || isFetchingNextPage) return;
     void fetchNextPage({ cancelRefetch: false });
   }, [
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    viewerIndex,
-    viewerResourceId,
+    wall.openId,
+    wall.index,
   ]);
 
   // 收起时只摆前几个地点；展开后整条链都摆出来。
@@ -302,7 +313,10 @@ function TravelTripCard({
                   key={id}
                   type="button"
                   className="travel-trip-card__photo"
-                  onClick={() => setViewerResourceId(id)}
+                  onClick={() => {
+                    setViewerHeld(true);
+                    wall.openById(id);
+                  }}
                   aria-label="看这一段的照片"
                 >
                   <ThumbImage
@@ -333,41 +347,25 @@ function TravelTripCard({
                 hasNextPage={media.hasNextPage ?? false}
                 isLoadingMore={media.isFetchingNextPage}
                 onLoadMore={() => void media.fetchNextPage({ cancelRefetch: false })}
-                onOpen={(_item, index) => setViewerResourceId(items[index]?.id ?? null)}
+                onOpen={(_item, index) => {
+                  setViewerHeld(true);
+                  wall.open(index);
+                }}
                 albumLabel={(item) => item.albumName}
                 isPicked={picks.isPicked}
-                onTogglePick={(item) => {
-                  void picks
-                    .toggle(item.id)
-                    .catch(() =>
-                      pushToast({ kind: "error", message: "精选操作失败" }),
-                    );
-                }}
+                onTogglePick={(item) => picks.toggle(item.id)}
               />
             )}
           </div>
         </>
       ) : null}
 
-      {viewerIndex !== null && viewerIndex >= 0 ? (
+      {viewer ? (
         <PhotoViewer
-          items={items}
-          index={viewerIndex}
-          albumName={items[viewerIndex].albumName}
-          totalCount={total}
-          hasNextPage={media.hasNextPage ?? false}
-          isLoadingMore={media.isFetchingNextPage}
-          loadMoreError={media.isFetchNextPageError}
-          onLoadMore={() => void media.fetchNextPage({ cancelRefetch: false })}
-          onIndexChange={(index) => setViewerResourceId(items[index]?.id ?? null)}
-          onClose={() => setViewerResourceId(null)}
-          isPicked={picks.isPicked(items[viewerIndex].id)}
-          onTogglePick={() => {
-            void picks
-              .toggle(items[viewerIndex].id)
-              .catch(() =>
-                pushToast({ kind: "error", message: "精选操作失败" }),
-              );
+          {...viewer}
+          onClose={() => {
+            setViewerHeld(false);
+            wall.close();
           }}
         />
       ) : null}

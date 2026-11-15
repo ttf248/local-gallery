@@ -38,7 +38,7 @@ import {
   StarIcon,
 } from "../common/Icon";
 
-interface Props {
+export interface PhotoViewerProps {
   /**
    * 照片墙上的媒体序列（图片与视频混合）。
    *
@@ -162,7 +162,7 @@ export default function PhotoViewer({
   comparePinned,
   onToggleCompare,
   compareOpen = false,
-}: Props) {
+}: PhotoViewerProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [showInfo, setShowInfo] = useState(
@@ -437,6 +437,14 @@ export default function PhotoViewer({
     return () => stage.removeEventListener("wheel", onWheel);
   }, [clampPan]);
 
+  // 全局按键只装一次。
+  //
+  // 监听器原本挂在依赖数组上：父组件每渲染一次，监听就摘掉重装一遍
+  // （翻页、缩放、切信息面板都会触发）。摘掉的那一刻正好落在两次
+  // 按键之间还好，落在渲染中间就会漏掉一次按键。改成把处理函数放在
+  // ref 里、监听只装一次，处理函数始终是最新的一份。
+  const keyHandlerRef = useRef<(event: KeyboardEvent) => void>(() => {});
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (shouldIgnoreShortcut(event)) return;
@@ -522,21 +530,14 @@ export default function PhotoViewer({
           break;
       }
     };
+    keyHandlerRef.current = onKey;
+  });
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => keyHandlerRef.current(event);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [
-    applyZoom,
-    compareOpen,
-    go,
-    isVideo,
-    items.length,
-    onClose,
-    onIndexChange,
-    onToggleCompare,
-    onTogglePick,
-    showInfo,
-    zoom,
-  ]);
+  }, []);
 
   if (!current) return null;
 
@@ -776,6 +777,7 @@ export default function PhotoViewer({
                 ref={imageRef}
                 src={previewUrl(current.id, previewWidth, current.version)}
                 alt={current.name}
+                decoding="async"
                 onLoad={measureFitted}
                 onError={() => setFailed(true)}
                 draggable={false}

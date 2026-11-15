@@ -83,6 +83,21 @@ export function usePicks() {
     [qc],
   );
 
+  // 三个写入口各自记住：它们被墙与预览的回调依赖着，
+  // 每次渲染换一个函数会让整面墙跟着重画。
+  const add = useCallback(
+    (targets: string[]) => mutate(targets, "add"),
+    [mutate],
+  );
+  const remove = useCallback(
+    (targets: string[]) => mutate(targets, "remove"),
+    [mutate],
+  );
+  const toggle = useCallback(
+    (id: string) => mutate([id], ids.has(id) ? "remove" : "add"),
+    [mutate, ids],
+  );
+
   return {
     ids,
     total: query.data?.total ?? ids.size,
@@ -90,8 +105,8 @@ export function usePicks() {
     isError: query.isError,
     isPicked,
     mergeServerFlags,
-    add: (targets: string[]) => mutate(targets, "add"),
-    remove: (targets: string[]) => mutate(targets, "remove"),
-    toggle: (id: string) => mutate([id], ids.has(id) ? "remove" : "add"),
+    add,
+    remove,
+    toggle,
   };
 }

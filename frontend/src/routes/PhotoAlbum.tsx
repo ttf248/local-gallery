@@ -13,6 +13,9 @@ import {
 import { useFavorites } from "../hooks/useFavorites";
 import { usePicks } from "../hooks/usePicks";
 import { useAlbumActions } from "../hooks/useAlbumActions";
+import { useWallViewer } from "../hooks/useWallViewer";
+import { usePhotoCompare } from "../hooks/usePhotoCompare";
+import { useContextMenu } from "../hooks/useContextMenu";
 import { useUIStore } from "../store/uiStore";
 import {
   usePhotoSelectionStore,
@@ -26,7 +29,7 @@ import {
 } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
-import PhotoCompare, { type CompareItem } from "../components/wall/PhotoCompare";
+import PhotoCompare from "../components/wall/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
 import SmartAlbumBrowser from "../components/album/SmartAlbumBrowser";
 import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
@@ -193,15 +196,8 @@ export default function PhotoAlbum({ album }: Props) {
     refetchInterval: analyzingJobIds.length > 0 ? 2_000 : false,
   });
 
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  // 关掉大图预览后回到刚才看的那张。
-  const [focusIndex, setFocusIndex] = useState<number | null>(null);
   // 右键菜单：照片墙上的图片同样能查看属性、在文件管理器中定位。
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    item: LibraryMediaItem;
-  } | null>(null);
+  const menu = useContextMenu<LibraryMediaItem>();
   const [propertiesFileId, setPropertiesFileId] = useState<string | null>(null);
 
   // 精选：照片级的标记，与相册级收藏是两份数据。
@@ -212,12 +208,6 @@ export default function PhotoAlbum({ album }: Props) {
     add: addPicks,
     remove: removePicks,
   } = usePicks();
-  // 并排对比：先放一张进「待对比」，再对另一张按 C 就并排打开。
-  const [comparePin, setComparePin] = useState<CompareItem | null>(null);
-  const [comparePair, setComparePair] = useState<
-    [CompareItem, CompareItem] | null
-  >(null);
-
   // 多选：作用域是这一本相册，换一本相册选择就清空。
   const selectionScope = `album:${album.id}`;
   const selection = usePhotoSelectionStore((s) => s.entries);
@@ -238,6 +228,9 @@ export default function PhotoAlbum({ album }: Props) {
   const title = album.virtual
     ? album.location || album.displayName || album.name
     : album.displayName || album.name;
+
+  // 并排对比：先放一张进「待对比」，再对另一张按 C 就并排打开。
+  const compare = usePhotoCompare(() => title);
 
   useEffect(() => {
     if (
@@ -372,29 +365,6 @@ export default function PhotoAlbum({ album }: Props) {
     [album.id, dimension, pushToast, queryClient],
   );
 
-  const onOpen = useCallback((item: LibraryMediaItem, index: number) => {
-    // 打开前先把「回到哪张」清掉：关掉预览时重新对一次位置，
-    // 同一张照片看了又看也能滚回去。
-    setFocusIndex(null);
-    if (item.kind === "video") {
-      // 视频在大图预览里播放，位置与图片共用同一套切换逻辑。
-      setViewerIndex(index);
-      return;
-    }
-    setViewerIndex(index);
-  }, []);
-
-  const setCover = useCallback(async () => {
-    const item = viewerIndex === null ? undefined : mediaItems[viewerIndex];
-    if (!item) return;
-    try {
-      await albumsApi.setCover(album.id, item.id);
-      void queryClient.invalidateQueries({ queryKey: ["library"] });
-      pushToast({ kind: "success", message: "已设为封面" });
-    } catch {
-      pushToast({ kind: "error", message: "设置封面失败" });
-    }
-  }, [album.id, mediaItems, pushToast, queryClient, viewerIndex]);
 
   const copyLink = useCallback(async () => {
     try {
@@ -439,6 +409,36 @@ export default function PhotoAlbum({ album }: Props) {
     },
     [pushToast, togglePickState],
   );
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items: mediaItems,
+    total,
+    albumName: () => title,
+    /* 这一页的每一张都出自这本相册：最近浏览据此记它。 */
+    albumId: album.id,
+    /* 连续浏览：相册里的照片是分页取的，翻到已加载的末尾时
+       自动接下一页，而不是停在两百张。 */
+    hasNextPage: mediaQuery.hasNextPage ?? false,
+    isLoadingMore: mediaQuery.isFetchingNextPage,
+    loadMoreError: mediaQuery.isFetchNextPageError,
+    onLoadMore: loadMore,
+    isPicked,
+    onTogglePick: togglePick,
+  });
+  const viewer = wall.viewer;
+
+  const setCover = useCallback(async () => {
+    const item = wall.index === null ? undefined : mediaItems[wall.index];
+    if (!item) return;
+    try {
+      await albumsApi.setCover(album.id, item.id);
+      void queryClient.invalidateQueries({ queryKey: ["library"] });
+      pushToast({ kind: "success", message: "已设为封面" });
+    } catch {
+      pushToast({ kind: "error", message: "设置封面失败" });
+    }
+  }, [album.id, mediaItems, pushToast, queryClient, wall.index]);
 
   const toSelectionEntry = useCallback(
     (item: LibraryMediaItem): PhotoSelectionEntry => ({
@@ -513,52 +513,7 @@ export default function PhotoAlbum({ album }: Props) {
     [runPickAction],
   );
 
-  const compareSelected = useCallback(() => {
-    const entries = Object.values(usePhotoSelectionStore.getState().entries);
-    if (entries.length !== 2) return;
-    const [left, right] = entries;
-    setComparePair([
-      {
-        id: left.id,
-        name: left.name,
-        version: left.version,
-        width: left.width,
-        height: left.height,
-        albumName: left.albumName,
-      },
-      {
-        id: right.id,
-        name: right.name,
-        version: right.version,
-        width: right.width,
-        height: right.height,
-        albumName: right.albumName,
-      },
-    ]);
-  }, []);
-
-  const toggleComparePin = useCallback(
-    (item: LibraryMediaItem) => {
-      // 视频没有可并排的画面：对比只对图片开放。
-      if (item.kind === "video") return;
-      const current: CompareItem = {
-        id: item.id,
-        name: item.name,
-        version: item.version,
-        width: item.width,
-        height: item.height,
-        albumName: title,
-      };
-      setComparePin((prev) => {
-        if (prev && prev.id !== current.id) {
-          setComparePair([prev, current]);
-          return null;
-        }
-        return prev ? null : current;
-      });
-    },
-    [title],
-  );
+  const compareSelected = compare.compareSelected;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -861,18 +816,14 @@ export default function PhotoAlbum({ album }: Props) {
               hasNextPage={mediaQuery.hasNextPage ?? false}
               isLoadingMore={mediaQuery.isFetchingNextPage}
               onLoadMore={loadMore}
-              onOpen={onOpen}
+              onOpen={(_item, index) => wall.open(index)}
               selecting={selectionActive}
               isSelected={isSelected}
               onToggleSelect={toggleSelect}
               isPicked={isPicked}
               onTogglePick={togglePick}
-              scrollToIndex={focusIndex}
-              onContextMenu={(item, event) => {
-                event.preventDefault();
-                event.currentTarget.focus({ preventScroll: true });
-                setContextMenu({ x: event.clientX, y: event.clientY, item });
-              }}
+              scrollToIndex={wall.focusIndex}
+              onContextMenu={menu.open}
             />
           )}
         </div>
@@ -890,10 +841,10 @@ export default function PhotoAlbum({ album }: Props) {
         />
       )}
 
-      {contextMenu && (
+      {menu.menu && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          x={menu.menu.x}
+          y={menu.menu.y}
           items={[
             {
               id: "open",
@@ -902,10 +853,10 @@ export default function PhotoAlbum({ album }: Props) {
             },
             {
               id: "pick",
-              label: isPicked(contextMenu.item.id)
+              label: isPicked(menu.menu.item.id)
                 ? "移出精选"
                 : "加入精选",
-              icon: isPicked(contextMenu.item.id) ? (
+              icon: isPicked(menu.menu.item.id) ? (
                 <UncheckIcon size={12} />
               ) : (
                 <CheckIcon size={12} />
@@ -935,11 +886,11 @@ export default function PhotoAlbum({ album }: Props) {
             },
           ]}
           onSelect={(id) => {
-            const item = contextMenu.item;
-            setContextMenu(null);
+            const item = menu.menu!.item;
+            menu.close();
             if (id === "open") {
               const index = mediaItems.findIndex((it) => it.id === item.id);
-              if (index >= 0) onOpen(item, index);
+              if (index >= 0) wall.open(index);
               return;
             }
             if (id === "pick") {
@@ -963,7 +914,7 @@ export default function PhotoAlbum({ album }: Props) {
             if (id === "copy") void copyLink();
             if (id === "explorer") void openInExplorer();
           }}
-          onClose={() => setContextMenu(null)}
+          onClose={menu.close}
         />
       )}
 
@@ -974,55 +925,30 @@ export default function PhotoAlbum({ album }: Props) {
         onClose={() => setPropertiesFileId(null)}
       />
 
-      {viewerIndex !== null && (
+      {viewer && (
         <PhotoViewer
-          items={mediaItems}
-          index={viewerIndex}
-          albumName={title}
-          /* 这一页的每一张都出自这本相册：最近浏览据此记它。 */
-          albumId={album.id}
-          totalCount={total}
-          /* 连续浏览：相册里的照片是分页取的，翻到已加载的末尾时
-             自动接下一页，而不是停在两百张。 */
-          hasNextPage={mediaQuery.hasNextPage ?? false}
-          isLoadingMore={mediaQuery.isFetchingNextPage}
-          loadMoreError={mediaQuery.isFetchNextPageError}
-          onLoadMore={loadMore}
-          onIndexChange={(index) => setViewerIndex(index)}
-          onClose={() => {
-            setFocusIndex(viewerIndex);
-            setViewerIndex(null);
-          }}
+          {...viewer}
           isFavorite={isFavorite}
           onToggleFavorite={toggleFavorite}
           onSetCover={() => void setCover()}
           hasCustomCover={album.hasCustomCover}
-          isPicked={isPicked(mediaItems[viewerIndex]?.id ?? "")}
-          onTogglePick={() => {
-            const item = mediaItems[viewerIndex];
-            if (item) togglePick(item);
-          }}
-          comparePinned={comparePin?.id === mediaItems[viewerIndex]?.id}
-          compareOpen={comparePair !== null}
+          comparePinned={compare.pin?.id === mediaItems[viewer.index]?.id}
+          compareOpen={compare.pair !== null}
           onToggleCompare={() => {
-            const item = mediaItems[viewerIndex];
-            if (item) toggleComparePin(item);
+            const item = mediaItems[viewer.index];
+            if (item) compare.togglePin(item);
           }}
         />
       )}
 
-      {comparePair && (
+      {compare.pair && (
         <PhotoCompare
-          left={comparePair[0]}
-          right={comparePair[1]}
-          leftPicked={isPicked(comparePair[0].id)}
-          rightPicked={isPicked(comparePair[1].id)}
-          onClose={() => setComparePair(null)}
-          onSwap={() =>
-            setComparePair((prev) =>
-              prev ? [prev[1], prev[0]] : prev,
-            )
-          }
+          left={compare.pair[0]}
+          right={compare.pair[1]}
+          leftPicked={isPicked(compare.pair[0].id)}
+          rightPicked={isPicked(compare.pair[1].id)}
+          onClose={compare.close}
+          onSwap={compare.swap}
         />
       )}
     </div>

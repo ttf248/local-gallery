@@ -564,6 +564,33 @@ test("照片大图预览按显示尺寸取档，URL 只有一个问号", async (
   expect(Number(query.get("w"))).toBeLessThanOrEqual(1920);
 });
 
+test("关掉大图预览后照片墙回到刚才看的那一张", async ({ page }) => {
+  const nodes = await scannedNodes(page.request);
+  const album = nodes.find((node) => node.name === "2024年照片墙");
+  expect(album).toBeDefined();
+  await page.goto(albumUrl(album!));
+  const scroller = page.locator("[data-virtuoso-scroller]");
+  const tiles = scroller.getByRole("button", { name: /^查看 / });
+  await expect(tiles.first()).toBeVisible({ timeout: 15000 });
+
+  // 从墙的顶上打开第一张，一路翻到第四十一张。
+  await tiles.first().click();
+  const viewer = page.getByRole("dialog", { name: /大图预览/ });
+  await expect(viewer).toBeVisible();
+  for (let i = 0; i < 40; i += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await expect(viewer.getByText(/第 41 张/)).toBeVisible();
+
+  // 关掉预览：墙要回到刚才看的那一张，而不是留在顶上。
+  // 刚才看的那一张在墙的深处 —— 墙还停在顶上就等于把用户丢了回去。
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+  await expect
+    .poll(() => scroller.evaluate((node) => node.scrollTop))
+    .toBeGreaterThan(500);
+});
+
 test("离开相册会取消浏览器抽帧且不继续上传封面", async ({ page }) => {
   const nodes = await scannedNodes(page.request);
   const album = nodes.find((node) => node.name === "sample-video-cover");

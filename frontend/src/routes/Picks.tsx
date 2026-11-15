@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { picksApi, type PickItem } from "../api/picks";
-import { usePicks } from "../hooks/usePicks";
+import { usePickToggle } from "../hooks/usePickToggle";
 import { useUIStore } from "../store/uiStore";
 import {
   usePhotoSelectionStore,
@@ -11,10 +11,13 @@ import {
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
-import PhotoCompare, { type CompareItem } from "../components/wall/PhotoCompare";
+import PhotoCompare from "../components/wall/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
 import ContextMenu from "../components/album/ContextMenu";
 import EmptyState from "../components/common/EmptyState";
+import { useWallViewer } from "../hooks/useWallViewer";
+import { usePhotoCompare } from "../hooks/usePhotoCompare";
+import { useContextMenu } from "../hooks/useContextMenu";
 import { FolderIcon, GridIcon, PickIcon, UncheckIcon } from "../components/common/Icon";
 import { albumRoute, homeRoute } from "../utils/path";
 import { photoCopy } from "../utils/workbench";
@@ -33,19 +36,12 @@ export default function Picks() {
   const pushToast = useUIStore((s) => s.pushToast);
   const navigate = useNavigate();
   const density = usePhotoStore((s) => s.density);
-  const picks = usePicks();
+  const picks = usePickToggle();
 
-  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const [comparePin, setComparePin] = useState<CompareItem | null>(null);
-  const [comparePair, setComparePair] = useState<
-    [CompareItem, CompareItem] | null
-  >(null);
   // 右键菜单：精选页的照片来自不同相册，用户常要跳回原来那本看看上下文。
-  const [contextMenu, setContextMenu] = useState<{
-    x: number;
-    y: number;
-    item: PickItem;
-  } | null>(null);
+  const menu = useContextMenu<PickItem>();
+  // 并排对比：先放一张进「待对比」，再对另一张按 C 就并排打开。
+  const compare = usePhotoCompare((item) => item.albumName ?? "");
 
   const query = useInfiniteQuery({
     queryKey: ["picks", "media"],
@@ -70,6 +66,23 @@ export default function Picks() {
     [query.data],
   );
   const total = query.data?.pages[0]?.total ?? items.length;
+
+  const title = copy.picksTitle;
+
+  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
+  const wall = useWallViewer({
+    items,
+    total,
+    albumName: (item) => item.albumName || title,
+    albumHref: (item) => albumRoute("photo", item.albumId ?? ""),
+    isPicked: () => true,
+    onTogglePick: (item) => {
+      void picks
+        .remove([item.id])
+        .then(() => pushToast({ kind: "success", message: "已移出精选" }))
+        .catch(() => pushToast({ kind: "error", message: "操作失败" }));
+    },
+  });
 
   // 多选：作用域是这一页。
   const selectionScope = "picks";
@@ -134,55 +147,11 @@ export default function Picks() {
       .finally(() => usePhotoSelectionStore.getState().setBusy(false));
   }, [picks, pushToast]);
 
-  const compareSelected = useCallback(() => {
-    const entries = Object.values(usePhotoSelectionStore.getState().entries);
-    if (entries.length !== 2) return;
-    const [left, right] = entries;
-    setComparePair([
-      {
-        id: left.id,
-        name: left.name,
-        version: left.version,
-        width: left.width,
-        height: left.height,
-        albumName: left.albumName,
-      },
-      {
-        id: right.id,
-        name: right.name,
-        version: right.version,
-        width: right.width,
-        height: right.height,
-        albumName: right.albumName,
-      },
-    ]);
-  }, []);
-
-  const toggleComparePin = useCallback((item: PickItem) => {
-    // 视频没有可并排的画面：对比只对图片开放。
-    if (item.kind === "video") return;
-    const current: CompareItem = {
-      id: item.id,
-      name: item.name,
-      version: item.version,
-      width: item.width,
-      height: item.height,
-      albumName: item.albumName,
-    };
-    setComparePin((prev) => {
-      if (prev && prev.id !== current.id) {
-        setComparePair([prev, current]);
-        return null;
-      }
-      return prev ? null : current;
-    });
-  }, []);
-
   const loadMore = useCallback(() => {
     void query.fetchNextPage({ cancelRefetch: false });
   }, [query]);
 
-  const title = copy.picksTitle;
+  const viewer = wall.viewer;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -268,7 +237,7 @@ export default function Picks() {
             hasNextPage={query.hasNextPage ?? false}
             isLoadingMore={query.isFetchingNextPage}
             onLoadMore={loadMore}
-            onOpen={(_item, index) => setViewerIndex(index)}
+            onOpen={(_item, index) => wall.open(index)}
             /* 精选页的照片来自不同相册：悬停信息层说清出处，
                用户才知道自己看的是哪本里的哪一张。 */
             albumLabel={(item) => item.albumName}
@@ -276,24 +245,19 @@ export default function Picks() {
             isSelected={isSelected}
             onToggleSelect={(item) => toggleSelect(item)}
             isPicked={picks.isPicked}
-            onTogglePick={(item) => {
-              void picks
-                .toggle(item.id)
-                .catch(() => pushToast({ kind: "error", message: "精选操作失败" }));
-            }}
-            onContextMenu={(item, event) => {
-              event.preventDefault();
-              event.currentTarget.focus({ preventScroll: true });
-              setContextMenu({ x: event.clientX, y: event.clientY, item });
-            }}
+            onTogglePick={(item) => picks.toggle(item.id)}
+            /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
+               不该把人丢回墙的顶上。 */
+            scrollToIndex={wall.focusIndex}
+            onContextMenu={menu.open}
           />
         )}
       </div>
 
-      {contextMenu && (
+      {menu.menu && (
         <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
+          x={menu.menu.x}
+          y={menu.menu.y}
           items={[
             {
               id: "open",
@@ -312,11 +276,11 @@ export default function Picks() {
             },
           ]}
           onSelect={(id) => {
-            const item = contextMenu.item;
-            setContextMenu(null);
+            const item = menu.menu!.item;
+            menu.close();
             if (id === "open") {
               const index = items.findIndex((it) => it.id === item.id);
-              if (index >= 0) setViewerIndex(index);
+              if (index >= 0) wall.open(index);
               return;
             }
             if (id === "album") {
@@ -334,7 +298,7 @@ export default function Picks() {
                 );
             }
           }}
-          onClose={() => setContextMenu(null)}
+          onClose={menu.close}
         />
       )}
 
@@ -346,50 +310,34 @@ export default function Picks() {
             /* 这一页的每张都在精选里，「加入精选」不会露出来。 */
           }}
           onRemovePicks={removeSelectedFromPicks}
-          onCompare={compareSelected}
+          onCompare={compare.compareSelected}
           onExit={() => usePhotoSelectionStore.getState().clear()}
           busy={selectionBusy}
         />
       )}
 
-      {viewerIndex !== null && items[viewerIndex] && (
+      {viewer && (
         <PhotoViewer
-          items={items}
-          index={viewerIndex}
+          {...viewer}
           /* 精选页的照片来自不同相册：标题给当前这张的出处，
              用户才知道自己看的是哪本里挑出来的。 */
-          albumName={items[viewerIndex].albumName || title}
-          /* 精选页的照片来自不同相册：标题点一下就回到那本。 */
-          albumHref={albumRoute("photo", items[viewerIndex].albumId)}
-          totalCount={total}
-          onIndexChange={(index) => setViewerIndex(index)}
-          onClose={() => setViewerIndex(null)}
-          isPicked
-          onTogglePick={() => {
-            const item = items[viewerIndex];
-            if (!item) return;
-            void picks
-              .remove([item.id])
-              .then(() => pushToast({ kind: "success", message: "已移出精选" }))
-              .catch(() => pushToast({ kind: "error", message: "操作失败" }));
-          }}
-          comparePinned={comparePin?.id === items[viewerIndex]?.id}
-          compareOpen={comparePair !== null}
+          comparePinned={compare.pin?.id === items[viewer.index]?.id}
+          compareOpen={compare.pair !== null}
           onToggleCompare={() => {
-            const item = items[viewerIndex];
-            if (item) toggleComparePin(item);
+            const item = items[viewer.index];
+            if (item) compare.togglePin(item);
           }}
         />
       )}
 
-      {comparePair && (
+      {compare.pair && (
         <PhotoCompare
-          left={comparePair[0]}
-          right={comparePair[1]}
-          leftPicked={picks.isPicked(comparePair[0].id)}
-          rightPicked={picks.isPicked(comparePair[1].id)}
-          onClose={() => setComparePair(null)}
-          onSwap={() => setComparePair((prev) => (prev ? [prev[1], prev[0]] : prev))}
+          left={compare.pair[0]}
+          right={compare.pair[1]}
+          leftPicked={picks.isPicked(compare.pair[0].id)}
+          rightPicked={picks.isPicked(compare.pair[1].id)}
+          onClose={compare.close}
+          onSwap={compare.swap}
         />
       )}
     </div>
