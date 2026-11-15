@@ -11,7 +11,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { LibraryNodeSummary } from "../api/library";
 import { historyApi } from "../api/prefs";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import { useUIStore } from "../store/uiStore";
 import Home from "./Home";
 import Album from "./Album";
@@ -136,8 +136,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(historyApi.list).mockReset();
   useUIStore.setState({ viewMode: "grid" });
-  useSearchStore.getState().reset();
-  useSearchStore.getState().setSortBy("recent");
+  useSortPreference.setState({ sortBy: "name", sortTouched: false });
+  useSortPreference.getState().setSortBy("recent");
   mocks.items = [
     {
       id: "a_old",
@@ -261,7 +261,7 @@ const addedExpected = ["Z旧相册", "A中相册", "M新相册"];
 it.each(pages)(
   "%s 按加入时间按业务日期倒序，不按修改时间",
   async (_name, path) => {
-    useSearchStore.getState().setSortBy("added");
+    useSortPreference.getState().setSortBy("added");
     renderPage(path);
     await waitFor(() => expect(order()).toEqual(addedExpected));
   },
@@ -270,7 +270,7 @@ it.each(pages)(
 it.each(sortablePages)(
   "%s 最近看按访问时间倒序，未访问相册置后",
   async (_name, path) => {
-    useSearchStore.getState().setSortBy("viewed");
+    useSortPreference.getState().setSortBy("viewed");
     vi.mocked(historyApi.list).mockResolvedValue({ history: viewedHistory });
     renderPage(path);
     await waitFor(() => expect(order()).toEqual(viewedExpected));
@@ -280,7 +280,7 @@ it.each(sortablePages)(
 it.each(noticePages)(
   "%s 最近看读取失败保留卡片，重试后更新顺序",
   async (_name, path) => {
-    useSearchStore.getState().setSortBy("viewed");
+    useSortPreference.getState().setSortBy("viewed");
     vi.mocked(historyApi.list)
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValue({ history: viewedHistory });
@@ -297,7 +297,7 @@ it.each(noticePages)(
 );
 
 it("最近看读取中显示状态并保留可操作的卡片", () => {
-  useSearchStore.getState().setSortBy("viewed");
+  useSortPreference.getState().setSortBy("viewed");
   vi.mocked(historyApi.list).mockReturnValue(new Promise(() => {}));
   renderPage("/unread");
   expect(screen.getByRole("status")).toHaveTextContent("正在加载最近访问");
@@ -305,7 +305,7 @@ it("最近看读取中显示状态并保留可操作的卡片", () => {
 });
 
 it("后台刷新失败保留上次访问顺序，切换名称排序后隐藏访问错误", async () => {
-  useSearchStore.getState().setSortBy("viewed");
+  useSortPreference.getState().setSortBy("viewed");
   vi.mocked(historyApi.list).mockResolvedValue({ history: viewedHistory });
   const client = renderPage("/unread");
   await waitFor(() => expect(order()).toEqual(viewedExpected));
@@ -330,7 +330,7 @@ const historyFreeSortPages = noticePages;
 it.each(historyFreeSortPages)(
   "%s 名称排序不读取访问历史",
   async (_name, path) => {
-    useSearchStore.getState().setSortBy("name");
+    useSortPreference.getState().setSortBy("name");
     renderPage(path);
     await waitFor(() => expect(order()).toEqual(nameExpected));
     expect(historyApi.list).not.toHaveBeenCalled();

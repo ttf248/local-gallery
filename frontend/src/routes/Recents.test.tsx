@@ -10,7 +10,7 @@ import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import { historyApi } from "../api/prefs";
 import { useLibraryNodes } from "../hooks/useLibrary";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import Recents from "./Recents";
 
 const mocks = vi.hoisted(() => ({
@@ -66,10 +66,13 @@ const node = {
 const clientForTest = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
-function renderRecents(client = clientForTest()) {
+function renderRecents(
+  client = clientForTest(),
+  entry = "/photo/recents",
+) {
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <Recents />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -79,7 +82,7 @@ function renderRecents(client = clientForTest()) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.gridProps.length = 0;
-  useSearchStore.getState().reset();
+  useSortPreference.setState({ sortBy: "name", sortTouched: false });
   vi.mocked(historyApi.list).mockResolvedValue({ history });
   vi.mocked(useLibraryNodes).mockReturnValue({
     data: { items: [node], missing: [] },
@@ -169,8 +172,7 @@ it("历史中资源均已失效时说明相册不可用，不引导清除筛选"
 });
 
 it("已加载记录确实被筛选掉时仍可清除筛选", async () => {
-  useSearchStore.getState().setQuery("无匹配");
-  renderRecents();
+  renderRecents(clientForTest(), "/photo/recents?q=无匹配");
   expect(await screen.findByText("没有匹配的最近访问")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "清除筛选" }));
   expect(await screen.findByText("春游相册")).toBeInTheDocument();

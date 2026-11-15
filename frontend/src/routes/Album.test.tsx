@@ -15,7 +15,7 @@ import {
   useLibraryNodes,
 } from "../hooks/useLibrary";
 import { useFavorites } from "../hooks/useFavorites";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import { historyApi } from "../api/prefs";
 
 vi.mock("../hooks/useLibrary", () => ({
@@ -80,7 +80,7 @@ describe("Album", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(historyApi.add).mockResolvedValue({ history: [] });
-    useSearchStore.getState().reset();
+    useSortPreference.setState({ sortBy: "name", sortTouched: false });
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       isLoading: false,

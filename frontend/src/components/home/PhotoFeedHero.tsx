@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { useMediaFeed } from "../../hooks/useMediaFeed";
 import { usePicks } from "../../hooks/usePicks";
 import { useUIStore } from "../../store/uiStore";
 import PhotoStrip from "../wall/PhotoStrip";
-import PhotoViewer from "../wall/PhotoViewer";
+// 大图预览按需加载：首屏用不到它，代码不该跟着首屏一起下来。
+const PhotoViewer = lazy(() => import("../wall/PhotoViewer"));
 import { ShuffleIcon } from "../common/Icon";
 import { albumRoute } from "../../utils/path";
 
@@ -81,19 +82,21 @@ export default function PhotoFeedHero() {
       )}
 
       {viewerIndex !== null && feed.items[viewerIndex] && (
-        <PhotoViewer
-          items={feed.items}
-          index={viewerIndex}
-          /* 这一墙的照片来自不同相册：标题说清出处，
+        <Suspense fallback={null}>
+          <PhotoViewer
+            items={feed.items}
+            index={viewerIndex}
+            /* 这一墙的照片来自不同相册：标题说清出处，
              点一下就回到那本。 */
-          albumName={feed.items[viewerIndex].albumName}
-          albumHref={albumRoute("photo", feed.items[viewerIndex].albumId)}
-          totalCount={feed.items.length}
-          onIndexChange={(index) => setViewerIndex(index)}
-          onClose={() => setViewerIndex(null)}
-          isPicked={picks.isPicked(feed.items[viewerIndex].id)}
-          onTogglePick={() => togglePick(feed.items[viewerIndex].id)}
-        />
+            albumName={feed.items[viewerIndex].albumName}
+            albumHref={albumRoute("photo", feed.items[viewerIndex].albumId)}
+            totalCount={feed.items.length}
+            onIndexChange={(index) => setViewerIndex(index)}
+            onClose={() => setViewerIndex(null)}
+            isPicked={picks.isPicked(feed.items[viewerIndex].id)}
+            onTogglePick={() => togglePick(feed.items[viewerIndex].id)}
+          />
+        </Suspense>
       )}
     </section>
   );

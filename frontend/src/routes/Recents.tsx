@@ -2,7 +2,7 @@ import PageHeading from "../components/common/PageHeading";
 import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { useSearchStore } from "../store/searchStore";
+import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
 import { historyApi, type HistoryEntry } from "../api/prefs";
 import { historyQueryKey } from "../api/queryKeys";
@@ -30,17 +30,22 @@ export default function Recents() {
   const queryClient = useQueryClient();
   const viewMode = useUIStore((s) => s.viewMode);
   const pushToast = useUIStore((s) => s.pushToast);
-  const query = useSearchStore((s) => s.query);
-  const sortBy = useSearchStore((s) => s.sortBy);
-  const sortTouched = useSearchStore((s) => s.sortTouched);
-  const minImageCount = useSearchStore((s) => s.minImageCount);
+  const {
+    query,
+    sortBy,
+    setSortBy,
+    minImageCount,
+    setMinImageCount,
+    reset: resetFilters,
+  } = useListFilters({ defaultSort: "viewed" });
 
   const { mode } = useAppMode();
   const copy = workbenchCopy(mode);
   // 这一页的天然顺序是「按最近看」：它问的是「我刚才在翻什么」，
   // 按名称排会把时刻打乱，左边那一列时间就不再是一条轴。
-  // 用户亲手选过排序时，沿用他挑的那个。
-  const effectiveSort = sortTouched ? sortBy : "viewed";
+  // 用户亲手选过排序时，沿用他挑的那个 —— 排序的回落由 useListFilters
+  // 按这一页的天然顺序算好。
+  const effectiveSort = sortBy;
 
   // 访问历史按当前工作台收敛：照片侧只列照片相册。
   const { history, cards, resolvedCount, historyQuery, nodesQuery } =
@@ -219,9 +224,10 @@ export default function Recents() {
           totalCount={filtered.length}
           /* 照片侧只有卡片墙这一种形态，摆一个切不动的视图开关只是噪音。 */
           hideViewToggle={mode === "photo"}
-          /* 这一页按时间排：这一页问的是「我刚才在翻什么」，
-             时刻是它的天然顺序。 */
-          defaultSort="viewed"
+          sort={sortBy}
+          onSortChange={setSortBy}
+          minImageCount={minImageCount}
+          onMinImageCountChange={setMinImageCount}
         />
       )}
 
@@ -279,7 +285,7 @@ export default function Recents() {
           dense
           action={
             <button
-              onClick={() => useSearchStore.getState().reset()}
+              onClick={resetFilters}
               className="btn btn-outline"
             >
               清除筛选

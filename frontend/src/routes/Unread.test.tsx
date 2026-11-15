@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import Unread from "./Unread";
 import { useFavorites } from "../hooks/useFavorites";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import { useAppModeStore } from "../store/appModeStore";
 
 // 全部依赖外部 hook,组件本身不直接 fetch — mock 掉避免网络。
@@ -82,11 +82,11 @@ function seedUnread(
   } as never);
 }
 
-function renderUnread() {
+function renderUnread(entry = "/comic/unread") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <Unread />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -114,7 +114,7 @@ describe("Unread", () => {
     } as never);
     // 未读页只属于漫画工作台：照片模式会被重定向回主页。
     useAppModeStore.setState({ preference: "comic", hydrated: true });
-    useSearchStore.getState().reset();
+    useSortPreference.setState({ sortBy: "name", sortTouched: false });
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
       isLoading: false,
@@ -157,14 +157,9 @@ describe("Unread", () => {
     expect(screen.getByText("去设置")).toBeInTheDocument();
   });
 
-  it("最小图数变化后立即重新筛选", async () => {
+  it("最少图数写进地址后立即重新筛选", async () => {
     seedUnread([baseAlbum("/a", "A", 2), baseAlbum("/b", "B", 10)]);
-    renderUnread();
-
-    expect(await screen.findByText("A")).toBeInTheDocument();
-    expect(screen.getByText("B")).toBeInTheDocument();
-
-    act(() => useSearchStore.getState().setMinImageCount(5));
+    renderUnread("/comic/unread?min=5");
 
     await waitFor(() =>
       expect(screen.queryByText("A")).not.toBeInTheDocument(),
@@ -180,12 +175,8 @@ describe("Unread", () => {
       }),
       baseAlbum("/b", "B"),
     ]);
-    renderUnread();
-
-    // 卡片展示归属目录，而不是通用的类型名
-    expect(await screen.findByText("2020年")).toBeInTheDocument();
-
-    act(() => useSearchStore.getState().setQuery("2020年"));
+    // 关键词也在地址里：目录名能搜到散图相册。
+    renderUnread("/comic/unread?q=2020年");
 
     await waitFor(() =>
       expect(screen.queryByText("B")).not.toBeInTheDocument(),

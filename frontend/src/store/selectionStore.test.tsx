@@ -6,7 +6,7 @@ import {
   useSelectionStore,
   type SelectionItem,
 } from "./selectionStore";
-import { useSearchStore } from "./searchStore";
+import { useSortPreference } from "./sortPreference";
 
 const item: SelectionItem = {
   id: "a_one",
@@ -22,7 +22,7 @@ beforeEach(() => {
     active: false,
     busy: false,
   });
-  useSearchStore.getState().reset();
+  useSortPreference.setState({ sortBy: "name", sortTouched: false });
 });
 
 it("选择有界且整批失败不改变原选择，跨作用域清空", () => {
@@ -47,7 +47,14 @@ it("选择有界且整批失败不改变原选择，跨作用域清空", () => {
 function Scope() {
   useSelectionScope();
   const navigate = useNavigate();
-  return <button onClick={() => navigate("/comic/favorites")}>换页</button>;
+  return (
+    <>
+      {/* 排序只是换个顺序，还是同一批东西；筛选换了就不是同一批了。 */}
+      <button onClick={() => navigate("/comic?sort=count")}>换排序</button>
+      <button onClick={() => navigate("/comic?q=新筛选")}>换筛选</button>
+      <button onClick={() => navigate("/comic/favorites")}>换页</button>
+    </>
+  );
 }
 it("排序保留选择，筛选与页面导航清空选择", async () => {
   render(
@@ -57,9 +64,9 @@ it("排序保留选择，筛选与页面导航清空选择", async () => {
   );
   useSelectionStore.getState().start();
   useSelectionStore.getState().toggle(item);
-  useSearchStore.getState().setSortBy("count");
+  fireEvent.click(screen.getByText("换排序"));
   expect(useSelectionStore.getState().items[item.id]).toEqual(item);
-  useSearchStore.getState().setQuery("新筛选");
+  fireEvent.click(screen.getByText("换筛选"));
   await waitFor(() => expect(useSelectionStore.getState().active).toBe(false));
   useSelectionStore.getState().start();
   useSelectionStore.getState().toggle(item);

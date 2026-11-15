@@ -90,14 +90,15 @@ describe("那年今日", () => {
     expect(screen.queryByTestId("album-card")).toBeNull();
   });
 
-  it("点照片直接看那一张，标题能回到原相册", () => {
+  it("点照片直接看那一张，标题能回到原相册", async () => {
     renderSection([
       makeItem("a_1", "2024年", "2024-11-07", makePhoto("f_1", "IMG_1.jpg", "2024-11-07")),
     ]);
     fireEvent.click(
       screen.getByRole("button", { name: /查看 2024 年 11 月 7 日/ }),
     );
-    const viewer = screen.getByTestId("photo-viewer");
+    // 大图预览按需加载：等它自己下来。
+    const viewer = await screen.findByTestId("photo-viewer");
     expect(viewer.textContent).toContain("2024年");
     const link = within(viewer).getByRole("link", { name: "2024年" });
     expect(link.getAttribute("href")).toBe("/photo/albums/a_1");

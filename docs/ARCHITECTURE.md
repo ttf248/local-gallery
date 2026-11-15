@@ -29,7 +29,7 @@ Fiber middleware → handlers → services/store → models + 本地文件
 | [internal/store/](../backend/internal/store/)                                                                                               | 偏好与媒体活动分文件持久化，锁内部分更新、原子写入         |
 | [frontend/src/App.tsx](../frontend/src/App.tsx)、[main.tsx](../frontend/src/main.tsx)                                                       | 应用入口、懒加载路由、访问门禁、主题、活动同步与错误边界   |
 | [frontend/src/api/](../frontend/src/api/)、[hooks/](../frontend/src/hooks/)                                                                 | 唯一网络访问层、共享查询、写入协调与 SSE 生命周期          |
-| [frontend/src/store/](../frontend/src/store/)                                                                                               | UI、阅读器、筛选及扫描会话状态，不复制长期服务端数据       |
+| [frontend/src/store/](../frontend/src/store/)                                                                                               | UI、阅读器、排序偏好及扫描会话状态，不复制长期服务端数据   |
 
 依赖方向为入口 → handler → service/store → model；service 不依赖 Fiber。媒体格式统一由 `models.ImageExts` / `VideoExts` 与 `FileMediaKind` 判定，不在扫描、封面和发送链路复制白名单。
 
@@ -285,6 +285,9 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 服务端列表接口的 `kind` 查询参数（`photo` / `comic`）必填，缺失或非法返回 `400 invalid_kind`：子节点、未读、随机、标签、标签相册与搜索按目录属性过滤。集合继承所属目录的属性，因此同样参与过滤——漫画目录下的集合不会出现在照片工作台里。它的 `albumCount` 恒为全部后代，但集合的所有成员都在同一媒体根（同属性），所以这个计数天然按侧，无需再拆一份。manifest 的 `albumCount` 是全库总数，另给 `photoAlbumCount` / `comicAlbumCount`，集合同理有 `photoCollectionCount` / `comicCollectionCount`。
 - 过滤发生在分页之前：发布时预切好的有序切片按属性筛成子序列，游标里的偏移是过滤后列表的偏移。属性进游标作用域，跨属性复用被拒绝为 `invalid_cursor`。
 - 未读/在读派生按 `(catalogRevision, activityRevision)` 缓存，缓存与属性无关，属性过滤是请求期后置筛选。未读下标只收漫画相册：照片目录下的相册不记录阅读进度，没有「未读」这个概念。
+- 列表页的筛选状态在地址里：`q`（关键词）、`sort`（排序）、`min`（最少图数），首页另有 `view`（视图）与 `year`（年份）。链接可以分享，浏览器后退能取消筛选，刷新页面也不会丢。参数名与解析只有一份实现（`utils/listFilterParams.ts`），状态只有一个来源（`hooks/useListFilters.ts` 读 `useSearchParams`）—— 不再另存一份在 localStorage 里。
+- 排序另有一层回落：用户亲手选过的顺序对所有列表页生效，存在 `store/sortPreference.ts`；地址里的 `sort` 是逐页的显式选择，优先于它。浏览足迹页的天然顺序是「按最近看」，各页没有显式选择时用它。其余筛选不再跨页共享 —— 每页的筛选是这一页的事。
+- 工具条的全局搜索框写的是当前地址的 `q`：列表页直接按它过滤，回车没有命中时带着关键词回主页。敲字改地址用 `replace`（每敲一个字塞一条历史，后退键就退不出输入框），换排序与视图用 `push`（后退键能退回上一个排序）。
 - 查询键集中注册在 `api/queryKeys.ts`：媒体库（`libraryQueryKeys`）、偏好、收藏与最近访问各只有一处定义。键散落在各处各拼各的，「刷新列表」就不知道该失效哪些 —— 手抄一遍字符串，漏一个就有一条旧数据留在界面上。注册表只放键，不放取数函数：取数函数属于各自的 api 模块，测试替换那一层时不必连带替换这里。
 - 前端查询键带模式段（`["library", ..., "mode", mode]`），切模式即换键自动重取，旧模式缓存保留。媒体清单与 `nodes/query` 与模式无关，键不带模式。收藏与历史的资源 ID 集合不分类型，由前端按摘要里的 `contentKind` 客户端过滤；`hooks/useFavoritesByMode.ts` 把「当前侧可见的卡片 / 本侧计数 / 真失效的条目」收在一处，收藏页与首页共用它，口径不再分叉。
 - 收藏里的智能标签按名解析（`POST /api/tags/query`），接口同时给出两侧的册数：客户端据此区分「这个标签在库里不存在」（失效，可清理）与「它只属于另一侧」（不可见，但不是失效）。把两者混为一谈会导致用户在另一侧点一次「清理失效收藏」就删掉自己的收藏。

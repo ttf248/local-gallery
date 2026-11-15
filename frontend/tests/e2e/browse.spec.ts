@@ -1162,6 +1162,39 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
   }
 });
 
+// 筛选状态在地址里：链接能分享，刷新不丢，换排序是一次普通导航。
+test("列表页的筛选写进地址，刷新不丢，后退退得回上一个排序", async ({
+  page,
+}) => {
+  await scannedNodes(page.request);
+  await page.goto("/photo");
+
+  const sortButton = page.getByRole("button", { name: "排序" });
+  await sortButton.click();
+  await page.getByRole("button", { name: "按最近看", exact: true }).click();
+  await expect(page).toHaveURL(/\/photo\?sort=viewed$/);
+
+  // 刷新不丢：筛选是地址的一部分，不是某个组件的内存。
+  await page.reload();
+  await expect(page.getByRole("button", { name: "排序" })).toContainText(
+    "按最近看",
+  );
+
+  // 工具条的关键词也写进地址。
+  const search = page.getByRole("combobox");
+  await search.fill("sample");
+  await expect(page).toHaveURL(/q=sample/);
+  await page.reload();
+  await expect(page.getByRole("combobox")).toHaveValue("sample");
+
+  // 换排序是一次普通导航：后退键退得回去。
+  await page.getByRole("button", { name: "排序" }).click();
+  await page.getByRole("button", { name: "按名称", exact: true }).click();
+  await expect(page).toHaveURL(/sort=name/);
+  await page.goBack();
+  await expect(page).toHaveURL(/sort=viewed/);
+});
+
 test("六个列表支持按最近看排序，集合与标签具有当前页排序入口", async ({
   page,
 }) => {
@@ -1779,7 +1812,7 @@ for (const mode of ["grid", "list"] as const) {
         .evaluate((element) => (element as HTMLInputElement).focus());
       await expect(close).toBeFocused();
       await page.keyboard.press("u");
-      await expect(page).toHaveURL("/photo");
+      await expect(page).toHaveURL(/\/photo(\?.*)?$/);
       if (mode === "grid") {
         for (const theme of ["light", "dark"] as const) {
           await page.emulateMedia({
@@ -2308,7 +2341,7 @@ test("时间线年份卡的筛选按钮可访问名不与卡片本身混淆", as
   await expect(
     page.getByRole("heading", { name: "该年份的照片" }),
   ).toBeVisible();
-  await expect(page).toHaveURL("/photo");
+  await expect(page).toHaveURL(/\/photo(\?.*)?$/);
 });
 
 test("卡片悬停预览完整落在视口内，不被视口下缘裁掉", async ({ page }) => {
@@ -2395,7 +2428,7 @@ test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ pa
   await star.click();
 
   // 星标在链接之外：点击不能带着进入相册。
-  await expect(page).toHaveURL("/photo");
+  await expect(page).toHaveURL(/\/photo(\?.*)?$/);
   // 服务端确实写入了收藏。
   await expect
     .poll(async () => {
@@ -2590,7 +2623,7 @@ test("年份索引可用空格筛选，并保留首页上下文", async ({ page 
     .first();
   await filter.focus();
   await filter.press("Space");
-  await expect(page).toHaveURL("/photo");
+  await expect(page).toHaveURL(/\/photo(\?.*)?$/);
   await expect(
     page.getByRole("heading", { name: "该年份的照片", exact: true }),
   ).toBeVisible();

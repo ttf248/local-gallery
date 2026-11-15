@@ -1,6 +1,6 @@
 import { useMemo, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSearchStore } from "../../store/searchStore";
+import { useListFilters } from "../../hooks/useListFilters";
 import { useAppMode } from "../../hooks/useAppMode";
 import type { YearGroup } from "../../utils/albumGrouping";
 import { albumCountUnit } from "../../utils/workbench";
@@ -22,8 +22,7 @@ interface Props {
  */
 export default function YearTimeline({ groups, gridRef }: Props) {
   const navigate = useNavigate();
-  const yearFilter = useSearchStore((s) => s.yearFilter);
-  const toggleYear = useSearchStore((s) => s.toggleYearFilter);
+  const { yearFilter, toggleYearFilter: toggleYear } = useListFilters();
   // 计数单位跟着工作台走：照片侧「张」，漫画侧「页」。
   const { mode } = useAppMode();
   const unit = mode === "comic" ? "页" : "张";

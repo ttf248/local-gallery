@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { useEffect } from "react";
-import { useLocation } from "react-router-dom";
-import { useSearchStore } from "./searchStore";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { LIST_PARAM } from "../utils/listFilterParams";
 import type { ContentKind } from "../api/library";
 
 export interface SelectionItem {
@@ -67,10 +67,15 @@ export const useSelectionStore = create<SelectionState>((set, get) => ({
 
 export function useSelectionScope() {
   const location = useLocation();
-  const query = useSearchStore((s) => s.query);
-  const view = useSearchStore((s) => s.view);
-  const year = useSearchStore((s) => s.yearFilter);
-  const minimum = useSearchStore((s) => s.minImageCount);
-  const scope = JSON.stringify([location.pathname, query, view, year, minimum]);
+  const [params] = useSearchParams();
+  // 作用域 = 路由 + 这一页的筛选。排序不算在内：同一批东西换个顺序，
+  // 还是那批东西，不该把勾选清掉。
+  const scope = JSON.stringify([
+    location.pathname,
+    params.get(LIST_PARAM.query) ?? "",
+    params.get(LIST_PARAM.view) ?? "",
+    params.get(LIST_PARAM.year) ?? "",
+    params.get(LIST_PARAM.min) ?? "",
+  ]);
   useEffect(() => useSelectionStore.getState().ensureScope(scope), [scope]);
 }

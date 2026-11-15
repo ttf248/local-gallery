@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type {
   LibraryOnThisDayItem,
@@ -7,7 +7,8 @@ import type {
 import { nodeSummaryToCard } from "../../utils/libraryCard";
 import AlbumCard from "../album/AlbumCard";
 import ThumbImage from "../common/ThumbImage";
-import PhotoViewer from "../wall/PhotoViewer";
+// 大图预览按需加载：首屏用不到它，代码不该跟着首屏一起下来。
+const PhotoViewer = lazy(() => import("../wall/PhotoViewer"));
 import { albumRoute } from "../../utils/path";
 
 interface Props {
@@ -66,7 +67,10 @@ export default function OnThisDaySection({
       ? `${month} 月 ${day} 日 · 往年这天拍过 ${photoCount} 张`
       : `${month} 月 ${day} 日 · 往年这天有 ${cards.length} 本相册拍过照`;
   return (
-    <section className="page-shell page-section" data-testid="on-this-day-section">
+    <section
+      className="page-shell page-section"
+      data-testid="on-this-day-section"
+    >
       <div className="section-heading">
         <span className="section-index">{sectionIndex}</span>
         <h2 className="section-title">那年今日</h2>
@@ -105,18 +109,20 @@ export default function OnThisDaySection({
       </div>
 
       {viewing && (
-        <PhotoViewer
-          items={[viewing.photo]}
-          index={0}
-          albumName={viewing.albumName}
-          /* 这一张出自哪本相册：最近浏览据此记它。 */
-          albumId={viewing.albumId}
-          /* 标题点一下就回到那本相册：这一段是照片，出去的路却是相册。 */
-          albumHref={albumRoute("photo", viewing.albumId)}
-          totalCount={1}
-          onIndexChange={() => {}}
-          onClose={() => setViewing(null)}
-        />
+        <Suspense fallback={null}>
+          <PhotoViewer
+            items={[viewing.photo]}
+            index={0}
+            albumName={viewing.albumName}
+            /* 这一张出自哪本相册：最近浏览据此记它。 */
+            albumId={viewing.albumId}
+            /* 标题点一下就回到那本相册：这一段是照片，出去的路却是相册。 */
+            albumHref={albumRoute("photo", viewing.albumId)}
+            totalCount={1}
+            onIndexChange={() => {}}
+            onClose={() => setViewing(null)}
+          />
+        </Suspense>
       )}
     </section>
   );

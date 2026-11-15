@@ -15,7 +15,7 @@ import {
   useLibraryNodes,
   useLibraryRecentAlbums,
 } from "../hooks/useLibrary";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import { useAppModeStore } from "../store/appModeStore";
 import Favorites from "./Favorites";
 
@@ -66,10 +66,10 @@ const node = {
 };
 const clientForTest = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
-function renderFavorites(client = clientForTest()) {
+function renderFavorites(client = clientForTest(), entry = "/photo/favorites") {
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <Favorites />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -78,7 +78,7 @@ function renderFavorites(client = clientForTest()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useSearchStore.getState().reset();
+  useSortPreference.setState({ sortBy: "name", sortTouched: false });
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   vi.mocked(favoritesApi.list).mockResolvedValue({ favorites: [node.id] });
   vi.mocked(historyApi.list).mockResolvedValue({ history: [] });
@@ -266,7 +266,7 @@ it("收藏资源均失效时提供清理失效收藏的动作", async () => {
 });
 
 it("最近看排序依赖的历史查询失败时保留收藏并提供重试", async () => {
-  useSearchStore.getState().setSortBy("viewed");
+  useSortPreference.getState().setSortBy("viewed");
   vi.mocked(historyApi.list).mockRejectedValueOnce(new Error("offline"));
   renderFavorites();
   expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -282,8 +282,7 @@ it("最近看排序依赖的历史查询失败时保留收藏并提供重试", a
 });
 
 it("名称排序不读取历史，真正的筛选空结果仍可清除", async () => {
-  useSearchStore.getState().setQuery("无匹配");
-  renderFavorites();
+  renderFavorites(clientForTest(), "/photo/favorites?q=无匹配");
   expect(await screen.findByText("没有匹配的收藏")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "清除筛选" }));
   expect(await screen.findByText("春游相册")).toBeInTheDocument();

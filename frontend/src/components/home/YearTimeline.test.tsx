@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import YearTimeline from "./YearTimeline";
-import { useSearchStore } from "../../store/searchStore";
 import { useAppModeStore } from "../../store/appModeStore";
 import type { YearGroup } from "../../utils/albumGrouping";
 import type { CardData } from "../album/AlbumCard";
@@ -52,10 +51,17 @@ function makeGroup(year: number, albumCount = 1): YearGroup {
   };
 }
 
+// 年份筛选在地址里：探针把当前的查询串读出来，断言看它而不是看状态。
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="location">{location.search}</output>;
+}
+
 function renderTimeline(groups: YearGroup[]) {
   return render(
     <MemoryRouter>
       <YearTimeline groups={groups} />
+      <LocationProbe />
     </MemoryRouter>,
   );
 }
@@ -63,7 +69,6 @@ function renderTimeline(groups: YearGroup[]) {
 describe("YearTimeline", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useSearchStore.setState({ yearFilter: null });
     useAppModeStore.setState({ preference: "photo", hydrated: true });
   });
 
@@ -101,7 +106,7 @@ describe("YearTimeline", () => {
     renderTimeline([makeGroup(2024)]);
     fireEvent.click(screen.getByRole("button", { name: "筛选该年份" }));
 
-    expect(useSearchStore.getState().yearFilter).toBe(2024);
+    expect(screen.getByTestId("location")).toHaveTextContent("year=2024");
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -110,10 +115,10 @@ describe("YearTimeline", () => {
     const filterButton = screen.getByRole("button", { name: "筛选该年份" });
 
     fireEvent.click(filterButton);
-    expect(useSearchStore.getState().yearFilter).toBe(2024);
+    expect(screen.getByTestId("location")).toHaveTextContent("year=2024");
     // 激活态下按钮文案变为「取消年份筛选」。
     fireEvent.click(screen.getByRole("button", { name: "取消年份筛选" }));
-    expect(useSearchStore.getState().yearFilter).toBeNull();
+    expect(screen.getByTestId("location")).not.toHaveTextContent("year=");
   });
 
   // 照片侧：年份卡直接看这一年的照片。年份散在好几本相册里，
@@ -145,7 +150,7 @@ describe("YearTimeline", () => {
 
     fireEvent.click(card);
     expect(navigate).toHaveBeenCalledWith("/albums/a0");
-    expect(useSearchStore.getState().yearFilter).toBeNull();
+    expect(screen.getByTestId("location")).not.toHaveTextContent("year=");
   });
 
   it("年份里有集合时进入集合（那一年通常就是一个同名集合）", () => {

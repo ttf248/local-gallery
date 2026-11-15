@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { useSearchStore } from "../store/searchStore";
+import { useListFilters } from "../hooks/useListFilters";
 import { useFavorites } from "../hooks/useFavorites";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useVisitRecorder } from "../hooks/useVisitRecorder";
@@ -130,8 +130,7 @@ export default function Album() {
   // 再解会把 ID 里的字面 %xx 破坏掉。
   const resourceID = decodePathTail(location.pathname, "/albums/");
 
-  const query = useSearchStore((s) => s.query);
-  const sortBy = useSearchStore((s) => s.sortBy);
+  const { query, sortBy } = useListFilters();
   const viewMode = useUIStore((s) => s.viewMode);
   const { toggle: toggleFav, favorites } = useFavorites();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -518,6 +517,7 @@ function CollectionView({
   onToggleFav: () => void;
   isFavorite: boolean;
 }) {
+  const { sortBy, setSortBy } = useListFilters();
   const cards = list.cards;
   const yearGroups = useMemo(
     () => listYearGroups(list.summary, list.query),
@@ -576,6 +576,10 @@ function CollectionView({
         <ListFilterBar
           totalCount={list.summary?.total ?? 0}
           showMinImageFilter={false}
+          sort={sortBy}
+          onSortChange={setSortBy}
+          minImageCount={0}
+          onMinImageCountChange={() => {}}
           trailing={<SelectionToggle />}
         />
         {/* 时间线只在 ≥2 个真实年份桶时才有意义:

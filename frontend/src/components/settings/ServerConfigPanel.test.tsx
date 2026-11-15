@@ -16,7 +16,6 @@ import {
 } from "../../api/config";
 import { useUIStore } from "../../store/uiStore";
 import { ListFilterBar } from "../common/ListFilterBar";
-import { useSearchStore } from "../../store/searchStore";
 import { authApi } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fsApi } from "../../api/fs";
@@ -1412,15 +1411,17 @@ describe("ServerConfigPanel", () => {
 // sort menu 的 'viewed' 选项出现(用 store 直接改 sortBy 验证)
 describe("ListFilterBar - sort menu", () => {
   beforeEach(() => {
-    useSearchStore.setState({
-      sortBy: "name",
-      query: "",
-      view: "all",
-      yearFilter: null,
-    });
   });
   it("包含「按最近看」选项", async () => {
-    render(<ListFilterBar totalCount={10} />);
+    render(
+      <ListFilterBar
+        totalCount={10}
+        sort="name"
+        onSortChange={() => {}}
+        minImageCount={0}
+        onMinImageCountChange={() => {}}
+      />,
+    );
     // 打开 sort menu
     const sortBtn = screen.getByRole("button", { name: /排序/ });
     fireEvent.click(sortBtn);

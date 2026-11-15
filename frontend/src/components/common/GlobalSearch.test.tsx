@@ -4,7 +4,6 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import GlobalSearch from "./GlobalSearch";
 import { albumsApi } from "../../api/albums";
-import { useSearchStore } from "../../store/searchStore";
 
 vi.mock("../../api/albums", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../api/albums")>();
@@ -36,7 +35,6 @@ function renderSearch() {
 describe("GlobalSearch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useSearchStore.getState().reset();
   });
 
   it("搜索框有可访问名称", () => {

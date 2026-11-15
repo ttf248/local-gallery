@@ -10,7 +10,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { LibraryNodeSummary } from "../api/library";
 import { historyApi } from "../api/prefs";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import { useUIStore } from "../store/uiStore";
 import { useAppModeStore } from "../store/appModeStore";
 import Home from "./Home";
@@ -163,7 +163,7 @@ vi.mock("../hooks/useLibrary", () => {
 beforeEach(() => {
   vi.clearAllMocks();
   useUIStore.setState({ viewMode: "grid" });
-  useSearchStore.getState().reset();
+  useSortPreference.setState({ sortBy: "name", sortTouched: false });
   mocks.inProgress = true;
   mocks.listItems = undefined;
   vi.mocked(useLibraryList).mockImplementation(
@@ -204,13 +204,13 @@ beforeEach(() => {
   ];
 });
 
-function renderHome() {
+function renderHome(entry = "/") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/" element={<Home />} />
         </Routes>
@@ -373,8 +373,7 @@ it("漫画工作台不显示「接着看」专区", async () => {
 // 早先只有一个笼统的「清除筛选」，按一下还会把排序与视图一起重置。
 it("空结果时按生效的筛选分别给手柄", async () => {
   mocks.listItems = [];
-  useSearchStore.setState({ view: "album", yearFilter: 1999 });
-  renderHome();
+  renderHome("/?view=album&year=1999");
   await waitFor(() =>
     expect(screen.getByText(/没有匹配的图像/)).toBeInTheDocument(),
   );
@@ -412,20 +411,49 @@ it("视图 chip 的计数跟着年份筛选走", async () => {
       coverImages: [],
     },
   ];
-  renderHome();
+  renderHome("/?year=2023");
   await waitFor(() => expect(screen.getByTestId("album-grid")).toBeTruthy());
   const allChip = () => screen.getByRole("button", { name: /^全部/ });
   const albumChip = () => screen.getByRole("button", { name: /^相册/ });
   expect(allChip().textContent).toContain("2");
   expect(albumChip().textContent).toContain("2");
-
-  mocks.listItems = [mocks.items[0]];
-  useSearchStore.getState().setYearFilter(2023);
-  await waitFor(() => expect(allChip().textContent).toContain("1"));
-  expect(albumChip().textContent).toContain("1");
+  // 年份筛选进了地址，也就进了列表查询。
   expect(useLibraryList).toHaveBeenLastCalledWith(
     expect.objectContaining({ year: "2023" }),
     true,
+  );
+});
+
+// chip 上的数字取自当前这份列表，不是另算的全库总数。
+it("视图 chip 的计数跟着列表走，不停在旧数字上", async () => {
+  mocks.items = [
+    {
+      id: "a_1",
+      kind: "album",
+      contentKind: "photo",
+      name: "2023年相册",
+      displayName: "2023年相册",
+      imageCount: 3,
+      coverImages: [],
+    },
+    {
+      id: "a_2",
+      kind: "album",
+      contentKind: "photo",
+      name: "2024年相册",
+      displayName: "2024年相册",
+      imageCount: 5,
+      coverImages: [],
+    },
+  ];
+  mocks.listItems = [mocks.items[0]];
+  renderHome("/?year=2023");
+  await waitFor(() => expect(screen.getByTestId("album-grid")).toBeTruthy());
+  expect(screen.getByRole("button", { name: /^全部/ }).textContent).toContain(
+    "1",
+  );
+  expect(screen.getByRole("button", { name: /^相册/ }).textContent).toContain(
+    "1",
   );
 });
 

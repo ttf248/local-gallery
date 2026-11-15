@@ -1,7 +1,7 @@
 import PageHeading from "../components/common/PageHeading";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useSearchStore } from "../store/searchStore";
+import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
 import { useFavorites } from "../hooks/useFavorites";
 import { useImageActivities } from "../hooks/useImageActivity";
@@ -47,9 +47,14 @@ export default function Favorites() {
   // 收藏在另一侧时，指向那一侧的库名与切换动作。
   const otherMode = mode === "comic" ? "photo" : "comic";
   const otherLibraryTitle = workbenchCopy(otherMode).libraryTitle;
-  const query = useSearchStore((s) => s.query);
-  const sortBy = useSearchStore((s) => s.sortBy);
-  const minImageCount = useSearchStore((s) => s.minImageCount);
+  const {
+    query,
+    sortBy,
+    setSortBy,
+    minImageCount,
+    setMinImageCount,
+    reset: resetFilters,
+  } = useListFilters();
   const favoritesQuery = useFavorites();
   const { favorites } = favoritesQuery;
   const needsHistory =
@@ -253,6 +258,10 @@ export default function Favorites() {
       {cards.length > 0 && (
         <ListFilterBar
           totalCount={filtered.length}
+          sort={sortBy}
+          onSortChange={setSortBy}
+          minImageCount={minImageCount}
+          onMinImageCountChange={setMinImageCount}
           trailing={<SelectionToggle />}
         />
       )}
@@ -357,7 +366,7 @@ export default function Favorites() {
           dense
           action={
             <button
-              onClick={() => useSearchStore.getState().reset()}
+              onClick={resetFilters}
               className="btn btn-outline"
             >
               清除筛选

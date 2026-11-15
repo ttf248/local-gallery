@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { useSearchStore, type SortKey } from "../../store/searchStore";
+import type { SortKey } from "../../utils/listFilterParams";
 import { useUIStore } from "../../store/uiStore";
 import { ChevronDownIcon, GridIcon, ListIcon, FilterIcon } from "./Icon";
 import { useAppMode } from "../../hooks/useAppMode";
@@ -11,7 +11,7 @@ import type { AppMode } from "../../api/library";
 // - 所有控件高度统一 30px，文字 13px，激活态 accent-soft + accent 字
 // - 左：视图切换；右：最少图数 · 总数 · 排序 · 网格/列表
 // - 控件之间用 gap-2 分组，不画分隔线，避免视觉噪声
-interface ListFilterBarProps {
+export interface ListFilterBarProps {
   // 视图 chips (全部 / 文件夹 / 集合 / 标签),不需要就传 undefined
   viewChips?: { key: string; label: string; count: number }[];
   // 当前激活的 view chip key
@@ -26,12 +26,15 @@ interface ListFilterBarProps {
   // 「最近浏览」按时间排成一条足迹），摆一个切不动的开关只是噪音。
   hideViewToggle?: boolean;
   /**
-   * 这一页的天然排序（用户没有亲手选过排序时用它）。
+   * 生效的排序与最少图数。
    *
-   * 浏览足迹页用它「按最近看」：那一页问的是「我刚才在翻什么」，
-   * 按名称排会把时刻打乱，左边那一列时间就不再是一条轴。
+   * 筛选状态在地址里（见 hooks/useListFilters），这条工具条只负责把它
+   * 画出来、改回去 —— 它自己不再存一份。
    */
-  defaultSort?: SortKey;
+  sort: SortKey;
+  onSortChange: (s: SortKey) => void;
+  minImageCount: number;
+  onMinImageCountChange: (n: number) => void;
   /**
    * 工具条最右端的附加控件（批量选择的「选择」按钮）。
    *
@@ -48,16 +51,14 @@ export function ListFilterBar({
   totalCount,
   showMinImageFilter = true,
   hideViewToggle = false,
-  defaultSort = "name",
+  sort,
+  onSortChange,
+  minImageCount,
+  onMinImageCountChange,
   trailing,
 }: ListFilterBarProps) {
-  const sortBy = useSearchStore((s) => s.sortBy);
-  const sortTouched = useSearchStore((s) => s.sortTouched);
-  const setSortBy = useSearchStore((s) => s.setSortBy);
   const viewMode = useUIStore((s) => s.viewMode);
   const setViewMode = useUIStore((s) => s.setViewMode);
-  const minImageCount = useSearchStore((s) => s.minImageCount);
-  const setMinImageCount = useSearchStore((s) => s.setMinImageCount);
 
   return (
     <div className="page-shell">
@@ -92,7 +93,10 @@ export function ListFilterBar({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {showMinImageFilter && (
-            <MinImageFilter value={minImageCount} onChange={setMinImageCount} />
+            <MinImageFilter
+              value={minImageCount}
+              onChange={onMinImageCountChange}
+            />
           )}
           {viewChips?.length &&
           totalCount !== viewChips.find((c) => c.key === "all")?.count ? (
@@ -103,10 +107,7 @@ export function ListFilterBar({
               共 {totalCount} 项
             </span>
           ) : null}
-          <SortMenu
-            value={sortTouched ? sortBy : defaultSort}
-            onChange={setSortBy}
-          />
+          <SortMenu value={sort} onChange={onSortChange} />
           {/* 网格 / 列表：一条分段控件（跟主题切换同一套语言）。
               早先两个 30px 的方块各自带一圈边框，激活态只是把底色改成
               --bg-subtle，在浅色画布上几乎看不出差别 —— 两个图标悬在

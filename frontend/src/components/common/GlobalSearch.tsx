@@ -1,21 +1,30 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
-import { useSearchStore } from "../../store/searchStore";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { LIST_PARAM } from "../../utils/listFilterParams";
 import { SearchIcon } from "./Icon";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useAppMode } from "../../hooks/useAppMode";
 import { albumsApi, type SearchHit } from "../../api/albums";
 import RenditionImage from "./RenditionImage";
-import { albumRoute, tagRoute } from "../../utils/path";
+import { albumRoute, homeRoute, tagRoute } from "../../utils/path";
 import { albumCountUnit, collectionUnit, mediaUnit, workbenchCopy } from "../../utils/workbench";
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
 //   - 空结果时返回静默，仅同步过滤本地视图
 //   - 回车跳转主页
 export default function GlobalSearch() {
-  const query = useSearchStore((s) => s.query);
-  const setQuery = useSearchStore((s) => s.setQuery);
+  // 关键词在地址里：列表页直接按它过滤，链接也能带着走。
+  const [params, setParams] = useSearchParams();
+  const query = params.get(LIST_PARAM.query) ?? "";
+  const setQuery = (value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(LIST_PARAM.query, value);
+    else next.delete(LIST_PARAM.query);
+    if (next.toString() === params.toString()) return;
+    // 敲一个字改一次地址：每敲一下塞一条历史，后退键就退不出输入框。
+    setParams(next, { replace: true });
+  };
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -88,7 +97,12 @@ export default function GlobalSearch() {
                   onPick(activeHit);
                 } else {
                   setOpen(false);
-                  navigate("/");
+                  // 回车没有命中：带着关键词回主页。关键词已经在地址里，
+                  // 换路由会丢掉它，因此这里显式带上。
+                  const target = new URLSearchParams();
+                  if (query) target.set(LIST_PARAM.query, query);
+                  const search = target.toString();
+                  navigate(`${homeRoute(mode)}${search ? `?${search}` : ""}`);
                 }
                 break;
               }

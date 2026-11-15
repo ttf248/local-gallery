@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { useSearchStore } from "../store/searchStore";
+import { useListFilters } from "../hooks/useListFilters";
 import { useScanSSE } from "../hooks/useScanSSE";
 import { useFavoritesByMode } from "../hooks/useFavoritesByMode";
 import { useMarkAlbumRead, useMarkAlbumsRead } from "../hooks/useImageActivity";
@@ -67,14 +67,19 @@ export default function Home() {
   // "全部图像" section 的 ref：年份筛选触发后自动滚到这里
   const gridRef = useRef<HTMLDivElement>(null);
 
-  const query = useSearchStore((s) => s.query);
-  const setQuery = useSearchStore((s) => s.setQuery);
-  const sortBy = useSearchStore((s) => s.sortBy);
-  const view = useSearchStore((s) => s.view);
-  const setView = useSearchStore((s) => s.setView);
-  const yearFilter = useSearchStore((s) => s.yearFilter);
-  const setYearFilter = useSearchStore((s) => s.setYearFilter);
-  const setMinImageCount = useSearchStore((s) => s.setMinImageCount);
+  const {
+    query,
+    setQuery,
+    sortBy,
+    setSortBy,
+    view,
+    setView,
+    yearFilter,
+    setYearFilter,
+    minImageCount,
+    setMinImageCount,
+    reset: resetFilters,
+  } = useListFilters();
   const viewMode = useUIStore((s) => s.viewMode);
 
   // 收藏数按当前工作台算：照片工作台的「N 收藏」不该把漫画收藏算进去。
@@ -230,7 +235,6 @@ export default function Home() {
   // 全部图像 filter（视图 + 搜索 + 年份筛选 + 最小图数 + 排序）
   const yearFilterActive =
     yearFilter !== null && (view === "all" || view === "album");
-  const minImageCount = useSearchStore((s) => s.minImageCount);
   const listQuery = useMemo(
     () => ({
       kind: mode,
@@ -614,6 +618,10 @@ export default function Home() {
               activeViewKey={view}
               onChangeView={(k) => setView(k as typeof view)}
               totalCount={overview.summary?.total ?? 0}
+              sort={sortBy}
+              onSortChange={setSortBy}
+              minImageCount={minImageCount}
+              onMinImageCountChange={setMinImageCount}
             />
           )}
 
@@ -695,7 +703,7 @@ export default function Home() {
                   )}
                   {activeFilterCount === 0 && (
                     <button
-                      onClick={() => useSearchStore.getState().reset()}
+                      onClick={resetFilters}
                       className="btn btn-outline"
                     >
                       清除筛选

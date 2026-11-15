@@ -10,7 +10,7 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import Tag from "./Tag";
 import { useFavorites } from "../hooks/useFavorites";
 import { useImageActivities } from "../hooks/useImageActivity";
-import { useSearchStore } from "../store/searchStore";
+import { useSortPreference } from "../store/sortPreference";
 import { useAppModeStore } from "../store/appModeStore";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -60,7 +60,7 @@ function renderTag(path = "/tags/%E6%97%85%E8%A1%8C") {
 describe("Tag", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useSearchStore.getState().reset();
+    useSortPreference.setState({ sortBy: "name", sortTouched: false });
     // 「已读完」统计只属于漫画工作台。
     useAppModeStore.setState({ preference: "comic", hydrated: true });
     vi.mocked(useFavorites).mockReturnValue({

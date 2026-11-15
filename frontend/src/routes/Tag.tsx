@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
-import { useSearchStore } from "../store/searchStore";
+import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
 import { useFavorites } from "../hooks/useFavorites";
 import { useImageActivities } from "../hooks/useImageActivity";
@@ -58,8 +58,7 @@ export default function Tag() {
   // 从原始路径读取并只解码一次，保留标签名称中的字面 %xx。
   const tag = decodePathTail(location.pathname, "/tags/");
 
-  const query = useSearchStore((s) => s.query);
-  const sortBy = useSearchStore((s) => s.sortBy);
+  const { query, sortBy, setSortBy } = useListFilters();
   const viewMode = useUIStore((s) => s.viewMode);
   const { favorites, toggle } = useFavorites();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -320,6 +319,10 @@ export default function Tag() {
         <ListFilterBar
           totalCount={albumsQuery.summary?.total ?? 0}
           showMinImageFilter={false}
+          sort={sortBy}
+          onSortChange={setSortBy}
+          minImageCount={0}
+          onMinImageCountChange={() => {}}
           trailing={<SelectionToggle />}
         />
         {filtered.length === 0 ? (
