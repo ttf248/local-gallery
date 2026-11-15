@@ -663,10 +663,28 @@ func TestEmptyPreferencesResponsesUseArrays(t *testing.T) {
 			}
 		}
 	}
-	check("GET", "/api/prefs", nil, "favorites", "history")
+	// 偏好里不再带收藏与历史：它们各有自己的接口，
+	// 偏好响应里再抄一份就又是两份真相。
+	absent := func(method, route string, request any, fields ...string) {
+		t.Helper()
+		response, body := h.do(t, method, route, request)
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("%s %s status=%d body=%s", method, route, response.StatusCode, body)
+		}
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal(body, &payload); err != nil {
+			t.Fatal(err)
+		}
+		for _, field := range fields {
+			if _, ok := payload[field]; ok {
+				t.Errorf("%s %s still carries %s", method, route, field)
+			}
+		}
+	}
+	absent("GET", "/api/prefs", nil, "favorites", "history")
 	check("GET", "/api/favorites", nil, "favorites")
 	check("GET", "/api/history", nil, "history")
-	check("PATCH", "/api/prefs", map[string]string{"theme": "dark"}, "favorites", "history")
+	absent("PATCH", "/api/prefs", map[string]string{"theme": "dark"}, "favorites", "history")
 	id := "a_0000000000000000000001"
 	check("POST", "/api/favorites", map[string]string{"resourceId": id})
 	check("DELETE", "/api/favorites", map[string]string{"resourceId": id}, "favorites")
