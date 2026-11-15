@@ -616,10 +616,10 @@ export const aiJobsApi = {
   /** 空闲时的规模与耗时核算；只读，不创建任务。 */
   estimate: () =>
     api<{ ok: boolean; estimate: AIJobEstimate }>("/api/ai/jobs/estimate"),
-  start: (type: AnalysisType, mode: AnalysisMode) =>
+  start: (type: AnalysisType, mode: AnalysisMode, albumId?: string) =>
     api<{ ok: boolean; job: AIJob; reused: boolean }>("/api/ai/jobs", {
       method: "POST",
-      body: { type, mode },
+      body: { type, mode, albumId },
     }),
   startAll: (mode: AnalysisMode, albumId?: string) =>
     api<{

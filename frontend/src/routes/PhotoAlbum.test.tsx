@@ -10,6 +10,7 @@ import {
 } from "../hooks/useSmartAlbums";
 import { useFavorites } from "../hooks/useFavorites";
 import { fsApi } from "../api/fs";
+import { aiJobsApi } from "../api/aiJobs";
 import { useUIStore } from "../store/uiStore";
 
 vi.mock("../hooks/useLibrary", () => ({
@@ -27,6 +28,13 @@ vi.mock("../api/fs", () => ({
   fsApi: {
     capabilities: vi.fn().mockResolvedValue({ allowOsOpen: false }),
     openInExplorer: vi.fn().mockResolvedValue({ ok: true }),
+  },
+}));
+vi.mock("../api/aiJobs", () => ({
+  aiJobsApi: {
+    list: vi.fn(),
+    start: vi.fn(),
+    startAll: vi.fn(),
   },
 }));
 vi.mock("../api/albums", () => ({
@@ -110,6 +118,33 @@ function renderPhotoAlbum(node = album, entry = `/albums/${node.id}`) {
 describe("PhotoAlbum", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: {
+        jobs: [],
+        queue: [],
+        settings: {
+          dailyEnabled: false,
+          dailyTime: "03:00",
+          dailyModules: [],
+          dailyScan: false,
+          dailySmartAlbums: false,
+          peopleEnabled: false,
+          gpuEnabled: true,
+        },
+        modules: [],
+      },
+    });
+    vi.mocked(aiJobsApi.start).mockResolvedValue({
+      ok: true,
+      reused: false,
+      job: { id: "job-scene" },
+    } as never);
+    vi.mocked(aiJobsApi.startAll).mockResolvedValue({
+      ok: true,
+      jobs: [],
+      skippedModules: [],
+    } as never);
     useUIStore.setState({ toasts: [] });
     vi.mocked(useFavorites).mockReturnValue({
       favorites: [],
@@ -252,6 +287,92 @@ describe("PhotoAlbum", () => {
       "sg_0123456789abcdef0123",
       "smart-snapshot",
     );
+  });
+
+  it("场景维度缺少向量时只启动当前相册的语义分析", async () => {
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+      data: {
+        ok: true,
+        summary: {
+          albumId: album.id,
+          dimension: "scene",
+          revision: 1,
+          snapshotKey: "scene-snapshot",
+          totalPhotos: 4,
+          availablePhotos: 4,
+          unavailablePhotos: 0,
+          ungroupedPhotos: 4,
+          hiddenGroupCount: 0,
+          coverage: {
+            module: "embedding",
+            total: 4,
+            analyzed: 0,
+            missing: 4,
+            failed: 0,
+            withEvidence: 0,
+            available: true,
+          },
+          groups: [],
+          cacheHit: true,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderPhotoAlbum(album, `/albums/${album.id}?view=smart&dimension=scene`);
+
+    fireEvent.click(screen.getByRole("button", { name: "补充语义向量分析" }));
+
+    await waitFor(() =>
+      expect(aiJobsApi.start).toHaveBeenCalledWith(
+        "embedding",
+        "incremental",
+        album.id,
+      ),
+    );
+    expect(
+      screen.getByRole("button", { name: "已加入分析队列…" }),
+    ).toBeDisabled();
+  });
+
+  it("人物分析未启用时指向每日计划，不启动人脸任务", () => {
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+      data: {
+        ok: true,
+        summary: {
+          albumId: album.id,
+          dimension: "people",
+          revision: 1,
+          snapshotKey: "people-snapshot",
+          totalPhotos: 4,
+          availablePhotos: 4,
+          unavailablePhotos: 0,
+          ungroupedPhotos: 4,
+          hiddenGroupCount: 0,
+          coverage: {
+            module: "face",
+            total: 4,
+            analyzed: 0,
+            missing: 4,
+            failed: 0,
+            withEvidence: 0,
+            available: false,
+            reason: "people_analysis_disabled",
+          },
+          groups: [],
+          cacheHit: true,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderPhotoAlbum(album, `/albums/${album.id}?view=smart&dimension=people`);
+
+    expect(screen.getByText("人物分析尚未启用")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "去任务中心启用" }),
+    ).toHaveAttribute("href", "/tasks/plan");
+    expect(aiJobsApi.start).not.toHaveBeenCalled();
   });
 
   it("从智能相册直达链接进入分组浏览并可返回原始照片墙", () => {

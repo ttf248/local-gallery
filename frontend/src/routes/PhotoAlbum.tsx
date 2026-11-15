@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LibraryMediaItem, LibraryNodeSummary } from "../api/library";
 import { albumsApi, type SmartAlbumDimension } from "../api/albums";
-import { aiJobsApi } from "../api/aiJobs";
+import { aiJobsApi, type AnalysisType } from "../api/aiJobs";
 import { useAlbumMedia } from "../hooks/useLibrary";
 import {
   smartAlbumQueryKeys,
@@ -169,9 +169,11 @@ export default function PhotoAlbum({ album }: Props) {
   const analysisJobsQuery = useQuery({
     queryKey: ["ai-jobs"],
     queryFn: aiJobsApi.list,
-    enabled: analyzingJobIds.length > 0,
+    enabled: smartMode || analyzingJobIds.length > 0,
     refetchInterval: analyzingJobIds.length > 0 ? 2_000 : false,
   });
+  const peopleEnabled =
+    analysisJobsQuery.data?.snapshot.settings.peopleEnabled ?? false;
 
   // 右键菜单：照片墙上的图片同样能查看属性、在文件管理器中定位。
   const menu = useContextMenu<LibraryMediaItem>();
@@ -296,6 +298,31 @@ export default function PhotoAlbum({ album }: Props) {
       pushToast({ kind: "error", message: "分析任务未能启动，请检查任务中心" });
     }
   }, [album.id, pushToast]);
+
+  const analyzeDimension = useCallback(
+    async (type: AnalysisType) => {
+      try {
+        const result = await aiJobsApi.start(type, "incremental", album.id);
+        setAnalyzingJobIds([result.job.id]);
+        const label =
+          type === "face"
+            ? "人脸"
+            : type === "embedding"
+              ? "场景语义"
+              : "元数据";
+        pushToast({
+          kind: "success",
+          message: `已加入当前相册的${label}分析队列`,
+        });
+      } catch {
+        pushToast({
+          kind: "error",
+          message: "分析任务未能启动，请检查任务中心",
+        });
+      }
+    },
+    [album.id, pushToast],
+  );
 
   const rebuildSmartGroups = useCallback(async () => {
     setRebuilding(true);
@@ -747,9 +774,11 @@ export default function PhotoAlbum({ album }: Props) {
           error={smartGroupsQuery.isError}
           dimension={dimension}
           analyzing={analyzingJobIds.length > 0}
+          peopleEnabled={peopleEnabled}
           rebuilding={rebuilding}
           onDimensionChange={setDimension}
           onAnalyze={() => void analyzeAlbum()}
+          onAnalyzeDimension={(type) => void analyzeDimension(type)}
           onRebuild={() => void rebuildSmartGroups()}
           onSaveOverride={saveGroupOverride}
           onOpenGroup={setSelectedGroupId}

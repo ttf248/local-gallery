@@ -63,6 +63,39 @@ test("首页汇总已生成的智能分组并直接进入来源相册", async ({
   );
 });
 
+test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {
+  const albums = await scannedNodes(page.request, "photo");
+  const album = albums.find((item) => item.name === "zz-capture-date");
+  expect(album).toBeDefined();
+
+  await page.goto(albumUrl(album!));
+  await page.getByRole("button", { name: "智能相册", exact: true }).click();
+  await expect(page.getByText("未分析 1 张")).toBeVisible();
+
+  const startResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/ai/jobs") &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "补充EXIF 元数据分析" }).click();
+  const { job } = (await (await startResponse).json()) as {
+    job: { id: string; albumId: string };
+  };
+  expect(job.albumId).toBe(album!.id);
+
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/api/ai/jobs/${encodeURIComponent(job.id)}`,
+      );
+      if (!response.ok()) return "missing";
+      const body = (await response.json()) as { status: string };
+      return body.status;
+    })
+    .toBe("completed");
+  await expect(page.getByText("分析覆盖 1/1")).toBeVisible();
+});
+
 test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({ page }) => {
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-足迹");

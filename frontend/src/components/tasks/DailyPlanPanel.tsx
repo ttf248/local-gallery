@@ -78,6 +78,20 @@ export default function DailyPlanPanel({
   const disabled = !ready || saving;
   const hasSelectedTask =
     scanEnabled || smartAlbumsEnabled || selectedModules.length > 0;
+  const generatedDimensions = [
+    ...(selectedModules.includes("metadata") ? ["时间", "地点"] : []),
+    ...(selectedModules.includes("embedding") ? ["场景"] : []),
+    ...(peopleEnabled && selectedModules.includes("face") ? ["人物"] : []),
+  ];
+  const unavailableDimensions = [
+    ...(!selectedModules.includes("metadata")
+      ? ["时间、地点需元数据分析"]
+      : []),
+    ...(!selectedModules.includes("embedding") ? ["场景需语义向量分析"] : []),
+    ...(!peopleEnabled || !selectedModules.includes("face")
+      ? ["人物需启用并选择人脸分析"]
+      : []),
+  ];
 
   const scheduledStatus = (() => {
     if (lastScheduledStatus === "running") {
@@ -228,6 +242,27 @@ export default function DailyPlanPanel({
       <p className="border-t border-border-faint px-5 py-3 text-meta leading-relaxed text-fg-subtle sm:px-6">
         到点后依次扫描媒体目录、运行所选分析模块、生成智能相册；分析与分组在本机处理。按设备本地时间运行，错过计划时间后会在下次启动时补跑一次。
       </p>
+      {smartAlbumsEnabled && (
+        <div
+          className="border-t border-border-faint px-5 py-3 text-meta leading-relaxed sm:px-6"
+          role="status"
+          aria-label="智能相册维度计划"
+        >
+          <p className="text-fg-muted">
+            本轮具备生成线索：
+            {generatedDimensions.length > 0
+              ? generatedDimensions.join("、")
+              : "暂无"}
+            。
+          </p>
+          {unavailableDimensions.length > 0 && (
+            <p className="mt-1 text-fg-subtle">
+              其他维度仍会刷新已有结果；补齐前置分析：
+              {unavailableDimensions.join("；")}。
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

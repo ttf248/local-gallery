@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type {
   SmartAlbumDimension,
   SmartAlbumOverride,
   SmartAlbumSummary,
 } from "../../api/albums";
+import type { AnalysisType } from "../../api/aiJobs";
 import RenditionImage from "../common/RenditionImage";
 import ErrorBanner from "../common/ErrorBanner";
 
@@ -16,6 +18,8 @@ interface Props {
   rebuilding: boolean;
   onDimensionChange: (dimension: SmartAlbumDimension) => void;
   onAnalyze: () => void;
+  onAnalyzeDimension: (type: AnalysisType) => void;
+  peopleEnabled: boolean;
   onRebuild: () => void;
   onSaveOverride: (
     groupId: string,
@@ -40,6 +44,8 @@ export default function SmartAlbumBrowser({
   rebuilding,
   onDimensionChange,
   onAnalyze,
+  onAnalyzeDimension,
+  peopleEnabled,
   onRebuild,
   onSaveOverride,
   onOpenGroup,
@@ -50,6 +56,49 @@ export default function SmartAlbumBrowser({
 
   const visibleGroups =
     summary?.groups.filter((group) => showHiddenGroups || !group.hidden) ?? [];
+  const requiredModule: Record<SmartAlbumDimension, AnalysisType> = {
+    time: "metadata",
+    place: "metadata",
+    people: "face",
+    scene: "embedding",
+  };
+  const requiredModuleNames: Record<AnalysisType, string> = {
+    metadata: "EXIF 元数据",
+    embedding: "语义向量",
+    ocr: "OCR 文字",
+    face: "人脸",
+  };
+  const analyzableMissing = summary
+    ? Math.max(0, summary.coverage.missing - summary.unavailablePhotos)
+    : 0;
+  const emptyDescription = (() => {
+    if (!summary) return "正在读取这本相册的分析线索…";
+    if (summary.hiddenGroupCount > 0 && !showHiddenGroups) {
+      return "当前分组已隐藏，可选择显示已隐藏分组。";
+    }
+    if (summary.coverage.reason === "people_analysis_disabled") {
+      return "人物分组依赖人脸分析。先到任务中心启用人物分析，再把人脸分析加入运行或每日计划。";
+    }
+    if (!summary.coverage.available) {
+      return "所需分析模块当前不可用；可在任务中心的本机存储页查看模型状态。";
+    }
+    if (analyzableMissing > 0) {
+      return `还有 ${analyzableMissing} 张照片没有完成${requiredModuleNames[requiredModule[dimension]]}分析。`;
+    }
+    if (summary.unavailablePhotos > 0) {
+      return "尚未分析的照片当前不可读取；请先检查本地文件并重新扫描媒体库。";
+    }
+    if (summary.coverage.withEvidence < 3) {
+      return `分析已完成，但只有 ${summary.coverage.withEvidence} 张照片含有可用线索；每组至少需要 3 张。`;
+    }
+    return "分析已完成，但当前线索没有形成达到最低数量的分组。";
+  })();
+  const canAnalyzeDimension = Boolean(
+    summary &&
+    summary.coverage.available &&
+    analyzableMissing > 0 &&
+    !(dimension === "people" && !peopleEnabled),
+  );
 
   return (
     <section className="min-h-0 flex-1 overflow-auto px-[clamp(20px,3vw,48px)] py-6">
@@ -147,7 +196,11 @@ export default function SmartAlbumBrowser({
                 <span>文件不可用 {summary.unavailablePhotos} 张</span>
               )}
               {!summary.coverage.available && summary.coverage.reason && (
-                <span className="text-warning">该分析模块暂不可用</span>
+                <span className="text-warning">
+                  {summary.coverage.reason === "people_analysis_disabled"
+                    ? "人物分析尚未启用"
+                    : "所需分析模块暂不可用"}
+                </span>
               )}
             </div>
 
@@ -157,12 +210,29 @@ export default function SmartAlbumBrowser({
                   还没有可展示的分组
                 </h3>
                 <p className="mt-2 text-meta text-fg-muted">
-                  {summary.hiddenGroupCount > 0 && !showHiddenGroups
-                    ? "当前分组已隐藏，可选择显示已隐藏分组。"
-                    : summary.coverage.missing > 0
-                      ? "先分析当前相册，再根据可信线索建立分组。"
-                      : "当前相册没有达到最低照片数的分组。"}
+                  {emptyDescription}
                 </p>
+                {summary.coverage.reason === "people_analysis_disabled" ? (
+                  <Link
+                    to="/tasks/plan"
+                    className="btn btn-sm btn-outline mt-4"
+                  >
+                    去任务中心启用
+                  </Link>
+                ) : canAnalyzeDimension ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onAnalyzeDimension(requiredModule[dimension])
+                    }
+                    disabled={analyzing}
+                    className="btn btn-sm btn-outline mt-4"
+                  >
+                    {analyzing
+                      ? "已加入分析队列…"
+                      : `补充${requiredModuleNames[requiredModule[dimension]]}分析`}
+                  </button>
+                ) : null}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

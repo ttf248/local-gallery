@@ -189,11 +189,17 @@ export default function SmartAlbumDirectory({
         </ErrorBanner>
       ) : items.length === 0 ? (
         <EmptyState
-          title="还没有已生成的智能相册"
-          description={
-            dimension === "all"
-              ? "各文件夹内的智能分组会汇总显示在这里。先打开照片文件夹，在「智能相册」中生成分组。"
-              : `目前没有已生成的${label}。在照片文件夹内生成该维度的分组后，这里会自动汇总。`
+          title={dimension === "all" ? "还没有智能相册分组" : `还没有${label}`}
+          description={directoryEmptyDescription(dimension)}
+          action={
+            dimension === "all" ? undefined : (
+              <Link
+                to={dimension === "people" ? "/tasks/plan" : "/tasks/run"}
+                className="btn btn-sm btn-outline"
+              >
+                打开任务中心
+              </Link>
+            )
           }
           icon={<span aria-hidden="true">✦</span>}
           dense
@@ -224,4 +230,22 @@ export default function SmartAlbumDirectory({
       />
     </div>
   );
+}
+
+function directoryEmptyDescription(
+  dimension: SmartAlbumDirectoryDimension,
+): string {
+  switch (dimension) {
+    case "time":
+      return "时间分组依赖 EXIF 拍摄时间。到任务中心运行元数据分析，再打开照片相册生成或刷新分组。";
+    case "place":
+      return "地点分组依赖照片中的 GPS 或可用地点线索。先运行元数据分析；没有位置数据的照片不会被猜测归类。";
+    case "people":
+      return "人物分组依赖人脸分析。需先在每日计划启用人物分析，再运行人脸任务；识别结果只保存在本机。";
+    case "scene":
+      return "场景分组依赖 Chinese-CLIP 语义向量。到任务中心运行语义向量分析，再打开照片相册生成或刷新分组。";
+    case "all":
+    default:
+      return "智能相册按时间、地点、人物和场景分组。每个维度都需要对应的照片线索；打开单本照片相册可查看覆盖率并补充分析。";
+  }
 }
