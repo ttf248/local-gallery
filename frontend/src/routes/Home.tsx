@@ -33,7 +33,7 @@ import {
   unreadRoute,
 } from "../utils/path";
 import { continueReadingTarget } from "../utils/continueReading";
-import { formatRelative } from "../utils/date";
+import { timeAgo } from "../utils/date";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import {
   useLibraryDashboard,
@@ -415,7 +415,7 @@ export default function Home() {
                     <>
                       <span className="text-fg-subtle">，</span>
                       <span className="text-fg-subtle">
-                        上次更新 {formatRelative(manifest.scannedAt)}
+                        上次更新 {timeAgo(manifest.scannedAt)}
                       </span>
                     </>
                   )}

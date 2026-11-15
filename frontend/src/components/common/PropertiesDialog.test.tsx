@@ -73,7 +73,7 @@ it("相册属性读取目录摘要并显示真实统计", async () => {
   expect(screen.getByRole("dialog", { name: "属性" })).toBeInTheDocument();
   expect(screen.getByText("1 张")).toBeInTheDocument();
   expect(screen.getByText("2 个")).toBeInTheDocument();
-  expect(screen.getByText("1.0 KB")).toBeInTheDocument();
+  expect(screen.getByText("1 KB")).toBeInTheDocument();
   expect(screen.getByText("素材")).toBeInTheDocument();
   expect(libraryApi.queryNodes).toHaveBeenCalledWith(
     ["a_trip"],

@@ -374,7 +374,7 @@ export default function Sidebar({
 
       {/* 本机组：任务中心与设置。它们不属于当前工作台，单独成组，
           放在浏览组下面 —— 看完照片再管机器上的事，顺序不能反。 */}
-      <nav className="px-4 pb-3 space-y-1.5">
+      <nav aria-label="本机" className="px-4 pb-3 space-y-1.5">
         {renderGroup("本机", SECONDARY_GROUP, () => 0)}
       </nav>
 

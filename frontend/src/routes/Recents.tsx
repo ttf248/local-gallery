@@ -20,7 +20,7 @@ import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
 import { ClockIcon } from "../components/common/Icon";
 import { decodeFavPath, homeRoute } from "../utils/path";
-import { compareDatesDesc, formatRelative } from "../utils/date";
+import { compareDatesDesc, timeAgo } from "../utils/date";
 import { compareByAdded } from "../utils/cardSorting";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import { cardMatchesQuery } from "../utils/libraryCard";
@@ -181,7 +181,7 @@ export default function Recents() {
                 <>
                   最近打开{" "}
                   <span className="text-fg">
-                    {formatRelative(cards[0]?.lastSeenAt)}
+                    {timeAgo(cards[0]?.lastSeenAt)}
                   </span>
                 </>
               ) : historyQuery.isLoading ||

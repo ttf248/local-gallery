@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
+import type { FaceBox } from "../api/aiJobs";
 
 /**
  * Face boxes are stored in source-image pixels. Convert one into the visible
  * tile coordinates used by an object-fit: cover image.
  */
 export function personFaceFrameStyle(
-  box: number[],
+  box: FaceBox,
   imageWidth: number,
   imageHeight: number,
   tileWidth: number,

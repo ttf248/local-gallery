@@ -1,4 +1,4 @@
-import { formatBytes } from "../../api/cache";
+import { formatSize } from "../../utils/format";
 import { RefreshIcon } from "../common/Icon";
 
 export interface StorageUsageProps {
@@ -70,7 +70,7 @@ export default function StorageUsage({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border-faint px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-mono text-section font-medium tabular-nums text-fg">
-            {formatBytes(totalBytes)}
+            {formatSize(totalBytes)}
           </span>
           <span className="text-meta tabular-nums text-fg-subtle">
             合计 · {totalFiles.toLocaleString()} 个文件
@@ -99,7 +99,7 @@ export default function StorageUsage({
           className="flex h-1.5 overflow-hidden rounded-full bg-bg-subtle"
           role="img"
           aria-label={segments
-            .map((segment) => `${segment.label} ${formatBytes(segment.bytes)}`)
+            .map((segment) => `${segment.label} ${formatSize(segment.bytes)}`)
             .join("，")}
         >
           {segments.map((segment) => (
@@ -125,7 +125,7 @@ export default function StorageUsage({
               </dt>
               <dd className="mt-1 flex flex-wrap items-baseline gap-x-2">
                 <span className="font-mono text-label tabular-nums text-fg">
-                  {formatBytes(segment.bytes)}
+                  {formatSize(segment.bytes)}
                 </span>
                 <span className="text-meta tabular-nums text-fg-subtle">
                   {segment.count}

@@ -27,26 +27,6 @@ export function compareDatesDesc(first?: string, second?: string): number {
   return secondTime - firstTime;
 }
 
-// 距离今天的相对时间（细颗粒度：分钟/小时/天），
-// 用于 Recents 列表 / Album 详情页 hero 等"最近多久前"展示。
-//   - < 1 分钟  → "刚刚"
-//   - < 1 小时  → "N 分钟前"
-//   - < 1 天    → "N 小时前"
-//   - < 1 周    → "N 天前"
-//   - 其余      → 本地化 "月 日"
-//
-// 解析失败 / 未提供返回 '—'。
-export function formatRelative(iso: string | undefined | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(+d)) return "—";
-  const diff = (Date.now() - d.getTime()) / 1000;
-  if (diff < 60) return "刚刚";
-  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`;
-  return d.toLocaleDateString("zh-CN", { month: "short", day: "numeric" });
-}
 
 // 绝对时间（本地化）：用于属性 / 信息面板这类需要精确到分钟的展示。
 // 空值、无法解析或零值时间返回 "—"

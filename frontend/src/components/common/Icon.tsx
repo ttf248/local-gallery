@@ -275,13 +275,6 @@ export const RewindIcon = (p: IconProps) => (
   </svg>
 );
 
-// 全新 / 闪光：四角星（与重温/继续阅读的图标节奏一致）
-export const SparklesIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M12 3l1.6 4.2L18 9l-4.4 1.8L12 15l-1.6-4.2L6 9l4.4-1.8L12 3z" />
-    <path d="M19 14l.7 1.8L21.5 17l-1.8.7L19 19.5l-.7-1.8L16.5 17l1.8-1.2L19 14z" />
-  </svg>
-);
 
 // 更多：水平三点（用于菜单折叠入口）
 export const MoreHorizontalIcon = (p: IconProps) => (
@@ -508,12 +501,6 @@ export const ServerIcon = (p: IconProps) => (
 );
 
 /** 盾牌（安全 / 隐私） */
-export const ShieldIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <path d="M12 3 4 6v6c0 4.5 3 8.4 8 9 5-.6 8-4.5 8-9V6l-8-3z" />
-    <path d="m9 12 2 2 4-4" />
-  </svg>
-);
 
 /** 重启（循环箭头） */
 export const RestartIcon = (p: IconProps) => (
@@ -524,13 +511,6 @@ export const RestartIcon = (p: IconProps) => (
 );
 
 /** 图片（用于缩略图相关） */
-export const ThumbIcon = (p: IconProps) => (
-  <svg {...base(p)}>
-    <rect x="3" y="4" width="18" height="16" rx="2" />
-    <circle cx="9" cy="10" r="1.5" />
-    <path d="m4 18 5-5 4 4 3-3 4 4" />
-  </svg>
-);
 
 /** 拍摄地点 */
 export const MapPinIcon = (p: IconProps) => (

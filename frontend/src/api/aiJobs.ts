@@ -575,12 +575,20 @@ export interface PersonGroup {
   hidden: boolean;
 }
 
+/**
+ * 人脸框：源图像素里的 [x, y, 宽, 高]。
+ *
+ * 四元组而不是 number[]：读框的地方要按位置拆开，类型说清是四个数，
+ * 就不用每次都自己判断长度。
+ */
+export type FaceBox = readonly [number, number, number, number];
+
 export interface PersonFace {
   key: string;
   resourceId: string;
   faceIndex: number;
   personId: string;
-  box: number[];
+  box: FaceBox;
   score: number;
 }
 

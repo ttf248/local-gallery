@@ -4,7 +4,8 @@ import {
   useQueryClient,
   type UseQueryResult,
 } from "@tanstack/react-query";
-import { cacheApi, formatBytes, type CacheStats } from "../api/cache";
+import { cacheApi, type CacheStats } from "../api/cache";
+import { formatSize } from "../utils/format";
 import {
   storageApi,
   type JobOutput,
@@ -123,7 +124,7 @@ export function useMediaCache(): MediaCacheState {
         return;
       }
       const freed =
-        sub.freedBytes > 0 ? ` · 释放 ${formatBytes(sub.freedBytes)}` : "";
+        sub.freedBytes > 0 ? ` · 释放 ${formatSize(sub.freedBytes)}` : "";
       pushToast({
         kind: "success",
         message: `已清空 ${mediaCacheScopeLabel(scope)} ${sub.deleted} 个文件${freed}`,
@@ -146,7 +147,7 @@ export function useMediaCache(): MediaCacheState {
       }
       pushToast({
         kind: "success",
-        message: `已清空全部缓存 · ${result.totalDeleted} 个文件 · 释放 ${formatBytes(
+        message: `已清空全部缓存 · ${result.totalDeleted} 个文件 · 释放 ${formatSize(
           result.totalFreedBytes,
         )}`,
       });

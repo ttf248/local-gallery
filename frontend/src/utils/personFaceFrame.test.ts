@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { personFaceFrameStyle } from "./personFaceFrame";
+import type { FaceBox } from "../api/aiJobs";
 
 describe("personFaceFrameStyle", () => {
   it("accounts for the vertical crop of an object-fit cover tile", () => {
@@ -25,7 +26,10 @@ describe("personFaceFrameStyle", () => {
   });
 
   it("ignores invalid boxes and tile dimensions", () => {
-    expect(personFaceFrameStyle([0, 0, 1], 400, 400, 200, 200)).toBeNull();
+    // 服务端给回来的框未必是四个数：类型说它应该是，运行时还得再挡一道。
+    expect(
+      personFaceFrameStyle([0, 0, 1] as unknown as FaceBox, 400, 400, 200, 200),
+    ).toBeNull();
     expect(personFaceFrameStyle([0, 0, 10, 10], 0, 400, 200, 200)).toBeNull();
     expect(
       personFaceFrameStyle([500, 500, 10, 10], 400, 400, 200, 200),

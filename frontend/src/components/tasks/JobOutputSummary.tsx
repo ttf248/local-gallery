@@ -1,4 +1,4 @@
-import { formatBytes } from "../../api/cache";
+import { formatSize } from "../../utils/format";
 import { useJobOutput } from "../../hooks/useStorage";
 
 interface Props {
@@ -48,7 +48,7 @@ export default function JobOutputSummary({ jobId, enabled }: Props) {
       <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-meta">
         <span className="text-fg-muted">
           {output.available
-            ? `${formatBytes(output.bytes)} · ${output.fileCount.toLocaleString()} 个批次文件`
+            ? `${formatSize(output.bytes)} · ${output.fileCount.toLocaleString()} 个批次文件`
             : "产物目录不存在（可能已被清理）"}
         </span>
         <span className="font-mono tabular-nums text-fg-subtle">

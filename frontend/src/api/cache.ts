@@ -119,21 +119,3 @@ export const cacheApi = {
     ),
 };
 
-// 把字节数格式化为 B / KB / MB / GB / TB。
-//   - 1 KB = 1024 B
-//   - 1 MB = 1024 KB
-// 保留 1 位小数,小于 1 KB 显示 "X B"。
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let n = bytes / 1024;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  // 1 位小数,但舍去末尾 .0
-  const fixed = n.toFixed(1).replace(/\.0$/, "");
-  return `${fixed} ${units[i]}`;
-}

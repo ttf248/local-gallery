@@ -1,4 +1,4 @@
-import { formatBytes } from "../../api/cache";
+import { formatSize } from "../../utils/format";
 import type { MediaCacheScope } from "../../hooks/useStorage";
 import { RefreshIcon, TrashIcon } from "../common/Icon";
 import CacheRebuildPanel from "./CacheRebuildPanel";
@@ -68,7 +68,7 @@ export default function StorageMediaCache({
               ? "计算中…"
               : totalBytes === undefined
                 ? "—"
-                : `${formatBytes(totalBytes)} · ${(totalFileCount ?? 0).toLocaleString()} 个文件`}
+                : `${formatSize(totalBytes)} · ${(totalFileCount ?? 0).toLocaleString()} 个文件`}
             {scannedAt
               ? ` · ${ttlSeconds && ttlSeconds > 0 ? `${ttlSeconds}s 内复用` : "已过期"}`
               : ""}
@@ -115,7 +115,7 @@ export default function StorageMediaCache({
                 {item.label}
               </span>
               <span className="min-w-0 flex-1 font-mono text-meta tabular-nums text-fg">
-                {entry.available ? formatBytes(entry.bytes) : "—"}
+                {entry.available ? formatSize(entry.bytes) : "—"}
               </span>
               <span className="w-16 shrink-0 text-right text-meta tabular-nums text-fg-subtle">
                 {entry.available ? `${entry.fileCount.toLocaleString()} 个` : ""}

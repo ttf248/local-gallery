@@ -1,4 +1,4 @@
-import { formatBytes } from "../../api/cache";
+import { formatSize } from "../../utils/format";
 import type { StorageModule } from "../../api/storage";
 
 interface Props {
@@ -35,8 +35,8 @@ export default function StorageModuleGrid({ modules }: Props) {
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                 <span className="text-label font-medium text-fg">{module.name}</span>
                 <span className="font-mono text-meta tabular-nums text-fg-muted">
-                  模型 {formatBytes(module.modelBytes)} · 产物{" "}
-                  {formatBytes(module.outputBytes)}
+                  模型 {formatSize(module.modelBytes)} · 产物{" "}
+                  {formatSize(module.outputBytes)}
                 </span>
               </div>
 
