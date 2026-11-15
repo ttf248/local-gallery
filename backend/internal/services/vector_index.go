@@ -464,12 +464,12 @@ func (s *VectorIndexStore) SearchWithPriority(query []float32, candidates []Vect
 		if usePartialSort && len(hits) == retainCount && priority < hits[0].priority {
 			continue
 		}
-		score := 0.0
+		score := float32(0)
 		start := metadata.Position * AIEmbeddingDimension
 		for column, component := range normalizedQuery {
-			score += float64(component) * float64(halfToFloat32Lookup[shard.values[start+column]])
+			score += component * halfToFloat32Lookup[shard.values[start+column]]
 		}
-		hit := VectorHit{ResourceID: metadata.ResourceID, Score: score, priority: priority}
+		hit := VectorHit{ResourceID: metadata.ResourceID, Score: float64(score), priority: priority}
 		if !usePartialSort || len(hits) < retainCount {
 			hits = append(hits, hit)
 			if usePartialSort {

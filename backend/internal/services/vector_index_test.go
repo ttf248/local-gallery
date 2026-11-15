@@ -2,12 +2,88 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 )
+
+func TestVectorIndexFloat32AccumulationPreservesExactTopK(t *testing.T) {
+	const vectorCount = 100_000
+	random := rand.New(rand.NewSource(20261113))
+	values := make([]uint16, vectorCount*AIEmbeddingDimension)
+	metadata := make(map[string]VectorMetadata, vectorCount)
+	candidates := make([]VectorMetadata, 0, vectorCount)
+	vector := make([]float32, AIEmbeddingDimension)
+	for row := 0; row < vectorCount; row++ {
+		var norm float64
+		for column := range vector {
+			vector[column] = random.Float32()*2 - 1
+			norm += float64(vector[column] * vector[column])
+		}
+		scale := float32(1 / math.Sqrt(norm))
+		for column, component := range vector {
+			values[row*AIEmbeddingDimension+column] = float32ToHalf(component * scale)
+		}
+		resourceID := fmt.Sprintf("r-%06d", row)
+		item := VectorMetadata{
+			ResourceID: resourceID, Size: int64(row + 1), MTimeNs: int64(row + 1),
+			ModelVersion: "test-v1", ShardID: "all", Position: row,
+		}
+		metadata[resourceID] = item
+		candidates = append(candidates, item)
+	}
+	index := &VectorIndexStore{
+		modelVersion: "test-v1",
+		shards:       map[string]vectorShardData{"all": {values: values}},
+		latest:       metadata,
+	}
+
+	for queryIndex := 0; queryIndex < 3; queryIndex++ {
+		query := make([]float32, AIEmbeddingDimension)
+		var queryNorm float64
+		for column := range query {
+			query[column] = random.Float32()*2 - 1
+			queryNorm += float64(query[column] * query[column])
+		}
+		queryScale := float32(1 / math.Sqrt(queryNorm))
+		for column := range query {
+			query[column] *= queryScale
+		}
+
+		exactHits := make([]VectorHit, vectorCount)
+		for row := 0; row < vectorCount; row++ {
+			score := 0.0
+			start := row * AIEmbeddingDimension
+			for column, component := range query {
+				score += float64(component) * float64(halfToFloat32Lookup[values[start+column]])
+			}
+			exactHits[row] = VectorHit{ResourceID: candidates[row].ResourceID, Score: score}
+		}
+		sort.Slice(exactHits, func(i, j int) bool {
+			if exactHits[i].Score != exactHits[j].Score {
+				return exactHits[i].Score > exactHits[j].Score
+			}
+			return exactHits[i].ResourceID < exactHits[j].ResourceID
+		})
+		actual, total, err := index.Search(query, candidates, 0, 10)
+		if err != nil || total != vectorCount || len(actual) != 10 {
+			t.Fatalf("query %d Search() = (%d hits, %d total, %v)", queryIndex, len(actual), total, err)
+		}
+		for rank := range actual {
+			if actual[rank].ResourceID != exactHits[rank].ResourceID {
+				t.Fatalf("query %d rank %d = %s, exact rank is %s", queryIndex, rank, actual[rank].ResourceID, exactHits[rank].ResourceID)
+			}
+			if delta := math.Abs(actual[rank].Score - exactHits[rank].Score); delta > 1e-6 {
+				t.Fatalf("query %d rank %d score drift = %g", queryIndex, rank, delta)
+			}
+		}
+	}
+}
 
 func TestVectorIndexPersistsFloat16VectorsAndRanksCosine(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "derived", "ai", "vectors")
