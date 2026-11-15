@@ -265,9 +265,12 @@ export async function restoreHistory(
     ).toBeTruthy();
 }
 
-export async function openCardProperties(page: Page, nodeId: string) {
+export async function openCardProperties(
+  page: Page,
+  node: { id: string; contentKind?: string },
+) {
   const card = page.locator(
-    `main [data-virtuoso-scroller] a[href="/photo/albums/${nodeId}"]`,
+    `main [data-virtuoso-scroller] a[href="${albumUrl(node)}"]`,
   );
   await card.scrollIntoViewIfNeeded();
   await card.click({ button: "right" });

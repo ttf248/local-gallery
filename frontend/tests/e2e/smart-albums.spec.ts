@@ -41,7 +41,10 @@ test("首页汇总已生成的智能分组并直接进入来源相册", async ({
   expect(group).toBeDefined();
 
   await page.goto("/");
-  await page.getByRole("button", { name: /^智能相册/ }).click();
+  // 照片侧首页那一块就是智能相册，不必再点开哪个视图。
+  await expect(
+    page.getByRole("heading", { name: "智能相册", exact: true }),
+  ).toBeVisible();
 
   const smartGroupLink = page.locator(
     `a[href="${albumUrl(album!)}?view=smart&dimension=time&group=${group.id}"]`,

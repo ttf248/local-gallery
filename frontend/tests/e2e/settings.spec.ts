@@ -41,8 +41,10 @@ test("扫描并打开示例相册", async ({ page }) => {
     await scanButton.click();
   }
 
+  // 扫描结果进了界面：年份索引里出现 2024。照片侧首页不再列相册，
+  // 年份索引是它的一条主索引。
   await expect(
-    page.getByText("sample-album", { exact: false }).first(),
+    page.getByTestId("year-timeline").getByRole("button", { name: /^2024/ }),
   ).toBeVisible({
     timeout: 20_000,
   });
@@ -72,10 +74,13 @@ test("扫描并打开示例相册", async ({ page }) => {
   expect(body.page.items[0]?.id).toMatch(/^a_[A-Za-z0-9_-]+$/);
   expect(body.page.items[0]?.coverImages[0]).toMatch(/^f_/);
 
+  // 从年份索引进那一年，再从「来源」回到一本相册。
   await page
-    .getByRole("link", { name: /打开相册“sample-album”/ })
-    .first()
+    .getByTestId("year-timeline")
+    .getByRole("button", { name: /^2024/ })
     .click();
+  await expect(page).toHaveURL(/\/photo\/years\/2024$/);
+  await page.locator('a[href^="/photo/albums/"]').first().click();
   await expect(page).toHaveURL(/\/albums\/a_[A-Za-z0-9_-]+$/);
 
   // 阅读进度只属于漫画工作台：这一段用漫画根下的多页漫画。
@@ -499,7 +504,7 @@ for (const health of ["late", "error"] as const) {
     page,
   }) => {
     const nodes = await scannedNodes(page.request);
-    const album = nodes.find((node) => node.name === "sample-album")!;
+    const album = nodes.find((node) => node.name.endsWith(" tagged-A"))!;
     const original = (await (await page.request.get("/api/config")).json()) as {
       allowOsOpen: boolean;
       mediaRoots: MediaRootConfig[];
@@ -595,8 +600,15 @@ for (const health of ["late", "error"] as const) {
           allowConfig: "1",
         }),
       );
-      await page.getByRole("link", { name: "照片库", exact: true }).click();
-      await page.getByRole("combobox").fill(album.name);
+      // 照片侧首页那一块换成智能相册，不再列相册卡片；相册卡片改在
+      // 标签页取（那里仍列带这个标签的相册）。用全局搜索进标签页 ——
+      // 这是应用内跳转，页面不重载，刚存好的健康状态不会被
+      // /api/health 的假响应抹掉。
+      await page.getByRole("combobox").fill("测试");
+      const tagHit = page.getByRole("option", { name: /标签/ });
+      await expect(tagHit).toBeVisible();
+      await tagHit.click();
+      await expect(page).toHaveURL(/\/photo\/tags\//);
       const card = page.locator(
         `main [data-virtuoso-scroller] a[href="/photo/albums/${album.id}"]`,
       );

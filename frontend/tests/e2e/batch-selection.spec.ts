@@ -31,15 +31,21 @@ test("照片多选支持键盘、排序保留和失败重试，筛选清空", as
     await request.get("/api/admin/state/export")
   ).json();
   try {
-    await page.goto("/photo");
+    // 照片侧首页那一块换成智能相册，不再列相册卡片；多选在标签页验证
+    // —— 那里仍列带这个标签的相册。
+    await page.goto(`/photo/tags/${encodeURIComponent("测试")}`);
     await page.getByRole("button", { name: "选择", exact: true }).click();
+    // 标签页上同名相册有两张：根目录的散图（标题带来源路径）与那本
+    // 相册本身 —— 按完整可访问名挑后者。
+    const albumName =
+      "zz-[测试][空 格][C++][100%][字面%20][字面%2F][字面%25] tagged-A";
     const card = page.getByRole("checkbox", {
-      name: "选择“sample-album”",
+      name: `选择“${albumName}”`,
       exact: true,
     });
     await card.click();
     await expect(card).toHaveAttribute("aria-checked", "true");
-    await expect(page).toHaveURL(/\/photo$/);
+    await expect(page).toHaveURL(/\/photo\/tags\//);
     await card.press("Space");
     await expect(card).toHaveAttribute("aria-checked", "false");
     await card.press("Space");
@@ -49,7 +55,7 @@ test("照片多选支持键盘、排序保留和失败重试，筛选清空", as
     await page.getByRole("button", { name: "排序", exact: true }).click();
     await page.getByRole("button", { name: "按最近改", exact: true }).click();
     await expect(
-      page.getByRole("checkbox", { name: "选择“sample-album”", exact: true }),
+      page.getByRole("checkbox", { name: `选择“${albumName}”`, exact: true }),
     ).toHaveAttribute("aria-checked", "true");
     let fail = true;
     await page.route("**/api/favorites/batch", async (route) => {
@@ -91,7 +97,7 @@ test("照片多选支持键盘、排序保留和失败重试，筛选清空", as
         });
       }
     }
-    await page.getByRole("combobox").fill("sample-album");
+    await page.getByRole("combobox").fill("zz-没有这样的相册");
     await expect(
       page.getByRole("button", { name: "选择", exact: true }),
     ).toBeVisible();

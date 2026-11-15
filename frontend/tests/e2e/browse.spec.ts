@@ -135,7 +135,9 @@ test("两侧的措辞与计数单位各归各", async ({ page }) => {
   await setWorkbenchMode(page.request, "photo");
   await scannedNodes(page.request, "photo");
 
-  await page.goto("/photo");
+  await page.goto(`/photo/tags/${encodeURIComponent("测试")}`);
+  // 照片侧首页那一块现在是智能相册，不再列相册卡片；相册卡片改在标签页
+  // 验证（那里仍列带这个标签的相册）。
   // 取一张卡片上的链接，而不是页面上第一个「打开相册」链接：首屏专区
   // 里也有指向相册的链接（随手看看的封面），它不是卡片，没有悬停预览。
   const photoCard = albumCard(page).getByRole("link", { name: /打开相册/ });
@@ -1193,13 +1195,16 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
 test("列表页的筛选写进地址，刷新不丢，后退退得回上一个排序", async ({
   page,
 }) => {
-  await scannedNodes(page.request);
-  await page.goto("/photo");
+  // 照片侧首页那一块换成智能相册，没有列表可筛；这条约束在漫画侧验证 ——
+  // 那里仍列全部作品，筛选与排序条都在。
+  await scannedNodes(page.request, "comic");
+  await setWorkbenchMode(page.request, "comic");
+  await page.goto("/comic");
 
   const sortButton = page.getByRole("button", { name: "排序" });
   await sortButton.click();
   await page.getByRole("button", { name: "按最近看", exact: true }).click();
-  await expect(page).toHaveURL(/\/photo\?sort=viewed$/);
+  await expect(page).toHaveURL(/\/comic\?sort=viewed$/);
 
   // 刷新不丢：筛选是地址的一部分，不是某个组件的内存。
   await page.reload();
@@ -1769,8 +1774,10 @@ for (const mode of ["grid", "list"] as const) {
 
 for (const mode of ["grid", "list"] as const) {
   test(`${mode} 相册集合属性按类型读取并保持模态焦点`, async ({ page }) => {
-    const nodes = await scannedNodes(page.request);
-    const album = nodes.find((node) => node.name === "sample-album")!;
+    // 照片侧首页那一块换成智能相册，不再列相册卡片；卡片交互在漫画侧
+    // 验证 —— 那里仍列全部作品，网格与列表两种看法都有。
+    const nodes = await scannedNodes(page.request, "comic");
+    const album = nodes.find((node) => node.name === "sample-comic")!;
     const collection = nodes.find(
       (node) => node.name === "zz-sort-collection",
     )!;
@@ -1781,7 +1788,8 @@ for (const mode of ["grid", "list"] as const) {
       if (/\/api\/images\/.+\/info$/.test(new URL(request.url()).pathname))
         metadataRequests.push(request.url());
     });
-    await page.goto("/");
+    await setWorkbenchMode(page.request, "comic");
+    await page.goto("/comic");
     await page
       .getByRole("button", {
         name: mode === "grid" ? "网格视图" : "列表视图",
@@ -1790,7 +1798,7 @@ for (const mode of ["grid", "list"] as const) {
       .click();
     for (const [node, kind] of [
       [album, "相册"],
-      [collection, "集合"],
+      [collection, "作品"],
     ] as const) {
       await page.getByRole("combobox").fill(node.name);
       await page
@@ -1799,7 +1807,7 @@ for (const mode of ["grid", "list"] as const) {
           exact: true,
         })
         .click();
-      const { card, dialog } = await openCardProperties(page, node.id);
+      const { card, dialog } = await openCardProperties(page, node);
       const fields = () =>
         dialog
           .locator("dl")
@@ -1814,15 +1822,16 @@ for (const mode of ["grid", "list"] as const) {
       await expect.poll(fields).toMatchObject({
         名称: node.name,
         类型: kind,
-        来源: "media",
+        来源: "media-comic",
         媒体总数: "3 项",
       });
       if (kind === "相册")
-        await expect.poll(fields).toMatchObject({ 图片: "3 张", 视频: "0 个" });
+        // 漫画侧一张图就是一页：标签与单位一起换。
+        await expect.poll(fields).toMatchObject({ 页面: "3 页", 视频: "0 个" });
       else
         await expect
           .poll(fields)
-          .toMatchObject({ 相册数量: "3 本", 直属项目: "3 项" });
+          .toMatchObject({ 相册数量: "3 卷", 直属项目: "3 项" });
       expect((await fields())["大小"]).toMatch(/[1-9].*B/);
       const close = dialog.getByRole("button", { name: "关闭", exact: true });
       await expect(close).toBeFocused();
@@ -1839,7 +1848,7 @@ for (const mode of ["grid", "list"] as const) {
         .evaluate((element) => (element as HTMLInputElement).focus());
       await expect(close).toBeFocused();
       await page.keyboard.press("u");
-      await expect(page).toHaveURL(/\/photo(\?.*)?$/);
+      await expect(page).toHaveURL(/\/comic(\?.*)?$/);
       if (mode === "grid") {
         for (const theme of ["light", "dark"] as const) {
           await page.emulateMedia({
@@ -1869,7 +1878,7 @@ for (const mode of ["grid", "list"] as const) {
       await page.keyboard.press("Escape");
       await expect(dialog).toHaveCount(0);
       await expect(card).toBeFocused();
-      await openCardProperties(page, node.id);
+      await openCardProperties(page, node);
       await expect(dialog.getByText(node.name, { exact: true })).toBeVisible();
       await page.mouse.click(3, 3);
       await expect(dialog).toHaveCount(0);
@@ -1886,13 +1895,15 @@ for (const mode of ["api", "missing", "denied"] as const) {
     denied: "在 API 拒绝后回退并支持失败重试",
   }[mode];
   test(`属性弹窗复制${scenario}`, async ({ page }) => {
-    const nodes = await scannedNodes(page.request);
-    const album = nodes.find((node) => node.name === "sample-album")!;
+    // 卡片交互在漫画侧验证：照片侧首页那一块换成智能相册，不再列相册。
+    const nodes = await scannedNodes(page.request, "comic");
+    const album = nodes.find((node) => node.name === "sample-comic")!;
     expect(album).toBeDefined();
     await installCopyAudit(page, mode);
-    await page.goto("/");
+    await setWorkbenchMode(page.request, "comic");
+    await page.goto("/comic");
     await page.getByRole("combobox").fill(album.name);
-    const { card, dialog } = await openCardProperties(page, album.id);
+    const { card, dialog } = await openCardProperties(page, album);
     // 复制按钮跟在值后面（规格表），不再挂在标签单元格里。
     // 它的可访问名会随状态变化（复制名称 → 正在复制… → 已复制 /
     // 复制失败，重试），定位器必须同时认得这几种名字 —— 只写
@@ -1941,11 +1952,12 @@ for (const view of ["grid", "list"] as const) {
     test(`${view} 右键复制链接在 ${mode} 下反馈结果并恢复卡片焦点`, async ({
       page,
     }) => {
-      const nodes = await scannedNodes(page.request);
-      const album = nodes.find((node) => node.name === "sample-album")!;
+      const nodes = await scannedNodes(page.request, "comic");
+      const album = nodes.find((node) => node.name === "sample-comic")!;
       expect(album).toBeDefined();
       await installCopyAudit(page, mode);
-      await page.goto("/");
+      await setWorkbenchMode(page.request, "comic");
+      await page.goto("/comic");
       await page.getByRole("combobox").fill(album.name);
       await page
         .getByRole("button", {
@@ -1954,7 +1966,7 @@ for (const view of ["grid", "list"] as const) {
         })
         .click();
       const card = page.locator(
-        `main [data-virtuoso-scroller] a[href="/photo/albums/${album.id}"]`,
+        `main [data-virtuoso-scroller] a[href="/comic/albums/${album.id}"]`,
       );
       await card.click({ button: "right" });
       await page
@@ -2064,8 +2076,8 @@ for (const view of ["grid", "list"] as const) {
   test(`${view} 系统打开权限迟到后更新菜单，失败反馈后可重试`, async ({
     page,
   }) => {
-    const nodes = await scannedNodes(page.request);
-    const album = nodes.find((node) => node.name === "sample-album")!;
+    const nodes = await scannedNodes(page.request, "comic");
+    const album = nodes.find((node) => node.name === "sample-comic")!;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
@@ -2094,7 +2106,8 @@ for (const view of ["grid", "list"] as const) {
           : { status: 200, json: { ok: true } },
       );
     });
-    await page.goto("/");
+    await setWorkbenchMode(page.request, "comic");
+    await page.goto("/comic");
     await page.getByRole("combobox").fill(album.name);
     await page
       .getByRole("button", {
@@ -2103,7 +2116,7 @@ for (const view of ["grid", "list"] as const) {
       })
       .click();
     const card = page.locator(
-      `main [data-virtuoso-scroller] a[href="/photo/albums/${album.id}"]`,
+      `main [data-virtuoso-scroller] a[href="/comic/albums/${album.id}"]`,
     );
     await card.click({ button: "right" });
     const open = page.getByRole("menuitem", {
@@ -2213,8 +2226,8 @@ test("相册系统打开权限更新更多及图片菜单，并说明本机限�
 });
 
 test("目录属性读取失败可重试", async ({ page }) => {
-  const nodes = await scannedNodes(page.request);
-  const album = nodes.find((node) => node.name === "sample-album")!;
+  const nodes = await scannedNodes(page.request, "comic");
+  const album = nodes.find((node) => node.name === "sample-comic")!;
   let blocked = true;
   await page.route("**/api/library/nodes/query", async (route) => {
     if (!blocked) return route.continue();
@@ -2223,8 +2236,9 @@ test("目录属性读取失败可重试", async ({ page }) => {
       json: { code: "test_unavailable", message: "unavailable" },
     });
   });
-  await page.goto("/");
-  const { card, dialog } = await openCardProperties(page, album.id);
+  await setWorkbenchMode(page.request, "comic");
+  await page.goto("/comic");
+  const { card, dialog } = await openCardProperties(page, album);
   await expect(dialog.getByRole("alert")).toContainText("无法读取目录属性", {
     timeout: 15_000,
   });
@@ -2233,7 +2247,7 @@ test("目录属性读取失败可重试", async ({ page }) => {
   await expect(
     dialog.getByRole("button", { name: "关闭", exact: true }),
   ).toBeFocused();
-  await expect(dialog.getByText("sample-album", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("sample-comic", { exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(card).toBeFocused();
 });
@@ -2342,39 +2356,30 @@ test("年份卡直接打开这一年的照片墙，照片能回到原相册", as
   await expect(page).toHaveURL(/\/photo\/albums\//);
 });
 
-test("时间线年份卡的筛选按钮可访问名不与卡片本身混淆", async ({
-  page,
-  request,
-}) => {
+test("照片侧年份卡没有漏斗，卡片名只说年份", async ({ page, request }) => {
   const nodes = await scannedNodes(request);
   expect(nodes.length).toBeGreaterThan(0);
-  await page.goto("/");
+  await page.goto("/photo");
 
-  const matches = page.getByRole("button", { name: "筛选该年份" });
-  await expect(matches.first()).toBeVisible();
-  // 只有真正的筛选按钮才应该被匹配到：年份卡的可访问名不能被按钮的 aria-label 污染，
-  // 否则按名称定位（含子串匹配）会命中卡片而不是筛选按钮。
-  const labels = await matches.evaluateAll((elements) =>
-    elements.map((element) => element.getAttribute("aria-label")),
-  );
-  expect(labels.length).toBeGreaterThan(0);
-  expect(labels.every((label) => label === "筛选该年份")).toBe(true);
-
-  // 点击筛选按钮只切换下方网格的年份筛选，不跳转相册。
-  await page
-    .getByRole("button", { name: "筛选该年份", exact: true })
-    .first()
-    .click();
+  const years = page.getByTestId("year-timeline");
+  await expect(years).toBeVisible();
+  // 漏斗筛的是下方那张网格。照片侧首页那一块换成智能相册，没有网格
+  // 可筛，漏斗就没有去处 —— 它只在漫画侧出现。
   await expect(
-    page.getByRole("heading", { name: "该年份的照片" }),
-  ).toBeVisible();
-  await expect(page).toHaveURL(/\/photo(\?.*)?$/);
+    years.getByRole("button", { name: "筛选该年份" }),
+  ).toHaveCount(0);
+  // 卡片仍是年份入口：它的可访问名只说年份与照片数。
+  const card = years.getByRole("button", { name: /^2024/ }).first();
+  await expect(card).toBeVisible();
+  await expect(card).not.toContainText("筛选该年份");
 });
 
 test("卡片悬停预览完整落在视口内，不被视口下缘裁掉", async ({ page }) => {
-  await page.goto("/");
-  // 明确取一张卡片上的链接：首屏专区里也有指向相册的链接（随手看看的
-  // 封面），它不是卡片，没有悬停预览。
+  // 卡片交互在漫画侧验证：照片侧首页那一块换成智能相册，不再列相册。
+  await setWorkbenchMode(page.request, "comic");
+  await page.goto("/comic");
+  // 明确取一张卡片上的链接：首屏专区里也有指向相册的链接（未读 / 继续
+  // 阅读的封面），它不是卡片，没有悬停预览。
   const card = albumCard(page).getByRole("link", { name: /打开相册/ });
   await expect(card).toBeVisible();
   // 把卡片滚到视口下缘：预览会向下溢出，只有按整体高度夹紧才不会越界。
@@ -2394,7 +2399,9 @@ test("卡片悬停预览完整落在视口内，不被视口下缘裁掉", async
 
 test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/");
+  // 视图标签在漫画侧验证：照片侧首页那一块换成智能相册，没有视图标签。
+  await setWorkbenchMode(page.request, "comic");
+  await page.goto("/comic");
   await expect(
     page.getByRole("combobox", { name: "搜索相册或标签" }),
   ).toBeVisible();
@@ -2433,9 +2440,11 @@ test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page 
 });
 
 test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ page, request }) => {
-  await page.goto("/");
+  // 卡片交互在漫画侧验证：照片侧首页那一块换成智能相册，不再列相册。
+  await setWorkbenchMode(page.request, "comic");
+  await page.goto("/comic");
   // 明确取一张卡片，而不是页面上第一个「打开相册」链接：首屏专区里也有
-  // 指向相册的链接（随手看看的封面），它不是卡片，也没有星标。
+  // 指向相册的链接（未读 / 继续阅读的封面），它不是卡片，也没有星标。
   const card = albumCard(page);
   const link = card.getByRole("link", { name: /^打开相册/ });
   const href = await link.getAttribute("href");
@@ -2455,7 +2464,7 @@ test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ pa
   await star.click();
 
   // 星标在链接之外：点击不能带着进入相册。
-  await expect(page).toHaveURL(/\/photo(\?.*)?$/);
+  await expect(page).toHaveURL(/\/comic(\?.*)?$/);
   // 服务端确实写入了收藏。
   await expect
     .poll(async () => {
@@ -2545,8 +2554,11 @@ test("坏掉的图片在照片墙上标成「无法解码」", async ({ page, re
   await expect(page.getByText("这张图片无法解码")).toBeVisible();
 });
 
-test("主页的视图筛选条紧贴在「库内一览」网格上方", async ({ page }) => {
-  await page.goto("/");
+test("主页的视图筛选条紧贴在「库内一览」网格上方", async ({ page, request }) => {
+  // 照片侧的「库内一览」已换成智能相册，没有网格也没有筛选条；
+  // 这条版式约束留给漫画侧 —— 它仍旧列全部作品。
+  await setWorkbenchMode(request, "comic");
+  await page.goto("/comic");
   // 叶级目录两侧都叫「相册」：视图 chip 的名字用它。
   const chip = page.getByRole("button", { name: /^相册/ });
   await expect(chip).toBeVisible();
@@ -2640,24 +2652,16 @@ test("重设计后的首页把继续阅读放在首屏，未读区不再逐张�
   }
 });
 
-test("年份索引可用空格筛选，并保留首页上下文", async ({ page }) => {
+test("年份卡用空格也能进那一年", async ({ page, request }) => {
   await scannedNodes(page.request);
-  await page.goto("/");
+  await page.goto("/photo");
   const years = page.getByTestId("year-timeline");
   await expect(years).toBeVisible();
-  const filter = years
-    .getByRole("button", { name: "筛选该年份", exact: true })
-    .first();
-  await filter.focus();
-  await filter.press("Space");
-  await expect(page).toHaveURL(/\/photo(\?.*)?$/);
-  await expect(
-    page.getByRole("heading", { name: "该年份的照片", exact: true }),
-  ).toBeVisible();
-  await page.getByTitle("清除年份筛选", { exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "库内一览", exact: true }),
-  ).toBeVisible();
+  // 年份卡是照片侧的主索引，键盘要能直接用：空格等同回车。
+  const card = years.getByRole("button", { name: /^2024/ }).first();
+  await card.focus();
+  await card.press("Space");
+  await expect(page).toHaveURL(/\/photo\/years\/2024$/);
 });
 
 test("列表视图按内容宽度切双列 / 三列，窄屏仍是单列", async ({ page }) => {
@@ -2960,7 +2964,7 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
       await page.keyboard.press("Escape");
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await expect(
-        page.getByRole("heading", { name: "库内一览" }),
+        page.getByRole("heading", { name: "智能相册", exact: true }),
       ).toBeAttached();
       await page.waitForFunction(() =>
         Array.from(document.images)

@@ -224,6 +224,63 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	}
 }
 
+// 目录里还没有任何分组时，接口要给空数组，不能给 null：前端把 items
+// 当数组用，null 会被当成一条空分组记录，首页整页落进错误边界。
+func TestSmartAlbumDirectoryEmptyPageSerializesAsEmptyArray(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "album-a")
+	if err := os.MkdirAll(albumPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	imagePath := filepath.Join(albumPath, "0.jpg")
+	if err := os.WriteFile(imagePath, []byte("photo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root}, AlbumCount: 1,
+		Albums: []models.Album{{
+			Type: "album", Name: "album-a", Path: albumPath, SourceRoot: root,
+			ImageFiles: []string{imagePath}, ImageCount: 1, CoverImage: imagePath,
+		}},
+	}, []string{root})
+	jobs := newTestAIJobService(
+		t,
+		filepath.Join(root, "state", "ai-jobs.json"),
+		filepath.Join(root, "derived", "metadata"),
+		catalog,
+		MetadataAnalyzer{},
+		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-test-v1"},
+	)
+	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(root, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs,
+		ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Items == nil {
+		t.Fatal("空目录的 items 不能是 nil")
+	}
+	if len(page.Items) != 0 || page.Total != 0 {
+		t.Fatalf("empty smart album directory page=%+v", page)
+	}
+	encoded, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"items":[]`) {
+		t.Fatalf("empty directory page must serialize as an empty array: %s", encoded)
+	}
+}
+
 func TestAlbumImageIDsReturnsOnlyImagesFromOneAlbum(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "mixed")

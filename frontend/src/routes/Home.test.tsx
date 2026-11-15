@@ -256,6 +256,9 @@ function renderHome(entry = "/") {
 }
 
 it("筛选条紧贴在「库内一览」网格上方，不被英雄区 / 时间线隔开", async () => {
+  // 照片侧的「库内一览」已换成智能相册，没有网格也没有筛选条；
+  // 这条版式约束留给漫画侧 —— 它仍旧列全部作品。
+  useAppModeStore.setState({ preference: "comic", hydrated: true });
   renderHome();
 
   await waitFor(() => expect(screen.getByTestId("album-grid")).toBeTruthy());
@@ -362,10 +365,11 @@ it("没有在读相册时未读区独立成块（没有舞台可挂）", async (
 it("照片工作台不显示继续阅读与未读区", async () => {
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   renderHome();
-  await waitFor(() => expect(screen.getByTestId("album-grid")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText("智能相册")).toBeTruthy());
   expect(screen.queryByTestId("continue-hero")).toBeNull();
   expect(screen.queryByTestId("unread-hero")).toBeNull();
-  expect(screen.getByText("库内一览")).toBeTruthy();
+  // 照片侧那一块是智能相册，不再是「库内一览」的相册网格。
+  expect(screen.queryByTestId("album-grid")).toBeNull();
 });
 
 // 照片侧的对称物：漫画有「继续阅读」，照片有「接着看」。
@@ -392,15 +396,13 @@ it("首页智能相册汇总已生成的分组并直达来源相册中的分组"
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   renderHome();
 
-  fireEvent.click(screen.getByRole("button", { name: /^智能相册/ }));
+  // 照片侧不再列全部图像：首页那一块就是智能相册，不必先点开哪个视图。
+  expect(screen.getByText("智能相册")).toBeTruthy();
+  expect(screen.queryByText("库内一览")).toBeNull();
 
   const smartGroupLink = await screen.findByRole("link", {
     name: /打开智能相册 2024年春游/,
   });
-  expect(screen.getByRole("button", { name: /^智能相册/ })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
   expect(useLibraryList).toHaveBeenLastCalledWith(
     expect.objectContaining({ kind: "photo", view: "all" }),
     true,

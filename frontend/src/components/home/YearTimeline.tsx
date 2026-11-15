@@ -11,6 +11,14 @@ import Timeline, { type TimelineEntry } from "./Timeline";
 interface Props {
   groups: YearGroup[];
   gridRef?: RefObject<HTMLDivElement>;
+  /**
+   * 是否给出「只筛这一年」的那枚漏斗。
+   *
+   * 漏斗筛的是下方那张网格。照片侧的首页不再列全部图像（那一块换成
+   * 智能相册），漏斗就没有可筛的对象 —— 年卡的主操作本来就直接进
+   * 那一年，漏斗只是多一个没有去处的动作。
+   */
+  showFilter?: boolean;
 }
 
 /**
@@ -20,7 +28,11 @@ interface Props {
  * 先挑一本再进去等于让用户替系统做取舍。漫画侧仍进那一年的作品集。
  * 卡片右上角的漏斗才是「只筛这一年」—— 它筛的是下方网格。
  */
-export default function YearTimeline({ groups, gridRef }: Props) {
+export default function YearTimeline({
+  groups,
+  gridRef,
+  showFilter = true,
+}: Props) {
   const navigate = useNavigate();
   const { yearFilter, toggleYearFilter: toggleYear } = useListFilters();
   // 计数单位跟着工作台走：照片侧「张」，漫画侧「页」。
@@ -33,7 +45,9 @@ export default function YearTimeline({ groups, gridRef }: Props) {
       groups.map((group) => {
         const filterValue = group.year ?? "other";
         const key = String(filterValue);
-        const isActive = yearFilter === filterValue;
+        // 选中态说的是「正筛着这一年」：没有漏斗的那一侧没有筛选，
+        // 地址里残留的年份参数也不该点亮任何一张卡。
+        const isActive = showFilter && yearFilter === filterValue;
         const triggerFilter = () => {
           toggleYear(filterValue);
           requestAnimationFrame(() =>
@@ -77,7 +91,7 @@ export default function YearTimeline({ groups, gridRef }: Props) {
             if (enterTarget) navigate(enterTarget.to);
             else triggerFilter();
           },
-          action: (
+          action: showFilter ? (
             <button
               type="button"
               onClick={triggerFilter}
@@ -87,10 +101,20 @@ export default function YearTimeline({ groups, gridRef }: Props) {
             >
               <FilterIcon size={12} />
             </button>
-          ),
+          ) : undefined,
         };
       }),
-    [groups, yearFilter, toggleYear, navigate, gridRef, unit, mode, isPhoto],
+    [
+      groups,
+      yearFilter,
+      toggleYear,
+      navigate,
+      gridRef,
+      unit,
+      mode,
+      isPhoto,
+      showFilter,
+    ],
   );
 
   return <Timeline entries={entries} testId="year-timeline" />;

@@ -57,9 +57,7 @@ import { SelectionToggle } from "../components/album/BulkActions";
 import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
 import type { SmartAlbumDirectoryDimension } from "../api/albums";
 
-const HOME_SMART_ALBUMS_PARAM = "smartAlbums";
 const HOME_SMART_ALBUM_DIMENSION_PARAM = "smartDimension";
-const HOME_SMART_ALBUMS_VIEW = "smartAlbums";
 
 function parseSmartAlbumDimension(
   value: string | null,
@@ -108,8 +106,10 @@ export default function Home() {
   const { count: favCount } = useFavoritesByMode(mode);
   // 未读与继续阅读只属于漫画工作台：照片这边不出现这两个区。
   const isComic = mode === "comic";
-  const smartAlbumDirectory =
-    !isComic && homeSearchParams.get(HOME_SMART_ALBUMS_PARAM) === "1";
+  // 照片侧的首页不再列全部图像：那一块换成智能相册（跨文件夹汇总的
+  // 智能分组）。漫画侧仍旧列全部作品 —— 漫画的「库内一览」是它按作品
+  // 与卷找内容的地方，照片侧有智能相册与年份索引可看。
+  const smartAlbumDirectory = !isComic;
   const smartDimension = parseSmartAlbumDimension(
     homeSearchParams.get(HOME_SMART_ALBUM_DIMENSION_PARAM),
   );
@@ -118,17 +118,11 @@ export default function Home() {
     smartAlbumDirectory && !!manifest,
   );
   const listView = view;
-  const activeViewKey = smartAlbumDirectory ? HOME_SMART_ALBUMS_VIEW : view;
   const setHomeView = (key: string) => {
     const next = new URLSearchParams(homeSearchParams);
-    if (key === HOME_SMART_ALBUMS_VIEW) {
-      next.set(HOME_SMART_ALBUMS_PARAM, "1");
-    } else {
-      next.delete(HOME_SMART_ALBUMS_PARAM);
-      next.delete(HOME_SMART_ALBUM_DIMENSION_PARAM);
-      if (key === "all") next.delete(LIST_PARAM.view);
-      else next.set(LIST_PARAM.view, key);
-    }
+    next.delete(HOME_SMART_ALBUM_DIMENSION_PARAM);
+    if (key === "all") next.delete(LIST_PARAM.view);
+    else next.set(LIST_PARAM.view, key);
     if (next.toString() !== homeSearchParams.toString()) {
       setHomeSearchParams(next);
     }
@@ -295,7 +289,9 @@ export default function Home() {
   const listQuery = useMemo(
     () => ({
       kind: mode,
-      view: listView,
+      // 照片侧没有视图切换了：那一块是智能相册。地址里若还留着旧的
+      // view 参数，概览不该跟着它筛 —— 页面上没有能改回来的控件。
+      view: isComic ? listView : ("all" as const),
       q: query,
       sort: sortBy,
       year: yearFilterActive ? String(yearFilter) : undefined,
@@ -306,6 +302,7 @@ export default function Home() {
     }),
     [
       mode,
+      isComic,
       listView,
       query,
       sortBy,
@@ -493,6 +490,18 @@ export default function Home() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {/* 照片侧原来把「N 收藏」放在「库内一览」那一节的标题行里。
+                那一节换成智能相册后，收藏跟它不再相干，挪到页头 ——
+                页头的动作位本来空着，收在这里比藏在下面一节里好找。 */}
+            {!isComic && favCount > 0 && (
+              <button
+                onClick={() => navigate(favoritesRoute(mode))}
+                className="chip"
+              >
+                <StarIcon size={11} filled className="text-favorite" />
+                <span>{favCount} 收藏</span>
+              </button>
+            )}
             <button
               onClick={() => startScan.mutate()}
               disabled={startScan.isPending || sse.isRunning}
@@ -625,11 +634,20 @@ export default function Home() {
             <h2 className="section-title">按年份浏览</h2>
             <span className="section-meta">看这一年的照片</span>
           </div>
-          <YearTimeline groups={yearGroups} gridRef={gridRef} />
+          <YearTimeline
+            groups={yearGroups}
+            gridRef={gridRef}
+            /* 照片侧的下方是智能相册，不是可筛的网格：漏斗没有去处。 */
+            showFilter={isComic}
+          />
         </section>
       )}
 
-      {/* === 全部图像 ===
+      {/* === 智能相册（照片侧）/ 全部图像（漫画侧） ===
+          照片侧不再列全部图像：首页是发现页 —— 照片由「随手看看」给出，
+          分组由智能相册给出，浏览相册交给年份索引与智能相册里的来源。
+          漫画侧仍旧列全部作品，它的库内一览是按作品与卷找内容的地方。
+
           初次加载时也渲染这一段（内容换成骨架）：否则首屏只有标题和
           四个动作按钮，数据到达后整页内容一次性长出来，视线要重新找
           一次位置。骨架占住网格的位置，数据回来时是"填满"而不是"重排"。 */}
@@ -641,9 +659,15 @@ export default function Home() {
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.library)}</span>
             <h2 className="section-title">
-              {yearFilterActive ? copy.yearSectionTitle : copy.sectionTitle}
+              {smartAlbumDirectory
+                ? "智能相册"
+                : yearFilterActive
+                  ? copy.yearSectionTitle
+                  : copy.sectionTitle}
             </h2>
-            {yearFilterActive && (
+            {smartAlbumDirectory ? (
+              <span className="section-meta">按线索分组</span>
+            ) : yearFilterActive ? (
               <button
                 onClick={() => setYearFilter(null)}
                 className="chip bg-accent-soft text-accent"
@@ -652,8 +676,8 @@ export default function Home() {
                 <span>{yearFilterLabel}</span>
                 <CloseIcon size={11} />
               </button>
-            )}
-            {favCount > 0 && !yearFilterActive && (
+            ) : null}
+            {favCount > 0 && !yearFilterActive && !smartAlbumDirectory && (
               <button
                 onClick={() => navigate(favoritesRoute(mode))}
                 className="chip"
@@ -667,8 +691,11 @@ export default function Home() {
           {/* 筛选 / 排序 / 视图切换只作用于下面这张网格，因此放在
               「全部图像」标题正下方贴着网格；不要提到未读 / 继续阅读 /
               时间线这些区块前面 —— 那里离网格有两千多像素，用户滚到
-              网格时控件早已不在视野里。 */}
-          {!isLoadingInitial && (
+              网格时控件早已不在视野里。
+
+              照片侧没有这一条：那一段是智能相册，没有视图、排序与
+              最少张数可筛。 */}
+          {!isLoadingInitial && !smartAlbumDirectory && (
             <ListFilterBar
               viewChips={[
                 { key: "all", label: "全部", count: counts.all },
@@ -683,27 +710,12 @@ export default function Home() {
                   count: counts.collection,
                 },
                 { key: "smart", label: "标签", count: counts.smart },
-                ...(!isComic
-                  ? [
-                      {
-                        key: HOME_SMART_ALBUMS_VIEW,
-                        label: "智能相册",
-                        count: smartDirectory.total,
-                      },
-                    ]
-                  : []),
               ]}
-              activeViewKey={activeViewKey}
+              activeViewKey={listView}
               onChangeView={setHomeView}
-              totalCount={
-                smartAlbumDirectory
-                  ? (smartDirectory.total ?? 0)
-                  : (overview.summary?.total ?? 0)
-              }
-              showMinImageFilter={!smartAlbumDirectory}
-              hideSort={smartAlbumDirectory}
-              hideTotalCount={smartAlbumDirectory}
-              trailing={smartAlbumDirectory ? undefined : <SelectionToggle />}
+              totalCount={overview.summary?.total ?? 0}
+              showMinImageFilter
+              trailing={<SelectionToggle />}
               sort={sortBy}
               onSortChange={setSortBy}
               minImageCount={minImageCount}

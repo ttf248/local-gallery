@@ -57,10 +57,10 @@ function LocationProbe() {
   return <output data-testid="location">{location.search}</output>;
 }
 
-function renderTimeline(groups: YearGroup[]) {
+function renderTimeline(groups: YearGroup[], showFilter?: boolean) {
   return render(
     <MemoryRouter>
-      <YearTimeline groups={groups} />
+      <YearTimeline groups={groups} showFilter={showFilter} />
       <LocationProbe />
     </MemoryRouter>,
   );
@@ -119,6 +119,16 @@ describe("YearTimeline", () => {
     // 激活态下按钮文案变为「取消年份筛选」。
     fireEvent.click(screen.getByRole("button", { name: "取消年份筛选" }));
     expect(screen.getByTestId("location")).not.toHaveTextContent("year=");
+  });
+
+  // 照片侧首页那一块换成智能相册，下方没有可筛的网格：漏斗没有去处，
+  // 也就没有「正在筛这一年」这回事。
+  it("不给漏斗时不渲染筛选按钮", () => {
+    renderTimeline([makeGroup(2024)], false);
+    expect(
+      screen.queryByRole("button", { name: "筛选该年份" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /2024/ })).toBeInTheDocument();
   });
 
   // 照片侧：年份卡直接看这一年的照片。年份散在好几本相册里，

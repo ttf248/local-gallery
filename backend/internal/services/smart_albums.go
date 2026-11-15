@@ -394,6 +394,10 @@ func (s *SmartAlbumService) groupsForDimension(
 // DirectoryPage collects only folder dimensions that already have a smart
 // album cache. Missing folder summaries stay missing instead of triggering
 // analysis or a full-library rebuild from the home page.
+//
+// 它直接读已生成的缓存，不重算分组：目录只是「已生成了哪些分组」的汇总，
+// 而重算分组要把每本相册的媒体逐个 stat 一遍（真实库上几十秒）——
+// 首页等不起，那笔钱该由刷新任务出（见 SweepSmartAlbums）。
 func (s *SmartAlbumService) DirectoryPage(
 	ctx context.Context,
 	dimension, cursor string,
@@ -423,21 +427,11 @@ func (s *SmartAlbumService) DirectoryPage(
 			if err := ctx.Err(); err != nil {
 				return LibraryPage[SmartAlbumDirectoryItem]{}, err
 			}
-			cachePath := s.cachePath(album.ID, currentDimension)
-			if _, err := os.Stat(cachePath); err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				return LibraryPage[SmartAlbumDirectoryItem]{}, fmt.Errorf("read smart album directory cache: %w", err)
+			cache, ok := s.readCachedGroups(album.ID, currentDimension)
+			if !ok {
+				continue
 			}
-			summary, err := s.Groups(ctx, album.ID, currentDimension, false)
-			if err != nil {
-				return LibraryPage[SmartAlbumDirectoryItem]{}, err
-			}
-			if summary.Revision != snapshot.Revision() {
-				return LibraryPage[SmartAlbumDirectoryItem]{}, ErrStalePageCursor
-			}
-			for _, group := range summary.Groups {
+			for _, group := range s.applyOverrides(album.ID, currentDimension, smartAlbumGroups(cache.Groups)) {
 				if group.Hidden {
 					continue
 				}
@@ -457,7 +451,9 @@ func (s *SmartAlbumService) DirectoryPage(
 	}
 	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
 	page := LibraryPage[SmartAlbumDirectoryItem]{
-		Revision: snapshot.Revision(), Items: append([]SmartAlbumDirectoryItem(nil), items[offset:end]...), Total: len(items),
+		// 空页要给 []，不能给 null：前端把 items 当数组用，null 会让它
+		// 把一个空分组当成一条记录（库里还没生成任何分组时就会踩到）。
+		Revision: snapshot.Revision(), Items: clonePage(items, offset, end), Total: len(items),
 	}
 	if end < len(items) {
 		nextCursor, err := EncodePageCursor(
@@ -1269,16 +1265,33 @@ func (s *SmartAlbumService) cachePath(albumID, dimension string) string {
 }
 
 func readSmartAlbumCache(path, albumID, dimension, key string) (smartAlbumCache, bool) {
+	cache, ok := readSmartAlbumCacheFile(path, albumID, dimension)
+	if !ok || cache.Key != key {
+		return smartAlbumCache{}, false
+	}
+	return cache, true
+}
+
+// readSmartAlbumCacheFile 读一本相册某个维度的分组缓存。
+//
+// 只看缓存自身的身份（版本、相册、维度），不比对媒体指纹：目录要的是
+// 「已经生成了哪些分组」，指纹变了也照旧列出来，等刷新任务更新。
+func readSmartAlbumCacheFile(path, albumID, dimension string) (smartAlbumCache, bool) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return smartAlbumCache{}, false
 	}
 	var cache smartAlbumCache
 	if json.Unmarshal(data, &cache) != nil || cache.Version != smartAlbumCacheVersion ||
-		cache.AlbumID != albumID || cache.Dimension != dimension || cache.Key != key || cache.Groups == nil {
+		cache.AlbumID != albumID || cache.Dimension != dimension || cache.Groups == nil {
 		return smartAlbumCache{}, false
 	}
 	return cache, true
+}
+
+// readCachedGroups 读一本相册某个维度已生成的分组；没有缓存就是没有。
+func (s *SmartAlbumService) readCachedGroups(albumID, dimension string) (smartAlbumCache, bool) {
+	return readSmartAlbumCacheFile(s.cachePath(albumID, dimension), albumID, dimension)
 }
 
 func cacheSmartAlbumGroups(groups []SmartAlbumGroup) []smartAlbumCachedGroup {
