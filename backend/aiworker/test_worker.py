@@ -416,6 +416,54 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual([40.0, 40.0, 120.0, 80.0], result["data"]["faces"][0]["box"])
 
+    def test_sface_alignment_matches_svd_reference(self):
+        rng = np.random.default_rng(20261115)
+        destination = np.asarray([
+            [38.2946, 51.6963], [73.5318, 51.5014], [56.0252, 71.7366],
+            [41.5493, 92.3655], [70.7299, 92.2041],
+        ], dtype=np.float64)
+        destination_mean = np.asarray([56.0262, 71.9008], dtype=np.float64)
+        image = rng.integers(0, 256, (320, 480, 3), dtype=np.uint8)
+
+        def svd_reference(detection):
+            source = np.asarray(detection[4:14], dtype=np.float64).reshape(5, 2)
+            source_mean = source.mean(axis=0)
+            source_centered = source - source_mean
+            destination_centered = destination - destination_mean
+            covariance = destination_centered.T @ source_centered / 5
+            u, singular_values, vt = np.linalg.svd(covariance)
+            signs = np.asarray([1.0, -1.0 if np.linalg.det(covariance) < 0 else 1.0])
+            rotation = u @ np.diag(signs) @ vt
+            variance = float(np.square(source_centered).sum() / 5)
+            scale = float((singular_values * signs).sum() / variance)
+            matrix = np.empty((2, 3), dtype=np.float64)
+            matrix[:, :2] = scale * rotation
+            matrix[:, 2] = destination_mean - scale * rotation @ source_mean
+            return cv2.warpAffine(image, matrix, (112, 112), flags=cv2.INTER_LINEAR)
+
+        detections = []
+        for index in range(32):
+            angle = rng.uniform(-0.3, 0.3)
+            scale = rng.uniform(0.8, 1.2)
+            rotation = np.asarray([
+                [np.cos(angle), -np.sin(angle)],
+                [np.sin(angle), np.cos(angle)],
+            ])
+            if index % 2 == 0:
+                rotation[0, 0] *= -1
+            offset = np.asarray([rng.uniform(100, 400), rng.uniform(100, 300)])
+            source = (destination - destination_mean) @ rotation / scale + offset
+            source += rng.normal(0, 0.7, source.shape)
+            detections.append([0.0, 0.0, 200.0, 250.0, *source.reshape(-1), 0.99])
+
+        with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np):
+            for index, detection in enumerate(detections):
+                with self.subTest(face=index):
+                    expected = svd_reference(detection)
+                    actual = worker.align_sface_crop(image, detection)
+                    difference = np.abs(expected.astype(np.int16) - actual.astype(np.int16))
+                    self.assertLessEqual(int(difference.max()), 1)
+
     def test_yunet_nms_matches_score_ordered_reference(self):
         rng = np.random.default_rng(42)
         faces = []

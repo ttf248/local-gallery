@@ -885,15 +885,24 @@ def align_sface_crop(image, detection):
     destination_mean = np.asarray([56.0262, 71.9008], dtype=np.float64)
     source_centered = source - source_mean
     destination_centered = destination - destination_mean
-    covariance = destination_centered.T @ source_centered / 5
-    u, singular_values, vt = np.linalg.svd(covariance)
-    signs = np.asarray([1.0, -1.0 if np.linalg.det(covariance) < 0 else 1.0])
-    rotation = u @ np.diag(signs) @ vt
-    variance = float(np.square(source_centered).sum() / 5)
-    scale = float((singular_values * signs).sum() / variance)
+    variance = float(np.square(source_centered).sum())
+    scale_cos = float(np.sum(source_centered * destination_centered) / variance)
+    scale_sin = float(
+        np.sum(
+            source_centered[:, 0] * destination_centered[:, 1]
+            - source_centered[:, 1] * destination_centered[:, 0]
+        )
+        / variance
+    )
     matrix = np.empty((2, 3), dtype=np.float64)
-    matrix[:, :2] = scale * rotation
-    matrix[:, 2] = destination_mean - scale * rotation @ source_mean
+    matrix[0, 0], matrix[0, 1] = scale_cos, -scale_sin
+    matrix[1, 0], matrix[1, 1] = scale_sin, scale_cos
+    matrix[0, 2] = (
+        destination_mean[0] - scale_cos * source_mean[0] + scale_sin * source_mean[1]
+    )
+    matrix[1, 2] = (
+        destination_mean[1] - scale_sin * source_mean[0] - scale_cos * source_mean[1]
+    )
     return cv2.warpAffine(image, matrix, (112, 112), flags=cv2.INTER_LINEAR)
 
 
