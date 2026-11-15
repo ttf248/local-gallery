@@ -252,6 +252,15 @@ class WorkerTests(unittest.TestCase):
         self.assertIs(result, response)
         self.assertEqual(3, run_batch.call_args.args[2])
 
+    def test_ocr_gpu_analysis_uses_benchmarked_worker_count(self):
+        result = {"items": []}
+        with patch.object(worker, "run_warmed_image_analysis", return_value=result) as run_batch:
+            response = worker.run_ocr_image_analysis(["page.png"], "gpu")
+
+        self.assertIs(result, response)
+        self.assertEqual(8, worker.OCR_GPU_IMAGE_WORKERS)
+        self.assertEqual(8, run_batch.call_args.args[2])
+
     def test_ocr_input_pixel_cap_resizes_and_maps_boxes_to_source(self):
         pixels = np.full((100, 100, 3), 255, dtype=np.uint8)
         with tempfile.TemporaryDirectory() as directory:
