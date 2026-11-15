@@ -28,6 +28,7 @@ const (
 	SmartAlbumDimensionPlace  = "place"
 	SmartAlbumDimensionPeople = "people"
 	SmartAlbumDimensionScene  = "scene"
+	SmartAlbumDimensionAll    = "all"
 
 	smartAlbumStateVersion     = 1
 	smartAlbumCacheVersion     = 1
@@ -91,6 +92,15 @@ type SmartAlbumSummary struct {
 	Coverage          SmartAlbumCoverage `json:"coverage"`
 	Groups            []SmartAlbumGroup  `json:"groups"`
 	CacheHit          bool               `json:"cacheHit"`
+}
+
+// SmartAlbumDirectoryItem is a folder-scoped group shown in the cross-folder
+// smart-album directory.
+type SmartAlbumDirectoryItem struct {
+	AlbumID    string          `json:"albumId"`
+	AlbumName  string          `json:"albumName"`
+	ParentName string          `json:"parentName,omitempty"`
+	Group      SmartAlbumGroup `json:"group"`
 }
 
 type smartAlbumMedia struct {
@@ -175,9 +185,10 @@ type SmartAlbumService struct {
 	textEmbedder SmartAlbumTextEmbedder
 	validatePath func(string) (string, error)
 
-	stateMu sync.Mutex
-	state   smartAlbumState
-	buildMu sync.Mutex
+	stateMu           sync.Mutex
+	state             smartAlbumState
+	buildMu           sync.Mutex
+	directoryRevision atomic.Uint64
 }
 
 func OpenSmartAlbumService(options SmartAlbumServiceOptions) (*SmartAlbumService, error) {
@@ -301,6 +312,7 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 		if err := writeAIJSONAtomic(cachePath, cache); err != nil {
 			return SmartAlbumSummary{}, fmt.Errorf("persist smart album cache: %w", err)
 		}
+		s.directoryRevision.Add(1)
 	}
 	groups := s.applyOverrides(albumID, dimension, smartAlbumGroups(cache.Groups))
 	groupedIDs := make(map[string]struct{})
@@ -321,6 +333,108 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 		UngroupedPhotos: max(0, len(ids)-len(groupedIDs)), HiddenGroupCount: hiddenCount,
 		Coverage: coverage, Groups: groups, CacheHit: cacheHit,
 	}, nil
+}
+
+// DirectoryPage collects only folder dimensions that already have a smart
+// album cache. Missing folder summaries stay missing instead of triggering
+// analysis or a full-library rebuild from the home page.
+func (s *SmartAlbumService) DirectoryPage(
+	ctx context.Context,
+	dimension, cursor string,
+	limit int,
+) (LibraryPage[SmartAlbumDirectoryItem], error) {
+	if !validSmartAlbumDirectoryDimension(dimension) {
+		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrSmartAlbumDimension
+	}
+	snapshot := s.catalog.Acquire()
+	if !snapshot.Ready() {
+		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrLibraryNotReady
+	}
+	directoryRevision := s.directoryRevision.Load()
+	scope := smartAlbumDirectoryScope(dimension, directoryRevision)
+	offset := 0
+	if cursor != "" {
+		var err error
+		offset, err = DecodePageCursor(cursor, snapshot.Revision(), scope)
+		if err != nil {
+			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+		}
+	}
+	dimensions := smartAlbumDirectoryDimensions(dimension)
+	items := make([]SmartAlbumDirectoryItem, 0)
+	for _, album := range snapshot.PhotoAlbumSummaries() {
+		for _, currentDimension := range dimensions {
+			if err := ctx.Err(); err != nil {
+				return LibraryPage[SmartAlbumDirectoryItem]{}, err
+			}
+			cachePath := s.cachePath(album.ID, currentDimension)
+			if _, err := os.Stat(cachePath); err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return LibraryPage[SmartAlbumDirectoryItem]{}, fmt.Errorf("read smart album directory cache: %w", err)
+			}
+			summary, err := s.Groups(ctx, album.ID, currentDimension, false)
+			if err != nil {
+				return LibraryPage[SmartAlbumDirectoryItem]{}, err
+			}
+			if summary.Revision != snapshot.Revision() {
+				return LibraryPage[SmartAlbumDirectoryItem]{}, ErrStalePageCursor
+			}
+			for _, group := range summary.Groups {
+				if group.Hidden {
+					continue
+				}
+				items = append(items, SmartAlbumDirectoryItem{
+					AlbumID: album.ID, AlbumName: album.DisplayName,
+					ParentName: album.ParentName, Group: group,
+				})
+			}
+		}
+	}
+	currentDirectoryRevision := s.directoryRevision.Load()
+	if cursor != "" && currentDirectoryRevision != directoryRevision {
+		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrStalePageCursor
+	}
+	if offset > len(items) {
+		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrInvalidPageCursor
+	}
+	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
+	page := LibraryPage[SmartAlbumDirectoryItem]{
+		Revision: snapshot.Revision(), Items: append([]SmartAlbumDirectoryItem(nil), items[offset:end]...), Total: len(items),
+	}
+	if end < len(items) {
+		nextCursor, err := EncodePageCursor(
+			snapshot.Revision(),
+			smartAlbumDirectoryScope(dimension, currentDirectoryRevision),
+			end,
+		)
+		if err != nil {
+			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
+func smartAlbumDirectoryScope(dimension string, revision uint64) string {
+	return fmt.Sprintf("smart-album-directory:%s:%d", dimension, revision)
+}
+
+func validSmartAlbumDirectoryDimension(dimension string) bool {
+	return dimension == SmartAlbumDimensionAll || validSmartAlbumDimension(dimension)
+}
+
+func smartAlbumDirectoryDimensions(dimension string) []string {
+	if dimension != SmartAlbumDimensionAll {
+		return []string{dimension}
+	}
+	return []string{
+		SmartAlbumDimensionTime,
+		SmartAlbumDimensionPlace,
+		SmartAlbumDimensionPeople,
+		SmartAlbumDimensionScene,
+	}
 }
 
 func (s *SmartAlbumService) currentAlbumMedia(ctx context.Context, snapshot CatalogSnapshot, ids []string) ([]smartAlbumMedia, int, error) {
@@ -1291,6 +1405,7 @@ func (s *SmartAlbumService) UpdateOverride(ctx context.Context, albumID, dimensi
 		return SmartAlbumSummary{}, fmt.Errorf("persist smart album override: %w", err)
 	}
 	s.stateMu.Unlock()
+	s.directoryRevision.Add(1)
 	return s.Groups(ctx, albumID, dimension, false)
 }
 
@@ -1329,6 +1444,7 @@ func (s *SmartAlbumService) ReplaceCorrections(corrections SmartAlbumCorrections
 		return err
 	}
 	s.stateMu.Unlock()
+	s.directoryRevision.Add(1)
 	return nil
 }
 

@@ -470,6 +470,7 @@ func main() {
 	api.Post("/ai/jobs/:id/cancel", handlers.AIJobActionHandler(aiJobs, "cancel"))
 	api.Post("/ai/jobs/:id/retry", handlers.AIJobActionHandler(aiJobs, "retry"))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
+	api.Get("/smart-albums", handlers.SmartAlbumDirectoryHandler(smartAlbums))
 	api.Get("/albums/:id/smart-groups", resourceParam, handlers.SmartAlbumGroupsHandler(smartAlbums, false))
 	api.Post("/albums/:id/smart-groups/rebuild", resourceParam, handlers.SmartAlbumGroupsHandler(smartAlbums, true))
 	api.Put("/albums/:id/smart-groups/:groupId", resourceParam, handlers.SmartAlbumOverrideHandler(smartAlbums))

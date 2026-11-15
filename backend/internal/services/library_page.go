@@ -263,6 +263,29 @@ func (s CatalogSnapshot) LibraryNode(id string) (LibraryNodeSummary, bool) {
 	return cloneNodeSummary(node), true
 }
 
+// PhotoAlbumSummaries returns a stable list of all photo folders in this
+// catalog snapshot, including folders nested inside collections.
+func (s CatalogSnapshot) PhotoAlbumSummaries() []LibraryNodeSummary {
+	if s.state == nil || s.state.library == nil {
+		return nil
+	}
+	items := make([]LibraryNodeSummary, 0)
+	for _, node := range s.state.library.nodes {
+		if node.Kind == string(ResourceAlbum) && node.ContentKind == string(models.ContentKindPhoto) {
+			items = append(items, cloneNodeSummary(node))
+		}
+	}
+	sort.Slice(items, func(i, j int) bool {
+		left := strings.ToLower(items[i].DisplayName)
+		right := strings.ToLower(items[j].DisplayName)
+		if left != right {
+			return left < right
+		}
+		return items[i].ID < items[j].ID
+	})
+	return items
+}
+
 // AlbumImageIDs returns only the image resources that belong directly to one
 // album. It is used by folder-scoped analysis and views so they do not need to
 // enumerate the whole catalog and filter it in a caller.

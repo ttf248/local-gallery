@@ -60,6 +60,7 @@ func TestSmartAlbumGroupsHandlerBuildsAlbumScopedSummary(t *testing.T) {
 	}
 	albumID := catalog.ExternalID(albumPath, services.ResourceAlbum)
 	app := fiber.New()
+	app.Get("/api/smart-albums", SmartAlbumDirectoryHandler(smartAlbums))
 	app.Get("/api/albums/:id/smart-groups", SmartAlbumGroupsHandler(smartAlbums, false))
 	app.Post("/api/albums/:id/smart-groups/rebuild", SmartAlbumGroupsHandler(smartAlbums, true))
 	response, err := app.Test(httptest.NewRequest("GET", "/api/albums/"+albumID+"/smart-groups?dimension=time", nil))
@@ -79,6 +80,22 @@ func TestSmartAlbumGroupsHandlerBuildsAlbumScopedSummary(t *testing.T) {
 	}
 	if !payload.OK || payload.Summary.AlbumID != albumID || payload.Summary.TotalPhotos != 3 || payload.Summary.Dimension != services.SmartAlbumDimensionTime {
 		t.Fatalf("summary response=%+v", payload)
+	}
+	response, err = app.Test(httptest.NewRequest("GET", "/api/smart-albums?dimension=time&limit=1", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var directoryPayload struct {
+		OK   bool                                                   `json:"ok"`
+		Page services.LibraryPage[services.SmartAlbumDirectoryItem] `json:"page"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&directoryPayload); err != nil {
+		response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != fiber.StatusOK || !directoryPayload.OK || directoryPayload.Page.Revision == 0 || directoryPayload.Page.Total != 0 {
+		t.Fatalf("directory response status=%d payload=%+v", response.StatusCode, directoryPayload)
 	}
 	request := httptest.NewRequest("POST", "/api/albums/"+albumID+"/smart-groups/rebuild?dimension=time", nil)
 	response, err = app.Test(request)

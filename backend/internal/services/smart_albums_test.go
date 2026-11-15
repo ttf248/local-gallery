@@ -114,6 +114,28 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 		scenes.Coverage.Analyzed != 3 || scenes.Coverage.WithEvidence != 3 {
 		t.Fatalf("scene groups did not reuse only this album's vectors: %+v", scenes)
 	}
+	directoryFirst, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directoryFirst.Total != 3 || len(directoryFirst.Items) != 2 || directoryFirst.NextCursor == "" {
+		t.Fatalf("first smart album directory page=%+v", directoryFirst)
+	}
+	directorySecond, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, directoryFirst.NextCursor, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directorySecond.Total != 3 || len(directorySecond.Items) != 1 || directorySecond.NextCursor != "" {
+		t.Fatalf("second smart album directory page=%+v", directorySecond)
+	}
+	if directoryFirst.Items[0].AlbumID != firstAlbumID || directorySecond.Items[0].AlbumID != secondAlbumID {
+		t.Fatalf("directory pages did not retain source albums: first=%+v second=%+v", directoryFirst.Items, directorySecond.Items)
+	}
+	for _, dimension := range []string{SmartAlbumDimensionPlace, SmartAlbumDimensionPeople} {
+		if _, err := os.Stat(service.cachePath(firstAlbumID, dimension)); !os.IsNotExist(err) {
+			t.Fatalf("directory aggregation created an unrequested %s cache: %v", dimension, err)
+		}
+	}
 	encoded, err := json.Marshal(first)
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +166,13 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	}
 	if len(updated.Groups) != 1 || updated.Groups[0].Name != customName || !updated.Groups[0].Hidden || !updated.Groups[0].CustomName {
 		t.Fatalf("updated override=%+v", updated.Groups)
+	}
+	visibleDirectory, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if visibleDirectory.Total != 1 || visibleDirectory.Items[0].AlbumID != secondAlbumID {
+		t.Fatalf("hidden smart group remained in directory: %+v", visibleDirectory)
 	}
 	corrections := service.Corrections()
 	if !validSmartAlbumCorrections(corrections) || len(corrections.Overrides) != 1 {
