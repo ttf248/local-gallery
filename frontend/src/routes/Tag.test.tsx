@@ -127,7 +127,7 @@ describe("Tag", () => {
 
     renderTag();
 
-    expect(screen.getByText("正在加载标签")).toBeInTheDocument();
+    expect(screen.getByText("正在加载标签…")).toBeInTheDocument();
     expect(screen.queryByText("未找到该标签")).not.toBeInTheDocument();
   });
 
