@@ -393,6 +393,25 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual((200, 100), image.shape[:2])
         self.assertEqual((4.0, 4.0), (scale_x, scale_y))
 
+    def test_face_gpu_worker_count_bounds_large_non_jpeg_inputs(self):
+        from PIL import Image as PILImage
+
+        with tempfile.TemporaryDirectory() as directory:
+            small_png = Path(directory) / "small.png"
+            large_png = Path(directory) / "large.png"
+            large_jpeg = Path(directory) / "large.jpg"
+            PILImage.new("RGB", (100, 100)).save(small_png)
+            PILImage.new("RGB", (2200, 1900)).save(large_png)
+            PILImage.new("RGB", (2200, 1900)).save(large_jpeg)
+
+            self.assertEqual(12, worker.face_gpu_worker_count([str(small_png)]))
+            self.assertEqual(4, worker.face_gpu_worker_count([str(large_png)]))
+            self.assertEqual(12, worker.face_gpu_worker_count([str(large_jpeg)]))
+            self.assertEqual(
+                4,
+                worker.face_gpu_worker_count([str(small_png), str(large_png)]),
+            )
+
     def test_face_boxes_map_from_reduced_input_to_source_dimensions(self):
         class Detector:
             @staticmethod
@@ -891,10 +910,14 @@ class WorkerTests(unittest.TestCase):
         response = {"items": []}
         with patch.object(worker, "face_module_status", return_value={"ready": True}), patch.object(
             worker, "gpu_available", return_value=True
-        ), patch.object(worker, "run_image_analysis", return_value=response) as run_analysis:
+        ), patch.object(worker, "face_gpu_worker_count", return_value=12) as choose_workers, patch.object(
+            worker, "run_image_analysis", return_value=response
+        ) as run_analysis:
             result = worker.process({"action": "face_images", "device": "gpu", "paths": ["one", "two"]})
 
         self.assertIs(response, result)
+        self.assertEqual(12, worker.FACE_GPU_WORKERS)
+        choose_workers.assert_called_once_with(["one", "two"])
         self.assertEqual(worker.FACE_GPU_WORKERS, run_analysis.call_args.kwargs["max_workers"])
 
     def test_face_model_initialization_is_shared_by_parallel_workers(self):

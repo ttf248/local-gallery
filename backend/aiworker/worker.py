@@ -45,7 +45,9 @@ OCR_CLASSIFIER_SHA256 = "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185
 OCR_RECOGNIZER_FILE = "PP-OCRv6_rec_small.onnx"
 OCR_RECOGNIZER_SHA256 = "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884"
 # YuNet and SFace accept one image each; overlap calls across photos instead.
-FACE_GPU_WORKERS = 4
+FACE_GPU_WORKERS = 12
+FACE_GPU_LARGE_IMAGE_WORKERS = 4
+FACE_GPU_TWELVE_WORKER_PIXEL_LIMIT = 4_000_000
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
@@ -563,6 +565,25 @@ def read_face_image(path: str, max_dimension=FACE_MAX_INPUT_DIMENSION):
         )
         height, width = image.shape[:2]
     return image, original_width / width, original_height / height
+
+
+def face_gpu_worker_count(paths):
+    from PIL import Image as PILImage
+
+    for path in paths:
+        try:
+            with open(path, "rb") as image_file:
+                is_jpeg = image_file.read(2) == b"\xff\xd8"
+            if is_jpeg:
+                continue
+            with PILImage.open(path) as source:
+                if source.format != "JPEG" and (
+                    source.width * source.height > FACE_GPU_TWELVE_WORKER_PIXEL_LIMIT
+                ):
+                    return FACE_GPU_LARGE_IMAGE_WORKERS
+        except Exception:
+            return FACE_GPU_LARGE_IMAGE_WORKERS
+    return FACE_GPU_WORKERS
 
 
 def read_ocr_image(path: str, max_pixels=OCR_MAX_INPUT_PIXELS):
@@ -1094,10 +1115,16 @@ def _process_request(request: dict) -> dict:
             return {"error": face_module_status().get("error", "face_dependencies_missing")}
         if device_mode == "gpu" and not gpu_available(require_onnx=True):
             return {"error": "gpu_unavailable", "status": status()}
+        paths = request.get("paths")
+        max_workers = FACE_GPU_WORKERS
+        if device_mode == "gpu" and isinstance(paths, list) and 0 < len(paths) <= 32 and all(
+            isinstance(path, str) for path in paths
+        ):
+            max_workers = face_gpu_worker_count(paths)
         return run_image_analysis(
-            request.get("paths"),
+            paths,
             lambda path: analyze_face_image(path, device_mode),
-            max_workers=FACE_GPU_WORKERS if device_mode == "gpu" else 1,
+            max_workers=max_workers if device_mode == "gpu" else 1,
         )
     if action not in ("embed_images", "embed_texts"):
         return {"error": "unknown_action"}
