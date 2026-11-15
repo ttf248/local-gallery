@@ -9,6 +9,7 @@ import TaskQueuePanel from "../components/tasks/TaskQueuePanel";
 import ComputeHardwarePanel from "../components/tasks/ComputeHardwarePanel";
 import DailyPlanPanel from "../components/tasks/DailyPlanPanel";
 import JobHistoryPanel from "../components/tasks/JobHistoryPanel";
+import SmartAlbumRefreshPanel from "../components/tasks/SmartAlbumRefreshPanel";
 import StorageSection from "../components/tasks/StorageSection";
 
 /**
@@ -133,6 +134,9 @@ export function TaskCenterView({
                 onAction={center.act}
                 onRefreshEstimate={center.refreshEstimate}
               />
+              <div className="mt-4">
+                <SmartAlbumRefreshPanel />
+              </div>
               <div className="mt-4">
                 <TaskQueuePanel
                   jobs={queue}

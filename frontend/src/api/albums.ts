@@ -9,6 +9,40 @@ import type {
 export type SmartAlbumDimension = "time" | "place" | "people" | "scene";
 export type SmartAlbumDirectoryDimension = "all" | SmartAlbumDimension;
 
+/** 智能相册刷新的任务状态，与缓存重建同一套取值。 */
+export type SmartAlbumRefreshStatus =
+  | "pending"
+  | "running"
+  | "complete"
+  | "cancelled"
+  | "error";
+
+/** 全库智能相册刷新的进度快照。 */
+export interface SmartAlbumRefreshProgress {
+  jobId: string;
+  status: SmartAlbumRefreshStatus;
+  /** 为真时无视缓存，全部重算。 */
+  force: boolean;
+  /** 照片相册总数；total 是「相册 × 四个维度」的组合总数。 */
+  albums: number;
+  total: number;
+  done: number;
+  /** 重算的组合数；reused 是命中缓存直接复用的组合数。 */
+  rebuilt: number;
+  reused: number;
+  /** 本次产出的分组总数。 */
+  groups: number;
+  currentAlbumId?: string;
+  currentAlbumName?: string;
+  currentDimension?: string;
+  /** 任务的开始与结束时间（ISO 字符串）。 */
+  startedAt?: string;
+  finishedAt?: string;
+  elapsedMs: number;
+  /** 失败时的机器可读错误码。 */
+  error?: string;
+}
+
 export interface SmartAlbumGroup {
   id: string;
   dimension: SmartAlbumDimension;
@@ -159,6 +193,26 @@ export const albumsApi = {
     return api<{ ok: boolean; page: LibraryPage<LibraryMediaItem> }>(
       `/api/albums/${encodeURIComponent(albumId)}/smart-groups/${encodeURIComponent(groupId)}/media`,
       { params: { dimension, snapshot, cursor, limit: 200 }, signal },
+    );
+  },
+  // 全库刷新：后台任务，返回任务号，进度与取消另有接口。
+  startSmartAlbumRefresh(force = false) {
+    return api<{ ok: boolean; jobId: string; reused: boolean }>(
+      "/api/smart-albums/refresh",
+      { method: "POST", body: { force } },
+    );
+  },
+  // 当前任务：没有任务时 task 为 null —— 这是常规状态查询，不是错误。
+  smartAlbumRefreshActive(signal?: AbortSignal) {
+    return api<{ ok: boolean; task: SmartAlbumRefreshProgress | null }>(
+      "/api/smart-albums/refresh/active",
+      { signal },
+    );
+  },
+  cancelSmartAlbumRefresh(jobId: string) {
+    return api<{ ok: boolean }>(
+      `/api/smart-albums/refresh/${encodeURIComponent(jobId)}`,
+      { method: "DELETE" },
     );
   },
 };

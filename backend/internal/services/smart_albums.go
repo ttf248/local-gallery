@@ -227,31 +227,52 @@ func OpenSmartAlbumService(options SmartAlbumServiceOptions) (*SmartAlbumService
 	return service, nil
 }
 
-func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension string, force bool) (SmartAlbumSummary, error) {
-	if !validSmartAlbumDimension(dimension) {
-		return SmartAlbumSummary{}, ErrSmartAlbumDimension
-	}
-	s.buildMu.Lock()
-	defer s.buildMu.Unlock()
+// smartAlbumAlbumInput 是一本照片相册的分组输入：媒体清单、文件指纹与
+// 三个分析模块的当前结果。
+//
+// 四个维度共用同一份输入。算一次媒体指纹要 stat 每个文件、还要逐级校验
+// 路径边界（Windows 上每个文件要好几次系统调用），四个维度各算一遍
+// 就是四倍的代价 —— 全库刷新因此慢得看不出在做什么。
+type smartAlbumAlbumInput struct {
+	albumID string
+	// revision 是准备输入时的库版本；摘要里的版本与之相同。
+	revision     uint64
+	ids          []string
+	media        []smartAlbumMedia
+	mediaByID    map[string]smartAlbumMedia
+	fingerprints map[string]smartAlbumFileFingerprint
+	metadata     map[string]AIAnalysisRecord
+	face         map[string]AIAnalysisRecordSummary
+	embedding    map[string]AIAnalysisRecordSummary
 
+	metadataStatus  AIJobModule
+	faceStatus      AIJobModule
+	embeddingStatus AIJobModule
+	// unavailable 是相册里取不到的文件数（已删除、越界或不是普通文件）。
+	unavailable int
+}
+
+// prepareAlbum 取出一本照片相册的分组输入：媒体清单、文件指纹与各分析
+// 模块的当前结果。它只读不改，写缓存的事留给分组那一步。
+func (s *SmartAlbumService) prepareAlbum(ctx context.Context, albumID string) (smartAlbumAlbumInput, error) {
 	snapshot := s.catalog.Acquire()
 	if !snapshot.Ready() {
-		return SmartAlbumSummary{}, ErrLibraryNotReady
+		return smartAlbumAlbumInput{}, ErrLibraryNotReady
 	}
 	album, exists := snapshot.AlbumSummary(albumID)
 	if !exists {
-		return SmartAlbumSummary{}, ErrLibraryResourceNotFound
+		return smartAlbumAlbumInput{}, ErrLibraryResourceNotFound
 	}
 	if album.ContentKind != string(models.ContentKindPhoto) {
-		return SmartAlbumSummary{}, ErrLibraryResourceWrongKind
+		return smartAlbumAlbumInput{}, ErrLibraryResourceWrongKind
 	}
 	ids, exists := snapshot.AlbumImageIDs(albumID)
 	if !exists {
-		return SmartAlbumSummary{}, ErrLibraryResourceNotFound
+		return smartAlbumAlbumInput{}, ErrLibraryResourceNotFound
 	}
 	media, unavailable, err := s.currentAlbumMedia(ctx, snapshot, ids)
 	if err != nil {
-		return SmartAlbumSummary{}, err
+		return smartAlbumAlbumInput{}, err
 	}
 	mediaIDs := make([]string, len(media))
 	fingerprints := make(map[string]smartAlbumFileFingerprint, len(media))
@@ -264,18 +285,47 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 	metadataRecords := s.jobs.RecordsForResources(AIJobTypeMetadata, mediaIDs)
 	faceRecords := s.jobs.RecordSummariesForResources(AIJobTypeFace, mediaIDs)
 	embeddingRecords := s.jobs.RecordSummariesForResources(AIJobTypeEmbedding, mediaIDs)
-	metadataCurrent := currentAnalysisRecords(metadataRecords, fingerprints)
-	faceCurrent := currentAnalysisSummaries(faceRecords, fingerprints)
-	embeddingCurrent := currentAnalysisSummaries(embeddingRecords, fingerprints)
-	metadataStatus := s.jobs.ModuleStatus(AIJobTypeMetadata)
-	faceStatus := s.jobs.ModuleStatus(AIJobTypeFace)
-	embeddingStatus := s.jobs.ModuleStatus(AIJobTypeEmbedding)
-	metadataCoverage := coverageForRecords(len(ids), len(media), metadataCurrent, metadataStatus)
-	faceCoverage := coverageForSummaries(len(ids), len(media), faceCurrent, faceStatus)
-	embeddingCoverage := coverageForVectors(len(ids), len(media), s.vectors, fingerprints, embeddingCurrent, embeddingStatus)
+	return smartAlbumAlbumInput{
+		albumID: albumID, revision: snapshot.Revision(),
+		ids: ids, media: media, mediaByID: mediaByID, fingerprints: fingerprints,
+		metadata:        currentAnalysisRecords(metadataRecords, fingerprints),
+		face:            currentAnalysisSummaries(faceRecords, fingerprints),
+		embedding:       currentAnalysisSummaries(embeddingRecords, fingerprints),
+		metadataStatus:  s.jobs.ModuleStatus(AIJobTypeMetadata),
+		faceStatus:      s.jobs.ModuleStatus(AIJobTypeFace),
+		embeddingStatus: s.jobs.ModuleStatus(AIJobTypeEmbedding),
+		unavailable:     unavailable,
+	}, nil
+}
+
+func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension string, force bool) (SmartAlbumSummary, error) {
+	if !validSmartAlbumDimension(dimension) {
+		return SmartAlbumSummary{}, ErrSmartAlbumDimension
+	}
+	input, err := s.prepareAlbum(ctx, albumID)
+	if err != nil {
+		return SmartAlbumSummary{}, err
+	}
+	return s.groupsForDimension(ctx, input, dimension, force)
+}
+
+// groupsForDimension 按一个维度算分组：命中派生缓存就直接复用，没命中
+// 才重算并写回缓存。
+func (s *SmartAlbumService) groupsForDimension(
+	ctx context.Context,
+	input smartAlbumAlbumInput,
+	dimension string,
+	force bool,
+) (SmartAlbumSummary, error) {
+	s.buildMu.Lock()
+	defer s.buildMu.Unlock()
+
+	metadataCoverage := coverageForRecords(len(input.ids), len(input.media), input.metadata, input.metadataStatus)
+	faceCoverage := coverageForSummaries(len(input.ids), len(input.media), input.face, input.faceStatus)
+	embeddingCoverage := coverageForVectors(len(input.ids), len(input.media), s.vectors, input.fingerprints, input.embedding, input.embeddingStatus)
 	peopleGroups := []PeopleAlbumGroup{}
 	if s.people != nil && dimension == SmartAlbumDimensionPeople {
-		peopleGroups = s.people.AlbumGroups(currentFingerprints(faceCurrent, fingerprints))
+		peopleGroups = s.people.AlbumGroups(currentFingerprints(input.face, input.fingerprints))
 		faceCoverage.WithEvidence = peopleEvidencePhotoCount(peopleGroups)
 		if !s.jobs.PeopleEnabled() {
 			faceCoverage.Available = false
@@ -290,31 +340,37 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 		coverage = embeddingCoverage
 	}
 	if dimension == SmartAlbumDimensionTime || dimension == SmartAlbumDimensionPlace {
-		coverage.WithEvidence = metadataEvidenceCount(metadataCurrent, dimension)
+		coverage.WithEvidence = metadataEvidenceCount(input.metadata, dimension)
 	}
 
-	analysisFingerprint := s.analysisFingerprint(dimension, media, metadataCurrent, faceCurrent, peopleGroups, metadataStatus, faceStatus, embeddingStatus)
-	key := smartAlbumCacheKey(albumID, dimension, media, analysisFingerprint)
-	cachePath := s.cachePath(albumID, dimension)
+	analysisFingerprint := s.analysisFingerprint(
+		dimension, input.media, input.metadata, input.face, peopleGroups,
+		input.metadataStatus, input.faceStatus, input.embeddingStatus,
+	)
+	key := smartAlbumCacheKey(input.albumID, dimension, input.media, analysisFingerprint)
+	cachePath := s.cachePath(input.albumID, dimension)
 	cache, cacheHit := smartAlbumCache{}, false
 	if !force {
-		cache, cacheHit = readSmartAlbumCache(cachePath, albumID, dimension, key)
+		cache, cacheHit = readSmartAlbumCache(cachePath, input.albumID, dimension, key)
 	}
 	if !cacheHit {
-		groups, buildErr := s.buildGroups(ctx, albumID, dimension, media, mediaByID, metadataCurrent, faceCurrent, peopleGroups)
+		groups, buildErr := s.buildGroups(
+			ctx, input.albumID, dimension, input.media, input.mediaByID,
+			input.metadata, input.face, peopleGroups,
+		)
 		if buildErr != nil {
 			return SmartAlbumSummary{}, buildErr
 		}
 		cache = smartAlbumCache{
-			Version: smartAlbumCacheVersion, AlbumID: albumID, Dimension: dimension,
-			Key: key, Fingerprints: fingerprints, Groups: cacheSmartAlbumGroups(groups),
+			Version: smartAlbumCacheVersion, AlbumID: input.albumID, Dimension: dimension,
+			Key: key, Fingerprints: input.fingerprints, Groups: cacheSmartAlbumGroups(groups),
 		}
 		if err := writeAIJSONAtomic(cachePath, cache); err != nil {
 			return SmartAlbumSummary{}, fmt.Errorf("persist smart album cache: %w", err)
 		}
 		s.directoryRevision.Add(1)
 	}
-	groups := s.applyOverrides(albumID, dimension, smartAlbumGroups(cache.Groups))
+	groups := s.applyOverrides(input.albumID, dimension, smartAlbumGroups(cache.Groups))
 	groupedIDs := make(map[string]struct{})
 	hiddenCount := 0
 	for _, group := range cache.Groups {
@@ -328,9 +384,9 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 		}
 	}
 	return SmartAlbumSummary{
-		AlbumID: albumID, Dimension: dimension, Revision: snapshot.Revision(), SnapshotKey: cache.Key,
-		TotalPhotos: len(ids), AvailablePhotos: len(media), UnavailablePhotos: unavailable,
-		UngroupedPhotos: max(0, len(ids)-len(groupedIDs)), HiddenGroupCount: hiddenCount,
+		AlbumID: input.albumID, Dimension: dimension, Revision: input.revision, SnapshotKey: cache.Key,
+		TotalPhotos: len(input.ids), AvailablePhotos: len(input.media), UnavailablePhotos: input.unavailable,
+		UngroupedPhotos: max(0, len(input.ids)-len(groupedIDs)), HiddenGroupCount: hiddenCount,
 		Coverage: coverage, Groups: groups, CacheHit: cacheHit,
 	}, nil
 }
@@ -425,46 +481,78 @@ func validSmartAlbumDirectoryDimension(dimension string) bool {
 	return dimension == SmartAlbumDimensionAll || validSmartAlbumDimension(dimension)
 }
 
-// RefreshAll prepares the four folder-scoped dimensions for every photo album.
-// It reuses matching derived caches and rebuilds only summaries whose media or
-// analysis fingerprint has changed.
-func (s *SmartAlbumService) RefreshAll(ctx context.Context) error {
+// SweepSmartAlbums prepares the four folder-scoped dimensions for every photo
+// album. It reuses matching derived caches and rebuilds only summaries whose
+// media or analysis fingerprint has changed, unless force is set.
+//
+// 手动触发与每日计划走的是同一段代码：分组口径只有一处实现。
+func (s *SmartAlbumService) SweepSmartAlbums(
+	ctx context.Context,
+	force bool,
+	progress func(SmartAlbumSweepProgress),
+) error {
 	snapshot := s.catalog.Acquire()
 	if !snapshot.Ready() {
 		return ErrLibraryNotReady
 	}
-	for _, album := range snapshot.PhotoAlbumSummaries() {
-		for _, dimension := range []string{
-			SmartAlbumDimensionTime,
-			SmartAlbumDimensionPlace,
-			SmartAlbumDimensionPeople,
-			SmartAlbumDimensionScene,
-		} {
+	albums := snapshot.PhotoAlbumSummaries()
+	dimensions := smartAlbumDimensions()
+	total := len(albums) * len(dimensions)
+	completed, rebuilt, reused, groups := 0, 0, 0, 0
+	for _, album := range albums {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		// 一本相册的媒体清单与文件指纹只算一次，四个维度共用。
+		input, err := s.prepareAlbum(ctx, album.ID)
+		if err != nil {
+			return err
+		}
+		for _, dimension := range dimensions {
 			if err := ctx.Err(); err != nil {
 				return err
 			}
-			summary, err := s.Groups(ctx, album.ID, dimension, false)
+			summary, err := s.groupsForDimension(ctx, input, dimension, force)
 			if err != nil {
 				return err
 			}
 			if summary.Revision != snapshot.Revision() {
 				return ErrStalePageCursor
 			}
+			completed++
+			if summary.CacheHit {
+				reused++
+			} else {
+				rebuilt++
+			}
+			groups += len(summary.Groups)
+			if progress != nil {
+				progress(SmartAlbumSweepProgress{
+					Albums: len(albums), Total: total, Completed: completed,
+					Rebuilt: rebuilt, Reused: reused, Groups: groups,
+					AlbumID: album.ID, AlbumName: album.DisplayName, Dimension: dimension,
+				})
+			}
 		}
 	}
 	return nil
 }
 
-func smartAlbumDirectoryDimensions(dimension string) []string {
-	if dimension != SmartAlbumDimensionAll {
-		return []string{dimension}
-	}
+// smartAlbumDimensions 是每本照片相册都要算的四个分组维度。
+func smartAlbumDimensions() []string {
 	return []string{
 		SmartAlbumDimensionTime,
 		SmartAlbumDimensionPlace,
 		SmartAlbumDimensionPeople,
 		SmartAlbumDimensionScene,
 	}
+}
+
+func smartAlbumDirectoryDimensions(dimension string) []string {
+	if dimension != SmartAlbumDimensionAll {
+		return []string{dimension}
+	}
+	return smartAlbumDimensions()
 }
 
 func (s *SmartAlbumService) currentAlbumMedia(ctx context.Context, snapshot CatalogSnapshot, ids []string) ([]smartAlbumMedia, int, error) {

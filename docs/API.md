@@ -636,6 +636,18 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 时间只使用可信 EXIF 拍摄时间，按日期与自适应拍摄间隔形成分组；地点使用离线行政边界或 geohash 精度 5，接口不返回原始坐标；人物复用当前人物候选组在本相册内的成员；场景复用现有 Chinese-CLIP 向量，并给出可编辑的建议标签。每组至少 3 张，证据不足时保留未分组状态。派生成员清单写入 `derived/ai/smart-albums/`，人工名称与隐藏状态写入 `state/smart_album_overrides.json`，状态备份的 `smartAlbums` 类别包含这些修正。
 
+### 全库智能相册刷新
+
+全库刷新是后台任务：手动触发与每日计划共用同一个任务服务，同一时刻只跑一个。
+
+- `POST /api/smart-albums/refresh` 请求 `{ "force": false }`，启动一次全库刷新，返回 `{ ok, jobId, reused, force }`。`force` 为真时无视缓存，把所有照片相册的四个维度全部重算；缺省只重建媒体或分析结果有变化的组合。已有任务在跑时复用它（`reused=true`），不会并发重建。服务关闭或分组服务不可用时返回 `503 smart_album_refresh_failed`。
+- `GET /api/smart-albums/refresh/active` 返回当前任务（最近一次刷新）的进度快照 `{ ok, task }`；本进程还没有跑过刷新时 `task` 为 `null` —— 这是常规状态查询，不是错误。
+- `GET /api/smart-albums/refresh/:id` 返回指定任务的进度快照：`{ jobId, status, force, albums, total, done, rebuilt, reused, groups, currentAlbumId, currentAlbumName, currentDimension, elapsedMs, error? }`。`status` 取 `pending|running|complete|cancelled|error`；`total` 是「相册 × 四个维度」的组合总数；`rebuilt` 是重算的组合数，`reused` 是命中缓存直接复用的组合数。任务不存在时返回 `404 smart_album_refresh_not_found`。
+- `DELETE /api/smart-albums/refresh/:id` 取消正在进行的刷新；任务已经结束时返回 `{ ok: true, alreadyDone: true }`。
+- `GET /api/smart-albums/refresh/:id/events` 以 SSE 推送进度，事件名与任务状态同名，`data` 为同一份进度快照，终态事件后连接关闭。
+
+失败时 `error` 只给机器可读的错误码（`library_not_ready`、`library_changed`、`smart_album_failed`），不回传本机路径。
+
 ## 媒体、缩略图与视频
 
 ### `GET /api/media/:fileId`

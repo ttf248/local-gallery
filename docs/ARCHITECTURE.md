@@ -24,7 +24,7 @@ Fiber middleware → handlers → services/store → models + 本地文件
 | [services/scanner.go](../backend/internal/services/scanner.go)、[scan_runner.go](../backend/internal/services/scan_runner.go)               | 目录工作池、扫描生命周期与进度订阅                         |
 | [resource_catalog.go](../backend/internal/services/resource_catalog.go)、[library_page.go](../backend/internal/services/library_page.go)    | 不可变库快照、资源 ID、分页/搜索索引                       |
 | [ai_jobs.go](../backend/internal/services/ai_jobs.go)、[exif_metadata.go](../backend/internal/services/exif_metadata.go)、[china_geolocation.go](../backend/internal/services/china_geolocation.go) | 持久分析任务、EXIF/GPS 解析、省级地图与市区照片统计、按拍摄时间的轨迹与到访聚合 |
-| [smart_albums.go](../backend/internal/services/smart_albums.go)                                                                            | 当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组 |
+| [smart_albums.go](../backend/internal/services/smart_albums.go)、[smart_album_refresh.go](../backend/internal/services/smart_album_refresh.go) | 当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组；全库刷新的后台任务 |
 | [thumbnail.go](../backend/internal/services/thumbnail.go)、[video_transcode.go](../backend/internal/services/video_transcode.go) 等媒体服务 | 缩略图、预览、格式转换、视频封面、元数据、faststart 与转码 |
 | [internal/store/](../backend/internal/store/)                                                                                               | 偏好与媒体活动分文件持久化，锁内部分更新、原子写入         |
 | [frontend/src/App.tsx](../frontend/src/App.tsx)、[main.tsx](../frontend/src/main.tsx)                                                       | 应用入口、懒加载路由、访问门禁、主题、活动同步与错误边界   |
@@ -76,7 +76,7 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 
 `AIJobService` 与扫描任务分开运行：扫描负责发布当前资源快照，分析服务只处理快照内的图片文件。`metadata`（EXIF/GPS）、`embedding`（Chinese-CLIP）、`ocr`（RapidOCR）与 `face`（YuNet + SFace）都通过 `AIAnalyzer` 注册并各自维护版本。全量任务重算全部图片，增量任务按资源 ID、大小、纳秒修改时间与模块版本筛出新增或变化项；带 `albumId` 的定向任务只从指定照片相册取得图片 ID，定向序列跳过与智能分组无关的 OCR。人物分析通过 `peopleEnabled` 默认关闭；明确开启后才允许手动、按序或每日启动 `face` 任务。OCR 文本和人脸框/特征写入既有分析批次；相似人脸接口只返回通过当前路径和文件指纹检查的照片 DTO，不对外暴露特征向量。每个结果仍由现有任务服务按 32 张一批提交、恢复与重试，不另设任务队列。
 
-`SmartAlbumService` 只读取指定照片相册的直属图片，在 EXIF 拍摄时间、离线地点、现有人物候选和已有 Chinese-CLIP 向量上生成虚拟分组，不移动或复制媒体。派生缓存键包含相册 ID、维度、资源 ID 与文件指纹、相关分析记录版本和分组算法版本；不同相册使用不同缓存文件。时间使用可信拍摄时间并按间隔切段，地点只输出离线行政区域名或 geohash 单元名，不向浏览器传 GPS，人物只取当前相册成员，场景以相互近邻与相似度门槛保守成组；每组至少 3 张。名称建议、覆盖率与成员摘要按需计算，媒体页在返回前再次校验当前相册成员、路径边界、普通文件与指纹。用户改名/隐藏写入 `state/smart_album_overrides.json` 并包含在状态备份，分组成员只保存在可重建的 `derived/ai/smart-albums/`。每日计划的智能相册步骤遍历全库照片相册与四个维度，复用指纹匹配的派生缓存，只重建媒体或分析结果变化的分组。
+`SmartAlbumService` 只读取指定照片相册的直属图片，在 EXIF 拍摄时间、离线地点、现有人物候选和已有 Chinese-CLIP 向量上生成虚拟分组，不移动或复制媒体。派生缓存键包含相册 ID、维度、资源 ID 与文件指纹、相关分析记录版本和分组算法版本；不同相册使用不同缓存文件。时间使用可信拍摄时间并按间隔切段，地点只输出离线行政区域名或 geohash 单元名，不向浏览器传 GPS，人物只取当前相册成员，场景以相互近邻与相似度门槛保守成组；每组至少 3 张。名称建议、覆盖率与成员摘要按需计算，媒体页在返回前再次校验当前相册成员、路径边界、普通文件与指纹。用户改名/隐藏写入 `state/smart_album_overrides.json` 并包含在状态备份，分组成员只保存在可重建的 `derived/ai/smart-albums/`。每日计划的智能相册步骤遍历全库照片相册与四个维度，复用指纹匹配的派生缓存，只重建媒体或分析结果变化的分组。`SmartAlbumRefreshService` 把这次全库遍历做成后台任务：手动触发与每日计划共用它，同一时刻只跑一个，有进度、可取消，失败只回错误码不回本机路径。
 
 任务状态、每日计划与最后一次计划流程状态写在 `state/ai_jobs.json`，每 32 张图片提交一个批次检查点；批次结果使用同目录内的原子 JSON 文件，位于 `derived/metadata/<模块>/batches/<任务 ID>/`，可重建且与用户状态分开。结果文件先原子发布，再写检查点；启动时扫描结果批次并修复“结果已写、检查点未写”的崩溃窗口。任务恢复只从最近已提交的批次继续，未提交的尾批会重跑。失败记录写入同一批次，错误仅含资源 ID、稳定错误码和脱敏原因。
 
@@ -106,7 +106,7 @@ OCR 额外维护 `derived/ai/ocr-search-index.json` 倒排索引，索引项仅�
 
 任务快照分两类字段：事实与派生。`results`（按解析状态分类的计数）与 `fields`（按字段统计的产出）是事实，随每个 32 张的批次原子提交并落盘；重启时按批次文件重放，与失败计数走同一条恢复路径。`planned`、`completed`、`estimatedRemainingMs` 与速度是派生值，每次快照按落盘的计数重算，不写入状态文件 —— 写进去就等于把某一刻的估计当成事实。已注册的分析模块清单由后端给出，客户端不维护第二份模块名表。
 
-任务中心的界面拆成四个页签：运行（当前任务的进度、读数与控制，空闲时是开始分析的入口）、每日计划（开关、时间、扫描/分析/智能相册任务选择与人物开关）、任务记录（历史任务与失败项）、本机存储（派生缓存占用、AI 模型权重与各模块产物、相对路径与本机绝对路径）。等待队列作为「运行」页签的附属面板贴在它下面，始终显示并明确呈现空队列状态。每个页签独占整幅宽度，宽屏的宽度用在卡片内部（运行面板左右分栏、每日计划模块与人物开关左右分栏、本机存储两卡并排）。任务数据层收在 `hooks/useTaskCenter.ts`，存储数据层收在 `hooks/useStorage.ts`，面板在 `components/tasks/`；路由组件只排版。分析模块用芯片列出（`components/tasks/ModuleChips.tsx`），互斥选项用分段控件（`components/common/Segmented.tsx`），两类控件在各页共用同一套语义与键盘行为。单项启动和“按序启动全部任务”都复用 `AIJobService` 的持久队列；全部任务固定按 metadata、embedding、OCR、人脸顺序入队，缺少依赖或模型的模块跳过，前端在每项终结后刷新活动任务以跟上下一项，等待中的任务按执行顺序排列显示。失败项按「错误码 + 原因」在前端分组，同一原因的几百条路径折叠起来只留计数，展开才列路径。进度分母是本次任务实际要处理的张数（`planned`），不是整库规模：增量任务里整库大部分文件已经是最新的，拿整库当分母会让进度一上来就接近满格。
+任务中心的界面拆成四个页签：运行（当前任务的进度、读数与控制，空闲时是开始分析的入口）、每日计划（开关、时间、扫描/分析/智能相册任务选择与人物开关）、任务记录（历史任务与失败项）、本机存储（派生缓存占用、AI 模型权重与各模块产物、相对路径与本机绝对路径）。等待队列作为「运行」页签的附属面板贴在它下面，始终显示并明确呈现空队列状态。状态面板与队列之间是「智能相册分组」面板：增量更新与强制重建两个入口跑全库刷新，面板显示当前相册、维度与进度，可中途取消；生成结束后首页汇总与相册页的分组摘要一起失效重读。每个页签独占整幅宽度，宽屏的宽度用在卡片内部（运行面板左右分栏、每日计划模块与人物开关左右分栏、本机存储两卡并排）。任务数据层收在 `hooks/useTaskCenter.ts`，存储数据层收在 `hooks/useStorage.ts`，面板在 `components/tasks/`；路由组件只排版。分析模块用芯片列出（`components/tasks/ModuleChips.tsx`），互斥选项用分段控件（`components/common/Segmented.tsx`），两类控件在各页共用同一套语义与键盘行为。单项启动和“按序启动全部任务”都复用 `AIJobService` 的持久队列；全部任务固定按 metadata、embedding、OCR、人脸顺序入队，缺少依赖或模型的模块跳过，前端在每项终结后刷新活动任务以跟上下一项，等待中的任务按执行顺序排列显示。失败项按「错误码 + 原因」在前端分组，同一原因的几百条路径折叠起来只留计数，展开才列路径。进度分母是本次任务实际要处理的张数（`planned`），不是整库规模：增量任务里整库大部分文件已经是最新的，拿整库当分母会让进度一上来就接近满格。
 
 空闲时先给数字再给按钮：运行页签在头部条与主体之间放一条「本次规模」（`components/tasks/TaskEstimatePanel.tsx`），把增量与全量两种口径的张数与预计耗时并排列出，当前模式那一行高亮。四个模块 × 两种口径由一次核算带来，切模式与切模块都不重新请求。模块与模式的选择态放在 `hooks/useTaskCenter.ts` 而不是组件里 —— 规模表、按钮上的张数说明与真正发出去的启动请求必须读到同一个 mode，分开存必然漂移。任务进入终态、用户清空历史、媒体库重新扫描之后都要让核算失效重算。每日计划按增量口径给出「预计下次运行」的张数与耗时。
 

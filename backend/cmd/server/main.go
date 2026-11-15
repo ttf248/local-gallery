@@ -364,6 +364,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化智能相册服务失败: %v", err)
 	}
+	// 全库智能相册刷新是个后台任务：手动触发与每日计划都走它。
+	smartAlbumRefresh := services.NewSmartAlbumRefreshService(smartAlbums)
 	aiJobs.SetDailyTaskHandlers(
 		func(ctx context.Context) error {
 			opts := handlers.ScanOptionsFromConfig(mgr)
@@ -403,7 +405,9 @@ func main() {
 			if len(mgr.Roots()) == 0 {
 				return services.ErrDailyPlanNoMediaRoots
 			}
-			return smartAlbums.RefreshAll(ctx)
+			// 与手动触发共用同一个刷新任务：分组口径只有一处实现，
+			// 两条路径也不会同时重建同一份派生缓存。
+			return smartAlbumRefresh.Run(ctx, false)
 		},
 	)
 
@@ -513,6 +517,11 @@ func main() {
 	api.Post("/ai/jobs/:id/retry", handlers.AIJobActionHandler(aiJobs, "retry"))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
 	api.Get("/smart-albums", handlers.SmartAlbumDirectoryHandler(smartAlbums))
+	api.Post("/smart-albums/refresh", handlers.SmartAlbumRefreshStartHandler(smartAlbumRefresh))
+	api.Get("/smart-albums/refresh/active", handlers.SmartAlbumRefreshActiveHandler(smartAlbumRefresh))
+	api.Get("/smart-albums/refresh/:id", handlers.SmartAlbumRefreshStatusHandler(smartAlbumRefresh))
+	api.Delete("/smart-albums/refresh/:id", handlers.SmartAlbumRefreshCancelHandler(smartAlbumRefresh))
+	api.Get("/smart-albums/refresh/:id/events", handlers.SmartAlbumRefreshEventsHandler(smartAlbumRefresh))
 	api.Get("/albums/:id/smart-groups", resourceParam, handlers.SmartAlbumGroupsHandler(smartAlbums, false))
 	api.Post("/albums/:id/smart-groups/rebuild", resourceParam, handlers.SmartAlbumGroupsHandler(smartAlbums, true))
 	api.Put("/albums/:id/smart-groups/:groupId", resourceParam, handlers.SmartAlbumOverrideHandler(smartAlbums))
@@ -629,7 +638,7 @@ func main() {
 			return err
 		})
 	}()
-	err = runServer(ctx, app, cfg.Addr(), runner, transcode, scanCache, aiJobs)
+	err = runServer(ctx, app, cfg.Addr(), runner, transcode, scanCache, aiJobs, smartAlbumRefresh)
 	stop()
 	<-maintenanceDone
 	if err != nil {
@@ -648,12 +657,13 @@ func runServer(
 	transcode *services.TranscodeService,
 	scanCache *services.ScanResultCache,
 	aiJobs *services.AIJobService,
+	smartAlbumRefresh *services.SmartAlbumRefreshService,
 ) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return errors.Join(fmt.Errorf("监听失败: %w", err), shutdownRuntime(cleanupCtx, runner, transcode, scanCache, aiJobs))
+		return errors.Join(fmt.Errorf("监听失败: %w", err), shutdownRuntime(cleanupCtx, runner, transcode, scanCache, aiJobs, smartAlbumRefresh))
 	}
 
 	listenDone := make(chan error, 1)
@@ -665,7 +675,7 @@ func runServer(
 	case listenErr := <-listenDone:
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		return errors.Join(listenErr, shutdownRuntime(cleanupCtx, runner, transcode, scanCache, aiJobs))
+		return errors.Join(listenErr, shutdownRuntime(cleanupCtx, runner, transcode, scanCache, aiJobs, smartAlbumRefresh))
 	case <-ctx.Done():
 		log.Printf("收到退出信号，正在停止后台任务并刷新缓存…")
 	}
@@ -674,7 +684,7 @@ func runServer(
 	defer cancel()
 	runtimeDone := make(chan error, 1)
 	go func() {
-		runtimeDone <- shutdownRuntime(cleanupCtx, runner, transcode, scanCache, aiJobs)
+		runtimeDone <- shutdownRuntime(cleanupCtx, runner, transcode, scanCache, aiJobs, smartAlbumRefresh)
 	}()
 
 	httpErr := app.ShutdownWithTimeout(5 * time.Second)
@@ -689,6 +699,7 @@ func shutdownRuntime(
 	transcode *services.TranscodeService,
 	scanCache *services.ScanResultCache,
 	aiJobs *services.AIJobService,
+	smartAlbumRefresh *services.SmartAlbumRefreshService,
 ) error {
 	var scanErr, transcodeErr, cacheErr, aiJobsErr error
 	if runner != nil {
@@ -702,6 +713,10 @@ func shutdownRuntime(
 	}
 	if aiJobs != nil {
 		aiJobsErr = aiJobs.Shutdown(ctx)
+	}
+	if smartAlbumRefresh != nil {
+		// 刷新任务是后台任务：停掉它，别让它在进程退出后还写派生缓存。
+		smartAlbumRefresh.Close()
 	}
 	return errors.Join(scanErr, transcodeErr, cacheErr, aiJobsErr)
 }

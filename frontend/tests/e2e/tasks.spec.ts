@@ -121,6 +121,26 @@ test.describe("任务中心", () => {
     ).toBeChecked();
   });
 
+  test("任务中心能手动生成智能相册分组", async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.goto("/tasks/run");
+    await scannedNodes(page.request, "photo");
+
+    const start = page.getByRole("button", { name: "增量更新" });
+    await expect(start).toBeVisible();
+    await start.click();
+
+    // 后台任务跑完，面板上给出重算与复用的数量。
+    await expect(page.getByTestId("smart-album-refresh-done")).toBeVisible({
+      timeout: 90_000,
+    });
+    await expect(page.getByTestId("smart-album-refresh-done")).toContainText(
+      "个相册",
+    );
+    // 任务结束就不再提供「取消」。
+    await expect(page.getByRole("button", { name: "取消" })).toHaveCount(0);
+  });
+
   test("跑完一次分析后任务记录里出现新的任务与产出明细", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/tasks/run");

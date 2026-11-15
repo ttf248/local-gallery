@@ -194,8 +194,11 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	if len(rebuilt.Groups) != 1 || rebuilt.Groups[0].Name != customName || !rebuilt.Groups[0].Hidden {
 		t.Fatalf("override did not survive restart and forced rebuild: %+v", rebuilt.Groups)
 	}
-	if err := service.RefreshAll(context.Background()); err != nil {
-		t.Fatalf("RefreshAll() error = %v", err)
+	var sweepProgress []SmartAlbumSweepProgress
+	if err := service.SweepSmartAlbums(context.Background(), false, func(progress SmartAlbumSweepProgress) {
+		sweepProgress = append(sweepProgress, progress)
+	}); err != nil {
+		t.Fatalf("SweepSmartAlbums() error = %v", err)
 	}
 	for _, albumID := range []string{firstAlbumID, secondAlbumID} {
 		for _, dimension := range []string{
@@ -205,9 +208,19 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 			SmartAlbumDimensionScene,
 		} {
 			if _, err := os.Stat(service.cachePath(albumID, dimension)); err != nil {
-				t.Fatalf("RefreshAll() did not prepare %s for %s: %v", dimension, albumID, err)
+				t.Fatalf("SweepSmartAlbums() did not prepare %s for %s: %v", dimension, albumID, err)
 			}
 		}
+	}
+	if len(sweepProgress) != 8 {
+		t.Fatalf("sweep progress steps = %d, want 8", len(sweepProgress))
+	}
+	last := sweepProgress[len(sweepProgress)-1]
+	if last.Albums != 2 || last.Total != 8 || last.Completed != 8 {
+		t.Fatalf("sweep progress = %+v", last)
+	}
+	if last.Rebuilt == 0 && last.Reused == 0 {
+		t.Fatalf("sweep did not count rebuilt or reused groups: %+v", last)
 	}
 }
 
