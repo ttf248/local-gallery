@@ -5,6 +5,64 @@ test.beforeEach(async ({ request }) => {
   await resetWorkbenchMode(request);
 });
 
+test("首页汇总已生成的智能分组并直接进入来源相册", async ({ page }) => {
+  const albums = await scannedNodes(page.request, "photo");
+  const album = albums.find((item) => item.name === "zz-足迹");
+  expect(album).toBeDefined();
+
+  const started = await page.request.post("/api/ai/jobs", {
+    data: { type: "metadata", mode: "incremental", albumId: album!.id },
+  });
+  expect(started.ok()).toBeTruthy();
+  const { job } = (await started.json()) as { job: { id: string } };
+  await expect
+    .poll(async () => {
+      const response = await page.request.get("/api/ai/jobs");
+      if (!response.ok()) return "";
+      const body = (await response.json()) as {
+        snapshot: { jobs: Array<{ id: string; status: string }> };
+      };
+      return (
+        body.snapshot.jobs.find((item) => item.id === job.id)?.status ?? ""
+      );
+    })
+    .toBe("completed");
+
+  const summaryResponse = await page.request.get(
+    `/api/albums/${encodeURIComponent(album!.id)}/smart-groups?dimension=time`,
+  );
+  expect(summaryResponse.ok()).toBeTruthy();
+  const summary = (await summaryResponse.json()) as {
+    summary: {
+      groups: Array<{ id: string; name: string; photoCount: number }>;
+    };
+  };
+  const group = summary.summary.groups[0];
+  expect(group).toBeDefined();
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /^智能相册/ }).click();
+
+  const smartGroupLink = page.locator(
+    `a[href="${albumUrl(album!)}?view=smart&dimension=time&group=${group.id}"]`,
+  );
+  await expect(smartGroupLink).toBeVisible();
+  await expect(smartGroupLink).toContainText(group.name);
+  await expect(smartGroupLink).toContainText("zz-足迹");
+  await smartGroupLink.click();
+
+  await expect(page).toHaveURL(
+    `${albumUrl(album!)}?view=smart&dimension=time&group=${group.id}`,
+  );
+  await expect(
+    page.getByRole("button", { name: "智能相册", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const wall = page.locator("[data-virtuoso-scroller]");
+  await expect(wall.getByRole("button", { name: /查看 .*\.jpg/ })).toHaveCount(
+    group.photoCount,
+  );
+});
+
 test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({ page }) => {
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-足迹");
