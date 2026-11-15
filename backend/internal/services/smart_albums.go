@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -33,12 +34,12 @@ const (
 	smartAlbumTimeVersion      = "time-day-session-v1"
 	smartAlbumPlaceVersion     = "place-offline-admin-v1"
 	smartAlbumPeopleVersion    = "people-album-members-v1"
-	smartAlbumSceneVersion     = "scene-mutual-ann-v3"
+	smartAlbumSceneVersion     = "scene-mutual-ann-v9"
 	smartAlbumMinimumGroupSize = 3
 	smartAlbumStatWorkers      = 8
 	smartSceneSimilarityFloor  = 0.72
 	smartSceneANNConstruction  = 40
-	smartSceneANNSearch        = 64
+	smartSceneANNSearch        = 16
 )
 
 var (
@@ -251,17 +252,20 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 	}
 	metadataRecords := s.jobs.RecordsForResources(AIJobTypeMetadata, mediaIDs)
 	faceRecords := s.jobs.RecordSummariesForResources(AIJobTypeFace, mediaIDs)
+	embeddingRecords := s.jobs.RecordSummariesForResources(AIJobTypeEmbedding, mediaIDs)
 	metadataCurrent := currentAnalysisRecords(metadataRecords, fingerprints)
 	faceCurrent := currentAnalysisSummaries(faceRecords, fingerprints)
+	embeddingCurrent := currentAnalysisSummaries(embeddingRecords, fingerprints)
 	metadataStatus := s.jobs.ModuleStatus(AIJobTypeMetadata)
 	faceStatus := s.jobs.ModuleStatus(AIJobTypeFace)
 	embeddingStatus := s.jobs.ModuleStatus(AIJobTypeEmbedding)
 	metadataCoverage := coverageForRecords(len(ids), len(media), metadataCurrent, metadataStatus)
 	faceCoverage := coverageForSummaries(len(ids), len(media), faceCurrent, faceStatus)
-	embeddingCoverage := coverageForVectors(len(ids), len(media), s.vectors, fingerprints, embeddingStatus)
+	embeddingCoverage := coverageForVectors(len(ids), len(media), s.vectors, fingerprints, embeddingCurrent, embeddingStatus)
 	peopleGroups := []PeopleAlbumGroup{}
 	if s.people != nil && dimension == SmartAlbumDimensionPeople {
 		peopleGroups = s.people.AlbumGroups(currentFingerprints(faceCurrent, fingerprints))
+		faceCoverage.WithEvidence = peopleEvidencePhotoCount(peopleGroups)
 		if !s.jobs.PeopleEnabled() {
 			faceCoverage.Available = false
 			faceCoverage.Reason = "people_analysis_disabled"
@@ -432,13 +436,18 @@ func (s *SmartAlbumService) buildGroups(
 		return nil, err
 	}
 	groups := make([]SmartAlbumGroup, 0, len(drafts))
+	mediaOrder := make(map[string]int, len(media))
+	for index, item := range media {
+		mediaOrder[item.id] = index
+	}
 	for _, draft := range drafts {
 		members := make([]string, 0, len(draft.members))
-		for _, item := range media {
-			if _, exists := draft.members[item.id]; exists {
-				members = append(members, item.id)
+		for id := range draft.members {
+			if _, exists := mediaByID[id]; exists {
+				members = append(members, id)
 			}
 		}
+		sort.Slice(members, func(i, j int) bool { return mediaOrder[members[i]] < mediaOrder[members[j]] })
 		if len(members) < smartAlbumMinimumGroupSize {
 			continue
 		}
@@ -564,20 +573,6 @@ func splitSmartCaptureSessions(photos []smartCapture) [][]smartCapture {
 		}
 	}
 	segments = append(segments, append([]smartCapture(nil), photos[start:]...))
-	for index := 0; index < len(segments); {
-		if len(segments[index]) >= smartAlbumMinimumGroupSize || len(segments) == 1 {
-			index++
-			continue
-		}
-		if index > 0 {
-			segments[index-1] = append(segments[index-1], segments[index]...)
-			segments = append(segments[:index], segments[index+1:]...)
-			index--
-			continue
-		}
-		segments[1] = append(segments[0], segments[1]...)
-		segments = segments[1:]
-	}
 	return segments
 }
 
@@ -1005,15 +1000,17 @@ func (s *SmartAlbumService) analysisFingerprint(
 	case SmartAlbumDimensionScene:
 		write(embeddingStatus.Version)
 		if s.vectors != nil {
+			vectorBytes := make([]byte, AIEmbeddingDimension*4)
 			for _, item := range media {
 				vector, ok := s.vectors.Vector(item.id, item.fingerprint.Size, item.fingerprint.MTimeNs)
 				if !ok {
 					continue
 				}
 				write(item.id)
-				for _, value := range vector {
-					write(strconv.FormatUint(uint64(math.Float32bits(value)), 16))
+				for index, value := range vector {
+					binary.LittleEndian.PutUint32(vectorBytes[index*4:], math.Float32bits(value))
 				}
+				_, _ = hash.Write(vectorBytes)
 			}
 		}
 	}
@@ -1171,20 +1168,39 @@ func coverageForSummaries(total, available int, records map[string]AIAnalysisRec
 	return coverage
 }
 
-func coverageForVectors(total, available int, vectors *VectorIndexStore, fingerprints map[string]smartAlbumFileFingerprint, module AIJobModule) SmartAlbumCoverage {
+func coverageForVectors(
+	total, available int,
+	vectors *VectorIndexStore,
+	fingerprints map[string]smartAlbumFileFingerprint,
+	records map[string]AIAnalysisRecordSummary,
+	module AIJobModule,
+) SmartAlbumCoverage {
 	coverage := SmartAlbumCoverage{Module: module.Type, Total: total, Available: module.Installed, Reason: module.Reason}
-	if vectors != nil {
-		for id, fingerprint := range fingerprints {
-			if vectors.Current(id, fingerprint.Size, fingerprint.MTimeNs) {
-				coverage.Analyzed++
-			}
+	for id, fingerprint := range fingerprints {
+		if vectors != nil && vectors.Current(id, fingerprint.Size, fingerprint.MTimeNs) {
+			coverage.Analyzed++
+			continue
+		}
+		if record, exists := records[id]; exists && record.Status == "failed" {
+			coverage.Failed++
 		}
 	}
-	coverage.Missing = max(0, total-coverage.Analyzed)
+	coverage.Missing = max(0, total-coverage.Analyzed-coverage.Failed)
 	if available < total && coverage.Missing < total-available {
 		coverage.Missing = total - available
 	}
+	coverage.WithEvidence = coverage.Analyzed
 	return coverage
+}
+
+func peopleEvidencePhotoCount(groups []PeopleAlbumGroup) int {
+	resourceIDs := make(map[string]struct{})
+	for _, group := range groups {
+		for _, resourceID := range group.ResourceIDs {
+			resourceIDs[resourceID] = struct{}{}
+		}
+	}
+	return len(resourceIDs)
 }
 
 func metadataEvidenceCount(records map[string]AIAnalysisRecord, dimension string) int {

@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	root := t.TempDir()
 	albumPaths := []string{filepath.Join(root, "album-a"), filepath.Join(root, "album-b")}
 	result := &models.ScanResult{Roots: []string{root}, AlbumCount: len(albumPaths)}
+	allFiles := make([]string, 0, 6)
 	for albumIndex, albumPath := range albumPaths {
 		if err := os.MkdirAll(albumPath, 0o755); err != nil {
 			t.Fatal(err)
@@ -29,6 +31,7 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 				t.Fatal(err)
 			}
 			files = append(files, path)
+			allFiles = append(allFiles, path)
 		}
 		result.Albums = append(result.Albums, models.Album{
 			Type: "album", Name: filepath.Base(albumPath), Path: albumPath,
@@ -44,17 +47,40 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 		filepath.Join(root, "derived", "metadata"),
 		catalog,
 		MetadataAnalyzer{},
+		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-test-v1"},
 	)
 	snapshot := catalog.Acquire()
 	firstAlbumID := catalog.ExternalID(albumPaths[0], ResourceAlbum)
 	secondAlbumID := catalog.ExternalID(albumPaths[1], ResourceAlbum)
 	seedMetadataRecords(t, jobs, snapshot, firstAlbumID, "2025-06-18T10:00:00")
 	seedMetadataRecords(t, jobs, snapshot, secondAlbumID, "2025-06-18T10:00:00")
+	vectors, err := OpenVectorIndex(filepath.Join(root, "derived", "vectors"), "embedding-test-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer vectors.Close()
+	vectorInputs := make([]VectorInput, 0, len(allFiles))
+	for _, path := range allFiles {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		vector := make([]float32, AIEmbeddingDimension)
+		vector[0] = 1
+		vectorInputs = append(vectorInputs, VectorInput{
+			ResourceID: catalog.ExternalID(path, ResourceFile), Size: info.Size(),
+			MTimeNs: info.ModTime().UnixNano(), Vector: vector,
+		})
+	}
+	if err := vectors.Commit(context.Background(), vectorInputs); err != nil {
+		t.Fatal(err)
+	}
 
 	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
 		StatePath: filepath.Join(root, "state", "smart-albums.json"),
 		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
-		Catalog:   catalog, Jobs: jobs, ValidatePath: aiTestPathValidator(t, root),
+		Catalog:   catalog, Jobs: jobs, Vectors: vectors,
+		ValidatePath: aiTestPathValidator(t, root),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +88,13 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	first, err := service.Groups(context.Background(), firstAlbumID, SmartAlbumDimensionTime, false)
 	if err != nil {
 		t.Fatal(err)
+	}
+	cached, err := service.Groups(context.Background(), firstAlbumID, SmartAlbumDimensionTime, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cached.CacheHit {
+		t.Fatal("repeated album grouping did not reuse its cache")
 	}
 	second, err := service.Groups(context.Background(), secondAlbumID, SmartAlbumDimensionTime, false)
 	if err != nil {
@@ -72,6 +105,14 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	}
 	if second.TotalPhotos != 3 || len(second.Groups) != 1 || second.Groups[0].PhotoCount != 3 {
 		t.Fatalf("second album groups=%+v", second)
+	}
+	scenes, err := service.Groups(context.Background(), firstAlbumID, SmartAlbumDimensionScene, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scenes.Groups) != 1 || scenes.Groups[0].PhotoCount != 3 ||
+		scenes.Coverage.Analyzed != 3 || scenes.Coverage.WithEvidence != 3 {
+		t.Fatalf("scene groups did not reuse only this album's vectors: %+v", scenes)
 	}
 	encoded, err := json.Marshal(first)
 	if err != nil {
@@ -107,6 +148,22 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	corrections := service.Corrections()
 	if !validSmartAlbumCorrections(corrections) || len(corrections.Overrides) != 1 {
 		t.Fatalf("corrections=%+v", corrections)
+	}
+
+	reopened, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(root, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs, ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rebuilt, err := reopened.Groups(context.Background(), firstAlbumID, SmartAlbumDimensionTime, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rebuilt.Groups) != 1 || rebuilt.Groups[0].Name != customName || !rebuilt.Groups[0].Hidden {
+		t.Fatalf("override did not survive restart and forced rebuild: %+v", rebuilt.Groups)
 	}
 }
 
@@ -267,6 +324,113 @@ func TestSmartAlbumTimeSessionsUseRobustGapCut(t *testing.T) {
 	}
 }
 
+func TestSmartAlbumTimeSessionsLeaveSparseOutliersUngrouped(t *testing.T) {
+	base := time.Date(2025, 6, 18, 10, 0, 0, 0, time.UTC)
+	photos := []smartCapture{
+		{resourceID: "a", captured: base},
+		{resourceID: "b", captured: base.Add(2 * time.Minute)},
+		{resourceID: "c", captured: base.Add(5 * time.Minute)},
+		{resourceID: "d", captured: base.Add(12 * time.Hour)},
+		{resourceID: "e", captured: base.Add(12*time.Hour + 2*time.Minute)},
+	}
+	segments := splitSmartCaptureSessions(photos)
+	if len(segments) != 2 || len(segments[0]) != 3 || len(segments[1]) != 2 {
+		t.Fatalf("sparse session was merged across a long gap: sizes=%v", []int{len(segments[0]), len(segments[1])})
+	}
+}
+
+func TestSmartAlbumGroupsDegradeWithoutAnalysisAndInvalidateChangedFiles(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "album")
+	if err := os.MkdirAll(albumPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := make([]string, 3)
+	for index := range files {
+		files[index] = filepath.Join(albumPath, fmt.Sprintf("%d.jpg", index))
+		if err := os.WriteFile(files[index], []byte("photo"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root}, AlbumCount: 1,
+		Albums: []models.Album{{
+			Type: "album", Name: "album", Path: albumPath, SourceRoot: root,
+			ImageFiles: files, ImageCount: len(files),
+		}},
+	}, []string{root})
+	jobs := newTestAIJobService(
+		t,
+		filepath.Join(root, "state", "ai-jobs.json"),
+		filepath.Join(root, "derived", "metadata"),
+		catalog,
+		MetadataAnalyzer{},
+	)
+	albumID := catalog.ExternalID(albumPath, ResourceAlbum)
+	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(root, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs, ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dimension := range []string{
+		SmartAlbumDimensionTime, SmartAlbumDimensionPlace,
+		SmartAlbumDimensionPeople, SmartAlbumDimensionScene,
+	} {
+		summary, err := service.Groups(context.Background(), albumID, dimension, false)
+		if err != nil {
+			t.Fatalf("dimension %s without records: %v", dimension, err)
+		}
+		if len(summary.Groups) != 0 || summary.UngroupedPhotos != len(files) || summary.Coverage.Missing != len(files) {
+			t.Fatalf("dimension %s did not degrade to ungrouped photos: %+v", dimension, summary)
+		}
+	}
+	cached, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionTime, false)
+	if err != nil || !cached.CacheHit {
+		t.Fatalf("empty result cache was not reused: cacheHit=%t err=%v", cached.CacheHit, err)
+	}
+	seedMetadataRecords(t, jobs, catalog.Acquire(), albumID, "2025-06-18T10:00:00")
+	seeded, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionTime, false)
+	if err != nil || seeded.CacheHit || len(seeded.Groups) != 1 {
+		t.Fatalf("new metadata did not rebuild a time group: summary=%+v err=%v", seeded, err)
+	}
+	if err := os.WriteFile(files[0], []byte("changed photo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionTime, false)
+	if err != nil || changed.CacheHit || changed.AvailablePhotos != len(files) || len(changed.Groups) != 0 || changed.Coverage.Analyzed != len(files)-1 {
+		t.Fatalf("changed file did not invalidate cache: summary=%+v err=%v", changed, err)
+	}
+}
+
+func TestSmartAlbumPlaceGroupsNearbyGPSWithoutReturningCoordinates(t *testing.T) {
+	drafts := make(map[string]*smartAlbumDraft)
+	media := make([]smartAlbumMedia, 3)
+	records := make(map[string]AIAnalysisRecord, len(media))
+	for index := range media {
+		id := fmt.Sprintf("f_%d", index)
+		media[index].id = id
+		data, err := json.Marshal(ImageMetadata{GPS: &GPSMetadata{Latitude: 40.7128, Longitude: -74.0060}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		records[id] = AIAnalysisRecord{Status: MetadataParseParsed, Data: data}
+	}
+	addPlaceDrafts(drafts, media, records)
+	if len(drafts) != 1 {
+		t.Fatalf("nearby GPS photos formed %d drafts, want one", len(drafts))
+	}
+	for key, draft := range drafts {
+		if !strings.HasPrefix(key, "place:") || len(draft.members) != 3 || strings.Contains(draft.name, "40.7128") || strings.Contains(draft.name, "-74.0060") {
+			t.Fatalf("unexpected location draft: key=%q draft=%+v", key, draft)
+		}
+	}
+}
+
 func TestSmartSceneClustersCanFormThreePhotoGroup(t *testing.T) {
 	vectors := make([]smartSceneVector, 3)
 	for index := range vectors {
@@ -316,6 +480,89 @@ func BenchmarkSmartSceneClusters(b *testing.B) {
 			}
 		})
 	}
+}
+
+func BenchmarkSmartAlbumSceneGroups(b *testing.B) {
+	for _, count := range []int{100, 1000, 5000} {
+		b.Run(fmt.Sprint(count), func(b *testing.B) {
+			service, albumID := newSmartSceneBenchmarkService(b, count)
+			b.ReportAllocs()
+			b.ReportMetric(float64(count), "photos/op")
+			b.ResetTimer()
+			for index := 0; index < b.N; index++ {
+				if _, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionScene, true); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func newSmartSceneBenchmarkService(b *testing.B, count int) (*SmartAlbumService, string) {
+	b.Helper()
+	root := filepath.Join(b.TempDir(), "media")
+	albumPath := filepath.Join(root, "album")
+	if err := os.MkdirAll(albumPath, 0o755); err != nil {
+		b.Fatal(err)
+	}
+	files := make([]string, count)
+	for index := range files {
+		files[index] = filepath.Join(albumPath, fmt.Sprintf("photo-%06d.jpg", index))
+		if err := os.WriteFile(files[index], []byte("photo"), 0o600); err != nil {
+			b.Fatal(err)
+		}
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root}, AlbumCount: 1,
+		Albums: []models.Album{{
+			Type: "album", Name: "album", Path: albumPath, SourceRoot: root,
+			ImageFiles: files, ImageCount: len(files),
+		}},
+	}, []string{root})
+
+	validatePath := func(path string) (string, error) { return filepath.Clean(path), nil }
+	jobs, err := NewAIJobService(AIJobServiceOptions{
+		StatePath:   filepath.Join(b.TempDir(), "state", "jobs.json"),
+		MetadataDir: filepath.Join(b.TempDir(), "derived", "metadata"),
+		Catalog:     catalog, ValidatePath: validatePath, WorkerCount: 1,
+		Analyzers: []AIAnalyzer{MetadataAnalyzer{}},
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(func() { _ = jobs.Shutdown(context.Background()) })
+
+	vectors, err := OpenVectorIndex(filepath.Join(b.TempDir(), "derived", "vectors"), "smart-scene-benchmark-v1")
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.Cleanup(vectors.Close)
+	items := smartSceneBenchmarkVectors(count)
+	inputs := make([]VectorInput, len(files))
+	for index, path := range files {
+		info, err := os.Stat(path)
+		if err != nil {
+			b.Fatal(err)
+		}
+		inputs[index] = VectorInput{
+			ResourceID: catalog.ExternalID(path, ResourceFile), Size: info.Size(),
+			MTimeNs: info.ModTime().UnixNano(), Vector: items[index].vector,
+		}
+	}
+	if err := vectors.Commit(context.Background(), inputs); err != nil {
+		b.Fatal(err)
+	}
+	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(b.TempDir(), "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(b.TempDir(), "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs, Vectors: vectors, ValidatePath: validatePath,
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	return service, catalog.ExternalID(albumPath, ResourceAlbum)
 }
 
 func smartSceneBenchmarkVectors(count int) []smartSceneVector {

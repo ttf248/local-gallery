@@ -35,6 +35,25 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
     name: "打开分组 2024年5月2日，3 张",
   });
   await expect(group).toBeVisible();
+
+  await page.getByRole("tab", { name: "地点" }).click();
+  await expect(
+    page.getByRole("button", {
+      name: "打开分组 浙江省 · 杭州市 · 拱墅区，3 张",
+    }),
+  ).toBeVisible();
+
+  for (const dimension of ["人物", "场景"]) {
+    await page.getByRole("tab", { name: dimension }).click();
+    await expect(page.getByText("分析覆盖 0/5")).toBeVisible();
+    await expect(page.getByText("未分析 5 张")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "还没有可展示的分组" }),
+    ).toBeVisible();
+  }
+
+  await page.getByRole("tab", { name: "时间" }).click();
+  await expect(group).toBeVisible();
   await group.click();
 
   const wall = page.locator("[data-virtuoso-scroller]");

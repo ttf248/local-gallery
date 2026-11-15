@@ -236,6 +236,7 @@ describe("PhotoAlbum", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "智能相册" }));
     expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
+    expect(screen.getByText("未分析 1 张")).toBeInTheDocument();
     fireEvent.click(
       screen.getByRole("button", {
         name: "打开分组 2025年6月18日，3 张",

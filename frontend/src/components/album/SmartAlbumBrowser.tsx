@@ -132,8 +132,22 @@ export default function SmartAlbumBrowser({
               <span>
                 分析覆盖 {summary.coverage.analyzed}/{summary.coverage.total}
               </span>
+              <span>
+                未分析{" "}
+                {Math.max(
+                  0,
+                  summary.coverage.missing - summary.unavailablePhotos,
+                )}{" "}
+                张
+              </span>
               <span>有效线索 {summary.coverage.withEvidence} 张</span>
               <span>未分组 {summary.ungroupedPhotos} 张</span>
+              {summary.coverage.failed > 0 && (
+                <span>分析失败 {summary.coverage.failed} 张</span>
+              )}
+              {summary.unavailablePhotos > 0 && (
+                <span>文件不可用 {summary.unavailablePhotos} 张</span>
+              )}
               {!summary.coverage.available && summary.coverage.reason && (
                 <span className="text-warning">该分析模块暂不可用</span>
               )}
