@@ -253,7 +253,7 @@ func TestAIJobEstimateLocksFaceUntilPeopleEnabled(t *testing.T) {
 		t.Fatalf("locked module still reports counts: %+v", face)
 	}
 
-	if _, err := service.ConfigureDaily(false, "03:00", []string{AIJobTypeMetadata}, true); err != nil {
+	if _, err := service.ConfigureDaily(false, "03:00", []string{AIJobTypeMetadata}, true, false, false); err != nil {
 		t.Fatal(err)
 	}
 	estimate, err = service.Estimate(context.Background())

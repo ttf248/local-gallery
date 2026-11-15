@@ -401,7 +401,7 @@ func (a *sequenceAPIAnalyzer) Analyze(context.Context, io.ReadSeeker) (services.
 	return services.AIAnalysisOutput{Status: "processed", Data: json.RawMessage(`{"ok":true}`)}, nil
 }
 
-func TestAIJobSettingsHandlerExplainsInvalidModules(t *testing.T) {
+func TestAIJobSettingsHandlerRejectsEmptyPlan(t *testing.T) {
 	service, err := services.NewAIJobService(services.AIJobServiceOptions{
 		StatePath:    filepath.Join(t.TempDir(), "state", "jobs.json"),
 		MetadataDir:  filepath.Join(t.TempDir(), "derived"),
@@ -439,8 +439,53 @@ func TestAIJobSettingsHandlerExplainsInvalidModules(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Code != "invalid_analysis_settings" || !strings.Contains(body.Message, "dailyModules") {
+	if body.Code != "invalid_analysis_settings" || body.Message != "daily plan settings are invalid" {
 		t.Fatalf("settings error = %+v", body)
+	}
+}
+
+func TestAIJobSettingsHandlerSavesScanAndSmartAlbumTasks(t *testing.T) {
+	root := t.TempDir()
+	service, err := services.NewAIJobService(services.AIJobServiceOptions{
+		StatePath:    filepath.Join(root, "state", "jobs.json"),
+		MetadataDir:  filepath.Join(root, "derived"),
+		Catalog:      services.NewResourceCatalog(),
+		ValidatePath: func(path string) (string, error) { return path, nil },
+		Analyzers:    []services.AIAnalyzer{services.MetadataAnalyzer{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := service.Shutdown(ctx); err != nil {
+			t.Errorf("AI job shutdown: %v", err)
+		}
+	})
+
+	app := fiber.New()
+	app.Put("/api/ai/jobs/settings", AIJobSettingsHandler(service, nil))
+	request := httptest.NewRequest(fiber.MethodPut, "/api/ai/jobs/settings", strings.NewReader(
+		`{"dailyEnabled":true,"dailyTime":"04:10","dailyModules":["metadata"],"dailyScan":false,"dailySmartAlbums":true,"peopleEnabled":false}`,
+	))
+	request.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != fiber.StatusOK {
+		t.Fatalf("settings status = %d", response.StatusCode)
+	}
+	var body struct {
+		Settings services.AIJobSettings `json:"settings"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Settings.DailyScan || !body.Settings.DailySmartAlbums {
+		t.Fatalf("scheduled tasks = scan:%t smartAlbums:%t", body.Settings.DailyScan, body.Settings.DailySmartAlbums)
 	}
 }
 

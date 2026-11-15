@@ -64,6 +64,7 @@ var ErrAIJobInvalidDirection = errors.New("invalid queue direction")
 var ErrAIJobInvalidAlbum = errors.New("analysis album is unavailable or is not a photo album")
 var ErrAIAnalyzerUnavailable = errors.New("analysis module runtime or model is unavailable")
 var ErrPeopleAnalysisDisabled = errors.New("people analysis is disabled")
+var ErrDailyPlanNoMediaRoots = errors.New("daily plan has no configured media roots")
 
 // AIAnalysisOutput 是一个分析模块对单个媒体返回的可序列化结果。
 type AIAnalysisOutput struct {
@@ -225,13 +226,18 @@ type AIJob struct {
 
 // AIJobSettings 放在 state/，不属于可重建的 derived 数据。
 type AIJobSettings struct {
-	DailyEnabled      bool     `json:"dailyEnabled"`
-	DailyTime         string   `json:"dailyTime"`
-	DailyModules      []string `json:"dailyModules"`
-	PeopleEnabled     bool     `json:"peopleEnabled"`
-	GPUEnabled        bool     `json:"gpuEnabled"`
-	LastScheduledDate string   `json:"lastScheduledDate,omitempty"`
-	gpuEnabledSet     bool
+	DailyEnabled        bool     `json:"dailyEnabled"`
+	DailyTime           string   `json:"dailyTime"`
+	DailyModules        []string `json:"dailyModules"`
+	DailyScan           bool     `json:"dailyScan"`
+	DailySmartAlbums    bool     `json:"dailySmartAlbums"`
+	PeopleEnabled       bool     `json:"peopleEnabled"`
+	GPUEnabled          bool     `json:"gpuEnabled"`
+	LastScheduledDate   string   `json:"lastScheduledDate,omitempty"`
+	LastScheduledStatus string   `json:"lastScheduledStatus,omitempty"`
+	LastScheduledStage  string   `json:"lastScheduledStage,omitempty"`
+	LastScheduledError  string   `json:"lastScheduledError,omitempty"`
+	gpuEnabledSet       bool
 }
 
 func (s *AIJobSettings) UnmarshalJSON(data []byte) error {
@@ -246,6 +252,12 @@ func (s *AIJobSettings) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	_, s.gpuEnabledSet = fields["gpuEnabled"]
+	if _, exists := fields["dailyScan"]; !exists {
+		s.DailyScan = true
+	}
+	if _, exists := fields["dailySmartAlbums"]; !exists {
+		s.DailySmartAlbums = true
+	}
 	return nil
 }
 
@@ -362,15 +374,19 @@ type AIJobService struct {
 	records            map[string]AIAnalysisRecord
 	// recordsRevision 在分析结果增删改时递增。
 	// 依赖分析结果的派生数据（如离线地点图谱）用它判断缓存是否过期。
-	recordsRevision uint64
-	runtimes        map[string]*aiJobRuntime
-	subs            map[string]map[chan AIJob]struct{}
-	activeID        string
-	closed          bool
-	settings        AIJobSettings
-	stopSchedule    context.CancelFunc
-	closeOnce       sync.Once
-	wg              sync.WaitGroup
+	recordsRevision  uint64
+	runtimes         map[string]*aiJobRuntime
+	subs             map[string]map[chan AIJob]struct{}
+	activeID         string
+	closed           bool
+	settings         AIJobSettings
+	stopSchedule     context.CancelFunc
+	scheduleContext  context.Context
+	dailyPlanActive  bool
+	dailyScan        func(context.Context) error
+	dailySmartAlbums func(context.Context) error
+	closeOnce        sync.Once
+	wg               sync.WaitGroup
 	// targetCache 是文件指纹清单的短时缓存，只服务空闲时的规模预估。
 	// 它有自己的锁，避免把 stat 的等待混进任务状态锁。
 	targetCacheMu sync.Mutex
@@ -411,7 +427,10 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		records:            make(map[string]AIAnalysisRecord),
 		runtimes:           make(map[string]*aiJobRuntime),
 		subs:               make(map[string]map[chan AIJob]struct{}),
-		settings:           AIJobSettings{DailyEnabled: true, DailyTime: "03:00", DailyModules: []string{AIJobTypeMetadata}, GPUEnabled: true},
+		settings: AIJobSettings{
+			DailyEnabled: true, DailyTime: "03:00", DailyModules: []string{AIJobTypeMetadata},
+			DailyScan: true, DailySmartAlbums: true, GPUEnabled: true,
+		},
 	}
 	for _, analyzer := range options.Analyzers {
 		if analyzer == nil || !validAIJobType(analyzer.Type()) || strings.TrimSpace(analyzer.Version()) == "" {
@@ -484,6 +503,9 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	if s.closed {
 		return AIJob{}, false, errors.New("AI job service is shutting down")
 	}
+	if s.dailyPlanActive {
+		return AIJob{}, false, ErrAIJobActive
+	}
 	if moduleType == AIJobTypeFace && !s.settings.PeopleEnabled {
 		return AIJob{}, false, ErrPeopleAnalysisDisabled
 	}
@@ -536,6 +558,10 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 	if s.closed {
 		s.mu.Unlock()
 		return nil, nil, errors.New("AI job service is shutting down")
+	}
+	if s.dailyPlanActive {
+		s.mu.Unlock()
+		return nil, nil, ErrAIJobActive
 	}
 	if s.hasPendingJobsLocked() {
 		s.mu.Unlock()
@@ -595,6 +621,9 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 	defer s.mu.Unlock()
 	if s.closed {
 		return nil, nil, errors.New("AI job service is shutting down")
+	}
+	if s.dailyPlanActive {
+		return nil, nil, ErrAIJobActive
 	}
 	if s.hasPendingJobsLocked() {
 		return nil, nil, ErrAIJobActive
@@ -970,6 +999,15 @@ func (s *AIJobService) List() AIJobSnapshot {
 	return result
 }
 
+// SetDailyTaskHandlers attaches the non-analysis work that brackets scheduled
+// analysis. The scanner and smart album service are created after AIJobService.
+func (s *AIJobService) SetDailyTaskHandlers(scan, smartAlbums func(context.Context) error) {
+	s.mu.Lock()
+	s.dailyScan = scan
+	s.dailySmartAlbums = smartAlbums
+	s.mu.Unlock()
+}
+
 // modulesLocked 列出全部已知分析模块及其安装情况。
 func (s *AIJobService) modulesLocked() []AIJobModule {
 	known := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
@@ -1016,7 +1054,14 @@ func aiJobModuleName(moduleType string) string {
 }
 
 // ConfigureDaily 更新持久化的本地每日调度设置。
-func (s *AIJobService) ConfigureDaily(enabled bool, dailyTime string, dailyModules []string, peopleEnabled bool) (AIJobSettings, error) {
+func (s *AIJobService) ConfigureDaily(
+	enabled bool,
+	dailyTime string,
+	dailyModules []string,
+	peopleEnabled bool,
+	dailyScan bool,
+	dailySmartAlbums bool,
+) (AIJobSettings, error) {
 	if _, err := time.Parse("15:04", dailyTime); err != nil {
 		return AIJobSettings{}, errors.New("daily time must use HH:MM")
 	}
@@ -1031,14 +1076,19 @@ func (s *AIJobService) ConfigureDaily(enabled bool, dailyTime string, dailyModul
 	if !peopleEnabled {
 		dailyModules = withoutModule(dailyModules, AIJobTypeFace)
 	}
-	modules, err := s.normalizeDailyModulesLocked(dailyModules, enabled)
+	modules, err := s.normalizeDailyModulesLocked(dailyModules, enabled && !dailyScan && !dailySmartAlbums)
 	if err != nil {
 		return AIJobSettings{}, err
+	}
+	if enabled && !dailyScan && !dailySmartAlbums && len(modules) == 0 {
+		return AIJobSettings{}, errors.New("at least one scheduled task is required")
 	}
 	previous := s.copySettingsLocked()
 	s.settings.DailyEnabled = enabled
 	s.settings.DailyTime = dailyTime
 	s.settings.DailyModules = modules
+	s.settings.DailyScan = dailyScan
+	s.settings.DailySmartAlbums = dailySmartAlbums
 	s.settings.PeopleEnabled = peopleEnabled
 	if err := s.persistLocked(); err != nil {
 		s.settings = previous
@@ -1179,6 +1229,21 @@ func (s *AIJobService) normalizeDailyModulesLocked(modules []string, enabled boo
 		}
 	}
 	return ordered, nil
+}
+
+func (s *AIJobService) setDailyRun(stage, status, message string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return
+	}
+	s.settings.LastScheduledStage = stage
+	s.settings.LastScheduledStatus = status
+	s.settings.LastScheduledError = message
+	if status != "running" {
+		s.dailyPlanActive = false
+	}
+	_ = s.persistLocked()
 }
 
 func (s *AIJobService) copySettingsLocked() AIJobSettings {
@@ -1392,11 +1457,12 @@ func (s *AIJobService) StartScheduler(ctx context.Context) {
 	}
 	schedulerCtx, cancel := context.WithCancel(ctx)
 	s.stopSchedule = cancel
+	s.scheduleContext = schedulerCtx
 	s.wg.Add(1)
 	s.mu.Unlock()
 	go func() {
 		defer s.wg.Done()
-		s.scheduleTick(s.now())
+		s.scheduleTickWithContext(schedulerCtx, s.now())
 		ticker := time.NewTicker(time.Minute)
 		defer ticker.Stop()
 		for {
@@ -1404,7 +1470,7 @@ func (s *AIJobService) StartScheduler(ctx context.Context) {
 			case <-schedulerCtx.Done():
 				return
 			case <-ticker.C:
-				s.scheduleTick(s.now())
+				s.scheduleTickWithContext(schedulerCtx, s.now())
 			}
 		}
 	}()
@@ -1413,6 +1479,10 @@ func (s *AIJobService) StartScheduler(ctx context.Context) {
 // Shutdown 停止调度并让当前批次以 pending 检查点退出，供下次启动续跑。
 func (s *AIJobService) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
+	if s.dailyPlanActive {
+		s.settings.LastScheduledStatus = "interrupted"
+		_ = s.persistLocked()
+	}
 	s.closed = true
 	if s.stopSchedule != nil {
 		s.stopSchedule()
@@ -2280,26 +2350,43 @@ func (s *AIJobService) finishJobWithCode(id, status, stage, errorCode, message s
 
 func (s *AIJobService) scheduleTick(now time.Time) {
 	s.mu.Lock()
-	if s.closed || s.hasPendingJobsLocked() || !dailyScheduleDue(s.settings, now) {
+	ctx := s.scheduleContext
+	s.mu.Unlock()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.scheduleTickWithContext(ctx, now)
+}
+
+func (s *AIJobService) scheduleTickWithContext(ctx context.Context, now time.Time) {
+	s.mu.Lock()
+	if s.closed || s.dailyPlanActive || s.hasPendingJobsLocked() || !dailyScheduleDue(s.settings, now) {
 		s.mu.Unlock()
 		return
 	}
-	modules := append([]string(nil), s.settings.DailyModules...)
-	analyzers := make(map[string]AIAnalyzer, len(modules))
-	for _, moduleType := range modules {
+	settings := s.copySettingsLocked()
+	analyzers := make(map[string]AIAnalyzer, len(settings.DailyModules))
+	for _, moduleType := range settings.DailyModules {
 		analyzers[moduleType] = s.analyzers[moduleType]
 	}
+	s.dailyPlanActive = true
 	s.mu.Unlock()
 
-	readyModules := make([]string, 0, len(modules))
-	for _, moduleType := range modules {
+	readyModules := make([]string, 0, len(settings.DailyModules))
+	for _, moduleType := range settings.DailyModules {
+		if err := ctx.Err(); err != nil {
+			s.mu.Lock()
+			s.dailyPlanActive = false
+			s.mu.Unlock()
+			return
+		}
 		analyzer := analyzers[moduleType]
 		if analyzer == nil {
 			continue
 		}
 		if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			err := readiness.Ready(ctx)
+			readyCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+			err := readiness.Ready(readyCtx)
 			cancel()
 			if err != nil {
 				continue
@@ -2309,16 +2396,127 @@ func (s *AIJobService) scheduleTick(now time.Time) {
 	}
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed || s.hasPendingJobsLocked() || !dailyScheduleDue(s.settings, now) || !slices.Equal(s.settings.DailyModules, modules) {
+	if s.closed || !s.dailyPlanActive || s.hasPendingJobsLocked() || !dailyScheduleDue(s.settings, now) || !sameDailyPlan(s.settings, settings) {
+		s.dailyPlanActive = false
+		s.mu.Unlock()
 		return
 	}
 	today := now.In(time.Local).Format("2006-01-02")
 	previousDate := s.settings.LastScheduledDate
+	previousStatus := s.settings.LastScheduledStatus
+	previousStage := s.settings.LastScheduledStage
+	previousError := s.settings.LastScheduledError
+	s.settings.LastScheduledDate = today
+	s.settings.LastScheduledStatus = "running"
+	s.settings.LastScheduledStage = "starting"
+	s.settings.LastScheduledError = ""
+	if err := s.persistLocked(); err != nil {
+		s.settings.LastScheduledDate = previousDate
+		s.settings.LastScheduledStatus = previousStatus
+		s.settings.LastScheduledStage = previousStage
+		s.settings.LastScheduledError = previousError
+		s.dailyPlanActive = false
+		s.mu.Unlock()
+		return
+	}
+	s.wg.Add(1)
+	s.mu.Unlock()
+
+	go s.runScheduledPlan(ctx, settings, readyModules)
+}
+
+func sameDailyPlan(left, right AIJobSettings) bool {
+	return left.DailyEnabled == right.DailyEnabled &&
+		left.DailyTime == right.DailyTime &&
+		left.PeopleEnabled == right.PeopleEnabled &&
+		left.DailyScan == right.DailyScan &&
+		left.DailySmartAlbums == right.DailySmartAlbums &&
+		slices.Equal(left.DailyModules, right.DailyModules)
+}
+
+func (s *AIJobService) runScheduledPlan(ctx context.Context, settings AIJobSettings, modules []string) {
+	defer s.wg.Done()
+	if settings.DailyScan {
+		s.setDailyRun("scan", "running", "")
+		s.mu.Lock()
+		scan := s.dailyScan
+		s.mu.Unlock()
+		if scan == nil {
+			s.setDailyRun("scan", "failed", "scan_task_unavailable")
+			return
+		}
+		if err := scan(ctx); err != nil {
+			if errors.Is(err, ErrDailyPlanNoMediaRoots) {
+				s.setDailyRun("completed", "completed", "")
+				return
+			}
+			status := "failed"
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				status = "interrupted"
+			}
+			s.setDailyRun("scan", status, "scan_failed")
+			return
+		}
+	}
+	if len(modules) > 0 && !s.catalog.Acquire().Ready() {
+		s.setDailyRun("analysis", "failed", "library_not_ready")
+		return
+	}
+
+	if len(modules) > 0 {
+		s.setDailyRun("analysis", "running", "")
+		ids, err := s.enqueueScheduledModules(modules)
+		if err != nil {
+			s.setDailyRun("analysis", "failed", "analysis_start_failed")
+			return
+		}
+		if err := s.waitForScheduledModules(ctx, ids); err != nil {
+			s.setDailyRun("analysis", "interrupted", "analysis_interrupted")
+			return
+		}
+	}
+
+	if settings.DailySmartAlbums {
+		s.setDailyRun("smart_albums", "running", "")
+		s.mu.Lock()
+		refresh := s.dailySmartAlbums
+		s.mu.Unlock()
+		if refresh == nil {
+			s.setDailyRun("smart_albums", "failed", "smart_albums_unavailable")
+			return
+		}
+		if err := refresh(ctx); err != nil {
+			if errors.Is(err, ErrDailyPlanNoMediaRoots) {
+				s.setDailyRun("completed", "completed", "")
+				return
+			}
+			status := "failed"
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				status = "interrupted"
+			}
+			s.setDailyRun("smart_albums", status, "smart_albums_failed")
+			return
+		}
+	}
+	s.setDailyRun("completed", "completed", "")
+}
+
+func (s *AIJobService) enqueueScheduledModules(modules []string) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil, errors.New("AI job service is shutting down")
+	}
+	if s.hasPendingJobsLocked() {
+		return nil, ErrAIJobActive
+	}
 	previousOrderLength := len(s.order)
 	previousQueue := append([]string(nil), s.queue...)
-	created := make([]string, 0, len(readyModules))
-	for _, moduleType := range readyModules {
+	created := make([]string, 0, len(modules))
+	for _, moduleType := range modules {
+		if moduleType == AIJobTypeFace && !s.settings.PeopleEnabled {
+			continue
+		}
 		if _, installed := s.analyzers[moduleType]; !installed {
 			continue
 		}
@@ -2328,22 +2526,53 @@ func (s *AIJobService) scheduleTick(now time.Time) {
 		s.order = append(s.order, job.ID)
 		created = append(created, job.ID)
 	}
+	if len(created) == 0 {
+		return nil, nil
+	}
 	if len(created) > 1 {
 		s.queue = append(s.queue, created[1:]...)
 	}
-	s.settings.LastScheduledDate = today
+	s.activeID = created[0]
 	if err := s.persistLocked(); err != nil {
-		s.settings.LastScheduledDate = previousDate
 		for _, id := range created {
 			delete(s.jobs, id)
 		}
 		s.order = s.order[:previousOrderLength]
 		s.queue = previousQueue
-		return
+		s.activeID = ""
+		return nil, err
 	}
-	if len(created) > 0 {
-		s.activeID = created[0]
-		s.launchLocked(created[0])
+	s.launchLocked(created[0])
+	return created, nil
+}
+
+func (s *AIJobService) waitForScheduledModules(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		allDone := true
+		for _, id := range ids {
+			job, exists := s.Get(id)
+			if !exists {
+				continue
+			}
+			switch job.Status {
+			case AIJobStatusCompleted, AIJobStatusFailed, AIJobStatusCancelled:
+			default:
+				allDone = false
+			}
+		}
+		if allDone {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
 	}
 }
 
@@ -2354,7 +2583,7 @@ func dailyScheduleDue(settings AIJobSettings, now time.Time) bool {
 	now = now.In(time.Local)
 	today := now.Format("2006-01-02")
 	if settings.LastScheduledDate == today {
-		return false
+		return settings.LastScheduledStatus == "interrupted"
 	}
 	scheduledToday, err := time.ParseInLocation("2006-01-02 15:04", today+" "+settings.DailyTime, time.Local)
 	if err != nil {
@@ -2487,6 +2716,10 @@ func (s *AIJobService) loadState() error {
 	}
 	if s.settings.DailyModules == nil {
 		s.settings.DailyModules = []string{AIJobTypeMetadata}
+	}
+	if s.settings.LastScheduledStatus == "running" {
+		s.settings.LastScheduledStatus = "interrupted"
+		settingsChanged = true
 	}
 	if !s.settings.PeopleEnabled {
 		modules := withoutModule(s.settings.DailyModules, AIJobTypeFace)

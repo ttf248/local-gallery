@@ -30,12 +30,16 @@ export interface TaskCenterPlan {
   enabled: boolean;
   time: string;
   modules: AnalysisType[];
+  scan: boolean;
+  smartAlbums: boolean;
   peopleEnabled: boolean;
   /** 服务器设置已读取，可以开始编辑。 */
   ready: boolean;
   setEnabled: (value: boolean) => void;
   setTime: (value: string) => void;
   setModules: (value: AnalysisType[]) => void;
+  setScan: (value: boolean) => void;
+  setSmartAlbums: (value: boolean) => void;
   setPeopleEnabled: (value: boolean) => void;
   save: () => void;
   saving: boolean;
@@ -111,6 +115,7 @@ export function useTaskCenter(): TaskCenterState {
     queryFn: aiJobsApi.list,
     refetchInterval: (query) => {
       const snapshot = query.state.data?.snapshot;
+      if (snapshot?.settings.lastScheduledStatus === "running") return 2_000;
       return snapshot?.active || snapshot?.queue?.length ? 15_000 : false;
     },
   });
@@ -142,6 +147,8 @@ export function useTaskCenter(): TaskCenterState {
     enabled: boolean;
     time: string;
     modules: AnalysisType[];
+    scan: boolean;
+    smartAlbums: boolean;
     peopleEnabled: boolean;
   } | null>(null);
 
@@ -174,6 +181,8 @@ export function useTaskCenter(): TaskCenterState {
       enabled: snapshot.settings.dailyEnabled,
       time: snapshot.settings.dailyTime || "03:00",
       modules: snapshot.settings.dailyModules ?? ["metadata"],
+      scan: snapshot.settings.dailyScan ?? true,
+      smartAlbums: snapshot.settings.dailySmartAlbums ?? true,
       peopleEnabled: snapshot.settings.peopleEnabled ?? false,
     });
   }, [snapshot, planDraft]);
@@ -261,12 +270,16 @@ export function useTaskCenter(): TaskCenterState {
       enabled: boolean;
       time: string;
       modules: AnalysisType[];
+      scan: boolean;
+      smartAlbums: boolean;
       peopleEnabled: boolean;
     }) =>
       aiJobsApi.updateSettings({
         dailyEnabled: draft.enabled,
         dailyTime: draft.time,
         dailyModules: draft.modules,
+        dailyScan: draft.scan,
+        dailySmartAlbums: draft.smartAlbums,
         peopleEnabled: draft.peopleEnabled,
       }),
     onSuccess: ({ settings }) => {
@@ -274,6 +287,8 @@ export function useTaskCenter(): TaskCenterState {
         enabled: settings.dailyEnabled,
         time: settings.dailyTime,
         modules: settings.dailyModules,
+        scan: settings.dailyScan,
+        smartAlbums: settings.dailySmartAlbums,
         peopleEnabled: settings.peopleEnabled,
       });
       queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
@@ -356,6 +371,8 @@ export function useTaskCenter(): TaskCenterState {
       enabled: planDraft?.enabled ?? false,
       time: planDraft?.time ?? "03:00",
       modules: planDraft?.modules ?? ["metadata"],
+      scan: planDraft?.scan ?? true,
+      smartAlbums: planDraft?.smartAlbums ?? true,
       peopleEnabled: planDraft?.peopleEnabled ?? false,
       ready: planDraft !== null,
       setEnabled: (value: boolean) =>
@@ -369,6 +386,14 @@ export function useTaskCenter(): TaskCenterState {
       setModules: (value: AnalysisType[]) =>
         setPlanDraft((current) =>
           current ? { ...current, modules: value } : current,
+        ),
+      setScan: (value: boolean) =>
+        setPlanDraft((current) =>
+          current ? { ...current, scan: value } : current,
+        ),
+      setSmartAlbums: (value: boolean) =>
+        setPlanDraft((current) =>
+          current ? { ...current, smartAlbums: value } : current,
         ),
       setPeopleEnabled: (value: boolean) =>
         setPlanDraft((current) =>

@@ -194,6 +194,21 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	if len(rebuilt.Groups) != 1 || rebuilt.Groups[0].Name != customName || !rebuilt.Groups[0].Hidden {
 		t.Fatalf("override did not survive restart and forced rebuild: %+v", rebuilt.Groups)
 	}
+	if err := service.RefreshAll(context.Background()); err != nil {
+		t.Fatalf("RefreshAll() error = %v", err)
+	}
+	for _, albumID := range []string{firstAlbumID, secondAlbumID} {
+		for _, dimension := range []string{
+			SmartAlbumDimensionTime,
+			SmartAlbumDimensionPlace,
+			SmartAlbumDimensionPeople,
+			SmartAlbumDimensionScene,
+		} {
+			if _, err := os.Stat(service.cachePath(albumID, dimension)); err != nil {
+				t.Fatalf("RefreshAll() did not prepare %s for %s: %v", dimension, albumID, err)
+			}
+		}
+	}
 }
 
 func TestAlbumImageIDsReturnsOnlyImagesFromOneAlbum(t *testing.T) {

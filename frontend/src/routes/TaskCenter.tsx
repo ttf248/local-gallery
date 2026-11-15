@@ -87,7 +87,7 @@ export function TaskCenterView({
       <PageHeading
         eyebrow="后台分析"
         title="任务中心"
-        description="查看本机分析进度，管理等待队列与任务记录，安排每日增量更新。分析完全在本机运行。"
+        description="查看本机任务进度并管理等待队列与记录；每日计划可自动扫描媒体目录、运行分析并刷新智能相册。"
         action={
           <Link className="btn btn-sm btn-outline" to="/settings/server">
             服务设置
@@ -155,7 +155,9 @@ export function TaskCenterView({
               {center.sequenceSkipped && center.sequenceSkipped.length > 0 ? (
                 <p role="status" className="mt-3 text-meta text-warning">
                   本次按序启动已跳过未就绪模块：
-                  {center.sequenceSkipped.map((module) => module.name).join("、")}
+                  {center.sequenceSkipped
+                    .map((module) => module.name)
+                    .join("、")}
                   。可在「本机存储」页签查看模型与运行环境。
                 </p>
               ) : null}
@@ -175,17 +177,24 @@ export function TaskCenterView({
                 enabled={plan.enabled}
                 time={plan.time}
                 selectedModules={plan.modules}
+                scanEnabled={plan.scan}
+                smartAlbumsEnabled={plan.smartAlbums}
                 peopleEnabled={plan.peopleEnabled}
                 ready={plan.ready}
                 onEnabledChange={plan.setEnabled}
                 onTimeChange={plan.setTime}
                 onModulesChange={plan.setModules}
+                onScanChange={plan.setScan}
+                onSmartAlbumsChange={plan.setSmartAlbums}
                 onPeopleEnabledChange={plan.setPeopleEnabled}
                 onSave={plan.save}
                 saving={plan.saving}
                 saved={plan.saved}
                 error={plan.error}
                 lastScheduledDate={snapshot?.settings.lastScheduledDate}
+                lastScheduledStatus={snapshot?.settings.lastScheduledStatus}
+                lastScheduledStage={snapshot?.settings.lastScheduledStage}
+                lastScheduledError={snapshot?.settings.lastScheduledError}
                 modules={snapshot?.modules ?? []}
                 estimate={center.estimate}
                 estimateLoading={center.estimateLoading}

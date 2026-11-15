@@ -121,6 +121,8 @@ function snapshot(overrides: Partial<AIJobSnapshot> = {}): AIJobSnapshot {
       dailyEnabled: false,
       dailyTime: "03:00",
       dailyModules: ["metadata"],
+      dailyScan: true,
+      dailySmartAlbums: true,
       peopleEnabled: false,
       gpuEnabled: true,
     },
@@ -304,6 +306,8 @@ describe("任务中心", () => {
         dailyEnabled: true,
         dailyTime: "04:15",
         dailyModules: ["metadata"],
+        dailyScan: true,
+        dailySmartAlbums: true,
         peopleEnabled: false,
         gpuEnabled: true,
       },
@@ -387,7 +391,9 @@ describe("任务中心", () => {
   it("页签条有四个页签，只有当前这一个被选中", async () => {
     renderCenter("run");
 
-    const tablist = await screen.findByRole("tablist", { name: "任务中心分区" });
+    const tablist = await screen.findByRole("tablist", {
+      name: "任务中心分区",
+    });
     const tabs = within(tablist).getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual([
       "运行",
@@ -437,14 +443,12 @@ describe("任务中心", () => {
     // 每日计划：开关与时间输入。
     view.rerenderWithTab("plan");
     expect(
-      await screen.findByRole("switch", { name: "每天自动检查变化" }),
+      await screen.findByRole("switch", { name: "启用每日自动任务" }),
     ).toBeInTheDocument();
 
     // 任务记录：历史列表（此刻没有已结束的任务，只有空状态）。
     view.rerenderWithTab("history");
-    expect(
-      await screen.findByText("还没有已结束的任务"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("还没有已结束的任务")).toBeInTheDocument();
 
     // 本机存储：派生缓存与路径。
     view.rerenderWithTab("storage");
@@ -609,6 +613,8 @@ describe("任务中心", () => {
           dailyEnabled: true,
           dailyTime: "03:00",
           dailyModules: ["metadata"],
+          dailyScan: true,
+          dailySmartAlbums: true,
           peopleEnabled: false,
           gpuEnabled: true,
         },
@@ -617,7 +623,7 @@ describe("任务中心", () => {
     renderCenter("plan");
 
     expect(
-      await screen.findByText("预计下次运行：320 张 · 约 45 秒"),
+      await screen.findByText("分析预计：320 张 · 约 45 秒"),
     ).toBeInTheDocument();
   });
 
@@ -941,6 +947,8 @@ describe("任务中心", () => {
           dailyEnabled: false,
           dailyTime: "03:00",
           dailyModules: ["metadata"],
+          dailyScan: false,
+          dailySmartAlbums: false,
           peopleEnabled: true,
           gpuEnabled: true,
         },
@@ -1018,11 +1026,17 @@ describe("任务中心", () => {
     renderCenter("plan");
 
     const toggle = await screen.findByRole("switch", {
-      name: "每天自动检查变化",
+      name: "启用每日自动任务",
     });
     await waitFor(() => expect(toggle).toBeEnabled());
+    expect(
+      screen.getByRole("checkbox", { name: "扫描所有媒体目录" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "生成智能相册分组" }),
+    ).toBeChecked();
     fireEvent.click(toggle);
-    fireEvent.change(screen.getByLabelText("每日分析开始时间"), {
+    fireEvent.change(screen.getByLabelText("每日自动任务开始时间"), {
       target: { value: "04:15" },
     });
     fireEvent.click(screen.getByRole("button", { name: "保存计划" }));
@@ -1031,9 +1045,16 @@ describe("任务中心", () => {
         dailyEnabled: true,
         dailyTime: "04:15",
         dailyModules: ["metadata"],
+        dailyScan: true,
+        dailySmartAlbums: true,
         peopleEnabled: false,
       }),
     );
+    expect(
+      screen.getByText(
+        "到点后依次扫描媒体目录、运行所选分析模块、生成智能相册；分析与分组在本机处理。按设备本地时间运行，错过计划时间后会在下次启动时补跑一次。",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("每日计划会保存用户选择的已安装分析模块", async () => {
@@ -1062,6 +1083,8 @@ describe("任务中心", () => {
         dailyEnabled: false,
         dailyTime: "03:00",
         dailyModules: ["metadata", "embedding"],
+        dailyScan: true,
+        dailySmartAlbums: true,
         peopleEnabled: false,
       }),
     );
@@ -1104,6 +1127,8 @@ describe("任务中心", () => {
         dailyEnabled: false,
         dailyTime: "03:00",
         dailyModules: ["metadata", "face"],
+        dailyScan: true,
+        dailySmartAlbums: true,
         peopleEnabled: true,
       }),
     );

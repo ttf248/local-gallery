@@ -23,26 +23,37 @@ test.describe("任务中心", () => {
 
     // 侧栏不再挂二级菜单，只在条目上标出当前页签。
     const sidebar = page.locator('aside[aria-label="主导航"]');
-    await expect(
-      sidebar.getByRole("button", { name: /本机存储/ }),
-    ).toHaveCount(0);
+    await expect(sidebar.getByRole("button", { name: /本机存储/ })).toHaveCount(
+      0,
+    );
     await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("运行");
 
     await page.getByRole("tab", { name: "本机存储" }).click();
     await expect(page).toHaveURL(/\/tasks\/storage$/);
-    await expect(
-      page.getByRole("heading", { name: "派生缓存" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "派生缓存" })).toBeVisible();
     await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("本机存储");
 
     // 深链直接落在那一屏。
     await page.goto("/tasks/plan");
-    await expect(page.getByLabel("每日分析开始时间")).toBeVisible();
+    await expect(page.getByLabel("每日自动任务开始时间")).toBeVisible();
   });
 
   test("空闲时给出增量与全量的规模对比，并带上本次张数", async ({ page }) => {
     await page.goto("/tasks/run");
     await scannedNodes(page.request);
+    await expect
+      .poll(async () => {
+        const response = await page.request.get("/api/ai/jobs/estimate");
+        if (!response.ok()) return false;
+        const body = (await response.json()) as {
+          estimate?: { libraryReady?: boolean };
+        };
+        return body.estimate?.libraryReady ?? false;
+      })
+      .toBe(true);
+    // 这次扫描由 API 测试助手触发，页面没有收到浏览器内的扫描完成事件；
+    // 重新加载以从已就绪的图库读取新的规模估算。
+    await page.reload();
     await expect(page.getByText("本次规模")).toBeVisible();
     await expect(page.getByRole("rowheader", { name: "增量" })).toBeVisible();
     await expect(page.getByRole("rowheader", { name: "全量" })).toBeVisible();
@@ -66,7 +77,9 @@ test.describe("任务中心", () => {
   test("本机存储给出派生缓存占用、模型与产物路径", async ({ page }) => {
     await page.goto("/tasks/storage");
     await expect(page.getByRole("heading", { name: "派生缓存" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "AI 模型与产物" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "AI 模型与产物" }),
+    ).toBeVisible();
     // 「缩略图」在重建范围勾选项里也有一份，这里认的是占用行。
     await expect(
       page.locator("span.text-fg-muted", { hasText: /^缩略图$/ }),
@@ -80,14 +93,32 @@ test.describe("任务中心", () => {
 
   test("每日计划的时间可以保存并在刷新后保留", async ({ page }) => {
     await page.goto("/tasks/plan");
-    const timeInput = page.getByLabel("每日分析开始时间");
+    const timeInput = page.getByLabel("每日自动任务开始时间");
+    const planSwitch = page.getByRole("switch", { name: "启用每日自动任务" });
+    const scanTask = page.getByRole("checkbox", { name: "扫描所有媒体目录" });
+    const smartAlbumTask = page.getByRole("checkbox", {
+      name: "生成智能相册分组",
+    });
     await expect(timeInput).toBeEnabled();
+    await expect(scanTask).toBeChecked();
+    await expect(smartAlbumTask).toBeChecked();
+    await planSwitch.click();
+    await scanTask.uncheck();
     await timeInput.fill("04:15");
     await page.getByRole("button", { name: "保存计划" }).click();
     await expect(page.getByText("已保存")).toBeVisible();
 
     await page.reload();
-    await expect(page.getByLabel("每日分析开始时间")).toHaveValue("04:15");
+    await expect(page.getByLabel("每日自动任务开始时间")).toHaveValue("04:15");
+    await expect(
+      page.getByRole("switch", { name: "启用每日自动任务" }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "扫描所有媒体目录" }),
+    ).not.toBeChecked();
+    await expect(
+      page.getByRole("checkbox", { name: "生成智能相册分组" }),
+    ).toBeChecked();
   });
 
   test("跑完一次分析后任务记录里出现新的任务与产出明细", async ({ page }) => {

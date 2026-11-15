@@ -72,14 +72,24 @@ export interface AIJobSettings {
   dailyEnabled: boolean;
   dailyTime: string;
   dailyModules: AnalysisType[];
+  dailyScan: boolean;
+  dailySmartAlbums: boolean;
   peopleEnabled: boolean;
   gpuEnabled: boolean;
   lastScheduledDate?: string;
+  lastScheduledStatus?: "running" | "completed" | "failed" | "interrupted";
+  lastScheduledStage?: string;
+  lastScheduledError?: string;
 }
 
 export type AIJobSettingsUpdate = Pick<
   AIJobSettings,
-  "dailyEnabled" | "dailyTime" | "dailyModules" | "peopleEnabled"
+  | "dailyEnabled"
+  | "dailyTime"
+  | "dailyModules"
+  | "dailyScan"
+  | "dailySmartAlbums"
+  | "peopleEnabled"
 >;
 
 /** 某个模块在一种模式下的核算结果。 */

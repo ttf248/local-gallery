@@ -596,7 +596,7 @@ func TestAIJobSchedulerUsesLocalTimeAndRunsMissedDayOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeMetadata}, false); err != nil {
+	if _, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeMetadata}, false, false, false); err != nil {
 		t.Fatal(err)
 	}
 	service.scheduleTick(current)
@@ -611,6 +611,7 @@ func TestAIJobSchedulerUsesLocalTimeAndRunsMissedDayOnce(t *testing.T) {
 	waitForJobHistoryCount(t, service, 1)
 	waitForAIJobStatusAtIndex(t, service, 0, AIJobStatusCompleted)
 	waitForAIJobIdle(t, service)
+	waitForDailyPlanStatus(t, service, "completed")
 	service.scheduleTick(current.Add(time.Minute))
 	if len(service.List().Jobs) != 1 {
 		t.Fatal("scheduler ran twice on the same local date")
@@ -628,6 +629,7 @@ func TestAIJobSchedulerUsesLocalTimeAndRunsMissedDayOnce(t *testing.T) {
 	waitForJobHistoryCount(t, service, 2)
 	waitForAIJobStatusAtIndex(t, service, 0, AIJobStatusCompleted)
 	waitForAIJobIdle(t, service)
+	waitForDailyPlanStatus(t, service, "completed")
 
 	current = time.Date(2026, time.November, 15, 2, 0, 0, 0, time.Local)
 	now.Store(current)
@@ -639,6 +641,7 @@ func TestAIJobSchedulerUsesLocalTimeAndRunsMissedDayOnce(t *testing.T) {
 		t.Fatalf("missed run = %+v", job)
 	}
 	waitForAIJobIdle(t, service)
+	waitForDailyPlanStatus(t, service, "completed")
 	shutdownAIJobService(t, service)
 }
 
@@ -665,7 +668,7 @@ func TestAIJobSchedulerQueuesConfiguredModules(t *testing.T) {
 	if _, err := service.SetGPUEnabled(false); err != nil {
 		t.Fatal(err)
 	}
-	settings, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeEmbedding, AIJobTypeMetadata, AIJobTypeEmbedding}, false)
+	settings, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeEmbedding, AIJobTypeMetadata, AIJobTypeEmbedding}, false, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -697,6 +700,103 @@ func TestAIJobSchedulerQueuesConfiguredModules(t *testing.T) {
 		t.Fatalf("scheduled date = %q", service.List().Settings.LastScheduledDate)
 	}
 	shutdownAIJobService(t, service)
+}
+
+func TestAIJobSchedulerRunsScanAnalysisAndSmartAlbumsInOrder(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 2)
+	catalog := aiJobCatalog(root, files)
+	var now atomic.Value
+	current := time.Date(2026, time.November, 11, 3, 0, 0, 0, time.Local)
+	now.Store(current)
+	service, err := NewAIJobService(AIJobServiceOptions{
+		StatePath:    filepath.Join(t.TempDir(), "state", "jobs.json"),
+		MetadataDir:  filepath.Join(t.TempDir(), "derived"),
+		Catalog:      catalog,
+		ValidatePath: aiTestPathValidator(t, root),
+		Analyzers:    []AIAnalyzer{MetadataAnalyzer{}},
+		Now:          func() time.Time { return now.Load().(time.Time) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	order := []string{}
+	service.SetDailyTaskHandlers(
+		func(context.Context) error {
+			mu.Lock()
+			order = append(order, "scan")
+			mu.Unlock()
+			return nil
+		},
+		func(context.Context) error {
+			if got := len(service.Records(AIJobTypeMetadata)); got != len(files) {
+				return fmt.Errorf("metadata records = %d, want %d", got, len(files))
+			}
+			mu.Lock()
+			order = append(order, "smart_albums")
+			mu.Unlock()
+			return nil
+		},
+	)
+	if _, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeMetadata}, false, true, true); err != nil {
+		t.Fatal(err)
+	}
+	service.scheduleTick(current)
+	waitForDailyPlanStatus(t, service, "completed")
+	mu.Lock()
+	gotOrder := append([]string(nil), order...)
+	mu.Unlock()
+	if !reflect.DeepEqual(gotOrder, []string{"scan", "smart_albums"}) {
+		t.Fatalf("scheduled task order = %v", gotOrder)
+	}
+	jobs := service.List().Jobs
+	if len(jobs) != 1 || jobs[0].Type != AIJobTypeMetadata || !jobs[0].Scheduled || jobs[0].Status != AIJobStatusCompleted {
+		t.Fatalf("scheduled analysis jobs = %+v", jobs)
+	}
+	shutdownAIJobService(t, service)
+}
+
+func TestAIJobSchedulerStopsAfterScanFailure(t *testing.T) {
+	root := t.TempDir()
+	catalog := aiJobCatalog(root, nil)
+	service := newTestAIJobService(
+		t,
+		filepath.Join(t.TempDir(), "state", "jobs.json"),
+		filepath.Join(t.TempDir(), "derived"),
+		catalog,
+		MetadataAnalyzer{},
+	)
+	var smartAlbumsCalled atomic.Bool
+	service.SetDailyTaskHandlers(
+		func(context.Context) error { return errors.New("scan failed") },
+		func(context.Context) error {
+			smartAlbumsCalled.Store(true)
+			return nil
+		},
+	)
+	if _, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeMetadata}, false, true, true); err != nil {
+		t.Fatal(err)
+	}
+	service.scheduleTick(time.Date(2026, time.November, 11, 3, 0, 0, 0, time.Local))
+	waitForDailyPlanStatus(t, service, "failed")
+	settings := service.List().Settings
+	if settings.LastScheduledStage != "scan" || settings.LastScheduledError != "scan_failed" {
+		t.Fatalf("scan failure status = %+v", settings)
+	}
+	if len(service.List().Jobs) != 0 || smartAlbumsCalled.Load() {
+		t.Fatalf("tasks continued after scan failure: jobs=%+v smart=%v", service.List().Jobs, smartAlbumsCalled.Load())
+	}
+}
+
+func TestAIJobSettingsLegacyStateEnablesDailyScanAndSmartAlbums(t *testing.T) {
+	var settings AIJobSettings
+	if err := json.Unmarshal([]byte(`{"dailyTime":"03:00","dailyModules":["metadata"]}`), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if !settings.DailyScan || !settings.DailySmartAlbums {
+		t.Fatalf("legacy daily settings defaults = %+v", settings)
+	}
 }
 
 func TestAIJobGPUPreferenceDefaultsOnAndUnavailableGPUIsRecorded(t *testing.T) {
@@ -1174,6 +1274,18 @@ func shutdownAIJobService(t *testing.T, service *AIJobService) {
 	if err := service.Shutdown(ctx); err != nil && !errors.Is(err, context.Canceled) {
 		t.Errorf("AIJobService.Shutdown() error = %v", err)
 	}
+}
+
+func waitForDailyPlanStatus(t *testing.T, service *AIJobService, status string) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if service.List().Settings.LastScheduledStatus == status {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("daily plan did not reach %s: %+v", status, service.List().Settings)
 }
 
 type testJSONAnalyzer struct {

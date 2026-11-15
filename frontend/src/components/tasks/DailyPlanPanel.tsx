@@ -1,5 +1,13 @@
-import type { AIJobEstimate, AIJobModule, AnalysisType } from "../../api/aiJobs";
-import { formatCount, formatEstimateDuration, sumEstimateModes } from "../../utils/taskFormat";
+import type {
+  AIJobEstimate,
+  AIJobModule,
+  AnalysisType,
+} from "../../api/aiJobs";
+import {
+  formatCount,
+  formatEstimateDuration,
+  sumEstimateModes,
+} from "../../utils/taskFormat";
 import Toggle from "../common/Toggle";
 import ModuleChips from "./ModuleChips";
 
@@ -7,12 +15,16 @@ interface Props {
   enabled: boolean;
   time: string;
   selectedModules: AnalysisType[];
+  scanEnabled: boolean;
+  smartAlbumsEnabled: boolean;
   peopleEnabled: boolean;
   /** 服务器设置还没到之前不允许编辑。 */
   ready: boolean;
   onEnabledChange: (value: boolean) => void;
   onTimeChange: (value: string) => void;
   onModulesChange: (value: AnalysisType[]) => void;
+  onScanChange: (value: boolean) => void;
+  onSmartAlbumsChange: (value: boolean) => void;
   onPeopleEnabledChange: (value: boolean) => void;
   onSave: () => void;
   saving: boolean;
@@ -20,6 +32,9 @@ interface Props {
   error: boolean;
   /** 后端记录的上次计划执行日期。 */
   lastScheduledDate?: string;
+  lastScheduledStatus?: "running" | "completed" | "failed" | "interrupted";
+  lastScheduledStage?: string;
+  lastScheduledError?: string;
   modules: AIJobModule[];
   /** 空闲时的规模与耗时核算；每日计划按增量口径看。 */
   estimate?: AIJobEstimate;
@@ -37,23 +52,54 @@ export default function DailyPlanPanel({
   enabled,
   time,
   selectedModules,
+  scanEnabled,
+  smartAlbumsEnabled,
   peopleEnabled,
   ready,
   onEnabledChange,
   onTimeChange,
   onModulesChange,
+  onScanChange,
+  onSmartAlbumsChange,
   onPeopleEnabledChange,
   onSave,
   saving,
   saved,
   error,
   lastScheduledDate,
+  lastScheduledStatus,
+  lastScheduledStage,
+  lastScheduledError,
   modules,
   estimate,
   estimateLoading,
   estimateError,
 }: Props) {
   const disabled = !ready || saving;
+  const hasSelectedTask =
+    scanEnabled || smartAlbumsEnabled || selectedModules.length > 0;
+
+  const scheduledStatus = (() => {
+    if (lastScheduledStatus === "running") {
+      if (lastScheduledStage === "scan") return "正在扫描媒体库";
+      if (lastScheduledStage === "analysis") return "正在运行分析模块";
+      if (lastScheduledStage === "smart_albums") return "正在生成智能相册";
+      return "正在执行计划";
+    }
+    if (lastScheduledStatus === "completed") return "已完成";
+    if (lastScheduledStatus === "interrupted")
+      return "上次执行中断，下次启动会续跑";
+    if (lastScheduledStatus === "failed") {
+      if (lastScheduledError === "scan_failed")
+        return "扫描失败，后续任务未运行";
+      if (lastScheduledError === "library_not_ready")
+        return "图库尚未就绪，分析未运行";
+      if (lastScheduledError === "smart_albums_failed")
+        return "智能相册生成失败";
+      return "执行失败";
+    }
+    return "";
+  })();
 
   function toggleModule(type: AnalysisType) {
     const next = selectedModules.includes(type)
@@ -74,12 +120,12 @@ export default function DailyPlanPanel({
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <label className="flex items-center gap-3">
             <Toggle
-              label="每天自动检查变化"
+              label="启用每日自动任务"
               checked={enabled}
               disabled={disabled}
               onChange={onEnabledChange}
             />
-            <span className="text-body text-fg">每天自动检查变化</span>
+            <span className="text-body text-fg">启用每日自动任务</span>
           </label>
 
           <label className="flex items-center gap-2 text-meta text-fg-muted">
@@ -90,14 +136,35 @@ export default function DailyPlanPanel({
               disabled={disabled}
               onChange={(event) => onTimeChange(event.target.value)}
               className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-fg disabled:opacity-60"
-              aria-label="每日分析开始时间"
+              aria-label="每日自动任务开始时间"
             />
+          </label>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="flex items-center gap-2 text-meta text-fg">
+            <input
+              type="checkbox"
+              checked={scanEnabled}
+              disabled={disabled}
+              onChange={(event) => onScanChange(event.target.checked)}
+            />
+            扫描所有媒体目录
+          </label>
+          <label className="flex items-center gap-2 text-meta text-fg">
+            <input
+              type="checkbox"
+              checked={smartAlbumsEnabled}
+              disabled={disabled}
+              onChange={(event) => onSmartAlbumsChange(event.target.checked)}
+            />
+            生成智能相册分组
           </label>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start xl:gap-8">
           <div className="min-w-0">
-            <p className="text-meta text-fg-subtle">运行模块</p>
+            <p className="text-meta text-fg-subtle">AI 分析模块</p>
             <div className="mt-2">
               <ModuleChips
                 modules={modules}
@@ -125,25 +192,29 @@ export default function DailyPlanPanel({
           <button
             className="btn btn-outline"
             type="submit"
-            disabled={disabled || (enabled && selectedModules.length === 0)}
+            disabled={disabled || (enabled && !hasSelectedTask)}
           >
             {saving ? "保存中…" : "保存计划"}
           </button>
           <span className="text-meta text-fg-subtle">
             {lastScheduledDate
-              ? `上次运行 ${lastScheduledDate}`
+              ? `最近执行 ${lastScheduledDate}${scheduledStatus ? ` · ${scheduledStatus}` : ""}`
               : "尚未自动运行过"}
           </span>
-          {enabled ? <DailyPlanEstimate
-            estimate={estimate}
-            loading={estimateLoading}
-            error={estimateError}
-            modules={selectedModules}
-          /> : null}
-          {saved ? <span className="text-meta text-fg-muted">已保存</span> : null}
-          {enabled && selectedModules.length === 0 ? (
+          {enabled ? (
+            <DailyPlanEstimate
+              estimate={estimate}
+              loading={estimateLoading}
+              error={estimateError}
+              modules={selectedModules}
+            />
+          ) : null}
+          {saved ? (
+            <span className="text-meta text-fg-muted">已保存</span>
+          ) : null}
+          {enabled && !hasSelectedTask ? (
             <span className="text-meta text-fg-muted">
-              自动运行至少选择一个已安装模块。
+              至少选择扫描、分析模块或智能相册中的一项。
             </span>
           ) : null}
           {error ? (
@@ -155,7 +226,7 @@ export default function DailyPlanPanel({
       </form>
 
       <p className="border-t border-border-faint px-5 py-3 text-meta leading-relaxed text-fg-subtle sm:px-6">
-        分析仅在本机处理，按设备本地时间运行；错过计划时间后会补跑一次。
+        到点后依次扫描媒体目录、运行所选分析模块、生成智能相册；分析与分组在本机处理。按设备本地时间运行，错过计划时间后会在下次启动时补跑一次。
       </p>
     </div>
   );
@@ -185,9 +256,7 @@ function DailyPlanEstimate({
   }
   if (error) {
     return (
-      <span className="text-meta text-fg-subtle">
-        预计下次运行：预估失败
-      </span>
+      <span className="text-meta text-fg-subtle">预计下次运行：预估失败</span>
     );
   }
   if (!estimate) return null;
@@ -203,10 +272,12 @@ function DailyPlanEstimate({
   if (usable.length === 0) {
     return null;
   }
-  const total = sumEstimateModes(usable.map((entry) => entry?.incremental ?? null));
+  const total = sumEstimateModes(
+    usable.map((entry) => entry?.incremental ?? null),
+  );
   return (
     <span className="text-meta text-fg-subtle">
-      {`预计下次运行：${formatCount(total.count)} 张 · ${formatEstimateDuration(total.estimatedDurationMs)}`}
+      {`分析预计：${formatCount(total.count)} 张 · ${formatEstimateDuration(total.estimatedDurationMs)}`}
     </span>
   );
 }

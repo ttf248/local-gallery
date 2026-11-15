@@ -364,6 +364,48 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化智能相册服务失败: %v", err)
 	}
+	aiJobs.SetDailyTaskHandlers(
+		func(ctx context.Context) error {
+			opts := handlers.ScanOptionsFromConfig(mgr)
+			if len(opts.Roots) == 0 {
+				return services.ErrDailyPlanNoMediaRoots
+			}
+			id, _, startErr := runner.StartOrReuse(opts)
+			if startErr != nil {
+				return startErr
+			}
+			ticker := time.NewTicker(250 * time.Millisecond)
+			defer ticker.Stop()
+			for {
+				state := runner.Get(id)
+				if state == nil {
+					return errors.New("scheduled scan disappeared")
+				}
+				switch state.Status {
+				case services.ScanStatusComplete:
+					return nil
+				case services.ScanStatusCancelled:
+					return context.Canceled
+				case services.ScanStatusError:
+					if state.Err != nil {
+						return state.Err
+					}
+					return errors.New("scheduled scan failed")
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-ticker.C:
+				}
+			}
+		},
+		func(ctx context.Context) error {
+			if len(mgr.Roots()) == 0 {
+				return services.ErrDailyPlanNoMediaRoots
+			}
+			return smartAlbums.RefreshAll(ctx)
+		},
+	)
 
 	// 启动时若缓存为空（首次启动 / 缓存根目录不匹配被清空 / 磁盘无缓存），
 	// 自动跑一次扫描，避免前端打开时看到 404 或空数据。

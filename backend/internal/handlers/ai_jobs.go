@@ -33,10 +33,12 @@ type aiJobQueueMoveRequest struct {
 }
 
 type aiJobSettingsRequest struct {
-	DailyEnabled  bool     `json:"dailyEnabled"`
-	DailyTime     string   `json:"dailyTime"`
-	DailyModules  []string `json:"dailyModules"`
-	PeopleEnabled bool     `json:"peopleEnabled"`
+	DailyEnabled     bool     `json:"dailyEnabled"`
+	DailyTime        string   `json:"dailyTime"`
+	DailyModules     []string `json:"dailyModules"`
+	DailyScan        bool     `json:"dailyScan"`
+	DailySmartAlbums bool     `json:"dailySmartAlbums"`
+	PeopleEnabled    bool     `json:"peopleEnabled"`
 }
 
 type aiJobHardwareRequest struct {
@@ -309,12 +311,15 @@ func AIJobSettingsHandler(service *services.AIJobService, people *services.Peopl
 			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_settings", "request body is not valid JSON")
 		}
 		peopleWasEnabled := service.PeopleEnabled()
-		settings, err := service.ConfigureDaily(body.DailyEnabled, body.DailyTime, body.DailyModules, body.PeopleEnabled)
+		settings, err := service.ConfigureDaily(
+			body.DailyEnabled, body.DailyTime, body.DailyModules, body.PeopleEnabled,
+			body.DailyScan, body.DailySmartAlbums,
+		)
 		if err != nil {
 			if errors.Is(err, services.ErrAIJobActive) {
 				return writeError(c, fiber.StatusConflict, "analysis_job_active", "stop the face analysis task before disabling people analysis")
 			}
-			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_settings", "dailyTime and dailyModules are invalid")
+			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_settings", "daily plan settings are invalid")
 		}
 		if settings.PeopleEnabled && !peopleWasEnabled && people != nil {
 			if err := people.Sync(service.Records(services.AIJobTypeFace)); err != nil {

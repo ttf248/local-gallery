@@ -425,6 +425,36 @@ func validSmartAlbumDirectoryDimension(dimension string) bool {
 	return dimension == SmartAlbumDimensionAll || validSmartAlbumDimension(dimension)
 }
 
+// RefreshAll prepares the four folder-scoped dimensions for every photo album.
+// It reuses matching derived caches and rebuilds only summaries whose media or
+// analysis fingerprint has changed.
+func (s *SmartAlbumService) RefreshAll(ctx context.Context) error {
+	snapshot := s.catalog.Acquire()
+	if !snapshot.Ready() {
+		return ErrLibraryNotReady
+	}
+	for _, album := range snapshot.PhotoAlbumSummaries() {
+		for _, dimension := range []string{
+			SmartAlbumDimensionTime,
+			SmartAlbumDimensionPlace,
+			SmartAlbumDimensionPeople,
+			SmartAlbumDimensionScene,
+		} {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			summary, err := s.Groups(ctx, album.ID, dimension, false)
+			if err != nil {
+				return err
+			}
+			if summary.Revision != snapshot.Revision() {
+				return ErrStalePageCursor
+			}
+		}
+	}
+	return nil
+}
+
 func smartAlbumDirectoryDimensions(dimension string) []string {
 	if dimension != SmartAlbumDimensionAll {
 		return []string{dimension}
