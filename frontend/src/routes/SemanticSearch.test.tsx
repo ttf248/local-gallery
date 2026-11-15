@@ -170,7 +170,8 @@ describe("智能搜索", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
       revision: 1,
     });
     mocks.semanticSearch.mockResolvedValue({

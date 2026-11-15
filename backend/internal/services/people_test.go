@@ -1,7 +1,6 @@
 package services
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -132,6 +131,35 @@ func TestPeopleServicePersistsCorrectionsWithoutCopyingEmbeddings(t *testing.T) 
 	}
 }
 
+func TestPeopleServiceKeepsLegacyFaceRecordsUntilReanalysisCompletes(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := peopleTestRecord("legacy_face", peopleTestVector(0, 0))
+	legacy.ModuleVersion = previousFaceAnalyzerVersion
+	if err := people.Sync([]AIAnalysisRecord{legacy}); err != nil {
+		t.Fatal(err)
+	}
+	faces := people.AllFaces()
+	if len(faces) != 1 {
+		t.Fatalf("legacy face count = %d, want 1", len(faces))
+	}
+	if err := people.Rename(faces[0].PersonID, "保留的分组"); err != nil {
+		t.Fatal(err)
+	}
+
+	updated := peopleTestRecord("legacy_face", peopleTestVector(0, 0.01))
+	if err := people.ApplyRecords([]AIAnalysisRecord{updated}); err != nil {
+		t.Fatal(err)
+	}
+	groups := people.Groups(true)
+	if len(groups) != 1 || groups[0].Name != "保留的分组" {
+		t.Fatalf("groups after new-version result = %+v", groups)
+	}
+}
+
 func TestPeopleServiceIncrementalReplacesChangedResourceFaces(t *testing.T) {
 	root := t.TempDir()
 	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "derived.json"))
@@ -255,63 +283,71 @@ func TestPeopleServiceRechecksANNScoreNearCentroidThreshold(t *testing.T) {
 	}
 }
 
-func TestPeopleServiceUsesCurrentImageVectorsForAmbiguousMatches(t *testing.T) {
-	root := t.TempDir()
-	vectorIndex, err := OpenVectorIndex(filepath.Join(root, "vectors"), "clip-v1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer vectorIndex.Close()
-
-	imageA := make([]float32, AIEmbeddingDimension)
-	imageB := make([]float32, AIEmbeddingDimension)
-	imageC := make([]float32, AIEmbeddingDimension)
-	imageD := make([]float32, AIEmbeddingDimension)
-	imageA[0], imageB[0], imageC[2], imageD[3] = 1, 1, 1, 1
-	if err := vectorIndex.Commit(context.Background(), []VectorInput{
-		{ResourceID: "a_anchor", Size: 100, MTimeNs: 200, Vector: imageA},
-		{ResourceID: "b_match", Size: 100, MTimeNs: 200, Vector: imageB},
-		{ResourceID: "c_anchor", Size: 100, MTimeNs: 200, Vector: imageC},
-		{ResourceID: "d_different_context", Size: 100, MTimeNs: 200, Vector: imageD},
-		{ResourceID: "e_same_photo", Size: 100, MTimeNs: 200, Vector: imageA},
-	}); err != nil {
-		t.Fatal(err)
-	}
-
-	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "people-index.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	people.SetImageVectorLookup(vectorIndex.Vector)
-	match := make([]float32, peopleEmbeddingDimension)
-	match[0], match[1] = 0.6, 0.8
-	differentContext := make([]float32, peopleEmbeddingDimension)
-	differentContext[2], differentContext[3] = 0.6, 0.8
-	samePhotoOtherFace := make([]float32, peopleEmbeddingDimension)
-	samePhotoOtherFace[0], samePhotoOtherFace[1] = 0.6, 0.8
-	records := []AIAnalysisRecord{
-		peopleTestRecord("a_anchor", peopleTestVector(0, 0)),
-		peopleTestRecord("b_match", match),
-		peopleTestRecord("c_anchor", peopleTestVector(2, 0)),
-		peopleTestRecord("d_different_context", differentContext),
-		peopleTestRecord("e_same_photo", peopleTestVector(0, 0), samePhotoOtherFace),
-	}
-	if err := people.Sync(records); err != nil {
-		t.Fatal(err)
+func TestPeopleServiceRequiresIndependentFaceExemplarsForAmbiguousMatches(t *testing.T) {
+	matchAgainst := func(similarities ...float32) string {
+		centroid := make([]float32, peopleEmbeddingDimension)
+		centroid[0] = 1
+		cluster := &peopleCluster{
+			sum:       make([]float64, peopleEmbeddingDimension),
+			centroid:  centroid,
+			count:     len(similarities),
+			members:   make(map[string]struct{}, len(similarities)),
+			resources: make(map[string]struct{}, len(similarities)),
+		}
+		cluster.sum[0] = float64(len(similarities))
+		for index, similarity := range similarities {
+			vector := make([]float32, peopleEmbeddingDimension)
+			vector[0] = similarity
+			vector[1] = float32(math.Sqrt(float64(1 - similarity*similarity)))
+			if index%2 == 1 {
+				vector[1] = -vector[1]
+			}
+			key := fmt.Sprintf("exemplar_%d#0", index)
+			resourceID := fmt.Sprintf("exemplar_%d", index)
+			cluster.members[key] = struct{}{}
+			cluster.resources[resourceID] = struct{}{}
+			cluster.exemplars = append(cluster.exemplars, peopleClusterExemplar{
+				key: key, resourceID: resourceID, score: 0.9, embedding: vector,
+			})
+		}
+		people := &PeopleService{
+			faces:    map[string]PersonFace{},
+			clusters: map[string]*peopleCluster{"p_existing": cluster},
+			ann:      newPeopleANNIndex(),
+		}
+		people.ann.Add("p_existing", centroid)
+		candidate := make([]float32, peopleEmbeddingDimension)
+		candidate[0] = 1
+		people.addFaceLocked(PersonFace{Key: "candidate#0", ResourceID: "candidate", Score: 0.9, embedding: candidate})
+		return people.faces["candidate#0"].PersonID
 	}
 
-	ids := make(map[string]string)
-	for _, face := range people.AllFaces() {
-		ids[face.Key] = face.PersonID
+	if got := matchAgainst(0.60); got == "p_existing" {
+		t.Fatal("one ambiguous face match was enough to join a cluster")
 	}
-	if ids["a_anchor#0"] != ids["b_match#0"] {
-		t.Fatal("borderline face with matching image context was not grouped")
+	if got := matchAgainst(0.60, 0.60); got != "p_existing" {
+		t.Fatalf("two independent face matches joined %q, want p_existing", got)
 	}
-	if ids["c_anchor#0"] == ids["d_different_context#0"] {
-		t.Fatal("borderline face with unrelated image context was grouped")
+}
+
+func TestPeopleServiceRetainsEightHighestConfidenceExemplars(t *testing.T) {
+	cluster := &peopleCluster{}
+	for index := 0; index < 10; index++ {
+		vector := make([]float32, peopleEmbeddingDimension)
+		vector[index] = 1
+		key := fmt.Sprintf("face_%02d#0", index)
+		addPeopleClusterExemplar(cluster, PersonFace{
+			Key: key, ResourceID: fmt.Sprintf("face_%02d", index), Score: float32(index), embedding: vector,
+		})
 	}
-	if ids["a_anchor#0"] != ids["e_same_photo#0"] || ids["e_same_photo#0"] == ids["e_same_photo#1"] {
-		t.Fatal("multiple faces from one resource were merged into the same person")
+	if len(cluster.exemplars) != PeopleGroupingExemplarLimit {
+		t.Fatalf("exemplar count = %d, want %d", len(cluster.exemplars), PeopleGroupingExemplarLimit)
+	}
+	for index, exemplar := range cluster.exemplars {
+		want := fmt.Sprintf("face_%02d#0", 9-index)
+		if exemplar.key != want {
+			t.Fatalf("exemplar %d = %q, want %q", index, exemplar.key, want)
+		}
 	}
 }
 

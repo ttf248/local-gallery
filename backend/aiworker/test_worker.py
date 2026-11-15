@@ -563,6 +563,82 @@ class WorkerTests(unittest.TestCase):
                         worker.yunet_nms(faces, threshold, limit),
                     )
 
+    def test_yunet_gpu_adds_scaled_full_frame_pass_for_large_faces(self):
+        output_names = [
+            f"{kind}_{stride}"
+            for stride in (8, 16, 32)
+            for kind in ("cls", "obj", "bbox", "kps")
+        ]
+
+        class Session:
+            def __init__(self):
+                self.calls = 0
+
+            @staticmethod
+            def get_inputs():
+                return [SimpleNamespace(name="input")]
+
+            @staticmethod
+            def get_outputs():
+                return [SimpleNamespace(name=name) for name in output_names]
+
+            def run(self, _outputs, _inputs):
+                self.calls += 1
+                predictions = []
+                for stride in (8, 16, 32):
+                    count = (worker.YUNET_INPUT_SIZE // stride) ** 2
+                    predictions.extend((
+                        np.zeros((1, count, 1), dtype=np.float32),
+                        np.zeros((1, count, 1), dtype=np.float32),
+                        np.zeros((1, count, 4), dtype=np.float32),
+                        np.zeros((1, count, 10), dtype=np.float32),
+                    ))
+                if self.calls == 7:
+                    index = 10 * (worker.YUNET_INPUT_SIZE // 8) + 10
+                    predictions[0][0, index, 0] = 0.9
+                    predictions[1][0, index, 0] = 0.9
+                    predictions[2][0, index, 2:4] = np.log(10)
+                    predictions[3][0, index] = [0, 0, 4, 0, 2, 4, 1, 7, 4, 7]
+                return predictions
+
+        session = Session()
+        with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np):
+            faces = worker.detect_yunet_gpu(np.zeros((800, 1200, 3), dtype=np.uint8), session)
+
+        self.assertEqual(7, session.calls)
+        self.assertEqual(1, len(faces))
+        self.assertAlmostEqual(75, faces[0][0], delta=1)
+        self.assertAlmostEqual(75, faces[0][1], delta=1)
+        self.assertAlmostEqual(150, faces[0][2], delta=2)
+        self.assertAlmostEqual(150, faces[0][3], delta=2)
+
+    def test_yunet_cpu_maps_scaled_overview_detections_to_source(self):
+        detection = np.asarray([[
+            40, 40, 80, 80,
+            48, 52, 72, 52, 60, 65, 50, 76, 70, 76, 0.9,
+        ]], dtype=np.float32)
+
+        class Detector:
+            def __init__(self):
+                self.sizes = []
+
+            def setInputSize(self, size):
+                self.sizes.append(size)
+
+            def detect(self, _image):
+                return None, detection if self.sizes[-1] == (640, 640) else None
+
+        detector = Detector()
+        with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np):
+            faces = worker.detect_yunet_cpu(np.zeros((800, 1200, 3), dtype=np.uint8), detector)
+
+        self.assertEqual([(1200, 800), (640, 640)], detector.sizes)
+        self.assertEqual(1, len(faces))
+        self.assertAlmostEqual(75, faces[0][0], delta=1)
+        self.assertAlmostEqual(75, faces[0][1], delta=1)
+        self.assertAlmostEqual(150, faces[0][2], delta=2)
+        self.assertAlmostEqual(150, faces[0][3], delta=2)
+
     def test_ocr_status_verifies_models_in_the_derived_cache(self):
         def version(package):
             return "3.10.0" if package == "rapidocr" else "1.20.2"

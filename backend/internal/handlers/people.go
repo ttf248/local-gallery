@@ -66,20 +66,22 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			return c.JSON(fiber.Map{
 				"ok": true, "people": []services.PersonGroup{}, "totalGroups": 0,
 				"limit": limit, "centroidThreshold": services.PeopleGroupingCentroidThreshold,
-				"exemplarThreshold":        services.PeopleGroupingExemplarThreshold,
-				"ambiguousFaceThreshold":   services.PeopleGroupingAmbiguousFaceThreshold,
-				"imageSimilarityThreshold": services.PeopleGroupingImageThreshold,
-				"revision":                 snapshot.Revision(),
+				"exemplarThreshold":      services.PeopleGroupingExemplarThreshold,
+				"ambiguousFaceThreshold": services.PeopleGroupingAmbiguousFaceThreshold,
+				"exemplarLimit":          services.PeopleGroupingExemplarLimit,
+				"ambiguousExemplarCount": services.PeopleGroupingAmbiguousExemplarCount,
+				"revision":               snapshot.Revision(),
 			})
 		}
 		groups, total := people.SearchGroups(query, limit, c.Query("includeHidden") == "true", snapshot.IsPhotoImage)
 		return c.JSON(fiber.Map{
 			"ok": true, "people": groups, "totalGroups": total, "limit": limit,
-			"centroidThreshold":        services.PeopleGroupingCentroidThreshold,
-			"exemplarThreshold":        services.PeopleGroupingExemplarThreshold,
-			"ambiguousFaceThreshold":   services.PeopleGroupingAmbiguousFaceThreshold,
-			"imageSimilarityThreshold": services.PeopleGroupingImageThreshold,
-			"revision":                 snapshot.Revision(),
+			"centroidThreshold":      services.PeopleGroupingCentroidThreshold,
+			"exemplarThreshold":      services.PeopleGroupingExemplarThreshold,
+			"ambiguousFaceThreshold": services.PeopleGroupingAmbiguousFaceThreshold,
+			"exemplarLimit":          services.PeopleGroupingExemplarLimit,
+			"ambiguousExemplarCount": services.PeopleGroupingAmbiguousExemplarCount,
+			"revision":               snapshot.Revision(),
 		})
 	}
 }

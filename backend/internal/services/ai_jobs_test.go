@@ -62,6 +62,33 @@ func TestAIJobServiceFullIncrementalAndPersistentResults(t *testing.T) {
 	shutdownAIJobService(t, restarted)
 }
 
+func TestRecordsIncludingStaleVersionsPreservesDataForIndexMigration(t *testing.T) {
+	service := &AIJobService{
+		analyzers: map[string]AIAnalyzer{
+			AIJobTypeFace: testJSONAnalyzer{module: AIJobTypeFace, version: FaceAnalyzerVersion},
+		},
+		records: map[string]AIAnalysisRecord{
+			aiRecordKey(AIJobTypeFace, "old"): {
+				Type: AIJobTypeFace, ResourceID: "old", ModuleVersion: previousFaceAnalyzerVersion,
+				Data: json.RawMessage(`{"old":true}`),
+			},
+			aiRecordKey(AIJobTypeFace, "current"): {
+				Type: AIJobTypeFace, ResourceID: "current", ModuleVersion: FaceAnalyzerVersion,
+				Data: json.RawMessage(`{"current":true}`),
+			},
+			aiRecordKey(AIJobTypeOCR, "other"): {Type: AIJobTypeOCR, ResourceID: "other"},
+		},
+	}
+
+	if records := service.Records(AIJobTypeFace); len(records) != 1 || records[0].ResourceID != "current" {
+		t.Fatalf("current records = %+v, want only current-version record", records)
+	}
+	if records := service.RecordsIncludingStaleVersions(AIJobTypeFace); len(records) != 2 ||
+		records[0].ResourceID != "current" || records[1].ResourceID != "old" {
+		t.Fatalf("migration records = %+v, want sorted current and old records", records)
+	}
+}
+
 func TestAIJobStagesSeparatePreparationFromModelLoadingAndInference(t *testing.T) {
 	root := t.TempDir()
 	files := writeAIJobImages(t, root, AIBatchSize+1)

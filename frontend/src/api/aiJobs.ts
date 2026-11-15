@@ -601,7 +601,6 @@ export const aiJobsApi = {
     api<{ ok: boolean; job: AIJob; reused: boolean }>("/api/ai/jobs", {
       method: "POST",
       body: { type, mode },
-      nonIdempotent: true,
     }),
   startAll: (mode: AnalysisMode) =>
     api<{
@@ -611,32 +610,30 @@ export const aiJobsApi = {
     }>("/api/ai/jobs/sequence", {
       method: "POST",
       body: { mode },
-      nonIdempotent: true,
     }),
   action: (id: string, action: "pause" | "resume" | "cancel" | "retry") =>
     api<{ ok: boolean; job?: AIJob }>(
       `/api/ai/jobs/${encodeURIComponent(id)}/${action}`,
-      { method: "POST", nonIdempotent: true },
+      { method: "POST" },
     ),
   moveQueued: (id: string, direction: "up" | "down") =>
     api<{ ok: boolean; snapshot: AIJobSnapshot }>(
       `/api/ai/jobs/${encodeURIComponent(id)}/move`,
-      { method: "POST", body: { direction }, nonIdempotent: true },
+      { method: "POST", body: { direction } },
     ),
   clearQueue: () =>
     api<{ ok: boolean; cancelledCount: number; snapshot: AIJobSnapshot }>(
       "/api/ai/jobs/queue",
-      { method: "DELETE", nonIdempotent: true },
+      { method: "DELETE" },
     ),
   deleteHistoryItem: (id: string) =>
     api<{ ok: boolean }>(`/api/ai/jobs/${encodeURIComponent(id)}`, {
       method: "DELETE",
-      nonIdempotent: true,
     }),
   clearHistory: () =>
     api<{ ok: boolean; deletedCount: number; snapshot: AIJobSnapshot }>(
       "/api/ai/jobs/history",
-      { method: "DELETE", nonIdempotent: true },
+      { method: "DELETE" },
     ),
   settings: () =>
     api<{ ok: boolean; settings: AIJobSettings }>("/api/ai/jobs/settings"),
@@ -644,13 +641,11 @@ export const aiJobsApi = {
     api<{ ok: boolean; settings: AIJobSettings }>("/api/ai/jobs/settings", {
       method: "PUT",
       body: settings,
-      nonIdempotent: true,
     }),
   updateHardware: (gpuEnabled: boolean) =>
     api<{ ok: boolean; settings: AIJobSettings }>("/api/ai/jobs/hardware", {
       method: "PUT",
       body: { gpuEnabled },
-      nonIdempotent: true,
     }),
   metadata: (id: string) =>
     api<ImageMetadataResponse>(
@@ -664,7 +659,6 @@ export const aiJobsApi = {
     api<FaceSearchResponse>("/api/ai/faces/search", {
       method: "POST",
       body: { resourceId, faceIndex },
-      nonIdempotent: true,
     }),
   chinaLocations: (timeRange?: ChinaTimeRange) =>
     api<{ ok: boolean; locations: ChinaLocationSummary }>(
@@ -796,7 +790,6 @@ export const aiJobsApi = {
       return api<SemanticSearchResponse>("/api/ai/search", {
         method: "POST",
         body: request,
-        nonIdempotent: true,
       });
     }
     const body = new FormData();
@@ -807,7 +800,6 @@ export const aiJobsApi = {
     return api<SemanticSearchResponse>("/api/ai/search", {
       method: "POST",
       body,
-      nonIdempotent: true,
     });
   },
   people: (includeHidden = false) =>
@@ -819,7 +811,8 @@ export const aiJobsApi = {
       centroidThreshold: number;
       exemplarThreshold: number;
       ambiguousFaceThreshold: number;
-      imageSimilarityThreshold: number;
+      exemplarLimit: number;
+      ambiguousExemplarCount: number;
       revision: number;
     }>("/api/people", { params: { includeHidden } }),
   searchPeople: (query: string) =>
@@ -831,7 +824,8 @@ export const aiJobsApi = {
       centroidThreshold: number;
       exemplarThreshold: number;
       ambiguousFaceThreshold: number;
-      imageSimilarityThreshold: number;
+      exemplarLimit: number;
+      ambiguousExemplarCount: number;
       revision: number;
     }>("/api/people", { params: { q: query, limit: 20 } }),
   personMedia: (id: string, cursor?: string) =>
@@ -843,23 +837,20 @@ export const aiJobsApi = {
     api<{ ok: boolean }>(`/api/people/${encodeURIComponent(id)}`, {
       method: "PUT",
       body,
-      nonIdempotent: true,
     }),
   mergePeople: (sourceId: string, targetId: string) =>
     api<{ ok: boolean }>("/api/people/merge", {
       method: "POST",
       body: { sourceId, targetId },
-      nonIdempotent: true,
     }),
   splitPerson: (personId: string, faceKeys: string[]) =>
     api<{ ok: boolean; personId: string }>("/api/people/split", {
       method: "POST",
       body: { personId, faceKeys },
-      nonIdempotent: true,
     }),
   clearPeople: () =>
     api<{ ok: boolean; cleared: boolean; peopleEnabled: boolean }>(
       "/api/people",
-      { method: "DELETE", nonIdempotent: true },
+      { method: "DELETE" },
     ),
 };

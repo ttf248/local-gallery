@@ -1212,6 +1212,25 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 	return result
 }
 
+// RecordsIncludingStaleVersions supplies persisted results to derived-index
+// migrations while a module version is being recomputed.
+func (s *AIJobService) RecordsIncludingStaleVersions(moduleType string) []AIAnalysisRecord {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, installed := s.analyzers[moduleType]; !installed {
+		return nil
+	}
+	result := make([]AIAnalysisRecord, 0)
+	for _, record := range s.records {
+		if record.Type == moduleType {
+			record.Data = append(json.RawMessage(nil), record.Data...)
+			result = append(result, record)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].ResourceID < result[j].ResourceID })
+	return result
+}
+
 // Record 返回一个资源在指定模块中的当前分析结果。
 func (s *AIJobService) Record(moduleType, resourceID string) (AIAnalysisRecord, bool) {
 	s.mu.Lock()

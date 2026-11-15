@@ -54,7 +54,9 @@ YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
 SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
-FACE_VERSION = "yunet-2023mar+sface-2021dec"
+FACE_VERSION = "yunet-2023mar-multiscale+sface-2021dec"
+YUNET_INPUT_SIZE = 640
+YUNET_SCORE_THRESHOLD = 0.65
 
 model_dir = Path(sys.argv[1]).resolve()
 model = None
@@ -844,7 +846,7 @@ def ocr_gpu_image_worker_count(paths) -> int:
     return OCR_GPU_IMAGE_WORKERS
 
 
-def tile_offsets(length, tile_size=640):
+def tile_offsets(length, tile_size=YUNET_INPUT_SIZE):
     if length <= tile_size:
         return [0]
     stride = tile_size - 128
@@ -891,52 +893,111 @@ def yunet_nms(faces, threshold=0.3, limit=5000):
     return [faces[index] for index in kept]
 
 
-def detect_yunet_gpu(image, session):
+def yunet_overview(image):
+    height, width = image.shape[:2]
+    scale = YUNET_INPUT_SIZE / float(max(height, width))
+    resized_width = max(1, int(round(width * scale)))
+    resized_height = max(1, int(round(height * scale)))
+    resized = cv2.resize(
+        image,
+        (resized_width, resized_height),
+        interpolation=cv2.INTER_AREA,
+    )
+    if resized_height != YUNET_INPUT_SIZE or resized_width != YUNET_INPUT_SIZE:
+        resized = cv2.copyMakeBorder(
+            resized,
+            0,
+            YUNET_INPUT_SIZE - resized_height,
+            0,
+            YUNET_INPUT_SIZE - resized_width,
+            cv2.BORDER_CONSTANT,
+            value=(0, 0, 0),
+        )
+    return resized, width / resized_width, height / resized_height
+
+
+def detect_yunet_gpu_input(image, session, offset_x=0, offset_y=0, scale_x=1.0, scale_y=1.0):
     input_meta = session.get_inputs()[0]
     outputs = {output.name: index for index, output in enumerate(session.get_outputs())}
     faces = []
+    blob = cv2.dnn.blobFromImage(image)
+    predictions = session.run(None, {input_meta.name: blob})
+    for stride in (8, 16, 32):
+        cls = predictions[outputs[f"cls_{stride}"]].reshape(-1)
+        obj = predictions[outputs[f"obj_{stride}"]].reshape(-1)
+        bbox = predictions[outputs[f"bbox_{stride}"]].reshape(-1, 4)
+        keypoints = predictions[outputs[f"kps_{stride}"]].reshape(-1, 10)
+        columns = YUNET_INPUT_SIZE // stride
+        scores = np.sqrt(np.clip(cls, 0.0, 1.0) * np.clip(obj, 0.0, 1.0))
+        selected = np.flatnonzero(scores >= YUNET_SCORE_THRESHOLD)
+        if selected.size == 0:
+            continue
+        rows, grid_columns = np.divmod(selected, columns)
+        selected_boxes = bbox[selected]
+        center_x = (grid_columns + selected_boxes[:, 0]) * stride
+        center_y = (rows + selected_boxes[:, 1]) * stride
+        box_width = np.exp(selected_boxes[:, 2]) * stride
+        box_height = np.exp(selected_boxes[:, 3]) * stride
+        boxes = np.column_stack((
+            (center_x - box_width / 2 + offset_x) * scale_x,
+            (center_y - box_height / 2 + offset_y) * scale_y,
+            box_width * scale_x,
+            box_height * scale_y,
+        ))
+        landmarks = keypoints[selected].reshape(-1, 5, 2).copy()
+        landmarks[:, :, 0] = (landmarks[:, :, 0] + grid_columns[:, None] * stride + offset_x) * scale_x
+        landmarks[:, :, 1] = (landmarks[:, :, 1] + rows[:, None] * stride + offset_y) * scale_y
+        faces.extend(np.column_stack((
+            boxes,
+            landmarks.reshape(-1, 10),
+            scores[selected],
+        )).tolist())
+    return faces
+
+
+def detect_yunet_gpu(image, session):
     height, width = image.shape[:2]
+    faces = []
     for top in tile_offsets(height):
         for left in tile_offsets(width):
-            tile = image[top:min(top + 640, height), left:min(left + 640, width)]
+            tile = image[top:min(top + YUNET_INPUT_SIZE, height), left:min(left + YUNET_INPUT_SIZE, width)]
             tile_height, tile_width = tile.shape[:2]
-            if tile_height != 640 or tile_width != 640:
+            if tile_height != YUNET_INPUT_SIZE or tile_width != YUNET_INPUT_SIZE:
                 tile = cv2.copyMakeBorder(
-                    tile, 0, 640 - tile_height, 0, 640 - tile_width,
+                    tile, 0, YUNET_INPUT_SIZE - tile_height,
+                    0, YUNET_INPUT_SIZE - tile_width,
                     cv2.BORDER_CONSTANT, value=(0, 0, 0),
                 )
-            blob = cv2.dnn.blobFromImage(tile)
-            predictions = session.run(None, {input_meta.name: blob})
-            for stride in (8, 16, 32):
-                cls = predictions[outputs[f"cls_{stride}"]].reshape(-1)
-                obj = predictions[outputs[f"obj_{stride}"]].reshape(-1)
-                bbox = predictions[outputs[f"bbox_{stride}"]].reshape(-1, 4)
-                keypoints = predictions[outputs[f"kps_{stride}"]].reshape(-1, 10)
-                columns = 640 // stride
-                scores = np.sqrt(np.clip(cls, 0.0, 1.0) * np.clip(obj, 0.0, 1.0))
-                selected = np.flatnonzero(scores >= 0.65)
-                if selected.size == 0:
-                    continue
-                rows, grid_columns = np.divmod(selected, columns)
-                selected_boxes = bbox[selected]
-                center_x = (grid_columns + selected_boxes[:, 0]) * stride
-                center_y = (rows + selected_boxes[:, 1]) * stride
-                box_width = np.exp(selected_boxes[:, 2]) * stride
-                box_height = np.exp(selected_boxes[:, 3]) * stride
-                boxes = np.column_stack((
-                    center_x - box_width / 2 + left,
-                    center_y - box_height / 2 + top,
-                    box_width,
-                    box_height,
-                ))
-                landmarks = keypoints[selected].reshape(-1, 5, 2).copy()
-                landmarks[:, :, 0] = (landmarks[:, :, 0] + grid_columns[:, None]) * stride + left
-                landmarks[:, :, 1] = (landmarks[:, :, 1] + rows[:, None]) * stride + top
-                faces.extend(np.column_stack((
-                    boxes,
-                    landmarks.reshape(-1, 10),
-                    scores[selected],
-                )).tolist())
+            faces.extend(detect_yunet_gpu_input(tile, session, left, top))
+
+    if max(height, width) > YUNET_INPUT_SIZE:
+        overview, scale_x, scale_y = yunet_overview(image)
+        faces.extend(detect_yunet_gpu_input(overview, session, scale_x=scale_x, scale_y=scale_y))
+    return yunet_nms(faces)
+
+
+def detect_yunet_cpu(image, detector):
+    height, width = image.shape[:2]
+    faces = []
+
+    def detect(view, scale_x=1.0, scale_y=1.0):
+        view_height, view_width = view.shape[:2]
+        detector.setInputSize((view_width, view_height))
+        _, detections = detector.detect(view)
+        if detections is None:
+            return
+        for detection in detections:
+            face = detection.copy()
+            face[[0, 2]] *= scale_x
+            face[[1, 3]] *= scale_y
+            face[4:14:2] *= scale_x
+            face[5:14:2] *= scale_y
+            faces.append(face.tolist())
+
+    detect(image)
+    if max(height, width) > YUNET_INPUT_SIZE:
+        overview, scale_x, scale_y = yunet_overview(image)
+        detect(overview, scale_x, scale_y)
     return yunet_nms(faces)
 
 
@@ -980,9 +1041,7 @@ def analyze_face_image(path: str, device_mode="cpu") -> dict:
         if runtime["device"] == "gpu":
             detections = detect_yunet_gpu(image, runtime["detector"])
         else:
-            height, width = image.shape[:2]
-            runtime["detector"].setInputSize((width, height))
-            _, detections = runtime["detector"].detect(image)
+            detections = detect_yunet_cpu(image, runtime["detector"])
         faces = []
         if detections is not None:
             for detection in detections:

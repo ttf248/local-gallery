@@ -14,7 +14,8 @@ test.describe("本机智能照片功能", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
     });
     const peopleSearchResponse = await page.request.get(
       "/api/people?q=%E4%B8%8D%E5%AD%98%E5%9C%A8&limit=20",
@@ -27,7 +28,8 @@ test.describe("本机智能照片功能", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
     });
     await page.getByRole("link", { name: "打开任务中心" }).click();
     await expect(page).toHaveURL(/\/tasks\/plan$/);

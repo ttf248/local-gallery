@@ -62,7 +62,8 @@ describe("人物相册", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
       revision: 1,
     });
     mocks.searchPeople.mockResolvedValue({
@@ -73,7 +74,8 @@ describe("人物相册", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
       revision: 1,
     });
     mocks.clearPeople.mockResolvedValue({ ok: true, cleared: true });
@@ -104,7 +106,8 @@ describe("人物相册", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
       revision: 2,
     });
     renderPeople();
@@ -137,7 +140,8 @@ describe("人物相册", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
       revision: 3,
     });
     renderPeople();
@@ -227,7 +231,8 @@ describe("人物相册", () => {
       centroidThreshold: 0.52,
       exemplarThreshold: 0.72,
       ambiguousFaceThreshold: 0.58,
-      imageSimilarityThreshold: 0.65,
+      exemplarLimit: 8,
+      ambiguousExemplarCount: 2,
       revision: 4,
     });
     render(
