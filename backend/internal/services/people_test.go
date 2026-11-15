@@ -54,6 +54,54 @@ func peopleTestRandomVector(rng *rand.Rand) []float32 {
 	return vector
 }
 
+func TestPeopleServiceNamesUnnamedGroupsByOrder(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "state", "people.json")
+	indexPath := filepath.Join(root, "derived", "people-index.json")
+	records := []AIAnalysisRecord{
+		peopleTestRecord("f_a", peopleTestVector(0, 0)),
+		peopleTestRecord("f_b", peopleTestVector(0, 0)),
+		peopleTestRecord("f_c", peopleTestVector(1, 0)),
+	}
+	people, err := OpenPeopleService(statePath, indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+
+	groups := people.Groups(false)
+	if len(groups) != 2 {
+		t.Fatalf("groups = %d, want two candidate groups: %+v", len(groups), groups)
+	}
+	// 名字是序数，不是内部标识：照片多的在前，编号跟着走。
+	if groups[0].Name != "人物 1" || groups[1].Name != "人物 2" {
+		t.Fatalf("group names = %q, %q; want 人物 1 and 人物 2", groups[0].Name, groups[1].Name)
+	}
+	if groups[0].PhotoCount != 2 || groups[1].PhotoCount != 1 {
+		t.Fatalf("group order = %d photos then %d photos, want 2 then 1", groups[0].PhotoCount, groups[1].PhotoCount)
+	}
+	// 列表页与搜索页说的是同一个名字。
+	listed, _ := people.SearchGroups("", 0, false, nil)
+	if len(listed) != 2 || listed[0].Name != "人物 1" || listed[1].Name != "人物 2" {
+		t.Fatalf("search listing = %+v, want the same ordinal names", listed)
+	}
+	// 按名字找得到人。
+	found, total := people.SearchGroups("人物 2", 0, false, nil)
+	if total != 1 || len(found) != 1 || found[0].Name != "人物 2" {
+		t.Fatalf("search 人物 2 = %+v (total %d), want the second group", found, total)
+	}
+	// 改过名的分组保留自己的名字，也不占号：没改名的那些接着排。
+	if err := people.Rename(groups[0].ID, "旅行同伴"); err != nil {
+		t.Fatal(err)
+	}
+	renamed := people.Groups(false)
+	if renamed[0].Name != "旅行同伴" || renamed[1].Name != "人物 1" {
+		t.Fatalf("names after rename = %q, %q; want 旅行同伴 and 人物 1", renamed[0].Name, renamed[1].Name)
+	}
+}
+
 func TestPeopleServicePersistsCorrectionsWithoutCopyingEmbeddings(t *testing.T) {
 	root := t.TempDir()
 	statePath := filepath.Join(root, "state", "people.json")

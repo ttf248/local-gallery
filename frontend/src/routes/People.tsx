@@ -161,7 +161,10 @@ function PersonCard({ person }: { person: PersonGroup }) {
           />
         ) : null}
         <span className="absolute bottom-3 left-3 rounded-full bg-black/65 px-2.5 py-1 text-meta text-white backdrop-blur-sm">
-          {person.photoCount.toLocaleString()} 张
+          {/* 说的是「这个人在多少张照片里出现过」；下面那行是「认出了
+              多少张脸」。两个数常常一样，摆在一起时得说清哪个是哪个，
+              否则读起来像同一个数字写了两遍。 */}
+          {person.photoCount.toLocaleString()} 张照片
         </span>
       </div>
       <div className="flex items-center justify-between gap-3 px-4 py-3">

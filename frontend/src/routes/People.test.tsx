@@ -120,7 +120,7 @@ describe("人物相册", () => {
       screen.getByText(
         (_content, element) =>
           element?.tagName === "SPAN" &&
-          element.textContent?.replace(/\s+/g, "") === "2张",
+          element.textContent?.replace(/\s+/g, "") === "2张照片",
       ),
     ).toBeInTheDocument();
   });

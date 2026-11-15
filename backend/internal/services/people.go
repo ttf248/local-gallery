@@ -11,6 +11,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -859,17 +860,14 @@ func (s *PeopleService) effectivePersonIDLocked(face PersonFace) string {
 func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	ordinals := s.personOrdinalNamesLocked()
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
 	for _, face := range s.faces {
 		id := s.effectivePersonIDLocked(face)
 		group := groups[id]
 		if group == nil {
-			name := s.manual.Names[id]
-			if name == "" {
-				name = "人物 " + strings.TrimPrefix(id, "p_")[:min(6, len(strings.TrimPrefix(id, "p_")))]
-			}
-			group = &PersonGroup{ID: id, Name: name, Hidden: s.manual.Hidden[id]}
+			group = &PersonGroup{ID: id, Name: s.personNameLocked(id, ordinals), Hidden: s.manual.Hidden[id]}
 			groups[id] = group
 			photos[id] = map[string]struct{}{}
 		}
@@ -887,10 +885,7 @@ func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
-		if result[i].Name == result[j].Name {
-			return result[i].ID < result[j].ID
-		}
-		return strings.ToLower(result[i].Name) < strings.ToLower(result[j].Name)
+		return peopleGroupRanksBefore(result[i], result[j])
 	})
 	return result
 }
@@ -905,6 +900,7 @@ func (s *PeopleService) AlbumGroups(fingerprints map[string]smartAlbumFileFinger
 		photos       map[string]struct{}
 		fingerprints []string
 	}
+	ordinals := s.personOrdinalNamesLocked()
 	groups := make(map[string]*albumGroupState)
 	for resourceID, fingerprint := range fingerprints {
 		for _, faceKey := range s.facesByResource[resourceID] {
@@ -915,13 +911,8 @@ func (s *PeopleService) AlbumGroups(fingerprints map[string]smartAlbumFileFinger
 			personID := s.effectivePersonIDLocked(face)
 			group := groups[personID]
 			if group == nil {
-				name := s.manual.Names[personID]
-				if name == "" {
-					suffix := strings.TrimPrefix(personID, "p_")
-					name = "人物 " + suffix[:min(6, len(suffix))]
-				}
 				group = &albumGroupState{
-					group:  PersonGroup{ID: personID, Name: name, Hidden: s.manual.Hidden[personID]},
+					group:  PersonGroup{ID: personID, Name: s.personNameLocked(personID, ordinals), Hidden: s.manual.Hidden[personID]},
 					photos: make(map[string]struct{}),
 				}
 				groups[personID] = group
@@ -968,6 +959,7 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	ordinals := s.personOrdinalNamesLocked()
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
 	for _, face := range s.faces {
@@ -980,12 +972,7 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 		}
 		group := groups[id]
 		if group == nil {
-			name := s.manual.Names[id]
-			if name == "" {
-				suffix := strings.TrimPrefix(id, "p_")
-				name = "人物 " + suffix[:min(6, len(suffix))]
-			}
-			group = &PersonGroup{ID: id, Name: name, Hidden: s.manual.Hidden[id]}
+			group = &PersonGroup{ID: id, Name: s.personNameLocked(id, ordinals), Hidden: s.manual.Hidden[id]}
 			groups[id] = group
 			photos[id] = make(map[string]struct{})
 		}
@@ -1043,7 +1030,12 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 		query = ""
 	}
 	if strings.HasPrefix(query, "人物 ") {
-		query = strings.TrimSpace(strings.TrimPrefix(query, "人物 "))
+		rest := strings.TrimSpace(strings.TrimPrefix(query, "人物 "))
+		// 「人物 3」就是分组的名字本身，别把它剥成「3」：那会连
+		// 「人物 13」「人物 30」一起搜出来。要按旧名字搜的人才写全名。
+		if !isDigitsOnly(rest) {
+			query = rest
+		}
 	}
 	if query == "" {
 		return s.TopGroups(limit, includeHidden, includeResource)
@@ -1054,6 +1046,7 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	ordinals := s.personOrdinalNamesLocked()
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
 	for _, face := range s.faces {
@@ -1064,7 +1057,7 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 		if !includeHidden && s.manual.Hidden[id] {
 			continue
 		}
-		name := s.personNameLocked(id)
+		name := s.personNameLocked(id, ordinals)
 		if !strings.Contains(strings.ToLower(name), query) && !strings.Contains(strings.ToLower(id), query) {
 			continue
 		}
@@ -1107,7 +1100,7 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFace, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	group := PersonGroup{ID: personID, Name: s.personNameLocked(personID), Hidden: s.manual.Hidden[personID]}
+	group := PersonGroup{ID: personID, Name: s.personNameLocked(personID, s.personOrdinalNamesLocked()), Hidden: s.manual.Hidden[personID]}
 	photos := make(map[string]struct{})
 	faces := make([]PersonFace, 0)
 	for _, face := range s.faces {
@@ -1137,8 +1130,72 @@ func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFac
 	return group, faces, true
 }
 
-func (s *PeopleService) personNameLocked(personID string) string {
+// personOrdinalNamesLocked 给未改名的分组算出序数名。
+//
+// 未改名的分组原先拿哈希后缀当名字（「人物 513e12」）：那是内部标识，
+// 摆到界面上既读不懂，也分不出先后。改成按展示顺序编号 —— 照片多的在前 ——
+// 名字至少说得出「这是第几个」。序数会随分组集合变化而重排：分组多了少了，
+// 后面那些的号跟着挪。这是可接受的 —— 用户一旦改名就固定下来
+// （改名存在 state/people.json）。
+func (s *PeopleService) personOrdinalNamesLocked() map[string]string {
+	photos := make(map[string]map[string]struct{})
+	covers := make(map[string]string)
+	for _, face := range s.faces {
+		id := s.effectivePersonIDLocked(face)
+		if photos[id] == nil {
+			photos[id] = make(map[string]struct{})
+		}
+		photos[id][face.ResourceID] = struct{}{}
+		if cover, ok := covers[id]; !ok || face.ResourceID < cover {
+			covers[id] = face.ResourceID
+		}
+	}
+	ids := make([]string, 0, len(photos))
+	for id := range photos {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		left, right := ids[i], ids[j]
+		if len(photos[left]) != len(photos[right]) {
+			return len(photos[left]) > len(photos[right])
+		}
+		if covers[left] != covers[right] {
+			return covers[left] < covers[right]
+		}
+		return left < right
+	})
+	names := make(map[string]string, len(ids))
+	number := 0
+	for _, id := range ids {
+		if s.manual.Names[id] != "" {
+			// 用户改过名的分组不占号：没改名的那些连着排下去，
+			// 中间有人改名也不会让「人物 1」「人物 2」断开。
+			continue
+		}
+		number++
+		names[id] = "人物 " + strconv.Itoa(number)
+	}
+	return names
+}
+
+// isDigitsOnly 判断一段文本是不是只有数字（且非空）。
+func isDigitsOnly(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *PeopleService) personNameLocked(personID string, ordinals map[string]string) string {
 	if name := s.manual.Names[personID]; name != "" {
+		return name
+	}
+	if name, ok := ordinals[personID]; ok {
 		return name
 	}
 	suffix := strings.TrimPrefix(personID, "p_")
