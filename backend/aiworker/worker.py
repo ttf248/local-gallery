@@ -32,7 +32,9 @@ OCR_DEFAULT_BATCH_SIZE = 6
 OCR_RECOGNIZER_BATCH_SIZE = 6
 OCR_CPU_ONNX_THREADS = 2
 OCR_CPU_MAX_IMAGE_WORKERS = 4
-OCR_GPU_IMAGE_WORKERS = 8
+OCR_GPU_IMAGE_WORKERS = 16
+OCR_GPU_LARGE_IMAGE_WORKERS = 8
+OCR_GPU_LARGE_IMAGE_PIXEL_LIMIT = 4_000_000
 OCR_MAX_INPUT_PIXELS = 16_000_000
 FACE_MAX_INPUT_DIMENSION = 2048
 MODEL_IDLE_RELEASE_SECONDS = 300
@@ -819,6 +821,25 @@ def ocr_cpu_image_worker_count() -> int:
     )
 
 
+def ocr_gpu_image_worker_count(paths) -> int:
+    from PIL import Image as PILImage
+
+    if (
+        not isinstance(paths, list)
+        or not paths
+        or not all(isinstance(path, str) for path in paths)
+    ):
+        return OCR_GPU_IMAGE_WORKERS
+    for path in paths:
+        try:
+            with PILImage.open(path) as source:
+                if source.width * source.height > OCR_GPU_LARGE_IMAGE_PIXEL_LIMIT:
+                    return OCR_GPU_LARGE_IMAGE_WORKERS
+        except Exception:
+            return OCR_GPU_LARGE_IMAGE_WORKERS
+    return OCR_GPU_IMAGE_WORKERS
+
+
 def tile_offsets(length, tile_size=640):
     if length <= tile_size:
         return [0]
@@ -1010,7 +1031,11 @@ def run_ocr_image_analysis(paths, device_mode):
     def analyze(path):
         return analyze_ocr_image(path, device_mode)
 
-    max_workers = OCR_GPU_IMAGE_WORKERS if device_mode == "gpu" else ocr_cpu_image_worker_count()
+    max_workers = (
+        ocr_gpu_image_worker_count(paths)
+        if device_mode == "gpu"
+        else ocr_cpu_image_worker_count()
+    )
     return run_warmed_image_analysis(paths, analyze, max_workers)
 
 

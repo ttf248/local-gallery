@@ -252,14 +252,45 @@ class WorkerTests(unittest.TestCase):
         self.assertIs(result, response)
         self.assertEqual(3, run_batch.call_args.args[2])
 
-    def test_ocr_gpu_analysis_uses_benchmarked_worker_count(self):
+    def test_ocr_gpu_worker_count_bounds_large_image_batches(self):
+        from PIL import Image as PILImage
+
+        with tempfile.TemporaryDirectory() as directory:
+            small_png = Path(directory) / "small.png"
+            large_png = Path(directory) / "large.png"
+            large_jpeg = Path(directory) / "large.jpg"
+            broken_image = Path(directory) / "broken.png"
+            PILImage.new("RGB", (100, 100)).save(small_png)
+            PILImage.new("RGB", (2200, 1900)).save(large_png)
+            PILImage.new("RGB", (2200, 1900)).save(large_jpeg)
+            broken_image.write_bytes(b"not an image")
+
+            self.assertEqual(16, worker.ocr_gpu_image_worker_count([str(small_png)]))
+            self.assertEqual(8, worker.ocr_gpu_image_worker_count([str(large_png)]))
+            self.assertEqual(8, worker.ocr_gpu_image_worker_count([str(large_jpeg)]))
+            self.assertEqual(
+                8,
+                worker.ocr_gpu_image_worker_count([str(small_png), str(large_png)]),
+            )
+            self.assertEqual(8, worker.ocr_gpu_image_worker_count([str(broken_image)]))
+
+    def test_ocr_gpu_analysis_uses_adaptive_worker_count(self):
+        paths = ["page.png", "large.png"]
         result = {"items": []}
-        with patch.object(worker, "run_warmed_image_analysis", return_value=result) as run_batch:
-            response = worker.run_ocr_image_analysis(["page.png"], "gpu")
+        with patch.object(
+            worker, "ocr_gpu_image_worker_count", return_value=8
+        ) as choose_workers, patch.object(
+            worker, "run_warmed_image_analysis", return_value=result
+        ) as run_batch:
+            response = worker.run_ocr_image_analysis(paths, "gpu")
 
         self.assertIs(result, response)
-        self.assertEqual(8, worker.OCR_GPU_IMAGE_WORKERS)
-        self.assertEqual(8, run_batch.call_args.args[2])
+        self.assertEqual(16, worker.OCR_GPU_IMAGE_WORKERS)
+        choose_workers.assert_called_once_with(paths)
+        self.assertEqual(
+            worker.OCR_GPU_LARGE_IMAGE_WORKERS,
+            run_batch.call_args.args[2],
+        )
 
     def test_ocr_input_pixel_cap_resizes_and_maps_boxes_to_source(self):
         pixels = np.full((100, 100, 3), 255, dtype=np.uint8)
