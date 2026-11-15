@@ -34,7 +34,9 @@ export interface Shortcut {
 }
 
 // 按页面和媒体类型声明快捷键；reader 分组由图片与视频阅读器共用。
-// 列表须与 Toolbar/AppShell/Gallery/VideoPlayer/PageSlider 的处理函数一致。
+// 列表须与 Toolbar/AppShell/Gallery/VideoPlayer/PageSlider 的处理函数一致
+// —— shortcutsTable.test.ts 逐条核对：帮助浮层写着的快捷键要是没人
+// 处理，用户按下没反应，比不写这一行更糟。
 // HelpOverlay 直接消费此表作为单一事实来源。
 
 export const SHORTCUTS: Shortcut[] = [
