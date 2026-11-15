@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, AUTH_REQUIRED_EVENT } from "./client";
+import {
+  api,
+  apiUrl,
+  ApiError,
+  AUTH_REQUIRED_EVENT,
+  buildQuery,
+  isRetryableStatus,
+} from "./client";
 
 function failedResponse(status: number, body: string): Response {
   return {
@@ -71,7 +78,7 @@ describe("api error response", () => {
     const listener = vi.fn();
     window.addEventListener(AUTH_REQUIRED_EVENT, listener);
 
-    await expect(api("/api/private", { retries: 0 })).rejects.toMatchObject({
+    await expect(api("/api/private")).rejects.toMatchObject({
       status: 401,
       code: "authentication_required",
     });
@@ -97,7 +104,6 @@ describe("api error response", () => {
     await api("/api/ai/search", {
       method: "POST",
       body,
-      nonIdempotent: true,
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -106,6 +112,78 @@ describe("api error response", () => {
         body,
         headers: { Accept: "application/json" },
       }),
+    );
+  });
+
+  it("上传 Blob 时保留它自己的 Content-Type", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({ ok: true }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const body = new Blob([new Uint8Array([1, 2, 3])], { type: "image/jpeg" });
+
+    await api("/api/thumbs/f_1/cover", { method: "POST", body });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/thumbs/f_1/cover",
+      expect.objectContaining({
+        body,
+        headers: expect.objectContaining({ "Content-Type": "image/jpeg" }),
+      }),
+    );
+  });
+});
+
+describe("重试策略只在查询层", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("请求层不再自己重试：一次失败只发一次请求", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(failedResponse(500, "服务器开小差了"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api("/api/example")).rejects.toMatchObject({ status: 500 });
+
+    // 重试由 TanStack Query 决定（api/queryClient.ts）。两处都重试的
+    // 时候，一个 GET 最多会发出 8 次请求。
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("只把 5xx、408、429 算作值得重试", () => {
+    expect(isRetryableStatus(500)).toBe(true);
+    expect(isRetryableStatus(503)).toBe(true);
+    expect(isRetryableStatus(408)).toBe(true);
+    expect(isRetryableStatus(429)).toBe(true);
+    // 请求本身不成立的状态：重试多少次都一样。
+    expect(isRetryableStatus(400)).toBe(false);
+    expect(isRetryableStatus(401)).toBe(false);
+    expect(isRetryableStatus(403)).toBe(false);
+    expect(isRetryableStatus(404)).toBe(false);
+  });
+});
+
+describe("查询串拼装只有一处", () => {
+  it("空值一律省略，其余按给定顺序拼出", () => {
+    expect(buildQuery({ w: 1280, v: "abc" })).toBe("?w=1280&v=abc");
+    expect(buildQuery({ w: undefined, v: "" })).toBe("");
+    expect(buildQuery({ scope: "thumbs" })).toBe("?scope=thumbs");
+    expect(buildQuery()).toBe("");
+  });
+
+  it("值里的特殊字符会被转义", () => {
+    expect(buildQuery({ tag: "C++ / 100%" })).toBe(
+      "?tag=C%2B%2B%20%2F%20100%25",
+    );
+  });
+
+  it("apiUrl 把查询串接在路径后面", () => {
+    expect(apiUrl("/api/thumbs/f_1", { w: 640 })).toBe(
+      "/api/thumbs/f_1?w=640",
     );
   });
 });

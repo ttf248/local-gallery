@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError } from "../api/client";
+import { ApiError, isRetryableStatus } from "../api/client";
 import {
   libraryApi,
   type LibraryListQuery,
@@ -36,11 +36,11 @@ export function useLibraryList(query: LibraryListQuery, enabled = true) {
       libraryApi.overview(query, pageParam, signal).then((r) => r.page),
     getNextPageParam: (page) => page.nextCursor || undefined,
     enabled: ready && enabled,
+    // 游标失效（400）重试没有意义：库变了，重取首屏才是对的。
+    // 其余也只重试值得重试的状态（5xx / 408 / 429），最多一次。
     retry: (count, error) =>
-      !(
-        error instanceof ApiError &&
-        ["stale_cursor", "invalid_cursor"].includes(error.code ?? "")
-      ) && count < 1,
+      !(error instanceof ApiError && !isRetryableStatus(error.status)) &&
+      count < 1,
   });
   useEffect(() => {
     if (

@@ -58,7 +58,6 @@ export const stateBackupApi = {
           versions: preview.versions,
           libraryRevision: preview.libraryRevision,
         },
-        nonIdempotent: true,
       });
     return categories.includes("activities")
       ? afterImageActivityWrites(restore)

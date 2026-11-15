@@ -227,8 +227,10 @@ for (const kind of ["images", "mixed", "videos"] as const) {
       await expect(
         scroller.getByRole("button", { name: "查看 page-1.png", exact: true }),
       ).toBeVisible();
-      // 失败次数取决于重试节奏，只断言「确实反复失败过」。
-      expect(failedRequests).toBeGreaterThanOrEqual(4);
+      // 400 不重试：请求本身不成立（游标失效之类），再试一次结果一样，
+      // 只会让界面多等好几秒才说出「加载失败」。界面上有显式的重试入口，
+      // 要不要再试由用户决定。
+      expect(failedRequests).toBe(1);
       for (const theme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: theme });
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);

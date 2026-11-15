@@ -1,10 +1,8 @@
-import { API_BASE } from "./client";
-import { renditionQuery } from "./thumbs";
+import { apiUrl } from "./client";
 
 // 全图 URL（与 thumbUrl 对应）
 export function imageUrl(fileId: string): string {
-  const p = `/api/media/${encodeURIComponent(fileId)}`;
-  return API_BASE ? `${API_BASE}${p}` : p;
+  return apiUrl(`/api/media/${encodeURIComponent(fileId)}`);
 }
 
 // 预览图 URL：服务端按宽度等比缩放后的 JPEG。
@@ -23,9 +21,10 @@ export function previewUrl(
   version?: string,
 ): string {
   const w = Math.max(320, Math.min(4096, Math.round(width)));
-  const p = `/api/previews/${encodeURIComponent(fileId)}`;
-  // 查询串统一由 renditionQuery 拼：自己手写 "?w=…" 再拼一个 "?v=…" 会
-  // 拼出两个问号，服务端把 "?v=…" 当成 w 的值，整张图直接 400。
-  const query = renditionQuery(version, w);
-  return API_BASE ? `${API_BASE}${p}${query}` : `${p}${query}`;
+  // 查询串统一由 client.ts 的 buildQuery 拼：自己手写 "?w=…" 再拼一个
+  // "?v=…" 会拼出两个问号，服务端把 "?v=…" 当成 w 的值，整张图直接 400。
+  return apiUrl(`/api/previews/${encodeURIComponent(fileId)}`, {
+    w,
+    v: version,
+  });
 }

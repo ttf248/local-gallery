@@ -1,4 +1,4 @@
-import { api, API_BASE } from "./client";
+import { api, API_BASE, sse } from "./client";
 
 // 视频原始流 URL（供 <video src=...> 使用）。
 //
@@ -70,7 +70,6 @@ export async function getVideoInfoBatch(
     }>("/api/videos/info/batch", {
       method: "POST",
       body: { ids: ids.slice(offset, offset + VIDEO_INFO_BATCH_LIMIT) },
-      nonIdempotent: true,
     });
     for (const item of response.items) {
       if (item.info) result[item.id] = item.info;
@@ -107,24 +106,22 @@ export interface TranscodeStatus {
 export async function getTranscodeStatus(
   fileId: string,
 ): Promise<TranscodeStatus> {
-  const url = API_BASE
-    ? `${API_BASE}/api/videos/${encodeURIComponent(fileId)}/transcode/status`
-    : `/api/videos/${encodeURIComponent(fileId)}/transcode/status`;
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) {
-    throw new Error(`transcode status failed: HTTP ${res.status}`);
-  }
-  return (await res.json()) as TranscodeStatus;
+  return api<TranscodeStatus>(
+    `/api/videos/${encodeURIComponent(fileId)}/transcode/status`,
+  );
 }
 
 /**
  * 取消转码。
+ *
+ * 走统一的请求出口：失败会抛 ApiError，调用方据此提示「取消失败」，
+ * 而不是把服务端仍在转码说成「已取消」。
  */
 export async function cancelTranscode(fileId: string): Promise<void> {
-  const url = API_BASE
-    ? `${API_BASE}/api/videos/${encodeURIComponent(fileId)}/transcode/cancel`
-    : `/api/videos/${encodeURIComponent(fileId)}/transcode/cancel`;
-  await fetch(url, { method: "POST" });
+  await api<{ ok: boolean }>(
+    `/api/videos/${encodeURIComponent(fileId)}/transcode/cancel`,
+    { method: "POST" },
+  );
 }
 
 /**
@@ -147,33 +144,26 @@ export function subscribeTranscodeEvents(
     onError?: (err: Event) => void;
   },
 ): () => void {
-  const url = API_BASE
-    ? `${API_BASE}/api/videos/${encodeURIComponent(fileId)}/transcode/events`
-    : `/api/videos/${encodeURIComponent(fileId)}/transcode/events`;
-  const es = new EventSource(url);
-
-  es.addEventListener("progress", (e) => {
-    try {
-      const status = JSON.parse((e as MessageEvent).data) as TranscodeStatus;
-      handlers.onProgress?.(status);
-    } catch {
-      // ignore parse error
-    }
-  });
-  es.addEventListener("done", (e) => {
-    try {
-      const status = JSON.parse((e as MessageEvent).data) as TranscodeStatus;
-      handlers.onDone?.(status);
-    } catch {
-      // ignore
-    }
-    es.close();
-  });
-  es.onerror = (e) => {
-    handlers.onError?.(e);
-    // EventSource 在网络断开时会自动重连;不主动 close,
-    // 让浏览器自己处理(组件 unmount 时由返回的 close() 关)
-  };
-
-  return () => es.close();
+  let close = () => {};
+  close = sse(
+    `/api/videos/${encodeURIComponent(fileId)}/transcode/events`,
+    (eventName, data) => {
+      const status = data as TranscodeStatus;
+      if (eventName === "progress") {
+        handlers.onProgress?.(status);
+        return;
+      }
+      if (eventName === "done") {
+        handlers.onDone?.(status);
+        // 终态之后这条连接没有意义：先关掉再通知，组件里的收尾逻辑
+        // 不必再自己记得关一次。
+        close();
+      }
+    },
+    {
+      events: ["progress", "done"],
+      onError: (err) => handlers.onError?.(err),
+    },
+  );
+  return close;
 }

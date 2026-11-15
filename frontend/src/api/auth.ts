@@ -16,7 +16,6 @@ export const authApi = {
   login: async (token: string) => {
     const session = await api<SessionStatus>("/api/auth/session", {
       method: "POST",
-      nonIdempotent: true,
       body: { token },
     });
     if (session.authenticated && typeof window !== "undefined") {
@@ -27,6 +26,5 @@ export const authApi = {
   logout: () =>
     api<void>("/api/auth/session", {
       method: "DELETE",
-      nonIdempotent: true,
     }),
 };

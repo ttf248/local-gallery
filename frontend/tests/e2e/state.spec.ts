@@ -293,8 +293,10 @@ test("收藏写入成功后列表刷新失败仍保留已确认的状态", async
     ).json()) as { favorites: string[] };
     expect(removed.favorites).not.toContain(resourceId);
     await expect
+      // 重试策略只有一处（api/queryClient.ts）：5xx 会重试 3 次，
+      // 一次读取最多发出 4 个请求。
       .poll(() => failedReads, { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(8);
+      .toBeGreaterThanOrEqual(4);
     await expect(unselected).toBeVisible();
     await unselected.click();
     await expect(
@@ -405,7 +407,7 @@ for (const operation of ["limit", "clear", "visit"] as const) {
       await page.getByRole("link", { name: "最近浏览", exact: true }).click();
       await expect
         .poll(() => failedReads, { timeout: 15_000 })
-        .toBeGreaterThanOrEqual(8);
+        .toBeGreaterThanOrEqual(4);
       await expect(page.getByRole("alert")).toContainText("最近浏览加载失败");
       const firstCard = page
         .locator(`main a[href="/photo/albums/${first.id}"]`)
@@ -483,7 +485,7 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
     await page.getByRole("link", { name: "收藏照片", exact: true }).click();
     await expect
       .poll(() => failedReads, { timeout: 15_000 })
-      .toBeGreaterThanOrEqual(8);
+      .toBeGreaterThanOrEqual(4);
     await expect(count).toHaveText(`共 ${confirmed.length} 项`);
     await expect(
       page.locator(`main a[href="/photo/albums/${album.id}"]`).first(),

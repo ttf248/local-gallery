@@ -44,7 +44,7 @@ export const libraryQueryKeys = {
 export function useLibraryManifest() {
   const query = useQuery({
     queryKey: libraryQueryKeys.manifest(),
-    queryFn: () => libraryApi.manifest(),
+    queryFn: ({ signal }) => libraryApi.manifest(signal),
   });
   // 多根时才需要在卡片上标来源：单一根下每张卡片都挂「来自 X」是噪音。
   const rootCount = query.data?.manifest.roots?.length ?? 0;
@@ -86,7 +86,7 @@ export function useLibraryActivitySummary() {
   const { mode, ready } = useAppMode();
   return useQuery({
     queryKey: libraryQueryKeys.activitySummary(mode),
-    queryFn: () => libraryApi.activitySummary(mode),
+    queryFn: ({ signal }) => libraryApi.activitySummary(mode, signal),
     staleTime: 30_000,
     enabled: ready,
   });
@@ -97,7 +97,7 @@ export function useLibraryDashboard() {
   const { mode, ready } = useAppMode();
   return useQuery({
     queryKey: libraryQueryKeys.dashboard(mode),
-    queryFn: () => libraryApi.dashboard(mode),
+    queryFn: ({ signal }) => libraryApi.dashboard(mode, signal),
     staleTime: 30_000,
     enabled: ready,
   });
@@ -108,7 +108,7 @@ export function useLibraryUnreadAlbums() {
   const { mode, ready } = useAppMode();
   return useQuery({
     queryKey: libraryQueryKeys.unreadAlbums(mode),
-    queryFn: () => libraryApi.allUnreadAlbums(mode),
+    queryFn: ({ signal }) => libraryApi.allUnreadAlbums(mode, signal),
     staleTime: 30_000,
     enabled: ready,
   });
@@ -119,8 +119,13 @@ export function useAlbumMedia(albumId: string, expectedRevision?: number) {
   // 阅读器仍可使用 libraryApi.allMedia 一次性建立跨页导航上下文。
   return useInfiniteQuery({
     queryKey: [...libraryQueryKeys.media(albumId), expectedRevision],
-    queryFn: async ({ pageParam }) => {
-      const response = await libraryApi.mediaPage(albumId, pageParam);
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await libraryApi.mediaPage(
+        albumId,
+        pageParam,
+        undefined,
+        signal,
+      );
       const page = response.page;
       if (
         expectedRevision !== undefined &&
@@ -140,8 +145,8 @@ export function useLibraryTags(enabled = true, expectedRevision?: number) {
   const { mode, ready } = useAppMode();
   return useQuery({
     queryKey: [...libraryQueryKeys.tags(mode), expectedRevision],
-    queryFn: async () => {
-      const page = await libraryApi.allTags(mode);
+    queryFn: async ({ signal }) => {
+      const page = await libraryApi.allTags(mode, signal);
       if (
         expectedRevision !== undefined &&
         page.revision !== expectedRevision
@@ -168,7 +173,7 @@ export function useLibraryRecentAlbums(
   const { ready } = useAppMode();
   return useQuery({
     queryKey: [...libraryQueryKeys.mode(kind), "recent", limit],
-    queryFn: () => libraryApi.recentAlbums(kind, limit),
+    queryFn: ({ signal }) => libraryApi.recentAlbums(kind, limit, signal),
     enabled: ready && enabled,
     staleTime: 60_000,
   });
@@ -196,7 +201,8 @@ export function useOnThisDayAlbums(
       day,
       limit,
     ],
-    queryFn: () => libraryApi.onThisDay(kind, month, day, limit),
+    queryFn: ({ signal }) =>
+      libraryApi.onThisDay(kind, month, day, limit, signal),
     enabled: ready && enabled,
     staleTime: 60 * 60 * 1000,
   });
@@ -205,7 +211,7 @@ export function useOnThisDayAlbums(
 export function useLibraryNodes(ids: string[]) {
   return useQuery({
     queryKey: libraryQueryKeys.nodes(ids),
-    queryFn: () => libraryApi.queryNodes(ids),
+    queryFn: ({ signal }) => libraryApi.queryNodes(ids, signal),
     enabled: ids.length > 0,
   });
 }
@@ -222,11 +228,11 @@ export function useLibraryNodes(ids: string[]) {
 export function useLibraryAncestors(parentId: string) {
   return useQuery({
     queryKey: [...libraryQueryKeys.root, "ancestors", parentId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const chain: LibraryNodeSummary[] = [];
       let current = parentId;
       while (current) {
-        const result = await libraryApi.queryNodes([current]);
+        const result = await libraryApi.queryNodes([current], signal);
         const node = result.items[0];
         if (!node) break;
         chain.unshift(node);

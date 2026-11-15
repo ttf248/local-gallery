@@ -110,7 +110,11 @@ it("浏览器抽帧上传后用原资源 URL 显示封面，不把刷新参数�
     }
     if (url.endsWith("/cover")) {
       uploaded = true;
-      return new Response(null, { status: 200 });
+      // 服务端回 {"ok": true, "bytes": N}。
+      return new Response(JSON.stringify({ ok: true, bytes: 3 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
     }
     return new Response(new Blob(["video"]), { status: 200 });
   });

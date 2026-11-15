@@ -1,4 +1,4 @@
-import { API_BASE } from "./client";
+import { api, apiUrl } from "./client";
 
 /**
  * 渲染图 URL 构造。
@@ -15,9 +15,13 @@ export function thumbUrl(
   version?: string,
   width?: number,
 ): string {
-  const path = `/api/thumbs/${encodeURIComponent(fileId)}`;
-  const query = renditionQuery(version, width);
-  return API_BASE ? `${API_BASE}${path}${query}` : `${path}${query}`;
+  return apiUrl(`/api/thumbs/${encodeURIComponent(fileId)}`, {
+    w:
+      typeof width === "number" && Number.isFinite(width) && width > 0
+        ? Math.round(width)
+        : undefined,
+    v: version,
+  });
 }
 
 /**
@@ -36,48 +40,19 @@ export function thumbSrcSet(
     .join(", ");
 }
 
-/** renditionQuery 拼出 ?w=…&v=… 查询串（按参数有无决定要不要问号）。 */
-export function renditionQuery(
-  version?: string,
-  width?: number,
-): string {
-  const parts: string[] = [];
-  if (typeof width === "number" && Number.isFinite(width) && width > 0) {
-    parts.push(`w=${Math.round(width)}`);
-  }
-  if (version) {
-    parts.push(`v=${encodeURIComponent(version)}`);
-  }
-  return parts.length > 0 ? `?${parts.join("&")}` : "";
-}
-
 // 把视频封面上传到后端。后端会把字节 resize → 缓存到磁盘。
 //
-// 失败场景由后端返回 4xx/5xx；本函数抛 Error 给调用方处理。
+// 走统一的请求出口：会话 cookie 带上、失败抛 ApiError（带后端的
+// code 与 message），调用方不必自己解析错误结构。
 export async function uploadVideoCover(
   fileId: string,
   blob: Blob,
   signal?: AbortSignal,
 ): Promise<void> {
-  const url = API_BASE
-    ? `${API_BASE}/api/thumbs/${encodeURIComponent(fileId)}/cover`
-    : `/api/thumbs/${encodeURIComponent(fileId)}/cover`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": blob.type || "image/jpeg" },
-    body: blob,
-    signal,
-  });
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try {
-      const j = await res.json();
-      if (j && typeof j.error === "string") msg = j.error;
-    } catch {
-      // ignore parse error
-    }
-    throw new Error(`upload cover failed: ${msg}`);
-  }
+  await api<{ ok: boolean }>(
+    `/api/thumbs/${encodeURIComponent(fileId)}/cover`,
+    { method: "POST", body: blob, signal },
+  );
 }
 
 export interface ThumbnailStats {

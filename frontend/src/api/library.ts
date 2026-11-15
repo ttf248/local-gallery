@@ -330,7 +330,8 @@ export class LibraryRevisionChangedError extends Error {
 }
 
 async function collectPages<T>(
-  load: (cursor?: string) => Promise<PageResponse<T>>,
+  load: (cursor?: string, signal?: AbortSignal) => Promise<PageResponse<T>>,
+  signal?: AbortSignal,
 ): Promise<LibraryPage<T>> {
   let cursor: string | undefined;
   let revision: number | undefined;
@@ -342,7 +343,7 @@ async function collectPages<T>(
   do {
     let response: PageResponse<T>;
     try {
-      response = await load(cursor);
+      response = await load(cursor, signal);
     } catch (error: unknown) {
       if (!restarted && cursor && isInvalidCursor(error)) {
         restarted = true;
@@ -374,7 +375,10 @@ function isInvalidCursor(error: unknown): boolean {
   );
 }
 
-async function queryNodes(ids: string[]): Promise<LibraryNodeQueryResult> {
+async function queryNodes(
+  ids: string[],
+  signal?: AbortSignal,
+): Promise<LibraryNodeQueryResult> {
   if (ids.length === 0) return { revision: 0, items: [], missing: [] };
   let revision: number | undefined;
   const items: LibraryNodeSummary[] = [];
@@ -390,6 +394,7 @@ async function queryNodes(ids: string[]): Promise<LibraryNodeQueryResult> {
     }>("/api/library/nodes/query", {
       method: "POST",
       body: { ids: ids.slice(offset, offset + LIBRARY_NODE_BATCH_LIMIT) },
+      signal,
     });
     if (revision !== undefined && response.result.revision !== revision) {
       throw new LibraryRevisionChangedError();
@@ -407,8 +412,10 @@ export const libraryApi = {
       params: { ...query, cursor, limit: LIBRARY_PAGE_LIMIT },
       signal,
     }),
-  manifest: () =>
-    api<{ ok: boolean; manifest: LibraryManifest }>("/api/library/manifest"),
+  manifest: (signal?: AbortSignal) =>
+    api<{ ok: boolean; manifest: LibraryManifest }>("/api/library/manifest", {
+      signal,
+    }),
   mediaFeed: (
     query: MediaFeedQuery,
     cursor?: string,
@@ -418,38 +425,46 @@ export const libraryApi = {
       params: { ...query, cursor, limit: LIBRARY_PAGE_LIMIT },
       signal,
     }),
-  activitySummary: (kind: AppMode) =>
+  activitySummary: (kind: AppMode, signal?: AbortSignal) =>
     api<{ ok: boolean; summary: LibraryActivitySummary }>(
       "/api/library/activity-summary",
-      { params: { kind } },
+      { params: { kind }, signal },
     ),
-  dashboard: (kind: AppMode) =>
+  dashboard: (kind: AppMode, signal?: AbortSignal) =>
     api<{ ok: boolean; dashboard: LibraryHomeDashboard }>(
       "/api/library/dashboard",
-      { params: { kind } },
+      { params: { kind }, signal },
     ),
   unreadAlbumPage: (
     kind: AppMode,
     cursor?: string,
     limit = LIBRARY_PAGE_LIMIT,
+    signal?: AbortSignal,
   ) =>
     api<PageResponse<LibraryNodeSummary>>("/api/library/unread", {
       params: { cursor, limit, kind },
+      signal,
     }),
   childrenPage: (
     parentId: string,
     kind: AppMode,
     cursor?: string,
     limit = LIBRARY_PAGE_LIMIT,
+    signal?: AbortSignal,
   ) =>
     api<PageResponse<LibraryNodeSummary>>(
       `/api/library/${encodeURIComponent(parentId)}/children`,
-      { params: { cursor, limit, kind } },
+      { params: { cursor, limit, kind }, signal },
     ),
-  mediaPage: (albumId: string, cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
+  mediaPage: (
+    albumId: string,
+    cursor?: string,
+    limit = LIBRARY_PAGE_LIMIT,
+    signal?: AbortSignal,
+  ) =>
     api<PageResponse<LibraryMediaItem>>(
       `/api/albums/${encodeURIComponent(albumId)}/media`,
-      { params: { cursor, limit } },
+      { params: { cursor, limit }, signal },
     ),
   /**
    * 往年同一天拍过照的相册。
@@ -457,30 +472,49 @@ export const libraryApi = {
    * month/day 缺省时服务端取当天。只认拍摄日期（从文件名推断），
    * 没有拍摄时间的相册不在其中。
    */
-  onThisDay: (kind: AppMode, month?: number, day?: number, limit = 20) =>
+  onThisDay: (
+    kind: AppMode,
+    month?: number,
+    day?: number,
+    limit = 20,
+    signal?: AbortSignal,
+  ) =>
     api<PageResponse<LibraryOnThisDayItem>>("/api/library/on-this-day", {
       params: { kind, month, day, limit },
+      signal,
     }),
-  tagPage: (kind: AppMode, cursor?: string, limit = LIBRARY_PAGE_LIMIT) =>
+  tagPage: (
+    kind: AppMode,
+    cursor?: string,
+    limit = LIBRARY_PAGE_LIMIT,
+    signal?: AbortSignal,
+  ) =>
     api<PageResponse<LibraryTagSummary>>("/api/tags", {
       params: { cursor, limit, kind },
+      signal,
     }),
   tagAlbumsPage: (
     tag: string,
     kind: AppMode,
     cursor?: string,
     limit = LIBRARY_PAGE_LIMIT,
+    signal?: AbortSignal,
   ) =>
     api<PageResponse<LibraryNodeSummary>>(
       `/api/tags/${encodeURIComponent(tag)}/albums`,
-      { params: { cursor, limit, kind } },
+      { params: { cursor, limit, kind }, signal },
     ),
   // scope 只区分「该模式下的任意一本」与「该模式下还没翻开的」；
   // 叫 "any" 而不是 "all"，避免和工作台模式混成一个概念。
   //
   // count 一次要几本：首页「随手看看」一次给三本候选。服务端保证
   // 抽出的相册互不相同，候选不够时给全部。
-  randomAlbums: (kind: AppMode, scope: "any" | "unread" = "any", count = 1) =>
+  randomAlbums: (
+    kind: AppMode,
+    scope: "any" | "unread" = "any",
+    count = 1,
+    signal?: AbortSignal,
+  ) =>
     api<{
       ok: boolean;
       albums: LibraryNodeSummary[];
@@ -491,22 +525,30 @@ export const libraryApi = {
         kind,
         count,
       },
+      signal,
     }),
-  allUnreadAlbums: (kind: AppMode) =>
-    collectPages((cursor) => libraryApi.unreadAlbumPage(kind, cursor)),
-  allMedia: (albumId: string) =>
-    collectPages((cursor) => libraryApi.mediaPage(albumId, cursor)),
-  allTags: (kind: AppMode) =>
-    collectPages((cursor) => libraryApi.tagPage(kind, cursor)),
+  allUnreadAlbums: (kind: AppMode, signal?: AbortSignal) =>
+    collectPages(
+      (cursor, sig) => libraryApi.unreadAlbumPage(kind, cursor, undefined, sig),
+      signal,
+    ),
+  allMedia: (albumId: string, signal?: AbortSignal) =>
+    collectPages(
+      (cursor, sig) => libraryApi.mediaPage(albumId, cursor, undefined, sig),
+      signal,
+    ),
+  allTags: (kind: AppMode, signal?: AbortSignal) =>
+    collectPages((cursor, sig) => libraryApi.tagPage(kind, cursor, undefined, sig), signal),
   /**
    * 「最近加入」的相册摘要，按业务日期倒序。
    *
    * 照片工作台不记录浏览进度，没有「继续阅读」可言；这个列表是它与
    * 漫画侧对称的入口，也是收藏空态的推荐来源。
    */
-  recentAlbums: (kind: AppMode, limit = 12) =>
+  recentAlbums: (kind: AppMode, limit = 12, signal?: AbortSignal) =>
     api<PageResponse<LibraryNodeSummary>>("/api/library/recent", {
       params: { kind, limit },
+      signal,
     }),
   /**
    * 按名批量解析标签摘要。
@@ -515,10 +557,11 @@ export const libraryApi = {
    * 可能在任意一侧有作品，客户端需要同时知道两侧的册数，
    * 才能区分「这个标签失效了」和「它只属于另一侧」。
    */
-  queryTags: (names: string[]) =>
+  queryTags: (names: string[], signal?: AbortSignal) =>
     api<{ ok: boolean; result: LibraryTagQueryResult }>("/api/tags/query", {
       method: "POST",
       body: { names },
+      signal,
     }),
   queryNodes,
 };

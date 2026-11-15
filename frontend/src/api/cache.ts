@@ -94,8 +94,9 @@ export const cacheApi = {
       | "transcode"
       | "all",
   ) =>
-    api<CacheScopeClearResult>(`/api/cache/clear?scope=${scope}`, {
+    api<CacheScopeClearResult>("/api/cache/clear", {
       method: "POST",
+      params: { scope },
     }),
   // 启动一次后台重建。已有任务在跑时返回同一个 jobId（reused=true）。
   startRebuild: (scopes: CacheRebuildScope[], previewWidth?: number) =>
