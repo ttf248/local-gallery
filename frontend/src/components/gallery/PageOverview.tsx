@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import RenditionImage from "../common/RenditionImage";
 import { CloseIcon, SinglePageIcon } from "../common/Icon";
@@ -85,10 +85,30 @@ export default function PageOverview({
     setFailed(new Set<string>());
   }, [images]);
 
+  // 原生 <dialog> 的模态：焦点关在目录里，背景的漫画页读屏器够不着。
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previous = document.activeElement;
+    dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      if (
+        previous instanceof HTMLElement &&
+        previous.isConnected &&
+        previous !== document.body
+      ) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, []);
+
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       data-testid="page-overview"
-      className="fixed inset-0 z-50 flex flex-col bg-overlay-bg text-overlay-fg"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
       role="dialog"
       aria-modal="true"
       aria-label="目录"
@@ -173,6 +193,6 @@ export default function PageOverview({
           )}
         />
       </div>
-    </div>
+    </dialog>
   );
 }

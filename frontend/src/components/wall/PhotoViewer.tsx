@@ -178,6 +178,26 @@ export default function PhotoViewer({
     return () => setImmersiveOverlay(false);
   }, [setImmersiveOverlay]);
 
+  // 原生 <dialog> 的模态：焦点被关在这一层里，背景读屏器够不着，
+  // Tab 不会跑到背后的照片墙上去。关掉时把焦点还给打开它的那张照片。
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previous = document.activeElement;
+    dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      if (
+        previous instanceof HTMLElement &&
+        previous.isConnected &&
+        previous !== document.body
+      ) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, []);
+
   const imageRef = useRef<HTMLImageElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const fittedRef = useRef({ width: 0, height: 0 });
@@ -594,9 +614,10 @@ export default function PhotoViewer({
   };
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       data-testid="photo-viewer"
-      className="fixed inset-0 z-50 flex flex-col bg-overlay-bg text-overlay-fg"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
       role="dialog"
       aria-modal="true"
       aria-label={`${albumName} 大图预览`}
@@ -882,6 +903,6 @@ export default function PhotoViewer({
           )}
         </div>
       </footer>
-    </div>
+    </dialog>
   );
 }

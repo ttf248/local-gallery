@@ -42,6 +42,31 @@ describe("useMediaGridPagination", () => {
     expect(props.onLoadMore).toHaveBeenCalledTimes(3);
   });
 
+  it("取下一页的回调换了身份也不会多取一次", () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { result, rerender } = renderHook(useMediaGridPagination, {
+      initialProps: {
+        loadedCount: 200,
+        hasNextPage: true,
+        isLoadingMore: false,
+        onLoadMore: first,
+      },
+    });
+    act(() => result.current({ startIndex: 160, endIndex: 190 }));
+    expect(first).toHaveBeenCalledTimes(1);
+
+    // 调用方给的多半是内联箭头函数：身份每次渲染都换。
+    // 换了身份不该再取一次 —— 条件没变，就不该动。
+    rerender({
+      loadedCount: 200,
+      hasNextPage: true,
+      isLoadingMore: false,
+      onLoadMore: second,
+    });
+    expect(second).not.toHaveBeenCalled();
+  });
+
   it("加载期间和禁止继续分页时不发请求，恢复后重新检查视口", () => {
     const props = options();
     const { result, rerender } = renderHook(useMediaGridPagination, {

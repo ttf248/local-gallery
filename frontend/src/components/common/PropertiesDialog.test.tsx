@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import PropertiesDialog from "./PropertiesDialog";
 import { libraryApi, type LibraryNodeSummary } from "../../api/library";
@@ -12,18 +12,6 @@ vi.mock("../../api/imageInfo", () => ({ imageInfoApi: { get: vi.fn() } }));
 vi.mock("../../api/activity", () => ({
   activityApi: { queryImages: vi.fn() },
 }));
-
-// jsdom 没有原生 dialog 方法；焦点限制、Esc 和背景交互由浏览器用例验证。
-beforeAll(() => {
-  Object.assign(HTMLDialogElement.prototype, {
-    showModal(this: HTMLDialogElement) {
-      this.open = true;
-    },
-    close(this: HTMLDialogElement) {
-      this.open = false;
-    },
-  });
-});
 
 const node: LibraryNodeSummary = {
   id: "a_trip",

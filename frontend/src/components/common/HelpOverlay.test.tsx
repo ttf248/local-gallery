@@ -1,20 +1,8 @@
 import { useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeAll, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 import HelpOverlay from "./HelpOverlay";
 import { useAppModeStore } from "../../store/appModeStore";
-
-// jsdom 不提供原生 dialog 行为；焦点循环和背景点击由浏览器用例验证。
-beforeAll(() => {
-  Object.assign(HTMLDialogElement.prototype, {
-    showModal(this: HTMLDialogElement) {
-      this.open = true;
-    },
-    close(this: HTMLDialogElement) {
-      this.open = false;
-    },
-  });
-});
 
 function HelpHarness() {
   const [open, setOpen] = useState(false);

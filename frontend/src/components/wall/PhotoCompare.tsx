@@ -61,6 +61,26 @@ export default function PhotoCompare({
 }: Props) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const dialogRef = useRef<HTMLDialogElement>(null);
+
+  // 原生 <dialog> 的模态：焦点被关在里面，背景读屏器够不着，
+  // Esc 交给我们处理（Esc 归对比这一层，不该顺手关掉背后的预览）。
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previous = document.activeElement;
+    dialog.showModal();
+    return () => {
+      if (dialog.open) dialog.close();
+      if (
+        previous instanceof HTMLElement &&
+        previous.isConnected &&
+        previous !== document.body
+      ) {
+        previous.focus({ preventScroll: true });
+      }
+    };
+  }, []);
 
   // 换了一对照片就回到初始状态：上一组的放大与位移不该带过来。
   useEffect(() => {
@@ -109,12 +129,17 @@ export default function PhotoCompare({
   }, [applyZoom, onClose, onSwap, zoom]);
 
   return (
-    <div
+    <dialog
+      ref={dialogRef}
       data-testid="photo-compare"
-      className="fixed inset-0 z-50 flex flex-col bg-overlay-bg text-overlay-fg"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
       role="dialog"
       aria-modal="true"
       aria-label="两张照片并排对比"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
     >
       <header className="relative flex h-14 shrink-0 items-center gap-3 px-3 sm:px-5">
         <button
@@ -197,7 +222,7 @@ export default function PhotoCompare({
           </button>
         </div>
       </footer>
-    </div>
+    </dialog>
   );
 }
 
