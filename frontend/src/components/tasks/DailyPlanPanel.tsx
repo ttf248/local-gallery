@@ -106,6 +106,14 @@ export default function DailyPlanPanel({
     if (lastScheduledStatus === "failed") {
       if (lastScheduledError === "scan_failed")
         return "扫描失败，后续任务未运行";
+      if (lastScheduledError === "analysis_failed")
+        return smartAlbumsEnabled
+          ? "分析模块失败，智能相册已刷新已有结果"
+          : "分析模块失败";
+      if (lastScheduledError === "analysis_module_unavailable")
+        return smartAlbumsEnabled
+          ? "分析模块未就绪，智能相册已刷新已有结果"
+          : "分析模块未就绪";
       if (lastScheduledError === "library_not_ready")
         return "图库尚未就绪，分析未运行";
       if (lastScheduledError === "smart_albums_failed")

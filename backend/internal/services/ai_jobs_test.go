@@ -757,6 +757,110 @@ func TestAIJobSchedulerRunsScanAnalysisAndSmartAlbumsInOrder(t *testing.T) {
 	shutdownAIJobService(t, service)
 }
 
+func TestAIJobSchedulerReportsAnalysisFailureAfterRefreshingExistingResults(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 1)
+	catalog := aiJobCatalog(root, files)
+	service, err := NewAIJobService(AIJobServiceOptions{
+		StatePath:    filepath.Join(t.TempDir(), "state", "jobs.json"),
+		MetadataDir:  filepath.Join(t.TempDir(), "derived"),
+		Catalog:      catalog,
+		ValidatePath: aiTestPathValidator(t, root),
+		Analyzers: []AIAnalyzer{
+			testJSONAnalyzer{module: AIJobTypeMetadata, version: "metadata-test-v1"},
+			gpuTestAnalyzer{unavailable: true},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdownAIJobService(t, service)
+
+	var scanCalled, smartAlbumsCalled atomic.Bool
+	service.SetDailyTaskHandlers(
+		func(context.Context) error {
+			scanCalled.Store(true)
+			return nil
+		},
+		func(context.Context) error {
+			smartAlbumsCalled.Store(true)
+			return nil
+		},
+	)
+	if _, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeEmbedding, AIJobTypeMetadata}, false, true, true); err != nil {
+		t.Fatal(err)
+	}
+
+	service.scheduleTick(time.Date(2026, time.November, 11, 3, 0, 0, 0, time.Local))
+	waitForDailyPlanStatus(t, service, "failed")
+	waitForJobHistoryCount(t, service, 2)
+	waitForAIJobIdle(t, service)
+
+	statuses := make(map[string]string)
+	for _, job := range service.List().Jobs {
+		statuses[job.Type] = job.Status
+	}
+	if statuses[AIJobTypeMetadata] != AIJobStatusCompleted || statuses[AIJobTypeEmbedding] != AIJobStatusFailed {
+		t.Fatalf("scheduled job statuses = %v", statuses)
+	}
+	settings := service.List().Settings
+	if settings.LastScheduledStage != "analysis" || settings.LastScheduledError != "analysis_failed" {
+		t.Fatalf("analysis failure status = %+v", settings)
+	}
+	if !scanCalled.Load() || !smartAlbumsCalled.Load() {
+		t.Fatalf("scheduled work scan=%v smartAlbums=%v", scanCalled.Load(), smartAlbumsCalled.Load())
+	}
+}
+
+func TestAIJobSchedulerReportsUnavailableModulesAfterRefreshingExistingResults(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 1)
+	catalog := aiJobCatalog(root, files)
+	service, err := NewAIJobService(AIJobServiceOptions{
+		StatePath:    filepath.Join(t.TempDir(), "state", "jobs.json"),
+		MetadataDir:  filepath.Join(t.TempDir(), "derived"),
+		Catalog:      catalog,
+		ValidatePath: aiTestPathValidator(t, root),
+		Analyzers: []AIAnalyzer{
+			testJSONAnalyzer{module: AIJobTypeMetadata, version: "metadata-test-v1"},
+			unavailableReadinessAnalyzer{module: AIJobTypeEmbedding},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer shutdownAIJobService(t, service)
+
+	var smartAlbumsCalled atomic.Bool
+	service.SetDailyTaskHandlers(
+		func(context.Context) error { return nil },
+		func(context.Context) error {
+			smartAlbumsCalled.Store(true)
+			return nil
+		},
+	)
+	if _, err := service.ConfigureDaily(true, "03:00", []string{AIJobTypeEmbedding, AIJobTypeMetadata}, false, true, true); err != nil {
+		t.Fatal(err)
+	}
+
+	service.scheduleTick(time.Date(2026, time.November, 11, 3, 0, 0, 0, time.Local))
+	waitForDailyPlanStatus(t, service, "failed")
+	waitForJobHistoryCount(t, service, 1)
+	waitForAIJobIdle(t, service)
+
+	jobs := service.List().Jobs
+	if len(jobs) != 1 || jobs[0].Type != AIJobTypeMetadata || jobs[0].Status != AIJobStatusCompleted {
+		t.Fatalf("scheduled ready jobs = %+v", jobs)
+	}
+	settings := service.List().Settings
+	if settings.LastScheduledStage != "analysis" || settings.LastScheduledError != "analysis_module_unavailable" {
+		t.Fatalf("unavailable module status = %+v", settings)
+	}
+	if !smartAlbumsCalled.Load() {
+		t.Fatal("smart albums did not refresh from the available analysis results")
+	}
+}
+
 func TestAIJobSchedulerStopsAfterScanFailure(t *testing.T) {
 	root := t.TempDir()
 	catalog := aiJobCatalog(root, nil)
@@ -1291,6 +1395,19 @@ func waitForDailyPlanStatus(t *testing.T, service *AIJobService, status string) 
 type testJSONAnalyzer struct {
 	module  string
 	version string
+}
+
+type unavailableReadinessAnalyzer struct {
+	module string
+}
+
+func (a unavailableReadinessAnalyzer) Type() string  { return a.module }
+func (unavailableReadinessAnalyzer) Version() string { return "unavailable-test-v1" }
+func (unavailableReadinessAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput, error) {
+	return AIAnalysisOutput{}, ErrAIAnalyzerUnavailable
+}
+func (unavailableReadinessAnalyzer) Ready(context.Context) error {
+	return ErrAIAnalyzerUnavailable
 }
 
 type stagedBatchAnalyzer struct {

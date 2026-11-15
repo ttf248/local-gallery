@@ -37,4 +37,40 @@ describe("DailyPlanPanel", () => {
     );
     expect(dimensions).toHaveTextContent("人物需启用并选择人脸分析");
   });
+
+  it("分析模块失败时报告失败并说明智能相册使用已有结果刷新", () => {
+    render(
+      <DailyPlanPanel
+        enabled
+        time="03:00"
+        selectedModules={["metadata", "embedding"]}
+        scanEnabled
+        smartAlbumsEnabled
+        peopleEnabled={false}
+        ready
+        onEnabledChange={vi.fn()}
+        onTimeChange={vi.fn()}
+        onModulesChange={vi.fn()}
+        onScanChange={vi.fn()}
+        onSmartAlbumsChange={vi.fn()}
+        onPeopleEnabledChange={vi.fn()}
+        onSave={vi.fn()}
+        saving={false}
+        saved={false}
+        error={false}
+        modules={[]}
+        estimateLoading={false}
+        estimateError={false}
+        lastScheduledDate="2026-11-11"
+        lastScheduledStatus="failed"
+        lastScheduledError="analysis_failed"
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "最近执行 2026-11-11 · 分析模块失败，智能相册已刷新已有结果",
+      ),
+    ).toBeInTheDocument();
+  });
 });

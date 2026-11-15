@@ -2373,6 +2373,7 @@ func (s *AIJobService) scheduleTickWithContext(ctx context.Context, now time.Tim
 	s.mu.Unlock()
 
 	readyModules := make([]string, 0, len(settings.DailyModules))
+	skippedModules := make([]string, 0)
 	for _, moduleType := range settings.DailyModules {
 		if err := ctx.Err(); err != nil {
 			s.mu.Lock()
@@ -2382,6 +2383,7 @@ func (s *AIJobService) scheduleTickWithContext(ctx context.Context, now time.Tim
 		}
 		analyzer := analyzers[moduleType]
 		if analyzer == nil {
+			skippedModules = append(skippedModules, moduleType)
 			continue
 		}
 		if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
@@ -2389,6 +2391,7 @@ func (s *AIJobService) scheduleTickWithContext(ctx context.Context, now time.Tim
 			err := readiness.Ready(readyCtx)
 			cancel()
 			if err != nil {
+				skippedModules = append(skippedModules, moduleType)
 				continue
 			}
 		}
@@ -2422,7 +2425,7 @@ func (s *AIJobService) scheduleTickWithContext(ctx context.Context, now time.Tim
 	s.wg.Add(1)
 	s.mu.Unlock()
 
-	go s.runScheduledPlan(ctx, settings, readyModules)
+	go s.runScheduledPlan(ctx, settings, readyModules, skippedModules)
 }
 
 func sameDailyPlan(left, right AIJobSettings) bool {
@@ -2434,8 +2437,9 @@ func sameDailyPlan(left, right AIJobSettings) bool {
 		slices.Equal(left.DailyModules, right.DailyModules)
 }
 
-func (s *AIJobService) runScheduledPlan(ctx context.Context, settings AIJobSettings, modules []string) {
+func (s *AIJobService) runScheduledPlan(ctx context.Context, settings AIJobSettings, modules, skippedModules []string) {
 	defer s.wg.Done()
+	analysisErrorCode := ""
 	if settings.DailyScan {
 		s.setDailyRun("scan", "running", "")
 		s.mu.Lock()
@@ -2471,9 +2475,15 @@ func (s *AIJobService) runScheduledPlan(ctx context.Context, settings AIJobSetti
 			return
 		}
 		if err := s.waitForScheduledModules(ctx, ids); err != nil {
-			s.setDailyRun("analysis", "interrupted", "analysis_interrupted")
-			return
+			if ctx.Err() != nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				s.setDailyRun("analysis", "interrupted", "analysis_interrupted")
+				return
+			}
+			analysisErrorCode = "analysis_failed"
 		}
+	}
+	if analysisErrorCode == "" && len(skippedModules) > 0 {
+		analysisErrorCode = "analysis_module_unavailable"
 	}
 
 	if settings.DailySmartAlbums {
@@ -2497,6 +2507,10 @@ func (s *AIJobService) runScheduledPlan(ctx context.Context, settings AIJobSetti
 			s.setDailyRun("smart_albums", status, "smart_albums_failed")
 			return
 		}
+	}
+	if analysisErrorCode != "" {
+		s.setDailyRun("analysis", "failed", analysisErrorCode)
+		return
 	}
 	s.setDailyRun("completed", "completed", "")
 }
@@ -2552,21 +2566,29 @@ func (s *AIJobService) waitForScheduledModules(ctx context.Context, ids []string
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	var terminalError error
 	for {
 		allDone := true
 		for _, id := range ids {
 			job, exists := s.Get(id)
 			if !exists {
+				if terminalError == nil {
+					terminalError = errors.New("scheduled analysis job disappeared")
+				}
 				continue
 			}
 			switch job.Status {
-			case AIJobStatusCompleted, AIJobStatusFailed, AIJobStatusCancelled:
+			case AIJobStatusCompleted:
+			case AIJobStatusFailed, AIJobStatusCancelled:
+				if terminalError == nil {
+					terminalError = errors.New("scheduled analysis job did not complete")
+				}
 			default:
 				allDone = false
 			}
 		}
 		if allDone {
-			return nil
+			return terminalError
 		}
 		select {
 		case <-ctx.Done():
