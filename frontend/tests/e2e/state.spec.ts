@@ -6,6 +6,8 @@ import {
   resetWorkbenchMode,
   resetNavItems,
   showNavItems,
+  readFavorites,
+  readHistory,
   type CopyAuditWindow,
   installCopyAudit,
 } from "./helpers/library";
@@ -332,9 +334,11 @@ for (const operation of ["limit", "clear", "visit"] as const) {
     const second = nodes.find((node) => node.name === "sample-mixed-cover")!;
     expect(first).toBeDefined();
     expect(second).toBeDefined();
-    const original = (await (await page.request.get("/api/prefs")).json()) as {
-      maxRecent: number;
-      history: Array<{ albumId: string; name: string; imageCount: number }>;
+    const original = {
+      maxRecent: (
+        (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+      ).maxRecent,
+      history: await readHistory(page.request),
     };
     try {
       expect(

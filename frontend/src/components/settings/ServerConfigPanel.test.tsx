@@ -21,7 +21,7 @@ import { authApi } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fsApi } from "../../api/fs";
 import { fsCapabilitiesQueryKey } from "../../hooks/useFsCapabilities";
-import { libraryQueryKeys } from "../../hooks/useLibrary";
+import { libraryQueryKeys } from "../../api/queryKeys";
 
 // Mock the config API
 vi.mock("../../api/config", () => ({

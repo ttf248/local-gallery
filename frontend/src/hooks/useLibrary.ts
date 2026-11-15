@@ -9,37 +9,11 @@ import {
   libraryApi,
   type LibraryNodeSummary,
 } from "../api/library";
+import { activityAffectedKeys, libraryQueryKeys } from "../api/queryKeys";
 import { ACTIVITY_CHANGED_EVENT } from "../api/activity";
 import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "./useAppMode";
 import type { AppMode } from "../api/library";
-
-export const libraryQueryKeys = {
-  root: ["library"] as const,
-  /**
-   * 模式维度。列表型查询都带上模式：切换工作台等于换一组查询键，
-   * React Query 会自动去拉新数据，旧模式的缓存留着，切回来是秒开。
-   */
-  mode: (mode: AppMode) => [...libraryQueryKeys.root, "mode", mode] as const,
-  // 与模式无关：切模式不重取。
-  manifest: () => [...libraryQueryKeys.root, "manifest"] as const,
-  media: (albumId: string) =>
-    [...libraryQueryKeys.root, "media", albumId] as const,
-  nodes: (ids: string[]) =>
-    [...libraryQueryKeys.root, "nodes", ...ids] as const,
-  // 与模式相关。
-  activitySummary: (mode: AppMode) =>
-    [...libraryQueryKeys.mode(mode), "activity-summary"] as const,
-  dashboard: (mode: AppMode) =>
-    [...libraryQueryKeys.mode(mode), "dashboard"] as const,
-  unreadAlbums: (mode: AppMode) =>
-    [...libraryQueryKeys.mode(mode), "unread-albums"] as const,
-  children: (parentId: string, mode: AppMode) =>
-    [...libraryQueryKeys.mode(mode), "children", parentId] as const,
-  tags: (mode: AppMode) => [...libraryQueryKeys.mode(mode), "tags"] as const,
-  tagAlbums: (tag: string, mode: AppMode) =>
-    [...libraryQueryKeys.mode(mode), "tag-albums", tag] as const,
-};
 
 export function useLibraryManifest() {
   const query = useQuery({
@@ -60,18 +34,7 @@ export function useLibraryActivitySync() {
   const queryClient = useQueryClient();
   useEffect(() => {
     const refresh = () => {
-      for (const queryKey of [
-        libraryQueryKeys.activitySummary("photo"),
-        libraryQueryKeys.activitySummary("comic"),
-        libraryQueryKeys.dashboard("photo"),
-        libraryQueryKeys.dashboard("comic"),
-        libraryQueryKeys.unreadAlbums("photo"),
-        libraryQueryKeys.unreadAlbums("comic"),
-        ["activity-query", "image"],
-        ["activity", "image"],
-        ["library", "mode", "photo", "list"],
-        ["library", "mode", "comic", "list"],
-      ]) {
+      for (const queryKey of activityAffectedKeys()) {
         // 失效未挂载页面的缓存，但只立即重新获取当前有订阅的数据。
         void queryClient.invalidateQueries({ queryKey });
       }
@@ -114,7 +77,11 @@ export function useLibraryUnreadAlbums() {
   });
 }
 
-export function useAlbumMedia(albumId: string, expectedRevision?: number) {
+export function useAlbumMedia(
+  albumId: string,
+  expectedRevision?: number,
+  enabled = true,
+) {
   // 详情页只先取首屏媒体；调用方在虚拟网格接近末尾时继续取下一页。
   // 阅读器仍可使用 libraryApi.allMedia 一次性建立跨页导航上下文。
   return useInfiniteQuery({
@@ -137,7 +104,7 @@ export function useAlbumMedia(albumId: string, expectedRevision?: number) {
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
-    enabled: albumId.length > 0,
+    enabled: enabled && albumId.length > 0,
   });
 }
 

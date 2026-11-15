@@ -195,6 +195,27 @@ export async function showNavItems(
   expect(response.ok()).toBeTruthy();
 }
 
+// 收藏与最近访问各有自己的接口，不再跟着偏好一起返回。用例要复原这两份
+// 状态时，从各自的接口读，别从 /api/prefs 里找 —— 那里没有它们了。
+export async function readFavorites(
+  request: APIRequestContext,
+): Promise<string[]> {
+  const response = await request.get("/api/favorites");
+  expect(response.ok()).toBeTruthy();
+  return ((await response.json()) as { favorites: string[] }).favorites;
+}
+
+export async function readHistory(
+  request: APIRequestContext,
+): Promise<Array<{ albumId: string; name: string; imageCount: number }>> {
+  const response = await request.get("/api/history");
+  expect(response.ok()).toBeTruthy();
+  const payload = (await response.json()) as {
+    history: Array<{ albumId: string; name: string; imageCount: number }>;
+  };
+  return payload.history;
+}
+
 export const taggedSortPrefix =
   "zz-[测试][空 格][C++][100%][字面%20][字面%2F][字面%25] tagged-";
 

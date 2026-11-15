@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { prefsApi } from "../api/prefs";
+import { prefsQueryOptions } from "./usePrefs";
 import { DEFAULT_HIDDEN_NAV_ITEMS } from "../utils/navEntries";
 
 export interface NavVisibility {
@@ -18,11 +18,7 @@ export interface NavVisibility {
  * 「先全显示、再收掉三项」的闪动。
  */
 export function useNavVisibility(): NavVisibility {
-  const query = useQuery({
-    queryKey: ["prefs"],
-    queryFn: () => prefsApi.get(),
-    staleTime: 5 * 60 * 1000,
-  });
+  const query = useQuery(prefsQueryOptions);
   const hidden = query.data?.hiddenNavItems ?? DEFAULT_HIDDEN_NAV_ITEMS;
   return useMemo(() => {
     const set = new Set(hidden);

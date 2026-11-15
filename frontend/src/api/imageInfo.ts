@@ -13,7 +13,9 @@ export interface ImageInfo {
 }
 
 export const imageInfoApi = {
-  get(fileId: string) {
-    return api<ImageInfo>(`/api/images/${encodeURIComponent(fileId)}/info`);
+  get(fileId: string, signal?: AbortSignal) {
+    return api<ImageInfo>(`/api/images/${encodeURIComponent(fileId)}/info`, {
+      signal,
+    });
   },
 };

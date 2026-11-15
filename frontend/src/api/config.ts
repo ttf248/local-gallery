@@ -1,4 +1,5 @@
 import { api } from "./client";
+import type { ContentKind } from "./library";
 
 // 后端 /api/config 的响应结构。所有字段都来自 config.yaml；
 // 当前生效值在 GetConfig 时返回。
@@ -34,9 +35,6 @@ export interface ServerConfig {
   systemFiles: string[];
   excludePatterns: string[];
 }
-
-/** 相册的浏览用途：照片墙 / 漫画阅读器。 */
-export type ContentKind = "photo" | "comic";
 
 // PUT /api/config 的请求体。key 缺省视为"不修改"；
 // bool 字段（如 allowOsOpen）必须显式传值以区分 unset / explicit false。

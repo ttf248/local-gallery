@@ -1,4 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { imageInfoApi, type ImageInfo } from "../api/imageInfo";
 import { useImageInfo } from "./useImageInfo";
@@ -18,6 +20,16 @@ const first: ImageInfo = {
 const second: ImageInfo = { ...first, path: "f_second", name: "次图.png" };
 beforeEach(() => vi.resetAllMocks());
 
+function setup() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  return { client, wrapper };
+}
+
 it("切换文件时清除旧属性，直到新文件加载完成", async () => {
   let finish!: (info: ImageInfo) => void;
   vi.mocked(imageInfoApi.get)
@@ -27,22 +39,25 @@ it("切换文件时清除旧属性，直到新文件加载完成", async () => {
         finish = resolve;
       }),
     );
+  const { wrapper } = setup();
   const { result, rerender } = renderHook(({ id }) => useImageInfo(id), {
     initialProps: { id: first.path },
+    wrapper,
   });
   await waitFor(() => expect(result.current.info).toEqual(first));
   rerender({ id: second.path });
   expect(result.current.info).toBeNull();
   expect(result.current.loading).toBe(true);
-  await act(async () => finish(second));
-  expect(result.current.info).toEqual(second);
+  act(() => finish(second));
+  await waitFor(() => expect(result.current.info).toEqual(second));
 });
 
 it("失败后可以重新请求当前文件", async () => {
   vi.mocked(imageInfoApi.get)
     .mockRejectedValueOnce(new Error("offline"))
     .mockResolvedValueOnce(first);
-  const { result } = renderHook(() => useImageInfo(first.path));
+  const { wrapper } = setup();
+  const { result } = renderHook(() => useImageInfo(first.path), { wrapper });
   // err 保留原始异常对象：界面要按错误码翻成中文，不能只留 message。
   await waitFor(() =>
     expect((result.current.err as Error | null)?.message).toBe("offline"),
@@ -62,11 +77,24 @@ it("延迟返回的旧文件不会覆盖新文件", async () => {
       }),
     )
     .mockResolvedValueOnce(second);
+  const { wrapper } = setup();
   const { result, rerender } = renderHook(({ id }) => useImageInfo(id), {
     initialProps: { id: first.path },
+    wrapper,
   });
   rerender({ id: second.path });
   await waitFor(() => expect(result.current.info).toEqual(second));
-  await act(async () => finish(first));
-  expect(result.current.info).toEqual(second);
+  act(() => finish(first));
+  await waitFor(() => expect(result.current.info).toEqual(second));
+});
+
+// 属性面板与属性弹窗读同一个文件时，只取一次。
+it("同一个文件的属性在共享缓存里只取一次", async () => {
+  vi.mocked(imageInfoApi.get).mockResolvedValue(first);
+  const { wrapper } = setup();
+  const { result: a } = renderHook(() => useImageInfo(first.path), { wrapper });
+  const { result: b } = renderHook(() => useImageInfo(first.path), { wrapper });
+  await waitFor(() => expect(a.current.info).toEqual(first));
+  await waitFor(() => expect(b.current.info).toEqual(first));
+  expect(imageInfoApi.get).toHaveBeenCalledTimes(1);
 });

@@ -2,13 +2,25 @@ import PageHeading from "../components/common/PageHeading";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { prefsApi, favoritesApi, historyApi, type Prefs } from "../api/prefs";
+import {
+  prefsApi,
+  favoritesApi,
+  historyApi,
+  type HistoryEntry,
+  type Prefs,
+} from "../api/prefs";
+import {
+  favoritesQueryKey,
+  historyQueryKey,
+  libraryQueryKeys,
+} from "../api/queryKeys";
+import { prefsQueryOptions } from "../hooks/usePrefs";
 import { scanApi } from "../api/scan";
 import { useScanSSE } from "../hooks/useScanSSE";
 import ThemeSwitcher from "../components/common/ThemeSwitcher";
 import Segmented from "../components/common/Segmented";
 import { useUIStore } from "../store/uiStore";
-import { libraryQueryKeys, useLibraryManifest } from "../hooks/useLibrary";
+import { useLibraryManifest } from "../hooks/useLibrary";
 import StateBackupPanel from "../components/settings/StateBackupPanel";
 import ServerConfigPanel from "../components/settings/ServerConfigPanel";
 import PageTabs, { PagePanel } from "../components/common/PageTabs";
@@ -91,10 +103,7 @@ export function SettingsView({
   tab: string;
   onSelectTab: (id: string) => void;
 }) {
-  const prefsQuery = useQuery({
-    queryKey: ["prefs"],
-    queryFn: () => prefsApi.get(),
-  });
+  const prefsQuery = useQuery(prefsQueryOptions);
   const { data } = prefsQuery;
   // 访问过的页签。切走的页签不卸载：面板里的草稿与筛选是组件内状态
   // （备份的预览、服务端配置的路径草稿），看一眼别的页签就卸载等于把
@@ -149,9 +158,20 @@ export function SettingsView({
     mutationFn: (p: Partial<Parameters<typeof prefsApi.patch>[0]>) =>
       prefsApi.patch(p),
     onSuccess: (saved, patch) => {
-      qc.setQueryData(["prefs"], saved);
-      if (patch.maxRecent !== undefined) syncHistoryCache(qc, saved.history);
-      void qc.invalidateQueries({ queryKey: ["prefs"] });
+      qc.setQueryData(prefsQueryOptions.queryKey, saved);
+      if (patch.maxRecent !== undefined) {
+        // 保留条数变了，最近访问要按新上限裁剪。服务端按同一口径裁（保留
+        // 最新的若干条），客户端先照着裁一份写回缓存 —— 之后的读取失败
+        // 也不该把已经裁掉的记录放回来。
+        const limit = saved.maxRecent;
+        qc.setQueryData<{ history: HistoryEntry[] }>(
+          historyQueryKey,
+          (previous) =>
+            previous ? { history: previous.history.slice(0, limit) } : previous,
+        );
+        void qc.invalidateQueries({ queryKey: historyQueryKey });
+      }
+      void qc.invalidateQueries({ queryKey: prefsQueryOptions.queryKey });
     },
     onError: () => pushToast({ kind: "error", message: "保存阅读设置失败" }),
   });
@@ -167,21 +187,22 @@ export function SettingsView({
     },
     onMutate: (payload) => {
       // 乐观更新：开关立刻到位，侧栏随之变化；请求失败再回滚。
-      const previous = qc.getQueryData<Prefs>(["prefs"]);
+      const previous = qc.getQueryData<Prefs>(prefsQueryOptions.queryKey);
       const hidden = new Set(previous?.hiddenNavItems ?? []);
       if (payload.visible) hidden.delete(payload.key);
       else hidden.add(payload.key);
-      qc.setQueryData<Prefs>(["prefs"], (current) =>
+      qc.setQueryData<Prefs>(prefsQueryOptions.queryKey, (current) =>
         current ? { ...current, hiddenNavItems: [...hidden] } : current,
       );
       return { previous };
     },
     onSuccess: (saved) => {
       // 侧栏读的是同一份偏好缓存：写回去即生效，不必等重新拉取。
-      qc.setQueryData(["prefs"], saved);
+      qc.setQueryData(prefsQueryOptions.queryKey, saved);
     },
     onError: (_error, _payload, context) => {
-      if (context?.previous) qc.setQueryData(["prefs"], context.previous);
+      if (context?.previous)
+        qc.setQueryData(prefsQueryOptions.queryKey, context.previous);
       pushToast({ kind: "error", message: "保存导航设置失败" });
     },
   });
@@ -192,16 +213,11 @@ export function SettingsView({
       const removed = new Set(r.removed);
       const keep = (id: string) => !removed.has(id);
       qc.setQueryData<Awaited<ReturnType<typeof favoritesApi.list>>>(
-        ["favorites"],
+        favoritesQueryKey,
         (previous) =>
           previous ? { favorites: previous.favorites.filter(keep) } : undefined,
       );
-      qc.setQueryData<Prefs>(["prefs"], (previous) =>
-        previous
-          ? { ...previous, favorites: previous.favorites.filter(keep) }
-          : previous,
-      );
-      void qc.invalidateQueries({ queryKey: ["favorites"] });
+      void qc.invalidateQueries({ queryKey: favoritesQueryKey });
       pushToast({
         kind: "success",
         message: `已清理 ${r.removed.length} 项失效收藏`,

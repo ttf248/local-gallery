@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -82,6 +83,66 @@ func patchReq(body string) *http.Request {
 	req := httptest.NewRequest("PATCH", "/api/prefs", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req
+}
+
+// 偏好响应里不再带收藏与最近访问：它们各有独立接口与独立缓存。
+// 但偏好文件本身仍然带着这两项 —— 备份要是一个完整快照。
+func TestPrefsResponseOmitsFavoritesAndHistory(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "web_settings.json")
+	prefs := store.NewPrefsStore(path)
+	app := fiber.New()
+	app.Get("/api/prefs", PrefsGetHandler(prefs))
+	app.Patch("/api/prefs", PrefsPatchHandler(prefs))
+	app.Get("/api/favorites", FavoritesListHandler(prefs))
+
+	resp, err := app.Test(httptest.NewRequest("GET", "/api/prefs", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != fiber.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d body=%s", resp.StatusCode, body)
+	}
+	var payload map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"favorites", "history"} {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("偏好响应不应带 %s, payload=%v", key, payload)
+		}
+	}
+
+	// 收藏走自己的接口，数据仍在。
+	if _, err := prefs.AddFavorite("a_0000000000000000000001"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err = app.Test(httptest.NewRequest("GET", "/api/favorites", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var favs struct {
+		Favorites []string `json:"favorites"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&favs); err != nil {
+		t.Fatal(err)
+	}
+	if len(favs.Favorites) != 1 {
+		t.Fatalf("favorites=%v, want 1 entry", favs.Favorites)
+	}
+
+	// 落盘的偏好文件仍然带着收藏：备份要能还原。
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var disk map[string]any
+	if err := json.Unmarshal(data, &disk); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := disk["favorites"]; !ok {
+		t.Fatalf("偏好文件应带 favorites, disk=%v", disk)
+	}
 }
 
 // 侧栏的隐藏清单：默认收起照片侧的三项，改动后整份写回，非法 key 被拒绝。

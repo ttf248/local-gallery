@@ -9,6 +9,7 @@ import {
   type MediaFeedQuery,
 } from "../api/library";
 import { useAppMode } from "./useAppMode";
+import { libraryQueryKeys } from "../api/queryKeys";
 
 /**
  * 跨相册的照片流。
@@ -29,10 +30,7 @@ export function useMediaFeed(
 ) {
   const { ready } = useAppMode();
   const client = useQueryClient();
-  const key = useMemo(
-    () => ["library", "mode", query.kind, "feed", query] as const,
-    [query],
-  );
+  const key = useMemo(() => libraryQueryKeys.feed(query), [query]);
   const keepPrevious = options?.keepPrevious ?? false;
   const result = useInfiniteQuery({
     queryKey: key,

@@ -105,13 +105,44 @@ export function setGalleryContext(ctx: Omit<GalleryContext, "openedAt">): void {
   }
 }
 
-/** 读取最近一次上下文；读不到返回 null。 */
+/** 条目形状守卫：缺字段的条目不能进上下文。 */
+function isGalleryContextEntry(value: unknown): value is GalleryContextEntry {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Record<string, unknown>;
+  return (
+    typeof entry.key === "string" &&
+    typeof entry.to === "string" &&
+    typeof entry.name === "string"
+  );
+}
+
+/**
+ * 上下文形状守卫。
+ *
+ * sessionStorage 里存的是上一版写下的东西，也可能被别的脚本写过。
+ * 读出来先验形状再往下用 —— 缺字段的上下文会让阅读器在「上一本 / 下一本」
+ * 上取到 undefined，整页直接崩。
+ */
+function isGalleryContext(value: unknown): value is GalleryContext {
+  if (!value || typeof value !== "object") return false;
+  const ctx = value as Record<string, unknown>;
+  if (!Array.isArray(ctx.list)) return false;
+  if (!ctx.list.every(isGalleryContextEntry)) return false;
+  if (typeof ctx.index !== "number" || !Number.isFinite(ctx.index)) return false;
+  if (typeof ctx.openedAt !== "number" || !Number.isFinite(ctx.openedAt)) {
+    return false;
+  }
+  if (!ctx.source || typeof ctx.source !== "object") return false;
+  return typeof (ctx.source as { type?: unknown }).type === "string";
+}
+
+/** 读取最近一次上下文；读不到或形状不对返回 null。 */
 export function getGalleryContext(): GalleryContext | null {
   try {
     const raw = sessionStorage.getItem(KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as GalleryContext;
-    if (!parsed || !Array.isArray(parsed.list)) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isGalleryContext(parsed)) return null;
     return parsed;
   } catch {
     return null;

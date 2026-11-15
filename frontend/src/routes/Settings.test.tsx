@@ -8,7 +8,13 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { favoritesApi, historyApi, prefsApi, type Prefs } from "../api/prefs";
+import {
+  favoritesApi,
+  historyApi,
+  prefsApi,
+  type HistoryEntry,
+  type Prefs,
+} from "../api/prefs";
 import { useUIStore } from "../store/uiStore";
 import { SettingsView } from "./Settings";
 
@@ -21,7 +27,6 @@ vi.mock("../hooks/useScanSSE", () => ({
   useScanSSE: () => ({ isRunning: false, startWith: vi.fn() }),
 }));
 vi.mock("../hooks/useLibrary", () => ({
-  libraryQueryKeys: { root: ["library"] },
   useLibraryManifest: () => ({ data: undefined }),
 }));
 vi.mock("../components/settings/ServerConfigPanel", () => ({
@@ -29,8 +34,6 @@ vi.mock("../components/settings/ServerConfigPanel", () => ({
 }));
 
 const basePrefs: Prefs = {
-  favorites: [],
-  history: [],
   maxRecent: 10,
   autoSwitchAlbum: false,
   showSwitchNotif: true,
@@ -81,7 +84,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const savedHistory: Prefs["history"] = ["a_first", "a_second"].map(
+const savedHistory: HistoryEntry[] = ["a_first", "a_second"].map(
   (albumId) => ({
     albumId,
     name: albumId,
@@ -90,15 +93,11 @@ const savedHistory: Prefs["history"] = ["a_first", "a_second"].map(
   }),
 );
 
-it("清理失效收藏成功后同步收藏列表与已有偏好", async () => {
+it("清理失效收藏成功后收藏列表立即更新", async () => {
   const client = clientForTest();
   const favorites = ["a_valid", "a_missing"];
   client.setQueryData(["favorites"], { favorites });
-  vi.mocked(prefsApi.get).mockResolvedValue({
-    ...basePrefs,
-    favorites,
-    history: savedHistory,
-  });
+  vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(favoritesApi.prune).mockResolvedValue({ removed: ["a_missing"] });
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清理" }));
@@ -110,17 +109,11 @@ it("清理失效收藏成功后同步收藏列表与已有偏好", async () => {
   expect(client.getQueryData(["favorites"])).toEqual({
     favorites: ["a_valid"],
   });
-  expect(client.getQueryData<Prefs>(["prefs"])).toEqual(
-    expect.objectContaining({ favorites: ["a_valid"], history: savedHistory }),
-  );
 });
 
 it("清理时尚未读取收藏列表，不凭删除项伪造空列表", async () => {
   const client = clientForTest();
-  vi.mocked(prefsApi.get).mockResolvedValue({
-    ...basePrefs,
-    favorites: ["a_valid", "a_missing"],
-  });
+  vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(favoritesApi.prune).mockResolvedValue({ removed: ["a_missing"] });
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清理" }));
@@ -130,14 +123,13 @@ it("清理时尚未读取收藏列表，不凭删除项伪造空列表", async (
     ),
   );
   expect(client.getQueryData(["favorites"])).toBeUndefined();
-  expect(client.getQueryData<Prefs>(["prefs"])?.favorites).toEqual(["a_valid"]);
 });
 
 it("清理失败不移除缓存收藏", async () => {
   const client = clientForTest();
   const favorites = ["a_valid", "a_missing"];
   client.setQueryData(["favorites"], { favorites });
-  vi.mocked(prefsApi.get).mockResolvedValue({ ...basePrefs, favorites });
+  vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(favoritesApi.prune).mockRejectedValue(new Error("offline"));
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清理" }));
@@ -147,16 +139,12 @@ it("清理失败不移除缓存收藏", async () => {
     ),
   );
   expect(client.getQueryData(["favorites"])).toEqual({ favorites });
-  expect(client.getQueryData<Prefs>(["prefs"])?.favorites).toEqual(favorites);
 });
 
-it("清空成功立即清空共享历史和已有偏好缓存", async () => {
+it("清空成功立即清空共享历史", async () => {
   const client = clientForTest();
   client.setQueryData(["history"], { history: savedHistory });
-  vi.mocked(prefsApi.get).mockResolvedValue({
-    ...basePrefs,
-    history: savedHistory,
-  });
+  vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清空" }));
   await waitFor(() =>
@@ -165,16 +153,12 @@ it("清空成功立即清空共享历史和已有偏好缓存", async () => {
     ),
   );
   expect(client.getQueryData(["history"])).toEqual({ history: [] });
-  expect(client.getQueryData<Prefs>(["prefs"])?.history).toEqual([]);
 });
 
 it("清空失败不丢弃原有共享历史", async () => {
   const client = clientForTest();
   client.setQueryData(["history"], { history: savedHistory });
-  vi.mocked(prefsApi.get).mockResolvedValue({
-    ...basePrefs,
-    history: savedHistory,
-  });
+  vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(historyApi.clear).mockRejectedValue(new Error("offline"));
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清空" }));
@@ -184,35 +168,25 @@ it("清空失败不丢弃原有共享历史", async () => {
     ),
   );
   expect(client.getQueryData(["history"])).toEqual({ history: savedHistory });
-  expect(client.getQueryData<Prefs>(["prefs"])?.history).toEqual(savedHistory);
 });
 
-it("修改保留条数后用服务端裁剪结果同步最近访问", async () => {
+it("修改保留条数后最近访问重新读取，由服务端按新上限裁剪", async () => {
   const client = clientForTest();
   client.setQueryData(["history"], { history: savedHistory });
-  vi.mocked(prefsApi.get).mockResolvedValue({
-    ...basePrefs,
-    maxRecent: 2,
-    history: savedHistory,
-  });
-  const saved = {
-    ...basePrefs,
-    maxRecent: 1,
-    history: savedHistory.slice(0, 1),
-  };
-  vi.mocked(prefsApi.patch).mockResolvedValue(saved);
+  vi.mocked(prefsApi.get).mockResolvedValue({ ...basePrefs, maxRecent: 2 });
+  vi.mocked(prefsApi.patch).mockResolvedValue({ ...basePrefs, maxRecent: 1 });
   renderSettings("data", client);
   const decrease = await screen.findByRole("button", {
     name: "减少最近访问保留条数",
   });
-  vi.mocked(prefsApi.get).mockResolvedValue(saved);
   fireEvent.click(decrease);
   await waitFor(() =>
-    expect(client.getQueryData(["history"])).toEqual({
-      history: saved.history,
-    }),
+    expect(prefsApi.patch).toHaveBeenCalledWith({ maxRecent: 1 }),
   );
-  expect(prefsApi.patch).toHaveBeenCalledWith({ maxRecent: 1 });
+  // 服务端会按新上限裁剪：本地这份标记为失效，下次读到的是裁剪后的列表。
+  await waitFor(() =>
+    expect(client.getQueryState(["history"])?.isInvalidated).toBe(true),
+  );
 });
 
 it("修改其他阅读偏好不覆盖更晚加载的历史快照", async () => {

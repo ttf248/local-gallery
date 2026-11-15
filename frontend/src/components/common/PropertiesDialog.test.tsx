@@ -237,7 +237,10 @@ it("图片属性只请求文件元数据", async () => {
   expect(await screen.findByText("照片.png")).toBeInTheDocument();
   expect(screen.getByText("40 × 50 px")).toBeInTheDocument();
   expect(screen.getByText("PNG")).toBeInTheDocument();
-  expect(imageInfoApi.get).toHaveBeenCalledWith("f_picture");
+  expect(imageInfoApi.get).toHaveBeenCalledWith(
+    "f_picture",
+    expect.any(AbortSignal),
+  );
   expect(libraryApi.queryNodes).not.toHaveBeenCalled();
 });
 

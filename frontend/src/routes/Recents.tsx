@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useSearchStore } from "../store/searchStore";
 import { useUIStore } from "../store/uiStore";
-import { historyApi, type Prefs } from "../api/prefs";
+import { historyApi, type HistoryEntry } from "../api/prefs";
+import { historyQueryKey } from "../api/queryKeys";
 import { syncHistoryCache } from "../utils/historyCache";
 import { useHistoryCards } from "../hooks/useHistory";
 import { useImageActivities } from "../hooks/useImageActivity";
@@ -51,8 +52,8 @@ export default function Recents() {
         .remove(albumId)
         .then(() => {
           const cached = queryClient.getQueryData<{
-            history: Prefs["history"];
-          }>(["history"]);
+            history: HistoryEntry[];
+          }>(historyQueryKey);
           const current = cached?.history ?? history;
           syncHistoryCache(
             queryClient,

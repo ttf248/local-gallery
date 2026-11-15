@@ -6,12 +6,13 @@ import {
   type Activity,
   type ImageActivity,
 } from "../api/activity";
+import { activityBatchQueryKey, activityQueryKey } from "../api/queryKeys";
 
 const ACTIVITY_BATCH_SIZE = 1_000;
 
 export function useImageActivity(albumId: string | null | undefined) {
   return useQuery({
-    queryKey: ["activity", "image", albumId],
+    queryKey: activityQueryKey(albumId ?? ""),
     queryFn: async () => {
       if (!albumId) return null;
       try {
@@ -34,7 +35,7 @@ export function useImageActivities(albumIds: string[], enabled = true) {
   );
 
   return useQuery({
-    queryKey: ["activity-query", "image", canonicalAlbumIds],
+    queryKey: [...activityBatchQueryKey, canonicalAlbumIds],
     queryFn: async () => {
       const chunks: string[][] = [];
       for (
@@ -68,11 +69,9 @@ function invalidateImageActivities(
   queryClient: ReturnType<typeof useQueryClient>,
   albumId?: string,
 ) {
-  queryClient.invalidateQueries({ queryKey: ["activity-query", "image"] });
+  queryClient.invalidateQueries({ queryKey: activityBatchQueryKey });
   if (albumId) {
-    queryClient.invalidateQueries({
-      queryKey: ["activity", "image", albumId],
-    });
+    queryClient.invalidateQueries({ queryKey: activityQueryKey(albumId) });
   } else {
     queryClient.invalidateQueries({ queryKey: ["activity", "image"] });
   }

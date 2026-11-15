@@ -15,6 +15,7 @@ import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import { SearchIcon } from "../components/common/Icon";
 import { usePicks } from "../hooks/usePicks";
+import { useChinaPlacesAll } from "../hooks/useChinaLocations";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { useUIStore } from "../store/uiStore";
 import Segmented from "../components/common/Segmented";
@@ -59,16 +60,10 @@ export default function SemanticSearch() {
   });
   // 地点筛选用行政区：坐标聚类的名字是「坐标 30.25°, 120.13°」，
   // 没法用来挑一个地方。
-  const provincePlacesQuery = useQuery({
-    queryKey: ["china-locations", "places", "province", null],
-    queryFn: () => aiJobsApi.chinaPlaces("province").then((r) => r.places.items),
-    staleTime: 60_000,
-  });
-  const cityPlacesQuery = useQuery({
-    queryKey: ["china-locations", "places", "city", null],
-    queryFn: () => aiJobsApi.chinaPlaces("city").then((r) => r.places.items),
-    staleTime: 60_000,
-  });
+  // 地点清单走共享的 hook：键与足迹页的同一份查询一致，
+  // 同一份数据不会因为键不同而被取两次。
+  const provincePlacesQuery = useChinaPlacesAll("province", null);
+  const cityPlacesQuery = useChinaPlacesAll("city", null);
   const provincePlaces = provincePlacesQuery.data ?? [];
   const cityPlaces = cityPlacesQuery.data ?? [];
   const peopleQuery = useQuery({

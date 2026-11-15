@@ -4,8 +4,8 @@ import { expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { ACTIVITY_CHANGED_EVENT } from "../api/activity";
 import { libraryApi } from "../api/library";
+import { libraryQueryKeys } from "../api/queryKeys";
 import {
-  libraryQueryKeys,
   useLibraryActivitySync,
   useLibraryUnreadAlbums,
 } from "./useLibrary";

@@ -7,6 +7,7 @@ import {
   type LibraryListItem,
 } from "../api/library";
 import { useAppMode } from "./useAppMode";
+import { libraryQueryKeys } from "../api/queryKeys";
 import { useImageActivities } from "./useImageActivity";
 import { decodeFavPath } from "../utils/path";
 import { nodeSummaryToCard, tagSummaryToCard } from "../utils/libraryCard";
@@ -25,10 +26,7 @@ export function listItemToCard(item: LibraryListItem, query: LibraryListQuery) {
 export function useLibraryList(query: LibraryListQuery, enabled = true) {
   const { ready } = useAppMode();
   const client = useQueryClient();
-  const key = useMemo(
-    () => ["library", "mode", query.kind, "list", query] as const,
-    [query],
-  );
+  const key = useMemo(() => libraryQueryKeys.list(query), [query]);
   const result = useInfiniteQuery({
     queryKey: key,
     initialPageParam: undefined as string | undefined,

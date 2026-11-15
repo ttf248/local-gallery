@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   entryDisplayName,
   entryReaderUrl,
+  getGalleryContext,
   type GalleryContextEntry,
 } from "./galleryContext";
 
@@ -47,5 +48,52 @@ describe("entryDisplayName", () => {
     expect(
       entryDisplayName(entry({ name: "星海漫步", parentName: "星海漫步" })),
     ).toBe("星海漫步");
+  });
+});
+
+// sessionStorage 里可能是上一版的结构，也可能被别的脚本写过。
+// 形状不对就当没有上下文：缺字段的上下文会让阅读器在「上一本 / 下一本」
+// 上取到 undefined，整页直接崩。
+describe("getGalleryContext", () => {
+  const KEY = "local-gallery-context";
+
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it("读不到上下文时返回 null", () => {
+    expect(getGalleryContext()).toBeNull();
+  });
+
+  it("形状不对的存量数据按没有上下文处理", () => {
+    sessionStorage.setItem(KEY, JSON.stringify({ list: "不是数组" }));
+    expect(getGalleryContext()).toBeNull();
+
+    sessionStorage.setItem(KEY, JSON.stringify({ list: [], index: "第一" }));
+    expect(getGalleryContext()).toBeNull();
+
+    sessionStorage.setItem(KEY, JSON.stringify({ list: [{}], index: 0 }));
+    expect(getGalleryContext()).toBeNull();
+
+    sessionStorage.setItem(KEY, JSON.stringify({ list: [], index: 0 }));
+    expect(getGalleryContext()).toBeNull();
+  });
+
+  it("坏掉的 JSON 按没有上下文处理", () => {
+    sessionStorage.setItem(KEY, "{不是 JSON");
+    expect(getGalleryContext()).toBeNull();
+  });
+
+  it("形状正确时读回上下文", () => {
+    sessionStorage.setItem(
+      KEY,
+      JSON.stringify({
+        source: { type: "home" },
+        list: [{ key: "a_1", to: "/photo/albums/a_1", name: "旅行" }],
+        index: 0,
+        openedAt: 1,
+      }),
+    );
+    expect(getGalleryContext()?.list[0]?.name).toBe("旅行");
   });
 });

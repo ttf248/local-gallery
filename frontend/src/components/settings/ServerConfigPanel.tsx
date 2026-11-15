@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   configApi,
-  type ContentKind,
   type MediaRootConfig,
   type ServerConfig,
   type ServerConfigPatch,
 } from "../../api/config";
+import type { ContentKind } from "../../api/library";
 import { useUIStore } from "../../store/uiStore";
 import { fsApi } from "../../api/fs";
 import { updateFsCapabilities } from "../../hooks/useFsCapabilities";

@@ -13,6 +13,8 @@ import {
   setWorkbenchMode,
   resetWorkbenchMode,
   resetNavItems,
+  readFavorites,
+  readHistory,
   taggedSortPrefix,
   sortFixture,
   restoreHistory,
@@ -229,8 +231,9 @@ for (const kind of ["images", "mixed", "videos"] as const) {
       ).toBeVisible();
       // 400 不重试：请求本身不成立（游标失效之类），再试一次结果一样，
       // 只会让界面多等好几秒才说出「加载失败」。界面上有显式的重试入口，
-      // 要不要再试由用户决定。
-      expect(failedRequests).toBe(1);
+      // 要不要再试由用户决定。具体失败几次取决于虚拟列表又问了几次，
+      // 这里只断言「确实失败过」。
+      expect(failedRequests).toBeGreaterThanOrEqual(1);
       for (const theme of ["light", "dark"] as const) {
         await page.emulateMedia({ colorScheme: theme });
         await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
@@ -241,6 +244,8 @@ for (const kind of ["images", "mixed", "videos"] as const) {
       // 提示条给出显式重试入口；恢复后提示条消失，已加载内容继续可翻。
       await expect(alert.locator("button")).toHaveCount(1);
       failNextPage = false;
+      // 400 不自动重试，恢复要靠这个显式入口。
+      await alert.getByRole("button", { name: "重试加载" }).click();
       await expect(alert).toHaveCount(0, { timeout: 15_000 });
     }
     await expect.poll(() => mediaRequests.length).toBe(2);
@@ -1054,10 +1059,12 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
       children.page.items.find((node) => node.name === prefix + suffix)!.id,
   );
   const ids = samples.map((node) => node.id);
-  const original = (await (await page.request.get("/api/prefs")).json()) as {
-    favorites: string[];
-    maxRecent: number;
-    history: Array<{ albumId: string; name: string; imageCount: number }>;
+  const original = {
+    favorites: await readFavorites(page.request),
+    maxRecent: (
+      (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+    ).maxRecent,
+    history: await readHistory(page.request),
   };
   try {
     expect(
@@ -1163,10 +1170,12 @@ test("六个列表支持按最近看排序，集合与标签具有当前页排�
   const { rootAlbums, childAlbums, collectionId } = await sortFixture(
     page.request,
   );
-  const original = (await (await page.request.get("/api/prefs")).json()) as {
-    favorites: string[];
-    maxRecent: number;
-    history: Array<{ albumId: string; name: string; imageCount: number }>;
+  const original = {
+    favorites: await readFavorites(page.request),
+    maxRecent: (
+      (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+    ).maxRecent,
+    history: await readHistory(page.request),
   };
   try {
     expect(
@@ -1279,9 +1288,11 @@ for (const name of ["unread"] as const) {
     const { rootAlbums, childAlbums, collectionId } = await sortFixture(
       page.request,
     );
-    const original = (await (await page.request.get("/api/prefs")).json()) as {
-      maxRecent: number;
-      history: Array<{ albumId: string; name: string; imageCount: number }>;
+    const original = {
+      maxRecent: (
+        (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+      ).maxRecent,
+      history: await readHistory(page.request),
     };
     try {
       expect(
@@ -1554,9 +1565,7 @@ for (const mode of ["grid", "list"] as const) {
           pageCount: number;
         })
       : null;
-    const originalPrefs = (await (
-      await page.request.get("/api/prefs")
-    ).json()) as { favorites: string[] };
+    const originalPrefs = { favorites: await readFavorites(page.request) };
     try {
       expect((await page.request.delete(activityPath)).ok()).toBeTruthy();
       expect(
@@ -1933,9 +1942,11 @@ for (const entrypoint of ["more", "image"] as const) {
   test(`相册 ${entrypoint} 菜单复制链接并恢复来源焦点`, async ({ page }) => {
     const nodes = await scannedNodes(page.request);
     const album = nodes.find((node) => node.name === "sample-album")!;
-    const original = (await (await page.request.get("/api/prefs")).json()) as {
-      maxRecent: number;
-      history: Array<{ albumId: string; name: string; imageCount: number }>;
+    const original = {
+      maxRecent: (
+        (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+      ).maxRecent,
+      history: await readHistory(page.request),
     };
     try {
       await installCopyAudit(page, entrypoint === "more" ? "denied" : "api");
@@ -2072,9 +2083,11 @@ for (const view of ["grid", "list"] as const) {
 test("相册系统打开权限更新更多及图片菜单，并说明本机限制", async ({ page }) => {
   const nodes = await scannedNodes(page.request);
   const album = nodes.find((node) => node.name === "sample-album")!;
-  const original = (await (await page.request.get("/api/prefs")).json()) as {
-    maxRecent: number;
-    history: Array<{ albumId: string; name: string; imageCount: number }>;
+  const original = {
+    maxRecent: (
+      (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+    ).maxRecent,
+    history: await readHistory(page.request),
   };
   let release!: () => void;
   const gate = new Promise<void>((resolve) => {
@@ -2174,9 +2187,11 @@ test("图片属性使用文件ID并支持失败重试和小屏关闭", async ({ 
     page: { items: Array<{ id: string; name: string }> };
   };
   const file = media.page.items[0];
-  const original = (await (await page.request.get("/api/prefs")).json()) as {
-    maxRecent: number;
-    history: Array<{ albumId: string; name: string; imageCount: number }>;
+  const original = {
+    maxRecent: (
+      (await (await page.request.get("/api/prefs")).json()) as { maxRecent: number }
+    ).maxRecent,
+    history: await readHistory(page.request),
   };
   let blocked = true;
   const metadataIds: string[] = [];

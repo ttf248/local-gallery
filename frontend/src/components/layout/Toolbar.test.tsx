@@ -23,7 +23,6 @@ const manifest = {
 
 vi.mock("../../hooks/useLibrary", () => ({
   useLibraryManifest: () => ({ data: manifest }),
-  libraryQueryKeys: { root: ["library"] },
 }));
 
 vi.mock("../../hooks/useScanSSE", () => ({

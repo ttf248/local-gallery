@@ -43,6 +43,42 @@ type Prefs struct {
 	HiddenNavItems []string `json:"hiddenNavItems"`
 }
 
+// PrefsView 是 /api/prefs 对外暴露的偏好子集。
+//
+// 收藏与最近访问各有一套接口（/api/favorites、/api/history）：它们有独立的
+// 写入路径与独立的缓存，跟着偏好一起返回只会让客户端多存一份同样的数据。
+// 偏好文件本身仍然带着这两个字段（收藏与历史要和其它设置写在同一份文件里，
+// 备份才是一个完整快照）。
+type PrefsView struct {
+	MaxRecent        int    `json:"maxRecent"`
+	AutoSwitchAlbum  bool   `json:"autoSwitchAlbum"`
+	ShowSwitchNotif  bool   `json:"showSwitchNotif"`
+	Theme            string `json:"theme"`
+	SidebarCollapsed bool   `json:"sidebarCollapsed"`
+	// AppMode 是上次使用的工作台。它决定进入应用根路径时落到照片侧还是
+	// 漫画侧；当前在看哪一侧由前端路由决定，不从这里读。
+	AppMode AppMode `json:"appMode"`
+	// HiddenNavItems 是侧栏里被收起的导航项 key 列表。
+	//
+	// 侧栏入口可按需隐藏（设置页的「导航」分区逐项开关）。这里存的是
+	// 生效的清单：前端算好每一项的最终可见性，再整份写回。服务端只把
+	// key 当不透明字符串保存与透传，不解释它的含义。
+	HiddenNavItems []string `json:"hiddenNavItems"`
+}
+
+// View 取偏好里对外可见的那部分。
+func (p Prefs) View() PrefsView {
+	return PrefsView{
+		MaxRecent:        p.MaxRecent,
+		AutoSwitchAlbum:  p.AutoSwitchAlbum,
+		ShowSwitchNotif:  p.ShowSwitchNotif,
+		Theme:            p.Theme,
+		SidebarCollapsed: p.SidebarCollapsed,
+		AppMode:          p.AppMode,
+		HiddenNavItems:   append([]string{}, p.HiddenNavItems...),
+	}
+}
+
 // MaxHiddenNavItems 是隐藏导航项的上限。侧栏入口只有十来个，
 // 超过这个数只可能是异常输入。
 const MaxHiddenNavItems = 32

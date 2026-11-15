@@ -5,7 +5,7 @@ import {
   useMemo,
 } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { prefsApi } from "../api/prefs";
+import { prefsQueryOptions } from "./usePrefs";
 import { useAppModeStore } from "../store/appModeStore";
 import { homeRoute } from "../utils/path";
 import type { AppMode } from "../api/library";
@@ -60,11 +60,7 @@ export function useAppMode(): WorkbenchModeValue {
  * 卡在骨架屏上——它只决定根路径落到哪一侧，不影响当前页面的数据。
  */
 export function useAppModeHydration() {
-  const query = useQuery({
-    queryKey: ["prefs"],
-    queryFn: () => prefsApi.get(),
-    staleTime: 5 * 60 * 1000,
-  });
+  const query = useQuery(prefsQueryOptions);
   const hydrate = useAppModeStore((s) => s.hydrate);
 
   useEffect(() => {

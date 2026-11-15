@@ -2,13 +2,6 @@ import { api } from "./client";
 import type { AppMode } from "./library";
 
 export interface Prefs {
-  favorites: string[];
-  history: {
-    albumId: string;
-    name: string;
-    imageCount: number;
-    openedAt: string;
-  }[];
   maxRecent: number;
   autoSwitchAlbum: boolean;
   showSwitchNotif: boolean;
@@ -26,6 +19,19 @@ export interface Prefs {
    * 这些 key 的含义，只保存与透传。
    */
   hiddenNavItems: string[];
+}
+
+/**
+ * 一条最近访问记录。
+ *
+ * 与偏好分开：收藏与历史各有自己的接口、自己的写入路径与自己的缓存，
+ * 跟着偏好一起存一份就是同一份数据的两处副本。
+ */
+export interface HistoryEntry {
+  albumId: string;
+  name: string;
+  imageCount: number;
+  openedAt: string;
 }
 
 export const prefsApi = {
@@ -56,9 +62,9 @@ export const favoritesApi = {
 };
 
 export const historyApi = {
-  list: () => api<{ history: Prefs["history"] }>("/api/history"),
+  list: () => api<{ history: HistoryEntry[] }>("/api/history"),
   add: (entry: { albumId: string; name: string; imageCount: number }) =>
-    api<{ history: Prefs["history"] }>("/api/history", {
+    api<{ history: HistoryEntry[] }>("/api/history", {
       method: "POST",
       body: entry,
     }),

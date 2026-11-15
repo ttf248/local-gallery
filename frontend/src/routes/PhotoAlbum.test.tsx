@@ -4,18 +4,25 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import PhotoAlbum from "./PhotoAlbum";
 import { useAlbumMedia } from "../hooks/useLibrary";
+import {
+  useSmartAlbumGroupMedia,
+  useSmartAlbumGroups,
+} from "../hooks/useSmartAlbums";
 import { useFavorites } from "../hooks/useFavorites";
 import { fsApi } from "../api/fs";
 import { useUIStore } from "../store/uiStore";
 
 vi.mock("../hooks/useLibrary", () => ({
-  libraryQueryKeys: { root: ["library"] },
   useAlbumMedia: vi.fn(),
   useLibraryChildren: vi.fn(),
   useLibraryNodes: vi.fn(),
   useTagAlbums: vi.fn(),
 }));
 vi.mock("../hooks/useFavorites", () => ({ useFavorites: vi.fn() }));
+vi.mock("../hooks/useSmartAlbums", () => ({
+  useSmartAlbumGroups: vi.fn(),
+  useSmartAlbumGroupMedia: vi.fn(),
+}));
 vi.mock("../api/fs", () => ({
   fsApi: {
     capabilities: vi.fn().mockResolvedValue({ allowOsOpen: false }),
@@ -150,6 +157,69 @@ describe("PhotoAlbum", () => {
       isFetchNextPageError: false,
       fetchNextPage: vi.fn(),
     } as never);
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+      data: {
+        ok: true,
+        summary: {
+          albumId: album.id,
+          dimension: "time",
+          revision: 1,
+          snapshotKey: "smart-snapshot",
+          totalPhotos: 4,
+          availablePhotos: 4,
+          unavailablePhotos: 0,
+          ungroupedPhotos: 1,
+          hiddenGroupCount: 0,
+          coverage: {
+            module: "metadata",
+            total: 4,
+            analyzed: 3,
+            missing: 1,
+            failed: 0,
+            withEvidence: 3,
+            available: true,
+          },
+          groups: [
+            {
+              id: "sg_0123456789abcdef0123",
+              dimension: "time",
+              name: "2025年6月18日",
+              suggestedName: "2025年6月18日",
+              customName: false,
+              photoCount: 3,
+              coverResourceId: "f_1",
+              coverVersion: "v1",
+              hidden: false,
+            },
+          ],
+          cacheHit: true,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as never);
+    vi.mocked(useSmartAlbumGroupMedia).mockReturnValue({
+      data: {
+        pages: [
+          {
+            total: 3,
+            items: [
+              {
+                id: "f_smart_1",
+                kind: "image",
+                index: 0,
+                kindIndex: 0,
+                name: "group-photo.jpg",
+              },
+            ],
+          },
+        ],
+      },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage: vi.fn(),
+    } as never);
   });
 
   it("直接呈现照片墙，没有漫画阅读器的入口", () => {
@@ -159,6 +229,28 @@ describe("PhotoAlbum", () => {
     expect(screen.getByText("春游")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /开始浏览/ })).toBeNull();
     expect(screen.queryByText(/阅读进度/)).toBeNull();
+  });
+
+  it("打开智能分组后仍使用相册内的照片墙", () => {
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: "智能相册" }));
+    expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "打开分组 2025年6月18日，3 张",
+      }),
+    );
+
+    expect(screen.getByTestId("photo-wall")).toHaveTextContent(
+      "group-photo.jpg",
+    );
+    expect(useSmartAlbumGroupMedia).toHaveBeenLastCalledWith(
+      album.id,
+      "time",
+      "sg_0123456789abcdef0123",
+      "smart-snapshot",
+    );
   });
 
   it("点击照片打开沉浸式大图预览", () => {

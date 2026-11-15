@@ -12,7 +12,7 @@ import { authApi } from "../api/auth";
 import { useUIStore } from "../store/uiStore";
 import { updateFsCapabilities } from "./useFsCapabilities";
 import { useScanStore } from "../store/scanStore";
-import { libraryQueryKeys } from "./useLibrary";
+import { libraryQueryKeys } from "../api/queryKeys";
 
 export type FieldStatus = "idle" | "saving" | "saved" | "error";
 type RetryablePatch = Omit<ServerConfigPatch, "accessMode" | "accessToken">;

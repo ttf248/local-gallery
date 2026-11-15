@@ -1,17 +1,18 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { historyApi, type Prefs } from "../api/prefs";
+import { historyApi, type HistoryEntry } from "../api/prefs";
+import { historyQueryKey } from "../api/queryKeys";
 import type { AppMode } from "../api/library";
 import { compareDatesDesc } from "../utils/date";
 import { useLibraryNodes } from "./useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
 import type { CardData } from "../components/album/AlbumCard";
 
-const EMPTY_HISTORY: Prefs["history"] = [];
+const EMPTY_HISTORY: HistoryEntry[] = [];
 
 export function useHistory(enabled = true) {
   return useQuery({
-    queryKey: ["history"],
+    queryKey: historyQueryKey,
     queryFn: () => historyApi.list(),
     staleTime: 30_000,
     enabled,

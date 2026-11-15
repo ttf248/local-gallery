@@ -17,7 +17,7 @@ func PrefsGetHandler(s *store.PrefsStore) fiber.Handler {
 		if err != nil {
 			return prefsInternalError(c)
 		}
-		return c.JSON(p)
+		return c.JSON(p.View())
 	}
 }
 
@@ -81,7 +81,7 @@ func PrefsPatchHandler(s *store.PrefsStore) fiber.Handler {
 		if err != nil {
 			return prefsInternalError(c)
 		}
-		return c.JSON(cur)
+		return c.JSON(cur.View())
 	}
 }
 

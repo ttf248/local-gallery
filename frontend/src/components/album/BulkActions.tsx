@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { favoritesApi, type Prefs } from "../../api/prefs";
+import { favoritesApi } from "../../api/prefs";
+import { favoritesQueryKey } from "../../api/queryKeys";
 import { activityApi } from "../../api/activity";
 import { libraryApi } from "../../api/library";
 import { ApiError } from "../../api/client";
@@ -69,11 +70,8 @@ export default function BulkActions({ loaded }: Props) {
           snapshot.map((item) => item.id),
           action,
         );
-        client.setQueryData(["favorites"], { favorites: saved.favorites });
-        client.setQueryData<Prefs>(["prefs"], (previous) =>
-          previous ? { ...previous, favorites: saved.favorites } : previous,
-        );
-        void client.invalidateQueries({ queryKey: ["favorites"] });
+        client.setQueryData(favoritesQueryKey, { favorites: saved.favorites });
+        void client.invalidateQueries({ queryKey: favoritesQueryKey });
       } else {
         const candidates = snapshot.filter(
           (item) =>

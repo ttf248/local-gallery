@@ -24,6 +24,7 @@ Fiber middleware → handlers → services/store → models + 本地文件
 | [services/scanner.go](../backend/internal/services/scanner.go)、[scan_runner.go](../backend/internal/services/scan_runner.go)               | 目录工作池、扫描生命周期与进度订阅                         |
 | [resource_catalog.go](../backend/internal/services/resource_catalog.go)、[library_page.go](../backend/internal/services/library_page.go)    | 不可变库快照、资源 ID、分页/搜索索引                       |
 | [ai_jobs.go](../backend/internal/services/ai_jobs.go)、[exif_metadata.go](../backend/internal/services/exif_metadata.go)、[china_geolocation.go](../backend/internal/services/china_geolocation.go) | 持久分析任务、EXIF/GPS 解析、省级地图与市区照片统计、按拍摄时间的轨迹与到访聚合 |
+| [smart_albums.go](../backend/internal/services/smart_albums.go)                                                                            | 当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组 |
 | [thumbnail.go](../backend/internal/services/thumbnail.go)、[video_transcode.go](../backend/internal/services/video_transcode.go) 等媒体服务 | 缩略图、预览、格式转换、视频封面、元数据、faststart 与转码 |
 | [internal/store/](../backend/internal/store/)                                                                                               | 偏好与媒体活动分文件持久化，锁内部分更新、原子写入         |
 | [frontend/src/App.tsx](../frontend/src/App.tsx)、[main.tsx](../frontend/src/main.tsx)                                                       | 应用入口、懒加载路由、访问门禁、主题、活动同步与错误边界   |
@@ -73,7 +74,9 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 
 ## 媒体分析任务
 
-`AIJobService` 与扫描任务分开运行：扫描负责发布当前资源快照，分析服务只处理快照内的图片文件。`metadata`（EXIF/GPS）、`embedding`（Chinese-CLIP）、`ocr`（RapidOCR）与 `face`（YuNet + SFace）都通过 `AIAnalyzer` 注册并各自维护版本。全量任务重算全部图片，增量任务按资源 ID、大小、纳秒修改时间与模块版本筛出新增或变化项。人物分析通过 `peopleEnabled` 默认关闭；明确开启后才允许手动、按序或每日启动 `face` 任务。OCR 文本和人脸框/特征写入既有分析批次；相似人脸接口只返回通过当前路径和文件指纹检查的照片 DTO，不对外暴露特征向量。每个结果仍由现有任务服务按 32 张一批提交、恢复与重试，不另设任务队列。
+`AIJobService` 与扫描任务分开运行：扫描负责发布当前资源快照，分析服务只处理快照内的图片文件。`metadata`（EXIF/GPS）、`embedding`（Chinese-CLIP）、`ocr`（RapidOCR）与 `face`（YuNet + SFace）都通过 `AIAnalyzer` 注册并各自维护版本。全量任务重算全部图片，增量任务按资源 ID、大小、纳秒修改时间与模块版本筛出新增或变化项；带 `albumId` 的定向任务只从指定照片相册取得图片 ID，定向序列跳过与智能分组无关的 OCR。人物分析通过 `peopleEnabled` 默认关闭；明确开启后才允许手动、按序或每日启动 `face` 任务。OCR 文本和人脸框/特征写入既有分析批次；相似人脸接口只返回通过当前路径和文件指纹检查的照片 DTO，不对外暴露特征向量。每个结果仍由现有任务服务按 32 张一批提交、恢复与重试，不另设任务队列。
+
+`SmartAlbumService` 只读取指定照片相册的直属图片，在 EXIF 拍摄时间、离线地点、现有人物候选和已有 Chinese-CLIP 向量上生成虚拟分组，不移动或复制媒体。派生缓存键包含相册 ID、维度、资源 ID 与文件指纹、相关分析记录版本和分组算法版本；不同相册使用不同缓存文件。时间使用可信拍摄时间并按间隔切段，地点只输出离线行政区域名或 geohash 单元名，不向浏览器传 GPS，人物只取当前相册成员，场景以相互近邻与相似度门槛保守成组；每组至少 3 张。名称建议、覆盖率与成员摘要按需计算，媒体页在返回前再次校验当前相册成员、路径边界、普通文件与指纹。用户改名/隐藏写入 `state/smart_album_overrides.json` 并包含在状态备份，分组成员只保存在可重建的 `derived/ai/smart-albums/`。
 
 任务状态与每日计划写在 `state/ai_jobs.json`，每 32 张图片提交一个批次检查点；批次结果使用同目录内的原子 JSON 文件，位于 `derived/metadata/<模块>/batches/<任务 ID>/`，可重建且与用户状态分开。结果文件先原子发布，再写检查点；启动时扫描结果批次并修复“结果已写、检查点未写”的崩溃窗口。任务恢复只从最近已提交的批次继续，未提交的尾批会重跑。失败记录写入同一批次，错误仅含资源 ID、稳定错误码和脱敏原因。
 
@@ -234,6 +237,7 @@ EXIF 的 `dateTimeOriginal` 通常不含时区，因此保留相机记录的墙�
 | `state/picks.json`                               | 照片级精选（媒体文件 ID 集合）                               |
 | `state/ai_jobs.json`                             | 媒体分析任务历史、检查点、每日时间与模块选择、人物分析开关 |
 | `state/people.json`                              | 人物名称、隐藏状态与手动分组修正                         |
+| `state/smart_album_overrides.json`                | 智能相册自定义分组名称与隐藏状态                         |
 | `state/cover_overrides.json`                     | 自定义封面                                                   |
 | `derived/thumbnails/`、`converted/`、`previews/` | 缩略图、整图格式转换、阅读器预览，各自独立统计/清理          |
 | `derived/media_dimensions.jsonl`                  | 媒体像素宽高（照片墙排布用），可由源文件重建                |
@@ -242,6 +246,7 @@ EXIF 的 `dateTimeOriginal` 通常不含时区，因此保留相机记录的墙�
 | `derived/ai/models/`                             | 经固定 SHA256 校验的本机 AI 模型权重                         |
 | `derived/ai/vectors/`                            | Float16 语义向量 shard、JSONL 元数据和 manifest              |
 | `derived/ai/people-index.json`                    | 可重建的人脸组、脸部框与资源 ID，不含特征向量              |
+| `derived/ai/smart-albums/`                       | 按相册与维度缓存的分组成员、文件指纹与建议名称             |
 | `temp/`                                          | 通用临时目录；需原子发布的媒体任务在目标目录创建独占临时文件 |
 
 `state/backups/` 保存用户手动恢复前的备份，不属于派生缓存，不参与缓存清理。对外只给相对缓存根目录的路径；绝对路径由回环保护的本机接口单独提供。对外备份仅使用资源 ID；另存的内部封面映射仅供本机恢复旧状态，不对外下载。
@@ -280,6 +285,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 服务端列表接口的 `kind` 查询参数（`photo` / `comic`）必填，缺失或非法返回 `400 invalid_kind`：子节点、未读、随机、标签、标签相册与搜索按目录属性过滤。集合继承所属目录的属性，因此同样参与过滤——漫画目录下的集合不会出现在照片工作台里。它的 `albumCount` 恒为全部后代，但集合的所有成员都在同一媒体根（同属性），所以这个计数天然按侧，无需再拆一份。manifest 的 `albumCount` 是全库总数，另给 `photoAlbumCount` / `comicAlbumCount`，集合同理有 `photoCollectionCount` / `comicCollectionCount`。
 - 过滤发生在分页之前：发布时预切好的有序切片按属性筛成子序列，游标里的偏移是过滤后列表的偏移。属性进游标作用域，跨属性复用被拒绝为 `invalid_cursor`。
 - 未读/在读派生按 `(catalogRevision, activityRevision)` 缓存，缓存与属性无关，属性过滤是请求期后置筛选。未读下标只收漫画相册：照片目录下的相册不记录阅读进度，没有「未读」这个概念。
+- 查询键集中注册在 `api/queryKeys.ts`：媒体库（`libraryQueryKeys`）、偏好、收藏与最近访问各只有一处定义。键散落在各处各拼各的，「刷新列表」就不知道该失效哪些 —— 手抄一遍字符串，漏一个就有一条旧数据留在界面上。注册表只放键，不放取数函数：取数函数属于各自的 api 模块，测试替换那一层时不必连带替换这里。
 - 前端查询键带模式段（`["library", ..., "mode", mode]`），切模式即换键自动重取，旧模式缓存保留。媒体清单与 `nodes/query` 与模式无关，键不带模式。收藏与历史的资源 ID 集合不分类型，由前端按摘要里的 `contentKind` 客户端过滤；`hooks/useFavoritesByMode.ts` 把「当前侧可见的卡片 / 本侧计数 / 真失效的条目」收在一处，收藏页与首页共用它，口径不再分叉。
 - 收藏里的智能标签按名解析（`POST /api/tags/query`），接口同时给出两侧的册数：客户端据此区分「这个标签在库里不存在」（失效，可清理）与「它只属于另一侧」（不可见，但不是失效）。把两者混为一谈会导致用户在另一侧点一次「清理失效收藏」就删掉自己的收藏。
 - 阅读器整屏脱离 AppShell，侧栏不可见，顶部提供工作台 chip 切模式（切模式即离开阅读器回到外壳）。
@@ -300,6 +306,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - **模式有且只有一个真相源：URL 路径前缀。** 服务端 `Prefs.appMode` 只决定根路径落到哪一侧；前端 `appModeStore` 只镜像这个偏好，不持有「当前模式」。`WorkbenchModeProvider`（`components/layout/`）挂在应用最外层，从 `useLocation` 推导模式并经上下文下发，因此整屏脱离外壳的阅读器也在同一套上下文里。切换模式 = 导航到对侧对应页 + 写回偏好，两件事缺一不可。
 - 模式切换的语义只有一张表（`utils/path.ts` 的 `counterpartRoute`）：两侧都有的同名页（最近 / 收藏 / 标签）一一对应；相册与阅读器只属于一侧，未读只属于漫画侧，精选只属于照片侧，它们都回落到对侧首页。
 - 相册入口按内容属性分派：照片目录的相册 `/photo/albums/<相册 id>` 直接渲染照片墙，漫画目录的相册重定向到阅读器。属性由服务端给出（所属目录的 `kind`），前端不按图片数量推断。
+- 照片相册页在原始照片墙与智能分组之间切换。智能分组按时间、地点、人物和场景展示相册内摘要；点开分组后复用同一分页照片墙和大图预览。分析入口只把当前相册 ID 发给现有分析队列，名称与隐藏操作只写服务端用户状态。
 - 常驻导航仅取 activity-summary、随机相册或已加载 dashboard；首页一次取得未读计数、有限预览与在读摘要，不下载全库。完整未读索引按“库 revision + 活动版本”复用，列表按需分页。
 - `AlbumGrid` 绑定最近的纵向滚动祖先，网格/列表只挂视口附近条目。
 - 照片墙（`components/wall`）按每张图的真实宽高比做自适应排布：宽高比来自服务端媒体分页返回的像素宽高（由 `MediaDimensionService` 读图片头得到并缓存），排布算法是纯函数，容器宽度或密度变化时重算。行高度由算法确定，`Virtuoso` 只负责按行虚拟化；虚拟窗口参数保持在安全范围内，避免尺寸树展开过深触发爆栈。总数占位保留整本相册的滚动长度，行范围换算回媒体序号后由 `useMediaGridPagination` 连续补页，失败保留内容并暂停自动请求，显式重试恢复。容器与窗口的验证要求见设计文档。
@@ -331,7 +338,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 收藏/历史/偏好写入成功后先将服务端确认结果写共享查询缓存，再后台刷新，后续 GET 失败不能复活已删除记录或回退新设置。切换收藏读取当前缓存，首次查询未确认不盲写；清理失效项只过滤已知缓存，不凭移除清单构造空列表。
 - 首页、集合与标签相册使用 `useLibraryList` 无限分页，服务端 `library_query.go` 统一筛选与排序。每个不可变库快照拥有最多 16 个查询结果的 LRU，翻页复用结果；游标同时绑定查询与历史排序快照。年份/作品索引和统计独立于已加载页数。请求取消、后续页重试和游标失效后的整链重取由 hook 处理。阅读器上下文携带查询及后续游标，在已加载边界补页，卸载/换卷取消请求；失败提示返回列表刷新，不混用旧顺序。
 - 列表排序共用一套口径：「按拍摄时间」（照片侧）/「按加入时间」（漫画侧）用业务日期（拍摄时间 > 文件夹名日期 > 修改时间），与后端 `albumMoreRecent` 相同；缺业务日期时退回修改时间。首页、集合、标签由服务端执行；收藏与最近等有界列表继续使用 `utils/cardSorting.ts`。首页的「库内一览」默认不再重复摆年份归组的那些集合（`library_query.go` 的 `excludeYearTargets`），搜索或按年份筛选时仍给出全部命中。
-- 最近与收藏分别处理查询失败、资源失效和筛选无结果，保留已加载卡片。“最近看”只在需要排序时读历史，按 `openedAt` 降序，同时间或未访问按名称；历史确认结果同时同步 `history` 与已存在的 `prefs.history`。
+- 最近与收藏分别处理查询失败、资源失效和筛选无结果，保留已加载卡片。“最近看”只在需要排序时读历史，按 `openedAt` 降序，同时间或未访问按名称；历史只有这一份缓存：收藏与最近访问各有独立接口，偏好响应不再带这两个字段，客户端也不另存副本。
 - 照片侧的访问记录记到相册：打开相册页记一条，看照片（大图预览）也记它出自的那本相册 —— 用户翻的是照片，落点却是相册。跨相册的照片墙里相册随照片变，`useVisitRecorder` 按相册冷却 30 秒，避免连翻几十张时写盘次数跟着照片数走；打开相册页不走冷却，刚打开的这本总要排在最前。记录只依赖相册身份，不随媒体分页重复写入。
 - 访问记录使用真实相册名称和图片总数，只依赖相册身份，不随媒体分页重复记录；视频数量不替代图片总数。可点击星标与链接分离，星标使用共享 mutation，不为每张卡订阅完整收藏列表。
 

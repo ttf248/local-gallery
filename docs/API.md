@@ -89,9 +89,9 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 三个端点均经过现有访问门禁与回环限制，响应 `Cache-Control: no-store`，错误不包含底层文件路径。
 
-- `GET /api/admin/state/export` 下载 v1 JSON：`version`、`exportedAt`、`favorites`、`history`、`preferences`、`activities`、`covers`、`picks`。`preferences` 仅为服务端偏好字段；`covers` 每项为 `{albumId,itemId}`。不含配置、令牌、扫描缓存或浏览器本机阅读偏好。当前库无法解析的旧封面不导出，`unresolvedCovers` 报告数量，恢复目录后可再次导出。
+- `GET /api/admin/state/export` 下载 v1 JSON：`version`、`exportedAt`、`favorites`、`history`、`preferences`、`activities`、`covers`、`picks`、`people`、`smartAlbums`。`preferences` 仅为服务端偏好字段；`covers` 每项为 `{albumId,itemId}`。`smartAlbums` 只保存智能分组的自定义名称与隐藏状态，不含成员清单或分析产物。不含配置、令牌、扫描缓存或浏览器本机阅读偏好。当前库无法解析的旧封面不导出，`unresolvedCovers` 报告数量，恢复目录后可再次导出。
 - `POST /api/admin/state/import/preview` 请求 `{backup}`，返回 `versions`、`libraryRevision`、`ready`、分类 `counts`、`missing` 与 `skippedCovers`。未知字段、损坏 JSON、非 v1 版本、非法或重复 ID 均返回 `400 invalid_state_backup`。设置页文件上限 32 MiB，接口含 JSON 包装上限 34 MiB，超限返回 `413 state_backup_too_large`。
-- `POST /api/admin/state/import` 请求 `{backup,categories,versions,libraryRevision}`；类别为 `favorites/history/preferences/activities/covers/picks`。`versions` 来自预览，是当前状态摘要，不是授权凭据。相关状态变化返回 `409 state_changed`；库变化或恢复封面时库未就绪返回 `409 library_not_ready`，均需重新预览。
+- `POST /api/admin/state/import` 请求 `{backup,categories,versions,libraryRevision}`；类别为 `favorites/history/preferences/activities/covers/picks/people/smartAlbums`。`versions` 来自预览，是当前状态摘要，不是授权凭据。相关状态变化返回 `409 state_changed`；库变化或恢复封面时库未就绪返回 `409 library_not_ready`，均需重新预览。
 
 覆盖前先在 `state/backups/` 保存同格式的恢复前 JSON 与仅服务端可见的完整内部封面映射；创建失败时不写入任何类别。收藏、历史和偏好共享文件，在一次锁内合并提交并保留未选类别；随后依次恢复活动、封面与精选，每个文件原子落盘。精选单独一个类别：恢复精选不动收藏，恢复收藏也不动精选。响应 `{completed,failed?,pending,code?,skippedCovers}`，失败后停止后续类别。已经完成的写入不因其他类别失败回滚，客户端不得自动重放恢复请求。
 
@@ -201,7 +201,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/ai/jobs` / `POST /api/ai/jobs`
 
-读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental" }`。全量分析当前库中的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用 YuNet 检测人脸并由 SFace 生成相似检索特征。后三者需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
+读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用 YuNet 检测人脸并由 SFace 生成相似检索特征。后三者需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
 
 任务快照的 `jobs` 按创建时间倒序提供任务记录，`active` 是当前执行或暂停的任务，`queue` 是按执行顺序排列的等待任务 ID，不包含 `active`。任务记录包含等待队列任务以及所有终态记录。队列 ID 与任务状态会一起持久化到 `state/ai_jobs.json`；旧状态文件缺少 `queue` 时会按待执行任务的创建顺序恢复，服务重启时未完成的当前任务会插回队首续跑。
 
@@ -218,7 +218,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `POST /api/ai/jobs/sequence`
 
-请求为 `{ "mode": "full" | "incremental" }`，一次创建所有已就绪模块的任务，并按照片元数据、向量索引、OCR、人脸识别的固定顺序加入既有任务队列。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
+请求为 `{ "mode": "full" | "incremental", "albumId"?: "a_…" }`，一次创建所有已就绪模块的任务，并按固定顺序加入既有任务队列。全库任务依次执行 metadata、embedding、OCR、face；传入照片 `albumId` 时仅排入 metadata、embedding、face，并且每项只处理该相册图片。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
 
 ### `GET /api/ai/jobs/estimate`
 
@@ -626,6 +626,15 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 清除自定义封面并恢复扫描器默认封面。
 
+### 智能相册分组
+
+- `GET /api/albums/:albumId/smart-groups?dimension=time|place|people|scene` 返回该照片相册的分组摘要、分析覆盖率与未分组照片数。相册内直接图片是唯一分析范围，分组不会跨相册。摘要只返回分组 ID、名称、照片数和封面，不返回成员清单、路径或 GPS 坐标。
+- `POST /api/albums/:albumId/smart-groups/rebuild?dimension=…` 按当前分析记录重建选定维度并刷新派生缓存。
+- `PUT /api/albums/:albumId/smart-groups/:groupId?dimension=…` 接受 `{ "name"?: "…", "hidden"?: boolean }`，用于自定义名称或隐藏分组；名称最多 60 个字符，空名称恢复建议名。
+- `GET /api/albums/:albumId/smart-groups/:groupId/media?dimension=…&snapshot=…&cursor=…&limit=200` 只分页返回该相册该分组的图片 DTO。每页重新验证当前相册成员、文件路径边界、普通文件类型与生成分组时的文件指纹；库变化或快照过期后应重新读取分组摘要。
+
+时间只使用可信 EXIF 拍摄时间，按日期与自适应拍摄间隔形成分组；地点使用离线行政边界或 geohash 精度 5，接口不返回原始坐标；人物复用当前人物候选组在本相册内的成员；场景复用现有 Chinese-CLIP 向量，并给出可编辑的建议标签。每组至少 3 张，证据不足时保留未分组状态。派生成员清单写入 `derived/ai/smart-albums/`，人工名称与隐藏状态写入 `state/smart_album_overrides.json`，状态备份的 `smartAlbums` 类别包含这些修正。
+
 ## 媒体、缩略图与视频
 
 ### `GET /api/media/:fileId`
@@ -740,7 +749,9 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 偏好响应中的 `favorites`、`history` 以及清理响应中的 `removed` 始终为数组；没有条目时返回 `[]`，不返回 `null`。删除最后一个收藏、清空最近访问和无变化清理同样遵循此约定。
 
-- `GET /api/prefs`、`PATCH /api/prefs`：读取或修改界面偏好。高频媒体活动不再混入偏好响应。
+- `GET /api/prefs`、`PATCH /api/prefs`：读取或修改界面偏好。收藏与最近访问各有独立接口
+  （`/api/favorites`、`/api/history`），不再混进偏好响应：客户端不必为此多存一份同样的数据。
+  偏好文件本身仍带着这两项，备份因此是一个完整快照。
   `appMode` 是全局工作台模式，取值 `photo` / `comic`（缺省 `photo`），决定列表呈现哪一类相册；
   非法值返回 `400 invalid_app_mode`。两个模式互斥且完整覆盖媒体库：目录属性把媒体库分成
   照片与漫画两半，工作台一次只面对其中一半。

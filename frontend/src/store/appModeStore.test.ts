@@ -11,8 +11,6 @@ vi.mock("../api/queryClient", () => ({
 }));
 
 const savedPrefs = {
-  favorites: [] as string[],
-  history: [] as Prefs["history"],
   maxRecent: 10,
   autoSwitchAlbum: true,
   showSwitchNotif: true,
