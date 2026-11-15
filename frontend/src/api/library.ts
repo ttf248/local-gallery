@@ -179,7 +179,13 @@ export interface LibraryFeedAlbum {
  * - collection：某个集合内部的照片
  * - recent / random：几本相册的照片交错排在一起
  */
-export type MediaFeedScope = "recent" | "random" | "year" | "collection";
+export type MediaFeedScope =
+  | "recent"
+  | "random"
+  | "year"
+  | "collection"
+  /** 随机长流：瀑布流专页往下滑的数据源，按游标一页页往下取。 */
+  | "stream";
 
 export interface MediaFeedQuery {
   kind: AppMode;

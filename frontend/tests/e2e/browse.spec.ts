@@ -2894,13 +2894,50 @@ test("首页「随手看看」的标题进随机照片专页，那一页全是�
   await expect(page).toHaveURL(/\/photo\/random$/);
   await expect(page.getByRole("heading", { name: "随机照片" })).toBeVisible();
   // 这一页只有照片：墙上铺的是随机抽来的跨相册照片。
-  const wall = page.locator("[data-virtuoso-scroller]");
-  await expect(wall).toBeAttached();
   await expect
-    .poll(async () => wall.locator("img").count(), { timeout: 20_000 })
+    .poll(async () => page.locator("main img").count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
   // 页面上没有按时间或最近的筛选：这一页只有一个「换一批」。
   await expect(page.getByRole("button", { name: /换一批/ })).toBeVisible();
+});
+
+test("随手看看专页是瀑布流，往下滑会接着抽下一批", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+
+  const feedRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/library/media-feed")) {
+      feedRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/photo/random");
+  await expect(page.getByRole("heading", { name: "随机照片" })).toBeVisible();
+  await expect
+    .poll(() => feedRequests.length, { timeout: 20_000 })
+    .toBeGreaterThan(0);
+
+  // 墙上确实铺着照片。
+  const photos = page.locator("main img");
+  await expect.poll(() => photos.count(), { timeout: 20_000 }).toBeGreaterThan(0);
+  const heightBefore = await page
+    .locator("main")
+    .evaluate((element) => element.scrollHeight);
+
+  // 滑到底：接上下一批，墙因此变长。
+  await page.locator("main").evaluate((element) => {
+    element.scrollTo({ top: element.scrollHeight, behavior: "instant" });
+  });
+  await expect
+    .poll(() => feedRequests.length, { timeout: 30_000 })
+    .toBeGreaterThan(1);
+  await expect
+    .poll(
+      async () =>
+        page.locator("main").evaluate((element) => element.scrollHeight),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThan(heightBefore);
 });
 
 test("分页浏览明暗主题与四个断点实际截图", async ({ page, request }) => {

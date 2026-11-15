@@ -1,38 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { forwardRef, type ReactNode } from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import RandomPhotos from "./RandomPhotos";
 import { useAppModeStore } from "../store/appModeStore";
 
-const requests: { seed?: string }[] = [];
+const requests: { seed?: string; cursor?: string }[] = [];
 
 vi.mock("../api/library", () => ({
   libraryApi: {
-    mediaFeed: (query: { seed?: string }) => {
-      requests.push({ seed: query.seed });
+    mediaFeed: (query: { seed?: string }, cursor?: string) => {
+      requests.push({ seed: query.seed, cursor });
+      const page = cursor ? 2 : 1;
       return Promise.resolve({
         ok: true,
         page: {
           revision: 1,
-          total: 2,
+          total: 4,
+          nextCursor: page === 1 ? "cursor-2" : "",
           items: [
             {
-              id: `f_${query.seed ?? "none"}_1`,
+              id: `f_${page}_1`,
               kind: "image",
-              name: "一.jpg",
+              name: `${page}-一.jpg`,
               index: 0,
               kindIndex: 0,
+              width: 1200,
+              height: 800,
               albumId: "a_1",
               albumName: "第一本",
             },
             {
-              id: `f_${query.seed ?? "none"}_2`,
+              id: `f_${page}_2`,
               kind: "image",
-              name: "二.jpg",
+              name: `${page}-二.jpg`,
               index: 1,
               kindIndex: 1,
+              width: 800,
+              height: 1200,
               albumId: "a_2",
               albumName: "第二本",
             },
@@ -52,33 +57,14 @@ vi.mock("../hooks/usePicks", () => ({
   }),
 }));
 
-// 虚拟列表在测试里按行渲染：照片墙要的是「行」，不是滚动行为。
-vi.mock("react-virtuoso", () => ({
-  Virtuoso: forwardRef(
-    (
-      {
-        data,
-        itemContent,
-      }: {
-        data: Array<{ key: string }>;
-        itemContent: (index: number, row: { key: string }) => ReactNode;
-      },
-      _ref: React.ForwardedRef<unknown>,
-    ) => (
-      <>
-        {data.map((row, index) => (
-          <div key={row.key} data-testid="wall-row">
-            {itemContent(index, row)}
-          </div>
-        ))}
-      </>
-    ),
-  ),
-}));
-
 // 照片墙按容器宽度排布：测试里给一个固定宽度。
 vi.mock("../hooks/useElementSize", () => ({
-  useElementSize: () => ({ ref: { current: null }, width: 1200, height: 800 }),
+  useElementSize: () => ({
+    ref: () => {},
+    width: 1200,
+    height: 800,
+    element: null,
+  }),
 }));
 
 function renderPage() {
@@ -103,8 +89,10 @@ describe("随手看看专页", () => {
     await waitFor(() => expect(requests.length).toBe(1));
     expect(requests[0].seed).toBeTruthy();
     await waitFor(() =>
-      expect(screen.getAllByTestId("wall-row").length).toBeGreaterThan(0),
+      expect(screen.getByAltText("1-一.jpg")).toBeInTheDocument(),
     );
+    expect(screen.getByAltText("1-二.jpg")).toBeInTheDocument();
+    // 照片的出处相册写在悬停层里。
     expect(screen.getByText("第一本")).toBeInTheDocument();
   });
 
@@ -116,5 +104,30 @@ describe("随手看看专页", () => {
     fireEvent.click(screen.getByRole("button", { name: /换一批/ }));
     await waitFor(() => expect(requests.length).toBe(2));
     expect(requests[1].seed).not.toBe(first);
+  });
+
+  it("滑到底会接上下一批照片", async () => {
+    renderPage();
+    await waitFor(() => expect(requests.length).toBe(1));
+    await waitFor(() =>
+      expect(screen.getByAltText("1-一.jpg")).toBeInTheDocument(),
+    );
+
+    const sentinel = document.querySelector(
+      '[data-testid="random-photos-sentinel"]',
+    );
+    expect(sentinel).toBeTruthy();
+    (
+      globalThis as unknown as {
+        triggerIntersection: (target: Element) => void;
+      }
+    ).triggerIntersection(sentinel as Element);
+
+    // 下一页接上来，墙上的照片换成了新一批。
+    await waitFor(() => expect(requests.length).toBe(2));
+    expect(requests[1].cursor).toBe("cursor-2");
+    await waitFor(() =>
+      expect(screen.getByAltText("2-一.jpg")).toBeInTheDocument(),
+    );
   });
 });

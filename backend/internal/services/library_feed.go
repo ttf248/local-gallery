@@ -30,6 +30,8 @@ const (
 	MediaFeedYear MediaFeedScope = "year"
 	// MediaFeedCollection 取某个集合内部所有相册的照片。
 	MediaFeedCollection MediaFeedScope = "collection"
+	// MediaFeedStream 取一条确定的长流：瀑布流专页往下滑的数据源。
+	MediaFeedStream MediaFeedScope = "stream"
 )
 
 // MediaFeedQuery 描述一次跨相册取照片的请求。
@@ -193,11 +195,11 @@ func (q *MediaFeedQuery) Normalize() error {
 		return ErrInvalidMediaFeedQuery
 	}
 	switch q.Scope {
-	case MediaFeedRecent, MediaFeedRandom:
-		// 这两种取材方式不带条件：年份与集合由服务端挑。
+	case MediaFeedRecent, MediaFeedRandom, MediaFeedStream:
+		// 这三种取材方式不带条件：年份与集合由服务端挑。
 		q.Year = ""
 		q.Parent = ""
-		if q.Scope != MediaFeedRandom {
+		if q.Scope != MediaFeedRandom && q.Scope != MediaFeedStream {
 			// 种子只对随机取材有意义。
 			q.Seed = ""
 		}
@@ -248,6 +250,10 @@ func PageMediaFeed(snapshot CatalogSnapshot, q MediaFeedQuery, cursor string, li
 			Albums:  albums,
 			Sources: []FeedSource{},
 		}, nil
+	}
+
+	if q.Scope == MediaFeedStream {
+		return pageMediaFeedStream(snapshot, index, q, cursor, limit)
 	}
 
 	albums, sources, err := mediaFeedAlbums(snapshot, index, q)
@@ -614,14 +620,29 @@ func (r *feedRandomizer) float64() float64 {
 
 // selectFeedAlbums 按年份分散地挑相册。
 //
+// 只取前 count 本。取到的前缀与 orderFeedAlbums 排出的全量顺序一致 ——
+// 「一次给八本」与「排出全量再截前八本」给的是同一批相册。
+func selectFeedAlbums(index *libraryPageIndex, kind models.ContentKind, count int, rnd *feedRandomizer) []LibraryNodeSummary {
+	if count <= 0 {
+		return nil
+	}
+	ordered := orderFeedAlbums(index, kind, rnd)
+	if len(ordered) > count {
+		ordered = ordered[:count]
+	}
+	return ordered
+}
+
+// orderFeedAlbums 按年份分散地排出相册顺序。
+//
 // 纯随机会撞：一次抽到七八本同一年、同一场活动的相册，墙上就只剩一种
 // 口味。按年份分桶后轮流取，一批照片因此来自不同的年份、不同的场景。
 //
 // 库里只有一两年时第一轮就挑不满，第二轮不设上限补齐 —— 分 buckets 是
 // 为了丰富，不是为了少给照片。
-func selectFeedAlbums(index *libraryPageIndex, kind models.ContentKind, count int, rnd *feedRandomizer) []LibraryNodeSummary {
+func orderFeedAlbums(index *libraryPageIndex, kind models.ContentKind, rnd *feedRandomizer) []LibraryNodeSummary {
 	positions := index.albumIndexesByKind[kind]
-	if len(positions) == 0 || count <= 0 {
+	if len(positions) == 0 {
 		return nil
 	}
 	buckets := map[int][]int{}
@@ -638,15 +659,15 @@ func selectFeedAlbums(index *libraryPageIndex, kind models.ContentKind, count in
 	sort.Ints(keys)
 	rnd.shuffle(keys)
 
-	picked := make([]int, 0, count)
-	used := make(map[int]bool, count)
+	picked := make([]int, 0, len(positions))
+	used := make(map[int]bool, len(positions))
 	// 第一轮：每个年份桶最多取几本，年份之间轮流取。
 	for _, key := range keys {
 		list := buckets[key]
 		rnd.shuffle(list)
 		taken := 0
 		for _, position := range list {
-			if taken >= mediaFeedPerYearBucket || len(picked) >= count {
+			if taken >= mediaFeedPerYearBucket {
 				break
 			}
 			picked = append(picked, position)
@@ -656,13 +677,7 @@ func selectFeedAlbums(index *libraryPageIndex, kind models.ContentKind, count in
 	}
 	// 第二轮：年份不够分时补齐。
 	for _, key := range keys {
-		if len(picked) >= count {
-			break
-		}
 		for _, position := range buckets[key] {
-			if len(picked) >= count {
-				break
-			}
 			if used[position] {
 				continue
 			}

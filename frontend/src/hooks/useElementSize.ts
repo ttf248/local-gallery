@@ -35,5 +35,5 @@ export function useElementSize<T extends HTMLElement>() {
     return () => observer.disconnect();
   }, [element]);
 
-  return { ref: setElement, width, height };
+  return { ref: setElement, width, height, element };
 }

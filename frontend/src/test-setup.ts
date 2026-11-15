@@ -13,3 +13,65 @@ if (typeof HTMLDialogElement !== 'undefined') {
     },
   });
 }
+
+// jsdom 还没实现 IntersectionObserver：无限下拉靠它判断「快到底了」。
+// 这里补一个最小实现：观察者记下来，用例要触发时自己调
+// triggerIntersection(target)。
+interface StubObserver {
+  callback: IntersectionObserverCallback;
+  targets: Set<Element>;
+}
+
+const stubObservers = new Set<StubObserver>();
+
+class StubIntersectionObserver implements IntersectionObserver {
+  readonly root: Element | Document | null = null;
+  readonly rootMargin = "";
+  readonly thresholds: ReadonlyArray<number> = [];
+  private readonly record: StubObserver;
+
+  constructor(callback: IntersectionObserverCallback) {
+    this.record = { callback, targets: new Set() };
+    stubObservers.add(this.record);
+  }
+
+  observe(target: Element) {
+    this.record.targets.add(target);
+  }
+
+  unobserve(target: Element) {
+    this.record.targets.delete(target);
+  }
+
+  disconnect() {
+    stubObservers.delete(this.record);
+    this.record.targets.clear();
+  }
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+globalThis.IntersectionObserver =
+  StubIntersectionObserver as unknown as typeof IntersectionObserver;
+
+// 手动触发一次相交：用例用它验证「滑到底会接上下一批」。
+(globalThis as unknown as Record<string, unknown>).triggerIntersection = (
+  target: Element,
+  isIntersecting = true,
+) => {
+  for (const observer of stubObservers) {
+    if (!observer.targets.has(target)) continue;
+    observer.callback(
+      [
+        {
+          target,
+          isIntersecting,
+          intersectionRatio: isIntersecting ? 1 : 0,
+        } as IntersectionObserverEntry,
+      ],
+      observer as unknown as IntersectionObserver,
+    );
+  }
+};
