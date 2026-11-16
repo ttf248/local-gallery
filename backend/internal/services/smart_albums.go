@@ -32,7 +32,7 @@ const (
 
 	smartAlbumStateVersion       = 1
 	smartAlbumCacheVersion       = 2
-	smartAlbumRecommendedVersion = "recommended-evidence-rank-v1"
+	smartAlbumRecommendedVersion = "recommended-parent-aware-evidence-v6"
 	smartAlbumTimeVersion        = "time-day-session-v2"
 	smartAlbumPlaceVersion       = "place-adaptive-admin-v2"
 	smartAlbumPeopleVersion      = "people-album-members-v1"
@@ -82,6 +82,7 @@ type SmartAlbumGroup struct {
 	Hidden                bool     `json:"hidden"`
 	Members               []string `json:"-"`
 	sortKey               string   `json:"sortKey,omitempty"`
+	recommendationSeed    string
 	overrideSources       []string `json:"-"`
 	// CoverWidth 与 CoverHeight 是封面图的原始像素尺寸。
 	//
@@ -266,7 +267,8 @@ func OpenSmartAlbumService(options SmartAlbumServiceOptions) (*SmartAlbumService
 // 路径边界（Windows 上每个文件要好几次系统调用），四个维度各算一遍
 // 就是四倍的代价 —— 全库刷新因此慢得看不出在做什么。
 type smartAlbumAlbumInput struct {
-	albumID string
+	albumID   string
+	albumName string
 	// revision 是准备输入时的库版本；摘要里的版本与之相同。
 	revision     uint64
 	ids          []string
@@ -318,7 +320,7 @@ func (s *SmartAlbumService) prepareAlbum(ctx context.Context, albumID string) (s
 	faceRecords := s.jobs.RecordSummariesForResources(AIJobTypeFace, mediaIDs)
 	embeddingRecords := s.jobs.RecordSummariesForResources(AIJobTypeEmbedding, mediaIDs)
 	return smartAlbumAlbumInput{
-		albumID: albumID, revision: snapshot.Revision(),
+		albumID: albumID, albumName: smartAlbumInputAlbumName(album), revision: snapshot.Revision(),
 		ids: ids, media: media, mediaByID: mediaByID, fingerprints: fingerprints,
 		metadata:        currentAnalysisRecords(metadataRecords, fingerprints),
 		face:            currentAnalysisSummaries(faceRecords, fingerprints),
@@ -328,6 +330,21 @@ func (s *SmartAlbumService) prepareAlbum(ctx context.Context, albumID string) (s
 		embeddingStatus: s.jobs.ModuleStatus(AIJobTypeEmbedding),
 		unavailable:     unavailable,
 	}, nil
+}
+
+func smartAlbumInputAlbumName(album LibraryNodeSummary) string {
+	name := strings.TrimSpace(album.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(album.Name)
+	}
+	if album.Virtual {
+		if location := strings.Trim(strings.TrimSpace(album.Location), "/\\"); location != "" {
+			name = location
+		} else if album.ParentName != "" {
+			name = album.ParentName
+		}
+	}
+	return name
 }
 
 func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension string, force bool) (SmartAlbumSummary, error) {
@@ -413,7 +430,7 @@ func (s *SmartAlbumService) loadOrBuildSmartAlbumGroups(
 	peopleGroups []PeopleAlbumGroup,
 ) (smartAlbumCache, bool, error) {
 	analysisFingerprint := s.analysisFingerprint(
-		dimension, input.media, input.metadata, input.face, peopleGroups,
+		dimension, input.albumName, input.media, input.metadata, input.face, peopleGroups,
 		input.metadataStatus, input.faceStatus, input.embeddingStatus,
 	)
 	key := smartAlbumCacheKey(input.albumID, dimension, input.media, analysisFingerprint)
@@ -441,7 +458,7 @@ func (s *SmartAlbumService) loadOrBuildSmartAlbumGroups(
 			detailGroups[detailDimension] = smartAlbumGroups(detailCache.Groups)
 		}
 		vectors := s.currentSmartSceneVectors(input)
-		groups = buildSmartAlbumRecommendations(input.albumID, input.media, detailGroups, input.metadata, vectors)
+		groups = buildSmartAlbumRecommendations(input.albumID, input.albumName, input.media, detailGroups, input.metadata, vectors)
 	} else {
 		groups, err = s.buildGroups(
 			ctx, input.albumID, dimension, input.media, input.mediaByID,
@@ -1561,6 +1578,7 @@ func sortSmartAlbumGroups(groups []SmartAlbumGroup, dimension string) {
 
 func (s *SmartAlbumService) analysisFingerprint(
 	dimension string,
+	albumName string,
 	media []smartAlbumMedia,
 	metadata map[string]AIAnalysisRecord,
 	face map[string]AIAnalysisRecordSummary,
@@ -1616,6 +1634,7 @@ func (s *SmartAlbumService) analysisFingerprint(
 			}
 		}
 	case SmartAlbumDimensionRecommended:
+		write(albumName)
 		write(metadataStatus.Version)
 		write(faceStatus.Version)
 		write(embeddingStatus.Version)

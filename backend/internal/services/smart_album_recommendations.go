@@ -7,6 +7,13 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
+)
+
+const (
+	smartRecommendationMinimumQualityScore  = 0.82
+	smartRecommendationDuplicateContainment = 0.60
+	smartRecommendationDuplicateJaccard     = 0.40
 )
 
 type smartRecommendationEvidence struct {
@@ -25,10 +32,12 @@ type smartRecommendationCandidate struct {
 type smartRecommendationMatch struct {
 	evidence smartRecommendationEvidence
 	overlap  int
+	strength float64
 }
 
 func buildSmartAlbumRecommendations(
 	albumID string,
+	albumName string,
 	media []smartAlbumMedia,
 	detailGroups map[string][]SmartAlbumGroup,
 	metadata map[string]AIAnalysisRecord,
@@ -78,7 +87,9 @@ func buildSmartAlbumRecommendations(
 
 	candidates := make([]smartRecommendationCandidate, 0, len(events)+len(evidence))
 	candidates = append(candidates, events...)
-	for _, dimension := range []string{SmartAlbumDimensionScene, SmartAlbumDimensionPlace} {
+	for _, dimension := range []string{
+		SmartAlbumDimensionScene, SmartAlbumDimensionPlace, SmartAlbumDimensionPeople,
+	} {
 		for _, item := range evidenceByDimension[dimension] {
 			candidates = append(candidates, smartRecommendationCandidate{
 				seedDimension: dimension,
@@ -88,7 +99,7 @@ func buildSmartAlbumRecommendations(
 		}
 	}
 
-	minimumPhotos := 8
+	minimumPhotos := 12
 	maxRecommendations := min(8, max(1, int(math.Ceil(math.Sqrt(float64(len(media))/50)))))
 	qualified := make([]SmartAlbumGroup, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -118,18 +129,6 @@ func buildSmartAlbumRecommendations(
 		memberCount := len(candidate.members)
 		ratio := float64(memberCount) / float64(len(media))
 		specificEvidence := !isGenericSmartRecommendationName(scene.Name) || !isGenericSmartRecommendationName(place.Name)
-		singleStrongScene := candidate.seedDimension == SmartAlbumDimensionScene &&
-			len(evidenceDimensions) == 1 && sceneOverlap >= max(12, memberCount*3/4) &&
-			smartRecommendationSceneCohesion(candidate.members, vectorByID) >= 0.86
-		singleDistinctPlace := candidate.seedDimension == SmartAlbumDimensionPlace &&
-			len(evidenceDimensions) == 1 && memberCount >= 12 && ratio <= 0.65
-		if len(evidenceDimensions) < 2 && !singleStrongScene && !singleDistinctPlace {
-			continue
-		}
-		if ratio > 0.92 && (len(evidenceDimensions) < 2 || !specificEvidence) {
-			continue
-		}
-
 		cohesion := 0.78
 		if sceneOverlap > 0 {
 			cohesion = smartRecommendationSceneCohesion(candidate.members, vectorByID)
@@ -140,13 +139,41 @@ func buildSmartAlbumRecommendations(
 		if candidate.seedDimension == SmartAlbumDimensionPlace {
 			cohesion = max(cohesion, 0.80)
 		}
-		score := scoreSmartRecommendation(memberCount, len(media), len(evidenceDimensions), cohesion, specificEvidence)
+		singleDistinctPlace := candidate.seedDimension == SmartAlbumDimensionPlace &&
+			len(evidenceDimensions) == 1 && memberCount >= 12 && ratio <= 0.65
+		personSceneSupport := sceneOverlap >= max(8, int(math.Ceil(float64(memberCount)*0.45))) &&
+			!isGenericSmartRecommendationName(scene.Name) && cohesion >= 0.82
+		representativePeople := candidate.seedDimension == SmartAlbumDimensionPeople &&
+			memberCount >= 12 && ratio >= 0.10 && ratio <= 0.65 &&
+			personSceneSupport &&
+			containsSmartDimension(evidenceDimensions, SmartAlbumDimensionPeople)
+		if len(evidenceDimensions) < 2 && !singleDistinctPlace && !representativePeople {
+			continue
+		}
+		if ratio >= 0.82 {
+			if memberCount < 32 || !specificEvidence || !smartRecommendationAddsParentValue(albumName, name) {
+				continue
+			}
+			crossDay := !candidate.start.IsZero() && !candidate.end.IsZero() &&
+				(candidate.start.Year() != candidate.end.Year() || candidate.start.YearDay() != candidate.end.YearDay())
+			if len(evidenceDimensions) < 3 && !crossDay {
+				continue
+			}
+		}
+
+		evidenceStrength := smartRecommendationEvidenceStrength(matches)
+		score := scoreSmartRecommendation(
+			memberCount, len(media), len(evidenceDimensions), evidenceStrength, cohesion, specificEvidence,
+		)
 		if candidate.seedDimension == SmartAlbumDimensionTime && len(candidate.seedGroups) > 1 {
 			// 多个连续拍摄段被独立地点、人物或场景证据串成同一活动时，
 			// 让完整活动优先于其中一个高密度子集，避免多日行程被拆散。
 			score = math.Min(1, score+math.Min(0.12, float64(len(candidate.seedGroups)-1)*0.06))
 		}
-		if score < 0.52 {
+		if representativePeople {
+			score = math.Min(1, score+0.02)
+		}
+		if score < smartRecommendationMinimumQualityScore {
 			continue
 		}
 
@@ -184,6 +211,7 @@ func buildSmartAlbumRecommendations(
 			QualityScore: score, EvidenceDimensions: evidenceDimensions,
 			RecommendationReasons: reasons, CoverResourceID: cover,
 			CoverVersion: mediaByID[cover].version, Members: members,
+			recommendationSeed: candidate.seedDimension,
 		})
 	}
 
@@ -200,18 +228,16 @@ func buildSmartAlbumRecommendations(
 		return qualified[i].ID < qualified[j].ID
 	})
 	selected := make([]SmartAlbumGroup, 0, maxRecommendations)
+	peopleRecommendationSelected := false
 	for _, candidate := range qualified {
+		if candidate.recommendationSeed == SmartAlbumDimensionPeople && peopleRecommendationSelected {
+			continue
+		}
 		duplicate := false
 		for _, existing := range selected {
 			left := smartRecommendationMemberSet(candidate.Members, mediaByID)
 			right := smartRecommendationMemberSet(existing.Members, mediaByID)
-			intersection := smartRecommendationIntersection(left, right)
-			if len(left) == 0 || len(right) == 0 {
-				continue
-			}
-			containment := float64(intersection) / float64(min(len(left), len(right)))
-			jaccard := float64(intersection) / float64(len(left)+len(right)-intersection)
-			if containment >= 0.82 || jaccard >= 0.58 {
+			if smartRecommendationIsDuplicate(left, right) {
 				duplicate = true
 				break
 			}
@@ -220,6 +246,9 @@ func buildSmartAlbumRecommendations(
 			continue
 		}
 		selected = append(selected, candidate)
+		if candidate.recommendationSeed == SmartAlbumDimensionPeople {
+			peopleRecommendationSelected = true
+		}
 		if len(selected) >= maxRecommendations {
 			break
 		}
@@ -348,11 +377,15 @@ func matchSmartRecommendationEvidence(
 		if overlap < smartEvidenceOverlapMinimum(members, item.members) {
 			continue
 		}
-		if float64(overlap)/float64(len(members)) < 0.15 &&
-			float64(overlap)/float64(len(item.members)) < 0.15 {
+		candidateCoverage := float64(overlap) / float64(len(members))
+		evidenceCoverage := float64(overlap) / float64(len(item.members))
+		if candidateCoverage < 0.25 && evidenceCoverage < 0.60 {
 			continue
 		}
-		matches = append(matches, smartRecommendationMatch{evidence: item, overlap: overlap})
+		strength := 2 * candidateCoverage * evidenceCoverage / (candidateCoverage + evidenceCoverage)
+		matches = append(matches, smartRecommendationMatch{
+			evidence: item, overlap: overlap, strength: strength,
+		})
 		if !containsSmartDimension(dimensions, item.group.Dimension) {
 			dimensions = append(dimensions, item.group.Dimension)
 		}
@@ -362,6 +395,24 @@ func matchSmartRecommendationEvidence(
 
 func smartEvidenceOverlapMinimum(left, right map[string]struct{}) int {
 	return max(2, int(math.Ceil(float64(min(len(left), len(right)))*0.15)))
+}
+
+func smartRecommendationEvidenceStrength(matches []smartRecommendationMatch) float64 {
+	strongest := make(map[string]float64, len(smartAlbumDetailDimensions()))
+	for _, match := range matches {
+		dimension := match.evidence.group.Dimension
+		if match.strength > strongest[dimension] {
+			strongest[dimension] = match.strength
+		}
+	}
+	if len(strongest) == 0 {
+		return 0
+	}
+	total := 0.0
+	for _, strength := range strongest {
+		total += strength
+	}
+	return total / float64(len(strongest))
 }
 
 func bestSmartRecommendationMatch(matches []smartRecommendationMatch, dimension string) (SmartAlbumGroup, int) {
@@ -387,6 +438,24 @@ func smartRecommendationName(
 ) string {
 	sceneName := smartRecommendationSpecificName(scene.Name)
 	placeName := smartRecommendationSpecificName(place.Name)
+	if candidate.seedDimension == SmartAlbumDimensionPeople {
+		parts := []string{"合影"}
+		if sceneName != "" {
+			parts = append(parts, sceneName)
+		}
+		if placeName != "" {
+			parts = append(parts, placeName)
+		}
+		if len(parts) == 1 {
+			if period := smartRecommendationPeriod(candidate, metadata); period != "" {
+				parts = append(parts, period)
+			}
+		}
+		if len(parts) == 1 {
+			return ""
+		}
+		return strings.Join(parts, " · ")
+	}
 	if sceneName != "" && placeName != "" {
 		return sceneName + " · " + placeName
 	}
@@ -426,6 +495,69 @@ func isGenericSmartRecommendationName(name string) bool {
 		strings.HasPrefix(name, "附近位置 ") || strings.HasPrefix(name, "人物 ")
 }
 
+func smartRecommendationAddsParentValue(parentName, recommendationName string) bool {
+	parent := normalizeSmartAlbumLabel(parentName)
+	recommendation := normalizeSmartAlbumLabel(recommendationName)
+	if parent == "" || isGenericSmartAlbumName(parent) {
+		return true
+	}
+	if recommendation == "" || strings.Contains(parent, recommendation) || strings.Contains(recommendation, parent) {
+		return false
+	}
+	return smartAlbumLabelSimilarity(parent, recommendation) < 0.60
+}
+
+func isGenericSmartAlbumName(name string) bool {
+	name = normalizeSmartAlbumLabel(name)
+	if name == "" {
+		return true
+	}
+	switch strings.ToLower(name) {
+	case "album", "photos", "photo", "pictures", "picture", "images", "image", "camera", "dcim",
+		"相册", "照片", "图片", "相机", "导入", "微信图片", "本目录媒体":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeSmartAlbumLabel(value string) string {
+	var normalized strings.Builder
+	for _, char := range strings.ToLower(strings.TrimSpace(value)) {
+		if unicode.IsLetter(char) || unicode.IsNumber(char) {
+			normalized.WriteRune(char)
+		}
+	}
+	return normalized.String()
+}
+
+func smartAlbumLabelSimilarity(left, right string) float64 {
+	leftRunes, rightRunes := []rune(left), []rune(right)
+	if len(leftRunes) < 2 || len(rightRunes) < 2 {
+		if left == right {
+			return 1
+		}
+		return 0
+	}
+	leftPairs := make(map[string]struct{}, len(leftRunes)-1)
+	for index := 0; index+1 < len(leftRunes); index++ {
+		leftPairs[string(leftRunes[index:index+2])] = struct{}{}
+	}
+	shared := 0
+	seen := make(map[string]struct{}, len(rightRunes)-1)
+	for index := 0; index+1 < len(rightRunes); index++ {
+		pair := string(rightRunes[index : index+2])
+		if _, duplicate := seen[pair]; duplicate {
+			continue
+		}
+		seen[pair] = struct{}{}
+		if _, exists := leftPairs[pair]; exists {
+			shared++
+		}
+	}
+	return 2 * float64(shared) / float64(len(leftPairs)+len(seen))
+}
+
 func smartRecommendationPeriod(
 	candidate smartRecommendationCandidate,
 	metadata map[string]AIAnalysisRecord,
@@ -443,20 +575,25 @@ func smartRecommendationPeriod(
 	return fmt.Sprintf("%d年%d月–%d年%d月", start.Year(), int(start.Month()), end.Year(), int(end.Month()))
 }
 
-func scoreSmartRecommendation(size, albumSize, dimensions int, cohesion float64, specific bool) float64 {
+func scoreSmartRecommendation(
+	size, albumSize, dimensions int,
+	evidenceStrength, cohesion float64,
+	specific bool,
+) float64 {
 	if size <= 0 || albumSize <= 0 {
 		return 0
 	}
 	ratio := float64(size) / float64(albumSize)
 	sizeScore := math.Min(1, math.Log2(float64(size)+1)/math.Log2(65))
-	distinctiveness := math.Max(0.2, 1-math.Abs(ratio-0.38)*1.15)
-	evidenceScore := math.Min(1, float64(max(0, dimensions-1))/2)
+	distinctiveness := math.Max(0.15, 1-ratio)
+	dimensionScore := math.Min(1, float64(max(0, dimensions-1))/2)
+	evidenceScore := 0.60*dimensionScore + 0.40*math.Max(0, math.Min(1, evidenceStrength))
 	labelScore := 0.45
 	if specific {
 		labelScore = 1
 	}
-	score := 0.27*sizeScore + 0.27*evidenceScore + 0.22*cohesion +
-		0.15*distinctiveness + 0.09*labelScore
+	score := 0.20*sizeScore + 0.34*evidenceScore + 0.22*cohesion +
+		0.14*distinctiveness + 0.10*labelScore
 	return math.Round(score*1000) / 1000
 }
 
@@ -554,6 +691,17 @@ func smartRecommendationIntersection(left, right map[string]struct{}) int {
 		}
 	}
 	return count
+}
+
+func smartRecommendationIsDuplicate(left, right map[string]struct{}) bool {
+	if len(left) == 0 || len(right) == 0 {
+		return false
+	}
+	intersection := smartRecommendationIntersection(left, right)
+	containment := float64(intersection) / float64(min(len(left), len(right)))
+	jaccard := float64(intersection) / float64(len(left)+len(right)-intersection)
+	return containment >= smartRecommendationDuplicateContainment ||
+		jaccard >= smartRecommendationDuplicateJaccard
 }
 
 func containsSmartDimension(dimensions []string, dimension string) bool {

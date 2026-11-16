@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestSmartAlbumRecommendationsKeepSmallAlbumsWhole(t *testing.T) {
+func TestSmartAlbumRecommendationsSkipNearParentSmallAlbum(t *testing.T) {
 	media, metadata, vectors := recommendationFixture(16, time.Date(2025, 6, 18, 10, 0, 0, 0, time.UTC), 1)
 	members := recommendationIDs(media, 0, len(media))
 	details := map[string][]SmartAlbumGroup{
@@ -27,21 +29,53 @@ func TestSmartAlbumRecommendationsKeepSmallAlbumsWhole(t *testing.T) {
 		},
 	}
 
-	groups := buildSmartAlbumRecommendations("a_test", media, details, metadata, vectors)
+	groups := buildSmartAlbumRecommendations("a_test", "家庭聚会", media, details, metadata, vectors)
 	logSmartAlbumRecommendationMetrics(t, len(media), groups)
-	if len(groups) != 1 || groups[0].PhotoCount != len(media) {
-		t.Fatalf("recommendations=%+v, want one whole-album topic", groups)
+	if len(groups) != 0 {
+		t.Fatalf("near-parent recommendation added no value for a 16-photo album: %+v", groups)
 	}
-	if len(groups[0].EvidenceDimensions) < 3 || len(groups[0].RecommendationReasons) < 3 {
-		t.Fatalf("recommendation lacks independent evidence: %+v", groups[0])
-	}
-	if groups[0].QualityScore < 0.65 {
-		t.Fatalf("quality score %.3f is too low for a coherent, multi-source group", groups[0].QualityScore)
-	}
-	again := buildSmartAlbumRecommendations("a_test", media, details, metadata, vectors)
+	again := buildSmartAlbumRecommendations("a_test", "家庭聚会", media, details, metadata, vectors)
 	t.Logf("synthetic stability: stable_ids=%t", reflect.DeepEqual(groups, again))
 	if !reflect.DeepEqual(groups, again) {
 		t.Fatalf("recommendation IDs or ordering changed between identical builds: first=%+v second=%+v", groups, again)
+	}
+}
+
+func TestSmartAlbumRecommendationsDoNotPromoteSimilarPhotosAlone(t *testing.T) {
+	media, metadata, vectors := recommendationFixture(
+		100, time.Date(2025, 6, 18, 10, 0, 0, 0, time.UTC), 1,
+	)
+	details := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionScene: {
+			recommendationGroup(
+				SmartAlbumDimensionScene, "similar-only", "建议 · 蓝天", recommendationIDs(media, 0, 24),
+			),
+		},
+	}
+	groups := buildSmartAlbumRecommendations("a_similar", "照片", media, details, metadata, vectors)
+	logSmartAlbumRecommendationMetrics(t, len(media), groups)
+	if len(groups) != 0 {
+		t.Fatalf("a similar-photo cluster without independent context became a theme: %+v", groups)
+	}
+}
+
+func TestSmartAlbumRecommendationsSkipCandidatesBelowQualityFloor(t *testing.T) {
+	media, metadata, vectors := recommendationFixture(
+		100, time.Date(2025, 6, 18, 10, 0, 0, 0, time.UTC), 1,
+	)
+	members := recommendationIDs(media, 0, 12)
+	details := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionTime: {
+			recommendationGroup(SmartAlbumDimensionTime, "low-score-time", "2025年6月18日", members),
+		},
+		SmartAlbumDimensionScene: {
+			recommendationGroup(SmartAlbumDimensionScene, "low-score-scene", "建议 · 蓝天", members),
+		},
+	}
+	groups := buildSmartAlbumRecommendations("a_low_score", "照片", media, details, metadata, vectors)
+	logSmartAlbumRecommendationMetrics(t, len(media), groups)
+	if len(groups) != 0 {
+		t.Fatalf("low-scoring candidate passed the %.2f quality floor: %+v", smartRecommendationMinimumQualityScore, groups)
 	}
 }
 
@@ -67,7 +101,7 @@ func TestSmartAlbumRecommendationsMergeRelatedDaysIntoOneEvent(t *testing.T) {
 		},
 	}
 
-	groups := buildSmartAlbumRecommendations("a_trip", media, details, metadata, vectors)
+	groups := buildSmartAlbumRecommendations("a_trip", "照片", media, details, metadata, vectors)
 	logSmartAlbumRecommendationMetrics(t, len(media), groups)
 	if len(groups) != 1 || groups[0].PhotoCount != 100 {
 		t.Fatalf("cross-day event split into multiple recommendations: %+v", groups)
@@ -75,10 +109,182 @@ func TestSmartAlbumRecommendationsMergeRelatedDaysIntoOneEvent(t *testing.T) {
 	if groups[0].Name != "城市旅行 · 杭州市 · 西湖区" {
 		t.Fatalf("recommendation name=%q, want scene and place evidence", groups[0].Name)
 	}
+	duplicate := buildSmartAlbumRecommendations("a_trip", groups[0].Name, media, details, metadata, vectors)
+	if len(duplicate) != 0 {
+		t.Fatalf("recommendation duplicated its already descriptive parent folder: %+v", duplicate)
+	}
+}
+
+func TestSmartAlbumRecommendationsHighlightRepresentativeGroupPhotos(t *testing.T) {
+	media, metadata, vectors := recommendationFixture(
+		100, time.Date(2025, 7, 1, 9, 0, 0, 0, time.UTC), 1,
+	)
+	members := recommendationIDs(media, 0, 36)
+	details := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionTime: {
+			recommendationGroup(SmartAlbumDimensionTime, "people-time", "2025年7月1日", members),
+		},
+		SmartAlbumDimensionPlace: {
+			recommendationGroup(SmartAlbumDimensionPlace, "people-place", "杭州市 · 西湖区", members),
+		},
+		SmartAlbumDimensionPeople: {
+			recommendationGroup(SmartAlbumDimensionPeople, "people-group", "人物 1", members),
+		},
+		SmartAlbumDimensionScene: {
+			recommendationGroup(SmartAlbumDimensionScene, "people-scene", "建议 · 家庭聚会", members),
+		},
+	}
+	groups := buildSmartAlbumRecommendations("a_people", "家庭照片", media, details, metadata, vectors)
+	logSmartAlbumRecommendationMetrics(t, len(media), groups)
+	if len(groups) != 1 || groups[0].PhotoCount != len(members) ||
+		!containsSmartDimension(groups[0].EvidenceDimensions, SmartAlbumDimensionPeople) ||
+		!strings.Contains(groups[0].Name, "合影") {
+		t.Fatalf("representative group photos were not surfaced with people evidence: %+v", groups)
+	}
+}
+
+func TestSmartAlbumRecommendationsLimitPeopleThemesPerAlbum(t *testing.T) {
+	base := time.Date(2025, 7, 1, 9, 0, 0, 0, time.UTC)
+	media, metadata, vectors := recommendationFixture(100, base, 1)
+	first := recommendationIDs(media, 0, 30)
+	second := recommendationIDs(media, 30, 30)
+	for _, id := range second {
+		record := metadata[id]
+		var parsed ImageMetadata
+		if err := json.Unmarshal(record.Data, &parsed); err != nil {
+			t.Fatal(err)
+		}
+		parsed.DateTimeOriginal = base.Add(24 * time.Hour).Format(time.RFC3339Nano)
+		record.Data, _ = json.Marshal(parsed)
+		metadata[id] = record
+	}
+	details := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionTime: {
+			recommendationGroup(SmartAlbumDimensionTime, "two-days-first", "2025年7月1日", first),
+			recommendationGroup(SmartAlbumDimensionTime, "two-days-second", "2025年7月2日", second),
+		},
+		SmartAlbumDimensionPlace: {
+			recommendationGroup(SmartAlbumDimensionPlace, "two-places-first", "杭州市", first),
+			recommendationGroup(SmartAlbumDimensionPlace, "two-places-second", "上海市", second),
+		},
+		SmartAlbumDimensionPeople: {
+			recommendationGroup(SmartAlbumDimensionPeople, "two-people-first", "人物 1", first),
+			recommendationGroup(SmartAlbumDimensionPeople, "two-people-second", "人物 2", second),
+		},
+		SmartAlbumDimensionScene: {
+			recommendationGroup(SmartAlbumDimensionScene, "two-scenes-first", "建议 · 家庭聚会", first),
+			recommendationGroup(SmartAlbumDimensionScene, "two-scenes-second", "建议 · 户外活动", second),
+		},
+	}
+	groups := buildSmartAlbumRecommendations("a_people_limit", "周末照片", media, details, metadata, vectors)
+	logSmartAlbumRecommendationMetrics(t, len(media), groups)
+	peopleThemes := 0
+	for _, group := range groups {
+		if strings.Contains(group.Name, "合影") {
+			peopleThemes++
+		}
+	}
+	if peopleThemes > 1 {
+		t.Fatalf("people themes=%d, want at most one representative theme: %+v", peopleThemes, groups)
+	}
+}
+
+func TestSmartAlbumRecommendationsUsePartialMetadataAndAIIndexes(t *testing.T) {
+	media, metadata, vectors := recommendationFixture(
+		100, time.Date(2025, 9, 1, 9, 0, 0, 0, time.UTC), 1,
+	)
+	placeTimeMembers := recommendationIDs(media, 0, 24)
+	sceneMembers := recommendationIDs(media, 0, 12)
+	for index, id := range recommendationIDs(media, 0, len(media)) {
+		if index >= len(placeTimeMembers) {
+			delete(metadata, id)
+		}
+	}
+	for _, id := range placeTimeMembers {
+		record := metadata[id]
+		var parsed ImageMetadata
+		if err := json.Unmarshal(record.Data, &parsed); err != nil {
+			t.Fatal(err)
+		}
+		parsed.GPS = &GPSMetadata{Latitude: 30.259242, Longitude: 120.130396, MapDatum: "GCJ-02"}
+		record.Data, _ = json.Marshal(parsed)
+		metadata[id] = record
+	}
+	partialVectors := append([]smartSceneVector(nil), vectors[:12]...)
+	details := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionTime: {
+			recommendationGroup(SmartAlbumDimensionTime, "partial-time", "2025年9月1日", placeTimeMembers),
+		},
+		SmartAlbumDimensionPlace: {
+			recommendationGroup(SmartAlbumDimensionPlace, "partial-place", "杭州市 · 西湖区", placeTimeMembers),
+		},
+		SmartAlbumDimensionScene: {
+			recommendationGroup(SmartAlbumDimensionScene, "partial-scene", "建议 · 家庭聚会", sceneMembers),
+		},
+	}
+	groups := buildSmartAlbumRecommendations("a_partial", "照片", media, details, metadata, partialVectors)
+	logSmartAlbumRecommendationMetrics(t, len(media), groups)
+	if len(groups) != 1 || groups[0].PhotoCount != len(placeTimeMembers) {
+		t.Fatalf("strong EXIF/GPS evidence was lost with partial indexes: %+v", groups)
+	}
+	if groups := buildSmartAlbumRecommendations("a_unindexed", "照片", media,
+		map[string][]SmartAlbumGroup{}, nil, nil); len(groups) != 0 {
+		t.Fatalf("folder without EXIF, GPS, or AI evidence produced recommendations: %+v", groups)
+	}
+}
+
+func TestSmartAlbumRecommendationIDSurvivesNewMembers(t *testing.T) {
+	base := time.Date(2025, 10, 1, 9, 0, 0, 0, time.UTC)
+	media, metadata, vectors := recommendationFixture(40, base, 1)
+	all := recommendationIDs(media, 0, len(media))
+	details := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionTime: {
+			recommendationGroup(SmartAlbumDimensionTime, "stable-time", "2025年10月1日", all),
+		},
+		SmartAlbumDimensionPlace: {
+			recommendationGroup(SmartAlbumDimensionPlace, "stable-place", "杭州市", all),
+		},
+		SmartAlbumDimensionScene: {
+			recommendationGroup(SmartAlbumDimensionScene, "stable-scene", "建议 · 出游", all),
+		},
+	}
+	first := buildSmartAlbumRecommendations("a_stable", "照片", media, details, metadata, vectors)
+	if len(first) != 1 {
+		t.Fatalf("initial recommendation=%+v, want one topic", first)
+	}
+
+	newID := "f_new"
+	media = append(media, smartAlbumMedia{id: newID, version: "v1"})
+	newMetadata, _ := json.Marshal(ImageMetadata{DateTimeOriginal: base.Format(time.RFC3339Nano)})
+	metadata[newID] = AIAnalysisRecord{Status: MetadataParseParsed, Data: newMetadata}
+	newVector := make([]float32, AIEmbeddingDimension)
+	newVector[0] = 1
+	vectors = append(vectors, smartSceneVector{id: newID, vector: newVector})
+	for dimension, groups := range details {
+		groups[0].Members = append(groups[0].Members, newID)
+		groups[0].PhotoCount++
+		details[dimension] = groups
+	}
+	second := buildSmartAlbumRecommendations("a_stable", "照片", media, details, metadata, vectors)
+	logSmartAlbumRecommendationMetrics(t, len(media), second)
+	if len(second) != 1 || second[0].ID != first[0].ID || second[0].PhotoCount != len(media) {
+		t.Fatalf("recommendation identity did not survive a new member: before=%+v after=%+v", first, second)
+	}
 }
 
 func TestSmartAlbumRecommendationsKeepThreeDayTripAsOneTheme(t *testing.T) {
-	media, metadata, vectors := recommendationFixture(300, time.Date(2025, 7, 1, 9, 0, 0, 0, time.UTC), 1)
+	base := time.Date(2025, 7, 1, 9, 0, 0, 0, time.UTC)
+	media, metadata, vectors := recommendationFixture(300, base, 1)
+	for index, item := range media {
+		record := metadata[item.id]
+		var parsed ImageMetadata
+		if err := json.Unmarshal(record.Data, &parsed); err != nil {
+			t.Fatal(err)
+		}
+		parsed.DateTimeOriginal = base.Add(time.Duration(index/100) * 24 * time.Hour).Format(time.RFC3339Nano)
+		record.Data, _ = json.Marshal(parsed)
+		metadata[item.id] = record
+	}
 	all := recommendationIDs(media, 0, len(media))
 	details := map[string][]SmartAlbumGroup{
 		SmartAlbumDimensionTime: {
@@ -99,7 +305,7 @@ func TestSmartAlbumRecommendationsKeepThreeDayTripAsOneTheme(t *testing.T) {
 		},
 	}
 
-	groups := buildSmartAlbumRecommendations("a_three_day_trip", media, details, metadata, vectors)
+	groups := buildSmartAlbumRecommendations("a_three_day_trip", "相机", media, details, metadata, vectors)
 	logSmartAlbumRecommendationMetrics(t, len(media), groups)
 	if len(groups) != 1 || groups[0].PhotoCount != 300 {
 		t.Fatalf("three-day trip was split into multiple topics: %+v", groups)
@@ -128,7 +334,7 @@ func TestSmartAlbumRecommendationsSelectDistinctThemesFromMixedAlbum(t *testing.
 		))
 	}
 
-	groups := buildSmartAlbumRecommendations("a_mixed", media, details, metadata, vectors)
+	groups := buildSmartAlbumRecommendations("a_mixed", "照片", media, details, metadata, vectors)
 	logSmartAlbumRecommendationMetrics(t, len(media), groups)
 	if len(groups) < 3 || len(groups) > 8 {
 		t.Fatalf("mixed album produced %d recommendations, want 3–8: %+v", len(groups), groups)
@@ -162,26 +368,90 @@ func TestSmartAlbumRecommendationsSkipThinOrUnverifiableEvidence(t *testing.T) {
 			recommendationGroup(SmartAlbumDimensionPeople, "person-only", "人物 2", recommendationIDs(media, 4, 10)),
 		},
 	}
-	if groups := buildSmartAlbumRecommendations("a_sparse", media, details, metadata, vectors); len(groups) != 0 {
+	if groups := buildSmartAlbumRecommendations("a_sparse", "相册", media, details, metadata, vectors); len(groups) != 0 {
 		t.Fatalf("weak, generic evidence became a recommendation: %+v", groups)
+	}
+
+	smallMedia, smallMetadata, smallVectors := recommendationFixture(
+		20, time.Date(2025, 9, 1, 9, 0, 0, 0, time.UTC), 1,
+	)
+	smallMembers := recommendationIDs(smallMedia, 0, 10)
+	smallDetails := map[string][]SmartAlbumGroup{
+		SmartAlbumDimensionTime: {
+			recommendationGroup(SmartAlbumDimensionTime, "small-time", "2025年9月1日", smallMembers),
+		},
+		SmartAlbumDimensionPlace: {
+			recommendationGroup(SmartAlbumDimensionPlace, "small-place", "杭州市", smallMembers),
+		},
+		SmartAlbumDimensionScene: {
+			recommendationGroup(SmartAlbumDimensionScene, "small-scene", "建议 · 家庭聚会", smallMembers),
+		},
+	}
+	if groups := buildSmartAlbumRecommendations(
+		"a_small_group", "照片", smallMedia, smallDetails, smallMetadata, smallVectors,
+	); len(groups) != 0 {
+		t.Fatalf("10-photo recommendation was not suppressed: %+v", groups)
 	}
 
 	delete(details, SmartAlbumDimensionPeople)
 	details[SmartAlbumDimensionScene] = []SmartAlbumGroup{
 		recommendationGroup(SmartAlbumDimensionScene, "scene-no-vectors", "建议 · 家庭日常", recommendationIDs(media, 0, 12)),
 	}
-	if groups := buildSmartAlbumRecommendations("a_missing", media, details, metadata, nil); len(groups) != 0 {
+	if groups := buildSmartAlbumRecommendations("a_missing", "相册", media, details, metadata, nil); len(groups) != 0 {
 		t.Fatalf("scene-only recommendation without vectors was not withheld: %+v", groups)
 	}
 }
 
+func TestSmartAlbumRecommendationCacheTracksParentName(t *testing.T) {
+	service := &SmartAlbumService{}
+	status := AIJobModule{Version: "test-v1"}
+	first := service.analysisFingerprint(
+		SmartAlbumDimensionRecommended, "Camera", nil, nil, nil, nil, status, status, status,
+	)
+	second := service.analysisFingerprint(
+		SmartAlbumDimensionRecommended, "Family trip", nil, nil, nil, nil, status, status, status,
+	)
+	if first == second {
+		t.Fatal("recommendation cache fingerprint ignored a source folder rename")
+	}
+}
+
+func TestSmartAlbumInputAlbumNameUsesVirtualFolderLocation(t *testing.T) {
+	name := smartAlbumInputAlbumName(LibraryNodeSummary{
+		Name: "本目录媒体", DisplayName: "本目录媒体", Virtual: true,
+		Location: "2025/杭州旅行",
+	})
+	if name != "2025/杭州旅行" {
+		t.Fatalf("virtual album name=%q, want its source folder location", name)
+	}
+}
+
 func TestSmartAlbumRecommendedCacheAndUserCorrectionsSurviveRefreshAndRestore(t *testing.T) {
-	service, albumID := newSmartSceneBenchmarkService(t, 12)
+	service, albumID := newSmartSceneBenchmarkService(t, 40)
 	snapshot := service.catalog.Acquire()
 	seedMetadataRecords(t, service.jobs, snapshot, albumID, "2025-06-18T10:00:00")
 	ids, ok := snapshot.AlbumImageIDs(albumID)
 	if !ok {
 		t.Fatalf("album %s has no image IDs", albumID)
+	}
+	vector := make([]float32, AIEmbeddingDimension)
+	vector[0] = 1
+	vectorInputs := make([]VectorInput, len(ids))
+	for index, id := range ids {
+		ref, exists := snapshot.Lookup(id)
+		if !exists {
+			t.Fatalf("resource %s disappeared from the test catalog", id)
+		}
+		info, err := os.Stat(ref.AbsolutePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		vectorInputs[index] = VectorInput{
+			ResourceID: id, Size: info.Size(), MTimeNs: info.ModTime().UnixNano(), Vector: vector,
+		}
+	}
+	if err := service.vectors.Commit(context.Background(), vectorInputs); err != nil {
+		t.Fatal(err)
 	}
 	service.jobs.mu.Lock()
 	for _, id := range ids {
@@ -201,7 +471,8 @@ func TestSmartAlbumRecommendedCacheAndUserCorrectionsSurviveRefreshAndRestore(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(first.Groups) != 1 || len(first.Groups[0].EvidenceDimensions) < 2 || first.Groups[0].QualityScore < 0.52 {
+	if len(first.Groups) != 1 || len(first.Groups[0].EvidenceDimensions) < 2 ||
+		first.Groups[0].QualityScore < smartRecommendationMinimumQualityScore {
 		t.Fatalf("folder evidence did not produce one explained recommendation: %+v", first)
 	}
 	cached, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionRecommended, false)
@@ -303,13 +574,16 @@ func TestSmartAlbumOverrideMigrationPreservesSingleMatchAndSurfacesConflicts(t *
 }
 
 func TestSmartAlbumRecommendationScoreIsBoundedAndPrefersIndependentEvidence(t *testing.T) {
-	weak := scoreSmartRecommendation(24, 80, 2, 0.82, true)
-	strong := scoreSmartRecommendation(24, 80, 4, 0.9, true)
+	weak := scoreSmartRecommendation(24, 80, 2, 0.55, 0.82, true)
+	strong := scoreSmartRecommendation(24, 80, 4, 0.95, 0.9, true)
 	if weak < 0 || strong > 1 || strong <= weak {
 		t.Fatalf("scores do not reflect evidence quality: weak=%.3f strong=%.3f", weak, strong)
 	}
 	if math.IsNaN(strong) || math.IsInf(strong, 0) {
 		t.Fatalf("invalid score %.3f", strong)
+	}
+	if strong < smartRecommendationMinimumQualityScore {
+		t.Fatalf("strong evidence score %.3f is below the recommendation floor", strong)
 	}
 }
 
@@ -364,8 +638,12 @@ func logSmartAlbumRecommendationMetrics(t *testing.T, albumSize int, groups []Sm
 	covered := make(map[string]struct{})
 	qualityTotal := 0.0
 	overlapPairs := 0
+	smallGroups := 0
 	for _, group := range groups {
 		sizes = append(sizes, group.PhotoCount)
+		if group.PhotoCount < 12 {
+			smallGroups++
+		}
 		qualityTotal += group.QualityScore
 		for _, id := range group.Members {
 			covered[id] = struct{}{}
@@ -397,8 +675,8 @@ func logSmartAlbumRecommendationMetrics(t *testing.T, albumSize int, groups []Sm
 		meanQuality = qualityTotal / float64(len(groups))
 	}
 	t.Logf(
-		"synthetic quality: photos=%d recommendations=%d coverage=%d/%.0f%% size[min/median/p90/max]=%d/%d/%d/%d mean_score=%.3f overlapping_pairs=%d",
-		albumSize, len(groups), len(covered), coverage, minimum, median, p90, maximum, meanQuality, overlapPairs,
+		"synthetic quality: photos=%d recommendations=%d coverage=%d/%.0f%% size[min/median/p90/max]=%d/%d/%d/%d mean_score=%.3f groups_under_12=%d overlapping_pairs=%d",
+		albumSize, len(groups), len(covered), coverage, minimum, median, p90, maximum, meanQuality, smallGroups, overlapPairs,
 	)
 }
 
@@ -410,6 +688,32 @@ func recommendationMemberSet(ids []string) map[string]struct{} {
 	return result
 }
 
+func TestSmartAlbumRecommendationOverlapThreshold(t *testing.T) {
+	makePair := func(shared int) (map[string]struct{}, map[string]struct{}) {
+		leftIDs := make([]string, 0, 80)
+		rightIDs := make([]string, 0, 80)
+		for index := 0; index < shared; index++ {
+			id := fmt.Sprintf("shared-%d", index)
+			leftIDs = append(leftIDs, id)
+			rightIDs = append(rightIDs, id)
+		}
+		for index := shared; index < 80; index++ {
+			leftIDs = append(leftIDs, fmt.Sprintf("left-%d", index))
+			rightIDs = append(rightIDs, fmt.Sprintf("right-%d", index))
+		}
+		return recommendationMemberSet(leftIDs), recommendationMemberSet(rightIDs)
+	}
+
+	left, right := makePair(48)
+	if !smartRecommendationIsDuplicate(left, right) {
+		t.Fatal("60% containment / 42.9% Jaccard overlap was not rejected")
+	}
+	left, right = makePair(42)
+	if smartRecommendationIsDuplicate(left, right) {
+		t.Fatal("overlap below both duplicate thresholds was rejected")
+	}
+}
+
 func BenchmarkSmartAlbumRecommendations(b *testing.B) {
 	for _, count := range []int{100, 1000, 5000} {
 		b.Run(fmt.Sprint(count), func(b *testing.B) {
@@ -419,7 +723,7 @@ func BenchmarkSmartAlbumRecommendations(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for index := 0; index < b.N; index++ {
-				_ = buildSmartAlbumRecommendations("a_benchmark", media, details, metadata, vectors)
+				_ = buildSmartAlbumRecommendations("a_benchmark", "照片", media, details, metadata, vectors)
 			}
 		})
 	}
