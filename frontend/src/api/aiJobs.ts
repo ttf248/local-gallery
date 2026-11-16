@@ -37,6 +37,8 @@ export interface AIJob {
   failed: number;
   done: number;
   currentResourceId?: string;
+  /** 任务曾在服务重启后从最近提交的检查点续跑。 */
+  recoveredAfterRestart?: boolean;
   checkpoint: {
     offset: number;
     lastResourceId?: string;

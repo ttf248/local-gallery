@@ -473,6 +473,24 @@ describe("任务中心", () => {
     );
   });
 
+  it("显示已提交检查点与服务重启后的续跑状态", async () => {
+    const recoveredJob: AIJob = {
+      ...currentJob,
+      recoveredAfterRestart: true,
+    };
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({ jobs: [recoveredJob], active: recoveredJob }),
+    });
+
+    renderCenter("run");
+
+    expect(
+      await screen.findByText("已保存到第 3 批 · 位置 98 / 100"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("服务重启后从此处续跑")).toBeInTheDocument();
+  });
+
   it("在活动任务标题中明确显示捕获的 GPU 设备", async () => {
     const gpuFaceJob: AIJob = {
       ...currentJob,

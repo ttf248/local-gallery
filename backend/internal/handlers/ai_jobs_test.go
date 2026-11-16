@@ -173,6 +173,81 @@ func TestAIJobAPIFullAnalysisOverThousandImages(t *testing.T) {
 	}
 }
 
+func TestAIJobAPIExposesRecoveredCheckpoint(t *testing.T) {
+	root := t.TempDir()
+	catalog := services.NewResourceCatalog()
+	catalog.Publish(&models.ScanResult{Roots: []string{root}}, []string{root})
+	_, safetyState := middleware.PathSafetyMiddleware([]string{root}, catalog)
+	statePath := filepath.Join(t.TempDir(), "state", "ai_jobs.json")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	state := map[string]any{
+		"version": 1,
+		"jobs": []services.AIJob{{
+			ID: "job-recovered", Type: services.AIJobTypeMetadata,
+			Mode: services.AIJobModeFull, Status: services.AIJobStatusRunning,
+			Stage: services.AIJobTypeMetadata, ModuleVersion: services.MetadataParserVersion,
+			ComputeDevice: "cpu", Total: 64, CreatedAt: now, UpdatedAt: now,
+			Checkpoint: services.AIJobCheckpoint{
+				Offset: 32, Batch: 1, ModuleVersion: services.MetadataParserVersion,
+			},
+		}},
+		"queue": []string{},
+		"settings": services.AIJobSettings{
+			DailyTime: "03:00", DailyModules: []string{services.AIJobTypeMetadata},
+		},
+	}
+	encoded, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, encoded, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	service, err := services.NewAIJobService(services.AIJobServiceOptions{
+		StatePath: statePath, MetadataDir: filepath.Join(t.TempDir(), "derived", "metadata"),
+		Catalog: catalog, ValidatePath: safetyState.Validate,
+		Analyzers: []services.AIAnalyzer{services.MetadataAnalyzer{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := service.Shutdown(ctx); err != nil {
+			t.Errorf("AI job shutdown: %v", err)
+		}
+	})
+
+	app := fiber.New()
+	app.Get("/api/ai/jobs", AIJobsHandler(service))
+	response, err := app.Test(httptest.NewRequest(fiber.MethodGet, "/api/ai/jobs", nil), -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != fiber.StatusOK {
+		t.Fatalf("list status = %d", response.StatusCode)
+	}
+	var body struct {
+		Snapshot services.AIJobSnapshot `json:"snapshot"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Snapshot.Jobs) == 0 {
+		t.Fatal("job list is empty after recovery")
+	}
+	job := body.Snapshot.Jobs[0]
+	if job.ID != "job-recovered" || job.Status != services.AIJobStatusPending ||
+		!job.RecoveredAfterRestart || job.Checkpoint.Offset != 32 || job.Checkpoint.Batch != 1 {
+		t.Fatalf("recovered API job = %+v; want pending with checkpoint and recovery marker", job)
+	}
+}
+
 func TestAIJobQueueAndHistoryManagementAPI(t *testing.T) {
 	root := t.TempDir()
 	catalog := services.NewResourceCatalog()

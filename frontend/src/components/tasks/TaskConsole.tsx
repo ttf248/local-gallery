@@ -331,6 +331,23 @@ export default function TaskConsole({
           />
         </div>
 
+        {active.checkpoint.batch > 0 || active.recoveredAfterRestart ? (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-faint bg-bg-subtle/40 px-3 py-2 text-meta text-fg-muted">
+            <span>
+              {active.checkpoint.batch > 0
+                ? `已保存到第 ${formatCount(active.checkpoint.batch)} 批 · 位置 ${formatCount(active.checkpoint.offset)} / ${formatCount(active.total)}`
+                : "尚无已提交批次，将从任务起点继续"}
+            </span>
+            {active.recoveredAfterRestart ? (
+              <span className="font-medium text-fg">
+                {active.checkpoint.batch > 0
+                  ? "服务重启后从此处续跑"
+                  : "服务重启后重新开始"}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
         <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border-faint bg-border-faint sm:grid-cols-3 lg:grid-cols-5">
           <Readout label="已处理" value={formatCount(active.processed)} />
           <Readout label="已跳过" value={formatCount(active.skipped)} />

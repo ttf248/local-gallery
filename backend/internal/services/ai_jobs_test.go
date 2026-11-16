@@ -459,14 +459,14 @@ func TestAIJobServicePauseResumeAndShutdownRecovery(t *testing.T) {
 	}
 	shutdownAIJobService(t, first)
 	interrupted, ok := first.Get(interrupted.ID)
-	if !ok || interrupted.Status != AIJobStatusPending {
+	if !ok || interrupted.Status != AIJobStatusPending || !interrupted.RecoveredAfterRestart {
 		t.Fatalf("shutdown did not preserve pending checkpoint: %+v", interrupted)
 	}
 
 	resumed := newTestAIJobService(t, secondState, secondMetadata, secondCatalog, MetadataAnalyzer{})
 	resumed.StartPending()
 	interrupted = waitForAIJob(t, resumed, interrupted.ID, AIJobStatusCompleted)
-	if interrupted.Processed != len(secondFiles) {
+	if interrupted.Processed != len(secondFiles) || !interrupted.RecoveredAfterRestart {
 		t.Fatalf("recovered job = %+v", interrupted)
 	}
 	shutdownAIJobService(t, resumed)
@@ -503,6 +503,56 @@ func TestAIJobServicePauseResumeAndShutdownRecovery(t *testing.T) {
 		t.Fatalf("restarted paused job = %+v", pausedJob)
 	}
 	shutdownAIJobService(t, pausedRestart)
+}
+
+func TestAIJobServiceMarksRunningJobRecoveredFromPersistedCheckpoint(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 2)
+	catalog := aiJobCatalog(root, files)
+	statePath := filepath.Join(t.TempDir(), "state", "ai_jobs.json")
+	metadataDir := filepath.Join(t.TempDir(), "derived", "metadata")
+	now := time.Now()
+	state := aiJobDiskState{
+		Version: aiJobStoreVersion,
+		Jobs: []AIJob{{
+			ID: "job-interrupted", Type: AIJobTypeMetadata, Mode: AIJobModeFull,
+			Status: AIJobStatusRunning, Stage: AIJobTypeMetadata,
+			ModuleVersion: MetadataParserVersion, ComputeDevice: "cpu", Total: len(files),
+			Checkpoint: AIJobCheckpoint{
+				Offset: 1, Batch: 1, ModuleVersion: MetadataParserVersion,
+				TargetDigest: "target-digest",
+			},
+			CreatedAt: now, UpdatedAt: now,
+		}},
+		Queue: []string{},
+		Settings: AIJobSettings{
+			DailyTime: "03:00", DailyModules: []string{AIJobTypeMetadata},
+			DailyScan: true, DailySmartAlbums: true, GPUEnabled: false,
+		},
+	}
+	if err := writeAIJSONAtomic(statePath, state); err != nil {
+		t.Fatal(err)
+	}
+
+	service := newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{})
+	job, exists := service.Get("job-interrupted")
+	if !exists || job.Status != AIJobStatusPending || !job.RecoveredAfterRestart {
+		t.Fatalf("recovered job = %+v, exists=%v; want pending with restart marker", job, exists)
+	}
+	if job.Checkpoint.Offset != 1 || job.Checkpoint.Batch != 1 {
+		t.Fatalf("recovered checkpoint = %+v; want offset 1, batch 1", job.Checkpoint)
+	}
+	encoded, err := json.Marshal(job)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response map[string]any
+	if err := json.Unmarshal(encoded, &response); err != nil {
+		t.Fatal(err)
+	}
+	if response["recoveredAfterRestart"] != true {
+		t.Fatalf("serialized recovery marker = %v; want true", response["recoveredAfterRestart"])
+	}
 }
 
 func TestAIJobServiceCancelsAndRetryCreatesNewHistoryItem(t *testing.T) {

@@ -305,7 +305,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 历史删除只移除 `state/ai_jobs.json` 中的任务日志，不会删除 `derived/metadata` 中可重建的分析批次、语义索引、OCR 搜索数据或人脸结果。不存在的任务返回 `404 analysis_job_not_found`；活动与等待任务不可删除，返回 `409 analysis_history_delete_unavailable`。批量删除响应含 `deletedCount` 与最新 `snapshot`。
 
-`planned`、`completed`、`estimatedRemainingMs` 与速度都是快照派生值，不写入 `state/ai_jobs.json`；`results` 与 `fields` 是事实，随批次一并落盘，重启后按批次文件重放恢复。
+`planned`、`completed`、`estimatedRemainingMs` 与速度都是快照派生值，不写入 `state/ai_jobs.json`；`results` 与 `fields` 是事实，随批次一并落盘，重启后按批次文件重放恢复。任务的 `checkpoint.offset` 与 `checkpoint.batch` 是最近已提交的位置；`recoveredAfterRestart=true` 表示服务重启后已从该检查点续跑（没有已提交批次时从任务起点重新开始）。用户手动暂停后等待继续不会设置此标记。
 
 快照还带 `modules`：后端已知的全部分析模块及其安装情况，元素包含 `{ "type", "name", "installed", "version", "reason" }`。`type` 为 `metadata`、`embedding`、`ocr`、`face`；对 OCR 与人脸模块，`installed` 表示对应本机运行依赖和权重已就绪，缺失时可用 `reason` 诊断。`version` 只在已就绪时给出。客户端据此渲染模块清单，不再自行硬编码模块名。
 

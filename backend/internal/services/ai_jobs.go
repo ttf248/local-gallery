@@ -185,34 +185,35 @@ type AIJobError struct {
 
 // AIJob 是用户可查看的持久化任务记录。
 type AIJob struct {
-	ID                string          `json:"id"`
-	AlbumID           string          `json:"albumId,omitempty"`
-	Type              string          `json:"type"`
-	Mode              string          `json:"mode"`
-	Status            string          `json:"status"`
-	Stage             string          `json:"stage"`
-	ModuleVersion     string          `json:"moduleVersion"`
-	Total             int             `json:"total"`
-	Processed         int             `json:"processed"`
-	Skipped           int             `json:"skipped"`
-	Failed            int             `json:"failed"`
-	Done              int             `json:"done"`
-	CurrentResourceID string          `json:"currentResourceId,omitempty"`
-	Checkpoint        AIJobCheckpoint `json:"checkpoint"`
-	Errors            []AIJobError    `json:"errors,omitempty"`
-	Error             string          `json:"error,omitempty"`
-	ErrorCode         string          `json:"errorCode,omitempty"`
-	ComputeDevice     string          `json:"computeDevice"`
-	Scheduled         bool            `json:"scheduled,omitempty"`
-	RetryOf           string          `json:"retryOf,omitempty"`
-	RetryFailedOnly   bool            `json:"retryFailedOnly,omitempty"`
-	RetryFromOffset   int             `json:"retryFromOffset,omitempty"`
-	StartedAt         *time.Time      `json:"startedAt,omitempty"`
-	FinishedAt        *time.Time      `json:"finishedAt,omitempty"`
-	CreatedAt         time.Time       `json:"createdAt"`
-	UpdatedAt         time.Time       `json:"updatedAt"`
-	ElapsedMs         int64           `json:"elapsedMs"`
-	SpeedPerSecond    float64         `json:"speedPerSecond"`
+	ID                    string          `json:"id"`
+	AlbumID               string          `json:"albumId,omitempty"`
+	Type                  string          `json:"type"`
+	Mode                  string          `json:"mode"`
+	Status                string          `json:"status"`
+	Stage                 string          `json:"stage"`
+	ModuleVersion         string          `json:"moduleVersion"`
+	Total                 int             `json:"total"`
+	Processed             int             `json:"processed"`
+	Skipped               int             `json:"skipped"`
+	Failed                int             `json:"failed"`
+	Done                  int             `json:"done"`
+	CurrentResourceID     string          `json:"currentResourceId,omitempty"`
+	Checkpoint            AIJobCheckpoint `json:"checkpoint"`
+	RecoveredAfterRestart bool            `json:"recoveredAfterRestart,omitempty"`
+	Errors                []AIJobError    `json:"errors,omitempty"`
+	Error                 string          `json:"error,omitempty"`
+	ErrorCode             string          `json:"errorCode,omitempty"`
+	ComputeDevice         string          `json:"computeDevice"`
+	Scheduled             bool            `json:"scheduled,omitempty"`
+	RetryOf               string          `json:"retryOf,omitempty"`
+	RetryFailedOnly       bool            `json:"retryFailedOnly,omitempty"`
+	RetryFromOffset       int             `json:"retryFromOffset,omitempty"`
+	StartedAt             *time.Time      `json:"startedAt,omitempty"`
+	FinishedAt            *time.Time      `json:"finishedAt,omitempty"`
+	CreatedAt             time.Time       `json:"createdAt"`
+	UpdatedAt             time.Time       `json:"updatedAt"`
+	ElapsedMs             int64           `json:"elapsedMs"`
+	SpeedPerSecond        float64         `json:"speedPerSecond"`
 	// Planned 是本次任务实际要处理的张数，Completed 是已处理张数。
 	// 两者由快照按持久化计数推导，不作为事实落盘。
 	Planned   int `json:"planned"`
@@ -1880,6 +1881,7 @@ func (s *AIJobService) selectTargets(jobID string, targets []aiJobTarget, digest
 	if job.ModuleVersion != version || job.Checkpoint.ModuleVersion != "" && job.Checkpoint.ModuleVersion != version {
 		job.ModuleVersion = version
 		job.Checkpoint = AIJobCheckpoint{ModuleVersion: version}
+		job.RecoveredAfterRestart = false
 		job.Total, job.Processed, job.Skipped, job.Failed, job.Done = 0, 0, 0, 0, 0
 		job.Errors = nil
 		job.Results, job.Fields = nil, nil
@@ -2304,6 +2306,7 @@ func (s *AIJobService) finishInterrupted(id string, runtimeState *aiJobRuntime, 
 		job.Status = AIJobStatusPending
 		job.Stage = "pending"
 		job.Error = ""
+		job.RecoveredAfterRestart = true
 	} else if runtimeState.stopReason == "shutdown_paused" {
 		job.Status = AIJobStatusPaused
 		job.Stage = "paused"
@@ -2844,6 +2847,7 @@ func (s *AIJobService) recoverInterruptedJobs() {
 			job.Stage = "pending"
 			job.CurrentResourceID = ""
 			job.UpdatedAt = s.now()
+			job.RecoveredAfterRestart = true
 			s.queue = append([]string{id}, s.queue...)
 			changed = true
 		}
