@@ -512,7 +512,7 @@ export default function SemanticSearch() {
         </section>
       </div>
 
-      <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
+      <div className="page-shell min-h-0 flex-1 pb-2">
         {submittedQuery.isError ? (
           <EmptyState
             title="搜索失败"

@@ -113,7 +113,7 @@ export default function TravelPlace() {
   return (
     <div className="h-full overflow-y-auto pb-12">
       <header className="border-b border-border-faint bg-bg">
-        <div className="page-bleed">
+        <div className="page-shell">
           <div className="album-bar">
             <Link to={backTo} className="btn btn-sm btn-outline shrink-0">
               返回足迹
@@ -160,7 +160,7 @@ export default function TravelPlace() {
         </div>
       </header>
 
-      <div className="page-bleed">
+      <div className="page-shell">
         {regionsQuery.isError ? (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-bg-elevated px-4 py-3 text-body text-danger">
             <span>这个地方的照片暂时读不出来。</span>

@@ -243,7 +243,7 @@ export default function Travels() {
   return (
     <div className="h-full overflow-y-auto pb-12">
       <header className="border-b border-border-faint bg-bg">
-        <div className="page-bleed">
+        <div className="page-shell">
           {/* 页面名不再显示在内容区（侧栏那一项已经说明了），但这一页仍要
               有一个标题，否则读屏用户进来时不知道自己在哪。 */}
           <h1 className="sr-only">足迹</h1>
@@ -289,7 +289,7 @@ export default function Travels() {
       </header>
 
       {error ? (
-        <div className="page-bleed">
+        <div className="page-shell">
           <ErrorBanner
             className="mt-4"
             onRetry={() => {
@@ -303,7 +303,7 @@ export default function Travels() {
         </div>
       ) : null}
 
-      <div className="page-bleed travel-layout">
+      <div className="page-shell travel-layout">
         {/* 地图占着右栏，滚动时一直跟着 —— 读行程的时候手边得有个方位。 */}
         <aside className="travel-layout__aside">
           <div className="travel-aside__bar">

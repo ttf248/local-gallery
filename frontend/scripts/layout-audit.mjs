@@ -13,11 +13,13 @@
 // 输出的核心指标：
 //   - contentWidthRatio : 主内容实际占视口宽度的比例（结合版式判断空间使用）
 //   - gutterRatio       : 左右空白各占视口宽度的比例
+//   - effectiveLeft/Right : 内容实际左右缘（页面留白是否两边一致）
+//   - shellLeft/Right   : 内容容器自身的左右边界（各页是否用同一个容器）
 //   - tinyText[]        : 实际渲染字号 < 12.5px 的可见文本（中文可读性下限）
 //   - controlHeights    : 可交互控件的实际高度分布（触控目标是否达标）
 //   - overflowPx        : 横向溢出像素
 //
-// 退出码：横向溢出、当前跨页对齐基线失败或页面加载失败时为 1。
+// 退出码：横向溢出、跨页对齐基线失败、容器不一致或页面加载失败时为 1。
 import assert from "node:assert/strict";
 import { chromium } from "@playwright/test";
 import {
@@ -46,7 +48,8 @@ const PAGES = (
 // 字号与控件尺寸都要单独量一遍，不能拿网格视图的数据代替。
 const VIEWMODE = process.env.LG_VIEWMODE ?? "grid";
 const VIEWPORTS = (
-  process.env.LG_VIEWPORTS ?? "390x844,768x1024,1024x768,1440x900,1920x1080"
+  process.env.LG_VIEWPORTS ??
+  "390x844,768x1024,1024x768,1440x900,1920x1080,2560x1440"
 )
   .split(",")
   .map((v) => {
@@ -226,9 +229,18 @@ const MEASURE = ({ minFontPx, minControlPx }) => {
     contentWidthRatio: Math.round((contentWidth / viewportWidth) * 1000) / 1000,
     gutter,
     gutterRatio: Math.round((gutter / viewportWidth) * 1000) / 1000,
+    // 容器自身的左右边界：所有页面应当是同一个容器，因此同一断点下
+    // 这两个值必须逐页相等 —— 这是「左右留白一致」最直接的证据。
+    shellLeft: Math.round(shellRect.left),
+    shellRight: Math.round(shellRect.right),
     routeError,
     effectiveWidth,
     effectiveLeft,
+    effectiveRight,
+    // 右侧留白：视口右缘到内容右缘。左右留白不等时，页面右侧会空出
+    // 一块与左侧不同的空白 —— 27 寸上最显眼。
+    rightGap:
+      effectiveRight === null ? null : Math.round(viewportWidth - effectiveRight),
     // 照片墙页头以返回按钮开头；文字左缘会多出按钮宽度，比较容器边界。
     alignmentLeft: main?.querySelector(".album-bar") ? Math.round(main.querySelector(".album-bar").getBoundingClientRect().left) : effectiveLeft,
     effectiveRatio:
@@ -507,13 +519,41 @@ async function main() {
     }
   }
 
+  // 容器一致性：同一断点下每一页的内容容器必须是同一个盒子 ——
+  // 左右边界逐页相等。左右留白不一致的根因就是这里：某一页套了
+  // 另一套容器（窄壳或通栏），左右留白立刻差出一截。
+  const containerMismatch = [];
+  {
+    const groups = new Map();
+    for (const r of report) {
+      if (r.route === "reader" || r.routeError) continue;
+      const key = `${r.vp}|${r.theme}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(r);
+    }
+    for (const [key, rows] of groups) {
+      const lefts = new Set(rows.map((r) => r.shellLeft));
+      const rights = new Set(rows.map((r) => r.shellRight));
+      if (lefts.size > 1 || rights.size > 1) {
+        for (const r of rows) {
+          containerMismatch.push({
+            vp: r.vp,
+            theme: r.theme,
+            route: r.route,
+            shell: `${r.shellLeft}–${r.shellRight}`,
+          });
+        }
+      }
+    }
+  }
+
   const asJson = process.argv.includes("--json");
   if (asJson) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(
       [
-        "断点          主题   路由        内容宽  占比   左右留白  有效宽 有效左  溢出  <12.5px文本  小控件",
+        "断点          主题   路由        内容宽  占比   左右留白  有效宽 有效左 有效右 右留白  溢出  <12.5px文本  小控件",
         ...report.map((r) =>
           [
             r.vp.padEnd(14),
@@ -524,6 +564,8 @@ async function main() {
             String(r.gutter).padEnd(9),
             String(r.effectiveWidth ?? "-").padEnd(7),
             String(r.effectiveLeft ?? "-").padEnd(7),
+            String(r.effectiveRight ?? "-").padEnd(7),
+            String(r.rightGap ?? "-").padEnd(7),
             String(r.overflowPx).padEnd(5),
             String(r.tinyTextTotal).padEnd(11),
             String(r.smallControlsTotal),
@@ -554,6 +596,18 @@ async function main() {
         );
       }
     }
+    if (containerMismatch.length === 0) {
+      console.log("✓ 内容容器一致：同一断点下所有页面的左右留白相同。");
+    } else {
+      console.log(
+        `✗ 内容容器不一致：${containerMismatch.length} 处（同一断点下不同页面的容器边界不同）`,
+      );
+      for (const c of containerMismatch) {
+        console.log(
+          `  · ${c.vp} ${c.theme} ${c.route}：容器 ${c.shell}（左右边界应逐页相同）`,
+        );
+      }
+    }
     console.log("");
     for (const r of report) {
       const sizes = r.fontSizeCounts
@@ -568,6 +622,10 @@ async function main() {
   }
   if (misaligned.length > 0) {
     console.error("\n存在内容左缘不对齐的页面。");
+    process.exit(1);
+  }
+  if (containerMismatch.length > 0) {
+    console.error("\n存在内容容器不一致的页面。");
     process.exit(1);
   }
   if (routeErrors.length > 0) {

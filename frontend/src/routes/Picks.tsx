@@ -156,7 +156,7 @@ export default function Picks() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-border-faint bg-bg">
-        <div className="px-[clamp(20px,3vw,48px)]">
+        <div className="page-shell">
           <div className="album-bar">
             <div className="min-w-0 flex-1">
               {/* 眉标说清这一页是什么：精选是跨相册的挑选，
@@ -208,7 +208,7 @@ export default function Picks() {
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
+      <div className="page-shell min-h-0 flex-1 pb-2">
         {query.isError && items.length === 0 ? (
           <div className="flex h-full items-center justify-center text-body text-fg-muted">
             精选加载失败，请重试。

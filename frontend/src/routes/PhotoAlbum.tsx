@@ -543,7 +543,7 @@ export default function PhotoAlbum({ album }: Props) {
       <header className="shrink-0 border-b border-border-faint bg-bg">
         {/* 照片墙与其它页面的内容左缘保持一致：留白用同一套 gutter，
             宽屏时照片铺满但边缘不跑掉。 */}
-        <div className="px-[clamp(20px,3vw,48px)]">
+        <div className="page-shell">
           <div className="album-bar">
             <button
               type="button"
@@ -742,7 +742,7 @@ export default function PhotoAlbum({ album }: Props) {
       </header>
 
       {smartMode && showingSmartGroup && !selectedGroup ? (
-        <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] py-6">
+        <div className="page-shell min-h-0 flex-1 py-6">
           {smartGroupsQuery.isLoading ? (
             <div className="rounded-xl border border-border bg-bg-elevated p-6 text-body text-fg-muted">
               正在读取智能分组…
@@ -784,7 +784,7 @@ export default function PhotoAlbum({ album }: Props) {
           onOpenGroup={setSelectedGroupId}
         />
       ) : (
-        <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
+        <div className="page-shell min-h-0 flex-1 pb-2">
           {showingSmartGroup && selectedGroup && (
             <div className="flex items-center gap-2 py-3 text-meta">
               <button

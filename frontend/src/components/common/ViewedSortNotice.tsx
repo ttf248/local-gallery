@@ -8,7 +8,7 @@ export default function ViewedSortNotice({
 }) {
   if (query.isError) {
     return (
-      <div className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full mb-4">
+      <div className="page-shell mb-4">
         <ErrorBanner onRetry={() => void query.refetch()} retrying={query.isFetching}>
           最近访问加载失败。
           {query.data ? "仍使用已加载的访问记录。" : "暂按名称排序。"}
@@ -19,10 +19,7 @@ export default function ViewedSortNotice({
   }
   if (query.isLoading) {
     return (
-      <div
-        role="status"
-        className="px-6 lg:px-10 max-w-[1400px] mx-auto w-full mb-4 text-body text-fg-muted"
-      >
+      <div role="status" className="page-shell mb-4 text-body text-fg-muted">
         正在加载最近访问…
       </div>
     );

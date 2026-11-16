@@ -298,7 +298,7 @@ function PersonAlbum({ personId }: { personId: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-border-faint bg-bg">
-        <div className="px-[clamp(20px,3vw,48px)]">
+        <div className="page-shell">
           <div className="album-bar">
             <div className="min-w-0 flex-1">
               <p className="page-eyebrow">人物相册 · 可编辑候选分组</p>
@@ -312,7 +312,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           </div>
         </div>
       </header>
-      <div className="shrink-0 space-y-3 border-b border-border-faint px-[clamp(20px,3vw,48px)] py-3">
+      <div className="page-shell shrink-0 space-y-3 border-b border-border-faint py-3">
         <p className="text-meta text-fg-muted">
           {person?.photoCount.toLocaleString() ?? 0} 张照片 ·{" "}
           {person?.faceCount.toLocaleString() ?? 0}{" "}
@@ -429,7 +429,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           dense
         />
       ) : (
-        <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2 pt-3">
+        <div className="page-shell min-h-0 flex-1 pb-2 pt-3">
           <PhotoWall
             items={items}
             total={total}

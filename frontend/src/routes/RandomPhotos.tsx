@@ -92,7 +92,7 @@ export default function RandomPhotos() {
       {/* 页头压成一条：这一页是往下滑的照片墙，页头占太高就把照片挤到
           下面去了。说明文字挪到墙的上方，随页面一起滚走。 */}
       <header className="sticky top-0 z-20 border-b border-border-faint bg-bg">
-        <div className="flex items-center justify-between gap-4 px-[clamp(20px,3vw,48px)] py-3">
+        <div className="page-shell flex items-center justify-between gap-4 py-3">
           <div className="flex min-w-0 items-baseline gap-3">
             <span className="page-eyebrow shrink-0">随手看看</span>
             <h1 className="page-title page-title--sm truncate">随机照片</h1>
@@ -109,7 +109,7 @@ export default function RandomPhotos() {
         </div>
       </header>
 
-      <div className="px-[clamp(20px,3vw,48px)] pt-4">
+      <div className="page-shell pt-4">
         <p className="mb-3 text-meta text-fg-muted">
           全是随机抽的：跨相册取照片，不按时间、不看最近。往下滑会接着抽下一批。
         </p>

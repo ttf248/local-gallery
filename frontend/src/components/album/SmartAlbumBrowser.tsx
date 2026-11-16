@@ -101,8 +101,8 @@ export default function SmartAlbumBrowser({
   );
 
   return (
-    <section className="min-h-0 flex-1 overflow-auto px-[clamp(20px,3vw,48px)] py-6">
-      <div className="mx-auto max-w-[1600px]">
+    <section className="page-shell min-h-0 flex-1 overflow-auto py-6">
+      <div>
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-title font-semibold text-fg">按线索浏览</h2>

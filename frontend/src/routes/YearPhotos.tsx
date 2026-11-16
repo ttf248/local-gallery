@@ -75,7 +75,7 @@ export default function YearPhotos() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-border-faint bg-bg">
-        <div className="px-[clamp(20px,3vw,48px)]">
+        <div className="page-shell">
           <div className="album-bar">
             <div className="min-w-0 flex-1">
               {/* 眉标说清这一页是什么：年份是浏览入口，
@@ -121,7 +121,7 @@ export default function YearPhotos() {
           照片墙看的是内容，集合看的是它由哪几本相册组成。两条路
           各管一件事，入口摆在一起，用户不必猜哪一个是哪一个。 */}
       {feed.sources.length > 0 && (
-        <div className="px-[clamp(20px,3vw,48px)] pt-3">
+        <div className="page-shell pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-meta text-fg-subtle">来源</span>
             {feed.sources.map((source) => (
@@ -137,7 +137,7 @@ export default function YearPhotos() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 px-[clamp(20px,3vw,48px)] pb-2">
+      <div className="page-shell min-h-0 flex-1 pb-2">
         {feed.isError && items.length === 0 ? (
           <div className="flex h-full items-center justify-center text-body text-fg-muted">
             照片加载失败，请重试。
