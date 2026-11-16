@@ -15,6 +15,7 @@ import {
   picksRoute,
   recentsRoute,
   semanticSearchRoute,
+  smartAlbumsRoute,
   travelsRoute,
   unreadRoute,
 } from "./path";
@@ -56,6 +57,7 @@ export const PHOTO_NAV: NavEntry[] = [
   { key: "photo.picks", label: "精选照片", Icon: PickIcon, to: picksRoute(), mode: "photo" },
   { key: "photo.travels", label: "足迹", Icon: MapPinIcon, to: travelsRoute(), mode: "photo" },
   { key: "photo.people", label: "人物相册", Icon: PeopleIcon, to: peopleRoute(), mode: "photo" },
+  { key: "photo.smart-albums", label: "智能相册", Icon: SparkleIcon, to: smartAlbumsRoute(), mode: "photo" },
   { key: "photo.semantic", label: "智能搜索", Icon: FolderSearchIcon, to: semanticSearchRoute(), mode: "photo" },
 ];
 

@@ -66,17 +66,25 @@ type SmartAlbumCoverage struct {
 }
 
 type SmartAlbumGroup struct {
-	ID              string   `json:"id"`
-	Dimension       string   `json:"dimension"`
-	Name            string   `json:"name"`
-	SuggestedName   string   `json:"suggestedName"`
-	CustomName      bool     `json:"customName"`
-	PhotoCount      int      `json:"photoCount"`
-	CoverResourceID string   `json:"coverResourceId,omitempty"`
-	CoverVersion    string   `json:"coverVersion,omitempty"`
-	Hidden          bool     `json:"hidden"`
-	Members         []string `json:"-"`
-	sortKey         string   `json:"sortKey,omitempty"`
+	ID              string `json:"id"`
+	Dimension       string `json:"dimension"`
+	Name            string `json:"name"`
+	SuggestedName   string `json:"suggestedName"`
+	CustomName      bool   `json:"customName"`
+	PhotoCount      int    `json:"photoCount"`
+	CoverResourceID string `json:"coverResourceId,omitempty"`
+	CoverVersion    string `json:"coverVersion,omitempty"`
+	// CoverWidth 与 CoverHeight 是封面图的原始像素尺寸。
+	//
+	// 目录页把分组排成瀑布流，卡片高度得跟着封面的真实比例走，
+	// 否则一面墙上全是等高的卡片，竖幅照片全被裁掉。
+	// 尺寸按请求时探测（只读图片头），因此不进缓存：
+	// 缓存里存的是「分组有哪些成员」，不是媒体的呈现属性。
+	CoverWidth  int      `json:"coverWidth,omitempty"`
+	CoverHeight int      `json:"coverHeight,omitempty"`
+	Hidden      bool     `json:"hidden"`
+	Members     []string `json:"-"`
+	sortKey     string   `json:"sortKey,omitempty"`
 }
 
 type SmartAlbumSummary struct {
@@ -169,7 +177,18 @@ type SmartAlbumServiceOptions struct {
 	People       *PeopleService
 	Vectors      *VectorIndexStore
 	TextEmbedder SmartAlbumTextEmbedder
+	// Dimensions 提供封面图片的像素尺寸；没有它，目录页不给尺寸，
+	// 前端只能按默认比例排瀑布流。
+	Dimensions   SmartAlbumDimensionSource
 	ValidatePath func(string) (string, error)
+}
+
+// SmartAlbumDimensionSource 提供封面图片的像素尺寸。
+//
+// 尺寸探测只读图片头，代价很低，但要走同一份尺寸缓存 ——
+// 否则每翻一页都要重读一遍全库封面。
+type SmartAlbumDimensionSource interface {
+	Dimensions(path string) MediaDimensions
 }
 
 // SmartAlbumService computes album-local groups from the existing analysis
@@ -183,6 +202,7 @@ type SmartAlbumService struct {
 	people       *PeopleService
 	vectors      *VectorIndexStore
 	textEmbedder SmartAlbumTextEmbedder
+	dimensions   SmartAlbumDimensionSource
 	validatePath func(string) (string, error)
 
 	stateMu           sync.Mutex
@@ -204,8 +224,9 @@ func OpenSmartAlbumService(options SmartAlbumServiceOptions) (*SmartAlbumService
 	service := &SmartAlbumService{
 		statePath: options.StatePath, cacheDir: options.CacheDir, catalog: options.Catalog,
 		jobs: options.Jobs, people: options.People, vectors: options.Vectors,
-		textEmbedder: options.TextEmbedder, validatePath: options.ValidatePath,
-		state: smartAlbumState{Version: smartAlbumStateVersion, Overrides: map[string]SmartAlbumOverride{}},
+		textEmbedder: options.TextEmbedder, dimensions: options.Dimensions,
+		validatePath: options.ValidatePath,
+		state:        smartAlbumState{Version: smartAlbumStateVersion, Overrides: map[string]SmartAlbumOverride{}},
 	}
 	data, err := os.ReadFile(options.StatePath)
 	if err != nil && !os.IsNotExist(err) {
@@ -450,10 +471,14 @@ func (s *SmartAlbumService) DirectoryPage(
 		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrInvalidPageCursor
 	}
 	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
+	pageItems := clonePage(items, offset, end)
+	// 封面尺寸只给这一页：全库四千多组每组都探一次尺寸，
+	// 一页请求要背上几千次文件探测，首页等不起。
+	s.enrichCoverDimensions(snapshot, pageItems)
 	page := LibraryPage[SmartAlbumDirectoryItem]{
 		// 空页要给 []，不能给 null：前端把 items 当数组用，null 会让它
 		// 把一个空分组当成一条记录（库里还没生成任何分组时就会踩到）。
-		Revision: snapshot.Revision(), Items: clonePage(items, offset, end), Total: len(items),
+		Revision: snapshot.Revision(), Items: pageItems, Total: len(items),
 	}
 	if end < len(items) {
 		nextCursor, err := EncodePageCursor(
@@ -471,6 +496,40 @@ func (s *SmartAlbumService) DirectoryPage(
 
 func smartAlbumDirectoryScope(dimension string, revision uint64) string {
 	return fmt.Sprintf("smart-album-directory:%s:%d", dimension, revision)
+}
+
+// enrichCoverDimensions 给这一页的分组补上封面的像素尺寸。
+//
+// 瀑布流按封面真实比例排卡片：尺寸已知就按它算，未知就退回默认比例。
+// 尺寸只探测当前页的封面，翻页时同一批封面直接命中尺寸缓存。
+func (s *SmartAlbumService) enrichCoverDimensions(
+	snapshot CatalogSnapshot,
+	items []SmartAlbumDirectoryItem,
+) {
+	if s.dimensions == nil {
+		return
+	}
+	for index := range items {
+		coverID := items[index].Group.CoverResourceID
+		if coverID == "" {
+			continue
+		}
+		ref, exists := snapshot.Lookup(coverID)
+		if !exists || ref.Kind != ResourceFile {
+			continue
+		}
+		// 封面与其它媒体一样按当前媒体根重新校验：资源 ID 不是授权凭据。
+		path, err := s.validatePath(ref.AbsolutePath)
+		if err != nil {
+			continue
+		}
+		dimensions := s.dimensions.Dimensions(path)
+		if !dimensions.Known() {
+			continue
+		}
+		items[index].Group.CoverWidth = dimensions.Width
+		items[index].Group.CoverHeight = dimensions.Height
+	}
 }
 
 func validSmartAlbumDirectoryDimension(dimension string) bool {

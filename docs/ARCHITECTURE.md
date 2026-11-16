@@ -24,7 +24,7 @@ Fiber middleware → handlers → services/store → models + 本地文件
 | [services/scanner.go](../backend/internal/services/scanner.go)、[scan_runner.go](../backend/internal/services/scan_runner.go)               | 目录工作池、扫描生命周期与进度订阅                         |
 | [resource_catalog.go](../backend/internal/services/resource_catalog.go)、[library_page.go](../backend/internal/services/library_page.go)    | 不可变库快照、资源 ID、分页/搜索索引                       |
 | [ai_jobs.go](../backend/internal/services/ai_jobs.go)、[exif_metadata.go](../backend/internal/services/exif_metadata.go)、[china_geolocation.go](../backend/internal/services/china_geolocation.go) | 持久分析任务、EXIF/GPS 解析、省级地图与市区照片统计、按拍摄时间的轨迹与到访聚合 |
-| [smart_albums.go](../backend/internal/services/smart_albums.go)、[smart_album_refresh.go](../backend/internal/services/smart_album_refresh.go) | 当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组；全库刷新的后台任务 |
+| [smart_albums.go](../backend/internal/services/smart_albums.go)、[smart_album_refresh.go](../backend/internal/services/smart_album_refresh.go) | 当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组；跨文件夹的分组汇总目录（含封面像素尺寸）；全库刷新的后台任务 |
 | [thumbnail.go](../backend/internal/services/thumbnail.go)、[video_transcode.go](../backend/internal/services/video_transcode.go) 等媒体服务 | 缩略图、预览、格式转换、视频封面、元数据、faststart 与转码 |
 | [internal/store/](../backend/internal/store/)                                                                                               | 偏好与媒体活动分文件持久化，锁内部分更新、原子写入         |
 | [frontend/src/App.tsx](../frontend/src/App.tsx)、[main.tsx](../frontend/src/main.tsx)                                                       | 应用入口、懒加载路由、访问门禁、主题、活动同步与错误边界   |
@@ -303,14 +303,15 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 ### 查询、导航与网格
 
 - TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
-- 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片库）、`/photo/recents`、`/photo/favorites`、`/photo/picks`（精选照片）、`/photo/albums/*`、`/photo/tags/*`、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画库）、`/comic/unread`、`/comic/recents`、`/comic/favorites`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底。
+- 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片库）、`/photo/recents`、`/photo/favorites`、`/photo/picks`（精选照片）、`/photo/albums/*`、`/photo/tags/*`、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画库）、`/comic/unread`、`/comic/recents`、`/comic/favorites`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底。
 - 足迹页在 `/photo/travels`，地点详情在 `/photo/travels/place/<六位区划码>`。筛选状态（时间区间 `from`/`to`、时间跨度 `span`、归并粒度 `level`）放查询参数，时间区间是跨层级的一维：换粒度与下钻都带着它，缺省表示全部时间。`span` 取 `1y`/`3y`/`5y`/`10y`/`all`，缺省 `5y`：跨度圈的就是这一段，下面的行程目录与地图随之过滤。旧的 `/photo/locations` 与坐标聚类相册 ID 一并作废，不留兼容跳转。
 - 足迹页的组成：`routes/Travels.tsx` 是通栏两栏的骨架（抬头一条带：最左是跨度筛选，随后是规模带，右边是粒度控件，页面名只留在 `sr-only` 的 `h1` 里；正文左栏是行程目录，右栏是地图，`position: sticky` 随页面滚动），`components/travels/TravelMiniMap.tsx` 是右栏那块只读地图（离线行政边界 + 照片位置的点云，320–440 像素见方；`scope` 决定画面是裁到有数据的区域还是整张地图），`components/travels/TravelTrips.tsx` 是行程目录（按年分组，年份倒序，一段一张卡片，宽屏两栏并排，点开才就地展开照片）。段的照片按需取回：`hooks/useChinaLocations.ts` 的 `useChinaTripMedia` 在展开或点开时才发请求。
 - **行程不随时间区间重切。** 段是按「粒度 + 两周间隔」切出来的，`/trips/:index/media` 按段的下标寻址 —— 段若随区间重排，下标就再也指不到同一段照片了。因此足迹页的行程列表与行程照片端点**都不带时间区间**，抬头选定的跨度（`span`）与地址里带来的区间（`from`/`to`）只决定哪些段被点亮、地图与地点清单过滤到什么范围；抬头的规模带取的是全量汇总（`useChinaSummaryAll`），说的是这个库的事实。查询键里因此有「全量」与「区间」两套（`useChinaTripsAll` / `useChinaSummaryAll` / `useChinaPlacesAll`），两者不能共用同一个键，否则会互相顶掉。
 - **模式有且只有一个真相源：URL 路径前缀。** 服务端 `Prefs.appMode` 只决定根路径落到哪一侧；前端 `appModeStore` 只镜像这个偏好，不持有「当前模式」。`WorkbenchModeProvider`（`components/layout/`）挂在应用最外层，从 `useLocation` 推导模式并经上下文下发，因此整屏脱离外壳的阅读器也在同一套上下文里。切换模式 = 导航到对侧对应页 + 写回偏好，两件事缺一不可。
 - 模式切换的语义只有一张表（`utils/path.ts` 的 `counterpartRoute`）：两侧都有的同名页（最近 / 收藏 / 标签）一一对应；相册与阅读器只属于一侧，未读只属于漫画侧，精选只属于照片侧，它们都回落到对侧首页。
 - 相册入口按内容属性分派：照片目录的相册 `/photo/albums/<相册 id>` 直接渲染照片墙，漫画目录的相册重定向到阅读器。属性由服务端给出（所属目录的 `kind`），前端不按图片数量推断。
-- 照片相册页在原始照片墙与智能分组之间切换。智能分组按时间、地点、人物和场景展示相册内摘要；点开分组后复用同一分页照片墙和大图预览。首页照片侧的末节是智能相册：通过 `/api/smart-albums` 汇总各文件夹已生成的分组，不为未生成的文件夹触发分析；汇总只读分组缓存，不重算分组（重算由全库刷新任务负责，真实库上重算要几十秒，首页等不起）；分组仍归属来源相册，卡片链接以 `view=smart`、`dimension` 和 `group` 直达对应分组。照片侧首页不再列全部相册（那一块已换成智能相册），漫画侧仍保留「库内一览」网格。分析入口只把当前相册 ID 发给现有分析队列，名称与隐藏操作只写服务端用户状态。
+- 照片相册页在原始照片墙与智能分组之间切换。智能分组按时间、地点、人物和场景展示相册内摘要；点开分组后复用同一分页照片墙和大图预览。跨文件夹的分组汇总有自己的专页 `/photo/smart-albums`（`routes/SmartAlbums.tsx`）：它通过 `/api/smart-albums` 汇总各文件夹已生成的分组，不为未生成的文件夹触发分析；汇总只读分组缓存，不重算分组（重算由全库刷新任务负责，真实库上重算要几十秒，首页等不起）；分组仍归属来源相册，卡片链接以 `view=smart`、`dimension` 和 `group` 直达对应分组。照片侧首页不再列全部相册（那一块换成智能相册的**预览**：只铺一屏，标题与「查看全部」指向专页），漫画侧仍保留「库内一览」网格。分析入口只把当前相册 ID 发给现有分析队列，名称与隐藏操作只写服务端用户状态。
+- **智能相册专页是一面瀑布流墙。** 页面的数据源仍是 `GET /api/smart-albums`（`hooks/useSmartAlbums.ts` 的 `useSmartAlbumDirectory`），维度页签走查询参数 `dimension`（`all` 缺省），因此深链与前进后退都能落在同一个维度上；页签上的组数用四个 `limit=1` 的轻量请求取（`useSmartAlbumDimensionCounts`），「全部」是它们之和。排布复用照片墙的瀑布流算法（`components/wall/masonryLayout.ts`）：分组卡片的封面按封面真实宽高比占位（封面像素尺寸由服务端在汇总时探测，随分组摘要一起返回），封面之下是定高的说明区（`components/album/SmartAlbumCard.tsx`），卡片因此参差而不裁图。渲染按视口裁（`hooks/useVisibleWindow.ts`），一次排几千组也不撑 DOM。往下滑自动接下一批（`IntersectionObserver` 探针，与随手看看同一套做法），不再有「加载更多」按钮。首页那一份预览用同一套卡片，但批次只有十二个（批次大小进查询键，两处不共用缓存）。
 - 常驻导航仅取 activity-summary、随机相册或已加载 dashboard；首页一次取得未读计数、有限预览与在读摘要，不下载全库。完整未读索引按“库 revision + 活动版本”复用，列表按需分页。
 - `AlbumGrid` 绑定最近的纵向滚动祖先，网格/列表只挂视口附近条目。
 - 照片墙（`components/wall`）按每张图的真实宽高比做自适应排布：宽高比来自服务端媒体分页返回的像素宽高（由 `MediaDimensionService` 读图片头得到并缓存），排布算法是纯函数，容器宽度或密度变化时重算。行高度由算法确定，`Virtuoso` 只负责按行虚拟化；虚拟窗口参数保持在安全范围内，避免尺寸树展开过深触发爆栈。总数占位保留整本相册的滚动长度，行范围换算回媒体序号后由 `useMediaGridPagination` 连续补页，失败保留内容并暂停自动请求，显式重试恢复。容器与窗口的验证要求见设计文档。
@@ -398,6 +399,8 @@ backend\aiworker\.venv\Scripts\python.exe backend\aiworker\evaluate_quality.py -
 | 100,000 | 1.55 · 693.34ms · 269,968,809 | 84,531 · 7.1μs · 375 |
 
 这些结果只说明重复业务载荷的跳过收益。10 万条记录下，实际页码变化的写入 p95 仍约 698ms，每次约 269MB 分配，整文件复制、排序与 JSON 编码仍为 O(N)；不能把重复提交吞吐当作持续翻页容量。当前保留单 JSON 文件与落盘确认语义，进一步调整快照布局需单独评估并迁移已有状态。
+
+2026-11-16 在同一台 Windows / Intel i7-10700K 上，活动写入改为单写者串行；数据复制、排序、JSON 编码和原子落盘期间，读请求继续读取旧的不可变快照，落盘成功后再发布新快照。使用 1,000 条活动、20 次交替进度更新的并发读基准，读取 p95 从 28.37ms 降到 0.5μs。基准通过 `go test ./internal/store -run '^$' -bench '^BenchmarkActivityReadWhileRepeatedWrites$' -benchtime=20x -benchmem` 运行；旧实现与新实现均使用修正后的基准代码。该结果只衡量读锁等待，不代表写入不再是 O(N)。单轮写入基准的吞吐、p95 与分配分别为 20.56 次/秒、104.57ms、1,926,363 B/op 和 71.17 次/秒、18.79ms、1,885,404 B/op；写入数据受本机原子文件替换与同步影响，单轮结果不作为写吞吐承诺。
 
 在 `backend/` 下复测：
 

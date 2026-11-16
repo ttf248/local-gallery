@@ -16,6 +16,13 @@ export const DEFAULT_MASONRY_RATIO = 1.5;
 export interface MasonryInput {
   id: string;
   ratio: number;
+  /**
+   * 图片之外还要占的高度（像素）。
+   *
+   * 照片墙里的每一块就是一张图，高度由比例算出；卡片不一样 ——
+   * 封面下面还有标题与说明，那部分是固定的，按比例算不出来。
+   */
+  extraHeight?: number;
 }
 
 /** 排布输出的一项：位置与尺寸都是容器内的像素坐标。 */
@@ -73,7 +80,7 @@ export function layoutMasonry(
       if (heights[candidate] < heights[column]) column = candidate;
     }
     const ratio = item.ratio > 0 ? item.ratio : DEFAULT_MASONRY_RATIO;
-    const height = columnWidth / ratio;
+    const height = columnWidth / ratio + (item.extraHeight ?? 0);
     tiles.push({
       id: item.id,
       index,

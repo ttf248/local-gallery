@@ -85,4 +85,16 @@ describe("瀑布流排布", () => {
     });
     expect(layout.tiles[0].height).toBeGreaterThan(0);
   });
+
+  it("图片之外还有说明区时，卡片按说明区的高度一起占位", () => {
+    const layout = layoutMasonry(
+      [{ id: "a", ratio: 2, extraHeight: 52 }],
+      { containerWidth: 600, targetColumnWidth: 300, gap: 10 },
+    );
+    // 卡片高 = 封面高（宽 / 比例）+ 说明区高。
+    expect(layout.tiles[0].height).toBeCloseTo(
+      layout.tiles[0].width / 2 + 52,
+      5,
+    );
+  });
 });

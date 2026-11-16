@@ -106,6 +106,16 @@ export function yearRoute(year: string): string {
 }
 
 /**
+ * 智能相册：全库已生成的智能分组汇成的一面墙。
+ *
+ * 只属于照片工作台：分组线索（时间、地点、人物、场景）来自照片的
+ * 元数据与人脸分析，漫画那边没有这一套。
+ */
+export function smartAlbumsRoute(): string {
+  return `${MODE_PREFIX.photo}/smart-albums`;
+}
+
+/**
  * 未读页只在漫画工作台存在。
  *
  * 它没有模式参数：照片侧根本没有这个页面，路由表里也不注册。

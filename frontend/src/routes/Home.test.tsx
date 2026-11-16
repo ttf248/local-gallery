@@ -33,7 +33,7 @@ vi.mock("../hooks/useSmartAlbums", () => ({
     fetchNextPage: vi.fn(),
   }),
 }));
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -73,6 +73,15 @@ vi.mock("../hooks/useImageActivity", () => ({
   useImageActivities: () => ({ data: {} }),
   useMarkAlbumRead: () => ({ mutateAsync: vi.fn() }),
   useMarkAlbumsRead: () => ({ mutateAsync: vi.fn() }),
+}));
+// 智能相册墙按容器宽度排布：测试里给一个固定宽度。
+vi.mock("../hooks/useElementSize", () => ({
+  useElementSize: () => ({
+    ref: () => {},
+    width: 1200,
+    height: 800,
+    element: null,
+  }),
 }));
 // 英雄区与时间线用占位元素代替：这里只关心「筛选条相对它们的位置」。
 vi.mock("../components/home/YearTimeline", () => ({
@@ -411,7 +420,14 @@ it("首页智能相册汇总已生成的分组并直达来源相册中的分组"
     "href",
     "/photo/albums/a_1?view=smart&dimension=time&group=sg_0123456789abcdef0123",
   );
-  expect(smartGroupLink).toHaveTextContent("来自 家庭照片 / 2023年测试相册");
+  expect(smartGroupLink).toHaveTextContent("3 张 · 家庭照片 / 2023年测试相册");
+  // 首页只给一屏预览：标题与「查看全部」都通向智能相册专页。
+  expect(
+    screen.getByRole("heading", { name: "智能相册" }).querySelector("a"),
+  ).toHaveAttribute("href", "/photo/smart-albums");
+  expect(
+    screen.getByRole("link", { name: /查看全部/ }),
+  ).toHaveAttribute("href", "/photo/smart-albums");
   expect(screen.queryByTestId("album-grid")).not.toBeInTheDocument();
   expect(screen.queryByTestId("filter-bar-count")).not.toBeInTheDocument();
 });

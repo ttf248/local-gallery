@@ -10,7 +10,9 @@ import { scanApi } from "../api/scan";
 import { useHistoryCards } from "../hooks/useHistory";
 import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
-import SmartAlbumDirectory from "../components/album/SmartAlbumDirectory";
+import SmartAlbumPreview, {
+  HOME_SMART_ALBUM_PREVIEW,
+} from "../components/home/SmartAlbumPreview";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
@@ -31,6 +33,7 @@ import {
   favoritesRoute,
   homeRoute,
   recentsRoute,
+  smartAlbumsRoute,
   unreadRoute,
 } from "../utils/path";
 import { continueReadingTarget } from "../utils/continueReading";
@@ -52,26 +55,10 @@ import {
   CloseIcon,
   ImageIcon,
   SparkleIcon,
+  ChevronRightIcon,
 } from "../components/common/Icon";
 import { SelectionToggle } from "../components/album/BulkActions";
 import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
-import type { SmartAlbumDirectoryDimension } from "../api/albums";
-
-const HOME_SMART_ALBUM_DIMENSION_PARAM = "smartDimension";
-
-function parseSmartAlbumDimension(
-  value: string | null,
-): SmartAlbumDirectoryDimension {
-  switch (value) {
-    case "time":
-    case "place":
-    case "people":
-    case "scene":
-      return value;
-    default:
-      return "all";
-  }
-}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -110,29 +97,19 @@ export default function Home() {
   // 智能分组）。漫画侧仍旧列全部作品 —— 漫画的「库内一览」是它按作品
   // 与卷找内容的地方，照片侧有智能相册与年份索引可看。
   const smartAlbumDirectory = !isComic;
-  const smartDimension = parseSmartAlbumDimension(
-    homeSearchParams.get(HOME_SMART_ALBUM_DIMENSION_PARAM),
-  );
+  // 首页只给一屏预览：完整的墙在智能相册页，按维度翻也在那一页。
   const smartDirectory = useSmartAlbumDirectory(
-    smartDimension,
+    "all",
     smartAlbumDirectory && !!manifest,
+    { limit: HOME_SMART_ALBUM_PREVIEW },
   );
   const listView = view;
   const setHomeView = (key: string) => {
     const next = new URLSearchParams(homeSearchParams);
-    next.delete(HOME_SMART_ALBUM_DIMENSION_PARAM);
     if (key === "all") next.delete(LIST_PARAM.view);
     else next.set(LIST_PARAM.view, key);
     if (next.toString() !== homeSearchParams.toString()) {
       setHomeSearchParams(next);
-    }
-  };
-  const setSmartDimension = (dimension: SmartAlbumDirectoryDimension) => {
-    const next = new URLSearchParams(homeSearchParams);
-    if (dimension === "all") next.delete(HOME_SMART_ALBUM_DIMENSION_PARAM);
-    else next.set(HOME_SMART_ALBUM_DIMENSION_PARAM, dimension);
-    if (next.toString() !== homeSearchParams.toString()) {
-      setHomeSearchParams(next, { replace: true });
     }
   };
   // 首页只展示服务端预先限制为六本的未读预览；完整未读库交给 /unread 分页加载。
@@ -659,14 +636,33 @@ export default function Home() {
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.library)}</span>
             <h2 className="section-title">
-              {smartAlbumDirectory
-                ? "智能相册"
-                : yearFilterActive
-                  ? copy.yearSectionTitle
-                  : copy.sectionTitle}
+              {/* 照片侧这一段的标题就是入口：全部分组有四千多组，
+                  首页只给一屏预览，完整的墙在智能相册页。 */}
+              {smartAlbumDirectory ? (
+                <Link
+                  to={smartAlbumsRoute()}
+                  className="transition-colors hover:text-brand-ink"
+                >
+                  智能相册
+                </Link>
+              ) : yearFilterActive ? (
+                copy.yearSectionTitle
+              ) : (
+                copy.sectionTitle
+              )}
             </h2>
             {smartAlbumDirectory ? (
-              <span className="section-meta">按线索分组</span>
+              <>
+                <span className="section-meta">按线索分组</span>
+                <Link
+                  to={smartAlbumsRoute()}
+                  className="chip ml-auto"
+                  title="打开智能相册"
+                >
+                  <span>查看全部</span>
+                  <ChevronRightIcon size={11} />
+                </Link>
+              </>
             ) : yearFilterActive ? (
               <button
                 onClick={() => setYearFilter(null)}
@@ -737,18 +733,12 @@ export default function Home() {
               }
             />
           ) : smartAlbumDirectory ? (
-            <SmartAlbumDirectory
-              dimension={smartDimension}
+            <SmartAlbumPreview
               items={smartDirectory.items}
               total={smartDirectory.total}
-              viewMode={viewMode}
               isLoading={smartDirectory.isLoading}
               isError={smartDirectory.isError}
-              hasNextPage={smartDirectory.hasNextPage}
-              isFetchingNextPage={smartDirectory.isFetchingNextPage}
-              onDimensionChange={setSmartDimension}
               onRetry={() => void smartDirectory.refetch()}
-              onLoadMore={() => void smartDirectory.fetchNextPage()}
             />
           ) : overview.isError && !overview.summary ? (
             <EmptyState

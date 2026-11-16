@@ -39,7 +39,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark")
 //             伪造标签页数据，封面仍是真实缩略图）
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/recents,/favorites,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,album,reader,tag"
+  "/,/recents,/favorites,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag"
 )
   .split(",")
   .map((p) => p.trim())
@@ -407,6 +407,13 @@ async function main() {
         // 量到的还是首页的数据。直接跳过。
         if (route === "/unread" && mode !== "comic") {
           console.log(`  · 跳过 ${theme} /unread：只有漫画工作台有未读页`);
+          continue;
+        }
+        // 智能相册墙只属于照片侧：分组线索来自照片的元数据与人脸分析。
+        if (route === "/smart-albums" && mode !== "photo") {
+          console.log(
+            `  · 跳过 ${theme} /smart-albums：只有照片工作台有智能相册墙`,
+          );
           continue;
         }
         if (route === "reader") {

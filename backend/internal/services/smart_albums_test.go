@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -278,6 +280,90 @@ func TestSmartAlbumDirectoryEmptyPageSerializesAsEmptyArray(t *testing.T) {
 	}
 	if !strings.Contains(string(encoded), `"items":[]`) {
 		t.Fatalf("empty directory page must serialize as an empty array: %s", encoded)
+	}
+}
+
+func TestSmartAlbumDirectoryReportsCoverDimensions(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "album-a")
+	if err := os.MkdirAll(albumPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// 真实的 JPEG：尺寸探测要读图片头，假文件探不出宽高。
+	files := make([]string, 0, 3)
+	for index, size := range [][2]int{{40, 20}, {20, 40}, {30, 30}} {
+		path := filepath.Join(albumPath, fmt.Sprintf("%d.jpg", index))
+		writeTestJPEG(t, path, size[0], size[1])
+		files = append(files, path)
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root}, AlbumCount: 1,
+		Albums: []models.Album{{
+			Type: "album", Name: "album-a", Path: albumPath, SourceRoot: root,
+			ImageFiles: files, ImageCount: len(files), CoverImage: files[0],
+		}},
+	}, []string{root})
+	jobs := newTestAIJobService(
+		t,
+		filepath.Join(root, "state", "ai-jobs.json"),
+		filepath.Join(root, "derived", "metadata"),
+		catalog,
+		MetadataAnalyzer{},
+		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-test-v1"},
+	)
+	snapshot := catalog.Acquire()
+	albumID := catalog.ExternalID(albumPath, ResourceAlbum)
+	seedMetadataRecords(t, jobs, snapshot, albumID, "2025-06-18T10:00:00")
+	dimensions, err := NewMediaDimensionService(filepath.Join(root, "derived", "media_dimensions.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(root, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs, Dimensions: dimensions,
+		ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 目录只汇总已经生成的分组：先算一次时间分组，再读目录。
+	if _, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionTime, false); err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("directory items=%+v", page.Items)
+	}
+	group := page.Items[0].Group
+	if group.CoverWidth != 40 || group.CoverHeight != 20 {
+		t.Fatalf("cover dimensions=%dx%d, want 40x20", group.CoverWidth, group.CoverHeight)
+	}
+	encoded, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"coverWidth":40`) {
+		t.Fatalf("directory page must carry the cover size: %s", encoded)
+	}
+}
+
+// writeTestJPEG 写一张指定尺寸的真实 JPEG：尺寸探测读的是图片头。
+func writeTestJPEG(t *testing.T, path string, width, height int) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	image := image.NewRGBA(image.Rect(0, 0, width, height))
+	if err := jpeg.Encode(file, image, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 

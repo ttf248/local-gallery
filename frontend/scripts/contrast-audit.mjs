@@ -30,7 +30,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",");
 //   reader —— 阅读器（见下方 openReader）
 //   tag    —— 标签页（真实库里可能一个标签都没有，用仪表盘里的真实相册
 //             伪造标签页数据，封面仍是真实缩略图）
-const PAGES = (process.env.LG_PAGES ?? "/,/unread,/recents,/favorites,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,album,reader,tag")
+const PAGES = (process.env.LG_PAGES ?? "/,/unread,/recents,/favorites,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag")
   .split(",")
   .map((p) => p.trim())
   .filter(Boolean);
@@ -872,6 +872,13 @@ for (const theme of THEMES) {
     // 未读页只属于漫画工作台：照片侧没有这个路由，硬走会落回首页。
     if (route === "/unread" && mode !== "comic") {
       console.log(`  · 跳过 ${theme} /unread：只有漫画工作台有未读页`);
+      continue;
+    }
+    // 智能相册墙只属于照片侧：分组线索来自照片的元数据与人脸分析。
+    if (route === "/smart-albums" && mode !== "photo") {
+      console.log(
+        `  · 跳过 ${theme} /smart-albums：只有照片工作台有智能相册墙`,
+      );
       continue;
     }
     if (route === "reader") {

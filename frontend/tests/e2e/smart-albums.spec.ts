@@ -5,7 +5,7 @@ test.beforeEach(async ({ request }) => {
   await resetWorkbenchMode(request);
 });
 
-test("首页汇总已生成的智能分组并直接进入来源相册", async ({ page }) => {
+test("首页给出智能相册入口，专页铺出分组并直达来源相册", async ({ page }) => {
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-足迹");
   expect(album).toBeDefined();
@@ -41,11 +41,19 @@ test("首页汇总已生成的智能分组并直接进入来源相册", async ({
   expect(group).toBeDefined();
 
   await page.goto("/");
-  // 照片侧首页那一块就是智能相册，不必再点开哪个视图。
+  // 照片侧首页那一节是智能相册的预览，标题与「查看全部」都通向专页。
+  const smartHeading = page.getByRole("heading", { name: "智能相册", exact: true });
+  await expect(smartHeading).toBeVisible();
+  await expect(smartHeading.getByRole("link")).toHaveAttribute(
+    "href",
+    "/photo/smart-albums",
+  );
   await expect(
-    page.getByRole("heading", { name: "智能相册", exact: true }),
-  ).toBeVisible();
+    page.getByRole("link", { name: /查看全部/ }),
+  ).toHaveAttribute("href", "/photo/smart-albums");
 
+  // 专页按维度铺出分组卡片，点分组直达来源相册里的那一个。
+  await page.goto("/photo/smart-albums?dimension=time");
   const smartGroupLink = page.locator(
     `a[href="${albumUrl(album!)}?view=smart&dimension=time&group=${group.id}"]`,
   );
@@ -64,6 +72,28 @@ test("首页汇总已生成的智能分组并直接进入来源相册", async ({
   await expect(wall.getByRole("button", { name: /查看 .*\.jpg/ })).toHaveCount(
     group.photoCount,
   );
+});
+
+test("专页按维度翻页，分组随之换一批", async ({ page }) => {
+  await scannedNodes(page.request, "photo");
+  await page.goto("/photo/smart-albums");
+  await expect(page.getByRole("tab", { name: /全部/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  await page.getByRole("tab", { name: /人物/ }).click();
+  await expect(page).toHaveURL(/\/photo\/smart-albums\?dimension=people/);
+  await expect(page.getByRole("tab", { name: /人物/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  // 页签上的组数来自轻量请求：人物维度不是零就是有个数。
+  const peopleCount = await page
+    .getByRole("tab", { name: /人物/ })
+    .innerText();
+  expect(peopleCount).toMatch(/\d+/);
 });
 
 test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {

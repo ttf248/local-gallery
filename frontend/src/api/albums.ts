@@ -52,6 +52,9 @@ export interface SmartAlbumGroup {
   photoCount: number;
   coverResourceId?: string;
   coverVersion?: string;
+  /** 封面图的原始像素尺寸：瀑布流按它算卡片高度。 */
+  coverWidth?: number;
+  coverHeight?: number;
   hidden: boolean;
 }
 
@@ -123,14 +126,30 @@ export const albumsApi = {
       },
     );
   },
+  /**
+   * 智能相册目录：一页给一批分组。
+   *
+   * limit 是「这一批给多少个」，不是页大小：目录是无限下拉的，
+   * 每次滑到底再接一批。
+   */
   smartDirectory(
     dimension: SmartAlbumDirectoryDimension,
-    cursor?: string,
-    signal?: AbortSignal,
+    options: {
+      cursor?: string;
+      limit?: number;
+      signal?: AbortSignal;
+    } = {},
   ) {
     return api<{ ok: boolean; page: SmartAlbumDirectoryPage }>(
       "/api/smart-albums",
-      { params: { dimension, cursor, limit: 60 }, signal },
+      {
+        params: {
+          dimension,
+          cursor: options.cursor,
+          limit: options.limit ?? 60,
+        },
+        signal: options.signal,
+      },
     );
   },
   // 自定义封面：把 file 设为 album path 的封面（持久化到 cover_overrides.json）。

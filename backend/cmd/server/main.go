@@ -359,6 +359,7 @@ func main() {
 		People:       peopleService,
 		Vectors:      vectorIndex,
 		TextEmbedder: embeddingAnalyzer,
+		Dimensions:   mediaDimensions,
 		ValidatePath: safetyState.Validate,
 	})
 	if err != nil {
