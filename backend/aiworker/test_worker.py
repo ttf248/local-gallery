@@ -451,10 +451,10 @@ class WorkerTests(unittest.TestCase):
 
             @staticmethod
             def detect(_image):
-                detection = np.asarray(
-                    [[10, 20, 30, 40, 15, 25, 35, 25, 25, 30, 18, 40, 32, 40, 0.9]],
-                    dtype=np.float32,
-                )
+                accepted = [10, 20, 40, 40, 18, 28, 42, 28, 30, 35, 20, 48, 40, 48, 0.75]
+                rejected = accepted.copy()
+                rejected[-1] = 0.74
+                detection = np.asarray([rejected, accepted], dtype=np.float32)
                 return None, detection
 
         class Recognizer:
@@ -473,7 +473,32 @@ class WorkerTests(unittest.TestCase):
         ), patch.object(worker, "np", np):
             result = worker.analyze_face_image("face.jpg")
 
-        self.assertEqual([40.0, 40.0, 120.0, 80.0], result["data"]["faces"][0]["box"])
+        self.assertEqual(1, len(result["data"]["faces"]))
+        self.assertEqual([40.0, 40.0, 160.0, 80.0], result["data"]["faces"][0]["box"])
+
+    def test_yunet_detection_quality_gate_rejects_weak_or_invalid_faces(self):
+        detection = np.asarray(
+            [20, 20, 64, 64, 32, 38, 72, 38, 52, 51, 38, 70, 66, 70, 0.9],
+            dtype=np.float32,
+        )
+        with patch.object(worker, "np", np):
+            self.assertTrue(worker.valid_yunet_detection(detection, (120, 120, 3)))
+
+            low_score = detection.copy()
+            low_score[14] = 0.74
+            self.assertFalse(worker.valid_yunet_detection(low_score, (120, 120, 3)))
+
+            tiny_face = detection.copy()
+            tiny_face[2] = 31
+            self.assertFalse(worker.valid_yunet_detection(tiny_face, (120, 120, 3)))
+
+            invalid_landmarks = detection.copy()
+            invalid_landmarks[9] = 80
+            self.assertFalse(worker.valid_yunet_detection(invalid_landmarks, (120, 120, 3)))
+
+            non_finite = detection.copy()
+            non_finite[4] = np.nan
+            self.assertFalse(worker.valid_yunet_detection(non_finite, (120, 120, 3)))
 
     def test_sface_alignment_matches_svd_reference(self):
         rng = np.random.default_rng(20261115)

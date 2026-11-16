@@ -54,7 +54,7 @@ func peopleHandlerOutput(axis int) services.AIAnalysisOutput {
 		Box       []float32 `json:"box"`
 		Score     float32   `json:"score"`
 		Embedding []float32 `json:"embedding"`
-	}{{Box: []float32{0.1, 0.1, 0.4, 0.5}, Score: 0.99, Embedding: vector}}})
+	}{{Box: []float32{0.1, 0.1, 40, 50}, Score: 0.99, Embedding: vector}}})
 	return services.AIAnalysisOutput{Status: "faces_found", Data: data, Fields: []string{services.AIFieldFaces}}
 }
 
@@ -304,23 +304,17 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 
 	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
 	var listBody struct {
-		People                 []services.PersonGroup `json:"people"`
-		TotalGroups            int                    `json:"totalGroups"`
-		Limit                  int                    `json:"limit"`
-		CentroidThreshold      float64                `json:"centroidThreshold"`
-		ExemplarThreshold      float64                `json:"exemplarThreshold"`
-		AmbiguousFaceThreshold float64                `json:"ambiguousFaceThreshold"`
-		ExemplarLimit          int                    `json:"exemplarLimit"`
-		AmbiguousExemplarCount int                    `json:"ambiguousExemplarCount"`
-		GroupingLimited        *bool                  `json:"groupingLimited"`
+		People            []services.PersonGroup `json:"people"`
+		TotalGroups       int                    `json:"totalGroups"`
+		Limit             int                    `json:"limit"`
+		CentroidThreshold float64                `json:"centroidThreshold"`
+		AnchorThreshold   float64                `json:"anchorThreshold"`
+		GroupingLimited   *bool                  `json:"groupingLimited"`
 	}
 	decodePeopleBody(t, list, &listBody)
 	if len(listBody.People) != 50 || listBody.TotalGroups != groupCount || listBody.Limit != 50 ||
 		listBody.CentroidThreshold != services.PeopleGroupingCentroidThreshold ||
-		listBody.ExemplarThreshold != services.PeopleGroupingExemplarThreshold ||
-		listBody.AmbiguousFaceThreshold != services.PeopleGroupingAmbiguousFaceThreshold ||
-		listBody.ExemplarLimit != services.PeopleGroupingExemplarLimit ||
-		listBody.AmbiguousExemplarCount != services.PeopleGroupingAmbiguousExemplarCount || listBody.GroupingLimited != nil {
+		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil {
 		t.Fatalf("top people response = %d groups, total %d, limit %d; want 50 of %d", len(listBody.People), listBody.TotalGroups, listBody.Limit, groupCount)
 	}
 	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 2 {

@@ -19,12 +19,10 @@ import (
 
 const (
 	peopleIndexVersion       = 1
-	peopleGroupingVersion    = 7
+	peopleGroupingVersion    = 12
 	peopleEmbeddingDimension = 128
 	peopleMaxSplitFaces      = 200
 )
-
-const PeopleGroupingExemplarLimit = 8
 
 // PeopleGroupingCentroidThreshold keeps approximate group lookup focused on nearby centers.
 const PeopleGroupingCentroidThreshold = 0.52
@@ -33,14 +31,9 @@ const PeopleGroupingCentroidThreshold = 0.52
 // exact float64 centroid path before applying the grouping threshold.
 const peopleGroupingANNScoreMargin = 0.001
 
-// PeopleGroupingExemplarThreshold allows a strong match to one stable face exemplar.
-const PeopleGroupingExemplarThreshold = 0.72
-
-// PeopleGroupingAmbiguousFaceThreshold is the minimum face similarity for each
-// of two independent exemplars to support an ambiguous match.
-const PeopleGroupingAmbiguousFaceThreshold = 0.58
-
-const PeopleGroupingAmbiguousExemplarCount = 2
+// PeopleGroupingAnchorThreshold keeps every cluster member close to its
+// immutable seed, preventing slowly drifting centroids from chaining identities.
+const PeopleGroupingAnchorThreshold = 0.72
 
 var (
 	ErrPersonNotFound = errors.New("person not found")
@@ -108,35 +101,35 @@ type peopleManualState = PeopleCorrections
 type peopleCluster struct {
 	sum       []float64
 	centroid  []float32
+	anchor    peopleClusterAnchor
 	count     int
 	members   map[string]struct{}
 	resources map[string]struct{}
-	exemplars []peopleClusterExemplar
 }
 
-type peopleClusterExemplar struct {
+type peopleClusterAnchor struct {
 	key        string
 	resourceID string
-	score      float32
 	embedding  []float32
 }
 
 // PeopleService keeps a rebuildable face grouping index separate from the small
 // user-owned names, visibility flags, and corrections stored under state/.
 type PeopleService struct {
-	mu              sync.RWMutex
-	persistMu       sync.Mutex
-	statePath       string
-	derivedPath     string
-	faces           map[string]PersonFace
-	facesByResource map[string][]string
-	clusters        map[string]*peopleCluster
-	ann             *peopleANNIndex
-	previousIDs     map[string]string
-	cachedIDs       map[string]string
-	cachedHashes    map[string]string
-	manual          peopleManualState
-	comparisons     int
+	mu               sync.RWMutex
+	persistMu        sync.Mutex
+	statePath        string
+	derivedPath      string
+	sourceDimensions func(string) MediaDimensions
+	faces            map[string]PersonFace
+	facesByResource  map[string][]string
+	clusters         map[string]*peopleCluster
+	ann              *peopleANNIndex
+	previousIDs      map[string]string
+	cachedIDs        map[string]string
+	cachedHashes     map[string]string
+	manual           peopleManualState
+	comparisons      int
 }
 
 func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
@@ -198,6 +191,15 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 	return service, nil
 }
 
+// SetSourceDimensions enables analysis-scale face-size filtering for older
+// records whose boxes are in source-image coordinates. Set it before Sync or
+// ApplyRecords so cache rebuilds and incremental updates use the same rule.
+func (s *PeopleService) SetSourceDimensions(lookup func(resourceID string) MediaDimensions) {
+	s.mu.Lock()
+	s.sourceDimensions = lookup
+	s.mu.Unlock()
+}
+
 func emptyPeopleManualState() peopleManualState {
 	return peopleManualState{Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}
 }
@@ -242,7 +244,7 @@ func (s *PeopleService) Sync(records []AIAnalysisRecord) error {
 	}
 	faces := make(map[string]PersonFace)
 	for _, record := range records {
-		for _, face := range peopleFacesFromRecord(record) {
+		for _, face := range s.facesFromRecord(record) {
 			faces[face.Key] = face
 		}
 	}
@@ -271,7 +273,13 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 	s.faces = make(map[string]PersonFace, len(faces))
 	s.facesByResource = make(map[string][]string, len(faces))
 	s.clusters = make(map[string]*peopleCluster)
-	for key, face := range faces {
+	keys := make([]string, 0, len(faces))
+	for key := range faces {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return personFaceLess(faces[keys[i]], faces[keys[j]]) })
+	for _, key := range keys {
+		face := faces[key]
 		face.PersonID = s.cachedIDs[key]
 		s.faces[key] = face
 		s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], key)
@@ -291,7 +299,9 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 		cluster.count++
 		cluster.members[key] = struct{}{}
 		cluster.resources[face.ResourceID] = struct{}{}
-		addPeopleClusterExemplar(cluster, face)
+		if cluster.anchor.embedding == nil {
+			cluster.anchor = peopleClusterAnchor{key: face.Key, resourceID: face.ResourceID, embedding: face.embedding}
+		}
 	}
 	for _, cluster := range s.clusters {
 		updatePeopleCentroid(cluster)
@@ -327,7 +337,7 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		if record.Type != AIJobTypeFace {
 			continue
 		}
-		incoming := peopleFacesFromRecord(record)
+		incoming := s.facesFromRecord(record)
 		current := s.facesForResourceLocked(record.ResourceID)
 		if samePeopleFaces(current, incoming) {
 			continue
@@ -566,7 +576,7 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 		}
 		s.comparisons++
 		score := peopleCosine(face.embedding, cluster.centroid)
-		if score <= PeopleGroupingCentroidThreshold || !peopleClusterHasMatchingExemplar(face, cluster) {
+		if score <= PeopleGroupingCentroidThreshold || !peopleClusterHasMatchingAnchor(face, cluster) {
 			continue
 		}
 		if score > bestScore || (bestID != "" && score == bestScore && id < bestID) {
@@ -579,6 +589,7 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 		s.clusters[bestID] = &peopleCluster{
 			sum:       make([]float64, peopleEmbeddingDimension),
 			centroid:  make([]float32, peopleEmbeddingDimension),
+			anchor:    peopleClusterAnchor{key: face.Key, resourceID: face.ResourceID, embedding: face.embedding},
 			members:   map[string]struct{}{},
 			resources: map[string]struct{}{},
 		}
@@ -593,7 +604,6 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 		cluster.resources = make(map[string]struct{})
 	}
 	cluster.resources[face.ResourceID] = struct{}{}
-	addPeopleClusterExemplar(cluster, face)
 	updatePeopleCentroid(cluster)
 	if newCluster {
 		s.ann.Add(bestID, cluster.centroid)
@@ -606,58 +616,14 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 	s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], face.Key)
 }
 
-func addPeopleClusterExemplar(cluster *peopleCluster, face PersonFace) {
-	exemplar := peopleClusterExemplar{
-		key: face.Key, resourceID: face.ResourceID, score: face.Score,
-		embedding: face.embedding,
+func peopleClusterHasMatchingAnchor(face PersonFace, cluster *peopleCluster) bool {
+	if cluster.anchor.embedding == nil || face.ResourceID == cluster.anchor.resourceID {
+		return false
 	}
-	for index, current := range cluster.exemplars {
-		if current.key == exemplar.key {
-			cluster.exemplars[index] = exemplar
-			sort.Slice(cluster.exemplars, func(i, j int) bool {
-				return peopleExemplarRanksBefore(cluster.exemplars[i], cluster.exemplars[j])
-			})
-			return
-		}
-	}
-	if len(cluster.exemplars) < PeopleGroupingExemplarLimit {
-		cluster.exemplars = append(cluster.exemplars, exemplar)
-	} else if peopleExemplarRanksBefore(exemplar, cluster.exemplars[len(cluster.exemplars)-1]) {
-		cluster.exemplars[len(cluster.exemplars)-1] = exemplar
-	}
-	sort.Slice(cluster.exemplars, func(i, j int) bool {
-		return peopleExemplarRanksBefore(cluster.exemplars[i], cluster.exemplars[j])
-	})
-}
-
-func peopleExemplarRanksBefore(left, right peopleClusterExemplar) bool {
-	if left.score != right.score {
-		return left.score > right.score
-	}
-	return left.key < right.key
-}
-
-func peopleClusterHasMatchingExemplar(face PersonFace, cluster *peopleCluster) bool {
 	if _, alreadyPresent := cluster.resources[face.ResourceID]; alreadyPresent {
 		return false
 	}
-	ambiguousMatches := 0
-	for _, exemplar := range cluster.exemplars {
-		if face.ResourceID == exemplar.resourceID {
-			continue
-		}
-		faceSimilarity := peopleCosine(face.embedding, exemplar.embedding)
-		if faceSimilarity > PeopleGroupingExemplarThreshold {
-			return true
-		}
-		if faceSimilarity > PeopleGroupingAmbiguousFaceThreshold {
-			ambiguousMatches++
-			if ambiguousMatches >= PeopleGroupingAmbiguousExemplarCount {
-				return true
-			}
-		}
-	}
-	return false
+	return peopleCosine(face.embedding, cluster.anchor.embedding) > PeopleGroupingAnchorThreshold
 }
 
 func updatePeopleCentroid(cluster *peopleCluster) {
@@ -696,15 +662,24 @@ func (s *PeopleService) removeFaceLocked(key string) {
 	cluster.sum = make([]float64, peopleEmbeddingDimension)
 	cluster.count = 0
 	cluster.resources = make(map[string]struct{}, len(cluster.members))
-	cluster.exemplars = nil
+	cluster.anchor = peopleClusterAnchor{}
+	memberKeys := make([]string, 0, len(cluster.members))
 	for memberKey := range cluster.members {
+		memberKeys = append(memberKeys, memberKey)
+	}
+	sort.Slice(memberKeys, func(i, j int) bool {
+		return personFaceLess(s.faces[memberKeys[i]], s.faces[memberKeys[j]])
+	})
+	for _, memberKey := range memberKeys {
 		member := s.faces[memberKey]
 		for index, value := range member.embedding {
 			cluster.sum[index] += float64(value)
 		}
 		cluster.count++
 		cluster.resources[member.ResourceID] = struct{}{}
-		addPeopleClusterExemplar(cluster, member)
+		if cluster.anchor.embedding == nil {
+			cluster.anchor = peopleClusterAnchor{key: member.Key, resourceID: member.ResourceID, embedding: member.embedding}
+		}
 	}
 	updatePeopleCentroid(cluster)
 }
@@ -749,7 +724,7 @@ func (s *PeopleService) removeResourceFaceKeyLocked(resourceID, key string) {
 
 func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
 	if record.Type != AIJobTypeFace ||
-		(record.ModuleVersion != FaceAnalyzerVersion && record.ModuleVersion != previousFaceAnalyzerVersion) ||
+		!SupportsFaceAnalyzerVersion(record.ModuleVersion) ||
 		record.Status != "faces_found" {
 		return nil
 	}
@@ -766,7 +741,19 @@ func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
 	hash := sha256.Sum256(record.Data)
 	faces := make([]PersonFace, 0, len(result.Faces))
 	for index, face := range result.Faces {
-		if len(face.Embedding) != peopleEmbeddingDimension || len(face.Box) != 4 || math.IsNaN(float64(face.Score)) || math.IsInf(float64(face.Score), 0) {
+		if len(face.Embedding) != peopleEmbeddingDimension || len(face.Box) != 4 ||
+			math.IsNaN(float64(face.Score)) || math.IsInf(float64(face.Score), 0) ||
+			face.Score < faceDetectionMinimumScore {
+			continue
+		}
+		validBox := true
+		for _, value := range face.Box {
+			if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+				validBox = false
+				break
+			}
+		}
+		if !validBox || face.Box[2] < faceDetectionMinimumBoxSide || face.Box[3] < faceDetectionMinimumBoxSide {
 			continue
 		}
 		vector := normalizedVector(face.Embedding)
@@ -781,6 +768,26 @@ func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
 		})
 	}
 	return faces
+}
+
+func (s *PeopleService) facesFromRecord(record AIAnalysisRecord) []PersonFace {
+	faces := peopleFacesFromRecord(record)
+	if len(faces) == 0 || record.ModuleVersion == FaceAnalyzerVersion || s.sourceDimensions == nil {
+		return faces
+	}
+	dimensions := s.sourceDimensions(record.ResourceID)
+	if !dimensions.Known() {
+		return faces
+	}
+	longSide := max(dimensions.Width, dimensions.Height)
+	scale := math.Min(1, float64(faceAnalyzerInputMaxDimension)/float64(longSide))
+	filtered := faces[:0]
+	for _, face := range faces {
+		if float64(min(face.Box[2], face.Box[3]))*scale >= float64(faceDetectionMinimumBoxSide) {
+			filtered = append(filtered, face)
+		}
+	}
+	return filtered
 }
 
 func PersonFaceKey(resourceID string, faceIndex int) string {

@@ -125,8 +125,9 @@ func FaceSimilaritySearchHandler(
 			score float64
 		}
 		bestByResource := make(map[string]candidate)
-		for _, record := range jobs.Records(services.AIJobTypeFace) {
-			if record.ResourceID == request.ResourceID || record.Status != "faces_found" || record.ModuleVersion != services.FaceAnalyzerVersion {
+		for _, record := range jobs.RecordsIncludingStaleVersions(services.AIJobTypeFace) {
+			if record.ResourceID == request.ResourceID || record.Status != "faces_found" ||
+				!services.SupportsFaceAnalyzerVersion(record.ModuleVersion) {
 				continue
 			}
 			item, exists := services.LookupLibraryFeedItem(snapshot, record.ResourceID)
@@ -185,8 +186,8 @@ func currentFaceRecord(
 	resourceID string,
 	validatePath func(string) (string, error),
 ) (services.AIAnalysisRecord, error) {
-	record, ok := jobs.Record(services.AIJobTypeFace, resourceID)
-	if !ok || record.Status != "faces_found" || record.ModuleVersion != services.FaceAnalyzerVersion {
+	record, ok := jobs.RecordIncludingStaleVersions(services.AIJobTypeFace, resourceID)
+	if !ok || record.Status != "faces_found" || !services.SupportsFaceAnalyzerVersion(record.ModuleVersion) {
 		return services.AIAnalysisRecord{}, errors.New("face record unavailable")
 	}
 	ref, ok := snapshot.Lookup(resourceID)

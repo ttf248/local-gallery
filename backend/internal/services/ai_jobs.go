@@ -1411,6 +1411,23 @@ func (s *AIJobService) Record(moduleType, resourceID string) (AIAnalysisRecord, 
 	return record, true
 }
 
+// RecordIncludingStaleVersions returns one persisted result even when its
+// analyzer version is no longer current, for fingerprint-validated migration reads.
+func (s *AIJobService) RecordIncludingStaleVersions(moduleType, resourceID string) (AIAnalysisRecord, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, exists := s.analyzers[moduleType]; !exists {
+		return AIAnalysisRecord{}, false
+	}
+	record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+	if !exists {
+		return AIAnalysisRecord{}, false
+	}
+	record.Data = append(json.RawMessage(nil), record.Data...)
+	record.Fields = append([]string(nil), record.Fields...)
+	return record, true
+}
+
 // StartPending 恢复启动时持久化的 pending 任务；调用时应已加载扫描快照。
 func (s *AIJobService) StartPending() {
 	s.mu.Lock()

@@ -132,7 +132,7 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	vector := make([]float32, peopleEmbeddingDimension)
 	vector[0] = 1
 	data, _ := json.Marshal(map[string]any{"faces": []any{map[string]any{
-		"box": []float32{1, 2, 3, 4}, "score": .9, "embedding": vector,
+		"box": []float32{1, 2, 40, 42}, "score": .9, "embedding": vector,
 	}}})
 	if err := people.Sync([]AIAnalysisRecord{{
 		Type: AIJobTypeFace, ResourceID: resourceID, Size: 7, MTimeNs: 11,

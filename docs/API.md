@@ -425,14 +425,14 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### 人物相册 API
 
-- `GET /api/people` 默认返回照片数最多的 50 个候选组，按照片数降序排列，照片数相同时按封面资源 ID 与人物 ID 稳定排序。`totalGroups` 是当前照片目录下的候选组总数，`limit` 为 50；`includeHidden=true` 将手动隐藏组加入统计与结果。设置 `q` 可按人物名称或 ID 搜索，默认最多返回 20 项，`limit` 上限为 50；空查询返回照片数最多的候选组，不提供全量清单。响应含 `centroidThreshold`、`exemplarThreshold`、`ambiguousFaceThreshold`、`exemplarLimit` 与 `ambiguousExemplarCount` 聚类参数，以及资源 ID、人数统计、名称和封面 ID；不返回特征向量或文件系统路径。
+- `GET /api/people` 默认返回照片数最多的 50 个候选组，按照片数降序排列，照片数相同时按封面资源 ID 与人物 ID 稳定排序。`totalGroups` 是当前照片目录下的候选组总数，`limit` 为 50；`includeHidden=true` 将手动隐藏组加入统计与结果。设置 `q` 可按人物名称或 ID 搜索，默认最多返回 20 项，`limit` 上限为 50；空查询返回照片数最多的候选组，不提供全量清单。响应含 `centroidThreshold` 与 `anchorThreshold` 聚类参数，以及资源 ID、人数统计、名称和封面 ID；不返回特征向量或文件系统路径。
 - `GET /api/people/:personId/media?cursor=…&limit=200` 返回人物相册分页、当前照片 DTO 与可供纠错的脸部框/序号；照片 DTO 含原图像素宽高，供照片墙将脸部框准确投影到合照上。只在本页校验源文件路径与指纹，并批量补齐媒体尺寸。
 - `PUT /api/people/:personId` 接受 `name` 和/或 `hidden`；空名称恢复默认名称。
 - `POST /api/people/merge` 接受 `{ "sourceId": "…", "targetId": "…" }`，将来源组的脸分配给目标组。
 - `POST /api/people/split` 接受 `{ "personId": "…", "faceKeys": ["f_…#0"] }`，将选中脸拆到新组；每次最多 200 张，必须给原组留至少一张脸。
 - `DELETE /api/people` 在没有活动人脸任务时关闭人物分析，并清除人脸任务结果、分组索引与手动修正。存在活动或排队任务时返回 `409 analysis_job_active`。
 
-人物分组列表同时返回 `centroidThreshold`、`exemplarThreshold`、`ambiguousFaceThreshold`、`exemplarLimit` 与 `ambiguousExemplarCount`。候选脸与组中心须高于 `0.520`；与最多 8 张高置信度代表脸之一的 SFace 余弦高于 `0.720` 时直接归组；与至少 2 张不同照片的代表脸余弦高于 `0.580` 时也归组。分组不再把 CLIP 整图相似度当作身份辅助证据。一个组不会包含同一张照片里的两张脸。阈值仍是启发值，没有本机标注集校准，不能确认身份。OpenCV 的 SFace `0.363` 是两张脸验证的参考值，不代表全库聚类阈值或身份确认。每张脸先用 HNSW 找最多 128 个近邻组，再按当前中心精确重算余弦相似度；近邻搜索是近似索引，仍可能漏掉匹配组，因此结果保持可编辑。相同分数按人物 ID 稳定决胜，不设比较次数或人脸总数上限。输入按资源 ID 与脸序号排序，旧组的命名、隐藏与分配在重建时按人脸重叠迁移；自动重建若会合并多个已有人工修正的组或拆分一个已有人工修正的组，旧分组保持独立，直到用户显式合并或拆分。人物媒体分页继续以照片为单位，拆分选择器每次显示 200 张已加载人脸，可逐段展开。用户修正保存在 `state/people.json`；可重建索引位于 `derived/ai/people-index.json`，只存资源 ID、文件指纹、脸部框、记录哈希和组 ID，不保存特征向量。SFace 特征只保存在现有 `derived/metadata/face/` 结果中。
+人物分组列表同时返回 `centroidThreshold` 与 `anchorThreshold`。候选脸须与当前组中心的余弦高于 `0.520`，并与创建该组的固定锚脸高于 `0.720`；锚脸在组生命周期内不随高分新脸替换。之前的“移动中心 + 可替换代表脸”会让连续的中等相似脸逐步拖动组中心，把相距很远的人脸链式并入同组；分组算法版本升级会全量重建派生索引。分组不把 CLIP 整图相似度当作身份辅助证据。一个组不会包含同一张照片里的两张脸。阈值仍是启发值，没有本机标注集校准，不能确认身份。OpenCV 的 SFace `0.363` 是两张脸验证的参考值，不代表全库聚类阈值或身份确认。每张脸先用 HNSW 找最多 128 个近邻组，再按当前中心精确重算余弦相似度；近邻搜索是近似索引，仍可能漏掉匹配组，因此结果保持可编辑。相同分数按人物 ID 稳定决胜，不设比较次数或人脸总数上限。输入按资源 ID 与脸序号排序，旧组的命名、隐藏与分配在重建时按人脸重叠迁移；自动重建若会合并多个已有人工修正的组或拆分一个已有人工修正的组，旧分组保持独立，直到用户显式合并或拆分。人物媒体分页继续以照片为单位，拆分选择器每次显示 200 张已加载人脸，可逐段展开。用户修正保存在 `state/people.json`；可重建索引位于 `derived/ai/people-index.json`，只存资源 ID、文件指纹、脸部框、记录哈希和组 ID，不保存特征向量。SFace 特征只保存在现有 `derived/metadata/face/` 结果中。
 
 ### 足迹页 API
 

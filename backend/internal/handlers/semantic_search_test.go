@@ -117,7 +117,7 @@ func (handlerSemanticWorker) AnalyzeFaces(_ context.Context, paths []string) ([]
 			Box       []float32 `json:"box"`
 			Score     float32   `json:"score"`
 			Embedding []float32 `json:"embedding"`
-		}{{Box: []float32{0.1, 0.1, 0.5, 0.5}, Score: 0.99, Embedding: vector}}})
+		}{{Box: []float32{0.1, 0.1, 40, 50}, Score: 0.99, Embedding: vector}}})
 		results[index].Data = data
 	}
 	return results, nil

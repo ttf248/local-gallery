@@ -828,10 +828,7 @@ export const aiJobsApi = {
       totalGroups: number;
       limit: number;
       centroidThreshold: number;
-      exemplarThreshold: number;
-      ambiguousFaceThreshold: number;
-      exemplarLimit: number;
-      ambiguousExemplarCount: number;
+      anchorThreshold: number;
       revision: number;
     }>("/api/people", { params: { includeHidden } }),
   searchPeople: (query: string) =>
@@ -841,10 +838,7 @@ export const aiJobsApi = {
       totalGroups: number;
       limit: number;
       centroidThreshold: number;
-      exemplarThreshold: number;
-      ambiguousFaceThreshold: number;
-      exemplarLimit: number;
-      ambiguousExemplarCount: number;
+      anchorThreshold: number;
       revision: number;
     }>("/api/people", { params: { q: query, limit: 20 } }),
   personMedia: (id: string, cursor?: string) =>

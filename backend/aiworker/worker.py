@@ -54,9 +54,10 @@ YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
 SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
-FACE_VERSION = "yunet-2023mar-multiscale+sface-2021dec"
+FACE_VERSION = "yunet-2023mar-multiscale+sface-2021dec+quality-v1"
 YUNET_INPUT_SIZE = 640
-YUNET_SCORE_THRESHOLD = 0.65
+YUNET_SCORE_THRESHOLD = 0.75
+YUNET_MIN_FACE_SIDE = 32
 
 model_dir = Path(sys.argv[1]).resolve()
 model = None
@@ -763,7 +764,9 @@ def load_face_models(device_mode="cpu"):
             else:
                 face_models[mode] = {
                     "device": mode,
-                    "detector": cv2.FaceDetectorYN_create(detector_path, "", (320, 320), 0.65, 0.3, 5000),
+                    "detector": cv2.FaceDetectorYN_create(
+                        detector_path, "", (320, 320), YUNET_SCORE_THRESHOLD, 0.3, 5000
+                    ),
                     "recognizer": cv2.FaceRecognizerSF_create(recognizer_path, ""),
                 }
         except RuntimeError:
@@ -1032,6 +1035,37 @@ def align_sface_crop(image, detection):
     return cv2.warpAffine(image, matrix, (112, 112), flags=cv2.INTER_LINEAR)
 
 
+def valid_yunet_detection(detection, image_shape):
+    values = np.asarray(detection, dtype=np.float64).reshape(-1)
+    if values.size < 15 or not np.isfinite(values[:15]).all():
+        return False
+
+    x, y, width, height = values[:4]
+    score = values[14]
+    if score < YUNET_SCORE_THRESHOLD or width < YUNET_MIN_FACE_SIDE or height < YUNET_MIN_FACE_SIDE:
+        return False
+    if height <= 0 or width / height < 0.5 or width / height > 2.0:
+        return False
+
+    frame_height, frame_width = image_shape[:2]
+    if x + width <= 0 or y + height <= 0 or x >= frame_width or y >= frame_height:
+        return False
+
+    landmarks = values[4:14].reshape(5, 2)
+    if (
+        np.any(landmarks[:, 0] < x - width * 0.2)
+        or np.any(landmarks[:, 0] > x + width * 1.2)
+        or np.any(landmarks[:, 1] < y - height * 0.2)
+        or np.any(landmarks[:, 1] > y + height * 1.2)
+    ):
+        return False
+
+    eye_y = float(np.mean(landmarks[:2, 1]))
+    nose_y = float(landmarks[2, 1])
+    mouth_y = float(np.mean(landmarks[3:, 1]))
+    return eye_y < mouth_y and eye_y - height * 0.1 <= nose_y <= mouth_y + height * 0.1
+
+
 def analyze_face_image(path: str, device_mode="cpu") -> dict:
     image, scale_x, scale_y = read_face_image(path)
     if image is None:
@@ -1045,6 +1079,8 @@ def analyze_face_image(path: str, device_mode="cpu") -> dict:
         faces = []
         if detections is not None:
             for detection in detections:
+                if not valid_yunet_detection(detection, image.shape):
+                    continue
                 if runtime["device"] == "gpu":
                     aligned = align_sface_crop(image, detection)
                     blob = cv2.dnn.blobFromImage(aligned, 1.0, (112, 112), (0, 0, 0), True, False)

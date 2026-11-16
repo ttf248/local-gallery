@@ -208,6 +208,79 @@ func TestPeopleServiceKeepsLegacyFaceRecordsUntilReanalysisCompletes(t *testing.
 	}
 }
 
+func TestPeopleFacesFromRecordFiltersWeakCachedDetections(t *testing.T) {
+	makeRecord := func(score float32, box []float32) AIAnalysisRecord {
+		type storedFace struct {
+			Box       []float32 `json:"box"`
+			Score     float32   `json:"score"`
+			Embedding []float32 `json:"embedding"`
+		}
+		data, err := json.Marshal(struct {
+			Faces []storedFace `json:"faces"`
+		}{Faces: []storedFace{{Box: box, Score: score, Embedding: peopleTestVector(0, 0)}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return AIAnalysisRecord{
+			Type: AIJobTypeFace, ResourceID: "cached_face", ModuleVersion: legacyFaceAnalyzerVersion,
+			Status: "faces_found", Data: data,
+		}
+	}
+
+	if faces := peopleFacesFromRecord(makeRecord(0.74, []float32{10, 12, 40, 42})); len(faces) != 0 {
+		t.Fatalf("weak cached detection retained: %+v", faces)
+	}
+	if faces := peopleFacesFromRecord(makeRecord(0.9, []float32{10, 12, 0, 42})); len(faces) != 0 {
+		t.Fatalf("invalid cached box retained: %+v", faces)
+	}
+	if faces := peopleFacesFromRecord(makeRecord(0.9, []float32{10, 12, 31, 42})); len(faces) != 0 {
+		t.Fatalf("small cached face retained: %+v", faces)
+	}
+	if faces := peopleFacesFromRecord(makeRecord(faceDetectionMinimumScore, []float32{10, 12, 40, 42})); len(faces) != 1 {
+		t.Fatalf("valid legacy detection count = %d, want 1", len(faces))
+	}
+}
+
+func TestPeopleServiceFiltersLegacyFacesAtAnalysisScale(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	people.SetSourceDimensions(func(resourceID string) MediaDimensions {
+		if resourceID != "scaled_faces" {
+			t.Fatalf("dimension lookup resource = %q, want scaled_faces", resourceID)
+		}
+		return MediaDimensions{Width: 4000, Height: 3000}
+	})
+	record := peopleTestRecord("scaled_faces", peopleTestVector(0, 0), peopleTestVector(1, 0))
+	record.ModuleVersion = previousFaceAnalyzerVersion
+	type storedFace struct {
+		Box       []float32 `json:"box"`
+		Score     float32   `json:"score"`
+		Embedding []float32 `json:"embedding"`
+	}
+	var data struct {
+		Faces []storedFace `json:"faces"`
+	}
+	if err := json.Unmarshal(record.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	data.Faces[0].Box = []float32{10, 12, 48, 48}
+	data.Faces[1].Box = []float32{10, 12, 70, 70}
+	record.Data, err = json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.Sync([]AIAnalysisRecord{record}); err != nil {
+		t.Fatal(err)
+	}
+	faces := people.AllFaces()
+	if len(faces) != 1 || faces[0].FaceIndex != 1 {
+		t.Fatalf("legacy faces after 2048-pixel scale filter = %+v, want only face 1", faces)
+	}
+}
+
 func TestPeopleServiceIncrementalReplacesChangedResourceFaces(t *testing.T) {
 	root := t.TempDir()
 	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "derived.json"))
@@ -257,7 +330,7 @@ func TestPeopleServiceSyncIsIndependentOfRecordOrder(t *testing.T) {
 	}
 }
 
-func TestPeopleServiceRequiresCentroidAndExemplarThresholds(t *testing.T) {
+func TestPeopleServiceRequiresCentroidAndAnchorThresholds(t *testing.T) {
 	root := t.TempDir()
 	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
 	if err != nil {
@@ -292,7 +365,7 @@ func TestPeopleServiceRequiresCentroidAndExemplarThresholds(t *testing.T) {
 		t.Fatal("0.50 similarity unexpectedly merged below the centroid threshold")
 	}
 	if ids["c_above_anchor"] != ids["d_above_neighbor"] {
-		t.Fatal("0.74 similarity did not merge above the centroid and exemplar thresholds")
+		t.Fatal("0.74 similarity did not merge above the centroid and anchor thresholds")
 	}
 }
 
@@ -325,118 +398,66 @@ func TestPeopleServiceRechecksANNScoreNearCentroidThreshold(t *testing.T) {
 				t.Fatalf("exact centroid comparisons = %d, want %d", people.comparisons, test.wantCompare)
 			}
 			if people.faces["candidate#0"].PersonID == people.faces["anchor#0"].PersonID {
-				t.Fatal("candidate merged despite failing the stable exemplar threshold")
+				t.Fatal("candidate merged despite failing the immutable anchor threshold")
 			}
 		})
 	}
 }
 
-func TestPeopleServiceRequiresIndependentFaceExemplarsForAmbiguousMatches(t *testing.T) {
-	matchAgainst := func(similarities ...float32) string {
-		centroid := make([]float32, peopleEmbeddingDimension)
-		centroid[0] = 1
-		cluster := &peopleCluster{
-			sum:       make([]float64, peopleEmbeddingDimension),
-			centroid:  centroid,
-			count:     len(similarities),
-			members:   make(map[string]struct{}, len(similarities)),
-			resources: make(map[string]struct{}, len(similarities)),
-		}
-		cluster.sum[0] = float64(len(similarities))
-		for index, similarity := range similarities {
-			vector := make([]float32, peopleEmbeddingDimension)
-			vector[0] = similarity
-			vector[1] = float32(math.Sqrt(float64(1 - similarity*similarity)))
-			if index%2 == 1 {
-				vector[1] = -vector[1]
-			}
-			key := fmt.Sprintf("exemplar_%d#0", index)
-			resourceID := fmt.Sprintf("exemplar_%d", index)
-			cluster.members[key] = struct{}{}
-			cluster.resources[resourceID] = struct{}{}
-			cluster.exemplars = append(cluster.exemplars, peopleClusterExemplar{
-				key: key, resourceID: resourceID, score: 0.9, embedding: vector,
-			})
-		}
-		people := &PeopleService{
-			faces:    map[string]PersonFace{},
-			clusters: map[string]*peopleCluster{"p_existing": cluster},
-			ann:      newPeopleANNIndex(),
-		}
-		people.ann.Add("p_existing", centroid)
-		candidate := make([]float32, peopleEmbeddingDimension)
-		candidate[0] = 1
-		people.addFaceLocked(PersonFace{Key: "candidate#0", ResourceID: "candidate", Score: 0.9, embedding: candidate})
-		return people.faces["candidate#0"].PersonID
+func TestPeopleServicePreventsCentroidDriftFromChainingIdentities(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	if got := matchAgainst(0.60); got == "p_existing" {
-		t.Fatal("one ambiguous face match was enough to join a cluster")
+	records := []AIAnalysisRecord{
+		peopleTestRecord("a_seed", peopleTestAngle(0)),
+		peopleTestRecord("b_neighbor", peopleTestAngle(30)),
+		peopleTestRecord("c_drift", peopleTestAngle(60)),
 	}
-	if got := matchAgainst(0.60, 0.60); got != "p_existing" {
-		t.Fatalf("two independent face matches joined %q, want p_existing", got)
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	ids := make(map[string]string)
+	for _, face := range people.AllFaces() {
+		ids[face.ResourceID] = face.PersonID
+	}
+	if ids["a_seed"] != ids["b_neighbor"] {
+		t.Fatal("a face above the anchor threshold did not join its seed group")
+	}
+	if ids["a_seed"] == ids["c_drift"] {
+		t.Fatal("a face that only matches the moving centroid/neighbor was chained into the seed group")
 	}
 }
 
-func TestPeopleServiceRetainsEightHighestConfidenceExemplars(t *testing.T) {
-	cluster := &peopleCluster{}
-	for index := 0; index < 10; index++ {
-		vector := make([]float32, peopleEmbeddingDimension)
-		vector[index] = 1
-		key := fmt.Sprintf("face_%02d#0", index)
-		addPeopleClusterExemplar(cluster, PersonFace{
-			Key: key, ResourceID: fmt.Sprintf("face_%02d", index), Score: float32(index), embedding: vector,
-		})
+func TestPeopleServiceRebuildRestoresTheSameImmutableAnchor(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "state.json")
+	indexPath := filepath.Join(root, "index.json")
+	records := []AIAnalysisRecord{
+		peopleTestRecord("z_late", peopleTestVector(0, 0)),
+		peopleTestRecord("a_seed", peopleTestVector(0, 0)),
+		peopleTestRecord("m_middle", peopleTestVector(0, .02)),
 	}
-	if len(cluster.exemplars) != PeopleGroupingExemplarLimit {
-		t.Fatalf("exemplar count = %d, want %d", len(cluster.exemplars), PeopleGroupingExemplarLimit)
+	first, err := OpenPeopleService(statePath, indexPath)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for index, exemplar := range cluster.exemplars {
-		want := fmt.Sprintf("face_%02d#0", 9-index)
-		if exemplar.key != want {
-			t.Fatalf("exemplar %d = %q, want %q", index, exemplar.key, want)
-		}
+	if err := first.Sync(records); err != nil {
+		t.Fatal(err)
 	}
-}
+	firstAnchor := first.clusters[first.faces["a_seed#0"].PersonID].anchor.key
 
-func TestPeopleServiceRejectsCentroidDriftWithoutExemplarMatch(t *testing.T) {
-	addFaceToCluster := func(exemplarSimilarity float32) string {
-		centroid := make([]float32, peopleEmbeddingDimension)
-		centroid[0] = 1
-		exemplar := make([]float32, peopleEmbeddingDimension)
-		exemplar[0] = exemplarSimilarity
-		exemplar[1] = float32(math.Sqrt(float64(1 - exemplarSimilarity*exemplarSimilarity)))
-		clusterID := "p_existing"
-		cluster := &peopleCluster{
-			sum:      make([]float64, peopleEmbeddingDimension),
-			centroid: centroid,
-			count:    1,
-			members:  map[string]struct{}{"seed#0": {}},
-			exemplars: []peopleClusterExemplar{{
-				key: "seed#0", score: 0.9, embedding: exemplar,
-			}},
-		}
-		cluster.sum[0] = 1
-		people := &PeopleService{
-			faces:    map[string]PersonFace{},
-			clusters: map[string]*peopleCluster{clusterID: cluster},
-			ann:      newPeopleANNIndex(),
-		}
-		people.ann.Add(clusterID, cluster.centroid)
-		candidate := make([]float32, peopleEmbeddingDimension)
-		candidate[0] = 1
-		people.addFaceLocked(PersonFace{Key: "new#0", ResourceID: "new", Score: 0.9, embedding: candidate})
-		return people.faces["new#0"].PersonID
+	restarted, err := OpenPeopleService(statePath, indexPath)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	if got := addFaceToCluster(0.669); got == "p_existing" {
-		t.Fatal("face matching only the moving centroid joined without a strong exemplar match")
+	if err := restarted.Sync(records); err != nil {
+		t.Fatal(err)
 	}
-	if got := addFaceToCluster(0.7116); got == "p_existing" {
-		t.Fatal("cross-style near match unexpectedly joined the cluster")
-	}
-	if got := addFaceToCluster(0.73); got != "p_existing" {
-		t.Fatalf("face with a strong exemplar match joined %q, want p_existing", got)
+	restoredAnchor := restarted.clusters[restarted.faces["a_seed#0"].PersonID].anchor.key
+	if firstAnchor != "a_seed#0" || restoredAnchor != firstAnchor {
+		t.Fatalf("anchor before/after cached restore = %q/%q, want a_seed#0", firstAnchor, restoredAnchor)
 	}
 }
 
