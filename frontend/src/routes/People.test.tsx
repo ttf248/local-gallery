@@ -106,6 +106,7 @@ describe("人物相册", () => {
     expect(await screen.findByText("旅行同伴")).toBeInTheDocument();
     expect(screen.getByText(/3\s*张脸/)).toBeInTheDocument();
     expect(screen.getByText("1 组 · 按照片数排序")).toBeInTheDocument();
+    expect(mocks.people).toHaveBeenCalledWith(false, "photos");
     expect(screen.queryByText(/组中心|代表脸|边界脸/)).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -114,6 +115,49 @@ describe("人物相册", () => {
           element.textContent?.replace(/\s+/g, "") === "2张照片",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("切换审查优先并展示组内低分位复核线索", async () => {
+    mocks.people.mockImplementation(
+      (_includeHidden: boolean, sort: "photos" | "review") =>
+        Promise.resolve({
+          ok: true,
+          people: [
+            {
+              id: "p_review",
+              name: "待复核人物",
+              faceCount: 4,
+              photoCount: 3,
+              hidden: false,
+              quality:
+                sort === "review"
+                  ? {
+                      anchorP10: 0.731,
+                      centroidP10: 0.812,
+                      detectionP10: 0.754,
+                    }
+                  : undefined,
+            },
+          ],
+          totalGroups: 1,
+          limit: 50,
+          centroidThreshold: 0.52,
+          anchorThreshold: 0.72,
+          sort,
+          revision: 5,
+        }),
+    );
+    renderPeople();
+
+    fireEvent.click(await screen.findByRole("radio", { name: "审查优先" }));
+
+    expect(await screen.findByText("锚点 P10 0.731")).toBeInTheDocument();
+    expect(screen.getByText("中心 P10 0.812")).toBeInTheDocument();
+    expect(screen.getByText("检测 P10 0.754")).toBeInTheDocument();
+    expect(
+      screen.getByText(/只用于安排人工复核，不代表身份置信度/),
+    ).toBeInTheDocument();
+    expect(mocks.people).toHaveBeenLastCalledWith(false, "review");
   });
 
   it("说明列表仅展示照片数最多的前50组", async () => {

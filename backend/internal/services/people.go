@@ -54,12 +54,22 @@ type PersonFace struct {
 }
 
 type PersonGroup struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	FaceCount       int    `json:"faceCount"`
-	PhotoCount      int    `json:"photoCount"`
-	CoverResourceID string `json:"coverResourceId,omitempty"`
-	Hidden          bool   `json:"hidden"`
+	ID              string              `json:"id"`
+	Name            string              `json:"name"`
+	FaceCount       int                 `json:"faceCount"`
+	PhotoCount      int                 `json:"photoCount"`
+	CoverResourceID string              `json:"coverResourceId,omitempty"`
+	Hidden          bool                `json:"hidden"`
+	Quality         *PersonGroupQuality `json:"quality,omitempty"`
+}
+
+// PersonGroupQuality describes the lower tenth percentile of each group's
+// stored similarity and detector confidence scores. It prioritizes manual
+// review; it is not an identity probability.
+type PersonGroupQuality struct {
+	AnchorP10    float64 `json:"anchorP10"`
+	CentroidP10  float64 `json:"centroidP10"`
+	DetectionP10 float64 `json:"detectionP10"`
 }
 
 // PeopleAlbumGroup is a person's current photo membership inside one album.
@@ -1032,6 +1042,16 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 // An empty query returns the most photographed groups, which gives merge dialogs
 // useful initial choices without sending the full people index to the browser.
 func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool, includeResource func(string) bool) ([]PersonGroup, int) {
+	return s.searchGroups(query, limit, includeHidden, includeResource, false)
+}
+
+// SearchGroupsForReview orders groups by the weakest lower-tail similarity
+// evidence so users can inspect uncertain groups before large but consistent ones.
+func (s *PeopleService) SearchGroupsForReview(query string, limit int, includeHidden bool, includeResource func(string) bool) ([]PersonGroup, int) {
+	return s.searchGroups(query, limit, includeHidden, includeResource, true)
+}
+
+func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool, includeResource func(string) bool, reviewOrder bool) ([]PersonGroup, int) {
 	query = strings.ToLower(strings.TrimSpace(query))
 	if query == "人物" {
 		query = ""
@@ -1044,7 +1064,7 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 			query = rest
 		}
 	}
-	if query == "" {
+	if query == "" && !reviewOrder {
 		return s.TopGroups(limit, includeHidden, includeResource)
 	}
 	if limit <= 0 {
@@ -1056,6 +1076,7 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 	ordinals := s.personOrdinalNamesLocked()
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
+	qualitySamples := make(map[string]*peopleGroupQualitySamples)
 	for _, face := range s.faces {
 		if includeResource != nil && !includeResource(face.ResourceID) {
 			continue
@@ -1079,6 +1100,42 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 		if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
 			group.CoverResourceID = face.ResourceID
 		}
+		if reviewOrder {
+			samples := qualitySamples[id]
+			if samples == nil {
+				samples = &peopleGroupQualitySamples{sum: make([]float64, peopleEmbeddingDimension)}
+				if cluster := s.clusters[id]; cluster != nil {
+					samples.anchor = cluster.anchor.embedding
+				}
+				qualitySamples[id] = samples
+			}
+			samples.members = append(samples.members, face)
+			for index, value := range face.embedding {
+				samples.sum[index] += float64(value)
+			}
+			if face.Score > samples.fallback.Score || samples.fallback.Key == "" ||
+				(face.Score == samples.fallback.Score && face.Key < samples.fallback.Key) {
+				samples.fallback = face
+			}
+		}
+	}
+	if reviewOrder {
+		result := make([]PersonGroup, 0, len(groups))
+		for id, group := range groups {
+			group.PhotoCount = len(photos[id])
+			if samples := qualitySamples[id]; samples != nil {
+				group.Quality = samples.summarize()
+			}
+			result = append(result, *group)
+		}
+		sort.Slice(result, func(i, j int) bool {
+			return peopleGroupReviewRanksBefore(result[i], result[j])
+		})
+		total := len(result)
+		if len(result) > limit {
+			result = result[:limit]
+		}
+		return result, total
 	}
 
 	selected := make(peopleGroupHeap, 0, min(limit, len(groups)))
@@ -1101,6 +1158,65 @@ func (s *PeopleService) SearchGroups(query string, limit int, includeHidden bool
 		return peopleGroupRanksBefore(result[i], result[j])
 	})
 	return result, total
+}
+
+type peopleGroupQualitySamples struct {
+	anchor   []float32
+	fallback PersonFace
+	sum      []float64
+	members  []PersonFace
+}
+
+func (samples *peopleGroupQualitySamples) summarize() *PersonGroupQuality {
+	if len(samples.members) == 0 {
+		return nil
+	}
+	anchor := samples.anchor
+	if len(anchor) != peopleEmbeddingDimension {
+		anchor = samples.fallback.embedding
+	}
+	centroid := normalizedCentroid(samples.sum)
+	anchorScores := make([]float64, 0, len(samples.members))
+	centroidScores := make([]float64, 0, len(samples.members))
+	detectionScores := make([]float64, 0, len(samples.members))
+	for _, face := range samples.members {
+		anchorScores = append(anchorScores, peopleCosine(face.embedding, anchor))
+		centroidScores = append(centroidScores, peopleCosine(face.embedding, centroid))
+		detectionScores = append(detectionScores, float64(face.Score))
+	}
+	return &PersonGroupQuality{
+		AnchorP10:    peopleP10(anchorScores),
+		CentroidP10:  peopleP10(centroidScores),
+		DetectionP10: peopleP10(detectionScores),
+	}
+}
+
+func peopleP10(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sort.Float64s(values)
+	index := int(math.Floor(float64(len(values)-1) * 0.1))
+	return math.Round(values[index]*1000) / 1000
+}
+
+func peopleGroupReviewRanksBefore(left, right PersonGroup) bool {
+	leftQuality, rightQuality := left.Quality, right.Quality
+	if leftQuality != nil && rightQuality != nil {
+		if leftQuality.AnchorP10 != rightQuality.AnchorP10 {
+			return leftQuality.AnchorP10 < rightQuality.AnchorP10
+		}
+		if leftQuality.CentroidP10 != rightQuality.CentroidP10 {
+			return leftQuality.CentroidP10 < rightQuality.CentroidP10
+		}
+		if leftQuality.DetectionP10 != rightQuality.DetectionP10 {
+			return leftQuality.DetectionP10 < rightQuality.DetectionP10
+		}
+	}
+	if left.PhotoCount != right.PhotoCount {
+		return left.PhotoCount > right.PhotoCount
+	}
+	return left.ID < right.ID
 }
 
 // GroupAndFaces returns one group's current summary and its faces in one pass.

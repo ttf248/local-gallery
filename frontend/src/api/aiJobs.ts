@@ -583,7 +583,14 @@ export interface PersonGroup {
   photoCount: number;
   coverResourceId?: string;
   hidden: boolean;
+  quality?: {
+    anchorP10: number;
+    centroidP10: number;
+    detectionP10: number;
+  };
 }
+
+export type PeopleSort = "photos" | "review";
 
 /**
  * 人脸框：源图像素里的 [x, y, 宽, 高]。
@@ -821,7 +828,7 @@ export const aiJobsApi = {
       body,
     });
   },
-  people: (includeHidden = false) =>
+  people: (includeHidden = false, sort: PeopleSort = "photos") =>
     api<{
       ok: boolean;
       people: PersonGroup[];
@@ -829,8 +836,9 @@ export const aiJobsApi = {
       limit: number;
       centroidThreshold: number;
       anchorThreshold: number;
+      sort: PeopleSort;
       revision: number;
-    }>("/api/people", { params: { includeHidden } }),
+    }>("/api/people", { params: { includeHidden, sort } }),
   searchPeople: (query: string) =>
     api<{
       ok: boolean;

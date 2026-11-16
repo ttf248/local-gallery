@@ -540,6 +540,41 @@ func TestPeopleGroupingSyntheticQualitySet(t *testing.T) {
 	}
 }
 
+func TestPeopleServiceReviewOrderPrioritizesWeakAnchorTail(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	vectorAtSimilarity := func(axis int, similarity float32) []float32 {
+		vector := make([]float32, peopleEmbeddingDimension)
+		vector[axis] = similarity
+		vector[axis+1] = float32(math.Sqrt(float64(1 - similarity*similarity)))
+		return vector
+	}
+	if err := people.Sync([]AIAnalysisRecord{
+		peopleTestRecord("a_strong_seed", peopleTestVector(2, 0)),
+		peopleTestRecord("b_strong_member", vectorAtSimilarity(2, .90)),
+		peopleTestRecord("z_border_seed", peopleTestVector(0, 0)),
+		peopleTestRecord("zz_border_member", vectorAtSimilarity(0, .74)),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	countOrdered, _ := people.SearchGroups("", 50, false, nil)
+	if len(countOrdered) != 2 || countOrdered[0].CoverResourceID != "a_strong_seed" {
+		t.Fatalf("photo-count order = %+v, want the stable cover-ID order", countOrdered)
+	}
+	reviewOrdered, total := people.SearchGroupsForReview("", 50, false, nil)
+	if total != 2 || len(reviewOrdered) != 2 || reviewOrdered[0].CoverResourceID != "z_border_seed" {
+		t.Fatalf("review order = %+v, total %d; want the weaker anchor group first", reviewOrdered, total)
+	}
+	quality := reviewOrdered[0].Quality
+	if quality == nil || math.Abs(quality.AnchorP10-.74) > .001 || quality.CentroidP10 <= .52 || math.Abs(quality.DetectionP10-.95) > .001 {
+		t.Fatalf("review quality = %+v, want anchor P10 .74, strong center, and detector P10 .95", quality)
+	}
+}
+
 func TestPeopleServiceRestoresCachedAssignmentsWithoutReclustering(t *testing.T) {
 	root := t.TempDir()
 	statePath := filepath.Join(root, "state.json")

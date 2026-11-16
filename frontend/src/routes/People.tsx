@@ -9,10 +9,16 @@ import {
 import EmptyState from "../components/common/EmptyState";
 import PageHeading from "../components/common/PageHeading";
 import RenditionImage from "../components/common/RenditionImage";
+import Segmented from "../components/common/Segmented";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoWall from "../components/wall/PhotoWall";
 import PeopleMergeDialog from "../components/people/PeopleMergeDialog";
-import { aiJobsApi, type PersonFace, type PersonGroup } from "../api/aiJobs";
+import {
+  aiJobsApi,
+  type PeopleSort,
+  type PersonFace,
+  type PersonGroup,
+} from "../api/aiJobs";
 import { usePickToggle } from "../hooks/usePickToggle";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
@@ -28,9 +34,10 @@ export default function People() {
 function PeopleList() {
   const client = useQueryClient();
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [sort, setSort] = useState<PeopleSort>("photos");
   const query = useQuery({
-    queryKey: ["people", includeHidden],
-    queryFn: () => aiJobsApi.people(includeHidden),
+    queryKey: ["people", includeHidden, sort],
+    queryFn: () => aiJobsApi.people(includeHidden, sort),
   });
   const jobs = useQuery({ queryKey: ["ai-jobs"], queryFn: aiJobsApi.list });
   const clear = useMutation({
@@ -94,12 +101,25 @@ function PeopleList() {
         <section className="page-shell mt-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-meta text-fg-muted">
-              {totalGroups > groups.length
-                ? `照片数最多的 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
-                : `${totalGroups.toLocaleString()} 组`}
-              {" · 按照片数排序"}
+              {sort === "photos"
+                ? totalGroups > groups.length
+                  ? `照片数最多的 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
+                  : `${totalGroups.toLocaleString()} 组`
+                : totalGroups > groups.length
+                  ? `优先审查的 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
+                  : `${totalGroups.toLocaleString()} 组`}
+              {sort === "photos" ? " · 按照片数排序" : " · 按复核线索排序"}
             </p>
             <div className="flex flex-wrap items-center gap-3">
+              <Segmented
+                label="人物排序"
+                value={sort}
+                onChange={setSort}
+                options={[
+                  { value: "photos", label: "照片最多" },
+                  { value: "review", label: "审查优先" },
+                ]}
+              />
               <label className="flex items-center gap-2 text-meta text-fg-muted">
                 <input
                   type="checkbox"
@@ -131,12 +151,21 @@ function PeopleList() {
               清除失败。请确认没有人脸识别任务正在运行后重试。
             </p>
           ) : null}
+          {sort === "review" ? (
+            <p className="mb-4 text-meta text-fg-muted">
+              优先展示组内较低一成的锚点相似度、中心相似度与检测分数较弱的分组。这些数值只用于安排人工复核，不代表身份置信度。
+            </p>
+          ) : null}
           {/* 密度跟着相册网格走（列宽下限 260px）：固定三列时一张脸
               占掉四百像素，一屏只看得到六个人；这一页有五十个候选组，
               它要的是一面能扫完的墙。 */}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {groups.map((person) => (
-              <PersonCard key={person.id} person={person} />
+              <PersonCard
+                key={person.id}
+                person={person}
+                showQuality={sort === "review"}
+              />
             ))}
           </div>
         </section>
@@ -145,7 +174,13 @@ function PeopleList() {
   );
 }
 
-function PersonCard({ person }: { person: PersonGroup }) {
+function PersonCard({
+  person,
+  showQuality,
+}: {
+  person: PersonGroup;
+  showQuality: boolean;
+}) {
   return (
     <Link
       to={peopleRoute(person.id)}
@@ -184,6 +219,13 @@ function PersonCard({ person }: { person: PersonGroup }) {
           ›
         </span>
       </div>
+      {showQuality && person.quality ? (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border-faint px-4 py-2 text-meta text-fg-muted">
+          <span>锚点 P10 {person.quality.anchorP10.toFixed(3)}</span>
+          <span>中心 P10 {person.quality.centroidP10.toFixed(3)}</span>
+          <span>检测 P10 {person.quality.detectionP10.toFixed(3)}</span>
+        </div>
+      ) : null}
     </Link>
   );
 }

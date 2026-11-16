@@ -310,11 +310,12 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 		CentroidThreshold float64                `json:"centroidThreshold"`
 		AnchorThreshold   float64                `json:"anchorThreshold"`
 		GroupingLimited   *bool                  `json:"groupingLimited"`
+		Sort              string                 `json:"sort"`
 	}
 	decodePeopleBody(t, list, &listBody)
 	if len(listBody.People) != 50 || listBody.TotalGroups != groupCount || listBody.Limit != 50 ||
 		listBody.CentroidThreshold != services.PeopleGroupingCentroidThreshold ||
-		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil {
+		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil || listBody.Sort != peopleSortPhotos {
 		t.Fatalf("top people response = %d groups, total %d, limit %d; want 50 of %d", len(listBody.People), listBody.TotalGroups, listBody.Limit, groupCount)
 	}
 	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 2 {
@@ -339,6 +340,21 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 	decodePeopleBody(t, search, &searchBody)
 	if len(searchBody.People) != 1 || searchBody.People[0].ID != target.ID || searchBody.Limit != 20 {
 		t.Fatalf("bounded search response = %+v; want target %s", searchBody, target.ID)
+	}
+
+	review := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people?sort=review", "")
+	var reviewBody struct {
+		People []services.PersonGroup `json:"people"`
+		Sort   string                 `json:"sort"`
+	}
+	decodePeopleBody(t, review, &reviewBody)
+	if len(reviewBody.People) != 50 || reviewBody.Sort != peopleSortReview || reviewBody.People[0].Quality == nil {
+		t.Fatalf("review response = %d groups, sort %q", len(reviewBody.People), reviewBody.Sort)
+	}
+	invalid := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people?sort=unknown", "")
+	defer invalid.Body.Close()
+	if invalid.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("invalid sort status = %d; want %d", invalid.StatusCode, fiber.StatusBadRequest)
 	}
 }
 

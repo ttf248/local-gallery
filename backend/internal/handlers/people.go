@@ -21,6 +21,8 @@ type personMediaPage struct {
 
 const peopleListLimit = 50
 const peopleSearchLimit = 20
+const peopleSortPhotos = "photos"
+const peopleSortReview = "review"
 
 // PeopleHandler lists current photo-only person albums and clears all face-derived data.
 func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, catalog *services.ResourceCatalog, validatePath func(string) (string, error)) fiber.Handler {
@@ -41,6 +43,13 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			return c.JSON(fiber.Map{"ok": true, "cleared": true, "peopleEnabled": false})
 		}
 		query := strings.TrimSpace(c.Query("q"))
+		sortOrder := strings.TrimSpace(c.Query("sort"))
+		if sortOrder == "" {
+			sortOrder = peopleSortPhotos
+		}
+		if sortOrder != peopleSortPhotos && sortOrder != peopleSortReview {
+			return writeError(c, fiber.StatusBadRequest, "invalid_people_sort", "sort must be photos or review")
+		}
 		limit := peopleListLimit
 		if query != "" {
 			if len([]rune(query)) < 2 {
@@ -66,16 +75,22 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			return c.JSON(fiber.Map{
 				"ok": true, "people": []services.PersonGroup{}, "totalGroups": 0,
 				"limit": limit, "centroidThreshold": services.PeopleGroupingCentroidThreshold,
-				"anchorThreshold": services.PeopleGroupingAnchorThreshold,
-				"revision":        snapshot.Revision(),
+				"anchorThreshold": services.PeopleGroupingAnchorThreshold, "sort": sortOrder,
+				"revision": snapshot.Revision(),
 			})
 		}
-		groups, total := people.SearchGroups(query, limit, c.Query("includeHidden") == "true", snapshot.IsPhotoImage)
+		var groups []services.PersonGroup
+		var total int
+		if sortOrder == peopleSortReview {
+			groups, total = people.SearchGroupsForReview(query, limit, c.Query("includeHidden") == "true", snapshot.IsPhotoImage)
+		} else {
+			groups, total = people.SearchGroups(query, limit, c.Query("includeHidden") == "true", snapshot.IsPhotoImage)
+		}
 		return c.JSON(fiber.Map{
 			"ok": true, "people": groups, "totalGroups": total, "limit": limit,
 			"centroidThreshold": services.PeopleGroupingCentroidThreshold,
-			"anchorThreshold":   services.PeopleGroupingAnchorThreshold,
-			"revision":          snapshot.Revision(),
+			"anchorThreshold":   services.PeopleGroupingAnchorThreshold, "sort": sortOrder,
+			"revision": snapshot.Revision(),
 		})
 	}
 }

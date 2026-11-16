@@ -425,7 +425,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### 人物相册 API
 
-- `GET /api/people` 默认返回照片数最多的 50 个候选组，按照片数降序排列，照片数相同时按封面资源 ID 与人物 ID 稳定排序。`totalGroups` 是当前照片目录下的候选组总数，`limit` 为 50；`includeHidden=true` 将手动隐藏组加入统计与结果。设置 `q` 可按人物名称或 ID 搜索，默认最多返回 20 项，`limit` 上限为 50；空查询返回照片数最多的候选组，不提供全量清单。响应含 `centroidThreshold` 与 `anchorThreshold` 聚类参数，以及资源 ID、人数统计、名称和封面 ID；不返回特征向量或文件系统路径。
+- `GET /api/people?sort=photos|review` 默认返回照片数最多的 50 个候选组，按照片数降序排列，照片数相同时按封面资源 ID 与人物 ID 稳定排序。`sort=review` 按组内锚点相似度 P10、中心相似度 P10、检测分数 P10 从低到高排列，并在每组返回对应 `quality` 指标；这只是人工复核排序启发值，不代表身份概率。未指定 `sort` 时按 `photos` 处理，其他值返回 `400 invalid_people_sort`。`totalGroups` 是当前照片目录下的候选组总数，`limit` 为 50；`includeHidden=true` 将手动隐藏组加入统计与结果。设置 `q` 可按人物名称或 ID 搜索，默认最多返回 20 项，`limit` 上限为 50；空查询返回所选排序的前列候选组，不提供全量清单。响应含 `centroidThreshold`、`anchorThreshold` 与最终使用的 `sort`，以及资源 ID、人数统计、名称和封面 ID；不返回特征向量或文件系统路径。
 - `GET /api/people/:personId/media?cursor=…&limit=200` 返回人物相册分页、当前照片 DTO 与可供纠错的脸部框/序号；照片 DTO 含原图像素宽高，供照片墙将脸部框准确投影到合照上。只在本页校验源文件路径与指纹，并批量补齐媒体尺寸。
 - `PUT /api/people/:personId` 接受 `name` 和/或 `hidden`；空名称恢复默认名称。
 - `POST /api/people/merge` 接受 `{ "sourceId": "…", "targetId": "…" }`，将来源组的脸分配给目标组。
