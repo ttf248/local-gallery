@@ -72,9 +72,12 @@ func (s *ActivityStore) DeleteBatch(identities []models.ActivityIdentity) (int, 
 	if err := s.ensureLoaded(); err != nil {
 		return 0, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	next := cloneActivityMap(s.items)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.RLock()
+	currentItems := s.items
+	s.mu.RUnlock()
+	next := cloneActivityMap(currentItems)
 	deleted := 0
 	for key := range keys {
 		if _, ok := next[key]; ok {
@@ -88,6 +91,5 @@ func (s *ActivityStore) DeleteBatch(identities []models.ActivityIdentity) (int, 
 	if err := s.commitLocked(next); err != nil {
 		return 0, err
 	}
-	s.revision++
 	return deleted, nil
 }

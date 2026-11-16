@@ -26,9 +26,10 @@ type activityFile struct {
 type ActivityStore struct {
 	path string
 
-	mu     sync.RWMutex
-	items  map[string]models.Activity
-	loaded bool
+	writeMu sync.Mutex
+	mu      sync.RWMutex
+	items   map[string]models.Activity
+	loaded  bool
 	// revision 仅在成功持久化活动变更后递增，供依赖活动派生结果的内存索引失效。
 	// 它是进程内版本号，不会写入活动文件或暴露给 HTTP 客户端。
 	revision uint64
@@ -101,10 +102,12 @@ func (s *ActivityStore) StartedAlbumIDsSnapshot() (image, video map[string]struc
 		return nil, nil, 0, err
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
 	image = make(map[string]struct{})
 	video = make(map[string]struct{})
-	for _, activity := range s.items {
+	items := s.items
+	revision = s.revision
+	s.mu.RUnlock()
+	for _, activity := range items {
 		switch activity.MediaKind {
 		case models.MediaKindImage:
 			image[activity.AlbumID] = struct{}{}
@@ -112,7 +115,7 @@ func (s *ActivityStore) StartedAlbumIDsSnapshot() (image, video map[string]struc
 			video[activity.AlbumID] = struct{}{}
 		}
 	}
-	return image, video, s.revision, nil
+	return image, video, revision, nil
 }
 
 // ImageActivitySnapshot 返回全部漫画阅读活动、对应相册 ID 集合和当前活动版本。
@@ -128,16 +131,18 @@ func (s *ActivityStore) activitySnapshot(kind models.MediaKind) ([]models.Activi
 		return nil, nil, 0, err
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	activities := make([]models.Activity, 0, len(s.items))
+	items := s.items
+	revision := s.revision
+	s.mu.RUnlock()
+	activities := make([]models.Activity, 0, len(items))
 	ids := make(map[string]struct{})
-	for _, activity := range s.items {
+	for _, activity := range items {
 		if activity.MediaKind == kind {
 			activities = append(activities, activity)
 			ids[activity.AlbumID] = struct{}{}
 		}
 	}
-	return activities, ids, s.revision, nil
+	return activities, ids, revision, nil
 }
 
 // Set 新增或覆盖单条活动。
@@ -175,9 +180,12 @@ func (s *ActivityStore) setBatch(activities []models.Activity, result *models.Ac
 	if err := s.ensureLoaded(); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	next := s.items
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.RLock()
+	currentItems := s.items
+	s.mu.RUnlock()
+	next := currentItems
 	changed := false
 	for _, activity := range normalized {
 		key, _ := activity.Identity().Key()
@@ -185,7 +193,7 @@ func (s *ActivityStore) setBatch(activities []models.Activity, result *models.Ac
 			continue
 		}
 		if !changed {
-			next = cloneActivityMap(s.items)
+			next = cloneActivityMap(currentItems)
 		}
 		next[key] = activity
 		changed = true
@@ -194,11 +202,10 @@ func (s *ActivityStore) setBatch(activities []models.Activity, result *models.Ac
 		if err := s.commitLocked(next); err != nil {
 			return err
 		}
-		s.revision++
 	}
 	if result != nil {
 		key, _ := normalized[len(normalized)-1].Identity().Key()
-		*result = s.items[key]
+		*result = next[key]
 	}
 	return nil
 }
@@ -212,17 +219,19 @@ func (s *ActivityStore) Delete(identity models.ActivityIdentity) (bool, error) {
 	if err := s.ensureLoaded(); err != nil {
 		return false, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, exists := s.items[key]; !exists {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.RLock()
+	currentItems := s.items
+	s.mu.RUnlock()
+	if _, exists := currentItems[key]; !exists {
 		return false, nil
 	}
-	next := cloneActivityMap(s.items)
+	next := cloneActivityMap(currentItems)
 	delete(next, key)
 	if err := s.commitLocked(next); err != nil {
 		return false, err
 	}
-	s.revision++
 	return true, nil
 }
 
@@ -231,16 +240,19 @@ func (s *ActivityStore) Clear() (int, error) {
 	if err := s.ensureLoaded(); err != nil {
 		return 0, err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	count := len(s.items)
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.RLock()
+	currentItems := s.items
+	s.mu.RUnlock()
+	count := len(currentItems)
 	if count == 0 {
 		return 0, nil
 	}
-	if err := s.commitLocked(map[string]models.Activity{}); err != nil {
+	next := map[string]models.Activity{}
+	if err := s.commitLocked(next); err != nil {
 		return 0, err
 	}
-	s.revision++
 	return count, nil
 }
 
@@ -309,8 +321,22 @@ func isolateUnsupportedFile(path string) error {
 	return os.Rename(path, path+".unsupported."+stamp)
 }
 
+// commitLocked requires writeMu. The map is persisted before it is published,
+// while readers continue using the previous immutable snapshot.
 func (s *ActivityStore) commitLocked(items map[string]models.Activity) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	if err := writeActivityFile(s.path, items); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.items = items
+	s.loaded = true
+	s.revision++
+	s.mu.Unlock()
+	return nil
+}
+
+func writeActivityFile(path string, items map[string]models.Activity) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	activities := make([]models.Activity, 0, len(items))
@@ -329,7 +355,7 @@ func (s *ActivityStore) commitLocked(items map[string]models.Activity) error {
 	if err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
+	tmp := path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
 		return err
@@ -348,12 +374,10 @@ func (s *ActivityStore) commitLocked(items map[string]models.Activity) error {
 		_ = os.Remove(tmp)
 		return err
 	}
-	if err := os.Rename(tmp, s.path); err != nil {
+	if err := os.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("replace activity store: %w", err)
 	}
-	s.items = items
-	s.loaded = true
 	return nil
 }
 

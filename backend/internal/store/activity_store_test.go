@@ -3,6 +3,7 @@ package store
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -76,6 +77,40 @@ func TestActivityStoreBatchRejectsAllWhenOneItemIsInvalid(t *testing.T) {
 	}
 	if _, exists, err := store.Get(valid.Identity()); err != nil || exists {
 		t.Fatalf("invalid batch partially committed: exists=%v err=%v", exists, err)
+	}
+}
+
+func TestActivityStoreConcurrentMutationsPersistEveryRecord(t *testing.T) {
+	store, path := newTestActivityStore(t)
+	const count = 16
+	var workers sync.WaitGroup
+	errs := make(chan error, count)
+	for index := 0; index < count; index++ {
+		workers.Add(1)
+		go func(index int) {
+			defer workers.Done()
+			errs <- store.Set(imageActivity(index+1, index%3, 3))
+		}(index)
+	}
+	workers.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	identities := make([]models.ActivityIdentity, count)
+	for index := range identities {
+		identities[index] = imageActivity(index+1, 0, 3).Identity()
+	}
+	reopened := NewActivityStore(path)
+	activities, err := reopened.Query(identities)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activities) != count {
+		t.Fatalf("persisted %d activities, want %d", len(activities), count)
 	}
 }
 

@@ -20,7 +20,7 @@ func benchmarkActivityStore(b *testing.B, size int) *ActivityStore {
 		key, _ := a.Identity().Key()
 		s.items[key] = a
 	}
-	if err := s.commitLocked(s.items); err != nil {
+	if err := writeActivityFile(s.path, s.items); err != nil {
 		b.Fatal(err)
 	}
 	return s
@@ -55,32 +55,41 @@ func BenchmarkActivityWrites(b *testing.B) {
 	}
 }
 func BenchmarkActivityReadWhileRepeatedWrites(b *testing.B) {
-	s := benchmarkActivityStore(b, 100000)
+	s := benchmarkActivityStore(b, 1000)
 	durations := make([]time.Duration, 0, b.N)
 	done := make(chan error, 1)
-	start := make(chan struct{})
+	writerDone := make(chan struct{})
 	b.ResetTimer()
 	go func() {
-		<-start
+		defer close(writerDone)
 		for i := 0; i < b.N; i++ {
-			if err := s.Set(models.Activity{AlbumID: batchAlbumID(0), MediaKind: models.MediaKindImage, PageCount: 3}); err != nil {
+			if err := s.Set(models.Activity{
+				AlbumID: batchAlbumID(0), MediaKind: models.MediaKindImage,
+				PageCount: 3, PageIndex: i%2 + 1,
+			}); err != nil {
 				done <- err
 				return
 			}
 		}
 		done <- nil
 	}()
-	close(start)
-	for i := 0; i < b.N; i++ {
+	for {
+		select {
+		case <-writerDone:
+			if err := <-done; err != nil {
+				b.Fatal(err)
+			}
+			goto finished
+		default:
+		}
 		before := b.Elapsed()
 		if _, _, err := s.Get(models.ActivityIdentity{AlbumID: batchAlbumID(0), MediaKind: models.MediaKindImage}); err != nil {
 			b.Fatal(err)
 		}
 		durations = append(durations, b.Elapsed()-before)
 	}
-	if err := <-done; err != nil {
-		b.Fatal(err)
-	}
+
+finished:
 	b.StopTimer()
 	sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
 	b.ReportMetric(float64(durations[(len(durations)-1)*95/100].Nanoseconds()), "read-p95-ns")

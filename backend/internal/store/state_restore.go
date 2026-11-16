@@ -30,8 +30,9 @@ func (s *ActivityStore) Snapshot() ([]models.Activity, error) {
 		return nil, err
 	}
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return activityList(s.items), nil
+	items := s.items
+	s.mu.RUnlock()
+	return activityList(items), nil
 }
 
 func activityList(items map[string]models.Activity) []models.Activity {
@@ -60,14 +61,16 @@ func (s *ActivityStore) CompareAndReplace(expected, next []models.Activity) erro
 	if err := s.ensureLoaded(); err != nil {
 		return err
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !reflect.DeepEqual(activityList(s.items), expected) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.RLock()
+	currentItems := s.items
+	s.mu.RUnlock()
+	if !reflect.DeepEqual(activityList(currentItems), expected) {
 		return ErrStateChanged
 	}
 	if err := s.commitLocked(items); err != nil {
 		return err
 	}
-	s.revision++
 	return nil
 }
