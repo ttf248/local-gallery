@@ -98,6 +98,28 @@ test("专页按维度翻页，分组随之换一批", async ({ page }) => {
   expect(peopleCount).toMatch(/\d+/);
 });
 
+test("「全部分类」页签铺出四类详细分类，选中后请求的是全部维度", async ({
+  page,
+}) => {
+  await scannedNodes(page.request, "photo");
+  await page.goto("/photo/smart-albums");
+
+  await page.getByRole("tab", { name: /全部分类/ }).click();
+  await expect(page).toHaveURL(/\/photo\/smart-albums\?dimension=all/);
+  await expect(page.getByRole("tab", { name: /全部分类/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  // 全部维度里不含精选推荐：卡片角标是四类详细分类之一。
+  const badges = await page
+    .locator('[data-testid="smart-album-dimension"]')
+    .allInnerTexts();
+  const dimensions = ["时间", "地点", "人物", "场景"];
+  expect(badges.length).toBeGreaterThan(0);
+  expect(badges.every((text) => dimensions.includes(text.trim()))).toBe(true);
+});
+
 test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-capture-date");

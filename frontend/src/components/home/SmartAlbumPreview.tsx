@@ -51,7 +51,7 @@ export default function SmartAlbumPreview({
     return (
       <EmptyState
         title="暂时没有精选推荐"
-        description="精选主题只展示证据充分、规模与区分度合适的照片组合；时间、地点、人物和场景详细分类仍可在专页查看。"
+        description="精选主题只展示至少 12 张、至少两类线索一致且不与所在文件夹重复的照片组合；时间、地点、人物和场景详细分类仍可在专页查看。"
         action={
           <Link to="/photo/smart-albums" className="btn btn-sm btn-outline">
             查看详细分类

@@ -8,6 +8,11 @@ import type {
 
 export type SmartAlbumDimension =
   "recommended" | "time" | "place" | "people" | "scene";
+/** 证据维度：推荐由这几类线索支撑，不含「推荐」本身。 */
+export type SmartAlbumEvidenceDimension = Exclude<
+  SmartAlbumDimension,
+  "recommended"
+>;
 export type SmartAlbumDirectoryDimension =
   "featured" | "all" | SmartAlbumDimension;
 
@@ -49,7 +54,8 @@ export interface SmartAlbumGroup {
   customName: boolean;
   photoCount: number;
   qualityScore?: number;
-  evidenceDimensions?: SmartAlbumDimension[];
+  /** 支撑这条推荐的证据维度，顺序固定为时间、地点、人物、场景。 */
+  evidenceDimensions?: SmartAlbumEvidenceDimension[];
   recommendationReasons?: string[];
   overrideConflict?: boolean;
   coverResourceId?: string;

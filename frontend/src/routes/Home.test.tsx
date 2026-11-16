@@ -36,7 +36,7 @@ vi.mock("../hooks/useSmartAlbums", () => ({
     fetchNextPage: vi.fn(),
   }),
 }));
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -424,9 +424,12 @@ it("首页智能相册汇总已生成的分组并直达来源相册中的分组"
     "/photo/albums/a_1?view=smart&dimension=recommended&group=sg_0123456789abcdef0123",
   );
   expect(smartGroupLink).toHaveTextContent("3 张 · 家庭照片 / 2023年测试相册");
-  expect(smartGroupLink).toHaveTextContent(
-    "连续拍摄时间 · 同一地点 · 其余 1 类",
-  );
+  // 推荐卡片第三行是证据维度芯片，不再是一串平铺的理由。
+  const evidence = within(smartGroupLink).getByTestId("smart-album-evidence");
+  expect(evidence).toHaveTextContent("时间");
+  expect(evidence).toHaveTextContent("地点");
+  expect(evidence).toHaveTextContent("场景");
+  expect(smartGroupLink).not.toHaveTextContent("其余 1 类");
   // 首页只给一屏预览：标题与「查看全部」都通向智能相册专页。
   expect(
     screen.getByRole("heading", { name: "智能相册" }).querySelector("a"),

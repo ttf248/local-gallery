@@ -301,7 +301,9 @@ export default function PhotoAlbum({ album }: Props) {
     async (type: AnalysisType) => {
       try {
         const result = await aiJobsApi.start(type, "incremental", album.id);
-        setAnalyzingJobIds([result.job.id]);
+        // 追加而不是覆盖：推荐空态可能一次给两个补分析入口，
+        // 覆盖会把先启动的那个任务挤出监视范围，结束时不会提示也不会刷新。
+        setAnalyzingJobIds((ids) => [...ids, result.job.id]);
         const label =
           type === "face"
             ? "人脸"
@@ -779,6 +781,8 @@ export default function PhotoAlbum({ album }: Props) {
           onRebuild={() => void rebuildSmartGroups()}
           onSaveOverride={saveGroupOverride}
           onOpenGroup={setSelectedGroupId}
+          modules={analysisJobsQuery.data?.snapshot.modules ?? []}
+          jobs={analysisJobsQuery.data?.snapshot.jobs ?? []}
         />
       ) : (
         <div className="page-shell min-h-0 flex-1 pb-2">

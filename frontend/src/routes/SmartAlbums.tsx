@@ -36,6 +36,7 @@ function parseDimension(value: string | null): SmartAlbumDirectoryDimension {
     case "place":
     case "people":
     case "scene":
+    case "all":
       return value;
     default:
       return "recommended";
@@ -70,12 +71,12 @@ export default function SmartAlbums() {
     document.querySelector(".app-main")?.scrollTo({ top: 0 });
   }, [dimension]);
 
-  // 当前维度的组数：目录接口的 total 就是它。
-  // 「全部」没有单独的 total，用四个维度之和（它们本就是同一批分组）。
+  // 当前维度的组数。「全部」是四类详细维度之和（后端也这么算），
+  // 其余维度的组数取自计数查询 —— 计数查询是按维度各问一次，
+  // 拿当前目录的 total 去填别的维度会把组数串台。
   const currentTotal = useMemo(() => {
-    if (dimension === "recommended") return directory.total;
-    if (dimension === "featured") return directory.total;
     if (dimension === "all") return total ?? directory.total;
+    if (dimension === "featured") return directory.total;
     return counts[dimension] ?? directory.total;
   }, [dimension, total, counts, directory.total]);
 
@@ -120,10 +121,10 @@ export default function SmartAlbums() {
           className="page-shell flex flex-wrap gap-2 pb-3"
         >
           {DIMENSIONS.map((entry) => {
+            // 页签上的组数一律取自计数查询：每个页签各问一次，
+            // 不看当前选中的是哪一维。
             const count =
-              entry.key === "recommended"
-                ? directory.total
-                : dimensionCount(entry.key, counts, total);
+              entry.key === "all" ? total : countFor(counts, entry.key);
             return (
               <button
                 key={entry.key}
@@ -150,6 +151,12 @@ export default function SmartAlbums() {
       </header>
 
       <div className="page-shell pt-4">
+        {dimension === "recommended" && (
+          <p className="mb-6 border-b border-border-faint pb-3 text-meta text-fg-muted">
+            精选推荐至少 12 张、至少两类线索一致（时间 / 地点 / 人物 /
+            场景），且不与所在文件夹重复。
+          </p>
+        )}
         {isInitialLoading ? (
           <AlbumGridSkeleton
             count={10}
@@ -242,6 +249,13 @@ export default function SmartAlbums() {
   );
 }
 
+/**
+ * 按来源相册分块。
+ *
+ * 按 albumId 归并而不是只合并相邻的：分页可能把同一本相册切成两段
+ * （只有推荐维度会把一页延伸到相册边界），只合并相邻的会让这本相册
+ * 在墙上出现两次，标题也重复。
+ */
 function groupByAlbum(items: SmartAlbumDirectoryItem[]) {
   const sections: {
     albumId: string;
@@ -249,15 +263,17 @@ function groupByAlbum(items: SmartAlbumDirectoryItem[]) {
     parentName?: string;
     items: SmartAlbumDirectoryItem[];
   }[] = [];
+  const byAlbum = new Map<string, (typeof sections)[number]>();
   for (const item of items) {
-    let section = sections.at(-1);
-    if (section?.albumId !== item.albumId) {
+    let section = byAlbum.get(item.albumId);
+    if (!section) {
       section = {
         albumId: item.albumId,
         albumName: item.albumName,
         parentName: item.parentName,
         items: [],
       };
+      byAlbum.set(item.albumId, section);
       sections.push(section);
     }
     section.items.push(item);
@@ -265,14 +281,16 @@ function groupByAlbum(items: SmartAlbumDirectoryItem[]) {
   return sections;
 }
 
-/** 某个维度页签上的组数。 */
-function dimensionCount(
-  dimension: SmartAlbumDirectoryDimension,
+/**
+ * 某个维度有多少组。
+ *
+ * 计数查询只覆盖五个维度；「featured」是首页专用的取样视图，没有计数。
+ */
+function countFor(
   counts: Partial<Record<SmartAlbumDimension, number>>,
-  total: number | undefined,
+  dimension: SmartAlbumDirectoryDimension,
 ): number | undefined {
-  if (dimension === "all") return total;
-  if (dimension === "featured") return undefined;
+  if (dimension === "all" || dimension === "featured") return undefined;
   return counts[dimension];
 }
 
@@ -280,7 +298,7 @@ function dimensionCount(
 function dimensionDescription(dimension: SmartAlbumDirectoryDimension): string {
   switch (dimension) {
     case "recommended":
-      return "精选推荐只展示证据充分、规模与区分度合适的主题；没有合适结果时可以留空。时间、地点、人物和场景分类仍可在上方筛选。";
+      return "精选推荐只展示至少 12 张、至少两类线索一致且不与所在文件夹重复的主题；没有合适结果时可以留空。时间、地点、人物和场景分类仍可在上方筛选。";
     case "time":
       return "时间分组依赖 EXIF 拍摄时间。到任务中心运行元数据分析，再打开照片相册生成或刷新分组。";
     case "place":
@@ -291,6 +309,6 @@ function dimensionDescription(dimension: SmartAlbumDirectoryDimension): string {
       return "场景分组依赖 Chinese-CLIP 语义向量。到任务中心运行语义向量分析，再打开照片相册生成或刷新分组。";
     case "all":
     default:
-      return "按来源文件夹查看全部时间、地点、人物和场景分类。详细分类允许重叠，精选推荐会单独排序并抑制近似结果。";
+      return "按来源文件夹查看全部时间、地点、人物和场景分类；这一页不含精选推荐。详细分类允许重叠，精选推荐单独成页并抑制近似结果。";
   }
 }
