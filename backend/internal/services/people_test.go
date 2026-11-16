@@ -727,6 +727,41 @@ func TestPeopleServiceEarlierIncrementalFacePreservesNameAcrossRebuild(t *testin
 	}
 }
 
+func TestPeopleServiceKeepsRebuiltIndexWhenPersistenceFails(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "state", "people.json")
+	indexPath := filepath.Join(root, "derived", "people-index.json")
+	people, err := OpenPeopleService(statePath, indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := peopleTestRecord("z_existing", peopleTestVector(0, 0))
+	if err := people.Sync([]AIAnalysisRecord{initial}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(indexPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(indexPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(indexPath, "keep"), []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inserted := peopleTestRecord("a_inserted", peopleTestVector(0, .02))
+	if err := people.ApplyRecords([]AIAnalysisRecord{inserted}); err == nil {
+		t.Fatal("ApplyRecords() succeeded despite an unreplaceable index path")
+	}
+	faces := people.AllFaces()
+	if len(faces) != 2 {
+		t.Fatalf("in-memory faces after index persistence failure = %d, want 2", len(faces))
+	}
+	if faces[0].ResourceID != "a_inserted" || faces[1].ResourceID != "z_existing" {
+		t.Fatalf("in-memory index lost the rebuilt faces: %+v", faces)
+	}
+}
+
 func TestPeopleServiceKeepsCorrectedGroupsSeparateWhenAutomaticClustersMerge(t *testing.T) {
 	root := t.TempDir()
 	statePath := filepath.Join(root, "state", "people.json")

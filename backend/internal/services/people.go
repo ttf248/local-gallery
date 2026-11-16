@@ -329,11 +329,23 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	s.persistMu.Lock()
 	defer s.persistMu.Unlock()
-	s.mu.Lock()
+	s.mu.RLock()
+	existingFaces := clonePeopleFaces(s.faces)
+	existingFaceKeys := clonePeopleFaceKeys(s.facesByResource)
+	previousIDs := cloneStringMap(s.previousIDs)
+	cachedIDs := cloneStringMap(s.cachedIDs)
+	cachedHashes := cloneStringMap(s.cachedHashes)
+	manual := clonePeopleManualState(s.manual)
+	annAvailable := s.ann != nil
+	comparisons := s.comparisons
+	var clusters map[string]*peopleCluster
+	if !annAvailable {
+		clusters = clonePeopleClusters(s.clusters)
+	}
 	changed := false
-	previousIDs := make(map[string]string, len(s.faces))
+	updatedFaces := existingFaces
 	lastExisting := PersonFace{}
-	for key, face := range s.faces {
+	for key, face := range existingFaces {
 		previousIDs[key] = face.PersonID
 		if lastExisting.Key == "" || personFaceLess(lastExisting, face) {
 			lastExisting = face
@@ -348,13 +360,17 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 			continue
 		}
 		incoming := s.facesFromRecord(record)
-		current := s.facesForResourceLocked(record.ResourceID)
+		current := make([]PersonFace, 0, len(existingFaceKeys[record.ResourceID]))
+		for _, key := range existingFaceKeys[record.ResourceID] {
+			if face, exists := existingFaces[key]; exists {
+				current = append(current, face)
+			}
+		}
 		if samePeopleFaces(current, incoming) {
 			continue
 		}
 		for _, face := range current {
-			delete(s.faces, face.Key)
-			s.removeResourceFaceKeyLocked(face.ResourceID, face.Key)
+			delete(updatedFaces, face.Key)
 			appendOnly = false
 		}
 		for _, face := range incoming {
@@ -362,35 +378,121 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 				appendOnly = false
 			}
 			appendedFaces = append(appendedFaces, face)
+			updatedFaces[face.Key] = face
 		}
 		changed = true
 	}
+	s.mu.RUnlock()
 	if !changed {
-		s.mu.Unlock()
 		return nil
 	}
-	if appendOnly {
+	if appendOnly && annAvailable {
 		sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
+		s.mu.Lock()
 		for _, face := range appendedFaces {
 			s.addFaceLocked(face)
 		}
-	} else {
-		for _, face := range appendedFaces {
-			s.faces[face.Key] = face
+		s.cleanAssignmentsLocked()
+		disk := s.indexSnapshotLocked()
+		s.mu.Unlock()
+		if err := s.persistIndexSnapshot(disk); err != nil {
+			return err
 		}
-		s.rebuildLocked(s.faces, previousIDs)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.updatePreviousIDsLocked()
+		s.updateCachedAssignmentsLocked()
+		return s.persistManualLocked()
 	}
-	s.cleanAssignmentsLocked()
-	disk := s.indexSnapshotLocked()
-	s.mu.Unlock()
-	if err := s.persistIndexSnapshot(disk); err != nil {
-		return err
+
+	candidate := &PeopleService{
+		statePath: s.statePath, derivedPath: s.derivedPath,
+		previousIDs: previousIDs, cachedIDs: cachedIDs, cachedHashes: cachedHashes, manual: manual,
 	}
+	if appendOnly {
+		candidate.faces = existingFaces
+		candidate.facesByResource = existingFaceKeys
+		candidate.clusters = clusters
+		candidate.ann = nil
+		candidate.comparisons = comparisons
+		sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
+		for _, face := range appendedFaces {
+			candidate.addFaceLocked(face)
+		}
+	} else {
+		candidate.rebuildLocked(updatedFaces, previousIDs)
+	}
+	candidate.cleanAssignmentsLocked()
+	return s.publishRebuiltIndex(candidate)
+}
+
+func clonePeopleFaces(source map[string]PersonFace) map[string]PersonFace {
+	result := make(map[string]PersonFace, len(source))
+	for key, face := range source {
+		result[key] = face
+	}
+	return result
+}
+
+func clonePeopleFaceKeys(source map[string][]string) map[string][]string {
+	result := make(map[string][]string, len(source))
+	for resourceID, keys := range source {
+		result[resourceID] = append([]string(nil), keys...)
+	}
+	return result
+}
+
+func clonePeopleClusters(source map[string]*peopleCluster) map[string]*peopleCluster {
+	result := make(map[string]*peopleCluster, len(source))
+	for id, cluster := range source {
+		copy := *cluster
+		copy.sum = append([]float64(nil), cluster.sum...)
+		copy.centroid = append([]float32(nil), cluster.centroid...)
+		copy.anchor.embedding = append([]float32(nil), cluster.anchor.embedding...)
+		copy.members = make(map[string]struct{}, len(cluster.members))
+		for key := range cluster.members {
+			copy.members[key] = struct{}{}
+		}
+		copy.resources = make(map[string]struct{}, len(cluster.resources))
+		for resourceID := range cluster.resources {
+			copy.resources[resourceID] = struct{}{}
+		}
+		result[id] = &copy
+	}
+	return result
+}
+
+func clonePeopleManualState(state peopleManualState) peopleManualState {
+	return normalizePeopleManualState(peopleManualState{
+		Version: state.Version, Names: cloneStringMap(state.Names),
+		Hidden: cloneBoolMap(state.Hidden), Assignments: cloneStringMap(state.Assignments),
+	})
+}
+
+func (s *PeopleService) publishRebuiltIndex(candidate *PeopleService) error {
+	indexErr := candidate.persistIndexSnapshot(candidate.indexSnapshotLocked())
+	var manualErr error
+	if indexErr == nil {
+		candidate.updatePreviousIDsLocked()
+		candidate.updateCachedAssignmentsLocked()
+		manualErr = candidate.persistManualLocked()
+	}
+
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.updatePreviousIDsLocked()
-	s.updateCachedAssignmentsLocked()
-	return s.persistManualLocked()
+	s.faces = candidate.faces
+	s.facesByResource = candidate.facesByResource
+	s.clusters = candidate.clusters
+	s.ann = candidate.ann
+	s.previousIDs = candidate.previousIDs
+	s.cachedIDs = candidate.cachedIDs
+	s.cachedHashes = candidate.cachedHashes
+	s.manual = candidate.manual
+	s.comparisons = candidate.comparisons
+	s.mu.Unlock()
+	if indexErr != nil {
+		return indexErr
+	}
+	return manualErr
 }
 
 // rebuildLocked makes approximate centroid grouping independent of batch
@@ -401,7 +503,7 @@ func (s *PeopleService) rebuildLocked(faces map[string]PersonFace, previousIDs m
 		keys = append(keys, key)
 	}
 	sort.Slice(keys, func(i, j int) bool { return personFaceLess(faces[keys[i]], faces[keys[j]]) })
-	s.faces = make(map[string]PersonFace, len(faces))
+	s.faces = faces
 	s.facesByResource = make(map[string][]string, len(faces))
 	s.clusters = make(map[string]*peopleCluster)
 	s.ann = newPeopleANNIndex()
@@ -1405,6 +1507,8 @@ func (s *PeopleService) Rename(personID, name string) error {
 	if len([]rune(name)) > 60 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return ErrInvalidPerson
 	}
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.hasPersonLocked(personID) {
@@ -1419,6 +1523,8 @@ func (s *PeopleService) Rename(personID, name string) error {
 }
 
 func (s *PeopleService) SetHidden(personID string, hidden bool) error {
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.hasPersonLocked(personID) {
@@ -1436,6 +1542,8 @@ func (s *PeopleService) Merge(sourceID, targetID string) error {
 	if sourceID == targetID || !validPersonID(sourceID) || !validPersonID(targetID) {
 		return ErrInvalidPerson
 	}
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.hasPersonLocked(sourceID) || !s.hasPersonLocked(targetID) {
@@ -1455,6 +1563,8 @@ func (s *PeopleService) Split(personID string, faceKeys []string) (string, error
 	if !validPersonID(personID) || len(faceKeys) == 0 || len(faceKeys) > peopleMaxSplitFaces {
 		return "", ErrInvalidPerson
 	}
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.hasPersonLocked(personID) {
@@ -1543,6 +1653,8 @@ func (s *PeopleService) Corrections() PeopleCorrections {
 }
 
 func (s *PeopleService) ReplaceCorrections(corrections PeopleCorrections) error {
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.manual = normalizePeopleManualState(corrections)
