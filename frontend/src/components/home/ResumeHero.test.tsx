@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import ResumeHero from "./ResumeHero";
+import { shelfItemCount } from "../../utils/resumeShelf";
 import type { CardData } from "../album/AlbumGrid";
 
 function card(overrides: Partial<CardData> = {}): CardData {
@@ -108,5 +109,29 @@ describe("照片工作台的「接着看」专区", () => {
     const hero = screen.getByTestId("resume-hero");
     expect(hero.textContent).not.toContain("读到");
     expect(hero.textContent).not.toContain("已读完");
+  });
+});
+
+describe("队列摆几件由面板宽度决定", () => {
+  it("宽屏上多摆几件，而不是把同样的几件拉大", () => {
+    // 24 寸（队列 1130px）与 27 寸（队列 1770px）上的一件方照一样大，
+    // 27 寸只是多摆几件 —— 两块屏上是同一套版式。
+    expect(shelfItemCount(1130, 9)).toBe(6);
+    expect(shelfItemCount(1770, 9)).toBe(9);
+  });
+
+  it("摆不满时只摆现有的那几件", () => {
+    expect(shelfItemCount(1770, 3)).toBe(3);
+    expect(shelfItemCount(1770, 0)).toBe(0);
+  });
+
+  it("量不到宽度时先摆五件", () => {
+    expect(shelfItemCount(0, 9)).toBe(5);
+    expect(shelfItemCount(0, 2)).toBe(2);
+  });
+
+  it("窄屏上的一件小一号", () => {
+    // 手机上横排放不下 176px 的方照，一件约 100px，三件一行。
+    expect(shelfItemCount(300, 9)).toBe(3);
   });
 });

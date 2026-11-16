@@ -160,14 +160,13 @@
   }
 .resume-shelf {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    /* 摆几件由组件量了面板宽度后写进 --resume-cols：宽屏上多摆几件，
+       而不是把同样的几件拉大 —— 拉大后排里的方照会比主角那枚裱框
+       还大，主次就反了。列数写死时，宽屏上要么空出一段地，
+       要么把队列撑成一面巨幅海报。 */
+    grid-template-columns: repeat(var(--resume-cols, 5), minmax(0, 1fr));
     gap: clamp(12px, 1.4vw, 20px);
     align-content: start;
-  }
-@media (max-width: 639px) {
-    .resume-shelf {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
   }
 .resume-shelf__item {
     display: block;

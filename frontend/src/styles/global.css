@@ -121,11 +121,13 @@
   @media (min-width: 1280px) {
     .resume-body {
       display: grid;
-      /* 主角与队列并排。队列那一列给得比主角宽：它摆的是一排方照，
-         窄一截就每张都小一号，与主角那枚裱框差得太远。
-         比例不是 1 : 1 —— 主角那列是「一枚裱框 + 一段话」，话很
-         短；等分两列会在主角与队列之间留出一大片空纸。 */
-      grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+      /* 主角与队列并排。主角那一列贴着它自己的内容走（fit-content），
+         队列拿走剩下的宽度：主角是「一枚裱框 + 一段话」，话不长，
+         按比例分列会在主角与队列之间留出一大片空纸 —— 而且这块
+         空纸随屏幕一起变宽，27 寸上就是一道明显的沟。贴内容排，
+         两块屏上的这道缝才一样宽。
+         560px 是上限：主角的名字长了也不许把队列挤没。 */
+      grid-template-columns: fit-content(560px) minmax(0, 1fr);
       gap: clamp(16px, 2vw, 32px);
       align-items: start;
     }

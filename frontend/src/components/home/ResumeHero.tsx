@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import type { CardData } from "../album/AlbumGrid";
 import Cover from "./Cover";
@@ -7,6 +7,8 @@ import { photoCopy } from "../../utils/workbench";
 import { mediaCountCompact, mediaCountLabel } from "../../utils/mediaCount";
 import { recentsRoute } from "../../utils/path";
 import { timeAgo } from "../../utils/date";
+import { useElementSize } from "../../hooks/useElementSize";
+import { shelfItemCount } from "../../utils/resumeShelf";
 import "../../styles/home.css";
 
 /**
@@ -28,10 +30,13 @@ interface Props {
 export default function ResumeHero({ cards }: Props) {
   const copy = photoCopy();
   const featured = cards[0];
-  // 主角一件 + 次级展品五件。面板写的是「N 本相册」，只摆三件时
-  // 宽屏上那三件会被拉到比主角那枚裱框还大 —— 次级展品比主角还
-  // 大，主次就反了；五件摆在同一排，宽窄屏都是一排小一号的作品。
-  const rest = useMemo(() => cards.slice(1, 6), [cards]);
+  // 主角一件，次级展品若干件 —— 若干件由队列那一段的宽度决定。
+  const { ref: shelfRef, width: shelfWidth } = useElementSize<HTMLDivElement>();
+  const rest = useMemo(
+    () => cards.slice(1, 1 + shelfItemCount(shelfWidth, cards.length - 1)),
+    [cards, shelfWidth],
+  );
+  const remaining = cards.length - 1 - rest.length;
 
   if (!featured) return null;
 
@@ -51,12 +56,12 @@ export default function ResumeHero({ cards }: Props) {
         <span className="hero-panel__muted tabular-nums">
           {cards.length} {copy.resumeCountLabel}
         </span>
-        {cards.length > 6 && (
+        {remaining > 0 && (
           <Link
             to={recentsRoute("photo")}
             className="hero-panel__muted ml-auto inline-flex items-center gap-1.5 min-h-7 hover:text-fg transition-colors"
           >
-            还有 {cards.length - 6} 本最近看过 <ArrowRightLineIcon size={12} />
+            还有 {remaining} 本最近看过 <ArrowRightLineIcon size={12} />
           </Link>
         )}
       </div>
@@ -99,7 +104,11 @@ export default function ResumeHero({ cards }: Props) {
           </div>
         </div>
         {rest.length > 0 && (
-          <div className="resume-shelf">
+          <div
+            className="resume-shelf"
+            ref={shelfRef}
+            style={{ "--resume-cols": rest.length } as CSSProperties}
+          >
             {rest.map((card) => (
               <ResumeShelfItem key={card.id} card={card} />
             ))}
