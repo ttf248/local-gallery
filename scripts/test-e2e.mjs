@@ -13,7 +13,8 @@ const backendRoot = path.join(repoRoot, 'backend')
 const frontendRoot = path.join(repoRoot, 'frontend')
 const args = new Set(process.argv.slice(2))
 if (args.has('--help')) {
-  console.log('用法：node scripts/test-e2e.mjs [--audit] [--crash] [--keep-server] [--port 18923]')
+  console.log('用法：node scripts/test-e2e.mjs [--audit] [--crash] [--keep-server] [--port 18923] [用例过滤...]')
+  console.log('用例过滤：原样交给 Playwright，例如 smart-albums.spec.ts 或 -g "分组封面"')
   process.exit(0)
 }
 const audit = args.has('--audit')
@@ -21,6 +22,11 @@ const crash = args.has('--crash')
 const keepServer = args.has('--keep-server')
 const portIndex = process.argv.indexOf('--port')
 const requestedPort = portIndex >= 0 ? Number(process.argv[portIndex + 1]) : 0
+// 位置参数（不以 -- 开头）当用例过滤交给 Playwright：整套跑一遍要好几分钟，
+// 调一个用例时不必每次都等全套。
+const playwrightFilters = process.argv
+  .slice(2)
+  .filter((value, index, all) => !value.startsWith('--') && all[index - 1] !== '--port')
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const go = process.platform === 'win32' ? 'go.exe' : 'go'
 const node = process.execPath
@@ -243,7 +249,7 @@ async function main() {
 
     console.log('[3/4] 运行 Playwright...')
     const e2eEnv = { ...process.env, PLAYWRIGHT_BASE_URL: baseUrl }
-    run(npm, ['exec', '--', 'playwright', 'test'], { cwd: frontendRoot, env: e2eEnv })
+    run(npm, ['exec', '--', 'playwright', 'test', ...playwrightFilters], { cwd: frontendRoot, env: e2eEnv })
 
     if (audit) {
       console.log('[3.5/4] 运行布局和对比度审计...')

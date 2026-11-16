@@ -1,23 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 import { albumUrl, resetWorkbenchMode, scannedNodes } from "./helpers/library";
 
 test.beforeEach(async ({ request }) => {
   await resetWorkbenchMode(request);
 });
 
-test("首页给出智能相册入口，专页铺出分组并直达来源相册", async ({ page }) => {
-  const albums = await scannedNodes(page.request, "photo");
-  const album = albums.find((item) => item.name === "zz-足迹");
-  expect(album).toBeDefined();
-
-  const started = await page.request.post("/api/ai/jobs", {
-    data: { type: "metadata", mode: "incremental", albumId: album!.id },
+/** 跑一次当前相册的元数据分析并等它跑完：拍摄时间与坐标都从 EXIF 来。 */
+async function analyzeMetadata(request: APIRequestContext, albumId: string) {
+  const started = await request.post("/api/ai/jobs", {
+    data: { type: "metadata", mode: "incremental", albumId },
   });
   expect(started.ok()).toBeTruthy();
   const { job } = (await started.json()) as { job: { id: string } };
   await expect
     .poll(async () => {
-      const response = await page.request.get("/api/ai/jobs");
+      const response = await request.get("/api/ai/jobs");
       if (!response.ok()) return "";
       const body = (await response.json()) as {
         snapshot: { jobs: Array<{ id: string; status: string }> };
@@ -27,18 +24,10 @@ test("首页给出智能相册入口，专页铺出分组并直达来源相册",
       );
     })
     .toBe("completed");
+}
 
-  const summaryResponse = await page.request.get(
-    `/api/albums/${encodeURIComponent(album!.id)}/smart-groups?dimension=time`,
-  );
-  expect(summaryResponse.ok()).toBeTruthy();
-  const summary = (await summaryResponse.json()) as {
-    summary: {
-      groups: Array<{ id: string; name: string; photoCount: number }>;
-    };
-  };
-  const group = summary.summary.groups[0];
-  expect(group).toBeDefined();
+test("首页给出智能相册入口，通向专页", async ({ page }) => {
+  await scannedNodes(page.request, "photo");
 
   await page.goto("/");
   // 照片侧首页那一节是智能相册的预览，标题与「查看全部」都通向专页。
@@ -55,95 +44,29 @@ test("首页给出智能相册入口，专页铺出分组并直达来源相册",
     "href",
     "/photo/smart-albums",
   );
-
-  // 专页按维度铺出分组卡片，点分组直达来源相册里的那一个。
-  await page.goto("/photo/smart-albums?dimension=time");
-  const smartGroupLink = page.locator(
-    `a[href="${albumUrl(album!)}?view=smart&dimension=time&group=${group.id}"]`,
-  );
-  await expect(smartGroupLink).toBeVisible();
-  await expect(smartGroupLink).toContainText(group.name);
-  await expect(smartGroupLink).toContainText("zz-足迹");
-  await smartGroupLink.click();
-
-  await expect(page).toHaveURL(
-    `${albumUrl(album!)}?view=smart&dimension=time&group=${group.id}`,
-  );
-  await expect(
-    page.getByRole("button", { name: "智能相册", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
-  const wall = page.locator("[data-virtuoso-scroller]");
-  await expect(wall.getByRole("button", { name: /查看 .*\.jpg/ })).toHaveCount(
-    group.photoCount,
-  );
 });
 
-test("专页按维度翻页，分组随之换一批", async ({ page }) => {
-  await scannedNodes(page.request, "photo");
-  await page.goto("/photo/smart-albums");
-  await expect(page.getByRole("tab", { name: /精选推荐/ })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-
-  await page.getByRole("tab", { name: /人物/ }).click();
-  await expect(page).toHaveURL(/\/photo\/smart-albums\?dimension=people/);
-  await expect(page.getByRole("tab", { name: /人物/ })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-
-  // 页签上的组数来自轻量请求：人物维度不是零就是有个数。
-  const peopleCount = await page.getByRole("tab", { name: /人物/ }).innerText();
-  expect(peopleCount).toMatch(/\d+/);
-});
-
-test("「全部分类」页签铺出四类详细分类，选中后请求的是全部维度", async ({
+test("专页只展示精选推荐：旧分类深链被规范化，页面上没有分类页签", async ({
   page,
 }) => {
   await scannedNodes(page.request, "photo");
-  await page.goto("/photo/smart-albums");
+  const requested: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("/api/smart-albums")) {
+      requested.push(req.url());
+    }
+  });
 
-  await page.getByRole("tab", { name: /全部分类/ }).click();
-  await expect(page).toHaveURL(/\/photo\/smart-albums\?dimension=all/);
-  await expect(page.getByRole("tab", { name: /全部分类/ })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
-
-  // 全部维度里不含精选推荐：卡片角标是四类详细分类之一。
-  const badges = await page
-    .locator('[data-testid="smart-album-dimension"]')
-    .allInnerTexts();
-  const dimensions = ["时间", "地点", "人物", "场景"];
-  expect(badges.length).toBeGreaterThan(0);
-  expect(badges.every((text) => dimensions.includes(text.trim()))).toBe(true);
-});
-
-test("专页的卡片等高对齐：封面盒一样高、同一行顶边齐平", async ({ page }) => {
-  await scannedNodes(page.request, "photo");
+  // 旧的分类深链落到专页上，地址栏里的分类参数被去掉。
   await page.goto("/photo/smart-albums?dimension=time");
-  await expect(page.getByTestId("smart-album-wall")).toBeVisible();
+  await expect(page).toHaveURL(/\/photo\/smart-albums$/);
+  await expect(page.getByRole("tab")).toHaveCount(0);
 
-  const boxes = await page
-    .locator('[data-testid="smart-album-cover"]')
-    .evaluateAll((nodes) =>
-      nodes.map((node) => {
-        const rect = node.getBoundingClientRect();
-        return {
-          top: Math.round(rect.top),
-          height: Math.round(rect.height),
-          width: Math.round(rect.width),
-        };
-      }),
-    );
-  expect(boxes.length).toBeGreaterThan(0);
-  // 封面一律裁成正方形：同一面墙上的卡片因此一样高，行底对齐。
-  for (const box of boxes) {
-    expect(box.width).toBe(box.height);
-  }
-  expect(new Set(boxes.map((box) => box.width)).size).toBe(1);
-  expect(new Set(boxes.map((box) => box.height)).size).toBe(1);
+  // 请求的维度固定是精选推荐，不会按 URL 里的旧分类去取。
+  await expect.poll(() => requested.length).toBeGreaterThan(0);
+  expect(requested.every((url) => url.includes("dimension=recommended"))).toBe(
+    true,
+  );
 });
 
 test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {
@@ -184,25 +107,7 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-足迹");
   expect(album).toBeDefined();
-
-  const started = await page.request.post("/api/ai/jobs", {
-    data: { type: "metadata", mode: "incremental", albumId: album!.id },
-  });
-  expect(started.ok()).toBeTruthy();
-  const { job } = (await started.json()) as { job: { id: string } };
-
-  await expect
-    .poll(async () => {
-      const response = await page.request.get("/api/ai/jobs");
-      if (!response.ok()) return "";
-      const body = (await response.json()) as {
-        snapshot: { jobs: Array<{ id: string; status: string }> };
-      };
-      return (
-        body.snapshot.jobs.find((item) => item.id === job.id)?.status ?? ""
-      );
-    })
-    .toBe("completed");
+  await analyzeMetadata(page.request, album!.id);
 
   await page.goto(albumUrl(album!));
   await page.getByRole("button", { name: "智能相册", exact: true }).click();
@@ -236,5 +141,5 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
   await expect(wall.getByRole("button", { name: /查看 .*\.jpg/ })).toHaveCount(
     3,
   );
-  await expect(page.getByRole("button", { name: /智能分组/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "智能分组" })).toBeVisible();
 });
