@@ -18,6 +18,16 @@ import { albumRoute } from "./path";
 export const SMART_ALBUM_CAPTION_HEIGHT = 52;
 export const SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT = 74;
 
+/**
+ * 主题封面统一裁成正方形（宽 / 高 = 1）。
+ *
+ * 照片侧的封面一律方形：相册网格、接着看队列、那年今日、年份卡都是。
+ * 智能相册的封面跟同一套语言，理由不止是统一 —— 主题封面的真实比例
+ * 散得很开（实测 0.56 到 1.78），按真实比例排会让同一行的卡片高度差
+ * 三倍，底边参差不齐、中间留洞。裁成方形后每张卡一样高，行自然对齐。
+ */
+export const SMART_ALBUM_COVER_RATIO = 1;
+
 /** 维度在界面上的短标签。角标与证据芯片共用一份，不会各说各话。 */
 export const SMART_ALBUM_DIMENSION_LABELS: Record<SmartAlbumDimension, string> =
   {
@@ -70,4 +80,23 @@ export function smartGroupHref(item: SmartAlbumDirectoryItem): string {
     group: item.group.id,
   });
   return `${albumRoute("photo", item.albumId)}?${query.toString()}`;
+}
+
+/**
+ * 首页预览的列数要能整除卡片数。
+ *
+ * 列数本来按容器宽度算：1600px 宽算出 5 列、2300px 算出 7 列，
+ * 六张卡摊进去就成了「五张 + 一张」的孤行。这里在能整除卡片数的因数里
+ * 挑一个不超过算出值的最大的；挑不出来（卡片数是素数、而列数只有一两列）
+ * 就按算出的列数来 —— 宁可末行不满，也不要为凑整把卡挤成一列。
+ */
+export function smartAlbumPreviewColumns(
+  computed: number,
+  count: number,
+): number {
+  if (count <= 0) return computed;
+  for (let columns = Math.min(computed, count); columns >= 2; columns -= 1) {
+    if (count % columns === 0) return columns;
+  }
+  return computed;
 }

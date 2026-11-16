@@ -60,8 +60,6 @@ vi.mock("../api/albums", async (original) => ({
                 photoCount: 3,
                 coverResourceId: "f_cover",
                 coverVersion: "v1",
-                coverWidth: 1600,
-                coverHeight: 900,
                 hidden: false,
                 qualityScore: 0.84,
                 evidenceDimensions: ["time", "place", "scene"],
@@ -136,9 +134,10 @@ describe("智能相册专页", () => {
     expect(evidence).toHaveTextContent("地点");
     expect(evidence).toHaveTextContent("场景");
     expect(link).not.toHaveTextContent("其余 1 类");
+    // 专页不再按相册分块：来源相册写在卡片上。
     expect(
-      screen.getByRole("heading", { name: "2023年测试相册" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "2023年测试相册" }),
+    ).toBeNull();
   });
 
   it("按维度翻页时分组换一批", async () => {

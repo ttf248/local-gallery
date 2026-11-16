@@ -120,6 +120,32 @@ test("「全部分类」页签铺出四类详细分类，选中后请求的是�
   expect(badges.every((text) => dimensions.includes(text.trim()))).toBe(true);
 });
 
+test("专页的卡片等高对齐：封面盒一样高、同一行顶边齐平", async ({ page }) => {
+  await scannedNodes(page.request, "photo");
+  await page.goto("/photo/smart-albums?dimension=time");
+  await expect(page.getByTestId("smart-album-wall")).toBeVisible();
+
+  const boxes = await page
+    .locator('[data-testid="smart-album-cover"]')
+    .evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const rect = node.getBoundingClientRect();
+        return {
+          top: Math.round(rect.top),
+          height: Math.round(rect.height),
+          width: Math.round(rect.width),
+        };
+      }),
+    );
+  expect(boxes.length).toBeGreaterThan(0);
+  // 封面一律裁成正方形：同一面墙上的卡片因此一样高，行底对齐。
+  for (const box of boxes) {
+    expect(box.width).toBe(box.height);
+  }
+  expect(new Set(boxes.map((box) => box.width)).size).toBe(1);
+  expect(new Set(boxes.map((box) => box.height)).size).toBe(1);
+});
+
 test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-capture-date");

@@ -84,14 +84,6 @@ type SmartAlbumGroup struct {
 	sortKey               string   `json:"sortKey,omitempty"`
 	recommendationSeed    string
 	overrideSources       []string `json:"-"`
-	// CoverWidth 与 CoverHeight 是封面图的原始像素尺寸。
-	//
-	// 目录页把分组排成瀑布流，卡片高度得跟着封面的真实比例走，
-	// 否则一面墙上全是等高的卡片，竖幅照片全被裁掉。
-	// 尺寸按请求时探测（只读图片头），因此不进缓存：
-	// 缓存里存的是「分组有哪些成员」，不是媒体的呈现属性。
-	CoverWidth  int `json:"coverWidth,omitempty"`
-	CoverHeight int `json:"coverHeight,omitempty"`
 }
 
 type SmartAlbumSummary struct {
@@ -579,9 +571,6 @@ func (s *SmartAlbumService) DirectoryPage(
 		}
 	}
 	pageItems := clonePage(items, offset, end)
-	// 封面尺寸只给这一页：全库四千多组每组都探一次尺寸，
-	// 一页请求要背上几千次文件探测，首页等不起。
-	s.enrichCoverDimensions(snapshot, pageItems)
 	page := LibraryPage[SmartAlbumDirectoryItem]{
 		// 空页要给 []，不能给 null：前端把 items 当数组用，null 会让它
 		// 把一个空分组当成一条记录（库里还没生成任何分组时就会踩到）。
@@ -686,7 +675,7 @@ func (s *SmartAlbumService) featuredDirectoryPage(
 	}
 	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
 	pageItems := clonePage(items, offset, end)
-	s.enrichCoverDimensions(snapshot, pageItems)
+
 	page := LibraryPage[SmartAlbumDirectoryItem]{
 		Revision: snapshot.Revision(), Items: pageItems, Total: len(items),
 	}
@@ -774,40 +763,6 @@ func sortSmartAlbumBlocks(blocks []smartAlbumDirectoryBlock) {
 		}
 		return strings.ToLower(left.album.DisplayName) < strings.ToLower(right.album.DisplayName)
 	})
-}
-
-// enrichCoverDimensions 给这一页的分组补上封面的像素尺寸。
-//
-// 瀑布流按封面真实比例排卡片：尺寸已知就按它算，未知就退回默认比例。
-// 尺寸只探测当前页的封面，翻页时同一批封面直接命中尺寸缓存。
-func (s *SmartAlbumService) enrichCoverDimensions(
-	snapshot CatalogSnapshot,
-	items []SmartAlbumDirectoryItem,
-) {
-	if s.dimensions == nil {
-		return
-	}
-	for index := range items {
-		coverID := items[index].Group.CoverResourceID
-		if coverID == "" {
-			continue
-		}
-		ref, exists := snapshot.Lookup(coverID)
-		if !exists || ref.Kind != ResourceFile {
-			continue
-		}
-		// 封面与其它媒体一样按当前媒体根重新校验：资源 ID 不是授权凭据。
-		path, err := s.validatePath(ref.AbsolutePath)
-		if err != nil {
-			continue
-		}
-		dimensions := s.dimensions.Dimensions(path)
-		if !dimensions.Known() {
-			continue
-		}
-		items[index].Group.CoverWidth = dimensions.Width
-		items[index].Group.CoverHeight = dimensions.Height
-	}
 }
 
 func validSmartAlbumDirectoryDimension(dimension string) bool {

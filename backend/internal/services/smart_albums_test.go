@@ -284,13 +284,13 @@ func TestSmartAlbumDirectoryEmptyPageSerializesAsEmptyArray(t *testing.T) {
 	}
 }
 
-func TestSmartAlbumDirectoryReportsCoverDimensions(t *testing.T) {
+func TestSmartAlbumDirectoryListsGeneratedGroups(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album-a")
 	if err := os.MkdirAll(albumPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// 真实的 JPEG：尺寸探测要读图片头，假文件探不出宽高。
+	// 真实的 JPEG：封面要能读出来，媒体不能只靠扩展名。
 	files := make([]string, 0, 3)
 	for index, size := range [][2]int{{40, 20}, {20, 40}, {30, 30}} {
 		path := filepath.Join(albumPath, fmt.Sprintf("%d.jpg", index))
@@ -342,15 +342,16 @@ func TestSmartAlbumDirectoryReportsCoverDimensions(t *testing.T) {
 		t.Fatalf("directory items=%+v", page.Items)
 	}
 	group := page.Items[0].Group
-	if group.CoverWidth != 40 || group.CoverHeight != 20 {
-		t.Fatalf("cover dimensions=%dx%d, want 40x20", group.CoverWidth, group.CoverHeight)
+	if group.CoverResourceID == "" {
+		t.Fatalf("directory item must carry a cover: %+v", group)
 	}
+	// 封面尺寸不再随目录下发：封面统一裁成方形，前端不需要原始像素。
 	encoded, err := json.Marshal(page)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(encoded), `"coverWidth":40`) {
-		t.Fatalf("directory page must carry the cover size: %s", encoded)
+	if strings.Contains(string(encoded), "coverWidth") {
+		t.Fatalf("directory page must not carry the cover size: %s", encoded)
 	}
 }
 

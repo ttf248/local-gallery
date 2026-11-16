@@ -60,9 +60,6 @@ export interface SmartAlbumGroup {
   overrideConflict?: boolean;
   coverResourceId?: string;
   coverVersion?: string;
-  /** 封面图的原始像素尺寸：瀑布流按它算卡片高度。 */
-  coverWidth?: number;
-  coverHeight?: number;
   hidden: boolean;
 }
 

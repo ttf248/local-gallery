@@ -333,7 +333,7 @@ export default function SmartAlbumBrowser({
                       <button
                         type="button"
                         onClick={() => onOpenGroup(group.id)}
-                        className="group relative block aspect-[4/3] w-full overflow-hidden bg-bg-subtle text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                        className="group relative block aspect-square w-full overflow-hidden bg-bg-subtle text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
                         aria-label={`打开分组 ${group.name}，${group.photoCount} 张`}
                       >
                         {group.coverResourceId ? (

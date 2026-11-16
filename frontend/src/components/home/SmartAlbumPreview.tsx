@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { SmartAlbumDirectoryItem } from "../../api/albums";
+import { smartAlbumPreviewColumns } from "../../utils/smartAlbum";
 import SmartAlbumWall from "../album/SmartAlbumWall";
 import AlbumGridSkeleton from "../album/AlbumGridSkeleton";
 import EmptyState from "../common/EmptyState";
@@ -65,7 +66,14 @@ export default function SmartAlbumPreview({
 
   return (
     <div>
-      <SmartAlbumWall items={preview} targetColumnWidth={300} />
+      {/* 六张卡要排成整整齐齐的矩形：列数得能整除它，否则末行只挂一张。 */}
+      <SmartAlbumWall
+        items={preview}
+        targetColumnWidth={300}
+        columns={(computed) =>
+          smartAlbumPreviewColumns(computed, preview.length)
+        }
+      />
       {typeof total === "number" && (
         <p className="mt-4 text-meta tabular-nums text-fg-subtle">
           全库有 {total} 个推荐主题，这里精选了 {preview.length} 个

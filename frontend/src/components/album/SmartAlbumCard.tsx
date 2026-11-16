@@ -46,6 +46,7 @@ export default function SmartAlbumCard({ item, coverHeight }: Props) {
         <div
           className="relative overflow-hidden bg-bg-subtle"
           style={{ height: coverHeight }}
+          data-testid="smart-album-cover"
         >
           {group.coverResourceId ? (
             <RenditionImage

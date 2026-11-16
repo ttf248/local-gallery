@@ -51,6 +51,26 @@ export interface MasonryOptions {
   targetColumnWidth: number;
   /** 列与列之间的间距（像素）。 */
   gap: number;
+  /**
+   * 明确的列数。
+   *
+   * 不给就按容器宽度算。给了就照给的来 —— 条数少的场合（首页预览
+   * 只有六张）需要列数能整除条数，否则末行只挂一张卡。
+   */
+  columns?: number;
+}
+
+/** 按容器宽度算列数：宽屏上列多、窄屏上列少。 */
+export function masonryColumnCount(
+  containerWidth: number,
+  targetColumnWidth: number,
+  gap: number,
+): number {
+  if (containerWidth <= 0) return 1;
+  return Math.max(
+    1,
+    Math.floor((containerWidth + gap) / (targetColumnWidth + gap)),
+  );
 }
 
 /**
@@ -67,10 +87,10 @@ export function layoutMasonry(
   if (containerWidth <= 0 || items.length === 0) {
     return { tiles: [], height: 0, columns: 0, columnWidth: 0 };
   }
-  const columns = Math.max(
-    1,
-    Math.floor((containerWidth + gap) / (targetColumnWidth + gap)),
-  );
+  const columns =
+    options.columns && options.columns > 0
+      ? Math.min(options.columns, items.length)
+      : masonryColumnCount(containerWidth, targetColumnWidth, gap);
   const columnWidth = (containerWidth - gap * (columns - 1)) / columns;
   const heights = new Array<number>(columns).fill(0);
   const tiles: MasonryTile[] = [];

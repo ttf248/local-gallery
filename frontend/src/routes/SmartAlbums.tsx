@@ -7,13 +7,11 @@ import {
 import type {
   SmartAlbumDimension,
   SmartAlbumDirectoryDimension,
-  SmartAlbumDirectoryItem,
 } from "../api/albums";
 import SmartAlbumWall from "../components/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
-import { albumRoute } from "../utils/path";
 
 const DIMENSION_PARAM = "dimension";
 
@@ -44,8 +42,8 @@ function parseDimension(value: string | null): SmartAlbumDirectoryDimension {
 }
 
 /**
- * 智能相册先按来源文件夹展示精选主题，时间、地点、人物和场景保留为
- * 可筛选的详细分类。目录分页只读已生成缓存，不在浏览时触发分析。
+ * 智能相册先展示精选主题，时间、地点、人物和场景保留为可筛选的详细
+ * 分类。目录分页只读已生成缓存，不在浏览时触发分析。
  */
 export default function SmartAlbums() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -63,7 +61,6 @@ export default function SmartAlbums() {
   };
 
   const items = directory.items;
-  const sections = useMemo(() => groupByAlbum(items), [items]);
   const isInitialLoading = directory.isLoading && items.length === 0;
 
   // 换维度就是换一面墙：停在原来那一屏的位置上，看到的还是上一维度的分组。
@@ -196,41 +193,10 @@ export default function SmartAlbums() {
           />
         ) : (
           <>
-            <div className="space-y-9">
-              {sections.map((section) => (
-                <section
-                  key={section.albumId}
-                  aria-labelledby={`smart-album-source-${section.albumId}`}
-                  className="border-b border-border-faint pb-8 last:border-b-0"
-                >
-                  <header className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-meta text-fg-subtle">
-                        {section.parentName || "来源文件夹"}
-                      </p>
-                      <h2
-                        id={`smart-album-source-${section.albumId}`}
-                        className="truncate text-title font-semibold text-fg"
-                      >
-                        {section.albumName}
-                      </h2>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-meta text-fg-muted">
-                        {section.items.length} 组
-                      </span>
-                      <Link
-                        to={`${albumRoute("photo", section.albumId)}?view=smart`}
-                        className="inline-flex min-h-7 items-center rounded-md px-2 text-meta text-brand hover:bg-bg-subtle hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                      >
-                        查看来源相册
-                      </Link>
-                    </div>
-                  </header>
-                  <SmartAlbumWall items={section.items} />
-                </section>
-              ))}
-            </div>
+            {/* 一面连续的墙：分组不再按来源相册切块。
+                新算法下每本相册往往只有一条推荐，分块会退化成一条只挂
+                一张卡的窄带，右侧四列全空。来源相册写在卡片上。 */}
+            <SmartAlbumWall items={items} />
             <div
               ref={sentinelRef}
               className="h-px"
@@ -247,38 +213,6 @@ export default function SmartAlbums() {
       </div>
     </div>
   );
-}
-
-/**
- * 按来源相册分块。
- *
- * 按 albumId 归并而不是只合并相邻的：分页可能把同一本相册切成两段
- * （只有推荐维度会把一页延伸到相册边界），只合并相邻的会让这本相册
- * 在墙上出现两次，标题也重复。
- */
-function groupByAlbum(items: SmartAlbumDirectoryItem[]) {
-  const sections: {
-    albumId: string;
-    albumName: string;
-    parentName?: string;
-    items: SmartAlbumDirectoryItem[];
-  }[] = [];
-  const byAlbum = new Map<string, (typeof sections)[number]>();
-  for (const item of items) {
-    let section = byAlbum.get(item.albumId);
-    if (!section) {
-      section = {
-        albumId: item.albumId,
-        albumName: item.albumName,
-        parentName: item.parentName,
-        items: [],
-      };
-      byAlbum.set(item.albumId, section);
-      sections.push(section);
-    }
-    section.items.push(item);
-  }
-  return sections;
 }
 
 /**
