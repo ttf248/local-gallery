@@ -7,13 +7,19 @@ import {
   smartAlbumEvidenceDimensions,
   smartGroupHref,
 } from "../../utils/smartAlbum";
-import RenditionImage from "../common/RenditionImage";
+import SmartAlbumCover from "./SmartAlbumCover";
 import SmartAlbumEvidence from "./SmartAlbumEvidence";
 
 interface Props {
   item: SmartAlbumDirectoryItem;
   /** 封面区的高度（像素）：由瀑布流按封面比例算出来。 */
   coverHeight: number;
+  /**
+   * 封面槽位的宽度（像素）：决定取哪一档渲染图。
+   *
+   * 别写死：首页预览的列宽能到五百多像素，按固定档取图会放大发虚。
+   */
+  coverWidth: number;
 }
 
 /**
@@ -24,7 +30,11 @@ interface Props {
  *
  * 推荐多一行：几类线索对上了同一批照片，这是它值得单独成组的理由。
  */
-export default function SmartAlbumCard({ item, coverHeight }: Props) {
+export default function SmartAlbumCard({
+  item,
+  coverHeight,
+  coverWidth,
+}: Props) {
   const group = item.group;
   const evidence = smartAlbumEvidenceDimensions(group);
   // 老缓存里可能没有 evidenceDimensions（全库刷新之前仍会列出旧推荐），
@@ -48,19 +58,11 @@ export default function SmartAlbumCard({ item, coverHeight }: Props) {
           style={{ height: coverHeight }}
           data-testid="smart-album-cover"
         >
-          {group.coverResourceId ? (
-            <RenditionImage
-              fileId={group.coverResourceId}
-              version={group.coverVersion}
-              alt=""
-              displayWidth={320}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-            />
-          ) : (
-            <div className="flex h-full items-center justify-center text-meta text-fg-subtle">
-              暂无封面
-            </div>
-          )}
+          <SmartAlbumCover
+            fileId={group.coverResourceId}
+            version={group.coverVersion}
+            displayWidth={coverWidth}
+          />
           {/* 角标里是汉字：按字号阶梯，带汉字的角标走 --text-meta，
               不占 11.5px 那一档（那一档只给拉丁字母与数字）。
               压在照片上时用 --fg 而不是 --fg-muted：角标的底色是半透明的，

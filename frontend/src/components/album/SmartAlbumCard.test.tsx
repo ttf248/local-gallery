@@ -33,10 +33,37 @@ function recommendation(
 function renderCard(item: SmartAlbumDirectoryItem) {
   return render(
     <MemoryRouter>
-      <SmartAlbumCard item={item} coverHeight={200} />
+      <SmartAlbumCard item={item} coverHeight={200} coverWidth={200} />
     </MemoryRouter>,
   );
 }
+
+describe("智能相册卡片的封面", () => {
+  it("照片按原比例摆，不裁成方形：底下垫一层同图的虚化", () => {
+    renderCard(recommendation());
+
+    const photo = screen.getByTestId("smart-album-cover-photo");
+    // contain 而不是 cover：cover 会把照片裁成槽位大小。
+    expect(photo).toHaveClass("object-contain");
+    expect(photo).not.toHaveClass("object-cover");
+    // 照片本身按原比例缩放，元素盒才是照片而不是整个槽位。
+    expect(photo).toHaveClass("max-h-full");
+    expect(photo).toHaveClass("max-w-full");
+
+    const backdrop = screen.getByTestId("smart-album-cover-backdrop");
+    expect(backdrop).toHaveClass("object-cover");
+    expect(backdrop).toHaveClass("blur-lg");
+  });
+
+  it("没有封面时显示占位，不摆空照片", () => {
+    renderCard(recommendation({ coverResourceId: undefined }));
+
+    expect(screen.getByTestId("smart-album-cover-empty")).toHaveTextContent(
+      "暂无封面",
+    );
+    expect(screen.queryByTestId("smart-album-cover-photo")).toBeNull();
+  });
+});
 
 describe("智能相册卡片的证据线索", () => {
   it("推荐的第三行是证据维度芯片，不是平铺的理由", () => {

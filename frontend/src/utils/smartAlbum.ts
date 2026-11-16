@@ -19,14 +19,18 @@ export const SMART_ALBUM_CAPTION_HEIGHT = 52;
 export const SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT = 74;
 
 /**
- * 主题封面统一裁成正方形（宽 / 高 = 1）。
+ * 主题封面的**槽位**比例（宽 / 高 = 1）。
  *
- * 照片侧的封面一律方形：相册网格、接着看队列、那年今日、年份卡都是。
- * 智能相册的封面跟同一套语言，理由不止是统一 —— 主题封面的真实比例
+ * 照片侧的封面画幅一律方形：相册网格、接着看队列、那年今日、年份卡都是。
+ * 智能相册的槽位跟同一套语言，理由不止是统一 —— 主题封面的真实比例
  * 散得很开（实测 0.56 到 1.78），按真实比例排会让同一行的卡片高度差
- * 三倍，底边参差不齐、中间留洞。裁成方形后每张卡一样高，行自然对齐。
+ * 三倍，底边参差不齐、中间留洞。槽位固定成方形后每张卡一样高，行自然对齐。
+ *
+ * 槽位是方的，**照片不是被裁成方的**：照片按原比例完整放进槽里，空出来
+ * 的地方用同一张照片放大虚化补齐（见 `components/album/SmartAlbumCover.tsx`）。
+ * 早期版本用 object-cover 把照片裁成方形，竖幅照片因此被切掉上下大半。
  */
-export const SMART_ALBUM_COVER_RATIO = 1;
+export const SMART_ALBUM_COVER_SLOT_RATIO = 1;
 
 /** 维度在界面上的短标签。角标与证据芯片共用一份，不会各说各话。 */
 export const SMART_ALBUM_DIMENSION_LABELS: Record<SmartAlbumDimension, string> =

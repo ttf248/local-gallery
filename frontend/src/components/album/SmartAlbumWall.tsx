@@ -3,7 +3,7 @@ import type { SmartAlbumDirectoryItem } from "../../api/albums";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useVisibleWindow } from "../../hooks/useVisibleWindow";
 import {
-  SMART_ALBUM_COVER_RATIO,
+  SMART_ALBUM_COVER_SLOT_RATIO,
   smartAlbumCaptionHeight,
 } from "../../utils/smartAlbum";
 import {
@@ -34,8 +34,9 @@ const GAP = 10;
 /**
  * 智能相册墙：把分组铺成一面等高的方格墙。
  *
- * 封面统一裁成正方形（与相册网格、接着看队列同一套照片侧语言），
- * 说明区定高，因此每张卡一样高，行的底边自然对齐。
+ * 槽位是正方形（与相册网格、接着看队列同一套照片侧语言），照片按原比例
+ * 完整放进槽里、不裁切，空出来的地方用同一张照片虚化补齐；说明区定高，
+ * 因此每张卡一样高，行的底边自然对齐。
  *
  * 渲染按视口裁：一次可能排到四千多组，全量挂进 DOM 会把浏览器拖垮，
  * 因此只有视口附近的那几张真正挂上节点，其余留白。
@@ -56,7 +57,7 @@ export default function SmartAlbumWall({
     () =>
       items.map((item) => ({
         id: `${item.albumId}:${item.group.dimension}:${item.group.id}`,
-        ratio: SMART_ALBUM_COVER_RATIO,
+        ratio: SMART_ALBUM_COVER_SLOT_RATIO,
         extraHeight: smartAlbumCaptionHeight(item),
       })),
     [items],
@@ -116,6 +117,7 @@ export default function SmartAlbumWall({
             <SmartAlbumCard
               item={item}
               coverHeight={tile.height - smartAlbumCaptionHeight(item)}
+              coverWidth={Math.round(tile.width)}
             />
           </div>
         );

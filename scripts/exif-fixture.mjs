@@ -2,14 +2,18 @@
 //
 // 足迹页的端到端用例需要真的带坐标的照片：没有坐标就没有行程、没有停留
 // 点，右栏的地图也无从谈起。临时媒体库里其余素材都是没有 EXIF 的 PNG，
-// 所以这里手写一个 APP1 段塞进一张 1×1 的 JPEG —— 让库里出现可解码、带
-// 坐标、带拍摄时间的照片。
+// 所以这里手写一个 APP1 段塞进一张 JPEG —— 让库里出现可解码、带坐标、
+// 带拍摄时间的照片。
 //
 // 只写足迹用例需要的几个字段：GPS 纬度经度、GPS 参考方向、拍摄时间。
 
-// 一张 1×1 的灰度 JPEG（SOI + APP0 + DQT + SOF0 + DHT + DHT + SOS + EOI）。
+// 一张 64×48 的 JPEG（SOI + APP0 + DQT + SOF0 + DHT + SOS + EOI）。
+//
+// 底图是横的，不是方的：临时库里的素材几乎都是 1×1 的方图，封面若按
+// 原比例摆（不裁切），方图验不出差别 —— 横图才能证明照片没有被裁成
+// 方形，也没有被拉变形。
 const BASE_JPEG = Buffer.from(
-  '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==',
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAwAEADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDi0t/apkt/atBLf2qdLf2r9PrVz4fD4kzkt/apkt/atFLf2qZLf2ryq1c9vD4kz0t/apkt/atBLf2qZLf2ryq1c9zD4kz0t/apkt/atFLf2qZLf2rya1c9zD4kykt/apkt/atFLf2qZLf2r6etXPwvD4kzkt/ap0t/atBLf2qZLf2ryq1c9zD4kz0t/apkt/atBLf2qZLf2rya1c9zD4kz0t/apkt/atFLf2qZLf2ryq1c9vD4kykt/apkt/atFLf2qZLf2r6etXPwzD4kzkt/ap0t/atBLf2qZLf2rya1c9zD4kzkt/apkt/atFLf2qdLf2ryq1c9zD4kzkt/apkt/atBLf2qZLf2rya1c9vD4k//2Q==',
   'base64',
 )
 

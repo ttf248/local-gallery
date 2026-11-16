@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   SMART_ALBUM_CAPTION_HEIGHT,
-  SMART_ALBUM_COVER_RATIO,
+  SMART_ALBUM_COVER_SLOT_RATIO,
   SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT,
   smartAlbumCaptionHeight,
   smartAlbumEvidenceDimensions,
@@ -50,9 +50,9 @@ describe("证据维度", () => {
   });
 });
 
-describe("封面比例", () => {
-  it("主题封面统一裁成正方形", () => {
-    expect(SMART_ALBUM_COVER_RATIO).toBe(1);
+describe("封面槽位比例", () => {
+  it("槽位是正方形：照片按原比例摆进去，槽位本身仍是方的", () => {
+    expect(SMART_ALBUM_COVER_SLOT_RATIO).toBe(1);
   });
 });
 

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import type { SmartAlbumSummary } from "../../api/albums";
+import type { SmartAlbumDimension, SmartAlbumSummary } from "../../api/albums";
 import type { AIJob, AIJobModule } from "../../api/aiJobs";
 import SmartAlbumBrowser from "./SmartAlbumBrowser";
 
@@ -71,6 +71,7 @@ interface Options {
   modules?: AIJobModule[];
   jobs?: AIJob[];
   peopleEnabled?: boolean;
+  dimension?: SmartAlbumDimension;
   onAnalyzeDimension?: (
     type: "metadata" | "embedding" | "ocr" | "face",
   ) => void;
@@ -81,6 +82,7 @@ function renderBrowser({
   modules = MODULES,
   jobs = [],
   peopleEnabled = true,
+  dimension = "recommended",
   onAnalyzeDimension = vi.fn(),
 }: Options = {}) {
   render(
@@ -89,7 +91,7 @@ function renderBrowser({
         summary={data}
         loading={false}
         error={false}
-        dimension="recommended"
+        dimension={dimension}
         analyzing={false}
         rebuilding={false}
         onDimensionChange={vi.fn()}
@@ -106,6 +108,34 @@ function renderBrowser({
   );
   return { onAnalyzeDimension };
 }
+
+describe("相册内分组的封面", () => {
+  it("封面按原比例摆，不裁成方形", () => {
+    renderBrowser({
+      dimension: "time",
+      summary: summary({
+        groups: [
+          {
+            id: "sg_1",
+            dimension: "time",
+            name: "2024年5月2日",
+            suggestedName: "2024年5月2日",
+            customName: false,
+            photoCount: 3,
+            coverResourceId: "f_1",
+            coverVersion: "v1",
+            hidden: false,
+          },
+        ],
+      }),
+    });
+
+    const photo = screen.getByTestId("smart-album-cover-photo");
+    expect(photo).toHaveClass("object-contain");
+    expect(photo).not.toHaveClass("object-cover");
+    expect(screen.getByTestId("smart-album-cover-backdrop")).toBeTruthy();
+  });
+});
 
 describe("相册内精选推荐的空态", () => {
   it("还没跑分析时给出补分析入口", () => {

@@ -7,8 +7,8 @@ import type {
 } from "../../api/albums";
 import type { AIJob, AIJobModule, AnalysisType } from "../../api/aiJobs";
 import { smartAlbumEvidenceDimensions } from "../../utils/smartAlbum";
-import RenditionImage from "../common/RenditionImage";
 import ErrorBanner from "../common/ErrorBanner";
+import SmartAlbumCover from "./SmartAlbumCover";
 import SmartAlbumEvidence from "./SmartAlbumEvidence";
 
 interface Props {
@@ -334,21 +334,17 @@ export default function SmartAlbumBrowser({
                         type="button"
                         onClick={() => onOpenGroup(group.id)}
                         className="group relative block aspect-square w-full overflow-hidden bg-bg-subtle text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                        data-testid="smart-album-cover"
                         aria-label={`打开分组 ${group.name}，${group.photoCount} 张`}
                       >
-                        {group.coverResourceId ? (
-                          <RenditionImage
-                            fileId={group.coverResourceId}
-                            version={group.coverVersion}
-                            alt=""
-                            displayWidth={320}
-                            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                          />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-fg-subtle">
-                            暂无封面
-                          </div>
-                        )}
+                        <SmartAlbumCover
+                          fileId={group.coverResourceId}
+                          version={group.coverVersion}
+                          displayWidth={320}
+                          /* 这里的槽宽由 CSS 网格决定，量不到具体像素：
+                             用视口相对宽度告诉浏览器这个槽位有多宽。 */
+                          sizes="(min-width: 1280px) 18vw, (min-width: 1024px) 22vw, (min-width: 640px) 32vw, 45vw"
+                        />
                         {group.hidden && (
                           <span className="absolute left-3 top-3 rounded-full bg-bg/90 px-2 py-1 text-xs text-fg-muted">
                             已隐藏

@@ -69,6 +69,36 @@ test("专页只展示精选推荐：旧分类深链被规范化，页面上没�
   );
 });
 
+test("相册内的分组封面按原比例摆：照片不裁成方形，也不被拉变形", async ({
+  page,
+}) => {
+  const albums = await scannedNodes(page.request, "photo");
+  const album = albums.find((item) => item.name === "zz-足迹");
+  expect(album).toBeDefined();
+  await analyzeMetadata(page.request, album!.id);
+
+  await page.goto(albumUrl(album!));
+  await page.getByRole("button", { name: "智能相册", exact: true }).click();
+  await page.getByRole("tab", { name: "时间" }).click();
+
+  // 素材库里的照片是 64×48 的横图（4:3），不是方图。
+  const cover = page.getByTestId("smart-album-cover-photo").first();
+  await expect(cover).toBeVisible();
+  const box = await cover.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  });
+  // 照片按原比例摆：渲染出来的比例还是 4:3。旧做法是把照片裁成方形，
+  // 元素盒就会是 1:1 —— 这里是两者的分界。
+  expect(box.width / box.height).toBeCloseTo(64 / 48, 2);
+  // 照片没有铺满方槽：宽度小于槽位，槽位边上留给虚化底。
+  const slot = await page
+    .locator('[data-testid="smart-album-cover"]')
+    .first()
+    .evaluate((element) => element.getBoundingClientRect().width);
+  expect(box.width).toBeLessThan(slot);
+});
+
 test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {
   const albums = await scannedNodes(page.request, "photo");
   const album = albums.find((item) => item.name === "zz-capture-date");

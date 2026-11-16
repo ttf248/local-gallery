@@ -15,6 +15,15 @@ interface Props {
    * sizes 用它告诉浏览器这个槽位有多宽，浏览器据此在候选里挑一档。
    */
   displayWidth: number;
+  /**
+   * 覆盖 sizes 描述符。
+   *
+   * 槽位宽度由 CSS 决定（而不是 JS 量出来）时用它：浏览器据此在候选
+   * 里挑档，displayWidth 只作为 src 的兜底。
+   */
+  sizes?: string;
+  /** 透传到 img 的 data-testid：测试与样式定位用。 */
+  testId?: string;
   className?: string;
   loading?: "lazy" | "eager";
   style?: CSSProperties;
@@ -33,6 +42,8 @@ export default function RenditionImage({
   version,
   alt,
   displayWidth,
+  sizes,
+  testId,
   className,
   loading = "lazy",
   style,
@@ -42,13 +53,14 @@ export default function RenditionImage({
     <img
       src={thumbUrl(fileId, version, pickRenditionWidth(displayWidth))}
       srcSet={thumbSrcSet(fileId, version, renditionCandidates())}
-      sizes={`${displayWidth}px`}
+      sizes={sizes ?? `${displayWidth}px`}
       alt={alt}
       loading={loading}
       decoding="async"
       onError={onError}
       className={className}
       style={style}
+      data-testid={testId}
     />
   );
 }
