@@ -36,12 +36,12 @@ func NewEmbeddingAnalyzer(worker AIEmbeddingWorker, index *VectorIndexStore) (*E
 	}, nil
 }
 
-func (EmbeddingAnalyzer) Type() string    { return AIJobTypeEmbedding }
-func (EmbeddingAnalyzer) Version() string { return ChineseCLIPModelVersion }
-func (EmbeddingAnalyzer) MaxWorkers() int { return 1 }
+func (*EmbeddingAnalyzer) Type() string    { return AIJobTypeEmbedding }
+func (*EmbeddingAnalyzer) Version() string { return ChineseCLIPModelVersion }
+func (*EmbeddingAnalyzer) MaxWorkers() int { return 1 }
 
 // Analyze is unused by AIJobService because this analyzer implements AnalyzeBatch.
-func (EmbeddingAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput, error) {
+func (*EmbeddingAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput, error) {
 	return AIAnalysisOutput{}, errors.New("embedding analyzer requires validated batch inputs")
 }
 
