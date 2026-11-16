@@ -461,6 +461,85 @@ func TestPeopleServiceRebuildRestoresTheSameImmutableAnchor(t *testing.T) {
 	}
 }
 
+func TestPeopleGroupingSyntheticQualitySet(t *testing.T) {
+	const facesPerIdentity = 6
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type expectedFace struct {
+		identity string
+	}
+	expected := make(map[string]expectedFace)
+	records := make([]AIAnalysisRecord, 0, 4*facesPerIdentity+3)
+	for identity := 0; identity < 4; identity++ {
+		for shot := 0; shot < facesPerIdentity; shot++ {
+			resourceID := fmt.Sprintf("f_identity_%d_%02d", identity, shot)
+			vector := make([]float32, peopleEmbeddingDimension)
+			axis := identity*2 + 8
+			vector[axis] = 1
+			vector[axis+1] = float32(shot+1) * 0.025
+			expected[resourceID] = expectedFace{identity: fmt.Sprintf("identity-%d", identity)}
+			records = append(records, peopleTestRecord(resourceID, vector))
+		}
+	}
+
+	chain := []struct {
+		resourceID string
+		identity   string
+		angle      float64
+	}{
+		{resourceID: "z_chain_0_seed", identity: "chain-a", angle: 0},
+		{resourceID: "z_chain_1_neighbor", identity: "chain-a", angle: 30},
+		{resourceID: "z_chain_2_drift", identity: "chain-b", angle: 60},
+	}
+	for _, sample := range chain {
+		vector := peopleTestAngle(sample.angle)
+		expected[sample.resourceID] = expectedFace{identity: sample.identity}
+		records = append(records, peopleTestRecord(sample.resourceID, vector))
+	}
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+
+	faces := people.AllFaces()
+	truePositive, falsePositive, falseNegative, trueNegative := 0, 0, 0, 0
+	for leftIndex, left := range faces {
+		leftExpected, ok := expected[left.ResourceID]
+		if !ok {
+			t.Fatalf("missing expected identity for %q", left.ResourceID)
+		}
+		for _, right := range faces[leftIndex+1:] {
+			rightExpected, ok := expected[right.ResourceID]
+			if !ok {
+				t.Fatalf("missing expected identity for %q", right.ResourceID)
+			}
+			sameIdentity := leftExpected.identity == rightExpected.identity
+			sameGroup := left.PersonID == right.PersonID
+			switch {
+			case sameIdentity && sameGroup:
+				truePositive++
+			case sameIdentity:
+				falseNegative++
+			case sameGroup:
+				falsePositive++
+			default:
+				trueNegative++
+			}
+		}
+	}
+
+	precision := float64(truePositive) / float64(truePositive+falsePositive)
+	recall := float64(truePositive) / float64(truePositive+falseNegative)
+	f1 := 2 * precision * recall / (precision + recall)
+	t.Logf("synthetic pairwise quality: precision=%.3f recall=%.3f f1=%.3f TP=%d FP=%d FN=%d TN=%d", precision, recall, f1, truePositive, falsePositive, falseNegative, trueNegative)
+	if falsePositive != 0 || falseNegative != 0 {
+		t.Fatalf("synthetic identity grouping metrics: precision=%.3f recall=%.3f FP=%d FN=%d", precision, recall, falsePositive, falseNegative)
+	}
+}
+
 func TestPeopleServiceRestoresCachedAssignmentsWithoutReclustering(t *testing.T) {
 	root := t.TempDir()
 	statePath := filepath.Join(root, "state.json")
