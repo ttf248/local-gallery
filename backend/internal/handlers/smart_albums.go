@@ -30,7 +30,7 @@ func SmartAlbumDirectoryHandler(service *services.SmartAlbumService) fiber.Handl
 		}
 		ctx, cancel := context.WithTimeout(c.UserContext(), smartAlbumRequestTimeout)
 		defer cancel()
-		page, err := service.DirectoryPage(ctx, c.Query("dimension", services.SmartAlbumDimensionAll), c.Query("cursor"), limit)
+		page, err := service.DirectoryPage(ctx, c.Query("dimension", services.SmartAlbumDimensionRecommended), c.Query("cursor"), limit)
 		if err != nil {
 			return writeSmartAlbumError(c, err)
 		}
@@ -117,7 +117,7 @@ func writeSmartAlbumError(c *fiber.Ctx, err error) error {
 	case errors.Is(err, services.ErrLibraryResourceWrongKind):
 		return writeError(c, fiber.StatusBadRequest, "invalid_album", "resource is not a photo album")
 	case errors.Is(err, services.ErrSmartAlbumDimension):
-		return writeError(c, fiber.StatusBadRequest, "invalid_group_dimension", "dimension must be time, place, people, or scene")
+		return writeError(c, fiber.StatusBadRequest, "invalid_group_dimension", "dimension must be recommended, time, place, people, or scene")
 	case errors.Is(err, services.ErrSmartAlbumNotFound):
 		return writeError(c, fiber.StatusNotFound, "smart_group_not_found", "smart album group was not found")
 	case errors.Is(err, services.ErrSmartAlbumOverride):

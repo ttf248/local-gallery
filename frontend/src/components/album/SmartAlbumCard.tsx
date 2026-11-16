@@ -5,11 +5,13 @@ import type {
 } from "../../api/albums";
 import {
   SMART_ALBUM_CAPTION_HEIGHT,
+  SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT,
   smartGroupHref,
 } from "../../utils/smartAlbum";
 import RenditionImage from "../common/RenditionImage";
 
 const DIMENSION_LABELS: Record<SmartAlbumDimension, string> = {
+  recommended: "推荐",
   time: "时间",
   place: "地点",
   people: "人物",
@@ -30,9 +32,16 @@ interface Props {
  */
 export default function SmartAlbumCard({ item, coverHeight }: Props) {
   const group = item.group;
-  const source = [item.parentName, item.albumName]
-    .filter(Boolean)
-    .join(" / ");
+  const recommendationReasons = group.recommendationReasons ?? [];
+  const recommendationCaption =
+    recommendationReasons.length > 2
+      ? `${recommendationReasons.slice(0, 2).join(" · ")} · 其余 ${recommendationReasons.length - 2} 类`
+      : recommendationReasons.join(" · ");
+  const captionHeight =
+    group.dimension === "recommended"
+      ? SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT
+      : SMART_ALBUM_CAPTION_HEIGHT;
+  const source = [item.parentName, item.albumName].filter(Boolean).join(" / ");
 
   return (
     <article className="h-full overflow-hidden rounded-xl bg-bg-elevated shadow-sm ring-1 ring-inset ring-border transition-shadow hover:shadow-md">
@@ -65,17 +74,33 @@ export default function SmartAlbumCard({ item, coverHeight }: Props) {
           <span className="absolute left-3 top-3 rounded-full border border-border/70 bg-bg/95 px-2 py-1 text-meta text-fg backdrop-blur-sm">
             {DIMENSION_LABELS[group.dimension]}
           </span>
+          {group.overrideConflict && (
+            <span className="absolute right-3 top-3 rounded-full border border-warning/50 bg-bg/95 px-2 py-1 text-meta text-warning backdrop-blur-sm">
+              修改待确认
+            </span>
+          )}
         </div>
-        <div
-          className="px-3 pt-2 pb-1"
-          style={{ height: SMART_ALBUM_CAPTION_HEIGHT }}
-        >
-          <h3 className="truncate text-body font-medium leading-5 text-fg" title={group.name}>
+        <div className="px-3 pt-2 pb-1" style={{ height: captionHeight }}>
+          <h3
+            className="truncate text-body font-medium leading-5 text-fg"
+            title={group.name}
+          >
             {group.name}
           </h3>
-          <p className="mt-1 truncate text-meta leading-4 text-fg-muted" title={source}>
+          <p
+            className="mt-1 truncate text-meta leading-4 text-fg-muted"
+            title={source}
+          >
             {group.photoCount} 张 · {source}
           </p>
+          {group.dimension === "recommended" && (
+            <p
+              className="mt-1 truncate text-meta leading-4 text-fg-subtle"
+              title={recommendationReasons.join(" · ")}
+            >
+              {recommendationCaption || "多项线索一致"}
+            </p>
+          )}
         </div>
       </Link>
     </article>

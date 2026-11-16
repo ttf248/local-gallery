@@ -6,16 +6,14 @@ import type {
   LibraryPage,
 } from "./library";
 
-export type SmartAlbumDimension = "time" | "place" | "people" | "scene";
-export type SmartAlbumDirectoryDimension = "all" | SmartAlbumDimension;
+export type SmartAlbumDimension =
+  "recommended" | "time" | "place" | "people" | "scene";
+export type SmartAlbumDirectoryDimension =
+  "featured" | "all" | SmartAlbumDimension;
 
 /** 智能相册刷新的任务状态，与缓存重建同一套取值。 */
 export type SmartAlbumRefreshStatus =
-  | "pending"
-  | "running"
-  | "complete"
-  | "cancelled"
-  | "error";
+  "pending" | "running" | "complete" | "cancelled" | "error";
 
 /** 全库智能相册刷新的进度快照。 */
 export interface SmartAlbumRefreshProgress {
@@ -23,7 +21,7 @@ export interface SmartAlbumRefreshProgress {
   status: SmartAlbumRefreshStatus;
   /** 为真时无视缓存，全部重算。 */
   force: boolean;
-  /** 照片相册总数；total 是「相册 × 四个维度」的组合总数。 */
+  /** 照片相册总数；total 是「相册 × 五类结果」的组合总数。 */
   albums: number;
   total: number;
   done: number;
@@ -50,6 +48,10 @@ export interface SmartAlbumGroup {
   suggestedName: string;
   customName: boolean;
   photoCount: number;
+  qualityScore?: number;
+  evidenceDimensions?: SmartAlbumDimension[];
+  recommendationReasons?: string[];
+  overrideConflict?: boolean;
   coverResourceId?: string;
   coverVersion?: string;
   /** 封面图的原始像素尺寸：瀑布流按它算卡片高度。 */

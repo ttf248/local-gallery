@@ -9,6 +9,13 @@ import { albumRoute } from "./path";
  * 换行会让卡片高度飘，瀑布流就会错位。
  */
 export const SMART_ALBUM_CAPTION_HEIGHT = 52;
+export const SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT = 68;
+
+export function smartAlbumCaptionHeight(item: SmartAlbumDirectoryItem): number {
+  return item.group.dimension === "recommended"
+    ? SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT
+    : SMART_ALBUM_CAPTION_HEIGHT;
+}
 
 /** 分组卡片的去处：来源相册里的那个分组。 */
 export function smartGroupHref(item: SmartAlbumDirectoryItem): string {

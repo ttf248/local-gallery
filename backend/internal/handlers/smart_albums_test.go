@@ -63,7 +63,23 @@ func TestSmartAlbumGroupsHandlerBuildsAlbumScopedSummary(t *testing.T) {
 	app.Get("/api/smart-albums", SmartAlbumDirectoryHandler(smartAlbums))
 	app.Get("/api/albums/:id/smart-groups", SmartAlbumGroupsHandler(smartAlbums, false))
 	app.Post("/api/albums/:id/smart-groups/rebuild", SmartAlbumGroupsHandler(smartAlbums, true))
-	response, err := app.Test(httptest.NewRequest("GET", "/api/albums/"+albumID+"/smart-groups?dimension=time", nil))
+	response, err := app.Test(httptest.NewRequest("GET", "/api/smart-albums", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var defaultDirectory struct {
+		OK   bool                                                   `json:"ok"`
+		Page services.LibraryPage[services.SmartAlbumDirectoryItem] `json:"page"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&defaultDirectory); err != nil {
+		response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != fiber.StatusOK || !defaultDirectory.OK || defaultDirectory.Page.Total != 0 {
+		t.Fatalf("default recommendation directory status=%d payload=%+v", response.StatusCode, defaultDirectory)
+	}
+	response, err = app.Test(httptest.NewRequest("GET", "/api/albums/"+albumID+"/smart-groups?dimension=time", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

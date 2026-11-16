@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { SmartAlbumDirectoryItem } from "../../api/albums";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useVisibleWindow } from "../../hooks/useVisibleWindow";
-import { SMART_ALBUM_CAPTION_HEIGHT } from "../../utils/smartAlbum";
+import { smartAlbumCaptionHeight } from "../../utils/smartAlbum";
 import {
   DEFAULT_MASONRY_RATIO,
   layoutMasonry,
@@ -46,7 +46,7 @@ export default function SmartAlbumWall({
       items.map((item) => ({
         id: `${item.albumId}:${item.group.dimension}:${item.group.id}`,
         ratio: coverRatio(item),
-        extraHeight: SMART_ALBUM_CAPTION_HEIGHT,
+        extraHeight: smartAlbumCaptionHeight(item),
       })),
     [items],
   );
@@ -95,7 +95,7 @@ export default function SmartAlbumWall({
           >
             <SmartAlbumCard
               item={item}
-              coverHeight={tile.height - SMART_ALBUM_CAPTION_HEIGHT}
+              coverHeight={tile.height - smartAlbumCaptionHeight(item)}
             />
           </div>
         );

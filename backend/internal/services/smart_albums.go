@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,23 +23,25 @@ import (
 )
 
 const (
-	SmartAlbumDimensionTime   = "time"
-	SmartAlbumDimensionPlace  = "place"
-	SmartAlbumDimensionPeople = "people"
-	SmartAlbumDimensionScene  = "scene"
-	SmartAlbumDimensionAll    = "all"
+	SmartAlbumDimensionRecommended = "recommended"
+	SmartAlbumDimensionTime        = "time"
+	SmartAlbumDimensionPlace       = "place"
+	SmartAlbumDimensionPeople      = "people"
+	SmartAlbumDimensionScene       = "scene"
+	SmartAlbumDimensionAll         = "all"
 
-	smartAlbumStateVersion     = 1
-	smartAlbumCacheVersion     = 1
-	smartAlbumTimeVersion      = "time-day-session-v1"
-	smartAlbumPlaceVersion     = "place-offline-admin-v1"
-	smartAlbumPeopleVersion    = "people-album-members-v1"
-	smartAlbumSceneVersion     = "scene-mutual-ann-v9"
-	smartAlbumMinimumGroupSize = 3
-	smartAlbumStatWorkers      = 8
-	smartSceneSimilarityFloor  = 0.72
-	smartSceneANNConstruction  = 40
-	smartSceneANNSearch        = 16
+	smartAlbumStateVersion       = 1
+	smartAlbumCacheVersion       = 2
+	smartAlbumRecommendedVersion = "recommended-evidence-rank-v1"
+	smartAlbumTimeVersion        = "time-day-session-v2"
+	smartAlbumPlaceVersion       = "place-adaptive-admin-v2"
+	smartAlbumPeopleVersion      = "people-album-members-v1"
+	smartAlbumSceneVersion       = "scene-cohesive-mutual-ann-v10"
+	smartAlbumMinimumGroupSize   = 3
+	smartAlbumStatWorkers        = 8
+	smartSceneSimilarityFloor    = 0.78
+	smartSceneANNConstruction    = 40
+	smartSceneANNSearch          = 16
 )
 
 var (
@@ -66,17 +67,22 @@ type SmartAlbumCoverage struct {
 }
 
 type SmartAlbumGroup struct {
-	ID              string   `json:"id"`
-	Dimension       string   `json:"dimension"`
-	Name            string   `json:"name"`
-	SuggestedName   string   `json:"suggestedName"`
-	CustomName      bool     `json:"customName"`
-	PhotoCount      int      `json:"photoCount"`
-	CoverResourceID string   `json:"coverResourceId,omitempty"`
-	CoverVersion    string   `json:"coverVersion,omitempty"`
-	Hidden          bool     `json:"hidden"`
-	Members         []string `json:"-"`
-	sortKey         string   `json:"sortKey,omitempty"`
+	ID                    string   `json:"id"`
+	Dimension             string   `json:"dimension"`
+	Name                  string   `json:"name"`
+	SuggestedName         string   `json:"suggestedName"`
+	CustomName            bool     `json:"customName"`
+	PhotoCount            int      `json:"photoCount"`
+	QualityScore          float64  `json:"qualityScore,omitempty"`
+	EvidenceDimensions    []string `json:"evidenceDimensions,omitempty"`
+	RecommendationReasons []string `json:"recommendationReasons,omitempty"`
+	OverrideConflict      bool     `json:"overrideConflict,omitempty"`
+	CoverResourceID       string   `json:"coverResourceId,omitempty"`
+	CoverVersion          string   `json:"coverVersion,omitempty"`
+	Hidden                bool     `json:"hidden"`
+	Members               []string `json:"-"`
+	sortKey               string   `json:"sortKey,omitempty"`
+	overrideSources       []string `json:"-"`
 	// CoverWidth 与 CoverHeight 是封面图的原始像素尺寸。
 	//
 	// 目录页把分组排成瀑布流，卡片高度得跟着封面的真实比例走，
@@ -129,15 +135,20 @@ type smartAlbumCache struct {
 }
 
 type smartAlbumCachedGroup struct {
-	ID              string   `json:"id"`
-	Dimension       string   `json:"dimension"`
-	Name            string   `json:"name"`
-	SuggestedName   string   `json:"suggestedName"`
-	PhotoCount      int      `json:"photoCount"`
-	CoverResourceID string   `json:"coverResourceId,omitempty"`
-	CoverVersion    string   `json:"coverVersion,omitempty"`
-	Members         []string `json:"members"`
-	sortKey         string   `json:"sortKey,omitempty"`
+	ID                    string   `json:"id"`
+	Dimension             string   `json:"dimension"`
+	Name                  string   `json:"name"`
+	SuggestedName         string   `json:"suggestedName"`
+	PhotoCount            int      `json:"photoCount"`
+	QualityScore          float64  `json:"qualityScore,omitempty"`
+	EvidenceDimensions    []string `json:"evidenceDimensions,omitempty"`
+	RecommendationReasons []string `json:"recommendationReasons,omitempty"`
+	OverrideConflict      bool     `json:"overrideConflict,omitempty"`
+	OverrideSources       []string `json:"overrideSources,omitempty"`
+	CoverResourceID       string   `json:"coverResourceId,omitempty"`
+	CoverVersion          string   `json:"coverVersion,omitempty"`
+	Members               []string `json:"members"`
+	sortKey               string   `json:"sortKey,omitempty"`
 }
 
 type SmartAlbumOverride struct {
@@ -345,10 +356,12 @@ func (s *SmartAlbumService) groupsForDimension(
 	faceCoverage := coverageForSummaries(len(input.ids), len(input.media), input.face, input.faceStatus)
 	embeddingCoverage := coverageForVectors(len(input.ids), len(input.media), s.vectors, input.fingerprints, input.embedding, input.embeddingStatus)
 	peopleGroups := []PeopleAlbumGroup{}
-	if s.people != nil && dimension == SmartAlbumDimensionPeople {
+	if s.people != nil && (dimension == SmartAlbumDimensionPeople || dimension == SmartAlbumDimensionRecommended) {
 		peopleGroups = s.people.AlbumGroups(currentFingerprints(input.face, input.fingerprints))
-		faceCoverage.WithEvidence = peopleEvidencePhotoCount(peopleGroups)
-		if !s.jobs.PeopleEnabled() {
+		if dimension == SmartAlbumDimensionPeople {
+			faceCoverage.WithEvidence = peopleEvidencePhotoCount(peopleGroups)
+		}
+		if dimension == SmartAlbumDimensionPeople && !s.jobs.PeopleEnabled() {
 			faceCoverage.Available = false
 			faceCoverage.Reason = "people_analysis_disabled"
 		}
@@ -364,32 +377,12 @@ func (s *SmartAlbumService) groupsForDimension(
 		coverage.WithEvidence = metadataEvidenceCount(input.metadata, dimension)
 	}
 
-	analysisFingerprint := s.analysisFingerprint(
-		dimension, input.media, input.metadata, input.face, peopleGroups,
-		input.metadataStatus, input.faceStatus, input.embeddingStatus,
-	)
-	key := smartAlbumCacheKey(input.albumID, dimension, input.media, analysisFingerprint)
-	cachePath := s.cachePath(input.albumID, dimension)
-	cache, cacheHit := smartAlbumCache{}, false
-	if !force {
-		cache, cacheHit = readSmartAlbumCache(cachePath, input.albumID, dimension, key)
+	cache, cacheHit, err := s.loadOrBuildSmartAlbumGroups(ctx, input, dimension, force, peopleGroups)
+	if err != nil {
+		return SmartAlbumSummary{}, err
 	}
-	if !cacheHit {
-		groups, buildErr := s.buildGroups(
-			ctx, input.albumID, dimension, input.media, input.mediaByID,
-			input.metadata, input.face, peopleGroups,
-		)
-		if buildErr != nil {
-			return SmartAlbumSummary{}, buildErr
-		}
-		cache = smartAlbumCache{
-			Version: smartAlbumCacheVersion, AlbumID: input.albumID, Dimension: dimension,
-			Key: key, Fingerprints: input.fingerprints, Groups: cacheSmartAlbumGroups(groups),
-		}
-		if err := writeAIJSONAtomic(cachePath, cache); err != nil {
-			return SmartAlbumSummary{}, fmt.Errorf("persist smart album cache: %w", err)
-		}
-		s.directoryRevision.Add(1)
+	if dimension == SmartAlbumDimensionRecommended {
+		coverage = coverageForRecommendations(len(input.ids), len(input.media), cache.Groups)
 	}
 	groups := s.applyOverrides(input.albumID, dimension, smartAlbumGroups(cache.Groups))
 	groupedIDs := make(map[string]struct{})
@@ -412,6 +405,69 @@ func (s *SmartAlbumService) groupsForDimension(
 	}, nil
 }
 
+func (s *SmartAlbumService) loadOrBuildSmartAlbumGroups(
+	ctx context.Context,
+	input smartAlbumAlbumInput,
+	dimension string,
+	force bool,
+	peopleGroups []PeopleAlbumGroup,
+) (smartAlbumCache, bool, error) {
+	analysisFingerprint := s.analysisFingerprint(
+		dimension, input.media, input.metadata, input.face, peopleGroups,
+		input.metadataStatus, input.faceStatus, input.embeddingStatus,
+	)
+	key := smartAlbumCacheKey(input.albumID, dimension, input.media, analysisFingerprint)
+	cachePath := s.cachePath(input.albumID, dimension)
+	cache, cacheHit := smartAlbumCache{}, false
+	if !force {
+		cache, cacheHit = readSmartAlbumCache(cachePath, input.albumID, dimension, key)
+	}
+	if cacheHit {
+		return cache, true, nil
+	}
+
+	previous, previousExists := readSmartAlbumCacheFile(cachePath, input.albumID, dimension)
+	var groups []SmartAlbumGroup
+	var err error
+	if dimension == SmartAlbumDimensionRecommended {
+		detailGroups := make(map[string][]SmartAlbumGroup, len(smartAlbumDetailDimensions()))
+		for _, detailDimension := range smartAlbumDetailDimensions() {
+			detailCache, _, loadErr := s.loadOrBuildSmartAlbumGroups(
+				ctx, input, detailDimension, false, peopleGroups,
+			)
+			if loadErr != nil {
+				return smartAlbumCache{}, false, loadErr
+			}
+			detailGroups[detailDimension] = smartAlbumGroups(detailCache.Groups)
+		}
+		vectors := s.currentSmartSceneVectors(input)
+		groups = buildSmartAlbumRecommendations(input.albumID, input.media, detailGroups, input.metadata, vectors)
+	} else {
+		groups, err = s.buildGroups(
+			ctx, input.albumID, dimension, input.media, input.mediaByID,
+			input.metadata, input.face, peopleGroups,
+		)
+	}
+	if err != nil {
+		return smartAlbumCache{}, false, err
+	}
+	if previousExists {
+		groups, err = s.migrateSmartAlbumOverrides(input.albumID, dimension, previous.Groups, groups)
+		if err != nil {
+			return smartAlbumCache{}, false, err
+		}
+	}
+	cache = smartAlbumCache{
+		Version: smartAlbumCacheVersion, AlbumID: input.albumID, Dimension: dimension,
+		Key: key, Fingerprints: input.fingerprints, Groups: cacheSmartAlbumGroups(groups),
+	}
+	if err := writeAIJSONAtomic(cachePath, cache); err != nil {
+		return smartAlbumCache{}, false, fmt.Errorf("persist smart album cache: %w", err)
+	}
+	s.directoryRevision.Add(1)
+	return cache, false, nil
+}
+
 // DirectoryPage collects only folder dimensions that already have a smart
 // album cache. Missing folder summaries stay missing instead of triggering
 // analysis or a full-library rebuild from the home page.
@@ -430,6 +486,9 @@ func (s *SmartAlbumService) DirectoryPage(
 	snapshot := s.catalog.Acquire()
 	if !snapshot.Ready() {
 		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrLibraryNotReady
+	}
+	if dimension == "featured" {
+		return s.featuredDirectoryPage(ctx, snapshot, cursor, limit)
 	}
 	directoryRevision := s.directoryRevision.Load()
 	scope := smartAlbumDirectoryScope(dimension, directoryRevision)
@@ -496,6 +555,12 @@ func (s *SmartAlbumService) DirectoryPage(
 		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrInvalidPageCursor
 	}
 	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
+	if dimension == SmartAlbumDimensionRecommended && end > offset && end < len(items) {
+		albumID := items[end-1].AlbumID
+		for end < len(items) && items[end].AlbumID == albumID {
+			end++
+		}
+	}
 	pageItems := clonePage(items, offset, end)
 	// 封面尺寸只给这一页：全库四千多组每组都探一次尺寸，
 	// 一页请求要背上几千次文件探测，首页等不起。
@@ -510,6 +575,107 @@ func (s *SmartAlbumService) DirectoryPage(
 			snapshot.Revision(),
 			smartAlbumDirectoryScope(dimension, currentDirectoryRevision),
 			end,
+		)
+		if err != nil {
+			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+		}
+		page.NextCursor = nextCursor
+	}
+	return page, nil
+}
+
+// featuredDirectoryPage picks the best recommendation from different source
+// folders before taking a folder's second result. The home page therefore gets
+// a curated, folder-diverse preview instead of the first slice of the full
+// directory order.
+func (s *SmartAlbumService) featuredDirectoryPage(
+	ctx context.Context,
+	snapshot CatalogSnapshot,
+	cursor string,
+	limit int,
+) (LibraryPage[SmartAlbumDirectoryItem], error) {
+	directoryRevision := s.directoryRevision.Load()
+	scope := smartAlbumDirectoryScope("featured", directoryRevision)
+	offset := 0
+	if cursor != "" {
+		var err error
+		offset, err = DecodePageCursor(cursor, snapshot.Revision(), scope)
+		if err != nil {
+			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+		}
+	}
+	byAlbum := make([][]SmartAlbumDirectoryItem, 0)
+	for _, album := range snapshot.PhotoAlbumSummaries() {
+		if err := ctx.Err(); err != nil {
+			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+		}
+		cache, ok := s.readCachedGroups(album.ID, SmartAlbumDimensionRecommended)
+		if !ok {
+			continue
+		}
+		groups := s.applyOverrides(album.ID, SmartAlbumDimensionRecommended, smartAlbumGroups(cache.Groups))
+		items := make([]SmartAlbumDirectoryItem, 0, len(groups))
+		for _, group := range groups {
+			if group.Hidden {
+				continue
+			}
+			items = append(items, SmartAlbumDirectoryItem{
+				AlbumID: album.ID, AlbumName: album.DisplayName,
+				ParentName: album.ParentName, Group: group,
+			})
+		}
+		if len(items) == 0 {
+			continue
+		}
+		sort.SliceStable(items, func(i, j int) bool {
+			if items[i].Group.QualityScore != items[j].Group.QualityScore {
+				return items[i].Group.QualityScore > items[j].Group.QualityScore
+			}
+			return items[i].Group.ID < items[j].Group.ID
+		})
+		byAlbum = append(byAlbum, items)
+	}
+	items := make([]SmartAlbumDirectoryItem, 0)
+	for rank := 0; ; rank++ {
+		round := make([]SmartAlbumDirectoryItem, 0, len(byAlbum))
+		for _, albumItems := range byAlbum {
+			if rank < len(albumItems) {
+				round = append(round, albumItems[rank])
+			}
+		}
+		if len(round) == 0 {
+			break
+		}
+		sort.SliceStable(round, func(i, j int) bool {
+			if round[i].Group.QualityScore != round[j].Group.QualityScore {
+				return round[i].Group.QualityScore > round[j].Group.QualityScore
+			}
+			if round[i].Group.PhotoCount != round[j].Group.PhotoCount {
+				return round[i].Group.PhotoCount > round[j].Group.PhotoCount
+			}
+			if round[i].AlbumName != round[j].AlbumName {
+				return strings.ToLower(round[i].AlbumName) < strings.ToLower(round[j].AlbumName)
+			}
+			return round[i].Group.ID < round[j].Group.ID
+		})
+		items = append(items, round...)
+	}
+	currentDirectoryRevision := s.directoryRevision.Load()
+	if cursor != "" && currentDirectoryRevision != directoryRevision {
+		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrStalePageCursor
+	}
+	if offset > len(items) {
+		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrInvalidPageCursor
+	}
+	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
+	pageItems := clonePage(items, offset, end)
+	s.enrichCoverDimensions(snapshot, pageItems)
+	page := LibraryPage[SmartAlbumDirectoryItem]{
+		Revision: snapshot.Revision(), Items: pageItems, Total: len(items),
+	}
+	if end < len(items) {
+		nextCursor, err := EncodePageCursor(
+			snapshot.Revision(), smartAlbumDirectoryScope("featured", currentDirectoryRevision), end,
 		)
 		if err != nil {
 			return LibraryPage[SmartAlbumDirectoryItem]{}, err
@@ -628,11 +794,11 @@ func (s *SmartAlbumService) enrichCoverDimensions(
 }
 
 func validSmartAlbumDirectoryDimension(dimension string) bool {
-	return dimension == SmartAlbumDimensionAll || validSmartAlbumDimension(dimension)
+	return dimension == SmartAlbumDimensionAll || dimension == "featured" || validSmartAlbumDimension(dimension)
 }
 
-// SweepSmartAlbums prepares the four folder-scoped dimensions for every photo
-// album. It reuses matching derived caches and rebuilds only summaries whose
+// SweepSmartAlbums prepares the four detail dimensions and recommendations for
+// every photo album. It reuses matching derived caches and rebuilds only summaries whose
 // media or analysis fingerprint has changed, unless force is set.
 //
 // 手动触发与每日计划走的是同一段代码：分组口径只有一处实现。
@@ -646,7 +812,7 @@ func (s *SmartAlbumService) SweepSmartAlbums(
 		return ErrLibraryNotReady
 	}
 	albums := snapshot.PhotoAlbumSummaries()
-	dimensions := smartAlbumDimensions()
+	dimensions := smartAlbumRefreshDimensions()
 	total := len(albums) * len(dimensions)
 	completed, rebuilt, reused, groups := 0, 0, 0, 0
 	for _, album := range albums {
@@ -688,21 +854,45 @@ func (s *SmartAlbumService) SweepSmartAlbums(
 	return nil
 }
 
-// smartAlbumDimensions 是每本照片相册都要算的四个分组维度。
+// smartAlbumDimensions 是每本照片相册都要算的四个详细分类维度。
 func smartAlbumDimensions() []string {
-	return []string{
-		SmartAlbumDimensionTime,
-		SmartAlbumDimensionPlace,
-		SmartAlbumDimensionPeople,
-		SmartAlbumDimensionScene,
-	}
+	return smartAlbumDetailDimensions()
+}
+
+func smartAlbumRefreshDimensions() []string {
+	return append(smartAlbumDetailDimensions(), SmartAlbumDimensionRecommended)
 }
 
 func smartAlbumDirectoryDimensions(dimension string) []string {
+	if dimension == SmartAlbumDimensionRecommended {
+		return []string{SmartAlbumDimensionRecommended}
+	}
 	if dimension != SmartAlbumDimensionAll {
 		return []string{dimension}
 	}
 	return smartAlbumDimensions()
+}
+
+func (s *SmartAlbumService) currentSmartSceneVectors(input smartAlbumAlbumInput) []smartSceneVector {
+	return s.currentSmartSceneVectorsFromMedia(input.media)
+}
+
+func (s *SmartAlbumService) currentSmartSceneVectorsFromMedia(media []smartAlbumMedia) []smartSceneVector {
+	if s.vectors == nil {
+		return nil
+	}
+	vectors := make([]smartSceneVector, 0, len(media))
+	for _, item := range media {
+		vector, ok := s.vectors.Vector(item.id, item.fingerprint.Size, item.fingerprint.MTimeNs)
+		if !ok {
+			continue
+		}
+		normalized := normalizeSmartVector(vector)
+		if normalized != nil {
+			vectors = append(vectors, smartSceneVector{id: item.id, vector: normalized})
+		}
+	}
+	return vectors
 }
 
 func (s *SmartAlbumService) currentAlbumMedia(ctx context.Context, snapshot CatalogSnapshot, ids []string) ([]smartAlbumMedia, int, error) {
@@ -779,19 +969,7 @@ func (s *SmartAlbumService) buildGroups(
 			addDraft(drafts, "person:"+person.Group.ID, person.Group.Name, person.Group.Name, person.ResourceIDs)
 		}
 	case SmartAlbumDimensionScene:
-		vectors := make([]smartSceneVector, 0, len(media))
-		if s.vectors != nil {
-			for _, item := range media {
-				vector, ok := s.vectors.Vector(item.id, item.fingerprint.Size, item.fingerprint.MTimeNs)
-				if !ok {
-					continue
-				}
-				normalized := normalizeSmartVector(vector)
-				if normalized != nil {
-					vectors = append(vectors, smartSceneVector{id: item.id, vector: normalized})
-				}
-			}
-		}
+		vectors := s.currentSmartSceneVectorsFromMedia(media)
 		for _, scene := range clusterSmartScenes(vectors) {
 			addDraft(drafts, "scene:"+scene.anchor, "相似场景", "相似场景", scene.members)
 		}
@@ -973,7 +1151,14 @@ func medianFloat64(values []float64) float64 {
 
 func addPlaceDrafts(drafts map[string]*smartAlbumDraft, media []smartAlbumMedia, records map[string]AIAnalysisRecord) {
 	metadataIndex, _ := loadChinaAdminIndex()
-	labels := make(map[string]string)
+	type smartPlacePoint struct {
+		id        string
+		latitude  float64
+		longitude float64
+		chain     []*chinaAdminFeature
+	}
+	points := make([]smartPlacePoint, 0)
+	maxDepth := 0
 	for _, item := range media {
 		record, exists := records[item.id]
 		if !exists || record.Status != MetadataParseParsed || len(record.Data) == 0 {
@@ -986,45 +1171,84 @@ func addPlaceDrafts(drafts map[string]*smartAlbumDraft, media []smartAlbumMedia,
 		}
 		gps := metadata.GPS
 		longitude, latitude, datumValid := coordinatesToChinaMap(gps.Longitude, gps.Latitude, gps.MapDatum)
-		locationKey := ""
-		locationName := ""
+		point := smartPlacePoint{id: item.id, latitude: gps.Latitude, longitude: gps.Longitude}
 		if datumValid && metadataIndex != nil {
 			province := matchingChinaFeature(metadataIndex.provinces, longitude, latitude)
 			if province != nil {
-				if area := deepestChinaFeature(metadataIndex, province, longitude, latitude); area != nil {
-					locationKey = "admin:" + strconv.Itoa(area.adcode)
-					locationName = chinaFeatureLabel(metadataIndex, area)
+				area := deepestChinaFeature(metadataIndex, province, longitude, latitude)
+				if area == nil {
+					area = province
+				}
+				for current := area; current != nil; current = metadataIndex.byAdcode[current.parentAdcode] {
+					point.chain = append(point.chain, current)
+					if current.parentAdcode == 0 {
+						break
+					}
+				}
+				for left, right := 0, len(point.chain)-1; left < right; left, right = left+1, right-1 {
+					point.chain[left], point.chain[right] = point.chain[right], point.chain[left]
 				}
 			}
 		}
-		if locationKey == "" {
-			locationKey = "cell:" + encodeSmartGeohash(gps.Latitude, gps.Longitude, 5)
-		}
-		if locationName != "" {
-			labels[locationKey] = locationName
-		}
-		addDraft(drafts, "place:"+locationKey, locationName, locationKey, []string{item.id})
+		maxDepth = max(maxDepth, len(point.chain))
+		points = append(points, point)
 	}
-	cellKeys := make([]string, 0)
-	for key, draft := range drafts {
-		if strings.HasPrefix(key, "place:cell:") && draft.name == "" {
-			cellKeys = append(cellKeys, key)
+	if len(points) == 0 {
+		return
+	}
+	maxGroups := max(1, min(12, int(math.Ceil(math.Sqrt(float64(len(points))/8)))))
+	level := maxDepth
+	if level == 0 {
+		level = 3
+	}
+	type smartPlaceBucket struct {
+		name    string
+		members []string
+	}
+	buckets := map[string]*smartPlaceBucket{}
+	for currentLevel := level; currentLevel >= 0; currentLevel-- {
+		buckets = make(map[string]*smartPlaceBucket)
+		for _, point := range points {
+			key, name := "", ""
+			if currentLevel > 0 && len(point.chain) >= currentLevel {
+				feature := point.chain[currentLevel-1]
+				key = "admin:" + strconv.Itoa(feature.adcode)
+				name = chinaFeatureLabel(metadataIndex, feature)
+			} else {
+				precision := min(5, max(2, currentLevel+2))
+				key = "cell:" + encodeSmartGeohash(point.latitude, point.longitude, precision)
+			}
+			bucket := buckets[key]
+			if bucket == nil {
+				bucket = &smartPlaceBucket{name: name}
+				buckets[key] = bucket
+			}
+			if bucket.name == "" {
+				bucket.name = name
+			}
+			bucket.members = append(bucket.members, point.id)
+		}
+		if len(buckets) <= maxGroups || currentLevel == 0 {
+			break
 		}
 	}
-	sort.Strings(cellKeys)
-	for index, key := range cellKeys {
-		drafts[key].name = fmt.Sprintf("附近位置 %02d", index+1)
+	keys := make([]string, 0, len(buckets))
+	for key := range buckets {
+		keys = append(keys, key)
 	}
-	for _, draft := range drafts {
-		if len(draft.members) < smartAlbumMinimumGroupSize {
+	sort.Strings(keys)
+	nearbyIndex := 0
+	for _, key := range keys {
+		bucket := buckets[key]
+		if len(bucket.members) < smartAlbumMinimumGroupSize {
 			continue
 		}
-		if draft.name == "" {
-			locationKey := strings.TrimPrefix(draft.key, "place:")
-			if strings.HasPrefix(locationKey, "admin:") {
-				draft.name = labels[locationKey]
-			}
+		name := bucket.name
+		if name == "" {
+			nearbyIndex++
+			name = fmt.Sprintf("附近位置 %02d", nearbyIndex)
 		}
+		addDraft(drafts, "place:"+key, name, key, bucket.members)
 	}
 }
 
@@ -1090,8 +1314,9 @@ type smartSceneVector struct {
 }
 
 type smartSceneCluster struct {
-	anchor  string
-	members []string
+	anchor   string
+	members  []string
+	cohesion float64
 }
 
 func normalizeSmartVector(values []float32) []float32 {
@@ -1140,7 +1365,10 @@ func clusterSmartScenes(vectors []smartSceneVector) []smartSceneCluster {
 			neighbors[position][neighborPosition] = hit.score
 		}
 	}
-	threshold := max(float32(smartSceneSimilarityFloor), smartSceneBackgroundThreshold(vectors))
+	// Mutual neighbors find local photo sets. A fixed cosine floor keeps the
+	// threshold interpretable; random-pair P99 made it depend on unrelated
+	// photos elsewhere in the folder.
+	threshold := float32(smartSceneSimilarityFloor)
 	parents := make([]int, len(vectors))
 	for index := range parents {
 		parents[index] = index
@@ -1177,36 +1405,28 @@ func clusterSmartScenes(vectors []smartSceneVector) []smartSceneCluster {
 	for position, item := range vectors {
 		components[find(position)] = append(components[find(position)], item.id)
 	}
+	vectorByID := make(map[string][]float32, len(vectors))
+	for _, item := range vectors {
+		vectorByID[item.id] = item.vector
+	}
 	result := make([]smartSceneCluster, 0, len(components))
 	for _, members := range components {
 		if len(members) < smartAlbumMinimumGroupSize {
 			continue
 		}
 		sort.Strings(members)
-		result = append(result, smartSceneCluster{anchor: members[0], members: members})
+		memberSet := make(map[string]struct{}, len(members))
+		for _, id := range members {
+			memberSet[id] = struct{}{}
+		}
+		cohesion := smartRecommendationSceneCohesion(memberSet, vectorByID)
+		if cohesion < 0.80 {
+			continue
+		}
+		result = append(result, smartSceneCluster{anchor: members[0], members: members, cohesion: cohesion})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].anchor < result[j].anchor })
 	return result
-}
-
-func smartSceneBackgroundThreshold(vectors []smartSceneVector) float32 {
-	if len(vectors) < 2 {
-		return 1
-	}
-	rng := rand.New(rand.NewSource(42))
-	sampleCount := min(4096, len(vectors)*8)
-	scores := make([]float64, 0, sampleCount)
-	for len(scores) < sampleCount {
-		left, right := rng.Intn(len(vectors)), rng.Intn(len(vectors))
-		if left == right {
-			continue
-		}
-		scores = append(scores, float64(smartVectorDot(vectors[left].vector, vectors[right].vector)))
-	}
-	sort.Float64s(scores)
-	index := int(math.Ceil(float64(len(scores))*0.99)) - 1
-	index = max(0, min(index, len(scores)-1))
-	return float32(scores[index])
 }
 
 func smartVectorDot(left, right []float32) float32 {
@@ -1395,6 +1615,49 @@ func (s *SmartAlbumService) analysisFingerprint(
 				_, _ = hash.Write(vectorBytes)
 			}
 		}
+	case SmartAlbumDimensionRecommended:
+		write(metadataStatus.Version)
+		write(faceStatus.Version)
+		write(embeddingStatus.Version)
+		for _, detailDimension := range smartAlbumDetailDimensions() {
+			write(smartAlbumAlgorithmVersion(detailDimension))
+		}
+		metadataIDs := make([]string, 0, len(metadata))
+		for id := range metadata {
+			metadataIDs = append(metadataIDs, id)
+		}
+		sort.Strings(metadataIDs)
+		for _, id := range metadataIDs {
+			record := metadata[id]
+			dataHash := sha256.Sum256(record.Data)
+			write(fmt.Sprintf("%s:%s:%s", id, record.Status, hex.EncodeToString(dataHash[:])))
+		}
+		faceIDs := make([]string, 0, len(face))
+		for id := range face {
+			faceIDs = append(faceIDs, id)
+		}
+		sort.Strings(faceIDs)
+		for _, id := range faceIDs {
+			record := face[id]
+			write(fmt.Sprintf("%s:%s:%d:%d:%s", id, record.Status, record.Size, record.MTimeNs, record.ModuleVersion))
+		}
+		for _, group := range people {
+			write(group.Group.ID + ":" + group.Group.Name + ":" + group.Fingerprint)
+		}
+		if s.vectors != nil {
+			vectorBytes := make([]byte, AIEmbeddingDimension*4)
+			for _, item := range media {
+				vector, ok := s.vectors.Vector(item.id, item.fingerprint.Size, item.fingerprint.MTimeNs)
+				if !ok {
+					continue
+				}
+				write(item.id)
+				for index, value := range vector {
+					binary.LittleEndian.PutUint32(vectorBytes[index*4:], math.Float32bits(value))
+				}
+				_, _ = hash.Write(vectorBytes)
+			}
+		}
 	}
 	if dimension == SmartAlbumDimensionPlace {
 		write(chinaBoundaryVersion)
@@ -1436,7 +1699,7 @@ func readSmartAlbumCacheFile(path, albumID, dimension string) (smartAlbumCache, 
 		return smartAlbumCache{}, false
 	}
 	var cache smartAlbumCache
-	if json.Unmarshal(data, &cache) != nil || cache.Version != smartAlbumCacheVersion ||
+	if json.Unmarshal(data, &cache) != nil || cache.Version < 1 || cache.Version > smartAlbumCacheVersion ||
 		cache.AlbumID != albumID || cache.Dimension != dimension || cache.Groups == nil {
 		return smartAlbumCache{}, false
 	}
@@ -1454,6 +1717,9 @@ func cacheSmartAlbumGroups(groups []SmartAlbumGroup) []smartAlbumCachedGroup {
 		result[index] = smartAlbumCachedGroup{
 			ID: group.ID, Dimension: group.Dimension, Name: group.SuggestedName,
 			SuggestedName: group.SuggestedName, PhotoCount: group.PhotoCount,
+			QualityScore: group.QualityScore, EvidenceDimensions: append([]string(nil), group.EvidenceDimensions...),
+			RecommendationReasons: append([]string(nil), group.RecommendationReasons...),
+			OverrideConflict:      group.OverrideConflict, OverrideSources: append([]string(nil), group.overrideSources...),
 			CoverResourceID: group.CoverResourceID, CoverVersion: group.CoverVersion,
 			Members: append([]string(nil), group.Members...), sortKey: group.sortKey,
 		}
@@ -1467,6 +1733,9 @@ func smartAlbumGroups(groups []smartAlbumCachedGroup) []SmartAlbumGroup {
 		result[index] = SmartAlbumGroup{
 			ID: group.ID, Dimension: group.Dimension, Name: group.Name,
 			SuggestedName: group.SuggestedName, PhotoCount: group.PhotoCount,
+			QualityScore: group.QualityScore, EvidenceDimensions: append([]string(nil), group.EvidenceDimensions...),
+			RecommendationReasons: append([]string(nil), group.RecommendationReasons...),
+			OverrideConflict:      group.OverrideConflict, overrideSources: append([]string(nil), group.OverrideSources...),
 			CoverResourceID: group.CoverResourceID, CoverVersion: group.CoverVersion,
 			Members: append([]string(nil), group.Members...), sortKey: group.sortKey,
 		}
@@ -1476,6 +1745,8 @@ func smartAlbumGroups(groups []smartAlbumCachedGroup) []SmartAlbumGroup {
 
 func smartAlbumAlgorithmVersion(dimension string) string {
 	switch dimension {
+	case SmartAlbumDimensionRecommended:
+		return smartAlbumRecommendedVersion
 	case SmartAlbumDimensionTime:
 		return smartAlbumTimeVersion
 	case SmartAlbumDimensionPlace:
@@ -1496,7 +1767,7 @@ func smartGroupID(dimension, stableKey string) string {
 
 func validSmartAlbumDimension(dimension string) bool {
 	switch dimension {
-	case SmartAlbumDimensionTime, SmartAlbumDimensionPlace, SmartAlbumDimensionPeople, SmartAlbumDimensionScene:
+	case SmartAlbumDimensionRecommended, SmartAlbumDimensionTime, SmartAlbumDimensionPlace, SmartAlbumDimensionPeople, SmartAlbumDimensionScene:
 		return true
 	default:
 		return false
@@ -1592,6 +1863,20 @@ func coverageForVectors(
 	return coverage
 }
 
+func coverageForRecommendations(total, available int, groups []smartAlbumCachedGroup) SmartAlbumCoverage {
+	members := make(map[string]struct{})
+	for _, group := range groups {
+		for _, id := range group.Members {
+			members[id] = struct{}{}
+		}
+	}
+	return SmartAlbumCoverage{
+		Module: "combined", Total: total, Analyzed: available,
+		Missing: max(0, total-available), WithEvidence: len(members),
+		Available: available > 0,
+	}
+}
+
 func peopleEvidencePhotoCount(groups []PeopleAlbumGroup) int {
 	resourceIDs := make(map[string]struct{})
 	for _, group := range groups {
@@ -1629,6 +1914,11 @@ func (s *SmartAlbumService) applyOverrides(albumID, dimension string, groups []S
 	result := make([]SmartAlbumGroup, len(groups))
 	for index, group := range groups {
 		group.Members = nil
+		group.OverrideConflict = group.OverrideConflict && hasSmartAlbumOverrideSource(s.state.Overrides, albumID, dimension, group.overrideSources)
+		if group.OverrideConflict {
+			result[index] = group
+			continue
+		}
 		if override, exists := s.state.Overrides[smartOverrideKey(albumID, dimension, group.ID)]; exists {
 			group.Hidden = override.Hidden
 			if override.Name != "" {
@@ -1639,6 +1929,139 @@ func (s *SmartAlbumService) applyOverrides(albumID, dimension string, groups []S
 		result[index] = group
 	}
 	return result
+}
+
+func hasSmartAlbumOverrideSource(
+	overrides map[string]SmartAlbumOverride,
+	albumID, dimension string,
+	sources []string,
+) bool {
+	for _, source := range sources {
+		if _, exists := overrides[smartOverrideKey(albumID, dimension, source)]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *SmartAlbumService) migrateSmartAlbumOverrides(
+	albumID, dimension string,
+	previous []smartAlbumCachedGroup,
+	groups []SmartAlbumGroup,
+) ([]SmartAlbumGroup, error) {
+	if len(previous) == 0 || len(groups) == 0 {
+		return groups, nil
+	}
+	type oldOverride struct {
+		id      string
+		value   SmartAlbumOverride
+		members map[string]struct{}
+	}
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+	originalOverrides := make(map[string]SmartAlbumOverride, len(s.state.Overrides))
+	for key, value := range s.state.Overrides {
+		originalOverrides[key] = value
+	}
+
+	oldByID := make(map[string]oldOverride)
+	for _, group := range previous {
+		members := make(map[string]struct{}, len(group.Members))
+		for _, id := range group.Members {
+			members[id] = struct{}{}
+		}
+		sourceIDs := append([]string{group.ID}, group.OverrideSources...)
+		for _, id := range sourceIDs {
+			if override, exists := s.state.Overrides[smartOverrideKey(albumID, dimension, id)]; exists {
+				oldByID[id] = oldOverride{id: id, value: override, members: members}
+			}
+		}
+	}
+	if len(oldByID) == 0 {
+		return groups, nil
+	}
+	oldIDs := make([]string, 0, len(oldByID))
+	for id := range oldByID {
+		oldIDs = append(oldIDs, id)
+	}
+	sort.Strings(oldIDs)
+	matches := make(map[int][]oldOverride)
+	for _, id := range oldIDs {
+		old := oldByID[id]
+		bestIndex, bestOverlap, bestRatio := -1, 0, -1.0
+		for index, group := range groups {
+			newMembers := make(map[string]struct{}, len(group.Members))
+			for _, member := range group.Members {
+				newMembers[member] = struct{}{}
+			}
+			overlap := smartRecommendationIntersection(old.members, newMembers)
+			if id != group.ID {
+				minimum := max(3, int(math.Ceil(float64(min(len(old.members), len(newMembers)))*0.35)))
+				if overlap < minimum || float64(overlap)/float64(max(1, len(old.members))) < 0.5 ||
+					float64(overlap)/float64(max(1, len(newMembers))) < 0.25 {
+					continue
+				}
+			}
+			ratio := float64(overlap) / float64(max(1, len(old.members)))
+			if overlap > bestOverlap || overlap == bestOverlap && ratio > bestRatio ||
+				overlap == bestOverlap && ratio == bestRatio && bestIndex >= 0 && group.ID < groups[bestIndex].ID {
+				bestIndex, bestOverlap, bestRatio = index, overlap, ratio
+			}
+		}
+		if bestIndex >= 0 {
+			matches[bestIndex] = append(matches[bestIndex], old)
+		}
+	}
+	changed := false
+	for index, oldMatches := range matches {
+		group := &groups[index]
+		newKey := smartOverrideKey(albumID, dimension, group.ID)
+		existing, hasExisting := s.state.Overrides[newKey]
+		values := make([]SmartAlbumOverride, 0, len(oldMatches)+1)
+		if hasExisting {
+			values = append(values, existing)
+		}
+		for _, old := range oldMatches {
+			if old.id != group.ID {
+				values = append(values, old.value)
+			}
+		}
+		if len(values) == 0 {
+			continue
+		}
+		same := true
+		for _, value := range values[1:] {
+			if value != values[0] {
+				same = false
+				break
+			}
+		}
+		if !same {
+			group.OverrideConflict = true
+			for _, old := range oldMatches {
+				if old.id != group.ID {
+					group.overrideSources = append(group.overrideSources, old.id)
+				}
+			}
+			continue
+		}
+		if len(values) > 0 {
+			s.state.Overrides[newKey] = values[0]
+		}
+		for _, old := range oldMatches {
+			if old.id != group.ID {
+				delete(s.state.Overrides, smartOverrideKey(albumID, dimension, old.id))
+			}
+		}
+		changed = true
+	}
+	if changed {
+		if err := writeAIJSONAtomic(s.statePath, s.state); err != nil {
+			s.state.Overrides = originalOverrides
+			return nil, fmt.Errorf("persist migrated smart album overrides: %w", err)
+		}
+	}
+	return groups, nil
 }
 
 func (s *SmartAlbumService) UpdateOverride(ctx context.Context, albumID, dimension, groupID string, name *string, hidden *bool) (SmartAlbumSummary, error) {
@@ -1655,19 +2078,27 @@ func (s *SmartAlbumService) UpdateOverride(ctx context.Context, albumID, dimensi
 	if err != nil {
 		return SmartAlbumSummary{}, err
 	}
-	groupExists := false
+	var targetGroup SmartAlbumGroup
 	for _, group := range summary.Groups {
 		if group.ID == groupID {
-			groupExists = true
+			targetGroup = group
 			break
 		}
 	}
-	if !groupExists {
+	if targetGroup.ID == "" {
 		return SmartAlbumSummary{}, ErrSmartAlbumNotFound
 	}
 	key := smartOverrideKey(albumID, dimension, groupID)
 	s.stateMu.Lock()
 	previous := s.state.Overrides[key]
+	removed := make(map[string]SmartAlbumOverride)
+	for _, source := range targetGroup.overrideSources {
+		sourceKey := smartOverrideKey(albumID, dimension, source)
+		if value, exists := s.state.Overrides[sourceKey]; exists {
+			removed[sourceKey] = value
+			delete(s.state.Overrides, sourceKey)
+		}
+	}
 	next := previous
 	if name != nil {
 		next.Name = *name
@@ -1685,6 +2116,9 @@ func (s *SmartAlbumService) UpdateOverride(ctx context.Context, albumID, dimensi
 			delete(s.state.Overrides, key)
 		} else {
 			s.state.Overrides[key] = previous
+		}
+		for sourceKey, value := range removed {
+			s.state.Overrides[sourceKey] = value
 		}
 		s.stateMu.Unlock()
 		return SmartAlbumSummary{}, fmt.Errorf("persist smart album override: %w", err)

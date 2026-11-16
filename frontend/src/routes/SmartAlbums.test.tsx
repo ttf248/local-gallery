@@ -3,10 +3,11 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SmartAlbums from "./SmartAlbums";
+import type { SmartAlbumDirectoryDimension } from "../api/albums";
 import { useAppModeStore } from "../store/appModeStore";
 
 const requests: {
-  dimension: string;
+  dimension: SmartAlbumDirectoryDimension;
   cursor?: string;
   limit?: number;
 }[] = [];
@@ -15,10 +16,14 @@ vi.mock("../api/albums", async (original) => ({
   ...(await original<typeof import("../api/albums")>()),
   albumsApi: {
     smartDirectory: (
-      dimension: string,
+      dimension: SmartAlbumDirectoryDimension,
       options: { cursor?: string; limit?: number } = {},
     ) => {
-      requests.push({ dimension, cursor: options.cursor, limit: options.limit });
+      requests.push({
+        dimension,
+        cursor: options.cursor,
+        limit: options.limit,
+      });
       const page = options.cursor ? 2 : 1;
       return Promise.resolve({
         ok: true,
@@ -33,7 +38,7 @@ vi.mock("../api/albums", async (original) => ({
               parentName: "家庭照片",
               group: {
                 id: `sg_0123456789abcdef012${page}`,
-                dimension: "time",
+                dimension,
                 name: page === 1 ? "2024年春游" : "2024年夏游",
                 suggestedName: "2024年春游",
                 customName: false,
@@ -43,6 +48,9 @@ vi.mock("../api/albums", async (original) => ({
                 coverWidth: 1600,
                 coverHeight: 900,
                 hidden: false,
+                qualityScore: 0.84,
+                evidenceDimensions: ["time", "place", "scene"],
+                recommendationReasons: ["连续拍摄时间", "同一地点", "相近场景"],
               },
             },
           ],
@@ -90,18 +98,27 @@ describe("智能相册专页", () => {
     useAppModeStore.setState({ preference: "photo", hydrated: true });
   });
 
-  it("墙上铺的是各本相册的智能分组", async () => {
+  it("默认精选推荐并按来源相册展示证据", async () => {
     renderPage();
     await waitFor(() => expect(directoryRequests().length).toBe(1));
+
+    expect(screen.getByRole("tab", { name: /精选推荐/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
 
     const link = await screen.findByRole("link", {
       name: /打开智能相册 2024年春游/,
     });
     expect(link).toHaveAttribute(
       "href",
-      "/photo/albums/a_1?view=smart&dimension=time&group=sg_0123456789abcdef0121",
+      "/photo/albums/a_1?view=smart&dimension=recommended&group=sg_0123456789abcdef0121",
     );
     expect(link).toHaveTextContent("3 张 · 家庭照片 / 2023年测试相册");
+    expect(link).toHaveTextContent("连续拍摄时间 · 同一地点 · 其余 1 类");
+    expect(
+      screen.getByRole("heading", { name: "2023年测试相册" }),
+    ).toBeInTheDocument();
   });
 
   it("按维度翻页时分组换一批", async () => {
@@ -111,9 +128,7 @@ describe("智能相册专页", () => {
     fireEvent.click(screen.getByRole("tab", { name: /人物/ }));
     await waitFor(() =>
       expect(
-        directoryRequests().some(
-          (request) => request.dimension === "people",
-        ),
+        directoryRequests().some((request) => request.dimension === "people"),
       ).toBe(true),
     );
     expect(screen.getByTestId("location")).toHaveTextContent(

@@ -29,6 +29,7 @@ interface Props {
 }
 
 const DIMENSIONS: readonly [SmartAlbumDimension, string][] = [
+  ["recommended", "精选推荐"],
   ["time", "时间"],
   ["place", "地点"],
   ["people", "人物"],
@@ -57,6 +58,7 @@ export default function SmartAlbumBrowser({
   const visibleGroups =
     summary?.groups.filter((group) => showHiddenGroups || !group.hidden) ?? [];
   const requiredModule: Record<SmartAlbumDimension, AnalysisType> = {
+    recommended: "metadata",
     time: "metadata",
     place: "metadata",
     people: "face",
@@ -79,6 +81,9 @@ export default function SmartAlbumBrowser({
     if (summary.coverage.reason === "people_analysis_disabled") {
       return "人物分组依赖人脸分析。先到任务中心启用人物分析，再把人脸分析加入运行或每日计划。";
     }
+    if (dimension === "recommended") {
+      return "当前文件夹的时间、地点、人物和场景线索还没有形成足够一致且有区分度的主题。详细分类仍可在其他页签查看。";
+    }
     if (!summary.coverage.available) {
       return "所需分析模块当前不可用；可在任务中心的本机存储页查看模型状态。";
     }
@@ -95,6 +100,7 @@ export default function SmartAlbumBrowser({
   })();
   const canAnalyzeDimension = Boolean(
     summary &&
+    dimension !== "recommended" &&
     summary.coverage.available &&
     analyzableMissing > 0 &&
     !(dimension === "people" && !peopleEnabled),
@@ -175,34 +181,47 @@ export default function SmartAlbumBrowser({
           </div>
         ) : (
           <>
-            <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-bg-elevated px-4 py-3 text-meta text-fg-muted">
-              <span>
-                分析覆盖 {summary.coverage.analyzed}/{summary.coverage.total}
-              </span>
-              <span>
-                未分析{" "}
-                {Math.max(
-                  0,
-                  summary.coverage.missing - summary.unavailablePhotos,
-                )}{" "}
-                张
-              </span>
-              <span>有效线索 {summary.coverage.withEvidence} 张</span>
-              <span>未分组 {summary.ungroupedPhotos} 张</span>
-              {summary.coverage.failed > 0 && (
-                <span>分析失败 {summary.coverage.failed} 张</span>
-              )}
-              {summary.unavailablePhotos > 0 && (
-                <span>文件不可用 {summary.unavailablePhotos} 张</span>
-              )}
-              {!summary.coverage.available && summary.coverage.reason && (
-                <span className="text-warning">
-                  {summary.coverage.reason === "people_analysis_disabled"
-                    ? "人物分析尚未启用"
-                    : "所需分析模块暂不可用"}
+            {dimension === "recommended" ? (
+              <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-bg-elevated px-4 py-3 text-meta text-fg-muted">
+                <span>
+                  精选主题{" "}
+                  {visibleGroups.filter((group) => !group.hidden).length} 组
                 </span>
-              )}
-            </div>
+                <span>
+                  覆盖 {summary.totalPhotos - summary.ungroupedPhotos} 张
+                </span>
+                <span>可用照片 {summary.availablePhotos}</span>
+              </div>
+            ) : (
+              <div className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-bg-elevated px-4 py-3 text-meta text-fg-muted">
+                <span>
+                  分析覆盖 {summary.coverage.analyzed}/{summary.coverage.total}
+                </span>
+                <span>
+                  未分析{" "}
+                  {Math.max(
+                    0,
+                    summary.coverage.missing - summary.unavailablePhotos,
+                  )}{" "}
+                  张
+                </span>
+                <span>有效线索 {summary.coverage.withEvidence} 张</span>
+                <span>未分组 {summary.ungroupedPhotos} 张</span>
+                {summary.coverage.failed > 0 && (
+                  <span>分析失败 {summary.coverage.failed} 张</span>
+                )}
+                {summary.unavailablePhotos > 0 && (
+                  <span>文件不可用 {summary.unavailablePhotos} 张</span>
+                )}
+                {!summary.coverage.available && summary.coverage.reason && (
+                  <span className="text-warning">
+                    {summary.coverage.reason === "people_analysis_disabled"
+                      ? "人物分析尚未启用"
+                      : "所需分析模块暂不可用"}
+                  </span>
+                )}
+              </div>
+            )}
 
             {visibleGroups.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border bg-bg-elevated/60 px-6 py-14 text-center">
@@ -265,6 +284,11 @@ export default function SmartAlbumBrowser({
                           已隐藏
                         </span>
                       )}
+                      {group.overrideConflict && (
+                        <span className="absolute right-3 top-3 rounded-full bg-bg/90 px-2 py-1 text-xs text-warning">
+                          修改待确认
+                        </span>
+                      )}
                     </button>
                     <div className="p-3">
                       {editingGroupId === group.id ? (
@@ -315,6 +339,14 @@ export default function SmartAlbumBrowser({
                             <p className="mt-1 text-meta text-fg-muted">
                               {group.photoCount} 张照片
                             </p>
+                            {group.dimension === "recommended" && (
+                              <p
+                                className="mt-1 text-meta text-fg-subtle"
+                                title={group.recommendationReasons?.join(" · ")}
+                              >
+                                {group.recommendationReasons?.join(" · ")}
+                              </p>
+                            )}
                           </div>
                           <button
                             type="button"

@@ -13,7 +13,7 @@ vi.mock("../hooks/useSmartAlbums", () => ({
         parentName: "家庭照片",
         group: {
           id: "sg_0123456789abcdef0123",
-          dimension: "time",
+          dimension: "recommended",
           name: "2024年春游",
           suggestedName: "2024年春游",
           customName: false,
@@ -21,6 +21,9 @@ vi.mock("../hooks/useSmartAlbums", () => ({
           coverResourceId: "f_cover",
           coverVersion: "v1",
           hidden: false,
+          qualityScore: 0.82,
+          evidenceDimensions: ["time", "place", "scene"],
+          recommendationReasons: ["连续拍摄时间", "同一地点", "相近场景"],
         },
       },
     ],
@@ -418,16 +421,20 @@ it("首页智能相册汇总已生成的分组并直达来源相册中的分组"
   );
   expect(smartGroupLink).toHaveAttribute(
     "href",
-    "/photo/albums/a_1?view=smart&dimension=time&group=sg_0123456789abcdef0123",
+    "/photo/albums/a_1?view=smart&dimension=recommended&group=sg_0123456789abcdef0123",
   );
   expect(smartGroupLink).toHaveTextContent("3 张 · 家庭照片 / 2023年测试相册");
+  expect(smartGroupLink).toHaveTextContent(
+    "连续拍摄时间 · 同一地点 · 其余 1 类",
+  );
   // 首页只给一屏预览：标题与「查看全部」都通向智能相册专页。
   expect(
     screen.getByRole("heading", { name: "智能相册" }).querySelector("a"),
   ).toHaveAttribute("href", "/photo/smart-albums");
-  expect(
-    screen.getByRole("link", { name: /查看全部/ }),
-  ).toHaveAttribute("href", "/photo/smart-albums");
+  expect(screen.getByRole("link", { name: /查看全部/ })).toHaveAttribute(
+    "href",
+    "/photo/smart-albums",
+  );
   expect(screen.queryByTestId("album-grid")).not.toBeInTheDocument();
   expect(screen.queryByTestId("filter-bar-count")).not.toBeInTheDocument();
 });

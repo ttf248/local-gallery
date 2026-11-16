@@ -270,6 +270,7 @@ describe("PhotoAlbum", () => {
     renderPhotoAlbum();
 
     fireEvent.click(screen.getByRole("button", { name: "智能相册" }));
+    fireEvent.click(screen.getByRole("tab", { name: "时间" }));
     expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
     expect(screen.getByText("未分析 1 张")).toBeInTheDocument();
     fireEvent.click(
@@ -375,14 +376,18 @@ describe("PhotoAlbum", () => {
     expect(aiJobsApi.start).not.toHaveBeenCalled();
   });
 
-  it("从智能相册直达链接进入分组浏览并可返回原始照片墙", () => {
+  it("智能相册直达页默认精选推荐并可返回原始照片墙", () => {
     renderPhotoAlbum(album, `/albums/${album.id}?view=smart`);
 
     expect(screen.getByRole("button", { name: "智能相册" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
-    expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "精选推荐" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText(/精选主题/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "原始照片墙" }));
 

@@ -97,9 +97,9 @@ export default function Home() {
   // 智能分组）。漫画侧仍旧列全部作品 —— 漫画的「库内一览」是它按作品
   // 与卷找内容的地方，照片侧有智能相册与年份索引可看。
   const smartAlbumDirectory = !isComic;
-  // 首页只给一屏预览：完整的墙在智能相册页，按维度翻也在那一页。
+  // 首页只取服务端按质量与文件夹多样性挑选的推荐，不切全库分组列表。
   const smartDirectory = useSmartAlbumDirectory(
-    "all",
+    "featured",
     smartAlbumDirectory && !!manifest,
     { limit: HOME_SMART_ALBUM_PREVIEW },
   );
@@ -636,8 +636,7 @@ export default function Home() {
           <div className="section-heading">
             <span className="section-index">{pad(sectionNo.library)}</span>
             <h2 className="section-title">
-              {/* 照片侧这一段的标题就是入口：全部分组有四千多组，
-                  首页只给一屏预览，完整的墙在智能相册页。 */}
+              {/* 首页只展示六个精选主题，详细分类与完整推荐在智能相册页。 */}
               {smartAlbumDirectory ? (
                 <Link
                   to={smartAlbumsRoute()}
@@ -653,7 +652,7 @@ export default function Home() {
             </h2>
             {smartAlbumDirectory ? (
               <>
-                <span className="section-meta">按线索分组</span>
+                <span className="section-meta">精选推荐</span>
                 <Link
                   to={smartAlbumsRoute()}
                   className="chip ml-auto"

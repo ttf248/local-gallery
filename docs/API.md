@@ -628,22 +628,22 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### 智能相册分组
 
-- `GET /api/smart-albums?dimension=all|time|place|people|scene&cursor=…&limit=60` 跨照片文件夹汇总已生成的智能分组（默认 `all`，单页默认 60、最多 200），返回 `page.items`、`total` 与 `nextCursor`。每项含来源相册 ID/名称、所属集合名与分组摘要；分组摘要里的 `coverResourceId` / `coverVersion` 指向封面图，`coverWidth` / `coverHeight` 是封面的原始像素尺寸（探测不出时缺省，客户端退回默认比例）。只读取已有分组缓存，不为尚未生成分组的相册启动计算，媒体有变化也照旧列出已生成的分组（更新由全库刷新任务负责）。隐藏分组不进入汇总页；游标绑定库版本、维度与汇总目录版本。空汇总的 `items` 是空数组，不是 `null`。
+- `GET /api/smart-albums?dimension=recommended|time|place|people|scene|all|featured&cursor=…&limit=60` 跨照片文件夹汇总已生成的智能分组（默认 `recommended`，单页默认 60、最多 200），返回 `page.items`、`total` 与 `nextCursor`。`recommended` 返回精选主题；`all` 汇总四类详细分类；`featured` 按推荐质量并按来源文件夹轮流取样，供首页预览。每项含来源相册 ID/名称、所属集合名与分组摘要；推荐组摘要含 `qualityScore`、`evidenceDimensions` 与 `recommendationReasons`；`overrideConflict` 表示多个旧修改合并后等待用户复核。`coverResourceId` / `coverVersion` 指向封面图，`coverWidth` / `coverHeight` 是封面的原始像素尺寸（探测不出时缺省，客户端退回默认比例）。只读取已有分组缓存，不为尚未生成推荐的相册启动计算，媒体有变化也照旧列出已生成的结果（更新由全库刷新任务负责）。隐藏分组不进入目录；游标绑定库版本、维度与汇总目录版本。推荐分页会延伸到来源相册边界，避免同一本相册被截成两页。空汇总的 `items` 是空数组，不是 `null`。
 - **汇总的排序**：同一本相册的分组挨在一起（相册内按该维度自己的次序：时间维度从新到旧，其余维度按张数从多到少）；相册之间按「这本相册最新的一组」排 —— 时间维度看那一组封面照片的 EXIF 拍摄时间（从新到旧），其余维度看该相册张数最多的那一组，读不到时间信息的相册排在有时间的之后。同分按相册名兜底。
 - `GET /api/albums/:albumId/smart-groups?dimension=time|place|people|scene` 返回该照片相册的分组摘要、分析覆盖率与未分组照片数。相册内直接图片是唯一分析范围，分组不会跨相册。摘要只返回分组 ID、名称、照片数和封面，不返回成员清单、路径或 GPS 坐标。
 - `POST /api/albums/:albumId/smart-groups/rebuild?dimension=…` 按当前分析记录重建选定维度并刷新派生缓存。
 - `PUT /api/albums/:albumId/smart-groups/:groupId?dimension=…` 接受 `{ "name"?: "…", "hidden"?: boolean }`，用于自定义名称或隐藏分组；名称最多 60 个字符，空名称恢复建议名。
 - `GET /api/albums/:albumId/smart-groups/:groupId/media?dimension=…&snapshot=…&cursor=…&limit=200` 只分页返回该相册该分组的图片 DTO。每页重新验证当前相册成员、文件路径边界、普通文件类型与生成分组时的文件指纹；库变化或快照过期后应重新读取分组摘要。
 
-时间只使用可信 EXIF 拍摄时间，按日期与自适应拍摄间隔形成分组；地点使用离线行政边界或 geohash 精度 5，接口不返回原始坐标；人物复用当前人物候选组在本相册内的成员；场景复用现有 Chinese-CLIP 向量，并给出可编辑的建议标签。每组至少 3 张，证据不足时保留未分组状态。派生成员清单写入 `derived/ai/smart-albums/`，人工名称与隐藏状态写入 `state/smart_album_overrides.json`，状态备份的 `smartAlbums` 类别包含这些修正。
+时间只使用可信 EXIF 拍摄时间，按日期与自适应拍摄间隔形成分组；地点按文件夹内位置数量选择行政区域粒度或 geohash，接口不返回原始坐标；人物复用当前人物候选组在本相册内的成员；场景复用现有 Chinese-CLIP 向量，并给出可编辑的建议标签。详细分组至少 3 张；精选推荐至少 8 张，并结合规模、证据独立性、场景凝聚度与区分度评分，重叠过高的候选只保留一条。推荐 ID 由来源相册和种子分组稳定派生；重算会按成员重叠迁移名称与隐藏状态，冲突时保留旧修改并标记待复核。派生成员清单写入 `derived/ai/smart-albums/`，人工名称与隐藏状态写入 `state/smart_album_overrides.json`，状态备份的 `smartAlbums` 类别包含这些修正。
 
 ### 全库智能相册刷新
 
 全库刷新是后台任务：手动触发与每日计划共用同一个任务服务，同一时刻只跑一个。
 
-- `POST /api/smart-albums/refresh` 请求 `{ "force": false }`，启动一次全库刷新，返回 `{ ok, jobId, reused, force }`。`force` 为真时无视缓存，把所有照片相册的四个维度全部重算；缺省只重建媒体或分析结果有变化的组合。已有任务在跑时复用它（`reused=true`），不会并发重建。服务关闭或分组服务不可用时返回 `503 smart_album_refresh_failed`。
+- `POST /api/smart-albums/refresh` 请求 `{ "force": false }`，启动一次全库刷新，返回 `{ ok, jobId, reused, force }`。`force` 为真时无视缓存，把所有照片相册的四类详细分类和精选推荐共五个维度全部重算；缺省只重建媒体或分析结果有变化的组合。已有任务在跑时复用它（`reused=true`），不会并发重建。服务关闭或分组服务不可用时返回 `503 smart_album_refresh_failed`。
 - `GET /api/smart-albums/refresh/active` 返回当前任务（最近一次刷新）的进度快照 `{ ok, task }`；本进程还没有跑过刷新时 `task` 为 `null` —— 这是常规状态查询，不是错误。
-- `GET /api/smart-albums/refresh/:id` 返回指定任务的进度快照：`{ jobId, status, force, albums, total, done, rebuilt, reused, groups, currentAlbumId, currentAlbumName, currentDimension, elapsedMs, error? }`。`status` 取 `pending|running|complete|cancelled|error`；`total` 是「相册 × 四个维度」的组合总数；`rebuilt` 是重算的组合数，`reused` 是命中缓存直接复用的组合数。任务不存在时返回 `404 smart_album_refresh_not_found`。
+- `GET /api/smart-albums/refresh/:id` 返回指定任务的进度快照：`{ jobId, status, force, albums, total, done, rebuilt, reused, groups, currentAlbumId, currentAlbumName, currentDimension, elapsedMs, error? }`。`status` 取 `pending|running|complete|cancelled|error`；`total` 是「相册 × 五个维度」的组合总数；`rebuilt` 是重算的组合数，`reused` 是命中缓存直接复用的组合数。任务不存在时返回 `404 smart_album_refresh_not_found`。
 - `DELETE /api/smart-albums/refresh/:id` 取消正在进行的刷新；任务已经结束时返回 `{ ok: true, alreadyDone: true }`。
 - `GET /api/smart-albums/refresh/:id/events` 以 SSE 推送进度，事件名与任务状态同名，`data` 为同一份进度快照，终态事件后连接关闭。
 

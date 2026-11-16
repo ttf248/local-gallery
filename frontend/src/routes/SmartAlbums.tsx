@@ -7,11 +7,13 @@ import {
 import type {
   SmartAlbumDimension,
   SmartAlbumDirectoryDimension,
+  SmartAlbumDirectoryItem,
 } from "../api/albums";
 import SmartAlbumWall from "../components/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
+import { albumRoute } from "../utils/path";
 
 const DIMENSION_PARAM = "dimension";
 
@@ -19,34 +21,30 @@ const DIMENSIONS: readonly {
   key: SmartAlbumDirectoryDimension;
   label: string;
 }[] = [
-  { key: "all", label: "全部" },
+  { key: "recommended", label: "精选推荐" },
   { key: "time", label: "时间" },
   { key: "place", label: "地点" },
   { key: "people", label: "人物" },
   { key: "scene", label: "场景" },
+  { key: "all", label: "全部分类" },
 ];
 
 function parseDimension(value: string | null): SmartAlbumDirectoryDimension {
   switch (value) {
+    case "recommended":
     case "time":
     case "place":
     case "people":
     case "scene":
       return value;
     default:
-      return "all";
+      return "recommended";
   }
 }
 
 /**
- * 智能相册：全库已生成的智能分组汇成的一面墙。
- *
- * 分组是相册内部的自动归类（按时间、按地点、按人物、按场景），
- * 每一本照片相册各算各的。这里的目录把各本的分组摊到一页上，
- * 按线索分组翻阅。
- *
- * 墙是无限下拉的：滑到底自动接下一批，不用点「加载更多」——
- * 四千多组分组一页页点按钮是不可能的事。
+ * 智能相册先按来源文件夹展示精选主题，时间、地点、人物和场景保留为
+ * 可筛选的详细分类。目录分页只读已生成缓存，不在浏览时触发分析。
  */
 export default function SmartAlbums() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -56,7 +54,7 @@ export default function SmartAlbums() {
 
   const setDimension = (next: SmartAlbumDirectoryDimension) => {
     const params = new URLSearchParams(searchParams);
-    if (next === "all") params.delete(DIMENSION_PARAM);
+    if (next === "recommended") params.delete(DIMENSION_PARAM);
     else params.set(DIMENSION_PARAM, next);
     if (params.toString() !== searchParams.toString()) {
       setSearchParams(params);
@@ -64,6 +62,7 @@ export default function SmartAlbums() {
   };
 
   const items = directory.items;
+  const sections = useMemo(() => groupByAlbum(items), [items]);
   const isInitialLoading = directory.isLoading && items.length === 0;
 
   // 换维度就是换一面墙：停在原来那一屏的位置上，看到的还是上一维度的分组。
@@ -74,6 +73,8 @@ export default function SmartAlbums() {
   // 当前维度的组数：目录接口的 total 就是它。
   // 「全部」没有单独的 total，用四个维度之和（它们本就是同一批分组）。
   const currentTotal = useMemo(() => {
+    if (dimension === "recommended") return directory.total;
+    if (dimension === "featured") return directory.total;
     if (dimension === "all") return total ?? directory.total;
     return counts[dimension] ?? directory.total;
   }, [dimension, total, counts, directory.total]);
@@ -119,7 +120,10 @@ export default function SmartAlbums() {
           className="page-shell flex flex-wrap gap-2 pb-3"
         >
           {DIMENSIONS.map((entry) => {
-            const count = dimensionCount(entry.key, counts, total);
+            const count =
+              entry.key === "recommended"
+                ? directory.total
+                : dimensionCount(entry.key, counts, total);
             return (
               <button
                 key={entry.key}
@@ -162,10 +166,16 @@ export default function SmartAlbums() {
           </ErrorBanner>
         ) : items.length === 0 ? (
           <EmptyState
-            title={dimension === "all" ? "还没有智能相册分组" : "这一类还没有分组"}
+            title={
+              dimension === "recommended"
+                ? "暂时没有精选推荐"
+                : dimension === "all"
+                  ? "还没有详细分组"
+                  : "这一类还没有分组"
+            }
             description={dimensionDescription(dimension)}
             action={
-              dimension === "all" ? undefined : (
+              dimension === "all" || dimension === "recommended" ? undefined : (
                 <Link
                   to={dimension === "people" ? "/tasks/plan" : "/tasks/run"}
                   className="btn btn-sm btn-outline"
@@ -179,7 +189,41 @@ export default function SmartAlbums() {
           />
         ) : (
           <>
-            <SmartAlbumWall items={items} />
+            <div className="space-y-9">
+              {sections.map((section) => (
+                <section
+                  key={section.albumId}
+                  aria-labelledby={`smart-album-source-${section.albumId}`}
+                  className="border-b border-border-faint pb-8 last:border-b-0"
+                >
+                  <header className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-meta text-fg-subtle">
+                        {section.parentName || "来源文件夹"}
+                      </p>
+                      <h2
+                        id={`smart-album-source-${section.albumId}`}
+                        className="truncate text-title font-semibold text-fg"
+                      >
+                        {section.albumName}
+                      </h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-meta text-fg-muted">
+                        {section.items.length} 组
+                      </span>
+                      <Link
+                        to={`${albumRoute("photo", section.albumId)}?view=smart`}
+                        className="inline-flex min-h-7 items-center rounded-md px-2 text-meta text-brand hover:bg-bg-subtle hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                      >
+                        查看来源相册
+                      </Link>
+                    </div>
+                  </header>
+                  <SmartAlbumWall items={section.items} />
+                </section>
+              ))}
+            </div>
             <div
               ref={sentinelRef}
               className="h-px"
@@ -198,6 +242,29 @@ export default function SmartAlbums() {
   );
 }
 
+function groupByAlbum(items: SmartAlbumDirectoryItem[]) {
+  const sections: {
+    albumId: string;
+    albumName: string;
+    parentName?: string;
+    items: SmartAlbumDirectoryItem[];
+  }[] = [];
+  for (const item of items) {
+    let section = sections.at(-1);
+    if (section?.albumId !== item.albumId) {
+      section = {
+        albumId: item.albumId,
+        albumName: item.albumName,
+        parentName: item.parentName,
+        items: [],
+      };
+      sections.push(section);
+    }
+    section.items.push(item);
+  }
+  return sections;
+}
+
 /** 某个维度页签上的组数。 */
 function dimensionCount(
   dimension: SmartAlbumDirectoryDimension,
@@ -205,12 +272,15 @@ function dimensionCount(
   total: number | undefined,
 ): number | undefined {
   if (dimension === "all") return total;
+  if (dimension === "featured") return undefined;
   return counts[dimension];
 }
 
 /** 某个维度为什么还没有分组。 */
 function dimensionDescription(dimension: SmartAlbumDirectoryDimension): string {
   switch (dimension) {
+    case "recommended":
+      return "精选推荐只展示证据充分、规模与区分度合适的主题；没有合适结果时可以留空。时间、地点、人物和场景分类仍可在上方筛选。";
     case "time":
       return "时间分组依赖 EXIF 拍摄时间。到任务中心运行元数据分析，再打开照片相册生成或刷新分组。";
     case "place":
@@ -221,6 +291,6 @@ function dimensionDescription(dimension: SmartAlbumDirectoryDimension): string {
       return "场景分组依赖 Chinese-CLIP 语义向量。到任务中心运行语义向量分析，再打开照片相册生成或刷新分组。";
     case "all":
     default:
-      return "智能相册按时间、地点、人物和场景分组。每个维度都需要对应的照片线索；打开单本照片相册可查看覆盖率并补充分析。";
+      return "按来源文件夹查看全部时间、地点、人物和场景分类。详细分类允许重叠，精选推荐会单独排序并抑制近似结果。";
   }
 }

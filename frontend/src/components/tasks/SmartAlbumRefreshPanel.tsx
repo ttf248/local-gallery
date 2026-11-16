@@ -8,6 +8,7 @@ import { stampLabel } from "../../utils/date";
 import { useUIStore } from "../../store/uiStore";
 
 const DIMENSION_LABELS: Record<SmartAlbumDimension, string> = {
+  recommended: "精选推荐",
   time: "时间",
   place: "地点",
   people: "人物",
@@ -66,7 +67,9 @@ export default function SmartAlbumRefreshPanel() {
       refresh.start(started.jobId);
       pushToast({
         kind: "info",
-        message: started.reused ? "生成已在进行中，接入现有任务" : "已开始生成智能相册",
+        message: started.reused
+          ? "生成已在进行中，接入现有任务"
+          : "已开始生成智能相册",
       });
     } catch (err) {
       setError(errorMessage(err));
@@ -106,7 +109,7 @@ export default function SmartAlbumRefreshPanel() {
             智能相册分组
           </h2>
           <p className="mt-1 max-w-2xl text-meta text-fg-muted">
-            按时间、地点、人物、场景把照片相册分成智能分组。分组只依据已完成的分析结果，原始照片保持不变。
+            按时间、地点、人物、场景分类并精选主题。只依据已完成的分析结果生成，原始照片保持不变。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -123,7 +126,7 @@ export default function SmartAlbumRefreshPanel() {
             className="btn btn-outline"
             onClick={() => void start(true)}
             disabled={running || starting}
-            title="无视缓存，把所有相册的四个维度全部重算一遍"
+            title="无视缓存，把所有相册的四类分类与精选推荐全部重算一遍"
           >
             强制重建
           </button>

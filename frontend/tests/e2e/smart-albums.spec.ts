@@ -42,15 +42,19 @@ test("首页给出智能相册入口，专页铺出分组并直达来源相册",
 
   await page.goto("/");
   // 照片侧首页那一节是智能相册的预览，标题与「查看全部」都通向专页。
-  const smartHeading = page.getByRole("heading", { name: "智能相册", exact: true });
+  const smartHeading = page.getByRole("heading", {
+    name: "智能相册",
+    exact: true,
+  });
   await expect(smartHeading).toBeVisible();
   await expect(smartHeading.getByRole("link")).toHaveAttribute(
     "href",
     "/photo/smart-albums",
   );
-  await expect(
-    page.getByRole("link", { name: /查看全部/ }),
-  ).toHaveAttribute("href", "/photo/smart-albums");
+  await expect(page.getByRole("link", { name: /查看全部/ })).toHaveAttribute(
+    "href",
+    "/photo/smart-albums",
+  );
 
   // 专页按维度铺出分组卡片，点分组直达来源相册里的那一个。
   await page.goto("/photo/smart-albums?dimension=time");
@@ -77,7 +81,7 @@ test("首页给出智能相册入口，专页铺出分组并直达来源相册",
 test("专页按维度翻页，分组随之换一批", async ({ page }) => {
   await scannedNodes(page.request, "photo");
   await page.goto("/photo/smart-albums");
-  await expect(page.getByRole("tab", { name: /全部/ })).toHaveAttribute(
+  await expect(page.getByRole("tab", { name: /精选推荐/ })).toHaveAttribute(
     "aria-selected",
     "true",
   );
@@ -90,9 +94,7 @@ test("专页按维度翻页，分组随之换一批", async ({ page }) => {
   );
 
   // 页签上的组数来自轻量请求：人物维度不是零就是有个数。
-  const peopleCount = await page
-    .getByRole("tab", { name: /人物/ })
-    .innerText();
+  const peopleCount = await page.getByRole("tab", { name: /人物/ }).innerText();
   expect(peopleCount).toMatch(/\d+/);
 });
 
@@ -103,6 +105,7 @@ test("缺少的维度可只为当前相册排入所需的增量分析", async ({
 
   await page.goto(albumUrl(album!));
   await page.getByRole("button", { name: "智能相册", exact: true }).click();
+  await page.getByRole("tab", { name: "时间" }).click();
   await expect(page.getByText("未分析 1 张")).toBeVisible();
 
   const startResponse = page.waitForResponse(
@@ -155,6 +158,7 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
 
   await page.goto(albumUrl(album!));
   await page.getByRole("button", { name: "智能相册", exact: true }).click();
+  await page.getByRole("tab", { name: "时间" }).click();
   const group = page.getByRole("button", {
     name: "打开分组 2024年5月2日，3 张",
   });
@@ -163,7 +167,7 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
   await page.getByRole("tab", { name: "地点" }).click();
   await expect(
     page.getByRole("button", {
-      name: "打开分组 浙江省 · 杭州市 · 拱墅区，3 张",
+      name: /打开分组 .+，5 张/,
     }),
   ).toBeVisible();
 

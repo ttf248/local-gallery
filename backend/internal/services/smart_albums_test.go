@@ -208,17 +208,18 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 			SmartAlbumDimensionPlace,
 			SmartAlbumDimensionPeople,
 			SmartAlbumDimensionScene,
+			SmartAlbumDimensionRecommended,
 		} {
 			if _, err := os.Stat(service.cachePath(albumID, dimension)); err != nil {
 				t.Fatalf("SweepSmartAlbums() did not prepare %s for %s: %v", dimension, albumID, err)
 			}
 		}
 	}
-	if len(sweepProgress) != 8 {
-		t.Fatalf("sweep progress steps = %d, want 8", len(sweepProgress))
+	if len(sweepProgress) != 10 {
+		t.Fatalf("sweep progress steps = %d, want 10", len(sweepProgress))
 	}
 	last := sweepProgress[len(sweepProgress)-1]
-	if last.Albums != 2 || last.Total != 8 || last.Completed != 8 {
+	if last.Albums != 2 || last.Total != 10 || last.Completed != 10 {
 		t.Fatalf("sweep progress = %+v", last)
 	}
 	if last.Rebuilt == 0 && last.Reused == 0 {
@@ -700,6 +701,42 @@ func TestSmartAlbumPlaceGroupsNearbyGPSWithoutReturningCoordinates(t *testing.T)
 	}
 }
 
+func TestSmartAlbumPlaceGroupsChooseCoarserNearbyAdminLevel(t *testing.T) {
+	coordinates := [][2]float64{
+		{30.259242, 120.130396},
+		{30.260000, 120.131000},
+		{30.258500, 120.129500},
+		{30.186000, 120.266000},
+		{30.187000, 120.265000},
+		{30.185000, 120.267000},
+	}
+	media := make([]smartAlbumMedia, len(coordinates))
+	records := make(map[string]AIAnalysisRecord, len(coordinates))
+	for index, coordinate := range coordinates {
+		id := fmt.Sprintf("f_%d", index)
+		media[index].id = id
+		data, err := json.Marshal(ImageMetadata{GPS: &GPSMetadata{
+			Latitude: coordinate[0], Longitude: coordinate[1], MapDatum: "GCJ-02",
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		records[id] = AIAnalysisRecord{Status: MetadataParseParsed, Data: data}
+	}
+	drafts := make(map[string]*smartAlbumDraft)
+	addPlaceDrafts(drafts, media, records)
+	if len(drafts) != 1 {
+		t.Fatalf("nearby district evidence made %d place groups, want one city-level group", len(drafts))
+	}
+	for key, draft := range drafts {
+		if len(draft.members) != len(coordinates) || !strings.Contains(draft.name, "杭州市") ||
+			strings.Contains(draft.name, "西湖区") || strings.Contains(draft.name, "萧山区") ||
+			!strings.HasPrefix(key, "place:admin:") {
+			t.Fatalf("place group did not choose a useful shared level: key=%q draft=%+v", key, draft)
+		}
+	}
+}
+
 func TestSmartSceneClustersCanFormThreePhotoGroup(t *testing.T) {
 	vectors := make([]smartSceneVector, 3)
 	for index := range vectors {
@@ -767,7 +804,7 @@ func BenchmarkSmartAlbumSceneGroups(b *testing.B) {
 	}
 }
 
-func newSmartSceneBenchmarkService(b *testing.B, count int) (*SmartAlbumService, string) {
+func newSmartSceneBenchmarkService(b testing.TB, count int) (*SmartAlbumService, string) {
 	b.Helper()
 	root := filepath.Join(b.TempDir(), "media")
 	albumPath := filepath.Join(root, "album")

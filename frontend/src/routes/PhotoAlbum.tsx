@@ -63,13 +63,14 @@ interface Props {
 
 function parseSmartAlbumDimension(value: string | null): SmartAlbumDimension {
   switch (value) {
+    case "recommended":
+    case "time":
     case "place":
     case "people":
     case "scene":
       return value;
-    case "time":
     default:
-      return "time";
+      return "recommended";
   }
 }
 
@@ -195,10 +196,7 @@ export default function PhotoAlbum({ album }: Props) {
   useEffect(() => {
     usePhotoSelectionStore.getState().ensureScope(selectionScope);
   }, [selectionScope]);
-  const selectedEntries = useMemo(
-    () => Object.values(selection),
-    [selection],
-  );
+  const selectedEntries = useMemo(() => Object.values(selection), [selection]);
   const selectedPickedCount = useMemo(
     () => selectedEntries.filter((entry) => isPicked(entry.id)).length,
     [isPicked, selectedEntries],
@@ -378,7 +376,6 @@ export default function PhotoAlbum({ album }: Props) {
     [album.id, dimension, pushToast, queryClient],
   );
 
-
   const copyLink = useCallback(async () => {
     try {
       await actions.copyLink();
@@ -536,7 +533,7 @@ export default function PhotoAlbum({ album }: Props) {
           className="shrink-0"
           onRetry={loadMore}
           retrying={mediaQuery.isFetchingNextPage}
-          >
+        >
           后续媒体加载失败，已加载内容仍可浏览。
         </ErrorBanner>
       )}
@@ -862,9 +859,7 @@ export default function PhotoAlbum({ album }: Props) {
             },
             {
               id: "pick",
-              label: isPicked(menu.menu.item.id)
-                ? "移出精选"
-                : "加入精选",
+              label: isPicked(menu.menu.item.id) ? "移出精选" : "加入精选",
               icon: isPicked(menu.menu.item.id) ? (
                 <UncheckIcon size={12} />
               ) : (

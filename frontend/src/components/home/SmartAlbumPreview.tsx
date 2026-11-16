@@ -5,7 +5,7 @@ import AlbumGridSkeleton from "../album/AlbumGridSkeleton";
 import EmptyState from "../common/EmptyState";
 import ErrorBanner from "../common/ErrorBanner";
 
-/** 首页只给一屏预览：完整的墙在智能相册页。 */
+/** 首页精选最多六个不同来源文件夹的推荐主题。 */
 export const HOME_SMART_ALBUM_PREVIEW = 6;
 
 interface Props {
@@ -29,15 +29,13 @@ export default function SmartAlbumPreview({
   isError,
   onRetry,
 }: Props) {
-  const preview = items.slice(0, HOME_SMART_ALBUM_PREVIEW);
+  // API 的 featured 视图已经按质量和来源文件夹多样性挑选，不在 UI
+  // 里从全库分组墙截取前几项。
+  const preview = items;
 
   if (isLoading && preview.length === 0) {
     return (
-      <AlbumGridSkeleton
-        count={6}
-        bare
-        label="正在汇总已生成的智能相册…"
-      />
+      <AlbumGridSkeleton count={6} bare label="正在汇总已生成的智能相册…" />
     );
   }
 
@@ -52,11 +50,11 @@ export default function SmartAlbumPreview({
   if (preview.length === 0) {
     return (
       <EmptyState
-        title="还没有智能相册分组"
-        description="智能相册按时间、地点、人物和场景分组。每一类都需要对应的照片线索：到任务中心跑一次分析，再打开照片相册生成分组。"
+        title="暂时没有精选推荐"
+        description="精选主题只展示证据充分、规模与区分度合适的照片组合；时间、地点、人物和场景详细分类仍可在专页查看。"
         action={
-          <Link to="/tasks/run" className="btn btn-sm btn-outline">
-            打开任务中心
+          <Link to="/photo/smart-albums" className="btn btn-sm btn-outline">
+            查看详细分类
           </Link>
         }
         icon={<span aria-hidden="true">✦</span>}
@@ -70,7 +68,7 @@ export default function SmartAlbumPreview({
       <SmartAlbumWall items={preview} targetColumnWidth={300} />
       {typeof total === "number" && (
         <p className="mt-4 text-meta tabular-nums text-fg-subtle">
-          共 {total} 组，这里是其中 {preview.length} 组
+          全库有 {total} 个推荐主题，这里精选了 {preview.length} 个
         </p>
       )}
     </div>

@@ -24,7 +24,7 @@ const (
 
 // SmartAlbumSweepProgress 是全库扫描的进度回报。
 //
-// 计数都是累计值：Albums 是照片相册总数，Total 是「相册 × 四个维度」的
+// 计数都是累计值：Albums 是照片相册总数，Total 是「相册 × 五个维度」的
 // 组合总数，Completed 是已处理的组合数。
 type SmartAlbumSweepProgress struct {
 	Albums    int
@@ -55,7 +55,7 @@ type SmartAlbumRefreshProgress struct {
 	Status SmartAlbumRefreshStatus `json:"status"`
 	// Force 为真时无视缓存，全部重算。
 	Force bool `json:"force"`
-	// Albums 是照片相册总数，Total 是「相册 × 四个维度」的组合总数。
+	// Albums 是照片相册总数，Total 是「相册 × 五个维度」的组合总数。
 	Albums int `json:"albums"`
 	Total  int `json:"total"`
 	Done   int `json:"done"`
@@ -104,7 +104,7 @@ type smartAlbumRefreshState struct {
 
 // SmartAlbumRefreshService 负责「重建全部智能相册分组」的后台任务。
 //
-// 为什么要有它：全库分组要按相册 × 四个维度逐个算，放在 HTTP 请求里
+// 为什么要有它：全库分组要按相册 × 五个维度逐个算，放在 HTTP 请求里
 // 同步跑会撞超时；放进后台任务，页面上看得见进度、也能中途取消。
 //
 // 全进程同一时间只跑一个刷新：手动触发与每日计划读的是同一份派生缓存
