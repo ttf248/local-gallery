@@ -317,14 +317,16 @@ export function SettingsView({
               title="外观"
               icon={<SunIcon size={13} />}
             >
-              <Row label="主题">
-                <ThemeSwitcher />
-              </Row>
-              {/* 侧栏的折叠只属于宽屏：窄屏侧栏是抽屉，宽度不由折叠决定，
-                  设置里也就不再摆这一行 —— 让人改一个当前看不见的东西，
-                  等于把设置页变成第二本说明。 */}
-              <div className="hidden lg:block">
-                <Row label="侧边栏">
+              {/* 这四行摆在一起，卡够宽时排成两列（见 settings.css 的
+                  .settings-rows）：标签与控件挨着，不隔着半张卡。 */}
+              <div className="settings-rows">
+                <Row label="主题">
+                  <ThemeSwitcher />
+                </Row>
+                {/* 侧栏的折叠只属于宽屏：窄屏侧栏是抽屉，宽度不由折叠决定，
+                    设置里也就不再摆这一行 —— 让人改一个当前看不见的东西，
+                    等于把设置页变成第二本说明。 */}
+                <Row label="侧边栏" className="hidden lg:flex">
                   <Segmented
                     label="侧边栏"
                     value={sidebarCollapsed ? "collapsed" : "expanded"}
@@ -339,31 +341,31 @@ export function SettingsView({
                     ]}
                   />
                 </Row>
+                <Row label="默认视图">
+                  <Segmented
+                    label="默认视图"
+                    value={viewMode}
+                    onChange={setViewMode}
+                    options={[
+                      { value: "grid", label: "网格" },
+                      { value: "list", label: "列表" },
+                    ]}
+                  />
+                </Row>
+                {/* 工作台：应用当前面向哪一类目录。它决定列表呈现什么、
+                    页面用什么措辞；两类目录的属性在「服务端 › 媒体根目录」里设定。 */}
+                <Row label="默认工作台">
+                  <Segmented
+                    label="默认工作台"
+                    value={workbenchMode}
+                    onChange={setWorkbenchMode}
+                    options={[
+                      { value: "photo", label: "照片" },
+                      { value: "comic", label: "漫画" },
+                    ]}
+                  />
+                </Row>
               </div>
-              <Row label="默认视图">
-                <Segmented
-                  label="默认视图"
-                  value={viewMode}
-                  onChange={setViewMode}
-                  options={[
-                    { value: "grid", label: "网格" },
-                    { value: "list", label: "列表" },
-                  ]}
-                />
-              </Row>
-              {/* 工作台：应用当前面向哪一类目录。它决定列表呈现什么、
-                  页面用什么措辞；两类目录的属性在「服务端 › 媒体根目录」里设定。 */}
-              <Row label="默认工作台">
-                <Segmented
-                  label="默认工作台"
-                  value={workbenchMode}
-                  onChange={setWorkbenchMode}
-                  options={[
-                    { value: "photo", label: "照片" },
-                    { value: "comic", label: "漫画" },
-                  ]}
-                />
-              </Row>
             </Section>
 
             <Section
@@ -707,7 +709,7 @@ function Group({
   return (
     <div className="settings-group">
       <div className="settings-group__label">{title}</div>
-      <div className="divide-y divide-border-faint">{children}</div>
+      <div className="settings-rows">{children}</div>
     </div>
   );
 }
@@ -716,15 +718,20 @@ function Row({
   label,
   children,
   danger,
+  className,
 }: {
   label: string;
   children: React.ReactNode;
   danger?: boolean;
+  /** 行本身的外类：窄屏才出现的设置用它把自己藏起来。 */
+  className?: string;
 }) {
   return (
     // 标签固定不换行：内容多的时候应该让内容换行，而不是把标签
     // 挤成两行、同时把右侧内容裁掉。
-    <div className="settings-row flex items-center justify-between gap-3 px-4 py-2.5 text-body">
+    <div
+      className={`settings-row flex items-center justify-between gap-3 px-4 py-2.5 text-body ${className ?? ""}`}
+    >
       <span
         className={`shrink-0 whitespace-nowrap ${danger ? "text-danger" : "text-fg"}`}
       >

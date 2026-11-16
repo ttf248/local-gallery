@@ -36,8 +36,10 @@ import { SelectionToggle } from "../components/album/BulkActions";
  *
  * 用 flex-1 铺满整行：条目少时把行填满（不留右侧空白），条目多时
  * 收窄到上限并横向滚动。与首页「未读」货架同一套策略。
+ * 上限取 360px：27 寸上六本正好铺满一整行，条目更少时也不会把
+ * 一本封面拉成半屏宽。
  */
-const SUGGEST_WIDTH = "flex-1 min-w-[148px] max-w-[240px]";
+const SUGGEST_WIDTH = "flex-1 min-w-[148px] max-w-[360px]";
 
 export default function Favorites() {
   const navigate = useNavigate();

@@ -380,6 +380,25 @@ it("导航分区按工作台分成照片与漫画两组", async () => {
   expect(labels).toEqual(["照片", "漫画"]);
 });
 
+// 一组设置行装在同一个行组里：卡够宽时这组行排成两列，标签与控件
+// 仍然挨着（分列由 styles/settings.css 的容器查询决定，跟卡宽走，
+// 不跟视口走）。分组丢了，两列的排法就没有落脚点。
+it("一组设置行装在同一个行组里", async () => {
+  renderSettings("interface");
+  const appearance = await screen.findByRole("region", { name: "外观" });
+  const appearanceRows = appearance.querySelector(".settings-rows");
+  expect(appearanceRows).not.toBeNull();
+  expect(appearanceRows?.querySelectorAll(".settings-row").length).toBe(4);
+
+  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  const nav = screen.getByRole("region", { name: "导航" });
+  for (const group of nav.querySelectorAll(".settings-group")) {
+    const rows = group.querySelector(".settings-rows");
+    expect(rows).not.toBeNull();
+    expect(rows?.querySelectorAll(".settings-row").length).toBeGreaterThan(0);
+  }
+});
+
 it("后台读取失败保留上次设置", async () => {
   const client = clientForTest();
   client.setQueryData(["prefs"], basePrefs);

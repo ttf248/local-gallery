@@ -14,6 +14,41 @@
 @tailwind components;
 
 @layer components {
+/* 卡片与分组都是排版容器：卡里的一组设置行在容器够宽时排成两列，
+   标签与控件仍然挨着，不必隔着半张卡去找开关。
+   断点跟容器走，不跟视口走 —— 同一张卡在 24 寸上是半栏、在 27 寸
+   上是整幅，宽度不同，要不要分两列由它自己决定；这样两块屏上的
+   设置页是同一套排法，而不是「宽屏才换一版」。 */
+.settings-card,
+.settings-group {
+  container-type: inline-size;
+}
+.settings-rows > .settings-row {
+  border-top: 1px solid var(--border-faint);
+}
+.settings-rows > .settings-row:first-child {
+  border-top: 0;
+}
+@container (min-width: 520px) {
+  .settings-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* 两列的每一行各自成对：分隔线只画在每行的上沿，列与列之间
+     画一条竖线，读者一眼能看出「这里是两列」。 */
+  .settings-rows > .settings-row {
+    border-top: 0;
+  }
+  .settings-rows > .settings-row:nth-child(odd) {
+    border-top: 1px solid var(--border-faint);
+  }
+  .settings-rows > .settings-row:first-child {
+    border-top: 0;
+  }
+  .settings-rows > .settings-row:nth-child(even) {
+    border-left: 1px solid var(--border-faint);
+  }
+}
 .settings-columns {
     max-width: 860px;
   }
