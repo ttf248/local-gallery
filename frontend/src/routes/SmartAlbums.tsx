@@ -1,13 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import {
-  useSmartAlbumDimensionCounts,
-  useSmartAlbumDirectory,
-} from "../hooks/useSmartAlbums";
-import type {
-  SmartAlbumDimension,
-  SmartAlbumDirectoryDimension,
-} from "../api/albums";
+import { useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
 import SmartAlbumWall from "../components/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
@@ -15,67 +8,24 @@ import ErrorBanner from "../components/common/ErrorBanner";
 
 const DIMENSION_PARAM = "dimension";
 
-const DIMENSIONS: readonly {
-  key: SmartAlbumDirectoryDimension;
-  label: string;
-}[] = [
-  { key: "recommended", label: "精选推荐" },
-  { key: "time", label: "时间" },
-  { key: "place", label: "地点" },
-  { key: "people", label: "人物" },
-  { key: "scene", label: "场景" },
-  { key: "all", label: "全部分类" },
-];
-
-function parseDimension(value: string | null): SmartAlbumDirectoryDimension {
-  switch (value) {
-    case "recommended":
-    case "time":
-    case "place":
-    case "people":
-    case "scene":
-    case "all":
-      return value;
-    default:
-      return "recommended";
-  }
-}
-
 /**
- * 智能相册先展示精选主题，时间、地点、人物和场景保留为可筛选的详细
- * 分类。目录分页只读已生成缓存，不在浏览时触发分析。
+ * 跨文件夹专页只展示精选主题。详细分类仍由后台生成并用于推荐计算；
+ * 目录分页只读已生成的推荐缓存，不在浏览时触发分析。
  */
 export default function SmartAlbums() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const dimension = parseDimension(searchParams.get(DIMENSION_PARAM));
-  const directory = useSmartAlbumDirectory(dimension, true);
-  const { counts, total } = useSmartAlbumDimensionCounts(true);
-
-  const setDimension = (next: SmartAlbumDirectoryDimension) => {
-    const params = new URLSearchParams(searchParams);
-    if (next === "recommended") params.delete(DIMENSION_PARAM);
-    else params.set(DIMENSION_PARAM, next);
-    if (params.toString() !== searchParams.toString()) {
-      setSearchParams(params);
-    }
-  };
+  const directory = useSmartAlbumDirectory("recommended", true);
 
   const items = directory.items;
   const isInitialLoading = directory.isLoading && items.length === 0;
 
-  // 换维度就是换一面墙：停在原来那一屏的位置上，看到的还是上一维度的分组。
+  // 旧的分类深链统一回到精选推荐，避免页面和地址栏表达不同分类。
   useEffect(() => {
-    document.querySelector(".app-main")?.scrollTo({ top: 0 });
-  }, [dimension]);
-
-  // 当前维度的组数。「全部」是四类详细维度之和（后端也这么算），
-  // 其余维度的组数取自计数查询 —— 计数查询是按维度各问一次，
-  // 拿当前目录的 total 去填别的维度会把组数串台。
-  const currentTotal = useMemo(() => {
-    if (dimension === "all") return total ?? directory.total;
-    if (dimension === "featured") return directory.total;
-    return counts[dimension] ?? directory.total;
-  }, [dimension, total, counts, directory.total]);
+    if (!searchParams.has(DIMENSION_PARAM)) return;
+    const params = new URLSearchParams(searchParams);
+    params.delete(DIMENSION_PARAM);
+    setSearchParams(params, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   // 无限下拉：快滑到底时就把下一批接上，滑到底时分组已经在那里。
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -100,65 +50,13 @@ export default function SmartAlbums() {
 
   return (
     <div className="min-h-full pb-10">
-      <header className="sticky top-0 z-20 border-b border-border-faint bg-bg">
-        <div className="page-shell flex items-center justify-between gap-4 py-3">
-          <div className="flex min-w-0 items-baseline gap-3">
-            <span className="page-eyebrow shrink-0">智能分组</span>
-            <h1 className="page-title page-title--sm truncate">智能相册</h1>
-          </div>
-          {typeof currentTotal === "number" && (
-            <span className="shrink-0 text-meta tabular-nums text-fg-muted">
-              共 {currentTotal} 组
-            </span>
-          )}
-        </div>
-        <div
-          role="tablist"
-          aria-label="智能相册维度"
-          className="page-shell flex flex-wrap gap-2 pb-3"
-        >
-          {DIMENSIONS.map((entry) => {
-            // 页签上的组数一律取自计数查询：每个页签各问一次，
-            // 不看当前选中的是哪一维。
-            const count =
-              entry.key === "all" ? total : countFor(counts, entry.key);
-            return (
-              <button
-                key={entry.key}
-                type="button"
-                role="tab"
-                aria-selected={dimension === entry.key}
-                onClick={() => setDimension(entry.key)}
-                className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
-                  dimension === entry.key
-                    ? "border-brand/40 bg-brand/10 text-brand-ink"
-                    : "border-border bg-bg-elevated text-fg-muted hover:text-fg"
-                }`}
-              >
-                {entry.label}
-                {count !== undefined && (
-                  <span className="ml-1.5 tabular-nums text-fg-subtle">
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </header>
-
+      <h1 className="sr-only">精选推荐</h1>
       <div className="page-shell pt-4">
-        {dimension === "recommended" && (
-          <p className="mb-6 border-b border-border-faint pb-3 text-meta text-fg-muted">
-            精选推荐至少 12 张、至少两类线索一致（时间 / 地点 / 人物 /
-            场景），且不与所在文件夹重复。
-          </p>
-        )}
         {isInitialLoading ? (
           <AlbumGridSkeleton
             count={10}
             bare
-            label="正在汇总已生成的智能相册…"
+            label="正在加载精选推荐…"
           />
         ) : directory.isError && items.length === 0 ? (
           <ErrorBanner
@@ -166,28 +64,12 @@ export default function SmartAlbums() {
             onRetry={() => void directory.refetch()}
             retrying={directory.isLoading}
           >
-            智能相册汇总暂时读不出来。
+            精选推荐暂时读不出来。
           </ErrorBanner>
         ) : items.length === 0 ? (
           <EmptyState
-            title={
-              dimension === "recommended"
-                ? "暂时没有精选推荐"
-                : dimension === "all"
-                  ? "还没有详细分组"
-                  : "这一类还没有分组"
-            }
-            description={dimensionDescription(dimension)}
-            action={
-              dimension === "all" || dimension === "recommended" ? undefined : (
-                <Link
-                  to={dimension === "people" ? "/tasks/plan" : "/tasks/run"}
-                  className="btn btn-sm btn-outline"
-                >
-                  打开任务中心
-                </Link>
-              )
-            }
+            title="暂时没有精选推荐"
+            description="精选推荐至少 12 张、至少两类线索一致，且不与所在文件夹重复；没有合适结果时可以留空。"
             icon={<span aria-hidden="true">✦</span>}
             dense
           />
@@ -213,36 +95,4 @@ export default function SmartAlbums() {
       </div>
     </div>
   );
-}
-
-/**
- * 某个维度有多少组。
- *
- * 计数查询只覆盖五个维度；「featured」是首页专用的取样视图，没有计数。
- */
-function countFor(
-  counts: Partial<Record<SmartAlbumDimension, number>>,
-  dimension: SmartAlbumDirectoryDimension,
-): number | undefined {
-  if (dimension === "all" || dimension === "featured") return undefined;
-  return counts[dimension];
-}
-
-/** 某个维度为什么还没有分组。 */
-function dimensionDescription(dimension: SmartAlbumDirectoryDimension): string {
-  switch (dimension) {
-    case "recommended":
-      return "精选推荐只展示至少 12 张、至少两类线索一致且不与所在文件夹重复的主题；没有合适结果时可以留空。时间、地点、人物和场景分类仍可在上方筛选。";
-    case "time":
-      return "时间分组依赖 EXIF 拍摄时间。到任务中心运行元数据分析，再打开照片相册生成或刷新分组。";
-    case "place":
-      return "地点分组依赖照片中的 GPS 或可用地点线索。先运行元数据分析；没有位置数据的照片不会被猜测归类。";
-    case "people":
-      return "人物分组依赖人脸分析。需先在每日计划启用人物分析，再运行人脸任务；识别结果只保存在本机。";
-    case "scene":
-      return "场景分组依赖 Chinese-CLIP 语义向量。到任务中心运行语义向量分析，再打开照片相册生成或刷新分组。";
-    case "all":
-    default:
-      return "按来源文件夹查看全部时间、地点、人物和场景分类；这一页不含精选推荐。详细分类允许重叠，精选推荐单独成页并抑制近似结果。";
-  }
 }
