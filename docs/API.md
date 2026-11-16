@@ -629,6 +629,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 ### 智能相册分组
 
 - `GET /api/smart-albums?dimension=all|time|place|people|scene&cursor=…&limit=60` 跨照片文件夹汇总已生成的智能分组（默认 `all`，单页默认 60、最多 200），返回 `page.items`、`total` 与 `nextCursor`。每项含来源相册 ID/名称、所属集合名与分组摘要；分组摘要里的 `coverResourceId` / `coverVersion` 指向封面图，`coverWidth` / `coverHeight` 是封面的原始像素尺寸（探测不出时缺省，客户端退回默认比例）。只读取已有分组缓存，不为尚未生成分组的相册启动计算，媒体有变化也照旧列出已生成的分组（更新由全库刷新任务负责）。隐藏分组不进入汇总页；游标绑定库版本、维度与汇总目录版本。空汇总的 `items` 是空数组，不是 `null`。
+- **汇总的排序**：同一本相册的分组挨在一起（相册内按该维度自己的次序：时间维度从新到旧，其余维度按张数从多到少）；相册之间按「这本相册最新的一组」排 —— 时间维度看那一组封面照片的 EXIF 拍摄时间（从新到旧），其余维度看该相册张数最多的那一组，读不到时间信息的相册排在有时间的之后。同分按相册名兜底。
 - `GET /api/albums/:albumId/smart-groups?dimension=time|place|people|scene` 返回该照片相册的分组摘要、分析覆盖率与未分组照片数。相册内直接图片是唯一分析范围，分组不会跨相册。摘要只返回分组 ID、名称、照片数和封面，不返回成员清单、路径或 GPS 坐标。
 - `POST /api/albums/:albumId/smart-groups/rebuild?dimension=…` 按当前分析记录重建选定维度并刷新派生缓存。
 - `PUT /api/albums/:albumId/smart-groups/:groupId?dimension=…` 接受 `{ "name"?: "…", "hidden"?: boolean }`，用于自定义名称或隐藏分组；名称最多 60 个字符，空名称恢复建议名。

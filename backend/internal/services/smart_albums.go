@@ -66,25 +66,25 @@ type SmartAlbumCoverage struct {
 }
 
 type SmartAlbumGroup struct {
-	ID              string `json:"id"`
-	Dimension       string `json:"dimension"`
-	Name            string `json:"name"`
-	SuggestedName   string `json:"suggestedName"`
-	CustomName      bool   `json:"customName"`
-	PhotoCount      int    `json:"photoCount"`
-	CoverResourceID string `json:"coverResourceId,omitempty"`
-	CoverVersion    string `json:"coverVersion,omitempty"`
+	ID              string   `json:"id"`
+	Dimension       string   `json:"dimension"`
+	Name            string   `json:"name"`
+	SuggestedName   string   `json:"suggestedName"`
+	CustomName      bool     `json:"customName"`
+	PhotoCount      int      `json:"photoCount"`
+	CoverResourceID string   `json:"coverResourceId,omitempty"`
+	CoverVersion    string   `json:"coverVersion,omitempty"`
+	Hidden          bool     `json:"hidden"`
+	Members         []string `json:"-"`
+	sortKey         string   `json:"sortKey,omitempty"`
 	// CoverWidth 与 CoverHeight 是封面图的原始像素尺寸。
 	//
 	// 目录页把分组排成瀑布流，卡片高度得跟着封面的真实比例走，
 	// 否则一面墙上全是等高的卡片，竖幅照片全被裁掉。
 	// 尺寸按请求时探测（只读图片头），因此不进缓存：
 	// 缓存里存的是「分组有哪些成员」，不是媒体的呈现属性。
-	CoverWidth  int      `json:"coverWidth,omitempty"`
-	CoverHeight int      `json:"coverHeight,omitempty"`
-	Hidden      bool     `json:"hidden"`
-	Members     []string `json:"-"`
-	sortKey     string   `json:"sortKey,omitempty"`
+	CoverWidth  int `json:"coverWidth,omitempty"`
+	CoverHeight int `json:"coverHeight,omitempty"`
 }
 
 type SmartAlbumSummary struct {
@@ -442,12 +442,14 @@ func (s *SmartAlbumService) DirectoryPage(
 		}
 	}
 	dimensions := smartAlbumDirectoryDimensions(dimension)
-	items := make([]SmartAlbumDirectoryItem, 0)
+	blocks := make([]smartAlbumDirectoryBlock, 0)
+	coverIDs := make([]string, 0)
 	for _, album := range snapshot.PhotoAlbumSummaries() {
+		if err := ctx.Err(); err != nil {
+			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+		}
+		block := smartAlbumDirectoryBlock{album: album}
 		for _, currentDimension := range dimensions {
-			if err := ctx.Err(); err != nil {
-				return LibraryPage[SmartAlbumDirectoryItem]{}, err
-			}
 			cache, ok := s.readCachedGroups(album.ID, currentDimension)
 			if !ok {
 				continue
@@ -456,12 +458,35 @@ func (s *SmartAlbumService) DirectoryPage(
 				if group.Hidden {
 					continue
 				}
-				items = append(items, SmartAlbumDirectoryItem{
+				block.items = append(block.items, SmartAlbumDirectoryItem{
 					AlbumID: album.ID, AlbumName: album.DisplayName,
 					ParentName: album.ParentName, Group: group,
 				})
+				if group.PhotoCount > block.leadCount {
+					block.leadCount = group.PhotoCount
+				}
+				// 时间分组在缓存里就是从新到旧排的，因此第一个时间组
+				// 就是这本相册最新的一组；它的封面是那一组里的照片。
+				if currentDimension == SmartAlbumDimensionTime && block.leadCoverID == "" {
+					block.leadCoverID = group.CoverResourceID
+				}
 			}
 		}
+		if len(block.items) == 0 {
+			continue
+		}
+		if block.leadCoverID != "" {
+			coverIDs = append(coverIDs, block.leadCoverID)
+		}
+		blocks = append(blocks, block)
+	}
+	// 相册之间按「这本相册最新的一组」排：封面图的 EXIF 拍摄时间即那一组
+	// 的起点。一次取回所有封面的元数据，避免逐本相册去查。
+	s.albumLeadTimes(blocks, coverIDs)
+	sortSmartAlbumBlocks(blocks)
+	items := make([]SmartAlbumDirectoryItem, 0)
+	for _, block := range blocks {
+		items = append(items, block.items...)
 	}
 	currentDirectoryRevision := s.directoryRevision.Load()
 	if cursor != "" && currentDirectoryRevision != directoryRevision {
@@ -496,6 +521,76 @@ func (s *SmartAlbumService) DirectoryPage(
 
 func smartAlbumDirectoryScope(dimension string, revision uint64) string {
 	return fmt.Sprintf("smart-album-directory:%s:%d", dimension, revision)
+}
+
+// smartAlbumDirectoryBlock 是目录里一本相册的全部分组。
+//
+// 目录按相册分块铺开：同一本相册的分组挨在一起，翻的时候才认得出
+// 「这几组是同一本里的」；块与块之间按这本相册最新的一组排。
+type smartAlbumDirectoryBlock struct {
+	album LibraryNodeSummary
+	items []SmartAlbumDirectoryItem
+	// leadTime 是这本相册最新一组的拍摄时间（RFC3339），空表示读不到。
+	leadTime string
+	// leadCount 是这本相册张数最多的一组的张数。
+	leadCount int
+	// leadCoverID 是最新一组的封面，用它的 EXIF 拍摄时间当 leadTime。
+	leadCoverID string
+}
+
+// albumLeadTimes 取出各本相册最新一组的拍摄时间。
+//
+// 时间分组的封面就是那一组里的照片，它的 EXIF 时间落在这一组的时间段内，
+// 足以给相册定出「哪本更新」。读不到就留空：排序时这类相册排在有时间的
+// 之后，而不是被当成最旧的。
+func (s *SmartAlbumService) albumLeadTimes(
+	blocks []smartAlbumDirectoryBlock,
+	coverIDs []string,
+) {
+	if len(coverIDs) == 0 {
+		return
+	}
+	records := s.jobs.RecordsForResources(AIJobTypeMetadata, coverIDs)
+	for index := range blocks {
+		coverID := blocks[index].leadCoverID
+		if coverID == "" {
+			continue
+		}
+		record, exists := records[coverID]
+		if !exists || record.Status != MetadataParseParsed || len(record.Data) == 0 {
+			continue
+		}
+		var metadata ImageMetadata
+		if json.Unmarshal(record.Data, &metadata) != nil {
+			continue
+		}
+		captured, ok := parseSmartCaptureTime(metadata.DateTimeOriginal)
+		if !ok {
+			continue
+		}
+		blocks[index].leadTime = captured.Format(time.RFC3339Nano)
+	}
+}
+
+// sortSmartAlbumBlocks 给相册块排序：先按最新一组的拍摄时间倒序，
+// 没有时间信息的按张数最多的那一组倒序，最后按相册名兜底。
+func sortSmartAlbumBlocks(blocks []smartAlbumDirectoryBlock) {
+	sort.SliceStable(blocks, func(i, j int) bool {
+		left, right := blocks[i], blocks[j]
+		if left.leadTime != right.leadTime {
+			if left.leadTime == "" {
+				return false
+			}
+			if right.leadTime == "" {
+				return true
+			}
+			return left.leadTime > right.leadTime
+		}
+		if left.leadCount != right.leadCount {
+			return left.leadCount > right.leadCount
+		}
+		return strings.ToLower(left.album.DisplayName) < strings.ToLower(right.album.DisplayName)
+	})
 }
 
 // enrichCoverDimensions 给这一页的分组补上封面的像素尺寸。

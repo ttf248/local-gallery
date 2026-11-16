@@ -367,6 +367,75 @@ func writeTestJPEG(t *testing.T, path string, width, height int) {
 	}
 }
 
+// 目录里的相册块按「这本相册最新的一组」排：新的相册在前。
+func TestSmartAlbumDirectoryOrdersAlbumsByRecency(t *testing.T) {
+	root := t.TempDir()
+	// 两本相册，拍摄时间一新一旧；相册名故意与时间相反，
+	// 这样「按名字排」与「按新旧排」不会碰巧一致。
+	albums := []struct {
+		name     string
+		captured string
+	}{
+		{name: "旧相册", captured: "2019-05-04T10:00:00"},
+		{name: "新相册", captured: "2024-11-30T10:00:00"},
+	}
+	result := &models.ScanResult{Roots: []string{root}, AlbumCount: len(albums)}
+	for _, album := range albums {
+		albumPath := filepath.Join(root, album.name)
+		if err := os.MkdirAll(albumPath, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		files := make([]string, 0, 3)
+		for imageIndex := 0; imageIndex < 3; imageIndex++ {
+			path := filepath.Join(albumPath, fmt.Sprintf("%d.jpg", imageIndex))
+			writeTestJPEG(t, path, 40, 20)
+			files = append(files, path)
+		}
+		result.Albums = append(result.Albums, models.Album{
+			Type: "album", Name: album.name, Path: albumPath,
+			SourceRoot: root, ImageFiles: files, ImageCount: len(files), CoverImage: files[0],
+		})
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(result, []string{root})
+	jobs := newTestAIJobService(
+		t,
+		filepath.Join(root, "state", "ai-jobs.json"),
+		filepath.Join(root, "derived", "metadata"),
+		catalog,
+		MetadataAnalyzer{},
+		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-test-v1"},
+	)
+	snapshot := catalog.Acquire()
+	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(root, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs,
+		ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, album := range albums {
+		albumID := catalog.ExternalID(filepath.Join(root, album.name), ResourceAlbum)
+		seedMetadataRecords(t, jobs, snapshot, albumID, album.captured)
+		if _, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionTime, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 {
+		t.Fatalf("directory items=%+v", page.Items)
+	}
+	if page.Items[0].AlbumName != "新相册" || page.Items[1].AlbumName != "旧相册" {
+		t.Fatalf("albums are not ordered by recency: %+v", page.Items)
+	}
+}
+
 func TestAlbumImageIDsReturnsOnlyImagesFromOneAlbum(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "mixed")
