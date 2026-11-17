@@ -601,6 +601,36 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(3, detector.calls)
         self.assertGreaterEqual(len(faces), 2)
 
+    def test_buffalo_m_detector_can_disable_group_tiles_for_evaluation(self):
+        overview = [[100, 120, 40, 40, 0.9]]
+        runtime = {"detector": object()}
+        with patch.object(worker, "buffalo_m_detection_input", return_value=overview), patch.object(
+            worker, "buffalo_m_needs_group_tiles", return_value=True
+        ):
+            faces = worker.detect_buffalo_m(
+                np.zeros((1600, 1600, 3), dtype=np.uint8),
+                runtime,
+                use_group_tiles=False,
+            )
+
+        self.assertIs(faces, overview)
+
+    def test_buffalo_m_analysis_forwards_evaluation_tiling_mode(self):
+        image = np.zeros((640, 640, 3), dtype=np.uint8)
+        runtime = {"device": "cpu", "detector": object()}
+        with patch.object(worker, "read_face_image", return_value=(image, 1.0, 1.0)), patch.object(
+            worker, "load_face_models", return_value=runtime
+        ), patch.object(worker, "detect_buffalo_m", return_value=[]) as detect:
+            result = worker.analyze_face_image(
+                "face.jpg",
+                "cpu",
+                worker.FACE_MODEL_BUFFALO_M,
+                buffalo_m_tiling=False,
+            )
+
+        detect.assert_called_once_with(image, runtime, use_group_tiles=False)
+        self.assertEqual([], result["data"]["faces"])
+
     def test_buffalo_m_group_photo_trigger_preserves_ordinary_fast_path(self):
         with patch.object(worker, "np", np):
             ordinary_image = np.zeros((1200, 1200, 3), dtype=np.uint8)

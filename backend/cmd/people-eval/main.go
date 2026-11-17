@@ -22,6 +22,7 @@ type evaluationInput struct {
 
 type annotatedPhoto struct {
 	ResourceID string          `json:"resourceId"`
+	Tags       []string        `json:"tags,omitempty"`
 	Faces      []annotatedFace `json:"faces"`
 }
 
@@ -47,26 +48,73 @@ type faceMetrics struct {
 }
 
 type evaluationReport struct {
-	Model               string      `json:"model"`
-	PhotoCount          int         `json:"photoCount"`
-	AnnotatedFaceCount  int         `json:"annotatedFaceCount"`
-	DetectedFaceCount   int         `json:"detectedFaceCount"`
-	IndexedFaceCount    int         `json:"indexedFaceCount"`
-	Detection           faceMetrics `json:"detection"`
-	SmallFaceDetection  faceMetrics `json:"smallFaceDetection"`
-	IdentityPairwise    faceMetrics `json:"identityPairwise"`
-	SplitIdentityCount  int         `json:"splitIdentityCount"`
-	MergedGroupCount    int         `json:"mergedGroupCount"`
-	GroupCount          int         `json:"groupCount"`
-	SingletonGroupCount int         `json:"singletonGroupCount"`
-	SingletonGroupShare float64     `json:"singletonGroupShare"`
+	Model                 string                  `json:"model"`
+	PhotoCount            int                     `json:"photoCount"`
+	AnnotatedFaceCount    int                     `json:"annotatedFaceCount"`
+	DetectedFaceCount     int                     `json:"detectedFaceCount"`
+	IndexedFaceCount      int                     `json:"indexedFaceCount"`
+	Detection             faceMetrics             `json:"detection"`
+	SmallFaceDetection    faceMetrics             `json:"smallFaceDetection"`
+	IdentityPairwise      faceMetrics             `json:"identityPairwise"`
+	LabeledIdentityCount  int                     `json:"labeledIdentityCount"`
+	SplitIdentityCount    int                     `json:"splitIdentityCount"`
+	SplitIdentityRate     float64                 `json:"splitIdentityRate"`
+	MergedGroupCount      int                     `json:"mergedGroupCount"`
+	MergedGroupRate       float64                 `json:"mergedGroupRate"`
+	GroupCount            int                     `json:"groupCount"`
+	SingletonGroupCount   int                     `json:"singletonGroupCount"`
+	SingletonGroupShare   float64                 `json:"singletonGroupShare"`
+	EmbeddingIndexedShare float64                 `json:"embeddingIndexedShare"`
+	FeatureSimilarity     featureSimilarityReport `json:"featureSimilarity"`
+	Scenarios             []scenarioMetrics       `json:"scenarios"`
+}
+
+type scenarioMetrics struct {
+	Tag                   string                  `json:"tag"`
+	PhotoCount            int                     `json:"photoCount"`
+	AnnotatedFaceCount    int                     `json:"annotatedFaceCount"`
+	DetectedFaceCount     int                     `json:"detectedFaceCount"`
+	IndexedFaceCount      int                     `json:"indexedFaceCount"`
+	Detection             faceMetrics             `json:"detection"`
+	SmallFaceDetection    faceMetrics             `json:"smallFaceDetection"`
+	IdentityPairwise      faceMetrics             `json:"identityPairwise"`
+	LabeledIdentityCount  int                     `json:"labeledIdentityCount"`
+	SplitIdentityCount    int                     `json:"splitIdentityCount"`
+	SplitIdentityRate     float64                 `json:"splitIdentityRate"`
+	MergedGroupCount      int                     `json:"mergedGroupCount"`
+	MergedGroupRate       float64                 `json:"mergedGroupRate"`
+	GroupCount            int                     `json:"groupCount"`
+	SingletonGroupCount   int                     `json:"singletonGroupCount"`
+	SingletonGroupShare   float64                 `json:"singletonGroupShare"`
+	EmbeddingIndexedShare float64                 `json:"embeddingIndexedShare"`
+	FeatureSimilarity     featureSimilarityReport `json:"featureSimilarity"`
+}
+
+type featureSimilarityReport struct {
+	SampledFaceCount  int               `json:"sampledFaceCount"`
+	SameIdentity      similaritySummary `json:"sameIdentity"`
+	DifferentIdentity similaritySummary `json:"differentIdentity"`
+}
+
+type similaritySummary struct {
+	PairCount int     `json:"pairCount"`
+	Mean      float64 `json:"mean"`
+	P10       float64 `json:"p10"`
+	Median    float64 `json:"median"`
+	P90       float64 `json:"p90"`
+}
+
+type featureSample struct {
+	photoID   string
+	identity  string
+	embedding []float32
 }
 
 func main() {
 	inputPath := flag.String("input", "", "本地评测输入 JSON 路径")
 	smallFaceMaxSide := flag.Float64("small-face-max-side", 96, "小脸定义：标注框短边像素上限")
 	flag.Parse()
-	if *inputPath == "" || *smallFaceMaxSide <= 0 {
+	if *inputPath == "" || math.IsNaN(*smallFaceMaxSide) || math.IsInf(*smallFaceMaxSide, 0) || *smallFaceMaxSide <= 0 {
 		fatal(errors.New("必须提供 --input，且 --small-face-max-side 必须大于 0"))
 	}
 	file, err := os.Open(*inputPath)
@@ -94,6 +142,9 @@ func main() {
 }
 
 func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport, error) {
+	if math.IsNaN(smallFaceMaxSide) || math.IsInf(smallFaceMaxSide, 0) || smallFaceMaxSide <= 0 {
+		return evaluationReport{}, errors.New("small-face-max-side must be a positive finite number")
+	}
 	version := services.FaceAnalyzerVersion
 	switch input.Model {
 	case services.FaceModelQualityV2:
@@ -166,6 +217,16 @@ func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport
 	for _, photo := range input.Photos {
 		if photo.ResourceID == "" {
 			return evaluationReport{}, errors.New("photo resourceId must not be empty")
+		}
+		tags := make(map[string]struct{}, len(photo.Tags))
+		for _, tag := range photo.Tags {
+			if tag == "" {
+				return evaluationReport{}, fmt.Errorf("photo %q contains an empty scenario tag", photo.ResourceID)
+			}
+			if _, exists := tags[tag]; exists {
+				return evaluationReport{}, fmt.Errorf("photo %q contains duplicate scenario tag %q", photo.ResourceID, tag)
+			}
+			tags[tag] = struct{}{}
 		}
 		if _, exists := photoIDs[photo.ResourceID]; exists {
 			return evaluationReport{}, fmt.Errorf("duplicate annotation photo %q", photo.ResourceID)
@@ -264,6 +325,10 @@ func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport
 			report.MergedGroupCount++
 		}
 	}
+	report.LabeledIdentityCount = len(identityCounts)
+	if report.LabeledIdentityCount > 0 {
+		report.SplitIdentityRate = float64(report.SplitIdentityCount) / float64(report.LabeledIdentityCount)
+	}
 	groups, _ := people.TopGroups(0, true, nil)
 	report.GroupCount = len(groups)
 	for _, group := range groups {
@@ -273,8 +338,285 @@ func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport
 	}
 	if report.GroupCount > 0 {
 		report.SingletonGroupShare = float64(report.SingletonGroupCount) / float64(report.GroupCount)
+		report.MergedGroupRate = float64(report.MergedGroupCount) / float64(report.GroupCount)
+	}
+	if report.DetectedFaceCount > 0 {
+		report.EmbeddingIndexedShare = float64(report.IndexedFaceCount) / float64(report.DetectedFaceCount)
+	}
+	report.FeatureSimilarity, err = featureSimilarities(input.Photos, recordsByResource)
+	if err != nil {
+		return evaluationReport{}, err
+	}
+	photosByTag := make(map[string][]annotatedPhoto)
+	for _, photo := range input.Photos {
+		for _, tag := range photo.Tags {
+			photosByTag[tag] = append(photosByTag[tag], photo)
+		}
+	}
+	tags := make([]string, 0, len(photosByTag))
+	for tag := range photosByTag {
+		tags = append(tags, tag)
+	}
+	sort.Strings(tags)
+	report.Scenarios = make([]scenarioMetrics, 0, len(tags))
+	for _, tag := range tags {
+		scenario, err := evaluateScenario(
+			tag, photosByTag[tag], recordsByResource, indexedByKey, smallFaceMaxSide,
+		)
+		if err != nil {
+			return evaluationReport{}, err
+		}
+		report.Scenarios = append(report.Scenarios, scenario)
 	}
 	return report, nil
+}
+
+func evaluateScenario(
+	tag string,
+	photos []annotatedPhoto,
+	recordsByResource map[string]services.AIAnalysisRecord,
+	indexedByKey map[string]string,
+	smallFaceMaxSide float64,
+) (scenarioMetrics, error) {
+	var report scenarioMetrics
+	report.Tag = tag
+	identityCounts := make(map[string]int)
+	predictedGroupCounts := make(map[string]int)
+	identityGroupCounts := make(map[string]map[string]struct{})
+	groupIdentityCounts := make(map[string]map[string]struct{})
+	intersectionCounts := make(map[string]map[string]int)
+	groupFaceCounts := make(map[string]int)
+	selectedPhotos := make([]annotatedPhoto, 0)
+	smallFacePredictionCount := 0
+	for _, photo := range photos {
+		selectedPhotos = append(selectedPhotos, photo)
+		report.PhotoCount++
+		record, exists := recordsByResource[photo.ResourceID]
+		if !exists {
+			return scenarioMetrics{}, fmt.Errorf("missing face record for resource %q", photo.ResourceID)
+		}
+		predictions, err := recordFaces(record)
+		if err != nil {
+			return scenarioMetrics{}, err
+		}
+		report.AnnotatedFaceCount += len(photo.Faces)
+		report.DetectedFaceCount += len(predictions)
+		for index, prediction := range predictions {
+			if len(prediction.Box) == 4 && math.Min(float64(prediction.Box[2]), float64(prediction.Box[3])) <= smallFaceMaxSide {
+				smallFacePredictionCount++
+			}
+			groupID := indexedByKey[services.PersonFaceKey(photo.ResourceID, index)]
+			if groupID != "" {
+				report.IndexedFaceCount++
+				groupFaceCounts[groupID]++
+			}
+		}
+		matched := matchFaces(photo.Faces, predictions)
+		report.Detection.TruePositive += len(matched)
+		report.Detection.FalsePositive += len(predictions) - len(matched)
+		report.Detection.FalseNegative += len(photo.Faces) - len(matched)
+		for index, annotation := range photo.Faces {
+			identityCounts[annotation.Identity]++
+			small := annotation.Box[2] < smallFaceMaxSide || annotation.Box[3] < smallFaceMaxSide
+			if annotation.SmallFace != nil {
+				small = *annotation.SmallFace
+			}
+			if small {
+				report.SmallFaceDetection.FalseNegative++
+			}
+			predictionIndex, found := matched[index]
+			if !found {
+				continue
+			}
+			prediction := predictions[predictionIndex]
+			if small && math.Min(float64(prediction.Box[2]), float64(prediction.Box[3])) <= smallFaceMaxSide {
+				report.SmallFaceDetection.TruePositive++
+				report.SmallFaceDetection.FalseNegative--
+			}
+			groupID := indexedByKey[services.PersonFaceKey(photo.ResourceID, predictionIndex)]
+			if groupID == "" {
+				continue
+			}
+			predictedGroupCounts[groupID]++
+			if identityGroupCounts[annotation.Identity] == nil {
+				identityGroupCounts[annotation.Identity] = make(map[string]struct{})
+			}
+			identityGroupCounts[annotation.Identity][groupID] = struct{}{}
+			if groupIdentityCounts[groupID] == nil {
+				groupIdentityCounts[groupID] = make(map[string]struct{})
+			}
+			groupIdentityCounts[groupID][annotation.Identity] = struct{}{}
+			if intersectionCounts[annotation.Identity] == nil {
+				intersectionCounts[annotation.Identity] = make(map[string]int)
+			}
+			intersectionCounts[annotation.Identity][groupID]++
+		}
+	}
+	report.Detection.calculate()
+	report.SmallFaceDetection.FalsePositive = max(0, smallFacePredictionCount-report.SmallFaceDetection.TruePositive)
+	report.SmallFaceDetection.calculate()
+	groundTruthPairs := 0
+	for _, count := range identityCounts {
+		groundTruthPairs += chooseTwo(count)
+	}
+	truePositivePairs := 0
+	for _, groups := range intersectionCounts {
+		for _, count := range groups {
+			truePositivePairs += chooseTwo(count)
+		}
+	}
+	predictedPairs := 0
+	for _, count := range predictedGroupCounts {
+		predictedPairs += chooseTwo(count)
+	}
+	report.IdentityPairwise.TruePositive = truePositivePairs
+	report.IdentityPairwise.FalsePositive = predictedPairs - truePositivePairs
+	report.IdentityPairwise.FalseNegative = groundTruthPairs - truePositivePairs
+	report.IdentityPairwise.calculate()
+	for _, groups := range identityGroupCounts {
+		if len(groups) > 1 {
+			report.SplitIdentityCount++
+		}
+	}
+	for _, identities := range groupIdentityCounts {
+		if len(identities) > 1 {
+			report.MergedGroupCount++
+		}
+	}
+	report.LabeledIdentityCount = len(identityCounts)
+	if report.LabeledIdentityCount > 0 {
+		report.SplitIdentityRate = float64(report.SplitIdentityCount) / float64(report.LabeledIdentityCount)
+	}
+	report.GroupCount = len(groupFaceCounts)
+	for _, faceCount := range groupFaceCounts {
+		if faceCount == 1 {
+			report.SingletonGroupCount++
+		}
+	}
+	if report.GroupCount > 0 {
+		report.SingletonGroupShare = float64(report.SingletonGroupCount) / float64(report.GroupCount)
+		report.MergedGroupRate = float64(report.MergedGroupCount) / float64(report.GroupCount)
+	}
+	if report.DetectedFaceCount > 0 {
+		report.EmbeddingIndexedShare = float64(report.IndexedFaceCount) / float64(report.DetectedFaceCount)
+	}
+	featureMetrics, err := featureSimilarities(selectedPhotos, recordsByResource)
+	if err != nil {
+		return scenarioMetrics{}, err
+	}
+	report.FeatureSimilarity = featureMetrics
+	return report, nil
+}
+
+func featureSimilarities(
+	photos []annotatedPhoto,
+	recordsByResource map[string]services.AIAnalysisRecord,
+) (featureSimilarityReport, error) {
+	const maxSamples = 256
+	samples := make([]featureSample, 0)
+	for _, photo := range photos {
+		record, exists := recordsByResource[photo.ResourceID]
+		if !exists {
+			return featureSimilarityReport{}, fmt.Errorf("missing face record for resource %q", photo.ResourceID)
+		}
+		predictions, err := recordFaces(record)
+		if err != nil {
+			return featureSimilarityReport{}, err
+		}
+		for annotationIndex, predictionIndex := range matchFaces(photo.Faces, predictions) {
+			embedding := predictions[predictionIndex].Embedding
+			if len(embedding) == 0 || !validVector(embedding) {
+				continue
+			}
+			samples = append(samples, featureSample{
+				photoID: photo.ResourceID, identity: photo.Faces[annotationIndex].Identity,
+				embedding: embedding,
+			})
+		}
+	}
+	if len(samples) > maxSamples {
+		selected := make([]featureSample, 0, maxSamples)
+		for index := 0; index < maxSamples; index++ {
+			selected = append(selected, samples[index*(len(samples)-1)/(maxSamples-1)])
+		}
+		samples = selected
+	}
+	report := featureSimilarityReport{SampledFaceCount: len(samples)}
+	sameIdentity := make([]float64, 0)
+	differentIdentity := make([]float64, 0)
+	for left := 0; left < len(samples); left++ {
+		for right := left + 1; right < len(samples); right++ {
+			if samples[left].photoID == samples[right].photoID {
+				continue
+			}
+			similarity, ok := cosineSimilarity(samples[left].embedding, samples[right].embedding)
+			if !ok {
+				continue
+			}
+			if samples[left].identity == samples[right].identity {
+				sameIdentity = append(sameIdentity, similarity)
+			} else {
+				differentIdentity = append(differentIdentity, similarity)
+			}
+		}
+	}
+	report.SameIdentity = summarizeSimilarities(sameIdentity)
+	report.DifferentIdentity = summarizeSimilarities(differentIdentity)
+	return report, nil
+}
+
+func validVector(vector []float32) bool {
+	for _, value := range vector {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return false
+		}
+	}
+	return true
+}
+
+func cosineSimilarity(left, right []float32) (float64, bool) {
+	if len(left) == 0 || len(left) != len(right) {
+		return 0, false
+	}
+	dot, leftNorm, rightNorm := 0.0, 0.0, 0.0
+	for index, value := range left {
+		leftValue, rightValue := float64(value), float64(right[index])
+		dot += leftValue * rightValue
+		leftNorm += leftValue * leftValue
+		rightNorm += rightValue * rightValue
+	}
+	if leftNorm == 0 || rightNorm == 0 {
+		return 0, false
+	}
+	return math.Max(-1, math.Min(1, dot/math.Sqrt(leftNorm*rightNorm))), true
+}
+
+func summarizeSimilarities(values []float64) similaritySummary {
+	if len(values) == 0 {
+		return similaritySummary{}
+	}
+	sorted := append([]float64(nil), values...)
+	sort.Float64s(sorted)
+	total := 0.0
+	for _, value := range sorted {
+		total += value
+	}
+	return similaritySummary{
+		PairCount: len(sorted), Mean: total / float64(len(sorted)),
+		P10: quantile(sorted, 0.10), Median: quantile(sorted, 0.50),
+		P90: quantile(sorted, 0.90),
+	}
+}
+
+func quantile(sorted []float64, fraction float64) float64 {
+	position := fraction * float64(len(sorted)-1)
+	lower := int(math.Floor(position))
+	upper := int(math.Ceil(position))
+	if lower == upper {
+		return sorted[lower]
+	}
+	weight := position - float64(lower)
+	return sorted[lower]*(1-weight) + sorted[upper]*weight
 }
 
 func recordFaces(record services.AIAnalysisRecord) ([]detectedFace, error) {

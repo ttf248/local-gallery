@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import math
 import os
@@ -33,12 +34,21 @@ def read_dataset(path: Path, limit: int | None) -> tuple[list[dict], int]:
         resource_id = photo.get("resourceId")
         image_path = photo.get("path")
         faces = photo.get("faces")
+        tags = photo.get("tags", [])
         if not isinstance(resource_id, str) or not resource_id or resource_id in resource_ids:
             raise ValueError(f"photos[{index}].resourceId 必须唯一且非空")
         if not isinstance(image_path, str) or not image_path:
             raise ValueError(f"photos[{index}].path 必须是本地图片路径")
         if not isinstance(faces, list):
             raise ValueError(f"photos[{index}].faces 必须是数组")
+        if (
+            not isinstance(tags, list)
+            or any(not isinstance(tag, str) or not tag.strip() for tag in tags)
+        ):
+            raise ValueError(f"photos[{index}].tags 必须是非空字符串组成且无重复的数组")
+        tags = [tag.strip() for tag in tags]
+        if len(tags) != len(set(tags)):
+            raise ValueError(f"photos[{index}].tags 必须是非空字符串组成且无重复的数组")
         resolved_path = Path(image_path).expanduser()
         if not resolved_path.is_absolute():
             resolved_path = path.parent / resolved_path
@@ -76,6 +86,7 @@ def read_dataset(path: Path, limit: int | None) -> tuple[list[dict], int]:
         normalized.append({
             "resourceId": resource_id,
             "path": str(resolved_path.resolve()),
+            "tags": tags,
             "faces": normalized_faces,
         })
     if limit is not None:
@@ -97,17 +108,103 @@ def load_worker(model_directory: Path):
     return worker
 
 
-def evaluate_profile(worker, photos: list[dict], model: str, device: str, backend: Path, small_face_max_side: float) -> dict:
+def process_peak_working_set_bytes() -> int | None:
+    if os.name == "nt":
+        class ProcessMemoryCounters(ctypes.Structure):
+            _fields_ = [
+                ("cb", ctypes.c_ulong),
+                ("PageFaultCount", ctypes.c_ulong),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+            ]
+
+        counters = ProcessMemoryCounters()
+        counters.cb = ctypes.sizeof(counters)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+        psapi.GetProcessMemoryInfo.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ProcessMemoryCounters),
+            ctypes.c_ulong,
+        ]
+        psapi.GetProcessMemoryInfo.restype = ctypes.c_int
+        process = kernel32.GetCurrentProcess()
+        if psapi.GetProcessMemoryInfo(
+            process, ctypes.byref(counters), counters.cb
+        ):
+            return int(counters.PeakWorkingSetSize)
+        return None
+
+    if sys.platform.startswith("linux"):
+        try:
+            status = Path("/proc/self/status").read_text(encoding="utf-8")
+        except OSError:
+            return None
+        for line in status.splitlines():
+            if line.startswith("VmHWM:"):
+                return int(line.split()[1]) * 1024
+        return None
+
+    try:
+        import resource
+    except ImportError:
+        return None
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return int(peak if sys.platform == "darwin" else peak * 1024)
+
+
+def percentile(values: list[float], fraction: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    position = fraction * (len(ordered) - 1)
+    lower = math.floor(position)
+    upper = math.ceil(position)
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1 - weight) + ordered[upper] * weight
+
+
+def evaluate_profile(
+    worker,
+    photos: list[dict],
+    model: str,
+    device: str,
+    backend: Path,
+    small_face_max_side: float,
+    detection_mode: str | None = None,
+) -> dict:
     profile_status = worker.face_model_status().get(model, {})
     if not profile_status.get("ready"):
         raise RuntimeError(profile_status.get("error", "face_model_unavailable"))
 
     start = time.perf_counter()
+    model_load_start = time.perf_counter()
     worker.load_face_models(device, model)
+    model_load_seconds = time.perf_counter() - model_load_start
     records = []
+    inference_seconds = []
     for photo in photos:
         stat = os.stat(photo["path"])
-        result = worker.analyze_face_image(photo["path"], device, model)
+        inference_start = time.perf_counter()
+        if model == worker.FACE_MODEL_BUFFALO_M:
+            result = worker.analyze_face_image(
+                photo["path"],
+                device,
+                model,
+                buffalo_m_tiling=detection_mode == "adaptive",
+            )
+        else:
+            result = worker.analyze_face_image(photo["path"], device, model)
+        inference_seconds.append(time.perf_counter() - inference_start)
         if result.get("error") or result.get("data") is None:
             raise RuntimeError(f"{photo['resourceId']}: {result.get('error', 'face_inference_failed')}")
         records.append({
@@ -127,7 +224,11 @@ def evaluate_profile(worker, photos: list[dict], model: str, device: str, backen
         input_path.write_text(json.dumps({
             "model": model,
             "photos": [
-                {"resourceId": photo["resourceId"], "faces": photo["faces"]}
+                {
+                    "resourceId": photo["resourceId"],
+                    "tags": photo["tags"],
+                    "faces": photo["faces"],
+                }
                 for photo in photos
             ],
             "records": records,
@@ -152,8 +253,72 @@ def evaluate_profile(worker, photos: list[dict], model: str, device: str, backen
         "model": model,
         "version": profile_status["version"],
         "device": device,
+        **({"detectionMode": detection_mode} if detection_mode else {}),
         "durationSeconds": round(time.perf_counter() - start, 3),
+        "performance": {
+            "modelLoadSeconds": round(model_load_seconds, 3),
+            "inferenceSeconds": round(sum(inference_seconds), 3),
+            "imagesPerSecond": round(
+                len(photos) / sum(inference_seconds) if sum(inference_seconds) else 0,
+                3,
+            ),
+            "latencyP50Seconds": round(percentile(inference_seconds, 0.50), 4),
+            "latencyP95Seconds": round(percentile(inference_seconds, 0.95), 4),
+        },
         "metrics": metrics,
+    }
+
+
+def buffalo_m_comparison(profiles: list[dict]) -> dict | None:
+    overview = next(
+        (profile for profile in profiles if profile.get("detectionMode") == "overview"),
+        None,
+    )
+    adaptive = next(
+        (profile for profile in profiles if profile.get("detectionMode") == "adaptive"),
+        None,
+    )
+    if overview is None or adaptive is None:
+        return None
+
+    def read_metric(profile: dict, section: str | None, key: str) -> float | None:
+        try:
+            value = (
+                profile["metrics"][section][key]
+                if section
+                else profile["metrics"][key]
+            )
+        except (KeyError, TypeError):
+            return None
+        if not isinstance(value, (int, float)) or not math.isfinite(value):
+            return None
+        return float(value)
+
+    def delta(section: str | None, key: str) -> float | None:
+        overview_value = read_metric(overview, section, key)
+        adaptive_value = read_metric(adaptive, section, key)
+        if overview_value is None or adaptive_value is None:
+            return None
+        return round(adaptive_value - overview_value, 6)
+
+    overview_seconds = overview["performance"]["inferenceSeconds"]
+    adaptive_seconds = adaptive["performance"]["inferenceSeconds"]
+    return {
+        "overviewInferenceSeconds": overview_seconds,
+        "adaptiveInferenceSeconds": adaptive_seconds,
+        "additionalInferenceSeconds": round(adaptive_seconds - overview_seconds, 3),
+        "inferenceTimeRatio": round(adaptive_seconds / overview_seconds, 3)
+        if overview_seconds > 0
+        else None,
+        "adaptiveMinusOverview": {
+            "detectionRecall": delta("detection", "recall"),
+            "smallFaceRecall": delta("smallFaceDetection", "recall"),
+            "identityPairwisePrecision": delta("identityPairwise", "precision"),
+            "identityPairwiseRecall": delta("identityPairwise", "recall"),
+            "splitIdentityRate": delta(None, "splitIdentityRate"),
+            "mergedGroupRate": delta(None, "mergedGroupRate"),
+            "singletonGroupShare": delta(None, "singletonGroupShare"),
+        },
     }
 
 
@@ -178,19 +343,39 @@ def main() -> int:
         backend = Path(__file__).resolve().parents[1]
         profiles = []
         failures = []
-        for model in worker.FACE_MODELS:
+        profile_runs = [
+            (worker.FACE_MODEL_QUALITY_V2, None),
+            (worker.FACE_MODEL_BUFFALO_M, "overview"),
+            (worker.FACE_MODEL_BUFFALO_M, "adaptive"),
+        ]
+        for model, detection_mode in profile_runs:
             try:
                 profiles.append(evaluate_profile(
-                    worker, photos, model, args.device, backend, args.small_face_max_side
+                    worker,
+                    photos,
+                    model,
+                    args.device,
+                    backend,
+                    args.small_face_max_side,
+                    detection_mode,
                 ))
             except Exception as error:
-                failures.append({"model": model, "error": str(error)})
+                failures.append({
+                    "model": model,
+                    **({"detectionMode": detection_mode} if detection_mode else {}),
+                    "error": str(error),
+                })
         report = {
             "photoCount": len(photos),
             "annotatedFaceCount": annotated_faces,
             "smallFaceMaxSide": args.small_face_max_side,
             "device": args.device,
             "profiles": profiles,
+            "buffaloMComparison": buffalo_m_comparison(profiles),
+            "memory": {
+                "processPeakWorkingSetBytes": process_peak_working_set_bytes(),
+                "gpuPeakBytes": None,
+            },
             "failures": failures,
         }
         encoded = json.dumps(report, ensure_ascii=False, indent=2) + "\n"

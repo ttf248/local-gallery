@@ -1261,10 +1261,10 @@ def buffalo_m_face_limit(image, detections):
     return BUFFALO_M_GROUP_FACE_LIMIT if buffalo_m_needs_group_tiles(image, detections) else BUFFALO_M_FACE_LIMIT
 
 
-def detect_buffalo_m(image, runtime):
+def detect_buffalo_m(image, runtime, use_group_tiles=True):
     detector = runtime["detector"]
     overview = buffalo_m_detection_input(image, detector, runtime)
-    if not buffalo_m_needs_group_tiles(image, overview):
+    if not use_group_tiles or not buffalo_m_needs_group_tiles(image, overview):
         return overview
 
     height, width = image.shape[:2]
@@ -1352,14 +1352,19 @@ def valid_yunet_detection(detection, image_shape, minimum_score=YUNET_SCORE_THRE
     return eye_y < mouth_y and eye_y - height * 0.1 <= nose_y <= mouth_y + height * 0.1
 
 
-def analyze_face_image(path: str, device_mode="cpu", face_model=FACE_MODEL_DEFAULT) -> dict:
+def analyze_face_image(
+    path: str,
+    device_mode="cpu",
+    face_model=FACE_MODEL_DEFAULT,
+    buffalo_m_tiling=True,
+) -> dict:
     image, scale_x, scale_y = read_face_image(path)
     if image is None:
         return {"data": None, "error": "image_unreadable"}
     try:
         runtime = load_face_models(device_mode, face_model)
         if face_model == FACE_MODEL_BUFFALO_M:
-            detections = detect_buffalo_m(image, runtime)
+            detections = detect_buffalo_m(image, runtime, use_group_tiles=buffalo_m_tiling)
         elif runtime["device"] == "gpu":
             detections = detect_yunet_gpu(image, runtime["detector"])
         else:
