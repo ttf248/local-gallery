@@ -8,6 +8,9 @@
 //   LG_VIEWPORTS=390x844,1440x900 npm run audit:layout
 //   LG_THEMES=dark npm run audit:layout
 //   LG_VIEWMODE=list npm run audit:layout                  # 审计列表视图
+//   LG_TOUCH=1 npm run audit:layout                      # 触摸仿真档（手机）
+//   LG_DPR=3 npm run audit:layout                        # 设备像素比
+//   LG_ORIENTATION=both npm run audit:layout             # 横屏也量一遍
 //   npm run audit:layout -- --json                          # 输出机器可读 JSON
 //
 // 输出的核心指标：
@@ -17,6 +20,7 @@
 //   - shellLeft/Right   : 内容容器自身的左右边界（各页是否用同一个容器）
 //   - tinyText[]        : 实际渲染字号 < 12.5px 的可见文本（中文可读性下限）
 //   - controlHeights    : 可交互控件的实际高度分布（触控目标是否达标）
+//   - touchTargets[]    : 触摸档下有效命中区不足 44×44 的控件
 //   - overflowPx        : 横向溢出像素
 //
 // 退出码：横向溢出、跨页对齐基线失败、容器不一致或页面加载失败时为 1。
@@ -27,6 +31,10 @@ import {
   resolveAlbumId,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
+import {
+  profileOptionsFromEnv,
+  resolveProfiles,
+} from "./lib/device-profile.mjs";
 
 const BASE = process.env.LG_BASE ?? "http://127.0.0.1:5173";
 const THEMES = (process.env.LG_THEMES ?? "light,dark")
@@ -57,11 +65,18 @@ const VIEWPORTS = (
     return { width: w, height: h };
   })
   .filter((v) => Number.isFinite(v.width));
+// 设备档位：视口 + 触摸 + 像素比 + 横竖屏（见 lib/device-profile.mjs）。
+const PROFILES = resolveProfiles({
+  viewports: VIEWPORTS,
+  ...profileOptionsFromEnv(),
+});
 
 const MIN_FONT_PX = 12.5;
 const MIN_CONTROL_PX = 28;
+// 手指点的不是一个按钮，而是按钮周围约 44×44 的一块。
+const MIN_TOUCH_TARGET_PX = 44;
 
-const MEASURE = ({ minFontPx, minControlPx }) => {
+const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   // 祖先链上只要有一层是透明的，这个元素就等于没显示。
   //
   // 只看元素自己的 opacity 会漏掉「悬停才显形」的那一层：照片墙的
@@ -144,6 +159,54 @@ const MEASURE = ({ minFontPx, minControlPx }) => {
       .replace(/\s+/g, " ")
       .slice(0, 30);
     controlHeights.push({ h: Math.round(rect.height * 10) / 10, text });
+  }
+
+  // 有效命中区（只在触摸档量）：手指点的是控件周围约 44×44 的一块，
+  // 不是按钮本身那几像素。
+  //
+  // 用 elementFromPoint 打四角与中心：伪元素扩区能过；相邻控件抢走命中、
+  // 浮层压住按钮这类「看得见却点不到」的情况能被抓出来。只量视口内的
+  // 控件 —— 视口外的点 elementFromPoint 返回空，算不上失败。
+  const touchTargets = [];
+  if (touch) {
+    for (const el of controls) {
+      if (!visible(el)) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) continue;
+      if (rect.bottom < 0 || rect.right < 0) continue;
+      if (rect.top > window.innerHeight || rect.left > window.innerWidth) {
+        continue;
+      }
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const reach = minTouchTargetPx / 2;
+      const points = [
+        [-reach, -reach],
+        [reach, -reach],
+        [-reach, reach],
+        [reach, reach],
+        [0, 0],
+      ];
+      // 本体就够大的控件不用查：它的 44×44 中心区必然落在自己身上，
+      // 被邻居压住角也不影响点得到（照片墙的行会挨着）。
+      if (rect.width >= minTouchTargetPx && rect.height >= minTouchTargetPx) {
+        continue;
+      }
+      const reachable = points.every(([dx, dy]) => {
+        const hit = document.elementFromPoint(cx + dx, cy + dy);
+        return hit === el || (hit !== null && el.contains(hit));
+      });
+      if (!reachable) {
+        touchTargets.push({
+          w: Math.round(rect.width),
+          h: Math.round(rect.height),
+          text: (el.getAttribute("aria-label") || el.textContent || "")
+            .trim()
+            .replace(/\s+/g, " ")
+            .slice(0, 30),
+        });
+      }
+    }
   }
 
   // 有效内容范围：main 里可见的"叶子内容"（文字 / 图片 / 控件）的并集。
@@ -267,8 +330,85 @@ const MEASURE = ({ minFontPx, minControlPx }) => {
       .filter((c) => c.h < minControlPx)
       .slice(0, 10),
     smallControlsTotal: controlHeights.filter((c) => c.h < minControlPx).length,
+    // 触摸档才有：有效命中区不足的控件。
+    touchTargets: touchTargets.slice(0, 20),
+    touchTargetsTotal: touchTargets.length,
   };
 };
+
+/**
+ * 触摸档的外壳可达性：抽屉开合与软键盘遮挡。
+ *
+ * 这两件事只在触摸设备上出现，桌面档量不到：
+ * 抽屉是模态浮层 —— 背景必须不可聚焦、内容不可滚、焦点不能跑出去；
+ * 软键盘弹起时可视视口变矮，贴底的输入框会被顶到看不见的地方。
+ *
+ * 先只报告，不作为失败条件 —— 等页面补齐了再开门禁。
+ */
+async function checkMobileShell(page) {
+  const trigger = page.locator('button[aria-label="打开导航"]');
+  if ((await trigger.count()) === 0) {
+    return {
+      drawer: { skipped: "没有找到打开导航的按钮" },
+      keyboard: { skipped: "没有找到打开导航的按钮" },
+    };
+  }
+  await trigger.click();
+  await page.waitForTimeout(350);
+  const drawerState = await page.evaluate(() => {
+    const nav = document.querySelector('aside[aria-label="主导航"]');
+    const main = document.querySelector(".app-main");
+    const active = document.activeElement;
+    return {
+      opened: Boolean(nav),
+      focusInside: Boolean(nav && active && nav.contains(active)),
+      backgroundInert: Boolean(
+        main?.closest("[inert]") ?? main?.hasAttribute("inert"),
+      ),
+      mainScrollLocked: main
+        ? getComputedStyle(main).overflowY === "hidden"
+        : null,
+    };
+  });
+  // 连续按二十次 Tab，焦点不能跑到抽屉外面去。
+  // 必须用真键盘：合成的 KeyboardEvent 不会移动焦点，量出来的是假的。
+  let focusEscaped = false;
+  for (let index = 0; index < 20; index += 1) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(() => {
+      const nav = document.querySelector('aside[aria-label="主导航"]');
+      const active = document.activeElement;
+      return Boolean(nav && active && nav.contains(active));
+    });
+    if (!inside) {
+      focusEscaped = true;
+      break;
+    }
+  }
+  const drawer = { ...drawerState, focusEscaped };
+  // 抽屉打开时按钮被盖住，点它关不了 —— 用 Esc（应用自己支持）。
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(250);
+
+  const keyboard = await page.evaluate(async () => {
+    const input = document.querySelector(
+      'input:not([type="hidden"]):not([disabled]), textarea',
+    );
+    if (!input) return { skipped: "这一页没有输入框" };
+    input.focus();
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const viewport = window.visualViewport;
+    const limit = viewport ? viewport.height : window.innerHeight;
+    const rect = input.getBoundingClientRect();
+    return {
+      covered: rect.bottom > limit + 1,
+      bottom: Math.round(rect.bottom),
+      limit: Math.round(limit),
+    };
+  });
+
+  return { drawer, keyboard };
+}
 
 async function setTheme(page, theme) {
   await page.evaluate(
@@ -384,13 +524,17 @@ async function main() {
   }
   const report = [];
   const routeErrors = [];
+  // 触摸档的外壳检查（抽屉、软键盘）：与页面无关，一个页面上量一次。
+  const shellChecks = [];
   let failed = false;
 
   for (const theme of THEMES) {
-    for (const viewport of VIEWPORTS) {
+    for (const profile of PROFILES) {
+      const viewport = profile.viewport;
       const ctx = await browser.newContext({
         viewport,
-        deviceScaleFactor: 1,
+        hasTouch: profile.hasTouch,
+        deviceScaleFactor: profile.deviceScaleFactor,
         locale: "zh-CN",
         colorScheme: theme,
       });
@@ -455,6 +599,8 @@ async function main() {
         let m = await page.evaluate(MEASURE, {
           minFontPx: MIN_FONT_PX,
           minControlPx: MIN_CONTROL_PX,
+          touch: profile.hasTouch,
+          minTouchTargetPx: MIN_TOUCH_TARGET_PX,
         });
         // 偶发的渲染异常（相册页的虚拟列表爆栈）重试一次再判：
         // 重试后仍然报错才算这一页真的坏了。
@@ -464,12 +610,14 @@ async function main() {
           m = await page.evaluate(MEASURE, {
             minFontPx: MIN_FONT_PX,
             minControlPx: MIN_CONTROL_PX,
+            touch: profile.hasTouch,
+            minTouchTargetPx: MIN_TOUCH_TARGET_PX,
           });
         }
         report.push({
           theme,
           route,
-          vp: `${viewport.width}x${viewport.height}`,
+          vp: profile.label,
           ...m,
         });
         if (m.overflowPx > 0) failed = true;
@@ -477,9 +625,19 @@ async function main() {
           routeErrors.push({
             theme,
             route,
-            vp: `${viewport.width}x${viewport.height}`,
+            vp: profile.label,
           });
         }
+      }
+      // 触摸档：抽屉开合与软键盘遮挡只跟外壳有关，一个页面上量一次就够。
+      if (profile.hasTouch) {
+        await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+        await page.waitForTimeout(900);
+        shellChecks.push({
+          theme,
+          vp: profile.label,
+          ...(await checkMobileShell(page)),
+        });
       }
       await ctx.close();
     }
@@ -556,7 +714,7 @@ async function main() {
 
   const asJson = process.argv.includes("--json");
   if (asJson) {
-    console.log(JSON.stringify(report, null, 2));
+    console.log(JSON.stringify({ report, shellChecks }, null, 2));
   } else {
     console.log(
       [
@@ -621,6 +779,32 @@ async function main() {
         .map((f) => `${f.size}px×${f.count}`)
         .join(" ");
       console.log(`${r.vp} ${r.theme} ${r.route} 字号分布: ${sizes}`);
+    }
+    // 触摸档的两项新指标：命中区与外壳可达性。先只报告，不作为失败条件。
+    const touchRows = report.filter((r) => r.touchTargetsTotal > 0);
+    if (touchRows.length > 0) {
+      console.log("");
+      console.log("触摸档：有效命中区不足 44×44 的控件");
+      for (const r of touchRows) {
+        const list = r.touchTargets
+          .map((t) => `${t.text || "(无文字)"} ${t.w}×${t.h}`)
+          .join("，");
+        console.log(`  · ${r.vp} ${r.theme} ${r.route}：${r.touchTargetsTotal} 处 —— ${list}`);
+      }
+    }
+    if (shellChecks.length > 0) {
+      console.log("");
+      console.log("触摸档：外壳可达性");
+      for (const c of shellChecks) {
+        const drawer = c.drawer;
+        console.log(
+          `  · ${c.vp} ${c.theme} 抽屉：${drawer.skipped ?? `打开=${drawer.opened} 焦点在内=${drawer.focusInside} 焦点跑出=${drawer.focusEscaped} 背景inert=${drawer.backgroundInert} 正文锁滚=${drawer.mainScrollLocked}`}`,
+        );
+        const keyboard = c.keyboard;
+        console.log(
+          `  · ${c.vp} ${c.theme} 软键盘：${keyboard.skipped ?? `被遮=${keyboard.covered}（底边 ${keyboard.bottom} / 可视高 ${keyboard.limit}）`}`,
+        );
+      }
     }
   }
   if (failed) {

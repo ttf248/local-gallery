@@ -22,6 +22,10 @@ import {
   resolveAlbumId,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
+import {
+  profileOptionsFromEnv,
+  resolveProfiles,
+} from "./lib/device-profile.mjs";
 
 const BASE = process.env.LG_BASE ?? "http://127.0.0.1:5173";
 const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",");
@@ -36,6 +40,20 @@ const PAGES = (process.env.LG_PAGES ?? "/,/unread,/recents,/favorites,/settings/
   .filter(Boolean);
 // 视图模式：grid（默认）/ list。列表视图用另一套字号与配色。
 const VIEWMODE = process.env.LG_VIEWMODE ?? "grid";
+// 设备档位：视口 + 触摸 + 像素比 + 横竖屏（见 lib/device-profile.mjs）。
+//
+// 此前这个脚本把视口写死 1440×900：手机宽度上的对比度从来没有被量过。
+// 现在默认档不变（还是 1440），要量手机传 LG_VIEWPORTS=390x844 LG_TOUCH=1。
+const PROFILES = resolveProfiles({
+  viewports: (process.env.LG_VIEWPORTS ?? "1440x900")
+    .split(",")
+    .map((v) => {
+      const [w, h] = v.split("x").map(Number);
+      return { width: w, height: h };
+    })
+    .filter((v) => Number.isFinite(v.width)),
+  ...profileOptionsFromEnv(),
+});
 
 // 在页面里跑的取色 / 判定逻辑。
 const AUDIT = () => {
@@ -850,11 +868,13 @@ const coverage = [];
 const routeErrors = [];
 
 for (const theme of THEMES) {
+ for (const profile of PROFILES) {
   const ctx = await browser.newContext({
-    viewport: { width: 1440, height: 900 },
+    viewport: profile.viewport,
     locale: "zh-CN",
     colorScheme: theme,
-    deviceScaleFactor: 1,
+    hasTouch: profile.hasTouch,
+    deviceScaleFactor: profile.deviceScaleFactor,
   });
   const page = await ctx.newPage();
   await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
@@ -926,7 +946,8 @@ for (const theme of THEMES) {
       const checked = await page.evaluate(PIXELS, {
         dataUrl,
         targets: overImage,
-        dpr: 1,
+        // 截图是设备像素：坐标要按真实像素比换算，否则采样框会错位。
+        dpr: await page.evaluate(() => window.devicePixelRatio),
       });
       for (const c of checked) {
         if (c.pixelRatio === null) continue;
@@ -939,7 +960,7 @@ for (const theme of THEMES) {
       const checkedIcons = await page.evaluate(PIXELS, {
         dataUrl,
         targets: icons,
-        dpr: 1,
+        dpr: await page.evaluate(() => window.devicePixelRatio),
       });
       for (const c of checkedIcons) {
         if (c.pixelRatio === null) continue;
@@ -965,6 +986,7 @@ for (const theme of THEMES) {
     }
   }
   await ctx.close();
+ }
 }
 await browser.close();
 

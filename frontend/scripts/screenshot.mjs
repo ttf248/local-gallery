@@ -12,20 +12,39 @@
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import {
+  buildRoute,
+  resolveAlbumId,
+  resolveMode,
+} from "./lib/workbench-routes.mjs";
+import {
+  profileOptionsFromEnv,
+  resolveProfiles,
+} from "./lib/device-profile.mjs";
 
 const BASE = process.env.LG_BASE ?? "http://127.0.0.1:5173";
 const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",").filter(Boolean);
-const PAGES = (process.env.LG_PAGES ?? "/,/recents,/favorites,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage")
+// 页面清单：模式前缀由 buildRoute 补（审计脚本早就这么做了，截图脚本
+// 此前直接拼 BASE + route，/recents 落在兜底路由、截出来的其实是首页）。
+// 可以写伪路由 album / reader / tag：运行时现取真实相册与标签。
+const PAGES = (process.env.LG_PAGES ?? "/,/recents,/favorites,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag")
   .split(",")
   .map((p) => p.trim())
   .filter(Boolean);
-const VIEWPORTS = (process.env.LG_VIEWPORTS ?? "390x844,768x1024,1440x900,1920x1080")
-  .split(",")
-  .map((v) => {
-    const [w, h] = v.split("x").map(Number);
-    return { width: w, height: h };
-  })
-  .filter((v) => Number.isFinite(v.width));
+// 设备档位：视口 + 触摸 + 像素比 + 横竖屏（见 lib/device-profile.mjs）。
+const PROFILES = resolveProfiles({
+  viewports: (
+    process.env.LG_VIEWPORTS ??
+    "390x844,768x1024,1024x768,1440x900,1920x1080,2560x1440"
+  )
+    .split(",")
+    .map((v) => {
+      const [w, h] = v.split("x").map(Number);
+      return { width: w, height: h };
+    })
+    .filter((v) => Number.isFinite(v.width)),
+  ...profileOptionsFromEnv(),
+});
 
 const argv = process.argv.slice(2);
 const outArg = argv.indexOf("--out");
@@ -36,6 +55,9 @@ const FULL = process.env.LG_FULL === "1";
 
 const slug = (route) =>
   route === "/" ? "home" : route.replace(/^\//, "").replace(/[/?=&]/g, "-");
+
+// 档位标签进文件名：触摸档与桌面档尺寸相同时会互相覆盖。
+const profileSlug = (profile) => profile.label.replace(/x/, "-");
 
 async function setTheme(page, theme) {
   await page.evaluate((t) => {
@@ -53,10 +75,12 @@ async function main() {
   let count = 0;
 
   for (const theme of THEMES) {
-    for (const viewport of VIEWPORTS) {
+    for (const profile of PROFILES) {
+      const viewport = profile.viewport;
       const ctx = await browser.newContext({
         viewport,
-        deviceScaleFactor: 1,
+        hasTouch: profile.hasTouch,
+        deviceScaleFactor: profile.deviceScaleFactor,
         locale: "zh-CN",
         colorScheme: theme,
       });
@@ -66,11 +90,21 @@ async function main() {
       );
       await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
       await setTheme(page, theme);
+      // 工作台模式决定路由前缀：两侧的页面各在 /photo 与 /comic 下。
+      const mode = await resolveMode(page);
 
       for (const route of PAGES) {
+        // 伪路由：相册页与阅读器要现取一本真实相册。
+        let target = route;
+        if (route === "album" || route === "reader") {
+          const albumId = await resolveAlbumId(page, mode);
+          if (!albumId) continue;
+          target =
+            route === "album" ? `/albums/${albumId}` : `/read/${albumId}`;
+        }
         // 不用 networkidle：页面里有 SSE 长连接，且 /api/previews 首次生成
         // 预览图可能耗时数秒，networkidle 会一直等不到而超时。
-        await page.goto(BASE + route, {
+        await page.goto(BASE + buildRoute(target, mode), {
           waitUntil: "domcontentloaded",
           timeout: 60000,
         });
@@ -85,7 +119,7 @@ async function main() {
           )
           .catch(() => {});
         await page.waitForTimeout(1200);
-        const name = `${theme}-${viewport.width}-${slug(route)}.png`;
+        const name = `${theme}-${profileSlug(profile)}-${slug(route)}.png`;
         await page.screenshot({
           path: path.join(OUT, name),
           fullPage: FULL,
