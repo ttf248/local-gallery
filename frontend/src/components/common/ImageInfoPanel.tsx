@@ -215,7 +215,7 @@ export default function ImageInfoPanel({ absPath, onClose }: Props) {
                       </p>
                       <button
                         type="button"
-                        className="text-meta text-white/50 hover:text-white"
+                        className="btn-text text-meta text-white/50 hover:text-white"
                         onClick={() => setSelectedFace(null)}
                       >
                         收起

@@ -32,7 +32,7 @@ export default function ScanWarnings({ warnings = [], total }: Props) {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex items-center gap-1.5 text-meta text-warning hover:text-warning/80 transition-colors"
+        className="btn-text inline-flex items-center gap-1.5 text-meta text-warning hover:text-warning/80 transition-colors"
         aria-expanded={open}
         aria-controls="scan-warning-details"
       >

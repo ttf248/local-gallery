@@ -1433,6 +1433,19 @@ button:not(:disabled):active {
     color: var(--fg-muted);
   }
 
+  /* --- 文字按钮 ---
+     没有填充也没有描边，只有一枚强调色文字 —— 看着像一段文本，
+     但它是能点的控件。命中区按控件算：桌面档至少 28px 高
+     （布局审计的控件高度门禁就是这条），触摸档由下面那条通用
+     规则撑到 44px。尺寸写在样式表里：工具类的 min-h-* 与本层
+     同权重，而工具类排在样式表之后，写成工具类就压不住触摸档
+     那一档。 */
+  .btn-text {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+  }
+
   /* --- 按钮：三种语义，尺寸统一（h-8 / h-9 / h-10） --- */
   .btn {
     display: inline-flex;

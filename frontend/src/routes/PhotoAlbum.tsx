@@ -791,7 +791,7 @@ export default function PhotoAlbum({ album }: Props) {
               <button
                 type="button"
                 onClick={() => setSelectedGroupId(null)}
-                className="inline-flex items-center gap-1 text-brand hover:underline"
+                className="btn-text inline-flex items-center gap-1 text-brand hover:underline"
               >
                 <ChevronLeftIcon size={13} /> 智能分组
               </button>

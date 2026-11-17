@@ -381,7 +381,7 @@ function MinImageFilter({
       {active && (
         <button
           onClick={() => onChange(0)}
-          className="text-fg-subtle hover:text-fg text-body leading-none px-0.5"
+          className="btn-text text-fg-subtle hover:text-fg text-body leading-none px-0.5"
           title="清除"
           aria-label="清除最小图数"
         >

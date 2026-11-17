@@ -381,14 +381,14 @@ export default function SmartAlbumBrowser({
                             />
                             <button
                               type="submit"
-                              className="text-meta text-brand hover:underline"
+                              className="btn-text text-meta text-brand hover:underline"
                             >
                               保存
                             </button>
                             <button
                               type="button"
                               onClick={() => setEditingGroupId(null)}
-                              className="text-meta text-fg-muted hover:text-fg"
+                              className="btn-text text-meta text-fg-muted hover:text-fg"
                             >
                               取消
                             </button>

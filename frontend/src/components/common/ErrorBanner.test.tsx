@@ -44,6 +44,15 @@ describe("ErrorBanner", () => {
     expect(screen.getByRole("button", { name: "重新加载" })).toBeTruthy();
   });
 
+  it("重试手柄按控件的高度算，不是一行小字", () => {
+    render(<ErrorBanner onRetry={vi.fn()}>足迹数据加载失败。</ErrorBanner>);
+    // .btn-text 给它 28px 的高度（触摸档 44px）：它看着像一段文本，
+    // 但它是能点的控件，命中区得按控件算。
+    expect(screen.getByRole("button", { name: "重试加载" }).className).toContain(
+      "btn-text",
+    );
+  });
+
   it("还能用但有一件没成时用另一种语气", () => {
     const { container } = render(
       <ErrorBanner kind="warning">后续照片加载失败。</ErrorBanner>,

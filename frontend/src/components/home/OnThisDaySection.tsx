@@ -175,7 +175,7 @@ function OnThisDayPhotoCard({
         <Link
           to={albumRoute("photo", albumId)}
           title={`回到相册「${albumName}」`}
-          className="block truncate text-body font-medium text-fg transition-colors hover:text-brand-ink"
+          className="block min-h-7 truncate text-body font-medium text-fg transition-colors hover:text-brand-ink"
         >
           {albumName}
         </Link>

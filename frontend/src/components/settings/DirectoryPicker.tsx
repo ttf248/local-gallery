@@ -123,7 +123,7 @@ export default function DirectoryPicker({
             type="button"
             aria-label="关闭"
             onClick={onClose}
-            className="p-1 text-fg-muted hover:text-fg"
+            className="btn-text p-1 text-fg-muted hover:text-fg"
           >
             <CloseIcon size={14} />
           </button>

@@ -166,6 +166,13 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   const controls = document.querySelectorAll(
     "button, a[href], input, select, textarea, [role='button'], [role='tab']",
   );
+  // 行内链接不算控件：它的盒子就是文字所在的那一行的行盒，撑到 28px
+  // （或触摸档的 44px）会把段落撑散。独立成行的链接（卡片标题、
+  // 「回到相册」）在 flex/grid 里会被块化，computed display 不是
+  // inline，仍受两条门禁约束 —— 这正是要区别对待的那一类。
+  const isInlineLink = (el) =>
+    el.tagName.toLowerCase() === "a" &&
+    getComputedStyle(el).display === "inline";
   // 太小的控件：只算真正点得到的。屏幕阅读器专用的元素（sr-only）
   // 不是控件；勾选框与单选钮本体只有十几像素，点的是它外面的
   // label —— 与触摸档的命中区判定同一口径。
@@ -184,7 +191,7 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
       const isCheckable =
         tag === "input" &&
         ["checkbox", "radio"].includes(el.getAttribute("type") ?? "");
-      if (!isHiddenForScreenReader && !isCheckable) {
+      if (!isHiddenForScreenReader && !isCheckable && !isInlineLink(el)) {
         smallControlList.push({
           h: Math.round(rect.height * 10) / 10,
           text,
@@ -209,6 +216,8 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
       // 屏幕阅读器专用的元素（sr-only）不是可点的控件：它被裁到
       // 一像素，点不到也不该算命中区不足。
       if (String(el.className || "").includes("sr-only")) continue;
+      // 行内链接同上面那条理由：命中区就是那行字，不能撑。
+      if (isInlineLink(el)) continue;
       const rect = el.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
       if (rect.bottom < 0 || rect.right < 0) continue;
@@ -569,13 +578,16 @@ async function main() {
       const result=await page.evaluate(MEASURE,{minFontPx:MIN_FONT_PX,minControlPx:MIN_CONTROL_PX});
       assert.equal(result.alignmentLeft,20);
       // 门禁判据本身的样本：容器认 .page-layout--page；读屏专用元素与
-      // 勾选框本体不算太小的控件；低于最小字号档的文字要被抓出来。
+      // 勾选框本体不算太小的控件；低于最小字号档的文字要被抓出来；
+      // 行内链接不算控件，独立成行的链接算。
       await page.setContent(
         '<style>body{margin:0}.page-layout--page{width:800px;padding:0 24px}</style>' +
           '<main><div class="page-layout--page"><p style="font-size:11px">徽章</p>' +
           '<button style="height:20px">小按钮</button>' +
           '<input class="sr-only" style="width:1px;height:1px">' +
           '<input type="checkbox" style="width:13px;height:13px">' +
+          '<p>正文里的<a href="/inline">行内链接</a>。</p>' +
+          '<a href="/block" style="display:block;height:20px">独立链接</a>' +
           '</div></main>',
       );
       const gate = await page.evaluate(MEASURE, {
@@ -586,8 +598,12 @@ async function main() {
       });
       assert.equal(gate.shellLeft, 0);
       assert.equal(gate.tinyText.some((t) => t.size < MIN_FONT_FAIL_PX), true);
-      assert.equal(gate.smallControlsTotal, 1);
+      assert.equal(gate.smallControlsTotal, 2);
       assert.equal(gate.smallControls[0].text, "小按钮");
+      assert.equal(
+        gate.smallControls.some((c) => c.text === "行内链接"),
+        false,
+      );
       console.log(
         "布局审计 self-test：普通列表、带返回按钮的照片墙、错误偏移、门禁判据均通过",
       );

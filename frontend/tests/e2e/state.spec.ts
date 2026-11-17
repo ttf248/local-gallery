@@ -160,7 +160,12 @@ for (const failure of ["history", "nodes"] as const) {
       });
     }
     blocked = false;
-    await alert.getByRole("button", { name: "重试加载", exact: true }).click();
+    const retry = alert.getByRole("button", { name: "重试加载", exact: true });
+    // 失败提示里的重试手柄是控件，不是一行正文：命中区按控件算，
+    // 桌面档的下限是 28px（布局审计的控件高度门禁就是这条）。
+    const retryBox = await retry.boundingBox();
+    expect(retryBox?.height ?? 0).toBeGreaterThanOrEqual(28);
+    await retry.click();
     await expect(
       page.locator(`a[href="/photo/albums/${album!.id}"]`).first(),
     ).toBeVisible();
