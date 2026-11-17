@@ -54,7 +54,7 @@ YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
 SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
-FACE_VERSION = "yunet-2023mar-multiscale+sface-2021dec+quality-v1"
+FACE_VERSION = "yunet-2023mar-multiscale+sface-2021dec+quality-v2"
 YUNET_INPUT_SIZE = 640
 YUNET_SCORE_THRESHOLD = 0.75
 YUNET_MIN_FACE_SIDE = 32
@@ -948,8 +948,10 @@ def detect_yunet_gpu_input(image, session, offset_x=0, offset_y=0, scale_x=1.0, 
             box_height * scale_y,
         ))
         landmarks = keypoints[selected].reshape(-1, 5, 2).copy()
-        landmarks[:, :, 0] = (landmarks[:, :, 0] + grid_columns[:, None] * stride + offset_x) * scale_x
-        landmarks[:, :, 1] = (landmarks[:, :, 1] + rows[:, None] * stride + offset_y) * scale_y
+        landmarks[:, :, 0] = (
+            (landmarks[:, :, 0] + grid_columns[:, None]) * stride + offset_x
+        ) * scale_x
+        landmarks[:, :, 1] = ((landmarks[:, :, 1] + rows[:, None]) * stride + offset_y) * scale_y
         faces.extend(np.column_stack((
             boxes,
             landmarks.reshape(-1, 10),
@@ -1058,6 +1060,11 @@ def valid_yunet_detection(detection, image_shape):
         or np.any(landmarks[:, 1] < y - height * 0.2)
         or np.any(landmarks[:, 1] > y + height * 1.2)
     ):
+        return False
+
+    eye_distance = float(np.linalg.norm(landmarks[0] - landmarks[1]))
+    mouth_distance = float(np.linalg.norm(landmarks[3] - landmarks[4]))
+    if eye_distance < max(2.0, width * 0.1) or mouth_distance < max(1.5, width * 0.06):
         return False
 
     eye_y = float(np.mean(landmarks[:2, 1]))

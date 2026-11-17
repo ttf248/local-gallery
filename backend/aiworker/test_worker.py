@@ -500,6 +500,10 @@ class WorkerTests(unittest.TestCase):
             non_finite[4] = np.nan
             self.assertFalse(worker.valid_yunet_detection(non_finite, (120, 120, 3)))
 
+            collapsed_landmarks = detection.copy()
+            collapsed_landmarks[4:14] = [52, 48, 53, 49, 52, 50, 52, 51, 53, 51]
+            self.assertFalse(worker.valid_yunet_detection(collapsed_landmarks, (120, 120, 3)))
+
     def test_sface_alignment_matches_svd_reference(self):
         rng = np.random.default_rng(20261115)
         destination = np.asarray([
@@ -636,6 +640,9 @@ class WorkerTests(unittest.TestCase):
         self.assertAlmostEqual(75, faces[0][1], delta=1)
         self.assertAlmostEqual(150, faces[0][2], delta=2)
         self.assertAlmostEqual(150, faces[0][3], delta=2)
+        landmarks = np.asarray(faces[0][4:14]).reshape((5, 2))
+        self.assertAlmostEqual(60, landmarks[1, 0] - landmarks[0, 0], delta=1)
+        self.assertAlmostEqual(45, landmarks[4, 0] - landmarks[3, 0], delta=1)
 
     def test_yunet_cpu_maps_scaled_overview_detections_to_source(self):
         detection = np.asarray([[

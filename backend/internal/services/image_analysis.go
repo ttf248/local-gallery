@@ -10,8 +10,9 @@ import (
 
 const (
 	OCRAnalyzerVersion            = "rapidocr-3.10.0-onnxruntime-1.20.2"
-	FaceAnalyzerVersion           = "yunet-2023mar-multiscale+sface-2021dec+quality-v1"
-	previousFaceAnalyzerVersion   = "yunet-2023mar-multiscale+sface-2021dec"
+	FaceAnalyzerVersion           = "yunet-2023mar-multiscale+sface-2021dec+quality-v2"
+	previousFaceAnalyzerVersion   = "yunet-2023mar-multiscale+sface-2021dec+quality-v1"
+	olderFaceAnalyzerVersion      = "yunet-2023mar-multiscale+sface-2021dec"
 	legacyFaceAnalyzerVersion     = "yunet-2023mar+sface-2021dec"
 	faceDetectionMinimumScore     = float32(0.75)
 	faceDetectionMinimumBoxSide   = float32(32)
@@ -21,7 +22,8 @@ const (
 // SupportsFaceAnalyzerVersion identifies face records that can still be read
 // while the current analyzer version is being recomputed.
 func SupportsFaceAnalyzerVersion(version string) bool {
-	return version == FaceAnalyzerVersion || version == previousFaceAnalyzerVersion || version == legacyFaceAnalyzerVersion
+	return version == FaceAnalyzerVersion || version == previousFaceAnalyzerVersion ||
+		version == olderFaceAnalyzerVersion || version == legacyFaceAnalyzerVersion
 }
 
 // OCRAnalyzer stores local text-recognition results in the existing AI metadata batches.

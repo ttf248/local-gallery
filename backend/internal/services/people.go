@@ -19,7 +19,7 @@ import (
 
 const (
 	peopleIndexVersion       = 1
-	peopleGroupingVersion    = 12
+	peopleGroupingVersion    = 13
 	peopleEmbeddingDimension = 128
 	peopleMaxSplitFaces      = 200
 )
