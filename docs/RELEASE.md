@@ -31,7 +31,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-测试入口 `scripts/test-e2e.mjs` 会创建临时媒体库、构建并启动隔离服务，结束后清理临时进程和目录。Windows 也可从仓库根目录运行 `scripts\test-e2e.bat --audit` 或 `scripts\test-e2e.bat --crash`。
+测试入口 `scripts/test-e2e.mjs` 会创建临时媒体库、构建并启动隔离服务，结束后清理临时进程和目录。Windows 上进程刚结束时文件句柄可能还没释放，临时目录删不掉只会打印警告（带上目录路径），不会把这一轮跑批报成失败 —— 退出码只看用例与审计。Windows 也可从仓库根目录运行 `scripts\test-e2e.bat --audit` 或 `scripts\test-e2e.bat --crash`。
 
 ## CI
 
