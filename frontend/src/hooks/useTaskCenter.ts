@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { sse } from "../api/client";
+import { ApiError, sse } from "../api/client";
 import { useScanStore } from "../store/scanStore";
 import {
   aiJobsApi,
@@ -70,7 +70,7 @@ export interface TaskCenterState {
   clearHistory: () => void;
   /** 启动或任务操作正在提交。 */
   busy: boolean;
-  operationError: boolean;
+  operationError: string | null;
   embeddingStatus?: AIWorkerStatus;
   embeddingStatusLoading: boolean;
   gpuEnabled: boolean;
@@ -121,7 +121,12 @@ export function useTaskCenter(): TaskCenterState {
     refetchInterval: (query) => {
       const snapshot = query.state.data?.snapshot;
       if (snapshot?.settings.lastScheduledStatus === "running") return 2_000;
-      return snapshot?.active || snapshot?.queue?.length ? 15_000 : false;
+      const hasActiveJob =
+        snapshot?.active ||
+        snapshot?.jobs.some(
+          (job) => job.status === "running" || job.status === "paused",
+        );
+      return hasActiveJob || snapshot?.queue?.length ? 15_000 : false;
     },
   });
   const embeddingStatusQuery = useQuery({
@@ -136,7 +141,11 @@ export function useTaskCenter(): TaskCenterState {
     refetchOnMount: "always",
   });
   const snapshot = jobsQuery.data?.snapshot;
-  const active = snapshot?.active;
+  const active =
+    snapshot?.active ??
+    snapshot?.jobs.find(
+      (job) => job.status === "running" || job.status === "paused",
+    );
   const activeId = active?.id;
 
   // 扫描一结束，媒体库就换了：规模核算要按新库重做。
@@ -239,10 +248,12 @@ export function useTaskCenter(): TaskCenterState {
     mutationFn: ({ type, mode }: { type: AnalysisType; mode: AnalysisMode }) =>
       aiJobsApi.start(type, mode),
     onSuccess: () => void invalidateJobs(),
+    onError: () => void invalidateJobs(),
   });
   const startAllMutation = useMutation({
     mutationFn: (mode: AnalysisMode) => aiJobsApi.startAll(mode),
     onSuccess: () => void invalidateJobs(),
+    onError: () => void invalidateJobs(),
   });
   const actionMutation = useMutation({
     mutationFn: ({ id, action }: { id: string; action: JobAction }) =>
@@ -449,11 +460,12 @@ export function useTaskCenter(): TaskCenterState {
       startAllMutation.isPending ||
       actionMutation.isPending ||
       managementMutation.isPending,
-    operationError:
-      startMutation.isError ||
-      startAllMutation.isError ||
-      actionMutation.isError ||
-      managementMutation.isError,
+    operationError: taskOperationErrorMessage(
+      startMutation.error,
+      startAllMutation.error,
+      actionMutation.error,
+      managementMutation.error,
+    ),
     embeddingStatus: embeddingStatusQuery.data?.status,
     embeddingStatusLoading: embeddingStatusQuery.isLoading,
     gpuEnabled: snapshot?.settings.gpuEnabled ?? true,
@@ -486,4 +498,12 @@ function isAIJob(value: unknown): value is AIJob {
     typeof job.status === "string" &&
     typeof job.done === "number"
   );
+}
+
+function taskOperationErrorMessage(...errors: (unknown | null | undefined)[]) {
+  const error = errors.find(Boolean);
+  if (error instanceof ApiError && error.code === "analysis_job_active") {
+    return "已有分析任务正在运行或等待中，当前任务已显示在上方或队列中；完成、暂停或取消后再启动。";
+  }
+  return error ? "操作未完成，请稍后重试。" : null;
 }

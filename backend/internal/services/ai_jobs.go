@@ -726,8 +726,27 @@ func (s *AIJobService) Pause(id string) bool {
 	defer s.mu.Unlock()
 	job := s.jobs[id]
 	runtimeState := s.runtimes[id]
-	if job == nil || runtimeState == nil || !isAIJobActive(job.Status) || job.Status == AIJobStatusPaused {
+	if job == nil || !isAIJobActive(job.Status) || job.Status == AIJobStatusPaused {
 		return false
+	}
+	if runtimeState == nil {
+		if job.Status != AIJobStatusRunning {
+			return false
+		}
+		previousStage, previousStatus, previousUpdated, previousActive := job.Stage, job.Status, job.UpdatedAt, s.activeID
+		job.Status = AIJobStatusPaused
+		job.Stage = AIJobStatusPaused
+		job.UpdatedAt = s.now()
+		if s.activeID == "" {
+			s.activeID = id
+		}
+		if err := s.persistLocked(); err != nil {
+			job.Stage, job.Status, job.UpdatedAt = previousStage, previousStatus, previousUpdated
+			s.activeID = previousActive
+			return false
+		}
+		s.publishLocked(*job)
+		return true
 	}
 	previousStage, previousUpdated := job.Stage, job.UpdatedAt
 	runtimeState.pauseRequested = true
@@ -1049,7 +1068,10 @@ func (s *AIJobService) List() AIJobSnapshot {
 		if job := s.jobs[s.order[index]]; job != nil {
 			copy := s.snapshotLocked(job)
 			result.Jobs = append(result.Jobs, copy)
-			if job.ID == s.activeID {
+			if job.ID == s.activeID && isAIJobActive(job.Status) {
+				active := copy
+				result.Active = &active
+			} else if result.Active == nil && (job.Status == AIJobStatusRunning || job.Status == AIJobStatusPaused) {
 				active := copy
 				result.Active = &active
 			}

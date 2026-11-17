@@ -9,6 +9,7 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiError } from "../api/client";
 import { TaskCenterView } from "./TaskCenter";
 import {
   aiJobsApi,
@@ -537,6 +538,82 @@ describe("任务中心", () => {
     await waitFor(() =>
       expect(aiJobsApi.start).toHaveBeenCalledWith("metadata", "full"),
     );
+  });
+
+  it("快照缺少 active 时仍显示正在运行的任务", async () => {
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({ jobs: [currentJob], active: undefined }),
+    });
+    renderCenter("run");
+
+    expect(await screen.findByText("读取照片元数据")).toBeInTheDocument();
+    expect(screen.getByText("43 / 45 张")).toBeInTheDocument();
+    expect(screen.queryByText("队列空闲")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /开始分析/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("启动被活动任务拒绝时显示原因并刷新任务状态", async () => {
+    const faceModules: AIJobSnapshot["modules"] = [
+      ...modules,
+      {
+        type: "face",
+        name: "人脸识别",
+        installed: true,
+        version: "quality-v2",
+      },
+    ];
+    vi.mocked(aiJobsApi.list)
+      .mockResolvedValueOnce({
+        ok: true,
+        snapshot: snapshot({
+          jobs: [],
+          active: undefined,
+          modules: faceModules,
+          settings: { ...snapshot().settings, peopleEnabled: true },
+        }),
+      })
+      .mockResolvedValue({
+        ok: true,
+        snapshot: snapshot({
+          jobs: [currentJob],
+          active: undefined,
+          modules: faceModules,
+        }),
+      });
+    vi.mocked(aiJobsApi.start).mockRejectedValue(
+      new ApiError(
+        409,
+        "another analysis task is active",
+        undefined,
+        "analysis_job_active",
+      ),
+    );
+    renderCenter("run");
+
+    await screen.findByText("队列空闲");
+    const faceButton = screen.getByRole("button", { name: "人脸识别" });
+    await waitFor(() => expect(faceButton).toBeEnabled());
+    fireEvent.click(faceButton);
+    await waitFor(() =>
+      expect(faceButton).toHaveAttribute("aria-pressed", "true"),
+    );
+    const startButton = screen.getByRole("button", { name: /开始分析/ });
+    await waitFor(() => expect(startButton).toBeEnabled());
+    fireEvent.click(startButton);
+    await waitFor(() =>
+      expect(aiJobsApi.start).toHaveBeenCalledWith("face", "incremental"),
+    );
+
+    expect(
+      await screen.findByText(
+        "已有分析任务正在运行或等待中，当前任务已显示在上方或队列中；完成、暂停或取消后再启动。",
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("读取照片元数据")).toBeInTheDocument();
+    expect(screen.queryByText("队列空闲")).not.toBeInTheDocument();
   });
 
   it("空闲时给出增量与全量的规模对比，并标出当前模式", async () => {

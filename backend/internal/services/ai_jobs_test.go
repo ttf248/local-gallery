@@ -604,6 +604,48 @@ func TestAIJobServicePauseResumeAndShutdownRecovery(t *testing.T) {
 	shutdownAIJobService(t, pausedRestart)
 }
 
+func TestAIJobServiceRecoversRunningTaskWithoutActiveRuntime(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 2)
+	catalog := aiJobCatalog(root, files)
+	statePath := filepath.Join(t.TempDir(), "state", "ai_jobs.json")
+	metadataDir := filepath.Join(t.TempDir(), "derived", "metadata")
+	service := newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{})
+	t.Cleanup(func() { shutdownAIJobService(t, service) })
+
+	job := service.newJobLocked(AIJobTypeMetadata, AIJobModeFull)
+	job.ID = "job-orphaned-running"
+	job.Status = AIJobStatusRunning
+	job.Stage = AIJobTypeMetadata
+	job.Total = len(files)
+	service.mu.Lock()
+	service.jobs[job.ID] = &job
+	service.order = append(service.order, job.ID)
+	if err := service.persistLocked(); err != nil {
+		service.mu.Unlock()
+		t.Fatal(err)
+	}
+	service.mu.Unlock()
+
+	if snapshot := service.List(); snapshot.Active == nil || snapshot.Active.ID != job.ID {
+		t.Fatalf("untracked running job was not exposed as active: %+v", snapshot)
+	}
+	if !service.Pause(job.ID) {
+		t.Fatal("Pause() did not recover a running task without a runtime")
+	}
+	paused, ok := service.Get(job.ID)
+	if !ok || paused.Status != AIJobStatusPaused {
+		t.Fatalf("orphaned task status after pause = %+v", paused)
+	}
+	if !service.Resume(job.ID) {
+		t.Fatal("Resume() did not launch the recovered task")
+	}
+	completed := waitForAIJob(t, service, job.ID, AIJobStatusCompleted)
+	if completed.Processed != len(files) {
+		t.Fatalf("recovered task processed %d files, want %d", completed.Processed, len(files))
+	}
+}
+
 func TestAIJobServiceMarksRunningJobRecoveredFromPersistedCheckpoint(t *testing.T) {
 	root := t.TempDir()
 	files := writeAIJobImages(t, root, 2)

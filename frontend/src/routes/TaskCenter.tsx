@@ -175,7 +175,7 @@ export function TaskCenterView({
               ) : null}
               {center.operationError ? (
                 <p role="alert" className="mt-2 text-meta text-danger">
-                  操作未完成，请稍后重试。
+                  {center.operationError}
                 </p>
               ) : null}
             </div>
