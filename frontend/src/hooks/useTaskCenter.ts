@@ -8,6 +8,7 @@ import {
   type AIJobEstimate,
   type AIJobSnapshot,
   type AIWorkerStatus,
+  type FaceModel,
   type AnalysisType,
   type AnalysisMode,
 } from "../api/aiJobs";
@@ -76,6 +77,10 @@ export interface TaskCenterState {
   setGPUEnabled: (enabled: boolean) => void;
   gpuSaving: boolean;
   gpuSaveError: boolean;
+  faceModel: FaceModel;
+  setFaceModel: (model: FaceModel) => void;
+  faceModelSaving: boolean;
+  faceModelSaveError: boolean;
   /** 空闲时的规模与耗时核算。 */
   estimate?: AIJobEstimate;
   estimateLoading: boolean;
@@ -341,6 +346,20 @@ export function useTaskCenter(): TaskCenterState {
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: JOBS_KEY }),
   });
+  const faceModelMutation = useMutation({
+    mutationFn: (model: FaceModel) => aiJobsApi.updateFaceModel(model),
+    onSuccess: ({ settings }) => {
+      queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
+        JOBS_KEY,
+        (current) =>
+          current
+            ? { ...current, snapshot: { ...current.snapshot, settings } }
+            : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: JOBS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ESTIMATE_KEY });
+    },
+  });
 
   const queue = useMemo(() => {
     const jobsById = new Map(snapshot?.jobs.map((job) => [job.id, job]) ?? []);
@@ -441,6 +460,10 @@ export function useTaskCenter(): TaskCenterState {
     setGPUEnabled: (enabled: boolean) => hardwareMutation.mutate(enabled),
     gpuSaving: hardwareMutation.isPending,
     gpuSaveError: hardwareMutation.isError,
+    faceModel: snapshot?.settings.faceModel ?? "quality-v2",
+    setFaceModel: (model: FaceModel) => faceModelMutation.mutate(model),
+    faceModelSaving: faceModelMutation.isPending,
+    faceModelSaveError: faceModelMutation.isError,
     selection: {
       module: selectedModule,
       mode,

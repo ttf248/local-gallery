@@ -36,6 +36,7 @@ vi.mock("../api/aiJobs", () => ({
     settings: vi.fn(),
     updateSettings: vi.fn(),
     updateHardware: vi.fn(),
+    updateFaceModel: vi.fn(),
     metadata: vi.fn(),
     embeddingStatus: vi.fn(),
     estimate: vi.fn(),
@@ -318,6 +319,10 @@ describe("任务中心", () => {
         settings: { ...snapshot().settings, gpuEnabled },
       }),
     );
+    vi.mocked(aiJobsApi.updateFaceModel).mockImplementation(async (model) => ({
+      ok: true,
+      settings: { ...snapshot().settings, faceModel: model },
+    }));
     vi.mocked(aiJobsApi.estimate).mockResolvedValue({
       ok: true,
       estimate: estimateFixture(),
@@ -347,6 +352,10 @@ describe("任务中心", () => {
           ready: true,
         },
         coverage: { indexed: 100, total: 100 },
+        faceModels: {
+          "quality-v2": { ready: true, version: "quality-v2" },
+          buffalo_m: { ready: true, version: "buffalo_m-v1" },
+        },
       },
     });
     vi.mocked(cacheApi.stats).mockResolvedValue({
@@ -707,6 +716,27 @@ describe("任务中心", () => {
     expect(pauseButton).toBeDisabled();
     resolveSave({ ...snapshot().settings, gpuEnabled: false });
     await waitFor(() => expect(pauseButton).toBeEnabled());
+  });
+
+  it("任务页切换人脸模型并保存后端配置", async () => {
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({
+        jobs: [],
+        active: undefined,
+        settings: { ...snapshot().settings, faceModel: "quality-v2" },
+      }),
+    });
+    renderCenter("run");
+
+    const selector = await screen.findByRole("radiogroup", {
+      name: "人脸分析模型",
+    });
+    fireEvent.click(within(selector).getByRole("radio", { name: "Buffalo_m" }));
+
+    await waitFor(() =>
+      expect(aiJobsApi.updateFaceModel).toHaveBeenCalledWith("buffalo_m"),
+    );
   });
 
   it("按所选模式一键排入全部模块，并提供服务端设置入口", async () => {

@@ -3,6 +3,7 @@ import type {
   AIJobEstimate,
   AIJobModule,
   AIWorkerStatus,
+  FaceModel,
   AnalysisMode,
   AnalysisType,
 } from "../../api/aiJobs";
@@ -33,6 +34,10 @@ interface Props {
   busy: boolean;
   modules: AIJobModule[];
   peopleEnabled: boolean;
+  faceModel: FaceModel;
+  faceModelSaving: boolean;
+  faceModelSaveError: boolean;
+  onChangeFaceModel: (model: FaceModel) => void;
   /** 队列里等待的任务数；为空时是真正的空闲。 */
   queuedCount: number;
   embeddingStatus?: AIWorkerStatus;
@@ -62,6 +67,10 @@ export default function TaskConsole({
   busy,
   modules,
   peopleEnabled,
+  faceModel,
+  faceModelSaving,
+  faceModelSaveError,
+  onChangeFaceModel,
   queuedCount,
   embeddingStatus,
   embeddingStatusLoading,
@@ -92,6 +101,13 @@ export default function TaskConsole({
     const embeddingReady = Boolean(
       embeddingStatus?.runtimeReady && embeddingStatus.modelValid,
     );
+    const buffaloReady = Boolean(embeddingStatus?.faceModels?.buffalo_m?.ready);
+    const qualityReady = Boolean(
+      embeddingStatus?.faceModels?.["quality-v2"]?.ready ??
+      embeddingStatus?.modules?.face?.ready,
+    );
+    const selectedFaceModelReady =
+      faceModel === "buffalo_m" ? buffaloReady : qualityReady;
     const selectedName =
       installedModules.find((module) => module.type === selectedModule)?.name ??
       "照片元数据";
@@ -101,7 +117,10 @@ export default function TaskConsole({
     const canStart =
       !busy &&
       !(isEmbedding && !embeddingReady) &&
-      !(selectedModule === "face" && !peopleEnabled);
+      !(
+        selectedModule === "face" &&
+        (!peopleEnabled || !selectedFaceModelReady)
+      );
     // 这次要干的活：选中模块在当前模式下的张数，以及按序启动全部的合计。
     const estimateEntry = estimate?.modules.find(
       (item) => item.type === selectedModule,
@@ -166,6 +185,46 @@ export default function TaskConsole({
                   locked={peopleEnabled ? [] : ["face"]}
                 />
               </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Segmented
+                label="人脸分析模型"
+                value={faceModel}
+                onChange={onChangeFaceModel}
+                disabled={busy || faceModelSaving || embeddingStatusLoading}
+                options={[
+                  {
+                    value: "quality-v2",
+                    label: "quality-v2",
+                    title: "当前质量优化版，128 维特征",
+                    disabled: !qualityReady,
+                  },
+                  {
+                    value: "buffalo_m",
+                    label: "Buffalo_m",
+                    title: "SCRFD 检测与 ResNet50 特征，512 维",
+                    disabled: !buffaloReady,
+                  },
+                ]}
+              />
+              <span className="text-meta text-fg-subtle">
+                {selectedFaceModelReady
+                  ? faceModel === "buffalo_m"
+                    ? "512 维特征 · Buffalo_m"
+                    : "128 维特征 · quality-v2"
+                  : "所选模型未就绪，请在本机存储页签安装模型"}
+              </span>
+              {faceModelSaving ? (
+                <span className="text-meta text-fg-subtle">
+                  正在切换并重建人物索引…
+                </span>
+              ) : null}
+              {faceModelSaveError ? (
+                <span role="alert" className="text-meta text-danger">
+                  模型切换失败，检查是否有正在运行的人脸任务后重试。
+                </span>
+              ) : null}
             </div>
 
             <p className="mt-4 text-meta text-fg-subtle">
@@ -263,6 +322,12 @@ export default function TaskConsole({
           <span className="text-meta text-fg-muted">
             设备：{active.computeDevice === "gpu" ? "NVIDIA GPU" : "CPU"}
           </span>
+          {active.type === "face" && active.faceModel ? (
+            <span className="text-meta text-fg-muted">
+              模型：
+              {active.faceModel === "buffalo_m" ? "Buffalo_m" : "quality-v2"}
+            </span>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {active.status === "running" ? (

@@ -2,6 +2,7 @@ import { api } from "./client";
 import type { AppMode, LibraryFeedItem, LibraryPage } from "./library";
 
 export type AnalysisType = "metadata" | "embedding" | "ocr" | "face";
+export type FaceModel = "quality-v2" | "buffalo_m";
 export type AnalysisMode = "full" | "incremental";
 export type AnalysisStatus =
   "pending" | "running" | "paused" | "completed" | "failed" | "cancelled";
@@ -31,6 +32,7 @@ export interface AIJob {
   status: AnalysisStatus;
   stage: string;
   moduleVersion: string;
+  faceModel?: FaceModel;
   total: number;
   processed: number;
   skipped: number;
@@ -78,6 +80,7 @@ export interface AIJobSettings {
   dailySmartAlbums: boolean;
   peopleEnabled: boolean;
   gpuEnabled: boolean;
+  faceModel?: FaceModel;
   lastScheduledDate?: string;
   lastScheduledStatus?: "running" | "completed" | "failed" | "interrupted";
   lastScheduledStage?: string;
@@ -178,6 +181,7 @@ export interface AIWorkerStatus {
   };
   coverage: { indexed: number; total: number };
   modules?: Partial<Record<"ocr" | "face", AIWorkerModuleStatus>>;
+  faceModels?: Partial<Record<FaceModel, AIWorkerModuleStatus>>;
 }
 
 export interface AIWorkerModuleStatus {
@@ -674,6 +678,11 @@ export const aiJobsApi = {
     api<{ ok: boolean; settings: AIJobSettings }>("/api/ai/jobs/hardware", {
       method: "PUT",
       body: { gpuEnabled },
+    }),
+  updateFaceModel: (model: FaceModel) =>
+    api<{ ok: boolean; settings: AIJobSettings }>("/api/ai/jobs/face-model", {
+      method: "PUT",
+      body: { model },
     }),
   metadata: (id: string) =>
     api<ImageMetadataResponse>(

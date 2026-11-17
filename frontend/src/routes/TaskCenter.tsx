@@ -119,9 +119,17 @@ export function TaskCenterView({
                 active={active}
                 lastJob={history[0]}
                 loading={center.loading}
-                busy={taskActionsBusy}
+                busy={
+                  taskActionsBusy ||
+                  center.faceModelSaving ||
+                  queue.some((job) => job.type === "face")
+                }
                 modules={snapshot?.modules ?? []}
                 peopleEnabled={plan.peopleEnabled}
+                faceModel={center.faceModel}
+                faceModelSaving={center.faceModelSaving}
+                faceModelSaveError={center.faceModelSaveError}
+                onChangeFaceModel={center.setFaceModel}
                 queuedCount={queue.length}
                 embeddingStatus={center.embeddingStatus}
                 embeddingStatusLoading={center.embeddingStatusLoading}
