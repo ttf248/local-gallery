@@ -81,6 +81,118 @@ func TestPeopleServiceKeepsSelectedFaceModelEmbeddingDimensionIsolated(t *testin
 	}
 }
 
+func TestPeopleCorrectionsPersistIndependentlyForEachFaceModel(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "state", "people.json")
+	derivedPath := filepath.Join(root, "derived", "people-index.json")
+	people, err := OpenPeopleService(statePath, derivedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	people.manual.Names["p_quality1"] = "质量模型人物"
+	if err := people.persistManualLocked(); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := people.manual.Names["p_quality1"]; exists {
+		t.Fatal("quality-v2 corrections leaked into Buffalo_m")
+	}
+	people.manual.Names["p_buffalo1"] = "Buffalo 人物"
+	if err := people.persistManualLocked(); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	if people.manual.Names["p_quality1"] != "质量模型人物" {
+		t.Fatalf("quality-v2 corrections were not restored: %+v", people.manual.Names)
+	}
+	if _, exists := people.manual.Names["p_buffalo1"]; exists {
+		t.Fatal("Buffalo_m corrections leaked into quality-v2")
+	}
+	corrections := people.Corrections()
+	if corrections.Profiles[FaceModelQualityV2].Names["p_quality1"] != "质量模型人物" ||
+		corrections.Profiles[FaceModelBuffaloM].Names["p_buffalo1"] != "Buffalo 人物" {
+		t.Fatalf("model-specific corrections were not exported: %+v", corrections.Profiles)
+	}
+	legacy := PeopleCorrections{
+		Version: peopleIndexVersion, Names: map[string]string{"p_stale1": "旧共享状态"},
+		Hidden: map[string]bool{}, Assignments: map[string]string{},
+	}
+	if err := writeAIJSONAtomic(statePath, legacy); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, err := OpenPeopleService(statePath, derivedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.SetFaceAnalyzerVersion(FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+	if restarted.manual.Names["p_buffalo1"] != "Buffalo 人物" {
+		t.Fatalf("Buffalo_m corrections were not restored after restart: %+v", restarted.manual.Names)
+	}
+	restartedCorrections := restarted.Corrections()
+	if restartedCorrections.Profiles[FaceModelQualityV2].Names["p_quality1"] != "质量模型人物" ||
+		restartedCorrections.Profiles[FaceModelBuffaloM].Names["p_buffalo1"] != "Buffalo 人物" {
+		t.Fatalf("both persisted model profiles were not exported after restart: %+v", restartedCorrections.Profiles)
+	}
+	if _, exists := restartedCorrections.Profiles[FaceModelQualityV2].Names["p_stale1"]; exists {
+		t.Fatal("stale shared legacy corrections overwrote a model-specific profile")
+	}
+	if err := restarted.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	if restarted.manual.Names["p_quality1"] != "质量模型人物" {
+		t.Fatalf("quality-v2 corrections were not restored after restart: %+v", restarted.manual.Names)
+	}
+}
+
+func TestLegacyPeopleStateMigratesToFirstActiveFaceProfile(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "state", "people.json")
+	derivedPath := filepath.Join(root, "derived", "people-index.json")
+	legacy := PeopleCorrections{
+		Version: peopleIndexVersion,
+		Names:   map[string]string{"p_legacy1": "旧人物"}, Hidden: map[string]bool{}, Assignments: map[string]string{},
+	}
+	if err := writeAIJSONAtomic(statePath, legacy); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAIJSONAtomic(derivedPath, peopleIndexDisk{Version: peopleIndexVersion, GroupingVersion: peopleGroupingVersion}); err != nil {
+		t.Fatal(err)
+	}
+
+	people, err := OpenPeopleService(statePath, derivedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+	if people.manual.Names["p_legacy1"] != "旧人物" {
+		t.Fatalf("legacy corrections were not assigned to the active profile: %+v", people.manual.Names)
+	}
+	if pathExists(peopleProfilePath(statePath, FaceModelQualityV2)) {
+		t.Fatal("legacy corrections were copied into the inactive model profile")
+	}
+	if !pathExists(peopleProfilePath(statePath, FaceModelBuffaloM)) || !pathExists(peopleProfilePath(derivedPath, FaceModelBuffaloM)) {
+		t.Fatal("legacy state and index were not migrated into Buffalo_m profile")
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	if len(people.manual.Names) != 0 {
+		t.Fatalf("inactive model unexpectedly received legacy corrections: %+v", people.manual.Names)
+	}
+}
+
 func peopleTestVector(axis int, noise float32) []float32 {
 	vector := make([]float32, peopleEmbeddingDimension)
 	vector[axis] = 1

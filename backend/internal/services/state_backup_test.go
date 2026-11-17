@@ -129,6 +129,9 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
 	vector := make([]float32, peopleEmbeddingDimension)
 	vector[0] = 1
 	data, _ := json.Marshal(map[string]any{"faces": []any{map[string]any{
@@ -144,6 +147,22 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	if err := people.Rename(personID, "家人"); err != nil {
 		t.Fatal(err)
 	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+	people.manual.Names["p_buffalo1"] = "Buffalo 修正"
+	if err := people.persistManualLocked(); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.Sync([]AIAnalysisRecord{{
+		Type: AIJobTypeFace, ResourceID: resourceID, Size: 7, MTimeNs: 11,
+		ModuleVersion: FaceAnalyzerVersion, Status: "faces_found", Data: data,
+	}}); err != nil {
+		t.Fatal(err)
+	}
 	s.People = people
 	backup, err := s.Export()
 	if err != nil {
@@ -152,6 +171,9 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	encoded, _ := json.Marshal(backup)
 	if bytes.Contains(encoded, []byte("embedding")) {
 		t.Fatalf("backup contains face vectors: %s", encoded)
+	}
+	if backup.People == nil || backup.People.Profiles[FaceModelBuffaloM].Names["p_buffalo1"] != "Buffalo 修正" {
+		t.Fatalf("backup omitted inactive model corrections: %+v", backup.People)
 	}
 	if err := people.ReplaceCorrections(PeopleCorrections{Version: 1, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}); err != nil {
 		t.Fatal(err)
@@ -166,6 +188,9 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	}
 	if got := people.Groups(false); len(got) != 1 || got[0].Name != "家人" {
 		t.Fatalf("restored people corrections = %+v", got)
+	}
+	if got := people.Corrections().Profiles[FaceModelBuffaloM].Names["p_buffalo1"]; got != "Buffalo 修正" {
+		t.Fatalf("restored Buffalo_m corrections = %q", got)
 	}
 }
 

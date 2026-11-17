@@ -122,6 +122,7 @@ type smartAlbumCache struct {
 	Version      int                                  `json:"version"`
 	AlbumID      string                               `json:"albumId"`
 	Dimension    string                               `json:"dimension"`
+	FaceModel    string                               `json:"faceModel,omitempty"`
 	Key          string                               `json:"key"`
 	Fingerprints map[string]smartAlbumFileFingerprint `json:"fingerprints"`
 	Groups       []smartAlbumCachedGroup              `json:"groups"`
@@ -468,7 +469,8 @@ func (s *SmartAlbumService) loadOrBuildSmartAlbumGroups(
 	}
 	cache = smartAlbumCache{
 		Version: smartAlbumCacheVersion, AlbumID: input.albumID, Dimension: dimension,
-		Key: key, Fingerprints: input.fingerprints, Groups: cacheSmartAlbumGroups(groups),
+		FaceModel: smartAlbumFaceModel(s.jobs, dimension),
+		Key:       key, Fingerprints: input.fingerprints, Groups: cacheSmartAlbumGroups(groups),
 	}
 	if err := writeAIJSONAtomic(cachePath, cache); err != nil {
 		return smartAlbumCache{}, false, fmt.Errorf("persist smart album cache: %w", err)
@@ -1686,6 +1688,9 @@ func (s *SmartAlbumService) analysisFingerprint(
 		_, _ = hash.Write([]byte(value))
 		_, _ = hash.Write([]byte{0})
 	}
+	if dimension == SmartAlbumDimensionPeople || dimension == SmartAlbumDimensionRecommended {
+		write(smartAlbumFaceModel(s.jobs, dimension))
+	}
 	switch dimension {
 	case SmartAlbumDimensionTime, SmartAlbumDimensionPlace:
 		write(metadataStatus.Version)
@@ -1823,7 +1828,26 @@ func readSmartAlbumCacheFile(path, albumID, dimension string) (smartAlbumCache, 
 
 // readCachedGroups 读一本相册某个维度已生成的分组；没有缓存就是没有。
 func (s *SmartAlbumService) readCachedGroups(albumID, dimension string) (smartAlbumCache, bool) {
-	return readSmartAlbumCacheFile(s.cachePath(albumID, dimension), albumID, dimension)
+	cache, ok := readSmartAlbumCacheFile(s.cachePath(albumID, dimension), albumID, dimension)
+	if !ok || (dimension != SmartAlbumDimensionPeople && dimension != SmartAlbumDimensionRecommended) {
+		return cache, ok
+	}
+	model := cache.FaceModel
+	if model == "" {
+		model = DefaultFaceModel
+	}
+	return cache, model == smartAlbumFaceModel(s.jobs, dimension)
+}
+
+func smartAlbumFaceModel(jobs *AIJobService, dimension string) string {
+	// Only these dimensions derive memberships or recommendations from faces.
+	if dimension != SmartAlbumDimensionPeople && dimension != SmartAlbumDimensionRecommended {
+		return ""
+	}
+	if jobs == nil {
+		return DefaultFaceModel
+	}
+	return jobs.FaceModel()
 }
 
 func cacheSmartAlbumGroups(groups []SmartAlbumGroup) []smartAlbumCachedGroup {

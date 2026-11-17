@@ -756,3 +756,30 @@ func recommendationBenchmarkDetails(media []smartAlbumMedia, start time.Time) ma
 	}
 	return details
 }
+
+func TestSmartAlbumFaceCachesFollowActiveModel(t *testing.T) {
+	cacheDir := t.TempDir()
+	jobs := &AIJobService{settings: AIJobSettings{FaceModel: FaceModelBuffaloM}}
+	service := &SmartAlbumService{cacheDir: cacheDir, jobs: jobs}
+	for _, dimension := range []string{SmartAlbumDimensionPeople, SmartAlbumDimensionRecommended} {
+		cache := smartAlbumCache{
+			Version: smartAlbumCacheVersion, AlbumID: "album-profile-cache", Dimension: dimension,
+			FaceModel: FaceModelQualityV2, Groups: []smartAlbumCachedGroup{},
+		}
+		path := service.cachePath(cache.AlbumID, dimension)
+		if err := writeAIJSONAtomic(path, cache); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := service.readCachedGroups(cache.AlbumID, dimension); ok {
+			t.Fatalf("%s cache from quality-v2 was served while Buffalo_m is active", dimension)
+		}
+
+		cache.FaceModel = FaceModelBuffaloM
+		if err := writeAIJSONAtomic(path, cache); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := service.readCachedGroups(cache.AlbumID, dimension); !ok {
+			t.Fatalf("%s cache for the active Buffalo_m model was rejected", dimension)
+		}
+	}
+}

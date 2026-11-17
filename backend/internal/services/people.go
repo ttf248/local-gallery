@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -84,6 +85,15 @@ type PeopleAlbumGroup struct {
 
 // PeopleCorrections contains user-owned labels and assignments, never embeddings.
 type PeopleCorrections struct {
+	Version     int                                `json:"version"`
+	Names       map[string]string                  `json:"names"`
+	Hidden      map[string]bool                    `json:"hidden"`
+	Assignments map[string]string                  `json:"assignments"`
+	Profiles    map[string]PeopleCorrectionProfile `json:"profiles,omitempty"`
+}
+
+// PeopleCorrectionProfile stores names and manual assignments for one face model.
+type PeopleCorrectionProfile struct {
 	Version     int               `json:"version"`
 	Names       map[string]string `json:"names"`
 	Hidden      map[string]bool   `json:"hidden"`
@@ -132,6 +142,10 @@ type PeopleService struct {
 	persistMu          sync.Mutex
 	statePath          string
 	derivedPath        string
+	stateBasePath      string
+	derivedBasePath    string
+	legacyPending      bool
+	activeModel        string
 	sourceIsPhoto      func(string) bool
 	sourceDimensions   func(string) MediaDimensions
 	faces              map[string]PersonFace
@@ -142,6 +156,7 @@ type PeopleService struct {
 	cachedIDs          map[string]string
 	cachedHashes       map[string]string
 	manual             peopleManualState
+	manualByModel      map[string]peopleManualState
 	comparisons        int
 	faceModelVersion   string
 	embeddingDimension int
@@ -153,6 +168,7 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 	}
 	service := &PeopleService{
 		statePath: statePath, derivedPath: derivedPath,
+		stateBasePath: statePath, derivedBasePath: derivedPath,
 		faces: make(map[string]PersonFace), facesByResource: make(map[string][]string),
 		clusters: make(map[string]*peopleCluster), ann: newPeopleANNIndex(),
 		embeddingDimension: peopleEmbeddingDimension,
@@ -160,71 +176,173 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 		cachedIDs:          make(map[string]string),
 		cachedHashes:       make(map[string]string),
 		manual:             emptyPeopleManualState(),
+		manualByModel:      make(map[string]peopleManualState),
 	}
-	data, err := os.ReadFile(statePath)
-	if err != nil && !os.IsNotExist(err) {
+	if err := service.loadProfileLocked(); err != nil {
 		return nil, err
+	}
+	if err := service.loadProfileIndexLocked(); err != nil {
+		return nil, err
+	}
+	service.legacyPending = pathExists(statePath) || pathExists(derivedPath)
+	return service, nil
+}
+
+func (s *PeopleService) loadProfileLocked() error {
+	s.manual = emptyPeopleManualState()
+	data, err := os.ReadFile(s.statePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	if err == nil {
 		var state peopleManualState
 		if json.Unmarshal(data, &state) == nil && state.Version == peopleIndexVersion {
-			service.manual = normalizePeopleManualState(state)
+			s.manual = normalizePeopleManualState(state)
 		}
 	}
-	data, err = os.ReadFile(derivedPath)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, err
-	}
-	if err == nil {
-		var index peopleIndexDisk
-		if json.Unmarshal(data, &index) == nil && index.Version == peopleIndexVersion {
-			referencedIDs := peopleReferencedIDs(service.manual)
-			cacheValid := index.GroupingVersion == peopleGroupingVersion
-			if cacheValid {
-				service.cachedIDs = make(map[string]string, len(index.Faces))
-				service.cachedHashes = make(map[string]string, len(index.Faces))
-			}
-			for _, face := range index.Faces {
-				if face.Key != "" && referencedIDs[face.ClusterID] {
-					service.previousIDs[face.Key] = face.ClusterID
-				}
-				if !cacheValid {
-					continue
-				}
-				if face.Key == "" || !validPersonID(face.ClusterID) || len(face.RecordHash) != sha256.Size*2 {
-					cacheValid = false
-					break
-				}
-				service.cachedIDs[face.Key] = face.ClusterID
-				service.cachedHashes[face.Key] = face.RecordHash
-			}
-			if !cacheValid {
-				service.cachedIDs = nil
-				service.cachedHashes = nil
-			}
-		}
-	}
-	return service, nil
+	return nil
 }
 
-// SetFaceAnalyzerVersion scopes the people index to one embedding space.
+func (s *PeopleService) loadProfileIndexLocked() error {
+	s.previousIDs = make(map[string]string)
+	s.cachedIDs = make(map[string]string)
+	s.cachedHashes = make(map[string]string)
+	data, err := os.ReadFile(s.derivedPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err != nil {
+		return nil
+	}
+	var index peopleIndexDisk
+	if json.Unmarshal(data, &index) != nil || index.Version != peopleIndexVersion {
+		return nil
+	}
+	referencedIDs := peopleReferencedIDs(s.manual)
+	cacheValid := index.GroupingVersion == peopleGroupingVersion
+	if cacheValid {
+		s.cachedIDs = make(map[string]string, len(index.Faces))
+		s.cachedHashes = make(map[string]string, len(index.Faces))
+	}
+	for _, face := range index.Faces {
+		if face.Key != "" && referencedIDs[face.ClusterID] {
+			s.previousIDs[face.Key] = face.ClusterID
+		}
+		if !cacheValid {
+			continue
+		}
+		if face.Key == "" || !validPersonID(face.ClusterID) || len(face.RecordHash) != sha256.Size*2 {
+			cacheValid = false
+			break
+		}
+		s.cachedIDs[face.Key] = face.ClusterID
+		s.cachedHashes[face.Key] = face.RecordHash
+	}
+	if !cacheValid {
+		s.cachedIDs = nil
+		s.cachedHashes = nil
+	}
+	return nil
+}
+
+func peopleProfilePath(basePath, model string) string {
+	extension := filepath.Ext(basePath)
+	return strings.TrimSuffix(basePath, extension) + "-" + model + extension
+}
+
+func peopleModelForVersion(version string) (string, bool) {
+	if version == FaceAnalyzerBuffaloMVersion {
+		return FaceModelBuffaloM, true
+	}
+	if SupportsFaceAnalyzerVersion(version) {
+		return FaceModelQualityV2, true
+	}
+	return "", false
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// SetFaceAnalyzerVersion selects the independent people state and index for
+// the active face model. The first selected profile adopts the legacy shared
+// files once, preserving the data that was active before profile isolation.
 func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
 	dimension := FaceEmbeddingDimensionForVersion(version)
-	if dimension == 0 {
+	model, knownModel := peopleModelForVersion(version)
+	if dimension == 0 || !knownModel {
 		return errors.New("unsupported face analyzer version")
 	}
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.faceModelVersion == version && s.embeddingDimension == dimension {
 		return nil
 	}
-	for key, face := range s.faces {
-		s.previousIDs[key] = face.PersonID
+	if s.faceModelVersion != "" && s.activeModel == model {
+		for key, face := range s.faces {
+			s.previousIDs[key] = face.PersonID
+		}
+		s.faceModelVersion = version
+		s.embeddingDimension = dimension
+		s.cachedIDs = nil
+		s.cachedHashes = nil
+		return nil
 	}
+	if s.faceModelVersion != "" {
+		if err := s.persistLocked(); err != nil {
+			return err
+		}
+		s.manualByModel[s.activeModel] = clonePeopleManualState(s.manual)
+	}
+
+	statePath := peopleProfilePath(s.stateBasePath, model)
+	derivedPath := peopleProfilePath(s.derivedBasePath, model)
+	if s.faceModelVersion == "" && s.legacyPending {
+		if !pathExists(statePath) && !pathExists(derivedPath) {
+			if err := writeAIJSONAtomic(statePath, s.manual); err != nil {
+				return err
+			}
+			if data, err := os.ReadFile(s.derivedBasePath); err == nil {
+				var index peopleIndexDisk
+				if json.Unmarshal(data, &index) == nil && index.Version == peopleIndexVersion {
+					if err := writeAIJSONAtomic(derivedPath, index); err != nil {
+						return err
+					}
+				}
+			} else if !os.IsNotExist(err) {
+				return err
+			}
+			if err := os.Remove(s.stateBasePath); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			if err := os.Remove(s.derivedBasePath); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+		s.legacyPending = false
+	}
+	s.statePath = statePath
+	s.derivedPath = derivedPath
+	s.activeModel = model
 	s.faceModelVersion = version
 	s.embeddingDimension = dimension
-	s.cachedIDs = nil
-	s.cachedHashes = nil
+	s.faces = make(map[string]PersonFace)
+	s.facesByResource = make(map[string][]string)
+	s.clusters = make(map[string]*peopleCluster)
+	s.ann = newPeopleANNIndexForDimension(dimension)
+	s.comparisons = 0
+	if manual, exists := s.manualByModel[model]; exists {
+		s.manual = clonePeopleManualState(manual)
+	} else if err := s.loadProfileLocked(); err != nil {
+		return err
+	}
+	if err := s.loadProfileIndexLocked(); err != nil {
+		return err
+	}
+	s.manualByModel[model] = clonePeopleManualState(s.manual)
 	return nil
 }
 
@@ -462,6 +580,8 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 
 	candidate := &PeopleService{
 		statePath: s.statePath, derivedPath: s.derivedPath,
+		stateBasePath: s.stateBasePath, derivedBasePath: s.derivedBasePath,
+		activeModel: s.activeModel, manualByModel: clonePeopleManualProfiles(s.manualByModel),
 		faceModelVersion: s.faceModelVersion, embeddingDimension: s.embeddingDimension,
 		previousIDs: previousIDs, cachedIDs: cachedIDs, cachedHashes: cachedHashes, manual: manual,
 	}
@@ -525,6 +645,14 @@ func clonePeopleManualState(state peopleManualState) peopleManualState {
 	})
 }
 
+func clonePeopleManualProfiles(source map[string]peopleManualState) map[string]peopleManualState {
+	result := make(map[string]peopleManualState, len(source))
+	for model, state := range source {
+		result[model] = clonePeopleManualState(state)
+	}
+	return result
+}
+
 func (s *PeopleService) publishRebuiltIndex(candidate *PeopleService) error {
 	indexErr := candidate.persistIndexSnapshot(candidate.indexSnapshotLocked())
 	var manualErr error
@@ -543,9 +671,11 @@ func (s *PeopleService) publishRebuiltIndex(candidate *PeopleService) error {
 	s.cachedIDs = candidate.cachedIDs
 	s.cachedHashes = candidate.cachedHashes
 	s.manual = candidate.manual
+	s.manualByModel = candidate.manualByModel
 	s.comparisons = candidate.comparisons
 	s.faceModelVersion = candidate.faceModelVersion
 	s.embeddingDimension = candidate.embeddingDimension
+	s.activeModel = candidate.activeModel
 	s.mu.Unlock()
 	if indexErr != nil {
 		return indexErr
@@ -1720,11 +1850,39 @@ func (s *PeopleService) cleanAssignmentsLocked() {
 func (s *PeopleService) Corrections() PeopleCorrections {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return PeopleCorrections{
+	profiles := clonePeopleManualProfiles(s.manualByModel)
+	if s.activeModel != "" {
+		profiles[s.activeModel] = clonePeopleManualState(s.manual)
+	}
+	for _, model := range []string{FaceModelQualityV2, FaceModelBuffaloM} {
+		if _, loaded := profiles[model]; loaded {
+			continue
+		}
+		data, err := os.ReadFile(peopleProfilePath(s.stateBasePath, model))
+		if err != nil {
+			continue
+		}
+		var state peopleManualState
+		if json.Unmarshal(data, &state) == nil && state.Version == peopleIndexVersion {
+			profiles[model] = normalizePeopleManualState(state)
+		}
+	}
+	profileCorrections := make(map[string]PeopleCorrectionProfile, len(profiles))
+	for model, state := range profiles {
+		profileCorrections[model] = PeopleCorrectionProfile{
+			Version: state.Version, Names: cloneStringMap(state.Names), Hidden: cloneBoolMap(state.Hidden),
+			Assignments: cloneStringMap(state.Assignments),
+		}
+	}
+	corrections := PeopleCorrections{
 		Version: peopleIndexVersion,
 		Names:   cloneStringMap(s.manual.Names), Hidden: cloneBoolMap(s.manual.Hidden),
 		Assignments: cloneStringMap(s.manual.Assignments),
 	}
+	if len(profileCorrections) > 0 {
+		corrections.Profiles = profileCorrections
+	}
+	return corrections
 }
 
 func (s *PeopleService) ReplaceCorrections(corrections PeopleCorrections) error {
@@ -1732,6 +1890,33 @@ func (s *PeopleService) ReplaceCorrections(corrections PeopleCorrections) error 
 	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if corrections.Profiles != nil {
+		profiles := make(map[string]peopleManualState, len(corrections.Profiles))
+		for model, profile := range corrections.Profiles {
+			if model != FaceModelQualityV2 && model != FaceModelBuffaloM {
+				return errors.New("unsupported people correction profile")
+			}
+			profiles[model] = normalizePeopleManualState(PeopleCorrections{
+				Version: profile.Version, Names: profile.Names, Hidden: profile.Hidden, Assignments: profile.Assignments,
+			})
+		}
+		for _, model := range []string{FaceModelQualityV2, FaceModelBuffaloM} {
+			state := profiles[model]
+			if state.Version == 0 {
+				state = emptyPeopleManualState()
+			}
+			profiles[model] = state
+			if err := writeAIJSONAtomic(peopleProfilePath(s.stateBasePath, model), state); err != nil {
+				return err
+			}
+		}
+		s.manualByModel = profiles
+		if s.activeModel != "" {
+			s.manual = clonePeopleManualState(profiles[s.activeModel])
+			s.statePath = peopleProfilePath(s.stateBasePath, s.activeModel)
+			return s.persistManualLocked()
+		}
+	}
 	s.manual = normalizePeopleManualState(corrections)
 	return s.persistManualLocked()
 }
@@ -1766,6 +1951,19 @@ func (s *PeopleService) Clear() error {
 	s.cachedHashes = nil
 	s.comparisons = 0
 	s.manual = emptyPeopleManualState()
+	s.manualByModel = make(map[string]peopleManualState)
+	for _, model := range []string{FaceModelQualityV2, FaceModelBuffaloM} {
+		for _, path := range []string{peopleProfilePath(s.stateBasePath, model), peopleProfilePath(s.derivedBasePath, model)} {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+	for _, path := range []string{s.stateBasePath, s.derivedBasePath} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
 	if err := s.persistManualLocked(); err != nil {
 		return err
 	}
@@ -1776,6 +1974,9 @@ func (s *PeopleService) Clear() error {
 }
 
 func (s *PeopleService) persistManualLocked() error {
+	if s.activeModel != "" {
+		s.manualByModel[s.activeModel] = clonePeopleManualState(s.manual)
+	}
 	return writeAIJSONAtomic(s.statePath, s.manual)
 }
 

@@ -346,6 +346,7 @@ type aiJobDiskState struct {
 
 type aiJobBatch struct {
 	JobID          string             `json:"jobId"`
+	FaceModel      string             `json:"faceModel,omitempty"`
 	Number         int                `json:"number"`
 	Offset         int                `json:"offset"`
 	LastResourceID string             `json:"lastResourceId"`
@@ -464,6 +465,9 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		return nil, fmt.Errorf("create metadata directory: %w", err)
 	}
 	if err := service.loadState(); err != nil {
+		return nil, err
+	}
+	if err := service.migrateLegacyFaceBatches(); err != nil {
 		return nil, err
 	}
 	if err := service.loadRecords(); err != nil {
@@ -1418,7 +1422,12 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 			result = append(result, record)
 		}
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ResourceID < result[j].ResourceID })
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].ResourceID != result[j].ResourceID {
+			return result[i].ResourceID < result[j].ResourceID
+		}
+		return result[i].ModuleVersion < result[j].ModuleVersion
+	})
 	return result
 }
 
@@ -1439,7 +1448,7 @@ func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map
 	}
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, resourceID := range resourceIDs {
-		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+		record, exists := s.records[aiRecordKeyForVersion(moduleType, version, resourceID)]
 		if !exists || record.ModuleVersion != version || len(record.Data) == 0 {
 			continue
 		}
@@ -1471,7 +1480,7 @@ func (s *AIJobService) RecordsForResources(moduleType string, resourceIDs []stri
 	}
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, resourceID := range resourceIDs {
-		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+		record, exists := s.records[aiRecordKeyForVersion(moduleType, version, resourceID)]
 		if !exists || record.ModuleVersion != version {
 			continue
 		}
@@ -1494,7 +1503,7 @@ func (s *AIJobService) RecordSummariesForResources(moduleType string, resourceID
 	}
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, resourceID := range resourceIDs {
-		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+		record, exists := s.records[aiRecordKeyForVersion(moduleType, version, resourceID)]
 		if !exists || record.ModuleVersion != version {
 			continue
 		}
@@ -1536,7 +1545,12 @@ func (s *AIJobService) RecordsIncludingStaleVersions(moduleType string) []AIAnal
 			result = append(result, record)
 		}
 	}
-	sort.Slice(result, func(i, j int) bool { return result[i].ResourceID < result[j].ResourceID })
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].ResourceID != result[j].ResourceID {
+			return result[i].ResourceID < result[j].ResourceID
+		}
+		return result[i].ModuleVersion < result[j].ModuleVersion
+	})
 	return result
 }
 
@@ -1547,8 +1561,9 @@ func (s *AIJobService) Record(moduleType, resourceID string) (AIAnalysisRecord, 
 	if _, exists := s.analyzers[moduleType]; !exists {
 		return AIAnalysisRecord{}, false
 	}
-	record, exists := s.records[aiRecordKey(moduleType, resourceID)]
-	if !exists || record.ModuleVersion != aiAnalyzerVersion(s.analyzers[moduleType], s.settings.FaceModel) {
+	version := aiAnalyzerVersion(s.analyzers[moduleType], s.settings.FaceModel)
+	record, exists := s.records[aiRecordKeyForVersion(moduleType, version, resourceID)]
+	if !exists || record.ModuleVersion != version {
 		return AIAnalysisRecord{}, false
 	}
 	record.Data = append(json.RawMessage(nil), record.Data...)
@@ -1563,7 +1578,8 @@ func (s *AIJobService) RecordIncludingStaleVersions(moduleType, resourceID strin
 	if _, exists := s.analyzers[moduleType]; !exists {
 		return AIAnalysisRecord{}, false
 	}
-	record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+	version := aiAnalyzerVersion(s.analyzers[moduleType], s.settings.FaceModel)
+	record, exists := s.records[aiRecordKeyForVersion(moduleType, version, resourceID)]
 	if !exists {
 		return AIAnalysisRecord{}, false
 	}
@@ -2079,7 +2095,7 @@ func (s *AIJobService) selectTargets(jobID string, targets []aiJobTarget, digest
 		}
 		validator, _ := s.analyzers[job.Type].(AIAnalyzerRecordValidator)
 		for _, target := range targets {
-			record, exists := s.records[aiRecordKey(job.Type, target.resourceID)]
+			record, exists := s.records[aiRecordKeyForVersion(job.Type, version, target.resourceID)]
 			current := aiRecordIsCurrent(record, exists, target, version, validator)
 			if job.RetryFailedOnly {
 				if (exists && record.Status == "failed") || (target.position >= job.RetryFromOffset && !current) {
@@ -2368,13 +2384,14 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 	lastIndex := len(records) - 1
 	batchFile := aiJobBatch{
 		JobID:          jobID,
+		FaceModel:      job.FaceModel,
 		Number:         batchNumber,
 		Offset:         targets[lastIndex].position + 1,
 		LastResourceID: records[lastIndex].ResourceID,
 		TargetDigest:   digest,
 		Records:        records,
 	}
-	path := filepath.Join(s.metadataDir, records[0].Type, "batches", jobID, fmt.Sprintf("%08d.json", batchNumber))
+	path := s.jobBatchPath(job, batchNumber)
 	if err := writeAIJSONAtomic(path, batchFile); err != nil {
 		return err
 	}
@@ -2389,7 +2406,7 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 		if record.ResourceID == "" {
 			continue
 		}
-		s.records[aiRecordKey(record.Type, record.ResourceID)] = record
+		s.records[aiRecordKeyForRecord(record)] = record
 		s.recordsRevision++
 		if record.Status == "failed" {
 			job.Failed++
@@ -2431,6 +2448,126 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 		onRecordsCommitted(committed)
 	}
 	return nil
+}
+
+func (s *AIJobService) jobBatchPath(job *AIJob, batchNumber int) string {
+	directory := filepath.Join(s.metadataDir, job.Type, "batches", job.ID)
+	if job.Type == AIJobTypeFace {
+		model := job.FaceModel
+		if _, valid := FaceAnalyzerVersionForModel(model); !valid {
+			model = DefaultFaceModel
+		}
+		directory = filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", job.ID)
+	}
+	return filepath.Join(directory, fmt.Sprintf("%08d.json", batchNumber))
+}
+
+// migrateLegacyFaceBatches moves the old shared face batch tree into the
+// profile directory recorded by each task. The operation is safe to retry if
+// the process stops partway through moving a task directory.
+func (s *AIJobService) migrateLegacyFaceBatches() error {
+	legacyRoot := filepath.Join(s.metadataDir, AIJobTypeFace, "batches")
+	jobs, err := os.ReadDir(legacyRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	for _, entry := range jobs {
+		if !entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		jobID := entry.Name()
+		sourceDir := filepath.Join(legacyRoot, jobID)
+		model := s.faceModelForBatch(jobID, sourceDir)
+		destinationDir := filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", jobID)
+		if err := os.MkdirAll(destinationDir, 0o755); err != nil {
+			return err
+		}
+		files, err := os.ReadDir(sourceDir)
+		if err != nil {
+			return err
+		}
+		for _, file := range files {
+			if file.IsDir() || file.Type()&os.ModeSymlink != 0 {
+				continue
+			}
+			source := filepath.Join(sourceDir, file.Name())
+			destination := filepath.Join(destinationDir, file.Name())
+			if _, statErr := os.Stat(destination); statErr == nil {
+				sourceData, sourceErr := os.ReadFile(source)
+				destinationData, destinationErr := os.ReadFile(destination)
+				if sourceErr != nil || destinationErr != nil || string(sourceData) != string(destinationData) {
+					return fmt.Errorf("conflicting face batch during profile migration: %s", file.Name())
+				}
+				if removeErr := os.Remove(source); removeErr != nil {
+					return removeErr
+				}
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				return statErr
+			} else if err := os.Rename(source, destination); err != nil {
+				return err
+			}
+		}
+		if err := os.Remove(sourceDir); err != nil && !errors.Is(err, os.ErrNotExist) {
+			remaining, readErr := os.ReadDir(sourceDir)
+			if readErr != nil {
+				return readErr
+			}
+			if len(remaining) == 0 {
+				return err
+			}
+		}
+	}
+	remaining, err := os.ReadDir(legacyRoot)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if len(remaining) > 0 {
+		return nil
+	}
+	return os.Remove(legacyRoot)
+}
+
+func (s *AIJobService) faceModelForBatch(jobID, directory string) string {
+	if job := s.jobs[jobID]; job != nil {
+		if _, valid := FaceAnalyzerVersionForModel(job.FaceModel); valid {
+			return job.FaceModel
+		}
+	}
+	files, _ := os.ReadDir(directory)
+	for _, file := range files {
+		if file.IsDir() || filepath.Ext(file.Name()) != ".json" || file.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(directory, file.Name()))
+		if err != nil {
+			continue
+		}
+		var batch aiJobBatch
+		if json.Unmarshal(data, &batch) != nil {
+			continue
+		}
+		if _, valid := FaceAnalyzerVersionForModel(batch.FaceModel); valid {
+			return batch.FaceModel
+		}
+		for _, record := range batch.Records {
+			if record.Type != AIJobTypeFace {
+				continue
+			}
+			if record.ModuleVersion == FaceAnalyzerBuffaloMVersion {
+				return FaceModelBuffaloM
+			}
+			if SupportsFaceAnalyzerVersion(record.ModuleVersion) {
+				return FaceModelQualityV2
+			}
+		}
+	}
+	return DefaultFaceModel
 }
 
 func (s *AIJobService) pauseAtBoundary(id string, runtimeState *aiJobRuntime) bool {
@@ -3077,7 +3214,7 @@ func (s *AIJobService) loadRecords() error {
 			if !validAIJobType(record.Type) || record.ResourceID == "" || record.ModuleVersion == "" {
 				continue
 			}
-			key := aiRecordKey(record.Type, record.ResourceID)
+			key := aiRecordKeyForRecord(record)
 			current, exists := s.records[key]
 			if !exists || record.UpdatedAt.After(current.UpdatedAt) {
 				s.records[key] = record
@@ -3199,6 +3336,21 @@ func aiWorkerCount() int {
 
 func aiRecordKey(moduleType, resourceID string) string {
 	return moduleType + "\x00" + resourceID
+}
+
+func aiRecordKeyForVersion(moduleType, version, resourceID string) string {
+	if moduleType != AIJobTypeFace {
+		return aiRecordKey(moduleType, resourceID)
+	}
+	model := FaceModelQualityV2
+	if version == FaceAnalyzerBuffaloMVersion {
+		model = FaceModelBuffaloM
+	}
+	return moduleType + "\x00" + model + "\x00" + resourceID
+}
+
+func aiRecordKeyForRecord(record AIAnalysisRecord) string {
+	return aiRecordKeyForVersion(record.Type, record.ModuleVersion, record.ResourceID)
 }
 
 func isAIJobActive(status string) bool {

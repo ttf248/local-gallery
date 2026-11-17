@@ -200,32 +200,47 @@ func ValidateStateBackup(backup StateBackup) error {
 	}
 	if backup.People != nil {
 		people := backup.People
-		if people.Version != 1 || len(people.Names) > 30000 || len(people.Hidden) > 30000 || len(people.Assignments) > 30000 {
+		if err := validatePeopleCorrectionSet(people.Version, people.Names, people.Hidden, people.Assignments); err != nil {
 			return ErrInvalidBackup
 		}
-		for id, name := range people.Names {
-			if !validPersonID(id) || len([]rune(name)) > 60 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+		for model, profile := range people.Profiles {
+			if model != FaceModelQualityV2 && model != FaceModelBuffaloM {
 				return ErrInvalidBackup
 			}
-		}
-		for id, hidden := range people.Hidden {
-			if !validPersonID(id) || !hidden {
-				return ErrInvalidBackup
-			}
-		}
-		for faceKey, personID := range people.Assignments {
-			separator := strings.LastIndex(faceKey, "#")
-			if separator <= 0 || !models.IsFileID(faceKey[:separator]) || !validPersonID(personID) {
-				return ErrInvalidBackup
-			}
-			faceIndex, err := strconv.Atoi(faceKey[separator+1:])
-			if err != nil || faceIndex < 0 || faceIndex > 100 {
+			if err := validatePeopleCorrectionSet(profile.Version, profile.Names, profile.Hidden, profile.Assignments); err != nil {
 				return ErrInvalidBackup
 			}
 		}
 	}
 	if backup.SmartAlbums != nil && !validSmartAlbumCorrections(*backup.SmartAlbums) {
 		return ErrInvalidBackup
+	}
+	return nil
+}
+
+func validatePeopleCorrectionSet(version int, names map[string]string, hidden map[string]bool, assignments map[string]string) error {
+	if version != peopleIndexVersion || len(names) > 30000 || len(hidden) > 30000 || len(assignments) > 30000 {
+		return ErrInvalidBackup
+	}
+	for id, name := range names {
+		if !validPersonID(id) || len([]rune(name)) > 60 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+			return ErrInvalidBackup
+		}
+	}
+	for id, isHidden := range hidden {
+		if !validPersonID(id) || !isHidden {
+			return ErrInvalidBackup
+		}
+	}
+	for faceKey, personID := range assignments {
+		separator := strings.LastIndex(faceKey, "#")
+		if separator <= 0 || !models.IsFileID(faceKey[:separator]) || !validPersonID(personID) {
+			return ErrInvalidBackup
+		}
+		faceIndex, err := strconv.Atoi(faceKey[separator+1:])
+		if err != nil || faceIndex < 0 || faceIndex > 100 {
+			return ErrInvalidBackup
+		}
 	}
 	return nil
 }
@@ -274,7 +289,13 @@ func (s *StateBackupService) Preview(backup StateBackup) (BackupPreview, error) 
 	_, skipped := s.coverPaths(state.catalog, backup.Covers)
 	peopleCount := 0
 	if backup.People != nil {
-		peopleCount = len(backup.People.Names) + len(backup.People.Hidden) + len(backup.People.Assignments)
+		if len(backup.People.Profiles) == 0 {
+			peopleCount = len(backup.People.Names) + len(backup.People.Hidden) + len(backup.People.Assignments)
+		} else {
+			for _, profile := range backup.People.Profiles {
+				peopleCount += len(profile.Names) + len(profile.Hidden) + len(profile.Assignments)
+			}
+		}
 	}
 	smartAlbumCount := 0
 	if backup.SmartAlbums != nil {

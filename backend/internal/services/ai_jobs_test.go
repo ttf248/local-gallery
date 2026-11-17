@@ -68,11 +68,11 @@ func TestRecordsIncludingStaleVersionsPreservesDataForIndexMigration(t *testing.
 			AIJobTypeFace: testJSONAnalyzer{module: AIJobTypeFace, version: FaceAnalyzerVersion},
 		},
 		records: map[string]AIAnalysisRecord{
-			aiRecordKey(AIJobTypeFace, "old"): {
+			aiRecordKeyForVersion(AIJobTypeFace, previousFaceAnalyzerVersion, "old"): {
 				Type: AIJobTypeFace, ResourceID: "old", ModuleVersion: previousFaceAnalyzerVersion,
 				Data: json.RawMessage(`{"old":true}`),
 			},
-			aiRecordKey(AIJobTypeFace, "current"): {
+			aiRecordKeyForVersion(AIJobTypeFace, FaceAnalyzerVersion, "current"): {
 				Type: AIJobTypeFace, ResourceID: "current", ModuleVersion: FaceAnalyzerVersion,
 				Data: json.RawMessage(`{"current":true}`),
 			},
@@ -86,6 +86,92 @@ func TestRecordsIncludingStaleVersionsPreservesDataForIndexMigration(t *testing.
 	if records := service.RecordsIncludingStaleVersions(AIJobTypeFace); len(records) != 2 ||
 		records[0].ResourceID != "current" || records[1].ResourceID != "old" {
 		t.Fatalf("migration records = %+v, want sorted current and old records", records)
+	}
+}
+
+func TestFaceAnalysisRecordsPersistIndependentlyByModel(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 1)
+	catalog := aiJobCatalog(root, files)
+	statePath := filepath.Join(t.TempDir(), "state", "ai_jobs.json")
+	metadataDir := filepath.Join(t.TempDir(), "derived", "metadata")
+	quality := AIAnalysisRecord{
+		Type: AIJobTypeFace, ResourceID: "same-resource", ModuleVersion: FaceAnalyzerVersion,
+		Status: "faces_found", Data: json.RawMessage(`{"model":"quality"}`),
+	}
+	buffalo := AIAnalysisRecord{
+		Type: AIJobTypeFace, ResourceID: "same-resource", ModuleVersion: FaceAnalyzerBuffaloMVersion,
+		Status: "faces_found", Data: json.RawMessage(`{"model":"buffalo"}`),
+	}
+	for _, item := range []struct {
+		model  string
+		record AIAnalysisRecord
+	}{
+		{model: FaceModelQualityV2, record: quality},
+		{model: FaceModelBuffaloM, record: buffalo},
+	} {
+		batch := aiJobBatch{JobID: "job-" + item.model, FaceModel: item.model, Number: 1, Records: []AIAnalysisRecord{item.record}}
+		path := filepath.Join(metadataDir, AIJobTypeFace, item.model, "batches", batch.JobID, "00000001.json")
+		if err := writeAIJSONAtomic(path, batch); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	service := newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{}, &FaceAnalyzer{})
+	if got := service.Records(AIJobTypeFace); len(got) != 1 || !strings.Contains(string(got[0].Data), `"quality"`) {
+		t.Fatalf("quality records = %+v", got)
+	}
+	if _, err := service.SetFaceModel(FaceModelBuffaloM); err != nil {
+		t.Fatal(err)
+	}
+	if got := service.Records(AIJobTypeFace); len(got) != 1 || !strings.Contains(string(got[0].Data), `"buffalo"`) {
+		t.Fatalf("Buffalo_m records = %+v", got)
+	}
+	shutdownAIJobService(t, service)
+
+	restarted := newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{}, &FaceAnalyzer{})
+	if got := restarted.Records(AIJobTypeFace); len(got) != 1 || !strings.Contains(string(got[0].Data), `"buffalo"`) {
+		t.Fatalf("restarted Buffalo_m records = %+v", got)
+	}
+	if _, err := restarted.SetFaceModel(FaceModelQualityV2); err != nil {
+		t.Fatal(err)
+	}
+	if got := restarted.Records(AIJobTypeFace); len(got) != 1 || !strings.Contains(string(got[0].Data), `"quality"`) {
+		t.Fatalf("restored quality records = %+v", got)
+	}
+}
+
+func TestLegacyFaceBatchesMigrateIntoRecordedModelProfile(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 1)
+	catalog := aiJobCatalog(root, files)
+	statePath := filepath.Join(t.TempDir(), "state", "ai_jobs.json")
+	metadataDir := filepath.Join(t.TempDir(), "derived", "metadata")
+	legacyBatch := aiJobBatch{
+		JobID: "legacy-buffalo-job", Number: 1,
+		Records: []AIAnalysisRecord{{
+			Type: AIJobTypeFace, ResourceID: "same-resource", ModuleVersion: FaceAnalyzerBuffaloMVersion,
+			Status: "faces_found", Data: json.RawMessage(`{"model":"buffalo"}`),
+		}},
+	}
+	legacyPath := filepath.Join(metadataDir, AIJobTypeFace, "batches", legacyBatch.JobID, "00000001.json")
+	if err := writeAIJSONAtomic(legacyPath, legacyBatch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{}, &FaceAnalyzer{})
+	profilePath := filepath.Join(metadataDir, AIJobTypeFace, FaceModelBuffaloM, "batches", legacyBatch.JobID, "00000001.json")
+	if _, err := os.Stat(profilePath); err != nil {
+		t.Fatalf("legacy batch was not moved to Buffalo_m profile: %v", err)
+	}
+	if _, err := os.Stat(legacyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy batch still exists: %v", err)
+	}
+	if _, err := service.SetFaceModel(FaceModelBuffaloM); err != nil {
+		t.Fatal(err)
+	}
+	if got := service.Records(AIJobTypeFace); len(got) != 1 || !strings.Contains(string(got[0].Data), `"buffalo"`) {
+		t.Fatalf("migrated Buffalo_m records = %+v", got)
 	}
 }
 

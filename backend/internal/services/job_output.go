@@ -1,6 +1,8 @@
 package services
 
 import (
+	"errors"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -100,5 +102,19 @@ func (s *AIJobService) JobOutputDir(jobID string) (string, string, bool) {
 	if !ok {
 		return "", "", false
 	}
-	return filepath.Join(s.metadataDir, job.Type, "batches", job.ID), job.Type, true
+	directory := filepath.Join(s.metadataDir, job.Type, "batches", job.ID)
+	if job.Type == AIJobTypeFace {
+		model := job.FaceModel
+		if _, valid := FaceAnalyzerVersionForModel(model); !valid {
+			model = DefaultFaceModel
+		}
+		directory = filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", job.ID)
+		if _, err := os.Stat(directory); errors.Is(err, os.ErrNotExist) {
+			legacyDirectory := filepath.Join(s.metadataDir, AIJobTypeFace, "batches", job.ID)
+			if _, legacyErr := os.Stat(legacyDirectory); legacyErr == nil {
+				directory = legacyDirectory
+			}
+		}
+	}
+	return directory, job.Type, true
 }
