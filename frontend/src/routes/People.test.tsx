@@ -92,14 +92,17 @@ describe("人物相册", () => {
         {
           id: "p_123456",
           name: "旅行同伴",
-          faceCount: 3,
-          photoCount: 2,
-          folderCount: 3,
+          faceCount: 6,
+          photoCount: 6,
+          folderCount: 2,
           hidden: false,
         },
       ],
       totalGroups: 1,
-      singleFolderGroups: 1,
+      filteredGroups: 1,
+      minimumFolderCount: 2,
+      minimumFolderPhotos: 3,
+      minimumFolderPhotoSharePercent: 10,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
       revision: 2,
@@ -107,16 +110,16 @@ describe("人物相册", () => {
     renderPeople();
 
     expect(await screen.findByText("旅行同伴")).toBeInTheDocument();
-    expect(screen.getByText(/3\s*张脸/)).toBeInTheDocument();
+    expect(screen.getByText(/6\s*张脸/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        "跨文件夹人物 1 组 · 已隐藏单文件夹 1 组 · 按照片数排序",
+        "跨文件夹人物 1 组 · 已隐藏目录分布不足 1 组 · 按照片数排序",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/3 个文件夹 · 3 张脸/)).toBeInTheDocument();
+    expect(screen.getByText(/2 个一级目录 · 6 张脸/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        "只展示出现在至少 2 个相册文件夹中的人物组；卡片标出所在文件夹数。",
+        "只展示在至少 2 个一级来源目录中都有稳定分布的人物组（每个目录至少 3 张，且占组内照片至少 10%）；卡片标出达标目录数。",
       ),
     ).toBeInTheDocument();
     expect(mocks.people).toHaveBeenCalledWith(false, "photos");
@@ -125,12 +128,12 @@ describe("人物相册", () => {
       screen.getByText(
         (_content, element) =>
           element?.tagName === "SPAN" &&
-          element.textContent?.replace(/\s+/g, "") === "2张照片",
+          element.textContent?.replace(/\s+/g, "") === "6张照片",
       ),
     ).toBeInTheDocument();
   });
 
-  it("所有候选都只在一个文件夹时说明已隐藏且不引导重复分析", async () => {
+  it("所有候选的目录分布都不足时说明已隐藏且不引导重复分析", async () => {
     mocks.list.mockResolvedValue({
       ok: true,
       snapshot: { settings: { peopleEnabled: true } },
@@ -139,7 +142,10 @@ describe("人物相册", () => {
       ok: true,
       people: [],
       totalGroups: 0,
-      singleFolderGroups: 17,
+      filteredGroups: 17,
+      minimumFolderCount: 2,
+      minimumFolderPhotos: 3,
+      minimumFolderPhotoSharePercent: 10,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
       revision: 2,
@@ -147,10 +153,10 @@ describe("人物相册", () => {
     renderPeople();
 
     expect(
-      await screen.findByText("暂不展示单文件夹人物组"),
+      await screen.findByText("暂不展示目录分布不足的人物组"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/有 17 组人物只出现在一个相册文件夹中，已暂时隐藏/),
+      screen.getByText(/有 17 组人物未达到跨目录展示条件，已暂时隐藏/),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "打开任务中心" }),
@@ -211,7 +217,7 @@ describe("人物相册", () => {
         hidden: false,
       })),
       totalGroups: 83,
-      singleFolderGroups: 20,
+      filteredGroups: 20,
       limit: 50,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
@@ -221,7 +227,7 @@ describe("人物相册", () => {
 
     expect(
       await screen.findByText(
-        /照片数最多的跨文件夹人物 50 \/ 共 83 组 · 已隐藏单文件夹 20 组 · 按照片数排序/,
+        /照片数最多的跨文件夹人物 50 \/ 共 83 组 · 已隐藏目录分布不足 20 组 · 按照片数排序/,
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("人物 0")).toBeInTheDocument();

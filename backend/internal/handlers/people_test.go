@@ -33,7 +33,7 @@ func (peopleHandlerAnalyzer) AnalyzeBatch(_ context.Context, inputs []services.A
 	outputs := make([]services.AIAnalysisOutput, len(inputs))
 	for index, input := range inputs {
 		axis := 0
-		if filepath.Base(input.Path) == "other.jpg" || filepath.Base(input.Path) == "other-copy.jpg" {
+		if strings.HasPrefix(filepath.Base(input.Path), "other") {
 			axis = 1
 		}
 		outputs[index] = peopleHandlerOutput(axis)
@@ -60,8 +60,8 @@ func peopleHandlerOutput(axis int) services.AIAnalysisOutput {
 
 func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	root := t.TempDir()
-	firstAlbumPath := filepath.Join(root, "photos", "event-a")
-	secondAlbumPath := filepath.Join(root, "photos", "event-b")
+	firstAlbumPath := filepath.Join(root, "event-a")
+	secondAlbumPath := filepath.Join(root, "event-b")
 	for _, albumPath := range []string{firstAlbumPath, secondAlbumPath} {
 		if err := os.MkdirAll(albumPath, 0o755); err != nil {
 			t.Fatal(err)
@@ -69,9 +69,17 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	}
 	files := []string{
 		filepath.Join(firstAlbumPath, "first.jpg"),
+		filepath.Join(firstAlbumPath, "first-2.jpg"),
+		filepath.Join(firstAlbumPath, "first-3.jpg"),
 		filepath.Join(secondAlbumPath, "second.jpg"),
+		filepath.Join(secondAlbumPath, "second-2.jpg"),
+		filepath.Join(secondAlbumPath, "second-3.jpg"),
 		filepath.Join(firstAlbumPath, "other.jpg"),
+		filepath.Join(firstAlbumPath, "other-2.jpg"),
+		filepath.Join(firstAlbumPath, "other-3.jpg"),
 		filepath.Join(secondAlbumPath, "other-copy.jpg"),
+		filepath.Join(secondAlbumPath, "other-copy-2.jpg"),
+		filepath.Join(secondAlbumPath, "other-copy-3.jpg"),
 	}
 	var encodedImage bytes.Buffer
 	if err := jpeg.Encode(&encodedImage, image.NewRGBA(image.Rect(0, 0, 640, 480)), nil); err != nil {
@@ -88,11 +96,11 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 		Albums: []models.Album{
 			{
 				Type: "album", Name: "人物测试 A", Path: firstAlbumPath, SourceRoot: root,
-				ContentKind: string(models.ContentKindPhoto), ImageFiles: []string{files[0], files[2]}, CoverImage: files[0],
+				ContentKind: string(models.ContentKindPhoto), ImageFiles: []string{files[0], files[1], files[2], files[6], files[7], files[8]}, CoverImage: files[0],
 			},
 			{
 				Type: "album", Name: "人物测试 B", Path: secondAlbumPath, SourceRoot: root,
-				ContentKind: string(models.ContentKindPhoto), ImageFiles: []string{files[1], files[3]}, CoverImage: files[1],
+				ContentKind: string(models.ContentKindPhoto), ImageFiles: []string{files[3], files[4], files[5], files[9], files[10], files[11]}, CoverImage: files[3],
 			},
 		},
 	}, []string{root})
@@ -180,7 +188,7 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	}
 	var repeated *services.PersonGroup
 	for index := range listBody.People {
-		if listBody.People[index].FaceCount == 2 {
+		if listBody.People[index].FaceCount == 6 {
 			repeated = &listBody.People[index]
 		}
 	}
@@ -208,10 +216,10 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	if err := json.Unmarshal(mediaData, &mediaBody); err != nil {
 		t.Fatal(err)
 	}
-	if mediaBody.Page.Total != 2 || len(mediaBody.Page.Faces) != 2 {
+	if mediaBody.Page.Total != 6 || len(mediaBody.Page.Faces) != 6 {
 		t.Fatalf("person media page = %+v", mediaBody.Page)
 	}
-	if len(mediaBody.Page.Items) != 2 || mediaBody.Page.Items[0].Width != 640 || mediaBody.Page.Items[0].Height != 480 {
+	if len(mediaBody.Page.Items) != 6 || mediaBody.Page.Items[0].Width != 640 || mediaBody.Page.Items[0].Height != 480 {
 		t.Fatalf("person media dimensions = %+v, want 640x480", mediaBody.Page.Items)
 	}
 
@@ -262,15 +270,23 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 }
 
 func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
-	const groupCount = 52
-	const singleFolderGroupIndex = 10
+	const groupCount = 70
+	const singleFolderGroupCount = 10
+	const sparseFolderGroupIndex = 10
+	const sameTopLevelFolderGroupIndex = 11
+	const lowShareGroupIndex = 30
 	root := t.TempDir()
-	photoRoot := filepath.Join(root, "photos")
-	folderNames := []string{"folder-a", "folder-b", "single-folder"}
+	folderPathsByName := map[string]string{
+		"folder-a":         filepath.Join("2015", "event-a"),
+		"folder-a-sibling": filepath.Join("2015", "event-b"),
+		"folder-b":         filepath.Join("2016", "event-a"),
+		"single-folder":    filepath.Join("2015", "single-folder"),
+	}
+	folderNames := []string{"folder-a", "folder-a-sibling", "folder-b", "single-folder"}
 	folderPaths := make(map[string]string, len(folderNames))
 	folderFiles := make(map[string][]string, len(folderNames))
 	for _, name := range folderNames {
-		path := filepath.Join(photoRoot, name)
+		path := filepath.Join(root, folderPathsByName[name])
 		if err := os.MkdirAll(path, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -282,8 +298,20 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 	for groupIndex := 0; groupIndex < groupCount; groupIndex++ {
 		for photoIndex := 0; photoIndex <= groupIndex; photoIndex++ {
 			folderName := "folder-a"
-			if groupIndex == singleFolderGroupIndex {
+			if groupIndex < singleFolderGroupCount {
 				folderName = "single-folder"
+			} else if groupIndex == sparseFolderGroupIndex {
+				if photoIndex >= groupIndex {
+					folderName = "folder-b"
+				}
+			} else if groupIndex == sameTopLevelFolderGroupIndex {
+				if photoIndex >= groupIndex/2+1 {
+					folderName = "folder-a-sibling"
+				}
+			} else if groupIndex == lowShareGroupIndex {
+				if photoIndex >= groupIndex-2 {
+					folderName = "folder-b"
+				}
 			} else if photoIndex%2 == 1 {
 				folderName = "folder-b"
 			}
@@ -330,24 +358,28 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 
 	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
 	var listBody struct {
-		People             []services.PersonGroup `json:"people"`
-		TotalGroups        int                    `json:"totalGroups"`
-		SingleFolderGroups int                    `json:"singleFolderGroups"`
-		MinimumFolderCount int                    `json:"minimumFolderCount"`
-		Limit              int                    `json:"limit"`
-		CentroidThreshold  float64                `json:"centroidThreshold"`
-		AnchorThreshold    float64                `json:"anchorThreshold"`
-		GroupingLimited    *bool                  `json:"groupingLimited"`
-		Sort               string                 `json:"sort"`
+		People                         []services.PersonGroup `json:"people"`
+		TotalGroups                    int                    `json:"totalGroups"`
+		FilteredGroups                 int                    `json:"filteredGroups"`
+		MinimumFolderCount             int                    `json:"minimumFolderCount"`
+		MinimumFolderPhotos            int                    `json:"minimumFolderPhotos"`
+		MinimumFolderPhotoSharePercent int                    `json:"minimumFolderPhotoSharePercent"`
+		Limit                          int                    `json:"limit"`
+		CentroidThreshold              float64                `json:"centroidThreshold"`
+		AnchorThreshold                float64                `json:"anchorThreshold"`
+		GroupingLimited                *bool                  `json:"groupingLimited"`
+		Sort                           string                 `json:"sort"`
 	}
 	decodePeopleBody(t, list, &listBody)
-	if len(listBody.People) != 50 || listBody.TotalGroups != 50 || listBody.SingleFolderGroups != 2 ||
-		listBody.MinimumFolderCount != peopleListMinimumFolderCount || listBody.Limit != 50 ||
+	if len(listBody.People) != 50 || listBody.TotalGroups != 57 || listBody.FilteredGroups != 13 ||
+		listBody.MinimumFolderCount != peopleListMinimumFolderCount ||
+		listBody.MinimumFolderPhotos != peopleListMinimumFolderPhotos ||
+		listBody.MinimumFolderPhotoSharePercent != peopleListMinimumFolderSharePercent || listBody.Limit != 50 ||
 		listBody.CentroidThreshold != services.PeopleGroupingCentroidThreshold ||
 		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil || listBody.Sort != peopleSortPhotos {
-		t.Fatalf("top people response = %d groups, total %d, single-folder %d, limit %d", len(listBody.People), listBody.TotalGroups, listBody.SingleFolderGroups, listBody.Limit)
+		t.Fatalf("top people response = %d groups, total %d, filtered %d, limit %d", len(listBody.People), listBody.TotalGroups, listBody.FilteredGroups, listBody.Limit)
 	}
-	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 2 ||
+	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 20 ||
 		listBody.People[0].FolderCount != 2 || listBody.People[49].FolderCount != 2 {
 		t.Fatalf("returned photo/folder range = %d/%d..%d/%d", listBody.People[0].PhotoCount, listBody.People[0].FolderCount, listBody.People[49].PhotoCount, listBody.People[49].FolderCount)
 	}

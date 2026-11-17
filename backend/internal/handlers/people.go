@@ -24,6 +24,8 @@ const peopleSearchLimit = 20
 const peopleSortPhotos = "photos"
 const peopleSortReview = "review"
 const peopleListMinimumFolderCount = 2
+const peopleListMinimumFolderPhotos = 3
+const peopleListMinimumFolderSharePercent = 10
 
 // PeopleHandler lists current photo-only person albums and clears all face-derived data.
 func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, catalog *services.ResourceCatalog, validatePath func(string) (string, error)) fiber.Handler {
@@ -100,7 +102,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			return c.JSON(response)
 		}
 
-		folderCounts := people.GroupFolderCounts(func(resourceID string) string {
+		folderPhotoCounts := people.GroupFolderPhotoCounts(func(resourceID string) string {
 			if !snapshot.IsPhotoImage(resourceID) {
 				return ""
 			}
@@ -108,21 +110,37 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			if !exists {
 				return ""
 			}
-			return item.AlbumID
+			album, exists := snapshot.Lookup(item.AlbumID)
+			if !exists {
+				return ""
+			}
+			relativePath := strings.Trim(album.RelativePath, "/")
+			if firstFolder, _, found := strings.Cut(relativePath, "/"); found {
+				relativePath = firstFolder
+			}
+			if relativePath == "" {
+				return album.RootID
+			}
+			return album.RootID + "\x00" + relativePath
 		})
 		if sortOrder == peopleSortReview {
-			groups, total = people.SearchGroupsForReview(query, len(folderCounts)+1, includeHidden, snapshot.IsPhotoImage)
+			groups, total = people.SearchGroupsForReview(query, len(folderPhotoCounts)+1, includeHidden, snapshot.IsPhotoImage)
 		} else {
 			groups, total = people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
 		}
 
 		visibleGroups := make([]services.PersonGroup, 0, min(limit, len(groups)))
-		singleFolderGroups := 0
+		filteredGroups := 0
 		visibleTotal := 0
 		for _, group := range groups {
-			group.FolderCount = folderCounts[group.ID]
+			for _, photoCount := range folderPhotoCounts[group.ID] {
+				if photoCount >= peopleListMinimumFolderPhotos &&
+					photoCount*100 >= group.PhotoCount*peopleListMinimumFolderSharePercent {
+					group.FolderCount++
+				}
+			}
 			if group.FolderCount < peopleListMinimumFolderCount {
-				singleFolderGroups++
+				filteredGroups++
 				continue
 			}
 			visibleTotal++
@@ -131,12 +149,14 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			}
 		}
 		if total > len(groups) {
-			singleFolderGroups += total - len(groups)
+			filteredGroups += total - len(groups)
 		}
 		response["people"] = visibleGroups
 		response["totalGroups"] = visibleTotal
-		response["singleFolderGroups"] = singleFolderGroups
+		response["filteredGroups"] = filteredGroups
 		response["minimumFolderCount"] = peopleListMinimumFolderCount
+		response["minimumFolderPhotos"] = peopleListMinimumFolderPhotos
+		response["minimumFolderPhotoSharePercent"] = peopleListMinimumFolderSharePercent
 		return c.JSON(response)
 	}
 }

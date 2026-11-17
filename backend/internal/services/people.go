@@ -1707,11 +1707,11 @@ func (s *PeopleService) AllFaces() []PersonFace {
 	return result
 }
 
-// GroupFolderCounts returns the number of distinct source folders represented
-// in each current person group. The callback must return an opaque stable folder
-// key for a photo resource and an empty string for resources outside the photo library.
-func (s *PeopleService) GroupFolderCounts(folderForResource func(string) string) map[string]int {
-	counts := make(map[string]int)
+// GroupFolderPhotoCounts returns distinct-photo counts per opaque source-folder
+// key for each current person group. The callback returns an empty key for
+// resources outside the current photo library.
+func (s *PeopleService) GroupFolderPhotoCounts(folderForResource func(string) string) map[string]map[string]int {
+	counts := make(map[string]map[string]int)
 	if folderForResource == nil {
 		return counts
 	}
@@ -1720,7 +1720,7 @@ func (s *PeopleService) GroupFolderCounts(folderForResource func(string) string)
 	defer s.mu.RUnlock()
 
 	resourceFolders := make(map[string]string)
-	foldersByGroup := make(map[string]map[string]struct{})
+	seenGroupResources := make(map[string]struct{})
 	for _, face := range s.faces {
 		folder, resolved := resourceFolders[face.ResourceID]
 		if !resolved {
@@ -1731,13 +1731,15 @@ func (s *PeopleService) GroupFolderCounts(folderForResource func(string) string)
 			continue
 		}
 		groupID := s.effectivePersonIDLocked(face)
-		if foldersByGroup[groupID] == nil {
-			foldersByGroup[groupID] = make(map[string]struct{})
+		groupResourceKey := groupID + "\x00" + face.ResourceID
+		if _, counted := seenGroupResources[groupResourceKey]; counted {
+			continue
 		}
-		foldersByGroup[groupID][folder] = struct{}{}
-	}
-	for groupID, folders := range foldersByGroup {
-		counts[groupID] = len(folders)
+		seenGroupResources[groupResourceKey] = struct{}{}
+		if counts[groupID] == nil {
+			counts[groupID] = make(map[string]int)
+		}
+		counts[groupID][folder]++
 	}
 	return counts
 }

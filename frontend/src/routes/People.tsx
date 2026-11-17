@@ -52,9 +52,13 @@ function PeopleList() {
   });
   const groups = query.data?.people ?? [];
   const totalGroups = query.data?.totalGroups ?? groups.length;
-  const singleFolderGroups = query.data?.singleFolderGroups ?? 0;
-  const onlySingleFolderGroups =
-    peopleEnabled && totalGroups === 0 && singleFolderGroups > 0;
+  const filteredGroups = query.data?.filteredGroups ?? 0;
+  const minimumFolderCount = query.data?.minimumFolderCount ?? 2;
+  const minimumFolderPhotos = query.data?.minimumFolderPhotos ?? 3;
+  const minimumFolderPhotoSharePercent =
+    query.data?.minimumFolderPhotoSharePercent ?? 10;
+  const onlyFilteredGroups =
+    peopleEnabled && totalGroups === 0 && filteredGroups > 0;
 
   return (
     <div className="h-full overflow-y-auto pb-12">
@@ -87,20 +91,20 @@ function PeopleList() {
         <EmptyState
           title={
             peopleEnabled
-              ? onlySingleFolderGroups
-                ? "暂不展示单文件夹人物组"
+              ? onlyFilteredGroups
+                ? "暂不展示目录分布不足的人物组"
                 : "还没有人物候选组"
               : "人物分析默认关闭"
           }
           description={
             peopleEnabled
-              ? onlySingleFolderGroups
-                ? `有 ${singleFolderGroups.toLocaleString()} 组人物只出现在一个相册文件夹中，已暂时隐藏；至少出现在 2 个文件夹中的组才会展示。`
+              ? onlyFilteredGroups
+                ? `有 ${filteredGroups.toLocaleString()} 组人物未达到跨目录展示条件，已暂时隐藏；至少覆盖 ${minimumFolderCount} 个一级来源目录，且每个目录至少有 ${minimumFolderPhotos} 张照片并占该组照片的 ${minimumFolderPhotoSharePercent}%。`
                 : "请在任务中心运行人脸识别任务；分析只在本机处理。"
               : "前往任务中心显式启用人物分析，再启动人脸识别任务。"
           }
           action={
-            onlySingleFolderGroups ? undefined : (
+            onlyFilteredGroups ? undefined : (
               <Link className="btn btn-outline" to="/tasks/plan">
                 打开任务中心
               </Link>
@@ -118,8 +122,8 @@ function PeopleList() {
                 : totalGroups > groups.length
                   ? `优先审查的跨文件夹人物 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
                   : `跨文件夹人物 ${totalGroups.toLocaleString()} 组`}
-              {singleFolderGroups > 0
-                ? ` · 已隐藏单文件夹 ${singleFolderGroups.toLocaleString()} 组`
+              {filteredGroups > 0
+                ? ` · 已隐藏目录分布不足 ${filteredGroups.toLocaleString()} 组`
                 : ""}
               {sort === "photos" ? " · 按照片数排序" : " · 按复核线索排序"}
             </p>
@@ -170,7 +174,10 @@ function PeopleList() {
             </p>
           ) : null}
           <p className="mb-4 text-meta text-fg-muted">
-            只展示出现在至少 2 个相册文件夹中的人物组；卡片标出所在文件夹数。
+            只展示在至少 {minimumFolderCount}{" "}
+            个一级来源目录中都有稳定分布的人物组（每个目录至少{" "}
+            {minimumFolderPhotos} 张，且占组内照片至少{" "}
+            {minimumFolderPhotoSharePercent}%）；卡片标出达标目录数。
           </p>
           {/* 密度跟着相册网格走（列宽下限 260px）：固定三列时一张脸
               占掉四百像素，一屏只看得到六个人；这一页有五十个候选组，
@@ -225,7 +232,7 @@ function PersonCard({
           </h2>
           <p className="mt-0.5 text-meta text-fg-muted">
             {person.folderCount != null
-              ? `${person.folderCount.toLocaleString()} 个文件夹 · `
+              ? `${person.folderCount.toLocaleString()} 个一级目录 · `
               : ""}
             {person.faceCount.toLocaleString()} 张脸
             {person.hidden ? " · 已隐藏" : ""}

@@ -845,8 +845,10 @@ export const aiJobsApi = {
       ok: boolean;
       people: PersonGroup[];
       totalGroups: number;
-      singleFolderGroups?: number;
+      filteredGroups?: number;
       minimumFolderCount?: number;
+      minimumFolderPhotos?: number;
+      minimumFolderPhotoSharePercent?: number;
       limit: number;
       centroidThreshold: number;
       anchorThreshold: number;
@@ -858,8 +860,10 @@ export const aiJobsApi = {
       ok: boolean;
       people: PersonGroup[];
       totalGroups: number;
-      singleFolderGroups?: number;
+      filteredGroups?: number;
       minimumFolderCount?: number;
+      minimumFolderPhotos?: number;
+      minimumFolderPhotoSharePercent?: number;
       limit: number;
       centroidThreshold: number;
       anchorThreshold: number;
