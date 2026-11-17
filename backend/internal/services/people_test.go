@@ -618,6 +618,135 @@ func TestPeopleServicePreventsCentroidDriftFromChainingIdentities(t *testing.T) 
 	}
 }
 
+func TestPeopleServiceConsolidatesReciprocallyMatchedIdentityClusters(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	records := make([]AIAnalysisRecord, 0, 42)
+	anchor := make([]float32, peopleBuffaloMDimension)
+	anchor[0] = float32(math.Cos(-40 * math.Pi / 180))
+	anchor[1] = float32(math.Sin(-40 * math.Pi / 180))
+	records = append(records, peopleBuffaloTestRecord("a-anchor", anchor))
+	for index := 0; index < 20; index++ {
+		axis := index + 2
+		records = append(records,
+			peopleBuffaloTestRecord(fmt.Sprintf("b-first-%02d", index), peopleBuffaloAngle(0, axis)),
+		)
+	}
+	seed := peopleBuffaloAngle(20, 22)
+	records = append(records, peopleBuffaloTestRecord("z-seed", seed))
+	for index := 0; index < 20; index++ {
+		axis := index + 2
+		records = append(records,
+			peopleBuffaloTestRecord(fmt.Sprintf("z-pair-%02d", index), peopleBuffaloAngle(20, axis)),
+		)
+	}
+
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	if len(people.clusters) != 1 {
+		t.Fatalf("reciprocal cross-cluster evidence left %d groups, want one", len(people.clusters))
+	}
+	group := people.clusters[people.AllFaces()[0].PersonID]
+	if group == nil || group.count != len(records) {
+		t.Fatalf("consolidated faces = %d, want %d", len(people.AllFaces()), len(records))
+	}
+}
+
+func TestPeopleClusterConsolidationRequiresCompleteLinkEvidence(t *testing.T) {
+	evidence := map[string]peopleClusterMergeEvidence{
+		peopleClusterPairKey("a", "b"): {leftID: "a", rightID: "b"},
+		peopleClusterPairKey("b", "c"): {leftID: "b", rightID: "c"},
+	}
+	if peopleClusterComponentsHaveEvidence([]string{"a", "b"}, []string{"c"}, evidence) {
+		t.Fatal("transitive A-B-C chain merged without direct A-C evidence")
+	}
+	evidence[peopleClusterPairKey("a", "c")] = peopleClusterMergeEvidence{leftID: "a", rightID: "c"}
+	if !peopleClusterComponentsHaveEvidence([]string{"a", "b"}, []string{"c"}, evidence) {
+		t.Fatal("fully supported cluster components did not pass complete-link evidence")
+	}
+}
+
+func TestPeopleClusterConsolidationRejectsSharedPhotos(t *testing.T) {
+	left := &peopleCluster{
+		anchor:    peopleClusterAnchor{embedding: []float32{1}},
+		centroid:  []float32{1},
+		resources: map[string]struct{}{"shared": {}},
+	}
+	right := &peopleCluster{
+		anchor:    peopleClusterAnchor{embedding: []float32{1}},
+		centroid:  []float32{1},
+		resources: map[string]struct{}{"shared": {}},
+	}
+	people := &PeopleService{}
+	if count, _, ok := people.peopleClusterMutualMatches(left, right, nil, nil); ok || count != 0 {
+		t.Fatalf("shared-photo clusters returned evidence (%d, %v)", count, ok)
+	}
+}
+
+func TestPeopleClusterConsolidationChecksEveryOriginAfterIncrementalMerge(t *testing.T) {
+	people := &PeopleService{faces: make(map[string]PersonFace)}
+	left := &peopleCluster{
+		anchor:    peopleClusterAnchor{embedding: []float32{1, 0}},
+		centroid:  []float32{1, 0},
+		count:     4,
+		members:   make(map[string]struct{}),
+		resources: map[string]struct{}{"left-a1": {}, "left-a2": {}, "left-b1": {}, "left-b2": {}},
+	}
+	right := &peopleCluster{
+		anchor:    peopleClusterAnchor{embedding: []float32{1, 0}},
+		centroid:  []float32{1, 0},
+		count:     2,
+		members:   make(map[string]struct{}),
+		resources: map[string]struct{}{"right-1": {}, "right-2": {}},
+	}
+	faces := []PersonFace{
+		{Key: "left-a1#0", PersonID: "left", ResourceID: "left-a1", originID: "origin-a", embedding: []float32{1, 0}},
+		{Key: "left-a2#0", PersonID: "left", ResourceID: "left-a2", originID: "origin-a", embedding: []float32{0.98, 0.2}},
+		{Key: "left-b1#0", PersonID: "left", ResourceID: "left-b1", originID: "origin-b", embedding: []float32{0, 1}},
+		{Key: "left-b2#0", PersonID: "left", ResourceID: "left-b2", originID: "origin-b", embedding: []float32{-0.2, 0.98}},
+		{Key: "right-1#0", PersonID: "right", ResourceID: "right-1", originID: "origin-right", embedding: []float32{1, 0}},
+		{Key: "right-2#0", PersonID: "right", ResourceID: "right-2", originID: "origin-right", embedding: []float32{0.98, 0.2}},
+	}
+	for _, face := range faces {
+		people.faces[face.Key] = face
+		if face.PersonID == "left" {
+			left.members[face.Key] = struct{}{}
+		} else {
+			right.members[face.Key] = struct{}{}
+		}
+	}
+
+	count, _, ok := people.peopleClusterMutualMatches(left, right,
+		people.peopleClusterMatchSamples(left), people.peopleClusterMatchSamples(right))
+	if !ok || count != 0 {
+		t.Fatalf("incremental candidate passed despite one unmatched origin: matches=%d, evidenceValid=%v", count, ok)
+	}
+}
+
+func peopleBuffaloTestRecord(resourceID string, vector []float32) AIAnalysisRecord {
+	record := peopleTestRecord(resourceID, vector)
+	record.ModuleVersion = FaceAnalyzerBuffaloMVersion
+	return record
+}
+
+func peopleBuffaloAngle(degrees float64, markerAxis int) []float32 {
+	vector := make([]float32, peopleBuffaloMDimension)
+	vector[0] = float32(math.Cos(degrees * math.Pi / 180))
+	vector[1] = float32(math.Sin(degrees * math.Pi / 180))
+	if markerAxis >= 2 {
+		vector[markerAxis] = 0.05
+	}
+	return vector
+}
+
 func TestPeopleServiceRebuildRestoresTheSameImmutableAnchor(t *testing.T) {
 	root := t.TempDir()
 	statePath := filepath.Join(root, "state.json")
@@ -635,10 +764,22 @@ func TestPeopleServiceRebuildRestoresTheSameImmutableAnchor(t *testing.T) {
 		t.Fatal(err)
 	}
 	firstAnchor := first.clusters[first.faces["a_seed#0"].PersonID].anchor.key
+	firstOrigins := make(map[string]string, len(first.faces))
+	for key, face := range first.faces {
+		firstOrigins[key] = face.originID
+	}
 
 	restarted, err := OpenPeopleService(statePath, indexPath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(restarted.cachedOrigins) != len(firstOrigins) {
+		t.Fatalf("cached origin count = %d, want %d", len(restarted.cachedOrigins), len(firstOrigins))
+	}
+	for key, originID := range firstOrigins {
+		if restarted.cachedOrigins[key] != originID {
+			t.Fatalf("cached origin for %q = %q, want %q", key, restarted.cachedOrigins[key], originID)
+		}
 	}
 	if err := restarted.Sync(records); err != nil {
 		t.Fatal(err)

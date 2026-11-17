@@ -20,7 +20,7 @@ import (
 
 const (
 	peopleIndexVersion       = 1
-	peopleGroupingVersion    = 14
+	peopleGroupingVersion    = 17
 	peopleEmbeddingDimension = 128
 	peopleBuffaloMDimension  = 512
 	faceDetectionMinScoreM   = float32(0.5)
@@ -38,6 +38,23 @@ const peopleGroupingANNScoreMargin = 0.001
 // immutable seed, preventing slowly drifting centroids from chaining identities.
 const PeopleGroupingAnchorThreshold = 0.72
 
+// PeopleGroupingMergeCentroidThreshold identifies separate clusters that may
+// represent the same identity after changes in age, pose, or image quality.
+const PeopleGroupingMergeCentroidThreshold = 0.82
+
+// PeopleGroupingMergeFaceThreshold is the minimum similarity for reciprocal
+// nearest-face evidence between two independent clusters.
+const PeopleGroupingMergeFaceThreshold = 0.72
+
+const (
+	peopleGroupingMergeCandidateLimit        = 64
+	peopleGroupingMergeMaximumSampleFaces    = 256
+	peopleGroupingMergeMinimumFaces          = 10
+	peopleGroupingMergeMinimumMutualMatches  = 2
+	peopleGroupingMergeMutualMatchRatio      = 0.05
+	peopleGroupingMergeMinimumMeanSimilarity = 0.75
+)
+
 var (
 	ErrPersonNotFound = errors.New("person not found")
 	ErrInvalidPerson  = errors.New("invalid person change")
@@ -54,6 +71,7 @@ type PersonFace struct {
 	MTimeNs    int64     `json:"-"`
 	embedding  []float32
 	recordHash string
+	originID   string
 }
 
 type PersonGroup struct {
@@ -106,6 +124,7 @@ type peopleFaceDisk struct {
 	ResourceID string    `json:"resourceId"`
 	FaceIndex  int       `json:"faceIndex"`
 	ClusterID  string    `json:"clusterId"`
+	OriginID   string    `json:"originId"`
 	Box        []float32 `json:"box"`
 	Score      float32   `json:"score"`
 	Size       int64     `json:"size"`
@@ -156,6 +175,7 @@ type PeopleService struct {
 	previousIDs        map[string]string
 	cachedIDs          map[string]string
 	cachedHashes       map[string]string
+	cachedOrigins      map[string]string
 	manual             peopleManualState
 	manualByModel      map[string]peopleManualState
 	comparisons        int
@@ -176,6 +196,7 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 		previousIDs:        make(map[string]string),
 		cachedIDs:          make(map[string]string),
 		cachedHashes:       make(map[string]string),
+		cachedOrigins:      make(map[string]string),
 		manual:             emptyPeopleManualState(),
 		manualByModel:      make(map[string]peopleManualState),
 	}
@@ -208,6 +229,7 @@ func (s *PeopleService) loadProfileIndexLocked() error {
 	s.previousIDs = make(map[string]string)
 	s.cachedIDs = make(map[string]string)
 	s.cachedHashes = make(map[string]string)
+	s.cachedOrigins = make(map[string]string)
 	data, err := os.ReadFile(s.derivedPath)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -224,6 +246,7 @@ func (s *PeopleService) loadProfileIndexLocked() error {
 	if cacheValid {
 		s.cachedIDs = make(map[string]string, len(index.Faces))
 		s.cachedHashes = make(map[string]string, len(index.Faces))
+		s.cachedOrigins = make(map[string]string, len(index.Faces))
 	}
 	for _, face := range index.Faces {
 		if face.Key != "" && referencedIDs[face.ClusterID] {
@@ -232,16 +255,18 @@ func (s *PeopleService) loadProfileIndexLocked() error {
 		if !cacheValid {
 			continue
 		}
-		if face.Key == "" || !validPersonID(face.ClusterID) || len(face.RecordHash) != sha256.Size*2 {
+		if face.Key == "" || !validPersonID(face.ClusterID) || !validPersonID(face.OriginID) || len(face.RecordHash) != sha256.Size*2 {
 			cacheValid = false
 			break
 		}
 		s.cachedIDs[face.Key] = face.ClusterID
 		s.cachedHashes[face.Key] = face.RecordHash
+		s.cachedOrigins[face.Key] = face.OriginID
 	}
 	if !cacheValid {
 		s.cachedIDs = nil
 		s.cachedHashes = nil
+		s.cachedOrigins = nil
 	}
 	return nil
 }
@@ -289,6 +314,7 @@ func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
 		s.embeddingDimension = dimension
 		s.cachedIDs = nil
 		s.cachedHashes = nil
+		s.cachedOrigins = nil
 		return nil
 	}
 	if s.faceModelVersion != "" {
@@ -434,11 +460,11 @@ func (s *PeopleService) Sync(records []AIAnalysisRecord) error {
 }
 
 func (s *PeopleService) matchesCachedAssignmentsLocked(faces map[string]PersonFace) bool {
-	if len(faces) == 0 || len(faces) != len(s.cachedIDs) || len(faces) != len(s.cachedHashes) {
+	if len(faces) == 0 || len(faces) != len(s.cachedIDs) || len(faces) != len(s.cachedHashes) || len(faces) != len(s.cachedOrigins) {
 		return false
 	}
 	for key, face := range faces {
-		if s.cachedIDs[key] == "" || s.cachedHashes[key] != face.recordHash {
+		if s.cachedIDs[key] == "" || s.cachedHashes[key] != face.recordHash || s.cachedOrigins[key] == "" {
 			return false
 		}
 	}
@@ -457,6 +483,7 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 	for _, key := range keys {
 		face := faces[key]
 		face.PersonID = s.cachedIDs[key]
+		face.originID = s.cachedOrigins[key]
 		s.faces[key] = face
 		s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], key)
 		cluster := s.clusters[face.PersonID]
@@ -501,6 +528,7 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	previousIDs := cloneStringMap(s.previousIDs)
 	cachedIDs := cloneStringMap(s.cachedIDs)
 	cachedHashes := cloneStringMap(s.cachedHashes)
+	cachedOrigins := cloneStringMap(s.cachedOrigins)
 	sourceIsPhoto := s.sourceIsPhoto
 	manual := clonePeopleManualState(s.manual)
 	annAvailable := s.ann != nil
@@ -562,9 +590,14 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	if appendOnly && annAvailable {
 		sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
 		s.mu.Lock()
+		touchedClusters := make(map[string]struct{})
 		for _, face := range appendedFaces {
 			s.addFaceLocked(face)
+			if added, exists := s.faces[face.Key]; exists {
+				touchedClusters[added.PersonID] = struct{}{}
+			}
 		}
+		s.consolidateClustersLocked(touchedClusters)
 		s.cleanAssignmentsLocked()
 		disk := s.indexSnapshotLocked()
 		s.mu.Unlock()
@@ -583,7 +616,8 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		stateBasePath: s.stateBasePath, derivedBasePath: s.derivedBasePath,
 		activeModel: s.activeModel, manualByModel: clonePeopleManualProfiles(s.manualByModel),
 		faceModelVersion: s.faceModelVersion, embeddingDimension: s.embeddingDimension,
-		previousIDs: previousIDs, cachedIDs: cachedIDs, cachedHashes: cachedHashes, manual: manual,
+		previousIDs: previousIDs, cachedIDs: cachedIDs, cachedHashes: cachedHashes,
+		cachedOrigins: cachedOrigins, manual: manual,
 	}
 	if appendOnly {
 		candidate.faces = existingFaces
@@ -591,10 +625,15 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		candidate.clusters = clusters
 		candidate.ann = nil
 		candidate.comparisons = comparisons
+		touchedClusters := make(map[string]struct{})
 		sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
 		for _, face := range appendedFaces {
 			candidate.addFaceLocked(face)
+			if added, exists := candidate.faces[face.Key]; exists {
+				touchedClusters[added.PersonID] = struct{}{}
+			}
 		}
+		candidate.consolidateClustersLocked(touchedClusters)
 	} else {
 		candidate.rebuildLocked(updatedFaces, previousIDs)
 	}
@@ -670,6 +709,7 @@ func (s *PeopleService) publishRebuiltIndex(candidate *PeopleService) error {
 	s.previousIDs = candidate.previousIDs
 	s.cachedIDs = candidate.cachedIDs
 	s.cachedHashes = candidate.cachedHashes
+	s.cachedOrigins = candidate.cachedOrigins
 	s.manual = candidate.manual
 	s.manualByModel = candidate.manualByModel
 	s.comparisons = candidate.comparisons
@@ -697,8 +737,11 @@ func (s *PeopleService) rebuildLocked(faces map[string]PersonFace, previousIDs m
 	s.ann = newPeopleANNIndexForDimension(s.embeddingDimension)
 	s.comparisons = 0
 	for _, key := range keys {
-		s.addFaceLocked(faces[key])
+		face := faces[key]
+		face.originID = ""
+		s.addFaceLocked(face)
 	}
+	s.consolidateClustersLocked(nil)
 	s.remapCorrectionsLocked(previousIDs)
 }
 
@@ -909,11 +952,354 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 		s.ann.Add(bestID, cluster.centroid)
 	}
 	face.PersonID = bestID
+	if face.originID == "" {
+		face.originID = bestID
+	}
 	s.faces[face.Key] = face
 	if s.facesByResource == nil {
 		s.facesByResource = make(map[string][]string)
 	}
 	s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], face.Key)
+}
+
+type peopleClusterMergeEvidence struct {
+	leftID      string
+	rightID     string
+	centroid    float64
+	mutualCount int
+	mutualMean  float64
+}
+
+func (s *PeopleService) consolidateClustersLocked(touched map[string]struct{}) {
+	if len(s.clusters) < 2 {
+		return
+	}
+	if s.ann == nil {
+		s.rebuildPeopleANNLocked()
+	}
+
+	clusterIDs := make([]string, 0, len(s.clusters))
+	for id := range s.clusters {
+		clusterIDs = append(clusterIDs, id)
+	}
+	sort.Strings(clusterIDs)
+	referencedIDs := peopleReferencedIDs(s.manual)
+	eligible := make(map[string]bool, len(s.clusters))
+	for _, id := range clusterIDs {
+		cluster := s.clusters[id]
+		if cluster.count < peopleGroupingMergeMinimumFaces || referencedIDs[id] ||
+			s.manual.Names[id] != "" || s.manual.Hidden[id] {
+			continue
+		}
+		manuallyAssigned := false
+		for key := range cluster.members {
+			if s.manual.Assignments[key] != "" {
+				manuallyAssigned = true
+				break
+			}
+		}
+		eligible[id] = !manuallyAssigned
+	}
+	matchFaces := make(map[string]map[string][]PersonFace, len(eligible))
+	for id, canMerge := range eligible {
+		if canMerge {
+			matchFaces[id] = s.peopleClusterMatchSamples(s.clusters[id])
+		}
+	}
+
+	evidenceByPair := make(map[string]peopleClusterMergeEvidence)
+	var evidence []peopleClusterMergeEvidence
+	for _, leftID := range clusterIDs {
+		if !eligible[leftID] {
+			continue
+		}
+		if touched != nil {
+			if _, isTouched := touched[leftID]; !isTouched {
+				continue
+			}
+		}
+		left := s.clusters[leftID]
+		for _, candidate := range s.ann.Search(left.centroid, peopleGroupingMergeCandidateLimit) {
+			rightID := candidate.id
+			if rightID == leftID || !eligible[rightID] {
+				continue
+			}
+			pairLeftID, pairRightID := leftID, rightID
+			if pairRightID < pairLeftID {
+				pairLeftID, pairRightID = pairRightID, pairLeftID
+			}
+			pairKey := peopleClusterPairKey(pairLeftID, pairRightID)
+			if _, checked := evidenceByPair[pairKey]; checked {
+				continue
+			}
+			pairLeft, pairRight := s.clusters[pairLeftID], s.clusters[pairRightID]
+			centroidScore := peopleCosine(pairLeft.centroid, pairRight.centroid)
+			if centroidScore < PeopleGroupingMergeCentroidThreshold {
+				continue
+			}
+			mutualCount, mutualMean, ok := s.peopleClusterMutualMatches(pairLeft, pairRight, matchFaces[pairLeftID], matchFaces[pairRightID])
+			if !ok || mutualCount < peopleGroupingMinimumMutualMatches(min(pairLeft.count, pairRight.count)) || mutualMean < peopleGroupingMergeMinimumMeanSimilarity {
+				continue
+			}
+			pair := peopleClusterMergeEvidence{
+				leftID: pairLeftID, rightID: pairRightID, centroid: centroidScore,
+				mutualCount: mutualCount, mutualMean: mutualMean,
+			}
+			evidenceByPair[pairKey] = pair
+			evidence = append(evidence, pair)
+		}
+	}
+	if len(evidence) == 0 {
+		return
+	}
+	sort.Slice(evidence, func(i, j int) bool {
+		if evidence[i].centroid != evidence[j].centroid {
+			return evidence[i].centroid > evidence[j].centroid
+		}
+		if evidence[i].mutualCount != evidence[j].mutualCount {
+			return evidence[i].mutualCount > evidence[j].mutualCount
+		}
+		if evidence[i].leftID != evidence[j].leftID {
+			return evidence[i].leftID < evidence[j].leftID
+		}
+		return evidence[i].rightID < evidence[j].rightID
+	})
+
+	componentByID := make(map[string]string, len(clusterIDs))
+	componentMembers := make(map[string][]string, len(clusterIDs))
+	for _, id := range clusterIDs {
+		componentByID[id] = id
+		componentMembers[id] = []string{id}
+	}
+	for _, pair := range evidence {
+		leftRoot, rightRoot := componentByID[pair.leftID], componentByID[pair.rightID]
+		if leftRoot == rightRoot || !peopleClusterComponentsHaveEvidence(componentMembers[leftRoot], componentMembers[rightRoot], evidenceByPair) {
+			continue
+		}
+		keeper, source := leftRoot, rightRoot
+		if rightRoot < leftRoot {
+			keeper, source = rightRoot, leftRoot
+		}
+		mergedMembers := append(componentMembers[keeper], componentMembers[source]...)
+		sort.Strings(mergedMembers)
+		componentMembers[keeper] = mergedMembers
+		delete(componentMembers, source)
+		for _, id := range mergedMembers {
+			componentByID[id] = keeper
+		}
+	}
+
+	var components [][]string
+	for _, members := range componentMembers {
+		if len(members) > 1 {
+			components = append(components, members)
+		}
+	}
+	sort.Slice(components, func(i, j int) bool { return components[i][0] < components[j][0] })
+	for _, members := range components {
+		keeperID := members[0]
+		for _, id := range members[1:] {
+			keeper, source := s.clusters[keeperID], s.clusters[id]
+			if source.count > keeper.count || source.count == keeper.count && id < keeperID {
+				keeperID = id
+			}
+		}
+		for _, id := range members {
+			if id != keeperID {
+				s.mergePeopleClustersLocked(keeperID, id)
+			}
+		}
+	}
+	s.rebuildPeopleANNLocked()
+}
+
+func peopleClusterPairKey(leftID, rightID string) string {
+	if rightID < leftID {
+		leftID, rightID = rightID, leftID
+	}
+	return leftID + "\x00" + rightID
+}
+
+func peopleGroupingMinimumMutualMatches(smallerClusterSize int) int {
+	return max(peopleGroupingMergeMinimumMutualMatches, int(math.Ceil(float64(smallerClusterSize)*peopleGroupingMergeMutualMatchRatio)))
+}
+
+func (s *PeopleService) peopleClusterMutualMatches(left, right *peopleCluster, leftFaces, rightFaces map[string][]PersonFace) (int, float64, bool) {
+	if left.anchor.embedding == nil || right.anchor.embedding == nil || len(left.centroid) != len(right.centroid) {
+		return 0, 0, false
+	}
+	for resourceID := range left.resources {
+		if _, shared := right.resources[resourceID]; shared {
+			return 0, 0, false
+		}
+	}
+	leftCounts := s.peopleClusterOriginCounts(left)
+	rightCounts := s.peopleClusterOriginCounts(right)
+	if len(leftFaces) == 0 || len(rightFaces) == 0 || len(leftCounts) == 0 || len(rightCounts) == 0 {
+		return 0, 0, false
+	}
+	leftOrigins := make([]string, 0, len(leftCounts))
+	for originID := range leftCounts {
+		leftOrigins = append(leftOrigins, originID)
+	}
+	sort.Strings(leftOrigins)
+	rightOrigins := make([]string, 0, len(rightCounts))
+	for originID := range rightCounts {
+		rightOrigins = append(rightOrigins, originID)
+	}
+	sort.Strings(rightOrigins)
+	totalMatches := 0
+	var totalSimilarity float64
+	for _, leftOrigin := range leftOrigins {
+		for _, rightOrigin := range rightOrigins {
+			count, mean := peopleReciprocalFaceMatches(leftFaces[leftOrigin], rightFaces[rightOrigin])
+			minimum := peopleGroupingMinimumMutualMatches(min(leftCounts[leftOrigin], rightCounts[rightOrigin]))
+			if count < minimum || mean < peopleGroupingMergeMinimumMeanSimilarity {
+				return 0, 0, true
+			}
+			totalMatches += count
+			totalSimilarity += mean * float64(count)
+		}
+	}
+	if totalMatches == 0 {
+		return 0, 0, true
+	}
+	return totalMatches, totalSimilarity / float64(totalMatches), true
+}
+
+func peopleReciprocalFaceMatches(leftFaces, rightFaces []PersonFace) (int, float64) {
+	if len(leftFaces) == 0 || len(rightFaces) == 0 {
+		return 0, 0
+	}
+	leftBest := make([]int, len(leftFaces))
+	rightBest := make([]int, len(rightFaces))
+	leftScores := make([]float64, len(leftFaces))
+	rightScores := make([]float64, len(rightFaces))
+	for index := range leftBest {
+		leftBest[index] = -1
+	}
+	for index := range rightBest {
+		rightBest[index] = -1
+	}
+	for leftIndex, leftFace := range leftFaces {
+		for rightIndex, rightFace := range rightFaces {
+			score := peopleCosine(leftFace.embedding, rightFace.embedding)
+			if leftBest[leftIndex] < 0 || score > leftScores[leftIndex] ||
+				score == leftScores[leftIndex] && rightFace.Key < rightFaces[leftBest[leftIndex]].Key {
+				leftScores[leftIndex] = score
+				leftBest[leftIndex] = rightIndex
+			}
+			if rightBest[rightIndex] < 0 || score > rightScores[rightIndex] ||
+				score == rightScores[rightIndex] && leftFace.Key < leftFaces[rightBest[rightIndex]].Key {
+				rightScores[rightIndex] = score
+				rightBest[rightIndex] = leftIndex
+			}
+		}
+	}
+	mutualCount := 0
+	var mutualTotal float64
+	for leftIndex, rightIndex := range leftBest {
+		if rightIndex < 0 || rightBest[rightIndex] != leftIndex || leftScores[leftIndex] < PeopleGroupingMergeFaceThreshold {
+			continue
+		}
+		mutualCount++
+		mutualTotal += leftScores[leftIndex]
+	}
+	if mutualCount == 0 {
+		return 0, 0
+	}
+	return mutualCount, mutualTotal / float64(mutualCount)
+}
+
+func (s *PeopleService) peopleClusterMatchSamples(cluster *peopleCluster) map[string][]PersonFace {
+	faces := s.peopleClusterFacesLocked(cluster)
+	byOrigin := make(map[string][]PersonFace)
+	for _, face := range faces {
+		originID := face.originID
+		if originID == "" {
+			originID = face.PersonID
+		}
+		if originID != "" {
+			byOrigin[originID] = append(byOrigin[originID], face)
+		}
+	}
+	for originID, originFaces := range byOrigin {
+		if len(originFaces) <= peopleGroupingMergeMaximumSampleFaces {
+			continue
+		}
+		samples := make([]PersonFace, peopleGroupingMergeMaximumSampleFaces)
+		for index := range samples {
+			position := index * (len(originFaces) - 1) / (len(samples) - 1)
+			samples[index] = originFaces[position]
+		}
+		byOrigin[originID] = samples
+	}
+	return byOrigin
+}
+
+func (s *PeopleService) peopleClusterOriginCounts(cluster *peopleCluster) map[string]int {
+	counts := make(map[string]int)
+	for key := range cluster.members {
+		face, exists := s.faces[key]
+		if !exists {
+			continue
+		}
+		originID := face.originID
+		if originID == "" {
+			originID = face.PersonID
+		}
+		if originID != "" {
+			counts[originID]++
+		}
+	}
+	return counts
+}
+
+func (s *PeopleService) peopleClusterFacesLocked(cluster *peopleCluster) []PersonFace {
+	faces := make([]PersonFace, 0, len(cluster.members))
+	for key := range cluster.members {
+		if face, exists := s.faces[key]; exists {
+			faces = append(faces, face)
+		}
+	}
+	sort.Slice(faces, func(i, j int) bool { return personFaceLess(faces[i], faces[j]) })
+	return faces
+}
+
+func peopleClusterComponentsHaveEvidence(leftIDs, rightIDs []string, evidence map[string]peopleClusterMergeEvidence) bool {
+	for _, leftID := range leftIDs {
+		for _, rightID := range rightIDs {
+			if _, exists := evidence[peopleClusterPairKey(leftID, rightID)]; !exists {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (s *PeopleService) mergePeopleClustersLocked(keeperID, sourceID string) {
+	keeper, source := s.clusters[keeperID], s.clusters[sourceID]
+	if keeper == nil || source == nil || len(keeper.sum) != len(source.sum) {
+		return
+	}
+	for index := range keeper.sum {
+		keeper.sum[index] += source.sum[index]
+	}
+	keeper.count += source.count
+	for key := range source.members {
+		keeper.members[key] = struct{}{}
+		face := s.faces[key]
+		face.PersonID = keeperID
+		s.faces[key] = face
+	}
+	for resourceID := range source.resources {
+		keeper.resources[resourceID] = struct{}{}
+	}
+	if source.anchor.embedding != nil && (keeper.anchor.embedding == nil || personFaceLess(s.faces[source.anchor.key], s.faces[keeper.anchor.key])) {
+		keeper.anchor = source.anchor
+	}
+	updatePeopleCentroid(keeper)
+	delete(s.clusters, sourceID)
 }
 
 func peopleClusterHasMatchingAnchor(face PersonFace, cluster *peopleCluster) bool {
@@ -1986,6 +2372,7 @@ func (s *PeopleService) Clear() error {
 	s.previousIDs = make(map[string]string)
 	s.cachedIDs = nil
 	s.cachedHashes = nil
+	s.cachedOrigins = nil
 	s.comparisons = 0
 	s.manual = emptyPeopleManualState()
 	s.manualByModel = make(map[string]peopleManualState)
@@ -2035,7 +2422,7 @@ func (s *PeopleService) indexSnapshotLocked() peopleIndexDisk {
 		disk.Faces = append(disk.Faces, peopleFaceDisk{
 			Key: face.Key, ResourceID: face.ResourceID, FaceIndex: face.FaceIndex,
 			ClusterID: face.PersonID, Box: face.Box, Score: face.Score, Size: face.Size, MTimeNs: face.MTimeNs,
-			RecordHash: face.recordHash,
+			RecordHash: face.recordHash, OriginID: face.originID,
 		})
 	}
 	return disk
@@ -2059,8 +2446,10 @@ func (s *PeopleService) updatePreviousIDsLocked() {
 func (s *PeopleService) updateCachedAssignmentsLocked() {
 	s.cachedIDs = make(map[string]string, len(s.faces))
 	s.cachedHashes = make(map[string]string, len(s.faces))
+	s.cachedOrigins = make(map[string]string, len(s.faces))
 	for key, face := range s.faces {
 		s.cachedIDs[key] = face.PersonID
 		s.cachedHashes[key] = face.recordHash
+		s.cachedOrigins[key] = face.originID
 	}
 }
