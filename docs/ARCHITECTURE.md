@@ -335,7 +335,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 页面的版式只有一处真相源，分三层：
 
 - **容器**：`.page-shell` 是唯一的内容容器（`styles/global.css`），宽度由 `--page-max`（2560px）封顶，左右留白由 `--page-gutter`（`clamp(20px, 3vw, 48px)`）给出，并让开安全区（`--safe-left/right`）。所有页面都用它，因此左右留白与内容左缘在翻页时不跳。防御规则 `.page-shell .page-shell` 把嵌套里的内边距清掉 —— 组件内部再套一层容器时不许凭空多出留白。
-- **骨架**：`.page-layout` 是超宽档（≥2240px）的两栏骨架，左叙述（`.page-layout__aside`，吸顶）右陈列（`.page-layout__main`）。窄屏上它是 `display: contents`，DOM 结构不变、版式不动；断点在样式表的媒体查询与 `hooks/useMediaQuery.ts` 的 `ULTRAWIDE_LAYOUT_QUERY` 两处，改的时候一起改。首页与智能相册专页用了它。
+- **超宽档**：2240px 起（2560 宽的 27 寸）仍是单栏，只是列宽放大、首页页头并成一行；断点在样式表的 `@media (min-width: 2240px)` 与 `hooks/useMediaQuery.ts` 的 `ULTRAWIDE_LAYOUT_QUERY` 两处，改的时候一起改。超宽档不再另做两栏骨架 —— 理由见设计文档的「超宽档版式」。
 - **网格**：两套系统各有分工。`.library-grid`（含 `--dense` / `--spacious` / `--comic` 几档）是 CSS 网格，列宽由 `tokens.css` 的 `--library-col` 一族给定，按可用宽度自动分列；`masonryLayout.ts` 是 JS 排的瀑布流，用于照片内容（照片墙、随手看看、智能相册墙），按每张的真实宽高比落进当前最矮的一列。列宽的数值只在 tokens 与 `masonryColumnCount` 的入参里，组件里不写死。
 
 触摸设备另有一套约定：命中区不小于 44×44（`styles/global.css` 的触摸档规则把按钮与链接的本体撑大，视觉尺寸不变），贴边内容让开安全区（`--safe-*`），软键盘弹出时贴底浮层按 `--keyboard-inset` 上移（`hooks/useVisualViewport.ts`）。设计意图与理由见设计文档。

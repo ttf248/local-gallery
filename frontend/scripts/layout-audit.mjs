@@ -123,12 +123,10 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   // 必须单独报出来（相册详情页偶发爆栈就是这一类）。
   const routeError = !!document.querySelector('[role="alert"]');
 
-  // 主内容容器：页面级容器优先（.page-layout--page，超宽档上首页的
-  // 那一层），其次正文里的第一个 .page-shell，再退回 <main> 与 body。
-  // 取第一个有实际宽度的 —— .page-layout 在窄屏上是 display: contents，
+  // 主内容容器：正文里的第一个 .page-shell，再退回 <main> 与 body。
+  // 取第一个有实际宽度的 —— 页面级的容器有些是 display: contents，
   // 没有盒子。
   const shellCandidates = [
-    main?.querySelector(".page-layout--page"),
     main?.querySelector(".page-shell"),
     main,
     document.body,
@@ -577,12 +575,12 @@ async function main() {
       await page.setContent('<style>body{margin:0}h1{margin:0}</style><main style="padding:20px"><h1>列表</h1></main>');
       const result=await page.evaluate(MEASURE,{minFontPx:MIN_FONT_PX,minControlPx:MIN_CONTROL_PX});
       assert.equal(result.alignmentLeft,20);
-      // 门禁判据本身的样本：容器认 .page-layout--page；读屏专用元素与
+      // 门禁判据本身的样本：容器认 .page-shell；读屏专用元素与
       // 勾选框本体不算太小的控件；低于最小字号档的文字要被抓出来；
       // 行内链接不算控件，独立成行的链接算。
       await page.setContent(
-        '<style>body{margin:0}.page-layout--page{width:800px;padding:0 24px}</style>' +
-          '<main><div class="page-layout--page"><p style="font-size:11px">徽章</p>' +
+        '<style>body{margin:0}.page-shell{width:800px;padding:0 24px}</style>' +
+          '<main><div class="page-shell"><p style="font-size:11px">徽章</p>' +
           '<button style="height:20px">小按钮</button>' +
           '<input class="sr-only" style="width:1px;height:1px">' +
           '<input type="checkbox" style="width:13px;height:13px">' +

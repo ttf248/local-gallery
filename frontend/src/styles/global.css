@@ -128,6 +128,43 @@
   .home-overview > :only-child {
     grid-column: 1 / -1;
   }
+  /* 首页页头：三块（标题、说明、动作）。
+     窄屏是标题独占一行、说明在第二行、动作贴在说明那行的右端；
+     超宽档上说明与标题并排成一行 —— 多出来的宽度空在页头中间，
+     不如让说明站到标题旁边。用网格而不是 flex：三块的归属要
+     跟着断点换位置（grid-area 换行即换位）。 */
+  .home-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "title title"
+      "desc actions";
+    column-gap: 24px;
+    row-gap: 8px;
+    align-items: end;
+  }
+  .home-heading__title {
+    grid-area: title;
+    min-width: 0;
+  }
+  .home-heading__desc {
+    grid-area: desc;
+    min-width: 0;
+  }
+  .home-heading__actions {
+    grid-area: actions;
+  }
+  @media (min-width: 2240px) {
+    .home-heading {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-areas: "title desc actions";
+      row-gap: 0;
+      /* last baseline：说明与动作对齐到标题那一行的基线。
+         标题块里眉标在上、标题在下，用 first baseline 会把说明拉到
+         眉标那一行 —— 读起来像眉标的注脚。 */
+      align-items: last baseline;
+    }
+  }
   /* 照片侧首屏现在只有「接着看」一块面板，漫画侧是「继续阅读 +
      未读」两块；`home-overview` 的两栏骨架因此只服务漫画侧。
      照片侧的面板是唯一子元素，`.home-overview > :only-child`
@@ -508,62 +545,15 @@
   }
 
 
-  /* --- 超宽屏的两栏骨架 ---
-     2240px 起（2560 宽的 27 寸）另做一套版式：左边一栏叙述
-     （页头、说明、排序、计数），右边一栏陈列（照片与网格）。
-     1920 与 1440 上仍是原来那一套单栏版式。
+  /* --- 超宽档（2240px 起，2560 宽的 27 寸） ---
+     这一档不再另起一套骨架，仍是单栏：内容占满整宽，多出来的宽度
+     用来放大卡片与多放几列。
 
-     低于这条线时 .page-layout 是 display: contents —— DOM 结构
-     不变，现有版式一行都不动；它只是个透明的壳。 */
-  .page-layout {
-    display: contents;
-  }
-  /* 标题栏：标题与排序控件底对齐（同一行里读起来是一件事）。
-     对齐写在样式表里而不是工具类 —— 超宽档要改成上下两行、
-     左对齐，工具类在 utilities 层压不住那条媒体查询。 */
-  .page-layout__titlebar {
-    align-items: flex-end;
-  }
+     早先试过在这里做「左叙述、右陈列」的两栏骨架（页头与筛选控件
+     收进左边一栏），看着像报头，实际上左栏只有一行标题和一枚
+     按钮，下面空着一千多像素，而排序控件离它排序的照片隔着半屏。
+     筛选贴着它管的内容才说得清 —— 所以两栏撤掉了。 */
   @media (min-width: 2240px) {
-    .page-layout {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--layout-gap);
-    }
-    .page-layout__aside {
-      flex: 0 0 var(--layout-aside);
-      position: sticky;
-      top: var(--layout-aside-top);
-      min-width: 0;
-    }
-    .page-layout__main {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-    /* 叙述栏只有 380px 宽，标题与排序控件并排放不下 ——
-       改成上下两行，排序控件不再离标题两千多像素。 */
-    .page-layout__titlebar {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 16px;
-    }
-    /* 容器自己给留白，里面的 section 不再各自留一份。 */
-    .page-layout > .page-shell,
-    .page-layout__main > .page-shell {
-      max-width: none;
-      margin-inline: 0;
-      padding-inline: 0;
-    }
-    /* 页面级的容器（首页）：留白与最大宽度由它给。
-       不套 .page-shell 是有原因的 —— 那条类会连带把里面各段的
-       留白一并清掉（样式表里有一条「page-shell 套 page-shell 就
-       不给留白」的防御规则），首页各段本来各带一份。 */
-    .page-layout--page {
-      max-width: var(--page-max);
-      margin-inline: auto;
-      padding-inline: max(var(--page-gutter), var(--safe-left))
-        max(var(--page-gutter), var(--safe-right));
-    }
     /* 列宽放大：照片墙每张从约 236px 到 300px 上下。
        年份索引条上每一项也跟着放大 —— 一屏看得到几个年份，
        在这么宽的屏上本该多看几个。 */
