@@ -430,11 +430,13 @@ export default function Home() {
       (minImageCount > 0 ? 1 : 0);
 
   return (
-    <div className="home-page min-h-full">
+    <div className="home-page min-h-full page-layout page-layout--page">
       {/* ScanProgress 已提升到 AppShell，跨路由常驻显示 */}
 
-      {/* === 页头：标题 + 库统计 + 次级入口 === */}
-      <section className="page-shell page-heading">
+      {/* === 页头：标题 + 库统计 + 次级入口 ===
+          超宽档（≥2240px）上它在左侧的叙述栏里，右边是陈列；
+          窄一些时 .page-layout 是 display: contents，版式不变。 */}
+      <section className="page-shell page-heading page-layout__aside">
         <div className="flex items-end justify-between gap-6 flex-wrap">
           <div className="min-w-0">
             <p className="page-eyebrow">{copy.libraryEyebrow}</p>
@@ -535,32 +537,33 @@ export default function Home() {
         )}
       </section>
 
-      {hasContent &&
-        isComic &&
-        (inProgressAll.length > 0 || unreadCards.length > 0) && (
-          <div className="page-shell">
-            <div className="home-overview">
-              {inProgressAll.length > 0 && (
-                <ContinueHero
-                  cards={inProgressAll}
-                  onContinue={onContinue}
-                  onRemove={onRemoveContinue}
-                  onClearAll={onClearContinue}
-                />
-              )}
-              {unreadCards.length > 0 && (
-                <UnreadHero
-                  cards={unreadCards}
-                  count={unreadCount}
-                  onShuffle={onShuffleUnread}
-                  onMarkRead={onMarkReadUnread}
-                />
-              )}
+      <div className="page-layout__main">
+        {hasContent &&
+          isComic &&
+          (inProgressAll.length > 0 || unreadCards.length > 0) && (
+            <div className="page-shell">
+              <div className="home-overview">
+                {inProgressAll.length > 0 && (
+                  <ContinueHero
+                    cards={inProgressAll}
+                    onContinue={onContinue}
+                    onRemove={onRemoveContinue}
+                    onClearAll={onClearContinue}
+                  />
+                )}
+                {unreadCards.length > 0 && (
+                  <UnreadHero
+                    cards={unreadCards}
+                    count={unreadCount}
+                    onShuffle={onShuffleUnread}
+                    onMarkRead={onMarkReadUnread}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-      {/* 照片侧的首屏：先是一面照片墙，再是「接着看」。
+        {/* 照片侧的首屏：先是一面照片墙，再是「接着看」。
 
           早先这里是三块关于照片的说明（接着看 / 随手看看 / 最近加入），
           照片本身只是它们面板里的一张小封面 —— 首页第一眼看不见照片。
@@ -569,58 +572,58 @@ export default function Home() {
 
           「最近加入」不再单独占一节：它与下方网格是同一批内容，网格
           按「按加入」排序就是它，不必在一屏里摆两遍。 */}
-      {hasContent && !isComic && (
-        <>
-          <PhotoFeedHero />
-          {resumeCards.length > 0 && (
-            <div className="page-shell page-section">
-              <div className="home-overview">
-                <ResumeHero cards={resumeCards} />
+        {hasContent && !isComic && (
+          <>
+            <PhotoFeedHero />
+            {resumeCards.length > 0 && (
+              <div className="page-shell page-section">
+                <div className="home-overview">
+                  <ResumeHero cards={resumeCards} />
+                </div>
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
 
-      {/* === 索引条 ===
+        {/* === 索引条 ===
           漫画多一条「作品」索引：漫画常常不以年份命名，一部作品横跨
           好几年，按年份分会把同一部作品拆散。年份索引两边都留着 ——
           它筛的是下方网格，不只服务索引条本身。 */}
-      {hasContent && isComic && seriesGroups.length > 0 && (
-        <section className="page-shell page-section">
-          <div className="section-heading">
-            <span className="section-index">{pad(sectionNo.series)}</span>
-            <h2 className="section-title">作品</h2>
-            <span className="section-meta">按作品浏览</span>
-          </div>
-          <SeriesTimeline groups={seriesGroups} />
-        </section>
-      )}
-      {hasOnThisDay && (
-        <OnThisDaySection
-          items={onThisDayItems}
-          month={today.getMonth() + 1}
-          day={today.getDate()}
-          sectionIndex={pad(sectionNo.onThisDay)}
-        />
-      )}
-      {hasYearIndex && (
-        <section className="page-shell page-section">
-          <div className="section-heading">
-            <span className="section-index">{pad(sectionNo.year)}</span>
-            <h2 className="section-title">按年份浏览</h2>
-            <span className="section-meta">看这一年的照片</span>
-          </div>
-          <YearTimeline
-            groups={yearGroups}
-            gridRef={gridRef}
-            /* 照片侧的下方是智能相册，不是可筛的网格：漏斗没有去处。 */
-            showFilter={isComic}
+        {hasContent && isComic && seriesGroups.length > 0 && (
+          <section className="page-shell page-section">
+            <div className="section-heading">
+              <span className="section-index">{pad(sectionNo.series)}</span>
+              <h2 className="section-title">作品</h2>
+              <span className="section-meta">按作品浏览</span>
+            </div>
+            <SeriesTimeline groups={seriesGroups} />
+          </section>
+        )}
+        {hasOnThisDay && (
+          <OnThisDaySection
+            items={onThisDayItems}
+            month={today.getMonth() + 1}
+            day={today.getDate()}
+            sectionIndex={pad(sectionNo.onThisDay)}
           />
-        </section>
-      )}
+        )}
+        {hasYearIndex && (
+          <section className="page-shell page-section">
+            <div className="section-heading">
+              <span className="section-index">{pad(sectionNo.year)}</span>
+              <h2 className="section-title">按年份浏览</h2>
+              <span className="section-meta">看这一年的照片</span>
+            </div>
+            <YearTimeline
+              groups={yearGroups}
+              gridRef={gridRef}
+              /* 照片侧的下方是智能相册，不是可筛的网格：漏斗没有去处。 */
+              showFilter={isComic}
+            />
+          </section>
+        )}
 
-      {/* === 智能相册（照片侧）/ 全部图像（漫画侧） ===
+        {/* === 智能相册（照片侧）/ 全部图像（漫画侧） ===
           照片侧不再列全部图像：首页是发现页 —— 照片由「随手看看」给出，
           分组由智能相册给出，浏览相册交给年份索引与智能相册里的来源。
           漫画侧仍旧列全部作品，它的库内一览是按作品与卷找内容的地方。
@@ -628,272 +631,276 @@ export default function Home() {
           初次加载时也渲染这一段（内容换成骨架）：否则首屏只有标题和
           四个动作按钮，数据到达后整页内容一次性长出来，视线要重新找
           一次位置。骨架占住网格的位置，数据回来时是"填满"而不是"重排"。 */}
-      {(hasContent || isLoadingInitial) && (
-        <section
-          ref={gridRef}
-          className="page-shell page-section pb-4 scroll-mt-6"
-        >
-          <div className="section-heading">
-            <span className="section-index">{pad(sectionNo.library)}</span>
-            <h2 className="section-title">
-              {/* 首页只展示六个精选主题，详细分类与完整推荐在智能相册页。 */}
+        {(hasContent || isLoadingInitial) && (
+          <section
+            ref={gridRef}
+            className="page-shell page-section pb-4 scroll-mt-6"
+          >
+            <div className="section-heading">
+              <span className="section-index">{pad(sectionNo.library)}</span>
+              <h2 className="section-title">
+                {/* 首页只展示六个精选主题，详细分类与完整推荐在智能相册页。 */}
+                {smartAlbumDirectory ? (
+                  <Link
+                    to={smartAlbumsRoute()}
+                    className="transition-colors hover:text-brand-ink"
+                  >
+                    智能相册
+                  </Link>
+                ) : yearFilterActive ? (
+                  copy.yearSectionTitle
+                ) : (
+                  copy.sectionTitle
+                )}
+              </h2>
               {smartAlbumDirectory ? (
-                <Link
-                  to={smartAlbumsRoute()}
-                  className="transition-colors hover:text-brand-ink"
-                >
-                  智能相册
-                </Link>
+                <>
+                  <span className="section-meta">精选推荐</span>
+                  <Link
+                    to={smartAlbumsRoute()}
+                    className="chip ml-auto"
+                    title="打开智能相册"
+                  >
+                    <span>查看全部</span>
+                    <ChevronRightIcon size={11} />
+                  </Link>
+                </>
               ) : yearFilterActive ? (
-                copy.yearSectionTitle
-              ) : (
-                copy.sectionTitle
-              )}
-            </h2>
-            {smartAlbumDirectory ? (
-              <>
-                <span className="section-meta">精选推荐</span>
-                <Link
-                  to={smartAlbumsRoute()}
-                  className="chip ml-auto"
-                  title="打开智能相册"
+                <button
+                  onClick={() => setYearFilter(null)}
+                  className="chip bg-accent-soft text-accent"
+                  title="清除年份筛选"
                 >
-                  <span>查看全部</span>
-                  <ChevronRightIcon size={11} />
-                </Link>
-              </>
-            ) : yearFilterActive ? (
-              <button
-                onClick={() => setYearFilter(null)}
-                className="chip bg-accent-soft text-accent"
-                title="清除年份筛选"
-              >
-                <span>{yearFilterLabel}</span>
-                <CloseIcon size={11} />
-              </button>
-            ) : null}
-            {favCount > 0 && !yearFilterActive && !smartAlbumDirectory && (
-              <button
-                onClick={() => navigate(favoritesRoute(mode))}
-                className="chip"
-              >
-                <StarIcon size={11} filled className="text-favorite" />
-                <span>{favCount} 收藏</span>
-              </button>
-            )}
-          </div>
+                  <span>{yearFilterLabel}</span>
+                  <CloseIcon size={11} />
+                </button>
+              ) : null}
+              {favCount > 0 && !yearFilterActive && !smartAlbumDirectory && (
+                <button
+                  onClick={() => navigate(favoritesRoute(mode))}
+                  className="chip"
+                >
+                  <StarIcon size={11} filled className="text-favorite" />
+                  <span>{favCount} 收藏</span>
+                </button>
+              )}
+            </div>
 
-          {/* 筛选 / 排序 / 视图切换只作用于下面这张网格，因此放在
+            {/* 筛选 / 排序 / 视图切换只作用于下面这张网格，因此放在
               「全部图像」标题正下方贴着网格；不要提到未读 / 继续阅读 /
               时间线这些区块前面 —— 那里离网格有两千多像素，用户滚到
               网格时控件早已不在视野里。
 
               照片侧没有这一条：那一段是智能相册，没有视图、排序与
               最少张数可筛。 */}
-          {!isLoadingInitial && !smartAlbumDirectory && (
-            <ListFilterBar
-              viewChips={[
-                { key: "all", label: "全部", count: counts.all },
-                {
-                  key: "album",
-                  label: copy.albumTypeLabel,
-                  count: counts.album,
-                },
-                {
-                  key: "collection",
-                  label: copy.collectionTypeLabel,
-                  count: counts.collection,
-                },
-                { key: "smart", label: "标签", count: counts.smart },
-              ]}
-              activeViewKey={listView}
-              onChangeView={setHomeView}
-              totalCount={overview.summary?.total ?? 0}
-              showMinImageFilter
-              trailing={<SelectionToggle />}
-              sort={sortBy}
-              onSortChange={setSortBy}
-              minImageCount={minImageCount}
-              onMinImageCountChange={setMinImageCount}
-            />
-          )}
+            {!isLoadingInitial && !smartAlbumDirectory && (
+              <ListFilterBar
+                viewChips={[
+                  { key: "all", label: "全部", count: counts.all },
+                  {
+                    key: "album",
+                    label: copy.albumTypeLabel,
+                    count: counts.album,
+                  },
+                  {
+                    key: "collection",
+                    label: copy.collectionTypeLabel,
+                    count: counts.collection,
+                  },
+                  { key: "smart", label: "标签", count: counts.smart },
+                ]}
+                activeViewKey={listView}
+                onChangeView={setHomeView}
+                totalCount={overview.summary?.total ?? 0}
+                showMinImageFilter
+                trailing={<SelectionToggle />}
+                sort={sortBy}
+                onSortChange={setSortBy}
+                minImageCount={minImageCount}
+                onMinImageCountChange={setMinImageCount}
+              />
+            )}
 
-          {isLoadingInitial ||
-          (smartAlbumDirectory
-            ? smartDirectory.isLoading
-            : overview.isLoading) ? (
-            <AlbumGridSkeleton
-              variant={viewMode}
-              bare
-              label={
-                smartAlbumDirectory
-                  ? "正在汇总已生成的智能相册…"
-                  : "正在加载图像库…"
-              }
-            />
-          ) : smartAlbumDirectory ? (
-            <SmartAlbumPreview
-              items={smartDirectory.items}
-              total={smartDirectory.total}
-              isLoading={smartDirectory.isLoading}
-              isError={smartDirectory.isError}
-              onRetry={() => void smartDirectory.refetch()}
-            />
-          ) : overview.isError && !overview.summary ? (
-            <EmptyState
-              title="列表加载失败"
-              description="其他专区仍可使用，请重试。"
-              action={
-                <button
-                  className="btn btn-outline"
-                  onClick={() => void overview.refetch()}
-                >
-                  重试
-                </button>
-              }
-            />
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              title={
-                yearFilterActive
-                  ? `「${yearFilterLabel}」没有匹配的图像`
-                  : "没有匹配的图像"
-              }
-              description={
-                query
-                  ? `没有匹配"${query}"的结果`
-                  : yearFilterActive && listView !== "all"
-                    ? `当前视图是「${viewLabel}」，${yearFilterLabel} 这一年下没有${viewLabel}。换成「全部」再看看。`
-                    : yearFilterActive
-                      ? "尝试切换到其他年份或清除筛选"
-                      : "当前视图下没有内容"
-              }
-              icon={<ImageIcon size={20} />}
-              /* 筛选条就在上面：空态不必再撑满半屏。 */
-              dense
-              action={
-                <div className="flex items-center gap-2 flex-wrap justify-center">
-                  {/* 每一条真正生效的筛选给一个手柄。
+            {isLoadingInitial ||
+            (smartAlbumDirectory
+              ? smartDirectory.isLoading
+              : overview.isLoading) ? (
+              <AlbumGridSkeleton
+                variant={viewMode}
+                bare
+                label={
+                  smartAlbumDirectory
+                    ? "正在汇总已生成的智能相册…"
+                    : "正在加载图像库…"
+                }
+              />
+            ) : smartAlbumDirectory ? (
+              <SmartAlbumPreview
+                items={smartDirectory.items}
+                total={smartDirectory.total}
+                isLoading={smartDirectory.isLoading}
+                isError={smartDirectory.isError}
+                onRetry={() => void smartDirectory.refetch()}
+              />
+            ) : overview.isError && !overview.summary ? (
+              <EmptyState
+                title="列表加载失败"
+                description="其他专区仍可使用，请重试。"
+                action={
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => void overview.refetch()}
+                  >
+                    重试
+                  </button>
+                }
+              />
+            ) : filtered.length === 0 ? (
+              <EmptyState
+                title={
+                  yearFilterActive
+                    ? `「${yearFilterLabel}」没有匹配的图像`
+                    : "没有匹配的图像"
+                }
+                description={
+                  query
+                    ? `没有匹配"${query}"的结果`
+                    : yearFilterActive && listView !== "all"
+                      ? `当前视图是「${viewLabel}」，${yearFilterLabel} 这一年下没有${viewLabel}。换成「全部」再看看。`
+                      : yearFilterActive
+                        ? "尝试切换到其他年份或清除筛选"
+                        : "当前视图下没有内容"
+                }
+                icon={<ImageIcon size={20} />}
+                /* 筛选条就在上面：空态不必再撑满半屏。 */
+                dense
+                action={
+                  <div className="flex items-center gap-2 flex-wrap justify-center">
+                    {/* 每一条真正生效的筛选给一个手柄。
                       早先只有一个笼统的「清除筛选」：用户同时用了年份与
                       视图两个筛选时，空结果说不清是哪一个造成的，
                       按一下还会把排序与视图一起重置。 */}
-                  {yearFilterActive && (
-                    <button
-                      onClick={() => setYearFilter(null)}
-                      className="btn btn-outline"
-                    >
-                      清除年份筛选
-                    </button>
-                  )}
-                  {listView !== "all" && (
-                    <button
-                      onClick={() => setHomeView("all")}
-                      className="btn btn-outline"
-                    >
-                      看全部
-                    </button>
-                  )}
-                  {query && (
-                    <button
-                      onClick={() => setQuery("")}
-                      className="btn btn-outline"
-                    >
-                      清除搜索
-                    </button>
-                  )}
-                  {minImageCount > 0 && (
-                    <button
-                      onClick={() => setMinImageCount(0)}
-                      className="btn btn-outline"
-                    >
-                      清除最少张数
-                    </button>
-                  )}
-                  {activeFilterCount === 0 && (
-                    <button onClick={resetFilters} className="btn btn-outline">
-                      清除筛选
-                    </button>
-                  )}
-                </div>
-              }
-            />
-          ) : (
-            <div className="pb-10">
-              <AlbumGrid
-                selectable
-                items={filtered}
-                variant={viewMode}
-                onEndReached={() => {
-                  if (
-                    overview.hasNextPage &&
-                    !overview.isFetching &&
-                    !overview.isError
-                  )
-                    void overview.fetchNextPage();
-                }}
+                    {yearFilterActive && (
+                      <button
+                        onClick={() => setYearFilter(null)}
+                        className="btn btn-outline"
+                      >
+                        清除年份筛选
+                      </button>
+                    )}
+                    {listView !== "all" && (
+                      <button
+                        onClick={() => setHomeView("all")}
+                        className="btn btn-outline"
+                      >
+                        看全部
+                      </button>
+                    )}
+                    {query && (
+                      <button
+                        onClick={() => setQuery("")}
+                        className="btn btn-outline"
+                      >
+                        清除搜索
+                      </button>
+                    )}
+                    {minImageCount > 0 && (
+                      <button
+                        onClick={() => setMinImageCount(0)}
+                        className="btn btn-outline"
+                      >
+                        清除最少张数
+                      </button>
+                    )}
+                    {activeFilterCount === 0 && (
+                      <button
+                        onClick={resetFilters}
+                        className="btn btn-outline"
+                      >
+                        清除筛选
+                      </button>
+                    )}
+                  </div>
+                }
               />
-              <ListPagination
-                {...overview}
-                load={() => void overview.fetchNextPage()}
-              />
-            </div>
-          )}
-        </section>
-      )}
+            ) : (
+              <div className="pb-10">
+                <AlbumGrid
+                  selectable
+                  items={filtered}
+                  variant={viewMode}
+                  onEndReached={() => {
+                    if (
+                      overview.hasNextPage &&
+                      !overview.isFetching &&
+                      !overview.isError
+                    )
+                      void overview.fetchNextPage();
+                  }}
+                />
+                <ListPagination
+                  {...overview}
+                  load={() => void overview.fetchNextPage()}
+                />
+              </div>
+            )}
+          </section>
+        )}
 
-      {/* 空状态 — 分两种：整个库都还没内容（首次使用），和这一侧没有内容
+        {/* 空状态 — 分两种：整个库都还没内容（首次使用），和这一侧没有内容
           （媒体根全被设成了另一种属性）。后者的引导要是「去设置媒体目录」，
           就把人指到了错误的地方。 */}
-      {!hasContent && !isLoadingInitial && (
-        <section className="page-shell">
-          {libraryHasContent && !sideHasContent ? (
-            <EmptyState
-              title={`${copy.libraryTitle}这边还没有内容`}
-              description={
-                otherSideHasContent
-                  ? "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去另一边看看。"
-                  : "媒体目录的内容属性与这一侧对不上。可以在设置里改属性。"
-              }
-              icon={<LibraryIcon size={20} />}
-              action={
-                <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className="btn btn-outline">
-                    去设置里改属性
-                  </Link>
-                  {otherSideHasContent && (
-                    <Link
-                      to={homeRoute(isComic ? "photo" : "comic")}
+        {!hasContent && !isLoadingInitial && (
+          <section className="page-shell">
+            {libraryHasContent && !sideHasContent ? (
+              <EmptyState
+                title={`${copy.libraryTitle}这边还没有内容`}
+                description={
+                  otherSideHasContent
+                    ? "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去另一边看看。"
+                    : "媒体目录的内容属性与这一侧对不上。可以在设置里改属性。"
+                }
+                icon={<LibraryIcon size={20} />}
+                action={
+                  <div className="flex items-center gap-3">
+                    <Link to="/settings/server" className="btn btn-outline">
+                      去设置里改属性
+                    </Link>
+                    {otherSideHasContent && (
+                      <Link
+                        to={homeRoute(isComic ? "photo" : "comic")}
+                        className="btn btn-primary"
+                      >
+                        去{isComic ? "照片" : "漫画"}库看看
+                      </Link>
+                    )}
+                  </div>
+                }
+              />
+            ) : (
+              <EmptyState
+                title="欢迎使用本地画廊"
+                description="首次使用请先设置媒体目录，再开始扫描。目录离线时可在设置中修复。"
+                icon={<LibraryIcon size={20} />}
+                action={
+                  <div className="flex items-center gap-3">
+                    <Link to="/settings/server" className="btn btn-outline">
+                      设置媒体目录
+                    </Link>
+                    <button
+                      onClick={() => startScan.mutate()}
+                      disabled={startScan.isPending}
                       className="btn btn-primary"
                     >
-                      去{isComic ? "照片" : "漫画"}库看看
-                    </Link>
-                  )}
-                </div>
-              }
-            />
-          ) : (
-            <EmptyState
-              title="欢迎使用本地画廊"
-              description="首次使用请先设置媒体目录，再开始扫描。目录离线时可在设置中修复。"
-              icon={<LibraryIcon size={20} />}
-              action={
-                <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className="btn btn-outline">
-                    设置媒体目录
-                  </Link>
-                  <button
-                    onClick={() => startScan.mutate()}
-                    disabled={startScan.isPending}
-                    className="btn btn-primary"
-                  >
-                    {startScan.isPending ? "启动中…" : "开始扫描"}
-                  </button>
-                </div>
-              }
-            />
-          )}
-        </section>
-      )}
+                      {startScan.isPending ? "启动中…" : "开始扫描"}
+                    </button>
+                  </div>
+                }
+              />
+            )}
+          </section>
+        )}
+      </div>
 
       <div className="h-8" />
     </div>

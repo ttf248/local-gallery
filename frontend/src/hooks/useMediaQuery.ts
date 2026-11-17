@@ -9,6 +9,15 @@ import { useEffect, useState } from "react";
 export const WIDE_LAYOUT_QUERY = "(min-width: 1024px)";
 
 /**
+ * 超宽版式的断点。
+ *
+ * 2240px 起另做一套版式（2560 宽的 27 寸）：左边一栏叙述，
+ * 右边一栏陈列。1920 与 1440 上仍是单栏 —— 这条线与样式表里
+ * `.page-layout` 的那条媒体查询是同一个数，两边必须一起改。
+ */
+export const ULTRAWIDE_LAYOUT_QUERY = "(min-width: 2240px)";
+
+/**
  * 订阅一条媒体查询。
  *
  * 用法：const isWide = useMediaQuery("(min-width: 1536px)");

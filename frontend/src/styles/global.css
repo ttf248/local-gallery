@@ -508,6 +508,74 @@
   }
 
 
+  /* --- 超宽屏的两栏骨架 ---
+     2240px 起（2560 宽的 27 寸）另做一套版式：左边一栏叙述
+     （页头、说明、排序、计数），右边一栏陈列（照片与网格）。
+     1920 与 1440 上仍是原来那一套单栏版式。
+
+     低于这条线时 .page-layout 是 display: contents —— DOM 结构
+     不变，现有版式一行都不动；它只是个透明的壳。 */
+  .page-layout {
+    display: contents;
+  }
+  /* 标题栏：标题与排序控件底对齐（同一行里读起来是一件事）。
+     对齐写在样式表里而不是工具类 —— 超宽档要改成上下两行、
+     左对齐，工具类在 utilities 层压不住那条媒体查询。 */
+  .page-layout__titlebar {
+    align-items: flex-end;
+  }
+  @media (min-width: 2240px) {
+    .page-layout {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--layout-gap);
+    }
+    .page-layout__aside {
+      flex: 0 0 var(--layout-aside);
+      position: sticky;
+      top: var(--layout-aside-top);
+      min-width: 0;
+    }
+    .page-layout__main {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    /* 叙述栏只有 380px 宽，标题与排序控件并排放不下 ——
+       改成上下两行，排序控件不再离标题两千多像素。 */
+    .page-layout__titlebar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    /* 容器自己给留白，里面的 section 不再各自留一份。 */
+    .page-layout > .page-shell,
+    .page-layout__main > .page-shell {
+      max-width: none;
+      margin-inline: 0;
+      padding-inline: 0;
+    }
+    /* 页面级的容器（首页）：留白与最大宽度由它给。
+       不套 .page-shell 是有原因的 —— 那条类会连带把里面各段的
+       留白一并清掉（样式表里有一条「page-shell 套 page-shell 就
+       不给留白」的防御规则），首页各段本来各带一份。 */
+    .page-layout--page {
+      max-width: var(--page-max);
+      margin-inline: auto;
+      padding-inline: max(var(--page-gutter), var(--safe-left))
+        max(var(--page-gutter), var(--safe-right));
+    }
+    /* 列宽放大：照片墙每张从约 236px 到 300px 上下。
+       年份索引条上每一项也跟着放大 —— 一屏看得到几个年份，
+       在这么宽的屏上本该多看几个。 */
+    :root {
+      --library-col: 300px;
+      --library-col-dense: 240px;
+      --library-col-spacious: 330px;
+      --library-col-comic: 210px;
+      --year-index-item: 240px;
+    }
+  }
+
   /* --- 触摸目标 ---
      手指的命中区比鼠标大一圈：44×44 是通行推荐值。做法是把按钮与
      链接的本体撑到 44 见方 —— 视觉尺寸不变（里面的图标与文字仍是
@@ -662,23 +730,23 @@
 
   .library-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--library-col), 1fr));
   }
   /* 最近浏览：卡片墙要密。
      这一页问的是「我刚才在翻什么」，答的是一份清单：单列一行一本的
      时间线在宽屏上只占左边一条，剩下的半屏全是空白，读起来像一页
      没排完的表。密集网格把十几条一次摆出来，一屏就能扫完。 */
   .library-grid--dense {
-    grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--library-col-dense), 1fr));
   }
   .library-grid--spacious {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--library-col-spacious), 1fr));
   }
   /* 漫画侧的书架网格比展陈墙密：封面竖版本身就窄，再按展陈墙的列宽
      铺开，每张卡会撑成一张巨幅海报，一屏只看得到四本。收窄列宽，
      一排六到七本才读得出「一排书」而不是「四张海报」。 */
   .library-grid--comic {
-    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(var(--library-col-comic), 1fr));
   }
 
   /* 索引卡里的封面：漫画侧也是一本书（装订边 + 厚度），

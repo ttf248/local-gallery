@@ -216,14 +216,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px 14px;
   }
-.hero-grid--wall {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-@media (min-width: 1600px) {
-    .hero-grid--wall {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-    }
-  }
 .year-index {
     display: flex;
     gap: 12px;
@@ -233,7 +225,7 @@
   }
 .year-index__item {
     position: relative;
-    flex: 0 0 184px;
+    flex: 0 0 var(--year-index-item);
     scroll-snap-align: start;
   }
 .year-index__open {
@@ -341,9 +333,4 @@
     background: var(--bg-elevated);
   }
 }
-@media (max-width: 767px) {
-    .hero-grid--wall {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
 }
