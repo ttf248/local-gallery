@@ -587,7 +587,6 @@ export interface PersonGroup {
   name: string;
   faceCount: number;
   photoCount: number;
-  folderCount?: number;
   coverResourceId?: string;
   hidden: boolean;
   quality?: {
@@ -846,9 +845,7 @@ export const aiJobsApi = {
       people: PersonGroup[];
       totalGroups: number;
       filteredGroups?: number;
-      minimumFolderCount?: number;
-      minimumFolderPhotos?: number;
-      minimumFolderPhotoSharePercent?: number;
+      groupPhotoFaceThreshold?: number;
       limit: number;
       centroidThreshold: number;
       anchorThreshold: number;
@@ -861,9 +858,6 @@ export const aiJobsApi = {
       people: PersonGroup[];
       totalGroups: number;
       filteredGroups?: number;
-      minimumFolderCount?: number;
-      minimumFolderPhotos?: number;
-      minimumFolderPhotoSharePercent?: number;
       limit: number;
       centroidThreshold: number;
       anchorThreshold: number;

@@ -42,19 +42,26 @@ func (peopleHandlerAnalyzer) AnalyzeBatch(_ context.Context, inputs []services.A
 }
 
 func peopleHandlerOutput(axis int) services.AIAnalysisOutput {
-	vector := make([]float32, 128)
-	vector[axis] = 1
-	data, _ := json.Marshal(struct {
-		Faces []struct {
-			Box       []float32 `json:"box"`
-			Score     float32   `json:"score"`
-			Embedding []float32 `json:"embedding"`
-		} `json:"faces"`
-	}{Faces: []struct {
+	return peopleHandlerOutputWithAxes([]int{axis})
+}
+
+func peopleHandlerOutputWithAxes(axes []int) services.AIAnalysisOutput {
+	type faceOutput struct {
 		Box       []float32 `json:"box"`
 		Score     float32   `json:"score"`
 		Embedding []float32 `json:"embedding"`
-	}{{Box: []float32{0.1, 0.1, 40, 50}, Score: 0.99, Embedding: vector}}})
+	}
+	faces := make([]faceOutput, len(axes))
+	for index, axis := range axes {
+		vector := make([]float32, 128)
+		vector[axis] = 1
+		faces[index] = faceOutput{
+			Box: []float32{0.1, 0.1, 40, 50}, Score: 0.99, Embedding: vector,
+		}
+	}
+	data, _ := json.Marshal(struct {
+		Faces []faceOutput `json:"faces"`
+	}{Faces: faces})
 	return services.AIAnalysisOutput{Status: "faces_found", Data: data, Fields: []string{services.AIFieldFaces}}
 }
 
@@ -358,30 +365,25 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 
 	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
 	var listBody struct {
-		People                         []services.PersonGroup `json:"people"`
-		TotalGroups                    int                    `json:"totalGroups"`
-		FilteredGroups                 int                    `json:"filteredGroups"`
-		MinimumFolderCount             int                    `json:"minimumFolderCount"`
-		MinimumFolderPhotos            int                    `json:"minimumFolderPhotos"`
-		MinimumFolderPhotoSharePercent int                    `json:"minimumFolderPhotoSharePercent"`
-		Limit                          int                    `json:"limit"`
-		CentroidThreshold              float64                `json:"centroidThreshold"`
-		AnchorThreshold                float64                `json:"anchorThreshold"`
-		GroupingLimited                *bool                  `json:"groupingLimited"`
-		Sort                           string                 `json:"sort"`
+		People                  []services.PersonGroup `json:"people"`
+		TotalGroups             int                    `json:"totalGroups"`
+		FilteredGroups          int                    `json:"filteredGroups"`
+		GroupPhotoFaceThreshold int                    `json:"groupPhotoFaceThreshold"`
+		Limit                   int                    `json:"limit"`
+		CentroidThreshold       float64                `json:"centroidThreshold"`
+		AnchorThreshold         float64                `json:"anchorThreshold"`
+		GroupingLimited         *bool                  `json:"groupingLimited"`
+		Sort                    string                 `json:"sort"`
 	}
 	decodePeopleBody(t, list, &listBody)
-	if len(listBody.People) != 50 || listBody.TotalGroups != 57 || listBody.FilteredGroups != 13 ||
-		listBody.MinimumFolderCount != peopleListMinimumFolderCount ||
-		listBody.MinimumFolderPhotos != peopleListMinimumFolderPhotos ||
-		listBody.MinimumFolderPhotoSharePercent != peopleListMinimumFolderSharePercent || listBody.Limit != 50 ||
+	if len(listBody.People) != 50 || listBody.TotalGroups != groupCount || listBody.FilteredGroups != 0 ||
+		listBody.GroupPhotoFaceThreshold != peopleListGroupPhotoFaceThreshold || listBody.Limit != 50 ||
 		listBody.CentroidThreshold != services.PeopleGroupingCentroidThreshold ||
 		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil || listBody.Sort != peopleSortPhotos {
 		t.Fatalf("top people response = %d groups, total %d, filtered %d, limit %d", len(listBody.People), listBody.TotalGroups, listBody.FilteredGroups, listBody.Limit)
 	}
-	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 20 ||
-		listBody.People[0].FolderCount != 2 || listBody.People[49].FolderCount != 2 {
-		t.Fatalf("returned photo/folder range = %d/%d..%d/%d", listBody.People[0].PhotoCount, listBody.People[0].FolderCount, listBody.People[49].PhotoCount, listBody.People[49].FolderCount)
+	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 21 {
+		t.Fatalf("returned photo-count range = %d..%d", listBody.People[0].PhotoCount, listBody.People[49].PhotoCount)
 	}
 
 	var target services.PersonGroup
@@ -418,6 +420,125 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 	if invalid.StatusCode != fiber.StatusBadRequest {
 		t.Fatalf("invalid sort status = %d; want %d", invalid.StatusCode, fiber.StatusBadRequest)
 	}
+}
+
+func TestPeopleHTTPListFiltersOnlyGroupsFoundExclusivelyInLargeGroupPhotos(t *testing.T) {
+	root := t.TempDir()
+	photoDir := filepath.Join(root, "photos")
+	if err := os.MkdirAll(photoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{
+		filepath.Join(photoDir, "large-group.jpg"),
+		filepath.Join(photoDir, "ordinary.jpg"),
+		filepath.Join(photoDir, "twenty-faces.jpg"),
+	}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("temporary test image"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	catalog := services.NewResourceCatalog()
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root},
+		Albums: []models.Album{{
+			Type: "album", Name: "photos", Path: photoDir, SourceRoot: root,
+			ContentKind: string(models.ContentKindPhoto), ImageFiles: paths, CoverImage: paths[0],
+		}},
+	}, []string{root})
+	resourceID := func(path string) string {
+		return catalog.ExternalID(path, services.ResourceFile)
+	}
+	records := []services.AIAnalysisRecord{
+		{
+			Type: services.AIJobTypeFace, ResourceID: resourceID(paths[0]), Size: 100, MTimeNs: 200,
+			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found",
+			Data: peopleHandlerOutputWithAxes(peopleTestSequence(0, 21)).Data, Fields: []string{services.AIFieldFaces},
+		},
+		{
+			Type: services.AIJobTypeFace, ResourceID: resourceID(paths[1]), Size: 100, MTimeNs: 200,
+			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found",
+			Data: peopleHandlerOutput(0).Data, Fields: []string{services.AIFieldFaces},
+		},
+		{
+			Type: services.AIJobTypeFace, ResourceID: resourceID(paths[2]), Size: 100, MTimeNs: 200,
+			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found",
+			Data: peopleHandlerOutputWithAxes(peopleTestSequence(21, 20)).Data, Fields: []string{services.AIFieldFaces},
+		},
+	}
+	people, err := services.OpenPeopleService(filepath.Join(root, "state", "people.json"), filepath.Join(root, "derived", "people-index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	safety, _ := middleware.PathSafetyMiddleware([]string{root}, catalog)
+	app := fiber.New()
+	app.Use(safety)
+	app.Get("/api/people", PeopleHandler(people, nil, catalog, nil))
+
+	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
+	var listBody struct {
+		People                  []services.PersonGroup `json:"people"`
+		TotalGroups             int                    `json:"totalGroups"`
+		FilteredGroups          int                    `json:"filteredGroups"`
+		GroupPhotoFaceThreshold int                    `json:"groupPhotoFaceThreshold"`
+	}
+	decodePeopleBody(t, list, &listBody)
+	if len(listBody.People) != 21 || listBody.TotalGroups != 21 || listBody.FilteredGroups != 20 ||
+		listBody.GroupPhotoFaceThreshold != 20 {
+		t.Fatalf("large group filtering returned %d people, total %d, filtered %d, threshold %d", len(listBody.People), listBody.TotalGroups, listBody.FilteredGroups, listBody.GroupPhotoFaceThreshold)
+	}
+	var ordinaryPhotoGroup *services.PersonGroup
+	for index := range listBody.People {
+		if listBody.People[index].PhotoCount == 2 {
+			ordinaryPhotoGroup = &listBody.People[index]
+			break
+		}
+	}
+	if ordinaryPhotoGroup == nil {
+		t.Fatal("group with an ordinary photo was hidden along with large-group-only candidates")
+	}
+
+	var hiddenCandidate services.PersonGroup
+	allGroups, _ := people.TopGroups(0, true, nil)
+	for _, group := range allGroups {
+		if group.PhotoCount == 1 {
+			if _, exists := listBodyGroupByID(listBody.People, group.ID); !exists {
+				hiddenCandidate = group
+				break
+			}
+		}
+	}
+	if hiddenCandidate.ID == "" {
+		t.Fatal("could not find a candidate that appears only in the 21-face group photo")
+	}
+	search := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people?q="+hiddenCandidate.ID, "")
+	var searchBody struct {
+		People []services.PersonGroup `json:"people"`
+	}
+	decodePeopleBody(t, search, &searchBody)
+	if len(searchBody.People) != 1 || searchBody.People[0].ID != hiddenCandidate.ID {
+		t.Fatalf("search did not retain access to hidden candidate %s", hiddenCandidate.ID)
+	}
+}
+
+func peopleTestSequence(start, count int) []int {
+	values := make([]int, count)
+	for index := range values {
+		values[index] = start + index
+	}
+	return values
+}
+
+func listBodyGroupByID(groups []services.PersonGroup, id string) (services.PersonGroup, bool) {
+	for _, group := range groups {
+		if group.ID == id {
+			return group, true
+		}
+	}
+	return services.PersonGroup{}, false
 }
 
 func peopleHandlerRequest(t *testing.T, app *fiber.App, method, path, body string) *http.Response {

@@ -94,15 +94,12 @@ describe("人物相册", () => {
           name: "旅行同伴",
           faceCount: 6,
           photoCount: 6,
-          folderCount: 2,
           hidden: false,
         },
       ],
       totalGroups: 1,
       filteredGroups: 1,
-      minimumFolderCount: 2,
-      minimumFolderPhotos: 3,
-      minimumFolderPhotoSharePercent: 10,
+      groupPhotoFaceThreshold: 20,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
       revision: 2,
@@ -113,13 +110,12 @@ describe("人物相册", () => {
     expect(screen.getByText(/6\s*张脸/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        "跨文件夹人物 1 组 · 已隐藏目录分布不足 1 组 · 按照片数排序",
+        "人物 1 组 · 已隐藏仅出现在大型合照中的 1 组 · 按照片数排序",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/2 个一级目录 · 6 张脸/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        "只展示在至少 2 个一级来源目录中都有稳定分布的人物组（每个目录至少 3 张，且占组内照片至少 10%）；卡片标出达标目录数。",
+        "只有当一个人物组出现的每张照片都检测到超过 20 张脸时，才会暂时隐藏；其余候选不受目录结构影响。",
       ),
     ).toBeInTheDocument();
     expect(mocks.people).toHaveBeenCalledWith(false, "photos");
@@ -133,7 +129,7 @@ describe("人物相册", () => {
     ).toBeInTheDocument();
   });
 
-  it("所有候选的目录分布都不足时说明已隐藏且不引导重复分析", async () => {
+  it("所有候选都只出现在大型合照中时说明已隐藏且不引导重复分析", async () => {
     mocks.list.mockResolvedValue({
       ok: true,
       snapshot: { settings: { peopleEnabled: true } },
@@ -143,9 +139,7 @@ describe("人物相册", () => {
       people: [],
       totalGroups: 0,
       filteredGroups: 17,
-      minimumFolderCount: 2,
-      minimumFolderPhotos: 3,
-      minimumFolderPhotoSharePercent: 10,
+      groupPhotoFaceThreshold: 20,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
       revision: 2,
@@ -153,10 +147,12 @@ describe("人物相册", () => {
     renderPeople();
 
     expect(
-      await screen.findByText("暂不展示目录分布不足的人物组"),
+      await screen.findByText("暂不展示只出现在大型合照中的人物组"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/有 17 组人物未达到跨目录展示条件，已暂时隐藏/),
+      screen.getByText(
+        /有 17 组人物只在超过 20 张脸的大合照中出现，已暂时隐藏/,
+      ),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("link", { name: "打开任务中心" }),
@@ -218,6 +214,7 @@ describe("人物相册", () => {
       })),
       totalGroups: 83,
       filteredGroups: 20,
+      groupPhotoFaceThreshold: 20,
       limit: 50,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
@@ -227,7 +224,7 @@ describe("人物相册", () => {
 
     expect(
       await screen.findByText(
-        /照片数最多的跨文件夹人物 50 \/ 共 83 组 · 已隐藏目录分布不足 20 组 · 按照片数排序/,
+        /照片数最多的人物 50 \/ 共 83 组 · 已隐藏仅出现在大型合照中的 20 组 · 按照片数排序/,
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("人物 0")).toBeInTheDocument();

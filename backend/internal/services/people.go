@@ -79,10 +79,16 @@ type PersonGroup struct {
 	Name            string              `json:"name"`
 	FaceCount       int                 `json:"faceCount"`
 	PhotoCount      int                 `json:"photoCount"`
-	FolderCount     int                 `json:"folderCount,omitempty"`
 	CoverResourceID string              `json:"coverResourceId,omitempty"`
 	Hidden          bool                `json:"hidden"`
 	Quality         *PersonGroupQuality `json:"quality,omitempty"`
+}
+
+// PersonGroupPhotoStats counts each person's distinct photos and the subset
+// classified as large group photos by their total detected face count.
+type PersonGroupPhotoStats struct {
+	PhotoCount           int
+	LargeGroupPhotoCount int
 }
 
 // PersonGroupQuality describes the lower tenth percentile of each group's
@@ -2093,41 +2099,43 @@ func (s *PeopleService) AllFaces() []PersonFace {
 	return result
 }
 
-// GroupFolderPhotoCounts returns distinct-photo counts per opaque source-folder
-// key for each current person group. The callback returns an empty key for
-// resources outside the current photo library.
-func (s *PeopleService) GroupFolderPhotoCounts(folderForResource func(string) string) map[string]map[string]int {
-	counts := make(map[string]map[string]int)
-	if folderForResource == nil {
-		return counts
-	}
-
+// GroupPhotoStats counts each group's distinct current photos and how many of
+// those photos contain more than faceCountThreshold detected faces. The
+// callback excludes resources outside the current photo library.
+func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceCountThreshold int) map[string]PersonGroupPhotoStats {
+	stats := make(map[string]PersonGroupPhotoStats)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	resourceFolders := make(map[string]string)
-	seenGroupResources := make(map[string]struct{})
+	faceCountsByResource := make(map[string]int)
+	resourceIncluded := make(map[string]bool)
+	resourceChecked := make(map[string]struct{})
+	resourcesByGroup := make(map[string]map[string]struct{})
 	for _, face := range s.faces {
-		folder, resolved := resourceFolders[face.ResourceID]
-		if !resolved {
-			folder = folderForResource(face.ResourceID)
-			resourceFolders[face.ResourceID] = folder
+		if _, checked := resourceChecked[face.ResourceID]; !checked {
+			resourceIncluded[face.ResourceID] = includeResource == nil || includeResource(face.ResourceID)
+			resourceChecked[face.ResourceID] = struct{}{}
 		}
-		if folder == "" {
+		if !resourceIncluded[face.ResourceID] {
 			continue
 		}
+		faceCountsByResource[face.ResourceID]++
 		groupID := s.effectivePersonIDLocked(face)
-		groupResourceKey := groupID + "\x00" + face.ResourceID
-		if _, counted := seenGroupResources[groupResourceKey]; counted {
-			continue
+		if resourcesByGroup[groupID] == nil {
+			resourcesByGroup[groupID] = make(map[string]struct{})
 		}
-		seenGroupResources[groupResourceKey] = struct{}{}
-		if counts[groupID] == nil {
-			counts[groupID] = make(map[string]int)
-		}
-		counts[groupID][folder]++
+		resourcesByGroup[groupID][face.ResourceID] = struct{}{}
 	}
-	return counts
+	for groupID, resources := range resourcesByGroup {
+		groupStats := PersonGroupPhotoStats{PhotoCount: len(resources)}
+		for resourceID := range resources {
+			if faceCountsByResource[resourceID] > faceCountThreshold {
+				groupStats.LargeGroupPhotoCount++
+			}
+		}
+		stats[groupID] = groupStats
+	}
+	return stats
 }
 
 func (s *PeopleService) Rename(personID, name string) error {

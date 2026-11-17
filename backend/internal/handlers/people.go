@@ -23,9 +23,7 @@ const peopleListLimit = 50
 const peopleSearchLimit = 20
 const peopleSortPhotos = "photos"
 const peopleSortReview = "review"
-const peopleListMinimumFolderCount = 2
-const peopleListMinimumFolderPhotos = 3
-const peopleListMinimumFolderSharePercent = 10
+const peopleListGroupPhotoFaceThreshold = 20
 
 // PeopleHandler lists current photo-only person albums and clears all face-derived data.
 func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, catalog *services.ResourceCatalog, validatePath func(string) (string, error)) fiber.Handler {
@@ -77,6 +75,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		if !snapshot.Ready() {
 			return c.JSON(fiber.Map{
 				"ok": true, "people": []services.PersonGroup{}, "totalGroups": 0,
+				"filteredGroups": 0, "groupPhotoFaceThreshold": peopleListGroupPhotoFaceThreshold,
 				"limit": limit, "centroidThreshold": services.PeopleGroupingCentroidThreshold,
 				"anchorThreshold": services.PeopleGroupingAnchorThreshold, "sort": sortOrder,
 				"revision": snapshot.Revision(),
@@ -102,29 +101,9 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			return c.JSON(response)
 		}
 
-		folderPhotoCounts := people.GroupFolderPhotoCounts(func(resourceID string) string {
-			if !snapshot.IsPhotoImage(resourceID) {
-				return ""
-			}
-			item, exists := services.LookupLibraryFeedItem(snapshot, resourceID)
-			if !exists {
-				return ""
-			}
-			album, exists := snapshot.Lookup(item.AlbumID)
-			if !exists {
-				return ""
-			}
-			relativePath := strings.Trim(album.RelativePath, "/")
-			if firstFolder, _, found := strings.Cut(relativePath, "/"); found {
-				relativePath = firstFolder
-			}
-			if relativePath == "" {
-				return album.RootID
-			}
-			return album.RootID + "\x00" + relativePath
-		})
+		photoStats := people.GroupPhotoStats(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
 		if sortOrder == peopleSortReview {
-			groups, total = people.SearchGroupsForReview(query, len(folderPhotoCounts)+1, includeHidden, snapshot.IsPhotoImage)
+			groups, total = people.SearchGroupsForReview(query, len(photoStats)+1, includeHidden, snapshot.IsPhotoImage)
 		} else {
 			groups, total = people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
 		}
@@ -133,13 +112,9 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		filteredGroups := 0
 		visibleTotal := 0
 		for _, group := range groups {
-			for _, photoCount := range folderPhotoCounts[group.ID] {
-				if photoCount >= peopleListMinimumFolderPhotos &&
-					photoCount*100 >= group.PhotoCount*peopleListMinimumFolderSharePercent {
-					group.FolderCount++
-				}
-			}
-			if group.FolderCount < peopleListMinimumFolderCount {
+			groupPhotos := photoStats[group.ID]
+			if group.PhotoCount > 0 && groupPhotos.PhotoCount == group.PhotoCount &&
+				groupPhotos.LargeGroupPhotoCount == group.PhotoCount {
 				filteredGroups++
 				continue
 			}
@@ -154,9 +129,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		response["people"] = visibleGroups
 		response["totalGroups"] = visibleTotal
 		response["filteredGroups"] = filteredGroups
-		response["minimumFolderCount"] = peopleListMinimumFolderCount
-		response["minimumFolderPhotos"] = peopleListMinimumFolderPhotos
-		response["minimumFolderPhotoSharePercent"] = peopleListMinimumFolderSharePercent
+		response["groupPhotoFaceThreshold"] = peopleListGroupPhotoFaceThreshold
 		return c.JSON(response)
 	}
 }
