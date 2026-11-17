@@ -200,14 +200,14 @@ func ValidateStateBackup(backup StateBackup) error {
 	}
 	if backup.People != nil {
 		people := backup.People
-		if err := validatePeopleCorrectionSet(people.Version, people.Names, people.Hidden, people.Assignments); err != nil {
+		if err := validatePeopleCorrectionSet(people.Version, people.Names, people.Hidden, people.Assignments, people.PinnedFaces, people.RetainedGroups, people.ExcludedMatches); err != nil {
 			return ErrInvalidBackup
 		}
 		for model, profile := range people.Profiles {
 			if model != FaceModelQualityV2 && model != FaceModelBuffaloM {
 				return ErrInvalidBackup
 			}
-			if err := validatePeopleCorrectionSet(profile.Version, profile.Names, profile.Hidden, profile.Assignments); err != nil {
+			if err := validatePeopleCorrectionSet(profile.Version, profile.Names, profile.Hidden, profile.Assignments, profile.PinnedFaces, profile.RetainedGroups, profile.ExcludedMatches); err != nil {
 				return ErrInvalidBackup
 			}
 		}
@@ -218,8 +218,8 @@ func ValidateStateBackup(backup StateBackup) error {
 	return nil
 }
 
-func validatePeopleCorrectionSet(version int, names map[string]string, hidden map[string]bool, assignments map[string]string) error {
-	if version != peopleIndexVersion || len(names) > 30000 || len(hidden) > 30000 || len(assignments) > 30000 {
+func validatePeopleCorrectionSet(version int, names map[string]string, hidden map[string]bool, assignments, pinnedFaces map[string]string, retainedGroups map[string]bool, exclusions []PeopleMatchExclusion) error {
+	if version != peopleIndexVersion || len(names) > 30000 || len(hidden) > 30000 || len(assignments) > 30000 || len(pinnedFaces) > 30000 || len(retainedGroups) > 30000 || len(exclusions) > 30000 {
 		return ErrInvalidBackup
 	}
 	for id, name := range names {
@@ -232,14 +232,44 @@ func validatePeopleCorrectionSet(version int, names map[string]string, hidden ma
 			return ErrInvalidBackup
 		}
 	}
+	for id, retained := range retainedGroups {
+		if !validPersonID(id) || !retained {
+			return ErrInvalidBackup
+		}
+	}
 	for faceKey, personID := range assignments {
 		separator := strings.LastIndex(faceKey, "#")
 		if separator <= 0 || !models.IsFileID(faceKey[:separator]) || !validPersonID(personID) {
 			return ErrInvalidBackup
 		}
 		faceIndex, err := strconv.Atoi(faceKey[separator+1:])
-		if err != nil || faceIndex < 0 || faceIndex > 100 {
+		if err != nil || faceIndex < 0 || faceIndex >= PeopleMaxFacesPerPhoto {
 			return ErrInvalidBackup
+		}
+	}
+	for faceKey, personID := range pinnedFaces {
+		separator := strings.LastIndex(faceKey, "#")
+		if separator <= 0 || !models.IsFileID(faceKey[:separator]) || !validPersonID(personID) {
+			return ErrInvalidBackup
+		}
+		faceIndex, err := strconv.Atoi(faceKey[separator+1:])
+		if err != nil || faceIndex < 0 || faceIndex >= PeopleMaxFacesPerPhoto {
+			return ErrInvalidBackup
+		}
+	}
+	for _, exclusion := range exclusions {
+		if exclusion.FirstFaceKey == exclusion.SecondFaceKey {
+			return ErrInvalidBackup
+		}
+		for _, faceKey := range []string{exclusion.FirstFaceKey, exclusion.SecondFaceKey} {
+			separator := strings.LastIndex(faceKey, "#")
+			if separator <= 0 || !models.IsFileID(faceKey[:separator]) {
+				return ErrInvalidBackup
+			}
+			faceIndex, err := strconv.Atoi(faceKey[separator+1:])
+			if err != nil || faceIndex < 0 || faceIndex >= PeopleMaxFacesPerPhoto {
+				return ErrInvalidBackup
+			}
 		}
 	}
 	return nil
@@ -290,10 +320,10 @@ func (s *StateBackupService) Preview(backup StateBackup) (BackupPreview, error) 
 	peopleCount := 0
 	if backup.People != nil {
 		if len(backup.People.Profiles) == 0 {
-			peopleCount = len(backup.People.Names) + len(backup.People.Hidden) + len(backup.People.Assignments)
+			peopleCount = len(backup.People.Names) + len(backup.People.Hidden) + len(backup.People.Assignments) + len(backup.People.PinnedFaces) + len(backup.People.RetainedGroups) + len(backup.People.ExcludedMatches)
 		} else {
 			for _, profile := range backup.People.Profiles {
-				peopleCount += len(profile.Names) + len(profile.Hidden) + len(profile.Assignments)
+				peopleCount += len(profile.Names) + len(profile.Hidden) + len(profile.Assignments) + len(profile.PinnedFaces) + len(profile.RetainedGroups) + len(profile.ExcludedMatches)
 			}
 		}
 	}
@@ -492,7 +522,11 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 		if s.People == nil {
 			return fail("people", ErrInvalidBackup)
 		}
-		corrections := PeopleCorrections{Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}
+		corrections := PeopleCorrections{
+			Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{},
+			Assignments: map[string]string{}, PinnedFaces: map[string]string{}, RetainedGroups: map[string]bool{},
+			ExcludedMatches: []PeopleMatchExclusion{},
+		}
 		if backup.People != nil {
 			corrections = *backup.People
 		}

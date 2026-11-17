@@ -103,7 +103,7 @@ func FaceSimilaritySearchHandler(
 ) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var request faceSearchRequest
-		if err := c.BodyParser(&request); err != nil || request.ResourceID == "" || request.FaceIndex < 0 || request.FaceIndex > 100 {
+		if err := c.BodyParser(&request); err != nil || request.ResourceID == "" || request.FaceIndex < 0 || request.FaceIndex >= services.PeopleMaxFacesPerPhoto {
 			return writeError(c, fiber.StatusBadRequest, "invalid_face_search", "resourceId and faceIndex are invalid")
 		}
 		snapshot := requestCatalogSnapshot(c, catalog)

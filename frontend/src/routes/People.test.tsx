@@ -9,6 +9,10 @@ const mocks = vi.hoisted(() => ({
   people: vi.fn(),
   searchPeople: vi.fn(),
   clearPeople: vi.fn(),
+  peopleMatches: vi.fn(),
+  groupPhotoCandidates: vi.fn(),
+  excludePersonMatch: vi.fn(),
+  retainPersonGroup: vi.fn(),
   personMedia: vi.fn(),
   mergePeople: vi.fn(),
 }));
@@ -19,6 +23,10 @@ vi.mock("../api/aiJobs", () => ({
     people: mocks.people,
     searchPeople: mocks.searchPeople,
     clearPeople: mocks.clearPeople,
+    peopleMatches: mocks.peopleMatches,
+    groupPhotoCandidates: mocks.groupPhotoCandidates,
+    excludePersonMatch: mocks.excludePersonMatch,
+    retainPersonGroup: mocks.retainPersonGroup,
     personMedia: mocks.personMedia,
     updatePerson: vi.fn(),
     mergePeople: mocks.mergePeople,
@@ -73,6 +81,30 @@ describe("人物相册", () => {
       revision: 1,
     });
     mocks.clearPeople.mockResolvedValue({ ok: true, cleared: true });
+    mocks.peopleMatches.mockResolvedValue({
+      ok: true,
+      items: [],
+      totalSources: 0,
+      offset: 0,
+      nextOffset: 0,
+      checkedSources: 0,
+      hasMore: false,
+      revision: 1,
+    });
+    mocks.groupPhotoCandidates.mockResolvedValue({
+      ok: true,
+      items: [],
+      total: 0,
+      offset: 0,
+      nextOffset: 0,
+      hasMore: false,
+      faceCountThreshold: 20,
+      minimumFaceCount: 8,
+      relativeFaceSizeThreshold: 0.04,
+      revision: 1,
+    });
+    mocks.excludePersonMatch.mockResolvedValue({ ok: true, excluded: true });
+    mocks.retainPersonGroup.mockResolvedValue({ ok: true, retained: true });
     mocks.mergePeople.mockResolvedValue({ ok: true });
   });
 
@@ -108,16 +140,7 @@ describe("人物相册", () => {
 
     expect(await screen.findByText("旅行同伴")).toBeInTheDocument();
     expect(screen.getByText(/6\s*张脸/)).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "人物 1 组 · 已隐藏仅出现在大型合照中的 1 组 · 按照片数排序",
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        "只有当一个人物组出现的每张照片都检测到超过 20 张脸时，才会暂时隐藏；其余候选不受目录结构影响。",
-      ),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/人物 1 组.*见“合照候选”/)).toBeInTheDocument();
     expect(mocks.people).toHaveBeenCalledWith(false, "photos");
     expect(screen.queryByText(/组中心|代表脸|边界脸/)).not.toBeInTheDocument();
     expect(
@@ -129,7 +152,7 @@ describe("人物相册", () => {
     ).toBeInTheDocument();
   });
 
-  it("所有候选都只出现在大型合照中时说明已隐藏且不引导重复分析", async () => {
+  it("只出现在合照中的分组可从独立候选页检查", async () => {
     mocks.list.mockResolvedValue({
       ok: true,
       snapshot: { settings: { peopleEnabled: true } },
@@ -144,19 +167,45 @@ describe("人物相册", () => {
       anchorThreshold: 0.72,
       revision: 2,
     });
+    mocks.groupPhotoCandidates.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          person: {
+            id: "p_group",
+            name: "合照人物",
+            faceCount: 1,
+            photoCount: 1,
+            hidden: false,
+            confirmed: false,
+          },
+          stats: {
+            photoCount: 1,
+            groupPhotoCount: 1,
+            ordinaryPhotoCount: 0,
+            relativeFaceSizeP10: 0.02,
+            detectionP10: 0.91,
+          },
+        },
+      ],
+      total: 17,
+      offset: 0,
+      nextOffset: 1,
+      hasMore: true,
+      faceCountThreshold: 20,
+      minimumFaceCount: 8,
+      relativeFaceSizeThreshold: 0.04,
+      revision: 2,
+    });
     renderPeople();
 
+    expect(await screen.findByText("还没有常见人物组")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /合照候选/ }));
+    expect(await screen.findByText("合照人物")).toBeInTheDocument();
+    expect(screen.getByText(/相对脸部尺寸 P10 2\.0%/)).toBeInTheDocument();
     expect(
-      await screen.findByText("暂不展示只出现在大型合照中的人物组"),
+      screen.getByRole("button", { name: "继续检查" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(
-        /有 17 组人物只在超过 20 张脸的大合照中出现，已暂时隐藏/,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "打开任务中心" }),
-    ).not.toBeInTheDocument();
   });
 
   it("切换审查优先并展示组内低分位复核线索", async () => {
@@ -196,10 +245,113 @@ describe("人物相册", () => {
     expect(await screen.findByText("锚点 P10 0.731")).toBeInTheDocument();
     expect(screen.getByText("中心 P10 0.812")).toBeInTheDocument();
     expect(screen.getByText("检测 P10 0.754")).toBeInTheDocument();
-    expect(
-      screen.getByText(/只用于安排人工复核，不代表身份置信度/),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/这些数值不代表身份概率/)).toBeInTheDocument();
     expect(mocks.people).toHaveBeenLastCalledWith(false, "review");
+  });
+
+  it("匹配建议必须由用户操作合并或排除", async () => {
+    mocks.list.mockResolvedValue({
+      ok: true,
+      snapshot: { settings: { peopleEnabled: true } },
+    });
+    mocks.peopleMatches.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          source: {
+            id: "p_source",
+            name: "待确认人物",
+            faceCount: 2,
+            photoCount: 2,
+            hidden: false,
+            confirmed: false,
+          },
+          candidates: [
+            {
+              person: {
+                id: "p_target",
+                name: "可能的同一人",
+                faceCount: 12,
+                photoCount: 10,
+                hidden: false,
+                confirmed: false,
+              },
+              similarity: 0.82,
+              bestFaceSimilarity: 0.91,
+              secondBestSimilarity: 0.74,
+              margin: 0.08,
+              independentPhotoPairs: 2,
+              sourceEvidencePhotos: 2,
+              targetEvidencePhotos: 5,
+              humanConfirmationRequired: true,
+              ambiguous: false,
+            },
+          ],
+        },
+      ],
+      totalSources: 1,
+      offset: 0,
+      nextOffset: 1,
+      checkedSources: 1,
+      hasMore: false,
+      revision: 5,
+    });
+    renderPeople();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /待确认匹配/ }));
+    expect(await screen.findByText("可能的同一人")).toBeInTheDocument();
+    expect(screen.getByText(/特征相似度 0\.820/)).toBeInTheDocument();
+    expect(mocks.mergePeople).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "排除此建议" }));
+    await waitFor(() =>
+      expect(mocks.excludePersonMatch).toHaveBeenCalledWith(
+        "p_source",
+        "p_target",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "确认合并" }));
+    await waitFor(() =>
+      expect(mocks.mergePeople).toHaveBeenCalledWith("p_source", "p_target"),
+    );
+  });
+
+  it("没有匹配对象时允许保留独立人物", async () => {
+    mocks.list.mockResolvedValue({
+      ok: true,
+      snapshot: { settings: { peopleEnabled: true } },
+    });
+    mocks.peopleMatches.mockResolvedValue({
+      ok: true,
+      items: [
+        {
+          source: {
+            id: "p_single",
+            name: "单独人物",
+            faceCount: 1,
+            photoCount: 1,
+            hidden: false,
+            confirmed: false,
+          },
+          candidates: [],
+        },
+      ],
+      totalSources: 1,
+      offset: 0,
+      nextOffset: 1,
+      checkedSources: 1,
+      hasMore: false,
+      revision: 6,
+    });
+    renderPeople();
+
+    fireEvent.click(await screen.findByRole("tab", { name: /待确认匹配/ }));
+    expect(
+      await screen.findByText(/没有达到提示门槛的候选/),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保留为独立人物" }));
+    await waitFor(() =>
+      expect(mocks.retainPersonGroup.mock.calls[0]?.[0]).toBe("p_single"),
+    );
   });
 
   it("说明列表仅展示照片数最多的前50组", async () => {
@@ -222,11 +374,7 @@ describe("人物相册", () => {
     });
     renderPeople();
 
-    expect(
-      await screen.findByText(
-        /照片数最多的人物 50 \/ 共 83 组 · 已隐藏仅出现在大型合照中的 20 组 · 按照片数排序/,
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/人物 83 组/)).toBeInTheDocument();
     expect(screen.getByText("人物 0")).toBeInTheDocument();
     expect(screen.getByText("人物 49")).toBeInTheDocument();
   });

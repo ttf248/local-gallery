@@ -588,12 +588,65 @@ export interface PersonGroup {
   faceCount: number;
   photoCount: number;
   coverResourceId?: string;
+  confirmed: boolean;
   hidden: boolean;
   quality?: {
     anchorP10: number;
     centroidP10: number;
     detectionP10: number;
   };
+}
+
+export interface PersonGroupPhotoStats {
+  photoCount: number;
+  groupPhotoCount: number;
+  ordinaryPhotoCount: number;
+  relativeFaceSizeP10: number;
+  detectionP10: number;
+}
+
+export interface PersonGroupPhotoCandidate {
+  person: PersonGroup;
+  stats: PersonGroupPhotoStats;
+}
+
+export interface PersonMatchCandidate {
+  person: PersonGroup;
+  similarity: number;
+  bestFaceSimilarity: number;
+  secondBestSimilarity: number;
+  margin: number;
+  independentPhotoPairs: number;
+  sourceEvidencePhotos: number;
+  targetEvidencePhotos: number;
+  humanConfirmationRequired: true;
+  ambiguous: boolean;
+}
+
+export interface PersonMatchSuggestion {
+  source: PersonGroup;
+  candidates: PersonMatchCandidate[];
+}
+
+export interface PeopleReviewPage<T> {
+  ok: boolean;
+  items: T[];
+  total: number;
+  offset: number;
+  nextOffset: number;
+  hasMore: boolean;
+  revision: number;
+}
+
+export interface PeopleMatchPage {
+  ok: boolean;
+  items: PersonMatchSuggestion[];
+  totalSources: number;
+  offset: number;
+  nextOffset: number;
+  checkedSources: number;
+  hasMore: boolean;
+  revision: number;
 }
 
 export type PeopleSort = "photos" | "review";
@@ -846,6 +899,8 @@ export const aiJobsApi = {
       totalGroups: number;
       filteredGroups?: number;
       groupPhotoFaceThreshold?: number;
+      groupPhotoMinimumFaceCount?: number;
+      groupPhotoRelativeFaceSizeThreshold?: number;
       limit: number;
       centroidThreshold: number;
       anchorThreshold: number;
@@ -863,6 +918,30 @@ export const aiJobsApi = {
       anchorThreshold: number;
       revision: number;
     }>("/api/people", { params: { q: query, limit: 20 } }),
+  peopleMatches: (includeHidden = false, limit = 20, offset = 0) =>
+    api<PeopleMatchPage>("/api/people/matches", {
+      params: { includeHidden, limit, offset },
+    }),
+  groupPhotoCandidates: (includeHidden = false, limit = 20, offset = 0) =>
+    api<
+      PeopleReviewPage<PersonGroupPhotoCandidate> & {
+        faceCountThreshold: number;
+        minimumFaceCount: number;
+        relativeFaceSizeThreshold: number;
+      }
+    >("/api/people/group-photo-candidates", {
+      params: { includeHidden, limit, offset },
+    }),
+  excludePersonMatch: (sourceId: string, targetId: string) =>
+    api<{ ok: boolean; excluded: boolean }>("/api/people/matches/exclude", {
+      method: "POST",
+      body: { sourceId, targetId },
+    }),
+  retainPersonGroup: (personId: string) =>
+    api<{ ok: boolean; retained: boolean }>("/api/people/matches/retain", {
+      method: "POST",
+      body: { personId },
+    }),
   personMedia: (id: string, cursor?: string) =>
     api<{ ok: boolean; page: PersonMediaPage }>(
       `/api/people/${encodeURIComponent(id)}/media`,

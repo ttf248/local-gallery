@@ -539,6 +539,96 @@ class WorkerTests(unittest.TestCase):
         np.testing.assert_allclose(faces[0][4:14], [248, 176, 256, 176, 264, 184, 256, 192, 264, 192])
         self.assertAlmostEqual(0.9, float(faces[0][14]))
 
+        with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np):
+            shifted = worker.buffalo_m_detection_input(
+                np.zeros((640, 640, 3), dtype=np.uint8),
+                runtime["detector"],
+                runtime,
+                offset_x=640,
+                offset_y=320,
+            )
+        np.testing.assert_allclose(shifted[0][:4], [848, 440, 80, 96])
+        np.testing.assert_allclose(shifted[0][4:14], [888, 496, 896, 496, 904, 504, 896, 512, 904, 512])
+
+    def test_buffalo_m_tile_nms_merges_overlapping_boxes(self):
+        def face(x, y, score):
+            return np.asarray([x, y, 40, 40, *([0] * 10), score], dtype=np.float32)
+
+        with patch.object(worker, "np", np):
+            faces = worker.buffalo_m_nms([
+                face(100, 120, 0.9),
+                face(104, 122, 0.8),
+                face(500, 400, 0.7),
+            ])
+
+        self.assertEqual(2, len(faces))
+        self.assertEqual([100, 500], [int(item[0]) for item in faces])
+
+    def test_buffalo_m_detect_runs_overlapping_tiles_after_group_trigger(self):
+        outputs = [
+            np.zeros((12800, 1), dtype=np.float32),
+            np.zeros((3200, 1), dtype=np.float32),
+            np.zeros((800, 1), dtype=np.float32),
+            np.zeros((12800, 4), dtype=np.float32),
+            np.zeros((3200, 4), dtype=np.float32),
+            np.zeros((800, 4), dtype=np.float32),
+            np.zeros((12800, 10), dtype=np.float32),
+            np.zeros((3200, 10), dtype=np.float32),
+            np.zeros((800, 10), dtype=np.float32),
+        ]
+        position = (20 * 80 + 30) * worker.BUFFALO_M_ANCHORS_PER_LOCATION
+        outputs[0][position, 0] = 0.9
+
+        class Detector:
+            def __init__(self):
+                self.calls = 0
+
+            def run(self, _names, _feed):
+                self.calls += 1
+                return outputs
+
+        detector = Detector()
+        runtime = {
+            "detector": detector,
+            "detector_input": "input.1",
+            "detector_outputs": [str(index) for index in range(9)],
+        }
+        with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np), patch.object(
+            worker, "buffalo_m_needs_group_tiles", return_value=True
+        ):
+            faces = worker.detect_buffalo_m(np.zeros((640, 1600, 3), dtype=np.uint8), runtime)
+
+        self.assertEqual(3, detector.calls)
+        self.assertGreaterEqual(len(faces), 2)
+
+    def test_buffalo_m_group_photo_trigger_preserves_ordinary_fast_path(self):
+        with patch.object(worker, "np", np):
+            ordinary_image = np.zeros((1200, 1200, 3), dtype=np.uint8)
+            group_image = np.zeros((2000, 2000, 3), dtype=np.uint8)
+            ordinary = [[200, 200, 180, 180, 0.9]]
+            small = [[200, 200, 40, 45, 0.9]]
+
+            self.assertFalse(worker.buffalo_m_needs_group_tiles(ordinary_image, ordinary))
+            self.assertEqual(worker.BUFFALO_M_FACE_LIMIT, worker.buffalo_m_face_limit(ordinary_image, ordinary))
+            self.assertTrue(worker.buffalo_m_needs_group_tiles(group_image, small))
+            self.assertEqual(worker.BUFFALO_M_GROUP_FACE_LIMIT, worker.buffalo_m_face_limit(group_image, small))
+            self.assertTrue(worker.buffalo_m_needs_group_tiles(ordinary_image, [small[0]] * 8))
+
+    def test_buffalo_m_gpu_worker_count_reduces_tiled_batch_concurrency(self):
+        from PIL import Image as PILImage
+
+        with tempfile.TemporaryDirectory() as directory:
+            small = Path(directory) / "small.png"
+            tiled = Path(directory) / "tiled.png"
+            large = Path(directory) / "large.png"
+            PILImage.new("RGB", (800, 800)).save(small)
+            PILImage.new("RGB", (1600, 1400)).save(tiled)
+            PILImage.new("RGB", (2048, 2048)).save(large)
+
+            self.assertEqual(worker.BUFFALO_M_GPU_WORKERS, worker.buffalo_m_gpu_worker_count([str(small)]))
+            self.assertEqual(worker.BUFFALO_M_GPU_TILED_WORKERS, worker.buffalo_m_gpu_worker_count([str(tiled)]))
+            self.assertEqual(worker.BUFFALO_M_GPU_LARGE_IMAGE_WORKERS, worker.buffalo_m_gpu_worker_count([str(large)]))
+
     def test_sface_alignment_matches_svd_reference(self):
         rng = np.random.default_rng(20261115)
         destination = np.asarray([
@@ -1132,6 +1222,8 @@ class WorkerTests(unittest.TestCase):
         ), patch.object(worker, "gpu_available", return_value=True), patch.object(
             worker, "run_image_analysis", return_value=response
         ) as run_analysis, patch.object(
+            worker, "buffalo_m_gpu_worker_count", return_value=3
+        ) as choose_workers, patch.object(
             worker, "analyze_face_image", return_value={"data": {"faces": []}}
         ) as analyze:
             result = worker.process({
@@ -1143,7 +1235,8 @@ class WorkerTests(unittest.TestCase):
             run_analysis.call_args.args[1]("one.jpg")
 
         self.assertIs(response, result)
-        self.assertEqual(worker.BUFFALO_M_GPU_WORKERS, run_analysis.call_args.kwargs["max_workers"])
+        choose_workers.assert_called_once_with(["one.jpg", "two.jpg"])
+        self.assertEqual(3, run_analysis.call_args.kwargs["max_workers"])
         analyze.assert_called_once_with("one.jpg", "gpu", worker.FACE_MODEL_BUFFALO_M)
 
     def test_face_model_initialization_is_shared_by_parallel_workers(self):

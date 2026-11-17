@@ -276,6 +276,92 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	cleared.Body.Close()
 }
 
+func TestPeopleMatchReviewAPIListsSmallGroupsAndPersistsActions(t *testing.T) {
+	root := t.TempDir()
+	photoDir := filepath.Join(root, "photos")
+	if err := os.MkdirAll(photoDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{filepath.Join(photoDir, "first.jpg"), filepath.Join(photoDir, "second.jpg")}
+	for _, path := range paths {
+		if err := os.WriteFile(path, []byte("temporary image"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	catalog := services.NewResourceCatalog()
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root},
+		Albums: []models.Album{{
+			Type: "album", Name: "人物复核", Path: photoDir, SourceRoot: root,
+			ContentKind: string(models.ContentKindPhoto), ImageFiles: paths, CoverImage: paths[0],
+		}},
+	}, []string{root})
+	people, err := services.OpenPeopleService(filepath.Join(root, "state", "people.json"), filepath.Join(root, "derived", "people-index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := people.SetFaceAnalyzerVersion(services.FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	records := make([]services.AIAnalysisRecord, len(paths))
+	for index, path := range paths {
+		records[index] = services.AIAnalysisRecord{
+			Type: services.AIJobTypeFace, ResourceID: catalog.ExternalID(path, services.ResourceFile),
+			Size: 100, MTimeNs: 200, ModuleVersion: services.FaceAnalyzerVersion,
+			Status: "faces_found", Data: peopleHandlerOutput(index).Data,
+			Fields: []string{services.AIFieldFaces}, UpdatedAt: time.Now(),
+		}
+	}
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	safety, _ := middleware.PathSafetyMiddleware([]string{root}, catalog)
+	app := fiber.New()
+	api := app.Group("/api")
+	api.Use(safety)
+	api.Get("/people/matches", PeopleMatchSuggestionsHandler(people, catalog))
+	api.Post("/people/matches/exclude", PeopleMatchExclusionHandler(people))
+	api.Post("/people/matches/retain", PeopleMatchRetentionHandler(people))
+
+	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people/matches?limit=2", "")
+	var body struct {
+		Items        []services.PersonMatchSuggestion `json:"items"`
+		TotalSources int                              `json:"totalSources"`
+		Checked      int                              `json:"checkedSources"`
+		HasMore      bool                             `json:"hasMore"`
+	}
+	decodePeopleBody(t, list, &body)
+	if list.StatusCode != fiber.StatusOK || len(body.Items) != 2 || body.TotalSources != 2 || body.Checked != 2 || body.HasMore {
+		t.Fatalf("review page status=%d payload=%+v", list.StatusCode, body)
+	}
+	for _, item := range body.Items {
+		if item.Source.FaceCount != 1 || len(item.Candidates) != 0 {
+			t.Fatalf("isolated face review item = %+v", item)
+		}
+	}
+
+	retainBody, _ := json.Marshal(map[string]string{"personId": body.Items[0].Source.ID})
+	retained := peopleHandlerRequest(t, app, fiber.MethodPost, "/api/people/matches/retain", string(retainBody))
+	if retained.StatusCode != fiber.StatusOK || !people.Corrections().RetainedGroups[body.Items[0].Source.ID] {
+		t.Fatalf("retain response=%d corrections=%+v", retained.StatusCode, people.Corrections())
+	}
+
+	excludeBody, _ := json.Marshal(map[string]string{
+		"sourceId": body.Items[0].Source.ID,
+		"targetId": body.Items[1].Source.ID,
+	})
+	excluded := peopleHandlerRequest(t, app, fiber.MethodPost, "/api/people/matches/exclude", string(excludeBody))
+	if excluded.StatusCode != fiber.StatusOK || len(people.Corrections().ExcludedMatches) != 1 {
+		t.Fatalf("exclude response=%d corrections=%+v", excluded.StatusCode, people.Corrections())
+	}
+
+	invalid := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people/matches?offset=-1", "")
+	defer invalid.Body.Close()
+	if invalid.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("invalid review offset status=%d", invalid.StatusCode)
+	}
+}
+
 func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 	const groupCount = 70
 	const singleFolderGroupCount = 10
@@ -362,6 +448,8 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 	app := fiber.New()
 	app.Use(safety)
 	app.Get("/api/people", PeopleHandler(people, nil, catalog, nil))
+	app.Get("/api/people/group-photo-candidates", PeopleGroupPhotoCandidatesHandler(people, catalog))
+	app.Get("/api/people/matches", PeopleMatchSuggestionsHandler(people, catalog))
 
 	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
 	var listBody struct {
@@ -376,7 +464,7 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 		Sort                    string                 `json:"sort"`
 	}
 	decodePeopleBody(t, list, &listBody)
-	if len(listBody.People) != 50 || listBody.TotalGroups != groupCount || listBody.FilteredGroups != 0 ||
+	if len(listBody.People) != 50 || listBody.TotalGroups != groupCount-2 || listBody.FilteredGroups != 0 ||
 		listBody.GroupPhotoFaceThreshold != peopleListGroupPhotoFaceThreshold || listBody.Limit != 50 ||
 		listBody.CentroidThreshold != services.PeopleGroupingCentroidThreshold ||
 		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil || listBody.Sort != peopleSortPhotos {
@@ -422,7 +510,7 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 	}
 }
 
-func TestPeopleHTTPListFiltersOnlyGroupsFoundExclusivelyInLargeGroupPhotos(t *testing.T) {
+func TestPeopleHTTPListSeparatesCommonPendingAndGroupPhotoCandidates(t *testing.T) {
 	root := t.TempDir()
 	photoDir := filepath.Join(root, "photos")
 	if err := os.MkdirAll(photoDir, 0o755); err != nil {
@@ -432,6 +520,8 @@ func TestPeopleHTTPListFiltersOnlyGroupsFoundExclusivelyInLargeGroupPhotos(t *te
 		filepath.Join(photoDir, "large-group.jpg"),
 		filepath.Join(photoDir, "ordinary.jpg"),
 		filepath.Join(photoDir, "twenty-faces.jpg"),
+		filepath.Join(photoDir, "ordinary-repeat-a.jpg"),
+		filepath.Join(photoDir, "ordinary-repeat-b.jpg"),
 	}
 	for _, path := range paths {
 		if err := os.WriteFile(path, []byte("temporary test image"), 0o600); err != nil {
@@ -465,6 +555,16 @@ func TestPeopleHTTPListFiltersOnlyGroupsFoundExclusivelyInLargeGroupPhotos(t *te
 			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found",
 			Data: peopleHandlerOutputWithAxes(peopleTestSequence(21, 20)).Data, Fields: []string{services.AIFieldFaces},
 		},
+		{
+			Type: services.AIJobTypeFace, ResourceID: resourceID(paths[3]), Size: 100, MTimeNs: 200,
+			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found",
+			Data: peopleHandlerOutput(0).Data, Fields: []string{services.AIFieldFaces},
+		},
+		{
+			Type: services.AIJobTypeFace, ResourceID: resourceID(paths[4]), Size: 100, MTimeNs: 200,
+			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found",
+			Data: peopleHandlerOutput(0).Data, Fields: []string{services.AIFieldFaces},
+		},
 	}
 	people, err := services.OpenPeopleService(filepath.Join(root, "state", "people.json"), filepath.Join(root, "derived", "people-index.json"))
 	if err != nil {
@@ -477,6 +577,8 @@ func TestPeopleHTTPListFiltersOnlyGroupsFoundExclusivelyInLargeGroupPhotos(t *te
 	app := fiber.New()
 	app.Use(safety)
 	app.Get("/api/people", PeopleHandler(people, nil, catalog, nil))
+	app.Get("/api/people/group-photo-candidates", PeopleGroupPhotoCandidatesHandler(people, catalog))
+	app.Get("/api/people/matches", PeopleMatchSuggestionsHandler(people, catalog))
 
 	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
 	var listBody struct {
@@ -486,19 +588,41 @@ func TestPeopleHTTPListFiltersOnlyGroupsFoundExclusivelyInLargeGroupPhotos(t *te
 		GroupPhotoFaceThreshold int                    `json:"groupPhotoFaceThreshold"`
 	}
 	decodePeopleBody(t, list, &listBody)
-	if len(listBody.People) != 21 || listBody.TotalGroups != 21 || listBody.FilteredGroups != 20 ||
+	if len(listBody.People) != 1 || listBody.TotalGroups != 1 || listBody.FilteredGroups != 20 ||
 		listBody.GroupPhotoFaceThreshold != 20 {
 		t.Fatalf("large group filtering returned %d people, total %d, filtered %d, threshold %d", len(listBody.People), listBody.TotalGroups, listBody.FilteredGroups, listBody.GroupPhotoFaceThreshold)
 	}
 	var ordinaryPhotoGroup *services.PersonGroup
 	for index := range listBody.People {
-		if listBody.People[index].PhotoCount == 2 {
+		if listBody.People[index].PhotoCount == 4 {
 			ordinaryPhotoGroup = &listBody.People[index]
 			break
 		}
 	}
 	if ordinaryPhotoGroup == nil {
 		t.Fatal("group with an ordinary photo was hidden along with large-group-only candidates")
+	}
+	candidates := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people/group-photo-candidates?limit=5", "")
+	var candidatesBody struct {
+		Items  []peopleGroupPhotoCandidate `json:"items"`
+		Total  int                         `json:"total"`
+		Offset int                         `json:"offset"`
+		Next   int                         `json:"nextOffset"`
+		More   bool                        `json:"hasMore"`
+	}
+	decodePeopleBody(t, candidates, &candidatesBody)
+	if len(candidatesBody.Items) != 5 || candidatesBody.Total != 20 || candidatesBody.Offset != 0 ||
+		candidatesBody.Next != 5 || !candidatesBody.More {
+		t.Fatalf("group-photo candidate page = %+v, want the 20 single-photo groups paged by 5", candidatesBody)
+	}
+	matches := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people/matches?limit=50", "")
+	var matchesBody struct {
+		TotalSources int                              `json:"totalSources"`
+		Items        []services.PersonMatchSuggestion `json:"items"`
+	}
+	decodePeopleBody(t, matches, &matchesBody)
+	if matchesBody.TotalSources != 20 || len(matchesBody.Items) != 20 {
+		t.Fatalf("pending match sources = %d items / %d total, want ordinary one-photo groups only", len(matchesBody.Items), matchesBody.TotalSources)
 	}
 
 	var hiddenCandidate services.PersonGroup

@@ -19,41 +19,72 @@ import (
 )
 
 const (
-	peopleIndexVersion       = 1
-	peopleGroupingVersion    = 17
-	peopleEmbeddingDimension = 128
-	peopleBuffaloMDimension  = 512
-	faceDetectionMinScoreM   = float32(0.5)
-	peopleMaxSplitFaces      = 200
+	peopleIndexVersion                        = 1
+	peopleGroupingVersion                     = 18
+	peopleEmbeddingDimension                  = 128
+	peopleBuffaloMDimension                   = 512
+	faceDetectionMinScoreM                    = float32(0.5)
+	peopleMaxSplitFaces                       = 200
+	PeopleMaxFacesPerPhoto                    = 256
+	PeopleGroupPhotoMinimumFaces              = 8
+	PeopleGroupPhotoRelativeFaceSizeThreshold = 0.04
+	PeopleCommonMinimumPhotoCount             = 3
 )
 
-// PeopleGroupingCentroidThreshold keeps approximate group lookup focused on nearby centers.
+// PeopleGroupingCentroidThreshold is the quality-v2 starting value retained
+// for API compatibility. Each model has an independent policy.
 const PeopleGroupingCentroidThreshold = 0.52
 
-// peopleGroupingANNScoreMargin keeps borderline float32 ANN scores on the
-// exact float64 centroid path before applying the grouping threshold.
-const peopleGroupingANNScoreMargin = 0.001
-
-// PeopleGroupingAnchorThreshold keeps every cluster member close to its
-// immutable seed, preventing slowly drifting centroids from chaining identities.
+// PeopleGroupingAnchorThreshold prevents slowly drifting centroids from
+// chaining identities. This is the quality-v2 starting value.
 const PeopleGroupingAnchorThreshold = 0.72
 
-// PeopleGroupingMergeCentroidThreshold identifies separate clusters that may
-// represent the same identity after changes in age, pose, or image quality.
+// PeopleGroupingMergeCentroidThreshold is the quality-v2 starting value for
+// the separate-cluster review pass.
 const PeopleGroupingMergeCentroidThreshold = 0.82
 
-// PeopleGroupingMergeFaceThreshold is the minimum similarity for reciprocal
-// nearest-face evidence between two independent clusters.
+// PeopleGroupingMergeFaceThreshold is the quality-v2 starting value for
+// reciprocal nearest-face evidence.
 const PeopleGroupingMergeFaceThreshold = 0.72
 
-const (
-	peopleGroupingMergeCandidateLimit        = 64
-	peopleGroupingMergeMaximumSampleFaces    = 256
-	peopleGroupingMergeMinimumFaces          = 10
-	peopleGroupingMergeMinimumMutualMatches  = 2
-	peopleGroupingMergeMutualMatchRatio      = 0.05
-	peopleGroupingMergeMinimumMeanSimilarity = 0.75
+type peopleGroupingThresholds struct {
+	centroidThreshold          float64
+	annScoreMargin             float64
+	anchorThreshold            float64
+	mergeCentroidThreshold     float64
+	mergeFaceThreshold         float64
+	mergeCandidateLimit        int
+	mergeMaximumSampleFaces    int
+	mergeMinimumFaces          int
+	mergeMinimumMutual         int
+	mergeMutualRatio           float64
+	mergeMinimumMeanSimilarity float64
+}
+
+// Keep model policies separate so calibration can use each model's own
+// annotated pairs without comparing vectors across feature spaces. The
+// starting values intentionally match until local labels justify a change.
+var (
+	qualityV2GroupingThresholds = peopleGroupingThresholds{
+		centroidThreshold: 0.52, annScoreMargin: 0.001, anchorThreshold: 0.72,
+		mergeCentroidThreshold: 0.82, mergeFaceThreshold: 0.72,
+		mergeCandidateLimit: 64, mergeMaximumSampleFaces: 256, mergeMinimumFaces: 10,
+		mergeMinimumMutual: 2, mergeMutualRatio: 0.05, mergeMinimumMeanSimilarity: 0.75,
+	}
+	buffaloMGroupingThresholds = peopleGroupingThresholds{
+		centroidThreshold: 0.52, annScoreMargin: 0.001, anchorThreshold: 0.72,
+		mergeCentroidThreshold: 0.82, mergeFaceThreshold: 0.72,
+		mergeCandidateLimit: 64, mergeMaximumSampleFaces: 256, mergeMinimumFaces: 10,
+		mergeMinimumMutual: 2, mergeMutualRatio: 0.05, mergeMinimumMeanSimilarity: 0.75,
+	}
 )
+
+func peopleGroupingThresholdsForModel(model string) peopleGroupingThresholds {
+	if model == FaceModelBuffaloM {
+		return buffaloMGroupingThresholds
+	}
+	return qualityV2GroupingThresholds
+}
 
 var (
 	ErrPersonNotFound = errors.New("person not found")
@@ -80,15 +111,24 @@ type PersonGroup struct {
 	FaceCount       int                 `json:"faceCount"`
 	PhotoCount      int                 `json:"photoCount"`
 	CoverResourceID string              `json:"coverResourceId,omitempty"`
+	Confirmed       bool                `json:"confirmed"`
 	Hidden          bool                `json:"hidden"`
 	Quality         *PersonGroupQuality `json:"quality,omitempty"`
 }
 
-// PersonGroupPhotoStats counts each person's distinct photos and the subset
-// classified as large group photos by their total detected face count.
+// IsCommon reports whether a group belongs in the regular people list.
+func (group PersonGroup) IsCommon() bool {
+	return group.Confirmed || group.PhotoCount >= PeopleCommonMinimumPhotoCount
+}
+
+// PersonGroupPhotoStats counts distinct photos, group-photo appearances and
+// low-resolution face evidence for one person group.
 type PersonGroupPhotoStats struct {
-	PhotoCount           int
-	LargeGroupPhotoCount int
+	PhotoCount           int     `json:"photoCount"`
+	LargeGroupPhotoCount int     `json:"groupPhotoCount"`
+	OrdinaryPhotoCount   int     `json:"ordinaryPhotoCount"`
+	RelativeFaceSizeP10  float64 `json:"relativeFaceSizeP10"`
+	DetectionP10         float64 `json:"detectionP10"`
 }
 
 // PersonGroupQuality describes the lower tenth percentile of each group's
@@ -110,19 +150,32 @@ type PeopleAlbumGroup struct {
 
 // PeopleCorrections contains user-owned labels and assignments, never embeddings.
 type PeopleCorrections struct {
-	Version     int                                `json:"version"`
-	Names       map[string]string                  `json:"names"`
-	Hidden      map[string]bool                    `json:"hidden"`
-	Assignments map[string]string                  `json:"assignments"`
-	Profiles    map[string]PeopleCorrectionProfile `json:"profiles,omitempty"`
+	Version         int                                `json:"version"`
+	Names           map[string]string                  `json:"names"`
+	Hidden          map[string]bool                    `json:"hidden"`
+	Assignments     map[string]string                  `json:"assignments"`
+	PinnedFaces     map[string]string                  `json:"pinnedFaces,omitempty"`
+	RetainedGroups  map[string]bool                    `json:"retainedGroups,omitempty"`
+	ExcludedMatches []PeopleMatchExclusion             `json:"excludedMatches,omitempty"`
+	Profiles        map[string]PeopleCorrectionProfile `json:"profiles,omitempty"`
+}
+
+// PeopleMatchExclusion stores the two stable face keys a user chose to keep
+// separate. The relation is model-specific and survives rebuilding clusters.
+type PeopleMatchExclusion struct {
+	FirstFaceKey  string `json:"firstFaceKey"`
+	SecondFaceKey string `json:"secondFaceKey"`
 }
 
 // PeopleCorrectionProfile 保存单个人脸模型的名称与人工分配。
 type PeopleCorrectionProfile struct {
-	Version     int               `json:"version"`
-	Names       map[string]string `json:"names"`
-	Hidden      map[string]bool   `json:"hidden"`
-	Assignments map[string]string `json:"assignments"`
+	Version         int                    `json:"version"`
+	Names           map[string]string      `json:"names"`
+	Hidden          map[string]bool        `json:"hidden"`
+	Assignments     map[string]string      `json:"assignments"`
+	PinnedFaces     map[string]string      `json:"pinnedFaces,omitempty"`
+	RetainedGroups  map[string]bool        `json:"retainedGroups,omitempty"`
+	ExcludedMatches []PeopleMatchExclusion `json:"excludedMatches,omitempty"`
 }
 
 type peopleFaceDisk struct {
@@ -378,6 +431,14 @@ func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
 	return nil
 }
 
+func (s *PeopleService) groupingThresholdsLocked() peopleGroupingThresholds {
+	model := s.activeModel
+	if model == "" && s.faceModelVersion == FaceAnalyzerBuffaloMVersion {
+		model = FaceModelBuffaloM
+	}
+	return peopleGroupingThresholdsForModel(model)
+}
+
 // SetSourceDimensions enables analysis-scale face-size filtering for older
 // records whose boxes are in source-image coordinates. Set it before Sync or
 // ApplyRecords so cache rebuilds and incremental updates use the same rule.
@@ -397,7 +458,12 @@ func (s *PeopleService) SetSourceIsPhoto(lookup func(resourceID string) bool) {
 }
 
 func emptyPeopleManualState() peopleManualState {
-	return peopleManualState{Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}
+	return peopleManualState{
+		Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{},
+		Assignments: map[string]string{}, PinnedFaces: map[string]string{},
+		RetainedGroups:  map[string]bool{},
+		ExcludedMatches: []PeopleMatchExclusion{},
+	}
 }
 
 func normalizePeopleManualState(state peopleManualState) peopleManualState {
@@ -410,12 +476,19 @@ func normalizePeopleManualState(state peopleManualState) peopleManualState {
 	if state.Assignments == nil {
 		state.Assignments = map[string]string{}
 	}
+	if state.PinnedFaces == nil {
+		state.PinnedFaces = map[string]string{}
+	}
+	if state.RetainedGroups == nil {
+		state.RetainedGroups = map[string]bool{}
+	}
+	state.ExcludedMatches = normalizePeopleMatchExclusions(state.ExcludedMatches)
 	state.Version = peopleIndexVersion
 	return state
 }
 
 func peopleReferencedIDs(state peopleManualState) map[string]bool {
-	result := make(map[string]bool, len(state.Names)+len(state.Hidden)+len(state.Assignments))
+	result := make(map[string]bool, len(state.Names)+len(state.Hidden)+len(state.Assignments)+len(state.PinnedFaces)+len(state.RetainedGroups))
 	for id := range state.Names {
 		result[id] = true
 	}
@@ -424,6 +497,14 @@ func peopleReferencedIDs(state peopleManualState) map[string]bool {
 	}
 	for _, id := range state.Assignments {
 		result[id] = true
+	}
+	for _, id := range state.PinnedFaces {
+		result[id] = true
+	}
+	for id, retained := range state.RetainedGroups {
+		if retained {
+			result[id] = true
+		}
 	}
 	return result
 }
@@ -687,6 +768,9 @@ func clonePeopleManualState(state peopleManualState) peopleManualState {
 	return normalizePeopleManualState(peopleManualState{
 		Version: state.Version, Names: cloneStringMap(state.Names),
 		Hidden: cloneBoolMap(state.Hidden), Assignments: cloneStringMap(state.Assignments),
+		PinnedFaces:     cloneStringMap(state.PinnedFaces),
+		RetainedGroups:  cloneBoolMap(state.RetainedGroups),
+		ExcludedMatches: append([]PeopleMatchExclusion(nil), state.ExcludedMatches...),
 	})
 }
 
@@ -904,28 +988,53 @@ func (s *PeopleService) remapCorrectionsLocked(previousIDs map[string]string) {
 			s.manual.Assignments[key] = newID
 		}
 	}
+	for key, id := range s.manual.PinnedFaces {
+		if newID := oldToNew[id]; newID != "" && !pinnedOldIDs[id] {
+			s.manual.PinnedFaces[key] = newID
+		}
+	}
+	retainedGroups := make(map[string]bool, len(s.manual.RetainedGroups))
+	for id, retained := range s.manual.RetainedGroups {
+		if !retained {
+			continue
+		}
+		if newID := oldToNew[id]; newID != "" && !pinnedOldIDs[id] {
+			retainedGroups[newID] = true
+		} else {
+			retainedGroups[id] = true
+		}
+	}
+	s.manual.RetainedGroups = retainedGroups
 	s.manual.Names = names
 	s.manual.Hidden = hidden
 }
 
 func (s *PeopleService) addFaceLocked(face PersonFace) {
+	thresholds := s.groupingThresholdsLocked()
 	if s.ann == nil {
 		s.rebuildPeopleANNLocked()
 	}
+	if pinnedID := s.manual.PinnedFaces[face.Key]; pinnedID != "" {
+		s.addPinnedFaceLocked(face, pinnedID)
+		return
+	}
 	bestID := ""
-	bestScore := PeopleGroupingCentroidThreshold
+	bestScore := thresholds.centroidThreshold
 	for _, candidate := range s.ann.Search(face.embedding, peopleANNCandidateLimit) {
 		id := candidate.id
 		cluster := s.clusters[id]
 		if cluster == nil {
 			continue
 		}
-		if candidate.score <= float32(PeopleGroupingCentroidThreshold-peopleGroupingANNScoreMargin) {
+		if s.peopleFaceExcludedFromClusterLocked(face.Key, cluster) {
+			continue
+		}
+		if candidate.score <= float32(thresholds.centroidThreshold-thresholds.annScoreMargin) {
 			continue
 		}
 		s.comparisons++
 		score := peopleCosine(face.embedding, cluster.centroid)
-		if score <= PeopleGroupingCentroidThreshold || !peopleClusterHasMatchingAnchor(face, cluster) {
+		if score <= thresholds.centroidThreshold || !peopleClusterHasMatchingAnchorAtThreshold(face, cluster, thresholds.anchorThreshold) {
 			continue
 		}
 		if score > bestScore || (bestID != "" && score == bestScore && id < bestID) {
@@ -968,6 +1077,36 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 	s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], face.Key)
 }
 
+func (s *PeopleService) addPinnedFaceLocked(face PersonFace, personID string) {
+	cluster := s.clusters[personID]
+	newCluster := cluster == nil
+	if newCluster {
+		cluster = &peopleCluster{
+			sum: make([]float64, len(face.embedding)), centroid: make([]float32, len(face.embedding)),
+			anchor:  peopleClusterAnchor{key: face.Key, resourceID: face.ResourceID, embedding: face.embedding},
+			members: make(map[string]struct{}), resources: make(map[string]struct{}),
+		}
+		s.clusters[personID] = cluster
+	}
+	for index, value := range face.embedding {
+		cluster.sum[index] += float64(value)
+	}
+	cluster.count++
+	cluster.members[face.Key] = struct{}{}
+	cluster.resources[face.ResourceID] = struct{}{}
+	updatePeopleCentroid(cluster)
+	face.PersonID = personID
+	face.originID = personID
+	s.faces[face.Key] = face
+	if s.facesByResource == nil {
+		s.facesByResource = make(map[string][]string)
+	}
+	s.facesByResource[face.ResourceID] = append(s.facesByResource[face.ResourceID], face.Key)
+	if newCluster {
+		s.ann.Add(personID, cluster.centroid)
+	}
+}
+
 type peopleClusterMergeEvidence struct {
 	leftID      string
 	rightID     string
@@ -977,6 +1116,7 @@ type peopleClusterMergeEvidence struct {
 }
 
 func (s *PeopleService) consolidateClustersLocked(touched map[string]struct{}) {
+	thresholds := s.groupingThresholdsLocked()
 	if len(s.clusters) < 2 {
 		return
 	}
@@ -993,7 +1133,7 @@ func (s *PeopleService) consolidateClustersLocked(touched map[string]struct{}) {
 	eligible := make(map[string]bool, len(s.clusters))
 	for _, id := range clusterIDs {
 		cluster := s.clusters[id]
-		if cluster.count < peopleGroupingMergeMinimumFaces || referencedIDs[id] ||
+		if cluster.count < thresholds.mergeMinimumFaces || referencedIDs[id] ||
 			s.manual.Names[id] != "" || s.manual.Hidden[id] {
 			continue
 		}
@@ -1025,7 +1165,7 @@ func (s *PeopleService) consolidateClustersLocked(touched map[string]struct{}) {
 			}
 		}
 		left := s.clusters[leftID]
-		for _, candidate := range s.ann.Search(left.centroid, peopleGroupingMergeCandidateLimit) {
+		for _, candidate := range s.ann.Search(left.centroid, thresholds.mergeCandidateLimit) {
 			rightID := candidate.id
 			if rightID == leftID || !eligible[rightID] {
 				continue
@@ -1039,12 +1179,15 @@ func (s *PeopleService) consolidateClustersLocked(touched map[string]struct{}) {
 				continue
 			}
 			pairLeft, pairRight := s.clusters[pairLeftID], s.clusters[pairRightID]
-			centroidScore := peopleCosine(pairLeft.centroid, pairRight.centroid)
-			if centroidScore < PeopleGroupingMergeCentroidThreshold {
+			if s.peopleClustersExcludedLocked(pairLeft, pairRight) {
 				continue
 			}
-			mutualCount, mutualMean, ok := s.peopleClusterMutualMatches(pairLeft, pairRight, matchFaces[pairLeftID], matchFaces[pairRightID])
-			if !ok || mutualCount < peopleGroupingMinimumMutualMatches(min(pairLeft.count, pairRight.count)) || mutualMean < peopleGroupingMergeMinimumMeanSimilarity {
+			centroidScore := peopleCosine(pairLeft.centroid, pairRight.centroid)
+			if centroidScore < thresholds.mergeCentroidThreshold {
+				continue
+			}
+			mutualCount, mutualMean, ok := s.peopleClusterMutualMatchesWithThresholds(pairLeft, pairRight, matchFaces[pairLeftID], matchFaces[pairRightID], thresholds)
+			if !ok || mutualCount < peopleGroupingMinimumMutualMatchesFor(min(pairLeft.count, pairRight.count), thresholds) || mutualMean < thresholds.mergeMinimumMeanSimilarity {
 				continue
 			}
 			pair := peopleClusterMergeEvidence{
@@ -1127,10 +1270,18 @@ func peopleClusterPairKey(leftID, rightID string) string {
 }
 
 func peopleGroupingMinimumMutualMatches(smallerClusterSize int) int {
-	return max(peopleGroupingMergeMinimumMutualMatches, int(math.Ceil(float64(smallerClusterSize)*peopleGroupingMergeMutualMatchRatio)))
+	return peopleGroupingMinimumMutualMatchesFor(smallerClusterSize, qualityV2GroupingThresholds)
+}
+
+func peopleGroupingMinimumMutualMatchesFor(smallerClusterSize int, thresholds peopleGroupingThresholds) int {
+	return max(thresholds.mergeMinimumMutual, int(math.Ceil(float64(smallerClusterSize)*thresholds.mergeMutualRatio)))
 }
 
 func (s *PeopleService) peopleClusterMutualMatches(left, right *peopleCluster, leftFaces, rightFaces map[string][]PersonFace) (int, float64, bool) {
+	return s.peopleClusterMutualMatchesWithThresholds(left, right, leftFaces, rightFaces, qualityV2GroupingThresholds)
+}
+
+func (s *PeopleService) peopleClusterMutualMatchesWithThresholds(left, right *peopleCluster, leftFaces, rightFaces map[string][]PersonFace, thresholds peopleGroupingThresholds) (int, float64, bool) {
 	if left.anchor.embedding == nil || right.anchor.embedding == nil || len(left.centroid) != len(right.centroid) {
 		return 0, 0, false
 	}
@@ -1158,9 +1309,9 @@ func (s *PeopleService) peopleClusterMutualMatches(left, right *peopleCluster, l
 	var totalSimilarity float64
 	for _, leftOrigin := range leftOrigins {
 		for _, rightOrigin := range rightOrigins {
-			count, mean := peopleReciprocalFaceMatches(leftFaces[leftOrigin], rightFaces[rightOrigin])
-			minimum := peopleGroupingMinimumMutualMatches(min(leftCounts[leftOrigin], rightCounts[rightOrigin]))
-			if count < minimum || mean < peopleGroupingMergeMinimumMeanSimilarity {
+			count, mean := peopleReciprocalFaceMatchesAtThreshold(leftFaces[leftOrigin], rightFaces[rightOrigin], thresholds.mergeFaceThreshold)
+			minimum := peopleGroupingMinimumMutualMatchesFor(min(leftCounts[leftOrigin], rightCounts[rightOrigin]), thresholds)
+			if count < minimum || mean < thresholds.mergeMinimumMeanSimilarity {
 				return 0, 0, true
 			}
 			totalMatches += count
@@ -1174,6 +1325,10 @@ func (s *PeopleService) peopleClusterMutualMatches(left, right *peopleCluster, l
 }
 
 func peopleReciprocalFaceMatches(leftFaces, rightFaces []PersonFace) (int, float64) {
+	return peopleReciprocalFaceMatchesAtThreshold(leftFaces, rightFaces, qualityV2GroupingThresholds.mergeFaceThreshold)
+}
+
+func peopleReciprocalFaceMatchesAtThreshold(leftFaces, rightFaces []PersonFace, minimumSimilarity float64) (int, float64) {
 	if len(leftFaces) == 0 || len(rightFaces) == 0 {
 		return 0, 0
 	}
@@ -1205,7 +1360,7 @@ func peopleReciprocalFaceMatches(leftFaces, rightFaces []PersonFace) (int, float
 	mutualCount := 0
 	var mutualTotal float64
 	for leftIndex, rightIndex := range leftBest {
-		if rightIndex < 0 || rightBest[rightIndex] != leftIndex || leftScores[leftIndex] < PeopleGroupingMergeFaceThreshold {
+		if rightIndex < 0 || rightBest[rightIndex] != leftIndex || leftScores[leftIndex] < minimumSimilarity {
 			continue
 		}
 		mutualCount++
@@ -1230,10 +1385,11 @@ func (s *PeopleService) peopleClusterMatchSamples(cluster *peopleCluster) map[st
 		}
 	}
 	for originID, originFaces := range byOrigin {
-		if len(originFaces) <= peopleGroupingMergeMaximumSampleFaces {
+		maximumSampleFaces := s.groupingThresholdsLocked().mergeMaximumSampleFaces
+		if len(originFaces) <= maximumSampleFaces {
 			continue
 		}
-		samples := make([]PersonFace, peopleGroupingMergeMaximumSampleFaces)
+		samples := make([]PersonFace, maximumSampleFaces)
 		for index := range samples {
 			position := index * (len(originFaces) - 1) / (len(samples) - 1)
 			samples[index] = originFaces[position]
@@ -1309,13 +1465,17 @@ func (s *PeopleService) mergePeopleClustersLocked(keeperID, sourceID string) {
 }
 
 func peopleClusterHasMatchingAnchor(face PersonFace, cluster *peopleCluster) bool {
+	return peopleClusterHasMatchingAnchorAtThreshold(face, cluster, qualityV2GroupingThresholds.anchorThreshold)
+}
+
+func peopleClusterHasMatchingAnchorAtThreshold(face PersonFace, cluster *peopleCluster, threshold float64) bool {
 	if cluster.anchor.embedding == nil || face.ResourceID == cluster.anchor.resourceID {
 		return false
 	}
 	if _, alreadyPresent := cluster.resources[face.ResourceID]; alreadyPresent {
 		return false
 	}
-	return peopleCosine(face.embedding, cluster.anchor.embedding) > PeopleGroupingAnchorThreshold
+	return peopleCosine(face.embedding, cluster.anchor.embedding) > threshold
 }
 
 func updatePeopleCentroid(cluster *peopleCluster) {
@@ -1432,7 +1592,7 @@ func peopleFacesFromRecordWithDimension(record AIAnalysisRecord, dimension int) 
 			Embedding []float32 `json:"embedding"`
 		} `json:"faces"`
 	}
-	if json.Unmarshal(record.Data, &result) != nil || len(result.Faces) > 100 {
+	if json.Unmarshal(record.Data, &result) != nil || len(result.Faces) > PeopleMaxFacesPerPhoto {
 		return nil
 	}
 	hash := sha256.Sum256(record.Data)
@@ -1577,13 +1737,17 @@ func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	ordinals := s.personOrdinalNamesLocked()
+	confirmed := peopleConfirmedPersonIDs(s.manual)
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
 	for _, face := range s.faces {
 		id := s.effectivePersonIDLocked(face)
 		group := groups[id]
 		if group == nil {
-			group = &PersonGroup{ID: id, Name: s.personNameLocked(id, ordinals), Hidden: s.manual.Hidden[id]}
+			group = &PersonGroup{
+				ID: id, Name: s.personNameLocked(id, ordinals),
+				Confirmed: confirmed[id], Hidden: s.manual.Hidden[id],
+			}
 			groups[id] = group
 			photos[id] = map[string]struct{}{}
 		}
@@ -1617,6 +1781,7 @@ func (s *PeopleService) AlbumGroups(fingerprints map[string]smartAlbumFileFinger
 		fingerprints []string
 	}
 	ordinals := s.personOrdinalNamesLocked()
+	confirmed := peopleConfirmedPersonIDs(s.manual)
 	groups := make(map[string]*albumGroupState)
 	for resourceID, fingerprint := range fingerprints {
 		for _, faceKey := range s.facesByResource[resourceID] {
@@ -1628,7 +1793,10 @@ func (s *PeopleService) AlbumGroups(fingerprints map[string]smartAlbumFileFinger
 			group := groups[personID]
 			if group == nil {
 				group = &albumGroupState{
-					group:  PersonGroup{ID: personID, Name: s.personNameLocked(personID, ordinals), Hidden: s.manual.Hidden[personID]},
+					group: PersonGroup{
+						ID: personID, Name: s.personNameLocked(personID, ordinals),
+						Confirmed: confirmed[personID], Hidden: s.manual.Hidden[personID],
+					},
 					photos: make(map[string]struct{}),
 				}
 				groups[personID] = group
@@ -1676,6 +1844,7 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 	defer s.mu.RUnlock()
 
 	ordinals := s.personOrdinalNamesLocked()
+	confirmed := peopleConfirmedPersonIDs(s.manual)
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
 	for _, face := range s.faces {
@@ -1688,7 +1857,10 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 		}
 		group := groups[id]
 		if group == nil {
-			group = &PersonGroup{ID: id, Name: s.personNameLocked(id, ordinals), Hidden: s.manual.Hidden[id]}
+			group = &PersonGroup{
+				ID: id, Name: s.personNameLocked(id, ordinals),
+				Confirmed: confirmed[id], Hidden: s.manual.Hidden[id],
+			}
 			groups[id] = group
 			photos[id] = make(map[string]struct{})
 		}
@@ -1773,6 +1945,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	ordinals := s.personOrdinalNamesLocked()
+	confirmed := peopleConfirmedPersonIDs(s.manual)
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]map[string]struct{})
 	qualitySamples := make(map[string]*peopleGroupQualitySamples)
@@ -1790,7 +1963,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 		}
 		group := groups[id]
 		if group == nil {
-			group = &PersonGroup{ID: id, Name: name, Hidden: s.manual.Hidden[id]}
+			group = &PersonGroup{ID: id, Name: name, Confirmed: confirmed[id], Hidden: s.manual.Hidden[id]}
 			groups[id] = group
 			photos[id] = make(map[string]struct{})
 		}
@@ -1922,7 +2095,10 @@ func peopleGroupReviewRanksBefore(left, right PersonGroup) bool {
 func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFace, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	group := PersonGroup{ID: personID, Name: s.personNameLocked(personID, s.personOrdinalNamesLocked()), Hidden: s.manual.Hidden[personID]}
+	group := PersonGroup{
+		ID: personID, Name: s.personNameLocked(personID, s.personOrdinalNamesLocked()),
+		Confirmed: peopleConfirmedPersonIDs(s.manual)[personID], Hidden: s.manual.Hidden[personID],
+	}
 	photos := make(map[string]struct{})
 	faces := make([]PersonFace, 0)
 	for _, face := range s.faces {
@@ -2025,6 +2201,9 @@ func (s *PeopleService) personNameLocked(personID string, ordinals map[string]st
 }
 
 func peopleGroupRanksBefore(left, right PersonGroup) bool {
+	if left.Confirmed != right.Confirmed {
+		return left.Confirmed
+	}
 	if left.PhotoCount != right.PhotoCount {
 		return left.PhotoCount > right.PhotoCount
 	}
@@ -2032,6 +2211,26 @@ func peopleGroupRanksBefore(left, right PersonGroup) bool {
 		return left.CoverResourceID < right.CoverResourceID
 	}
 	return left.ID < right.ID
+}
+
+func peopleConfirmedPersonIDs(state peopleManualState) map[string]bool {
+	confirmed := make(map[string]bool, len(state.Names)+len(state.Assignments)+len(state.RetainedGroups))
+	for id, name := range state.Names {
+		if name != "" {
+			confirmed[id] = true
+		}
+	}
+	for _, id := range state.Assignments {
+		if id != "" {
+			confirmed[id] = true
+		}
+	}
+	for id, retained := range state.RetainedGroups {
+		if retained {
+			confirmed[id] = true
+		}
+	}
+	return confirmed
 }
 
 type peopleGroupHeap []PersonGroup
@@ -2099,43 +2298,96 @@ func (s *PeopleService) AllFaces() []PersonFace {
 	return result
 }
 
-// GroupPhotoStats counts each group's distinct current photos and how many of
-// those photos contain more than faceCountThreshold detected faces. The
+// GroupPhotoStats counts each group's distinct current photos and classifies
+// group photos using both detected face count and normalized face size. The
 // callback excludes resources outside the current photo library.
 func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceCountThreshold int) map[string]PersonGroupPhotoStats {
-	stats := make(map[string]PersonGroupPhotoStats)
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	faceCountsByResource := make(map[string]int)
-	resourceIncluded := make(map[string]bool)
-	resourceChecked := make(map[string]struct{})
-	resourcesByGroup := make(map[string]map[string]struct{})
+	faces := make([]PersonFace, 0, len(s.faces))
+	dimensionsLookup := s.sourceDimensions
 	for _, face := range s.faces {
-		if _, checked := resourceChecked[face.ResourceID]; !checked {
-			resourceIncluded[face.ResourceID] = includeResource == nil || includeResource(face.ResourceID)
-			resourceChecked[face.ResourceID] = struct{}{}
-		}
-		if !resourceIncluded[face.ResourceID] {
+		face.PersonID = s.effectivePersonIDLocked(face)
+		face.embedding = nil
+		face.recordHash = ""
+		faces = append(faces, face)
+	}
+	s.mu.RUnlock()
+
+	stats := make(map[string]PersonGroupPhotoStats)
+	facesByResource := make(map[string][]PersonFace)
+	dimensionsByResource := make(map[string]MediaDimensions)
+	resourcesByGroup := make(map[string]map[string][]PersonFace)
+	for _, face := range faces {
+		if includeResource != nil && !includeResource(face.ResourceID) {
 			continue
 		}
-		faceCountsByResource[face.ResourceID]++
-		groupID := s.effectivePersonIDLocked(face)
+		facesByResource[face.ResourceID] = append(facesByResource[face.ResourceID], face)
+		groupID := face.PersonID
 		if resourcesByGroup[groupID] == nil {
-			resourcesByGroup[groupID] = make(map[string]struct{})
+			resourcesByGroup[groupID] = make(map[string][]PersonFace)
 		}
-		resourcesByGroup[groupID][face.ResourceID] = struct{}{}
+		resourcesByGroup[groupID][face.ResourceID] = append(resourcesByGroup[groupID][face.ResourceID], face)
+	}
+	groupPhotos := make(map[string]bool, len(facesByResource))
+	for resourceID, resourceFaces := range facesByResource {
+		groupPhoto := len(resourceFaces) > faceCountThreshold
+		faceSizes := make([]float64, 0, len(resourceFaces))
+		if dimensionsLookup != nil {
+			dimensions := dimensionsLookup(resourceID)
+			dimensionsByResource[resourceID] = dimensions
+			if dimensions.Known() {
+				longSide := float64(max(dimensions.Width, dimensions.Height))
+				for _, face := range resourceFaces {
+					if len(face.Box) >= 4 && longSide > 0 {
+						faceSizes = append(faceSizes, float64(max(face.Box[2], face.Box[3]))/longSide)
+					}
+				}
+			}
+		}
+		if !groupPhoto && len(resourceFaces) >= PeopleGroupPhotoMinimumFaces && len(faceSizes) > 0 &&
+			peopleP50(faceSizes) <= PeopleGroupPhotoRelativeFaceSizeThreshold {
+			groupPhoto = true
+		}
+		groupPhotos[resourceID] = groupPhoto
 	}
 	for groupID, resources := range resourcesByGroup {
 		groupStats := PersonGroupPhotoStats{PhotoCount: len(resources)}
-		for resourceID := range resources {
-			if faceCountsByResource[resourceID] > faceCountThreshold {
+		faceSizes := make([]float64, 0)
+		detectionScores := make([]float64, 0)
+		for resourceID, groupFaces := range resources {
+			if groupPhotos[resourceID] {
 				groupStats.LargeGroupPhotoCount++
+			} else {
+				groupStats.OrdinaryPhotoCount++
+			}
+			if dimensionsLookup != nil {
+				dimensions := dimensionsByResource[resourceID]
+				if dimensions.Known() {
+					longSide := float64(max(dimensions.Width, dimensions.Height))
+					for _, face := range groupFaces {
+						if len(face.Box) >= 4 && longSide > 0 {
+							faceSizes = append(faceSizes, float64(max(face.Box[2], face.Box[3]))/longSide)
+						}
+					}
+				}
+			}
+			for _, face := range groupFaces {
+				detectionScores = append(detectionScores, float64(face.Score))
 			}
 		}
+		groupStats.RelativeFaceSizeP10 = peopleP10(faceSizes)
+		groupStats.DetectionP10 = peopleP10(detectionScores)
 		stats[groupID] = groupStats
 	}
 	return stats
+}
+
+func peopleP50(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sort.Float64s(values)
+	return values[(len(values)-1)/2]
 }
 
 func (s *PeopleService) Rename(personID, name string) error {
@@ -2192,6 +2444,7 @@ func (s *PeopleService) Merge(sourceID, targetID string) error {
 	}
 	delete(s.manual.Names, sourceID)
 	delete(s.manual.Hidden, sourceID)
+	delete(s.manual.RetainedGroups, sourceID)
 	return s.persistManualLocked()
 }
 
@@ -2302,13 +2555,19 @@ func (s *PeopleService) Corrections() PeopleCorrections {
 	for model, state := range profiles {
 		profileCorrections[model] = PeopleCorrectionProfile{
 			Version: state.Version, Names: cloneStringMap(state.Names), Hidden: cloneBoolMap(state.Hidden),
-			Assignments: cloneStringMap(state.Assignments),
+			Assignments:     cloneStringMap(state.Assignments),
+			PinnedFaces:     cloneStringMap(state.PinnedFaces),
+			RetainedGroups:  cloneBoolMap(state.RetainedGroups),
+			ExcludedMatches: append([]PeopleMatchExclusion(nil), state.ExcludedMatches...),
 		}
 	}
 	corrections := PeopleCorrections{
 		Version: peopleIndexVersion,
 		Names:   cloneStringMap(s.manual.Names), Hidden: cloneBoolMap(s.manual.Hidden),
-		Assignments: cloneStringMap(s.manual.Assignments),
+		Assignments:     cloneStringMap(s.manual.Assignments),
+		PinnedFaces:     cloneStringMap(s.manual.PinnedFaces),
+		RetainedGroups:  cloneBoolMap(s.manual.RetainedGroups),
+		ExcludedMatches: append([]PeopleMatchExclusion(nil), s.manual.ExcludedMatches...),
 	}
 	if len(profileCorrections) > 0 {
 		corrections.Profiles = profileCorrections
@@ -2328,7 +2587,10 @@ func (s *PeopleService) ReplaceCorrections(corrections PeopleCorrections) error 
 				return errors.New("unsupported people correction profile")
 			}
 			profiles[model] = normalizePeopleManualState(PeopleCorrections{
-				Version: profile.Version, Names: profile.Names, Hidden: profile.Hidden, Assignments: profile.Assignments,
+				Version: profile.Version, Names: profile.Names, Hidden: profile.Hidden,
+				Assignments: profile.Assignments, PinnedFaces: profile.PinnedFaces,
+				RetainedGroups:  profile.RetainedGroups,
+				ExcludedMatches: profile.ExcludedMatches,
 			})
 		}
 		for _, model := range []string{FaceModelQualityV2, FaceModelBuffaloM} {

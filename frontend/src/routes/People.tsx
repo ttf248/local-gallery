@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   useInfiniteQuery,
@@ -16,6 +16,8 @@ import PeopleMergeDialog from "../components/people/PeopleMergeDialog";
 import {
   aiJobsApi,
   type PeopleSort,
+  type PersonGroupPhotoCandidate,
+  type PersonMatchSuggestion,
   type PersonFace,
   type PersonGroup,
 } from "../api/aiJobs";
@@ -33,36 +35,102 @@ export default function People() {
 
 function PeopleList() {
   const client = useQueryClient();
+  const pushToast = useUIStore((state) => state.pushToast);
   const [includeHidden, setIncludeHidden] = useState(false);
   const [sort, setSort] = useState<PeopleSort>("photos");
+  const [activeTab, setActiveTab] = useState<
+    "common" | "matches" | "groupPhotos"
+  >("common");
   const query = useQuery({
     queryKey: ["people", includeHidden, sort],
     queryFn: () => aiJobsApi.people(includeHidden, sort),
   });
+  const matches = useInfiniteQuery({
+    queryKey: ["people-matches", includeHidden],
+    queryFn: ({ pageParam }) =>
+      aiJobsApi.peopleMatches(includeHidden, 20, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (page) => (page.hasMore ? page.nextOffset : undefined),
+    enabled: activeTab === "matches",
+  });
+  const groupPhotoCandidates = useInfiniteQuery({
+    queryKey: ["people-group-photo-candidates", includeHidden],
+    queryFn: ({ pageParam }) =>
+      aiJobsApi.groupPhotoCandidates(includeHidden, 20, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (page) => (page.hasMore ? page.nextOffset : undefined),
+    enabled: activeTab === "groupPhotos",
+  });
   const jobs = useQuery({ queryKey: ["ai-jobs"], queryFn: aiJobsApi.list });
   const peopleEnabled = jobs.data?.snapshot.settings.peopleEnabled ?? false;
+  const refreshPeople = async () =>
+    Promise.all([
+      client.invalidateQueries({ queryKey: ["people"] }),
+      client.invalidateQueries({ queryKey: ["people-matches"] }),
+      client.invalidateQueries({ queryKey: ["people-group-photo-candidates"] }),
+    ]);
   const clear = useMutation({
     mutationFn: aiJobsApi.clearPeople,
     onSuccess: async () => {
       await Promise.all([
-        client.invalidateQueries({ queryKey: ["people"] }),
+        refreshPeople(),
         client.invalidateQueries({ queryKey: ["ai-jobs"] }),
       ]);
     },
   });
+  const mergeMatch = useMutation({
+    mutationFn: ({
+      sourceId,
+      targetId,
+    }: {
+      sourceId: string;
+      targetId: string;
+    }) => aiJobsApi.mergePeople(sourceId, targetId),
+    onSuccess: async () => {
+      await refreshPeople();
+      pushToast({ kind: "success", message: "已按你的确认合并人物组" });
+    },
+    onError: () => pushToast({ kind: "error", message: "合并人物组失败" }),
+  });
+  const excludeMatch = useMutation({
+    mutationFn: ({
+      sourceId,
+      targetId,
+    }: {
+      sourceId: string;
+      targetId: string;
+    }) => aiJobsApi.excludePersonMatch(sourceId, targetId),
+    onSuccess: async () => {
+      await refreshPeople();
+      pushToast({ kind: "success", message: "已排除此匹配建议" });
+    },
+    onError: () => pushToast({ kind: "error", message: "排除匹配建议失败" }),
+  });
+  const retainGroup = useMutation({
+    mutationFn: aiJobsApi.retainPersonGroup,
+    onSuccess: async () => {
+      await refreshPeople();
+      pushToast({ kind: "success", message: "已保留为独立人物" });
+    },
+    onError: () => pushToast({ kind: "error", message: "保留人物组失败" }),
+  });
   const groups = query.data?.people ?? [];
   const totalGroups = query.data?.totalGroups ?? groups.length;
   const filteredGroups = query.data?.filteredGroups ?? 0;
-  const groupPhotoFaceThreshold = query.data?.groupPhotoFaceThreshold ?? 20;
-  const onlyFilteredGroups =
-    peopleEnabled && totalGroups === 0 && filteredGroups > 0;
+  const matchItems = matches.data?.pages.flatMap((page) => page.items) ?? [];
+  const totalSources = matches.data?.pages[0]?.totalSources ?? 0;
+  const photoItems =
+    groupPhotoCandidates.data?.pages.flatMap((page) => page.items) ?? [];
+  const totalPhotoCandidates = groupPhotoCandidates.data?.pages[0]?.total ?? 0;
+  const mutationPending =
+    mergeMatch.isPending || excludeMatch.isPending || retainGroup.isPending;
 
   return (
     <div className="h-full overflow-y-auto pb-12">
       <PageHeading
         eyebrow="离线智能相册"
         title="人物相册"
-        description="按本机人脸特征生成可编辑的候选分组。应用不会识别真实姓名；你可以改名、合并、拆分或隐藏分组。"
+        description="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
         action={
           <Link className="btn btn-sm btn-outline" to="/tasks/plan">
             人物分析设置
@@ -84,56 +152,67 @@ function PeopleList() {
           }
         />
       ) : null}
-      {groups.length === 0 && !query.isLoading ? (
+      {!peopleEnabled &&
+      !jobs.isLoading &&
+      totalGroups === 0 &&
+      filteredGroups === 0 ? (
         <EmptyState
-          title={
-            peopleEnabled
-              ? onlyFilteredGroups
-                ? "暂不展示只出现在大型合照中的人物组"
-                : "还没有人物候选组"
-              : "人物分析默认关闭"
-          }
-          description={
-            peopleEnabled
-              ? onlyFilteredGroups
-                ? `有 ${filteredGroups.toLocaleString()} 组人物只在超过 ${groupPhotoFaceThreshold} 张脸的大合照中出现，已暂时隐藏；搜索仍可查看完整候选。`
-                : "请在任务中心运行人脸识别任务；分析只在本机处理。"
-              : "前往任务中心显式启用人物分析，再启动人脸识别任务。"
-          }
+          title="人物分析默认关闭"
+          description="前往任务中心启用人物分析并运行人脸识别。分析只在本机处理。"
           action={
-            onlyFilteredGroups ? undefined : (
-              <Link className="btn btn-outline" to="/tasks/plan">
-                打开任务中心
-              </Link>
-            )
+            <Link className="btn btn-outline" to="/tasks/plan">
+              打开任务中心
+            </Link>
           }
         />
       ) : (
         <section className="page-shell mt-6">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-meta text-fg-muted">
-              {sort === "photos"
-                ? totalGroups > groups.length
-                  ? `照片数最多的人物 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
-                  : `人物 ${totalGroups.toLocaleString()} 组`
-                : totalGroups > groups.length
-                  ? `优先审查的人物 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
-                  : `人物 ${totalGroups.toLocaleString()} 组`}
-              {filteredGroups > 0
-                ? ` · 已隐藏仅出现在大型合照中的 ${filteredGroups.toLocaleString()} 组`
-                : ""}
-              {sort === "photos" ? " · 按照片数排序" : " · 按复核线索排序"}
-            </p>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div
+              role="tablist"
+              aria-label="人物分组分类"
+              className="flex flex-wrap gap-2"
+            >
+              <PeopleTab
+                active={activeTab === "common"}
+                onClick={() => setActiveTab("common")}
+              >
+                常见人物{" "}
+                <span className="ml-1 text-fg-subtle">
+                  {totalGroups.toLocaleString()}
+                </span>
+              </PeopleTab>
+              <PeopleTab
+                active={activeTab === "matches"}
+                onClick={() => setActiveTab("matches")}
+              >
+                待确认匹配{" "}
+                <span className="ml-1 text-fg-subtle">
+                  {totalSources.toLocaleString()}
+                </span>
+              </PeopleTab>
+              <PeopleTab
+                active={activeTab === "groupPhotos"}
+                onClick={() => setActiveTab("groupPhotos")}
+              >
+                合照候选{" "}
+                <span className="ml-1 text-fg-subtle">
+                  {totalPhotoCandidates.toLocaleString()}
+                </span>
+              </PeopleTab>
+            </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Segmented
-                label="人物排序"
-                value={sort}
-                onChange={setSort}
-                options={[
-                  { value: "photos", label: "照片最多" },
-                  { value: "review", label: "审查优先" },
-                ]}
-              />
+              {activeTab === "common" ? (
+                <Segmented
+                  label="人物排序"
+                  value={sort}
+                  onChange={setSort}
+                  options={[
+                    { value: "photos", label: "照片最多" },
+                    { value: "review", label: "审查优先" },
+                  ]}
+                />
+              ) : null}
               <label className="flex items-center gap-2 text-meta text-fg-muted">
                 <input
                   type="checkbox"
@@ -145,7 +224,7 @@ function PeopleList() {
               <button
                 type="button"
                 className="btn btn-outline"
-                disabled={clear.isPending || groups.length === 0}
+                disabled={clear.isPending}
                 onClick={() => {
                   if (
                     window.confirm(
@@ -165,29 +244,352 @@ function PeopleList() {
               清除失败。请确认没有人脸识别任务正在运行后重试。
             </p>
           ) : null}
-          {sort === "review" ? (
-            <p className="mb-4 text-meta text-fg-muted">
-              优先展示组内较低一成的锚点相似度、中心相似度与检测分数较弱的分组。这些数值只用于安排人工复核，不代表身份置信度。
-            </p>
+          {activeTab === "common" ? (
+            <>
+              <p className="mb-4 text-meta text-fg-muted">
+                {sort === "review"
+                  ? "复核线索按组内锚点、中心相似度和检测质量排序；这些数值不代表身份概率。"
+                  : `人物 ${totalGroups.toLocaleString()} 组${filteredGroups > 0 ? ` · ${filteredGroups.toLocaleString()} 组只出现在合照中，见“合照候选”` : ""}`}
+              </p>
+              {groups.length === 0 && !query.isLoading ? (
+                <EmptyState
+                  title="还没有常见人物组"
+                  description="可在“待确认匹配”与“合照候选”中检查稀疏分组。"
+                />
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
+                  {groups.map((person) => (
+                    <PersonCard
+                      key={person.id}
+                      person={person}
+                      showQuality={sort === "review"}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           ) : null}
-          <p className="mb-4 text-meta text-fg-muted">
-            只有当一个人物组出现的每张照片都检测到超过{" "}
-            {groupPhotoFaceThreshold} 张脸时，才会暂时隐藏；其余候选不受目录结构影响。
-          </p>
-          {/* 密度跟着相册网格走（列宽下限 260px）：固定三列时一张脸
-              占掉四百像素，一屏只看得到六个人；这一页有五十个候选组，
-              它要的是一面能扫完的墙。 */}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-            {groups.map((person) => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                showQuality={sort === "review"}
-              />
-            ))}
-          </div>
+          {activeTab === "matches" ? (
+            <>
+              <p className="mb-4 text-meta text-fg-muted">
+                每条建议都需要你打开照片确认后再合并。相似度、差值和照片数只描述当前模型的线索，不是身份概率。
+              </p>
+              {matches.isError ? (
+                <ReviewLoadError onRetry={() => void matches.refetch()} />
+              ) : null}
+              {matchItems.length === 0 && !matches.isLoading ? (
+                <EmptyState
+                  title="没有待确认的人物组"
+                  description="新的稀疏分组会出现在这里。"
+                />
+              ) : (
+                <div className="space-y-4">
+                  {matchItems.map((item) => (
+                    <MatchSuggestionCard
+                      key={item.source.id}
+                      item={item}
+                      pending={mutationPending}
+                      onMerge={(targetId) =>
+                        mergeMatch.mutate({
+                          sourceId: item.source.id,
+                          targetId,
+                        })
+                      }
+                      onExclude={(targetId) =>
+                        excludeMatch.mutate({
+                          sourceId: item.source.id,
+                          targetId,
+                        })
+                      }
+                      onRetain={() => retainGroup.mutate(item.source.id)}
+                    />
+                  ))}
+                </div>
+              )}
+              {matches.hasNextPage ? (
+                <LoadMoreButton
+                  loading={matches.isFetchingNextPage}
+                  onClick={() => void matches.fetchNextPage()}
+                />
+              ) : null}
+            </>
+          ) : null}
+          {activeTab === "groupPhotos" ? (
+            <>
+              <p className="mb-4 text-meta text-fg-muted">
+                只在合照中出现的组单独列出。判定参考检测脸数与脸部相对画面尺寸；确认保留后会固定为独立人物，不会自动合并。
+              </p>
+              {groupPhotoCandidates.isError ? (
+                <ReviewLoadError
+                  onRetry={() => void groupPhotoCandidates.refetch()}
+                />
+              ) : null}
+              {photoItems.length === 0 && !groupPhotoCandidates.isLoading ? (
+                <EmptyState
+                  title="没有合照候选"
+                  description="普通照片中的人物组会显示在常见人物里。"
+                />
+              ) : (
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+                  {photoItems.map((candidate) => (
+                    <GroupPhotoCandidateCard
+                      key={candidate.person.id}
+                      candidate={candidate}
+                      pending={mutationPending}
+                      onRetain={() => retainGroup.mutate(candidate.person.id)}
+                    />
+                  ))}
+                </div>
+              )}
+              {groupPhotoCandidates.hasNextPage ? (
+                <LoadMoreButton
+                  loading={groupPhotoCandidates.isFetchingNextPage}
+                  onClick={() => void groupPhotoCandidates.fetchNextPage()}
+                />
+              ) : null}
+            </>
+          ) : null}
         </section>
       )}
+    </div>
+  );
+}
+
+function PeopleTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`rounded-full border px-4 py-2 text-meta transition-colors ${
+        active
+          ? "border-border-strong bg-bg-elevated text-fg"
+          : "border-border-faint text-fg-muted hover:text-fg"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ReviewLoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <EmptyState
+      title="复核列表加载失败"
+      description="请稍后重试。"
+      action={
+        <button type="button" className="btn btn-outline" onClick={onRetry}>
+          重新加载
+        </button>
+      }
+    />
+  );
+}
+
+function LoadMoreButton({
+  loading,
+  onClick,
+}: {
+  loading: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="mt-6 flex justify-center">
+      <button
+        type="button"
+        className="btn btn-outline"
+        disabled={loading}
+        onClick={onClick}
+      >
+        {loading ? "加载中…" : "继续检查"}
+      </button>
+    </div>
+  );
+}
+
+function MatchSuggestionCard({
+  item,
+  pending,
+  onMerge,
+  onExclude,
+  onRetain,
+}: {
+  item: PersonMatchSuggestion;
+  pending: boolean;
+  onMerge: (targetId: string) => void;
+  onExclude: (targetId: string) => void;
+  onRetain: () => void;
+}) {
+  return (
+    <article className="overflow-hidden rounded-xl border border-border-faint bg-bg-elevated">
+      <div className="grid gap-4 p-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.6fr)]">
+        <div>
+          <p className="mb-2 text-meta text-fg-muted">待确认的人物组</p>
+          <PersonReviewImage person={item.source} />
+          <Link
+            className="mt-3 inline-block font-medium text-fg hover:underline"
+            to={peopleRoute(item.source.id)}
+          >
+            {item.source.name}
+          </Link>
+          <p className="mt-1 text-meta text-fg-muted">
+            {item.source.photoCount.toLocaleString()} 张照片 ·{" "}
+            {item.source.faceCount.toLocaleString()} 张脸
+          </p>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline mt-3"
+            disabled={pending}
+            onClick={onRetain}
+          >
+            保留为独立人物
+          </button>
+        </div>
+        <div className="min-w-0">
+          <h2 className="font-display text-label text-fg">可能的匹配对象</h2>
+          {item.candidates.length === 0 ? (
+            <p className="mt-3 rounded-lg bg-bg-subtle p-4 text-meta text-fg-muted">
+              当前没有达到提示门槛的候选。你可以先保留为独立人物，之后再从人物详情检查。
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {item.candidates.map((candidate) => (
+                <div
+                  key={candidate.person.id}
+                  className="rounded-lg border border-border-faint p-3"
+                >
+                  <div className="flex flex-wrap items-center gap-3">
+                    <PersonReviewImage person={candidate.person} compact />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        className="font-medium text-fg hover:underline"
+                        to={peopleRoute(candidate.person.id)}
+                      >
+                        {candidate.person.name}
+                      </Link>
+                      <p className="mt-1 text-meta text-fg-muted">
+                        {candidate.person.photoCount.toLocaleString()} 张照片 ·
+                        特征相似度 {candidate.similarity.toFixed(3)} · 差值{" "}
+                        {candidate.margin.toFixed(3)}
+                      </p>
+                      <p className="mt-1 text-meta text-fg-subtle">
+                        跨照互证 {candidate.independentPhotoPairs} 对 ·
+                        源/目标照片证据 {candidate.sourceEvidencePhotos}/
+                        {candidate.targetEvidencePhotos}
+                      </p>
+                      <p className="mt-1 text-meta text-fg-subtle">
+                        {candidate.ambiguous
+                          ? "证据较少或结果接近其他候选，建议打开照片逐张核对。"
+                          : "跨照片证据较多；仍需你打开照片确认。"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-primary"
+                      disabled={pending}
+                      onClick={() => onMerge(candidate.person.id)}
+                    >
+                      确认合并
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline"
+                      disabled={pending}
+                      onClick={() => onExclude(candidate.person.id)}
+                    >
+                      排除此建议
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function GroupPhotoCandidateCard({
+  candidate,
+  pending,
+  onRetain,
+}: {
+  candidate: PersonGroupPhotoCandidate;
+  pending: boolean;
+  onRetain: () => void;
+}) {
+  const { person, stats } = candidate;
+  return (
+    <article className="overflow-hidden rounded-xl border border-border-faint bg-bg-elevated">
+      <Link className="group block" to={peopleRoute(person.id)}>
+        <PersonReviewImage person={person} wide />
+        <div className="p-4">
+          <h2 className="truncate font-display text-label text-fg">
+            {person.name}
+          </h2>
+          <p className="mt-1 text-meta text-fg-muted">
+            {person.photoCount.toLocaleString()} 张合照 ·{" "}
+            {person.faceCount.toLocaleString()} 张脸
+          </p>
+          <p className="mt-2 text-meta text-fg-subtle">
+            相对脸部尺寸 P10{" "}
+            {stats.relativeFaceSizeP10 > 0
+              ? `${(stats.relativeFaceSizeP10 * 100).toFixed(1)}%`
+              : "未知"}{" "}
+            · 检测分数 P10 {stats.detectionP10.toFixed(2)}
+          </p>
+        </div>
+      </Link>
+      <div className="border-t border-border-faint p-4">
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          disabled={pending}
+          onClick={onRetain}
+        >
+          保留为独立人物
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function PersonReviewImage({
+  person,
+  compact = false,
+  wide = false,
+}: {
+  person: PersonGroup;
+  compact?: boolean;
+  wide?: boolean;
+}) {
+  const imageClass = compact
+    ? "h-14 w-14 rounded-md"
+    : wide
+      ? "aspect-[1.7/1] w-full"
+      : "aspect-[1.7/1] w-full rounded-lg";
+  return (
+    <div className={`overflow-hidden bg-bg-subtle ${imageClass}`}>
+      {person.coverResourceId ? (
+        <RenditionImage
+          fileId={person.coverResourceId}
+          alt=""
+          displayWidth={wide ? 560 : compact ? 128 : 320}
+          className="h-full w-full object-cover"
+        />
+      ) : null}
     </div>
   );
 }
@@ -227,6 +629,7 @@ function PersonCard({
           </h2>
           <p className="mt-0.5 text-meta text-fg-muted">
             {person.faceCount.toLocaleString()} 张脸
+            {person.confirmed ? " · 已确认" : ""}
             {person.hidden ? " · 已隐藏" : ""}
           </p>
         </div>

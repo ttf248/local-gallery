@@ -51,6 +51,14 @@ FACE_GPU_WORKERS = 12
 FACE_GPU_LARGE_IMAGE_WORKERS = 4
 FACE_GPU_TWELVE_WORKER_PIXEL_LIMIT = 4_000_000
 BUFFALO_M_GPU_WORKERS = 4
+BUFFALO_M_GPU_TILED_WORKERS = 2
+BUFFALO_M_GPU_LARGE_IMAGE_WORKERS = 1
+BUFFALO_M_TILED_IMAGE_PIXEL_LIMIT = 2_000_000
+BUFFALO_M_LARGE_IMAGE_PIXEL_LIMIT = 3_500_000
+BUFFALO_M_GROUP_TILE_SIZE = 1280
+BUFFALO_M_GROUP_TILE_LIMIT = 64
+BUFFALO_M_GROUP_FACE_LIMIT = 256
+BUFFALO_M_FACE_LIMIT = 64
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
@@ -638,6 +646,22 @@ def face_gpu_worker_count(paths):
     return FACE_GPU_WORKERS
 
 
+def buffalo_m_gpu_worker_count(paths):
+    from PIL import Image as PILImage
+
+    has_tiled_image = False
+    for path in paths:
+        try:
+            with PILImage.open(path) as source:
+                pixels = source.width * source.height
+                if pixels >= BUFFALO_M_LARGE_IMAGE_PIXEL_LIMIT:
+                    return BUFFALO_M_GPU_LARGE_IMAGE_WORKERS
+                has_tiled_image = has_tiled_image or pixels >= BUFFALO_M_TILED_IMAGE_PIXEL_LIMIT
+        except Exception:
+            return BUFFALO_M_GPU_LARGE_IMAGE_WORKERS
+    return BUFFALO_M_GPU_TILED_WORKERS if has_tiled_image else BUFFALO_M_GPU_WORKERS
+
+
 def read_ocr_image(path: str, max_pixels=OCR_MAX_INPUT_PIXELS):
     """Decode OCR input at a bounded size and return source-to-input scale."""
     global cv2, np
@@ -929,10 +953,10 @@ def ocr_gpu_image_worker_count(paths) -> int:
     return OCR_GPU_IMAGE_WORKERS
 
 
-def tile_offsets(length, tile_size=YUNET_INPUT_SIZE):
+def tile_offsets(length, tile_size=YUNET_INPUT_SIZE, overlap=128):
     if length <= tile_size:
         return [0]
-    stride = tile_size - 128
+    stride = tile_size - max(0, min(overlap, tile_size - 1))
     offsets = list(range(0, length - tile_size + 1, stride))
     final = length - tile_size
     if offsets[-1] != final:
@@ -1086,7 +1110,7 @@ def detect_yunet_cpu(image, detector):
     return yunet_nms(faces)
 
 
-def buffalo_m_detection_input(image, detector, runtime):
+def buffalo_m_detection_input(image, detector, runtime, offset_x=0, offset_y=0):
     height, width = image.shape[:2]
     target_width = BUFFALO_M_DETECTION_SIZE
     target_height = BUFFALO_M_DETECTION_SIZE
@@ -1144,11 +1168,15 @@ def buffalo_m_detection_input(image, detector, runtime):
         ))
         decoded_boxes[:, (0, 2)] /= scale_x
         decoded_boxes[:, (1, 3)] /= scale_y
+        decoded_boxes[:, (0, 2)] += offset_x
+        decoded_boxes[:, (1, 3)] += offset_y
         scores_all.append(scores[selected])
         boxes_all.append(decoded_boxes)
         decoded_landmarks = landmarks[selected] + centers[selected, None, :]
         decoded_landmarks[:, :, 0] /= scale_x
         decoded_landmarks[:, :, 1] /= scale_y
+        decoded_landmarks[:, :, 0] += offset_x
+        decoded_landmarks[:, :, 1] += offset_y
         landmarks_all.append(decoded_landmarks)
 
     if not scores_all:
@@ -1189,8 +1217,72 @@ def buffalo_m_detection_input(image, detector, runtime):
     return detections
 
 
+def buffalo_m_nms(faces, threshold=0.4, limit=512):
+    if not faces:
+        return []
+    boxes = np.asarray([face[:4] for face in faces], dtype=np.float64)
+    scores = np.asarray([face[14] for face in faces], dtype=np.float64)
+    x1, y1 = boxes[:, 0], boxes[:, 1]
+    x2, y2 = x1 + boxes[:, 2], y1 + boxes[:, 3]
+    areas = np.maximum(0.0, boxes[:, 2]) * np.maximum(0.0, boxes[:, 3])
+    order = np.argsort(-scores, kind="stable")
+    kept = []
+    while order.size and len(kept) < max(1, limit):
+        selected = int(order[0])
+        kept.append(selected)
+        candidates = order[1:]
+        if not candidates.size:
+            break
+        left = np.maximum(x1[selected], x1[candidates])
+        top = np.maximum(y1[selected], y1[candidates])
+        right = np.minimum(x2[selected], x2[candidates])
+        bottom = np.minimum(y2[selected], y2[candidates])
+        intersection = np.maximum(0.0, right - left) * np.maximum(0.0, bottom - top)
+        union = areas[selected] + areas[candidates] - intersection
+        overlaps = np.divide(intersection, union, out=np.zeros_like(intersection), where=union > 0)
+        order = candidates[overlaps <= threshold]
+    return [faces[index] for index in kept]
+
+
+def buffalo_m_needs_group_tiles(image, detections):
+    height, width = image.shape[:2]
+    long_side = max(height, width)
+    if len(detections) >= 8:
+        return True
+    if long_side >= 2048 and len(detections) >= 4:
+        return True
+    return any(
+        len(face) >= 4 and max(float(face[2]), float(face[3])) / long_side <= 0.04
+        for face in detections
+    )
+
+
+def buffalo_m_face_limit(image, detections):
+    return BUFFALO_M_GROUP_FACE_LIMIT if buffalo_m_needs_group_tiles(image, detections) else BUFFALO_M_FACE_LIMIT
+
+
 def detect_buffalo_m(image, runtime):
-    return buffalo_m_detection_input(image, runtime["detector"], runtime)
+    detector = runtime["detector"]
+    overview = buffalo_m_detection_input(image, detector, runtime)
+    if not buffalo_m_needs_group_tiles(image, overview):
+        return overview
+
+    height, width = image.shape[:2]
+    tiled = list(overview)
+    tile_count = 0
+    for top in tile_offsets(height, BUFFALO_M_GROUP_TILE_SIZE):
+        for left in tile_offsets(width, BUFFALO_M_GROUP_TILE_SIZE):
+            if tile_count >= BUFFALO_M_GROUP_TILE_LIMIT:
+                break
+            tile = image[
+                top:min(top + BUFFALO_M_GROUP_TILE_SIZE, height),
+                left:min(left + BUFFALO_M_GROUP_TILE_SIZE, width),
+            ]
+            tiled.extend(buffalo_m_detection_input(tile, detector, runtime, left, top))
+            tile_count += 1
+        if tile_count >= BUFFALO_M_GROUP_TILE_LIMIT:
+            break
+    return buffalo_m_nms(tiled, limit=BUFFALO_M_GROUP_FACE_LIMIT * 2)
 
 
 def align_sface_crop(image, detection):
@@ -1279,6 +1371,11 @@ def analyze_face_image(path: str, device_mode="cpu", face_model=FACE_MODEL_DEFAU
             else YUNET_SCORE_THRESHOLD
         )
         if detections is not None:
+            face_limit = (
+                buffalo_m_face_limit(image, detections)
+                if face_model == FACE_MODEL_BUFFALO_M
+                else BUFFALO_M_FACE_LIMIT
+            )
             for detection in detections:
                 if not valid_yunet_detection(detection, image.shape, minimum_score):
                     continue
@@ -1317,7 +1414,7 @@ def analyze_face_image(path: str, device_mode="cpu", face_model=FACE_MODEL_DEFAU
                     "score": float(detection[-1]),
                     "embedding": embedding,
                 })
-                if len(faces) == 64:
+                if len(faces) == face_limit:
                     break
         return {"data": {"faces": faces}}
     except RuntimeError as error:
@@ -1495,6 +1592,10 @@ def _process_request(request: dict) -> dict:
             return {"error": "gpu_unavailable", "status": status()}
         paths = request.get("paths")
         max_workers = BUFFALO_M_GPU_WORKERS if face_model == FACE_MODEL_BUFFALO_M else FACE_GPU_WORKERS
+        if face_model == FACE_MODEL_BUFFALO_M and device_mode == "gpu" and isinstance(paths, list) and 0 < len(paths) <= 32 and all(
+            isinstance(path, str) for path in paths
+        ):
+            max_workers = buffalo_m_gpu_worker_count(paths)
         if face_model != FACE_MODEL_BUFFALO_M and device_mode == "gpu" and isinstance(paths, list) and 0 < len(paths) <= 32 and all(
             isinstance(path, str) for path in paths
         ):

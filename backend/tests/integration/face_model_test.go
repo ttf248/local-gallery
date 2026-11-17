@@ -118,6 +118,7 @@ func TestFaceModelSelectionFlowsThroughJobAndPeopleIndex(t *testing.T) {
 	app := fiber.New(fiber.Config{DisableStartupMessage: true})
 	app.Put("/api/ai/jobs/face-model", handlers.AIJobFaceModelHandler(jobs, people))
 	app.Post("/api/ai/jobs", handlers.AIJobStartHandler(jobs))
+	app.Post("/api/people/matches/retain", handlers.PeopleMatchRetentionHandler(people))
 	modelRequest := httptest.NewRequest(http.MethodPut, "/api/ai/jobs/face-model", strings.NewReader(`{"model":"buffalo_m"}`))
 	modelRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 	modelResponse, err := app.Test(modelRequest, -1)
@@ -179,5 +180,33 @@ func TestFaceModelSelectionFlowsThroughJobAndPeopleIndex(t *testing.T) {
 	groups := people.Groups(false)
 	if len(groups) != 1 || groups[0].FaceCount != 1 || groups[0].PhotoCount != 1 {
 		t.Fatalf("Buffalo_m people index = %+v", groups)
+	}
+	retainRequest := httptest.NewRequest(http.MethodPost, "/api/people/matches/retain", strings.NewReader(`{"personId":"`+groups[0].ID+`"}`))
+	retainRequest.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	retainResponse, err := app.Test(retainRequest, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer retainResponse.Body.Close()
+	if retainResponse.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(retainResponse.Body)
+		t.Fatalf("retain person response = %d %s", retainResponse.StatusCode, body)
+	}
+	reopenedPeople, err := services.OpenPeopleService(
+		filepath.Join(cache, "state", "people.json"),
+		filepath.Join(cache, "derived", "people-index.json"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := reopenedPeople.SetFaceAnalyzerVersion(services.FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := reopenedPeople.Sync([]services.AIAnalysisRecord{record}); err != nil {
+		t.Fatal(err)
+	}
+	reopenedGroups := reopenedPeople.Groups(false)
+	if len(reopenedGroups) != 1 || !reopenedGroups[0].Confirmed || reopenedGroups[0].ID != groups[0].ID {
+		t.Fatalf("retained Buffalo_m correction was not durable: %+v", reopenedGroups)
 	}
 }

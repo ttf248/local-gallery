@@ -25,6 +25,163 @@ const peopleSortPhotos = "photos"
 const peopleSortReview = "review"
 const peopleListGroupPhotoFaceThreshold = 20
 
+type peopleGroupPhotoCandidate struct {
+	Person services.PersonGroup           `json:"person"`
+	Stats  services.PersonGroupPhotoStats `json:"stats"`
+}
+
+func PeopleGroupPhotoCandidatesHandler(people *services.PeopleService, catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit, offset, err := parsePeoplePage(c)
+		if err != nil {
+			return err
+		}
+		snapshot := requestCatalogSnapshot(c, catalog)
+		if !snapshot.Ready() {
+			return c.JSON(fiber.Map{
+				"ok": true, "items": []peopleGroupPhotoCandidate{}, "total": 0,
+				"offset": offset, "nextOffset": offset, "hasMore": false,
+				"revision": snapshot.Revision(),
+			})
+		}
+		includeHidden := c.Query("includeHidden") == "true"
+		stats := people.GroupPhotoStats(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
+		groups, _ := people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
+		candidates := make([]peopleGroupPhotoCandidate, 0)
+		for _, group := range groups {
+			groupStats := stats[group.ID]
+			if group.Confirmed || groupStats.PhotoCount == 0 || groupStats.LargeGroupPhotoCount != groupStats.PhotoCount {
+				continue
+			}
+			candidates = append(candidates, peopleGroupPhotoCandidate{Person: group, Stats: groupStats})
+		}
+		sort.Slice(candidates, func(i, j int) bool {
+			left, right := candidates[i], candidates[j]
+			if left.Stats.PhotoCount != right.Stats.PhotoCount {
+				return left.Stats.PhotoCount > right.Stats.PhotoCount
+			}
+			if left.Person.FaceCount != right.Person.FaceCount {
+				return left.Person.FaceCount > right.Person.FaceCount
+			}
+			if left.Stats.RelativeFaceSizeP10 != right.Stats.RelativeFaceSizeP10 {
+				return left.Stats.RelativeFaceSizeP10 > right.Stats.RelativeFaceSizeP10
+			}
+			if left.Stats.DetectionP10 != right.Stats.DetectionP10 {
+				return left.Stats.DetectionP10 > right.Stats.DetectionP10
+			}
+			return left.Person.ID < right.Person.ID
+		})
+		end := min(offset+limit, len(candidates))
+		items := []peopleGroupPhotoCandidate{}
+		if offset < len(candidates) {
+			items = candidates[offset:end]
+		}
+		return c.JSON(fiber.Map{
+			"ok": true, "items": items, "total": len(candidates),
+			"offset": offset, "nextOffset": end, "hasMore": end < len(candidates),
+			"faceCountThreshold":        peopleListGroupPhotoFaceThreshold,
+			"minimumFaceCount":          services.PeopleGroupPhotoMinimumFaces,
+			"relativeFaceSizeThreshold": services.PeopleGroupPhotoRelativeFaceSizeThreshold,
+			"revision":                  snapshot.Revision(),
+		})
+	}
+}
+
+func parsePeoplePage(c *fiber.Ctx) (int, int, error) {
+	limit := 20
+	if rawLimit := strings.TrimSpace(c.Query("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed < 1 || parsed > 50 {
+			return 0, 0, writeError(c, fiber.StatusBadRequest, "invalid_people_limit", "limit must be between 1 and 50")
+		}
+		limit = parsed
+	}
+	offset := 0
+	if rawOffset := strings.TrimSpace(c.Query("offset")); rawOffset != "" {
+		parsed, err := strconv.Atoi(rawOffset)
+		if err != nil || parsed < 0 || parsed > 1_000_000 {
+			return 0, 0, writeError(c, fiber.StatusBadRequest, "invalid_people_offset", "offset must be a non-negative integer")
+		}
+		offset = parsed
+	}
+	return limit, offset, nil
+}
+
+func PeopleMatchSuggestionsHandler(people *services.PeopleService, catalog *services.ResourceCatalog) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		limit := 20
+		if rawLimit := strings.TrimSpace(c.Query("limit")); rawLimit != "" {
+			parsed, err := strconv.Atoi(rawLimit)
+			if err != nil || parsed < 1 || parsed > 50 {
+				return writeError(c, fiber.StatusBadRequest, "invalid_people_limit", "limit must be between 1 and 50")
+			}
+			limit = parsed
+		}
+		offset := 0
+		if rawOffset := strings.TrimSpace(c.Query("offset")); rawOffset != "" {
+			parsed, err := strconv.Atoi(rawOffset)
+			if err != nil || parsed < 0 || parsed > 1_000_000 {
+				return writeError(c, fiber.StatusBadRequest, "invalid_people_offset", "offset must be a non-negative integer")
+			}
+			offset = parsed
+		}
+		snapshot := requestCatalogSnapshot(c, catalog)
+		if !snapshot.Ready() {
+			return c.JSON(fiber.Map{
+				"ok": true, "items": []services.PersonMatchSuggestion{}, "totalSources": 0,
+				"offset": offset, "nextOffset": offset, "checkedSources": 0, "hasMore": false,
+				"revision": snapshot.Revision(),
+			})
+		}
+		includeHidden := c.Query("includeHidden") == "true"
+		photoStats := people.GroupPhotoStats(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
+		groupPhotoOnly := make(map[string]bool)
+		for id, stats := range photoStats {
+			if stats.PhotoCount > 0 && stats.LargeGroupPhotoCount == stats.PhotoCount {
+				groupPhotoOnly[id] = true
+			}
+		}
+		page := people.MatchSuggestionsExcluding(offset, limit, includeHidden, snapshot.IsPhotoImage, groupPhotoOnly)
+		return c.JSON(fiber.Map{
+			"ok": true, "items": page.Items, "totalSources": page.TotalSources,
+			"offset": page.Offset, "nextOffset": page.NextOffset,
+			"checkedSources": page.CheckedSources, "hasMore": page.HasMore,
+			"revision": snapshot.Revision(),
+		})
+	}
+}
+
+func PeopleMatchExclusionHandler(people *services.PeopleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var body struct {
+			SourceID string `json:"sourceId"`
+			TargetID string `json:"targetId"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return writeError(c, fiber.StatusBadRequest, "invalid_person_change", "sourceId and targetId are required")
+		}
+		if err := people.ExcludeMatch(body.SourceID, body.TargetID); err != nil {
+			return personChangeError(c, err)
+		}
+		return c.JSON(fiber.Map{"ok": true, "excluded": true})
+	}
+}
+
+func PeopleMatchRetentionHandler(people *services.PeopleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var body struct {
+			PersonID string `json:"personId"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return writeError(c, fiber.StatusBadRequest, "invalid_person_change", "personId is required")
+		}
+		if err := people.RetainGroup(body.PersonID); err != nil {
+			return personChangeError(c, err)
+		}
+		return c.JSON(fiber.Map{"ok": true, "retained": true})
+	}
+}
+
 // PeopleHandler lists current photo-only person albums and clears all face-derived data.
 func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, catalog *services.ResourceCatalog, validatePath func(string) (string, error)) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -113,9 +270,12 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		visibleTotal := 0
 		for _, group := range groups {
 			groupPhotos := photoStats[group.ID]
-			if group.PhotoCount > 0 && groupPhotos.PhotoCount == group.PhotoCount &&
+			if !group.Confirmed && group.PhotoCount > 0 && groupPhotos.PhotoCount == group.PhotoCount &&
 				groupPhotos.LargeGroupPhotoCount == group.PhotoCount {
 				filteredGroups++
+				continue
+			}
+			if !group.IsCommon() || !group.Confirmed && groupPhotos.OrdinaryPhotoCount == 0 {
 				continue
 			}
 			visibleTotal++
@@ -130,6 +290,8 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		response["totalGroups"] = visibleTotal
 		response["filteredGroups"] = filteredGroups
 		response["groupPhotoFaceThreshold"] = peopleListGroupPhotoFaceThreshold
+		response["groupPhotoMinimumFaceCount"] = services.PeopleGroupPhotoMinimumFaces
+		response["groupPhotoRelativeFaceSizeThreshold"] = services.PeopleGroupPhotoRelativeFaceSizeThreshold
 		return c.JSON(response)
 	}
 }

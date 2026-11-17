@@ -31,6 +31,90 @@ func peopleTestRecord(resourceID string, faceVectors ...[]float32) AIAnalysisRec
 	}
 }
 
+func peopleTestRecordWithBox(resourceID string, box []float32, faceVectors ...[]float32) AIAnalysisRecord {
+	record := peopleTestRecord(resourceID, faceVectors...)
+	var data struct {
+		Faces []struct {
+			Box       []float32 `json:"box"`
+			Score     float32   `json:"score"`
+			Embedding []float32 `json:"embedding"`
+		} `json:"faces"`
+	}
+	if err := json.Unmarshal(record.Data, &data); err != nil {
+		panic(err)
+	}
+	for index := range data.Faces {
+		data.Faces[index].Box = append([]float32(nil), box...)
+	}
+	record.Data, _ = json.Marshal(data)
+	return record
+}
+
+func TestPeopleGroupPhotoStatsUseFaceSizeAndKeepTwentyFaceBoundary(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	people.SetSourceDimensions(func(string) MediaDimensions {
+		return MediaDimensions{Width: 2000, Height: 2000}
+	})
+	records := []AIAnalysisRecord{
+		peopleTestRecordWithBox("photo-20", []float32{10, 10, 100, 100}, peopleTestVectors(0, 20)...),
+		peopleTestRecordWithBox("photo-21", []float32{10, 10, 100, 100}, peopleTestVectors(20, 21)...),
+		peopleTestRecordWithBox("photo-small-faces", []float32{10, 10, 40, 40}, peopleTestVectors(41, 8)...),
+		peopleTestRecordWithBox("photo-seven-faces", []float32{10, 10, 40, 40}, peopleTestVectors(49, 7)...),
+	}
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	stats := people.GroupPhotoStats(nil, 20)
+	byResource := make(map[string]PersonGroupPhotoStats)
+	for _, face := range people.AllFaces() {
+		byResource[face.ResourceID] = stats[face.PersonID]
+	}
+	if got := byResource["photo-20"]; got.LargeGroupPhotoCount != 0 || got.OrdinaryPhotoCount != 1 {
+		t.Fatalf("20-face photo stats = %+v, want ordinary", got)
+	}
+	if got := byResource["photo-21"]; got.LargeGroupPhotoCount != 1 || got.OrdinaryPhotoCount != 0 {
+		t.Fatalf("21-face photo stats = %+v, want group photo", got)
+	}
+	if got := byResource["photo-small-faces"]; got.LargeGroupPhotoCount != 1 || got.RelativeFaceSizeP10 != 0.02 {
+		t.Fatalf("small-face group photo stats = %+v, want relative-size classification", got)
+	}
+	if got := byResource["photo-seven-faces"]; got.LargeGroupPhotoCount != 0 || got.OrdinaryPhotoCount != 1 {
+		t.Fatalf("7-face photo stats = %+v, want ordinary", got)
+	}
+}
+
+func TestPeopleFaceRecordsAcceptUpToTheExpandedPhotoLimit(t *testing.T) {
+	vector := peopleTestVector(0, 0)
+	valid := peopleTestRecord("faces-256", makeRepeatedVectors(256, vector)...)
+	tooMany := peopleTestRecord("faces-257", makeRepeatedVectors(257, vector)...)
+	if got := len(peopleFacesFromRecordWithDimension(valid, peopleEmbeddingDimension)); got != 256 {
+		t.Fatalf("indexed faces at the cap = %d, want 256", got)
+	}
+	if got := peopleFacesFromRecordWithDimension(tooMany, peopleEmbeddingDimension); len(got) != 0 {
+		t.Fatalf("record above cap indexed %d faces, want rejection", len(got))
+	}
+}
+
+func makeRepeatedVectors(count int, vector []float32) [][]float32 {
+	vectors := make([][]float32, count)
+	for index := range vectors {
+		vectors[index] = vector
+	}
+	return vectors
+}
+
+func peopleTestVectors(start, count int) [][]float32 {
+	vectors := make([][]float32, count)
+	for index := range vectors {
+		vectors[index] = peopleTestVector(start+index, 0)
+	}
+	return vectors
+}
+
 func TestPeopleServiceKeepsSelectedFaceModelEmbeddingDimensionIsolated(t *testing.T) {
 	root := t.TempDir()
 	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
