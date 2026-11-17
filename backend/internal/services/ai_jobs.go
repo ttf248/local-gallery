@@ -1321,7 +1321,7 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 //
 // It reads only that one field instead of copying whole analysis records:
 // the smart album directory needs the newest capture time of every group,
-// and a group's members run into tens of thousands of photos, so copying
+// and a group's members run into tens of thousands of photos — copying
 // each record's JSON payload just to read one timestamp is wasted work.
 // Resources without a parsed capture time are simply absent from the map.
 func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map[string]time.Time {
