@@ -129,7 +129,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	s.mu.Unlock()
 
 	if !estimate.LibraryReady {
-		estimate.Modules = estimateModules(modules, peopleEnabled, 0, nil, versions, samples)
+		estimate.Modules = estimateModules(modules, peopleEnabled, nil, nil, versions, samples)
 		estimate.Sequence = AIJobEstimateSequence{
 			Incremental: AIJobEstimateTotal{Modules: []string{}},
 			Full:        AIJobEstimateTotal{Modules: []string{}},
@@ -137,22 +137,31 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 		return estimate, nil
 	}
 
-	targets := s.targetsFor(ctx, snapshot)
+	targetCounts := make(map[string]int, len(modules))
+	statsByModule := make(map[string]map[string]aiTargetStat, len(modules))
+	for _, module := range modules {
+		if module.Type == AIJobTypeFace && !peopleEnabled {
+			continue
+		}
+		targets := s.targetsFor(ctx, snapshot, module.Type)
+		targetCounts[module.Type] = len(targets)
+		stats := make(map[string]aiTargetStat, len(targets))
+		for _, target := range targets {
+			stats[target.resourceID] = aiTargetStat{size: target.size, mtimeNs: target.mtimeNs}
+		}
+		statsByModule[module.Type] = stats
+	}
 	if err := ctx.Err(); err != nil {
 		return AIJobEstimate{}, err
 	}
-	estimate.TotalImages = len(targets)
-
-	stats := make(map[string]aiTargetStat, len(targets))
-	for _, target := range targets {
-		stats[target.resourceID] = aiTargetStat{size: target.size, mtimeNs: target.mtimeNs}
-	}
+	allTargets := s.targetsFor(ctx, snapshot, "")
+	estimate.TotalImages = len(allTargets)
 
 	// 仍然有效的结果数：按模块各数一遍。待处理张数 = 目标总数 - 有效张数，
 	// 与 selectTargets 的候选集完全等价。
 	current := map[string]int{}
 	for _, fact := range facts {
-		stat, ok := stats[fact.resourceID]
+		stat, ok := statsByModule[fact.moduleType][fact.resourceID]
 		if !ok {
 			// 文件已经不在库里，这条记录不再参与计数。
 			continue
@@ -171,13 +180,13 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 		}
 	}
 
-	estimate.Modules = estimateModules(modules, peopleEnabled, estimate.TotalImages, current, versions, samples)
+	estimate.Modules = estimateModules(modules, peopleEnabled, targetCounts, current, versions, samples)
 	estimate.Sequence = estimateSequence(estimate.Modules)
 	return estimate, nil
 }
 
 // estimateModules 组装每个模块的两种模式结果。
-func estimateModules(modules []AIJobModule, peopleEnabled bool, totalImages int, current map[string]int, versions map[string]string, samples map[string][]aiEstimateSample) []AIJobEstimateModule {
+func estimateModules(modules []AIJobModule, peopleEnabled bool, targetCounts map[string]int, current map[string]int, versions map[string]string, samples map[string][]aiEstimateSample) []AIJobEstimateModule {
 	result := make([]AIJobEstimateModule, 0, len(modules))
 	for _, module := range modules {
 		entry := AIJobEstimateModule{
@@ -199,6 +208,7 @@ func estimateModules(modules []AIJobModule, peopleEnabled bool, totalImages int,
 			continue
 		}
 		version := versions[module.Type]
+		totalImages := targetCounts[module.Type]
 		pending := 0
 		if current != nil {
 			pending = totalImages - current[module.Type]
@@ -363,19 +373,26 @@ func estimateDuration(count int, perImage float64, known bool) *int64 {
 //
 // 缓存只服务空闲时的规模预估：任务开跑必须用当下真实的 stat，否则文件刚
 // 被改过时会被误判成「已经是最新的」而跳过重跑。
-func (s *AIJobService) targetsFor(ctx context.Context, snapshot CatalogSnapshot) []aiJobTarget {
+func (s *AIJobService) targetsFor(ctx context.Context, snapshot CatalogSnapshot, moduleType string) []aiJobTarget {
 	revision := snapshot.Revision()
 	s.targetCacheMu.Lock()
 	cached := s.targetCache
 	if cached != nil && cached.revision == revision && s.now().Sub(cached.builtAt) < aiTargetCacheTTL {
-		s.targetCacheMu.Unlock()
-		return cached.targets
+		if targets, exists := cached.targets[moduleType]; exists {
+			s.targetCacheMu.Unlock()
+			return targets
+		}
 	}
 	s.targetCacheMu.Unlock()
 
-	targets := s.buildTargets(ctx, snapshot)
+	targets := s.buildTargets(ctx, snapshot, moduleType)
 	s.targetCacheMu.Lock()
-	s.targetCache = &aiTargetCache{revision: revision, builtAt: s.now(), targets: targets}
+	cached = s.targetCache
+	if cached == nil || cached.revision != revision || s.now().Sub(cached.builtAt) >= aiTargetCacheTTL {
+		cached = &aiTargetCache{revision: revision, builtAt: s.now(), targets: make(map[string][]aiJobTarget)}
+		s.targetCache = cached
+	}
+	cached.targets[moduleType] = targets
 	s.targetCacheMu.Unlock()
 	return targets
 }

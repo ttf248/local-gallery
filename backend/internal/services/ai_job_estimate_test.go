@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 // estimateModule 按类型取出估算结果；找不到时测试直接失败。
@@ -90,6 +92,72 @@ func TestAIJobEstimateCountsPendingImagesPerMode(t *testing.T) {
 	}
 	if metadata.Full == nil || metadata.Full.Count != 3 {
 		t.Fatalf("full count = %+v, want 3", metadata.Full)
+	}
+}
+
+func TestAIJobEstimateUsesPhotoScopeForFaceModule(t *testing.T) {
+	root := t.TempDir()
+	photoRoot := filepath.Join(root, "photos")
+	comicRoot := filepath.Join(root, "comics")
+	photoFiles := writeAIJobImages(t, photoRoot, 2)
+	comicFiles := writeAIJobImages(t, comicRoot, 3)
+	result := &models.ScanResult{Roots: []string{photoRoot, comicRoot}, Albums: []models.Album{
+		{
+			Type: "album", Name: "photos", Path: filepath.Join(photoRoot, "album"), SourceRoot: photoRoot,
+			ImageFiles: photoFiles, CoverImage: photoFiles[0],
+		},
+		{
+			Type: "album", Name: "comics", Path: filepath.Join(comicRoot, "album"), SourceRoot: comicRoot,
+			ImageFiles: comicFiles, CoverImage: comicFiles[0],
+		},
+	}}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{
+		{Path: photoRoot, Kind: models.ContentKindPhoto},
+		{Path: comicRoot, Kind: models.ContentKindComic},
+	}))
+	catalog.Publish(result, result.Roots)
+	service, err := NewAIJobService(AIJobServiceOptions{
+		StatePath: filepath.Join(root, "state", "jobs.json"), MetadataDir: filepath.Join(root, "derived"),
+		Catalog: catalog, ValidatePath: func(path string) (string, error) { return path, nil },
+		Analyzers: []AIAnalyzer{
+			MetadataAnalyzer{}, testJSONAnalyzer{module: AIJobTypeFace, version: "face-v1"},
+		},
+		WorkerCount: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { shutdownAIJobService(t, service) })
+	if _, err := service.SetGPUEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SetPeopleEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+
+	estimate, err := service.Estimate(context.Background())
+	if err != nil {
+		t.Fatalf("Estimate() error = %v", err)
+	}
+	if estimate.TotalImages != 5 {
+		t.Fatalf("total library images = %d, want 5", estimate.TotalImages)
+	}
+	metadata := estimateModule(t, estimate, AIJobTypeMetadata)
+	if metadata.Incremental == nil || metadata.Incremental.Count != 5 || metadata.Full == nil || metadata.Full.Count != 5 {
+		t.Fatalf("metadata estimate = %+v, want all 5 images", metadata)
+	}
+	face := estimateModule(t, estimate, AIJobTypeFace)
+	if face.Incremental == nil || face.Incremental.Count != 2 || face.Full == nil || face.Full.Count != 2 {
+		t.Fatalf("face estimate = %+v, want only 2 photo images", face)
+	}
+	job, _, err := service.Start(AIJobTypeFace, AIJobModeFull)
+	if err != nil {
+		t.Fatalf("Start(face, full) error = %v", err)
+	}
+	job = waitForAIJob(t, service, job.ID, AIJobStatusCompleted)
+	if job.Total != 2 || job.Processed != 2 || job.Failed != 0 {
+		t.Fatalf("face job totals = %+v, want 2 photo images and no comic images", job)
 	}
 }
 

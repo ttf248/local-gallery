@@ -281,6 +281,32 @@ func TestPeopleServiceFiltersLegacyFacesAtAnalysisScale(t *testing.T) {
 	}
 }
 
+func TestPeopleServiceUsesOnlyPhotoResourcesForSyncAndUpdates(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	people.SetSourceIsPhoto(func(resourceID string) bool { return resourceID != "comic" })
+	photo := peopleTestRecord("photo", peopleTestVector(0, 0))
+	comic := peopleTestRecord("comic", peopleTestVector(1, 0))
+	if err := people.Sync([]AIAnalysisRecord{photo, comic}); err != nil {
+		t.Fatal(err)
+	}
+	if faces := people.AllFaces(); len(faces) != 1 || faces[0].ResourceID != "photo" {
+		t.Fatalf("faces after Sync = %+v, want only the photo resource", faces)
+	}
+
+	comic.MTimeNs++
+	photo.MTimeNs++
+	if err := people.ApplyRecords([]AIAnalysisRecord{comic, photo}); err != nil {
+		t.Fatal(err)
+	}
+	if faces := people.AllFaces(); len(faces) != 1 || faces[0].ResourceID != "photo" || faces[0].MTimeNs != photo.MTimeNs {
+		t.Fatalf("faces after ApplyRecords = %+v, want only the updated photo resource", faces)
+	}
+}
+
 func TestPeopleServiceIncrementalReplacesChangedResourceFaces(t *testing.T) {
 	root := t.TempDir()
 	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "derived.json"))

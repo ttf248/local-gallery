@@ -130,6 +130,7 @@ type PeopleService struct {
 	persistMu        sync.Mutex
 	statePath        string
 	derivedPath      string
+	sourceIsPhoto    func(string) bool
 	sourceDimensions func(string) MediaDimensions
 	faces            map[string]PersonFace
 	facesByResource  map[string][]string
@@ -210,6 +211,15 @@ func (s *PeopleService) SetSourceDimensions(lookup func(resourceID string) Media
 	s.mu.Unlock()
 }
 
+// SetSourceIsPhoto restricts face records to resources that belong to photo albums.
+// Set it before Sync or ApplyRecords so startup rebuilds and live updates share
+// the same media scope.
+func (s *PeopleService) SetSourceIsPhoto(lookup func(resourceID string) bool) {
+	s.mu.Lock()
+	s.sourceIsPhoto = lookup
+	s.mu.Unlock()
+}
+
 func emptyPeopleManualState() peopleManualState {
 	return peopleManualState{Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}
 }
@@ -249,11 +259,15 @@ func (s *PeopleService) Sync(records []AIAnalysisRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	previousIDs := cloneStringMap(s.previousIDs)
+	sourceIsPhoto := s.sourceIsPhoto
 	for key, face := range s.faces {
 		previousIDs[key] = face.PersonID
 	}
 	faces := make(map[string]PersonFace)
 	for _, record := range records {
+		if sourceIsPhoto != nil && !sourceIsPhoto(record.ResourceID) {
+			continue
+		}
 		for _, face := range s.facesFromRecord(record) {
 			faces[face.Key] = face
 		}
@@ -335,6 +349,7 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	previousIDs := cloneStringMap(s.previousIDs)
 	cachedIDs := cloneStringMap(s.cachedIDs)
 	cachedHashes := cloneStringMap(s.cachedHashes)
+	sourceIsPhoto := s.sourceIsPhoto
 	manual := clonePeopleManualState(s.manual)
 	annAvailable := s.ann != nil
 	comparisons := s.comparisons
@@ -359,7 +374,10 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		if record.Type != AIJobTypeFace {
 			continue
 		}
-		incoming := s.facesFromRecord(record)
+		var incoming []PersonFace
+		if sourceIsPhoto == nil || sourceIsPhoto(record.ResourceID) {
+			incoming = s.facesFromRecord(record)
+		}
 		current := make([]PersonFace, 0, len(existingFaceKeys[record.ResourceID]))
 		for _, key := range existingFaceKeys[record.ResourceID] {
 			if face, exists := existingFaces[key]; exists {

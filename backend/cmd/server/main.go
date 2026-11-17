@@ -306,6 +306,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化人物索引失败: %v", err)
 	}
+	peopleService.SetSourceIsPhoto(func(resourceID string) bool {
+		return resourceCatalog.Acquire().IsPhotoImage(resourceID)
+	})
 	peopleService.SetSourceDimensions(func(resourceID string) services.MediaDimensions {
 		ref, exists := resourceCatalog.Acquire().Lookup(resourceID)
 		if !exists {
@@ -356,9 +359,15 @@ func main() {
 	if err := ocrSearchIndex.Sync(aiJobs.Records(services.AIJobTypeOCR)); err != nil {
 		log.Printf("重建 OCR 搜索索引失败: %v", err)
 	}
-	if aiJobs.PeopleEnabled() {
-		if err := peopleService.Sync(aiJobs.RecordsIncludingStaleVersions(services.AIJobTypeFace)); err != nil {
+	syncPeopleRecords := func() error {
+		return peopleService.Sync(aiJobs.RecordsIncludingStaleVersions(services.AIJobTypeFace))
+	}
+	peopleSynced := false
+	if aiJobs.PeopleEnabled() && resourceCatalog.Acquire().Ready() {
+		if err := syncPeopleRecords(); err != nil {
 			log.Printf("重建人物索引失败: %v", err)
+		} else {
+			peopleSynced = true
 		}
 	}
 	aiJobs.StartPending()
@@ -634,6 +643,25 @@ func main() {
 	// ---- 启动与优雅退出 ----
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if aiJobs.PeopleEnabled() && !peopleSynced {
+		go func() {
+			ticker := time.NewTicker(time.Second)
+			defer ticker.Stop()
+			for {
+				if resourceCatalog.Acquire().Ready() {
+					if err := syncPeopleRecords(); err != nil {
+						log.Printf("扫描完成后重建人物索引失败: %v", err)
+					}
+					return
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+			}
+		}()
+	}
 	aiJobs.StartScheduler(ctx)
 	maintenanceDone := make(chan struct{})
 	go func() {

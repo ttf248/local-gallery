@@ -398,7 +398,7 @@ type AIJobService struct {
 type aiTargetCache struct {
 	revision uint64
 	builtAt  time.Time
-	targets  []aiJobTarget
+	targets  map[string][]aiJobTarget
 }
 
 func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
@@ -1687,7 +1687,7 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 		albumID = job.AlbumID
 	}
 	s.mu.Unlock()
-	targets := s.buildTargets(runtimeState.ctx, snapshot, albumID)
+	targets := s.buildTargets(runtimeState.ctx, snapshot, job.Type, albumID)
 	digest := digestAITargets(targets, albumID)
 	candidates, err := s.selectTargets(id, targets, digest)
 	if err != nil {
@@ -1781,7 +1781,7 @@ func (s *AIJobService) waitForCatalog(ctx context.Context) (CatalogSnapshot, err
 	}
 }
 
-func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, albumIDs ...string) []aiJobTarget {
+func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, moduleType string, albumIDs ...string) []aiJobTarget {
 	ids := snapshot.FileIDs()
 	if albumID, err := s.analysisAlbumID(albumIDs); err != nil {
 		return nil
@@ -1796,6 +1796,9 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 	for _, id := range ids {
 		ref, ok := snapshot.Lookup(id)
 		if !ok || !models.IsImageFile(ref.AbsolutePath) {
+			continue
+		}
+		if moduleType == AIJobTypeFace && !snapshot.IsPhotoImage(id) {
 			continue
 		}
 		targets = append(targets, aiJobTarget{
