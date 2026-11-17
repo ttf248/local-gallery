@@ -3018,6 +3018,11 @@ func (s *AIJobService) recoverInterruptedJobs() {
 	changed := false
 	for _, id := range s.order {
 		job := s.jobs[id]
+		minimumTotal := max(job.Done, job.Checkpoint.Offset)
+		if job.Total < minimumTotal {
+			job.Total = minimumTotal
+			changed = true
+		}
 		if job.Type == AIJobTypeFace && !s.settings.PeopleEnabled && isAIJobActive(job.Status) {
 			job.Status = AIJobStatusCancelled
 			job.Stage = string(AIJobStatusCancelled)

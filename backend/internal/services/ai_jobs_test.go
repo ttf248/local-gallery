@@ -568,6 +568,47 @@ func TestAIJobServiceMarksRunningJobRecoveredFromPersistedCheckpoint(t *testing.
 	}
 }
 
+func TestAIJobServiceRaisesTotalToRecoveredProgress(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 3)
+	catalog := aiJobCatalog(root, files)
+	statePath := filepath.Join(t.TempDir(), "state", "ai_jobs.json")
+	metadataDir := filepath.Join(t.TempDir(), "derived", "metadata")
+	now := time.Now()
+	state := aiJobDiskState{
+		Version: aiJobStoreVersion,
+		Jobs: []AIJob{{
+			ID: "job-recovered-progress", Type: AIJobTypeMetadata, Mode: AIJobModeFull,
+			Status: AIJobStatusPaused, Stage: AIJobStatusPaused,
+			ModuleVersion: MetadataParserVersion, ComputeDevice: "cpu", Total: 2,
+			Processed: 3, Done: 3,
+			Checkpoint: AIJobCheckpoint{
+				Offset: 3, Batch: 1, ModuleVersion: MetadataParserVersion,
+				TargetDigest: "target-digest",
+			},
+			CreatedAt: now, UpdatedAt: now,
+		}},
+		Queue: []string{},
+		Settings: AIJobSettings{
+			DailyTime: "03:00", DailyModules: []string{AIJobTypeMetadata},
+			DailyScan: true, DailySmartAlbums: true, GPUEnabled: false,
+		},
+	}
+	if err := writeAIJSONAtomic(statePath, state); err != nil {
+		t.Fatal(err)
+	}
+
+	service := newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{})
+	job, exists := service.Get("job-recovered-progress")
+	if !exists || job.Status != AIJobStatusPaused {
+		t.Fatalf("recovered job = %+v, exists=%v; want paused", job, exists)
+	}
+	if job.Total != 3 || job.Done != 3 || job.Checkpoint.Offset != 3 {
+		t.Fatalf("recovered progress = total %d, done %d, offset %d; want all 3", job.Total, job.Done, job.Checkpoint.Offset)
+	}
+	shutdownAIJobService(t, service)
+}
+
 func TestAIJobServiceCancelsAndRetryCreatesNewHistoryItem(t *testing.T) {
 	root := t.TempDir()
 	files := writeAIJobImages(t, root, 2)
