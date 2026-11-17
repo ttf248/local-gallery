@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AIJob } from "../../api/aiJobs";
+import type { AIJob, FaceModel } from "../../api/aiJobs";
 import { formatDateTime } from "../../utils/date";
 import {
   formatCount,
@@ -102,7 +102,9 @@ export default function JobHistoryPanel({
               onClick={() => setFilter(value)}
             >
               {label}{" "}
-              <span className="ml-1 font-mono tabular-nums">{counts[value]}</span>
+              <span className="ml-1 font-mono tabular-nums">
+                {counts[value]}
+              </span>
             </button>
           ))}
         </div>
@@ -162,6 +164,9 @@ export default function JobHistoryPanel({
                     >
                       失败 {formatCount(job.failed)}
                     </span>
+                    {job.type === "face" ? (
+                      <span>模型 {faceModelLabel(job.faceModel)}</span>
+                    ) : null}
                   </div>
                 </div>
                 <ChevronDownIcon
@@ -190,6 +195,13 @@ export default function JobHistoryPanel({
                     value={job.moduleVersion || "—"}
                     fullWidth
                   />
+                  {job.type === "face" ? (
+                    <SpecRow
+                      label="使用模型"
+                      value={faceModelLabel(job.faceModel)}
+                      fullWidth
+                    />
+                  ) : null}
                 </dl>
 
                 {job.error ? (
@@ -259,6 +271,12 @@ export default function JobHistoryPanel({
 }
 
 type HistoryFilter = "all" | "completed" | "failed" | "cancelled";
+
+function faceModelLabel(model?: FaceModel): string {
+  if (model === "quality-v2") return "YuNet + SFace（quality-v2）";
+  if (model === "buffalo_m") return "SCRFD + ResNet50（Buffalo_m）";
+  return "未知";
+}
 
 const HISTORY_FILTERS: { value: HistoryFilter; label: string }[] = [
   { value: "all", label: "全部" },

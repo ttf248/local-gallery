@@ -30,6 +30,19 @@ export interface StorageOutput {
   available: boolean;
 }
 
+/** One independent face model's weights, analysis batches, index and corrections. */
+export interface StorageFaceProfile {
+  model: "quality-v2" | "buffalo_m";
+  version: string;
+  active: boolean;
+  modelDirectory: string;
+  modelFiles: StorageModelFile[];
+  modelBytes: number;
+  outputBytes: number;
+  outputFileCount: number;
+  outputs: StorageOutput[];
+}
+
 /** 一个分析模块的模型与产物。 */
 export interface StorageModule {
   type: AnalysisType;
@@ -41,6 +54,7 @@ export interface StorageModule {
   outputBytes: number;
   outputFileCount: number;
   outputs: StorageOutput[];
+  profiles?: StorageFaceProfile[];
 }
 
 export interface StorageSummary {

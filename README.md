@@ -145,7 +145,7 @@ face/buffalo_m/det_2.5g.onnx
 face/buffalo_m/w600k_r50.onnx
 ~~~
 
-任务中心的人脸模型选择同时作用于手动和每日增量任务。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；切换模型后，尚无该模型版本结果的照片会被增量任务重新分析。
+任务中心的人脸模型选择同时作用于手动和每日增量任务。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；两套模型的分析记录、人物索引和人工修正分别持久化。切换模型会恢复对应数据，增量任务只补齐该模型缺失或已过期的结果；人物相册和智能相册的人物聚合始终读取当前模型。任务记录和本机存储页会标明使用模型及各模型的权重、批次与索引占用。
 
 默认 `cacheDir` 是进程工作目录下的 `.local-gallery`。虚拟环境位于 Worker 目录的 `.venv/`；模型保存在 `<cacheDir>/derived/ai/models/`，不包含在发布压缩包中。Chinese-CLIP 权重约 753 MB；OCR 模型保存在 `derived/ai/models/ocr/`。
 

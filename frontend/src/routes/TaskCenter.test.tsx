@@ -911,6 +911,28 @@ describe("任务中心", () => {
     );
   });
 
+  it("人脸任务历史记录显示任务创建时使用的模型", async () => {
+    const faceJob: AIJob = {
+      ...currentJob,
+      id: "job-face-buffalo",
+      type: "face",
+      faceModel: "buffalo_m",
+      moduleVersion: "buffalo-m-v1",
+      status: "completed",
+      finishedAt: "2026-11-11T02:02:00Z",
+    };
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({ jobs: [faceJob], active: undefined }),
+    });
+    renderCenter("history");
+
+    const row = (await screen.findAllByTestId("task-history-row"))[0];
+    expect(row.textContent).toContain("SCRFD + ResNet50（Buffalo_m）");
+    fireEvent.click(within(row).getByText("手动 人脸识别"));
+    expect(await within(row).findByText("使用模型")).toBeInTheDocument();
+  });
+
   it("已取消任务可重新运行未完成部分", async () => {
     const cancelledJob: AIJob = {
       ...currentJob,

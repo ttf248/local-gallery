@@ -142,6 +142,72 @@ const usage: StorageUsage = {
           available: false,
         },
       ],
+      profiles: [
+        {
+          model: "quality-v2",
+          version: "quality-version",
+          active: true,
+          modelDirectory: "derived/ai/models/face",
+          modelFiles: [
+            {
+              name: "yunet.onnx",
+              path: "derived/ai/models/face/yunet.onnx",
+              location: "cache",
+              sizeBytes: 256,
+              exists: true,
+            },
+          ],
+          modelBytes: 256,
+          outputBytes: 256,
+          outputFileCount: 2,
+          outputs: [
+            {
+              kind: "batches",
+              label: "分析批次",
+              path: "derived/metadata/face/quality-v2/batches",
+              bytes: 128,
+              fileCount: 1,
+              available: true,
+            },
+            {
+              kind: "index",
+              label: "人物索引",
+              path: "derived/ai/people-index-quality-v2.json",
+              bytes: 128,
+              fileCount: 1,
+              available: true,
+            },
+          ],
+        },
+        {
+          model: "buffalo_m",
+          version: "buffalo-version",
+          active: false,
+          modelDirectory: "derived/ai/models/face/buffalo_m",
+          modelFiles: [
+            {
+              name: "det_2.5g.onnx",
+              path: "derived/ai/models/face/buffalo_m/det_2.5g.onnx",
+              location: "cache",
+              sizeBytes: 512,
+              exists: true,
+            },
+          ],
+          modelBytes: 512,
+          outputBytes: 0,
+          outputFileCount: 0,
+          outputs: [
+            {
+              kind: "batches",
+              label: "分析批次",
+              path: "derived/metadata/face/buffalo_m/batches",
+              bytes: 0,
+              fileCount: 0,
+              available: false,
+            },
+          ],
+        },
+      ],
     },
   ],
   paths: {
@@ -162,7 +228,8 @@ const absolutePaths: StorageAbsolutePaths = {
   stateDirectory: "F:\\gallery\\.local-gallery\\state",
   jobsFile: "F:\\gallery\\.local-gallery\\state\\ai_jobs.json",
   pythonEnvironment: "F:\\gallery\\backend\\aiworker\\.venv",
-  pythonExecutable: "F:\\gallery\\backend\\aiworker\\.venv\\Scripts\\python.exe",
+  pythonExecutable:
+    "F:\\gallery\\backend\\aiworker\\.venv\\Scripts\\python.exe",
   modules: [
     {
       type: "embedding",
@@ -192,7 +259,12 @@ function cacheStats(): CacheStats {
     available: true,
     cacheTtlSeconds: 30,
     thumbs: { path: "thumbs", bytes: 1000, fileCount: 2, available: true },
-    converted: { path: "converted", bytes: 3000, fileCount: 1, available: true },
+    converted: {
+      path: "converted",
+      bytes: 3000,
+      fileCount: 1,
+      available: true,
+    },
     previews: emptySub,
     videoFaststart: emptySub,
     videoTranscode: emptySub,
@@ -255,6 +327,24 @@ describe("本机存储", () => {
     expect(screen.getByText("state/ai_jobs.json")).toBeInTheDocument();
   });
 
+  it("人脸存储按模型分开展示并标记当前生效模型", async () => {
+    renderSection();
+
+    expect(
+      await screen.findByText("YuNet + SFace（quality-v2）"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("SCRFD + ResNet50（Buffalo_m）"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("当前使用")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "分析批次：derived/metadata/face/quality-v2/batches、人物索引：derived/ai/people-index-quality-v2.json",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("det_2.5g.onnx")).toBeInTheDocument();
+  });
+
   it("OCR 权重来自派生缓存，元数据模块说明无需权重", async () => {
     renderSection();
 
@@ -297,7 +387,9 @@ describe("本机存储", () => {
       await screen.findByText("F:\\gallery\\.local-gallery"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("F:\\gallery\\backend\\aiworker\\.venv\\Scripts\\python.exe"),
+      screen.getByText(
+        "F:\\gallery\\backend\\aiworker\\.venv\\Scripts\\python.exe",
+      ),
     ).toBeInTheDocument();
   });
 

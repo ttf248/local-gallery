@@ -11,6 +11,7 @@ import (
 // StorageHandlerOptions 存储接口需要的本机位置。
 type StorageHandlerOptions struct {
 	CacheRoot string
+	Jobs      *services.AIJobService
 }
 
 // StorageUsageHandler 返回本机分析任务的模型权重与产物占用。
@@ -32,7 +33,18 @@ func StorageUsageHandler(service *services.AIStorageService, options StorageHand
 				usage.CacheTTLSeconds = left
 			}
 		}
-		return c.JSON(fiber.Map{"ok": true, "usage": usage})
+		response := *usage
+		response.Modules = append([]services.AIStorageModule(nil), usage.Modules...)
+		if options.Jobs != nil {
+			activeModel := options.Jobs.FaceModel()
+			for index := range response.Modules {
+				response.Modules[index].Profiles = append([]services.AIStorageFaceProfile(nil), usage.Modules[index].Profiles...)
+				for profileIndex := range response.Modules[index].Profiles {
+					response.Modules[index].Profiles[profileIndex].Active = response.Modules[index].Profiles[profileIndex].Model == activeModel
+				}
+			}
+		}
+		return c.JSON(fiber.Map{"ok": true, "usage": &response})
 	}
 }
 

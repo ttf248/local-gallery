@@ -33,38 +33,96 @@ export default function StorageModuleGrid({ modules }: Props) {
           return (
             <li key={module.type} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-label font-medium text-fg">{module.name}</span>
+                <span className="text-label font-medium text-fg">
+                  {module.name}
+                </span>
                 <span className="font-mono text-meta tabular-nums text-fg-muted">
                   模型 {formatSize(module.modelBytes)} · 产物{" "}
                   {formatSize(module.outputBytes)}
                 </span>
               </div>
 
-              {module.modelFiles.length > 0 ? (
-                <p
-                  className="mt-1 truncate font-mono text-meta text-fg-subtle"
-                  title={modelNames}
-                >
-                  {modelNames}
-                </p>
-              ) : module.modelLocation === "none" ? (
-                <p className="mt-1 text-meta text-fg-subtle">
-                  使用 Go 内置 EXIF/GPS 解析器，无需权重。
-                </p>
+              {module.profiles?.length ? (
+                <ul className="mt-2 space-y-2">
+                  {module.profiles.map((profile) => {
+                    const profileModelNames = profile.modelFiles
+                      .map((file) => file.name)
+                      .join("、");
+                    const profileOutputPaths = profile.outputs
+                      .map((output) => `${output.label}：${output.path}`)
+                      .join("、");
+                    return (
+                      <li
+                        key={profile.model}
+                        className="rounded-lg border border-border-faint bg-bg-subtle px-3 py-2"
+                      >
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                          <span className="text-meta font-medium text-fg">
+                            {faceModelLabel(profile.model)}
+                            {profile.active ? (
+                              <span className="ml-2 text-success">
+                                当前使用
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="font-mono text-meta tabular-nums text-fg-muted">
+                            模型 {formatSize(profile.modelBytes)} · 产物{" "}
+                            {formatSize(profile.outputBytes)}
+                          </span>
+                        </div>
+                        <p
+                          className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                          title={profileModelNames}
+                        >
+                          {profileModelNames || "未发现模型文件"}
+                        </p>
+                        <p
+                          className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                          title={profileOutputPaths}
+                        >
+                          {profileOutputPaths}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
               ) : (
-                <p className="mt-1 text-meta text-warning">未发现模型文件</p>
-              )}
+                <>
+                  {module.modelFiles.length > 0 ? (
+                    <p
+                      className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                      title={modelNames}
+                    >
+                      {modelNames}
+                    </p>
+                  ) : module.modelLocation === "none" ? (
+                    <p className="mt-1 text-meta text-fg-subtle">
+                      使用 Go 内置 EXIF/GPS 解析器，无需权重。
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-meta text-warning">
+                      未发现模型文件
+                    </p>
+                  )}
 
-              <p
-                className="mt-1 truncate font-mono text-meta text-fg-subtle"
-                title={outputPaths}
-              >
-                {outputPaths}
-              </p>
+                  <p
+                    className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                    title={outputPaths}
+                  >
+                    {outputPaths}
+                  </p>
+                </>
+              )}
             </li>
           );
         })}
       </ul>
     </section>
   );
+}
+
+function faceModelLabel(model: "quality-v2" | "buffalo_m"): string {
+  return model === "quality-v2"
+    ? "YuNet + SFace（quality-v2）"
+    : "SCRFD + ResNet50（Buffalo_m）";
 }

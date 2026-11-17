@@ -597,6 +597,7 @@ func main() {
 	api.Post("/admin/state/import", middleware.LoopbackOnly(), handlers.StateImportHandler(backupService))
 	api.Get("/storage/usage", handlers.StorageUsageHandler(storageUsage, handlers.StorageHandlerOptions{
 		CacheRoot: cacheLayout.Root,
+		Jobs:      aiJobs,
 	}))
 	api.Get("/storage/paths", middleware.LoopbackOnly(), handlers.StoragePathsHandler(storageUsage, services.AIStoragePathOptions{
 		ConfigPath:       mgr.Path(),

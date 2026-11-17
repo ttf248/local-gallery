@@ -201,7 +201,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/ai/jobs` / `POST /api/ai/jobs`
 
-读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型；切换模型会让新模型版本的结果进入增量清单。人脸记录按每张照片保存当前生效的一份，因此切换后首次增量可能需要重算大部分照片。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。后三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
+读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型。两种模型的每张照片分析记录分别持久化；切换后会加载该模型已有记录，增量只补齐该模型缺失或过期的照片。人物索引和人工修正同样按模型隔离；人物相册与智能相册人物维度始终使用当前选择模型的数据，切换后不会展示另一模型生成的缓存结果。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。后三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
 
 任务快照的 `jobs` 按创建时间倒序提供任务记录，`active` 是当前执行或暂停的任务，`queue` 是按执行顺序排列的等待任务 ID，不包含 `active`。任务记录包含等待队列任务以及所有终态记录。队列 ID 与任务状态会一起持久化到 `state/ai_jobs.json`；旧状态文件缺少 `queue` 时会按待执行任务的创建顺序恢复，服务重启时未完成的当前任务会插回队首续跑。
 
@@ -332,7 +332,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `PUT /api/ai/jobs/face-model`
 
-请求为 `{ "model": "quality-v2" | "buffalo_m" }`，保存新建人脸任务和每日计划使用的模型。只有模型权重已就绪时才能通过任务中心启动对应分析；任务快照保留创建时的模型。切换期间若人脸任务或每日计划正在运行，返回 `409 analysis_job_active`；不支持的模型返回 `400 invalid_face_model`。设置保存失败返回 `500 face_model_update_failed`；切换后重建当前人物索引失败会恢复原模型设置并返回 `500 people_index_unavailable`。模型状态通过 `GET /api/ai/semantic/status` 的 `faceModels` 返回，包含 `ready`、`version` 和可选错误码。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；两种向量空间严格隔离，不混合参与人物分组或人脸相似检索。切换模型后目标版本尚无结果的照片会在下次增量任务中分析。
+请求为 `{ "model": "quality-v2" | "buffalo_m" }`，保存新建人脸任务和每日计划使用的模型。只有模型权重已就绪时才能通过任务中心启动对应分析；任务快照保留创建时的模型。切换期间若人脸任务或每日计划正在运行，返回 `409 analysis_job_active`；不支持的模型返回 `400 invalid_face_model`。设置保存失败返回 `500 face_model_update_failed`；切换后重建当前人物索引失败会恢复原模型设置并返回 `500 people_index_unavailable`。模型状态通过 `GET /api/ai/semantic/status` 的 `faceModels` 返回，包含 `ready`、`version` 和可选错误码。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；两种向量空间严格隔离，不混合参与人物分组或人脸相似检索。切换会恢复该模型独立的人脸记录、人物索引与人工修正；目标模型尚无当前版本结果的照片会进入下次增量分析。
 
 ### `GET /api/ai/semantic/status`
 
@@ -383,8 +383,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 - `modules` 按 `metadata`、`embedding`、`ocr`、`face` 固定顺序给出，与模块清单一致。
 - `modelLocation` 为 `none`（无权重）或 `cache`（权重在缓存根目录内，`path` 相对缓存根目录）。OCR 权重位于 `derived/ai/models/ocr/`。
-- `outputs[].kind` 为 `batches`（每次任务新增的批次结果）、`vectors`（向量分片）或 `index`（模块共享的搜索索引）。产物目录尚未产生时 `available=false`、`bytes` 与 `fileCount` 为 0。
-- 照片元数据由 Go 内置 EXIF/GPS 解析器处理，没有独立模型权重；Chinese-CLIP、RapidOCR 与 YuNet/SFace 按各自实际权重文件统计。
+- `outputs[].kind` 为 `batches`（每次任务新增的批次结果）、`vectors`（向量分片）或 `index`（模块共享的索引）。人脸模块另含 `profiles[]`，分别报告 `quality-v2` 与 `buffalo_m` 的 `version`、`active`、模型权重和产物；产物包含各模型的批次目录、人物索引与人工修正文件。模块级数字是两套模型的合计。产物目录尚未产生时 `available=false`、`bytes` 与 `fileCount` 为 0。
+- 照片元数据由 Go 内置 EXIF/GPS 解析器处理，没有独立模型权重；人脸存储按模型分别统计 YuNet/SFace 与 SCRFD/ResNet50 权重、任务批次、人物索引和修正状态。
 - 占用统计带 30 秒内存 TTL，批次提交与人物分析结果清理后失效重算。
 
 ### `GET /api/storage/paths`
@@ -436,7 +436,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `POST /api/people/split` 接受 `{ "personId": "…", "faceKeys": ["f_…#0"] }`，将选中脸拆到新组；每次最多 200 张，必须给原组留至少一张脸。
 - `DELETE /api/people` 在没有活动人脸任务时关闭人物分析，并清除人脸任务结果、分组索引与手动修正。存在活动或排队任务时返回 `409 analysis_job_active`。
 
-人物分组列表同时返回 `centroidThreshold` 与 `anchorThreshold`。候选脸须与当前组中心的余弦高于 `0.520`，并与创建该组的固定锚脸高于 `0.720`；锚脸在组生命周期内不随高分新脸替换。之前的“移动中心 + 可替换代表脸”会让连续的中等相似脸逐步拖动组中心，把相距很远的人脸链式并入同组；分组算法版本升级会全量重建派生索引。分组不把 CLIP 整图相似度当作身份辅助证据。一个组不会包含同一张照片里的两张脸。阈值仍是启发值，没有本机标注集校准，不能确认身份。OpenCV 的 SFace `0.363` 是两张脸验证的参考值，不代表全库聚类阈值或身份确认。每张脸先用 HNSW 找最多 128 个近邻组，再按当前中心精确重算余弦相似度；近邻搜索是近似索引，仍可能漏掉匹配组，因此结果保持可编辑。相同分数按人物 ID 稳定决胜，不设比较次数或人脸总数上限。输入按资源 ID 与脸序号排序，旧组的命名、隐藏与分配在重建时按人脸重叠迁移；自动重建若会合并多个已有人工修正的组或拆分一个已有人工修正的组，旧分组保持独立，直到用户显式合并或拆分。人物媒体分页继续以照片为单位，拆分选择器每次显示 200 张已加载人脸，可逐段展开。用户修正保存在 `state/people.json`；可重建索引位于 `derived/ai/people-index.json`，只存资源 ID、文件指纹、脸部框、记录哈希和组 ID，不保存特征向量。SFace 特征只保存在现有 `derived/metadata/face/` 结果中。
+人物分组列表同时返回 `centroidThreshold` 与 `anchorThreshold`。候选脸须与当前组中心的余弦高于 `0.520`，并与创建该组的固定锚脸高于 `0.720`；锚脸在组生命周期内不随高分新脸替换。之前的“移动中心 + 可替换代表脸”会让连续的中等相似脸逐步拖动组中心，把相距很远的人脸链式并入同组；分组算法版本升级会全量重建派生索引。分组不把 CLIP 整图相似度当作身份辅助证据。一个组不会包含同一张照片里的两张脸。阈值仍是启发值，没有本机标注集校准，不能确认身份。OpenCV 的 SFace `0.363` 是两张脸验证的参考值，不代表全库聚类阈值或身份确认。每张脸先用 HNSW 找最多 128 个近邻组，再按当前中心精确重算余弦相似度；近邻搜索是近似索引，仍可能漏掉匹配组，因此结果保持可编辑。相同分数按人物 ID 稳定决胜，不设比较次数或人脸总数上限。输入按资源 ID 与脸序号排序，旧组的命名、隐藏与分配在重建时按人脸重叠迁移；自动重建若会合并多个已有人工修正的组或拆分一个已有人工修正的组，旧分组保持独立，直到用户显式合并或拆分。人物媒体分页继续以照片为单位，拆分选择器每次显示 200 张已加载人脸，可逐段展开。用户修正保存在 `state/people-<model>.json`；可重建索引位于 `derived/ai/people-index-<model>.json`，只存资源 ID、文件指纹、脸部框、记录哈希和组 ID，不保存特征向量。SFace 特征只保存在现有 `derived/metadata/face/` 结果中。
 
 ### 足迹页 API
 

@@ -49,10 +49,24 @@ type AIStorageOutput struct {
 
 // AIStorageModule 一个分析模块的模型与产物。
 type AIStorageModule struct {
-	Type            string            `json:"type"`
-	Name            string            `json:"name"`
+	Type            string                 `json:"type"`
+	Name            string                 `json:"name"`
+	ModelDirectory  string                 `json:"modelDirectory"`
+	ModelLocation   string                 `json:"modelLocation"`
+	ModelFiles      []AIStorageFile        `json:"modelFiles"`
+	ModelBytes      int64                  `json:"modelBytes"`
+	OutputBytes     int64                  `json:"outputBytes"`
+	OutputFileCount int                    `json:"outputFileCount"`
+	Outputs         []AIStorageOutput      `json:"outputs"`
+	Profiles        []AIStorageFaceProfile `json:"profiles,omitempty"`
+}
+
+// AIStorageFaceProfile reports weights and persisted outputs for one face model.
+type AIStorageFaceProfile struct {
+	Model           string            `json:"model"`
+	Version         string            `json:"version"`
+	Active          bool              `json:"active"`
 	ModelDirectory  string            `json:"modelDirectory"`
-	ModelLocation   string            `json:"modelLocation"`
 	ModelFiles      []AIStorageFile   `json:"modelFiles"`
 	ModelBytes      int64             `json:"modelBytes"`
 	OutputBytes     int64             `json:"outputBytes"`
@@ -212,6 +226,13 @@ func (s *AIStorageService) AbsolutePaths(options AIStoragePathOptions) AIStorage
 				Exists:    file.Exists,
 			})
 		}
+		for _, profile := range module.Profiles {
+			for _, file := range profile.ModelFiles {
+				absolute.ModelFiles = append(absolute.ModelFiles, AIStorageAbsoluteFile{
+					Name: file.Name, Path: absolutePath(file.Path), SizeBytes: file.SizeBytes, Exists: file.Exists,
+				})
+			}
+		}
 		paths.Modules = append(paths.Modules, absolute)
 	}
 	return paths
@@ -219,16 +240,22 @@ func (s *AIStorageService) AbsolutePaths(options AIStoragePathOptions) AIStorage
 
 // statModelFiles 补齐模型权重文件的大小与存在状态。
 func statModelFiles(module *AIStorageModule) {
-	for index := range module.ModelFiles {
-		file := &module.ModelFiles[index]
-		info, err := os.Stat(file.Path)
-		if err != nil || !info.Mode().IsRegular() {
-			file.Exists = false
-			file.SizeBytes = 0
-			continue
+	statFiles := func(files []AIStorageFile) {
+		for index := range files {
+			file := &files[index]
+			info, err := os.Stat(file.Path)
+			if err != nil || !info.Mode().IsRegular() {
+				file.Exists = false
+				file.SizeBytes = 0
+				continue
+			}
+			file.Exists = true
+			file.SizeBytes = info.Size()
 		}
-		file.Exists = true
-		file.SizeBytes = info.Size()
+	}
+	statFiles(module.ModelFiles)
+	for index := range module.Profiles {
+		statFiles(module.Profiles[index].ModelFiles)
 	}
 }
 
@@ -298,20 +325,34 @@ func aiStorageModules(layout CacheLayout) []AIStorageModule {
 			Name:           aiJobModuleName(AIJobTypeFace),
 			ModelLocation:  AIStorageModelCache,
 			ModelDirectory: filepath.Join(layout.AIModelsDir, "face"),
-			ModelFiles: []AIStorageFile{
-				modelFile(filepath.Join(layout.AIModelsDir, "face", "face_detection_yunet_2023mar.onnx"), AIStorageModelCache),
-				modelFile(filepath.Join(layout.AIModelsDir, "face", "face_recognition_sface_2021dec.onnx"), AIStorageModelCache),
-			},
-			Outputs: []AIStorageOutput{
+			ModelFiles:     []AIStorageFile{},
+			Outputs:        []AIStorageOutput{},
+			Profiles: []AIStorageFaceProfile{
 				{
-					Kind:  AIStorageOutputBatches,
-					Label: "批次结果",
-					Path:  filepath.Join(layout.MetadataDir, AIJobTypeFace),
+					Model: FaceModelQualityV2, Version: FaceAnalyzerVersion,
+					ModelDirectory: filepath.Join(layout.AIModelsDir, "face"),
+					ModelFiles: []AIStorageFile{
+						modelFile(filepath.Join(layout.AIModelsDir, "face", "face_detection_yunet_2023mar.onnx"), AIStorageModelCache),
+						modelFile(filepath.Join(layout.AIModelsDir, "face", "face_recognition_sface_2021dec.onnx"), AIStorageModelCache),
+					},
+					Outputs: []AIStorageOutput{
+						{Kind: AIStorageOutputBatches, Label: "分析批次", Path: filepath.Join(layout.MetadataDir, AIJobTypeFace, FaceModelQualityV2, "batches")},
+						{Kind: AIStorageOutputIndex, Label: "人物索引", Path: filepath.Join(layout.AIDerivedDir, "people-index-quality-v2.json")},
+						{Kind: AIStorageOutputIndex, Label: "人物修正", Path: filepath.Join(layout.StateDir, "people-quality-v2.json")},
+					},
 				},
 				{
-					Kind:  AIStorageOutputIndex,
-					Label: "人物索引",
-					Path:  filepath.Join(layout.AIDerivedDir, "people-index.json"),
+					Model: FaceModelBuffaloM, Version: FaceAnalyzerBuffaloMVersion,
+					ModelDirectory: filepath.Join(layout.AIModelsDir, "face", FaceModelBuffaloM),
+					ModelFiles: []AIStorageFile{
+						modelFile(filepath.Join(layout.AIModelsDir, "face", FaceModelBuffaloM, "det_2.5g.onnx"), AIStorageModelCache),
+						modelFile(filepath.Join(layout.AIModelsDir, "face", FaceModelBuffaloM, "w600k_r50.onnx"), AIStorageModelCache),
+					},
+					Outputs: []AIStorageOutput{
+						{Kind: AIStorageOutputBatches, Label: "分析批次", Path: filepath.Join(layout.MetadataDir, AIJobTypeFace, FaceModelBuffaloM, "batches")},
+						{Kind: AIStorageOutputIndex, Label: "人物索引", Path: filepath.Join(layout.AIDerivedDir, "people-index-buffalo_m.json")},
+						{Kind: AIStorageOutputIndex, Label: "人物修正", Path: filepath.Join(layout.StateDir, "people-buffalo_m.json")},
+					},
 				},
 			},
 		},
@@ -327,6 +368,43 @@ func scanAIStorage(cacheRoot string) AIStorageUsage {
 	for index := range modules {
 		module := &modules[index]
 		statModelFiles(module)
+		if len(module.Profiles) > 0 {
+			module.ModelFiles = []AIStorageFile{}
+			module.Outputs = []AIStorageOutput{}
+			for profileIndex := range module.Profiles {
+				profile := &module.Profiles[profileIndex]
+				profile.ModelDirectory = relativePath(root, profile.ModelDirectory)
+				for fileIndex := range profile.ModelFiles {
+					file := &profile.ModelFiles[fileIndex]
+					file.Path = relativePath(root, file.Path)
+					profile.ModelBytes += file.SizeBytes
+					module.ModelFiles = append(module.ModelFiles, *file)
+				}
+				for outputIndex := range profile.Outputs {
+					output := &profile.Outputs[outputIndex]
+					scanned := scanAIStorageTarget(output.Path)
+					output.Bytes = scanned.bytes
+					output.FileCount = scanned.fileCount
+					output.Available = scanned.available
+					output.Path = relativePath(root, output.Path)
+					profile.OutputBytes += output.Bytes
+					profile.OutputFileCount += output.FileCount
+					module.Outputs = append(module.Outputs, *output)
+				}
+				module.OutputBytes += profile.OutputBytes
+				module.OutputFileCount += profile.OutputFileCount
+			}
+			module.ModelBytes = 0
+			for _, file := range module.ModelFiles {
+				module.ModelBytes += file.SizeBytes
+			}
+			module.ModelDirectory = relativePath(root, module.ModelDirectory)
+			summary.ModelBytes += module.ModelBytes
+			summary.ModelFileCount += len(module.ModelFiles)
+			summary.OutputBytes += module.OutputBytes
+			summary.OutputFileCount += module.OutputFileCount
+			continue
+		}
 		for fileIndex := range module.ModelFiles {
 			file := &module.ModelFiles[fileIndex]
 			file.Path = relativePath(root, file.Path)

@@ -34,13 +34,32 @@ func TestStorageUsageHandlerReturnsRelativePathsOnly(t *testing.T) {
 	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", services.ChineseCLIPModelFile), "clip-model")
 	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "ocr", "PP-OCRv6_det_small.onnx"), "ocr-detector")
 	writeStorageTestFile(t, filepath.Join(workerDir, ".venv", "Lib", "site-packages", "rapidocr", "models", "legacy-detector.onnx"), "legacy-model")
-	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "metadata", "ocr", "batches", "job", "00000001.json"), "batch")
+	writeStorageTestFile(t, filepath.Join(cacheRoot, "derived", "metadata", "ocr", "batches", "job", "00000001.json"), `{"jobId":"job"}`)
 
 	service := services.NewAIStorageService(0)
+	jobs, err := services.NewAIJobService(services.AIJobServiceOptions{
+		StatePath:   filepath.Join(cacheRoot, "state", "ai_jobs.json"),
+		MetadataDir: filepath.Join(cacheRoot, "derived", "metadata"),
+		Catalog:     services.NewResourceCatalog(), ValidatePath: func(path string) (string, error) { return path, nil },
+		Analyzers: []services.AIAnalyzer{services.MetadataAnalyzer{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := jobs.SetFaceModel(services.FaceModelBuffaloM); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := jobs.Shutdown(ctx); err != nil {
+			t.Errorf("AI job shutdown: %v", err)
+		}
+	})
 	app := fiber.New()
 	api := app.Group("/api")
 	api.Get("/storage/usage", StorageUsageHandler(service, StorageHandlerOptions{
-		CacheRoot: cacheRoot,
+		CacheRoot: cacheRoot, Jobs: jobs,
 	}))
 
 	response, err := app.Test(httptest.NewRequest("GET", "/api/storage/usage", nil), -1)
@@ -62,6 +81,10 @@ func TestStorageUsageHandlerReturnsRelativePathsOnly(t *testing.T) {
 	}
 	if len(body.Usage.Modules) != 4 {
 		t.Fatalf("module count = %d", len(body.Usage.Modules))
+	}
+	face := body.Usage.Modules[3]
+	if len(face.Profiles) != 2 || face.Profiles[0].Active || !face.Profiles[1].Active {
+		t.Fatalf("active face profile = %+v", face.Profiles)
 	}
 	if body.Usage.Paths.JobsFile != "state/ai_jobs.json" {
 		t.Fatalf("jobs file = %q", body.Usage.Paths.JobsFile)

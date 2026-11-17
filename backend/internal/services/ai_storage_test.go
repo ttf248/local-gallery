@@ -30,6 +30,8 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	clipBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", ChineseCLIPModelFile), "clip-model")
 	yunetBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "face", "face_detection_yunet_2023mar.onnx"), "yunet")
 	sfaceBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "face", "face_recognition_sface_2021dec.onnx"), "sface-model")
+	buffaloDetectorBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "face", FaceModelBuffaloM, "det_2.5g.onnx"), "buffalo-detector")
+	buffaloRecognizerBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "models", "face", FaceModelBuffaloM, "w600k_r50.onnx"), "buffalo-recognizer")
 	ocrBytes := int64(0)
 	for _, model := range []struct{ name, content string }{
 		{name: "PP-OCRv6_det_small.onnx", content: "ocr-detector"},
@@ -42,12 +44,17 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	_ = writeAIStorageFile(t, filepath.Join(legacyOCRModels, "legacy-detector.onnx"), "ignored")
 
 	metadataBytes := int64(0)
-	for _, module := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace} {
+	for _, module := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR} {
 		metadataBytes += writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "metadata", module, "batches", "job", "00000001.json"), "batch")
 	}
+	metadataBytes += writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "metadata", AIJobTypeFace, FaceModelQualityV2, "batches", "job-quality", "00000001.json"), "quality-batch")
+	metadataBytes += writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "metadata", AIJobTypeFace, FaceModelBuffaloM, "batches", "job-buffalo", "00000001.json"), "buffalo-batch")
 	vectorBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "vectors", "shards", "00000001.bin"), "vector")
 	ocrIndexBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "ocr-search-index.json"), "ocr-index")
-	peopleIndexBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "people-index.json"), "people-index")
+	qualityIndexBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "people-index-quality-v2.json"), "quality-index")
+	buffaloIndexBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "derived", "ai", "people-index-buffalo_m.json"), "buffalo-index")
+	qualityCorrectionsBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "state", "people-quality-v2.json"), "quality-corrections")
+	buffaloCorrectionsBytes := writeAIStorageFile(t, filepath.Join(cacheRoot, "state", "people-buffalo_m.json"), "buffalo-corrections")
 
 	service := NewAIStorageService(0)
 	usage, _, err := service.Usage(cacheRoot)
@@ -104,18 +111,27 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	}
 
 	face := usage.Modules[3]
-	if face.ModelBytes != yunetBytes+sfaceBytes {
+	if face.ModelBytes != yunetBytes+sfaceBytes+buffaloDetectorBytes+buffaloRecognizerBytes || len(face.Profiles) != 2 {
 		t.Fatalf("face model bytes = %d", face.ModelBytes)
 	}
+	if face.Profiles[0].Model != FaceModelQualityV2 || face.Profiles[0].ModelBytes != yunetBytes+sfaceBytes || face.Profiles[1].Model != FaceModelBuffaloM || face.Profiles[1].ModelBytes != buffaloDetectorBytes+buffaloRecognizerBytes {
+		t.Fatalf("face profiles = %+v", face.Profiles)
+	}
+	if face.ModelDirectory != "derived/ai/models/face" || face.Profiles[0].ModelDirectory != "derived/ai/models/face" || face.Profiles[1].ModelDirectory != "derived/ai/models/face/buffalo_m" {
+		t.Fatalf("face model directories = module:%q profiles:%+v", face.ModelDirectory, face.Profiles)
+	}
+	if face.Profiles[0].Outputs[0].Path != "derived/metadata/face/quality-v2/batches" || face.Profiles[1].Outputs[0].Path != "derived/metadata/face/buffalo_m/batches" {
+		t.Fatalf("face profile outputs = %+v", face.Profiles)
+	}
 
-	if usage.Summary.ModelBytes != clipBytes+yunetBytes+sfaceBytes+ocrBytes {
+	if usage.Summary.ModelBytes != clipBytes+yunetBytes+sfaceBytes+buffaloDetectorBytes+buffaloRecognizerBytes+ocrBytes {
 		t.Fatalf("summary model bytes = %d", usage.Summary.ModelBytes)
 	}
-	if usage.Summary.OutputBytes != metadataBytes+vectorBytes+ocrIndexBytes+peopleIndexBytes {
+	if usage.Summary.OutputBytes != metadataBytes+vectorBytes+ocrIndexBytes+qualityIndexBytes+buffaloIndexBytes+qualityCorrectionsBytes+buffaloCorrectionsBytes {
 		t.Fatalf("summary output bytes = %d", usage.Summary.OutputBytes)
 	}
-	if usage.Summary.OutputFileCount != 7 {
-		t.Fatalf("summary output file count = %d, want 7", usage.Summary.OutputFileCount)
+	if usage.Summary.OutputFileCount != 11 {
+		t.Fatalf("summary output file count = %d, want 11", usage.Summary.OutputFileCount)
 	}
 
 	if usage.Paths.JobsFile != "state/ai_jobs.json" {
