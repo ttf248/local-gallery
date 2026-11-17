@@ -194,7 +194,7 @@ scripts\install-ffmpeg.bat
 | frontend/ | npm run typecheck | TypeScript 检查（含测试文件） |
 | frontend/ | npm run build | 应用工程类型检查与生产构建 |
 | frontend/ | npm run test:e2e | 独立临时媒体库的全栈浏览器测试 |
-| frontend/ | npm run audit:layout | 布局审计：溢出、留白、容器一致性与命中区 |
+| frontend/ | npm run audit:layout | 布局审计与门禁：溢出、留白、容器一致性、字号、控件高度、命中区与抽屉可达性 |
 | frontend/ | npm run audit:contrast | 对比度审计：明暗主题下的文本与图标对比度 |
 | frontend/ | npm run audit:size | 首屏体积审计（`-- --dist` 只量构建产物） |
 | frontend/ | npm run shot | 多断点、明暗主题截图，产物在 `.smoke/` 不入库 |
@@ -204,6 +204,8 @@ scripts\install-ffmpeg.bat
 E2E 首次运行前，在 frontend/ 执行 npx playwright install chromium。测试会生成独立临时媒体与配置，不读取个人媒体库；只读文档改动不需要新增业务测试。
 
 审计与截图脚本都对着运行中的服务，默认 `http://127.0.0.1:5173`，用 `LG_BASE` 换地址；断点、触摸与像素比等档位见 [docs/DESIGN.md](./docs/DESIGN.md) 的环境变量表。手机档的完整复核：`LG_TOUCH=1 LG_ORIENTATION=both npm run audit:layout`。
+
+布局审计同时是门禁：横向溢出、跨页左缘、容器一致性、字号下限、控件高度、有效命中区、抽屉的模态语义与软键盘遮挡，任何一条不成立都以 1 退出；判据与豁免见 [docs/DESIGN.md](./docs/DESIGN.md) 的验证方法。
 
 ## 项目结构与文档
 

@@ -72,6 +72,10 @@ const PROFILES = resolveProfiles({
 });
 
 const MIN_FONT_PX = 12.5;
+// 门禁阈值：低于最小一档字号（tokens.css 的 --text-badge，徽章与键帽
+// 用的那一档）才算越界。12.5px 是正文的下限，徽章一档是设计上允许的
+// 例外 —— 门禁卡的是「比设计允许的还小」。
+const MIN_FONT_FAIL_PX = 11.5;
 const MIN_CONTROL_PX = 28;
 // 手指点的不是一个按钮，而是按钮周围约 44×44 的一块。
 const MIN_TOUCH_TARGET_PX = 44;
@@ -119,9 +123,20 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   // 必须单独报出来（相册详情页偶发爆栈就是这一类）。
   const routeError = !!document.querySelector('[role="alert"]');
 
-  // 主内容容器：优先 .page-shell（带 max-width 的那层），
-  // 否则退回 <main>，再退回 body。
-  const shell = document.querySelector(".page-shell") ?? main ?? document.body;
+  // 主内容容器：页面级容器优先（.page-layout--page，超宽档上首页的
+  // 那一层），其次正文里的第一个 .page-shell，再退回 <main> 与 body。
+  // 取第一个有实际宽度的 —— .page-layout 在窄屏上是 display: contents，
+  // 没有盒子。
+  const shellCandidates = [
+    main?.querySelector(".page-layout--page"),
+    main?.querySelector(".page-shell"),
+    main,
+    document.body,
+  ];
+  const shell =
+    shellCandidates.find(
+      (element) => element && element.getBoundingClientRect().width > 0,
+    ) ?? document.body;
   const shellRect = shell.getBoundingClientRect();
 
   // 文本节点字体统计：只看直接包含文字的元素，避免把父容器算进去。
@@ -151,6 +166,10 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   const controls = document.querySelectorAll(
     "button, a[href], input, select, textarea, [role='button'], [role='tab']",
   );
+  // 太小的控件：只算真正点得到的。屏幕阅读器专用的元素（sr-only）
+  // 不是控件；勾选框与单选钮本体只有十几像素，点的是它外面的
+  // label —— 与触摸档的命中区判定同一口径。
+  const smallControlList = [];
   for (const el of controls) {
     if (!visible(el)) continue;
     const rect = el.getBoundingClientRect();
@@ -158,6 +177,22 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
       .trim()
       .replace(/\s+/g, " ")
       .slice(0, 30);
+    if (rect.height < minControlPx) {
+      const cls = String(el.className || "");
+      const tag = el.tagName.toLowerCase();
+      const isHiddenForScreenReader = cls.includes("sr-only");
+      const isCheckable =
+        tag === "input" &&
+        ["checkbox", "radio"].includes(el.getAttribute("type") ?? "");
+      if (!isHiddenForScreenReader && !isCheckable) {
+        smallControlList.push({
+          h: Math.round(rect.height * 10) / 10,
+          text,
+          cls: cls.slice(0, 60),
+          tag,
+        });
+      }
+    }
     controlHeights.push({ h: Math.round(rect.height * 10) / 10, text });
   }
 
@@ -171,6 +206,9 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   if (touch) {
     for (const el of controls) {
       if (!visible(el)) continue;
+      // 屏幕阅读器专用的元素（sr-only）不是可点的控件：它被裁到
+      // 一像素，点不到也不该算命中区不足。
+      if (String(el.className || "").includes("sr-only")) continue;
       const rect = el.getBoundingClientRect();
       if (rect.width < 1 || rect.height < 1) continue;
       if (rect.bottom < 0 || rect.right < 0) continue;
@@ -194,14 +232,14 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
       }
       // 复选框与单选钮本身只有十几像素见方，但它们包在 label 里 ——
       // 手指点的是 label（点文字也行）。label 够大就算达标。
-      const label =
-        el.matches('input[type="checkbox"], input[type="radio"]')
-          ? el.closest("label")
-          : null;
+      const label = el.matches('input[type="checkbox"], input[type="radio"]')
+        ? el.closest("label")
+        : null;
       let reachable;
       if (label) {
         const lRect = label.getBoundingClientRect();
-        reachable = lRect.width >= minTouchTargetPx && lRect.height >= minTouchTargetPx;
+        reachable =
+          lRect.width >= minTouchTargetPx && lRect.height >= minTouchTargetPx;
       } else {
         reachable = points.every(([dx, dy]) => {
           const hit = document.elementFromPoint(cx + dx, cy + dy);
@@ -338,10 +376,8 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     )
       .map(([h, count]) => ({ h: Number(h), count }))
       .sort((a, b) => a.h - b.h),
-    smallControls: controlHeights
-      .filter((c) => c.h < minControlPx)
-      .slice(0, 10),
-    smallControlsTotal: controlHeights.filter((c) => c.h < minControlPx).length,
+    smallControls: smallControlList.slice(0, 10),
+    smallControlsTotal: smallControlList.length,
     // 触摸档才有：有效命中区不足的控件。
     touchTargets: touchTargets.slice(0, 20),
     touchTargetsTotal: touchTargets.length,
@@ -355,14 +391,16 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
  * 抽屉是模态浮层 —— 背景必须不可聚焦、内容不可滚、焦点不能跑出去；
  * 软键盘弹起时可视视口变矮，贴底的输入框会被顶到看不见的地方。
  *
- * 先只报告，不作为失败条件 —— 等页面补齐了再开门禁。
+ * 这里的两项都是门禁：抽屉的模态语义不完整、软键盘遮住输入框，
+ * 都会让审计以 1 退出。命中区那一项在页面上量（见 MEASURE）。
  */
 async function checkMobileShell(page) {
   const trigger = page.locator('button[aria-label="打开导航"]');
-  if ((await trigger.count()) === 0) {
+  if ((await trigger.count()) === 0 || !(await trigger.isVisible())) {
+    // 抽屉只存在于窄屏：宽屏上侧栏常驻，没有「打开导航」这一档。
     return {
-      drawer: { skipped: "没有找到打开导航的按钮" },
-      keyboard: { skipped: "没有找到打开导航的按钮" },
+      drawer: { skipped: "这一档没有抽屉（侧栏常驻）" },
+      keyboard: { skipped: "这一档没有抽屉（侧栏常驻）" },
     };
   }
   await trigger.click();
@@ -530,7 +568,29 @@ async function main() {
       await page.setContent('<style>body{margin:0}h1{margin:0}</style><main style="padding:20px"><h1>列表</h1></main>');
       const result=await page.evaluate(MEASURE,{minFontPx:MIN_FONT_PX,minControlPx:MIN_CONTROL_PX});
       assert.equal(result.alignmentLeft,20);
-      console.log("布局审计 self-test：普通列表、带返回按钮的照片墙及错误偏移均通过");
+      // 门禁判据本身的样本：容器认 .page-layout--page；读屏专用元素与
+      // 勾选框本体不算太小的控件；低于最小字号档的文字要被抓出来。
+      await page.setContent(
+        '<style>body{margin:0}.page-layout--page{width:800px;padding:0 24px}</style>' +
+          '<main><div class="page-layout--page"><p style="font-size:11px">徽章</p>' +
+          '<button style="height:20px">小按钮</button>' +
+          '<input class="sr-only" style="width:1px;height:1px">' +
+          '<input type="checkbox" style="width:13px;height:13px">' +
+          '</div></main>',
+      );
+      const gate = await page.evaluate(MEASURE, {
+        minFontPx: MIN_FONT_PX,
+        minControlPx: MIN_CONTROL_PX,
+        touch: true,
+        minTouchTargetPx: MIN_TOUCH_TARGET_PX,
+      });
+      assert.equal(gate.shellLeft, 0);
+      assert.equal(gate.tinyText.some((t) => t.size < MIN_FONT_FAIL_PX), true);
+      assert.equal(gate.smallControlsTotal, 1);
+      assert.equal(gate.smallControls[0].text, "小按钮");
+      console.log(
+        "布局审计 self-test：普通列表、带返回按钮的照片墙、错误偏移、门禁判据均通过",
+      );
     } finally { await browser.close(); }
     return;
   }
@@ -538,6 +598,12 @@ async function main() {
   const routeErrors = [];
   // 触摸档的外壳检查（抽屉、软键盘）：与页面无关，一个页面上量一次。
   const shellChecks = [];
+  // 三条门禁的失败清单（字号、控件高度、命中区）。
+  const fontViolations = [];
+  const controlViolations = [];
+  const touchViolations = [];
+  const drawerViolations = [];
+  const keyboardViolations = [];
   let failed = false;
 
   for (const theme of THEMES) {
@@ -633,6 +699,18 @@ async function main() {
           ...m,
         });
         if (m.overflowPx > 0) failed = true;
+        // 字号门禁：低于最小一档（徽章档）就算越界。
+        if ((m.tinyText ?? []).some((t) => t.size < MIN_FONT_FAIL_PX)) {
+          fontViolations.push({ theme, route, vp: profile.label });
+        }
+        // 控件高度门禁：桌面档 28px 是本仓的下限。
+        if (m.smallControlsTotal > 0) {
+          controlViolations.push({ theme, route, vp: profile.label });
+        }
+        // 命中区门禁：触摸档的有效命中区必须够 44×44。
+        if (m.touchTargetsTotal > 0) {
+          touchViolations.push({ theme, route, vp: profile.label });
+        }
         if (m.routeError) {
           routeErrors.push({
             theme,
@@ -645,11 +723,21 @@ async function main() {
       if (profile.hasTouch) {
         await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
         await page.waitForTimeout(900);
-        shellChecks.push({
-          theme,
-          vp: profile.label,
-          ...(await checkMobileShell(page)),
-        });
+        const shell = await checkMobileShell(page);
+        shellChecks.push({ theme, vp: profile.label, ...shell });
+        const drawer = shell.drawer ?? {};
+        const keyboard = shell.keyboard ?? {};
+        if (
+          drawer.opened &&
+          (drawer.focusEscaped ||
+            !drawer.backgroundInert ||
+            !drawer.mainScrollLocked)
+        ) {
+          drawerViolations.push({ theme, vp: profile.label, ...drawer });
+        }
+        if (keyboard.covered) {
+          keyboardViolations.push({ theme, vp: profile.label, ...keyboard });
+        }
       }
       await ctx.close();
     }
@@ -792,7 +880,7 @@ async function main() {
         .join(" ");
       console.log(`${r.vp} ${r.theme} ${r.route} 字号分布: ${sizes}`);
     }
-    // 触摸档的两项新指标：命中区与外壳可达性。先只报告，不作为失败条件。
+    // 触摸档的两项指标：命中区与外壳可达性（都已进门禁）。
     const touchRows = report.filter((r) => r.touchTargetsTotal > 0);
     if (touchRows.length > 0) {
       console.log("");
@@ -833,6 +921,51 @@ async function main() {
   }
   if (routeErrors.length > 0) {
     console.error("\n存在加载失败的页面。");
+    process.exit(1);
+  }
+  if (fontViolations.length > 0) {
+    console.error(
+      `
+存在低于最小字号档（${MIN_FONT_FAIL_PX}px）的文字：${fontViolations
+        .map((v) => `${v.vp} ${v.theme} ${v.route}`)
+        .join("，")}`,
+    );
+    process.exit(1);
+  }
+  if (controlViolations.length > 0) {
+    console.error(
+      `
+存在高度不足 ${MIN_CONTROL_PX}px 的控件：${controlViolations
+        .map((v) => `${v.vp} ${v.theme} ${v.route}`)
+        .join("，")}`,
+    );
+    process.exit(1);
+  }
+  if (touchViolations.length > 0) {
+    console.error(
+      `
+存在有效命中区不足 ${MIN_TOUCH_TARGET_PX}×${MIN_TOUCH_TARGET_PX} 的控件：${touchViolations
+        .map((v) => `${v.vp} ${v.theme} ${v.route}`)
+        .join("，")}`,
+    );
+    process.exit(1);
+  }
+  if (drawerViolations.length > 0) {
+    console.error(
+      `
+存在模态语义不完整的抽屉：${drawerViolations
+        .map((v) => `${v.vp} ${v.theme}`)
+        .join("，")}`,
+    );
+    process.exit(1);
+  }
+  if (keyboardViolations.length > 0) {
+    console.error(
+      `
+存在被软键盘遮住的输入框：${keyboardViolations
+        .map((v) => `${v.vp} ${v.theme}`)
+        .join("，")}`,
+    );
     process.exit(1);
   }
 }

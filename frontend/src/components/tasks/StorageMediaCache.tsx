@@ -122,7 +122,7 @@ export default function StorageMediaCache({
               </span>
               <button
                 type="button"
-                className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
                 disabled={!canClear || clearing === item.scope}
                 onClick={() => onClear(item.scope)}
                 title={canClear ? `清空 ${item.label} 缓存` : "暂无内容"}
