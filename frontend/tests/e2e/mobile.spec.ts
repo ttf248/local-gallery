@@ -45,14 +45,25 @@ test("抽屉开合：背景不滚、焦点不跑出去", async ({ page }) => {
       (el) => el.hasAttribute("inert") || Boolean(el.closest("[inert]")),
     );
 
-  // 观察式记录：抽屉的模态语义（背景 inert、正文锁滚、焦点不外逃）
-  // 要等外壳那一步补上再变成断言。
-  console.log(
-    `抽屉：焦点外逃=${escaped} 正文锁滚=${locked} 背景inert=${inert}`,
-  );
+  // 抽屉是模态：焦点关在里面、背景不可聚焦、正文不滚。
+  expect(escaped, "焦点不该跑到抽屉外面").toBe(false);
+  expect(locked, "抽屉打开时正文应当锁滚").toBe(true);
+  expect(inert, "抽屉打开时背景应当 inert").toBe(true);
 
   await page.keyboard.press("Escape");
   await expect(nav).toBeHidden();
+
+  // 关闭后焦点回到触发按钮，背景恢复可聚焦、可滚。
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.activeElement?.getAttribute("aria-label")),
+    )
+    .toBe("打开导航");
+  expect(
+    await page
+      .locator(".app-main")
+      .evaluate((el) => getComputedStyle(el).overflowY),
+  ).not.toBe("hidden");
 });
 
 test("主流程走得通：进相册、选照片、多选条在视口内", async ({ page }) => {
@@ -132,9 +143,5 @@ test("可交互控件的命中区够手指点", async ({ page }) => {
     return problems;
   });
 
-  // 观察式记录：命中区不足的控件清单，等外壳那一步把命中区补齐再变成断言。
-  console.log(
-    `命中区不足 44×44 的控件：${small.length} 处 —— ${small.join("，")}`,
-  );
-  expect(small.length).toBeGreaterThanOrEqual(0);
+  expect(small, `命中区不足 44×44 的控件：${small.join("，")}`).toHaveLength(0);
 });

@@ -70,7 +70,7 @@ export default function PhotoSelectionBar({
     <div
       role="toolbar"
       aria-label="照片多选操作"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-3 sm:pb-5"
+      className="float-bottom pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(12px,var(--safe-bottom))] sm:pb-[max(20px,var(--safe-bottom))]"
     >
       <div className="pointer-events-auto flex max-w-full flex-wrap items-center gap-1.5 rounded-xl border border-border bg-bg-elevated/95 px-2.5 py-2 shadow-lg backdrop-blur">
         <span role="status" className="px-1 text-body text-fg">

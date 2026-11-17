@@ -186,7 +186,7 @@ export default function ScanProgress({
   return (
     <div
       // 左下角浮动卡 — fixed 到 viewport（不挂 main 内部，避开 main 滚动影响）
-      className="fixed bottom-4 left-4 sm:bottom-6 sm:left-60 z-50 w-[400px] max-w-[calc(100vw-2rem)] rounded-xl border border-border shadow-2xl glass-strong fade-up"
+      className="float-bottom fixed bottom-[calc(var(--safe-bottom)+1rem)] left-4 sm:bottom-[calc(var(--safe-bottom)+1.5rem)] sm:left-60 z-50 w-[400px] max-w-[calc(100vw-2rem)] rounded-xl border border-border shadow-2xl glass-strong fade-up"
       role="status"
       aria-live="polite"
       data-testid="scan-progress"

@@ -2,7 +2,13 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover：让页面铺到刘海与圆角之外，
+         CSS 里的 env(safe-area-inset-*) 才有值；
+         没有它，浏览器一律把安全区报成 0。 -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <!-- 原生控件（滚动条、下拉、表单）跟着主题走 -->
     <meta name="color-scheme" content="light dark" />
     <title>本地画廊 · Local Gallery</title>

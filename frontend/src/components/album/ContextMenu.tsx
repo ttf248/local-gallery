@@ -153,7 +153,7 @@ export default function ContextMenu({
         zIndex: 1000,
         /* 菜单比视口还高时（缩到很矮的窗口）自己滚动，
            而不是把下半截留在屏幕外。 */
-        maxHeight: "calc(100vh - 16px)",
+        maxHeight: "calc(100dvh - var(--safe-bottom) - 16px)",
         overflowY: "auto",
       }}
       className={`min-w-[190px] border rounded-lg shadow-lg py-1.5 fade-up text-body ${

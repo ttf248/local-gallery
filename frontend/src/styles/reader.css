@@ -23,7 +23,8 @@
        而「这一页从头到尾都在屏幕上」正是阅读时最基本的一条。
        拆开后中间留白直接透到画面上，点空白处还能翻页。 */
     position: absolute;
-    top: 14px;
+    /* 让开刘海：带刘海的手机上，顶栏正好压在刘海底下。 */
+    top: calc(14px + var(--safe-top));
     left: 16px;
     right: 16px;
     z-index: 20;

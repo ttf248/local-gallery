@@ -158,7 +158,7 @@ export default function PhotoMasonry<
                     : `把 ${item.name} 加入精选`
                 }
                 title={picked ? "移出精选" : "加入精选"}
-                className={`absolute left-0 top-0 z-10 grid h-7 w-7 place-items-center rounded-full transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
+                className={`absolute left-0 top-0 z-10 grid place-items-center rounded-full transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
                   picked ? "opacity-100" : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100"
                 }`}
               >

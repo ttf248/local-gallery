@@ -68,6 +68,21 @@
        页头（眉标 · 标题 · 说明）→ 区块标题（序号 · 标题 · 说明）→ 内容。
      三个间距分别对应「头与头」「段与段」「段内」三种关系，数值成倍进位，
      段与段的间距明显大于段内，一眼能分出层级。 */
+  /* === 安全区 ===
+     带刘海、圆角与手势条的手机上，贴边的内容要让开一段，否则
+     标题钻到刘海底下，浮层压在 Home 指示条上。
+     env() 的前提是 index.html 里写了 viewport-fit=cover —— 没有它，
+     浏览器一律把安全区报成 0，这些值就都是摆设。
+     桌面上 env() 恒为 0，因此下面这些值在桌面等于没有。 */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* 贴底浮层的高度基准：安全区 + 一档呼吸。
+     多选条、扫描卡、提示条都用它，浮层的高度只有这一处来源。 */
+  --float-bottom: calc(var(--safe-bottom) + 12px);
+  /* 软键盘占掉的高度：由 useVisualViewport 写入，键盘没开时是 0。 */
+  --keyboard-inset: 0px;
   /* 页面左右留白：所有页面共用这一档。24 寸与 27 寸上都是 48px，
      两块屏的留白因此一样宽，翻页时内容不会左右跳。 */
   --page-gutter: clamp(20px, 3vw, 48px);
@@ -179,7 +194,7 @@
   --overlay-favorite: #e08bb4;
   /* 「按高度适配」时图片参照的高度。照片墙整屏就是视口，
      阅读器要给常驻控件留出两条带，因此改成 100%。 */
-  --gallery-fit-height: 100vh;
+  --gallery-fit-height: 100dvh;
   /* 阅读器给常驻控件留出的两条带：顶部条与底部页码条。
      这两条带是常驻的，压在画面上就等于永久遮住页面的一头一尾 ——
      漫画页的开头与结尾正是最不该被遮住的地方。 */

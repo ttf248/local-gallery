@@ -69,7 +69,7 @@ export default function GlobalSearch() {
 
   return (
     <div className="relative w-full max-w-[560px] min-w-0">
-      <div className="input-focus-ring flex items-center gap-2.5 bg-bg-subtle rounded-full px-4 h-10 border border-border-faint focus-within:bg-bg-elevated focus-within:border-border-strong min-w-0 shadow-xs">
+      <div className="toolbar-search input-focus-ring flex items-center gap-2.5 bg-bg-subtle rounded-full px-4 border border-border-faint focus-within:bg-bg-elevated focus-within:border-border-strong min-w-0 shadow-xs">
         <SearchIcon size={15} className="text-fg-subtle shrink-0" />
         <input
           value={query}

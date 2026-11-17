@@ -20,7 +20,7 @@ export default function ToastViewport() {
   if (!toasts.length) return null
   return (
     <div
-      className="fixed bottom-12 right-5 z-[60] flex flex-col gap-2 pointer-events-none"
+      className="float-bottom fixed bottom-[calc(var(--safe-bottom)+3rem)] right-5 z-[60] flex flex-col gap-2 pointer-events-none"
       aria-live="polite"
     >
       {toasts.map((t) => {

@@ -16,6 +16,8 @@ import {
 import { tabLabelFor } from "../../utils/pageTabs";
 import { workbenchCopy } from "../../utils/workbench";
 import { useFsCapabilities } from "../../hooks/useFsCapabilities";
+import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useVisualViewport } from "../../hooks/useVisualViewport";
 import { useAppMode } from "../../hooks/useAppMode";
 import { scanApi } from "../../api/scan";
 import { useScanSSE } from "../../hooks/useScanSSE";
@@ -52,6 +54,14 @@ export default function AppShell() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const wasMobileNavOpen = useRef(false);
+  // 抽屉本体与它背后的东西：抽屉关焦点，背景置 inert，正文锁滚。
+  const sidebarRef = useRef<HTMLElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  // 键盘焦点关在抽屉里：Tab 不该走到被遮住的背景控件上。
+  useFocusTrap(sidebarRef, mobileNavOpen);
+  // 软键盘占掉的高度写进 --keyboard-inset，贴底浮层据此上移。
+  useVisualViewport();
   // 阅读器（/read）占用单键快捷键：r 是旋转，u 不是「未读」。
   // 大图预览（照片墙上的浮层）同样占用单键：它自己处理方向键与缩放，
   // 全局的 r / u 必须在它打开时让位，否则按 r 会一边旋转一边跳走整页。
@@ -67,6 +77,23 @@ export default function AppShell() {
   useEffect(() => {
     if (scanSse.progress) setScanCardMounted(true);
   }, [scanSse.progress]);
+
+  // 抽屉是模态：它开着的时候，背景（顶栏与正文）不可聚焦 ——
+  // Tab 不该走到被遮住的控件上，读屏也不该读到它们。
+  // 这条必须排在下面「关闭后归还焦点」之前：焦点归还要发生在
+  // inert 撤掉之后，否则 focus() 落在 inert 元素上不生效。
+  useEffect(() => {
+    const background = [toolbarRef.current, mainRef.current].filter(
+      (element): element is HTMLElement => Boolean(element),
+    );
+    for (const element of background) {
+      if (mobileNavOpen) element.setAttribute("inert", "");
+      else element.removeAttribute("inert");
+    }
+    return () => {
+      for (const element of background) element.removeAttribute("inert");
+    };
+  }, [mobileNavOpen]);
 
   useEffect(() => {
     if (!mobileNavOpen) {
@@ -185,16 +212,23 @@ export default function AppShell() {
   return (
     <div className="app-shell flex h-full bg-bg">
       <Sidebar
+        ref={sidebarRef}
         collapsed={mobileNavOpen ? false : sidebarCollapsed}
         onToggle={toggleSidebar}
         mobileOpen={mobileNavOpen}
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <Toolbar
-          onOpenMobileNav={() => setMobileNavOpen(true)}
-          mobileMenuButtonRef={mobileMenuButtonRef}
-        />
-        <main className="app-main flex-1 overflow-auto">
+        <div ref={toolbarRef}>
+          <Toolbar
+            onOpenMobileNav={() => setMobileNavOpen(true)}
+            mobileMenuButtonRef={mobileMenuButtonRef}
+          />
+        </div>
+        <main
+          ref={mainRef}
+          className="app-main flex-1"
+          data-nav-open={mobileNavOpen ? "true" : undefined}
+        >
           {/* 路由层错误兜底:任意子组件 render 抛错都不会让整个 SPA 白屏。
               key 用 pageBoundaryKey：设置页与任务中心切页签时不重挂整页
               （页面状态与未保存的草稿都在里面），其余页面仍逐页重挂。 */}
@@ -208,6 +242,9 @@ export default function AppShell() {
           type="button"
           aria-label="关闭导航"
           onClick={() => setMobileNavOpen(false)}
+          // 遮罩只是点一下就关抽屉的便签，不该出现在 Tab 顺序里：
+          // 抽屉打开时焦点关在抽屉内，Tab 到遮罩上等于逃出去。
+          tabIndex={-1}
           className="fixed inset-0 z-40 bg-black/30 lg:hidden"
         />
       )}

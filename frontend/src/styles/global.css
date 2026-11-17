@@ -5,9 +5,21 @@
 @layer components {
   .app-main {
     scroll-behavior: smooth;
+    /* 滚动写在样式表里而不是工具类：抽屉打开时要把它锁住
+       （overflow-y: hidden），工具类在 utilities 层，优先级高于
+       本层，写在一起锁不住。 */
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  /* 抽屉打开时正文不滚：锁的是这一块，不是 body ——
+     真正滚动的是它，锁 body 没有用。 */
+  .app-main[data-nav-open="true"] {
+    overflow-y: hidden;
   }
   .app-toolbar {
-    height: 60px;
+    /* 顶栏贴顶：带刘海的手机上要留出安全区，否则标题钻到刘海底下。 */
+    height: calc(60px + var(--safe-top));
+    padding-top: var(--safe-top);
     flex-shrink: 0;
     background: var(--bg);
     border-bottom: 1px solid var(--border);
@@ -495,6 +507,92 @@
     color: var(--fg-subtle);
   }
 
+
+  /* --- 触摸目标 ---
+     手指的命中区比鼠标大一圈：44×44 是通行推荐值。做法是把按钮与
+     链接的本体撑到 44 见方 —— 视觉尺寸不变（里面的图标与文字仍是
+     原来的大小，只是四周的余量大了），命中的却是一整块 44 见方。
+
+     早先试过用一层伪元素把命中区撑开而不动本体，那条路走不通：
+     伪元素会覆盖控件自己已有的 ::after（页签的选中下划线就是
+     ::after 画的），把它变成一块压在控件中间的黑块。而且伪元素
+     扩出去会吃掉邻座的点击 —— 相邻两项的扩区互相抢命中，
+     「够大」就变成了「点错」。本体放大没有这两个问题。
+     真需要豁免时给控件加 data-no-touch-expand。 */
+  /* 顶栏的图标按钮：36 见方，触摸设备上 44 见方。
+     它们挨在一起，扩区会互相抢命中 —— 只能把本体放大。
+     尺寸写在样式表里：工具类在 utilities 层，压不住触摸档这一档。 */
+  .toolbar-icon {
+    width: 36px;
+    height: 36px;
+  }
+  @media (hover: none), (pointer: coarse) {
+    .toolbar-icon {
+      width: 44px;
+      height: 44px;
+    }
+  }
+
+  /* 顶栏的搜索胶囊：40px 高，触摸设备上 44px ——
+     输入框是手指最常落的地方，比 44 矮一截就容易点空。
+     高度写在样式表里而不是工具类：工具类在 utilities 层，
+     优先级高于本层，写在一起压不住触摸档这一档。 */
+  .toolbar-search {
+    height: 40px;
+  }
+  @media (hover: none), (pointer: coarse) {
+    /* 46 而不是 44：胶囊有 1px 描边，输入框撑满的是内容盒，
+       44 的内容盒才够手指点。 */
+    .toolbar-search {
+      height: 46px;
+    }
+  }
+
+  /* 勾选框与单选钮：本体只有十三四像素见方，触摸设备上 24px；
+     它与说明文字是一行，整行都是点的地方 —— label 给到 44px 高。 */
+  @media (hover: none), (pointer: coarse) {
+    input[type="checkbox"],
+    input[type="radio"] {
+      min-width: 24px;
+      min-height: 24px;
+    }
+    label:has(input[type="checkbox"]),
+    label:has(input[type="radio"]) {
+      min-height: 44px;
+    }
+  }
+
+  /* 输入框：32–39px 高，触摸设备上 44px。
+     用 min-height 而不是 height：工具类给的是 height，min-height
+     在盒模型里压得住它，两条不冲突。 */
+  @media (hover: none), (pointer: coarse) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]) {
+      min-height: 44px;
+    }
+  }
+  /* 密集排布的控件（设置页的页签与筛选项、任务中心的按钮行）：
+     它们一行挨着一行，伪元素扩区会互相抢命中，只能把本体撑到
+     44 见方。视觉尺寸不变（内容仍是原来的大小，只是行变高了），
+     但一行的高度会长出几像素 —— 触摸设备上这一档本来就是
+     为手指准备的。 */
+  @media (hover: none), (pointer: coarse) {
+    button:not([data-no-touch-expand]),
+    a[href]:not([data-no-touch-expand]) {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+
+  /* 贴底浮层：软键盘弹出时整体上移。键盘占掉的那段高度由
+     useVisualViewport 写进 --keyboard-inset（键盘没开时是 0，
+     这条规则不生效）。 */
+  [data-keyboard] .float-bottom {
+    /* 用 translate 而不是 transform：扫描浮卡还带着 fade-up 动画，
+       它的末帧是 transform: none，而 CSS 动画的优先级高于普通声明 ——
+       写成 transform 会被动画的末帧盖住，浮卡就不动了。 */
+    translate: 0 calc(-1 * var(--keyboard-inset));
+  }
+
   /* --- 悬停与触摸 ---
      触摸设备没有悬停，而「悬停才出现」的东西在手机上只有两种下场：
      永远藏着（Tailwind 的 hover 变体被 future.hoverOnlyWhenSupported
@@ -844,7 +942,8 @@
     .reader-header {
       left: 8px;
       right: 8px;
-      top: 8px;
+      /* 让开刘海：窄屏上顶栏离屏幕边更近，正好撞上刘海。 */
+      top: calc(8px + var(--safe-top));
     }
     .reader-header__group {
       height: 42px;
@@ -854,7 +953,7 @@
       max-width: 70%;
     }
     .app-toolbar {
-      height: 56px;
+      height: calc(56px + var(--safe-top));
     }
     .page-heading {
       padding-top: 20px;
@@ -1210,7 +1309,10 @@ button:not(:disabled):active {
     width: 100%;
     max-width: var(--page-max);
     margin-inline: auto;
-    padding-inline: var(--page-gutter);
+    /* 留白取「页面留白」与「安全区」里更大的那个：横屏时页面留白
+       常常比安全区小，但刘海那一侧不能少于安全区。 */
+    padding-left: max(var(--page-gutter), var(--safe-left));
+    padding-right: max(var(--page-gutter), var(--safe-right));
   }
   /* 设置页在宽屏（≥1280）改成两列：一列的分区按顺序读，另一列接着排。
      分区不能被列切断，所以 break-inside: avoid。 */

@@ -112,7 +112,7 @@ export default function Toolbar({
               type="button"
               ref={mobileMenuButtonRef}
               onClick={onOpenMobileNav}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+              className="toolbar-icon inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
               title="打开导航"
               aria-label="打开导航"
             >
@@ -169,7 +169,7 @@ export default function Toolbar({
             onClick={() =>
               window.dispatchEvent(new CustomEvent("comic:open-help"))
             }
-            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+            className="toolbar-icon inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
             title="快捷键帮助 (?)"
             aria-label="快捷键帮助"
           >
@@ -243,7 +243,7 @@ function MoreMenu({ onRefresh }: { onRefresh: () => void }) {
       <button
         onClick={() => setOpen((v) => !v)}
         type="button"
-        className="inline-flex items-center justify-center w-9 h-9 rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+        className="toolbar-icon inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
         title="更多"
         aria-label="更多"
         aria-haspopup="menu"

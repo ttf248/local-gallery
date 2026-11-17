@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useRef } from "react";
+import { forwardRef, useEffect, useMemo, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   HomeIcon,
@@ -69,11 +69,12 @@ const SECONDARY_GROUP: SidebarEntry[] = [
 // - 品牌区只留「图标 + Local Gallery」，不再叠一行 10px 副标题
 // - 导航项统一 36px 高 / 13.5px 文字，选中态 = 亮一档的灰块 + 白字
 // - 「随机」类操作沉到底部一组，与主导航分开，避免平铺抢注意力
-export default function Sidebar({
-  collapsed: collapsedProp,
-  onToggle,
-  mobileOpen = false,
-}: Props) {
+// 抽屉本体（<aside>）要拿到 ref：窄屏时它是模态抽屉，外壳要把焦点
+// 关在里面，并知道背景该 inert 谁。
+const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
+  { collapsed: collapsedProp, onToggle, mobileOpen = false },
+  ref,
+) {
   const navigate = useNavigate();
   const location = useLocation();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -251,6 +252,7 @@ export default function Sidebar({
 
   return (
     <aside
+      ref={ref}
       aria-label="主导航"
       className={`app-sidebar scroll-thin flex flex-col shrink-0 overflow-y-auto transition-[width] duration-200 ease-out ${
         mobileOpen
@@ -404,7 +406,9 @@ export default function Sidebar({
       </div>
     </aside>
   );
-}
+});
+
+export default Sidebar;
 
 // 品牌方块：纯几何 + 字形，用琥珀品牌色 —— 全局唯一的彩色标记。
 function Logo() {

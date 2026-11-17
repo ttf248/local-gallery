@@ -192,10 +192,22 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
       if (rect.width >= minTouchTargetPx && rect.height >= minTouchTargetPx) {
         continue;
       }
-      const reachable = points.every(([dx, dy]) => {
-        const hit = document.elementFromPoint(cx + dx, cy + dy);
-        return hit === el || (hit !== null && el.contains(hit));
-      });
+      // 复选框与单选钮本身只有十几像素见方，但它们包在 label 里 ——
+      // 手指点的是 label（点文字也行）。label 够大就算达标。
+      const label =
+        el.matches('input[type="checkbox"], input[type="radio"]')
+          ? el.closest("label")
+          : null;
+      let reachable;
+      if (label) {
+        const lRect = label.getBoundingClientRect();
+        reachable = lRect.width >= minTouchTargetPx && lRect.height >= minTouchTargetPx;
+      } else {
+        reachable = points.every(([dx, dy]) => {
+          const hit = document.elementFromPoint(cx + dx, cy + dy);
+          return hit === el || (hit !== null && el.contains(hit));
+        });
+      }
       if (!reachable) {
         touchTargets.push({
           w: Math.round(rect.width),
