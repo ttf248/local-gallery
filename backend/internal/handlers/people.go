@@ -23,6 +23,7 @@ const peopleListLimit = 50
 const peopleSearchLimit = 20
 const peopleSortPhotos = "photos"
 const peopleSortReview = "review"
+const peopleListMinimumFolderCount = 2
 
 // PeopleHandler lists current photo-only person albums and clears all face-derived data.
 func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, catalog *services.ResourceCatalog, validatePath func(string) (string, error)) fiber.Handler {
@@ -79,19 +80,64 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 				"revision": snapshot.Revision(),
 			})
 		}
+		includeHidden := c.Query("includeHidden") == "true"
 		var groups []services.PersonGroup
 		var total int
-		if sortOrder == peopleSortReview {
-			groups, total = people.SearchGroupsForReview(query, limit, c.Query("includeHidden") == "true", snapshot.IsPhotoImage)
-		} else {
-			groups, total = people.SearchGroups(query, limit, c.Query("includeHidden") == "true", snapshot.IsPhotoImage)
-		}
-		return c.JSON(fiber.Map{
-			"ok": true, "people": groups, "totalGroups": total, "limit": limit,
+		response := fiber.Map{
+			"ok": true, "limit": limit,
 			"centroidThreshold": services.PeopleGroupingCentroidThreshold,
 			"anchorThreshold":   services.PeopleGroupingAnchorThreshold, "sort": sortOrder,
 			"revision": snapshot.Revision(),
+		}
+		if query != "" {
+			if sortOrder == peopleSortReview {
+				groups, total = people.SearchGroupsForReview(query, limit, includeHidden, snapshot.IsPhotoImage)
+			} else {
+				groups, total = people.SearchGroups(query, limit, includeHidden, snapshot.IsPhotoImage)
+			}
+			response["people"] = groups
+			response["totalGroups"] = total
+			return c.JSON(response)
+		}
+
+		folderCounts := people.GroupFolderCounts(func(resourceID string) string {
+			if !snapshot.IsPhotoImage(resourceID) {
+				return ""
+			}
+			item, exists := services.LookupLibraryFeedItem(snapshot, resourceID)
+			if !exists {
+				return ""
+			}
+			return item.AlbumID
 		})
+		if sortOrder == peopleSortReview {
+			groups, total = people.SearchGroupsForReview(query, len(folderCounts)+1, includeHidden, snapshot.IsPhotoImage)
+		} else {
+			groups, total = people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
+		}
+
+		visibleGroups := make([]services.PersonGroup, 0, min(limit, len(groups)))
+		singleFolderGroups := 0
+		visibleTotal := 0
+		for _, group := range groups {
+			group.FolderCount = folderCounts[group.ID]
+			if group.FolderCount < peopleListMinimumFolderCount {
+				singleFolderGroups++
+				continue
+			}
+			visibleTotal++
+			if len(visibleGroups) < limit {
+				visibleGroups = append(visibleGroups, group)
+			}
+		}
+		if total > len(groups) {
+			singleFolderGroups += total - len(groups)
+		}
+		response["people"] = visibleGroups
+		response["totalGroups"] = visibleTotal
+		response["singleFolderGroups"] = singleFolderGroups
+		response["minimumFolderCount"] = peopleListMinimumFolderCount
+		return c.JSON(response)
 	}
 }
 

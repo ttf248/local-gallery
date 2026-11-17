@@ -33,7 +33,7 @@ func (peopleHandlerAnalyzer) AnalyzeBatch(_ context.Context, inputs []services.A
 	outputs := make([]services.AIAnalysisOutput, len(inputs))
 	for index, input := range inputs {
 		axis := 0
-		if filepath.Base(input.Path) == "other.jpg" {
+		if filepath.Base(input.Path) == "other.jpg" || filepath.Base(input.Path) == "other-copy.jpg" {
 			axis = 1
 		}
 		outputs[index] = peopleHandlerOutput(axis)
@@ -60,14 +60,18 @@ func peopleHandlerOutput(axis int) services.AIAnalysisOutput {
 
 func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	root := t.TempDir()
-	albumPath := filepath.Join(root, "photos")
-	if err := os.MkdirAll(albumPath, 0o755); err != nil {
-		t.Fatal(err)
+	firstAlbumPath := filepath.Join(root, "photos", "event-a")
+	secondAlbumPath := filepath.Join(root, "photos", "event-b")
+	for _, albumPath := range []string{firstAlbumPath, secondAlbumPath} {
+		if err := os.MkdirAll(albumPath, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	files := []string{
-		filepath.Join(albumPath, "first.jpg"),
-		filepath.Join(albumPath, "second.jpg"),
-		filepath.Join(albumPath, "other.jpg"),
+		filepath.Join(firstAlbumPath, "first.jpg"),
+		filepath.Join(secondAlbumPath, "second.jpg"),
+		filepath.Join(firstAlbumPath, "other.jpg"),
+		filepath.Join(secondAlbumPath, "other-copy.jpg"),
 	}
 	var encodedImage bytes.Buffer
 	if err := jpeg.Encode(&encodedImage, image.NewRGBA(image.Rect(0, 0, 640, 480)), nil); err != nil {
@@ -81,10 +85,16 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	catalog := services.NewResourceCatalog()
 	catalog.Publish(&models.ScanResult{
 		Roots: []string{root},
-		Albums: []models.Album{{
-			Type: "album", Name: "人物测试", Path: albumPath, SourceRoot: root,
-			ContentKind: string(models.ContentKindPhoto), ImageFiles: files, CoverImage: files[0],
-		}},
+		Albums: []models.Album{
+			{
+				Type: "album", Name: "人物测试 A", Path: firstAlbumPath, SourceRoot: root,
+				ContentKind: string(models.ContentKindPhoto), ImageFiles: []string{files[0], files[2]}, CoverImage: files[0],
+			},
+			{
+				Type: "album", Name: "人物测试 B", Path: secondAlbumPath, SourceRoot: root,
+				ContentKind: string(models.ContentKindPhoto), ImageFiles: []string{files[1], files[3]}, CoverImage: files[1],
+			},
+		},
 	}, []string{root})
 	safety, safetyState := middleware.PathSafetyMiddleware([]string{root}, catalog)
 	people, err := services.OpenPeopleService(filepath.Join(t.TempDir(), "state", "people.json"), filepath.Join(t.TempDir(), "derived", "people-index.json"))
@@ -252,37 +262,53 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 }
 
 func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
-	const groupCount = 51
+	const groupCount = 52
+	const singleFolderGroupIndex = 10
 	root := t.TempDir()
 	photoRoot := filepath.Join(root, "photos")
-	if err := os.MkdirAll(photoRoot, 0o755); err != nil {
-		t.Fatal(err)
+	folderNames := []string{"folder-a", "folder-b", "single-folder"}
+	folderPaths := make(map[string]string, len(folderNames))
+	folderFiles := make(map[string][]string, len(folderNames))
+	for _, name := range folderNames {
+		path := filepath.Join(photoRoot, name)
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		folderPaths[name] = path
 	}
 	catalog := services.NewResourceCatalog()
-	files := make([]string, 0)
+	filesByGroup := make([][]string, groupCount)
 	records := make([]services.AIAnalysisRecord, 0)
 	for groupIndex := 0; groupIndex < groupCount; groupIndex++ {
-		vector := make([]float32, 128)
-		vector[groupIndex] = 1
 		for photoIndex := 0; photoIndex <= groupIndex; photoIndex++ {
-			path := filepath.Join(photoRoot, fmt.Sprintf("photo-%02d-%03d.jpg", groupIndex, photoIndex))
+			folderName := "folder-a"
+			if groupIndex == singleFolderGroupIndex {
+				folderName = "single-folder"
+			} else if photoIndex%2 == 1 {
+				folderName = "folder-b"
+			}
+			path := filepath.Join(folderPaths[folderName], fmt.Sprintf("photo-%02d-%03d.jpg", groupIndex, photoIndex))
 			if err := os.WriteFile(path, []byte("temporary test image"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			files = append(files, path)
+			filesByGroup[groupIndex] = append(filesByGroup[groupIndex], path)
+			folderFiles[folderName] = append(folderFiles[folderName], path)
 		}
 	}
+	albums := make([]models.Album, 0, len(folderNames))
+	for _, name := range folderNames {
+		albums = append(albums, models.Album{
+			Type: "album", Name: name, Path: folderPaths[name], SourceRoot: root,
+			ContentKind: string(models.ContentKindPhoto), ImageFiles: folderFiles[name], CoverImage: folderFiles[name][0],
+		})
+	}
 	catalog.Publish(&models.ScanResult{
-		Roots: []string{root},
-		Albums: []models.Album{{
-			Type: "album", Name: "人物列表测试", Path: photoRoot, SourceRoot: root,
-			ContentKind: string(models.ContentKindPhoto), ImageFiles: files, CoverImage: files[0],
-		}},
+		Roots:  []string{root},
+		Albums: albums,
 	}, []string{root})
-	for groupIndex := 0; groupIndex < groupCount; groupIndex++ {
+	for groupIndex, groupFiles := range filesByGroup {
 		output := peopleHandlerOutput(groupIndex)
-		for photoIndex := 0; photoIndex <= groupIndex; photoIndex++ {
-			path := filepath.Join(photoRoot, fmt.Sprintf("photo-%02d-%03d.jpg", groupIndex, photoIndex))
+		for _, path := range groupFiles {
 			records = append(records, services.AIAnalysisRecord{
 				Type: services.AIJobTypeFace, ResourceID: catalog.ExternalID(path, services.ResourceFile),
 				Size: 100, MTimeNs: 200, ModuleVersion: services.FaceAnalyzerVersion,
@@ -304,22 +330,26 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 
 	list := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people", "")
 	var listBody struct {
-		People            []services.PersonGroup `json:"people"`
-		TotalGroups       int                    `json:"totalGroups"`
-		Limit             int                    `json:"limit"`
-		CentroidThreshold float64                `json:"centroidThreshold"`
-		AnchorThreshold   float64                `json:"anchorThreshold"`
-		GroupingLimited   *bool                  `json:"groupingLimited"`
-		Sort              string                 `json:"sort"`
+		People             []services.PersonGroup `json:"people"`
+		TotalGroups        int                    `json:"totalGroups"`
+		SingleFolderGroups int                    `json:"singleFolderGroups"`
+		MinimumFolderCount int                    `json:"minimumFolderCount"`
+		Limit              int                    `json:"limit"`
+		CentroidThreshold  float64                `json:"centroidThreshold"`
+		AnchorThreshold    float64                `json:"anchorThreshold"`
+		GroupingLimited    *bool                  `json:"groupingLimited"`
+		Sort               string                 `json:"sort"`
 	}
 	decodePeopleBody(t, list, &listBody)
-	if len(listBody.People) != 50 || listBody.TotalGroups != groupCount || listBody.Limit != 50 ||
+	if len(listBody.People) != 50 || listBody.TotalGroups != 50 || listBody.SingleFolderGroups != 2 ||
+		listBody.MinimumFolderCount != peopleListMinimumFolderCount || listBody.Limit != 50 ||
 		listBody.CentroidThreshold != services.PeopleGroupingCentroidThreshold ||
 		listBody.AnchorThreshold != services.PeopleGroupingAnchorThreshold || listBody.GroupingLimited != nil || listBody.Sort != peopleSortPhotos {
-		t.Fatalf("top people response = %d groups, total %d, limit %d; want 50 of %d", len(listBody.People), listBody.TotalGroups, listBody.Limit, groupCount)
+		t.Fatalf("top people response = %d groups, total %d, single-folder %d, limit %d", len(listBody.People), listBody.TotalGroups, listBody.SingleFolderGroups, listBody.Limit)
 	}
-	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 2 {
-		t.Fatalf("returned photo-count range = %d..%d, want %d..2", listBody.People[0].PhotoCount, listBody.People[49].PhotoCount, groupCount)
+	if listBody.People[0].PhotoCount != groupCount || listBody.People[49].PhotoCount != 2 ||
+		listBody.People[0].FolderCount != 2 || listBody.People[49].FolderCount != 2 {
+		t.Fatalf("returned photo/folder range = %d/%d..%d/%d", listBody.People[0].PhotoCount, listBody.People[0].FolderCount, listBody.People[49].PhotoCount, listBody.People[49].FolderCount)
 	}
 
 	var target services.PersonGroup

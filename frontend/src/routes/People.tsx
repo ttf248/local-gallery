@@ -40,6 +40,7 @@ function PeopleList() {
     queryFn: () => aiJobsApi.people(includeHidden, sort),
   });
   const jobs = useQuery({ queryKey: ["ai-jobs"], queryFn: aiJobsApi.list });
+  const peopleEnabled = jobs.data?.snapshot.settings.peopleEnabled ?? false;
   const clear = useMutation({
     mutationFn: aiJobsApi.clearPeople,
     onSuccess: async () => {
@@ -51,6 +52,9 @@ function PeopleList() {
   });
   const groups = query.data?.people ?? [];
   const totalGroups = query.data?.totalGroups ?? groups.length;
+  const singleFolderGroups = query.data?.singleFolderGroups ?? 0;
+  const onlySingleFolderGroups =
+    peopleEnabled && totalGroups === 0 && singleFolderGroups > 0;
 
   return (
     <div className="h-full overflow-y-auto pb-12">
@@ -82,19 +86,25 @@ function PeopleList() {
       {groups.length === 0 && !query.isLoading ? (
         <EmptyState
           title={
-            jobs.data?.snapshot.settings.peopleEnabled
-              ? "还没有人物候选组"
+            peopleEnabled
+              ? onlySingleFolderGroups
+                ? "暂不展示单文件夹人物组"
+                : "还没有人物候选组"
               : "人物分析默认关闭"
           }
           description={
-            jobs.data?.snapshot.settings.peopleEnabled
-              ? "请在任务中心运行人脸识别任务；分析只在本机处理。"
+            peopleEnabled
+              ? onlySingleFolderGroups
+                ? `有 ${singleFolderGroups.toLocaleString()} 组人物只出现在一个相册文件夹中，已暂时隐藏；至少出现在 2 个文件夹中的组才会展示。`
+                : "请在任务中心运行人脸识别任务；分析只在本机处理。"
               : "前往任务中心显式启用人物分析，再启动人脸识别任务。"
           }
           action={
-            <Link className="btn btn-outline" to="/tasks/plan">
-              打开任务中心
-            </Link>
+            onlySingleFolderGroups ? undefined : (
+              <Link className="btn btn-outline" to="/tasks/plan">
+                打开任务中心
+              </Link>
+            )
           }
         />
       ) : (
@@ -103,11 +113,14 @@ function PeopleList() {
             <p className="text-meta text-fg-muted">
               {sort === "photos"
                 ? totalGroups > groups.length
-                  ? `照片数最多的 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
-                  : `${totalGroups.toLocaleString()} 组`
+                  ? `照片数最多的跨文件夹人物 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
+                  : `跨文件夹人物 ${totalGroups.toLocaleString()} 组`
                 : totalGroups > groups.length
-                  ? `优先审查的 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
-                  : `${totalGroups.toLocaleString()} 组`}
+                  ? `优先审查的跨文件夹人物 ${groups.length.toLocaleString()} / 共 ${totalGroups.toLocaleString()} 组`
+                  : `跨文件夹人物 ${totalGroups.toLocaleString()} 组`}
+              {singleFolderGroups > 0
+                ? ` · 已隐藏单文件夹 ${singleFolderGroups.toLocaleString()} 组`
+                : ""}
               {sort === "photos" ? " · 按照片数排序" : " · 按复核线索排序"}
             </p>
             <div className="flex flex-wrap items-center gap-3">
@@ -156,6 +169,9 @@ function PeopleList() {
               优先展示组内较低一成的锚点相似度、中心相似度与检测分数较弱的分组。这些数值只用于安排人工复核，不代表身份置信度。
             </p>
           ) : null}
+          <p className="mb-4 text-meta text-fg-muted">
+            只展示出现在至少 2 个相册文件夹中的人物组；卡片标出所在文件夹数。
+          </p>
           {/* 密度跟着相册网格走（列宽下限 260px）：固定三列时一张脸
               占掉四百像素，一屏只看得到六个人；这一页有五十个候选组，
               它要的是一面能扫完的墙。 */}
@@ -208,6 +224,9 @@ function PersonCard({
             {person.name}
           </h2>
           <p className="mt-0.5 text-meta text-fg-muted">
+            {person.folderCount != null
+              ? `${person.folderCount.toLocaleString()} 个文件夹 · `
+              : ""}
             {person.faceCount.toLocaleString()} 张脸
             {person.hidden ? " · 已隐藏" : ""}
           </p>

@@ -61,6 +61,7 @@ type PersonGroup struct {
 	Name            string              `json:"name"`
 	FaceCount       int                 `json:"faceCount"`
 	PhotoCount      int                 `json:"photoCount"`
+	FolderCount     int                 `json:"folderCount,omitempty"`
 	CoverResourceID string              `json:"coverResourceId,omitempty"`
 	Hidden          bool                `json:"hidden"`
 	Quality         *PersonGroupQuality `json:"quality,omitempty"`
@@ -1704,6 +1705,41 @@ func (s *PeopleService) AllFaces() []PersonFace {
 		return result[i].PersonID < result[j].PersonID
 	})
 	return result
+}
+
+// GroupFolderCounts returns the number of distinct source folders represented
+// in each current person group. The callback must return an opaque stable folder
+// key for a photo resource and an empty string for resources outside the photo library.
+func (s *PeopleService) GroupFolderCounts(folderForResource func(string) string) map[string]int {
+	counts := make(map[string]int)
+	if folderForResource == nil {
+		return counts
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	resourceFolders := make(map[string]string)
+	foldersByGroup := make(map[string]map[string]struct{})
+	for _, face := range s.faces {
+		folder, resolved := resourceFolders[face.ResourceID]
+		if !resolved {
+			folder = folderForResource(face.ResourceID)
+			resourceFolders[face.ResourceID] = folder
+		}
+		if folder == "" {
+			continue
+		}
+		groupID := s.effectivePersonIDLocked(face)
+		if foldersByGroup[groupID] == nil {
+			foldersByGroup[groupID] = make(map[string]struct{})
+		}
+		foldersByGroup[groupID][folder] = struct{}{}
+	}
+	for groupID, folders := range foldersByGroup {
+		counts[groupID] = len(folders)
+	}
+	return counts
 }
 
 func (s *PeopleService) Rename(personID, name string) error {

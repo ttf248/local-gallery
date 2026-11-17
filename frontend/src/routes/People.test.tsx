@@ -94,9 +94,12 @@ describe("人物相册", () => {
           name: "旅行同伴",
           faceCount: 3,
           photoCount: 2,
+          folderCount: 3,
           hidden: false,
         },
       ],
+      totalGroups: 1,
+      singleFolderGroups: 1,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
       revision: 2,
@@ -105,7 +108,17 @@ describe("人物相册", () => {
 
     expect(await screen.findByText("旅行同伴")).toBeInTheDocument();
     expect(screen.getByText(/3\s*张脸/)).toBeInTheDocument();
-    expect(screen.getByText("1 组 · 按照片数排序")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "跨文件夹人物 1 组 · 已隐藏单文件夹 1 组 · 按照片数排序",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/3 个文件夹 · 3 张脸/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "只展示出现在至少 2 个相册文件夹中的人物组；卡片标出所在文件夹数。",
+      ),
+    ).toBeInTheDocument();
     expect(mocks.people).toHaveBeenCalledWith(false, "photos");
     expect(screen.queryByText(/组中心|代表脸|边界脸/)).not.toBeInTheDocument();
     expect(
@@ -115,6 +128,33 @@ describe("人物相册", () => {
           element.textContent?.replace(/\s+/g, "") === "2张照片",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("所有候选都只在一个文件夹时说明已隐藏且不引导重复分析", async () => {
+    mocks.list.mockResolvedValue({
+      ok: true,
+      snapshot: { settings: { peopleEnabled: true } },
+    });
+    mocks.people.mockResolvedValue({
+      ok: true,
+      people: [],
+      totalGroups: 0,
+      singleFolderGroups: 17,
+      centroidThreshold: 0.52,
+      anchorThreshold: 0.72,
+      revision: 2,
+    });
+    renderPeople();
+
+    expect(
+      await screen.findByText("暂不展示单文件夹人物组"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/有 17 组人物只出现在一个相册文件夹中，已暂时隐藏/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "打开任务中心" }),
+    ).not.toBeInTheDocument();
   });
 
   it("切换审查优先并展示组内低分位复核线索", async () => {
@@ -171,6 +211,7 @@ describe("人物相册", () => {
         hidden: false,
       })),
       totalGroups: 83,
+      singleFolderGroups: 20,
       limit: 50,
       centroidThreshold: 0.52,
       anchorThreshold: 0.72,
@@ -179,7 +220,9 @@ describe("人物相册", () => {
     renderPeople();
 
     expect(
-      await screen.findByText(/照片数最多的 50 \/ 共 83 组 · 按照片数排序/),
+      await screen.findByText(
+        /照片数最多的跨文件夹人物 50 \/ 共 83 组 · 已隐藏单文件夹 20 组 · 按照片数排序/,
+      ),
     ).toBeInTheDocument();
     expect(screen.getByText("人物 0")).toBeInTheDocument();
     expect(screen.getByText("人物 49")).toBeInTheDocument();
