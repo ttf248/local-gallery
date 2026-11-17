@@ -30,7 +30,13 @@ func SmartAlbumDirectoryHandler(service *services.SmartAlbumService) fiber.Handl
 		}
 		ctx, cancel := context.WithTimeout(c.UserContext(), smartAlbumRequestTimeout)
 		defer cancel()
-		page, err := service.DirectoryPage(ctx, c.Query("dimension", services.SmartAlbumDimensionRecommended), c.Query("cursor"), limit)
+		page, err := service.DirectoryPage(
+			ctx,
+			c.Query("dimension", services.SmartAlbumDimensionRecommended),
+			c.Query("cursor"),
+			limit,
+			c.Query("sort", services.SmartAlbumSortTime),
+		)
 		if err != nil {
 			return writeSmartAlbumError(c, err)
 		}

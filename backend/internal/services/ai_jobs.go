@@ -1317,6 +1317,41 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 	return result
 }
 
+// CaptureTimes returns the EXIF capture time of the supplied resources.
+//
+// It reads only that one field instead of copying whole analysis records:
+// the smart album directory needs the newest capture time of every group,
+// and a group's members run into tens of thousands of photos, so copying
+// each record's JSON payload just to read one timestamp is wasted work.
+// Resources without a parsed capture time are simply absent from the map.
+func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map[string]time.Time {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make(map[string]time.Time, len(resourceIDs))
+	analyzer, installed := s.analyzers[moduleType]
+	if !installed {
+		return result
+	}
+	for _, resourceID := range resourceIDs {
+		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
+		if !exists || record.ModuleVersion != analyzer.Version() || len(record.Data) == 0 {
+			continue
+		}
+		var metadata struct {
+			DateTimeOriginal string `json:"dateTimeOriginal,omitempty"`
+		}
+		if json.Unmarshal(record.Data, &metadata) != nil {
+			continue
+		}
+		captured, ok := parseSmartCaptureTime(metadata.DateTimeOriginal)
+		if !ok {
+			continue
+		}
+		result[resourceID] = captured
+	}
+	return result
+}
+
 // RecordsForResources returns current-version analysis records only for the
 // supplied resource IDs. Album-scoped features use this instead of copying a
 // library-wide analysis table into their own working set.

@@ -5,16 +5,37 @@ import SmartAlbumWall from "../components/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
+import Segmented from "../components/common/Segmented";
+import type { SmartAlbumSort } from "../api/albums";
 
 const DIMENSION_PARAM = "dimension";
+const SORT_PARAM = "sort";
+
+/** 排序方式与它在标题栏上的说法。 */
+const SORT_OPTIONS: { value: SmartAlbumSort; label: string }[] = [
+  { value: "time", label: "时间最新" },
+  { value: "photos", label: "照片最多" },
+  { value: "quality", label: "推荐最强" },
+];
+
+/** 认出排序参数：认不出来的按「时间最新」处理。 */
+function readSort(value: string | null): SmartAlbumSort {
+  const found = SORT_OPTIONS.find((option) => option.value === value);
+  return found?.value ?? "time";
+}
 
 /**
  * 跨文件夹专页只展示精选主题。详细分类仍由后台生成并用于推荐计算；
  * 目录分页只读已生成的推荐缓存，不在浏览时触发分析。
+ *
+ * 这一页是排序的特例：它排的是跨相册的一组主题，按相册分块排出来的是
+ * 「这本相册最近拍过什么」，与主题本身的新旧无关 —— 因此整面墙按用户
+ * 选的方式排：组内最新一张照片的拍摄时间、照片张数或推荐强度。
  */
 export default function SmartAlbums() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const directory = useSmartAlbumDirectory("recommended", true);
+  const sort = readSort(searchParams.get(SORT_PARAM));
+  const directory = useSmartAlbumDirectory("recommended", true, { sort });
 
   const items = directory.items;
   const isInitialLoading = directory.isLoading && items.length === 0;
@@ -26,6 +47,14 @@ export default function SmartAlbums() {
     params.delete(DIMENSION_PARAM);
     setSearchParams(params, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  // 排序写进地址栏：这一页是唯一有排序的页面，复制链接要带上排序。
+  function changeSort(next: SmartAlbumSort) {
+    if (next === sort) return;
+    const params = new URLSearchParams(searchParams);
+    params.set(SORT_PARAM, next);
+    setSearchParams(params, { replace: true });
+  }
 
   // 无限下拉：快滑到底时就把下一批接上，滑到底时分组已经在那里。
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -41,7 +70,7 @@ export default function SmartAlbums() {
         if (!hasNextPage || isFetchingNextPage) return;
         void fetchNextPage();
       },
-      // 提前一屏接上：等真的滑到底再请求，会有一次明显的空档。
+      // 提前一屏接上：等真的滑到底再请求，会出现一次明显的空档。
       { rootMargin: "800px 0px" },
     );
     observer.observe(sentinel);
@@ -50,14 +79,23 @@ export default function SmartAlbums() {
 
   return (
     <div className="min-h-full pb-10">
-      <h1 className="sr-only">精选推荐</h1>
       <div className="page-shell pt-4">
-        {isInitialLoading ? (
-          <AlbumGridSkeleton
-            count={10}
-            bare
-            label="正在加载精选推荐…"
+        {/* 标题栏：这一页只有精选推荐，没有分类页签；排序是这一页唯一的
+            操作，放在标题这一行的右端。 */}
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="page-eyebrow">智能相册</p>
+            <h1 className="page-title page-title--sm">精选推荐</h1>
+          </div>
+          <Segmented
+            label="推荐主题排序"
+            value={sort}
+            onChange={changeSort}
+            options={SORT_OPTIONS}
           />
+        </div>
+        {isInitialLoading ? (
+          <AlbumGridSkeleton count={10} bare label="正在加载精选推荐…" />
         ) : directory.isError && items.length === 0 ? (
           <ErrorBanner
             className="rounded-xl"

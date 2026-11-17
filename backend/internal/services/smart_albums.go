@@ -477,6 +477,34 @@ func (s *SmartAlbumService) loadOrBuildSmartAlbumGroups(
 	return cache, false, nil
 }
 
+// 精选推荐的排序模式。
+//
+// 专页排的是跨相册的一组主题，按相册分块排出来的顺序是「这本相册最近
+// 拍过什么」，跟主题本身的新旧无关 —— 因此这一页给用户几种排法。
+const (
+	// SmartAlbumSortTime：组内最新一张照片的拍摄时间倒序（默认）。
+	SmartAlbumSortTime = "time"
+	// SmartAlbumSortPhotos：照片张数倒序。
+	SmartAlbumSortPhotos = "photos"
+	// SmartAlbumSortQuality：推荐分倒序（后端算的证据强度，不上屏）。
+	SmartAlbumSortQuality = "quality"
+)
+
+// NormalizeSmartAlbumSort 把请求里的排序参数收敛到已知模式。
+//
+// 认不出来的参数一律按时间倒序处理：排序是给人看的偏好，不是接口的
+// 硬约束，为它报错反而会挡住整页。
+func NormalizeSmartAlbumSort(value string) string {
+	switch value {
+	case SmartAlbumSortPhotos:
+		return SmartAlbumSortPhotos
+	case SmartAlbumSortQuality:
+		return SmartAlbumSortQuality
+	default:
+		return SmartAlbumSortTime
+	}
+}
+
 // DirectoryPage collects only folder dimensions that already have a smart
 // album cache. Missing folder summaries stay missing instead of triggering
 // analysis or a full-library rebuild from the home page.
@@ -484,10 +512,14 @@ func (s *SmartAlbumService) loadOrBuildSmartAlbumGroups(
 // 它直接读已生成的缓存，不重算分组：目录只是「已生成了哪些分组」的汇总，
 // 而重算分组要把每本相册的媒体逐个 stat 一遍（真实库上几十秒）——
 // 首页等不起，那笔钱该由刷新任务出（见 SweepSmartAlbums）。
+//
+// sortMode 只对精选推荐这一页有意义（见 sortRecommendedItems）；其它维度
+// 仍按相册分块排。
 func (s *SmartAlbumService) DirectoryPage(
 	ctx context.Context,
 	dimension, cursor string,
 	limit int,
+	sortMode string,
 ) (LibraryPage[SmartAlbumDirectoryItem], error) {
 	if !validSmartAlbumDirectoryDimension(dimension) {
 		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrSmartAlbumDimension
@@ -499,8 +531,9 @@ func (s *SmartAlbumService) DirectoryPage(
 	if dimension == "featured" {
 		return s.featuredDirectoryPage(ctx, snapshot, cursor, limit)
 	}
+	sortMode = NormalizeSmartAlbumSort(sortMode)
 	directoryRevision := s.directoryRevision.Load()
-	scope := smartAlbumDirectoryScope(dimension, directoryRevision)
+	scope := smartAlbumDirectoryScope(dimension, directoryRevision, sortMode)
 	offset := 0
 	if cursor != "" {
 		var err error
@@ -512,6 +545,9 @@ func (s *SmartAlbumService) DirectoryPage(
 	dimensions := smartAlbumDirectoryDimensions(dimension)
 	blocks := make([]smartAlbumDirectoryBlock, 0)
 	coverIDs := make([]string, 0)
+	// 精选推荐要按组内最新的拍摄时间排序，而成员不随目录外传
+	//（applyOverrides 会清掉）：排序用的成员在这里单独留一份。
+	membersByGroup := make(map[string][]string)
 	for _, album := range snapshot.PhotoAlbumSummaries() {
 		if err := ctx.Err(); err != nil {
 			return LibraryPage[SmartAlbumDirectoryItem]{}, err
@@ -522,7 +558,13 @@ func (s *SmartAlbumService) DirectoryPage(
 			if !ok {
 				continue
 			}
-			for _, group := range s.applyOverrides(album.ID, currentDimension, smartAlbumGroups(cache.Groups)) {
+			cached := smartAlbumGroups(cache.Groups)
+			if dimension == SmartAlbumDimensionRecommended {
+				for _, group := range cached {
+					membersByGroup[group.ID] = group.Members
+				}
+			}
+			for _, group := range s.applyOverrides(album.ID, currentDimension, cached) {
 				if group.Hidden {
 					continue
 				}
@@ -556,6 +598,10 @@ func (s *SmartAlbumService) DirectoryPage(
 	for _, block := range blocks {
 		items = append(items, block.items...)
 	}
+	// 精选推荐是一个特例：它排的是跨相册的一组主题，不按相册分块。
+	if dimension == SmartAlbumDimensionRecommended {
+		s.sortRecommendedItems(items, sortMode, membersByGroup)
+	}
 	currentDirectoryRevision := s.directoryRevision.Load()
 	if cursor != "" && currentDirectoryRevision != directoryRevision {
 		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrStalePageCursor
@@ -564,12 +610,6 @@ func (s *SmartAlbumService) DirectoryPage(
 		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrInvalidPageCursor
 	}
 	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
-	if dimension == SmartAlbumDimensionRecommended && end > offset && end < len(items) {
-		albumID := items[end-1].AlbumID
-		for end < len(items) && items[end].AlbumID == albumID {
-			end++
-		}
-	}
 	pageItems := clonePage(items, offset, end)
 	page := LibraryPage[SmartAlbumDirectoryItem]{
 		// 空页要给 []，不能给 null：前端把 items 当数组用，null 会让它
@@ -579,7 +619,7 @@ func (s *SmartAlbumService) DirectoryPage(
 	if end < len(items) {
 		nextCursor, err := EncodePageCursor(
 			snapshot.Revision(),
-			smartAlbumDirectoryScope(dimension, currentDirectoryRevision),
+			smartAlbumDirectoryScope(dimension, currentDirectoryRevision, sortMode),
 			end,
 		)
 		if err != nil {
@@ -601,7 +641,7 @@ func (s *SmartAlbumService) featuredDirectoryPage(
 	limit int,
 ) (LibraryPage[SmartAlbumDirectoryItem], error) {
 	directoryRevision := s.directoryRevision.Load()
-	scope := smartAlbumDirectoryScope("featured", directoryRevision)
+	scope := smartAlbumDirectoryScope("featured", directoryRevision, "")
 	offset := 0
 	if cursor != "" {
 		var err error
@@ -681,7 +721,7 @@ func (s *SmartAlbumService) featuredDirectoryPage(
 	}
 	if end < len(items) {
 		nextCursor, err := EncodePageCursor(
-			snapshot.Revision(), smartAlbumDirectoryScope("featured", currentDirectoryRevision), end,
+			snapshot.Revision(), smartAlbumDirectoryScope("featured", currentDirectoryRevision, ""), end,
 		)
 		if err != nil {
 			return LibraryPage[SmartAlbumDirectoryItem]{}, err
@@ -691,8 +731,109 @@ func (s *SmartAlbumService) featuredDirectoryPage(
 	return page, nil
 }
 
-func smartAlbumDirectoryScope(dimension string, revision uint64) string {
-	return fmt.Sprintf("smart-album-directory:%s:%d", dimension, revision)
+func smartAlbumDirectoryScope(dimension string, revision uint64, sortMode string) string {
+	return fmt.Sprintf("smart-album-directory:%s:%s:%d", dimension, sortMode, revision)
+}
+
+// sortRecommendedItems 按选定的模式排精选推荐这一面墙。
+//
+// 精选推荐是跨相册的一组主题，按相册分块排会得到「这本相册最近拍过
+// 什么」的顺序 —— 与主题本身的新旧无关。这一页因此整体排序：
+//
+//	time    组内最新一张照片的拍摄时间倒序（默认）
+//	photos  照片张数倒序
+//	quality 推荐分倒序
+//
+// 同分同数时按张数、名字、ID 兜底，顺序稳定。
+func (s *SmartAlbumService) sortRecommendedItems(
+	items []SmartAlbumDirectoryItem,
+	mode string,
+	membersByGroup map[string][]string,
+) {
+	switch mode {
+	case SmartAlbumSortPhotos:
+		sort.SliceStable(items, func(i, j int) bool {
+			left, right := items[i].Group, items[j].Group
+			if left.PhotoCount != right.PhotoCount {
+				return left.PhotoCount > right.PhotoCount
+			}
+			return recommendedItemTieBreak(items[i], items[j])
+		})
+	case SmartAlbumSortQuality:
+		sort.SliceStable(items, func(i, j int) bool {
+			left, right := items[i].Group, items[j].Group
+			if left.QualityScore != right.QualityScore {
+				return left.QualityScore > right.QualityScore
+			}
+			return recommendedItemTieBreak(items[i], items[j])
+		})
+	default:
+		times := s.recommendedCaptureTimes(membersByGroup)
+		sort.SliceStable(items, func(i, j int) bool {
+			left, right := times[items[i].Group.ID], times[items[j].Group.ID]
+			if !left.Equal(right) {
+				// 没有拍摄时间的主题排最后：它们不是「旧」，只是读不出时间。
+				if left.IsZero() {
+					return false
+				}
+				if right.IsZero() {
+					return true
+				}
+				return left.After(right)
+			}
+			return recommendedItemTieBreak(items[i], items[j])
+		})
+	}
+}
+
+// recommendedItemTieBreak 排序的兜底：张数多的在前，再按名字与 ID。
+func recommendedItemTieBreak(left, right SmartAlbumDirectoryItem) bool {
+	if left.Group.PhotoCount != right.Group.PhotoCount {
+		return left.Group.PhotoCount > right.Group.PhotoCount
+	}
+	if left.Group.Name != right.Group.Name {
+		return strings.ToLower(left.Group.Name) < strings.ToLower(right.Group.Name)
+	}
+	return left.Group.ID < right.Group.ID
+}
+
+// recommendedCaptureTimes 算出每个推荐主题里最新的那张照片的拍摄时间。
+//
+// 一个主题是聚合出来的，它的时间就是组内所有照片里最新的那张 —— 按
+// 主题名字或质量分排，都读不出「这个主题是什么时候的事」。
+func (s *SmartAlbumService) recommendedCaptureTimes(membersByGroup map[string][]string) map[string]time.Time {
+	ids := make([]string, 0, len(membersByGroup))
+	seen := make(map[string]struct{}, len(membersByGroup))
+	for _, members := range membersByGroup {
+		for _, id := range members {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	captured := s.jobs.CaptureTimes(AIJobTypeMetadata, ids)
+	times := make(map[string]time.Time, len(membersByGroup))
+	for groupID, members := range membersByGroup {
+		var latest time.Time
+		for _, id := range members {
+			at, ok := captured[id]
+			if !ok {
+				continue
+			}
+			if latest.IsZero() || at.After(latest) {
+				latest = at
+			}
+		}
+		if !latest.IsZero() {
+			times[groupID] = latest
+		}
+	}
+	return times
 }
 
 // smartAlbumDirectoryBlock 是目录里一本相册的全部分组。

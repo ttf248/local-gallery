@@ -16,6 +16,9 @@ export type SmartAlbumEvidenceDimension = Exclude<
 export type SmartAlbumDirectoryDimension =
   "featured" | "all" | SmartAlbumDimension;
 
+/** 精选推荐的排序方式：组内最新照片的时间、照片张数、推荐强度。 */
+export type SmartAlbumSort = "time" | "photos" | "quality";
+
 /** 智能相册刷新的任务状态，与缓存重建同一套取值。 */
 export type SmartAlbumRefreshStatus =
   "pending" | "running" | "complete" | "cancelled" | "error";
@@ -142,6 +145,8 @@ export const albumsApi = {
     options: {
       cursor?: string;
       limit?: number;
+      /** 精选推荐的排序方式（时间 / 张数 / 推荐分）。 */
+      sort?: SmartAlbumSort;
       signal?: AbortSignal;
     } = {},
   ) {
@@ -152,6 +157,7 @@ export const albumsApi = {
           dimension,
           cursor: options.cursor,
           limit: options.limit ?? 60,
+          sort: options.sort,
         },
         signal: options.signal,
       },

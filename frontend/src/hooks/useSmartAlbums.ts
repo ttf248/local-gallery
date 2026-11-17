@@ -8,6 +8,7 @@ import {
   albumsApi,
   type SmartAlbumDimension,
   type SmartAlbumDirectoryDimension,
+  type SmartAlbumSort,
 } from "../api/albums";
 import { ApiError, isRetryableStatus } from "../api/client";
 import { useAppMode } from "./useAppMode";
@@ -32,16 +33,17 @@ export const smartAlbumQueryKeys = {
 export function useSmartAlbumDirectory(
   dimension: SmartAlbumDirectoryDimension,
   enabled: boolean,
-  options: { limit?: number } = {},
+  options: { limit?: number; sort?: SmartAlbumSort } = {},
 ) {
   const client = useQueryClient();
   const { ready } = useAppMode();
   const limit = options.limit ?? SMART_ALBUM_BATCH_SIZE;
-  // 批次大小进了查询键：首页只预览十二个，完整页面一次接六十个，
-  // 两者共用一个键会拿到对方那批数据。
+  const sort = options.sort;
+  // 批次大小与排序方式都进了查询键：首页只预览六个，完整页面一次接六十个；
+  // 排序方式换了，顺序整页都变了，不能拿旧的那批接着往下拼。
   const key = useMemo(
-    () => [...smartAlbumQueryKeys.directory(dimension), limit] as const,
-    [dimension, limit],
+    () => [...smartAlbumQueryKeys.directory(dimension), limit, sort] as const,
+    [dimension, limit, sort],
   );
   const result = useInfiniteQuery({
     queryKey: key,
@@ -51,6 +53,7 @@ export function useSmartAlbumDirectory(
         .smartDirectory(dimension, {
           cursor: pageParam,
           limit,
+          sort,
           signal,
         })
         .then((response) => response.page),

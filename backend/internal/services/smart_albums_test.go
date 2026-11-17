@@ -116,14 +116,14 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 		scenes.Coverage.Analyzed != 3 || scenes.Coverage.WithEvidence != 3 {
 		t.Fatalf("scene groups did not reuse only this album's vectors: %+v", scenes)
 	}
-	directoryFirst, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 2)
+	directoryFirst, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 2, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if directoryFirst.Total != 3 || len(directoryFirst.Items) != 2 || directoryFirst.NextCursor == "" {
 		t.Fatalf("first smart album directory page=%+v", directoryFirst)
 	}
-	directorySecond, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, directoryFirst.NextCursor, 1)
+	directorySecond, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, directoryFirst.NextCursor, 1, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	if len(updated.Groups) != 1 || updated.Groups[0].Name != customName || !updated.Groups[0].Hidden || !updated.Groups[0].CustomName {
 		t.Fatalf("updated override=%+v", updated.Groups)
 	}
-	visibleDirectory, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10)
+	visibleDirectory, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestSmartAlbumDirectoryEmptyPageSerializesAsEmptyArray(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 10)
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +334,7 @@ func TestSmartAlbumDirectoryListsGeneratedGroups(t *testing.T) {
 	if _, err := service.Groups(context.Background(), albumID, SmartAlbumDimensionTime, false); err != nil {
 		t.Fatal(err)
 	}
-	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10)
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +426,7 @@ func TestSmartAlbumDirectoryOrdersAlbumsByRecency(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10)
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionTime, "", 10, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,6 +435,136 @@ func TestSmartAlbumDirectoryOrdersAlbumsByRecency(t *testing.T) {
 	}
 	if page.Items[0].AlbumName != "新相册" || page.Items[1].AlbumName != "旧相册" {
 		t.Fatalf("albums are not ordered by recency: %+v", page.Items)
+	}
+}
+
+// 精选推荐这一页排的是跨相册的主题，不按相册分块。
+//
+// 两本相册故意反着来：拍得新的那本照片少、推荐分低 —— 于是「按时间」
+// 与「按张数」「按推荐分」排出的顺序各不相同，三种排法都验得到。
+func TestSmartAlbumDirectorySortsRecommendationsAcrossAlbums(t *testing.T) {
+	root := t.TempDir()
+	albums := []struct {
+		name     string
+		captured string
+		photos   int
+		quality  float64
+	}{
+		{name: "新相册", captured: "2025-06-18T10:00:00", photos: 2, quality: 0.90},
+		{name: "旧相册", captured: "2019-05-04T10:00:00", photos: 4, quality: 0.95},
+	}
+	result := &models.ScanResult{Roots: []string{root}, AlbumCount: len(albums)}
+	for _, album := range albums {
+		albumPath := filepath.Join(root, album.name)
+		if err := os.MkdirAll(albumPath, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		files := make([]string, 0, album.photos)
+		for index := 0; index < album.photos; index++ {
+			path := filepath.Join(albumPath, fmt.Sprintf("%d.jpg", index))
+			writeTestJPEG(t, path, 40, 20)
+			files = append(files, path)
+		}
+		result.Albums = append(result.Albums, models.Album{
+			Type: "album", Name: album.name, Path: albumPath,
+			SourceRoot: root, ImageFiles: files, ImageCount: len(files), CoverImage: files[0],
+		})
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(result, []string{root})
+	jobs := newTestAIJobService(
+		t,
+		filepath.Join(root, "state", "ai-jobs.json"),
+		filepath.Join(root, "derived", "metadata"),
+		catalog,
+		MetadataAnalyzer{},
+		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-test-v1"},
+	)
+	snapshot := catalog.Acquire()
+	service, err := OpenSmartAlbumService(SmartAlbumServiceOptions{
+		StatePath: filepath.Join(root, "state", "smart-albums.json"),
+		CacheDir:  filepath.Join(root, "derived", "smart-albums"),
+		Catalog:   catalog, Jobs: jobs,
+		ValidatePath: aiTestPathValidator(t, root),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, album := range albums {
+		albumID := catalog.ExternalID(filepath.Join(root, album.name), ResourceAlbum)
+		seedMetadataRecords(t, jobs, snapshot, albumID, album.captured)
+		members, ok := snapshot.AlbumImageIDs(albumID)
+		if !ok || len(members) == 0 {
+			t.Fatalf("album %s has no images", albumID)
+		}
+		seedRecommendedGroup(t, service, albumID, "sg_"+album.name, album.name, members, album.quality)
+	}
+
+	// 时间倒序：拍得新的那本在前。
+	page, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionRecommended, "", 10, SmartAlbumSortTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].AlbumName != "新相册" {
+		t.Fatalf("recommendations are not ordered by capture time: %+v", page.Items)
+	}
+	// 张数倒序：照片多的那本在前。
+	page, err = service.DirectoryPage(context.Background(), SmartAlbumDimensionRecommended, "", 10, SmartAlbumSortPhotos)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].AlbumName != "旧相册" {
+		t.Fatalf("recommendations are not ordered by photo count: %+v", page.Items)
+	}
+	// 推荐分倒序：分高的那本在前。
+	page, err = service.DirectoryPage(context.Background(), SmartAlbumDimensionRecommended, "", 10, SmartAlbumSortQuality)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].AlbumName != "旧相册" {
+		t.Fatalf("recommendations are not ordered by quality: %+v", page.Items)
+	}
+	// 认不出来的排序参数按时间倒序处理，不报错。
+	page, err = service.DirectoryPage(context.Background(), SmartAlbumDimensionRecommended, "", 10, "nonsense")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 2 || page.Items[0].AlbumName != "新相册" {
+		t.Fatalf("unknown sort did not fall back to capture time: %+v", page.Items)
+	}
+}
+
+// seedRecommendedGroup 直接写一份精选推荐的缓存：目录只汇总已生成的
+// 分组，这里要的是「排出来的顺序」，不必把推荐算法整套跑一遍。
+func seedRecommendedGroup(
+	t *testing.T,
+	service *SmartAlbumService,
+	albumID, groupID, name string,
+	members []string,
+	quality float64,
+) {
+	t.Helper()
+	cache := smartAlbumCache{
+		Version: smartAlbumCacheVersion, AlbumID: albumID,
+		Dimension: SmartAlbumDimensionRecommended, Key: "seed-" + groupID,
+		Groups: []smartAlbumCachedGroup{{
+			ID: groupID, Dimension: SmartAlbumDimensionRecommended,
+			Name: name, SuggestedName: name, PhotoCount: len(members),
+			QualityScore: quality, Members: members,
+			CoverResourceID: members[0],
+		}},
+	}
+	data, err := json.Marshal(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := service.cachePath(albumID, SmartAlbumDimensionRecommended)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 

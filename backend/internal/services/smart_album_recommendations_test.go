@@ -479,7 +479,7 @@ func TestSmartAlbumRecommendedCacheAndUserCorrectionsSurviveRefreshAndRestore(t 
 	if err != nil || !cached.CacheHit || cached.Groups[0].ID != first.Groups[0].ID {
 		t.Fatalf("recommendation cache was not reused: summary=%+v err=%v", cached, err)
 	}
-	featured, err := service.DirectoryPage(context.Background(), "featured", "", 6)
+	featured, err := service.DirectoryPage(context.Background(), "featured", "", 6, "")
 	if err != nil || featured.Total != 1 || len(featured.Items) != 1 ||
 		featured.Items[0].Group.ID != first.Groups[0].ID {
 		t.Fatalf("featured directory did not return the curated recommendation: page=%+v err=%v", featured, err)
@@ -516,7 +516,7 @@ func TestSmartAlbumRecommendedCacheAndUserCorrectionsSurviveRefreshAndRestore(t 
 	if err != nil || restored.Groups[0].Name != name || !restored.Groups[0].Hidden {
 		t.Fatalf("backup corrections did not restore the recommendation: summary=%+v err=%v", restored, err)
 	}
-	visibleDirectory, err := service.DirectoryPage(context.Background(), "featured", "", 6)
+	visibleDirectory, err := service.DirectoryPage(context.Background(), "featured", "", 6, "")
 	if err != nil || visibleDirectory.Total != 0 || len(visibleDirectory.Items) != 0 {
 		t.Fatalf("hidden recommendation remained in the featured directory: page=%+v err=%v", visibleDirectory, err)
 	}

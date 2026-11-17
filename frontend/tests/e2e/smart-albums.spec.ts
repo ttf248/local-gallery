@@ -69,6 +69,31 @@ test("专页只展示精选推荐：旧分类深链被规范化，页面上没�
   );
 });
 
+test("专页顶部能切换排序，排序写进地址栏并跟着请求", async ({ page }) => {
+  await scannedNodes(page.request, "photo");
+  const requested: string[] = [];
+  page.on("request", (req) => {
+    if (req.url().includes("/api/smart-albums")) {
+      requested.push(req.url());
+    }
+  });
+
+  await page.goto("/photo/smart-albums");
+  // 默认按时间倒序：这一页只有一个排序控件。
+  await expect(page.getByRole("radio", { name: "时间最新" })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
+  await expect.poll(() => requested.length).toBeGreaterThan(0);
+  expect(requested[0]).toContain("sort=time");
+
+  await page.getByRole("radio", { name: "照片最多" }).click();
+  await expect(page).toHaveURL(/sort=photos/);
+  await expect
+    .poll(() => requested.filter((url) => url.includes("sort=photos")).length)
+    .toBeGreaterThan(0);
+});
+
 test("相册内的分组封面按原比例摆：照片不裁成方形，也不被拉变形", async ({
   page,
 }) => {

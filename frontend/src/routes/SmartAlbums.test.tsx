@@ -1,20 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import SmartAlbums from "./SmartAlbums";
-import type { SmartAlbumDirectoryDimension } from "../api/albums";
+import type {
+  SmartAlbumDirectoryDimension,
+  SmartAlbumSort,
+} from "../api/albums";
 import { useAppModeStore } from "../store/appModeStore";
 
 const requests: {
   dimension: SmartAlbumDirectoryDimension;
   cursor?: string;
   limit?: number;
+  sort?: SmartAlbumSort;
 }[] = [];
 
 vi.mock("../api/albums", async (original) => ({
@@ -22,12 +21,17 @@ vi.mock("../api/albums", async (original) => ({
   albumsApi: {
     smartDirectory: (
       dimension: SmartAlbumDirectoryDimension,
-      options: { cursor?: string; limit?: number } = {},
+      options: {
+        cursor?: string;
+        limit?: number;
+        sort?: SmartAlbumSort;
+      } = {},
     ) => {
       requests.push({
         dimension,
         cursor: options.cursor,
         limit: options.limit,
+        sort: options.sort,
       });
       const page = options.cursor ? 2 : 1;
       return Promise.resolve({
@@ -101,7 +105,7 @@ describe("智能相册专页", () => {
     useAppModeStore.setState({ preference: "photo", hydrated: true });
   });
 
-  it("专页只加载精选推荐，不显示分类页签或顶部说明", async () => {
+  it("专页只加载精选推荐，不显示分类页签", async () => {
     renderPage();
     await waitFor(() => expect(directoryRequests().length).toBe(1));
 
@@ -110,10 +114,10 @@ describe("智能相册专页", () => {
     ]);
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByRole("tab")).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "精选推荐" }),
-    ).toHaveClass("sr-only");
-    expect(screen.queryByText("智能相册")).toBeNull();
+    // 标题是看得见的：这一页有排序要切，排序控件就在标题这一行。
+    expect(screen.getByRole("heading", { name: "精选推荐" })).not.toHaveClass(
+      "sr-only",
+    );
     expect(
       screen.queryByText(/精选推荐至少 12 张、至少两类线索一致/),
     ).toBeNull();
@@ -167,4 +171,30 @@ describe("智能相册专页", () => {
     expect(directoryRequests()[1].cursor).toBe("cursor-2");
   });
 
+  it("默认按时间倒序，切换排序会重取目录并写进地址栏", async () => {
+    renderPage();
+    await waitFor(() => expect(directoryRequests().length).toBe(1));
+    expect(directoryRequests()[0].sort).toBe("time");
+
+    const photos = screen.getByRole("radio", { name: "照片最多" });
+    photos.click();
+
+    await waitFor(() => expect(directoryRequests().length).toBe(2));
+    expect(directoryRequests()[1].sort).toBe("photos");
+    expect(screen.getByTestId("location")).toHaveTextContent("sort=photos");
+    expect(screen.getByRole("radio", { name: "照片最多" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("地址栏里的排序参数会被认出来", async () => {
+    renderPage("/photo/smart-albums?sort=quality");
+    await waitFor(() => expect(directoryRequests().length).toBe(1));
+    expect(directoryRequests()[0].sort).toBe("quality");
+    expect(screen.getByRole("radio", { name: "推荐最强" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
 });
