@@ -174,6 +174,35 @@ function stopProcess(child) {
   ])
 }
 
+// 删掉临时目录。
+//
+// Windows 上 taskkill 返回时，server.exe 的文件句柄常常还没释放，
+// 紧接着删目录会撞上 EPERM。这个错会顺着 finally 抛到最外层，
+// 把一轮全绿的跑批报成失败 —— 看日志的人只会看到最后一行 EPERM，
+// 前面 183 条通过和两道审计的结论全被盖住。
+//
+// 所以这里隔一会儿再删，删不掉也不把整轮跑批判成失败：临时目录躺在
+// 系统临时目录里不影响任何事，只是留了份垃圾。真正要报的是它还在，
+// 以及服务可能还占着端口。
+async function removeTestRoot(testRoot, baseUrl, attempts = 6) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await rm(testRoot, { recursive: true, force: true })
+      return true
+    } catch (error) {
+      if (attempt === attempts) {
+        console.warn(
+          `[警告] 临时目录没删干净：${testRoot}（${error?.message ?? error}）。` +
+            `手动删掉即可；服务若还在监听 ${baseUrl}，先结束那个进程。`,
+        )
+        return false
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500 * attempt))
+    }
+  }
+  return false
+}
+
 async function main() {
   const testRoot = keepServer
     ? await mkdtemp(path.join(tmpdir(), 'local-gallery-dev-e2e-'))
@@ -267,7 +296,7 @@ async function main() {
       console.log('[4/4] 清理临时服务和测试目录...')
       await stopProcess(server)
       if (testRoot.startsWith(path.join(tmpdir(), 'local-gallery-e2e-'))) {
-        await rm(testRoot, { recursive: true, force: true })
+        await removeTestRoot(testRoot, baseUrl)
       }
     }
   }
