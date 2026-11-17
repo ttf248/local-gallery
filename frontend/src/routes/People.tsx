@@ -192,7 +192,7 @@ function PersonCard({
             fileId={person.coverResourceId}
             alt=""
             displayWidth={560}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
           />
         ) : null}
         <span className="absolute bottom-3 left-3 rounded-full bg-black/65 px-2.5 py-1 text-meta text-white backdrop-blur-sm">
@@ -215,7 +215,7 @@ function PersonCard({
         {/* 整张卡就是入口，不必每张都写一遍「打开相册 →」：
             一屏十几张卡各写一句，那句话成了噪音。方向键与列表卡
             同一套语言 —— 悬停才出现，触屏设备常驻。 */}
-        <span className="shrink-0 text-body text-fg-subtle opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+        <span className="shrink-0 text-body text-fg-subtle hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
           ›
         </span>
       </div>

@@ -77,9 +77,20 @@
       background var(--dur),
       color var(--dur);
   }
-  .nav-entry:hover {
-    background: var(--rail-hover);
-    color: var(--rail-fg);
+  /* 悬停反馈分两处写：鼠标设备靠 :hover，触摸设备靠 :active。
+     触摸设备没有悬停，指针停在按钮上时底色会粘住不散 —— 那是
+     浏览器把「点过」当成了「指着」。 */
+  @media (hover: hover) and (pointer: fine) {
+    .nav-entry:hover {
+      background: var(--rail-hover);
+      color: var(--rail-fg);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .nav-entry:active {
+      background: var(--rail-hover);
+      color: var(--rail-fg);
+    }
   }
   .nav-entry.is-active {
     background: var(--rail-active);
@@ -185,9 +196,17 @@
       box-shadow var(--dur),
       transform var(--dur);
   }
-  .album-tile:hover {
-    box-shadow: var(--card-shadow);
-    transform: translateY(var(--card-lift));
+  @media (hover: hover) and (pointer: fine) {
+    .album-tile:hover {
+      box-shadow: var(--card-shadow);
+      transform: translateY(var(--card-lift));
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .album-tile:active {
+      box-shadow: var(--card-shadow);
+      transform: translateY(1px);
+    }
   }
   /* 照片侧的网格卡不裱框。试过一次：白底卡片把照片挤成中间一小块，
      说明区又留出一片空白，整面墙读起来是「一堆白卡片」。
@@ -316,18 +335,34 @@
     border-radius: 0;
     background: transparent;
   }
-  :root[data-mode="comic"] .album-tile:hover {
-    box-shadow: none;
-    transform: none;
+  @media (hover: hover) and (pointer: fine) {
+    :root[data-mode="comic"] .album-tile:hover {
+      box-shadow: none;
+      transform: none;
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    :root[data-mode="comic"] .album-tile:active {
+      box-shadow: none;
+      transform: none;
+    }
   }
   :root[data-mode="comic"] .album-tile__cover--book {
     transition:
       transform var(--dur) var(--ease-out),
       box-shadow var(--dur) var(--ease-out);
   }
-  :root[data-mode="comic"] .album-tile:hover .album-tile__cover--book {
-    transform: translateY(-4px);
-    box-shadow: 0 18px 30px -16px rgb(0 0 0 / 0.6);
+  @media (hover: hover) and (pointer: fine) {
+    :root[data-mode="comic"] .album-tile:hover .album-tile__cover--book {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 30px -16px rgb(0 0 0 / 0.6);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    :root[data-mode="comic"] .album-tile:active .album-tile__cover--book {
+      transform: translateY(-4px);
+      box-shadow: 0 18px 30px -16px rgb(0 0 0 / 0.6);
+    }
   }
   /* 卡片不再有内边距，角标要贴着封面走。 */
   :root[data-mode="comic"] .album-tile > .absolute {
@@ -460,21 +495,30 @@
     color: var(--fg-subtle);
   }
 
-  /* --- 照片墙的精选角标 ---
-     悬停才浮出来：满墙常驻圆点会把照片本身挤掉。
-     但触摸设备没有悬停 —— Tailwind 的 hover 变体只在
-     (hover: hover) and (pointer: fine) 下生效，手机上它根本不触发，
-     角标于是永远藏着，「加入精选」在手机上就没了入口。
-     因此这个显隐自己管：触摸设备上常驻。 */
-  .wall-pick-reveal {
+  /* --- 悬停与触摸 ---
+     触摸设备没有悬停，而「悬停才出现」的东西在手机上只有两种下场：
+     永远藏着（Tailwind 的 hover 变体被 future.hoverOnlyWhenSupported
+     收进 (hover: hover) and (pointer: fine)），或者点一下底色就粘住
+     （手写的 :hover 规则不受那个开关约束）。两条路都要堵。
+
+     .hover-reveal：触摸设备常驻；有鼠标的设备上才隐去。显隐由这条
+     类统一管，组件里不再写 opacity-0 配 group-hover —— 满墙悬停才
+     出现的角标在触摸端要么常驻，要么没有。鼠标设备上「悬停才显形」
+     的另一半由组件里的 group-hover 工具类负责，键盘用户靠
+     group-focus-within 工具类：两条都是工具类，优先级高于本层。
+     .mouse-only：只在有鼠标的设备上显示。像素尺寸这类次要信息
+     在手机上不值得占地方。 */
+  .hover-reveal {
     opacity: 1;
   }
   @media (hover: hover) and (pointer: fine) {
-    .wall-pick-reveal {
+    .hover-reveal {
       opacity: 0;
     }
-    .group:hover .wall-pick-reveal {
-      opacity: 1;
+  }
+  @media (hover: none), (pointer: coarse) {
+    .mouse-only {
+      display: none;
     }
   }
 
@@ -584,8 +628,15 @@
     white-space: nowrap;
     transition: color var(--dur-fast) var(--ease-out);
   }
-  .page-tabs__tab:hover {
-    color: var(--fg);
+  @media (hover: hover) and (pointer: fine) {
+    .page-tabs__tab:hover {
+      color: var(--fg);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .page-tabs__tab:active {
+      color: var(--fg);
+    }
   }
   .page-tabs__tab[aria-selected="true"] {
     color: var(--fg);
@@ -934,8 +985,10 @@ body {
   border-radius: var(--radius-xs);
   border: 2px solid var(--bg);
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--fg-subtle);
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-subtle);
+  }
 }
 
 /* === 选区色 === */
@@ -1054,8 +1107,15 @@ button:not(:disabled):active {
     background var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
 }
-.lift-soft:hover {
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .lift-soft:hover {
+    transform: translateY(-1px);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .lift-soft:active {
+    transform: translateY(1px);
+  }
 }
 
 /* 卡片浮起：中等的 hover 抬升 + 阴影 */
@@ -1065,8 +1125,15 @@ button:not(:disabled):active {
     box-shadow var(--dur) var(--ease-out),
     border-color var(--dur) var(--ease-out);
 }
-.lift-card:hover {
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .lift-card:hover {
+    transform: translateY(-2px);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .lift-card:active {
+    transform: translateY(1px);
+  }
 }
 
 /* ============================================================
@@ -1108,6 +1175,29 @@ button:not(:disabled):active {
     text-shadow:
       0 1px 2px rgba(0, 0, 0, 0.92),
       0 0 6px rgba(0, 0, 0, 0.7);
+  }
+
+  /* --- 照片墙的信息层（触摸端常驻） ---
+     鼠标设备上这层是悬停才浮出来的，背板用 .scrim-bottom —— 一整条
+     88% 的黑带，只为了托住一行字。触摸设备上它常驻，满墙都是黑带
+     就把照片压成一条条暗色横栏，照片本身让位给了文件名。
+     触摸端因此改用一小段渐变：文字所在的那半段仍是 86% 黑
+     （压纯白背景白字约 5.5:1，AA 要 4.5:1），往上很快淡掉，
+     再加一圈文字描边，字与照片之间不糊。 */
+  @media (hover: none), (pointer: coarse) {
+    .wall-tile-info {
+      background-image: linear-gradient(
+        to top,
+        rgba(0, 0, 0, 0.86) 0%,
+        rgba(0, 0, 0, 0.86) 50%,
+        rgba(0, 0, 0, 0) 100%
+      );
+    }
+    .wall-tile-info > span {
+      text-shadow:
+        0 1px 2px rgba(0, 0, 0, 0.92),
+        0 0 6px rgba(0, 0, 0, 0.7);
+    }
   }
 
   /* 唯一的内容容器：所有页面（照片墙、列表、设置、表单）都用它，
@@ -1208,8 +1298,15 @@ button:not(:disabled):active {
     background: var(--accent);
     color: var(--accent-contrast);
   }
-  .btn-primary:not(:disabled):hover {
-    background: var(--accent-hover);
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:not(:disabled):hover {
+      background: var(--accent-hover);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .btn-primary:not(:disabled):active {
+      background: var(--accent-hover);
+    }
   }
   /* 按下时微微下沉：主按钮是唯一带填充的那一枚，给它一点触觉反馈。
      过渡沿用 .btn 的那一份（背景、文字、描边、阴影、位移一起动），
@@ -1225,9 +1322,17 @@ button:not(:disabled):active {
     border: 1px solid var(--border);
     color: var(--fg);
   }
-  .btn-outline:not(:disabled):hover {
-    background: var(--bg-subtle);
-    border-color: var(--border-strong);
+  @media (hover: hover) and (pointer: fine) {
+    .btn-outline:not(:disabled):hover {
+      background: var(--bg-subtle);
+      border-color: var(--border-strong);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .btn-outline:not(:disabled):active {
+      background: var(--bg-subtle);
+      border-color: var(--border-strong);
+    }
   }
 
   /* 幽灵操作：用于工具条 / 次要入口 */
@@ -1235,9 +1340,17 @@ button:not(:disabled):active {
     background: transparent;
     color: var(--fg-muted);
   }
-  .btn-ghost:not(:disabled):hover {
-    background: var(--bg-subtle);
-    color: var(--fg);
+  @media (hover: hover) and (pointer: fine) {
+    .btn-ghost:not(:disabled):hover {
+      background: var(--bg-subtle);
+      color: var(--fg);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .btn-ghost:not(:disabled):active {
+      background: var(--bg-subtle);
+      color: var(--fg);
+    }
   }
 
   /* --- 筛选 chip：视图切换 / 标签切换 --- */
@@ -1255,9 +1368,17 @@ button:not(:disabled):active {
       background var(--dur-fast) var(--ease-out),
       color var(--dur-fast) var(--ease-out);
   }
-  .chip:hover {
-    background: var(--bg-subtle);
-    color: var(--fg);
+  @media (hover: hover) and (pointer: fine) {
+    .chip:hover {
+      background: var(--bg-subtle);
+      color: var(--fg);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .chip:active {
+      background: var(--bg-subtle);
+      color: var(--fg);
+    }
   }
   .chip[aria-pressed="true"],
   .chip[data-active="true"] {

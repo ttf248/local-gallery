@@ -6,6 +6,14 @@ const tokenColor = (name: string) =>
 
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  future: {
+    // 触屏没有悬停。hover 变体（连同 group-hover）只在
+    // (hover: hover) and (pointer: fine) 下生效，否则点一下按钮
+    // 底色就粘住不放 —— 手机上那一下「按下去」永远是「按住了」。
+    // 靠悬停才出现的元素因此要在触摸端另有安排，见 styles/global.css
+    // 的 .hover-reveal 与 .mouse-only。
+    hoverOnlyWhenSupported: true,
+  },
   theme: {
     extend: {
       colors: {

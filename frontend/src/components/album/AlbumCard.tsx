@@ -797,7 +797,7 @@ function ListCard({
           )}
         </div>
 
-        <div className="text-fg-subtle opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity pr-1">
+        <div className="text-fg-subtle hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pr-1">
           <span className="text-body">›</span>
         </div>
       </Link>
@@ -898,10 +898,12 @@ function FavoriteStar({
   className?: string;
   alwaysVisible?: boolean;
 }) {
+  // 显隐由 .hover-reveal 统一管：触摸设备上常驻，鼠标设备上悬停
+  // 才浮出来（focus-visible 让键盘也能看到它）。
   const visibility =
     fav || alwaysVisible
       ? "opacity-100"
-      : "opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100";
+      : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100";
   return (
     <button
       type="button"

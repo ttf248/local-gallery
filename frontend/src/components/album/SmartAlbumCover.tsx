@@ -74,7 +74,7 @@ export default function SmartAlbumCover({
           alt=""
           displayWidth={displayWidth}
           sizes={sizes}
-          className="max-h-full max-w-full rounded-sm object-contain shadow-md ring-1 ring-inset ring-border/50 transition-transform duration-300 group-hover:scale-[1.03]"
+          className="max-h-full max-w-full rounded-sm object-contain shadow-md ring-1 ring-inset ring-border/50 transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
           testId="smart-album-cover-photo"
           onError={() => setFailed(true)}
         />

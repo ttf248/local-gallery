@@ -36,11 +36,14 @@ export default function PageOverview({
   const small = useMediaQuery("(min-width: 640px)");
   const medium = useMediaQuery("(min-width: 1024px)");
   const wide = useMediaQuery("(min-width: 1440px)");
+  // 档位按断点从宽到窄判断。原先 `small` 排在 `medium` 前面，
+  // 于是 1024px 以上永远命中 small 那一档：640–1439px 都是 7 列，
+  // 1024 的屏上每列只剩一百四十几像素，页缩略图挤成一条。
   const columns = wide
     ? COLUMNS.huge
-    : small
+    : medium
       ? COLUMNS.wide
-      : medium
+      : small
         ? COLUMNS.medium
         : COLUMNS.narrow;
 

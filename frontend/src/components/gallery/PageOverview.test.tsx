@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import PageOverview from "./PageOverview";
@@ -25,6 +25,22 @@ const thumbSrcSet = vi.hoisted(() =>
 );
 
 vi.mock("../../api/thumbs", () => ({ thumbUrl, thumbSrcSet }));
+
+// 列数按视口宽度分档，测试里直接给宽度。
+const viewport = vi.hoisted(() => ({ width: 390 }));
+vi.mock("../../hooks/useMediaQuery", () => ({
+  useMediaQuery: (query: string) => {
+    const min = /min-width:\s*(\d+)px/.exec(query);
+    return min ? viewport.width >= Number(min[1]) : false;
+  },
+}));
+
+/** 目录网格的列数写在 grid-template-columns 上。 */
+function gridColumns(container: HTMLElement): number {
+  const grid = container.querySelector<HTMLElement>("[style*='grid-template-columns']");
+  const value = grid?.style.gridTemplateColumns ?? "";
+  return Number(value.match(/repeat\((\d+)/)?.[1] ?? 0);
+}
 
 function renderOverview(props: Partial<React.ComponentProps<typeof PageOverview>> = {}) {
   const onJump = vi.fn();
@@ -77,5 +93,19 @@ describe("PageOverview", () => {
 
     expect(screen.getByText("共 3 页")).toBeInTheDocument();
     expect(screen.getByText("T / Esc 关闭")).toBeInTheDocument();
+  });
+
+  it("列数按视口宽度分档，且宽档不会被窄档抢走", () => {
+    // 断点从宽往窄判：1024 以上是 7 列，640–1023 是 5 列。
+    // 早先把 640 的判断排在 1024 前面，1024–1439 一直给 7 列，
+    // 每列只剩一百四十几像素。
+    viewport.width = 1280;
+    renderOverview();
+    expect(gridColumns(document.body)).toBe(7);
+    cleanup();
+
+    viewport.width = 900;
+    renderOverview();
+    expect(gridColumns(document.body)).toBe(5);
   });
 });

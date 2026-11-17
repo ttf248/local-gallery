@@ -164,7 +164,7 @@ function OnThisDayPhotoCard({
             version={photo.version}
             displayWidth={240}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
           />
         </div>
       </button>

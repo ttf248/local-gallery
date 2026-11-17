@@ -81,9 +81,16 @@
     border: 1px solid var(--media-highlight);
     border-radius: inherit;
   }
-.hero-cover--book:hover {
+@media (hover: hover) and (pointer: fine) {
+  .hero-cover--book:hover {
     transform: rotate(-1deg) translateY(-3px);
   }
+}
+@media (hover: none), (pointer: coarse) {
+  .hero-cover--book:active {
+    transform: rotate(-1deg) translateY(-3px);
+  }
+}
 .hero-cover--print {
     aspect-ratio: 1 / 1;
     box-shadow: var(--shadow-sm);
@@ -154,10 +161,21 @@
     color: var(--panel-muted);
     opacity: 0;
   }
-.hero-queue__item:hover .hero-queue__remove,
-  .hero-queue__remove:focus-visible {
+@media (hover: hover) and (pointer: fine) {
+  .hero-queue__item:hover .hero-queue__remove {
     opacity: 1;
   }
+}
+/* 触摸设备没有悬停，移除钮却是真动作 —— 藏起来等于没有这一项。
+   队列本来就是「正在读的那几本」，一枚常驻的移除钮不占多少地方。 */
+@media (hover: none), (pointer: coarse) {
+  .hero-queue__remove {
+    opacity: 1;
+  }
+}
+.hero-queue__remove:focus-visible {
+  opacity: 1;
+}
 .resume-shelf {
     display: grid;
     /* 摆几件由组件量了面板宽度后写进 --resume-cols：宽屏上多摆几件，
@@ -183,9 +201,16 @@
     box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
     transition: box-shadow var(--dur);
   }
-.resume-shelf__item:hover .resume-shelf__cover {
+@media (hover: hover) and (pointer: fine) {
+  .resume-shelf__item:hover .resume-shelf__cover {
     box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
   }
+}
+@media (hover: none), (pointer: coarse) {
+  .resume-shelf__item:active .resume-shelf__cover {
+    box-shadow: 0 6px 18px rgb(0 0 0 / 28%);
+  }
+}
 .hero-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -225,23 +250,45 @@
       background var(--dur),
       border-color var(--dur);
   }
-.year-index__open:hover,
-  .year-index__item[data-active="true"] .year-index__open {
+.year-index__item[data-active="true"] .year-index__open {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-ink);
+}
+@media (hover: hover) and (pointer: fine) {
+  .year-index__open:hover {
     border-color: var(--brand);
     background: var(--brand-soft);
     color: var(--brand-ink);
   }
+}
+@media (hover: none), (pointer: coarse) {
+  .year-index__open:active {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand-ink);
+  }
+}
 :root[data-mode="comic"] .year-index__open {
     background: transparent;
     border-color: transparent;
   }
-:root[data-mode="comic"] .year-index__open:hover,
-  :root[data-mode="comic"]
-    .year-index__item[data-active="true"]
-    .year-index__open {
+:root[data-mode="comic"] .year-index__item[data-active="true"] .year-index__open {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+@media (hover: hover) and (pointer: fine) {
+  :root[data-mode="comic"] .year-index__open:hover {
     background: var(--brand-soft);
     border-color: var(--brand);
   }
+}
+@media (hover: none), (pointer: coarse) {
+  :root[data-mode="comic"] .year-index__open:active {
+    background: var(--brand-soft);
+    border-color: var(--brand);
+  }
+}
 .year-index__filter {
     position: absolute;
     top: 8px;
@@ -268,20 +315,32 @@
       background var(--dur-fast),
       opacity var(--dur-fast);
   }
-.year-index__item:hover .year-index__filter,
-  .year-index__item:focus-within .year-index__filter,
+.year-index__item:focus-within .year-index__filter,
   .year-index__item[data-active="true"] .year-index__filter {
     opacity: 1;
   }
+@media (hover: hover) and (pointer: fine) {
+  .year-index__item:hover .year-index__filter {
+    opacity: 1;
+  }
+}
 @media (hover: none) {
     .year-index__filter {
       opacity: 1;
     }
   }
-.year-index__filter:hover {
+@media (hover: hover) and (pointer: fine) {
+  .year-index__filter:hover {
     color: var(--fg);
     background: var(--bg-elevated);
   }
+}
+@media (hover: none), (pointer: coarse) {
+  .year-index__filter:active {
+    color: var(--fg);
+    background: var(--bg-elevated);
+  }
+}
 @media (max-width: 767px) {
     .hero-grid--wall {
       grid-template-columns: repeat(2, minmax(0, 1fr));

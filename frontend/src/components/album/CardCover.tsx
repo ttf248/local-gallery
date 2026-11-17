@@ -150,7 +150,7 @@ function CoverImage({
       loading={loading}
       onError={() => setFailed(true)}
       style={{ objectPosition: position }}
-      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
     />
   );
 }

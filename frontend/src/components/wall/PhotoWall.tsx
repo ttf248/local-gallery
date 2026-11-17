@@ -266,7 +266,7 @@ export default function PhotoWall<
                         version={item.version}
                         displayWidth={tile.width}
                         undecodable={item.undecodable}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
                       />
                     )}
                     {overlay}
@@ -329,7 +329,7 @@ export default function PhotoWall<
                         }
                         title={picked ? "移出精选" : "加入精选"}
                         className={`absolute left-0 top-0 z-10 grid h-7 w-7 place-items-center rounded-full transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
-                          picked ? "opacity-100" : "wall-pick-reveal"
+                          picked ? "opacity-100" : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100"
                         }`}
                       >
                         <span className="grid h-5 w-5 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/25 backdrop-blur">
@@ -372,9 +372,12 @@ export default function PhotoWall<
                         </span>
                       </button>
                     )}
-                    {/* 悬停信息层：文件名与像素尺寸。
+                    {/* 信息层：文件名与像素尺寸。
                         照片墙是浏览页，光靠缩略图看不出「这是什么」；
                         尺寸来自服务端已带的 width / height，不用另发请求。
+                        显隐由 .hover-reveal 管：鼠标设备上悬停才浮出，
+                        触摸设备上常驻文件名（像素尺寸是鼠标用户的细节，
+                        触摸端收起）。
 
                         跨相册的墙（年份、精选）显示相册名而不是文件名：
                         那里的照片来自不同的本，用户先要知道自己看的是
@@ -386,13 +389,13 @@ export default function PhotoWall<
                         （AA 要 4.5:1）—— 亮度不可控的封面必须按最坏情况算。 */}
                     <div
                       data-testid="wall-tile-info"
-                      className="pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-end justify-between gap-2 px-2.5 pb-2 pt-9 scrim-bottom opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                      className="wall-tile-info pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-end justify-between gap-2 px-2.5 pb-2 pt-9 scrim-bottom hover-reveal transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100"
                     >
                       <span className="truncate text-meta text-white">
                         {sourceLabel || item.name}
                       </span>
                       {hasSize && (
-                        <span className="shrink-0 text-badge tabular-nums text-white/80">
+                        <span className="mouse-only shrink-0 text-badge tabular-nums text-white/80">
                           {item.width}×{item.height}
                         </span>
                       )}

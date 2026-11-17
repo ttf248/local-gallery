@@ -128,7 +128,7 @@ export default function PhotoMasonry<
                 version={item.version}
                 displayWidth={tile.width}
                 undecodable={item.undecodable}
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
               />
             )}
             <button
@@ -159,7 +159,7 @@ export default function PhotoMasonry<
                 }
                 title={picked ? "移出精选" : "加入精选"}
                 className={`absolute left-0 top-0 z-10 grid h-7 w-7 place-items-center rounded-full transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
-                  picked ? "opacity-100" : "wall-pick-reveal"
+                  picked ? "opacity-100" : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100"
                 }`}
               >
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/25 backdrop-blur">
@@ -167,14 +167,16 @@ export default function PhotoMasonry<
                 </span>
               </button>
             )}
-            {/* 悬停信息层：出处相册与文件名。
-                跨相册的墙上，照片来自不同的本 —— 先说清它出自哪本。 */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 translate-y-1 bg-gradient-to-t from-black/75 to-transparent px-2.5 pb-2 pt-6 opacity-0 transition-opacity duration-200 group-hover:translate-y-0 group-hover:opacity-100">
+            {/* 信息层：出处相册与文件名。
+                跨相册的墙上，照片来自不同的本 —— 先说清它出自哪本。
+                显隐由 .hover-reveal 管：鼠标设备上悬停才浮出，
+                触摸设备上常驻（像素尺寸在触摸端收起）。 */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 translate-y-1 bg-gradient-to-t from-black/75 to-transparent px-2.5 pb-2 pt-6 hover-reveal transition-opacity duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:opacity-100">
               <p className="truncate text-meta font-medium text-white/95">
                 {sourceLabel ?? item.name}
               </p>
               {item.width && item.height ? (
-                <p className="truncate text-meta text-white/75">
+                <p className="mouse-only truncate text-meta text-white/75">
                   {item.width}×{item.height}
                 </p>
               ) : null}

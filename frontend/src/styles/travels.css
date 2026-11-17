@@ -170,8 +170,15 @@
   border-radius: var(--radius-xs);
   transition: background var(--dur);
 }
-.travel-axis__year:hover {
-  background: var(--bg-subtle);
+@media (hover: hover) and (pointer: fine) {
+  .travel-axis__year:hover {
+    background: var(--bg-subtle);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .travel-axis__year:active {
+    background: var(--bg-subtle);
+  }
 }
 .travel-axis__year[aria-pressed="true"] {
   background: var(--accent-soft);
@@ -216,8 +223,15 @@
   padding: 4px 2px;
   border-radius: var(--radius-xs);
 }
-.travel-axis__month:hover {
-  background: var(--bg-subtle);
+@media (hover: hover) and (pointer: fine) {
+  .travel-axis__month:hover {
+    background: var(--bg-subtle);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .travel-axis__month:active {
+    background: var(--bg-subtle);
+  }
 }
 .travel-axis__month[aria-pressed="true"] {
   background: var(--accent-soft);
@@ -336,8 +350,15 @@
   color: var(--fg);
   text-align: left;
 }
-.travel-trip-card__date:hover {
-  color: var(--brand-ink);
+@media (hover: hover) and (pointer: fine) {
+  .travel-trip-card__date:hover {
+    color: var(--brand-ink);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .travel-trip-card__date:active {
+    color: var(--brand-ink);
+  }
 }
 .travel-trip-card[data-selected="true"] .travel-trip-card__date {
   color: var(--brand-ink);
@@ -377,9 +398,17 @@
   font-size: var(--text-meta);
   color: var(--fg);
 }
-.travel-trip-card__stop:hover {
-  background: var(--bg-strong);
-  color: var(--brand-ink);
+@media (hover: hover) and (pointer: fine) {
+  .travel-trip-card__stop:hover {
+    background: var(--bg-strong);
+    color: var(--brand-ink);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .travel-trip-card__stop:active {
+    background: var(--bg-strong);
+    color: var(--brand-ink);
+  }
 }
 .travel-trip-card__stop-count {
   color: var(--fg-subtle);
@@ -418,8 +447,15 @@
   object-fit: cover;
   transition: transform 300ms var(--dur);
 }
-.travel-trip-card__photo:hover img {
-  transform: scale(1.03);
+@media (hover: hover) and (pointer: fine) {
+  .travel-trip-card__photo:hover img {
+    transform: scale(1.03);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .travel-trip-card__photo:active img {
+    transform: scale(1.03);
+  }
 }
 
 /* --- 展开后的整段照片 --- */

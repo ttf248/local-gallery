@@ -92,7 +92,7 @@ export function UnreadHero({
                   event.stopPropagation();
                   onMarkRead(card);
                 }}
-                className="w-7 h-7 rounded-full bg-black/65 text-white flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                className="w-7 h-7 rounded-full bg-black/65 text-white flex items-center justify-center hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                 title={`将「${card.title}」${copy.markFinishedLabel}`}
                 aria-label={`将${card.title}${copy.markFinishedLabel}`}
               >
