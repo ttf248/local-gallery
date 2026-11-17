@@ -356,11 +356,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化媒体分析任务服务失败: %v", err)
 	}
+	faceVersion, _ := services.FaceAnalyzerVersionForModel(aiJobs.List().Settings.FaceModel)
+	if err := peopleService.SetFaceAnalyzerVersion(faceVersion); err != nil {
+		log.Fatalf("初始化人物索引模型失败: %v", err)
+	}
 	if err := ocrSearchIndex.Sync(aiJobs.Records(services.AIJobTypeOCR)); err != nil {
 		log.Printf("重建 OCR 搜索索引失败: %v", err)
 	}
 	syncPeopleRecords := func() error {
-		return peopleService.Sync(aiJobs.RecordsIncludingStaleVersions(services.AIJobTypeFace))
+		return peopleService.Sync(aiJobs.Records(services.AIJobTypeFace))
 	}
 	peopleSynced := false
 	if aiJobs.PeopleEnabled() && resourceCatalog.Acquire().Ready() {
@@ -522,6 +526,7 @@ func main() {
 	api.Get("/ai/jobs/settings", handlers.AIJobSettingsHandler(aiJobs, peopleService))
 	api.Put("/ai/jobs/settings", handlers.AIJobSettingsHandler(aiJobs, peopleService))
 	api.Put("/ai/jobs/hardware", handlers.AIJobHardwareHandler(aiJobs))
+	api.Put("/ai/jobs/face-model", handlers.AIJobFaceModelHandler(aiJobs, peopleService))
 	// 核算要排在 /ai/jobs/:id 之前：那条是带参数的路由，静态段先注册
 	// 才不会落到参数路由上。
 	api.Get("/ai/jobs/estimate", handlers.AIJobEstimateHandler(aiJobs))

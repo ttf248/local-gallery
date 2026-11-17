@@ -94,6 +94,18 @@ type AIAnalyzerHardware interface {
 	ValidateHardware(context.Context, string) error
 }
 
+type AIAnalyzerModelVersion interface {
+	VersionForModel(string) (string, bool)
+}
+
+type AIAnalyzerModelReadiness interface {
+	ReadyForModel(context.Context, string) error
+}
+
+type AIAnalyzerModelAvailability interface {
+	AvailableForModel(string) (bool, string)
+}
+
 type AIAnalysisInput struct {
 	ResourceID    string
 	Path          string
@@ -101,6 +113,7 @@ type AIAnalysisInput struct {
 	Size          int64
 	MTimeNs       int64
 	ComputeDevice string
+	FaceModel     string
 }
 
 // AIImageConverter converts formats that the local image worker cannot decode.
@@ -192,6 +205,7 @@ type AIJob struct {
 	Status                string          `json:"status"`
 	Stage                 string          `json:"stage"`
 	ModuleVersion         string          `json:"moduleVersion"`
+	FaceModel             string          `json:"faceModel,omitempty"`
 	Total                 int             `json:"total"`
 	Processed             int             `json:"processed"`
 	Skipped               int             `json:"skipped"`
@@ -234,6 +248,7 @@ type AIJobSettings struct {
 	DailySmartAlbums    bool     `json:"dailySmartAlbums"`
 	PeopleEnabled       bool     `json:"peopleEnabled"`
 	GPUEnabled          bool     `json:"gpuEnabled"`
+	FaceModel           string   `json:"faceModel"`
 	LastScheduledDate   string   `json:"lastScheduledDate,omitempty"`
 	LastScheduledStatus string   `json:"lastScheduledStatus,omitempty"`
 	LastScheduledStage  string   `json:"lastScheduledStage,omitempty"`
@@ -430,7 +445,7 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		subs:               make(map[string]map[chan AIJob]struct{}),
 		settings: AIJobSettings{
 			DailyEnabled: true, DailyTime: "03:00", DailyModules: []string{AIJobTypeMetadata},
-			DailyScan: true, DailySmartAlbums: true, GPUEnabled: true,
+			DailyScan: true, DailySmartAlbums: true, GPUEnabled: true, FaceModel: DefaultFaceModel,
 		},
 	}
 	for _, analyzer := range options.Analyzers {
@@ -482,7 +497,11 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 		}
 		return AIJob{}, false, errors.New("unknown analysis module")
 	}
-	if !aiAnalyzerAvailable(analyzer) {
+	faceModel := DefaultFaceModel
+	if moduleType == AIJobTypeFace {
+		faceModel = s.FaceModel()
+	}
+	if available, _ := aiAnalyzerAvailabilityForModel(analyzer, faceModel); !available {
 		return AIJob{}, false, ErrAIAnalyzerUnavailable
 	}
 	s.mu.Lock()
@@ -491,7 +510,13 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	if closed {
 		return AIJob{}, false, errors.New("AI job service is shutting down")
 	}
-	if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
+	if readiness, ok := analyzer.(AIAnalyzerModelReadiness); ok && moduleType == AIJobTypeFace {
+		readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		if err := readiness.ReadyForModel(readyCtx, faceModel); err != nil {
+			return AIJob{}, false, err
+		}
+	} else if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
 		readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		if err := readiness.Ready(readyCtx); err != nil {
@@ -503,6 +528,9 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	defer s.mu.Unlock()
 	if s.closed {
 		return AIJob{}, false, errors.New("AI job service is shutting down")
+	}
+	if moduleType == AIJobTypeFace && s.settings.FaceModel != faceModel {
+		return AIJob{}, false, ErrAIJobActive
 	}
 	if s.dailyPlanActive {
 		return AIJob{}, false, ErrAIJobActive
@@ -569,6 +597,7 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 		return nil, nil, ErrAIJobActive
 	}
 	peopleEnabled := s.settings.PeopleEnabled
+	faceModel := s.settings.FaceModel
 	analyzers := make(map[string]AIAnalyzer, len(moduleTypes))
 	for _, moduleType := range moduleTypes {
 		analyzers[moduleType] = s.analyzers[moduleType]
@@ -591,13 +620,27 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 			})
 			continue
 		}
-		if available, reason := aiAnalyzerAvailability(analyzer); !available {
+		if available, reason := aiAnalyzerAvailabilityForModel(analyzer, faceModel); !available {
 			skippedModules = append(skippedModules, AIJobModule{
 				Type: moduleType, Name: aiJobModuleName(moduleType), Reason: reason,
 			})
 			continue
 		}
-		if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
+		if readiness, ok := analyzer.(AIAnalyzerModelReadiness); ok && moduleType == AIJobTypeFace {
+			readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			err := readiness.ReadyForModel(readyCtx, faceModel)
+			cancel()
+			if err != nil {
+				_, reason := aiAnalyzerAvailabilityForModel(analyzer, faceModel)
+				if reason == "" {
+					reason = "runtime_unavailable"
+				}
+				skippedModules = append(skippedModules, AIJobModule{
+					Type: moduleType, Name: aiJobModuleName(moduleType), Reason: reason,
+				})
+				continue
+			}
+		} else if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
 			readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			err := readiness.Ready(readyCtx)
 			cancel()
@@ -624,6 +667,9 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 		return nil, nil, errors.New("AI job service is shutting down")
 	}
 	if s.dailyPlanActive {
+		return nil, nil, ErrAIJobActive
+	}
+	if s.settings.FaceModel != faceModel {
 		return nil, nil, ErrAIJobActive
 	}
 	if s.hasPendingJobsLocked() {
@@ -951,6 +997,14 @@ func (s *AIJobService) Retry(id string) (AIJob, error) {
 		return AIJob{}, errors.New("only failed or cancelled jobs can be retried")
 	}
 	job := s.newJobLocked(previous.Type, previous.Mode)
+	if previous.Type == AIJobTypeFace {
+		job.FaceModel = previous.FaceModel
+		if job.FaceModel == "" {
+			job.FaceModel = DefaultFaceModel
+		}
+		job.ModuleVersion = aiAnalyzerVersion(s.analyzers[previous.Type], job.FaceModel)
+		job.Checkpoint.ModuleVersion = job.ModuleVersion
+	}
 	job.AlbumID = previous.AlbumID
 	job.RetryOf = previous.ID
 	job.RetryFailedOnly = true
@@ -1016,9 +1070,9 @@ func (s *AIJobService) modulesLocked() []AIJobModule {
 	for _, moduleType := range known {
 		module := AIJobModule{Type: moduleType, Name: aiJobModuleName(moduleType)}
 		if analyzer, exists := s.analyzers[moduleType]; exists {
-			module.Installed, module.Reason = aiAnalyzerAvailability(analyzer)
+			module.Installed, module.Reason = aiAnalyzerAvailabilityForModel(analyzer, s.settings.FaceModel)
 			if module.Installed {
-				module.Version = analyzer.Version()
+				module.Version = aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 			}
 		}
 		modules = append(modules, module)
@@ -1036,6 +1090,22 @@ func aiAnalyzerAvailability(analyzer AIAnalyzer) (bool, string) {
 		return availability.Available()
 	}
 	return true, ""
+}
+
+func aiAnalyzerAvailabilityForModel(analyzer AIAnalyzer, model string) (bool, string) {
+	if availability, ok := analyzer.(AIAnalyzerModelAvailability); ok && analyzer.Type() == AIJobTypeFace {
+		return availability.AvailableForModel(model)
+	}
+	return aiAnalyzerAvailability(analyzer)
+}
+
+func aiAnalyzerVersion(analyzer AIAnalyzer, model string) string {
+	if versioner, ok := analyzer.(AIAnalyzerModelVersion); ok && analyzer.Type() == AIJobTypeFace {
+		if version, valid := versioner.VersionForModel(model); valid {
+			return version
+		}
+	}
+	return analyzer.Version()
 }
 
 // aiJobModuleName 给分析模块一个中文显示名。
@@ -1109,6 +1179,40 @@ func (s *AIJobService) SetGPUEnabled(enabled bool) (AIJobSettings, error) {
 	previous := s.settings
 	s.settings.GPUEnabled = enabled
 	s.settings.gpuEnabledSet = true
+	if err := s.persistLocked(); err != nil {
+		s.settings = previous
+		return AIJobSettings{}, err
+	}
+	return s.copySettingsLocked(), nil
+}
+
+func (s *AIJobService) FaceModel() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.settings.FaceModel == "" {
+		return DefaultFaceModel
+	}
+	return s.settings.FaceModel
+}
+
+// SetFaceModel updates the profile used by newly created face analysis jobs.
+func (s *AIJobService) SetFaceModel(model string) (AIJobSettings, error) {
+	if _, valid := FaceAnalyzerVersionForModel(model); !valid {
+		return AIJobSettings{}, errors.New("unknown face model")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return AIJobSettings{}, errors.New("AI job service is shutting down")
+	}
+	if s.dailyPlanActive || hasActiveAIJobType(s.jobs, AIJobTypeFace) {
+		return AIJobSettings{}, ErrAIJobActive
+	}
+	if s.settings.FaceModel == model {
+		return s.copySettingsLocked(), nil
+	}
+	previous := s.settings
+	s.settings.FaceModel = model
 	if err := s.persistLocked(); err != nil {
 		s.settings = previous
 		return AIJobSettings{}, err
@@ -1307,8 +1411,9 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 	if !installed {
 		return result
 	}
+	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, record := range s.records {
-		if record.Type == moduleType && record.ModuleVersion == analyzer.Version() {
+		if record.Type == moduleType && record.ModuleVersion == version {
 			record.Data = append(json.RawMessage(nil), record.Data...)
 			result = append(result, record)
 		}
@@ -1332,9 +1437,10 @@ func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map
 	if !installed {
 		return result
 	}
+	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, resourceID := range resourceIDs {
 		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
-		if !exists || record.ModuleVersion != analyzer.Version() || len(record.Data) == 0 {
+		if !exists || record.ModuleVersion != version || len(record.Data) == 0 {
 			continue
 		}
 		var metadata struct {
@@ -1363,9 +1469,10 @@ func (s *AIJobService) RecordsForResources(moduleType string, resourceIDs []stri
 	if !installed {
 		return result
 	}
+	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, resourceID := range resourceIDs {
 		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
-		if !exists || record.ModuleVersion != analyzer.Version() {
+		if !exists || record.ModuleVersion != version {
 			continue
 		}
 		record.Data = append(json.RawMessage(nil), record.Data...)
@@ -1385,9 +1492,10 @@ func (s *AIJobService) RecordSummariesForResources(moduleType string, resourceID
 	if !installed {
 		return result
 	}
+	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, resourceID := range resourceIDs {
 		record, exists := s.records[aiRecordKey(moduleType, resourceID)]
-		if !exists || record.ModuleVersion != analyzer.Version() {
+		if !exists || record.ModuleVersion != version {
 			continue
 		}
 		result[resourceID] = AIAnalysisRecordSummary{
@@ -1405,9 +1513,9 @@ func (s *AIJobService) ModuleStatus(moduleType string) AIJobModule {
 	defer s.mu.Unlock()
 	module := AIJobModule{Type: moduleType, Name: aiJobModuleName(moduleType)}
 	if analyzer, exists := s.analyzers[moduleType]; exists {
-		module.Installed, module.Reason = aiAnalyzerAvailability(analyzer)
+		module.Installed, module.Reason = aiAnalyzerAvailabilityForModel(analyzer, s.settings.FaceModel)
 		if module.Installed {
-			module.Version = analyzer.Version()
+			module.Version = aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 		}
 	}
 	return module
@@ -1440,7 +1548,7 @@ func (s *AIJobService) Record(moduleType, resourceID string) (AIAnalysisRecord, 
 		return AIAnalysisRecord{}, false
 	}
 	record, exists := s.records[aiRecordKey(moduleType, resourceID)]
-	if !exists || record.ModuleVersion != s.analyzers[moduleType].Version() {
+	if !exists || record.ModuleVersion != aiAnalyzerVersion(s.analyzers[moduleType], s.settings.FaceModel) {
 		return AIAnalysisRecord{}, false
 	}
 	record.Data = append(json.RawMessage(nil), record.Data...)
@@ -1581,7 +1689,14 @@ func (s *AIJobService) closeAnalyzers() {
 
 func (s *AIJobService) newJobLocked(moduleType, mode string) AIJob {
 	now := s.now()
-	version := s.analyzers[moduleType].Version()
+	faceModel := ""
+	if moduleType == AIJobTypeFace {
+		faceModel = s.settings.FaceModel
+		if faceModel == "" {
+			faceModel = DefaultFaceModel
+		}
+	}
+	version := aiAnalyzerVersion(s.analyzers[moduleType], faceModel)
 	computeDevice := "cpu"
 	if moduleType != AIJobTypeMetadata && s.settings.GPUEnabled {
 		computeDevice = "gpu"
@@ -1590,6 +1705,7 @@ func (s *AIJobService) newJobLocked(moduleType, mode string) AIJob {
 		ID:            uuid.NewString(),
 		Type:          moduleType,
 		Mode:          mode,
+		FaceModel:     faceModel,
 		ComputeDevice: computeDevice,
 		Status:        AIJobStatusPending,
 		Stage:         "pending",
@@ -1633,6 +1749,7 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 	}
 	analyzer := s.analyzers[job.Type]
 	computeDevice := job.ComputeDevice
+	faceModel := job.FaceModel
 	now := s.now()
 	job.Status = AIJobStatusRunning
 	job.Stage = "waiting_for_library"
@@ -1652,6 +1769,16 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 	}
 	s.publishLocked(*job)
 	s.mu.Unlock()
+
+	if readiness, ok := analyzer.(AIAnalyzerModelReadiness); ok && analyzer.Type() == AIJobTypeFace {
+		readyCtx, cancel := context.WithTimeout(runtimeState.ctx, 20*time.Second)
+		err := readiness.ReadyForModel(readyCtx, faceModel)
+		cancel()
+		if err != nil {
+			s.finishJobWithCode(id, AIJobStatusFailed, "failed", "face_model_unavailable", "所选人脸模型未就绪")
+			return
+		}
+	}
 
 	if computeDevice == "gpu" {
 		if err := s.setJobStage(id, "checking_runtime"); err != nil {
@@ -1915,7 +2042,10 @@ func (s *AIJobService) selectTargets(jobID string, targets []aiJobTarget, digest
 	if job == nil {
 		return nil, errors.New("analysis job not found")
 	}
-	version := s.analyzers[job.Type].Version()
+	if job.Type == AIJobTypeFace && job.FaceModel == "" {
+		job.FaceModel = DefaultFaceModel
+	}
+	version := aiAnalyzerVersion(s.analyzers[job.Type], job.FaceModel)
 	if job.ModuleVersion != version || job.Checkpoint.ModuleVersion != "" && job.Checkpoint.ModuleVersion != version {
 		job.ModuleVersion = version
 		job.Checkpoint = AIJobCheckpoint{ModuleVersion: version}
@@ -1981,13 +2111,15 @@ func (s *AIJobService) processBatch(ctx context.Context, jobID string, targets [
 	job := s.jobs[jobID]
 	var analyzer AIAnalyzer
 	computeDevice := "cpu"
+	faceModel := ""
 	if job != nil {
 		analyzer = s.analyzers[job.Type]
 		computeDevice = job.ComputeDevice
+		faceModel = job.FaceModel
 	}
 	s.mu.Unlock()
 	if batchAnalyzer, ok := analyzer.(AIAnalyzerBatch); ok {
-		return s.processAnalyzerBatch(ctx, analyzer, batchAnalyzer, computeDevice, targets)
+		return s.processAnalyzerBatch(ctx, analyzer, batchAnalyzer, computeDevice, faceModel, targets)
 	}
 	results := make([]AIAnalysisRecord, len(targets))
 	workers := min(s.workerCount, len(targets))
@@ -2019,8 +2151,8 @@ sendLoop:
 	return results
 }
 
-func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnalyzer, batchAnalyzer AIAnalyzerBatch, computeDevice string, targets []aiJobTarget) []AIAnalysisRecord {
-	version := analyzer.Version()
+func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnalyzer, batchAnalyzer AIAnalyzerBatch, computeDevice, faceModel string, targets []aiJobTarget) []AIAnalysisRecord {
+	version := aiAnalyzerVersion(analyzer, faceModel)
 	results := make([]AIAnalysisRecord, len(targets))
 	inputs := make([]AIAnalysisInput, 0, len(targets))
 	inputPositions := make([]int, 0, len(targets))
@@ -2085,7 +2217,7 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 		}
 		inputs = append(inputs, AIAnalysisInput{
 			ResourceID: target.resourceID, Path: validated, AnalysisPath: analysisPath,
-			Size: target.size, MTimeNs: target.mtimeNs, ComputeDevice: computeDevice,
+			Size: target.size, MTimeNs: target.mtimeNs, ComputeDevice: computeDevice, FaceModel: faceModel,
 		})
 		inputPositions = append(inputPositions, index)
 	}
@@ -2136,7 +2268,7 @@ func (s *AIJobService) processTarget(ctx context.Context, jobID string, target a
 		return AIAnalysisRecord{}
 	}
 	typeName := job.Type
-	version := s.analyzers[typeName].Version()
+	version := aiAnalyzerVersion(s.analyzers[typeName], job.FaceModel)
 	s.mu.Unlock()
 	record := AIAnalysisRecord{
 		Type:          typeName,
@@ -2490,6 +2622,7 @@ func sameDailyPlan(left, right AIJobSettings) bool {
 	return left.DailyEnabled == right.DailyEnabled &&
 		left.DailyTime == right.DailyTime &&
 		left.PeopleEnabled == right.PeopleEnabled &&
+		left.FaceModel == right.FaceModel &&
 		left.DailyScan == right.DailyScan &&
 		left.DailySmartAlbums == right.DailySmartAlbums &&
 		slices.Equal(left.DailyModules, right.DailyModules)
@@ -2788,6 +2921,13 @@ func (s *AIJobService) loadState() error {
 			return errors.New("invalid daily analysis time in state")
 		}
 		s.settings = state.Settings
+		if s.settings.FaceModel == "" {
+			s.settings.FaceModel = DefaultFaceModel
+			settingsChanged = true
+		}
+		if _, valid := FaceAnalyzerVersionForModel(s.settings.FaceModel); !valid {
+			return errors.New("invalid face model in state")
+		}
 		if !state.Settings.gpuEnabledSet {
 			s.settings.GPUEnabled = true
 			s.settings.gpuEnabledSet = true
@@ -2818,6 +2958,15 @@ func (s *AIJobService) loadState() error {
 				job.ComputeDevice = "gpu"
 			}
 			settingsChanged = true
+		}
+		if job.Type == AIJobTypeFace && job.FaceModel == "" {
+			job.FaceModel = DefaultFaceModel
+			settingsChanged = true
+		}
+		if job.Type == AIJobTypeFace {
+			if _, valid := FaceAnalyzerVersionForModel(job.FaceModel); !valid {
+				continue
+			}
 		}
 		if job.Errors == nil {
 			job.Errors = []AIJobError{}

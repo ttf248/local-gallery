@@ -617,6 +617,49 @@ func TestAIJobHardwareHandlerPersistsGPUPreference(t *testing.T) {
 	}
 }
 
+func TestAIJobFaceModelHandlerPersistsSelectionAndRebuildsIndex(t *testing.T) {
+	root := t.TempDir()
+	catalog := services.NewResourceCatalog()
+	catalog.Publish(&models.ScanResult{Roots: []string{root}}, []string{root})
+	service, err := services.NewAIJobService(services.AIJobServiceOptions{
+		StatePath:   filepath.Join(t.TempDir(), "state", "ai_jobs.json"),
+		MetadataDir: filepath.Join(t.TempDir(), "derived", "metadata"),
+		Catalog:     catalog, ValidatePath: func(path string) (string, error) { return path, nil },
+		Analyzers: []services.AIAnalyzer{services.MetadataAnalyzer{}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	people, err := services.OpenPeopleService(
+		filepath.Join(t.TempDir(), "state", "people.json"),
+		filepath.Join(t.TempDir(), "derived", "people-index.json"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app := fiber.New()
+	app.Put("/api/ai/jobs/face-model", AIJobFaceModelHandler(service, people))
+	request := httptest.NewRequest(http.MethodPut, "/api/ai/jobs/face-model", strings.NewReader(`{"model":"buffalo_m"}`))
+	request.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	response, err := app.Test(request, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != fiber.StatusOK || service.FaceModel() != services.FaceModelBuffaloM {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("face model response = %d %s; selected = %q", response.StatusCode, body, service.FaceModel())
+	}
+	if err := people.Sync(service.Records(services.AIJobTypeFace)); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := service.Shutdown(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAIJobStartAPIRequiresPeopleOptIn(t *testing.T) {
 	service, err := services.NewAIJobService(services.AIJobServiceOptions{
 		StatePath:    filepath.Join(t.TempDir(), "state", "jobs.json"),

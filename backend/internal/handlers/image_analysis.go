@@ -15,7 +15,6 @@ import (
 
 const (
 	faceSimilarityThreshold = 0.363
-	faceEmbeddingDimension  = 128
 )
 
 type storedFace struct {
@@ -115,7 +114,8 @@ func FaceSimilaritySearchHandler(
 		var sourceData struct {
 			Faces []storedFace `json:"faces"`
 		}
-		if json.Unmarshal(source.Data, &sourceData) != nil || request.FaceIndex >= len(sourceData.Faces) || len(sourceData.Faces[request.FaceIndex].Embedding) != faceEmbeddingDimension {
+		if json.Unmarshal(source.Data, &sourceData) != nil || request.FaceIndex >= len(sourceData.Faces) ||
+			len(sourceData.Faces[request.FaceIndex].Embedding) != services.FaceEmbeddingDimensionForVersion(source.ModuleVersion) {
 			return writeError(c, fiber.StatusBadRequest, "invalid_face_search", "selected face is unavailable")
 		}
 		query := sourceData.Faces[request.FaceIndex].Embedding
@@ -125,9 +125,9 @@ func FaceSimilaritySearchHandler(
 			score float64
 		}
 		bestByResource := make(map[string]candidate)
-		for _, record := range jobs.RecordsIncludingStaleVersions(services.AIJobTypeFace) {
+		for _, record := range jobs.Records(services.AIJobTypeFace) {
 			if record.ResourceID == request.ResourceID || record.Status != "faces_found" ||
-				!services.SupportsFaceAnalyzerVersion(record.ModuleVersion) {
+				services.FaceEmbeddingDimensionForVersion(record.ModuleVersion) != len(query) {
 				continue
 			}
 			item, exists := services.LookupLibraryFeedItem(snapshot, record.ResourceID)
@@ -186,8 +186,8 @@ func currentFaceRecord(
 	resourceID string,
 	validatePath func(string) (string, error),
 ) (services.AIAnalysisRecord, error) {
-	record, ok := jobs.RecordIncludingStaleVersions(services.AIJobTypeFace, resourceID)
-	if !ok || record.Status != "faces_found" || !services.SupportsFaceAnalyzerVersion(record.ModuleVersion) {
+	record, ok := jobs.Record(services.AIJobTypeFace, resourceID)
+	if !ok || record.Status != "faces_found" || services.FaceEmbeddingDimensionForVersion(record.ModuleVersion) == 0 {
 		return services.AIAnalysisRecord{}, errors.New("face record unavailable")
 	}
 	ref, ok := snapshot.Lookup(resourceID)
@@ -206,7 +206,7 @@ func currentFaceRecord(
 }
 
 func normalizedCosine(left, right []float32) float64 {
-	if len(left) != faceEmbeddingDimension || len(right) != faceEmbeddingDimension {
+	if len(left) != len(right) || (len(left) != 128 && len(left) != 512) {
 		return -1
 	}
 	var dot, leftNorm, rightNorm float64

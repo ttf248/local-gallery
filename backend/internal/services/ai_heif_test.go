@@ -79,7 +79,7 @@ func TestAIJobServiceConvertsHEIFForFaceAnalysisAndCleansTemporaryFiles(t *testi
 		faceImageConverter: converter,
 		now:                time.Now,
 	}
-	results := service.processAnalyzerBatch(context.Background(), analyzer, analyzer, "cpu", []aiJobTarget{
+	results := service.processAnalyzerBatch(context.Background(), analyzer, analyzer, "cpu", "", []aiJobTarget{
 		{resourceID: "f_heif", path: heifPath, position: 0, size: heifInfo.Size(), mtimeNs: heifInfo.ModTime().UnixNano()},
 		{resourceID: "f_jpeg", path: jpegPath, position: 1, size: jpegInfo.Size(), mtimeNs: jpegInfo.ModTime().UnixNano()},
 	})

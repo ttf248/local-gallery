@@ -67,9 +67,6 @@ func TestImageAnalysisHidesFaceEmbeddingsAndFindsSimilarPhoto(t *testing.T) {
 			Type: services.AIJobTypeFace, ResourceID: ids[index], Size: info.Size(), MTimeNs: info.ModTime().UnixNano(),
 			ModuleVersion: services.FaceAnalyzerVersion, Status: "faces_found", Data: faceData, UpdatedAt: time.Now(),
 		}
-		if index == 1 {
-			faceRecord.ModuleVersion = "yunet-2023mar-multiscale+sface-2021dec"
-		}
 		records = append(records, faceRecord)
 		if index == 0 {
 			records = append(records, services.AIAnalysisRecord{

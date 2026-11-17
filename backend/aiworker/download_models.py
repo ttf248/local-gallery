@@ -7,6 +7,7 @@ import os
 import sys
 import time
 import urllib.request
+import zipfile
 from pathlib import Path
 
 from model_cache import resolve_model_dir
@@ -51,6 +52,13 @@ MODELS = (
     ),
 )
 
+BUFFALO_M_ARCHIVE_URL = "https://github.com/deepinsight/insightface/releases/download/model-zoo/buffalo_m.zip"
+BUFFALO_M_ARCHIVE_SHA256 = "d98264bd8f2dc75cbc2ddce2a14e636e02bb857b3051c234b737bf3b614edca9"
+BUFFALO_M_FILES = (
+    ("det_2.5g.onnx", 3_292_009, "041f73f47371333d1d17a6fee6c8ab4e6aecabefe398ff32cca4e2d5eaee0af9"),
+    ("w600k_r50.onnx", 174_383_860, "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"),
+)
+
 
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
@@ -86,10 +94,50 @@ def download(name: str, url: str, destination: Path, expected: str) -> None:
     print(f"[完成] {name}")
 
 
+def install_buffalo_m(model_dir: Path) -> None:
+    face_dir = model_dir / "face" / "buffalo_m"
+    face_dir.mkdir(parents=True, exist_ok=True)
+    if all((face_dir / name).is_file() and sha256(face_dir / name) == digest for name, _, digest in BUFFALO_M_FILES):
+        print("[已就绪] Buffalo_m SCRFD 与人脸特征模型")
+        return
+
+    archive_path = model_dir / "face" / "buffalo_m.zip"
+    download("Buffalo_m 模型包", BUFFALO_M_ARCHIVE_URL, archive_path, BUFFALO_M_ARCHIVE_SHA256)
+    try:
+        with zipfile.ZipFile(archive_path) as archive:
+            for name, expected_size, expected_digest in BUFFALO_M_FILES:
+                member = f"buffalo_m/{name}"
+                try:
+                    info = archive.getinfo(member)
+                except KeyError as error:
+                    raise ValueError(f"Buffalo_m 模型包缺少 {name}") from error
+                if info.file_size != expected_size:
+                    raise ValueError(f"Buffalo_m {name} 文件大小不匹配")
+
+                destination = face_dir / name
+                partial = destination.with_name(destination.name + ".download")
+                digest = hashlib.sha256()
+                try:
+                    with archive.open(info) as source, partial.open("wb") as target:
+                        while chunk := source.read(1024 * 1024):
+                            target.write(chunk)
+                            digest.update(chunk)
+                    if digest.hexdigest() != expected_digest:
+                        raise ValueError(f"Buffalo_m {name} SHA256 校验失败")
+                    partial.replace(destination)
+                except Exception:
+                    partial.unlink(missing_ok=True)
+                    raise
+    finally:
+        archive_path.unlink(missing_ok=True)
+    print("[完成] Buffalo_m SCRFD 与人脸特征模型")
+
+
 def main() -> int:
     model_dir = resolve_model_dir()
     for name, url, relative_path, digest in MODELS:
         download(name, url, model_dir / relative_path, digest)
+    install_buffalo_m(model_dir)
     print(f"模型目录：{model_dir}")
     return 0
 

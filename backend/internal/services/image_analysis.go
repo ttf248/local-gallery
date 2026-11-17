@@ -11,6 +11,10 @@ import (
 const (
 	OCRAnalyzerVersion            = "rapidocr-3.10.0-onnxruntime-1.20.2"
 	FaceAnalyzerVersion           = "yunet-2023mar-multiscale+sface-2021dec+quality-v2"
+	FaceAnalyzerBuffaloMVersion   = "buffalo-m-scrfd-2.5g-w600k-r50-v1"
+	FaceModelQualityV2            = "quality-v2"
+	FaceModelBuffaloM             = "buffalo_m"
+	DefaultFaceModel              = FaceModelQualityV2
 	previousFaceAnalyzerVersion   = "yunet-2023mar-multiscale+sface-2021dec+quality-v1"
 	olderFaceAnalyzerVersion      = "yunet-2023mar-multiscale+sface-2021dec"
 	legacyFaceAnalyzerVersion     = "yunet-2023mar+sface-2021dec"
@@ -22,8 +26,30 @@ const (
 // SupportsFaceAnalyzerVersion identifies face records that can still be read
 // while the current analyzer version is being recomputed.
 func SupportsFaceAnalyzerVersion(version string) bool {
-	return version == FaceAnalyzerVersion || version == previousFaceAnalyzerVersion ||
+	return version == FaceAnalyzerVersion || version == FaceAnalyzerBuffaloMVersion ||
+		version == previousFaceAnalyzerVersion ||
 		version == olderFaceAnalyzerVersion || version == legacyFaceAnalyzerVersion
+}
+
+func FaceAnalyzerVersionForModel(model string) (string, bool) {
+	switch model {
+	case FaceModelQualityV2:
+		return FaceAnalyzerVersion, true
+	case FaceModelBuffaloM:
+		return FaceAnalyzerBuffaloMVersion, true
+	default:
+		return "", false
+	}
+}
+
+func FaceEmbeddingDimensionForVersion(version string) int {
+	if version == FaceAnalyzerBuffaloMVersion {
+		return 512
+	}
+	if SupportsFaceAnalyzerVersion(version) {
+		return 128
+	}
+	return 0
 }
 
 // OCRAnalyzer stores local text-recognition results in the existing AI metadata batches.
@@ -84,17 +110,45 @@ func NewFaceAnalyzer(worker AIImageAnalysisWorker) (*FaceAnalyzer, error) {
 
 func (FaceAnalyzer) Type() string    { return AIJobTypeFace }
 func (FaceAnalyzer) Version() string { return FaceAnalyzerVersion }
+func (FaceAnalyzer) VersionForModel(model string) (string, bool) {
+	return FaceAnalyzerVersionForModel(model)
+}
 func (a *FaceAnalyzer) Available() (bool, string) {
 	status := a.worker.ModuleStatus(AIJobTypeFace)
 	return status.Ready, status.Error
 }
+func (a *FaceAnalyzer) AvailableForModel(model string) (bool, string) {
+	if _, valid := FaceAnalyzerVersionForModel(model); !valid {
+		return false, "invalid_face_model"
+	}
+	if status, ok := a.worker.(AIWorkerFaceModelStatus); ok {
+		profile := status.FaceModelStatus(model)
+		return profile.Ready, profile.Error
+	}
+	if model == FaceModelQualityV2 {
+		return a.Available()
+	}
+	return false, "face_model_status_unavailable"
+}
 func (a *FaceAnalyzer) Ready(ctx context.Context) error {
+	return a.ReadyForModel(ctx, FaceModelQualityV2)
+}
+func (a *FaceAnalyzer) ReadyForModel(ctx context.Context, model string) error {
 	status, err := a.worker.Status(ctx)
 	if err != nil {
 		return err
 	}
-	if !status.Modules[AIJobTypeFace].Ready {
-		return fmt.Errorf("%w: %s", ErrAIAnalyzerUnavailable, status.Modules[AIJobTypeFace].Error)
+	profile, known := status.FaceModels[model]
+	if !known && model == FaceModelQualityV2 {
+		profile = status.Modules[AIJobTypeFace]
+		known = true
+	}
+	if _, valid := FaceAnalyzerVersionForModel(model); !valid || !known || !profile.Ready {
+		reason := profile.Error
+		if reason == "" {
+			reason = "face_model_unavailable"
+		}
+		return fmt.Errorf("%w: %s", ErrAIAnalyzerUnavailable, reason)
 	}
 	return nil
 }
@@ -106,7 +160,7 @@ func (a *FaceAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput
 }
 func (a *FaceAnalyzer) AnalyzeBatch(ctx context.Context, inputs []AIAnalysisInput) ([]AIAnalysisOutput, error) {
 	return analyzeImageBatch(ctx, inputs, func(ctx context.Context, paths []string, device string) ([]AIWorkerAnalysis, error) {
-		return runImageAnalysis(a.worker, "face", ctx, paths, device)
+		return runImageAnalysisForFaceModel(a.worker, ctx, paths, device, inputs[0].FaceModel)
 	}, AIFieldFaces, func(data json.RawMessage) bool {
 		var result struct {
 			Faces []json.RawMessage `json:"faces"`
@@ -115,7 +169,8 @@ func (a *FaceAnalyzer) AnalyzeBatch(ctx context.Context, inputs []AIAnalysisInpu
 	})
 }
 func (a *FaceAnalyzer) RecordCurrent(record AIAnalysisRecord) bool {
-	return record.Type == AIJobTypeFace && (record.Status == "faces_found" || record.Status == "no_faces") && record.ModuleVersion == a.Version()
+	return record.Type == AIJobTypeFace && (record.Status == "faces_found" || record.Status == "no_faces") &&
+		SupportsFaceAnalyzerVersion(record.ModuleVersion)
 }
 
 type imageBatchAnalyzer func(context.Context, []string, string) ([]AIWorkerAnalysis, error)
@@ -199,6 +254,23 @@ func runImageAnalysis(worker AIImageAnalysisWorker, module string, ctx context.C
 		return computeWorker.AnalyzeOCROnDevice(ctx, paths, device)
 	}
 	return computeWorker.AnalyzeFacesOnDevice(ctx, paths, device)
+}
+
+func runImageAnalysisForFaceModel(worker AIImageAnalysisWorker, ctx context.Context, paths []string, device, model string) ([]AIWorkerAnalysis, error) {
+	if model == "" || model == FaceModelQualityV2 {
+		return runImageAnalysis(worker, AIJobTypeFace, ctx, paths, device)
+	}
+	if _, valid := FaceAnalyzerVersionForModel(model); !valid {
+		return nil, ErrAIAnalyzerUnavailable
+	}
+	computeWorker, ok := worker.(AIWorkerFaceModelCompute)
+	if !ok {
+		return nil, ErrAIAnalyzerUnavailable
+	}
+	if device == "" {
+		device = "auto"
+	}
+	return computeWorker.AnalyzeFacesWithModelOnDevice(ctx, paths, device, model)
 }
 
 func validateImageGPU(ctx context.Context, worker AIImageAnalysisWorker, device string) error {

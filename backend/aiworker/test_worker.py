@@ -504,6 +504,41 @@ class WorkerTests(unittest.TestCase):
             collapsed_landmarks[4:14] = [52, 48, 53, 49, 52, 50, 52, 51, 53, 51]
             self.assertFalse(worker.valid_yunet_detection(collapsed_landmarks, (120, 120, 3)))
 
+    def test_buffalo_m_scrfd_decodes_boxes_and_five_landmarks(self):
+        outputs = [
+            np.zeros((12800, 1), dtype=np.float32),
+            np.zeros((3200, 1), dtype=np.float32),
+            np.zeros((800, 1), dtype=np.float32),
+            np.zeros((12800, 4), dtype=np.float32),
+            np.zeros((3200, 4), dtype=np.float32),
+            np.zeros((800, 4), dtype=np.float32),
+            np.zeros((12800, 10), dtype=np.float32),
+            np.zeros((3200, 10), dtype=np.float32),
+            np.zeros((800, 10), dtype=np.float32),
+        ]
+        position = (20 * 80 + 30) * worker.BUFFALO_M_ANCHORS_PER_LOCATION + 1
+        outputs[0][position, 0] = 0.9
+        outputs[3][position] = [4, 5, 6, 7]
+        outputs[6][position] = [1, 2, 2, 2, 3, 3, 2, 4, 3, 4]
+
+        class Detector:
+            def run(self, _names, _feed):
+                return outputs
+
+        runtime = {
+            "detector": Detector(),
+            "detector_input": "input.1",
+            "detector_outputs": [str(index) for index in range(9)],
+        }
+        with patch.object(worker, "cv2", cv2), patch.object(worker, "np", np):
+            faces = worker.detect_buffalo_m(np.zeros((640, 640, 3), dtype=np.uint8), runtime)
+            self.assertTrue(worker.valid_yunet_detection(faces[0], (640, 640, 3), 0.5))
+
+        self.assertEqual(1, len(faces))
+        np.testing.assert_allclose(faces[0][:4], [208, 120, 80, 96])
+        np.testing.assert_allclose(faces[0][4:14], [248, 176, 256, 176, 264, 184, 256, 192, 264, 192])
+        self.assertAlmostEqual(0.9, float(faces[0][14]))
+
     def test_sface_alignment_matches_svd_reference(self):
         rng = np.random.default_rng(20261115)
         destination = np.asarray([
@@ -1087,6 +1122,29 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(12, worker.FACE_GPU_WORKERS)
         choose_workers.assert_called_once_with(["one", "two"])
         self.assertEqual(worker.FACE_GPU_WORKERS, run_analysis.call_args.kwargs["max_workers"])
+
+    def test_buffalo_m_gpu_action_uses_its_captured_profile_and_worker_limit(self):
+        response = {"items": []}
+        with patch.object(
+            worker,
+            "face_model_status",
+            return_value={worker.FACE_MODEL_BUFFALO_M: {"ready": True}},
+        ), patch.object(worker, "gpu_available", return_value=True), patch.object(
+            worker, "run_image_analysis", return_value=response
+        ) as run_analysis, patch.object(
+            worker, "analyze_face_image", return_value={"data": {"faces": []}}
+        ) as analyze:
+            result = worker.process({
+                "action": "face_images",
+                "device": "gpu",
+                "model": worker.FACE_MODEL_BUFFALO_M,
+                "paths": ["one.jpg", "two.jpg"],
+            })
+            run_analysis.call_args.args[1]("one.jpg")
+
+        self.assertIs(response, result)
+        self.assertEqual(worker.BUFFALO_M_GPU_WORKERS, run_analysis.call_args.kwargs["max_workers"])
+        analyze.assert_called_once_with("one.jpg", "gpu", worker.FACE_MODEL_BUFFALO_M)
 
     def test_face_model_initialization_is_shared_by_parallel_workers(self):
         sessions = []

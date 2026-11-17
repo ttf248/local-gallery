@@ -45,6 +45,10 @@ type aiJobHardwareRequest struct {
 	GPUEnabled *bool `json:"gpuEnabled"`
 }
 
+type aiJobFaceModelRequest struct {
+	Model string `json:"model"`
+}
+
 // AIJobsHandler 返回任务历史、活动任务与每日调度设置。
 func AIJobsHandler(service *services.AIJobService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
@@ -343,6 +347,45 @@ func AIJobHardwareHandler(service *services.AIJobService) fiber.Handler {
 		settings, err := service.SetGPUEnabled(*body.GPUEnabled)
 		if err != nil {
 			return writeError(c, fiber.StatusInternalServerError, "analysis_hardware_update_failed", "hardware settings could not be saved")
+		}
+		return c.JSON(fiber.Map{"ok": true, "settings": settings})
+	}
+}
+
+func AIJobFaceModelHandler(service *services.AIJobService, people *services.PeopleService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if service == nil {
+			return writeError(c, fiber.StatusServiceUnavailable, "analysis_unavailable", "analysis service is unavailable")
+		}
+		var body aiJobFaceModelRequest
+		if err := c.BodyParser(&body); err != nil || body.Model == "" {
+			return writeError(c, fiber.StatusBadRequest, "invalid_face_model", "model must identify a supported face model")
+		}
+		model := strings.TrimSpace(body.Model)
+		if _, valid := services.FaceAnalyzerVersionForModel(model); !valid {
+			return writeError(c, fiber.StatusBadRequest, "invalid_face_model", "model must identify a supported face model")
+		}
+		previousModel := service.FaceModel()
+		settings, err := service.SetFaceModel(model)
+		if err != nil {
+			if errors.Is(err, services.ErrAIJobActive) {
+				return writeError(c, fiber.StatusConflict, "analysis_job_active", "finish face analysis before changing the model")
+			}
+			return writeError(c, fiber.StatusInternalServerError, "face_model_update_failed", "face model setting could not be saved")
+		}
+		if previousModel != settings.FaceModel && people != nil {
+			version, _ := services.FaceAnalyzerVersionForModel(settings.FaceModel)
+			if err := people.SetFaceAnalyzerVersion(version); err != nil {
+				_, _ = service.SetFaceModel(previousModel)
+				return writeError(c, fiber.StatusInternalServerError, "people_index_unavailable", "people index could not be prepared")
+			}
+			if err := people.Sync(service.Records(services.AIJobTypeFace)); err != nil {
+				previousVersion, _ := services.FaceAnalyzerVersionForModel(previousModel)
+				_, _ = service.SetFaceModel(previousModel)
+				_ = people.SetFaceAnalyzerVersion(previousVersion)
+				_ = people.Sync(service.Records(services.AIJobTypeFace))
+				return writeError(c, fiber.StatusInternalServerError, "people_index_unavailable", "people index could not be prepared")
+			}
 		}
 		return c.JSON(fiber.Map{"ok": true, "settings": settings})
 	}

@@ -108,6 +108,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	s.mu.Lock()
 	modules := s.modulesLocked()
 	peopleEnabled := s.settings.PeopleEnabled
+	faceModel := s.settings.FaceModel
 	facts := make([]aiRecordFact, 0, len(s.records))
 	for _, record := range s.records {
 		facts = append(facts, aiRecordFact{
@@ -123,7 +124,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	versions := make(map[string]string, len(s.analyzers))
 	validators := make(map[string]AIAnalyzerRecordValidator, len(s.analyzers))
 	for moduleType, analyzer := range s.analyzers {
-		versions[moduleType] = analyzer.Version()
+		versions[moduleType] = aiAnalyzerVersion(analyzer, faceModel)
 		validators[moduleType], _ = analyzer.(AIAnalyzerRecordValidator)
 	}
 	s.mu.Unlock()

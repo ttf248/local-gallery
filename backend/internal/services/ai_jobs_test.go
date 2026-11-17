@@ -89,6 +89,19 @@ func TestRecordsIncludingStaleVersionsPreservesDataForIndexMigration(t *testing.
 	}
 }
 
+func TestNewFaceJobCapturesSelectedModelAndVersion(t *testing.T) {
+	service := &AIJobService{
+		now:       time.Now,
+		analyzers: map[string]AIAnalyzer{AIJobTypeFace: &FaceAnalyzer{}},
+		settings:  AIJobSettings{FaceModel: FaceModelBuffaloM},
+	}
+	job := service.newJobLocked(AIJobTypeFace, AIJobModeIncremental)
+	if job.FaceModel != FaceModelBuffaloM || job.ModuleVersion != FaceAnalyzerBuffaloMVersion ||
+		job.Checkpoint.ModuleVersion != FaceAnalyzerBuffaloMVersion {
+		t.Fatalf("face job did not capture Buffalo_m profile: %+v", job)
+	}
+}
+
 func TestAIJobStagesSeparatePreparationFromModelLoadingAndInference(t *testing.T) {
 	root := t.TempDir()
 	files := writeAIJobImages(t, root, AIBatchSize+1)

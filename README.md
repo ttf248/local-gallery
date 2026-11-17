@@ -11,7 +11,7 @@ Local Gallery 是一款在本机运行的照片、漫画与视频画廊。Go 后
 | 照片 | 多目录合并为媒体库；按相册、集合、标签、年份和 GPS 地点浏览，足迹页抬头一条带（时间跨度筛选与全库规模），正文右栏是一块把照片坐标聚成网格的地图，左边是一段段行程；智能相册专页只展示精选推荐，时间、地点、人物、场景详细分类仍由后台计算，用于推荐生成和来源相册内浏览；中文语义搜索与以图搜图；照片墙、大图预览、并排对比、精选、收藏、最近浏览。 |
 | 漫画 | 独立作品列表；单页、连续、双页与 RTL 阅读；缩放、旋转、目录、阅读进度恢复、未读列表与最近阅读。 |
 | 后台任务 | 扫描进度与取消；EXIF/GPS、OCR、人脸分析和语义向量的全量或增量任务；任务中心支持按序启动全部已就绪模块、始终查看等待队列、筛选与清理历史记录、暂停、继续、失败项重试、重启恢复与每日自动计划（按时依次扫描媒体目录、运行所选分析模块并刷新智能相册；错过时下次启动补跑），并在同一页给出本机存储：派生缓存占用与清理、各分析模块的模型权重与产物、相对路径与本机绝对路径。模型任务默认强制使用 GPU，可切换为 CPU；GPU 不可用或推理失败时会将原因写入任务记录。启动前先给出本次要处理的张数与预计耗时（增量与全量并排对比，耗时按历史任务速度估算）。任务记录可展开查看该次任务自己的产物目录与占用，失败图片给出相对路径。任务中心还能手动生成智能相册分组：增量更新只重建有变化的相册与维度，强制重建全部重算；生成在后台跑，有进度也能中途取消。 |
-| 本机 AI | Chinese-CLIP 中文语义搜索和图片相似检索；RapidOCR 识别文字、支持 OCR 关键词搜索，并可与相册、年份、GPS、人物、收藏和精选条件组合；YuNet + SFace 检测人脸、生成本地特征、查找相似照片并建立可改名/合并/拆分/隐藏的人物候选相册。人物分析默认关闭，须在任务中心显式启用。 |
+| 本机 AI | Chinese-CLIP 中文语义搜索和图片相似检索；RapidOCR 识别文字、支持 OCR 关键词搜索，并可与相册、年份、GPS、人物、收藏和精选条件组合；任务中心可切换 YuNet + SFace（quality-v2）或 SCRFD + ResNet50（Buffalo_m）做人脸检测与特征提取、相似照片检索和人物候选分组。人物分析默认关闭，须在任务中心显式启用。 |
 | 视频与媒体 | 浏览器原生播放和 Range 请求；可选 FFmpeg 提供视频封面、元数据、faststart、H.264/AAC 转码及 HEIC/HEIF/TIFF 转换。 |
 | 本机管理 | 多媒体根目录、派生缓存清理与重建、状态备份与恢复、明暗主题、键盘与触摸操作。照片级「精选」与相册级「收藏」分开保存。 |
 
@@ -133,7 +133,7 @@ backend\aiworker\setup.bat
 aiworker\setup.bat
 ~~~
 
-需要改代理端口时，编辑两个 BAT 脚本中的 `http_proxy`、`https_proxy`。脚本校验 Chinese-CLIP、YuNet 和 SFace 权重的 SHA256，并实际检查 OCR、人脸推理。安装后重启应用，在「任务中心」运行相应任务；人物分析需先启用。模型来源：[OpenCV Zoo YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) 和 [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface)。
+需要改代理端口时，编辑两个 BAT 脚本中的 `http_proxy`、`https_proxy`。脚本校验 Chinese-CLIP、YuNet、SFace 和 Buffalo_m 权重的 SHA256，并实际检查 OCR 与两种人脸模型推理。安装后重启应用，在「任务中心」运行相应任务；人物分析需先启用。模型来源：[OpenCV Zoo YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)、[SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) 和 [InsightFace Buffalo_m](https://github.com/deepinsight/insightface/releases/tag/model-zoo)。
 
 Python 虚拟环境位于 Worker 目录的 `.venv/`，模型按配置保存在 `<cacheDir>/derived/ai/models/`：
 
@@ -141,7 +141,11 @@ Python 虚拟环境位于 Worker 目录的 `.venv/`，模型按配置保存在 `
 clip_cn_vit-b-16.pt
 face/face_detection_yunet_2023mar.onnx
 face/face_recognition_sface_2021dec.onnx
+face/buffalo_m/det_2.5g.onnx
+face/buffalo_m/w600k_r50.onnx
 ~~~
+
+任务中心的人脸模型选择同时作用于手动和每日增量任务。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；切换模型后，尚无该模型版本结果的照片会被增量任务重新分析。
 
 默认 `cacheDir` 是进程工作目录下的 `.local-gallery`。虚拟环境位于 Worker 目录的 `.venv/`；模型保存在 `<cacheDir>/derived/ai/models/`，不包含在发布压缩包中。Chinese-CLIP 权重约 753 MB；OCR 模型保存在 `derived/ai/models/ocr/`。
 
@@ -187,7 +191,7 @@ scripts\install-ffmpeg.bat
 | backend/ | go vet ./... | 后端静态检查 |
 | backend/ | go test ./internal/services -run TestOCRSearchQualityEvaluation -v | 可复现 OCR 中文空格、断行、标点与近似误识评测 |
 | backend/ | go test ./internal/services -run '^$' -bench '^BenchmarkVectorIndexSearch100K$' -benchtime=31x -benchmem | 10 万向量 Top-K 延迟与分配基准 |
-| backend/aiworker/ | python test_worker.py | Worker 权重校验、模型缓存、OOM 处理、强制 GPU 不回退与 CPU 状态测试 |
+| backend/aiworker/ | python test_worker.py | Worker 权重校验、模型缓存、OOM 处理、强制 GPU 不回退、Buffalo_m 解码与 CPU 状态测试 |
 | backend/aiworker/ | `python evaluate_quality.py --model-dir <cacheDir>/derived/ai/models --device gpu --profile-device-switches --output <ignored-path>.json` | 确定性中文语义/OCR 质量集与设备切换基准；输出写仓库忽略路径，不读取用户媒体 |
 | frontend/ | npm run lint | 前端静态检查 |
 | frontend/ | npm run test | Vitest 单元与组件测试 |

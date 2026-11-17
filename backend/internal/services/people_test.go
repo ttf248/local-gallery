@@ -31,6 +31,56 @@ func peopleTestRecord(resourceID string, faceVectors ...[]float32) AIAnalysisRec
 	}
 }
 
+func TestPeopleServiceKeepsSelectedFaceModelEmbeddingDimensionIsolated(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	qualityVector := peopleTestVector(0, 0)
+	buffaloVector := make([]float32, peopleBuffaloMDimension)
+	buffaloVector[0] = 1
+	qualityRecord := peopleTestRecord("same_photo", qualityVector)
+	buffaloRecord := peopleTestRecord("same_photo", buffaloVector)
+	buffaloRecord.ModuleVersion = FaceAnalyzerBuffaloMVersion
+	type face struct {
+		Box       []float32 `json:"box"`
+		Score     float32   `json:"score"`
+		Embedding []float32 `json:"embedding"`
+	}
+	var data struct {
+		Faces []face `json:"faces"`
+	}
+	if err := json.Unmarshal(buffaloRecord.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	data.Faces[0].Score = 0.65
+	buffaloRecord.Data, err = json.Marshal(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerBuffaloMVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.Sync([]AIAnalysisRecord{qualityRecord, buffaloRecord}); err != nil {
+		t.Fatal(err)
+	}
+	if len(people.AllFaces()) != 1 || len(people.faces[PersonFaceKey("same_photo", 0)].embedding) != peopleBuffaloMDimension {
+		t.Fatalf("Buffalo_m index mixed or rejected vectors: faces=%d dimension=%d", len(people.AllFaces()), len(people.faces[PersonFaceKey("same_photo", 0)].embedding))
+	}
+
+	if err := people.SetFaceAnalyzerVersion(FaceAnalyzerVersion); err != nil {
+		t.Fatal(err)
+	}
+	if err := people.Sync([]AIAnalysisRecord{qualityRecord, buffaloRecord}); err != nil {
+		t.Fatal(err)
+	}
+	if len(people.AllFaces()) != 1 || len(people.faces[PersonFaceKey("same_photo", 0)].embedding) != peopleEmbeddingDimension {
+		t.Fatalf("quality-v2 index mixed or rejected vectors: faces=%d dimension=%d", len(people.AllFaces()), len(people.faces[PersonFaceKey("same_photo", 0)].embedding))
+	}
+}
+
 func peopleTestVector(axis int, noise float32) []float32 {
 	vector := make([]float32, peopleEmbeddingDimension)
 	vector[axis] = 1

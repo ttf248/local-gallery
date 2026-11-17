@@ -201,11 +201,11 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/ai/jobs` / `POST /api/ai/jobs`
 
-读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用 YuNet 检测人脸并由 SFace 生成相似检索特征。后三者需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
+读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型；切换模型会让新模型版本的结果进入增量清单。人脸记录按每张照片保存当前生效的一份，因此切换后首次增量可能需要重算大部分照片。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。后三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
 
 任务快照的 `jobs` 按创建时间倒序提供任务记录，`active` 是当前执行或暂停的任务，`queue` 是按执行顺序排列的等待任务 ID，不包含 `active`。任务记录包含等待队列任务以及所有终态记录。队列 ID 与任务状态会一起持久化到 `state/ai_jobs.json`；旧状态文件缺少 `queue` 时会按待执行任务的创建顺序恢复，服务重启时未完成的当前任务会插回队首续跑。
 
-任务状态为 `pending`、`running`、`paused`、`completed`、`failed`、`cancelled`。快照包含阶段、总数、已处理/跳过/失败/完成数、检查点、耗时、速度、开始/结束时间及错误项。`stage` 会报告 GPU 环境检查、等待媒体库、整理分析清单、准备模型与首批推理，以及后续的模块批量推理。首批阶段可能包含模型冷启动。任务的 `computeDevice` 是创建时记录的 `cpu` 或 `gpu`：元数据始终使用 CPU，其他模型任务默认强制使用 GPU；关闭 GPU 设置后新任务改用 CPU，已排队任务不变。旧状态里的未完成任务若没有设备记录，恢复时按当前 GPU 设置补录设备，元数据任务仍使用 CPU。设备不可用或 GPU 推理失败时，任务以 `failed` 结束，并在 `errorCode` 与 `error` 中记录原因。错误项包含资源 ID、根目录别名下的相对图片路径、稳定错误码、脱敏原因和时间；不返回文件系统绝对路径。任务在后台按 32 张一批提交，重启后自动恢复运行中任务。
+任务状态为 `pending`、`running`、`paused`、`completed`、`failed`、`cancelled`。快照包含阶段、总数、已处理/跳过/失败/完成数、检查点、耗时、速度、开始/结束时间及错误项；人脸任务另含 `faceModel`。`stage` 会报告 GPU 环境检查、等待媒体库、整理分析清单、准备模型与首批推理，以及后续的模块批量推理。首批阶段可能包含模型冷启动。任务的 `computeDevice` 是创建时记录的 `cpu` 或 `gpu`：元数据始终使用 CPU，其他模型任务默认强制使用 GPU；关闭 GPU 设置后新任务改用 CPU，已排队任务不变。旧状态里的未完成任务若没有设备记录，恢复时按当前 GPU 设置补录设备，元数据任务仍使用 CPU。设备不可用或 GPU 推理失败时，任务以 `failed` 结束，并在 `errorCode` 与 `error` 中记录原因。错误项包含资源 ID、根目录别名下的相对图片路径、稳定错误码、脱敏原因和时间；不返回文件系统绝对路径。任务在后台按 32 张一批提交，重启后自动恢复运行中任务。
 
 快照里另有几个按持久化计数推导的进度字段，以及两份产出统计：
 
@@ -324,15 +324,19 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/ai/jobs/settings` / `PUT /api/ai/jobs/settings`
 
-每日计划请求字段为 `{ "dailyEnabled": true, "dailyTime": "03:00", "dailyScan": true, "dailyModules": ["metadata", "ocr"], "dailySmartAlbums": true, "peopleEnabled": false }`。新安装默认开启每日扫描和智能相册刷新，分析模块默认选择 `metadata`；`peopleEnabled` 默认关闭。开启人物分析后才允许启动 `face` 任务，也可将其加入每日计划。关闭时会从计划模块中移除 `face`；若人脸任务仍在排队、运行或暂停，返回 `409 analysis_job_active`。时间格式为 24 小时 `HH:MM`；开启计划时至少选择扫描、智能相册或一个已安装的分析模块。未安装模块、没有任何已选任务或无效时间返回 `400 invalid_analysis_settings`。到时后按“扫描媒体目录 → 所选分析模块的增量任务 → 刷新所有照片相册的四个智能分组维度”顺序执行；扫描失败会停止后续步骤，未就绪的分析模块会跳过，其他可运行模块继续执行。计划会等待本轮分析全部结束后再刷新智能相册；任一已运行分析任务失败/取消，或有选中模块未就绪时，仍用已有结果刷新分组，但计划状态标记为 `failed`，错误码分别为 `analysis_failed` 或 `analysis_module_unavailable`，不会误报完成。智能相册刷新只使用本轮与已有的分析结果：时间/地点依赖 `metadata`，场景依赖 `embedding`，人物依赖已启用的 `face`；计划页会提示所选模块能支持的维度，并展示分析失败或未就绪状态，不会为未选维度隐式启动高耗时分析。设置响应还包含 `gpuEnabled`、`lastScheduledDate`、`lastScheduledStatus`、`lastScheduledStage` 与安全错误码 `lastScheduledError`。服务错过计划日期后启动时补跑一次，同一天不重复执行；服务关闭期间错过计划时，会在下次启动后补跑。旧状态文件缺少 `dailyModules` 时按 metadata 恢复，缺少 `dailyScan` 或 `dailySmartAlbums` 时按开启处理，缺少 `peopleEnabled` 时按关闭处理，缺少 `gpuEnabled` 时启用 GPU。
+每日计划请求字段为 `{ "dailyEnabled": true, "dailyTime": "03:00", "dailyScan": true, "dailyModules": ["metadata", "ocr"], "dailySmartAlbums": true, "peopleEnabled": false }`。新安装默认开启每日扫描和智能相册刷新，分析模块默认选择 `metadata`；`peopleEnabled` 默认关闭。人脸任务使用当前保存的 `faceModel`，该选择同样用于每日增量分析。开启人物分析后才允许启动 `face` 任务，也可将其加入每日计划。关闭时会从计划模块中移除 `face`；若人脸任务仍在排队、运行或暂停，返回 `409 analysis_job_active`。时间格式为 24 小时 `HH:MM`；开启计划时至少选择扫描、智能相册或一个已安装的分析模块。未安装模块、没有任何已选任务或无效时间返回 `400 invalid_analysis_settings`。到时后按“扫描媒体目录 → 所选分析模块的增量任务 → 刷新所有照片相册的四个智能分组维度”顺序执行；扫描失败会停止后续步骤，未就绪的分析模块会跳过，其他可运行模块继续执行。计划会等待本轮分析全部结束后再刷新智能相册；任一已运行分析任务失败/取消，或有选中模块未就绪时，仍用已有结果刷新分组，但计划状态标记为 `failed`，错误码分别为 `analysis_failed` 或 `analysis_module_unavailable`，不会误报完成。智能相册刷新只使用本轮与已有的分析结果：时间/地点依赖 `metadata`，场景依赖 `embedding`，人物依赖已启用的 `face`；计划页会提示所选模块能支持的维度，并展示分析失败或未就绪状态，不会为未选维度隐式启动高耗时分析。设置响应还包含 `faceModel`、`gpuEnabled`、`lastScheduledDate`、`lastScheduledStatus`、`lastScheduledStage` 与安全错误码 `lastScheduledError`。服务错过计划日期后启动时补跑一次，同一天不重复执行；服务关闭期间错过计划时，会在下次启动后补跑。旧状态文件缺少 `dailyModules` 时按 metadata 恢复，缺少 `dailyScan` 或 `dailySmartAlbums` 时按开启处理，缺少 `peopleEnabled` 时按关闭处理，缺少 `gpuEnabled` 时启用 GPU；缺少 `faceModel` 时按 `quality-v2` 恢复。
 
 ### `PUT /api/ai/jobs/hardware`
 
 请求为 `{ "gpuEnabled": true | false }`，持久化新任务的硬件偏好。默认开启；向量、OCR 与人脸任务强制使用 NVIDIA GPU，不自动切换到 CPU，GPU 不可用或推理失败时任务记录 `gpu_unavailable` 或 `gpu_inference_failed`。关闭后新建任务使用 CPU。元数据解析始终使用 CPU，修改偏好不会改变已排队任务。缺少布尔字段或 JSON 无效返回 `400 invalid_analysis_hardware`；保存失败返回 `500 analysis_hardware_update_failed`。
 
+### `PUT /api/ai/jobs/face-model`
+
+请求为 `{ "model": "quality-v2" | "buffalo_m" }`，保存新建人脸任务和每日计划使用的模型。只有模型权重已就绪时才能通过任务中心启动对应分析；任务快照保留创建时的模型。切换期间若人脸任务或每日计划正在运行，返回 `409 analysis_job_active`；不支持的模型返回 `400 invalid_face_model`。设置保存失败返回 `500 face_model_update_failed`；切换后重建当前人物索引失败会恢复原模型设置并返回 `500 people_index_unavailable`。模型状态通过 `GET /api/ai/semantic/status` 的 `faceModels` 返回，包含 `ready`、`version` 和可选错误码。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；两种向量空间严格隔离，不混合参与人物分组或人脸相似检索。切换模型后目标版本尚无结果的照片会在下次增量任务中分析。
+
 ### `GET /api/ai/semantic/status`
 
-返回本机 Python、PyTorch、CUDA/GPU、ONNX Runtime CUDA Execution Provider、Chinese-CLIP SHA256 校验、向量索引版本与覆盖率，以及 `modules.ocr` 与 `modules.face` 的依赖/权重状态。`runtimeReady` 表示 Chinese-CLIP 推理依赖可导入，`modelValid` 表示权重匹配固定 revision；`cudaAvailable` 与 `cudaExecutionProviderAvailable` 分别报告 PyTorch CUDA 和 ONNX Runtime CUDA 是否可用。关闭 GPU 强制设置时仍可使用 CPU。OCR 和人脸检测通过 `modules` 独立报告依赖与权重就绪状态，不受 Chinese-CLIP 权重缺失影响。`coverage` 按当前资源快照和有效文件指纹统计已索引数/照片数。
+返回本机 Python、PyTorch、CUDA/GPU、ONNX Runtime CUDA Execution Provider、Chinese-CLIP SHA256 校验、向量索引版本与覆盖率，以及 `modules.ocr`、`modules.face` 和逐项的 `faceModels.quality-v2` / `faceModels.buffalo_m` 状态。`runtimeReady` 表示 Chinese-CLIP 推理依赖可导入，`modelValid` 表示权重匹配固定 revision；`cudaAvailable` 与 `cudaExecutionProviderAvailable` 分别报告 PyTorch CUDA 和 ONNX Runtime CUDA 是否可用。关闭 GPU 强制设置时仍可使用 CPU。OCR 和两种人脸模型通过各自状态独立报告依赖与权重就绪情况，不受 Chinese-CLIP 权重缺失影响。`coverage` 按当前资源快照和有效文件指纹统计已索引数/照片数。
 
 ### `GET /api/storage/usage`
 

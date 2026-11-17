@@ -50,11 +50,27 @@ OCR_RECOGNIZER_SHA256 = "6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe21
 FACE_GPU_WORKERS = 12
 FACE_GPU_LARGE_IMAGE_WORKERS = 4
 FACE_GPU_TWELVE_WORKER_PIXEL_LIMIT = 4_000_000
+BUFFALO_M_GPU_WORKERS = 4
 YUNET_FILE = "face_detection_yunet_2023mar.onnx"
 YUNET_SHA256 = "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4"
 SFACE_FILE = "face_recognition_sface_2021dec.onnx"
 SFACE_SHA256 = "0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79"
 FACE_VERSION = "yunet-2023mar-multiscale+sface-2021dec+quality-v2"
+FACE_MODEL_QUALITY_V2 = "quality-v2"
+FACE_MODEL_BUFFALO_M = "buffalo_m"
+FACE_MODEL_DEFAULT = FACE_MODEL_QUALITY_V2
+FACE_MODELS = (FACE_MODEL_QUALITY_V2, FACE_MODEL_BUFFALO_M)
+BUFFALO_M_VERSION = "buffalo-m-scrfd-2.5g-w600k-r50-v1"
+BUFFALO_M_DETECTOR_FILE = "det_2.5g.onnx"
+BUFFALO_M_DETECTOR_SHA256 = "041f73f47371333d1d17a6fee6c8ab4e6aecabefe398ff32cca4e2d5eaee0af9"
+BUFFALO_M_RECOGNIZER_FILE = "w600k_r50.onnx"
+BUFFALO_M_RECOGNIZER_SHA256 = "4c06341c33c2ca1f86781dab0e829f88ad5b64be9fba56e56bc9ebdefc619e43"
+BUFFALO_M_DETECTION_THRESHOLD = 0.5
+BUFFALO_M_DETECTION_STRIDES = (8, 16, 32)
+BUFFALO_M_ANCHORS_PER_LOCATION = 2
+BUFFALO_M_DETECTION_SIZE = 640
+BUFFALO_M_RECOGNITION_SIZE = 112
+BUFFALO_M_EMBEDDING_DIMENSION = 512
 YUNET_INPUT_SIZE = 640
 YUNET_SCORE_THRESHOLD = 0.75
 YUNET_MIN_FACE_SIDE = 32
@@ -79,6 +95,7 @@ np = None
 ocr_runtime_error = ""
 ocr_gpu_runtime_failed = False
 face_runtime_error = ""
+face_profile_runtime_errors = {}
 model_file_validation = {}
 last_model_activity = None
 
@@ -101,7 +118,7 @@ def release_idle_models(now=None) -> bool:
         model_device == "cuda"
         or "cuda" in model_cache
         or "gpu" in rapid_ocr
-        or "gpu" in face_models
+        or any(key.endswith(":gpu") or key == "gpu" for key in face_models)
     )
     model = None
     model_device = None
@@ -178,6 +195,7 @@ def status() -> dict:
             "ocr": ocr_module_status(),
             "face": face_module_status(),
         },
+        "faceModels": face_model_status(),
     }
     if torch is not None:
         result["torchVersion"] = torch.__version__
@@ -273,6 +291,31 @@ def face_module_status() -> dict:
         "ready": not error,
         "version": FACE_VERSION,
         **({"error": error} if error else {}),
+    }
+
+
+def face_model_status() -> dict:
+    quality = face_module_status()
+    buffalo_error = face_profile_runtime_errors.get(FACE_MODEL_BUFFALO_M, "")
+    buffalo_detector = model_dir / "face" / FACE_MODEL_BUFFALO_M / BUFFALO_M_DETECTOR_FILE
+    buffalo_recognizer = model_dir / "face" / FACE_MODEL_BUFFALO_M / BUFFALO_M_RECOGNIZER_FILE
+    if not buffalo_error:
+        try:
+            if importlib.util.find_spec("cv2") is None or importlib.util.find_spec("onnxruntime") is None:
+                buffalo_error = "face_dependencies_missing"
+            elif not file_state(buffalo_detector, BUFFALO_M_DETECTOR_SHA256) or not file_state(
+                buffalo_recognizer, BUFFALO_M_RECOGNIZER_SHA256
+            ):
+                buffalo_error = "face_model_missing_or_checksum_invalid"
+        except Exception:
+            buffalo_error = "face_dependencies_missing"
+    return {
+        FACE_MODEL_QUALITY_V2: quality,
+        FACE_MODEL_BUFFALO_M: {
+            "ready": not buffalo_error,
+            "version": BUFFALO_M_VERSION,
+            **({"error": buffalo_error} if buffalo_error else {}),
+        },
     }
 
 
@@ -726,24 +769,54 @@ def invalidate_gpu_ocr_engine() -> None:
     rapid_ocr.pop("gpu", None)
 
 
-def load_face_models(device_mode="cpu"):
+def load_face_models(device_mode="cpu", face_model=FACE_MODEL_DEFAULT):
     global face_models, cv2, np, face_runtime_error
-    state = face_module_status()
+    if face_model not in FACE_MODELS:
+        raise RuntimeError("face_model_unknown")
+    state = face_module_status() if face_model == FACE_MODEL_QUALITY_V2 else face_model_status().get(face_model, {})
     if not state["ready"]:
         face_runtime_error = state.get("error", "face_dependencies_missing")
         raise RuntimeError(face_runtime_error)
     mode = "gpu" if device_mode == "gpu" else "cpu"
     if mode == "gpu" and not gpu_available(require_onnx=True):
         raise RuntimeError("gpu_unavailable")
-    if mode in face_models:
-        return face_models[mode]
+    cache_key = f"{face_model}:{mode}"
+    if cache_key in face_models:
+        return face_models[cache_key]
     with face_models_lock:
-        if mode in face_models:
-            return face_models[mode]
+        if cache_key in face_models:
+            return face_models[cache_key]
         try:
             import cv2 as cv2_module
             import numpy as numpy_module
             cv2, np = cv2_module, numpy_module
+            if face_model == FACE_MODEL_BUFFALO_M:
+                import onnxruntime
+                detector_path = str(model_dir / "face" / FACE_MODEL_BUFFALO_M / BUFFALO_M_DETECTOR_FILE)
+                recognizer_path = str(model_dir / "face" / FACE_MODEL_BUFFALO_M / BUFFALO_M_RECOGNIZER_FILE)
+                providers = ["CUDAExecutionProvider"] if mode == "gpu" else ["CPUExecutionProvider"]
+                detector = onnxruntime.InferenceSession(detector_path, providers=providers)
+                recognizer = onnxruntime.InferenceSession(recognizer_path, providers=providers)
+                if any(
+                    not session.get_providers()
+                    or session.get_providers()[0] != providers[0]
+                    for session in (detector, recognizer)
+                ):
+                    raise RuntimeError("gpu_unavailable" if mode == "gpu" else "face_inference_failed")
+                outputs = detector.get_outputs()
+                if len(outputs) != 9:
+                    raise RuntimeError("face_model_load_failed")
+                face_models[cache_key] = {
+                    "device": mode,
+                    "profile": face_model,
+                    "detector": detector,
+                    "recognizer": recognizer,
+                    "detector_input": detector.get_inputs()[0].name,
+                    "recognizer_input": recognizer.get_inputs()[0].name,
+                    "detector_outputs": [output.name for output in outputs],
+                }
+                return face_models[cache_key]
+
             detector_path = str(model_dir / "face" / YUNET_FILE)
             recognizer_path = str(model_dir / "face" / SFACE_FILE)
             if mode == "gpu":
@@ -760,10 +833,14 @@ def load_face_models(device_mode="cpu"):
                     for session in (detector, recognizer)
                 ):
                     raise RuntimeError("gpu_unavailable")
-                face_models[mode] = {"device": mode, "detector": detector, "recognizer": recognizer}
+                face_models[cache_key] = {
+                    "device": mode, "profile": face_model,
+                    "detector": detector, "recognizer": recognizer,
+                }
             else:
-                face_models[mode] = {
+                face_models[cache_key] = {
                     "device": mode,
+                    "profile": face_model,
                     "detector": cv2.FaceDetectorYN_create(
                         detector_path, "", (320, 320), YUNET_SCORE_THRESHOLD, 0.3, 5000
                     ),
@@ -774,9 +851,12 @@ def load_face_models(device_mode="cpu"):
         except Exception:
             if mode == "gpu":
                 raise RuntimeError("gpu_inference_failed") from None
-            face_runtime_error = "face_model_load_failed"
-            raise RuntimeError(face_runtime_error) from None
-        return face_models[mode]
+            if face_model == FACE_MODEL_QUALITY_V2:
+                face_runtime_error = "face_model_load_failed"
+                raise RuntimeError(face_runtime_error) from None
+            face_profile_runtime_errors[face_model] = "face_model_load_failed"
+            raise RuntimeError(face_profile_runtime_errors[face_model]) from None
+        return face_models[cache_key]
 
 
 def analyze_ocr_image(path: str, device_mode="cpu") -> dict:
@@ -1006,6 +1086,113 @@ def detect_yunet_cpu(image, detector):
     return yunet_nms(faces)
 
 
+def buffalo_m_detection_input(image, detector, runtime):
+    height, width = image.shape[:2]
+    target_width = BUFFALO_M_DETECTION_SIZE
+    target_height = BUFFALO_M_DETECTION_SIZE
+    image_ratio = float(height) / width
+    model_ratio = float(target_height) / target_width
+    if image_ratio > model_ratio:
+        resized_height = target_height
+        resized_width = int(resized_height / image_ratio)
+    else:
+        resized_width = target_width
+        resized_height = int(resized_width * image_ratio)
+    if resized_width <= 0 or resized_height <= 0:
+        return []
+    scale_x = float(resized_width) / width
+    scale_y = float(resized_height) / height
+    resized = cv2.resize(image, (resized_width, resized_height))
+    detector_image = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+    detector_image[:resized_height, :resized_width] = resized
+    blob = cv2.dnn.blobFromImage(
+        detector_image,
+        1.0 / 128.0,
+        (target_width, target_height),
+        (127.5, 127.5, 127.5),
+        swapRB=True,
+    )
+    predictions = detector.run(
+        runtime["detector_outputs"],
+        {runtime["detector_input"]: blob},
+    )
+
+    scores_all = []
+    boxes_all = []
+    landmarks_all = []
+    for index, stride in enumerate(BUFFALO_M_DETECTION_STRIDES):
+        scores = predictions[index].reshape(-1)
+        boxes = predictions[index + 3].reshape(-1, 4) * stride
+        landmarks = predictions[index + 6].reshape(-1, 5, 2) * stride
+        feature_height = target_height // stride
+        feature_width = target_width // stride
+        grid_x, grid_y = np.meshgrid(
+            np.arange(feature_width, dtype=np.float32),
+            np.arange(feature_height, dtype=np.float32),
+        )
+        centers = np.column_stack((grid_x.reshape(-1), grid_y.reshape(-1))) * stride
+        centers = np.repeat(centers, BUFFALO_M_ANCHORS_PER_LOCATION, axis=0)
+        selected = np.flatnonzero(scores >= BUFFALO_M_DETECTION_THRESHOLD)
+        if selected.size == 0:
+            continue
+        selected_boxes = boxes[selected]
+        decoded_boxes = np.column_stack((
+            centers[selected, 0] - selected_boxes[:, 0],
+            centers[selected, 1] - selected_boxes[:, 1],
+            centers[selected, 0] + selected_boxes[:, 2],
+            centers[selected, 1] + selected_boxes[:, 3],
+        ))
+        decoded_boxes[:, (0, 2)] /= scale_x
+        decoded_boxes[:, (1, 3)] /= scale_y
+        scores_all.append(scores[selected])
+        boxes_all.append(decoded_boxes)
+        decoded_landmarks = landmarks[selected] + centers[selected, None, :]
+        decoded_landmarks[:, :, 0] /= scale_x
+        decoded_landmarks[:, :, 1] /= scale_y
+        landmarks_all.append(decoded_landmarks)
+
+    if not scores_all:
+        return []
+    scores = np.concatenate(scores_all).astype(np.float32, copy=False)
+    boxes = np.concatenate(boxes_all).astype(np.float32, copy=False)
+    landmarks = np.concatenate(landmarks_all).astype(np.float32, copy=False)
+    order = np.argsort(-scores, kind="stable")
+    scores, boxes, landmarks = scores[order], boxes[order], landmarks[order]
+
+    x1, y1, x2, y2 = boxes.T
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = np.argsort(-scores, kind="stable")
+    kept = []
+    while order.size and len(kept) < 5000:
+        selected = int(order[0])
+        kept.append(selected)
+        remaining = order[1:]
+        if not remaining.size:
+            break
+        left = np.maximum(x1[selected], x1[remaining])
+        top = np.maximum(y1[selected], y1[remaining])
+        right = np.minimum(x2[selected], x2[remaining])
+        bottom = np.minimum(y2[selected], y2[remaining])
+        intersection = np.maximum(0.0, right - left + 1) * np.maximum(0.0, bottom - top + 1)
+        union = areas[selected] + areas[remaining] - intersection
+        overlap = np.divide(intersection, union, out=np.zeros_like(intersection), where=union > 0)
+        order = remaining[overlap <= 0.4]
+
+    detections = []
+    for index in kept:
+        x, y, right, bottom = boxes[index]
+        detections.append(np.concatenate((
+            np.asarray([x, y, right - x, bottom - y], dtype=np.float32),
+            landmarks[index].reshape(-1),
+            np.asarray([scores[index]], dtype=np.float32),
+        )))
+    return detections
+
+
+def detect_buffalo_m(image, runtime):
+    return buffalo_m_detection_input(image, runtime["detector"], runtime)
+
+
 def align_sface_crop(image, detection):
     source = np.asarray(detection[4:14], dtype=np.float64).reshape(5, 2)
     destination = np.asarray([
@@ -1037,14 +1224,14 @@ def align_sface_crop(image, detection):
     return cv2.warpAffine(image, matrix, (112, 112), flags=cv2.INTER_LINEAR)
 
 
-def valid_yunet_detection(detection, image_shape):
+def valid_yunet_detection(detection, image_shape, minimum_score=YUNET_SCORE_THRESHOLD):
     values = np.asarray(detection, dtype=np.float64).reshape(-1)
     if values.size < 15 or not np.isfinite(values[:15]).all():
         return False
 
     x, y, width, height = values[:4]
     score = values[14]
-    if score < YUNET_SCORE_THRESHOLD or width < YUNET_MIN_FACE_SIDE or height < YUNET_MIN_FACE_SIDE:
+    if score < minimum_score or width < YUNET_MIN_FACE_SIDE or height < YUNET_MIN_FACE_SIDE:
         return False
     if height <= 0 or width / height < 0.5 or width / height > 2.0:
         return False
@@ -1073,22 +1260,42 @@ def valid_yunet_detection(detection, image_shape):
     return eye_y < mouth_y and eye_y - height * 0.1 <= nose_y <= mouth_y + height * 0.1
 
 
-def analyze_face_image(path: str, device_mode="cpu") -> dict:
+def analyze_face_image(path: str, device_mode="cpu", face_model=FACE_MODEL_DEFAULT) -> dict:
     image, scale_x, scale_y = read_face_image(path)
     if image is None:
         return {"data": None, "error": "image_unreadable"}
     try:
-        runtime = load_face_models(device_mode)
-        if runtime["device"] == "gpu":
+        runtime = load_face_models(device_mode, face_model)
+        if face_model == FACE_MODEL_BUFFALO_M:
+            detections = detect_buffalo_m(image, runtime)
+        elif runtime["device"] == "gpu":
             detections = detect_yunet_gpu(image, runtime["detector"])
         else:
             detections = detect_yunet_cpu(image, runtime["detector"])
         faces = []
+        minimum_score = (
+            BUFFALO_M_DETECTION_THRESHOLD
+            if face_model == FACE_MODEL_BUFFALO_M
+            else YUNET_SCORE_THRESHOLD
+        )
         if detections is not None:
             for detection in detections:
-                if not valid_yunet_detection(detection, image.shape):
+                if not valid_yunet_detection(detection, image.shape, minimum_score):
                     continue
-                if runtime["device"] == "gpu":
+                if face_model == FACE_MODEL_BUFFALO_M:
+                    aligned = align_sface_crop(image, detection)
+                    blob = cv2.dnn.blobFromImage(
+                        aligned,
+                        1.0 / 127.5,
+                        (BUFFALO_M_RECOGNITION_SIZE, BUFFALO_M_RECOGNITION_SIZE),
+                        (127.5, 127.5, 127.5),
+                        swapRB=True,
+                    )
+                    feature = runtime["recognizer"].run(
+                        None,
+                        {runtime["recognizer_input"]: blob},
+                    )[0].reshape(-1).astype(np.float32)
+                elif runtime["device"] == "gpu":
                     aligned = align_sface_crop(image, detection)
                     blob = cv2.dnn.blobFromImage(aligned, 1.0, (112, 112), (0, 0, 0), True, False)
                     feature = runtime["recognizer"].run(
@@ -1177,7 +1384,11 @@ def run_warmed_image_analysis(paths, analyze, max_workers):
 def verify_installation() -> None:
     global cv2, np
     modules = status()["modules"]
-    if not modules["ocr"]["ready"] or not modules["face"]["ready"]:
+    face_models_status = status()["faceModels"]
+    if (
+        not modules["ocr"]["ready"]
+        or not all(face_models_status[profile]["ready"] for profile in FACE_MODELS)
+    ):
         raise RuntimeError("OCR or face dependencies/models are unavailable")
     import cv2 as cv2_module
     import numpy as numpy_module
@@ -1195,6 +1406,24 @@ def verify_installation() -> None:
     face_feature = face_runtime["recognizer"].feature(np.zeros((112, 112, 3), dtype=np.uint8)).reshape(-1)
     if face_feature.size != 128 or not np.isfinite(face_feature).all():
         raise RuntimeError("SFace inference returned an invalid feature")
+
+    buffalo_runtime = load_face_models("cpu", FACE_MODEL_BUFFALO_M)
+    buffalo_detections = detect_buffalo_m(np.full((640, 640, 3), 255, dtype=np.uint8), buffalo_runtime)
+    if not isinstance(buffalo_detections, list):
+        raise RuntimeError("Buffalo_m SCRFD inference returned unexpected detections")
+    buffalo_feature_input = cv2.dnn.blobFromImage(
+        np.zeros((112, 112, 3), dtype=np.uint8),
+        1.0 / 127.5,
+        (112, 112),
+        (127.5, 127.5, 127.5),
+        swapRB=True,
+    )
+    buffalo_feature = buffalo_runtime["recognizer"].run(
+        None,
+        {buffalo_runtime["recognizer_input"]: buffalo_feature_input},
+    )[0].reshape(-1)
+    if buffalo_feature.size != BUFFALO_M_EMBEDDING_DIMENSION or not np.isfinite(buffalo_feature).all():
+        raise RuntimeError("Buffalo_m recognition returned an invalid feature")
 
     gpu_verified = False
     if gpu_available(require_onnx=True):
@@ -1218,12 +1447,26 @@ def verify_installation() -> None:
         )[0].reshape(-1)
         if gpu_face_feature.size != 128 or not np.isfinite(gpu_face_feature).all():
             raise RuntimeError("GPU SFace inference returned an invalid feature")
+        gpu_buffalo_runtime = load_face_models("gpu", FACE_MODEL_BUFFALO_M)
+        gpu_buffalo_detections = detect_buffalo_m(
+            np.full((640, 640, 3), 255, dtype=np.uint8),
+            gpu_buffalo_runtime,
+        )
+        if not isinstance(gpu_buffalo_detections, list):
+            raise RuntimeError("GPU Buffalo_m SCRFD inference returned unexpected detections")
+        gpu_buffalo_feature = gpu_buffalo_runtime["recognizer"].run(
+            None,
+            {gpu_buffalo_runtime["recognizer_input"]: buffalo_feature_input},
+        )[0].reshape(-1)
+        if gpu_buffalo_feature.size != BUFFALO_M_EMBEDDING_DIMENSION or not np.isfinite(gpu_buffalo_feature).all():
+            raise RuntimeError("GPU Buffalo_m recognition returned an invalid feature")
         gpu_verified = True
 
     print(json.dumps({
         "ok": True,
         "ocrText": " ".join(ocr_result.txts),
         "faceEmbeddingDimension": int(face_feature.size),
+        "buffaloEmbeddingDimension": int(buffalo_feature.size),
         "gpuVerified": gpu_verified,
     }, ensure_ascii=False))
 
@@ -1242,19 +1485,23 @@ def _process_request(request: dict) -> dict:
             return {"error": "gpu_unavailable", "status": status()}
         return run_ocr_image_analysis(request.get("paths"), device_mode)
     if action == "face_images":
-        if not face_module_status()["ready"]:
-            return {"error": face_module_status().get("error", "face_dependencies_missing")}
+        face_model = request.get("model", FACE_MODEL_DEFAULT)
+        if face_model not in FACE_MODELS:
+            return {"error": "invalid_face_model"}
+        profile_status = face_model_status()[face_model]
+        if not profile_status["ready"]:
+            return {"error": profile_status.get("error", "face_dependencies_missing")}
         if device_mode == "gpu" and not gpu_available(require_onnx=True):
             return {"error": "gpu_unavailable", "status": status()}
         paths = request.get("paths")
-        max_workers = FACE_GPU_WORKERS
-        if device_mode == "gpu" and isinstance(paths, list) and 0 < len(paths) <= 32 and all(
+        max_workers = BUFFALO_M_GPU_WORKERS if face_model == FACE_MODEL_BUFFALO_M else FACE_GPU_WORKERS
+        if face_model != FACE_MODEL_BUFFALO_M and device_mode == "gpu" and isinstance(paths, list) and 0 < len(paths) <= 32 and all(
             isinstance(path, str) for path in paths
         ):
             max_workers = face_gpu_worker_count(paths)
         return run_image_analysis(
             paths,
-            lambda path: analyze_face_image(path, device_mode),
+            lambda path: analyze_face_image(path, device_mode, face_model),
             max_workers=max_workers if device_mode == "gpu" else 1,
         )
     if action not in ("embed_images", "embed_texts"):

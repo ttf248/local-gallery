@@ -19,8 +19,10 @@ import (
 
 const (
 	peopleIndexVersion       = 1
-	peopleGroupingVersion    = 13
+	peopleGroupingVersion    = 14
 	peopleEmbeddingDimension = 128
+	peopleBuffaloMDimension  = 512
+	faceDetectionMinScoreM   = float32(0.5)
 	peopleMaxSplitFaces      = 200
 )
 
@@ -126,21 +128,23 @@ type peopleClusterAnchor struct {
 // PeopleService keeps a rebuildable face grouping index separate from the small
 // user-owned names, visibility flags, and corrections stored under state/.
 type PeopleService struct {
-	mu               sync.RWMutex
-	persistMu        sync.Mutex
-	statePath        string
-	derivedPath      string
-	sourceIsPhoto    func(string) bool
-	sourceDimensions func(string) MediaDimensions
-	faces            map[string]PersonFace
-	facesByResource  map[string][]string
-	clusters         map[string]*peopleCluster
-	ann              *peopleANNIndex
-	previousIDs      map[string]string
-	cachedIDs        map[string]string
-	cachedHashes     map[string]string
-	manual           peopleManualState
-	comparisons      int
+	mu                 sync.RWMutex
+	persistMu          sync.Mutex
+	statePath          string
+	derivedPath        string
+	sourceIsPhoto      func(string) bool
+	sourceDimensions   func(string) MediaDimensions
+	faces              map[string]PersonFace
+	facesByResource    map[string][]string
+	clusters           map[string]*peopleCluster
+	ann                *peopleANNIndex
+	previousIDs        map[string]string
+	cachedIDs          map[string]string
+	cachedHashes       map[string]string
+	manual             peopleManualState
+	comparisons        int
+	faceModelVersion   string
+	embeddingDimension int
 }
 
 func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
@@ -151,10 +155,11 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 		statePath: statePath, derivedPath: derivedPath,
 		faces: make(map[string]PersonFace), facesByResource: make(map[string][]string),
 		clusters: make(map[string]*peopleCluster), ann: newPeopleANNIndex(),
-		previousIDs:  make(map[string]string),
-		cachedIDs:    make(map[string]string),
-		cachedHashes: make(map[string]string),
-		manual:       emptyPeopleManualState(),
+		embeddingDimension: peopleEmbeddingDimension,
+		previousIDs:        make(map[string]string),
+		cachedIDs:          make(map[string]string),
+		cachedHashes:       make(map[string]string),
+		manual:             emptyPeopleManualState(),
 	}
 	data, err := os.ReadFile(statePath)
 	if err != nil && !os.IsNotExist(err) {
@@ -200,6 +205,27 @@ func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
 		}
 	}
 	return service, nil
+}
+
+// SetFaceAnalyzerVersion scopes the people index to one embedding space.
+func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
+	dimension := FaceEmbeddingDimensionForVersion(version)
+	if dimension == 0 {
+		return errors.New("unsupported face analyzer version")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.faceModelVersion == version && s.embeddingDimension == dimension {
+		return nil
+	}
+	for key, face := range s.faces {
+		s.previousIDs[key] = face.PersonID
+	}
+	s.faceModelVersion = version
+	s.embeddingDimension = dimension
+	s.cachedIDs = nil
+	s.cachedHashes = nil
+	return nil
 }
 
 // SetSourceDimensions enables analysis-scale face-size filtering for older
@@ -258,6 +284,14 @@ func (s *PeopleService) Sync(records []AIAnalysisRecord) error {
 	defer s.persistMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.faceModelVersion == "" {
+		for _, record := range records {
+			if dimension := FaceEmbeddingDimensionForVersion(record.ModuleVersion); dimension != 0 {
+				s.embeddingDimension = dimension
+				break
+			}
+		}
+	}
 	previousIDs := cloneStringMap(s.previousIDs)
 	sourceIsPhoto := s.sourceIsPhoto
 	for key, face := range s.faces {
@@ -310,8 +344,8 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 		cluster := s.clusters[face.PersonID]
 		if cluster == nil {
 			cluster = &peopleCluster{
-				sum:       make([]float64, peopleEmbeddingDimension),
-				centroid:  make([]float32, peopleEmbeddingDimension),
+				sum:       make([]float64, len(face.embedding)),
+				centroid:  make([]float32, len(face.embedding)),
 				members:   make(map[string]struct{}),
 				resources: make(map[string]struct{}),
 			}
@@ -374,6 +408,9 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		if record.Type != AIJobTypeFace {
 			continue
 		}
+		if s.faceModelVersion != "" && record.ModuleVersion != s.faceModelVersion {
+			continue
+		}
 		var incoming []PersonFace
 		if sourceIsPhoto == nil || sourceIsPhoto(record.ResourceID) {
 			incoming = s.facesFromRecord(record)
@@ -425,6 +462,7 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 
 	candidate := &PeopleService{
 		statePath: s.statePath, derivedPath: s.derivedPath,
+		faceModelVersion: s.faceModelVersion, embeddingDimension: s.embeddingDimension,
 		previousIDs: previousIDs, cachedIDs: cachedIDs, cachedHashes: cachedHashes, manual: manual,
 	}
 	if appendOnly {
@@ -506,6 +544,8 @@ func (s *PeopleService) publishRebuiltIndex(candidate *PeopleService) error {
 	s.cachedHashes = candidate.cachedHashes
 	s.manual = candidate.manual
 	s.comparisons = candidate.comparisons
+	s.faceModelVersion = candidate.faceModelVersion
+	s.embeddingDimension = candidate.embeddingDimension
 	s.mu.Unlock()
 	if indexErr != nil {
 		return indexErr
@@ -524,7 +564,7 @@ func (s *PeopleService) rebuildLocked(faces map[string]PersonFace, previousIDs m
 	s.faces = faces
 	s.facesByResource = make(map[string][]string, len(faces))
 	s.clusters = make(map[string]*peopleCluster)
-	s.ann = newPeopleANNIndex()
+	s.ann = newPeopleANNIndexForDimension(s.embeddingDimension)
 	s.comparisons = 0
 	for _, key := range keys {
 		s.addFaceLocked(faces[key])
@@ -717,8 +757,8 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 	if newCluster {
 		bestID = stablePersonID(face.Key)
 		s.clusters[bestID] = &peopleCluster{
-			sum:       make([]float64, peopleEmbeddingDimension),
-			centroid:  make([]float32, peopleEmbeddingDimension),
+			sum:       make([]float64, len(face.embedding)),
+			centroid:  make([]float32, len(face.embedding)),
 			anchor:    peopleClusterAnchor{key: face.Key, resourceID: face.ResourceID, embedding: face.embedding},
 			members:   map[string]struct{}{},
 			resources: map[string]struct{}{},
@@ -789,7 +829,7 @@ func (s *PeopleService) removeFaceLocked(key string) {
 		s.rebuildPeopleANNLocked()
 		return
 	}
-	cluster.sum = make([]float64, peopleEmbeddingDimension)
+	cluster.sum = make([]float64, len(face.embedding))
 	cluster.count = 0
 	cluster.resources = make(map[string]struct{}, len(cluster.members))
 	cluster.anchor = peopleClusterAnchor{}
@@ -815,7 +855,7 @@ func (s *PeopleService) removeFaceLocked(key string) {
 }
 
 func (s *PeopleService) rebuildPeopleANNLocked() {
-	s.ann = newPeopleANNIndex()
+	s.ann = newPeopleANNIndexForDimension(s.embeddingDimension)
 	clusterIDs := make([]string, 0, len(s.clusters))
 	for id := range s.clusters {
 		clusterIDs = append(clusterIDs, id)
@@ -853,9 +893,14 @@ func (s *PeopleService) removeResourceFaceKeyLocked(resourceID, key string) {
 }
 
 func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
+	return peopleFacesFromRecordWithDimension(record, FaceEmbeddingDimensionForVersion(record.ModuleVersion))
+}
+
+func peopleFacesFromRecordWithDimension(record AIAnalysisRecord, dimension int) []PersonFace {
 	if record.Type != AIJobTypeFace ||
 		!SupportsFaceAnalyzerVersion(record.ModuleVersion) ||
-		record.Status != "faces_found" {
+		record.Status != "faces_found" || dimension == 0 ||
+		FaceEmbeddingDimensionForVersion(record.ModuleVersion) != dimension {
 		return nil
 	}
 	var result struct {
@@ -870,10 +915,14 @@ func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
 	}
 	hash := sha256.Sum256(record.Data)
 	faces := make([]PersonFace, 0, len(result.Faces))
+	minimumScore := faceDetectionMinimumScore
+	if record.ModuleVersion == FaceAnalyzerBuffaloMVersion {
+		minimumScore = faceDetectionMinScoreM
+	}
 	for index, face := range result.Faces {
-		if len(face.Embedding) != peopleEmbeddingDimension || len(face.Box) != 4 ||
+		if len(face.Embedding) != dimension || len(face.Box) != 4 ||
 			math.IsNaN(float64(face.Score)) || math.IsInf(float64(face.Score), 0) ||
-			face.Score < faceDetectionMinimumScore {
+			face.Score < minimumScore {
 			continue
 		}
 		validBox := true
@@ -901,8 +950,16 @@ func peopleFacesFromRecord(record AIAnalysisRecord) []PersonFace {
 }
 
 func (s *PeopleService) facesFromRecord(record AIAnalysisRecord) []PersonFace {
-	faces := peopleFacesFromRecord(record)
-	if len(faces) == 0 || record.ModuleVersion == FaceAnalyzerVersion || s.sourceDimensions == nil {
+	if s.faceModelVersion != "" && record.ModuleVersion != s.faceModelVersion {
+		return nil
+	}
+	dimension := s.embeddingDimension
+	if s.faceModelVersion == "" {
+		dimension = FaceEmbeddingDimensionForVersion(record.ModuleVersion)
+	}
+	faces := peopleFacesFromRecordWithDimension(record, dimension)
+	if len(faces) == 0 || record.ModuleVersion == FaceAnalyzerVersion ||
+		record.ModuleVersion == FaceAnalyzerBuffaloMVersion || s.sourceDimensions == nil {
 		return faces
 	}
 	dimensions := s.sourceDimensions(record.ResourceID)
@@ -942,7 +999,7 @@ func samePeopleFaces(left, right []PersonFace) bool {
 }
 
 func normalizedVector(values []float32) []float32 {
-	if len(values) != peopleEmbeddingDimension {
+	if len(values) != peopleEmbeddingDimension && len(values) != peopleBuffaloMDimension {
 		return nil
 	}
 	var norm float64
@@ -972,7 +1029,7 @@ func normalizedCentroid(sum []float64) []float32 {
 }
 
 func peopleCosine(left, right []float32) float64 {
-	if len(left) != peopleEmbeddingDimension || len(right) != peopleEmbeddingDimension {
+	if len(left) == 0 || len(left) != len(right) {
 		return -1
 	}
 	var score float64
@@ -1223,7 +1280,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 		if reviewOrder {
 			samples := qualitySamples[id]
 			if samples == nil {
-				samples = &peopleGroupQualitySamples{sum: make([]float64, peopleEmbeddingDimension)}
+				samples = &peopleGroupQualitySamples{sum: make([]float64, len(face.embedding))}
 				if cluster := s.clusters[id]; cluster != nil {
 					samples.anchor = cluster.anchor.embedding
 				}
@@ -1292,7 +1349,7 @@ func (samples *peopleGroupQualitySamples) summarize() *PersonGroupQuality {
 		return nil
 	}
 	anchor := samples.anchor
-	if len(anchor) != peopleEmbeddingDimension {
+	if len(anchor) != len(samples.fallback.embedding) {
 		anchor = samples.fallback.embedding
 	}
 	centroid := normalizedCentroid(samples.sum)
@@ -1703,7 +1760,7 @@ func (s *PeopleService) Clear() error {
 	s.faces = make(map[string]PersonFace)
 	s.facesByResource = make(map[string][]string)
 	s.clusters = make(map[string]*peopleCluster)
-	s.ann = newPeopleANNIndex()
+	s.ann = newPeopleANNIndexForDimension(s.embeddingDimension)
 	s.previousIDs = make(map[string]string)
 	s.cachedIDs = nil
 	s.cachedHashes = nil

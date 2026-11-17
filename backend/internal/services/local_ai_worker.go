@@ -52,6 +52,7 @@ type AIWorkerStatus struct {
 	Index                          VectorIndexStatus               `json:"index"`
 	Coverage                       AIIndexCoverage                 `json:"coverage"`
 	Modules                        map[string]AIWorkerModuleStatus `json:"modules,omitempty"`
+	FaceModels                     map[string]AIWorkerModuleStatus `json:"faceModels,omitempty"`
 }
 
 type AIWorkerModuleStatus struct {
@@ -97,6 +98,14 @@ type AIWorkerCompute interface {
 	AnalyzeFacesOnDevice(context.Context, []string, string) ([]AIWorkerAnalysis, error)
 }
 
+type AIWorkerFaceModelCompute interface {
+	AnalyzeFacesWithModelOnDevice(context.Context, []string, string, string) ([]AIWorkerAnalysis, error)
+}
+
+type AIWorkerFaceModelStatus interface {
+	FaceModelStatus(string) AIWorkerModuleStatus
+}
+
 type LocalAIWorkerOptions struct {
 	PythonPath string
 	PythonArgs []string
@@ -108,6 +117,7 @@ type workerRequest struct {
 	ID     string   `json:"id"`
 	Action string   `json:"action"`
 	Device string   `json:"device,omitempty"`
+	Model  string   `json:"model,omitempty"`
 	Paths  []string `json:"paths,omitempty"`
 	Texts  []string `json:"texts,omitempty"`
 }
@@ -218,6 +228,20 @@ func (w *localAIWorker) ModuleStatus(moduleType string) AIWorkerModuleStatus {
 	return AIWorkerModuleStatus{Error: "runtime_status_not_checked"}
 }
 
+func (w *localAIWorker) FaceModelStatus(model string) AIWorkerModuleStatus {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if status, ok := w.status.FaceModels[model]; ok {
+		return status
+	}
+	if model == FaceModelQualityV2 {
+		if status, ok := w.status.Modules[AIJobTypeFace]; ok {
+			return status
+		}
+	}
+	return AIWorkerModuleStatus{Error: "face_model_status_unavailable"}
+}
+
 func (w *localAIWorker) cacheStatus(status AIWorkerStatus) {
 	w.mu.Lock()
 	w.status = status
@@ -260,8 +284,16 @@ func (w *localAIWorker) AnalyzeFacesOnDevice(ctx context.Context, paths []string
 	return w.analyzeImages(ctx, "face_images", paths, device)
 }
 
-func (w *localAIWorker) analyzeImages(ctx context.Context, action string, paths []string, device string) ([]AIWorkerAnalysis, error) {
-	response, err := w.send(ctx, workerRequest{Action: action, Paths: paths, Device: device})
+func (w *localAIWorker) AnalyzeFacesWithModelOnDevice(ctx context.Context, paths []string, device, model string) ([]AIWorkerAnalysis, error) {
+	return w.analyzeImages(ctx, "face_images", paths, device, model)
+}
+
+func (w *localAIWorker) analyzeImages(ctx context.Context, action string, paths []string, device string, model ...string) ([]AIWorkerAnalysis, error) {
+	request := workerRequest{Action: action, Paths: paths, Device: device}
+	if len(model) > 0 {
+		request.Model = model[0]
+	}
+	response, err := w.send(ctx, request)
 	if err != nil {
 		return nil, err
 	}
