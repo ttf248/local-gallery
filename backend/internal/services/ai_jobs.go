@@ -2462,9 +2462,8 @@ func (s *AIJobService) jobBatchPath(job *AIJob, batchNumber int) string {
 	return filepath.Join(directory, fmt.Sprintf("%08d.json", batchNumber))
 }
 
-// migrateLegacyFaceBatches moves the old shared face batch tree into the
-// profile directory recorded by each task. The operation is safe to retry if
-// the process stops partway through moving a task directory.
+// migrateLegacyFaceBatches 将旧版共享人脸批次迁移到任务记录对应的模型目录。
+// 如果迁移中断，重新启动后可以安全重试。
 func (s *AIJobService) migrateLegacyFaceBatches() error {
 	legacyRoot := filepath.Join(s.metadataDir, AIJobTypeFace, "batches")
 	jobs, err := os.ReadDir(legacyRoot)

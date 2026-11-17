@@ -30,7 +30,7 @@ export interface StorageOutput {
   available: boolean;
 }
 
-/** One independent face model's weights, analysis batches, index and corrections. */
+/** 单个人脸模型的权重、分析批次、人物索引与人工修正占用。 */
 export interface StorageFaceProfile {
   model: "quality-v2" | "buffalo_m";
   version: string;

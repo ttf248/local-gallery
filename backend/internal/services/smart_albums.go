@@ -1840,7 +1840,7 @@ func (s *SmartAlbumService) readCachedGroups(albumID, dimension string) (smartAl
 }
 
 func smartAlbumFaceModel(jobs *AIJobService, dimension string) string {
-	// Only these dimensions derive memberships or recommendations from faces.
+	// 只有这两个维度会根据人脸结果计算成员或推荐内容。
 	if dimension != SmartAlbumDimensionPeople && dimension != SmartAlbumDimensionRecommended {
 		return ""
 	}

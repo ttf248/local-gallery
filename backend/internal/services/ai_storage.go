@@ -61,7 +61,7 @@ type AIStorageModule struct {
 	Profiles        []AIStorageFaceProfile `json:"profiles,omitempty"`
 }
 
-// AIStorageFaceProfile reports weights and persisted outputs for one face model.
+// AIStorageFaceProfile 描述一种人脸模型的权重与持久化产物。
 type AIStorageFaceProfile struct {
 	Model           string            `json:"model"`
 	Version         string            `json:"version"`

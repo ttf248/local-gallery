@@ -92,7 +92,7 @@ type PeopleCorrections struct {
 	Profiles    map[string]PeopleCorrectionProfile `json:"profiles,omitempty"`
 }
 
-// PeopleCorrectionProfile stores names and manual assignments for one face model.
+// PeopleCorrectionProfile 保存单个人脸模型的名称与人工分配。
 type PeopleCorrectionProfile struct {
 	Version     int               `json:"version"`
 	Names       map[string]string `json:"names"`
@@ -265,9 +265,8 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
-// SetFaceAnalyzerVersion selects the independent people state and index for
-// the active face model. The first selected profile adopts the legacy shared
-// files once, preserving the data that was active before profile isolation.
+// SetFaceAnalyzerVersion 为当前人脸模型选择独立的人物状态与索引。
+// 首次选择的模型会接管旧版共享文件，保留隔离前正在使用的数据。
 func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
 	dimension := FaceEmbeddingDimensionForVersion(version)
 	model, knownModel := peopleModelForVersion(version)
