@@ -538,12 +538,22 @@ func TestSmartAlbumOverrideMigrationPreservesSingleMatchAndSurfacesConflicts(t *
 	service.state.Overrides[smartOverrideKey(albumID, SmartAlbumDimensionRecommended, oldID)] = SmartAlbumOverride{
 		Name: "家人出游", Hidden: true,
 	}
-	groups, err := service.migrateSmartAlbumOverrides(albumID, SmartAlbumDimensionRecommended,
+	groups, migration, err := service.migrateSmartAlbumOverrides(albumID, SmartAlbumDimensionRecommended,
 		[]smartAlbumCachedGroup{{ID: oldID, Members: firstMembers}},
 		[]SmartAlbumGroup{{ID: newID, Dimension: SmartAlbumDimensionRecommended, Members: mergedMembers}},
 	)
 	if err != nil || len(groups) != 1 || groups[0].OverrideConflict {
 		t.Fatalf("unambiguous override migration failed: groups=%+v err=%v", groups, err)
+	}
+	// 迁移分两步：先写下新键，旧键等缓存落盘之后才删。
+	if _, exists := service.state.Overrides[smartOverrideKey(albumID, SmartAlbumDimensionRecommended, newID)]; !exists {
+		t.Fatal("migrated override key was not written")
+	}
+	if _, exists := service.state.Overrides[smartOverrideKey(albumID, SmartAlbumDimensionRecommended, oldID)]; !exists {
+		t.Fatal("old override key was removed before the cache was persisted")
+	}
+	if err := service.commitSmartAlbumOverrideMigration(migration); err != nil {
+		t.Fatalf("commitSmartAlbumOverrideMigration() error = %v", err)
 	}
 	if _, exists := service.state.Overrides[smartOverrideKey(albumID, SmartAlbumDimensionRecommended, oldID)]; exists {
 		t.Fatal("old override key remained after an unambiguous migration")
@@ -557,7 +567,7 @@ func TestSmartAlbumOverrideMigrationPreservesSingleMatchAndSurfacesConflicts(t *
 		smartOverrideKey(albumID, SmartAlbumDimensionRecommended, oldID): {Name: "春日旅行"},
 		smartOverrideKey(albumID, SmartAlbumDimensionRecommended, newID): {Name: "家人聚会", Hidden: true},
 	}
-	conflicted, err := service.migrateSmartAlbumOverrides(albumID, SmartAlbumDimensionRecommended,
+	conflicted, _, err := service.migrateSmartAlbumOverrides(albumID, SmartAlbumDimensionRecommended,
 		[]smartAlbumCachedGroup{{ID: oldID, Members: firstMembers}, {ID: newID, Members: mergedMembers}},
 		[]SmartAlbumGroup{{ID: "sg_33333333333333333333", Dimension: SmartAlbumDimensionRecommended, Members: mergedMembers}},
 	)
