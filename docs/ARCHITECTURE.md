@@ -101,12 +101,18 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 | 人物 | `people.go` | 数据模型、服务装配与模型切换 |
 | | `people_state.go` | 人工纠错（命名、隐藏、合并、拆分）与它们的持久化 |
 | | `people_index.go` | 可重建的人物索引：聚类重建、增量更新与失效 |
+| | `people_clustering.go` | 自动聚类：分组合并、锚脸与组间复核 |
 | | `people_query.go` | 分组查询、列表与照片统计 |
+| | `people_matches.go` | 待确认匹配：候选来源、目标与风险判定 |
+| | `people_annotations.go` | 标注工作台：抽样计划与人脸标注 |
+| | `people_quality.go` | 组内质量分：锚点、中心与检测分的分位数 |
 | 智能相册 | `smart_albums.go` | 数据模型、服务装配与分组入口 |
 | | `smart_album_cache.go` | 可重建的派生缓存：指纹、缓存键、读写与覆盖率 |
 | | `smart_album_build.go` | 四个维度的分组草稿构建 |
+| | `smart_album_recommendations.go` | 精选推荐：证据打分、合并与去重 |
 | | `smart_album_directory.go` | 跨相册的目录列表与分页 |
 | | `smart_album_overrides.go` | 用户改名与隐藏，以及分组换号时的迁移 |
+| | `smart_album_refresh.go` | 全库刷新：后台任务、进度与取消 |
 
 ### 四层数据的边界与统一规则
 
