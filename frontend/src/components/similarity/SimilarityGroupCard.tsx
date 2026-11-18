@@ -147,7 +147,7 @@ export default function SimilarityGroupCard({
           <button
             type="button"
             className="btn btn-sm"
-            onClick={group.status === "reviewed" ? onReview : onReview}
+            onClick={onReview}
             disabled={busy}
           >
             {group.status === "reviewed" ? "取消已审查" : "已审查"}

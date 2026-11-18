@@ -1,6 +1,10 @@
 import { ensureLibraryReady } from "./helpers/library";
 import { expect, test } from "@playwright/test";
 
+// 特征分析要真的跑一遍：临时库有五百多张图，第一条用例还要连扫描
+// 一起等，默认的 30 秒超时不够。
+test.setTimeout(240_000);
+
 /**
  * 相似照片整理的跨层主链路。
  *
@@ -29,15 +33,25 @@ interface SimilarityPage {
 }
 
 /** 跑一次相似照片特征分析并等到它结束。 */
-async function runSimilarityAnalysis(request: Parameters<typeof ensureLibraryReady>[0]) {
-  const started = await request.post("/api/ai/jobs", {
-    data: { type: "similarity", mode: "full" },
-  });
-  // 409 表示已有任务在跑：等那一个，不抢。
-  expect(started.ok() || started.status() === 409).toBeTruthy();
-  const jobId = started.ok()
-    ? ((await started.json()) as { job: { id: string } }).job.id
-    : await activeJobId(request);
+async function runSimilarityAnalysis(
+  request: Parameters<typeof ensureLibraryReady>[0],
+) {
+  // 队列里已经有任务时，服务端会拒绝新任务（409）。等那个跑完再排自己的，
+  // 而不是去抢别人的队列位置。
+  let jobId = "";
+  await expect
+    .poll(
+      async () => {
+        const started = await request.post("/api/ai/jobs", {
+          data: { type: "similarity", mode: "full" },
+        });
+        if (!started.ok()) return false;
+        jobId = ((await started.json()) as { job: { id: string } }).job.id;
+        return true;
+      },
+      { timeout: 180_000 },
+    )
+    .toBe(true);
   await expect
     .poll(
       async () => {
@@ -45,27 +59,12 @@ async function runSimilarityAnalysis(request: Parameters<typeof ensureLibraryRea
           `/api/ai/jobs/${encodeURIComponent(jobId)}`,
         );
         if (!response.ok()) return "missing";
-        return ((await response.json()) as { job: { status: string } }).job
-          .status;
+        // 单项任务快照是平铺的：字段直接在这一层。
+        return ((await response.json()) as { status: string }).status;
       },
       { timeout: 180_000 },
     )
     .toMatch(/^(completed|failed|cancelled)$/);
-}
-
-/** 正在跑的那个分析任务。 */
-async function activeJobId(
-  request: Parameters<typeof ensureLibraryReady>[0],
-): Promise<string> {
-  const response = await request.get("/api/ai/jobs");
-  const body = (await response.json()) as {
-    snapshot: { jobs: { id: string; status: string }[] };
-  };
-  const running = body.snapshot.jobs.find(
-    (job) => job.status === "running" || job.status === "pending",
-  );
-  expect(running, "没有正在运行的分析任务").toBeTruthy();
-  return running!.id;
 }
 
 test("相似照片能分组列出，人工决定重启后仍在", async ({ page, request }) => {
@@ -97,11 +96,11 @@ test("相似照片能分组列出，人工决定重启后仍在", async ({ page,
   await expect(card.getByText(/清晰 \d+/)).toBeVisible();
 
   // 展开后成员并排摆着，能逐张比。
-  await card.getByRole("button", { name: "展开" }).click();
+  await card.getByRole("button", { name: "展开", exact: true }).click();
   await expect(page.getByTestId("similarity-member").first()).toBeVisible();
 
   // 标记已审查：决定写进 state，重新读取仍在。
-  await card.getByRole("button", { name: "已审查" }).click();
+  await card.getByRole("button", { name: "已审查", exact: true }).click();
   await expect
     .poll(async () => {
       const response = await request.get("/api/similarity/groups?limit=50");

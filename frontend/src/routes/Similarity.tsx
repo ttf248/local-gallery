@@ -123,6 +123,27 @@ export default function Similarity() {
     [groups, pushToast],
   );
 
+  /** 把一组的代表照片加入精选：不必先勾选这一组。 */
+  const handlePickGroup = useCallback(
+    async (groupId: string) => {
+      try {
+        const result = await groups.batch.mutateAsync({
+          action: "pick",
+          groupIds: [groupId],
+        });
+        pushToast({
+          kind: "success",
+          message: result.changed
+            ? "已把代表照片加入精选"
+            : "这张照片已经在精选里了",
+        });
+      } catch (error) {
+        pushToast({ kind: "error", message: `没能加入精选：${describeError(error)}` });
+      }
+    },
+    [groups, pushToast],
+  );
+
   const handleBatch = useCallback(
     async (action: SimilarityBatchAction) => {
       const ids = [...selectedIds];
@@ -331,7 +352,7 @@ export default function Similarity() {
                 onIgnore={() =>
                   void handleUpdate(group.id, { ignored: group.status !== "ignored" })
                 }
-                onPick={() => void handleBatch("pick")}
+                onPick={() => void handlePickGroup(group.id)}
                 onCompare={(left, right) => setComparePair([left, right])}
                 busy={groups.update.isPending || groups.batch.isPending}
               />

@@ -85,7 +85,8 @@ function groupFixture(overrides: Partial<SimilarityGroup> = {}): SimilarityGroup
 function pageFixture(groups: SimilarityGroup[]): SimilarityGroupPage {
   return {
     revision: 1,
-    total: groups.length,
+    // 命中数比返回的组数多：库大时分组会分页接下一批。
+    total: groups.length + 120,
     groups,
     folders: [
       { folder: "存照/2024", groups: groups.length, photos: groups.length * 2 },
@@ -252,6 +253,32 @@ describe("相似照片整理页", () => {
       expect(requests.some((request) => request.kind === "burst")).toBe(true);
     });
     expect(screen.getByTestId("location")).toHaveTextContent("kind=burst");
+  });
+
+  it("单组的加入精选不必先勾选这一组", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    const card = screen.getByTestId("similarity-group");
+    fireEvent.click(within(card).getByRole("button", { name: "加入精选" }));
+
+    await waitFor(() =>
+      expect(batches).toContainEqual({ action: "pick", groupIds: ["exact-1"] }),
+    );
+  });
+
+  it("分组太多时可以再接下一批", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    // 接口说命中很多组时，页面给出一枚「再显示」的按钮。
+    requests.length = 0;
+    const more = await screen.findByRole("button", { name: /再显示 60 组/ });
+    fireEvent.click(more);
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.kind === "")).toBe(true);
+    });
   });
 
   it("地址栏里的类别参数会被认出来", async () => {

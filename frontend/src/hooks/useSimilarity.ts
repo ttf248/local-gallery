@@ -31,9 +31,10 @@ export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
         query.kind ?? "",
         query.status ?? "",
         query.folder ?? "",
+        query.limit ?? 0,
         query.offset ?? 0,
       ] as const,
-    [query.kind, query.status, query.folder, query.offset],
+    [query.kind, query.status, query.folder, query.limit, query.offset],
   );
 
   const list = useQuery({

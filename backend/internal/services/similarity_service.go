@@ -32,6 +32,8 @@ const (
 	// similarityRebuildDebounce 是分析结果提交后等待重建的静默时间。
 	// 一次分析会连续提交很多批，等它安静下来再算一次，避免每批都重算。
 	similarityRebuildDebounce = 1500 * time.Millisecond
+	// similarityRebuildPollInterval 是等待分析任务停下来时的轮询间隔。
+	similarityRebuildPollInterval = 3 * time.Second
 	// similarityGroupPageLimit 是单页返回的分组数上限。
 	similarityGroupPageLimit = 200
 )
@@ -484,8 +486,22 @@ func (s *SimilarityService) ScheduleRebuild() {
 }
 
 // rebuildLoop 是后台重建循环。
+//
+// 分析任务在跑的时候不重算：特征每提交一批就会触发一次，
+// 那会把 CPU 从分析任务上抢走，还把派生文件反复写一遍。
+// 等分析停下来再一次性算，分组结果也更接近最终状态。
 func (s *SimilarityService) rebuildLoop() {
 	for {
+		if !s.analysisIdle() {
+			if !s.waitForRebuildSlot(similarityRebuildPollInterval) {
+				s.mu.Lock()
+				s.rebuilding = false
+				s.mu.Unlock()
+				return
+			}
+			continue
+		}
+		// 静默期：等没有新结果进来再算一次。
 		timer := time.NewTimer(similarityRebuildDebounce)
 		select {
 		case <-s.rebuildStop:
@@ -514,6 +530,26 @@ func (s *SimilarityService) rebuildLoop() {
 			s.mu.Unlock()
 			return
 		}
+	}
+}
+
+// analysisIdle 判断当前有没有分析任务在跑。
+func (s *SimilarityService) analysisIdle() bool {
+	if s.jobs == nil {
+		return true
+	}
+	return s.jobs.List().Active == nil
+}
+
+// waitForRebuildSlot 等到分析任务停下来，或服务关闭。
+func (s *SimilarityService) waitForRebuildSlot(interval time.Duration) bool {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-s.rebuildStop:
+		return false
+	case <-timer.C:
+		return true
 	}
 }
 

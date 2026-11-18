@@ -336,8 +336,8 @@ type AIJobServiceOptions struct {
 	OnRecordsCommitted func([]AIAnalysisRecord)
 	// OnRecordsCleared 在某个模块的派生结果被整体删除后调用，
 	// 让按目录统计的占用缓存重新扫描。
-	OnRecordsCleared   func()
-	ImageConverter AIImageConverter
+	OnRecordsCleared func()
+	ImageConverter   AIImageConverter
 }
 
 type aiJobDiskState struct {
@@ -382,7 +382,7 @@ type AIJobService struct {
 	metadataDir        string
 	catalog            *ResourceCatalog
 	validatePath       func(string) (string, error)
-	imageConverter AIImageConverter
+	imageConverter     AIImageConverter
 	analyzers          map[string]AIAnalyzer
 	workerCount        int
 	now                func() time.Time
@@ -437,7 +437,7 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		metadataDir:        options.MetadataDir,
 		catalog:            options.Catalog,
 		validatePath:       options.ValidatePath,
-		imageConverter: options.ImageConverter,
+		imageConverter:     options.ImageConverter,
 		analyzers:          make(map[string]AIAnalyzer, len(options.Analyzers)),
 		workerCount:        options.WorkerCount,
 		now:                options.Now,
@@ -1968,7 +1968,9 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 		if !ok || !models.IsImageFile(ref.AbsolutePath) {
 			continue
 		}
-		if moduleType == AIJobTypeFace && !snapshot.IsPhotoImage(id) {
+		// 人脸与相似照片只处理照片侧：漫画是另一套工作区，
+		// 既不参与人物分组，也不进相似照片整理。
+		if (moduleType == AIJobTypeFace || moduleType == AIJobTypeSimilarity) && !snapshot.IsPhotoImage(id) {
 			continue
 		}
 		targets = append(targets, aiJobTarget{
