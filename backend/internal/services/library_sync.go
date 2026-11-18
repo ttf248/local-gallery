@@ -784,15 +784,24 @@ func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
 		var ids []string
 		if full {
 			// 全库增量分析：任务中心按文件指纹挑出真正要重算的资源。
+			// 任务中心正忙时把标记放回去，等下一轮再提交 ——
+			// 放掉就等于这批任务没人接手了。
 			delete(s.analysisFull, module)
-			entry.reset()
+			if entry != nil {
+				entry.reset()
+			}
 			s.mu.Unlock()
 			if _, _, err := s.opts.Jobs.Start(module, AIJobModeIncremental); err != nil {
-				if !errors.Is(err, ErrAIJobActive) {
-					s.recordAnalysisFailure(module, err)
+				if errors.Is(err, ErrAIJobActive) {
+					s.mu.Lock()
+					s.analysisFull[module] = true
+					s.mu.Unlock()
+					return
 				}
+				s.recordAnalysisFailure(module, err)
 				return
 			}
+			s.clearAnalysisFailure(module)
 			continue
 		}
 		ids = entry.take(analysisBatchSize)

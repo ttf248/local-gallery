@@ -243,6 +243,49 @@ func TestLibrarySync_AnalysisQueueAcceptsSameResourceAgain(t *testing.T) {
 	}
 }
 
+// TestLibrarySync_FullAnalysisFlagSurvivesBusyJobCenter 验证任务中心正忙
+// 时，全库增量分析的标记不会被丢掉。
+//
+// 标记丢了就等于这批任务没人接手：那批照片的分析结果永远补不上。
+func TestLibrarySync_FullAnalysisFlagSurvivesBusyJobCenter(t *testing.T) {
+	blocking := &syncTestAnalyzer{gate: make(chan struct{})}
+	sync, catalog, _, root := newAnalysisHarnessWith(t, blocking)
+	defer close(blocking.gate)
+
+	album := filepath.Join(root, "album")
+	mkdirAll(t, album)
+	touchAll(t, filepath.Join(album, "busy.jpg"))
+	scanner := NewScanner()
+	initial, err := scanner.Scan(ScanOptions{Roots: []string{root}})
+	if err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+	catalog.Publish(initial, []string{root})
+
+	sync.mu.Lock()
+	sync.settings.AutoAnalyze = true
+	sync.analysisFull[AIJobTypeMetadata] = true
+	sync.mu.Unlock()
+
+	// 先占住任务中心。
+	if _, _, err := sync.opts.Jobs.Start(AIJobTypeMetadata, AIJobModeFull); err != nil {
+		t.Fatalf("start blocking job: %v", err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && blocking.analyzed.Load() == 0 {
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	sync.pumpAnalysis(context.Background())
+
+	sync.mu.Lock()
+	full := sync.analysisFull[AIJobTypeMetadata]
+	sync.mu.Unlock()
+	if !full {
+		t.Fatal("任务中心正忙时全库分析的标记被丢掉了")
+	}
+}
+
 // TestLibrarySync_AnalysisQueueBatchesLargeImport 验证大批量导入会分批
 // 提交，而不是一次性塞进任务中心。
 func TestLibrarySync_AnalysisQueueBatchesLargeImport(t *testing.T) {

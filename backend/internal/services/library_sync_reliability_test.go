@@ -325,16 +325,11 @@ func waitForCatalogRevision(t *testing.T, catalog *ResourceCatalog, from uint64)
 
 // failingScanner 是必定失败的增量扫描引擎。
 type failingScanner struct {
-	failures int
-	calls    int
+	calls int
 }
 
 func (f *failingScanner) Apply(*models.ScanResult, *SyncChangeSet, ScanOptions) (*IncrementalOutcome, error) {
 	f.calls++
-	f.failures--
-	if f.failures >= 0 {
-		return nil, errors.New("增量扫描失败")
-	}
 	return nil, errors.New("增量扫描失败")
 }
 
@@ -355,7 +350,7 @@ func TestLibrarySync_FailedIncrementalKeepsPendingChanges(t *testing.T) {
 	defer h.sync.Shutdown()
 
 	// 让增量扫描必然失败。
-	h.sync.engine = &failingScanner{failures: 1 << 30}
+	h.sync.engine = &failingScanner{}
 
 	album := filepath.Join(h.root, "album")
 	mkdirAll(t, album)
