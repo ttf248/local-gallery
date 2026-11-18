@@ -39,9 +39,10 @@ const (
 	// similarityNearClipVeto 是语义相似度的否决线。
 	// 画面哈希接近但语义差得远，说明不是同一张照片。
 	similarityNearClipVeto = 0.72
-	// similarityNearCandidateLimit 是一个文件夹内允许的候选对数量上限。
-	// 超过上限说明这个文件夹大到需要更粗的策略，此时宁可少召回。
-	similarityNearCandidateLimit = 400000
+	// similarityNearCandidateLimit 是一个文件夹内允许复核的候选对数量上限。
+	// 超过上限说明这个文件夹大到需要更粗的策略，此时宁可少召回；
+	// 界面上会如实说明召回可能不完整。
+	similarityNearCandidateLimit = 20000000
 )
 
 const (
@@ -190,6 +191,10 @@ func SimilarityNearGroups(candidates []SimilarityCandidate) ([][]int, bool) {
 }
 
 // similarityNearGroupsInFolder 在一个文件夹内部做近似重复分组。
+//
+// 候选召回分两步：先用分带索引把「有可能像」的照片凑成对，再逐对复核。
+// 候选对的去重不靠大集合 —— 那样一张照片多的文件夹会吃掉几百兆内存；
+// 改成「按张照片收集候选 + 世代标记去重」，内存只与照片数成正比。
 func similarityNearGroupsInFolder(candidates []SimilarityCandidate, members []int) ([][]int, bool) {
 	if len(members) < 2 {
 		return nil, false
@@ -208,35 +213,41 @@ func similarityNearGroupsInFolder(candidates []SimilarityCandidate, members []in
 			}
 		}
 	}
-	// 候选对用集合去重：同一对照片可能在多段索引里各出现一次。
-	pairs := map[[2]int]struct{}{}
+	find := newSimilarityUnionFind(len(candidates))
+	// 世代标记：同一张照片的候选里，某个对家只算一次。
+	marks := make([]int32, len(candidates))
+	var epoch int32
+	verified := 0
 	limited := false
-	keys := make([]similarityBandKey, 0, len(buckets))
-	for key := range buckets {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].band != keys[j].band {
-			return keys[i].band < keys[j].band
-		}
-		return keys[i].value < keys[j].value
-	})
-	for _, key := range keys {
-		bucket := buckets[key]
-		for left := 0; left < len(bucket); left++ {
-			for right := left + 1; right < len(bucket); right++ {
-				first, second := bucket[left], bucket[right]
-				if first > second {
-					first, second = second, first
+	for _, index := range members {
+		epoch++
+		for _, hash := range similarityHashVariants(candidates[index].Feature) {
+			for band := 0; band < similarityNearBands; band++ {
+				key := similarityBandKey{
+					band:  uint8(band),
+					value: uint8(hash >> uint((1-band)*similarityNearBandBits) & 0xff),
 				}
-				if _, exists := pairs[[2]int{first, second}]; exists {
-					continue
+				for _, other := range buckets[key] {
+					if other == index {
+						continue
+					}
+					if marks[other] == epoch {
+						continue
+					}
+					marks[other] = epoch
+					verified++
+					if verified > similarityNearCandidateLimit {
+						limited = true
+						break
+					}
+					if !similarityNearMatch(candidates[index], candidates[other]) {
+						continue
+					}
+					find.Union(index, other)
 				}
-				if len(pairs) >= similarityNearCandidateLimit {
-					limited = true
+				if limited {
 					break
 				}
-				pairs[[2]int{first, second}] = struct{}{}
 			}
 			if limited {
 				break
@@ -245,15 +256,6 @@ func similarityNearGroupsInFolder(candidates []SimilarityCandidate, members []in
 		if limited {
 			break
 		}
-	}
-
-	find := newSimilarityUnionFind(len(candidates))
-	for pair := range pairs {
-		left, right := candidates[pair[0]], candidates[pair[1]]
-		if !similarityNearMatch(left, right) {
-			continue
-		}
-		find.Union(pair[0], pair[1])
 	}
 	components := similarityComponents(find, len(candidates))
 	// 只保留同一文件夹内部的成员。

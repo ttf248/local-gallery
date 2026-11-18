@@ -63,6 +63,25 @@ func SimilarityGroupsHandler(service *services.SimilarityService) fiber.Handler 
 	}
 }
 
+// SimilarityRebuildHandler POST /api/similarity/rebuild
+//
+// 重算分组。特征已经变了但还没重建时用它，不必再跑一遍分析任务。
+func SimilarityRebuildHandler(service *services.SimilarityService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if service == nil {
+			return httputil.Internal(c, "similarity_unavailable", "the similarity service is unavailable")
+		}
+		summary, err := service.RebuildNow()
+		if err != nil {
+			if errors.Is(err, services.ErrLibraryNotReady) {
+				return httputil.BadRequest(c, "library_not_ready", "the media library is not ready")
+			}
+			return httputil.Internal(c, "similarity_rebuild_failed", "the similarity groups could not be rebuilt")
+		}
+		return c.JSON(fiber.Map{"ok": true, "summary": summary})
+	}
+}
+
 // SimilarityGroupUpdateHandler PUT /api/similarity/groups/:id
 //
 // Body: {"representative": "f_..."} 或 {"reviewed": true} 或 {"ignored": true}。

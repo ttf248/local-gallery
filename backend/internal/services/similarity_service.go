@@ -89,6 +89,9 @@ type SimilarityMember struct {
 	AlbumID string `json:"albumId"`
 	// AlbumName 是所属相册的展示名。
 	AlbumName string `json:"albumName"`
+	// Width / Height 是原图像素尺寸，并排对比时用来算适应比例。
+	Width  int `json:"width"`
+	Height int `json:"height"`
 	// Quality 是可解释的质量分项。
 	Quality SimilarityQuality `json:"quality"`
 	// CapturedAt 是可信拍摄时间，没有时为空。
@@ -262,7 +265,40 @@ func OpenSimilarityService(options SimilarityServiceOptions) (*SimilarityService
 		return nil, err
 	}
 	service.loadGroups()
+	// 分组是派生的：记录比分组新（上次分析没跑完、服务被中断过），
+	// 或者分组文件根本不在，就该重算一次。放到后台，不挡启动。
+	if service.needsRebuild() {
+		service.ScheduleRebuild()
+	}
 	return service, nil
+}
+
+// needsRebuild 判断分组结果是否已经落后于分析结果。
+func (s *SimilarityService) needsRebuild() bool {
+	if s.jobs == nil {
+		return false
+	}
+	records := s.jobs.Records(AIJobTypeSimilarity)
+	if len(records) == 0 {
+		return false
+	}
+	newest := time.Time{}
+	for _, record := range records {
+		if record.UpdatedAt.After(newest) {
+			newest = record.UpdatedAt
+		}
+	}
+	if s.builtAt.IsZero() {
+		return true
+	}
+	return newest.After(s.builtAt)
+}
+
+// RebuildNow 立刻重算分组。
+//
+// 手动触发用：特征变了但还没重建时，用户不必等分析任务再跑一遍。
+func (s *SimilarityService) RebuildNow() (SimilaritySummary, error) {
+	return s.Rebuild(context.Background())
 }
 
 // loadState 读入人工决定。坏文件改名备份后按空决定继续，不让服务起不来。
@@ -499,9 +535,15 @@ func (s *SimilarityService) Rebuild(ctx context.Context) (SimilaritySummary, err
 	groups = append(groups, s.buildGroups(snapshot, candidates, exactGroups, SimilarityGroupKindExact)...)
 	groups = append(groups, s.buildGroups(snapshot, candidates, nearGroups, SimilarityGroupKindNear)...)
 	groups = append(groups, s.buildGroups(snapshot, candidates, burstGroups, SimilarityGroupKindBurst)...)
+	// 排序按「最该先处理」来：完全重复最明确，近似重复次之，
+	// 连拍是同场景的不同画面，放最后。
 	sort.Slice(groups, func(i, j int) bool {
-		if groups[i].Kind != groups[j].Kind {
-			return groups[i].Kind < groups[j].Kind
+		left, right := similarityKindOrder(groups[i].Kind), similarityKindOrder(groups[j].Kind)
+		if left != right {
+			return left < right
+		}
+		if groups[i].Redundant != groups[j].Redundant {
+			return groups[i].Redundant > groups[j].Redundant
 		}
 		return groups[i].ID < groups[j].ID
 	})
@@ -600,6 +642,8 @@ func (s *SimilarityService) buildGroups(snapshot CatalogSnapshot, candidates []S
 			member := SimilarityMember{
 				ResourceID: candidate.ResourceID,
 				Folder:     candidate.Folder,
+				Width:      candidate.Feature.Width,
+				Height:     candidate.Feature.Height,
 				Quality:    quality,
 				Score:      quality.Score,
 			}
@@ -784,6 +828,20 @@ func similarityFolderLabel(snapshot CatalogSnapshot, ref ResourceRef) string {
 		return rootName
 	}
 	return rootName + "/" + directory
+}
+
+// similarityKindOrder 给出分组类别的展示次序。
+func similarityKindOrder(kind string) int {
+	switch kind {
+	case string(SimilarityGroupKindExact):
+		return 0
+	case string(SimilarityGroupKindNear):
+		return 1
+	case string(SimilarityGroupKindBurst):
+		return 2
+	default:
+		return 3
+	}
 }
 
 // similarityGroupID 生成稳定的分组标识。

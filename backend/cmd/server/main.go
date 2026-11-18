@@ -577,6 +577,7 @@ func main() {
 	api.Get("/similarity/groups", handlers.SimilarityGroupsHandler(similarityService))
 	api.Put("/similarity/groups/:id", handlers.SimilarityGroupUpdateHandler(similarityService))
 	api.Post("/similarity/batch", handlers.SimilarityBatchHandler(similarityService))
+	api.Post("/similarity/rebuild", handlers.SimilarityRebuildHandler(similarityService))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
 	api.Get("/smart-albums", handlers.SmartAlbumDirectoryHandler(smartAlbums))
 	api.Post("/smart-albums/refresh", handlers.SmartAlbumRefreshStartHandler(smartAlbumRefresh))
