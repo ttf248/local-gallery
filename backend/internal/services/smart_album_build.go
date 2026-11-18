@@ -26,11 +26,14 @@ func (s *SmartAlbumService) buildGroups(
 	peopleGroups []PeopleAlbumGroup,
 ) ([]SmartAlbumGroup, error) {
 	drafts := make(map[string]*smartAlbumDraft)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	switch dimension {
 	case SmartAlbumDimensionTime:
 		addTimeDrafts(drafts, metadata)
 	case SmartAlbumDimensionPlace:
-		addPlaceDrafts(drafts, media, metadata)
+		addPlaceDrafts(ctx, drafts, media, metadata)
 	case SmartAlbumDimensionPeople:
 		for _, person := range peopleGroups {
 			if person.Group.Hidden || person.Group.PhotoCount < smartAlbumMinimumGroupSize {
@@ -40,7 +43,11 @@ func (s *SmartAlbumService) buildGroups(
 		}
 	case SmartAlbumDimensionScene:
 		vectors := s.currentSmartSceneVectorsFromMedia(media)
-		for _, scene := range clusterSmartScenes(vectors) {
+		scenes, err := clusterSmartScenes(ctx, vectors)
+		if err != nil {
+			return nil, err
+		}
+		for _, scene := range scenes {
 			addDraft(drafts, "scene:"+scene.anchor, "相似场景", "相似场景", scene.members)
 		}
 		if len(drafts) > 0 {
@@ -219,7 +226,7 @@ func medianFloat64(values []float64) float64 {
 	return (ordered[middle-1] + ordered[middle]) / 2
 }
 
-func addPlaceDrafts(drafts map[string]*smartAlbumDraft, media []smartAlbumMedia, records map[string]AIAnalysisRecord) {
+func addPlaceDrafts(ctx context.Context, drafts map[string]*smartAlbumDraft, media []smartAlbumMedia, records map[string]AIAnalysisRecord) error {
 	metadataIndex, _ := loadChinaAdminIndex()
 	type smartPlacePoint struct {
 		id        string
@@ -230,6 +237,9 @@ func addPlaceDrafts(drafts map[string]*smartAlbumDraft, media []smartAlbumMedia,
 	points := make([]smartPlacePoint, 0)
 	maxDepth := 0
 	for _, item := range media {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		record, exists := records[item.id]
 		if !exists || record.Status != MetadataParseParsed || len(record.Data) == 0 {
 			continue
@@ -264,7 +274,7 @@ func addPlaceDrafts(drafts map[string]*smartAlbumDraft, media []smartAlbumMedia,
 		points = append(points, point)
 	}
 	if len(points) == 0 {
-		return
+		return nil
 	}
 	maxGroups := max(1, min(12, int(math.Ceil(math.Sqrt(float64(len(points))/8)))))
 	level := maxDepth
@@ -320,6 +330,7 @@ func addPlaceDrafts(drafts map[string]*smartAlbumDraft, media []smartAlbumMedia,
 		}
 		addDraft(drafts, "place:"+key, name, key, bucket.members)
 	}
+	return nil
 }
 
 func chinaFeatureLabel(index *chinaAdminIndex, feature *chinaAdminFeature) string {
@@ -411,9 +422,9 @@ func normalizeSmartVector(values []float32) []float32 {
 	return result
 }
 
-func clusterSmartScenes(vectors []smartSceneVector) []smartSceneCluster {
+func clusterSmartScenes(ctx context.Context, vectors []smartSceneVector) ([]smartSceneCluster, error) {
 	if len(vectors) < smartAlbumMinimumGroupSize {
-		return nil
+		return nil, nil
 	}
 	index := newPeopleANNIndexForDimension(AIEmbeddingDimension)
 	index.efConstruction = smartSceneANNConstruction
@@ -426,6 +437,9 @@ func clusterSmartScenes(vectors []smartSceneVector) []smartSceneCluster {
 	neighbors := make([]map[int]float32, len(vectors))
 	limit := min(16, len(vectors))
 	for position, item := range vectors {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		neighbors[position] = make(map[int]float32, limit)
 		for _, hit := range index.Search(item.vector, limit) {
 			neighborPosition, exists := positionByID[hit.id]
@@ -496,7 +510,7 @@ func clusterSmartScenes(vectors []smartSceneVector) []smartSceneCluster {
 		result = append(result, smartSceneCluster{anchor: members[0], members: members, cohesion: cohesion})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].anchor < result[j].anchor })
-	return result
+	return result, nil
 }
 
 func smartVectorDot(left, right []float32) float32 {

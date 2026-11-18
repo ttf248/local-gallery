@@ -822,7 +822,7 @@ func TestSmartAlbumPlaceGroupsNearbyGPSWithoutReturningCoordinates(t *testing.T)
 		}
 		records[id] = AIAnalysisRecord{Status: MetadataParseParsed, Data: data}
 	}
-	addPlaceDrafts(drafts, media, records)
+	addPlaceDrafts(context.Background(), drafts, media, records)
 	if len(drafts) != 1 {
 		t.Fatalf("nearby GPS photos formed %d drafts, want one", len(drafts))
 	}
@@ -856,7 +856,7 @@ func TestSmartAlbumPlaceGroupsChooseCoarserNearbyAdminLevel(t *testing.T) {
 		records[id] = AIAnalysisRecord{Status: MetadataParseParsed, Data: data}
 	}
 	drafts := make(map[string]*smartAlbumDraft)
-	addPlaceDrafts(drafts, media, records)
+	addPlaceDrafts(context.Background(), drafts, media, records)
 	if len(drafts) != 1 {
 		t.Fatalf("nearby district evidence made %d place groups, want one city-level group", len(drafts))
 	}
@@ -876,7 +876,10 @@ func TestSmartSceneClustersCanFormThreePhotoGroup(t *testing.T) {
 		vector[0] = 1
 		vectors[index] = smartSceneVector{id: fmt.Sprintf("f_%d", index), vector: vector}
 	}
-	clusters := clusterSmartScenes(vectors)
+	clusters, err := clusterSmartScenes(context.Background(), vectors)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(clusters) != 1 || len(clusters[0].members) != 3 {
 		t.Fatalf("clusters=%+v", clusters)
 	}
@@ -885,13 +888,20 @@ func TestSmartSceneClustersCanFormThreePhotoGroup(t *testing.T) {
 		vector[index] = 1
 		vectors[index].vector = vector
 	}
-	if clusters := clusterSmartScenes(vectors); len(clusters) != 0 {
+	clusters, err = clusterSmartScenes(context.Background(), vectors)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(clusters) != 0 {
 		t.Fatalf("unrelated orthogonal scene vectors were grouped: %+v", clusters)
 	}
 }
 
 func TestSmartSceneClustersPreserveDenseSyntheticScenes(t *testing.T) {
-	clusters := clusterSmartScenes(smartSceneBenchmarkVectors(1000))
+	clusters, err := clusterSmartScenes(context.Background(), smartSceneBenchmarkVectors(1000))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(clusters) != 50 {
 		t.Fatalf("clusters=%d, want 50", len(clusters))
 	}
@@ -914,7 +924,7 @@ func BenchmarkSmartSceneClusters(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for index := 0; index < b.N; index++ {
-				_ = clusterSmartScenes(vectors)
+				_, _ = clusterSmartScenes(context.Background(), vectors)
 			}
 		})
 	}
