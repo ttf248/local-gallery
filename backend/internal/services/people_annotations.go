@@ -468,12 +468,12 @@ func peopleBuildAnnotationPlan(people *PeopleService, isPhotoImage func(string) 
 	for _, group := range reviewGroups {
 		addGroup(group.ID, group.Name, PeopleAnnotationReasonLowQuality)
 	}
-	// 合照候选：只在合照里出现的组。
-	stats := people.GroupPhotoStats(isPhotoImage, peopleAnnotationGroupPhotoFaceThreshold)
+	// 合照候选：只在合照里出现的组。这里只要分类，不要人脸相对尺寸的分位数。
+	classes := people.GroupPhotoClassifications(isPhotoImage, peopleAnnotationGroupPhotoFaceThreshold)
 	topGroups, _ := people.TopGroups(0, false, isPhotoImage)
 	for _, group := range topGroups {
-		groupStats := stats[group.ID]
-		if groupStats.PhotoCount == 0 || groupStats.LargeGroupPhotoCount != groupStats.PhotoCount {
+		groupClasses := classes[group.ID]
+		if groupClasses.PhotoCount == 0 || groupClasses.LargeGroupPhotoCount != groupClasses.PhotoCount {
 			continue
 		}
 		addGroup(group.ID, group.Name, PeopleAnnotationReasonGroupPhoto)

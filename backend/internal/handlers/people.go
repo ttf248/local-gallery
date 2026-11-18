@@ -45,15 +45,24 @@ func PeopleGroupPhotoCandidatesHandler(people *services.PeopleService, catalog *
 			})
 		}
 		includeHidden := c.Query("includeHidden") == "true"
-		stats := people.GroupPhotoStats(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
+		// 分两步：先算出合影分类挑出候选，再只给候选算人脸相对尺寸。
+		// 相对尺寸要查原图尺寸（落盘校验路径），对全部分组都算一遍就是一秒多。
+		classes := people.GroupPhotoClassifications(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
 		groups, _ := people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
-		candidates := make([]peopleGroupPhotoCandidate, 0)
+		candidateIDs := make(map[string]struct{})
+		candidateGroups := make([]services.PersonGroup, 0)
 		for _, group := range groups {
-			groupStats := stats[group.ID]
-			if group.Confirmed || groupStats.PhotoCount == 0 || groupStats.LargeGroupPhotoCount != groupStats.PhotoCount {
+			groupClasses := classes[group.ID]
+			if group.Confirmed || groupClasses.PhotoCount == 0 || groupClasses.LargeGroupPhotoCount != groupClasses.PhotoCount {
 				continue
 			}
-			candidates = append(candidates, peopleGroupPhotoCandidate{Person: group, Stats: groupStats})
+			candidateIDs[group.ID] = struct{}{}
+			candidateGroups = append(candidateGroups, group)
+		}
+		stats := people.GroupPhotoStatsForGroups(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold, candidateIDs)
+		candidates := make([]peopleGroupPhotoCandidate, 0, len(candidateGroups))
+		for _, group := range candidateGroups {
+			candidates = append(candidates, peopleGroupPhotoCandidate{Person: group, Stats: stats[group.ID]})
 		}
 		sort.Slice(candidates, func(i, j int) bool {
 			left, right := candidates[i], candidates[j]
@@ -134,10 +143,12 @@ func PeopleMatchSuggestionsHandler(people *services.PeopleService, catalog *serv
 			})
 		}
 		includeHidden := c.Query("includeHidden") == "true"
-		photoStats := people.GroupPhotoStats(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
+		// 匹配建议只要知道哪些分组只出现在合照里，不需要人脸相对尺寸的分位数：
+		// 那一档要落盘查原图尺寸，几千张脸就是一秒多。
+		photoClasses := people.GroupPhotoClassifications(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
 		groupPhotoOnly := make(map[string]bool)
-		for id, stats := range photoStats {
-			if stats.PhotoCount > 0 && stats.LargeGroupPhotoCount == stats.PhotoCount {
+		for id, classes := range photoClasses {
+			if classes.PhotoCount > 0 && classes.LargeGroupPhotoCount == classes.PhotoCount {
 				groupPhotoOnly[id] = true
 			}
 		}
@@ -258,9 +269,11 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 			return c.JSON(response)
 		}
 
-		photoStats := people.GroupPhotoStats(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
+		// 人物列表只要合影分类，不要人脸相对尺寸的分位数：
+		// 那一档要落盘查原图尺寸，几千张脸就是一秒多。
+		photoClasses := people.GroupPhotoClassifications(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
 		if sortOrder == peopleSortReview {
-			groups, total = people.SearchGroupsForReview(query, len(photoStats)+1, includeHidden, snapshot.IsPhotoImage)
+			groups, total = people.SearchGroupsForReview(query, len(photoClasses)+1, includeHidden, snapshot.IsPhotoImage)
 		} else {
 			groups, total = people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
 		}
@@ -269,7 +282,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		filteredGroups := 0
 		visibleTotal := 0
 		for _, group := range groups {
-			groupPhotos := photoStats[group.ID]
+			groupPhotos := photoClasses[group.ID]
 			if !group.Confirmed && group.PhotoCount > 0 && groupPhotos.PhotoCount == group.PhotoCount &&
 				groupPhotos.LargeGroupPhotoCount == group.PhotoCount {
 				filteredGroups++

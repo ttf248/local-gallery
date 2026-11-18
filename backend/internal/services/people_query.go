@@ -564,9 +564,6 @@ func (s *PeopleService) AllFaces() []PersonFace {
 	return result
 }
 
-// GroupPhotoStats counts each group's distinct current photos and classifies
-// group photos using both detected face count and normalized face size. The
-// callback excludes resources outside the current photo library.
 // peoplePhotoFace 是照片统计要用到的那张脸。
 //
 // 统计只需要资源、分组、框与检测分，所以用一条轻量记录代替整张 PersonFace：
@@ -578,7 +575,53 @@ type peoplePhotoFace struct {
 	score      float32
 }
 
+// PersonGroupPhotoClassification 是一个分组的照片分类。
+//
+// 照片数是「出现在多少张不同的照片里」，合影与普通照片按资源分类。
+// 相对脸尺寸与检测分的分位数要另算，见 GroupPhotoStats。
+type PersonGroupPhotoClassification struct {
+	PhotoCount           int
+	LargeGroupPhotoCount int
+	OrdinaryPhotoCount   int
+}
+
+// GroupPhotoClassifications 只算每个分组的照片数与合影分类。
+//
+// 合影判定分三档：脸数超过门槛就是合影，脸数不足八张就不是合影，
+// 只有中间那一档要看人脸相对尺寸。而查原图尺寸要落盘校验路径，
+// 六千张脸的照片就是一秒多 —— 所以这一档之外不去查尺寸。
+// 判定口径与 GroupPhotoStats 一致，两者的分类结果逐项相同。
+func (s *PeopleService) GroupPhotoClassifications(includeResource func(string) bool, faceCountThreshold int) map[string]PersonGroupPhotoClassification {
+	classes, _ := s.groupPhotoStats(includeResource, faceCountThreshold, false, nil)
+	return classes
+}
+
+// GroupPhotoStats counts each group's distinct current photos and classifies
+// group photos using both detected face count and normalized face size. The
+// callback excludes resources outside the current photo library.
+//
+// 相对脸尺寸的分位数要遍历每个资源的原图尺寸，所以这个口径比
+// GroupPhotoClassifications 慢得多：只需要分类的调用方用后者。
 func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceCountThreshold int) map[string]PersonGroupPhotoStats {
+	_, stats := s.groupPhotoStats(includeResource, faceCountThreshold, true, nil)
+	return stats
+}
+
+// GroupPhotoStatsForGroups 返回指定分组的照片统计。
+//
+// 人脸相对尺寸的分位数只给这些分组算：范围外的分组不必查原图尺寸。
+// 先用 GroupPhotoClassifications 挑出要看的分组，再调这个，
+// 比对全部分组都算一遍少一次落盘。
+func (s *PeopleService) GroupPhotoStatsForGroups(includeResource func(string) bool, faceCountThreshold int, groups map[string]struct{}) map[string]PersonGroupPhotoStats {
+	_, stats := s.groupPhotoStats(includeResource, faceCountThreshold, true, groups)
+	return stats
+}
+
+// groupPhotoStats 是两种口径的共同实现。
+//
+// withSizes 决定要不要算人脸相对尺寸：算的时候每个资源都要查一次原图尺寸，
+// 不算的时候只查「脸数在八张到门槛之间」的那一批资源。
+func (s *PeopleService) groupPhotoStats(includeResource func(string) bool, faceCountThreshold int, withSizes bool, sizeGroups map[string]struct{}) (map[string]PersonGroupPhotoClassification, map[string]PersonGroupPhotoStats) {
 	s.mu.RLock()
 	faces := make([]peoplePhotoFace, 0, len(s.faces))
 	dimensionsLookup := s.sourceDimensions
@@ -602,6 +645,30 @@ func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceC
 		}
 		resourceFaceCounts[face.resourceID]++
 		groupFaceCounts[face.groupID]++
+	}
+
+	// 要查原图尺寸的资源：判定合影只看「脸数在八张到门槛之间」那一档；
+	// 还要算分组的人脸相对尺寸时，再加上要算尺寸的那些分组的资源。
+	needsSizes := make(map[string]bool, len(resourceFaceCounts))
+	for resourceID, faceCount := range resourceFaceCounts {
+		if withSizes && sizeGroups == nil {
+			// 全部分组都要算尺寸时，每个资源都得查一遍原图尺寸。
+			needsSizes[resourceID] = true
+			continue
+		}
+		if faceCount >= PeopleGroupPhotoMinimumFaces && faceCount <= faceCountThreshold {
+			needsSizes[resourceID] = true
+		}
+	}
+	if withSizes && sizeGroups != nil {
+		for _, face := range faces {
+			if includeResource != nil && !includeResource(face.resourceID) {
+				continue
+			}
+			if _, wanted := sizeGroups[face.groupID]; wanted {
+				needsSizes[face.resourceID] = true
+			}
+		}
 	}
 
 	// 每个分组出现的资源：照片数按资源算，不按脸算。
@@ -639,12 +706,17 @@ func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceC
 		groupID := face.groupID
 		groupScores[groupID] = append(groupScores[groupID], float64(face.score))
 		groupResources[peopleGroupResource{group: groupID, resource: face.resourceID}] = struct{}{}
+		if !needsSizes[face.resourceID] {
+			continue
+		}
 		longSide := longSideOf(face.resourceID)
 		if longSide <= 0 || len(face.box) < 4 {
 			continue
 		}
 		size := float64(max(face.box[2], face.box[3])) / longSide
-		groupSizes[groupID] = append(groupSizes[groupID], size)
+		if withSizes && (sizeGroups == nil || groupInScope(sizeGroups, groupID)) {
+			groupSizes[groupID] = append(groupSizes[groupID], size)
+		}
 		sizes := resourceSizes[face.resourceID]
 		if sizes == nil {
 			sizes = make([]float64, 0, resourceFaceCounts[face.resourceID])
@@ -672,18 +744,32 @@ func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceC
 		}
 	}
 
+	classes := make(map[string]PersonGroupPhotoClassification, len(groupFaceCounts))
 	stats := make(map[string]PersonGroupPhotoStats, len(groupFaceCounts))
 	for groupID := range groupFaceCounts {
 		largeCount := largeCountByGroup[groupID]
-		stats[groupID] = PersonGroupPhotoStats{
+		classes[groupID] = PersonGroupPhotoClassification{
 			PhotoCount:           photoCountByGroup[groupID],
 			LargeGroupPhotoCount: largeCount,
 			OrdinaryPhotoCount:   photoCountByGroup[groupID] - largeCount,
-			RelativeFaceSizeP10:  peopleP10(groupSizes[groupID]),
-			DetectionP10:         peopleP10(groupScores[groupID]),
+		}
+		if withSizes && (sizeGroups == nil || groupInScope(sizeGroups, groupID)) {
+			stats[groupID] = PersonGroupPhotoStats{
+				PhotoCount:           photoCountByGroup[groupID],
+				LargeGroupPhotoCount: largeCount,
+				OrdinaryPhotoCount:   photoCountByGroup[groupID] - largeCount,
+				RelativeFaceSizeP10:  peopleP10(groupSizes[groupID]),
+				DetectionP10:         peopleP10(groupScores[groupID]),
+			}
 		}
 	}
-	return stats
+	return classes, stats
+}
+
+// groupInScope 判断分组是否在要算尺寸的范围内。
+func groupInScope(scope map[string]struct{}, groupID string) bool {
+	_, ok := scope[groupID]
+	return ok
 }
 
 func peopleP50(values []float64) float64 {

@@ -113,3 +113,61 @@ func TestPeopleGroupPhotoStatsClassifiesSmallFacePhotos(t *testing.T) {
 		t.Fatalf("relative face size p10 = %v, want 0.02", group.RelativeFaceSizeP10)
 	}
 }
+
+// TestPeopleGroupPhotoClassificationsMatchFullStats 锁定两种口径的一致性：
+// 只做分类时给出的照片数与合影判定，必须和完整统计逐项相同；
+// 同时只有「脸数在八张到门槛之间」的资源才去查原图尺寸 ——
+// 查尺寸要落盘校验路径，其余资源不该为分类付出这个代价。
+func TestPeopleGroupPhotoClassificationsMatchFullStats(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	looked := map[string]int{}
+	people.SetSourceDimensions(func(resourceID string) MediaDimensions {
+		looked[resourceID]++
+		return MediaDimensions{Width: 2000, Height: 2000}
+	})
+	records := []AIAnalysisRecord{
+		peopleTestRecordWithBox("photo-two", []float32{10, 10, 100, 100}, peopleTestVectors(0, 2)...),
+		peopleTestRecordWithBox("photo-eight", []float32{10, 10, 40, 40}, peopleTestVectors(10, 8)...),
+		peopleTestRecordWithBox("photo-many", []float32{10, 10, 40, 40}, peopleTestVectors(30, 25)...),
+	}
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	// 同步本身也会查尺寸，这里只看统计阶段的查询。
+	clear(looked)
+
+	classes := people.GroupPhotoClassifications(nil, 20)
+	// 只做分类时，只有「脸数在八张到门槛之间」的资源才查过尺寸。
+	classificationLookups := make(map[string]int, len(looked))
+	for resourceID, count := range looked {
+		classificationLookups[resourceID] = count
+	}
+	full := people.GroupPhotoStats(nil, 20)
+	if len(classes) != len(full) {
+		t.Fatalf("classes = %d, full = %d", len(classes), len(full))
+	}
+	for groupID, class := range classes {
+		stats := full[groupID]
+		if class.PhotoCount != stats.PhotoCount ||
+			class.LargeGroupPhotoCount != stats.LargeGroupPhotoCount ||
+			class.OrdinaryPhotoCount != stats.OrdinaryPhotoCount {
+			t.Fatalf("group %s: classification %+v differs from stats %+v", groupID, class, stats)
+		}
+	}
+	if classificationLookups["photo-eight"] == 0 {
+		t.Fatal("the eight-face photo must be checked for face size")
+	}
+	if classificationLookups["photo-two"] != 0 {
+		t.Fatal("a photo with two faces must not be checked for face size")
+	}
+	if classificationLookups["photo-many"] != 0 {
+		t.Fatal("a photo with more faces than the threshold must not be checked for face size")
+	}
+	if looked["photo-two"] == 0 || looked["photo-many"] == 0 {
+		t.Fatal("the full stats must check every photo for face size")
+	}
+}
