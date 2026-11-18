@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+
 	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
@@ -283,6 +285,87 @@ func newVerifyHarness(t *testing.T, verifyInterval time.Duration) *syncHarness {
 		t.Fatalf("create library sync service: %v", err)
 	}
 	return &syncHarness{root: root, catalog: catalog, cache: cache, runner: runner, sync: sync}
+}
+
+// TestChangeWatcher_ErrorMarksDegraded 验证监听出错时监听器会降级并
+// 把错误报给上层。
+func TestChangeWatcher_ErrorMarksDegraded(t *testing.T) {
+	root := t.TempDir()
+	errorsSeen := make(chan error, 4)
+	watcher, err := NewChangeWatcher(ChangeWatcherOptions{
+		Roots:        []string{root},
+		Exclude:      DefaultExclude(),
+		Debounce:     20 * time.Millisecond,
+		MaxWait:      time.Second,
+		MaxWatchDirs: 100,
+		OnError: func(err error) {
+			select {
+			case errorsSeen <- err:
+			default:
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("create watcher: %v", err)
+	}
+
+	watcher.handleError(errors.New("监听出错"))
+	status := watcher.Status()
+	if !status.Degraded {
+		t.Fatal("监听出错后应标记为降级")
+	}
+	if status.LastError != "watch_failed" {
+		t.Fatalf("降级原因应记为 watch_failed，实际 %q", status.LastError)
+	}
+	select {
+	case <-errorsSeen:
+	default:
+		t.Fatal("监听出错没有报给上层")
+	}
+
+	// 事件溢出：这是最需要兜底的一种（这段时间的事件可能丢了）。
+	watcher.handleError(fsnotify.ErrEventOverflow)
+	status = watcher.Status()
+	if status.LastError != "event_overflow" {
+		t.Fatalf("溢出的原因应记为 event_overflow，实际 %q", status.LastError)
+	}
+}
+
+// TestLibrarySync_WatcherErrorTriggersVerification 验证监听出错时会立刻
+// 补一次校验。
+//
+// 监听不可靠时，磁盘上的变化可能整个漏掉；定期校验是兜底，但等它到期
+// 之前图库一直落后。
+func TestLibrarySync_WatcherErrorTriggersVerification(t *testing.T) {
+	h := newVerifyHarness(t, time.Hour)
+	h.scanNow(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := h.sync.Start(ctx); err != nil {
+		t.Fatalf("start library sync: %v", err)
+	}
+	defer h.sync.Shutdown()
+
+	h.sync.mu.Lock()
+	watcher := h.sync.watcher
+	h.sync.mu.Unlock()
+	if watcher == nil {
+		t.Fatal("监听器没有启动")
+	}
+
+	before := h.sync.Status().LastVerifyAt
+	watcher.handleError(errors.New("监听出错"))
+
+	// 监听出错会安排一次 5 秒后的校验；这里等它真的跑起来。
+	deadline := time.Now().Add(60 * time.Second)
+	for time.Now().Before(deadline) {
+		if h.sync.Status().LastVerifyAt.After(before) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("监听出错后没有补校验：%+v", h.sync.Status())
 }
 
 // TestLibrarySync_VerificationKeepsRunning 验证定期校验会一直跑下去。
