@@ -622,7 +622,8 @@ func (s *LibrarySyncService) processPending(ctx context.Context) {
 		return
 	}
 	if outcome == nil || outcome.Result == nil {
-		s.restorePending(pending)
+		// 结果为空同样算失败：这批变化留着重试，不能就这么丢掉。
+		s.retryPending(pending)
 		return
 	}
 	if !outcome.Changed {
