@@ -21,6 +21,7 @@ import { useVisualViewport } from "../../hooks/useVisualViewport";
 import { useAppMode } from "../../hooks/useAppMode";
 import { scanApi } from "../../api/scan";
 import { useScanSSE } from "../../hooks/useScanSSE";
+import { useLibraryRevisionSync } from "../../hooks/useLibrarySync";
 import Sidebar from "./Sidebar";
 import Toolbar from "./Toolbar";
 import ErrorBoundary from "../common/ErrorBoundary";
@@ -69,6 +70,8 @@ export default function AppShell() {
   // 扫描进度 + 取消（提升到 AppShell 后所有路由都能看到顶部进度条）
   const scanSse = useScanSSE();
   useFsCapabilities();
+  // 目录监听在后台更新图库时，界面上已经打开的列表要跟着换新数据。
+  useLibraryRevisionSync();
 
   useEffect(() => {
     setMobileNavOpen(false);
