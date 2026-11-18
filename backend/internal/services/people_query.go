@@ -15,33 +15,57 @@ import (
 	"strings"
 )
 
+// peopleGroupList 按人脸汇总出分组。
+//
+// include 决定哪些脸计入（资源过滤与隐藏分组由调用方给）。
+// 照片数是「出现在多少张不同的照片里」：同一张照片里同一个人的两张脸
+// 只算一张。用（分组, 照片）组成键去重，而不是给每个分组各建一张表 ——
+// 后者在一万张脸上要几万次分配，而分组列表每次请求都要算一遍。
+func peopleGroupList(
+	faces map[string]PersonFace,
+	effective func(PersonFace) string,
+	include func(resourceID, personID string) bool,
+) map[string]*PersonGroup {
+	groups := make(map[string]*PersonGroup)
+	photos := make(map[string]int)
+	seen := make(map[peopleGroupResource]struct{}, len(faces))
+	for _, face := range faces {
+		id := effective(face)
+		if include != nil && !include(face.ResourceID, id) {
+			continue
+		}
+		group := groups[id]
+		if group == nil {
+			group = &PersonGroup{ID: id}
+			groups[id] = group
+		}
+		group.FaceCount++
+		key := peopleGroupResource{group: id, resource: face.ResourceID}
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
+			photos[id]++
+			if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
+				group.CoverResourceID = face.ResourceID
+			}
+		}
+	}
+	for id, group := range groups {
+		group.PhotoCount = photos[id]
+	}
+	return groups
+}
+
 func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	ordinals := s.personOrdinalNamesLocked()
 	confirmed := peopleConfirmedPersonIDs(s.manual)
-	groups := make(map[string]*PersonGroup)
-	photos := make(map[string]map[string]struct{})
-	for _, face := range s.faces {
-		id := s.effectivePersonIDLocked(face)
-		group := groups[id]
-		if group == nil {
-			group = &PersonGroup{
-				ID: id, Name: s.personNameLocked(id, ordinals),
-				Confirmed: confirmed[id], Hidden: s.manual.Hidden[id],
-			}
-			groups[id] = group
-			photos[id] = map[string]struct{}{}
-		}
-		group.FaceCount++
-		photos[id][face.ResourceID] = struct{}{}
-		if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
-			group.CoverResourceID = face.ResourceID
-		}
-	}
+	groups := peopleGroupList(s.faces, s.effectivePersonIDLocked, nil)
 	result := make([]PersonGroup, 0, len(groups))
 	for id, group := range groups {
-		group.PhotoCount = len(photos[id])
+		group.Name = s.personNameLocked(id, ordinals)
+		group.Confirmed = confirmed[id]
+		group.Hidden = s.manual.Hidden[id]
 		if includeHidden || !group.Hidden {
 			result = append(result, *group)
 		}
@@ -127,30 +151,16 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 
 	ordinals := s.personOrdinalNamesLocked()
 	confirmed := peopleConfirmedPersonIDs(s.manual)
-	groups := make(map[string]*PersonGroup)
-	photos := make(map[string]map[string]struct{})
-	for _, face := range s.faces {
-		if includeResource != nil && !includeResource(face.ResourceID) {
-			continue
+	groups := peopleGroupList(s.faces, s.effectivePersonIDLocked, func(resourceID, personID string) bool {
+		if includeResource != nil && !includeResource(resourceID) {
+			return false
 		}
-		id := s.effectivePersonIDLocked(face)
-		if !includeHidden && s.manual.Hidden[id] {
-			continue
-		}
-		group := groups[id]
-		if group == nil {
-			group = &PersonGroup{
-				ID: id, Name: s.personNameLocked(id, ordinals),
-				Confirmed: confirmed[id], Hidden: s.manual.Hidden[id],
-			}
-			groups[id] = group
-			photos[id] = make(map[string]struct{})
-		}
-		group.FaceCount++
-		photos[id][face.ResourceID] = struct{}{}
-		if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
-			group.CoverResourceID = face.ResourceID
-		}
+		return includeHidden || !s.manual.Hidden[personID]
+	})
+	for id, group := range groups {
+		group.Name = s.personNameLocked(id, ordinals)
+		group.Confirmed = confirmed[id]
+		group.Hidden = s.manual.Hidden[id]
 	}
 
 	capacity := 0
@@ -163,8 +173,7 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 	}
 	result := make([]PersonGroup, 0, len(groups))
 	total := 0
-	for id, group := range groups {
-		group.PhotoCount = len(photos[id])
+	for _, group := range groups {
 		if !includeHidden && group.Hidden {
 			continue
 		}
@@ -358,35 +367,67 @@ func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFac
 // 名字至少说得出「这是第几个」。序数会随分组集合变化而重排：分组多了少了，
 // 后面那些的号跟着挪。这是可接受的 —— 用户一旦改名就固定下来
 // （改名存在 state/people.json）。
-func (s *PeopleService) personOrdinalNamesLocked() map[string]string {
-	photos := make(map[string]map[string]struct{})
-	covers := make(map[string]string)
-	for _, face := range s.faces {
-		id := s.effectivePersonIDLocked(face)
-		if photos[id] == nil {
-			photos[id] = make(map[string]struct{})
+// peopleGroupResource 标识「某个分组出现在某张照片里」。
+type peopleGroupResource struct {
+	group    string
+	resource string
+}
+
+// peopleGroupSummary 是一个分组的汇总。
+type peopleGroupSummary struct {
+	// PhotoCount 是这个分组出现在多少张不同的照片里。
+	PhotoCount int
+	// CoverResourceID 是其中最小的那个资源 ID。
+	CoverResourceID string
+	// FaceCount 是这个分组的人脸总数。
+	FaceCount int
+}
+
+// peopleGroupSummaries 一次扫完人脸，给出每个分组的照片数、封面与人脸数。
+//
+// 照片数是「出现在多少张不同的照片里」：同一张照片里同一个人的两张脸
+// 只算一张。用（分组, 照片）组成键去重，而不是给每个分组各建一张表 ——
+// 后者在一万张脸上要几万次分配，而分组列表每次请求都要算一遍。
+func peopleGroupSummaries(faces map[string]PersonFace, effective func(PersonFace) string) map[string]peopleGroupSummary {
+	seen := make(map[peopleGroupResource]struct{}, len(faces))
+	summaries := make(map[string]peopleGroupSummary, len(faces)/4)
+	for _, face := range faces {
+		id := effective(face)
+		key := peopleGroupResource{group: id, resource: face.ResourceID}
+		summary := summaries[id]
+		summary.FaceCount++
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
+			summary.PhotoCount++
+			if summary.CoverResourceID == "" || face.ResourceID < summary.CoverResourceID {
+				summary.CoverResourceID = face.ResourceID
+			}
 		}
-		photos[id][face.ResourceID] = struct{}{}
-		if cover, ok := covers[id]; !ok || face.ResourceID < cover {
-			covers[id] = face.ResourceID
-		}
+		summaries[id] = summary
 	}
-	ids := make([]string, 0, len(photos))
-	for id := range photos {
+	return summaries
+}
+
+func (s *PeopleService) personOrdinalNamesLocked() map[string]string {
+	summaries := peopleGroupSummaries(s.faces, s.effectivePersonIDLocked)
+	ids := make([]string, 0, len(summaries))
+	for id := range summaries {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool {
 		left, right := ids[i], ids[j]
-		if len(photos[left]) != len(photos[right]) {
-			return len(photos[left]) > len(photos[right])
+		if summaries[left].PhotoCount != summaries[right].PhotoCount {
+			return summaries[left].PhotoCount > summaries[right].PhotoCount
 		}
-		if covers[left] != covers[right] {
-			return covers[left] < covers[right]
+		if summaries[left].CoverResourceID != summaries[right].CoverResourceID {
+			return summaries[left].CoverResourceID < summaries[right].CoverResourceID
 		}
 		return left < right
 	})
 	names := make(map[string]string, len(ids))
 	number := 0
+	// 名字一次拼好：每组两次分配（数字与拼接）在这个列表页上是白花的。
+	nameBuffer := make([]byte, 0, 16)
 	for _, id := range ids {
 		if s.manual.Names[id] != "" {
 			// 用户改过名的分组不占号：没改名的那些连着排下去，
@@ -394,7 +435,9 @@ func (s *PeopleService) personOrdinalNamesLocked() map[string]string {
 			continue
 		}
 		number++
-		names[id] = "人物 " + strconv.Itoa(number)
+		nameBuffer = append(nameBuffer[:0], "人物 "...)
+		nameBuffer = strconv.AppendInt(nameBuffer, int64(number), 10)
+		names[id] = string(nameBuffer)
 	}
 	return names
 }
@@ -524,83 +567,121 @@ func (s *PeopleService) AllFaces() []PersonFace {
 // GroupPhotoStats counts each group's distinct current photos and classifies
 // group photos using both detected face count and normalized face size. The
 // callback excludes resources outside the current photo library.
+// peoplePhotoFace 是照片统计要用到的那张脸。
+//
+// 统计只需要资源、分组、框与检测分，所以用一条轻量记录代替整张 PersonFace：
+// 整张复制会把特征向量与记录哈希也带着走，一次列表请求就要复制一遍全量人脸。
+type peoplePhotoFace struct {
+	resourceID string
+	groupID    string
+	box        []float32
+	score      float32
+}
+
 func (s *PeopleService) GroupPhotoStats(includeResource func(string) bool, faceCountThreshold int) map[string]PersonGroupPhotoStats {
 	s.mu.RLock()
-	faces := make([]PersonFace, 0, len(s.faces))
+	faces := make([]peoplePhotoFace, 0, len(s.faces))
 	dimensionsLookup := s.sourceDimensions
 	for _, face := range s.faces {
-		face.PersonID = s.effectivePersonIDLocked(face)
-		face.embedding = nil
-		face.recordHash = ""
-		faces = append(faces, face)
+		faces = append(faces, peoplePhotoFace{
+			resourceID: face.ResourceID,
+			groupID:    s.effectivePersonIDLocked(face),
+			box:        face.Box,
+			score:      face.Score,
+		})
 	}
 	s.mu.RUnlock()
 
-	stats := make(map[string]PersonGroupPhotoStats)
-	facesByResource := make(map[string][]PersonFace)
-	dimensionsByResource := make(map[string]MediaDimensions)
-	resourcesByGroup := make(map[string]map[string][]PersonFace)
+	// 先数一遍每个资源、每个分组各有多少张脸。
+	// 后面按这个数量预分配缓冲，避免切片反复扩容。
+	resourceFaceCounts := make(map[string]int)
+	groupFaceCounts := make(map[string]int)
 	for _, face := range faces {
-		if includeResource != nil && !includeResource(face.ResourceID) {
+		if includeResource != nil && !includeResource(face.resourceID) {
 			continue
 		}
-		facesByResource[face.ResourceID] = append(facesByResource[face.ResourceID], face)
-		groupID := face.PersonID
-		if resourcesByGroup[groupID] == nil {
-			resourcesByGroup[groupID] = make(map[string][]PersonFace)
-		}
-		resourcesByGroup[groupID][face.ResourceID] = append(resourcesByGroup[groupID][face.ResourceID], face)
+		resourceFaceCounts[face.resourceID]++
+		groupFaceCounts[face.groupID]++
 	}
-	groupPhotos := make(map[string]bool, len(facesByResource))
-	for resourceID, resourceFaces := range facesByResource {
-		groupPhoto := len(resourceFaces) > faceCountThreshold
-		faceSizes := make([]float64, 0, len(resourceFaces))
+
+	// 每个分组出现的资源：照片数按资源算，不按脸算。
+	groupResources := make(map[peopleGroupResource]struct{}, len(groupFaceCounts))
+	// 每个分组的相对脸尺寸与检测分，列表要展示这两项的分位数。
+	groupSizes := make(map[string][]float64, len(groupFaceCounts))
+	groupScores := make(map[string][]float64, len(groupFaceCounts))
+	for groupID, count := range groupFaceCounts {
+		groupSizes[groupID] = make([]float64, 0, count)
+		groupScores[groupID] = make([]float64, 0, count)
+	}
+	// 每个资源里所有脸的相对尺寸：判定合影要用该资源的脸数与尺寸中位数。
+	resourceSizes := make(map[string][]float64, len(resourceFaceCounts))
+
+	longSideByResource := make(map[string]float64, len(resourceFaceCounts))
+	longSideOf := func(resourceID string) float64 {
+		if longSide, ok := longSideByResource[resourceID]; ok {
+			return longSide
+		}
+		longSide := 0.0
 		if dimensionsLookup != nil {
 			dimensions := dimensionsLookup(resourceID)
-			dimensionsByResource[resourceID] = dimensions
 			if dimensions.Known() {
-				longSide := float64(max(dimensions.Width, dimensions.Height))
-				for _, face := range resourceFaces {
-					if len(face.Box) >= 4 && longSide > 0 {
-						faceSizes = append(faceSizes, float64(max(face.Box[2], face.Box[3]))/longSide)
-					}
-				}
+				longSide = float64(max(dimensions.Width, dimensions.Height))
 			}
 		}
-		if !groupPhoto && len(resourceFaces) >= PeopleGroupPhotoMinimumFaces && len(faceSizes) > 0 &&
-			peopleP50(faceSizes) <= PeopleGroupPhotoRelativeFaceSizeThreshold {
+		longSideByResource[resourceID] = longSide
+		return longSide
+	}
+
+	for _, face := range faces {
+		if includeResource != nil && !includeResource(face.resourceID) {
+			continue
+		}
+		groupID := face.groupID
+		groupScores[groupID] = append(groupScores[groupID], float64(face.score))
+		groupResources[peopleGroupResource{group: groupID, resource: face.resourceID}] = struct{}{}
+		longSide := longSideOf(face.resourceID)
+		if longSide <= 0 || len(face.box) < 4 {
+			continue
+		}
+		size := float64(max(face.box[2], face.box[3])) / longSide
+		groupSizes[groupID] = append(groupSizes[groupID], size)
+		sizes := resourceSizes[face.resourceID]
+		if sizes == nil {
+			sizes = make([]float64, 0, resourceFaceCounts[face.resourceID])
+		}
+		resourceSizes[face.resourceID] = append(sizes, size)
+	}
+
+	groupPhotos := make(map[string]bool, len(resourceFaceCounts))
+	for resourceID, faceCount := range resourceFaceCounts {
+		groupPhoto := faceCount > faceCountThreshold
+		sizes := resourceSizes[resourceID]
+		if !groupPhoto && faceCount >= PeopleGroupPhotoMinimumFaces && len(sizes) > 0 &&
+			peopleP50(sizes) <= PeopleGroupPhotoRelativeFaceSizeThreshold {
 			groupPhoto = true
 		}
 		groupPhotos[resourceID] = groupPhoto
 	}
-	for groupID, resources := range resourcesByGroup {
-		groupStats := PersonGroupPhotoStats{PhotoCount: len(resources)}
-		faceSizes := make([]float64, 0)
-		detectionScores := make([]float64, 0)
-		for resourceID, groupFaces := range resources {
-			if groupPhotos[resourceID] {
-				groupStats.LargeGroupPhotoCount++
-			} else {
-				groupStats.OrdinaryPhotoCount++
-			}
-			if dimensionsLookup != nil {
-				dimensions := dimensionsByResource[resourceID]
-				if dimensions.Known() {
-					longSide := float64(max(dimensions.Width, dimensions.Height))
-					for _, face := range groupFaces {
-						if len(face.Box) >= 4 && longSide > 0 {
-							faceSizes = append(faceSizes, float64(max(face.Box[2], face.Box[3]))/longSide)
-						}
-					}
-				}
-			}
-			for _, face := range groupFaces {
-				detectionScores = append(detectionScores, float64(face.Score))
-			}
+
+	photoCountByGroup := make(map[string]int, len(groupFaceCounts))
+	largeCountByGroup := make(map[string]int, len(groupFaceCounts))
+	for key := range groupResources {
+		photoCountByGroup[key.group]++
+		if groupPhotos[key.resource] {
+			largeCountByGroup[key.group]++
 		}
-		groupStats.RelativeFaceSizeP10 = peopleP10(faceSizes)
-		groupStats.DetectionP10 = peopleP10(detectionScores)
-		stats[groupID] = groupStats
+	}
+
+	stats := make(map[string]PersonGroupPhotoStats, len(groupFaceCounts))
+	for groupID := range groupFaceCounts {
+		largeCount := largeCountByGroup[groupID]
+		stats[groupID] = PersonGroupPhotoStats{
+			PhotoCount:           photoCountByGroup[groupID],
+			LargeGroupPhotoCount: largeCount,
+			OrdinaryPhotoCount:   photoCountByGroup[groupID] - largeCount,
+			RelativeFaceSizeP10:  peopleP10(groupSizes[groupID]),
+			DetectionP10:         peopleP10(groupScores[groupID]),
+		}
 	}
 	return stats
 }
