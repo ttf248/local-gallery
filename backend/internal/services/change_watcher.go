@@ -510,26 +510,31 @@ func (w *ChangeWatcher) flushLoop(ctx context.Context) {
 }
 
 // flush 提交当前批次。文件仍在写入时推迟到下一轮。
+//
+// 批次在取出时就换走：换走之后这一批只归 flush 所有，事件处理那边
+// 往新批次里写，两边不再碰同一份数据 —— 否则「读批次」与「写批次」
+// 会并发跑在同一张表上。
 func (w *ChangeWatcher) flush(ctx context.Context) {
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()
 		return
 	}
-	pending := w.pending
-	w.mu.Unlock()
-
-	if pending.Empty() {
-		w.mu.Lock()
+	batch := w.pending
+	if batch.Empty() {
 		w.batchAt = time.Time{}
 		w.deadline = time.Time{}
 		w.mu.Unlock()
 		return
 	}
+	// 把批次换走：之后到达的事件进入新的批次。
+	w.pending = newSyncChangeSet()
+	w.mu.Unlock()
 
-	if !w.filesStable(pending) {
-		// 文件还在写：重新计时，等它写完再提交。
+	if !w.filesStable(batch) {
+		// 文件还在写：这一批放回去，重新计时，等它写完再提交。
 		w.mu.Lock()
+		w.pending.Merge(batch)
 		w.rounds++
 		exhausted := w.rounds >= watchStabilityRounds
 		w.mu.Unlock()
@@ -537,10 +542,10 @@ func (w *ChangeWatcher) flush(ctx context.Context) {
 			w.armTimer()
 			return
 		}
+		// 超过确认轮次：按当前状态提交，避免永远等下去。
 	}
 
 	w.mu.Lock()
-	w.pending = newSyncChangeSet()
 	w.sizes = make(map[string]int64)
 	w.batchAt = time.Time{}
 	w.deadline = time.Time{}
@@ -548,7 +553,7 @@ func (w *ChangeWatcher) flush(ctx context.Context) {
 	w.mu.Unlock()
 
 	if w.opts.OnChange != nil {
-		w.opts.OnChange(pending)
+		w.opts.OnChange(batch)
 	}
 }
 
@@ -557,13 +562,16 @@ func (w *ChangeWatcher) flush(ctx context.Context) {
 // 判定方式是「两次观测之间大小没有变化」。第一次观测只建立基线，
 // 还不能确认文件写完了 —— 新写入的图片要等下一轮才提交，
 // 免得把写了一半的文件写进图库。
-func (w *ChangeWatcher) filesStable(pending *SyncChangeSet) bool {
+//
+// 批次在调用方那里已经是独占的，这里读它不需要加锁；
+// 只有跨批次共用的 sizes 需要保护。
+func (w *ChangeWatcher) filesStable(batch *SyncChangeSet) bool {
 	stable := true
 	w.mu.Lock()
 	sizes := w.sizes
 	w.mu.Unlock()
-	next := make(map[string]int64, len(pending.Files))
-	for path := range pending.Files {
+	next := make(map[string]int64, len(batch.Files))
+	for path := range batch.Files {
 		info, err := os.Lstat(path)
 		if err != nil {
 			// 文件已经消失：不是「仍在写入」，交给删除流程处理。

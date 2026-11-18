@@ -121,14 +121,38 @@ const (
 	// maxAnalysisQueue 是自动分析排队等待的资源上限。
 	//
 	// 一次大批量导入可能带来上万个资源；全部排进任务中心会让队列
-	// 失去意义。超出上限时只保留最新的一批，其余交给后续批次。
+	// 失去意义。超出上限时不丢任务，而是改成让该模块做一次全库增量
+	// 分析 —— 任务中心会按文件指纹挑出真正需要重算的那些。
 	maxAnalysisQueue = 5000
+	// analysisBatchSize 是自动分析一次提交给任务中心的资源数量上限。
+	//
+	// 分批提交让一次大批量导入能够连续跑完：任务中心同一时刻只跑一批，
+	// 下一批等上一批结束再排。
+	analysisBatchSize = 500
+	// maxAnalysisRetries 是自动分析排队连续失败的重试上限。
+	//
+	// 失败要能恢复（模型刚装好、磁盘刚恢复），但也不能无限重试：
+	// 超过上限就放弃这批并如实记下原因。
+	maxAnalysisRetries = 3
+	// maxIncrementalRetries 是增量扫描连续失败的重试上限。
+	//
+	// 失败的变化必须留着等下一轮；但磁盘一直读不了时也不能无限重试，
+	// 超过上限就交给一次全量校验把图库对齐。
+	maxIncrementalRetries = 5
 	// maxPendingChanges 是待处理变化集合的上限。
 	//
 	// 图库长时间不可用时变化会一直攒着；攒到上限就丢掉旧的 ——
 	// 一次全量校验会把它们全部覆盖掉。
 	maxPendingChanges = 20000
 )
+
+// incrementalScanner 是增量扫描引擎的最小接口。
+//
+// 抽成接口是为了让「扫描失败后怎么办」这条路径能被测试覆盖：
+// 真让磁盘读不出来很难在测试里稳定复现。
+type incrementalScanner interface {
+	Apply(previous *models.ScanResult, changes *SyncChangeSet, opts ScanOptions) (*IncrementalOutcome, error)
+}
 
 // LibrarySyncService 把目录监听、增量扫描与分析任务串成一条链路。
 //
@@ -138,7 +162,7 @@ const (
 //   - 监听不可靠时由定期校验兜底。
 type LibrarySyncService struct {
 	opts   LibrarySyncOptions
-	engine *IncrementalEngine
+	engine incrementalScanner
 
 	mu       sync.Mutex
 	stateMu  sync.Mutex
@@ -146,8 +170,14 @@ type LibrarySyncService struct {
 	state    librarySyncState
 	watcher  *ChangeWatcher
 	pending  *SyncChangeSet
+	// pendingRetries 是待处理变化连续失败的次数。
+	pendingRetries int
 	// analysisQueue 是「模块 → 待分析资源」的排队表。
-	analysisQueue map[string]map[string]struct{}
+	analysisQueue map[string]*analysisQueue
+	// analysisFull 标记某些模块要做一次全库增量分析。
+	analysisFull map[string]bool
+	// analysisFailures 是各模块排队连续失败的次数。
+	analysisFailures map[string]int
 	// analysisDirty 标记「有变化需要重算智能相册」。
 	analysisDirty bool
 	// pendingOverflow 标记待处理的变化曾经多到被丢弃过：
@@ -158,6 +188,76 @@ type LibrarySyncService struct {
 	cancel          context.CancelFunc
 	closed          bool
 	verifyAt        time.Time
+}
+
+// analysisQueue 是一个模块的待分析资源队列。
+//
+// 队列按先来后到排，重复的资源只排一次。它是内存里的有界队列：
+// 超过上限时不丢任务，而是交给一次全库增量分析接手
+// （见 LibrarySyncService.analysisFull）。
+type analysisQueue struct {
+	ids  []string
+	seen map[string]struct{}
+}
+
+func newAnalysisQueue() *analysisQueue {
+	return &analysisQueue{seen: map[string]struct{}{}}
+}
+
+// push 把资源排进队列，已经在队列里的不重复排。
+func (q *analysisQueue) push(ids []string) {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, exists := q.seen[id]; exists {
+			continue
+		}
+		q.seen[id] = struct{}{}
+		q.ids = append(q.ids, id)
+	}
+}
+
+// take 取出队列最前面的若干个资源。
+//
+// 取走的资源同时从去重表里移除：它们已经交给任务中心，之后内容再变
+// （原地覆盖一张照片）还要能重新排进来。去重表留着的话，第二次改动
+// 会被当成重复而丢掉 —— 旧的分析结果就一直留着。
+func (q *analysisQueue) take(limit int) []string {
+	if limit <= 0 || len(q.ids) == 0 {
+		return nil
+	}
+	if limit > len(q.ids) {
+		limit = len(q.ids)
+	}
+	taken := q.ids[:limit]
+	q.ids = q.ids[limit:]
+	for _, id := range taken {
+		delete(q.seen, id)
+	}
+	return taken
+}
+
+// restore 把一批资源放回队列最前面，保持先来后到的顺序。
+func (q *analysisQueue) restore(ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	q.ids = append(append(make([]string, 0, len(ids)+len(q.ids)), ids...), q.ids...)
+	for _, id := range ids {
+		q.seen[id] = struct{}{}
+	}
+}
+
+// reset 清空队列。
+func (q *analysisQueue) reset() {
+	q.ids = nil
+	q.seen = map[string]struct{}{}
+}
+
+// len 是队列里待分析的资源数量。
+func (q *analysisQueue) len() int {
+	return len(q.ids)
 }
 
 // NewLibrarySyncService 创建自动同步服务并读取已保存的开关。
@@ -172,11 +272,13 @@ func NewLibrarySyncService(opts LibrarySyncOptions) (*LibrarySyncService, error)
 		opts.VerifyInterval = defaultVerifyInterval
 	}
 	service := &LibrarySyncService{
-		opts:          opts,
-		engine:        NewIncrementalEngine(),
-		pending:       newSyncChangeSet(),
-		analysisQueue: make(map[string]map[string]struct{}),
-		wake:          make(chan struct{}, 1),
+		opts:             opts,
+		engine:           NewIncrementalEngine(),
+		pending:          newSyncChangeSet(),
+		analysisQueue:    make(map[string]*analysisQueue),
+		analysisFull:     make(map[string]bool),
+		analysisFailures: make(map[string]int),
+		wake:             make(chan struct{}, 1),
 	}
 	if err := service.loadState(); err != nil {
 		return nil, err
@@ -311,6 +413,9 @@ func (s *LibrarySyncService) Update(ctx context.Context, settings LibrarySyncSet
 			s.recordError("watcher_start_failed")
 			return s.Status(), err
 		}
+		// 监听关着的那段时间里磁盘上的变化不会有事件：
+		// 重新打开后要补一次校验，把这段时间漏掉的找回来。
+		s.scheduleVerify(time.Now().Add(startupVerifyDelay))
 	case !settings.Enabled && previous.Enabled:
 		s.stopWatcher()
 	}
@@ -336,8 +441,8 @@ func (s *LibrarySyncService) Status() LibrarySyncStatus {
 	settings := s.settings
 	pending := s.pending.Size()
 	queued := 0
-	for _, set := range s.analysisQueue {
-		queued += len(set)
+	for _, entry := range s.analysisQueue {
+		queued += entry.len()
 	}
 	watcher := s.watcher
 	s.mu.Unlock()
@@ -512,16 +617,21 @@ func (s *LibrarySyncService) processPending(ctx context.Context) {
 	if err != nil {
 		s.recordError("incremental_failed")
 		log.Printf("增量扫描失败: %v", err)
+		// 失败不能把变化丢掉：这批变化放回队列，等下一轮再试。
+		s.retryPending(pending)
 		return
 	}
 	if outcome == nil || outcome.Result == nil {
+		s.restorePending(pending)
 		return
 	}
 	if !outcome.Changed {
-		// 图库结构没变（例如只是目录被碰了一下）：不发布，
+		// 图库结构与内容都没变（例如只是目录被碰了一下）：不发布，
 		// 图库版本不跳动，界面也不用白刷一遍。
+		s.clearPendingRetries()
 		return
 	}
+	s.clearPendingRetries()
 
 	// 发布前先记下离开图库的资源：它们在旧快照里还有 ID，
 	// 发布之后就没法再解析了。
@@ -614,6 +724,9 @@ func (s *LibrarySyncService) collectChangedResources(
 }
 
 // queueAnalysis 把变动的资源排进分析队列。
+//
+// 队列满了不丢任务：改成给该模块记一次全库增量分析，
+// 由任务中心按文件指纹挑出真正需要重算的那些。
 func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
 	if len(resourceIDs) == 0 {
 		return
@@ -625,28 +738,29 @@ func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
 	}
 	queued := 0
 	for _, module := range s.analysisModules() {
-		set, exists := s.analysisQueue[module]
+		entry, exists := s.analysisQueue[module]
 		if !exists {
-			set = make(map[string]struct{})
-			s.analysisQueue[module] = set
+			entry = newAnalysisQueue()
+			s.analysisQueue[module] = entry
 		}
-		for _, id := range resourceIDs {
-			set[id] = struct{}{}
+		entry.push(resourceIDs)
+		if entry.len() > maxAnalysisQueue {
+			// 超出上限：队列清空，改成一次全库增量分析。
+			// 丢掉的是「哪些文件排队了」这份名单，不是任务本身。
+			entry.reset()
+			s.analysisFull[module] = true
 		}
-		if len(set) > maxAnalysisQueue {
-			s.analysisQueue[module] = trimStringSet(set, maxAnalysisQueue)
-		}
-		queued += len(set)
+		queued += entry.len()
 	}
 	// 只有真的排进了分析任务才需要重算智能相册。
-	s.analysisDirty = queued > 0
+	s.analysisDirty = s.analysisDirty || queued > 0
 	s.mu.Unlock()
 }
 
 // pumpAnalysis 把排队的资源提交成分析任务。
 //
-// 一次只提交一个模块的任务：任务中心同一时刻只跑一个任务，
-// 其余排队等它结束。这样一次文件变化不会同时点亮好几条流水线。
+// 一次只提交一批：任务中心同一时刻只跑一个任务，批次之间排队等它结束。
+// 这样一次导入几千张照片也不会把任务中心一次塞满。
 func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
 	if s.opts.Jobs == nil {
 		return
@@ -661,43 +775,93 @@ func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
 
 	for _, module := range modules {
 		s.mu.Lock()
-		set := s.analysisQueue[module]
-		if len(set) == 0 {
+		full := s.analysisFull[module]
+		entry := s.analysisQueue[module]
+		if !full && (entry == nil || entry.len() == 0) {
 			s.mu.Unlock()
 			continue
 		}
-		ids := make([]string, 0, len(set))
-		for id := range set {
-			ids = append(ids, id)
+		var ids []string
+		if full {
+			// 全库增量分析：任务中心按文件指纹挑出真正要重算的资源。
+			delete(s.analysisFull, module)
+			entry.reset()
+			s.mu.Unlock()
+			if _, _, err := s.opts.Jobs.Start(module, AIJobModeIncremental); err != nil {
+				if !errors.Is(err, ErrAIJobActive) {
+					s.recordAnalysisFailure(module, err)
+				}
+				return
+			}
+			continue
 		}
-		delete(s.analysisQueue, module)
+		ids = entry.take(analysisBatchSize)
 		s.mu.Unlock()
 		sort.Strings(ids)
 
 		_, _, err := s.opts.Jobs.StartForResources(module, ids)
 		if err == nil {
+			s.clearAnalysisFailure(module)
 			continue
 		}
 		if errors.Is(err, ErrAIJobActive) {
 			// 任务中心正忙：放回去，等下一轮。
-			s.mu.Lock()
-			restored := s.analysisQueue[module]
-			if restored == nil {
-				restored = make(map[string]struct{})
-				s.analysisQueue[module] = restored
-			}
-			for _, id := range ids {
-				restored[id] = struct{}{}
-			}
-			s.mu.Unlock()
+			s.restoreAnalysis(module, ids)
 			return
 		}
-		// 模块不可用（模型没装、人脸分析没打开）：丢掉这批，
-		// 不再反复重试。
-		log.Printf("自动分析排队失败 module=%s: %v", module, err)
+		// 模块暂时不可用（模型没装好、磁盘读不了）：这批留到下一轮再试。
+		// 连续失败超过上限才放弃，不能静默丢掉。
+		s.restoreAnalysis(module, ids)
+		s.recordAnalysisFailure(module, err)
 		return
 	}
 	s.refreshSmartAlbums()
+}
+
+// restoreAnalysis 把一批资源放回某个模块的队首。
+func (s *LibrarySyncService) restoreAnalysis(module string, ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	s.mu.Lock()
+	entry, exists := s.analysisQueue[module]
+	if !exists {
+		entry = newAnalysisQueue()
+		s.analysisQueue[module] = entry
+	}
+	entry.restore(ids)
+	s.mu.Unlock()
+}
+
+// recordAnalysisFailure 记下一次自动分析排队失败。
+//
+// 连续失败超过上限就放弃这批资源，并把原因如实记进状态 ——
+// 不能悄悄丢掉，也不能无限重试。
+func (s *LibrarySyncService) recordAnalysisFailure(module string, err error) {
+	s.mu.Lock()
+	s.analysisFailures[module]++
+	failures := s.analysisFailures[module]
+	exhausted := failures >= maxAnalysisRetries
+	if exhausted {
+		entry, exists := s.analysisQueue[module]
+		if exists {
+			entry.reset()
+		}
+		delete(s.analysisQueue, module)
+	}
+	s.mu.Unlock()
+	log.Printf("自动分析排队失败 module=%s（第 %d 次）: %v", module, failures, err)
+	if !exhausted {
+		return
+	}
+	s.recordError("analysis_queue_failed")
+}
+
+// clearAnalysisFailure 记下这个模块排队成功过一次。
+func (s *LibrarySyncService) clearAnalysisFailure(module string) {
+	s.mu.Lock()
+	delete(s.analysisFailures, module)
+	s.mu.Unlock()
 }
 
 // refreshSmartAlbums 在自动分析跑完之后重算智能相册。
@@ -709,8 +873,8 @@ func (s *LibrarySyncService) refreshSmartAlbums() {
 	dirty := s.analysisDirty
 	s.analysisDirty = false
 	queued := 0
-	for _, set := range s.analysisQueue {
-		queued += len(set)
+	for _, entry := range s.analysisQueue {
+		queued += entry.len()
 	}
 	s.mu.Unlock()
 	if !dirty || queued > 0 || s.opts.SmartAlbums == nil {
@@ -761,7 +925,9 @@ func (s *LibrarySyncService) maybeVerify(ctx context.Context) {
 	s.mu.Lock()
 	due := !s.verifyAt.IsZero() && time.Now().After(s.verifyAt)
 	if due {
-		s.verifyAt = time.Time{}
+		// 校验完要排下一次：不排的话只会在启动后校验一次，
+		// 之后监听再漏掉变化就永远补不回来了。
+		s.verifyAt = time.Now().Add(s.opts.VerifyInterval)
 	}
 	overflow := s.pendingOverflow
 	s.pendingOverflow = false
@@ -782,6 +948,8 @@ func (s *LibrarySyncService) maybeVerify(ctx context.Context) {
 }
 
 // scheduleVerify 安排一次校验扫描。
+//
+// 只能提前，不能推后：监听出错时要尽快补一次漏掉的变化。
 func (s *LibrarySyncService) scheduleVerify(at time.Time) {
 	s.mu.Lock()
 	if s.verifyAt.IsZero() || at.Before(s.verifyAt) {
@@ -849,17 +1017,58 @@ func (s *LibrarySyncService) recordError(code string) {
 
 // requeue 把一批变化放回队列，等下一轮再处理。
 func (s *LibrarySyncService) requeue(changes *SyncChangeSet) {
-	if changes == nil || changes.Empty() {
+	if !s.restorePending(changes) {
 		return
+	}
+	select {
+	case s.wake <- struct{}{}:
+	default:
+	}
+}
+
+// restorePending 把一批变化放回待处理集合。
+//
+// 返回值表示这批变化是否真的被放回去了（空批次不算）。
+func (s *LibrarySyncService) restorePending(changes *SyncChangeSet) bool {
+	if changes == nil || changes.Empty() {
+		return false
 	}
 	s.mu.Lock()
 	s.pending.Merge(changes)
 	s.trimPendingLocked()
 	s.mu.Unlock()
-	select {
-	case s.wake <- struct{}{}:
-	default:
+	return true
+}
+
+// retryPending 安排一批失败的变化稍后重试。
+//
+// 这里不唤醒主循环：立即重试会变成忙等 —— 磁盘一直读不了时，
+// 主循环会一秒几百次地重扫同一批变化。交给定时器，节奏才是固定的。
+//
+// 连续失败超过上限就放弃这批变化，改用一次全量校验把图库对齐：
+// 逐条重试已经没有意义，全量校验会把这些变化一次性覆盖掉。
+func (s *LibrarySyncService) retryPending(changes *SyncChangeSet) {
+	s.mu.Lock()
+	s.pendingRetries++
+	failures := s.pendingRetries
+	exhausted := failures >= maxIncrementalRetries
+	s.mu.Unlock()
+	if exhausted {
+		log.Printf("增量扫描连续失败 %d 次，改用全量校验对齐图库", failures)
+		s.mu.Lock()
+		s.pendingRetries = 0
+		s.pendingOverflow = true
+		s.mu.Unlock()
+		return
 	}
+	s.restorePending(changes)
+}
+
+// clearPendingRetries 记下这一轮增量扫描成功了。
+func (s *LibrarySyncService) clearPendingRetries() {
+	s.mu.Lock()
+	s.pendingRetries = 0
+	s.mu.Unlock()
 }
 
 // scanOptions 构造扫描选项。
@@ -869,21 +1078,4 @@ func (s *LibrarySyncService) scanOptions() ScanOptions {
 		exclude = s.opts.Exclude()
 	}
 	return ScanOptions{Roots: s.opts.Roots(), Exclude: exclude}
-}
-
-// trimStringSet 把集合裁剪到上限，保留字典序靠前的一部分。
-func trimStringSet(set map[string]struct{}, limit int) map[string]struct{} {
-	if len(set) <= limit {
-		return set
-	}
-	keys := make([]string, 0, len(set))
-	for key := range set {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	next := make(map[string]struct{}, limit)
-	for _, key := range keys[:limit] {
-		next[key] = struct{}{}
-	}
-	return next
 }

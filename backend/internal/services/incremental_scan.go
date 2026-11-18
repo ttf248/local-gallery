@@ -24,8 +24,19 @@ type IncrementalOutcome struct {
 	AddedDirs []string
 	// RemovedDirs 是消失的目录（绝对路径）。
 	RemovedDirs []string
-	// ChangedAlbums 是内容发生变化的相册目录（绝对路径）。
+	// ChangedAlbums 是媒体清单发生变化的相册目录（绝对路径）。
 	ChangedAlbums []string
+	// ChangedContentAlbums 是文件清单没变、但内容被改写过的相册目录
+	// （绝对路径）。
+	//
+	// 它与 ChangedAlbums 分开报：目录结构变了与文件内容变了是两件事，
+	// 前者要重建索引，后者要作废旧的分析结果。
+	ChangedContentAlbums []string
+	// ChangedContentFiles 是内容被改写过的媒体文件（绝对路径）。
+	//
+	// 只列出能从变化批次里对上号的那些：没有变化批次时（例如定期校验
+	// 走全量扫描）只能报出相册，报不出具体是哪一张。
+	ChangedContentFiles []string
 	// Warnings 是本轮重新读取目录时产生的告警。
 	Warnings []models.ScanWarning
 	// RescannedDirs 是本轮真正重新读取磁盘的目录数量。
@@ -42,7 +53,7 @@ func (o *IncrementalOutcome) ChangedResourceCount() int {
 	if o == nil {
 		return 0
 	}
-	return len(o.AddedFiles) + len(o.RemovedFiles)
+	return len(o.AddedFiles) + len(o.RemovedFiles) + len(o.ChangedContentFiles)
 }
 
 // dirNode 是扫描结果树里的一个目录节点。
@@ -80,7 +91,13 @@ type syncDiff struct {
 	addedDirs    []string
 	removedDirs  []string
 	changedDirs  map[string]struct{}
-	warnings     []models.ScanWarning
+	// contentDirs 是文件清单没变、内容却被改写过的相册目录。
+	contentDirs map[string]struct{}
+	// contentFiles 是内容被改写过的媒体文件。
+	contentFiles []string
+	// touched 是这一批变化里被写过的文件，用来在相册里定位到具体文件。
+	touched  map[string]struct{}
+	warnings []models.ScanWarning
 }
 
 // IncrementalEngine 把一批文件变化合并进上一份扫描结果。
@@ -115,7 +132,11 @@ func (e *IncrementalEngine) Apply(
 		scanner.rootKeys[pathutil.RootKey(path)] = struct{}{}
 	}
 
-	diff := &syncDiff{changedDirs: make(map[string]struct{})}
+	diff := &syncDiff{
+		changedDirs: make(map[string]struct{}),
+		contentDirs: make(map[string]struct{}),
+		touched:     changes.Files,
+	}
 	var allAlbums []models.Album
 	var allCollections []models.Collection
 	rescanned := 0
@@ -160,15 +181,17 @@ func (e *IncrementalEngine) Apply(
 	}
 
 	return &IncrementalOutcome{
-		Result:        result,
-		AddedFiles:    diff.addedFiles,
-		RemovedFiles:  diff.removedFiles,
-		AddedDirs:     diff.addedDirs,
-		RemovedDirs:   diff.removedDirs,
-		ChangedAlbums: sortedKeys(diff.changedDirs),
-		Warnings:      diff.warnings,
-		RescannedDirs: rescanned,
-		Changed:       resultFingerprint(result) != resultFingerprint(previous),
+		Result:               result,
+		AddedFiles:           diff.addedFiles,
+		RemovedFiles:         diff.removedFiles,
+		AddedDirs:            diff.addedDirs,
+		RemovedDirs:          diff.removedDirs,
+		ChangedAlbums:        sortedKeys(diff.changedDirs),
+		ChangedContentAlbums: sortedKeys(diff.contentDirs),
+		ChangedContentFiles:  diff.contentFiles,
+		Warnings:             diff.warnings,
+		RescannedDirs:        rescanned,
+		Changed:              resultFingerprint(result) != resultFingerprint(previous),
 	}, nil
 }
 
@@ -221,8 +244,13 @@ func previousRootContent(previous *models.ScanResult, root string, roots []strin
 
 // resultFingerprint 算出扫描结果的结构指纹。
 //
-// 指纹覆盖目录结构、媒体清单与目录修改时间：这三样变了才值得重新
-// 发布。只碰了一下目录（内容没变）不会让指纹变化，图库版本也就不跳动。
+// 指纹覆盖目录结构、媒体清单与相册的内容指纹：
+//   - 目录结构与媒体清单变了，图库里确实多了一张或少了一张；
+//   - 内容指纹变了，说明文件被原地改写过 —— 目录结构没变、目录修改
+//     时间也没变，只有内容变了。
+//
+// 目录修改时间不参与指纹：只是被碰了一下的目录不该让图库版本跳动，
+// 那只会让界面白刷一遍，还白白重建一次整库资源索引。
 func resultFingerprint(result *models.ScanResult) string {
 	if result == nil {
 		return ""
@@ -244,11 +272,10 @@ func resultFingerprint(result *models.ScanResult) string {
 			for _, file := range albums[i].VideoFiles {
 				write("v", file)
 			}
-			write(albums[i].ModTime.UTC().Format(time.RFC3339Nano))
+			write(albums[i].ContentSignature)
 		}
 		for i := range collections {
 			write(collections[i].Path)
-			write(collections[i].ModTime.UTC().Format(time.RFC3339Nano))
 			walk(collections[i].Albums, collections[i].Collections)
 		}
 	}
@@ -287,7 +314,15 @@ func (e *IncrementalEngine) rebuildRoot(
 			album.Virtual = true
 		}
 		stampNewAlbum(album, root.path, filepath.Base(root.path))
+		// 媒体根自身的散图也要比一次：漏掉它，根目录里新增或被覆盖的
+		// 照片既不会进变化清单，也不会被排进分析。
+		diff.diffAlbum(root.path, old, album)
 		albums = append(albums, *album)
+	} else if old != nil && old.album != nil {
+		// 根目录的散图被清空了：这些文件离开了图库。
+		// 子目录另行处理，这里只算根目录自己相册里的散图。
+		diff.removedFiles = append(diff.removedFiles, old.files...)
+		diff.changedDirs[root.path] = struct{}{}
 	}
 	albums = append(albums, childAlbums...)
 	collections := childCollections
@@ -570,7 +605,11 @@ func computeRebuildSet(changes *SyncChangeSet, roots []string) map[string]bool {
 	return rebuild
 }
 
-// diffAlbum 比较一个目录重建前后的媒体文件，算出新增与消失的部分。
+// diffAlbum 比较一个目录重建前后的媒体文件，算出新增、消失与内容变动。
+//
+// 文件清单没变但内容指纹变了，说明文件被原地改写过：目录结构没变，
+// 目录修改时间也没变，只有内容变了。这类改动必须被认出来 ——
+// 认不出来就等于「这张照片被覆盖了但图库不知道」。
 func (d *syncDiff) diffAlbum(path string, old *dirNode, album *models.Album) {
 	newFiles := albumFiles(album)
 	var oldFiles []string
@@ -581,9 +620,33 @@ func (d *syncDiff) diffAlbum(path string, old *dirNode, album *models.Album) {
 	d.addedFiles = append(d.addedFiles, added...)
 	d.removedFiles = append(d.removedFiles, removed...)
 	if len(added) == 0 && len(removed) == 0 && old != nil {
+		if old.album != nil && old.album.ContentSignature != "" &&
+			old.album.ContentSignature != album.ContentSignature {
+			d.contentDirs[path] = struct{}{}
+			d.changedDirs[path] = struct{}{}
+			d.contentFiles = append(d.contentFiles, d.touchedFilesIn(album)...)
+		}
 		return
 	}
 	d.changedDirs[path] = struct{}{}
+}
+
+// touchedFilesIn 找出相册里被这一批变化写过的文件。
+//
+// 变化批次里有具体文件时才能定位到「是哪一张被改了」；没有批次
+// （例如定期校验走全量扫描）时只能报出相册本身。
+func (d *syncDiff) touchedFilesIn(album *models.Album) []string {
+	if len(d.touched) == 0 {
+		return nil
+	}
+	var files []string
+	for _, file := range albumFiles(album) {
+		if _, exists := d.touched[file]; exists {
+			files = append(files, file)
+		}
+	}
+	sort.Strings(files)
+	return files
 }
 
 // removeNode 把一整棵消失的子树里的文件记为删除。

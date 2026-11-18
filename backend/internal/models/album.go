@@ -154,6 +154,13 @@ type Album struct {
 	// ContentKind 是相册的内容属性："photo"（照片）或 "comic"（漫画）。
 	// 它完全继承自所属媒体根的属性，不按图片数量推断，也不单独设置。
 	ContentKind string `json:"contentKind,omitempty"`
+	// ContentSignature 是相册的内容指纹：媒体文件的大小与纳秒修改时间
+	// 汇总出的哈希。
+	//
+	// 它回答的是「文件清单没变，内容变没变」。原地覆盖一张照片时目录
+	// 结构、文件清单、目录修改时间都没变，只有内容指纹会变 —— 没有它
+	// 就认不出这类改动，界面与派生数据都会停留在旧内容上。
+	ContentSignature string `json:"contentSignature,omitempty"`
 }
 
 // MarshalJSON 保证当前 API 的媒体列表始终是数组，避免调用方区分 null 与 []。

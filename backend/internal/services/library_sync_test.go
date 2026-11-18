@@ -329,11 +329,20 @@ func TestLibrarySync_IncrementalResultMatchesFullScan(t *testing.T) {
 // syncTestAnalyzer 是自动分析链路用的假分析器：只计数，不解析图片。
 type syncTestAnalyzer struct {
 	analyzed atomic.Int64
+	// gate 非空时，分析会一直等这个通道关闭：用来制造「任务中心正忙」。
+	gate chan struct{}
 }
 
 func (a *syncTestAnalyzer) Type() string    { return AIJobTypeMetadata }
 func (a *syncTestAnalyzer) Version() string { return "sync-test-v1" }
-func (a *syncTestAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput, error) {
+func (a *syncTestAnalyzer) Analyze(ctx context.Context, _ io.ReadSeeker) (AIAnalysisOutput, error) {
+	if a.gate != nil {
+		select {
+		case <-a.gate:
+		case <-ctx.Done():
+			return AIAnalysisOutput{}, ctx.Err()
+		}
+	}
 	a.analyzed.Add(1)
 	return AIAnalysisOutput{Status: "ok", Data: json.RawMessage(`{}`)}, nil
 }

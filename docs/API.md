@@ -147,6 +147,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 相册同时返回 `date` 与 `dateSource`。`dateSource` 取值为 `filename` / `folder` / `modified`，服务端按该顺序降级。`filename` 是从文件名推断的拍摄时间（`IMG_20240101_105902.jpg`、`2024-01-01`、`2024年10月1日` 这类写法），不读 EXIF；一本相册取其中出现次数最多的那一天（并列取较早的）。`folder` 只接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`、`YYYYMMDD` 或严格的 `YYYY/MM/DD` 路径分段，不会从任意名称子串中猜测。集合与相册一样带 `date` / `dateSource` / `modTime`：集合的日期是后代相册拍摄时间的代表值（按媒体数加权取众数），没有拍摄时间时退回目录日期或目录修改时间。
 
+相册还带 `contentSignature`：这本相册里媒体文件内容（大小与纳秒修改时间）汇总出的指纹。它区分「目录结构变了」与「文件内容变了」——原地覆盖一张照片时文件清单与目录修改时间都没变，只有这个指纹会变。客户端不需要解释它，只把它当作相册内容是否变过的判据。
+
 媒体库浏览只使用下列 revision 分页接口。除 `/api/library/manifest`、
 `/api/library/nodes/query`、`/api/tags/query` 与 `/api/albums/:albumId/media` 外，
 它们都接受必填的 `kind` 查询参数，取值 `photo` / `comic`：

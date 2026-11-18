@@ -3,6 +3,9 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -778,22 +781,47 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 		cover, coverKind = videoPaths[0], "video"
 	}
 	return &models.Album{
-		Type:         "album",
-		Path:         dir,
-		Name:         name,
-		ImageFiles:   imagePaths,
-		VideoFiles:   videoPaths,
-		CoverImage:   cover,
-		CoverKind:    coverKind,
-		ImageCount:   len(imagePaths),
-		VideoCount:   len(videoPaths),
-		FolderSize:   totalSize,
-		Tags:         ExtractTags(name),
-		ModTime:      modTime,
-		Date:         date,
-		DateSource:   dateSource,
-		CaptureDates: captureDates,
+		Type:             "album",
+		Path:             dir,
+		Name:             name,
+		ImageFiles:       imagePaths,
+		VideoFiles:       videoPaths,
+		CoverImage:       cover,
+		CoverKind:        coverKind,
+		ImageCount:       len(imagePaths),
+		VideoCount:       len(videoPaths),
+		FolderSize:       totalSize,
+		Tags:             ExtractTags(name),
+		ModTime:          modTime,
+		Date:             date,
+		DateSource:       dateSource,
+		CaptureDates:     captureDates,
+		ContentSignature: albumContentSignature(images, videos),
 	}
+}
+
+// albumContentSignature 汇总相册里媒体文件的内容指纹。
+//
+// 只看文件清单看不出「原地覆盖」：文件还在、名字没变，目录修改时间也没变。
+// 把每个文件的大小与纳秒修改时间算进指纹，覆盖就能被认出来，
+// 界面与派生数据（缩略图、分析结果）因此不会停留在旧内容上。
+//
+// 指纹只在本相册内部比较：同一本相册里文件名唯一，因此用文件名做键即可。
+func albumContentSignature(images, videos []fileEntry) string {
+	hash := sha256.New()
+	write := func(entries []fileEntry) {
+		sorted := make([]fileEntry, len(entries))
+		copy(sorted, entries)
+		sort.Slice(sorted, func(left, right int) bool {
+			return sorted[left].path < sorted[right].path
+		})
+		for _, entry := range sorted {
+			_, _ = fmt.Fprintf(hash, "%s\x00%d\x00%d\n", filepath.Base(entry.path), entry.size, entry.modTime.UnixNano())
+		}
+	}
+	write(images)
+	write(videos)
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // aggregateCaptureDates 汇总一本相册里从文件名推断出的拍摄日期。
