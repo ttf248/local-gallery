@@ -970,6 +970,38 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual("gpu_out_of_memory", results[0]["error"])
         self.assertEqual("cuda", model.device)
 
+    def test_auto_mode_stays_on_cpu_after_cuda_oom(self):
+        """自动模式下 CUDA 失败过一次之后，不该再往 CUDA 上加载一遍。
+
+        模型有七百多兆：每次都「加载到 CUDA → 显存不够 → 退回 CPU」
+        等于每个请求都白加载一次权重。强制 GPU 的任务不受影响 ——
+        它本来就该按 GPU 失败来报。
+        """
+        original_failed = worker.cuda_inference_failed
+        worker.cuda_inference_failed = False
+        try:
+            def encode(items):
+                if worker.device == "cuda":
+                    raise FakeOutOfMemoryError("CUDA out of memory")
+                return [[1.0] + [0.0] * (worker.DIMENSION - 1) for _ in items]
+
+            results = worker.run_with_fallback(["a"], encode, lambda item: item)
+            self.assertFalse(results[0]["error"])
+            self.assertEqual("cpu", worker.device)
+            self.assertTrue(worker.cuda_inference_failed)
+
+            # 之后的自动模式请求直接用 CPU：模型缓存里已经有 CPU 那份。
+            worker.model = None
+            worker.model_device = None
+            worker.device = "cuda"
+            worker.model_cache = {"cpu": (FakeModel(), "cpu-preprocess")}
+            with patch.object(worker, "model_state", return_value={"modelValid": True}):
+                worker.load_model("auto")
+            self.assertEqual("cpu", worker.device)
+            self.assertNotIn("cuda", worker.model_cache)
+        finally:
+            worker.cuda_inference_failed = original_failed
+
     def test_unreadable_image_does_not_abort_other_items(self):
         results = worker.run_with_fallback(
             ["bad", "good"],

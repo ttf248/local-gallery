@@ -102,6 +102,11 @@ cv2 = None
 np = None
 ocr_runtime_error = ""
 ocr_gpu_runtime_failed = False
+# cuda_inference_failed 记下「这台机器的 CUDA 推理已经失败过」。
+# 显存不够时模型会退回 CPU：此后自动模式不该再往 CUDA 上加载一遍
+# 再失败一遍 —— 那是七百多兆权重的一次白加载。
+# 强制 GPU 的任务不受影响：它本来就该按 GPU 失败来报。
+cuda_inference_failed = False
 face_runtime_error = ""
 face_profile_runtime_errors = {}
 model_file_validation = {}
@@ -372,7 +377,7 @@ def gpu_available(require_onnx: bool = False) -> bool:
 
 
 def load_model(device_mode: str = "auto") -> None:
-    global clip, model, model_device, preprocess, torch, Image, device, runtime_error
+    global clip, model, model_device, preprocess, torch, Image, device, runtime_error, cuda_inference_failed
     state = model_state()
     if not state.get("modelValid"):
         raise RuntimeError("model_missing_or_checksum_invalid")
@@ -387,7 +392,12 @@ def load_model(device_mode: str = "auto") -> None:
     torch, Image, clip = torch_module, image_module, clip_module
     if device_mode == "gpu" and not torch.cuda.is_available():
         raise RuntimeError("gpu_unavailable")
-    target_device = "cuda" if device_mode == "gpu" or (device_mode == "auto" and torch.cuda.is_available()) else "cpu"
+    if device_mode == "gpu":
+        target_device = "cuda"
+    elif device_mode == "auto" and torch.cuda.is_available() and not cuda_inference_failed:
+        target_device = "cuda"
+    else:
+        target_device = "cpu"
     if model is not None and model_device == target_device:
         device = target_device
         return
@@ -459,7 +469,7 @@ def is_cuda_oom(error: Exception) -> bool:
 
 
 def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_workers=1):
-    global device, model, model_device
+    global device, model, model_device, cuda_inference_failed
     batch_size = GPU_INITIAL_BATCH_SIZE if device == "cuda" else INITIAL_BATCH_SIZE
     results = [None] * len(items)
     errors = [""] * len(items)
@@ -519,6 +529,8 @@ def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_worker
             model_device = "cpu"
             model_cache.pop("cuda", None)
             model_cache["cpu"] = (model, preprocess)
+            # 记下来：自动模式此后直接用 CPU，不再往 CUDA 上加载一遍。
+            cuda_inference_failed = True
             batch_size = 1
     return [{"vector": results[index], "error": errors[index]} for index in range(len(items))]
 
