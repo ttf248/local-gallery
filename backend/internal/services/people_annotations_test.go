@@ -145,3 +145,49 @@ func TestPeopleAnnotationDatasetSkipsPhotosWithoutPath(t *testing.T) {
 		t.Fatalf("dataset = %+v, want no photo without a resolvable path", dataset.Photos)
 	}
 }
+
+func TestPeopleAnnotationKeepsLabelsWhenSampleFormatChanges(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "people-annotations.json")
+	legacy := `{
+  "version": 1,
+  "identities": {"id-001": {"id": "id-001", "label": "妈妈"}},
+  "photos": {"f_001": {"resourceId": "f_001", "tags": ["groupPhoto"], "faces": [{"identity": "id-001", "box": [1, 2, 3, 4]}], "reviewed": true}},
+  "samples": ["f_001", "f_002"]
+}`
+	if err := os.WriteFile(statePath, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	annotations, err := OpenPeopleAnnotationService(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress := annotations.Progress()
+	if progress.AnnotatedPhotoCount != 1 || progress.FaceCount != 1 || progress.IdentityCount != 1 {
+		t.Fatalf("progress = %+v, want the saved labels to survive the format change", progress)
+	}
+	if len(annotations.Identities()) != 1 {
+		t.Fatalf("identities = %+v, want the saved identity to survive", annotations.Identities())
+	}
+}
+
+func TestPeopleAnnotationKeepsLabelsWhenSamplesAreBroken(t *testing.T) {
+	root := t.TempDir()
+	statePath := filepath.Join(root, "people-annotations.json")
+	broken := `{
+  "version": 1,
+  "identities": {"id-001": {"id": "id-001"}},
+  "photos": {"f_001": {"resourceId": "f_001", "tags": [], "faces": [{"identity": "id-001", "box": [1, 2, 3, 4]}], "reviewed": true}},
+  "samples": 12
+}`
+	if err := os.WriteFile(statePath, []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	annotations, err := OpenPeopleAnnotationService(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if progress := annotations.Progress(); progress.AnnotatedPhotoCount != 1 || progress.FaceCount != 1 {
+		t.Fatalf("progress = %+v, want the saved labels to survive a broken sample list", progress)
+	}
+}

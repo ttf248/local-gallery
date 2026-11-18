@@ -146,12 +146,33 @@ type peopleAnnotationState struct {
 	Samples []PeopleAnnotationSamplePlan `json:"samples"`
 }
 
-// PeopleAnnotationSamplePlan 是抽样清单里的一项：照片、来源与出处人物。
+// PeopleAnnotationSamplePlan 是抽样清单里一项：照片、来源与出处人物。
 type PeopleAnnotationSamplePlan struct {
 	ResourceID string `json:"resourceId"`
 	Reason     string `json:"reason"`
 	PersonID   string `json:"personId,omitempty"`
 	PersonName string `json:"personName,omitempty"`
+}
+
+// UnmarshalJSON 兼容早期只存资源 ID 的清单格式。
+//
+// 抽样清单的字段变过：早期每个条目只是一个资源 ID，后来才带上来源与
+// 出处人物。若整份文件因为这一处不兼容而被丢弃，用户已经标好的照片与
+// 身份会跟着一起消失 —— 那是不可接受的损失。这里让两种格式都能读，
+// 旧格式只还原资源 ID，其余字段留空。
+func (plan *PeopleAnnotationSamplePlan) UnmarshalJSON(data []byte) error {
+	var legacy string
+	if err := json.Unmarshal(data, &legacy); err == nil {
+		plan.ResourceID = legacy
+		return nil
+	}
+	type alias PeopleAnnotationSamplePlan
+	var current alias
+	if err := json.Unmarshal(data, &current); err != nil {
+		return err
+	}
+	*plan = PeopleAnnotationSamplePlan(current)
+	return nil
 }
 
 // PeopleAnnotationService 保存本机的标注进度。它与人格修正完全分开：
@@ -179,12 +200,39 @@ func OpenPeopleAnnotationService(statePath string) (*PeopleAnnotationService, er
 		return nil, err
 	}
 	if err == nil {
-		var state peopleAnnotationState
-		if json.Unmarshal(data, &state) == nil && state.Version == peopleAnnotationVersion {
-			service.state = normalizePeopleAnnotationState(state)
-		}
+		service.state = decodePeopleAnnotationState(data)
 	}
 	return service, nil
+}
+
+// decodePeopleAnnotationState 逐段读取标注状态。
+//
+// 整份文件一次性解析时，任何一段格式不兼容都会把用户已经标好的照片与
+// 身份一起丢掉 —— 那是不可接受的损失。这里分段解析：一段读不出来只影响
+// 那一段，其余内容照常保留。版本号对不上时只重建抽样清单，标注本身仍然
+// 读得出来。
+func decodePeopleAnnotationState(data []byte) peopleAnnotationState {
+	state := emptyPeopleAnnotationState()
+	var sections map[string]json.RawMessage
+	if err := json.Unmarshal(data, &sections); err != nil {
+		return state
+	}
+	var version int
+	if raw, exists := sections["version"]; exists {
+		_ = json.Unmarshal(raw, &version)
+	}
+	if raw, exists := sections["identities"]; exists {
+		_ = json.Unmarshal(raw, &state.Identities)
+	}
+	if raw, exists := sections["photos"]; exists {
+		_ = json.Unmarshal(raw, &state.Photos)
+	}
+	if version == peopleAnnotationVersion {
+		if raw, exists := sections["samples"]; exists {
+			_ = json.Unmarshal(raw, &state.Samples)
+		}
+	}
+	return normalizePeopleAnnotationState(state)
 }
 
 func emptyPeopleAnnotationState() peopleAnnotationState {
