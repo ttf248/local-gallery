@@ -148,8 +148,6 @@ type LibrarySyncService struct {
 	pending  *SyncChangeSet
 	// analysisQueue 是「模块 → 待分析资源」的排队表。
 	analysisQueue map[string]map[string]struct{}
-	// removedResources 是已经离开图库、但分析结果还没作废的资源。
-	removedResources map[string]struct{}
 	// analysisDirty 标记「有变化需要重算智能相册」。
 	analysisDirty bool
 	// pendingOverflow 标记待处理的变化曾经多到被丢弃过：
@@ -174,12 +172,11 @@ func NewLibrarySyncService(opts LibrarySyncOptions) (*LibrarySyncService, error)
 		opts.VerifyInterval = defaultVerifyInterval
 	}
 	service := &LibrarySyncService{
-		opts:             opts,
-		engine:           NewIncrementalEngine(),
-		pending:          newSyncChangeSet(),
-		analysisQueue:    make(map[string]map[string]struct{}),
-		removedResources: make(map[string]struct{}),
-		wake:             make(chan struct{}, 1),
+		opts:          opts,
+		engine:        NewIncrementalEngine(),
+		pending:       newSyncChangeSet(),
+		analysisQueue: make(map[string]map[string]struct{}),
+		wake:          make(chan struct{}, 1),
 	}
 	if err := service.loadState(); err != nil {
 		return nil, err
@@ -545,7 +542,6 @@ func (s *LibrarySyncService) processPending(ctx context.Context) {
 
 	changed := s.collectChangedResources(outcome, pending)
 	s.mu.Lock()
-	s.removedResources = mergeStringSet(s.removedResources, removedIDs)
 	s.state.LastSyncAt = time.Now()
 	s.state.LastDetected = pending.Size()
 	s.state.LastUpdated = outcome.ChangedResourceCount()
@@ -627,6 +623,7 @@ func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
 		s.mu.Unlock()
 		return
 	}
+	queued := 0
 	for _, module := range s.analysisModules() {
 		set, exists := s.analysisQueue[module]
 		if !exists {
@@ -639,8 +636,10 @@ func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
 		if len(set) > maxAnalysisQueue {
 			s.analysisQueue[module] = trimStringSet(set, maxAnalysisQueue)
 		}
+		queued += len(set)
 	}
-	s.analysisDirty = true
+	// 只有真的排进了分析任务才需要重算智能相册。
+	s.analysisDirty = queued > 0
 	s.mu.Unlock()
 }
 
@@ -870,17 +869,6 @@ func (s *LibrarySyncService) scanOptions() ScanOptions {
 		exclude = s.opts.Exclude()
 	}
 	return ScanOptions{Roots: s.opts.Roots(), Exclude: exclude}
-}
-
-// mergeStringSet 把一批 ID 并进一个集合。
-func mergeStringSet(base map[string]struct{}, extra []string) map[string]struct{} {
-	if base == nil {
-		base = make(map[string]struct{})
-	}
-	for _, id := range extra {
-		base[id] = struct{}{}
-	}
-	return base
 }
 
 // trimStringSet 把集合裁剪到上限，保留字典序靠前的一部分。
