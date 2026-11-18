@@ -2,8 +2,11 @@ package services
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -323,6 +326,134 @@ func TestLibrarySync_IncrementalResultMatchesFullScan(t *testing.T) {
 	var _ = models.Album{}
 }
 
+// syncTestAnalyzer 是自动分析链路用的假分析器：只计数，不解析图片。
+type syncTestAnalyzer struct {
+	analyzed atomic.Int64
+}
+
+func (a *syncTestAnalyzer) Type() string    { return AIJobTypeMetadata }
+func (a *syncTestAnalyzer) Version() string { return "sync-test-v1" }
+func (a *syncTestAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput, error) {
+	a.analyzed.Add(1)
+	return AIAnalysisOutput{Status: "ok", Data: json.RawMessage(`{}`)}, nil
+}
+
+// TestLibrarySync_AutoAnalysisCoversOnlyChangedPhotos 验证自动分析只覆盖
+// 真正变动的照片：没变过的照片不会被重复分析。
+func TestLibrarySync_AutoAnalysisCoversOnlyChangedPhotos(t *testing.T) {
+	root := t.TempDir()
+	album := filepath.Join(root, "album")
+	mkdirAll(t, album)
+	touchAll(t, filepath.Join(album, "a.jpg"))
+
+	catalog := NewResourceCatalog()
+	cache := NewScanResultCache(filepath.Join(t.TempDir(), "scan_cache.json"))
+	covers := NewCoverOverrideStore(filepath.Join(t.TempDir(), "covers.json"))
+	runner := NewAsyncScanRunner()
+	runner.SetCache(cache)
+	runner.SetCatalog(catalog)
+	runner.SetCoverOverrides(covers)
+
+	analyzer := &syncTestAnalyzer{}
+	jobs, err := NewAIJobService(AIJobServiceOptions{
+		StatePath:    filepath.Join(t.TempDir(), "jobs.json"),
+		MetadataDir:  filepath.Join(t.TempDir(), "derived"),
+		Catalog:      catalog,
+		ValidatePath: func(path string) (string, error) { return path, nil },
+		Analyzers:    []AIAnalyzer{analyzer},
+	})
+	if err != nil {
+		t.Fatalf("create ai job service: %v", err)
+	}
+	defer jobs.Shutdown(context.Background())
+
+	sync, err := NewLibrarySyncService(LibrarySyncOptions{
+		StatePath:      filepath.Join(t.TempDir(), "library_sync.json"),
+		Roots:          func() []string { return []string{root} },
+		Exclude:        func() ExcludeConfig { return DefaultExclude() },
+		Catalog:        catalog,
+		Cache:          cache,
+		Covers:         covers,
+		Runner:         runner,
+		Jobs:           jobs,
+		VerifyInterval: time.Hour,
+		WatchDebounce:  80 * time.Millisecond,
+		WatchMaxWait:   2 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("create library sync service: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := sync.Start(ctx); err != nil {
+		t.Fatalf("start library sync: %v", err)
+	}
+	defer sync.Shutdown()
+	if _, err := sync.Update(ctx, LibrarySyncSettings{Enabled: true, AutoAnalyze: true}); err != nil {
+		t.Fatalf("update library sync: %v", err)
+	}
+	scanner := NewScanner()
+	initial, scanErr := scanner.Scan(ScanOptions{Roots: []string{root}})
+	if scanErr != nil {
+		t.Fatalf("scan failed: %v", scanErr)
+	}
+	catalog.Publish(initial, []string{root})
+
+	// 新增一张照片：只有它该被分析。
+	added := filepath.Join(album, "b.jpg")
+	touchAll(t, added)
+	waitForCatalogFile(t, catalog, added, true)
+	waitForAnalyzed(t, analyzer, 1)
+
+	job := waitForLatestJob(t, jobs)
+	if job.Total != 1 {
+		t.Fatalf("任务应只覆盖变动的照片，实际 %d 张", job.Total)
+	}
+
+	// 再加一张：仍然只有新照片被分析，老照片不重算。
+	second := filepath.Join(album, "c.jpg")
+	touchAll(t, second)
+	waitForCatalogFile(t, catalog, second, true)
+	waitForAnalyzed(t, analyzer, 2)
+	job = waitForLatestJob(t, jobs)
+	if job.Total != 1 {
+		t.Fatalf("第二次任务仍应只覆盖一张照片，实际 %d 张", job.Total)
+	}
+	if job.Skipped != 0 {
+		t.Fatalf("限定资源集合的任务不应跳过任何资源，实际跳过 %d", job.Skipped)
+	}
+}
+
+// waitForAnalyzed 等到分析器累计分析了指定数量的文件。
+func waitForAnalyzed(t *testing.T, analyzer *syncTestAnalyzer, want int64) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if analyzer.analyzed.Load() >= want {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("分析器累计分析了 %d 次，期望至少 %d 次", analyzer.analyzed.Load(), want)
+}
+
+// waitForLatestJob 等到任务中心里出现一个已结束的任务。
+func waitForLatestJob(t *testing.T, jobs *AIJobService) AIJob {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot := jobs.List()
+		for i := len(snapshot.Jobs) - 1; i >= 0; i-- {
+			if isAIJobTerminal(snapshot.Jobs[i].Status) {
+				return snapshot.Jobs[i]
+			}
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("没有等到已结束的分析任务")
+	return AIJob{}
+}
+
 func TestLibrarySync_SettingsSurviveRestart(t *testing.T) {
 	statePath := filepath.Join(t.TempDir(), "library_sync.json")
 	catalog := NewResourceCatalog()
@@ -351,4 +482,26 @@ func TestLibrarySync_SettingsSurviveRestart(t *testing.T) {
 	if !second.settings.Enabled {
 		t.Fatal("重启后自动发现文件变化的开关丢失了")
 	}
+}
+
+// waitForCatalogFile 等待索引里出现（或不再出现）某个文件。
+func waitForCatalogFile(t *testing.T, catalog *ResourceCatalog, path string, present bool) {
+	t.Helper()
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		snapshot := catalog.Acquire()
+		found := false
+		for _, id := range snapshot.FileIDs() {
+			ref, ok := snapshot.Lookup(id)
+			if ok && filepath.Clean(ref.AbsolutePath) == filepath.Clean(path) {
+				found = true
+				break
+			}
+		}
+		if found == present {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("文件 %s 的索引状态没有变成「存在=%v」", path, present)
 }

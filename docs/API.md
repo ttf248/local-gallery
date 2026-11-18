@@ -226,7 +226,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `running`：监听器已启动并在接收事件。`degraded` 表示监听不可靠（事件溢出、权限不足），此时由定期校验兜底；某个媒体根读不到（离线磁盘、断开的网络共享）不算降级，其余根照常工作。
 - `watchedDirs` / `maxWatchDirs`：已登记的监听目录数与上限。Windows 上每个目录占一个句柄与一块事件缓冲区，因此上限固定，内存与句柄有界。
 - `lastDetected` / `lastUpdated`：上一次真正改动图库的同步里，检测到的变化条目数与改动索引的资源数量。图库结构没变时（例如只是目录被碰了一下）不发布，也不覆盖这两个计数。
-- `lastVerifyAt` 是最近一次定期校验（全量扫描）的时间，`lastSyncAt` 是最近一次增量同步的时间。`lastError` 是机器可读的失败原因：`event_overflow`、`watch_failed`、`watcher_start_failed`、`root_unavailable`、`incremental_failed`、`verification_failed`；界面据此翻译成中文。
+- `lastVerifyAt` 是最近一次定期校验（全量扫描）的时间，`lastSyncAt` 是最近一次改动图库的增量同步的时间 —— 两个计数与它描述的是同一件事。`lastError` 是机器可读的失败原因：`event_overflow`、`watch_failed`、`watcher_start_failed`、`root_unavailable`、`incremental_failed`、`verification_failed`；界面据此翻译成中文。
 - `libraryRevision` 与媒体库接口返回的 revision 一致：它一变，界面就重新拉数据。
 
 ### `PUT /api/library-sync`
