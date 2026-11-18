@@ -101,7 +101,7 @@ func (s *AIJobService) ClearModuleRecords(moduleType string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return errors.New("AI job service is shutting down")
+		return errAIJobServiceClosed
 	}
 	if hasActiveAIJobType(s.jobs, moduleType) {
 		return ErrAIJobActive
@@ -164,8 +164,7 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	for _, record := range s.records {
 		if record.Type == moduleType && record.ModuleVersion == version {
-			record.Data = append(json.RawMessage(nil), record.Data...)
-			result = append(result, record)
+			result = append(result, cloneRecord(record))
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -230,9 +229,7 @@ func (s *AIJobService) RecordsForResources(moduleType string, resourceIDs []stri
 		if !exists || record.ModuleVersion != version {
 			continue
 		}
-		record.Data = append(json.RawMessage(nil), record.Data...)
-		record.Fields = append([]string(nil), record.Fields...)
-		result[resourceID] = record
+		result[resourceID] = cloneRecord(record)
 	}
 	return result
 }
@@ -287,8 +284,7 @@ func (s *AIJobService) RecordsIncludingStaleVersions(moduleType string) []AIAnal
 	result := make([]AIAnalysisRecord, 0)
 	for _, record := range s.records {
 		if record.Type == moduleType {
-			record.Data = append(json.RawMessage(nil), record.Data...)
-			result = append(result, record)
+			result = append(result, cloneRecord(record))
 		}
 	}
 	sort.Slice(result, func(i, j int) bool {
@@ -312,8 +308,7 @@ func (s *AIJobService) Record(moduleType, resourceID string) (AIAnalysisRecord, 
 	if !exists || record.ModuleVersion != version {
 		return AIAnalysisRecord{}, false
 	}
-	record.Data = append(json.RawMessage(nil), record.Data...)
-	return record, true
+	return cloneRecord(record), true
 }
 
 // RecordIncludingStaleVersions returns one persisted result even when its
@@ -329,13 +324,33 @@ func (s *AIJobService) RecordIncludingStaleVersions(moduleType, resourceID strin
 	if !exists {
 		return AIAnalysisRecord{}, false
 	}
-	record.Data = append(json.RawMessage(nil), record.Data...)
-	record.Fields = append([]string(nil), record.Fields...)
-	return record, true
+	return cloneRecord(record), true
 }
 
 func aiRecordKey(moduleType, resourceID string) string {
 	return moduleType + "\x00" + resourceID
+}
+
+// cloneRecord 复制一条分析结果，让调用方拿到的载荷与内存里的互不影响。
+//
+// 人脸与 OCR 的载荷可以很大：浅拷贝会让调用方改到正在用的字节，
+// 因此凡是把结果交出去的地方都走这一份复制。
+func cloneRecord(record AIAnalysisRecord) AIAnalysisRecord {
+	record.Data = append(json.RawMessage(nil), record.Data...)
+	record.Fields = append([]string(nil), record.Fields...)
+	return record
+}
+
+// cloneRecords 复制一批分析结果。
+func cloneRecords(records []AIAnalysisRecord) []AIAnalysisRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	cloned := make([]AIAnalysisRecord, len(records))
+	for index, record := range records {
+		cloned[index] = cloneRecord(record)
+	}
+	return cloned
 }
 
 func aiRecordKeyForVersion(moduleType, version, resourceID string) string {

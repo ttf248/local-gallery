@@ -144,7 +144,8 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 		if module.Type == AIJobTypeFace && !peopleEnabled {
 			continue
 		}
-		targets := s.targetsFor(ctx, snapshot, module.Type)
+		filter := aiTargetFilterForModule(module.Type)
+		targets := s.targetsFor(ctx, snapshot, filter)
 		targetCounts[module.Type] = len(targets)
 		stats := make(map[string]aiTargetStat, len(targets))
 		for _, target := range targets {
@@ -155,7 +156,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	if err := ctx.Err(); err != nil {
 		return AIJobEstimate{}, err
 	}
-	allTargets := s.targetsFor(ctx, snapshot, "")
+	allTargets := s.targetsFor(ctx, snapshot, aiTargetAllImages)
 	estimate.TotalImages = len(allTargets)
 
 	// 仍然有效的结果数：按模块各数一遍。待处理张数 = 目标总数 - 有效张数，
@@ -374,26 +375,29 @@ func estimateDuration(count int, perImage float64, known bool) *int64 {
 //
 // 缓存只服务空闲时的规模预估：任务开跑必须用当下真实的 stat，否则文件刚
 // 被改过时会被误判成「已经是最新的」而跳过重跑。
-func (s *AIJobService) targetsFor(ctx context.Context, snapshot CatalogSnapshot, moduleType string) []aiJobTarget {
+//
+// 缓存按口径而不是按模块分组：一次核算要看四五个模块，它们要的其实是
+// 同一份文件指纹，分开 stat 只是把同样的 IO 做了五遍。
+func (s *AIJobService) targetsFor(ctx context.Context, snapshot CatalogSnapshot, filter aiTargetFilter) []aiJobTarget {
 	revision := snapshot.Revision()
 	s.targetCacheMu.Lock()
 	cached := s.targetCache
 	if cached != nil && cached.revision == revision && s.now().Sub(cached.builtAt) < aiTargetCacheTTL {
-		if targets, exists := cached.targets[moduleType]; exists {
+		if targets, exists := cached.targets[filter]; exists {
 			s.targetCacheMu.Unlock()
 			return targets
 		}
 	}
 	s.targetCacheMu.Unlock()
 
-	targets := s.buildTargets(ctx, snapshot, moduleType)
+	targets := s.buildTargets(ctx, snapshot, filter)
 	s.targetCacheMu.Lock()
 	cached = s.targetCache
 	if cached == nil || cached.revision != revision || s.now().Sub(cached.builtAt) >= aiTargetCacheTTL {
-		cached = &aiTargetCache{revision: revision, builtAt: s.now(), targets: make(map[string][]aiJobTarget)}
+		cached = &aiTargetCache{revision: revision, builtAt: s.now(), targets: make(map[aiTargetFilter][]aiJobTarget)}
 		s.targetCache = cached
 	}
-	cached.targets[moduleType] = targets
+	cached.targets[filter] = targets
 	s.targetCacheMu.Unlock()
 	return targets
 }

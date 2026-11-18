@@ -102,13 +102,8 @@ func (s *AIJobService) JobOutputDir(jobID string) (string, string, bool) {
 	if !ok {
 		return "", "", false
 	}
-	directory := filepath.Join(s.metadataDir, job.Type, "batches", job.ID)
+	directory := s.aiJobBatchDir(job.Type, job.ID, job.FaceModel)
 	if job.Type == AIJobTypeFace {
-		model := job.FaceModel
-		if _, valid := FaceAnalyzerVersionForModel(model); !valid {
-			model = DefaultFaceModel
-		}
-		directory = filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", job.ID)
 		if _, err := os.Stat(directory); errors.Is(err, os.ErrNotExist) {
 			legacyDirectory := filepath.Join(s.metadataDir, AIJobTypeFace, "batches", job.ID)
 			if _, legacyErr := os.Stat(legacyDirectory); legacyErr == nil {

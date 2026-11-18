@@ -10,7 +10,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -31,14 +30,40 @@ type aiJobTarget struct {
 	statCode    string
 }
 
+// aiTargetFilter 描述分析目标集合的筛选口径。
+//
+// 目标集合只随口径变，不随模块变：metadata、embedding、ocr 看的都是
+// 全部图片，人脸与相似照片只看照片侧。
+//
+// 按模块缓存会让同一份文件指纹在一次核算里被 stat 六遍 —— 大库上
+// 这是一轮秒级开销，而六轮的结果完全一样。
+type aiTargetFilter int
+
+const (
+	// aiTargetAllImages 包含图库里的全部图片。
+	aiTargetAllImages aiTargetFilter = iota
+	// aiTargetPhotoOnly 只包含照片侧的图片。
+	aiTargetPhotoOnly
+)
+
+// aiTargetFilterForModule 返回模块对应的目标口径。
+func aiTargetFilterForModule(moduleType string) aiTargetFilter {
+	switch moduleType {
+	case AIJobTypeFace, AIJobTypeSimilarity:
+		return aiTargetPhotoOnly
+	default:
+		return aiTargetAllImages
+	}
+}
+
 // aiTargetCache 是一次文件指纹采集的结果，按媒体库 revision 归类。
 type aiTargetCache struct {
 	revision uint64
 	builtAt  time.Time
-	targets  map[string][]aiJobTarget
+	targets  map[aiTargetFilter][]aiJobTarget
 }
 
-func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, moduleType string, albumIDs ...string) []aiJobTarget {
+func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, filter aiTargetFilter, albumIDs ...string) []aiJobTarget {
 	ids := snapshot.FileIDs()
 	if albumID, err := s.analysisAlbumID(albumIDs); err != nil {
 		return nil
@@ -49,7 +74,7 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 			return nil
 		}
 	}
-	return s.buildTargetsForResources(ctx, snapshot, moduleType, ids)
+	return s.buildTargetsForResources(ctx, snapshot, filter, ids)
 }
 
 // buildTargetsForResources 把资源集合转成分析目标。
@@ -59,7 +84,7 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 func (s *AIJobService) buildTargetsForResources(
 	ctx context.Context,
 	snapshot CatalogSnapshot,
-	moduleType string,
+	filter aiTargetFilter,
 	ids []string,
 ) []aiJobTarget {
 	if len(ids) == 0 {
@@ -73,7 +98,7 @@ func (s *AIJobService) buildTargetsForResources(
 		}
 		// 人脸与相似照片只处理照片侧：漫画是另一套工作区，
 		// 既不参与人物分组，也不进相似照片整理。
-		if (moduleType == AIJobTypeFace || moduleType == AIJobTypeSimilarity) && !snapshot.IsPhotoImage(id) {
+		if filter == aiTargetPhotoOnly && !snapshot.IsPhotoImage(id) {
 			continue
 		}
 		targets = append(targets, aiJobTarget{
@@ -188,7 +213,7 @@ func (s *AIJobService) selectTargets(jobID string, targets []aiJobTarget, digest
 	defer s.mu.Unlock()
 	job := s.jobs[jobID]
 	if job == nil {
-		return nil, errors.New("analysis job not found")
+		return nil, ErrAIJobNotFound
 	}
 	if job.Type == AIJobTypeFace && job.FaceModel == "" {
 		job.FaceModel = DefaultFaceModel

@@ -69,11 +69,8 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 	s.publishLocked(*job)
 	s.mu.Unlock()
 
-	if readiness, ok := analyzer.(AIAnalyzerModelReadiness); ok && analyzer.Type() == AIJobTypeFace {
-		readyCtx, cancel := context.WithTimeout(runtimeState.ctx, 20*time.Second)
-		err := readiness.ReadyForModel(readyCtx, faceModel)
-		cancel()
-		if err != nil {
+	if analyzer.Type() == AIJobTypeFace {
+		if err := probeAnalyzerModelReady(runtimeState.ctx, analyzer, faceModel); err != nil {
 			s.finishJobWithCode(id, AIJobStatusFailed, "failed", "face_model_unavailable", "所选人脸模型未就绪")
 			return
 		}
@@ -116,10 +113,11 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 	}
 	s.mu.Unlock()
 	var targets []aiJobTarget
+	filter := aiTargetFilterForModule(job.Type)
 	if len(resourceIDs) > 0 {
-		targets = s.buildTargetsForResources(runtimeState.ctx, snapshot, job.Type, resourceIDs)
+		targets = s.buildTargetsForResources(runtimeState.ctx, snapshot, filter, resourceIDs)
 	} else {
-		targets = s.buildTargets(runtimeState.ctx, snapshot, job.Type, albumID)
+		targets = s.buildTargets(runtimeState.ctx, snapshot, filter, albumID)
 	}
 	digest := digestAITargets(targets, albumID)
 	candidates, err := s.selectTargets(id, targets, digest)
@@ -220,10 +218,14 @@ func (s *AIJobService) processBatch(ctx context.Context, jobID string, targets [
 	var analyzer AIAnalyzer
 	computeDevice := "cpu"
 	faceModel := ""
+	typeName := ""
+	version := ""
 	if job != nil {
 		analyzer = s.analyzers[job.Type]
 		computeDevice = job.ComputeDevice
 		faceModel = job.FaceModel
+		typeName = job.Type
+		version = aiAnalyzerVersion(analyzer, faceModel)
 	}
 	s.mu.Unlock()
 	if batchAnalyzer, ok := analyzer.(AIAnalyzerBatch); ok {
@@ -241,7 +243,7 @@ func (s *AIJobService) processBatch(ctx context.Context, jobID string, targets [
 		go func() {
 			defer workersDone.Done()
 			for index := range queue {
-				results[index] = s.processTarget(ctx, jobID, targets[index])
+				results[index] = s.processTarget(ctx, analyzer, typeName, version, targets[index])
 			}
 		}()
 	}
@@ -279,17 +281,17 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 			continue
 		}
 		if target.statCode != "" {
-			results[index] = failedAIRecord(results[index], "source_unavailable", "无法读取图片或路径校验失败")
+			results[index] = failedSourceUnavailable(results[index])
 			continue
 		}
 		validated, err := s.validatePath(target.path)
 		if err != nil {
-			results[index] = failedAIRecord(results[index], "source_unavailable", "无法读取图片或路径校验失败")
+			results[index] = failedSourceUnavailable(results[index])
 			continue
 		}
 		info, err := os.Stat(validated)
 		if err != nil || !info.Mode().IsRegular() || info.Size() != target.size || info.ModTime().UnixNano() != target.mtimeNs {
-			results[index] = failedAIRecord(results[index], "source_changed", "分析期间图片已发生变化")
+			results[index] = failedSourceChanged(results[index])
 			continue
 		}
 		analysisPath := ""
@@ -297,7 +299,7 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 			if tempDir == "" {
 				tempDir, err = os.MkdirTemp("", "local-gallery-face-")
 				if err != nil {
-					results[index] = failedAIRecord(results[index], "image_conversion_failed", "图片格式转换失败")
+					results[index] = failedConversion(results[index])
 					continue
 				}
 			}
@@ -306,12 +308,12 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 				if ctx.Err() != nil {
 					continue
 				}
-				results[index] = failedAIRecord(results[index], "image_conversion_failed", "图片格式转换失败")
+				results[index] = failedConversion(results[index])
 				continue
 			}
 			file, createErr := os.CreateTemp(tempDir, "image-*.jpg")
 			if createErr != nil {
-				results[index] = failedAIRecord(results[index], "image_conversion_failed", "图片格式转换失败")
+				results[index] = failedConversion(results[index])
 				continue
 			}
 			analysisPath = file.Name()
@@ -319,7 +321,7 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 			closeErr := file.Close()
 			if writeErr != nil || closeErr != nil {
 				_ = os.Remove(analysisPath)
-				results[index] = failedAIRecord(results[index], "image_conversion_failed", "图片格式转换失败")
+				results[index] = failedConversion(results[index])
 				continue
 			}
 		}
@@ -347,7 +349,7 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 		}
 		info, statErr := os.Stat(inputs[inputIndex].Path)
 		if statErr != nil || !info.Mode().IsRegular() || info.Size() != inputs[inputIndex].Size || info.ModTime().UnixNano() != inputs[inputIndex].MTimeNs {
-			results[position] = failedAIRecord(results[position], "source_changed", "分析期间图片已发生变化")
+			results[position] = failedSourceChanged(results[position])
 			continue
 		}
 		if output.Status == "failed" {
@@ -362,22 +364,21 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 			output.Status = "processed"
 		}
 		results[position].Status = output.Status
-		results[position].Data = append(json.RawMessage(nil), output.Data...)
-		results[position].Fields = append([]string(nil), output.Fields...)
+		setRecordPayload(&results[position], output)
 	}
 	return results
 }
 
-func (s *AIJobService) processTarget(ctx context.Context, jobID string, target aiJobTarget) AIAnalysisRecord {
-	s.mu.Lock()
-	job := s.jobs[jobID]
-	if job == nil {
-		s.mu.Unlock()
-		return AIAnalysisRecord{}
-	}
-	typeName := job.Type
-	version := aiAnalyzerVersion(s.analyzers[typeName], job.FaceModel)
-	s.mu.Unlock()
+// processTarget 逐张跑一个分析模块。
+//
+// 模块、类型与版本由调用方一次性取好：逐张再取一次会让每个 worker
+// 都去抢任务锁，4 个 worker 跑同一批图片时锁竞争比推理本身还密。
+func (s *AIJobService) processTarget(
+	ctx context.Context,
+	analyzer AIAnalyzer,
+	typeName, version string,
+	target aiJobTarget,
+) AIAnalysisRecord {
 	record := AIAnalysisRecord{
 		Type:          typeName,
 		ResourceID:    target.resourceID,
@@ -390,38 +391,40 @@ func (s *AIJobService) processTarget(ctx context.Context, jobID string, target a
 		return record
 	}
 	if target.statCode != "" {
-		return failedAIRecord(record, "source_unavailable", "无法读取图片或路径校验失败")
+		return failedSourceUnavailable(record)
 	}
 	validated, err := s.validatePath(target.path)
 	if err != nil {
-		return failedAIRecord(record, "source_unavailable", "无法读取图片或路径校验失败")
+		return failedSourceUnavailable(record)
 	}
 	file, err := os.Open(validated)
 	if err != nil {
-		return failedAIRecord(record, "source_unavailable", "无法读取图片或路径校验失败")
+		return failedSourceUnavailable(record)
 	}
 	defer file.Close()
 	before, err := file.Stat()
 	if err != nil || !before.Mode().IsRegular() || before.Size() != target.size || before.ModTime().UnixNano() != target.mtimeNs {
-		return failedAIRecord(record, "source_changed", "分析期间图片已发生变化")
+		return failedSourceChanged(record)
 	}
-	output, err := s.analyzers[typeName].Analyze(ctx, file)
+	output, err := analyzer.Analyze(ctx, file)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			return record
 		}
-		return failedAIRecord(record, "analysis_failed", analysisFailureMessage(typeName))
+		// 与批量路径走同一套错误码映射：GPU 不可用与推理失败要能被区分出来，
+		// 否则一次显卡掉线在任务记录里和「文件读不出来」长得一模一样。
+		code, message := analysisFailure(err, typeName)
+		return failedAIRecord(record, code, message)
 	}
 	after, err := file.Stat()
 	if err != nil || after.Size() != target.size || after.ModTime().UnixNano() != target.mtimeNs {
-		return failedAIRecord(record, "source_changed", "分析期间图片已发生变化")
+		return failedSourceChanged(record)
 	}
 	if output.Status == "" {
 		output.Status = "processed"
 	}
 	record.Status = output.Status
-	record.Data = append(json.RawMessage(nil), output.Data...)
-	record.Fields = append([]string(nil), output.Fields...)
+	setRecordPayload(&record, output)
 	return record
 }
 
@@ -430,6 +433,47 @@ func failedAIRecord(record AIAnalysisRecord, code, message string) AIAnalysisRec
 	record.ErrorCode = code
 	record.ErrorMessage = message
 	return record
+}
+
+// setRecordPayload 把一次分析输出写进结果记录。
+//
+// 载荷与字段都复制一份：分析器可能复用同一块缓冲区，
+// 直接挂上去会让后一条结果改掉前一条。
+func setRecordPayload(record *AIAnalysisRecord, output AIAnalysisOutput) {
+	record.Data = append(json.RawMessage(nil), output.Data...)
+	record.Fields = append([]string(nil), output.Fields...)
+}
+
+// 单条分析失败的稳定错误码与文案。
+//
+// 同一份失败在两条执行路径（批量推理与逐张推理）里必须报同一个码，
+// 否则任务记录里按「错误码 + 原因」分组的失败项会漏掉一半。
+const (
+	aiFailureSourceUnavailable = "source_unavailable"
+	aiFailureSourceChanged     = "source_changed"
+	aiFailureConversionFailed  = "image_conversion_failed"
+	aiFailureAnalysisFailed    = "analysis_failed"
+)
+
+const (
+	aiMessageSourceUnavailable = "无法读取图片或路径校验失败"
+	aiMessageSourceChanged     = "分析期间图片已发生变化"
+	aiMessageConversionFailed  = "图片格式转换失败"
+)
+
+// failedSourceUnavailable 记一条「读不到源文件」的失败。
+func failedSourceUnavailable(record AIAnalysisRecord) AIAnalysisRecord {
+	return failedAIRecord(record, aiFailureSourceUnavailable, aiMessageSourceUnavailable)
+}
+
+// failedSourceChanged 记一条「分析期间源文件变了」的失败。
+func failedSourceChanged(record AIAnalysisRecord) AIAnalysisRecord {
+	return failedAIRecord(record, aiFailureSourceChanged, aiMessageSourceChanged)
+}
+
+// failedConversion 记一条「格式转换失败」的失败。
+func failedConversion(record AIAnalysisRecord) AIAnalysisRecord {
+	return failedAIRecord(record, aiFailureConversionFailed, aiMessageConversionFailed)
 }
 
 func isHEIFPath(path string) bool {
@@ -468,7 +512,7 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 	job := s.jobs[jobID]
 	if job == nil {
 		s.mu.Unlock()
-		return errors.New("analysis job not found")
+		return ErrAIJobNotFound
 	}
 	batchNumber := job.Checkpoint.Batch + 1
 	s.mu.Unlock()
@@ -492,7 +536,7 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 	job = s.jobs[jobID]
 	if job == nil {
 		s.mu.Unlock()
-		return errors.New("analysis job not found")
+		return ErrAIJobNotFound
 	}
 	for index, record := range records {
 		if record.ResourceID == "" {
@@ -533,26 +577,13 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 	onRecordsCommitted := s.onRecordsCommitted
 	s.mu.Unlock()
 	if onRecordsCommitted != nil {
-		committed := make([]AIAnalysisRecord, len(records))
-		for index, record := range records {
-			record.Data = append(json.RawMessage(nil), record.Data...)
-			record.Fields = append([]string(nil), record.Fields...)
-			committed[index] = record
-		}
-		onRecordsCommitted(committed)
+		onRecordsCommitted(cloneRecords(records))
 	}
 	return nil
 }
 
 func (s *AIJobService) jobBatchPath(job *AIJob, batchNumber int) string {
-	directory := filepath.Join(s.metadataDir, job.Type, "batches", job.ID)
-	if job.Type == AIJobTypeFace {
-		model := job.FaceModel
-		if _, valid := FaceAnalyzerVersionForModel(model); !valid {
-			model = DefaultFaceModel
-		}
-		directory = filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", job.ID)
-	}
+	directory := s.aiJobBatchDir(job.Type, job.ID, job.FaceModel)
 	return filepath.Join(directory, fmt.Sprintf("%08d.json", batchNumber))
 }
 

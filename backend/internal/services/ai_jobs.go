@@ -82,6 +82,12 @@ var ErrPeopleAnalysisDisabled = errors.New("people analysis is disabled")
 
 var ErrDailyPlanNoMediaRoots = errors.New("daily plan has no configured media roots")
 
+// errAIJobServiceClosed 表示服务正在退出，之后不再接受新的任务。
+//
+// 它只有一个来源：AIJobService.closed。散落的字符串副本会让上层
+// 无法用 errors.Is 判断「服务在关」这件事。
+var errAIJobServiceClosed = errors.New("AI job service is shutting down")
+
 // AIAnalysisOutput 是一个分析模块对单个媒体返回的可序列化结果。
 type AIAnalysisOutput struct {
 	Status       string          `json:"status"`
@@ -157,6 +163,55 @@ type AIAnalyzerWorkerLimit interface {
 
 type AIAnalyzerCloser interface {
 	Close() error
+}
+
+// aiAnalyzerReadyTimeout 是就绪检查的期限。
+//
+// 就绪检查可能触发模型权重校验或首次加载，不能让它无限期挂着。
+const aiAnalyzerReadyTimeout = 20 * time.Second
+
+// probeAnalyzerModelReady 检查人脸任务选中的模型是否就绪。
+//
+// 没实现模型级就绪检查的分析器一律视为就绪 —— 它没有按模型区分的准备步骤。
+func probeAnalyzerModelReady(ctx context.Context, analyzer AIAnalyzer, faceModel string) error {
+	readiness, ok := analyzer.(AIAnalyzerModelReadiness)
+	if !ok {
+		return nil
+	}
+	readyCtx, cancel := context.WithTimeout(ctx, aiAnalyzerReadyTimeout)
+	defer cancel()
+	return readiness.ReadyForModel(readyCtx, faceModel)
+}
+
+// probeAnalyzerModuleReady 检查模块自身的运行时与权重是否就绪。
+//
+// 没实现模块级就绪检查的分析器一律视为就绪。
+func probeAnalyzerModuleReady(ctx context.Context, analyzer AIAnalyzer) error {
+	readiness, ok := analyzer.(AIAnalyzerReadiness)
+	if !ok {
+		return nil
+	}
+	readyCtx, cancel := context.WithTimeout(ctx, aiAnalyzerReadyTimeout)
+	defer cancel()
+	return readiness.Ready(readyCtx)
+}
+
+// probeAnalyzerReady 检查一个分析模块是否可以开跑。
+//
+// 人脸任务先按选中的模型探：两个模型的权重不同，准备步骤也不同。
+// 模型级检查不存在时退回模块级检查；两者都没有就认为就绪。
+//
+// 启动任务、按序启动全部任务与每日计划都走这一条判据。
+func probeAnalyzerReady(ctx context.Context, analyzer AIAnalyzer, moduleType, faceModel string) error {
+	if analyzer == nil {
+		return ErrAIAnalyzerUnavailable
+	}
+	if moduleType == AIJobTypeFace {
+		if _, ok := analyzer.(AIAnalyzerModelReadiness); ok {
+			return probeAnalyzerModelReady(ctx, analyzer, faceModel)
+		}
+	}
+	return probeAnalyzerModuleReady(ctx, analyzer)
 }
 
 // MetadataAnalyzer 使用 EXIF 解析器实现 metadata 模块。
@@ -528,26 +583,16 @@ func (s *AIJobService) startAnalysis(moduleType, mode, albumID string, resourceI
 	closed := s.closed
 	s.mu.Unlock()
 	if closed {
-		return AIJob{}, false, errors.New("AI job service is shutting down")
+		return AIJob{}, false, errAIJobServiceClosed
 	}
-	if readiness, ok := analyzer.(AIAnalyzerModelReadiness); ok && moduleType == AIJobTypeFace {
-		readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		if err := readiness.ReadyForModel(readyCtx, faceModel); err != nil {
-			return AIJob{}, false, err
-		}
-	} else if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
-		readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		defer cancel()
-		if err := readiness.Ready(readyCtx); err != nil {
-			return AIJob{}, false, err
-		}
+	if err := probeAnalyzerReady(context.Background(), analyzer, moduleType, faceModel); err != nil {
+		return AIJob{}, false, err
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return AIJob{}, false, errors.New("AI job service is shutting down")
+		return AIJob{}, false, errAIJobServiceClosed
 	}
 	if moduleType == AIJobTypeFace && s.settings.FaceModel != faceModel {
 		return AIJob{}, false, ErrAIJobActive
@@ -588,15 +633,7 @@ func (s *AIJobService) startAnalysis(moduleType, mode, albumID string, resourceI
 
 // sameResourceSet 比较两个资源集合是否一致。
 func sameResourceSet(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for i := range left {
-		if left[i] != right[i] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(left, right)
 }
 
 // StartAll 按固定模块顺序把所有已就绪的分析任务写入现有任务队列。
@@ -622,7 +659,7 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
-		return nil, nil, errors.New("AI job service is shutting down")
+		return nil, nil, errAIJobServiceClosed
 	}
 	if s.dailyPlanActive {
 		s.mu.Unlock()
@@ -662,34 +699,15 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 			})
 			continue
 		}
-		if readiness, ok := analyzer.(AIAnalyzerModelReadiness); ok && moduleType == AIJobTypeFace {
-			readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			err := readiness.ReadyForModel(readyCtx, faceModel)
-			cancel()
-			if err != nil {
-				_, reason := aiAnalyzerAvailabilityForModel(analyzer, faceModel)
-				if reason == "" {
-					reason = "runtime_unavailable"
-				}
-				skippedModules = append(skippedModules, AIJobModule{
-					Type: moduleType, Name: aiJobModuleName(moduleType), Reason: reason,
-				})
-				continue
+		if err := probeAnalyzerReady(context.Background(), analyzer, moduleType, faceModel); err != nil {
+			_, reason := aiAnalyzerAvailabilityForModel(analyzer, faceModel)
+			if reason == "" {
+				reason = "runtime_unavailable"
 			}
-		} else if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
-			readyCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-			err := readiness.Ready(readyCtx)
-			cancel()
-			if err != nil {
-				_, reason := aiAnalyzerAvailability(analyzer)
-				if reason == "" {
-					reason = "runtime_unavailable"
-				}
-				skippedModules = append(skippedModules, AIJobModule{
-					Type: moduleType, Name: aiJobModuleName(moduleType), Reason: reason,
-				})
-				continue
-			}
+			skippedModules = append(skippedModules, AIJobModule{
+				Type: moduleType, Name: aiJobModuleName(moduleType), Reason: reason,
+			})
+			continue
 		}
 		readyModules = append(readyModules, moduleType)
 	}
@@ -700,7 +718,7 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, nil, errors.New("AI job service is shutting down")
+		return nil, nil, errAIJobServiceClosed
 	}
 	if s.dailyPlanActive {
 		return nil, nil, ErrAIJobActive
@@ -1039,14 +1057,14 @@ func (s *AIJobService) Retry(id string) (AIJob, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return AIJob{}, errors.New("AI job service is shutting down")
+		return AIJob{}, errAIJobServiceClosed
 	}
 	if s.hasPendingJobsLocked() {
 		return AIJob{}, ErrAIJobActive
 	}
 	previous := s.jobs[id]
 	if previous == nil {
-		return AIJob{}, errors.New("analysis job not found")
+		return AIJob{}, ErrAIJobNotFound
 	}
 	if previous.Status != AIJobStatusFailed && previous.Status != AIJobStatusCancelled {
 		return AIJob{}, errors.New("only failed or cancelled jobs can be retried")
@@ -1181,7 +1199,7 @@ func (s *AIJobService) SetGPUEnabled(enabled bool) (AIJobSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return AIJobSettings{}, errors.New("AI job service is shutting down")
+		return AIJobSettings{}, errAIJobServiceClosed
 	}
 	previous := s.settings
 	s.settings.GPUEnabled = enabled
@@ -1210,7 +1228,7 @@ func (s *AIJobService) SetFaceModel(model string) (AIJobSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return AIJobSettings{}, errors.New("AI job service is shutting down")
+		return AIJobSettings{}, errAIJobServiceClosed
 	}
 	if s.dailyPlanActive || hasActiveAIJobType(s.jobs, AIJobTypeFace) {
 		return AIJobSettings{}, ErrAIJobActive
@@ -1239,7 +1257,7 @@ func (s *AIJobService) SetPeopleEnabled(enabled bool) (AIJobSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return AIJobSettings{}, errors.New("AI job service is shutting down")
+		return AIJobSettings{}, errAIJobServiceClosed
 	}
 	if !enabled && hasActiveAIJobType(s.jobs, AIJobTypeFace) {
 		return AIJobSettings{}, ErrAIJobActive
@@ -1511,24 +1529,35 @@ func accumulateAIJobOutput(job *AIJob, record AIAnalysisRecord) {
 }
 
 func (s *AIJobService) publishLocked(job AIJob) {
-	for channel := range s.subs[job.ID] {
+	subscribers := s.subs[job.ID]
+	if len(subscribers) == 0 {
+		if !isAIJobActive(job.Status) {
+			delete(s.subs, job.ID)
+		}
+		return
+	}
+	// 快照只算一次：每个订阅者各算一次会把失败列表与计数表复制 N 遍，
+	// 而一个任务失败几百条时这个复制量并不小。
+	// 快照交出去之后只会被序列化，不会被改写。
+	snapshot := s.snapshotLocked(&job)
+	for channel := range subscribers {
 		select {
-		case channel <- s.snapshotLocked(&job):
+		case channel <- snapshot:
 		default:
 			select {
 			case <-channel:
 			default:
 			}
 			select {
-			case channel <- s.snapshotLocked(&job):
+			case channel <- snapshot:
 			default:
 			}
 		}
 	}
 	if !isAIJobActive(job.Status) {
-		for channel := range s.subs[job.ID] {
+		for channel := range subscribers {
 			close(channel)
-			delete(s.subs[job.ID], channel)
+			delete(subscribers, channel)
 		}
 		delete(s.subs, job.ID)
 	}

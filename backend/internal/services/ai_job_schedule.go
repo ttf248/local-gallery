@@ -37,7 +37,7 @@ func (s *AIJobService) ConfigureDaily(
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return AIJobSettings{}, errors.New("AI job service is shutting down")
+		return AIJobSettings{}, errAIJobServiceClosed
 	}
 	if !peopleEnabled && hasActiveAIJobType(s.jobs, AIJobTypeFace) {
 		return AIJobSettings{}, ErrAIJobActive
@@ -162,14 +162,9 @@ func (s *AIJobService) scheduleTickWithContext(ctx context.Context, now time.Tim
 			skippedModules = append(skippedModules, moduleType)
 			continue
 		}
-		if readiness, ok := analyzer.(AIAnalyzerReadiness); ok {
-			readyCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			err := readiness.Ready(readyCtx)
-			cancel()
-			if err != nil {
-				skippedModules = append(skippedModules, moduleType)
-				continue
-			}
+		if err := probeAnalyzerModuleReady(ctx, analyzer); err != nil {
+			skippedModules = append(skippedModules, moduleType)
+			continue
 		}
 		readyModules = append(readyModules, moduleType)
 	}
@@ -296,7 +291,7 @@ func (s *AIJobService) enqueueScheduledModules(modules []string) ([]string, erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return nil, errors.New("AI job service is shutting down")
+		return nil, errAIJobServiceClosed
 	}
 	if s.hasPendingJobsLocked() {
 		return nil, ErrAIJobActive

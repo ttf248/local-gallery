@@ -21,6 +21,23 @@ type aiJobDiskState struct {
 	Settings AIJobSettings `json:"settings"`
 }
 
+// aiJobBatchDir 返回某个任务的批次目录。
+//
+// 人脸任务按模型分目录：两个模型的权重与分析版本互不相通，
+// 批次文件混在一起会让重启后的恢复取到另一个模型的记录。
+//
+// 目录布局只有这一处决定，提交批次、统计占用与旧格式迁移共用它。
+func (s *AIJobService) aiJobBatchDir(jobType, jobID, faceModel string) string {
+	if jobType == AIJobTypeFace {
+		model := faceModel
+		if _, valid := FaceAnalyzerVersionForModel(model); !valid {
+			model = DefaultFaceModel
+		}
+		return filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", jobID)
+	}
+	return filepath.Join(s.metadataDir, jobType, "batches", jobID)
+}
+
 type aiJobBatch struct {
 	JobID          string             `json:"jobId"`
 	FaceModel      string             `json:"faceModel,omitempty"`
@@ -49,7 +66,7 @@ func (s *AIJobService) migrateLegacyFaceBatches() error {
 		jobID := entry.Name()
 		sourceDir := filepath.Join(legacyRoot, jobID)
 		model := s.faceModelForBatch(jobID, sourceDir)
-		destinationDir := filepath.Join(s.metadataDir, AIJobTypeFace, model, "batches", jobID)
+		destinationDir := s.aiJobBatchDir(AIJobTypeFace, jobID, model)
 		if err := os.MkdirAll(destinationDir, 0o755); err != nil {
 			return err
 		}
