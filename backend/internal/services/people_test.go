@@ -205,8 +205,10 @@ func TestPeopleCorrectionsPersistIndependentlyForEachFaceModel(t *testing.T) {
 		t.Fatalf("model-specific corrections were not exported: %+v", corrections.Profiles)
 	}
 	legacy := PeopleCorrections{
-		Version: peopleIndexVersion, Names: map[string]string{"p_stale1": "旧共享状态"},
-		Hidden: map[string]bool{}, Assignments: map[string]string{},
+		PeopleCorrectionProfile: PeopleCorrectionProfile{
+			Version: peopleIndexVersion, Names: map[string]string{"p_stale1": "旧共享状态"},
+			Hidden: map[string]bool{}, Assignments: map[string]string{},
+		},
 	}
 	if err := writeAIJSONAtomic(statePath, legacy); err != nil {
 		t.Fatal(err)
@@ -243,8 +245,10 @@ func TestLegacyPeopleStateMigratesToFirstActiveFaceProfile(t *testing.T) {
 	statePath := filepath.Join(root, "state", "people.json")
 	derivedPath := filepath.Join(root, "derived", "people-index.json")
 	legacy := PeopleCorrections{
-		Version: peopleIndexVersion,
-		Names:   map[string]string{"p_legacy1": "旧人物"}, Hidden: map[string]bool{}, Assignments: map[string]string{},
+		PeopleCorrectionProfile: PeopleCorrectionProfile{
+			Version: peopleIndexVersion,
+			Names:   map[string]string{"p_legacy1": "旧人物"}, Hidden: map[string]bool{}, Assignments: map[string]string{},
+		},
 	}
 	if err := writeAIJSONAtomic(statePath, legacy); err != nil {
 		t.Fatal(err)

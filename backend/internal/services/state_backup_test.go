@@ -175,7 +175,7 @@ func TestStateBackupRestoresPeopleCorrectionsWithoutVectors(t *testing.T) {
 	if backup.People == nil || backup.People.Profiles[FaceModelBuffaloM].Names["p_buffalo1"] != "Buffalo 修正" {
 		t.Fatalf("backup omitted inactive model corrections: %+v", backup.People)
 	}
-	if err := people.ReplaceCorrections(PeopleCorrections{Version: 1, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}); err != nil {
+	if err := people.ReplaceCorrections(PeopleCorrections{PeopleCorrectionProfile: PeopleCorrectionProfile{Version: 1, Names: map[string]string{}, Hidden: map[string]bool{}, Assignments: map[string]string{}}}); err != nil {
 		t.Fatal(err)
 	}
 	preview, err := s.Preview(backup)

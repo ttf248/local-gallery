@@ -49,13 +49,13 @@ type StateBackup struct {
 	// 它与相册级收藏是两份数据，恢复其中一份不动另一份。
 	Picks []string `json:"picks,omitempty"`
 	// People backs up only names, hidden groups, and manual face assignments.
-	People           *PeopleCorrections     `json:"people,omitempty"`
-	SmartAlbums      *SmartAlbumCorrections `json:"smartAlbums,omitempty"`
+	People      *PeopleCorrections     `json:"people,omitempty"`
+	SmartAlbums *SmartAlbumCorrections `json:"smartAlbums,omitempty"`
 	// Similarity backs up the manual decisions made while organizing
 	// similar photos. The groups themselves are derived data and are not
 	// exported: re-running the analysis produces them again.
 	Similarity       *SimilarityBackup `json:"similarity,omitempty"`
-	UnresolvedCovers int                `json:"unresolvedCovers,omitempty"`
+	UnresolvedCovers int               `json:"unresolvedCovers,omitempty"`
 }
 type BackupPreview struct {
 	Versions        map[string]string `json:"versions"`
@@ -537,9 +537,7 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 			return fail("people", ErrInvalidBackup)
 		}
 		corrections := PeopleCorrections{
-			Version: peopleIndexVersion, Names: map[string]string{}, Hidden: map[string]bool{},
-			Assignments: map[string]string{}, PinnedFaces: map[string]string{}, RetainedGroups: map[string]bool{},
-			ExcludedMatches: []PeopleMatchExclusion{},
+			PeopleCorrectionProfile: emptyPeopleCorrectionProfile(),
 		}
 		if backup.People != nil {
 			corrections = *backup.People
