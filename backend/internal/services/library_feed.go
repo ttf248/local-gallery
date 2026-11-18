@@ -111,8 +111,8 @@ func (s CatalogSnapshot) IsPhotoImage(id string) bool {
 }
 
 // PhotoCaptureYear 返回资源所属相册的拍摄年份。
-// 拍摄时间与相册 CaptureDates 同一口径：只从文件名推断。判断不出时返回 0，
-// 调用方把它当作「没有证据」，而不是「没有拍摄年份」。
+// 拍摄时间与相册 CaptureDates 同一口径：只从文件名或目录名推断。相册时间
+// 退回到文件修改时间时不算拍摄证据，返回 0，调用方把它当作「没有证据」。
 func (s CatalogSnapshot) PhotoCaptureYear(id string) int {
 	if !s.Ready() || s.state == nil || s.state.library == nil {
 		return 0
@@ -124,6 +124,9 @@ func (s CatalogSnapshot) PhotoCaptureYear(id string) int {
 	}
 	album, exists := library.nodes[ref.albumID]
 	if !exists || album.Date.IsZero() {
+		return 0
+	}
+	if album.DateSource != "filename" && album.DateSource != "folder" {
 		return 0
 	}
 	return album.Date.Year()
