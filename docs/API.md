@@ -197,6 +197,45 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 取消活动扫描，使它的提交令牌失效，并清除内存资源快照与磁盘扫描缓存；不会立即发起新扫描。
 
+### `GET /api/library-sync`
+
+返回自动发现文件变化的开关与运行状态。
+
+```json
+{
+  "enabled": true,
+  "autoAnalyze": false,
+  "running": true,
+  "degraded": false,
+  "watchedRoots": 1,
+  "watchedDirs": 109,
+  "maxWatchDirs": 10000,
+  "pendingChanges": 0,
+  "pendingAnalysis": 0,
+  "lastEventAt": "2026-11-18T17:11:48Z",
+  "lastVerifyAt": "2026-11-18T17:11:17Z",
+  "lastSyncAt": "2026-11-18T17:11:48Z",
+  "lastDetected": 8,
+  "lastUpdated": 5,
+  "lastFailed": 0,
+  "lastError": "",
+  "libraryRevision": 42
+}
+```
+
+- `running`：监听器已启动并在接收事件。`degraded` 表示监听不可靠（事件溢出、权限不足），此时由定期校验兜底；某个媒体根读不到（离线磁盘、断开的网络共享）不算降级，其余根照常工作。
+- `watchedDirs` / `maxWatchDirs`：已登记的监听目录数与上限。Windows 上每个目录占一个句柄与一块事件缓冲区，因此上限固定，内存与句柄有界。
+- `lastDetected` / `lastUpdated`：上一次真正改动图库的同步里，检测到的变化条目数与改动索引的资源数量。图库结构没变时（例如只是目录被碰了一下）不发布，也不覆盖这两个计数。
+- `lastVerifyAt` 是最近一次定期校验（全量扫描）的时间，`lastSyncAt` 是最近一次增量同步的时间。`lastError` 是机器可读的失败原因：`event_overflow`、`watch_failed`、`watcher_start_failed`、`root_unavailable`、`incremental_failed`、`verification_failed`；界面据此翻译成中文。
+- `libraryRevision` 与媒体库接口返回的 revision 一致：它一变，界面就重新拉数据。
+
+### `PUT /api/library-sync`
+
+修改开关。body 为 `{ "enabled": true, "autoAnalyze": false }`，两个字段都缺省视为「不改」，不能省略整段（否则返回 `400 invalid_library_sync_body`）。返回更新后的状态，结构同 `GET`。
+
+- `enabled`：打开后监听已配置的媒体根，文件新增、删除、移动后增量更新图库；关闭后只保留设置，不再监听磁盘。开关保存在 `state/library_sync.json`。
+- `autoAnalyze`：打开后，图库更新时为变动的照片排分析任务（按模块排队，复用任务中心）；关闭后只更新图库，不排分析任务。
+
 ## 媒体分析任务与地点相册
 
 ### `GET /api/ai/jobs` / `POST /api/ai/jobs`
