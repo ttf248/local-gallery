@@ -306,6 +306,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化人物索引失败: %v", err)
 	}
+	// 标注与人物修正分开存放：标注只描述照片里的人脸归属，
+	// 不会改写分组、命名或合并决定。
+	peopleAnnotations, err := services.OpenPeopleAnnotationService(
+		filepath.Join(cacheLayout.StateDir, "people-annotations.json"),
+	)
+	if err != nil {
+		log.Fatalf("初始化人物标注失败: %v", err)
+	}
 	peopleService.SetSourceIsPhoto(func(resourceID string) bool {
 		return resourceCatalog.Acquire().IsPhotoImage(resourceID)
 	})
@@ -596,6 +604,15 @@ func main() {
 	api.Post("/fs/open", middleware.LoopbackOnly(), handlers.FsOpenResourceHandler(mgr, resourceCatalog, safetyState, middleware.OpenInOS))
 	api.Get("/admin/fs/open", middleware.LoopbackOnly(), handlers.FsOpenHandler(mgr))
 	api.Post("/admin/fs/directories", middleware.LoopbackOnly(), handlers.DirectoriesHandler())
+
+	// 人物标注工作台：导出评测集时会带上本地路径，因此只允许本机访问。
+	api.Get("/admin/people/annotations/samples", middleware.LoopbackOnly(), handlers.PeopleAnnotationSamplesHandler(peopleAnnotations, peopleService, resourceCatalog))
+	api.Get("/admin/people/annotations/photo/:resourceId", middleware.LoopbackOnly(), handlers.PeopleAnnotationPhotoHandler(peopleAnnotations, peopleService, resourceCatalog, mediaDimensions))
+	api.Post("/admin/people/annotations/photo", middleware.LoopbackOnly(), handlers.PeopleAnnotationSaveHandler(peopleAnnotations))
+	api.Get("/admin/people/annotations/identities", middleware.LoopbackOnly(), handlers.PeopleAnnotationIdentitiesHandler(peopleAnnotations))
+	api.Post("/admin/people/annotations/identities", middleware.LoopbackOnly(), handlers.PeopleAnnotationIdentitiesHandler(peopleAnnotations))
+	api.Get("/admin/people/annotations/progress", middleware.LoopbackOnly(), handlers.PeopleAnnotationProgressHandler(peopleAnnotations))
+	api.Get("/admin/people/annotations/dataset", middleware.LoopbackOnly(), handlers.PeopleAnnotationDatasetHandler(peopleAnnotations, resourceCatalog, safetyState.Validate))
 
 	// 配置读写
 	backupService := &services.StateBackupService{Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, SmartAlbums: smartAlbums, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
