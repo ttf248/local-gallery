@@ -23,8 +23,8 @@ Fiber middleware → handlers → services/store → models + 本地文件
 | [internal/handlers/](../backend/internal/handlers/)                                                                                         | HTTP/SSE 输入输出、状态码与公共 DTO                        |
 | [services/scanner.go](../backend/internal/services/scanner.go)、[scan_runner.go](../backend/internal/services/scan_runner.go)               | 目录工作池、扫描生命周期与进度订阅                         |
 | [resource_catalog.go](../backend/internal/services/resource_catalog.go)、[library_page.go](../backend/internal/services/library_page.go)    | 不可变库快照、资源 ID、分页/搜索索引                       |
-| [ai_jobs.go](../backend/internal/services/ai_jobs.go)、[exif_metadata.go](../backend/internal/services/exif_metadata.go)、[china_geolocation.go](../backend/internal/services/china_geolocation.go) | 持久分析任务、EXIF/GPS 解析、省级地图与市区照片统计、按拍摄时间的轨迹与到访聚合 |
-| [smart_albums.go](../backend/internal/services/smart_albums.go)、[smart_album_refresh.go](../backend/internal/services/smart_album_refresh.go) | 当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组；跨文件夹的分组汇总目录；全库刷新的后台任务 |
+| [ai_jobs.go](../backend/internal/services/ai_jobs.go)、[ai_job_records.go](../backend/internal/services/ai_job_records.go)、[ai_job_state.go](../backend/internal/services/ai_job_state.go)、[ai_job_targets.go](../backend/internal/services/ai_job_targets.go)、[ai_job_runner.go](../backend/internal/services/ai_job_runner.go)、[ai_job_schedule.go](../backend/internal/services/ai_job_schedule.go)、[exif_metadata.go](../backend/internal/services/exif_metadata.go)、[china_geolocation.go](../backend/internal/services/china_geolocation.go) | 持久分析任务、EXIF/GPS 解析、省级地图与市区照片统计、按拍摄时间的轨迹与到访聚合 |
+| [people.go](../backend/internal/services/people.go)、[people_state.go](../backend/internal/services/people_state.go)、[people_index.go](../backend/internal/services/people_index.go)、[people_query.go](../backend/internal/services/people_query.go)、[smart_albums.go](../backend/internal/services/smart_albums.go)、[smart_album_cache.go](../backend/internal/services/smart_album_cache.go)、[smart_album_build.go](../backend/internal/services/smart_album_build.go)、[smart_album_directory.go](../backend/internal/services/smart_album_directory.go)、[smart_album_overrides.go](../backend/internal/services/smart_album_overrides.go)、[smart_album_refresh.go](../backend/internal/services/smart_album_refresh.go) | 人物分组与人工纠错；当前相册内按时间、离线地点、人物候选与 Chinese-CLIP 场景分组；跨文件夹的分组汇总目录；全库刷新的后台任务 |
 | [thumbnail.go](../backend/internal/services/thumbnail.go)、[video_transcode.go](../backend/internal/services/video_transcode.go) 等媒体服务 | 缩略图、预览、格式转换、视频封面、元数据、faststart 与转码 |
 | [internal/store/](../backend/internal/store/)                                                                                               | 偏好与媒体活动分文件持久化，锁内部分更新、原子写入         |
 | [frontend/src/App.tsx](../frontend/src/App.tsx)、[main.tsx](../frontend/src/main.tsx)                                                       | 应用入口、懒加载路由、访问门禁、主题、活动同步与错误边界   |
@@ -85,6 +85,59 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 - **兜底**：程序关闭期间磁盘上的变化不会产生事件，启动后 15 秒做一次校验扫描补上；此后每 30 分钟校验一次，监听报错时也立刻校验。校验走既有的扫描任务，进度、取消与 SSE 全部复用。
 
 ## 媒体分析任务
+
+### 模块内的文件分工
+
+分析任务、人物与智能相册三个模块都按职责拆在同一 package 内，不新增包、不增加跨包依赖。每个文件开头写明它负责什么、边界在哪。
+
+| 模块 | 文件 | 职责 |
+| --- | --- | --- |
+| 分析任务 | `ai_jobs.go` | 任务模型、分析模块边界、生命周期与订阅发布 |
+| | `ai_job_records.go` | 可重建的分析结果（`derived/metadata`）的读写与失效 |
+| | `ai_job_state.go` | 任务状态与批次文件的落盘、加载与迁移 |
+| | `ai_job_targets.go` | 分析目标的收集、文件指纹与「结果是否仍然有效」的判据 |
+| | `ai_job_runner.go` | 任务执行、批次提交与终态收敛 |
+| | `ai_job_schedule.go` | 每日计划与本机时钟调度 |
+| 人物 | `people.go` | 数据模型、服务装配与模型切换 |
+| | `people_state.go` | 人工纠错（命名、隐藏、合并、拆分）与它们的持久化 |
+| | `people_index.go` | 可重建的人物索引：聚类重建、增量更新与失效 |
+| | `people_query.go` | 分组查询、列表与照片统计 |
+| 智能相册 | `smart_albums.go` | 数据模型、服务装配与分组入口 |
+| | `smart_album_cache.go` | 可重建的派生缓存：指纹、缓存键、读写与覆盖率 |
+| | `smart_album_build.go` | 四个维度的分组草稿构建 |
+| | `smart_album_directory.go` | 跨相册的目录列表与分页 |
+| | `smart_album_overrides.go` | 用户改名与隐藏，以及分组换号时的迁移 |
+
+### 四层数据的边界与统一规则
+
+四类数据各有各的存法，规则统一如下：
+
+| 层 | 位置 | 可否重建 | 读不出来时 |
+| --- | --- | --- | --- |
+| 用户原始媒体 | 媒体根 | 不可重建 | 目录失效，不进图库 |
+| 只读资源索引 | 内存快照 | 可重建（重扫） | 沿用上一份快照 |
+| AI 分析结果与向量索引 | `derived/` | 可重建（重跑） | 按缺失处理 |
+| 用户确认、命名与排除关系 | `state/` | **不可重建** | 报错并保留原文件，不静默清空 |
+| 任务状态、检查点与调度设置 | `state/ai_jobs.json` | 不可重建 | 报错并保留原文件 |
+
+三条统一规则：
+
+- **版本失效只有一份判据。** 「既有结果对这张文件是否仍然有效」由 `aiRecordIsCurrent` 回答；任务开跑与空闲时的规模预估都走它，因此预估出来的张数与任务实际的 `planned` 对得上。人物索引与智能相册缓存各自按同一口径（大小 + 纳秒修改时间 + 模块版本）比对。
+- **落盘顺序：先用户状态，后派生数据。** 派生索引可以重算，用户纠错不能。让可重建文件的写入失败挡住不可重建文件的保存，等于用一次磁盘错误换掉用户改过的东西。人物服务、人物索引发布与智能相册改名迁移都按这个顺序。
+- **改名迁移分两步。** 智能相册的分组换号时，先写下新键，等派生缓存落盘之后再删旧键。顺序反过来的话，进程在两次写之间退出时旧键已被删掉、缓存里却还是旧分组，用户改过的名字就没有出处了。
+
+### 基准
+
+改动前后各留了一组可复现的数字（Windows / i7-10700K / `go test ./internal/services -run '^$' -bench '<名字>' -benchmem`）：
+
+| 基准 | 测什么 | 改动前 | 改动后 |
+| --- | --- | --- | --- |
+| `BenchmarkAIJobEstimate` | 空闲时规模核算的冷路径（每次让指纹清单失效，200 张图） | 43.79 ms/op，1.68 MB，13110 allocs | 17.08 ms/op，0.70 MB，5269 allocs |
+| `BenchmarkAIJobStatePersist` | 任务状态整份重写（50 个任务，每个 20 条失败项） | 无基准 | 12.6 ms/op，0.77 MB |
+| `BenchmarkSmartAlbumGroupsCacheHit` | 智能相册命中缓存的读取（100 张照片） | 无基准 | 4.9 ms/op，0.27 MB |
+| `BenchmarkIncrementalScanDelta` | 一个目录变动后重建图库（200 张照片） | 无基准 | 1.39 ms/op，0.38 MB |
+
+规模核算的降幅来自一处具体改动：文件指纹清单原先按模块分组缓存，一次核算要把全库 stat 六遍；现在按口径（全部图片 / 仅照片侧）分组，四五个模块共用同一份清单。
 
 quality-v2 的人脸 Worker 在 CPU 与 GPU 路径统一使用 YuNet 0.75 最低检测分；提交 SFace 前还会要求分析图上的人脸框最短边至少 32 像素，并检查框尺寸、有限坐标与五点关键点的基本几何关系。Buffalo_m 保留 640 像素全图快检；当检测到至少 8 张脸、检测图长边达到 2048 且至少检测到 4 张脸，或有人脸框长边不超过图像长边的 4% 时，顺序补跑 1280 像素图块，再将图块坐标还原并做全图 NMS。普通照片最多提交 64 张脸，触发图块检测的照片最多提交 256 张；GPU 图片并发从普通照片的 4 降到图块照片的 2，超过 350 万像素时降到 1。分析图最大长边为 2048，图块推理不会同时保留多张高分辨率副本。人物索引重建会对旧批次按相同分数门槛过滤，并通过当前安全校验后的源图尺寸还原到 2048 像素分析尺度，要求脸框最短边至少 32 像素；尺寸未知时保留旧框尺寸门槛。旧记录没有关键点，不能补做关键点几何检查，因此完整质量门仍需重跑人脸任务。旧版本结果在文件指纹仍匹配时继续可查看，新的分析版本会让任务估算识别待重算项。人物分组版本更新会重建可派生索引，同时按成员重叠迁移用户的改名、隐藏与手动分组修正。
 
@@ -161,6 +214,10 @@ quality-v2 的人脸 Worker 在 CPU 与 GPU 路径统一使用 YuNet 0.75 最低
 AI Worker 使用独立 `backend/aiworker/.venv`（Python 3.11）。Windows/Linux 安装 PyTorch 2.7.1 + CUDA 12.6 与 Chinese-CLIP 1.6.0；macOS 使用 PyTorch CPU 版。RapidOCR 3.10.0 + ONNX Runtime 1.20.2 处理文字，OpenCV 4.12.0 + YuNet/SFace ONNX 权重处理人脸。Windows/Linux 使用 ONNX Runtime GPU 版，macOS 使用 CPU 版。Go 通过 stdin/stdout JSON Lines 调用并将 stderr 接入服务日志，Worker 常驻并复用 OCR/人脸模型。每个模块独立报告依赖与权重状态；缺失时任务中心不会把它显示为可运行。所有权重只从 `cacheDir/derived/ai/models/` 读取；RapidOCR 的 PP-OCRv6 检测/识别和 PP-OCRv4 方向分类模型位于 `ocr/` 子目录，启动时校验 SHA256，模型下载脚本固定到 RapidOCR v3.10.0 来源并校验 SHA256，不在服务启动时联网下载。新建的 embedding、OCR 和 face 任务默认强制使用 GPU；任务保存创建时的 `cpu` / `gpu` 选择，关闭 GPU 偏好后新任务使用 CPU。强制 GPU 不回退到 CPU，硬件不可用与推理失败分别进入任务错误码。Chinese-CLIP 遇到 CUDA OOM 时减半批量，单张仍 OOM 则将该图片记录为失败；语义搜索请求仍使用 Worker 的自动设备模式。搜索与建库推理共享同一串行 Worker。
 
 Windows 上 Worker 将 CUDA DLL 目录加入进程 DLL 搜索路径和 `PATH`，避免 ONNX Runtime 找不到 PyTorch 附带的 CUDA/cuDNN DLL。RapidOCR 按需加载检测、分类和识别模型；GPU 推理后逐个检查已加载 session 的首选 provider，若实际回退到 CPU 则丢弃 GPU 引擎并记录 `gpu_inference_failed`，避免后续图片继续走 CPU。这项 session 检查参考 [LibrePhotos ONNX session helper](https://raw.githubusercontent.com/LibrePhotos/librephotos/dev/apps/backend/service/onnx_session.py)。GPU OCR 分类器批次为 16，CPU-only 分类器和 PP-OCRv6 识别器保持 6；识别批次16在当前 ONNX Runtime/CUDA 环境会触发 CPU 回退。
+
+Worker 的代码分成两个文件：`worker.py` 是唯一的协议入口（JSON Lines 的读循环、请求分派与响应编码），`worker_imageio.py` 是与状态无关的共享解码实现 —— 人脸与 OCR 的「按上限解码」收成一份，两边的上限口径不同（人脸看长边、OCR 看像素总数），压缩比策略由参数给出。协议入口同时持有全部可变状态（已加载的模型、各模型的缓存、当前设备），评测脚本与测试可以直接替换其中的条目。
+
+协议有两处硬性约定：响应必须原样带回请求 ID —— Go 侧按 ID 配对，对不上就把 Worker 当成失联杀掉并丢掉整批结果，因此单次请求失败不能拖垮整批；三处检测流程（YuNet、YuNet 图块合并、Buffalo_m）用同一份 NMS 与同一套重叠口径，同一批检测不能被两套口径各算一遍。
 
 GPU 人脸任务最多用 4 个线程并行处理不同照片，同一 YuNet/SFace session 可由这些线程共享，返回项仍按输入顺序排列。首个请求的模型加载由锁保护，避免并发建库时重复创建 GPU session；CPU 人脸任务保持串行，因为 OpenCV 的 YuNet 检测器会逐图修改输入尺寸。
 
