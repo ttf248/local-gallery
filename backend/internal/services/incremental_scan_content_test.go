@@ -134,6 +134,34 @@ func TestIncrementalScan_RootLevelOverwriteIsContentChange(t *testing.T) {
 	}
 }
 
+// TestIncrementalScan_OverwriteOnlyRereadsAffectedDirs 验证原地覆盖只
+// 重读受影响的目录，不会退化成全库扫描。
+//
+// 全库重读会让整库资源索引跟着重建一遍：一次文件改动不该付这个代价。
+func TestIncrementalScan_OverwriteOnlyRereadsAffectedDirs(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"one", "two", "three", "four"} {
+		album := filepath.Join(root, name)
+		mkdirAll(t, album)
+		touchAll(t, filepath.Join(album, "a.jpg"))
+	}
+	before := scanAll(t, root)
+
+	target := filepath.Join(root, "two", "a.jpg")
+	overwriteInPlace(t, target, "brand new content")
+
+	out, err := NewIncrementalEngine().Apply(before, changeSetFor(target), ScanOptions{Roots: []string{root}})
+	if err != nil {
+		t.Fatalf("incremental scan failed: %v", err)
+	}
+	if out.RescannedDirs > 3 {
+		t.Fatalf("原地覆盖只该重读受影响的目录，实际重读了 %d 个", out.RescannedDirs)
+	}
+	if !out.Changed {
+		t.Fatal("原地覆盖应该让图库版本变化")
+	}
+}
+
 // TestIncrementalScan_AlbumContentSignatureChanges 验证相册的内容指纹会
 // 跟着文件内容变化。
 func TestIncrementalScan_AlbumContentSignatureChanges(t *testing.T) {
