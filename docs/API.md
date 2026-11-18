@@ -442,6 +442,21 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 人物分组列表同时返回 `centroidThreshold` 与 `anchorThreshold`。候选脸须与当前组中心的余弦高于 `0.520`，并与创建该组的固定锚脸高于 `0.720`；锚脸在组生命周期内不随高分新脸替换。初步分组后会复核可能重复的组：只检查组中心 HNSW 的前 64 个候选，每个来源组按资源 ID 均匀抽样最多 256 张脸；组中心相似度至少 `0.820`，两组各有至少 10 张脸且没有共同来源照片；跨组需要至少 `max(2, 较小组脸数的 5%)` 组互为最近邻的人脸对，每对相似度至少 `0.720`、平均相似度至少 `0.750`。多组归并采用完全链接，组件内任意两组都必须有直接匹配证据；可重建索引保存自动合并前的来源组 ID，增量更新时逐一检查每对来源组，防止后续批次借聚合中心链式扩张；有改名、隐藏或人工分配的人物组不会自动归并。该步骤可找回跨年龄、姿态或画质变化后分裂的同一人，同时限制相似脸链式扩张。之前的“移动中心 + 可替换代表脸”会让连续的中等相似脸逐步拖动组中心，把相距很远的人脸链式并入同组；分组算法版本升级会全量重建派生索引。分组不把 CLIP 整图相似度当作身份辅助证据。一个组不会包含同一张照片里的两张脸。阈值仍是启发值，没有本机标注集校准，不能确认身份。OpenCV 的 SFace `0.363` 是两张脸验证的参考值，不代表全库聚类阈值或身份确认。每张脸先用 HNSW 找最多 128 个近邻组，再按当前中心精确重算余弦相似度；近邻搜索是近似索引，仍可能漏掉匹配组，因此结果保持可编辑。待确认匹配另有独立的召回链路：索引里为每个分组记录中心向量与锚脸各自的近邻关系，复核时再用两侧代表脸互相精确复核；代表脸按照片取，因此每一对互证天然来自两张不同照片。相同分数按人物 ID 稳定决胜，不设比较次数或人脸总数上限。输入按资源 ID 与脸序号排序，旧组的命名、隐藏与分配在重建时按人脸重叠迁移；自动重建若会合并多个已有人工修正的组或拆分一个已有人工修正的组，旧分组保持独立，直到用户显式合并或拆分。人物媒体分页继续以照片为单位，拆分选择器每次显示 200 张已加载人脸，可逐段展开。用户修正保存在 `state/people-<model>.json`；可重建索引位于 `derived/ai/people-index-<model>.json`，只存资源 ID、文件指纹、脸部框、记录哈希、当前组 ID 与自动合并来源组 ID，不保存特征向量。SFace 特征只保存在现有 `derived/metadata/face/` 结果中。
 
+### 人物标注 API
+
+人物标注是给人脸识别质量评估用的本机工作台。它与人物修正完全分开：标注只描述「这张照片里有哪些人脸、属于哪个匿名身份」，既不改写人物分组，也不改写命名、合并、排除与保留的决定，更不会修改原始照片。
+
+这组接口只允许回环访问：导出评测集会带上本地文件的绝对路径，与目录管理、状态导出这些本机管理接口同级。
+
+- `GET /api/admin/people/annotations/samples?limit=60&refresh=true` 返回待标注的样本清单。样本来自三处：待确认匹配的来源组与目标组、只在合照中出现的组、以及锚点与中心相似度最低的低质量分组。抽样结果按顺序保存在本机，`refresh=true` 才重新抽取。响应含 `items[]`（`resourceId`、`reason`、`faceCount`、`reviewed`、`identities`）、`progress` 与 `scenarioTags`。
+- `GET /api/admin/people/annotations/photo/:resourceId` 返回这张照片的检出人脸与已有标注。`detected[]` 含 `key`、`faceIndex`、`box`（原图像素）与 `score`；`annotation` 为已保存的标注，没有时为 `null`。
+- `POST /api/admin/people/annotations/photo` 保存一张照片的标注，body 为 `{ "resourceId": "…", "tags": ["groupPhoto"], "faces": [{ "identity": "id-001", "box": [x, y, w, h], "smallFace": false, "source": "manual" }], "reviewed": true }`。身份必须是已存在的匿名身份，框宽高必须为正；不合法返回 `400 invalid_people_annotation`。
+- `GET /api/admin/people/annotations/identities` 列出匿名身份；`POST` 同路径用 `{ "label": "妈妈" }` 新建一个，身份 ID 由本机生成，用户不需要写真实姓名。
+- `GET /api/admin/people/annotations/progress` 返回标注进度。
+- `GET /api/admin/people/annotations/dataset` 下载评测集，格式为 `schemaVersion=1`：`photos[]` 含 `resourceId`、`path`（本地绝对路径）、`tags` 与 `faces[]`（`box`、`identity`、可选 `smallFace`）。这与 `backend/aiworker/evaluate_people.py` 读取的格式一致，可以直接交给它比较不同模型与检测方式。
+
+标注进度保存在 `state/people-annotations.json`，与 `state/people-<model>.json` 分开；两者互不影响，重启或重建索引后都保留。标注数据只在本机保存，默认不上传，也不进版本库。
+
 ### 足迹页 API
 
 三个地图端点与一个媒体页端点共享一组可选的查询参数：

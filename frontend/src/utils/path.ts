@@ -81,6 +81,16 @@ export function peopleRoute(personId?: string): string {
   return personId ? `${base}/${encodeURIComponent(personId)}` : base;
 }
 
+/**
+ * 人物标注工作台。
+ *
+ * 它给本机的人脸识别质量评估准备标注数据：接口只在回环地址开放，
+ * 页面本身仍属于照片侧，路径与人物相册放在一起便于查找。
+ */
+export function peopleAnnotateRoute(): string {
+  return `${MODE_PREFIX.photo}/people/annotate`;
+}
+
 /** 照片侧的中文语义搜索与以图搜图。 */
 export function semanticSearchRoute(): string {
   return `${MODE_PREFIX.photo}/semantic`;

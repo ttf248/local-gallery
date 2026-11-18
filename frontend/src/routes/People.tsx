@@ -27,7 +27,7 @@ import { usePickToggle } from "../hooks/usePickToggle";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { useUIStore } from "../store/uiStore";
-import { albumRoute, homeRoute, peopleRoute } from "../utils/path";
+import { albumRoute, homeRoute, peopleAnnotateRoute, peopleRoute } from "../utils/path";
 import { personFaceFrameStyle } from "../utils/personFaceFrame";
 
 export default function People() {
@@ -134,9 +134,14 @@ function PeopleList() {
         title="人物相册"
         description="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
         action={
-          <Link className="btn btn-sm btn-outline" to="/tasks/plan">
-            人物分析设置
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link className="btn btn-sm btn-outline" to={peopleAnnotateRoute()}>
+              标注工具
+            </Link>
+            <Link className="btn btn-sm btn-outline" to="/tasks/plan">
+              人物分析设置
+            </Link>
+          </div>
         }
       />
       {query.isError ? (

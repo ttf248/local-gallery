@@ -26,6 +26,7 @@ const TaskCenter = lazy(() => import("./routes/TaskCenter"));
 const Travels = lazy(() => import("./routes/Travels"));
 const TravelPlace = lazy(() => import("./routes/TravelPlace"));
 const People = lazy(() => import("./routes/People"));
+const PeopleAnnotate = lazy(() => import("./routes/PeopleAnnotate"));
 const SemanticSearch = lazy(() => import("./routes/SemanticSearch"));
 const RandomPhotos = lazy(() => import("./routes/RandomPhotos"));
 const SmartAlbums = lazy(() => import("./routes/SmartAlbums"));
@@ -91,6 +92,8 @@ export default function App() {
             <Route path="/photo/semantic" element={lazyPage(SemanticSearch)} />
             <Route path="/photo/people" element={lazyPage(People)} />
             <Route path="/photo/people/:personId" element={lazyPage(People)} />
+            {/* 标注工作台：接口只允许本机访问，远程打开会看到明确提示。 */}
+            <Route path="/photo/people/annotate" element={lazyPage(PeopleAnnotate)} />
             {/* 随手看看：全库随机抽出的照片墙，只属于照片侧。 */}
             <Route path="/photo/random" element={lazyPage(RandomPhotos)} />
             {/* 智能相册：全库已生成的智能分组汇成的一面墙，只属于照片侧。 */}
