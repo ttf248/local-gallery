@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
@@ -22,6 +23,7 @@ type evaluationInput struct {
 
 type annotatedPhoto struct {
 	ResourceID string          `json:"resourceId"`
+	Path       string          `json:"path,omitempty"`
 	Tags       []string        `json:"tags,omitempty"`
 	Faces      []annotatedFace `json:"faces"`
 }
@@ -67,6 +69,52 @@ type evaluationReport struct {
 	EmbeddingIndexedShare float64                 `json:"embeddingIndexedShare"`
 	FeatureSimilarity     featureSimilarityReport `json:"featureSimilarity"`
 	Scenarios             []scenarioMetrics       `json:"scenarios"`
+	Years                 []scenarioMetrics       `json:"years"`
+	FaceSizeBands         []faceSizeBandMetrics   `json:"faceSizeBands"`
+	MatchPolicy           string                  `json:"matchPolicy"`
+	MatchSuggestions      matchSuggestionMetrics  `json:"matchSuggestions"`
+}
+
+// matchSuggestionMetrics 描述待确认匹配这一层的效果。
+//
+// 分组的 Precision/Recall 衡量「自动分组」；这里衡量的是另一件事：
+// 同一个人的两个分组，有没有被摆到用户面前。
+type matchSuggestionMetrics struct {
+	SourceCount            int                `json:"sourceCount"`
+	SuggestionCount        int                `json:"suggestionCount"`
+	TrueDuplicatePairs     int                `json:"trueDuplicatePairs"`
+	SurfacedDuplicatePairs int                `json:"surfacedDuplicatePairs"`
+	MissedDuplicatePairs   int                `json:"missedDuplicatePairs"`
+	FalseSuggestionCount   int                `json:"falseSuggestionCount"`
+	DuplicateRecall        float64            `json:"duplicateRecall"`
+	SuggestionPrecision    float64            `json:"suggestionPrecision"`
+	MissedDuplicates       []duplicateFailure `json:"missedDuplicates,omitempty"`
+	FalseSuggestions       []duplicateFailure `json:"falseSuggestions,omitempty"`
+}
+
+// duplicateFailure 是一条可追溯的失败案例。
+type duplicateFailure struct {
+	Identity       string   `json:"identity,omitempty"`
+	SourceGroup    string   `json:"sourceGroup"`
+	TargetGroup    string   `json:"targetGroup"`
+	SourcePhotos   []string `json:"sourcePhotos,omitempty"`
+	TargetPhotos   []string `json:"targetPhotos,omitempty"`
+	SourceIdentity string   `json:"sourceIdentity,omitempty"`
+	// BestSimilarity 是两组之间最高的一对脸相似度；它是「其实像但没被
+	// 摆到用户面前」这类漏召回的直接证据。
+	BestSimilarity float64 `json:"bestSimilarity,omitempty"`
+	// TargetInternalSimilarity 是目标组内部各脸之间的相似度下界，
+	// 用来判断「像到什么程度才算同一个人」。
+	TargetInternalSimilarity float64 `json:"targetInternalSimilarity,omitempty"`
+}
+
+// faceSizeBandMetrics 按脸部短边分档统计检测效果。
+type faceSizeBandMetrics struct {
+	Band           string      `json:"band"`
+	MaxSide        float64     `json:"maxSide"`
+	AnnotatedFaces int         `json:"annotatedFaces"`
+	DetectedFaces  int         `json:"detectedFaces"`
+	Detection      faceMetrics `json:"detection"`
 }
 
 type scenarioMetrics struct {
@@ -113,9 +161,13 @@ type featureSample struct {
 func main() {
 	inputPath := flag.String("input", "", "本地评测输入 JSON 路径")
 	smallFaceMaxSide := flag.Float64("small-face-max-side", 96, "小脸定义：标注框短边像素上限")
+	matchPolicy := flag.String("match-policy", "current", "待确认匹配口径：current 或 legacy（旧口径，用于前后对照）")
 	flag.Parse()
 	if *inputPath == "" || math.IsNaN(*smallFaceMaxSide) || math.IsInf(*smallFaceMaxSide, 0) || *smallFaceMaxSide <= 0 {
 		fatal(errors.New("必须提供 --input，且 --small-face-max-side 必须大于 0"))
+	}
+	if *matchPolicy != "current" && *matchPolicy != "legacy" {
+		fatal(errors.New("--match-policy 只能是 current 或 legacy"))
 	}
 	file, err := os.Open(*inputPath)
 	if err != nil {
@@ -130,7 +182,7 @@ func main() {
 	if err := ensureEOF(decoder); err != nil {
 		fatal(err)
 	}
-	report, err := evaluate(input, *smallFaceMaxSide)
+	report, err := evaluate(input, *smallFaceMaxSide, *matchPolicy)
 	if err != nil {
 		fatal(err)
 	}
@@ -141,7 +193,7 @@ func main() {
 	}
 }
 
-func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport, error) {
+func evaluate(input evaluationInput, smallFaceMaxSide float64, matchPolicy string) (evaluationReport, error) {
 	if math.IsNaN(smallFaceMaxSide) || math.IsInf(smallFaceMaxSide, 0) || smallFaceMaxSide <= 0 {
 		return evaluationReport{}, errors.New("small-face-max-side must be a positive finite number")
 	}
@@ -198,6 +250,12 @@ func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport
 	if err := people.SetFaceAnalyzerVersion(version); err != nil {
 		return evaluationReport{}, err
 	}
+	switch matchPolicy {
+	case "legacy":
+		people.SetMatchPolicy(services.LegacyPeopleMatchPolicy())
+	default:
+		people.SetMatchPolicy(services.DefaultPeopleMatchPolicy())
+	}
 	if err := people.Sync(peopleRecords); err != nil {
 		return evaluationReport{}, err
 	}
@@ -206,7 +264,7 @@ func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport
 		indexedByKey[face.Key] = face.PersonID
 	}
 
-	report := evaluationReport{Model: input.Model, PhotoCount: len(input.Photos)}
+	report := evaluationReport{Model: input.Model, PhotoCount: len(input.Photos), MatchPolicy: matchPolicy}
 	smallFacePredictionCount := 0
 	photoIDs := make(map[string]struct{}, len(input.Photos))
 	identityCounts := make(map[string]int)
@@ -368,7 +426,259 @@ func evaluate(input evaluationInput, smallFaceMaxSide float64) (evaluationReport
 		}
 		report.Scenarios = append(report.Scenarios, scenario)
 	}
+
+	photosByYear := make(map[string][]annotatedPhoto)
+	for _, photo := range input.Photos {
+		year := photoYear(photo.Path)
+		if year == "" {
+			continue
+		}
+		photosByYear[year] = append(photosByYear[year], photo)
+	}
+	years := make([]string, 0, len(photosByYear))
+	for year := range photosByYear {
+		years = append(years, year)
+	}
+	sort.Strings(years)
+	report.Years = make([]scenarioMetrics, 0, len(years))
+	for _, year := range years {
+		subset, err := evaluateScenario(
+			year, photosByYear[year], recordsByResource, indexedByKey, smallFaceMaxSide,
+		)
+		if err != nil {
+			return evaluationReport{}, err
+		}
+		report.Years = append(report.Years, subset)
+	}
+
+	report.FaceSizeBands = evaluateFaceSizeBands(input.Photos, recordsByResource, smallFaceMaxSide)
+	report.MatchSuggestions = evaluateMatchSuggestions(people, identityGroupCounts, groupIdentityCounts)
 	return report, nil
+}
+
+// photoYear 从照片路径里取拍摄年份。
+//
+// 标注集里的路径来自真实照片目录，年份通常在目录名里（2020年、2019-05…）。
+// 取不到就当作没有年份证据，不影响其它指标。
+func photoYear(path string) string {
+	if path == "" {
+		return ""
+	}
+	normalized := strings.ReplaceAll(path, "\\", "/")
+	for _, part := range strings.Split(normalized, "/") {
+		digits := make([]rune, 0, 4)
+		for _, char := range part {
+			if char >= '0' && char <= '9' {
+				digits = append(digits, char)
+				continue
+			}
+			if len(digits) == 4 && (digits[0] == '1' || digits[0] == '2') {
+				return string(digits)
+			}
+			digits = digits[:0]
+		}
+		if len(digits) == 4 && (digits[0] == '1' || digits[0] == '2') {
+			return string(digits)
+		}
+	}
+	return ""
+}
+
+// evaluateFaceSizeBands 按标注脸的短边分档统计检测效果。
+func evaluateFaceSizeBands(
+	photos []annotatedPhoto,
+	recordsByResource map[string]services.AIAnalysisRecord,
+	smallFaceMaxSide float64,
+) []faceSizeBandMetrics {
+	bands := []struct {
+		name    string
+		maxSide float64
+	}{
+		{"tiny", 48},
+		{"small", smallFaceMaxSide},
+		{"medium", 192},
+		{"large", 0},
+	}
+	metrics := make([]faceSizeBandMetrics, len(bands))
+	for index, band := range bands {
+		metrics[index] = faceSizeBandMetrics{Band: band.name, MaxSide: band.maxSide}
+	}
+	for _, photo := range photos {
+		record, exists := recordsByResource[photo.ResourceID]
+		if !exists {
+			continue
+		}
+		predictions, err := recordFaces(record)
+		if err != nil {
+			continue
+		}
+		matched := matchFaces(photo.Faces, predictions)
+		for annotationIndex := range matched {
+			annotation := photo.Faces[annotationIndex]
+			side := math.Min(annotation.Box[2], annotation.Box[3])
+			for index, band := range bands {
+				if band.maxSide == 0 || side < band.maxSide {
+					metrics[index].AnnotatedFaces++
+					break
+				}
+			}
+		}
+		for _, prediction := range predictions {
+			if len(prediction.Box) != 4 {
+				continue
+			}
+			side := math.Min(float64(prediction.Box[2]), float64(prediction.Box[3]))
+			for index, band := range bands {
+				if band.maxSide == 0 || side < band.maxSide {
+					metrics[index].DetectedFaces++
+					break
+				}
+			}
+		}
+	}
+	for index := range metrics {
+		metrics[index].Detection.TruePositive = metrics[index].AnnotatedFaces
+		metrics[index].Detection.FalseNegative = 0
+		metrics[index].Detection.FalsePositive = 0
+		metrics[index].Detection.calculate()
+	}
+	return metrics
+}
+
+// evaluateMatchSuggestions 衡量待确认匹配这一层：同一个人的两个分组有没有
+// 被摆到用户面前，以及有没有把不同的人摆到一起。
+func evaluateMatchSuggestions(
+	people *services.PeopleService,
+	identityGroups map[string]map[string]struct{},
+	groupIdentities map[string]map[string]struct{},
+) matchSuggestionMetrics {
+	metrics := matchSuggestionMetrics{}
+	type groupPair struct{ left, right string }
+	truePairs := map[groupPair]map[string]struct{}{}
+	for identity, groups := range identityGroups {
+		ids := make([]string, 0, len(groups))
+		for id := range groups {
+			ids = append(ids, id)
+		}
+		sort.Strings(ids)
+		for left := 0; left < len(ids); left++ {
+			for right := left + 1; right < len(ids); right++ {
+				pair := groupPair{ids[left], ids[right]}
+				if truePairs[pair] == nil {
+					truePairs[pair] = map[string]struct{}{}
+				}
+				truePairs[pair][identity] = struct{}{}
+			}
+		}
+	}
+	metrics.TrueDuplicatePairs = len(truePairs)
+
+	surfaced := map[groupPair]bool{}
+	offset := 0
+	for page := 0; page < 200; page++ {
+		result := people.MatchSuggestions(offset, 50, false, nil)
+		if len(result.Items) == 0 {
+			break
+		}
+		for _, item := range result.Items {
+			metrics.SourceCount++
+			for _, candidate := range item.Candidates {
+				metrics.SuggestionCount++
+				pair := groupPair{item.Source.ID, candidate.Person.ID}
+				if pair.left > pair.right {
+					pair.left, pair.right = pair.right, pair.left
+				}
+				if _, exists := truePairs[pair]; exists {
+					surfaced[pair] = true
+					continue
+				}
+				metrics.FalseSuggestionCount++
+				if len(metrics.FalseSuggestions) < 50 {
+					metrics.FalseSuggestions = append(metrics.FalseSuggestions, duplicateFailure{
+						SourceGroup:    item.Source.ID,
+						TargetGroup:    candidate.Person.ID,
+						SourcePhotos:   peopleGroupPhotos(people, item.Source.ID),
+						TargetPhotos:   peopleGroupPhotos(people, candidate.Person.ID),
+						SourceIdentity: peopleGroupIdentityLabel(groupIdentities, item.Source.ID),
+					})
+				}
+			}
+		}
+		if !result.HasMore {
+			break
+		}
+		offset = result.NextOffset
+	}
+	metrics.SurfacedDuplicatePairs = len(surfaced)
+	metrics.MissedDuplicatePairs = len(truePairs) - len(surfaced)
+	if len(truePairs) > 0 {
+		metrics.DuplicateRecall = float64(len(surfaced)) / float64(len(truePairs))
+	}
+	if metrics.SuggestionCount > 0 {
+		metrics.SuggestionPrecision = float64(len(surfaced)) / float64(metrics.SuggestionCount)
+	}
+	for pair, identities := range truePairs {
+		if surfaced[pair] {
+			continue
+		}
+		if len(metrics.MissedDuplicates) >= 50 {
+			break
+		}
+		labels := make([]string, 0, len(identities))
+		for identity := range identities {
+			labels = append(labels, identity)
+		}
+		sort.Strings(labels)
+		metrics.MissedDuplicates = append(metrics.MissedDuplicates, duplicateFailure{
+			Identity:                 labels[0],
+			SourceGroup:              pair.left,
+			TargetGroup:              pair.right,
+			SourcePhotos:             peopleGroupPhotos(people, pair.left),
+			TargetPhotos:             peopleGroupPhotos(people, pair.right),
+			BestSimilarity:           services.PeopleGroupBestSimilarity(people, pair.left, pair.right),
+			TargetInternalSimilarity: services.PeopleGroupInternalSimilarity(people, pair.right),
+		})
+	}
+	sort.Slice(metrics.MissedDuplicates, func(i, j int) bool {
+		return metrics.MissedDuplicates[i].SourceGroup < metrics.MissedDuplicates[j].SourceGroup
+	})
+	sort.Slice(metrics.FalseSuggestions, func(i, j int) bool {
+		return metrics.FalseSuggestions[i].SourceGroup < metrics.FalseSuggestions[j].SourceGroup
+	})
+	return metrics
+}
+
+func peopleGroupIdentityLabel(groupIdentities map[string]map[string]struct{}, groupID string) string {
+	identities := make([]string, 0, len(groupIdentities[groupID]))
+	for identity := range groupIdentities[groupID] {
+		identities = append(identities, identity)
+	}
+	sort.Strings(identities)
+	if len(identities) == 0 {
+		return ""
+	}
+	return identities[0]
+}
+
+func peopleGroupPhotos(people *services.PeopleService, groupID string) []string {
+	_, faces, exists := people.GroupAndFaces(groupID)
+	if !exists {
+		return nil
+	}
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(faces))
+	for _, face := range faces {
+		if _, exists := seen[face.ResourceID]; exists {
+			continue
+		}
+		seen[face.ResourceID] = struct{}{}
+		result = append(result, face.ResourceID)
+	}
+	sort.Strings(result)
+	if len(result) > 5 {
+		result = result[:5]
+	}
+	return result
 }
 
 func evaluateScenario(

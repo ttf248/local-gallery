@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import evaluate_people
 from evaluate_people import buffalo_m_comparison, evaluate_profile, read_dataset
 
 
@@ -177,3 +178,47 @@ class EvaluatePeopleDatasetTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MatchPolicyComparisonTests(unittest.TestCase):
+    """复核口径对照：同一份检测结果，当前口径与旧口径放在一起比。"""
+
+    def _profile(self, metrics):
+        return {"metrics": metrics}
+
+    def test_reports_recall_and_precision_delta(self):
+        current = self._profile({"matchSuggestions": {
+            "sourceCount": 12,
+            "suggestionCount": 8,
+            "trueDuplicatePairs": 5,
+            "surfacedDuplicatePairs": 4,
+            "missedDuplicatePairs": 1,
+            "falseSuggestionCount": 1,
+            "duplicateRecall": 0.8,
+            "suggestionPrecision": 0.5,
+        }})
+        legacy = self._profile({"matchSuggestions": {
+            "sourceCount": 4,
+            "suggestionCount": 2,
+            "trueDuplicatePairs": 5,
+            "surfacedDuplicatePairs": 1,
+            "missedDuplicatePairs": 4,
+            "falseSuggestionCount": 0,
+            "duplicateRecall": 0.2,
+            "suggestionPrecision": 1.0,
+        }})
+        comparison = evaluate_people.match_policy_comparison(current, legacy)
+        self.assertEqual(comparison["current"]["surfacedDuplicatePairs"], 4)
+        self.assertEqual(comparison["legacy"]["surfacedDuplicatePairs"], 1)
+        self.assertEqual(comparison["delta"]["surfacedDuplicatePairs"], 3)
+        self.assertAlmostEqual(comparison["delta"]["duplicateRecall"], 0.6)
+
+    def test_keeps_failure_cases_for_tracing(self):
+        current = self._profile({"matchSuggestions": {
+            "missedDuplicates": [{"sourceGroup": "p_a", "targetGroup": "p_b"}],
+            "falseSuggestions": [{"sourceGroup": "p_c", "targetGroup": "p_d"}],
+        }})
+        legacy = self._profile({"matchSuggestions": {}})
+        comparison = evaluate_people.match_policy_comparison(current, legacy)
+        self.assertEqual(comparison["missedDuplicates"][0]["sourceGroup"], "p_a")
+        self.assertEqual(comparison["falseSuggestions"][0]["targetGroup"], "p_d")

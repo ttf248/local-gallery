@@ -49,7 +49,7 @@ func TestEvaluateMeasuresDetectionAndIdentityGrouping(t *testing.T) {
 		},
 	}
 
-	report, err := evaluate(input, 96)
+	report, err := evaluate(input, 96, "current")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestEvaluateMeasuresDetectionAndIdentityGrouping(t *testing.T) {
 		t.Fatalf("scenario metrics = %+v", report.Scenarios)
 	}
 	input.Records = append(input.Records, evaluationRecord("unannotated-photo", firstData))
-	if _, err := evaluate(input, 96); err == nil {
+	if _, err := evaluate(input, 96, "current"); err == nil {
 		t.Fatal("evaluation accepted face records outside the annotated photo set")
 	}
 }
@@ -101,7 +101,7 @@ func TestEvaluateRejectsDuplicateScenarioTags(t *testing.T) {
 		Photos:  []annotatedPhoto{{ResourceID: "sample", Tags: []string{"group-photo", "group-photo"}}},
 		Records: []services.AIAnalysisRecord{evaluationRecord("sample", data)},
 	}
-	if _, err := evaluate(input, 96); err == nil {
+	if _, err := evaluate(input, 96, "current"); err == nil {
 		t.Fatal("evaluation accepted duplicate scenario tags")
 	}
 }

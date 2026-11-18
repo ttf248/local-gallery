@@ -173,20 +173,18 @@ def percentile(values: list[float], fraction: float) -> float:
     return ordered[lower] * (1 - weight) + ordered[upper] * weight
 
 
-def evaluate_profile(
+def infer_profile(
     worker,
     photos: list[dict],
     model: str,
     device: str,
-    backend: Path,
-    small_face_max_side: float,
     detection_mode: str | None = None,
 ) -> dict:
+    """跑一次推理，返回可直接交给评分工具的检测记录与性能数据。"""
     profile_status = worker.face_model_status().get(model, {})
     if not profile_status.get("ready"):
         raise RuntimeError(profile_status.get("error", "face_model_unavailable"))
 
-    start = time.perf_counter()
     model_load_start = time.perf_counter()
     worker.load_face_models(device, model)
     model_load_seconds = time.perf_counter() - model_load_start
@@ -219,6 +217,35 @@ def evaluate_profile(
             "fields": ["faces"],
         })
 
+    return {
+        "version": profile_status["version"],
+        "records": records,
+        "performance": {
+            "modelLoadSeconds": round(model_load_seconds, 3),
+            "inferenceSeconds": round(sum(inference_seconds), 3),
+            "imagesPerSecond": round(
+                len(photos) / sum(inference_seconds) if sum(inference_seconds) else 0,
+                3,
+            ),
+            "latencyP50Seconds": round(percentile(inference_seconds, 0.50), 4),
+            "latencyP95Seconds": round(percentile(inference_seconds, 0.95), 4),
+        },
+    }
+
+
+def score_profile(
+    photos: list[dict],
+    inference: dict,
+    model: str,
+    device: str,
+    backend: Path,
+    small_face_max_side: float,
+    detection_mode: str | None = None,
+    match_policy: str = "current",
+) -> dict:
+    """用生产分组器给检测结果打分。同一份检测结果可以换复核口径再评一次。"""
+    start = time.perf_counter()
+    records = inference["records"]
     with tempfile.TemporaryDirectory(prefix="local-gallery-people-eval-") as directory:
         input_path = Path(directory) / "records.json"
         input_path.write_text(json.dumps({
@@ -226,6 +253,7 @@ def evaluate_profile(
             "photos": [
                 {
                     "resourceId": photo["resourceId"],
+                    "path": photo["path"],
                     "tags": photo["tags"],
                     "faces": photo["faces"],
                 }
@@ -238,6 +266,7 @@ def evaluate_profile(
                 "go", "run", "./cmd/people-eval",
                 "--input", str(input_path),
                 "--small-face-max-side", str(small_face_max_side),
+                "--match-policy", match_policy,
             ],
             cwd=backend,
             capture_output=True,
@@ -251,21 +280,74 @@ def evaluate_profile(
 
     return {
         "model": model,
-        "version": profile_status["version"],
+        "version": inference["version"],
         "device": device,
         **({"detectionMode": detection_mode} if detection_mode else {}),
+        "matchPolicy": match_policy,
         "durationSeconds": round(time.perf_counter() - start, 3),
-        "performance": {
-            "modelLoadSeconds": round(model_load_seconds, 3),
-            "inferenceSeconds": round(sum(inference_seconds), 3),
-            "imagesPerSecond": round(
-                len(photos) / sum(inference_seconds) if sum(inference_seconds) else 0,
-                3,
-            ),
-            "latencyP50Seconds": round(percentile(inference_seconds, 0.50), 4),
-            "latencyP95Seconds": round(percentile(inference_seconds, 0.95), 4),
-        },
+        "performance": inference["performance"],
         "metrics": metrics,
+    }
+
+
+def evaluate_profile(
+    worker,
+    photos: list[dict],
+    model: str,
+    device: str,
+    backend: Path,
+    small_face_max_side: float,
+    detection_mode: str | None = None,
+) -> dict:
+    inference = infer_profile(worker, photos, model, device, detection_mode)
+    return score_profile(
+        photos, inference, model, device, backend, small_face_max_side, detection_mode,
+    )
+
+
+def match_policy_comparison(current: dict, legacy: dict) -> dict:
+    """对照两种复核口径：当前口径与扩大召回之前的旧口径。"""
+
+    def read(metrics: dict, key: str):
+        value = metrics.get("matchSuggestions", {}).get(key)
+        return value if isinstance(value, (int, float)) else None
+
+    def section(metrics: dict) -> dict:
+        suggestions = metrics.get("matchSuggestions", {})
+        return {
+            "sourceCount": suggestions.get("sourceCount", 0),
+            "suggestionCount": suggestions.get("suggestionCount", 0),
+            "trueDuplicatePairs": suggestions.get("trueDuplicatePairs", 0),
+            "surfacedDuplicatePairs": suggestions.get("surfacedDuplicatePairs", 0),
+            "missedDuplicatePairs": suggestions.get("missedDuplicatePairs", 0),
+            "falseSuggestionCount": suggestions.get("falseSuggestionCount", 0),
+            "duplicateRecall": suggestions.get("duplicateRecall", 0),
+            "suggestionPrecision": suggestions.get("suggestionPrecision", 0),
+        }
+
+    current_metrics = current.get("metrics", {})
+    legacy_metrics = legacy.get("metrics", {})
+    delta = {}
+    for key in ("surfacedDuplicatePairs", "missedDuplicatePairs", "falseSuggestionCount", "suggestionCount"):
+        current_value = read(current_metrics, key)
+        legacy_value = read(legacy_metrics, key)
+        if current_value is None or legacy_value is None:
+            continue
+        delta[key] = round(current_value - legacy_value, 6)
+    for key in ("duplicateRecall", "suggestionPrecision"):
+        current_value = read(current_metrics, key)
+        legacy_value = read(legacy_metrics, key)
+        if current_value is None or legacy_value is None:
+            continue
+        delta[key] = round(current_value - legacy_value, 6)
+
+    suggestions = current_metrics.get("matchSuggestions", {})
+    return {
+        "current": section(current_metrics),
+        "legacy": section(legacy_metrics),
+        "delta": delta,
+        "missedDuplicates": suggestions.get("missedDuplicates", []),
+        "falseSuggestions": suggestions.get("falseSuggestions", []),
     }
 
 
@@ -348,17 +430,22 @@ def main() -> int:
             (worker.FACE_MODEL_BUFFALO_M, "overview"),
             (worker.FACE_MODEL_BUFFALO_M, "adaptive"),
         ]
+        policy_comparison = None
         for model, detection_mode in profile_runs:
             try:
-                profiles.append(evaluate_profile(
-                    worker,
-                    photos,
-                    model,
-                    args.device,
-                    backend,
-                    args.small_face_max_side,
-                    detection_mode,
-                ))
+                inference = infer_profile(worker, photos, model, args.device, detection_mode)
+                profile = score_profile(
+                    photos, inference, model, args.device, backend,
+                    args.small_face_max_side, detection_mode,
+                )
+                profiles.append(profile)
+                if model == worker.FACE_MODEL_BUFFALO_M and detection_mode == "adaptive":
+                    # 同一份检测结果再按旧口径评一次，得到复核召回的前后对照。
+                    legacy = score_profile(
+                        photos, inference, model, args.device, backend,
+                        args.small_face_max_side, detection_mode, match_policy="legacy",
+                    )
+                    policy_comparison = match_policy_comparison(profile, legacy)
             except Exception as error:
                 failures.append({
                     "model": model,
@@ -372,6 +459,7 @@ def main() -> int:
             "device": args.device,
             "profiles": profiles,
             "buffaloMComparison": buffalo_m_comparison(profiles),
+            "matchPolicyComparison": policy_comparison,
             "memory": {
                 "processPeakWorkingSetBytes": process_peak_working_set_bytes(),
                 "gpuPeakBytes": None,

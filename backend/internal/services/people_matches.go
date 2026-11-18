@@ -42,6 +42,11 @@ const (
 	peopleMatchMaximumYearGapYears = 12
 	// peopleMatchStrongEvidencePairs 是「证据充分」所需的独立照片对数。
 	peopleMatchStrongEvidencePairs = 3
+	// peopleMatchMinimumCorroboration 是弱证据候选需要的印证张数：
+	// 目标组至少要在两张不同的照片上与来源组的那张脸相像。
+	peopleMatchMinimumCorroboration = 2
+	// peopleMatchInternalSlack 是外部脸相对目标组内部一致性的容忍幅度。
+	peopleMatchInternalSlack = 0.10
 )
 
 const (
@@ -49,6 +54,37 @@ const (
 	peopleMatchRiskMedium = "medium"
 	peopleMatchRiskHigh   = "high"
 )
+
+// PeopleMatchPolicy 决定哪些分组进入待确认复核、以及哪些分组能当合并目标。
+//
+// 默认值覆盖 1～9 张照片的来源组与至少 3 张脸、3 张照片的目标组。评测工具
+// 会用旧口径再跑一遍，以便在同一份标注集上做前后对照。
+type PeopleMatchPolicy struct {
+	// SourceMaximumPhotoCount 是来源组照片数的上限。
+	SourceMaximumPhotoCount int
+	// TargetMinimumPhotos 与 TargetMinimumFaces 是目标组的准入门槛。
+	TargetMinimumPhotos int
+	TargetMinimumFaces  int
+}
+
+// DefaultPeopleMatchPolicy 是生产使用的复核口径。
+func DefaultPeopleMatchPolicy() PeopleMatchPolicy {
+	return PeopleMatchPolicy{
+		SourceMaximumPhotoCount: peopleMatchSourceMaximumPhotoCount,
+		TargetMinimumPhotos:     peopleMatchTargetMinimumPhotos,
+		TargetMinimumFaces:      peopleMatchTargetMinimumFaces,
+	}
+}
+
+// LegacyPeopleMatchPolicy 复现扩大召回之前的口径：来源组只收 1～2 张照片，
+// 目标组要求至少 10 张脸且至少 3 张照片。
+func LegacyPeopleMatchPolicy() PeopleMatchPolicy {
+	return PeopleMatchPolicy{
+		SourceMaximumPhotoCount: 2,
+		TargetMinimumPhotos:     3,
+		TargetMinimumFaces:      10,
+	}
+}
 
 // PersonMatchCandidate contains similarity measurements for manual review.
 // None of these values is an identity probability or an automatic merge result.
@@ -148,6 +184,7 @@ type peopleMatchScore struct {
 	sourceEvidence        []PersonMatchEvidence
 	targetEvidence        []PersonMatchEvidence
 	similaritySpread      float64
+	corroboratingFaces    int
 }
 
 // peopleMatchView 是一次复核需要的分组视图与「可能重复」关系。
@@ -192,7 +229,7 @@ func (s *PeopleService) MatchSuggestionsExcluding(offset, limit int, includeHidd
 			continue
 		}
 		view.reviewSources[id] = true
-		if group.group.PhotoCount >= peopleMatchTargetMinimumPhotos &&
+		if group.group.PhotoCount >= s.matchPolicyLocked().TargetMinimumPhotos &&
 			!view.relationsForEffectiveLocked(id) {
 			// 三张以上的重复人物只在真有可能的重复对象时才进复核列表，
 			// 否则整页都是「没有候选」的噪声。
@@ -253,7 +290,7 @@ func (s *PeopleService) peopleMatchSourceEligibleLocked(group *peopleMatchGroup,
 	if excludedSources[group.group.ID] {
 		return false
 	}
-	if group.group.PhotoCount > peopleMatchSourceMaximumPhotoCount {
+	if group.group.PhotoCount > s.matchPolicyLocked().SourceMaximumPhotoCount {
 		return false
 	}
 	for _, face := range group.faces {
@@ -270,8 +307,24 @@ func (s *PeopleService) peopleMatchTargetEligibleLocked(group *peopleMatchGroup)
 	if group.group.Confirmed || s.manual.RetainedGroups[group.group.ID] {
 		return true
 	}
-	return group.group.PhotoCount >= peopleMatchTargetMinimumPhotos &&
-		group.group.FaceCount >= peopleMatchTargetMinimumFaces
+	policy := s.matchPolicyLocked()
+	return group.group.PhotoCount >= policy.TargetMinimumPhotos &&
+		group.group.FaceCount >= policy.TargetMinimumFaces
+}
+
+// matchPolicyLocked 返回当前生效的复核口径。
+func (s *PeopleService) matchPolicyLocked() PeopleMatchPolicy {
+	if s.matchPolicy.SourceMaximumPhotoCount <= 0 {
+		return DefaultPeopleMatchPolicy()
+	}
+	return s.matchPolicy
+}
+
+// SetMatchPolicy 覆盖复核口径。评测工具用它跑旧口径，做前后对照。
+func (s *PeopleService) SetMatchPolicy(policy PeopleMatchPolicy) {
+	s.mu.Lock()
+	s.matchPolicy = policy
+	s.mu.Unlock()
 }
 
 func (s *PeopleService) peopleMatchViewLocked(includeHidden bool, includeResource func(string) bool) *peopleMatchView {
@@ -730,6 +783,7 @@ type peopleMatchComparison struct {
 	sourceEvidence       []PersonMatchEvidence
 	targetEvidence       []PersonMatchEvidence
 	similaritySpread     float64
+	corroboratingFaces   int
 }
 
 // peopleCompareMatchGroups 用两侧的代表脸互相复核。
@@ -792,7 +846,7 @@ func (s *PeopleService) peopleCompareMatchGroups(source, target *peopleMatchGrou
 		if bestSimilarity < thresholds.mergeFaceThreshold || meanSimilarity < thresholds.mergeMinimumMeanSimilarity {
 			return peopleMatchComparison{}
 		}
-	} else if bestSimilarity < thresholds.mergeCentroidThreshold || meanSimilarity < peopleMatchSinglePhotoThreshold {
+	} else if !peopleMatchWeakEvidenceAccepts(source, target, bestSimilarity, meanSimilarity, thresholds) {
 		return peopleMatchComparison{}
 	}
 	return peopleMatchComparison{
@@ -803,7 +857,88 @@ func (s *PeopleService) peopleCompareMatchGroups(source, target *peopleMatchGrou
 		sourceEvidence:       sourceFaces,
 		targetEvidence:       targetFaces,
 		similaritySpread:     peopleSimilaritySpread(leftScores),
+		corroboratingFaces:   peopleMatchCorroboratingFaces(leftFaces, rightFaces, thresholds),
 	}
+}
+
+// peopleMatchWeakEvidenceAccepts 判断「证据不足」的候选要不要仍然提示。
+//
+// 只有一张照片的来源组拿不出跨照片证据，这时唯一能用的判据是：目标组
+// 自己是否从多张照片上印证了这张脸。门槛用的是人脸对人的相似度下限，
+// 与自动归并时的互为最近邻规则一致；组中心相似度是两张脸平均后的量，
+// 用在这里并不合适。
+func peopleMatchWeakEvidenceAccepts(
+	source, target *peopleMatchGroup,
+	bestSimilarity, meanSimilarity float64,
+	thresholds peopleGroupingThresholds,
+) bool {
+	if bestSimilarity < thresholds.mergeFaceThreshold || meanSimilarity < thresholds.mergeFaceThreshold {
+		return false
+	}
+	// 目标组必须从至少两张照片上印证这张脸，才值得摆到用户面前。
+	if peopleMatchCorroboratingFaces(source.reps(), target.reps(), thresholds) < peopleMatchMinimumCorroboration {
+		return false
+	}
+	// 目标组自己的一致性是参照：明显比组内成员更不像的，不提示。
+	internal := peopleGroupInternalSimilarity(target)
+	if internal > 0 && bestSimilarity < internal-peopleMatchInternalSlack {
+		return false
+	}
+	return true
+}
+
+// peopleMatchCorroboratingFaces 统计目标组里有多少张脸印证了来源组的那张脸。
+func peopleMatchCorroboratingFaces(leftFaces, rightFaces []PersonFace, thresholds peopleGroupingThresholds) int {
+	if len(leftFaces) == 0 || len(rightFaces) == 0 {
+		return 0
+	}
+	best := -1.0
+	for _, left := range leftFaces {
+		for _, right := range rightFaces {
+			similarity := peopleCosine(left.embedding, right.embedding)
+			if similarity > best {
+				best = similarity
+			}
+		}
+	}
+	if best < thresholds.mergeFaceThreshold {
+		return 0
+	}
+	count := 0
+	for _, right := range rightFaces {
+		for _, left := range leftFaces {
+			if peopleCosine(left.embedding, right.embedding) >= thresholds.mergeFaceThreshold {
+				count++
+				break
+			}
+		}
+	}
+	return count
+}
+
+// peopleGroupInternalSimilarity 返回组内各脸互相比对时的相似度下界。
+// 它说明这一组自己有多一致，是判断外面那张脸算不算这一组的参照。
+func peopleGroupInternalSimilarity(group *peopleMatchGroup) float64 {
+	faces := group.reps()
+	if len(faces) < 2 {
+		return 0
+	}
+	scores := make([]float64, 0, len(faces))
+	for index, face := range faces {
+		best := 0.0
+		for otherIndex, other := range faces {
+			if otherIndex == index {
+				continue
+			}
+			similarity := peopleCosine(face.embedding, other.embedding)
+			if similarity > best {
+				best = similarity
+			}
+		}
+		scores = append(scores, best)
+	}
+	sort.Float64s(scores)
+	return scores[int(math.Floor(float64(len(scores)-1)*0.1))]
 }
 
 // peopleMatchEvidenceOf 把一张脸转成可以给界面直接用的证据。

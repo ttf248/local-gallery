@@ -245,6 +245,8 @@ type PeopleService struct {
 	// 它是复核候选的来源，索引变化后需要重算一次。
 	matchRelations      map[string][]string
 	matchRelationsStale bool
+	// matchPolicy 决定复核口径。生产用默认值，评测工具会覆盖成旧口径做对照。
+	matchPolicy PeopleMatchPolicy
 }
 
 func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
@@ -2747,4 +2749,77 @@ func (s *PeopleService) updateCachedAssignmentsLocked() {
 		s.cachedHashes[key] = face.recordHash
 		s.cachedOrigins[key] = face.originID
 	}
+}
+
+// ResourceFaces returns every detected face in one resource.
+// The annotation view needs the raw detections to show boxes beside the
+// human labels; it never modifies them.
+func (s *PeopleService) ResourceFaces(resourceID string) []PersonFace {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	faces := s.facesForResourceLocked(resourceID)
+	result := make([]PersonFace, len(faces))
+	copy(result, faces)
+	return result
+}
+
+// PeopleGroupBestSimilarity returns the highest face similarity between two
+// groups. The evaluation tool uses it to explain why a duplicate pair was not
+// surfaced.
+func PeopleGroupBestSimilarity(people *PeopleService, leftID, rightID string) float64 {
+	people.mu.RLock()
+	defer people.mu.RUnlock()
+	left := people.groupFacesLocked(leftID)
+	right := people.groupFacesLocked(rightID)
+	if len(left) == 0 || len(right) == 0 {
+		return 0
+	}
+	best := 0.0
+	for _, leftFace := range left {
+		for _, rightFace := range right {
+			similarity := peopleCosine(leftFace.embedding, rightFace.embedding)
+			if similarity > best {
+				best = similarity
+			}
+		}
+	}
+	return math.Round(best*1000) / 1000
+}
+
+// PeopleGroupInternalSimilarity returns the lower tenth of the within-group
+// face similarities. It shows how consistent a group is on its own, which is
+// the yardstick for judging whether an outside face belongs to it.
+func PeopleGroupInternalSimilarity(people *PeopleService, groupID string) float64 {
+	people.mu.RLock()
+	defer people.mu.RUnlock()
+	faces := people.groupFacesLocked(groupID)
+	if len(faces) < 2 {
+		return 0
+	}
+	scores := make([]float64, 0, len(faces))
+	for index, face := range faces {
+		best := 0.0
+		for otherIndex, other := range faces {
+			if otherIndex == index {
+				continue
+			}
+			similarity := peopleCosine(face.embedding, other.embedding)
+			if similarity > best {
+				best = similarity
+			}
+		}
+		scores = append(scores, best)
+	}
+	sort.Float64s(scores)
+	return math.Round(scores[int(math.Floor(float64(len(scores)-1)*0.1))]*1000) / 1000
+}
+
+func (s *PeopleService) groupFacesLocked(personID string) []PersonFace {
+	result := make([]PersonFace, 0)
+	for _, face := range s.faces {
+		if s.effectivePersonIDLocked(face) == personID {
+			result = append(result, face)
+		}
+	}
+	return result
 }
