@@ -585,6 +585,9 @@ func (s *SimilarityService) Rebuild(ctx context.Context) (SimilaritySummary, err
 	})
 
 	s.mu.Lock()
+	// 人工决定跟着照片走：分组变了之后，旧决定要迁到新的分组上。
+	// 归属说不清时原始数据留在原处，不擅自套用。
+	s.state = similarityStateMigration(s.groups, s.state, groups)
 	s.groups = groups
 	s.builtAt = s.now()
 	s.stale = false
@@ -592,10 +595,14 @@ func (s *SimilarityService) Rebuild(ctx context.Context) (SimilaritySummary, err
 	s.applyStateLocked()
 	summary := s.summary
 	s.revision++
+	stateErr := s.persistStateLocked()
 	s.mu.Unlock()
 
 	if err := s.persistGroups(); err != nil {
 		return summary, err
+	}
+	if stateErr != nil {
+		return summary, stateErr
 	}
 	return summary, nil
 }
