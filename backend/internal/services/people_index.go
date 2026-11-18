@@ -118,23 +118,18 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	s.mu.RLock()
 	existingFaces := clonePeopleFaces(s.faces)
 	existingFaceKeys := clonePeopleFaceKeys(s.facesByResource)
-	previousIDs := cloneMap(s.previousIDs)
-	cachedIDs := cloneMap(s.cachedIDs)
-	cachedHashes := cloneMap(s.cachedHashes)
-	cachedOrigins := cloneMap(s.cachedOrigins)
 	sourceIsPhoto := s.sourceIsPhoto
-	manual := clonePeopleManualState(s.manual)
 	annAvailable := s.ann != nil
 	comparisons := s.comparisons
+	var previousIDs map[string]string
+	var cachedIDs, cachedHashes, cachedOrigins map[string]string
+	var manual peopleManualState
 	var clusters map[string]*peopleCluster
-	if !annAvailable {
-		clusters = clonePeopleClusters(s.clusters)
-	}
+	var removedPersonIDs map[string]string
 	changed := false
 	updatedFaces := existingFaces
 	lastExisting := PersonFace{}
-	for key, face := range existingFaces {
-		previousIDs[key] = face.PersonID
+	for _, face := range existingFaces {
 		if lastExisting.Key == "" || personFaceLess(lastExisting, face) {
 			lastExisting = face
 		}
@@ -165,6 +160,12 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		}
 		for _, face := range current {
 			delete(updatedFaces, face.Key)
+			// 这次删掉的脸原来的分组要单独记着：重建时靠它把用户改过的
+			// 分组迁移过去。它已经不在 existingFaces 里了。
+			if removedPersonIDs == nil {
+				removedPersonIDs = make(map[string]string)
+			}
+			removedPersonIDs[face.Key] = face.PersonID
 			appendOnly = false
 		}
 		for _, face := range incoming {
@@ -175,6 +176,25 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 			updatedFaces[face.Key] = face
 		}
 		changed = true
+	}
+	// 只有走重建路径时才需要这几份快照。
+	// 增量快路径直接在现有分组上追加，一个都用不到 ——
+	// 大库上每次增量白克隆四张全量映射表，就是白扔几份内存。
+	if changed && !(appendOnly && annAvailable) {
+		previousIDs = cloneMap(s.previousIDs)
+		for key, face := range existingFaces {
+			previousIDs[key] = face.PersonID
+		}
+		for key, personID := range removedPersonIDs {
+			previousIDs[key] = personID
+		}
+		cachedIDs = cloneMap(s.cachedIDs)
+		cachedHashes = cloneMap(s.cachedHashes)
+		cachedOrigins = cloneMap(s.cachedOrigins)
+		manual = clonePeopleManualState(s.manual)
+		if !annAvailable {
+			clusters = clonePeopleClusters(s.clusters)
+		}
 	}
 	s.mu.RUnlock()
 	if !changed {

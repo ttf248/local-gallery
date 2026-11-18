@@ -191,9 +191,16 @@ type SmartAlbumService struct {
 	dimensions   SmartAlbumDimensionSource
 	validatePath func(string) (string, error)
 
-	stateMu           sync.Mutex
-	state             smartAlbumState
+	stateMu sync.Mutex
+	// buildMu 只保护「同一本相册的同一个维度不要被算两遍」。
+	// 它曾经是一把全局锁：智能相册构建里最慢的一步是给场景分组取名字，
+	// 那一步要等本机的文本嵌入 Worker，最长二十秒 —— 用全局锁的话，
+	// 一本相册在等 Worker，别人的相册也只能干等。
+	// 现在按「相册 + 维度」分锁：同一把锁仍然只算一遍，
+	// 不同的相册可以同时构建。
 	buildMu           sync.Mutex
+	buildLocks        map[string]*sync.Mutex
+	state             smartAlbumState
 	directoryRevision atomic.Uint64
 }
 
@@ -334,14 +341,33 @@ func (s *SmartAlbumService) Groups(ctx context.Context, albumID, dimension strin
 
 // groupsForDimension 按一个维度算分组：命中派生缓存就直接复用，没命中
 // 才重算并写回缓存。
+// buildLock 取出「相册 + 维度」对应的构建锁。
+//
+// 锁本身只建一次：相册与维度的组合是有限的，表的规模跟着图库走，
+// 不需要回收。
+func (s *SmartAlbumService) buildLock(key string) *sync.Mutex {
+	s.buildMu.Lock()
+	defer s.buildMu.Unlock()
+	if s.buildLocks == nil {
+		s.buildLocks = make(map[string]*sync.Mutex)
+	}
+	lock, exists := s.buildLocks[key]
+	if !exists {
+		lock = &sync.Mutex{}
+		s.buildLocks[key] = lock
+	}
+	return lock
+}
+
 func (s *SmartAlbumService) groupsForDimension(
 	ctx context.Context,
 	input smartAlbumAlbumInput,
 	dimension string,
 	force bool,
 ) (SmartAlbumSummary, error) {
-	s.buildMu.Lock()
-	defer s.buildMu.Unlock()
+	lock := s.buildLock(input.albumID + "|" + dimension)
+	lock.Lock()
+	defer lock.Unlock()
 
 	metadataCoverage := coverageForRecords(len(input.ids), len(input.media), input.metadata, input.metadataStatus)
 	faceCoverage := coverageForSummaries(len(input.ids), len(input.media), input.face, input.faceStatus)

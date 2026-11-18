@@ -35,8 +35,8 @@ func (s *AIJobService) ForgetResources(resourceIDs []string) int {
 		return 0
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return 0
 	}
 	removed := 0
@@ -53,14 +53,18 @@ func (s *AIJobService) ForgetResources(resourceIDs []string) int {
 		removed++
 	}
 	if removed == 0 {
+		s.mu.Unlock()
 		return 0
 	}
+	s.recordsRevision++
+	s.mu.Unlock()
+	// 改写批次文件要读一遍整个文件再写回去，是磁盘操作：
+	// 锁内做会让读任务的接口一起等。
 	for path := range files {
 		// 批次文件改写失败不影响本次运行：内存里的结果已经删掉，
 		// 下次启动会重新读回旧记录，但图库本身的正确性不受影响。
 		_ = rewriteAIBatchWithout(path, targets)
 	}
-	s.recordsRevision++
 	return removed
 }
 
@@ -99,17 +103,18 @@ func (s *AIJobService) ClearModuleRecords(moduleType string) error {
 		return errors.New("only face analysis data can be cleared independently")
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return errAIJobServiceClosed
 	}
 	if hasActiveAIJobType(s.jobs, moduleType) {
+		s.mu.Unlock()
 		return ErrAIJobActive
 	}
 	moduleDir := filepath.Join(s.metadataDir, moduleType)
-	if err := os.RemoveAll(moduleDir); err != nil {
-		return err
-	}
+	// 删目录是磁盘操作：人脸模块的批次文件可能有几千个，
+	// 拿着任务状态锁删会让所有读任务的接口一起等。
+	// 锁内只把内存里的结果摘掉，删目录放到锁外。
 	for key, record := range s.records {
 		if record.Type == moduleType {
 			delete(s.records, key)
@@ -125,11 +130,17 @@ func (s *AIJobService) ClearModuleRecords(moduleType string) error {
 		keptOrder = append(keptOrder, id)
 	}
 	s.order = keptOrder
-	if err := s.persistLocked(); err != nil {
+	err := s.persistLocked()
+	cleared := s.onRecordsCleared
+	s.mu.Unlock()
+	if err != nil {
 		return err
 	}
-	if s.onRecordsCleared != nil {
-		s.onRecordsCleared()
+	if removeErr := os.RemoveAll(moduleDir); removeErr != nil {
+		return removeErr
+	}
+	if cleared != nil {
+		cleared()
 	}
 	return nil
 }
@@ -155,17 +166,25 @@ func (s *AIJobService) RecordsRevision() uint64 {
 // Records 返回指定模块的结果副本，便于 handler 按当前资源快照过滤过期记录。
 func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	result := make([]AIAnalysisRecord, 0)
 	analyzer, installed := s.analyzers[moduleType]
 	if !installed {
-		return result
+		s.mu.Unlock()
+		return []AIAnalysisRecord{}
 	}
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
+	// 锁内只挑出记录，载荷复制放到锁外：OCR 与人脸的载荷可以很大，
+	// 整表复制时拿着任务状态锁会让读任务的接口一起等。
+	matched := make([]AIAnalysisRecord, 0)
 	for _, record := range s.records {
 		if record.Type == moduleType && record.ModuleVersion == version {
-			result = append(result, cloneRecord(record))
+			matched = append(matched, record)
 		}
+	}
+	s.mu.Unlock()
+
+	result := make([]AIAnalysisRecord, 0, len(matched))
+	for _, record := range matched {
+		result = append(result, cloneRecord(record))
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].ResourceID != result[j].ResourceID {
@@ -185,29 +204,39 @@ func (s *AIJobService) Records(moduleType string) []AIAnalysisRecord {
 // Resources without a parsed capture time are simply absent from the map.
 func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map[string]time.Time {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	result := make(map[string]time.Time, len(resourceIDs))
 	analyzer, installed := s.analyzers[moduleType]
 	if !installed {
-		return result
+		s.mu.Unlock()
+		return map[string]time.Time{}
 	}
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
+	// 锁内只取载荷，解析放到锁外：一次要读整本相册的拍摄时间，
+	// 拿着任务状态锁解 JSON 会让读任务的接口一起等。
+	keys := make([]string, 0, len(resourceIDs))
+	payloads := make([]json.RawMessage, 0, len(resourceIDs))
 	for _, resourceID := range resourceIDs {
 		record, exists := s.records[aiRecordKeyForVersion(moduleType, version, resourceID)]
 		if !exists || record.ModuleVersion != version || len(record.Data) == 0 {
 			continue
 		}
+		keys = append(keys, resourceID)
+		payloads = append(payloads, record.Data)
+	}
+	s.mu.Unlock()
+
+	result := make(map[string]time.Time, len(keys))
+	for index, payload := range payloads {
 		var metadata struct {
 			DateTimeOriginal string `json:"dateTimeOriginal,omitempty"`
 		}
-		if json.Unmarshal(record.Data, &metadata) != nil {
+		if json.Unmarshal(payload, &metadata) != nil {
 			continue
 		}
 		captured, ok := parseSmartCaptureTime(metadata.DateTimeOriginal)
 		if !ok {
 			continue
 		}
-		result[resourceID] = captured
+		result[keys[index]] = captured
 	}
 	return result
 }
