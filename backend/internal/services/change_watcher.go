@@ -119,7 +119,12 @@ type ChangeWatcherOptions struct {
 	// OnChange 在一批变化合并完成时调用。
 	OnChange func(*SyncChangeSet)
 	// OnError 在监听器遇到错误时调用（溢出、权限不足等）。
+	//
+	// 某个媒体根登记失败不走上这条通道：那是那一个根的问题，
+	// 其余根照常工作，不该把整个监听标成降级。
 	OnError func(error)
+	// OnRootError 在某个媒体根无法监听时调用。
+	OnRootError func(root string, err error)
 }
 
 const (
@@ -221,7 +226,7 @@ func (w *ChangeWatcher) Start(ctx context.Context) error {
 	// 可能拿不到句柄，其余目录仍然可用，缺口由定期校验兜底。
 	for _, root := range w.roots {
 		if err := w.addTree(ctx, root); err != nil {
-			w.reportError(fmt.Errorf("watch root %s: %w", filepath.Base(root), err))
+			w.reportRootError(root, err)
 		}
 	}
 	w.mu.Lock()
@@ -276,7 +281,7 @@ func (w *ChangeWatcher) SetRoots(ctx context.Context, roots []string) {
 	}
 	for _, root := range roots {
 		if err := w.addTree(ctx, root); err != nil {
-			w.reportError(fmt.Errorf("watch root %s: %w", filepath.Base(root), err))
+			w.reportRootError(root, err)
 		}
 	}
 }
@@ -340,6 +345,16 @@ func (w *ChangeWatcher) handleError(err error) {
 func (w *ChangeWatcher) reportError(err error) {
 	if w.opts.OnError != nil {
 		w.opts.OnError(err)
+	}
+}
+
+// reportRootError 报告某个媒体根无法监听。
+//
+// 这不算监听器降级：那一个根读不到（离线磁盘、断开的网络共享），
+// 其余根照常工作。
+func (w *ChangeWatcher) reportRootError(root string, err error) {
+	if w.opts.OnRootError != nil {
+		w.opts.OnRootError(root, err)
 	}
 }
 
@@ -539,8 +554,9 @@ func (w *ChangeWatcher) flush(ctx context.Context) {
 
 // filesStable 判断批次里的文件是否都已经写完。
 //
-// 判定方式是「两次观测之间大小没有变化」。第一次观测只记录基线，
-// 因此一个在静默窗口内写完的文件不会被误判成仍在写入。
+// 判定方式是「两次观测之间大小没有变化」。第一次观测只建立基线，
+// 还不能确认文件写完了 —— 新写入的图片要等下一轮才提交，
+// 免得把写了一半的文件写进图库。
 func (w *ChangeWatcher) filesStable(pending *SyncChangeSet) bool {
 	stable := true
 	w.mu.Lock()
@@ -558,7 +574,14 @@ func (w *ChangeWatcher) filesStable(pending *SyncChangeSet) bool {
 		}
 		size := info.Size()
 		next[path] = size
-		if previous, exists := sizes[path]; exists && previous != size {
+		previous, exists := sizes[path]
+		if !exists {
+			// 第一次观测：只建立基线。
+			stable = false
+			continue
+		}
+		if previous != size {
+			// 大小又变了：文件还在写。
 			stable = false
 		}
 	}

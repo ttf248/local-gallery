@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -28,6 +30,11 @@ type IncrementalOutcome struct {
 	Warnings []models.ScanWarning
 	// RescannedDirs 是本轮真正重新读取磁盘的目录数量。
 	RescannedDirs int
+	// Changed 表示图库结构确实变了。
+	//
+	// 只被碰了一下（目录修改时间变了、内容没变）不算变化：
+	// 那样的发布只会让图库版本跳动，界面跟着白刷一遍。
+	Changed bool
 }
 
 // ChangedResourceCount 是这次变化里新增、删除与内容变动的资源数量。
@@ -98,18 +105,14 @@ func (e *IncrementalEngine) Apply(
 	if changes == nil {
 		changes = newSyncChangeSet()
 	}
-	roots, err := prepareScanRoots(opts)
-	if err != nil {
-		return nil, err
-	}
-	rootPaths := scanRootPaths(roots)
+	roots, rootPaths, offline := prepareSyncRoots(opts)
 	index := buildTreeIndex(previous, rootPaths)
 	rebuild := computeRebuildSet(changes, rootPaths)
 
 	scanner := NewScanner()
-	scanner.rootKeys = make(map[string]struct{}, len(roots))
-	for _, root := range roots {
-		scanner.rootKeys[pathutil.RootKey(root.path)] = struct{}{}
+	scanner.rootKeys = make(map[string]struct{}, len(rootPaths))
+	for _, path := range rootPaths {
+		scanner.rootKeys[pathutil.RootKey(path)] = struct{}{}
 	}
 
 	diff := &syncDiff{changedDirs: make(map[string]struct{})}
@@ -125,6 +128,18 @@ func (e *IncrementalEngine) Apply(
 		rescanned += count
 		allAlbums = append(allAlbums, albums...)
 		allCollections = append(allCollections, collections...)
+	}
+	// 离线的根（网络共享断了、磁盘没插上）保留上一份结果里的内容：
+	// 一个根读不到不该让其它根的变化也一起丢掉。
+	for _, path := range offline {
+		albums, collections := previousRootContent(previous, path, rootPaths)
+		allAlbums = append(allAlbums, albums...)
+		allCollections = append(allCollections, collections...)
+		diff.warnings = append(diff.warnings, models.ScanWarning{
+			Code:    "root_unavailable",
+			Path:    filepath.Base(filepath.Clean(path)),
+			Message: "媒体根暂时不可用，已保留上次的结果",
+		})
 	}
 
 	conflicts := albumDisplayConflicts(allAlbums, allCollections)
@@ -153,7 +168,92 @@ func (e *IncrementalEngine) Apply(
 		ChangedAlbums: sortedKeys(diff.changedDirs),
 		Warnings:      diff.warnings,
 		RescannedDirs: rescanned,
+		Changed:       resultFingerprint(result) != resultFingerprint(previous),
 	}, nil
+}
+
+// prepareSyncRoots 逐个准备媒体根。
+//
+// 与全量扫描不同，这里不会因为某个根不可用就整体失败：离线的根被单独
+// 列出来，调用方保留它上一份的内容，其余根照常更新。返回值分别是
+// 可用的根、全部根路径与离线的根路径。
+func prepareSyncRoots(opts ScanOptions) ([]scanRoot, []string, []string) {
+	paths := opts.effectiveRoots()
+	prepared := make([]scanRoot, 0, len(paths))
+	offline := make([]string, 0)
+	for _, path := range paths {
+		absolute, err := filepath.Abs(path)
+		if err != nil {
+			absolute = filepath.Clean(path)
+		}
+		info, err := readScanRoot(absolute)
+		if err != nil {
+			offline = append(offline, absolute)
+			continue
+		}
+		prepared = append(prepared, scanRoot{path: absolute, info: info})
+	}
+	return prepared, paths, offline
+}
+
+// previousRootContent 取出上一份结果里属于某个媒体根的顶层相册与集合。
+func previousRootContent(previous *models.ScanResult, root string, roots []string) ([]models.Album, []models.Collection) {
+	if previous == nil {
+		return nil, nil
+	}
+	clean := filepath.Clean(root)
+	var albums []models.Album
+	var collections []models.Collection
+	for i := range previous.Albums {
+		owner, _, matched := pathutil.MostSpecificRoot(previous.Albums[i].Path, roots)
+		if matched && filepath.Clean(owner) == clean {
+			albums = append(albums, previous.Albums[i])
+		}
+	}
+	for i := range previous.Collections {
+		owner, _, matched := pathutil.MostSpecificRoot(previous.Collections[i].Path, roots)
+		if matched && filepath.Clean(owner) == clean {
+			collections = append(collections, previous.Collections[i])
+		}
+	}
+	return albums, collections
+}
+
+// resultFingerprint 算出扫描结果的结构指纹。
+//
+// 指纹覆盖目录结构、媒体清单与目录修改时间：这三样变了才值得重新
+// 发布。只碰了一下目录（内容没变）不会让指纹变化，图库版本也就不跳动。
+func resultFingerprint(result *models.ScanResult) string {
+	if result == nil {
+		return ""
+	}
+	hash := sha256.New()
+	write := func(parts ...string) {
+		for _, part := range parts {
+			hash.Write([]byte(part))
+			hash.Write([]byte{0})
+		}
+	}
+	var walk func(albums []models.Album, collections []models.Collection)
+	walk = func(albums []models.Album, collections []models.Collection) {
+		for i := range albums {
+			write(albums[i].Path)
+			for _, file := range albums[i].ImageFiles {
+				write("i", file)
+			}
+			for _, file := range albums[i].VideoFiles {
+				write("v", file)
+			}
+			write(albums[i].ModTime.UTC().Format(time.RFC3339Nano))
+		}
+		for i := range collections {
+			write(collections[i].Path)
+			write(collections[i].ModTime.UTC().Format(time.RFC3339Nano))
+			walk(collections[i].Albums, collections[i].Collections)
+		}
+	}
+	walk(result.Albums, result.Collections)
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // rebuildRoot 重建一个媒体根的顶层结果。

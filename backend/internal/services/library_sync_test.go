@@ -322,3 +322,33 @@ func TestLibrarySync_IncrementalResultMatchesFullScan(t *testing.T) {
 	}
 	var _ = models.Album{}
 }
+
+func TestLibrarySync_SettingsSurviveRestart(t *testing.T) {
+	statePath := filepath.Join(t.TempDir(), "library_sync.json")
+	catalog := NewResourceCatalog()
+	newService := func() *LibrarySyncService {
+		service, err := NewLibrarySyncService(LibrarySyncOptions{
+			StatePath: statePath,
+			Roots:     func() []string { return []string{t.TempDir()} },
+			Catalog:   catalog,
+		})
+		if err != nil {
+			t.Fatalf("create library sync service: %v", err)
+		}
+		return service
+	}
+
+	// 首次使用：默认打开自动发现。
+	first := newService()
+	if !first.settings.Enabled {
+		t.Fatal("首次使用应当默认打开自动发现文件变化")
+	}
+	// 落盘一次（收到事件就会落盘）。
+	first.onChange(changeSetFor(filepath.Join(t.TempDir(), "a.jpg")))
+
+	// 重启后开关必须还在。
+	second := newService()
+	if !second.settings.Enabled {
+		t.Fatal("重启后自动发现文件变化的开关丢失了")
+	}
+}

@@ -242,3 +242,34 @@ func TestIncrementalScan_EmptyRootProducesEmptyResult(t *testing.T) {
 		t.Fatalf("expected empty library, got %d albums", out.Result.AlbumCount)
 	}
 }
+
+func TestIncrementalScan_KeepsOfflineRootContent(t *testing.T) {
+	online := t.TempDir()
+	offline := filepath.Join(t.TempDir(), "offline")
+	mkdirAll(t, filepath.Join(online, "album"))
+	touchAll(t, filepath.Join(online, "album", "a.jpg"))
+
+	opts := ScanOptions{Roots: []string{online, offline}}
+	before := scanAll(t, online)
+
+	// 离线的根让全量扫描无法完成，这里只验证增量更新不会因此丢掉
+	// 其它根的内容，也不会报错。
+	changes := changeSetFor(filepath.Join(online, "album", "b.jpg"))
+	touchAll(t, filepath.Join(online, "album", "b.jpg"))
+	out, err := NewIncrementalEngine().Apply(before, changes, opts)
+	if err != nil {
+		t.Fatalf("增量扫描不应因为离线的根失败: %v", err)
+	}
+	if len(out.AddedFiles) != 1 {
+		t.Fatalf("应检测到新增文件，实际 %v", out.AddedFiles)
+	}
+	found := false
+	for _, album := range out.Result.Albums {
+		if filepath.Clean(album.Path) == filepath.Clean(filepath.Join(online, "album")) {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("在线根的相册丢了：%v", out.Result.Albums)
+	}
+}

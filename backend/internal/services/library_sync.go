@@ -47,6 +47,9 @@ type LibrarySyncStatus struct {
 	LastFailed int `json:"lastFailed"`
 	// LastError 是最近一次失败的机器可读原因。
 	LastError string `json:"lastError,omitempty"`
+	// LibraryRevision 是当前图库版本。图库一变它就变，
+	// 界面据此判断要不要重新拉数据。
+	LibraryRevision uint64 `json:"libraryRevision"`
 }
 
 // librarySyncState 是持久化到磁盘的状态。
@@ -120,6 +123,11 @@ const (
 	// 一次大批量导入可能带来上万个资源；全部排进任务中心会让队列
 	// 失去意义。超出上限时只保留最新的一批，其余交给后续批次。
 	maxAnalysisQueue = 5000
+	// maxPendingChanges 是待处理变化集合的上限。
+	//
+	// 图库长时间不可用时变化会一直攒着；攒到上限就丢掉旧的 ——
+	// 一次全量校验会把它们全部覆盖掉。
+	maxPendingChanges = 20000
 )
 
 // LibrarySyncService 把目录监听、增量扫描与分析任务串成一条链路。
@@ -144,11 +152,14 @@ type LibrarySyncService struct {
 	removedResources map[string]struct{}
 	// analysisDirty 标记「有变化需要重算智能相册」。
 	analysisDirty bool
-	wake          chan struct{}
-	ctx           context.Context
-	cancel        context.CancelFunc
-	closed        bool
-	verifyAt      time.Time
+	// pendingOverflow 标记待处理的变化曾经多到被丢弃过：
+	// 那说明逐条处理已经不划算了，要靠一次全量校验兜底。
+	pendingOverflow bool
+	wake            chan struct{}
+	ctx             context.Context
+	cancel          context.CancelFunc
+	closed          bool
+	verifyAt        time.Time
 }
 
 // NewLibrarySyncService 创建自动同步服务并读取已保存的开关。
@@ -182,7 +193,9 @@ func (s *LibrarySyncService) loadState() error {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			// 首次使用：默认打开自动发现，默认不自动分析。
+			// 内存里的两份记录都要写全，否则下一次落盘会把开关写成关闭。
 			s.settings = LibrarySyncSettings{Enabled: true, AutoAnalyze: false}
+			s.state = librarySyncState{Enabled: true, AutoAnalyze: false}
 			return nil
 		}
 		return fmt.Errorf("read library sync state: %w", err)
@@ -200,11 +213,17 @@ func (s *LibrarySyncService) loadState() error {
 //
 // 写盘单独加一把锁：Windows 上重命名覆盖正在被读的文件会失败，
 // 事件与同步两条路径可能同时落盘，串行化才不会互相踩。
+//
+// 开关取自 settings 而不是 state：两者是同一件事的两个副本，
+// 只写其中一个会让磁盘上的开关与内存里的对不上 —— 首次运行时
+// 状态文件还不存在，下一次落盘就会把「已打开」写成「已关闭」。
 func (s *LibrarySyncService) saveState() {
 	s.stateMu.Lock()
 	defer s.stateMu.Unlock()
 	s.mu.Lock()
 	state := s.state
+	state.Enabled = s.settings.Enabled
+	state.AutoAnalyze = s.settings.AutoAnalyze
 	s.mu.Unlock()
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -286,8 +305,6 @@ func (s *LibrarySyncService) Update(ctx context.Context, settings LibrarySyncSet
 	s.mu.Lock()
 	previous := s.settings
 	s.settings = settings
-	s.state.Enabled = settings.Enabled
-	s.state.AutoAnalyze = settings.AutoAnalyze
 	s.mu.Unlock()
 	s.saveState()
 
@@ -341,6 +358,7 @@ func (s *LibrarySyncService) Status() LibrarySyncStatus {
 		LastUpdated:     state.LastUpdated,
 		LastFailed:      state.LastFailed,
 		LastError:       state.LastError,
+		LibraryRevision: s.opts.Catalog.Acquire().Revision(),
 	}
 	if watcher != nil {
 		watchStatus := watcher.Status()
@@ -379,6 +397,12 @@ func (s *LibrarySyncService) startWatcher() error {
 			s.recordError("watch_failed")
 			// 监听不可靠时立刻做一次校验，把漏掉的变化补回来。
 			s.scheduleVerify(time.Now().Add(5 * time.Second))
+		},
+		OnRootError: func(root string, err error) {
+			// 单个媒体根读不到（离线磁盘、断开的网络共享）：
+			// 其余根照常工作，这不是监听器降级。
+			log.Printf("媒体根无法监听 %s: %v", filepath.Base(root), err)
+			s.recordError("root_unavailable")
 		},
 	})
 	if err != nil {
@@ -420,6 +444,7 @@ func (s *LibrarySyncService) onChange(changes *SyncChangeSet) {
 	}
 	s.mu.Lock()
 	s.pending.Merge(changes)
+	s.trimPendingLocked()
 	s.state.LastEventAt = time.Now()
 	s.mu.Unlock()
 	s.saveState()
@@ -427,6 +452,19 @@ func (s *LibrarySyncService) onChange(changes *SyncChangeSet) {
 	case s.wake <- struct{}{}:
 	default:
 	}
+}
+
+// trimPendingLocked 给待处理的变化集合封顶。
+//
+// 图库长时间不可用时（例如媒体根离线导致图库还没建立），变化会一直
+// 攒着。攒到上限之后，多出来的变化没有价值 —— 一次全量校验会把它们
+// 全部覆盖掉 —— 直接丢掉，内存才有界。
+func (s *LibrarySyncService) trimPendingLocked() {
+	if s.pending.Size() <= maxPendingChanges {
+		return
+	}
+	s.pending = newSyncChangeSet()
+	s.pendingOverflow = true
 }
 
 // loop 是自动同步的主循环。
@@ -480,6 +518,11 @@ func (s *LibrarySyncService) processPending(ctx context.Context) {
 		return
 	}
 	if outcome == nil || outcome.Result == nil {
+		return
+	}
+	if !outcome.Changed {
+		// 图库结构没变（例如只是目录被碰了一下）：不发布，
+		// 图库版本不跳动，界面也不用白刷一遍。
 		return
 	}
 
@@ -721,9 +764,19 @@ func (s *LibrarySyncService) maybeVerify(ctx context.Context) {
 	if due {
 		s.verifyAt = time.Time{}
 	}
+	overflow := s.pendingOverflow
+	s.pendingOverflow = false
 	enabled := s.settings.Enabled
 	s.mu.Unlock()
-	if !due || !enabled {
+	if !enabled {
+		return
+	}
+	if overflow {
+		// 攒下的变化多到被丢掉了：一次全量校验把它们一次性对齐。
+		s.runVerification(ctx)
+		return
+	}
+	if !due {
 		return
 	}
 	s.runVerification(ctx)
@@ -802,6 +855,7 @@ func (s *LibrarySyncService) requeue(changes *SyncChangeSet) {
 	}
 	s.mu.Lock()
 	s.pending.Merge(changes)
+	s.trimPendingLocked()
 	s.mu.Unlock()
 	select {
 	case s.wake <- struct{}{}:
