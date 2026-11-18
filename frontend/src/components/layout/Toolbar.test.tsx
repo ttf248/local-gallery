@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
+import { useUIStore } from "../../store/uiStore";
 import Toolbar from "./Toolbar";
 
 const manifest = {
@@ -73,6 +74,7 @@ function renderToolbar(route = "/") {
 describe("Toolbar", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useUIStore.getState().setShowPersonFaceBoxes(false);
   });
 
   // 库规模原来常驻顶栏，与页头的「上次更新」、状态栏的「上次扫描」是
@@ -112,6 +114,37 @@ describe("Toolbar", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("menuitem", { name: /重新扫描/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("人物详情的更多菜单提供默认关闭并持久化的人脸框选项", () => {
+    renderToolbar("/photo/people/p_123456");
+    fireEvent.click(screen.getByLabelText("更多"));
+
+    const option = screen.getByRole("menuitemcheckbox", {
+      name: "显示当前人物的人脸框",
+    });
+    expect(option).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(option);
+
+    expect(
+      screen.getByRole("menuitemcheckbox", {
+        name: "显示当前人物的人脸框",
+      }),
+    ).toHaveAttribute("aria-checked", "true");
+    expect(useUIStore.getState().showPersonFaceBoxes).toBe(true);
+    expect(localStorage.getItem("local-gallery-ui")).toContain(
+      '"showPersonFaceBoxes":true',
+    );
+  });
+
+  it("人物列表页不显示详情专属的人脸框选项", () => {
+    renderToolbar("/photo/people");
+    fireEvent.click(screen.getByLabelText("更多"));
+    expect(
+      screen.queryByRole("menuitemcheckbox", {
+        name: "显示当前人物的人脸框",
+      }),
     ).not.toBeInTheDocument();
   });
 });

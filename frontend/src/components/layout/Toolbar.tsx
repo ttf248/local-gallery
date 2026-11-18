@@ -56,6 +56,9 @@ export default function Toolbar({
   const manifest = useLibraryManifest().data?.manifest;
   const warningCount = manifest?.statistics.warningCount ?? 0;
   const { mode, setMode } = useAppMode();
+  const showPersonFaceBoxes = useUIStore((s) => s.showPersonFaceBoxes);
+  const setShowPersonFaceBoxes = useUIStore((s) => s.setShowPersonFaceBoxes);
+  const isPersonAlbum = /^\/photo\/people\/[^/]+\/?$/.test(location.pathname);
   // 宽屏时模式切换在顶栏；窄屏顶栏放不下，改为在侧栏抽屉里。
   const isWide = useMediaQuery(WIDE_LAYOUT_QUERY);
 
@@ -178,6 +181,12 @@ export default function Toolbar({
           <ThemeSwitcher compact />
           {!onGallery && (
             <MoreMenu
+              showPersonFaceBoxes={
+                isPersonAlbum ? showPersonFaceBoxes : undefined
+              }
+              onTogglePersonFaceBoxes={() =>
+                setShowPersonFaceBoxes(!showPersonFaceBoxes)
+              }
               onRefresh={() =>
                 void queryClient.invalidateQueries({
                   queryKey: libraryQueryKeys.root,
@@ -199,7 +208,15 @@ export default function Toolbar({
 // 「重新扫描」不在这里：它已经有一个始终可见的入口（页头右上角），
 // 外加 Ctrl+S。三个入口做同一件事，多出来的那个只会在菜单深处
 // 增加一次"这个菜单里到底有什么"的猜测。
-function MoreMenu({ onRefresh }: { onRefresh: () => void }) {
+function MoreMenu({
+  onRefresh,
+  showPersonFaceBoxes,
+  onTogglePersonFaceBoxes,
+}: {
+  onRefresh: () => void;
+  showPersonFaceBoxes?: boolean;
+  onTogglePersonFaceBoxes: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -256,8 +273,25 @@ function MoreMenu({ onRefresh }: { onRefresh: () => void }) {
           ref={menuRef}
           role="menu"
           aria-label="更多操作"
-          className="absolute right-0 top-full mt-1.5 min-w-[180px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up"
+          className="absolute right-0 top-full mt-1.5 min-w-[220px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up"
         >
+          {showPersonFaceBoxes !== undefined ? (
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={showPersonFaceBoxes}
+              onClick={onTogglePersonFaceBoxes}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-body text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+            >
+              <span
+                aria-hidden="true"
+                className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-border text-meta text-fg"
+              >
+                {showPersonFaceBoxes ? "✓" : null}
+              </span>
+              <span>显示当前人物的人脸框</span>
+            </button>
+          ) : null}
           <button
             type="button"
             role="menuitem"

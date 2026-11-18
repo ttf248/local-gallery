@@ -656,6 +656,7 @@ function PersonAlbum({ personId }: { personId: string }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const density = usePhotoStore((state) => state.density);
+  const showPersonFaceBoxes = useUIStore((state) => state.showPersonFaceBoxes);
   const picks = usePickToggle();
   const pushToast = useUIStore((state) => state.pushToast);
   const [name, setName] = useState("");
@@ -781,14 +782,16 @@ function PersonAlbum({ personId }: { personId: string }) {
           {person?.faceCount.toLocaleString() ?? 0}{" "}
           张脸。分组只表示相似度候选，不代表身份确认。
         </p>
-        <p className="flex items-center gap-2 text-meta text-fg-muted">
-          <span
-            aria-hidden="true"
-            className="h-4 w-4 shrink-0 rounded border-2 border-white bg-bg-subtle shadow-[0_0_0_2px_var(--overlay-bg)]"
-          />
-          照片框线标出属于「{person?.name ?? "当前人物"}
-          」分组的人脸；合照里未框住的人脸不在本组。
-        </p>
+        {showPersonFaceBoxes ? (
+          <p className="flex items-center gap-2 text-meta text-fg-muted">
+            <span
+              aria-hidden="true"
+              className="h-4 w-4 shrink-0 rounded border-2 border-white bg-bg-subtle shadow-[0_0_0_2px_var(--overlay-bg)]"
+            />
+            照片框线标出属于「{person?.name ?? "当前人物"}
+            」分组的人脸；合照里未框住的人脸不在本组。
+          </p>
+        ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <form
             className="flex flex-wrap items-center gap-2"
@@ -902,6 +905,7 @@ function PersonAlbum({ personId }: { personId: string }) {
             onLoadMore={loadMore}
             onOpen={(_item, index) => wall.open(index)}
             itemOverlay={(item, tile) => {
+              if (!showPersonFaceBoxes) return null;
               const itemFaces = facesByResource.get(item.id);
               if (!itemFaces?.length) return null;
               return (

@@ -1,7 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useUIStore } from "../store/uiStore";
 import People from "./People";
 
 const mocks = vi.hoisted(() => ({
@@ -51,6 +58,7 @@ function renderPeople() {
 
 describe("人物相册", () => {
   beforeEach(() => {
+    useUIStore.getState().setShowPersonFaceBoxes(false);
     Object.assign(HTMLDialogElement.prototype, {
       showModal(this: HTMLDialogElement) {
         this.open = true;
@@ -475,6 +483,10 @@ describe("人物相册", () => {
     );
 
     expect(await screen.findByText("当前人物")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/照片框线标出属于「当前人物」分组的人脸/),
+    ).not.toBeInTheDocument();
+    act(() => useUIStore.getState().setShowPersonFaceBoxes(true));
     expect(
       screen.getByText(/照片框线标出属于「当前人物」分组的人脸/),
     ).toBeInTheDocument();

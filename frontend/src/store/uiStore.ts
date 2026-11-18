@@ -6,7 +6,7 @@ export type ViewMode = 'grid' | 'list'
 
 // UI 状态：侧边栏、主题、视图模式、toast 通知。
 //
-// 持久化只覆盖外观偏好（侧边栏折叠、主题、视图模式）→ localStorage。
+// 持久化覆盖外观与浏览偏好（侧边栏折叠、主题、视图模式、人脸框）→ localStorage。
 // toast、面包屑等临时状态不进 localStorage。
 interface Toast {
   id: string
@@ -25,6 +25,10 @@ interface UIState {
 
   viewMode: ViewMode
   setViewMode: (v: ViewMode) => void
+
+  /** 人物详情照片墙是否框出当前人物的人脸，默认关闭。 */
+  showPersonFaceBoxes: boolean
+  setShowPersonFaceBoxes: (v: boolean) => void
 
   /**
    * 是否配置了多个媒体根。只有多根时卡片才显示「来自 X」来源标记——
@@ -68,6 +72,9 @@ export const useUIStore = create<UIState>()(
       viewMode: 'grid',
       setViewMode: (v) => set({ viewMode: v }),
 
+      showPersonFaceBoxes: false,
+      setShowPersonFaceBoxes: (v) => set({ showPersonFaceBoxes: v }),
+
       multiRoot: false,
       setMultiRoot: (v) => set({ multiRoot: v }),
 
@@ -108,6 +115,7 @@ export const useUIStore = create<UIState>()(
         sidebarCollapsed: s.sidebarCollapsed,
         theme: s.theme,
         viewMode: s.viewMode,
+        showPersonFaceBoxes: s.showPersonFaceBoxes,
       }),
     },
   ),
