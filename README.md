@@ -193,6 +193,7 @@ scripts\install-ffmpeg.bat
 | backend/aiworker/ | `python evaluate_people.py --annotations <本机标注集.json> --models <cacheDir>/derived/ai/models --device cpu` | 按场景评测人物检测/分组，并对比 Buffalo_m 全图与自适应分块的准确率和耗时；标注格式与指标见 [架构文档](./docs/ARCHITECTURE.md#人物评测) |
 | backend/aiworker/ | `python annotate_ground_truth.py --metadata-dir <cacheDir>/derived/metadata --root <媒体根> --output <目录>` | 从本机人脸分析结果整理标注素材：按特征相似度给出候选分组并拼成联系表，供人工核对；只产出素材，不产生标签 |
 | backend/ | go test ./internal/services -run '^$' -bench '^BenchmarkVectorIndexSearch100K$' -benchtime=31x -benchmem | 10 万向量 Top-K 延迟与分配基准 |
+| backend/ | go test ./internal/services -run '^$' -bench '^BenchmarkPeopleList$' -benchtime=30x -benchmem | 人物列表的照片统计与分组排序基准，含查原图尺寸的次数 |
 | backend/aiworker/ | python test_worker.py | Worker 权重校验、模型缓存、OOM 处理、强制 GPU 不回退、Buffalo_m 解码与 CPU 状态测试 |
 | backend/aiworker/ | `python evaluate_quality.py --model-dir <cacheDir>/derived/ai/models --device gpu --profile-device-switches --output <ignored-path>.json` | 确定性中文语义/OCR 质量集与设备切换基准；输出写仓库忽略路径，不读取用户媒体 |
 | frontend/ | npm run lint | 前端静态检查 |
