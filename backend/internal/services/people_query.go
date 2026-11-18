@@ -617,10 +617,11 @@ func (s *PeopleService) GroupPhotoStatsForGroups(includeResource func(string) bo
 	return stats
 }
 
-// groupPhotoStats 是两种口径的共同实现。
+// groupPhotoStats 是三种口径的共同实现。
 //
-// withSizes 决定要不要算人脸相对尺寸：算的时候每个资源都要查一次原图尺寸，
-// 不算的时候只查「脸数在八张到门槛之间」的那一批资源。
+// withSizes 决定要不要算人脸相对尺寸；sizeGroups 限定只给这些分组算，
+// 为空表示全部分组都要算。判定合影始终只看「脸数在八张到门槛之间」
+// 那一档的资源尺寸 —— 那一档之外的资源不必为分类付出查尺寸的代价。
 func (s *PeopleService) groupPhotoStats(includeResource func(string) bool, faceCountThreshold int, withSizes bool, sizeGroups map[string]struct{}) (map[string]PersonGroupPhotoClassification, map[string]PersonGroupPhotoStats) {
 	s.mu.RLock()
 	faces := make([]peoplePhotoFace, 0, len(s.faces))
