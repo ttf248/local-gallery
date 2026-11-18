@@ -356,6 +356,18 @@ func aiStorageModules(layout CacheLayout) []AIStorageModule {
 				},
 			},
 		},
+		{
+			Type:           AIJobTypeSimilarity,
+			Name:           aiJobModuleName(AIJobTypeSimilarity),
+			ModelLocation:  AIStorageModelNone,
+			ModelDirectory: "",
+			ModelFiles:     []AIStorageFile{},
+			Outputs: []AIStorageOutput{
+				{Kind: AIStorageOutputBatches, Label: "批次结果", Path: filepath.Join(layout.MetadataDir, AIJobTypeSimilarity)},
+				{Kind: AIStorageOutputIndex, Label: "分组结果", Path: filepath.Join(layout.AIDerivedDir, "similarity")},
+				{Kind: AIStorageOutputIndex, Label: "人工决定", Path: filepath.Join(layout.StateDir, "similarity.json")},
+			},
+		},
 	}
 }
 

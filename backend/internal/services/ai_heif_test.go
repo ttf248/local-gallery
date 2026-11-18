@@ -76,7 +76,7 @@ func TestAIJobServiceConvertsHEIFForFaceAnalysisAndCleansTemporaryFiles(t *testi
 	analyzer := &fakeFaceBatchAnalyzer{}
 	service := &AIJobService{
 		validatePath:       func(path string) (string, error) { return path, nil },
-		faceImageConverter: converter,
+		imageConverter: converter,
 		now:                time.Now,
 	}
 	results := service.processAnalyzerBatch(context.Background(), analyzer, analyzer, "cpu", "", []aiJobTarget{

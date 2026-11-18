@@ -340,13 +340,14 @@ func main() {
 	// 让缓存失效，下一次读取重新统计。
 	storageUsage := services.NewAIStorageService(30 * time.Second)
 	jobOutputs := services.NewJobOutputService(cacheLayout.Root, 60*time.Second)
+	var similarityService *services.SimilarityService
 	aiJobs, err = services.NewAIJobService(services.AIJobServiceOptions{
 		StatePath:          cacheLayout.AIJobsPath,
 		MetadataDir:        cacheLayout.MetadataDir,
 		Catalog:            resourceCatalog,
 		ValidatePath:       safetyState.Validate,
-		FaceImageConverter: imageConverter,
-		Analyzers:          []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer},
+		ImageConverter: imageConverter,
+		Analyzers:          []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, services.SimilarityAnalyzer{}},
 		OnRecordsCommitted: func(records []services.AIAnalysisRecord) {
 			if indexErr := ocrSearchIndex.ApplyRecords(records); indexErr != nil {
 				log.Printf("更新 OCR 搜索索引失败: %v", indexErr)
@@ -355,6 +356,9 @@ func main() {
 				if indexErr := peopleService.ApplyRecords(records); indexErr != nil {
 					log.Printf("更新人物索引失败: %v", indexErr)
 				}
+			}
+			if similarityService != nil {
+				similarityService.ApplyRecords(records)
 			}
 			storageUsage.Invalidate()
 			jobOutputs.Invalidate()
@@ -367,6 +371,19 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化媒体分析任务服务失败: %v", err)
 	}
+	// 相似照片整理：分组结果是派生的，人工决定存在 state/。
+	similarityService, err = services.OpenSimilarityService(services.SimilarityServiceOptions{
+		StatePath:   filepath.Join(cacheLayout.StateDir, "similarity.json"),
+		DerivedPath: filepath.Join(cacheLayout.AIDerivedDir, "similarity", "groups.json"),
+		Catalog:     resourceCatalog,
+		Jobs:        aiJobs,
+		Vectors:     vectorIndex,
+		Picks:       picks,
+	})
+	if err != nil {
+		log.Fatalf("初始化相似照片整理服务失败: %v", err)
+	}
+	defer similarityService.Close()
 	faceVersion, _ := services.FaceAnalyzerVersionForModel(aiJobs.List().Settings.FaceModel)
 	if err := peopleService.SetFaceAnalyzerVersion(faceVersion); err != nil {
 		log.Fatalf("初始化人物索引模型失败: %v", err)
@@ -556,6 +573,10 @@ func main() {
 	api.Post("/ai/jobs/:id/resume", handlers.AIJobActionHandler(aiJobs, "resume"))
 	api.Post("/ai/jobs/:id/cancel", handlers.AIJobActionHandler(aiJobs, "cancel"))
 	api.Post("/ai/jobs/:id/retry", handlers.AIJobActionHandler(aiJobs, "retry"))
+	api.Get("/similarity/status", handlers.SimilarityStatusHandler(similarityService))
+	api.Get("/similarity/groups", handlers.SimilarityGroupsHandler(similarityService))
+	api.Put("/similarity/groups/:id", handlers.SimilarityGroupUpdateHandler(similarityService))
+	api.Post("/similarity/batch", handlers.SimilarityBatchHandler(similarityService))
 	resourceParam := middleware.ResourceParam(resourceCatalog, safetyState)
 	api.Get("/smart-albums", handlers.SmartAlbumDirectoryHandler(smartAlbums))
 	api.Post("/smart-albums/refresh", handlers.SmartAlbumRefreshStartHandler(smartAlbumRefresh))
@@ -615,7 +636,7 @@ func main() {
 	api.Get("/admin/people/annotations/dataset", middleware.LoopbackOnly(), handlers.PeopleAnnotationDatasetHandler(peopleAnnotations, resourceCatalog, safetyState.Validate))
 
 	// 配置读写
-	backupService := &services.StateBackupService{Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, SmartAlbums: smartAlbums, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
+	backupService := &services.StateBackupService{Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, SmartAlbums: smartAlbums, Similarity: similarityService, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
 	api.Get("/admin/state/export", middleware.LoopbackOnly(), handlers.StateExportHandler(backupService))
 	api.Post("/admin/state/import/preview", middleware.LoopbackOnly(), handlers.StatePreviewHandler(backupService))
 	api.Post("/admin/state/import", middleware.LoopbackOnly(), handlers.StateImportHandler(backupService))

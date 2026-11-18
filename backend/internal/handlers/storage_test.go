@@ -79,7 +79,7 @@ func TestStorageUsageHandlerReturnsRelativePathsOnly(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	if len(body.Usage.Modules) != 4 {
+	if len(body.Usage.Modules) != 5 {
 		t.Fatalf("module count = %d", len(body.Usage.Modules))
 	}
 	face := body.Usage.Modules[3]
@@ -149,7 +149,7 @@ func TestStoragePathsHandlerReturnsAbsolutePaths(t *testing.T) {
 	if body.Paths.JobsFile != filepath.Join(cacheRoot, "state", "ai_jobs.json") {
 		t.Fatalf("jobs file = %q", body.Paths.JobsFile)
 	}
-	if len(body.Paths.Modules) != 4 {
+	if len(body.Paths.Modules) != 5 {
 		t.Fatalf("module count = %d", len(body.Paths.Modules))
 	}
 }

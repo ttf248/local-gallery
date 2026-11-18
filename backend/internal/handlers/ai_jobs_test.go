@@ -149,7 +149,7 @@ func TestAIJobAPIFullAnalysisOverThousandImages(t *testing.T) {
 	if job.Results[services.MetadataParseNoExif] != 1001 {
 		t.Fatalf("job results = %+v", job.Results)
 	}
-	if len(listBody.Snapshot.Modules) != 4 {
+	if len(listBody.Snapshot.Modules) != 5 {
 		t.Fatalf("modules = %+v", listBody.Snapshot.Modules)
 	}
 
@@ -381,8 +381,8 @@ func TestAIJobSequenceAPIQueuesAllModulesInOrder(t *testing.T) {
 	}, []string{root})
 	safety, safetyState := middleware.PathSafetyMiddleware([]string{root}, catalog)
 	callOrder := []string{}
-	analyzers := make([]services.AIAnalyzer, 0, 4)
-	for _, moduleType := range []string{services.AIJobTypeMetadata, services.AIJobTypeEmbedding, services.AIJobTypeOCR, services.AIJobTypeFace} {
+	analyzers := make([]services.AIAnalyzer, 0, 5)
+	for _, moduleType := range []string{services.AIJobTypeMetadata, services.AIJobTypeEmbedding, services.AIJobTypeOCR, services.AIJobTypeFace, services.AIJobTypeSimilarity} {
 		analyzers = append(analyzers, &sequenceAPIAnalyzer{module: moduleType, calls: &callOrder})
 	}
 	service, err := services.NewAIJobService(services.AIJobServiceOptions{
@@ -430,7 +430,7 @@ func TestAIJobSequenceAPIQueuesAllModulesInOrder(t *testing.T) {
 	if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	wantOrder := []string{services.AIJobTypeMetadata, services.AIJobTypeEmbedding, services.AIJobTypeOCR, services.AIJobTypeFace}
+	wantOrder := []string{services.AIJobTypeMetadata, services.AIJobTypeEmbedding, services.AIJobTypeOCR, services.AIJobTypeFace, services.AIJobTypeSimilarity}
 	if len(body.Jobs) != len(wantOrder) || len(body.Skipped) != 0 {
 		t.Fatalf("sequence response = %+v", body)
 	}
@@ -795,8 +795,8 @@ func TestAIJobEstimateAPIReturnsModuleCounts(t *testing.T) {
 	if body.Estimate.TotalImages != 3 {
 		t.Fatalf("total images = %d, want 3", body.Estimate.TotalImages)
 	}
-	if len(body.Estimate.Modules) != 4 {
-		t.Fatalf("modules = %+v, want 4", body.Estimate.Modules)
+	if len(body.Estimate.Modules) != 5 {
+		t.Fatalf("modules = %+v, want 5", body.Estimate.Modules)
 	}
 	metadata := body.Estimate.Modules[0]
 	if metadata.Type != "metadata" || !metadata.Installed || !metadata.Available {

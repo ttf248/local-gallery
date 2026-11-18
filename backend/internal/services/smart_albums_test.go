@@ -655,6 +655,7 @@ func TestAIJobSequenceScopesModulesAndTargetsToAlbum(t *testing.T) {
 		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-test-v1"},
 		testJSONAnalyzer{module: AIJobTypeOCR, version: "ocr-test-v1"},
 		testJSONAnalyzer{module: AIJobTypeFace, version: "face-test-v1"},
+		testJSONAnalyzer{module: AIJobTypeSimilarity, version: "similarity-test-v1"},
 	)
 	if _, err := jobs.SetPeopleEnabled(true); err != nil {
 		t.Fatal(err)
@@ -664,10 +665,10 @@ func TestAIJobSequenceScopesModulesAndTargetsToAlbum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(skipped) != 0 || len(queued) != 3 {
+	if len(skipped) != 0 || len(queued) != 4 {
 		t.Fatalf("scoped sequence jobs=%+v skipped=%+v", queued, skipped)
 	}
-	wantTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeFace}
+	wantTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeFace, AIJobTypeSimilarity}
 	for index, job := range queued {
 		if job.Type != wantTypes[index] || job.AlbumID != firstAlbumID {
 			t.Fatalf("sequence job[%d]=%+v", index, job)

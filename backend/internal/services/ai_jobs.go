@@ -28,6 +28,9 @@ const (
 	AIJobTypeEmbedding = "embedding"
 	AIJobTypeOCR       = "ocr"
 	AIJobTypeFace      = "face"
+	// AIJobTypeSimilarity 提取相似照片整理需要的本地特征：
+	// 内容指纹、感知哈希与质量指标。这一步不依赖本机 AI Worker。
+	AIJobTypeSimilarity = "similarity"
 
 	AIJobModeFull        = "full"
 	AIJobModeIncremental = "incremental"
@@ -334,7 +337,7 @@ type AIJobServiceOptions struct {
 	// OnRecordsCleared 在某个模块的派生结果被整体删除后调用，
 	// 让按目录统计的占用缓存重新扫描。
 	OnRecordsCleared   func()
-	FaceImageConverter AIImageConverter
+	ImageConverter AIImageConverter
 }
 
 type aiJobDiskState struct {
@@ -379,7 +382,7 @@ type AIJobService struct {
 	metadataDir        string
 	catalog            *ResourceCatalog
 	validatePath       func(string) (string, error)
-	faceImageConverter AIImageConverter
+	imageConverter AIImageConverter
 	analyzers          map[string]AIAnalyzer
 	workerCount        int
 	now                func() time.Time
@@ -434,7 +437,7 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		metadataDir:        options.MetadataDir,
 		catalog:            options.Catalog,
 		validatePath:       options.ValidatePath,
-		faceImageConverter: options.FaceImageConverter,
+		imageConverter: options.ImageConverter,
 		analyzers:          make(map[string]AIAnalyzer, len(options.Analyzers)),
 		workerCount:        options.WorkerCount,
 		now:                options.Now,
@@ -581,11 +584,11 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 			return nil, nil, err
 		}
 	}
-	moduleTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
+	moduleTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
 	if albumID != "" {
 		// Album regrouping only needs EXIF/GPS, scene vectors, and face groups.
 		// OCR remains a separate user-requested task.
-		moduleTypes = []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeFace}
+		moduleTypes = []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeFace, AIJobTypeSimilarity}
 	}
 	s.mu.Lock()
 	if s.closed {
@@ -1091,7 +1094,7 @@ func (s *AIJobService) SetDailyTaskHandlers(scan, smartAlbums func(context.Conte
 
 // modulesLocked 列出全部已知分析模块及其安装情况。
 func (s *AIJobService) modulesLocked() []AIJobModule {
-	known := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
+	known := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
 	modules := make([]AIJobModule, 0, len(known))
 	for _, moduleType := range known {
 		module := AIJobModule{Type: moduleType, Name: aiJobModuleName(moduleType)}
@@ -1145,6 +1148,8 @@ func aiJobModuleName(moduleType string) string {
 		return "文字识别"
 	case AIJobTypeFace:
 		return "人脸识别"
+	case AIJobTypeSimilarity:
+		return "相似照片特征"
 	default:
 		return moduleType
 	}
@@ -1354,7 +1359,7 @@ func (s *AIJobService) normalizeDailyModulesLocked(modules []string, enabled boo
 		selected[moduleType] = struct{}{}
 	}
 	ordered := make([]string, 0, len(selected))
-	for _, moduleType := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace} {
+	for _, moduleType := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity} {
 		if _, exists := selected[moduleType]; exists {
 			ordered = append(ordered, moduleType)
 		}
@@ -1736,7 +1741,7 @@ func (s *AIJobService) newJobLocked(moduleType, mode string) AIJob {
 	}
 	version := aiAnalyzerVersion(s.analyzers[moduleType], faceModel)
 	computeDevice := "cpu"
-	if moduleType != AIJobTypeMetadata && s.settings.GPUEnabled {
+	if aiJobModuleUsesGPU(moduleType) && s.settings.GPUEnabled {
 		computeDevice = "gpu"
 	}
 	return AIJob{
@@ -1870,7 +1875,7 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 		}
 		return
 	}
-	if analyzer.Type() != AIJobTypeMetadata {
+	if aiJobModuleUsesGPU(analyzer.Type()) {
 		if err := s.setJobStage(id, "loading_model"); err != nil {
 			s.finishJob(id, AIJobStatusFailed, "failed", "任务状态未能持久化")
 			return
@@ -2223,7 +2228,7 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 			continue
 		}
 		analysisPath := ""
-		if analyzer.Type() == AIJobTypeFace && isHEIFPath(validated) && s.faceImageConverter != nil && s.faceImageConverter.Available() {
+		if aiJobTypeNeedsImageConversion(analyzer.Type()) && isHEIFPath(validated) && s.imageConverter != nil && s.imageConverter.Available() {
 			if tempDir == "" {
 				tempDir, err = os.MkdirTemp("", "local-gallery-face-")
 				if err != nil {
@@ -2231,7 +2236,7 @@ func (s *AIJobService) processAnalyzerBatch(ctx context.Context, analyzer AIAnal
 					continue
 				}
 			}
-			converted, convertErr := s.faceImageConverter.ConvertJPEGBytesContext(ctx, validated, faceAnalysisMaxDimension)
+			converted, convertErr := s.imageConverter.ConvertJPEGBytesContext(ctx, validated, aiJobAnalysisMaxDimension(analyzer.Type()))
 			if convertErr != nil {
 				if ctx.Err() != nil {
 					continue
@@ -3380,9 +3385,38 @@ func isAIJobActive(status string) bool {
 
 func validAIJobType(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace:
+	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity:
 		return true
 	default:
 		return false
 	}
+}
+
+// aiJobModuleUsesGPU 判断分析模块是否走 GPU 推理。
+//
+// 只有需要模型推理的模块才占用 GPU：元数据与相似照片特征都在本机
+// 用标准库算，强制 GPU 只会让它们因为没有 CUDA 环境而失败。
+func aiJobModuleUsesGPU(moduleType string) bool {
+	switch moduleType {
+	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace:
+		return true
+	default:
+		return false
+	}
+}
+
+// aiJobTypeNeedsImageConversion 判断分析模块是否需要先把 HEIC 转成 JPEG。
+func aiJobTypeNeedsImageConversion(moduleType string) bool {
+	return moduleType == AIJobTypeFace || moduleType == AIJobTypeSimilarity
+}
+
+// aiJobAnalysisMaxDimension 返回格式转换时保留的最大边长。
+//
+// 人脸识别要看清脸，需要更大的图；相似照片只取灰度缩略副本，
+// 2048 已经够用，转得更大只是白费时间和磁盘。
+func aiJobAnalysisMaxDimension(moduleType string) int {
+	if moduleType == AIJobTypeSimilarity {
+		return 2048
+	}
+	return faceAnalysisMaxDimension
 }

@@ -234,6 +234,7 @@ func TestAIJobServiceStartAllQueuesModulesInOrder(t *testing.T) {
 		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-v1"},
 		testJSONAnalyzer{module: AIJobTypeOCR, version: "ocr-v1"},
 		testJSONAnalyzer{module: AIJobTypeFace, version: "face-v1"},
+		testJSONAnalyzer{module: AIJobTypeSimilarity, version: "similarity-v1"},
 	)
 	if _, err := service.SetPeopleEnabled(true); err != nil {
 		t.Fatal(err)
@@ -243,7 +244,7 @@ func TestAIJobServiceStartAllQueuesModulesInOrder(t *testing.T) {
 	if err != nil || len(skipped) != 0 {
 		t.Fatalf("StartAll() = (%+v, skipped=%+v, err=%v)", jobs, skipped, err)
 	}
-	wantOrder := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
+	wantOrder := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
 	if len(jobs) != len(wantOrder) {
 		t.Fatalf("queued %d jobs, want %d", len(jobs), len(wantOrder))
 	}
@@ -1316,8 +1317,8 @@ func TestAIJobServiceReportsPlannedProgressAndOutputBreakdown(t *testing.T) {
 	shutdownAIJobService(t, service)
 
 	modules := service.List().Modules
-	if len(modules) != 4 {
-		t.Fatalf("modules = %+v, want 4 entries", modules)
+	if len(modules) != 5 {
+		t.Fatalf("modules = %+v, want 5 entries", modules)
 	}
 	installed := map[string]AIJobModule{}
 	for _, module := range modules {

@@ -376,7 +376,7 @@ func TestAIJobEstimateListsModulesInFixedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Estimate() error = %v", err)
 	}
-	want := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
+	want := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
 	if len(estimate.Modules) != len(want) {
 		t.Fatalf("modules = %+v, want %v", estimate.Modules, want)
 	}
