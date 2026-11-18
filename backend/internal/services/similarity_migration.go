@@ -201,18 +201,25 @@ func similarityMergeDecisions(
 				old := oldGroups[oldIndex]
 				reviewed := state.Reviewed[old.ID]
 				ignored := state.Ignored[old.ID]
-				if conflict {
-					if decision.reviewed != reviewed || decision.ignored != ignored {
-						return similarityDecision{}, false
-					}
+				representative := state.Representatives[old.ID]
+				if !conflict {
+					decision.reviewed = reviewed
+					decision.ignored = ignored
+					decision.representative = representative
+					conflict = true
 					continue
 				}
-				decision.reviewed = reviewed
-				decision.ignored = ignored
-				if representative := state.Representatives[old.ID]; representative != "" {
+				if decision.reviewed != reviewed || decision.ignored != ignored {
+					return similarityDecision{}, false
+				}
+				if representative != "" {
+					if decision.representative != "" && decision.representative != representative {
+						// 两组各指定了不同的代表照片：合出来之后该用哪一张
+						// 说不清，保留原始人工数据不套用。
+						return similarityDecision{}, false
+					}
 					decision.representative = representative
 				}
-				conflict = true
 			}
 			decision.moved = true
 		} else {

@@ -147,6 +147,63 @@ func TestSimilarityStateMigrationAppliesAgreeingMerge(t *testing.T) {
 	}
 }
 
+// TestSimilarityStateMigrationKeepsOriginalOnConflictingRepresentatives
+// 验证合组且两个旧组各指定了不同代表照片时保留原始人工数据。
+//
+// 两个旧组合成新组，谁当代表说不清：套用其中一个等于替用户做了选择，
+// 另一个还可能被清掉。归属说不清就什么都不动，让用户自己再选一次。
+func TestSimilarityStateMigrationKeepsOriginalOnConflictingRepresentatives(t *testing.T) {
+	old := []SimilarityGroup{
+		similarityTestGroup("near", "f_b", "f_c"),
+		similarityTestGroup("near", "f_d", "f_e"),
+	}
+	next := []SimilarityGroup{similarityTestGroup("near", "f_a", "f_b", "f_c", "f_d", "f_e")}
+	state := newSimilarityState()
+	state.Reviewed[old[0].ID] = true
+	state.Reviewed[old[1].ID] = true
+	state.Representatives[old[0].ID] = "f_b"
+	state.Representatives[old[1].ID] = "f_d"
+
+	migrated := similarityStateMigration(old, state, next)
+	if migrated.Reviewed[next[0].ID] {
+		t.Fatal("代表照片说不清时不该把决定套用到合出来的组上")
+	}
+	if migrated.Representatives[next[0].ID] != "" {
+		t.Fatalf("代表照片说不清时不该指定代表，实际 %q", migrated.Representatives[next[0].ID])
+	}
+	// 原始人工数据必须原样留着。
+	if !migrated.Reviewed[old[0].ID] || !migrated.Reviewed[old[1].ID] {
+		t.Fatal("归属说不清时原始的已看过决定应保留")
+	}
+	if migrated.Representatives[old[0].ID] != "f_b" ||
+		migrated.Representatives[old[1].ID] != "f_d" {
+		t.Fatalf("归属说不清时原始的代表照片应保留，实际 %+v", migrated.Representatives)
+	}
+}
+
+// TestSimilarityStateMigrationAppliesAgreeingRepresentatives 验证合组且
+// 两个旧组指定了同一个代表照片时决定能迁过去。
+func TestSimilarityStateMigrationAppliesAgreeingRepresentatives(t *testing.T) {
+	old := []SimilarityGroup{
+		similarityTestGroup("near", "f_b", "f_c"),
+		similarityTestGroup("near", "f_b", "f_e"),
+	}
+	next := []SimilarityGroup{similarityTestGroup("near", "f_a", "f_b", "f_c", "f_e")}
+	state := newSimilarityState()
+	state.Reviewed[old[0].ID] = true
+	state.Reviewed[old[1].ID] = true
+	state.Representatives[old[0].ID] = "f_b"
+	state.Representatives[old[1].ID] = "f_b"
+
+	migrated := similarityStateMigration(old, state, next)
+	if !migrated.Reviewed[next[0].ID] {
+		t.Fatal("决定一致时合出来的组应继承已看过")
+	}
+	if migrated.Representatives[next[0].ID] != "f_b" {
+		t.Fatalf("代表照片一致时应迁到合出来的组上，实际 %q", migrated.Representatives[next[0].ID])
+	}
+}
+
 // TestSimilarityStateMigrationDoesNotCrossKinds 验证类别不同的两组不会
 // 互相迁移决定。
 func TestSimilarityStateMigrationDoesNotCrossKinds(t *testing.T) {
