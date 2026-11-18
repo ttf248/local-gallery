@@ -162,6 +162,46 @@ func TestIncrementalScan_OverwriteOnlyRereadsAffectedDirs(t *testing.T) {
 	}
 }
 
+// TestIncrementalScan_ReportsRemovedFilesFromCollectionDirectory 验证集合
+// 目录里散落的照片被删掉时会被报成删除。
+//
+// 集合目录（下面还有子目录的那种）原先散落着几张照片，照片删掉之后
+// 目录还在、子目录也还在，但那些照片离开了图库。以前这种删除没有
+// 被报出来：分析结果留在任务中心里，对着已经不存在的文件。
+func TestIncrementalScan_ReportsRemovedFilesFromCollectionDirectory(t *testing.T) {
+	root := t.TempDir()
+	collection := filepath.Join(root, "collection")
+	child := filepath.Join(collection, "child")
+	mkdirAll(t, child)
+	loose := filepath.Join(collection, "loose.jpg")
+	inner := filepath.Join(child, "inner.jpg")
+	touchAll(t, loose, inner)
+
+	engine := NewIncrementalEngine()
+	before, err := engine.Apply(nil, newSyncChangeSet(), ScanOptions{Roots: []string{root}})
+	if err != nil {
+		t.Fatalf("initial scan failed: %v", err)
+	}
+
+	if err := os.Remove(loose); err != nil {
+		t.Fatal(err)
+	}
+	changes := newSyncChangeSet()
+	changes.Files[loose] = struct{}{}
+	changes.Dirs[collection] = struct{}{}
+
+	after, err := engine.Apply(before.Result, changes, ScanOptions{Roots: []string{root}})
+	if err != nil {
+		t.Fatalf("incremental scan failed: %v", err)
+	}
+	if len(after.RemovedFiles) != 1 || filepath.Clean(after.RemovedFiles[0]) != filepath.Clean(loose) {
+		t.Fatalf("集合目录里删掉的照片没有被报成删除：%+v", after.RemovedFiles)
+	}
+	if len(after.ChangedAlbums) == 0 {
+		t.Fatal("集合目录的变化没有进变更相册清单")
+	}
+}
+
 // TestIncrementalScan_AlbumContentSignatureChanges 验证相册的内容指纹会
 // 跟着文件内容变化。
 func TestIncrementalScan_AlbumContentSignatureChanges(t *testing.T) {

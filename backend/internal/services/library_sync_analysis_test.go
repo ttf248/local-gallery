@@ -2,10 +2,13 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -23,6 +26,16 @@ func newAnalysisHarness(t *testing.T) (*LibrarySyncService, *ResourceCatalog, *s
 
 // newAnalysisHarnessWith 搭一套带指定分析器的自动同步环境。
 func newAnalysisHarnessWith(t *testing.T, analyzer *syncTestAnalyzer) (*LibrarySyncService, *ResourceCatalog, *syncTestAnalyzer, string) {
+	t.Helper()
+	sync, catalog, root := newAnalysisHarnessWithAnalyzer(t, analyzer)
+	return sync, catalog, analyzer, root
+}
+
+// newAnalysisHarnessWithAnalyzer 搭一套带任意分析器的自动同步环境。
+//
+// 自动分析链路关心的是「哪些照片被排进了分析」，不是分析出来的内容，
+// 因此这里允许换成会失败、或者还没准备好的分析器。
+func newAnalysisHarnessWithAnalyzer(t *testing.T, analyzer AIAnalyzer) (*LibrarySyncService, *ResourceCatalog, string) {
 	t.Helper()
 	root := t.TempDir()
 	catalog := NewResourceCatalog()
@@ -61,7 +74,7 @@ func newAnalysisHarnessWith(t *testing.T, analyzer *syncTestAnalyzer) (*LibraryS
 	if err != nil {
 		t.Fatalf("create library sync service: %v", err)
 	}
-	return sync, catalog, analyzer, root
+	return sync, catalog, root
 }
 
 // TestLibrarySync_OverwrittenPhotoIsAnalyzedAgain 验证原地覆盖一张照片后
@@ -140,6 +153,141 @@ func TestLibrarySync_LargeImportAnalyzesEveryPhoto(t *testing.T) {
 	}
 
 	waitForAnalyzed(t, analyzer, int64(total))
+}
+
+// TestLibrarySync_SmartAlbumRefreshWaitsForQueuedAnalysis 验证队列还没
+// 排空时智能相册的重算不会被丢掉。
+//
+// 一次导入上千张照片时队列要分几轮才排得空。重算的标记如果在队列还有
+// 东西的时候就被抹掉，那这批照片改完之后智能相册就再也不会重算 ——
+// 派生结果停在导入之前的样子。
+func TestLibrarySync_SmartAlbumRefreshWaitsForQueuedAnalysis(t *testing.T) {
+	sync, _, _, _ := newAnalysisHarness(t)
+	refresher := &fakeSmartAlbumRefresher{}
+	sync.opts.SmartAlbums = refresher
+
+	// 队列里还有没提交的活。
+	sync.restoreAnalysis(AIJobTypeMetadata, []string{"f_1", "f_2"})
+	sync.mu.Lock()
+	sync.analysisDirty = true
+	sync.mu.Unlock()
+
+	sync.refreshSmartAlbums()
+
+	sync.mu.Lock()
+	dirty := sync.analysisDirty
+	sync.mu.Unlock()
+	if !dirty {
+		t.Fatal("队列还没排空就把重算的标记抹掉了，这批照片改完之后智能相册不会再重算")
+	}
+	if refresher.starts.Load() != 0 {
+		t.Fatal("队列还没排空就重算了智能相册：分析结果还没更新")
+	}
+}
+
+// fakeSmartAlbumRefresher 是智能相册刷新的假实现：只计数。
+type fakeSmartAlbumRefresher struct {
+	starts atomic.Int64
+}
+
+func (f *fakeSmartAlbumRefresher) Start(bool) (string, bool, error) {
+	f.starts.Add(1)
+	return "smart-album-job", true, nil
+}
+
+// TestLibrarySync_FullAnalysisSurvivesModuleFailure 验证全库增量分析
+// 在模块暂时不可用时不会被丢掉。
+//
+// 队列超上限时，那批资源改成由一次全库增量分析接手 —— 任务中心按
+// 文件指纹挑出真正要重算的那些。这次提交要是失败了（模型刚装好还没
+// 准备好、磁盘读不了），标记必须留着等下一轮再试。
+//
+// 以前标记在提交之前就被清掉了：模块失败一次，这批工作就再也没人
+// 接手，那批照片的分析结果永远补不上。
+func TestLibrarySync_FullAnalysisSurvivesModuleFailure(t *testing.T) {
+	analyzer := &unreadyAnalyzer{}
+	sync, _, _ := newAnalysisHarnessWithAnalyzer(t, analyzer)
+
+	sync.mu.Lock()
+	sync.settings.AutoAnalyze = true
+	sync.analysisFull[AIJobTypeMetadata] = true
+	sync.mu.Unlock()
+
+	sync.pumpAnalysis(context.Background())
+
+	sync.mu.Lock()
+	full := sync.analysisFull[AIJobTypeMetadata]
+	failures := sync.analysisFailures[AIJobTypeMetadata]
+	sync.mu.Unlock()
+	if !full {
+		t.Fatal("模块不可用时全库分析的标记被丢掉了，这批工作没人接手")
+	}
+	if failures < 1 {
+		t.Fatalf("失败次数没记上：%d", failures)
+	}
+
+	// 模块恢复之后，这次全库分析要真的跑起来。
+	analyzer.ready.Store(true)
+	sync.pumpAnalysis(context.Background())
+
+	sync.mu.Lock()
+	full = sync.analysisFull[AIJobTypeMetadata]
+	sync.mu.Unlock()
+	if full {
+		t.Fatal("模块恢复后全库分析仍然没有提交")
+	}
+}
+
+// TestLibrarySync_FullAnalysisGivesUpAfterRetries 验证全库增量分析连续
+// 失败之后会停手，并如实记下原因。
+//
+// 不能无限重试：模块一直不可用时每一轮都重试一次，图库就永远卡在
+// 排队状态。但停手也要说清楚为什么停，不能悄悄把任务丢掉。
+func TestLibrarySync_FullAnalysisGivesUpAfterRetries(t *testing.T) {
+	analyzer := &unreadyAnalyzer{}
+	sync, _, _ := newAnalysisHarnessWithAnalyzer(t, analyzer)
+
+	sync.mu.Lock()
+	sync.settings.AutoAnalyze = true
+	sync.analysisFull[AIJobTypeMetadata] = true
+	sync.mu.Unlock()
+
+	for attempt := 0; attempt < maxAnalysisRetries+2; attempt++ {
+		sync.pumpAnalysis(context.Background())
+	}
+
+	sync.mu.Lock()
+	full := sync.analysisFull[AIJobTypeMetadata]
+	failures := sync.analysisFailures[AIJobTypeMetadata]
+	sync.mu.Unlock()
+	if full {
+		t.Fatalf("超过重试上限后仍在重试：失败 %d 次", failures)
+	}
+	if failures < maxAnalysisRetries {
+		t.Fatalf("失败次数没记上：%d", failures)
+	}
+	if sync.Status().LastError == "" {
+		t.Fatal("放弃这批任务时没有记录原因")
+	}
+}
+
+// unreadyAnalyzer 是「装上了但还没准备好」的分析器。
+//
+// 它实现了就绪检查：没准备好时开任务会失败，但模块本身仍然算已安装。
+type unreadyAnalyzer struct {
+	ready atomic.Bool
+}
+
+func (a *unreadyAnalyzer) Type() string    { return AIJobTypeMetadata }
+func (a *unreadyAnalyzer) Version() string { return "unready-test-v1" }
+func (a *unreadyAnalyzer) Analyze(context.Context, io.ReadSeeker) (AIAnalysisOutput, error) {
+	return AIAnalysisOutput{Status: "ok", Data: json.RawMessage(`{}`)}, nil
+}
+func (a *unreadyAnalyzer) Ready(context.Context) error {
+	if a.ready.Load() {
+		return nil
+	}
+	return errors.New("模型还没准备好")
 }
 
 // TestLibrarySync_AnalysisQueueKeepsTasksWhenModuleFails 验证自动分析

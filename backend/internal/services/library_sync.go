@@ -118,6 +118,11 @@ const (
 	//
 	// 程序关闭期间磁盘上的变化不会产生事件，启动校验负责把它们补上。
 	startupVerifyDelay = 15 * time.Second
+	// verifyReuseDelay 是复用别人正在跑的扫描之后，隔多久补一次真正的校验。
+	//
+	// 复用的那次扫描开始得比校验早，覆盖不到校验这段时间的变化，
+	// 不能拿它当校验结果。等它跑完再补一次，图库才跟得上磁盘。
+	verifyReuseDelay = 5 * time.Second
 	// maxAnalysisQueue 是自动分析排队等待的资源上限。
 	//
 	// 一次大批量导入可能带来上万个资源；全部排进任务中心会让队列
@@ -518,11 +523,14 @@ func (s *LibrarySyncService) startWatcher() error {
 	}
 	previous := s.watcher
 	s.watcher = watcher
+	// 上下文要在锁里取：它由 Start 写入，而这里可能在 Start 之外
+	// 被调用（打开开关时重新建立监听），直接读会读到一个写了一半的值。
+	ctx := s.ctx
 	s.mu.Unlock()
 	if previous != nil {
 		_ = previous.Close()
 	}
-	if err := watcher.Start(s.ctx); err != nil {
+	if err := watcher.Start(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -785,23 +793,25 @@ func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
 		var ids []string
 		if full {
 			// 全库增量分析：任务中心按文件指纹挑出真正要重算的资源。
-			// 任务中心正忙时把标记放回去，等下一轮再提交 ——
-			// 放掉就等于这批任务没人接手了。
-			delete(s.analysisFull, module)
-			if entry != nil {
-				entry.reset()
-			}
+			//
+			// 提交成功之前既不清标记也不清队列：模块不可用时（模型没装好、
+			// 磁盘读不了）这次提交会失败，而失败的这次绝不能把这批工作
+			// 一起丢掉 —— 标记留着，下一轮还会再试。
 			s.mu.Unlock()
 			if _, _, err := s.opts.Jobs.Start(module, AIJobModeIncremental); err != nil {
 				if errors.Is(err, ErrAIJobActive) {
-					s.mu.Lock()
-					s.analysisFull[module] = true
-					s.mu.Unlock()
+					// 任务中心正忙：标记原样留着，等下一轮再提交。
 					return
 				}
 				s.recordAnalysisFailure(module, err)
 				return
 			}
+			s.mu.Lock()
+			delete(s.analysisFull, module)
+			if current, exists := s.analysisQueue[module]; exists {
+				current.reset()
+			}
+			s.mu.Unlock()
 			s.clearAnalysisFailure(module)
 			continue
 		}
@@ -858,6 +868,9 @@ func (s *LibrarySyncService) recordAnalysisFailure(module string, err error) {
 			entry.reset()
 		}
 		delete(s.analysisQueue, module)
+		// 全库增量分析的标记也要一起撤掉：它已经试过这么多次了，
+		// 留着只会让每一轮都重试一次，永远停不下来。
+		delete(s.analysisFull, module)
 	}
 	s.mu.Unlock()
 	log.Printf("自动分析排队失败 module=%s（第 %d 次）: %v", module, failures, err)
@@ -881,15 +894,28 @@ func (s *LibrarySyncService) clearAnalysisFailure(module string) {
 func (s *LibrarySyncService) refreshSmartAlbums() {
 	s.mu.Lock()
 	dirty := s.analysisDirty
-	s.analysisDirty = false
 	queued := 0
 	for _, entry := range s.analysisQueue {
 		queued += entry.len()
 	}
-	s.mu.Unlock()
-	if !dirty || queued > 0 || s.opts.SmartAlbums == nil {
+	if !dirty {
+		s.mu.Unlock()
 		return
 	}
+	if s.opts.SmartAlbums == nil {
+		s.analysisDirty = false
+		s.mu.Unlock()
+		return
+	}
+	if queued > 0 {
+		// 队列还没排空：这批分析还没跑完，重算没有意义。
+		// 标记要留着 —— 抹掉的话这批照片改完之后智能相册就再也不会重算了。
+		s.mu.Unlock()
+		return
+	}
+	s.analysisDirty = false
+	s.mu.Unlock()
+
 	snapshot := s.opts.Jobs.List()
 	if snapshot.Active != nil || len(snapshot.Queue) > 0 {
 		// 任务中心还忙着：等下一轮再重算。
@@ -980,33 +1006,49 @@ func (s *LibrarySyncService) runVerification(ctx context.Context) {
 	if len(opts.Roots) == 0 {
 		return
 	}
-	id, _, err := s.opts.Runner.StartOrReuse(opts)
+	id, reused, err := s.opts.Runner.StartOrReuse(opts)
 	if err != nil {
 		s.recordError("verification_failed")
 		return
 	}
-	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			state := s.opts.Runner.Get(id)
-			if state == nil {
-				return
-			}
-			switch state.Status {
-			case ScanStatusComplete:
-				s.markVerified()
-				return
-			case ScanStatusCancelled, ScanStatusError:
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
+	if reused {
+		// 复用了已经在跑的扫描（用户手动扫的、或者上一次校验还没结束）。
+		// 那次扫描可能早于这次校验就开始了，覆盖不到这段时间的变化 ——
+		// 拿它当校验结果，图库就会一直落后于磁盘。
+		// 等它跑完，再补一次真正的校验。
+		go s.watchScan(ctx, id, func() {
+			s.scheduleVerify(time.Now().Add(verifyReuseDelay))
+		})
+		return
+	}
+	go s.watchScan(ctx, id, s.markVerified)
+}
+
+// watchScan 盯住一次扫描任务，结束时调用 done。
+//
+// done 负责决定这次扫描算不算一次成功的校验：自己发起的扫描算，
+// 复用的扫描不算。
+func (s *LibrarySyncService) watchScan(ctx context.Context, id string, done func()) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		state := s.opts.Runner.Get(id)
+		if state == nil {
+			return
 		}
-	}()
+		switch state.Status {
+		case ScanStatusComplete:
+			done()
+			return
+		case ScanStatusCancelled, ScanStatusError:
+			return
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // markVerified 记录一次成功校验。

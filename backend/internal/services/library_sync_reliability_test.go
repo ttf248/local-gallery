@@ -287,6 +287,96 @@ func newVerifyHarness(t *testing.T, verifyInterval time.Duration) *syncHarness {
 	return &syncHarness{root: root, catalog: catalog, cache: cache, runner: runner, sync: sync}
 }
 
+// TestLibrarySync_VerificationIsNotSatisfiedByReusedScan 验证复用了别人
+// 正在跑的扫描时，定期校验不会就此算数。
+//
+// 扫描任务全局只有一个。校验到点时如果正好有扫描在跑（用户手动扫的、
+// 上一次校验还没结束），只能复用那一次 —— 而那次扫描可能早于校验就
+// 开始了，覆盖不到校验这段时间的变化。
+//
+// 拿它当校验结果，图库就会一直落后于磁盘：监听漏掉的变化再也补不回来。
+func TestLibrarySync_VerificationIsNotSatisfiedByReusedScan(t *testing.T) {
+	h := newVerifyHarness(t, time.Hour)
+	// 根下多放些文件，让这次扫描持续一小段时间：校验要撞上它。
+	album := filepath.Join(h.root, "album")
+	mkdirAll(t, album)
+	for i := 0; i < 3000; i++ {
+		if err := os.WriteFile(filepath.Join(album, fmt.Sprintf("f%05d.jpg", i)), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h.scanNow(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// 占住扫描任务。
+	if _, _, err := h.runner.StartOrReuse(ScanOptions{Roots: []string{h.root}}); err != nil {
+		t.Fatalf("occupy scanner: %v", err)
+	}
+	h.runner.mu.Lock()
+	before := h.runner.activeID
+	h.runner.mu.Unlock()
+
+	h.sync.runVerification(ctx)
+
+	h.runner.mu.Lock()
+	after := h.runner.activeID
+	h.runner.mu.Unlock()
+	if before != after {
+		t.Fatal("用例前提不成立：校验没有撞上正在跑的扫描")
+	}
+
+	// 复用的那次扫描跑完之后，必须补排一次真正的校验。
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		h.sync.mu.Lock()
+		scheduled := h.sync.verifyAt
+		h.sync.mu.Unlock()
+		if !scheduled.IsZero() {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	h.sync.mu.Lock()
+	scheduled := h.sync.verifyAt
+	h.sync.mu.Unlock()
+	if scheduled.IsZero() {
+		t.Fatal("复用了别人正在跑的扫描之后没有补排校验")
+	}
+	// 复用的那次扫描不算校验：图库还没对齐磁盘。
+	if !h.sync.Status().LastVerifyAt.IsZero() {
+		t.Fatal("复用的扫描被当成了校验结果")
+	}
+}
+
+// TestLibrarySync_StartAndUpdateDoNotRace 验证启动与改开关并发时不会出现
+// 数据竞态。
+//
+// 启动时要写下上下文，改开关时可能要重新建立监听并读它。以前那次读
+// 是在锁外做的：上下文是两个字，写到一半被读到就是一个坏掉的接口值。
+//
+// 用例本身不做断言：它要交给 `go test -race` 判断。
+func TestLibrarySync_StartAndUpdateDoNotRace(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		service, _, _, _ := newAnalysisHarness(t)
+		ctx, cancel := context.WithCancel(context.Background())
+		var group sync.WaitGroup
+		group.Add(2)
+		go func() {
+			defer group.Done()
+			_ = service.Start(ctx)
+		}()
+		go func() {
+			defer group.Done()
+			_, _ = service.Update(ctx, LibrarySyncSettings{Enabled: true, AutoAnalyze: false})
+		}()
+		group.Wait()
+		cancel()
+		service.Shutdown()
+	}
+}
+
 // TestChangeWatcher_ErrorMarksDegraded 验证监听出错时监听器会降级并
 // 把错误报给上层。
 func TestChangeWatcher_ErrorMarksDegraded(t *testing.T) {
@@ -366,6 +456,48 @@ func TestLibrarySync_WatcherErrorTriggersVerification(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatalf("监听出错后没有补校验：%+v", h.sync.Status())
+}
+
+// TestLibrarySync_VerifyIntervalSchedulesNextVerification 验证定期校验
+// 按 VerifyInterval 的间隔连续排下一次。
+//
+// 间隔要是没被真正用上（排下一次时写死了别的时长），监听漏掉的变化
+// 就永远补不回来 —— 校验只跑一次等于没有兜底。
+func TestLibrarySync_VerifyIntervalSchedulesNextVerification(t *testing.T) {
+	h := newVerifyHarness(t, defaultVerifyInterval)
+	h.scanNow(t)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := h.sync.Start(ctx); err != nil {
+		t.Fatalf("start library sync: %v", err)
+	}
+	defer h.sync.Shutdown()
+
+	// 启动后先排一次启动校验：程序关闭期间的变化靠它补上。
+	h.sync.mu.Lock()
+	first := h.sync.verifyAt
+	h.sync.mu.Unlock()
+	if first.IsZero() {
+		t.Fatal("启动后没有排启动校验")
+	}
+	if delay := time.Until(first); delay > startupVerifyDelay {
+		t.Fatalf("启动校验排得太晚：%v", delay)
+	}
+
+	// 校验到期之后，下一次要按 VerifyInterval 排。
+	h.sync.mu.Lock()
+	h.sync.verifyAt = time.Now().Add(-time.Second)
+	h.sync.mu.Unlock()
+	h.sync.maybeVerify(ctx)
+
+	h.sync.mu.Lock()
+	next := h.sync.verifyAt
+	h.sync.mu.Unlock()
+	delay := time.Until(next)
+	if delay < defaultVerifyInterval-time.Minute || delay > defaultVerifyInterval+time.Minute {
+		t.Fatalf("下一次校验的间隔不对：%v（应当是 %v）", delay, defaultVerifyInterval)
+	}
 }
 
 // TestLibrarySync_VerificationKeepsRunning 验证定期校验会一直跑下去。

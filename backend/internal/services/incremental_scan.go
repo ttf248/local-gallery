@@ -432,6 +432,15 @@ func (e *IncrementalEngine) rebuildNode(
 		diff.removedDirs = append(diff.removedDirs, path)
 		return nil, nil
 	}
+	if !hasFiles {
+		// 这个目录还有子目录，但原先散落在它下面的照片没有了：
+		// 那些照片离开了图库，必须报出去 ——
+		// 不报的话它们的分析结果会一直留在任务中心里。
+		if old != nil && old.album != nil {
+			diff.removedFiles = append(diff.removedFiles, old.files...)
+			diff.changedDirs[path] = struct{}{}
+		}
+	}
 
 	var albums []models.Album
 	if hasFiles {
