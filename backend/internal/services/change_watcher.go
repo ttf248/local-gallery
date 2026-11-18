@@ -224,7 +224,12 @@ func (w *ChangeWatcher) Start(ctx context.Context) error {
 
 	// 登记初始目录。单个目录登记失败不阻断整体：网络共享上某些目录
 	// 可能拿不到句柄，其余目录仍然可用，缺口由定期校验兜底。
-	for _, root := range w.roots {
+	//
+	// 根名单要取快照再读：监听运行期间换根会改写它。
+	w.mu.Lock()
+	roots := append([]string(nil), w.roots...)
+	w.mu.Unlock()
+	for _, root := range roots {
 		if err := w.addTree(ctx, root); err != nil {
 			w.reportRootError(root, err)
 		}
@@ -534,23 +539,38 @@ func (w *ChangeWatcher) flush(ctx context.Context) {
 	if !w.filesStable(batch) {
 		// 文件还在写：这一批放回去，重新计时，等它写完再提交。
 		w.mu.Lock()
-		w.pending.Merge(batch)
 		w.rounds++
 		exhausted := w.rounds >= watchStabilityRounds
+		if !exhausted {
+			w.pending.Merge(batch)
+		}
 		w.mu.Unlock()
 		if !exhausted {
 			w.armTimer()
 			return
 		}
 		// 超过确认轮次：按当前状态提交，避免永远等下去。
+		// 刚才没有合并回去，这一批不会被重复提交。
 	}
 
 	w.mu.Lock()
 	w.sizes = make(map[string]int64)
-	w.batchAt = time.Time{}
-	w.deadline = time.Time{}
 	w.rounds = 0
+	// 这一批到此结束：批次起点清掉，下一批从头计时。
+	w.batchAt = time.Time{}
+	hasPending := !w.pending.Empty()
+	if !hasPending {
+		// 没有新变化：计时器也清掉，等下一次事件再排。
+		w.deadline = time.Time{}
+	}
 	w.mu.Unlock()
+	if hasPending {
+		// 提交期间到达的新变化已经在等着了：重新排一次提交。
+		//
+		// 计时器不能就这么抹掉 —— 提交线程已经醒过一次，不会再有
+		// 第二次唤醒，这批变化会一直搁到下一次文件变化才有机会提交。
+		w.armTimer()
+	}
 
 	if w.opts.OnChange != nil {
 		w.opts.OnChange(batch)
@@ -635,6 +655,20 @@ func (w *ChangeWatcher) addDir(dir string) error {
 	return nil
 }
 
+// delegatedRoots 取出「独立配置、需要单独监听」的媒体根名单快照。
+//
+// 快照是必须的：rootKeys 会被 SetRoots 换掉，而遍历目录可能同时
+// 被换根与新建目录事件触发。直接读那张表就是并发读写。
+func (w *ChangeWatcher) delegatedRoots() map[string]struct{} {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	keys := make(map[string]struct{}, len(w.rootKeys))
+	for key := range w.rootKeys {
+		keys[key] = struct{}{}
+	}
+	return keys
+}
+
 // removeSubtree 摘掉某个路径及其子目录的监听。
 func (w *ChangeWatcher) removeSubtree(root string) {
 	w.mu.Lock()
@@ -668,6 +702,12 @@ func (w *ChangeWatcher) walkDirs(ctx context.Context, root string, visit func(di
 		path  string
 		depth int
 	}
+	// 独立配置的媒体根各自单独监听，遍历时要跳过。
+	//
+	// 这份名单要先取快照再读：SetRoots 会在监听运行期间换掉它，
+	// 直接读那张表就是并发读写 —— 换根的瞬间正好撞上新建目录事件，
+	// 竞态检测器会当场报出来。
+	delegated := w.delegatedRoots()
 	queue := []task{{path: root}}
 	for len(queue) > 0 {
 		if err := ctx.Err(); err != nil {
@@ -695,7 +735,7 @@ func (w *ChangeWatcher) walkDirs(ctx context.Context, root string, visit func(di
 				continue
 			}
 			child := filepath.Join(current.path, entry.Name())
-			if _, delegated := w.rootKeys[pathutil.RootKey(child)]; delegated {
+			if _, ok := delegated[pathutil.RootKey(child)]; ok {
 				continue
 			}
 			if directoryHasNoMediaMarker(child) {
