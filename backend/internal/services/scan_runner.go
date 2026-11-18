@@ -150,6 +150,48 @@ func (r *AsyncScanRunner) Get(id string) *ScanState {
 	return &cp
 }
 
+// HasActiveScan 报告当前是否有扫描任务在跑。
+//
+// 增量更新与全量扫描都基于「当前已发布的图库」，两者同时发布会
+// 互相覆盖。增量更新据此让路，等全量扫描结束后再基于新图库重算。
+func (r *AsyncScanRunner) HasActiveScan() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	active := r.states[r.activeID]
+	return active != nil && isActiveScan(active.Status)
+}
+
+// CommitIncremental 在与全量扫描同一把提交锁下发布一次增量结果。
+//
+// expectedRevision 是调用方读到的图库版本：期间若有过别的发布
+// （全量扫描改封面），版本会变，这次增量就作废，由调用方重算。
+// 这样两份结果不会互相覆盖，谁都不会丢掉对方刚发现的照片。
+func (r *AsyncScanRunner) CommitIncremental(
+	result *models.ScanResult,
+	roots []string,
+	expectedRevision uint64,
+) (*models.ScanResult, uint64, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil, 0, false
+	}
+	if active := r.states[r.activeID]; active != nil && isActiveScan(active.Status) {
+		return nil, 0, false
+	}
+	if r.catalog != nil {
+		if r.catalog.Acquire().Revision() != expectedRevision {
+			return nil, 0, false
+		}
+		published, revision := r.catalog.CommitScan(result, roots, r.cache, r.covers)
+		return published, revision, true
+	}
+	if r.cache != nil {
+		r.cache.Set(result)
+	}
+	return result, 0, true
+}
+
 func (r *AsyncScanRunner) Result(id string) *models.ScanResult {
 	r.mu.Lock()
 	defer r.mu.Unlock()

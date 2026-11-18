@@ -201,8 +201,13 @@ type AIJobError struct {
 
 // AIJob 是用户可查看的持久化任务记录。
 type AIJob struct {
-	ID                    string          `json:"id"`
-	AlbumID               string          `json:"albumId,omitempty"`
+	ID      string `json:"id"`
+	AlbumID string `json:"albumId,omitempty"`
+	// ResourceIDs 限定本任务只处理这些资源。为空表示按相册或全库处理。
+	//
+	// 文件变化触发的自动分析用它把范围收窄到真正变动的照片：
+	// 一次文件新增不该让整个图库重新排队。
+	ResourceIDs           []string        `json:"resourceIds,omitempty"`
 	Type                  string          `json:"type"`
 	Mode                  string          `json:"mode"`
 	Status                string          `json:"status"`
@@ -392,6 +397,10 @@ type AIJobService struct {
 	order              []string
 	queue              []string
 	records            map[string]AIAnalysisRecord
+	// recordFiles 记录每条分析结果落在哪个批次文件里。
+	// 资源从图库里消失后要能把它的结果从批次文件里一并删掉，
+	// 否则重启时旧结果会被重新读回来。
+	recordFiles map[string]string
 	// recordsRevision 在分析结果增删改时递增。
 	// 依赖分析结果的派生数据（如离线地点图谱）用它判断缓存是否过期。
 	recordsRevision  uint64
@@ -445,6 +454,7 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		onRecordsCleared:   options.OnRecordsCleared,
 		jobs:               make(map[string]*AIJob),
 		records:            make(map[string]AIAnalysisRecord),
+		recordFiles:        make(map[string]string),
 		runtimes:           make(map[string]*aiJobRuntime),
 		subs:               make(map[string]map[chan AIJob]struct{}),
 		settings: AIJobSettings{
@@ -486,6 +496,36 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	if err != nil {
 		return AIJob{}, false, err
 	}
+	return s.startAnalysis(moduleType, mode, albumID, nil)
+}
+
+// StartForResources 启动一个只处理给定资源的增量任务。
+//
+// 文件变化触发的自动分析走这条路径：范围收窄到真正变动的照片，
+// 一次文件新增不会让整个图库重新排队。任务内部仍按文件指纹判断，
+// 没变过的照片会被跳过而不是重算。
+func (s *AIJobService) StartForResources(moduleType string, resourceIDs []string) (AIJob, bool, error) {
+	unique := make([]string, 0, len(resourceIDs))
+	seen := make(map[string]struct{}, len(resourceIDs))
+	for _, id := range resourceIDs {
+		if id == "" {
+			continue
+		}
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	if len(unique) == 0 {
+		return AIJob{}, false, errors.New("analysis resource list is empty")
+	}
+	sort.Strings(unique)
+	return s.startAnalysis(moduleType, AIJobModeIncremental, "", unique)
+}
+
+// startAnalysis 是创建分析任务的唯一入口。
+func (s *AIJobService) startAnalysis(moduleType, mode, albumID string, resourceIDs []string) (AIJob, bool, error) {
 	if mode != AIJobModeFull && mode != AIJobModeIncremental {
 		return AIJob{}, false, errors.New("unknown analysis mode")
 	}
@@ -547,7 +587,9 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	}
 	if s.activeID != "" {
 		active := s.jobs[s.activeID]
-		if active != nil && active.Type == moduleType && active.Mode == mode && active.AlbumID == albumID && isAIJobActive(active.Status) {
+		if active != nil && active.Type == moduleType && active.Mode == mode &&
+			active.AlbumID == albumID && sameResourceSet(active.ResourceIDs, resourceIDs) &&
+			isAIJobActive(active.Status) {
 			return s.snapshotLocked(active), true, nil
 		}
 		return AIJob{}, false, ErrAIJobActive
@@ -557,6 +599,7 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	}
 	job := s.newJobLocked(moduleType, mode)
 	job.AlbumID = albumID
+	job.ResourceIDs = append([]string(nil), resourceIDs...)
 	s.jobs[job.ID] = &job
 	s.order = append(s.order, job.ID)
 	s.activeID = job.ID
@@ -568,6 +611,97 @@ func (s *AIJobService) Start(moduleType, mode string, albumIDs ...string) (AIJob
 	}
 	s.launchLocked(job.ID)
 	return s.snapshotLocked(&job), false, nil
+}
+
+// sameResourceSet 比较两个资源集合是否一致。
+func sameResourceSet(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// ForgetResources 忘掉一批资源的分析结果。
+//
+// 资源从图库里消失后，它的分析结果已经没有对应的文件；留着会让派生
+// 数据一直占着空间，也会让人以为这些照片还在库里。返回值是实际
+// 忘掉的条数。
+func (s *AIJobService) ForgetResources(resourceIDs []string) int {
+	if len(resourceIDs) == 0 {
+		return 0
+	}
+	targets := make(map[string]struct{}, len(resourceIDs))
+	for _, id := range resourceIDs {
+		if id == "" {
+			continue
+		}
+		targets[id] = struct{}{}
+	}
+	if len(targets) == 0 {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return 0
+	}
+	removed := 0
+	files := make(map[string]struct{})
+	for key, record := range s.records {
+		if _, exists := targets[record.ResourceID]; !exists {
+			continue
+		}
+		if path, ok := s.recordFiles[key]; ok {
+			files[path] = struct{}{}
+		}
+		delete(s.records, key)
+		delete(s.recordFiles, key)
+		removed++
+	}
+	if removed == 0 {
+		return 0
+	}
+	for path := range files {
+		// 批次文件改写失败不影响本次运行：内存里的结果已经删掉，
+		// 下次启动会重新读回旧记录，但图库本身的正确性不受影响。
+		_ = rewriteAIBatchWithout(path, targets)
+	}
+	s.recordsRevision++
+	return removed
+}
+
+// rewriteAIBatchWithout 从批次文件里删掉指定资源的结果。
+func rewriteAIBatchWithout(path string, removed map[string]struct{}) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var batch aiJobBatch
+	if err := json.Unmarshal(data, &batch); err != nil {
+		return err
+	}
+	kept := make([]AIAnalysisRecord, 0, len(batch.Records))
+	changed := false
+	for _, record := range batch.Records {
+		if _, exists := removed[record.ResourceID]; exists {
+			changed = true
+			continue
+		}
+		kept = append(kept, record)
+	}
+	if !changed {
+		return nil
+	}
+	batch.Records = kept
+	if len(batch.Records) == 0 {
+		return os.Remove(path)
+	}
+	return writeAIJSONAtomic(path, batch)
 }
 
 // StartAll 按固定模块顺序把所有已就绪的分析任务写入现有任务队列。
@@ -1853,11 +1987,18 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 	s.mu.Lock()
 	job = s.jobs[id]
 	albumID := ""
+	var resourceIDs []string
 	if job != nil {
 		albumID = job.AlbumID
+		resourceIDs = append([]string(nil), job.ResourceIDs...)
 	}
 	s.mu.Unlock()
-	targets := s.buildTargets(runtimeState.ctx, snapshot, job.Type, albumID)
+	var targets []aiJobTarget
+	if len(resourceIDs) > 0 {
+		targets = s.buildTargetsForResources(runtimeState.ctx, snapshot, job.Type, resourceIDs)
+	} else {
+		targets = s.buildTargets(runtimeState.ctx, snapshot, job.Type, albumID)
+	}
 	digest := digestAITargets(targets, albumID)
 	candidates, err := s.selectTargets(id, targets, digest)
 	if err != nil {
@@ -1961,6 +2102,22 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 		if !exists {
 			return nil
 		}
+	}
+	return s.buildTargetsForResources(ctx, snapshot, moduleType, ids)
+}
+
+// buildTargetsForResources 把资源集合转成分析目标。
+//
+// 资源集合可能来自相册、全库或一批具体资源；已经不在图库里的资源
+// （文件刚被删掉）会被跳过。
+func (s *AIJobService) buildTargetsForResources(
+	ctx context.Context,
+	snapshot CatalogSnapshot,
+	moduleType string,
+	ids []string,
+) []aiJobTarget {
+	if len(ids) == 0 {
+		return nil
 	}
 	targets := make([]aiJobTarget, 0, len(ids))
 	for _, id := range ids {
@@ -2435,7 +2592,9 @@ func (s *AIJobService) commitBatch(jobID string, runtimeState *aiJobRuntime, tar
 		if record.ResourceID == "" {
 			continue
 		}
-		s.records[aiRecordKeyForRecord(record)] = record
+		key := aiRecordKeyForRecord(record)
+		s.records[key] = record
+		s.recordFiles[key] = path
 		s.recordsRevision++
 		if record.Status == "failed" {
 			job.Failed++
@@ -3246,6 +3405,7 @@ func (s *AIJobService) loadRecords() error {
 			current, exists := s.records[key]
 			if !exists || record.UpdatedAt.After(current.UpdatedAt) {
 				s.records[key] = record
+				s.recordFiles[key] = path
 				s.recordsRevision++
 			}
 		}

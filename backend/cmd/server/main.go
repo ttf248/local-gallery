@@ -342,12 +342,12 @@ func main() {
 	jobOutputs := services.NewJobOutputService(cacheLayout.Root, 60*time.Second)
 	var similarityService *services.SimilarityService
 	aiJobs, err = services.NewAIJobService(services.AIJobServiceOptions{
-		StatePath:          cacheLayout.AIJobsPath,
-		MetadataDir:        cacheLayout.MetadataDir,
-		Catalog:            resourceCatalog,
-		ValidatePath:       safetyState.Validate,
+		StatePath:      cacheLayout.AIJobsPath,
+		MetadataDir:    cacheLayout.MetadataDir,
+		Catalog:        resourceCatalog,
+		ValidatePath:   safetyState.Validate,
 		ImageConverter: imageConverter,
-		Analyzers:          []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, services.SimilarityAnalyzer{}},
+		Analyzers:      []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, services.SimilarityAnalyzer{}},
 		OnRecordsCommitted: func(records []services.AIAnalysisRecord) {
 			if indexErr := ocrSearchIndex.ApplyRecords(records); indexErr != nil {
 				log.Printf("更新 OCR 搜索索引失败: %v", indexErr)
@@ -478,6 +478,38 @@ func main() {
 			log.Printf("  已自动启动扫描 id=%s，等待结果…", id)
 		}()
 	}
+
+	// 自动发现文件变化：监听媒体根，文件新增/删除/移动后增量更新图库，
+	// 并按差异触发分析任务。它复用既有的扫描任务与分析任务中心，
+	// 不新增第二套任务体系。
+	librarySync, err := services.NewLibrarySyncService(services.LibrarySyncOptions{
+		StatePath: filepath.Join(cacheLayout.StateDir, "library_sync.json"),
+		Roots:     mgr.Roots,
+		Exclude: func() services.ExcludeConfig {
+			return services.NormalizeExcludeConfig(
+				mgr.Get().SkipHidden,
+				mgr.Get().SystemFiles,
+				mgr.Get().ExcludePatterns,
+			)
+		},
+		Catalog:     resourceCatalog,
+		Cache:       scanCache,
+		Covers:      coverOverrides,
+		Runner:      runner,
+		Jobs:        aiJobs,
+		SmartAlbums: smartAlbumRefresh,
+	})
+	if err != nil {
+		log.Fatalf("初始化自动发现文件变化失败: %v", err)
+	}
+	defer librarySync.Shutdown()
+	if err := librarySync.Start(context.Background()); err != nil {
+		log.Printf("警告：启动文件监听失败: %v", err)
+	}
+	// 媒体根变更后重新登记监听：新增的根要开始监听，移除的根要摘掉。
+	mgr.OnChange("library_sync_roots", func(snapshot *config.Config) {
+		librarySync.SetRoots(context.Background())
+	})
 
 	// 仅缩略图参数热更新。cacheDir / ffmpegPath 涉及多个协作服务，配置接口
 	// 会明确返回 requiresRestart，避免只切换部分实例造成缓存与元数据分裂。
@@ -658,6 +690,9 @@ func main() {
 	// 偏好 / 收藏 / 历史
 	api.Get("/prefs", handlers.PrefsGetHandler(prefs))
 	api.Patch("/prefs", handlers.PrefsPatchHandler(prefs))
+	// 自动发现文件变化：开关、监听状态与最近一次同步结果。
+	api.Get("/library-sync", handlers.LibrarySyncStatusHandler(librarySync))
+	api.Put("/library-sync", handlers.LibrarySyncUpdateHandler(librarySync))
 	api.Post("/favorites/batch", handlers.FavoritesBatchHandler(prefs))
 	api.Get("/favorites", handlers.FavoritesListHandler(prefs))
 	api.Post("/favorites", handlers.FavoriteAddHandler(prefs))
