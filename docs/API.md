@@ -201,11 +201,11 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/ai/jobs` / `POST /api/ai/jobs`
 
-读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型。两种模型的每张照片分析记录分别持久化；切换后会加载该模型已有记录，增量只补齐该模型缺失或过期的照片。人物索引和人工修正同样按模型隔离；人物相册与智能相册人物维度始终使用当前选择模型的数据，切换后不会展示另一模型生成的缓存结果。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。后三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
+读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face" | "similarity", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`similarity` 在本机提取照片的内容指纹、感知哈希与质量指标，用于发现重复、裁剪压缩过的副本与连拍（该模块不需要本机 Python 依赖与权重）；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型。两种模型的每张照片分析记录分别持久化；切换后会加载该模型已有记录，增量只补齐该模型缺失或过期的照片。人物索引和人工修正同样按模型隔离；人物相册与智能相册人物维度始终使用当前选择模型的数据，切换后不会展示另一模型生成的缓存结果。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。后三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
 
 任务快照的 `jobs` 按创建时间倒序提供任务记录，`active` 是当前执行或暂停的任务，`queue` 是按执行顺序排列的等待任务 ID，不包含 `active`。任务记录包含等待队列任务以及所有终态记录。队列 ID 与任务状态会一起持久化到 `state/ai_jobs.json`；旧状态文件缺少 `queue` 时会按待执行任务的创建顺序恢复，服务重启时未完成的当前任务会插回队首续跑。
 
-任务状态为 `pending`、`running`、`paused`、`completed`、`failed`、`cancelled`。快照包含阶段、总数、已处理/跳过/失败/完成数、检查点、耗时、速度、开始/结束时间及错误项；人脸任务另含 `faceModel`。`stage` 会报告 GPU 环境检查、等待媒体库、整理分析清单、准备模型与首批推理，以及后续的模块批量推理。首批阶段可能包含模型冷启动。任务的 `computeDevice` 是创建时记录的 `cpu` 或 `gpu`：元数据始终使用 CPU，其他模型任务默认强制使用 GPU；关闭 GPU 设置后新任务改用 CPU，已排队任务不变。旧状态里的未完成任务若没有设备记录，恢复时按当前 GPU 设置补录设备，元数据任务仍使用 CPU。设备不可用或 GPU 推理失败时，任务以 `failed` 结束，并在 `errorCode` 与 `error` 中记录原因。错误项包含资源 ID、根目录别名下的相对图片路径、稳定错误码、脱敏原因和时间；不返回文件系统绝对路径。任务在后台按 32 张一批提交，重启后自动恢复运行中任务。
+任务状态为 `pending`、`running`、`paused`、`completed`、`failed`、`cancelled`。快照包含阶段、总数、已处理/跳过/失败/完成数、检查点、耗时、速度、开始/结束时间及错误项；人脸任务另含 `faceModel`。`stage` 会报告 GPU 环境检查、等待媒体库、整理分析清单、准备模型与首批推理，以及后续的模块批量推理。首批阶段可能包含模型冷启动。任务的 `computeDevice` 是创建时记录的 `cpu` 或 `gpu`：元数据与相似照片特征始终使用 CPU，其他模型任务默认强制使用 GPU；关闭 GPU 设置后新任务改用 CPU，已排队任务不变。旧状态里的未完成任务若没有设备记录，恢复时按当前 GPU 设置补录设备，元数据任务仍使用 CPU。设备不可用或 GPU 推理失败时，任务以 `failed` 结束，并在 `errorCode` 与 `error` 中记录原因。错误项包含资源 ID、根目录别名下的相对图片路径、稳定错误码、脱敏原因和时间；不返回文件系统绝对路径。任务在后台按 32 张一批提交，重启后自动恢复运行中任务。
 
 快照里另有几个按持久化计数推导的进度字段，以及两份产出统计：
 
@@ -214,11 +214,11 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `estimatedRemainingMs`：运行中任务的预计剩余毫秒。根据任务墙钟耗时与已完成图片推算，包含清单整理和首次模型加载，因此小任务或冷启动时较粗略。只在 `running` 时给出；暂停时耗时仍在增长、速度已失真，因此返回 0。队列、暂停与终态同样返回 0。
 - `speedPerSecond`：每秒实际处理张数，不含被跳过的文件（增量任务的 `done` 从跳过数起步，按它算速度会在任务开头虚高）。
 - `results`：按处理结果分类的计数。元数据使用 `parsed`、`no_exif`、`unsupported`、`failed`；OCR 使用 `recognized`、`no_text`、`failed`；人脸使用 `faces_found`、`no_faces`、`failed`；向量使用 `indexed`、`failed`。每组键的计数和等于 `completed`。
-- `fields`：按字段统计的产出计数，键包括 `exifTime`、`camera`、`gps`、`embedding`、`ocrText`、`faces`。只统计实际取得内容的图片，不报告空结果。
+- `fields`：按字段统计的产出计数，键包括 `exifTime`、`camera`、`gps`、`embedding`、`ocrText`、`faces`、`similarity`。只统计实际取得内容的图片，不报告空结果。
 
 ### `POST /api/ai/jobs/sequence`
 
-请求为 `{ "mode": "full" | "incremental", "albumId"?: "a_…" }`，一次创建所有已就绪模块的任务，并按固定顺序加入既有任务队列。全库任务依次执行 metadata、embedding、OCR、face；传入照片 `albumId` 时仅排入 metadata、embedding、face，并且每项只处理该相册图片。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
+请求为 `{ "mode": "full" | "incremental", "albumId"?: "a_…" }`，一次创建所有已就绪模块的任务，并按固定顺序加入既有任务队列。全库任务依次执行 metadata、embedding、OCR、face、similarity；传入照片 `albumId` 时仅排入 metadata、embedding、face、similarity，并且每项只处理该相册图片。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
 
 ### `GET /api/ai/jobs/estimate`
 
@@ -456,6 +456,20 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `GET /api/admin/people/annotations/dataset` 下载评测集，格式为 `schemaVersion=1`：`photos[]` 含 `resourceId`、`path`（本地绝对路径）、`tags` 与 `faces[]`（`box`、`identity`、可选 `smallFace`）。这与 `backend/aiworker/evaluate_people.py` 读取的格式一致，可以直接交给它比较不同模型与检测方式。
 
 标注进度保存在 `state/people-annotations.json`，与 `state/people-<model>.json` 分开；两者互不影响，重启或重建索引后都保留。标注数据只在本机保存，默认不上传，也不进版本库。
+
+### 相似照片整理 API
+
+相似照片整理把「同一张照片的多个副本」「裁剪压缩过的近似照片」「短时间连拍的同一场景」分成三类独立结果。三类不混：连拍组里的每一张都是不同的画面，只是拍的是同一个瞬间，因此绝不按重复处理。整理结果只用于发现与挑选，不删除、不移动、不覆盖任何原始媒体。
+
+特征提取是新增的分析模块 `similarity`，在本机用标准库完成，不依赖本机 AI Worker：
+
+- `GET /api/similarity/status` 返回整理模块的整体状态：`analyzed` 是已算出特征的照片张数，`total` 是媒体库照片总数，`hasVectors` 说明语义向量索引是否可用（可用时近似重复的复核更准），`builtAt` 是分组结果的生成时间，`stale` 说明特征已变、分组需要重建，`rebuilding` 说明正在重建，`limited` 说明候选召回触到了上限（此时结果可能不完整），`summary` 是分组总量。
+- `GET /api/similarity/groups?kind=&folder=&status=&limit=&offset=` 返回分组。`kind` 取 `exact`（完全重复）、`near`（近似重复）、`burst`（连拍同场景）或空串表示全部；`status` 取 `pending`、`reviewed`、`ignored` 或空串；`folder` 按文件夹别名筛选。`limit` 上限 200，`offset` 分页。响应 `page` 含 `groups[]`、`folders[]`（有结果的文件夹与各自组数）、`summary`（`exact`/`near`/`burst` 三类组数、`pending`/`reviewed`/`ignored` 状态数、`photos` 参与整理的张数、`redundant` 每组保留一张之外的多余张数）、`stale` 与 `limited`。无效 `limit` 或 `offset` 返回 `400 invalid_similarity_query`。
+- 每个分组含 `id`、`kind`、`folder`、`resourceIds[]`、`members[]`、`recommended`（算法建议的代表照片）、`representative`（当前生效的代表照片）、`representativeIsManual`（代表照片是否由用户指定）、`distance`（组内成员与代表照片的最大感知哈希距离）、`similarity`、`timeSpanMs`、`timeSource`（`capture` 为 EXIF 拍摄时间，`file` 为文件修改时间的退路）、`crossFolder`、`status` 与 `redundant`。每个成员含 `resourceId`、`folder`、`albumId`、`albumName`、原图像素 `width`/`height`、`capturedAt`、`distance`、`similarity` 与 `quality`。`quality` 是可解释的质量分项：`sharpness`（拉普拉斯响应的方差）、`sharpnessScore`、`megapixels`、`resolutionScore`、`exposure`（灰度均值）、`clippedHigh`、`clippedLow`、`exposureScore` 与 `score`。代表评分按清晰度 0.45、分辨率 0.25、曝光 0.30 加权，与文件大小无关。
+- `PUT /api/similarity/groups/:id` 写人工决定，body 为 `{ "representative"?: "f_…" }`、`{ "reviewed"?: true }` 或 `{ "ignored"?: true }`，一次可给一种。`representative` 必须指向组内成员，否则返回 `400 invalid_similarity_request`；分组不存在时返回 `404 similarity_group_not_found`。标记已审查与忽略互斥，后写的一个生效。
+- `POST /api/similarity/batch` 对一组分组执行同一个动作，body 为 `{ "action": "review"|"unreview"|"ignore"|"unignore"|"pick", "groupIds": ["…"] }`。`pick` 把每组当前生效的代表照片加入现有的照片级精选（`state/picks.json`），返回的 `changed` 是实际加入精选的张数。分组 ID 不存在时按未命中处理；未知动作返回 `400 invalid_similarity_batch`。
+
+分组结果是可重建的派生数据，写在 `derived/ai/similarity/groups.json`；人工决定（已审查、忽略、指定代表）写在 `state/similarity.json`，重建之后仍然生效，并随状态备份的 `similarity` 类别一起导出与恢复。组的标识取组内最小的资源标识，因此组变大变小都不会换号。
 
 ### 足迹页 API
 

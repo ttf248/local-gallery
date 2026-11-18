@@ -118,6 +118,7 @@ export default function AppShell() {
       "/tasks": "任务中心",
       "/photo/travels": "足迹",
       "/photo/people": "人物相册",
+      "/photo/similarity": "相似照片与连拍",
       "/settings": "设置",
     };
     const path = location.pathname;

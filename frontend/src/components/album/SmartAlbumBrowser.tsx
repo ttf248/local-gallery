@@ -68,6 +68,7 @@ const requiredModuleNames: Record<AnalysisType, string> = {
   embedding: "语义向量",
   ocr: "OCR 文字",
   face: "人脸",
+  similarity: "相似照片特征",
 };
 
 export default function SmartAlbumBrowser({

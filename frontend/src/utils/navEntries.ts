@@ -1,5 +1,6 @@
 import {
   ClockIcon,
+  CopyIcon,
   FolderSearchIcon,
   HomeIcon,
   MapPinIcon,
@@ -15,6 +16,7 @@ import {
   picksRoute,
   recentsRoute,
   semanticSearchRoute,
+  similarityRoute,
   smartAlbumsRoute,
   travelsRoute,
   unreadRoute,
@@ -58,6 +60,7 @@ export const PHOTO_NAV: NavEntry[] = [
   { key: "photo.travels", label: "足迹", Icon: MapPinIcon, to: travelsRoute(), mode: "photo" },
   { key: "photo.people", label: "人物相册", Icon: PeopleIcon, to: peopleRoute(), mode: "photo" },
   { key: "photo.smart-albums", label: "智能相册", Icon: SparkleIcon, to: smartAlbumsRoute(), mode: "photo" },
+  { key: "photo.similarity", label: "相似照片", Icon: CopyIcon, to: similarityRoute(), mode: "photo" },
   { key: "photo.semantic", label: "智能搜索", Icon: FolderSearchIcon, to: semanticSearchRoute(), mode: "photo" },
 ];
 

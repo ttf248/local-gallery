@@ -124,6 +124,8 @@ export function taskStageLabel(stage: string): string {
       return "批量识别并保存文字";
     case "face":
       return "批量识别人脸并保存特征";
+    case "similarity":
+      return "提取内容指纹、感知哈希与质量指标";
     case "paused":
       return "已暂停";
     case "complete":
@@ -151,6 +153,8 @@ function taskModuleLabel(type: AIJob["type"]): string {
       return "文字识别";
     case "face":
       return "人脸识别";
+    case "similarity":
+      return "相似照片特征";
     default:
       return type;
   }
@@ -201,6 +205,8 @@ export function taskResultLabel(key: string): string {
       return "解析失败";
     case "processed":
       return "已处理";
+    case "similarity":
+      return "已提取特征";
     case "indexed":
       return "已建向量";
     case "recognized":
@@ -231,6 +237,8 @@ export function taskFieldLabel(key: string): string {
       return "人脸特征";
     case "embedding":
       return "语义向量";
+    case "similarity":
+      return "相似照片特征";
     default:
       return key;
   }

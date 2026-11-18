@@ -10,6 +10,7 @@ export const backupCategories = [
   "picks",
   "people",
   "smartAlbums",
+  "similarity",
 ] as const;
 export type BackupCategory = (typeof backupCategories)[number];
 export const backupLabels: Record<BackupCategory, string> = {
@@ -21,6 +22,7 @@ export const backupLabels: Record<BackupCategory, string> = {
   picks: "照片精选",
   people: "人物分组与手动修正",
   smartAlbums: "智能相册命名与隐藏状态",
+  similarity: "相似照片整理的人工决定",
 };
 export interface StatePreview {
   versions: Record<string, string>;

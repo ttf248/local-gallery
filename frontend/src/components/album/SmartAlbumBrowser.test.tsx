@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import type { SmartAlbumDimension, SmartAlbumSummary } from "../../api/albums";
-import type { AIJob, AIJobModule } from "../../api/aiJobs";
+import type { AIJob, AIJobModule, AnalysisType } from "../../api/aiJobs";
 import SmartAlbumBrowser from "./SmartAlbumBrowser";
 
 const MODULES: AIJobModule[] = [
@@ -72,9 +72,7 @@ interface Options {
   jobs?: AIJob[];
   peopleEnabled?: boolean;
   dimension?: SmartAlbumDimension;
-  onAnalyzeDimension?: (
-    type: "metadata" | "embedding" | "ocr" | "face",
-  ) => void;
+  onAnalyzeDimension?: (type: AnalysisType) => void;
 }
 
 function renderBrowser({

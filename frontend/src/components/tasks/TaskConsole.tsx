@@ -474,6 +474,8 @@ function moduleDescription(type: AnalysisType): string {
       return "用本机 OCR 识别照片中的文字，结果可在图片详情中查看。";
     case "face":
       return "检测照片中的人脸并生成本机特征向量，可查找相似人脸；不会推断或标注真实姓名。";
+    case "similarity":
+      return "在本机提取照片的内容指纹、感知哈希与质量指标，用来发现重复、裁剪改过的副本与连拍；不联网，也不改动原始文件。";
     default:
       return "读取照片拍摄时间、相机信息与 GPS 坐标，结果只写进本机的派生缓存。";
   }

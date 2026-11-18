@@ -116,6 +116,16 @@ export function yearRoute(year: string): string {
 }
 
 /**
+ * 相似照片与连拍整理。
+ *
+ * 只属于照片工作台：重复、裁剪改过的副本与连拍都是照片侧的概念，
+ * 漫画那边按作品与卷组织，没有这一套。
+ */
+export function similarityRoute(): string {
+  return `${MODE_PREFIX.photo}/similarity`;
+}
+
+/**
  * 智能相册：全库已生成的智能分组汇成的一面墙。
  *
  * 只属于照片工作台：分组线索（时间、地点、人物、场景）来自照片的

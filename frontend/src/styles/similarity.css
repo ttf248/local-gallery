@@ -1,0 +1,276 @@
+/*
+ * 相似照片整理页。
+ *
+ * 这一页的主体是一列「决定」，不是一个网格：每一组相似照片是一个
+ * 待处理的事项，用户看完要能说出留哪张、其余算不算重复。因此
+ * 代表照片占据每组的左侧第一眼，其余成员收在展开区并排摆着。
+ *
+ * 外壳保持无彩灰阶 —— 页面里唯一有彩色的东西是照片本身。
+ *
+ * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由样式表
+ * 的先后决定，拆出来不影响任何一条既有规则。
+ *
+ * @tailwind components 只为把这一份样式挂进 components 层：Tailwind 的
+ * 工具类在 utilities 层，components 层在它之前，工具类才盖得住组件层。
+ * 没有这条指令，PostCSS 会报「no matching @tailwind components
+ * directive」。
+ */
+@tailwind components;
+
+@layer components {
+  /* 一组相似照片。组与组之间只隔一条发丝线，不用卡片框住：
+     框会把这一页读成「一堆盒子」，而不是一份待办的清单。 */
+  .similarity-group {
+    border-top: 1px solid var(--border-faint);
+    padding-block: 18px;
+  }
+  .similarity-group:last-child {
+    border-bottom: 1px solid var(--border-faint);
+  }
+
+  .similarity-group__head {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  /* 勾选框：整块可点，不是一枚几像素的小方块。 */
+  .similarity-group__check {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    margin-top: 4px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .similarity-group__check input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* 代表照片：照片墙的挂法 —— 小圆角 + 一道浅投影。 */
+  .similarity-group__hero {
+    flex-shrink: 0;
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+    background: var(--bg-subtle);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+    transition: box-shadow var(--dur-fast) var(--ease-out);
+    cursor: pointer;
+  }
+  .similarity-group__hero:hover {
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.24);
+  }
+  .similarity-group__hero:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .similarity-group__hero-image {
+    display: block;
+    width: 168px;
+    height: 168px;
+    object-fit: cover;
+  }
+
+  .similarity-group__body {
+    flex: 1 1 260px;
+    min-width: 0;
+  }
+
+  .similarity-group__title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  /* 类别徽章：字面说清是哪一类。把连拍写成「重复」是最容易出的错。 */
+  .similarity-group__kind {
+    font-size: var(--text-body);
+    font-weight: 600;
+    color: var(--fg);
+  }
+  .similarity-group__count {
+    font-size: var(--text-meta, var(--text-body));
+    color: var(--fg-muted);
+  }
+  .similarity-group__status {
+    display: inline-flex;
+    align-items: center;
+    height: 20px;
+    padding-inline: 7px;
+    border-radius: var(--radius-media);
+    font-size: var(--text-badge);
+    background: var(--bg-subtle);
+    color: var(--fg-muted);
+  }
+  .similarity-group__status--reviewed {
+    background: var(--accent-soft);
+    color: var(--fg);
+  }
+  .similarity-group__status--ignored {
+    background: transparent;
+    color: var(--fg-subtle);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  .similarity-group__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: var(--text-meta, var(--text-body));
+    color: var(--fg-subtle);
+    min-width: 0;
+  }
+
+  .similarity-group__quality {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .similarity-group__quality-label {
+    font-size: var(--text-meta, var(--text-body));
+    color: var(--fg-muted);
+  }
+  .similarity-group__hint {
+    font-size: var(--text-meta, var(--text-body));
+    color: var(--fg-subtle);
+  }
+
+  /* 三个质量分项：清晰度、分辨率、曝光。写成分开的数字，
+     而不是揉成一个总分 —— 总分没法解释，也没法据此改主意。 */
+  .similarity-quality {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--text-meta, var(--text-body));
+    color: var(--fg-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .similarity-group__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-left: auto;
+  }
+
+  /* 展开区：成员并排摆着，一眼能比出差别。 */
+  .similarity-group__members {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 14px;
+    margin-top: 16px;
+    padding-left: 44px;
+  }
+
+  .similarity-member {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    border-radius: var(--radius-media);
+    background: var(--bg-subtle);
+    min-width: 0;
+  }
+  .similarity-member--current {
+    box-shadow: inset 0 0 0 2px var(--fg);
+  }
+
+  .similarity-member__image {
+    position: relative;
+    display: block;
+    width: 100%;
+    border-radius: var(--radius-xs);
+    overflow: hidden;
+    background: var(--bg-strong);
+    cursor: pointer;
+  }
+  .similarity-member__image:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .similarity-member__thumb {
+    display: block;
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+  }
+  .similarity-member__flag {
+    position: absolute;
+    left: 6px;
+    top: 6px;
+    padding: 2px 7px;
+    border-radius: var(--radius-media);
+    font-size: var(--text-badge);
+    background: rgb(0 0 0 / 0.72);
+    color: #fff;
+    backdrop-filter: blur(4px);
+  }
+  .similarity-member__flag--quiet {
+    background: rgb(0 0 0 / 0.5);
+    color: rgb(255 255 255 / 0.85);
+  }
+
+  .similarity-member__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    font-size: var(--text-meta, var(--text-body));
+    color: var(--fg-muted);
+  }
+  .similarity-member__distance {
+    color: var(--fg-subtle);
+    font-variant-numeric: tabular-nums;
+  }
+  .similarity-member__compare {
+    align-self: flex-start;
+  }
+
+  /* 底部的批量操作条。 */
+  .similarity-actions {
+    position: sticky;
+    bottom: var(--float-bottom);
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+    padding: 10px 14px;
+    border-radius: var(--radius-control);
+    background: var(--bg-elevated);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border);
+  }
+
+  /* 文件夹选择：弹层里一列可选的文件夹，带各自的组数。
+     库大的时候文件夹有几十个，铺成一行会把整屏占满 ——
+     因此收进一个弹层，触发器留在工具条上只占一个按钮的位置。 */
+  .similarity-folder-menu {
+    max-height: min(60vh, 520px);
+    overflow-y: auto;
+  }
+
+  @media (max-width: 640px) {
+    .similarity-group__members {
+      padding-left: 0;
+    }
+    .similarity-group__hero-image {
+      width: 120px;
+      height: 120px;
+    }
+    .similarity-group__actions {
+      margin-left: 0;
+      width: 100%;
+    }
+  }
+}
