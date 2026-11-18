@@ -165,6 +165,13 @@ func (index *peopleANNIndex) Add(id string, vector []float32) {
 }
 
 func (index *peopleANNIndex) Search(query []float32, limit int) []peopleANNHit {
+	return index.SearchWithEf(query, limit, index.efSearch)
+}
+
+// SearchWithEf 允许调用方按需要收紧搜索宽度。
+// 复核页面要为每个分组各做一次近邻查找，宽度直接决定整体耗时，
+// 因此这里允许在召回与速度之间取舍。
+func (index *peopleANNIndex) SearchWithEf(query []float32, limit, ef int) []peopleANNHit {
 	if index.entry < 0 || limit <= 0 || len(query) != index.dimension {
 		return nil
 	}
@@ -181,11 +188,14 @@ func (index *peopleANNIndex) Search(query []float32, limit int) []peopleANNHit {
 		})
 		return hits
 	}
+	if ef < limit {
+		ef = limit
+	}
 	entry := index.entry
 	for layer := index.maxLevel; layer > 0; layer-- {
 		entry = index.greedyClosest(query, entry, layer)
 	}
-	candidates := index.searchLayer(query, entry, max(index.efSearch, limit), 0)
+	candidates := index.searchLayer(query, entry, max(ef, limit), 0)
 	if len(candidates) > limit {
 		candidates = candidates[:limit]
 	}

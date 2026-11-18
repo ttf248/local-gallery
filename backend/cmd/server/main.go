@@ -320,6 +320,9 @@ func main() {
 		}
 		return mediaDimensions.Dimensions(validated)
 	})
+	peopleService.SetSourceCaptureYear(func(resourceID string) int {
+		return resourceCatalog.Acquire().PhotoCaptureYear(resourceID)
+	})
 	// 离线地点图谱：全国地图、省内地图与区域照片墙共用一次匹配结果。
 	chinaLocations := services.NewChinaLocationService()
 	// 边界索引要 6 秒才能建好，放到后台预热，别让第一个打开地点页的人等。

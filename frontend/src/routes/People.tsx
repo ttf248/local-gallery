@@ -17,6 +17,8 @@ import {
   aiJobsApi,
   type PeopleSort,
   type PersonGroupPhotoCandidate,
+  type PersonMatchCandidate,
+  type PersonMatchEvidence,
   type PersonMatchSuggestion,
   type PersonFace,
   type PersonGroup,
@@ -486,13 +488,17 @@ function MatchSuggestionCard({
                         源/目标照片证据 {candidate.sourceEvidencePhotos}/
                         {candidate.targetEvidencePhotos}
                       </p>
-                      <p className="mt-1 text-meta text-fg-subtle">
-                        {candidate.ambiguous
-                          ? "证据较少或结果接近其他候选，建议打开照片逐张核对。"
-                          : "跨照片证据较多；仍需你打开照片确认。"}
-                      </p>
+                      <MatchRiskNote candidate={candidate} />
                     </div>
                   </div>
+                  <MatchEvidenceStrip
+                    label="来源组的互证照片"
+                    evidence={candidate.evidenceFaces ?? []}
+                  />
+                  <MatchEvidenceStrip
+                    label="目标组的互证照片"
+                    evidence={candidate.targetEvidenceFaces ?? []}
+                  />
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -518,6 +524,109 @@ function MatchSuggestionCard({
         </div>
       </div>
     </article>
+  );
+}
+
+/**
+ * 风险说明。
+ *
+ * 相似度只是线索，真正决定要不要合并的是照片本身。这块把服务端算出的
+ * 风险原因摆出来，用户不用点进人物详情才知道这条建议有多可靠。
+ */
+function MatchRiskNote({ candidate }: { candidate: PersonMatchCandidate }) {
+  const tone =
+    candidate.risk === "high"
+      ? "text-danger"
+      : candidate.risk === "medium"
+        ? "text-warning"
+        : "text-fg-subtle";
+  const headline =
+    candidate.risk === "high"
+      ? "证据薄弱，建议逐张核对后再决定。"
+      : candidate.risk === "medium"
+        ? "证据尚可，但仍有需要核对的地方。"
+        : "跨照片证据较多；仍需你打开照片确认。";
+  return (
+    <div className={`mt-1 text-meta ${tone}`}>
+      <p>{headline}</p>
+      {candidate.riskReasons?.length ? (
+        <ul className="mt-1 list-disc space-y-0.5 pl-4">
+          {candidate.riskReasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 互证照片条。
+ *
+ * 待确认列表里最费事的就是「想去看看是哪几张照片」。这里把提供互证的
+ * 真实照片直接摆出来，并把那张脸框出来，不必来回进出人物详情。
+ */
+function MatchEvidenceStrip({
+  label,
+  evidence,
+}: {
+  label: string;
+  evidence: PersonMatchEvidence[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (evidence.length === 0) return null;
+  const visible = expanded ? evidence : evidence.slice(0, 4);
+  return (
+    <div className="mt-3">
+      <p className="text-meta text-fg-muted">{label}</p>
+      <div className="mt-1 flex flex-wrap gap-2">
+        {visible.map((item) => (
+          <EvidenceThumbnail key={`${item.resourceId}#${item.faceIndex}`} evidence={item} />
+        ))}
+      </div>
+      {evidence.length > 4 ? (
+        <button
+          type="button"
+          className="btn btn-sm btn-outline mt-2"
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? "收起照片" : `再显示 ${evidence.length - 4} 张`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function EvidenceThumbnail({ evidence }: { evidence: PersonMatchEvidence }) {
+  const style = personFaceFrameStyle(
+    evidence.box,
+    evidence.width,
+    evidence.height,
+    96,
+    96,
+  );
+  return (
+    <figure className="relative h-24 w-24 overflow-hidden rounded-md bg-bg-subtle">
+      <RenditionImage
+        fileId={evidence.resourceId}
+        alt=""
+        displayWidth={192}
+        className="h-full w-full object-cover"
+      />
+      {style ? (
+        <span
+          aria-hidden="true"
+          data-testid="people-match-evidence-box"
+          className="absolute rounded border-2 border-white shadow-[0_0_0_2px_var(--overlay-bg)]"
+          style={style}
+        />
+      ) : null}
+      {evidence.year ? (
+        <figcaption className="absolute bottom-0 left-0 right-0 bg-black/65 px-1 py-0.5 text-center text-meta text-white">
+          {evidence.year}
+        </figcaption>
+      ) : null}
+    </figure>
   );
 }
 

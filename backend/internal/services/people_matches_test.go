@@ -152,7 +152,7 @@ func TestPeopleRetainSingletonPersistsAsConfirmedWithoutCrossModelLeak(t *testin
 	}
 }
 
-func newPeopleMatchTestService(t *testing.T) *PeopleService {
+func newPeopleMatchTestService(t testing.TB) *PeopleService {
 	t.Helper()
 	root := t.TempDir()
 	people, err := OpenPeopleService(filepath.Join(root, "state", "people.json"), filepath.Join(root, "derived", "people-index.json"))
@@ -179,7 +179,7 @@ func peopleMatchTestFaces(prefix string, angles []float64) (string, []PersonFace
 	return stablePersonID(faces[0].Key), faces
 }
 
-func peopleInstallMatchGroup(t *testing.T, people *PeopleService, personID string, faces []PersonFace) {
+func peopleInstallMatchGroup(t testing.TB, people *PeopleService, personID string, faces []PersonFace) {
 	t.Helper()
 	people.mu.Lock()
 	defer people.mu.Unlock()
@@ -218,4 +218,74 @@ func peopleMatchTestRecords(targetFaces, sourceFaces []PersonFace, sameVectors b
 		records = append(records, peopleTestRecord(face.ResourceID, vector))
 	}
 	return records
+}
+
+func TestPeopleMatchSuggestionsCoverRepeatedGroupsOfThreeToNinePhotos(t *testing.T) {
+	people := newPeopleMatchTestService(t)
+	targetID, targetFaces := peopleMatchTestFaces("target", []float64{0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55})
+	sourceID, sourceFaces := peopleMatchTestFaces("source", []float64{0, 5, 10, 15, 20})
+	peopleInstallMatchGroup(t, people, targetID, targetFaces)
+	peopleInstallMatchGroup(t, people, sourceID, sourceFaces)
+
+	page := people.MatchSuggestions(0, 20, false, nil)
+	if len(page.Items) != 1 || page.Items[0].Source.ID != sourceID {
+		t.Fatalf("repeated group review page = %+v, want the five-photo group to be listed", page.Items)
+	}
+	candidates := page.Items[0].Candidates
+	if len(candidates) != 1 || candidates[0].Person.ID != targetID {
+		t.Fatalf("repeated group candidates = %+v, want the twelve-photo group to be proposed", candidates)
+	}
+	candidate := candidates[0]
+	if candidate.SourcePhotoCount != 5 || candidate.TargetPhotoCount != 12 {
+		t.Fatalf("candidate photo counts = %d/%d, want 5/12", candidate.SourcePhotoCount, candidate.TargetPhotoCount)
+	}
+	if candidate.IndependentPhotoPairs < 2 || candidate.SourceEvidencePhotos < 2 || candidate.TargetEvidencePhotos < 2 {
+		t.Fatalf("candidate evidence = %+v, want reciprocal evidence across distinct photos", candidate)
+	}
+	if len(candidate.EvidenceFaces) == 0 {
+		t.Fatalf("candidate carries no evidence photos: %+v", candidate)
+	}
+	if len(candidate.TargetEvidenceFaces) == 0 {
+		t.Fatalf("candidate carries no target evidence photos: %+v", candidate)
+	}
+	if candidate.Risk != peopleMatchRiskLow {
+		t.Fatalf("candidate risk = %q, want a low-risk suggestion for matching faces: %+v", candidate.Risk, candidate)
+	}
+}
+
+func TestPeopleMatchSuggestionsSkipUnrelatedRepeatedGroups(t *testing.T) {
+	people := newPeopleMatchTestService(t)
+	firstID, firstFaces := peopleMatchTestFaces("first", []float64{0, 5, 10, 15, 20})
+	secondID, secondFaces := peopleMatchTestFaces("second", []float64{90, 95, 100, 105, 110})
+	peopleInstallMatchGroup(t, people, firstID, firstFaces)
+	peopleInstallMatchGroup(t, people, secondID, secondFaces)
+
+	page := people.MatchSuggestions(0, 20, false, nil)
+	for _, item := range page.Items {
+		for _, candidate := range item.Candidates {
+			if candidate.Person.ID == firstID && item.Source.ID == secondID {
+				t.Fatalf("unrelated groups received a match suggestion: %+v", item)
+			}
+		}
+	}
+}
+
+func TestPeopleMatchSuggestionsKeepSamePhotoGroupsApart(t *testing.T) {
+	people := newPeopleMatchTestService(t)
+	firstID, firstFaces := peopleMatchTestFaces("first", []float64{0, 5, 10, 15, 20})
+	secondID, secondFaces := peopleMatchTestFaces("second", []float64{0, 5, 10, 15, 20})
+	for index := range secondFaces {
+		secondFaces[index].ResourceID = firstFaces[index].ResourceID
+		secondFaces[index].Key = PersonFaceKey(secondFaces[index].ResourceID, 1)
+	}
+	peopleInstallMatchGroup(t, people, firstID, firstFaces)
+	peopleInstallMatchGroup(t, people, secondID, secondFaces)
+
+	for _, item := range people.MatchSuggestions(0, 20, false, nil).Items {
+		for _, candidate := range item.Candidates {
+			if candidate.Person.ID == firstID && item.Source.ID == secondID {
+				t.Fatalf("groups photographed together received a match suggestion: %+v", item)
+			}
+		}
+	}
 }

@@ -110,6 +110,25 @@ func (s CatalogSnapshot) IsPhotoImage(id string) bool {
 	return exists && album.ContentKind == string(models.ContentKindPhoto)
 }
 
+// PhotoCaptureYear 返回资源所属相册的拍摄年份。
+// 拍摄时间与相册 CaptureDates 同一口径：只从文件名推断。判断不出时返回 0，
+// 调用方把它当作「没有证据」，而不是「没有拍摄年份」。
+func (s CatalogSnapshot) PhotoCaptureYear(id string) int {
+	if !s.Ready() || s.state == nil || s.state.library == nil {
+		return 0
+	}
+	library := s.state.library
+	ref, exists := library.mediaByFile[id]
+	if !exists {
+		return 0
+	}
+	album, exists := library.nodes[ref.albumID]
+	if !exists || album.Date.IsZero() {
+		return 0
+	}
+	return album.Date.Year()
+}
+
 // ResolveLibraryFeedItems 按给定 ID 顺序解析当前快照里的媒体条目，并补上原相册定位。
 // 路径仅在服务端用于再次校验与计算版本，不会出现在返回 DTO 中。
 func ResolveLibraryFeedItems(snapshot CatalogSnapshot, ids []string, validatePath func(string) (string, error)) []FeedMediaItem {

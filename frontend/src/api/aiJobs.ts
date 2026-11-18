@@ -621,6 +621,39 @@ export interface PersonMatchCandidate {
   targetEvidencePhotos: number;
   humanConfirmationRequired: true;
   ambiguous: boolean;
+  /** 建议的可靠程度：low / medium / high。它不是身份概率。 */
+  risk: "low" | "medium" | "high";
+  /** 风险来自哪里，界面直接展示给用户看。 */
+  riskReasons?: string[];
+  sourcePhotoCount: number;
+  targetPhotoCount: number;
+  /** 两侧照片出现过的拍摄年份。 */
+  sourceYears?: number[];
+  targetYears?: number[];
+  /** 两侧是否有共同的拍摄年份。跨年龄的同一个人不会重叠。 */
+  yearOverlap: boolean;
+  /** 证据里脸部相对面积过小的比例。 */
+  smallFaceShare: number;
+  /** 组内代表脸相似度的离散度，偏高说明组里混了不同姿态。 */
+  similaritySpread: number;
+  /** 来源侧提供互证的真实照片与人脸，界面可以直接翻看。 */
+  evidenceFaces?: PersonMatchEvidence[];
+  /** 目标侧提供互证的真实照片与人脸。 */
+  targetEvidenceFaces?: PersonMatchEvidence[];
+}
+
+/**
+ * 一条互证证据：某张照片里的某张脸。
+ *
+ * 宽高是原图像素，界面据此把人脸框画在缩略图的正确位置。
+ */
+export interface PersonMatchEvidence {
+  resourceId: string;
+  faceIndex: number;
+  box: FaceBox;
+  width: number;
+  height: number;
+  year?: number;
 }
 
 export interface PersonMatchSuggestion {

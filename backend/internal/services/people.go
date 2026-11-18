@@ -227,6 +227,7 @@ type PeopleService struct {
 	activeModel        string
 	sourceIsPhoto      func(string) bool
 	sourceDimensions   func(string) MediaDimensions
+	sourceCaptureYear  func(string) int
 	faces              map[string]PersonFace
 	facesByResource    map[string][]string
 	clusters           map[string]*peopleCluster
@@ -240,6 +241,10 @@ type PeopleService struct {
 	comparisons        int
 	faceModelVersion   string
 	embeddingDimension int
+	// matchRelations 记录分组之间「可能重复」的近邻关系。
+	// 它是复核候选的来源，索引变化后需要重算一次。
+	matchRelations      map[string][]string
+	matchRelationsStale bool
 }
 
 func OpenPeopleService(statePath, derivedPath string) (*PeopleService, error) {
@@ -419,6 +424,8 @@ func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
 	s.clusters = make(map[string]*peopleCluster)
 	s.ann = newPeopleANNIndexForDimension(dimension)
 	s.comparisons = 0
+	s.matchRelations = nil
+	s.matchRelationsStale = true
 	if manual, exists := s.manualByModel[model]; exists {
 		s.manual = clonePeopleManualState(manual)
 	} else if err := s.loadProfileLocked(); err != nil {
@@ -454,6 +461,16 @@ func (s *PeopleService) SetSourceDimensions(lookup func(resourceID string) Media
 func (s *PeopleService) SetSourceIsPhoto(lookup func(resourceID string) bool) {
 	s.mu.Lock()
 	s.sourceIsPhoto = lookup
+	s.mu.Unlock()
+}
+
+// SetSourceCaptureYear provides the shooting year of a resource.
+// The review page uses it as supporting evidence: two groups shot in the same
+// years are more likely to be the same person, while a large gap only raises
+// the risk level and never blocks a cross-age merge.
+func (s *PeopleService) SetSourceCaptureYear(lookup func(resourceID string) int) {
+	s.mu.Lock()
+	s.sourceCaptureYear = lookup
 	s.mu.Unlock()
 }
 
@@ -803,6 +820,8 @@ func (s *PeopleService) publishRebuiltIndex(candidate *PeopleService) error {
 	s.manual = candidate.manual
 	s.manualByModel = candidate.manualByModel
 	s.comparisons = candidate.comparisons
+	s.matchRelations = candidate.matchRelations
+	s.matchRelationsStale = candidate.matchRelationsStale
 	s.faceModelVersion = candidate.faceModelVersion
 	s.embeddingDimension = candidate.embeddingDimension
 	s.activeModel = candidate.activeModel
@@ -1010,6 +1029,7 @@ func (s *PeopleService) remapCorrectionsLocked(previousIDs map[string]string) {
 }
 
 func (s *PeopleService) addFaceLocked(face PersonFace) {
+	s.matchRelationsStale = true
 	thresholds := s.groupingThresholdsLocked()
 	if s.ann == nil {
 		s.rebuildPeopleANNLocked()
@@ -1078,6 +1098,7 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 }
 
 func (s *PeopleService) addPinnedFaceLocked(face PersonFace, personID string) {
+	s.matchRelationsStale = true
 	cluster := s.clusters[personID]
 	newCluster := cluster == nil
 	if newCluster {
@@ -1440,6 +1461,7 @@ func peopleClusterComponentsHaveEvidence(leftIDs, rightIDs []string, evidence ma
 }
 
 func (s *PeopleService) mergePeopleClustersLocked(keeperID, sourceID string) {
+	s.matchRelationsStale = true
 	keeper, source := s.clusters[keeperID], s.clusters[sourceID]
 	if keeper == nil || source == nil || len(keeper.sum) != len(source.sum) {
 		return
@@ -1495,6 +1517,7 @@ func updatePeopleCentroid(cluster *peopleCluster) {
 }
 
 func (s *PeopleService) removeFaceLocked(key string) {
+	s.matchRelationsStale = true
 	face, exists := s.faces[key]
 	if !exists {
 		return
@@ -2644,6 +2667,8 @@ func (s *PeopleService) Clear() error {
 	s.cachedHashes = nil
 	s.cachedOrigins = nil
 	s.comparisons = 0
+	s.matchRelations = nil
+	s.matchRelationsStale = true
 	s.manual = emptyPeopleManualState()
 	s.manualByModel = make(map[string]peopleManualState)
 	for _, model := range []string{FaceModelQualityV2, FaceModelBuffaloM} {
