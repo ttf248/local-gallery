@@ -1,4 +1,5 @@
 import concurrent.futures
+import json
 import os
 import sys
 import tempfile
@@ -1313,6 +1314,63 @@ class WorkerTests(unittest.TestCase):
 
         self.assertEqual("utf-8", stdin.encoding)
         self.assertEqual("utf-8", stdout.encoding)
+
+    def test_worker_keeps_request_id_when_processing_fails(self):
+        """请求失败时 ID 必须原样带回。
+
+        Go 侧按 ID 配对，对不上就把 Worker 当成失联杀掉，整批结果一起丢掉。
+        一次请求失败不该拖垮整批。
+        """
+
+        class Stream:
+            encoding = "utf-8"
+
+            def __init__(self, lines=()):
+                self.lines = list(lines)
+
+            def reconfigure(self, *, encoding):
+                self.encoding = encoding
+
+            def __iter__(self):
+                return iter(self.lines)
+
+        stdin = Stream(['{"id":"req-1","action":"embed_images","paths":[]}'])
+        written = []
+
+        class Stdout(Stream):
+            def write(self, text):
+                written.append(text)
+
+            def flush(self):
+                pass
+
+        stdout = Stdout()
+        with patch.object(worker.sys, "stdin", stdin), patch.object(worker.sys, "stdout", stdout), patch.object(
+            worker, "process", side_effect=RuntimeError("boom")
+        ):
+            worker.main()
+
+        self.assertEqual(1, len(written))
+        payload = json.loads(written[0])
+        self.assertEqual("req-1", payload["id"])
+        self.assertEqual("worker_request_failed", payload["error"])
+
+    def test_nms_implementations_share_one_overlap_rule(self):
+        """三处检测流程必须用同一份 NMS 与同一套重叠口径。"""
+
+        def face(x, y, size, score):
+            row = [x, y, size, size] + [0.0] * 10 + [score]
+            return np.asarray(row, dtype=np.float32)
+
+        faces = [face(0, 0, 40, 0.9), face(4, 4, 40, 0.8), face(200, 200, 40, 0.7)]
+        shared = worker.nms(faces, threshold=0.3, limit=5000)
+        yunet = worker.yunet_nms(faces, threshold=0.3, limit=5000)
+        buffalo = worker.buffalo_m_nms(faces, threshold=0.3, limit=5000)
+        self.assertEqual(len(shared), len(yunet))
+        self.assertEqual(len(shared), len(buffalo))
+        self.assertEqual(2, len(shared))
+        for left, right in zip(shared, buffalo):
+            self.assertTrue(np.array_equal(left, right))
 
 
 if __name__ == "__main__":

@@ -9,12 +9,13 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
-import math
 import os
 import sys
 import threading
 import time
 from pathlib import Path
+
+import worker_imageio
 
 
 MODEL_FILE = "clip_cn_vit-b-16.pt"
@@ -38,7 +39,6 @@ OCR_GPU_LARGE_IMAGE_PIXEL_LIMIT = 4_000_000
 OCR_MAX_INPUT_PIXELS = 16_000_000
 FACE_MAX_INPUT_DIMENSION = 2048
 MODEL_IDLE_RELEASE_SECONDS = 300
-image_header_lock = threading.Lock()
 OCR_MODEL_DIRECTORY = "ocr"
 OCR_DETECTOR_FILE = "PP-OCRv6_det_small.onnx"
 OCR_DETECTOR_SHA256 = "090f04abcd9d9a7498bc4ebf677e4cb9bdce1fe4197ddb7e529f1ef44e1ff94f"
@@ -133,7 +133,8 @@ def release_idle_models(now=None) -> bool:
     preprocess = None
     model_cache.clear()
     rapid_ocr.clear()
-    face_models.clear()
+    with face_models_lock:
+        face_models.clear()
     device = "cpu"
     last_model_activity = None
     gc.collect()
@@ -551,12 +552,18 @@ def image_preprocess_worker_count(paths):
     return IMAGE_PREPROCESS_WORKERS
 
 
-def read_cv_image(path: str):
+def ensure_cv2():
+    """惰性导入 OpenCV 与 NumPy，并让 Worker 的全局状态跟着更新。"""
     global cv2, np
     if cv2 is None or np is None:
         import cv2 as cv2_module
         import numpy as numpy_module
         cv2, np = cv2_module, numpy_module
+    return cv2, np
+
+
+def read_cv_image(path: str):
+    cv2, np = ensure_cv2()
     try:
         encoded = np.fromfile(path, dtype=np.uint8)
         return cv2.imdecode(encoded, cv2.IMREAD_COLOR)
@@ -566,65 +573,10 @@ def read_cv_image(path: str):
 
 def read_face_image(path: str, max_dimension=FACE_MAX_INPUT_DIMENSION):
     """Decode large JPEG faces near the detector input size and return source scales."""
-    global cv2, np
-    if cv2 is None or np is None:
-        import cv2 as cv2_module
-        import numpy as numpy_module
-        cv2, np = cv2_module, numpy_module
-
-    max_dimension = max(1, int(max_dimension))
-    try:
-        from PIL import Image as PILImage
-
-        # Read dimensions without decoding the image. OpenCV performs the reduced JPEG decode.
-        with image_header_lock:
-            max_image_pixels = PILImage.MAX_IMAGE_PIXELS
-            try:
-                PILImage.MAX_IMAGE_PIXELS = None
-                with PILImage.open(path) as source:
-                    original_width, original_height = source.size
-                    image_format = source.format
-                    orientation = source.getexif().get(274, 1)
-            finally:
-                PILImage.MAX_IMAGE_PIXELS = max_image_pixels
-        if orientation in (5, 6, 7, 8):
-            original_width, original_height = original_height, original_width
-
-        encoded = np.fromfile(path, dtype=np.uint8)
-        decode_flag = cv2.IMREAD_COLOR
-        longest_side = max(original_width, original_height)
-        if image_format == "JPEG" and longest_side > max_dimension:
-            # Keep enough long-edge pixels for the final detector-sized resize.
-            for factor, flag in (
-                (8, cv2.IMREAD_REDUCED_COLOR_8),
-                (4, cv2.IMREAD_REDUCED_COLOR_4),
-                (2, cv2.IMREAD_REDUCED_COLOR_2),
-            ):
-                if math.ceil(longest_side / factor) >= max_dimension:
-                    decode_flag = flag
-                    break
-        image = cv2.imdecode(encoded, decode_flag)
-        if image is None and decode_flag != cv2.IMREAD_COLOR:
-            image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
-    except Exception:
-        image = read_cv_image(path)
-        if image is None:
-            return None, 1.0, 1.0
-        original_height, original_width = image.shape[:2]
-
-    if image is None:
-        return None, 1.0, 1.0
-
-    height, width = image.shape[:2]
-    if max(height, width) > max_dimension:
-        scale = max_dimension / float(max(height, width))
-        image = cv2.resize(
-            image,
-            (max(1, int(round(width * scale))), max(1, int(round(height * scale)))),
-            interpolation=cv2.INTER_AREA,
-        )
-        height, width = image.shape[:2]
-    return image, original_width / width, original_height / height
+    cv2, np = ensure_cv2()
+    return worker_imageio.decode_bounded(
+        path, cv2, np, max_dimension=max(1, int(max_dimension)), prefer="smallest"
+    )
 
 
 def face_gpu_worker_count(paths):
@@ -664,63 +616,8 @@ def buffalo_m_gpu_worker_count(paths):
 
 def read_ocr_image(path: str, max_pixels=OCR_MAX_INPUT_PIXELS):
     """Decode OCR input at a bounded size and return source-to-input scale."""
-    global cv2, np
-    if cv2 is None or np is None:
-        import cv2 as cv2_module
-        import numpy as numpy_module
-        cv2, np = cv2_module, numpy_module
-
-    try:
-        from PIL import Image as PILImage
-
-        # Pillow checks decompression limits while reading headers. Disable that check
-        # only during this metadata-only probe; OpenCV performs the bounded pixel decode.
-        with image_header_lock:
-            max_image_pixels = PILImage.MAX_IMAGE_PIXELS
-            try:
-                PILImage.MAX_IMAGE_PIXELS = None
-                with PILImage.open(path) as source:
-                    original_width, original_height = source.size
-                    image_format = source.format
-                    orientation = source.getexif().get(274, 1)
-            finally:
-                PILImage.MAX_IMAGE_PIXELS = max_image_pixels
-        if orientation in (5, 6, 7, 8):
-            original_width, original_height = original_height, original_width
-
-        encoded = np.fromfile(path, dtype=np.uint8)
-        decode_flag = cv2.IMREAD_COLOR
-        if original_width * original_height > max_pixels and image_format == "JPEG":
-            for factor, flag in (
-                (2, cv2.IMREAD_REDUCED_COLOR_2),
-                (4, cv2.IMREAD_REDUCED_COLOR_4),
-                (8, cv2.IMREAD_REDUCED_COLOR_8),
-            ):
-                decode_flag = flag
-                if original_width * original_height // (factor * factor) <= max_pixels:
-                    break
-        image = cv2.imdecode(encoded, decode_flag)
-        if image is None and decode_flag != cv2.IMREAD_COLOR:
-            image = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
-    except Exception:
-        image = read_cv_image(path)
-        if image is None:
-            return None, 1.0, 1.0
-        original_height, original_width = image.shape[:2]
-
-    if image is None:
-        return None, 1.0, 1.0
-
-    height, width = image.shape[:2]
-    if height * width > max_pixels:
-        scale = (max_pixels / float(height * width)) ** 0.5
-        image = cv2.resize(
-            image,
-            (max(1, int(width * scale)), max(1, int(height * scale))),
-            interpolation=cv2.INTER_AREA,
-        )
-        height, width = image.shape[:2]
-    return image, original_width / width, original_height / height
+    cv2, np = ensure_cv2()
+    return worker_imageio.decode_bounded(path, cv2, np, max_pixels=max_pixels, prefer="largest")
 
 
 def scale_ocr_box(box, scale_x, scale_y):
@@ -964,7 +861,14 @@ def tile_offsets(length, tile_size=YUNET_INPUT_SIZE, overlap=128):
     return offsets
 
 
-def yunet_nms(faces, threshold=0.3, limit=5000):
+def nms(faces, threshold=0.3, limit=5000):
+    """Greedy non-maximum suppression over the shared 15-value face layout.
+
+    每个检测是 [x, y, 宽, 高, 十个关键点坐标, 分数]。三处检测流程
+    （YuNet、YuNet 图块合并、Buffalo_m）原本各写了一份 NMS，其中一份
+    还用了「inclusive」的重叠口径 —— 同一批检测被两套口径各算一遍。
+    现在只有这一份，口径统一为标准 IoU。
+    """
     if not faces:
         return []
 
@@ -998,6 +902,10 @@ def yunet_nms(faces, threshold=0.3, limit=5000):
         order = candidates[overlaps <= threshold]
 
     return [faces[index] for index in kept]
+
+
+def yunet_nms(faces, threshold=0.3, limit=5000):
+    return nms(faces, threshold=threshold, limit=limit)
 
 
 def yunet_overview(image):
@@ -1187,61 +1095,19 @@ def buffalo_m_detection_input(image, detector, runtime, offset_x=0, offset_y=0):
     order = np.argsort(-scores, kind="stable")
     scores, boxes, landmarks = scores[order], boxes[order], landmarks[order]
 
-    x1, y1, x2, y2 = boxes.T
-    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
-    order = np.argsort(-scores, kind="stable")
-    kept = []
-    while order.size and len(kept) < 5000:
-        selected = int(order[0])
-        kept.append(selected)
-        remaining = order[1:]
-        if not remaining.size:
-            break
-        left = np.maximum(x1[selected], x1[remaining])
-        top = np.maximum(y1[selected], y1[remaining])
-        right = np.minimum(x2[selected], x2[remaining])
-        bottom = np.minimum(y2[selected], y2[remaining])
-        intersection = np.maximum(0.0, right - left + 1) * np.maximum(0.0, bottom - top + 1)
-        union = areas[selected] + areas[remaining] - intersection
-        overlap = np.divide(intersection, union, out=np.zeros_like(intersection), where=union > 0)
-        order = remaining[overlap <= 0.4]
-
     detections = []
-    for index in kept:
+    for index in range(len(boxes)):
         x, y, right, bottom = boxes[index]
         detections.append(np.concatenate((
             np.asarray([x, y, right - x, bottom - y], dtype=np.float32),
             landmarks[index].reshape(-1),
             np.asarray([scores[index]], dtype=np.float32),
         )))
-    return detections
+    return nms(detections, threshold=0.4, limit=5000)
 
 
 def buffalo_m_nms(faces, threshold=0.4, limit=512):
-    if not faces:
-        return []
-    boxes = np.asarray([face[:4] for face in faces], dtype=np.float64)
-    scores = np.asarray([face[14] for face in faces], dtype=np.float64)
-    x1, y1 = boxes[:, 0], boxes[:, 1]
-    x2, y2 = x1 + boxes[:, 2], y1 + boxes[:, 3]
-    areas = np.maximum(0.0, boxes[:, 2]) * np.maximum(0.0, boxes[:, 3])
-    order = np.argsort(-scores, kind="stable")
-    kept = []
-    while order.size and len(kept) < max(1, limit):
-        selected = int(order[0])
-        kept.append(selected)
-        candidates = order[1:]
-        if not candidates.size:
-            break
-        left = np.maximum(x1[selected], x1[candidates])
-        top = np.maximum(y1[selected], y1[candidates])
-        right = np.minimum(x2[selected], x2[candidates])
-        bottom = np.minimum(y2[selected], y2[candidates])
-        intersection = np.maximum(0.0, right - left) * np.maximum(0.0, bottom - top)
-        union = areas[selected] + areas[candidates] - intersection
-        overlaps = np.divide(intersection, union, out=np.zeros_like(intersection), where=union > 0)
-        order = candidates[overlaps <= threshold]
-    return [faces[index] for index in kept]
+    return nms(faces, threshold=threshold, limit=limit)
 
 
 def buffalo_m_needs_group_tiles(image, detections):
@@ -1581,8 +1447,9 @@ def _process_request(request: dict) -> dict:
     if device_mode not in ("auto", "cpu", "gpu"):
         return {"error": "invalid_device_mode"}
     if action == "ocr_images":
-        if not ocr_module_status()["ready"]:
-            return {"error": ocr_module_status().get("error", "ocr_dependencies_missing")}
+        ocr_status = ocr_module_status()
+        if not ocr_status["ready"]:
+            return {"error": ocr_status.get("error", "ocr_dependencies_missing")}
         if device_mode == "gpu" and not gpu_available(require_onnx=True):
             return {"error": "gpu_unavailable", "status": status()}
         return run_ocr_image_analysis(request.get("paths"), device_mode)
@@ -1612,8 +1479,6 @@ def _process_request(request: dict) -> dict:
         )
     if action not in ("embed_images", "embed_texts"):
         return {"error": "unknown_action"}
-    if runtime_error:
-        return {"error": runtime_error}
     if device_mode == "gpu" and not gpu_available():
         return {"error": "gpu_unavailable", "status": status()}
     try:
@@ -1684,14 +1549,25 @@ def main() -> None:
             raise SystemExit(1) from error
         return
     for line in sys.stdin:
+        request_id = ""
         try:
             request = json.loads(line)
             request_id = request.get("id", "")
             response = process(request)
             response["id"] = request_id
         except Exception:
-            response = {"id": "", "error": "worker_request_failed"}
-        sys.stdout.write(json.dumps(response, ensure_ascii=False, separators=(",", ":")) + "\n")
+            # 请求 ID 必须原样带回：Go 侧按 ID 配对，对不上就把 Worker
+            # 当成失联杀掉，整批结果一起丢掉。一次请求失败不该拖垮整批。
+            response = {"id": request_id, "error": "worker_request_failed"}
+        try:
+            encoded = json.dumps(response, ensure_ascii=False, separators=(",", ":"), default=str)
+        except Exception:
+            encoded = json.dumps(
+                {"id": request_id, "error": "worker_request_failed"},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            )
+        sys.stdout.write(encoded + "\n")
         sys.stdout.flush()
 
 
