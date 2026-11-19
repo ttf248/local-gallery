@@ -78,20 +78,15 @@ export function albumFilterCount(state: AlbumFilterState): number {
   return count;
 }
 
-/** 判断是不是空条件。 */
-export function isAlbumFilterEmpty(state: AlbumFilterState): boolean {
-  return albumFilterCount(state) === 0;
-}
-
 /** 判断是不是 "YYYY-MM"。 */
-export function isAlbumMonth(value: string): boolean {
+function isAlbumMonth(value: string): boolean {
   if (!/^\d{4}-\d{2}$/.test(value)) return false;
   const month = Number(value.slice(5, 7));
   return month >= 1 && month <= 12;
 }
 
 /** 把月份说成人读的样子。 */
-export function albumMonthLabel(month: string): string {
+function albumMonthLabel(month: string): string {
   if (!isAlbumMonth(month)) return month;
   return `${month.slice(0, 4)}年${Number(month.slice(5, 7))}月`;
 }
@@ -120,17 +115,6 @@ export function albumMonthInRange(
   if (state.from && month < state.from) return false;
   if (state.to && month > state.to) return false;
   return true;
-}
-
-/** 判断某一年是否落在当前时间范围内。 */
-export function albumYearInRange(
-  state: AlbumFilterState,
-  year: string,
-): boolean {
-  if (!state.from && !state.to) return true;
-  const start = state.from ? `${state.from.slice(0, 4)}-12` : "0000-00";
-  const end = state.to ? `${state.to.slice(0, 4)}-01` : "9999-99";
-  return `${year}-12` >= start && `${year}-01` <= end;
 }
 
 /** 一条生效条件的说法：给界面上的条件标签用。 */
@@ -210,9 +194,4 @@ export function albumTimeChipLabel(from?: string, to?: string): string {
   if (from) return `拍摄时间：${albumMonthLabel(from)} 起`;
   if (to) return `拍摄时间：至 ${albumMonthLabel(to)}`;
   return "拍摄时间";
-}
-
-/** 画面口径的说法。 */
-export function albumSceneLabel(scene: string): string {
-  return scene === "groupPhoto" ? "只看合照" : "只看相似照片";
 }

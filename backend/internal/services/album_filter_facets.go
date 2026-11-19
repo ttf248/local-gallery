@@ -1,9 +1,6 @@
 package services
 
-import (
-	"sort"
-	"strconv"
-)
+import "sort"
 
 // 本文件给出「这本相册里真实可用的筛选条件」。
 //
@@ -323,29 +320,4 @@ func (e *AlbumFilterEngine) similarityFacet(context *albumFilterContext) AlbumSi
 	facet.GroupCount = len(groups)
 	facet.Available = true
 	return facet
-}
-
-// albumFacetMonthLabel 是月份的中文说法，给界面用。
-func albumFacetMonthLabel(month string) string {
-	year, monthValue, ok := parseAlbumMonth(month)
-	if !ok {
-		return month
-	}
-	return strconv.Itoa(year) + "年" + strconv.Itoa(monthValue) + "月"
-}
-
-// parseAlbumMonth 解析 "YYYY-MM"。
-func parseAlbumMonth(value string) (int, int, bool) {
-	if len(value) != 7 || value[4] != '-' {
-		return 0, 0, false
-	}
-	year, err := strconv.Atoi(value[:4])
-	if err != nil {
-		return 0, 0, false
-	}
-	month, err := strconv.Atoi(value[5:])
-	if err != nil || month < 1 || month > 12 {
-		return 0, 0, false
-	}
-	return year, month, true
 }

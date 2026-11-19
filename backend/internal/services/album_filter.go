@@ -190,16 +190,10 @@ type albumFilterContext struct {
 	similarity map[string]SimilarityGroupRef
 	picked     map[string]bool
 
-	// groupMembers 是「组 → 组内落在本相册的成员」，按相册自然顺序。
-	groupMembers map[string][]string
-	// shown 是「组 → 折叠时留在墙上的那张」。
-	shown map[string]string
-	// expanded 是被展开的那一组：它的成员不再折叠。
-	expanded string
 	// placeScope 是地点筛选的范围（区划码集合）。
 	placeScope map[int]bool
 	// grouped 是折叠后藏起来的照片数，groupedGroups 是组数。
-	grouped      int
+	grouped       int
 	groupedGroups int
 }
 
@@ -281,12 +275,12 @@ func (e *AlbumFilterEngine) Page(
 			Total:      len(kept),
 			NextCursor: next,
 		},
-		Filtered:   !query.IsZero(),
-		AlbumTotal: len(items),
-		VideoTotal: context.videoCount,
-		PhotoTotal: photoTotal,
-		Unresolved: unresolved,
-		Grouped:    grouped,
+		Filtered:      !query.IsZero(),
+		AlbumTotal:    len(items),
+		VideoTotal:    context.videoCount,
+		PhotoTotal:    photoTotal,
+		Unresolved:    unresolved,
+		Grouped:       grouped,
 		GroupedGroups: groupedGroups,
 	}, nil
 }

@@ -268,7 +268,8 @@ export function albumPageExtras(page: unknown): {
 }
 
 /** 一本相册里真实可用的筛选条件。 */
-export interface AlbumFilterFacets {  total: number;
+export interface AlbumFilterFacets {
+  total: number;
   videos: number;
   time: {
     available: boolean;

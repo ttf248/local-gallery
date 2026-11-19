@@ -4,7 +4,6 @@ import {
   albumFilterChips,
   albumFilterParams,
   albumMonthInRange,
-  albumYearInRange,
   parseAlbumFilter,
   type AlbumFilterState,
 } from "./albumFilter";
@@ -68,13 +67,11 @@ describe("照片墙筛选条件", () => {
     ).toBe(4);
   });
 
-  it("时间范围能圈出月份与年份", () => {
+  it("时间范围能圈出月份", () => {
     const state: AlbumFilterState = { from: "2024-03", to: "2024-09" };
     expect(albumMonthInRange(state, "2024-05")).toBe(true);
     expect(albumMonthInRange(state, "2024-02")).toBe(false);
     expect(albumMonthInRange(state, "2024-11")).toBe(false);
-    expect(albumYearInRange(state, "2024")).toBe(true);
-    expect(albumYearInRange(state, "2023")).toBe(false);
   });
 
   it("条件逐条列出来，每条都能单独去掉", () => {
