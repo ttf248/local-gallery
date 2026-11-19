@@ -117,6 +117,9 @@ Local Gallery 是单用户、本机优先的私人影像空间。它把本机的
 | `/comic/unread` | 未读列表 | |
 | `/comic/me/:tab` | 我的 | `favorites` `recents` `reading` |
 
+带页签的页面缺省落到第一个页签（`/photo/me` → `/photo/me/picks`，
+`/comic/me` → `/comic/me/favorites`），重定向是一次普通导航。
+
 ### 3.2 旧路径（重定向到新路径，不失效）
 
 | 旧路径 | 新路径 |
