@@ -758,7 +758,9 @@ test("迟到的图片进度不会覆盖随后标记的已读或重置未读", as
     await route.continue();
   });
   try {
-    await page.goto("/comic");
+    // 清单在书架上：漫画首页只讲续读与未读。
+    await page.goto("/comic/library");
+    await page.getByRole("combobox").fill(album.name);
     const card = page.locator(
       `main [data-virtuoso-scroller] a[href="/comic/albums/${album.id}"]`,
     );
@@ -769,7 +771,7 @@ test("迟到的图片进度不会覆盖随后标记的已读或重置未读", as
     // 超过去抖窗口，制造一个等待发送的较新进度。
     await page.waitForTimeout(700);
     await page.keyboard.press("Escape");
-    await expect(page).toHaveURL(/\/comic$/);
+    await expect(page).toHaveURL(/\/comic\/library/);
     await card.click({ button: "right" });
     await page
       .getByRole("menuitem", { name: "标记为已读完", exact: true })

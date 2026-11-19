@@ -26,24 +26,25 @@ async function analyzeMetadata(request: APIRequestContext, albumId: string) {
     .toBe("completed");
 }
 
-test("首页给出智能相册入口，通向专页", async ({ page }) => {
+test("首页的主题入口通向探索，探索里的主题通向专页", async ({ page }) => {
   await scannedNodes(page.request, "photo");
 
   await page.goto("/");
-  // 照片侧首页那一节是智能相册的预览，标题与「查看全部」都通向专页。
-  const smartHeading = page.getByRole("heading", {
-    name: "智能相册",
+  // 照片侧首页那一节是主题的预览：它只给一屏样张，把人引向探索。
+  const themeHeading = page.getByRole("heading", {
+    name: "主题",
     exact: true,
   });
-  await expect(smartHeading).toBeVisible();
-  await expect(smartHeading.getByRole("link")).toHaveAttribute(
-    "href",
-    "/photo/smart-albums",
-  );
-  await expect(page.getByRole("link", { name: /查看全部/ })).toHaveAttribute(
-    "href",
-    "/photo/smart-albums",
-  );
+  await expect(themeHeading).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "去探索", exact: true }),
+  ).toHaveAttribute("href", "/photo/explore");
+
+  // 探索的主题一节再通向专页：主题墙的完整形态在那儿。
+  await page.goto("/photo/explore");
+  await expect(
+    page.getByRole("link", { name: "全部主题", exact: true }),
+  ).toHaveAttribute("href", "/photo/smart-albums");
 });
 
 test("专页只展示精选推荐：旧分类深链被规范化，页面上没有分类页签", async ({

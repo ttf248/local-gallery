@@ -41,8 +41,9 @@ test("扫描并打开示例相册", async ({ page }) => {
     await scanButton.click();
   }
 
-  // 扫描结果进了界面：年份索引里出现 2024。照片侧首页不再列相册，
-  // 年份索引是它的一条主索引。
+  // 扫描结果进了界面：年份索引里出现 2024。年份索引住在探索页
+  // —— 首页是发现页，不摆年份表。
+  await page.goto("/photo/explore");
   await expect(
     page.getByTestId("year-timeline").getByRole("button", { name: /^2024/ }),
   ).toBeVisible({
@@ -1168,7 +1169,7 @@ for (const failFirst of [false, true]) {
       await page.clock.runFor(700);
       expect(writes).toHaveLength(1);
       await expect(input).toHaveValue("/queue/latest");
-      await page.getByRole("link", { name: "照片库", exact: true }).click();
+      await page.getByRole("link", { name: "首页", exact: true }).click();
       await page.getByRole("link", { name: "设置", exact: true }).click();
       await page.getByRole("tab", { name: "服务端" }).click();
       await expect(input).toHaveValue("/queue/latest");
@@ -1253,7 +1254,7 @@ test("配置保存失败离开后仍保留输入，按 Enter 显式重试且不�
     await input.fill("/retry/photos");
     await page.clock.runFor(500);
     await expect.poll(() => writes.length).toBe(1);
-    await page.getByRole("link", { name: "照片库", exact: true }).click();
+    await page.getByRole("link", { name: "首页", exact: true }).click();
     const failed = page.waitForResponse(
       (response) =>
         response.request().method() === "PUT" &&
