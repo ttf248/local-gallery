@@ -384,6 +384,9 @@ func main() {
 		log.Fatalf("初始化相似照片整理服务失败: %v", err)
 	}
 	defer similarityService.Close()
+	// 原始照片墙的智能筛选：条件落在整本相册的数据上，
+	// 派生信号全部取自现有的分析记录、人物索引、精选与相似分组。
+	albumFilters := services.NewAlbumFilterEngine(resourceCatalog, aiJobs, peopleService, picks, similarityService)
 	faceVersion, _ := services.FaceAnalyzerVersionForModel(aiJobs.List().Settings.FaceModel)
 	if err := peopleService.SetFaceAnalyzerVersion(faceVersion); err != nil {
 		log.Fatalf("初始化人物索引模型失败: %v", err)
@@ -622,7 +625,8 @@ func main() {
 	api.Put("/albums/:id/smart-groups/:groupId", resourceParam, handlers.SmartAlbumOverrideHandler(smartAlbums))
 	api.Get("/albums/:id/smart-groups/:groupId/media", resourceParam, handlers.SmartAlbumGroupMediaHandler(smartAlbums, resourceCatalog, mediaDimensions, picks))
 	api.Get("/albums/random", handlers.LibraryRandomAlbumHandler(resourceCatalog, activities, unreadIndex))
-	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(resourceCatalog, mediaDimensions, picks))
+	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(resourceCatalog, mediaDimensions, picks, albumFilters))
+	api.Get("/albums/:id/filters", handlers.AlbumFiltersHandler(resourceCatalog, albumFilters))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。
 	// file 必须是 path 子路径 + 真实存在的文件；越权请求会被 400 拒绝。
 	api.Put("/albums/:id/cover", resourceParam, handlers.AlbumSetCoverHandler(scanCache, coverOverrides, resourceCatalog))

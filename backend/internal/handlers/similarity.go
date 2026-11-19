@@ -3,6 +3,7 @@ package handlers
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -33,16 +34,20 @@ func SimilarityStatusHandler(service *services.SimilarityService) fiber.Handler 
 // SimilarityGroupsHandler GET /api/similarity/groups
 //
 // Query: kind=exact|near|burst、folder=…、status=pending|reviewed|ignored、
-// limit、offset。
+// resourceId=…、limit、offset。
+//
+// resourceId 给出时只返回含有这张照片的分组：照片墙上展开一组时，
+// 用它把那一组的成员名单读回来。
 func SimilarityGroupsHandler(service *services.SimilarityService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		if service == nil {
 			return httputil.Internal(c, "similarity_unavailable", "the similarity service is unavailable")
 		}
 		filter := services.SimilarityGroupFilter{
-			Kind:   services.NormalizeSimilarityKind(c.Query("kind")),
-			Folder: c.Query("folder"),
-			Status: services.NormalizeSimilarityStatus(c.Query("status")),
+			Kind:       services.NormalizeSimilarityKind(c.Query("kind")),
+			Folder:     c.Query("folder"),
+			Status:     services.NormalizeSimilarityStatus(c.Query("status")),
+			ResourceID: strings.TrimSpace(c.Query("resourceId")),
 		}
 		if raw := c.Query("limit"); raw != "" {
 			limit, err := strconv.Atoi(raw)

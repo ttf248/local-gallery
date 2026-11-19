@@ -189,6 +189,9 @@ type SimilarityGroupFilter struct {
 	Folder string
 	// Status 是状态筛选，空串表示全部。
 	Status string
+	// ResourceID 是资源筛选：只返回含有这张照片的分组。
+	// 照片墙上展开一组时要读回成员名单，用的就是它。
+	ResourceID string
 	// Limit 是单页上限。
 	Limit int
 	// Offset 是跳过的分组数。
@@ -952,6 +955,9 @@ func (s *SimilarityService) Groups(filter SimilarityGroupFilter) SimilarityGroup
 		if filter.Folder != "" && !similarityGroupInFolder(group, filter.Folder) {
 			continue
 		}
+		if filter.ResourceID != "" && !similarityGroupHasResource(group, filter.ResourceID) {
+			continue
+		}
 		matched = append(matched, group)
 	}
 	total := len(matched)
@@ -986,6 +992,16 @@ func (s *SimilarityService) Groups(filter SimilarityGroupFilter) SimilarityGroup
 func similarityGroupInFolder(group SimilarityGroup, folder string) bool {
 	for _, member := range group.Members {
 		if member.Folder == folder {
+			return true
+		}
+	}
+	return false
+}
+
+// similarityGroupHasResource 判断分组里有没有这张照片。
+func similarityGroupHasResource(group SimilarityGroup, resourceID string) bool {
+	for _, member := range group.Members {
+		if member.ResourceID == resourceID {
 			return true
 		}
 	}

@@ -174,7 +174,7 @@ func TestLibraryChildrenUsesRevisionBoundCursorAndNaturalOrder(t *testing.T) {
 
 func TestAlbumMediaPageMergesImageAndVideoNaturalOrder(t *testing.T) {
 	fixture := newLibraryPageFixture(t)
-	first, err := PageAlbumMedia(fixture.catalog.Acquire(), fixture.albumID, "", 3)
+	first, err := NewAlbumFilterEngine(fixture.catalog, nil, nil, nil, nil).Page(fixture.catalog.Acquire(), fixture.albumID, AlbumFilterQuery{}, "", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestAlbumMediaPageMergesImageAndVideoNaturalOrder(t *testing.T) {
 			t.Fatalf("media[%d]=%+v, want name=%q kind=%q", i, first.Items[i], wantNames[i], wantKinds[i])
 		}
 	}
-	second, err := PageAlbumMedia(fixture.catalog.Acquire(), fixture.albumID, first.NextCursor, 3)
+	second, err := NewAlbumFilterEngine(fixture.catalog, nil, nil, nil, nil).Page(fixture.catalog.Acquire(), fixture.albumID, AlbumFilterQuery{}, first.NextCursor, 3)
 	if err != nil || len(second.Items) != 1 || second.Items[0].Name != "page10.jpg" || second.Items[0].Index != 3 {
 		t.Fatalf("second media page=(%+v, %v)", second, err)
 	}
@@ -575,7 +575,7 @@ func TestLibraryPageRejectsCursorFromAnotherScope(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := PageAlbumMedia(fixture.catalog.Acquire(), fixture.albumID, children.NextCursor, 1); !errors.Is(err, ErrInvalidPageCursor) {
+	if _, err := NewAlbumFilterEngine(fixture.catalog, nil, nil, nil, nil).Page(fixture.catalog.Acquire(), fixture.albumID, AlbumFilterQuery{}, children.NextCursor, 1); !errors.Is(err, ErrInvalidPageCursor) {
 		t.Fatalf("cross-scope cursor error=%v, want ErrInvalidPageCursor", err)
 	}
 }

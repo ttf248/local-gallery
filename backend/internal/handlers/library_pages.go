@@ -53,34 +53,6 @@ func LibraryChildrenPageHandler(catalog *services.ResourceCatalog) fiber.Handler
 	}
 }
 
-// AlbumMediaPageHandler 按统一自然顺序分页返回图片和视频。
-// 推荐路由：GET /api/albums/:id/media。
-//
-// 返回项带原始像素尺寸：照片墙要按真实宽高比排布，服务端读一次图片头
-// 并缓存，比让浏览器逐张探测更省事也更稳。视频没有像素尺寸，保持 0。
-func AlbumMediaPageHandler(catalog *services.ResourceCatalog, dimensions *services.MediaDimensionService, picks *store.PickStore) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		limit, ok := parseLibraryPageLimit(c)
-		if !ok {
-			return nil
-		}
-		albumID := strings.TrimSpace(c.Params("id"))
-		if albumID == "" {
-			return httputil.BadRequest(c, "missing_resource_id", "resource id is required")
-		}
-		snapshot := requestCatalogSnapshot(c, catalog)
-		page, err := services.PageAlbumMedia(snapshot, albumID, c.Query("cursor"), limit)
-		if err != nil {
-			return writeLibraryPageError(c, err, snapshot.Revision())
-		}
-		enrichMediaDimensions(snapshot, page.Items, dimensions)
-		// 精选是照片级状态，照片墙的每一格都要知道自己是不是精选。
-		markPicks(picks, page.Items)
-		setLibraryRevisionETag(c, snapshot.Revision())
-		return c.JSON(fiber.Map{"ok": true, "page": page})
-	}
-}
-
 // enrichMediaDimensions 补齐一页媒体的像素尺寸。
 //
 // 尺寸是可选信息：探测失败时保持 0，前端会退回默认宽高比，不影响浏览。

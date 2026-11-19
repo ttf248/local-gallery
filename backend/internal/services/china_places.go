@@ -537,6 +537,21 @@ func NewChinaPlaceFilter(adcode int) (*ChinaPlaceFilter, error) {
 	return &ChinaPlaceFilter{adcodes: codes}, nil
 }
 
+// Adcodes 返回筛选范围覆盖的区划码集合。
+//
+// 照片墙上按地点筛选时，每张照片已经归到了自己的区划；直接比对区划码
+// 比对坐标更省 —— 一张照片不必为了落在筛选范围内再算一次点在多边形。
+func (f *ChinaPlaceFilter) Adcodes() map[int]bool {
+	if f == nil {
+		return map[int]bool{}
+	}
+	result := make(map[int]bool, len(f.adcodes))
+	for adcode := range f.adcodes {
+		result[adcode] = true
+	}
+	return result
+}
+
 // Contains 判断一个坐标是否落在筛选范围内。
 //
 // 坐标按记录里的 datum 转到边界使用的 GCJ-02 再判定：边界是 GCJ-02，

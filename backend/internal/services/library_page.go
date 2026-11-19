@@ -172,6 +172,9 @@ type LibraryMediaItem struct {
 	// Picked 标记这张照片在精选里。它是用户数据而不是目录数据，
 	// 因此由请求期按当前精选集合标记，不进索引。
 	Picked bool `json:"picked,omitempty"`
+	// Similarity 标记这张照片所属的相似组。折叠相似组时，墙上只留
+	// 每组的代表照片，其余成员收在展开区里。没有分组时为空。
+	Similarity *AlbumSimilarityRef `json:"similarity,omitempty"`
 	// Version 是媒体文件的内容版本号（mtime + size + 渲染算法版本）。
 	// 前端把它拼进渲染图 URL，服务端据此回 immutable。
 	Version string `json:"version,omitempty"`
@@ -284,6 +287,26 @@ func (s CatalogSnapshot) PhotoAlbumSummaries() []LibraryNodeSummary {
 		return items[i].ID < items[j].ID
 	})
 	return items
+}
+
+// AlbumMediaItems returns the full media list of one album in natural order.
+//
+// The photo wall needs the whole album, not just the pages a browser has
+// loaded: filters apply to the album's data, and the total shown next to the
+// wall has to be the same number the server filtered.
+func (s CatalogSnapshot) AlbumMediaItems(albumID string) ([]LibraryMediaItem, bool) {
+	if s.state == nil || s.state.library == nil {
+		return nil, false
+	}
+	ref, exists := s.state.byID[albumID]
+	if !exists || ref.Kind != ResourceAlbum {
+		return nil, false
+	}
+	items, exists := s.state.library.media[albumID]
+	if !exists {
+		return nil, false
+	}
+	return items, true
 }
 
 // AlbumImageIDs returns only the image resources that belong directly to one
@@ -701,46 +724,6 @@ func PageLibraryChildren(snapshot CatalogSnapshot, parentID string, kind Library
 	}
 	return LibraryPage[LibraryNodeSummary]{
 		Revision: snapshot.Revision(), Items: cloneNodePage(items, start, end), Total: total, NextCursor: next,
-	}, nil
-}
-
-func PageAlbumMedia(snapshot CatalogSnapshot, albumID, cursor string, limit int) (LibraryPage[LibraryMediaItem], error) {
-	scope := "album-media:" + albumID
-	offset, err := pageOffset(snapshot, cursor, scope)
-	if err != nil {
-		return LibraryPage[LibraryMediaItem]{}, err
-	}
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
-		return LibraryPage[LibraryMediaItem]{}, ErrLibraryNotReady
-	}
-	ref, exists := snapshot.state.byID[albumID]
-	if !exists {
-		return LibraryPage[LibraryMediaItem]{}, ErrLibraryResourceNotFound
-	}
-	if ref.Kind != ResourceAlbum {
-		return LibraryPage[LibraryMediaItem]{}, ErrLibraryResourceWrongKind
-	}
-	media, exists := snapshot.state.library.media[albumID]
-	if !exists {
-		return LibraryPage[LibraryMediaItem]{}, ErrLibraryResourceNotFound
-	}
-	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(media), limit)
-	if err != nil {
-		return LibraryPage[LibraryMediaItem]{}, err
-	}
-	items := clonePage(media, start, end)
-	// 版本号按需 stat：只为这一页的文件付代价，不在索引构建阶段给
-	// 全库每个文件都 stat 一次。
-	for i := range items {
-		if items[i].sourcePath == "" {
-			continue
-		}
-		if version, verr := MediaVersion(items[i].sourcePath); verr == nil {
-			items[i].Version = version
-		}
-	}
-	return LibraryPage[LibraryMediaItem]{
-		Revision: snapshot.Revision(), Items: items, Total: len(media), NextCursor: next,
 	}, nil
 }
 

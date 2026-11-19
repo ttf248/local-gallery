@@ -155,7 +155,8 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatalf("create media dimension service: %v", err)
 	}
-	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog, dimensions, pickStore))
+	api.Get("/albums/:id/media", handlers.AlbumMediaPageHandler(catalog, dimensions, pickStore, services.NewAlbumFilterEngine(catalog, nil, nil, pickStore, nil)))
+	api.Get("/albums/:id/filters", handlers.AlbumFiltersHandler(catalog, services.NewAlbumFilterEngine(catalog, nil, nil, pickStore, nil)))
 	api.Get("/picks", handlers.PicksListHandler(pickStore))
 	api.Post("/picks/batch", handlers.PicksBatchHandler(pickStore))
 	api.Get("/picks/media", handlers.PicksMediaPageHandler(catalog, pickStore, dimensions))

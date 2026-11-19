@@ -31,6 +31,9 @@ const (
 	PeopleGroupPhotoMinimumFaces              = 8
 	PeopleGroupPhotoRelativeFaceSizeThreshold = 0.04
 	PeopleCommonMinimumPhotoCount             = 3
+	// PeopleGroupPhotoFaceThreshold 是判合照的脸数门槛：超过它就算合照，
+	// 不足八张不算，中间那一档看人脸相对尺寸。
+	PeopleGroupPhotoFaceThreshold = 20
 )
 
 // PeopleGroupingCentroidThreshold is the quality-v2 starting value retained

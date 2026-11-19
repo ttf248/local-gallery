@@ -44,7 +44,7 @@ func newPicksHandlerFixture(t *testing.T) (*fiber.App, *services.ResourceCatalog
 	app.Get("/api/picks", PicksListHandler(picks))
 	app.Post("/api/picks/batch", PicksBatchHandler(picks))
 	app.Get("/api/picks/media", PicksMediaPageHandler(catalog, picks, dimensions))
-	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog, dimensions, picks))
+	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog, dimensions, picks, services.NewAlbumFilterEngine(catalog, nil, nil, picks, nil)))
 
 	return app, catalog, picks, catalog.ExternalID(albumPath, services.ResourceAlbum), catalog.ExternalID(first, services.ResourceFile)
 }
