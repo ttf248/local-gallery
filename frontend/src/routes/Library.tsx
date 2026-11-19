@@ -298,7 +298,7 @@ function Breadcrumb({
           <span className="library-crumbs__current">{rootName}</span>
         </>
       ) : null}
-      {chain.map((item) => (
+      {chain.slice(0, -1).map((item) => (
         <span key={item.id} className="contents">
           <span className="library-crumbs__sep" aria-hidden>
             ›

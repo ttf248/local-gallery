@@ -143,3 +143,66 @@ test("同属性的多个媒体根可独立选择并限定右侧列表", async ({
     page.locator(".library-content").getByText("sample-album", { exact: true }),
   ).toHaveCount(0);
 });
+
+test("深层目录可直达与刷新，面包屑只显示一次当前节点", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+  const manifestResponse = await request.get("/api/library/manifest");
+  const manifest = (await manifestResponse.json()) as {
+    manifest: {
+      roots: Array<{ id: string; name: string; contentKind?: string }>;
+    };
+  };
+  const root = manifest.manifest.roots.find(
+    (item) => item.contentKind === "photo",
+  )!;
+  const children = async (id: string) => {
+    const response = await request.get(
+      `/api/library/${id}/children?kind=photo&limit=200`,
+    );
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()) as {
+      page: {
+        items: Array<{ id: string; name: string; kind: string }>;
+      };
+    };
+  };
+  const top = await children(root.id);
+  const hierarchy = top.page.items.find(
+    (item) => item.name === "zz-library-hierarchy",
+  );
+  expect(hierarchy?.kind).toBe("collection");
+  const nested = await children(hierarchy!.id);
+  const outer = nested.page.items.find((item) => item.name === "outer");
+  expect(outer?.kind).toBe("collection");
+
+  await page.goto(`/photo/library?node=${encodeURIComponent(outer!.id)}`);
+  const breadcrumbs = page.getByRole("navigation", { name: "目录位置" });
+  await expect(breadcrumbs).toBeVisible();
+  await expect(
+    breadcrumbs.getByRole("link", { name: "图库", exact: true }),
+  ).toBeVisible();
+  await expect(breadcrumbs.getByText(root.name, { exact: true })).toHaveCount(1);
+  await expect(
+    breadcrumbs.getByRole("link", { name: hierarchy!.name, exact: true }),
+  ).toBeVisible();
+  await expect(breadcrumbs.getByText(outer!.name, { exact: true })).toHaveCount(
+    1,
+  );
+  await expect(
+    page.locator(".library-content").getByTestId("album-card"),
+  ).toContainText("inner");
+
+  await page.reload();
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]node=${encodeURIComponent(outer!.id)}(?:&|$)`),
+  );
+  await expect(breadcrumbs.getByText(outer!.name, { exact: true })).toHaveCount(
+    1,
+  );
+  await expect(
+    page.locator(".library-content").getByTestId("album-card"),
+  ).toContainText("inner");
+});
