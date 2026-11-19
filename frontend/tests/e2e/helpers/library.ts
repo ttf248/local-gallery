@@ -68,7 +68,7 @@ export async function serverConfig(request: APIRequestContext) {
 }
 
 // 临时服务启动时带一个不存在的目录，用来验证「离线根不阻止启动」；
-// 其余用例先把它摘掉，只留照片根与漫画根这两个真实目录。
+// 其余用例先摘掉离线根，保留所有当前存在的真实媒体根。
 export async function liveRoots(request: APIRequestContext) {
   const config = await serverConfig(request);
   const live = config.mediaRoots.filter((root) => existsSync(root.path));

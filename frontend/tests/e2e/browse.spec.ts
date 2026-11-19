@@ -1210,12 +1210,17 @@ test("列表页的筛选写进地址，刷新不丢，后退退得回上一个�
     "按最近看",
   );
 
-  // 工具条的关键词也写进地址。
+  // 工具条先保留本地草稿，回车才进入名称搜索结果页；列表筛选地址不变。
   const search = page.getByRole("combobox");
   await search.fill("sample");
-  await expect(page).toHaveURL(/q=sample/);
+  await expect(page).toHaveURL(/\/comic\/library\?sort=viewed$/);
+  await search.press("Enter");
+  await expect(page).toHaveURL("/comic/search?q=sample");
   await page.reload();
   await expect(page.getByRole("combobox")).toHaveValue("sample");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/comic\/library\?sort=viewed$/);
+  await expect(page.getByRole("combobox")).toHaveValue("");
 
   // 换排序是一次普通导航：后退键退得回去。
   await page.getByRole("button", { name: "排序" }).click();
@@ -1799,7 +1804,7 @@ for (const mode of ["grid", "list"] as const) {
       [album, "相册"],
       [collection, "作品"],
     ] as const) {
-      await page.getByRole("combobox").fill(node.name);
+      await page.goto(`/comic/library?q=${encodeURIComponent(node.name)}`);
       await page
         .getByRole("button", {
           name: mode === "grid" ? "网格视图" : "列表视图",

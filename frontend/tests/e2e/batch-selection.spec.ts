@@ -22,7 +22,7 @@ async function restore(
   expect(response.ok()).toBeTruthy();
 }
 
-test("照片多选支持键盘、排序保留和失败重试，筛选清空", async ({
+test("照片多选支持键盘、排序保留和失败重试，搜索草稿不影响选择", async ({
   page,
   request,
 }) => {
@@ -97,13 +97,14 @@ test("照片多选支持键盘、排序保留和失败重试，筛选清空", as
         });
       }
     }
-    await page.getByRole("combobox").fill("zz-没有这样的相册");
-    await expect(
-      page.getByRole("button", { name: "选择", exact: true }),
-    ).toBeVisible();
+    const searchDraft = page.getByRole("combobox");
+    await searchDraft.fill("zz-没有这样的相册");
+    await expect(searchDraft).toHaveValue("zz-没有这样的相册");
+    await expect(page).toHaveURL(/\/photo\/tags\//);
+    await expect(card).toHaveAttribute("aria-checked", "true");
     await expect(
       page.getByRole("button", { name: "批量收藏", exact: true }),
-    ).toHaveCount(0);
+    ).toBeVisible();
   } finally {
     await restore(request, backup, ["favorites"]);
   }

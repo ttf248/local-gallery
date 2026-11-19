@@ -24,7 +24,8 @@ test("扫描并打开示例相册", async ({ page }) => {
     mediaRoots: MediaRootConfig[];
   };
   const live = config.mediaRoots.filter((root) => existsSync(root.path));
-  expect(live).toHaveLength(2);
+  expect(live.some((root) => root.kind === "photo")).toBe(true);
+  expect(live.some((root) => root.kind === "comic")).toBe(true);
   const repaired = await page.request.put("/api/config", {
     data: { mediaRoots: live },
   });
