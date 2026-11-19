@@ -24,7 +24,7 @@ import "../styles/library.css";
 
 /** 图库页自己的地址参数。 */
 const LIBRARY_PARAM = {
-  /** 当前所在的集合 id（空 = 顶层）。 */
+  /** 当前所在的媒体根或集合 id（空 = 所有根）。 */
   node: "node",
 } as const;
 
@@ -64,6 +64,7 @@ export default function Library() {
   const list = useLibraryList(query, Boolean(manifest));
   const nodes = useLibraryNodes(nodeId ? [nodeId] : []);
   const current = nodes.data?.items[0];
+  const currentRoot = manifest?.roots.find((root) => root.id === nodeId);
 
   // 集合卡在图库里指向它的下一层，而不是跳到集合页：图库是结构页，
   // 在它里面换目录比跳出去再跳回来短。相册卡仍然指向照片墙。
@@ -98,9 +99,7 @@ export default function Library() {
   // 再写一遍「图库」就成了同一个词出现在屏幕上两次。
   const title = current
     ? current.displayName || current.name
-    : mode === "comic"
-      ? "全部作品"
-      : "全部相册";
+    : currentRoot?.name || (mode === "comic" ? "全部作品" : "全部相册");
   const total = list.summary?.total ?? 0;
   const hasContent = (manifest?.statistics.albumCount ?? 0) > 0;
   const hasActiveFilters =
@@ -120,6 +119,7 @@ export default function Library() {
               <Breadcrumb
                 mode={mode}
                 nodeId={nodeId}
+                rootName={currentRoot?.name}
                 currentName={current ? current.displayName || current.name : ""}
                 onSelect={selectNode}
               />
@@ -261,18 +261,20 @@ export default function Library() {
 function Breadcrumb({
   mode,
   nodeId,
+  rootName: selectedRootName,
   currentName,
   onSelect,
 }: {
   mode: "photo" | "comic";
   nodeId: string;
+  rootName?: string;
   currentName: string;
   onSelect: (id: string) => void;
 }) {
   // 祖先链：节点摘要带 parentId，拿到上级才知道再上一级是谁。
   const ancestors = useLibraryAncestors(nodeId);
   const chain = ancestors.data ?? [];
-  const rootName = chain[0]?.sourceName ?? "";
+  const rootName = selectedRootName || chain[0]?.sourceName || "";
 
   return (
     <nav aria-label="目录位置" className="library-crumbs">

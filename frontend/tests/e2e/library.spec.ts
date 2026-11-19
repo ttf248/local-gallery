@@ -102,3 +102,44 @@ test("筛选结果为零时仍可调整条件并一键清除", async ({ page, re
     filterBar.getByRole("button", { name: "全部", pressed: true }),
   ).toBeVisible();
 });
+
+test("同属性的多个媒体根可独立选择并限定右侧列表", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+  const manifestResponse = await request.get("/api/library/manifest");
+  const manifest = (await manifestResponse.json()) as {
+    manifest: {
+      roots: Array<{ id: string; name: string; contentKind?: string }>;
+    };
+  };
+  const roots = manifest.manifest.roots.filter(
+    (root) => root.contentKind === "photo",
+  );
+  expect(roots).toHaveLength(2);
+
+  await page.goto("/photo/library");
+  const tree = page.getByRole("navigation", { name: "目录" });
+  await expect(tree.locator(".library-tree__row.is-active")).toHaveCount(0);
+
+  const selectedRoot = roots[1]!;
+  await tree
+    .getByRole("button", { name: selectedRoot.name, exact: true })
+    .click();
+
+  await expect(page).toHaveURL(
+    new RegExp(`[?&]node=${encodeURIComponent(selectedRoot.id)}(?:&|$)`),
+  );
+  await expect(tree.locator(".library-tree__row.is-active")).toHaveCount(1);
+  await expect(
+    tree.getByRole("button", { name: selectedRoot.name, exact: true }),
+  ).toHaveAttribute("aria-current", "location");
+  await expect(
+    page.getByRole("heading", { name: selectedRoot.name }),
+  ).toBeVisible();
+  await expect(page.getByTestId("album-card")).toHaveCount(1);
+  await expect(page.getByTestId("album-card").first()).toContainText(
+    "zz-extra-root-only",
+  );
+  await expect(
+    page.locator(".library-content").getByText("sample-album", { exact: true }),
+  ).toHaveCount(0);
+});

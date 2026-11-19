@@ -59,10 +59,13 @@ async function writeFixture(root, relative, data = png) {
 async function makeFixtures(root) {
   const media = path.join(root, 'media')
   const comic = path.join(root, 'media-comic')
+  const mediaExtra = path.join(root, 'media-photo-extra')
   await mkdir(media, { recursive: true })
   await mkdir(comic, { recursive: true })
+  await mkdir(mediaExtra, { recursive: true })
 
   for (let i = 1; i <= 3; i++) await writeFixture(media, 'sample-album/page-' + i + '.png')
+  await writeFixture(mediaExtra, 'zz-extra-root-only/page.png')
   await writeFixture(media, 'sample-format/photo.heic', Buffer.from('not a decodable image'))
   await writeFixture(media, 'sample-broken/broken.jpg', Buffer.from('not a decodable image'))
 
@@ -211,6 +214,7 @@ async function main() {
   const staticRoot = path.join(testRoot, 'frontend')
   const mediaRoot = path.join(testRoot, 'media')
   const comicRoot = path.join(testRoot, 'media-comic')
+  const mediaExtraRoot = path.join(testRoot, 'media-photo-extra')
   const cacheRoot = path.join(testRoot, 'cache')
   const serverPath = path.join(testRoot, process.platform === 'win32' ? 'server.exe' : 'server')
   const configPath = path.join(testRoot, 'config.yaml')
@@ -240,6 +244,8 @@ async function main() {
       '    kind: photo',
       '  - path: "' + yamlPath(comicRoot) + '"',
       '    kind: comic',
+      '  - path: "' + yamlPath(mediaExtraRoot) + '"',
+      '    kind: photo',
       '  - path: "' + yamlPath(mediaRoot + '-offline') + '"',
       '    kind: photo',
       'host: "127.0.0.1"',

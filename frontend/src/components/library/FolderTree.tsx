@@ -13,9 +13,9 @@ import { albumCountUnit } from "../../utils/workbench";
 
 interface Props {
   mode: AppMode;
-  /** 当前选中的集合 id（空串 = 顶层）。 */
+  /** 当前选中的媒体根或集合 id（空串 = 所有根）。 */
   selectedId: string;
-  /** 选中一个集合：内容区切到它的下一层。 */
+  /** 选中一个媒体根或集合：内容区切到它的下一层。 */
   onSelect: (id: string) => void;
 }
 
@@ -81,8 +81,8 @@ function TreeRoot({
         expanded={expanded}
         hasChildren
         onToggle={() => setExpanded((v) => !v)}
-        active={selectedId === ""}
-        onSelect={() => onSelect("")}
+        active={selectedId === id}
+        onSelect={() => onSelect(id)}
       />
       {expanded ? (
         <TreeChildren
@@ -233,7 +233,12 @@ function TreeRow({
       ) : (
         <span className="library-tree__toggle library-tree__toggle--leaf" />
       )}
-      <button type="button" className="library-tree__label" onClick={onSelect}>
+      <button
+        type="button"
+        className="library-tree__label"
+        onClick={onSelect}
+        aria-current={active ? "location" : undefined}
+      >
         {icon}
         <span className="truncate">{label}</span>
       </button>
