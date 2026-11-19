@@ -216,6 +216,14 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
       )}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
+        {/* 嵌在「我的」里时页头由外层给：精选有多少张要说在这页上 ——
+            收藏与最近浏览的页签都报「共 N 项」，精选只摆照片会显得
+            像漏了计数。 */}
+        {embedded && items.length > 0 ? (
+          <p className="pb-3 text-meta text-fg-muted tabular-nums">
+            共 {total} 张精选照片
+          </p>
+        ) : null}
         {query.isError && items.length === 0 ? (
           <div className="flex h-full items-center justify-center text-body text-fg-muted">
             精选加载失败，请重试。

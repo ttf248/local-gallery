@@ -53,7 +53,8 @@ test("照片可以加入精选，在精选页里聚在一起，重启后仍然�
     page.getByRole("tab", { name: "精选照片", exact: true }),
   ).toHaveAttribute("aria-selected", "true");
   // 计数在页头上，而这一页签嵌在「我的」里：页头由外层给，
-  // 面板里给的是照片本身与它的出处。
+  // 面板里给的是照片本身、它的出处，还有这一页有多少张。
+  await expect(page.getByText("共 1 张精选照片")).toBeVisible();
   await expect(page.getByText("sample-album", { exact: true })).toBeVisible();
   const pickedTile = page.locator('button[aria-label*="移出精选"]').first();
   await expect(pickedTile).toBeVisible();
