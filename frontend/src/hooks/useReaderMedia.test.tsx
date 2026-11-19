@@ -32,7 +32,20 @@ function media(id: string, kind: "image" | "video" = "image") {
 function page(items: ReturnType<typeof media>[], nextCursor?: string) {
   return {
     ok: true,
-    page: { revision: 1, total: items.length, items, nextCursor },
+    page: {
+      revision: 1,
+      total: items.length,
+      items,
+      nextCursor,
+      // 相册照片墙的附加信息：没筛选时这些数就是这本相册本身。
+      filtered: false,
+      albumTotal: items.length,
+      videoTotal: items.filter((item) => item.kind === "video").length,
+      photoTotal: items.filter((item) => item.kind === "image").length,
+      unresolved: { captureTime: 0, location: 0, face: 0, total: 0 },
+      grouped: 0,
+      groupedGroups: 0,
+    },
   };
 }
 

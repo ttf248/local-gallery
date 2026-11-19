@@ -225,7 +225,7 @@ export interface AlbumMediaPage extends LibraryPage<LibraryMediaItem> {
   albumTotal: number;
   /** 这本相册里的视频数：视频不参与分析类筛选。 */
   videoTotal: number;
-  /** 这一页里照片的张数（不含视频）。 */
+  /** 筛选后留下的照片张数（不含视频）：整份结果，不是这一页。 */
   photoTotal: number;
   /** 因缺少依据而没能参与筛选的照片数。 */
   unresolved: AlbumFilterUnresolved;

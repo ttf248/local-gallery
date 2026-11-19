@@ -87,10 +87,11 @@ type AlbumFilterPage struct {
 	AlbumTotal int `json:"albumTotal"`
 	// VideoTotal 是这本相册里的视频数：视频不参与分析类筛选。
 	VideoTotal int `json:"videoTotal"`
-	// PhotoTotal 是这一页里照片的张数（不含视频）。
+	// PhotoTotal 是筛选后留下的照片张数（不含视频）。
 	//
-	// 计数口径要与页头一致：视频不参与分析类筛选，折叠只对照片生效，
-	// 因此墙上摆着几张照片要单独报出来，不能拿媒体总数充数。
+	// 它数的是整份结果，不是这一页：墙上摆着几张照片要单独报出来，
+	// 不能拿媒体总数充数，也不能拿这一页的张数充数 —— 后者会随翻页变化。
+	// 计数口径与页头一致：视频不参与分析类筛选，折叠只对照片生效。
 	PhotoTotal int `json:"photoTotal"`
 	// Unresolved 是没能参与筛选的照片数，按维度分列。
 	Unresolved AlbumFilterUnresolved `json:"unresolved"`
