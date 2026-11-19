@@ -27,7 +27,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",").filter(Boolean
 // 页面清单：模式前缀由 buildRoute 补（审计脚本早就这么做了，截图脚本
 // 此前直接拼 BASE + route，/recents 落在兜底路由、截出来的其实是首页）。
 // 可以写伪路由 album / reader / tag：运行时现取真实相册与标签。
-const PAGES = (process.env.LG_PAGES ?? "/,/recents,/favorites,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag")
+const PAGES = (process.env.LG_PAGES ?? "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag")
   .split(",")
   .map((p) => p.trim())
   .filter(Boolean);

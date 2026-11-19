@@ -2,12 +2,17 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LIST_PARAM } from "../../utils/listFilterParams";
-import { SearchIcon } from "./Icon";
+import { FolderSearchIcon, SearchIcon } from "./Icon";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useAppMode } from "../../hooks/useAppMode";
 import { albumsApi, type SearchHit } from "../../api/albums";
 import RenditionImage from "./RenditionImage";
-import { albumRoute, homeRoute, tagRoute } from "../../utils/path";
+import {
+  albumRoute,
+  searchRoute,
+  semanticSearchRoute,
+  tagRoute,
+} from "../../utils/path";
 import { albumCountUnit, collectionUnit, mediaUnit, workbenchCopy } from "../../utils/workbench";
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
@@ -44,7 +49,12 @@ export default function GlobalSearch() {
   const hits = searchQuery.data?.results ?? [];
 
   useEffect(() => {
-    setActiveIndex(hits.length > 0 ? 0 : -1);
+    // 不默认选中第一条。
+    //
+    // 选中态是「用户正在挑哪一条」：回车应当落到**看得见结果的那一页**，
+    // 而不是直接打开列表里的第一项 —— 那等于用户没挑就替他挑了。
+    // 用方向键往下走才进入逐条挑选。
+    setActiveIndex(-1);
   }, [searchTerm, hits.length]);
 
   function onPick(hit: SearchHit) {
@@ -97,12 +107,15 @@ export default function GlobalSearch() {
                   onPick(activeHit);
                 } else {
                   setOpen(false);
-                  // 回车没有命中：带着关键词回主页。关键词已经在地址里，
-                  // 换路由会丢掉它，因此这里显式带上。
+                  // 回车没有命中：进结果页。
+                  //
+                  // 以前是带着关键词回首页 —— 而首页那一段是智能相册预览，
+                  // 搜到的相册被一片不相关的推荐盖住了，用户看不见自己
+                  // 搜到了什么。回车必须落在**看得见结果**的页面上。
                   const target = new URLSearchParams();
                   if (query) target.set(LIST_PARAM.query, query);
                   const search = target.toString();
-                  navigate(`${homeRoute(mode)}${search ? `?${search}` : ""}`);
+                  navigate(`${searchRoute(mode)}${search ? `?${search}` : ""}`);
                 }
                 break;
               }
@@ -206,6 +219,24 @@ export default function GlobalSearch() {
               </div>
             </button>
           ))}
+          {/* 面板底部：名字搜索与内容搜索的关系。
+              两者检索的东西不一样（名字 vs 画面与图片文字），共用一个输入框
+              会让人以为搜不到就是没有。 */}
+          <div className="mt-1 border-t border-border-faint">
+            <button
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setOpen(false);
+                navigate(semanticSearchRoute());
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-body text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+            >
+              <FolderSearchIcon size={14} className="shrink-0" />
+              <span>按画面内容找照片</span>
+              <span className="ml-auto text-meta text-fg-subtle">语义 / OCR</span>
+            </button>
+          </div>
         </div>
       )}
 

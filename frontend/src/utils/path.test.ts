@@ -145,6 +145,7 @@ describe("MODE_ROUTE_PATHS", () => {
       "/photo/library",
       "/photo/explore",
       "/photo/me/:tab",
+      "/photo/search",
       "/photo/albums/*",
       "/photo/tags/*",
     ]);
@@ -154,6 +155,7 @@ describe("MODE_ROUTE_PATHS", () => {
       "/comic",
       "/comic/library",
       "/comic/me/:tab",
+      "/comic/search",
       "/comic/albums/*",
       "/comic/tags/*",
     ]);

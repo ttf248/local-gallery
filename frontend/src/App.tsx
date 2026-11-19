@@ -17,6 +17,7 @@ const Home = lazy(() => import("./routes/Home"));
 const Library = lazy(() => import("./routes/Library"));
 const Explore = lazy(() => import("./routes/Explore"));
 const Me = lazy(() => import("./routes/Me"));
+const SearchResults = lazy(() => import("./routes/SearchResults"));
 const YearPhotos = lazy(() => import("./routes/YearPhotos"));
 const Unread = lazy(() => import("./routes/Unread"));
 const Album = lazy(() => import("./routes/Album"));
@@ -54,6 +55,7 @@ const MODE_ROUTE_ELEMENTS: Record<string, ComponentType> = {
   "/library": Library,
   "/explore": Explore,
   "/me/:tab": Me,
+  "/search": SearchResults,
   "/albums/*": Album,
   "/tags/*": Tag,
 };
