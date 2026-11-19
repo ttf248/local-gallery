@@ -123,6 +123,11 @@ func parseAlbumFilterQuery(c *fiber.Ctx) (services.AlbumFilterQuery, error) {
 	default:
 		return query, errInvalidAlbumFilter
 	}
+	query.Expand = strings.TrimSpace(c.Query("expand"))
+	if query.Expand != "" {
+		// 展开一组必然意味着折叠开着：成员要留在墙上，才谈得上「就地展开」。
+		query.Collapse = true
+	}
 	if query.From != "" && !validAlbumMonth(query.From) {
 		return query, errInvalidAlbumFilter
 	}

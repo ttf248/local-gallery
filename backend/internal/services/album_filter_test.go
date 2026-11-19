@@ -239,7 +239,7 @@ func TestAlbumFilterCollapseKeepsRepresentativeOnly(t *testing.T) {
 	if page.Grouped != 1 {
 		t.Fatalf("grouped=%d", page.Grouped)
 	}
-	reference := page.Items[0].Similarity
+	reference := page.Items[0].SimilarityGroup
 	if reference == nil || reference.AlbumSize != 2 || reference.AlbumHidden != 1 || reference.Shown != fixture.ids[0] {
 		t.Fatalf("similarity ref=%+v", reference)
 	}
@@ -274,6 +274,72 @@ func TestAlbumFilterCollapseKeepsFirstAlbumMemberWhenRepresentativeElsewhere(t *
 	}
 	if page.Total != 1 || page.Items[0].ID != fixture.ids[0] {
 		t.Fatalf("collapsed page=%+v", page)
+	}
+}
+
+func TestAlbumFilterExpandKeepsGroupMembersInPlace(t *testing.T) {
+	fixture := newAlbumFilterFixture(t, 3)
+	similarity := newAlbumFilterSimilarity(t, fixture, []SimilarityGroup{{
+		ID:          "g_1",
+		Kind:        string(SimilarityGroupKindExact),
+		Folder:      "album",
+		ResourceIDs: []string{fixture.ids[0], fixture.ids[1]},
+		Recommended: fixture.ids[0],
+		Members: []SimilarityMember{
+			{ResourceID: fixture.ids[0], Folder: "album"},
+			{ResourceID: fixture.ids[1], Folder: "album"},
+		},
+	}})
+	page, err := fixture.engine(similarity).Page(fixture.catalog.Acquire(), fixture.albumID,
+		AlbumFilterQuery{Collapse: true, Expand: "g_1"}, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 展开的那一组就地摆在墙上：成员不再藏起来。
+	if page.Total != 3 || len(page.Items) != 3 {
+		t.Fatalf("expanded page=%+v", page)
+	}
+	if page.Items[0].ID != fixture.ids[0] || page.Items[1].ID != fixture.ids[1] {
+		t.Fatalf("expanded items=%v", pageNames(page.Items))
+	}
+	if page.Grouped != 0 {
+		t.Fatalf("grouped=%d", page.Grouped)
+	}
+	member := page.Items[1].SimilarityGroup
+	if member == nil || member.AlbumHidden != 0 || member.Shown != fixture.ids[0] {
+		t.Fatalf("member ref=%+v", member)
+	}
+}
+
+func TestAlbumFilterExpandGathersMembersNextToRepresentative(t *testing.T) {
+	fixture := newAlbumFilterFixture(t, 3)
+	similarity := newAlbumFilterSimilarity(t, fixture, []SimilarityGroup{{
+		ID:          "g_1",
+		Kind:        string(SimilarityGroupKindNear),
+		Folder:      "album",
+		ResourceIDs: []string{fixture.ids[0], fixture.ids[2]},
+		Recommended: fixture.ids[0],
+		Members: []SimilarityMember{
+			{ResourceID: fixture.ids[0], Folder: "album"},
+			{ResourceID: fixture.ids[2], Folder: "album"},
+		},
+	}})
+	page, err := fixture.engine(similarity).Page(fixture.catalog.Acquire(), fixture.albumID,
+		AlbumFilterQuery{Collapse: true, Expand: "g_1"}, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 组的成员在相册里隔着一张：展开后要聚到代表照片后面，
+	// 否则「就地展开」等于没展开。
+	want := []string{"00.jpg", "02.jpg", "01.jpg"}
+	got := pageNames(page.Items)
+	if len(got) != len(want) {
+		t.Fatalf("expanded items=%v", got)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("expanded order=%v, want %v", got, want)
+		}
 	}
 }
 

@@ -43,18 +43,21 @@ type AlbumFilterQuery struct {
 	Scene string
 	// Collapse 折叠相似组：墙上只留每组的代表照片。
 	Collapse bool
+	// Expand 是被展开的那一组：它的成员不再折叠，就地摆在墙上。
+	Expand string
 }
 
 // IsZero 判断是否没有筛选条件。
 func (q AlbumFilterQuery) IsZero() bool {
 	return q.From == "" && q.To == "" && q.PersonID == "" && q.Adcode == 0 &&
-		q.Picks == "" && q.Scene == "" && !q.Collapse
+		q.Picks == "" && q.Scene == "" && !q.Collapse && q.Expand == ""
 }
 
 // ScopeKey 是筛选条件在翻页游标里的标记。
 //
 // 换了筛选条件，旧游标必须失效：否则下一页会按另一套条件取数据，
-// 页与页之间会漏项或重复。折叠也要算进去 —— 折叠与否的墙上不是同一批照片。
+// 页与页之间会漏项或重复。折叠与展开也要算进去 —— 折叠与否的墙上
+// 不是同一批照片。
 func (q AlbumFilterQuery) ScopeKey() string {
 	if q.IsZero() {
 		return "all"
@@ -67,6 +70,7 @@ func (q AlbumFilterQuery) ScopeKey() string {
 		q.Picks,
 		q.Scene,
 		strconv.FormatBool(q.Collapse),
+		q.Expand,
 	}, "|")
 }
 
@@ -83,10 +87,17 @@ type AlbumFilterPage struct {
 	AlbumTotal int `json:"albumTotal"`
 	// VideoTotal 是这本相册里的视频数：视频不参与分析类筛选。
 	VideoTotal int `json:"videoTotal"`
+	// PhotoTotal 是这一页里照片的张数（不含视频）。
+	//
+	// 计数口径要与页头一致：视频不参与分析类筛选，折叠只对照片生效，
+	// 因此墙上摆着几张照片要单独报出来，不能拿媒体总数充数。
+	PhotoTotal int `json:"photoTotal"`
 	// Unresolved 是没能参与筛选的照片数，按维度分列。
 	Unresolved AlbumFilterUnresolved `json:"unresolved"`
 	// Grouped 是折叠后藏起来的照片数。
 	Grouped int `json:"grouped"`
+	// GroupedGroups 是被折叠的相似组数。
+	GroupedGroups int `json:"groupedGroups"`
 }
 
 // AlbumFilterUnresolved 说明有多少照片因为缺少依据而没被纳入筛选。
@@ -97,6 +108,11 @@ type AlbumFilterUnresolved struct {
 	Location int `json:"location"`
 	// Face 是没有人脸分析结果的照片数。
 	Face int `json:"face"`
+	// Total 是因为缺少依据而没被纳入筛选的照片总数（去重）。
+	//
+	// 三个分项会重叠：一张既没有拍摄时间也没有人脸的照片，两项都算它。
+	// 报一个去重后的总数，界面上才不会摆出一个比整本相册还大的数字。
+	Total int `json:"total"`
 }
 
 // AlbumSimilarityRef 是相似组在相册照片墙上的引用。
@@ -178,8 +194,13 @@ type albumFilterContext struct {
 	groupMembers map[string][]string
 	// shown 是「组 → 折叠时留在墙上的那张」。
 	shown map[string]string
+	// expanded 是被展开的那一组：它的成员不再折叠。
+	expanded string
 	// placeScope 是地点筛选的范围（区划码集合）。
 	placeScope map[int]bool
+	// grouped 是折叠后藏起来的照片数，groupedGroups 是组数。
+	grouped      int
+	groupedGroups int
 }
 
 // albumPhotoPlace 是一张照片命中的地点。
@@ -195,7 +216,6 @@ type albumFilterNeeds struct {
 	locations   bool
 	people      bool
 	groupPhotos bool
-	similarity  bool
 }
 
 // needsFor 按筛选条件算出要算哪些信号。
@@ -205,7 +225,6 @@ func (q AlbumFilterQuery) needsFor() albumFilterNeeds {
 		locations:   q.Adcode != 0,
 		people:      q.PersonID != "",
 		groupPhotos: q.Scene == AlbumFilterSceneGroupPhoto,
-		similarity:  q.Scene == AlbumFilterSceneSimilar || q.Collapse,
 	}
 }
 
@@ -229,6 +248,13 @@ func (e *AlbumFilterEngine) Page(
 		return AlbumFilterPage{}, err
 	}
 	kept, unresolved := context.apply()
+	grouped, groupedGroups := context.groupedCount()
+	photoTotal := 0
+	for i := range kept {
+		if kept[i].Kind == "image" {
+			photoTotal++
+		}
+	}
 	scope := "album-media:" + albumID + ":" + query.ScopeKey()
 	offset, err := pageOffset(snapshot, cursor, scope)
 	if err != nil {
@@ -258,8 +284,10 @@ func (e *AlbumFilterEngine) Page(
 		Filtered:   !query.IsZero(),
 		AlbumTotal: len(items),
 		VideoTotal: context.videoCount,
+		PhotoTotal: photoTotal,
 		Unresolved: unresolved,
-		Grouped:    context.groupedCount(),
+		Grouped:    grouped,
+		GroupedGroups: groupedGroups,
 	}, nil
 }
 
@@ -299,14 +327,11 @@ func (e *AlbumFilterEngine) newContext(
 	if needs.groupPhotos {
 		context.loadGroupPhotos()
 	}
-	if needs.similarity {
-		context.loadSimilarity()
-	}
+	// 相似分组始终读一份：墙上每一张都要能说出自己属于哪一组，
+	// 用户不必先打开折叠才知道这儿有相似的照片。
+	context.loadSimilarity()
 	if query.Picks != "" {
 		context.loadPicks()
-	}
-	if query.Collapse {
-		context.planCollapse()
 	}
 	return context, nil
 }
@@ -412,29 +437,70 @@ func (c *albumFilterContext) loadPicks() {
 	}
 }
 
-// planCollapse 算出每组在墙上留哪一张。
+// groupedCount 统计折叠后藏起来的照片数与组数。
+func (c *albumFilterContext) groupedCount() (int, int) {
+	return c.grouped, c.groupedGroups
+}
+
+// apply 按条件筛出留下的照片，再在留下的那些里折叠相似组。
 //
-// 代表照片不在这一本里时，本相册的第一张成员顶上：折叠的是这一本里的
-// 重复，不是别的文件夹里的。连拍组的画面本就不同，折叠它反而把不同的
-// 瞬间藏起来 —— 界面上的类别徽章会把这三种情况分开说。
-func (c *albumFilterContext) planCollapse() {
-	c.groupMembers = map[string][]string{}
-	c.shown = map[string]string{}
-	for _, id := range c.ids {
-		ref, exists := c.similarity[id]
+// 顺序保持相册的自然顺序：筛选只决定「留哪些」，不重新排序 ——
+// 用户换一张筛选条件，墙上的先后就该是同一套。
+//
+// 折叠放在筛选之后：折叠的是「这一屏里的重复」，不是整本相册的重复。
+// 先折叠再筛会留下一批没有代表的空组，角标上的张数也会与墙上对不上。
+func (c *albumFilterContext) apply() ([]LibraryMediaItem, AlbumFilterUnresolved) {
+	unresolved := AlbumFilterUnresolved{}
+	if c.query.IsZero() {
+		return c.fold(c.items), unresolved
+	}
+	analysisFilter := c.query.From != "" || c.query.To != "" || c.query.PersonID != "" ||
+		c.query.Adcode != 0 || c.query.Picks != "" || c.query.Scene != ""
+
+	filtered := make([]LibraryMediaItem, 0, len(c.items))
+	for _, item := range c.items {
+		if item.Kind != "image" {
+			// 视频没有拍摄时间、位置与人物，混进筛选结果只会给出
+			// 一批「说不清为什么在」的条目。有分析类筛选时它们不进结果。
+			if analysisFilter {
+				continue
+			}
+			filtered = append(filtered, item)
+			continue
+		}
+		c.countUnresolved(item.ID, &unresolved)
+		if !c.matches(item.ID) {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return c.fold(filtered), unresolved
+}
+
+// fold 在留下的照片里折叠相似组：每组只留一张，其余收起来。
+//
+// 留哪一张：组的代表照片若也在结果里就留它；否则留结果里的第一张成员 ——
+// 折叠的是这一本里的重复，不是别的文件夹里的。
+//
+// 被展开的那一组不折叠：它的成员聚到代表照片后面就地摊开。
+// 组的成员在相册里可能隔得很远，摊在各自的位置上等于没展开。
+func (c *albumFilterContext) fold(items []LibraryMediaItem) []LibraryMediaItem {
+	members := map[string][]string{}
+	byID := map[string]LibraryMediaItem{}
+	for _, item := range items {
+		byID[item.ID] = item
+		ref, exists := c.similarity[item.ID]
 		if !exists {
 			continue
 		}
-		c.groupMembers[ref.ID] = append(c.groupMembers[ref.ID], id)
+		members[ref.ID] = append(members[ref.ID], item.ID)
 	}
-	for groupID, ids := range c.groupMembers {
+	shown := map[string]string{}
+	for groupID, ids := range members {
 		if len(ids) < 2 {
 			continue
 		}
-		ref, exists := c.similarity[ids[0]]
-		if !exists {
-			continue
-		}
+		ref := c.similarity[ids[0]]
 		keep := ""
 		for _, id := range ids {
 			if id == ref.Representative {
@@ -445,91 +511,97 @@ func (c *albumFilterContext) planCollapse() {
 		if keep == "" {
 			keep = ids[0]
 		}
-		c.shown[groupID] = keep
+		shown[groupID] = keep
 	}
-}
 
-// groupedCount 统计折叠后藏起来的照片数。
-func (c *albumFilterContext) groupedCount() int {
-	total := 0
-	for _, ids := range c.groupMembers {
-		if len(ids) < 2 {
-			continue
-		}
-		total += len(ids) - 1
-	}
-	return total
-}
-
-// apply 按条件筛出留下的照片。
-//
-// 顺序保持相册的自然顺序：筛选只决定「留哪些」，不重新排序 ——
-// 用户换一张筛选条件，墙上的先后就该是同一套。
-func (c *albumFilterContext) apply() ([]LibraryMediaItem, AlbumFilterUnresolved) {
-	unresolved := AlbumFilterUnresolved{}
-	if c.query.IsZero() {
-		return c.items, unresolved
-	}
-	analysisFilter := c.query.From != "" || c.query.To != "" || c.query.PersonID != "" ||
-		c.query.Adcode != 0 || c.query.Picks != "" || c.query.Scene != ""
-
-	kept := make([]LibraryMediaItem, 0, len(c.items))
-	for _, item := range c.items {
-		if item.Kind != "image" {
-			// 视频没有拍摄时间、位置与人物，混进筛选结果只会给出
-			// 一批「说不清为什么在」的条目。有分析类筛选时它们不进结果。
-			if analysisFilter {
+	// 展开的那一组：成员聚到代表照片后面。
+	moved := map[string]bool{}
+	expandedTail := map[string][]string{}
+	if c.query.Expand != "" {
+		for _, id := range members[c.query.Expand] {
+			if id == shown[c.query.Expand] {
 				continue
 			}
+			expandedTail[c.query.Expand] = append(expandedTail[c.query.Expand], id)
+			moved[id] = true
+		}
+	}
+
+	kept := make([]LibraryMediaItem, 0, len(items))
+	for _, item := range items {
+		if moved[item.ID] {
+			// 已经提前摆到代表照片后面了。
+			continue
+		}
+		ref, exists := c.similarity[item.ID]
+		if !exists {
 			kept = append(kept, item)
 			continue
 		}
-		c.countUnresolved(item.ID, &unresolved)
-		if !c.matches(item.ID) {
+		albumSize := len(members[ref.ID])
+		albumRef := AlbumSimilarityRef{
+			ID:                     ref.ID,
+			Kind:                   ref.Kind,
+			Size:                   ref.Size,
+			Redundant:              ref.Redundant,
+			Representative:         ref.Representative,
+			RepresentativeIsManual: ref.RepresentativeIsManual,
+			AlbumSize:              albumSize,
+			Shown:                  shown[ref.ID],
+		}
+		if albumSize > 1 && ref.ID == c.query.Expand {
+			// 展开的这一组：成员全部留在墙上，聚在代表照片后面。
+			albumRef.Shown = shown[ref.ID]
+			item.SimilarityGroup = &albumRef
+			kept = append(kept, item)
+			for _, id := range expandedTail[ref.ID] {
+				member := byID[id]
+				memberRef := albumRef
+				member.SimilarityGroup = &memberRef
+				kept = append(kept, member)
+			}
 			continue
 		}
-		if ref, exists := c.similarity[item.ID]; exists {
-			albumRef := AlbumSimilarityRef{
-				ID:                     ref.ID,
-				Kind:                   ref.Kind,
-				Size:                   ref.Size,
-				Redundant:              ref.Redundant,
-				Representative:         ref.Representative,
-				RepresentativeIsManual: ref.RepresentativeIsManual,
-				AlbumSize:              len(c.groupMembers[ref.ID]),
+		if c.query.Collapse && albumSize > 1 {
+			albumRef.AlbumHidden = albumSize - 1
+			if shown[ref.ID] != item.ID {
+				c.grouped++
+				continue
 			}
-			if c.query.Collapse {
-				albumRef.Shown = c.shown[ref.ID]
-				if albumRef.AlbumSize > 1 {
-					albumRef.AlbumHidden = albumRef.AlbumSize - 1
-				}
-			}
-			item.Similarity = &albumRef
+			c.groupedGroups++
 		}
+		item.SimilarityGroup = &albumRef
 		kept = append(kept, item)
 	}
-	return kept, unresolved
+	return kept
 }
 
 // countUnresolved 统计这张照片因为缺少依据而没能参与筛选。
 //
 // 说不清这一点，筛选结果就会被当成全貌：用户看到 12 张，却不知道
-// 还有 300 张没有拍摄时间、没被算进来。
+// 还有 300 张没有拍摄时间、没被算进来。三个分项会重叠，总数去重。
 func (c *albumFilterContext) countUnresolved(resourceID string, unresolved *AlbumFilterUnresolved) {
+	missing := false
 	if c.query.From != "" || c.query.To != "" {
 		if _, ok := c.captureTime(resourceID); !ok {
 			unresolved.CaptureTime++
+			missing = true
 		}
 	}
 	if c.query.Adcode != 0 {
 		if _, ok := c.locations[resourceID]; !ok {
 			unresolved.Location++
+			missing = true
 		}
 	}
 	if c.query.PersonID != "" || c.query.Scene == AlbumFilterSceneGroupPhoto {
 		if _, ok := c.people[resourceID]; !ok {
 			unresolved.Face++
+			missing = true
 		}
+	}
+	if missing {
+		unresolved.Total++
 	}
 }
 
@@ -581,17 +653,6 @@ func (c *albumFilterContext) matches(resourceID string) bool {
 		if _, exists := c.similarity[resourceID]; !exists {
 			return false
 		}
-	}
-	if c.query.Collapse {
-		ref, exists := c.similarity[resourceID]
-		if !exists {
-			return true
-		}
-		// 折叠：组里只留一张，其余藏起来。
-		if len(c.groupMembers[ref.ID]) < 2 {
-			return true
-		}
-		return c.shown[ref.ID] == resourceID
 	}
 	return true
 }

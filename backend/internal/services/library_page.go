@@ -172,9 +172,9 @@ type LibraryMediaItem struct {
 	// Picked 标记这张照片在精选里。它是用户数据而不是目录数据，
 	// 因此由请求期按当前精选集合标记，不进索引。
 	Picked bool `json:"picked,omitempty"`
-	// Similarity 标记这张照片所属的相似组。折叠相似组时，墙上只留
+	// SimilarityGroup 标记这张照片所属的相似组。折叠相似组时，墙上只留
 	// 每组的代表照片，其余成员收在展开区里。没有分组时为空。
-	Similarity *AlbumSimilarityRef `json:"similarity,omitempty"`
+	SimilarityGroup *AlbumSimilarityRef `json:"similarityGroup,omitempty"`
 	// Version 是媒体文件的内容版本号（mtime + size + 渲染算法版本）。
 	// 前端把它拼进渲染图 URL，服务端据此回 immutable。
 	Version string `json:"version,omitempty"`
