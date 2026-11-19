@@ -42,6 +42,7 @@ interface AlbumMediaPage {
     total: number;
     photoTotal: number;
     albumTotal: number;
+    videoTotal: number;
     filtered: boolean;
     unresolved: { total: number };
     grouped: number;
@@ -293,6 +294,65 @@ test("相似照片折叠只留代表照片，展开后成员就地摊开", async
     )
   ).json()) as AlbumMediaPage;
   expect(expanded.page.photoTotal).toBeGreaterThan(collapsed.page.photoTotal);
+});
+
+test("筛选后大图浏览的总数与顺序跟着筛选走", async ({ page, request }) => {
+  // 元素点不动时早失败早好：默认动作没有超时，卡住会一直等到用例超时。
+  page.setDefaultTimeout(30_000);
+  await ensureLibraryReady(request);
+  await ensureMetadataReady(request);
+  const album = await exifAlbum(request);
+  const facets = await facetsOf(request, album.id);
+  // 挑一个至少有两张照片的月份：预览的计数在只有一张时不显示。
+  const month = facets.facets.time.months.find(
+    (bucket) => bucket.count >= 2,
+  )!;
+  expect(month, "临时库里没有两个月以上的月份").toBeTruthy();
+
+  // 服务端按这条条件给出的顺序，就是墙上的顺序。
+  const filtered = (await (
+    await request.get(
+      `/api/albums/${encodeURIComponent(album.id)}/media?from=${month.month}&to=${month.month}&limit=3`,
+    )
+  ).json()) as AlbumMediaPage;
+  expect(filtered.page.items.length).toBeGreaterThan(1);
+  const first = filtered.page.items[0].name;
+  const second = filtered.page.items[1].name;
+
+  // 界面上把同一套条件选上：年份点开是整年，再点那个月份才是那一个月。
+  await page.goto(albumUrl(album));
+  await page.getByRole("button", { name: /^筛选/ }).click();
+  const panel = page.getByRole("dialog", { name: "筛选照片" });
+  await panel
+    .getByRole("button", { name: `${month.month.slice(0, 4)}年`, exact: true })
+    .click();
+  const monthButton = panel.getByRole("button", {
+    name: `${Number(month.month.slice(5, 7))}月`,
+  });
+  await expect(monthButton).toBeVisible();
+  await monthButton.click();
+  await page.keyboard.press("Escape");
+  await expect(page).toHaveURL(new RegExp(`from=${month.month}`));
+
+  // 条件条上写的照片数与服务端一致。
+  const albumPhotos = filtered.page.albumTotal - filtered.page.videoTotal;
+  await expect(
+    page
+      .getByText(`${filtered.page.photoTotal} / ${albumPhotos} 张`)
+      .first(),
+  ).toBeVisible();
+
+  // 墙上的第一张就是服务端排的第一张，预览的总数也跟着筛选走。
+  // 墙上的触发层是覆盖在封面上的按钮，图片本身点不到。
+  await page.getByRole("button", { name: `查看 ${first}`, exact: true }).click();
+  const viewer = page.getByTestId("photo-viewer");
+  await expect(viewer).toBeVisible();
+  await expect(viewer).toContainText(`共 ${filtered.page.total} 张`);
+  await expect(viewer.getByRole("img", { name: first })).toBeVisible();
+  // 下一张按的是同一套顺序。
+  await viewer.getByRole("button", { name: "下一张" }).click();
+  await expect(viewer).toContainText("第 2 张");
+  await expect(viewer.getByRole("img", { name: second })).toBeVisible();
 });
 
 test("筛选结果里能连续选择并批量加入精选，筛选状态与选择都在", async ({
