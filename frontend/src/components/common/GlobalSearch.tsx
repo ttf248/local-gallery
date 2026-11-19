@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { LIST_PARAM } from "../../utils/listFilterParams";
 import { FolderSearchIcon, SearchIcon } from "./Icon";
 import { useDebounce } from "../../hooks/useDebounce";
@@ -16,24 +16,23 @@ import {
 import { albumCountUnit, collectionUnit, mediaUnit, workbenchCopy } from "../../utils/workbench";
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
-//   - 空结果时返回静默，仅同步过滤本地视图
-//   - 回车跳转主页
+//   - 草稿独立于列表筛选，只有名称搜索结果页从地址预填
+//   - 回车进入名称搜索结果页
 export default function GlobalSearch() {
-  // 关键词在地址里：列表页直接按它过滤，链接也能带着走。
-  const [params, setParams] = useSearchParams();
-  const query = params.get(LIST_PARAM.query) ?? "";
-  const setQuery = (value: string) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(LIST_PARAM.query, value);
-    else next.delete(LIST_PARAM.query);
-    if (next.toString() === params.toString()) return;
-    // 敲一个字改一次地址：每敲一下塞一条历史，后退键就退不出输入框。
-    setParams(next, { replace: true });
-  };
+  const location = useLocation();
+  const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { mode } = useAppMode();
+  const isSearchPage = location.pathname === searchRoute(mode);
+  const routeQuery = isSearchPage ? params.get(LIST_PARAM.query) ?? "" : "";
+  const [query, setQuery] = useState(routeQuery);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
-  const { mode } = useAppMode();
+  useEffect(() => {
+    // 切到名称搜索结果页时恢复地址里的关键词；其他页面不借用列表 q。
+    setQuery(routeQuery);
+  }, [location.pathname, routeQuery]);
+
   // 叶级目录两侧都叫「相册」：一个词，不必按侧记两套。
   const albumWord = workbenchCopy(mode).albumTypeLabel;
   const debounced = useDebounce(query, 200);

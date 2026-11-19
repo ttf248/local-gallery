@@ -47,6 +47,26 @@ test("顶栏搜索回车进入可见的结果页", async ({ page, request }) => 
   await expect(page).toHaveURL(/\/photo\/albums\/|\/photo\/tags\//);
 });
 
+test("全局搜索草稿不覆盖列表筛选，回退后返回原列表地址", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+  const listUrl = "/photo/library?q=list-filter-kept&min=2";
+  await page.goto(listUrl);
+  const search = page.getByRole("combobox");
+  await expect(search).toHaveValue("");
+
+  await search.fill("new-search-draft");
+  await expect(page).toHaveURL(listUrl);
+  await search.press("Enter");
+  await expect(page).toHaveURL("/photo/search?q=new-search-draft");
+
+  await page.goBack();
+  await expect(page).toHaveURL(listUrl);
+  await expect(search).toHaveValue("");
+});
+
 test("搜索无结果时说清没有匹配", async ({ page }) => {
   await page.goto("/photo/search?q=zzz-不存在的名字-zzz");
   await expect(page.getByText(/没有匹配/)).toBeVisible();

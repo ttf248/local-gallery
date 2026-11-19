@@ -23,13 +23,13 @@ function LocationProbe() {
   );
 }
 
-function renderSearch() {
+function renderSearch(initialEntry = "/") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <GlobalSearch />
         <LocationProbe />
       </MemoryRouter>
@@ -47,6 +47,28 @@ describe("GlobalSearch", () => {
     expect(
       screen.getByRole("combobox", { name: "搜索相册或标签" }),
     ).toBeInTheDocument();
+  });
+
+  it("只从名称搜索结果路径预填关键词", () => {
+    renderSearch("/photo/search?q=直接搜索");
+    expect(screen.getByRole("combobox")).toHaveValue("直接搜索");
+  });
+
+  it("列表页地址里的 q 不会被当成全局搜索草稿", () => {
+    renderSearch("/photo/library?q=列表筛选&min=2");
+    expect(screen.getByRole("combobox")).toHaveValue("");
+  });
+
+  it("在列表页输入搜索草稿不改写当前筛选地址", () => {
+    renderSearch("/photo/library?q=列表筛选&min=2");
+    const input = screen.getByRole("combobox");
+
+    fireEvent.change(input, { target: { value: "新的搜索词" } });
+
+    expect(input).toHaveValue("新的搜索词");
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/photo/library?q=列表筛选&min=2",
+    );
   });
 
   it("在请求完成后显示建议，并可用键盘选择标签页", async () => {
