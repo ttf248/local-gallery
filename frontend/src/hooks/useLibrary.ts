@@ -7,6 +7,7 @@ import {
 import {
   LibraryRevisionChangedError,
   libraryApi,
+  type AlbumFilterQuery,
   type LibraryNodeSummary,
 } from "../api/library";
 import { activityAffectedKeys, libraryQueryKeys } from "../api/queryKeys";
@@ -81,17 +82,25 @@ export function useAlbumMedia(
   albumId: string,
   expectedRevision?: number,
   enabled = true,
+  filter?: AlbumFilterQuery,
 ) {
   // 详情页只先取首屏媒体；调用方在虚拟网格接近末尾时继续取下一页。
   // 阅读器仍可使用 libraryApi.allMedia 一次性建立跨页导航上下文。
+  //
+  // 筛选条件进查询键：筛选与否是两份不同的数据，换筛选就是换一份缓存，
+  // 旧的那份留着，切回去是秒开。
   return useInfiniteQuery({
-    queryKey: [...libraryQueryKeys.media(albumId), expectedRevision],
+    queryKey: [
+      ...libraryQueryKeys.media(albumId, albumFilterKey(filter)),
+      expectedRevision,
+    ],
     queryFn: async ({ pageParam, signal }) => {
       const response = await libraryApi.mediaPage(
         albumId,
         pageParam,
         undefined,
         signal,
+        filter,
       );
       const page = response.page;
       if (
@@ -106,6 +115,37 @@ export function useAlbumMedia(
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: enabled && albumId.length > 0,
   });
+}
+
+/**
+ * 这本相册里真实可用的筛选条件。
+ *
+ * 只有打开筛选面板时才去取：这份数据要读分析记录与人物索引，
+ * 不该在每次进相册时都付这个代价。
+ */
+export function useAlbumFilters(albumId: string, enabled = true) {
+  return useQuery({
+    queryKey: libraryQueryKeys.albumFilters(albumId),
+    queryFn: ({ signal }) => libraryApi.albumFilters(albumId, signal),
+    enabled: enabled && albumId.length > 0,
+    staleTime: 60_000,
+  });
+}
+
+/** 筛选条件的缓存标记：同一套条件共用一份数据。 */
+function albumFilterKey(filter?: AlbumFilterQuery): string {
+  if (!filter) return "";
+  const parts = [
+    filter.from ?? "",
+    filter.to ?? "",
+    filter.personId ?? "",
+    filter.adcode ?? "",
+    filter.picks ?? "",
+    filter.scene ?? "",
+    filter.collapse ? "fold" : "",
+    filter.expand ?? "",
+  ];
+  return parts.join("|");
 }
 
 export function useLibraryTags(enabled = true, expectedRevision?: number) {

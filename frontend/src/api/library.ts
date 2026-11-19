@@ -151,6 +151,153 @@ export interface LibraryMediaItem {
    * 前端把它拼进渲染图 URL，服务端据此回 immutable。
    */
   version?: string;
+  /**
+   * 这张照片所属的相似组。折叠时墙上只留代表照片，其余成员收在展开区。
+   */
+  similarityGroup?: AlbumSimilarityRef;
+}
+
+/**
+ * 相似组在照片墙上的引用。
+ *
+ * 照片墙只需要知道「这张属于哪一组、这组在本相册里有几张、代表是谁」，
+ * 成员名单在用户点开那一组时才去取。
+ */
+export interface AlbumSimilarityRef {
+  id: string;
+  /** exact（完全重复）/ near（近似重复）/ burst（连拍同场景）。 */
+  kind: "exact" | "near" | "burst";
+  /** 组内照片总数（全库口径）。 */
+  size: number;
+  /** 全库口径下除代表之外的张数。 */
+  redundant: number;
+  /** 当前生效的代表照片。 */
+  representative: string;
+  /** 代表照片是用户指定的。 */
+  representativeIsManual: boolean;
+  /** 组内落在本相册的张数。 */
+  albumSize: number;
+  /** 折叠后藏起来的张数（相册内）。 */
+  albumHidden: number;
+  /** 折叠时留在墙上的那张。 */
+  shown: string;
+}
+
+/**
+ * 原始照片墙的筛选条件。
+ *
+ * 条件作用在整本相册的数据上：服务端先筛出留下的照片，再按相册的
+ * 自然顺序分页。因此结果总数、翻页与大图浏览顺序始终是同一件事。
+ */
+export interface AlbumFilterQuery {
+  /** 拍摄时间区间起点，"YYYY-MM"，左闭。 */
+  from?: string;
+  /** 拍摄时间区间终点，"YYYY-MM"，右闭。 */
+  to?: string;
+  /** 只保留出现过这个人物的照片。 */
+  personId?: string;
+  /** 只保留落在这个行政区（含下级）里的照片。 */
+  adcode?: number;
+  /** 精选口径："only" 只看精选，"none" 只看未精选。 */
+  picks?: "only" | "none";
+  /** 画面口径："groupPhoto" 只看合照，"similar" 只看相似照片。 */
+  scene?: "groupPhoto" | "similar";
+  /** 折叠相似组：墙上只留每组的代表照片。 */
+  collapse?: boolean;
+  /** 展开的那一组：它的成员不再折叠，就地摆在墙上。 */
+  expand?: string;
+}
+
+/** 一页相册照片墙上因缺少依据而没能参与筛选的数量。 */
+export interface AlbumFilterUnresolved {
+  captureTime: number;
+  location: number;
+  face: number;
+  /** 去重后的总数：三个分项会重叠。 */
+  total: number;
+}
+
+/** 相册照片墙的一页。 */
+export interface AlbumMediaPage extends LibraryPage<LibraryMediaItem> {
+  /** 这一页是筛选后的结果。 */
+  filtered: boolean;
+  /** 这本相册的媒体总数（筛选前）。 */
+  albumTotal: number;
+  /** 这本相册里的视频数：视频不参与分析类筛选。 */
+  videoTotal: number;
+  /** 这一页里照片的张数（不含视频）。 */
+  photoTotal: number;
+  /** 因缺少依据而没能参与筛选的照片数。 */
+  unresolved: AlbumFilterUnresolved;
+  /** 折叠后藏起来的照片数。 */
+  grouped: number;
+  /** 被折叠的相似组数。 */
+  groupedGroups: number;
+}
+
+/**
+ * 相册照片墙这一页的附加信息。
+ *
+ * 智能分组那一页也是「相册里的一段照片」，但它没有这些数字；
+ * 读不到时按零算 —— 那一段界面上根本不显示。
+ */
+export function albumPageExtras(page: unknown): {
+  filtered: boolean;
+  albumTotal: number;
+  videoTotal: number;
+  photoTotal: number;
+  unresolved: AlbumFilterUnresolved;
+  grouped: number;
+  groupedGroups: number;
+} {
+  const value = (page ?? {}) as Partial<AlbumMediaPage>;
+  return {
+    filtered: value.filtered ?? false,
+    albumTotal: value.albumTotal ?? 0,
+    videoTotal: value.videoTotal ?? 0,
+    photoTotal: value.photoTotal ?? 0,
+    unresolved: value.unresolved ?? {
+      captureTime: 0,
+      location: 0,
+      face: 0,
+      total: 0,
+    },
+    grouped: value.grouped ?? 0,
+    groupedGroups: value.groupedGroups ?? 0,
+  };
+}
+
+/** 一本相册里真实可用的筛选条件。 */
+export interface AlbumFilterFacets {  total: number;
+  videos: number;
+  time: {
+    available: boolean;
+    reason?: string;
+    months: { month: string; count: number }[];
+    analyzedCount: number;
+    unresolvedCount: number;
+  };
+  people: {
+    available: boolean;
+    reason?: string;
+    items: { id: string; name: string; count: number; confirmed: boolean }[];
+    analyzedCount: number;
+  };
+  places: {
+    available: boolean;
+    reason?: string;
+    items: { adcode: number; name: string; level: string; count: number }[];
+    locatedCount: number;
+  };
+  picks: { pickedCount: number };
+  groupPhotos: { available: boolean; reason?: string; count: number };
+  similarity: {
+    available: boolean;
+    reason?: string;
+    groupCount: number;
+    photoCount: number;
+    stale: boolean;
+  };
 }
 
 /**
@@ -467,10 +614,36 @@ export const libraryApi = {
     cursor?: string,
     limit = LIBRARY_PAGE_LIMIT,
     signal?: AbortSignal,
+    filter?: AlbumFilterQuery,
   ) =>
-    api<PageResponse<LibraryMediaItem>>(
+    api<{ ok: boolean; page: AlbumMediaPage }>(
       `/api/albums/${encodeURIComponent(albumId)}/media`,
-      { params: { cursor, limit }, signal },
+      {
+        params: {
+          cursor,
+          limit,
+          from: filter?.from,
+          to: filter?.to,
+          personId: filter?.personId,
+          adcode: filter?.adcode,
+          picks: filter?.picks,
+          scene: filter?.scene,
+          collapse: filter?.collapse ? "1" : undefined,
+          expand: filter?.expand,
+        },
+        signal,
+      },
+    ),
+  /**
+   * 这本相册里真实可用的筛选条件。
+   *
+   * 每个维度都带一个理由，说清它现在为什么不能用 —— 是还没跑分析，
+   * 还是跑了但这本相册里确实没有那样的照片。
+   */
+  albumFilters: (albumId: string, signal?: AbortSignal) =>
+    api<{ ok: boolean; revision: number; facets: AlbumFilterFacets }>(
+      `/api/albums/${encodeURIComponent(albumId)}/filters`,
+      { signal },
     ),
   /**
    * 往年同一天拍过照的相册。

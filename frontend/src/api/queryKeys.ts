@@ -36,8 +36,19 @@ export const libraryQueryKeys = {
   mode: (mode: AppMode) => [...libraryQueryKeys.root, "mode", mode] as const,
   // 与模式无关：切模式不重取。
   manifest: () => [...libraryQueryKeys.root, "manifest"] as const,
-  media: (albumId: string) =>
-    [...libraryQueryKeys.root, "media", albumId] as const,
+  /**
+   * 相册里的媒体。
+   *
+   * filterKey 是筛选条件的标记：筛选与否是两份不同的数据，
+   * 换筛选就是换一份查询键，React Query 自动去拉新数据。
+   */
+  media: (albumId: string, filterKey = "") =>
+    [...libraryQueryKeys.root, "media", albumId, filterKey] as const,
+  /**
+   * 一本相册里真实可用的筛选条件。
+   */
+  albumFilters: (albumId: string) =>
+    [...libraryQueryKeys.root, "album-filters", albumId] as const,
   nodes: (ids: string[]) =>
     [...libraryQueryKeys.root, "nodes", ...ids] as const,
   // 与模式相关。

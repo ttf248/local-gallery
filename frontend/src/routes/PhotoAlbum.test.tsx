@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import PhotoAlbum from "./PhotoAlbum";
-import { useAlbumMedia } from "../hooks/useLibrary";
+import { useAlbumFilters, useAlbumMedia } from "../hooks/useLibrary";
 import {
   useSmartAlbumGroupMedia,
   useSmartAlbumGroups,
@@ -15,6 +15,7 @@ import { useUIStore } from "../store/uiStore";
 
 vi.mock("../hooks/useLibrary", () => ({
   useAlbumMedia: vi.fn(),
+  useAlbumFilters: vi.fn(),
   useLibraryChildren: vi.fn(),
   useLibraryNodes: vi.fn(),
   useTagAlbums: vi.fn(),
@@ -191,6 +192,49 @@ describe("PhotoAlbum", () => {
       isFetchingNextPage: false,
       isFetchNextPageError: false,
       fetchNextPage: vi.fn(),
+    } as never);
+    vi.mocked(useAlbumFilters).mockReturnValue({
+      data: {
+        ok: true,
+        revision: 1,
+        facets: {
+          total: 3,
+          videos: 1,
+          time: {
+            available: true,
+            months: [{ month: "2024-06", count: 2 }],
+            analyzedCount: 2,
+            unresolvedCount: 1,
+          },
+          people: {
+            available: true,
+            items: [
+              { id: "p_1", name: "人物 1", count: 3, confirmed: true },
+              { id: "p_2", name: "人物 2", count: 1, confirmed: false },
+            ],
+            analyzedCount: 4,
+          },
+          places: {
+            available: true,
+            items: [
+              { adcode: 330100, name: "杭州市", level: "city", count: 2 },
+            ],
+            locatedCount: 2,
+          },
+          picks: { pickedCount: 1 },
+          groupPhotos: { available: true, count: 0 },
+          similarity: {
+            available: false,
+            reason: "还没有相似照片分析结果",
+            groupCount: 0,
+            photoCount: 0,
+            stale: false,
+          },
+        },
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
     } as never);
     vi.mocked(useSmartAlbumGroups).mockReturnValue({
       data: {
@@ -489,5 +533,111 @@ describe("PhotoAlbum", () => {
     expect(useUIStore.getState().helpContext).toBe("photo");
     unmount();
     expect(useUIStore.getState().helpContext).toBe("library");
+  });
+
+  // 智能筛选：条件能组合、逐条能去掉，状态住在地址栏里。
+  it("筛选条件写进地址，刷新不丢", async () => {
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+    fireEvent.click(screen.getByRole("button", { name: /人物 1/ }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "personId=p_1",
+      ),
+    );
+  });
+
+  it("条件能组合，每条都能单独去掉", async () => {
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+    fireEvent.click(screen.getByRole("button", { name: /人物 1/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "已精选" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        "personId=p_1",
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent("picks=only"),
+    );
+
+    // 条件标签逐条摆出来，点掉一条其余留着。
+    fireEvent.click(screen.getByTitle("去掉这条条件：人物：人物 1"));
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).not.toHaveTextContent(
+        "personId=p_1",
+      ),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("picks=only");
+  });
+
+  it("筛选面板只摆这本相册里真实有的选项", () => {
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+
+    expect(screen.getByRole("button", { name: /人物 1/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /杭州市/ })).toBeInTheDocument();
+    // 相似照片还没分析：这一档摆出来但点不动，并说清为什么。
+    expect(screen.getByRole("radio", { name: "相似照片" })).toBeDisabled();
+    expect(
+      screen.getByTitle("还没有相似照片分析结果"),
+    ).toBeInTheDocument();
+  });
+
+  it("缺少分析结果时写明原因，不摆空选项", () => {
+    vi.mocked(useAlbumFilters).mockReturnValue({
+      data: {
+        ok: true,
+        revision: 1,
+        facets: {
+          total: 3,
+          videos: 1,
+          time: {
+            available: false,
+            reason: "这本相册还没有 EXIF 分析结果，先在任务中心运行元数据分析",
+            months: [],
+            analyzedCount: 0,
+            unresolvedCount: 0,
+          },
+          people: { available: true, items: [], analyzedCount: 0 },
+          places: { available: true, items: [], locatedCount: 0 },
+          picks: { pickedCount: 0 },
+          groupPhotos: { available: true, count: 0 },
+          similarity: {
+            available: false,
+            reason: "还没有相似照片分析结果",
+            groupCount: 0,
+            photoCount: 0,
+            stale: false,
+          },
+        },
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    } as never);
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+
+    expect(
+      screen.getByText(
+        "这本相册还没有 EXIF 分析结果，先在任务中心运行元数据分析",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /2024年/ })).toBeNull();
+  });
+
+  it("地址栏里带着条件时，进页面就是那套条件", () => {
+    renderPhotoAlbum(album, `/albums/${album.id}?picks=only&from=2024-06`);
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+    expect(screen.getByRole("radio", { name: "已精选" })).toBeChecked();
+    expect(screen.getByTitle("去掉这条条件：已精选")).toBeInTheDocument();
   });
 });

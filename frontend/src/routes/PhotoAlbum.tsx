@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { LibraryMediaItem, LibraryNodeSummary } from "../api/library";
+import type {
+  LibraryMediaItem,
+  LibraryNodeSummary,
+  LibraryPage,
+} from "../api/library";
+import { albumPageExtras } from "../api/library";
 import { albumsApi, type SmartAlbumDimension } from "../api/albums";
 import { aiJobsApi, type AnalysisType } from "../api/aiJobs";
-import { useAlbumMedia } from "../hooks/useLibrary";
+import { similarityApi } from "../api/similarity";
+import { libraryQueryKeys } from "../api/queryKeys";
+import { useAlbumFilters, useAlbumMedia } from "../hooks/useLibrary";
 import {
   smartAlbumQueryKeys,
   useSmartAlbumGroupMedia,
@@ -24,6 +31,7 @@ import {
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
 import DensityControl from "../components/wall/DensityControl";
+import AlbumFilterBar from "../components/wall/AlbumFilterBar";
 import ErrorBanner from "../components/common/ErrorBanner";
 import EmptyState from "../components/common/EmptyState";
 import PhotoViewer from "../components/wall/PhotoViewer";
@@ -41,12 +49,14 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  CloseIcon,
   ImageIcon,
   CopyIcon,
   FolderIcon,
   GridIcon,
   InfoIcon,
   MoreHorizontalIcon,
+  PickIcon,
   SelectIcon,
   StarIcon,
   UncheckIcon,
@@ -55,6 +65,13 @@ import { fileManagerErrorMessage } from "../utils/fileManager";
 import { useSafeBack } from "../utils/navigation";
 import { albumRoute, homeRoute } from "../utils/path";
 import { mediaCountParts } from "../utils/mediaCount";
+import {
+  ALBUM_FILTER_PARAM,
+  albumFilterChips,
+  albumFilterParams,
+  parseAlbumFilter,
+  type AlbumFilterState,
+} from "../utils/albumFilter";
 
 interface Props {
   /** 相册摘要（含内容用途与封面）。 */
@@ -89,6 +106,25 @@ export default function PhotoAlbum({ album }: Props) {
   const setDensity = usePhotoStore((s) => s.setDensity);
   const [searchParams, setSearchParams] = useSearchParams();
   const smartMode = searchParams.get("view") === "smart";
+  /* 筛选条件住在地址栏里：刷新、复制链接、前进后退都带着它。
+     条件是离散的挑选，因此写回地址时不替换历史 —— 用户按一次后退
+     就能退回刚才那套条件。 */
+  const filter = useMemo(() => parseAlbumFilter(searchParams), [searchParams]);
+  const setFilter = useCallback(
+    (next: AlbumFilterState) => {
+      const params = new URLSearchParams(searchParams);
+      for (const key of Object.values(ALBUM_FILTER_PARAM)) params.delete(key);
+      albumFilterParams(next).forEach((value, key) => params.set(key, value));
+      if (params.toString() !== searchParams.toString()) {
+        setSearchParams(params);
+      }
+    },
+    [searchParams, setSearchParams],
+  );
+  const clearFilter = useCallback(
+    () => setFilter({ collapse: filter.collapse }),
+    [filter.collapse, setFilter],
+  );
   const setSmartMode = useCallback(
     (enabled: boolean) => {
       const next = new URLSearchParams(searchParams);
@@ -140,7 +176,8 @@ export default function PhotoAlbum({ album }: Props) {
   // 媒体根数量：单根时不必在页头上重复来源。
   const multiRoot = useUIStore((s) => s.multiRoot);
 
-  const rawMediaQuery = useAlbumMedia(album.id, undefined, !smartMode);
+  const rawMediaQuery = useAlbumMedia(album.id, undefined, !smartMode, filter);
+  const albumFiltersQuery = useAlbumFilters(album.id, !smartMode);
   const smartGroupsQuery = useSmartAlbumGroups(album.id, dimension, smartMode);
   const smartSummary = smartGroupsQuery.data?.summary;
   const selectedGroup =
@@ -153,11 +190,33 @@ export default function PhotoAlbum({ album }: Props) {
   );
   const showingSmartGroup = smartMode && selectedGroupId !== null;
   const mediaQuery = showingSmartGroup ? smartGroupMediaQuery : rawMediaQuery;
-  const mediaItems = useMemo<LibraryMediaItem[]>(
-    () => mediaQuery.data?.pages.flatMap((page) => page.items) ?? [],
-    [mediaQuery.data],
+  const mediaItems = useMemo<LibraryMediaItem[]>(() => {
+    // 原始照片墙与智能分组两边的页结构不同，但媒体项是同一种。
+    const pages = (mediaQuery.data?.pages ?? []) as LibraryPage<LibraryMediaItem>[];
+    return pages.flatMap((page) => page.items);
+  }, [mediaQuery.data]);
+  const mediaPage = mediaQuery.data?.pages[0];
+  const total = mediaPage?.total ?? mediaItems.length;
+  const extras = useMemo(
+    () => albumPageExtras(mediaPage),
+    [mediaPage],
   );
-  const total = mediaQuery.data?.pages[0]?.total ?? mediaItems.length;
+  const facets = albumFiltersQuery.data?.facets;
+  /* 相册里的照片数（不含视频）：视频不参与分析类筛选，
+     计数因此与筛选条上的口径一致。 */
+  const photoCount = Math.max(
+    0,
+    extras.albumTotal - extras.videoTotal,
+  );
+  /* 墙上现在摆着几张照片：视频不参与分析类筛选，折叠也只对照片生效，
+     拿媒体总数充数会让计数与页头对不上。 */
+  const wallPhotoCount = extras.photoTotal || photoCount;
+  const unresolved = extras.unresolved;
+  const filterChips = useMemo(
+    () => albumFilterChips(filter, facets),
+    [filter, facets],
+  );
+  const expandedGroupId = filter.expand ?? null;
 
   useEffect(() => {
     if (smartSummary && !smartSummary.cacheHit) {
@@ -420,6 +479,76 @@ export default function PhotoAlbum({ album }: Props) {
       );
     },
     [pushToast, togglePickState],
+  );
+
+  /* 相似组：点一下代表照片上的角标，这一组的成员就地摊开在墙上；
+     再点一下收回去。展开与折叠都写在地址栏里，刷新与后退都跟着走。 */
+  const toggleGroup = useCallback(
+    (groupId: string) => {
+      if (expandedGroupId === groupId) {
+        setFilter({ ...filter, collapse: true, expand: undefined });
+        return;
+      }
+      setFilter({ ...filter, collapse: true, expand: groupId });
+    },
+    [expandedGroupId, filter, setFilter],
+  );
+
+  /* 换代表照片：这是用户自己的决定，写进相似照片的人工决定里。
+     改完要重取这一页的媒体，墙上的角标与折叠才对得上。 */
+  const setRepresentative = useCallback(
+    async (groupId: string, resourceId: string) => {
+      try {
+        await similarityApi.update(groupId, { representative: resourceId });
+        void queryClient.invalidateQueries({
+          queryKey: libraryQueryKeys.media(album.id),
+        });
+        pushToast({ kind: "success", message: "已更换代表照片" });
+      } catch {
+        pushToast({ kind: "error", message: "更换代表照片失败" });
+      }
+    },
+    [album.id, pushToast, queryClient],
+  );
+
+  /* 墙上的相似组角标。它只在「这一组在本相册里不止一张」时出现 ——
+     一张照片单独一组，说不出「相似」是什么意思。 */
+  const itemOverlay = useCallback(
+    (item: LibraryMediaItem) => {
+      const group = item.similarityGroup;
+      if (!group || group.albumSize < 2) return null;
+      if (group.shown !== item.id) {
+        // 展开的成员：标出它跟代表照片是同一组。
+        if (expandedGroupId !== group.id) return null;
+        return (
+          <span className="pointer-events-none absolute right-1.5 top-1.5 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-meta text-white/90 backdrop-blur">
+            同组
+          </span>
+        );
+      }
+      const expanded = expandedGroupId === group.id;
+      return (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleGroup(group.id);
+          }}
+          aria-pressed={expanded}
+          title={
+            expanded
+              ? "收起这一组"
+              : `这一组有 ${group.albumSize} 张相似的照片，点开就地比较`
+          }
+          className={`hover-reveal absolute right-1.5 top-1.5 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-meta text-white/90 backdrop-blur transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100 group-focus-within:opacity-100 ${
+            expanded ? "opacity-100" : ""
+          }`}
+        >
+          {expanded ? "收起这组" : `${group.albumSize} 张相似`}
+        </button>
+      );
+    },
+    [expandedGroupId, toggleGroup],
   );
 
   // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
@@ -705,38 +834,75 @@ export default function PhotoAlbum({ album }: Props) {
           </div>
           <nav
             aria-label="相册视图"
-            className="flex items-center gap-1 border-t border-border-faint py-2"
+            className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-faint py-2"
           >
-            <button
-              type="button"
-              onClick={() => setSmartMode(false)}
-              className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
-                !smartMode
-                  ? "bg-bg-elevated text-fg shadow-xs"
-                  : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
-              }`}
-              aria-pressed={!smartMode}
-            >
-              原始照片墙
-            </button>
-            <button
-              type="button"
-              onClick={() => setSmartMode(true)}
-              className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
-                smartMode
-                  ? "bg-bg-elevated text-fg shadow-xs"
-                  : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
-              }`}
-              aria-pressed={smartMode}
-            >
-              智能相册
-            </button>
-            {showingSmartGroup && selectedGroup && (
-              <span className="ml-2 truncate text-meta text-fg-muted">
-                {selectedGroup.name} · {selectedGroup.photoCount} 张
-              </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setSmartMode(false)}
+                className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
+                  !smartMode
+                    ? "bg-bg-elevated text-fg shadow-xs"
+                    : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                }`}
+                aria-pressed={!smartMode}
+              >
+                原始照片墙
+              </button>
+              <button
+                type="button"
+                onClick={() => setSmartMode(true)}
+                className={`rounded-md px-3 py-1.5 text-meta transition-colors ${
+                  smartMode
+                    ? "bg-bg-elevated text-fg shadow-xs"
+                    : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                }`}
+                aria-pressed={smartMode}
+              >
+                智能相册
+              </button>
+              {showingSmartGroup && selectedGroup && (
+                <span className="ml-2 truncate text-meta text-fg-muted">
+                  {selectedGroup.name} · {selectedGroup.photoCount} 张
+                </span>
+              )}
+            </div>
+            {/* 筛选条只在原始照片墙这一边：智能相册的分组本身就是筛过的，
+                再加一层筛选会让人以为那些分组还能再筛。 */}
+            {!smartMode && (
+              <div className="ml-auto">
+                <AlbumFilterBar
+                  state={filter}
+                  facets={facets}
+                  resultCount={wallPhotoCount}
+                  photoCount={photoCount}
+                  unresolved={unresolved}
+                  grouped={extras.grouped}
+                  groupedGroups={extras.groupedGroups}
+                  onChange={setFilter}
+                  onClear={clearFilter}
+                />
+              </div>
             )}
           </nav>
+          {/* 生效的条件逐条摆出来：条件能组合，用户不必回到面板里
+              再点一次才能去掉其中一条。 */}
+          {!smartMode && filterChips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-border-faint py-1.5">
+              {filterChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => setFilter(chip.clear)}
+                  className="inline-flex h-7 items-center gap-1 rounded-md bg-bg-subtle px-2 text-meta text-fg transition-colors hover:bg-bg-strong"
+                  title={`去掉这条条件：${chip.label}`}
+                >
+                  {chip.label}
+                  <CloseIcon size={11} />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
@@ -832,6 +998,7 @@ export default function PhotoAlbum({ album }: Props) {
               onToggleSelect={toggleSelect}
               isPicked={isPicked}
               onTogglePick={togglePick}
+              itemOverlay={itemOverlay}
               scrollToIndex={wall.focusIndex}
               onContextMenu={menu.open}
             />
@@ -880,6 +1047,17 @@ export default function PhotoAlbum({ album }: Props) {
               label: "设为封面",
               icon: <ImageIcon size={12} />,
             },
+            /* 换代表照片：只有属于某个相似组的照片才有这个动作。
+               它是用户自己的决定，写进相似照片的人工决定里。 */
+            ...(menu.menu.item.similarityGroup
+              ? ([
+                  {
+                    id: "representative",
+                    label: "设为相似组代表",
+                    icon: <PickIcon size={12} />,
+                  },
+                ] as AnyMenuItem[])
+              : []),
             { id: "sep1", separator: true } as AnyMenuItem,
             {
               id: "properties",
@@ -921,6 +1099,9 @@ export default function PhotoAlbum({ album }: Props) {
             if (id === "properties") setPropertiesFileId(item.id);
             if (id === "copy") void copyLink();
             if (id === "explorer") void openInExplorer();
+            if (id === "representative" && item.similarityGroup) {
+              void setRepresentative(item.similarityGroup.id, item.id);
+            }
           }}
           onClose={menu.close}
         />
