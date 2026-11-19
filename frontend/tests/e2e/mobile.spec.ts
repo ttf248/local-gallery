@@ -91,7 +91,7 @@ test("主流程走得通：进相册、选照片、多选条在视口内", async
 
 test("页面在窄屏上没有横向溢出", async ({ page }) => {
   await scannedNodes(page.request, "photo");
-  for (const route of ["/photo", "/photo/smart-albums", "/photo/recents"]) {
+  for (const route of ["/photo", "/photo/smart-albums", "/photo/me/recents"]) {
     await page.goto(route, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(600);
     const overflow = await page.evaluate(

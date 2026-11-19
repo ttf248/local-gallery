@@ -169,11 +169,8 @@ export async function resetWorkbenchMode(request: APIRequestContext) {
 // 侧栏入口的显示状态存在服务端偏好里，与模式一样是整条用例链共享的。
 // 每条用例开始前把它复位成默认（照片侧收起最近浏览 / 收藏照片 / 精选照片），
 // 免得上一条用例留下的状态污染这一条的侧栏断言。
-export const defaultHiddenNavItems = [
-  "photo.recents",
-  "photo.favorites",
-  "photo.picks",
-];
+// 新导航默认全部显示：每个一级入口回答一个不同的问题。
+export const defaultHiddenNavItems: string[] = [];
 
 export async function resetNavItems(request: APIRequestContext) {
   const response = await request.patch("/api/prefs", {

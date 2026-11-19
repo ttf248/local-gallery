@@ -6,11 +6,12 @@ import { useKeyboard } from "../../hooks/useKeyboard";
 import {
   albumRoute,
   decodePathTail,
-  favoritesRoute,
+  exploreRoute,
   homeRoute,
   isReaderPath,
+  libraryRoute,
+  meRoute,
   pageBoundaryKey,
-  recentsRoute,
   unreadRoute,
 } from "../../utils/path";
 import { tabLabelFor } from "../../utils/pageTabs";
@@ -115,13 +116,16 @@ export default function AppShell() {
   useEffect(() => {
     const titles: Record<string, string> = {
       [homeRoute(mode)]: mode === "comic" ? "漫画库" : "照片库",
-      [recentsRoute(mode)]: mode === "comic" ? "最近阅读" : "最近浏览",
-      [favoritesRoute(mode)]: mode === "comic" ? "收藏漫画" : "收藏照片",
+      [libraryRoute(mode)]: mode === "comic" ? "书架" : "图库",
+      [exploreRoute()]: "探索",
+      [meRoute(mode)]: mode === "comic" ? "我的漫画" : "我的照片",
       [unreadRoute()]: "未读",
       "/tasks": "任务中心",
       "/photo/travels": "足迹",
       "/photo/people": "人物相册",
       "/photo/similarity": "相似照片与连拍",
+      "/photo/semantic": "智能搜索",
+      "/photo/smart-albums": "智能相册",
       "/settings": "设置",
     };
     const path = location.pathname;
@@ -140,8 +144,11 @@ export default function AppShell() {
         // 查表，再补上当前页签的名字，否则标题会掉进工作台的兜底文案。
         // 其余页面仍走兜底（相册页是「相册」，不是「照片库」）。
         const segment = path.split("/")[1] ?? "";
-        if (segment === "settings" || segment === "tasks") {
-          base = titles[`/${segment}`];
+        if (segment === "settings" || segment === "tasks" || segment === "me") {
+          base = titles[`/${segment}`] ?? titles[meRoute(mode)];
+        }
+        if (segment === "search") {
+          base = "搜索结果";
         }
         if (base === undefined) base = workbenchCopy(mode).albumTypeLabel;
       }
@@ -187,9 +194,10 @@ export default function AppShell() {
   useKeyboard({
     "ctrl+b": () => toggleSidebar(),
     "ctrl+h": () => navigate(homeRoute(mode)),
-    "ctrl+d": () => navigate(favoritesRoute(mode)),
+    // 收藏与最近浏览住在「我的」的页签里，快捷键跟着走。
+    "ctrl+d": () => navigate(meRoute(mode, "favorites")),
     "ctrl+,": () => navigate("/settings"),
-    "ctrl+r": () => navigate(recentsRoute(mode)),
+    "ctrl+r": () => navigate(meRoute(mode, "recents")),
     "?": () => setHelpOpen((v) => !v),
     "/": () => {
       const el =

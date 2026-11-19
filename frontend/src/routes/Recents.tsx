@@ -26,7 +26,12 @@ import type { GalleryContextEntry } from "../utils/galleryContext";
 import { cardMatchesQuery } from "../utils/libraryCard";
 
 // 最近访问：从后端 history 列表中读取。带阅读进度。
-export default function Recents() {
+/**
+ * 最近浏览页。
+ *
+ * `embedded` 时不渲染页头：它被嵌在「我的」的页签里。
+ */
+export default function Recents({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const viewMode = useUIStore((s) => s.viewMode);
@@ -163,6 +168,7 @@ export default function Recents() {
 
   return (
     <div className="min-h-full">
+      {embedded ? null : (
       <PageHeading
         title={copy.recentsTitle}
         eyebrow={copy.recentsEyebrow}
@@ -196,6 +202,7 @@ export default function Recents() {
           ) : null
         }
       />
+      )}
 
       {loadFailed && (
         <div className="page-shell mb-4">

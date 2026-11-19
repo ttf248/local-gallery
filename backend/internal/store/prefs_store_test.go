@@ -106,7 +106,7 @@ func TestPrefsStore_GetDefaultsWhenMissing(t *testing.T) {
 	}
 }
 
-// 隐藏导航项：默认收起照片侧三项；旧偏好文件没有这个字段时补上默认值；
+// 隐藏导航项：新导航默认全部显示；旧偏好文件没有这个字段时补上默认值；
 // 写进文件的是生效清单，重开仍是它。
 func TestPrefsStore_HiddenNavItems(t *testing.T) {
 	s := tempStore(t)
@@ -114,14 +114,8 @@ func TestPrefsStore_HiddenNavItems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"photo.recents", "photo.favorites", "photo.picks"}
-	if len(p.HiddenNavItems) != len(want) {
-		t.Fatalf("defaults=%v, want %v", p.HiddenNavItems, want)
-	}
-	for i, key := range want {
-		if p.HiddenNavItems[i] != key {
-			t.Fatalf("defaults=%v, want %v", p.HiddenNavItems, want)
-		}
+	if len(p.HiddenNavItems) != 0 {
+		t.Fatalf("defaults=%v, want none hidden", p.HiddenNavItems)
 	}
 
 	// 旧偏好文件没有 hiddenNavItems 字段：读回来时补上默认清单。
@@ -134,8 +128,8 @@ func TestPrefsStore_HiddenNavItems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.HiddenNavItems) != len(want) || p.HiddenNavItems[0] != want[0] {
-		t.Fatalf("legacy file defaults=%v, want %v", p.HiddenNavItems, want)
+	if len(p.HiddenNavItems) != 0 {
+		t.Fatalf("legacy file defaults=%v, want none hidden", p.HiddenNavItems)
 	}
 
 	if _, err := s.Patch(func(cur *models.Prefs) {

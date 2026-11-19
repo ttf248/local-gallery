@@ -36,29 +36,22 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await page.goto("/");
   // 侧栏是本用例的断言范围：主区也有同名链接，不限定会撞上严格模式。
   const sidebar = page.locator('aside[aria-label="主导航"]');
-  // 照片工作台只列照片那边的东西：漫画的未读、阅读措辞都不在。
-  await expect(sidebar.getByRole("link", { name: "照片库" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "足迹" })).toBeVisible();
+  // 照片工作台只列照片那边的东西：漫画的未读、书架都不在。
+  await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "我的" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "漫画库" })).toHaveCount(0);
-  // 默认收起的三项不在侧栏里：它们在设置页的「导航」分区里能打开。
-  await expect(sidebar.getByRole("link", { name: "最近浏览" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "收藏照片" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "照片库" })).toBeVisible();
 
   const switcher = page.getByRole("group", { name: "工作台模式" });
   await switcher.getByRole("button", { name: "漫画" }).click();
   await expect(page.getByRole("heading", { name: "漫画库" })).toBeVisible();
   // 漫画工作台的菜单换成漫画自己那套，照片那边的一点都不留。
-  await expect(sidebar.getByRole("link", { name: "漫画库" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "我的" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "最近阅读" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "收藏漫画" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "照片库" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "最近浏览" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "收藏照片" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
 
   // 模式写在服务端偏好里，刷新后仍然是漫画工作台。
   await expect
@@ -74,6 +67,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
 
   // 两个模式互斥：没有第三档「全部相册」。
   await expect(sidebar.getByRole("link", { name: "全部相册" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "相似照片" })).toHaveCount(0);
   // 用例结束时把模式复位，别把状态留给后面的用例。
   await page.request.patch("/api/prefs", { data: { appMode: "photo" } });
 });
@@ -83,13 +77,14 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
 test("设置页的导航分区开关侧栏入口", async ({ page }) => {
   await page.goto("/settings/interface");
   const sidebar = page.locator('aside[aria-label="主导航"]');
-  // 默认收起的三项：侧栏里没有，设置页里开关是关着的。
-  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
-  const picksSwitch = page.getByRole("switch", { name: "在导航栏显示精选照片" });
-  await expect(picksSwitch).toHaveAttribute("aria-checked", "false");
+  // 默认全部显示：关掉「探索」后它从侧栏消失。
+  const exploreSwitch = page.getByRole("switch", {
+    name: "在照片导航栏显示探索",
+  });
+  await expect(exploreSwitch).toHaveAttribute("aria-checked", "true");
 
-  await picksSwitch.click();
-  await expect(sidebar.getByRole("link", { name: "精选照片" })).toBeVisible();
+  await exploreSwitch.click();
+  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
   // 写进服务端偏好：换台设备打开也是这一套。
   await expect
     .poll(async () => {
@@ -98,19 +93,19 @@ test("设置页的导航分区开关侧栏入口", async ({ page }) => {
       const prefs = (await response.json()) as { hiddenNavItems?: string[] };
       return (prefs.hiddenNavItems ?? []).join(",");
     })
-    .toBe("photo.recents,photo.favorites");
+    .toBe("photo.explore");
 
-  // 刷新后仍然显示：侧栏读的是服务端偏好，不是本机状态。
+  // 刷新后仍然收起：侧栏读的是服务端偏好，不是本机状态。
   await page.reload();
-  await expect(sidebar.getByRole("link", { name: "精选照片" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
 
-  // 再关掉，侧栏里随之消失。
-  await page.getByRole("switch", { name: "在导航栏显示精选照片" }).click();
-  await expect(sidebar.getByRole("link", { name: "精选照片" })).toHaveCount(0);
+  // 再打开，侧栏里随之回来。
+  await page.getByRole("switch", { name: "在照片导航栏显示探索" }).click();
+  await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
 
   // 工作台首页固定显示，不给开关。
   await expect(
-    page.getByRole("switch", { name: "在导航栏显示照片库" }),
+    page.getByRole("switch", { name: "在照片导航栏显示首页" }),
   ).toHaveCount(0);
 });
 
@@ -1123,8 +1118,8 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
     const pages = [
       ["/comic", ids],
       [`/comic/albums/${collection.id}`, childIds],
-      ["/comic/favorites", ids],
-      ["/comic/recents", ids],
+      ["/comic/me/favorites", ids],
+      ["/comic/me/recents", ids],
       ["/comic/unread", ids],
       [`/comic/tags/${encodeURIComponent("测试")}`, ids],
     ] as const;
@@ -1281,8 +1276,8 @@ test("六个列表支持按最近看排序，集合与标签具有当前页排�
     const pages = [
       ["/comic", expectedRoot],
       [`/comic/albums/${collectionId}`, expectedChildren],
-      ["/comic/favorites", expectedRoot],
-      ["/comic/recents", expectedRoot.slice(0, 2)],
+      ["/comic/me/favorites", expectedRoot],
+      ["/comic/me/recents", expectedRoot.slice(0, 2)],
       ["/comic/unread", expectedRoot],
       [`/comic/tags/${encodeURIComponent("测试")}`, expectedRoot],
     ] as const;

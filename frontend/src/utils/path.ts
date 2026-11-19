@@ -1,4 +1,5 @@
 import type { AppMode } from "../api/library";
+import { meTabsFor } from "./meTabs";
 
 /**
  * 工作台路由。
@@ -39,14 +40,56 @@ export function homeRoute(mode: AppMode): string {
   return MODE_PREFIX[mode];
 }
 
-/** 最近浏览 / 最近阅读。 */
-export function recentsRoute(mode: AppMode): string {
-  return `${MODE_PREFIX[mode]}/recents`;
+/**
+ * 图库（照片侧）/ 书架（漫画侧）。
+ *
+ * 两侧是同一个页面：它按当前媒体根的真实目录层级列出全部相册与集合，
+ * 措辞与封面画幅随侧走。
+ */
+export function libraryRoute(mode: AppMode): string {
+  return `${MODE_PREFIX[mode]}/library`;
 }
 
-/** 收藏照片 / 收藏漫画。 */
+/**
+ * 探索页。只属于照片侧：漫画没有时间、人物、地点与主题这些维度，
+ * 它的结构浏览就是书架。
+ */
+export function exploreRoute(): string {
+  return `${MODE_PREFIX.photo}/explore`;
+}
+
+/**
+ * 「我的」页：个人数据（精选 / 收藏 / 最近浏览）。
+ *
+ * 页签 id 进路径：切页签是一次普通导航，深链能直接落到某一页签。
+ */
+export function meRoute(mode: AppMode, tab?: string): string {
+  const base = `${MODE_PREFIX[mode]}/me`;
+  return tab ? `${base}/${tab}` : base;
+}
+
+/**
+ * 名称搜索结果页。
+ *
+ * 顶栏的搜索框回车落到这里：结果是一页可见的清单，而不是把关键词塞进
+ * 地址后回到一个不显示结果的首页。
+ */
+export function searchRoute(mode: AppMode): string {
+  return `${MODE_PREFIX[mode]}/search`;
+}
+
+/**
+ * 最近浏览 / 最近阅读。
+ *
+ * 它住在「我的」的页签里：旧路径（/photo/recents）会重定向过来。
+ */
+export function recentsRoute(mode: AppMode): string {
+  return meRoute(mode, "recents");
+}
+
+/** 收藏。资源级标记，可以是相册、集合、作品、卷或标签。 */
 export function favoritesRoute(mode: AppMode): string {
-  return `${MODE_PREFIX[mode]}/favorites`;
+  return meRoute(mode, "favorites");
 }
 
 /**
@@ -165,25 +208,25 @@ export function readerRoute(albumId: string, index?: number): string {
 }
 
 /**
- * 两个工作台共用的页面路径（相对模式前缀）。
+ * 两个工作台各自的页面路径（相对模式前缀）。
  *
  * 子路径自带前导斜杠：完整路径 = 模式前缀 + 子路径。
  * 少了这个斜杠就会拼出 "/photoalbums/*" 这种匹配不上的路径 ——
  * 症状是页面能开首页，点进相册却落回兜底路由。
+ *
+ * 两侧的清单不同：探索只属于照片侧（漫画没有时间、人物、地点与主题），
+ * 其余页面两侧共用同一批组件，差别在数据源与措辞。
  */
-export const MODE_ROUTE_PATHS = [
-  "",
-  "/recents",
-  "/favorites",
-  "/albums/*",
-  "/tags/*",
-] as const;
+export const MODE_ROUTE_PATHS: Record<AppMode, readonly string[]> = {
+  photo: ["", "/explore", "/me/:tab", "/albums/*", "/tags/*"],
+  comic: ["", "/me/:tab", "/albums/*", "/tags/*"],
+};
 
 /**
  * 切到另一侧时该去的页面。
  *
- * 只有两侧都有的同名页（最近 / 收藏 / 标签）能一一对应；相册与阅读器
- * 只属于一侧，未读只属于漫画侧，因此它们都回落到目标侧首页。
+ * 两侧都有对应物的页面（图库 / 搜索 / 标签 / 「我的」的同名页签）一一搬
+ * 过去；只属于一侧的（相册、阅读器、未读、精选）回落到目标侧首页。
  * 这张表是「模式切换」唯一的语义来源，侧栏开关与阅读器顶栏共用它。
  */
 export function counterpartRoute(pathname: string, target: AppMode): string {
@@ -191,8 +234,17 @@ export function counterpartRoute(pathname: string, target: AppMode): string {
   if (!current) return homeRoute(target);
   if (current === target) return pathname;
   const rest = pathname.slice(MODE_PREFIX[current].length) || "/";
-  if (rest === "/recents" || rest === "/favorites") {
+  // 图库与搜索两侧同名：照片侧叫图库，漫画侧叫书架，同一个页面。
+  if (rest === "/library" || rest === "/search") {
     return `${MODE_PREFIX[target]}${rest}`;
+  }
+  // 「我的」的页签按名字搬：两侧都有 favorites / recents；
+  // 精选只在照片侧、在读只在漫画侧，对不上就回落到目标侧首页。
+  if (rest.startsWith("/me")) {
+    const tabId = rest.slice("/me".length).replace(/^\//, "");
+    const tabs = meTabsFor(target);
+    const tab = tabs.find((t) => t.id === tabId);
+    return tab ? meRoute(target, tab.id) : homeRoute(target);
   }
   // 标签段原样搬过去：它可能含字面 %xx，重新编码会破坏语义。
   if (rest.startsWith(TAGS_MARKER)) {
@@ -257,11 +309,14 @@ export function favoriteResourceId(item: {
  * 重挂整页 —— 任务中心里已选的分析模块与没保存的每日计划草稿都在页面
  * 状态里，重挂一次就丢了。
  *
- * 因此只把这两页的子路径折叠成同一个 key，其余路径一字不动：相册页
- * 之间仍然逐页重挂（换相册就是换一份数据）。
+ * 因此只把这几页的子路径折叠成同一个 key，其余路径一字不动：相册页
+ * 之间仍然逐页重挂（换相册就是换一份数据）。「我的」的页签也在路径里
+ * （`/photo/me/picks`），切页签同样不该重挂整页。
  */
 export function pageBoundaryKey(pathname: string): string {
   const segment = pathname.split("/")[1] ?? "";
-  if (segment === "settings" || segment === "tasks") return segment;
+  if (segment === "settings" || segment === "tasks" || segment === "me") {
+    return segment;
+  }
   return pathname;
 }

@@ -40,7 +40,8 @@ const basePrefs: Prefs = {
   theme: "system",
   sidebarCollapsed: false,
   appMode: "photo",
-  hiddenNavItems: ["photo.recents", "photo.favorites", "photo.picks"],
+  // 新导航默认全部显示。
+  hiddenNavItems: [],
 };
 const clientForTest = () =>
   new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -208,35 +209,33 @@ it("修改其他阅读偏好不覆盖更晚加载的历史快照", async () => {
 // 导航分区：逐项开关侧栏入口，存的是生效的隐藏清单。
 it("导航分区按当前偏好显示每一项的开关状态", async () => {
   renderSettings("interface");
-  // 默认收起的三项在设置页里也是关着的。
+  // 新导航默认全部显示：每个一级入口回答一个不同的问题，
+  // 收起任何一个都会让那一类内容少一条路。
   expect(
-    await screen.findByRole("switch", { name: "在导航栏显示最近浏览" }),
-  ).toHaveAttribute("aria-checked", "false");
-  expect(
-    screen.getByRole("switch", { name: "在导航栏显示收藏照片" }),
-  ).toHaveAttribute("aria-checked", "false");
-  expect(
-    screen.getByRole("switch", { name: "在导航栏显示精选照片" }),
-  ).toHaveAttribute("aria-checked", "false");
-  expect(
-    screen.getByRole("switch", { name: "在导航栏显示足迹" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示探索" }),
   ).toHaveAttribute("aria-checked", "true");
-  // 漫画侧独立：漫画库的入口照旧开着。
   expect(
-    screen.getByRole("switch", { name: "在导航栏显示未读" }),
+    screen.getByRole("switch", { name: "在照片导航栏显示我的" }),
+  ).toHaveAttribute("aria-checked", "true");
+  expect(
+    screen.getByRole("switch", { name: "在照片导航栏显示相似照片" }),
+  ).toHaveAttribute("aria-checked", "true");
+  // 漫画侧独立：它的入口各是各的。
+  expect(
+    screen.getByRole("switch", { name: "在漫画导航栏显示未读" }),
   ).toHaveAttribute("aria-checked", "true");
 });
 
 it("工作台首页固定显示，不提供开关", async () => {
   renderSettings("interface");
-  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   expect(
-    screen.queryByRole("switch", { name: "在导航栏显示照片库" }),
+    screen.queryByRole("switch", { name: "在照片导航栏显示首页" }),
   ).not.toBeInTheDocument();
   expect(screen.getAllByText("固定显示")).toHaveLength(2);
 });
 
-it("打开导航项后把生效的隐藏清单写回服务端", async () => {
+it("关掉导航项后把生效的隐藏清单写回服务端", async () => {
   const client = clientForTest();
   vi.mocked(prefsApi.patch).mockImplementation(async (patch) => ({
     ...basePrefs,
@@ -244,18 +243,18 @@ it("打开导航项后把生效的隐藏清单写回服务端", async () => {
   }));
   renderSettings("interface", client);
   fireEvent.click(
-    await screen.findByRole("switch", { name: "在导航栏显示精选照片" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示探索" }),
   );
   await waitFor(() =>
     expect(prefsApi.patch).toHaveBeenCalledWith({
-      hiddenNavItems: ["photo.recents", "photo.favorites"],
+      hiddenNavItems: ["photo.explore"],
     }),
   );
-  // 写回后开关立刻变成开着的，不需要刷新页面。
+  // 写回后开关立刻变成关着的，不需要刷新页面。
   await waitFor(() =>
     expect(
-      screen.getByRole("switch", { name: "在导航栏显示精选照片" }),
-    ).toHaveAttribute("aria-checked", "true"),
+      screen.getByRole("switch", { name: "在照片导航栏显示探索" }),
+    ).toHaveAttribute("aria-checked", "false"),
   );
 });
 
@@ -263,7 +262,7 @@ it("保存导航设置失败保留原值并提示", async () => {
   vi.mocked(prefsApi.patch).mockRejectedValueOnce(new Error("offline"));
   renderSettings("interface");
   fireEvent.click(
-    await screen.findByRole("switch", { name: "在导航栏显示足迹" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示探索" }),
   );
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
@@ -271,7 +270,7 @@ it("保存导航设置失败保留原值并提示", async () => {
     ),
   );
   expect(
-    screen.getByRole("switch", { name: "在导航栏显示足迹" }),
+    screen.getByRole("switch", { name: "在照片导航栏显示探索" }),
   ).toHaveAttribute("aria-checked", "true");
 });
 
@@ -369,7 +368,7 @@ it("关于页脚在每个页签下都在", async () => {
 // 导航分区按工作台分两组列出：两组各是一块，照片那一组在左。
 it("导航分区按工作台分成照片与漫画两组", async () => {
   renderSettings("interface");
-  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   const nav = screen.getByRole("region", { name: "导航" });
   expect(within(nav).getByText("照片")).toBeInTheDocument();
   expect(within(nav).getByText("漫画")).toBeInTheDocument();
@@ -390,7 +389,7 @@ it("一组设置行装在同一个行组里", async () => {
   expect(appearanceRows).not.toBeNull();
   expect(appearanceRows?.querySelectorAll(".settings-row").length).toBe(4);
 
-  await screen.findByRole("switch", { name: "在导航栏显示未读" });
+  await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   const nav = screen.getByRole("region", { name: "导航" });
   for (const group of nav.querySelectorAll(".settings-group")) {
     const rows = group.querySelector(".settings-rows");

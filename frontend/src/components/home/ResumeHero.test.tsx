@@ -84,7 +84,7 @@ describe("照片工作台的「接着看」专区", () => {
       />,
     );
     const link = screen.getByRole("link", { name: /还有 1 本最近看过/ });
-    expect(link).toHaveAttribute("href", "/photo/recents");
+    expect(link).toHaveAttribute("href", "/photo/me/recents");
   });
 
   it("摆得下的相册不再挂「还有」出口", () => {

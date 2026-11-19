@@ -47,11 +47,11 @@ test("照片可以加入精选，在精选页里聚在一起，重启后仍然�
     })
     .toBe(1);
 
-  // 精选页把它列出来，并说得出它属于哪本相册。
-  await page.goto("/photo/picks");
+  // 「我的 · 精选照片」把它列出来，并说得出它属于哪本相册。
+  await page.goto("/photo/me/picks");
   await expect(
-    page.getByRole("heading", { name: "精选照片", exact: true }),
-  ).toBeVisible();
+    page.getByRole("tab", { name: "精选照片", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
   await expect(page.getByText("1 张", { exact: true })).toBeVisible();
   const pickedTile = page.locator('button[aria-label*="移出精选"]').first();
   await expect(pickedTile).toBeVisible();

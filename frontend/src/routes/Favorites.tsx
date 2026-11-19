@@ -41,7 +41,13 @@ import { SelectionToggle } from "../components/album/BulkActions";
  */
 const SUGGEST_WIDTH = "flex-1 min-w-[148px] max-w-[360px]";
 
-export default function Favorites() {
+/**
+ * 收藏页。
+ *
+ * `embedded` 时不渲染页头：它被嵌在「我的」的页签里，页头由外层给，
+ * 两处各写一个标题就是同一个名字出现两次。
+ */
+export default function Favorites({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate();
   const viewMode = useUIStore((s) => s.viewMode);
   const pushToast = useUIStore((s) => s.pushToast);
@@ -200,6 +206,7 @@ export default function Favorites() {
 
   return (
     <div className="min-h-full">
+      {embedded ? null : (
       <PageHeading
         title={copy.favoritesTitle}
         eyebrow="值得反复翻看的"
@@ -232,6 +239,7 @@ export default function Favorites() {
           ) : null
         }
       />
+      )}
 
       {loadFailed && (
         <div className="page-shell mb-4">

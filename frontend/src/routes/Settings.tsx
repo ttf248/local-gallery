@@ -382,6 +382,7 @@ export function SettingsView({
                     <NavRow
                       key={entry.key}
                       entry={entry}
+                      scope="照片"
                       visible={!hiddenNavItems.has(entry.key)}
                       disabled={patchNavItem.isPending}
                       onChange={(visible) =>
@@ -395,6 +396,7 @@ export function SettingsView({
                     <NavRow
                       key={entry.key}
                       entry={entry}
+                      scope="漫画"
                       visible={!hiddenNavItems.has(entry.key)}
                       disabled={patchNavItem.isPending}
                       onChange={(visible) =>
@@ -689,11 +691,14 @@ function Group({
  */
 function NavRow({
   entry,
+  scope,
   visible,
   disabled,
   onChange,
 }: {
   entry: NavEntry;
+  /** 所属工作台：两侧都有「我的」这样的同名入口，名字里要能分清。 */
+  scope: string;
   visible: boolean;
   disabled: boolean;
   onChange: (visible: boolean) => void;
@@ -709,7 +714,7 @@ function NavRow({
       </span>
       {!entry.locked && (
         <Toggle
-          label={`在导航栏显示${entry.label}`}
+          label={`在${scope}导航栏显示${entry.label}`}
           checked={visible}
           disabled={disabled}
           onChange={onChange}

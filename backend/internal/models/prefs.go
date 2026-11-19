@@ -85,17 +85,13 @@ const MaxHiddenNavItems = 32
 
 // DefaultHiddenNavItems 是默认收起的导航项。
 //
-// 照片侧的最近浏览、收藏照片与精选照片默认不出现在侧栏：它们都有更近
-// 的入口（照片墙、首页专区），侧栏留给更少、更常用的入口。
+// 新导航只有几个一级入口（首页、图库、探索、我的、书架），每个回答一个
+// 不同的问题，默认全部显示：收起任何一个都会让那一类内容少一条路。
 //
 // 这份清单与前端 utils/navEntries.ts 的 DEFAULT_HIDDEN_NAV_ITEMS 一一
 // 对应，改一处就要改另一处。之所以两边各留一份：服务端存的是生效清单，
-// 没有默认值就无法区分「用户没配过」与「用户把三项都放出来了」。
-var DefaultHiddenNavItems = []string{
-	"photo.recents",
-	"photo.favorites",
-	"photo.picks",
-}
+// 没有默认值就无法区分「用户没配过」与「用户把它收起来了」。
+var DefaultHiddenNavItems = []string{}
 
 // IsValidNavItemKey 校验导航项 key 的格式：<侧>.<名字>。
 //

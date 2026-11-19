@@ -104,11 +104,14 @@ export function PagePanel({
   idPrefix,
   tab,
   active,
+  className,
   children,
 }: {
   idPrefix: string;
   tab: PageTabDef;
   active: string;
+  /** 面板自己的版面类：页面需要它撑满剩余高度时用。 */
+  className?: string;
   children: ReactNode;
 }) {
   return (
@@ -117,6 +120,7 @@ export function PagePanel({
       id={`${idPrefix}-panel-${tab.id}`}
       aria-labelledby={`${idPrefix}-tab-${tab.id}`}
       hidden={tab.id !== active}
+      className={className}
     >
       {children}
     </div>

@@ -37,8 +37,7 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
   expect(album).toBeDefined();
   expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
   // 侧栏入口默认收起：这条用例要从侧栏点进「最近浏览」，先把它放出来。
-  await showNavItems(page.request, ["photo.recents"]);
-  let historyWrites = 0;
+    let historyWrites = 0;
   page.on("request", (request) => {
     if (
       new URL(request.url()).pathname === "/api/history" &&
@@ -46,7 +45,7 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
     )
       historyWrites++;
   });
-  await page.goto("/photo/recents");
+  await page.goto("/photo/me/recents");
   await expect(page.getByText("还没有最近浏览", { exact: true })).toBeVisible();
   const search = page.getByRole("combobox");
   await search.fill("sample-paged-images");
@@ -111,7 +110,7 @@ test("看照片也记一次访问：照片出处的那本相册进最近浏览",
   ).json()) as { history: Array<{ albumId: string }> };
   const albumId = result.history[0].albumId;
   expect(albumId).toMatch(/^a_/);
-  await page.goto("/photo/recents");
+  await page.goto("/photo/me/recents");
   await expect(
     page.locator(`a[href="/photo/albums/${albumId}"]`).first(),
   ).toBeVisible();
@@ -140,7 +139,7 @@ for (const failure of ["history", "nodes"] as const) {
         });
       else await route.continue();
     });
-    await page.goto("/photo/recents");
+    await page.goto("/photo/me/recents");
     const alert = page.getByRole("alert");
     await expect(alert).toContainText(
       failure === "history" ? "最近浏览加载失败" : "相册信息加载失败",
@@ -219,7 +218,7 @@ for (const failure of ["favorites", "nodes", "tags"] as const) {
           else await route.continue();
         },
       );
-      await page.goto("/photo/favorites");
+      await page.goto("/photo/me/favorites");
       const alert = page.getByRole("alert");
       await expect(alert).toContainText(
         failure === "favorites" ? "收藏加载失败" : "收藏详情加载失败",
@@ -367,7 +366,7 @@ for (const operation of ["limit", "clear", "visit"] as const) {
           ).ok(),
         ).toBeTruthy();
       }
-      await page.goto("/photo/recents");
+      await page.goto("/photo/me/recents");
       await expect(
         page.locator(`main a[href="/photo/albums/${first.id}"]`).first(),
       ).toBeVisible();
@@ -465,7 +464,7 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
         ).ok(),
       ).toBeTruthy();
     const seededCount = (await list()).favorites.length;
-    await page.goto("/photo/favorites");
+    await page.goto("/photo/me/favorites");
     await expect(
       page.locator(`main a[href="/photo/albums/${album.id}"]`).first(),
     ).toBeVisible();
@@ -534,7 +533,7 @@ test("收藏标签复制链接保留字面百分号并可直接打开", async ({
       ).ok(),
     ).toBeTruthy();
     await installCopyAudit(page, "api");
-    await page.goto("/photo/favorites");
+    await page.goto("/photo/me/favorites");
     const tagPath = `/photo/tags/${encodeURIComponent(tag)}`;
     const card = page.locator(
       `main [data-virtuoso-scroller] a[href="${tagPath}"]`,

@@ -527,3 +527,28 @@ export const TasksIcon = (p: IconProps) => (
     <path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2" />
   </svg>
 );
+
+/** 探索：指南针 */
+export const CompassIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="m15.5 8.5-2 5-5 2 2-5z" />
+  </svg>
+);
+
+/** 我的：人 */
+export const UserIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="8" r="3.5" />
+    <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+  </svg>
+);
+
+/** 整理：图层（分组归拢） */
+export const LayersIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="m12 3 9 5-9 5-9-5z" />
+    <path d="m3.5 12.5 8.5 4.7 8.5-4.7" />
+    <path d="m3.5 16.5 8.5 4.7 8.5-4.7" />
+  </svg>
+);

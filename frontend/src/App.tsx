@@ -10,12 +10,12 @@ import { useTheme } from "./hooks/useTheme";
 import { useAppMode, useAppModeHydration } from "./hooks/useAppMode";
 import { useLibraryActivitySync } from "./hooks/useLibrary";
 import { homeRoute, MODE_PREFIX, MODE_ROUTE_PATHS } from "./utils/path";
+import { PHOTO_ME_TABS, COMIC_ME_TABS } from "./utils/meTabs";
 import type { AppMode } from "./api/library";
 
 const Home = lazy(() => import("./routes/Home"));
-const Recents = lazy(() => import("./routes/Recents"));
-const Favorites = lazy(() => import("./routes/Favorites"));
-const Picks = lazy(() => import("./routes/Picks"));
+const Explore = lazy(() => import("./routes/Explore"));
+const Me = lazy(() => import("./routes/Me"));
 const YearPhotos = lazy(() => import("./routes/YearPhotos"));
 const Unread = lazy(() => import("./routes/Unread"));
 const Album = lazy(() => import("./routes/Album"));
@@ -40,20 +40,18 @@ function lazyPage(Page: ComponentType) {
   );
 }
 
-// 两个工作台各有一套同名页面。路径表只有一份，内容随模式前缀走：
-// 照片侧与漫画侧的「最近 / 收藏 / 相册 / 标签」是同一批组件，
-// 差别在数据源与措辞，由 workbench.ts 统一收口。
-//
-// 路径清单只有一个来源（utils/path.ts 的 MODE_ROUTE_PATHS）：子路径自带
-// 前导斜杠，完整路径 = 模式前缀 + 子路径。少一个斜杠就会拼出
-// "/photoalbums/*" 这种匹配不上的路径 —— 首页能开，点进相册却落回兜底。
-const MODE_ROUTE_ELEMENTS: Record<
-  (typeof MODE_ROUTE_PATHS)[number],
-  ComponentType
-> = {
+/**
+ * 模式路径 → 页面。
+ *
+ * 两个工作台共用同一批组件，差别在数据源与措辞，由 workbench.ts 统一收口。
+ * 路径清单只有一个来源（utils/path.ts 的 MODE_ROUTE_PATHS）：子路径自带
+ * 前导斜杠，完整路径 = 模式前缀 + 子路径。少一个斜杠就会拼出
+ * "/photoalbums/*" 这种匹配不上的路径 —— 首页能开，点进相册却落回兜底。
+ */
+const MODE_ROUTE_ELEMENTS: Record<string, ComponentType> = {
   "": Home,
-  "/recents": Recents,
-  "/favorites": Favorites,
+  "/explore": Explore,
+  "/me/:tab": Me,
   "/albums/*": Album,
   "/tags/*": Tag,
 };
@@ -74,7 +72,7 @@ export default function App() {
         <Routes>
           <Route element={<AppShell />}>
             {MODES.flatMap((mode) =>
-              MODE_ROUTE_PATHS.map((path) => (
+              MODE_ROUTE_PATHS[mode].map((path) => (
                 <Route
                   key={`${MODE_PREFIX[mode]}${path}`}
                   path={`${MODE_PREFIX[mode]}${path}`}
@@ -82,10 +80,39 @@ export default function App() {
                 />
               )),
             )}
+            {/* 「我的」缺省落到第一个页签。 */}
+            <Route
+              path="/photo/me"
+              element={<Navigate to={`/photo/me/${PHOTO_ME_TABS[0].id}`} replace />}
+            />
+            <Route
+              path="/comic/me"
+              element={<Navigate to={`/comic/me/${COMIC_ME_TABS[0].id}`} replace />}
+            />
+            {/* 旧路径重定向到新入口：书签与外链照旧可用。
+                它们是一次普通导航（replace），不留一串跳来跳去的历史。 */}
+            <Route
+              path="/photo/picks"
+              element={<Navigate to="/photo/me/picks" replace />}
+            />
+            <Route
+              path="/photo/favorites"
+              element={<Navigate to="/photo/me/favorites" replace />}
+            />
+            <Route
+              path="/photo/recents"
+              element={<Navigate to="/photo/me/recents" replace />}
+            />
+            <Route
+              path="/comic/favorites"
+              element={<Navigate to="/comic/me/favorites" replace />}
+            />
+            <Route
+              path="/comic/recents"
+              element={<Navigate to="/comic/me/recents" replace />}
+            />
             {/* 未读只属于漫画工作台：照片侧没有这个页面，路由表里也不注册。 */}
             <Route path="/comic/unread" element={lazyPage(Unread)} />
-            {/* 精选只属于照片工作台：它是照片级的挑选，与漫画的阅读进度无关。 */}
-            <Route path="/photo/picks" element={lazyPage(Picks)} />
             {/* 年份墙也只属于照片侧：漫画按作品与卷组织，年份对它没有意义。 */}
             <Route path="/photo/years/:year" element={lazyPage(YearPhotos)} />
             <Route path="/photo/travels" element={lazyPage(Travels)} />

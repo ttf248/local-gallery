@@ -79,7 +79,7 @@ describe("ContinueReadingHero", () => {
     expect(cardButtons.length).toBe(4);
     expect(
       screen.getByRole("link", { name: /还有 16 卷在读/ }),
-    ).toHaveAttribute("href", "/comic/recents");
+    ).toHaveAttribute("href", "/comic/me/recents");
   });
 
   it("没有在读相册时不渲染空阅读区", () => {

@@ -1,24 +1,17 @@
 import {
-  ClockIcon,
+  CompassIcon,
   CopyIcon,
-  FolderSearchIcon,
   HomeIcon,
-  MapPinIcon,
-  PeopleIcon,
-  PickIcon,
   SparkleIcon,
-  StarIcon,
+  TasksIcon,
+  SettingsIcon,
+  UserIcon,
 } from "../components/common/Icon";
 import {
-  favoritesRoute,
+  exploreRoute,
   homeRoute,
-  peopleRoute,
-  picksRoute,
-  recentsRoute,
-  semanticSearchRoute,
+  meRoute,
   similarityRoute,
-  smartAlbumsRoute,
-  travelsRoute,
   unreadRoute,
 } from "./path";
 import type { AppMode } from "../api/library";
@@ -29,6 +22,12 @@ import type { AppMode } from "../api/library";
  * 这是导航项的唯一一份清单：侧栏按它渲染，设置页的「导航」分区也按它
  * 逐项开关。两处共用一份，就不会出现侧栏写着「精选照片」而设置页里
  * 叫「精选」的情况。
+ *
+ * 侧栏按**分组**呈现，而不是一长串平铺入口：
+ *
+ * - 内容组（照片 / 漫画）：这一侧的主导航 —— 首页、图库、探索、我的。
+ * - 整理组：相似照片这类写操作，是次级入口，不与主导航混在一列。
+ * - 本机组：任务中心与设置。它们不属于任何一侧，排在所有内容入口之后。
  *
  * 侧栏只呈现当前工作台的那一组。两个模式是完全独立的界面：照片这边
  * 只有浏览、收藏与最近；漫画这边才有未读与继续阅读。菜单不混排，
@@ -42,8 +41,8 @@ export interface NavEntry {
   Icon: typeof HomeIcon;
   /** 路由路径。 */
   to: string;
-  /** 所属工作台。 */
-  mode: AppMode;
+  /** 所属工作台。本机组的条目不属于任何一侧。 */
+  mode?: AppMode;
   /**
    * 固定显示：工作台首页不可收起。
    *
@@ -52,42 +51,137 @@ export interface NavEntry {
   locked?: boolean;
 }
 
+/** 侧栏的一组入口。 */
+export interface NavGroup {
+  /** 稳定 id：分组名也进服务端偏好吗？不进 —— 只有条目可收起。 */
+  key: string;
+  /** 分组名（折叠态不显示）。 */
+  label: string;
+  entries: NavEntry[];
+}
+
 export const PHOTO_NAV: NavEntry[] = [
-  { key: "photo.home", label: "照片库", Icon: HomeIcon, to: homeRoute("photo"), mode: "photo", locked: true },
-  { key: "photo.recents", label: "最近浏览", Icon: ClockIcon, to: recentsRoute("photo"), mode: "photo" },
-  { key: "photo.favorites", label: "收藏照片", Icon: StarIcon, to: favoritesRoute("photo"), mode: "photo" },
-  { key: "photo.picks", label: "精选照片", Icon: PickIcon, to: picksRoute(), mode: "photo" },
-  { key: "photo.travels", label: "足迹", Icon: MapPinIcon, to: travelsRoute(), mode: "photo" },
-  { key: "photo.people", label: "人物相册", Icon: PeopleIcon, to: peopleRoute(), mode: "photo" },
-  { key: "photo.smart-albums", label: "智能相册", Icon: SparkleIcon, to: smartAlbumsRoute(), mode: "photo" },
-  { key: "photo.similarity", label: "相似照片", Icon: CopyIcon, to: similarityRoute(), mode: "photo" },
-  { key: "photo.semantic", label: "智能搜索", Icon: FolderSearchIcon, to: semanticSearchRoute(), mode: "photo" },
+  {
+    key: "photo.home",
+    label: "首页",
+    Icon: HomeIcon,
+    to: homeRoute("photo"),
+    mode: "photo",
+    locked: true,
+  },
+  {
+    key: "photo.explore",
+    label: "探索",
+    Icon: CompassIcon,
+    to: exploreRoute(),
+    mode: "photo",
+  },
+  {
+    key: "photo.me",
+    label: "我的",
+    Icon: UserIcon,
+    to: meRoute("photo"),
+    mode: "photo",
+  },
+  {
+    key: "photo.organize",
+    label: "相似照片",
+    Icon: CopyIcon,
+    to: similarityRoute(),
+    mode: "photo",
+  },
 ];
 
 export const COMIC_NAV: NavEntry[] = [
-  { key: "comic.home", label: "漫画库", Icon: HomeIcon, to: homeRoute("comic"), mode: "comic", locked: true },
-  { key: "comic.unread", label: "未读", Icon: SparkleIcon, to: unreadRoute(), mode: "comic" },
-  { key: "comic.recents", label: "最近阅读", Icon: ClockIcon, to: recentsRoute("comic"), mode: "comic" },
-  { key: "comic.favorites", label: "收藏漫画", Icon: StarIcon, to: favoritesRoute("comic"), mode: "comic" },
+  {
+    key: "comic.home",
+    label: "首页",
+    Icon: HomeIcon,
+    to: homeRoute("comic"),
+    mode: "comic",
+    locked: true,
+  },
+  {
+    key: "comic.me",
+    label: "我的",
+    Icon: UserIcon,
+    to: meRoute("comic"),
+    mode: "comic",
+  },
+  {
+    key: "comic.unread",
+    label: "未读",
+    Icon: SparkleIcon,
+    to: unreadRoute(),
+    mode: "comic",
+  },
 ];
+
+/**
+ * 侧栏分组。
+ *
+ * 照片侧：主导航（首页 / 图库 / 探索 / 我的）+ 整理（相似照片）+ 本机。
+ * 漫画侧：主导航（首页 / 书架 / 我的 / 未读）+ 本机。
+ */
+export const PHOTO_NAV_GROUPS: NavGroup[] = [
+  { key: "photo.main", label: "照片", entries: PHOTO_NAV.slice(0, 3) },
+  { key: "photo.organize", label: "整理", entries: PHOTO_NAV.slice(3) },
+];
+
+export const COMIC_NAV_GROUPS: NavGroup[] = [
+  { key: "comic.main", label: "漫画", entries: COMIC_NAV },
+];
+
+/**
+ * 本机组：任务中心与设置。
+ *
+ * 它们不属于当前工作台，单独成组，放在浏览组下面 —— 看完照片再管机器
+ * 上的事，顺序不能反。这两项不属于任何一侧，也不在设置页的开关范围
+ * 内。
+ */
+export const MACHINE_GROUP: NavGroup = {
+  key: "machine",
+  label: "本机",
+  entries: [
+    {
+      key: "machine.tasks",
+      label: "任务中心",
+      Icon: TasksIcon,
+      to: "/tasks",
+    },
+    {
+      key: "machine.settings",
+      label: "设置",
+      Icon: SettingsIcon,
+      to: "/settings",
+    },
+  ],
+};
 
 /**
  * 默认收起的导航项。
  *
- * 照片侧的最近浏览、收藏照片与精选照片默认不出现在侧栏：它们都有更近
- * 的入口（照片墙、首页专区），侧栏留给更少、更常用的入口。
+ * 新导航只有几个一级入口，全部默认显示：它们各自回答一个不同的问题，
+ * 收起任何一个都会让那一类内容少一条路。高级整理（相似照片）仍然在
+ * 侧栏里，但单独成组、视觉次级。
  *
  * 这份清单与后端 models.DefaultHiddenNavItems 一一对应，改一处就要改
  * 另一处 —— 服务端存的是生效清单，没有默认值就无法区分「用户没配过」
- * 与「用户把三项都放出来了」。
+ * 与「用户把它收起来了」。
  */
-export const DEFAULT_HIDDEN_NAV_ITEMS = [
-  "photo.recents",
-  "photo.favorites",
-  "photo.picks",
-];
+export const DEFAULT_HIDDEN_NAV_ITEMS: string[] = [];
 
 /** 某个工作台的导航项。 */
 export function navEntriesFor(mode: AppMode): NavEntry[] {
   return mode === "comic" ? COMIC_NAV : PHOTO_NAV;
+}
+
+/** 某个工作台的侧栏分组（不含本机组）。 */
+export function navGroupsFor(mode: AppMode): NavGroup[] {
+  return mode === "comic" ? COMIC_NAV_GROUPS : PHOTO_NAV_GROUPS;
+}
+
+/** 某个工作台的入口 key 清单（设置页的「导航」分区按它渲染）。 */
+export function navKeysFor(mode: AppMode): string[] {
+  return navEntriesFor(mode).map((entry) => entry.key);
 }

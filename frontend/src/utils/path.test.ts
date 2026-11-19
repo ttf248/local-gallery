@@ -40,10 +40,10 @@ describe("路由构造", () => {
   it("每个入口落在自己那一侧", () => {
     expect(homeRoute("photo")).toBe("/photo");
     expect(homeRoute("comic")).toBe("/comic");
-    expect(recentsRoute("photo")).toBe("/photo/recents");
-    expect(recentsRoute("comic")).toBe("/comic/recents");
-    expect(favoritesRoute("photo")).toBe("/photo/favorites");
-    expect(favoritesRoute("comic")).toBe("/comic/favorites");
+    expect(recentsRoute("photo")).toBe("/photo/me/recents");
+    expect(recentsRoute("comic")).toBe("/comic/me/recents");
+    expect(favoritesRoute("photo")).toBe("/photo/me/favorites");
+    expect(favoritesRoute("comic")).toBe("/comic/me/favorites");
     expect(albumRoute("photo", "a_1")).toBe("/photo/albums/a_1");
     expect(albumRoute("comic", "a_1")).toBe("/comic/albums/a_1");
     expect(tagRoute("comic", "共同")).toBe("/comic/tags/%E5%85%B1%E5%90%8C");
@@ -63,10 +63,18 @@ describe("counterpartRoute", () => {
   const cases: Array<[string, string]> = [
     ["/photo", "/comic"],
     ["/comic", "/photo"],
-    ["/photo/recents", "/comic/recents"],
-    ["/comic/recents", "/photo/recents"],
-    ["/photo/favorites", "/comic/favorites"],
-    ["/comic/favorites", "/photo/favorites"],
+    // 「我的」的页签按名字搬：两侧都有 favorites / recents。
+    ["/photo/me/recents", "/comic/me/recents"],
+    ["/comic/me/recents", "/photo/me/recents"],
+    ["/photo/me/favorites", "/comic/me/favorites"],
+    ["/comic/me/favorites", "/photo/me/favorites"],
+    // 图库与搜索两侧同名：照片侧叫图库，漫画侧叫书架。
+    ["/photo/library", "/comic/library"],
+    ["/comic/library", "/photo/library"],
+    ["/photo/search", "/comic/search"],
+    // 精选只属于照片侧：在读只属于漫画侧 —— 对不上就回落到对侧首页。
+    ["/photo/me/picks", "/comic"],
+    ["/comic/me/reading", "/photo"],
     ["/photo/tags/%E5%85%B1%E5%90%8C", "/comic/tags/%E5%85%B1%E5%90%8C"],
     ["/comic/tags/%E5%85%B1%E5%90%8C", "/photo/tags/%E5%85%B1%E5%90%8C"],
     // 相册只属于一侧：回落到对侧首页。
@@ -130,25 +138,33 @@ describe("MODE_ROUTE_PATHS", () => {
   // 少了前导斜杠就会拼出 "/photoalbums/*" 这种匹配不上的路径：
   // 首页能开，点进相册却落回兜底路由。这条用例守住那个斜杠。
   it("照片侧与漫画侧各自成套", () => {
-    expect([...MODE_ROUTE_PATHS].map((p) => `${MODE_PREFIX.photo}${p}`)).toEqual([
+    expect(
+      MODE_ROUTE_PATHS.photo.map((p) => `${MODE_PREFIX.photo}${p}`),
+    ).toEqual([
       "/photo",
-      "/photo/recents",
-      "/photo/favorites",
+      "/photo/explore",
+      "/photo/me/:tab",
       "/photo/albums/*",
       "/photo/tags/*",
     ]);
-    expect([...MODE_ROUTE_PATHS].map((p) => `${MODE_PREFIX.comic}${p}`)).toEqual([
+    expect(
+      MODE_ROUTE_PATHS.comic.map((p) => `${MODE_PREFIX.comic}${p}`),
+    ).toEqual([
       "/comic",
-      "/comic/recents",
-      "/comic/favorites",
+      "/comic/me/:tab",
       "/comic/albums/*",
       "/comic/tags/*",
     ]);
   });
 
+  it("探索只属于照片侧", () => {
+    expect(MODE_ROUTE_PATHS.photo).toContain("/explore");
+    expect(MODE_ROUTE_PATHS.comic).not.toContain("/explore");
+  });
+
   it("每条路径都能推出它所属的一侧", () => {
     for (const mode of ["photo", "comic"] as const) {
-      for (const path of MODE_ROUTE_PATHS) {
+      for (const path of MODE_ROUTE_PATHS[mode]) {
         expect(modeFromPath(`${MODE_PREFIX[mode]}${path}`)).toBe(mode);
       }
     }

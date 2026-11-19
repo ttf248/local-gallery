@@ -31,7 +31,12 @@ import { photoCopy } from "../utils/workbench";
  * 这里的墙与相册里的照片墙是同一个组件 —— 排布规则、密度档位、
  * 悬停信息层都一致，用户不需要学第二套。
  */
-export default function Picks() {
+/**
+ * 精选照片页。
+ *
+ * `embedded` 时不渲染页头：它被嵌在「我的」的页签里，页头由外层给。
+ */
+export default function Picks({ embedded = false }: { embedded?: boolean } = {}) {
   const copy = photoCopy();
   const pushToast = useUIStore((s) => s.pushToast);
   const navigate = useNavigate();
@@ -155,6 +160,7 @@ export default function Picks() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
+      {embedded ? null : (
       <header className="shrink-0 border-b border-border-faint bg-bg">
         <div className="page-shell">
           <div className="album-bar">
@@ -207,6 +213,7 @@ export default function Picks() {
           </div>
         </div>
       </header>
+      )}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
         {query.isError && items.length === 0 ? (
