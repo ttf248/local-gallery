@@ -399,8 +399,12 @@ export async function ensureMetadataReady(request: APIRequestContext) {
           `/api/ai/jobs/${encodeURIComponent(jobId)}`,
         );
         if (!response.ok()) return "missing";
-        return ((await response.json()) as { job: { status: string } }).job
-          .status;
+        // 单项任务快照是平铺的：字段直接在这一层。
+        const body = (await response.json()) as {
+          status?: string;
+          job?: { status?: string };
+        };
+        return body.status ?? body.job?.status ?? "missing";
       },
       { timeout: 180_000 },
     )
