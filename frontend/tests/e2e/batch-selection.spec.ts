@@ -115,7 +115,7 @@ test("漫画批量已读与重置只修改所选阅读活动", async ({ page, re
     await request.get("/api/admin/state/export")
   ).json();
   try {
-    await page.goto("/comic");
+    await page.goto("/comic/library");
     await page.getByRole("combobox").fill("sample-comic");
     await page.getByRole("button", { name: "选择", exact: true }).click();
     await page
@@ -158,7 +158,7 @@ for (const view of ["网格视图", "列表视图"] as const) {
     await ensureLibraryReady(request);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/comic");
+    await page.goto("/comic/library");
     await page.getByRole("combobox").fill("long-list");
     await page.getByRole("button", { name: view, exact: true }).click();
     await page.getByRole("button", { name: "选择", exact: true }).click();

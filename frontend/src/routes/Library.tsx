@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link } from "react-router-dom";
 import AlbumGrid from "../components/album/AlbumGrid";
+import { SelectionToggle } from "../components/album/BulkActions";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { ListFilterBar } from "../components/common/ListFilterBar";
@@ -66,13 +67,17 @@ export default function Library() {
 
   // 集合卡在图库里指向它的下一层，而不是跳到集合页：图库是结构页，
   // 在它里面换目录比跳出去再跳回来短。相册卡仍然指向照片墙。
+  //
+  // 换的是「点下去去哪里」，不是「这份内容是什么」：集合的规范地址
+  // 仍然是作品页 —— 收藏、属性、复制链接、在文件管理器里打开都要靠它
+  // 认出这是哪一个集合。
   const cards = useMemo(
     () =>
       list.cards.map((card) =>
         card.variant === "collection"
           ? {
               ...card,
-              to: `${libraryRoute(mode)}?${LIBRARY_PARAM.node}=${encodeURIComponent(
+              linkTo: `${libraryRoute(mode)}?${LIBRARY_PARAM.node}=${encodeURIComponent(
                 decodeFavPath(card.to),
               )}`,
             }
@@ -181,6 +186,8 @@ export default function Library() {
                 onSortChange={filters.setSortBy}
                 minImageCount={filters.minImageCount}
                 onMinImageCountChange={filters.setMinImageCount}
+                /* 多选：图库一屏几十本相册，逐本收藏不现实。 */
+                trailing={<SelectionToggle />}
               />
             ) : null}
 
@@ -190,6 +197,7 @@ export default function Library() {
 
             {cards.length > 0 ? (
               <AlbumGrid
+                selectable
                 items={cards}
                 variant={viewMode}
                 onEndReached={() => {

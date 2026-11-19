@@ -179,17 +179,18 @@ export async function resetNavItems(request: APIRequestContext) {
   expect(response.ok()).toBeTruthy();
 }
 
-/** 让指定的几项重新出现在侧栏里（其余保持收起的状态）。 */
-export async function showNavItems(
-  request: APIRequestContext,
-  keys: string[],
-) {
-  const response = await request.patch("/api/prefs", {
-    data: {
-      hiddenNavItems: defaultHiddenNavItems.filter((key) => !keys.includes(key)),
-    },
-  });
-  expect(response.ok()).toBeTruthy();
+/**
+ * 从侧栏进「我的」，再切到某个页签。
+ *
+ * 收藏与最近浏览不再是侧栏条目，它们是「我的」里的页签。这条路径就是
+ * 用户实际会走的路：先点侧栏的「我的」，再点页签。
+ */
+export async function openMeTab(page: Page, tab: string) {
+  await page
+    .locator('aside[aria-label="主导航"]')
+    .getByRole("link", { name: "我的", exact: true })
+    .click();
+  await page.getByRole("tab", { name: tab, exact: true }).click();
 }
 
 // 收藏与最近访问各有自己的接口，不再跟着偏好一起返回。用例要复原这两份
@@ -266,9 +267,16 @@ export async function openCardProperties(
   page: Page,
   node: { id: string; contentKind?: string },
 ) {
-  const card = page.locator(
-    `main [data-virtuoso-scroller] a[href="${albumUrl(node)}"]`,
-  );
+  // 卡片链接有两种：相册指向照片墙，集合在图库里指向它的下一层
+  // （集合在图库里是目录，点它应该原地往下走）。
+  const card = page
+    .locator(`main [data-virtuoso-scroller] a[href="${albumUrl(node)}"]`)
+    .or(
+      page.locator(
+        `main [data-virtuoso-scroller] a[href*="node=${encodeURIComponent(node.id)}"]`,
+      ),
+    )
+    .first();
   await card.scrollIntoViewIfNeeded();
   await card.click({ button: "right" });
   await page.getByRole("menuitem", { name: "属性", exact: true }).click();

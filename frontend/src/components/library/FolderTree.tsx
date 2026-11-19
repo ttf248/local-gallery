@@ -31,7 +31,11 @@ interface Props {
  */
 export default function FolderTree({ mode, selectedId, onSelect }: Props) {
   const manifest = useLibraryManifest().data?.manifest;
-  const roots = manifest?.roots ?? [];
+  // 只列当前这一侧的根：照片工作台的目录树里摆一个漫画根，点进去
+  // 右边是空的 —— 用户只会以为自己走错了地方。
+  const roots = (manifest?.roots ?? []).filter(
+    (root) => (root.contentKind ?? "photo") === mode,
+  );
   if (roots.length === 0) return null;
   return (
     <nav aria-label="目录" className="library-tree">

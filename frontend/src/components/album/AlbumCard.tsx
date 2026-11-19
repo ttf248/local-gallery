@@ -73,7 +73,20 @@ export interface CardData {
    * 由调用方在用 <video> 探测后填入；非必填，缺省时角标只显示 ▶。
    */
   durationSec?: number;
+  /**
+   * 这份内容的规范地址（相册页 / 作品页）。
+   *
+   * 收藏、属性、复制链接、在文件管理器里打开都以它为准 —— 那些动作
+   * 说的是「这一个东西」，地址得是它自己的。
+   */
   to: string;
+  /**
+   * 卡片点击时实际去的地方。
+   *
+   * 缺省就是 `to`。图库页给集合卡换了一个：集合在图库里是目录，
+   * 点它应该在原地往下走一层，而不是跳去作品页再跳回来。
+   */
+  linkTo?: string;
   isFavorite?: boolean;
   // 阅读进度：index + total，用于显示百分比与定位条
   progress?: { index: number; total: number };
@@ -387,7 +400,7 @@ function GridCard({
       data-testid="album-card"
     >
       <Link
-        to={data.to}
+        to={data.linkTo ?? data.to}
         onClick={(e) => {
           // 长按刚唤起过预览：这一下抬手不是「打开相册」。
           if (longPressedRef.current) {
@@ -678,7 +691,7 @@ function ListCard({
     // 放在一起看会像两套产品。
     <div className="relative group flex items-center border-b border-border-faint h-[86px]">
       <Link
-        to={data.to}
+        to={data.linkTo ?? data.to}
         aria-label={`打开${data.variant === "album" ? "相册" : data.variant === "collection" ? "集合" : "智能视图"}“${data.displayTitle ?? data.title}”`}
         className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
       >

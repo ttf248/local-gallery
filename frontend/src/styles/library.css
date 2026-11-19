@@ -135,13 +135,16 @@
 }
 
 /* 展开箭头：点它展开/收起，点名字选中它。两个动作分开，
-   不然点名字会既选中又展开 —— 想看下一层的人总是被顺手带进去。 */
+   不然点名字会既选中又展开 —— 想看下一层的人总是被顺手带进去。
+   命中区按 28px 走（审计的门禁）：箭头画得小，但点得到的那一块
+   不能也小。 */
 .library-tree__toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
+  margin-left: -4px;
   flex-shrink: 0;
   border-radius: var(--radius-xs);
   color: var(--fg-subtle);

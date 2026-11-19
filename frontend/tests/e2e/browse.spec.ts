@@ -1119,7 +1119,7 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
       ).toBeTruthy();
     }
     const pages = [
-      ["/comic", ids],
+      ["/comic/library", ids],
       [`/comic/albums/${collection.id}`, childIds],
       ["/comic/me/favorites", ids],
       ["/comic/me/recents", ids],
@@ -1130,7 +1130,7 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
       await test.step(path, async () => {
         await page.goto(path);
         await page.getByRole("combobox").fill(prefix);
-        if (path === "/comic") {
+        if (path === "/comic/library") {
           await page.getByRole("button", { name: "排序", exact: true }).click();
           await page
             .getByRole("button", { name: "按最近改", exact: true })
@@ -1193,16 +1193,15 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
 test("列表页的筛选写进地址，刷新不丢，后退退得回上一个排序", async ({
   page,
 }) => {
-  // 照片侧首页那一块换成智能相册，没有列表可筛；这条约束在漫画侧验证 ——
-  // 那里仍列全部作品，筛选与排序条都在。
+  // 漫画侧的清单在书架里（首页只讲续读与未读），筛选与排序条都在书架上。
   await scannedNodes(page.request, "comic");
   await setWorkbenchMode(page.request, "comic");
-  await page.goto("/comic");
+  await page.goto("/comic/library");
 
   const sortButton = page.getByRole("button", { name: "排序" });
   await sortButton.click();
   await page.getByRole("button", { name: "按最近看", exact: true }).click();
-  await expect(page).toHaveURL(/\/comic\?sort=viewed$/);
+  await expect(page).toHaveURL(/\/comic\/library\?sort=viewed$/);
 
   // 刷新不丢：筛选是地址的一部分，不是某个组件的内存。
   await page.reload();
@@ -1277,7 +1276,7 @@ test("六个列表支持按最近看排序，集合与标签具有当前页排�
       childAlbums[0].id,
     ];
     const pages = [
-      ["/comic", expectedRoot],
+      ["/comic/library", expectedRoot],
       [`/comic/albums/${collectionId}`, expectedChildren],
       ["/comic/me/favorites", expectedRoot],
       ["/comic/me/recents", expectedRoot.slice(0, 2)],
@@ -1772,8 +1771,8 @@ for (const mode of ["grid", "list"] as const) {
 
 for (const mode of ["grid", "list"] as const) {
   test(`${mode} 相册集合属性按类型读取并保持模态焦点`, async ({ page }) => {
-    // 照片侧首页那一块换成智能相册，不再列相册卡片；卡片交互在漫画侧
-    // 验证 —— 那里仍列全部作品，网格与列表两种看法都有。
+    // 卡片交互在漫画侧的书架上验证：那里列出全部作品与相册，
+    // 网格与列表两种看法都有。
     const nodes = await scannedNodes(page.request, "comic");
     const album = nodes.find((node) => node.name === "sample-comic")!;
     const collection = nodes.find(
@@ -1787,7 +1786,7 @@ for (const mode of ["grid", "list"] as const) {
         metadataRequests.push(request.url());
     });
     await setWorkbenchMode(page.request, "comic");
-    await page.goto("/comic");
+    await page.goto("/comic/library");
     await page
       .getByRole("button", {
         name: mode === "grid" ? "网格视图" : "列表视图",
@@ -1846,7 +1845,7 @@ for (const mode of ["grid", "list"] as const) {
         .evaluate((element) => (element as HTMLInputElement).focus());
       await expect(close).toBeFocused();
       await page.keyboard.press("u");
-      await expect(page).toHaveURL(/\/comic(\?.*)?$/);
+      await expect(page).toHaveURL(/\/comic\/library(\?.*)?$/);
       if (mode === "grid") {
         for (const theme of ["light", "dark"] as const) {
           await page.emulateMedia({
@@ -1893,13 +1892,13 @@ for (const mode of ["api", "missing", "denied"] as const) {
     denied: "在 API 拒绝后回退并支持失败重试",
   }[mode];
   test(`属性弹窗复制${scenario}`, async ({ page }) => {
-    // 卡片交互在漫画侧验证：照片侧首页那一块换成智能相册，不再列相册。
+    // 卡片交互在漫画侧的书架上验证：那里列出全部作品与相册。
     const nodes = await scannedNodes(page.request, "comic");
     const album = nodes.find((node) => node.name === "sample-comic")!;
     expect(album).toBeDefined();
     await installCopyAudit(page, mode);
     await setWorkbenchMode(page.request, "comic");
-    await page.goto("/comic");
+    await page.goto("/comic/library");
     await page.getByRole("combobox").fill(album.name);
     const { card, dialog } = await openCardProperties(page, album);
     // 复制按钮跟在值后面（规格表），不再挂在标签单元格里。
@@ -1955,7 +1954,7 @@ for (const view of ["grid", "list"] as const) {
       expect(album).toBeDefined();
       await installCopyAudit(page, mode);
       await setWorkbenchMode(page.request, "comic");
-      await page.goto("/comic");
+      await page.goto("/comic/library");
       await page.getByRole("combobox").fill(album.name);
       await page
         .getByRole("button", {
@@ -2105,7 +2104,7 @@ for (const view of ["grid", "list"] as const) {
       );
     });
     await setWorkbenchMode(page.request, "comic");
-    await page.goto("/comic");
+    await page.goto("/comic/library");
     await page.getByRole("combobox").fill(album.name);
     await page
       .getByRole("button", {
@@ -2235,7 +2234,7 @@ test("目录属性读取失败可重试", async ({ page }) => {
     });
   });
   await setWorkbenchMode(page.request, "comic");
-  await page.goto("/comic");
+  await page.goto("/comic/library");
   const { card, dialog } = await openCardProperties(page, album);
   await expect(dialog.getByRole("alert")).toContainText("无法读取目录属性", {
     timeout: 15_000,
@@ -2397,9 +2396,9 @@ test("卡片悬停预览完整落在视口内，不被视口下缘裁掉", async
 
 test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  // 视图标签在漫画侧验证：照片侧首页那一块换成智能相册，没有视图标签。
+  // 视图标签在漫画侧的书架上验证：那里有完整的清单与筛选条。
   await setWorkbenchMode(page.request, "comic");
-  await page.goto("/comic");
+  await page.goto("/comic/library");
   await expect(
     page.getByRole("combobox", { name: "搜索相册或标签" }),
   ).toBeVisible();
@@ -2438,9 +2437,9 @@ test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page 
 });
 
 test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ page, request }) => {
-  // 卡片交互在漫画侧验证：照片侧首页那一块换成智能相册，不再列相册。
+  // 卡片交互在漫画侧的书架上验证：那里列出全部作品与相册。
   await setWorkbenchMode(page.request, "comic");
-  await page.goto("/comic");
+  await page.goto("/comic/library");
   // 明确取一张卡片，而不是页面上第一个「打开相册」链接：首屏专区里也有
   // 指向相册的链接（未读 / 继续阅读的封面），它不是卡片，也没有星标。
   const card = albumCard(page);
@@ -2462,7 +2461,7 @@ test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ pa
   await star.click();
 
   // 星标在链接之外：点击不能带着进入相册。
-  await expect(page).toHaveURL(/\/comic(\?.*)?$/);
+  await expect(page).toHaveURL(/\/comic\/library(\?.*)?$/);
   // 服务端确实写入了收藏。
   await expect
     .poll(async () => {
@@ -2552,41 +2551,37 @@ test("坏掉的图片在照片墙上标成「无法解码」", async ({ page, re
   await expect(page.getByText("这张图片无法解码")).toBeVisible();
 });
 
-test("主页的视图筛选条紧贴在「库内一览」网格上方", async ({ page, request }) => {
-  // 照片侧的「库内一览」已换成智能相册，没有网格也没有筛选条；
-  // 这条版式约束留给漫画侧 —— 它仍旧列全部作品。
+test("图库的视图筛选条紧贴在网格上方", async ({ page, request }) => {
+  // 网格与筛选条搬到了图库（照片侧叫图库、漫画侧叫书架）：
+  // 首页是发现页，目录清单在结构页里。
   await setWorkbenchMode(request, "comic");
-  await page.goto("/comic");
+  await page.goto("/comic/library");
   // 叶级目录两侧都叫「相册」：视图 chip 的名字用它。
   const chip = page.getByRole("button", { name: /^相册/ });
   await expect(chip).toBeVisible();
   await chip.scrollIntoViewIfNeeded();
 
-  // 筛选条只作用于「库内一览」网格，必须和网格同处一个 section。
+  // 筛选条只作用于它下面的网格，必须和网格挨着。
   // 之前它排在未读 / 继续浏览 / 时间线之前，离网格两千多像素，
   // 用户滚到网格时控件已经不在视野里。
   const order = await page.evaluate(() => {
-    const heading = [...document.querySelectorAll("h2")].find(
-      (el) => (el.textContent ?? "").trim() === "库内一览",
-    );
     const chipButton = [...document.querySelectorAll("button")].find((el) =>
       (el.textContent ?? "").trim().startsWith("相册"),
     );
-    const section = heading?.closest("section");
-    const card = section?.querySelector('[data-testid="card-cover"]');
-    if (!heading || !chipButton || !section || !card) return null;
+    const strip = chipButton?.closest(".filter-strip");
+    const content = strip?.parentElement?.parentElement;
+    const card = content?.querySelector('[data-testid="card-cover"]');
+    if (!chipButton || !strip || !content || !card) return null;
     const follows = (a: Element, b: Element) =>
       (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
     return {
-      chipInSection: section.contains(chipButton),
-      headingBeforeChip: follows(heading, chipButton),
-      chipBeforeCard: follows(chipButton, card),
+      chipInStrip: strip.contains(chipButton),
+      stripBeforeCard: follows(strip, card),
     };
   });
   expect(order).toEqual({
-    chipInSection: true,
-    headingBeforeChip: true,
-    chipBeforeCard: true,
+    chipInStrip: true,
+    stripBeforeCard: true,
   });
 });
 
@@ -2718,15 +2713,18 @@ test("列表只取首屏，真实后端分页与筛选保留完整计数", async
       response: await route.fetch({ url: url.toString() }),
     });
   });
-  await page.goto("/comic");
-  await expect(page.getByRole("heading", { name: "库内一览" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "加载更多", exact: true }),
-  ).toBeAttached();
+  await page.goto("/comic/library");
+  await expect(page.getByRole("heading", { name: "全部作品" })).toBeVisible();
+  // 首屏只取一页：剩下的等滚到底再要。
   expect(calls.filter((cursor) => cursor === "first")).toHaveLength(1);
   expect(calls).toHaveLength(1);
-  await page.getByRole("button", { name: "加载更多", exact: true }).click();
+  // 滚的是主区：虚拟列表把 main 当作自己的滚动容器，滚它才会
+  // 走到末尾、触发下一段。
+  await page.locator("main").evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
   await expect.poll(() => calls.length).toBeGreaterThan(1);
+  // 换排序要重新从第一页取：旧游标的作用域变了。
   await page.getByRole("button", { name: "排序", exact: true }).click();
   await page.getByRole("button", { name: "按最近改", exact: true }).click();
   await expect
@@ -2986,11 +2984,12 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
   }
 });
 
-for (const source of ["home", "collection", "tag"] as const) {
+for (const source of ["library", "collection", "tag"] as const) {
   test(`${source} 服务端排序读取失败可重试`, async ({ page, request }) => {
     const { collectionId } = await sortFixture(request);
     const paths = {
-      home: "/comic",
+      // 清单页在书架上：首页只讲续读与未读，不是一张清单。
+      library: "/comic/library",
       collection: `/comic/albums/${collectionId}`,
       tag: `/comic/tags/${encodeURIComponent("测试")}`,
     };
@@ -3009,18 +3008,28 @@ for (const source of ["home", "collection", "tag"] as const) {
     await page.goto(paths[source]);
     await page.getByRole("button", { name: "排序", exact: true }).click();
     await page.getByRole("button", { name: "按最近看", exact: true }).click();
-    await expect(
-      page.getByRole("heading", {
-        name: source === "tag" ? "标签加载失败" : "列表加载失败",
-      }),
-    ).toBeVisible({ timeout: 15000 });
-    blocked = false;
-    await page.getByRole("button", { name: "重试", exact: true }).click();
-    await expect(
-      page.getByRole("heading", {
-        name: source === "tag" ? "标签加载失败" : "列表加载失败",
-      }),
-    ).toHaveCount(0);
+    if (source === "library") {
+      // 图库页的失败是一条横幅：已经加载的内容还在，不整页推倒。
+      await expect(page.getByRole("alert")).toContainText("图库内容读取失败。", {
+        timeout: 15000,
+      });
+      blocked = false;
+      await page.getByRole("button", { name: "重试加载", exact: true }).click();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+    } else {
+      await expect(
+        page.getByRole("heading", {
+          name: source === "tag" ? "标签加载失败" : "列表加载失败",
+        }),
+      ).toBeVisible({ timeout: 15000 });
+      blocked = false;
+      await page.getByRole("button", { name: "重试", exact: true }).click();
+      await expect(
+        page.getByRole("heading", {
+          name: source === "tag" ? "标签加载失败" : "列表加载失败",
+        }),
+      ).toHaveCount(0);
+    }
     await expect(
       page.locator("[data-virtuoso-scroller]").first(),
     ).toBeAttached();
