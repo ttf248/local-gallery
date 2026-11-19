@@ -162,6 +162,39 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `GET /api/library/:rootOrCollectionId/children?limit=60&cursor=...`：分页返回直属相册与子集合摘要。相册与集合都继承所属目录的属性，因此都参与 `kind` 过滤；属性不匹配的目录返回空页。集合摘要的 `albumCount` 恒为全部后代。
 - `GET /api/albums/random?scope=unread&count=3`：随机返回相册摘要列表；只在该属性的相册里抽取，`scope=unread` 时进一步只从未保存阅读活动的相册中抽取。`count` 缺省 1、范围 1–12，越界返回 `400 invalid_random_count`；抽出的相册互不相同，候选不足 `count` 时返回全部。没有匹配相册返回 `404 no_matching_album`。
 - `GET /api/albums/:albumId/media?limit=60&cursor=...`：按统一自然顺序返回媒体；`index` 是相册内总序号，`kindIndex` 是图片或视频各自序号。图片项另带 `width` / `height`（原始像素宽高，未知时为 0），照片墙据此按真实宽高比排布，不必在浏览器里逐张探测。媒体流与工作台模式无关。媒体项另带 `picked: true`，表示这张照片在精选里（精选是照片级的用户数据，见「精选」一节）。
+- `GET /api/albums/:albumId/media` 另接受一组筛选参数。**筛选作用在整本相册的数据上**，不是前端已经加载的那几页：服务端先把条件落成「相册成员 → 是否命中」的判定，再按相册的自然顺序分页，因此结果总数、翻页与大图浏览顺序始终是同一件事。
+
+  | 参数 | 含义 |
+  | --- | --- |
+  | `from` / `to` | 拍摄时间的日历月区间（`YYYY-MM`），左闭右闭。拍摄时间取 EXIF 的可信值（年份早于 1990 或晚于当年的不算）。 |
+  | `personId` | 只保留出现过这个人物的照片（人物分组 ID）。 |
+  | `adcode` | 只保留落在这个行政区（含其下级）里的照片（六位区划码）。 |
+  | `picks` | 精选口径：`only` 只看已精选，`none` 只看未精选。 |
+  | `scene` | 画面口径：`groupPhoto` 只看合照，`similar` 只看属于相似组的照片。 |
+  | `collapse` | `1` 折叠相似组：墙上只留每组的代表照片。 |
+  | `expand` | 展开某一组（分组 ID）：它的成员不再折叠，聚到代表照片后面就地摊开。给了它就等于 `collapse=1`。 |
+
+  条件可组合。**视频不参与分析类筛选**：没有拍摄时间、位置与人物，混进结果只会给出一批「说不清为什么在」的条目；没有任何分析类条件时视频照常返回。
+
+  响应除分页字段外另给：`filtered`（这一页是筛选后的结果）、`albumTotal`（这本相册的媒体总数）、`videoTotal`（视频数）、`photoTotal`（这一页里照片的张数，不含视频）、`unresolved`（因缺少依据而没能参与筛选的照片数：`captureTime` / `location` / `face` 三个分项与去重后的 `total`）、`grouped` 与 `groupedGroups`（折叠后藏起来的张数与组数）。
+
+  换了一组条件后旧游标立即失效（游标作用域含筛选条件），返回 `400 invalid_cursor`。参数不合法返回 `400 invalid_album_filter`。
+
+- 媒体项另带 `similarityGroup`：这张照片所属的相似组。`id` 是分组标识，`kind` 是 `exact` / `near` / `burst`，`size` 是组内照片总数（全库口径），`albumSize` 是组内落在本相册的张数，`shown` 是折叠时留在墙上的那张，`albumHidden` 是折叠后藏起来的张数。没有分组时这个字段缺省。
+
+- `GET /api/albums/:albumId/filters`：返回这本相册里**真实可用**的筛选条件。响应为 `{ "ok": true, "revision": 42, "facets": {...} }`，`facets` 含：
+
+  | 字段 | 内容 |
+  | --- | --- |
+  | `total` / `videos` | 这本相册的照片数与视频数。 |
+  | `time` | `available`（能不能用）、`reason`（不能用的原因，中文）、`months`（有照片的月份与张数）、`analyzedCount`、`unresolvedCount`。 |
+  | `people` | `available`、`reason`、`items`（这本相册里出现过的人物：ID、名字、张数、是否已确认）、`analyzedCount`。 |
+  | `places` | `available`、`reason`、`items`（区划码、地名、层级、张数）、`locatedCount`。 |
+  | `picks` | `pickedCount`（这本相册里已精选的照片数）。 |
+  | `groupPhotos` | `available`、`reason`、`count`（合照张数）。 |
+  | `similarity` | `available`、`reason`、`groupCount`、`photoCount`、`stale`。 |
+
+  每个维度都按这本相册算：别的相册里有的东西这里不出现。缺分析结果时写清原因（还没跑分析，还是跑了但这本相册里确实没有），不摆一个点下去空无一物的入口。
 - 图片项还可能带 `undecodable: true`：这个文件解码不出来 —— 扩展名说是 JPEG，内容却不是，或者像素数据是截断的。判定有两个来源：读图片头就失败（当场判定），以及渲染时整张解码失败（补记，随文件版本走，文件被替换后判定作废）。需要服务端转换的格式（HEIC/HEIF/TIFF）不算坏文件，不带这个标记。界面据此显示「无法解码」。
 - `POST /api/library/nodes/query`：body 为 `{ "ids": ["a_...", "c_..."] }`，按输入顺序批量解析相册/集合摘要；单批最多 500 项，失效 ID 返回在 `missing` 中。直达链接、收藏与最近浏览都靠它解析摘要，**不受工作台模式影响**。
 - `GET /api/tags?limit=60&cursor=...`：分页返回标签摘要。每个标签的 `albumCount` 按 `kind` 指定的属性重算，该属性下没有相册的标签整个不出现。
@@ -505,7 +538,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 特征提取是新增的分析模块 `similarity`，在本机用标准库完成，不依赖本机 AI Worker：
 
 - `GET /api/similarity/status` 返回整理模块的整体状态：`analyzed` 是已算出特征的照片张数，`total` 是媒体库照片总数，`hasVectors` 说明语义向量索引是否可用（可用时近似重复的复核更准），`builtAt` 是分组结果的生成时间，`stale` 说明特征已变、分组需要重建，`rebuilding` 说明正在重建，`limited` 说明候选召回触到了上限（此时结果可能不完整），`summary` 是分组总量。
-- `GET /api/similarity/groups?kind=&folder=&status=&limit=&offset=` 返回分组。`kind` 取 `exact`（完全重复）、`near`（近似重复）、`burst`（连拍同场景）或空串表示全部；`status` 取 `pending`、`reviewed`、`ignored` 或空串；`folder` 按文件夹别名筛选。`limit` 上限 200，`offset` 分页。响应 `page` 含 `groups[]`、`folders[]`（有结果的文件夹与各自组数）、`summary`（`exact`/`near`/`burst` 三类组数、`pending`/`reviewed`/`ignored` 状态数、`photos` 参与整理的张数、`redundant` 每组保留一张之外的多余张数）、`stale` 与 `limited`。无效 `limit` 或 `offset` 返回 `400 invalid_similarity_query`。
+- `GET /api/similarity/groups?kind=&folder=&status=&limit=&offset=` 返回分组。`kind` 取 `exact`（完全重复）、`near`（近似重复）、`burst`（连拍同场景）或空串表示全部；`status` 取 `pending`、`reviewed`、`ignored` 或空串；`folder` 按文件夹别名筛选；`resourceId` 只返回含有这张照片的分组（照片墙上展开一组时用它读回成员名单）。`limit` 上限 200，`offset` 分页。响应 `page` 含 `groups[]`、`folders[]`（有结果的文件夹与各自组数）、`summary`（`exact`/`near`/`burst` 三类组数、`pending`/`reviewed`/`ignored` 状态数、`photos` 参与整理的张数、`redundant` 每组保留一张之外的多余张数）、`stale` 与 `limited`。无效 `limit` 或 `offset` 返回 `400 invalid_similarity_query`。
 - 每个分组含 `id`、`kind`、`folder`、`resourceIds[]`、`members[]`、`recommended`（算法建议的代表照片）、`representative`（当前生效的代表照片）、`representativeIsManual`（代表照片是否由用户指定）、`distance`（组内成员与代表照片的最大感知哈希距离）、`similarity`、`timeSpanMs`、`timeSource`（`capture` 为 EXIF 拍摄时间，`file` 为文件修改时间的退路）、`crossFolder`、`status` 与 `redundant`。每个成员含 `resourceId`、`folder`、`albumId`、`albumName`、原图像素 `width`/`height`、`capturedAt`、`distance`、`similarity` 与 `quality`。`quality` 是可解释的质量分项：`sharpness`（拉普拉斯响应的方差）、`sharpnessScore`、`megapixels`、`resolutionScore`、`exposure`（灰度均值）、`clippedHigh`、`clippedLow`、`exposureScore` 与 `score`。代表评分按清晰度 0.45、分辨率 0.25、曝光 0.30 加权，与文件大小无关。
 - `PUT /api/similarity/groups/:id` 写人工决定，body 为 `{ "representative"?: "f_…" }`、`{ "reviewed"?: true }` 或 `{ "ignored"?: true }`，一次可给一种。`representative` 必须指向组内成员，否则返回 `400 invalid_similarity_request`；分组不存在时返回 `404 similarity_group_not_found`。标记已审查与忽略互斥，后写的一个生效。
 - `POST /api/similarity/batch` 对一组分组执行同一个动作，body 为 `{ "action": "review"|"unreview"|"ignore"|"unignore"|"pick", "groupIds": ["…"] }`。`pick` 把每组当前生效的代表照片加入现有的照片级精选（`state/picks.json`），返回的 `changed` 是实际加入精选的张数。分组 ID 不存在时按未命中处理；未知动作返回 `400 invalid_similarity_batch`。
