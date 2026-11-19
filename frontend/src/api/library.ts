@@ -610,6 +610,30 @@ export const libraryApi = {
       `/api/library/${encodeURIComponent(parentId)}/children`,
       { params: { cursor, limit, kind }, signal },
     ),
+  /**
+   * 一个目录下的全部子项（相册与集合），翻完所有页。
+   *
+   * 目录树要的是完整的子项名单：只取一页的话，树里会缺一截，
+   * 目录结构看起来就不完整 —— 用户会以为这个文件夹里就这些。
+   */
+  childrenAll: async (
+    parentId: string,
+    kind: AppMode,
+    signal?: AbortSignal,
+  ): Promise<LibraryNodeSummary[]> => {
+    const page = await collectPages<LibraryNodeSummary>(
+      (cursor, sig) =>
+        libraryApi.childrenPage(
+          parentId,
+          kind,
+          cursor,
+          LIBRARY_PAGE_LIMIT,
+          sig,
+        ),
+      signal,
+    );
+    return page.items;
+  },
   mediaPage: (
     albumId: string,
     cursor?: string,

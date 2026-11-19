@@ -38,6 +38,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   const sidebar = page.locator('aside[aria-label="主导航"]');
   // 照片工作台只列照片那边的东西：漫画的未读、书架都不在。
   await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "图库" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "我的" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
@@ -49,8 +50,10 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(page.getByRole("heading", { name: "漫画库" })).toBeVisible();
   // 漫画工作台的菜单换成漫画自己那套，照片那边的一点都不留。
   await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "书架" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "我的" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "图库" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
 
   // 模式写在服务端偏好里，刷新后仍然是漫画工作台。

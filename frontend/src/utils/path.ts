@@ -218,8 +218,8 @@ export function readerRoute(albumId: string, index?: number): string {
  * 其余页面两侧共用同一批组件，差别在数据源与措辞。
  */
 export const MODE_ROUTE_PATHS: Record<AppMode, readonly string[]> = {
-  photo: ["", "/explore", "/me/:tab", "/albums/*", "/tags/*"],
-  comic: ["", "/me/:tab", "/albums/*", "/tags/*"],
+  photo: ["", "/library", "/explore", "/me/:tab", "/albums/*", "/tags/*"],
+  comic: ["", "/library", "/me/:tab", "/albums/*", "/tags/*"],
 };
 
 /**

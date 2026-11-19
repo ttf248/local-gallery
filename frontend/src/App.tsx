@@ -14,6 +14,7 @@ import { PHOTO_ME_TABS, COMIC_ME_TABS } from "./utils/meTabs";
 import type { AppMode } from "./api/library";
 
 const Home = lazy(() => import("./routes/Home"));
+const Library = lazy(() => import("./routes/Library"));
 const Explore = lazy(() => import("./routes/Explore"));
 const Me = lazy(() => import("./routes/Me"));
 const YearPhotos = lazy(() => import("./routes/YearPhotos"));
@@ -50,6 +51,7 @@ function lazyPage(Page: ComponentType) {
  */
 const MODE_ROUTE_ELEMENTS: Record<string, ComponentType> = {
   "": Home,
+  "/library": Library,
   "/explore": Explore,
   "/me/:tab": Me,
   "/albums/*": Album,

@@ -1,0 +1,192 @@
+/* 图库页（照片侧）与书架页（漫画侧）的版式。
+ *
+ * 布局是一条轴：左侧是目录树（窄屏时收成可展开的面板），右侧是当前
+ * 这一层的内容。树用吸顶跟随滚动，读内容时手边一直有方位。
+ *
+ * 视觉上这一页刻意「安静」：目录树只有字与一条细线，不画卡片边框 ——
+ * 它是导航，不是内容；内容区的卡片才有资格带表面。
+ */
+
+.library-page {
+  padding-bottom: var(--page-gutter);
+}
+
+/* 页头：标题 + 面包屑，右侧给窄屏的目录开关。 */
+.library-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: var(--page-head-pad-top, 28px);
+  padding-bottom: 12px;
+}
+
+.library-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-bottom: 2px;
+}
+
+/* 面包屑：根 › 集合 › 子集合。祖先可点回。 */
+.library-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: var(--text-meta);
+  color: var(--fg-subtle);
+  flex-wrap: wrap;
+}
+
+.library-crumbs__link {
+  color: var(--fg-muted);
+  text-decoration: none;
+  border-radius: var(--radius-xs);
+}
+
+.library-crumbs__link:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.library-crumbs__current {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.library-crumbs__sep {
+  color: var(--fg-subtle);
+  opacity: 0.7;
+}
+
+/* 两栏：目录 + 内容。窄屏是一栏，目录收在内容上方。 */
+.library-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .library-layout {
+    grid-template-columns: 264px minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+/* 目录面板：宽屏常驻并吸顶，窄屏按需展开。 */
+.library-tree-panel {
+  display: none;
+}
+
+.library-tree-panel.is-open {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .library-tree-panel {
+    display: block;
+    position: sticky;
+    top: 12px;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
+  }
+}
+
+/* 树本体 */
+.library-tree {
+  font-size: var(--text-body);
+}
+
+.library-tree__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.library-tree__item {
+  margin: 0;
+}
+
+.library-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding-right: 8px;
+  border-radius: var(--radius-xs);
+  color: var(--fg-muted);
+}
+
+.library-tree__row:hover {
+  background: var(--bg-subtle);
+  color: var(--fg);
+}
+
+.library-tree__row.is-active {
+  color: var(--fg);
+  font-weight: 600;
+  background: var(--bg-subtle);
+}
+
+/* 展开箭头：点它展开/收起，点名字选中它。两个动作分开，
+   不然点名字会既选中又展开 —— 想看下一层的人总是被顺手带进去。 */
+.library-tree__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  color: var(--fg-subtle);
+}
+
+.library-tree__toggle:hover {
+  background: var(--bg-strong);
+  color: var(--fg);
+}
+
+.library-tree__toggle--leaf {
+  pointer-events: none;
+}
+
+.library-tree__chevron {
+  transition: transform var(--dur, 160ms) ease;
+}
+
+.library-tree__chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.library-tree__label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  padding: 3px 0;
+  text-align: left;
+  font-size: var(--text-body);
+  color: inherit;
+}
+
+.library-tree__meta {
+  flex-shrink: 0;
+  font-size: var(--text-meta);
+  color: var(--fg-subtle);
+}
+
+/* 内容区 */
+.library-content {
+  min-width: 0;
+}
+
+.library-content .filter-strip {
+  padding-top: 2px;
+}

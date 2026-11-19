@@ -91,9 +91,10 @@ describe("Sidebar", () => {
 
   // 侧栏分三段：内容组（这一侧的主导航）、整理组（写操作，次级）、
   // 本机组（任务中心与设置，属于机器不属于内容）。
-  it("漫画工作台列出首页、我的与未读", () => {
+  it("漫画工作台列出首页、书架、我的与未读", () => {
     renderSidebar();
     expect(screen.getByText("首页")).toBeInTheDocument();
+    expect(screen.getByText("书架")).toBeInTheDocument();
     expect(screen.getByText("我的")).toBeInTheDocument();
     expect(screen.getByText("未读")).toBeInTheDocument();
     // 照片那边的入口不出现在漫画工作台。
@@ -101,10 +102,11 @@ describe("Sidebar", () => {
     expect(screen.queryByText("整理")).not.toBeInTheDocument();
   });
 
-  it("照片工作台列出首页、探索、我的与整理", () => {
+  it("照片工作台列出首页、图库、探索、我的与整理", () => {
     appMode.mode = "photo";
     renderSidebar();
     expect(screen.getByText("首页")).toBeInTheDocument();
+    expect(screen.getByText("图库")).toBeInTheDocument();
     expect(screen.getByText("探索")).toBeInTheDocument();
     expect(screen.getByText("我的")).toBeInTheDocument();
     expect(screen.getByText("相似照片")).toBeInTheDocument();
@@ -168,6 +170,7 @@ describe("Sidebar", () => {
     renderSidebar();
     expect(screen.queryByText("探索")).not.toBeInTheDocument();
     // 没收起的照旧在列，首页永远在。
+    expect(screen.getByText("图库")).toBeInTheDocument();
     expect(screen.getByText("首页")).toBeInTheDocument();
   });
 

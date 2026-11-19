@@ -2,6 +2,7 @@ import {
   CompassIcon,
   CopyIcon,
   HomeIcon,
+  LibraryIcon,
   SparkleIcon,
   TasksIcon,
   SettingsIcon,
@@ -10,6 +11,7 @@ import {
 import {
   exploreRoute,
   homeRoute,
+  libraryRoute,
   meRoute,
   similarityRoute,
   unreadRoute,
@@ -70,6 +72,13 @@ export const PHOTO_NAV: NavEntry[] = [
     locked: true,
   },
   {
+    key: "photo.library",
+    label: "图库",
+    Icon: LibraryIcon,
+    to: libraryRoute("photo"),
+    mode: "photo",
+  },
+  {
     key: "photo.explore",
     label: "探索",
     Icon: CompassIcon,
@@ -102,6 +111,13 @@ export const COMIC_NAV: NavEntry[] = [
     locked: true,
   },
   {
+    key: "comic.library",
+    label: "书架",
+    Icon: LibraryIcon,
+    to: libraryRoute("comic"),
+    mode: "comic",
+  },
+  {
     key: "comic.me",
     label: "我的",
     Icon: UserIcon,
@@ -124,8 +140,8 @@ export const COMIC_NAV: NavEntry[] = [
  * 漫画侧：主导航（首页 / 书架 / 我的 / 未读）+ 本机。
  */
 export const PHOTO_NAV_GROUPS: NavGroup[] = [
-  { key: "photo.main", label: "照片", entries: PHOTO_NAV.slice(0, 3) },
-  { key: "photo.organize", label: "整理", entries: PHOTO_NAV.slice(3) },
+  { key: "photo.main", label: "照片", entries: PHOTO_NAV.slice(0, 4) },
+  { key: "photo.organize", label: "整理", entries: PHOTO_NAV.slice(4) },
 ];
 
 export const COMIC_NAV_GROUPS: NavGroup[] = [

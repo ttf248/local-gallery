@@ -24,13 +24,16 @@ test("照片与漫画两侧的导航各自成套", async ({ page, request }) => 
   await setWorkbenchMode(request, "photo");
   await page.goto("/photo");
   const sidebar = page.locator('aside[aria-label="主导航"]');
+  await expect(sidebar.getByRole("link", { name: "图库" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
 
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic");
+  await expect(sidebar.getByRole("link", { name: "书架" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "图库" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
 });
 

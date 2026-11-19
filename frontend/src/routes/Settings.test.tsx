@@ -212,7 +212,10 @@ it("导航分区按当前偏好显示每一项的开关状态", async () => {
   // 新导航默认全部显示：每个一级入口回答一个不同的问题，
   // 收起任何一个都会让那一类内容少一条路。
   expect(
-    await screen.findByRole("switch", { name: "在照片导航栏显示探索" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示图库" }),
+  ).toHaveAttribute("aria-checked", "true");
+  expect(
+    screen.getByRole("switch", { name: "在照片导航栏显示探索" }),
   ).toHaveAttribute("aria-checked", "true");
   expect(
     screen.getByRole("switch", { name: "在照片导航栏显示我的" }),
@@ -221,6 +224,9 @@ it("导航分区按当前偏好显示每一项的开关状态", async () => {
     screen.getByRole("switch", { name: "在照片导航栏显示相似照片" }),
   ).toHaveAttribute("aria-checked", "true");
   // 漫画侧独立：它的入口各是各的。
+  expect(
+    screen.getByRole("switch", { name: "在漫画导航栏显示书架" }),
+  ).toHaveAttribute("aria-checked", "true");
   expect(
     screen.getByRole("switch", { name: "在漫画导航栏显示未读" }),
   ).toHaveAttribute("aria-checked", "true");

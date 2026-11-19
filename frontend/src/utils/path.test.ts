@@ -142,6 +142,7 @@ describe("MODE_ROUTE_PATHS", () => {
       MODE_ROUTE_PATHS.photo.map((p) => `${MODE_PREFIX.photo}${p}`),
     ).toEqual([
       "/photo",
+      "/photo/library",
       "/photo/explore",
       "/photo/me/:tab",
       "/photo/albums/*",
@@ -151,6 +152,7 @@ describe("MODE_ROUTE_PATHS", () => {
       MODE_ROUTE_PATHS.comic.map((p) => `${MODE_PREFIX.comic}${p}`),
     ).toEqual([
       "/comic",
+      "/comic/library",
       "/comic/me/:tab",
       "/comic/albums/*",
       "/comic/tags/*",
