@@ -225,16 +225,17 @@ frontend/
   src/                React 页面、API、hooks、store 与界面组件
   tests/e2e/          Playwright 全栈测试
 scripts/              BAT 入口与跨平台 E2E 辅助脚本
-docs/                 API、架构、快捷键、设计与发布文档
+docs/                 产品契约、API、架构、快捷键、设计与发布文档
 ~~~
 
 | 文档 | 用途 |
 | --- | --- |
 | [AGENTS.md](./AGENTS.md) | 协作边界、修改规则、验证与提交要求 |
+| [docs/PRODUCT.md](./docs/PRODUCT.md) | 产品契约：信息架构、路由、页面职责、功能语义与旧入口映射 |
 | [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) | 模块边界、媒体管线、任务与持久化 |
 | [docs/API.md](./docs/API.md) | HTTP、SSE、字段与错误码 |
 | [docs/SHORTCUTS.md](./docs/SHORTCUTS.md) | 键盘快捷键 |
-| [docs/DESIGN.md](./docs/DESIGN.md) | 界面目标、设计权限与视觉验证 |
+| [docs/DESIGN.md](./docs/DESIGN.md) | 设计契约：设计权限、视觉与交互规则、视觉验证方法 |
 | [docs/RELEASE.md](./docs/RELEASE.md) | 构建、发布包、手动 CI 与正式发布 |
 
 ## 使用范围与许可

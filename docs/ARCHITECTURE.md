@@ -1,6 +1,6 @@
 # 系统架构
 
-本文维护当前模块入口、数据流与修改时必须守住的边界。接口字段见 [API.md](./API.md)，界面及开放问题见 [DESIGN.md](./DESIGN.md)，运行与验证命令见根 [README.md](../README.md)。
+本文维护当前模块入口、数据流与修改时必须守住的边界。接口字段见 [API.md](./API.md)，产品结构见 [PRODUCT.md](./PRODUCT.md)，界面及开放问题见 [DESIGN.md](./DESIGN.md)，运行与验证命令见根 [README.md](../README.md)。
 
 ## 模块与依赖
 
