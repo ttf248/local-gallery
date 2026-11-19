@@ -186,6 +186,16 @@ describe("pageBoundaryKey", () => {
     expect(pageBoundaryKey("/tasks/storage")).toBe("tasks");
   });
 
+  it("同一工作台的我的页签共用边界键，切换工作台时区分", () => {
+    expect(pageBoundaryKey("/photo/me/picks")).toBe("photo/me");
+    expect(pageBoundaryKey("/photo/me/favorites")).toBe("photo/me");
+    expect(pageBoundaryKey("/comic/me/reading")).toBe("comic/me");
+    expect(pageBoundaryKey("/comic/me/favorites")).toBe("comic/me");
+    expect(pageBoundaryKey("/photo/me/favorites")).not.toBe(
+      pageBoundaryKey("/comic/me/favorites"),
+    );
+  });
+
   // 其余页面仍然逐页重挂：换相册就是换一份数据。
   it("其余路径一字不动", () => {
     expect(pageBoundaryKey("/photo")).toBe("/photo");

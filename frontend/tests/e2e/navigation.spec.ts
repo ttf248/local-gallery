@@ -64,3 +64,19 @@ test("「我的」用页签承载精选、收藏与最近浏览", async ({ page,
   await page.goBack();
   await expect(page).toHaveURL(/\/photo\/me\/picks/);
 });
+
+test("切换「我的」页签后保留已访问的面板", async ({ page, request }) => {
+  await liveRoots(request);
+  await setWorkbenchMode(request, "photo");
+  await page.goto("/photo/me/picks");
+  await expect(page.locator("#me-panel-picks")).toBeVisible();
+
+  await page.getByRole("tab", { name: "收藏" }).click();
+  await expect(page).toHaveURL(/\/photo\/me\/favorites/);
+  await expect(page.locator("#me-panel-favorites")).toBeVisible();
+
+  await page.getByRole("tab", { name: "精选照片" }).click();
+  await expect(page).toHaveURL(/\/photo\/me\/picks/);
+  await expect(page.locator("#me-panel-favorites")).toBeAttached();
+  await expect(page.locator("#me-panel-favorites")).toBeHidden();
+});

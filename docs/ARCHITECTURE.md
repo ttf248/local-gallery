@@ -475,6 +475,8 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 ### 查询、导航与网格
 
+`AppShell` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
+
 - TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
 - 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片库首页）、`/photo/library`（图库）、`/photo/explore`（探索）、`/photo/me/:tab`（我的）、`/photo/search`（名称搜索结果）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画库首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
 - **图库（`routes/Library.tsx`）是结构页，不是一张清单。** 左侧 `components/library/FolderTree.tsx` 按需展开真实目录（媒体根 → 集合 → 相册），右侧是当前这一层的内容；当前层、排序、最少张数与视图都住在地址里（`node` 参数加 `hooks/useListFilters.ts` 的查询参数），复制链接能落到同一个文件夹。集合卡在图库里指向它的下一层（`node` 参数），而不是跳去集合页 —— 换目录在图库里比跳出去再跳回来短；集合的规范地址仍是集合页，收藏、属性与复制链接都用规范地址。智能主题（时间、人物、地点、场景的聚合）不进图库：拿自动分组冒充文件夹树，用户就找不到自己的文件。

@@ -322,9 +322,13 @@ export function favoriteResourceId(item: {
  * （`/photo/me/picks`），切页签同样不该重挂整页。
  */
 export function pageBoundaryKey(pathname: string): string {
-  const segment = pathname.split("/")[1] ?? "";
-  if (segment === "settings" || segment === "tasks" || segment === "me") {
-    return segment;
+  const segments = pathname.split("/").filter(Boolean);
+  const [section, page] = segments;
+  if (section === "settings" || section === "tasks") {
+    return section;
+  }
+  if ((section === "photo" || section === "comic") && page === "me") {
+    return `${section}/me`;
   }
   return pathname;
 }
