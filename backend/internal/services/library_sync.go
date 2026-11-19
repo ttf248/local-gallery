@@ -194,6 +194,12 @@ type LibrarySyncService struct {
 	analysisQueue map[string]*analysisQueue
 	// analysisFull 标记某些模块要做一次全库增量分析。
 	analysisFull map[string]bool
+	// analysisFullGeneration 是每个模块「欠一次全库增量分析」的代次。
+	//
+	// 每记一次新的欠账就加一：提交出去的任务带着启动时的代次回来，
+	// 代次没变才说明这次任务覆盖了全部欠账。任务在跑的时候又来了一批
+	// 新照片，代次会变 —— 那次的任务结果就不算数，欠账要留着。
+	analysisFullGeneration map[string]uint64
 	// analysisTasks 记录自动提交出去、还在跑的分析任务：模块 → 任务。
 	analysisTasks map[string]*analysisTask
 	// analysisFailures 是各模块分析连续失败的次数。
@@ -208,6 +214,11 @@ type LibrarySyncService struct {
 	smartAlbumJob string
 	// smartAlbumGeneration 是那次刷新启动时的代号。
 	smartAlbumGeneration uint64
+	// smartAlbumOwned 说明当前跟踪的那次刷新是自己发起的。
+	//
+	// 复用的那次刷新（用户手动点的、每日计划跑的）开始得更早，
+	// 覆盖不到后来才发生的分析变化：它跑完不能算作覆盖了当前的代号。
+	smartAlbumOwned bool
 	// smartAlbumRetryAt 是下一次可以重试刷新的时刻。
 	smartAlbumRetryAt time.Time
 	// smartAlbumRetryDelay 是刷新失败之后的重试间隔。
@@ -234,15 +245,16 @@ func NewLibrarySyncService(opts LibrarySyncOptions) (*LibrarySyncService, error)
 		opts.VerifyInterval = defaultVerifyInterval
 	}
 	service := &LibrarySyncService{
-		opts:                 opts,
-		engine:               NewIncrementalEngine(),
-		pending:              newSyncChangeSet(),
-		analysisQueue:        make(map[string]*analysisQueue),
-		analysisFull:         make(map[string]bool),
-		analysisTasks:        make(map[string]*analysisTask),
-		analysisFailures:     make(map[string]int),
-		smartAlbumRetryDelay: defaultSmartAlbumRetryDelay,
-		wake:                 make(chan struct{}, 1),
+		opts:                   opts,
+		engine:                 NewIncrementalEngine(),
+		pending:                newSyncChangeSet(),
+		analysisQueue:          make(map[string]*analysisQueue),
+		analysisFull:           make(map[string]bool),
+		analysisFullGeneration: make(map[string]uint64),
+		analysisTasks:          make(map[string]*analysisTask),
+		analysisFailures:       make(map[string]int),
+		smartAlbumRetryDelay:   defaultSmartAlbumRetryDelay,
+		wake:                   make(chan struct{}, 1),
 	}
 	if err := service.loadState(); err != nil {
 		return nil, err
@@ -276,7 +288,7 @@ func (s *LibrarySyncService) loadState() error {
 	s.analysisDirty = state.AnalysisDirty
 	if state.AutoAnalyze {
 		for module := range state.AnalysisPending {
-			s.analysisFull[module] = true
+			s.markFullAnalysisLocked(module)
 		}
 	}
 	return nil

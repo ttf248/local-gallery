@@ -211,6 +211,9 @@ func TestLibrarySync_SmartAlbumRefreshWaitsForQueuedAnalysis(t *testing.T) {
 //
 // 它也能模拟失败：startFailures 让前几次启动失败，statuses 记录每个
 // 任务的状态，用来验证「刷新失败之后会自动重试」。
+//
+// runningID 模拟「已经有一次刷新在跑」：这时再 Start 会复用它
+// （reused=true），跟用户手动点的刷新撞上时一样。
 type fakeSmartAlbumRefresher struct {
 	starts atomic.Int64
 
@@ -221,6 +224,8 @@ type fakeSmartAlbumRefresher struct {
 	statuses map[string]SmartAlbumRefreshProgress
 	// nextID 给刷新任务编号。
 	nextID int
+	// runningID 是当前正在跑的那次刷新；非空时 Start 复用它。
+	runningID string
 }
 
 func (f *fakeSmartAlbumRefresher) Start(bool) (string, bool, error) {
@@ -230,6 +235,10 @@ func (f *fakeSmartAlbumRefresher) Start(bool) (string, bool, error) {
 	if f.startFailures > 0 {
 		f.startFailures--
 		return "", false, errors.New("智能相册服务暂时不可用")
+	}
+	if f.runningID != "" {
+		// 已经有一次刷新在跑：复用它。
+		return f.runningID, true, nil
 	}
 	f.nextID++
 	id := fmt.Sprintf("smart-album-%d", f.nextID)
@@ -252,6 +261,36 @@ func (f *fakeSmartAlbumRefresher) failNextStart(n int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.startFailures = n
+}
+
+// startRunning 记下一次「别人开着」的刷新，返回它的任务号。
+//
+// 之后 Start 会复用它，直到 completeRunning 被调用。
+func (f *fakeSmartAlbumRefresher) startRunning() string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.nextID++
+	id := fmt.Sprintf("smart-album-%d", f.nextID)
+	if f.statuses == nil {
+		f.statuses = map[string]SmartAlbumRefreshProgress{}
+	}
+	f.statuses[id] = SmartAlbumRefreshProgress{JobID: id, Status: SmartAlbumRefreshStatusRunning}
+	f.runningID = id
+	return id
+}
+
+// completeRunning 让那次正在跑的刷新结束。
+func (f *fakeSmartAlbumRefresher) completeRunning() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.runningID == "" {
+		return
+	}
+	f.statuses[f.runningID] = SmartAlbumRefreshProgress{
+		JobID:  f.runningID,
+		Status: SmartAlbumRefreshStatusComplete,
+	}
+	f.runningID = ""
 }
 
 // TestLibrarySync_FullAnalysisSurvivesModuleFailure 验证全库增量分析
@@ -389,7 +428,11 @@ func TestLibrarySync_AnalysisQueueKeepsTasksWhenModuleFails(t *testing.T) {
 
 	// 连续失败但还没到上限：任务要留在队列里等下一轮。
 	for attempt := 1; attempt < maxAnalysisRetries; attempt++ {
-		sync.recordAnalysisFailure(AIJobTypeMetadata, errors.New("模块暂时不可用"))
+		sync.recordAnalysisFailure(
+			AIJobTypeMetadata,
+			analysisAttempt{ids: ids},
+			errors.New("模块暂时不可用"),
+		)
 		sync.mu.Lock()
 		entry := sync.analysisQueue[AIJobTypeMetadata]
 		sync.mu.Unlock()
@@ -399,7 +442,11 @@ func TestLibrarySync_AnalysisQueueKeepsTasksWhenModuleFails(t *testing.T) {
 	}
 
 	// 超过上限才放弃，并且要如实记下原因。
-	sync.recordAnalysisFailure(AIJobTypeMetadata, errors.New("模块一直不可用"))
+	sync.recordAnalysisFailure(
+		AIJobTypeMetadata,
+		analysisAttempt{ids: ids},
+		errors.New("模块一直不可用"),
+	)
 	sync.mu.Lock()
 	entry := sync.analysisQueue[AIJobTypeMetadata]
 	failures := sync.analysisFailures[AIJobTypeMetadata]

@@ -97,6 +97,29 @@ func (q *analysisQueue) reset() {
 	q.seen = map[string]struct{}{}
 }
 
+// remove 从队列里去掉指定的资源。
+//
+// 只去掉给定的这些：放弃一批失败的工作时，队列里后来排进来的资源
+// 不能跟着一起没。
+func (q *analysisQueue) remove(ids []string) {
+	if len(ids) == 0 {
+		return
+	}
+	drop := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		drop[id] = struct{}{}
+	}
+	kept := q.ids[:0]
+	for _, id := range q.ids {
+		if _, exists := drop[id]; exists {
+			delete(q.seen, id)
+			continue
+		}
+		kept = append(kept, id)
+	}
+	q.ids = kept
+}
+
 // len 是队列里待分析的资源数量。
 func (q *analysisQueue) len() int {
 	return len(q.ids)
@@ -113,6 +136,25 @@ type analysisTask struct {
 	ids []string
 	// full 标记这是一次全库增量分析。
 	full bool
+	// fullGeneration 是这次全库分析启动时的代次。
+	//
+	// 任务在跑的时候又来了一批新照片（队列超上限，改成一次新的全库
+	// 分析），代次会变。那次的任务结果覆盖不到新的这批：标记要留着，
+	// 等下一轮再提交一次。
+	fullGeneration uint64
+}
+
+// analysisAttempt 是一次自动分析尝试的上下文。
+//
+// 连续失败到上限时要放弃的只有这次尝试负责的工作：它对应的那份资源
+// 名单与那一轮全库分析。后来的工作不能跟着一起没。
+type analysisAttempt struct {
+	// ids 是这次尝试负责的资源；空表示没有具体名单。
+	ids []string
+	// full 标记这是一次全库增量分析的尝试。
+	full bool
+	// generation 是这次尝试对应的全库分析代次。
+	generation uint64
 }
 
 // queueAnalysis 把变动的资源排进分析队列。
@@ -143,7 +185,7 @@ func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
 			// 超出上限：队列清空，改成一次全库增量分析。
 			// 丢掉的是「哪些文件排队了」这份名单，不是任务本身。
 			entry.reset()
-			s.analysisFull[module] = true
+			s.markFullAnalysisLocked(module)
 		}
 	}
 	// 排进了分析任务就要重算智能相册 ——
@@ -163,6 +205,21 @@ func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
 func (s *LibrarySyncService) markDirtyLocked() {
 	s.analysisDirty = true
 	s.dirtyGeneration++
+}
+
+// markFullAnalysisLocked 给某个模块记一次新的全库增量分析。
+//
+// 代次每次加一：提交出去的任务带着启动时的代次回来，代次没变才说明
+// 这次任务覆盖了全部欠账。任务在跑的时候又来了一批新照片（队列超出
+// 上限，改成一次新的全库分析），代次会变 —— 那次的任务结果覆盖不到
+// 新的这批，标记要留着等下一轮再提交。
+//
+// 失败次数也一起清掉：新的一轮欠账配新的失败次数，上一轮连着失败
+// 不能让这一轮一提交就被判放弃。
+func (s *LibrarySyncService) markFullAnalysisLocked(module string) {
+	s.analysisFull[module] = true
+	s.analysisFullGeneration[module]++
+	delete(s.analysisFailures, module)
 }
 
 // pumpAnalysis 把排队的资源提交成分析任务。
@@ -213,17 +270,27 @@ func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
 			// 提交成功之前既不清标记也不清队列：模块不可用时（模型没装好、
 			// 磁盘读不了）这次提交会失败，而失败的这次绝不能把这批工作
 			// 一起丢掉 —— 标记留着，下一轮还会再试。
+			//
+			// 代次在提交之前取：这次尝试负责的是这一笔欠账，失败时放弃
+			// 的也只能是这一笔。
+			s.mu.Lock()
+			generation := s.analysisFullGeneration[module]
+			s.mu.Unlock()
 			job, _, err := s.opts.Jobs.Start(module, AIJobModeIncremental)
 			if err != nil {
 				if errors.Is(err, ErrAIJobActive) {
 					// 任务中心正忙：标记原样留着，等下一轮再提交。
 					return
 				}
-				s.recordAnalysisFailure(module, err)
+				s.recordAnalysisFailure(module, analysisAttempt{full: true, generation: generation}, err)
 				return
 			}
 			s.mu.Lock()
-			s.analysisTasks[module] = &analysisTask{jobID: job.ID, full: true}
+			s.analysisTasks[module] = &analysisTask{
+				jobID:          job.ID,
+				full:           true,
+				fullGeneration: generation,
+			}
 			s.mu.Unlock()
 			s.persistAnalysisState()
 			continue
@@ -251,7 +318,7 @@ func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
 		// 模块暂时不可用（模型没装好、磁盘读不了）：这批留到下一轮再试。
 		// 连续失败超过上限才放弃，不能静默丢掉。
 		s.restoreAnalysis(module, ids)
-		s.recordAnalysisFailure(module, err)
+		s.recordAnalysisFailure(module, analysisAttempt{ids: ids}, err)
 		return
 	}
 }
@@ -271,10 +338,21 @@ func (s *LibrarySyncService) settleAnalysisTask(module string) {
 	job, ok := s.opts.Jobs.Get(task.jobID)
 	if !ok {
 		// 任务记录不见了（被清掉了）：当作失败处理，重新排队。
+		//
+		// 记录没了不等于活干完了：这批资源要放回队列，全库分析的标记
+		// 也要留着。名单只记一次失败就丢掉的话，那批照片的分析结果
+		// 就永远补不上了。
 		s.mu.Lock()
 		delete(s.analysisTasks, module)
 		s.mu.Unlock()
-		s.recordAnalysisFailure(module, errors.New("分析任务记录不见了"))
+		if !task.full && len(task.ids) > 0 {
+			s.restoreAnalysis(module, task.ids)
+		}
+		s.recordAnalysisFailure(
+			module,
+			analysisAttempt{ids: task.ids, full: task.full, generation: task.fullGeneration},
+			errors.New("分析任务记录不见了"),
+		)
 		return
 	}
 	switch job.Status {
@@ -283,7 +361,10 @@ func (s *LibrarySyncService) settleAnalysisTask(module string) {
 		delete(s.analysisTasks, module)
 		// 全库分析跑完了：这次欠的活还清，标记可以撤掉。
 		// 只是一批资源的话不动标记 —— 批次跑完不等于这个模块的活干完了。
-		if task.full {
+		//
+		// 代次对得上才撤：任务在跑的时候又来了一批新照片（队列超上限，
+		// 改成一次新的全库分析），那次任务覆盖不到新的这批，标记要留着。
+		if task.full && s.analysisFullGeneration[module] == task.fullGeneration {
 			delete(s.analysisFull, module)
 		}
 		s.mu.Unlock()
@@ -297,7 +378,11 @@ func (s *LibrarySyncService) settleAnalysisTask(module string) {
 			// 这批资源没分析完：放回队列，下一轮重试。
 			s.restoreAnalysis(module, task.ids)
 		}
-		s.recordAnalysisFailure(module, fmt.Errorf("分析任务 %s 结束于 %s", task.jobID, job.Status))
+		s.recordAnalysisFailure(
+			module,
+			analysisAttempt{ids: task.ids, full: task.full, generation: task.fullGeneration},
+			fmt.Errorf("分析任务 %s 结束于 %s", task.jobID, job.Status),
+		)
 	}
 }
 
@@ -320,20 +405,26 @@ func (s *LibrarySyncService) restoreAnalysis(module string, ids []string) {
 //
 // 连续失败超过上限就放弃这批资源，并把原因如实记进状态 ——
 // 不能悄悄丢掉，也不能无限重试。
-func (s *LibrarySyncService) recordAnalysisFailure(module string, err error) {
+//
+// 放弃的只有这次尝试负责的工作：它对应的那份资源名单与那一轮全库
+// 分析。后来排进来的资源与后来记下的欠账不能跟着一起没。
+func (s *LibrarySyncService) recordAnalysisFailure(module string, attempt analysisAttempt, err error) {
 	s.mu.Lock()
 	s.analysisFailures[module]++
 	failures := s.analysisFailures[module]
 	exhausted := failures >= maxAnalysisRetries
 	if exhausted {
-		entry, exists := s.analysisQueue[module]
-		if exists {
-			entry.reset()
+		if attempt.full && s.analysisFullGeneration[module] == attempt.generation {
+			// 全库增量分析的标记也要一起撤掉：它已经试过这么多次了，
+			// 留着只会让每一轮都重试一次，永远停不下来。
+			// 代次对不上说明期间又记了一次新的欠账：那笔账不能撤。
+			delete(s.analysisFull, module)
 		}
-		delete(s.analysisQueue, module)
-		// 全库增量分析的标记也要一起撤掉：它已经试过这么多次了，
-		// 留着只会让每一轮都重试一次，永远停不下来。
-		delete(s.analysisFull, module)
+		if len(attempt.ids) > 0 {
+			if entry, exists := s.analysisQueue[module]; exists {
+				entry.remove(attempt.ids)
+			}
+		}
 	}
 	s.mu.Unlock()
 	log.Printf("自动分析失败 module=%s（第 %d 次）: %v", module, failures, err)
@@ -383,13 +474,16 @@ func (s *LibrarySyncService) refreshSmartAlbums() {
 			// 任务记录不见了：当作失败，重新触发一次。
 			s.mu.Lock()
 			s.smartAlbumJob = ""
+			s.smartAlbumOwned = false
 			s.mu.Unlock()
 		case progress.Status == SmartAlbumRefreshStatusComplete:
 			s.mu.Lock()
 			s.smartAlbumJob = ""
 			// 刷新期间又有新照片进来时代号会变：
 			// 那次的刷新结果覆盖不到新的变化，标记要留着。
-			if s.dirtyGeneration == s.smartAlbumGeneration {
+			covered := s.smartAlbumOwned && s.dirtyGeneration == s.smartAlbumGeneration
+			s.smartAlbumOwned = false
+			if covered {
 				s.analysisDirty = false
 			}
 			s.mu.Unlock()
@@ -400,15 +494,23 @@ func (s *LibrarySyncService) refreshSmartAlbums() {
 			log.Printf("智能相册刷新失败: %s", progress.Error)
 			s.mu.Lock()
 			s.smartAlbumJob = ""
+			s.smartAlbumOwned = false
 			s.smartAlbumRetryAt = time.Now().Add(s.smartAlbumRetryDelay)
 			s.mu.Unlock()
 		case progress.Status == SmartAlbumRefreshStatusCancelled:
-			// 用户主动取消的：不再自动重开。派生结果会停在旧状态，
-			// 下次有新的分析任务时自然会再重算一次。
+			// 用户主动取消的：这次刷新不算数。取消时覆盖得到的那一代
+			// 就此作罢，不再自动重开；取消之后才发生的变化还没被重算过，
+			// 标记要留着 —— 派生结果不能停在旧状态。
 			log.Printf("智能相册刷新被取消: %s", progress.Error)
 			s.mu.Lock()
 			s.smartAlbumJob = ""
-			s.analysisDirty = false
+			// 取消的那次刷新覆盖不到后来的变化时，标记要留着：
+			// 那批变化还没有被重算过，派生结果不能停在旧状态。
+			covered := s.smartAlbumOwned && s.dirtyGeneration == s.smartAlbumGeneration
+			s.smartAlbumOwned = false
+			if covered {
+				s.analysisDirty = false
+			}
 			s.mu.Unlock()
 			s.persistAnalysisState()
 			return
@@ -439,7 +541,7 @@ func (s *LibrarySyncService) refreshSmartAlbums() {
 		}
 	}
 
-	id, _, err := s.opts.SmartAlbums.Start(false)
+	id, reused, err := s.opts.SmartAlbums.Start(false)
 	if err != nil {
 		// 启动失败：标记留着，过一会儿自动重试。
 		log.Printf("智能相册增量刷新失败: %v", err)
@@ -450,7 +552,13 @@ func (s *LibrarySyncService) refreshSmartAlbums() {
 	}
 	s.mu.Lock()
 	s.smartAlbumJob = id
-	s.smartAlbumGeneration = s.dirtyGeneration
+	// 复用的那次刷新是别人先开的：它开始得比现在早，覆盖不到这期间
+	// 才发生的分析变化。这种刷新不能算作覆盖了当前的代号 ——
+	// 它的结果算完之后标记要留着，下一轮自己再开一次。
+	s.smartAlbumOwned = !reused
+	if !reused {
+		s.smartAlbumGeneration = s.dirtyGeneration
+	}
 	s.smartAlbumRetryAt = time.Time{}
 	s.mu.Unlock()
 }
@@ -553,7 +661,7 @@ func (s *LibrarySyncService) markFullAnalysis() {
 	}
 	s.mu.Lock()
 	for _, module := range modules {
-		s.analysisFull[module] = true
+		s.markFullAnalysisLocked(module)
 	}
 	s.markDirtyLocked()
 	s.mu.Unlock()
