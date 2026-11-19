@@ -103,6 +103,10 @@ export default function Library() {
       : "全部相册";
   const total = list.summary?.total ?? 0;
   const hasContent = (manifest?.statistics.albumCount ?? 0) > 0;
+  const hasActiveFilters =
+    Boolean(filters.query) ||
+    filters.view !== "all" ||
+    filters.minImageCount > 0;
 
   return (
     <div className="library-page min-h-full">
@@ -159,7 +163,7 @@ export default function Library() {
               </ErrorBanner>
             ) : null}
 
-            {cards.length > 0 ? (
+            {hasContent ? (
               <ListFilterBar
                 viewChips={
                   nodeId
@@ -181,6 +185,9 @@ export default function Library() {
                 }
                 activeViewKey={filters.view}
                 onChangeView={(key) => filters.setView(key as ViewKey)}
+                filterQuery={filters.query}
+                onClearQuery={() => filters.setQuery("")}
+                onClearFilters={hasActiveFilters ? filters.reset : undefined}
                 totalCount={total}
                 sort={filters.sortBy}
                 onSortChange={filters.setSortBy}

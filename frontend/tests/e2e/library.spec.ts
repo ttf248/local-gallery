@@ -77,3 +77,28 @@ test("图库打不开时给出重试手柄", async ({ page, request }) => {
   await expect(alert).toContainText("图库内容读取失败", { timeout: 15_000 });
   await expect(alert.getByRole("button", { name: /重试/ })).toBeVisible();
 });
+
+test("筛选结果为零时仍可调整条件并一键清除", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+  const query = "zz-no-such-library-result";
+  await page.goto(
+    `/photo/library?q=${encodeURIComponent(query)}&min=999999&view=album`,
+  );
+
+  await expect(page.getByRole("heading", { name: /没有匹配/ })).toBeVisible();
+  const filterBar = page.locator(".filter-strip");
+  await expect(filterBar).toBeVisible();
+  await expect(filterBar.getByRole("button", { name: "全部" })).toBeVisible();
+  await expect(
+    filterBar.getByText(`名称：${query}`, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    filterBar.getByRole("button", { name: "清除筛选" }),
+  ).toBeVisible();
+
+  await filterBar.getByRole("button", { name: "清除筛选" }).click();
+  await expect(page).toHaveURL("/photo/library");
+  await expect(
+    filterBar.getByRole("button", { name: "全部", pressed: true }),
+  ).toBeVisible();
+});

@@ -19,6 +19,12 @@ export interface ListFilterBarProps {
   onChangeView?: (key: string) => void;
   // 总数(用于 "共 N 项")
   totalCount: number;
+  /** 当前列表按名称筛选的词；全局搜索输入与列表 q 参数相互独立。 */
+  filterQuery?: string;
+  /** 移除名称筛选。 */
+  onClearQuery?: () => void;
+  /** 可选的整组筛选清除动作。调用方只在筛选生效时传入。 */
+  onClearFilters?: () => void;
   // 显示「最少图数」过滤(默认 true)。如果某页不希望显示(如纯 smart
   // 集合页,过滤不适用),传 false。
   showMinImageFilter?: boolean;
@@ -53,6 +59,9 @@ export function ListFilterBar({
   activeViewKey,
   onChangeView,
   totalCount,
+  filterQuery,
+  onClearQuery,
+  onClearFilters,
   showMinImageFilter = true,
   hideViewToggle = false,
   hideSort = false,
@@ -70,6 +79,17 @@ export function ListFilterBar({
     <div className="page-shell">
       <div className="filter-strip flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex items-center gap-1 flex-wrap min-w-0">
+          {filterQuery ? (
+            <button
+              type="button"
+              className="chip"
+              onClick={onClearQuery}
+              aria-label={`清除名称筛选「${filterQuery}」`}
+            >
+              <span>名称：{filterQuery}</span>
+              <span aria-hidden>×</span>
+            </button>
+          ) : null}
           {viewChips?.map((v) => {
             const active = activeViewKey === v.key;
             return (
@@ -117,6 +137,15 @@ export function ListFilterBar({
             </span>
           ) : null}
           {!hideSort && <SortMenu value={sort} onChange={onSortChange} />}
+          {onClearFilters ? (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={onClearFilters}
+            >
+              清除筛选
+            </button>
+          ) : null}
           {/* 网格 / 列表：一条分段控件（跟主题切换同一套语言）。
               早先两个 30px 的方块各自带一圈边框，激活态只是把底色改成
               --bg-subtle，在浅色画布上几乎看不出差别 —— 两个图标悬在
