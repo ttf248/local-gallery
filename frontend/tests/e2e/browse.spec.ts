@@ -15,6 +15,7 @@ import {
   resetNavItems,
   readFavorites,
   readHistory,
+  openMeTab,
   taggedSortPrefix,
   sortFixture,
   restoreHistory,
@@ -1719,7 +1720,8 @@ for (const mode of ["grid", "list"] as const) {
         status: "completed",
       });
 
-      await page.getByRole("link", { name: "收藏漫画", exact: true }).click();
+      // 「收藏漫画」不再是侧栏条目：它是「我的」里的一个页签。
+      await openMeTab(page, "收藏");
       await expect(
         card.getByText("已读完", { exact: true }).first(),
       ).toBeVisible();
@@ -2328,10 +2330,11 @@ test("年份卡直接打开这一年的照片墙，照片能回到原相册", as
   request,
 }) => {
   await scannedNodes(request, "photo");
-  await page.goto("/photo");
+  await page.goto("/photo/explore");
 
   // 年份卡的主操作是看这一年的照片：年份散在好几本相册里，
   // 先挑一本再进去等于让用户替系统做取舍。
+  // 年份索引住在探索页：首页是发现页，不摆年份表。
   const year = page
     .getByTestId("year-timeline")
     .getByRole("button", { name: /^2024/ });
@@ -2356,12 +2359,12 @@ test("年份卡直接打开这一年的照片墙，照片能回到原相册", as
 test("照片侧年份卡没有漏斗，卡片名只说年份", async ({ page, request }) => {
   const nodes = await scannedNodes(request);
   expect(nodes.length).toBeGreaterThan(0);
-  await page.goto("/photo");
+  await page.goto("/photo/explore");
 
   const years = page.getByTestId("year-timeline");
   await expect(years).toBeVisible();
-  // 漏斗筛的是下方那张网格。照片侧首页那一块换成智能相册，没有网格
-  // 可筛，漏斗就没有去处 —— 它只在漫画侧出现。
+  // 漏斗筛的是下方那张网格。探索页的年份索引下面没有网格可筛，
+  // 漏斗就没有去处 —— 它只在漫画侧出现。
   await expect(
     years.getByRole("button", { name: "筛选该年份" }),
   ).toHaveCount(0);
@@ -2645,12 +2648,12 @@ test("重设计后的首页把继续阅读放在首屏，未读区不再逐张�
   }
 });
 
-test("年份卡用空格也能进那一年", async ({ page, request }) => {
+test("年份卡用空格也能进那一年", async ({ page }) => {
   await scannedNodes(page.request);
-  await page.goto("/photo");
+  await page.goto("/photo/explore");
   const years = page.getByTestId("year-timeline");
   await expect(years).toBeVisible();
-  // 年份卡是照片侧的主索引，键盘要能直接用：空格等同回车。
+  // 年份卡是照片侧的索引，键盘要能直接用：空格等同回车。
   const card = years.getByRole("button", { name: /^2024/ }).first();
   await card.focus();
   await card.press("Space");
@@ -2949,7 +2952,8 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
   for (const theme of ["light", "dark"]) {
     for (const width of [390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto("/photo");
+      // 分页浏览在图库里：首页是发现页，不摆清单。
+      await page.goto("/photo/library");
       await page.getByRole("button", { name: /^主题:/ }).click();
       await page
         .getByRole("menuitemradio", {
@@ -2960,7 +2964,7 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
       await page.keyboard.press("Escape");
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await expect(
-        page.getByRole("heading", { name: "智能相册", exact: true }),
+        page.getByRole("heading", { name: "全部相册", exact: true }),
       ).toBeAttached();
       await page.waitForFunction(() =>
         Array.from(document.images)

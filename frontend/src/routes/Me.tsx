@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import PageTabs, { PagePanel } from "../components/common/PageTabs";
 import PageHeading from "../components/common/PageHeading";
@@ -31,6 +31,20 @@ export default function Me() {
   const tabs = meTabsFor(mode);
   const active = resolveMeTab(mode, tabParam);
 
+  // 访问过的页签。切走的页签不卸载：面板里的筛选是组件内状态，
+  // 一眼看别的页签就卸载等于把用户刚挑的排序扔了。没访问过的页签
+  // 不挂载 —— 进「我的」不必同时读三份数据。
+  const [visitedTabs, setVisitedTabs] = useState<string[]>([active.id]);
+  useEffect(() => {
+    setVisitedTabs((prev) =>
+      prev.includes(active.id) ? prev : [...prev, active.id],
+    );
+  }, [active.id]);
+  const visited = useMemo(
+    () => new Set([...visitedTabs, active.id]),
+    [visitedTabs, active.id],
+  );
+
   // 认不出的页签 id 落到缺省页签：地址是用户能直接改的地方，
   // 改错了不该给一个空白页。
   if (tabParam && !tabs.some((tab) => tab.id === tabParam)) {
@@ -57,20 +71,22 @@ export default function Me() {
         />
       </div>
 
-      {tabs.map((tab) => (
-        <PagePanel
-          key={tab.id}
-          idPrefix="me"
-          tab={{ id: tab.id, label: tab.label }}
-          active={active.id}
-          className="flex-1 min-h-0 overflow-y-auto"
-        >
-          {tab.id === "picks" ? <Picks embedded /> : null}
-          {tab.id === "favorites" ? <Favorites embedded /> : null}
-          {tab.id === "recents" ? <Recents embedded /> : null}
-          {tab.id === "reading" ? <ReadingPanel /> : null}
-        </PagePanel>
-      ))}
+      {tabs.map((tab) =>
+        visited.has(tab.id) ? (
+          <PagePanel
+            key={tab.id}
+            idPrefix="me"
+            tab={{ id: tab.id, label: tab.label }}
+            active={active.id}
+            className="flex-1 min-h-0 overflow-y-auto"
+          >
+            {tab.id === "picks" ? <Picks embedded /> : null}
+            {tab.id === "favorites" ? <Favorites embedded /> : null}
+            {tab.id === "recents" ? <Recents embedded /> : null}
+            {tab.id === "reading" ? <ReadingPanel /> : null}
+          </PagePanel>
+        ) : null,
+      )}
     </div>
   );
 }

@@ -156,7 +156,7 @@ it("全局操作的措辞随工作台模式变化", () => {
   expect(screen.getByText("随机翻翻")).toBeInTheDocument();
   expect(screen.getByText("回到照片库")).toBeInTheDocument();
   expect(screen.getByText("最近浏览")).toBeInTheDocument();
-  expect(screen.getByText("收藏照片")).toBeInTheDocument();
+  expect(screen.getByText("我的收藏")).toBeInTheDocument();
 
   act(() => {
     useAppModeStore.setState({ preference: "comic", hydrated: true });
@@ -164,7 +164,7 @@ it("全局操作的措辞随工作台模式变化", () => {
   expect(screen.getByText("随机一卷")).toBeInTheDocument();
   expect(screen.getByText("回到漫画库")).toBeInTheDocument();
   expect(screen.getByText("最近阅读")).toBeInTheDocument();
-  expect(screen.getByText("收藏漫画")).toBeInTheDocument();
+  expect(screen.getByText("我的收藏")).toBeInTheDocument();
   act(() => {
     useAppModeStore.setState({ preference: "photo", hydrated: true });
   });

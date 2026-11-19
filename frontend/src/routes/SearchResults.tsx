@@ -39,7 +39,9 @@ export default function SearchResults() {
     retry: false,
   });
 
-  const hits = search.data?.results ?? [];
+  // 结果列表本身是一个稳定的数组：搜索没返回时给一个空数组，
+  // 别每次渲染都造一个新的 —— 下游的 useMemo 依赖它。
+  const hits = useMemo(() => search.data?.results ?? [], [search.data]);
 
   // 搜索结果本身没有来源信息（它只给 id、名字与封面）。再查一次节点摘要，
   // 才知道它属于哪个媒体根、上级是哪个集合、封面有哪几张。

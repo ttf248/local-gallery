@@ -146,18 +146,10 @@ function PlaceSection() {
       </section>
     );
   }
-  if (!summary || summary.chinaPhotoCount === 0) {
-    return (
-      <section className="page-shell page-section">
-        <div className="section-heading">
-          <h2 className="section-title">地点</h2>
-        </div>
-        <p className="text-body text-fg-muted">
-          还没有解析出照片里的位置。跑一次元数据分析（EXIF / GPS）后，这里会给出去过的地方。
-        </p>
-      </section>
-    );
-  }
+  // 「足迹」这一节永远给得出入口：地点页本身是一张地图与一段行程，
+  // 即便还没解析出位置，它也说得清「这里还没有内容」。把入口藏起来
+  // 只在有数据时才给，用户就找不到这一页了。
+  const hasLocations = Boolean(summary && summary.chinaPhotoCount > 0);
   return (
     <section className="page-shell page-section">
       <div className="section-heading">
@@ -167,14 +159,20 @@ function PlaceSection() {
           足迹
         </Link>
       </div>
-      <p className="text-body text-fg-muted">
-        <span className="text-fg font-medium tabular-nums">
-          {summary.chinaPhotoCount.toLocaleString("zh-CN")}
-        </span>{" "}
-        张照片带位置，去过{" "}
-        <span className="text-fg font-medium tabular-nums">{provinces}</span>{" "}
-        个省级区域。全部在本机解析，不请求在线地图。
-      </p>
+      {hasLocations ? (
+        <p className="text-body text-fg-muted">
+          <span className="text-fg font-medium tabular-nums">
+            {summary!.chinaPhotoCount.toLocaleString("zh-CN")}
+          </span>{" "}
+          张照片带位置，去过{" "}
+          <span className="text-fg font-medium tabular-nums">{provinces}</span>{" "}
+          个省级区域。全部在本机解析，不请求在线地图。
+        </p>
+      ) : (
+        <p className="text-body text-fg-muted">
+          还没有解析出照片里的位置。跑一次元数据分析（EXIF / GPS）后，这里会给出去过的地方。
+        </p>
+      )}
     </section>
   );
 }

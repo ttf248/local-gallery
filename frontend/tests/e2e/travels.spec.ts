@@ -14,10 +14,11 @@ test.beforeEach(async ({ request }) => {
   await ensureMetadataReady(request);
 });
 
-test("侧栏的足迹入口打开的是新的地点页", async ({ page }) => {
-  await page.goto("/photo");
+test("探索里的足迹入口打开的是新的地点页", async ({ page }) => {
+  await page.goto("/photo/explore");
 
-  await page.getByRole("link", { name: "足迹" }).click();
+  // 「足迹」现在住在探索页的地点一节里：侧栏只留一级入口。
+  await page.getByRole("link", { name: "足迹", exact: true }).click();
   await expect(page).toHaveURL(/\/photo\/travels$/);
   // 页面名不再显示在内容区，进来看到的是跨度筛选与右栏的地图。
   await expect(page.getByRole("radiogroup", { name: "时间跨度" })).toBeVisible();

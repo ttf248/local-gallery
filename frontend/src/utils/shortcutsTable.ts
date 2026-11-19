@@ -66,8 +66,8 @@ export const SHORTCUTS: Shortcut[] = [
   {
     id: "favorites",
     label: "Ctrl+D",
+    // 两侧都是「我的」里的收藏页签，措辞不再分侧。
     description: "我的收藏",
-    modeDescriptions: { photo: "收藏照片", comic: "收藏漫画" },
     combo: "ctrl+d",
     group: "global",
   },

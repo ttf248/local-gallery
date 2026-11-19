@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useListFilters } from "../hooks/useListFilters";
+import { Link, useNavigate } from "react-router-dom";
 import { useScanSSE } from "../hooks/useScanSSE";
-import { useFavoritesByMode } from "../hooks/useFavoritesByMode";
 import { useMarkAlbumRead, useMarkAlbumsRead } from "../hooks/useImageActivity";
-import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { scanApi } from "../api/scan";
 import { useHistoryCards } from "../hooks/useHistory";
 import { libraryApi } from "../api/library";
@@ -13,130 +10,70 @@ import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
 import SmartAlbumPreview, {
   HOME_SMART_ALBUM_PREVIEW,
 } from "../components/home/SmartAlbumPreview";
-import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
-import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
-import ListPagination from "../components/common/ListPagination";
-import { useLibraryList, listYearGroups } from "../hooks/useLibraryList";
-import YearTimeline from "../components/home/YearTimeline";
-import SeriesTimeline from "../components/home/SeriesTimeline";
 import { ContinueHero, UnreadHero } from "../components/home/HomeHeroes";
 import ResumeHero from "../components/home/ResumeHero";
 import PhotoFeedHero from "../components/home/PhotoFeedHero";
 import OnThisDaySection from "../components/home/OnThisDaySection";
 import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "../hooks/useAppMode";
-import { comicCopy, workbenchCopy } from "../utils/workbench";
 import {
   albumRoute,
   decodeFavPath,
-  favoritesRoute,
+  exploreRoute,
   homeRoute,
-  recentsRoute,
-  smartAlbumsRoute,
-  unreadRoute,
+  libraryRoute,
 } from "../utils/path";
-import { continueReadingTarget } from "../utils/continueReading";
 import { timeAgo } from "../utils/date";
-import type { GalleryContextEntry } from "../utils/galleryContext";
 import {
   useLibraryDashboard,
   useLibraryManifest,
+  useLibraryRecentAlbums,
   useOnThisDayAlbums,
 } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
-import { LIST_PARAM } from "../utils/listFilterParams";
-import {
-  StarIcon,
-  ShuffleIcon,
-  RefreshIcon,
-  LibraryIcon,
-  ClockIcon,
-  CloseIcon,
-  ImageIcon,
-  SparkleIcon,
-  ChevronRightIcon,
-} from "../components/common/Icon";
-import { SelectionToggle } from "../components/album/BulkActions";
+import { LibraryIcon, RefreshIcon } from "../components/common/Icon";
 import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
 
+/**
+ * 工作台首页。
+ *
+ * 照片侧是**发现页**：第一屏是照片，随后是回忆（那年今日）、接着看
+ * （最近浏览）与新进门的相册。它不解释技术，也不把所有功能摆成入口 ——
+ * 想按目录翻的去图库，想按时间、人、地点找的去探索。
+ *
+ * 漫画侧是**续读页**：正在读的那本与还没翻开的那些。它不需要目录索引，
+ * 因为漫画的组织方式是作品与卷，不是文件夹。
+ */
 export default function Home() {
-  const navigate = useNavigate();
-  const [homeSearchParams, setHomeSearchParams] = useSearchParams();
+  const { mode } = useAppMode();
+  return mode === "comic" ? <ComicHome /> : <PhotoHome />;
+}
+
+/**
+ * 两个工作台共用的页头：标题、库的一行事实、两个动作。
+ *
+ * 页头刻意短：标题之下只留一句事实（多少相册、上次更新什么时候），
+ * 描述与统计一律不进这一屏 —— 首页的第一屏是照片，不是关于照片的说明。
+ */
+function HomeHeader({
+  title,
+  eyebrow,
+  primaryAction,
+}: {
+  title: string;
+  eyebrow: string;
+  primaryAction: { to: string; label: string };
+}) {
   const manifestQuery = useLibraryManifest();
   const manifest = manifestQuery.data?.manifest;
-  const dashboardQuery = useLibraryDashboard();
-  const dashboard = dashboardQuery.data?.dashboard;
+  const { mode } = useAppMode();
   const sse = useScanSSE();
   const pushToast = useUIStore((s) => s.pushToast);
-  const { mode } = useAppMode();
-  const copy = workbenchCopy(mode);
-
-  // "全部图像" section 的 ref：年份筛选触发后自动滚到这里
-  const gridRef = useRef<HTMLDivElement>(null);
-
-  const {
-    query,
-    setQuery,
-    sortBy,
-    setSortBy,
-    view,
-    yearFilter,
-    setYearFilter,
-    minImageCount,
-    setMinImageCount,
-    reset: resetFilters,
-  } = useListFilters();
-  const viewMode = useUIStore((s) => s.viewMode);
-
-  // 收藏数按当前工作台算：照片工作台的「N 收藏」不该把漫画收藏算进去。
-  const { count: favCount } = useFavoritesByMode(mode);
-  // 未读与继续阅读只属于漫画工作台：照片这边不出现这两个区。
-  const isComic = mode === "comic";
-  // 照片侧的首页不再列全部图像：那一块换成智能相册（跨文件夹汇总的
-  // 智能分组）。漫画侧仍旧列全部作品 —— 漫画的「库内一览」是它按作品
-  // 与卷找内容的地方，照片侧有智能相册与年份索引可看。
-  const smartAlbumDirectory = !isComic;
-  // 首页只取服务端按质量与文件夹多样性挑选的推荐，不切全库分组列表。
-  const smartDirectory = useSmartAlbumDirectory(
-    "featured",
-    smartAlbumDirectory && !!manifest,
-    { limit: HOME_SMART_ALBUM_PREVIEW },
-  );
-  const listView = view;
-  const setHomeView = (key: string) => {
-    const next = new URLSearchParams(homeSearchParams);
-    if (key === "all") next.delete(LIST_PARAM.view);
-    else next.set(LIST_PARAM.view, key);
-    if (next.toString() !== homeSearchParams.toString()) {
-      setHomeSearchParams(next);
-    }
-  };
-  // 首页只展示服务端预先限制为六本的未读预览；完整未读库交给 /unread 分页加载。
-  const unreadCards = useMemo<CardData[]>(
-    () =>
-      isComic
-        ? (dashboard?.unread ?? []).map((album) => ({
-            ...nodeSummaryToCard(album, "u:"),
-            progress: { index: 0, total: album.imageCount ?? 0 },
-          }))
-        : [],
-    [dashboard, isComic],
-  );
-  const unreadCount = isComic ? (dashboard?.unreadCount ?? 0) : 0;
-  // 「那年今日」只在照片侧成立：漫画没有拍摄时间。
-  const today = new Date();
-  const onThisDay = useOnThisDayAlbums(
-    mode,
-    today.getMonth() + 1,
-    today.getDate(),
-    6,
-    !isComic,
-  );
-  const onThisDayItems = onThisDay.data?.page.items ?? [];
-  // 「接着看」的数据是访问历史：照片相册其实一直在记，只是原先只有
-  // 「最近浏览」页在用。
-  const resumeCards = useHistoryCards(mode, !isComic).cards;
+  const librarySize =
+    mode === "comic"
+      ? `${manifest?.statistics.comicAlbumCount ?? 0} 卷`
+      : `${manifest?.statistics.photoAlbumCount ?? 0} 本相册`;
   const startScan = useMutation({
     mutationFn: () => scanApi.start(),
     onSuccess: (r) => {
@@ -146,12 +83,251 @@ export default function Home() {
     onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
   });
 
+  return (
+    <section className="page-shell page-heading">
+      <div className="home-heading">
+        <div className="home-heading__title">
+          <p className="page-eyebrow">{eyebrow}</p>
+          <h1 className="page-title page-title--sm">{title}</h1>
+        </div>
+        <p className="home-heading__desc text-body text-fg-muted">
+          {manifest ? (
+            <>
+              <span className="tabular-nums">{librarySize}</span>
+              {manifest.scannedAt ? (
+                <>
+                  <span className="text-fg-subtle">，</span>
+                  <span className="text-fg-subtle">
+                    上次更新 {timeAgo(manifest.scannedAt)}
+                  </span>
+                </>
+              ) : null}
+            </>
+          ) : (
+            "尚未加载图像库"
+          )}
+        </p>
+        <div className="home-heading__actions flex items-center gap-2">
+          {/* 通向完整图库的明确入口：首页给的是发现，目录在图库里。 */}
+          <Link to={primaryAction.to} className="btn btn-sm btn-outline">
+            <LibraryIcon size={13} />
+            <span className="hidden sm:inline">{primaryAction.label}</span>
+            <span className="sm:hidden">图库</span>
+          </Link>
+          <button
+            onClick={() => startScan.mutate()}
+            disabled={startScan.isPending || sse.isRunning}
+            className="btn btn-sm btn-outline"
+            title="扫描 (Ctrl+S)"
+            aria-label="重新扫描媒体目录"
+          >
+            <RefreshIcon size={13} />
+            <span className="hidden sm:inline">
+              {sse.isRunning
+                ? "扫描中…"
+                : startScan.isPending
+                  ? "启动中…"
+                  : "重新扫描"}
+            </span>
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** 照片首页：发现页。 */
+function PhotoHome() {
+  const manifestQuery = useLibraryManifest();
+  const manifest = manifestQuery.data?.manifest;
+
+  // 这一侧有没有内容：整个库都空，与「库有内容但这一侧没有」是两回事，
+  // 空态的引导不一样。
+  const libraryHasContent = (manifest?.statistics.albumCount ?? 0) > 0;
+  const sideHasContent = (manifest?.statistics.photoAlbumCount ?? 0) > 0;
+  const otherSideHasContent = (manifest?.statistics.comicAlbumCount ?? 0) > 0;
+  const hasContent = sideHasContent;
+  const isLoadingInitial = manifestQuery.isLoading;
+
+  // 「接着看」的数据是访问历史：照片相册一直在记，只是原先只有
+  // 「最近浏览」页在用。
+  const resumeCards = useHistoryCards("photo", hasContent).cards;
+
+  // 「那年今日」只在照片侧成立：漫画没有拍摄时间。
+  const today = new Date();
+  const onThisDay = useOnThisDayAlbums(
+    "photo",
+    today.getMonth() + 1,
+    today.getDate(),
+    6,
+    hasContent,
+  );
+  const onThisDayItems = onThisDay.data?.page.items ?? [];
+
+  // 最近加入：新进门的相册。与「接着看」（我刚才翻过哪本）是两件事。
+  const recent = useLibraryRecentAlbums("photo", 12, hasContent);
+  const recentCards = useMemo(
+    () =>
+      (recent.data?.page.items ?? []).map((node) =>
+        nodeSummaryToCard(node, "r:"),
+      ),
+    [recent.data],
+  );
+
+  // 少量主题推荐：给一点线索，真正去找去探索页。
+  const smart = useSmartAlbumDirectory("featured", hasContent, {
+    limit: HOME_SMART_ALBUM_PREVIEW,
+  });
+
+  return (
+    <div className="home-page min-h-full">
+      <HomeHeader
+        title="照片库"
+        eyebrow="你的照片"
+        primaryAction={{ to: libraryRoute("photo"), label: "图库" }}
+      />
+
+      {hasContent ? (
+        <>
+          {/* 第一屏：照片本身。 */}
+          <PhotoFeedHero />
+
+          {resumeCards.length > 0 ? (
+            <section className="page-shell page-section">
+              <div className="home-overview">
+                <ResumeHero cards={resumeCards} />
+              </div>
+            </section>
+          ) : null}
+
+          {onThisDayItems.length > 0 ? (
+            <OnThisDaySection
+              items={onThisDayItems}
+              month={today.getMonth() + 1}
+              day={today.getDate()}
+            />
+          ) : null}
+
+          {recentCards.length > 0 ? (
+            <section className="page-shell page-section">
+              <div className="section-heading">
+                <h2 className="section-title">最近加入</h2>
+                <span className="section-meta">按拍摄时间，最近的相册</span>
+                <Link to={libraryRoute("photo")} className="chip ml-auto">
+                  全部图库
+                </Link>
+              </div>
+              <AlbumGrid items={recentCards} variant="grid" />
+            </section>
+          ) : null}
+
+          <section className="page-shell page-section">
+            <div className="section-heading">
+              <h2 className="section-title">主题</h2>
+              <span className="section-meta">自动聚在一起的照片</span>
+              <Link to={exploreRoute()} className="chip ml-auto">
+                去探索
+              </Link>
+            </div>
+            <SmartAlbumPreview
+              items={smart.items}
+              total={smart.total}
+              isLoading={smart.isLoading}
+              isError={smart.isError}
+              onRetry={() => void smart.refetch()}
+            />
+          </section>
+        </>
+      ) : null}
+
+      {!hasContent && !isLoadingInitial ? (
+        <section className="page-shell">
+          {libraryHasContent ? (
+            <EmptyState
+              title="照片这边还没有内容"
+              description={
+                otherSideHasContent
+                  ? "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去漫画那边看看。"
+                  : "媒体目录的内容属性与这一侧对不上。可以在设置里改属性。"
+              }
+              icon={<LibraryIcon size={20} />}
+              action={
+                <div className="flex items-center gap-3">
+                  <Link to="/settings/server" className="btn btn-outline">
+                    去设置里改属性
+                  </Link>
+                  {otherSideHasContent && (
+                    <Link to={homeRoute("comic")} className="btn btn-primary">
+                      去漫画库看看
+                    </Link>
+                  )}
+                </div>
+              }
+            />
+          ) : (
+            <EmptyState
+              title="欢迎使用本地画廊"
+              description="首次使用请先设置媒体目录，再开始扫描。目录离线时可在设置中修复。"
+              icon={<LibraryIcon size={20} />}
+              action={
+                <div className="flex items-center gap-3">
+                  <Link to="/settings/server" className="btn btn-outline">
+                    设置媒体目录
+                  </Link>
+                  <Link to="/settings/data" className="btn btn-primary">
+                    去设置
+                  </Link>
+                </div>
+              }
+            />
+          )}
+        </section>
+      ) : null}
+
+      <div className="h-8" />
+    </div>
+  );
+}
+
+/** 漫画首页：续读页。 */
+function ComicHome() {
+  const navigate = useNavigate();
+  const manifestQuery = useLibraryManifest();
+  const manifest = manifestQuery.data?.manifest;
+  const dashboardQuery = useLibraryDashboard();
+  const dashboard = dashboardQuery.data?.dashboard;
+  const pushToast = useUIStore((s) => s.pushToast);
+
+  const libraryHasContent = (manifest?.statistics.albumCount ?? 0) > 0;
+  const sideHasContent = (manifest?.statistics.comicAlbumCount ?? 0) > 0;
+  const otherSideHasContent = (manifest?.statistics.photoAlbumCount ?? 0) > 0;
+  const hasContent = sideHasContent;
+  const isLoadingInitial = manifestQuery.isLoading;
+
+  const inProgressAll = useMemo(
+    () =>
+      (dashboard?.inProgress ?? []).map((item) => ({
+        ...nodeSummaryToCard(item.album, "c:"),
+        progress: { index: item.pageIndex, total: item.pageCount },
+      })),
+    [dashboard],
+  );
+  const unreadCards = useMemo<CardData[]>(
+    () =>
+      (dashboard?.unread ?? []).map((album) => ({
+        ...nodeSummaryToCard(album, "u:"),
+        progress: { index: 0, total: album.imageCount ?? 0 },
+      })),
+    [dashboard],
+  );
+  const unreadCount = dashboard?.unreadCount ?? 0;
+
   const randomAlbum = useMutation({
     mutationFn: (scope: "any" | "unread") =>
-      libraryApi.randomAlbums(mode, scope),
+      libraryApi.randomAlbums("comic", scope),
     onSuccess: ({ albums }) => {
       const album = albums[0];
-      if (album) navigate(albumRoute(mode, album.id));
+      if (album) navigate(albumRoute("comic", album.id));
     },
     onError: (_error, scope) =>
       pushToast({
@@ -159,7 +335,6 @@ export default function Home() {
         message: scope === "unread" ? "没有未读相册可跳" : "尚未加载图像库",
       }),
   });
-  const onShuffle = () => randomAlbum.mutate("any");
   const onShuffleUnread = () => randomAlbum.mutate("unread");
 
   // 「继续阅读」管理：单本标记已读 / 一键全部标记已读。
@@ -167,10 +342,7 @@ export default function Home() {
   // 关键决策：这里也走 mark-as-read（与「未读」一致），不走 DELETE。
   // 原因：DELETE 删完 record 会变成「无 record」状态，立刻被「未读」判定
   // 收编，给人「清空换皮出现」的错觉。mark-as-read 把 progress 推到 total，
-  // 配合 isInProgress 过滤（index < total 才算在读），这本就直接从首页两
-  // 个 hero 都消失。
-  //
-  // 真要「忘记这本」时仍可调 DELETE（后端保留），但 UI 上不再用。
+  // 这本就直接从首页两个 hero 都消失。
   const markReadContinue = useMarkAlbumRead();
   const markReadAllContinue = useMarkAlbumsRead();
   const onRemoveContinue = (card: CardData) => {
@@ -218,10 +390,6 @@ export default function Home() {
     });
   };
 
-  // 「未读」管理：单本标记已读。
-  // 语义上「标记已读」= 把 progress 推到 index=total（与 AlbumCard 右键
-  // 「标记为已读」一致）。不是删除 record — 保留"已读完"的痕迹，未来
-  // Recents / Favorites / 历史面板能继续看到。
   const markReadOne = useMarkAlbumRead();
   const onMarkReadUnread = (card: CardData) => {
     const albumId = decodeFavPath(card.to);
@@ -243,621 +411,48 @@ export default function Home() {
       },
     );
   };
-  // 在读列表由首页仪表盘提供，按最后阅读时间倒序且包含任意层级的相册。
-  const inProgressAll = useMemo<CardData[]>(() => {
-    return (dashboard?.inProgress ?? []).map((progress) => ({
-      ...nodeSummaryToCard(progress.album),
-      progress: { index: progress.pageIndex, total: progress.pageCount },
-    }));
-  }, [dashboard]);
-
-  // 切换视图到 collection/smart 时清掉 yearFilter（年份只对 album 有意义）
-  useEffect(() => {
-    if (yearFilter !== null && listView !== "all" && listView !== "album") {
-      setYearFilter(null);
-    }
-  }, [listView, yearFilter, setYearFilter]);
-
-  // 全部图像 filter（视图 + 搜索 + 年份筛选 + 最小图数 + 排序）
-  const yearFilterActive =
-    !smartAlbumDirectory &&
-    yearFilter !== null &&
-    (listView === "all" || listView === "album");
-  const listQuery = useMemo(
-    () => ({
-      kind: mode,
-      // 照片侧没有视图切换了：那一块是智能相册。地址里若还留着旧的
-      // view 参数，概览不该跟着它筛 —— 页面上没有能改回来的控件。
-      view: isComic ? listView : ("all" as const),
-      q: query,
-      sort: sortBy,
-      year: yearFilterActive ? String(yearFilter) : undefined,
-      minImageCount,
-      // 年份索引那一排已经把按年份归组的集合讲清楚了，网格里不再
-      // 重复摆一遍：同一批内容摆两处，用户只会以为看错了。
-      excludeYearTargets: true,
-    }),
-    [
-      mode,
-      isComic,
-      listView,
-      query,
-      sortBy,
-      yearFilterActive,
-      yearFilter,
-      minImageCount,
-    ],
-  );
-  const overview = useLibraryList(listQuery, !!manifest);
-  const filtered = overview.cards;
-  const yearGroups = useMemo(
-    () => listYearGroups(overview.summary, listQuery),
-    [overview.summary, listQuery],
-  );
-  const seriesGroups = useMemo(
-    () =>
-      (overview.summary?.series ?? []).map((group) => ({
-        key: group.id,
-        label: group.name,
-        to: albumRoute(mode, group.id),
-        count: group.count,
-        coverPath: group.coverImage,
-        coverVersion: group.coverImageVersion,
-      })),
-    [overview.summary, mode],
-  );
-
-  const homeEntries = useMemo<GalleryContextEntry[]>(
-    () =>
-      (smartAlbumDirectory ? [] : filtered)
-        .filter((c) => c.variant === "album")
-        .map((c) => ({
-          key: decodeFavPath(c.to),
-          to: c.to,
-          name: c.title,
-          parentName: c.parentName,
-          imageCount: c.imageCount,
-          videoCount: c.videoCount,
-          contentKind: c.contentKind,
-        })),
-    [filtered, smartAlbumDirectory],
-  );
-  useGalleryContextSync({ type: "home" }, homeEntries, undefined, {
-    query: listQuery,
-    nextCursor: overview.nextCursor,
-  });
-
-  const counts = overview.summary?.counts ?? {
-    all: 0,
-    album: 0,
-    collection: 0,
-    smart: 0,
-  };
-  const isLoadingInitial =
-    manifestQuery.isLoading || (!manifest && !!(sse.isRunning || sse.scanId));
-  const hasContent =
-    !!manifest &&
-    (mode === "comic"
-      ? manifest.statistics.comicAlbumCount
-      : manifest.statistics.photoAlbumCount)! > 0;
-  // 「这一侧没有内容」和「整个库还没内容」是两回事：媒体根可能全被设成
-  // 漫画属性，照片工作台就一部都没有，但库本身是扫过的。
-  // 两种情况给的引导不一样：前者该把人送去设置里改属性或去另一侧看看，
-  // 后者才是「去设置媒体目录」。
-  const libraryHasContent = (manifest?.statistics.albumCount ?? 0) > 0;
-  const sideHasContent = isComic
-    ? (manifest?.statistics.comicAlbumCount ?? 0) > 0
-    : (manifest?.statistics.photoAlbumCount ?? 0) > 0;
-  const otherSideHasContent = isComic
-    ? (manifest?.statistics.photoAlbumCount ?? 0) > 0
-    : (manifest?.statistics.comicAlbumCount ?? 0) > 0;
-  // 漫画侧多一条「作品」索引，章节序号因此往后挪一位。
-  const hasSeriesIndex = hasContent && isComic && seriesGroups.length > 0;
-  // 年份时间线：照片侧是这一侧的主索引（按年份浏览），有内容就摆；
-  // 漫画侧的主索引是「作品」，年份只是一条附带的筛选 —— 只剩「其他」
-  // 一桶时它筛不出任何东西，是装饰不是索引（漫画的卷常常不以年份
-  // 命名，全落进「其他」）。
-  const realYearBuckets = yearGroups.filter((g) => g.year !== null).length;
-  const hasYearIndex =
-    hasContent && (isComic ? realYearBuckets >= 2 : yearGroups.length > 0);
-  // 「那年今日」：往年同一天拍过照的那几本。有命中才摆 —— 没有就是
-  // 没有，不占一个章节号。
-  const hasOnThisDay = hasContent && !isComic && onThisDayItems.length > 0;
-  // 章节序号跟着实际出现的索引走：少一段，后面的序号要往前挪。
-  const sectionNo = {
-    series: hasSeriesIndex ? 1 : 0,
-    onThisDay: (hasSeriesIndex ? 1 : 0) + 1,
-    year: (hasSeriesIndex ? 1 : 0) + (hasOnThisDay ? 1 : 0) + 1,
-    library:
-      (hasSeriesIndex ? 1 : 0) +
-      (hasOnThisDay ? 1 : 0) +
-      (hasYearIndex ? 1 : 0) +
-      1,
-  };
-  const pad = (n: number) => String(n).padStart(2, "0");
-
-  // 主 CTA：有进度 → 继续上次；否则 → 随机翻翻
-  //
-  // 照片侧没有进度，但有「上次打开过的那本」：它就是照片侧的主 CTA，
-  // 与漫画侧的「继续阅读」位置对等。
-  const primaryAlbum = inProgressAll[0];
-  const hasPrimaryEntry = isComic ? !!primaryAlbum : resumeCards.length > 0;
-  const scanLabel = sse.isRunning
-    ? "扫描中…"
-    : startScan.isPending
-      ? "启动中…"
-      : "重新扫描";
-
-  // 库规模：按当前工作台算，这一侧只有多少相册、多少集合。
-  // 库规模的说法跟着侧走：漫画侧是「卷」与「作品」，照片侧是「本相册」
-  // 与「集合」—— 两侧的词不统一，用户读到「0 本漫画」会以为漫画也按
-  // 相册计数。
-  //
-  // 前缀「全库」是必要的：下面的网格只列媒体根的直属子项（顶层相册、
-  // 集合与标签），页头这个数却把各层集合里的相册都算上了。两个数摆在
-  // 同一屏却各说各话时，用户只会以为其中一个是错的 —— 说清口径，
-  // 「全库 116 本」与下面的「38 项」就不再打架。
-  const librarySize = manifest
-    ? isComic
-      ? `全库 ${manifest.statistics.comicAlbumCount ?? 0} 卷、${manifest.statistics.comicCollectionCount ?? 0} 个作品`
-      : `全库 ${manifest.statistics.photoAlbumCount ?? 0} 本相册、${manifest.statistics.photoCollectionCount ?? 0} 个集合`
-    : "";
-
-  // 「继续上次」直跳画廊：进首页最大的目的是「接着看」，
-  // 中转 Album 详情会多一次点击，对随手翻翻的场景不友好。
-  // 跳转目标的拼装集中在 utils/continueReading.ts，侧栏的迷你卡复用同一份逻辑。
-  const onContinue = (card: CardData) => {
-    navigate(continueReadingTarget(card));
-  };
-
-  // 年份筛选的"全部图像"section 顶部 chip
-  const yearFilterLabel = yearFilter === "other" ? "其他" : String(yearFilter);
-
-  // 当前视图的名字（空结果时要说清是哪个筛选把内容筛没了）。
-  const viewLabel = smartAlbumDirectory
-    ? "智能相册"
-    : view === "album"
-      ? copy.albumTypeLabel
-      : view === "collection"
-        ? copy.collectionTypeLabel
-        : "标签";
-  // 真正生效的筛选有几条：空结果时每条都给一个单独的手柄。
-  const activeFilterCount = smartAlbumDirectory
-    ? 0
-    : (yearFilterActive ? 1 : 0) +
-      (listView !== "all" ? 1 : 0) +
-      (query ? 1 : 0) +
-      (minImageCount > 0 ? 1 : 0);
 
   return (
     <div className="home-page min-h-full">
-      {/* ScanProgress 已提升到 AppShell，跨路由常驻显示 */}
+      <HomeHeader
+        title="漫画库"
+        eyebrow="你的漫画"
+        primaryAction={{ to: libraryRoute("comic"), label: "书架" }}
+      />
 
-      {/* === 页头：标题 + 库统计 + 次级入口 ===
-          窄屏是「标题在上、说明在下、动作在右」；超宽档（≥2240px）上
-          说明与标题并排成一行 —— 多出来的宽度空在页头中间，不如让
-          说明站到标题旁边。三块的摆法写在样式表里（.home-heading）。 */}
-      <section className="page-shell page-heading">
-        <div className="home-heading">
-          <div className="home-heading__title">
-            <p className="page-eyebrow">{copy.libraryEyebrow}</p>
-            <h1 className="page-title">{copy.libraryTitle}</h1>
-          </div>
-          <p className="home-heading__desc text-body text-fg-muted">
-            {manifest ? (
-              <>
-                {/* 分隔用中文标点，不用「·」：西文间隔号在换行时不受
-                    行首禁则约束，窄屏上会孤零零地站在行头。中文的
-                    「，」「、」由浏览器按行首禁则处理，不会被甩到
-                    下一行行首。 */}
-                <span>{copy.libraryDescription}</span>
-                <span className="text-fg-subtle">，</span>
-                {/* 库规模属于当前工作台：这一侧只有多少相册、多少集合。
-                    它原来常驻顶栏，与这里、以及状态栏的「上次扫描」
-                    是同一组上下文散在三处 —— 收进页头，只说一次。 */}
-                <span className="tabular-nums">{librarySize}</span>
-                {manifest.scannedAt && (
-                  <>
-                    <span className="text-fg-subtle">，</span>
-                    <span className="text-fg-subtle">
-                      上次更新 {timeAgo(manifest.scannedAt)}
-                    </span>
-                  </>
-                )}
-              </>
-            ) : (
-              "尚未加载图像库"
-            )}
-          </p>
-          <div className="home-heading__actions flex items-center gap-2">
-            {/* 照片侧原来把「N 收藏」放在「库内一览」那一节的标题行里。
-                那一节换成智能相册后，收藏跟它不再相干，挪到页头 ——
-                页头的动作位本来空着，收在这里比藏在下面一节里好找。 */}
-            {!isComic && favCount > 0 && (
-              <button
-                onClick={() => navigate(favoritesRoute(mode))}
-                className="chip"
-              >
-                <StarIcon size={11} filled className="text-favorite" />
-                <span>{favCount} 收藏</span>
-              </button>
-            )}
-            <button
-              onClick={() => startScan.mutate()}
-              disabled={startScan.isPending || sse.isRunning}
-              className="btn btn-sm btn-outline"
-              title="扫描 (Ctrl+S)"
-              aria-label={scanLabel}
-            >
-              <RefreshIcon size={13} />
-              {/* 窄屏上按钮独占一行、与标题分开，字数多反而更占地方：
-                  收成一枚图标，靠 title 与无障碍名称说清它是什么。 */}
-              <span className="hidden sm:inline">{scanLabel}</span>
-            </button>
+      {hasContent && (inProgressAll.length > 0 || unreadCards.length > 0) ? (
+        <div className="page-shell">
+          <div className="home-overview">
+            {inProgressAll.length > 0 ? (
+              <ContinueHero
+                cards={inProgressAll}
+                onContinue={(card) =>
+                  navigate(albumRoute("comic", decodeFavPath(card.to)))
+                }
+                onRemove={onRemoveContinue}
+                onClearAll={onClearContinue}
+              />
+            ) : null}
+            {unreadCards.length > 0 ? (
+              <UnreadHero
+                cards={unreadCards}
+                count={unreadCount}
+                onShuffle={onShuffleUnread}
+                onMarkRead={onMarkReadUnread}
+              />
+            ) : null}
           </div>
         </div>
+      ) : null}
 
-        {/* 次级入口：没有在读内容时，「随机一卷」升为主操作。
-            有在读内容时它退到次级，避免和「继续阅读」抢主位。
-            照片侧的对应物是「接着看」。
-            这一侧一部都没有时整块不出现：那里放着一枚点不动的按钮，
-            读起来像坏了。 */}
-        {!hasPrimaryEntry && hasContent && (
-          <div className="mt-5 flex items-center gap-2 flex-wrap">
-            <button
-              onClick={onShuffle}
-              disabled={!hasContent}
-              className="btn btn-primary"
-            >
-              <ShuffleIcon size={14} />
-              {copy.randomLabel}
-              <span className="text-meta opacity-70">R</span>
-            </button>
-            {isComic && (
-              <QuickLink
-                to={unreadRoute()}
-                icon={<SparkleIcon size={14} />}
-                count={unreadCount > 0 ? unreadCount : undefined}
-              >
-                {comicCopy().unreadTitle}
-              </QuickLink>
-            )}
-            <QuickLink to={recentsRoute(mode)} icon={<ClockIcon size={14} />}>
-              {copy.recentsTitle}
-            </QuickLink>
-            {favCount > 0 && (
-              <QuickLink
-                to={favoritesRoute(mode)}
-                icon={<StarIcon size={13} filled />}
-                count={favCount}
-              >
-                {copy.favoritesTitle}
-              </QuickLink>
-            )}
-          </div>
-        )}
-      </section>
-
-      {hasContent &&
-        isComic &&
-        (inProgressAll.length > 0 || unreadCards.length > 0) && (
-          <div className="page-shell">
-            <div className="home-overview">
-              {inProgressAll.length > 0 && (
-                <ContinueHero
-                  cards={inProgressAll}
-                  onContinue={onContinue}
-                  onRemove={onRemoveContinue}
-                  onClearAll={onClearContinue}
-                />
-              )}
-              {unreadCards.length > 0 && (
-                <UnreadHero
-                  cards={unreadCards}
-                  count={unreadCount}
-                  onShuffle={onShuffleUnread}
-                  onMarkRead={onMarkReadUnread}
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-      {/* 照片侧的首屏：先是一面照片墙，再是「接着看」。
-
-        早先这里是三块关于照片的说明（接着看 / 随手看看 / 最近加入），
-        照片本身只是它们面板里的一张小封面 —— 首页第一眼看不见照片。
-        现在第一屏就是照片：随手抽一批跨相册的照片铺成墙，「接着看」
-        退到照片墙下面，因为它说的是「回到上次那本」，不是「看照片」。
-
-        「最近加入」不再单独占一节：它与下方网格是同一批内容，网格
-        按「按加入」排序就是它，不必在一屏里摆两遍。 */}
-      {hasContent && !isComic && (
-        <>
-          <PhotoFeedHero />
-          {resumeCards.length > 0 && (
-            <div className="page-shell page-section">
-              <div className="home-overview">
-                <ResumeHero cards={resumeCards} />
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* === 索引条 ===
-        漫画多一条「作品」索引：漫画常常不以年份命名，一部作品横跨
-        好几年，按年份分会把同一部作品拆散。年份索引两边都留着 ——
-        它筛的是下方网格，不只服务索引条本身。 */}
-      {hasContent && isComic && seriesGroups.length > 0 && (
-        <section className="page-shell page-section">
-          <div className="section-heading">
-            <span className="section-index">{pad(sectionNo.series)}</span>
-            <h2 className="section-title">作品</h2>
-            <span className="section-meta">按作品浏览</span>
-          </div>
-          <SeriesTimeline groups={seriesGroups} />
-        </section>
-      )}
-      {hasOnThisDay && (
-        <OnThisDaySection
-          items={onThisDayItems}
-          month={today.getMonth() + 1}
-          day={today.getDate()}
-          sectionIndex={pad(sectionNo.onThisDay)}
-        />
-      )}
-      {hasYearIndex && (
-        <section className="page-shell page-section">
-          <div className="section-heading">
-            <span className="section-index">{pad(sectionNo.year)}</span>
-            <h2 className="section-title">按年份浏览</h2>
-            <span className="section-meta">看这一年的照片</span>
-          </div>
-          <YearTimeline
-            groups={yearGroups}
-            gridRef={gridRef}
-            /* 照片侧的下方是智能相册，不是可筛的网格：漏斗没有去处。 */
-            showFilter={isComic}
-          />
-        </section>
-      )}
-
-      {/* === 智能相册（照片侧）/ 全部图像（漫画侧） ===
-        照片侧不再列全部图像：首页是发现页 —— 照片由「随手看看」给出，
-        分组由智能相册给出，浏览相册交给年份索引与智能相册里的来源。
-        漫画侧仍旧列全部作品，它的库内一览是按作品与卷找内容的地方。
-
-        初次加载时也渲染这一段（内容换成骨架）：否则首屏只有标题和
-        四个动作按钮，数据到达后整页内容一次性长出来，视线要重新找
-        一次位置。骨架占住网格的位置，数据回来时是"填满"而不是"重排"。 */}
-      {(hasContent || isLoadingInitial) && (
-        <section
-          ref={gridRef}
-          className="page-shell page-section pb-4 scroll-mt-6"
-        >
-          <div className="section-heading">
-            <span className="section-index">{pad(sectionNo.library)}</span>
-            <h2 className="section-title">
-              {/* 首页只展示六个精选主题，详细分类与完整推荐在智能相册页。 */}
-              {smartAlbumDirectory ? (
-                <Link
-                  to={smartAlbumsRoute()}
-                  className="transition-colors hover:text-brand-ink"
-                >
-                  智能相册
-                </Link>
-              ) : yearFilterActive ? (
-                copy.yearSectionTitle
-              ) : (
-                copy.sectionTitle
-              )}
-            </h2>
-            {smartAlbumDirectory ? (
-              <>
-                <span className="section-meta">精选推荐</span>
-                <Link
-                  to={smartAlbumsRoute()}
-                  className="chip ml-auto"
-                  title="打开智能相册"
-                >
-                  <span>查看全部</span>
-                  <ChevronRightIcon size={11} />
-                </Link>
-              </>
-            ) : yearFilterActive ? (
-              <button
-                onClick={() => setYearFilter(null)}
-                className="chip bg-accent-soft text-accent"
-                title="清除年份筛选"
-              >
-                <span>{yearFilterLabel}</span>
-                <CloseIcon size={11} />
-              </button>
-            ) : null}
-            {favCount > 0 && !yearFilterActive && !smartAlbumDirectory && (
-              <button
-                onClick={() => navigate(favoritesRoute(mode))}
-                className="chip"
-              >
-                <StarIcon size={11} filled className="text-favorite" />
-                <span>{favCount} 收藏</span>
-              </button>
-            )}
-          </div>
-
-          {/* 筛选 / 排序 / 视图切换只作用于下面这张网格，因此放在
-            「全部图像」标题正下方贴着网格；不要提到未读 / 继续阅读 /
-            时间线这些区块前面 —— 那里离网格有两千多像素，用户滚到
-            网格时控件早已不在视野里。
-
-            照片侧没有这一条：那一段是智能相册，没有视图、排序与
-            最少张数可筛。 */}
-          {!isLoadingInitial && !smartAlbumDirectory && (
-            <ListFilterBar
-              viewChips={[
-                { key: "all", label: "全部", count: counts.all },
-                {
-                  key: "album",
-                  label: copy.albumTypeLabel,
-                  count: counts.album,
-                },
-                {
-                  key: "collection",
-                  label: copy.collectionTypeLabel,
-                  count: counts.collection,
-                },
-                { key: "smart", label: "标签", count: counts.smart },
-              ]}
-              activeViewKey={listView}
-              onChangeView={setHomeView}
-              totalCount={overview.summary?.total ?? 0}
-              showMinImageFilter
-              trailing={<SelectionToggle />}
-              sort={sortBy}
-              onSortChange={setSortBy}
-              minImageCount={minImageCount}
-              onMinImageCountChange={setMinImageCount}
-            />
-          )}
-
-          {isLoadingInitial ||
-          (smartAlbumDirectory
-            ? smartDirectory.isLoading
-            : overview.isLoading) ? (
-            <AlbumGridSkeleton
-              variant={viewMode}
-              bare
-              label={
-                smartAlbumDirectory
-                  ? "正在汇总已生成的智能相册…"
-                  : "正在加载图像库…"
-              }
-            />
-          ) : smartAlbumDirectory ? (
-            <SmartAlbumPreview
-              items={smartDirectory.items}
-              total={smartDirectory.total}
-              isLoading={smartDirectory.isLoading}
-              isError={smartDirectory.isError}
-              onRetry={() => void smartDirectory.refetch()}
-            />
-          ) : overview.isError && !overview.summary ? (
-            <EmptyState
-              title="列表加载失败"
-              description="其他专区仍可使用，请重试。"
-              action={
-                <button
-                  className="btn btn-outline"
-                  onClick={() => void overview.refetch()}
-                >
-                  重试
-                </button>
-              }
-            />
-          ) : filtered.length === 0 ? (
-            <EmptyState
-              title={
-                yearFilterActive
-                  ? `「${yearFilterLabel}」没有匹配的图像`
-                  : "没有匹配的图像"
-              }
-              description={
-                query
-                  ? `没有匹配"${query}"的结果`
-                  : yearFilterActive && listView !== "all"
-                    ? `当前视图是「${viewLabel}」，${yearFilterLabel} 这一年下没有${viewLabel}。换成「全部」再看看。`
-                    : yearFilterActive
-                      ? "尝试切换到其他年份或清除筛选"
-                      : "当前视图下没有内容"
-              }
-              icon={<ImageIcon size={20} />}
-              /* 筛选条就在上面：空态不必再撑满半屏。 */
-              dense
-              action={
-                <div className="flex items-center gap-2 flex-wrap justify-center">
-                  {/* 每一条真正生效的筛选给一个手柄。
-                    早先只有一个笼统的「清除筛选」：用户同时用了年份与
-                    视图两个筛选时，空结果说不清是哪一个造成的，
-                    按一下还会把排序与视图一起重置。 */}
-                  {yearFilterActive && (
-                    <button
-                      onClick={() => setYearFilter(null)}
-                      className="btn btn-outline"
-                    >
-                      清除年份筛选
-                    </button>
-                  )}
-                  {listView !== "all" && (
-                    <button
-                      onClick={() => setHomeView("all")}
-                      className="btn btn-outline"
-                    >
-                      看全部
-                    </button>
-                  )}
-                  {query && (
-                    <button
-                      onClick={() => setQuery("")}
-                      className="btn btn-outline"
-                    >
-                      清除搜索
-                    </button>
-                  )}
-                  {minImageCount > 0 && (
-                    <button
-                      onClick={() => setMinImageCount(0)}
-                      className="btn btn-outline"
-                    >
-                      清除最少张数
-                    </button>
-                  )}
-                  {activeFilterCount === 0 && (
-                    <button
-                      onClick={resetFilters}
-                      className="btn btn-outline"
-                    >
-                      清除筛选
-                    </button>
-                  )}
-                </div>
-              }
-            />
-          ) : (
-            <div className="pb-10">
-              <AlbumGrid
-                selectable
-                items={filtered}
-                variant={viewMode}
-                onEndReached={() => {
-                  if (
-                    overview.hasNextPage &&
-                    !overview.isFetching &&
-                    !overview.isError
-                  )
-                    void overview.fetchNextPage();
-                }}
-              />
-              <ListPagination
-                {...overview}
-                load={() => void overview.fetchNextPage()}
-              />
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 空状态 — 分两种：整个库都还没内容（首次使用），和这一侧没有内容
-        （媒体根全被设成了另一种属性）。后者的引导要是「去设置媒体目录」，
-        就把人指到了错误的地方。 */}
-      {!hasContent && !isLoadingInitial && (
+      {!hasContent && !isLoadingInitial ? (
         <section className="page-shell">
-          {libraryHasContent && !sideHasContent ? (
+          {libraryHasContent ? (
             <EmptyState
-              title={`${copy.libraryTitle}这边还没有内容`}
+              title="漫画这边还没有内容"
               description={
                 otherSideHasContent
-                  ? "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去另一边看看。"
+                  ? "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去照片那边看看。"
                   : "媒体目录的内容属性与这一侧对不上。可以在设置里改属性。"
               }
               icon={<LibraryIcon size={20} />}
@@ -867,11 +462,8 @@ export default function Home() {
                     去设置里改属性
                   </Link>
                   {otherSideHasContent && (
-                    <Link
-                      to={homeRoute(isComic ? "photo" : "comic")}
-                      className="btn btn-primary"
-                    >
-                      去{isComic ? "照片" : "漫画"}库看看
+                    <Link to={homeRoute("photo")} className="btn btn-primary">
+                      去照片库看看
                     </Link>
                   )}
                 </div>
@@ -887,49 +479,17 @@ export default function Home() {
                   <Link to="/settings/server" className="btn btn-outline">
                     设置媒体目录
                   </Link>
-                  <button
-                    onClick={() => startScan.mutate()}
-                    disabled={startScan.isPending}
-                    className="btn btn-primary"
-                  >
-                    {startScan.isPending ? "启动中…" : "开始扫描"}
-                  </button>
+                  <Link to="/settings/data" className="btn btn-primary">
+                    去设置
+                  </Link>
                 </div>
               }
             />
           )}
         </section>
-      )}
+      ) : null}
 
       <div className="h-8" />
     </div>
-  );
-}
-
-// ===== helpers =====
-
-// ===== 复用组件 =====
-
-// 次级入口：轻量的幽灵按钮 + 计数。取代旧版"动作卡"——
-// 旧版四张大卡占据大量面积却只承载极少信息，还会和内容区争夺注意力。
-function QuickLink({
-  to,
-  icon,
-  children,
-  count,
-}: {
-  to: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  count?: number;
-}) {
-  return (
-    <Link to={to} className="btn btn-sm btn-ghost border border-border-faint">
-      {icon}
-      <span>{children}</span>
-      {count !== undefined && (
-        <span className="tabular-nums text-fg-subtle">{count}</span>
-      )}
-    </Link>
   );
 }

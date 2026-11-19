@@ -17,8 +17,13 @@ interface Props {
   /** 今天的月与日（1 起）。 */
   month: number;
   day: number;
-  /** 这一段在首页里的序号。 */
-  sectionIndex: string;
+  /**
+   * 这一段在首页里的序号。
+   *
+   * 可选：首页是一串发现区，不是一份编号目录 —— 屏幕上只挂一个「02」
+   * 而前面没有「01」，读起来像漏了东西。要编号的场合再传。
+   */
+  sectionIndex?: string;
 }
 
 /**
@@ -72,7 +77,9 @@ export default function OnThisDaySection({
       data-testid="on-this-day-section"
     >
       <div className="section-heading">
-        <span className="section-index">{sectionIndex}</span>
+        {sectionIndex ? (
+          <span className="section-index">{sectionIndex}</span>
+        ) : null}
         <h2 className="section-title">那年今日</h2>
         <span className="section-meta">{summary}</span>
       </div>

@@ -204,6 +204,32 @@ export default function Favorites({ embedded = false }: { embedded?: boolean } =
     if (historyFailed) void historyQuery.refetch();
   };
 
+  // 筛选条给不出的信息：失效条目、加载状态与读不出来时的实话。
+  //
+  // 独立成一块而不是塞进页头：它被嵌进「我的」的页签时页头由外层给，
+  // 这一块仍要留着 —— 「有 1 项暂时找不到」是用户唯一能看出收藏不完整的
+  // 地方，藏起来就等于没有。
+  const status = (
+    <div className="flex items-baseline gap-2.5 flex-wrap">
+      {favoritesQuery.isLoading ? (
+        <p className="text-body text-fg-muted tabular-nums">正在加载收藏…</p>
+      ) : favoritesFailed && favorites.length === 0 ? (
+        <p className="text-body text-fg-muted tabular-nums">收藏暂不可用</p>
+      ) : cards.length === 0 ? (
+        <p className="text-body text-fg-muted tabular-nums">
+          {favoritesCount} 项
+        </p>
+      ) : null}
+      {missingCount > 0 && (
+        <span className="text-meta text-fg-subtle">
+          其中 {missingCount} 项暂时找不到
+        </span>
+      )}
+    </div>
+  );
+  const showStatus =
+    missingCount > 0 || favoritesQuery.isLoading || favoritesFailed;
+
   return (
     <div className="min-h-full">
       {embedded ? null : (
@@ -215,31 +241,13 @@ export default function Favorites({ embedded = false }: { embedded?: boolean } =
           // 有内容时筛选条上那行「共 N 项」说的就是它，两处各写一遍
           // 同一个数，读起来像两处不同的统计。
           // 剩下的情况只留筛选条给不出的信息 —— 失效条目与加载状态。
-          missingCount > 0 || favoritesQuery.isLoading || favoritesFailed ? (
-            <div className="flex items-baseline gap-2.5 mt-2 flex-wrap">
-              {favoritesQuery.isLoading ? (
-                <p className="text-body text-fg-muted tabular-nums">
-                  正在加载收藏…
-                </p>
-              ) : favoritesFailed && favorites.length === 0 ? (
-                <p className="text-body text-fg-muted tabular-nums">
-                  收藏暂不可用
-                </p>
-              ) : cards.length === 0 ? (
-                <p className="text-body text-fg-muted tabular-nums">
-                  {favoritesCount} 项
-                </p>
-              ) : null}
-              {missingCount > 0 && (
-                <span className="text-meta text-fg-subtle">
-                  其中 {missingCount} 项暂时找不到
-                </span>
-              )}
-            </div>
-          ) : null
+          showStatus ? status : null
         }
       />
       )}
+      {embedded && showStatus ? (
+        <div className="page-shell pt-4">{status}</div>
+      ) : null}
 
       {loadFailed && (
         <div className="page-shell mb-4">

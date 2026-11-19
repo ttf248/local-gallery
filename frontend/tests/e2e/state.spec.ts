@@ -5,9 +5,8 @@ import {
   albumUrlPattern,
   resetWorkbenchMode,
   resetNavItems,
-  showNavItems,
-  readFavorites,
   readHistory,
+  openMeTab,
   type CopyAuditWindow,
   installCopyAudit,
 } from "./helpers/library";
@@ -36,8 +35,7 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
   const album = nodes.find((node) => node.name === "sample-paged-images");
   expect(album).toBeDefined();
   expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
-  // 侧栏入口默认收起：这条用例要从侧栏点进「最近浏览」，先把它放出来。
-    let historyWrites = 0;
+  let historyWrites = 0;
   page.on("request", (request) => {
     if (
       new URL(request.url()).pathname === "/api/history" &&
@@ -50,6 +48,8 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
   const search = page.getByRole("combobox");
   await search.fill("sample-paged-images");
   await expect(page.getByRole("option").first()).toBeVisible();
+  // 方向键选中第一条建议，回车打开它：不按方向键时回车去结果页。
+  await search.press("ArrowDown");
   await search.press("Enter");
   await expect(page).toHaveURL(albumUrlPattern(album!));
   const scroller = page.locator("[data-virtuoso-scroller]");
@@ -69,8 +69,8 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
       return result.history[0]?.albumId;
     })
     .toBe(album!.id);
-  // 照片工作台的入口叫「最近浏览」。
-  await page.getByRole("link", { name: "最近浏览", exact: true }).click();
+  // 「最近浏览」现在住在「我的」的页签里。
+  await openMeTab(page, "最近浏览");
   await expect(
     page.locator(`a[href="/photo/albums/${album!.id}"]`).first(),
   ).toBeVisible();
@@ -268,8 +268,6 @@ test("收藏写入成功后列表刷新失败仍保留已确认的状态", async
   const album = nodes.find((node) => node.name === "sample-album");
   expect(album).toBeDefined();
   const resourceId = album!.id;
-  // 侧栏入口默认收起：这条用例要从侧栏点进「收藏照片」，先把它放出来。
-  await showNavItems(page.request, ["photo.favorites"]);
   const original = (await (
     await page.request.get("/api/favorites")
   ).json()) as { favorites: string[] };
@@ -313,7 +311,8 @@ test("收藏写入成功后列表刷新失败仍保留已确认的状态", async
       favorites: string[];
     };
     expect(added.favorites).toContain(resourceId);
-    await page.getByRole("link", { name: "收藏照片", exact: true }).click();
+    // 「我的 · 收藏」是现在的入口：侧栏只有「我的」，收藏是它的一个页签。
+    await openMeTab(page, "收藏");
     await expect(
       page.locator(`a[href="${albumUrl(album!)}"]`).first(),
     ).toBeVisible();
@@ -351,8 +350,6 @@ for (const operation of ["limit", "clear", "visit"] as const) {
         ).ok(),
       ).toBeTruthy();
       expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
-      // 侧栏入口默认收起：这条用例要从侧栏点进「最近浏览」，先把它放出来。
-      await showNavItems(page.request, ["photo.recents"]);
       for (const node of operation === "visit" ? [first] : [second, first]) {
         expect(
           (
@@ -383,6 +380,8 @@ for (const operation of ["limit", "clear", "visit"] as const) {
         const search = page.getByRole("combobox");
         await search.fill(second.name);
         await expect(page.getByRole("option").first()).toBeVisible();
+        // 方向键选中建议，回车打开它（不选时回车去结果页）。
+        await search.press("ArrowDown");
         await search.press("Enter");
         await expect(page).toHaveURL(new RegExp(`/photo/albums/${second.id}$`));
       } else {
@@ -412,7 +411,7 @@ for (const operation of ["limit", "clear", "visit"] as const) {
               ? [first.id]
               : [second.id, first.id],
         );
-      await page.getByRole("link", { name: "最近浏览", exact: true }).click();
+      await openMeTab(page, "最近浏览");
       await expect
         .poll(() => failedReads, { timeout: 15_000 })
         .toBeGreaterThanOrEqual(4);
@@ -454,8 +453,6 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
       favorites: string[];
     };
   const original = (await list()).favorites;
-  // 侧栏入口默认收起：这条用例要从侧栏点进「收藏照片」，先把它放出来。
-  await showNavItems(page.request, ["photo.favorites"]);
   try {
     for (const resourceId of [album.id, missing])
       expect(
@@ -490,7 +487,7 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
     await expect(page.getByText(/^已清理 \d+ 项失效收藏$/)).toBeVisible();
     const confirmed = (await list()).favorites;
     expect(confirmed).not.toContain(missing);
-    await page.getByRole("link", { name: "收藏照片", exact: true }).click();
+    await openMeTab(page, "收藏");
     await expect
       .poll(() => failedReads, { timeout: 15_000 })
       .toBeGreaterThanOrEqual(4);

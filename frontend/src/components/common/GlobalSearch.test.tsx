@@ -15,7 +15,12 @@ vi.mock("../../api/albums", async (importOriginal) => {
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="location">{location.pathname}</output>;
+  return (
+    <output data-testid="location">
+      {location.pathname}
+      {location.search}
+    </output>
+  );
 }
 
 function renderSearch() {
@@ -66,15 +71,44 @@ describe("GlobalSearch", () => {
 
     await waitFor(() => expect(albumsApi.search).toHaveBeenCalledWith("旅行", "photo", 10));
     expect(await screen.findByRole("listbox")).toBeInTheDocument();
+    // 建议先到，但不默认选中第一条：回车该落到「看得见结果」的那一页，
+    // 而不是替用户挑第一条直接打开。
+    expect(screen.getByRole("option", { name: /旅行册/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+
+    // 往下走两下才到标签：第一下选第一条（相册），第二下选标签。
+    fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(screen.getByRole("option", { name: /旅行册/ })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-
     fireEvent.keyDown(input, { key: "ArrowDown" });
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(screen.getByTestId("location")).toHaveTextContent("/tags/%E6%97%85%E8%A1%8C");
+  });
+
+  it("没有选中建议时回车落到结果页", async () => {
+    vi.mocked(albumsApi.search).mockResolvedValue({
+      ok: true,
+      count: 1,
+      results: [{ kind: "album", path: "a_trip", name: "旅行册", count: 12 }],
+    });
+    renderSearch();
+    const input = screen.getByRole("combobox");
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "旅行" } });
+    await screen.findByRole("listbox");
+
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    // 关键词进地址，结果页把它显示成一页清单。
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/photo/search?q=%E6%97%85%E8%A1%8C",
+    );
   });
 
   it("搜索结果的计数单位跟着当前工作台走", async () => {
