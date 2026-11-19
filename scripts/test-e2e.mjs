@@ -67,6 +67,12 @@ async function makeFixtures(root) {
   for (let i = 1; i <= 3; i++) await writeFixture(media, 'sample-album/page-' + i + '.png')
   await writeFixture(mediaExtra, 'zz-extra-root-only/page.png')
   await writeFixture(media, 'zz-library-hierarchy/outer/inner/page.png')
+  for (let i = 1; i <= 105; i++) {
+    await writeFixture(
+      media,
+      'zz-search-load-more-' + String(i).padStart(3, '0') + '/page.png',
+    )
+  }
   await writeFixture(media, 'sample-format/photo.heic', Buffer.from('not a decodable image'))
   await writeFixture(media, 'sample-broken/broken.jpg', Buffer.from('not a decodable image'))
 

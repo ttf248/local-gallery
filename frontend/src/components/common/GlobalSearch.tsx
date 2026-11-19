@@ -40,7 +40,7 @@ export default function GlobalSearch() {
   const searchTerm = debounced.trim();
   const searchEnabled = searchTerm.length >= 2;
   const searchQuery = useQuery({
-    queryKey: ["library", "search", mode, searchTerm],
+    queryKey: ["library", "search", mode, searchTerm, 10],
     queryFn: () => albumsApi.search(searchTerm, mode, 10),
     enabled: searchEnabled,
     staleTime: 30_000,

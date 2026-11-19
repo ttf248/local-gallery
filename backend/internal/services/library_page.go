@@ -18,6 +18,8 @@ const (
 	DefaultLibraryPageLimit = 60
 	MaxLibraryPageLimit     = 200
 	MaxLibraryNodeQuery     = 500
+	DefaultSearchPageLimit  = 50
+	MaxSearchPageLimit      = 500
 )
 
 var (
@@ -340,6 +342,14 @@ func NormalizeLibraryPageLimit(limit int) int {
 	}
 	if limit > MaxLibraryPageLimit {
 		return MaxLibraryPageLimit
+	}
+	return limit
+}
+
+// NormalizeSearchPageLimit 保留名称搜索原有的请求限制。
+func NormalizeSearchPageLimit(limit int) int {
+	if limit <= 0 || limit > MaxSearchPageLimit {
+		return DefaultSearchPageLimit
 	}
 	return limit
 }
@@ -1095,12 +1105,58 @@ func PageTagAlbums(snapshot CatalogSnapshot, tag string, kind LibraryKindScope, 
 // 「前 N 条碰巧命中的」，用户搜「2015」看到的第一条可能是一本只是
 // 恰好待在「2015年」目录下的散图。
 func SearchLibrary(snapshot CatalogSnapshot, query string, kind LibraryKindScope, limit int) []LibrarySearchHit {
-	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+	if limit <= 0 {
 		return []LibrarySearchHit{}
 	}
+	scored := rankedLibrarySearch(snapshot, query, kind)
+	results := make([]LibrarySearchHit, 0, min(limit, len(scored)))
+	for _, item := range scored {
+		results = append(results, item.hit)
+		if len(results) == limit {
+			break
+		}
+	}
+	return results
+}
+
+// PageLibrarySearch 在稳定的搜索排序上按游标返回一页结果。
+func PageLibrarySearch(snapshot CatalogSnapshot, query string, kind LibraryKindScope, cursor string, limit int) (LibraryPage[LibrarySearchHit], error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return LibraryPage[LibrarySearchHit]{}, ErrLibraryNotReady
+	}
 	needle := strings.ToLower(strings.TrimSpace(query))
-	if needle == "" || limit <= 0 {
-		return []LibrarySearchHit{}
+	if needle == "" {
+		return LibraryPage[LibrarySearchHit]{Revision: snapshot.Revision(), Items: []LibrarySearchHit{}}, nil
+	}
+
+	scored := rankedLibrarySearch(snapshot, needle, kind)
+	scope := libraryScope("library-search:"+needle, kind)
+	start, err := pageOffset(snapshot, cursor, scope)
+	if err != nil {
+		return LibraryPage[LibrarySearchHit]{}, err
+	}
+	start, end, next, err := pageBoundsWithLimit(
+		snapshot.Revision(), scope, cursor != "", start, len(scored), NormalizeSearchPageLimit(limit),
+	)
+	if err != nil {
+		return LibraryPage[LibrarySearchHit]{}, err
+	}
+	items := make([]LibrarySearchHit, 0, end-start)
+	for _, item := range scored[start:end] {
+		items = append(items, item.hit)
+	}
+	return LibraryPage[LibrarySearchHit]{
+		Revision: snapshot.Revision(), Items: items, Total: len(scored), NextCursor: next,
+	}, nil
+}
+
+func rankedLibrarySearch(snapshot CatalogSnapshot, query string, kind LibraryKindScope) []scoredSearchHit {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return []scoredSearchHit{}
+	}
+	needle := strings.ToLower(strings.TrimSpace(query))
+	if needle == "" {
+		return []scoredSearchHit{}
 	}
 	scored := make([]scoredSearchHit, 0, len(snapshot.state.library.search))
 	for order, hit := range snapshot.state.library.search {
@@ -1137,14 +1193,7 @@ func SearchLibrary(snapshot CatalogSnapshot, query string, kind LibraryKindScope
 		}
 		return left.order < right.order
 	})
-	results := make([]LibrarySearchHit, 0, min(limit, len(scored)))
-	for _, item := range scored {
-		results = append(results, item.hit)
-		if len(results) == limit {
-			break
-		}
-	}
-	return results
+	return scored
 }
 
 // scoredSearchHit 是一条命中连同它的匹配质量。
@@ -1377,10 +1426,20 @@ func pageOffset(snapshot CatalogSnapshot, cursor, scope string) (int, error) {
 }
 
 func pageBounds(revision uint64, scope string, hasCursor bool, offset, total, limit int) (int, int, string, error) {
+	return pageBoundsWithLimit(
+		revision,
+		scope,
+		hasCursor,
+		offset,
+		total,
+		NormalizeLibraryPageLimit(limit),
+	)
+}
+
+func pageBoundsWithLimit(revision uint64, scope string, hasCursor bool, offset, total, limit int) (int, int, string, error) {
 	if offset < 0 || offset > total || (hasCursor && (total == 0 || offset == total)) {
 		return 0, 0, "", ErrInvalidPageCursor
 	}
-	limit = NormalizeLibraryPageLimit(limit)
 	end := offset + limit
 	if end > total {
 		end = total

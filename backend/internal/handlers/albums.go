@@ -123,22 +123,25 @@ func SearchHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		q := strings.TrimSpace(c.Query("q"))
 		if q == "" {
-			return c.JSON(fiber.Map{"ok": true, "results": []services.LibrarySearchHit{}})
+			return c.JSON(fiber.Map{"ok": true, "results": []services.LibrarySearchHit{}, "count": 0})
 		}
 		kind, ok := parseLibraryKind(c)
 		if !ok {
 			return nil
 		}
-		limit := c.QueryInt("limit", 50)
-		if limit <= 0 || limit > 500 {
-			limit = 50
-		}
+		limit := services.NormalizeSearchPageLimit(c.QueryInt("limit", services.DefaultSearchPageLimit))
 		snapshot := catalog.Acquire()
 		if !snapshot.Ready() {
-			return c.JSON(fiber.Map{"ok": true, "results": []services.LibrarySearchHit{}, "scanned": false})
+			return c.JSON(fiber.Map{"ok": true, "results": []services.LibrarySearchHit{}, "count": 0, "scanned": false})
 		}
-		results := services.SearchLibrary(snapshot, q, kind, limit)
-		return c.JSON(fiber.Map{"ok": true, "results": results, "count": len(results), "revision": snapshot.Revision()})
+		page, err := services.PageLibrarySearch(snapshot, q, kind, c.Query("cursor"), limit)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		return c.JSON(fiber.Map{
+			"ok": true, "results": page.Items, "count": page.Total,
+			"nextCursor": page.NextCursor, "revision": page.Revision,
+		})
 	}
 }
 

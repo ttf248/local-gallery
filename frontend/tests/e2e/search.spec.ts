@@ -51,3 +51,18 @@ test("搜索无结果时说清没有匹配", async ({ page }) => {
   await page.goto("/photo/search?q=zzz-不存在的名字-zzz");
   await expect(page.getByText(/没有匹配/)).toBeVisible();
 });
+
+test("搜索超过一页时显示总数并可继续加载", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+  await page.goto("/photo/search?q=zz-search-load-more");
+
+  await expect(page.getByText("显示 100 / 105 项", { exact: true })).toBeVisible();
+  const loadMore = page.getByRole("button", { name: /加载更多/ });
+  await expect(loadMore).toBeVisible();
+  await loadMore.click();
+
+  await expect(page.getByText("共 105 项", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /加载更多/ }),
+  ).toHaveCount(0);
+});

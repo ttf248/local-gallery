@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import AlbumGrid from "../components/album/AlbumGrid";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
@@ -14,6 +14,8 @@ import { albumRoute, tagRoute } from "../utils/path";
 import { nodeSummaryToCard } from "../utils/libraryCard";
 import { LIST_PARAM } from "../utils/listFilterParams";
 import type { CardData } from "../components/album/AlbumCard";
+
+const SEARCH_PAGE_SIZE = 100;
 
 /**
  * 名称搜索的结果页。
@@ -31,9 +33,12 @@ export default function SearchResults() {
   const query = (params.get(LIST_PARAM.query) ?? "").trim();
   const viewMode = useUIStore((s) => s.viewMode);
 
-  const search = useQuery({
-    queryKey: ["library", "search", mode, query],
-    queryFn: () => albumsApi.search(query, mode, 100),
+  const search = useInfiniteQuery({
+    queryKey: ["library", "search", mode, query, SEARCH_PAGE_SIZE],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam, signal }) =>
+      albumsApi.search(query, mode, SEARCH_PAGE_SIZE, pageParam, signal),
+    getNextPageParam: (lastPage) => lastPage.nextCursor || undefined,
     enabled: query.length >= 1,
     staleTime: 30_000,
     retry: false,
@@ -41,7 +46,11 @@ export default function SearchResults() {
 
   // 结果列表本身是一个稳定的数组：搜索没返回时给一个空数组，
   // 别每次渲染都造一个新的 —— 下游的 useMemo 依赖它。
-  const hits = useMemo(() => search.data?.results ?? [], [search.data]);
+  const hits = useMemo(
+    () => search.data?.pages.flatMap((page) => page.results) ?? [],
+    [search.data],
+  );
+  const total = search.data?.pages[0]?.count ?? 0;
 
   // 搜索结果本身没有来源信息（它只给 id、名字与封面）。再查一次节点摘要，
   // 才知道它属于哪个媒体根、上级是哪个集合、封面有哪几张。
@@ -90,9 +99,23 @@ export default function SearchResults() {
         {cards.length > 0 ? (
           <>
             <p className="text-meta text-fg-subtle mb-3 tabular-nums">
-              共 {cards.length} 项
+              {cards.length < total
+                ? `显示 ${cards.length} / ${total} 项`
+                : `共 ${total} 项`}
             </p>
             <AlbumGrid items={cards} variant={viewMode} />
+            {search.hasNextPage ? (
+              <button
+                type="button"
+                className="button-secondary mt-6"
+                onClick={() => void search.fetchNextPage()}
+                disabled={search.isFetchingNextPage}
+              >
+                {search.isFetchingNextPage
+                  ? "正在加载…"
+                  : `加载更多（还剩 ${total - cards.length} 项）`}
+              </button>
+            ) : null}
           </>
         ) : null}
 
