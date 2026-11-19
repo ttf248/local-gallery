@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -117,12 +118,18 @@ func TestLibrarySync_OverwrittenPhotoIsAnalyzedAgain(t *testing.T) {
 }
 
 // TestLibrarySync_LargeImportAnalyzesEveryPhoto 验证一次导入超过
-// 队列上限的照片时，每一张都会被分析。
+// 队列上限的照片时，每一张都会被分析，并且智能相册跟着重算。
 //
 // 以前超出上限的部分会被直接裁掉：任务永远排不进去，那些照片的分析
 // 结果就再也补不上了。
+//
+// 队列超上限时会改成一次全库增量分析，而队列因此被清空：只看队列长度
+// 的话就会以为没有分析任务了，智能相册从此不再重算 ——
+// 派生结果停在导入之前的样子。
 func TestLibrarySync_LargeImportAnalyzesEveryPhoto(t *testing.T) {
 	sync, catalog, analyzer, root := newAnalysisHarness(t)
+	refresher := &fakeSmartAlbumRefresher{}
+	sync.opts.SmartAlbums = refresher
 	album := filepath.Join(root, "album")
 	mkdirAll(t, album)
 
@@ -153,6 +160,21 @@ func TestLibrarySync_LargeImportAnalyzesEveryPhoto(t *testing.T) {
 	}
 
 	waitForAnalyzed(t, analyzer, int64(total))
+	// 所有模块跑完之后，智能相册要重算一次。
+	waitForSmartAlbumRefresh(t, refresher)
+}
+
+// waitForSmartAlbumRefresh 等到智能相册被重算过。
+func waitForSmartAlbumRefresh(t *testing.T, refresher *fakeSmartAlbumRefresher) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		if refresher.starts.Load() > 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("分析都跑完了，智能相册仍然没有重算")
 }
 
 // TestLibrarySync_SmartAlbumRefreshWaitsForQueuedAnalysis 验证队列还没
@@ -186,13 +208,50 @@ func TestLibrarySync_SmartAlbumRefreshWaitsForQueuedAnalysis(t *testing.T) {
 }
 
 // fakeSmartAlbumRefresher 是智能相册刷新的假实现：只计数。
+//
+// 它也能模拟失败：startFailures 让前几次启动失败，statuses 记录每个
+// 任务的状态，用来验证「刷新失败之后会自动重试」。
 type fakeSmartAlbumRefresher struct {
 	starts atomic.Int64
+
+	mu sync.Mutex
+	// startFailures 是还要失败的启动次数。
+	startFailures int
+	// statuses 记录每个刷新任务的状态。
+	statuses map[string]SmartAlbumRefreshProgress
+	// nextID 给刷新任务编号。
+	nextID int
 }
 
 func (f *fakeSmartAlbumRefresher) Start(bool) (string, bool, error) {
 	f.starts.Add(1)
-	return "smart-album-job", true, nil
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.startFailures > 0 {
+		f.startFailures--
+		return "", false, errors.New("智能相册服务暂时不可用")
+	}
+	f.nextID++
+	id := fmt.Sprintf("smart-album-%d", f.nextID)
+	if f.statuses == nil {
+		f.statuses = map[string]SmartAlbumRefreshProgress{}
+	}
+	f.statuses[id] = SmartAlbumRefreshProgress{JobID: id, Status: SmartAlbumRefreshStatusComplete}
+	return id, false, nil
+}
+
+func (f *fakeSmartAlbumRefresher) Status(id string) (SmartAlbumRefreshProgress, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	status, ok := f.statuses[id]
+	return status, ok
+}
+
+// failNextStart 让接下来 n 次启动失败。
+func (f *fakeSmartAlbumRefresher) failNextStart(n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.startFailures = n
 }
 
 // TestLibrarySync_FullAnalysisSurvivesModuleFailure 验证全库增量分析
@@ -206,7 +265,8 @@ func (f *fakeSmartAlbumRefresher) Start(bool) (string, bool, error) {
 // 接手，那批照片的分析结果永远补不上。
 func TestLibrarySync_FullAnalysisSurvivesModuleFailure(t *testing.T) {
 	analyzer := &unreadyAnalyzer{}
-	sync, _, _ := newAnalysisHarnessWithAnalyzer(t, analyzer)
+	sync, catalog, root := newAnalysisHarnessWithAnalyzer(t, analyzer)
+	publishTestLibrary(t, catalog, root)
 
 	sync.mu.Lock()
 	sync.settings.AutoAnalyze = true
@@ -231,10 +291,22 @@ func TestLibrarySync_FullAnalysisSurvivesModuleFailure(t *testing.T) {
 	sync.pumpAnalysis(context.Background())
 
 	sync.mu.Lock()
+	task := sync.analysisTasks[AIJobTypeMetadata]
+	sync.mu.Unlock()
+	if task == nil {
+		t.Fatal("模块恢复后全库分析仍然没有提交")
+	}
+
+	// 标记要等任务真的跑完才清：提交成功就清的话，
+	// 任务中途失败就再也没人接手了。
+	waitForLatestJob(t, sync.opts.Jobs)
+	sync.pumpAnalysis(context.Background())
+
+	sync.mu.Lock()
 	full = sync.analysisFull[AIJobTypeMetadata]
 	sync.mu.Unlock()
 	if full {
-		t.Fatal("模块恢复后全库分析仍然没有提交")
+		t.Fatal("全库分析跑完之后标记仍然留着")
 	}
 }
 
@@ -245,7 +317,8 @@ func TestLibrarySync_FullAnalysisSurvivesModuleFailure(t *testing.T) {
 // 排队状态。但停手也要说清楚为什么停，不能悄悄把任务丢掉。
 func TestLibrarySync_FullAnalysisGivesUpAfterRetries(t *testing.T) {
 	analyzer := &unreadyAnalyzer{}
-	sync, _, _ := newAnalysisHarnessWithAnalyzer(t, analyzer)
+	sync, catalog, root := newAnalysisHarnessWithAnalyzer(t, analyzer)
+	publishTestLibrary(t, catalog, root)
 
 	sync.mu.Lock()
 	sync.settings.AutoAnalyze = true
@@ -269,6 +342,19 @@ func TestLibrarySync_FullAnalysisGivesUpAfterRetries(t *testing.T) {
 	if sync.Status().LastError == "" {
 		t.Fatal("放弃这批任务时没有记录原因")
 	}
+}
+
+// publishTestLibrary 扫一遍测试媒体根并发布到图库。
+//
+// 分析任务要有目标才能开跑：图库还没建立起来的时候没有可分析的资源。
+func publishTestLibrary(t *testing.T, catalog *ResourceCatalog, root string) {
+	t.Helper()
+	scanner := NewScanner()
+	initial, err := scanner.Scan(ScanOptions{Roots: []string{root}})
+	if err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+	catalog.Publish(initial, []string{root})
 }
 
 // unreadyAnalyzer 是「装上了但还没准备好」的分析器。

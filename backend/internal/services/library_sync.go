@@ -65,6 +65,13 @@ type librarySyncState struct {
 	LastUpdated  int       `json:"lastUpdated"`
 	LastFailed   int       `json:"lastFailed"`
 	LastError    string    `json:"lastError,omitempty"`
+	// AnalysisDirty 标记分析结果变了、智能相册要重算。
+	AnalysisDirty bool `json:"analysisDirty,omitempty"`
+	// AnalysisPending 标记各模块还欠着分析。
+	//
+	// 它是重启后能不能接上的关键：进程被杀时内存里的队列会没，
+	// 但磁盘上还留着这份名单，重启后靠它补上欠下的活。
+	AnalysisPending map[string]bool `json:"analysisPending,omitempty"`
 }
 
 // LibrarySyncOptions 是自动同步服务的构造参数。
@@ -102,7 +109,13 @@ type LibrarySyncOptions struct {
 // 智能相册是派生结果：照片变了、分析结果更新了之后要重算分组，
 // 但重算很贵，因此只在自动分析真的跑完之后才触发一次。
 type SmartAlbumRefresher interface {
+	// Start 启动一次刷新；已有任务在跑时复用它。
 	Start(force bool) (string, bool, error)
+	// Status 返回刷新任务的进度快照；任务不存在时返回 false。
+	//
+	// 自动分析要靠它确认上一次刷新到底成没成：刷新失败时要重试，
+	// 而不是把「要重算」的标记抹掉。
+	Status(id string) (SmartAlbumRefreshProgress, bool)
 }
 
 const (
@@ -181,10 +194,24 @@ type LibrarySyncService struct {
 	analysisQueue map[string]*analysisQueue
 	// analysisFull 标记某些模块要做一次全库增量分析。
 	analysisFull map[string]bool
-	// analysisFailures 是各模块排队连续失败的次数。
+	// analysisTasks 记录自动提交出去、还在跑的分析任务：模块 → 任务。
+	analysisTasks map[string]*analysisTask
+	// analysisFailures 是各模块分析连续失败的次数。
 	analysisFailures map[string]int
 	// analysisDirty 标记「有变化需要重算智能相册」。
 	analysisDirty bool
+	// dirtyGeneration 是「需要重算」的代号：每次有新的分析工作排进来
+	// 就加一。刷新任务带着它启动时的代号回来，代号没变才说明这次
+	// 刷新覆盖了全部变化。
+	dirtyGeneration uint64
+	// smartAlbumJob 是自动触发的那次智能相册刷新任务。
+	smartAlbumJob string
+	// smartAlbumGeneration 是那次刷新启动时的代号。
+	smartAlbumGeneration uint64
+	// smartAlbumRetryAt 是下一次可以重试刷新的时刻。
+	smartAlbumRetryAt time.Time
+	// smartAlbumRetryDelay 是刷新失败之后的重试间隔。
+	smartAlbumRetryDelay time.Duration
 	// pendingOverflow 标记待处理的变化曾经多到被丢弃过：
 	// 那说明逐条处理已经不划算了，要靠一次全量校验兜底。
 	pendingOverflow bool
@@ -193,76 +220,6 @@ type LibrarySyncService struct {
 	cancel          context.CancelFunc
 	closed          bool
 	verifyAt        time.Time
-}
-
-// analysisQueue 是一个模块的待分析资源队列。
-//
-// 队列按先来后到排，重复的资源只排一次。它是内存里的有界队列：
-// 超过上限时不丢任务，而是交给一次全库增量分析接手
-// （见 LibrarySyncService.analysisFull）。
-type analysisQueue struct {
-	ids  []string
-	seen map[string]struct{}
-}
-
-func newAnalysisQueue() *analysisQueue {
-	return &analysisQueue{seen: map[string]struct{}{}}
-}
-
-// push 把资源排进队列，已经在队列里的不重复排。
-func (q *analysisQueue) push(ids []string) {
-	for _, id := range ids {
-		if id == "" {
-			continue
-		}
-		if _, exists := q.seen[id]; exists {
-			continue
-		}
-		q.seen[id] = struct{}{}
-		q.ids = append(q.ids, id)
-	}
-}
-
-// take 取出队列最前面的若干个资源。
-//
-// 取走的资源同时从去重表里移除：它们已经交给任务中心，之后内容再变
-// （原地覆盖一张照片）还要能重新排进来。去重表留着的话，第二次改动
-// 会被当成重复而丢掉 —— 旧的分析结果就一直留着。
-func (q *analysisQueue) take(limit int) []string {
-	if limit <= 0 || len(q.ids) == 0 {
-		return nil
-	}
-	if limit > len(q.ids) {
-		limit = len(q.ids)
-	}
-	taken := q.ids[:limit]
-	q.ids = q.ids[limit:]
-	for _, id := range taken {
-		delete(q.seen, id)
-	}
-	return taken
-}
-
-// restore 把一批资源放回队列最前面，保持先来后到的顺序。
-func (q *analysisQueue) restore(ids []string) {
-	if len(ids) == 0 {
-		return
-	}
-	q.ids = append(append(make([]string, 0, len(ids)+len(q.ids)), ids...), q.ids...)
-	for _, id := range ids {
-		q.seen[id] = struct{}{}
-	}
-}
-
-// reset 清空队列。
-func (q *analysisQueue) reset() {
-	q.ids = nil
-	q.seen = map[string]struct{}{}
-}
-
-// len 是队列里待分析的资源数量。
-func (q *analysisQueue) len() int {
-	return len(q.ids)
 }
 
 // NewLibrarySyncService 创建自动同步服务并读取已保存的开关。
@@ -277,13 +234,15 @@ func NewLibrarySyncService(opts LibrarySyncOptions) (*LibrarySyncService, error)
 		opts.VerifyInterval = defaultVerifyInterval
 	}
 	service := &LibrarySyncService{
-		opts:             opts,
-		engine:           NewIncrementalEngine(),
-		pending:          newSyncChangeSet(),
-		analysisQueue:    make(map[string]*analysisQueue),
-		analysisFull:     make(map[string]bool),
-		analysisFailures: make(map[string]int),
-		wake:             make(chan struct{}, 1),
+		opts:                 opts,
+		engine:               NewIncrementalEngine(),
+		pending:              newSyncChangeSet(),
+		analysisQueue:        make(map[string]*analysisQueue),
+		analysisFull:         make(map[string]bool),
+		analysisTasks:        make(map[string]*analysisTask),
+		analysisFailures:     make(map[string]int),
+		smartAlbumRetryDelay: defaultSmartAlbumRetryDelay,
+		wake:                 make(chan struct{}, 1),
 	}
 	if err := service.loadState(); err != nil {
 		return nil, err
@@ -310,6 +269,16 @@ func (s *LibrarySyncService) loadState() error {
 	}
 	s.state = state
 	s.settings = LibrarySyncSettings{Enabled: state.Enabled, AutoAnalyze: state.AutoAnalyze}
+	// 上一次进程退出时还有分析没干完：把它接上。
+	//
+	// 内存里的资源名单已经没了，说不清欠的是哪几张：改成一次全库增量
+	// 分析 —— 任务中心按文件指纹挑出真正要重算的那些，欠的活一定在内。
+	s.analysisDirty = state.AnalysisDirty
+	if state.AutoAnalyze {
+		for module := range state.AnalysisPending {
+			s.analysisFull[module] = true
+		}
+	}
 	return nil
 }
 
@@ -732,230 +701,6 @@ func (s *LibrarySyncService) collectChangedResources(
 	return result
 }
 
-// queueAnalysis 把变动的资源排进分析队列。
-//
-// 队列满了不丢任务：改成给该模块记一次全库增量分析，
-// 由任务中心按文件指纹挑出真正需要重算的那些。
-func (s *LibrarySyncService) queueAnalysis(resourceIDs []string) {
-	if len(resourceIDs) == 0 {
-		return
-	}
-	s.mu.Lock()
-	if !s.settings.AutoAnalyze {
-		s.mu.Unlock()
-		return
-	}
-	queued := 0
-	for _, module := range s.analysisModules() {
-		entry, exists := s.analysisQueue[module]
-		if !exists {
-			entry = newAnalysisQueue()
-			s.analysisQueue[module] = entry
-		}
-		entry.push(resourceIDs)
-		if entry.len() > maxAnalysisQueue {
-			// 超出上限：队列清空，改成一次全库增量分析。
-			// 丢掉的是「哪些文件排队了」这份名单，不是任务本身。
-			entry.reset()
-			s.analysisFull[module] = true
-		}
-		queued += entry.len()
-	}
-	// 只有真的排进了分析任务才需要重算智能相册。
-	s.analysisDirty = s.analysisDirty || queued > 0
-	s.mu.Unlock()
-}
-
-// pumpAnalysis 把排队的资源提交成分析任务。
-//
-// 一次只提交一批：任务中心同一时刻只跑一个任务，批次之间排队等它结束。
-// 这样一次导入几千张照片也不会把任务中心一次塞满。
-func (s *LibrarySyncService) pumpAnalysis(ctx context.Context) {
-	if s.opts.Jobs == nil {
-		return
-	}
-	s.mu.Lock()
-	if !s.settings.AutoAnalyze || s.closed {
-		s.mu.Unlock()
-		return
-	}
-	modules := s.analysisModules()
-	s.mu.Unlock()
-
-	for _, module := range modules {
-		s.mu.Lock()
-		full := s.analysisFull[module]
-		entry := s.analysisQueue[module]
-		if !full && (entry == nil || entry.len() == 0) {
-			s.mu.Unlock()
-			continue
-		}
-		var ids []string
-		if full {
-			// 全库增量分析：任务中心按文件指纹挑出真正要重算的资源。
-			//
-			// 提交成功之前既不清标记也不清队列：模块不可用时（模型没装好、
-			// 磁盘读不了）这次提交会失败，而失败的这次绝不能把这批工作
-			// 一起丢掉 —— 标记留着，下一轮还会再试。
-			s.mu.Unlock()
-			if _, _, err := s.opts.Jobs.Start(module, AIJobModeIncremental); err != nil {
-				if errors.Is(err, ErrAIJobActive) {
-					// 任务中心正忙：标记原样留着，等下一轮再提交。
-					return
-				}
-				s.recordAnalysisFailure(module, err)
-				return
-			}
-			s.mu.Lock()
-			delete(s.analysisFull, module)
-			if current, exists := s.analysisQueue[module]; exists {
-				current.reset()
-			}
-			s.mu.Unlock()
-			s.clearAnalysisFailure(module)
-			continue
-		}
-		ids = entry.take(analysisBatchSize)
-		s.mu.Unlock()
-		sort.Strings(ids)
-
-		_, _, err := s.opts.Jobs.StartForResources(module, ids)
-		if err == nil {
-			s.clearAnalysisFailure(module)
-			continue
-		}
-		if errors.Is(err, ErrAIJobActive) {
-			// 任务中心正忙：放回去，等下一轮。
-			s.restoreAnalysis(module, ids)
-			return
-		}
-		// 模块暂时不可用（模型没装好、磁盘读不了）：这批留到下一轮再试。
-		// 连续失败超过上限才放弃，不能静默丢掉。
-		s.restoreAnalysis(module, ids)
-		s.recordAnalysisFailure(module, err)
-		return
-	}
-	s.refreshSmartAlbums()
-}
-
-// restoreAnalysis 把一批资源放回某个模块的队首。
-func (s *LibrarySyncService) restoreAnalysis(module string, ids []string) {
-	if len(ids) == 0 {
-		return
-	}
-	s.mu.Lock()
-	entry, exists := s.analysisQueue[module]
-	if !exists {
-		entry = newAnalysisQueue()
-		s.analysisQueue[module] = entry
-	}
-	entry.restore(ids)
-	s.mu.Unlock()
-}
-
-// recordAnalysisFailure 记下一次自动分析排队失败。
-//
-// 连续失败超过上限就放弃这批资源，并把原因如实记进状态 ——
-// 不能悄悄丢掉，也不能无限重试。
-func (s *LibrarySyncService) recordAnalysisFailure(module string, err error) {
-	s.mu.Lock()
-	s.analysisFailures[module]++
-	failures := s.analysisFailures[module]
-	exhausted := failures >= maxAnalysisRetries
-	if exhausted {
-		entry, exists := s.analysisQueue[module]
-		if exists {
-			entry.reset()
-		}
-		delete(s.analysisQueue, module)
-		// 全库增量分析的标记也要一起撤掉：它已经试过这么多次了，
-		// 留着只会让每一轮都重试一次，永远停不下来。
-		delete(s.analysisFull, module)
-	}
-	s.mu.Unlock()
-	log.Printf("自动分析排队失败 module=%s（第 %d 次）: %v", module, failures, err)
-	if !exhausted {
-		return
-	}
-	s.recordError("analysis_queue_failed")
-}
-
-// clearAnalysisFailure 记下这个模块排队成功过一次。
-func (s *LibrarySyncService) clearAnalysisFailure(module string) {
-	s.mu.Lock()
-	delete(s.analysisFailures, module)
-	s.mu.Unlock()
-}
-
-// refreshSmartAlbums 在自动分析跑完之后重算智能相册。
-//
-// 智能相册是派生结果：分析结果没更新之前重算没有意义，
-// 因此等任务中心空闲下来再触发一次增量刷新。
-func (s *LibrarySyncService) refreshSmartAlbums() {
-	s.mu.Lock()
-	dirty := s.analysisDirty
-	queued := 0
-	for _, entry := range s.analysisQueue {
-		queued += entry.len()
-	}
-	if !dirty {
-		s.mu.Unlock()
-		return
-	}
-	if s.opts.SmartAlbums == nil {
-		s.analysisDirty = false
-		s.mu.Unlock()
-		return
-	}
-	if queued > 0 {
-		// 队列还没排空：这批分析还没跑完，重算没有意义。
-		// 标记要留着 —— 抹掉的话这批照片改完之后智能相册就再也不会重算了。
-		s.mu.Unlock()
-		return
-	}
-	s.analysisDirty = false
-	s.mu.Unlock()
-
-	snapshot := s.opts.Jobs.List()
-	if snapshot.Active != nil || len(snapshot.Queue) > 0 {
-		// 任务中心还忙着：等下一轮再重算。
-		s.mu.Lock()
-		s.analysisDirty = true
-		s.mu.Unlock()
-		return
-	}
-	if _, _, err := s.opts.SmartAlbums.Start(false); err != nil {
-		log.Printf("智能相册增量刷新失败: %v", err)
-	}
-}
-
-// analysisModules 返回自动分析要覆盖的模块。
-//
-// 只包含已经装好的模块；人脸分析还要看用户有没有打开。
-func (s *LibrarySyncService) analysisModules() []string {
-	if s.opts.Jobs == nil {
-		return nil
-	}
-	snapshot := s.opts.Jobs.List()
-	installed := make(map[string]bool, len(snapshot.Modules))
-	for _, module := range snapshot.Modules {
-		installed[module.Type] = module.Installed
-	}
-	peopleEnabled := snapshot.Settings.PeopleEnabled
-	order := []string{AIJobTypeMetadata, AIJobTypeSimilarity, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace}
-	modules := make([]string, 0, len(order))
-	for _, module := range order {
-		if !installed[module] {
-			continue
-		}
-		if module == AIJobTypeFace && !peopleEnabled {
-			continue
-		}
-		modules = append(modules, module)
-	}
-	return modules
-}
-
 // maybeVerify 到点做一次校验扫描，兜住监听漏掉的变化。
 func (s *LibrarySyncService) maybeVerify(ctx context.Context) {
 	s.mu.Lock()
@@ -1006,6 +751,9 @@ func (s *LibrarySyncService) runVerification(ctx context.Context) {
 	if len(opts.Roots) == 0 {
 		return
 	}
+	// 校验前的图库快照：校验之后要拿它跟新的图库比，
+	// 才知道这段时间磁盘上多出来、改动了什么。
+	previous := s.opts.Catalog.Acquire()
 	id, reused, err := s.opts.Runner.StartOrReuse(opts)
 	if err != nil {
 		s.recordError("verification_failed")
@@ -1021,7 +769,13 @@ func (s *LibrarySyncService) runVerification(ctx context.Context) {
 		})
 		return
 	}
-	go s.watchScan(ctx, id, s.markVerified)
+	go s.watchScan(ctx, id, func() {
+		s.markVerified()
+		// 校验发现的变化要排进分析：程序关闭期间磁盘上的变化不会有
+		// 事件，增量扫描那条路发现不了。不排的话新照片永远没有分析
+		// 结果，派生索引就跟媒体库对不上。
+		s.reconcileAnalysis(previous)
+	})
 }
 
 // watchScan 盯住一次扫描任务，结束时调用 done。
