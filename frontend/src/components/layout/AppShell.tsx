@@ -115,7 +115,7 @@ export default function AppShell() {
 
   useEffect(() => {
     const titles: Record<string, string> = {
-      [homeRoute(mode)]: mode === "comic" ? "漫画库" : "照片库",
+      [homeRoute(mode)]: mode === "comic" ? "漫画首页" : "照片库",
       [libraryRoute(mode)]: mode === "comic" ? "书架" : "图库",
       [exploreRoute()]: "探索",
       [meRoute(mode)]: mode === "comic" ? "我的漫画" : "我的照片",
@@ -140,14 +140,19 @@ export default function AppShell() {
       } else if (path.startsWith("/photo/people/")) {
         base = "人物相册";
       } else {
-        // 设置页与任务中心的页签也在路径里（/settings/data）：这两页按首段
-        // 查表，再补上当前页签的名字，否则标题会掉进工作台的兜底文案。
-        // 其余页面仍走兜底（相册页是「相册」，不是「照片库」）。
-        const segment = path.split("/")[1] ?? "";
-        if (segment === "settings" || segment === "tasks" || segment === "me") {
-          base = titles[`/${segment}`] ?? titles[meRoute(mode)];
+        // 设置页与任务中心的页签按首段查表，「我的」页签要看工作台之后的
+        // 第二段；否则标题会掉进工作台的兜底文案。其余页面仍走兜底。
+        const [section, subpage] = path.split("/").filter(Boolean);
+        if (section === "settings" || section === "tasks") {
+          base = titles[`/${section}`];
         }
-        if (segment === "search") {
+        if (
+          (section === "photo" || section === "comic") &&
+          subpage === "me"
+        ) {
+          base = titles[meRoute(mode)];
+        }
+        if (subpage === "search") {
           base = "搜索结果";
         }
         if (base === undefined) base = workbenchCopy(mode).albumTypeLabel;

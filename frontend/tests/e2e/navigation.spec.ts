@@ -50,6 +50,12 @@ test("旧书签仍然打得开：它们重定向到新入口", async ({ page }) 
   }
 });
 
+test("我的漫画子页签显示对应的浏览器标题", async ({ page, request }) => {
+  await setWorkbenchMode(request, "comic");
+  await page.goto("/comic/me/reading");
+  await expect(page).toHaveTitle("我的漫画 · Local Gallery");
+});
+
 test("「我的」用页签承载精选、收藏与最近浏览", async ({ page, request }) => {
   await liveRoots(request);
   await setWorkbenchMode(request, "photo");

@@ -112,7 +112,7 @@ function HomeHeader({
           <Link to={primaryAction.to} className="btn btn-sm btn-outline">
             <LibraryIcon size={13} />
             <span className="hidden sm:inline">{primaryAction.label}</span>
-            <span className="sm:hidden">图库</span>
+            <span className="sm:hidden">{primaryAction.label}</span>
           </Link>
           <button
             onClick={() => startScan.mutate()}
@@ -321,6 +321,10 @@ function ComicHome() {
     [dashboard],
   );
   const unreadCount = dashboard?.unreadCount ?? 0;
+  const hasNoReadingActivity =
+    dashboardQuery.isSuccess &&
+    inProgressAll.length === 0 &&
+    unreadCount === 0;
 
   const randomAlbum = useMutation({
     mutationFn: (scope: "any" | "unread") =>
@@ -443,6 +447,21 @@ function ComicHome() {
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {hasContent && hasNoReadingActivity ? (
+        <section className="page-shell">
+          <EmptyState
+            title="还没有开始阅读"
+            description="从书架打开一卷漫画。开始阅读后，这里会记住进度并列出未读内容。"
+            icon={<LibraryIcon size={20} />}
+            action={
+              <Link to={libraryRoute("comic")} className="btn btn-primary">
+                去书架看看
+              </Link>
+            }
+          />
+        </section>
       ) : null}
 
       {!hasContent && !isLoadingInitial ? (

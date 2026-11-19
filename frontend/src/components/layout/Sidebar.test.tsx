@@ -102,6 +102,22 @@ describe("Sidebar", () => {
     expect(screen.queryByText("整理")).not.toBeInTheDocument();
   });
 
+  it("相册详情下高亮当前侧的图库入口", () => {
+    const { unmount } = renderSidebar(false, "/comic/albums/c_1");
+    expect(screen.getByRole("link", { name: "书架" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    unmount();
+    appMode.mode = "photo";
+    renderSidebar(false, "/photo/albums/a_1");
+    expect(screen.getByRole("link", { name: "图库" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
   it("照片工作台列出首页、图库、探索、我的与整理", () => {
     appMode.mode = "photo";
     renderSidebar();

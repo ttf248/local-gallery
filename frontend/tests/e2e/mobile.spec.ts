@@ -1,5 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { resetWorkbenchMode, scannedNodes } from "./helpers/library";
+import {
+  resetWorkbenchMode,
+  scannedNodes,
+  setWorkbenchMode,
+} from "./helpers/library";
 
 // 窄屏专项用例：只在 mobile / mobile-landscape 两个 project 上跑
 // （见 playwright.config.ts）。
@@ -101,6 +105,55 @@ test("页面在窄屏上没有横向溢出", async ({ page }) => {
     );
     expect(overflow, `${route} 横向溢出`).toBeLessThanOrEqual(1);
   }
+});
+
+test("漫画首页在窄屏上使用漫画标题与书架入口", async ({ page }) => {
+  await scannedNodes(page.request, "comic");
+  await setWorkbenchMode(page.request, "comic");
+
+  await page.goto("/comic");
+  await expect(page).toHaveTitle("漫画首页 · Local Gallery");
+  const shelfAction = page.locator(".home-heading__actions").getByRole("link");
+  await expect(shelfAction).toHaveAccessibleName("书架");
+  await expect(shelfAction).toHaveAttribute("href", "/comic/library");
+
+  await page.getByRole("button", { name: "打开导航" }).click();
+  const nav = page.locator('aside[aria-label="主导航"]');
+  await expect(nav.getByRole("link", { name: "书架" })).toBeVisible();
+});
+
+test("漫画内容存在但没有在读或未读时显示书架引导", async ({ page }) => {
+  const comicAlbums = await scannedNodes(page.request, "comic");
+  expect(comicAlbums.length).toBeGreaterThan(0);
+  await setWorkbenchMode(page.request, "comic");
+  await page.route("**/api/library/dashboard*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("kind") !== "comic") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      json: {
+        ok: true,
+        dashboard: {
+          revision: 1,
+          albumCount: comicAlbums.length,
+          unreadCount: 0,
+          unread: [],
+          inProgress: [],
+        },
+      },
+    });
+  });
+
+  await page.goto("/comic");
+  await expect(
+    page.getByRole("heading", { name: "还没有开始阅读" }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "去书架看看" })).toHaveAttribute(
+    "href",
+    "/comic/library",
+  );
 });
 
 test("可交互控件的命中区够手指点", async ({ page }) => {

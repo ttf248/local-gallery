@@ -13,7 +13,12 @@ import { useAppMode } from "../../hooks/useAppMode";
 import { useMediaQuery, WIDE_LAYOUT_QUERY } from "../../hooks/useMediaQuery";
 import { useNavVisibility } from "../../hooks/useNavVisibility";
 import { libraryApi } from "../../api/library";
-import { albumRoute, homeRoute, unreadRoute } from "../../utils/path";
+import {
+  albumRoute,
+  homeRoute,
+  libraryRoute,
+  unreadRoute,
+} from "../../utils/path";
 import {
   MACHINE_GROUP,
   navGroupsFor,
@@ -95,15 +100,19 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
     return visible.filter((group) => group.entries.length > 0);
   }, [mode, isVisible]);
 
-  // 选中态：路径完全相等才算命中。
-  //
   // 两个模式的路径互为前缀（/photo 与 /photo/library），用 startsWith
-  // 会让「首页」和「图库」同时亮起来。首页是精确匹配，其余条目靠前缀
-  // 命中（/photo/albums/… 归属于图库）。
-  const isEntryActive = (entry: NavEntry) =>
-    entry.to === homeRoute(mode)
-      ? location.pathname === entry.to
-      : location.pathname.startsWith(entry.to);
+  // 会让「首页」和「图库」同时亮起来。首页是精确匹配；相册详情虽不在
+  // 书架/图库的 URL 下，也属于同一结构入口。
+  const isEntryActive = (entry: NavEntry) => {
+    if (entry.to === homeRoute(mode)) return location.pathname === entry.to;
+    if (entry.to === libraryRoute(mode)) {
+      return (
+        location.pathname.startsWith(entry.to) ||
+        location.pathname.startsWith(`${homeRoute(mode)}/albums/`)
+      );
+    }
+    return location.pathname.startsWith(entry.to);
+  };
 
   // 当前所在页签：设置页与任务中心把分区放在页内的 tab 条上，
   // 侧栏不再挂二级菜单 —— 只在条目右边挂一枚当前页签名，
