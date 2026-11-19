@@ -85,8 +85,11 @@ function TreeRoot({
         onSelect={() => onSelect(id)}
       />
       {expanded ? (
-        <TreeChildren
+        <TreeChildrenContent
           items={children.data ?? []}
+          loading={children.isLoading}
+          error={children.isError}
+          onRetry={() => void children.refetch()}
           mode={mode}
           selectedId={selectedId}
           onSelect={onSelect}
@@ -128,8 +131,11 @@ function TreeCollection({
         meta={`${count} ${albumCountUnit(mode)}`}
       />
       {expanded ? (
-        <TreeChildren
+        <TreeChildrenContent
           items={children.data ?? []}
+          loading={children.isLoading}
+          error={children.isError}
+          onRetry={() => void children.refetch()}
           mode={mode}
           selectedId={selectedId}
           onSelect={onSelect}
@@ -187,6 +193,61 @@ function TreeChildren({
         ),
       )}
     </ul>
+  );
+}
+
+/** 目录树子项的读取状态；失败时保留已有条目并提供显式重试。 */
+function TreeChildrenContent({
+  items,
+  loading,
+  error,
+  onRetry,
+  mode,
+  selectedId,
+  onSelect,
+  depth,
+}: {
+  items: LibraryNodeSummary[];
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+  mode: AppMode;
+  selectedId: string;
+  onSelect: (id: string) => void;
+  depth: number;
+}) {
+  const indent = { paddingLeft: 8 + depth * 14 };
+  return (
+    <>
+      {error ? (
+        <div className="flex flex-wrap items-center gap-2 py-2" style={indent}>
+          <span role="alert" className="text-meta text-danger">
+            目录读取失败。
+          </span>
+          <button
+            type="button"
+            className="btn btn-sm btn-outline min-h-11"
+            onClick={onRetry}
+          >
+            重试
+          </button>
+        </div>
+      ) : null}
+      {loading && items.length === 0 ? (
+        <p className="py-2 text-meta text-fg-muted" style={indent}>
+          正在读取目录…
+        </p>
+      ) : null}
+      {items.length > 0 ? (
+        <TreeChildren
+          items={items}
+          mode={mode}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          depth={depth}
+        />
+      ) : null}
+    </>
   );
 }
 

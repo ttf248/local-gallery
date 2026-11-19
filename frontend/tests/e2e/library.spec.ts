@@ -78,6 +78,64 @@ test("图库打不开时给出重试手柄", async ({ page, request }) => {
   await expect(alert.getByRole("button", { name: /重试/ })).toBeVisible();
 });
 
+test("目录树根与集合读取失败时显示错误并可重试", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+  const manifestResponse = await request.get("/api/library/manifest");
+  const manifest = (await manifestResponse.json()) as {
+    manifest: {
+      roots: Array<{ id: string; name: string; contentKind?: string }>;
+    };
+  };
+  const root = manifest.manifest.roots.find(
+    (item) => item.contentKind === "photo",
+  )!;
+  const rootResponse = await request.get(
+    `/api/library/${root.id}/children?kind=photo&limit=200`,
+  );
+  const rootChildren = (await rootResponse.json()) as {
+    page: { items: Array<{ id: string; name: string; kind: string }> };
+  };
+  const collection = rootChildren.page.items.find(
+    (item) => item.name === "zz-library-hierarchy",
+  )!;
+  expect(collection.kind).toBe("collection");
+
+  const attempts = new Map<string, number>();
+  await page.route("**/api/library/*/children*", async (route) => {
+    const parentId = new URL(route.request().url()).pathname
+      .split("/")
+      .at(-2);
+    if (parentId === root.id || parentId === collection.id) {
+      const count = (attempts.get(parentId) ?? 0) + 1;
+      attempts.set(parentId, count);
+      if (count === 1) {
+        await route.fulfill({
+          status: 400,
+          json: { code: "test_unavailable", message: "unavailable" },
+        });
+        return;
+      }
+    }
+    await route.continue();
+  });
+
+  await page.goto("/photo/library");
+  const tree = page.getByRole("navigation", { name: "目录" });
+  await expect(tree.getByRole("alert")).toContainText("目录读取失败");
+  await tree.getByRole("button", { name: "重试" }).click();
+  await expect(
+    tree.getByRole("button", { name: collection.name, exact: true }),
+  ).toBeVisible();
+  await expect(tree.getByRole("alert")).toContainText("目录读取失败");
+
+  await tree.getByRole("button", { name: "重试" }).click();
+  await expect(
+    tree.getByRole("button", { name: "outer", exact: true }),
+  ).toBeVisible();
+  expect(attempts.get(root.id)).toBe(2);
+  expect(attempts.get(collection.id)).toBe(2);
+});
+
 test("筛选结果为零时仍可调整条件并一键清除", async ({ page, request }) => {
   await scannedNodes(request, "photo");
   const query = "zz-no-such-library-result";
