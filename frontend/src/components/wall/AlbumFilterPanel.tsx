@@ -4,7 +4,6 @@ import Segmented from "../common/Segmented";
 import {
   albumMonthInRange,
   albumMonthRange,
-  albumYearInRange,
   albumYearLabel,
   albumYearRange,
   type AlbumFilterState,
@@ -82,7 +81,9 @@ export default function AlbumFilterPanel({
   };
 
   const selectYear = (year: string) => {
-    if (albumYearInRange(state, year) && state.from?.startsWith(year)) {
+    // 整年已经选中时再点一次是取消；否则一律选整年 ——
+    // 上一次选的是这年里的某个月时，点年份要的是整年，不是取消。
+    if (state.from === `${year}-01` && state.to === `${year}-12`) {
       onChange({ ...state, from: undefined, to: undefined });
       setOpenYear(null);
       return;
