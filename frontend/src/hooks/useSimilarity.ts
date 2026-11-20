@@ -1,5 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { picksQueryKey } from "./usePicks";
 import {
   similarityApi,
   type SimilarityBatchAction,
@@ -14,6 +20,17 @@ export const similarityGroupsKey = ["similarity", "groups"] as const;
 
 /** 整理模块状态的查询键。 */
 export const similarityStatusKey = ["similarity", "status"] as const;
+const SIMILARITY_PAGE_SIZE = 60;
+
+/** 当前筛选切面共用一个无限分页缓存，页码由 pageParams 管理。 */
+export function similarityGroupsQueryKey(query: SimilarityGroupQuery = {}) {
+  return [
+    ...similarityGroupsKey,
+    query.kind ?? "",
+    query.status ?? "",
+    query.folder ?? "",
+  ] as const;
+}
 
 /**
  * 相似照片分组列表。
@@ -24,22 +41,32 @@ export const similarityStatusKey = ["similarity", "status"] as const;
  */
 export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
   const client = useQueryClient();
+  const { kind, status, folder } = query;
   const stableKey = useMemo(
-    () =>
-      [
-        ...similarityGroupsKey,
-        query.kind ?? "",
-        query.status ?? "",
-        query.folder ?? "",
-        query.limit ?? 0,
-        query.offset ?? 0,
-      ] as const,
-    [query.kind, query.status, query.folder, query.limit, query.offset],
+    () => similarityGroupsQueryKey({ kind, status, folder }),
+    [kind, status, folder],
   );
 
-  const list = useQuery({
+  const list = useInfiniteQuery({
     queryKey: stableKey,
-    queryFn: () => similarityApi.groups(query),
+    queryFn: ({ pageParam }) =>
+      similarityApi.groups({
+        kind,
+        status,
+        folder,
+        limit: SIMILARITY_PAGE_SIZE,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) => {
+      const loaded = pages.reduce(
+        (count, page) => count + page.page.groups.length,
+        0,
+      );
+      return lastPage.page.groups.length > 0 && loaded < lastPage.page.total
+        ? loaded
+        : undefined;
+    },
   });
 
   const invalidate = useCallback(async () => {
@@ -56,9 +83,16 @@ export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
   });
 
   const batch = useMutation({
-    mutationFn: (input: { action: SimilarityBatchAction; groupIds: string[] }) =>
-      similarityApi.batch(input.action, input.groupIds),
-    onSuccess: invalidate,
+    mutationFn: (input: {
+      action: SimilarityBatchAction;
+      groupIds: string[];
+    }) => similarityApi.batch(input.action, input.groupIds),
+    onSuccess: async (_result, input) => {
+      await invalidate();
+      if (input.action === "pick") {
+        await client.invalidateQueries({ queryKey: picksQueryKey });
+      }
+    },
   });
 
   const rebuild = useMutation({
@@ -66,13 +100,24 @@ export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
     onSuccess: invalidate,
   });
 
+  const pages = list.data?.pages;
+  const page = pages?.[0]?.page;
+  const groups = useMemo(
+    () => pages?.flatMap((response) => response.page.groups) ?? [],
+    [pages],
+  );
+
   return {
-    page: list.data?.page,
-    groups: list.data?.page.groups ?? [],
+    page,
+    groups,
     isLoading: list.isLoading,
     isError: list.isError,
+    isFetchNextPageError: list.isFetchNextPageError,
     error: list.error,
     refetch: list.refetch,
+    fetchNextPage: list.fetchNextPage,
+    hasNextPage: list.hasNextPage,
+    isFetchingNextPage: list.isFetchingNextPage,
     update,
     batch,
     rebuild,
@@ -96,7 +141,9 @@ export function useSimilarityStatus() {
 }
 
 /** 分组类别的中文名。 */
-export function similarityKindLabel(kind: SimilarityGroupKind | string): string {
+export function similarityKindLabel(
+  kind: SimilarityGroupKind | string,
+): string {
   switch (kind) {
     case "exact":
       return "完全重复";
@@ -124,7 +171,9 @@ export function similarityKindHint(kind: SimilarityGroupKind | string): string {
 }
 
 /** 整理状态的中文名。 */
-export function similarityStatusLabel(status: SimilarityGroupStatus | string): string {
+export function similarityStatusLabel(
+  status: SimilarityGroupStatus | string,
+): string {
   switch (status) {
     case "pending":
       return "待整理";
@@ -141,5 +190,7 @@ export function similarityStatusLabel(status: SimilarityGroupStatus | string): s
 export function similarityRepresentative(
   group: SimilarityGroup,
 ): SimilarityGroup["members"][number] | undefined {
-  return group.members.find((member) => member.resourceId === group.representative);
+  return group.members.find(
+    (member) => member.resourceId === group.representative,
+  );
 }

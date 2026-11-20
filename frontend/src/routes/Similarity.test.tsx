@@ -1,5 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import type { ReactNode } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Similarity from "./Similarity";
@@ -9,12 +17,23 @@ const requests: {
   kind: string;
   status: string;
   folder: string;
+  limit: number;
+  offset: number;
 }[] = [];
 
 const updates: { id: string; body: Record<string, unknown> }[] = [];
 const batches: { action: string; groupIds: string[] }[] = [];
+const virtualState = vi.hoisted(() => ({
+  windowSize: 1,
+  totalGroups: 121,
+  loadedGroups: 0,
+  useWindowScroll: false,
+  endReached: null as (() => void) | null,
+}));
 
-function groupFixture(overrides: Partial<SimilarityGroup> = {}): SimilarityGroup {
+function groupFixture(
+  overrides: Partial<SimilarityGroup> = {},
+): SimilarityGroup {
   return {
     id: "exact-1",
     kind: "exact",
@@ -82,11 +101,14 @@ function groupFixture(overrides: Partial<SimilarityGroup> = {}): SimilarityGroup
   };
 }
 
-function pageFixture(groups: SimilarityGroup[]): SimilarityGroupPage {
+function pageFixture(
+  groups: SimilarityGroup[],
+  total = groups.length + 120,
+): SimilarityGroupPage {
   return {
     revision: 1,
     // 命中数比返回的组数多：库大时分组会分页接下一批。
-    total: groups.length + 120,
+    total,
     groups,
     folders: [
       { folder: "存照/2024", groups: groups.length, photos: groups.length * 2 },
@@ -123,21 +145,39 @@ vi.mock("../api/similarity", async (original) => ({
           summary: pageFixture([]).summary,
         },
       }),
-    groups: (query: { kind?: string; status?: string; folder?: string } = {}) => {
+    groups: (
+      query: {
+        kind?: string;
+        status?: string;
+        folder?: string;
+        limit?: number;
+        offset?: number;
+      } = {},
+    ) => {
+      const offset = query.offset ?? 0;
+      const total = virtualState.totalGroups;
       requests.push({
         kind: query.kind ?? "",
         status: query.status ?? "",
         folder: query.folder ?? "",
+        limit: query.limit ?? 0,
+        offset,
       });
-      const groups = [groupFixture()];
-      if (query.kind === "burst") {
-        groups[0] = groupFixture({
-          id: "burst-1",
-          kind: "burst",
+      const count = Math.max(0, Math.min(query.limit ?? 60, total - offset));
+      const groups = Array.from({ length: count }, (_, index) => {
+        const groupIndex = offset + index;
+        return groupFixture({
+          id:
+            query.kind === "burst"
+              ? `burst-${groupIndex + 1}`
+              : groupIndex === 0
+                ? "exact-1"
+                : `exact-${groupIndex + 1}`,
+          kind: query.kind === "burst" ? "burst" : "exact",
           representativeIsManual: false,
         });
-      }
-      return Promise.resolve({ ok: true, page: pageFixture(groups) });
+      });
+      return Promise.resolve({ ok: true, page: pageFixture(groups, total) });
     },
     update: (id: string, body: Record<string, unknown>) => {
       updates.push({ id, body });
@@ -147,6 +187,31 @@ vi.mock("../api/similarity", async (original) => ({
       batches.push({ action, groupIds });
       return Promise.resolve({ ok: true, changed: groupIds.length });
     },
+  },
+}));
+
+vi.mock("react-virtuoso", () => ({
+  Virtuoso: ({
+    data,
+    itemContent,
+    useWindowScroll,
+    endReached,
+  }: {
+    data: SimilarityGroup[];
+    itemContent: (index: number, group: SimilarityGroup) => ReactNode;
+    useWindowScroll?: boolean;
+    endReached?: () => void;
+  }) => {
+    virtualState.loadedGroups = data.length;
+    virtualState.useWindowScroll = useWindowScroll ?? false;
+    virtualState.endReached = endReached ?? null;
+    return (
+      <div data-testid="similarity-virtual-list" data-groups={data.length}>
+        {data.slice(0, virtualState.windowSize).map((group, index) => (
+          <div key={group.id}>{itemContent(index, group)}</div>
+        ))}
+      </div>
+    );
   },
 }));
 
@@ -169,6 +234,11 @@ function renderPage(initialEntry = "/photo/similarity") {
 
 describe("相似照片整理页", () => {
   beforeEach(() => {
+    virtualState.windowSize = 1;
+    virtualState.totalGroups = 121;
+    virtualState.loadedGroups = 0;
+    virtualState.useWindowScroll = false;
+    virtualState.endReached = null;
     requests.length = 0;
     updates.length = 0;
     batches.length = 0;
@@ -187,7 +257,7 @@ describe("相似照片整理页", () => {
     expect(within(card).getByText(/12\.0MP/)).toBeInTheDocument();
     expect(within(card).getByText(/曝光 90/)).toBeInTheDocument();
     expect(screen.getByTestId("similarity-summary")).toHaveTextContent(
-      "1 组完全重复",
+      "60 组完全重复",
     );
   });
 
@@ -199,7 +269,9 @@ describe("相似照片整理页", () => {
     const members = screen.getAllByTestId("similarity-member");
     expect(members).toHaveLength(2);
 
-    fireEvent.click(within(members[1]).getByRole("button", { name: /设为代表照片/ }));
+    fireEvent.click(
+      within(members[1]).getByRole("button", { name: /设为代表照片/ }),
+    );
     await waitFor(() =>
       expect(updates).toContainEqual({
         id: "exact-1",
@@ -233,9 +305,7 @@ describe("相似照片整理页", () => {
     renderPage();
     await screen.findByTestId("similarity-group");
 
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: /选中这一组/ }),
-    );
+    fireEvent.click(screen.getByRole("checkbox", { name: /选中这一组/ }));
     const bar = await screen.findByTestId("similarity-batch-bar");
     fireEvent.click(within(bar).getByRole("button", { name: /加入精选/ }));
 
@@ -271,15 +341,72 @@ describe("相似照片整理页", () => {
     renderPage();
     await screen.findByTestId("similarity-group");
 
-    // 接口说命中很多组时，页面给出一枚「再显示」的按钮。
+    // 第二次请求只取下一页，不扩大首个请求的 limit 重下旧组。
     requests.length = 0;
     const more = await screen.findByRole("button", { name: /再显示 60 组/ });
     fireEvent.click(more);
 
     await waitFor(() => {
-      expect(requests.some((request) => request.kind === "")).toBe(true);
+      expect(requests.map((request) => request.offset)).toEqual([60]);
     });
   });
+
+  it("虚拟列表滚到末组时自动追加下一页", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+    requests.length = 0;
+
+    act(() => virtualState.endReached?.());
+
+    await waitFor(() => {
+      expect(requests.map((request) => request.offset)).toEqual([60]);
+      expect(virtualState.loadedGroups).toBe(120);
+    });
+  });
+
+  it("追加下一页后仍保留已展开分组和用户选择", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /选中这一组/ }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /再显示 60 组/ }),
+    );
+
+    await waitFor(() => expect(virtualState.loadedGroups).toBe(120));
+    expect(screen.getAllByTestId("similarity-member")).toHaveLength(2);
+    expect(screen.getByTestId("similarity-batch-bar")).toHaveTextContent(
+      "已选 1 组",
+    );
+  });
+
+  it(
+    "5000 组已加载时仍只挂载虚拟窗口内的条目",
+    async () => {
+      virtualState.totalGroups = 5000;
+      virtualState.windowSize = 6;
+      renderPage();
+      expect(await screen.findAllByTestId("similarity-group")).toHaveLength(6);
+
+      while (virtualState.loadedGroups < 5000) {
+        const expected = Math.min(virtualState.loadedGroups + 60, 5000);
+        fireEvent.click(
+          await screen.findByRole("button", { name: /再显示 60 组/ }),
+        );
+        await waitFor(() =>
+          expect(
+            screen.getByTestId("similarity-virtual-list"),
+          ).toHaveAttribute("data-groups", String(expected)),
+        );
+      }
+
+      expect(virtualState.useWindowScroll).toBe(true);
+      expect(virtualState.loadedGroups).toBe(5000);
+      expect(screen.getAllByTestId("similarity-group")).toHaveLength(6);
+    },
+    20_000,
+  );
 
   it("地址栏里的类别参数会被认出来", async () => {
     renderPage("/photo/similarity?kind=burst");

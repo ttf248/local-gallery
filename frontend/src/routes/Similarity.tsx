@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import "../styles/similarity.css";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Virtuoso } from "react-virtuoso";
 import PageHeading from "../components/common/PageHeading";
 import Segmented from "../components/common/Segmented";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
-import PhotoCompare, { type CompareItem } from "../components/wall/PhotoCompare";
+import PhotoCompare, {
+  type CompareItem,
+} from "../components/wall/PhotoCompare";
 import Popover, {
   PopoverItem,
   PopoverLabel,
@@ -56,20 +59,21 @@ const STATUS_OPTIONS: { value: SimilarityGroupStatus | ""; label: string }[] = [
  */
 export default function Similarity() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const kind = readParam(searchParams.get(KIND_PARAM)) as SimilarityGroupKind | "";
-  const status = readParam(searchParams.get(STATUS_PARAM)) as SimilarityGroupStatus | "";
+  const kind = readParam(searchParams.get(KIND_PARAM)) as
+    SimilarityGroupKind | "";
+  const status = readParam(searchParams.get(STATUS_PARAM)) as
+    SimilarityGroupStatus | "";
   const folder = searchParams.get(FOLDER_PARAM) ?? "";
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [comparePair, setComparePair] = useState<[string, string] | null>(null);
-  // 分组可能有几千个，一页 60 组，按需往下接。
-  const [limit, setLimit] = useState(60);
 
   const pushToast = useUIStore((state) => state.pushToast);
-  const groups = useSimilarityGroups({ kind, status, folder, limit });
+  const groups = useSimilarityGroups({ kind, status, folder });
   const moduleStatus = useSimilarityStatus();
   const queryClient = useQueryClient();
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = groups;
 
   // 筛选条件写进地址栏：这一页看的就是某个切面，链接要能带过去。
   const updateParam = useCallback(
@@ -109,6 +113,11 @@ export default function Similarity() {
     });
   }, []);
 
+  const loadMoreGroups = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    void fetchNextPage({ cancelRefetch: false });
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
   const handleUpdate = useCallback(
     async (
       id: string,
@@ -117,7 +126,10 @@ export default function Similarity() {
       try {
         await groups.update.mutateAsync({ id, body });
       } catch (error) {
-        pushToast({ kind: "error", message: `没能保存这个决定：${describeError(error)}` });
+        pushToast({
+          kind: "error",
+          message: `没能保存这个决定：${describeError(error)}`,
+        });
       }
     },
     [groups, pushToast],
@@ -138,7 +150,10 @@ export default function Similarity() {
             : "这张照片已经在精选里了",
         });
       } catch (error) {
-        pushToast({ kind: "error", message: `没能加入精选：${describeError(error)}` });
+        pushToast({
+          kind: "error",
+          message: `没能加入精选：${describeError(error)}`,
+        });
       }
     },
     [groups, pushToast],
@@ -149,25 +164,36 @@ export default function Similarity() {
       const ids = [...selectedIds];
       if (ids.length === 0) return;
       try {
-        const result = await groups.batch.mutateAsync({ action, groupIds: ids });
+        const result = await groups.batch.mutateAsync({
+          action,
+          groupIds: ids,
+        });
         if (action === "pick") {
-          pushToast({ kind: "success", message: `已把 ${result.changed} 张代表照片加入精选` });
+          pushToast({
+            kind: "success",
+            message: `已把 ${result.changed} 张代表照片加入精选`,
+          });
         } else {
-          pushToast({ kind: "success", message: `已处理 ${result.changed} 组` });
+          pushToast({
+            kind: "success",
+            message: `已处理 ${result.changed} 组`,
+          });
         }
         setSelectedIds(new Set());
       } catch (error) {
-        pushToast({ kind: "error", message: `批量操作没成功：${describeError(error)}` });
+        pushToast({
+          kind: "error",
+          message: `批量操作没成功：${describeError(error)}`,
+        });
       }
     },
     [groups, pushToast, selectedIds],
   );
 
-  // 展开状态与勾选状态在换筛选时清掉：上一屏的组可能已经不在这页里了。
+  // 展开状态与勾选状态在换筛选时清掉：上一组结果可能不在新切面里了。
   useEffect(() => {
     setExpandedIds(new Set());
     setSelectedIds(new Set());
-    setLimit(60);
   }, [kind, status, folder]);
 
   const items = groups.groups;
@@ -233,12 +259,16 @@ export default function Similarity() {
                     });
                   })
                   .finally(() => {
-                    void queryClient.invalidateQueries({ queryKey: ["similarity"] });
+                    void queryClient.invalidateQueries({
+                      queryKey: ["similarity"],
+                    });
                   });
               }}
             />
             <AnalyzeButton
-              onStarted={() => void queryClient.invalidateQueries({ queryKey: ["similarity"] })}
+              onStarted={() =>
+                void queryClient.invalidateQueries({ queryKey: ["similarity"] })
+              }
             />
           </div>
         }
@@ -271,7 +301,8 @@ export default function Similarity() {
                   </span>
                   {folder ? (
                     <span className="tabular-nums text-fg-subtle">
-                      {folders.find((item) => item.folder === folder)?.groups ?? 0}
+                      {folders.find((item) => item.folder === folder)?.groups ??
+                        0}
                     </span>
                   ) : (
                     <span className="tabular-nums text-fg-subtle">
@@ -303,9 +334,12 @@ export default function Similarity() {
         </div>
 
         {summary ? (
-          <p className="mb-4 text-meta text-fg-subtle" data-testid="similarity-summary">
-            {summary.exact + summary.near + summary.burst} 组 ·{" "}
-            {summary.exact} 组完全重复、{summary.near} 组近似重复、{summary.burst} 组连拍 ·{" "}
+          <p
+            className="mb-4 text-meta text-fg-subtle"
+            data-testid="similarity-summary"
+          >
+            {summary.exact + summary.near + summary.burst} 组 · {summary.exact}{" "}
+            组完全重复、{summary.near} 组近似重复、{summary.burst} 组连拍 ·{" "}
             {summary.redundant} 张多余照片 · 待整理 {summary.pending} 组
             {statusInfo?.hasVectors
               ? " · 语义索引可用，复核更准"
@@ -314,16 +348,18 @@ export default function Similarity() {
           </p>
         ) : null}
 
-        {groups.isError ? (
+        {groups.isError && items.length === 0 ? (
           <ErrorBanner
             className="rounded-xl"
             onRetry={() => void groups.refetch()}
-            retrying={groups.isLoading}
+            retrying={groups.isLoading || groups.isFetchingNextPage}
           >
             整理结果暂时读不出来。
           </ErrorBanner>
         ) : groups.isLoading && items.length === 0 ? (
-          <p className="py-8 text-center text-meta text-fg-subtle">正在读取整理结果…</p>
+          <p className="py-8 text-center text-meta text-fg-subtle">
+            正在读取整理结果…
+          </p>
         ) : isEmpty ? (
           <EmptyState
             title={emptyTitle(statusInfo?.analyzed ?? 0)}
@@ -332,8 +368,15 @@ export default function Similarity() {
             dense
           />
         ) : (
-          <div>
-            {items.map((group) => (
+          <Virtuoso
+            data={items}
+            useWindowScroll
+            overscan={200}
+            increaseViewportBy={{ top: 500, bottom: 700 }}
+            defaultItemHeight={240}
+            computeItemKey={(_index, group) => group.id}
+            endReached={loadMoreGroups}
+            itemContent={(_index, group) => (
               <SimilarityGroupCard
                 key={group.id}
                 group={group}
@@ -350,32 +393,58 @@ export default function Similarity() {
                   })
                 }
                 onIgnore={() =>
-                  void handleUpdate(group.id, { ignored: group.status !== "ignored" })
+                  void handleUpdate(group.id, {
+                    ignored: group.status !== "ignored",
+                  })
                 }
                 onPick={() => void handlePickGroup(group.id)}
                 onCompare={(left, right) => setComparePair([left, right])}
                 busy={groups.update.isPending || groups.batch.isPending}
               />
-            ))}
-          </div>
+            )}
+          />
         )}
 
-        {groups.page && groups.page.total > items.length ? (
+        {groups.isError && items.length > 0 ? (
+          <ErrorBanner
+            className="mt-4 rounded-xl"
+            kind="warning"
+            onRetry={() =>
+              groups.isFetchNextPageError
+                ? loadMoreGroups()
+                : void groups.refetch()
+            }
+            retrying={groups.isLoading || groups.isFetchingNextPage}
+          >
+            {groups.isFetchNextPageError
+              ? "后续分组读取失败，已加载的分组仍可整理。"
+              : "整理结果更新失败，仍显示上次读取到的分组。"}
+          </ErrorBanner>
+        ) : null}
+
+        {groups.hasNextPage ? (
           <div className="mt-4 flex justify-center">
             <button
               type="button"
               className="btn"
-              onClick={() => setLimit((current) => current + 60)}
-              disabled={groups.isLoading}
+              onClick={loadMoreGroups}
+              disabled={groups.isFetchingNextPage}
             >
-              再显示 60 组（还有 {groups.page.total - items.length} 组）
+              {groups.isFetchingNextPage
+                ? "正在读取下一批分组…"
+                : `再显示 60 组（还有 ${Math.max(0, (groups.page?.total ?? items.length) - items.length)} 组）`}
             </button>
           </div>
         ) : null}
 
         {selectedIds.size > 0 ? (
-          <div className="similarity-actions" data-testid="similarity-batch-bar">
-            <span className="text-meta text-fg-muted">已选 {selectedIds.size} 组</span>
+          <div
+            className="similarity-actions"
+            data-testid="similarity-batch-bar"
+          >
+            <span className="text-meta text-fg-muted">
+              已选 {selectedIds.size} 组
+            </span>
             <button
               type="button"
               className="btn btn-sm"
@@ -474,11 +543,17 @@ function AnalyzeButton({ onStarted }: { onStarted: () => void }) {
   const start = useMutation({
     mutationFn: () => aiJobsApi.start("similarity", "incremental"),
     onSuccess: () => {
-      pushToast({ kind: "info", message: "已加入分析队列，跑完自动刷新整理结果" });
+      pushToast({
+        kind: "info",
+        message: "已加入分析队列，跑完自动刷新整理结果",
+      });
       onStarted();
     },
     onError: (error) => {
-      pushToast({ kind: "error", message: `没能启动分析：${describeError(error)}` });
+      pushToast({
+        kind: "error",
+        message: `没能启动分析：${describeError(error)}`,
+      });
     },
   });
 
