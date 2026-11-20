@@ -1059,6 +1059,48 @@ test("那年今日按月日找出往年同一天拍过照的相册", async ({ re
   expect(invalid.status()).toBe(400);
 });
 
+/**
+ * 把列表里出现的相册按出现顺序收集起来。
+ *
+ * 只滚到底再抓一次是不够的：虚拟列表只挂载视口附近的卡片，
+ * 一次跳转会把中间那些整段跳过 —— 目标可能从头到尾没进过 DOM。
+ * 逐屏往下滚一遍，按首次出现的顺序攒，才等于列表本身的顺序。
+ */
+async function collectAlbumIds(page: Page, ids: string[]) {
+  const found: string[] = [];
+  const seen = new Set<string>();
+  const main = page.locator("main");
+  await main.evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await page.waitForTimeout(300);
+  for (;;) {
+    const links = await page
+      .locator('main [data-virtuoso-scroller] a[href^="/comic/albums/"]')
+      .evaluateAll((nodes) =>
+        nodes.map((node) =>
+          decodeURIComponent(
+            node.getAttribute("href")!.slice("/comic/albums/".length),
+          ),
+        ),
+      );
+    for (const id of links) {
+      if (ids.includes(id) && !seen.has(id)) {
+        seen.add(id);
+        found.push(id);
+      }
+    }
+    const done = await main.evaluate((element) => {
+      const before = element.scrollTop;
+      element.scrollTop = before + element.clientHeight * 0.8;
+      return element.scrollTop + element.clientHeight >= element.scrollHeight - 4;
+    });
+    if (done) break;
+    await page.waitForTimeout(150);
+  }
+  return found;
+}
+
 test("六个列表的最近改排序使用真实修改时间", async ({ page }) => {
   // 列表里含未读页，未读属于漫画工作台：素材取漫画根，整条用例在漫画模式下跑。
   await setWorkbenchMode(page.request, "comic");
@@ -1138,29 +1180,9 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
             .click();
         }
         await expect
-          .poll(async () => {
-            await page.locator("main").evaluate((element) => {
-              element.scrollTop = element.scrollHeight;
-            });
-            return page
-              .locator(
-                'main [data-virtuoso-scroller] a[href^="/comic/albums/"]',
-              )
-              .evaluateAll(
-                (links, expected) =>
-                  [
-                    ...new Set(
-                      links.map((link) =>
-                        decodeURIComponent(
-                          link
-                            .getAttribute("href")!
-                            .slice("/comic/albums/".length),
-                        ),
-                      ),
-                    ),
-                  ].filter((id) => expected.includes(id)),
-                [...expected],
-              );
+          .poll(async () => await collectAlbumIds(page, [...expected]), {
+            // 逐屏滚一遍要时间：列表长的时候比默认的 5 秒长。
+            timeout: 30_000,
           })
           .toEqual([...expected]);
       });
@@ -1292,37 +1314,19 @@ test("六个列表支持按最近看排序，集合与标签具有当前页排�
     for (const [path, expected] of pages) {
       await test.step(path, async () => {
         await page.goto(`${path}?q=${encodeURIComponent(taggedSortPrefix)}`);
+        // 漫画侧的叶级目录叫「卷」（作品 / 系列 / 卷 是漫画自己的层级），
+        // 搜索框的说法跟着走。
         await expect(
-          page.getByRole("combobox", { name: "搜索相册或标签" }),
+          page.getByRole("combobox", { name: "搜索卷或标签" }),
         ).toHaveValue("");
         await page.getByRole("button", { name: "排序", exact: true }).click();
         await page
           .getByRole("button", { name: "按最近看", exact: true })
           .click();
         await expect
-          .poll(async () => {
-            await page.locator("main").evaluate((element) => {
-              element.scrollTop = element.scrollHeight;
-            });
-            return page
-              .locator(
-                'main [data-virtuoso-scroller] a[href^="/comic/albums/"]',
-              )
-              .evaluateAll(
-                (links, expected) =>
-                  [
-                    ...new Set(
-                      links.map((link) =>
-                        decodeURIComponent(
-                          link
-                            .getAttribute("href")!
-                            .slice("/comic/albums/".length),
-                        ),
-                      ),
-                    ),
-                  ].filter((id) => expected.includes(id)),
-                [...expected],
-              );
+          .poll(async () => await collectAlbumIds(page, [...expected]), {
+            // 逐屏滚一遍要时间：列表长的时候比默认的 5 秒长。
+            timeout: 30_000,
           })
           .toEqual([...expected]);
         await page
@@ -2410,7 +2414,7 @@ test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page 
   await setWorkbenchMode(page.request, "comic");
   await page.goto("/comic/library");
   await expect(
-    page.getByRole("combobox", { name: "搜索相册或标签" }),
+    page.getByRole("combobox", { name: "搜索卷或标签" }),
   ).toBeVisible();
 
   // 顶栏控件不能把整页撑宽，否则窄屏下会出现横向滚动。
@@ -2566,8 +2570,8 @@ test("图库的视图筛选条紧贴在网格上方", async ({ page, request }) 
   // 首页是发现页，目录清单在结构页里。
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic/library");
-  // 叶级目录两侧都叫「相册」：视图 chip 的名字用它。
-  const chip = page.getByRole("button", { name: /^相册/ });
+  // 视图 chip 说的是叶级目录的类型词：照片侧「相册」，漫画侧「卷」。
+  const chip = page.getByRole("button", { name: /^卷/ });
   await expect(chip).toBeVisible();
   await chip.scrollIntoViewIfNeeded();
 
@@ -2576,7 +2580,7 @@ test("图库的视图筛选条紧贴在网格上方", async ({ page, request }) 
   // 用户滚到网格时控件已经不在视野里。
   const order = await page.evaluate(() => {
     const chipButton = [...document.querySelectorAll("button")].find((el) =>
-      (el.textContent ?? "").trim().startsWith("相册"),
+      (el.textContent ?? "").trim().startsWith("卷"),
     );
     const strip = chipButton?.closest(".filter-strip");
     const content = strip?.parentElement?.parentElement;

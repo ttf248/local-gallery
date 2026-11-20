@@ -574,7 +574,10 @@ test("窄屏阅读器不再显示右侧悬浮控件，阅读设置收进底部�
   await toolbar.getByRole("button", { name: "双页" }).click();
   await expect(page.getByText("1–2 /")).toBeVisible();
 
-  // 工具条让开后，图片右三分之一可以正常翻到下一张。
+  // 翻页热区跟着阅读方向走：右→左时下一页在左边，点右半屏是往回翻。
+  // 这条用例要验的是「工具条让开后热区仍然可用」，所以先切到左→右，
+  // 让「右三分之一翻到下一页」这句断言仍然成立。
+  await page.keyboard.press("l");
   await toolbar.getByRole("button", { name: "单页" }).click();
   await expect(page.getByText(new RegExp(`^1 / ${total}$`))).toBeVisible();
   await page.mouse.click(360, 300);
