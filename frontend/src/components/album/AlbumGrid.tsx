@@ -10,7 +10,6 @@ import { Virtuoso, VirtuosoGrid, type ListProps } from "react-virtuoso";
 import BulkActions from "./BulkActions";
 import SelectionCard from "./SelectionCard";
 import { useSelectionStore } from "../../store/selectionStore";
-import { decodeFavPath } from "../../utils/path";
 import AlbumCard, { type CardData, type CoverRatio } from "./AlbumCard";
 import AlbumContextMenu from "./AlbumContextMenu";
 import PropertiesDialog from "../common/PropertiesDialog";
@@ -18,6 +17,7 @@ import { useFavorites } from "../../hooks/useFavorites";
 import { useAppMode } from "../../hooks/useAppMode";
 import { useElementSize } from "../../hooks/useElementSize";
 import { favoriteResourceId } from "../../utils/path";
+import { toSelectionItems } from "../../utils/selectionItems";
 import { coverRatioForMode } from "../../utils/workbench";
 import { useUIStore, type ViewMode } from "../../store/uiStore";
 
@@ -56,6 +56,14 @@ interface Props {
    * 按卡片给：每张卡上要写的东西不一样（时刻各不相同）。
    */
   coverBadge?: (item: CardData) => ReactNode;
+  /**
+   * 是否由这个网格渲染批量动作条。
+   *
+   * 一页分成多个网格时（漫画书架的作品段与散卷段），动作条要只出现
+   * 一次 —— 两条一模一样的「选择已加载项」既难看也让人不知道该点哪条。
+   * 关掉之后由页面统一渲染一条。
+   */
+  showBulkActions?: boolean;
   /**
    * 封面右上角的额外动作（如「继续读」）。
    *
@@ -106,21 +114,12 @@ export default function AlbumGrid({
   coverBadge,
   overlayAction,
   note,
+  showBulkActions = true,
 }: Props) {
   const selectionActive = useSelectionStore((s) => s.active);
   const selectionItems = useSelectionStore((s) => s.items);
   const selectionBusy = useSelectionStore((s) => s.busy);
-  const selectedDescriptors = useMemo(
-    () =>
-      items.map((card) => ({
-        id: favoriteResourceId(card),
-        albumId: card.variant === "album" ? decodeFavPath(card.to) : undefined,
-        title: card.title,
-        contentKind: card.contentKind,
-        imageCount: card.imageCount ?? 0,
-      })),
-    [items],
-  );
+  const selectedDescriptors = useMemo(() => toSelectionItems(items), [items]);
   const [menu, setMenu] = useState<{
     x: number;
     y: number;
@@ -229,7 +228,9 @@ export default function AlbumGrid({
 
   return (
     <div ref={bindScrollParent}>
-      {selectable && <BulkActions loaded={selectedDescriptors} />}
+      {selectable && showBulkActions && (
+        <BulkActions loaded={selectedDescriptors} />
+      )}
       {mode === "list" ? (
         <div ref={widthRef}>
           <Virtuoso

@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link, useNavigate } from "react-router-dom";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
-import { SelectionToggle } from "../components/album/BulkActions";
+import BulkActions, { SelectionToggle } from "../components/album/BulkActions";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { ListFilterBar } from "../components/common/ListFilterBar";
@@ -24,6 +24,7 @@ import { decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import type { LibraryDashboardProgress } from "../api/library";
 import { workbenchCopy } from "../utils/workbench";
+import { toSelectionItems } from "../utils/selectionItems";
 import "../styles/library.css";
 
 /** 图库页自己的地址参数。 */
@@ -175,6 +176,19 @@ export default function Library() {
     [resumeOf],
   );
 
+  // 取下一页：整页一次算清。
+  //
+  // 分页是整页的事，不能只挂在某一段网格上 —— 页面被分成几段之后，
+  // 末尾那一段不一定是被滚到的那一段，取页的触发也就落空了。
+  const loadMore = useCallback(() => {
+    if (list.hasNextPage && !list.isFetchingNextPage) {
+      void list.fetchNextPage();
+    }
+  }, [list]);
+
+  // 批量选择的条目：整页一次算清，动作条也只出现一次。
+  const selectionItems = useMemo(() => toSelectionItems(cards), [cards]);
+
   // 跨卷导航的上下文：这一层的可见条目。
   //
   // 书架是选卷的地方，也是阅读器「上一卷 / 下一卷」的来路。少了它，
@@ -313,6 +327,8 @@ export default function Library() {
                 /* 书架：作品一排，没归入作品的散卷一排，标签一排。
                    分段摆开，层级才读得出来。 */
                 <>
+                  {/* 批量动作条只出现一次，覆盖整页已加载的条目。 */}
+                  <BulkActions loaded={selectionItems} />
                   {workCards.length > 0 ? (
                     <section className="mb-10">
                       <div className="section-heading">
@@ -322,15 +338,13 @@ export default function Library() {
                         </span>
                       </div>
                       <AlbumGrid
+                        selectable
+                        showBulkActions={false}
                         items={workCards}
                         variant={viewMode}
                         overlayAction={workOverlayAction}
                         note={workNote}
-                        onEndReached={() => {
-                          if (list.hasNextPage && !list.isFetchingNextPage) {
-                            void list.fetchNextPage();
-                          }
-                        }}
+                        onEndReached={loadMore}
                       />
                     </section>
                   ) : null}
@@ -344,13 +358,11 @@ export default function Library() {
                         </span>
                       </div>
                       <AlbumGrid
+                        selectable
+                        showBulkActions={false}
                         items={looseCards}
                         variant={viewMode}
-                        onEndReached={() => {
-                          if (list.hasNextPage && !list.isFetchingNextPage) {
-                            void list.fetchNextPage();
-                          }
-                        }}
+                        onEndReached={loadMore}
                       />
                     </section>
                   ) : null}
@@ -363,7 +375,11 @@ export default function Library() {
                           {tagCards.length} 个
                         </span>
                       </div>
-                      <AlbumGrid items={tagCards} variant={viewMode} />
+                      <AlbumGrid
+                        items={tagCards}
+                        variant={viewMode}
+                        onEndReached={loadMore}
+                      />
                     </section>
                   ) : null}
                 </>
@@ -372,11 +388,7 @@ export default function Library() {
                   selectable
                   items={cards}
                   variant={viewMode}
-                  onEndReached={() => {
-                    if (list.hasNextPage && !list.isFetchingNextPage) {
-                      void list.fetchNextPage();
-                    }
-                  }}
+                  onEndReached={loadMore}
                 />
               )
             ) : null}
