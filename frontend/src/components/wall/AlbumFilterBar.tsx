@@ -19,6 +19,12 @@ import AlbumFilterPanel from "./AlbumFilterPanel";
 interface Props {
   state: AlbumFilterState;
   facets?: AlbumFilterFacets;
+  facetsLoading?: boolean;
+  facetsError?: boolean;
+  retryingFacets?: boolean;
+  onRetryFacets?: () => void;
+  filterOpen: boolean;
+  onFilterOpenChange: (open: boolean) => void;
   /** 当前条件下的照片数。 */
   resultCount: number;
   /** 这本相册里的照片数（不含视频）。 */
@@ -42,6 +48,12 @@ interface Props {
 export default function AlbumFilterBar({
   state,
   facets,
+  facetsLoading,
+  facetsError,
+  retryingFacets,
+  onRetryFacets,
+  filterOpen,
+  onFilterOpenChange,
   resultCount,
   photoCount,
   unresolved,
@@ -57,7 +69,8 @@ export default function AlbumFilterBar({
   const reduced = filtered || state.collapse === true;
   const missing = unresolved.total;
   const collapseUsable =
-    !facets || (facets.similarity.available && facets.similarity.groupCount > 0);
+    !facets ||
+    (facets.similarity.available && facets.similarity.groupCount > 0);
   const collapseKnown = facets?.similarity.available === true;
 
   return (
@@ -65,10 +78,16 @@ export default function AlbumFilterBar({
       <FilterDropdown
         label="筛选"
         count={count}
+        open={filterOpen}
+        onOpenChange={onFilterOpenChange}
         panel={
           <AlbumFilterPanel
             state={state}
             facets={facets}
+            facetsLoading={facetsLoading}
+            facetsError={facetsError}
+            retryingFacets={retryingFacets}
+            onRetryFacets={onRetryFacets}
             onChange={onChange}
             onClear={onClear}
             /* 面板底下报的是「照片」：视频不参与筛选，没条件时也不该
@@ -83,9 +102,7 @@ export default function AlbumFilterBar({
       {(!collapseKnown || collapseUsable) && (
         <button
           type="button"
-          onClick={() =>
-            onChange({ ...state, collapse: !state.collapse })
-          }
+          onClick={() => onChange({ ...state, collapse: !state.collapse })}
           disabled={!collapseUsable}
           aria-pressed={state.collapse === true}
           title={
@@ -137,6 +154,8 @@ export default function AlbumFilterBar({
 interface DropdownProps {
   label: string;
   count: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   panel: ReactNode;
 }
 
@@ -149,11 +168,17 @@ interface DropdownProps {
  * 面板挂在视口上，不挂在按钮上：按钮在窄屏上贴着内容区的右边，
  * 面板右对齐到按钮就会有一半掉出屏幕。位置量出来再夹到视口里。
  */
-function FilterDropdown({ label, count, panel }: DropdownProps) {
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(
-    null,
-  );
+function FilterDropdown({
+  label,
+  count,
+  open,
+  onOpenChange,
+  panel,
+}: DropdownProps) {
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -163,12 +188,12 @@ function FilterDropdown({ label, count, panel }: DropdownProps) {
     const onPointerDown = (event: MouseEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return;
       if (menuRef.current?.contains(event.target as Node)) return;
-      setOpen(false);
+      onOpenChange(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
-      setOpen(false);
+      onOpenChange(false);
       triggerRef.current?.focus();
     };
     document.addEventListener("mousedown", onPointerDown);
@@ -177,7 +202,7 @@ function FilterDropdown({ label, count, panel }: DropdownProps) {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [onOpenChange, open]);
 
   useLayoutEffect(() => {
     if (!open) {
@@ -200,7 +225,10 @@ function FilterDropdown({ label, count, panel }: DropdownProps) {
       let top = rect.bottom + 6;
       if (top + height > window.innerHeight - margin) {
         const above = rect.top - 6 - height;
-        top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - height);
+        top =
+          above >= margin
+            ? above
+            : Math.max(margin, window.innerHeight - margin - height);
       }
       setPosition((previous) =>
         previous &&
@@ -224,7 +252,7 @@ function FilterDropdown({ label, count, panel }: DropdownProps) {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
         className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-meta transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${

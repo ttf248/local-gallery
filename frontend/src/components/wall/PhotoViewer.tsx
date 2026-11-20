@@ -220,6 +220,9 @@ export default function PhotoViewer({
   // 不记一笔就会发两次同样的请求。
   const loadedCountRef = useRef(items.length);
   const pendingRef = useRef(0);
+  // End 是显式跳到当前序列末尾：分页尚未结束时逐页加载，最后一页到达后
+  // 再定位，避免把「最后一张」误解为「目前已加载的最后一张」。
+  const pendingEndRef = useRef(false);
   const requestingRef = useRef(false);
   // 当前应该在第几张。
   //
@@ -349,11 +352,23 @@ export default function PhotoViewer({
     [items.length, onIndexChange, requestMore],
   );
 
-  // 新的一页到了：解锁请求，并兑现「用户已经按过的那几次」。
+  // 新的一页到了：解锁请求，并兑现待处理的 End 或「用户已经按过的次数」。
   useEffect(() => {
     if (items.length <= loadedCountRef.current) return;
     loadedCountRef.current = items.length;
     requestingRef.current = false;
+    if (pendingEndRef.current) {
+      if (hasNextPage && onLoadMore) {
+        requestMore();
+      } else {
+        pendingEndRef.current = false;
+        pendingRef.current = 0;
+        const lastIndex = items.length - 1;
+        indexRef.current = lastIndex;
+        onIndexChange(lastIndex);
+      }
+      return;
+    }
     if (pendingRef.current <= 0) return;
     const available = items.length - 1 - indexRef.current;
     const advance = Math.min(pendingRef.current, Math.max(0, available));
@@ -362,7 +377,7 @@ export default function PhotoViewer({
     const next = indexRef.current + advance;
     indexRef.current = next;
     onIndexChange(next);
-  }, [items.length, onIndexChange]);
+  }, [items.length, hasNextPage, onLoadMore, onIndexChange, requestMore]);
 
   // 位置只在真的被换到更靠后时才跟回去。
   //
@@ -499,8 +514,17 @@ export default function PhotoViewer({
           break;
         case "End":
           event.preventDefault();
-          indexRef.current = items.length - 1;
-          onIndexChange(items.length - 1);
+          if (items.length === 0) break;
+          pendingRef.current = 0;
+          if (hasNextPage && onLoadMore) {
+            pendingEndRef.current = true;
+            requestMore();
+          } else {
+            pendingEndRef.current = false;
+            const lastIndex = items.length - 1;
+            indexRef.current = lastIndex;
+            onIndexChange(lastIndex);
+          }
           break;
         case "+":
         case "=":

@@ -543,9 +543,7 @@ describe("PhotoAlbum", () => {
     fireEvent.click(screen.getByRole("button", { name: /人物 1/ }));
 
     await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent(
-        "personId=p_1",
-      ),
+      expect(screen.getByTestId("location")).toHaveTextContent("personId=p_1"),
     );
   });
 
@@ -557,9 +555,7 @@ describe("PhotoAlbum", () => {
     fireEvent.click(screen.getByRole("radio", { name: "已精选" }));
 
     await waitFor(() =>
-      expect(screen.getByTestId("location")).toHaveTextContent(
-        "personId=p_1",
-      ),
+      expect(screen.getByTestId("location")).toHaveTextContent("personId=p_1"),
     );
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent("picks=only"),
@@ -584,9 +580,7 @@ describe("PhotoAlbum", () => {
     expect(screen.getByRole("button", { name: /杭州市/ })).toBeInTheDocument();
     // 相似照片还没分析：这一档摆出来但点不动，并说清为什么。
     expect(screen.getByRole("radio", { name: "相似照片" })).toBeDisabled();
-    expect(
-      screen.getByTitle("还没有相似照片分析结果"),
-    ).toBeInTheDocument();
+    expect(screen.getByTitle("还没有相似照片分析结果")).toBeInTheDocument();
   });
 
   it("缺少分析结果时写明原因，不摆空选项", () => {
@@ -639,5 +633,79 @@ describe("PhotoAlbum", () => {
     fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
     expect(screen.getByRole("radio", { name: "已精选" })).toBeChecked();
     expect(screen.getByTitle("去掉这条条件：已精选")).toBeInTheDocument();
+  });
+
+  it("只在打开筛选面板时启用筛选维度查询", () => {
+    renderPhotoAlbum();
+
+    expect(useAlbumFilters).toHaveBeenLastCalledWith(album.id, false);
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+
+    expect(useAlbumFilters).toHaveBeenLastCalledWith(album.id, true);
+  });
+
+  it("筛选维度读取失败时显示重试入口", () => {
+    const refetch = vi.fn();
+    vi.mocked(useAlbumFilters).mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      isFetching: false,
+      refetch,
+    } as never);
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("筛选条件读取失败");
+    fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("筛选结果为空时可清除筛选，并与本身为空的相册区分", () => {
+    vi.mocked(useAlbumMedia).mockReturnValue({
+      data: {
+        pages: [
+          {
+            total: 0,
+            albumTotal: 0,
+            photoTotal: 0,
+            videoTotal: 0,
+            items: [],
+          },
+        ],
+      },
+      hasNextPage: false,
+      isLoading: false,
+      isError: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+    } as never);
+    renderPhotoAlbum(album, `/albums/${album.id}?personId=p_1`);
+
+    expect(
+      screen.getByRole("heading", { name: "没有符合筛选条件的照片" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "清除" }));
+
+    expect(
+      screen.getByRole("heading", { name: "相册里还没有媒体" }),
+    ).toBeInTheDocument();
+  });
+
+  it("改变筛选顺序后仍保留已经选中的条件", async () => {
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: /^筛选/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "已精选" }));
+    fireEvent.click(screen.getByRole("button", { name: /人物 1/ }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent("picks=only"),
+    );
+    expect(screen.getByTestId("location")).toHaveTextContent("personId=p_1");
   });
 });

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { forwardRef, type ReactNode } from "react";
 import type { ListRange } from "react-virtuoso";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -139,6 +139,36 @@ it("回报的分页范围换算回原始媒体序号", () => {
   expect(range.endIndex).toBe(29);
 });
 
+it("关闭大图后按目标照片把虚拟墙滚回对应行", () => {
+  render(
+    <PhotoWall
+      items={items}
+      total={3}
+      targetHeight={200}
+      hasNextPage={false}
+      isLoadingMore={false}
+      onLoadMore={() => {}}
+      onOpen={() => {}}
+      scrollToIndex={2}
+    />,
+  );
+
+  const target = screen.getByRole("button", { name: "播放 3.mp4" });
+  const rows = screen.getAllByTestId("wall-row");
+  const targetRow = rows.findIndex((row) =>
+    within(row).queryByRole("button", {
+      name: "播放 3.mp4",
+    }),
+  );
+
+  expect(target).toBeInTheDocument();
+  expect(targetRow).toBeGreaterThanOrEqual(0);
+  expect(virtuoso.scrollToIndex).toHaveBeenCalledWith({
+    index: targetRow,
+    align: "center",
+  });
+});
+
 it("虚拟窗口保持在安全范围内，避免 Virtuoso 一次性测量过多条目", () => {
   render(
     <PhotoWall
@@ -235,7 +265,8 @@ it("多选模式下点击照片是勾选，不是打开大图", () => {
 });
 
 // 窄屏上照片墙必须排得下两张：手机相册是一屏两三张，不是一屏一张。
-describe("照片墙的目标行高", () => {  it("宽屏时用密度设定值，不受宽度限制", () => {
+describe("照片墙的目标行高", () => {
+  it("宽屏时用密度设定值，不受宽度限制", () => {
     expect(effectiveTargetHeight(210, 1120)).toBe(210);
   });
 

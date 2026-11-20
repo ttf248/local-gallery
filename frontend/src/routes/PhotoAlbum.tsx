@@ -67,6 +67,7 @@ import { albumRoute, homeRoute } from "../utils/path";
 import { mediaCountParts } from "../utils/mediaCount";
 import {
   ALBUM_FILTER_PARAM,
+  albumFilterCount,
   albumFilterChips,
   albumFilterParams,
   parseAlbumFilter,
@@ -105,6 +106,7 @@ export default function PhotoAlbum({ album }: Props) {
   const density = usePhotoStore((s) => s.density);
   const setDensity = usePhotoStore((s) => s.setDensity);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [filterOpen, setFilterOpen] = useState(false);
   const smartMode = searchParams.get("view") === "smart";
   /* 筛选条件住在地址栏里：刷新、复制链接、前进后退都带着它。
      条件是离散的挑选，因此写回地址时不替换历史 —— 用户按一次后退
@@ -127,6 +129,7 @@ export default function PhotoAlbum({ album }: Props) {
   );
   const setSmartMode = useCallback(
     (enabled: boolean) => {
+      setFilterOpen(false);
       const next = new URLSearchParams(searchParams);
       if (enabled) next.set("view", "smart");
       else {
@@ -177,7 +180,7 @@ export default function PhotoAlbum({ album }: Props) {
   const multiRoot = useUIStore((s) => s.multiRoot);
 
   const rawMediaQuery = useAlbumMedia(album.id, undefined, !smartMode, filter);
-  const albumFiltersQuery = useAlbumFilters(album.id, !smartMode);
+  const albumFiltersQuery = useAlbumFilters(album.id, !smartMode && filterOpen);
   const smartGroupsQuery = useSmartAlbumGroups(album.id, dimension, smartMode);
   const smartSummary = smartGroupsQuery.data?.summary;
   const selectedGroup =
@@ -192,22 +195,17 @@ export default function PhotoAlbum({ album }: Props) {
   const mediaQuery = showingSmartGroup ? smartGroupMediaQuery : rawMediaQuery;
   const mediaItems = useMemo<LibraryMediaItem[]>(() => {
     // 原始照片墙与智能分组两边的页结构不同，但媒体项是同一种。
-    const pages = (mediaQuery.data?.pages ?? []) as LibraryPage<LibraryMediaItem>[];
+    const pages = (mediaQuery.data?.pages ??
+      []) as LibraryPage<LibraryMediaItem>[];
     return pages.flatMap((page) => page.items);
   }, [mediaQuery.data]);
   const mediaPage = mediaQuery.data?.pages[0];
   const total = mediaPage?.total ?? mediaItems.length;
-  const extras = useMemo(
-    () => albumPageExtras(mediaPage),
-    [mediaPage],
-  );
+  const extras = useMemo(() => albumPageExtras(mediaPage), [mediaPage]);
   const facets = albumFiltersQuery.data?.facets;
   /* 相册里的照片数（不含视频）：视频不参与分析类筛选，
      计数因此与筛选条上的口径一致。 */
-  const photoCount = Math.max(
-    0,
-    extras.albumTotal - extras.videoTotal,
-  );
+  const photoCount = Math.max(0, extras.albumTotal - extras.videoTotal);
   /* 墙上现在摆着几张照片：视频不参与分析类筛选，折叠也只对照片生效，
      拿媒体总数充数会让计数与页头对不上。 */
   const wallPhotoCount = extras.photoTotal || photoCount;
@@ -874,6 +872,12 @@ export default function PhotoAlbum({ album }: Props) {
                 <AlbumFilterBar
                   state={filter}
                   facets={facets}
+                  facetsLoading={albumFiltersQuery.isLoading}
+                  facetsError={albumFiltersQuery.isError}
+                  retryingFacets={albumFiltersQuery.isFetching}
+                  onRetryFacets={() => void albumFiltersQuery.refetch()}
+                  filterOpen={filterOpen}
+                  onFilterOpenChange={setFilterOpen}
                   resultCount={wallPhotoCount}
                   photoCount={photoCount}
                   unresolved={unresolved}
@@ -984,6 +988,34 @@ export default function PhotoAlbum({ album }: Props) {
                 </button>
               }
             />
+          ) : mediaQuery.isLoading && !mediaQuery.data ? (
+            <div
+              className="page-shell py-10 text-center text-body text-fg-muted"
+              aria-live="polite"
+            >
+              正在读取相册媒体…
+            </div>
+          ) : mediaItems.length === 0 && mediaQuery.data ? (
+            albumFilterCount(filter) > 0 ? (
+              <EmptyState
+                title="没有符合筛选条件的照片"
+                description="当前筛选条件没有匹配的照片。"
+                action={
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={clearFilter}
+                  >
+                    清除筛选
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                title="相册里还没有媒体"
+                description="这本相册里暂时没有可浏览的照片或视频。"
+              />
+            )
           ) : (
             <PhotoWall
               items={mediaItems}

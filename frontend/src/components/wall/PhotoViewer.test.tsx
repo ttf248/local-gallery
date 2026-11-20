@@ -299,6 +299,77 @@ describe("大图预览的连续浏览", () => {
     expect(onLoadMore).toHaveBeenCalled();
   });
 
+  it("End 键逐页加载后跳到相册的最后一张", async () => {
+    const firstPage = Array.from({ length: 10 }, (_, index) => ({
+      id: `first_${index}`,
+      kind: "image" as const,
+      name: `${index}.jpg`,
+      index,
+      kindIndex: index,
+    })) as LibraryMediaItem[];
+    const secondPage = Array.from({ length: 10 }, (_, index) => ({
+      id: `second_${index}`,
+      kind: "image" as const,
+      name: `second-${index}.jpg`,
+      index: 10 + index,
+      kindIndex: 10 + index,
+    })) as LibraryMediaItem[];
+    const lastPage = [
+      {
+        id: "last",
+        kind: "image" as const,
+        name: "last.jpg",
+        index: 20,
+        kindIndex: 20,
+      },
+    ] as LibraryMediaItem[];
+    const onLoadMore = vi.fn();
+    const onIndexChange = vi.fn();
+    const { rerender } = render(
+      <PhotoViewer
+        items={firstPage}
+        index={0}
+        albumName="测试相册"
+        totalCount={21}
+        hasNextPage
+        onLoadMore={onLoadMore}
+        onIndexChange={onIndexChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    fireEvent.keyDown(window, { key: "End" });
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <PhotoViewer
+        items={[...firstPage, ...secondPage]}
+        index={0}
+        albumName="测试相册"
+        totalCount={21}
+        hasNextPage
+        onLoadMore={onLoadMore}
+        onIndexChange={onIndexChange}
+        onClose={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(onLoadMore).toHaveBeenCalledTimes(2));
+
+    rerender(
+      <PhotoViewer
+        items={[...firstPage, ...secondPage, ...lastPage]}
+        index={0}
+        albumName="测试相册"
+        totalCount={21}
+        hasNextPage={false}
+        onIndexChange={onIndexChange}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => expect(onIndexChange).toHaveBeenCalledWith(20));
+  });
+
   it("还有下一页时下一张不灰：灰掉等于告诉用户后面没有了", () => {
     render(
       <PhotoViewer

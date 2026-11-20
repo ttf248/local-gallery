@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { AlbumFilterFacets } from "../../api/library";
+import ErrorBanner from "../common/ErrorBanner";
 import Segmented from "../common/Segmented";
 import {
   albumMonthInRange,
@@ -12,6 +13,10 @@ import {
 interface Props {
   state: AlbumFilterState;
   facets?: AlbumFilterFacets;
+  facetsLoading?: boolean;
+  facetsError?: boolean;
+  retryingFacets?: boolean;
+  onRetryFacets?: () => void;
   onChange: (next: AlbumFilterState) => void;
   onClear: () => void;
   /** 筛选后留下的照片数。 */
@@ -45,6 +50,10 @@ function Reason({ children }: { children: React.ReactNode }) {
 export default function AlbumFilterPanel({
   state,
   facets,
+  facetsLoading = false,
+  facetsError = false,
+  retryingFacets = false,
+  onRetryFacets,
   onChange,
   onClear,
   resultCount,
@@ -113,13 +122,27 @@ export default function AlbumFilterPanel({
         </button>
       </div>
 
+      {facetsError ? (
+        <ErrorBanner
+          kind={facets ? "warning" : "danger"}
+          className="mb-2"
+          onRetry={onRetryFacets}
+          retrying={retryingFacets}
+        >
+          {facets
+            ? "筛选条件更新失败，仍显示上次读取到的内容。"
+            : "筛选条件读取失败。"}
+        </ErrorBanner>
+      ) : null}
+      {facetsLoading && !facets ? (
+        <Reason>正在读取这本相册的筛选条件…</Reason>
+      ) : null}
+
       {/* 面板要能整个落在视口里：窄屏上它下面就是照片墙，
           盖住自己的入口比内容多几行更糟。 */}
       <div className="max-h-[min(56vh,460px)] overflow-y-auto pr-0.5">
         <SectionTitle>拍摄时间</SectionTitle>
-        {!facets ? (
-          <Reason>正在读取这本相册的分析结果…</Reason>
-        ) : !facets.time.available ? (
+        {!facets ? null : !facets.time.available ? (
           <Reason>{facets.time.reason}</Reason>
         ) : (
           <div className="space-y-0.5">
@@ -161,7 +184,9 @@ export default function AlbumFilterPanel({
                   {expanded && (
                     <div className="mt-0.5 flex flex-wrap gap-1 pl-2">
                       {months.map((bucket) => {
-                        const active = state.from === bucket.month && state.to === bucket.month;
+                        const active =
+                          state.from === bucket.month &&
+                          state.to === bucket.month;
                         const inRange = albumMonthInRange(state, bucket.month);
                         return (
                           <button
@@ -191,9 +216,7 @@ export default function AlbumFilterPanel({
         )}
 
         <SectionTitle>人物</SectionTitle>
-        {!facets ? (
-          <Reason>正在读取这本相册的分析结果…</Reason>
-        ) : !facets.people.available ? (
+        {!facets ? null : !facets.people.available ? (
           <Reason>{facets.people.reason}</Reason>
         ) : (
           <div className="max-h-[160px] space-y-0.5 overflow-y-auto">
@@ -222,9 +245,7 @@ export default function AlbumFilterPanel({
         )}
 
         <SectionTitle>地点</SectionTitle>
-        {!facets ? (
-          <Reason>正在读取这本相册的分析结果…</Reason>
-        ) : !facets.places.available ? (
+        {!facets ? null : !facets.places.available ? (
           <Reason>{facets.places.reason}</Reason>
         ) : (
           <div className="max-h-[160px] space-y-0.5 overflow-y-auto">
@@ -270,9 +291,8 @@ export default function AlbumFilterPanel({
         />
 
         <SectionTitle>画面</SectionTitle>
-        {!facets ? (
-          <Reason>正在读取这本相册的分析结果…</Reason>
-        ) : !facets.groupPhotos.available && !facets.similarity.available ? (
+        {!facets ? null : !facets.groupPhotos.available &&
+          !facets.similarity.available ? (
           <Reason>
             {facets.groupPhotos.reason || facets.similarity.reason}
           </Reason>
