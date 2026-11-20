@@ -99,10 +99,10 @@ export default function Me() {
  */
 function ReadingPanel() {
   const dashboard = useLibraryDashboard();
-  const items = dashboard.data?.dashboard.inProgress ?? [];
+  const items = dashboard.data?.dashboard.inProgress;
   const cards = useMemo(
     () =>
-      items.map((item) => ({
+      (items ?? []).map((item) => ({
         ...nodeSummaryToCard(item.album),
         progress: { index: item.pageIndex, total: item.pageCount },
       })),
