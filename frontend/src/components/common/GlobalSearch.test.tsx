@@ -281,3 +281,28 @@ describe("GlobalSearch 的搜索范围", () => {
     });
   });
 });
+
+describe("GlobalSearch 的作用域与结果页", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("在结果页换作用域时把作用域写进地址", async () => {
+    renderSearch("/photo/search?q=%E6%97%85%E8%A1%8C");
+    fireEvent.click(
+      screen.getByRole("button", { name: /搜索范围：相册、文件夹与标签的名字/ }),
+    );
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /画面/ }));
+
+    await waitFor(() => {
+      const location = new URL(
+        screen.getByTestId("location").textContent ?? "",
+        "http://local",
+      );
+      expect(location.pathname).toBe("/photo/search");
+      expect(location.searchParams.get("scope")).toBe("content");
+      // 关键词不丢。
+      expect(location.searchParams.get("q")).toBe("旅行");
+    });
+  });
+});

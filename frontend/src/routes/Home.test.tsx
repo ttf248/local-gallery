@@ -112,6 +112,9 @@ vi.mock("../hooks/useMediaFeed", () => ({
     years: [],
     unknown: 0,
     dateSources: {},
+    // 时间线工具条要按日期精度说话；这份固定数据里没有精度分布，
+    // 与真实 hook 的缺省一致（拿不到就是空分布，不是不存在）。
+    datePrecisions: {},
     total: 1,
     isLoading: false,
     isError: false,

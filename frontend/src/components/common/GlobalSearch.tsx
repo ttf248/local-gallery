@@ -27,7 +27,7 @@ import { albumCountUnit, collectionTypeWord, mediaUnit, workbenchCopy } from "..
 //   - 回车进入搜索结果页
 export default function GlobalSearch() {
   const location = useLocation();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const { mode } = useAppMode();
   const isSearchPage = location.pathname === searchRoute(mode);
@@ -43,6 +43,22 @@ export default function GlobalSearch() {
     setQuery(routeQuery);
     setScope(routeScope);
   }, [location.pathname, routeQuery, routeScope]);
+
+  /**
+   * 换作用域。
+   *
+   * 在搜索结果页上换，结果也要跟着换 —— 否则顶栏说「正在搜画面」，
+   * 页面还摆着名字的结果，两处各说各话。因此那里把作用域写进地址。
+   * 其它页面上作用域只是草稿：它决定回车去哪一档的结果页。
+   */
+  function changeScope(next: SearchScope) {
+    setScope(next);
+    if (!isSearchPage) return;
+    const nextParams = new URLSearchParams(params);
+    if (next === "content") nextParams.set(SEARCH_SCOPE_PARAM, "content");
+    else nextParams.delete(SEARCH_SCOPE_PARAM);
+    setParams(nextParams, { replace: true });
+  }
 
   // 叶级目录两侧都叫「相册」：一个词，不必按侧记两套。
   const albumWord = workbenchCopy(mode).albumTypeLabel;
@@ -110,7 +126,7 @@ export default function GlobalSearch() {
         <SearchScopeMenu
           value={scope}
           onChange={(next) => {
-            setScope(next);
+            changeScope(next);
             setOpen(true);
             setActiveIndex(-1);
           }}

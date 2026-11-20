@@ -50,6 +50,11 @@ test.describe("本机智能照片功能", () => {
     await expect(searchInput).toBeFocused();
     await searchInput.fill("入口");
     await page.getByRole("button", { name: "搜索照片" }).click();
-    await expect(page.getByText("还没有可搜索的文字结果")).toBeVisible();
+    // 画面模型没就绪：系统退成只查图片里的文字，零结果要说清是环境
+    // 没准备好 —— 用户要的仍是画面，不能写成「库里没有」。
+    await expect(page.getByText("画面搜索还没准备好")).toBeVisible();
+    await expect(
+      page.getByText(/图片里的文字已经查过了，确实没有匹配/),
+    ).toBeVisible();
   });
 });

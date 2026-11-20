@@ -236,8 +236,8 @@ export default function ContentSearchResults({
 
   return (
     <EmptyState
-      title={idleTitle}
-      description={idleDescription}
+      title={submitted ? "正在搜索…" : idleTitle}
+      description={submitted ? "正在按当前条件检索照片。" : idleDescription}
       icon={<SearchIcon size={24} />}
       dense
     />
