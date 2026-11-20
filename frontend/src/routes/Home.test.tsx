@@ -53,6 +53,7 @@ const mocks = vi.hoisted(() => ({
   listItems: undefined as LibraryNodeSummary[] | undefined,
   recent: [] as LibraryNodeSummary[],
   onThisDay: [] as unknown[],
+  manifest: undefined as unknown,
 }));
 
 vi.mock("../api/prefs", () => ({ historyApi: { list: vi.fn() } }));
@@ -137,20 +138,6 @@ vi.mock("../components/album/AlbumGrid", () => ({
   ),
 }));
 vi.mock("../hooks/useLibrary", () => {
-  const manifest = {
-    revision: 1,
-    scannedAt: "2026-10-31T00:00:00Z",
-    roots: [{ id: "r_fixture", name: "素材", childCount: 1 }],
-    statistics: {
-      rootCount: 1,
-      albumCount: 1,
-      photoAlbumCount: 1,
-      comicAlbumCount: 1,
-      collectionCount: 0,
-      tagCount: 0,
-      warningCount: 0,
-    },
-  };
   const query = (items: LibraryNodeSummary[]) => ({
     data: { items, missing: [], total: items.length },
     isLoading: false,
@@ -160,7 +147,7 @@ vi.mock("../hooks/useLibrary", () => {
   });
   return {
     useLibraryOverview: () => ({
-      manifest,
+      manifest: mocks.manifest,
       nodes: mocks.items,
       tags: [],
       isLoading: false,
@@ -182,7 +169,10 @@ vi.mock("../hooks/useLibrary", () => {
       },
       isLoading: false,
     }),
-    useLibraryManifest: () => ({ data: { manifest }, isLoading: false }),
+    useLibraryManifest: () => ({
+      data: { manifest: mocks.manifest },
+      isLoading: false,
+    }),
     useLibraryUnreadAlbums: () => query(mocks.items),
     useLibraryChildren: () => query(mocks.items),
     // 照片侧的「最近加入」专区。
@@ -225,6 +215,20 @@ beforeEach(() => {
   mocks.listItems = undefined;
   mocks.recent = [];
   mocks.onThisDay = [];
+  mocks.manifest = {
+    revision: 1,
+    scannedAt: "2026-10-31T00:00:00Z",
+    roots: [{ id: "r_fixture", name: "素材", childCount: 1 }],
+    statistics: {
+      rootCount: 1,
+      albumCount: 2,
+      photoAlbumCount: 1,
+      comicAlbumCount: 1,
+      collectionCount: 0,
+      tagCount: 0,
+      warningCount: 0,
+    },
+  };
   vi.mocked(useLibraryList).mockImplementation(
     (query) =>
       listFixture(
@@ -349,6 +353,32 @@ it("照片工作台不显示继续阅读与未读区", async () => {
   expect(screen.queryByTestId("unread-hero")).toBeNull();
 });
 
+it("照片工作台为空时只按照片统计，并指出漫画库仍有内容", () => {
+  useAppModeStore.setState({ preference: "photo", hydrated: true });
+  mocks.manifest = {
+    ...(mocks.manifest as object),
+    statistics: {
+      rootCount: 1,
+      albumCount: 1,
+      photoAlbumCount: 0,
+      comicAlbumCount: 1,
+      collectionCount: 0,
+      tagCount: 0,
+      warningCount: 0,
+    },
+  };
+
+  renderHome("/");
+
+  expect(screen.getByText("照片这边还没有内容")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "去漫画库看看" })).toHaveAttribute(
+    "href",
+    "/comic",
+  );
+  expect(screen.queryByTestId("photo-feed-hero")).toBeNull();
+  expect(screen.queryByText("1 本相册")).toBeNull();
+});
+
 // 漫画侧：阅读进度与未读是两块独立区块，不互相嵌套。
 it("只有一本在读时阅读区和未读区独立呈现", async () => {
   renderHome();
@@ -429,5 +459,7 @@ it("照片首页给出最近加入的相册", async () => {
   ];
   renderHome();
   await waitFor(() => expect(screen.getByText("最近加入")).toBeTruthy());
-  expect(screen.getByTestId("album-grid").textContent).toContain("刚进门的相册");
+  expect(screen.getByTestId("album-grid").textContent).toContain(
+    "刚进门的相册",
+  );
 });
