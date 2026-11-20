@@ -217,8 +217,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 集合的资源 ID。顶层集合与根目录下的相册没有上级集合，该字段为空；客户端据此
 逐级向上解析，拼出「存照 / 萍乡中学 / 3班running man」这样的面包屑。散图
 （虚拟相册）是某个目录里的散落媒体，与同名集合同处一个目录，因此它的上级是那个
-集合本身而不是集合的父目录。漫画工作台的首页按作品索引，索引项取自根目录下的集合
-（集合的成员由服务端聚合成 `albumCount`）。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
+集合本身而不是集合的父目录。作品索引的索引项取自根目录下的集合（集合的成员由服务端
+聚合成 `albumCount`）—— 那一面索引现在住在书架里。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
 `mediaCount` 和 `folderSize` 均包含所有后代，`childCount` 仍只表示直属子项数量。
 相册摘要的 `hasCustomCover` 为 `true` 时表示当前 revision 已应用用户设置的人工封面；
 失效的覆盖记录不会出现在此字段中。
@@ -886,8 +886,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
   `hiddenNavItems` 是侧栏里被收起的导航项 key 列表，存的是生效的清单：不在列表里的入口
   才显示在侧栏。key 形如 `photo.recents`、`comic.unread`，字符集限定为小写字母、数字、
   点与连字符；非法 key 返回 `400 invalid_nav_item`，超过 32 项返回 `400 invalid_nav_items`。
-  服务端只保存与透传 key，不解释它的含义：新增导航项不必改后端。缺省收起照片侧的
-  `photo.recents`、`photo.favorites`、`photo.picks` 三项。
+  服务端只保存与透传 key，不解释它的含义：新增导航项不必改后端，条目清单变了也不必
+  迁移旧 key。缺省不收起任何一项（`hiddenNavItems` 为空数组）。
 - `GET /api/favorites`：返回 `{ "favorites": ["<resourceId>"] }`。
 - `POST /api/favorites`、`DELETE /api/favorites`：body 为 `{ "resourceId": "a_... | c_... | smart:<tag>" }`。
 - `POST /api/favorites/prune`：按当前资源目录移除已失效相册/集合 ID，返回 `{ "removed": ["<resourceId>"] }`，不访问 ID 对应的文件路径；智能标签保留。资源目录尚未完成首次加载时返回 `409`，不会删除收藏。

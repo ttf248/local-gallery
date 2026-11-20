@@ -74,7 +74,7 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 
 ### 自动发现文件变化
 
-目录监听、增量扫描与分析任务串成一条链路，全部在后台运行，复用既有的扫描任务与分析任务中心，不新增第二套任务体系。
+文件与目录监听、增量扫描与分析任务串成一条链路，全部在后台运行，复用既有的扫描任务与分析任务中心，不新增第二套任务体系。
 
 - **监听**：`ChangeWatcher` 基于 fsnotify（Windows 上走 `ReadDirectoryChangesW`）监听已配置的媒体根。只登记扫描器会读取的目录：被排除规则跳过的目录、符号链接、独立配置的子根与带 `.nomedia` 标记的目录都不监听。新建目录自动登记，删除目录自动摘掉。Windows 的目录监听不是递归的，因此每个目录各占一个句柄与一块事件缓冲区（8 KiB）；监听目录数量有上限（1 万），超出部分与事件溢出由定期校验兜底，内存与句柄因此有界。单个媒体根读不到（离线磁盘、断开的网络共享）不算监听降级，其余根照常工作。
 - **去抖与合并**：连续事件在静默窗口（2 秒）内合并成一批，批量复制因此只产生一次同步；单批最长等待 30 秒，避免持续写入永远等不到静默。文件仍在写入时推迟提交：连续两次观测之间大小没有变化才算写完，因此写了一半的图片不会进索引。批次在提交前先从待处理集合里换走，换走之后这一批只归提交逻辑所有：事件处理往新批次里写，两边不碰同一份数据 —— 高频写入时否则会撞上「并发读写同一张表」而整个进程退出。提交期间到达的新事件不会被搁浅：提交收尾时若还有新变化在等着，就重新排一次提交 —— 提交线程已经醒过一次，不会再有第二次唤醒，把计时器抹掉等于让这批变化一直等到下一次文件变化才有机会提交。文件一直写不完时按当前状态强行提交，但提交过的那一批不再留在待处理集合里，避免同一批变化被交两次。
@@ -117,7 +117,7 @@ ID 只能证明扫描时的身份。每次媒体、批量元数据及系统打�
 | | `smart_album_directory.go` | 跨相册的目录列表与分页 |
 | | `smart_album_overrides.go` | 用户改名与隐藏，以及分组换号时的迁移 |
 | | `smart_album_refresh.go` | 全库刷新：后台任务、进度与取消 |
-| 自动发现 | `library_sync.go` | 目录监听、增量扫描与定期校验的编排 |
+| 自动发现 | `library_sync.go` | 文件与目录监听、增量扫描与定期校验的编排 |
 | | `library_sync_analysis.go` | 自动分析排队、任务结算与智能相册重算 |
 
 ### 四层数据的边界与统一规则
@@ -465,7 +465,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 服务端列表接口的 `kind` 查询参数（`photo` / `comic`）必填，缺失或非法返回 `400 invalid_kind`：子节点、未读、随机、标签、标签相册与搜索按目录属性过滤。集合继承所属目录的属性，因此同样参与过滤——漫画目录下的集合不会出现在照片工作台里。它的 `albumCount` 恒为全部后代，但集合的所有成员都在同一媒体根（同属性），所以这个计数天然按侧，无需再拆一份。manifest 的 `albumCount` 是全库总数，另给 `photoAlbumCount` / `comicAlbumCount`，集合同理有 `photoCollectionCount` / `comicCollectionCount`。
 - 过滤发生在分页之前：发布时预切好的有序切片按属性筛成子序列，游标里的偏移是过滤后列表的偏移。属性进游标作用域，跨属性复用被拒绝为 `invalid_cursor`。
 - 未读/在读派生按 `(catalogRevision, activityRevision)` 缓存，缓存与属性无关，属性过滤是请求期后置筛选。未读下标只收漫画相册：照片目录下的相册不记录阅读进度，没有「未读」这个概念。
-- 列表页的筛选状态在地址里：`q`（关键词）、`sort`（排序）、`min`（最少图数），首页另有 `view`（视图）与 `year`（年份）。链接可以分享，浏览器后退能取消筛选，刷新页面也不会丢。参数名与解析只有一份实现（`utils/listFilterParams.ts`），状态只有一个来源（`hooks/useListFilters.ts` 读 `useSearchParams`）—— 不再另存一份在 localStorage 里。
+- 列表页的筛选状态在地址里：`q`（关键词）、`sort`（排序）、`min`（最少张数），图库另有 `view`（视图）。`year`（年份）目前没有列表按它过滤：集合页的年份索引仍把它写进地址，但下方的子项网格不读它（后端已支持按年份过滤）。链接可以分享，浏览器后退能取消筛选，刷新页面也不会丢。参数名与解析只有一份实现（`utils/listFilterParams.ts`），状态只有一个来源（`hooks/useListFilters.ts` 读 `useSearchParams`）—— 不再另存一份在 localStorage 里。
 - 排序另有一层回落：用户亲手选过的顺序对所有列表页生效，存在 `store/sortPreference.ts`；地址里的 `sort` 是逐页的显式选择，优先于它。浏览足迹页的天然顺序是「按最近看」，各页没有显式选择时用它。其余筛选不再跨页共享 —— 每页的筛选是这一页的事。
 - 工具条的全局搜索框使用独立草稿，列表页自身的 `q` 仍只负责列表筛选；只有 `/photo/search` 与 `/comic/search` 从地址里的 `q` 预填。回车若没有选中某条建议，导航到名称搜索结果页并把关键词写进 `q`；输入时不改当前地址，浏览器返回仍恢复原列表筛选。换排序与视图用 `push`（后退键能退回上一个排序）。
 - 查询键集中注册在 `api/queryKeys.ts`：媒体库（`libraryQueryKeys`）、偏好、收藏与最近访问各只有一处定义。键散落在各处各拼各的，「刷新列表」就不知道该失效哪些 —— 手抄一遍字符串，漏一个就有一条旧数据留在界面上。注册表只放键，不放取数函数：取数函数属于各自的 api 模块，测试替换那一层时不必连带替换这里。
@@ -476,7 +476,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 模式也决定视觉基调：`<html data-mode>` 由 `WorkbenchModeProvider` 写入，CSS token 按 `:root[data-theme][data-mode]` 组合覆盖（`--brand*` / `--feature-bg` / `--mode-tint`），画布与文字保持中性灰阶。封面画幅同样按侧取默认值（照片 1:1、漫画 2:3），见 `utils/workbench.ts` 的 `coverRatioForMode`。
 - 首页首屏按侧各成一套：漫画是「继续阅读 / 未读」两块面板，照片是「随手看看」的跨相册照片墙，随后依次是「接着看」「那年今日」「最近加入」与一屏主题预览。照片墙的数据源是 `GET /api/library/media-feed?kind=photo&scope=random`（随机几本相册的照片，服务端交错排列），组件在 `components/home/PhotoFeedHero.tsx` 与 `components/wall/PhotoStrip.tsx`（只铺给定张数、不滚动的静态照片条），翻页由 `hooks/useMediaFeed.ts` 负责。照片墙的标题是一个入口，指向随手看看专页 `/photo/random`（`routes/RandomPhotos.tsx`）：那一页的数据源换成 `scope=stream` 的随机长流（`backend/internal/services/library_feed_stream.go`）—— 游标是长流里的照片下标，同一颗种子给出同一条长流，翻页与重进都接得上；走完一圈会绕回开头再来一圈。排布用瀑布流（`components/wall/PhotoMasonry.tsx` 与 `masonryLayout.ts`）：每张按原比例落进当前最矮的一列，与照片墙的 justified（凑行）不同。渲染按视口裁（`hooks/useVisibleWindow.ts`），一次排几千张也不会把 DOM 撑爆。页面上只有「换一批」这一个动作 —— 没有排序、筛选与「最近」。
 - **首页是发现页，不是入口页。** 照片侧首页不列全部相册（那是图库）、不列年份索引（那是探索）、不摆完整主题墙（那是探索）；页头只留一句事实（多少本相册、上次更新什么时候）与两个动作（进图库、重新扫描）。漫画侧首页只讲续读与未读，作品与卷的清单在书架 `/comic/library` 里：漫画按作品与卷组织，目录结构对它不是主要路径。
-- 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，组件 `components/home/ResumeHero.tsx`（首页首屏专区）、侧栏的「继续」区与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。
+- 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，组件 `components/home/ResumeHero.tsx`（首页首屏专区）与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。
 - 措辞与计数单位的唯一真相源是 `utils/workbench.ts` 的词表（`workbenchCopy(mode)`），两侧共用组件从**卡片自身的** `contentKind` 取词，而不是从当前工作台取：一张卡永远知道自己属于照片还是漫画，取不到时按照片兜底。照片说「张 / 本 / 浏览」，漫画说「页 / 卷 / 阅读」。
 - 「那年今日」的下标表在发布期建好：把各相册从文件名推断出的拍摄日期按月-日归桶（`library_page.go` 的 `onThisDay`），请求期只按属性与年份过滤。它靠拍摄时间成立，因此只在照片侧有意义 —— 漫画侧不出现这一段。
 - 索引维度按侧分：照片按年份（`components/home/YearTimeline.tsx`），漫画按作品（`components/home/SeriesTimeline.tsx`，集合即作品）。两者共用 `components/home/Timeline.tsx` 的视觉骨架。照片侧年份卡的主操作是打开年份照片墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`GET /api/library/media-feed?kind=photo&scope=year&year=<年份>` 按年份归组取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。
@@ -486,7 +486,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 `AppShell` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
 
 - TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
-- 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片库首页）、`/photo/library`（图库）、`/photo/explore`（探索）、`/photo/me/:tab`（我的）、`/photo/search`（名称搜索结果）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画库首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
+- 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片首页）、`/photo/library`（图库）、`/photo/explore`（探索）、`/photo/me/:tab`（我的）、`/photo/search`（名称搜索结果）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
 - **图库（`routes/Library.tsx`）是结构页，不是一张清单。** 左侧 `components/library/FolderTree.tsx` 按需展开真实目录（媒体根 → 集合 → 相册），右侧是当前这一层的内容；当前层、排序、最少张数与视图都住在地址里（`node` 参数加 `hooks/useListFilters.ts` 的查询参数），复制链接能落到同一个文件夹。集合卡在图库里指向它的下一层（`node` 参数），而不是跳去集合页 —— 换目录在图库里比跳出去再跳回来短；集合的规范地址仍是集合页，收藏、属性与复制链接都用规范地址。智能主题（时间、人物、地点、场景的聚合）不进图库：拿自动分组冒充文件夹树，用户就找不到自己的文件。
 - 足迹页在 `/photo/travels`，地点详情在 `/photo/travels/place/<六位区划码>`。筛选状态（时间区间 `from`/`to`、时间跨度 `span`、归并粒度 `level`）放查询参数，时间区间是跨层级的一维：换粒度与下钻都带着它，缺省表示全部时间。`span` 取 `1y`/`3y`/`5y`/`10y`/`all`，缺省 `5y`：跨度圈的就是这一段，下面的行程目录与地图随之过滤。旧的 `/photo/locations` 与坐标聚类相册 ID 一并作废，不留兼容跳转。
 - 足迹页的组成：`routes/Travels.tsx` 是通栏两栏的骨架（抬头一条带：最左是跨度筛选，随后是规模带，右边是粒度控件，页面名只留在 `sr-only` 的 `h1` 里；正文左栏是行程目录，右栏是地图，`position: sticky` 随页面滚动），`components/travels/TravelMiniMap.tsx` 是右栏那块只读地图（离线行政边界 + 照片位置的点云，320–440 像素见方；`scope` 决定画面是裁到有数据的区域还是整张地图），`components/travels/TravelTrips.tsx` 是行程目录（按年分组，年份倒序，一段一张卡片，宽屏两栏并排，点开才就地展开照片）。段的照片按需取回：`hooks/useChinaLocations.ts` 的 `useChinaTripMedia` 在展开或点开时才发请求。
@@ -538,7 +538,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - `useVideoActivity` 收拢视频恢复、节流保存与卸载补写，回调通过 ref 转发以避免查询重启；视频播放状态保持独立。活动写入由应用级 `useLibraryActivitySync` 统一失效首页、计数与未读缓存。
 - 活动状态以 JSON 持久化。图片进度已使用去抖与会话内串行合并降低写入频率，但真实大库高频翻页下的写盘成本尚未单独量化；存储改造前需先建立可复现基线。
 - 收藏/历史/偏好写入成功后先将服务端确认结果写共享查询缓存，再后台刷新，后续 GET 失败不能复活已删除记录或回退新设置。切换收藏读取当前缓存，首次查询未确认不盲写；清理失效项只过滤已知缓存，不凭移除清单构造空列表。
-- 首页、集合与标签相册使用 `useLibraryList` 无限分页，服务端 `library_query.go` 统一筛选与排序。每个不可变库快照拥有最多 16 个查询结果的 LRU，翻页复用结果；游标同时绑定查询与历史排序快照。年份/作品索引和统计独立于已加载页数。请求取消、后续页重试和游标失效后的整链重取由 hook 处理。阅读器上下文携带查询及后续游标，在已加载边界补页，卸载/换卷取消请求；失败提示返回列表刷新，不混用旧顺序。
+- 图库、集合与标签相册使用 `useLibraryList` 无限分页，服务端 `library_query.go` 统一筛选与排序。每个不可变库快照拥有最多 16 个查询结果的 LRU，翻页复用结果；游标同时绑定查询与历史排序快照。年份/作品索引和统计独立于已加载页数。请求取消、后续页重试和游标失效后的整链重取由 hook 处理。阅读器上下文携带查询及后续游标，在已加载边界补页，卸载/换卷取消请求；失败提示返回列表刷新，不混用旧顺序。
 - 列表排序共用一套口径：「按拍摄时间」（照片侧）/「按加入时间」（漫画侧）用业务日期（拍摄时间 > 文件夹名日期 > 修改时间），与后端 `albumMoreRecent` 相同；缺业务日期时退回修改时间。图库、集合、标签由服务端执行；收藏与最近等有界列表继续使用 `utils/cardSorting.ts`。列表默认不重复摆年份归组的那些集合（`library_query.go` 的 `excludeYearTargets`），搜索或按年份筛选时仍给出全部命中。
 - 最近与收藏分别处理查询失败、资源失效和筛选无结果，保留已加载卡片。“最近看”只在需要排序时读历史，按 `openedAt` 降序，同时间或未访问按名称；历史只有这一份缓存：收藏与最近访问各有独立接口，偏好响应不再带这两个字段，客户端也不另存副本。
 - 照片侧的访问记录记到相册：打开相册页记一条，看照片（大图预览）也记它出自的那本相册 —— 用户翻的是照片，落点却是相册。跨相册的照片墙里相册随照片变，`useVisitRecorder` 按相册冷却 30 秒，避免连翻几十张时写盘次数跟着照片数走；打开相册页不走冷却，刚打开的这本总要排在最前。记录只依赖相册身份，不随媒体分页重复写入。
