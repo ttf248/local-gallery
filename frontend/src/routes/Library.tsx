@@ -1,24 +1,28 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Link } from "react-router-dom";
-import AlbumGrid from "../components/album/AlbumGrid";
+import { Link, useNavigate } from "react-router-dom";
+import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
 import { SelectionToggle } from "../components/album/BulkActions";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import FolderTree from "../components/library/FolderTree";
-import { FolderOpenIcon } from "../components/common/Icon";
+import { FolderOpenIcon, ReaderIcon } from "../components/common/Icon";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryList } from "../hooks/useLibraryList";
 import {
   useLibraryAncestors,
+  useLibraryDashboard,
   useLibraryManifest,
   useLibraryNodes,
 } from "../hooks/useLibrary";
+import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useListFilters } from "../hooks/useListFilters";
 import type { ViewKey } from "../utils/listFilterParams";
 import { useUIStore } from "../store/uiStore";
-import { decodeFavPath, libraryRoute } from "../utils/path";
+import { decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
+import type { GalleryContextEntry } from "../utils/galleryContext";
+import type { LibraryDashboardProgress } from "../api/library";
 import { workbenchCopy } from "../utils/workbench";
 import "../styles/library.css";
 
@@ -42,6 +46,7 @@ const LIBRARY_PARAM = {
 export default function Library() {
   const { mode } = useAppMode();
   const copy = workbenchCopy(mode);
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const nodeId = params.get(LIBRARY_PARAM.node) ?? "";
   const [treeOpen, setTreeOpen] = useState(false);
@@ -94,6 +99,107 @@ export default function Library() {
     setParams(next, { replace: false });
     setTreeOpen(false);
   };
+
+  // 书架按作品陈列。
+  //
+  // 作品（集合）与卷（相册）在磁盘上是同一层的兄弟：把它们摊平在一张
+  // 网格里，读起来是一堆混在一起的目录 —— 「星海镖师」「番外 第05话」
+  // 「龙族」并排站着，谁也不知道谁是谁的一部分。分层摆开，层级就说
+  // 清楚了：上面一排是书，下面一排是没归入任何作品的散卷。
+  const isComicShelf = mode === "comic" && !nodeId;
+  const workCards = isComicShelf
+    ? cards.filter((card) => card.variant === "collection")
+    : [];
+  const looseCards = isComicShelf
+    ? cards.filter((card) => card.variant === "album")
+    : [];
+  const tagCards = isComicShelf
+    ? cards.filter((card) => card.variant === "smart")
+    : [];
+
+  // 在读摘要按作品分组：这一部读到哪儿了写在作品卡上，而不是让用户
+  // 点进去逐卷翻。同一作品有多卷在读时取最近更新的那卷。
+  const dashboard = useLibraryDashboard();
+  const resumeByWork = useMemo(() => {
+    const map = new Map<string, LibraryDashboardProgress>();
+    for (const entry of dashboard.data?.dashboard.inProgress ?? []) {
+      const parentId = entry.album.parentId;
+      if (!parentId) continue;
+      const previous = map.get(parentId);
+      if (!previous || entry.updated > previous.updated) {
+        map.set(parentId, entry);
+      }
+    }
+    return map;
+  }, [dashboard.data]);
+
+  const resumeOf = useCallback(
+    (card: CardData) => resumeByWork.get(decodeFavPath(card.to)),
+    [resumeByWork],
+  );
+
+  // 「继续读」：从书架一步进到读到一半的那一卷。
+  //
+  // 不带 index 进阅读器：阅读器会自己按服务端记录恢复页码，硬塞一个
+  // 页码反而把它顶掉。
+  const workOverlayAction = useCallback(
+    (card: CardData) => {
+      const entry = resumeOf(card);
+      if (!entry) return null;
+      const volumeName = entry.album.displayName || entry.album.name;
+      return (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            navigate(readerRoute(entry.album.id));
+          }}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm ring-1 ring-white/20 transition-colors hover:bg-black/80"
+          title={`继续读「${volumeName}」`}
+          aria-label={`继续读「${volumeName}」`}
+        >
+          <ReaderIcon size={13} />
+        </button>
+      );
+    },
+    [navigate, resumeOf],
+  );
+
+  const workNote = useCallback(
+    (card: CardData) => {
+      const entry = resumeOf(card);
+      if (!entry) return null;
+      return `在读 · ${entry.album.displayName || entry.album.name}`;
+    },
+    [resumeOf],
+  );
+
+  // 跨卷导航的上下文：这一层的可见条目。
+  //
+  // 书架是选卷的地方，也是阅读器「上一卷 / 下一卷」的来路。少了它，
+  // 从书架点开的一卷读完后无处可去；「读完自动切下一卷」也因此失效。
+  const contextEntries = useMemo<GalleryContextEntry[]>(
+    () =>
+      cards.map((card) => ({
+        key: decodeFavPath(card.to),
+        to: card.to,
+        name: card.title,
+        parentName: card.parentName,
+        // 作品没有阅读器入口：跳卷时必须跳过它。
+        kind: card.variant === "collection" ? "collection" : "album",
+        imageCount: card.imageCount,
+        videoCount: card.videoCount,
+        contentKind: card.contentKind,
+      })),
+    [cards],
+  );
+  useGalleryContextSync(
+    { type: "collection", parentPath: nodeId },
+    contextEntries,
+    undefined,
+    { query: list.query, nextCursor: list.nextCursor },
+  );
 
   // 顶层时标题是「全部相册」：页头已经写了「图库」这个栏目名，
   // 再写一遍「图库」就成了同一个词出现在屏幕上两次。
@@ -203,16 +309,76 @@ export default function Library() {
             ) : null}
 
             {cards.length > 0 ? (
-              <AlbumGrid
-                selectable
-                items={cards}
-                variant={viewMode}
-                onEndReached={() => {
-                  if (list.hasNextPage && !list.isFetchingNextPage) {
-                    void list.fetchNextPage();
-                  }
-                }}
-              />
+              isComicShelf ? (
+                /* 书架：作品一排，没归入作品的散卷一排，标签一排。
+                   分段摆开，层级才读得出来。 */
+                <>
+                  {workCards.length > 0 ? (
+                    <section className="mb-10">
+                      <div className="section-heading">
+                        <h2 className="section-title">作品</h2>
+                        <span className="section-meta tabular-nums">
+                          {workCards.length} 部
+                        </span>
+                      </div>
+                      <AlbumGrid
+                        items={workCards}
+                        variant={viewMode}
+                        overlayAction={workOverlayAction}
+                        note={workNote}
+                        onEndReached={() => {
+                          if (list.hasNextPage && !list.isFetchingNextPage) {
+                            void list.fetchNextPage();
+                          }
+                        }}
+                      />
+                    </section>
+                  ) : null}
+
+                  {looseCards.length > 0 ? (
+                    <section className="mb-10">
+                      <div className="section-heading">
+                        <h2 className="section-title">未归入作品</h2>
+                        <span className="section-meta tabular-nums">
+                          {looseCards.length} 卷
+                        </span>
+                      </div>
+                      <AlbumGrid
+                        items={looseCards}
+                        variant={viewMode}
+                        onEndReached={() => {
+                          if (list.hasNextPage && !list.isFetchingNextPage) {
+                            void list.fetchNextPage();
+                          }
+                        }}
+                      />
+                    </section>
+                  ) : null}
+
+                  {tagCards.length > 0 ? (
+                    <section className="mb-10">
+                      <div className="section-heading">
+                        <h2 className="section-title">标签</h2>
+                        <span className="section-meta tabular-nums">
+                          {tagCards.length} 个
+                        </span>
+                      </div>
+                      <AlbumGrid items={tagCards} variant={viewMode} />
+                    </section>
+                  ) : null}
+                </>
+              ) : (
+                <AlbumGrid
+                  selectable
+                  items={cards}
+                  variant={viewMode}
+                  onEndReached={() => {
+                    if (list.hasNextPage && !list.isFetchingNextPage) {
+                      void list.fetchNextPage();
+                    }
+                  }}
+                />
+              )
             ) : null}
 
             {!list.isLoading && cards.length === 0 && hasContent ? (

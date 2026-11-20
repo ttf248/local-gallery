@@ -56,6 +56,18 @@ interface Props {
    * 按卡片给：每张卡上要写的东西不一样（时刻各不相同）。
    */
   coverBadge?: (item: CardData) => ReactNode;
+  /**
+   * 封面右上角的额外动作（如「继续读」）。
+   *
+   * 按卡片给：只有需要这个动作的卡片才有。返回 null 的卡片不渲染。
+   */
+  overlayAction?: (item: CardData) => ReactNode;
+  /**
+   * 卡片下方的补充说明（如「在读 · 第02话」）。
+   *
+   * 按卡片给：读数因书而异，写死在卡片组件里就成了一句假话。
+   */
+  note?: (item: CardData) => ReactNode;
 }
 
 // 列表视图每一列的最小宽度。列数由可用宽度除以它得到 ——
@@ -92,6 +104,8 @@ export default function AlbumGrid({
   coverRatio,
   density = "default",
   coverBadge,
+  overlayAction,
+  note,
 }: Props) {
   const selectionActive = useSelectionStore((s) => s.active);
   const selectionItems = useSelectionStore((s) => s.items);
@@ -203,6 +217,8 @@ export default function AlbumGrid({
         showUnreadBadge={showUnreadBadge}
         coverRatio={ratio}
         coverBadge={coverBadge?.(it)}
+        overlayAction={overlayAction?.(it)}
+        note={note?.(it)}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY, item: it });

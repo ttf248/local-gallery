@@ -9,7 +9,7 @@ import {
 import { libraryApi, type AppMode, type LibraryNodeSummary } from "../../api/library";
 import { useLibraryManifest } from "../../hooks/useLibrary";
 import { albumRoute } from "../../utils/path";
-import { albumCountUnit } from "../../utils/workbench";
+import { albumCountUnit, mediaUnit } from "../../utils/workbench";
 
 interface Props {
   mode: AppMode;
@@ -187,7 +187,7 @@ function TreeChildren({
               onSelect={() => {
                 navigate(albumRoute(mode, node.id));
               }}
-              meta={`${node.imageCount ?? 0} 张`}
+              meta={`${node.imageCount ?? 0} ${mediaUnit(mode)}`}
             />
           </li>
         ),

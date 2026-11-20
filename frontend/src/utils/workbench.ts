@@ -57,12 +57,12 @@ export interface WorkbenchCopy {
    */
   collectionUnit: string;
   /**
-   * 单个相册的类型词：两侧都说「相册」。
+   * 叶级目录的类型词：照片「相册」，漫画「卷」。
    *
-   * 视图筛选的那一排 chip 用它。两侧的集合词不同（照片「集合」、
-   * 漫画「作品」），相册这个词两侧一致 —— 一个叶级目录在照片这边
-   * 叫「文件夹」，在漫画那边叫「相册」，用户要记两套；两侧统一说
-   * 「相册」，靠集合词把两边分开。
+   * 视图筛选的那一排 chip 用它。两侧的词本来就该不同：照片那边一个
+   * 叶级目录是一本「相册」，漫画那边它是作品里的一「卷」—— 作品下面
+   * 有几卷、这一卷有多少页，这套说法在漫画侧是成立的，在照片侧不是。
+   * 集合词同理（照片「集合」，漫画「作品」）。
    */
   albumTypeLabel: string;
   /** 集合的类型词：照片「集合」，漫画「作品」。 */
@@ -220,7 +220,7 @@ const COMIC: ComicCopy = {
   favoritesEmpty: "还没有收藏漫画",
   randomLabel: "随机一卷",
   mediaUnit: "页",
-  albumTypeLabel: "相册",
+  albumTypeLabel: "卷",
   collectionTypeLabel: "作品",
   lastSeenVerb: "阅读",
   neverSeenLabel: "尚未阅读",
