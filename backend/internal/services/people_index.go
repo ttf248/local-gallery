@@ -43,10 +43,13 @@ func (s *PeopleService) Sync(records []AIAnalysisRecord) error {
 			faces[face.Key] = face
 		}
 	}
-	if s.matchesCachedAssignmentsLocked(faces) {
+	// 索引是按批次增量攒出来的：分组结果与批次到达顺序有关，
+	// 启动时要整体重建一次。
+	if !s.rebuildPending && s.matchesCachedAssignmentsLocked(faces) {
 		s.restoreAssignmentsLocked(faces)
 	} else {
 		s.rebuildLocked(faces, previousIDs)
+		s.rebuildPending = false
 	}
 	s.cleanAssignmentsLocked()
 	return s.persistLocked()
@@ -112,6 +115,14 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 }
 
 // ApplyRecords updates affected resources without replacing the task system's records.
+// ApplyRecords applies a batch of analysis results to the people index.
+//
+// 增量更新：被替换的脸先去掉，新脸再追加到现有分组里。
+// 追加走的是与重建同一套判据（组中心余弦、锚脸余弦、同组互证），只是不从头
+// 再来一遍 —— 每张脸都要在整库分组里重新归位的话，一次分析要重算几十遍。
+//
+// 增量攒出来的分组与批次到达顺序有关。任务收尾时整体重建一次
+// （FinalizeRebuild），结果就与顺序无关了。
 func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	s.persistMu.Lock()
 	defer s.persistMu.Unlock()
@@ -128,16 +139,10 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 	var removedPersonIDs map[string]string
 	changed := false
 	updatedFaces := existingFaces
-	lastExisting := PersonFace{}
-	for _, face := range existingFaces {
-		if lastExisting.Key == "" || personFaceLess(lastExisting, face) {
-			lastExisting = face
-		}
-	}
+	appendedFaces := make([]PersonFace, 0)
+	replacedFaces := make([]PersonFace, 0)
 	orderedRecords := append([]AIAnalysisRecord(nil), records...)
 	sort.Slice(orderedRecords, func(i, j int) bool { return orderedRecords[i].ResourceID < orderedRecords[j].ResourceID })
-	appendedFaces := make([]PersonFace, 0)
-	appendOnly := true
 	for _, record := range orderedRecords {
 		if record.Type != AIJobTypeFace {
 			continue
@@ -166,21 +171,18 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 				removedPersonIDs = make(map[string]string)
 			}
 			removedPersonIDs[face.Key] = face.PersonID
-			appendOnly = false
+			replacedFaces = append(replacedFaces, face)
 		}
 		for _, face := range incoming {
-			if lastExisting.Key != "" && !personFaceLess(lastExisting, face) {
-				appendOnly = false
-			}
 			appendedFaces = append(appendedFaces, face)
 			updatedFaces[face.Key] = face
 		}
 		changed = true
 	}
 	// 只有走重建路径时才需要这几份快照。
-	// 增量快路径直接在现有分组上追加，一个都用不到 ——
+	// 增量路径直接在现有分组上追加，一个都用不到 ——
 	// 大库上每次增量白克隆四张全量映射表，就是白扔几份内存。
-	if changed && !(appendOnly && annAvailable) {
+	if changed && !annAvailable {
 		previousIDs = cloneMap(s.previousIDs)
 		for key, face := range existingFaces {
 			previousIDs[key] = face.PersonID
@@ -192,38 +194,14 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		cachedHashes = cloneMap(s.cachedHashes)
 		cachedOrigins = cloneMap(s.cachedOrigins)
 		manual = clonePeopleManualState(s.manual)
-		if !annAvailable {
-			clusters = clonePeopleClusters(s.clusters)
-		}
+		clusters = clonePeopleClusters(s.clusters)
 	}
 	s.mu.RUnlock()
 	if !changed {
 		return nil
 	}
-	if appendOnly && annAvailable {
-		sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
-		s.mu.Lock()
-		touchedClusters := make(map[string]struct{})
-		for _, face := range appendedFaces {
-			s.addFaceLocked(face)
-			if added, exists := s.faces[face.Key]; exists {
-				touchedClusters[added.PersonID] = struct{}{}
-			}
-		}
-		s.consolidateClustersLocked(touchedClusters)
-		s.cleanAssignmentsLocked()
-		disk := s.indexSnapshotLocked()
-		s.mu.Unlock()
-		// 先落人工纠错，再落派生索引：纠错不可重建，索引可以。
-		s.mu.Lock()
-		if err := s.persistManualLocked(); err != nil {
-			s.mu.Unlock()
-			return err
-		}
-		s.updatePreviousIDsLocked()
-		s.updateCachedAssignmentsLocked()
-		s.mu.Unlock()
-		return s.persistIndexSnapshot(disk)
+	if annAvailable {
+		return s.applyRecordsIncrementally(appendedFaces, replacedFaces)
 	}
 
 	candidate := &PeopleService{
@@ -234,26 +212,115 @@ func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
 		previousIDs: previousIDs, cachedIDs: cachedIDs, cachedHashes: cachedHashes,
 		cachedOrigins: cachedOrigins, manual: manual,
 	}
-	if appendOnly {
-		candidate.faces = existingFaces
-		candidate.facesByResource = existingFaceKeys
-		candidate.clusters = clusters
-		candidate.ann = nil
-		candidate.comparisons = comparisons
-		touchedClusters := make(map[string]struct{})
-		sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
-		for _, face := range appendedFaces {
-			candidate.addFaceLocked(face)
-			if added, exists := candidate.faces[face.Key]; exists {
-				touchedClusters[added.PersonID] = struct{}{}
-			}
+	candidate.faces = existingFaces
+	candidate.facesByResource = existingFaceKeys
+	candidate.clusters = clusters
+	candidate.ann = nil
+	candidate.comparisons = comparisons
+	touchedClusters := make(map[string]struct{})
+	sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
+	for _, face := range appendedFaces {
+		candidate.addFaceLocked(face)
+		if added, exists := candidate.faces[face.Key]; exists {
+			touchedClusters[added.PersonID] = struct{}{}
 		}
-		candidate.consolidateClustersLocked(touchedClusters)
-	} else {
-		candidate.rebuildLocked(updatedFaces, previousIDs)
 	}
+	candidate.consolidateClustersLocked(touchedClusters)
 	candidate.cleanAssignmentsLocked()
 	return s.publishRebuiltIndex(candidate)
+}
+
+// applyRecordsIncrementally 把一批脸并进现有分组。
+//
+// 先去掉被替换的脸（同一张照片重新分析过），再把新脸追加到分组里。
+// 分组中心变了就同步给 ANN 索引：索引里的节点向量要是旧的，
+// 下一批脸就近邻查找会找错分组。
+func (s *PeopleService) applyRecordsIncrementally(appendedFaces, replacedFaces []PersonFace) error {
+	s.mu.Lock()
+	// 改过名、隐藏过或保留过的分组不能被自动聚类拆开：
+	// 换掉的那张脸要留在原来的分组里。
+	correctedGroups := peopleReferencedIDs(s.manual)
+	for _, face := range replacedFaces {
+		effectiveID := s.effectivePersonIDLocked(face)
+		if correctedGroups[effectiveID] && s.manual.Assignments[face.Key] == "" {
+			s.manual.Assignments[face.Key] = effectiveID
+		}
+	}
+	for _, face := range replacedFaces {
+		s.removeFaceLocked(face.Key)
+	}
+	touchedClusters := make(map[string]struct{})
+	sort.Slice(appendedFaces, func(i, j int) bool { return personFaceLess(appendedFaces[i], appendedFaces[j]) })
+	for _, face := range appendedFaces {
+		s.addFaceLocked(face)
+		if added, exists := s.faces[face.Key]; exists {
+			touchedClusters[added.PersonID] = struct{}{}
+		}
+	}
+	s.consolidateClustersLocked(touchedClusters)
+	s.cleanAssignmentsLocked()
+	// 分组没了，索引里的旧节点留着：查近邻时按分组 ID 回查，
+	// 查不到的直接跳过。旧节点攒多了再整体重建索引。
+	if s.ann != nil && s.ann.Len() > len(s.clusters)+peopleANNStaleNodeLimit {
+		s.rebuildPeopleANNLocked()
+	}
+	s.rebuildPending = true
+	disk := s.indexSnapshotLocked()
+	s.mu.Unlock()
+	// 先落人工纠错，再落派生索引：纠错不可重建，索引可以。
+	s.mu.Lock()
+	if err := s.persistManualLocked(); err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.updatePreviousIDsLocked()
+	s.updateCachedAssignmentsLocked()
+	s.mu.Unlock()
+	return s.persistIndexSnapshot(disk)
+}
+
+// FinalizeRebuild rebuilds the groups deterministically once a task settles.
+//
+// 增量攒出来的分组与批次到达顺序有关；这里整体重建一次，结果就与顺序无关。
+// 重建整库要几十秒，放在后台做，不挡任务收尾。
+func (s *PeopleService) FinalizeRebuild() error {
+	s.persistMu.Lock()
+	defer s.persistMu.Unlock()
+	s.mu.RLock()
+	if !s.rebuildPending {
+		s.mu.RUnlock()
+		return nil
+	}
+	previousIDs := cloneMap(s.previousIDs)
+	for key, face := range s.faces {
+		previousIDs[key] = face.PersonID
+	}
+	candidate := &PeopleService{
+		statePath: s.statePath, derivedPath: s.derivedPath,
+		stateBasePath: s.stateBasePath, derivedBasePath: s.derivedBasePath,
+		activeModel: s.activeModel, manualByModel: clonePeopleManualProfiles(s.manualByModel),
+		faceModelVersion: s.faceModelVersion, embeddingDimension: s.embeddingDimension,
+		previousIDs: previousIDs, cachedIDs: s.cachedIDs, cachedHashes: s.cachedHashes,
+		cachedOrigins: s.cachedOrigins, manual: clonePeopleManualState(s.manual),
+		sourceIsPhoto: s.sourceIsPhoto, sourceDimensions: s.sourceDimensions,
+		comparisons: s.comparisons,
+	}
+	candidate.faces = clonePeopleFaces(s.faces)
+	candidate.facesByResource = clonePeopleFaceKeys(s.facesByResource)
+	candidate.ann = nil
+	s.mu.RUnlock()
+	// 重建在候选服务上做：整库重聚类要几十秒，不能占着状态锁 ——
+	// 占着的话，这一段时间里人物页与复核页全都读不动。
+	candidate.rebuildLocked(candidate.faces, previousIDs)
+	candidate.cleanAssignmentsLocked()
+	candidate.rebuildPending = false
+	if err := s.publishRebuiltIndex(candidate); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.rebuildPending = false
+	s.mu.Unlock()
+	return nil
 }
 
 func clonePeopleFaces(source map[string]PersonFace) map[string]PersonFace {

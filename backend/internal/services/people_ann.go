@@ -12,6 +12,10 @@ const (
 	peopleANNEfConstruction = 100
 	peopleANNEfSearch       = 128
 	peopleANNCandidateLimit = 128
+	// peopleANNStaleNodeLimit 是索引里允许留下的旧节点上限。
+	// 分组没了以后索引里的节点没法立刻删（邻接表指着它），
+	// 查近邻时按分组 ID 回查、查不到就跳过。攒多了再整体重建索引。
+	peopleANNStaleNodeLimit = 256
 )
 
 type peopleANNHit struct {

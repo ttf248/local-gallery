@@ -409,6 +409,9 @@ type AIJobServiceOptions struct {
 	WorkerCount        int
 	Now                func() time.Time
 	OnRecordsCommitted func([]AIAnalysisRecord)
+	// OnJobSettled 在任务走到终态（完成、失败、取消）时调用一次，
+	// 让按批次攒出来的派生数据在任务收尾时整体重建一次。
+	OnJobSettled func(jobType string)
 	// OnRecordsCleared 在某个模块的派生结果被整体删除后调用，
 	// 让按目录统计的占用缓存重新扫描。
 	OnRecordsCleared func()
@@ -427,6 +430,7 @@ type AIJobService struct {
 	workerCount        int
 	now                func() time.Time
 	onRecordsCommitted func([]AIAnalysisRecord)
+	onJobSettled       func(jobType string)
 	onRecordsCleared   func()
 	jobs               map[string]*AIJob
 	order              []string
@@ -479,6 +483,7 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		workerCount:        options.WorkerCount,
 		now:                options.Now,
 		onRecordsCommitted: options.OnRecordsCommitted,
+		onJobSettled:       options.OnJobSettled,
 		onRecordsCleared:   options.OnRecordsCleared,
 		jobs:               make(map[string]*AIJob),
 		records:            make(map[string]AIAnalysisRecord),

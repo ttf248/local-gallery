@@ -348,6 +348,16 @@ func main() {
 		ValidatePath:   safetyState.Validate,
 		ImageConverter: imageConverter,
 		Analyzers:      []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, services.SimilarityAnalyzer{}},
+		OnJobSettled: func(jobType string) {
+			// 人脸任务收尾时整体重建一次人物分组：
+			// 任务期间是按批次增量攒的，分组结果与批次到达顺序有关。
+			if jobType != services.AIJobTypeFace || !aiJobs.PeopleEnabled() {
+				return
+			}
+			if err := peopleService.FinalizeRebuild(); err != nil {
+				log.Printf("重建人物索引失败: %v", err)
+			}
+		},
 		OnRecordsCommitted: func(records []services.AIAnalysisRecord) {
 			if indexErr := ocrSearchIndex.ApplyRecords(records); indexErr != nil {
 				log.Printf("更新 OCR 搜索索引失败: %v", indexErr)

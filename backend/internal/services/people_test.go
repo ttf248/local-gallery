@@ -1128,8 +1128,21 @@ func TestPeopleServiceEarlierIncrementalFacePreservesNameAcrossRebuild(t *testin
 	if len(groups) != 1 || groups[0].Name != "已命名的人物" || !groups[0].Hidden {
 		t.Fatalf("corrections were lost when an earlier face changed the cluster anchor: %+v", groups)
 	}
-	if groups[0].ID == oldID {
-		t.Fatalf("test did not exercise an automatic ID change: old=%q new=%q", oldID, groups[0].ID)
+	if groups[0].ID != oldID {
+		t.Fatalf("incremental update changed the person id: old=%q new=%q", oldID, groups[0].ID)
+	}
+
+	// 任务收尾时的整体重建：分组按资源 ID 与脸序号重排，编号可能变，
+	// 用户改过的名字与隐藏要跟着走。
+	if err := people.FinalizeRebuild(); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt := people.Groups(true)
+	if len(rebuilt) != 1 || rebuilt[0].Name != "已命名的人物" || !rebuilt[0].Hidden {
+		t.Fatalf("corrections were lost across the final rebuild: %+v", rebuilt)
+	}
+	if rebuilt[0].ID == oldID {
+		t.Fatalf("test did not exercise an automatic ID change: old=%q new=%q", oldID, rebuilt[0].ID)
 	}
 
 	restarted, err := OpenPeopleService(statePath, indexPath)
@@ -1139,8 +1152,8 @@ func TestPeopleServiceEarlierIncrementalFacePreservesNameAcrossRebuild(t *testin
 	if err := restarted.Sync([]AIAnalysisRecord{initial, inserted}); err != nil {
 		t.Fatal(err)
 	}
-	if got := restarted.Groups(true); !reflect.DeepEqual(got, groups) {
-		t.Fatalf("restart changed person group or its corrections: got %+v, want %+v", got, groups)
+	if got := restarted.Groups(true); !reflect.DeepEqual(got, rebuilt) {
+		t.Fatalf("restart changed person group or its corrections: got %+v, want %+v", got, rebuilt)
 	}
 }
 

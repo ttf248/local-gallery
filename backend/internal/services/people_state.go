@@ -56,6 +56,7 @@ func (s *PeopleService) loadProfileIndexLocked() error {
 	if json.Unmarshal(data, &index) != nil || index.Version != peopleIndexVersion {
 		return nil
 	}
+	s.rebuildPending = index.PendingRebuild
 	referencedIDs := peopleReferencedIDs(s.manual)
 	cacheValid := index.GroupingVersion == peopleGroupingVersion
 	if cacheValid {
@@ -474,7 +475,8 @@ func (s *PeopleService) persistLocked() error {
 func (s *PeopleService) indexSnapshotLocked() peopleIndexDisk {
 	disk := peopleIndexDisk{
 		Version: peopleIndexVersion, GroupingVersion: peopleGroupingVersion,
-		Faces: make([]peopleFaceDisk, 0, len(s.faces)),
+		PendingRebuild: s.rebuildPending,
+		Faces:          make([]peopleFaceDisk, 0, len(s.faces)),
 	}
 	for _, face := range s.faces {
 		disk.Faces = append(disk.Faces, peopleFaceDisk{

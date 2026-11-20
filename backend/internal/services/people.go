@@ -198,9 +198,12 @@ type peopleFaceDisk struct {
 }
 
 type peopleIndexDisk struct {
-	Version         int              `json:"version"`
-	GroupingVersion int              `json:"groupingVersion"`
-	Faces           []peopleFaceDisk `json:"faces"`
+	Version         int `json:"version"`
+	GroupingVersion int `json:"groupingVersion"`
+	// PendingRebuild 标出这份索引是增量攒出来的：分组结果与批次到达顺序有关，
+	// 任务收尾时要整体重建一次才与顺序无关。
+	PendingRebuild bool             `json:"pendingRebuild,omitempty"`
+	Faces          []peopleFaceDisk `json:"faces"`
 }
 
 type peopleManualState = PeopleCorrections
@@ -251,6 +254,9 @@ type PeopleService struct {
 	// 它是复核候选的来源，索引变化后需要重算一次。
 	matchRelations      map[string][]string
 	matchRelationsStale bool
+	// rebuildPending 标出当前分组是增量攒出来的：与批次到达顺序有关，
+	// 任务收尾时要整体重建一次。
+	rebuildPending bool
 	// matchPolicy 决定复核口径。生产用默认值，评测工具会覆盖成旧口径做对照。
 	matchPolicy PeopleMatchPolicy
 }

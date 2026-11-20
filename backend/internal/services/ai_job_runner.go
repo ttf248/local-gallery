@@ -621,9 +621,9 @@ func (s *AIJobService) pauseAtBoundary(id string, runtimeState *aiJobRuntime) bo
 
 func (s *AIJobService) finishInterrupted(id string, runtimeState *aiJobRuntime, err error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	job := s.jobs[id]
 	if job == nil {
+		s.mu.Unlock()
 		return
 	}
 	if runtimeState.stopReason == "shutdown" {
@@ -654,6 +654,12 @@ func (s *AIJobService) finishInterrupted(id string, runtimeState *aiJobRuntime, 
 	}
 	_ = s.persistLocked()
 	s.publishLocked(*job)
+	jobType := job.Type
+	settled := !isAIJobActive(job.Status)
+	s.mu.Unlock()
+	if settled {
+		s.notifyJobSettled(jobType)
+	}
 }
 
 func (s *AIJobService) finishJob(id, status, stage, message string) {
@@ -666,9 +672,9 @@ func (s *AIJobService) failGPUJob(id, code, message string) {
 
 func (s *AIJobService) finishJobWithCode(id, status, stage, errorCode, message string) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	job := s.jobs[id]
 	if job == nil {
+		s.mu.Unlock()
 		return
 	}
 	job.Status = status
@@ -690,4 +696,17 @@ func (s *AIJobService) finishJobWithCode(id, status, stage, errorCode, message s
 		_ = s.persistLocked()
 	}
 	s.publishLocked(*job)
+	jobType := job.Type
+	s.mu.Unlock()
+	// 任务收尾了：按批次攒出来的派生数据可以整体重建一次。
+	s.notifyJobSettled(jobType)
+}
+
+// notifyJobSettled 告诉外部任务已经收尾。
+//
+// 重建可能要在整库上跑几十秒，放在后台做，不挡任务收尾。
+func (s *AIJobService) notifyJobSettled(jobType string) {
+	if callback := s.onJobSettled; callback != nil {
+		go callback(jobType)
+	}
 }

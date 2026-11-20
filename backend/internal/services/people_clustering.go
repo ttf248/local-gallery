@@ -63,9 +63,9 @@ func (s *PeopleService) addFaceLocked(face PersonFace) {
 	}
 	cluster.resources[face.ResourceID] = struct{}{}
 	updatePeopleCentroid(cluster)
-	if newCluster {
-		s.ann.Add(bestID, cluster.centroid)
-	}
+	// 分组中心变了，索引里的节点向量要跟着变：旧向量会让下一批脸
+	// 在近邻查找里找错分组。
+	s.ann.Add(bestID, cluster.centroid)
 	face.PersonID = bestID
 	if face.originID == "" {
 		face.originID = bestID
@@ -96,6 +96,7 @@ func (s *PeopleService) addPinnedFaceLocked(face PersonFace, personID string) {
 	cluster.members[face.Key] = struct{}{}
 	cluster.resources[face.ResourceID] = struct{}{}
 	updatePeopleCentroid(cluster)
+	s.ann.Add(personID, cluster.centroid)
 	face.PersonID = personID
 	face.originID = personID
 	s.faces[face.Key] = face
@@ -463,6 +464,8 @@ func (s *PeopleService) mergePeopleClustersLocked(keeperID, sourceID string) {
 		keeper.anchor = source.anchor
 	}
 	updatePeopleCentroid(keeper)
+	// 合并后保留下来的分组中心变了，索引里的节点向量要跟着变。
+	s.ann.Add(keeperID, keeper.centroid)
 	delete(s.clusters, sourceID)
 }
 
@@ -510,8 +513,9 @@ func (s *PeopleService) removeFaceLocked(key string) {
 	}
 	delete(cluster.members, key)
 	if len(cluster.members) == 0 {
+		// 分组没了，索引里的旧节点留着：查近邻时按分组 ID 回查，
+		// 查不到的直接跳过。旧节点攒多了再整体重建索引。
 		delete(s.clusters, face.PersonID)
-		s.rebuildPeopleANNLocked()
 		return
 	}
 	cluster.sum = make([]float64, len(face.embedding))
@@ -537,4 +541,6 @@ func (s *PeopleService) removeFaceLocked(key string) {
 		}
 	}
 	updatePeopleCentroid(cluster)
+	// 分组少了一张脸，中心变了，索引里的节点向量要跟着变。
+	s.ann.Add(face.PersonID, cluster.centroid)
 }
