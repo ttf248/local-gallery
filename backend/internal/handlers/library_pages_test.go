@@ -363,6 +363,72 @@ func TestLibraryOnThisDayHandlerReturnsTheMatchingPhoto(t *testing.T) {
 	}
 }
 
+func TestLibraryOnThisDayHandlerFallsBackToTheNearestDays(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "album")
+	file := filepath.Join(albumPath, "1.jpg")
+	year := time.Now().Year() - 1
+	result := &models.ScanResult{
+		Roots: []string{root}, AlbumCount: 1,
+		Albums: []models.Album{{
+			Type: "album", Path: albumPath, Name: "album", SourceRoot: root,
+			ImageFiles: []string{file}, ImageCount: 1, CoverImage: file, CoverKind: "image",
+			// 这本相册在 12 月 17 日拍过照。
+			CaptureDates: []string{fmt.Sprintf("%d1217", year)},
+		}},
+	}
+	catalog := services.NewResourceCatalog()
+	catalog.SetContentKindPolicy(services.NewContentKindPolicy([]services.RootKind{
+		{Path: root, Kind: models.ContentKindPhoto},
+	}))
+	catalog.Publish(result, []string{root})
+
+	app := fiber.New()
+	app.Get("/api/library/on-this-day", LibraryOnThisDayHandler(catalog, nil))
+
+	// 11 月 20 日往年没拍过照：不带 fallback 时这一段是空的。
+	empty := httptest.NewRequest("GET", "/api/library/on-this-day?kind=photo&month=11&day=20", nil)
+	resp, err := app.Test(empty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var strict struct {
+		Page struct {
+			Total int `json:"total"`
+		} `json:"page"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&strict); err != nil {
+		t.Fatal(err)
+	}
+	if strict.Page.Total != 0 {
+		t.Fatalf("strict page total = %d, want 0", strict.Page.Total)
+	}
+
+	// 带上 fallback：退回离今天最近的那几天，并说清命中的那一天。
+	nearest := httptest.NewRequest("GET", "/api/library/on-this-day?kind=photo&month=11&day=20&fallback=1", nil)
+	resp, err = app.Test(nearest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		Page struct {
+			Total int `json:"total"`
+			Items []struct {
+				MatchedDate string `json:"matchedDate"`
+			} `json:"items"`
+		} `json:"page"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.Page.Total != 1 || len(payload.Page.Items) != 1 {
+		t.Fatalf("fallback page = %+v, want one item", payload.Page)
+	}
+	if payload.Page.Items[0].MatchedDate != fmt.Sprintf("%d-12-17", year) {
+		t.Fatalf("matched date = %q, want %d-12-17", payload.Page.Items[0].MatchedDate, year)
+	}
+}
+
 func TestLibraryOnThisDayHandlerMatchesEarlierYearsOnly(t *testing.T) {
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album")

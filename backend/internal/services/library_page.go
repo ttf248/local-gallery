@@ -953,6 +953,19 @@ type LibraryOnThisDayPhoto struct {
 // 同一年里同一本相册只出现一次，取它最近的一次命中；结果按命中的
 // 日期倒序（新的在前）。
 func PageOnThisDay(snapshot CatalogSnapshot, kind LibraryKindScope, month, day int, limit int) (LibraryPage[LibraryOnThisDayItem], error) {
+	return pageOnThisDay(snapshot, kind, month, day, limit, false)
+}
+
+// PageOnThisDayNearest 在今天没有往年照片时，退回离今天最近的那几天。
+//
+// 拍摄日期是从文件名推断出来的，稀疏得很：大多数日子里往年这天根本没拍过照，
+// 首页那一段就整个消失，用户以为功能没了。退回最近的日子，回忆照样摆得出来 ——
+// 每一条都带着自己命中的那一天，不会假装是今天拍的。
+func PageOnThisDayNearest(snapshot CatalogSnapshot, kind LibraryKindScope, month, day int, limit int) (LibraryPage[LibraryOnThisDayItem], error) {
+	return pageOnThisDay(snapshot, kind, month, day, limit, true)
+}
+
+func pageOnThisDay(snapshot CatalogSnapshot, kind LibraryKindScope, month, day int, limit int, nearest bool) (LibraryPage[LibraryOnThisDayItem], error) {
 	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
 		return LibraryPage[LibraryOnThisDayItem]{}, ErrLibraryNotReady
 	}
@@ -962,13 +975,36 @@ func PageOnThisDay(snapshot CatalogSnapshot, kind LibraryKindScope, month, day i
 	if limit <= 0 || limit > MaxLibraryPageLimit {
 		limit = DefaultLibraryPageLimit
 	}
+	library := snapshot.state.library
 	thisYear := time.Now().Year()
 	key := fmt.Sprintf("%02d%02d", month, day)
-	entries := snapshot.state.library.onThisDay[key]
+	items := onThisDayItemsForKey(library, kind, key, thisYear)
+	if len(items) == 0 && nearest {
+		for _, nearby := range onThisDayNearestKeys(library, kind, month, day, thisYear) {
+			items = append(items, onThisDayItemsForKey(library, kind, nearby, thisYear)...)
+			if len(items) >= limit {
+				break
+			}
+		}
+	}
+	total := len(items)
+	if len(items) > limit {
+		items = items[:limit]
+	}
+	return LibraryPage[LibraryOnThisDayItem]{
+		Revision: snapshot.Revision(),
+		Items:    items,
+		Total:    total,
+	}, nil
+}
+
+// onThisDayItemsForKey 取出某一天（"MMDD"）拍过照的相册。
+func onThisDayItemsForKey(library *libraryPageIndex, kind LibraryKindScope, key string, thisYear int) []LibraryOnThisDayItem {
+	entries := library.onThisDay[key]
 	items := make([]LibraryOnThisDayItem, 0, len(entries))
 	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
-		album := snapshot.state.library.albums[entry.index]
+		album := library.albums[entry.index]
 		if models.NormalizeContentKind(album.ContentKind) != models.ContentKind(kind) {
 			continue
 		}
@@ -985,18 +1021,57 @@ func PageOnThisDay(snapshot CatalogSnapshot, kind LibraryKindScope, month, day i
 		items = append(items, LibraryOnThisDayItem{
 			LibraryNodeSummary: cloneNodeSummary(album),
 			MatchedDate:        matched,
-			Photo:              onThisDayPhoto(snapshot.state.library, album.ID, entry.date),
+			Photo:              onThisDayPhoto(library, album.ID, entry.date),
 		})
 	}
-	total := len(items)
-	if len(items) > limit {
-		items = items[:limit]
+	return items
+}
+
+// onThisDayNearestKeys 找出离今天最近、且往年这天确实拍过照的那几天。
+//
+// 按日历上的远近排：昨天、明天、前天、后天……跨年也算近
+// （12 月 31 日离 1 月 1 日只有一天）。今天自己排在最前。
+func onThisDayNearestKeys(library *libraryPageIndex, kind LibraryKindScope, month, day int, thisYear int) []string {
+	today := dayOfYear(month, day)
+	keys := make([]string, 0, len(library.onThisDay))
+	for key := range library.onThisDay {
+		if len(onThisDayItemsForKey(library, kind, key, thisYear)) == 0 {
+			continue
+		}
+		keys = append(keys, key)
 	}
-	return LibraryPage[LibraryOnThisDayItem]{
-		Revision: snapshot.Revision(),
-		Items:    items,
-		Total:    total,
-	}, nil
+	sort.Slice(keys, func(i, j int) bool {
+		left := dayOfYear(atoiOrZero(keys[i][:2]), atoiOrZero(keys[i][2:]))
+		right := dayOfYear(atoiOrZero(keys[j][:2]), atoiOrZero(keys[j][2:]))
+		leftDistance := onThisDayDayDistance(today, left)
+		rightDistance := onThisDayDayDistance(today, right)
+		if leftDistance != rightDistance {
+			return leftDistance < rightDistance
+		}
+		// 一样近的日子要有稳定的次序：同一份库，两次请求给一样的结果。
+		return keys[i] < keys[j]
+	})
+	return keys
+}
+
+// dayOfYear 把月与日换成一年里的第几天。
+func dayOfYear(month, day int) int {
+	if month < 1 || month > 12 || day < 1 {
+		return 0
+	}
+	return time.Date(2001, time.Month(month), day, 0, 0, 0, 0, time.UTC).YearDay()
+}
+
+// onThisDayDayDistance 两个日子在日历上差多远（跨年算近）。
+func onThisDayDayDistance(left, right int) int {
+	distance := left - right
+	if distance < 0 {
+		distance = -distance
+	}
+	if year := 365 - distance; year < distance {
+		distance = year
+	}
+	return distance
 }
 
 // onThisDayPhoto 找出这本相册里真正拍于那一天的那一张。

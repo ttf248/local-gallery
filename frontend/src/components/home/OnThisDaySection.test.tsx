@@ -118,4 +118,21 @@ describe("那年今日", () => {
     renderSection([]);
     expect(screen.queryByTestId("on-this-day-section")).toBeNull();
   });
+
+  it("退回最近的那几天时，标题跟着事实走", () => {
+    renderSection([
+      makeItem("a_1", "2021年", "2021-12-17", makePhoto("f_1", "IMG_1.jpg", "2021-12-17")),
+      makeItem("a_2", "2019年", "2019-12-15", makePhoto("f_2", "IMG_2.jpg", "2019-12-15")),
+    ]);
+    const section = screen.getByTestId("on-this-day-section");
+    // 摆的别的日子，就不能叫「那年今日」。
+    expect(section.textContent).toContain("往年今日");
+    expect(section.textContent).not.toContain("那年今日");
+    expect(section.textContent).toContain("今天没有往年的这一天");
+    // 说清是哪几天。
+    expect(section.textContent).toContain("12 月 17 日");
+    expect(section.textContent).toContain("12 月 15 日");
+    // 每张卡片仍带着自己命中的那一天。
+    expect(section.textContent).toContain("2021 年 12 月 17 日");
+  });
 });

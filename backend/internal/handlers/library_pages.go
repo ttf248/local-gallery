@@ -376,8 +376,17 @@ func LibraryOnThisDayHandler(catalog *services.ResourceCatalog, dimensions *serv
 			}
 			day = parsed
 		}
+		// fallback=1：今天没有往年照片时，退回离今天最近的那几天。
+		// 首页要的是「往年今天拍过什么」，空着就等于没有这一段。
+		fallback := strings.TrimSpace(c.Query("fallback")) == "1"
 		snapshot := catalog.Acquire()
-		page, err := services.PageOnThisDay(snapshot, kind, month, day, limit)
+		var page services.LibraryPage[services.LibraryOnThisDayItem]
+		var err error
+		if fallback {
+			page, err = services.PageOnThisDayNearest(snapshot, kind, month, day, limit)
+		} else {
+			page, err = services.PageOnThisDay(snapshot, kind, month, day, limit)
+		}
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}

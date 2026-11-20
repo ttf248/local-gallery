@@ -154,6 +154,10 @@ function PhotoHome() {
   const resumeCards = useHistoryCards("photo", hasContent).cards;
 
   // 「那年今日」只在照片侧成立：漫画没有拍摄时间。
+  //
+  // 拍摄日期是从文件名推断出来的，稀疏得很：大多数日子里往年这天没拍过照，
+  // 那一段就会整个消失，用户以为功能没了。所以这里允许退回离今天最近的
+  // 那几天 —— 每张卡片都带着自己命中的那一天，不会假装是今天拍的。
   const today = new Date();
   const onThisDay = useOnThisDayAlbums(
     "photo",
@@ -161,6 +165,7 @@ function PhotoHome() {
     today.getDate(),
     6,
     hasContent,
+    true,
   );
   const onThisDayItems = onThisDay.data?.page.items ?? [];
 

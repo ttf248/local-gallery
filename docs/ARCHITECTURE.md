@@ -478,7 +478,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - **首页是发现页，不是入口页。** 照片侧首页不列全部相册（那是图库）、不列年份索引（那是探索）、不摆完整主题墙（那是探索）；页头只留一句事实（多少本相册、上次更新什么时候）与两个动作（进图库、重新扫描）。漫画侧首页只讲续读与未读，作品与卷的清单在书架 `/comic/library` 里：漫画按作品与卷组织，目录结构对它不是主要路径。
 - 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，组件 `components/home/ResumeHero.tsx`（首页首屏专区）与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。
 - 措辞与计数单位的唯一真相源是 `utils/workbench.ts` 的词表（`workbenchCopy(mode)`），两侧共用组件从**卡片自身的** `contentKind` 取词，而不是从当前工作台取：一张卡永远知道自己属于照片还是漫画，取不到时按照片兜底。照片说「张 / 本 / 浏览」，漫画说「页 / 卷 / 阅读」。
-- 「那年今日」的下标表在发布期建好：把各相册从文件名推断出的拍摄日期按月-日归桶（`library_page.go` 的 `onThisDay`），请求期只按属性与年份过滤。它靠拍摄时间成立，因此只在照片侧有意义 —— 漫画侧不出现这一段。
+- 「那年今日」的下标表在发布期建好：把各相册从文件名推断出的拍摄日期按月-日归桶（`library_page.go` 的 `onThisDay`），请求期只按属性与年份过滤。它靠拍摄时间成立，因此只在照片侧有意义 —— 漫画侧不出现这一段。拍摄日期稀疏，多数日子里往年这天没拍过照；首页因此允许退回离这一天最近的、往年确实拍过照的那几天（`fallback=1`），标题与摘要跟着事实走：摆的是别的日子就不叫「那年今日」。
 - 索引维度按侧分：照片按年份（`components/home/YearTimeline.tsx`），漫画按作品（`components/home/SeriesTimeline.tsx`，集合即作品）。两者共用 `components/home/Timeline.tsx` 的视觉骨架。照片侧年份卡的主操作是打开年份照片墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`GET /api/library/media-feed?kind=photo&scope=year&year=<年份>` 按年份归组取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。
 
 ### 查询、导航与网格

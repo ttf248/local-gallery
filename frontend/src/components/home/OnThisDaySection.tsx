@@ -67,10 +67,22 @@ export default function OnThisDaySection({
   // 有照片证据时数照片，没有时数相册：两个数说的事不一样，
   // 混着说会让读者以为摆出来的就是照片。
   const photoCount = cards.filter((entry) => entry.photo).length;
-  const summary =
-    photoCount > 0
+  // 命中的日子未必就是今天：往年这天没拍过照时，退回离今天最近的那几天。
+  // 标题跟着事实走 —— 摆的是别的日子，就不能叫「那年今日」。
+  // 同一个日子可能命中好几本相册：摘要里按「月-日」去重，
+  // 摆出来的卡片仍各自带着自己那一年的那一天。
+  const matchedDays = [
+    ...new Set(cards.map((entry) => entry.matched.slice(5))),
+  ];
+  const isSameDay = matchedDays.every(
+    (value) => value === formatMonthDayKey(month, day),
+  );
+  const title = isSameDay ? "那年今日" : "往年今日";
+  const summary = isSameDay
+    ? photoCount > 0
       ? `${month} 月 ${day} 日 · 往年这天拍过 ${photoCount} 张`
-      : `${month} 月 ${day} 日 · 往年这天有 ${cards.length} 本相册拍过照`;
+      : `${month} 月 ${day} 日 · 往年这天有 ${cards.length} 本相册拍过照`
+    : `今天没有往年的这一天 · 最近的 ${formatMatchedDays(matchedDays)}`;
   return (
     <section
       className="page-shell page-section"
@@ -80,7 +92,7 @@ export default function OnThisDaySection({
         {sectionIndex ? (
           <span className="section-index">{sectionIndex}</span>
         ) : null}
-        <h2 className="section-title">那年今日</h2>
+        <h2 className="section-title">{title}</h2>
         <span className="section-meta">{summary}</span>
       </div>
       <div className="on-this-day__grid">
@@ -189,6 +201,28 @@ function OnThisDayPhotoCard({
       </div>
     </div>
   );
+}
+
+/**
+ * 列出最近的那几天，最多三个 —— 再多这一行就太长，读不完了。
+ *
+ * "11-19" → "11 月 19 日"。
+ */
+function formatMatchedDays(days: string[]): string {
+  const label = days.slice(0, 3).map((value) => {
+    const [month, day] = value.split("-");
+    if (!month || !day) return value;
+    return `${Number(month)} 月 ${Number(day)} 日`;
+  });
+  if (days.length > label.length) {
+    return `${label.join("、")} 等 ${days.length} 天`;
+  }
+  return label.join("、");
+}
+
+/** 11 月 20 日 → "11-20"：拿来比命中的是不是同一天。 */
+function formatMonthDayKey(month: number, day: number): string {
+  return `${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 /** "2023-11-07" → "2023 年 11 月 7 日"。 */

@@ -198,6 +198,7 @@ export function useOnThisDayAlbums(
   day: number,
   limit = 12,
   enabled = true,
+  fallback = false,
 ) {
   const { ready } = useAppMode();
   return useQuery({
@@ -207,9 +208,10 @@ export function useOnThisDayAlbums(
       month,
       day,
       limit,
+      fallback,
     ],
     queryFn: ({ signal }) =>
-      libraryApi.onThisDay(kind, month, day, limit, signal),
+      libraryApi.onThisDay(kind, month, day, limit, signal, fallback),
     enabled: ready && enabled,
     staleTime: 60 * 60 * 1000,
   });

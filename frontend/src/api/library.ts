@@ -682,9 +682,10 @@ export const libraryApi = {
     day?: number,
     limit = 20,
     signal?: AbortSignal,
+    fallback = false,
   ) =>
     api<PageResponse<LibraryOnThisDayItem>>("/api/library/on-this-day", {
-      params: { kind, month, day, limit },
+      params: { kind, month, day, limit, fallback: fallback ? 1 : undefined },
       signal,
     }),
   tagPage: (
