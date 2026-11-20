@@ -156,6 +156,35 @@ test("漫画内容存在但没有在读或未读时显示书架引导", async ({
   );
 });
 
+test("漫画侧没有内容时说明空工作台并提供照片库入口", async ({ page }) => {
+  await scannedNodes(page.request, "photo");
+  await setWorkbenchMode(page.request, "comic");
+  await page.route("**/api/library/manifest*", async (route) => {
+    const response = await route.fetch();
+    const manifest = (await response.json()) as {
+      manifest: {
+        statistics: { comicAlbumCount: number; photoAlbumCount: number };
+      };
+    };
+    expect(manifest.manifest.statistics.photoAlbumCount).toBeGreaterThan(0);
+    manifest.manifest.statistics.comicAlbumCount = 0;
+    await route.fulfill({ json: manifest });
+  });
+
+  await page.goto("/comic");
+  await expect(
+    page.getByRole("heading", { name: "漫画这边还没有内容" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去照片那边看看。",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "去照片库看看" }),
+  ).toHaveAttribute("href", "/photo");
+});
+
 test("可交互控件的命中区够手指点", async ({ page }) => {
   await scannedNodes(page.request, "photo");
   await page.goto("/photo", { waitUntil: "domcontentloaded" });
