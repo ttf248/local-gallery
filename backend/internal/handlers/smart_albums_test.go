@@ -79,6 +79,24 @@ func TestSmartAlbumGroupsHandlerBuildsAlbumScopedSummary(t *testing.T) {
 	if response.StatusCode != fiber.StatusOK || !defaultDirectory.OK || defaultDirectory.Page.Total != 0 {
 		t.Fatalf("default recommendation directory status=%d payload=%+v", response.StatusCode, defaultDirectory)
 	}
+	response, err = app.Test(httptest.NewRequest("GET", "/api/smart-albums?dimension=all", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ungenerated struct {
+		Page struct {
+			Analysis services.SmartAlbumDirectoryAnalysis `json:"analysis"`
+		} `json:"page"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&ungenerated); err != nil {
+		response.Body.Close()
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != fiber.StatusOK || ungenerated.Page.Analysis.TotalAlbums != 1 ||
+		ungenerated.Page.Analysis.AnalyzedAlbums != 0 || ungenerated.Page.Analysis.Complete {
+		t.Fatalf("ungenerated analysis state status=%d payload=%+v", response.StatusCode, ungenerated)
+	}
 	response, err = app.Test(httptest.NewRequest("GET", "/api/albums/"+albumID+"/smart-groups?dimension=time", nil))
 	if err != nil {
 		t.Fatal(err)

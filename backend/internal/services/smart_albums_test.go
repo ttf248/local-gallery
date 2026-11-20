@@ -123,6 +123,10 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 	if directoryFirst.Total != 3 || len(directoryFirst.Items) != 2 || directoryFirst.NextCursor == "" {
 		t.Fatalf("first smart album directory page=%+v", directoryFirst)
 	}
+	if directoryFirst.Analysis == nil || directoryFirst.Analysis.TotalAlbums != 2 ||
+		directoryFirst.Analysis.AnalyzedAlbums != 0 || directoryFirst.Analysis.Complete {
+		t.Fatalf("missing caches were reported as analyzed: %+v", directoryFirst.Analysis)
+	}
 	directorySecond, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, directoryFirst.NextCursor, 1, "")
 	if err != nil {
 		t.Fatal(err)
@@ -137,6 +141,24 @@ func TestSmartAlbumGroupsStayInsideAlbumAndPageValidatedMembers(t *testing.T) {
 		if _, err := os.Stat(service.cachePath(firstAlbumID, dimension)); !os.IsNotExist(err) {
 			t.Fatalf("directory aggregation created an unrequested %s cache: %v", dimension, err)
 		}
+	}
+	// Empty cache files are completed analysis results. They must not be
+	// mistaken for dimensions that have never run.
+	for _, albumID := range []string{firstAlbumID, secondAlbumID} {
+		for _, dimension := range smartAlbumRefreshDimensions() {
+			if _, ok := service.readCachedGroups(albumID, dimension); ok {
+				continue
+			}
+			seedEmptySmartAlbumCache(t, service, albumID, dimension)
+		}
+	}
+	completeDirectory, err := service.DirectoryPage(context.Background(), SmartAlbumDimensionAll, "", 2, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completeDirectory.Analysis == nil || completeDirectory.Analysis.TotalAlbums != 2 ||
+		completeDirectory.Analysis.AnalyzedAlbums != 2 || !completeDirectory.Analysis.Complete {
+		t.Fatalf("empty generated caches were not reported complete: %+v", completeDirectory.Analysis)
 	}
 	encoded, err := json.Marshal(first)
 	if err != nil {
@@ -537,6 +559,33 @@ func TestSmartAlbumDirectorySortsRecommendationsAcrossAlbums(t *testing.T) {
 
 // seedRecommendedGroup 直接写一份精选推荐的缓存：目录只汇总已生成的
 // 分组，这里要的是「排出来的顺序」，不必把推荐算法整套跑一遍。
+func seedEmptySmartAlbumCache(
+	t *testing.T,
+	service *SmartAlbumService,
+	albumID, dimension string,
+) {
+	t.Helper()
+	cache := smartAlbumCache{
+		Version:   smartAlbumCacheVersion,
+		AlbumID:   albumID,
+		Dimension: dimension,
+		FaceModel: smartAlbumFaceModel(service.jobs, dimension),
+		Key:       "empty-" + albumID + "-" + dimension,
+		Groups:    []smartAlbumCachedGroup{},
+	}
+	data, err := json.Marshal(cache)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := service.cachePath(albumID, dimension)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func seedRecommendedGroup(
 	t *testing.T,
 	service *SmartAlbumService,

@@ -87,13 +87,13 @@ vi.mock("../store/uiStore", () => ({
     selector({ pushToast: vi.fn() }),
 }));
 
-function renderSearch() {
+function renderSearch(entry = "/photo/semantic") {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[entry]}>
         <SemanticSearch />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -218,6 +218,25 @@ describe("智能搜索", () => {
     );
     expect(await screen.findByText("没有匹配的照片")).toBeInTheDocument();
     expect(screen.getByText(/NVIDIA GeForce RTX 3060/)).toBeInTheDocument();
+  });
+
+  it("从探索页带入的关键词会回填并立即提交搜索", async () => {
+    renderSearch("/photo/semantic?q=%E6%B5%B7%E8%BE%B9%E6%97%A5%E8%90%BD");
+
+    expect(await screen.findByLabelText("搜索内容")).toHaveValue("海边日落");
+    await waitFor(() =>
+      expect(mocks.semanticSearch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "海边日落",
+          ocrText: "海边日落",
+          matchMode: "any",
+          kind: "photo",
+          offset: 0,
+          limit: 60,
+        }),
+        undefined,
+      ),
+    );
   });
 
   it("Chinese-CLIP 不可用时仍可提交 OCR 搜索", async () => {

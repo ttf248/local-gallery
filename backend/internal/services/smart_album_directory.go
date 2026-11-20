@@ -12,6 +12,23 @@ import (
 	"time"
 )
 
+// SmartAlbumDirectoryAnalysis reports whether the cache has been generated for
+// every photo album and every smart-album dimension. Empty group lists are
+// valid completed results; a missing cache means the dimension has not run.
+type SmartAlbumDirectoryAnalysis struct {
+	TotalAlbums    int  `json:"totalAlbums"`
+	AnalyzedAlbums int  `json:"analyzedAlbums"`
+	Complete       bool `json:"complete"`
+}
+
+// SmartAlbumDirectoryPage adds cache-generation state to the shared page shape.
+// Analysis is present only for the "all" directory, which can cheaply inspect
+// all five cached dimensions while it is already reading the four detail ones.
+type SmartAlbumDirectoryPage struct {
+	LibraryPage[SmartAlbumDirectoryItem]
+	Analysis *SmartAlbumDirectoryAnalysis `json:"analysis,omitempty"`
+}
+
 // DirectoryPage collects only folder dimensions that already have a smart
 // album cache. Missing folder summaries stay missing instead of triggering
 // analysis or a full-library rebuild from the home page.
@@ -27,16 +44,17 @@ func (s *SmartAlbumService) DirectoryPage(
 	dimension, cursor string,
 	limit int,
 	sortMode string,
-) (LibraryPage[SmartAlbumDirectoryItem], error) {
+) (SmartAlbumDirectoryPage, error) {
 	if !validSmartAlbumDirectoryDimension(dimension) {
-		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrSmartAlbumDimension
+		return SmartAlbumDirectoryPage{}, ErrSmartAlbumDimension
 	}
 	snapshot := s.catalog.Acquire()
 	if !snapshot.Ready() {
-		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrLibraryNotReady
+		return SmartAlbumDirectoryPage{}, ErrLibraryNotReady
 	}
 	if dimension == "featured" {
-		return s.featuredDirectoryPage(ctx, snapshot, cursor, limit)
+		page, err := s.featuredDirectoryPage(ctx, snapshot, cursor, limit)
+		return SmartAlbumDirectoryPage{LibraryPage: page}, err
 	}
 	sortMode = NormalizeSmartAlbumSort(sortMode)
 	directoryRevision := s.directoryRevision.Load()
@@ -46,23 +64,30 @@ func (s *SmartAlbumService) DirectoryPage(
 		var err error
 		offset, err = DecodePageCursor(cursor, snapshot.Revision(), scope)
 		if err != nil {
-			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+			return SmartAlbumDirectoryPage{}, err
 		}
 	}
 	dimensions := smartAlbumDirectoryDimensions(dimension)
+	photoAlbums := snapshot.PhotoAlbumSummaries()
+	var analysis *SmartAlbumDirectoryAnalysis
+	if dimension == SmartAlbumDimensionAll {
+		analysis = &SmartAlbumDirectoryAnalysis{TotalAlbums: len(photoAlbums)}
+	}
 	blocks := make([]smartAlbumDirectoryBlock, 0)
 	coverIDs := make([]string, 0)
 	// 精选推荐要按组内最新的拍摄时间排序，而成员不随目录外传
 	//（applyOverrides 会清掉）：排序用的成员在这里单独留一份。
 	membersByGroup := make(map[string][]string)
-	for _, album := range snapshot.PhotoAlbumSummaries() {
+	for _, album := range photoAlbums {
 		if err := ctx.Err(); err != nil {
-			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+			return SmartAlbumDirectoryPage{}, err
 		}
 		block := smartAlbumDirectoryBlock{album: album}
+		albumComplete := true
 		for _, currentDimension := range dimensions {
 			cache, ok := s.readCachedGroups(album.ID, currentDimension)
 			if !ok {
+				albumComplete = false
 				continue
 			}
 			cached := smartAlbumGroups(cache.Groups)
@@ -89,6 +114,14 @@ func (s *SmartAlbumService) DirectoryPage(
 				}
 			}
 		}
+		if analysis != nil {
+			if _, ok := s.readCachedGroups(album.ID, SmartAlbumDimensionRecommended); !ok {
+				albumComplete = false
+			}
+			if albumComplete {
+				analysis.AnalyzedAlbums++
+			}
+		}
 		if len(block.items) == 0 {
 			continue
 		}
@@ -96,6 +129,9 @@ func (s *SmartAlbumService) DirectoryPage(
 			coverIDs = append(coverIDs, block.leadCoverID)
 		}
 		blocks = append(blocks, block)
+	}
+	if analysis != nil {
+		analysis.Complete = analysis.AnalyzedAlbums == analysis.TotalAlbums
 	}
 	// 相册之间按「这本相册最新的一组」排：封面图的 EXIF 拍摄时间即那一组
 	// 的起点。一次取回所有封面的元数据，避免逐本相册去查。
@@ -111,10 +147,10 @@ func (s *SmartAlbumService) DirectoryPage(
 	}
 	currentDirectoryRevision := s.directoryRevision.Load()
 	if cursor != "" && currentDirectoryRevision != directoryRevision {
-		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrStalePageCursor
+		return SmartAlbumDirectoryPage{}, ErrStalePageCursor
 	}
 	if offset > len(items) {
-		return LibraryPage[SmartAlbumDirectoryItem]{}, ErrInvalidPageCursor
+		return SmartAlbumDirectoryPage{}, ErrInvalidPageCursor
 	}
 	end := min(len(items), offset+NormalizeLibraryPageLimit(limit))
 	pageItems := clonePage(items, offset, end)
@@ -130,11 +166,11 @@ func (s *SmartAlbumService) DirectoryPage(
 			end,
 		)
 		if err != nil {
-			return LibraryPage[SmartAlbumDirectoryItem]{}, err
+			return SmartAlbumDirectoryPage{}, err
 		}
 		page.NextCursor = nextCursor
 	}
-	return page, nil
+	return SmartAlbumDirectoryPage{LibraryPage: page, Analysis: analysis}, nil
 }
 
 // featuredDirectoryPage picks the best recommendation from different source

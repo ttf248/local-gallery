@@ -99,7 +99,18 @@ export interface SmartAlbumDirectoryItem {
   group: SmartAlbumGroup;
 }
 
-export type SmartAlbumDirectoryPage = LibraryPage<SmartAlbumDirectoryItem>;
+export interface SmartAlbumDirectoryAnalysis {
+  totalAlbums: number;
+  /** 已生成全部五个分组维度缓存的相册数。 */
+  analyzedAlbums: number;
+  /** 空分组也算已分析；只有缺少缓存时才为 false。 */
+  complete: boolean;
+}
+
+export interface SmartAlbumDirectoryPage extends LibraryPage<SmartAlbumDirectoryItem> {
+  /** 仅 dimension=all 返回，用于区分尚未生成与分析后无结果。 */
+  analysis?: SmartAlbumDirectoryAnalysis;
+}
 
 export interface SmartAlbumOverride {
   name?: string;
@@ -142,13 +153,10 @@ export const albumsApi = {
     cursor?: string,
     signal?: AbortSignal,
   ) {
-    return api<SearchResponse>(
-      `/api/search`,
-      {
-        params: { q, limit, kind, cursor },
-        signal,
-      },
-    );
+    return api<SearchResponse>(`/api/search`, {
+      params: { q, limit, kind, cursor },
+      signal,
+    });
   },
   /**
    * 智能相册目录：一页给一批分组。

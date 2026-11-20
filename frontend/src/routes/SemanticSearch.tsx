@@ -1,5 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ApiError } from "../api/client";
 import {
@@ -34,10 +34,13 @@ interface SubmittedSearch {
 }
 
 export default function SemanticSearch() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const routeQuery = searchParams.get("q")?.trim() ?? "";
+  const routeSubmittedRef = useRef("");
   const density = usePhotoStore((state) => state.density);
   const picks = usePickToggle();
   const [mode, setMode] = useState<SearchMode>("text");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(routeQuery);
   const [imageOCRText, setImageOCRText] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [similarResourceId, setSimilarResourceId] = useState("");
@@ -119,6 +122,7 @@ export default function SemanticSearch() {
     isPicked: picks.isPicked,
     onTogglePick: (item) => picks.toggle(item.id),
   });
+  const resetWall = wall.reset;
   const viewer = wall.viewer;
   const status = statusQuery.data?.status;
   const embeddingReady = Boolean(status?.runtimeReady && status.modelValid);
@@ -170,9 +174,51 @@ export default function SemanticSearch() {
     wall.reset();
   };
 
+  // 探索页的快捷搜索通过 q 带入文字；读到模型状态后再提交，
+  // 这样模型可用时会同时查画面语义与 OCR，不可用时仍能查 OCR。
+  useEffect(() => {
+    if (!routeQuery) {
+      routeSubmittedRef.current = "";
+      return;
+    }
+    setMode("text");
+    setText(routeQuery);
+    setImageFile(undefined);
+    setSimilarResourceId("");
+    if (routeSubmittedRef.current === routeQuery) return;
+    if (!statusQuery.isSuccess && !statusQuery.isError) return;
+
+    routeSubmittedRef.current = routeQuery;
+    setSubmitted({
+      request: {
+        kind: "photo",
+        ...(embeddingReady
+          ? { text: routeQuery, ocrText: routeQuery, matchMode: "any" as const }
+          : { ocrText: routeQuery }),
+      },
+      token: Date.now(),
+    });
+    resetWall();
+  }, [
+    embeddingReady,
+    routeQuery,
+    resetWall,
+    statusQuery.isError,
+    statusQuery.isSuccess,
+  ]);
+
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (hasSemanticQuery && !embeddingReady) return;
+    const nextParams = new URLSearchParams(searchParams);
+    if (mode === "text" && text.trim()) {
+      routeSubmittedRef.current = text.trim();
+      nextParams.set("q", text.trim());
+    } else {
+      routeSubmittedRef.current = "";
+      nextParams.delete("q");
+    }
+    setSearchParams(nextParams, { replace: true });
     if (similarResourceId) {
       search(similarResourceId);
       return;
@@ -414,7 +460,8 @@ export default function SemanticSearch() {
                           <optgroup label="省">
                             {provincePlaces.map((place) => (
                               <option key={place.adcode} value={place.adcode}>
-                                {place.name} · {place.photoCount.toLocaleString()} 张
+                                {place.name} ·{" "}
+                                {place.photoCount.toLocaleString()} 张
                               </option>
                             ))}
                           </optgroup>
@@ -423,7 +470,8 @@ export default function SemanticSearch() {
                           <optgroup label="市">
                             {cityPlaces.map((place) => (
                               <option key={place.adcode} value={place.adcode}>
-                                {place.name} · {place.photoCount.toLocaleString()} 张
+                                {place.name} ·{" "}
+                                {place.photoCount.toLocaleString()} 张
                               </option>
                             ))}
                           </optgroup>

@@ -78,6 +78,7 @@ export function useSmartAlbumDirectory(
     ...result,
     items: result.data?.pages.flatMap((page) => page.items) ?? [],
     total: result.data?.pages[0]?.total,
+    analysis: result.data?.pages[0]?.analysis,
   };
 }
 
