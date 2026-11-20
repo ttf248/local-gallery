@@ -29,11 +29,14 @@ func peopleGroupList(
 	groups := make(map[string]*PersonGroup)
 	photos := make(map[string]int)
 	seen := make(map[peopleGroupResource]struct{}, len(faces))
+	// 归属分组先记下来：第二遍要为每组挑代表脸，不必再算一次归属。
+	effectiveIDs := make(map[string]string, len(faces))
 	for _, face := range faces {
 		id := effective(face)
 		if include != nil && !include(face.ResourceID, id) {
 			continue
 		}
+		effectiveIDs[face.Key] = id
 		group := groups[id]
 		if group == nil {
 			group = &PersonGroup{ID: id}
@@ -49,10 +52,80 @@ func peopleGroupList(
 			}
 		}
 	}
+	// 代表脸：封面照片里最大、最清晰的那张脸。
+	//
+	// 封面照片是按资源 ID 最小的那一张定的 —— 确定性强，但那张照片里
+	// 可能有好几张脸。第二遍只在该组的那张封面里挑，挑完再定，
+	// 因此结果与遍历顺序无关。
+	coverFaces := make(map[string]PersonFace, len(groups))
+	for key, face := range faces {
+		id := effectiveIDs[key]
+		if id == "" {
+			continue
+		}
+		group := groups[id]
+		if group == nil || face.ResourceID != group.CoverResourceID {
+			continue
+		}
+		if len(face.Box) != 4 || face.Box[2] <= 0 || face.Box[3] <= 0 {
+			continue
+		}
+		current, exists := coverFaces[id]
+		if !exists || personFaceMoreProminent(face, current) {
+			coverFaces[id] = face
+		}
+	}
+	for id, face := range coverFaces {
+		if len(face.Box) != 4 {
+			continue
+		}
+		groups[id].CoverFace = &PersonCoverFace{
+			ResourceID: face.ResourceID,
+			Box:        append([]float32(nil), face.Box...),
+		}
+	}
 	for id, group := range groups {
 		group.PhotoCount = photos[id]
 	}
 	return groups
+}
+
+// personFaceMoreProminent 判断两张脸哪一张更适合当代表脸。
+//
+// 先看脸在画面里有多大 —— 大脸认得出人，小脸只是一团模糊；
+// 一样大再看检测分；都一样就按稳定键取小的那个，结果与顺序无关。
+func personFaceMoreProminent(candidate, current PersonFace) bool {
+	candidateArea := float64(candidate.Box[2]) * float64(candidate.Box[3])
+	currentArea := float64(current.Box[2]) * float64(current.Box[3])
+	if candidateArea != currentArea {
+		return candidateArea > currentArea
+	}
+	if candidate.Score != current.Score {
+		return candidate.Score > current.Score
+	}
+	return candidate.Key < current.Key
+}
+
+// fillCoverFaceSizes 补齐代表脸的原图尺寸。
+//
+// 尺寸是按需查的（读一次图片头），所以只给**要返回给界面的**那几组补，
+// 不给全库几千个分组补。原图尺寸拿不到时留空，界面退回整张封面。
+func (s *PeopleService) fillCoverFaceSizes(groups []PersonGroup) {
+	if s.sourceDimensions == nil {
+		return
+	}
+	for i := range groups {
+		face := groups[i].CoverFace
+		if face == nil || face.Width > 0 && face.Height > 0 {
+			continue
+		}
+		dimensions := s.sourceDimensions(face.ResourceID)
+		if !dimensions.Known() {
+			continue
+		}
+		face.Width = dimensions.Width
+		face.Height = dimensions.Height
+	}
 }
 
 func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
@@ -73,6 +146,7 @@ func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 	sort.Slice(result, func(i, j int) bool {
 		return peopleGroupRanksBefore(result[i], result[j])
 	})
+	s.fillCoverFaceSizes(result)
 	return result
 }
 
@@ -197,6 +271,7 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 	sort.Slice(result, func(i, j int) bool {
 		return peopleGroupRanksBefore(result[i], result[j])
 	})
+	s.fillCoverFaceSizes(result)
 	return result, total
 }
 
@@ -298,6 +373,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 		if len(result) > limit {
 			result = result[:limit]
 		}
+		s.fillCoverFaceSizes(result)
 		return result, total
 	}
 
@@ -320,6 +396,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 	sort.Slice(result, func(i, j int) bool {
 		return peopleGroupRanksBefore(result[i], result[j])
 	})
+	s.fillCoverFaceSizes(result)
 	return result, total
 }
 

@@ -110,15 +110,30 @@ type PersonFace struct {
 	originID   string
 }
 
+// PersonCoverFace 描述人物分组封面照片里的那张代表脸。
+//
+// 人物预览要露出脸本身，而不是整张照片：一张脸在合影里往往只占很小一块，
+// 整张当封面时用户看到的是「有人的照片」，认不出是哪个人。框是本机分析
+// 算出来的，坐标在原图像素里；原图尺寸一并给出，界面据此把脸放到卡片
+// 中央，不用自己猜缩放比例。
+type PersonCoverFace struct {
+	ResourceID string    `json:"resourceId"`
+	Box        []float32 `json:"box"`
+	Width      int       `json:"width"`
+	Height     int       `json:"height"`
+}
+
 type PersonGroup struct {
 	ID              string              `json:"id"`
 	Name            string              `json:"name"`
 	FaceCount       int                 `json:"faceCount"`
 	PhotoCount      int                 `json:"photoCount"`
 	CoverResourceID string              `json:"coverResourceId,omitempty"`
-	Confirmed       bool                `json:"confirmed"`
-	Hidden          bool                `json:"hidden"`
-	Quality         *PersonGroupQuality `json:"quality,omitempty"`
+	// CoverFace 是封面照片里的代表脸。尺寸未知时只有框，界面退回整张封面。
+	CoverFace *PersonCoverFace `json:"coverFace,omitempty"`
+	Confirmed bool              `json:"confirmed"`
+	Hidden    bool              `json:"hidden"`
+	Quality   *PersonGroupQuality `json:"quality,omitempty"`
 }
 
 // IsCommon reports whether a group belongs in the regular people list.
