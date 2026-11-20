@@ -216,6 +216,11 @@ type LibrarySearchHit struct {
 	CoverImageVersion string `json:"coverImageVersion,omitempty"`
 	// ContentKind 让搜索结果不必再查一次相册摘要就能决定跳转目标。
 	ContentKind string `json:"contentKind,omitempty"`
+	// Match 说明这一条为什么算命中：exact / prefix / contains / tag / path。
+	//
+	// 界面据此写出「相关性」——用户看到的是「名字完全相同」这样一句话，
+	// 而不是一串分数。与 rank 一一对应，rank 只用于排序。
+	Match string `json:"match,omitempty"`
 }
 
 // LibraryActivitySummary 是常驻导航所需的轻量阅读计数，不携带相册清单或活动详情。
@@ -1242,6 +1247,7 @@ func rankedLibrarySearch(snapshot CatalogSnapshot, query string, kind LibraryKin
 		if !ok {
 			continue
 		}
+		hit.Match = searchMatchLabel(rank)
 		scored = append(scored, scoredSearchHit{
 			hit:   hit,
 			rank:  rank,
@@ -1299,6 +1305,24 @@ const (
 	searchRankTag     = 3 // 标签命中
 	searchRankPath    = 4 // 只在散图的整条归属路径里命中
 )
+
+// searchMatchLabel 把档位说成一句话：界面据此写出「为什么是它」。
+func searchMatchLabel(rank int) string {
+	switch rank {
+	case searchRankExact:
+		return "exact"
+	case searchRankPrefix:
+		return "prefix"
+	case searchRankContain:
+		return "contains"
+	case searchRankTag:
+		return "tag"
+	case searchRankPath:
+		return "path"
+	default:
+		return ""
+	}
+}
 
 // searchHitScore 给一条命中打分，返回档位与命中位置。
 //

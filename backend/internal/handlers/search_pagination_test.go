@@ -98,3 +98,65 @@ func TestSearchHandlerPagesMoreThanOneHundredHits(t *testing.T) {
 		t.Fatalf("second page order=%q..%q", second.Results[0].Name, second.Results[4].Name)
 	}
 }
+
+func TestSearchHandlerSaysWhyEachHitMatched(t *testing.T) {
+	root := t.TempDir()
+	names := []string{"旅行", "旅行日记", "我的旅行"}
+	albums := make([]models.Album, 0, len(names))
+	for _, name := range names {
+		albumPath := filepath.Join(root, name)
+		image := filepath.Join(albumPath, "page.jpg")
+		albums = append(albums, models.Album{
+			Type:        "album",
+			Path:        albumPath,
+			Name:        name,
+			DisplayName: name,
+			SourceRoot:  root,
+			ImageFiles:  []string{image},
+			ImageCount:  1,
+			CoverImage:  image,
+			CoverKind:   "image",
+		})
+	}
+	catalog := services.NewResourceCatalog()
+	catalog.SetContentKindPolicy(services.NewContentKindPolicy([]services.RootKind{
+		{Path: root, Kind: models.ContentKindPhoto},
+	}))
+	catalog.Publish(&models.ScanResult{
+		Roots:      []string{root},
+		Albums:     albums,
+		AlbumCount: len(albums),
+	}, []string{root})
+
+	app := fiber.New()
+	app.Get("/api/search", SearchHandler(catalog))
+	response, err := app.Test(httptest.NewRequest(
+		"GET",
+		"/api/search?q=旅行&kind=photo&limit=10",
+		nil,
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var page struct {
+		Results []services.LibrarySearchHit `json:"results"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&page); err != nil {
+		t.Fatal(err)
+	}
+	matches := map[string]string{}
+	for _, hit := range page.Results {
+		matches[hit.Name] = hit.Match
+	}
+	want := map[string]string{
+		"旅行":   "exact",
+		"旅行日记": "prefix",
+		"我的旅行": "contains",
+	}
+	for name, label := range want {
+		if matches[name] != label {
+			t.Fatalf("hit %q match=%q, want %q (all: %v)", name, matches[name], label, matches)
+		}
+	}
+}

@@ -6,18 +6,25 @@ import { FolderSearchIcon, SearchIcon } from "./Icon";
 import { useDebounce } from "../../hooks/useDebounce";
 import { useAppMode } from "../../hooks/useAppMode";
 import { albumsApi, type SearchHit } from "../../api/albums";
+import { aiJobsApi, type AIWorkerStatus } from "../../api/aiJobs";
 import RenditionImage from "./RenditionImage";
+import SearchScopeMenu from "./SearchScopeMenu";
 import {
   albumRoute,
   searchRoute,
-  semanticSearchRoute,
   tagRoute,
 } from "../../utils/path";
+import {
+  SEARCH_SCOPE_PARAM,
+  searchScopeFromParams,
+  type SearchScope,
+} from "../../utils/searchScope";
 import { albumCountUnit, collectionTypeWord, mediaUnit, workbenchCopy } from "../../utils/workbench";
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
-//   - 草稿独立于列表筛选，只有名称搜索结果页从地址预填
-//   - 回车进入名称搜索结果页
+//   - 草稿独立于列表筛选，只有搜索结果页从地址预填
+//   - 作用域说清搜的是「容器的名字」还是「照片里的画面与文字」
+//   - 回车进入搜索结果页
 export default function GlobalSearch() {
   const location = useLocation();
   const [params] = useSearchParams();
@@ -25,27 +32,41 @@ export default function GlobalSearch() {
   const { mode } = useAppMode();
   const isSearchPage = location.pathname === searchRoute(mode);
   const routeQuery = isSearchPage ? params.get(LIST_PARAM.query) ?? "" : "";
+  // 漫画侧只有名字可搜：内容搜索只查照片。
+  const routeScope = mode === "comic" ? "name" : searchScopeFromParams(params);
   const [query, setQuery] = useState(routeQuery);
+  const [scope, setScope] = useState<SearchScope>(routeScope);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   useEffect(() => {
-    // 切到名称搜索结果页时恢复地址里的关键词；其他页面不借用列表 q。
+    // 切到搜索结果页时恢复地址里的关键词与作用域；其他页面不借用列表 q。
     setQuery(routeQuery);
-  }, [location.pathname, routeQuery]);
+    setScope(routeScope);
+  }, [location.pathname, routeQuery, routeScope]);
 
   // 叶级目录两侧都叫「相册」：一个词，不必按侧记两套。
   const albumWord = workbenchCopy(mode).albumTypeLabel;
   const debounced = useDebounce(query, 200);
   const searchTerm = debounced.trim();
   const searchEnabled = searchTerm.length >= 2;
+  const nameScope = scope === "name";
   const searchQuery = useQuery({
     queryKey: ["library", "search", mode, searchTerm, 10],
     queryFn: () => albumsApi.search(searchTerm, mode, 10),
-    enabled: searchEnabled,
+    enabled: nameScope && searchEnabled,
     staleTime: 30_000,
     retry: false,
   });
-  const hits = searchQuery.data?.results ?? [];
+  const hits = nameScope ? (searchQuery.data?.results ?? []) : [];
+  // 内容搜索的运行环境：模型没就绪或还没建索引时，先说清楚，
+  // 别让用户以为库里没有那张照片。
+  const embeddingStatus = useQuery({
+    queryKey: ["ai-embedding-status"],
+    queryFn: aiJobsApi.embeddingStatus,
+    enabled: !nameScope && open && searchEnabled,
+    staleTime: 30_000,
+    retry: false,
+  });
 
   useEffect(() => {
     // 不默认选中第一条。
@@ -54,7 +75,7 @@ export default function GlobalSearch() {
     // 而不是直接打开列表里的第一项 —— 那等于用户没挑就替他挑了。
     // 用方向键往下走才进入逐条挑选。
     setActiveIndex(-1);
-  }, [searchTerm, hits.length]);
+  }, [searchTerm, hits.length, scope]);
 
   function onPick(hit: SearchHit) {
     setOpen(false);
@@ -76,13 +97,33 @@ export default function GlobalSearch() {
     });
   }
 
+  const inputLabel = nameScope
+    ? `搜索${albumWord}或标签`
+    : "搜索照片里的画面与文字";
+  const placeholder = nameScope
+    ? `搜索${albumWord} / 标签…`
+    : "描述画面，或输入照片里的文字…";
+
   return (
     <div className="relative w-full max-w-[560px] min-w-0">
-      <div className="toolbar-search input-focus-ring flex items-center gap-2.5 bg-bg-subtle rounded-full px-4 border border-border-faint focus-within:bg-bg-elevated focus-within:border-border-strong min-w-0 shadow-xs">
+      <div className="toolbar-search input-focus-ring flex items-center gap-1.5 bg-bg-subtle rounded-full px-3 border border-border-faint focus-within:bg-bg-elevated focus-within:border-border-strong min-w-0 shadow-xs">
+        <SearchScopeMenu
+          value={scope}
+          onChange={(next) => {
+            setScope(next);
+            setOpen(true);
+            setActiveIndex(-1);
+          }}
+          options={
+            mode === "comic"
+              ? [{ value: "name", label: "名称", hint: "作品、卷与标签的名字" }]
+              : undefined
+          }
+        />
         <SearchIcon size={15} className="text-fg-subtle shrink-0" />
         <input
           value={query}
-          aria-label={`搜索${albumWord}或标签`}
+          aria-label={inputLabel}
           onChange={(e) => {
             setQuery(e.target.value);
             setOpen(true);
@@ -92,10 +133,12 @@ export default function GlobalSearch() {
           onKeyDown={(e) => {
             switch (e.key) {
               case "ArrowDown":
+                if (!nameScope) return;
                 e.preventDefault();
                 moveActive(1);
                 break;
               case "ArrowUp":
+                if (!nameScope) return;
                 e.preventDefault();
                 moveActive(-1);
                 break;
@@ -113,6 +156,7 @@ export default function GlobalSearch() {
                   // 搜到了什么。回车必须落在**看得见结果**的页面上。
                   const target = new URLSearchParams();
                   if (query) target.set(LIST_PARAM.query, query);
+                  if (!nameScope) target.set(SEARCH_SCOPE_PARAM, "content");
                   const search = target.toString();
                   navigate(`${searchRoute(mode)}${search ? `?${search}` : ""}`);
                 }
@@ -125,7 +169,7 @@ export default function GlobalSearch() {
                 break;
             }
           }}
-          placeholder={`搜索${albumWord} / 标签…`}
+          placeholder={placeholder}
           /* h-full：输入框本身要撑满 40px 的胶囊。外壳是 h-10，输入框却
              只有内容高度（23px）—— 真正能点到的只有中间那一小条，
              低于 28px 的触控下限。 */
@@ -141,7 +185,7 @@ export default function GlobalSearch() {
         <kbd className="hidden sm:inline-flex kbd">/</kbd>
       </div>
 
-      {open && hits.length > 0 && (
+      {open && nameScope && hits.length > 0 && (
         <div
           id="global-search-results"
           role="listbox"
@@ -218,33 +262,53 @@ export default function GlobalSearch() {
           ))}
           {/* 面板底部：名字搜索与内容搜索的关系。
               两者检索的东西不一样（名字 vs 画面与图片文字），共用一个输入框
-              会让人以为搜不到就是没有。 */}
-          <div className="mt-1 border-t border-border-faint">
-            <button
-              type="button"
-              onMouseDown={(event) => {
-                event.preventDefault();
-                setOpen(false);
-                navigate(semanticSearchRoute());
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-body text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
-            >
-              <FolderSearchIcon size={14} className="shrink-0" />
-              <span>按画面内容找照片</span>
-              <span className="ml-auto text-meta text-fg-subtle">语义 / OCR</span>
-            </button>
+              会让人以为搜不到就是没有。这里给一枚直接切换作用域的入口。 */}
+          {mode === "photo" ? (
+            <div className="mt-1 border-t border-border-faint">
+              <button
+                type="button"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setOpen(false);
+                  setScope("content");
+                  setQuery("");
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-body text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+              >
+                <FolderSearchIcon size={14} className="shrink-0" />
+                <span>改搜照片里的画面与文字</span>
+                <span className="ml-auto text-meta text-fg-subtle">内容</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* 内容搜索：没有逐条建议可给，但要说清搜的是什么、现在能不能搜。 */}
+      {open && !nameScope && searchEnabled && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up">
+          <div className="px-3 py-2.5">
+            <p className="text-body text-fg">
+              按画面与图片文字找照片
+            </p>
+            <p className="mt-1 text-meta text-fg-muted">
+              {contentScopeNote(
+                embeddingStatus.data?.status,
+                embeddingStatus.isError,
+              )}
+            </p>
           </div>
         </div>
       )}
 
       {/* 无结果提示：用户至少敲了 2 个字符才显示，避免抖动 */}
-      {open && searchEnabled && searchQuery.isFetching && (
+      {open && nameScope && searchEnabled && searchQuery.isFetching && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up">
           <div className="px-3 py-2.5 text-meta text-fg-muted">搜索中…</div>
         </div>
       )}
 
-      {open && searchEnabled && searchQuery.isError && !searchQuery.isFetching && (
+      {open && nameScope && searchEnabled && searchQuery.isError && !searchQuery.isFetching && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up">
           <div className="px-3 py-2.5 text-meta text-fg-muted">
             搜索暂不可用，请稍后重试
@@ -253,7 +317,7 @@ export default function GlobalSearch() {
       )}
 
       {/* 无结果提示：用户至少敲了 2 个字符且请求完成才显示，避免把加载误报为无结果。 */}
-      {open && searchEnabled && !searchQuery.isFetching && !searchQuery.isError && hits.length === 0 && (
+      {open && nameScope && searchEnabled && !searchQuery.isFetching && !searchQuery.isError && hits.length === 0 && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up">
           <div className="px-3 py-2.5 text-meta text-fg-muted">
             没有匹配「{searchTerm}」的{albumWord}或标签
@@ -262,4 +326,25 @@ export default function GlobalSearch() {
       )}
     </div>
   );
+}
+
+/**
+ * 内容搜索这一档现在能不能搜。
+ *
+ * 三种情况说三句话：没就绪、还没建索引、可以搜。用户按下回车之前
+ * 就该知道这一档能不能给出结果 —— 否则搜不到会被误读成「库里没有」。
+ */
+function contentScopeNote(
+  status: AIWorkerStatus | undefined,
+  failed: boolean,
+): string {
+  if (failed) return "本机分析状态暂时读不出来，可以先到任务中心看看。";
+  if (!status) return "正在检查本机的画面索引…";
+  if (!status.runtimeReady || !status.modelValid) {
+    return "本机画面模型还没就绪，现在只能按图片里的文字找。";
+  }
+  if (status.coverage.total > 0 && status.coverage.indexed === 0) {
+    return "还没有建立画面索引，先到任务中心运行一次向量任务。";
+  }
+  return `已索引 ${status.coverage.indexed.toLocaleString()} / ${status.coverage.total.toLocaleString()} 张，回车查看结果。`;
 }

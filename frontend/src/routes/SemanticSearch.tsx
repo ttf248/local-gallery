@@ -1,44 +1,28 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ApiError } from "../api/client";
+import { useQuery } from "@tanstack/react-query";
 import {
   aiJobsApi,
-  type SemanticSearchHit,
   type SemanticSearchRequest,
 } from "../api/aiJobs";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryFeedItem } from "../api/library";
-import EmptyState from "../components/common/EmptyState";
 import PageHeading from "../components/common/PageHeading";
-import PhotoWall from "../components/wall/PhotoWall";
-import PhotoViewer from "../components/wall/PhotoViewer";
 import { SearchIcon } from "../components/common/Icon";
-import { usePickToggle } from "../hooks/usePickToggle";
+import ContentSearchResults from "../components/search/ContentSearchResults";
+import {
+  useContentSearchQuery,
+  type ContentSearchSubmission,
+} from "../hooks/useContentSearchQuery";
 import { useChinaPlacesAll } from "../hooks/useChinaLocations";
-import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
-import { useWallViewer } from "../hooks/useWallViewer";
 import Segmented from "../components/common/Segmented";
-import { albumRoute } from "../utils/path";
 
-type ScoredFeedItem = LibraryFeedItem & {
-  similarity?: number;
-  matchReasons?: SemanticSearchHit["matchReasons"];
-};
 type SearchMode = "text" | "image";
-
-interface SubmittedSearch {
-  request: SemanticSearchRequest;
-  image?: File;
-  token: number;
-}
 
 export default function SemanticSearch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const routeQuery = searchParams.get("q")?.trim() ?? "";
   const routeSubmittedRef = useRef("");
-  const density = usePhotoStore((state) => state.density);
-  const picks = usePickToggle();
   const [mode, setMode] = useState<SearchMode>("text");
   const [text, setText] = useState(routeQuery);
   const [imageOCRText, setImageOCRText] = useState("");
@@ -52,7 +36,9 @@ export default function SemanticSearch() {
   const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [pickedOnly, setPickedOnly] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [submitted, setSubmitted] = useState<SubmittedSearch | null>(null);
+  const [submitted, setSubmitted] = useState<ContentSearchSubmission | null>(
+    null,
+  );
 
   const statusQuery = useQuery({
     queryKey: ["ai-embedding-status"],
@@ -77,58 +63,19 @@ export default function SemanticSearch() {
     queryFn: () => albumsApi.search(albumText, "photo", 12),
     enabled: !album && albumText.trim().length >= 2,
   });
-  const submittedQuery = useInfiniteQuery({
-    queryKey: ["semantic-search", submitted?.token],
-    enabled: submitted !== null,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => {
-      if (!submitted) throw new Error("search query is missing");
-      return aiJobsApi.semanticSearch(
-        { ...submitted.request, offset: pageParam, limit: 60 },
-        submitted.image,
-      );
-    },
-    getNextPageParam: (page) =>
-      page.nextOffset < page.total ? page.nextOffset : undefined,
-  });
-
-  const hits = useMemo<SemanticSearchHit[]>(
-    () => submittedQuery.data?.pages.flatMap((page) => page.results) ?? [],
-    [submittedQuery.data],
-  );
-  const items = useMemo<ScoredFeedItem[]>(
-    () =>
-      hits.map(({ item, similarity, matchReasons }) => ({
-        ...item,
-        similarity,
-        matchReasons,
-      })),
-    [hits],
-  );
-  const total = submittedQuery.data?.pages[0]?.total ?? 0;
-  const loadMore = () =>
-    void submittedQuery.fetchNextPage({ cancelRefetch: false });
-
-  // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
-  const wall = useWallViewer({
-    items,
-    total,
-    albumName: (item) => item.albumName,
-    albumHref: (item) => albumRoute("photo", item.albumId),
-    hasNextPage: submittedQuery.hasNextPage ?? false,
-    isLoadingMore: submittedQuery.isFetchingNextPage,
-    loadMoreError: submittedQuery.isFetchNextPageError,
-    onLoadMore: loadMore,
-    isPicked: picks.isPicked,
-    onTogglePick: (item) => picks.toggle(item.id),
-  });
-  const resetWall = wall.reset;
-  const viewer = wall.viewer;
   const status = statusQuery.data?.status;
   const embeddingReady = Boolean(status?.runtimeReady && status.modelValid);
+  // 与结果区共用同一个查询键：这里看「还在搜吗」，那里看结果。
+  const submittedQuery = useContentSearchQuery(submitted);
   const hasSemanticQuery =
     mode === "text"
       ? Boolean(text.trim() && embeddingReady)
+      : Boolean(similarResourceId || imageFile);
+  // 用户想按画面找 —— 与「这次实际查了什么」分开：画面模型没就绪时，
+  // 系统会退成只查图片里的文字，零结果时要说清是环境没准备好。
+  const wantsSemantic =
+    mode === "text"
+      ? Boolean(text.trim())
       : Boolean(similarResourceId || imageFile);
   const hasOCRQuery =
     mode === "text" ? Boolean(text.trim()) : Boolean(imageOCRText.trim());
@@ -171,7 +118,6 @@ export default function SemanticSearch() {
       ...(pickedOnly ? { pickedOnly: true } : {}),
     };
     setSubmitted({ request, image: file, token: Date.now() });
-    wall.reset();
   };
 
   // 探索页的快捷搜索通过 q 带入文字；读到模型状态后再提交，
@@ -198,14 +144,7 @@ export default function SemanticSearch() {
       },
       token: Date.now(),
     });
-    resetWall();
-  }, [
-    embeddingReady,
-    routeQuery,
-    resetWall,
-    statusQuery.isError,
-    statusQuery.isSuccess,
-  ]);
+  }, [embeddingReady, routeQuery, statusQuery.isError, statusQuery.isSuccess]);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -231,7 +170,7 @@ export default function SemanticSearch() {
     search();
   };
 
-  const findSimilar = (item: ScoredFeedItem) => {
+  const findSimilar = (item: LibraryFeedItem) => {
     setMode("image");
     setImageFile(undefined);
     setSimilarResourceId(item.id);
@@ -241,13 +180,6 @@ export default function SemanticSearch() {
   const textHelp = embeddingReady
     ? "一个词同时检索画面语义与图片文字，任一匹配就会显示；文字会归一化标点、断行并修正常见误识。"
     : "Chinese-CLIP 不可用时仍可按图片文字搜索；OCR 会归一化标点、断行并修正常见误识。";
-  const submittedHasSemanticSource = Boolean(
-    submitted?.request.text ||
-    submitted?.request.resourceId ||
-    submitted?.image,
-  );
-  const submittedHasOCRSource = Boolean(submitted?.request.ocrText);
-  const submittedMatchesAny = submitted?.request.matchMode === "any";
 
   // 提交按钮在文字搜索里与输入框同行，在以图搜图里另起一行 —— 两种
   // 模式都用同一枚按钮。
@@ -561,123 +493,14 @@ export default function SemanticSearch() {
       </div>
 
       <div className="page-shell min-h-0 flex-1 pb-2">
-        {submittedQuery.isError ? (
-          <EmptyState
-            title="搜索失败"
-            description={semanticErrorMessage(submittedQuery.error)}
-            action={
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => void submittedQuery.refetch()}
-              >
-                重新搜索
-              </button>
-            }
-          />
-        ) : items.length > 0 ? (
-          <PhotoWall
-            items={items}
-            total={Math.max(total, items.length)}
-            targetHeight={wallTargetHeight(density)}
-            hasNextPage={submittedQuery.hasNextPage ?? false}
-            isLoadingMore={submittedQuery.isFetchingNextPage}
-            onLoadMore={loadMore}
-            onOpen={(_item, index) => wall.open(index)}
-            albumLabel={(item) => item.albumName}
-            itemBadge={(item) => {
-              const reasons = item.matchReasons ?? [];
-              const labels = reasons.flatMap((reason) => {
-                if (reason === "semantic") {
-                  return item.similarity === undefined
-                    ? ["语义"]
-                    : [`语义 ${item.similarity.toFixed(2)}`];
-                }
-                if (reason === "similar_image") {
-                  return item.similarity === undefined
-                    ? ["以图相似"]
-                    : [`以图 ${item.similarity.toFixed(2)}`];
-                }
-                if (reason === "ocr_exact") return ["文字匹配"];
-                return ["文字近似"];
-              });
-              return labels.length > 0
-                ? labels.join(" · ")
-                : item.similarity === undefined
-                  ? undefined
-                  : `相似度 ${item.similarity.toFixed(2)}`;
-            }}
-            isPicked={picks.isPicked}
-            onTogglePick={(item) => picks.toggle(item.id)}
-            /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
-               不该把人丢回墙的顶上。 */
-            scrollToIndex={wall.focusIndex}
-          />
-        ) : submitted && !submittedQuery.isLoading ? (
-          <EmptyState
-            title={
-              total === 0 && submittedMatchesAny
-                ? "没有匹配的照片"
-                : total === 0 &&
-                    submittedHasSemanticSource &&
-                    !submittedHasOCRSource
-                  ? "还没有可搜索的向量"
-                  : total === 0 &&
-                      submittedHasOCRSource &&
-                      !submittedHasSemanticSource
-                    ? "还没有可搜索的文字结果"
-                    : "没有匹配的照片"
-            }
-            description={
-              total === 0
-                ? submittedMatchesAny
-                  ? "已同时检查画面内容与图片文字，照片命中任一项即可显示；可以换个词或放宽筛选。"
-                  : submittedHasSemanticSource
-                    ? "请先到任务中心运行语义向量任务。"
-                    : submittedHasOCRSource
-                      ? "请先到任务中心运行文字识别任务。"
-                      : "当前相册、年份与地点条件下没有照片。"
-                : "试试调整描述，或放宽相册、年份与地点筛选。"
-            }
-            action={
-              total === 0 &&
-              (submittedHasSemanticSource || submittedHasOCRSource) ? (
-                <Link to="/tasks/run" className="btn btn-outline">
-                  打开任务中心
-                </Link>
-              ) : undefined
-            }
-          />
-        ) : (
-          <EmptyState
-            title="输入条件开始搜索"
-            description="语义结果按相似度排列；文字或结构化筛选不需要 CLIP。"
-            icon={<SearchIcon size={24} />}
-            dense
-          />
-        )}
-      </div>
-
-      {viewer && (
-        <PhotoViewer
-          {...viewer}
-          /* 以这张为查询图找相似照片。 */
-          onFindSimilar={() => {
-            const item = items[viewer.index];
-            if (item) findSimilar(item);
-          }}
+        <ContentSearchResults
+          submitted={submitted}
+          status={status}
+          statusError={statusQuery.isError}
+          wantsSemantic={wantsSemantic}
+          onFindSimilar={findSimilar}
         />
-      )}
+      </div>
     </div>
   );
-}
-
-function semanticErrorMessage(error: unknown): string {
-  if (error instanceof ApiError) {
-    if (error.code === "ai_model_missing")
-      return "本机模型缺失或校验失败，请检查任务中心的模型状态。";
-    if (error.code === "ai_runtime_unavailable")
-      return "本机 AI 运行环境不可用，请检查 Python 3.11 与 CUDA 安装。";
-  }
-  return "语义搜索暂不可用，请稍后重试。";
 }

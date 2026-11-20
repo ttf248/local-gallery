@@ -130,6 +130,8 @@ export interface SearchHit {
   coverImageVersion?: string;
   /** 内容用途："photo" / "comic"。搜索结果据此决定跳转目标。 */
   contentKind?: ContentKind;
+  /** 为什么算命中：exact / prefix / contains / tag / path。 */
+  match?: string;
 }
 
 export interface SearchResponse {

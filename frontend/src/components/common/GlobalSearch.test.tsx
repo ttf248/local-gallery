@@ -13,6 +13,25 @@ vi.mock("../../api/albums", async (importOriginal) => {
   };
 });
 
+vi.mock("../../api/aiJobs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/aiJobs")>();
+  return {
+    ...actual,
+    aiJobsApi: {
+      ...actual.aiJobsApi,
+      embeddingStatus: vi.fn().mockResolvedValue({
+        ok: true,
+        status: {
+          runtimeReady: true,
+          modelValid: true,
+          device: "cpu",
+          coverage: { indexed: 10, total: 20 },
+        },
+      }),
+    },
+  };
+});
+
 function LocationProbe() {
   const location = useLocation();
   return (
@@ -194,5 +213,71 @@ describe("GlobalSearch", () => {
 
     resolveSearch?.({ ok: true, count: 0, results: [] });
     expect(await screen.findByText(/没有匹配「春天」/)).toBeInTheDocument();
+  });
+});
+
+describe("GlobalSearch 的搜索范围", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("作用域按钮说清当前搜的是哪一类", () => {
+    renderSearch();
+    expect(
+      screen.getByRole("button", { name: /搜索范围：相册、文件夹与标签的名字/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("切到画面与文字后输入框与说明一起换掉", async () => {
+    renderSearch();
+    fireEvent.click(
+      screen.getByRole("button", { name: /搜索范围：相册、文件夹与标签的名字/ }),
+    );
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /画面/ }));
+
+    expect(
+      screen.getByRole("combobox", { name: "搜索照片里的画面与文字" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /搜索范围：照片里的画面与图片文字/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("画面范围回车进的是内容结果页", async () => {
+    renderSearch();
+    fireEvent.click(
+      screen.getByRole("button", { name: /搜索范围：相册、文件夹与标签的名字/ }),
+    );
+    fireEvent.click(screen.getByRole("menuitemradio", { name: /画面/ }));
+
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "雪" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      const location = new URL(
+        screen.getByTestId("location").textContent ?? "",
+        "http://local",
+      );
+      expect(location.pathname).toBe("/photo/search");
+      expect(location.searchParams.get("q")).toBe("雪");
+      expect(location.searchParams.get("scope")).toBe("content");
+    });
+  });
+
+  it("名字范围回车不带作用域", async () => {
+    renderSearch();
+    const input = screen.getByRole("combobox");
+    fireEvent.change(input, { target: { value: "旅行" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    await waitFor(() => {
+      const location = new URL(
+        screen.getByTestId("location").textContent ?? "",
+        "http://local",
+      );
+      expect(location.pathname).toBe("/photo/search");
+      expect(location.searchParams.get("scope")).toBeNull();
+    });
   });
 });

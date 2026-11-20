@@ -272,8 +272,13 @@ describe("智能搜索", () => {
     expect(mocks.semanticSearch.mock.calls[0][0]).not.toHaveProperty(
       "matchMode",
     );
+    // 画面模型没就绪：系统退成只查图片里的文字。用户要的仍是画面，
+    // 因此零结果要说清是环境没准备好，而不是说「库里没有」。
     expect(
-      await screen.findByText("还没有可搜索的文字结果"),
+      await screen.findByText("画面搜索还没准备好"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/图片里的文字已经查过了，确实没有匹配/),
     ).toBeInTheDocument();
   });
 
@@ -391,6 +396,6 @@ describe("智能搜索", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "搜索照片" }));
 
-    expect(await screen.findByText("语义 0.42 · 文字近似")).toBeInTheDocument();
+    expect(await screen.findByText("画面 0.42 · 文字近似")).toBeInTheDocument();
   });
 });

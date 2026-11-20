@@ -582,12 +582,27 @@ export interface ChinaTrips {
   untimedPhotoCount: number;
 }
 
+/**
+ * 人物分组封面照片里的代表脸。
+ *
+ * 框在原图像素里；原图宽高用于把脸换算成缩略图上的位置。尺寸为 0
+ * 表示服务端没读出来 —— 界面退回整张封面，而不是摆一张歪掉的图。
+ */
+export interface PersonCoverFace {
+  resourceId: string;
+  box: [number, number, number, number];
+  width: number;
+  height: number;
+}
+
 export interface PersonGroup {
   id: string;
   name: string;
   faceCount: number;
   photoCount: number;
   coverResourceId?: string;
+  /** 代表脸：预览露出脸本身，而不是整张照片。 */
+  coverFace?: PersonCoverFace;
   confirmed: boolean;
   hidden: boolean;
   quality?: {

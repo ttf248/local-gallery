@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
-import { aiJobsApi, type AIJob } from "../api/aiJobs";
+import { aiJobsApi, type AIJob, type ChinaPlace } from "../api/aiJobs";
 import { albumsApi } from "../api/albums";
 import Explore from "./Explore";
 
@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   libraryList: undefined as unknown,
   featuredDirectory: undefined as unknown,
   allDirectory: undefined as unknown,
+  places: undefined as unknown,
 }));
 
 vi.mock("../hooks/useLibrary", () => ({
@@ -23,6 +24,15 @@ vi.mock("../hooks/useLibraryList", async (original) => ({
 vi.mock("../hooks/useSmartAlbums", () => ({
   useSmartAlbumDirectory: (dimension: string) =>
     dimension === "featured" ? mocks.featuredDirectory : mocks.allDirectory,
+}));
+vi.mock("../hooks/useChinaLocations", () => ({
+  useChinaPlacesAll: () => ({
+    data: mocks.places as ChinaPlace[] | undefined,
+    isLoading: false,
+    isError: false,
+    isFetching: false,
+    refetch: vi.fn(),
+  }),
 }));
 vi.mock("../api/aiJobs", async (original) => {
   const actual = await original<typeof import("../api/aiJobs")>();
@@ -185,26 +195,9 @@ beforeEach(() => {
     total: 0,
     analysis: { totalAlbums: 1, analyzedAlbums: 0, complete: false },
   };
+  mocks.places = [];
   vi.mocked(aiJobsApi.people).mockResolvedValue(peopleResponse);
   vi.mocked(aiJobsApi.list).mockResolvedValue(jobsResponse);
-  vi.mocked(aiJobsApi.chinaLocations).mockResolvedValue({
-    ok: true,
-    locations: {
-      revision: 1,
-      boundaryVersion: "test",
-      gpsPhotoCount: 0,
-      chinaPhotoCount: 0,
-      unassignedPhotoCount: 0,
-      totalPhotoCount: 4,
-      provinces: [],
-      months: [],
-      trajectory: [],
-      untimedPhotoCount: 0,
-      provinceCount: 0,
-      cityCount: 0,
-      districtCount: 0,
-    },
-  });
   vi.mocked(albumsApi.smartAlbumRefreshActive).mockResolvedValue({
     ok: true,
     task: null,
@@ -233,7 +226,6 @@ it("仅有漫画相册时按照片统计显示探索空态，不加载照片分�
     "/comic",
   );
   expect(aiJobsApi.people).not.toHaveBeenCalled();
-  expect(aiJobsApi.chinaLocations).not.toHaveBeenCalled();
 });
 
 it("manifest 加载失败时展示重试，不误报照片库为空", () => {
@@ -258,30 +250,113 @@ it("照片库信息加载时显示进度，不把加载中当成空库", () => {
   expect(screen.queryByText("照片库还没有相册")).toBeNull();
 });
 
-it("人物和地点请求失败时分别显示可重试错误，不落入未分析空态", async () => {
-  vi.mocked(aiJobsApi.people).mockRejectedValue(new Error("people offline"));
-  vi.mocked(aiJobsApi.chinaLocations).mockRejectedValue(
-    new Error("locations offline"),
-  );
-
+it("首屏先给找法：搜索入口与四个维度", () => {
   renderExplore();
 
-  expect(await screen.findByText("人物分组暂时读不出来。")).toBeInTheDocument();
-  expect(await screen.findByText("地点数据暂时读不出来。")).toBeInTheDocument();
-  expect(screen.queryByText(/人物分析尚未/)).toBeNull();
-  expect(screen.queryByText(/还没有解析出照片里的位置/)).toBeNull();
+  expect(screen.getByText("我要找什么")).toBeInTheDocument();
+  const nav = screen.getByRole("navigation", { name: "发现维度" });
+  for (const label of ["时间", "人物", "地点", "主题"]) {
+    expect(
+      within(nav).getByRole("link", { name: label }),
+    ).toBeInTheDocument();
+  }
 });
 
-it("人物预览展示照片缩略图并明确标为候选分组", async () => {
+it("顶部搜索按名称进入名称结果页", async () => {
+  renderExplore();
+
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索" }), {
+    target: { value: "海边 日落" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+
+  await waitFor(() => {
+    const location = new URL(
+      screen.getByTestId("location").textContent ?? "",
+      "http://local",
+    );
+    expect(location.pathname).toBe("/photo/search");
+    expect(location.searchParams.get("q")).toBe("海边 日落");
+    expect(location.searchParams.get("scope")).toBeNull();
+  });
+});
+
+it("顶部搜索切到画面与文字后带上作用域", async () => {
+  renderExplore();
+
+  fireEvent.click(screen.getByRole("radio", { name: "画面与文字" }));
+  fireEvent.change(screen.getByRole("textbox", { name: "搜索" }), {
+    target: { value: "雪" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+
+  await waitFor(() => {
+    const location = new URL(
+      screen.getByTestId("location").textContent ?? "",
+      "http://local",
+    );
+    expect(location.pathname).toBe("/photo/search");
+    expect(location.searchParams.get("q")).toBe("雪");
+    expect(location.searchParams.get("scope")).toBe("content");
+  });
+});
+
+it("人物预览把已命名与候选分组分开摆", async () => {
   vi.mocked(aiJobsApi.people).mockResolvedValue({
     ...peopleResponse,
     people: [
       {
-        id: "p_1",
-        name: "人物 1",
+        id: "p_named",
+        name: "小明",
         faceCount: 6,
         photoCount: 5,
-        coverResourceId: "f_cover",
+        coverResourceId: "f_named",
+        confirmed: true,
+        hidden: false,
+      },
+      {
+        id: "p_candidate",
+        name: "人物 1",
+        faceCount: 2,
+        photoCount: 2,
+        coverResourceId: "f_candidate",
+        confirmed: false,
+        hidden: false,
+      },
+    ],
+    totalGroups: 2,
+  });
+  vi.mocked(aiJobsApi.list).mockResolvedValue(
+    jobsWith(analysisJob("face", "completed"), true),
+  );
+
+  renderExplore();
+
+  expect(await screen.findByText("已命名")).toBeInTheDocument();
+  expect(screen.getByText("候选分组")).toBeInTheDocument();
+  expect(
+    screen.getByText("相似度聚出来的，还没确认是谁"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("小明")).toBeInTheDocument();
+  expect(screen.getByText("人物 1")).toBeInTheDocument();
+});
+
+it("人物预览优先露出代表脸", async () => {
+  vi.mocked(aiJobsApi.people).mockResolvedValue({
+    ...peopleResponse,
+    people: [
+      {
+        id: "p_face",
+        name: "人物 1",
+        faceCount: 3,
+        photoCount: 3,
+        coverResourceId: "f_whole",
+        coverFace: {
+          resourceId: "f_face",
+          box: [10, 20, 30, 40],
+          width: 800,
+          height: 600,
+        },
         confirmed: false,
         hidden: false,
       },
@@ -294,14 +369,9 @@ it("人物预览展示照片缩略图并明确标为候选分组", async () => {
 
   renderExplore();
 
-  expect(await screen.findByText("候选分组")).toBeInTheDocument();
-  expect(screen.getByTestId("explore-person-thumbnail")).toHaveAttribute(
-    "src",
-    expect.stringContaining("f_cover"),
-  );
-  expect(
-    screen.getByText("相似度分组只是复核线索，不代表身份确认。"),
-  ).toBeInTheDocument();
+  const thumb = await screen.findByTestId("explore-person-thumbnail");
+  expect(thumb).toHaveAttribute("src", expect.stringContaining("f_face"));
+  expect(thumb.getAttribute("src")).not.toContain("f_whole");
 });
 
 it("区分人物分析尚未启用与已分析但没有候选", async () => {
@@ -318,7 +388,29 @@ it("区分人物分析尚未启用与已分析但没有候选", async () => {
   ).toBeInTheDocument();
 });
 
-it("地点区分尚未分析与分析完成但没有 GPS 位置", async () => {
+it("地点预览列出可进入的地点", async () => {
+  mocks.places = [
+    {
+      adcode: 330100,
+      name: "杭州市",
+      level: "city",
+      photoCount: 128,
+      unmatchedCount: 0,
+      visitCount: 3,
+      firstAt: "2023-05-01",
+      lastAt: "2023-05-05",
+      coverResourceIds: ["f_hz"],
+    },
+  ];
+
+  renderExplore();
+
+  const link = await screen.findByRole("link", { name: /杭州市/ });
+  expect(link).toHaveAttribute("href", "/photo/travels/place/330100");
+  expect(screen.getByText(/128 张/)).toBeInTheDocument();
+});
+
+it("地点没有解析结果时区分尚未分析与分析完成但没有位置", async () => {
   const first = renderExplore();
   expect(
     await screen.findByText(/尚未完成元数据 \/ GPS 分析/),
@@ -334,6 +426,37 @@ it("地点区分尚未分析与分析完成但没有 GPS 位置", async () => {
       "元数据分析已完成，目前没有解析出可用于足迹的位置。",
     ),
   ).toBeInTheDocument();
+});
+
+it("主题预览写清标题、张数与来源", async () => {
+  mocks.featuredDirectory = {
+    ...queryState(),
+    items: [
+      {
+        albumId: "a_trip",
+        albumName: "2019 旅行",
+        parentName: "旅行",
+        group: {
+          id: "g_1",
+          dimension: "recommended",
+          name: "海边的日落",
+          suggestedName: "海边的日落",
+          customName: false,
+          photoCount: 24,
+          evidenceDimensions: ["time", "place"],
+          coverResourceId: "f_sunset",
+          hidden: false,
+        },
+      },
+    ],
+    total: 1,
+  };
+
+  renderExplore();
+
+  expect(await screen.findByText("海边的日落")).toBeInTheDocument();
+  expect(screen.getByText(/24 张 · 来自 旅行 \/ 2019 旅行/)).toBeInTheDocument();
+  expect(screen.getByText("线索：时间 · 地点")).toBeInTheDocument();
 });
 
 it("主题区区分尚未生成与分析完成但没有分组", async () => {
@@ -363,22 +486,4 @@ it("年份索引请求失败时保留分区并提供重试", () => {
   renderExplore();
 
   expect(screen.getByText("年份索引暂时读不出来。")).toBeInTheDocument();
-});
-
-it("内容搜索提交后把关键词带到现有语义搜索页", async () => {
-  renderExplore();
-
-  fireEvent.change(screen.getByRole("textbox", { name: "搜索照片内容" }), {
-    target: { value: "海边 日落" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "搜索照片" }));
-
-  await waitFor(() => {
-    const location = new URL(
-      screen.getByTestId("location").textContent ?? "",
-      "http://local",
-    );
-    expect(location.pathname).toBe("/photo/semantic");
-    expect(location.searchParams.get("q")).toBe("海边 日落");
-  });
 });
