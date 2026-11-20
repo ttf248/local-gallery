@@ -205,6 +205,131 @@ describe("ImageGallery 单页触摸手势", () => {
   });
 });
 
+describe("ImageGallery 翻页方向", () => {
+  // 点击翻页靠的是「点在哪半边」，jsdom 里没有真实布局，
+  // 这里把容器尺寸钉死，坐标才有意义。
+  function stubRect(container: Element, width = 1000) {
+    container.getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        right: width,
+        bottom: 800,
+        width,
+        height: 800,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  beforeEach(() => {
+    useGalleryStore.setState({
+      index: 0,
+      mode: "single",
+      zoom: 1,
+      rotation: 0,
+      fit: "fit",
+      direction: "ltr",
+    });
+  });
+
+  it("左→右时：点左半屏往回，点右半屏往前", () => {
+    const onClickNavigate = vi.fn();
+    render(
+      <ImageGallery
+        images={["/1.jpg", "/2.jpg", "/3.jpg"]}
+        onClickNavigate={onClickNavigate}
+      />,
+    );
+    const container = document.querySelector("[data-image-gallery]");
+    if (!container) throw new Error("image gallery container not found");
+    stubRect(container);
+
+    fireEvent.click(container, { clientX: 100, clientY: 400 });
+    expect(onClickNavigate).toHaveBeenLastCalledWith(-1);
+
+    fireEvent.click(container, { clientX: 900, clientY: 400 });
+    expect(onClickNavigate).toHaveBeenLastCalledWith(1);
+  });
+
+  // 右→左读的册子里，下一页在左边：点左半屏就该翻过去。
+  it("右→左时：点左半屏往前，点右半屏往回", () => {
+    useGalleryStore.setState({ direction: "rtl" });
+    const onClickNavigate = vi.fn();
+    render(
+      <ImageGallery
+        images={["/1.jpg", "/2.jpg", "/3.jpg"]}
+        onClickNavigate={onClickNavigate}
+      />,
+    );
+    const container = document.querySelector("[data-image-gallery]");
+    if (!container) throw new Error("image gallery container not found");
+    stubRect(container);
+
+    fireEvent.click(container, { clientX: 100, clientY: 400 });
+    expect(onClickNavigate).toHaveBeenLastCalledWith(1);
+
+    fireEvent.click(container, { clientX: 900, clientY: 400 });
+    expect(onClickNavigate).toHaveBeenLastCalledWith(-1);
+  });
+
+  it("右→左时往右划露出下一页", () => {
+    useGalleryStore.setState({ direction: "rtl" });
+    const onClickNavigate = vi.fn();
+    render(
+      <ImageGallery
+        images={["/1.jpg", "/2.jpg", "/3.jpg"]}
+        onClickNavigate={onClickNavigate}
+      />,
+    );
+    const container = document.querySelector("[data-image-gallery]");
+    if (!container) throw new Error("image gallery container not found");
+
+    dispatchPointerEvent(container, "pointerdown", {
+      pointerId: 3,
+      pointerType: "touch",
+      clientX: 100,
+      clientY: 200,
+    });
+    dispatchPointerEvent(container, "pointerup", {
+      pointerId: 3,
+      pointerType: "touch",
+      clientX: 280,
+      clientY: 205,
+    });
+
+    expect(onClickNavigate).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("ImageGallery 双页并排", () => {
+  beforeEach(() => {
+    useGalleryStore.setState({
+      index: 0,
+      mode: "double",
+      zoom: 1,
+      rotation: 0,
+      fit: "fit",
+      direction: "rtl",
+    });
+  });
+
+  // 卷末只剩一页时不该配一个空白半页。
+  it("卷末只有一页时不摆空白半页", () => {
+    useGalleryStore.setState({ index: 2 });
+    render(<ImageGallery images={["/1.jpg", "/2.jpg", "/3.jpg"]} />);
+    expect(screen.queryByText("（空白）")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("img")).toHaveLength(1);
+  });
+
+  it("两页都在时并排摆开", () => {
+    useGalleryStore.setState({ index: 0 });
+    render(<ImageGallery images={["/1.jpg", "/2.jpg", "/3.jpg"]} />);
+    expect(screen.getAllByRole("img")).toHaveLength(2);
+  });
+});
+
 describe("ImageGallery 加载失败", () => {
   beforeEach(() => {
     useGalleryStore.setState({
@@ -232,5 +357,37 @@ describe("ImageGallery 加载失败", () => {
       expect(screen.queryByText("该图片无法显示")).not.toBeInTheDocument(),
     );
     expect(screen.getByAltText("第 1 页")).toBeInTheDocument();
+  });
+});
+
+// 连续模式按容器宽度铺开，图片加载前先按原始尺寸占好高度：
+// 懒加载的图片量出来是 0 高，虚拟列表按 0 高排版，滚起来会跳、页码会乱。
+describe("ImageGallery 连续模式的高度预留", () => {
+  beforeEach(() => {
+    useGalleryStore.setState({
+      index: 0,
+      mode: "continuous",
+      zoom: 1,
+      rotation: 0,
+      fit: "fit",
+      direction: "ltr",
+    });
+  });
+
+  it("按已知尺寸占好这一页的高度", () => {
+    render(
+      <ImageGallery
+        images={["f_aaa", "f_bbb"]}
+        dimensions={{ f_aaa: { width: 900, height: 1350 } }}
+      />,
+    );
+    const item = document.querySelector('[data-image-index="0"]') as HTMLElement;
+    expect(item.getAttribute("style")).toContain("900");
+  });
+
+  it("量不出尺寸时不占高度", () => {
+    render(<ImageGallery images={["f_aaa"]} />);
+    const item = document.querySelector('[data-image-index="0"]') as HTMLElement;
+    expect(item.getAttribute("style") ?? "").not.toContain("aspect-ratio");
   });
 });

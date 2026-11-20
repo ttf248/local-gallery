@@ -51,3 +51,20 @@ it("跳转输入框有可访问名称", () => {
     screen.getByRole("textbox", { name: "跳转到第几页" }),
   ).toBeInTheDocument();
 });
+
+// 双页并排时底栏与顶栏说的是同一件事：顶栏写「1–2 / 8」，
+// 底栏再写「1 / 8」，读者会以为底栏漏了一次翻页。
+it("双页并排时页码写成区间", () => {
+  render(<PageSlider total={8} index={0} onJump={vi.fn()} double />);
+  expect(screen.getByTitle("跳转到指定页 (G)")).toHaveTextContent("1–2");
+});
+
+it("双页并排且卷末只剩一页时页码不写区间", () => {
+  render(<PageSlider total={8} index={7} onJump={vi.fn()} double />);
+  expect(screen.getByTitle("跳转到指定页 (G)")).toHaveTextContent("8");
+});
+
+it("单页时页码是一个数字", () => {
+  render(<PageSlider total={8} index={0} onJump={vi.fn()} />);
+  expect(screen.getByTitle("跳转到指定页 (G)")).toHaveTextContent("1");
+});

@@ -12,6 +12,12 @@ export type ReaderMediaStatus =
 export interface ReaderMedia {
   /** 图片资源 ID，按卷内顺序。 */
   images: string[];
+  /**
+   * 每页的原始像素尺寸（资源 ID → 宽高）。
+   *
+   * 连续模式按它预留高度：图片加载前先占好位置，页面不跳、页码不乱。
+   */
+  dimensions: Record<string, { width: number; height: number }>;
   /** 视频资源 ID，按卷内顺序。 */
   videos: string[];
   /** 相册里「另一种媒体」的数量：图片模式看视频数，视频模式看图片数。 */
@@ -56,6 +62,16 @@ export function useReaderMedia(
     () => items.filter((item) => item.kind === "video").map((item) => item.id),
     [items],
   );
+  // 每一页的原始尺寸。服务端分析时量过，这里只是转个手。
+  const dimensions = useMemo(() => {
+    const map: Record<string, { width: number; height: number }> = {};
+    for (const item of items) {
+      if (item.kind !== "image") continue;
+      if (!item.width || !item.height) continue;
+      map[item.id] = { width: item.width, height: item.height };
+    }
+    return map;
+  }, [items]);
 
   const complete = data !== undefined && !hasNextPage;
   const status: ReaderMediaStatus =
@@ -80,6 +96,7 @@ export function useReaderMedia(
   return {
     images,
     videos,
+    dimensions,
     siblingCount: isVideo ? images.length : videos.length,
     status,
     error: errorMessage,

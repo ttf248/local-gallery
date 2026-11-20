@@ -122,3 +122,27 @@ it("与相册页共用同一份缓存，不重复下载", async () => {
   await waitFor(() => expect(result.current.status).toBe("ready"));
   expect(libraryApi.mediaPage).toHaveBeenCalledTimes(1);
 });
+
+// 连续模式要按原始尺寸先占好高度，这一手数据从这里出。
+it("给出每一页的原始尺寸，供连续模式预留高度", async () => {
+  vi.mocked(libraryApi.mediaPage).mockResolvedValue(
+    page([
+      { ...media("f1"), width: 900, height: 1350 },
+      { ...media("f2"), width: 800, height: 1200 },
+      { ...media("v1", "video"), width: 640, height: 360 },
+    ]),
+  );
+  const { result } = setup("a_1");
+  await waitFor(() => expect(result.current.status).toBe("ready"));
+  expect(result.current.dimensions).toEqual({
+    f1: { width: 900, height: 1350 },
+    f2: { width: 800, height: 1200 },
+  });
+});
+
+it("量不出尺寸的页不进尺寸表", async () => {
+  vi.mocked(libraryApi.mediaPage).mockResolvedValue(page([media("f1")]));
+  const { result } = setup("a_1");
+  await waitFor(() => expect(result.current.status).toBe("ready"));
+  expect(result.current.dimensions).toEqual({});
+});

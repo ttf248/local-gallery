@@ -13,6 +13,8 @@ import { ImageIcon } from "../common/Icon";
 
 interface Props {
   images: string[];
+  /** 每页的原始像素尺寸。连续模式按它预留高度，图片加载前后页面不跳。 */
+  dimensions?: Record<string, { width: number; height: number }>;
   /** 点击图片时触发：根据 clickX 在容器宽度的左/中/右决定动作。父组件传入 prev/next 即可。 */
   onClickNavigate?: (dir: -1 | 0 | 1) => void;
   /** 连续模式可见范围变化时，上报首尾两个 0-based 索引。 */
@@ -33,6 +35,7 @@ type Aspect =
 // - 点击翻页：左半区上一页 / 右半区下一页 / 中段 30% 不响应避免误触
 export default function ImageGallery({
   images,
+  dimensions,
   onClickNavigate,
   onVisibleRangeChange,
 }: Props) {
@@ -181,7 +184,10 @@ export default function ImageGallery({
       Math.abs(dx) > Math.abs(dy) * 1.2;
     if (isSwipe && onClickNavigate) {
       e.preventDefault();
-      onClickNavigate(dx < 0 ? 1 : -1);
+      // 滑动的方向跟着阅读方向走：右→左读的册子里，下一页在左边，
+      // 往右划才把它带出来。
+      const forward = direction === "rtl" ? dx > 0 : dx < 0;
+      onClickNavigate(forward ? 1 : -1);
     }
   };
 
@@ -197,6 +203,9 @@ export default function ImageGallery({
   // - 中段 30% 不响应，避免用户想"瞄准"图片内容时误触翻页
   // - 缩放 > 1 时不响应（用户想拖动图片而不是翻页）
   // - 双击是独立事件，不会触发 click；拖拽距离 > 3px 时 click 也不触发
+  // - 左右两半各管哪一头，跟着阅读方向走：右→左读的册子里下一页在
+  //   左边，点左半屏就该翻过去。这一条与双页并排的排布方向是同一套
+  //   规则，否则点左半屏翻到的是前一页，与画面上「下一页在左边」相悖。
   const onContainerClick = (e: React.MouseEvent) => {
     if (!onClickNavigate) return;
     if (suppressClickRef.current) {
@@ -210,8 +219,8 @@ export default function ImageGallery({
     const x = e.clientX - rect.left;
     const ratio = x / rect.width;
     let dir: -1 | 0 | 1 = 0;
-    if (ratio < 0.35) dir = -1;
-    else if (ratio > 0.65) dir = 1;
+    if (ratio < 0.35) dir = direction === "rtl" ? 1 : -1;
+    else if (ratio > 0.65) dir = direction === "rtl" ? -1 : 1;
     if (dir !== 0) onClickNavigate(dir);
   };
 
@@ -380,6 +389,7 @@ export default function ImageGallery({
               nearIndex={Math.abs(i - index) <= 2}
               isRotated={rotation !== 0}
               zoom={zoom}
+              size={dimensions?.[src]}
             />
           )}
         />
@@ -421,6 +431,11 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
   const left = images[index];
   const right = images[index + 1];
 
+  // 卷末只有一页时不该给它配一个空白半页：那一半是「没有」，不是
+  // 「还没翻到」。单页按阅读起点靠边摆（右→左时靠右），读起来才像
+  // 最后一页，而不是一本少了一半的书。
+  const isLastAlone = left !== undefined && right === undefined;
+
   // RTL 把 (left, right) 反过来渲染
   const order: Array<"left" | "right"> =
     direction === "rtl" ? ["right", "left"] : ["left", "right"];
@@ -430,7 +445,7 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
   ];
   const ordered = order
     .map((k) => pages.find((p) => p.key === k)!)
-    .filter(Boolean);
+    .filter((p) => Boolean(p.src));
 
   function pageClass() {
     if (aspect.mode === "fit") {
@@ -452,12 +467,21 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
        上缘被切掉一半，读者看到的是页面中段而不是这一页的开头。 */
     <div
       key={imgKey}
-      className="flex flex-row justify-center w-full h-full gap-1 p-2"
+      className={`flex flex-row w-full h-full gap-1 p-2 ${
+        isLastAlone
+          ? // 单页靠阅读起点：右→左时贴右，左→右时贴左。
+            direction === "rtl"
+            ? "justify-end"
+            : "justify-start"
+          : "justify-center"
+      }`}
     >
       {ordered.map((p, i) => (
         <div
           key={p.key + i}
-          className="flex-1 min-w-0 flex items-center justify-center"
+          className={`min-w-0 flex items-center justify-center ${
+            isLastAlone ? "flex-none" : "flex-1"
+          }`}
         >
           {p.src ? (
             <GalleryImage
@@ -466,9 +490,7 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
               loading="eager"
               className={`select-none ${pageClass()}`}
             />
-          ) : (
-            <div className="text-fg-subtle text-meta">（空白）</div>
-          )}
+          ) : null}
         </div>
       ))}
     </div>
@@ -489,6 +511,8 @@ interface ContinuousImageProps {
   nearIndex: boolean;
   isRotated: boolean;
   zoom: number;
+  /** 这一页的原始像素尺寸；用来在图片加载前先占好高度。 */
+  size?: { width: number; height: number };
 }
 
 // 用 React.memo 包:1000+ 张大本里,父 re-render(切 index/zoom)时
@@ -503,6 +527,7 @@ const ContinuousImage = memo(function ContinuousImage({
   nearIndex,
   isRotated,
   zoom,
+  size,
 }: ContinuousImageProps) {
   const baseStyle: React.CSSProperties = {
     display: "block",
@@ -529,6 +554,18 @@ const ContinuousImage = memo(function ContinuousImage({
     style = { ...baseStyle, width: "auto", height: "auto", maxWidth: "100%" };
   }
 
+  // 按容器宽度铺开时（适应 / 按宽），图片的高度由原始宽高比决定。
+  // 服务端已经量过每一页的像素尺寸，图片还没加载就先占好这个高度：
+  // 否则懒加载的图片量出来是 0 高，虚拟列表按 0 高排版，滚起来会跳，
+  // 页码也跟着乱。
+  const ratio =
+    size && size.width > 0 && size.height > 0
+      ? `${size.width} / ${size.height}`
+      : undefined;
+  const reservesHeight =
+    ratio !== undefined &&
+    (aspect.mode === "fit" || aspect.mode === "width");
+
   // 缩放：连续模式下用 transform，避免破坏流式布局。
   // transform-origin: top center → 缩放时图片从顶部对齐，下方自然溢出形成滚动。
   const transforms: string[] = [];
@@ -543,7 +580,11 @@ const ContinuousImage = memo(function ContinuousImage({
   }
 
   return (
-    <div className="w-full flex justify-center" data-image-index={index}>
+    <div
+      className="w-full flex justify-center"
+      data-image-index={index}
+      style={reservesHeight ? { aspectRatio: ratio } : undefined}
+    >
       <GalleryImage
         src={previewWidth ? previewUrl(src, previewWidth) : imageUrl(src)}
         alt={`第 ${index + 1} 页`}

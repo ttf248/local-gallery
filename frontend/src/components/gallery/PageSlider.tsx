@@ -14,6 +14,13 @@ interface Props {
   onJump: (i: number) => void;
   /** 可选：连续模式时用，标记「当前可视」图片列表（用于缩略图条）。 */
   images?: string[];
+  /**
+   * 双页并排时同时显示两页，页码要写成区间。
+   *
+   * 顶栏写「1–2 / 8」而底栏写「1 / 8」，两个数字说的不是同一件事 ——
+   * 读者会以为底栏漏了一次翻页。底栏与顶栏说同一句话。
+   */
+  double?: boolean;
 }
 
 // 页数跳转条：
@@ -25,7 +32,13 @@ interface Props {
 //
 // 用词与全局一致：漫画侧的图片按「页」计数（相册卡片也写「X 页」），
 // 照片侧才用「张」。
-export default function PageSlider({ total, index, onJump, images }: Props) {
+export default function PageSlider({
+  total,
+  index,
+  onJump,
+  images,
+  double = false,
+}: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [scrubIndex, setScrubIndex] = useState<number | null>(null);
@@ -35,6 +48,14 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
   const safeIndex = Math.max(0, Math.min(total - 1, index));
   const effective = scrubIndex ?? safeIndex;
   const pct = total > 1 ? (effective / (total - 1)) * 100 : 0;
+  // 双页时当前显示的是两页：页码写成区间，与顶栏一致。
+  const labelFor = (i: number) => {
+    const first = i + 1;
+    const last = Math.min(i + 2, total);
+    if (double && last > first) return `${first}–${last}`;
+    return String(first);
+  };
+  const pageLabel = labelFor(safeIndex);
 
   // 进入编辑态时预填当前页。
   //
@@ -173,7 +194,7 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
             );
           })}
           <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-meta text-white/75 tabular-nums">
-            第 {scrubIndex + 1} / {total} 页
+            第 {labelFor(scrubIndex)} / {total} 页
           </div>
         </div>
       )}
@@ -205,7 +226,7 @@ export default function PageSlider({ total, index, onJump, images }: Props) {
           className="min-w-[44px] h-7 px-1.5 rounded text-meta tabular-nums text-white/85 hover:bg-white/10 transition-colors"
           title="跳转到指定页 (G)"
         >
-          {safeIndex + 1}
+          {pageLabel}
         </button>
       )}
       <span className="text-white/70 text-meta tabular-nums">/ {total}</span>

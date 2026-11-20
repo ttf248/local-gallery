@@ -113,10 +113,15 @@ export default function GalleryHeader({
   const isVideo = itemIndex !== undefined;
 
   // 双页模式显示「L-R / total」；否则「N / total」
+  //
+  // 卷末只剩一页时（页数是单数，最后一页没有搭档）写「N / total」，
+  // 不写「N–N / total」：同一个数字写两遍读起来像少了一页。
   const counterText = (() => {
     if (!isVideo && mode === "double") {
       const hi = Math.min(displayIndex + 2, total);
-      return `${displayIndex + 1}–${hi} / ${total}`;
+      if (hi > displayIndex + 1) {
+        return `${displayIndex + 1}–${hi} / ${total}`;
+      }
     }
     return `${displayIndex + 1} / ${total}`;
   })();

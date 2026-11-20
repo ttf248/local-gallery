@@ -73,7 +73,7 @@ export default function Reader() {
   isVideoRef.current = isVideo;
 
   const media = useReaderMedia(pathParam, isVideo);
-  const { images, videos, reload: reloadMedia } = media;
+  const { images, videos, dimensions, reload: reloadMedia } = media;
   const ready = media.status === "ready";
 
   const [continuousRange, setContinuousRange] = useState({
@@ -942,6 +942,7 @@ export default function Reader() {
           ) : (
             <ImageGallery
               images={images}
+              dimensions={dimensions}
               onVisibleRangeChange={onContinuousVisibleRangeChange}
               onClickNavigate={(dir) => {
                 if (dir === -1) prev();
@@ -1039,6 +1040,7 @@ export default function Reader() {
               index={index}
               onJump={jumpTo}
               images={images}
+              double={mode === "double"}
             />
           </div>
         )}
