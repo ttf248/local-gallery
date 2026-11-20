@@ -62,6 +62,41 @@ func TestScanResultCache_LoadFromDisk(t *testing.T) {
 	}
 }
 
+func TestScanResultCache_PreservesMediaDateMetadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "scan_cache.json")
+	root := t.TempDir()
+	imagePath := filepath.Join(root, "photo.jpg")
+	modified := time.Date(2024, 5, 6, 7, 8, 9, 0, time.UTC)
+	cache := NewScanResultCache(path)
+	cache.Set(&models.ScanResult{
+		Roots: []string{root},
+		Albums: []models.Album{{
+			Path: root, ImageFiles: []string{imagePath}, ImageModTimes: []time.Time{modified},
+			Date:       time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+			DateSource: "folder", DatePrecision: "year",
+		}},
+	})
+	if err := cache.Flush(); err != nil {
+		t.Fatal(err)
+	}
+
+	reloaded := NewScanResultCache(path)
+	if _, err := reloaded.LoadWithRoots([]string{root}); err != nil {
+		t.Fatal(err)
+	}
+	result := reloaded.Get()
+	if result == nil || len(result.Albums) != 1 {
+		t.Fatalf("reloaded result = %+v", result)
+	}
+	album := result.Albums[0]
+	if len(album.ImageModTimes) != 1 || !album.ImageModTimes[0].Equal(modified) {
+		t.Fatalf("image modification times = %v, want %v", album.ImageModTimes, modified)
+	}
+	if album.DatePrecision != "year" {
+		t.Fatalf("date precision = %q, want year", album.DatePrecision)
+	}
+}
+
 func TestScanResultCache_NoUnnecessaryWriteWhenClean(t *testing.T) {
 	// 没 Set 过，flush 应该 no-op；磁盘文件不应被创建
 	path := filepath.Join(t.TempDir(), "scan_cache.json")

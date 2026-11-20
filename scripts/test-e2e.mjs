@@ -77,6 +77,8 @@ async function makeFixtures(root) {
   await writeFixture(media, 'sample-broken/broken.jpg', Buffer.from('not a decodable image'))
 
   for (let i = 1; i <= 2; i++) await writeFixture(media, '2024年/page-' + i + '.png')
+  await writeFixture(media, '2018/year-only.png')
+  await writeFixture(media, '2019-11/month-only.png')
   for (let i = 1; i <= 520; i++) {
     await writeFixture(media, '2024年照片墙/page-' + String(i).padStart(4, '0') + '.png')
   }

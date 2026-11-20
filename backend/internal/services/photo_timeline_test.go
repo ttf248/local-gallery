@@ -16,6 +16,8 @@ import (
 type timelineFixture struct {
 	catalog  *ResourceCatalog
 	jobs     *AIJobService
+	root     string
+	albums   []models.Album
 	ids      map[string]string // 相册路径 → 相册资源 ID
 	files    map[string]string // 相册路径 → 第一张照片的资源 ID
 	albumIDs []string
@@ -26,38 +28,43 @@ func newTimelineFixture(t *testing.T) *timelineFixture {
 	root := t.TempDir()
 	fixture := &timelineFixture{
 		catalog: NewResourceCatalog(),
+		root:    root,
 		ids:     map[string]string{},
 		files:   map[string]string{},
 	}
 
 	// 三本相册：文件名带日期、目录名带日期、两者都没有。
 	plans := []struct {
-		dir     string
-		files   []string
-		date    time.Time
-		source  string
-		modTime time.Time
+		dir       string
+		files     []string
+		date      time.Time
+		source    string
+		precision string
+		modTime   time.Time
 	}{
 		{
-			dir:     "名字带日期",
-			files:   []string{"IMG_20240305_101500.jpg", "IMG_20240406_101500.jpg"},
-			date:    time.Date(2024, 4, 6, 10, 15, 0, 0, time.UTC),
-			source:  "filename",
-			modTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			dir:       "名字带日期",
+			files:     []string{"IMG_20240305_101500.jpg", "IMG_20240406_101500.jpg"},
+			date:      time.Date(2024, 4, 6, 10, 15, 0, 0, time.UTC),
+			source:    "filename",
+			precision: TimelinePrecisionDay,
+			modTime:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			dir:     "目录带日期",
-			files:   []string{"a.jpg", "b.jpg"},
-			date:    time.Date(2019, 7, 1, 12, 0, 0, 0, time.UTC),
-			source:  "folder",
-			modTime: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			dir:       "目录带日期",
+			files:     []string{"a.jpg", "b.jpg"},
+			date:      time.Date(2019, 7, 1, 12, 0, 0, 0, time.UTC),
+			source:    "folder",
+			precision: TimelinePrecisionDay,
+			modTime:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		},
 		{
-			dir:     "只有修改时间",
-			files:   []string{"c.jpg"},
-			date:    time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC),
-			source:  "modified",
-			modTime: time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC),
+			dir:       "只有修改时间",
+			files:     []string{"c.jpg"},
+			date:      time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC),
+			source:    "modified",
+			precision: TimelinePrecisionUnknown,
+			modTime:   time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC),
 		},
 	}
 	albums := make([]models.Album, 0, len(plans))
@@ -78,9 +85,16 @@ func newTimelineFixture(t *testing.T) *timelineFixture {
 			Type: "album", Path: albumPath, Name: plan.dir, DisplayName: plan.dir,
 			SourceRoot: root, SourceName: filepath.Base(root),
 			ImageFiles: paths, ImageCount: len(paths),
+			ImageModTimes: func() []time.Time {
+				times := make([]time.Time, len(paths))
+				for index := range times {
+					times[index] = plan.modTime
+				}
+				return times
+			}(),
 			CoverImage: paths[0], CoverKind: "image",
 			ContentKind: string(models.ContentKindPhoto),
-			Date:        plan.date, DateSource: plan.source,
+			Date:        plan.date, DateSource: plan.source, DatePrecision: plan.precision,
 			ModTime: plan.modTime,
 		})
 		fixture.ids[plan.dir] = albumPath
@@ -94,6 +108,7 @@ func newTimelineFixture(t *testing.T) *timelineFixture {
 		ScannedAt: time.Date(2025, 2, 2, 0, 0, 0, 0, time.UTC),
 	}, []string{root})
 	fixture.catalog = catalog
+	fixture.albums = albums
 	snapshot := catalog.Acquire()
 	for _, album := range albums {
 		albumID := catalog.ExternalID(album.Path, ResourceAlbum)
@@ -109,6 +124,14 @@ func newTimelineFixture(t *testing.T) *timelineFixture {
 		filepath.Join(root, "derived", "metadata"),
 		catalog, MetadataAnalyzer{})
 	return fixture
+}
+
+func (f *timelineFixture) publish(t *testing.T) {
+	t.Helper()
+	albums := append([]models.Album(nil), f.albums...)
+	f.catalog.Publish(&models.ScanResult{
+		Roots: []string{f.root}, Albums: albums, AlbumCount: len(albums),
+	}, []string{f.root})
 }
 
 // seedCaptureTime 给一张照片写入 EXIF 拍摄时间。
@@ -133,6 +156,7 @@ func (f *timelineFixture) seedCaptureTime(t *testing.T, resourceID, captured str
 		Type: AIJobTypeMetadata, ResourceID: resourceID, Size: info.Size(), MTimeNs: info.ModTime().UnixNano(),
 		ModuleVersion: MetadataAnalyzer{}.Version(), Status: MetadataParseParsed, Data: data,
 	}
+	f.jobs.recordsRevision++
 }
 
 func (f *timelineFixture) service() *PhotoTimelineService {
@@ -311,30 +335,105 @@ func TestPhotoTimelineEmptyLibraryAnswersWithoutItems(t *testing.T) {
 	}
 }
 
-func TestTimelineMediaTimePrefersEXIFOverFileName(t *testing.T) {
-	album := LibraryNodeSummary{Date: time.Date(2019, 7, 1, 12, 0, 0, 0, time.UTC), DateSource: "folder"}
+func TestTimelineMediaTimePrefersEXIFThenFilenameThenFolderThenModified(t *testing.T) {
+	folderDate := time.Date(2019, 7, 1, 12, 0, 0, 0, time.UTC)
 	item := LibraryMediaItem{ID: "f_1", Name: "IMG_20240305_101500.jpg"}
 	exif := map[string]time.Time{"f_1": time.Date(2024, 3, 5, 9, 0, 0, 0, time.UTC)}
-	at, source := timelineMediaTime(item, album, exif)
-	if source != TimelineDateExif || !at.Equal(exif["f_1"]) {
-		t.Fatalf("exif time = %v/%q, want the EXIF stamp", at, source)
+	date := timelineMediaTime(item, folderDate, TimelinePrecisionDay, time.Time{}, exif)
+	if date.source != TimelineDateExif || !date.at.Equal(exif["f_1"]) || date.precision != TimelinePrecisionDay {
+		t.Fatalf("exif time = %+v, want the EXIF stamp", date)
 	}
-	at, source = timelineMediaTime(item, album, nil)
-	if source != TimelineDateFilename {
-		t.Fatalf("filename time source = %q, want filename", source)
+	date = timelineMediaTime(item, folderDate, TimelinePrecisionYear, time.Time{}, nil)
+	if date.source != TimelineDateFilename || date.precision != TimelinePrecisionDay {
+		t.Fatalf("filename time = %+v, want filename day precision", date)
 	}
-	if at.Year() != 2024 || at.Month() != time.March {
-		t.Fatalf("filename time = %v, want 2024-03", at)
+	if value := timelineDateValue(date.at, date.precision); value != "2024-03-05" {
+		t.Fatalf("filename value = %q, want 2024-03-05", value)
 	}
 	plain := LibraryMediaItem{ID: "f_2", Name: "photo.jpg"}
-	at, source = timelineMediaTime(plain, album, nil)
-	if source != TimelineDateFolder || !at.Equal(album.Date) {
-		t.Fatalf("folder time = %v/%q, want the album date", at, source)
+	date = timelineMediaTime(plain, folderDate, TimelinePrecisionMonth, time.Time{}, nil)
+	if date.source != TimelineDateFolder || date.precision != TimelinePrecisionMonth || timelineDateValue(date.at, date.precision) != "2019-07" {
+		t.Fatalf("folder time = %+v, want only 2019-07", date)
 	}
-	noDate := LibraryNodeSummary{ModTime: time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC)}
-	at, source = timelineMediaTime(plain, noDate, nil)
-	if source != TimelineDateModified || !at.Equal(noDate.ModTime) {
-		t.Fatalf("modified time = %v/%q, want the album mod time", at, source)
+	modified := time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC)
+	date = timelineMediaTime(plain, time.Time{}, "", modified, nil)
+	if date.source != TimelineDateModified || !date.at.Equal(modified) || date.precision != TimelinePrecisionUnknown || timelineDateValue(date.at, date.precision) != "" {
+		t.Fatalf("modified time = %+v, want unknown with its file modification time", date)
+	}
+}
+
+func TestPhotoTimelineDoesNotReuseAlbumRepresentativeDateForUndatedMedia(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	album := fixture.albums[0]
+	undatedPath := filepath.Join(album.Path, "photo-without-date.jpg")
+	if err := os.WriteFile(undatedPath, []byte("photo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	album.ImageFiles = append(album.ImageFiles, undatedPath)
+	album.ImageModTimes = append(album.ImageModTimes, time.Date(2025, 2, 3, 0, 0, 0, 0, time.UTC))
+	album.ImageCount++
+	fixture.albums[0] = album
+	fixture.publish(t)
+	page, err := fixture.service().Page(fixture.catalog.Acquire(), MediaFeedQuery{
+		Kind: LibraryKindPhoto, Scope: MediaFeedTimeline,
+	}, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range page.Items {
+		if item.Name != filepath.Base(undatedPath) {
+			continue
+		}
+		if item.DateSource != TimelineDateModified || item.DatePrecision != TimelinePrecisionUnknown || item.DateValue != "" {
+			t.Fatalf("undated media inherited its album date: %+v", item)
+		}
+		if item.CapturedAt != "2025-02-03T00:00:00Z" {
+			t.Fatalf("undated media capturedAt = %q, want its file modification time", item.CapturedAt)
+		}
+		return
+	}
+	t.Fatal("undated media missing from timeline")
+}
+
+func TestPhotoTimelineKeepsYearOnlyFolderEvidenceOutOfMonths(t *testing.T) {
+	root := t.TempDir()
+	albumPath := filepath.Join(root, "2024")
+	if err := os.MkdirAll(albumPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mediaPath := filepath.Join(albumPath, "photo.jpg")
+	if err := os.WriteFile(mediaPath, []byte("photo"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(&models.ScanResult{Roots: []string{root}, Albums: []models.Album{{
+		Type: "album", Path: albumPath, Name: "2024", SourceRoot: root,
+		ImageFiles: []string{mediaPath}, ImageModTimes: []time.Time{time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
+		ImageCount: 1, Date: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC),
+		DateSource: TimelineDateFolder, DatePrecision: TimelinePrecisionYear,
+		ContentKind: string(models.ContentKindPhoto),
+	}}}, []string{root})
+	service := NewPhotoTimelineService(nil)
+	query := MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline}
+	page, err := service.Page(catalog.Acquire(), query, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Total != 1 || page.Items[0].DatePrecision != TimelinePrecisionYear || page.Items[0].DateValue != "2024" || page.Items[0].CapturedAt != "" {
+		t.Fatalf("year-only timeline item = %+v", page.Items)
+	}
+	if len(page.Years) != 1 || page.Years[0].Year != 2024 || len(page.Years[0].Months) != 0 {
+		t.Fatalf("year-only index = %+v, want no invented month", page.Years)
+	}
+	month, err := service.Page(catalog.Acquire(), MediaFeedQuery{
+		Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "2024", Month: "1",
+	}, "", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if month.Total != 0 {
+		t.Fatalf("year-only evidence appeared in January: total = %d", month.Total)
 	}
 }
 
@@ -433,6 +532,226 @@ func TestPhotoTimelineRebuildsWhenTheLibraryChanges(t *testing.T) {
 	_ = fmt.Sprint(other)
 }
 
+func TestPhotoTimelineRebuildsImmediatelyAfterMediaIsAddedOrRemoved(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	service := fixture.service()
+	query := MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline}
+	first, err := service.Page(fixture.catalog.Acquire(), query, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Total != 5 {
+		t.Fatalf("initial total = %d, want 5", first.Total)
+	}
+
+	// 插入一个按相册自然顺序排在最前的媒体，会让旧索引里所有后续 index
+	// 指向别的照片。库 revision 一变，必须立即重建索引。
+	albumIndex := 0
+	album := fixture.albums[albumIndex]
+	addedPath := filepath.Join(album.Path, "IMG_20230201_101500.jpg")
+	if err := os.WriteFile(addedPath, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	album.ImageFiles = append(album.ImageFiles, addedPath)
+	album.ImageCount++
+	fixture.albums[albumIndex] = album
+	fixture.publish(t)
+	added, err := service.Page(fixture.catalog.Acquire(), query, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if added.Total != 6 {
+		t.Fatalf("after add total = %d, want 6", added.Total)
+	}
+	addedNames := map[string]bool{}
+	for _, item := range added.Items {
+		if addedNames[item.Name] {
+			t.Fatalf("item %q repeated after inserting media", item.Name)
+		}
+		addedNames[item.Name] = true
+	}
+	if !addedNames[filepath.Base(addedPath)] {
+		t.Fatalf("new item %q is missing after insertion", filepath.Base(addedPath))
+	}
+
+	if err := os.Remove(addedPath); err != nil {
+		t.Fatal(err)
+	}
+	album.ImageFiles = album.ImageFiles[:len(album.ImageFiles)-1]
+	album.ImageCount--
+	fixture.albums[albumIndex] = album
+	fixture.publish(t)
+	removed, err := service.Page(fixture.catalog.Acquire(), query, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if removed.Total != 5 {
+		t.Fatalf("after remove total = %d, want 5", removed.Total)
+	}
+	for _, item := range removed.Items {
+		if item.Name == filepath.Base(addedPath) {
+			t.Fatal("removed item remained in the timeline")
+		}
+	}
+}
+
+func TestPhotoTimelineRebuildsAfterAlbumOrderChanges(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	snapshot := fixture.catalog.Acquire()
+	service := fixture.service()
+	query := MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline}
+	albumPath := fixture.ids["目录带日期"]
+	albumID := fixture.catalog.ExternalID(albumPath, ResourceAlbum)
+	ids, ok := snapshot.AlbumImageIDs(albumID)
+	if !ok || len(ids) != 2 {
+		t.Fatalf("directory album image ids = %v", ids)
+	}
+	byName := map[string]string{}
+	for _, id := range ids {
+		ref, exists := snapshot.Lookup(id)
+		if !exists {
+			t.Fatalf("resource %q missing", id)
+		}
+		byName[filepath.Base(ref.AbsolutePath)] = id
+	}
+	fixture.seedCaptureTime(t, byName["a.jpg"], "2024-08-01T12:00:00")
+	fixture.seedCaptureTime(t, byName["b.jpg"], "2023-08-01T12:00:00")
+	if _, err := service.Page(snapshot, query, "", 20); err != nil {
+		t.Fatal(err)
+	}
+
+	oldPath := filepath.Join(albumPath, "a.jpg")
+	newPath := filepath.Join(albumPath, "z.jpg")
+	if err := os.Rename(oldPath, newPath); err != nil {
+		t.Fatal(err)
+	}
+	for index := range fixture.albums {
+		if fixture.albums[index].Path != albumPath {
+			continue
+		}
+		fixture.albums[index].ImageFiles = []string{
+			filepath.Join(albumPath, "b.jpg"), newPath,
+		}
+	}
+	fixture.publish(t)
+	page, err := service.Page(fixture.catalog.Acquire(), query, "", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range page.Items {
+		if item.Name == "b.jpg" && item.CapturedAt[:4] != "2023" {
+			t.Fatalf("b.jpg retained stale time %q after album order changed", item.CapturedAt)
+		}
+	}
+}
+
+func TestPhotoTimelineRejectsCursorFromPreviousIndexRevision(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	service := fixture.service()
+	query := MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline}
+	first, err := service.Page(fixture.catalog.Acquire(), query, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.NextCursor == "" {
+		t.Fatal("first page has no next cursor")
+	}
+	album := fixture.albums[0]
+	addedPath := filepath.Join(album.Path, "IMG_20220101.jpg")
+	if err := os.WriteFile(addedPath, []byte("new"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	album.ImageFiles = append(album.ImageFiles, addedPath)
+	album.ImageCount++
+	fixture.albums[0] = album
+	fixture.publish(t)
+	if _, err := service.Page(fixture.catalog.Acquire(), query, first.NextCursor, 1); err == nil {
+		t.Fatal("cursor from previous index revision was accepted")
+	}
+}
+
+func TestPhotoTimelineAlbumCountsCoverAllMatchingItems(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	page, err := fixture.service().Page(fixture.catalog.Acquire(), MediaFeedQuery{
+		Kind: LibraryKindPhoto, Scope: MediaFeedTimeline,
+	}, "", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, album := range page.Albums {
+		counts[album.ID] = album.Count
+	}
+	want := map[string]int{
+		fixture.catalog.ExternalID(fixture.ids["名字带日期"], ResourceAlbum):  2,
+		fixture.catalog.ExternalID(fixture.ids["目录带日期"], ResourceAlbum):  2,
+		fixture.catalog.ExternalID(fixture.ids["只有修改时间"], ResourceAlbum): 1,
+	}
+	if len(counts) != len(want) {
+		t.Fatalf("album counts = %v, want %v", counts, want)
+	}
+	for id, count := range want {
+		if counts[id] != count {
+			t.Errorf("album %q count = %d, want %d", id, counts[id], count)
+		}
+	}
+
+	filtered, err := fixture.service().Page(fixture.catalog.Acquire(), MediaFeedQuery{
+		Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "2024",
+	}, "", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Albums) != 1 || filtered.Albums[0].Count != 2 {
+		t.Fatalf("filtered album counts = %+v, want the 2024 source album with 2 items", filtered.Albums)
+	}
+}
+
+func TestPhotoTimelineUnknownCountIgnoresYearAndMonthFilters(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	albumIndex := 2
+	album := fixture.albums[albumIndex]
+	videoPath := filepath.Join(album.Path, "untimed.mp4")
+	if err := os.WriteFile(videoPath, []byte("video"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	album.VideoFiles = []string{videoPath}
+	album.VideoCount = 1
+	fixture.albums[albumIndex] = album
+	fixture.publish(t)
+	service := fixture.service()
+	base := MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline}
+
+	tests := []struct {
+		name         string
+		query        MediaFeedQuery
+		wantUnknown  int
+		wantModified int
+	}{
+		{name: "all", query: base, wantUnknown: 2, wantModified: 2},
+		{name: "year", query: MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "2024"}, wantUnknown: 2, wantModified: 0},
+		{name: "month", query: MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "2024", Month: "3"}, wantUnknown: 2, wantModified: 0},
+		{name: "photos", query: MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "2024", Media: "photo"}, wantUnknown: 1, wantModified: 0},
+		{name: "videos", query: MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "2024", Media: "video"}, wantUnknown: 1, wantModified: 0},
+		{name: "unknown photos", query: MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "unknown", Media: "photo"}, wantUnknown: 1, wantModified: 1},
+		{name: "unknown videos", query: MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline, Year: "unknown", Media: "video"}, wantUnknown: 1, wantModified: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			page, err := service.Page(fixture.catalog.Acquire(), test.query, "", 20)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if page.Unknown != test.wantUnknown {
+				t.Errorf("unknown = %d, want %d", page.Unknown, test.wantUnknown)
+			}
+			if page.DateSources[TimelineDateModified] != test.wantModified {
+				t.Errorf("dateSources modified = %d, want %d (all sources: %v)", page.DateSources[TimelineDateModified], test.wantModified, page.DateSources)
+			}
+		})
+	}
+}
+
 // 只看视频时，年份索引的数量也要是视频的数量。
 //
 // 界面上跳年跳月按的是眼下这一段筛选结果的数量：照片的数量摆在视频的
@@ -456,5 +775,37 @@ func TestTimelineYearIndexFollowsTheMediaFilter(t *testing.T) {
 	}
 	if videos[0].Months[0].Count != 1 {
 		t.Fatalf("video months = %+v, want one item in March", videos[0].Months)
+	}
+}
+
+func BenchmarkPhotoTimelinePage10K(b *testing.B) {
+	root := b.TempDir()
+	albumPath := filepath.Join(root, "album")
+	files := make([]string, 10_000)
+	for index := range files {
+		files[index] = filepath.Join(albumPath, fmt.Sprintf("photo-%05d.jpg", index))
+	}
+	catalog := NewResourceCatalog()
+	catalog.SetContentKindPolicy(NewContentKindPolicy([]RootKind{{
+		Path: root, Kind: models.ContentKindPhoto,
+	}}))
+	catalog.Publish(&models.ScanResult{
+		Roots: []string{root},
+		Albums: []models.Album{{
+			Type: "album", Path: albumPath, Name: "album", SourceRoot: root,
+			ImageFiles: files, ImageCount: len(files),
+			ContentKind: string(models.ContentKindPhoto),
+			ModTime:     time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		}},
+	}, []string{root})
+	snapshot := catalog.Acquire()
+	query := MediaFeedQuery{Kind: LibraryKindPhoto, Scope: MediaFeedTimeline}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for iteration := 0; iteration < b.N; iteration++ {
+		service := NewPhotoTimelineService(nil)
+		if _, err := service.Page(snapshot, query, "", 60); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

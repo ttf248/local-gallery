@@ -1,4 +1,8 @@
-import type { LibraryFeedItem, TimelineDateSource } from "../api/library";
+import type {
+  LibraryFeedItem,
+  TimelineDatePrecision,
+  TimelineDateSource,
+} from "../api/library";
 
 /**
  * 时间线的分组：一年的某个月，或「日期未知」的那一段。
@@ -21,6 +25,8 @@ export interface TimelineGroup {
   count: number;
   /** 组内各时间来源的数量。 */
   sources: Partial<Record<TimelineDateSource, number>>;
+  /** 组内每种日期精度的数量。 */
+  precisions: Partial<Record<TimelineDatePrecision, number>>;
 }
 
 /** 「日期未知」那一段的分组键。 */
@@ -33,10 +39,27 @@ export const TIMELINE_UNKNOWN_KEY = "unknown";
  * 就是把拷贝来的旧照片说成那月拍的。
  */
 export function timelineGroupKey(item: LibraryFeedItem): string {
-  if (item.dateSource === "modified") return TIMELINE_UNKNOWN_KEY;
+  const precision = item.datePrecision;
+  if (precision === "unknown" || item.dateSource === "modified") {
+    return TIMELINE_UNKNOWN_KEY;
+  }
+  const value = item.dateValue;
+  if (precision === "year" && value && /^\d{4}$/.test(value)) return value;
+  if (precision === "month" && value && /^\d{4}-\d{2}$/.test(value)) {
+    return value;
+  }
+  if (precision === "day" && value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value.slice(0, 7);
+  }
   const captured = item.capturedAt;
   if (!captured || captured.length < 7) return TIMELINE_UNKNOWN_KEY;
   return captured.slice(0, 7);
+}
+
+function itemDatePrecision(item: LibraryFeedItem): TimelineDatePrecision {
+  if (item.datePrecision) return item.datePrecision;
+  if (item.dateSource === "modified" || !item.capturedAt) return "unknown";
+  return "day";
 }
 
 /**
@@ -63,6 +86,7 @@ export function timelineSourceLabel(source: TimelineDateSource): string {
 /** "2024-05" → 「2024 年 5 月」。 */
 export function timelineGroupLabel(key: string): string {
   if (key === TIMELINE_UNKNOWN_KEY) return "日期未知";
+  if (/^\d{4}$/.test(key)) return `${Number(key)} 年`;
   const [year, month] = key.split("-");
   const yearNumber = Number(year);
   const monthNumber = Number(month);
@@ -94,12 +118,15 @@ export function buildTimelineGroups(
         note: "",
         count: 0,
         sources: {},
+        precisions: {},
       };
       groups.set(key, group);
     }
     group.count += 1;
     const source = item.dateSource ?? "modified";
     group.sources[source] = (group.sources[source] ?? 0) + 1;
+    const precision = itemDatePrecision(item);
+    group.precisions[precision] = (group.precisions[precision] ?? 0) + 1;
   }
   for (const group of groups.values()) {
     group.note = timelineGroupNote(group);
@@ -124,7 +151,26 @@ export function timelineGroupNote(group: TimelineGroup): string {
   const inferred = Object.keys(group.sources).some(
     (source) => source !== "exif",
   );
-  return inferred ? "含推断时间" : "";
+  const notes: string[] = [];
+  if (inferred) notes.push("含推断时间");
+  if (group.precisions.year) notes.push("仅精确到年份");
+  else if (group.precisions.month) notes.push("含仅精确到年月的日期");
+  return notes.join(" · ");
+}
+
+export function timelinePrecisionLabel(
+  precision: TimelineDatePrecision,
+): string {
+  switch (precision) {
+    case "day":
+      return "精确到日";
+    case "month":
+      return "仅年月";
+    case "year":
+      return "仅年份";
+    case "unknown":
+      return "日期未知";
+  }
 }
 
 /**

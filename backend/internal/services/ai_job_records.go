@@ -249,11 +249,21 @@ func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map
 // pass over the library into thousands of queries. Resources without a parsed
 // capture time are simply absent from the map.
 func (s *AIJobService) AllCaptureTimes(moduleType string) map[string]time.Time {
+	times, _ := s.AllCaptureTimesWithRevision(moduleType)
+	return times
+}
+
+// AllCaptureTimesWithRevision returns a capture-time snapshot and the records
+// revision observed while copying its payloads. A derived index must use these
+// together so a concurrent record update cannot label old values with a newer
+// cache epoch.
+func (s *AIJobService) AllCaptureTimesWithRevision(moduleType string) (map[string]time.Time, uint64) {
 	s.mu.Lock()
+	revision := s.recordsRevision
 	analyzer, installed := s.analyzers[moduleType]
 	if !installed {
 		s.mu.Unlock()
-		return map[string]time.Time{}
+		return map[string]time.Time{}, revision
 	}
 	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
 	// 锁内只取载荷，解析放到锁外：整库拍摄时间有十万条量级，
@@ -285,7 +295,7 @@ func (s *AIJobService) AllCaptureTimes(moduleType string) map[string]time.Time {
 		}
 		result[payload.resourceID] = captured
 	}
-	return result
+	return result, revision
 }
 
 // RecordsForResources returns current-version analysis records only for the

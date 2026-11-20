@@ -138,6 +138,7 @@ type LibraryNodeSummary struct {
 	ModTime            time.Time `json:"modTime,omitempty"`
 	Date               time.Time `json:"date,omitempty"`
 	DateSource         string    `json:"dateSource,omitempty"`
+	DatePrecision      string    `json:"datePrecision,omitempty"`
 	Virtual            bool      `json:"virtual,omitempty"`
 	HasCustomCover     bool      `json:"hasCustomCover,omitempty"`
 	// Location 是虚拟相册归属目录相对媒体根的路径（斜杠分隔），
@@ -184,6 +185,10 @@ type LibraryMediaItem struct {
 	// sourcePath 只在服务端内部用：分页时才 stat 出 Version，
 	// 不必在索引构建阶段给全库每个文件都做一次 stat。
 	sourcePath string
+	// 时间线按单张媒体使用文件修改时间作为最后退路。用整数保存，避免
+	// 为十万级媒体在目录索引里复制一整份 time.Time。
+	modifiedAtUnixNano int64
+	hasModifiedAt      bool
 }
 
 type LibraryTagSummary struct {
@@ -461,12 +466,14 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 		kindIndexes := map[string]int{"image": 0, "video": 0}
 		for itemIndex, source := range sources {
 			items = append(items, LibraryMediaItem{
-				ID:         source.id,
-				Kind:       source.kind,
-				Name:       filepath.Base(source.path),
-				Index:      itemIndex,
-				KindIndex:  kindIndexes[source.kind],
-				sourcePath: source.path,
+				ID:                 source.id,
+				Kind:               source.kind,
+				Name:               filepath.Base(source.path),
+				Index:              itemIndex,
+				KindIndex:          kindIndexes[source.kind],
+				sourcePath:         source.path,
+				modifiedAtUnixNano: source.modTime.UnixNano(),
+				hasModifiedAt:      !source.modTime.IsZero(),
 			})
 			kindIndexes[source.kind]++
 		}
@@ -1679,6 +1686,7 @@ func albumSummary(state *resourceCatalogState, album models.Album) LibraryNodeSu
 		ModTime:            album.ModTime,
 		Date:               album.Date,
 		DateSource:         album.DateSource,
+		DatePrecision:      album.DatePrecision,
 		Virtual:            album.Virtual,
 		HasCustomCover:     state.customCovers[filepath.Clean(album.Path)],
 		Location:           album.Location,
@@ -1771,6 +1779,7 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 		ModTime:            collection.ModTime,
 		Date:               collection.Date,
 		DateSource:         collection.DateSource,
+		DatePrecision:      collection.DatePrecision,
 	}
 }
 
@@ -1835,15 +1844,16 @@ func collectionCovers(state *resourceCatalogState, collection models.Collection,
 }
 
 type albumMediaSource struct {
-	id   string
-	kind string
-	path string
+	id      string
+	kind    string
+	path    string
+	modTime time.Time
 }
 
 func albumMediaSources(state *resourceCatalogState, album models.Album) []albumMediaSource {
 	media := make([]albumMediaSource, 0, len(album.ImageFiles)+len(album.VideoFiles))
 	seen := make(map[string]struct{}, cap(media))
-	appendMedia := func(path, kind string) {
+	appendMedia := func(path, kind string, modTime time.Time) {
 		if path == "" {
 			return
 		}
@@ -1856,13 +1866,21 @@ func albumMediaSources(state *resourceCatalogState, album models.Album) []albumM
 			return
 		}
 		seen[key] = struct{}{}
-		media = append(media, albumMediaSource{id: id, kind: kind, path: path})
+		media = append(media, albumMediaSource{id: id, kind: kind, path: path, modTime: modTime})
 	}
-	for _, path := range album.ImageFiles {
-		appendMedia(path, "image")
+	for index, path := range album.ImageFiles {
+		var modTime time.Time
+		if index < len(album.ImageModTimes) {
+			modTime = album.ImageModTimes[index]
+		}
+		appendMedia(path, "image", modTime)
 	}
-	for _, path := range album.VideoFiles {
-		appendMedia(path, "video")
+	for index, path := range album.VideoFiles {
+		var modTime time.Time
+		if index < len(album.VideoModTimes) {
+			modTime = album.VideoModTimes[index]
+		}
+		appendMedia(path, "video", modTime)
 	}
 	sort.SliceStable(media, func(i, j int) bool {
 		leftName, rightName := filepath.Base(media[i].path), filepath.Base(media[j].path)

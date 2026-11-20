@@ -112,25 +112,32 @@ const VirtualAlbumName = "本目录媒体"
 // SourceName（根的 basename，用于 badge 显示）；若不同根下出现同名相册，
 // DisplayName 会加 "[SourceName] " 前缀避免歧义，否则与 Name 相同。
 type Album struct {
-	Type        string    `json:"type"`                  // 始终为 "album"
-	Path        string    `json:"path"`                  // 绝对路径
-	Name        string    `json:"name"`                  // 文件夹名（原始名）
-	DisplayName string    `json:"displayName,omitempty"` // 同名冲突时加来源前缀；否则等于 Name
-	SourceRoot  string    `json:"sourceRoot,omitempty"`  // 所属媒体根（绝对路径）；多根扫描时填充
-	SourceName  string    `json:"sourceName,omitempty"`  // 所属媒体根的 basename，用于 UI badge
-	ImageFiles  []string  `json:"imageFiles"`
-	VideoFiles  []string  `json:"videoFiles"`
-	CoverImage  string    `json:"coverImage"` // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
-	ImageCount  int       `json:"imageCount"`
-	VideoCount  int       `json:"videoCount,omitempty"` // 视频数量（0 时省略）
-	FolderSize  int64     `json:"folderSize"`           // 字节
-	Tags        []string  `json:"tags,omitempty"`       // 标签（从方括号解析），可能多个
-	ModTime     time.Time `json:"modTime"`
+	Type        string   `json:"type"`                  // 始终为 "album"
+	Path        string   `json:"path"`                  // 绝对路径
+	Name        string   `json:"name"`                  // 文件夹名（原始名）
+	DisplayName string   `json:"displayName,omitempty"` // 同名冲突时加来源前缀；否则等于 Name
+	SourceRoot  string   `json:"sourceRoot,omitempty"`  // 所属媒体根（绝对路径）；多根扫描时填充
+	SourceName  string   `json:"sourceName,omitempty"`  // 所属媒体根的 basename，用于 UI badge
+	ImageFiles  []string `json:"imageFiles"`
+	VideoFiles  []string `json:"videoFiles"`
+	// ImageModTimes / VideoModTimes 与对应文件列表按下标一一对应。
+	// 时间线需要区分单张媒体的文件修改时间，不能把相册里最新文件的
+	// 修改时间套给所有媒体；旧扫描缓存缺省时由调用方按相册级时间退化。
+	ImageModTimes []time.Time `json:"imageModTimes,omitempty"`
+	VideoModTimes []time.Time `json:"videoModTimes,omitempty"`
+	CoverImage    string      `json:"coverImage"` // 封面（图片时为原图绝对路径；视频时为视频绝对路径，缩略图由前端抽帧）
+	ImageCount    int         `json:"imageCount"`
+	VideoCount    int         `json:"videoCount,omitempty"` // 视频数量（0 时省略）
+	FolderSize    int64       `json:"folderSize"`           // 字节
+	Tags          []string    `json:"tags,omitempty"`       // 标签（从方括号解析），可能多个
+	ModTime       time.Time   `json:"modTime"`
 	// Date 是相册在时间轴上的统一业务时间；DateSource 说明该时间的
 	// 来源，前端不再根据文件夹名自行猜测。优先级固定为
 	// filename > folder > modified。
 	Date       time.Time `json:"date"`
 	DateSource string    `json:"dateSource"` // filename / folder / modified
+	// DatePrecision 是 Date 的证据精度：day / month / year / unknown。
+	DatePrecision string `json:"datePrecision,omitempty"`
 	// CaptureDates 是这本相册里出现过的拍摄日期（"YYYYMMDD"，去重升序）。
 	//
 	// 它来自文件名推断（IMG_20240101_105902.jpg 这类写法），不读 EXIF ——
@@ -205,9 +212,10 @@ type Collection struct {
 	//
 	// 集合不是「拍于某天」的东西，但排序与「最近更新」需要它有时间：
 	// 早先集合不带任何时间戳，按时间排序时它们会永远排在最后。
-	ModTime    time.Time `json:"modTime,omitempty"`
-	Date       time.Time `json:"date,omitempty"`
-	DateSource string    `json:"dateSource,omitempty"` // filename / folder / modified
+	ModTime       time.Time `json:"modTime,omitempty"`
+	Date          time.Time `json:"date,omitempty"`
+	DateSource    string    `json:"dateSource,omitempty"` // filename / folder / modified
+	DatePrecision string    `json:"datePrecision,omitempty"`
 	// ContentKind 是集合的内容属性："photo" 或 "comic"。
 	// 集合只出现在一个媒体根下，因此继承该根的属性。
 	ContentKind string `json:"contentKind,omitempty"`

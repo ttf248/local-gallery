@@ -103,6 +103,9 @@ export default function PhotoTimeline() {
   const groupCount = useCallback(
     (key: string) => {
       if (key === "unknown") return feed.unknown;
+      if (/^\d{4}$/.test(key)) {
+        return feed.years.find((item) => item.year === Number(key))?.count ?? 0;
+      }
       const [year, month] = key.split("-");
       const entry = feed.years.find((item) => item.year === Number(year));
       const found = entry?.months.find((item) => item.month === Number(month));
@@ -252,6 +255,7 @@ export default function PhotoTimeline() {
                 years={feed.years}
                 filter={filter}
                 dateSources={feed.dateSources}
+                datePrecisions={feed.datePrecisions}
                 unknown={feed.unknown}
                 onChange={applyFilter}
               />

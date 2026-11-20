@@ -1,5 +1,13 @@
-import type { TimelineDateSource, TimelineYear } from "../../api/library";
-import { timelineSourceLabel, type TimelineFilter } from "../../utils/timeline";
+import type {
+  TimelineDatePrecision,
+  TimelineDateSource,
+  TimelineYear,
+} from "../../api/library";
+import {
+  timelinePrecisionLabel,
+  timelineSourceLabel,
+  type TimelineFilter,
+} from "../../utils/timeline";
 import TimelineFilters from "./TimelineFilters";
 
 interface Props {
@@ -9,6 +17,8 @@ interface Props {
   filter: TimelineFilter;
   /** 这一段筛选结果里的时间来源分布。 */
   dateSources: Partial<Record<TimelineDateSource, number>>;
+  /** 当前筛选结果里的日期精度分布。 */
+  datePrecisions: Partial<Record<TimelineDatePrecision, number>>;
   /** 「日期未知」的媒体数。 */
   unknown: number;
   /** 改筛选。 */
@@ -26,6 +36,7 @@ export default function TimelineToolbar({
   years,
   filter,
   dateSources,
+  datePrecisions,
   unknown,
   onChange,
 }: Props) {
@@ -34,6 +45,16 @@ export default function TimelineToolbar({
     .map(([source, count]) => `${timelineSourceLabel(source)} ${count} 张`);
   // 只有一种来源时不说话：那一段本来没什么要交代的。
   const legend = parts.length <= 1 ? "" : parts.join(" · ");
+  const precisionParts = (
+    Object.entries(datePrecisions) as [TimelineDatePrecision, number][]
+  )
+    .filter(([, count]) => count > 0)
+    .map(
+      ([precision, count]) =>
+        `${timelinePrecisionLabel(precision)} ${count} 张`,
+    );
+  const showPrecision =
+    (datePrecisions.month ?? 0) > 0 || (datePrecisions.year ?? 0) > 0;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -49,6 +70,14 @@ export default function TimelineToolbar({
           data-testid="timeline-source-legend"
         >
           时间来源：{legend}
+        </p>
+      ) : null}
+      {showPrecision ? (
+        <p
+          className="text-meta text-fg-subtle"
+          data-testid="timeline-precision-legend"
+        >
+          日期精度：{precisionParts.join(" · ")}
         </p>
       ) : null}
     </div>

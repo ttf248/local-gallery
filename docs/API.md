@@ -145,7 +145,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 扫描收录的媒体格式由服务端扩展名白名单决定（图片：jpg / jpeg / jfif / png / gif / bmp / webp / tiff / tif / heic / heif；视频：mp4 / m4v / webm / mov / mkv / avi / 3gp）。目录里只要有受支持的媒体就会生成相册；此前 3GP 不在白名单里，整目录都是 3GP 的文件夹（例如「萍乡中学/录像」）在应用里完全看不到。浏览器放不了的容器（mkv / avi / 3gp）一律走服务端转码，不按码流判断。
 
-相册同时返回 `date` 与 `dateSource`。`dateSource` 取值为 `filename` / `folder` / `modified`，服务端按该顺序降级。`filename` 是从文件名推断的拍摄时间（`IMG_20240101_105902.jpg`、`2024-01-01`、`2024年10月1日` 这类写法），不读 EXIF；一本相册取其中出现次数最多的那一天（并列取较早的）。`folder` 只接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`、`YYYYMMDD` 或严格的 `YYYY/MM/DD` 路径分段，不会从任意名称子串中猜测。集合与相册一样带 `date` / `dateSource` / `modTime`：集合的日期是后代相册拍摄时间的代表值（按媒体数加权取众数），没有拍摄时间时退回目录日期或目录修改时间。
+相册同时返回 `date`、`dateSource` 与 `datePrecision`。`dateSource` 取值为 `filename` / `folder` / `modified`，服务端按该顺序降级；`datePrecision` 为 `day` / `month` / `year` / `unknown`。`filename` 是从文件名推断的拍摄时间（`IMG_20240101_105902.jpg`、`2024-01-01`、`2024年10月1日` 这类写法），不读 EXIF；一本相册取其中出现次数最多的那一天（并列取较早的）。`folder` 只接受 `YYYY`、`YYYY-MM`、`YYYY-MM-DD`、`YYYYMM`、`YYYYMMDD` 或严格的 `YYYY/MM`、`YYYY/MM/DD` 路径分段，不会从任意名称子串中猜测。相册级 `date` 是代表值，不能当作相册内每张媒体的拍摄日期；只有年份或年月时，客户端应按 `datePrecision` 降低显示精度。集合与相册一样带 `date` / `dateSource` / `datePrecision` / `modTime`：集合的日期是后代相册拍摄时间的代表值（按媒体数加权取众数），没有拍摄时间时退回目录日期或目录修改时间。
 
 相册还带 `contentSignature`：这本相册里媒体文件内容（大小与纳秒修改时间）汇总出的指纹。它区分「目录结构变了」与「文件内容变了」——原地覆盖一张照片时文件清单与目录修改时间都没变，只有这个指纹会变。客户端不需要解释它，只把它当作相册内容是否变过的判据。
 
@@ -1030,9 +1030,9 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
   - `recent` —— 取最近加入的几本相册里的照片。
   - `random` —— 取随机几本相册里的照片。相册按年份分桶后轮流取（同一年份最多两本），一本相册里的照片则等距抽样而不是取连续的一段：连着看同一场活动的连拍，墙上就只剩一种口味。`seed` 可选：同一个种子给同一批照片，不同种子给不同的批次（「换一批」因此一定换得掉）。
   - `stream` —— 取一条确定的长流：瀑布流专页往下滑的数据源。相册按种子打散、相册内部的照片也按种子打散，按「每轮每本相册十二张」逐轮往下取。游标是长流里的照片下标，同一颗种子给出同一条长流，因此翻页与重进都接得上。走完一圈（全库每张照片各一次）会绕回开头再来一圈，绕圈时相册内的顺序重新打散：照片会再出现，但不会按同一个次序再出现。`seed` 必填语义与 `random` 相同。
-  - `timeline` —— 取全库按拍摄证据排下来的序列（只属于照片侧）。照片按拍摄时间倒序排列，只有文件修改时间的那一批排在末尾并单独成段。`year` 可选（`1900..2099`，或 `unknown` 表示「日期未知」那一段），`month` 可选（`1..12`，必须与 `year` 同时给），`media` 可选（`photo` / `video`，缺省两类都收）。换筛选条件后旧游标立即失效（作用域里带着筛选标记与索引版本）。
+  - `timeline` —— 取全库按单张媒体的日期证据排下来的序列（只属于照片侧），优先级为 EXIF → 文件名 → 有效目录日期 → 该文件的修改时间。只有文件修改时间的媒体排在末尾并单独成段。`year` 可选（`1900..2099`，或 `unknown` 表示「日期未知」那一段），`month` 可选（`1..12`，必须与 `year` 同时给；只有年份证据的媒体不属于任何月份），`media` 可选（`photo` / `video`，缺省两类都收）。换筛选条件后旧游标立即失效（作用域里带着筛选标记与实际索引版本）。库 revision 变化立即重建索引；仅分析记录 revision 变化允许 10 秒防抖，并且只在同一库快照上复用旧索引。
 - `limit` 沿用分页默认值与上限，`cursor` 是不透明游标，绑定取材条件与库 revision。`year` 与 `collection` 分页；`stream` 按游标分页；`recent` 与 `random` 一次返回整批，不分页。
-- 响应 `{ok:true,page:{revision,items,total,nextCursor?,albums,sources}}`。`items` 是媒体字段加上 `albumId` / `albumName`；`scope=timeline` 时每一项另带 `capturedAt`（RFC3339）与 `dateSource`（`exif` / `filename` / `folder` / `modified`），整页另带 `years`（年份索引 `{year,count,months:[{month,count}]}`）、`unknown`（日期未知的媒体数）与 `dateSources`（这一段筛选结果里的时间来源分布，按来源计数）；`albums` 是这一页涉及的相册 `{id,name,count}`；`sources` 是取材范围里被选中的节点 `{id,name,kind}` —— 年份对应的那几个集合，或集合页的那一个集合。
+- 响应 `{ok:true,page:{revision,items,total,nextCursor?,albums,sources}}`。`items` 是媒体字段加上 `albumId` / `albumName`；`scope=timeline` 时每一项另带 `dateSource`（`exif` / `filename` / `folder` / `modified`）、`datePrecision`（`day` / `month` / `year` / `unknown`）与按精度表达的 `dateValue`（`YYYY-MM-DD` / `YYYY-MM` / `YYYY`）。精确到日的媒体保留旧字段 `capturedAt`（RFC3339）；仅年月或年份不返回 `capturedAt`，避免旧客户端把内部排序锚点显示成一月一日。修改时间可继续由 `capturedAt` 提供排序值，但必须遵守 `datePrecision=unknown`，不得当作拍摄日期显示。整页另带 `years`（年份索引 `{year,count,months:[{month,count}]}`；只有年份证据时计入 `count`，不伪造月份）、`unknown`（全库当前 `media` 类型的日期未知数量，不随年份/月筛选变化）、`dateSources` 与 `datePrecisions`（当前筛选结果按来源和精度分别计数）。`albums` 的 `{id,name,count}` 统计当前筛选结果中各来源相册的媒体数，跨页保持一致；`sources` 是取材范围里被选中的节点 `{id,name,kind}` —— 年份对应的那几个集合，或集合页的那一个集合。
 - `scope=collection` 的照片按相册轮流排列（第 0 轮取每本相册的第 1 张，第 1 轮取每本的第 2 张……）：连着看一本相册的头几张，看到的只是这一本，轮流取之后每一本都露得出来。
 - `recent` 与 `random` 会把几本相册的照片交错排布：连着看一本相册的头几张，墙上就只剩一种口味。
 - 非法取材条件返回 `400 invalid_media_feed`；集合 ID 不存在返回 `404 resource_not_found`，类型不对返回 `400 invalid_resource_kind`。响应不携带本机绝对路径。

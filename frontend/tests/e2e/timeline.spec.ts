@@ -17,7 +17,7 @@ test.beforeEach(async ({ request }) => {
  * 后者尤其重要：从文件名或目录名推断出来的日期不是拍摄时间，界面上
  * 必须照实说。
  */
-test("照片首页就是时间线：按月份分段，时间来源照实说", async ({
+test("照片首页就是时间线：按日期精度分段，来源照实说", async ({
   page,
   request,
 }) => {
@@ -32,6 +32,32 @@ test("照片首页就是时间线：按月份分段，时间来源照实说", as
   const legend = page.getByTestId("timeline-source-legend");
   await expect(legend).toBeVisible();
   await expect(legend).toContainText("张");
+  await expect(page.getByTestId("timeline-precision-legend")).toContainText(
+    "仅年份",
+  );
+});
+
+test("年份与年月目录保留原精度，不补出一月或某一天", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+
+  await page.goto("/photo?year=2018");
+  const yearHeader = page.getByTestId("timeline-group-header").first();
+  await expect(yearHeader).toContainText("2018 年");
+  await expect(yearHeader).not.toContainText("1 月");
+  await expect(page.getByTestId("timeline-precision-legend")).toContainText(
+    "仅年份 1 张",
+  );
+
+  await page.goto("/photo?year=2019");
+  const monthHeader = page.getByTestId("timeline-group-header").first();
+  await expect(monthHeader).toContainText("2019 年 11 月");
+  await expect(monthHeader).not.toContainText("11 月 1 日");
+  await expect(page.getByTestId("timeline-precision-legend")).toContainText(
+    "仅年月 1 张",
+  );
 });
 
 /**

@@ -7,6 +7,7 @@ import {
   type LibraryFeedItem,
   type LibraryFeedSource,
   type MediaFeedQuery,
+  type TimelineDatePrecision,
   type TimelineDateSource,
   type TimelineYear,
 } from "../api/library";
@@ -41,9 +42,7 @@ export function useMediaFeed(
       libraryApi.mediaFeed(query, pageParam, signal).then((r) => r.page),
     getNextPageParam: (page) => page.nextCursor || undefined,
     enabled: ready && enabled,
-    placeholderData: keepPrevious
-      ? (previous) => previous as never
-      : undefined,
+    placeholderData: keepPrevious ? (previous) => previous as never : undefined,
     // 游标失效（400）重试没有意义：库变了，重取首屏才是对的。
     // 其余也只重试值得重试的状态（5xx / 408 / 429），最多一次。
     retry: (count, error) =>
@@ -86,6 +85,9 @@ export function useMediaFeed(
     () => result.data?.pages[0]?.dateSources ?? {},
     [result.data],
   );
+  const datePrecisions = useMemo<
+    Partial<Record<TimelineDatePrecision, number>>
+  >(() => result.data?.pages[0]?.datePrecisions ?? {}, [result.data]);
   const total = result.data?.pages[0]?.total ?? items.length;
 
   return {
@@ -96,6 +98,7 @@ export function useMediaFeed(
     years,
     unknown,
     dateSources,
+    datePrecisions,
     total,
     query,
   };

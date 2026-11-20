@@ -22,8 +22,53 @@ const (
 	// TimelineDateModified 是文件的修改时间。它只说明文件最后一次被
 	// 改动的时间：拷贝来的旧照片在这里会显示成拷贝那天。因此没有拍摄
 	// 证据的媒体按它排，但排在时间线末尾，并这样标注。
-	TimelineDateModified = "modified"
+	TimelineDateModified     = "modified"
+	TimelinePrecisionDay     = "day"
+	TimelinePrecisionMonth   = "month"
+	TimelinePrecisionYear    = "year"
+	TimelinePrecisionUnknown = "unknown"
 )
+
+type timelineDate struct {
+	at        time.Time
+	source    string
+	precision string
+}
+
+type timelinePrecisionCode uint8
+
+const (
+	timelinePrecisionUnknown timelinePrecisionCode = iota
+	timelinePrecisionDay
+	timelinePrecisionMonth
+	timelinePrecisionYear
+)
+
+func timelinePrecisionCodeFor(value string) timelinePrecisionCode {
+	switch value {
+	case TimelinePrecisionDay:
+		return timelinePrecisionDay
+	case TimelinePrecisionMonth:
+		return timelinePrecisionMonth
+	case TimelinePrecisionYear:
+		return timelinePrecisionYear
+	default:
+		return timelinePrecisionUnknown
+	}
+}
+
+func (p timelinePrecisionCode) String() string {
+	switch p {
+	case timelinePrecisionDay:
+		return TimelinePrecisionDay
+	case timelinePrecisionMonth:
+		return TimelinePrecisionMonth
+	case timelinePrecisionYear:
+		return TimelinePrecisionYear
+	default:
+		return TimelinePrecisionUnknown
+	}
+}
 
 // TimelineMonth 是某一年里一个月的媒体数。
 type TimelineMonth struct {
@@ -46,10 +91,11 @@ type TimelineYear struct {
 // 索引只存位置与时间，不复制媒体摘要：大库的照片有十万张量级，
 // 每张再抄一份摘要就是几兆的重复内存。
 type timelineEntry struct {
-	albumID string
-	index   int
-	at      time.Time
-	source  string
+	albumID   string
+	index     int
+	at        time.Time
+	source    string
+	precision timelinePrecisionCode
 	// video 记下这个条目是不是视频：索引期就记下来，翻页时不必再回
 	// 相册里找那一份媒体。
 	video bool
@@ -60,7 +106,9 @@ type photoTimelineIndex struct {
 	// epoch 是这份索引的版本：库版本与分析结果版本拼在一起。游标的
 	// 作用域里带着它，任一者变化后旧游标立即失效 —— 否则翻页会按另一
 	// 套顺序取数据，页与页之间漏项或重复。
-	epoch string
+	epoch           string
+	catalogRevision uint64
+	recordsRevision uint64
 	// entries 是排好序的序列：有拍摄证据的在前（时间倒序），没有拍摄
 	// 证据的按修改时间倒序排在后面。
 	entries []timelineEntry
@@ -105,46 +153,66 @@ func (s *PhotoTimelineService) index(snapshot CatalogSnapshot) *photoTimelineInd
 	if s.jobs != nil {
 		records = s.jobs.RecordsRevision()
 	}
-	epoch := strconv.FormatUint(revision, 10) + ":" + strconv.FormatUint(records, 10)
-	if s.cache != nil && s.cache.epoch == epoch {
+	if s.cache != nil && s.cache.catalogRevision == revision && s.cache.recordsRevision == records {
 		return s.cache
 	}
-	if s.cache != nil && time.Since(s.builtAt) < timelineRebuildInterval {
+	if s.cache != nil && s.cache.catalogRevision == revision && time.Since(s.builtAt) < timelineRebuildInterval {
 		// 刚重建过：分析多半还在跑，先用旧的那份，下一轮再更新。
+		// 仅允许复用同一目录快照上的索引；库 revision 变化必须立即重建，
+		// 否则旧位置会映射到新快照里的另一张照片。
 		return s.cache
 	}
-	built := s.build(snapshot, epoch)
+	built := s.build(snapshot)
 	s.cache = built
 	s.builtAt = time.Now()
 	return built
 }
 
 // build 按拍摄证据排出全库照片的顺序。
-func (s *PhotoTimelineService) build(snapshot CatalogSnapshot, epoch string) *photoTimelineIndex {
+func (s *PhotoTimelineService) build(snapshot CatalogSnapshot) *photoTimelineIndex {
 	library := snapshot.state.library
 	exif := map[string]time.Time{}
+	recordsRevision := uint64(0)
 	if s.jobs != nil {
-		exif = s.jobs.AllCaptureTimes(AIJobTypeMetadata)
+		exif, recordsRevision = s.jobs.AllCaptureTimesWithRevision(AIJobTypeMetadata)
 	}
+	revision := snapshot.Revision()
+	epoch := strconv.FormatUint(revision, 10) + ":" + strconv.FormatUint(recordsRevision, 10)
 	entries := make([]timelineEntry, 0, 1024)
 	for _, album := range library.albums {
 		if album.ContentKind != string(models.ContentKindPhoto) {
 			continue
 		}
 		media := library.media[album.ID]
+		sourceAlbum := snapshot.state.albums[album.ID]
+		folderDate, folderPrecision, hasFolderDate := strictDateFromPath(sourceAlbum.Path)
+		if !hasFolderDate && album.DateSource == TimelineDateFolder && !album.Date.IsZero() &&
+			(album.DatePrecision == TimelinePrecisionDay || album.DatePrecision == TimelinePrecisionMonth || album.DatePrecision == TimelinePrecisionYear) {
+			folderDate = album.Date
+			folderPrecision = album.DatePrecision
+			hasFolderDate = true
+		}
 		for index := range media {
-			at, source := timelineMediaTime(media[index], album, exif)
+			modifiedAt := album.ModTime
+			if media[index].hasModifiedAt {
+				modifiedAt = time.Unix(0, media[index].modifiedAtUnixNano).UTC()
+			}
+			date := timelineMediaTime(media[index], folderDate, folderPrecision, modifiedAt, exif)
 			entries = append(entries, timelineEntry{
-				albumID: album.ID,
-				index:   index,
-				at:      at,
-				source:  source,
-				video:   media[index].Kind == "video",
+				albumID:   album.ID,
+				index:     index,
+				at:        date.at,
+				source:    date.source,
+				precision: timelinePrecisionCodeFor(date.precision),
+				video:     media[index].Kind == "video",
 			})
 		}
 	}
 	sortTimelineEntries(entries)
-	built := &photoTimelineIndex{epoch: epoch, entries: entries}
+	built := &photoTimelineIndex{
+		epoch: epoch, catalogRevision: revision, recordsRevision: recordsRevision,
+		entries: entries,
+	}
 	built.years = timelineYearIndex(entries)
 	return built
 }
@@ -154,27 +222,48 @@ func (s *PhotoTimelineService) build(snapshot CatalogSnapshot, epoch string) *ph
 // 取时间的顺序就是可信度：EXIF 的拍摄时间 → 文件名里的日期 → 目录名
 // 里的日期 → 文件修改时间。前两者与第三项是「拍摄证据」，最后一项不是 ——
 // 它只说明文件最后一次被改动的时间。
-func timelineMediaTime(item LibraryMediaItem, album LibraryNodeSummary, exif map[string]time.Time) (time.Time, string) {
+func timelineMediaTime(
+	item LibraryMediaItem,
+	folderDate time.Time,
+	folderPrecision string,
+	modifiedAt time.Time,
+	exif map[string]time.Time,
+) timelineDate {
 	if captured, ok := exif[item.ID]; ok && !captured.IsZero() {
-		return captured, TimelineDateExif
+		return makeTimelineDate(captured, TimelineDateExif, TimelinePrecisionDay)
 	}
 	if fromName := captureFromFileName(item.Name); !fromName.IsZero() {
-		return fromName, TimelineDateFilename
+		return makeTimelineDate(fromName, TimelineDateFilename, TimelinePrecisionDay)
 	}
-	if !album.Date.IsZero() {
-		switch album.DateSource {
-		case "filename":
-			return album.Date, TimelineDateFilename
-		case "folder":
-			return album.Date, TimelineDateFolder
-		}
+	if !folderDate.IsZero() && (folderPrecision == TimelinePrecisionDay || folderPrecision == TimelinePrecisionMonth || folderPrecision == TimelinePrecisionYear) {
+		return makeTimelineDate(folderDate, TimelineDateFolder, folderPrecision)
 	}
-	// 没有拍摄证据：退回相册的修改时间（扫描时取的是相册里最新的文件
-	// 修改时间）。它不是拍摄时间，来源标成 modified，界面上要照实说。
-	if !album.ModTime.IsZero() {
-		return album.ModTime, TimelineDateModified
+	// 没有单张拍摄证据或目录日期时，使用这一个文件自己的修改时间。旧扫描
+	// 缓存缺少逐文件时间时，上层才退化到相册时间；精度仍标成 unknown。
+	return makeTimelineDate(modifiedAt, TimelineDateModified, TimelinePrecisionUnknown)
+}
+
+func makeTimelineDate(at time.Time, source, precision string) timelineDate {
+	if precision == "" {
+		precision = TimelinePrecisionUnknown
 	}
-	return time.Time{}, TimelineDateModified
+	return timelineDate{at: at, source: source, precision: precision}
+}
+
+func timelineDateValue(at time.Time, precision string) string {
+	if at.IsZero() {
+		return ""
+	}
+	switch precision {
+	case TimelinePrecisionDay:
+		return at.Format("2006-01-02")
+	case TimelinePrecisionMonth:
+		return at.Format("2006-01")
+	case TimelinePrecisionYear:
+		return at.Format("2006")
+	default:
+		return ""
+	}
 }
 
 // sortTimelineEntries 排出时间线的顺序。
@@ -213,6 +302,7 @@ func timelineYearIndex(entries []timelineEntry) []TimelineYear {
 // 眼下这一段筛选结果的数量，不是全库的数量。
 func timelineYearIndexWhere(entries []timelineEntry, keep func(timelineEntry) bool) []TimelineYear {
 	byYear := map[int]map[int]int{}
+	countsByYear := map[int]int{}
 	order := []int{}
 	for _, entry := range entries {
 		if entry.source == TimelineDateModified || entry.at.IsZero() {
@@ -228,7 +318,10 @@ func timelineYearIndexWhere(entries []timelineEntry, keep func(timelineEntry) bo
 			byYear[year] = months
 			order = append(order, year)
 		}
-		months[int(entry.at.Month())]++
+		countsByYear[year]++
+		if entry.precision != timelinePrecisionYear {
+			months[int(entry.at.Month())]++
+		}
 	}
 	sort.Sort(sort.Reverse(sort.IntSlice(order)))
 	years := make([]TimelineYear, 0, len(order))
@@ -239,10 +332,9 @@ func timelineYearIndexWhere(entries []timelineEntry, keep func(timelineEntry) bo
 			keys = append(keys, month)
 		}
 		sort.Sort(sort.Reverse(sort.IntSlice(keys)))
-		entry := TimelineYear{Year: year}
+		entry := TimelineYear{Year: year, Count: countsByYear[year]}
 		for _, month := range keys {
 			entry.Months = append(entry.Months, TimelineMonth{Month: month, Count: months[month]})
-			entry.Count += months[month]
 		}
 		years = append(years, entry)
 	}
@@ -272,8 +364,10 @@ func (f timelineFilter) matches(entry timelineEntry) bool {
 		if entry.at.Year() != f.year {
 			return false
 		}
-		if f.month > 0 && int(entry.at.Month()) != f.month {
-			return false
+		if f.month > 0 {
+			if entry.precision == timelinePrecisionYear || int(entry.at.Month()) != f.month {
+				return false
+			}
 		}
 	}
 	return true
@@ -307,6 +401,8 @@ type PhotoTimelinePage struct {
 	// DateSources 说明这一页里的时间分别来自哪里，按来源计数。
 	// 界面据此说清「这一段的时间是推断的」还是「这一段是拍摄时间」。
 	DateSources map[string]int `json:"dateSources,omitempty"`
+	// DatePrecisions 说明整段筛选结果里的日期精度分布，与 dateSources 分开统计。
+	DatePrecisions map[string]int `json:"datePrecisions,omitempty"`
 }
 
 // Page 返回时间线上的一页。
@@ -349,11 +445,15 @@ func (s *PhotoTimelineService) Page(
 	// 时间来源的分布按整段筛选结果算，不只算这一页：界面上要说的是
 	// 「这一屏看到的时间都是怎么来的」，而不是「这一页恰好有几种来源」。
 	sources := map[string]int{}
-	unknown := 0
+	precisions := map[string]int{}
 	for _, position := range matched {
 		entry := index.entries[position]
 		sources[entry.source]++
-		if entry.source == TimelineDateModified {
+		precisions[entry.precision.String()]++
+	}
+	unknown := 0
+	for _, entry := range index.entries {
+		if entry.source == TimelineDateModified && filter.matchesMedia(entry) {
 			unknown++
 		}
 	}
@@ -377,12 +477,22 @@ func (s *PhotoTimelineService) Page(
 		if name == "" {
 			name = strings.TrimSpace(album.Name)
 		}
+		capturedAt := ""
+		// 旧字段继续对精确日与文件修改时间提供 RFC3339 值。年月/年份证据
+		// 不伪造第一天，使用新增 dateValue + datePrecision 字段表达。
+		if entry.precision == timelinePrecisionDay || entry.precision == timelinePrecisionUnknown {
+			if !entry.at.IsZero() {
+				capturedAt = entry.at.UTC().Format(time.RFC3339)
+			}
+		}
 		items = append(items, FeedMediaItem{
 			LibraryMediaItem: item,
 			AlbumID:          entry.albumID,
 			AlbumName:        name,
-			CapturedAt:       entry.at.UTC().Format(time.RFC3339),
+			CapturedAt:       capturedAt,
 			DateSource:       entry.source,
+			DatePrecision:    entry.precision.String(),
+			DateValue:        timelineDateValue(entry.at, entry.precision.String()),
 		})
 	}
 	// 年份索引：跳年跳月用。它按媒体类型筛选（照片 / 视频），但不按年份筛 ——
@@ -393,8 +503,9 @@ func (s *PhotoTimelineService) Page(
 	}
 
 	albums := []FeedAlbumRef{}
-	seen := map[string]bool{}
 	counts := map[string]int{}
+	albumOrder := make([]string, 0)
+	seen := map[string]bool{}
 	for _, position := range matched {
 		entry := index.entries[position]
 		counts[entry.albumID]++
@@ -402,7 +513,10 @@ func (s *PhotoTimelineService) Page(
 			continue
 		}
 		seen[entry.albumID] = true
-		album, ok := library.nodes[entry.albumID]
+		albumOrder = append(albumOrder, entry.albumID)
+	}
+	for _, albumID := range albumOrder {
+		album, ok := library.nodes[albumID]
 		if !ok {
 			continue
 		}
@@ -411,9 +525,9 @@ func (s *PhotoTimelineService) Page(
 			name = strings.TrimSpace(album.Name)
 		}
 		albums = append(albums, FeedAlbumRef{
-			ID:    entry.albumID,
+			ID:    albumID,
 			Name:  name,
-			Count: counts[entry.albumID],
+			Count: counts[albumID],
 		})
 	}
 	return PhotoTimelinePage{
@@ -424,9 +538,10 @@ func (s *PhotoTimelineService) Page(
 			Albums:  albums,
 			Sources: []FeedSource{},
 		},
-		Years:       years,
-		Unknown:     unknown,
-		DateSources: sources,
+		Years:          years,
+		Unknown:        unknown,
+		DateSources:    sources,
+		DatePrecisions: precisions,
 	}, nil
 }
 

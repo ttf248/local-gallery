@@ -647,15 +647,18 @@ func applyCollectionDate(collection *models.Collection, path string) {
 	if date, ok := collectionCaptureDate(collection.Albums, collection.Collections); ok {
 		collection.Date = date
 		collection.DateSource = "filename"
+		collection.DatePrecision = "day"
 		return
 	}
-	if folderDate, ok := strictDateFromPath(path); ok {
+	if folderDate, precision, ok := strictDateFromPath(path); ok {
 		collection.Date = folderDate
 		collection.DateSource = "folder"
+		collection.DatePrecision = precision
 		return
 	}
 	collection.Date = collection.ModTime
 	collection.DateSource = "modified"
+	collection.DatePrecision = "unknown"
 }
 
 // collectionCaptureDate 汇总后代相册的拍摄时间。
@@ -743,23 +746,29 @@ func (s *Scanner) contextErr() error {
 // 拿到,这里直接累加,不再 N+1 stat。N+1 在 1k+ 张图的相册上是几百毫秒
 // 级别的浪费(每张 stat 一次),改完后整本相册只多一次 dir stat 拿 modTime。
 func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
-	imagePaths := make([]string, len(images))
+	sortedImages := append([]fileEntry(nil), images...)
+	sort.SliceStable(sortedImages, func(i, j int) bool {
+		return naturalLess(filepath.Base(sortedImages[i].path), filepath.Base(sortedImages[j].path))
+	})
+	imagePaths := make([]string, len(sortedImages))
+	imageModTimes := make([]time.Time, len(sortedImages))
 	var totalSize int64
-	for i, e := range images {
+	for i, e := range sortedImages {
 		imagePaths[i] = e.path
+		imageModTimes[i] = e.modTime
 		totalSize += e.size
 	}
-	videoPaths := make([]string, len(videos))
-	for i, e := range videos {
+	sortedVideos := append([]fileEntry(nil), videos...)
+	sort.SliceStable(sortedVideos, func(i, j int) bool {
+		return naturalLess(filepath.Base(sortedVideos[i].path), filepath.Base(sortedVideos[j].path))
+	})
+	videoPaths := make([]string, len(sortedVideos))
+	videoModTimes := make([]time.Time, len(sortedVideos))
+	for i, e := range sortedVideos {
 		videoPaths[i] = e.path
+		videoModTimes[i] = e.modTime
 		totalSize += e.size
 	}
-	sort.SliceStable(imagePaths, func(i, j int) bool {
-		return naturalLess(filepath.Base(imagePaths[i]), filepath.Base(imagePaths[j]))
-	})
-	sort.SliceStable(videoPaths, func(i, j int) bool {
-		return naturalLess(filepath.Base(videoPaths[i]), filepath.Base(videoPaths[j]))
-	})
 	modTime := time.Time{}
 	if fi, err := os.Stat(dir); err == nil {
 		modTime = fi.ModTime()
@@ -770,7 +779,7 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 	// 文件名里推断出的拍摄日期：这本相册出现过的所有日期，以及其中
 	// 最有代表性的一天（按媒体数加权取众数）。
 	captureDates, captureDate := aggregateCaptureDates(allFiles)
-	date, dateSource := resolveAlbumDate(dir, captureDate, allFiles, modTime)
+	date, dateSource, datePrecision := resolveAlbumDate(dir, captureDate, allFiles, modTime)
 	name := filepath.Base(dir)
 	// 封面选择：图片优先
 	var cover, coverKind string
@@ -786,6 +795,8 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 		Name:             name,
 		ImageFiles:       imagePaths,
 		VideoFiles:       videoPaths,
+		ImageModTimes:    imageModTimes,
+		VideoModTimes:    videoModTimes,
 		CoverImage:       cover,
 		CoverKind:        coverKind,
 		ImageCount:       len(imagePaths),
@@ -795,6 +806,7 @@ func buildAlbum(dir string, images, videos []fileEntry) *models.Album {
 		ModTime:          modTime,
 		Date:             date,
 		DateSource:       dateSource,
+		DatePrecision:    datePrecision,
 		CaptureDates:     captureDates,
 		ContentSignature: albumContentSignature(images, videos),
 	}
@@ -862,7 +874,7 @@ func aggregateCaptureDates(files []fileEntry) ([]string, time.Time) {
 	return keys, stamp
 }
 
-var strictFolderDate = regexp.MustCompile(`^(\d{4})(?:[-_.](\d{2})(?:[-_.](\d{2}))?)?$|^(\d{4})(\d{2})(\d{2})$`)
+var strictFolderDate = regexp.MustCompile(`^(\d{4})(?:[-_.](\d{2})(?:[-_.](\d{2}))?)?$|^(\d{4})(\d{2})(\d{2})$|^(\d{4})(\d{2})$`)
 
 // 文件名里的拍摄时间。
 //
@@ -974,12 +986,12 @@ func atoiOrZero(s string) int {
 // resolveAlbumDate 将时间语义收口在扫描层，避免不同页面以各自的正则
 // 重复推断。filenameDate 来自文件名推断（见 captureFromFileName）——
 // 当前扫描主链路不读取每个文件的 EXIF，避免百万媒体库被随机 I/O 拖慢。
-func resolveAlbumDate(dir string, filenameDate time.Time, files []fileEntry, dirModified time.Time) (time.Time, string) {
+func resolveAlbumDate(dir string, filenameDate time.Time, files []fileEntry, dirModified time.Time) (time.Time, string, string) {
 	if !filenameDate.IsZero() {
-		return filenameDate, "filename"
+		return filenameDate, "filename", "day"
 	}
-	if folderDate, ok := strictDateFromPath(dir); ok {
-		return folderDate, "folder"
+	if folderDate, precision, ok := strictDateFromPath(dir); ok {
+		return folderDate, "folder", precision
 	}
 	latest := dirModified
 	for _, file := range files {
@@ -987,10 +999,10 @@ func resolveAlbumDate(dir string, filenameDate time.Time, files []fileEntry, dir
 			latest = file.modTime
 		}
 	}
-	return latest, "modified"
+	return latest, "modified", "unknown"
 }
 
-func strictDateFromPath(path string) (time.Time, bool) {
+func strictDateFromPath(path string) (time.Time, string, bool) {
 	cleaned := filepath.Clean(path)
 	volume := filepath.VolumeName(cleaned)
 	withoutVolume := strings.TrimPrefix(cleaned, volume)
@@ -998,52 +1010,75 @@ func strictDateFromPath(path string) (time.Time, bool) {
 		return r == '/' || r == '\\'
 	})
 	for i := len(parts) - 1; i >= 0; i-- {
-		if parsed, ok := parseStrictDateSegment(parts[i]); ok {
-			return parsed, true
+		if parsed, precision, ok := parseStrictDateSegment(parts[i]); ok {
+			return parsed, precision, true
 		}
 		if i >= 2 {
-			year, yearOK := parseBoundedInt(parts[i-2], 1900, 2199)
-			month, monthOK := parseBoundedInt(parts[i-1], 1, 12)
-			day, dayOK := parseBoundedInt(parts[i], 1, 31)
+			year, yearOK := parsePathDatePart(parts[i-2], 4, 1900, 2199)
+			month, monthOK := parsePathDatePart(parts[i-1], 2, 1, 12)
+			day, dayOK := parsePathDatePart(parts[i], 2, 1, 31)
 			if yearOK && monthOK && dayOK {
 				if parsed, valid := makeStrictDate(year, month, day); valid {
-					return parsed, true
+					return parsed, "day", true
 				}
 			}
 		}
+		if i >= 1 {
+			year, yearOK := parsePathDatePart(parts[i-1], 4, 1900, 2199)
+			month, monthOK := parsePathDatePart(parts[i], 2, 1, 12)
+			if yearOK && monthOK {
+				return time.Date(year, time.Month(month), 1, 12, 0, 0, 0, time.UTC), "month", true
+			}
+		}
 	}
-	return time.Time{}, false
+	return time.Time{}, "", false
 }
 
-func parseStrictDateSegment(segment string) (time.Time, bool) {
+func parseStrictDateSegment(segment string) (time.Time, string, bool) {
 	match := strictFolderDate.FindStringSubmatch(segment)
 	if match == nil {
-		return time.Time{}, false
+		return time.Time{}, "", false
 	}
 	yearText, monthText, dayText := match[1], match[2], match[3]
 	if match[4] != "" {
 		yearText, monthText, dayText = match[4], match[5], match[6]
+	} else if match[7] != "" {
+		yearText, monthText = match[7], match[8]
 	}
 	year, yearOK := parseBoundedInt(yearText, 1900, 2199)
 	if !yearOK {
-		return time.Time{}, false
+		return time.Time{}, "", false
 	}
-	month, day := 1, 1
+	month, day := 0, 0
 	if monthText != "" {
 		var ok bool
 		month, ok = parseBoundedInt(monthText, 1, 12)
 		if !ok {
-			return time.Time{}, false
+			return time.Time{}, "", false
 		}
 	}
 	if dayText != "" {
 		var ok bool
 		day, ok = parseBoundedInt(dayText, 1, 31)
 		if !ok {
-			return time.Time{}, false
+			return time.Time{}, "", false
 		}
 	}
-	return makeStrictDate(year, month, day)
+	if month == 0 {
+		return time.Date(year, time.January, 1, 12, 0, 0, 0, time.UTC), "year", true
+	}
+	if day == 0 {
+		return time.Date(year, time.Month(month), 1, 12, 0, 0, 0, time.UTC), "month", true
+	}
+	parsed, valid := makeStrictDate(year, month, day)
+	return parsed, "day", valid
+}
+
+func parsePathDatePart(value string, digits, low, high int) (int, bool) {
+	if len(value) != digits {
+		return 0, false
+	}
+	return parseBoundedInt(value, low, high)
 }
 
 func parseBoundedInt(value string, low, high int) (int, bool) {

@@ -15,6 +15,8 @@ const feed = vi.hoisted(() => ({
     albumName: string;
     capturedAt?: string;
     dateSource?: string;
+    datePrecision?: "day" | "month" | "year" | "unknown";
+    dateValue?: string;
   }[],
   years: [] as {
     year: number;
@@ -23,6 +25,7 @@ const feed = vi.hoisted(() => ({
   }[],
   unknown: 0,
   dateSources: {} as Record<string, number>,
+  datePrecisions: {} as Record<string, number>,
   total: 0,
   lastQuery: undefined as unknown,
   photoAlbumCount: 3,
@@ -40,6 +43,7 @@ vi.mock("../hooks/useMediaFeed", () => ({
       years: feed.years,
       unknown: feed.unknown,
       dateSources: feed.dateSources,
+      datePrecisions: feed.datePrecisions,
       total: feed.total,
       isLoading: false,
       isError: false,
@@ -131,6 +135,8 @@ beforeEach(() => {
       albumName: "第一本",
       capturedAt: "2024-05-04T10:00:00Z",
       dateSource: "exif",
+      datePrecision: "day",
+      dateValue: "2024-05-04",
     },
     {
       id: "f_2",
@@ -142,6 +148,8 @@ beforeEach(() => {
       albumName: "第二本",
       capturedAt: "2023-08-09T10:00:00Z",
       dateSource: "filename",
+      datePrecision: "day",
+      dateValue: "2023-08-09",
     },
     {
       id: "f_3",
@@ -153,6 +161,7 @@ beforeEach(() => {
       albumName: "第三本",
       capturedAt: "2021-02-03T00:00:00Z",
       dateSource: "modified",
+      datePrecision: "unknown",
     },
   ];
   feed.years = [
@@ -169,6 +178,7 @@ beforeEach(() => {
   ];
   feed.unknown = 1;
   feed.dateSources = { exif: 1, filename: 1, modified: 1 };
+  feed.datePrecisions = { day: 2, unknown: 1 };
   feed.total = 3;
   feed.lastQuery = undefined;
   feed.photoAlbumCount = 3;
@@ -240,6 +250,68 @@ it("顶部说明时间来源的分布", async () => {
   const legend = await screen.findByTestId("timeline-source-legend");
   expect(legend.textContent).toContain("拍摄时间 1 张");
   expect(legend.textContent).toContain("文件名推断 1 张");
+});
+
+it("显示年月与年份精度而不伪造月份或日期", async () => {
+  feed.items = [
+    {
+      id: "year-only",
+      kind: "image",
+      name: "year.jpg",
+      index: 0,
+      kindIndex: 0,
+      albumId: "a_1",
+      albumName: "年份目录",
+      dateSource: "folder",
+      datePrecision: "year",
+      dateValue: "2018",
+    },
+    {
+      id: "month-only",
+      kind: "image",
+      name: "month.jpg",
+      index: 1,
+      kindIndex: 1,
+      albumId: "a_1",
+      albumName: "年月目录",
+      dateSource: "folder",
+      datePrecision: "month",
+      dateValue: "2019-11",
+    },
+    {
+      id: "exact-day",
+      kind: "image",
+      name: "exact.jpg",
+      index: 2,
+      kindIndex: 2,
+      albumId: "a_1",
+      albumName: "精确日期",
+      dateSource: "exif",
+      datePrecision: "day",
+      dateValue: "2020-02-03",
+      capturedAt: "2020-02-03T10:00:00Z",
+    },
+  ];
+  feed.dateSources = { exif: 1, folder: 2 };
+  feed.datePrecisions = { day: 1, month: 1, year: 1 };
+  feed.years = [
+    { year: 2020, count: 1, months: [{ month: 2, count: 1 }] },
+    { year: 2019, count: 1, months: [{ month: 11, count: 1 }] },
+    { year: 2018, count: 1, months: [] },
+  ];
+  feed.total = 3;
+  renderTimeline();
+  const headers = await screen.findAllByTestId("timeline-group-header");
+  expect(headers[0].textContent).toContain("2018 年");
+  expect(headers[1].textContent).toContain("2019 年 11 月");
+  expect(headers[2].textContent).toContain("2020 年 2 月");
+  expect(headers.map((node) => node.textContent).join(" ")).not.toContain(
+    "2018 年 1 月",
+  );
+  const legend = await screen.findByTestId("timeline-precision-legend");
+  expect(legend.textContent).toContain("精确到日 1 张");
+  expect(legend.textContent).toContain("仅年月 1 张");
+  expect(legend.textContent).toContain("仅年份 1 张");
 });
 
 // 跳年：年份进地址栏，服务端按年取材。

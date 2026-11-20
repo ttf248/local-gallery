@@ -52,9 +52,9 @@ type ScanResultCache struct {
 const (
 	flushDebounce = 500 * time.Millisecond
 	// scanCacheSchemaVersion 随 models.Album 等落盘结构变化递增。
-	// 6：Album 新增 Location（虚拟相册归属目录相对路径），旧缓存缺该
-	// 字段会导致散图重新退回“本目录媒体”，需要重扫。
-	scanCacheSchemaVersion = 7
+	// 8：保存每张媒体自己的修改时间与日期精度，避免将相册代表时间
+	// 错当成单张照片日期。
+	scanCacheSchemaVersion = 8
 )
 
 type scanCacheEnvelope struct {
@@ -286,6 +286,8 @@ func cloneAlbums(albums []models.Album) []models.Album {
 		out[i] = albums[i]
 		out[i].ImageFiles = append([]string(nil), albums[i].ImageFiles...)
 		out[i].VideoFiles = append([]string(nil), albums[i].VideoFiles...)
+		out[i].ImageModTimes = append([]time.Time(nil), albums[i].ImageModTimes...)
+		out[i].VideoModTimes = append([]time.Time(nil), albums[i].VideoModTimes...)
 		out[i].Tags = append([]string(nil), albums[i].Tags...)
 	}
 	return out
@@ -453,4 +455,3 @@ func hasRepeatedScanNodes(result *models.ScanResult) bool {
 	}
 	return collectionsRepeat(result.Collections)
 }
-

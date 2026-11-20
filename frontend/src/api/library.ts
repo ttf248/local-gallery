@@ -99,6 +99,7 @@ export interface LibraryNodeSummary {
   modTime?: string;
   date?: string;
   dateSource?: "filename" | "folder" | "modified";
+  datePrecision?: TimelineDatePrecision;
   virtual?: boolean;
   hasCustomCover?: boolean;
   /**
@@ -314,10 +315,17 @@ export interface LibraryFeedItem extends LibraryMediaItem {
   capturedAt?: string;
   /** 这个时间的来源：exif / filename / folder / modified。 */
   dateSource?: TimelineDateSource;
+  /** 日期证据的精度；精确日期、仅年月、仅年份或未知。 */
+  datePrecision?: TimelineDatePrecision;
+  /** 按 datePrecision 输出的 YYYY-MM-DD / YYYY-MM / YYYY。 */
+  dateValue?: string;
 }
 
 /** 时间的来源。 */
 export type TimelineDateSource = "exif" | "filename" | "folder" | "modified";
+
+/** 时间线日期精度；unknown 不进入年份或月份分组。 */
+export type TimelineDatePrecision = "day" | "month" | "year" | "unknown";
 
 /** 照片流里一本相册的定位：这些照片来自哪几本。 */
 export interface LibraryFeedAlbum {
@@ -413,6 +421,8 @@ export interface LibraryFeedPage extends LibraryPage<LibraryFeedItem> {
    * 怎么来的」。
    */
   dateSources?: Partial<Record<TimelineDateSource, number>>;
+  /** 当前筛选结果里的日期精度分布，与来源分布分开统计。 */
+  datePrecisions?: Partial<Record<TimelineDatePrecision, number>>;
 }
 
 /** 时间线上的一年：照片数与月份分布。 */
@@ -624,11 +634,7 @@ export const libraryApi = {
     api<{ ok: boolean; manifest: LibraryManifest }>("/api/library/manifest", {
       signal,
     }),
-  mediaFeed: (
-    query: MediaFeedQuery,
-    cursor?: string,
-    signal?: AbortSignal,
-  ) =>
+  mediaFeed: (query: MediaFeedQuery, cursor?: string, signal?: AbortSignal) =>
     api<{ ok: boolean; page: LibraryFeedPage }>("/api/library/media-feed", {
       params: { ...query, cursor, limit: LIBRARY_PAGE_LIMIT },
       signal,
@@ -797,7 +803,10 @@ export const libraryApi = {
       signal,
     ),
   allTags: (kind: AppMode, signal?: AbortSignal) =>
-    collectPages((cursor, sig) => libraryApi.tagPage(kind, cursor, undefined, sig), signal),
+    collectPages(
+      (cursor, sig) => libraryApi.tagPage(kind, cursor, undefined, sig),
+      signal,
+    ),
   /**
    * 「最近加入」的相册摘要，按业务日期倒序。
    *

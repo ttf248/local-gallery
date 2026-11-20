@@ -71,12 +71,17 @@ type FeedMediaItem struct {
 	AlbumName string `json:"albumName"`
 	// CapturedAt 是这张媒体在时间线上的时间（RFC3339）。
 	//
-	// 只有时间线取材才有：其余取材范围不按时间组织，不需要它。
+	// 只有时间线取材才有：其余取材范围不按时间组织，不需要它。目录日期
+	// 仅到年月/年份时省略，避免把内部排序锚点暴露成精确日期。
 	CapturedAt string `json:"capturedAt,omitempty"`
 	// DateSource 说明这个时间是从哪来的：exif / filename / folder / modified。
 	//
 	// 界面上要照实说：推断出来的日期不是拍摄时间，修改时间更不是。
 	DateSource string `json:"dateSource,omitempty"`
+	// DatePrecision 是日期证据的精度：day / month / year / unknown。
+	DatePrecision string `json:"datePrecision,omitempty"`
+	// DateValue 是按精度输出的日期：YYYY-MM-DD / YYYY-MM / YYYY；unknown 为空。
+	DateValue string `json:"dateValue,omitempty"`
 }
 
 // LookupLibraryFeedItem 只从已发布目录快照取媒体与原相册摘要，不执行磁盘访问。
