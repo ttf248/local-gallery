@@ -26,21 +26,17 @@ async function analyzeMetadata(request: APIRequestContext, albumId: string) {
     .toBe("completed");
 }
 
-test("首页的主题入口通向探索，探索里的主题通向专页", async ({ page }) => {
+test("主题归发现页，照片首页不再摆主题预览", async ({ page }) => {
   await scannedNodes(page.request, "photo");
 
+  // 照片首页是时间线：主题那一节搬去发现页，首页不再摆它。
   await page.goto("/");
-  // 照片侧首页那一节是主题的预览：它只给一屏样张，把人引向探索。
-  const themeHeading = page.getByRole("heading", {
-    name: "主题",
-    exact: true,
-  });
-  await expect(themeHeading).toBeVisible();
+  await expect(page.getByRole("heading", { name: "按时间浏览" })).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "去发现", exact: true }),
-  ).toHaveAttribute("href", "/photo/explore");
+    page.getByRole("heading", { name: "主题", exact: true }),
+  ).toHaveCount(0);
 
-  // 探索的主题一节再通向专页：主题墙的完整形态在那儿。
+  // 发现页的主题一节再通向专页：主题墙的完整形态在那儿。
   await page.goto("/photo/explore");
   await expect(
     page.getByRole("link", { name: "全部主题", exact: true }),

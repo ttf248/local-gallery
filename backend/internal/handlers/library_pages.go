@@ -90,9 +90,13 @@ func enrichMediaDimension(snapshot services.CatalogSnapshot, item *services.Libr
 // 推荐路由：GET /api/library/media-feed。
 //
 // scope 决定从哪里取材：year 取某一年下各相册的照片，collection 取一个
-// 集合内部的照片，recent / random 取几本相册的照片。每张照片都带它
-// 所属的相册，用户能看得出出处、也回得去原相册。
-func LibraryMediaFeedHandler(catalog *services.ResourceCatalog, dimensions *services.MediaDimensionService, picks *store.PickStore) fiber.Handler {
+// 集合内部的照片，timeline 取全库按拍摄时间排下来的序列，recent / random
+// 取几本相册的照片。每张照片都带它所属的相册，用户能看得出出处、也
+// 回得去原相册。
+//
+// 时间线另有年份、月份与媒体类型三个筛选条件；它由 timeline 服务提供，
+// 需要分析结果里的拍摄时间。
+func LibraryMediaFeedHandler(catalog *services.ResourceCatalog, dimensions *services.MediaDimensionService, picks *store.PickStore, timeline *services.PhotoTimelineService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		limit, ok := parseLibraryPageLimit(c)
 		if !ok {
@@ -110,8 +114,34 @@ func LibraryMediaFeedHandler(catalog *services.ResourceCatalog, dimensions *serv
 			// 种子只对随机取材有意义：「换一批」换一个种子，服务端因此
 			// 给出一批确实不同的照片。
 			Seed: strings.TrimSpace(c.Query("seed")),
+			// 年份、月份与媒体类型只对时间线有意义。
+			Month: strings.TrimSpace(c.Query("month")),
+			Media: strings.TrimSpace(c.Query("media")),
 		}
 		snapshot := requestCatalogSnapshot(c, catalog)
+		if query.Scope == services.MediaFeedTimeline {
+			if kind != services.LibraryKindPhoto {
+				_ = httputil.BadRequest(c, "invalid_kind", "timeline is a photo-side scope")
+				return nil
+			}
+			if timeline == nil {
+				_ = httputil.Internal(c, "timeline_unavailable", "photo timeline is unavailable")
+				return nil
+			}
+			page, err := timeline.Page(snapshot, query, c.Query("cursor"), limit)
+			if err != nil {
+				return writeLibraryPageError(c, err, snapshot.Revision())
+			}
+			for i := range page.Items {
+				enrichMediaDimension(snapshot, &page.Items[i].LibraryMediaItem, dimensions)
+			}
+			if dimensions != nil {
+				dimensions.Flush()
+			}
+			markFeedPicks(picks, page.Items)
+			setLibraryRevisionETag(c, snapshot.Revision())
+			return c.JSON(fiber.Map{"ok": true, "page": page})
+		}
 		page, err := services.PageMediaFeed(snapshot, query, c.Query("cursor"), limit)
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())

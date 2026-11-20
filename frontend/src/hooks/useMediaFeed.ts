@@ -7,6 +7,8 @@ import {
   type LibraryFeedItem,
   type LibraryFeedSource,
   type MediaFeedQuery,
+  type TimelineDateSource,
+  type TimelineYear,
 } from "../api/library";
 import { useAppMode } from "./useAppMode";
 import { libraryQueryKeys } from "../api/queryKeys";
@@ -72,6 +74,18 @@ export function useMediaFeed(
     () => result.data?.pages[0]?.sources ?? [],
     [result.data],
   );
+  // 时间线的年份索引：描述整条时间线，与已加载了多少页无关。
+  const years = useMemo<TimelineYear[]>(
+    () => result.data?.pages[0]?.years ?? [],
+    [result.data],
+  );
+  // 时间线里「日期未知」的那一段。
+  const unknown = result.data?.pages[0]?.unknown ?? 0;
+  // 这一段筛选结果里的时间来源分布。
+  const dateSources = useMemo<Partial<Record<TimelineDateSource, number>>>(
+    () => result.data?.pages[0]?.dateSources ?? {},
+    [result.data],
+  );
   const total = result.data?.pages[0]?.total ?? items.length;
 
   return {
@@ -79,6 +93,9 @@ export function useMediaFeed(
     items,
     albums,
     sources,
+    years,
+    unknown,
+    dateSources,
     total,
     query,
   };

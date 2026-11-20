@@ -80,16 +80,15 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
 /**
  * 看照片＝看过那本相册。
  *
- * 访问记录原先只在打开相册页时写一条，于是首页照片墙、年份墙、足迹里
- * 翻过的那些照片全都不算数，「最近浏览」看着像坏了。这条用例走首页
- * 「随手看看」的照片墙：不进相册页，只看一张照片，那本相册同样要进
- * 最近浏览。
+ * 访问记录原先只在打开相册页时写一条，于是首页时间线、年份墙、足迹里
+ * 翻过的那些照片全都不算数，「最近浏览」看着像坏了。这条用例走首页的
+ * 时间线：不进相册页，只看一张照片，那本相册同样要进最近浏览。
  */
 test("看照片也记一次访问：照片出处的那本相册进最近浏览", async ({ page }) => {
   await scannedNodes(page.request);
   expect((await page.request.delete("/api/history")).ok()).toBeTruthy();
   await page.goto("/photo");
-  const feed = page.locator('[data-testid="photo-feed-hero"]');
+  const feed = page.locator('main [data-virtuoso-scroller]');
   const photo = feed
     .locator('button[aria-label^="查看"], button[aria-label^="播放"]')
     .first();

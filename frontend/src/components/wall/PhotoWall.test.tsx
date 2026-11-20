@@ -282,3 +282,49 @@ describe("照片墙的目标行高", () => {
     expect(effectiveTargetHeight(290, 0)).toBe(290);
   });
 });
+
+// 整库级别的墙（时间线）不铺占位槽：只摆已经取回来的照片。
+it("关掉占位槽时墙上只有已加载的条目", () => {
+  render(
+    <PhotoWall
+      items={items}
+      total={30}
+      targetHeight={200}
+      hasNextPage
+      isLoadingMore={false}
+      onLoadMore={() => {}}
+      onOpen={() => {}}
+      showPlaceholders={false}
+    />,
+  );
+
+  const tiles = screen
+    .getAllByTestId("wall-row")
+    .flatMap((row) =>
+      within(row).queryAllByRole("button", { name: /^(查看|播放)/ }),
+    );
+  expect(tiles).toHaveLength(3);
+});
+
+// 按月分段时，每一段有自己的标题行，标题与照片不会错位。
+it("分组标题插在每一组的第一行之前", () => {
+  render(
+    <PhotoWall
+      items={items}
+      total={3}
+      targetHeight={200}
+      hasNextPage={false}
+      isLoadingMore={false}
+      onLoadMore={() => {}}
+      onOpen={() => {}}
+      groupOf={(item) => (item.name === "1.jpg" ? "2024-05" : "2024-06")}
+      groupHeader={(key) => <div data-testid="wall-group-header">{key}</div>}
+    />,
+  );
+
+  const headers = screen.getAllByTestId("wall-group-header");
+  expect(headers.map((node) => node.textContent)).toEqual([
+    "2024-05",
+    "2024-06",
+  ]);
+});

@@ -241,6 +241,53 @@ func (s *AIJobService) CaptureTimes(moduleType string, resourceIDs []string) map
 	return result
 }
 
+// AllCaptureTimes returns the capture time of every resource the module has a
+// current-version record for.
+//
+// The photo timeline orders the whole library by capture time, so it needs the
+// complete set rather than one album's slice: asking per album turns a single
+// pass over the library into thousands of queries. Resources without a parsed
+// capture time are simply absent from the map.
+func (s *AIJobService) AllCaptureTimes(moduleType string) map[string]time.Time {
+	s.mu.Lock()
+	analyzer, installed := s.analyzers[moduleType]
+	if !installed {
+		s.mu.Unlock()
+		return map[string]time.Time{}
+	}
+	version := aiAnalyzerVersion(analyzer, s.settings.FaceModel)
+	// 锁内只取载荷，解析放到锁外：整库拍摄时间有十万条量级，
+	// 拿着任务状态锁解 JSON 会让读任务的接口一起等。
+	type capturePayload struct {
+		resourceID string
+		data       json.RawMessage
+	}
+	payloads := make([]capturePayload, 0, len(s.records))
+	for _, record := range s.records {
+		if record.ModuleVersion != version || len(record.Data) == 0 {
+			continue
+		}
+		payloads = append(payloads, capturePayload{resourceID: record.ResourceID, data: record.Data})
+	}
+	s.mu.Unlock()
+
+	result := make(map[string]time.Time, len(payloads))
+	for _, payload := range payloads {
+		var metadata struct {
+			DateTimeOriginal string `json:"dateTimeOriginal,omitempty"`
+		}
+		if json.Unmarshal(payload.data, &metadata) != nil {
+			continue
+		}
+		captured, ok := parseSmartCaptureTime(metadata.DateTimeOriginal)
+		if !ok {
+			continue
+		}
+		result[payload.resourceID] = captured
+	}
+	return result
+}
+
 // RecordsForResources returns current-version analysis records only for the
 // supplied resource IDs. Album-scoped features use this instead of copying a
 // library-wide analysis table into their own working set.

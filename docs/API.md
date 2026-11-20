@@ -1028,8 +1028,9 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
   - `recent` —— 取最近加入的几本相册里的照片。
   - `random` —— 取随机几本相册里的照片。相册按年份分桶后轮流取（同一年份最多两本），一本相册里的照片则等距抽样而不是取连续的一段：连着看同一场活动的连拍，墙上就只剩一种口味。`seed` 可选：同一个种子给同一批照片，不同种子给不同的批次（「换一批」因此一定换得掉）。
   - `stream` —— 取一条确定的长流：瀑布流专页往下滑的数据源。相册按种子打散、相册内部的照片也按种子打散，按「每轮每本相册十二张」逐轮往下取。游标是长流里的照片下标，同一颗种子给出同一条长流，因此翻页与重进都接得上。走完一圈（全库每张照片各一次）会绕回开头再来一圈，绕圈时相册内的顺序重新打散：照片会再出现，但不会按同一个次序再出现。`seed` 必填语义与 `random` 相同。
+  - `timeline` —— 取全库按拍摄证据排下来的序列（只属于照片侧）。照片按拍摄时间倒序排列，只有文件修改时间的那一批排在末尾并单独成段。`year` 可选（`1900..2099`，或 `unknown` 表示「日期未知」那一段），`month` 可选（`1..12`，必须与 `year` 同时给），`media` 可选（`photo` / `video`，缺省两类都收）。换筛选条件后旧游标立即失效（作用域里带着筛选标记与索引版本）。
 - `limit` 沿用分页默认值与上限，`cursor` 是不透明游标，绑定取材条件与库 revision。`year` 与 `collection` 分页；`stream` 按游标分页；`recent` 与 `random` 一次返回整批，不分页。
-- 响应 `{ok:true,page:{revision,items,total,nextCursor?,albums,sources}}`。`items` 是媒体字段加上 `albumId` / `albumName`；`albums` 是这一页涉及的相册 `{id,name,count}`；`sources` 是取材范围里被选中的节点 `{id,name,kind}` —— 年份对应的那几个集合，或集合页的那一个集合。
+- 响应 `{ok:true,page:{revision,items,total,nextCursor?,albums,sources}}`。`items` 是媒体字段加上 `albumId` / `albumName`；`scope=timeline` 时每一项另带 `capturedAt`（RFC3339）与 `dateSource`（`exif` / `filename` / `folder` / `modified`），整页另带 `years`（年份索引 `{year,count,months:[{month,count}]}`）、`unknown`（日期未知的媒体数）与 `dateSources`（这一段筛选结果里的时间来源分布，按来源计数）；`albums` 是这一页涉及的相册 `{id,name,count}`；`sources` 是取材范围里被选中的节点 `{id,name,kind}` —— 年份对应的那几个集合，或集合页的那一个集合。
 - `scope=collection` 的照片按相册轮流排列（第 0 轮取每本相册的第 1 张，第 1 轮取每本的第 2 张……）：连着看一本相册的头几张，看到的只是这一本，轮流取之后每一本都露得出来。
 - `recent` 与 `random` 会把几本相册的照片交错排布：连着看一本相册的头几张，墙上就只剩一种口味。
 - 非法取材条件返回 `400 invalid_media_feed`；集合 ID 不存在返回 `404 resource_not_found`，类型不对返回 `400 invalid_resource_kind`。响应不携带本机绝对路径。

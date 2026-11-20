@@ -44,7 +44,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "珍藏" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "照片库" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "按时间浏览" })).toBeVisible();
 
   const switcher = page.getByRole("group", { name: "工作台模式" });
   await switcher.getByRole("button", { name: "漫画" }).click();
@@ -2838,23 +2838,17 @@ test("首页「那年今日」摆的是当天那张照片，并能回到原相�
   await scannedNodes(request, "photo");
   await page.goto("/photo");
 
-  const section = page.getByTestId("on-this-day-section");
-  await expect(section).toBeVisible();
-  // 这一段摆的是照片卡，不是相册卡：相册的通用封面回答不了
-  // 「往年这天我拍到了什么」。
-  const photo = section.getByTestId("on-this-day-photo").first();
+  const strip = page.getByTestId("on-this-day-strip");
+  await expect(strip).toBeVisible();
+  // 这一段摆的是照片本身，不是相册卡：相册的通用封面回答不了
+  // 「往年这天我拍到了什么」。点它就回到那本相册。
+  const photo = strip.getByRole("link").first();
   await expect(photo).toBeVisible();
-
-  await photo.getByRole("button").click();
-  const viewer = page.getByRole("dialog", { name: /大图预览/ });
-  await expect(viewer).toBeVisible();
-  const title = viewer.getByRole("link");
-  await expect(title).toBeVisible();
-  await title.click();
+  await photo.click();
   await expect(page).toHaveURL(/\/photo\/albums\//);
 });
 
-test("首页「随手看看」换一批换掉的是照片本身", async ({ page, request }) => {
+test("「随手看看」换一批换掉的是照片本身", async ({ page, request }) => {
   await scannedNodes(request, "photo");
 
   // 服务端侧：两个种子给出的是不同的一批相册。
@@ -2877,8 +2871,10 @@ test("首页「随手看看」换一批换掉的是照片本身", async ({ page,
   expect(second).not.toEqual(first);
 
   // 界面侧：点「换一批」之后墙上换了一批照片。
-  await page.goto("/photo");
-  const wall = page.getByTestId("photo-feed-hero");
+  // 随手看看是次级功能：它有自己的专页，首页只留一条通往它的路。
+  await page.goto("/photo/random");
+  // 随手看看是瀑布流：照片铺在一面墙上，没有虚拟列表的滚动容器。
+  const wall = page.locator("main");
   await expect(wall).toBeVisible();
 
   // 按图片的资源 ID 比对：素材里各本相册的照片都叫 page-N.png，
@@ -2892,7 +2888,7 @@ test("首页「随手看看」换一批换掉的是照片本身", async ({ page,
   await expect.poll(async () => (await ids()).length).toBeGreaterThan(3);
   const before = await ids();
 
-  await wall.getByRole("button", { name: /换一批/ }).click();
+  await page.getByRole("button", { name: /换一批/ }).click();
   await expect
     .poll(async () => {
       const after = await ids();

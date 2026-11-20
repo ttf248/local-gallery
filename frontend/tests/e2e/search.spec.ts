@@ -26,7 +26,9 @@ test("顶栏搜索回车进入可见的结果页", async ({ page, request }) => 
   expect(keyword.length).toBeGreaterThan(0);
 
   await page.goto("/photo");
-  const search = page.getByRole("combobox");
+  // 顶栏搜索框：照片首页上还有年份 / 月份两个下拉，它们也是 combobox，
+  // 这里要认准搜索框本身。
+  const search = page.getByRole("combobox", { name: "搜索相册或标签" });
   await search.fill(keyword);
   // 下拉给出明确的匹配建议。
   await expect(page.getByRole("option").first()).toBeVisible({ timeout: 10_000 });

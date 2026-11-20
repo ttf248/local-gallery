@@ -36,7 +36,7 @@ vi.mock("../hooks/useSmartAlbums", () => ({
     fetchNextPage: vi.fn(),
   }),
 }));
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -109,6 +109,9 @@ vi.mock("../hooks/useMediaFeed", () => ({
     ],
     albums: [],
     sources: [],
+    years: [],
+    unknown: 0,
+    dateSources: {},
     total: 1,
     isLoading: false,
     isError: false,
@@ -281,59 +284,6 @@ function renderHome(entry = "/") {
   return client;
 }
 
-// 照片首页是发现页：第一屏是照片，随后才是回忆与接着看。
-it("照片工作台首屏先摆照片墙，再摆「接着看」", async () => {
-  useAppModeStore.setState({ preference: "photo", hydrated: true });
-  vi.mocked(historyApi.list).mockResolvedValue({
-    history: [
-      {
-        albumId: "a_1",
-        name: "2023年测试相册",
-        imageCount: 3,
-        openedAt: "2024-05-01T00:00:00Z",
-      },
-    ],
-  });
-  renderHome();
-  await waitFor(() => expect(screen.getByTestId("resume-hero")).toBeTruthy());
-  const wall = screen.getByTestId("photo-feed-hero");
-  const resume = screen.getByTestId("resume-hero");
-  expect(
-    wall.compareDocumentPosition(resume) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
-});
-
-// 照片侧的对称物：漫画有「继续阅读」，照片有「接着看」。
-it("照片工作台显示「接着看」专区", async () => {
-  useAppModeStore.setState({ preference: "photo", hydrated: true });
-  vi.mocked(historyApi.list).mockResolvedValue({
-    history: [
-      {
-        albumId: "a_1",
-        name: "2023年测试相册",
-        imageCount: 3,
-        openedAt: "2024-05-01T00:00:00Z",
-      },
-    ],
-  });
-  renderHome();
-  await waitFor(() => expect(screen.getByTestId("resume-hero")).toBeTruthy());
-  expect(screen.getByTestId("resume-hero").textContent).toContain(
-    "2023年测试相册",
-  );
-});
-
-// 首页必须留着通往完整相册的明确入口：目录结构在相册里，不在首页。
-it("照片首页有通往相册的明确入口", async () => {
-  useAppModeStore.setState({ preference: "photo", hydrated: true });
-  renderHome();
-  await waitFor(() =>
-    expect(screen.getByTestId("photo-feed-hero")).toBeTruthy(),
-  );
-  const link = screen.getByRole("link", { name: "相册" });
-  expect(link).toHaveAttribute("href", "/photo/library");
-});
-
 // 漫画首页有通往书架的入口。
 it("漫画首页有通往书架的明确入口", async () => {
   renderHome();
@@ -347,36 +297,10 @@ it("照片工作台不显示继续阅读与未读区", async () => {
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   renderHome();
   await waitFor(() =>
-    expect(screen.getByTestId("photo-feed-hero")).toBeTruthy(),
+    expect(screen.getByRole("heading", { name: "按时间浏览" })).toBeTruthy(),
   );
   expect(screen.queryByTestId("continue-hero")).toBeNull();
   expect(screen.queryByTestId("unread-hero")).toBeNull();
-});
-
-it("照片工作台为空时只按照片统计，并指出漫画库仍有内容", () => {
-  useAppModeStore.setState({ preference: "photo", hydrated: true });
-  mocks.manifest = {
-    ...(mocks.manifest as object),
-    statistics: {
-      rootCount: 1,
-      albumCount: 1,
-      photoAlbumCount: 0,
-      comicAlbumCount: 1,
-      collectionCount: 0,
-      tagCount: 0,
-      warningCount: 0,
-    },
-  };
-
-  renderHome("/");
-
-  expect(screen.getByText("照片这边还没有内容")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "去漫画库看看" })).toHaveAttribute(
-    "href",
-    "/comic",
-  );
-  expect(screen.queryByTestId("photo-feed-hero")).toBeNull();
-  expect(screen.queryByText("1 本相册")).toBeNull();
 });
 
 // 漫画侧：阅读进度与未读是两块独立区块，不互相嵌套。
@@ -457,43 +381,3 @@ it("漫画首页摆出「最近阅读」专区", async () => {
   );
 });
 
-// 照片侧只给少量主题推荐，并把人引向发现页。
-it("照片首页给一屏主题预览并引向发现", async () => {
-  useAppModeStore.setState({ preference: "photo", hydrated: true });
-  renderHome();
-  await waitFor(() => expect(screen.getByText("主题")).toBeTruthy());
-  expect(screen.getByRole("link", { name: "去发现" })).toHaveAttribute(
-    "href",
-    "/photo/explore",
-  );
-  const smartGroupLink = await screen.findByRole("link", {
-    name: /打开智能相册 2024年春游/,
-  });
-  expect(smartGroupLink).toHaveAttribute(
-    "href",
-    "/photo/albums/a_1?view=smart&dimension=recommended&group=sg_0123456789abcdef0123",
-  );
-  const evidence = within(smartGroupLink).getByTestId("smart-album-evidence");
-  expect(evidence).toHaveTextContent("时间");
-});
-
-// 「最近加入」是新进门的相册，与「接着看」（我刚翻过哪本）是两件事。
-it("照片首页给出最近加入的相册", async () => {
-  useAppModeStore.setState({ preference: "photo", hydrated: true });
-  mocks.recent = [
-    {
-      id: "a_9",
-      kind: "album",
-      contentKind: "photo",
-      name: "刚进门的相册",
-      displayName: "刚进门的相册",
-      imageCount: 12,
-      coverImages: [],
-    } as unknown as LibraryNodeSummary,
-  ];
-  renderHome();
-  await waitFor(() => expect(screen.getByText("最近加入")).toBeTruthy());
-  expect(screen.getByTestId("album-grid").textContent).toContain(
-    "刚进门的相册",
-  );
-});

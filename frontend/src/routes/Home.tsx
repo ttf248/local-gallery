@@ -8,20 +8,14 @@ import { useHistoryCards } from "../hooks/useHistory";
 import { useImageActivities } from "../hooks/useImageActivity";
 import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
-import SmartAlbumPreview, {
-  HOME_SMART_ALBUM_PREVIEW,
-} from "../components/home/SmartAlbumPreview";
 import EmptyState from "../components/common/EmptyState";
 import { ContinueHero, UnreadHero } from "../components/home/HomeHeroes";
-import ResumeHero from "../components/home/ResumeHero";
-import PhotoFeedHero from "../components/home/PhotoFeedHero";
-import OnThisDaySection from "../components/home/OnThisDaySection";
 import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "../hooks/useAppMode";
+import PhotoTimeline from "./PhotoTimeline";
 import {
   albumRoute,
   decodeFavPath,
-  exploreRoute,
   homeRoute,
   libraryRoute,
   recentsRoute,
@@ -30,26 +24,22 @@ import { timeAgo } from "../utils/date";
 import {
   useLibraryDashboard,
   useLibraryManifest,
-  useLibraryRecentAlbums,
-  useOnThisDayAlbums,
 } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
 import { LibraryIcon, RefreshIcon } from "../components/common/Icon";
-import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
 
 /**
  * 工作台首页。
  *
- * 照片侧是**发现页**：第一屏是照片，随后是回忆（那年今日）、接着看
- * （最近浏览）与新进门的相册。它不解释技术，也不把所有功能摆成入口 ——
- * 想按目录翻的去相册，想按时间、人、地点找的去发现。
+ * 照片侧是**时间线**：第一屏就是照片本身，按拍摄证据排下来，往下滚就是
+ * 往回走时间。想按目录翻的去相册，想按人物、地点、主题找的去发现。
  *
  * 漫画侧是**续读页**：正在读的那本与还没翻开的那些。它不需要目录索引，
  * 因为漫画的组织方式是作品与卷，不是文件夹。
  */
 export default function Home() {
   const { mode } = useAppMode();
-  return mode === "comic" ? <ComicHome /> : <PhotoHome />;
+  return mode === "comic" ? <ComicHome /> : <PhotoTimeline />;
 }
 
 /**
@@ -141,164 +131,6 @@ function HomeHeader({
         </div>
       </div>
     </section>
-  );
-}
-
-/** 照片首页：发现页。 */
-function PhotoHome() {
-  const manifestQuery = useLibraryManifest();
-  const manifest = manifestQuery.data?.manifest;
-
-  // 这一侧有没有内容：整个库都空，与「库有内容但这一侧没有」是两回事，
-  // 空态的引导不一样。
-  const libraryHasContent = (manifest?.statistics.albumCount ?? 0) > 0;
-  const sideHasContent = (manifest?.statistics.photoAlbumCount ?? 0) > 0;
-  const otherSideHasContent = (manifest?.statistics.comicAlbumCount ?? 0) > 0;
-  const hasContent = sideHasContent;
-  const isLoadingInitial = manifestQuery.isLoading;
-
-  // 「接着看」的数据是访问历史：照片相册一直在记，只是原先只有
-  // 「最近浏览」页在用。
-  const resumeCards = useHistoryCards("photo", hasContent).cards;
-
-  // 「那年今日」只在照片侧成立：漫画没有拍摄时间。
-  //
-  // 拍摄日期是从文件名推断出来的，稀疏得很：大多数日子里往年这天没拍过照，
-  // 那一段就会整个消失，用户以为功能没了。所以这里允许退回离今天最近的
-  // 那几天 —— 每张卡片都带着自己命中的那一天，不会假装是今天拍的。
-  const today = new Date();
-  const onThisDay = useOnThisDayAlbums(
-    "photo",
-    today.getMonth() + 1,
-    today.getDate(),
-    6,
-    hasContent,
-    true,
-  );
-  const onThisDayItems = onThisDay.data?.page.items ?? [];
-
-  // 最近加入：新进门的相册。与「接着看」（我刚才翻过哪本）是两件事。
-  const recent = useLibraryRecentAlbums("photo", 12, hasContent);
-  const recentCards = useMemo(
-    () =>
-      (recent.data?.page.items ?? []).map((node) =>
-        nodeSummaryToCard(node, "r:"),
-      ),
-    [recent.data],
-  );
-
-  // 少量主题推荐：给一点线索，真正去找去发现页。
-  const smart = useSmartAlbumDirectory("featured", hasContent, {
-    limit: HOME_SMART_ALBUM_PREVIEW,
-  });
-
-  return (
-    <div className="home-page min-h-full">
-      <HomeHeader
-        title="照片库"
-        eyebrow="你的照片"
-        primaryAction={{ to: libraryRoute("photo"), label: "相册" }}
-      />
-
-      {hasContent ? (
-        <>
-          {/* 第一屏：照片本身。 */}
-          <PhotoFeedHero />
-
-          {resumeCards.length > 0 ? (
-            <section className="page-shell page-section">
-              <div className="home-overview">
-                <ResumeHero cards={resumeCards} />
-              </div>
-            </section>
-          ) : null}
-
-          {onThisDayItems.length > 0 ? (
-            <OnThisDaySection
-              items={onThisDayItems}
-              month={today.getMonth() + 1}
-              day={today.getDate()}
-            />
-          ) : null}
-
-          {recentCards.length > 0 ? (
-            <section className="page-shell page-section">
-              <div className="section-heading">
-                <h2 className="section-title">最近加入</h2>
-                <span className="section-meta">按拍摄时间，最近的相册</span>
-                <Link to={libraryRoute("photo")} className="chip ml-auto">
-                  全部相册
-                </Link>
-              </div>
-              <AlbumGrid items={recentCards} variant="grid" />
-            </section>
-          ) : null}
-
-          <section className="page-shell page-section">
-            <div className="section-heading">
-              <h2 className="section-title">主题</h2>
-              <span className="section-meta">自动聚在一起的照片</span>
-              <Link to={exploreRoute()} className="chip ml-auto">
-                去发现
-              </Link>
-            </div>
-            <SmartAlbumPreview
-              items={smart.items}
-              total={smart.total}
-              isLoading={smart.isLoading}
-              isError={smart.isError}
-              onRetry={() => void smart.refetch()}
-            />
-          </section>
-        </>
-      ) : null}
-
-      {!hasContent && !isLoadingInitial ? (
-        <section className="page-shell">
-          {libraryHasContent ? (
-            <EmptyState
-              title="照片这边还没有内容"
-              description={
-                otherSideHasContent
-                  ? "媒体目录都被设成了另一种内容属性。可以在设置里改属性，或者先去漫画那边看看。"
-                  : "媒体目录的内容属性与这一侧对不上。可以在设置里改属性。"
-              }
-              icon={<LibraryIcon size={20} />}
-              action={
-                <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className="btn btn-outline">
-                    去设置里改属性
-                  </Link>
-                  {otherSideHasContent && (
-                    <Link to={homeRoute("comic")} className="btn btn-primary">
-                      去漫画库看看
-                    </Link>
-                  )}
-                </div>
-              }
-            />
-          ) : (
-            <EmptyState
-              title="欢迎使用本地画廊"
-              description="首次使用请先设置媒体目录，再开始扫描。目录离线时可在设置中修复。"
-              icon={<LibraryIcon size={20} />}
-              action={
-                <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className="btn btn-outline">
-                    设置媒体目录
-                  </Link>
-                  <Link to="/settings/data" className="btn btn-primary">
-                    去设置
-                  </Link>
-                </div>
-              }
-            />
-          )}
-        </section>
-      ) : null}
-
-      <div className="h-8" />
-    </div>
   );
 }
 

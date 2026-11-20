@@ -310,7 +310,14 @@ export interface AlbumFilterFacets {
 export interface LibraryFeedItem extends LibraryMediaItem {
   albumId: string;
   albumName: string;
+  /** 时间线上的时间（RFC3339）。没有时间证据时为空。 */
+  capturedAt?: string;
+  /** 这个时间的来源：exif / filename / folder / modified。 */
+  dateSource?: TimelineDateSource;
 }
+
+/** 时间的来源。 */
+export type TimelineDateSource = "exif" | "filename" | "folder" | "modified";
 
 /** 照片流里一本相册的定位：这些照片来自哪几本。 */
 export interface LibraryFeedAlbum {
@@ -333,7 +340,13 @@ export type MediaFeedScope =
   | "year"
   | "collection"
   /** 随机长流：瀑布流专页往下滑的数据源，按游标一页页往下取。 */
-  | "stream";
+  | "stream"
+  /**
+   * 时间线：全库照片按拍摄证据排成的一条序列。
+   *
+   * 它是照片工作台的默认视图：一页一页往下取就是顺着时间往回走。
+   */
+  | "timeline";
 
 export interface MediaFeedQuery {
   kind: AppMode;
@@ -349,6 +362,19 @@ export interface MediaFeedQuery {
    * 一定换得掉，而不是碰运气看服务端抽到哪几本。
    */
   seed?: string;
+  /**
+   * scope=timeline 时：月份，"1".."12"。
+   *
+   * 月份只在年份之内有意义，因此必须与 year 同时给 —— 只给月份时服务端
+   * 拒绝这个请求，而不是猜一个年份。
+   */
+  month?: string;
+  /**
+   * scope=timeline 时：媒体类型，"photo" / "video"。
+   *
+   * 缺省是两类都收。
+   */
+  media?: string;
 }
 
 /**
@@ -366,6 +392,34 @@ export interface LibraryFeedSource {
 export interface LibraryFeedPage extends LibraryPage<LibraryFeedItem> {
   albums: LibraryFeedAlbum[];
   sources: LibraryFeedSource[];
+  /**
+   * 时间线的年份索引：跳年跳月用。
+   *
+   * 它描述整条时间线，不随已加载页数变化 —— 跳到哪一年，界面上要能
+   * 一次列出所有年份与它们的数量。
+   */
+  years?: TimelineYear[];
+  /**
+   * 时间线里「日期未知」的媒体数：只有文件修改时间的那部分。
+   *
+   * 它们不在任何一年里，也拿不到月份 —— 界面要单独摆出来，不能塞进
+   * 某一年冒充那年的照片。
+   */
+  unknown?: number;
+  /**
+   * 这一段筛选结果里的时间来源分布。
+   *
+   * 它按整段结果算，不只算当前页：界面上要说明「这一屏看到的时间都是
+   * 怎么来的」。
+   */
+  dateSources?: Partial<Record<TimelineDateSource, number>>;
+}
+
+/** 时间线上的一年：照片数与月份分布。 */
+export interface TimelineYear {
+  year: number;
+  count: number;
+  months: { month: number; count: number }[];
 }
 
 export interface LibraryTagSummary {

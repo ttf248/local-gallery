@@ -32,6 +32,11 @@ const (
 	MediaFeedCollection MediaFeedScope = "collection"
 	// MediaFeedStream 取一条确定的长流：瀑布流专页往下滑的数据源。
 	MediaFeedStream MediaFeedScope = "stream"
+	// MediaFeedTimeline 取全库按拍摄时间排下来的序列：日常浏览的那条线。
+	//
+	// 它由 PhotoTimelineService 提供（需要分析结果里的拍摄时间），
+	// 不走 PageMediaFeed 的取材路径。
+	MediaFeedTimeline MediaFeedScope = "timeline"
 )
 
 // MediaFeedQuery 描述一次跨相册取照片的请求。
@@ -46,6 +51,12 @@ type MediaFeedQuery struct {
 	// 按可复现的方式取材 —— 同一个种子给同一批照片，不同种子给不同的
 	// 一批。只有 scope=random 用它。
 	Seed string
+	// Month 只在 scope=timeline 时有意义："1".."12"。它只在 Year 之内
+	// 有效：没有年份就没有月份。
+	Month string
+	// Media 是媒体类型筛选："all"（默认）/ "photo" / "video"。
+	// 只有 scope=timeline 用它。
+	Media string
 }
 
 // FeedMediaItem 是跨相册的照片条目：媒体字段加上它来自哪本相册。
@@ -58,6 +69,14 @@ type FeedMediaItem struct {
 	AlbumID string `json:"albumId"`
 	// AlbumName 是所属相册的展示名。
 	AlbumName string `json:"albumName"`
+	// CapturedAt 是这张媒体在时间线上的时间（RFC3339）。
+	//
+	// 只有时间线取材才有：其余取材范围不按时间组织，不需要它。
+	CapturedAt string `json:"capturedAt,omitempty"`
+	// DateSource 说明这个时间是从哪来的：exif / filename / folder / modified。
+	//
+	// 界面上要照实说：推断出来的日期不是拍摄时间，修改时间更不是。
+	DateSource string `json:"dateSource,omitempty"`
 }
 
 // LookupLibraryFeedItem 只从已发布目录快照取媒体与原相册摘要，不执行磁盘访问。
@@ -244,6 +263,13 @@ func (q *MediaFeedQuery) Normalize() error {
 		if q.Parent == "" {
 			return ErrInvalidMediaFeedQuery
 		}
+	case MediaFeedTimeline:
+		// 时间线的年份、月份与媒体类型都是筛选条件，由时间线自己收口。
+		q.Parent = ""
+		q.Seed = ""
+		q.Year = strings.TrimSpace(q.Year)
+		q.Month = strings.TrimSpace(q.Month)
+		q.Media = strings.TrimSpace(q.Media)
 	default:
 		return ErrInvalidMediaFeedQuery
 	}

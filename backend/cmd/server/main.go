@@ -397,6 +397,9 @@ func main() {
 	// 原始照片墙的智能筛选：条件落在整本相册的数据上，
 	// 派生信号全部取自现有的分析记录、人物索引、精选与相似分组。
 	albumFilters := services.NewAlbumFilterEngine(resourceCatalog, aiJobs, peopleService, picks, similarityService)
+	// 照片时间线：把全库照片按拍摄证据排成一条稳定的序列。
+	// 拍摄时间取自分析结果里的 EXIF，没有分析结果时退回文件名与目录名推断。
+	photoTimeline := services.NewPhotoTimelineService(aiJobs)
 	faceVersion, _ := services.FaceAnalyzerVersionForModel(aiJobs.List().Settings.FaceModel)
 	if err := peopleService.SetFaceAnalyzerVersion(faceVersion); err != nil {
 		log.Fatalf("初始化人物索引模型失败: %v", err)
@@ -561,7 +564,7 @@ func main() {
 	api.Get("/library/manifest", handlers.LibraryManifestHandler(resourceCatalog))
 	// 照片流要排在 /library/:id/children 之前：那条是带参数的路由，
 	// 静态段先注册才不会落到参数路由上。
-	api.Get("/library/media-feed", handlers.LibraryMediaFeedHandler(resourceCatalog, mediaDimensions, picks))
+	api.Get("/library/media-feed", handlers.LibraryMediaFeedHandler(resourceCatalog, mediaDimensions, picks, photoTimeline))
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(resourceCatalog))
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(resourceCatalog))
 	api.Get("/library/recent", handlers.LibraryRecentHandler(resourceCatalog))
