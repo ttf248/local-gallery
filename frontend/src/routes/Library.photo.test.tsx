@@ -141,7 +141,7 @@ describe("照片相册页", () => {
     expect(screen.queryByText("全部相册")).not.toBeInTheDocument();
   });
 
-  it("视图切到相册时标题说是相册，切到集合时说是集合", async () => {
+  it("视图切到相册时标题说是相册，切到文件夹时说是文件夹", async () => {
     setView("album");
     const { unmount } = renderLibrary();
     await waitFor(() => {
@@ -155,7 +155,7 @@ describe("照片相册页", () => {
     renderLibrary();
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-        "全部集合",
+        "全部文件夹",
       );
     });
   });

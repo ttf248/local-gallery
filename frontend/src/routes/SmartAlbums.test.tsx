@@ -127,7 +127,7 @@ describe("智能相册专页", () => {
     });
     expect(link).toHaveAttribute(
       "href",
-      "/photo/albums/a_1?view=smart&dimension=recommended&group=sg_0123456789abcdef0121",
+      "/photo/albums/a_1?dimension=recommended&group=sg_0123456789abcdef0121",
     );
     expect(link).toHaveTextContent("3 张 · 家庭照片 / 2023年测试相册");
     // 推荐卡片第三行是证据维度芯片，不再是一串平铺的理由。

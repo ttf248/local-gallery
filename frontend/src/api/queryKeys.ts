@@ -60,6 +60,9 @@ export const libraryQueryKeys = {
     [...libraryQueryKeys.mode(mode), "unread-albums"] as const,
   children: (parentId: string, mode: AppMode) =>
     [...libraryQueryKeys.mode(mode), "children", parentId] as const,
+  /** 目录树里按名字定位：一次列出命中的文件夹与相册。 */
+  treeSearch: (mode: AppMode, query: string) =>
+    [...libraryQueryKeys.mode(mode), "tree-search", query] as const,
   tags: (mode: AppMode) => [...libraryQueryKeys.mode(mode), "tags"] as const,
   tagAlbums: (tag: string, mode: AppMode) =>
     [...libraryQueryKeys.mode(mode), "tag-albums", tag] as const,

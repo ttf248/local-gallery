@@ -32,10 +32,11 @@ export function nodeSummaryToCard(
       : isAlbum
         ? node.tags?.join(" · ") || undefined
         : // 类型词跟着侧走：漫画侧的集合叫「作品」—— 与集合页的眉标、
-          // 搜索结果、属性面板是同一个词。
+          // 搜索结果、属性面板是同一个词。照片侧叫「文件夹」：那是磁盘
+          // 上真实存在的目录，用户不需要知道它内部叫「集合」。
           node.contentKind === "comic"
           ? "作品"
-          : "集合",
+          : "文件夹",
     count: isAlbum ? (node.imageCount ?? 0) : (node.albumCount ?? 0),
     imageCount: isAlbum ? (node.imageCount ?? 0) : undefined,
     videoCount: isAlbum ? (node.videoCount ?? 0) : undefined,

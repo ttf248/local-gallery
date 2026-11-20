@@ -7,7 +7,11 @@ import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import FolderTree from "../components/library/FolderTree";
-import { FolderOpenIcon, ReaderIcon } from "../components/common/Icon";
+import {
+  ChevronLeftIcon,
+  FolderOpenIcon,
+  ReaderIcon,
+} from "../components/common/Icon";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryList } from "../hooks/useLibraryList";
 import {
@@ -22,7 +26,10 @@ import type { ViewKey } from "../utils/listFilterParams";
 import { useUIStore } from "../store/uiStore";
 import { decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
 import type { GalleryContextEntry } from "../utils/galleryContext";
-import type { LibraryDashboardProgress } from "../api/library";
+import type {
+  LibraryDashboardProgress,
+  LibraryNodeSummary,
+} from "../api/library";
 import { workbenchCopy } from "../utils/workbench";
 import { toSelectionItems } from "../utils/selectionItems";
 import "../styles/library.css";
@@ -71,13 +78,19 @@ export default function Library() {
   const nodes = useLibraryNodes(nodeId ? [nodeId] : []);
   const current = nodes.data?.items[0];
   const currentRoot = manifest?.roots.find((root) => root.id === nodeId);
+  // 祖先链：面包屑与「返回上级」共用一份。链上最后一段是当前节点，
+  // 倒数第二段就是上一级 —— 顶层文件夹的上一级是「所有根」。
+  const ancestors = useLibraryAncestors(nodeId);
+  const ancestorChain = ancestors.data ?? [];
+  const parentId =
+    ancestorChain.length > 1 ? ancestorChain[ancestorChain.length - 2].id : "";
 
-  // 集合卡在相册页里指向它的下一层，而不是跳到集合页：相册页是结构页，
+  // 文件夹卡在相册页里指向它的下一层，而不是跳去集合页：相册页是结构页，
   // 在它里面换目录比跳出去再跳回来短。相册卡仍然指向照片墙。
   //
-  // 换的是「点下去去哪里」，不是「这份内容是什么」：集合的规范地址
-  // 仍然是作品页 —— 收藏、属性、复制链接、在文件管理器里打开都要靠它
-  // 认出这是哪一个集合。
+  // 换的是「点下去去哪里」，不是「这份内容是什么」：文件夹的规范地址
+  // 仍然是集合页 —— 收藏、属性、复制链接、在文件管理器里打开都要靠它
+  // 认出这是哪一个文件夹。
   const cards = useMemo(
     () =>
       list.cards.map((card) =>
@@ -87,6 +100,10 @@ export default function Library() {
               linkTo: `${libraryRoute(mode)}?${LIBRARY_PARAM.node}=${encodeURIComponent(
                 decodeFavPath(card.to),
               )}`,
+              // 照片侧的文件夹卡自己就摆着文件夹的样子，封面里已经写着
+              // 「文件夹」：说明行再写一遍是同一句话说两遍。
+              subtitle:
+                mode === "photo" ? undefined : card.subtitle,
             }
           : card,
       ),
@@ -264,11 +281,25 @@ export default function Library() {
                 nodeId={nodeId}
                 rootName={currentRoot?.name}
                 currentName={current ? current.displayName || current.name : ""}
+                chain={ancestorChain}
                 onSelect={selectNode}
               />
             ) : null}
           </div>
           <div className="library-head__actions">
+            {/* 返回上级：目录越走越深时，得有一条明显的路回去。
+                面包屑能跳，但那是链上的任意一级；这一枚是「上一层」，
+                一步就回到刚才那一层。 */}
+            {nodeId ? (
+              <button
+                type="button"
+                className="btn btn-sm btn-outline"
+                onClick={() => selectNode(parentId)}
+              >
+                <ChevronLeftIcon size={13} />
+                返回上级
+              </button>
+            ) : null}
             {/* 窄屏：目录是一块可展开的面板，展开后它盖在内容上方 ——
                 触摸设备没有 hover，目录不能只在悬停时才出现。 */}
             <button
@@ -411,6 +442,9 @@ export default function Library() {
                   selectable
                   items={cards}
                   variant={viewMode}
+                  /* 文件夹与相册一眼要能分开：文件夹摆成文件夹的样子，
+                     点开是下一层目录；相册摆照片，点开是照片。 */
+                  folderSurface={mode === "photo"}
                   onEndReached={loadMore}
                 />
               )
@@ -464,17 +498,18 @@ function Breadcrumb({
   nodeId,
   rootName: selectedRootName,
   currentName,
+  chain,
   onSelect,
 }: {
   mode: "photo" | "comic";
   nodeId: string;
   rootName?: string;
   currentName: string;
+  /** 祖先链：最外层到紧邻当前节点的那一层。 */
+  chain: LibraryNodeSummary[];
   onSelect: (id: string) => void;
 }) {
   // 祖先链：节点摘要带 parentId，拿到上级才知道再上一级是谁。
-  const ancestors = useLibraryAncestors(nodeId);
-  const chain = ancestors.data ?? [];
   const rootName = selectedRootName || chain[0]?.sourceName || "";
 
   return (

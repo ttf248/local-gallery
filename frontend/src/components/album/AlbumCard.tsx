@@ -137,6 +137,14 @@ interface Props {
    */
   coverRatio?: CoverRatio;
   /**
+   * 文件夹卡用文件夹的样子，不用照片拼贴。
+   *
+   * 图库里文件夹与相册并排摆着，两者的动作不同：文件夹点开是下一层，
+   * 相册点开是照片。样子上也要分开 —— 图库页打开这一档，
+   * 别的页面（收藏、最近）保留拼贴封面，那是相册的缩略陈列。
+   */
+  folderSurface?: boolean;
+  /**
    * 计数行下面补一行说明（「那年今日」用它写命中的那一天）。
    *
    * 计数行是 nowrap 的：数量一长就把它挤到省略号后面。日期这种
@@ -189,6 +197,7 @@ export default function AlbumCard({
   alwaysShowFavorite = false,
   note,
   coverBadge,
+  folderSurface = false,
 }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
@@ -243,6 +252,7 @@ export default function AlbumCard({
           alwaysShowFavorite={alwaysShowFavorite}
           note={note}
           coverBadge={coverBadge}
+          folderSurface={folderSurface}
         />
       )}
       {menu && (
@@ -282,6 +292,7 @@ function GridCard({
   alwaysShowFavorite,
   note,
   coverBadge,
+  folderSurface,
 }: {
   data: CardData;
   showLastSeen?: boolean;
@@ -293,6 +304,7 @@ function GridCard({
   alwaysShowFavorite: boolean;
   note?: ReactNode;
   coverBadge?: ReactNode;
+  folderSurface: boolean;
 }) {
   // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
   // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
@@ -308,6 +320,9 @@ function GridCard({
   // 书名，一排封面才读得出「一排书」；照片工作台是展陈墙，标题仍然
   // 压在封面下方（展品说明牌）。
   const showTitleOnCover = titleOnCover ?? data.contentKind === "comic";
+  // 照片侧的文件夹：真实存在的目录，与相册（照片的集合）不是一回事。
+  const isPhotoFolder =
+    data.variant === "collection" && (data.contentKind ?? "photo") === "photo";
   // 作品名印在书名上方：漫画侧的卷名只写「第1卷」，一屏里两本「第1卷」
   // 分属不同作品，光看封面分不出谁是谁。真实书封就是这么排的 ——
   // 作品名在上，卷名在下。
@@ -410,7 +425,7 @@ function GridCard({
           }
           longPressedRef.current = false;
         }}
-        aria-label={`打开${data.variant === "album" ? "相册" : data.variant === "collection" ? "集合" : "智能视图"}“${data.displayTitle ?? data.title}”`}
+        aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
         className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <div
@@ -421,7 +436,16 @@ function GridCard({
         >
           {/* 视频封面同样裁切填满：方形画幅里保留 16:9 的完整画面会
               上下留出两条黑边，读起来像一只空信箱。 */}
-          <CardCover data={data} fit="cover" />
+          {folderSurface && isPhotoFolder ? (
+            /* 文件夹的样子：它装的是下一层目录，不是照片。
+               摆一张照片拼贴在这儿，用户会以为点开就是看图。 */
+            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-bg-subtle text-fg-subtle">
+              <FolderIcon size={30} />
+              <span className="text-meta">文件夹</span>
+            </div>
+          ) : (
+            <CardCover data={data} fit="cover" />
+          )}
 
           {/* 封面左上角：状态槽。阅读状态（未读 / 已读完）与视频转码角标
               都在这一列，堆叠显示，互不遮挡。
@@ -472,6 +496,17 @@ function GridCard({
 
           {/* 集合 / 标签 这类"类型"信息不属于阅读状态，已移到标题下的元信息行，
               封面角位只留给状态（未读点 / 已读），避免角标互相打架。 */}
+
+          {/* 文件夹角标：照片侧的文件夹与相册一眼要能分开。
+              文件夹点开是下一层，相册点开是照片 —— 这两件事不一样，
+              卡片的样子也得不一样：文件夹在封面上压一枚文件夹角标，
+              相册没有。 */}
+          {isPhotoFolder && !folderSurface && (
+            <span className="absolute left-2 bottom-2 inline-flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-badge text-white/90 backdrop-blur-sm">
+              <FolderIcon size={11} className="shrink-0" />
+              文件夹
+            </span>
+          )}
 
           {/* 阅读进度：百分比放深色蒙版 chip，进度条压在封面底边的暗色条上。
               以前整块用一层渐变蒙版，白字在亮封面（照片里的白墙、白纸）上
@@ -692,7 +727,7 @@ function ListCard({
     <div className="relative group flex items-center border-b border-border-faint h-[86px]">
       <Link
         to={data.linkTo ?? data.to}
-        aria-label={`打开${data.variant === "album" ? "相册" : data.variant === "collection" ? "集合" : "智能视图"}“${data.displayTitle ?? data.title}”`}
+        aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
         className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
       >
         <div
@@ -935,4 +970,18 @@ function FavoriteStar({
       <StarIcon size={13} filled={fav} />
     </button>
   );
+}
+
+/**
+ * 卡片打开的是什么东西。
+ *
+ * 照片侧的文件夹是磁盘上真实存在的目录，叫「文件夹」；漫画侧的集合叫
+ * 「作品」。相册两侧都叫「相册」—— 那句提示语是用户读得懂的日常词，
+ * 不跟着工作台换。
+ */
+function openTargetWord(data: CardData): string {
+  if (data.variant === "album") return "相册";
+  if (data.variant === "collection")
+    return data.contentKind === "comic" ? "作品" : "文件夹";
+  return "智能视图";
 }

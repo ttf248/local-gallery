@@ -78,8 +78,9 @@ export function smartAlbumEvidenceDimensions(group: {
 
 /** 分组卡片的去处：来源相册里的那个分组。 */
 export function smartGroupHref(item: SmartAlbumDirectoryItem): string {
+  // 分组是相册里照片的一种看法，不是另一本相册：地址里只有分组维度与
+  // 选中的那一组，没有「换个相册」的开关。
   const query = new URLSearchParams({
-    view: "smart",
     dimension: item.group.dimension,
     group: item.group.id,
   });

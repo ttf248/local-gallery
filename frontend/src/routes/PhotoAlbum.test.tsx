@@ -312,17 +312,19 @@ describe("PhotoAlbum", () => {
     expect(screen.queryByText(/阅读进度/)).toBeNull();
   });
 
-  it("打开智能分组后仍使用相册内的照片墙", () => {
-    renderPhotoAlbum();
+  it("分组是照片的一种看法：开着面板时墙上仍是全部照片，选一组才换", () => {
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time`);
 
-    fireEvent.click(screen.getByRole("button", { name: "智能相册" }));
-    fireEvent.click(screen.getByRole("tab", { name: "时间" }));
+    // 面板开着，墙上摆的仍是这本相册里的照片 —— 不是另一本相册。
+    expect(screen.getByTestId("photo-wall")).toHaveTextContent("1.jpg");
+    // 分析口径收在「分析说明」里，默认收起。
+    expect(screen.queryByText("分析覆盖 3/4")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "分析说明" }));
     expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
     expect(screen.getByText("未分析 1 张")).toBeInTheDocument();
+
     fireEvent.click(
-      screen.getByRole("button", {
-        name: "打开分组 2025年6月18日，3 张",
-      }),
+      screen.getByRole("button", { name: /^2025年6月18日/ }),
     );
 
     expect(screen.getByTestId("photo-wall")).toHaveTextContent(
@@ -334,6 +336,10 @@ describe("PhotoAlbum", () => {
       "sg_0123456789abcdef0123",
       "smart-snapshot",
     );
+
+    // 恢复入口：回到全部照片。
+    fireEvent.click(screen.getByRole("button", { name: "回到全部照片" }));
+    expect(screen.getByTestId("photo-wall")).toHaveTextContent("1.jpg");
   });
 
   it("场景维度缺少向量时只启动当前相册的语义分析", async () => {
@@ -413,37 +419,44 @@ describe("PhotoAlbum", () => {
       isLoading: false,
       isError: false,
     } as never);
-    renderPhotoAlbum(album, `/albums/${album.id}?view=smart&dimension=people`);
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=people`);
 
-    expect(screen.getByText("人物分析尚未启用")).toBeInTheDocument();
+    // 没有分析结果时不摆误导性的智能操作，只说清为什么用不了。
+    expect(screen.getByText(/人物分组依赖人脸分析/)).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "去任务中心启用" }),
     ).toHaveAttribute("href", "/tasks/plan");
     expect(aiJobsApi.start).not.toHaveBeenCalled();
   });
 
-  it("智能相册直达页默认精选推荐并可返回原始照片墙", () => {
-    renderPhotoAlbum(album, `/albums/${album.id}?view=smart`);
+  it("分组面板默认关着，打开后默认精选推荐，收起就回到全部照片", () => {
+    renderPhotoAlbum(album);
 
-    expect(screen.getByRole("button", { name: "智能相册" })).toHaveAttribute(
+    // 默认是原始照片墙：没有分组面板，也没有第二套相册。
+    expect(screen.queryByTestId("album-group-list")).toBeNull();
+    expect(screen.getByRole("button", { name: "按分组浏览" })).toHaveAttribute(
       "aria-pressed",
-      "true",
+      "false",
     );
+
+    fireEvent.click(screen.getByRole("button", { name: "按分组浏览" }));
+
     expect(screen.getByRole("tab", { name: "精选推荐" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(screen.getByText(/精选主题/)).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "dimension=recommended",
+    );
+    // 墙上仍然是这本相册的照片。
+    expect(screen.getByTestId("photo-wall")).toHaveTextContent("1.jpg");
 
-    fireEvent.click(screen.getByRole("button", { name: "原始照片墙" }));
+    fireEvent.click(screen.getByRole("button", { name: "收起分组浏览" }));
 
     expect(screen.getByTestId("location")).toHaveTextContent(
       `/albums/${album.id}`,
     );
-    expect(screen.getByRole("button", { name: "智能相册" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.queryByTestId("album-group-list")).toBeNull();
     expect(screen.getByTestId("photo-wall")).toBeInTheDocument();
   });
 
@@ -451,7 +464,7 @@ describe("PhotoAlbum", () => {
     const groupId = "sg_0123456789abcdef0123";
     renderPhotoAlbum(
       album,
-      `/albums/${album.id}?view=smart&dimension=time&group=${groupId}`,
+      `/albums/${album.id}?dimension=time&group=${groupId}`,
     );
 
     expect(screen.getByTestId("photo-wall")).toHaveTextContent(
@@ -469,7 +482,7 @@ describe("PhotoAlbum", () => {
       "smart-snapshot",
     );
     expect(screen.getByTestId("location")).toHaveTextContent(
-      `/albums/${album.id}?view=smart&dimension=time&group=${groupId}`,
+      `/albums/${album.id}?dimension=time&group=${groupId}`,
     );
   });
 

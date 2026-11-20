@@ -100,7 +100,7 @@ it("集合属性显示聚合媒体和相册数量", async () => {
   });
   renderDialog({ kind: "node", id: "c_trip" });
   expect(await screen.findByText("集合")).toBeInTheDocument();
-  expect(screen.getByText("5 本")).toBeInTheDocument();
+  expect(screen.getByText("5 个相册")).toBeInTheDocument();
   expect(screen.getByText("46 项")).toBeInTheDocument();
   expect(imageInfoApi.get).not.toHaveBeenCalled();
 });

@@ -103,6 +103,49 @@
   font-size: var(--text-body);
 }
 
+/* 定位框：在目录里按名字找文件夹或相册。 */
+.library-tree__search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 4px 0 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+}
+
+.library-tree__search:focus-within {
+  border-color: var(--focus);
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* 清除按钮：画得小，点得到的那一块不能小。 */
+.library-tree__search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  color: var(--fg-subtle);
+}
+
+.library-tree__search-clear:hover {
+  background: var(--bg-subtle);
+  color: var(--fg);
+}
+
+/* 定位结果的提示与空态。 */
+.library-tree__hint {
+  padding: 6px 8px;
+  font-size: var(--text-meta);
+  color: var(--fg-subtle);
+}
+
 .library-tree__list {
   list-style: none;
   margin: 0;

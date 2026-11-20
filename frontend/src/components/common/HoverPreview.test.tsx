@@ -87,11 +87,11 @@ describe("HoverPreview 按内容属性取词", () => {
     expect(view.queryByText("尚未浏览")).not.toBeInTheDocument();
   });
 
-  it("封面计数单位跟着属性走：照片本相册、照片张、漫画卷", () => {
+  it("封面计数单位跟着属性走：照片个相册、照片张、漫画卷", () => {
     const photo = renderPreview(
       card({ variant: "collection", contentKind: "photo", count: 3 }),
     );
-    expect(photo.getByText("3 本相册")).toBeInTheDocument();
+    expect(photo.getByText("3 个相册")).toBeInTheDocument();
     photo.unmount();
 
     const comic = renderPreview(

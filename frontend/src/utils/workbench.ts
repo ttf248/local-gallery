@@ -51,7 +51,7 @@ export interface WorkbenchCopy {
   /** 从未看过时的说法：照片「尚未浏览」，漫画「尚未阅读」。 */
   neverSeenLabel: string;
   /**
-   * 集合 / 标签的计数单位：照片「本」，漫画「卷」。
+   * 文件夹 / 标签的计数单位：照片「个相册」，漫画「卷」。
    *
    * 那个数字是「里面有多少本相册」，不是图片数。
    */
@@ -62,7 +62,7 @@ export interface WorkbenchCopy {
    * 视图筛选的那一排 chip 用它。两侧的词本来就该不同：照片那边一个
    * 叶级目录是一本「相册」，漫画那边它是作品里的一「卷」—— 作品下面
    * 有几卷、这一卷有多少页，这套说法在漫画侧是成立的，在照片侧不是。
-   * 集合词同理（照片「集合」，漫画「作品」）。
+   * 文件夹词同理（照片「文件夹」，漫画「作品」）。
    */
   albumTypeLabel: string;
   /** 集合的类型词：照片「集合」，漫画「作品」。 */
@@ -164,10 +164,10 @@ const PHOTO: PhotoCopy = {
   randomLabel: "随机翻翻",
   mediaUnit: "张",
   albumTypeLabel: "相册",
-  collectionTypeLabel: "集合",
+  collectionTypeLabel: "文件夹",
   lastSeenVerb: "浏览",
   neverSeenLabel: "尚未浏览",
-  collectionUnit: "本",
+  collectionUnit: "个相册",
   recentlyAddedTitle: "最近加入",
   recentlyAddedEyebrow: "刚进门的相册",
   /* 这一区的卡是相册，计数也是相册数：早先写「本新照片」，
@@ -228,7 +228,7 @@ const COMIC: ComicCopy = {
 };
 
 /**
- * 集合与标签卡片的计数单位。
+ * 文件夹与标签卡片的计数单位。
  *
  * 那个数字是「里面有多少本相册」，不是图片数：照片侧说「本」，
  * 漫画侧说「卷」。用「张」会让人以为那是图片数量。
@@ -246,7 +246,7 @@ export function collectionUnit(mode: "photo" | "comic"): string {
  * 「7 卷」。集合页头、网格卡片与侧栏共用这一个说法。
  */
 export function albumCountUnit(mode: "photo" | "comic"): string {
-  return mode === "comic" ? collectionUnit(mode) : "本相册";
+  return mode === "comic" ? collectionUnit(mode) : "个相册";
 }
 
 /**

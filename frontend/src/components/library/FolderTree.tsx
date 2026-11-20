@@ -1,30 +1,43 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRightIcon,
+  CloseIcon,
   FolderIcon,
   ImageIcon,
+  SearchIcon,
 } from "../common/Icon";
 import { libraryApi, type AppMode, type LibraryNodeSummary } from "../../api/library";
-import { useLibraryManifest } from "../../hooks/useLibrary";
+import { libraryQueryKeys } from "../../api/queryKeys";
+import { useLibraryAncestors, useLibraryManifest } from "../../hooks/useLibrary";
 import { albumRoute } from "../../utils/path";
-import { albumCountUnit, mediaUnit } from "../../utils/workbench";
+import { albumCountUnit, mediaUnit, workbenchCopy } from "../../utils/workbench";
 
 interface Props {
   mode: AppMode;
-  /** 当前选中的媒体根或集合 id（空串 = 所有根）。 */
+  /** 当前选中的媒体根或文件夹 id（空串 = 所有根）。 */
   selectedId: string;
-  /** 选中一个媒体根或集合：内容区切到它的下一层。 */
+  /** 选中一个媒体根或文件夹：内容区切到它的下一层。 */
   onSelect: (id: string) => void;
 }
 
+/** 定位一次最多列多少条命中。 */
+const SEARCH_LIMIT = 50;
+
 /**
- * 目录树：媒体根 → 集合 → 子集合 → 相册。
+ * 目录树：媒体根 → 文件夹 → 子文件夹 → 相册。
  *
  * 它展示的是**磁盘上真实存在的结构**，不是分析出来的分组。智能主题
- * （时间、人物、地点、场景的聚合）是另一回事，在探索页里，不在这里 ——
+ * （时间、人物、地点、场景的聚合）是另一回事，在发现页里，不在这里 ——
  * 用自动分组冒充文件夹树，用户就找不到自己的文件。
+ *
+ * 三件事决定它好不好用：
+ *
+ * - **默认只展开当前位置相关的那条路**。一棵全部摊开的树会把用户淹在
+ *   别人的目录里；站在哪一层，就只展开到那一层。
+ * - **能搜**。目录可能很深，靠一层层点找文件夹是体力活；搜到就跳过去。
+ * - **能收起**。看得见的只有需要的那几层。
  *
  * 子项按需取：展开一个节点才去读它的下一层。目录可能很深，一次性把
  * 整棵树拉下来既慢又没人看。
@@ -33,25 +46,188 @@ export default function FolderTree({ mode, selectedId, onSelect }: Props) {
   const manifest = useLibraryManifest().data?.manifest;
   // 只列当前这一侧的根：照片工作台的目录树里摆一个漫画根，点进去
   // 右边是空的 —— 用户只会以为自己走错了地方。
-  const roots = (manifest?.roots ?? []).filter(
-    (root) => (root.contentKind ?? "photo") === mode,
+  const roots = useMemo(
+    () =>
+      (manifest?.roots ?? []).filter(
+        (root) => (root.contentKind ?? "photo") === mode,
+      ),
+    [manifest, mode],
   );
+
+  // 当前位置的祖先链：默认展开的就是这条链上的层级。
+  const ancestors = useLibraryAncestors(selectedId);
+  const pathIds = useMemo(
+    () => new Set((ancestors.data ?? []).map((node) => node.id)),
+    [ancestors.data],
+  );
+  // 用户手动展开或收起的层级：手动优先于默认。
+  const [manual, setManual] = useState<Record<string, boolean>>({});
+  // 默认展开到什么程度：媒体根那一层始终看得见（它就是库的第一层，
+  // 收起它等于树里什么都没有），更深的层级只展开当前所在的那条路。
+  const rootIds = useMemo(
+    () => new Set(roots.map((root) => root.id)),
+    [roots],
+  );
+  const isExpanded = (id: string) =>
+    manual[id] ?? (rootIds.has(id) || pathIds.has(id));
+  const toggle = (id: string) =>
+    setManual((previous) => ({ ...previous, [id]: !isExpanded(id) }));
+
+  const [query, setQuery] = useState("");
+  const trimmed = query.trim();
+
   if (roots.length === 0) return null;
   return (
     <nav aria-label="目录" className="library-tree">
-      <ul className="library-tree__list">
-        {roots.map((root) => (
-          <TreeRoot
-            key={root.id}
-            id={root.id}
-            name={root.name}
-            mode={mode}
-            selectedId={selectedId}
-            onSelect={onSelect}
-          />
-        ))}
-      </ul>
+      <div className="library-tree__search">
+        <SearchIcon size={13} className="shrink-0 text-fg-subtle" />
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="定位文件夹或相册"
+          aria-label="在目录中定位"
+          className="h-full min-w-0 flex-1 bg-transparent text-body text-fg outline-none placeholder:text-fg-subtle"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="library-tree__search-clear"
+            aria-label="清除定位"
+          >
+            <CloseIcon size={12} />
+          </button>
+        ) : null}
+      </div>
+
+      {trimmed ? (
+        <TreeSearchResults
+          mode={mode}
+          query={trimmed}
+          onPickFolder={(id) => {
+            setQuery("");
+            onSelect(id);
+          }}
+        />
+      ) : (
+        <ul className="library-tree__list">
+          {roots.map((root) => (
+            <TreeRoot
+              key={root.id}
+              id={root.id}
+              name={root.name}
+              mode={mode}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              expanded={isExpanded(root.id)}
+              onToggle={() => toggle(root.id)}
+              isExpanded={isExpanded}
+              onToggleChild={toggle}
+            />
+          ))}
+        </ul>
+      )}
     </nav>
+  );
+}
+
+/**
+ * 定位结果：一份扁平清单。
+ *
+ * 搜目录不该再画一棵树 —— 树在这里只会把命中埋起来。给名字、类型与
+ * 数量，点一下就过去。
+ */
+function TreeSearchResults({
+  mode,
+  query,
+  onPickFolder,
+}: {
+  mode: AppMode;
+  query: string;
+  onPickFolder: (id: string) => void;
+}) {
+  const navigate = useNavigate();
+  const copy = workbenchCopy(mode);
+  const search = useQuery({
+    queryKey: libraryQueryKeys.treeSearch(mode, query),
+    queryFn: ({ signal }) =>
+      libraryApi
+        .overview({ kind: mode, q: query }, undefined, signal)
+        .then((response) => response.page),
+    staleTime: 30_000,
+  });
+  const nodes = (search.data?.items ?? [])
+    .filter((item) => item.kind !== "smart")
+    .map((item) => item.node);
+
+  if (search.isLoading) {
+    return <p className="library-tree__hint">正在查找…</p>;
+  }
+  if (search.isError) {
+    return (
+      <div className="library-tree__hint">
+        <p role="alert" className="text-danger">
+          查找失败。
+        </p>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          onClick={() => void search.refetch()}
+        >
+          重试
+        </button>
+      </div>
+    );
+  }
+  if (nodes.length === 0) {
+    return <p className="library-tree__hint">没有找到「{query}」。</p>;
+  }
+
+  return (
+    <ul className="library-tree__list" data-testid="tree-search-results">
+      {nodes.map((node) => {
+        const isFolder = node.kind === "collection";
+        const label = node.displayName || node.name;
+        return (
+          <li key={node.id} className="library-tree__item">
+            <div className="library-tree__row" style={{ paddingLeft: 8 }}>
+              <span className="library-tree__toggle library-tree__toggle--leaf" />
+              <button
+                type="button"
+                className="library-tree__label"
+                onClick={() => {
+                  if (isFolder) {
+                    onPickFolder(node.id);
+                    return;
+                  }
+                  navigate(albumRoute(mode, node.id));
+                }}
+              >
+                {isFolder ? (
+                  <FolderIcon size={14} />
+                ) : (
+                  <ImageIcon size={14} />
+                )}
+                <span className="truncate">{label}</span>
+              </button>
+              <span className="library-tree__meta tabular-nums">
+                {isFolder
+                  ? `${node.albumCount ?? 0} ${albumCountUnit(mode)}`
+                  : `${node.imageCount ?? 0} ${mediaUnit(mode)}`}
+              </span>
+            </div>
+          </li>
+        );
+      })}
+      {nodes.length >= SEARCH_LIMIT ? (
+        <li className="library-tree__hint">只列出了前 {SEARCH_LIMIT} 条。</li>
+      ) : null}
+      <li className="library-tree__hint">
+        {mode === "comic" ? copy.albumTypeLabel : "相册"}点开是内容，
+        {copy.collectionTypeLabel}点开是下一层。
+      </li>
+    </ul>
   );
 }
 
@@ -62,15 +238,21 @@ function TreeRoot({
   mode,
   selectedId,
   onSelect,
+  expanded,
+  onToggle,
+  isExpanded,
+  onToggleChild,
 }: {
   id: string;
   name: string;
   mode: AppMode;
   selectedId: string;
   onSelect: (id: string) => void;
+  expanded: boolean;
+  onToggle: () => void;
+  isExpanded: (id: string) => boolean;
+  onToggleChild: (id: string) => void;
 }) {
-  // 根默认展开：用户进来先看到「库里有哪几个目录」。
-  const [expanded, setExpanded] = useState(true);
   const children = useFolderChildren(id, mode, expanded);
   return (
     <li className="library-tree__item">
@@ -80,7 +262,7 @@ function TreeRoot({
         depth={0}
         expanded={expanded}
         hasChildren
-        onToggle={() => setExpanded((v) => !v)}
+        onToggle={onToggle}
         active={selectedId === id}
         onSelect={() => onSelect(id)}
       />
@@ -94,27 +276,36 @@ function TreeRoot({
           selectedId={selectedId}
           onSelect={onSelect}
           depth={1}
+          isExpanded={isExpanded}
+          onToggle={onToggleChild}
         />
       ) : null}
     </li>
   );
 }
 
-/** 一个集合（目录树的中间节点）。点它看它的下一层，再点里面的相册进照片墙。 */
+/** 一个文件夹（目录树的中间节点）。点它看它的下一层，再点里面的相册进照片墙。 */
 function TreeCollection({
   node,
   mode,
   selectedId,
   onSelect,
   depth,
+  expanded,
+  onToggle,
+  isExpanded,
+  onToggleChild,
 }: {
   node: LibraryNodeSummary;
   mode: AppMode;
   selectedId: string;
   onSelect: (id: string) => void;
   depth: number;
+  expanded: boolean;
+  onToggle: () => void;
+  isExpanded: (id: string) => boolean;
+  onToggleChild: (id: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(depth === 1);
   const children = useFolderChildren(node.id, mode, expanded);
   const count = node.albumCount ?? 0;
   return (
@@ -125,7 +316,7 @@ function TreeCollection({
         depth={depth}
         expanded={expanded}
         hasChildren
-        onToggle={() => setExpanded((v) => !v)}
+        onToggle={onToggle}
         active={selectedId === node.id}
         onSelect={() => onSelect(node.id)}
         meta={`${count} ${albumCountUnit(mode)}`}
@@ -140,25 +331,31 @@ function TreeCollection({
           selectedId={selectedId}
           onSelect={onSelect}
           depth={depth + 1}
+          isExpanded={isExpanded}
+          onToggle={onToggleChild}
         />
       ) : null}
     </li>
   );
 }
 
-/** 一层子项：集合可展开，相册直接进照片墙。 */
+/** 一层子项：文件夹可展开，相册直接进照片墙。 */
 function TreeChildren({
   items,
   mode,
   selectedId,
   onSelect,
   depth,
+  isExpanded,
+  onToggle,
 }: {
   items: LibraryNodeSummary[];
   mode: AppMode;
   selectedId: string;
   onSelect: (id: string) => void;
   depth: number;
+  isExpanded: (id: string) => boolean;
+  onToggle: (id: string) => void;
 }) {
   const navigate = useNavigate();
   if (items.length === 0) return null;
@@ -173,6 +370,10 @@ function TreeChildren({
             selectedId={selectedId}
             onSelect={onSelect}
             depth={depth}
+            expanded={isExpanded(node.id)}
+            onToggle={() => onToggle(node.id)}
+            isExpanded={isExpanded}
+            onToggleChild={onToggle}
           />
         ) : (
           <li key={node.id} className="library-tree__item">
@@ -206,6 +407,8 @@ function TreeChildrenContent({
   selectedId,
   onSelect,
   depth,
+  isExpanded,
+  onToggle,
 }: {
   items: LibraryNodeSummary[];
   loading: boolean;
@@ -215,6 +418,8 @@ function TreeChildrenContent({
   selectedId: string;
   onSelect: (id: string) => void;
   depth: number;
+  isExpanded: (id: string) => boolean;
+  onToggle: (id: string) => void;
 }) {
   const indent = { paddingLeft: 8 + depth * 14 };
   return (
@@ -245,6 +450,8 @@ function TreeChildrenContent({
           selectedId={selectedId}
           onSelect={onSelect}
           depth={depth}
+          isExpanded={isExpanded}
+          onToggle={onToggle}
         />
       ) : null}
     </>
@@ -315,9 +522,10 @@ function TreeRow({
  */
 function useFolderChildren(parentId: string, mode: AppMode, enabled: boolean) {
   return useQuery({
-    queryKey: ["library", "children", parentId, mode],
+    queryKey: libraryQueryKeys.children(parentId, mode),
     queryFn: ({ signal }) => libraryApi.childrenAll(parentId, mode, signal),
     enabled: enabled && parentId.length > 0,
     staleTime: 60_000,
+    retry: false,
   });
 }

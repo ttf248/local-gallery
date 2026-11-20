@@ -100,8 +100,8 @@ test("相册内的分组封面按原比例摆：照片不裁成方形，也不�
   await analyzeMetadata(page.request, album!.id);
 
   await page.goto(albumUrl(album!));
-  await page.getByRole("button", { name: "智能相册", exact: true }).click();
-  await page.getByRole("tab", { name: "时间" }).click();
+  await page.getByRole("button", { name: "按分组浏览" }).click();
+  await page.getByRole("tab", { name: "按时间" }).click();
 
   // 素材库里的照片是 64×48 的横图（4:3），不是方图。
   const cover = page.getByTestId("smart-album-cover-photo").first();
@@ -113,12 +113,15 @@ test("相册内的分组封面按原比例摆：照片不裁成方形，也不�
   // 照片按原比例摆：渲染出来的比例还是 4:3。旧做法是把照片裁成方形，
   // 元素盒就会是 1:1 —— 这里是两者的分界。
   expect(box.width / box.height).toBeCloseTo(64 / 48, 2);
-  // 照片没有铺满方槽：宽度小于槽位，槽位边上留给虚化底。
+  // 照片没有铺满方槽：至少有一边留给了虚化底。
   const slot = await page
     .locator('[data-testid="smart-album-cover"]')
     .first()
-    .evaluate((element) => element.getBoundingClientRect().width);
-  expect(box.width).toBeLessThan(slot);
+    .evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { width: rect.width, height: rect.height };
+    });
+  expect(box.width < slot.width || box.height < slot.height).toBe(true);
 });
 
 test("缺少的维度可只为当前相册排入所需的增量分析", async ({ page }) => {
@@ -127,8 +130,10 @@ test("缺少的维度可只为当前相册排入所需的增量分析", async ({
   expect(album).toBeDefined();
 
   await page.goto(albumUrl(album!));
-  await page.getByRole("button", { name: "智能相册", exact: true }).click();
-  await page.getByRole("tab", { name: "时间" }).click();
+  await page.getByRole("button", { name: "按分组浏览" }).click();
+  await page.getByRole("tab", { name: "按时间" }).click();
+  // 分析口径收在按需展开的说明里。
+  await page.getByRole("button", { name: "分析说明" }).click();
   await expect(page.getByText("未分析 1 张")).toBeVisible();
 
   const startResponse = page.waitForResponse(
@@ -162,21 +167,23 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
   await analyzeMetadata(page.request, album!.id);
 
   await page.goto(albumUrl(album!));
-  await page.getByRole("button", { name: "智能相册", exact: true }).click();
-  await page.getByRole("tab", { name: "时间" }).click();
-  const group = page.getByRole("button", {
-    name: "打开分组 2024年5月2日，3 张",
-  });
+  await page.getByRole("button", { name: "按分组浏览" }).click();
+  await page.getByRole("tab", { name: "按时间" }).click();
+  const group = page.getByRole("button", { name: /^2024年5月2日/ });
   await expect(group).toBeVisible();
 
-  await page.getByRole("tab", { name: "地点" }).click();
+  await page.getByRole("tab", { name: "按地点" }).click();
+  // 地点这一维里有一组 5 张：「全部照片」那一条不算。
   await expect(
-    page.getByRole("button", {
-      name: /打开分组 .+，5 张/,
-    }),
+    page
+      .getByTestId("album-group-list")
+      .getByRole("button", { name: /5 张/ })
+      .filter({ hasNotText: "全部照片" }),
   ).toBeVisible();
 
-  for (const dimension of ["人物", "场景"]) {
+  // 分析口径收在按需展开的说明里：展开一次，后面换维度都还在。
+  await page.getByRole("button", { name: "分析说明" }).click();
+  for (const dimension of ["按人物", "按场景"]) {
     await page.getByRole("tab", { name: dimension }).click();
     await expect(page.getByText("分析覆盖 0/5")).toBeVisible();
     await expect(page.getByText("未分析 5 张")).toBeVisible();
@@ -185,7 +192,7 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
     ).toBeVisible();
   }
 
-  await page.getByRole("tab", { name: "时间" }).click();
+  await page.getByRole("tab", { name: "按时间" }).click();
   await expect(group).toBeVisible();
   await group.click();
 
@@ -193,5 +200,8 @@ test("在当前相册按拍摄日期分组并用照片墙打开成员", async ({
   await expect(wall.getByRole("button", { name: /查看 .*\.jpg/ })).toHaveCount(
     3,
   );
-  await expect(page.getByRole("button", { name: "智能分组" })).toBeVisible();
+  // 恢复入口：回到全部照片。
+  await expect(
+    page.getByRole("button", { name: "回到全部照片" }),
+  ).toBeVisible();
 });

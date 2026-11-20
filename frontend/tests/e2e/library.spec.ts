@@ -35,7 +35,7 @@ test("从首页进图库，按目录找到相册并打开照片", async ({ page,
     page.getByRole("heading", { name: /全部内容|相册/ }).first(),
   ).toBeVisible();
 
-  // 目录树给出真实的文件夹层级：媒体根下挂着集合与相册。
+  // 目录树给出真实的文件夹层级：媒体根下挂着文件夹与相册。
   const tree = page.getByRole("navigation", { name: "目录" });
   await expect(tree).toBeVisible();
   await expect(tree.getByRole("button").first()).toBeVisible();
@@ -50,18 +50,113 @@ test("从首页进图库，按目录找到相册并打开照片", async ({ page,
   ).toBeVisible();
 });
 
-test("图库能按集合下钻，面包屑说清在哪一层", async ({ page, request }) => {
+test("图库能按文件夹下钻，面包屑说清在哪一层", async ({ page, request }) => {
   await scannedNodes(request, "photo");
   await page.goto("/photo/library");
   const tree = page.getByRole("navigation", { name: "目录" });
-  // 展开第一个媒体根，找一个集合点进去。
-  const collection = tree.getByRole("button", { name: /^[^/]*\d+ 本相册$/ });
-  if ((await collection.count()) > 0) {
-    await collection.first().click();
+  // 媒体根那一层默认展开着，从里面找一个文件夹点进去。
+  const folder = tree.getByRole("button", { name: /^[^/]*\d+ 个相册$/ });
+  if ((await folder.count()) > 0) {
+    await folder.first().click();
     await expect(page).toHaveURL(/\/photo\/library\?node=/);
-    // 面包屑给出祖先链：至少是「图库 › 某集合」。
+    // 面包屑给出祖先链：至少是「图库 › 某文件夹」。
     await expect(page.getByRole("navigation", { name: "目录位置" })).toBeVisible();
   }
+});
+
+/**
+ * 目录查找与照片浏览是一条连续的流程：进两层文件夹、打开相册、回到父级，
+ * 全程知道自己站在哪里。
+ */
+test("从图库进两层文件夹、打开相册、返回父级全程不迷路", async ({
+  page,
+  request,
+}) => {
+  await liveRoots(request);
+  const childrenOf = async (id: string) => {
+    const response = await request.get(
+      `/api/library/${id}/children?kind=photo&limit=200`,
+    );
+    expect(response.ok()).toBeTruthy();
+    const body = (await response.json()) as {
+      page: { items: Array<{ id: string; name: string; kind: string }> };
+    };
+    return body.page.items;
+  };
+  const manifest = (await (
+    await request.get("/api/library/manifest")
+  ).json()) as {
+    manifest: {
+      roots: Array<{ id: string; name: string; contentKind?: string }>;
+    };
+  };
+  const root = manifest.manifest.roots.find(
+    (item) => item.contentKind === "photo",
+  )!;
+  const level1 = (await childrenOf(root.id)).find(
+    (node) => node.name === "zz-library-hierarchy",
+  )!;
+  const level2 = (await childrenOf(level1.id)).find(
+    (node) => node.name === "outer",
+  )!;
+  const album = (await childrenOf(level2.id)).find(
+    (node) => node.name === "inner",
+  )!;
+
+  // 网格是虚拟化的：先用搜索把目标卡片带到眼前。
+  await page.goto("/photo/library?q=zz-library-hierarchy");
+
+  // 文件夹卡点开是下一层目录。
+  await page
+    .getByRole("link", { name: /打开文件夹.*zz-library-hierarchy/ })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`node=${level1.id}`));
+  await expect(
+    page.getByRole("navigation", { name: "目录位置" }),
+  ).toBeVisible();
+
+  await page.goto(`/photo/library?node=${level1.id}&q=outer`);
+  await page.getByRole("link", { name: /打开文件夹.*outer/ }).click();
+  await expect(page).toHaveURL(new RegExp(`node=${level2.id}`));
+
+  // 相册卡点开是照片。
+  await page.goto(`/photo/library?node=${level2.id}&q=inner`);
+  await page.getByRole("link", { name: /打开相册.*inner/ }).click();
+  await expect(page).toHaveURL(albumUrlPattern({ id: album.id }));
+  await expect(
+    page.locator("[data-virtuoso-scroller], .photo-wall").first(),
+  ).toBeVisible();
+
+  // 回到图库那一层，用「返回上级」一级一级退回去。
+  await page.goto(`/photo/library?node=${level2.id}`);
+  await page.getByRole("button", { name: "返回上级" }).click();
+  await expect(page).toHaveURL(new RegExp(`node=${level1.id}`));
+  await page.getByRole("button", { name: "返回上级" }).click();
+  await expect(page).toHaveURL(/\/photo\/library$/);
+});
+
+/**
+ * 相册里换一种看法（分组）不丢已经勾选的照片：勾选是浏览工具，
+ * 换看法不该把它清掉。
+ */
+test("相册里换一种看法不丢已经勾选的照片", async ({ page, request }) => {
+  const nodes = await scannedNodes(request, "photo");
+  const album = nodes.find(
+    (node) => (node as { kind?: string }).kind === "album" && node.name,
+  );
+  expect(album, "临时库里应有照片相册").toBeTruthy();
+
+  await page.goto(`/photo/albums/${album!.id}`);
+  await page.getByRole("button", { name: "选择照片" }).click();
+  const first = page.getByRole("checkbox", { name: /^选择「/ }).first();
+  await first.click();
+  await expect(first).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByText("已选 1 张")).toBeVisible();
+
+  // 换一种看法：分组面板开着，勾选还在。
+  await page.getByRole("button", { name: "按分组浏览" }).click();
+  await expect(page.getByText("已选 1 张")).toBeVisible();
+  await expect(first).toHaveAttribute("aria-checked", "true");
 });
 
 test("图库打不开时给出重试手柄", async ({ page, request }) => {
@@ -100,21 +195,19 @@ test("目录树根与集合读取失败时显示错误并可重试", async ({ pa
   )!;
   expect(collection.kind).toBe("collection");
 
-  const attempts = new Map<string, number>();
+  // 读不出来的目录一直失败，直到用例放开它：库一变化就会重取目录，
+  // 「第一次失败、之后成功」的话错误会被自动重取抹掉，断言就成了竞态。
+  const failing = new Set<string>([root.id]);
   await page.route("**/api/library/*/children*", async (route) => {
     const parentId = new URL(route.request().url()).pathname
       .split("/")
       .at(-2);
-    if (parentId === root.id || parentId === collection.id) {
-      const count = (attempts.get(parentId) ?? 0) + 1;
-      attempts.set(parentId, count);
-      if (count === 1) {
-        await route.fulfill({
-          status: 400,
-          json: { code: "test_unavailable", message: "unavailable" },
-        });
-        return;
-      }
+    if (failing.has(parentId)) {
+      await route.fulfill({
+        status: 400,
+        json: { code: "test_unavailable", message: "unavailable" },
+      });
+      return;
     }
     await route.continue();
   });
@@ -122,18 +215,23 @@ test("目录树根与集合读取失败时显示错误并可重试", async ({ pa
   await page.goto("/photo/library");
   const tree = page.getByRole("navigation", { name: "目录" });
   await expect(tree.getByRole("alert")).toContainText("目录读取失败");
+
+  // 放开失败再重试：目录读得出来了。
+  failing.delete(root.id);
   await tree.getByRole("button", { name: "重试" }).click();
   await expect(
     tree.getByRole("button", { name: collection.name, exact: true }),
   ).toBeVisible();
-  await expect(tree.getByRole("alert")).toContainText("目录读取失败");
 
+  // 下一层同样读不出来时也给得出重试的手柄。
+  failing.add(collection.id);
+  await tree.getByRole("button", { name: `展开 ${collection.name}` }).click();
+  await expect(tree.getByRole("alert")).toContainText("目录读取失败");
+  failing.delete(collection.id);
   await tree.getByRole("button", { name: "重试" }).click();
   await expect(
     tree.getByRole("button", { name: "outer", exact: true }),
   ).toBeVisible();
-  expect(attempts.get(root.id)).toBe(2);
-  expect(attempts.get(collection.id)).toBe(2);
 });
 
 test("筛选结果为零时仍可调整条件并一键清除", async ({ page, request }) => {

@@ -1,9 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 import type { SmartAlbumDimension, SmartAlbumSummary } from "../../api/albums";
 import type { AIJob, AIJobModule, AnalysisType } from "../../api/aiJobs";
-import SmartAlbumBrowser from "./SmartAlbumBrowser";
+import AlbumGroupPanel from "./AlbumGroupPanel";
 
 const MODULES: AIJobModule[] = [
   { type: "metadata", name: "EXIF 元数据", installed: true },
@@ -73,43 +73,48 @@ interface Options {
   peopleEnabled?: boolean;
   dimension?: SmartAlbumDimension;
   onAnalyzeDimension?: (type: AnalysisType) => void;
+  onOpenGroup?: (groupId: string | null) => void;
 }
 
-function renderBrowser({
+function renderPanel({
   summary: data = summary(),
   modules = MODULES,
   jobs = [],
   peopleEnabled = true,
   dimension = "recommended",
   onAnalyzeDimension = vi.fn(),
+  onOpenGroup = vi.fn(),
 }: Options = {}) {
   render(
     <MemoryRouter>
-      <SmartAlbumBrowser
+      <AlbumGroupPanel
         summary={data}
         loading={false}
         error={false}
         dimension={dimension}
+        groupId={null}
+        totalPhotos={40}
+        onDimensionChange={vi.fn()}
+        onOpenGroup={onOpenGroup}
+        onClose={vi.fn()}
         analyzing={false}
         rebuilding={false}
-        onDimensionChange={vi.fn()}
         onAnalyze={vi.fn()}
         onAnalyzeDimension={onAnalyzeDimension}
-        peopleEnabled={peopleEnabled}
         onRebuild={vi.fn()}
         onSaveOverride={vi.fn().mockResolvedValue(true)}
-        onOpenGroup={vi.fn()}
+        peopleEnabled={peopleEnabled}
         modules={modules}
         jobs={jobs}
       />
     </MemoryRouter>,
   );
-  return { onAnalyzeDimension };
+  return { onAnalyzeDimension, onOpenGroup };
 }
 
-describe("相册内分组的封面", () => {
+describe("相册内的分组面板", () => {
   it("封面按原比例摆，不裁成方形", () => {
-    renderBrowser({
+    renderPanel({
       dimension: "time",
       summary: summary({
         groups: [
@@ -133,11 +138,64 @@ describe("相册内分组的封面", () => {
     expect(photo).not.toHaveClass("object-cover");
     expect(screen.getByTestId("smart-album-cover-backdrop")).toBeTruthy();
   });
+
+  it("分组是照片的一种看法：面板里先给「全部照片」那一条", () => {
+    const { onOpenGroup } = renderPanel({
+      dimension: "time",
+      summary: summary({
+        groups: [
+          {
+            id: "sg_1",
+            dimension: "time",
+            name: "2024年5月2日",
+            suggestedName: "2024年5月2日",
+            customName: false,
+            photoCount: 3,
+            coverResourceId: "f_1",
+            coverVersion: "v1",
+            hidden: false,
+          },
+        ],
+      }),
+    });
+
+    expect(screen.getByRole("button", { name: /全部照片/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^2024年5月2日/ })).toBeInTheDocument();
+    screen.getByRole("button", { name: /^2024年5月2日/ }).click();
+    expect(onOpenGroup).toHaveBeenCalledWith("sg_1");
+    screen.getByRole("button", { name: /全部照片/ }).click();
+    expect(onOpenGroup).toHaveBeenCalledWith(null);
+  });
+
+  it("分析覆盖率收在按需展开的说明里，默认不摆在面板上", () => {
+    renderPanel({
+      dimension: "time",
+      summary: summary({
+        groups: [
+          {
+            id: "sg_1",
+            dimension: "time",
+            name: "2024年5月2日",
+            suggestedName: "2024年5月2日",
+            customName: false,
+            photoCount: 3,
+            coverResourceId: "f_1",
+            coverVersion: "v1",
+            hidden: false,
+          },
+        ],
+      }),
+    });
+
+    expect(screen.queryByText(/分析覆盖/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "分析说明" }));
+    expect(screen.getByText(/分析覆盖/)).toBeInTheDocument();
+  });
 });
 
 describe("相册内精选推荐的空态", () => {
   it("还没跑分析时给出补分析入口", () => {
-    const { onAnalyzeDimension } = renderBrowser({ jobs: [] });
+    const { onAnalyzeDimension } = renderPanel({ jobs: [] });
 
     expect(screen.getByText("还没有分析结果")).toBeTruthy();
     const metadata = screen.getByRole("button", {
@@ -153,13 +211,13 @@ describe("相册内精选推荐的空态", () => {
   });
 
   it("人物分析没启用时不给人脸入口", () => {
-    renderBrowser({ jobs: [], peopleEnabled: false });
+    renderPanel({ jobs: [], peopleEnabled: false });
 
     expect(screen.queryByRole("button", { name: "补充人脸分析" })).toBeNull();
   });
 
   it("分析模块没就绪时指向任务中心", () => {
-    renderBrowser({
+    renderPanel({
       jobs: [],
       modules: [
         { type: "metadata", name: "EXIF 元数据", installed: true },
@@ -179,7 +237,7 @@ describe("相册内精选推荐的空态", () => {
   });
 
   it("分析跑过但没凑出主题时说明准入规则", () => {
-    renderBrowser({
+    renderPanel({
       jobs: [job({ type: "metadata" }), job({ id: "j_2", type: "embedding" })],
     });
 
@@ -191,7 +249,7 @@ describe("相册内精选推荐的空态", () => {
   });
 
   it("分析有失败项时先说失败", () => {
-    renderBrowser({
+    renderPanel({
       jobs: [job({ status: "failed", failed: 3 })],
     });
 
@@ -199,7 +257,7 @@ describe("相册内精选推荐的空态", () => {
   });
 
   it("照片太少时说明还差多少张", () => {
-    renderBrowser({
+    renderPanel({
       summary: summary({
         totalPhotos: 5,
         availablePhotos: 5,
@@ -221,8 +279,10 @@ describe("相册内精选推荐的空态", () => {
   });
 
   it("推荐维度也写清准入门槛", () => {
-    renderBrowser();
+    renderPanel();
 
+    // 门槛写在按需展开的说明里，不占面板的主视觉。
+    fireEvent.click(screen.getByRole("button", { name: "分析说明" }));
     expect(screen.getByText(/至少 12/)).toBeTruthy();
   });
 });
