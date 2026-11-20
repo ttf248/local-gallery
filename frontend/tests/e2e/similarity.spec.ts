@@ -1,4 +1,8 @@
-import { ensureLibraryReady } from "./helpers/library";
+import {
+  ensureLibraryReady,
+  resetNavItems,
+  setWorkbenchMode,
+} from "./helpers/library";
 import { expect, test } from "@playwright/test";
 
 // 特征分析要真的跑一遍：临时库有五百多张图，第一条用例还要连扫描
@@ -67,8 +71,13 @@ async function runSimilarityAnalysis(
     .toMatch(/^(completed|failed|cancelled)$/);
 }
 
-test("相似照片能分组列出，人工决定重启后仍在", async ({ page, request }) => {
+test("相似照片能分组列出、跨页加入精选，人工决定重启后仍在", async ({
+  page,
+  request,
+}) => {
   await ensureLibraryReady(request);
+  await setWorkbenchMode(request, "photo");
+  await resetNavItems(request);
   await runSimilarityAnalysis(request);
 
   // 分组是后台算的，等它落盘。
@@ -83,7 +92,21 @@ test("相似照片能分组列出，人工决定重启后仍在", async ({ page,
     )
     .toBeGreaterThan(0);
 
-  await page.goto("/photo/similarity");
+  // 先把精选页载入同一个前端会话，再切到整理页操作；返回精选页时
+  // 应看到批量接口写入的新照片，而不是已缓存的旧空态。
+  const previousPicks = (await (
+    await request.get("/api/picks")
+  ).json()) as { picks: string[] };
+  if (previousPicks.picks.length > 0) {
+    const response = await request.post("/api/picks/batch", {
+      data: { ids: previousPicks.picks, action: "remove" },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
+  await page.goto("/photo/me/picks");
+  await expect(page.getByText("还没有精选照片")).toBeVisible();
+  const sidebar = page.locator('aside[aria-label="主导航"]');
+  await sidebar.getByRole("link", { name: "相似照片", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "相似照片与连拍" }),
   ).toBeVisible();
@@ -99,8 +122,24 @@ test("相似照片能分组列出，人工决定重启后仍在", async ({ page,
   await card.getByRole("button", { name: "展开", exact: true }).click();
   await expect(page.getByTestId("similarity-member").first()).toBeVisible();
 
+  await card.getByRole("button", { name: "加入精选", exact: true }).click();
+  await expect(page.getByText("已把代表照片加入精选")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const response = await request.get("/api/picks");
+      return ((await response.json()) as { picks: string[] }).picks.length;
+    })
+    .toBeGreaterThan(0);
+  await sidebar.getByRole("link", { name: "我的", exact: true }).click();
+  await expect(page).toHaveURL(/\/photo\/me\/picks$/);
+  await expect(page.getByText(/共 \d+ 张精选照片/)).toBeVisible();
+  await expect(page.locator('button[aria-label*="移出精选"]').first()).toBeVisible();
+
+  await sidebar.getByRole("link", { name: "相似照片", exact: true }).click();
+  const returnedCard = page.getByTestId("similarity-group").first();
+
   // 标记已审查：决定写进 state，重新读取仍在。
-  await card.getByRole("button", { name: "已审查", exact: true }).click();
+  await returnedCard.getByRole("button", { name: "已审查", exact: true }).click();
   await expect
     .poll(async () => {
       const response = await request.get("/api/similarity/groups?limit=50");
@@ -114,6 +153,16 @@ test("相似照片能分组列出，人工决定重启后仍在", async ({ page,
   await expect(
     page.getByTestId("similarity-group").first(),
   ).toHaveAttribute("data-group-status", "reviewed");
+
+  const picked = (await (await request.get("/api/picks")).json()) as {
+    picks: string[];
+  };
+  if (picked.picks.length > 0) {
+    const response = await request.post("/api/picks/batch", {
+      data: { ids: picked.picks, action: "remove" },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
 });
 
 test("相似照片的人工决定能随状态备份导出并恢复", async ({ request }) => {
