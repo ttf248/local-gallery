@@ -32,13 +32,13 @@ import {
   ArrowUpRightIcon,
 } from "../components/common/Icon";
 import { displayedPageIndex } from "../utils/progress";
-import { albumRoute, homeRoute, readerRoute } from "../utils/path";
+import { albumRoute, homeRoute, libraryRoute, readerRoute } from "../utils/path";
 import { useSafeBack } from "../utils/navigation";
 import { usePrefs } from "../hooks/usePrefs";
 import { useVideoActivity } from "../hooks/useVideoActivity";
 import { useAppMode } from "../hooks/useAppMode";
 import { useIdleChrome } from "../hooks/useIdleChrome";
-import { useAdjacentAlbum } from "../hooks/useAdjacentAlbum";
+import { useAdjacentAlbum, useSiblingVolumes } from "../hooks/useAdjacentAlbum";
 import { useReaderMedia } from "../hooks/useReaderMedia";
 import { useReaderKeys } from "../hooks/useReaderKeys";
 import type { AppMode } from "../api/library";
@@ -115,6 +115,9 @@ export default function Reader() {
   } | null>(null);
   const [retryingProgress, setRetryingProgress] = useState(false);
   const finishedRef = useRef(false);
+  // 「刚读完」与「恢复到上次位置」的区分：恢复到末页的那一次是打开一卷
+  // 早就读完的书，不该弹收尾提示。
+  const restoringRef = useRef(false);
   // 持有「最新」index/total；sendBeacon 关闭时从这里取最新值。
   // 同时记录 path，只有 images 有效时才更新 — 避免切到新 album 的 loading
   // 阶段把 path 也更新成新的，导致 sendBeacon 发往错的 album。
@@ -162,9 +165,17 @@ export default function Reader() {
   //
   // 兜底落在相册自己所属的那一侧：阅读器主要是漫画用的，但照片相册
   // 也能被视频播放页复用，返回时不该跳到另一侧去。
+  //
+  // 漫画侧的兜底是书架而不是相册页：漫画相册页会重定向回阅读器
+  // （卷就是从那儿进来的），把人送回相册页等于把人送回原处 ——
+  // 深链打开阅读器时按「返回」会原地打转。
   const albumSide = albumSummary?.contentKind ?? "comic";
   const goBack = useSafeBack(
-    pathParam ? albumRoute(albumSide, pathParam) : homeRoute(albumSide),
+    albumSide === "comic"
+      ? libraryRoute("comic")
+      : pathParam
+        ? albumRoute(albumSide, pathParam)
+        : homeRoute(albumSide),
   );
   // 当前展示的文件路径。Gallery 中段才计算 isVideo/images/videos/index → current，
   // 但 onSetCover 要读这个值。放进 ref 让 callback 拿到最新值而不需要把 current
@@ -268,6 +279,8 @@ export default function Reader() {
     }
     if (isVideo) return;
     let cancelled = false;
+    // 这次定位是「恢复」而不是「刚读完」：末页恢复不该弹收尾提示。
+    restoringRef.current = true;
     activityApi
       .getImage(pathParam)
       .then((rp) => {
@@ -442,16 +455,25 @@ export default function Reader() {
     if (!imageActivityWritable || !pathParam) return;
     if (imageActivityPageIndex < images.length - 1) {
       finishedRef.current = false;
+      // 恢复到中间某一页：这次恢复到此为止，之后翻到末页仍算「刚读完」。
+      restoringRef.current = false;
       return;
     }
     if (finishedRef.current) return;
     finishedRef.current = true;
+    // 恢复到上次位置的那一次不算「刚读完」：那一卷本来就读完了，
+    // 打开它不该弹收尾提示。
+    const restored = restoringRef.current;
+    restoringRef.current = false;
     setMarkingRead(true);
     activityApi
       .setImage(pathParam, images.length - 1, images.length)
       .then(() => {
         clearProgressFailure("save");
         pushToast({ kind: "success", message: "已读完 🎉", ttl: 1500 });
+        // 读到末页就是一个明确的结束界面：读完这一卷、还有没有下一卷，
+        // 在这里一次说清楚。
+        if (!restored) setShowFinished(true);
       })
       .catch(() => reportProgressFailure("save"))
       .finally(() => setMarkingRead(false));
@@ -532,12 +554,22 @@ export default function Reader() {
   );
 
   // 跳卷：上一卷 / 下一卷。
+  //
+  // 兄弟卷兜底：上下文记的是「用户从哪个列表点进来的」。从首页
+  // 「继续阅读」进来说卷时，那份上下文里未必有这一卷 —— 没有兜底，
+  // 「下一卷」就没有落脚点。同一作品里的卷一次取全，跨卷导航在作品
+  // 内部至少接得上。
+  const siblingEntries = useSiblingVolumes(albumSummary?.parentId);
   const closeInfo = useCallback(() => setShowInfo(false), []);
   const { goAdjacent, adjacentNames } = useAdjacentAlbum({
     pathParam,
     isVideo,
     onBeforeNavigate: closeInfo,
+    fallbackEntries: siblingEntries,
   });
+  // 有没有下一卷：跨卷导航算出来的目标卷名就是答案（没有下一卷时
+  // 它是空串）。收尾提示据此换一句话、也据此决定要不要留那个按钮。
+  const hasNextVolume = Boolean(adjacentNames.next);
 
   // 已到末尾的统一反馈：toast + 自动停幻灯片。
   // 用 ref 持有,避免 setInterval 闭包捕获旧的 onReachEnd 引用
@@ -1070,25 +1102,31 @@ export default function Reader() {
         >
           <div className="min-w-0 flex-1">
             <div className="text-body font-medium text-white/90">
-              这卷读完了
+              {hasNextVolume ? "这卷读完了" : "这一部读完了"}
             </div>
             <div className="text-meta text-white/55">
-              可以接着读下一卷，或回到相册继续浏览。
+              {hasNextVolume
+                ? "可以接着读下一卷，或回到书架继续浏览。"
+                : "这是这一部的最后一卷，没有下一卷了。"}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setShowFinished(false);
-              void goAdjacent(1, {
-                notify: showSwitchNotif,
-                albumsOnly: true,
-              });
-            }}
-            className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-meta text-white/90 transition-colors hover:bg-white/10"
-          >
-            下一卷
-          </button>
+          {/* 没有下一卷时不摆这个按钮：点了只会得到一句「没有下一卷」，
+              收尾的地方该说清楚话，不该留一个走不通的入口。 */}
+          {hasNextVolume ? (
+            <button
+              type="button"
+              onClick={() => {
+                setShowFinished(false);
+                void goAdjacent(1, {
+                  notify: showSwitchNotif,
+                  albumsOnly: true,
+                });
+              }}
+              className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-meta text-white/90 transition-colors hover:bg-white/10"
+            >
+              下一卷
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -1097,7 +1135,7 @@ export default function Reader() {
             }}
             className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-meta text-white/90 transition-colors hover:bg-white/10"
           >
-            回到相册
+            {albumSide === "comic" ? "回到书架" : "回到相册"}
           </button>
           <button
             type="button"

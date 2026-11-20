@@ -19,13 +19,19 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function media(id: string, kind: "image" | "video" = "image") {
+function media(
+  id: string,
+  kind: "image" | "video" = "image",
+  size?: { width: number; height: number },
+) {
   return {
     id,
     kind,
     name: `${id}.jpg`,
     index: 0,
     kindIndex: 0,
+    width: size?.width,
+    height: size?.height,
   };
 }
 
@@ -127,9 +133,9 @@ it("与相册页共用同一份缓存，不重复下载", async () => {
 it("给出每一页的原始尺寸，供连续模式预留高度", async () => {
   vi.mocked(libraryApi.mediaPage).mockResolvedValue(
     page([
-      { ...media("f1"), width: 900, height: 1350 },
-      { ...media("f2"), width: 800, height: 1200 },
-      { ...media("v1", "video"), width: 640, height: 360 },
+      media("f1", "image", { width: 900, height: 1350 }),
+      media("f2", "image", { width: 800, height: 1200 }),
+      media("v1", "video", { width: 640, height: 360 }),
     ]),
   );
   const { result } = setup("a_1");

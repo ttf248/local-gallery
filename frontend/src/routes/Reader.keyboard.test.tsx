@@ -111,6 +111,7 @@ function renderReader(type = "video") {
         <Routes>
           <Route path="/comic/read/:albumId" element={<Reader />} />
           <Route path="/comic/albums/a_test" element={<div>相册列表</div>} />
+          <Route path="/comic/library" element={<div>书架</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -198,12 +199,15 @@ describe("Reader 按媒体类型隔离快捷键", () => {
     }
   });
 
-  it("视频 Esc 返回相册，不受空图片列表阻挡", async () => {
+  // 漫画侧的兜底是书架而不是相册页：漫画相册页会重定向回阅读器
+  // （卷就是从那儿进来的，还不带走页码），把「返回」送回相册页等于
+  // 让人原地打转。
+  it("视频 Esc 退回书架，不受空图片列表阻挡", async () => {
     renderReader();
     await currentVideo();
     await pressKey("Escape");
-    expect(screen.getByTestId("location")).toHaveTextContent("/albums/a_test");
-    expect(screen.getByText("相册列表")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent("/comic/library");
+    expect(screen.getByText("书架")).toBeInTheDocument();
   });
 
   it("视频计数不沿用图片双页显示，并提示独立的换片按键", async () => {
