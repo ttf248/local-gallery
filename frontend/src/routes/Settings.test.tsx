@@ -212,13 +212,13 @@ it("导航分区按当前偏好显示每一项的开关状态", async () => {
   // 新导航默认全部显示：每个一级入口回答一个不同的问题，
   // 收起任何一个都会让那一类内容少一条路。
   expect(
-    await screen.findByRole("switch", { name: "在照片导航栏显示图库" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示相册" }),
   ).toHaveAttribute("aria-checked", "true");
   expect(
-    screen.getByRole("switch", { name: "在照片导航栏显示探索" }),
+    screen.getByRole("switch", { name: "在照片导航栏显示发现" }),
   ).toHaveAttribute("aria-checked", "true");
   expect(
-    screen.getByRole("switch", { name: "在照片导航栏显示我的" }),
+    screen.getByRole("switch", { name: "在照片导航栏显示珍藏" }),
   ).toHaveAttribute("aria-checked", "true");
   expect(
     screen.getByRole("switch", { name: "在照片导航栏显示相似照片" }),
@@ -236,7 +236,7 @@ it("工作台首页固定显示，不提供开关", async () => {
   renderSettings("interface");
   await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   expect(
-    screen.queryByRole("switch", { name: "在照片导航栏显示首页" }),
+    screen.queryByRole("switch", { name: "在照片导航栏显示照片" }),
   ).not.toBeInTheDocument();
   expect(screen.getAllByText("固定显示")).toHaveLength(2);
 });
@@ -249,7 +249,7 @@ it("关掉导航项后把生效的隐藏清单写回服务端", async () => {
   }));
   renderSettings("interface", client);
   fireEvent.click(
-    await screen.findByRole("switch", { name: "在照片导航栏显示探索" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示发现" }),
   );
   await waitFor(() =>
     expect(prefsApi.patch).toHaveBeenCalledWith({
@@ -259,7 +259,7 @@ it("关掉导航项后把生效的隐藏清单写回服务端", async () => {
   // 写回后开关立刻变成关着的，不需要刷新页面。
   await waitFor(() =>
     expect(
-      screen.getByRole("switch", { name: "在照片导航栏显示探索" }),
+      screen.getByRole("switch", { name: "在照片导航栏显示发现" }),
     ).toHaveAttribute("aria-checked", "false"),
   );
 });
@@ -268,7 +268,7 @@ it("保存导航设置失败保留原值并提示", async () => {
   vi.mocked(prefsApi.patch).mockRejectedValueOnce(new Error("offline"));
   renderSettings("interface");
   fireEvent.click(
-    await screen.findByRole("switch", { name: "在照片导航栏显示探索" }),
+    await screen.findByRole("switch", { name: "在照片导航栏显示发现" }),
   );
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
@@ -276,7 +276,7 @@ it("保存导航设置失败保留原值并提示", async () => {
     ),
   );
   expect(
-    screen.getByRole("switch", { name: "在照片导航栏显示探索" }),
+    screen.getByRole("switch", { name: "在照片导航栏显示发现" }),
   ).toHaveAttribute("aria-checked", "true");
 });
 
@@ -376,13 +376,13 @@ it("导航分区按工作台分成照片与漫画两组", async () => {
   renderSettings("interface");
   await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   const nav = screen.getByRole("region", { name: "导航" });
-  expect(within(nav).getByText("照片")).toBeInTheDocument();
-  expect(within(nav).getByText("漫画")).toBeInTheDocument();
+  expect(within(nav).getByText("照片侧")).toBeInTheDocument();
+  expect(within(nav).getByText("漫画侧")).toBeInTheDocument();
   // 照片组的入口在漫画组之前：读下来先是照片那一套。
   const labels = [...nav.querySelectorAll(".settings-group")].map(
     (group) => group.querySelector(".settings-group__label")?.textContent,
   );
-  expect(labels).toEqual(["照片", "漫画"]);
+  expect(labels).toEqual(["照片侧", "漫画侧"]);
 });
 
 // 一组设置行装在同一个行组里：卡够宽时这组行排成两列，标签与控件

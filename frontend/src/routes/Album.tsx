@@ -24,7 +24,7 @@ import {
 import { albumCountUnit, workbenchCopy } from "../utils/workbench";
 import CardCover from "../components/album/CardCover";
 import { useAppMode } from "../hooks/useAppMode";
-import { useSafeBack } from "../utils/navigation";
+import { useSafeBack, contextFallback } from "../utils/navigation";
 import { usableDate } from "../utils/date";
 import {
   ChevronLeftIcon,
@@ -123,14 +123,16 @@ export default function Album() {
   const { mode } = useAppMode();
   // 叶级目录两侧都叫「相册」：一个词，不必按侧记两套。
   const albumWord = workbenchCopy(mode).albumTypeLabel;
-  // 返回：应用内还有历史就回退，否则回主页（直接打开相册链接时
-  // navigate(-1) 会一路退出应用，停在空白页）。
-  const goBack = useSafeBack(homeRoute(mode));
+  // 返回：应用内还有历史就回退；深链直接打开这一层时回到它的上级集合，
+  // 上级不明就回相册页。集合的上级要等摘要回来才知道，所以兜底是个函数。
+  const goBack = useSafeBack(() =>
+    contextFallback(mode, nodeQuery.data?.items[0]?.parentId),
+  );
   // 资源 ID 从原始路径切段并解码一次：useParams 已经解过一次，
   // 再解会把 ID 里的字面 %xx 破坏掉。
   const resourceID = decodePathTail(location.pathname, "/albums/");
 
-  const { query, sortBy } = useListFilters();
+  const { query, sortBy, yearFilter } = useListFilters();
   const viewMode = useUIStore((s) => s.viewMode);
   const { toggle: toggleFav, favorites } = useFavorites();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -140,14 +142,18 @@ export default function Album() {
   const node = nodeQuery.data?.items[0];
   // 集合的子节点按集合自己的属性查：集合继承所属目录的属性，
   // 用当前工作台去查会把另一侧的成员过滤掉，集合看起来是空的。
+  //
+  // 年份筛选也在这里生效：上方年份索引上的漏斗把年份写进地址，
+  // 网格就得按它过滤 —— 漏斗改了地址却不改内容，那是一枚骗人的控件。
   const listQuery = useMemo(
     () => ({
       kind: node?.contentKind ?? mode,
       parent: node?.id,
       q: query,
       sort: sortBy,
+      year: yearFilter === null ? undefined : String(yearFilter),
     }),
-    [node?.contentKind, node?.id, mode, query, sortBy],
+    [node?.contentKind, node?.id, mode, query, sortBy, yearFilter],
   );
   const childrenQuery = useLibraryList(listQuery, node?.kind === "collection");
 
@@ -517,7 +523,7 @@ function CollectionView({
   onToggleFav: () => void;
   isFavorite: boolean;
 }) {
-  const { sortBy, setSortBy } = useListFilters();
+  const { sortBy, setSortBy, yearFilter, setYearFilter } = useListFilters();
   const cards = list.cards;
   const yearGroups = useMemo(
     () => listYearGroups(list.summary, list.query),
@@ -594,6 +600,19 @@ function CollectionView({
               <span className="section-meta">
                 按年份浏览 — 当前集合下的子相册/子集合
               </span>
+              {/* 生效的年份筛选摆出来：它筛的是下面那张网格，
+                  不写出来用户只会以为网格空了。 */}
+              {yearFilter !== null ? (
+                <button
+                  type="button"
+                  className="chip ml-auto"
+                  onClick={() => setYearFilter(null)}
+                  aria-label="取消年份筛选"
+                >
+                  只看 {yearFilter === "other" ? "未标年份的" : `${yearFilter} 年的`}
+                  子项 ×
+                </button>
+              ) : null}
             </div>
             {/* 年份卡与下面的网格共用同一条左缘：这里少一层容器，
                 整条索引会比网格左移一截。 */}
@@ -617,8 +636,16 @@ function CollectionView({
           />
         ) : cards.length === 0 ? (
           <EmptyState
-            title="无匹配结果"
-            description="试试修改搜索条件或排序。"
+            title={
+              yearFilter !== null
+                ? `没有${yearFilter === "other" ? "未标年份的" : `${yearFilter} 年的`}子项`
+                : "无匹配结果"
+            }
+            description={
+              yearFilter !== null
+                ? "这个集合里没有符合这一年的子相册或子集合。换个年份，或取消这条筛选。"
+                : "试试修改搜索条件或排序。"
+            }
             icon={<FilterIcon size={20} />}
             /* 筛选条就在上面：空态不必再撑满半屏，紧跟着它说清楚
                「是筛选筛没了」就行。 */

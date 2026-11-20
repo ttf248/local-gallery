@@ -27,18 +27,18 @@ import { workbenchCopy } from "../utils/workbench";
 import { toSelectionItems } from "../utils/selectionItems";
 import "../styles/library.css";
 
-/** 图库页自己的地址参数。 */
+/** 相册页自己的地址参数。 */
 const LIBRARY_PARAM = {
   /** 当前所在的媒体根或集合 id（空 = 所有根）。 */
   node: "node",
 } as const;
 
 /**
- * 图库（照片侧）/ 书架（漫画侧）。
+ * 相册（照片侧）/ 书架（漫画侧）。
  *
  * 这一页回答的是「库里有这些文件，它们在哪儿」。它展示的是磁盘上真实
  * 存在的目录结构 —— 左侧是媒体根、集合与相册的树，右侧是当前这一层的
- * 内容。智能主题（时间、人物、地点、场景的聚合）是另一回事，在探索页，
+ * 内容。智能主题（时间、人物、地点、场景的聚合）是另一回事，在发现页，
  * 不在这里：拿自动分组冒充文件夹树，用户就找不到自己的文件。
  *
  * 状态住在地址里：当前目录、排序、最少张数、视图都是查询参数，刷新不丢，
@@ -72,7 +72,7 @@ export default function Library() {
   const current = nodes.data?.items[0];
   const currentRoot = manifest?.roots.find((root) => root.id === nodeId);
 
-  // 集合卡在图库里指向它的下一层，而不是跳到集合页：图库是结构页，
+  // 集合卡在相册页里指向它的下一层，而不是跳到集合页：相册页是结构页，
   // 在它里面换目录比跳出去再跳回来短。相册卡仍然指向照片墙。
   //
   // 换的是「点下去去哪里」，不是「这份内容是什么」：集合的规范地址
@@ -215,11 +215,30 @@ export default function Library() {
     { query: list.query, nextCursor: list.nextCursor },
   );
 
-  // 顶层时标题是「全部相册」：页头已经写了「图库」这个栏目名，
-  // 再写一遍「图库」就成了同一个词出现在屏幕上两次。
+  // 顶层标题跟着视图走：这一层摆的是相册、集合还是标签，标题就说哪一种。
+  //
+  // 「全部相册」曾经是顶层的唯一说法，可默认视图（全部）里摆着集合与
+  // 标签 —— 标题与内容对不上，用户会以为集合没列出来。漫画侧同理：
+  // 书架顶层摆着作品、散卷与标签，说它是「全部作品」也不对。
+  const scopeTitle = useMemo(() => {
+    switch (filters.view) {
+      case "album":
+        return `全部${copy.albumTypeLabel}`;
+      case "collection":
+        return `全部${copy.collectionTypeLabel}`;
+      case "smart":
+        return "全部标签";
+      default:
+        return "全部内容";
+    }
+  }, [copy.albumTypeLabel, copy.collectionTypeLabel, filters.view]);
+  // 顶层时标题自己就说清了范围（全部……），不必再挂一个栏目眉标；
+  // 进了某一层，眉标才说得出「这一层在相册那一侧」。
   const title = current
     ? current.displayName || current.name
-    : currentRoot?.name || (mode === "comic" ? "全部作品" : "全部相册");
+    : (currentRoot?.name ?? scopeTitle);
+  // 顶层没有眉标，标题独占一行；往下走才有「栏目 + 名字」两层。
+  const showEyebrow = Boolean(nodeId);
   const total = list.summary?.total ?? 0;
   const hasContent = (manifest?.statistics.albumCount ?? 0) > 0;
   const hasActiveFilters =
@@ -233,7 +252,11 @@ export default function Library() {
         {/* 页头：这一层是什么、在哪棵树上。 */}
         <header className="library-head">
           <div className="min-w-0">
-            <p className="page-eyebrow">{mode === "comic" ? "书架" : "图库"}</p>
+            {showEyebrow ? (
+              <p className="page-eyebrow">
+                {mode === "comic" ? "书架" : "相册"}
+              </p>
+            ) : null}
             <h1 className="page-title page-title--sm truncate">{title}</h1>
             {nodeId ? (
               <Breadcrumb
@@ -278,7 +301,7 @@ export default function Library() {
           <div className="library-content min-w-0">
             {list.isError ? (
               <ErrorBanner onRetry={() => void list.refetch()} retrying={list.isFetching}>
-                图库内容读取失败。
+                {mode === "comic" ? "书架" : "相册"}内容读取失败。
                 {cards.length > 0 ? "仍显示已加载的内容。" : "请重试加载。"}
               </ErrorBanner>
             ) : null}
@@ -313,7 +336,7 @@ export default function Library() {
                 onSortChange={filters.setSortBy}
                 minImageCount={filters.minImageCount}
                 onMinImageCountChange={filters.setMinImageCount}
-                /* 多选：图库一屏几十本相册，逐本收藏不现实。 */
+                /* 多选：一屏几十本相册，逐本收藏不现实。 */
                 trailing={<SelectionToggle />}
               />
             ) : null}
@@ -398,8 +421,8 @@ export default function Library() {
                 title={filters.query ? "没有匹配的内容" : "这一层是空的"}
                 description={
                   filters.query
-                    ? `这个目录里没有名字包含「${filters.query}」的相册或集合。`
-                    : "这个目录下面没有相册。换一个目录看看，或者回到顶层。"
+                    ? `这个目录里没有名字包含「${filters.query}」的${copy.albumTypeLabel}或${copy.collectionTypeLabel}。`
+                    : `这个目录下面没有${copy.albumTypeLabel}。换一个目录看看，或者回到顶层。`
                 }
                 action={
                   nodeId ? (
@@ -413,7 +436,7 @@ export default function Library() {
 
             {!hasContent && !list.isLoading ? (
               <EmptyState
-                title={`${mode === "comic" ? "书架" : "图库"}这边还没有内容`}
+                title={`${mode === "comic" ? "书架" : "相册"}这边还没有内容`}
                 description="媒体库里还没有这一侧的内容。先到设置里添加媒体目录，或去另一边看看。"
                 action={
                   <Link className="btn btn-outline" to="/settings/data">
@@ -466,7 +489,7 @@ function Breadcrumb({
           }
         }}
       >
-        {mode === "comic" ? "书架" : "图库"}
+        {mode === "comic" ? "书架" : "相册"}
       </Link>
       {rootName ? (
         <>

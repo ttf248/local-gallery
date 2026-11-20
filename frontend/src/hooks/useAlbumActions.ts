@@ -23,7 +23,7 @@ export function useAlbumActions(item: CardData) {
 
   const actions: Actions = {
     canOpenInExplorer: allowOsOpen && item.variant !== "smart",
-    // 「打开」跟着卡片点击走：图库页的集合卡在原地往下走一层，
+    // 「打开」跟着卡片点击走：相册页的集合卡在原地往下走一层，
     // 其余页面就是打开这份内容本身。
     open: () => navigate(item.linkTo ?? item.to),
     openInExplorer: async () => {

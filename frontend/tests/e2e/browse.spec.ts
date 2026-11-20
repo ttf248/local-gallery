@@ -38,10 +38,10 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   // 侧栏是本用例的断言范围：主区也有同名链接，不限定会撞上严格模式。
   const sidebar = page.locator('aside[aria-label="主导航"]');
   // 照片工作台只列照片那边的东西：漫画的未读、书架都不在。
-  await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "图库" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "我的" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "照片", exact: true })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "相册" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "发现" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "珍藏" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "照片库" })).toBeVisible();
@@ -54,8 +54,8 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "书架" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "我的" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "图库" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "相册" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "发现" })).toHaveCount(0);
 
   // 模式写在服务端偏好里，刷新后仍然是漫画工作台。
   await expect
@@ -69,8 +69,8 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await page.reload();
   await expect(page.getByRole("heading", { name: "漫画库" })).toBeVisible();
 
-  // 两个模式互斥：没有第三档「全部相册」。
-  await expect(sidebar.getByRole("link", { name: "全部相册" })).toHaveCount(0);
+  // 两个模式互斥：漫画侧没有照片那边的任何一个入口。
+  await expect(sidebar.getByRole("link", { name: "照片", exact: true })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "相似照片" })).toHaveCount(0);
   // 用例结束时把模式复位，别把状态留给后面的用例。
   await page.request.patch("/api/prefs", { data: { appMode: "photo" } });
@@ -81,14 +81,14 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
 test("设置页的导航分区开关侧栏入口", async ({ page }) => {
   await page.goto("/settings/interface");
   const sidebar = page.locator('aside[aria-label="主导航"]');
-  // 默认全部显示：关掉「探索」后它从侧栏消失。
+  // 默认全部显示：关掉「发现」后它从侧栏消失。
   const exploreSwitch = page.getByRole("switch", {
-    name: "在照片导航栏显示探索",
+    name: "在照片导航栏显示发现",
   });
   await expect(exploreSwitch).toHaveAttribute("aria-checked", "true");
 
   await exploreSwitch.click();
-  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "发现" })).toHaveCount(0);
   // 写进服务端偏好：换台设备打开也是这一套。
   await expect
     .poll(async () => {
@@ -101,15 +101,15 @@ test("设置页的导航分区开关侧栏入口", async ({ page }) => {
 
   // 刷新后仍然收起：侧栏读的是服务端偏好，不是本机状态。
   await page.reload();
-  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "发现" })).toHaveCount(0);
 
   // 再打开，侧栏里随之回来。
-  await page.getByRole("switch", { name: "在照片导航栏显示探索" }).click();
-  await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
+  await page.getByRole("switch", { name: "在照片导航栏显示发现" }).click();
+  await expect(sidebar.getByRole("link", { name: "发现" })).toBeVisible();
 
   // 工作台首页固定显示，不给开关。
   await expect(
-    page.getByRole("switch", { name: "在照片导航栏显示首页" }),
+    page.getByRole("switch", { name: "在照片导航栏显示照片" }),
   ).toHaveCount(0);
 });
 
@@ -2565,9 +2565,9 @@ test("坏掉的图片在照片墙上标成「无法解码」", async ({ page, re
   await expect(page.getByText("这张图片无法解码")).toBeVisible();
 });
 
-test("图库的视图筛选条紧贴在网格上方", async ({ page, request }) => {
-  // 网格与筛选条搬到了图库（照片侧叫图库、漫画侧叫书架）：
-  // 首页是发现页，目录清单在结构页里。
+test("结构页的视图筛选条紧贴在网格上方", async ({ page, request }) => {
+  // 网格与筛选条在结构页（照片侧叫相册、漫画侧叫书架）：
+  // 首页是照片页，目录清单在结构页里。
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic/library");
   // 视图 chip 说的是叶级目录的类型词：照片侧「相册」，漫画侧「卷」。
@@ -2728,7 +2728,9 @@ test("列表只取首屏，真实后端分页与筛选保留完整计数", async
     });
   });
   await page.goto("/comic/library");
-  await expect(page.getByRole("heading", { name: "全部作品" })).toBeVisible();
+  // 顶层摆着作品、散卷与标签三类，标题说的是「全部内容」，
+  // 不是其中一种。
+  await expect(page.getByRole("heading", { name: "全部内容" })).toBeVisible();
   // 首屏只取一页：剩下的等滚到底再要。
   expect(calls.filter((cursor) => cursor === "first")).toHaveLength(1);
   expect(calls).toHaveLength(1);
@@ -2980,7 +2982,7 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
       await page.keyboard.press("Escape");
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await expect(
-        page.getByRole("heading", { name: "全部相册", exact: true }),
+        page.getByRole("heading", { name: "全部内容", exact: true }),
       ).toBeAttached();
       await page.waitForFunction(() =>
         Array.from(document.images)
@@ -3030,7 +3032,7 @@ for (const source of ["library", "collection", "tag"] as const) {
     await page.getByRole("button", { name: "按最近看", exact: true }).click();
     if (source === "library") {
       // 图库页的失败是一条横幅：已经加载的内容还在，不整页推倒。
-      await expect(page.getByRole("alert")).toContainText("图库内容读取失败。", {
+      await expect(page.getByRole("alert")).toContainText("书架内容读取失败。", {
         timeout: 15000,
       });
       blocked = false;

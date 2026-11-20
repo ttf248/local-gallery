@@ -159,24 +159,30 @@ export default function Reader() {
       ? `${albumSummary.parentName} · ${name}`
       : name;
 
-  // 返回：优先回到应用内的上一页；没有可回退历史时回到当前相册页。
+  // 返回：优先回到应用内的上一页；没有可回退历史时回到能确认的来路。
   // 直接打开阅读器链接（刷新、复制链接到新标签页）时，navigate(-1) 会
   // 一路退出应用停在空白页，必须有兜底。
   //
   // 兜底落在相册自己所属的那一侧：阅读器主要是漫画用的，但照片相册
   // 也能被视频播放页复用，返回时不该跳到另一侧去。
   //
-  // 漫画侧的兜底是书架而不是相册页：漫画相册页会重定向回阅读器
-  // （卷就是从那儿进来的），把人送回相册页等于把人送回原处 ——
-  // 深链打开阅读器时按「返回」会原地打转。
+  // 照片侧回到这一本自己的相册页（照片墙）：阅读器放的就是这本的内容，
+  // 它的来路就是那面墙。回到上级集合会跳过这一本。
+  //
+  // 漫画侧不能回这一卷的相册地址 —— 漫画卷的相册地址会重定向回阅读器，
+  // 深链打开阅读器时按返回会原地打转。那里回落到所属作品，上级不明
+  // 就回书架：它按作品与卷把内容摊开，比回到工作台首页更贴上下文。
   const albumSide = albumSummary?.contentKind ?? "comic";
-  const goBack = useSafeBack(
-    albumSide === "comic"
-      ? libraryRoute("comic")
-      : pathParam
+  const goBack = useSafeBack(() => {
+    if (albumSide !== "comic") {
+      return pathParam
         ? albumRoute(albumSide, pathParam)
-        : homeRoute(albumSide),
-  );
+        : libraryRoute(albumSide);
+    }
+    const parentId = albumSummary?.parentId;
+    if (parentId) return albumRoute("comic", parentId);
+    return libraryRoute("comic");
+  });
   // 当前展示的文件路径。Gallery 中段才计算 isVideo/images/videos/index → current，
   // 但 onSetCover 要读这个值。放进 ref 让 callback 拿到最新值而不需要把 current
   // 提前到 useCallback 之前（避免引入 forward reference）。

@@ -130,7 +130,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
       return ((await response.json()) as { picks: string[] }).picks.length;
     })
     .toBeGreaterThan(0);
-  await sidebar.getByRole("link", { name: "我的", exact: true }).click();
+  await sidebar.getByRole("link", { name: "珍藏", exact: true }).click();
   await expect(page).toHaveURL(/\/photo\/me\/picks$/);
   await expect(page.getByText(/共 \d+ 张精选照片/)).toBeVisible();
   await expect(page.locator('button[aria-label*="移出精选"]').first()).toBeVisible();

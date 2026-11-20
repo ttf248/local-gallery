@@ -2,6 +2,7 @@ import {
   CompassIcon,
   CopyIcon,
   HomeIcon,
+  ImageIcon,
   LibraryIcon,
   SparkleIcon,
   TasksIcon,
@@ -27,7 +28,8 @@ import type { AppMode } from "../api/library";
  *
  * 侧栏按**分组**呈现，而不是一长串平铺入口：
  *
- * - 内容组（照片 / 漫画）：这一侧的主导航 —— 首页、图库、探索、我的。
+ * - 内容组（照片 / 漫画）：这一侧的主导航 —— 照片侧是照片、相册、发现、
+ *   珍藏，漫画侧是首页、书架、我的、未读。
  * - 整理组：相似照片这类写操作，是次级入口，不与主导航混在一列。
  * - 本机组：任务中心与设置。它们不属于任何一侧，排在所有内容入口之后。
  *
@@ -65,29 +67,32 @@ export interface NavGroup {
 export const PHOTO_NAV: NavEntry[] = [
   {
     key: "photo.home",
-    label: "首页",
-    Icon: HomeIcon,
+    label: "照片",
+    // 这一项摆的是照片，图标也跟着说照片：旁边三项的图标都是内容
+    // 类型的（相册 / 探索 / 我的），唯独这一项挂个房子，读起来像
+    // 「首页」没改名。
+    Icon: ImageIcon,
     to: homeRoute("photo"),
     mode: "photo",
     locked: true,
   },
   {
     key: "photo.library",
-    label: "图库",
+    label: "相册",
     Icon: LibraryIcon,
     to: libraryRoute("photo"),
     mode: "photo",
   },
   {
     key: "photo.explore",
-    label: "探索",
+    label: "发现",
     Icon: CompassIcon,
     to: exploreRoute(),
     mode: "photo",
   },
   {
     key: "photo.me",
-    label: "我的",
+    label: "珍藏",
     Icon: UserIcon,
     to: meRoute("photo"),
     mode: "photo",
@@ -136,11 +141,14 @@ export const COMIC_NAV: NavEntry[] = [
 /**
  * 侧栏分组。
  *
- * 照片侧：主导航（首页 / 图库 / 探索 / 我的）+ 整理（相似照片）+ 本机。
- * 漫画侧：主导航（首页 / 书架 / 我的 / 未读）+ 本机。
+ * 照片侧：浏览（照片 / 相册 / 发现 / 珍藏）+ 整理（相似照片）+ 本机。
+ * 漫画侧：漫画（首页 / 书架 / 我的 / 未读）+ 本机。
+ *
+ * 照片侧的主分组不叫「照片」：里面第一项就是「照片」，分组名与条目名
+ * 撞在一起，窄栏里读起来像同一个词出现了两遍。
  */
 export const PHOTO_NAV_GROUPS: NavGroup[] = [
-  { key: "photo.main", label: "照片", entries: PHOTO_NAV.slice(0, 4) },
+  { key: "photo.main", label: "浏览", entries: PHOTO_NAV.slice(0, 4) },
   { key: "photo.organize", label: "整理", entries: PHOTO_NAV.slice(4) },
 ];
 

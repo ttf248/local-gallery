@@ -5,7 +5,7 @@ vi.mock("../hooks/useLibraryList", async (original) => ({
   useLibraryList: vi.fn(),
 }));
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import Album from "./Album";
@@ -272,6 +272,111 @@ describe("Album", () => {
     renderAlbum("/albums");
     expect(screen.getByTestId("location")).toHaveTextContent("/photo");
     expect(screen.queryByText("找不到这个相册")).not.toBeInTheDocument();
+  });
+
+  // 深链直接打开一个集合：返回要落回它的上级集合，而不是工作台首页。
+  it("深链打开集合时返回上级集合", () => {
+    vi.mocked(useLibraryNodes).mockReturnValue({
+      data: {
+        revision: 4,
+        missing: [],
+        items: [
+          {
+            id: "c_class",
+            kind: "collection",
+            name: "3班",
+            displayName: "3班",
+            coverImage: "f_cover",
+            coverImages: ["f_cover"],
+            albumCount: 1,
+            imageCount: 8,
+            parentId: "c_school",
+          },
+        ],
+      },
+      isLoading: false,
+    } as never);
+    vi.mocked(useLibraryList).mockReturnValue(
+      listFixture({
+        data: { revision: 4, total: 0, items: [] },
+        isLoading: false,
+      }) as never,
+    );
+
+    renderAlbum("/albums/c_class");
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/photo/albums/c_school",
+    );
+  });
+
+  // 顶层集合没有上级：返回落到那一侧的结构入口（相册页），不回首页。
+  it("顶层集合的返回落到相册页", () => {
+    vi.mocked(useLibraryNodes).mockReturnValue({
+      data: {
+        revision: 4,
+        missing: [],
+        items: [
+          {
+            id: "c_year",
+            kind: "collection",
+            name: "2025",
+            displayName: "2025",
+            coverImage: "f_cover",
+            coverImages: ["f_cover"],
+            albumCount: 1,
+            imageCount: 8,
+          },
+        ],
+      },
+      isLoading: false,
+    } as never);
+    vi.mocked(useLibraryList).mockReturnValue(
+      listFixture({
+        data: { revision: 4, total: 0, items: [] },
+        isLoading: false,
+      }) as never,
+    );
+
+    renderAlbum("/albums/c_year");
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/photo/library");
+  });
+
+  // 年份索引上的漏斗把年份写进地址，网格就得按它过滤：
+  // 只改地址不改内容，那是一枚骗人的控件。
+  it("年份筛选写进查询，子项网格按它过滤", () => {
+    vi.mocked(useLibraryNodes).mockReturnValue({
+      data: {
+        revision: 4,
+        missing: [],
+        items: [
+          {
+            id: "c_year",
+            kind: "collection",
+            name: "2025",
+            displayName: "2025",
+            coverImage: "f_cover",
+            coverImages: ["f_cover"],
+            albumCount: 2,
+            imageCount: 8,
+          },
+        ],
+      },
+      isLoading: false,
+    } as never);
+    vi.mocked(useLibraryList).mockReturnValue(
+      listFixture({
+        data: { revision: 4, total: 0, items: [] },
+        isLoading: false,
+      }) as never,
+    );
+
+    renderAlbum("/albums/c_year?year=2025");
+    expect(useLibraryList).toHaveBeenCalledWith(
+      expect.objectContaining({ parent: "c_year", year: "2025" }),
+      true,
+    );
   });
 
   it("节点查询未完成时显示加载态", () => {

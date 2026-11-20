@@ -62,8 +62,8 @@ import {
   UncheckIcon,
 } from "../components/common/Icon";
 import { fileManagerErrorMessage } from "../utils/fileManager";
-import { useSafeBack } from "../utils/navigation";
-import { albumRoute, homeRoute } from "../utils/path";
+import { useSafeBack, contextFallback } from "../utils/navigation";
+import { albumRoute } from "../utils/path";
 import { mediaCountParts } from "../utils/mediaCount";
 import {
   ALBUM_FILTER_PARAM,
@@ -100,7 +100,11 @@ function parseSmartAlbumDimension(value: string | null): SmartAlbumDimension {
  * 收在顶部工具条，不再占用一整屏的封面区。
  */
 export default function PhotoAlbum({ album }: Props) {
-  const goBack = useSafeBack(homeRoute("photo"));
+  // 返回：应用内还有历史就回退；深链直接打开这一本时回到它所属的集合，
+  // 集合不明就回相册页。回到那一侧的首页会把用户丢到离内容最远的地方。
+  const goBack = useSafeBack(() =>
+    contextFallback(album.contentKind ?? "photo", album.parentId),
+  );
   const queryClient = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
   const density = usePhotoStore((s) => s.density);

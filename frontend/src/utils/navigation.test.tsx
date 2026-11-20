@@ -2,9 +2,9 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { fireEvent } from "@testing-library/dom";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { hasAppHistory, useSafeBack } from "./navigation";
+import { contextFallback, hasAppHistory, useSafeBack } from "./navigation";
 
-function BackButton({ fallback }: { fallback: string }) {
+function BackButton({ fallback }: { fallback: string | (() => string) }) {
   const goBack = useSafeBack(fallback);
   const location = useLocation();
   return (
@@ -71,5 +71,38 @@ describe("useSafeBack", () => {
 
     fireEvent.click(screen.getByText("back"));
     expect(screen.getByTestId("loc")).toHaveTextContent("/");
+  });
+
+  // 上级要等资源摘要回来才知道：兜底是个函数，点击那一刻才求值。
+  it("兜底可以是函数，按点击那一刻的答案回", () => {
+    setHistoryIdx(0);
+    let parent = "";
+    render(
+      <MemoryRouter initialEntries={["/photo/albums/a_1"]}>
+        <BackButton fallback={() => parent} />
+      </MemoryRouter>,
+    );
+
+    // 摘要还没回来：没有兜底就不动，绝不跳到应用外面。
+    fireEvent.click(screen.getByText("back"));
+    expect(screen.getByTestId("loc")).toHaveTextContent("/photo/albums/a_1");
+
+    // 摘要回来了：回到上级集合。
+    parent = "/photo/albums/c_1";
+    fireEvent.click(screen.getByText("back"));
+    expect(screen.getByTestId("loc")).toHaveTextContent("/photo/albums/c_1");
+  });
+});
+
+describe("contextFallback", () => {
+  it("能确认上级就回上级", () => {
+    expect(contextFallback("photo", "c_1")).toBe("/photo/albums/c_1");
+    expect(contextFallback("comic", "c_work")).toBe("/comic/albums/c_work");
+  });
+
+  it("上级不明就回那一侧的结构入口", () => {
+    expect(contextFallback("photo", "")).toBe("/photo/library");
+    expect(contextFallback("photo", undefined)).toBe("/photo/library");
+    expect(contextFallback("comic", undefined)).toBe("/comic/library");
   });
 });

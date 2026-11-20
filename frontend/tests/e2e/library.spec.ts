@@ -28,11 +28,11 @@ test("从首页进图库，按目录找到相册并打开照片", async ({ page,
   expect(album, "临时库里应有照片相册").toBeTruthy();
 
   await page.goto("/photo");
-  // 首页上有一枚明确的图库入口。
-  await page.getByRole("link", { name: /图库/ }).first().click();
+  // 首页上有一枚明确的相册入口。
+  await page.getByRole("link", { name: "相册" }).first().click();
   await expect(page).toHaveURL(/\/photo\/library/);
   await expect(
-    page.getByRole("heading", { name: /全部相册|图库/ }).first(),
+    page.getByRole("heading", { name: /全部内容|相册/ }).first(),
   ).toBeVisible();
 
   // 目录树给出真实的文件夹层级：媒体根下挂着集合与相册。
@@ -74,7 +74,7 @@ test("图库打不开时给出重试手柄", async ({ page, request }) => {
   );
   await page.goto("/photo/library");
   const alert = page.getByRole("alert");
-  await expect(alert).toContainText("图库内容读取失败", { timeout: 15_000 });
+  await expect(alert).toContainText("相册内容读取失败", { timeout: 15_000 });
   await expect(alert.getByRole("button", { name: /重试/ })).toBeVisible();
 });
 
@@ -240,7 +240,7 @@ test("深层目录可直达与刷新，面包屑只显示一次当前节点", as
   const breadcrumbs = page.getByRole("navigation", { name: "目录位置" });
   await expect(breadcrumbs).toBeVisible();
   await expect(
-    breadcrumbs.getByRole("link", { name: "图库", exact: true }),
+    breadcrumbs.getByRole("link", { name: "相册", exact: true }),
   ).toBeVisible();
   await expect(breadcrumbs.getByText(root.name, { exact: true })).toHaveCount(1);
   await expect(

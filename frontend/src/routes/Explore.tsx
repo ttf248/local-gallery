@@ -24,7 +24,7 @@ import {
   travelsRoute,
 } from "../utils/path";
 
-/** 探索页：以照片库统计为准，避免漫画内容被算进照片探索。 */
+/** 发现页：以照片库统计为准，避免漫画内容被算进照片的发现结果。 */
 export default function Explore() {
   const manifestQuery = useLibraryManifest();
   const manifest = manifestQuery.data?.manifest;
@@ -34,7 +34,7 @@ export default function Explore() {
   return (
     <div className="min-h-full">
       <PageHeading
-        title="探索"
+        title="发现"
         eyebrow="换个找法"
         description="照片不只按文件夹摆着。它们还按时间、人、地方和画面里的内容聚在一起。"
       />
@@ -73,7 +73,7 @@ export default function Explore() {
             title="照片库还没有相册"
             description={
               comicAlbumCount > 0
-                ? "当前媒体库只有漫画相册。照片探索只统计照片目录；可以切换到漫画工作台继续阅读。"
+                ? "当前媒体库只有漫画相册。照片的发现结果只统计照片目录；可以切换到漫画工作台继续阅读。"
                 : "先添加照片目录并完成扫描，这里才会出现时间、人物、地点和主题。"
             }
             icon={<span aria-hidden="true">▧</span>}

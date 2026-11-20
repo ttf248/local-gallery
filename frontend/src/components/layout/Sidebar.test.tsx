@@ -102,7 +102,7 @@ describe("Sidebar", () => {
     expect(screen.queryByText("整理")).not.toBeInTheDocument();
   });
 
-  it("相册详情下高亮当前侧的图库入口", () => {
+  it("相册详情下高亮当前侧的结构入口", () => {
     const { unmount } = renderSidebar(false, "/comic/albums/c_1");
     expect(screen.getByRole("link", { name: "书架" })).toHaveAttribute(
       "aria-current",
@@ -112,19 +112,19 @@ describe("Sidebar", () => {
     unmount();
     appMode.mode = "photo";
     renderSidebar(false, "/photo/albums/a_1");
-    expect(screen.getByRole("link", { name: "图库" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "相册" })).toHaveAttribute(
       "aria-current",
       "page",
     );
   });
 
-  it("照片工作台列出首页、图库、探索、我的与整理", () => {
+  it("照片工作台列出照片、相册、发现、珍藏与整理", () => {
     appMode.mode = "photo";
     renderSidebar();
-    expect(screen.getByText("首页")).toBeInTheDocument();
-    expect(screen.getByText("图库")).toBeInTheDocument();
-    expect(screen.getByText("探索")).toBeInTheDocument();
-    expect(screen.getByText("我的")).toBeInTheDocument();
+    expect(screen.getByText("照片")).toBeInTheDocument();
+    expect(screen.getByText("相册")).toBeInTheDocument();
+    expect(screen.getByText("发现")).toBeInTheDocument();
+    expect(screen.getByText("珍藏")).toBeInTheDocument();
     expect(screen.getByText("相似照片")).toBeInTheDocument();
     // 漫画那边的一切都不出现，包括未读入口。
     expect(screen.queryByText("书架")).not.toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("Sidebar", () => {
   it("分组标题说清每一段是什么", () => {
     appMode.mode = "photo";
     renderSidebar();
-    expect(screen.getByText("照片")).toBeInTheDocument();
+    expect(screen.getByText("浏览")).toBeInTheDocument();
     expect(screen.getByText("整理")).toBeInTheDocument();
     expect(screen.getByText("相似照片")).toBeInTheDocument();
     // 本机组：任务中心与设置排在内容入口之后。
@@ -184,10 +184,10 @@ describe("Sidebar", () => {
     appMode.mode = "photo";
     hiddenNavItems = ["photo.explore"];
     renderSidebar();
-    expect(screen.queryByText("探索")).not.toBeInTheDocument();
-    // 没收起的照旧在列，首页永远在。
-    expect(screen.getByText("图库")).toBeInTheDocument();
-    expect(screen.getByText("首页")).toBeInTheDocument();
+    expect(screen.queryByText("发现")).not.toBeInTheDocument();
+    // 没收起的照旧在列，工作台首页永远在。
+    expect(screen.getByText("相册")).toBeInTheDocument();
+    expect(screen.getByText("照片")).toBeInTheDocument();
   });
 
   it("未读入口带未读数量", () => {

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext } from "@playwright/test";
 import {
   liveRoots,
   resetNavItems,
@@ -10,7 +10,7 @@ import {
  * 导航的验收用例。
  *
  * 锁住的是「入口还在不在、到了能不能看见东西」：两侧工作台各自的菜单、
- * 旧书签仍然打得开、「我的」的页签是一次普通导航。
+ * 旧书签仍然打得开、页签是一次普通导航、深链打开后返回逐级往上。
  */
 
 test.beforeEach(async ({ request }) => {
@@ -18,14 +18,29 @@ test.beforeEach(async ({ request }) => {
   await resetNavItems(request);
 });
 
+/** 某个目录下的直属子项（相册与集合）。 */
+async function childrenOf(
+  request: APIRequestContext,
+  parentId: string,
+): Promise<Array<{ id: string; name: string; kind: string }>> {
+  const response = await request.get(
+    `/api/library/${encodeURIComponent(parentId)}/children?limit=200&kind=photo`,
+  );
+  expect(response.ok()).toBeTruthy();
+  const body = (await response.json()) as {
+    page: { items: Array<{ id: string; name: string; kind: string }> };
+  };
+  return body.page.items;
+}
+
 
 test("照片与漫画两侧的导航各自成套", async ({ page, request }) => {
   await liveRoots(request);
   await setWorkbenchMode(request, "photo");
   await page.goto("/photo");
   const sidebar = page.locator('aside[aria-label="主导航"]');
-  await expect(sidebar.getByRole("link", { name: "图库" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "探索" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "相册" })).toBeVisible();
+  await expect(sidebar.getByRole("link", { name: "发现" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
 
@@ -33,8 +48,8 @@ test("照片与漫画两侧的导航各自成套", async ({ page, request }) => 
   await page.goto("/comic");
   await expect(sidebar.getByRole("link", { name: "书架" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toBeVisible();
-  await expect(sidebar.getByRole("link", { name: "图库" })).toHaveCount(0);
-  await expect(sidebar.getByRole("link", { name: "探索" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "相册" })).toHaveCount(0);
+  await expect(sidebar.getByRole("link", { name: "发现" })).toHaveCount(0);
 });
 
 test("旧书签仍然打得开：它们重定向到新入口", async ({ page }) => {
@@ -85,4 +100,61 @@ test("切换「我的」页签后保留已访问的面板", async ({ page, reque
   await expect(page).toHaveURL(/\/photo\/me\/picks/);
   await expect(page.locator("#me-panel-favorites")).toBeAttached();
   await expect(page.locator("#me-panel-favorites")).toBeHidden();
+});
+
+/**
+ * 深链打开相册后返回要逐级往上。
+ *
+ * 直接打开一个相册的链接时没有上一页可退：返回要落回它所属的集合，
+ * 再上一级是集合的集合，再上一级回到相册页。回落是「替换」而不是
+ * 「追加」——追加的话返回一次到上级、再返回一次又回到这一页，
+ * 用户在两页之间打转。
+ */
+test("深链打开相册后返回逐级往上，不在两页之间打转", async ({
+  page,
+  request,
+}) => {
+  await liveRoots(request);
+  await setWorkbenchMode(request, "photo");
+
+  const manifest = (await (
+    await request.get("/api/library/manifest")
+  ).json()) as {
+    manifest: { roots: Array<{ id: string; contentKind?: string }> };
+  };
+  const root = manifest.manifest.roots.find(
+    (item) => item.contentKind === "photo",
+  );
+  expect(root, "临时库里应有照片根").toBeTruthy();
+
+  // 临时库的层级：zz-library-hierarchy / outer / inner（inner 是相册）。
+  const level1 = (await childrenOf(request, root!.id)).find(
+    (node) => node.name === "zz-library-hierarchy",
+  );
+  expect(level1, "临时库里应有嵌套集合").toBeTruthy();
+  const level2 = (await childrenOf(request, level1!.id)).find(
+    (node) => node.name === "outer",
+  );
+  expect(level2, "临时库里应有第二层集合").toBeTruthy();
+  const album = (await childrenOf(request, level2!.id)).find(
+    (node) => node.name === "inner",
+  );
+  expect(album, "临时库里应有嵌套相册").toBeTruthy();
+
+  // 深链直接打开这一本：地址栏里没有上一页可退。
+  await page.goto(`/photo/albums/${album!.id}`);
+  await expect(
+    page.getByRole("button", { name: "返回" }).first(),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "返回" }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/photo/albums/${level2!.id}$`));
+
+  // 再按一次返回：往上再走一级，而不是退回刚才那本相册。
+  await page.getByRole("button", { name: "返回" }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/photo/albums/${level1!.id}$`));
+
+  // 顶层集合没有上级了：落回相册页。
+  await page.getByRole("button", { name: "返回" }).first().click();
+  await expect(page).toHaveURL(/\/photo\/library$/);
 });

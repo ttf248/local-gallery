@@ -180,15 +180,15 @@ export async function resetNavItems(request: APIRequestContext) {
 }
 
 /**
- * 从侧栏进「我的」，再切到某个页签。
+ * 从侧栏进「珍藏」，再切到某个页签。
  *
- * 收藏与最近浏览不再是侧栏条目，它们是「我的」里的页签。这条路径就是
- * 用户实际会走的路：先点侧栏的「我的」，再点页签。
+ * 收藏与最近浏览不再是侧栏条目，它们是「珍藏」（照片侧）/「我的」（漫画侧）
+ * 里的页签。这条路径就是用户实际会走的路：先点侧栏的入口，再点页签。
  */
 export async function openMeTab(page: Page, tab: string) {
   await page
     .locator('aside[aria-label="主导航"]')
-    .getByRole("link", { name: "我的", exact: true })
+    .getByRole("link", { name: /^(珍藏|我的)$/ })
     .click();
   await page.getByRole("tab", { name: tab, exact: true }).click();
 }

@@ -42,7 +42,7 @@ import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
  *
  * 照片侧是**发现页**：第一屏是照片，随后是回忆（那年今日）、接着看
  * （最近浏览）与新进门的相册。它不解释技术，也不把所有功能摆成入口 ——
- * 想按目录翻的去图库，想按时间、人、地点找的去探索。
+ * 想按目录翻的去相册，想按时间、人、地点找的去发现。
  *
  * 漫画侧是**续读页**：正在读的那本与还没翻开的那些。它不需要目录索引，
  * 因为漫画的组织方式是作品与卷，不是文件夹。
@@ -110,8 +110,14 @@ function HomeHeader({
           )}
         </p>
         <div className="home-heading__actions flex items-center gap-2">
-          {/* 通向完整图库的明确入口：首页给的是发现，目录在图库里。 */}
-          <Link to={primaryAction.to} className="btn btn-sm btn-outline">
+          {/* 通向完整相册的明确入口：首页给的是照片，目录在相册里。
+              两段文字按断点各显示一段，屏幕阅读器却会把两段都读出来
+              （「相册相册」），因此这里显式给一个可访问名。 */}
+          <Link
+            to={primaryAction.to}
+            className="btn btn-sm btn-outline"
+            aria-label={primaryAction.label}
+          >
             <LibraryIcon size={13} />
             <span className="hidden sm:inline">{primaryAction.label}</span>
             <span className="sm:hidden">{primaryAction.label}</span>
@@ -181,7 +187,7 @@ function PhotoHome() {
     [recent.data],
   );
 
-  // 少量主题推荐：给一点线索，真正去找去探索页。
+  // 少量主题推荐：给一点线索，真正去找去发现页。
   const smart = useSmartAlbumDirectory("featured", hasContent, {
     limit: HOME_SMART_ALBUM_PREVIEW,
   });
@@ -191,7 +197,7 @@ function PhotoHome() {
       <HomeHeader
         title="照片库"
         eyebrow="你的照片"
-        primaryAction={{ to: libraryRoute("photo"), label: "图库" }}
+        primaryAction={{ to: libraryRoute("photo"), label: "相册" }}
       />
 
       {hasContent ? (
@@ -221,7 +227,7 @@ function PhotoHome() {
                 <h2 className="section-title">最近加入</h2>
                 <span className="section-meta">按拍摄时间，最近的相册</span>
                 <Link to={libraryRoute("photo")} className="chip ml-auto">
-                  全部图库
+                  全部相册
                 </Link>
               </div>
               <AlbumGrid items={recentCards} variant="grid" />
@@ -233,7 +239,7 @@ function PhotoHome() {
               <h2 className="section-title">主题</h2>
               <span className="section-meta">自动聚在一起的照片</span>
               <Link to={exploreRoute()} className="chip ml-auto">
-                去探索
+                去发现
               </Link>
             </div>
             <SmartAlbumPreview

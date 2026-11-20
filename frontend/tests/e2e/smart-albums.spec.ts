@@ -37,7 +37,7 @@ test("首页的主题入口通向探索，探索里的主题通向专页", async
   });
   await expect(themeHeading).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "去探索", exact: true }),
+    page.getByRole("link", { name: "去发现", exact: true }),
   ).toHaveAttribute("href", "/photo/explore");
 
   // 探索的主题一节再通向专页：主题墙的完整形态在那儿。

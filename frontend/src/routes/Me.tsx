@@ -56,7 +56,7 @@ export default function Me() {
        它们要一个确定的高度才排得出行。 */
     <div className="flex h-full min-h-0 flex-col">
       <PageHeading
-        title={mode === "comic" ? "我的漫画" : "我的照片"}
+        title={mode === "comic" ? "我的漫画" : "珍藏"}
         eyebrow="留下的与看过的"
         description={active.hint}
       />
@@ -66,7 +66,7 @@ export default function Me() {
           tabs={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}
           active={active.id}
           onChange={(id) => navigate(meRoute(mode, id))}
-          label="我的分区"
+          label={mode === "comic" ? "我的分区" : "珍藏分区"}
           idPrefix="me"
         />
       </div>

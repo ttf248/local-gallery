@@ -1170,7 +1170,8 @@ for (const failFirst of [false, true]) {
       await page.clock.runFor(700);
       expect(writes).toHaveLength(1);
       await expect(input).toHaveValue("/queue/latest");
-      await page.getByRole("link", { name: "首页", exact: true }).click();
+      // 工作台首页入口：照片侧叫「照片」，漫画侧叫「首页」。
+      await page.getByRole("link", { name: /^(首页|照片)$/ }).click();
       await page.getByRole("link", { name: "设置", exact: true }).click();
       await page.getByRole("tab", { name: "服务端" }).click();
       await expect(input).toHaveValue("/queue/latest");
@@ -1255,7 +1256,8 @@ test("配置保存失败离开后仍保留输入，按 Enter 显式重试且不�
     await input.fill("/retry/photos");
     await page.clock.runFor(500);
     await expect.poll(() => writes.length).toBe(1);
-    await page.getByRole("link", { name: "首页", exact: true }).click();
+    // 工作台首页入口：照片侧叫「照片」，漫画侧叫「首页」。
+    await page.getByRole("link", { name: /^(首页|照片)$/ }).click();
     const failed = page.waitForResponse(
       (response) =>
         response.request().method() === "PUT" &&

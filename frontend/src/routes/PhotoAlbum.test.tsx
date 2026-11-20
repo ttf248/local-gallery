@@ -85,6 +85,8 @@ const album = {
   imageCount: 3,
   videoCount: 1,
   contentKind: "photo" as const,
+  // 上级集合：深链打开这一本时，返回要落回它。
+  parentId: undefined as string | undefined,
 };
 
 function Location() {
@@ -707,5 +709,24 @@ describe("PhotoAlbum", () => {
       expect(screen.getByTestId("location")).toHaveTextContent("picks=only"),
     );
     expect(screen.getByTestId("location")).toHaveTextContent("personId=p_1");
+  });
+
+  // 深链直接打开一本相册：返回落回它所属的集合，而不是工作台首页。
+  it("深链打开相册时返回上级集合", () => {
+    renderPhotoAlbum({ ...album, parentId: "c_trip" });
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/photo/albums/c_trip",
+    );
+  });
+
+  // 没有上级（相册直接挂在媒体根下）：返回落到相册页，那一页按目录
+  // 把内容摊开，比回到首页更接近「我刚才在看哪本」。
+  it("没有上级时返回落到相册页", () => {
+    renderPhotoAlbum();
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    expect(screen.getByTestId("location")).toHaveTextContent("/photo/library");
   });
 });

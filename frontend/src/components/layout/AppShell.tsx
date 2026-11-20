@@ -116,9 +116,9 @@ export default function AppShell() {
   useEffect(() => {
     const titles: Record<string, string> = {
       [homeRoute(mode)]: mode === "comic" ? "漫画首页" : "照片库",
-      [libraryRoute(mode)]: mode === "comic" ? "书架" : "图库",
-      [exploreRoute()]: "探索",
-      [meRoute(mode)]: mode === "comic" ? "我的漫画" : "我的照片",
+      [libraryRoute(mode)]: mode === "comic" ? "书架" : "相册",
+      [exploreRoute()]: "发现",
+      [meRoute(mode)]: mode === "comic" ? "我的漫画" : "珍藏",
       [unreadRoute()]: "未读",
       "/tasks": "任务中心",
       "/photo/travels": "足迹",

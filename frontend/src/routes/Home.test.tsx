@@ -323,14 +323,14 @@ it("照片工作台显示「接着看」专区", async () => {
   );
 });
 
-// 首页必须留着通往完整图库的明确入口：目录结构在图库里，不在首页。
-it("照片首页有通往图库的明确入口", async () => {
+// 首页必须留着通往完整相册的明确入口：目录结构在相册里，不在首页。
+it("照片首页有通往相册的明确入口", async () => {
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   renderHome();
   await waitFor(() =>
     expect(screen.getByTestId("photo-feed-hero")).toBeTruthy(),
   );
-  const link = screen.getByRole("link", { name: /图库/ });
+  const link = screen.getByRole("link", { name: "相册" });
   expect(link).toHaveAttribute("href", "/photo/library");
 });
 
@@ -457,12 +457,12 @@ it("漫画首页摆出「最近阅读」专区", async () => {
   );
 });
 
-// 照片侧只给少量主题推荐，并把人引向探索页。
-it("照片首页给一屏主题预览并引向探索", async () => {
+// 照片侧只给少量主题推荐，并把人引向发现页。
+it("照片首页给一屏主题预览并引向发现", async () => {
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   renderHome();
   await waitFor(() => expect(screen.getByText("主题")).toBeTruthy());
-  expect(screen.getByRole("link", { name: "去探索" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "去发现" })).toHaveAttribute(
     "href",
     "/photo/explore",
   );

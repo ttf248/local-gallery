@@ -377,7 +377,7 @@ export function SettingsView({
               description="左侧导航栏显示哪些入口"
             >
               <div className="settings-split">
-                <Group title="照片">
+                <Group title="照片侧">
                   {PHOTO_NAV.map((entry) => (
                     <NavRow
                       key={entry.key}
@@ -391,7 +391,7 @@ export function SettingsView({
                     />
                   ))}
                 </Group>
-                <Group title="漫画">
+                <Group title="漫画侧">
                   {COMIC_NAV.map((entry) => (
                     <NavRow
                       key={entry.key}
