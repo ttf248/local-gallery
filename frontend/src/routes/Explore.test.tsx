@@ -457,6 +457,12 @@ it("主题预览写清标题、张数与来源", async () => {
   expect(await screen.findByText("海边的日落")).toBeInTheDocument();
   expect(screen.getByText(/24 张 · 来自 旅行 \/ 2019 旅行/)).toBeInTheDocument();
   expect(screen.getByText("线索：时间 · 地点")).toBeInTheDocument();
+  // 点进去落到那一组照片：分组是相册里照片的一种看法，地址带维度与组 id。
+  const link = screen.getByRole("link", { name: /海边的日落/ });
+  expect(link).toHaveAttribute(
+    "href",
+    "/photo/albums/a_trip?dimension=recommended&group=g_1",
+  );
 });
 
 it("主题区区分尚未生成与分析完成但没有分组", async () => {
