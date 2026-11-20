@@ -4,7 +4,12 @@ import { useLibraryNodes } from "../../hooks/useLibrary";
 import { useImageActivities } from "../../hooks/useImageActivity";
 import { formatSize } from "../../utils/format";
 import { formatDateTime } from "../../utils/date";
-import { collectionUnit, comicCopy, mediaUnit } from "../../utils/workbench";
+import {
+  collectionTypeWord,
+  collectionUnit,
+  comicCopy,
+  mediaUnit,
+} from "../../utils/workbench";
 import { isCompleted } from "../../utils/progress";
 import { CloseIcon } from "./Icon";
 import ErrorBanner from "./ErrorBanner";
@@ -141,10 +146,9 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
               label="类型"
               value={
                 node.kind === "collection"
-                  ? // 漫画侧的集合叫「作品」—— 与集合页的眉标同一个词。
-                    node.contentKind === "comic"
-                    ? "作品"
-                    : "集合"
+                  ? // 中间目录的类型词跟着工作台走：漫画侧叫「作品」，
+                    // 照片侧叫「文件夹」—— 那一侧结构页的眉标同一个词。
+                    collectionTypeWord(node.contentKind ?? "photo")
                   : node.virtual
                     ? // 「本目录媒体」是服务端的技术叫法，界面上读不出
                       // 这是什么；别处一律叫「散图」。
@@ -154,12 +158,10 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
             />
             {/* 所属作品：漫画卷的名字只写「第2卷」，属性表里没有所属
                 作品时，这一条记录讲不清是哪一部的哪一卷。照片侧同一格
-                写所属集合。 */}
+                写所属文件夹。 */}
             {node.parentName && node.parentName !== node.name && (
               <Field
-                label={
-                  node.contentKind === "comic" ? "所属作品" : "所属集合"
-                }
+                label={`所属${collectionTypeWord(node.contentKind ?? "photo")}`}
                 value={node.parentName}
               />
             )}

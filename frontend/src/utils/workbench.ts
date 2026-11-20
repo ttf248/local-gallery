@@ -65,7 +65,12 @@ export interface WorkbenchCopy {
    * 文件夹词同理（照片「文件夹」，漫画「作品」）。
    */
   albumTypeLabel: string;
-  /** 集合的类型词：照片「集合」，漫画「作品」。 */
+  /**
+   * 中间目录的类型词：照片「文件夹」，漫画「作品」。
+   *
+   * 服务端内部叫它「集合」，那是实现细节：照片侧的界面一律说「文件夹」
+   * —— 磁盘上真实存在的目录，用户得能按它去找文件。
+   */
   collectionTypeLabel: string;
 }
 
@@ -247,6 +252,16 @@ export function collectionUnit(mode: "photo" | "comic"): string {
  */
 export function albumCountUnit(mode: "photo" | "comic"): string {
   return mode === "comic" ? collectionUnit(mode) : "个相册";
+}
+
+/**
+ * 中间目录的类型词：照片「文件夹」，漫画「作品」。
+ *
+ * 服务端内部叫它「集合」，界面上不出现那个词 —— 用户看到的是磁盘上
+ * 真实存在的目录。搜索结果、属性表与结构页的眉标共用这一个说法。
+ */
+export function collectionTypeWord(mode: "photo" | "comic"): string {
+  return workbenchCopy(mode).collectionTypeLabel;
 }
 
 /**

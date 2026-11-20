@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  collectionTypeWord,
   collectionUnit,
   coverRatioForMode,
   mediaUnit,
@@ -29,6 +30,13 @@ describe("工作台词表", () => {
     expect(collectionUnit("comic")).toBe("卷");
     expect(mediaUnit("photo")).toBe("张");
     expect(mediaUnit("comic")).toBe("页");
+  });
+
+  it("中间目录的类型词分侧：照片「文件夹」，漫画「作品」", () => {
+    // 服务端内部叫它「集合」，那是实现细节：界面上不出现那个词。
+    expect(collectionTypeWord("photo")).toBe("文件夹");
+    expect(collectionTypeWord("comic")).toBe("作品");
+    expect(workbenchCopy("photo").collectionTypeLabel).toBe("文件夹");
   });
 
   it("封面画幅分侧：照片方形，漫画竖版", () => {

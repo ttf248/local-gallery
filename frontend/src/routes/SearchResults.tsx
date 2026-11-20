@@ -12,6 +12,7 @@ import { useAppMode } from "../hooks/useAppMode";
 import { useUIStore } from "../store/uiStore";
 import { albumRoute, tagRoute } from "../utils/path";
 import { nodeSummaryToCard } from "../utils/libraryCard";
+import { collectionTypeWord } from "../utils/workbench";
 import { LIST_PARAM } from "../utils/listFilterParams";
 import type { CardData } from "../components/album/AlbumCard";
 
@@ -24,7 +25,7 @@ const SEARCH_PAGE_SIZE = 100;
  * 而首页那一段是智能相册预览 —— 搜出来的相册被一片不相关的推荐盖住了，
  * 用户看不到自己搜到了什么。现在回车进的是一页可见的结果。
  *
- * 检索范围是全库（相册、集合与标签），不是当前目录：搜「2011」要在
+ * 检索范围是全库（相册、文件夹与标签），不是当前目录：搜「2011」要在
  * 任何一层都找得到。关键词住在地址里，刷新、前进、后退都对。
  */
 export default function SearchResults() {
@@ -80,7 +81,7 @@ export default function SearchResults() {
         eyebrow="按名字找"
         description={
           query
-            ? `在${mode === "comic" ? "漫画" : "照片"}库里按名字找相册、集合与标签。`
+            ? `在${mode === "comic" ? "漫画" : "照片"}库里按名字找相册、文件夹与标签。`
             : "在顶栏的搜索框里输入名字，按回车就能看到结果。"
         }
       />
@@ -121,7 +122,7 @@ export default function SearchResults() {
 
         {!search.isFetching && !search.isError && cards.length === 0 && query ? (
           <EmptyState
-            title={`没有匹配「${query}」的相册、集合或标签`}
+            title={`没有匹配「${query}」的相册、文件夹或标签`}
             description="名字里没有这几个字。换个说法，或者按画面内容找 —— 内容搜索能认出照片里的东西。"
           />
         ) : null}
@@ -129,7 +130,7 @@ export default function SearchResults() {
         {!query ? (
           <EmptyState
             title="还没有搜索"
-            description="在顶栏的搜索框里输入相册、集合或标签的名字。"
+            description="在顶栏的搜索框里输入相册、文件夹或标签的名字。"
           />
         ) : null}
       </div>
@@ -167,7 +168,12 @@ function hitToCard(
     const card = nodeSummaryToCard(node);
     // 副标题补上来源：多根扫描时「2011年」这种同名文件夹有好几个，
     // 结果页必须说清它属于哪一个媒体目录。
-    const type = node.kind === "collection" ? "集合" : hit.virtual ? "散图" : "";
+    const type =
+      node.kind === "collection"
+        ? collectionTypeWord(node.contentKind ?? mode)
+        : hit.virtual
+          ? "散图"
+          : "";
     const source = node.sourceName ?? "";
     const parts = [type, source].filter(Boolean);
     return { ...card, subtitle: parts.length > 0 ? parts.join(" · ") : card.subtitle };
@@ -180,7 +186,11 @@ function hitToCard(
     id: (isAlbum ? "a:" : "c:") + hit.path,
     variant: hit.kind,
     title: hit.name,
-    subtitle: hit.virtual ? "散图" : isAlbum ? hit.tags?.join(" · ") : "集合",
+    subtitle: hit.virtual
+      ? "散图"
+      : isAlbum
+        ? hit.tags?.join(" · ")
+        : collectionTypeWord(hit.contentKind ?? mode),
     count: hit.count,
     coverPath: hit.coverImage ?? "",
     coverVersion: hit.coverImageVersion,

@@ -82,7 +82,7 @@ it("相册属性读取目录摘要并显示真实统计", async () => {
   expect(imageInfoApi.get).not.toHaveBeenCalled();
 });
 
-it("集合属性显示聚合媒体和相册数量", async () => {
+it("文件夹属性显示聚合媒体和相册数量", async () => {
   vi.mocked(libraryApi.queryNodes).mockResolvedValueOnce({
     revision: 1,
     missing: [],
@@ -99,7 +99,7 @@ it("集合属性显示聚合媒体和相册数量", async () => {
     ],
   });
   renderDialog({ kind: "node", id: "c_trip" });
-  expect(await screen.findByText("集合")).toBeInTheDocument();
+  expect(await screen.findByText("文件夹")).toBeInTheDocument();
   expect(screen.getByText("5 个相册")).toBeInTheDocument();
   expect(screen.getByText("46 项")).toBeInTheDocument();
   expect(imageInfoApi.get).not.toHaveBeenCalled();

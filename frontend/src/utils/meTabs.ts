@@ -25,7 +25,7 @@ export const PHOTO_ME_TABS: MeTab[] = [
   {
     id: "favorites",
     label: "收藏",
-    hint: "值得留着的相册、集合与标签",
+    hint: "值得留着的相册、文件夹与标签",
   },
   {
     id: "recents",

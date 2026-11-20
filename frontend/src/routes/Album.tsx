@@ -21,7 +21,7 @@ import {
   homeRoute,
   readerRoute,
 } from "../utils/path";
-import { albumCountUnit, workbenchCopy } from "../utils/workbench";
+import { albumCountUnit, collectionTypeWord, workbenchCopy } from "../utils/workbench";
 import CardCover from "../components/album/CardCover";
 import { useAppMode } from "../hooks/useAppMode";
 import { useSafeBack, contextFallback } from "../utils/navigation";
@@ -364,8 +364,8 @@ function CollectionHead({
   const copy = workbenchCopy(detail.contentKind);
   const albumCount = detail.albumCount;
   const collectionCount = detail.collectionCount;
-  // 集合在照片侧叫「集合」，在漫画侧叫「作品」—— 首页的作品索引也是
-  // 同一个词。两处用同一个词，用户才认得出这是同一类东西。
+  // 中间目录的类型词跟着内容属性走：照片侧叫「文件夹」，漫画侧叫「作品」——
+  // 首页的作品索引也是同一个词。两处用同一个词，用户才认得出这是同一类东西。
   const isComic = detail.contentKind === "comic";
   // 只有多根库才需要在页头标来源：单根时顶栏已经写着同一个目录名。
   const multiRoot = useUIStore((s) => s.multiRoot);
@@ -425,7 +425,7 @@ function CollectionHead({
         )}
         <div className="detail-head__body min-w-0">
           <p className="page-eyebrow">
-            {isComic ? "作品" : "集合"}
+            {collectionTypeWord(detail.contentKind)}
             {/* 来源是身份的一部分，不占计数行：多根库下它告诉用户这一屏
                 来自哪个目录；单根库里它只是重复了顶栏已知的事实。 */}
             {multiRoot && detail.sourceName && (
@@ -470,7 +470,7 @@ function CollectionHead({
                 <span className="text-fg-subtle">·</span>
                 <span>
                   <span className="detail-head__value">{collectionCount}</span>{" "}
-                  {isComic ? "个子作品" : "个子集合"}
+                  {isComic ? "个子作品" : "个文件夹"}
                 </span>
               </>
             )}
@@ -598,7 +598,9 @@ function CollectionView({
             <div className="page-shell flex items-center gap-3 mb-4">
               <h2 className="section-title">时间线</h2>
               <span className="section-meta">
-                按年份浏览 — 当前集合下的子相册/子集合
+                {detail.contentKind === "comic"
+                  ? "按年份浏览 — 当前作品下的子卷 / 子系列"
+                  : "按年份浏览 — 当前文件夹下的子相册 / 子文件夹"}
               </span>
               {/* 生效的年份筛选摆出来：它筛的是下面那张网格，
                   不写出来用户只会以为网格空了。 */}
@@ -643,7 +645,7 @@ function CollectionView({
             }
             description={
               yearFilter !== null
-                ? "这个集合里没有符合这一年的子相册或子集合。换个年份，或取消这条筛选。"
+                ? "这个文件夹里没有符合这一年的子相册或子文件夹。换个年份，或取消这条筛选。"
                 : "试试修改搜索条件或排序。"
             }
             icon={<FilterIcon size={20} />}

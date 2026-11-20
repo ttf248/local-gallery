@@ -13,7 +13,7 @@ import {
   semanticSearchRoute,
   tagRoute,
 } from "../../utils/path";
-import { albumCountUnit, collectionUnit, mediaUnit, workbenchCopy } from "../../utils/workbench";
+import { albumCountUnit, collectionTypeWord, mediaUnit, workbenchCopy } from "../../utils/workbench";
 
 // 全局搜索框：输入时显示下拉建议（来自后端 /api/search）。
 //   - 草稿独立于列表筛选，只有名称搜索结果页从地址预填
@@ -193,18 +193,16 @@ export default function GlobalSearch() {
               <div className="flex-1 min-w-0">
                 <div className="text-body truncate">{h.name}</div>
                 <div className="text-meta text-fg-subtle truncate">
-                  {/* 类型词跟着工作台走：集合在照片侧叫「集合」，
-                      在漫画侧叫「作品」—— 与集合页的眉标同一个词。
-                      同名的两个结果（同名相册与同名作品）靠它才分得开。 */}
+                  {/* 类型词跟着工作台走：照片侧的中间目录叫「文件夹」，
+                      漫画侧叫「作品」—— 与那一侧结构页的眉标同一个词。
+                      同名的两个结果（同名相册与同名文件夹）靠它才分得开。 */}
                   {h.kind === "album"
                     ? h.virtual
                       ? "散图"
                       : "相册"
                     : h.kind === "smartCollection"
                       ? "标签"
-                      : collectionUnit(mode) === "卷"
-                        ? "作品"
-                        : "集合"}
+                      : collectionTypeWord(mode)}
                   {" · "}
                   {/* 计数与单位单独成节点：单位跟着当前工作台走
                       （照片「张 / 本」，漫画「页 / 卷」）。 */}

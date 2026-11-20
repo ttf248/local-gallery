@@ -154,6 +154,24 @@ describe("GlobalSearch", () => {
     expect(screen.queryByText(/卷/)).not.toBeInTheDocument();
   });
 
+  it("照片侧不露出服务端的内部类型词「集合」", async () => {
+    vi.mocked(albumsApi.search).mockResolvedValue({
+      ok: true,
+      count: 1,
+      results: [{ kind: "collection", path: "c_trip", name: "旅行", count: 3 }],
+    });
+    renderSearch();
+    const input = screen.getByRole("combobox");
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "旅行" } });
+
+    // 中间目录在照片侧说「文件夹」：它是磁盘上真实存在的目录。
+    const option = await screen.findByRole("option", { name: /文件夹/ });
+    expect(option).toHaveTextContent("文件夹 · 3 个相册");
+    expect(option).not.toHaveTextContent("集合");
+  });
+
   it("在建议请求尚未结束时不误报无结果", async () => {
     let resolveSearch: ((value: {
       ok: boolean;
