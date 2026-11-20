@@ -423,6 +423,40 @@ it("漫画首页不再有「库内一览」网格", async () => {
   expect(screen.queryByTestId("album-grid")).toBeNull();
 });
 
+// 漫画首页的「最近阅读」：翻过的卷能一步回到阅读器。
+it("漫画首页摆出「最近阅读」专区", async () => {
+  mocks.items = [
+    {
+      id: "a_c1",
+      kind: "album",
+      contentKind: "comic",
+      name: "第01话 星海之生肖传说",
+      displayName: "第01话 星海之生肖传说",
+      parentName: "星海镖师",
+      imageCount: 8,
+      coverImages: [],
+      modTime: "2024-01-01T00:00:00Z",
+      date: "2024-01-01T00:00:00Z",
+    },
+  ];
+  vi.mocked(historyApi.list).mockResolvedValue({
+    history: [
+      {
+        albumId: "a_c1",
+        name: "第01话 星海之生肖传说",
+        imageCount: 8,
+        openedAt: "2024-05-01T00:00:00Z",
+      },
+    ],
+  });
+  renderHome();
+  await waitFor(() => expect(screen.getByText("最近阅读")).toBeTruthy());
+  const grid = screen.getByTestId("album-grid");
+  expect(grid.querySelector("li")?.getAttribute("data-to")).toBe(
+    "/comic/albums/a_c1",
+  );
+});
+
 // 照片侧只给少量主题推荐，并把人引向探索页。
 it("照片首页给一屏主题预览并引向探索", async () => {
   useAppModeStore.setState({ preference: "photo", hydrated: true });

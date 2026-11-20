@@ -5,6 +5,7 @@ import { useScanSSE } from "../hooks/useScanSSE";
 import { useMarkAlbumRead, useMarkAlbumsRead } from "../hooks/useImageActivity";
 import { scanApi } from "../api/scan";
 import { useHistoryCards } from "../hooks/useHistory";
+import { useImageActivities } from "../hooks/useImageActivity";
 import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
 import SmartAlbumPreview, {
@@ -23,6 +24,7 @@ import {
   exploreRoute,
   homeRoute,
   libraryRoute,
+  recentsRoute,
 } from "../utils/path";
 import { timeAgo } from "../utils/date";
 import {
@@ -421,6 +423,37 @@ function ComicHome() {
     );
   };
 
+  // 最近阅读：读过的那些卷。
+  //
+  // 与「继续阅读」不是一回事：继续阅读是还没读完的（正在读），这里是
+  // 已经翻过的 —— 读完的、或者只读了开头就想回头翻两页的。刚合上一本
+  // 想找回来时，入口在这里。
+  const recentHistory = useHistoryCards("comic", hasContent);
+  const recentIds = useMemo(
+    () => recentHistory.cards.map((card) => decodeFavPath(card.to)),
+    [recentHistory.cards],
+  );
+  const { data: recentActivities } = useImageActivities(recentIds, hasContent);
+  const recentCards = useMemo<CardData[]>(
+    () =>
+      recentHistory.cards
+        .map((card) => {
+          const activity = recentActivities?.[decodeFavPath(card.to)];
+          if (!activity) return card;
+          // 带上进度：读过的卷不该挂一枚「未读」点，读完了也不该
+          // 看着像没翻开过。
+          return {
+            ...card,
+            progress: {
+              index: activity.pageIndex,
+              total: card.imageCount ?? 0,
+            },
+          };
+        })
+        .slice(0, 8),
+    [recentHistory.cards, recentActivities],
+  );
+
   return (
     <div className="home-page min-h-full">
       <HomeHeader
@@ -452,6 +485,21 @@ function ComicHome() {
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {/* 最近阅读：读过的卷。放在继续阅读与未读之后 —— 有在读的书时，
+          「接着读」才是第一件事；读过的书是回访，不是待办。 */}
+      {recentCards.length > 0 ? (
+        <section className="page-shell page-section">
+          <div className="section-heading">
+            <h2 className="section-title">最近阅读</h2>
+            <span className="section-meta">翻过的卷</span>
+            <Link to={recentsRoute("comic")} className="chip ml-auto">
+              全部
+            </Link>
+          </div>
+          <AlbumGrid items={recentCards} variant="grid" />
+        </section>
       ) : null}
 
       {hasContent && hasNoReadingActivity ? (
