@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import HoverPreview from "./HoverPreview";
 import type { CardData } from "../album/AlbumCard";
 
@@ -15,6 +15,11 @@ vi.mock("../../hooks/useLibrary", () => ({
       : undefined,
   }),
 }));
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 // 悬停预览是两侧共用的组件：它的措辞与单位必须跟着这张卡自己的
 // 内容属性走，而不是跟着当前工作台走。
@@ -34,8 +39,11 @@ function card(overrides: Partial<CardData> = {}): CardData {
   };
 }
 
-function renderPreview(data: CardData, lastSeenAt?: string | null) {
-  const anchor = new DOMRect(0, 0, 100, 100);
+function renderPreview(
+  data: CardData,
+  lastSeenAt?: string | null,
+  anchor = new DOMRect(0, 0, 100, 100),
+) {
   return render(
     <HoverPreview data={data} anchorRect={anchor} lastSeenAt={lastSeenAt} />,
   );
@@ -110,6 +118,44 @@ describe("HoverPreview 按内容属性取词", () => {
     renderPreview(card({ parentName: "某个相册" }));
 
     expect(screen.queryByText("某个相册")).not.toBeInTheDocument();
+  });
+
+  it("预览内容高度变化后重新测量并夹紧位置", async () => {
+    let measuredHeight = 360;
+    const offsetHeight = vi
+      .spyOn(HTMLElement.prototype, "offsetHeight", "get")
+      .mockImplementation(function (this: HTMLElement) {
+        return this.getAttribute("role") === "dialog" ? measuredHeight : 0;
+      });
+
+    let notifyResize: (() => void) | undefined;
+    class ResizeObserverHarness implements ResizeObserver {
+      private readonly callback: ResizeObserverCallback;
+
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+        notifyResize = () => this.callback([], this);
+      }
+
+      observe(_target: Element) {}
+      unobserve(_target: Element) {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ResizeObserverHarness);
+
+    renderPreview(
+      card({ contentKind: "comic" }),
+      undefined,
+      new DOMRect(0, 700, 100, 100),
+    );
+    const dialog = await screen.findByRole("dialog");
+
+    expect(dialog.style.top).toBe(`${window.innerHeight - 360 - 12}px`);
+    measuredHeight = 500;
+    act(() => notifyResize?.());
+    expect(dialog.style.top).toBe(`${window.innerHeight - 500 - 12}px`);
+
+    offsetHeight.mockRestore();
   });
 
   it("照片相册的预览铺这一本的真实照片，而不只是放大封面", () => {

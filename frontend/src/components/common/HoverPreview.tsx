@@ -62,19 +62,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
   const progressPct = progressPercent(data.progress)
   const coverH = isComic ? COVER_H_COMIC : COVER_H_PHOTO
 
-  // 量预览整体高度：内容变了（标题行数、有无进度条）就重量一次。
-  // setBoxHeight 里带着「高度没变就不改」的判断，所以多跑一次不会
-  // 引发连续渲染。
-  //
-  // 不带依赖数组：高度要跟着**渲染出来的内容**走。带 [data] 时，
-  // 首帧量到的是还没长全的盒子（信息区后来才补上副标题、进度条），
-  // 夹紧仍按旧高度算，预览下半截就被视口下缘切掉。
-  useLayoutEffect(() => {
-    const el = boxRef.current
-    if (!el) return
-    const h = el.offsetHeight
-    setBoxHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h))
-  })
+  const viewportReady = vp.w > 0 && vp.h > 0
 
   useEffect(() => {
     const update = () => setVp({ w: window.innerWidth, h: window.innerHeight })
@@ -112,6 +100,30 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
     const items = mediaQuery.data?.pages[0]?.items ?? []
     return items.filter((item) => item.kind === 'image').slice(0, 4)
   }, [mediaQuery.data])
+
+  // 首次显示时测量一次；后续由 ResizeObserver 跟踪内容带来的高度变化。
+  // 浏览器没有 ResizeObserver 时，props 变化和视口尺寸变化仍会触发测量。
+  useLayoutEffect(() => {
+    if (!viewportReady) return
+    const el = boxRef.current
+    if (!el) return
+
+    const measure = () => {
+      const h = el.offsetHeight
+      setBoxHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h))
+    }
+    measure()
+
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(el)
+    window.addEventListener('resize', measure)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [data, lastSeenAt, previewItems, viewportReady])
 
   if (vp.w === 0 || vp.h === 0) return null
 
