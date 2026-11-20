@@ -261,7 +261,9 @@ func (s *PeopleService) consolidateClustersLocked(touched map[string]struct{}) {
 			}
 		}
 	}
-	s.rebuildPeopleANNLocked()
+	// 合并掉的分组在索引里留下旧节点：查近邻时按分组 ID 回查，
+	// 查不到的直接跳过。保留下来的分组中心变了，合并时已经同步过节点向量。
+	// 旧节点攒多了再整体重建索引。
 }
 
 func peopleClusterPairKey(leftID, rightID string) string {
