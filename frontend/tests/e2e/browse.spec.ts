@@ -1291,8 +1291,10 @@ test("六个列表支持按最近看排序，集合与标签具有当前页排�
     ] as const;
     for (const [path, expected] of pages) {
       await test.step(path, async () => {
-        await page.goto(path);
-        await page.getByRole("combobox").fill(taggedSortPrefix);
+        await page.goto(`${path}?q=${encodeURIComponent(taggedSortPrefix)}`);
+        await expect(
+          page.getByRole("combobox", { name: "搜索相册或标签" }),
+        ).toHaveValue("");
         await page.getByRole("button", { name: "排序", exact: true }).click();
         await page
           .getByRole("button", { name: "按最近看", exact: true })
@@ -2726,12 +2728,17 @@ test("列表只取首屏，真实后端分页与筛选保留完整计数", async
   // 首屏只取一页：剩下的等滚到底再要。
   expect(calls.filter((cursor) => cursor === "first")).toHaveLength(1);
   expect(calls).toHaveLength(1);
-  // 滚的是主区：虚拟列表把 main 当作自己的滚动容器，滚它才会
-  // 走到末尾、触发下一段。
-  await page.locator("main").evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await expect.poll(() => calls.length).toBeGreaterThan(1);
+  await expect(
+    page.locator('main [data-testid="album-card"]').first(),
+  ).toBeVisible();
+  // 虚拟列表在主区按滚动事件加载下一页；逐段向下滚动会走过测量边界。
+  await page.locator("main").hover();
+  await expect
+    .poll(async () => {
+      await page.mouse.wheel(0, 500);
+      return calls.length;
+    })
+    .toBeGreaterThan(1);
   // 换排序要重新从第一页取：旧游标的作用域变了。
   await page.getByRole("button", { name: "排序", exact: true }).click();
   await page.getByRole("button", { name: "按最近改", exact: true }).click();
