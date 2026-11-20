@@ -145,7 +145,7 @@ func TestPrefsResponseOmitsFavoritesAndHistory(t *testing.T) {
 	}
 }
 
-// 侧栏的隐藏清单：默认收起照片侧的三项，改动后整份写回，非法 key 被拒绝。
+// 侧栏的隐藏清单：默认全部显示，改动后整份写回，非法 key 被拒绝。
 func TestPrefsHiddenNavItemsRoundTrip(t *testing.T) {
 	prefs := store.NewPrefsStore(filepath.Join(t.TempDir(), "web_settings.json"))
 	app := fiber.New()
@@ -172,7 +172,7 @@ func TestPrefsHiddenNavItemsRoundTrip(t *testing.T) {
 	}
 
 	hidden := get()
-	want := []string{"photo.recents", "photo.favorites", "photo.picks"}
+	want := []string{}
 	if len(hidden) != len(want) {
 		t.Fatalf("default hiddenNavItems=%v, want %v", hidden, want)
 	}
