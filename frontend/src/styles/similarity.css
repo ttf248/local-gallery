@@ -37,19 +37,53 @@
 
   /* 勾选框：整块可点，不是一枚几像素的小方块。 */
   .similarity-group__check {
+    position: relative;
     display: grid;
     place-items: center;
-    width: 28px;
-    height: 28px;
-    margin-top: 4px;
+    width: 44px;
+    height: 44px;
     flex-shrink: 0;
+    border-radius: 4px;
     cursor: pointer;
   }
   .similarity-group__check input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .similarity-group__checkbox-mark {
+    display: grid;
+    place-items: center;
     width: 16px;
     height: 16px;
-    accent-color: var(--accent);
-    cursor: pointer;
+    border: 1px solid var(--border-strong);
+    border-radius: 3px;
+    background: var(--bg);
+    pointer-events: none;
+  }
+  .similarity-group__checkbox-mark::after {
+    content: "";
+    width: 8px;
+    height: 4px;
+    border-bottom: 2px solid var(--accent-contrast);
+    border-left: 2px solid var(--accent-contrast);
+    opacity: 0;
+    transform: translateY(-1px) rotate(-45deg);
+  }
+  .similarity-group__check input:checked + .similarity-group__checkbox-mark {
+    border-color: var(--accent);
+    background: var(--accent);
+  }
+  .similarity-group__check:focus-within {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .similarity-group__check input:checked + .similarity-group__checkbox-mark::after {
+    opacity: 1;
   }
 
   /* 代表照片：照片墙的挂法 —— 小圆角 + 一道浅投影。 */

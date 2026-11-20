@@ -67,6 +67,10 @@ export default function SimilarityGroupCard({
             onChange={onToggleSelect}
             aria-label={`选中这一组（${similarityKindLabel(group.kind)}）`}
           />
+          <span
+            className="similarity-group__checkbox-mark"
+            aria-hidden="true"
+          />
         </label>
 
         <button
