@@ -142,7 +142,7 @@ func TestSimilarityServiceDecisionsSurviveMemberChanges(t *testing.T) {
 	if representative == "" {
 		t.Fatal("没有可用于手动指定的代表照片")
 	}
-	if err := similarity.SetReviewed(group.ID, true); err != nil {
+	if _, err := similarity.SetStatus(group.ID, SimilarityStatusReviewed); err != nil {
 		t.Fatalf("set reviewed: %v", err)
 	}
 	if err := similarity.SetRepresentative(group.ID, representative); err != nil {

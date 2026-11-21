@@ -76,7 +76,7 @@ func TestSimilarityBackupRestoresManualDecisions(t *testing.T) {
 		t.Fatalf("rebuild: %v", err)
 	}
 	group := findExactGroup(t, similarity)
-	if err := similarity.SetReviewed(group.ID, true); err != nil {
+	if _, err := similarity.SetStatus(group.ID, SimilarityStatusReviewed); err != nil {
 		t.Fatalf("set reviewed: %v", err)
 	}
 
@@ -106,7 +106,7 @@ func TestSimilarityBackupRestoresManualDecisions(t *testing.T) {
 	}
 
 	// 清掉决定，再从备份恢复。
-	if err := similarity.SetReviewed(group.ID, false); err != nil {
+	if _, err := similarity.SetStatus(group.ID, SimilarityStatusPending); err != nil {
 		t.Fatalf("clear reviewed: %v", err)
 	}
 	preview, err := backupService.Preview(backup)
@@ -187,7 +187,7 @@ func TestSimilarityStateSurvivesRestart(t *testing.T) {
 		t.Fatalf("rebuild: %v", err)
 	}
 	group := findExactGroup(t, similarity)
-	if err := similarity.SetReviewed(group.ID, true); err != nil {
+	if _, err := similarity.SetStatus(group.ID, SimilarityStatusReviewed); err != nil {
 		t.Fatalf("set reviewed: %v", err)
 	}
 	similarity.Close()

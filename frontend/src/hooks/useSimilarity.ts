@@ -13,6 +13,7 @@ import {
   type SimilarityGroupKind,
   type SimilarityGroupQuery,
   type SimilarityGroupStatus,
+  type SimilarityRestoreEntry,
 } from "../api/similarity";
 
 /** 分组列表的查询键。筛选条件进键里：换筛选就是换一份数据。 */
@@ -77,9 +78,19 @@ export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
   const update = useMutation({
     mutationFn: (input: {
       id: string;
-      body: { representative?: string; reviewed?: boolean; ignored?: boolean };
+      body: {
+        representative?: string;
+        reviewed?: boolean;
+        ignored?: boolean;
+        status?: SimilarityGroupStatus;
+        expectedStatus?: SimilarityGroupStatus;
+      };
     }) => similarityApi.update(input.id, input.body),
-    onSuccess: invalidate,
+    // 重新取列表不阻塞这一次写入的返回：反馈（「已把这一组标记为已处理」
+    // 与那条撤销）要立刻出现，不能等整页分组取回来。
+    onSuccess: () => {
+      void invalidate();
+    },
   });
 
   const batch = useMutation({
@@ -87,11 +98,25 @@ export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
       action: SimilarityBatchAction;
       groupIds: string[];
     }) => similarityApi.batch(input.action, input.groupIds),
-    onSuccess: async (_result, input) => {
-      await invalidate();
+    onSuccess: (_result, input) => {
+      void invalidate();
       if (input.action === "pick") {
-        await client.invalidateQueries({ queryKey: picksQueryKey });
+        void client.invalidateQueries({ queryKey: picksQueryKey });
       }
+    },
+  });
+
+  /**
+   * 按每组各自的原状态恢复。
+   *
+   * 撤销走它，而不是再翻一次布尔：「全部」视图里的组状态不一，
+   * 统一翻会把用户的选择弄乱。
+   */
+  const restore = useMutation({
+    mutationFn: (entries: SimilarityRestoreEntry[]) =>
+      similarityApi.restore(entries),
+    onSuccess: () => {
+      void invalidate();
     },
   });
 
@@ -120,6 +145,7 @@ export function useSimilarityGroups(query: SimilarityGroupQuery = {}) {
     isFetchingNextPage: list.isFetchingNextPage,
     update,
     batch,
+    restore,
     rebuild,
   };
 }

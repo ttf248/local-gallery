@@ -41,6 +41,11 @@ const (
 // ErrSimilarityGroupNotFound 表示分组不存在或已经变了。
 var ErrSimilarityGroupNotFound = errors.New("similarity group not found")
 
+// ErrSimilarityStatusConflict 表示这一组的状态已经不是写入方以为的那一档，
+// 写入被拒绝。撤销用它：用户在这之后又改过这一组时，过期的撤销不能
+// 盖掉更新的决定。
+var ErrSimilarityStatusConflict = errors.New("similarity status conflict")
+
 // SimilarityGroupKind 是分组的类别。
 type SimilarityGroupKind string
 
@@ -62,6 +67,39 @@ const (
 	// SimilarityStatusIgnored 是用户不想再看到的组。
 	SimilarityStatusIgnored = "ignored"
 )
+
+// SimilarityStatusChange 是一次状态变更：把某一组从 From 改成 To。
+//
+// 撤销用它：每一组各自记着自己操作前的状态，不能统一翻一个布尔 ——
+// 「全部」视图里的组本来就五花八门。
+type SimilarityStatusChange struct {
+	GroupID string `json:"groupId"`
+	From    string `json:"from"`
+	To      string `json:"to"`
+}
+
+// SimilarityStatusChangeResult 是一次状态写入的结果。
+type SimilarityStatusChangeResult struct {
+	// Previous 是写入前的状态。
+	Previous string `json:"previous"`
+	// Current 是写入后的状态。
+	Current string `json:"current"`
+	// Changed 是否真的改了：本来就在那一档时是假。
+	Changed bool `json:"changed"`
+}
+
+// SimilarityBatchResult 是批量操作的结果。
+type SimilarityBatchResult struct {
+	// Changed 是真正变了的组数。
+	Changed int `json:"changed"`
+	// Previous 记下变了的那几组的原状态：撤销要按它恢复。
+	Previous map[string]string `json:"previous,omitempty"`
+	// Current 记下变了的那几组的新状态：撤销时用它做并发校验。
+	Current map[string]string `json:"current,omitempty"`
+	// Conflicts 是没写进去的组：它们的状态已经不是操作方以为的那一档，
+	// 或者分组已经不存在了。界面上要如实说「有几组没能恢复」。
+	Conflicts []string `json:"conflicts,omitempty"`
+}
 
 // SimilarityServiceOptions 是相似照片整理服务的构造选项。
 type SimilarityServiceOptions struct {
@@ -1063,44 +1101,81 @@ func (s *SimilarityService) SetRepresentative(groupID, resourceID string) error 
 	return nil
 }
 
-// SetReviewed 标记某一组已看过。
-func (s *SimilarityService) SetReviewed(groupID string, reviewed bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.findGroupLocked(groupID) == nil {
-		return ErrSimilarityGroupNotFound
+// statusOfLocked 返回某一组当前的人工状态。必须在持有锁时调用。
+func (s *SimilarityService) statusOfLocked(groupID string) string {
+	if s.state.Ignored[groupID] {
+		return SimilarityStatusIgnored
 	}
-	if reviewed {
-		s.state.Reviewed[groupID] = true
-		delete(s.state.Ignored, groupID)
-	} else {
-		delete(s.state.Reviewed, groupID)
+	if s.state.Reviewed[groupID] {
+		return SimilarityStatusReviewed
 	}
-	if err := s.persistStateLocked(); err != nil {
-		return err
-	}
-	s.applyStateLocked()
-	return nil
+	return SimilarityStatusPending
 }
 
-// SetIgnored 忽略某一组。
-func (s *SimilarityService) SetIgnored(groupID string, ignored bool) error {
+// setStatusLocked 把一组设成给定状态。必须在持有锁时调用。
+//
+// 状态是互斥的三档：设成「已处理」就抹掉「已忽略」，反之亦然。
+func (s *SimilarityService) setStatusLocked(groupID, status string) {
+	switch status {
+	case SimilarityStatusReviewed:
+		s.state.Reviewed[groupID] = true
+		delete(s.state.Ignored, groupID)
+	case SimilarityStatusIgnored:
+		s.state.Ignored[groupID] = true
+		delete(s.state.Reviewed, groupID)
+	default:
+		delete(s.state.Reviewed, groupID)
+		delete(s.state.Ignored, groupID)
+	}
+}
+
+// SetStatus 把某一组设成给定状态，返回操作前后的状态。
+//
+// 状态是三档而不是两个布尔：三档互斥，「标记已处理」之后原来的
+// 「已忽略」就没了 —— 撤销要靠这里返回的 Previous 才能恢复回去。
+func (s *SimilarityService) SetStatus(groupID, status string) (SimilarityStatusChangeResult, error) {
+	return s.SetStatusIfCurrent(groupID, "", status)
+}
+
+// SetStatusIfCurrent 只在当前状态等于 expected 时写入。
+//
+// expected 为空时不校验。状态对不上时返回 ErrSimilarityStatusConflict，
+// 一个字节都不写 —— 撤销用它挡住「用户在这之后又改过」的情况。
+func (s *SimilarityService) SetStatusIfCurrent(groupID, expected, status string) (SimilarityStatusChangeResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.findGroupLocked(groupID) == nil {
-		return ErrSimilarityGroupNotFound
+		return SimilarityStatusChangeResult{}, ErrSimilarityGroupNotFound
 	}
-	if ignored {
-		s.state.Ignored[groupID] = true
-		delete(s.state.Reviewed, groupID)
-	} else {
-		delete(s.state.Ignored, groupID)
+	target := NormalizeSimilarityStatus(status)
+	if target == "" {
+		return SimilarityStatusChangeResult{}, errors.New("invalid similarity status")
 	}
+	previous := s.statusOfLocked(groupID)
+	if expected != "" {
+		want := NormalizeSimilarityStatus(expected)
+		if want == "" {
+			return SimilarityStatusChangeResult{}, errors.New("invalid similarity status")
+		}
+		if previous != want {
+			return SimilarityStatusChangeResult{
+				Previous: previous,
+				Current:  previous,
+			}, ErrSimilarityStatusConflict
+		}
+	}
+	result := SimilarityStatusChangeResult{Previous: previous, Current: target}
+	if previous == target {
+		// 本来就在那一档：什么也没变，也不该算成一次变化。
+		return result, nil
+	}
+	s.setStatusLocked(groupID, target)
 	if err := s.persistStateLocked(); err != nil {
-		return err
+		return SimilarityStatusChangeResult{}, err
 	}
 	s.applyStateLocked()
-	return nil
+	result.Changed = true
+	return result, nil
 }
 
 // SimilarityBatchAction 是批量操作的动作。
@@ -1115,12 +1190,34 @@ const (
 	SimilarityBatchUnignore = "unignore"
 	// SimilarityBatchPick 把选中组的代表照片加入精选。
 	SimilarityBatchPick = "pick"
+	// SimilarityBatchRestore 按每组各自的原状态恢复。
+	SimilarityBatchRestore = "restore"
 )
 
+// applyStatusLocked 把一组设成给定状态，并记下这次变化。
+// 必须在持有锁时调用。
+func (s *SimilarityService) applyStatusLocked(groupID, status string, result *SimilarityBatchResult) {
+	previous := s.statusOfLocked(groupID)
+	if previous == status {
+		// 本来就在那一档：不算一次变化。
+		return
+	}
+	s.setStatusLocked(groupID, status)
+	result.Changed++
+	result.Previous[groupID] = previous
+	result.Current[groupID] = status
+}
+
 // ApplyBatch 对一组分组执行同一个动作。
-func (s *SimilarityService) ApplyBatch(action string, groupIDs []string) (int, error) {
+//
+// 返回值里带着每组真正的变化：本来就在目标状态的组不算变化，
+// 变了的那几组的原状态也记下来 —— 撤销要按它恢复。
+func (s *SimilarityService) ApplyBatch(action string, groupIDs []string) (SimilarityBatchResult, error) {
+	result := SimilarityBatchResult{
+		Previous: map[string]string{},
+		Current:  map[string]string{},
+	}
 	s.mu.Lock()
-	changed := 0
 	pickIDs := make([]string, 0, len(groupIDs))
 	for _, groupID := range groupIDs {
 		group := s.findGroupLocked(groupID)
@@ -1129,45 +1226,106 @@ func (s *SimilarityService) ApplyBatch(action string, groupIDs []string) (int, e
 		}
 		switch action {
 		case SimilarityBatchReview:
-			s.state.Reviewed[groupID] = true
-			delete(s.state.Ignored, groupID)
-			changed++
+			s.applyStatusLocked(groupID, SimilarityStatusReviewed, &result)
 		case SimilarityBatchUnreview:
-			delete(s.state.Reviewed, groupID)
-			changed++
+			// 取消「已处理」只对真的已处理的组有意义：已忽略的组不受影响。
+			if s.statusOfLocked(groupID) == SimilarityStatusReviewed {
+				s.applyStatusLocked(groupID, SimilarityStatusPending, &result)
+			}
 		case SimilarityBatchIgnore:
-			s.state.Ignored[groupID] = true
-			delete(s.state.Reviewed, groupID)
-			changed++
+			s.applyStatusLocked(groupID, SimilarityStatusIgnored, &result)
 		case SimilarityBatchUnignore:
-			delete(s.state.Ignored, groupID)
-			changed++
+			if s.statusOfLocked(groupID) == SimilarityStatusIgnored {
+				s.applyStatusLocked(groupID, SimilarityStatusPending, &result)
+			}
 		case SimilarityBatchPick:
 			pickIDs = append(pickIDs, group.Representative)
 		default:
 			s.mu.Unlock()
-			return 0, fmt.Errorf("unknown similarity action %q", action)
+			return SimilarityBatchResult{}, fmt.Errorf("unknown similarity action %q", action)
 		}
 	}
 	if action != SimilarityBatchPick {
 		if err := s.persistStateLocked(); err != nil {
 			s.mu.Unlock()
-			return 0, err
+			return SimilarityBatchResult{}, err
 		}
 		s.applyStateLocked()
 	}
 	s.mu.Unlock()
 	if action == SimilarityBatchPick {
 		if s.picks == nil {
-			return 0, errors.New("the picks collection is unavailable")
+			return SimilarityBatchResult{}, errors.New("the picks collection is unavailable")
 		}
 		added, err := s.picks.Batch(pickIDs, true)
 		if err != nil {
-			return 0, err
+			return SimilarityBatchResult{}, err
 		}
-		return added, nil
+		return SimilarityBatchResult{
+			Changed:  added,
+			Previous: result.Previous,
+			Current:  result.Current,
+		}, nil
 	}
-	return changed, nil
+	return result, nil
+}
+
+// ApplyBatchRestore 按每组各自的原状态恢复。
+//
+// changes 里每一项都是「把这一组从 From 改回 To」。当前状态已经不是
+// From 的组不动它 —— 用户在这之后又改过，过期的撤销不能盖掉更新的
+// 决定；这一项单���记进 Conflicts，界面上如实说「有几组没能恢复」。
+// 分组已经不存在（重建后换了 id）同样算进 Conflicts。
+func (s *SimilarityService) ApplyBatchRestore(changes []SimilarityStatusChange) (SimilarityBatchResult, error) {
+	result := SimilarityBatchResult{
+		Previous: map[string]string{},
+		Current:  map[string]string{},
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, change := range changes {
+		groupID := strings.TrimSpace(change.GroupID)
+		if groupID == "" {
+			continue
+		}
+		if s.findGroupLocked(groupID) == nil {
+			result.Conflicts = append(result.Conflicts, groupID)
+			continue
+		}
+		target := NormalizeSimilarityStatus(change.To)
+		if target == "" {
+			continue
+		}
+		current := s.statusOfLocked(groupID)
+		if change.From != "" {
+			want := NormalizeSimilarityStatus(change.From)
+			if want == "" {
+				continue
+			}
+			if current != want {
+				// 已经恢复过了：不算冲突，只是没什么可做的。
+				if current == target {
+					continue
+				}
+				result.Conflicts = append(result.Conflicts, groupID)
+				continue
+			}
+		}
+		if current == target {
+			continue
+		}
+		s.setStatusLocked(groupID, target)
+		result.Changed++
+		result.Previous[groupID] = current
+		result.Current[groupID] = target
+	}
+	if result.Changed > 0 {
+		if err := s.persistStateLocked(); err != nil {
+			return SimilarityBatchResult{}, err
+		}
+		s.applyStateLocked()
+	}
+	return result, nil
 }
 
 // findGroupLocked 找出分组。必须在持有锁时调用。

@@ -31,7 +31,6 @@ import (
 
 	"github.com/tianlongxiang/local-gallery/internal/config"
 	"github.com/tianlongxiang/local-gallery/internal/handlers"
-	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
 	"github.com/tianlongxiang/local-gallery/internal/models"
 	"github.com/tianlongxiang/local-gallery/internal/services"
@@ -77,22 +76,7 @@ func main() {
 	log.Printf("  Access:    %s", cfg.AccessMode)
 
 	// ---- 5. 创建并启动 Fiber App ----
-	app := fiber.New(fiber.Config{
-		AppName:               "local-gallery",
-		DisableStartupMessage: true,
-		// ShutdownWithTimeout 无法主动关闭 keep-alive 连接；设置读取和空闲
-		// 超时，确保退出窗口有明确上界。SSE 不设置 WriteTimeout。
-		ReadTimeout: 30 * time.Second,
-		IdleTimeout: 60 * time.Second,
-		// 备份导入允许 32 MiB 文件及 JSON 包装；封面和认证接口另有自身限制。
-		BodyLimit: 64 * 1024 * 1024,
-		ErrorHandler: func(c *fiber.Ctx, err error) error {
-			if fe, ok := err.(*fiber.Error); ok {
-				return httputil.Error(c, fe.Code, "http_error", fe.Message)
-			}
-			return httputil.Internal(c, "internal_error", "internal server error")
-		},
-	})
+	app := newFiberApp()
 
 	app.Use(middleware.Logger())
 	app.Use(middleware.Recover())

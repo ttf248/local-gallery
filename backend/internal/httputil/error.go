@@ -48,6 +48,13 @@ func NotFound(c *fiber.Ctx, code, message string, details ...map[string]any) err
 	return Error(c, fiber.StatusNotFound, code, message, details...)
 }
 
+// Conflict 409 + code。
+//
+// 用于「请求与当前状态对不上」：写的目标和现状冲突（比如撤销过期）。
+func Conflict(c *fiber.Ctx, code, message string, details ...map[string]any) error {
+	return Error(c, fiber.StatusConflict, code, message, details...)
+}
+
 // Internal 500 + code。通用兜底,不应被业务 handler 频繁使用。
 func Internal(c *fiber.Ctx, code, message string, details ...map[string]any) error {
 	return Error(c, fiber.StatusInternalServerError, code, message, details...)

@@ -224,6 +224,226 @@ test("人工指定的代表照片刷新后仍在", async ({ page, request }) => 
   ).toHaveAttribute("aria-pressed", "true");
 });
 
+/**
+ * 读某一组当前的状态。
+ *
+ * 状态是三档，「全部」视图里混着待处理、已处理与已忽略：
+ * 撤销要按每组操作前的那一档恢复，不能统一翻一个布尔。
+ */
+async function groupStatus(
+  request: Parameters<typeof ensureLibraryReady>[0],
+  groupId: string,
+): Promise<string | undefined> {
+  // 逐个状态档找：每一档的组数都在一页之内，比一次拿全量再翻更稳。
+  for (const status of ["pending", "reviewed", "ignored"]) {
+    const response = await request.get(
+      `/api/similarity/groups?status=${status}&limit=200`,
+    );
+    const body = (await response.json()) as SimilarityPage;
+    if (body.page.groups.some((group) => group.id === groupId)) return status;
+  }
+  return undefined;
+}
+
+/**
+ * 等后台重建停下来。
+ *
+ * 重建会重算分组并迁移人工决定，分组的 id 也可能跟着变。正在重建时
+ * 做的撤销会撞上「状态已经变了」或「这一组已经不在了」—— 那是并发
+ * 保护在正常工作，不是缺陷，所以用例要先等它安静下来再动手。
+ */
+async function waitForStableGroups(
+  request: Parameters<typeof ensureLibraryReady>[0],
+) {
+  let lastId = "";
+  await expect
+    .poll(
+      async () => {
+        const statusResponse = await request.get("/api/similarity/status");
+        const status = (await statusResponse.json()) as {
+          status: { stale: boolean; rebuilding: boolean };
+        };
+        if (status.status.rebuilding || status.status.stale) {
+          lastId = "";
+          return false;
+        }
+        const groupsResponse = await request.get(
+          "/api/similarity/groups?limit=1",
+        );
+        const groups = (await groupsResponse.json()) as SimilarityPage;
+        const id = groups.page.groups[0]?.id ?? "";
+        // 连续两次读到同一批分组，才算真的安静下来了。
+        const stable = id !== "" && id === lastId;
+        lastId = id;
+        return stable;
+      },
+      { timeout: 120_000, intervals: [1_500] },
+    )
+    .toBe(true);
+}
+
+/** 确保有分组可验：没有就先跑一次分析。 */
+async function ensureSimilarityGroups(
+  request: Parameters<typeof ensureLibraryReady>[0],
+) {
+  const existing = (await (
+    await request.get("/api/similarity/groups?limit=1")
+  ).json()) as SimilarityPage;
+  if (existing.page.total === 0) {
+    await runSimilarityAnalysis(request);
+    await expect
+      .poll(
+        async () => {
+          const response = await request.get("/api/similarity/groups?limit=50");
+          const body = (await response.json()) as SimilarityPage;
+          return body.page.total;
+        },
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(0);
+  }
+  await waitForStableGroups(request);
+}
+
+/**
+ * 撤销按操作前的状态恢复。
+ *
+ * 「已忽略」的组被标记为已处理之后，原来的「已忽略」就找不回来了 ——
+ * 撤销时只翻一个布尔，那一组会掉进「待处理」：用户明明说过
+ * 「我不想再看它」，撤销之后却又回到了待办堆里。
+ */
+test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤销回到已忽略", async ({
+  page,
+  request,
+}) => {
+  await ensureLibraryReady(request);
+  await setWorkbenchMode(request, "photo");
+  await ensureSimilarityGroups(request);
+
+  const pending = (await (
+    await request.get("/api/similarity/groups?status=pending&limit=2")
+  ).json()) as SimilarityPage;
+  expect(pending.page.groups.length).toBeGreaterThan(0);
+
+  await page.goto("/photo/similarity");
+  const card = page.getByTestId("similarity-group").first();
+  await expect(card).toBeVisible();
+  // 以页面上这一张卡为准：用户点的是看得见的那一张。
+  const groupId = (await card.getAttribute("data-group-id")) ?? "";
+
+  // 先忽略这一组，再撤销它 —— 撤销要回到待处理。
+  await card.getByRole("button", { name: "忽略", exact: true }).click();
+  const ignored = page.getByText("已忽略这一组");
+  await expect(ignored).toBeVisible();
+  // 等状态真的写进磁盘再撤销：不然后面读到的状态对不上，撤销会被
+  // 「状态已经变了」的并发保护挡下来。
+  await expect.poll(() => groupStatus(request, groupId)).toBe("ignored");
+  await ignored.locator("..").getByRole("button", { name: "撤销" }).click();
+  // 提示会堆着：同一条文案可能有多条（上一条还没过期），取最新的一条。
+  await expect(page.getByText("已恢复原状态").last()).toBeVisible({
+    timeout: 15000,
+  });
+  await expect.poll(() => groupStatus(request, groupId)).toBe("pending");
+
+  // 再忽略一次，然后标记已处理：撤销这次要回到「已忽略」。
+  await card.getByRole("button", { name: "忽略", exact: true }).click();
+  await expect(page.getByText("已忽略这一组")).toBeVisible();
+  await expect.poll(() => groupStatus(request, groupId)).toBe("ignored");
+
+  // 切到已忽略这一档：这一组就在里面，按钮也换成了「取消忽略」。
+  await page.getByRole("radio", { name: "已忽略" }).click();
+  const ignoredCard = page.locator(
+    `[data-testid="similarity-group"][data-group-id="${groupId}"]`,
+  );
+  await expect(ignoredCard).toBeVisible();
+  await ignoredCard
+    .getByRole("button", { name: "标记已处理", exact: true })
+    .click();
+  const reviewed = page.getByText("已把这一组标记为已处理");
+  await expect(reviewed).toBeVisible();
+  await expect.poll(() => groupStatus(request, groupId)).toBe("reviewed");
+  await reviewed.locator("..").getByRole("button", { name: "撤销" }).click();
+  // 提示会堆着：同一条文案可能有多条（上一条还没过期），取最新的一条。
+  await expect(page.getByText("已恢复原状态").last()).toBeVisible({
+    timeout: 15000,
+  });
+
+  // 撤销之后，这一组还是「已忽略」，没有掉进待处理。
+  await expect.poll(() => groupStatus(request, groupId)).toBe("ignored");
+
+  // 刷新之后照样是「已忽略」：决定写在磁盘上。
+  await page.reload();
+  await page.getByRole("radio", { name: "已忽略" }).click();
+  const reloaded = page.locator(
+    `[data-testid="similarity-group"][data-group-id="${groupId}"]`,
+  );
+  await expect(reloaded).toHaveAttribute("data-group-status", "ignored");
+});
+
+/**
+ * 混合状态的批量修改，撤销按每组各自恢复。
+ *
+ * 「全部」视图里的组本来就有各种状态：统一翻一个布尔的话，已处理的
+ * 会被推回待处理、已忽略的也会丢掉 —— 用户的选择全乱了。
+ */
+test("混合状态的批量修改，撤销按每组各自恢复", async ({ page, request }) => {
+  await ensureLibraryReady(request);
+  await setWorkbenchMode(request, "photo");
+  await ensureSimilarityGroups(request);
+
+  await page.goto("/photo/similarity?status=all");
+  const cards = page.getByTestId("similarity-group");
+  await expect(cards.first()).toBeVisible();
+  // 以「全部」视图里看得见的两张卡为准：混合状态正是这个视图的常态。
+  const ignoredId = (await cards.nth(0).getAttribute("data-group-id")) ?? "";
+  const reviewedId = (await cards.nth(1).getAttribute("data-group-id")) ?? "";
+  expect(ignoredId).not.toBe(reviewedId);
+
+  // 两组先进入不同的状态：一个是已忽略，另一个还待处理。
+  // 状态用接口摆好，页面再刷新一次 —— 要验的是批量撤销的恢复语义，
+  // 不是状态怎么摆上去的。
+  for (const [groupId, status] of [
+    [ignoredId, "ignored"],
+    [reviewedId, "pending"],
+  ] as const) {
+    const response = await request.put(
+      `/api/similarity/groups/${encodeURIComponent(groupId)}`,
+      { data: { status } },
+    );
+    expect(response.ok()).toBeTruthy();
+  }
+  await page.reload();
+
+  const ignoredCard = page.locator(
+    `[data-testid="similarity-group"][data-group-id="${ignoredId}"]`,
+  );
+  const reviewedCard = page.locator(
+    `[data-testid="similarity-group"][data-group-id="${reviewedId}"]`,
+  );
+  await expect(ignoredCard).toBeVisible();
+  await expect(reviewedCard).toBeVisible();
+  await expect.poll(() => groupStatus(request, ignoredId)).toBe("ignored");
+  await expect.poll(() => groupStatus(request, reviewedId)).toBe("pending");
+
+  // 勾上两组，一起标记为已处理。
+  await ignoredCard.getByRole("checkbox", { name: /选中这一组/ }).check();
+  await reviewedCard.getByRole("checkbox", { name: /选中这一组/ }).check();
+  const bar = page.getByTestId("similarity-batch-bar");
+  await expect(bar).toBeVisible();
+  await bar.getByRole("button", { name: "标记已处理", exact: true }).click();
+  await expect(page.getByText("已把 2 组标记为已处理")).toBeVisible();
+
+  // 撤销：每一组各自回到自己原来的那一档。
+  await page
+    .getByText("已把 2 组标记为已处理")
+    .locator("..")
+    .getByRole("button", { name: "撤销" })
+    .click();
+  await expect(page.getByText("已恢复 2 组的原状态")).toBeVisible({ timeout: 15000 });
+  await expect.poll(() => groupStatus(request, ignoredId)).toBe("ignored");
+  await expect.poll(() => groupStatus(request, reviewedId)).toBe("pending");
+});
+
 test("相似照片的人工决定能随状态备份导出并恢复", async ({ request }) => {
   await ensureLibraryReady(request);
   await runSimilarityAnalysis(request);

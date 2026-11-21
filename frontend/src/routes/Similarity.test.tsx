@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Similarity from "./Similarity";
 import { useUIStore } from "../store/uiStore";
 import type { SimilarityGroup, SimilarityGroupPage } from "../api/similarity";
+import { ApiError } from "../api/client";
 
 const requests: {
   kind: string;
@@ -24,12 +25,30 @@ const requests: {
 
 const updates: { id: string; body: Record<string, unknown> }[] = [];
 const batches: { action: string; groupIds: string[] }[] = [];
+const restores: { groupId: string; from: string; to: string }[] = [];
 const virtualState = vi.hoisted(() => ({
   windowSize: 1,
   totalGroups: 121,
   loadedGroups: 0,
   useWindowScroll: false,
   endReached: null as (() => void) | null,
+}));
+
+/**
+ * 模拟服务端的分组状态。
+ *
+ * 状态是真的三档，而不是两个布尔：撤销要按每组操作前的那一档恢复，
+ * 这一点只有服务端如实记下来才验得了。
+ */
+const serverState = vi.hoisted(() => ({
+  /** 每组当前的状态。 */
+  statuses: {} as Record<string, string>,
+  /** update 要抛出的错误。 */
+  updateError: null as unknown,
+  /** batch 要抛出的错误。 */
+  batchError: null as unknown,
+  /** restore 要抛出的错误。 */
+  restoreError: null as unknown,
 }));
 
 function groupFixture(
@@ -167,26 +186,87 @@ vi.mock("../api/similarity", async (original) => ({
       const count = Math.max(0, Math.min(query.limit ?? 60, total - offset));
       const groups = Array.from({ length: count }, (_, index) => {
         const groupIndex = offset + index;
+        const id =
+          query.kind === "burst"
+            ? `burst-${groupIndex + 1}`
+            : groupIndex === 0
+              ? "exact-1"
+              : `exact-${groupIndex + 1}`;
         return groupFixture({
-          id:
-            query.kind === "burst"
-              ? `burst-${groupIndex + 1}`
-              : groupIndex === 0
-                ? "exact-1"
-                : `exact-${groupIndex + 1}`,
+          id,
           kind: query.kind === "burst" ? "burst" : "exact",
           representativeIsManual: false,
+          status: (serverState.statuses[id] ?? "pending") as
+            | "pending"
+            | "reviewed"
+            | "ignored",
         });
       });
       return Promise.resolve({ ok: true, page: pageFixture(groups, total) });
     },
     update: (id: string, body: Record<string, unknown>) => {
       updates.push({ id, body });
-      return Promise.resolve({ ok: true });
+      if (serverState.updateError) {
+        return Promise.reject(serverState.updateError);
+      }
+      // 服务端记下操作前的状态：撤销要按它恢复回去。
+      const previous = serverState.statuses[id] ?? "pending";
+      const target =
+        typeof body.status === "string" ? body.status : previous;
+      serverState.statuses[id] = target;
+      return Promise.resolve({
+        ok: true,
+        status: target,
+        previousStatus: previous,
+        changed: previous !== target,
+      });
     },
     batch: (action: string, groupIds: string[]) => {
       batches.push({ action, groupIds });
-      return Promise.resolve({ ok: true, changed: groupIds.length });
+      if (serverState.batchError) {
+        return Promise.reject(serverState.batchError);
+      }
+      if (action === "pick") {
+        return Promise.resolve({ ok: true, changed: groupIds.length });
+      }
+      const previous: Record<string, string> = {};
+      const current: Record<string, string> = {};
+      let changed = 0;
+      for (const id of groupIds) {
+        const before = serverState.statuses[id] ?? "pending";
+        const target =
+          action === "review"
+            ? "reviewed"
+            : action === "ignore"
+              ? "ignored"
+              : "pending";
+        if (before === target) continue;
+        serverState.statuses[id] = target;
+        previous[id] = before;
+        current[id] = target;
+        changed += 1;
+      }
+      return Promise.resolve({ ok: true, changed, previous, current });
+    },
+    restore: (
+      entries: { groupId: string; from: string; to: string }[],
+    ) => {
+      restores.push(...entries);
+      if (serverState.restoreError) {
+        return Promise.reject(serverState.restoreError);
+      }
+      const conflicts: string[] = [];
+      let changed = 0;
+      for (const entry of entries) {
+        const current = serverState.statuses[entry.groupId] ?? "pending";
+        if (current !== entry.from) {
+          conflicts.push(entry.groupId);
+          continue;
+        }
+        serverState.statuses[entry.groupId] = entry.to;
+        changed += 1;
+      }
+      return Promise.resolve({ ok: true, changed, conflicts });
     },
   },
 }));
@@ -243,6 +323,13 @@ describe("相似照片整理页", () => {
     requests.length = 0;
     updates.length = 0;
     batches.length = 0;
+    restores.length = 0;
+    for (const key of Object.keys(serverState.statuses)) {
+      delete serverState.statuses[key];
+    }
+    serverState.updateError = null;
+    serverState.batchError = null;
+    serverState.restoreError = null;
     useUIStore.setState({ toasts: [] });
   });
 
@@ -290,7 +377,7 @@ describe("相似照片整理页", () => {
     await waitFor(() =>
       expect(updates).toContainEqual({
         id: "exact-1",
-        body: { reviewed: true },
+        body: { status: "reviewed" },
       }),
     );
 
@@ -298,7 +385,7 @@ describe("相似照片整理页", () => {
     await waitFor(() =>
       expect(updates).toContainEqual({
         id: "exact-1",
-        body: { ignored: true },
+        body: { status: "ignored" },
       }),
     );
   });
@@ -467,12 +554,15 @@ describe("相似照片整理页", () => {
       toast?.action?.onClick();
     });
 
+    // 撤销按「操作前的状态」回去：待处理的组被标记已处理之后，
+    // 撤销要写回 pending，并带上「操作后是哪一档」做并发校验。
     await waitFor(() =>
       expect(updates).toContainEqual({
         id: "exact-1",
-        body: { reviewed: false },
+        body: { status: "pending", expectedStatus: "reviewed" },
       }),
     );
+    expect(serverState.statuses["exact-1"]).toBe("pending");
   });
 
   it("批量忽略说清忽略了多少组，也能整体撤销", async () => {
@@ -503,12 +593,179 @@ describe("相似照片整理页", () => {
     await act(async () => {
       toast?.action?.onClick();
     });
+    // 撤销走恢复接口，并带上每一组自己的原状态。
+    await waitFor(() =>
+      expect(restores).toContainEqual({
+        groupId: "exact-1",
+        from: "ignored",
+        to: "pending",
+      }),
+    );
+    expect(serverState.statuses["exact-1"]).toBe("pending");
+  });
+
+  // 撤销要按每组操作前的那一档恢复。
+  //
+  // 状态是三档：「已忽略」的组被标记为已处理之后，原来的「已忽略」
+  // 就找不回来了 —— 撤销时只翻一个布尔，那一组会掉进「待处理」，
+  // 用户明明说「我不想再看它」。
+  it("已忽略的组标记为已处理后，撤销回到已忽略而不是待处理", async () => {
+    serverState.statuses["exact-1"] = "ignored";
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0].body).toEqual({ status: "reviewed" });
+
+    const toast = useUIStore
+      .getState()
+      .toasts.find((item) => item.message === "已把这一组标记为已处理");
+    expect(toast?.action?.label).toBe("撤销");
+    await act(async () => {
+      toast?.action?.onClick();
+    });
+
+    await waitFor(() => expect(updates).toHaveLength(2));
+    // 回到「已忽略」，并带上「操作后是哪一档」做并发校验。
+    expect(updates[1].body).toEqual({
+      status: "ignored",
+      expectedStatus: "reviewed",
+    });
+    expect(serverState.statuses["exact-1"]).toBe("ignored");
+  });
+
+  it("已处理的组忽略后，撤销回到已处理而不是待处理", async () => {
+    serverState.statuses["exact-1"] = "reviewed";
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("button", { name: "忽略" }));
+    await waitFor(() => expect(updates).toHaveLength(1));
+    expect(updates[0].body).toEqual({ status: "ignored" });
+
+    const toast = useUIStore
+      .getState()
+      .toasts.find((item) => item.message === "已忽略这一组");
+    await act(async () => {
+      toast?.action?.onClick();
+    });
+
+    await waitFor(() => expect(updates).toHaveLength(2));
+    expect(updates[1].body).toEqual({
+      status: "reviewed",
+      expectedStatus: "ignored",
+    });
+    expect(serverState.statuses["exact-1"]).toBe("reviewed");
+  });
+
+  // 「全部」视图里的组状态不一：批量撤销必须按组恢复，
+  // 不能统一翻一个布尔 —— 那会把用户的选择弄乱。
+  it("混合状态的批量修改，撤销按每组各自恢复", async () => {
+    virtualState.windowSize = 2;
+    serverState.statuses["exact-1"] = "ignored";
+    serverState.statuses["exact-2"] = "pending";
+    renderPage();
+    await screen.findAllByTestId("similarity-group");
+
+    const boxes = screen.getAllByRole("checkbox", { name: /选中这一组/ });
+    for (const box of boxes) fireEvent.click(box);
+    const bar = await screen.findByTestId("similarity-batch-bar");
+    fireEvent.click(within(bar).getByRole("button", { name: "标记已处理" }));
+
     await waitFor(() =>
       expect(batches).toContainEqual({
-        action: "unignore",
+        action: "review",
+        groupIds: ["exact-1", "exact-2"],
+      }),
+    );
+
+    const toast = useUIStore
+      .getState()
+      .toasts.find((item) => item.message === "已把 2 组标记为已处理");
+    expect(toast?.action?.label).toBe("撤销");
+    await act(async () => {
+      toast?.action?.onClick();
+    });
+
+    await waitFor(() => expect(restores).toHaveLength(2));
+    // 每一组各自回到自己原来的那一档。
+    expect(restores).toContainEqual({
+      groupId: "exact-1",
+      from: "reviewed",
+      to: "ignored",
+    });
+    expect(restores).toContainEqual({
+      groupId: "exact-2",
+      from: "reviewed",
+      to: "pending",
+    });
+    expect(serverState.statuses["exact-1"]).toBe("ignored");
+    expect(serverState.statuses["exact-2"]).toBe("pending");
+  });
+
+  // 重复操作不产生假的 changed：本来就是已处理的组再标记一次，
+  // 界面上不能说「已把 1 组标记为已处理」—— 实际上一组都没动。
+  it("本来就在目标状态的组不算变化，反馈不说假话", async () => {
+    serverState.statuses["exact-1"] = "reviewed";
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /选中这一组/ }));
+    const bar = await screen.findByTestId("similarity-batch-bar");
+    fireEvent.click(within(bar).getByRole("button", { name: "标记已处理" }));
+
+    await waitFor(() =>
+      expect(batches).toContainEqual({
+        action: "review",
         groupIds: ["exact-1"],
       }),
     );
+    await waitFor(() =>
+      expect(
+        useUIStore.getState().toasts.some(
+          (toast) => toast.message === "没有组需要标记为已处理",
+        ),
+      ).toBe(true),
+    );
+    // 没有变化就没有可撤销的东西。
+    expect(
+      useUIStore.getState().toasts.some((toast) => toast.action?.label === "撤销"),
+    ).toBe(false);
+  });
+
+  // 撤销过期：用户在这之后又改过这一组，撤销写不进去。
+  // 这时要说清楚为什么撤销不了，不能谎报恢复成功。
+  it("撤销遇到已经改过的组时如实说撤销不了", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+    await waitFor(() => expect(updates).toHaveLength(1));
+
+    serverState.updateError = new ApiError(
+      409,
+      "conflict",
+      undefined,
+      "similarity_status_conflict",
+    );
+    const toast = useUIStore
+      .getState()
+      .toasts.find((item) => item.message === "已把这一组标记为已处理");
+    await act(async () => {
+      toast?.action?.onClick();
+    });
+
+    await waitFor(() =>
+      expect(
+        useUIStore.getState().toasts.some(
+          (item) => item.message === "没能撤销：这一组之后又改过，撤销不了",
+        ),
+      ).toBe(true),
+    );
+    expect(
+      useUIStore.getState().toasts.some((item) => item.message === "已恢复原状态"),
+    ).toBe(false);
   });
 
   it("批量标记已处理与批量忽略的反馈不混着说", async () => {

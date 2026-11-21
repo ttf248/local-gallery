@@ -56,6 +56,7 @@ export default function SimilarityGroupCard({
     <article
       className="similarity-group"
       data-testid="similarity-group"
+      data-group-id={group.id}
       data-group-kind={group.kind}
       data-group-status={group.status}
     >

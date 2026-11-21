@@ -21,6 +21,7 @@ import {
   useSimilarityStatus,
 } from "../hooks/useSimilarity";
 import { aiJobsApi } from "../api/aiJobs";
+import { ApiError } from "../api/client";
 import { useUIStore } from "../store/uiStore";
 import type {
   SimilarityBatchAction,
@@ -65,6 +66,21 @@ function readStatusOption(value: string | null): SimilarityStatusOption {
     return value;
   }
   return "pending";
+}
+
+/**
+ * 一次可撤销的状态变更。
+ *
+ * 撤销要按每一组自己的原状态恢复：「全部」视图里的组本来就五花八门
+ * （有待处理、有已处理、有已忽略），统一翻一个布尔的话，已处理的会被
+ * 推回待处理、已忽略的也会丢掉 —— 用户的选择全乱了。
+ */
+interface UndoEntry {
+  groupId: string;
+  /** 操作之后的状态：撤销时拿它做并发校验。 */
+  from: SimilarityGroupStatus;
+  /** 操作之前的状态：撤销时回到这里。 */
+  to: SimilarityGroupStatus;
 }
 
 /**
@@ -165,84 +181,135 @@ export default function Similarity() {
   /**
    * 撤销一次状态写入。
    *
-   * 标记与忽略会让这一组离开「待处理」列表 —— 用户刚点完，屏幕上
-   * 就没有这一组了。没有撤销入口的话，反悔只能去别的筛选里把它翻
-   * 出来，那不叫反悔，叫找东西。
+   * 每一组回到自己操作前的那一档：后端记下了每组的原状态，撤销按它
+   * 恢复。「已忽略」的组被标记为已处理之后，撤销要回到「已忽略」，
+   * 不是回到「待处理」。
    */
   const undoStatus = useCallback(
-    async (
-      groupIds: string[],
-      body: { reviewed?: boolean; ignored?: boolean },
-      message: string,
-      batchAction?: SimilarityBatchAction,
-    ) => {
+    async (entries: UndoEntry[]) => {
+      if (entries.length === 0) return;
       try {
-        // 撤销走回原来那条路：单组的用单组写入，批量的用批量写入。
-        if (batchAction) {
-          await groups.batch.mutateAsync({
-            action: batchAction,
-            groupIds,
+        const result = await groups.restore.mutateAsync(
+          entries.map((entry) => ({
+            groupId: entry.groupId,
+            from: entry.from,
+            to: entry.to,
+          })),
+        );
+        const conflicts = result.conflicts?.length ?? 0;
+        if (conflicts > 0) {
+          pushToast({
+            kind: "warning",
+            message: `有 ${conflicts} 组之后又改过，没有恢复`,
           });
-        } else {
-          await groups.update.mutateAsync({ id: groupIds[0], body });
+          return;
         }
-        pushToast({ kind: "success", message });
+        pushToast({
+          kind: "success",
+          message: `已恢复 ${result.changed} 组的原状态`,
+        });
       } catch (error) {
         pushToast({
           kind: "error",
-          message: `没能撤销：${describeError(error)}`,
+          message: `没能撤销：${describeUndoError(error)}`,
         });
       }
     },
     [groups, pushToast],
   );
 
+  /**
+   * 撤销单组的状态写入。
+   *
+   * 与批量撤销走不同的路：单组是「这一组之后又改过」还是「恢复了」，
+   * 一句话说清；批量则要报出有几组没恢复。
+   *
+   * 并发校验：写入带上「操作后是哪一档」，用户在这之后又改过这一组
+   * 时后端拒写（409），这里如实说「撤销不了」，不谎报恢复成功。
+   */
+  const undoOne = useCallback(
+    async (entry: UndoEntry) => {
+      try {
+        await groups.update.mutateAsync({
+          id: entry.groupId,
+          body: { status: entry.to, expectedStatus: entry.from },
+        });
+        pushToast({ kind: "success", message: "已恢复原状态" });
+      } catch (error) {
+        pushToast({
+          kind: "error",
+          message: `没能撤销：${describeUndoError(error)}`,
+        });
+      }
+    },
+    [groups, pushToast],
+  );
+
+  /**
+   * 把某一组设成目标状态，并留一条能精确撤销的提示。
+   *
+   * 后端在写入前记下了这一组原来的状态（previousStatus）：三档状态
+   * 互斥，「标记已处理」会把原来的「已忽略」抹掉，只有记下来才回得去。
+   */
+  const handleSetStatus = useCallback(
+    async (
+      group: SimilarityGroup,
+      target: SimilarityGroupStatus,
+      message: string,
+    ) => {
+      try {
+        const result = await groups.update.mutateAsync({
+          id: group.id,
+          body: { status: target },
+        });
+        const entry: UndoEntry = {
+          groupId: group.id,
+          from: result.status ?? target,
+          to: result.previousStatus ?? group.status,
+        };
+        pushToast({
+          kind: "success",
+          message,
+          ttl: 8000,
+          action: {
+            label: "撤销",
+            onClick: () => void undoOne(entry),
+          },
+        });
+      } catch (error) {
+        pushToast({
+          kind: "error",
+          message: `没能保存这个决定：${describeError(error)}`,
+        });
+      }
+    },
+    [groups, pushToast, undoOne],
+  );
+
   /** 标记一组为已处理：说清做了什么，并留一条撤销。 */
   const handleReview = useCallback(
     async (group: SimilarityGroup) => {
       const undo = group.status === "reviewed";
-      const saved = await handleUpdate(group.id, { reviewed: !undo });
-      if (!saved) return;
-      if (!undo) {
-        pushToast({
-          kind: "success",
-          message: "已把这一组标记为已处理",
-          ttl: 8000,
-          action: {
-            label: "撤销",
-            onClick: () =>
-              void undoStatus([group.id], { reviewed: false }, "已放回待处理"),
-          },
-        });
-      } else {
-        pushToast({ kind: "success", message: "已放回待处理" });
-      }
+      await handleSetStatus(
+        group,
+        undo ? "pending" : "reviewed",
+        undo ? "已放回待处理" : "已把这一组标记为已处理",
+      );
     },
-    [handleUpdate, pushToast, undoStatus],
+    [handleSetStatus],
   );
 
   /** 忽略一组：同样留一条撤销。 */
   const handleIgnore = useCallback(
     async (group: SimilarityGroup) => {
       const undo = group.status === "ignored";
-      const saved = await handleUpdate(group.id, { ignored: !undo });
-      if (!saved) return;
-      if (!undo) {
-        pushToast({
-          kind: "success",
-          message: "已忽略这一组",
-          ttl: 8000,
-          action: {
-            label: "撤销",
-            onClick: () =>
-              void undoStatus([group.id], { ignored: false }, "已取消忽略"),
-          },
-        });
-      } else {
-        pushToast({ kind: "success", message: "已取消忽略" });
-      }
+      await handleSetStatus(
+        group,
+        undo ? "pending" : "ignored",
+        undo ? "已取消忽略" : "已忽略这一组",
+      );
     },
-    [handleUpdate, pushToast, undoStatus],
+    [handleSetStatus],
   );
 
   /** 把一组的代表照片加入精选：不必先勾选这一组。 */
@@ -287,48 +354,48 @@ export default function Similarity() {
               ? `已把 ${result.changed} 张代表照片加入精选`
               : "这些代表照片已经在精选里了",
           });
-        } else if (action === "review" || action === "unreview") {
-          const done = action === "review";
-          pushToast({
-            kind: "success",
-            message: done
-              ? `已把 ${result.changed} 组标记为已处理`
-              : `已把 ${result.changed} 组放回待处理`,
-            ttl: done ? 8000 : undefined,
-            action: done
-              ? {
-                  label: "撤销",
-                  onClick: () =>
-                    void undoStatus(
-                      ids,
-                      { reviewed: false },
-                      "已放回待处理",
-                      "unreview",
-                    ),
-                }
-              : undefined,
-          });
         } else {
-          const ignored = action === "ignore";
-          pushToast({
-            kind: "success",
-            message: ignored
-              ? `已忽略 ${result.changed} 组`
-              : `已取消忽略 ${result.changed} 组`,
-            ttl: ignored ? 8000 : undefined,
-            action: ignored
-              ? {
-                  label: "撤销",
-                  onClick: () =>
-                    void undoStatus(
-                      ids,
-                      { ignored: false },
-                      "已取消忽略",
-                      "unignore",
-                    ),
-                }
-              : undefined,
-          });
+          const done = action === "review" || action === "ignore";
+          const label =
+            action === "review"
+              ? "标记为已处理"
+              : action === "ignore"
+                ? "忽略"
+                : action === "unreview"
+                  ? "放回待处理"
+                  : "取消忽略";
+          const message =
+            action === "review"
+              ? `已把 ${result.changed} 组标记为已处理`
+              : action === "ignore"
+                ? `已忽略 ${result.changed} 组`
+                : action === "unreview"
+                  ? `已把 ${result.changed} 组放回待处理`
+                  : `已取消忽略 ${result.changed} 组`;
+          // 撤销按每组自己的原状态恢复：后端把变了的那几组的原状态
+          // 记了下来（previous），这里照着它一条条还原。
+          const entries = undoEntriesFrom(result);
+          if (result.changed === 0) {
+            // 一组都没变：如实说没有可做的事，也不给一条撤销 ——
+            // 没有变化就没有可撤销的东西。
+            pushToast({
+              kind: "info",
+              message: `没有组需要${label}`,
+            });
+          } else {
+            pushToast({
+              kind: "success",
+              message,
+              ttl: done ? 8000 : undefined,
+              action:
+                done && entries.length > 0
+                  ? {
+                      label: "撤销",
+                      onClick: () => void undoStatus(entries),
+                    }
+                  : undefined,
+            });
+          }
         }
         setSelectedIds(new Set());
       } catch (error) {
@@ -812,4 +879,43 @@ function emptyDescription(
 function describeError(error: unknown): string {
   if (error instanceof Error && error.message) return error.message;
   return "未知错误";
+}
+
+/**
+ * 撤销失败的说法。
+ *
+ * 撤销有两种失败：状态对不上（用户在这之后又改过这一组）与分组已经
+ * 没了（重建后换了 id）。这两种都不是「网络抖了一下」，要说得具体 ——
+ * 说清楚为什么撤销不了，用户才知道下一步该做什么。
+ */
+function describeUndoError(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.code === "similarity_status_conflict") {
+      return "这一组之后又改过，撤销不了";
+    }
+    if (error.code === "similarity_group_not_found") {
+      return "这一组已经不在了，撤销不了";
+    }
+  }
+  return describeError(error);
+}
+
+/**
+ * 从批量操作的结果里取出撤销条目。
+ *
+ * previous 是每组操作前的状态，current 是操作后的状态：撤销要按
+ * 「从 current 回到 previous」一条条还原。缺哪一头就不给这一条 ——
+ * 没有原状态就没有可恢复的地方。
+ */
+function undoEntriesFrom(result: {
+  previous?: Record<string, SimilarityGroupStatus>;
+  current?: Record<string, SimilarityGroupStatus>;
+}): UndoEntry[] {
+  const entries: UndoEntry[] = [];
+  for (const [groupId, to] of Object.entries(result.previous ?? {})) {
+    const from = result.current?.[groupId];
+    if (!from) continue;
+    entries.push({ groupId, from, to });
+  }
+  return entries;
 }

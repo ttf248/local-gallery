@@ -89,14 +89,22 @@ func SimilarityRebuildHandler(service *services.SimilarityService) fiber.Handler
 
 // SimilarityGroupUpdateHandler PUT /api/similarity/groups/:id
 //
-// Body: {"representative": "f_..."} 或 {"reviewed": true} 或 {"ignored": true}。
+// Body: {"status": "reviewed"} 或 {"representative": "f_..."}
+// 或旧式的 {"reviewed": true} / {"ignored": true}。
 //
-// 三种动作可以一次只给一个；representative 指定的照片必须在这组里。
+// status 直接设定三档状态（pending / reviewed / ignored），
+// 返回里带上操作前后的状态 —— 撤销要靠 previousStatus 恢复回去。
+// expectedStatus 是并发保护：只有当前状态等于它才写入，状态对不上
+// 返回 409（撤销过期时就是这种情况）。
 func SimilarityGroupUpdateHandler(service *services.SimilarityService) fiber.Handler {
 	type request struct {
 		Representative string `json:"representative,omitempty"`
 		Reviewed       *bool  `json:"reviewed,omitempty"`
 		Ignored        *bool  `json:"ignored,omitempty"`
+		// Status 直接设定状态（三档）。
+		Status string `json:"status,omitempty"`
+		// ExpectedStatus 只有当前状态等于它才写入。
+		ExpectedStatus string `json:"expectedStatus,omitempty"`
 	}
 	return func(c *fiber.Ctx) error {
 		if service == nil {
@@ -107,25 +115,54 @@ func SimilarityGroupUpdateHandler(service *services.SimilarityService) fiber.Han
 			return httputil.BadRequest(c, "invalid_similarity_request", "request body is not valid JSON")
 		}
 		groupID := c.Params("id")
-		if input.Reviewed != nil {
-			if err := service.SetReviewed(groupID, *input.Reviewed); err != nil {
+		response := fiber.Map{"ok": true}
+		if input.Status != "" {
+			result, err := service.SetStatusIfCurrent(groupID, input.ExpectedStatus, input.Status)
+			if err != nil {
+				if errors.Is(err, services.ErrSimilarityStatusConflict) {
+					return httputil.Conflict(c, "similarity_status_conflict", "this group has changed since the action was made")
+				}
 				return writeSimilarityError(c, err)
 			}
+			response["status"] = result.Current
+			response["previousStatus"] = result.Previous
+			response["changed"] = result.Changed
+		}
+		if input.Reviewed != nil {
+			status := services.SimilarityStatusPending
+			if *input.Reviewed {
+				status = services.SimilarityStatusReviewed
+			}
+			result, err := service.SetStatus(groupID, status)
+			if err != nil {
+				return writeSimilarityError(c, err)
+			}
+			response["status"] = result.Current
+			response["previousStatus"] = result.Previous
+			response["changed"] = result.Changed
 		}
 		if input.Ignored != nil {
-			if err := service.SetIgnored(groupID, *input.Ignored); err != nil {
+			status := services.SimilarityStatusPending
+			if *input.Ignored {
+				status = services.SimilarityStatusIgnored
+			}
+			result, err := service.SetStatus(groupID, status)
+			if err != nil {
 				return writeSimilarityError(c, err)
 			}
+			response["status"] = result.Current
+			response["previousStatus"] = result.Previous
+			response["changed"] = result.Changed
 		}
 		if input.Representative != "" {
 			if err := service.SetRepresentative(groupID, input.Representative); err != nil {
 				return writeSimilarityError(c, err)
 			}
 		}
-		if input.Reviewed == nil && input.Ignored == nil && input.Representative == "" {
+		if input.Status == "" && input.Reviewed == nil && input.Ignored == nil && input.Representative == "" {
 			return httputil.BadRequest(c, "invalid_similarity_request", "no action was requested")
 		}
-		return c.JSON(fiber.Map{"ok": true})
+		return c.JSON(response)
 	}
 }
 
@@ -133,11 +170,15 @@ func SimilarityGroupUpdateHandler(service *services.SimilarityService) fiber.Han
 //
 // Body: {"action": "review"|"unreview"|"ignore"|"unignore"|"pick", "groupIds": [...]}
 //
+// 或 {"action": "restore", "restores": [{"groupId": "...", "from": "...", "to": "..."}]}：
+// 撤销用后者，每一组各自回到自己的原状态。
+//
 // pick 把每组的代表照片加入现有的照片级精选。
 func SimilarityBatchHandler(service *services.SimilarityService) fiber.Handler {
 	type request struct {
 		Action   string   `json:"action"`
 		GroupIDs []string `json:"groupIds"`
+		Restores []services.SimilarityStatusChange `json:"restores"`
 	}
 	return func(c *fiber.Ctx) error {
 		if service == nil {
@@ -147,17 +188,39 @@ func SimilarityBatchHandler(service *services.SimilarityService) fiber.Handler {
 		if err := c.BodyParser(&input); err != nil {
 			return httputil.BadRequest(c, "invalid_similarity_request", "request body is not valid JSON")
 		}
+		if input.Action == services.SimilarityBatchRestore {
+			if len(input.Restores) == 0 || len(input.Restores) > maxSelectionBatch {
+				return httputil.BadRequest(c, "invalid_similarity_batch", "invalid similarity batch")
+			}
+			result, err := service.ApplyBatchRestore(input.Restores)
+			if err != nil {
+				return httputil.BadRequest(c, "invalid_similarity_batch", "the similarity action could not be applied")
+			}
+			return c.JSON(fiber.Map{
+				"ok":        true,
+				"changed":   result.Changed,
+				"previous":  result.Previous,
+				"current":   result.Current,
+				"conflicts": result.Conflicts,
+			})
+		}
 		if len(input.GroupIDs) == 0 || len(input.GroupIDs) > maxSelectionBatch {
 			return httputil.BadRequest(c, "invalid_similarity_batch", "invalid similarity batch")
 		}
-		changed, err := service.ApplyBatch(input.Action, input.GroupIDs)
+		result, err := service.ApplyBatch(input.Action, input.GroupIDs)
 		if err != nil {
 			if errors.Is(err, services.ErrSimilarityGroupNotFound) {
 				return httputil.NotFound(c, "similarity_group_not_found", "the similarity group no longer exists")
 			}
 			return httputil.BadRequest(c, "invalid_similarity_batch", "the similarity action could not be applied")
 		}
-		return c.JSON(fiber.Map{"ok": true, "changed": changed})
+		return c.JSON(fiber.Map{
+			"ok":        true,
+			"changed":   result.Changed,
+			"previous":  result.Previous,
+			"current":   result.Current,
+			"conflicts": result.Conflicts,
+		})
 	}
 }
 

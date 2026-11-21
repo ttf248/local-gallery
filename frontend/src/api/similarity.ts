@@ -142,6 +142,42 @@ export type SimilarityBatchAction =
   | "unignore"
   | "pick";
 
+/**
+ * 一次状态写入的结果。
+ *
+ * previousStatus 是操作前的状态：撤销要按它恢复回去。状态是三档，
+ * 「标记已处理」之后原来的「已忽略」就没了 —— 只翻一个布尔回不去。
+ */
+export interface SimilarityStatusResult {
+  /** 写入后的状态。 */
+  status?: SimilarityGroupStatus;
+  /** 写入前的状态。 */
+  previousStatus?: SimilarityGroupStatus;
+  /** 是否真的改了：本来就在那一档时是假。 */
+  changed?: boolean;
+}
+
+/** 批量操作的结果。 */
+export interface SimilarityBatchResult {
+  /** 真正变了的组数。 */
+  changed: number;
+  /** 变了的那几组的原状态。 */
+  previous?: Record<string, SimilarityGroupStatus>;
+  /** 变了的那几组的新状态。 */
+  current?: Record<string, SimilarityGroupStatus>;
+  /** 没写进去的组：状态已经变了，或分组已经不存在。 */
+  conflicts?: string[];
+}
+
+/** 一次状态恢复：把某一组从 from 改回 to。 */
+export interface SimilarityRestoreEntry {
+  groupId: string;
+  /** 恢复前的状态：只有它还成立时才恢复。 */
+  from: SimilarityGroupStatus;
+  /** 要恢复回去的状态。 */
+  to: SimilarityGroupStatus;
+}
+
 export const similarityApi = {
   status: () => api<{ ok: boolean; status: SimilarityStatus }>("/api/similarity/status"),
 
@@ -156,14 +192,29 @@ export const similarityApi = {
       },
     }),
 
+  /**
+   * 改某一组的人工决定。
+   *
+   * status 直接设定三档状态；expectedStatus 是并发保护：只有当前状态
+   * 等于它才写入，状态对不上时后端返回 409（撤销过期就是这种情况）。
+   */
   update: (
     id: string,
-    body: { representative?: string; reviewed?: boolean; ignored?: boolean },
+    body: {
+      representative?: string;
+      reviewed?: boolean;
+      ignored?: boolean;
+      status?: SimilarityGroupStatus;
+      expectedStatus?: SimilarityGroupStatus;
+    },
   ) =>
-    api<{ ok: boolean }>(`/api/similarity/groups/${encodeURIComponent(id)}`, {
-      method: "PUT",
-      body,
-    }),
+    api<{ ok: boolean } & SimilarityStatusResult>(
+      `/api/similarity/groups/${encodeURIComponent(id)}`,
+      {
+        method: "PUT",
+        body,
+      },
+    ),
 
   /** 重算分组。特征变了但还没重建时用它，不必再跑一遍分析任务。 */
   rebuild: () =>
@@ -172,8 +223,21 @@ export const similarityApi = {
     }),
 
   batch: (action: SimilarityBatchAction, groupIds: string[]) =>
-    api<{ ok: boolean; changed: number }>("/api/similarity/batch", {
+    api<{ ok: boolean } & SimilarityBatchResult>("/api/similarity/batch", {
       method: "POST",
       body: { action, groupIds },
+    }),
+
+  /**
+   * 按每组各自的原状态恢复。
+   *
+   * 「全部」视图里的组本来就五花八门：统一翻一个布尔，已处理的会被
+   * 推回待处理、已忽略的也会丢掉。这一项一组一条，各自回到自己
+   * 原来的那一档。
+   */
+  restore: (entries: SimilarityRestoreEntry[]) =>
+    api<{ ok: boolean } & SimilarityBatchResult>("/api/similarity/batch", {
+      method: "POST",
+      body: { action: "restore", restores: entries },
     }),
 };
