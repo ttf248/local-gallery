@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import {
   useInfiniteQuery,
   useQuery,
@@ -10,7 +10,7 @@ import {
   type SmartAlbumDirectoryDimension,
   type SmartAlbumSort,
 } from "../api/albums";
-import { ApiError, isRetryableStatus } from "../api/client";
+import { ApiError, isRetryableStatus, isStaleCursorError } from "../api/client";
 import { useAppMode } from "./useAppMode";
 
 /** 一次接一批分组：六十个刚好铺满两三屏瀑布流。 */
@@ -101,13 +101,14 @@ export function useSmartAlbumGroupMedia(
   groupId: string,
   snapshotKey: string,
 ) {
-  return useInfiniteQuery({
-    queryKey: smartAlbumQueryKeys.media(
-      albumId,
-      dimension,
-      groupId,
-      snapshotKey,
-    ),
+  const client = useQueryClient();
+  const key = useMemo(
+    () =>
+      smartAlbumQueryKeys.media(albumId, dimension, groupId, snapshotKey),
+    [albumId, dimension, groupId, snapshotKey],
+  );
+  const result = useInfiniteQuery({
+    queryKey: key,
     queryFn: async ({ pageParam, signal }) => {
       const response = await albumsApi.smartGroupMedia(
         albumId,
@@ -123,4 +124,19 @@ export function useSmartAlbumGroupMedia(
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled: albumId.length > 0 && groupId.length > 0 && snapshotKey.length > 0,
   });
+
+  const fetchNextPageRef = useRef(result.fetchNextPage);
+  fetchNextPageRef.current = result.fetchNextPage;
+
+  /* 分组摘要变了，这一页的位置不再有效：重试它没有意义，从头重取。
+     其余失败（断网、500）重试同一页即可，继续从正确的游标往下走。 */
+  const retryNextPage = useCallback(() => {
+    if (isStaleCursorError(result.error)) {
+      void client.resetQueries({ queryKey: key, exact: true });
+      return;
+    }
+    void fetchNextPageRef.current({ cancelRefetch: false });
+  }, [client, key, result.error]);
+
+  return { ...result, retryNextPage };
 }

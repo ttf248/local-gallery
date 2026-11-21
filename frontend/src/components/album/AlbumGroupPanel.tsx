@@ -58,6 +58,21 @@ const DIMENSIONS: readonly [SmartAlbumDimension, string][] = [
 ];
 
 /**
+ * 空态给出的那个操作。
+ *
+ * 空态说什么，底下就得给得出对得上的那一个：缺分析给补分析，分析失败
+ * 给重新分析，分析做完了却没凑出分组给重建。一个状态配一个动作，
+ * 不给对不上的按钮。
+ */
+type EmptyAction =
+  | null
+  | "enable-people"
+  | "analyze-module"
+  | "retry-module"
+  | "rebuild"
+  | "recommended-modules";
+
+/**
  * 推荐成立缺一不可的两个模块。
  *
  * EXIF 给出时间与地点线索，语义向量给出场景线索 —— 这两类对上了
@@ -142,30 +157,82 @@ export default function AlbumGroupPanel({
     peopleEnabled,
   });
 
-  const emptyDescription = (() => {
-    if (!summary) return "正在读取这本相册的分析线索…";
+  /* 分组面板的空态有三种，说法与操作各自对上：
+     - 还没分析：缺的是分析，入口是补分析。
+     - 分析失败：缺的是重跑，入口是重新分析（补分析不会碰失败的那些）。
+     - 分析过了但没凑出分组：没有可补的东西，只把原因说清楚。 */
+  const emptyState = (() => {
+    if (!summary) {
+      return {
+        title: "还没有可展示的分组",
+        description: "正在读取这本相册的分析线索…",
+        action: null as EmptyAction,
+      };
+    }
     if (summary.hiddenGroupCount > 0 && !showHiddenGroups) {
-      return "当前分组已隐藏，可选择显示已隐藏分组。";
+      return {
+        title: "还没有可展示的分组",
+        description: "当前分组已隐藏，可选择显示已隐藏分组。",
+        action: null as EmptyAction,
+      };
     }
     if (summary.coverage.reason === "people_analysis_disabled") {
-      return "人物分组依赖人脸分析。先到任务中心启用人物分析，再把人脸分析加入运行或每日计划。";
+      return {
+        title: "人物分组还不能用",
+        description:
+          "人物分组依赖人脸分析。先到任务中心启用人物分析，再把人脸分析加入运行或每日计划。",
+        action: "enable-people" as EmptyAction,
+      };
     }
     if (dimension === "recommended") {
-      return recommendation.description;
+      return {
+        title: recommendation.title,
+        description: recommendation.description,
+        action: "recommended-modules" as EmptyAction,
+      };
     }
     if (!summary.coverage.available) {
-      return "所需分析模块当前不可用；可在任务中心的本机存储页查看模型状态。";
+      return {
+        title: "所需分析模块不可用",
+        description:
+          "所需分析模块当前不可用；可在任务中心的本机存储页查看模型状态。",
+        action: null as EmptyAction,
+      };
+    }
+    if (summary.coverage.failed > 0) {
+      return {
+        title: "分析有失败项",
+        description: `有 ${summary.coverage.failed} 张照片分析失败，失败的这些不参与分组。`,
+        action: "retry-module" as EmptyAction,
+      };
     }
     if (analyzableMissing > 0) {
-      return `还有 ${analyzableMissing} 张照片没有完成${requiredModuleNames[requiredModule[dimension]]}分析。`;
+      return {
+        title: "还没有完成分析",
+        description: `还有 ${analyzableMissing} 张照片没有完成${requiredModuleNames[requiredModule[dimension]]}分析。`,
+        action: "analyze-module" as EmptyAction,
+      };
     }
     if (summary.unavailablePhotos > 0) {
-      return "尚未分析的照片当前不可读取；请先检查本地文件并重新扫描媒体库。";
+      return {
+        title: "还没有可展示的分组",
+        description:
+          "尚未分析的照片当前不可读取；请先检查本地文件并重新扫描媒体库。",
+        action: null as EmptyAction,
+      };
     }
     if (summary.coverage.withEvidence < 3) {
-      return `分析已完成，但只有 ${summary.coverage.withEvidence} 张照片含有可用线索；每组至少需要 3 张。`;
+      return {
+        title: "还没有可展示的分组",
+        description: `分析已完成，但只有 ${summary.coverage.withEvidence} 张照片含有可用线索；每组至少需要 3 张。`,
+        action: "rebuild" as EmptyAction,
+      };
     }
-    return "分析已完成，但当前线索没有形成达到最低数量的分组。";
+    return {
+      title: "还没有可展示的分组",
+      description: "分析已完成，但当前线索没有形成达到最低数量的分组。",
+      action: "rebuild" as EmptyAction,
+    };
   })();
   const canAnalyzeDimension = Boolean(
     summary &&
@@ -269,17 +336,28 @@ export default function AlbumGroupPanel({
           </div>
         ) : visibleGroups.length === 0 ? (
           <div className="mt-3 rounded-xl border border-dashed border-border bg-bg-elevated/60 px-6 py-10 text-center">
-            <h3 className="text-body font-medium text-fg">
-              {dimension === "recommended"
-                ? recommendation.title
-                : "还没有可展示的分组"}
-            </h3>
-            <p className="mt-2 text-meta text-fg-muted">{emptyDescription}</p>
-            {summary.coverage.reason === "people_analysis_disabled" ? (
+            <h3 className="text-body font-medium text-fg">{emptyState.title}</h3>
+            <p className="mt-2 text-meta text-fg-muted">
+              {emptyState.description}
+            </p>
+            {emptyState.action === "enable-people" ? (
               <Link to="/tasks/plan" className="btn btn-sm btn-outline mt-4">
                 去任务中心启用
               </Link>
-            ) : canAnalyzeDimension ? (
+            ) : emptyState.action === "retry-module" ? (
+              <button
+                type="button"
+                onClick={() =>
+                  onAnalyzeDimension(requiredModule[dimension])
+                }
+                disabled={analyzing}
+                className="btn btn-sm btn-outline mt-4"
+              >
+                {analyzing
+                  ? "已加入分析队列…"
+                  : `重新分析${requiredModuleNames[requiredModule[dimension]]}`}
+              </button>
+            ) : emptyState.action === "analyze-module" && canAnalyzeDimension ? (
               <button
                 type="button"
                 onClick={() =>
@@ -292,7 +370,8 @@ export default function AlbumGroupPanel({
                   ? "已加入分析队列…"
                   : `补充${requiredModuleNames[requiredModule[dimension]]}分析`}
               </button>
-            ) : recommendedAnalyzeModules.length > 0 ? (
+            ) : emptyState.action === "recommended-modules" &&
+              recommendedAnalyzeModules.length > 0 ? (
               <div className="mt-4 flex flex-wrap justify-center gap-2">
                 {recommendedAnalyzeModules.map((type) => (
                   <button
@@ -308,6 +387,17 @@ export default function AlbumGroupPanel({
                   </button>
                 ))}
               </div>
+            ) : emptyState.action === "rebuild" ? (
+              /* 分析做完了却没凑出分组：能做的不是再分析一次，
+                 而是按现有结果重建一遍分组。 */
+              <button
+                type="button"
+                onClick={onRebuild}
+                disabled={rebuilding}
+                className="btn btn-sm btn-outline mt-4"
+              >
+                {rebuilding ? "正在重建…" : "重建分组"}
+              </button>
             ) : null}
           </div>
         ) : (

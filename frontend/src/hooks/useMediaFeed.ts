@@ -1,6 +1,6 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, isRetryableStatus } from "../api/client";
+import { ApiError, isRetryableStatus, isStaleCursorError } from "../api/client";
 import {
   libraryApi,
   type LibraryFeedAlbum,
@@ -49,15 +49,22 @@ export function useMediaFeed(
       !(error instanceof ApiError && !isRetryableStatus(error.status)) &&
       count < 1,
   });
-  // 游标失效说明库变了：清掉分页链重取首屏，而不是把整页判成失败。
-  useEffect(() => {
-    if (
-      result.error instanceof ApiError &&
-      ["stale_cursor", "invalid_cursor"].includes(result.error.code ?? "")
-    ) {
+
+  const fetchNextPageRef = useRef(result.fetchNextPage);
+  fetchNextPageRef.current = result.fetchNextPage;
+
+  /* 分页失败之后怎么恢复：
+     - 游标失效：库变了，这一页的位置已经不对了，重试它没有意义 ——
+       从头重取才是对的。已加载的那几页会重新取一遍。
+     - 其余（断网、500）：重试同一页即可，继续从正确的游标往下走，
+       已加载的照片不重复也不丢。 */
+  const retryNextPage = useCallback(() => {
+    if (isStaleCursorError(result.error)) {
       void client.resetQueries({ queryKey: key, exact: true });
+      return;
     }
-  }, [result.error, client, key]);
+    void fetchNextPageRef.current({ cancelRefetch: false });
+  }, [client, key, result.error]);
 
   const items = useMemo<LibraryFeedItem[]>(
     () => result.data?.pages.flatMap((page) => page.items) ?? [],
@@ -101,5 +108,9 @@ export function useMediaFeed(
     datePrecisions,
     total,
     query,
+    /** 分页失败之后重试：游标失效时从头重取，其余重试同一页。 */
+    retryNextPage,
+    /** 这一次的失败是不是游标失效（库变了）。 */
+    cursorInvalidated: isStaleCursorError(result.error),
   };
 }

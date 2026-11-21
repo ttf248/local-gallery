@@ -5,6 +5,14 @@ interface Options {
   loadedCount: number;
   hasNextPage: boolean;
   isLoadingMore: boolean;
+  /**
+   * 上一次「取下一页」失败了。
+   *
+   * 失败之后不再自动触发下一次：条件一旦满足（已加载末尾还在视口里）
+   * 就会反复发同一个请求，失败一次接一次，成了一条无限请求。
+   * 失败时把重试交给用户，界面上有明确的提示条与按钮。
+   */
+  loadMoreError?: boolean;
   onLoadMore: () => void;
 }
 
@@ -13,6 +21,7 @@ export function useMediaGridPagination({
   loadedCount,
   hasNextPage,
   isLoadingMore,
+  loadMoreError = false,
   onLoadMore,
 }: Options) {
   const [endIndex, setEndIndex] = useState(-1);
@@ -30,6 +39,8 @@ export function useMediaGridPagination({
   onLoadMoreRef.current = onLoadMore;
 
   useEffect(() => {
+    // 上一次取下一页失败了：不再自动触发，等用户显式重试。
+    if (loadMoreError) return;
     // 占位槽已覆盖整本相册，endReached 只会在整本末尾触发。
     // 跳到远处占位区时，每页完成后也要重新检查，直到覆盖当前视口。
     if (
@@ -40,7 +51,7 @@ export function useMediaGridPagination({
     ) {
       onLoadMoreRef.current();
     }
-  }, [endIndex, loadedCount, hasNextPage, isLoadingMore]);
+  }, [endIndex, loadedCount, hasNextPage, isLoadingMore, loadMoreError]);
 
   return rangeChanged;
 }

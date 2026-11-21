@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigationType,
+} from "react-router-dom";
 import PhotoAlbum from "./PhotoAlbum";
 import { useAlbumFilters, useAlbumMedia } from "../hooks/useLibrary";
 import {
@@ -10,8 +16,10 @@ import {
 } from "../hooks/useSmartAlbums";
 import { useFavorites } from "../hooks/useFavorites";
 import { fsApi } from "../api/fs";
+import { ApiError } from "../api/client";
 import { aiJobsApi } from "../api/aiJobs";
 import { useUIStore } from "../store/uiStore";
+import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 
 vi.mock("../hooks/useLibrary", () => ({
   useAlbumMedia: vi.fn(),
@@ -91,9 +99,10 @@ const album = {
 
 function Location() {
   const location = useLocation();
+  const navigationType = useNavigationType();
   return (
     <output data-testid="location">
-      {location.pathname + location.search}
+      {location.pathname + location.search}|{navigationType}
     </output>
   );
 }
@@ -300,7 +309,9 @@ describe("PhotoAlbum", () => {
       isFetchingNextPage: false,
       isFetchNextPageError: false,
       fetchNextPage: vi.fn(),
+      retryNextPage: vi.fn(),
     } as never);
+    usePhotoSelectionStore.setState({ active: false, entries: {}, scope: "" });
   });
 
   it("直接呈现照片墙，没有漫画阅读器的入口", () => {
@@ -342,8 +353,137 @@ describe("PhotoAlbum", () => {
     expect(screen.getByTestId("photo-wall")).toHaveTextContent("1.jpg");
   });
 
-  it("场景维度缺少向量时只启动当前相册的语义分析", async () => {
-    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+  // 两套条件不叠加：分组本身就是筛好的结果，筛选条件留在地址栏里
+  // 只会让分组视图静默忽略它们。
+  it("进入分组时结束冲突的筛选条件，回到全部照片后不再意外恢复", async () => {
+    renderPhotoAlbum(
+      album,
+      `/albums/${album.id}?dimension=time&picks=only`,
+    );
+
+    // 分组视图里不摆筛选条：这里没有能再筛的东西。
+    fireEvent.click(
+      screen.getByRole("button", { name: /^2025年6月18日/ }),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        `/albums/${album.id}?dimension=time&group=sg_0123456789abcdef0123`,
+      ),
+    );
+    expect(screen.queryByRole("button", { name: /^筛选/ })).toBeNull();
+    // 地址栏里不再挂着在分组里根本不生效的条件。
+    expect(screen.getByTestId("location")).not.toHaveTextContent("picks=only");
+    // 界面上说清分组不叠加条件，不让用户自己猜。
+    expect(
+      screen.getByText("分组已经是筛好的照片，不叠加其它条件"),
+    ).toBeInTheDocument();
+
+    // 回到全部照片：真的回到全部，不再意外恢复那条被结束的筛选。
+    fireEvent.click(screen.getByRole("button", { name: "回到全部照片" }));
+    await waitFor(() => {
+      const last = vi.mocked(useAlbumMedia).mock.calls.at(-1);
+      expect(last?.[3]).toEqual({});
+    });
+  });
+
+  // 分组被重建、删除之后原先选中的那一组已经不在了：退回全部照片。
+  // 那是系统的纠错，改地址就行，别往历史里追加失效的地址。
+  it("分组失效后自动退回全部照片，不往历史里追加地址", async () => {
+    renderPhotoAlbum(
+      album,
+      `/albums/${album.id}?dimension=time&group=sg_gone`,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        `/albums/${album.id}?dimension=time`,
+      ),
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("group=");
+    expect(screen.getByTestId("location")).toHaveTextContent("|REPLACE");
+  });
+
+  // 分组参数没有维度作伴：它指向一个不存在的看法，删掉。
+  it("没有维度的分组参数会被清掉", async () => {
+    renderPhotoAlbum(album, `/albums/${album.id}?group=sg_0123456789abcdef0123`);
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        `/albums/${album.id}|`,
+      ),
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("group=");
+  });
+
+  // 分组在服务端已经不存在（被删掉、被换号）：地址里的 id 失效了。
+  // 摘要可能还缓存着旧的一份，这时由取媒体的失败把这件事说出来。
+  it("分组在服务端已经不存在时退回全部照片", async () => {
+    vi.mocked(useSmartAlbumGroupMedia).mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new ApiError(
+        404,
+        "分组不存在",
+        undefined,
+        "smart_group_not_found",
+      ),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isFetchNextPageError: false,
+      fetchNextPage: vi.fn(),
+      retryNextPage: vi.fn(),
+    } as never);
+    renderPhotoAlbum(
+      album,
+      `/albums/${album.id}?dimension=time&group=sg_0123456789abcdef0123`,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(
+        `/albums/${album.id}?dimension=time`,
+      ),
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("group=");
+    expect(screen.getByTestId("location")).toHaveTextContent("|REPLACE");
+  });
+
+  // 换一种看法不该把用户勾好的照片弄丢：多选的作用域是这本相册。
+  it("分组浏览不清空已经勾选的照片", async () => {
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time`);
+
+    // 作用域先落在这一本相册上，再勾选。
+    await waitFor(() =>
+      expect(usePhotoSelectionStore.getState().scope).toBe(
+        `album:${album.id}`,
+      ),
+    );
+    act(() => {
+      usePhotoSelectionStore.getState().start();
+      usePhotoSelectionStore.getState().toggle({
+        id: "f_1",
+        name: "1.jpg",
+        albumId: album.id,
+        albumName: "春游",
+        kind: "image",
+      });
+    });
+    await waitFor(() =>
+      expect(screen.getByText("已选 1 张")).toBeInTheDocument(),
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /^2025年6月18日/ }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent("group="),
+    );
+
+    expect(screen.getByText("已选 1 张")).toBeInTheDocument();
+    expect(usePhotoSelectionStore.getState().entries.f_1).toBeTruthy();
+  });
+
+  it("场景维度缺少向量时只启动当前相册的语义分析", async () => {    vi.mocked(useSmartAlbumGroups).mockReturnValue({
       data: {
         ok: true,
         summary: {
@@ -386,6 +526,137 @@ describe("PhotoAlbum", () => {
     expect(
       screen.getByRole("button", { name: "已加入分析队列…" }),
     ).toBeDisabled();
+  });
+
+  // 分组面板的三种空态：没分析、分析失败、没凑出分组。
+  // 每个状态说什么，底下就得给得出对得上的那一个操作。
+  it("分组没分析时给的是补分析", () => {
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+      data: {
+        ok: true,
+        summary: {
+          albumId: album.id,
+          dimension: "time",
+          revision: 1,
+          snapshotKey: "time-snapshot",
+          totalPhotos: 4,
+          availablePhotos: 4,
+          unavailablePhotos: 0,
+          ungroupedPhotos: 4,
+          hiddenGroupCount: 0,
+          coverage: {
+            module: "metadata",
+            total: 4,
+            analyzed: 0,
+            missing: 4,
+            failed: 0,
+            withEvidence: 0,
+            available: true,
+          },
+          groups: [],
+          cacheHit: true,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time`);
+
+    expect(
+      screen.getByRole("heading", { name: "还没有完成分析" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("还有 4 张照片没有完成EXIF 元数据分析。"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "补充EXIF 元数据分析" }),
+    ).toBeInTheDocument();
+  });
+
+  it("分析失败时给的是重新分析", () => {
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+      data: {
+        ok: true,
+        summary: {
+          albumId: album.id,
+          dimension: "time",
+          revision: 1,
+          snapshotKey: "time-snapshot",
+          totalPhotos: 4,
+          availablePhotos: 4,
+          unavailablePhotos: 0,
+          ungroupedPhotos: 4,
+          hiddenGroupCount: 0,
+          coverage: {
+            module: "metadata",
+            total: 4,
+            analyzed: 0,
+            missing: 0,
+            failed: 4,
+            withEvidence: 0,
+            available: true,
+          },
+          groups: [],
+          cacheHit: true,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time`);
+
+    expect(
+      screen.getByRole("heading", { name: "分析有失败项" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("有 4 张照片分析失败，失败的这些不参与分组。"),
+    ).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "重新分析EXIF 元数据" });
+    expect(retry).toBeInTheDocument();
+    // 失败的照片要重跑，不是补分析。
+    expect(
+      screen.queryByRole("button", { name: "补充EXIF 元数据分析" }),
+    ).toBeNull();
+  });
+
+  it("分析做完了却没凑出分组时给的是重建分组", () => {
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+      data: {
+        ok: true,
+        summary: {
+          albumId: album.id,
+          dimension: "time",
+          revision: 1,
+          snapshotKey: "time-snapshot",
+          totalPhotos: 4,
+          availablePhotos: 4,
+          unavailablePhotos: 0,
+          ungroupedPhotos: 4,
+          hiddenGroupCount: 0,
+          coverage: {
+            module: "metadata",
+            total: 4,
+            analyzed: 4,
+            missing: 0,
+            failed: 0,
+            withEvidence: 4,
+            available: true,
+          },
+          groups: [],
+          cacheHit: true,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time`);
+
+    expect(
+      screen.getByRole("heading", { name: "还没有可展示的分组" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "重建分组" }),
+    ).toBeInTheDocument();
   });
 
   it("人物分析未启用时指向每日计划，不启动人脸任务", () => {

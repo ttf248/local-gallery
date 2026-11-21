@@ -3067,3 +3067,59 @@ function thumbRoutePattern(fileId: string) {
   // 而 /cover 上传的 pathname 仍然不同，不会误伤。
   return (url: URL) => url.pathname === path;
 }
+
+/**
+ * 照片墙关掉大图之后要回到刚才看的那一张。
+ *
+ * 墙是分页取、虚拟列表铺的：关掉预览时如果不管位置，用户翻到第几百张
+ * 再关掉，就得自己滚回去找。焦点也要回到刚才点开的那一张 ——
+ * 键盘用户接着往下翻时，焦点不能掉在别处。
+ */
+test("相册照片墙关掉大图后回到刚才那张并恢复焦点", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+  const albums = await scannedNodes(request, "photo");
+  const album = albums.find((node) => node.name === "sample-paged-images");
+  expect(album).toBeDefined();
+
+  // 缩略图换成固定尺寸的实心图：版式立刻稳定，测的是交互而不是排版。
+  await page.route("**/api/thumbs/**", (route) =>
+    route.fulfill({ contentType: "image/png", body: solidPng(8, 8) }),
+  );
+
+  await page.goto(albumUrl(album!));
+  const scroller = page.locator("main [data-virtuoso-scroller]").first();
+  await expect(
+    scroller.locator("button[aria-label^='查看']").first(),
+  ).toBeVisible({ timeout: 20000 });
+
+  // 往下滚一段再打开一张：关掉之后要回到这一张，不是墙的顶上。
+  await scroller.evaluate((element) => {
+    element.scrollTop = 900;
+  });
+  await page.waitForTimeout(500);
+  const tile = scroller.locator("button[aria-label^='查看']").first();
+  const label = await tile.getAttribute("aria-label");
+  expect(label).toBeTruthy();
+  await tile.click();
+
+  const viewer = page.getByRole("dialog", { name: /大图预览/ });
+  await expect(viewer).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+
+  // 墙没有跳回顶上：位置还在刚才那一段。
+  expect(await scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+    0,
+  );
+  // 焦点也回到刚才点开的那一张。
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        () => document.activeElement?.getAttribute("aria-label") ?? "",
+      ),
+    )
+    .toBe(label);
+});

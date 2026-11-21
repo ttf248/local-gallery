@@ -7,6 +7,7 @@ import type {
 } from "../api/library";
 import { albumPageExtras } from "../api/library";
 import { albumsApi } from "../api/albums";
+import { ApiError } from "../api/client";
 import { similarityApi } from "../api/similarity";
 import { libraryQueryKeys } from "../api/queryKeys";
 import { useAlbumFilters, useAlbumMedia } from "../hooks/useLibrary";
@@ -139,6 +140,32 @@ export default function PhotoAlbum({ album }: Props) {
   );
   const expandedGroupId = filter.expand ?? null;
 
+  /* 进入某个分组：明确结束与它冲突的普通筛选条件。
+     分组是服务端算好的一段照片，它本身就是筛过的结果；筛选条件留在
+     地址栏里只会被静默忽略，界面上却看不出分组其实没按条件筛。
+     结束掉之后，回到全部照片看到的就是这本相册的全部照片，不会
+     意外恢复一条已经被结束的筛选。 */
+  const openGroup = useCallback(
+    (id: string | null) => {
+      if (id === null) {
+        setGroupId(null);
+        return;
+      }
+      const ended =
+        filterCount > 0 ||
+        filter.collapse === true ||
+        Boolean(filter.expand);
+      setGroupId(id);
+      if (ended) {
+        pushToast({
+          kind: "info",
+          message: "分组本身就是筛好的照片，进入分组不再叠加其它条件",
+        });
+      }
+    },
+    [filter.collapse, filter.expand, filterCount, pushToast, setGroupId],
+  );
+
   const analysis = useAlbumAnalysis({ albumId: album.id, dimension });
   const selection = useAlbumSelection({ albumId: album.id, albumName: title });
 
@@ -150,17 +177,31 @@ export default function PhotoAlbum({ album }: Props) {
     }
   }, [queryClient, smartSummary]);
 
-  // 分组被重建或隐藏之后，原先选中的那一组可能已经不在了：退回全部照片。
+  // 分组被重建或删除之后，原先选中的那一组可能已经不在了：退回全部照片。
+  //
+  // 这是系统的纠错，不是用户的操作：改地址用 replace，不往历史里追加
+  // 失效的地址。否则后退一次就多一条死链，来回打转停不下来。
   useEffect(() => {
-    if (
-      grouping &&
-      groupId &&
-      smartSummary &&
-      !smartSummary.groups.some((group) => group.id === groupId)
-    ) {
-      setGroupId(null);
+    if (!groupId) return;
+    if (!dimension) {
+      // 分组参数没有维度作伴：它指向一个不存在的看法，删掉。
+      setGroupId(null, { replace: true });
+      return;
     }
-  }, [groupId, grouping, setGroupId, smartSummary]);
+    if (smartSummary && !smartSummary.groups.some((group) => group.id === groupId)) {
+      setGroupId(null, { replace: true });
+    }
+  }, [dimension, groupId, setGroupId, smartSummary]);
+
+  // 分组在服务端已经不存在（被删掉、被换号）：地址里的那个 id 失效了。
+  // 摘要可能还缓存着旧的一份，这时由取媒体的失败把这件事说出来。
+  useEffect(() => {
+    if (!showingGroup) return;
+    const error = smartGroupMediaQuery.error;
+    if (error instanceof ApiError && error.code === "smart_group_not_found") {
+      setGroupId(null, { replace: true });
+    }
+  }, [showingGroup, smartGroupMediaQuery.error, setGroupId]);
 
   // 右键菜单：照片墙上的图片同样能查看属性、在文件管理器中定位。
   const menu = useContextMenu<LibraryMediaItem>();
@@ -190,8 +231,13 @@ export default function PhotoAlbum({ album }: Props) {
   }, [setHelpContext]);
 
   const loadMore = useCallback(() => {
-    void mediaQuery.fetchNextPage({ cancelRefetch: false });
-  }, [mediaQuery]);
+    // 分组里的照片有自己的分页链：游标失效时要从头重取，不是重试同一页。
+    if (showingGroup) {
+      smartGroupMediaQuery.retryNextPage();
+      return;
+    }
+    void rawMediaQuery.fetchNextPage({ cancelRefetch: false });
+  }, [rawMediaQuery, showingGroup, smartGroupMediaQuery]);
 
   const copyLink = useCallback(async () => {
     try {
@@ -386,13 +432,20 @@ export default function PhotoAlbum({ album }: Props) {
             </span>
           ) : null}
           {showingGroup ? (
-            <button
-              type="button"
-              onClick={() => setGroupId(null)}
-              className="btn-text text-meta text-brand hover:underline"
-            >
-              回到全部照片
-            </button>
+            <>
+              {/* 分组视图不叠加普通筛选：这句话一直摆着，用户不必
+                  猜为什么筛选条不见了。 */}
+              <span className="text-meta text-fg-subtle">
+                分组已经是筛好的照片，不叠加其它条件
+              </span>
+              <button
+                type="button"
+                onClick={() => openGroup(null)}
+                className="btn-text text-meta text-brand hover:underline"
+              >
+                回到全部照片
+              </button>
+            </>
           ) : null}
           {/* 筛选条只在看全部照片时出现：分组里的照片已经是筛过的，
               再加一层筛选会让人以为那些分组还能再筛。 */}
@@ -449,7 +502,7 @@ export default function PhotoAlbum({ album }: Props) {
              「全部照片」那一条仍要说整本有多少张。 */
           totalPhotos={album.imageCount ?? 0}
           onDimensionChange={setDimension}
-          onOpenGroup={setGroupId}
+          onOpenGroup={openGroup}
           onClose={() => setDimension(null)}
           analyzing={analysis.analyzing}
           rebuilding={analysis.rebuilding}
@@ -464,9 +517,23 @@ export default function PhotoAlbum({ album }: Props) {
       ) : null}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
-        {/* 只有第一页就没加载出来才整页报错：后续分页失败时已加载的内容
-            仍然能翻，页头的提示条已经说明了失败与重试。 */}
-        {mediaQuery.isError && mediaItems.length === 0 ? (
+        {/* 分组摘要读不出来：分组里的照片没有快照可依，墙上是一片空白。
+            说清是分组读不出来，并给一个重试的手柄。 */}
+        {showingGroup && smartGroupsQuery.isError ? (
+          <EmptyState
+            title="分组读取失败"
+            description="这一组的线索没有读出来，分组里的照片暂时取不到。"
+            action={
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => void smartGroupsQuery.refetch()}
+              >
+                重新加载
+              </button>
+            }
+          />
+        ) : mediaQuery.isError && mediaItems.length === 0 ? (
           <EmptyState
             title="媒体加载失败"
             description="这一本相册暂时读不出来。"
@@ -515,6 +582,7 @@ export default function PhotoAlbum({ album }: Props) {
             targetHeight={wallTargetHeight(density)}
             hasNextPage={mediaQuery.hasNextPage ?? false}
             isLoadingMore={mediaQuery.isFetchingNextPage}
+            loadMoreError={mediaQuery.isFetchNextPageError}
             onLoadMore={loadMore}
             onOpen={(_item, index) => wall.open(index)}
             selecting={selection.active}

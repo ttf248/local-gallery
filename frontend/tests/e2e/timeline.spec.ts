@@ -166,3 +166,146 @@ test("只看视频时时间线只留视频", async ({ page, request }) => {
     .toBeGreaterThan(0);
   expect(await photos.count()).toBe(0);
 });
+
+/**
+ * 首屏读不出来：说清是哪一类失败，并给一个重试的手柄。
+ */
+test("时间线首屏失败时给出清楚的错误信息与重试按钮", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+  let failing = true;
+  await page.route("**/api/library/media-feed**", async (route) => {
+    if (failing) {
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, message: "服务端出错了" }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto("/photo");
+  await expect(
+    page.getByRole("heading", { name: "时间线加载失败" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("服务端读取时间线时出错了，稍后重试。"),
+  ).toBeVisible();
+
+  // 服务端恢复之后重试：照片就回来了。
+  failing = false;
+  await page.getByRole("button", { name: "重新加载" }).click();
+  await expect(page.getByTestId("timeline-group-header").first()).toBeVisible();
+});
+
+/**
+ * 断网是另一回事：说的是网络没连上，不是服务端出错。
+ */
+test("断网时说的是网络没有连上", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+  await page.route("**/api/library/media-feed**", (route) =>
+    route.abort("failed"),
+  );
+
+  await page.goto("/photo");
+  await expect(
+    page.getByRole("heading", { name: "时间线加载失败" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("网络没有连上，检查连接后重试。"),
+  ).toBeVisible();
+});
+
+/**
+ * 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
+ */
+test("后续分页失败时保留已加载的照片，并给出可恢复的提示", async ({
+  page,
+  request,
+}) => {
+  await scannedNodes(request, "photo");
+  let cursorRequests = 0;
+  let failing = true;
+  await page.route("**/api/library/media-feed**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("cursor")) {
+      cursorRequests += 1;
+      if (failing) {
+        await route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          body: JSON.stringify({ ok: false, message: "服务端出错了" }),
+        });
+        return;
+      }
+    }
+    await route.continue();
+  });
+
+  await page.goto("/photo");
+  await expect(page.getByTestId("timeline-group-header").first()).toBeVisible();
+
+  // 滚到已加载的末尾：自动接下一页，那一页失败。
+  await page
+    .locator("[data-virtuoso-scroller]")
+    .first()
+    .evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+  await expect(page.getByRole("alert")).toContainText(
+    "后续照片加载失败，已加载的照片仍可浏览。",
+  );
+  // 已加载的照片还在墙上（滚到底之后看到的是最后一段）。
+  await expect(
+    page.locator("main [data-virtuoso-scroller] button[aria-label^='查看'], main [data-virtuoso-scroller] button[aria-label^='播放']").first(),
+  ).toBeVisible();
+
+  // 失败状态下不再自动续页：否则失败一次接一次，成了无限请求。
+  const failed = cursorRequests;
+  await page.waitForTimeout(1500);
+  expect(cursorRequests).toBe(failed);
+
+  // 服务端恢复之后重试：从正确的游标继续，已加载的不重复也不丢。
+  failing = false;
+  await page.getByRole("button", { name: "重试加载" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+/**
+ * 游标失效：库变了，这一页的位置已经不对了，重试它没有意义。
+ */
+test("游标失效时说清要从头重取", async ({ page, request }) => {
+  await scannedNodes(request, "photo");
+  await page.route("**/api/library/media-feed**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get("cursor")) {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: false,
+          code: "stale_cursor",
+          message: "library changed; restart pagination",
+        }),
+      });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto("/photo");
+  await expect(page.getByTestId("timeline-group-header").first()).toBeVisible();
+  await page
+    .locator("[data-virtuoso-scroller]")
+    .first()
+    .evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+  await expect(page.getByRole("alert")).toContainText(
+    "媒体库刚刚变了，这一页的位置已经失效。重新加载会从头开始。",
+  );
+});

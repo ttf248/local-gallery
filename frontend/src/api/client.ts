@@ -47,6 +47,19 @@ export function isRetryableStatus(status: number): boolean {
   return (status >= 500 && status < 600) || status === 408 || status === 429;
 }
 
+/**
+ * 游标失效：库变了，这一页的位置不再有效。
+ *
+ * 失效的游标重试没有意义 —— 用同一个游标再要一次，还是那一份错位的数据。
+ * 正确的恢复是从头重取（重新走一遍分页链），而不是重试这一页。
+ */
+export function isStaleCursorError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    (error.code === "stale_cursor" || error.code === "invalid_cursor")
+  );
+}
+
 /** 把查询参数拼成 ?a=1&b=2；空值一律省略。 */
 export function buildQuery(
   params?: Record<string, string | number | boolean | undefined>,

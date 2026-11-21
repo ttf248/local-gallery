@@ -1,11 +1,13 @@
 import { lazy, Suspense, useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMediaFeed } from "../hooks/useMediaFeed";
+import { ApiError } from "../api/client";
 import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
 import EmptyState from "../components/common/EmptyState";
+import ErrorBanner from "../components/common/ErrorBanner";
 import ContextMenu from "../components/album/ContextMenu";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
@@ -30,6 +32,25 @@ import { useHistoryCards } from "../hooks/useHistory";
 import type { LibraryFeedItem } from "../api/library";
 
 const PhotoViewer = lazy(() => import("../components/wall/PhotoViewer"));
+
+/**
+ * 首屏读不出来时说清是哪一类失败。
+ *
+ * 断网、库变了、服务端出错，恢复办法各不相同：断网要检查连接，库变了
+ * 要重新加载，服务端出错等一会儿再试。一句「加载失败」把这些都抹平了，
+ * 用户只能反复点重试。
+ */
+function timelineErrorDescription(error: unknown): string {
+  if (error instanceof ApiError) {
+    if (error.status === 409) {
+      return "媒体库刚刚变了，重新加载一次就好。";
+    }
+    if (error.status >= 500) {
+      return "服务端读取时间线时出错了，稍后重试。";
+    }
+  }
+  return "网络没有连上，检查连接后重试。";
+}
 
 /**
  * 照片工作台的首页：一条按时间下来的全库时间线。
@@ -130,7 +151,7 @@ export default function PhotoTimeline() {
   );
 
   const loadMore = useCallback(() => {
-    void feed.fetchNextPage({ cancelRefetch: false });
+    feed.retryNextPage();
   }, [feed]);
 
   const togglePick = useCallback(
@@ -283,11 +304,37 @@ export default function PhotoTimeline() {
       ) : null}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
+        {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
+            提示条说清影响范围，并给一个重试的手柄。 */}
+        {feed.isFetchNextPageError ? (
+          <div className="pb-2">
+            <ErrorBanner
+              kind="warning"
+              onRetry={loadMore}
+              retrying={feed.isFetchingNextPage}
+            >
+              {feed.cursorInvalidated
+                ? "媒体库刚刚变了，这一页的位置已经失效。重新加载会从头开始。"
+                : "后续照片加载失败，已加载的照片仍可浏览。"}
+            </ErrorBanner>
+          </div>
+        ) : null}
         {emptyState ??
           (feed.isError && items.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-body text-fg-muted">
-              时间线加载失败，请重试。
-            </div>
+            <EmptyState
+              title="时间线加载失败"
+              description={timelineErrorDescription(feed.error)}
+              action={
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => void feed.refetch()}
+                  disabled={feed.isFetching}
+                >
+                  重新加载
+                </button>
+              }
+            />
           ) : items.length === 0 && !feed.isLoading ? (
             <EmptyState
               title="这一段没有照片"
@@ -315,6 +362,7 @@ export default function PhotoTimeline() {
               targetHeight={wallTargetHeight(density)}
               hasNextPage={feed.hasNextPage ?? false}
               isLoadingMore={feed.isFetchingNextPage}
+              loadMoreError={feed.isFetchNextPageError}
               onLoadMore={loadMore}
               onOpen={(_item, index) => wall.open(index)}
               /* 跨相册的墙：照片要说出自己出自哪本相册。 */

@@ -37,6 +37,13 @@ interface Props<T extends LibraryMediaItem = LibraryMediaItem> {
   minTargetHeight?: number;
   hasNextPage: boolean;
   isLoadingMore: boolean;
+  /**
+   * 取下一页失败：已加载的内容仍然能翻，但不再自动接下一页。
+   *
+   * 失败状态下自动续页会变成一条无限请求：条件（已到末尾、还有下一页）
+   * 一直成立，失败一次接一次。传进来让自动续页停下来，重试交给用户。
+   */
+  loadMoreError?: boolean;
   onLoadMore: () => void;
   onOpen: (item: T, index: number) => void;
   onContextMenu?: (item: T, event: MouseEvent<HTMLButtonElement>) => void;
@@ -118,6 +125,7 @@ export default function PhotoWall<
   minTargetHeight = 210,
   hasNextPage,
   isLoadingMore,
+  loadMoreError = false,
   onLoadMore,
   onOpen,
   onContextMenu,
@@ -144,6 +152,7 @@ export default function PhotoWall<
     loadedCount: items.length,
     hasNextPage,
     isLoadingMore,
+    loadMoreError,
     onLoadMore,
   });
 

@@ -7,6 +7,7 @@ function options() {
     loadedCount: 200,
     hasNextPage: true,
     isLoadingMore: false,
+    loadMoreError: false,
     onLoadMore: vi.fn(),
   };
 }
@@ -81,5 +82,28 @@ describe("useMediaGridPagination", () => {
 
     rerender(props);
     expect(props.onLoadMore).toHaveBeenCalledTimes(1);
+  });
+
+  // 失败之后自动续页会变成一条无限请求：条件（已到末尾、还有下一页）
+  // 一直成立，失败一次接一次。
+  it("取下一页失败后不再自动续页，重试交给用户", () => {
+    const props = options();
+    const { result, rerender } = renderHook(useMediaGridPagination, {
+      initialProps: props,
+    });
+    act(() => result.current({ startIndex: 160, endIndex: 190 }));
+    expect(props.onLoadMore).toHaveBeenCalledTimes(1);
+
+    // 这一页失败了。
+    rerender({ ...props, isLoadingMore: true });
+    rerender({ ...props, loadMoreError: true });
+
+    // 条件仍然成立，但失败状态不再自动触发。
+    act(() => result.current({ startIndex: 160, endIndex: 190 }));
+    expect(props.onLoadMore).toHaveBeenCalledTimes(1);
+
+    // 用户重试成功后，自动续页恢复。
+    rerender({ ...props, loadMoreError: false });
+    expect(props.onLoadMore).toHaveBeenCalledTimes(2);
   });
 });

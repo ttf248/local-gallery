@@ -3,6 +3,7 @@ import { forwardRef, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import PhotoTimeline from "./PhotoTimeline";
+import { ApiError } from "../api/client";
 
 const feed = vi.hoisted(() => ({
   items: [] as {
@@ -31,6 +32,14 @@ const feed = vi.hoisted(() => ({
   photoAlbumCount: 3,
   comicAlbumCount: 0,
   historyCards: [] as { to: string; title: string }[],
+  // 失败状态：首屏失败、分页失败与游标失效各自怎么表现。
+  isLoading: false,
+  isError: false,
+  error: null as unknown,
+  isFetchNextPageError: false,
+  cursorInvalidated: false,
+  refetch: vi.fn(),
+  retryNextPage: vi.fn(),
 }));
 
 vi.mock("../hooks/useMediaFeed", () => ({
@@ -45,13 +54,16 @@ vi.mock("../hooks/useMediaFeed", () => ({
       dateSources: feed.dateSources,
       datePrecisions: feed.datePrecisions,
       total: feed.total,
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
+      isLoading: feed.isLoading,
+      isError: feed.isError,
+      error: feed.error,
+      isFetchNextPageError: feed.isFetchNextPageError,
+      cursorInvalidated: feed.cursorInvalidated,
+      refetch: feed.refetch,
+      retryNextPage: feed.retryNextPage,
       fetchNextPage: vi.fn(),
       hasNextPage: false,
       isFetchingNextPage: false,
-      isFetchNextPageError: false,
     };
   },
 }));
@@ -184,6 +196,13 @@ beforeEach(() => {
   feed.photoAlbumCount = 3;
   feed.comicAlbumCount = 0;
   feed.historyCards = [];
+  feed.isLoading = false;
+  feed.isError = false;
+  feed.error = null;
+  feed.isFetchNextPageError = false;
+  feed.cursorInvalidated = false;
+  feed.refetch.mockClear();
+  feed.retryNextPage.mockClear();
 });
 
 function LocationProbe() {
@@ -393,5 +412,55 @@ it("这一侧没有内容时给出引导", async () => {
   expect(screen.getByRole("link", { name: "去漫画库看看" })).toHaveAttribute(
     "href",
     "/comic",
+  );
+});
+
+// 首屏读不出来：说清是哪一类失败，并给一个重试的手柄。
+it("首屏失败时给出清楚的错误信息与重试按钮", async () => {
+  feed.items = [];
+  feed.isError = true;
+  feed.error = new TypeError("Failed to fetch");
+  renderTimeline();
+
+  expect(
+    screen.getByRole("heading", { name: "时间线加载失败" }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("网络没有连上，检查连接后重试。")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "重新加载" }));
+  expect(feed.refetch).toHaveBeenCalledTimes(1);
+});
+
+it("服务端出错时说的是服务端出错", async () => {
+  feed.items = [];
+  feed.isError = true;
+  feed.error = new ApiError(500, "boom");
+  renderTimeline();
+
+  expect(
+    screen.getByText("服务端读取时间线时出错了，稍后重试。"),
+  ).toBeInTheDocument();
+});
+
+// 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
+it("分页失败时保留已加载的照片，并给出可恢复的提示", async () => {
+  feed.isFetchNextPageError = true;
+  renderTimeline();
+
+  const banner = screen.getByRole("alert");
+  expect(banner).toHaveTextContent("后续照片加载失败，已加载的照片仍可浏览。");
+  // 已加载的照片还在墙上。
+  expect(screen.getByRole("button", { name: "查看 1.jpg" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
+  expect(feed.retryNextPage).toHaveBeenCalledTimes(1);
+});
+
+// 游标失效：这一页的位置已经不对了，重试它没有意义。
+it("游标失效时说清要从头重取", async () => {
+  feed.isFetchNextPageError = true;
+  feed.cursorInvalidated = true;
+  renderTimeline();
+
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "媒体库刚刚变了，这一页的位置已经失效。重新加载会从头开始。",
   );
 });
