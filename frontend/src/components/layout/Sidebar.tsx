@@ -155,10 +155,24 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
                 to={to}
                 className={`nav-entry group ${collapsed ? "nav-entry--compact" : ""} ${isActive ? "is-active" : ""}`}
                 aria-current={isActive ? "page" : undefined}
+                /* 挂着页签名时，链接的可访问名仍是入口本身（「设置」）——
+                   页签是这一页的状态，不是入口的名字。 */
+                aria-label={tabLabel ? entry.label : undefined}
                 title={`${entry.label}${tabLabel ? ` · ${tabLabel}` : ""}${badge > 0 ? ` · 还有 ${badge} ${albumCountUnit(mode)}` : ""}`}
               >
                 <entry.Icon size={16} className="shrink-0" />
                 {!collapsed && <span className="truncate">{entry.label}</span>}
+                {/* 当前页签写在激活的这一格里面：它与入口名是一件事
+                    （「设置 · 界面」），挂在格子外面会读成一个游离的词。
+                    它做成一枚小标签：一格里的两件事各占一个位置。 */}
+                {!collapsed && tabLabel && (
+                  <span
+                    data-testid="nav-tab-label"
+                    className="shrink-0 rounded bg-rail-hover px-1.5 py-0.5 text-meta text-rail-fg/80"
+                  >
+                    {tabLabel}
+                  </span>
+                )}
                 {!collapsed && badge > 0 && (
                   <span
                     className="inline-flex items-center justify-center min-w-[22px] h-[20px] px-1.5 rounded-full bg-rail-hover text-rail-fg text-meta font-semibold tabular-nums"
@@ -174,16 +188,6 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
                   />
                 )}
               </Link>
-              {/* 当前页签写在链接外面：它是这一页的状态，不是入口的名字。
-                  链接的可访问名因此始终是「设置」「任务中心」。 */}
-              {!collapsed && tabLabel && (
-                <span
-                  data-testid="nav-tab-label"
-                  className="shrink-0 text-meta text-rail-muted"
-                >
-                  {tabLabel}
-                </span>
-              )}
             </div>
           );
         })}

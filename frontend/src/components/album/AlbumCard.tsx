@@ -137,14 +137,6 @@ interface Props {
    */
   coverRatio?: CoverRatio;
   /**
-   * 文件夹卡用文件夹的样子，不用照片拼贴。
-   *
-   * 图库里文件夹与相册并排摆着，两者的动作不同：文件夹点开是下一层，
-   * 相册点开是照片。样子上也要分开 —— 图库页打开这一档，
-   * 别的页面（收藏、最近）保留拼贴封面，那是相册的缩略陈列。
-   */
-  folderSurface?: boolean;
-  /**
    * 计数行下面补一行说明（「那年今日」用它写命中的那一天）。
    *
    * 计数行是 nowrap 的：数量一长就把它挤到省略号后面。日期这种
@@ -197,7 +189,6 @@ export default function AlbumCard({
   alwaysShowFavorite = false,
   note,
   coverBadge,
-  folderSurface = false,
 }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
@@ -252,7 +243,6 @@ export default function AlbumCard({
           alwaysShowFavorite={alwaysShowFavorite}
           note={note}
           coverBadge={coverBadge}
-          folderSurface={folderSurface}
         />
       )}
       {menu && (
@@ -292,7 +282,6 @@ function GridCard({
   alwaysShowFavorite,
   note,
   coverBadge,
-  folderSurface,
 }: {
   data: CardData;
   showLastSeen?: boolean;
@@ -304,7 +293,6 @@ function GridCard({
   alwaysShowFavorite: boolean;
   note?: ReactNode;
   coverBadge?: ReactNode;
-  folderSurface: boolean;
 }) {
   // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
   // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
@@ -434,18 +422,10 @@ function GridCard({
           }`}
           data-testid="card-cover"
         >
-          {/* 视频封面同样裁切填满：方形画幅里保留 16:9 的完整画面会
-              上下留出两条黑边，读起来像一只空信箱。 */}
-          {folderSurface && isPhotoFolder ? (
-            /* 文件夹的样子：它装的是下一层目录，不是照片。
-               摆一张照片拼贴在这儿，用户会以为点开就是看图。 */
-            <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-bg-subtle text-fg-subtle">
-              <FolderIcon size={30} />
-              <span className="text-meta">文件夹</span>
-            </div>
-          ) : (
-            <CardCover data={data} fit="cover" />
-          )}
+          {/* 封面：相册用一张主封面，集合与文件夹用最多四张代表图拼出
+              「里面有什么」。视频封面同样裁切填满：方形画幅里保留 16:9
+              的完整画面会上下留出两条黑边，读起来像一只空信箱。 */}
+          <CardCover data={data} fit="cover" />
 
           {/* 封面左上角：状态槽。阅读状态（未读 / 已读完）与视频转码角标
               都在这一列，堆叠显示，互不遮挡。
@@ -500,8 +480,11 @@ function GridCard({
           {/* 文件夹角标：照片侧的文件夹与相册一眼要能分开。
               文件夹点开是下一层，相册点开是照片 —— 这两件事不一样，
               卡片的样子也得不一样：文件夹在封面上压一枚文件夹角标，
-              相册没有。 */}
-          {isPhotoFolder && !folderSurface && (
+              相册没有。
+              封面本身摆的是里面的真实照片（目录里的代表图），
+              不再用一块灰底加一枚图标代替：那一屏灰块既不回答
+              「里面有什么」，也让整页读成一排占位框。 */}
+          {isPhotoFolder && (
             <span className="absolute left-2 bottom-2 inline-flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-badge text-white/90 backdrop-blur-sm">
               <FolderIcon size={11} className="shrink-0" />
               文件夹

@@ -389,8 +389,7 @@ export default function Similarity() {
         description={
           <>
             完全重复按文件内容判定，近似重复按画面判定，连拍只标出「同一个瞬间」，
-            不当成重复。三类结果各自独立，任何一步都不会删除、移动或改写原始照片。
-            进来先看待处理：处理完的落到「已处理」，不再看的落到「已忽略」。
+            不当成重复。这一页只记录你的决定，原始照片一个字节都不动。
           </>
         }
         action={
@@ -430,12 +429,14 @@ export default function Similarity() {
         <div className="filter-strip flex flex-wrap items-center gap-x-5 gap-y-3">
           <Segmented
             label="结果类别"
+            showLabel
             value={kind}
             onChange={(value) => updateParam(KIND_PARAM, value)}
             options={KIND_OPTIONS}
           />
           <Segmented
             label="处理状态"
+            showLabel
             value={status}
             onChange={(value) => updateParam(STATUS_PARAM, value)}
             options={STATUS_OPTIONS}
@@ -486,17 +487,61 @@ export default function Similarity() {
         </div>
 
         {summary ? (
-          <p
-            className="mb-4 text-meta text-fg-subtle"
+          /* 统计拆成一行可扫读的数字，不用「共 N 组 · A 组… · B 组…」的
+             长句：一句里挤七八个数字，读的人要在中间反复找自己在找
+             哪个。数字与它的名字挨在一起，扫一遍就知道每类各有多少。 */
+          <div
+            className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-meta text-fg-subtle"
             data-testid="similarity-summary"
           >
-            共 {summary.exact + summary.near + summary.burst} 组 ·{" "}
-            {summary.exact} 组完全重复、{summary.near} 组近似重复、{summary.burst}{" "}
-            组连拍 · {summary.redundant} 张多余照片 · 待处理 {summary.pending}{" "}
-            组、已处理 {summary.reviewed} 组、已忽略 {summary.ignored} 组
+            <span>
+              共{" "}
+              <span className="font-medium text-fg tabular-nums">
+                {summary.exact + summary.near + summary.burst}
+              </span>{" "}
+              组
+            </span>
+            <span>
+              多余照片{" "}
+              <span className="font-medium text-fg tabular-nums">
+                {summary.redundant}
+              </span>{" "}
+              张
+            </span>
+            <span>
+              完全重复{" "}
+              <span className="tabular-nums">{summary.exact}</span> 组
+            </span>
+            <span>
+              近似重复{" "}
+              <span className="tabular-nums">{summary.near}</span> 组
+            </span>
+            <span>
+              连拍{" "}
+              <span className="tabular-nums">{summary.burst}</span> 组
+            </span>
+            <span>
+              待处理{" "}
+              <span className="tabular-nums">{summary.pending}</span> 组
+            </span>
+            <span>
+              已处理{" "}
+              <span className="tabular-nums">{summary.reviewed}</span> 组
+            </span>
+            <span>
+              已忽略{" "}
+              <span className="tabular-nums">{summary.ignored}</span> 组
+            </span>
+          </div>
+        ) : null}
+
+        {/* 索引状态与召回上限不是统计，是「结果怎么来的」：单独一行，
+            不与上面的数字混在一起读。 */}
+        {statusInfo || groups.page?.limited ? (
+          <p className="mb-4 text-meta text-fg-subtle">
             {statusInfo?.hasVectors
-              ? " · 语义索引可用，复核更准"
-              : " · 没有语义索引，近似判定已收紧"}
+              ? "语义索引可用，近似判定更准"
+              : "没有语义索引，近似判定已收紧"}
             {groups.page?.limited ? " · 本次召回触到上限，结果可能不完整" : ""}
           </p>
         ) : null}

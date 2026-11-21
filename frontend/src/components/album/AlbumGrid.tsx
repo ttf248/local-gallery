@@ -71,10 +71,6 @@ interface Props {
    */
   overlayAction?: (item: CardData) => ReactNode;
   /**
-   * 文件夹卡用文件夹的样子（图库页：文件夹与相册并排，要一眼分得开）。
-   */
-  folderSurface?: boolean;
-  /**
    * 卡片下方的补充说明（如「在读 · 第02话」）。
    *
    * 按卡片给：读数因书而异，写死在卡片组件里就成了一句假话。
@@ -119,7 +115,6 @@ export default function AlbumGrid({
   overlayAction,
   note,
   showBulkActions = true,
-  folderSurface = false,
 }: Props) {
   const selectionActive = useSelectionStore((s) => s.active);
   const selectionItems = useSelectionStore((s) => s.items);
@@ -220,7 +215,6 @@ export default function AlbumGrid({
         showLastSeen={showLastSeen}
         showUnreadBadge={showUnreadBadge}
         coverRatio={ratio}
-        folderSurface={folderSurface}
         coverBadge={coverBadge?.(it)}
         overlayAction={overlayAction?.(it)}
         note={note?.(it)}

@@ -259,7 +259,7 @@ describe("相似照片整理页", () => {
     expect(within(card).getByText(/12\.0MP/)).toBeInTheDocument();
     expect(within(card).getByText(/曝光 90/)).toBeInTheDocument();
     expect(screen.getByTestId("similarity-summary")).toHaveTextContent(
-      "60 组完全重复",
+      "完全重复 60 组",
     );
   });
 

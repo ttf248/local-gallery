@@ -25,6 +25,14 @@ interface Props<T extends string> {
    * 差别靠明暗读，不靠底色深一档（浅色画布上几乎看不出差别）。
    */
   compact?: boolean;
+  /**
+   * 把标签摆在控件左边。
+   *
+   * 同一行里有两组分段控件时（「结果类别」与「处理状态」），光看按钮
+   * 分不出哪一组管什么 —— 两组里都有「全部」。标签露出来，两组各管
+   * 一件事才读得出来。
+   */
+  showLabel?: boolean;
 }
 
 /**
@@ -41,6 +49,7 @@ export default function Segmented<T extends string>({
   label,
   disabled = false,
   compact = false,
+  showLabel = false,
 }: Props<T>) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -58,54 +67,59 @@ export default function Segmented<T extends string>({
   }
 
   return (
-    <div
-      ref={ref}
-      role="radiogroup"
-      aria-label={label}
-      className="inline-flex items-center overflow-hidden rounded-md border border-border bg-bg-subtle/40"
-    >
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            aria-label={option.ariaLabel}
-            disabled={disabled || option.disabled}
-            title={option.title}
-            onClick={() => onChange(option.value)}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-                event.preventDefault();
-                move(1);
-              } else if (
-                event.key === "ArrowLeft" ||
-                event.key === "ArrowUp"
-              ) {
-                event.preventDefault();
-                move(-1);
+    <div className="inline-flex items-center gap-2">
+      {showLabel ? (
+        <span className="shrink-0 text-meta text-fg-muted">{label}</span>
+      ) : null}
+      <div
+        ref={ref}
+        role="radiogroup"
+        aria-label={label}
+        className="inline-flex items-center overflow-hidden rounded-md border border-border bg-bg-subtle/40"
+      >
+        {options.map((option) => {
+          const selected = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              aria-label={option.ariaLabel}
+              disabled={disabled || option.disabled}
+              title={option.title}
+              onClick={() => onChange(option.value)}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+                  event.preventDefault();
+                  move(1);
+                } else if (
+                  event.key === "ArrowLeft" ||
+                  event.key === "ArrowUp"
+                ) {
+                  event.preventDefault();
+                  move(-1);
+                }
+              }}
+              className={
+                compact
+                  ? `inline-flex h-7 w-8 items-center justify-center transition-colors ${
+                      selected
+                        ? "bg-bg-elevated text-fg shadow-xs"
+                        : "text-fg-muted hover:text-fg"
+                    } disabled:opacity-50`
+                  : `h-8 px-3 text-meta transition-colors ${
+                      selected
+                        ? "bg-bg-strong text-fg"
+                        : "text-fg-muted hover:bg-bg-subtle"
+                    } disabled:opacity-50`
               }
-            }}
-            className={
-              compact
-                ? `inline-flex h-7 w-8 items-center justify-center transition-colors ${
-                    selected
-                      ? "bg-bg-elevated text-fg shadow-xs"
-                      : "text-fg-muted hover:text-fg"
-                  } disabled:opacity-50`
-                : `h-8 px-3 text-meta transition-colors ${
-                    selected
-                      ? "bg-bg-strong text-fg"
-                      : "text-fg-muted hover:bg-bg-subtle"
-                  } disabled:opacity-50`
-            }
-          >
-            {option.label}
-          </button>
-        );
-      })}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

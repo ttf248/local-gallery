@@ -111,6 +111,24 @@ export default function SearchResults() {
     return map;
   }, [cards, hits]);
 
+  /**
+   * 只在这一段理由的第一张卡上写理由。
+   *
+   * 结果按相关度排，同一种命中理由是连着出现的。理由挂在每一张卡上，
+   * 一屏下来就是同一句话重复三遍 —— 重复的说明不说明任何事。每一段
+   * 的第一张带上它，读者扫一遍就知道后面这些为什么命中。
+   */
+  const reasonCarriers = useMemo(() => {
+    const ids = new Set<string>();
+    let previous: string | undefined;
+    for (const card of cards) {
+      const label = matchLabels.get(card.id);
+      if (label && label !== previous) ids.add(card.id);
+      previous = label;
+    }
+    return ids;
+  }, [cards, matchLabels]);
+
   const setScope = (next: SearchScope) => {
     const nextParams = new URLSearchParams(params);
     if (next === "content") nextParams.set(SEARCH_SCOPE_PARAM, "content");
@@ -258,7 +276,11 @@ export default function SearchResults() {
             <AlbumGrid
               items={cards}
               variant={viewMode}
-              note={(item) => matchLabels.get(item.id)}
+              note={(item) =>
+                reasonCarriers.has(item.id)
+                  ? matchLabels.get(item.id)
+                  : undefined
+              }
             />
             {search.hasNextPage ? (
               <button

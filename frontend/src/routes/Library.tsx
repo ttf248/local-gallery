@@ -100,8 +100,8 @@ export default function Library() {
               linkTo: `${libraryRoute(mode)}?${LIBRARY_PARAM.node}=${encodeURIComponent(
                 decodeFavPath(card.to),
               )}`,
-              // 照片侧的文件夹卡自己就摆着文件夹的样子，封面里已经写着
-              // 「文件夹」：说明行再写一遍是同一句话说两遍。
+              // 照片侧的文件夹卡封面上已经压着「文件夹」角标：说明行
+              // 再写一遍是同一句话说两遍。
               subtitle:
                 mode === "photo" ? undefined : card.subtitle,
             }
@@ -442,9 +442,6 @@ export default function Library() {
                   selectable
                   items={cards}
                   variant={viewMode}
-                  /* 文件夹与相册一眼要能分开：文件夹摆成文件夹的样子，
-                     点开是下一层目录；相册摆照片，点开是照片。 */
-                  folderSurface={mode === "photo"}
                   onEndReached={loadMore}
                 />
               )

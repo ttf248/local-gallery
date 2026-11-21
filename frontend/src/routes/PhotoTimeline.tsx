@@ -291,9 +291,11 @@ export default function PhotoTimeline() {
           <div className="flex flex-wrap items-center gap-3">
             <OnThisDayStrip enabled={hasContent} />
             {resume ? (
+              /* 「接着看」是一个入口，不是一句说明：用次级按钮的样子，
+                 免得它读起来像一行正文。 */
               <Link
                 to={resume.to}
-                className="chip"
+                className="btn btn-sm btn-outline"
                 title="回到最近翻过的那本相册"
               >
                 接着看 · {resume.title}
