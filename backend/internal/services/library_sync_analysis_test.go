@@ -126,7 +126,79 @@ func TestLibrarySync_OverwrittenPhotoIsAnalyzedAgain(t *testing.T) {
 // 队列超上限时会改成一次全库增量分析，而队列因此被清空：只看队列长度
 // 的话就会以为没有分析任务了，智能相册从此不再重算 ——
 // 派生结果停在导入之前的样子。
+//
+// 这一批照片是一次校验扫描送进来的：校验按整棵树比对，一次把新增的
+// 照片全交给队列，于是「超上限」这条分支被确定地走到。听器的增量扫描
+// 是按目录分批送来的，每批都排不满上限 —— 走那条路时本用例要验的分支
+// 根本不会被触发，用例就成了碰运气。
 func TestLibrarySync_LargeImportAnalyzesEveryPhoto(t *testing.T) {
+	sync, catalog, analyzer, root := newAnalysisHarness(t)
+	refresher := &fakeSmartAlbumRefresher{}
+	sync.opts.SmartAlbums = refresher
+	album := filepath.Join(root, "album")
+	mkdirAll(t, album)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	scanner := NewScanner()
+	initial, err := scanner.Scan(ScanOptions{Roots: []string{root}})
+	if err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+	catalog.Publish(initial, []string{root})
+
+	// 先把照片写完，再启动同步：监听是从启动那一刻开始收事件的，
+	// 已经躺在盘上的照片它看不到，只会由校验扫描统一收进来。
+	// 程序刚启动时补的那次校验走的也是这一条。
+	total := maxAnalysisQueue + 120
+	for i := 0; i < total; i++ {
+		path := filepath.Join(album, fmt.Sprintf("p%05d.jpg", i))
+		if err := os.WriteFile(path, []byte("fake"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := sync.Start(ctx); err != nil {
+		t.Fatalf("start library sync: %v", err)
+	}
+	defer sync.Shutdown()
+	if _, err := sync.Update(ctx, LibrarySyncSettings{Enabled: true, AutoAnalyze: true}); err != nil {
+		t.Fatalf("update library sync: %v", err)
+	}
+
+	// 一次校验扫描：新增的这一批照片一次性排进队列，越过上限。
+	sync.runVerification(ctx)
+
+	// 等的是「分析流水线排空」，不是「跑够多少张」：智能相册的重算
+	// 要等任务中心空闲下来、且没有模块还欠着分析才会触发，它触发了
+	// 就说明这批照片都分析完了。
+	waitForSmartAlbumRefresh(t, refresher)
+
+	// 一张都不能少。
+	if analyzed := analyzer.analyzed.Load(); analyzed < int64(total) {
+		t.Fatalf("分析器累计分析了 %d 次，期望至少 %d 次", analyzed, total)
+	}
+
+	// 超上限之后由一次全库增量分析接手：那个任务没有限定资源名单。
+	// 一批一批送（每批 analysisBatchSize 个）时走的就不是这条路了。
+	snapshot := sync.opts.Jobs.List()
+	if len(snapshot.Jobs) != 1 {
+		t.Fatalf("超上限之后应当只跑一次全库增量分析，实际 %d 个任务", len(snapshot.Jobs))
+	}
+	if ids := snapshot.Jobs[0].ResourceIDs; len(ids) != 0 {
+		t.Fatalf("超上限之后应当由全库增量分析接手，任务却限定了 %d 个资源", len(ids))
+	}
+}
+
+// TestLibrarySync_BatchedImportAnalyzesEveryPhoto 验证一次导入排得进
+// 队列的照片时，每一张也会被分析，智能相册同样跟着重算。
+//
+// 排得进队列的照片是一批一批提交给任务中心的：任务中心同一时刻只跑
+// 一个任务，下一批要等上一批结束。每批提交之间的空档由自动同步的轮询
+// 节奏决定，因此这条链路的耗时不是定值 —— 用例等的必须是「跑完了」
+// 这个事实，不是「跑够多少张要多久」。
+func TestLibrarySync_BatchedImportAnalyzesEveryPhoto(t *testing.T) {
 	sync, catalog, analyzer, root := newAnalysisHarness(t)
 	refresher := &fakeSmartAlbumRefresher{}
 	sync.opts.SmartAlbums = refresher
@@ -150,8 +222,8 @@ func TestLibrarySync_LargeImportAnalyzesEveryPhoto(t *testing.T) {
 	}
 	catalog.Publish(initial, []string{root})
 
-	// 一次导入超过队列上限的照片。
-	total := maxAnalysisQueue + 120
+	// 排得进队列，但一张批（analysisBatchSize 个）放不下：会分几轮提交。
+	total := analysisBatchSize*2 + 7
 	for i := 0; i < total; i++ {
 		path := filepath.Join(album, fmt.Sprintf("p%05d.jpg", i))
 		if err := os.WriteFile(path, []byte("fake"), 0o644); err != nil {
@@ -159,22 +231,43 @@ func TestLibrarySync_LargeImportAnalyzesEveryPhoto(t *testing.T) {
 		}
 	}
 
-	waitForAnalyzed(t, analyzer, int64(total))
-	// 所有模块跑完之后，智能相册要重算一次。
+	// 分析流水线排空：智能相册的重算触发了就说明分析都跑完了。
 	waitForSmartAlbumRefresh(t, refresher)
+
+	if analyzed := analyzer.analyzed.Load(); analyzed < int64(total) {
+		t.Fatalf("分析器累计分析了 %d 次，期望至少 %d 次", analyzed, total)
+	}
+	// 分批提交：每个任务各自负责自己那批资源。
+	snapshot := sync.opts.Jobs.List()
+	if len(snapshot.Jobs) < 2 {
+		t.Fatalf("应当分几批提交，实际只跑了 %d 个任务", len(snapshot.Jobs))
+	}
+	for _, job := range snapshot.Jobs {
+		if len(job.ResourceIDs) == 0 {
+			t.Fatal("排得进队列时应当一批一批提交，任务却没限定资源名单")
+		}
+	}
 }
 
 // waitForSmartAlbumRefresh 等到智能相册被重算过。
+//
+// 这是「分析全部跑完」的信号：重算要等任务中心空闲下来、且没有模块还
+// 欠着分析才会触发。因此它触发了就说明这批照片都分析完了 —— 用它当
+// 完成条件，就不必去猜「跑够多少张要多久」，用例的成败只取决于行为，
+// 不取决于机器有多快。
+//
+// 超时是挂死保护，不是速度断言：这条链路在本机约十秒跑完，留一分钟
+// 给慢的机器。
 func waitForSmartAlbumRefresh(t *testing.T, refresher *fakeSmartAlbumRefresher) {
 	t.Helper()
-	deadline := time.Now().Add(30 * time.Second)
+	deadline := time.Now().Add(60 * time.Second)
 	for time.Now().Before(deadline) {
 		if refresher.starts.Load() > 0 {
 			return
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatal("分析都跑完了，智能相册仍然没有重算")
+	t.Fatal("分析链路没有排空：智能相册一直没有重算")
 }
 
 // TestLibrarySync_SmartAlbumRefreshWaitsForQueuedAnalysis 验证队列还没
