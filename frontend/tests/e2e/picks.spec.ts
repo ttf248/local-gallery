@@ -72,6 +72,191 @@ test("照片可以加入精选，在精选页里聚在一起，重启后仍然�
   expect(again.picks).toHaveLength(1);
 });
 
+test("从大图加入精选，珍藏页立刻能看到；移出精选不动相册收藏", async ({
+  page,
+  request,
+}) => {
+  await ensureLibraryReady(request);
+  const nodes = await scannedNodes(request, "photo");
+  const album = nodes.find((node) => node.name === "sample-album");
+  expect(album).toBeDefined();
+
+  // 收藏是另一份数据：动精选前后它必须一模一样。
+  const favoritesBefore = (await (
+    await request.get("/api/favorites")
+  ).json()) as { favorites: string[] };
+
+  const before = (await (await request.get("/api/picks")).json()) as {
+    picks: string[];
+  };
+  if (before.picks.length > 0) {
+    const response = await request.post("/api/picks/batch", {
+      data: { ids: before.picks, action: "remove" },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
+
+  await page.goto(`/photo/albums/${encodeURIComponent(album!.id)}`);
+  const scroller = page.locator("[data-virtuoso-scroller]");
+  const tile = scroller.getByRole("button", { name: /^查看 / }).first();
+  await expect(tile).toBeVisible();
+  await tile.click();
+
+  // 大图预览里的那个开关与照片墙上的角标是同一个动作。
+  const viewer = page.getByRole("dialog", { name: /大图预览/ });
+  await expect(viewer).toBeVisible();
+  await viewer.getByRole("button", { name: "把这张加入精选" }).click();
+
+  await expect
+    .poll(async () => {
+      const response = (await (await request.get("/api/picks")).json()) as {
+        picks: string[];
+      };
+      return response.picks.length;
+    })
+    .toBe(1);
+
+  // 珍藏页立刻能看到这一张：它摆成陈列，不是一面密排的墙。
+  await page.goto("/photo/me/picks");
+  await expect(page.getByText("共 1 张精选照片")).toBeVisible();
+  const showcase = page.getByTestId("pick-showcase");
+  await expect(showcase).toBeVisible();
+  await expect(showcase.locator("figure")).toHaveCount(1);
+
+  // 移出精选：反馈说清移的是精选，不是收藏。
+  await showcase.getByRole("button", { name: /移出精选/ }).click();
+  await expect(page.getByText("已移出精选")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const response = (await (await request.get("/api/picks")).json()) as {
+        picks: string[];
+      };
+      return response.picks.length;
+    })
+    .toBe(0);
+  await expect(page.getByText("还没有精选照片")).toBeVisible();
+
+  // 收藏一份没动：移出精选不碰资源级收藏。
+  const favoritesAfter = (await (
+    await request.get("/api/favorites")
+  ).json()) as { favorites: string[] };
+  expect(favoritesAfter.favorites).toEqual(favoritesBefore.favorites);
+});
+
+test("少量精选摆成陈列：并排、完整，不挤在左边也不裁掉画面", async ({
+  page,
+  request,
+}) => {
+  await ensureLibraryReady(request);
+  const nodes = await scannedNodes(request, "photo");
+  const album = nodes.find((node) => node.name === "sample-album");
+  expect(album).toBeDefined();
+  const media = (await (
+    await request.get(`/api/albums/${album!.id}/media?limit=10`)
+  ).json()) as { page: { items: Array<{ id: string }> } };
+  const ids = media.page.items.slice(0, 2).map((item) => item.id);
+  expect(ids).toHaveLength(2);
+
+  const previous = (await (await request.get("/api/picks")).json()) as {
+    picks: string[];
+  };
+  if (previous.picks.length > 0) {
+    await request.post("/api/picks/batch", {
+      data: { ids: previous.picks, action: "remove" },
+    });
+  }
+  await request.post("/api/picks/batch", {
+    data: { ids, action: "add" },
+  });
+
+  try {
+    await page.goto("/photo/me/picks");
+    const showcase = page.getByTestId("pick-showcase");
+    await expect(showcase).toBeVisible();
+    const figures = showcase.locator("figure");
+    await expect(figures).toHaveCount(2);
+
+    // 两个框并排摆开：不是一个挤在左边，另一个掉到下一行。
+    const first = await figures.nth(0).boundingBox();
+    const second = await figures.nth(1).boundingBox();
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(Math.abs(first!.y - second!.y)).toBeLessThan(4);
+    expect(second!.x).toBeGreaterThan(first!.x);
+
+    // 框按照片自己的形状长：素材是 1×1，图上按 1:1 摆，不裁。
+    const style = await figures
+      .nth(0)
+      .locator("div")
+      .first()
+      .getAttribute("style");
+    expect(style).toContain("aspect-ratio: 1");
+  } finally {
+    const current = (await (await request.get("/api/picks")).json()) as {
+      picks: string[];
+    };
+    if (current.picks.length > 0) {
+      await request.post("/api/picks/batch", {
+        data: { ids: current.picks, action: "remove" },
+      });
+    }
+  }
+});
+
+test("时间线与珍藏共用一份精选状态：一边改了，另一边跟着变", async ({
+  page,
+  request,
+}) => {
+  await ensureLibraryReady(request);
+  const before = (await (await request.get("/api/picks")).json()) as {
+    picks: string[];
+  };
+  if (before.picks.length > 0) {
+    const response = await request.post("/api/picks/batch", {
+      data: { ids: before.picks, action: "remove" },
+    });
+    expect(response.ok()).toBeTruthy();
+  }
+
+  // 时间线（照片首页）上把一张加入精选。
+  await page.goto("/photo");
+  const scroller = page.locator("[data-virtuoso-scroller]");
+  const tile = scroller.getByRole("button", { name: /^查看 / }).first();
+  await expect(tile).toBeVisible();
+  await tile.hover();
+  const pickButton = scroller.locator('button[aria-label*="加入精选"]').first();
+  await expect(pickButton).toBeVisible();
+  await pickButton.click();
+
+  await expect
+    .poll(async () => {
+      const response = (await (await request.get("/api/picks")).json()) as {
+        picks: string[];
+      };
+      return response.picks.length;
+    })
+    .toBe(1);
+
+  // 珍藏页立刻看到这一张。
+  await page.goto("/photo/me/picks");
+  await expect(page.getByText("共 1 张精选照片")).toBeVisible();
+
+  // 回到时间线，那一张的角标已经是「移出精选」：状态是同一份。
+  await page.goto("/photo");
+  const back = page.locator("[data-virtuoso-scroller]");
+  const picked = back.locator('button[aria-label*="移出精选"]').first();
+  await expect(picked).toBeVisible();
+
+  const current = (await (await request.get("/api/picks")).json()) as {
+    picks: string[];
+  };
+  if (current.picks.length > 0) {
+    await request.post("/api/picks/batch", {
+      data: { ids: current.picks, action: "remove" },
+    });
+  }
+});
+
 test("精选能随状态备份导出并按类别恢复，且不动相册收藏", async ({
   request,
 }) => {

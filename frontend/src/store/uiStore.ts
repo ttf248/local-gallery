@@ -13,6 +13,14 @@ interface Toast {
   kind: 'info' | 'success' | 'warning' | 'error'
   message: string
   ttl: number
+  /**
+   * 可选的撤销入口。
+   *
+   * 写操作一旦让东西从眼前消失，用户就没法反悔 —— 例如把一组标记成
+   * 「已处理」后它离开待处理列表。给一条带「撤销」的提示，用户不必
+   * 去别的筛选里把它翻出来。
+   */
+  action?: { label: string; onClick: () => void }
 }
 
 interface UIState {
@@ -55,7 +63,9 @@ interface UIState {
   setHelpContext: (v: 'library' | 'photo') => void
 
   toasts: Toast[]
-  pushToast: (t: Omit<Toast, 'id' | 'ttl'> & { ttl?: number }) => string
+  pushToast: (
+    t: Omit<Toast, 'id' | 'ttl'> & { ttl?: number },
+  ) => string
   dismissToast: (id: string) => void
 }
 
@@ -92,6 +102,7 @@ export const useUIStore = create<UIState>()(
           kind: t.kind,
           message: t.message,
           ttl: t.ttl ?? 2800,
+          action: t.action,
         }
         set({ toasts: [...get().toasts, toast] })
         if (toast.ttl > 0) {

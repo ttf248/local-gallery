@@ -66,8 +66,11 @@ export const SHORTCUTS: Shortcut[] = [
   {
     id: "favorites",
     label: "Ctrl+D",
-    // 两侧都是「我的」里的收藏页签，措辞不再分侧。
-    description: "我的收藏",
+    // 收藏页签住在各自那一侧的个人页里：照片侧叫「珍藏」，漫画侧叫「我的」。
+    // 收藏标的是资源（相册、文件夹、标签），不是照片 —— 照片级的那一份
+    // 叫「精选照片」，两处不能混着说。
+    description: "我的 · 收藏",
+    modeDescriptions: { photo: "珍藏 · 收藏" },
     combo: "ctrl+d",
     group: "global",
   },

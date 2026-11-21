@@ -156,7 +156,8 @@ it("全局操作的措辞随工作台模式变化", () => {
   expect(screen.getByText("随机翻翻")).toBeInTheDocument();
   expect(screen.getByText("回到照片库")).toBeInTheDocument();
   expect(screen.getByText("最近浏览")).toBeInTheDocument();
-  expect(screen.getByText("我的收藏")).toBeInTheDocument();
+  // 照片侧的个人页叫「珍藏」，收藏是它里面的资源级页签。
+  expect(screen.getByText("珍藏 · 收藏")).toBeInTheDocument();
 
   act(() => {
     useAppModeStore.setState({ preference: "comic", hydrated: true });
@@ -164,7 +165,7 @@ it("全局操作的措辞随工作台模式变化", () => {
   expect(screen.getByText("随机一卷")).toBeInTheDocument();
   expect(screen.getByText("回到漫画库")).toBeInTheDocument();
   expect(screen.getByText("最近阅读")).toBeInTheDocument();
-  expect(screen.getByText("我的收藏")).toBeInTheDocument();
+  expect(screen.getByText("我的 · 收藏")).toBeInTheDocument();
   act(() => {
     useAppModeStore.setState({ preference: "photo", hydrated: true });
   });

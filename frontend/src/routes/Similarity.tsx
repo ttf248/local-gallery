@@ -24,6 +24,7 @@ import { aiJobsApi } from "../api/aiJobs";
 import { useUIStore } from "../store/uiStore";
 import type {
   SimilarityBatchAction,
+  SimilarityGroup,
   SimilarityGroupKind,
   SimilarityGroupStatus,
 } from "../api/similarity";
@@ -39,12 +40,32 @@ const KIND_OPTIONS: { value: SimilarityGroupKind | ""; label: string }[] = [
   { value: "burst", label: "连拍" },
 ];
 
-const STATUS_OPTIONS: { value: SimilarityGroupStatus | ""; label: string }[] = [
-  { value: "", label: "全部" },
-  { value: "pending", label: "待整理" },
-  { value: "reviewed", label: "已审查" },
+/**
+ * 处理状态的三档，外加「全部」。
+ *
+ * 这一页是一列待办：进来先看待处理，处理完就落到「已处理」，
+ * 不再看的那一档是「已忽略」。所以默认落在待处理上 —— 打开这一页
+ * 就是要看还有什么没处理。
+ *
+ * 「全部」是显式的一档，不是「参数为空」：地址栏里没有 status 时
+ * 默认是待处理，空串会被当成待处理，免得旧书签把筛选弄丢。
+ */
+type SimilarityStatusOption = SimilarityGroupStatus | "all";
+
+const STATUS_OPTIONS: { value: SimilarityStatusOption; label: string }[] = [
+  { value: "pending", label: "待处理" },
+  { value: "reviewed", label: "已处理" },
   { value: "ignored", label: "已忽略" },
+  { value: "all", label: "全部" },
 ];
+
+/** 读地址栏里的状态：认不出来的按待处理算。 */
+function readStatusOption(value: string | null): SimilarityStatusOption {
+  if (value === "reviewed" || value === "ignored" || value === "all") {
+    return value;
+  }
+  return "pending";
+}
 
 /**
  * 相似照片与连拍整理。
@@ -61,8 +82,7 @@ export default function Similarity() {
   const [searchParams, setSearchParams] = useSearchParams();
   const kind = readParam(searchParams.get(KIND_PARAM)) as
     SimilarityGroupKind | "";
-  const status = readParam(searchParams.get(STATUS_PARAM)) as
-    SimilarityGroupStatus | "";
+  const status = readStatusOption(searchParams.get(STATUS_PARAM));
   const folder = searchParams.get(FOLDER_PARAM) ?? "";
 
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
@@ -70,7 +90,12 @@ export default function Similarity() {
   const [comparePair, setComparePair] = useState<[string, string] | null>(null);
 
   const pushToast = useUIStore((state) => state.pushToast);
-  const groups = useSimilarityGroups({ kind, status, folder });
+  const groups = useSimilarityGroups({
+    kind,
+    // 「全部」是不带状态筛选；其余三档原样传给后端。
+    status: status === "all" ? "" : status,
+    folder,
+  });
   const moduleStatus = useSimilarityStatus();
   const queryClient = useQueryClient();
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = groups;
@@ -122,17 +147,102 @@ export default function Similarity() {
     async (
       id: string,
       body: { representative?: string; reviewed?: boolean; ignored?: boolean },
-    ) => {
+    ): Promise<boolean> => {
       try {
         await groups.update.mutateAsync({ id, body });
+        return true;
       } catch (error) {
         pushToast({
           kind: "error",
           message: `没能保存这个决定：${describeError(error)}`,
         });
+        return false;
       }
     },
     [groups, pushToast],
+  );
+
+  /**
+   * 撤销一次状态写入。
+   *
+   * 标记与忽略会让这一组离开「待处理」列表 —— 用户刚点完，屏幕上
+   * 就没有这一组了。没有撤销入口的话，反悔只能去别的筛选里把它翻
+   * 出来，那不叫反悔，叫找东西。
+   */
+  const undoStatus = useCallback(
+    async (
+      groupIds: string[],
+      body: { reviewed?: boolean; ignored?: boolean },
+      message: string,
+      batchAction?: SimilarityBatchAction,
+    ) => {
+      try {
+        // 撤销走回原来那条路：单组的用单组写入，批量的用批量写入。
+        if (batchAction) {
+          await groups.batch.mutateAsync({
+            action: batchAction,
+            groupIds,
+          });
+        } else {
+          await groups.update.mutateAsync({ id: groupIds[0], body });
+        }
+        pushToast({ kind: "success", message });
+      } catch (error) {
+        pushToast({
+          kind: "error",
+          message: `没能撤销：${describeError(error)}`,
+        });
+      }
+    },
+    [groups, pushToast],
+  );
+
+  /** 标记一组为已处理：说清做了什么，并留一条撤销。 */
+  const handleReview = useCallback(
+    async (group: SimilarityGroup) => {
+      const undo = group.status === "reviewed";
+      const saved = await handleUpdate(group.id, { reviewed: !undo });
+      if (!saved) return;
+      if (!undo) {
+        pushToast({
+          kind: "success",
+          message: "已把这一组标记为已处理",
+          ttl: 8000,
+          action: {
+            label: "撤销",
+            onClick: () =>
+              void undoStatus([group.id], { reviewed: false }, "已放回待处理"),
+          },
+        });
+      } else {
+        pushToast({ kind: "success", message: "已放回待处理" });
+      }
+    },
+    [handleUpdate, pushToast, undoStatus],
+  );
+
+  /** 忽略一组：同样留一条撤销。 */
+  const handleIgnore = useCallback(
+    async (group: SimilarityGroup) => {
+      const undo = group.status === "ignored";
+      const saved = await handleUpdate(group.id, { ignored: !undo });
+      if (!saved) return;
+      if (!undo) {
+        pushToast({
+          kind: "success",
+          message: "已忽略这一组",
+          ttl: 8000,
+          action: {
+            label: "撤销",
+            onClick: () =>
+              void undoStatus([group.id], { ignored: false }, "已取消忽略"),
+          },
+        });
+      } else {
+        pushToast({ kind: "success", message: "已取消忽略" });
+      }
+    },
+    [handleUpdate, pushToast, undoStatus],
   );
 
   /** 把一组的代表照片加入精选：不必先勾选这一组。 */
@@ -168,15 +278,56 @@ export default function Similarity() {
           action,
           groupIds: ids,
         });
+        // 反馈必须说清是哪一件事：一句话里的「处理」既可以是标记处理
+        // 也可以是忽略，用户分不清自己刚才点的是哪一个。
         if (action === "pick") {
           pushToast({
-            kind: "success",
-            message: `已把 ${result.changed} 张代表照片加入精选`,
+            kind: result.changed ? "success" : "info",
+            message: result.changed
+              ? `已把 ${result.changed} 张代表照片加入精选`
+              : "这些代表照片已经在精选里了",
           });
-        } else {
+        } else if (action === "review" || action === "unreview") {
+          const done = action === "review";
           pushToast({
             kind: "success",
-            message: `已处理 ${result.changed} 组`,
+            message: done
+              ? `已把 ${result.changed} 组标记为已处理`
+              : `已把 ${result.changed} 组放回待处理`,
+            ttl: done ? 8000 : undefined,
+            action: done
+              ? {
+                  label: "撤销",
+                  onClick: () =>
+                    void undoStatus(
+                      ids,
+                      { reviewed: false },
+                      "已放回待处理",
+                      "unreview",
+                    ),
+                }
+              : undefined,
+          });
+        } else {
+          const ignored = action === "ignore";
+          pushToast({
+            kind: "success",
+            message: ignored
+              ? `已忽略 ${result.changed} 组`
+              : `已取消忽略 ${result.changed} 组`,
+            ttl: ignored ? 8000 : undefined,
+            action: ignored
+              ? {
+                  label: "撤销",
+                  onClick: () =>
+                    void undoStatus(
+                      ids,
+                      { ignored: false },
+                      "已取消忽略",
+                      "unignore",
+                    ),
+                }
+              : undefined,
           });
         }
         setSelectedIds(new Set());
@@ -187,7 +338,7 @@ export default function Similarity() {
         });
       }
     },
-    [groups, pushToast, selectedIds],
+    [groups, pushToast, selectedIds, undoStatus],
   );
 
   // 展开状态与勾选状态在换筛选时清掉：上一组结果可能不在新切面里了。
@@ -239,6 +390,7 @@ export default function Similarity() {
           <>
             完全重复按文件内容判定，近似重复按画面判定，连拍只标出「同一个瞬间」，
             不当成重复。三类结果各自独立，任何一步都不会删除、移动或改写原始照片。
+            进来先看待处理：处理完的落到「已处理」，不再看的落到「已忽略」。
           </>
         }
         action={
@@ -283,7 +435,7 @@ export default function Similarity() {
             options={KIND_OPTIONS}
           />
           <Segmented
-            label="整理状态"
+            label="处理状态"
             value={status}
             onChange={(value) => updateParam(STATUS_PARAM, value)}
             options={STATUS_OPTIONS}
@@ -338,9 +490,10 @@ export default function Similarity() {
             className="mb-4 text-meta text-fg-subtle"
             data-testid="similarity-summary"
           >
-            {summary.exact + summary.near + summary.burst} 组 · {summary.exact}{" "}
-            组完全重复、{summary.near} 组近似重复、{summary.burst} 组连拍 ·{" "}
-            {summary.redundant} 张多余照片 · 待整理 {summary.pending} 组
+            共 {summary.exact + summary.near + summary.burst} 组 ·{" "}
+            {summary.exact} 组完全重复、{summary.near} 组近似重复、{summary.burst}{" "}
+            组连拍 · {summary.redundant} 张多余照片 · 待处理 {summary.pending}{" "}
+            组、已处理 {summary.reviewed} 组、已忽略 {summary.ignored} 组
             {statusInfo?.hasVectors
               ? " · 语义索引可用，复核更准"
               : " · 没有语义索引，近似判定已收紧"}
@@ -362,8 +515,8 @@ export default function Similarity() {
           </p>
         ) : isEmpty ? (
           <EmptyState
-            title={emptyTitle(statusInfo?.analyzed ?? 0)}
-            description={emptyDescription(statusInfo?.analyzed ?? 0)}
+            title={emptyTitle(statusInfo?.analyzed ?? 0, status)}
+            description={emptyDescription(statusInfo?.analyzed ?? 0, status)}
             icon={<span aria-hidden="true">◧</span>}
             dense
           />
@@ -387,16 +540,8 @@ export default function Similarity() {
                 onSetRepresentative={(resourceId) =>
                   void handleUpdate(group.id, { representative: resourceId })
                 }
-                onReview={() =>
-                  void handleUpdate(group.id, {
-                    reviewed: group.status !== "reviewed",
-                  })
-                }
-                onIgnore={() =>
-                  void handleUpdate(group.id, {
-                    ignored: group.status !== "ignored",
-                  })
-                }
+                onReview={() => void handleReview(group)}
+                onIgnore={() => void handleIgnore(group)}
                 onPick={() => void handlePickGroup(group.id)}
                 onCompare={(left, right) => setComparePair([left, right])}
                 busy={groups.update.isPending || groups.batch.isPending}
@@ -459,7 +604,7 @@ export default function Similarity() {
               onClick={() => void handleBatch("review")}
               disabled={groups.batch.isPending}
             >
-              标记已审查
+              标记已处理
             </button>
             <button
               type="button"
@@ -584,17 +729,38 @@ function readParam(value: string | null): string {
 }
 
 /** 空的说法：没分析过与分析过但没结果，是两回事。 */
-function emptyTitle(analyzed: number): string {
+function emptyTitle(analyzed: number, status: SimilarityStatusOption): string {
   if (analyzed <= 0) return "还没有分析过照片";
-  return "这个筛选下没有需要整理的照片";
+  switch (status) {
+    case "pending":
+      return "待处理的组都处理完了";
+    case "reviewed":
+      return "还没有处理过的组";
+    case "ignored":
+      return "没有被忽略的组";
+    default:
+      return "这个筛选下没有需要整理的照片";
+  }
 }
 
 /** 空态的说明。 */
-function emptyDescription(analyzed: number): string {
+function emptyDescription(
+  analyzed: number,
+  status: SimilarityStatusOption,
+): string {
   if (analyzed <= 0) {
     return "点右上角的「分析相似照片」跑一次。它在本机算，不联网也不改动原始文件。";
   }
-  return "换个类别或状态看看，或者把「已忽略」的组放回待整理。";
+  switch (status) {
+    case "pending":
+      return "这批重复与连拍都处理过了。切到「已处理」看看决定了什么，切到「已忽略」把不看的那几组放回来。";
+    case "reviewed":
+      return "处理过的组会出现在这里。想从别处开始，切到「待处理」。";
+    case "ignored":
+      return "忽略的组不会打扰你。放回待处理的办法：切到「已忽略」，在那一组上点「取消忽略」。";
+    default:
+      return "换个类别或文件夹看看，或者点右上角「重算分组」重新算一遍。";
+  }
 }
 
 /** 把错误说成人话。 */

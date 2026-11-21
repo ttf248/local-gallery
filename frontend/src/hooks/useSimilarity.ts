@@ -170,15 +170,20 @@ export function similarityKindHint(kind: SimilarityGroupKind | string): string {
   }
 }
 
-/** 整理状态的中文名。 */
+/**
+ * 整理状态的中文名。
+ *
+ * 三档是一列待办：还没处理、处理完了、不再看。
+ * 「已审查」是行话 —— 用户在意的不是审没审，而是「这一组我处理了没有」。
+ */
 export function similarityStatusLabel(
   status: SimilarityGroupStatus | string,
 ): string {
   switch (status) {
     case "pending":
-      return "待整理";
+      return "待处理";
     case "reviewed":
-      return "已审查";
+      return "已处理";
     case "ignored":
       return "已忽略";
     default:

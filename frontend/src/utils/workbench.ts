@@ -164,8 +164,10 @@ const PHOTO: PhotoCopy = {
   recentsEmpty: "还没有最近浏览",
   recentsLoadError: "最近浏览加载失败。",
   recentsAlbumsLoadError: "最近浏览的相册信息加载失败。",
-  favoritesTitle: "我收藏的照片",
-  favoritesEmpty: "还没有收藏照片",
+  favoritesTitle: "收藏",
+  /* 收藏标的是相册、文件夹与标签，不是照片 ——
+     照片级的那一份叫「精选照片」，两处不能混着说。 */
+  favoritesEmpty: "还没有收藏",
   randomLabel: "随机翻翻",
   mediaUnit: "张",
   albumTypeLabel: "相册",

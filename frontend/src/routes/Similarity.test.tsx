@@ -11,6 +11,7 @@ import type { ReactNode } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Similarity from "./Similarity";
+import { useUIStore } from "../store/uiStore";
 import type { SimilarityGroup, SimilarityGroupPage } from "../api/similarity";
 
 const requests: {
@@ -242,6 +243,7 @@ describe("相似照片整理页", () => {
     requests.length = 0;
     updates.length = 0;
     batches.length = 0;
+    useUIStore.setState({ toasts: [] });
   });
 
   it("按三类结果分别列出分组，并说清这一类是什么", async () => {
@@ -280,11 +282,11 @@ describe("相似照片整理页", () => {
     );
   });
 
-  it("标记已审查与忽略各写各的决定", async () => {
+  it("标记已处理与忽略各写各的决定", async () => {
     renderPage();
     await screen.findByTestId("similarity-group");
 
-    fireEvent.click(screen.getByRole("button", { name: "已审查" }));
+    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
     await waitFor(() =>
       expect(updates).toContainEqual({
         id: "exact-1",
@@ -415,6 +417,114 @@ describe("相似照片整理页", () => {
     expect(screen.getByRole("radio", { name: "连拍" })).toHaveAttribute(
       "aria-checked",
       "true",
+    );
+  });
+
+  it("默认落在待处理：打开这一页就是还没处理的那一列", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    expect(requests[0].status).toBe("pending");
+    expect(screen.getByRole("radio", { name: "待处理" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+  });
+
+  it("切到已处理会改筛选，并把状态写进地址栏", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("radio", { name: "已处理" }));
+
+    await waitFor(() => {
+      expect(requests.some((request) => request.status === "reviewed")).toBe(
+        true,
+      );
+    });
+    expect(screen.getByTestId("location")).toHaveTextContent("status=reviewed");
+  });
+
+  it("标记已处理后给出撤销，撤销把它放回待处理", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+
+    await waitFor(() =>
+      expect(
+        useUIStore.getState().toasts.some(
+          (toast) => toast.message === "已把这一组标记为已处理",
+        ),
+      ).toBe(true),
+    );
+    const toast = useUIStore
+      .getState()
+      .toasts.find((item) => item.message === "已把这一组标记为已处理");
+    expect(toast?.action?.label).toBe("撤销");
+
+    await act(async () => {
+      toast?.action?.onClick();
+    });
+
+    await waitFor(() =>
+      expect(updates).toContainEqual({
+        id: "exact-1",
+        body: { reviewed: false },
+      }),
+    );
+  });
+
+  it("批量忽略说清忽略了多少组，也能整体撤销", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /选中这一组/ }));
+    const bar = await screen.findByTestId("similarity-batch-bar");
+    fireEvent.click(within(bar).getByRole("button", { name: "忽略" }));
+
+    await waitFor(() =>
+      expect(batches).toContainEqual({
+        action: "ignore",
+        groupIds: ["exact-1"],
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        useUIStore.getState().toasts.some(
+          (toast) => toast.message === "已忽略 1 组",
+        ),
+      ).toBe(true),
+    );
+
+    const toast = useUIStore
+      .getState()
+      .toasts.find((item) => item.message === "已忽略 1 组");
+    await act(async () => {
+      toast?.action?.onClick();
+    });
+    await waitFor(() =>
+      expect(batches).toContainEqual({
+        action: "unignore",
+        groupIds: ["exact-1"],
+      }),
+    );
+  });
+
+  it("批量标记已处理与批量忽略的反馈不混着说", async () => {
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /选中这一组/ }));
+    const bar = await screen.findByTestId("similarity-batch-bar");
+    fireEvent.click(within(bar).getByRole("button", { name: "标记已处理" }));
+
+    await waitFor(() =>
+      expect(
+        useUIStore.getState().toasts.some(
+          (toast) => toast.message === "已把 1 组标记为已处理",
+        ),
+      ).toBe(true),
     );
   });
 });

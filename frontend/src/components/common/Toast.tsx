@@ -36,6 +36,22 @@ export default function ToastViewport() {
           >
             <Icon size={15} className={`shrink-0 ${dark ? 'text-white/60' : 'text-fg-muted'}`} />
             <div className="flex-1 leading-snug">{t.message}</div>
+            {t.action ? (
+              /* 撤销入口：动作做完就关掉提示，别让它留在屏幕上。 */
+              <button
+                onClick={() => {
+                  t.action?.onClick()
+                  dismiss(t.id)
+                }}
+                className={`shrink-0 rounded px-1.5 py-0.5 text-body font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+                  dark
+                    ? 'text-white hover:bg-white/10'
+                    : 'text-brand hover:bg-brand/10'
+                }`}
+              >
+                {t.action.label}
+              </button>
+            ) : null}
             <button
               onClick={() => dismiss(t.id)}
               className={`shrink-0 inline-flex h-7 w-7 items-center justify-center rounded transition-colors ${

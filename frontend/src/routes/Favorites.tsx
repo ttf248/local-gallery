@@ -280,7 +280,7 @@ export default function Favorites({ embedded = false }: { embedded?: boolean } =
         <>
           <EmptyState
             title={copy.favoritesEmpty}
-            description="收藏是给相册打星标：点封面右上角的星标，这一本就会出现在这里。下面这几本可以直接点星标试试。"
+            description="收藏是给相册、文件夹与标签打星标：点封面右上角的星标，它就会出现在这里。下面这几本可以直接点星标试试。"
             icon={<StarIcon size={20} />}
             action={
               <button

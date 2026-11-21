@@ -10,6 +10,7 @@ import {
 } from "../store/photoSelectionStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
+import PickShowcase from "../components/wall/PickShowcase";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoCompare from "../components/wall/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
@@ -28,9 +29,14 @@ import { photoCopy } from "../utils/workbench";
  * 精选是跨相册的：用户在好几本相册里挑出的照片摆在一起。相册级
  * 收藏回答「哪些相册值得留着」，这一页回答「哪些照片值得留着」。
  *
- * 这里的墙与相册里的照片墙是同一个组件 —— 排布规则、密度档位、
- * 悬停信息层都一致，用户不需要学第二套。
+ * 精选多的时候用照片墙 —— 与相册里的照片墙是同一个组件，排布规则、
+ * 密度档位、悬停信息层都一致，用户不需要学第二套。精选少到几张时
+ * 换成陈列摆法（见 PickShowcase）：照片墙是给「很多张」用的。
  */
+
+/** 精选少到多少张时改用陈列摆法。 */
+const SHOWCASE_LIMIT = 4;
+
 /**
  * 精选照片页。
  *
@@ -158,6 +164,13 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
 
   const viewer = wall.viewer;
 
+  /* 少量精选换一种摆法。
+     照片墙是给「很多张」用的：密排、裁切、按固定行高铺满。挑出来的三五张
+     用它排会缩在左边一角，竖幅还被裁掉半张 —— 用户挑出来的照片是拿来
+     好好看的，不是拿来数的。数量少的时候摆成陈列：每张一个框，完整地
+     摆出来，几个框并排摆开、整体居中。 */
+  const showcase = items.length > 0 && items.length <= SHOWCASE_LIMIT;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       {embedded ? null : (
@@ -243,6 +256,34 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
                 去照片库
               </button>
             }
+          />
+        ) : showcase ? (
+          <PickShowcase
+            items={items}
+            onOpen={(index) => wall.open(index)}
+            /* 精选页摆的每张都在精选里：角标就是移出精选的入口。 */
+            onTogglePick={(item) =>
+              void picks
+                .remove([item.id])
+                .then(() =>
+                  pushToast({ kind: "success", message: "已移出精选" }),
+                )
+                .catch(() =>
+                  pushToast({ kind: "error", message: "移出精选失败" }),
+                )
+            }
+            name={(item) => item.name}
+            /* 精选页的照片来自不同相册：出处要写在照片下面，
+               用户才知道自己看的是哪本里的哪一张。 */
+            source={(item) => item.albumName}
+            /* 框按照片自己的形状长：竖幅不该被裁成横幅。 */
+            ratio={(item) =>
+              item.width && item.height ? item.width / item.height : undefined
+            }
+            selecting={selectionActive}
+            isSelected={isSelected}
+            onToggleSelect={(item) => toggleSelect(item)}
+            onContextMenu={menu.open}
           />
         ) : (
           <PhotoWall

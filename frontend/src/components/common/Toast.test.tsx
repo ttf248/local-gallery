@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import ToastViewport from "./Toast";
 import { useUIStore } from "../../store/uiStore";
 
@@ -55,5 +55,30 @@ describe("ToastViewport", () => {
     expect(card.className).toContain("bg-overlay-panel");
     expect(card.className).not.toContain("bg-bg-elevated/95");
     useUIStore.setState({ immersiveOverlay: false });
+  });
+
+  it("带撤销的提示会给出撤销按钮，点完就关掉自己", () => {
+    const undone = vi.fn();
+    useUIStore.setState({
+      toasts: [
+        {
+          id: "t1",
+          kind: "success",
+          message: "已把这一组标记为已处理",
+          ttl: 0,
+          action: { label: "撤销", onClick: undone },
+        },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <ToastViewport />
+      </MemoryRouter>,
+    );
+    const undo = screen.getByRole("button", { name: "撤销" });
+    fireEvent.click(undo);
+    expect(undone).toHaveBeenCalledTimes(1);
+    // 撤销之后提示不再挂在屏幕上。
+    expect(screen.queryByText("已把这一组标记为已处理")).toBeNull();
   });
 });

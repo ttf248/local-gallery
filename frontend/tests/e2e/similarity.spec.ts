@@ -138,8 +138,8 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
   await sidebar.getByRole("link", { name: "相似照片", exact: true }).click();
   const returnedCard = page.getByTestId("similarity-group").first();
 
-  // 标记已审查：决定写进 state，重新读取仍在。
-  await returnedCard.getByRole("button", { name: "已审查", exact: true }).click();
+  // 标记已处理：决定写进 state，重新读取仍在。
+  await returnedCard.getByRole("button", { name: "标记已处理", exact: true }).click();
   await expect
     .poll(async () => {
       const response = await request.get("/api/similarity/groups?limit=50");
@@ -148,7 +148,17 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
     })
     .toBe(true);
 
-  // 页面重新读取后，状态照样显示为已审查。
+  // 反馈说清做了什么，并留一条撤销。
+  await expect(page.getByText("已把这一组标记为已处理")).toBeVisible();
+  await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
+
+  // 这一组离开待处理列表了：切到已处理才看得见它。
+  await page.getByRole("radio", { name: "已处理" }).click();
+  await expect(
+    page.getByTestId("similarity-group").first(),
+  ).toHaveAttribute("data-group-status", "reviewed");
+
+  // 页面重新读取后，状态照样显示为已处理。
   await page.reload();
   await expect(
     page.getByTestId("similarity-group").first(),
@@ -163,6 +173,55 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
     });
     expect(response.ok()).toBeTruthy();
   }
+});
+
+test("人工指定的代表照片刷新后仍在", async ({ page, request }) => {
+  await ensureLibraryReady(request);
+  await setWorkbenchMode(request, "photo");
+
+  // 分组是后台算好的：上一条用例已经跑过一次分析，这里直接用。
+  // 单独跑这一条时（没有分组）才补跑一次 —— 多跑一次分析会改变库里
+  // 「未分析几张」的计数，后面那条用例按这个数字断言。
+  const existing = (await (
+    await request.get("/api/similarity/groups?limit=1")
+  ).json()) as SimilarityPage;
+  if (existing.page.total === 0) {
+    await runSimilarityAnalysis(request);
+    await expect
+      .poll(
+        async () => {
+          const response = await request.get("/api/similarity/groups?limit=50");
+          const body = (await response.json()) as SimilarityPage;
+          return body.page.total;
+        },
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(0);
+  }
+
+  // 看连拍组：它们的成员少，展开后逐张比较不会刷出几千张图。
+  await page.goto("/photo/similarity?kind=burst");
+  const card = page.getByTestId("similarity-group").first();
+  await expect(card).toBeVisible();
+
+  // 展开后成员并排摆着，点其中一张就是「把它当代表」。
+  await card.getByRole("button", { name: "展开", exact: true }).click();
+  const members = card.getByTestId("similarity-member");
+  await expect(members.first()).toBeVisible();
+  await members.nth(1).locator("button[aria-label*='设为代表照片']").click();
+  await expect(card.getByText("当前代表")).toBeVisible();
+
+  // 决定记在磁盘上：刷新后还是那一张。
+  await page.reload();
+  const again = page.getByTestId("similarity-group").first();
+  await again.getByRole("button", { name: "展开", exact: true }).click();
+  await expect(again.getByText("当前代表")).toBeVisible();
+  await expect(
+    again
+      .getByTestId("similarity-member")
+      .nth(1)
+      .locator("button[aria-label*='设为代表照片']"),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("相似照片的人工决定能随状态备份导出并恢复", async ({ request }) => {

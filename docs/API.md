@@ -540,11 +540,11 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `GET /api/similarity/status` 返回整理模块的整体状态：`analyzed` 是已算出特征的照片张数，`total` 是媒体库照片总数，`hasVectors` 说明语义向量索引是否可用（可用时近似重复的复核更准），`builtAt` 是分组结果的生成时间，`stale` 说明特征已变、分组需要重建，`rebuilding` 说明正在重建，`limited` 说明候选召回触到了上限（此时结果可能不完整），`summary` 是分组总量。
 - `GET /api/similarity/groups?kind=&folder=&status=&limit=&offset=` 返回分组。`kind` 取 `exact`（完全重复）、`near`（近似重复）、`burst`（连拍同场景）或空串表示全部；`status` 取 `pending`、`reviewed`、`ignored` 或空串；`folder` 按文件夹别名筛选；`resourceId` 只返回含有这张照片的分组（照片墙上展开一组时用它读回成员名单）。`limit` 上限 200，`offset` 分页。响应 `page` 含 `groups[]`、`folders[]`（有结果的文件夹与各自组数）、`summary`（`exact`/`near`/`burst` 三类组数、`pending`/`reviewed`/`ignored` 状态数、`photos` 参与整理的张数、`redundant` 每组保留一张之外的多余张数）、`stale` 与 `limited`。无效 `limit` 或 `offset` 返回 `400 invalid_similarity_query`。
 - 每个分组含 `id`、`kind`、`folder`、`resourceIds[]`、`members[]`、`recommended`（算法建议的代表照片）、`representative`（当前生效的代表照片）、`representativeIsManual`（代表照片是否由用户指定）、`distance`（组内成员与代表照片的最大感知哈希距离）、`similarity`、`timeSpanMs`、`timeSource`（`capture` 为 EXIF 拍摄时间，`file` 为文件修改时间的退路）、`crossFolder`、`status` 与 `redundant`。每个成员含 `resourceId`、`folder`、`albumId`、`albumName`、原图像素 `width`/`height`、`capturedAt`、`distance`、`similarity` 与 `quality`。`quality` 是可解释的质量分项：`sharpness`（拉普拉斯响应的方差）、`sharpnessScore`、`megapixels`、`resolutionScore`、`exposure`（灰度均值）、`clippedHigh`、`clippedLow`、`exposureScore` 与 `score`。代表评分按清晰度 0.45、分辨率 0.25、曝光 0.30 加权，与文件大小无关。
-- `PUT /api/similarity/groups/:id` 写人工决定，body 为 `{ "representative"?: "f_…" }`、`{ "reviewed"?: true }` 或 `{ "ignored"?: true }`，一次可给一种。`representative` 必须指向组内成员，否则返回 `400 invalid_similarity_request`；分组不存在时返回 `404 similarity_group_not_found`。标记已审查与忽略互斥，后写的一个生效。
+- `PUT /api/similarity/groups/:id` 写人工决定，body 为 `{ "representative"?: "f_…" }`、`{ "reviewed"?: true }` 或 `{ "ignored"?: true }`，一次可给一种。`representative` 必须指向组内成员，否则返回 `400 invalid_similarity_request`；分组不存在时返回 `404 similarity_group_not_found`。标记处理与忽略互斥，后写的一个生效。字段名沿用 `reviewed` / `ignored`，界面上的说法是「已处理」与「已忽略」。
 - `POST /api/similarity/batch` 对一组分组执行同一个动作，body 为 `{ "action": "review"|"unreview"|"ignore"|"unignore"|"pick", "groupIds": ["…"] }`。`pick` 把每组当前生效的代表照片加入现有的照片级精选（`state/picks.json`），返回的 `changed` 是实际加入精选的张数。分组 ID 不存在时按未命中处理；未知动作返回 `400 invalid_similarity_batch`。
 - `POST /api/similarity/rebuild` 按当前特征重算分组，响应含重算后的 `summary`。特征已经变了但还没重建时用它，不必再跑一遍分析任务；服务启动时若分组比分析结果旧，也会在后台自动重算一次。媒体库尚未就绪返回 `400 library_not_ready`。
 
-分组结果是可重建的派生数据，写在 `derived/ai/similarity/groups.json`；人工决定（已审查、忽略、指定代表）写在 `state/similarity.json`，重建之后仍然生效，并随状态备份的 `similarity` 类别一起导出与恢复。组的标识取组内最小的资源标识，因此组变大变小都不会换号。
+分组结果是可重建的派生数据，写在 `derived/ai/similarity/groups.json`；人工决定（处理状态、忽略、指定代表）写在 `state/similarity.json`，重建之后仍然生效，并随状态备份的 `similarity` 类别一起导出与恢复。组的标识取组内最小的资源标识，因此组变大变小都不会换号。
 
 ### 足迹页 API
 
