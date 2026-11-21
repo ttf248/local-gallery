@@ -8,6 +8,7 @@ import PhotoWall from "../components/wall/PhotoWall";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import ContextMenu from "../components/album/ContextMenu";
 import EmptyState from "../components/common/EmptyState";
+import ErrorBanner from "../components/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
 import type { LibraryFeedItem } from "../api/library";
@@ -15,11 +16,10 @@ import { FolderIcon, GridIcon } from "../components/common/Icon";
 import { albumRoute, homeRoute } from "../utils/path";
 
 /**
- * 按年份浏览照片。
+ * 旧版目录年份书签：按相册 / 目录的年份范围浏览照片。
  *
- * 年份是照片工作台的一条主索引：用户想看「2024 年的照片」时，不必先
- * 猜中是哪一本相册、再一层层点进去。这一页直接把该年份下各相册的
- * 照片铺成一面墙，每张都带着它出自哪本相册，看完能一键回到原相册。
+ * 新的按时间找照片入口使用 /photo?year=YYYY；这里保留旧深链，页面名称
+ * 与计数口径都明确标出目录年份，避免和单张媒体的日期证据混淆。
  *
  * 墙与相册里的照片墙是同一个组件 —— 排布规则、密度档位、悬停信息层
  * 都一致，用户不需要学第二套。
@@ -41,8 +41,9 @@ export default function YearPhotos() {
   const feed = useMediaFeed(feedQuery);
   const items = feed.items;
   const total = feed.total;
+  const { isFetchNextPageError, retryNextPage: retryFeedPage } = feed;
 
-  const label = year === "other" ? "其他年份" : `${year} 年`;
+  const label = year === "other" ? "未标年份目录照片" : `${year} 年目录照片`;
 
   const togglePick = useCallback(
     (id: string) => {
@@ -53,9 +54,14 @@ export default function YearPhotos() {
     [picks, pushToast],
   );
 
+  const retryNextPage = useCallback(() => {
+    retryFeedPage();
+  }, [retryFeedPage]);
+
   const loadMore = useCallback(() => {
-    void feed.fetchNextPage({ cancelRefetch: false });
-  }, [feed]);
+    if (isFetchNextPageError) return;
+    retryFeedPage();
+  }, [isFetchNextPageError, retryFeedPage]);
 
   // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
   const wall = useWallViewer({
@@ -80,7 +86,7 @@ export default function YearPhotos() {
             <div className="min-w-0 flex-1">
               {/* 眉标说清这一页是什么：年份是浏览入口，
                   与相册页的「这一本」不是一回事。 */}
-              <p className="page-eyebrow">按年份浏览</p>
+              <p className="page-eyebrow">按相册目录年份浏览</p>
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <h1 className="album-bar__title truncate">{label}</h1>
                 <div className="album-bar__meta tabular-nums">
@@ -138,10 +144,40 @@ export default function YearPhotos() {
       )}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
-        {feed.isError && items.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-body text-fg-muted">
-            照片加载失败，请重试。
+        {feed.isError && items.length > 0 ? (
+          <div className="pb-2">
+            <ErrorBanner
+              kind="warning"
+              onRetry={() =>
+                feed.isFetchNextPageError
+                  ? retryNextPage()
+                  : void feed.refetch()
+              }
+              retrying={feed.isFetching}
+            >
+              {feed.isFetchNextPageError
+                ? feed.cursorInvalidated
+                  ? "媒体库刚刚变了，下一页位置已经失效。重试会从头读取目录年份照片。"
+                  : "后续照片加载失败，已加载的目录年份照片仍可浏览。"
+                : "目录年份照片更新失败，仍保留已加载的照片。"}
+            </ErrorBanner>
           </div>
+        ) : null}
+        {feed.isError && items.length === 0 ? (
+          <EmptyState
+            title="目录年份照片加载失败"
+            description="检查服务或网络后，可以重新读取这个目录年份。"
+            action={
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => void feed.refetch()}
+                disabled={feed.isFetching}
+              >
+                重试加载
+              </button>
+            }
+          />
         ) : items.length === 0 && !feed.isLoading ? (
           <EmptyState
             title={`${label}没有照片`}
@@ -163,6 +199,7 @@ export default function YearPhotos() {
             targetHeight={wallTargetHeight(density)}
             hasNextPage={feed.hasNextPage ?? false}
             isLoadingMore={feed.isFetchingNextPage}
+            loadMoreError={feed.isFetchNextPageError}
             onLoadMore={loadMore}
             onOpen={(_item, index) => wall.open(index)}
             /* 跨相册的墙：照片要说出自己出自哪本相册，

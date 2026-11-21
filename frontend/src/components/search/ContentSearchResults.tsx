@@ -1,12 +1,10 @@
 import { useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../../api/client";
-import {
-  type AIWorkerStatus,
-  type SemanticSearchHit,
-} from "../../api/aiJobs";
+import { type AIWorkerStatus, type SemanticSearchHit } from "../../api/aiJobs";
 import type { LibraryFeedItem } from "../../api/library";
 import EmptyState from "../common/EmptyState";
+import ErrorBanner from "../common/ErrorBanner";
 import PhotoWall from "../wall/PhotoWall";
 import PhotoViewer from "../wall/PhotoViewer";
 import { SearchIcon } from "../common/Icon";
@@ -89,8 +87,10 @@ export default function ContentSearchResults({
     [hits],
   );
   const total = submittedQuery.data?.pages[0]?.total ?? 0;
-  const loadMore = () =>
+  const loadMore = () => {
+    if (submittedQuery.isFetchNextPageError) return;
     void submittedQuery.fetchNextPage({ cancelRefetch: false });
+  };
 
   // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
   const wall = useWallViewer({
@@ -119,7 +119,9 @@ export default function ContentSearchResults({
   const notIndexed = status !== undefined && totalPhotos > 0 && indexed === 0;
 
   const searchedSemantic = Boolean(
-    submitted?.request.text || submitted?.request.resourceId || submitted?.image,
+    submitted?.request.text ||
+    submitted?.request.resourceId ||
+    submitted?.image,
   );
   const searchedOCR = Boolean(submitted?.request.ocrText);
   const searchedBoth = searchedSemantic && searchedOCR;
@@ -134,7 +136,7 @@ export default function ContentSearchResults({
     searchedBoth,
   });
 
-  if (submittedQuery.isError) {
+  if (submittedQuery.isError && items.length === 0) {
     return (
       <>
         <EmptyState
@@ -174,12 +176,30 @@ export default function ContentSearchResults({
   if (items.length > 0) {
     return (
       <>
+        {submittedQuery.isError ? (
+          <div className="mb-3">
+            <ErrorBanner
+              kind="warning"
+              onRetry={() =>
+                submittedQuery.isFetchNextPageError
+                  ? void submittedQuery.fetchNextPage({ cancelRefetch: false })
+                  : void submittedQuery.refetch()
+              }
+              retrying={submittedQuery.isFetching}
+            >
+              {submittedQuery.isFetchNextPageError
+                ? "后续搜索结果加载失败，已加载的照片仍可浏览。"
+                : "搜索结果更新失败，仍保留已加载的照片。"}
+            </ErrorBanner>
+          </div>
+        ) : null}
         <PhotoWall
           items={items}
           total={Math.max(total, items.length)}
           targetHeight={wallTargetHeight(density)}
           hasNextPage={submittedQuery.hasNextPage ?? false}
           isLoadingMore={submittedQuery.isFetchingNextPage}
+          loadMoreError={submittedQuery.isFetchNextPageError}
           onLoadMore={loadMore}
           onOpen={(_item, index) => wall.open(index)}
           albumLabel={(item) => item.albumName}

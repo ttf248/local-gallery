@@ -114,7 +114,12 @@ export default function Similarity() {
   });
   const moduleStatus = useSimilarityStatus();
   const queryClient = useQueryClient();
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = groups;
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = groups;
 
   // 筛选条件写进地址栏：这一页看的就是某个切面，链接要能带过去。
   const updateParam = useCallback(
@@ -155,6 +160,12 @@ export default function Similarity() {
   }, []);
 
   const loadMoreGroups = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
+    void fetchNextPage({ cancelRefetch: false });
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError]);
+
+  // 自动续页失败后，只有这个显式操作可以再次请求同一页。
+  const retryNextPage = useCallback(() => {
     if (!hasNextPage || isFetchingNextPage) return;
     void fetchNextPage({ cancelRefetch: false });
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
@@ -576,28 +587,22 @@ export default function Similarity() {
               张
             </span>
             <span>
-              完全重复{" "}
-              <span className="tabular-nums">{summary.exact}</span> 组
+              完全重复 <span className="tabular-nums">{summary.exact}</span> 组
             </span>
             <span>
-              近似重复{" "}
-              <span className="tabular-nums">{summary.near}</span> 组
+              近似重复 <span className="tabular-nums">{summary.near}</span> 组
             </span>
             <span>
-              连拍{" "}
-              <span className="tabular-nums">{summary.burst}</span> 组
+              连拍 <span className="tabular-nums">{summary.burst}</span> 组
             </span>
             <span>
-              待处理{" "}
-              <span className="tabular-nums">{summary.pending}</span> 组
+              待处理 <span className="tabular-nums">{summary.pending}</span> 组
             </span>
             <span>
-              已处理{" "}
-              <span className="tabular-nums">{summary.reviewed}</span> 组
+              已处理 <span className="tabular-nums">{summary.reviewed}</span> 组
             </span>
             <span>
-              已忽略{" "}
-              <span className="tabular-nums">{summary.ignored}</span> 组
+              已忽略 <span className="tabular-nums">{summary.ignored}</span> 组
             </span>
           </div>
         ) : null}
@@ -668,7 +673,7 @@ export default function Similarity() {
             kind="warning"
             onRetry={() =>
               groups.isFetchNextPageError
-                ? loadMoreGroups()
+                ? retryNextPage()
                 : void groups.refetch()
             }
             retrying={groups.isLoading || groups.isFetchingNextPage}
@@ -684,12 +689,16 @@ export default function Similarity() {
             <button
               type="button"
               className="btn"
-              onClick={loadMoreGroups}
+              onClick={
+                groups.isFetchNextPageError ? retryNextPage : loadMoreGroups
+              }
               disabled={groups.isFetchingNextPage}
             >
               {groups.isFetchingNextPage
                 ? "正在读取下一批分组…"
-                : `再显示 60 组（还有 ${Math.max(0, (groups.page?.total ?? items.length) - items.length)} 组）`}
+                : groups.isFetchNextPageError
+                  ? "重试读取下一批分组"
+                  : `再显示 60 组（还有 ${Math.max(0, (groups.page?.total ?? items.length) - items.length)} 组）`}
             </button>
           </div>
         ) : null}

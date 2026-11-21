@@ -18,10 +18,16 @@ const virtuoso = vi.hoisted(() => ({
   scrollToIndex: vi.fn(),
 }));
 
-const pagination = vi.hoisted(() => ({ rangeChanged: vi.fn() }));
+const pagination = vi.hoisted(() => ({
+  rangeChanged: vi.fn(),
+  options: null as { loadMoreError?: boolean } | null,
+}));
 
 vi.mock("../../hooks/useMediaGridPagination", () => ({
-  useMediaGridPagination: () => pagination.rangeChanged,
+  useMediaGridPagination: (options: { loadMoreError?: boolean }) => {
+    pagination.options = options;
+    return pagination.rangeChanged;
+  },
 }));
 
 vi.mock("react-virtuoso", () => ({
@@ -91,6 +97,7 @@ beforeEach(() => {
   virtuoso.increaseViewportBy = { top: 0, bottom: 0 };
   virtuoso.scrollToIndex.mockClear();
   pagination.rangeChanged.mockClear();
+  pagination.options = null;
 });
 
 it("按真实宽高比排布，并把已加载与未加载的条目都算进滚动长度", () => {
@@ -137,6 +144,23 @@ it("回报的分页范围换算回原始媒体序号", () => {
   const range = pagination.rangeChanged.mock.calls[0][0];
   expect(range.startIndex).toBe(0);
   expect(range.endIndex).toBe(29);
+});
+
+it("把分页错误状态交给自动续页守卫", () => {
+  render(
+    <PhotoWall
+      items={items}
+      total={30}
+      targetHeight={200}
+      hasNextPage
+      isLoadingMore={false}
+      loadMoreError
+      onLoadMore={() => {}}
+      onOpen={() => {}}
+    />,
+  );
+
+  expect(pagination.options?.loadMoreError).toBe(true);
 });
 
 it("关闭大图后按目标照片把虚拟墙滚回对应行", () => {

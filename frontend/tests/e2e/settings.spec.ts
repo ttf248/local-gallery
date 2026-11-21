@@ -76,13 +76,19 @@ test("扫描并打开示例相册", async ({ page }) => {
   expect(body.page.items[0]?.id).toMatch(/^a_[A-Za-z0-9_-]+$/);
   expect(body.page.items[0]?.coverImages[0]).toMatch(/^f_/);
 
-  // 从年份索引进那一年，再从「来源」回到一本相册。
+  // 从年份索引进那一年，再从照片的出处回到一本相册。
+  // 年份卡按单张媒体的日期证据统计，落地页是时间线上同一年份的筛选。
   await page
     .getByTestId("year-timeline")
     .getByRole("button", { name: /^2024/ })
     .click();
-  await expect(page).toHaveURL(/\/photo\/years\/2024$/);
-  await page.locator('a[href^="/photo/albums/"]').first().click();
+  await expect(page).toHaveURL(/\/photo\?year=2024$/);
+  const tile = page.locator('button[aria-label^="查看"]').first();
+  await expect(tile).toBeVisible();
+  await tile.click();
+  const viewer = page.getByRole("dialog", { name: /大图预览/ });
+  await expect(viewer).toBeVisible();
+  await viewer.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/albums\/a_[A-Za-z0-9_-]+$/);
 
   // 阅读进度只属于漫画工作台：这一段用漫画根下的多页漫画。

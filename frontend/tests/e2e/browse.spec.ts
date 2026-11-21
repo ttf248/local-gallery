@@ -2346,23 +2346,28 @@ test("年份卡直接打开这一年的照片墙，照片能回到原相册", as
   // 年份卡的主操作是看这一年的照片：年份散在好几本相册里，
   // 先挑一本再进去等于让用户替系统做取舍。
   // 年份索引住在探索页：首页是发现页，不摆年份表。
+  // 年份按单张媒体的日期证据统计，点进去就是时间线上同一年份的筛选，
+  // 计数与照片范围两处一致。
   const year = page
     .getByTestId("year-timeline")
     .getByRole("button", { name: /^2024/ });
   await expect(year).toBeVisible();
   await year.click();
-  await expect(page).toHaveURL(/\/photo\/years\/2024$/);
+  await expect(page).toHaveURL(/\/photo\?year=2024$/);
 
   // 墙上是这一年的照片，不是空页。
   const tile = page.locator('button[aria-label^="查看"]').first();
   await expect(tile).toBeVisible();
 
   // 照片带着它的出处：点开大图，标题说清是哪本，点一下就回去。
+  // 2024 年里有精确到日的照片，也有只有年份的；时间线按证据从新到旧排，
+  // 第一张未必是「2024年」那本 —— 这里只验出处链接本身。
   await tile.click();
   const viewer = page.getByRole("dialog", { name: /大图预览/ });
   await expect(viewer).toBeVisible();
-  const title = viewer.getByRole("link", { name: "2024年" });
+  const title = viewer.getByRole("link");
   await expect(title).toBeVisible();
+  expect(await title.getAttribute("href")).toMatch(/^\/photo\/albums\//);
   await title.click();
   await expect(page).toHaveURL(/\/photo\/albums\//);
 });
@@ -2668,7 +2673,7 @@ test("年份卡用空格也能进那一年", async ({ page }) => {
   const card = years.getByRole("button", { name: /^2024/ }).first();
   await card.focus();
   await card.press("Space");
-  await expect(page).toHaveURL(/\/photo\/years\/2024$/);
+  await expect(page).toHaveURL(/\/photo\?year=2024$/);
 });
 
 test("列表视图按内容宽度切双列 / 三列，窄屏仍是单列", async ({ page }) => {

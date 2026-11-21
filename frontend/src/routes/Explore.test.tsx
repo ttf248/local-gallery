@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -9,6 +15,7 @@ import Explore from "./Explore";
 const mocks = vi.hoisted(() => ({
   manifest: undefined as unknown,
   libraryList: undefined as unknown,
+  timelineFeed: undefined as unknown,
   featuredDirectory: undefined as unknown,
   allDirectory: undefined as unknown,
   places: undefined as unknown,
@@ -20,6 +27,9 @@ vi.mock("../hooks/useLibrary", () => ({
 vi.mock("../hooks/useLibraryList", async (original) => ({
   ...(await original<typeof import("../hooks/useLibraryList")>()),
   useLibraryList: () => mocks.libraryList,
+}));
+vi.mock("../hooks/useMediaFeed", () => ({
+  useMediaFeed: () => mocks.timelineFeed,
 }));
 vi.mock("../hooks/useSmartAlbums", () => ({
   useSmartAlbumDirectory: (dimension: string) =>
@@ -183,6 +193,7 @@ beforeEach(() => {
     summary: { years: [], imageTotal: 4 },
     query: { kind: "photo", view: "all" },
   };
+  mocks.timelineFeed = { ...queryState(), years: [] };
   mocks.featuredDirectory = {
     ...queryState(),
     items: [],
@@ -256,9 +267,7 @@ it("首屏先给找法：搜索入口与四个维度", () => {
   expect(screen.getByText("我要找什么")).toBeInTheDocument();
   const nav = screen.getByRole("navigation", { name: "发现维度" });
   for (const label of ["时间", "人物", "地点", "主题"]) {
-    expect(
-      within(nav).getByRole("link", { name: label }),
-    ).toBeInTheDocument();
+    expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
   }
 });
 
@@ -334,9 +343,7 @@ it("人物预览把已命名与候选分组分开摆", async () => {
 
   expect(await screen.findByText("已命名")).toBeInTheDocument();
   expect(screen.getByText("候选分组")).toBeInTheDocument();
-  expect(
-    screen.getByText("相似度聚出来的，还没确认是谁"),
-  ).toBeInTheDocument();
+  expect(screen.getByText("相似度聚出来的，还没确认是谁")).toBeInTheDocument();
   expect(screen.getByText("小明")).toBeInTheDocument();
   expect(screen.getByText("人物 1")).toBeInTheDocument();
 });
@@ -455,7 +462,9 @@ it("主题预览写清标题、张数与来源", async () => {
   renderExplore();
 
   expect(await screen.findByText("海边的日落")).toBeInTheDocument();
-  expect(screen.getByText(/24 张 · 来自 旅行 \/ 2019 旅行/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/24 张 · 来自 旅行 \/ 2019 旅行/),
+  ).toBeInTheDocument();
   expect(screen.getByText("线索：时间 · 地点")).toBeInTheDocument();
   // 点进去落到那一组照片：分组是相册里照片的一种看法，地址带维度与组 id。
   const link = screen.getByRole("link", { name: /海边的日落/ });
@@ -483,10 +492,9 @@ it("主题区区分尚未生成与分析完成但没有分组", async () => {
 });
 
 it("年份索引请求失败时保留分区并提供重试", () => {
-  mocks.libraryList = {
+  mocks.timelineFeed = {
     ...queryState({ data: undefined, isError: true }),
-    summary: undefined,
-    query: { kind: "photo", view: "all" },
+    years: [],
   };
 
   renderExplore();

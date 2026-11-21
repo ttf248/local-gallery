@@ -40,6 +40,24 @@ describe("时间线的分组", () => {
     expect(timelineGroupKey(item("f_4", undefined, "exif"))).toBe("unknown");
   });
 
+  it("只有年份精度的媒体保留为年份段，不补造月份", () => {
+    const yearOnly = {
+      ...item("f_year", undefined, "folder"),
+      datePrecision: "year" as const,
+      dateValue: "2024",
+    };
+    const groups = buildTimelineGroups([yearOnly]);
+
+    expect(timelineGroupKey(yearOnly)).toBe("2024");
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({
+      key: "2024",
+      label: "2024 年",
+      year: 2024,
+      month: 0,
+    });
+  });
+
   it("月份标题说人话", () => {
     expect(timelineGroupLabel("2024-05")).toBe("2024 年 5 月");
     expect(timelineGroupLabel("unknown")).toBe("日期未知");

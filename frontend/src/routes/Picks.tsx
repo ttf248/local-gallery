@@ -16,10 +16,16 @@ import PhotoCompare from "../components/wall/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
 import ContextMenu from "../components/album/ContextMenu";
 import EmptyState from "../components/common/EmptyState";
+import ErrorBanner from "../components/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoCompare } from "../hooks/usePhotoCompare";
 import { useContextMenu } from "../hooks/useContextMenu";
-import { FolderIcon, GridIcon, PickIcon, UncheckIcon } from "../components/common/Icon";
+import {
+  FolderIcon,
+  GridIcon,
+  PickIcon,
+  UncheckIcon,
+} from "../components/common/Icon";
 import { albumRoute, homeRoute } from "../utils/path";
 import { photoCopy } from "../utils/workbench";
 
@@ -42,7 +48,9 @@ const SHOWCASE_LIMIT = 4;
  *
  * `embedded` 时不渲染页头：它被嵌在「我的」的页签里，页头由外层给。
  */
-export default function Picks({ embedded = false }: { embedded?: boolean } = {}) {
+export default function Picks({
+  embedded = false,
+}: { embedded?: boolean } = {}) {
   const copy = photoCopy();
   const pushToast = useUIStore((s) => s.pushToast);
   const navigate = useNavigate();
@@ -63,6 +71,12 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  } = query;
 
   // 帮助浮层跟着页面走：这一页是照片墙的另一种形态，
   // 该列出的是照片墙与大图预览的那一组操作。
@@ -103,26 +117,26 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
   useEffect(() => {
     usePhotoSelectionStore.getState().ensureScope(selectionScope);
   }, [selectionScope]);
-  const selectedEntries = useMemo(
-    () => Object.values(selection),
-    [selection],
-  );
+  const selectedEntries = useMemo(() => Object.values(selection), [selection]);
   const isPicked = picks.isPicked;
   const selectedPickedCount = useMemo(
     () => selectedEntries.filter((entry) => isPicked(entry.id)).length,
     [isPicked, selectedEntries],
   );
 
-  const toSelectionEntry = useCallback((item: PickItem): PhotoSelectionEntry => ({
-    id: item.id,
-    name: item.name,
-    albumId: item.albumId,
-    albumName: item.albumName,
-    kind: item.kind,
-    version: item.version,
-    width: item.width,
-    height: item.height,
-  }), []);
+  const toSelectionEntry = useCallback(
+    (item: PickItem): PhotoSelectionEntry => ({
+      id: item.id,
+      name: item.name,
+      albumId: item.albumId,
+      albumName: item.albumName,
+      kind: item.kind,
+      version: item.version,
+      width: item.width,
+      height: item.height,
+    }),
+    [],
+  );
 
   const toggleSelect = useCallback(
     (item: PickItem) => {
@@ -152,15 +166,24 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
     void picks
       .remove(ids)
       .then(() =>
-        pushToast({ kind: "success", message: `已把 ${ids.length} 张移出精选` }),
+        pushToast({
+          kind: "success",
+          message: `已把 ${ids.length} 张移出精选`,
+        }),
       )
       .catch(() => pushToast({ kind: "error", message: "移出精选失败" }))
       .finally(() => usePhotoSelectionStore.getState().setBusy(false));
   }, [picks, pushToast]);
 
   const loadMore = useCallback(() => {
-    void query.fetchNextPage({ cancelRefetch: false });
-  }, [query]);
+    if (!hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
+    void fetchNextPage({ cancelRefetch: false });
+  }, [
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetchNextPageError,
+  ]);
 
   const viewer = wall.viewer;
 
@@ -169,63 +192,63 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
      用它排会缩在左边一角，竖幅还被裁掉半张 —— 用户挑出来的照片是拿来
      好好看的，不是拿来数的。数量少的时候摆成陈列：每张一个框，完整地
      摆出来，几个框并排摆开、整体居中。 */
-  const showcase = items.length > 0 && items.length <= SHOWCASE_LIMIT;
+  const showcase = total > 0 && total <= SHOWCASE_LIMIT;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {embedded ? null : (
-      <header className="shrink-0 border-b border-border-faint bg-bg">
-        <div className="page-shell">
-          <div className="album-bar">
-            <div className="min-w-0 flex-1">
-              {/* 眉标说清这一页是什么：精选是跨相册的挑选，
+        <header className="shrink-0 border-b border-border-faint bg-bg">
+          <div className="page-shell">
+            <div className="album-bar">
+              <div className="min-w-0 flex-1">
+                {/* 眉标说清这一页是什么：精选是跨相册的挑选，
                   与相册级收藏不是一回事。 */}
-              <p className="page-eyebrow">跨相册挑选</p>
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <h1 className="album-bar__title truncate">{title}</h1>
-                <div className="album-bar__meta tabular-nums">
-                  <span>
-                    <span className="text-fg font-medium">{total}</span> 张
-                  </span>
-                  {picks.total !== total && (
-                    <>
-                      <span className="text-fg-subtle">·</span>
-                      <span>
-                        共{" "}
-                        <span className="text-fg font-medium">
-                          {picks.total}
-                        </span>{" "}
-                        张在精选
-                      </span>
-                    </>
-                  )}
+                <p className="page-eyebrow">跨相册挑选</p>
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <h1 className="album-bar__title truncate">{title}</h1>
+                  <div className="album-bar__meta tabular-nums">
+                    <span>
+                      <span className="text-fg font-medium">{total}</span> 张
+                    </span>
+                    {picks.total !== total && (
+                      <>
+                        <span className="text-fg-subtle">·</span>
+                        <span>
+                          共{" "}
+                          <span className="text-fg font-medium">
+                            {picks.total}
+                          </span>{" "}
+                          张在精选
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const state = usePhotoSelectionStore.getState();
-                  if (state.active) state.clear();
-                  else state.start();
-                }}
-                className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-                  selectionActive
-                    ? "bg-brand/15 text-brand"
-                    : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
-                }`}
-                aria-pressed={selectionActive}
-              >
-                <PickIcon size={14} />
-                <span className="hidden sm:inline">
-                  {selectionActive ? "退出选择" : "选择"}
-                </span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const state = usePhotoSelectionStore.getState();
+                    if (state.active) state.clear();
+                    else state.start();
+                  }}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+                    selectionActive
+                      ? "bg-brand/15 text-brand"
+                      : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                  }`}
+                  aria-pressed={selectionActive}
+                >
+                  <PickIcon size={14} />
+                  <span className="hidden sm:inline">
+                    {selectionActive ? "退出选择" : "选择"}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
       )}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
@@ -237,10 +260,38 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
             共 {total} 张精选照片
           </p>
         ) : null}
-        {query.isError && items.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-body text-fg-muted">
-            精选加载失败，请重试。
+        {query.isError && items.length > 0 ? (
+          <div className="pb-2">
+            <ErrorBanner
+              kind="warning"
+              onRetry={() =>
+                query.isFetchNextPageError
+                  ? void query.fetchNextPage({ cancelRefetch: false })
+                  : void query.refetch()
+              }
+              retrying={query.isFetching}
+            >
+              {query.isFetchNextPageError
+                ? "后续精选照片加载失败，已加载的照片仍可浏览。"
+                : "精选列表更新失败，仍保留已加载的照片。"}
+            </ErrorBanner>
           </div>
+        ) : null}
+        {query.isError && items.length === 0 ? (
+          <EmptyState
+            title="精选加载失败"
+            description="检查服务或网络后，可以重新读取精选照片。"
+            action={
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => void query.refetch()}
+                disabled={query.isFetching}
+              >
+                重试加载
+              </button>
+            }
+          />
         ) : items.length === 0 && !query.isLoading ? (
           <EmptyState
             title={copy.picksEmpty}
@@ -292,6 +343,7 @@ export default function Picks({ embedded = false }: { embedded?: boolean } = {})
             targetHeight={wallTargetHeight(density)}
             hasNextPage={query.hasNextPage ?? false}
             isLoadingMore={query.isFetchingNextPage}
+            loadMoreError={query.isFetchNextPageError}
             onLoadMore={loadMore}
             onOpen={(_item, index) => wall.open(index)}
             /* 精选页的照片来自不同相册：悬停信息层说清出处，

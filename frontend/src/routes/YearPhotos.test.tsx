@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { forwardRef, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -17,21 +17,23 @@ const feed = vi.hoisted(() => ({
   albums: [] as { id: string; name: string; count: number }[],
   sources: [] as { id: string; name: string; kind: string }[],
   total: 0,
+  isLoading: false,
+  isError: false,
+  isFetching: false,
+  isFetchNextPageError: false,
+  cursorInvalidated: false,
+  hasNextPage: false,
+  isFetchingNextPage: false,
+  refetch: vi.fn(),
+  retryNextPage: vi.fn(),
+  query: null as unknown,
 }));
 
 vi.mock("../hooks/useMediaFeed", () => ({
-  useMediaFeed: () => ({
-    items: feed.items,
-    albums: feed.albums,
-    sources: feed.sources,
-    total: feed.total,
-    isLoading: false,
-    isError: false,
-    refetch: vi.fn(),
-    fetchNextPage: vi.fn(),
-    hasNextPage: false,
-    isFetchingNextPage: false,
-  }),
+  useMediaFeed: (query: unknown) => {
+    feed.query = query;
+    return feed;
+  },
 }));
 
 // 虚拟列表在 jsdom 里没有尺寸：换成直接渲染全部行。
@@ -76,6 +78,15 @@ vi.mock("../hooks/usePicks", () => ({
 }));
 
 beforeEach(() => {
+  feed.isLoading = false;
+  feed.isError = false;
+  feed.isFetching = false;
+  feed.isFetchNextPageError = false;
+  feed.cursorInvalidated = false;
+  feed.hasNextPage = false;
+  feed.isFetchingNextPage = false;
+  feed.refetch.mockReset();
+  feed.retryNextPage.mockReset();
   feed.items = [
     {
       id: "f_1",
@@ -92,21 +103,83 @@ beforeEach(() => {
   feed.total = 449;
 });
 
-function renderYear() {
-  return render(
+function yearTree() {
+  return (
     <MemoryRouter initialEntries={["/photo/years/2024"]}>
       <Routes>
         <Route path="/photo/years/:year" element={<YearPhotos />} />
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderYear() {
+  return render(yearTree());
 }
 
 it("页头说清是哪一年、多少张、来自几本相册", async () => {
   renderYear();
-  expect(screen.getByRole("heading", { name: "2024 年" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "2024 年目录照片" })).toBeTruthy();
+  expect(screen.getByText("按相册目录年份浏览")).toBeTruthy();
   await waitFor(() => expect(screen.getByText("449")).toBeTruthy());
   expect(screen.getByText(/来自/)).toBeTruthy();
+});
+
+it("旧年份深链仍使用目录年份范围", () => {
+  renderYear();
+  expect(feed.query).toEqual({ kind: "photo", scope: "year", year: "2024" });
+});
+
+it("首屏失败提供可点击的重试操作", () => {
+  feed.items = [];
+  feed.albums = [];
+  feed.sources = [];
+  feed.total = 0;
+  feed.isError = true;
+
+  renderYear();
+  fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
+
+  expect(feed.refetch).toHaveBeenCalledTimes(1);
+});
+
+it("后续分页失败保留照片，重试成功后无重复或遗漏", async () => {
+  feed.isError = true;
+  feed.isFetchNextPageError = true;
+  feed.hasNextPage = true;
+
+  const view = renderYear();
+
+  expect(
+    await screen.findByText("后续照片加载失败，已加载的目录年份照片仍可浏览。"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "查看 1.jpg" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
+  expect(feed.retryNextPage).toHaveBeenCalledTimes(1);
+
+  feed.items = [
+    feed.items[0],
+    {
+      id: "f_2",
+      kind: "image",
+      name: "2.jpg",
+      index: 1,
+      kindIndex: 1,
+      albumId: "a_1",
+      albumName: "第一本",
+    },
+  ];
+  feed.total = 2;
+  feed.isError = false;
+  feed.isFetchNextPageError = false;
+  feed.hasNextPage = false;
+  view.rerender(yearTree());
+
+  expect(screen.getAllByRole("button", { name: "查看 1.jpg" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: "查看 2.jpg" })).toHaveLength(1);
+  expect(screen.getAllByRole("button", { name: /^查看 / })).toHaveLength(2);
 });
 
 it("来源集合给出回到集合的入口", async () => {

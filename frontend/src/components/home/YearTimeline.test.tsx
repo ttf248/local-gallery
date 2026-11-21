@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import YearTimeline from "./YearTimeline";
 import { useAppModeStore } from "../../store/appModeStore";
+import type { TimelineYear } from "../../api/library";
 import type { YearGroup } from "../../utils/albumGrouping";
 import type { CardData } from "../album/AlbumCard";
 
@@ -57,10 +58,18 @@ function LocationProbe() {
   return <output data-testid="location">{location.search}</output>;
 }
 
-function renderTimeline(groups: YearGroup[], showFilter?: boolean) {
+function renderTimeline(
+  groups: YearGroup[] = [],
+  showFilter?: boolean,
+  timelineYears?: TimelineYear[],
+) {
   return render(
     <MemoryRouter>
-      <YearTimeline groups={groups} showFilter={showFilter} />
+      <YearTimeline
+        groups={groups}
+        timelineYears={timelineYears}
+        showFilter={showFilter}
+      />
       <LocationProbe />
     </MemoryRouter>,
   );
@@ -141,6 +150,15 @@ describe("YearTimeline", () => {
     expect(card.tagName).toBe("BUTTON");
     fireEvent.click(card);
     expect(navigate).toHaveBeenCalledWith("/photo/years/2024");
+  });
+
+  it("时间线年份卡使用时间线计数并进入相同的年份筛选", () => {
+    renderTimeline([], false, [{ year: 2024, count: 17, months: [] }]);
+    const card = screen.getByRole("button", { name: /2024/ });
+
+    expect(card).toHaveTextContent("17 张");
+    fireEvent.click(card);
+    expect(navigate).toHaveBeenCalledWith("/photo?year=2024");
   });
 
   // 漫画侧没有照片墙：年份卡仍进那一年（通常是一个同名作品集）。

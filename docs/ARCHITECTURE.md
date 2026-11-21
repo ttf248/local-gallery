@@ -336,15 +336,16 @@ EXIF 解析器保存拍摄墙上时间、朝向、相机信息和 GPS 附属字�
 
 时间过滤与其它端点不同：**没有可信拍摄时间的照片一律保留**。它们有真实位置，只是没法判断在不在区间里；一并丢掉的话，一张没设时钟的照片就会让整张地图空掉。它们在每格的 `untimed` 里单独计数。
 
-### 时间维度：三种时间，只用一种
+### 时间维度：不同口径各有用途
 
 地点页的轨迹叙事只用 **EXIF 拍摄时间**（`dateTimeOriginal`）。库里有三种「时间」，各管各的，不混用：
 
-| 口径           | 来源                             | 用途                                 |
-| -------------- | -------------------------------- | ------------------------------------ |
-| 文件夹名年份   | 目录名里的 `19xx/20xx`           | `/photo/years/:year` 年份墙          |
-| 相册业务日期   | `filename > folder > modified`    | 相册在时间轴上的位置                 |
-| EXIF 拍摄时间  | `dateTimeOriginal`               | **地点页的时间轴、轨迹与到访**       |
+| 口径             | 来源                                                       | 用途                                               |
+| ---------------- | ---------------------------------------------------------- | -------------------------------------------------- |
+| 目录年份         | 目录名里的 `19xx/20xx`                                     | 相册目录索引与旧书签 `/photo/years/:year`          |
+| 相册业务日期     | `filename > folder > modified`                             | 相册在目录列表中的排序位置                         |
+| 单张媒体日期证据 | `EXIF > filename > folder`；只有修改时间时记为日期未知      | `/photo` 时间线与发现页 `/photo?year=YYYY` 年份索引 |
+| EXIF 拍摄时间    | `dateTimeOriginal`                                         | **地点页的时间轴、轨迹与到访**                     |
 
 EXIF 的 `dateTimeOriginal` 通常不含时区，因此保留相机记录的墙上时间，按**拍摄地的当地日期**比较 —— 这正是「我在杭州待了几天」这种叙事的口径；接口不声称给出绝对时刻。
 
@@ -510,14 +511,14 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，照片首页的「接着看」chip 与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。
 - 措辞与计数单位的唯一真相源是 `utils/workbench.ts` 的词表（`workbenchCopy(mode)`），两侧共用组件从**卡片自身的** `contentKind` 取词，而不是从当前工作台取：一张卡永远知道自己属于照片还是漫画，取不到时按照片兜底。照片说「张 / 本 / 浏览」，漫画说「页 / 卷 / 阅读」。中间目录的类型词走同一个词表（`collectionTypeWord(mode)`）：照片侧说「文件夹」、漫画侧说「作品」—— 服务端内部叫它「集合」，那是实现细节，界面上不出现。
 - 「那年今日」的下标表在发布期建好：把各相册从文件名推断出的拍摄日期按月-日归桶（`library_page.go` 的 `onThisDay`），请求期只按属性与年份过滤。它靠拍摄时间成立，因此只在照片侧有意义 —— 漫画侧不出现这一段。拍摄日期稀疏，多数日子里往年这天没拍过照；首页因此允许退回离这一天最近的、往年确实拍过照的那几天（`fallback=1`），标题与摘要跟着事实走：摆的是别的日子就不叫「那年今日」。
-- 索引维度按侧分：照片按年份（`components/home/YearTimeline.tsx`），漫画按作品（`components/home/SeriesTimeline.tsx`，集合即作品）。两者共用 `components/home/Timeline.tsx` 的视觉骨架。照片侧年份卡的主操作是打开年份照片墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`GET /api/library/media-feed?kind=photo&scope=year&year=<年份>` 按年份归组取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。
+- 目录里的年份索引仍由 `components/home/YearTimeline.tsx` 接收相册目录分组，点击打开旧目录年份墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`scope=year` 按目录年份范围取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。发现页的时间预览改用同一组件呈现 `scope=timeline` 的年份索引，年份与计数来自单张媒体日期证据，点击进入 `/photo?year=<年份>`；只有年份精度的媒体计入该年，不生成月份。漫画年份索引仍按作品目录分组，两侧共用 `components/home/Timeline.tsx` 的视觉骨架。
 
 ### 查询、导航与网格
 
 `AppShell` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
 
 - TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
-- 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片）、`/photo/library`（相册）、`/photo/explore`（发现）、`/photo/me/:tab`（珍藏）、`/photo/search`（搜索结果，名称 / 画面与文字两档）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底：`utils/navigation.ts` 的 `useSafeBack` 先看应用内历史（`history.state.idx > 0`），有就后退；没有就按「能确认的上级 → 该侧结构入口」的顺序回落，落点由资源摘要的 `parentId` 决定（兜底可以是函数，点击那一刻才求值）。兜底回落用 `replace` 而不是 `push`：深链打开时这一页就是历史里的第一条，再 `push` 一条就等于留了一枚回跳死循环（返回一次到上级，再返回一次又回到这一页）。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
+- 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片时间线，年份与月份筛选在查询参数中，如 `?year=2024`）、`/photo/library`（相册）、`/photo/explore`（发现）、`/photo/me/:tab`（珍藏）、`/photo/search`（搜索结果，名称 / 画面与文字两档）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`（按目录年份取材的旧书签入口）、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底：`utils/navigation.ts` 的 `useSafeBack` 先看应用内历史（`history.state.idx > 0`），有就后退；没有就按「能确认的上级 → 该侧结构入口」的顺序回落，落点由资源摘要的 `parentId` 决定（兜底可以是函数，点击那一刻才求值）。兜底回落用 `replace` 而不是 `push`：深链打开时这一页就是历史里的第一条，再 `push` 一条就等于留了一枚回跳死循环（返回一次到上级，再返回一次又回到这一页）。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
 - **相册页（`routes/Library.tsx`）是结构页，不是一张清单。** 左侧 `components/library/FolderTree.tsx` 按需展开真实目录（媒体根 → 文件夹 → 相册），右侧是当前这一层的内容；当前层、排序、最少张数与视图都住在地址里（`node` 参数加 `hooks/useListFilters.ts` 的查询参数），复制链接能落到同一个文件夹。目录树默认只展开当前位置相关的那条路：媒体根那一层始终可见，更深的层级只展开当前所在的那条，其余收起；每一层都能单独收起，树上方有定位框（按名字找到文件夹或相册后直接跳过去）。文件夹卡在相册页里指向它的下一层（`node` 参数），而不是跳去集合页 —— 换目录在相册页里比跳出去再跳回来短；集合的规范地址仍是集合页，收藏、属性与复制链接都用规范地址。照片侧界面上说「文件夹」，不说服务端的内部类型名「集合」。智能主题（时间、人物、地点、场景的聚合）不进相册页：拿自动分组冒充文件夹树，用户就找不到自己的文件。
 - **相册页的目录树只按需取一层。** 子项用 `libraryQueryKeys.children(parentId, mode)` 做键（与库级查询同一套键注册表），展开一个节点才去读它的下一层；库一变（`["library"]` 失效）这些查询跟着重取，失败时树上给出显式的重试手柄而不是空目录。
 - 足迹页在 `/photo/travels`，地点详情在 `/photo/travels/place/<六位区划码>`。筛选状态（时间区间 `from`/`to`、时间跨度 `span`、归并粒度 `level`）放查询参数，时间区间是跨层级的一维：换粒度与下钻都带着它，缺省表示全部时间。`span` 取 `1y`/`3y`/`5y`/`10y`/`all`，缺省 `5y`：跨度圈的就是这一段，下面的行程目录与地图随之过滤。旧的 `/photo/locations` 与坐标聚类相册 ID 一并作废，不留兼容跳转。

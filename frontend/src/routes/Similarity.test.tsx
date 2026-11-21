@@ -30,6 +30,7 @@ const virtualState = vi.hoisted(() => ({
   windowSize: 1,
   totalGroups: 121,
   loadedGroups: 0,
+  loadedIds: [] as string[],
   useWindowScroll: false,
   endReached: null as (() => void) | null,
 }));
@@ -49,6 +50,12 @@ const serverState = vi.hoisted(() => ({
   batchError: null as unknown,
   /** restore 要抛出的错误。 */
   restoreError: null as unknown,
+  /** 指定页码临时失败，用于模拟服务端错误或网络中断。 */
+  groupsFailure: null as {
+    offset: number;
+    remaining: number;
+    error: unknown;
+  } | null,
 }));
 
 function groupFixture(
@@ -183,6 +190,11 @@ vi.mock("../api/similarity", async (original) => ({
         limit: query.limit ?? 0,
         offset,
       });
+      const failure = serverState.groupsFailure;
+      if (failure && failure.offset === offset && failure.remaining > 0) {
+        failure.remaining -= 1;
+        return Promise.reject(failure.error);
+      }
       const count = Math.max(0, Math.min(query.limit ?? 60, total - offset));
       const groups = Array.from({ length: count }, (_, index) => {
         const groupIndex = offset + index;
@@ -197,9 +209,7 @@ vi.mock("../api/similarity", async (original) => ({
           kind: query.kind === "burst" ? "burst" : "exact",
           representativeIsManual: false,
           status: (serverState.statuses[id] ?? "pending") as
-            | "pending"
-            | "reviewed"
-            | "ignored",
+            "pending" | "reviewed" | "ignored",
         });
       });
       return Promise.resolve({ ok: true, page: pageFixture(groups, total) });
@@ -211,8 +221,7 @@ vi.mock("../api/similarity", async (original) => ({
       }
       // 服务端记下操作前的状态：撤销要按它恢复回去。
       const previous = serverState.statuses[id] ?? "pending";
-      const target =
-        typeof body.status === "string" ? body.status : previous;
+      const target = typeof body.status === "string" ? body.status : previous;
       serverState.statuses[id] = target;
       return Promise.resolve({
         ok: true,
@@ -248,9 +257,7 @@ vi.mock("../api/similarity", async (original) => ({
       }
       return Promise.resolve({ ok: true, changed, previous, current });
     },
-    restore: (
-      entries: { groupId: string; from: string; to: string }[],
-    ) => {
+    restore: (entries: { groupId: string; from: string; to: string }[]) => {
       restores.push(...entries);
       if (serverState.restoreError) {
         return Promise.reject(serverState.restoreError);
@@ -284,6 +291,7 @@ vi.mock("react-virtuoso", () => ({
     endReached?: () => void;
   }) => {
     virtualState.loadedGroups = data.length;
+    virtualState.loadedIds = data.map((group) => group.id);
     virtualState.useWindowScroll = useWindowScroll ?? false;
     virtualState.endReached = endReached ?? null;
     return (
@@ -318,6 +326,7 @@ describe("相似照片整理页", () => {
     virtualState.windowSize = 1;
     virtualState.totalGroups = 121;
     virtualState.loadedGroups = 0;
+    virtualState.loadedIds = [];
     virtualState.useWindowScroll = false;
     virtualState.endReached = null;
     requests.length = 0;
@@ -330,6 +339,7 @@ describe("相似照片整理页", () => {
     serverState.updateError = null;
     serverState.batchError = null;
     serverState.restoreError = null;
+    serverState.groupsFailure = null;
     useUIStore.setState({ toasts: [] });
   });
 
@@ -470,32 +480,88 @@ describe("相似照片整理页", () => {
     );
   });
 
-  it(
-    "5000 组已加载时仍只挂载虚拟窗口内的条目",
-    async () => {
-      virtualState.totalGroups = 5000;
-      virtualState.windowSize = 6;
-      renderPage();
-      expect(await screen.findAllByTestId("similarity-group")).toHaveLength(6);
+  it("首屏失败后可以手动重试读取", async () => {
+    virtualState.totalGroups = 1;
+    serverState.groupsFailure = {
+      offset: 0,
+      remaining: 1,
+      error: new Error("500 Internal Server Error"),
+    };
 
-      while (virtualState.loadedGroups < 5000) {
-        const expected = Math.min(virtualState.loadedGroups + 60, 5000);
-        fireEvent.click(
-          await screen.findByRole("button", { name: /再显示 60 组/ }),
-        );
-        await waitFor(() =>
-          expect(
-            screen.getByTestId("similarity-virtual-list"),
-          ).toHaveAttribute("data-groups", String(expected)),
-        );
-      }
+    renderPage();
 
-      expect(virtualState.useWindowScroll).toBe(true);
-      expect(virtualState.loadedGroups).toBe(5000);
-      expect(screen.getAllByTestId("similarity-group")).toHaveLength(6);
-    },
-    20_000,
-  );
+    expect(
+      await screen.findByText("整理结果暂时读不出来。"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
+
+    expect(await screen.findByTestId("similarity-group")).toBeInTheDocument();
+    expect(requests.filter((request) => request.offset === 0)).toHaveLength(2);
+  });
+
+  it.each([
+    ["500", new Error("500 Internal Server Error")],
+    ["断网", new TypeError("Failed to fetch")],
+  ])("后续分页遇到%s后等待用户重试并保留选择", async (_failure, error) => {
+    serverState.groupsFailure = { offset: 60, remaining: 1, error };
+    renderPage();
+    await screen.findByTestId("similarity-group");
+
+    const selected = screen.getByRole("checkbox", { name: /选中这一组/ });
+    fireEvent.click(selected);
+    expect(selected).toBeChecked();
+
+    act(() => virtualState.endReached?.());
+    expect(
+      await screen.findByText("后续分组读取失败，已加载的分组仍可整理。"),
+    ).toBeInTheDocument();
+    expect(virtualState.loadedGroups).toBe(60);
+    expect(screen.getByTestId("similarity-batch-bar")).toHaveTextContent(
+      "已选 1 组",
+    );
+
+    // Virtuoso 可能在同一个可视末尾反复回报 endReached；失败后它不能
+    // 再次自动请求，必须等提示条上的手动重试。
+    act(() => {
+      virtualState.endReached?.();
+      virtualState.endReached?.();
+    });
+    expect(requests.filter((request) => request.offset === 60)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
+    await waitFor(() => expect(virtualState.loadedGroups).toBe(120));
+
+    expect(virtualState.loadedIds).toEqual(
+      Array.from({ length: 120 }, (_, index) => `exact-${index + 1}`),
+    );
+    expect(new Set(virtualState.loadedIds).size).toBe(120);
+    expect(screen.getByRole("checkbox", { name: /选中这一组/ })).toBeChecked();
+    expect(requests.filter((request) => request.offset === 60)).toHaveLength(2);
+  });
+
+  it("5000 组已加载时仍只挂载虚拟窗口内的条目", async () => {
+    virtualState.totalGroups = 5000;
+    virtualState.windowSize = 6;
+    renderPage();
+    expect(await screen.findAllByTestId("similarity-group")).toHaveLength(6);
+
+    while (virtualState.loadedGroups < 5000) {
+      const expected = Math.min(virtualState.loadedGroups + 60, 5000);
+      fireEvent.click(
+        await screen.findByRole("button", { name: /再显示 60 组/ }),
+      );
+      await waitFor(() =>
+        expect(screen.getByTestId("similarity-virtual-list")).toHaveAttribute(
+          "data-groups",
+          String(expected),
+        ),
+      );
+    }
+
+    expect(virtualState.useWindowScroll).toBe(true);
+    expect(virtualState.loadedGroups).toBe(5000);
+    expect(screen.getAllByTestId("similarity-group")).toHaveLength(6);
+  }, 20_000);
 
   it("地址栏里的类别参数会被认出来", async () => {
     renderPage("/photo/similarity?kind=burst");
@@ -540,9 +606,9 @@ describe("相似照片整理页", () => {
 
     await waitFor(() =>
       expect(
-        useUIStore.getState().toasts.some(
-          (toast) => toast.message === "已把这一组标记为已处理",
-        ),
+        useUIStore
+          .getState()
+          .toasts.some((toast) => toast.message === "已把这一组标记为已处理"),
       ).toBe(true),
     );
     const toast = useUIStore
@@ -581,9 +647,9 @@ describe("相似照片整理页", () => {
     );
     await waitFor(() =>
       expect(
-        useUIStore.getState().toasts.some(
-          (toast) => toast.message === "已忽略 1 组",
-        ),
+        useUIStore
+          .getState()
+          .toasts.some((toast) => toast.message === "已忽略 1 组"),
       ).toBe(true),
     );
 
@@ -723,14 +789,16 @@ describe("相似照片整理页", () => {
     );
     await waitFor(() =>
       expect(
-        useUIStore.getState().toasts.some(
-          (toast) => toast.message === "没有组需要标记为已处理",
-        ),
+        useUIStore
+          .getState()
+          .toasts.some((toast) => toast.message === "没有组需要标记为已处理"),
       ).toBe(true),
     );
     // 没有变化就没有可撤销的东西。
     expect(
-      useUIStore.getState().toasts.some((toast) => toast.action?.label === "撤销"),
+      useUIStore
+        .getState()
+        .toasts.some((toast) => toast.action?.label === "撤销"),
     ).toBe(false);
   });
 
@@ -758,13 +826,17 @@ describe("相似照片整理页", () => {
 
     await waitFor(() =>
       expect(
-        useUIStore.getState().toasts.some(
-          (item) => item.message === "没能撤销：这一组之后又改过，撤销不了",
-        ),
+        useUIStore
+          .getState()
+          .toasts.some(
+            (item) => item.message === "没能撤销：这一组之后又改过，撤销不了",
+          ),
       ).toBe(true),
     );
     expect(
-      useUIStore.getState().toasts.some((item) => item.message === "已恢复原状态"),
+      useUIStore
+        .getState()
+        .toasts.some((item) => item.message === "已恢复原状态"),
     ).toBe(false);
   });
 
@@ -778,9 +850,9 @@ describe("相似照片整理页", () => {
 
     await waitFor(() =>
       expect(
-        useUIStore.getState().toasts.some(
-          (toast) => toast.message === "已把 1 组标记为已处理",
-        ),
+        useUIStore
+          .getState()
+          .toasts.some((toast) => toast.message === "已把 1 组标记为已处理"),
       ).toBe(true),
     );
   });
