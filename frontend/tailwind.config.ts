@@ -34,6 +34,7 @@ export default {
         "border-strong": tokenColor("border-strong"),
         "border-faint": tokenColor("border-faint"),
         danger: tokenColor("danger"),
+        "danger-ink": tokenColor("danger-ink"),
         success: tokenColor("success"),
         warning: tokenColor("warning"),
         favorite: tokenColor("favorite"),

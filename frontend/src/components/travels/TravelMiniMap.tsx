@@ -32,6 +32,8 @@ interface TravelMiniMapProps {
    * data 是裁到照片真正在的那一片；full 是整张地图，一个区划都不裁掉。
    */
   scope: MapScope;
+  /** 数据还在路上：此时说「还没有带位置的照片」是假话。 */
+  loading?: boolean;
 }
 
 /** 地图画到哪儿。 */
@@ -54,6 +56,7 @@ export default function TravelMiniMap({
   levelTotal,
   scopeLabel,
   scope,
+  loading = false,
 }: TravelMiniMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -171,7 +174,9 @@ export default function TravelMiniMap({
       }}
     >
       {empty ? (
-        <p className="text-meta text-fg-muted">还没有带位置的照片</p>
+        <p className="text-meta text-fg-muted">
+          {loading ? "正在载入足迹…" : "还没有带位置的照片"}
+        </p>
       ) : (
         <svg
           role="img"

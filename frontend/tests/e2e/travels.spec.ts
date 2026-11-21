@@ -3,6 +3,7 @@ import {
   ensureLibraryReady,
   ensureMetadataReady,
   resetWorkbenchMode,
+  scannedNodes,
 } from "./helpers/library";
 
 test.beforeEach(async ({ request }) => {
@@ -11,7 +12,13 @@ test.beforeEach(async ({ request }) => {
   // 地点页读的是媒体库快照：这条用例要能单独跑，不能等别的用例先把库准备好。
   await ensureLibraryReady(request);
   // 坐标来自元数据分析任务：没有这一趟，临时库里就没有带位置的照片。
-  await ensureMetadataReady(request);
+  // 只分析带坐标的那一本 —— 全库分析会把每张照片都标成「已分析」，
+  // 别的用例再想验证「缺分析」的入口就没有素材了。
+  const nodes = await scannedNodes(request, "photo");
+  const gpsAlbums = nodes
+    .filter((node) => node.name.includes("足迹"))
+    .map((node) => node.id);
+  await ensureMetadataReady(request, gpsAlbums);
 });
 
 test("探索里的足迹入口打开的是新的地点页", async ({ page }) => {

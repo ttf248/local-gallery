@@ -48,6 +48,20 @@
   .settings-rows > .settings-row:nth-child(even) {
     border-left: 1px solid var(--border-faint);
   }
+  /* 单列的一组设置（外观）：两列并排会把标签与控件拉得太开，
+     单列读下来更稳，也把这一张卡撑到与旁边那张接近 ——
+     两张卡一高一矮时，短的那张下面空出一大块。 */
+  .settings-rows--stack {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .settings-rows--stack > .settings-row:nth-child(odd),
+  .settings-rows--stack > .settings-row:nth-child(even) {
+    border-top: 1px solid var(--border-faint);
+    border-left: 0;
+  }
+  .settings-rows--stack > .settings-row:first-child {
+    border-top: 0;
+  }
 }
 .settings-columns {
     max-width: 860px;
@@ -112,6 +126,9 @@
     display: flex;
     align-items: center;
     gap: 8px;
+    /* 标题与说明并排，但窄屏放不下时说明另起一行：把标题挤成竖着的
+       「导/航」，读起来像渲染事故。 */
+    flex-wrap: wrap;
     padding: 7px 14px;
     border-bottom: 1px solid var(--border-faint);
     background: var(--bg-subtle);
@@ -127,11 +144,20 @@
     font-size: var(--text-label);
     font-weight: 600;
     color: var(--fg);
+    white-space: nowrap;
   }
 .settings-card__desc {
     margin-left: auto;
     font-size: var(--text-meta);
     color: var(--fg-subtle);
+    min-width: 0;
+  }
+  /* 窄屏：说明另起一行，不与标题抢宽度。 */
+  @media (max-width: 639px) {
+    .settings-card__desc {
+      margin-left: 0;
+      flex-basis: 100%;
+    }
   }
 .settings-split {
     display: grid;

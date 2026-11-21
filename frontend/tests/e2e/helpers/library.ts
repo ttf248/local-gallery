@@ -380,8 +380,30 @@ export async function ensureLibraryReady(request: APIRequestContext) {
  * 坐标不是扫描时读出来的，而是元数据分析任务的产物：不跑过这一趟，库里
  * 一张带位置的照片都没有，足迹页也就没有行程可讲。已经有结果时直接返回，
  * 免得每条用例都等一遍全量分析。
+ *
+ * 给了 `albumIds` 就只分析那几本。全库分析会把每一张照片都标成「已分析」，
+ * 别的用例再想验证「缺分析时给补分析的入口」就没有素材了 —— 临时库是
+ * 全套用例共用的一份，分析范围越窄，后面的用例越站得住。
+ * 已分析过的相册记在进程里，同一轮跑下来不会重复排任务。
  */
-export async function ensureMetadataReady(request: APIRequestContext) {
+const metadataAnalyzedAlbums = new Set<string>();
+
+export async function ensureMetadataReady(
+  request: APIRequestContext,
+  albumIds?: string[],
+) {
+  if (albumIds && albumIds.length > 0) {
+    const pending = albumIds.filter((id) => !metadataAnalyzedAlbums.has(id));
+    for (const albumId of pending) {
+      await runMetadataJob(request, {
+        type: "metadata",
+        mode: "incremental",
+        albumId,
+      });
+      metadataAnalyzedAlbums.add(albumId);
+    }
+    return;
+  }
   const trips = await request.get(
     "/api/locations/china/trips?granularity=city",
   );
@@ -389,9 +411,15 @@ export async function ensureMetadataReady(request: APIRequestContext) {
     const body = (await trips.json()) as { trips: { total: number } };
     if (body.trips.total > 0) return;
   }
-  const started = await request.post("/api/ai/jobs", {
-    data: { type: "metadata", mode: "full" },
-  });
+  await runMetadataJob(request, { type: "metadata", mode: "full" });
+}
+
+/** 排一次元数据分析并等它跑完。 */
+async function runMetadataJob(
+  request: APIRequestContext,
+  body: { type: string; mode: string; albumId?: string },
+) {
+  const started = await request.post("/api/ai/jobs", { data: body });
   // 409 表示已有任务在跑：等那一个，不抢。
   expect(started.ok() || started.status() === 409).toBeTruthy();
   const jobId = started.ok()

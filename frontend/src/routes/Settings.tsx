@@ -319,9 +319,9 @@ export function SettingsView({
               title="外观"
               icon={<SunIcon size={13} />}
             >
-              {/* 这四行摆在一起，卡够宽时排成两列（见 settings.css 的
-                  .settings-rows）：标签与控件挨着，不隔着半张卡。 */}
-              <div className="settings-rows">
+              {/* 这几行摆在一起，单列读下来最稳：标签与控件挨着，
+                  不隔着半张卡。 */}
+              <div className="settings-rows settings-rows--stack">
                 <Row label="主题">
                   <ThemeSwitcher />
                 </Row>
@@ -374,7 +374,9 @@ export function SettingsView({
               id="nav"
               title="导航"
               icon={<MenuIcon size={13} />}
-              description="左侧导航栏显示哪些入口"
+              /* 这句话原来挂在卡片底下：它说的是这一节管什么，
+                 放在标题旁边更像说明，卡片底下那一行就省了。 */
+              description="收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入"
             >
               <div className="settings-split">
                 <Group title="照片侧">
@@ -406,9 +408,6 @@ export function SettingsView({
                   ))}
                 </Group>
               </div>
-              <p className="settings-note">
-                收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入。
-              </p>
             </Section>
           </div>
         </PagePanel>

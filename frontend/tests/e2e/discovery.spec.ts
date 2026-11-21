@@ -23,6 +23,21 @@ test.beforeEach(async ({ request }) => {
   await ensureLibraryReady(request);
 });
 
+/**
+ * 带坐标的那几本相册。
+ *
+ * 坐标来自这些相册里的 EXIF：只分析它们，临时库里其余照片仍留着「未分析」
+ * 的状态 —— 后面的用例要验「缺分析时给补分析的入口」，得有料可缺。
+ */
+async function gpsAlbumIds(
+  request: Parameters<typeof ensureLibraryReady>[0],
+): Promise<string[]> {
+  const nodes = await scannedNodes(request, "photo");
+  return nodes
+    .filter((node) => node.name.includes("足迹"))
+    .map((node) => node.id);
+}
+
 test("顶栏搜索按名称进结果页，结果带命中理由", async ({ page, request }) => {
   const nodes = await scannedNodes(request, "photo");
   const target = nodes.find((node) => node.name);
@@ -118,7 +133,7 @@ test("人物页深链可用，没分析时给出去哪开启的入口", async ({
 });
 
 test("地点预览列出能点进详情的城市", async ({ page, request }) => {
-  await ensureMetadataReady(request);
+  await ensureMetadataReady(request, await gpsAlbumIds(request));
   await page.goto("/photo/explore");
 
   const places = page.getByRole("region", { name: "地点" });
@@ -132,7 +147,7 @@ test("地点预览列出能点进详情的城市", async ({ page, request }) => 
 });
 
 test("足迹深链仍然可用", async ({ page, request }) => {
-  await ensureMetadataReady(request);
+  await ensureMetadataReady(request, await gpsAlbumIds(request));
   await page.goto("/photo/travels");
 
   await expect(page.getByRole("radiogroup", { name: "时间跨度" })).toBeVisible();

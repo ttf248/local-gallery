@@ -252,10 +252,10 @@ export default function Travels() {
                 —— 它管的是范围，规模管的是体量，两件事并成一行。 */}
             <TravelStats
               totalPhotos={whole?.totalPhotoCount ?? null}
-              gpsPhotos={whole?.gpsPhotoCount ?? 0}
-              provinces={whole?.provinceCount ?? 0}
-              cities={whole?.cityCount ?? 0}
-              untimed={untimedCount}
+              gpsPhotos={whole ? whole.gpsPhotoCount : null}
+              provinces={whole ? whole.provinceCount : null}
+              cities={whole ? whole.cityCount : null}
+              untimed={whole ? untimedCount : null}
             >
               <Segmented
                 label="时间跨度"
@@ -326,6 +326,7 @@ export default function Travels() {
               levelTotal={levelTotal}
               scopeLabel="足迹"
               scope={mapScope}
+              loading={!whole}
             />
           </div>
         </aside>

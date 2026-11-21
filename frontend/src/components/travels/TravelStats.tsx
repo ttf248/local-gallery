@@ -3,13 +3,13 @@ import type { ReactNode } from "react";
 interface TravelStatsProps {
   /** 全库图片总数（不含视频）；null 表示还没取到。 */
   totalPhotos: number | null;
-  /** 带位置的照片数。 */
-  gpsPhotos: number;
-  /** 去过的省、市数。 */
-  provinces: number;
-  cities: number;
-  /** 没有可信拍摄时间的照片数。 */
-  untimed: number;
+  /** 带位置的照片数；null 表示还没取到。 */
+  gpsPhotos: number | null;
+  /** 去过的省、市数；null 表示还没取到。 */
+  provinces: number | null;
+  cities: number | null;
+  /** 没有可信拍摄时间的照片数；null 表示还没取到。 */
+  untimed: number | null;
   /** 排在规模信息左边的控件（时间跨度筛选）。 */
   children?: ReactNode;
 }
@@ -41,18 +41,25 @@ export default function TravelStats({
         </span>
         <span className="travel-stats__hero-label">张照片 · 全库</span>
       </p>
+      {/* 还没取到时一律写「—」：加载途中先摆一排 0，读的人会以为库里
+          真的没有带位置的照片 —— 那是这一页最不该说错的一句。 */}
       <div className="travel-stats__rest">
         <span>
-          <b className="travel-stats__value">{gpsPhotos.toLocaleString()}</b> 张带位置
+          <b className="travel-stats__value">{count(gpsPhotos)}</b> 张带位置
         </span>
         <span>
-          <b className="travel-stats__value">{provinces}</b> 个省
-          <b className="travel-stats__value ml-2">{cities}</b> 个市
+          <b className="travel-stats__value">{count(provinces)}</b> 个省
+          <b className="travel-stats__value ml-2">{count(cities)}</b> 个市
         </span>
         <span>
-          <b className="travel-stats__value">{untimed.toLocaleString()}</b> 张没有拍摄时间
+          <b className="travel-stats__value">{count(untimed)}</b> 张没有拍摄时间
         </span>
       </div>
     </div>
   );
+}
+
+/** 数字还没到时写破折号，不写 0。 */
+function count(value: number | null): string {
+  return value === null ? "—" : value.toLocaleString();
 }

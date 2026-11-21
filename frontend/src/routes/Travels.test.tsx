@@ -316,9 +316,29 @@ describe("足迹页", () => {
     });
   });
 
-  it("跨度筛选并进抬头，排在规模信息的左边", async () => {
+  // 加载途中先摆一排 0，读的人会以为库里真的没有带位置的照片 ——
+  // 这一页最不该说错的正是这句。没取到就写「—」。
+  it("数据还在路上时不谎报「没有带位置的照片」", async () => {
+    vi.mocked(aiJobsApi.chinaLocations).mockImplementation(
+      () => new Promise(() => {}),
+    );
     renderPage();
 
+    const stats = document.querySelector(".travel-stats") as HTMLElement;
+    await waitFor(() => {
+      expect(stats.textContent).toContain("张照片");
+    });
+    expect(stats.textContent).toContain("— 张带位置");
+    expect(stats.textContent).not.toContain("0 张带位置");
+
+    // 地图那一块同样：还没取到就说在载入，不说「没有」。
+    const mapBox = document.querySelector(".travel-mini-map") as HTMLElement;
+    expect(mapBox.textContent).toContain("正在载入足迹…");
+    expect(mapBox.textContent).not.toContain("还没有带位置的照片");
+  });
+
+  it("跨度筛选并进抬头，排在规模信息的左边", async () => {
+    renderPage();
     const spans = await screen.findByRole("radiogroup", { name: "时间跨度" });
     const stats = spans.closest(".travel-stats") as HTMLElement;
     expect(stats).toBeTruthy();

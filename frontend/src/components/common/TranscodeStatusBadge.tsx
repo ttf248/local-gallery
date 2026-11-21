@@ -46,7 +46,8 @@ const STATUS_STYLE: Record<
   cached: null, // 缓存命中时直接不显示
   queued: { text: "排队", cls: "bg-bg-strong text-fg-muted" },
   running: { text: "转码中", cls: "bg-bg-strong text-fg" },
-  failed: { text: "转码失败", cls: "bg-danger text-white" },
+  // 危险色在深色主题里是浅红：字色跟着 token 走，不写死白色。
+  failed: { text: "转码失败", cls: "bg-danger text-danger-ink" },
   // pending：需要转码但还没开始（按需触发，播放时才启动）。
   // 这不是故障，不显示角标。
   pending: null,

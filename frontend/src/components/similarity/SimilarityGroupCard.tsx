@@ -89,38 +89,42 @@ export default function SimilarityGroupCard({
         </button>
 
         <div className="similarity-group__body">
-          <div className="similarity-group__title">
-            <span className="similarity-group__kind" title={similarityKindHint(group.kind)}>
-              {similarityKindLabel(group.kind)}
-            </span>
-            <span className="similarity-group__count">{group.members.length} 张</span>
-            {group.redundant > 0 ? (
-              <span className="similarity-group__count">多余 {group.redundant} 张</span>
-            ) : null}
-            {group.crossFolder ? (
-              <span className="similarity-group__count" title="这一组的照片分散在多个文件夹">
-                跨文件夹
+          <div className="similarity-group__text">
+            <div className="similarity-group__title">
+              <span className="similarity-group__kind" title={similarityKindHint(group.kind)}>
+                {similarityKindLabel(group.kind)}
               </span>
-            ) : null}
-            <span
-              className={`similarity-group__status similarity-group__status--${group.status}`}
-            >
-              {similarityStatusLabel(group.status)}
-            </span>
+              <span className="similarity-group__count">{group.members.length} 张</span>
+              {group.redundant > 0 ? (
+                <span className="similarity-group__count">多余 {group.redundant} 张</span>
+              ) : null}
+              {group.crossFolder ? (
+                <span className="similarity-group__count" title="这一组的照片分散在多个文件夹">
+                  跨文件夹
+                </span>
+              ) : null}
+              <span
+                className={`similarity-group__status similarity-group__status--${group.status}`}
+              >
+                {similarityStatusLabel(group.status)}
+              </span>
+            </div>
+
+            <div className="similarity-group__meta">
+              <span className="truncate" title={group.folder}>
+                {group.folder}
+              </span>
+              {group.timeSpanMs > 0 ? (
+                <span>· 跨度 {formatSimilaritySpan(group.timeSpanMs)}</span>
+              ) : null}
+              {group.timeSource === "file" ? (
+                <span title="这组照片没有拍摄时间，用的是文件修改时间">· 文件时间</span>
+              ) : null}
+            </div>
           </div>
 
-          <div className="similarity-group__meta">
-            <span className="truncate" title={group.folder}>
-              {group.folder}
-            </span>
-            {group.timeSpanMs > 0 ? (
-              <span>· 跨度 {formatSimilaritySpan(group.timeSpanMs)}</span>
-            ) : null}
-            {group.timeSource === "file" ? (
-              <span title="这组照片没有拍摄时间，用的是文件修改时间">· 文件时间</span>
-            ) : null}
-          </div>
-
+          {/* 质量读数单独一列：各行的数字上下对齐，比谁更清楚、
+              谁更曝得过度，一眼就能比出来。 */}
           {representative ? (
             <div className="similarity-group__quality">
               <span className="similarity-group__quality-label">

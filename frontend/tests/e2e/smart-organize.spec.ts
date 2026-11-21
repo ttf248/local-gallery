@@ -253,12 +253,23 @@ test("相似照片折叠只留代表照片，展开后成员就地摊开", async
   ).json()) as {
     page: { groups: { members: { albumId: string }[] }[] };
   };
-  const albumIDs = new Set<string>();
+  // 折叠只在「同一本相册里有好几张相似照片」时才让墙上的照片变少：
+  // 成员不足两张的相册折叠前后数量一样，用例会误判成折叠没生效。
+  // 因此只认那些在同一组里落了两张以上的相册。
+  const albumCounts = new Map<string, number>();
   for (const group of groups.page.groups) {
-    for (const member of group.members) albumIDs.add(member.albumId);
+    const perAlbum = new Map<string, number>();
+    for (const member of group.members) {
+      perAlbum.set(member.albumId, (perAlbum.get(member.albumId) ?? 0) + 1);
+    }
+    for (const [albumId, count] of perAlbum) {
+      if (count >= 2) {
+        albumCounts.set(albumId, (albumCounts.get(albumId) ?? 0) + count);
+      }
+    }
   }
-  const album = nodes.find((node) => albumIDs.has(node.id));
-  test.skip(!album, "没有相册落在相似组里");
+  const album = nodes.find((node) => albumCounts.has(node.id));
+  test.skip(!album, "没有相册落在一组多张相似照片里");
 
   await page.goto(albumUrl(album!));
   const collapse = page.getByRole("button", { name: "折叠相似" });

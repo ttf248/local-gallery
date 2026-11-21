@@ -21,6 +21,10 @@
   --accent-soft: #e7e9ed;
   --accent-contrast: #ffffff;
   --danger: #b42318;
+  /* 压在危险色上的文字色。危险色在明暗两套主题里一深一浅（浅色主题是
+     深红，深色主题是浅红），压在它上面的字要跟着翻，否则深色主题里
+     白字压在浅红上只剩 2:1。 */
+  --danger-ink: #ffffff;
   --success: #1a7a52;
   --warning: #8a5a00;
   /* 收藏是全局一份数据，不属于任何一个工作台，因此它的颜色也不跟着模式走。
@@ -156,6 +160,7 @@
   --accent-soft: #24272d;
   --accent-contrast: #16181c;
   --danger: #ff9a90;
+  --danger-ink: #16181c;
   --success: #79d3a4;
   --warning: #e0b169;
   --favorite: #e08bb4;

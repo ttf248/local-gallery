@@ -110,9 +110,25 @@
     object-fit: cover;
   }
 
+  /* 这一组的正文与质量读数并排：读数单独一列，各行的数字上下对齐，
+     比谁更清楚、谁更曝得过度，扫一列就能比出来。 */
   .similarity-group__body {
     flex: 1 1 260px;
     min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 24px;
+    align-items: start;
+  }
+  .similarity-group__text {
+    min-width: 0;
+  }
+  /* 窄屏放不下两列：读数回到文字下面。 */
+  @media (max-width: 899px) {
+    .similarity-group__body {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 8px;
+    }
   }
 
   .similarity-group__title {
@@ -168,6 +184,13 @@
     flex-wrap: wrap;
     margin-top: 8px;
   }
+  /* 宽屏上读数是独立的一列：不再压在文字下面一行的末尾。 */
+  @media (min-width: 900px) {
+    .similarity-group__quality {
+      margin-top: 0;
+      justify-content: flex-end;
+    }
+  }
   .similarity-group__quality-label {
     font-size: var(--text-meta, var(--text-body));
     color: var(--fg-muted);
@@ -194,6 +217,15 @@
     gap: 8px;
     flex-wrap: wrap;
     margin-left: auto;
+  }
+  /* 宽屏：动作列给一个固定的宽度，各行的按钮起点一致 ——
+     按钮紧跟在文字后面的话，每行的动作都落在不同的地方，
+     扫读时要重新找一遍「标记已处理」在哪。 */
+  @media (min-width: 900px) {
+    .similarity-group__actions {
+      flex: 0 0 320px;
+      justify-content: flex-end;
+    }
   }
 
   /* 展开区：成员并排摆着，一眼能比出差别。 */
