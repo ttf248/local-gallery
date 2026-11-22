@@ -35,8 +35,8 @@ export type FieldDef =
  * 服务端配置里的一组设置。
  *
  * 之前分组标题是一行浮在画布上的灰字，下面的内容又是白卡 —— 白卡套
- * 白卡，标题和内容各说各的，整段看不出哪里到哪里。改成分组自带一张
- * 面板：标题做成顶栏（压一层浅色底），正文在下面，一组一块。
+ * 白卡，标题和内容各说各的，整段看不出哪里到哪里。现在分组就是标题
+ * 加一行行字段：字段之间一条细线，标题与字段落在同一条左缘上。
  */
 export function ConfigGroup({
   title,
@@ -48,10 +48,8 @@ export function ConfigGroup({
   return (
     // 组内的字段行固定上下堆：这一段是三栏排布，每组只有三百多像素，
     // 标签与输入框并排会把标签挤成一列竖字。
-    <section className="mb-4 break-inside-avoid overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
-      <h3 className="border-b border-border-faint bg-bg-subtle px-4 py-2.5 text-meta font-medium text-fg-muted">
-        {title}
-      </h3>
+    <section className="mb-6 break-inside-avoid">
+      <h3 className="mb-1 text-meta font-medium text-fg-muted">{title}</h3>
       {children}
     </section>
   );
@@ -93,7 +91,8 @@ export function ConfigRow({
   }, onCompositionChange);
   return (
     // 字段行上下堆叠：标签与控件并排时，路径输入框会把标签挤成一列竖排文字。
-    <div className="flex flex-col items-stretch justify-between gap-2 px-4 py-3 text-body">
+    // 行与行之间一条细线：分组不再有盒子，分组靠这些线读出来。
+    <div className="flex flex-col items-stretch justify-between gap-2 border-t border-border-faint py-3 text-body">
       <div className="flex flex-col min-w-0">
         <span className="text-fg flex items-center gap-2">
           {def.label}
