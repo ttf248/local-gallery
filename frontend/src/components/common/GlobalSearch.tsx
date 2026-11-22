@@ -121,8 +121,11 @@ export default function GlobalSearch() {
     : "描述画面，或输入照片里的文字…";
 
   return (
-    <div className="relative w-full max-w-[560px] min-w-0">
-      <div className="toolbar-search input-focus-ring flex items-center gap-1.5 bg-bg-subtle rounded-full px-3 border border-border-faint focus-within:bg-bg-elevated focus-within:border-border-strong min-w-0 shadow-xs">
+    <div className="relative w-full max-w-[480px] min-w-0">
+      {/* 搜索框：浅灰底 + 一圈极淡的描边，指针落进去时底色换成面板白、
+          描边换成强调色 —— 聚焦的那一刻背景先变白，焦点才真的看得见。
+          圆角与控件同档（10px），不再是药丸。 */}
+      <div className="toolbar-search input-focus-ring flex items-center gap-1.5 bg-bg-subtle rounded-md px-3 border border-border-faint focus-within:bg-bg-elevated focus-within:border-accent min-w-0">
         <SearchScopeMenu
           value={scope}
           onChange={(next) => {

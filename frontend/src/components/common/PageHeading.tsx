@@ -2,7 +2,14 @@ import type { ReactNode } from "react";
 
 interface Props {
   title: string;
-  eyebrow: string;
+  /**
+   * 眉标：一句说明这一屏「是什么、怎么来的」的小字。
+   *
+   * 它是可选的：标题已经说清楚的一页不必再挂一行，页面按自己的类型
+   * 决定要不要。只有眉标补上了标题给不出的信息时（搜的是名字还是
+   * 画面、这一页是本机算出来的），才留它。
+   */
+  eyebrow?: string;
   description?: ReactNode;
   /**
    * 页头右侧的动作（这一页的主要操作）。
@@ -35,7 +42,7 @@ export default function PageHeading({
     <section className={`${contained ? "" : "page-shell "}page-heading`}>
       <div className="flex items-end justify-between gap-6 flex-wrap">
         <div className="min-w-0">
-          <p className="page-eyebrow">{eyebrow}</p>
+          {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
           <h1
             className={`page-title${size === "lg" ? "" : " page-title--sm"}`}
           >

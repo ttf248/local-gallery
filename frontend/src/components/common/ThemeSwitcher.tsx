@@ -60,7 +60,7 @@ function CompactSwitch({
       trigger={
         <button
           type="button"
-          className="toolbar-icon inline-flex items-center justify-center rounded-md text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors"
+          className="toolbar-icon"
           title={`主题: ${theme === "light" ? "浅色" : theme === "dark" ? "深色" : "系统"}`}
           aria-label={`主题: ${theme === "light" ? "浅色" : theme === "dark" ? "深色" : "系统"}`}
         >

@@ -277,7 +277,6 @@ export function SettingsView({
         <div className="max-w-3xl">
           <PageHeading
             title="设置"
-            eyebrow="你的空间，你的习惯"
             contained
             description="调整外观、阅读方式与本地媒体配置。"
           />
@@ -295,7 +294,6 @@ export function SettingsView({
     <div className="page-shell settings-page pb-10">
       <PageHeading
         title="设置"
-        eyebrow="你的空间，你的习惯"
         contained
         description="外观、导航、阅读方式与本地媒体配置。"
       />

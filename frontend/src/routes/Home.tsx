@@ -50,11 +50,9 @@ export default function Home() {
  */
 function HomeHeader({
   title,
-  eyebrow,
   primaryAction,
 }: {
   title: string;
-  eyebrow: string;
   primaryAction: { to: string; label: string };
 }) {
   const manifestQuery = useLibraryManifest();
@@ -79,7 +77,6 @@ function HomeHeader({
     <section className="page-shell page-heading">
       <div className="home-heading">
         <div className="home-heading__title">
-          <p className="page-eyebrow">{eyebrow}</p>
           <h1 className="page-title page-title--sm">{title}</h1>
         </div>
         <p className="home-heading__desc text-body text-fg-muted">
@@ -296,7 +293,6 @@ function ComicHome() {
     <div className="home-page min-h-full">
       <HomeHeader
         title="漫画库"
-        eyebrow="你的漫画"
         primaryAction={{ to: libraryRoute("comic"), label: "书架" }}
       />
 

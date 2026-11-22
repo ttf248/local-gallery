@@ -112,7 +112,6 @@ export default function Unread() {
     <div className="min-h-full">
       <PageHeading
         title={copy.unreadPageTitle}
-        eyebrow={copy.unreadEyebrow}
         action={
           count > 0 && (
             <button

@@ -86,7 +86,6 @@ export function TaskCenterView({
   return (
     <div className="pb-12">
       <PageHeading
-        eyebrow="后台分析"
         title="任务中心"
         description="查看本机任务进度并管理等待队列与记录；每日计划可自动扫描媒体目录、运行分析并刷新智能相册。"
         action={

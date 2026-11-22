@@ -49,11 +49,12 @@ export default function ModeSwitch({ mode, onChange, tone = "rail" }: Props) {
             title={title}
             className={`h-7 flex-1 rounded px-2.5 text-meta transition-colors ${
               active
-                ? onRail
-                  ? "bg-rail-accent text-rail-accent-fg font-medium"
-                  : /* 画布上的选中块用品牌色：焦点属于当前工作台。
-                       近黑的强调色让漫画侧的顶栏看着还是照片侧的。 */
-                    "bg-accent text-accent-contrast font-medium"
+                ? /* 选中态与侧栏的当前入口同一套说法：淡底 + 深一档的
+                     蓝字。抽屉里那一档用侧栏专用的淡底 —— 它是压在浅灰
+                     侧栏上的，得比画布上的那一档更蓝一点才看得出来。 */
+                  onRail
+                  ? "bg-rail-active text-rail-active-fg font-medium"
+                  : "bg-accent-soft text-accent-ink font-medium"
                 : onRail
                   ? "text-rail-muted hover:text-rail-fg"
                   : "text-fg-muted hover:text-fg"

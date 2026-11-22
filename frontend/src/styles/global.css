@@ -18,10 +18,12 @@
   }
   .app-toolbar {
     /* 顶栏贴顶：带刘海的手机上要留出安全区，否则标题钻到刘海底下。 */
-    height: calc(60px + var(--safe-top));
+    height: calc(64px + var(--safe-top));
     padding-top: var(--safe-top);
     flex-shrink: 0;
-    background: var(--bg);
+    /* 顶栏是画布之上的一层面板：浅色主题是纯白，深色是面板色。
+       它比画布亮一线，与侧栏那条浅灰带一起把外壳的两条边分出来。 */
+    background: var(--bg-elevated);
     border-bottom: 1px solid var(--border);
   }
   /* 眉标：一句说明这一屏是什么的小字，用强调色标出来。
@@ -59,22 +61,23 @@
     border-right: 1px solid var(--rail-line);
   }
   .sidebar-brand {
-    height: 60px;
+    height: 64px;
     padding-inline: 20px;
     border-bottom: 1px solid var(--rail-line);
   }
+  /* 品牌标记：一枚描边的方块加一个字。
+     它原来是一块带底色的装饰块 —— 侧栏里已经有选中底色与品牌名，
+     再加一块彩色方块，界面里就有三处颜色在抢注意力。 */
   .app-mark {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     flex-shrink: 0;
-    background: var(--accent-soft);
+    border: 1px solid var(--rail-line);
+    border-radius: var(--radius-control);
     color: var(--accent-ink);
-    /* 一枚圆角方块上的字：编辑式版面的品牌标记靠字重与留白立住，
-       不靠造型。 */
-    border-radius: var(--radius-media);
-    font: 600 18px/1 var(--font-display);
+    font: 600 15px/1 var(--font-display);
     letter-spacing: 0.01em;
   }
   .nav-entry {
@@ -586,12 +589,32 @@
      扩出去会吃掉邻座的点击 —— 相邻两项的扩区互相抢命中，
      「够大」就变成了「点错」。本体放大没有这两个问题。
      真需要豁免时给控件加 data-no-touch-expand。 */
-  /* 顶栏的图标按钮：36 见方，触摸设备上 44 见方。
-     它们挨在一起，扩区会互相抢命中 —— 只能把本体放大。
-     尺寸写在样式表里：工具类在 utilities 层，压不住触摸档这一档。 */
+  /* 顶栏的图标按钮：帮助、主题、更多、窄屏的菜单。
+     全站同一枚样子：36 见方，辅助色的图标，悬停才给一层浅底 ——
+     它们是全局动作，不是这一页的主操作，视觉权重压到最低。 */
   .toolbar-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 36px;
     height: 36px;
+    border-radius: var(--radius-control);
+    color: var(--fg-subtle);
+    transition:
+      background var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .toolbar-icon:hover {
+      background: var(--bg-subtle);
+      color: var(--fg);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .toolbar-icon:active {
+      background: var(--bg-subtle);
+      color: var(--fg);
+    }
   }
   @media (hover: none), (pointer: coarse) {
     .toolbar-icon {
@@ -1019,7 +1042,9 @@
       max-width: 70%;
     }
     .app-toolbar {
-      height: calc(56px + var(--safe-top));
+      /* 窄屏上顶栏矮一档：手机横屏的竖向空间本来就紧，64px 会把第一屏
+         内容挤掉一截。 */
+      height: calc(60px + var(--safe-top));
     }
     .page-heading {
       padding-top: 20px;

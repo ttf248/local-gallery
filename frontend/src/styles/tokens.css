@@ -57,8 +57,11 @@
   --rail-muted: #5c6672;
   --rail-hover: #e8ebef;
   --rail-line: #e3e7ec;
-  --rail-active: #e3eaf2; /* 选中项：强调色淡底 */
-  --rail-active-fg: #2f5372; /* 选中项：强调色的墨 */
+  /* 选中项：一层柔和的蓝底 + 一档深的蓝字。
+     不用实心填充 —— 侧栏一列入口里出现一块饱和色块，整条栏会被它
+     拽住，剩下的入口反而退到背景里。 */
+  --rail-active: #e3ecf4;
+  --rail-active-fg: #244867;
   --rail-accent: #476c8d;
   --rail-accent-fg: #ffffff;
   /* --- 圆角 ---
@@ -197,8 +200,10 @@
   --rail-muted: #8b97a6;
   --rail-hover: #1e2732;
   --rail-line: #242d38;
-  --rail-active: #1d2e3d; /* 选中项：强调色淡底 */
-  --rail-active-fg: #b9d8ee; /* 选中项：强调色的墨 */
+  /* 选中项：深色主题下是品牌蓝的淡底 + 一档浅蓝字，与浅色主题同一套
+     说法（淡底 + 深的蓝字），只是底色落在深色画布上。 */
+  --rail-active: #1c2b38;
+  --rail-active-fg: #b9d8ee;
   --rail-accent: #91bdd9;
   --rail-accent-fg: #101820;
   /* --- 阴影 --- */

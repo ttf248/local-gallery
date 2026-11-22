@@ -201,8 +201,8 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
       aria-label="主导航"
       className={`app-sidebar scroll-thin flex flex-col shrink-0 overflow-y-auto transition-[width] duration-200 ease-out ${
         mobileOpen
-          ? "fixed inset-y-0 left-0 z-50 w-[236px]"
-          : `hidden lg:flex lg:static ${collapsed ? "w-[72px]" : "w-[236px]"}`
+          ? "fixed inset-y-0 left-0 z-50 w-[224px]"
+          : `hidden lg:flex lg:static ${collapsed ? "w-[68px]" : "w-[224px]"}`
       }`}
     >
       <div
@@ -212,21 +212,25 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
       >
         {
           !collapsed ? (
+            /* 品牌区：名字 + 一句定位。Logo 只是一枚描边的方块，不再是
+               一块带底色的装饰 —— 侧栏里真正的标识是这行字。 */
             <div className="flex items-center gap-2.5 min-w-0">
               <Logo />
-              {/* 品牌行只留名字：副标题是一行小字，说的还是同一个
-                  产品的名字，读的人得不到新信息。 */}
-              <div className="leading-none min-w-0 font-display font-semibold text-label truncate">
-                Local Gallery
+              <div className="leading-none min-w-0">
+                <div className="font-display font-semibold text-label truncate">
+                  Local Gallery
+                </div>
+                <div className="mt-1.5 font-sans text-meta text-rail-muted truncate">
+                  本地影像档案
+                </div>
               </div>
             </div>
           ) : null /* 折叠态下隐藏 logo,把整行让给展开按钮 */
         }
         {/* 折叠/展开按钮:
             折叠态是用户「想找回菜单」的关键时刻 —— 按钮必须一眼可见,
-            所以用亮色填充的"药丸"按钮悬浮在右缘。
-            侧栏是墨黑表面,应用级 --accent 在浅色主题下也是近黑,
-            压上去看不见 —— 这里用侧栏专用的 --rail-accent。
+            所以用一枚淡底的药丸按钮。它不抢品牌名的注意力：淡底 +
+            强调色的字，而不是一整块实色。
             展开态时侧边栏本来就在视野里,按钮保持低调(灰图标 + hover 背景)
             即可,避免和品牌名挤。
 
@@ -239,8 +243,8 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
             title={collapsed ? "展开侧边栏 (Ctrl+B)" : "折叠侧边栏 (Ctrl+B)"}
             className={
               collapsed
-                ? "group/toggle relative z-10 inline-flex items-center gap-0.5 h-7 pl-1.5 pr-2 whitespace-nowrap rounded-full bg-rail-accent text-rail-accent-fg shadow-md ring-1 ring-rail-accent/40 hover:ring-2 hover:ring-rail-accent/70 hover:scale-105 active:scale-95 transition-all"
-                : "shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-rail-muted hover:text-rail-hover hover:text-rail-fg transition-colors"
+                ? "group/toggle relative z-10 inline-flex items-center gap-0.5 h-7 pl-1.5 pr-2 whitespace-nowrap rounded-full bg-accent-soft text-accent-ink ring-1 ring-accent/25 hover:ring-accent/45 hover:scale-105 active:scale-95 transition-all"
+                : "shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-rail-muted hover:bg-rail-hover hover:text-rail-fg transition-colors"
             }
           >
             {collapsed ? (
@@ -249,7 +253,7 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
                   size={12}
                   className="transition-transform group-hover/toggle:translate-x-0.5"
                 />
-                {/* 折叠态只有 72px 宽：字压到 11.5px 并禁止换行，
+                {/* 折叠态只有 68px 宽：字压到 11.5px 并禁止换行，
                     否则「展开」会折成两行、被 60px 高的品牌栏裁掉一半。 */}
                 <span className="text-badge font-semibold tracking-wide whitespace-nowrap">
                   展开
