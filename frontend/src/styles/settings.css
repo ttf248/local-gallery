@@ -116,11 +116,12 @@
     }
   }
 .settings-card {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-tile);
-    background: var(--bg-elevated);
-    box-shadow: var(--shadow-xs);
-    overflow: hidden;
+    /* 分组不再是一只盒子：标题 + 一条细线 + 一行行设置，底子透出画布。
+       设置页里的分组靠标题与细线就分得开，描边与白底只是多一层
+       「灰卡片」。 */
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
   }
 .settings-card__head {
     display: flex;
@@ -129,9 +130,8 @@
     /* 标题与说明并排，但窄屏放不下时说明另起一行：把标题挤成竖着的
        「导/航」，读起来像渲染事故。 */
     flex-wrap: wrap;
-    padding: 7px 14px;
+    padding: 0 0 10px;
     border-bottom: 1px solid var(--border-faint);
-    background: var(--bg-subtle);
   }
 .settings-card__icon {
     display: grid;
