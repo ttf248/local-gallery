@@ -155,11 +155,8 @@ function ThemeRow({ item }: { item: SmartAlbumDirectoryItem }) {
   const evidence = smartAlbumEvidenceDimensions(group);
   return (
     <li>
-      <Link
-        to={smartGroupHref(item)}
-        className="flex items-center gap-3 rounded-lg border border-border-faint bg-bg-elevated p-2 transition-colors hover:border-border-strong"
-      >
-        <span className="h-12 w-12 shrink-0 overflow-hidden rounded-md bg-bg-subtle">
+      <Link to={smartGroupHref(item)} className="tile-row">
+        <span className="tile-row__thumb">
           {group.coverResourceId ? (
             <RenditionImage
               fileId={group.coverResourceId}

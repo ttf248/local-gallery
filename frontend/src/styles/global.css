@@ -1566,6 +1566,40 @@ button:not(:disabled):active {
     font-weight: 500;
   }
 
+  /* --- 列表行：预览清单里的一行 ---
+     以前每一行预览都是一块「白卡片 + 描边」：一屏十几行就是十几块白
+     盒子，内容被挤在盒子中间，行与行之间也读不出层级。编辑式版面里，
+     一行内容靠留白就分得开 —— 底色留给指针落在上面的时候。 */
+  .tile-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 8px;
+    border-radius: var(--radius-media);
+    text-align: left;
+    transition: background var(--dur-fast) var(--ease-out);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .tile-row:hover {
+      background: var(--bg-subtle);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .tile-row:active {
+      background: var(--bg-subtle);
+    }
+  }
+  /* 行内缩略图：尺寸与圆角只有这一处，各页面不再各写一遍。 */
+  .tile-row__thumb {
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-radius: var(--radius-xs);
+    background: var(--bg-subtle);
+  }
+
   /* --- 徽章：只用于短词 / 数字，正文不使用 --- */
   .badge {
     display: inline-flex;

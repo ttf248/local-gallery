@@ -233,52 +233,33 @@
     align-items: center;
     gap: 12px;
     width: 100%;
-    padding: 12px;
+    padding: 8px;
     border-radius: var(--radius-media);
-    border: 1px solid var(--border);
-    background: var(--bg-elevated);
     text-align: left;
     transition:
-      background var(--dur),
-      border-color var(--dur);
+      background var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out);
   }
+/* 索引卡不再是一只白盒子：年份与封面本身就是内容，靠留白分行，
+   指针落在上面时才给一层浅底。选中的一档用强调色淡底标出来。 */
 .year-index__item[data-active="true"] .year-index__open {
-  border-color: var(--brand);
   background: var(--brand-soft);
   color: var(--brand-ink);
 }
 @media (hover: hover) and (pointer: fine) {
   .year-index__open:hover {
-    border-color: var(--brand);
+    background: var(--bg-subtle);
+  }
+  .year-index__item[data-active="true"] .year-index__open:hover {
     background: var(--brand-soft);
-    color: var(--brand-ink);
   }
 }
 @media (hover: none), (pointer: coarse) {
   .year-index__open:active {
-    border-color: var(--brand);
-    background: var(--brand-soft);
-    color: var(--brand-ink);
+    background: var(--bg-subtle);
   }
-}
-:root[data-mode="comic"] .year-index__open {
-    background: transparent;
-    border-color: transparent;
-  }
-:root[data-mode="comic"] .year-index__item[data-active="true"] .year-index__open {
-  background: var(--brand-soft);
-  border-color: var(--brand);
-}
-@media (hover: hover) and (pointer: fine) {
-  :root[data-mode="comic"] .year-index__open:hover {
+  .year-index__item[data-active="true"] .year-index__open:active {
     background: var(--brand-soft);
-    border-color: var(--brand);
-  }
-}
-@media (hover: none), (pointer: coarse) {
-  :root[data-mode="comic"] .year-index__open:active {
-    background: var(--brand-soft);
-    border-color: var(--brand);
   }
 }
 .year-index__filter {

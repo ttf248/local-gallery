@@ -32,19 +32,16 @@ export default function ExploreSearchHero() {
   };
 
   return (
-    <section
-      aria-labelledby="explore-search-title"
-      className="rounded-xl border border-border bg-bg-elevated p-4 shadow-xs sm:p-5"
-    >
-      <h2
-        id="explore-search-title"
-        className="font-display text-label text-fg"
-      >
+    /* 这块不再是一张卡片：整页只有这一个搜索框，卡片把它框成了一个
+       「小部件」，反而把它压成了次要的东西。标题、输入框与说明直接
+       摆在画布上，靠字号与留白分层。 */
+    <section aria-labelledby="explore-search-title" className="pb-2">
+      <h2 id="explore-search-title" className="section-title">
         我要找什么
       </h2>
-      <form className="mt-3" onSubmit={submit}>
+      <form className="mt-4" onSubmit={submit}>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex h-11 min-w-0 flex-1 basis-56 items-center gap-2 rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
+          <div className="flex h-12 min-w-0 flex-1 basis-56 items-center gap-2 rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
             <SearchIcon
               size={15}
               className="ml-3 shrink-0 text-fg-subtle"
@@ -64,7 +61,7 @@ export default function ExploreSearchHero() {
           </div>
           <button
             type="submit"
-            className="btn btn-primary"
+            className="btn btn-primary h-12"
             disabled={!keyword.trim()}
           >
             搜索
