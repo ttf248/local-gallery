@@ -2849,6 +2849,10 @@ test("首页「那年今日」摆的是当天那张照片，并能回到原相�
   // 「往年这天我拍到了什么」。点它就回到那本相册。
   const photo = strip.getByRole("link").first();
   await expect(photo).toBeVisible();
+  // 缩略图要看得清：缩到认不出拍的是什么，这一行就退化成了装饰。
+  const box = await photo.locator("img").first().boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(80);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(60);
   await photo.click();
   await expect(page).toHaveURL(/\/photo\/albums\//);
 });
