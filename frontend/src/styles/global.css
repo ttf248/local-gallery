@@ -1499,9 +1499,12 @@ button:not(:disabled):active {
     transform: translateY(0.5px);
   }
 
-  /* 次级操作：描边 */
+  /* 次级操作：描边，但不垫白底。
+     白底 + 描边的按钮在一块浅色画布上就是一张小卡片 —— 一屏里
+     「相册」「随手看看」「书架」「重新扫描」排开就是四张白卡。
+     现在它只剩一圈细线，指针落上去才给一层浅底。 */
   .btn-outline {
-    background: var(--bg-elevated);
+    background: transparent;
     border: 1px solid var(--border);
     color: var(--fg);
   }

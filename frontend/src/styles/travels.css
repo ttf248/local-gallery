@@ -321,16 +321,19 @@
   grid-column: 1 / -1;
 }
 
-/* --- 一段行程：一张卡片 --- */
+/* --- 一段行程：一块记录 ---
+   行程是记录，不是卡片：以前每一段行程都是一只「白底 + 描边」的盒子，
+   一屏十几段就是十几只白盒子。现在每段行程上面一条细线，底子透出画布，
+   选中（展开）的那一段仍然有底色，读得出哪一段是当前这段。 */
 .travel-trip-card {
   position: relative;
-  padding: 8px 10px 9px;
-  border: 1px solid var(--border-faint);
-  border-radius: var(--radius-tile);
-  background: var(--bg-elevated);
+  padding: 10px 10px 12px;
+  border-top: 1px solid var(--border-faint);
+  background: transparent;
 }
 .travel-trip-card[data-selected="true"] {
-  border-color: color-mix(in srgb, var(--brand-ink) 40%, var(--border-faint));
+  border-top-color: color-mix(in srgb, var(--brand-ink) 40%, var(--border-faint));
+  border-radius: var(--radius-tile);
   background: color-mix(in srgb, var(--brand) 6%, var(--bg-elevated));
 }
 .travel-trip-card__head {
