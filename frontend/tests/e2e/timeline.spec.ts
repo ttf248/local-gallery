@@ -151,7 +151,8 @@ test("只看视频时时间线只留视频", async ({ page, request }) => {
   await scannedNodes(request, "photo");
   await page.goto("/photo");
 
-  await page.getByRole("button", { name: "视频", exact: true }).click();
+  // 媒体类型是一组互斥选项，用 radio 语义（全站的分段控件都是这样）。
+  await page.getByRole("radio", { name: "视频", exact: true }).click();
   await expect(page).toHaveURL(/\?media=video$/);
   const videos = page.locator(
     'main [data-virtuoso-scroller] button[aria-label^="播放"]',
