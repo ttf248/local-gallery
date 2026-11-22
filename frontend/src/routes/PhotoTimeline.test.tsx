@@ -360,7 +360,8 @@ it("选中年份后可以再选月份", async () => {
 // 照片与视频可以分开看。
 it("可以只看视频", async () => {
   renderTimeline();
-  fireEvent.click(screen.getByRole("button", { name: "视频" }));
+  // 媒体类型是一组互斥选项，用 radio 语义（全站的分段控件都是这样）。
+  fireEvent.click(screen.getByRole("radio", { name: "视频" }));
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe("?media=video"),
   );

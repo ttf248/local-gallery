@@ -47,8 +47,10 @@ export default function OnThisDayStrip({ enabled }: Props) {
   return (
     <div
       /* 窄屏让「接着看」换到下一行：照片才是这一条的内容，
-         chip 不该从照片那里抢宽度。宽屏再并到一行。 */
-      className="flex w-full min-w-0 items-center gap-2 overflow-x-auto scroll-thin sm:flex-1"
+         chip 不该从照片那里抢宽度。宽屏再并到一行。
+         右缘渐隐：这一条横向能滚，被裁掉的那张不是坏图，是「还有
+         下一张」的提示。 */
+      className="shelf-fade flex w-full min-w-0 items-center gap-2 overflow-x-auto scroll-thin sm:flex-1"
       data-testid="on-this-day-strip"
     >
       <span className="shrink-0 text-meta text-fg-muted">那年今日</span>

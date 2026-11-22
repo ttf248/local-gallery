@@ -1,5 +1,6 @@
 import type { TimelineYear } from "../../api/library";
 import type { TimelineFilter } from "../../utils/timeline";
+import Segmented from "../common/Segmented";
 
 interface Props {
   /** 年份索引：跳年与跳月的依据。 */
@@ -11,12 +12,6 @@ interface Props {
   /** 改筛选。 */
   onChange: (next: TimelineFilter) => void;
 }
-
-const MEDIA_OPTIONS: { value: string; label: string }[] = [
-  { value: "", label: "全部" },
-  { value: "photo", label: "照片" },
-  { value: "video", label: "视频" },
-];
 
 const SELECT_CLASS =
   "h-[34px] rounded-md border border-border bg-bg px-2 text-body text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus";
@@ -38,7 +33,7 @@ export default function TimelineFilters({
   const hasFilter = Boolean(filter.year || filter.month || filter.media);
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
       <label className="inline-flex items-center gap-1.5 text-meta text-fg-muted">
         <span>年份</span>
         <select
@@ -80,23 +75,20 @@ export default function TimelineFilters({
         </label>
       ) : null}
 
-      <div
-        className="inline-flex items-center gap-1"
-        role="group"
-        aria-label="媒体类型"
-      >
-        {MEDIA_OPTIONS.map((option) => (
-          <button
-            key={option.value || "all"}
-            type="button"
-            aria-pressed={filter.media === option.value}
-            onClick={() => onChange({ ...filter, media: option.value })}
-            className="chip"
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      {/* 媒体类型这一组要露标签：左边是「年份」下拉，右边这组也有一个
+          「全部」，光看按钮读不出它管的是类型。标签露出来，两组各管
+          一件事才读得出来（全站的分段控件都用同一个组件与同一种样子）。 */}
+      <Segmented
+        label="类型"
+        showLabel
+        value={filter.media}
+        onChange={(media) => onChange({ ...filter, media })}
+        options={[
+          { value: "", label: "全部" },
+          { value: "photo", label: "照片" },
+          { value: "video", label: "视频" },
+        ]}
+      />
 
       {hasFilter ? (
         <button

@@ -110,8 +110,8 @@ export default function Segmented<T extends string>({
                     } disabled:opacity-50`
                   : `h-8 px-3 text-meta transition-colors ${
                       selected
-                        ? "bg-bg-strong text-fg"
-                        : "text-fg-muted hover:bg-bg-subtle"
+                        ? "bg-brand-soft text-brand-ink font-medium"
+                        : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
                     } disabled:opacity-50`
               }
             >

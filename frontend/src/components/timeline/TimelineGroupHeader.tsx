@@ -20,7 +20,7 @@ export default function TimelineGroupHeader({ group }: Props) {
       className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
       data-testid="timeline-group-header"
     >
-      <h2 className="font-display text-body font-semibold text-fg">
+      <h2 className="font-display text-label font-semibold text-fg">
         {group.label}
       </h2>
       <span className="text-meta tabular-nums text-fg-subtle">
@@ -34,6 +34,10 @@ export default function TimelineGroupHeader({ group }: Props) {
           · {group.note}
         </span>
       ) : null}
+      {/* 标题后面一条细线：这一段的内容到这里为止。月份是时间线上的
+          骨架，线把「这一段」与下一段分开，读的人一眼知道照片从哪
+          开始、到哪结束。 */}
+      <span className="section-rule" aria-hidden />
     </div>
   );
 }

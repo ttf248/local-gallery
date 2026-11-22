@@ -1561,8 +1561,10 @@ button:not(:disabled):active {
   }
   .chip[aria-pressed="true"],
   .chip[data-active="true"] {
-    background: var(--accent-soft);
-    color: var(--accent);
+    /* 选中态：强调色淡底 + 深一档的强调色字。直接用 accent 压在
+       accent-soft 上只有 4.6:1，12.5px 的小字贴着下限走。 */
+    background: var(--brand-soft);
+    color: var(--brand-ink);
     font-weight: 500;
   }
 
