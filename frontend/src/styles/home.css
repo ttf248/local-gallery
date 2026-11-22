@@ -18,8 +18,9 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
-    padding: 24px;
-    border: 1px solid var(--border);
+    /* 面板不再是一只盒子：没有描边、没有底色，它就是画布上的一段内容，
+       靠标题、留白与细线分层。 */
+    padding-block: 6px;
     border-radius: var(--radius-panel);
     background: var(--panel-bg);
     color: var(--panel-fg);
@@ -106,7 +107,7 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 12px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--border-faint);
     padding-top: 18px;
   }
 .hero-queue__item {

@@ -43,14 +43,19 @@ export function UnreadHero({
       aria-labelledby="unread-heading"
     >
       <div className="flex items-start justify-between gap-3 mb-5">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="page-eyebrow mb-2">{copy.unreadEyebrow}</p>
-          <h2 id="unread-heading" className="section-title">
-            {copy.unreadTitle}{" "}
-            <span className="font-sans text-body font-normal text-fg-muted ml-2 tabular-nums">
-              {count} {copy.unreadCountLabel}
-            </span>
-          </h2>
+          {/* 标题后接一条细线：这一段的内容到这里为止 —— 与时间线上的
+              月份标题同一套写法。 */}
+          <div className="flex items-baseline gap-3">
+            <h2 id="unread-heading" className="section-title">
+              {copy.unreadTitle}{" "}
+              <span className="font-sans text-body font-normal text-fg-muted ml-2 tabular-nums">
+                {count} {copy.unreadCountLabel}
+              </span>
+            </h2>
+            <span className="section-rule" aria-hidden />
+          </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
@@ -151,10 +156,11 @@ export function ContinueHero({
         <span className="hero-panel__muted tabular-nums">
           {cards.length} {copy.unfinishedCountLabel}
         </span>
+        <span className="section-rule" aria-hidden />
         <button
           type="button"
           onClick={onClearAll}
-          className="hero-panel__muted inline-flex items-center gap-1 ml-auto min-h-7 px-1 rounded"
+          className="hero-panel__muted inline-flex items-center gap-1 min-h-7 px-1 rounded"
           title={copy.markAllTitle}
         >
           <CloseIcon size={12} />

@@ -54,9 +54,6 @@
   --rail-active-fg: #2f5372;
   --rail-accent: #476c8d;
   --rail-accent-fg: #ffffff;
-  --feature-bg: #eef1f5;
-  --feature-fg: #16191d;
-  --feature-muted: #4a5462;
   /* 圆角按「它是什么形状」命名，而不是按大小编号：
      编号式（sm/md/lg/xl）让同一个数值在不同语境里被当成不同含义，
      于是组件里开始出现 11px / 14px / 18px 这类硬编码。 */
@@ -184,9 +181,6 @@
   --rail-active-fg: #b7d6ec;
   --rail-accent: #91bdd9;
   --rail-accent-fg: #101820;
-  --feature-bg: #1a212a;
-  --feature-fg: #e7ecf2;
-  --feature-muted: #a3aebb;
   --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.2);
   --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.34);
@@ -248,7 +242,9 @@
   --card-radius: 6px;
   --card-shadow: none;
   --card-lift: 0px;
-  --panel-bg: var(--bg-elevated);
+  /* 面板不再是「一块底色 + 一圈描边」的卡片：它就是画布上的一段内容，
+     靠标题、留白与一条细线分层。底色留白的地方一律透明。 */
+  --panel-bg: transparent;
   --panel-fg: var(--fg);
   --panel-muted: var(--fg-muted);
   --hero-cover-col: 176px;
@@ -261,9 +257,6 @@
   --card-radius: 16px;
   --card-shadow: var(--shadow-md);
   --card-lift: -3px;
-  --panel-bg: var(--feature-bg);
-  --panel-fg: var(--feature-fg);
-  --panel-muted: var(--feature-muted);
   /* 首屏书封给得比照片侧大：漫画侧整页是竖版书封语言，首屏那一本
      也要像一本书；面板被邻栏拉到等高时，中间那本不能小得像一张
      缩略图。260px 时这一栏与右边的「未读」预览大致齐平 —— 200px
