@@ -14,7 +14,7 @@ test("发现页年份卡与时间线共用同一日期范围，旧目录年份�
   await yearOnlyCard.click();
 
   await expect(page).toHaveURL(/\/photo\?year=2018$/);
-  await expect(page.getByRole("heading", { name: "按时间浏览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
   await expect(page.locator(".album-bar__meta").first()).toContainText("1 张");
   await expect(
     page.getByRole("button", { name: "查看 year-only.png" }),

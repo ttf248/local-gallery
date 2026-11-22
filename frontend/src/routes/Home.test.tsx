@@ -300,7 +300,7 @@ it("照片工作台不显示继续阅读与未读区", async () => {
   useAppModeStore.setState({ preference: "photo", hydrated: true });
   renderHome();
   await waitFor(() =>
-    expect(screen.getByRole("heading", { name: "按时间浏览" })).toBeTruthy(),
+    expect(screen.getByRole("heading", { name: "全部照片" })).toBeTruthy(),
   );
   expect(screen.queryByTestId("continue-hero")).toBeNull();
   expect(screen.queryByTestId("unread-hero")).toBeNull();

@@ -352,3 +352,53 @@ it("分组标题插在每一组的第一行之前", () => {
     "2024-06",
   ]);
 });
+
+// 一个月里只有两三张照片时，那几张不铺满整行：铺满了看起来像加载失败。
+it("稀疏的一段不铺满宽度，密集的一段仍然铺满", () => {
+  const sparseItems = [
+    { id: "s_1", kind: "image" as const, name: "s1.jpg", index: 0, kindIndex: 0, width: 3, height: 2 },
+    { id: "s_2", kind: "image" as const, name: "s2.jpg", index: 1, kindIndex: 1, width: 3, height: 2 },
+  ];
+  const denseItems = Array.from({ length: 12 }, (_, index) => ({
+    id: `d_${index}`,
+    kind: "image" as const,
+    name: `d${index}.jpg`,
+    index,
+    kindIndex: index,
+    width: 3,
+    height: 2,
+  }));
+
+  render(
+    <PhotoWall
+      items={[...sparseItems, ...denseItems]}
+      total={14}
+      hasNextPage={false}
+      isLoadingMore={false}
+      onLoadMore={() => {}}
+      onOpen={() => {}}
+      groupOf={(item) => (item.id.startsWith("s_") ? "2026-01" : "2024-05")}
+      groupHeader={(key) => <div data-testid="wall-group-header">{key}</div>}
+      showPlaceholders={false}
+    />,
+  );
+
+  const rows = screen.getAllByTestId("wall-row");
+  const widthsOf = (row: HTMLElement) =>
+    Array.from(row.querySelectorAll<HTMLElement>("[style*='width']"))
+      .map((node) => Number.parseFloat(node.style.width))
+      .filter((value) => Number.isFinite(value));
+  const rowOf = (name: string) =>
+    rows.find((row) => row.textContent?.includes(name))!;
+
+  // 稀疏段：只有两张，且加起来远不到容器宽度。
+  const sparseRow = rowOf("s1.jpg");
+  const sparseWidth = widthsOf(sparseRow).reduce((sum, w) => sum + w, 0);
+  expect(widthsOf(sparseRow)).toHaveLength(2);
+  expect(sparseWidth).toBeLessThan(1200);
+
+  // 密集段：每一行铺满容器宽度。
+  const denseRow = rows.filter((row) => row.textContent?.includes("d")).at(-1)!;
+  const denseWidth = widthsOf(denseRow).reduce((sum, w) => sum + w, 0);
+  expect(denseWidth).toBeGreaterThan(1000);
+});

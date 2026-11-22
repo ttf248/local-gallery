@@ -15,7 +15,10 @@ import { CheckIcon, PickIcon, PlayFilledIcon, PlusIcon } from "../common/Icon";
 import {
   autoTargetHeight,
   effectiveTargetHeight,
+  layoutGroup,
   layoutJustified,
+  SPARSE_MAX_HEIGHT,
+  SPARSE_MIN_HEIGHT,
   tileRatio,
   type WallRow,
   type WallTile,
@@ -108,7 +111,17 @@ type WallEntry =
   | { kind: "group"; key: string; group: string }
   | { kind: "row"; key: string; row: WallRow; startIndex: number };
 
-const GAP = 10;
+const GAP = 8;
+
+/**
+ * 分组排布时每一段自己的行高区间（像素）。
+ *
+ * 整面墙用同一套行高，稀疏的月份会被拉到密集月份的高度：一个月里
+ * 只有两张照片，那两张却和几十张的月份一样大，那一段看着像缺了内容。
+ * 分段各算各的，密集的月份保持浏览密度，冷清的月份把画面让出来。
+ */
+const GROUP_MIN_HEIGHT = 190;
+const GROUP_MAX_HEIGHT = 240;
 
 /**
  * 照片墙：按每张图真实宽高比排布的自适应网格。
@@ -209,6 +222,67 @@ export default function PhotoWall<
     return map;
   }, [tiles]);
 
+  // 分组：每一组单独排一次，组与组之间不混排。
+  //
+  // 一行里横跨两个月，那个月的标题就贴错了地方 —— 标题说的是第一张
+  // 照片的月份，行尾那几张其实是下一个月拍的。分组排布让每一组从新
+  // 的一行开始，标题与照片永远对得上。
+  const groups = useMemo(() => {
+    if (!groupOf) return [];
+    const list: { key: string; tiles: WallTile[] }[] = [];
+    tiles.forEach((tile, index) => {
+      const item = items[index];
+      const key = item ? groupOf(item) : undefined;
+      const groupKey = key ?? "";
+      let group = list.at(-1);
+      if (!group || group.key !== groupKey) {
+        group = { key: groupKey, tiles: [] };
+        list.push(group);
+      }
+      group.tiles.push(tile);
+    });
+    return list;
+  }, [tiles, items, groupOf]);
+
+  // 每一段自己的行高：照片少的月份给大一点，多的月份保持浏览密度。
+  //
+  // 用户手动选过密度就按他选的来 —— 明确选过的东西不该被自动改回去。
+  const groupFloor = Math.min(
+    GROUP_MIN_HEIGHT,
+    narrowBound || GROUP_MIN_HEIGHT,
+  );
+  const groupCeiling = Math.max(
+    groupFloor,
+    Math.min(GROUP_MAX_HEIGHT, narrowBound || GROUP_MAX_HEIGHT),
+  );
+  const groupHeights = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!groupOf || targetHeight !== undefined) return map;
+    for (const group of groups) {
+      map.set(
+        group.key,
+        autoTargetHeight(group.tiles, {
+          containerWidth: width,
+          containerHeight: height,
+          gap: GAP,
+          minTargetHeight: groupFloor,
+          maxTargetHeight: groupCeiling,
+        }),
+      );
+    }
+    return map;
+  }, [groups, groupOf, width, height, groupFloor, groupCeiling, targetHeight]);
+
+  // 稀疏段（照片少得一行放得下）的高度区间：手动密度按用户选的那一档，
+  // 自适应则给一段更宽松的区间 —— 少到两三张时，那几张本来就该大一些。
+  const sparseBand = useMemo(() => {
+    if (targetHeight !== undefined) {
+      const height = effectiveTargetHeight(targetHeight, width);
+      return { min: height, max: height };
+    }
+    return { min: SPARSE_MIN_HEIGHT, max: SPARSE_MAX_HEIGHT };
+  }, [targetHeight, width]);
+
   // 虚拟列表的数据：分组标题行与照片行混在一起。
   //
   // 给了 groupOf 时每一组单独排一次，标题行插在每组的第一行之前；
@@ -221,23 +295,6 @@ export default function PhotoWall<
         return { kind: "row", key: row.key, row, startIndex };
       });
     }
-    // 分组排布：每一组单独排一次，组与组之间不混排。
-    //
-    // 一行里横跨两个月，那个月的标题就贴错了地方 —— 标题说的是第一张
-    // 照片的月份，行尾那几张其实是下一个月拍的。分组排布让每一组从新
-    // 的一行开始，标题与照片永远对得上。
-    const groups: { key: string; tiles: WallTile[] }[] = [];
-    tiles.forEach((tile, index) => {
-      const item = items[index];
-      const key = item ? groupOf(item) : undefined;
-      const groupKey = key ?? "";
-      let group = groups.at(-1);
-      if (!group || group.key !== groupKey) {
-        group = { key: groupKey, tiles: [] };
-        groups.push(group);
-      }
-      group.tiles.push(tile);
-    });
     const list: WallEntry[] = [];
     for (const group of groups) {
       if (group.key) {
@@ -247,10 +304,15 @@ export default function PhotoWall<
           group: group.key,
         });
       }
-      const groupRows = layoutJustified(group.tiles, {
+      const groupRows = layoutGroup(group.tiles, {
         containerWidth: width,
-        targetHeight: effectiveHeight,
         gap: GAP,
+        targetHeight:
+          targetHeight !== undefined
+            ? effectiveTargetHeight(targetHeight, width)
+            : (groupHeights.get(group.key) ?? effectiveHeight),
+        sparseMinHeight: sparseBand.min,
+        sparseMaxHeight: sparseBand.max,
       });
       for (const row of groupRows) {
         const first = row.tiles[0];
@@ -259,7 +321,17 @@ export default function PhotoWall<
       }
     }
     return list;
-  }, [rows, tiles, items, itemIndex, groupOf, width, effectiveHeight]);
+  }, [
+    rows,
+    groups,
+    groupHeights,
+    sparseBand,
+    itemIndex,
+    groupOf,
+    width,
+    targetHeight,
+    effectiveHeight,
+  ]);
 
   // 滚到指定条目：条目下标先换算成行下标，虚拟列表按行滚。
   useEffect(() => {
@@ -311,7 +383,12 @@ export default function PhotoWall<
           itemContent={(_index, entry) => {
             if (entry.kind === "group") {
               return (
-                <div className="pb-1 pt-3">{groupHeader?.(entry.group)}</div>
+                /* 分段标题：上面留一整段空白，下面紧贴照片。标题是这一段
+                   的骨架，空白就是它的层级 —— 挤在照片边上时读不出
+                   「这一段从这儿开始」。 */
+                <div className="pb-2 pt-6">
+                  {groupHeader?.(entry.group)}
+                </div>
               );
             }
             const row = entry.row;

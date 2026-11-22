@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   autoTargetHeight,
   DEFAULT_TILE_RATIO,
+  layoutGroup,
   layoutJustified,
+  layoutSparse,
+  SPARSE_MAX_HEIGHT,
+  SPARSE_MIN_HEIGHT,
   tileRatio,
   type WallTile,
 } from "./justifiedLayout";
@@ -86,8 +90,87 @@ describe("layoutJustified", () => {
   });
 });
 
-describe("tileRatio", () => {
-  it("优先使用服务端给出的像素尺寸", () => {
+describe("layoutSparse", () => {
+  const sparse = { containerWidth: 1200, gap: 8 };
+
+  it("稀疏段落不铺满容器宽度", () => {
+    const rows = layoutSparse(tiles(1), sparse);
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    const total =
+      row.tiles.reduce((sum, tile) => sum + tile.width, 0) +
+      sparse.gap * (row.tiles.length - 1);
+    // 一张照片铺满一千二百像素宽，看起来像加载失败，不像一张照片。
+    expect(total).toBeLessThan(sparse.containerWidth);
+  });
+
+  it("图片高度落在 220–280 之间", () => {
+    for (const count of [1, 2, 3]) {
+      const row = layoutSparse(tiles(count), sparse)[0];
+      expect(row.tileHeight).toBeGreaterThanOrEqual(SPARSE_MIN_HEIGHT);
+      expect(row.tileHeight).toBeLessThanOrEqual(SPARSE_MAX_HEIGHT);
+    }
+  });
+
+  it("保留每张照片自己的比例", () => {
+    const rows = layoutSparse(
+      [
+        { id: "wide", ratio: 2 },
+        { id: "tall", ratio: 0.5 },
+      ],
+      sparse,
+    );
+    const row = rows[0];
+    const wide = row.tiles.find((tile) => tile.id === "wide")!;
+    const tall = row.tiles.find((tile) => tile.id === "tall")!;
+    expect(wide.width / row.tileHeight).toBeCloseTo(2, 5);
+    expect(tall.width / row.tileHeight).toBeCloseTo(0.5, 5);
+  });
+
+  it("超过上限张数就不走稀疏排布", () => {
+    expect(layoutSparse(tiles(4), sparse)).toEqual([]);
+  });
+
+  it("挤成细条时退回铺满排布", () => {
+    // 三张极端宽幅：压到能看的高度都不到，就交给 justified。
+    const rows = layoutSparse(
+      [
+        { id: "a", ratio: 4 },
+        { id: "b", ratio: 4 },
+        { id: "c", ratio: 4 },
+      ],
+      sparse,
+    );
+    expect(rows).toEqual([]);
+  });
+});
+
+describe("layoutGroup", () => {
+  it("稀疏段落走稀疏排布，密集段落走铺满排布", () => {
+    const sparseRows = layoutGroup(tiles(2), {
+      containerWidth: 1200,
+      gap: 8,
+      targetHeight: 240,
+    });
+    expect(sparseRows).toHaveLength(1);
+    expect(sparseRows[0].tileHeight).toBeGreaterThanOrEqual(SPARSE_MIN_HEIGHT);
+
+    const denseRows = layoutGroup(tiles(12), {
+      containerWidth: 1200,
+      gap: 8,
+      targetHeight: 240,
+    });
+    expect(denseRows.length).toBeGreaterThan(1);
+    // 密集段每一行都铺满容器宽度。
+    const first = denseRows[0];
+    const total =
+      first.tiles.reduce((sum, tile) => sum + tile.width, 0) +
+      8 * (first.tiles.length - 1);
+    expect(total).toBeCloseTo(1200, 5);
+  });
+});
+
+describe("tileRatio", () => {  it("优先使用服务端给出的像素尺寸", () => {
     expect(tileRatio({ kind: "image", width: 1600, height: 900 })).toBeCloseTo(
       16 / 9,
       5,

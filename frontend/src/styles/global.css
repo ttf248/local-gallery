@@ -654,9 +654,12 @@
 
   /* 输入框：32–39px 高，触摸设备上 44px。
      用 min-height 而不是 height：工具类给的是 height，min-height
-     在盒模型里压得住它，两条不冲突。 */
+     在盒模型里压得住它，两条不冲突。
+     下拉框（select）算在里头：它同样是手指点开一份清单的地方，
+     40px 高差的那一截在手机上正好点不准。 */
   @media (hover: none), (pointer: coarse) {
-    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+    select {
       min-height: 44px;
     }
   }
@@ -1493,6 +1496,28 @@ button:not(:disabled):active {
     color: var(--fg-muted);
   }
 
+  /* --- 时间线的分段标题 ---
+     月份是这一段的骨架，单独一档：区块标题那档（20px）给月份，
+     张数与来源说明退到辅助信息那档（13px）。张数与标题用同一个
+     字号时，两边互相抢 —— 读的人先看见的是「24 张」，而不是
+     「2024 年 5 月」。 */
+  .timeline-group__title {
+    font-family: var(--font-display);
+    font-size: var(--text-section);
+    line-height: 1.35;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--fg);
+  }
+  .timeline-group__count {
+    font-size: var(--text-meta);
+    color: var(--fg-muted);
+  }
+  .timeline-group__note {
+    font-size: var(--text-meta);
+    color: var(--fg-subtle);
+  }
+
   /* --- 文字按钮 ---
      没有填充也没有描边，只有一枚强调色文字 —— 看着像一段文本，
      但它是能点的控件。命中区按控件算：桌面档至少 28px 高
@@ -1734,22 +1759,6 @@ button:not(:disabled):active {
   }
   .shelf > * {
     scroll-snap-align: start;
-  }
-  /* 货架右端的渐隐提示：内容被截断时给出"还有更多"的暗示。
-     只淡右端 —— 左端是货架起点，淡左端会把第一张卡切掉一块。 */
-  .shelf-fade {
-    -webkit-mask-image: linear-gradient(
-      to right,
-      #000 0,
-      #000 calc(100% - 28px),
-      transparent 100%
-    );
-    mask-image: linear-gradient(
-      to right,
-      #000 0,
-      #000 calc(100% - 28px),
-      transparent 100%
-    );
   }
 }
 

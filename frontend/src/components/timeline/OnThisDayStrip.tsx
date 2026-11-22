@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useOnThisDayAlbums } from "../../hooks/useLibrary";
 import ThumbImage from "../common/ThumbImage";
+import { ClockIcon } from "../common/Icon";
 import { albumRoute } from "../../utils/path";
 import {
   ON_THIS_DAY_THUMB_HEIGHT,
@@ -14,20 +15,18 @@ interface Props {
 }
 
 /**
- * 「那年今日」：往年同一天拍过照的那些照片，紧凑地摆成一条。
+ * 「那年今日」：往年同一天拍过照的那些照片。
  *
- * 它是回忆的入口，不是浏览的主线 —— 时间线才是这一页的主内容。因此
- * 这里只留一条窄窄的缩略图带：看一眼，点进去是那一张照片，回得到它的
- * 相册。
+ * 它是回忆的**入口**，不是这一页的主线 —— 时间线才是主内容。因此收起
+ * 时只是一枚 chip，不占首屏；想看的时候展开，照片带才出现。
  *
- * 摆的是「那天拍的那一张」，不是相册封面：这一条回答的是「往年这天
- * 我拍到了什么」，给一张封面等于什么也没说。
- *
- * 因此缩略图要看得清：太小的一格格认不出拍的是什么，这一行就退化成了
- * 装饰。而且按照片自己的比例摆，不裁成方块 —— 回忆里缺的那一角往往正是
- * 内容本身。整条仍然是横向的一条，宽度不够时自己滚。
+ * 展开的那一条摆的是「那天拍的那一张」，不是相册封面：这一条回答的是
+ * 「往年这天我拍到了什么」，给一张封面等于什么也没说。缩略图按照片
+ * 自己的比例摆，不裁成方块 —— 回忆里缺的那一角往往正是内容本身。
  */
 export default function OnThisDayStrip({ enabled }: Props) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const today = new Date();
   const query = useOnThisDayAlbums(
     "photo",
@@ -42,43 +41,72 @@ export default function OnThisDayStrip({ enabled }: Props) {
       (query.data?.page.items ?? []).filter((item) => item.photo).slice(0, 8),
     [query.data],
   );
+
+  // 展开着的时候点别处就收起：这一条是浮在页面上的，不该挡住别处。
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
   if (photos.length === 0) return null;
 
   return (
-    <div
-      /* 窄屏让「接着看」换到下一行：照片才是这一条的内容，
-         chip 不该从照片那里抢宽度。宽屏再并到一行。
-         右缘渐隐：这一条横向能滚，被裁掉的那张不是坏图，是「还有
-         下一张」的提示。 */
-      className="shelf-fade flex w-full min-w-0 items-center gap-2 overflow-x-auto scroll-thin sm:flex-1"
-      data-testid="on-this-day-strip"
-    >
-      <span className="shrink-0 text-meta text-fg-muted">那年今日</span>
-      {photos.map((item) => {
-        const photo = item.photo;
-        const width = onThisDayThumbWidth(photo?.width, photo?.height);
-        return (
-          <Link
-            key={item.id}
-            to={albumRoute("photo", item.id)}
-            title={`${photo?.date ?? ""} 拍的这张照片`}
-            className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-          >
-            <span
-              className="block overflow-hidden rounded-md"
-              style={{ height: ON_THIS_DAY_THUMB_HEIGHT, width }}
-            >
-              <ThumbImage
-                fileId={photo?.id ?? ""}
-                alt={`${photo?.date ?? ""} 拍的照片`}
-                version={photo?.version}
-                displayWidth={width}
-                className="h-full w-full object-cover"
-              />
-            </span>
-          </Link>
-        );
-      })}
+    <div ref={rootRef} className="relative shrink-0" data-testid="on-this-day-strip">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        title="往年这一天拍过的照片"
+        className="btn btn-sm btn-outline"
+      >
+        <ClockIcon size={13} />
+        那年今日 · {photos.length} 张
+      </button>
+      {open ? (
+        /* 窄屏时靠左展开（那一行的 chip 在左边），宽屏靠右（chip 在
+           筛选行末尾）。两种对齐都贴着视口内侧，不让面板撑出屏幕。
+           面板贴着内容宽：只有两张照片时不必留一块空板。 */
+        <div className="absolute left-0 top-full z-30 mt-2 w-max max-w-[min(560px,calc(100vw-24px))] rounded-lg border border-border bg-bg-elevated p-3 shadow-lg sm:left-auto sm:right-0">
+          <div className="flex items-center gap-2 overflow-x-auto scroll-thin">
+            {photos.map((item) => {
+              const photo = item.photo;
+              const width = onThisDayThumbWidth(photo?.width, photo?.height);
+              return (
+                <Link
+                  key={item.id}
+                  to={albumRoute("photo", item.id)}
+                  title={`${photo?.date ?? ""} 拍的这张照片`}
+                  className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                >
+                  <span
+                    className="block overflow-hidden rounded-md"
+                    style={{ height: ON_THIS_DAY_THUMB_HEIGHT, width }}
+                  >
+                    <ThumbImage
+                      fileId={photo?.id ?? ""}
+                      alt={`${photo?.date ?? ""} 拍的照片`}
+                      version={photo?.version}
+                      displayWidth={width}
+                      className="h-full w-full object-cover"
+                    />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

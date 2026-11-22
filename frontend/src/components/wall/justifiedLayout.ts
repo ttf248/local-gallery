@@ -5,6 +5,9 @@
  * 也不把竖幅照片压成统一的小方块。实现参考图库常见的 justified layout：
  * 逐张累加比例，凑不满一行就换行，并把每行等比缩放到刚好铺满容器宽度。
  *
+ * 密集的一段走 justified；照片少的一段走稀疏排布 —— 少到一两张时，
+ * 把它们铺满整行只是把一张照片撑成巨幅，看不出拍的是什么。
+ *
  * 这里是纯函数，不碰 DOM：布局要在容器宽度、媒体尺寸或相册切换时反复
  * 重算，纯函数才好测、好缓存。
  */
@@ -131,6 +134,134 @@ export function layoutJustified(
   }
   flush(true);
   return rows;
+}
+
+/**
+ * 稀疏段落的张数上限。
+ *
+ * 一个月里只有两三张照片时，那一段不该被拉成一整行：一张照片铺满
+ * 一千二百像素宽，看起来像加载失败，而不是像一张照片。
+ */
+export const SPARSE_GROUP_LIMIT = 3;
+
+/** 稀疏段落的图片高度下限（像素）。 */
+export const SPARSE_MIN_HEIGHT = 220;
+
+/** 稀疏段落的图片高度上限（像素）。 */
+export const SPARSE_MAX_HEIGHT = 280;
+
+/**
+ * 稀疏段落里低于这个高度就退回铺满排布。
+ *
+ * 一行挤成几十像素高的细条，比铺满一行更难看 —— 那种照片已经认不出
+ * 拍的是什么了。
+ */
+const SPARSE_MIN_FIT_HEIGHT = 160;
+
+export interface SparseLayoutOptions {
+  /** 可用宽度（像素）。 */
+  containerWidth: number;
+  /** 图片之间的间距（像素）。 */
+  gap: number;
+  /** 稀疏段落的张数上限。 */
+  maxTiles?: number;
+  /** 图片高度下限（像素）。 */
+  minHeight?: number;
+  /** 图片高度上限（像素）。 */
+  maxHeight?: number;
+}
+
+/**
+ * 稀疏段落：照片少到一行放得下时，按各自的真实比例摆，不铺满容器。
+ *
+ * 高度在区间里往上走，走到容器放不下为止 —— 照片各按自己的比例，
+ * 不为了填满一行而放大，也就不存在拉伸变形。放不下就压到刚好铺满
+ * 容器；连压扁到能看的高度都不到，就交给 justified 排。
+ */
+export function layoutSparse(
+  tiles: readonly WallTile[],
+  options: SparseLayoutOptions,
+): WallRow[] {
+  const { containerWidth, gap } = options;
+  const maxTiles = options.maxTiles ?? SPARSE_GROUP_LIMIT;
+  const minHeight = options.minHeight ?? SPARSE_MIN_HEIGHT;
+  const maxHeight = options.maxHeight ?? SPARSE_MAX_HEIGHT;
+  if (containerWidth <= 0 || tiles.length === 0 || tiles.length > maxTiles) {
+    return [];
+  }
+  const list = tiles.map((tile) => ({
+    id: tile.id,
+    ratio: tile.ratio > 0 ? tile.ratio : DEFAULT_TILE_RATIO,
+  }));
+  const gaps = gap * (list.length - 1);
+  const sumRatio = list.reduce((sum, tile) => sum + tile.ratio, 0);
+  if (sumRatio <= 0) return [];
+
+  // 高度在区间里往上走：能放多高就放多高，但不超过上限。
+  let height = minHeight;
+  while (
+    height < maxHeight &&
+    sumRatio * (height + 10) + gaps <= containerWidth
+  ) {
+    height += 10;
+  }
+  if (sumRatio * height + gaps > containerWidth) {
+    // 区间里最小的高度都放不下：压到刚好铺满容器。
+    height = (containerWidth - gaps) / sumRatio;
+    if (height < SPARSE_MIN_FIT_HEIGHT) return [];
+  }
+  return [
+    {
+      key: `row-sparse-${list[0].id}`,
+      height: height + gap,
+      tileHeight: height,
+      tiles: list.map((tile) => ({
+        id: tile.id,
+        ratio: tile.ratio,
+        width: tile.ratio * height,
+      })),
+    },
+  ];
+}
+
+export interface GroupLayoutOptions {
+  /** 可用宽度（像素）。 */
+  containerWidth: number;
+  /** 图片之间的间距（像素）。 */
+  gap: number;
+  /** 密集段的目标行高（像素）。 */
+  targetHeight: number;
+  /** 稀疏段的张数上限。 */
+  sparseLimit?: number;
+  /** 稀疏段的图片高度下限（像素）。 */
+  sparseMinHeight?: number;
+  /** 稀疏段的图片高度上限（像素）。 */
+  sparseMaxHeight?: number;
+}
+
+/**
+ * 一段照片的排布：稀疏段按真实比例摆，密集段走 justified。
+ *
+ * 同一段里用同一套规则，不按「这一段恰好几张」临时换花样 —— 换一次
+ * 整面墙的节奏就断了。
+ */
+export function layoutGroup(
+  tiles: readonly WallTile[],
+  options: GroupLayoutOptions,
+): WallRow[] {
+  const sparse = layoutSparse(tiles, {
+    containerWidth: options.containerWidth,
+    gap: options.gap,
+    maxTiles: options.sparseLimit,
+    minHeight: options.sparseMinHeight,
+    maxHeight: options.sparseMaxHeight,
+  });
+  if (sparse.length > 0) return sparse;
+  return layoutJustified(tiles, {
+    containerWidth: options.containerWidth,
+    targetHeight: options.targetHeight,
+    gap: options.gap,
+  });
 }
 
 /**

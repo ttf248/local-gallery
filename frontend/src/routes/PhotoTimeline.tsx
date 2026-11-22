@@ -6,6 +6,7 @@ import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../components/wall/PhotoWall";
+import DensityControl from "../components/wall/DensityControl";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import ContextMenu from "../components/album/ContextMenu";
@@ -65,12 +66,16 @@ function timelineErrorDescription(error: unknown): string {
  * - 「日期未知」的那一段单独摆着，不混进任何一年；
  * - 顶部的「年份 / 月份 / 照片还是视频」把筛选放在地址栏里，跳过去再
  *   退回来都还在原地。
+ *
+ * 时间来源的分布收在可展开的说明里：那是解释（哪些日期是猜出来的），
+ * 不是这一屏的主内容，一直摊在筛选行下面会把注意力从照片上拽走。
  */
 export default function PhotoTimeline() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const pushToast = useUIStore((s) => s.pushToast);
   const density = usePhotoStore((s) => s.density);
+  const setDensity = usePhotoStore((s) => s.setDensity);
   const picks = usePicks();
   const menu = useContextMenu<LibraryFeedItem>();
 
@@ -234,28 +239,31 @@ export default function PhotoTimeline() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 border-b border-border-faint bg-bg">
         <div className="page-shell">
+          {/* 页头：标题只说这一页是什么，数量与时间范围退到下面一行。
+              「全部照片」是这一页的内容；有多少张、跨哪几年是事实，
+              不是标题。 */}
           <div className="album-bar">
             <div className="min-w-0 flex-1">
-              <p className="page-eyebrow">照片</p>
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <h1 className="album-bar__title truncate">按时间浏览</h1>
-                <div className="album-bar__meta tabular-nums">
-                  <span>
-                    <span className="text-fg font-medium">{feed.total}</span> 张
-                  </span>
-                  {range ? (
-                    <>
-                      <span className="text-fg-subtle">·</span>
-                      <span>{range}</span>
-                    </>
-                  ) : null}
-                  {feed.isFetchingNextPage ? (
-                    <>
-                      <span className="text-fg-subtle">·</span>
-                      <span className="text-fg-subtle">正在加载下一批</span>
-                    </>
-                  ) : null}
-                </div>
+              <h1 className="page-title truncate">全部照片</h1>
+              <div
+                className="album-bar__meta mt-1 tabular-nums"
+                data-testid="timeline-meta"
+              >
+                <span>
+                  <span className="text-fg font-medium">{feed.total}</span> 张
+                </span>
+                {range ? (
+                  <>
+                    <span className="text-fg-subtle">·</span>
+                    <span>{range}</span>
+                  </>
+                ) : null}
+                {feed.isFetchingNextPage ? (
+                  <>
+                    <span className="text-fg-subtle">·</span>
+                    <span className="text-fg-subtle">正在加载下一批</span>
+                  </>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -271,7 +279,9 @@ export default function PhotoTimeline() {
             </div>
           </div>
           {hasContent ? (
-            <div className="pb-3 pt-2">
+            /* 筛选与回忆入口同在一行：这一页的第一屏是照片，能收进
+               头部的都收进头部，别让一条一条的横带往下推。 */
+            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pb-3 pt-1">
               <TimelineToolbar
                 years={feed.years}
                 filter={filter}
@@ -280,30 +290,33 @@ export default function PhotoTimeline() {
                 unknown={feed.unknown}
                 onChange={applyFilter}
               />
+              <div className="flex flex-wrap items-center gap-2">
+                {/* 密度：默认是每段各算各的行高（稀疏的月份大一些，
+                    密集的月份保持浏览密度）。用户明确要一档时，
+                    整面墙都按那一档来 —— 明确选过的东西不该被
+                    自动改回去。窄屏不给：那里的墙固定两列，
+                    给一个改不动的控件只是噪音。 */}
+                <div className="hidden items-center gap-2 md:flex">
+                  <span className="text-meta text-fg-subtle">密度</span>
+                  <DensityControl value={density} onChange={setDensity} />
+                </div>
+                <OnThisDayStrip enabled={hasContent} />
+                {resume ? (
+                  /* 「接着看」是一个入口，不是一句说明：用次级按钮的样子，
+                     免得它读起来像一行正文。 */
+                  <Link
+                    to={resume.to}
+                    className="btn btn-sm btn-outline"
+                    title="回到最近翻过的那本相册"
+                  >
+                    接着看 · {resume.title}
+                  </Link>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </div>
       </header>
-
-      {/* 回忆与继续：一条窄窄的入口，不与时间线抢主视觉。 */}
-      {hasContent ? (
-        <div className="page-shell shrink-0 border-b border-border-faint py-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <OnThisDayStrip enabled={hasContent} />
-            {resume ? (
-              /* 「接着看」是一个入口，不是一句说明：用次级按钮的样子，
-                 免得它读起来像一行正文。 */
-              <Link
-                to={resume.to}
-                className="btn btn-sm btn-outline"
-                title="回到最近翻过的那本相册"
-              >
-                接着看 · {resume.title}
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
         {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。

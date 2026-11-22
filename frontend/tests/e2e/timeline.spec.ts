@@ -24,11 +24,15 @@ test("照片首页就是时间线：按日期精度分段，来源照实说", as
   await scannedNodes(request, "photo");
   await page.goto("/photo");
 
-  await expect(page.getByRole("heading", { name: "按时间浏览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
   const headers = page.getByTestId("timeline-group-header");
   await expect(headers.first()).toBeVisible();
   await expect(headers.first()).toContainText("年");
   await expect(headers.first()).toContainText("月");
+  // 时间来源的分布收在可展开的说明里：收起时看不见，展开一次就照实说。
+  const toggle = page.getByRole("button", { name: "时间来源与日期精度" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
   const legend = page.getByTestId("timeline-source-legend");
   await expect(legend).toBeVisible();
   await expect(legend).toContainText("张");
@@ -47,6 +51,7 @@ test("年份与年月目录保留原精度，不补出一月或某一天", async
   const yearHeader = page.getByTestId("timeline-group-header").first();
   await expect(yearHeader).toContainText("2018 年");
   await expect(yearHeader).not.toContainText("1 月");
+  await page.getByRole("button", { name: "时间来源与日期精度" }).click();
   await expect(page.getByTestId("timeline-precision-legend")).toContainText(
     "仅年份 1 张",
   );
@@ -55,6 +60,7 @@ test("年份与年月目录保留原精度，不补出一月或某一天", async
   const monthHeader = page.getByTestId("timeline-group-header").first();
   await expect(monthHeader).toContainText("2019 年 11 月");
   await expect(monthHeader).not.toContainText("11 月 1 日");
+  await page.getByRole("button", { name: "时间来源与日期精度" }).click();
   await expect(page.getByTestId("timeline-precision-legend")).toContainText(
     "仅年月 1 张",
   );

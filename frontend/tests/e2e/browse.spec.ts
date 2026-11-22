@@ -44,7 +44,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "珍藏" })).toBeVisible();
   await expect(sidebar.getByRole("link", { name: "未读" })).toHaveCount(0);
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "按时间浏览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
 
   const switcher = page.getByRole("group", { name: "工作台模式" });
   await switcher.getByRole("button", { name: "漫画" }).click();
@@ -2845,6 +2845,10 @@ test("首页「那年今日」摆的是当天那张照片，并能回到原相�
 
   const strip = page.getByTestId("on-this-day-strip");
   await expect(strip).toBeVisible();
+  // 收起时只是一枚 chip，不占首屏；展开才是那条照片带。
+  const entry = strip.getByRole("button", { name: /那年今日/ });
+  await expect(entry).toHaveAttribute("aria-expanded", "false");
+  await entry.click();
   // 这一段摆的是照片本身，不是相册卡：相册的通用封面回答不了
   // 「往年这天我拍到了什么」。点它就回到那本相册。
   const photo = strip.getByRole("link").first();

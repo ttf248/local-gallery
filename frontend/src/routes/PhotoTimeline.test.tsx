@@ -221,6 +221,21 @@ function renderTimeline(entry = "/photo") {
   );
 }
 
+// 页头：主标题说这一页是什么，数量与时间范围退到次要信息。
+it("主标题是「全部照片」，数量与时间范围是次要信息", async () => {
+  feed.years = [
+    { year: 2024, count: 1, months: [{ month: 5, count: 1 }] },
+    { year: 2023, count: 1, months: [{ month: 8, count: 1 }] },
+  ];
+  renderTimeline();
+  expect(
+    await screen.findByRole("heading", { name: "全部照片" }),
+  ).toBeInTheDocument();
+  const meta = screen.getByTestId("timeline-meta");
+  expect(meta.textContent).toContain("3 张");
+  expect(meta.textContent).toContain("2023 – 2024");
+});
+
 // 时间线按月份分段，每段标题写清是几月。
 it("时间线按月份分段，标题写清是几月", async () => {
   renderTimeline();
@@ -263,9 +278,15 @@ it("没有拍摄证据的那一段单独摆着", async () => {
   ).toBe(true);
 });
 
-// 顶部的来源说明照实说这一段时间是怎么来的。
-it("顶部说明时间来源的分布", async () => {
+// 时间来源的分布收在可展开的说明里：默认收起，展开一次就照实说清
+// 这一段时间是怎么来的。
+it("时间来源的分布收在可展开的说明里", async () => {
   renderTimeline();
+  const toggle = screen.getByRole("button", { name: "时间来源与日期精度" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.queryByTestId("timeline-source-legend")).toBeNull();
+
+  fireEvent.click(toggle);
   const legend = await screen.findByTestId("timeline-source-legend");
   expect(legend.textContent).toContain("拍摄时间 1 张");
   expect(legend.textContent).toContain("文件名推断 1 张");
@@ -327,6 +348,7 @@ it("显示年月与年份精度而不伪造月份或日期", async () => {
   expect(headers.map((node) => node.textContent).join(" ")).not.toContain(
     "2018 年 1 月",
   );
+  fireEvent.click(screen.getByRole("button", { name: "时间来源与日期精度" }));
   const legend = await screen.findByTestId("timeline-precision-legend");
   expect(legend.textContent).toContain("精确到日 1 张");
   expect(legend.textContent).toContain("仅年月 1 张");

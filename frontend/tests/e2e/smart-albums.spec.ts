@@ -72,7 +72,7 @@ test("主题归发现页，照片首页不再摆主题预览", async ({ page }) 
 
   // 照片首页是时间线：主题那一节搬去发现页，首页不再摆它。
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "按时间浏览" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "主题", exact: true }),
   ).toHaveCount(0);
