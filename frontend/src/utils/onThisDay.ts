@@ -7,7 +7,7 @@
  */
 
 /** 缩略图的高度（CSS 像素）。 */
-export const ON_THIS_DAY_THUMB_HEIGHT = 96;
+export const ON_THIS_DAY_THUMB_HEIGHT = 160;
 
 /**
  * 缩略图的宽度范围（CSS 像素）。
@@ -15,8 +15,8 @@ export const ON_THIS_DAY_THUMB_HEIGHT = 96;
  * 宽度按照片自身的比例算，但两头要收住：竖幅照片不能窄成一条缝，
  * 极端宽幅（全景）也不能把一行撑散。
  */
-export const ON_THIS_DAY_MIN_THUMB_WIDTH = 64;
-export const ON_THIS_DAY_MAX_THUMB_WIDTH = 176;
+export const ON_THIS_DAY_MIN_THUMB_WIDTH = 96;
+export const ON_THIS_DAY_MAX_THUMB_WIDTH = 240;
 
 /**
  * 缩略图的宽度（CSS 像素）：按照片自身的比例算，两头收住。
