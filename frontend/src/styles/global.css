@@ -24,6 +24,9 @@
     background: var(--bg);
     border-bottom: 1px solid var(--border);
   }
+  /* 眉标：一句说明这一屏是什么的小字，用强调色标出来。
+     它不再带一根装饰性的短横 —— 那根横线在每页页头重复出现，读的人
+     只会当成版式花纹，页头因此多了一层没有信息的东西。 */
   .toolbar-caption,
   .page-eyebrow {
     display: flex;
@@ -32,20 +35,14 @@
     color: var(--accent-ink);
     font-size: var(--text-meta);
     font-weight: 600;
-    letter-spacing: 0.06em;
-  }
-  .page-eyebrow::before {
-    content: "";
-    width: 18px;
-    height: 2px;
-    background: var(--accent);
+    letter-spacing: 0.02em;
   }
   .page-heading {
     padding-top: var(--page-head-pad-top);
     padding-bottom: var(--page-head-pad-bottom);
   }
   .page-heading .page-title {
-    margin-top: 10px;
+    margin-top: 8px;
   }
   /* 区块：页面里一段自成一体的内容（一个网格、一列清单、一个面板）。
      区块与区块之间的间距统一由 --section-gap 决定，组件里不再写
@@ -85,9 +82,9 @@
     align-items: center;
     position: relative;
     gap: 12px;
-    height: 44px;
+    height: 42px;
     padding-inline: 12px;
-    border-radius: var(--radius-media);
+    border-radius: var(--radius-control);
     font-size: var(--text-body);
     color: var(--rail-muted);
     transition:
@@ -109,6 +106,9 @@
       color: var(--rail-fg);
     }
   }
+  /* 选中态：强调色淡底 + 强调色的墨 + 一档字重。
+     三样一起说「你现在在这一页」—— 底色说是，字重也说是，颜色只是
+     顺带把那一条标成品牌蓝。 */
   .nav-entry.is-active {
     background: var(--rail-active);
     color: var(--rail-active-fg);
@@ -119,10 +119,10 @@
     padding-inline: 0;
   }
   .app-sidebar :focus-visible {
-    outline-color: var(--rail-fg);
+    outline-color: var(--focus);
   }
   .app-sidebar .is-active :focus-visible {
-    outline-color: var(--rail-active-fg);
+    outline-color: var(--focus);
   }
   .home-overview {
     display: grid;
@@ -757,11 +757,10 @@
   }
 
   /* 工具条：列表页顶部那一行控件（视图 chip · 计数 · 排序 · 视图模式）。
-     上下各一条细线把它与页头、与内容分开；线用 faint 色，band 因此
-     只是「一行控件」，不是一块面板。 */
+     只在下面留一条细线把它与内容分开 —— 上下各一条线时，这一行控件
+     被夹在两条线之间，读起来像一块独立的面板。 */
   .filter-strip {
     margin-bottom: var(--block-gap);
-    border-top: 1px solid var(--border-faint);
     border-bottom: 1px solid var(--border-faint);
     padding-block: 10px;
   }
@@ -906,7 +905,7 @@
     align-items: start;
     padding: 24px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
+    border-radius: var(--radius-tile);
     background: var(--bg-elevated);
     box-shadow: var(--shadow-xs);
   }
@@ -1198,10 +1197,17 @@ a:focus-visible,
 [role="link"]:focus-visible {
   outline-offset: 1px;
 }
+/* 表单控件同理：输入框自己有一圈描边，焦点环再往外挪两像素就成了
+   两圈线。 */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 1px;
+}
 
-/* 阅读器的浮层是暗色的，而浅色主题的强调色恰好是近黑的石墨色
-   （--accent: #1f242b）—— 焦点环会变成"黑底上的黑框"，等于没有焦点
-   指示。暗色浮层里改用半透明白作为焦点环颜色。
+/* 阅读器的浮层是暗色的，浅色主题的强调色是品牌蓝 —— 焦点环压在深色
+   浮层上读得清，但阅读器是纯暗场，用半透明白更像「这一层自己有一套
+   规矩」。
    这条规则必须不分层写：未分层的声明优先级高于 @layer utilities，
    否则压不过上面的 :focus-visible 与 Tailwind 的 outline-none。 */
 [data-tone="reader"] :focus-visible {
@@ -1396,17 +1402,46 @@ button:not(:disabled):active {
     padding-inline: 0;
   }
 
+  /* === 容器变体 ===
+     一套变体，既能落在页面的内容容器上，也能落在页面里的某一段上：
+       gallery  媒体优先：照片墙与相册网格用它 —— 列更宽、行距更松，
+                照片占更多画面。
+       standard 通用内容页的默认节奏。
+       focused  聚焦：少量内容摆出来给人好好看 —— 单栏窄内容、
+                整体居中，读者的视线不必横跨整屏。
+     变体只改宽度与密度，不改左右留白：留白一变，这一页的内容左缘
+     就离开了网格线，翻页时内容会左右跳。 */
+  .container--standard {
+    max-width: var(--page-max);
+  }
+  .container--gallery {
+    max-width: var(--page-max);
+    /* 媒体网格的列宽与间距在容器这一层放大：网格跟着容器走，
+       组件里不必再写一遍。 */
+    --library-col: 236px;
+    --library-col-dense: 196px;
+    --library-col-spacious: 280px;
+    --library-col-comic: 184px;
+    --section-gap: 40px;
+  }
+  .container--focused {
+    /* 聚焦栏：内容窄一些、整体居中。放在页面里的一段上（精选陈列），
+       不放在整页上 —— 整页收窄会把页头与导航一起挤窄。 */
+    max-width: 960px;
+    margin-inline: auto;
+  }
+
   /* --- 页面主标题 ---
-     两档：工作台首页用 --text-page（42px），其余页面用 --text-page-sm
-     （28px）。所有页面都顶着一个 42px 的大标题，标题就失去了层级 ——
+     两档：主标题 --text-page（32px），其余页面用 --text-page-sm
+     （26px）。所有页面都顶着同一个字号，标题就失去了层级 ——
      首页与「最近浏览」看起来是同一件事。 */
   .page-title {
     font-family: var(--font-display);
     font-size: var(--text-page);
-    line-height: 1.2;
+    line-height: 1.25;
     font-weight: 600;
     /* 标题字距收紧：编辑式版面靠字距与字重分层，不靠换字族。 */
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
     color: var(--fg);
   }
   .page-title--sm {
@@ -1446,7 +1481,12 @@ button:not(:disabled):active {
     min-height: 28px;
   }
 
-  /* --- 按钮：三种语义，尺寸统一（h-8 / h-9 / h-10） --- */
+  /* --- 按钮 ---
+     三种语义，一套尺寸语言：
+       primary  主操作：强调色实底 + 反色字。一屏最多一枚。
+       outline  次级操作：一圈细线，不垫底色。
+       ghost    弱操作：只有文字，指针落上去才给一层浅底。
+     高度两档（40 / 32），圆角与控件同档（10px）。 */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -1470,13 +1510,13 @@ button:not(:disabled):active {
     cursor: not-allowed;
   }
   .btn-sm {
-    height: 34px;
-    padding-inline: 13px;
-    font-size: var(--text-body);
-    border-radius: var(--radius-media);
+    height: 32px;
+    padding-inline: 12px;
+    font-size: var(--text-meta);
+    border-radius: var(--radius-control);
   }
 
-  /* 主操作使用强调色：浅色主题是近黑的石墨，深色主题是近白。 */
+  /* 主操作使用强调色：浅色主题是品牌蓝，深色主题是浅蓝。 */
   .btn-primary {
     background: var(--accent);
     color: var(--accent-contrast);
@@ -1539,15 +1579,41 @@ button:not(:disabled):active {
     }
   }
 
+  /* --- 输入框 ---
+     输入框、下拉与搜索框共用这一套：描边 + 圆角 10px，聚焦时描边换成
+     强调色并加一圈淡光。组件里用 .field 标出来的那几处（全局搜索、
+     时间线的年份与月份、设置里的输入）共用这一份，其余输入框由各自
+     组件的类名给出同样的形状。 */
+  .field {
+    height: 40px;
+    padding-inline: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+    background: var(--bg-elevated);
+    color: var(--fg);
+    font-size: var(--text-body);
+    transition:
+      border-color var(--dur-fast) var(--ease-out),
+      box-shadow var(--dur-fast) var(--ease-out);
+  }
+  .field::placeholder {
+    color: var(--fg-subtle);
+  }
+  /* 聚焦：描边换成强调色，焦点环仍由全局那条规则画（见 :focus-visible），
+     两样一起说「现在焦点在这里」，不多画第二圈光晕。 */
+  .field:focus-visible {
+    border-color: var(--focus);
+  }
+
   /* --- 筛选 chip：视图切换 / 标签切换 --- */
   .chip {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    height: 34px;
+    height: 32px;
     padding-inline: 12px;
-    border-radius: var(--radius-media);
-    font-size: var(--text-body);
+    border-radius: var(--radius-control);
+    font-size: var(--text-meta);
     color: var(--fg-muted);
     white-space: nowrap;
     transition:

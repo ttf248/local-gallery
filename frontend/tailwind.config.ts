@@ -67,12 +67,13 @@ export default {
       // 圆角数值只有一份来源（tokens.css 的语义 token）。Tailwind 侧保留
       // 数字档名，避免同一个圆角出现「rounded-lg」和「rounded-tile」两套
       // 叫法；样式表内部一律用语义名 var(--radius-tile) 之类。
+      // 卡片与面板同属一档（12px），xl 是 lg 的别名。
       borderRadius: {
         DEFAULT: "var(--radius-xs)",
         sm: "var(--radius-media)",
         md: "var(--radius-control)",
         lg: "var(--radius-tile)",
-        xl: "var(--radius-panel)",
+        xl: "var(--radius-tile)",
       },
       fontSize: {
         badge: "var(--text-badge)",

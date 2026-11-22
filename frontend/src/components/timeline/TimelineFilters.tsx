@@ -13,8 +13,9 @@ interface Props {
   onChange: (next: TimelineFilter) => void;
 }
 
-const SELECT_CLASS =
-  "h-[34px] rounded-md border border-border bg-bg px-2 text-body text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus";
+/* 下拉框用全站共用的输入框样式（.field）：高度、圆角、描边与聚焦
+   状态都只有一处定义，筛选行里的控件不再各写各的边框色。 */
+const SELECT_CLASS = "field cursor-pointer";
 
 /**
  * 时间线的定位与筛选：跳年、跳月、只看照片或视频。

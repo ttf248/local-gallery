@@ -265,7 +265,7 @@ export default function Library() {
 
   return (
     <div className="library-page min-h-full">
-      <div className="page-shell">
+      <div className="page-shell container--gallery">
         {/* 页头：这一层是什么、在哪棵树上。 */}
         <header className="library-head">
           <div className="min-w-0">

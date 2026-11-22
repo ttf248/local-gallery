@@ -656,7 +656,7 @@ function CollectionView({
         ) : (
           /* 网格与页头共用同一条留白线：之前这里少了一层容器，
              卡片贴到了侧栏边上，与其它页面的左缘对不齐。 */
-          <section className="page-shell">
+          <section className="page-shell container--gallery">
             <div className="pb-10">
               <AlbumGrid
                 selectable

@@ -251,7 +251,7 @@ export default function Picks({
         </header>
       )}
 
-      <div className="page-shell min-h-0 flex-1 pb-2">
+      <div className="page-shell container--focused min-h-0 flex-1 pb-2">
         {/* 嵌在「我的」里时页头由外层给：精选有多少张要说在这页上 ——
             收藏与最近浏览的页签都报「共 N 项」，精选只摆照片会显得
             像漏了计数。 */}

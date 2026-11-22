@@ -21,7 +21,7 @@
     /* 面板不再是一只盒子：没有描边、没有底色，它就是画布上的一段内容，
        靠标题、留白与细线分层。 */
     padding-block: 6px;
-    border-radius: var(--radius-panel);
+    border-radius: var(--radius-tile);
     background: var(--panel-bg);
     color: var(--panel-fg);
   }

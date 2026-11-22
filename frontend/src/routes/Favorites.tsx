@@ -380,7 +380,7 @@ export default function Favorites({ embedded = false }: { embedded?: boolean } =
           }
         />
       ) : (
-        <section className="page-shell">
+        <section className="page-shell container--gallery">
           <div className="pb-10">
             {/* 收藏是"精选陈列"，不是"全量浏览"：用更疏的网格，
             与未读 / 最近 / 全部图像的密集清单区分开。 */}

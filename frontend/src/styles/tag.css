@@ -20,9 +20,11 @@
     align-items: center;
     gap: 32px;
     padding: 30px;
-    background: var(--feature-bg);
+    /* 页头图这一块用次级底色托住：它是一段介绍，不是一张卡片，
+       但介绍与下面的照片墙之间需要一层底，否则两块内容糊在一起。 */
+    background: var(--bg-subtle);
     border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
+    border-radius: var(--radius-tile);
   }
 .tag-feature__image {
     height: 220px;

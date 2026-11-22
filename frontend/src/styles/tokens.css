@@ -1,28 +1,38 @@
-/* Modern Editorial Gallery：一套克制的编辑式界面。
-   画布与侧栏是同一族冷灰（浅色 #F8F9FB / #F2F4F7，深色 #11151B / #161C24），
-   唯一的彩色是强调色（浅色 #476C8D，深色 #91BDD9）——它只出现在眉标、
-   选中态、主按钮与焦点环上。照片与漫画是同一间展厅里的两种陈列，
-   差别落在封面材质与版面，不落在色相上。
+/* Pearl White / Midnight Slate：Local Gallery 的双主题视觉系统。
+   浅色是一间珍珠白的展厅：画布 #F8F9FB，侧栏 #F2F4F7，正文 #18212B，
+   唯一的彩色是品牌蓝 #476C8D；深色是午夜石板：画布 #11151B，面板
+   #1A2028，侧栏 #161C24，正文 #F0F3F7，品牌蓝 #91BDD9。
 
-   视觉值集中维护，主题保持成套。 */
+   视觉值集中维护，主题保持成套：同一份名字在两套主题里指的是同一个
+   角色（画布、面板、文字、边框、强调色），因此换主题时组件一行都不用改。
+   照片与漫画是同一间展厅里的两种陈列，差别落在封面材质与版面，不落在
+   色相上 —— 两个工作台共用同一套强调色。 */
 :root,
 :root[data-theme="light"] {
   /* 显式声明 color-scheme：系统是暗色而用户手动选了浅色时，原生控件
      （下拉、滚动条槽、表单控件）也要跟着变浅，否则会出现深色弹层
      压在浅色页面上。 */
   color-scheme: light;
-  --bg: #f8f9fb;
-  --bg-elevated: #ffffff;
-  --bg-subtle: #f2f4f7;
-  --bg-strong: #e1e6eb;
-  --bg-media: #17191a;
-  --fg: #16191d;
-  --fg-muted: #4a5462;
-  --fg-subtle: #656e7b;
+  /* --- 画布与面板 --- */
+  --bg: #f8f9fb; /* 画布 */
+  --bg-elevated: #ffffff; /* 面板、卡片、浮层 */
+  --bg-subtle: #f2f4f7; /* 次级底色：侧栏、输入框、悬停 */
+  --bg-strong: #e6eaef; /* 更实的一档：进度槽、占位 */
+  --bg-media: #17191a; /* 媒体占位底 */
+  /* --- 文字 --- */
+  --fg: #18212b; /* 主文字 */
+  --fg-muted: #56606d; /* 次要文字 */
+  --fg-subtle: #636c7a; /* 辅助文字：计数、来源、说明 */
+  /* --- 强调色：整套界面唯一的彩色 --- */
   --accent: #476c8d;
-  --accent-hover: #395a78;
-  --accent-soft: #e5ecf2;
+  --accent-hover: #3a5b7a;
+  --accent-soft: #e7edf3; /* 选中态的淡底 */
+  /* 强调色的「墨」：压在强调色淡底上的文字色。直接用 --accent 只有
+     4.6:1，13px 的辅助文字贴着 AA 下限走。 */
+  --accent-ink: #35566f;
+  /* 压在强调色实底上的文字色。 */
   --accent-contrast: #ffffff;
+  /* --- 语义色 --- */
   --danger: #b42318;
   /* 压在危险色上的文字色。危险色在明暗两套主题里一深一浅（浅色主题是
      深红，深色主题是浅红），压在它上面的字要跟着翻，否则深色主题里
@@ -33,36 +43,41 @@
   /* 收藏是全局一份数据，不属于任何一个工作台，因此它的颜色也不跟着模式走。
      独立成色是为了不和 --warning（扫描告警）、--accent（强调色）撞义。 */
   --favorite: #b8477f;
-  /* 焦点环用强调色：它在明暗两套画布上都有足够对比度，而近黑的
-     --accent 压在深色照片上会成一条看不见的黑边。 */
+  /* --- 描边 --- */
+  --border: #e3e7ec; /* 分隔线、控件描边 */
+  --border-strong: #c6ccd4; /* 更实的一档：选中控件、悬停 */
+  --border-faint: #eef1f4; /* 最淡的一档：行与行之间的分隔 */
+  /* --- 焦点 --- */
+  /* 焦点环用强调色：它在明暗两套画布上都有足够对比度，而近黑的描边
+     压在深色照片上会成一条看不见的黑边。 */
   --focus: var(--accent);
-  --border: #e4e8ed;
-  --border-strong: #c9d0d8;
-  --border-faint: #edf0f3;
-  /* 强调色的「墨」：压在强调色淡底（--accent-soft）上的文字色。
-     直接用 --accent 只有 4.6:1，12.5px 的小字贴着 AA 下限走。 */
-  --accent-ink: #35566f;
+  /* --- 侧栏：画布旁边的一条浅色带 --- */
   --rail-bg: #f2f4f7;
-  --rail-fg: #16191d;
-  --rail-muted: #5b6572;
-  --rail-hover: #e7eaef;
-  --rail-line: #e4e8ed;
-  --rail-active: #e2eaf2;
-  --rail-active-fg: #2f5372;
+  --rail-fg: #18212b;
+  --rail-muted: #5c6672;
+  --rail-hover: #e8ebef;
+  --rail-line: #e3e7ec;
+  --rail-active: #e3eaf2; /* 选中项：强调色淡底 */
+  --rail-active-fg: #2f5372; /* 选中项：强调色的墨 */
   --rail-accent: #476c8d;
   --rail-accent-fg: #ffffff;
-  /* 圆角按「它是什么形状」命名，而不是按大小编号：
-     编号式（sm/md/lg/xl）让同一个数值在不同语境里被当成不同含义，
-     于是组件里开始出现 11px / 14px / 18px 这类硬编码。 */
-  --radius-xs: 5px; /* 小徽标、输入框内的极小块 */
-  --radius-media: 10px; /* 封面内层、进度条、小药丸 */
-  --radius-control: 12px; /* 按钮、chip、输入框、浮动工具条 */
-  --radius-tile: 16px; /* 卡片 */
-  --radius-panel: 20px; /* 面板、摘要块 */
-  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.05);
-  --shadow-sm: 0 2px 8px rgba(16, 24, 40, 0.06);
-  --shadow-md: 0 12px 28px rgba(16, 24, 40, 0.08);
-  --shadow-lg: 0 22px 56px rgba(16, 24, 40, 0.12);
+  /* --- 圆角 ---
+     三档就够：控件 10px、图片 8px、卡片 12px。小徽标再收一档。
+     圆角按「它是什么形状」命名，而不是按大小编号：编号式（sm/md/lg/xl）
+     让同一个数值在不同语境里被当成不同含义，于是组件里开始出现
+     11px / 14px / 18px 这类硬编码。 */
+  --radius-xs: 6px; /* 小徽标、键帽、进度条 */
+  --radius-media: 8px; /* 图片、封面 */
+  --radius-control: 10px; /* 按钮、chip、输入框、浮动工具条 */
+  --radius-tile: 12px; /* 卡片与面板 */
+  /* --- 阴影 ---
+     只给真正浮起来的东西用：浮层、拖拽把手、贴底的工具条。卡片与
+     面板靠描边与留白分层，不靠投影 —— 一屏十几张带投影的卡片，页面
+     就变成了一堆浮在半空的盒子。 */
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-sm: 0 2px 6px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 10px 24px rgba(16, 24, 40, 0.07);
+  --shadow-lg: 0 20px 48px rgba(16, 24, 40, 0.1);
   /* === 版式骨架 ===
      页面只有三层，纵向节奏在这里定一次，组件里不再各写各的
      pt-9 / pt-10 / pb-14：
@@ -105,25 +120,28 @@
   --page-head-pad-bottom: 20px; /* 页头与第一个内容块之间 */
   --section-gap: 32px; /* 区块与区块之间 */
   --block-gap: 16px; /* 区块标题与该区块内容之间 */
+  /* --- 字体 ---
+     全站一套现代无衬线：标题与正文同族，靠字距、字重与字号分层，
+     不靠换字族换气质。 */
   --font-sans:
     "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
     "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: "SF Mono", "Consolas", "Liberation Mono", monospace;
-  /* 展示字重与正文同族：编辑式版面靠字距与字重分层，不靠换字族。
-     保留这一个角色 token，标题处写 var(--font-display)，将来真要换
-     展示字族时只改这一行。 */
+  /* 展示字重与正文同族：保留这一个角色 token，标题处写
+     var(--font-display)，将来真要换展示字族时只改这一行。 */
   --font-display: var(--font-sans);
-  /* 字号阶梯：每一档只承担一个角色，中文正文不低于 12.5px。
-     --text-label 是补上的一档：卡片标题原先只有 14px，与区块标题 21px
-     之间空着一档，标题撑不起视觉锚点。 */
-  --text-badge: 11.5px; /* 徽章、角标、键帽 —— 唯一允许小于 12.5px 的层级 */
-  --text-meta: 12.5px; /* 次要信息：时间、来源、计数 */
-  --text-body: 14px; /* 正文、元信息行、按钮与输入的文字 */
+  /* --- 字号阶梯 ---
+     五档承担全部层级：主标题 32 · 次级标题 26 · 区块 20 · 正文 15 ·
+     辅助 13。徽章 11.5px 是唯一允许更小的一档（角标与键帽）。
+     正文与辅助文字的中文可读性下限是 13px，不再有 11px / 12px 的正文。 */
+  --text-badge: 11.5px; /* 徽章、角标、键帽 —— 唯一允许小于 13px 的层级 */
+  --text-meta: 13px; /* 辅助信息：时间、来源、计数 */
+  --text-body: 15px; /* 正文、元信息行、按钮与输入的文字 */
   --text-label: 16px; /* 卡片标题、列表行标题 */
-  --text-section: 21px; /* 区块标题 */
-  --text-bar: 22px; /* 沉浸窄条页头的标题：压在内容上，比列表页标题小一档 */
-  --text-page-sm: 28px; /* 次级页标题：最近 / 收藏 / 未读 / 设置 */
-  --text-page: 42px; /* 工作台首页标题 */
+  --text-section: 20px; /* 区块标题 */
+  --text-bar: 20px; /* 沉浸窄条页头的标题：压在内容上，比区块标题大不了一档 */
+  --text-page-sm: 26px; /* 次级页标题：最近 / 收藏 / 未读 / 设置 */
+  --text-page: 32px; /* 主标题：工作台首页 */
   /* 间距不另立 token：Tailwind 的 4px 栅格已经是全局唯一阶梯，
      再叠一套 --space-* 只会制造第二真相（历史上它一次也没被引用过）。 */
   /* 书封材质：漫画工作台把每一本相册当成一件独立的东西展示，
@@ -145,40 +163,49 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #11151b;
-  --bg-elevated: #161c24;
-  --bg-subtle: #1c232c;
-  --bg-strong: #28313c;
-  --bg-media: #0d0f12;
-  --fg: #e7ecf2;
-  --fg-muted: #a3aebb;
-  --fg-subtle: #8b97a5;
+  /* --- 画布与面板 --- */
+  --bg: #11151b; /* 画布 */
+  --bg-elevated: #1a2028; /* 面板、卡片、浮层 */
+  --bg-subtle: #1e2630; /* 次级底色：侧栏、输入框、悬停 */
+  --bg-strong: #2a3440; /* 更实的一档：进度槽、占位 */
+  --bg-media: #0d0f12; /* 媒体占位底 */
+  /* --- 文字 --- */
+  --fg: #f0f3f7; /* 主文字 */
+  --fg-muted: #a3aebc; /* 次要文字 */
+  --fg-subtle: #8593a2; /* 辅助文字：计数、来源、说明 */
+  /* --- 强调色：整套界面唯一的彩色 --- */
   --accent: #91bdd9;
-  --accent-hover: #a9cde3;
-  --accent-soft: #1b2a36;
-  --accent-contrast: #0f141a;
+  --accent-hover: #a8cbe3;
+  --accent-soft: #1c2b38; /* 选中态的淡底 */
+  --accent-ink: #a9cbe2; /* 压在强调色淡底上的文字色 */
+  --accent-contrast: #0f141a; /* 压在强调色实底上的文字色 */
+  /* --- 语义色 --- */
   --danger: #ff9a90;
   --danger-ink: #16181c;
   --success: #79d3a4;
   --warning: #e0b169;
   --favorite: #e08bb4;
-  --border: #232b34;
-  --border-strong: #3a4553;
-  --border-faint: #1a212a;
-  --accent-ink: #a9cbe2;
+  /* --- 描边 --- */
+  --border: #242d38;
+  --border-strong: #3c4756;
+  --border-faint: #1b222b;
+  /* --- 焦点 --- */
+  --focus: var(--accent);
+  /* --- 侧栏：画布旁边的一条更亮一点的带 --- */
   --rail-bg: #161c24;
-  --rail-fg: #e7ecf2;
-  --rail-muted: #8b97a5;
-  --rail-hover: #1e2731;
-  --rail-line: #232b34;
-  --rail-active: #1d2e3c;
-  --rail-active-fg: #b7d6ec;
+  --rail-fg: #f0f3f7;
+  --rail-muted: #8b97a6;
+  --rail-hover: #1e2732;
+  --rail-line: #242d38;
+  --rail-active: #1d2e3d; /* 选中项：强调色淡底 */
+  --rail-active-fg: #b9d8ee; /* 选中项：强调色的墨 */
   --rail-accent: #91bdd9;
   --rail-accent-fg: #101820;
-  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.2);
-  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.24);
-  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.34);
-  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.45);
+  /* --- 阴影 --- */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 10px 24px rgba(0, 0, 0, 0.36);
+  --shadow-lg: 0 20px 48px rgba(0, 0, 0, 0.48);
 }
 
 /* === 沉浸暗场 ===
@@ -223,17 +250,18 @@
    卡片不画框、不浮起，封面方形）；漫画侧是书架（每一本都是一件独立的
    东西，有边框、有厚度、有阴影，封面竖版像书脊）。
 
-   色相不再参与区分 —— 整站只有一套强调色，切换工作台不该让界面换一套
-   颜色语言。两侧的差别落在版面与材质上，这正是「两种工作台各有语气」
-   说的那件事：语气不等于色相。 */
+   这一段只管材质，不碰颜色：模式覆盖里不再出现任何颜色值，主题色只
+   由上面两套主题给出。色相不参与区分 —— 整站只有一套强调色，切换
+   工作台不该让界面换一套颜色语言；两侧的差别落在版面与材质上，
+   这正是「两种工作台各有语气」说的那件事：语气不等于色相。
 
-/* 基础档即照片侧。模式由 URL 路径推导，写在 <html data-mode> 上，
+   基础档即照片侧。模式由 URL 路径推导，写在 <html data-mode> 上，
    因此切模式就是一次导航，材质随之切换。
    模式未确定（首帧）时用这套中性值：宁可少一层材质，也不要闪一下错材质。 */
 :root {
   --card-bg: transparent;
   --card-border: transparent;
-  --card-radius: 6px;
+  --card-radius: var(--radius-tile);
   --card-shadow: none;
   --card-lift: 0px;
   /* 面板不再是「一块底色 + 一圈描边」的卡片：它就是画布上的一段内容，
@@ -248,8 +276,8 @@
 :root[data-mode="comic"] {
   --card-bg: var(--bg-elevated);
   --card-border: var(--border-faint);
-  --card-radius: 16px;
-  --card-shadow: var(--shadow-md);
+  --card-radius: var(--radius-tile);
+  --card-shadow: var(--shadow-sm);
   --card-lift: -3px;
   /* 首屏书封给得比照片侧大：漫画侧整页是竖版书封语言，首屏那一本
      也要像一本书；面板被邻栏拉到等高时，中间那本不能小得像一张
