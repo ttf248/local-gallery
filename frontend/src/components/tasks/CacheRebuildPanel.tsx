@@ -182,7 +182,7 @@ export default function CacheRebuildPanel() {
               aria-label="缓存重建进度"
             >
               <div
-                className="h-full rounded-full bg-brand transition-[width]"
+                className="h-full rounded-full bg-accent transition-[width]"
                 style={{ width: `${percent}%` }}
               />
             </div>

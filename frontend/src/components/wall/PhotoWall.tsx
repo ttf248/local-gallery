@@ -479,7 +479,7 @@ export default function PhotoWall<
                           <span
                             className={`grid h-5 w-5 place-items-center rounded-sm ring-1 transition-colors ${
                               selected
-                                ? "bg-brand text-brand-contrast ring-brand"
+                                ? "bg-accent text-accent-contrast ring-accent"
                                 : "bg-black/25 text-white ring-white/60"
                             }`}
                           >

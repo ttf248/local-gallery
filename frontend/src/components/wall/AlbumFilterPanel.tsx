@@ -158,7 +158,7 @@ export default function AlbumFilterPanel({
                       onClick={() => selectYear(year)}
                       className={`flex-1 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
                         selected
-                          ? "bg-brand/12 text-brand"
+                          ? "bg-accent/12 text-accent"
                           : "text-fg hover:bg-bg-subtle"
                       }`}
                       aria-pressed={selected}
@@ -196,7 +196,7 @@ export default function AlbumFilterPanel({
                             aria-pressed={active}
                             className={`rounded-md px-2 py-1 text-meta tabular-nums transition-colors ${
                               active
-                                ? "bg-brand/12 text-brand"
+                                ? "bg-accent/12 text-accent"
                                 : inRange
                                   ? "text-fg hover:bg-bg-subtle"
                                   : "text-fg-subtle hover:bg-bg-subtle"
@@ -230,7 +230,7 @@ export default function AlbumFilterPanel({
                   aria-pressed={active}
                   className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
                     active
-                      ? "bg-brand/12 text-brand"
+                      ? "bg-accent/12 text-accent"
                       : "text-fg hover:bg-bg-subtle"
                   }`}
                 >
@@ -259,7 +259,7 @@ export default function AlbumFilterPanel({
                   aria-pressed={active}
                   className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
                     active
-                      ? "bg-brand/12 text-brand"
+                      ? "bg-accent/12 text-accent"
                       : "text-fg hover:bg-bg-subtle"
                   }`}
                 >

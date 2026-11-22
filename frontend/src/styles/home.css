@@ -244,15 +244,15 @@
 /* 索引卡不再是一只白盒子：年份与封面本身就是内容，靠留白分行，
    指针落在上面时才给一层浅底。选中的一档用强调色淡底标出来。 */
 .year-index__item[data-active="true"] .year-index__open {
-  background: var(--brand-soft);
-  color: var(--brand-ink);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
 }
 @media (hover: hover) and (pointer: fine) {
   .year-index__open:hover {
     background: var(--bg-subtle);
   }
   .year-index__item[data-active="true"] .year-index__open:hover {
-    background: var(--brand-soft);
+    background: var(--accent-soft);
   }
 }
 @media (hover: none), (pointer: coarse) {
@@ -260,7 +260,7 @@
     background: var(--bg-subtle);
   }
   .year-index__item[data-active="true"] .year-index__open:active {
-    background: var(--brand-soft);
+    background: var(--accent-soft);
   }
 }
 .year-index__filter {

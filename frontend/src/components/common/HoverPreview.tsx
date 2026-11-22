@@ -256,7 +256,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
                 <span className="tabular-nums">{progressPct}%</span>
               </div>
               <div className="h-1 bg-bg-subtle rounded-full overflow-hidden">
-                <div className="h-full bg-brand" style={{ width: `${progressPct}%` }} />
+                <div className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
           )}

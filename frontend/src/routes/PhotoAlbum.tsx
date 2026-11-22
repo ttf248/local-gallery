@@ -441,7 +441,7 @@ export default function PhotoAlbum({ album }: Props) {
               <button
                 type="button"
                 onClick={() => openGroup(null)}
-                className="btn-text text-meta text-brand hover:underline"
+                className="btn-text text-meta text-accent hover:underline"
               >
                 回到全部照片
               </button>

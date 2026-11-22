@@ -317,7 +317,7 @@ export default function AlbumGroupPanel({
               onClick={() => onDimensionChange(key)}
               className={`rounded-full border px-3 py-1 text-meta transition-colors ${
                 dimension === key
-                  ? "border-brand/40 bg-brand/10 text-brand-ink"
+                  ? "border-accent/40 bg-accent/10 text-accent-ink"
                   : "border-border bg-bg-elevated text-fg-muted hover:text-fg"
               }`}
             >
@@ -412,7 +412,7 @@ export default function AlbumGroupPanel({
                 aria-pressed={groupId === null}
                 className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
                   groupId === null
-                    ? "border-brand/40 bg-brand/10"
+                    ? "border-accent/40 bg-accent/10"
                     : "border-border bg-bg-elevated hover:border-border-strong"
                 }`}
               >
@@ -433,7 +433,7 @@ export default function AlbumGroupPanel({
                   <div
                     className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
                       active
-                        ? "border-brand/40 bg-brand/10"
+                        ? "border-accent/40 bg-accent/10"
                         : "border-border bg-bg-elevated"
                     }`}
                   >
@@ -514,7 +514,7 @@ export default function AlbumGroupPanel({
                           />
                           <button
                             type="submit"
-                            className="btn-text text-meta text-brand hover:underline"
+                            className="btn-text text-meta text-accent hover:underline"
                           >
                             保存
                           </button>

@@ -395,7 +395,7 @@ function CollectionHead({
                   )}
                   <Link
                     to={albumRoute(mode, ancestor.id)}
-                    className="truncate hover:text-brand-ink transition-colors"
+                    className="truncate hover:text-accent-ink transition-colors"
                   >
                     {ancestor.displayName || ancestor.name}
                   </Link>

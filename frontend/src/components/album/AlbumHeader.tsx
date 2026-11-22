@@ -97,7 +97,7 @@ export default function AlbumHeader({
                 {album.parentId ? (
                   <Link
                     to={albumRoute("photo", album.parentId)}
-                    className="album-bar__crumb inline-flex items-center gap-1 truncate hover:text-brand-ink transition-colors"
+                    className="album-bar__crumb inline-flex items-center gap-1 truncate hover:text-accent-ink transition-colors"
                     title={`回到「${album.parentName}」`}
                   >
                     <FolderIcon size={11} className="shrink-0" />
@@ -164,7 +164,7 @@ export default function AlbumHeader({
               onClick={onToggleSelection}
               className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
                 selectionActive
-                  ? "bg-brand/15 text-brand"
+                  ? "bg-accent/15 text-accent"
                   : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
               }`}
               title={selectionActive ? "退出选择" : "选择照片"}

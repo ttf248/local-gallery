@@ -172,7 +172,7 @@ function PeopleEmptyState({
       <p className="text-body text-fg-muted">
         人物分析尚未启用。前往任务中心开启分析后，这里才会出现候选分组。
         <Link
-          className="ml-1 text-brand underline-offset-2 hover:underline"
+          className="ml-1 text-accent underline-offset-2 hover:underline"
           to="/tasks/plan"
         >
           打开任务中心
@@ -192,7 +192,7 @@ function PeopleEmptyState({
       <p className="text-body text-fg-muted">
         上次人物分析失败，暂时无法确认是否有候选分组。
         <Link
-          className="ml-1 text-brand underline-offset-2 hover:underline"
+          className="ml-1 text-accent underline-offset-2 hover:underline"
           to="/tasks"
         >
           查看任务记录
@@ -205,7 +205,7 @@ function PeopleEmptyState({
       <p className="text-body text-fg-muted">
         上次人物分析已取消，尚未完成；可以到任务中心重新运行。
         <Link
-          className="ml-1 text-brand underline-offset-2 hover:underline"
+          className="ml-1 text-accent underline-offset-2 hover:underline"
           to="/tasks"
         >
           查看任务中心
@@ -218,7 +218,7 @@ function PeopleEmptyState({
       <p className="text-body text-fg-muted">
         人物分析尚未运行。前往任务中心启动人脸分析后，这里才会出现候选分组。
         <Link
-          className="ml-1 text-brand underline-offset-2 hover:underline"
+          className="ml-1 text-accent underline-offset-2 hover:underline"
           to="/tasks/plan"
         >
           打开任务中心

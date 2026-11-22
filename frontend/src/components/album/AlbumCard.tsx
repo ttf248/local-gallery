@@ -525,7 +525,7 @@ function GridCard({
               说两遍，封面的书名会被下面的说明读成回声。 */}
           {!showTitleOnCover && (
             <div
-              className="album-tile__title text-label font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-brand-ink"
+              className="album-tile__title text-label font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent-ink"
               title={data.displayTitle ?? data.title}
             >
               {data.displayTitle ?? data.title}
@@ -584,7 +584,7 @@ function GridCard({
               !isFinished && (
                 <>
                   <span className="text-fg-subtle">·</span>
-                  <span className="text-brand-ink font-medium shrink-0 whitespace-nowrap">
+                  <span className="text-accent-ink font-medium shrink-0 whitespace-nowrap">
                     已读 {progressPct}%
                   </span>
                 </>
@@ -755,7 +755,7 @@ function ListCard({
                 {/* 未读点用品牌色：它是「这一本还没翻开」的信号，
                     近黑的强调色在这里读起来只是一个句点。 */}
                 <span
-                  className="h-2 w-2 rounded-full bg-brand"
+                  className="h-2 w-2 rounded-full bg-accent"
                   aria-hidden="true"
                 />
                 <span>{cardCopy.unreadTitle}</span>
@@ -783,7 +783,7 @@ function ListCard({
                     读起来是分隔线，不是进度条。 */}
                 <span className="w-20 shrink-0 h-[3px] bg-bg-strong rounded-full overflow-hidden">
                   <span
-                    className="block h-full bg-brand"
+                    className="block h-full bg-accent"
                     style={{
                       width: `${progressPct}%`,
                     }}

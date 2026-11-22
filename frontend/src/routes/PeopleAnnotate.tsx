@@ -507,7 +507,7 @@ function AnnotationEditor({
               }}
               className={`absolute rounded border-2 ${
                 active
-                  ? "border-brand shadow-[0_0_0_3px_var(--overlay-bg)]"
+                  ? "border-accent shadow-[0_0_0_3px_var(--overlay-bg)]"
                   : face.identity
                     ? "border-white shadow-[0_0_0_2px_var(--overlay-bg)]"
                     : "border-danger/80"
@@ -519,7 +519,7 @@ function AnnotationEditor({
         {previewBox ? (
           <span
             aria-hidden="true"
-            className="absolute rounded border-2 border-brand"
+            className="absolute rounded border-2 border-accent"
             style={
               faceBoxStyle(
                 [

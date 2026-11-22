@@ -235,7 +235,7 @@ export default function Picks({
                   }}
                   className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
                     selectionActive
-                      ? "bg-brand/15 text-brand"
+                      ? "bg-accent/15 text-accent"
                       : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
                   }`}
                   aria-pressed={selectionActive}

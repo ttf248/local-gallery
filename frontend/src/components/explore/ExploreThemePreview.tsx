@@ -129,7 +129,7 @@ export default function ExploreThemePreview() {
             ? `主题分析尚未完成（${allDirectory.analysis.analyzedAlbums}/${allDirectory.analysis.totalAlbums} 本相册已生成）。`
             : "主题尚未生成。"}{" "}
           <Link
-            className="text-brand underline-offset-2 hover:underline"
+            className="text-accent underline-offset-2 hover:underline"
             to="/tasks"
           >
             前往任务中心运行智能相册生成

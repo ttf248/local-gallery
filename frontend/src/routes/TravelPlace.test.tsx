@@ -145,7 +145,7 @@ describe("地点详情页", () => {
     });
     expect(locator).toBeTruthy();
     // 只有当前这个地方是品牌色，其余是中性底。
-    const brand = document.querySelectorAll(".travel-map path.fill-brand");
+    const brand = document.querySelectorAll(".travel-map path.fill-accent");
     expect(brand).toHaveLength(1);
   });
 

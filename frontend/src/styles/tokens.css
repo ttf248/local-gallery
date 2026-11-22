@@ -31,7 +31,7 @@
   --success: #1a7a52;
   --warning: #8a5a00;
   /* 收藏是全局一份数据，不属于任何一个工作台，因此它的颜色也不跟着模式走。
-     独立成色是为了不和 --warning（扫描告警）、--brand（强调色）撞义。 */
+     独立成色是为了不和 --warning（扫描告警）、--accent（强调色）撞义。 */
   --favorite: #b8477f;
   /* 焦点环用强调色：它在明暗两套画布上都有足够对比度，而近黑的
      --accent 压在深色照片上会成一条看不见的黑边。 */
@@ -39,12 +39,9 @@
   --border: #e4e8ed;
   --border-strong: #c9d0d8;
   --border-faint: #edf0f3;
-  --brand: #476c8d;
-  --brand-soft: #e5ecf2;
-  --brand-ink: #35566f;
-  /* 压在品牌色上的文字色。品牌色跟着主题翻明暗（浅色主题是深蓝，
-     深色主题是浅蓝），压在它上面的字也要跟着翻。 */
-  --brand-contrast: #ffffff;
+  /* 强调色的「墨」：压在强调色淡底（--accent-soft）上的文字色。
+     直接用 --accent 只有 4.6:1，12.5px 的小字贴着 AA 下限走。 */
+  --accent-ink: #35566f;
   --rail-bg: #f2f4f7;
   --rail-fg: #16191d;
   --rail-muted: #5b6572;
@@ -168,10 +165,7 @@
   --border: #232b34;
   --border-strong: #3a4553;
   --border-faint: #1a212a;
-  --brand: #91bdd9;
-  --brand-soft: #1b2a36;
-  --brand-ink: #a9cbe2;
-  --brand-contrast: #0f141a;
+  --accent-ink: #a9cbe2;
   --rail-bg: #161c24;
   --rail-fg: #e7ecf2;
   --rail-muted: #8b97a5;

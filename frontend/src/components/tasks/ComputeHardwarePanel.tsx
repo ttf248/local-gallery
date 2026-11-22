@@ -57,7 +57,7 @@ export default function ComputeHardwarePanel({
         >
           <input
             type="checkbox"
-            className="size-4 accent-brand"
+            className="size-4 accent-accent"
             checked={gpuEnabled}
             disabled={disabled || saving}
             onChange={(event) => onChange(event.currentTarget.checked)}

@@ -125,7 +125,7 @@ export default function PickShowcase<T extends { id: string }>({
                 className="absolute inset-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
               />
               {selected ? (
-                <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-brand px-1.5 py-0.5 text-meta text-brand-contrast">
+                <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-accent px-1.5 py-0.5 text-meta text-accent-contrast">
                   已选
                 </span>
               ) : null}

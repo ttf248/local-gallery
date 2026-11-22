@@ -98,7 +98,7 @@ export default function TravelPlace() {
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div>
           <p className="text-body font-medium text-fg">这个地方不存在</p>
-          <Link to={travelsRoute()} className="mt-2 inline-block text-brand-ink underline">
+          <Link to={travelsRoute()} className="mt-2 inline-block text-accent-ink underline">
             回到足迹
           </Link>
         </div>
@@ -297,7 +297,7 @@ function VisitRow({
             期间还去了：{regions.join("、")}
           </span>
         ) : null}
-        <span className="ml-auto text-meta text-brand-ink">
+        <span className="ml-auto text-meta text-accent-ink">
           {open ? "收起" : "看照片"}
         </span>
       </button>

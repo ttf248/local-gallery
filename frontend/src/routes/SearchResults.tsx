@@ -223,7 +223,7 @@ export default function SearchResults() {
                 本机画面模型未就绪，这次只能按图片里的文字找。
                 <Link
                   to="/tasks/storage"
-                  className="ml-1 text-brand underline-offset-2 hover:underline"
+                  className="ml-1 text-accent underline-offset-2 hover:underline"
                 >
                   查看任务中心
                 </Link>

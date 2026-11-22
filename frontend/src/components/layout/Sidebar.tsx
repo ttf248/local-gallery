@@ -320,5 +320,5 @@ export default Sidebar;
  * 兄弟节点的方式会让对比度检查工具读不到深色底板，把白字判成白底白字。
  */
 function Logo() {
-  return <div className="brand-mark">L</div>;
+  return <div className="app-mark">L</div>;
 }

@@ -164,7 +164,7 @@ function PlaceEmptyState({
       <p className="text-body text-fg-muted">
         上次元数据分析失败，暂时无法确认地点结果。
         <Link
-          className="ml-1 text-brand underline-offset-2 hover:underline"
+          className="ml-1 text-accent underline-offset-2 hover:underline"
           to="/tasks"
         >
           查看任务记录
@@ -183,7 +183,7 @@ function PlaceEmptyState({
     <p className="text-body text-fg-muted">
       尚未完成元数据 / GPS 分析。运行一次元数据分析后，这里会显示已解析出位置的照片。
       <Link
-        className="ml-1 text-brand underline-offset-2 hover:underline"
+        className="ml-1 text-accent underline-offset-2 hover:underline"
         to="/tasks/plan"
       >
         打开任务中心

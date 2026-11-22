@@ -55,7 +55,7 @@ export default function ModuleChips({
             className={[
               "inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-meta transition-colors",
               isSelected
-                ? "border-brand/50 bg-brand-soft/60 text-fg"
+                ? "border-accent/50 bg-accent-soft/60 text-fg"
                 : "border-border-faint text-fg-muted hover:border-border hover:bg-bg-subtle",
               isDisabled ? "cursor-not-allowed opacity-55 hover:border-border-faint hover:bg-transparent" : "",
             ].join(" ")}

@@ -266,11 +266,11 @@ export default function TravelMap({
                     d={path}
                     className={
                       hasPhotos
-                        ? "fill-brand group-hover:fill-brand-ink group-focus-visible:stroke-brand-ink"
-                        : "fill-bg-strong group-focus-visible:stroke-brand-ink"
+                        ? "fill-accent group-hover:fill-accent-ink group-focus-visible:stroke-accent-ink"
+                        : "fill-bg-strong group-focus-visible:stroke-accent-ink"
                     }
                     fillOpacity={opacity}
-                    stroke={region.photoCount === 0 ? "transparent" : "brand"}
+                    stroke={region.photoCount === 0 ? "transparent" : "accent"}
                     strokeWidth={1.2}
                     strokeLinejoin="round"
                     fillRule="evenodd"

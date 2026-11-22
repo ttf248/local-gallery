@@ -29,6 +29,9 @@ export default {
         accent: tokenColor("accent"),
         "accent-hover": tokenColor("accent-hover"),
         "accent-soft": tokenColor("accent-soft"),
+        // 压在强调色淡底上的文字色：直接用 accent 只有 4.6:1，
+        // 12.5px 的小字贴着 AA 下限走。
+        "accent-ink": tokenColor("accent-ink"),
         "accent-contrast": tokenColor("accent-contrast"),
         border: tokenColor("border"),
         "border-strong": tokenColor("border-strong"),
@@ -39,13 +42,6 @@ export default {
         warning: tokenColor("warning"),
         favorite: tokenColor("favorite"),
         focus: tokenColor("focus"),
-        brand: tokenColor("brand"),
-        "brand-soft": tokenColor("brand-soft"),
-        "brand-ink": tokenColor("brand-ink"),
-        // 压在品牌色上的文字色。品牌色跟着主题与工作台翻明暗，
-        // 压在它上面的字也要跟着翻 —— 没有这一项，模式切换按钮
-        // 会继承正文色，明亮两套主题下都读不清。
-        "brand-contrast": tokenColor("brand-contrast"),
         "rail-bg": tokenColor("rail-bg"),
         "rail-fg": tokenColor("rail-fg"),
         "rail-muted": tokenColor("rail-muted"),

@@ -63,7 +63,7 @@ export default function TravelPhotoWall({
         <h2 className="font-display text-section font-medium text-fg">
           {name}
         </h2>
-        <span className="text-label font-medium tabular-nums text-brand-ink">
+        <span className="text-label font-medium tabular-nums text-accent-ink">
           {total.toLocaleString()} 张
         </span>
       </div>

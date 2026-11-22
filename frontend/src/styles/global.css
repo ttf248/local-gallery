@@ -29,7 +29,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--brand-ink);
+    color: var(--accent-ink);
     font-size: var(--text-meta);
     font-weight: 600;
     letter-spacing: 0.06em;
@@ -38,7 +38,7 @@
     content: "";
     width: 18px;
     height: 2px;
-    background: var(--brand);
+    background: var(--accent);
   }
   .page-heading {
     padding-top: var(--page-head-pad-top);
@@ -66,14 +66,14 @@
     padding-inline: 20px;
     border-bottom: 1px solid var(--rail-line);
   }
-  .brand-mark {
+  .app-mark {
     display: grid;
     place-items: center;
     width: 34px;
     height: 34px;
     flex-shrink: 0;
-    background: var(--brand-soft);
-    color: var(--brand-ink);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     /* 一枚圆角方块上的字：编辑式版面的品牌标记靠字重与留白立住，
        不靠造型。 */
     border-radius: var(--radius-media);
@@ -237,7 +237,7 @@
     margin-bottom: var(--block-gap);
   }
   .section-index {
-    color: var(--brand-ink);
+    color: var(--accent-ink);
     font: 500 var(--text-meta)/1 var(--section-index-font);
   }
   /* 卡片材质跟着工作台走：照片侧无框展陈，漫画侧有框有厚度。 */
@@ -870,7 +870,7 @@
     isolation: isolate;
     width: 56px;
     height: 60px;
-    color: var(--brand-ink);
+    color: var(--accent-ink);
     transform: rotate(-5deg);
   }
   /* 后面一本 */
@@ -891,7 +891,7 @@
     z-index: 0;
     border-radius: 14px 14px 14px 3px;
     border: 1px solid var(--border);
-    background: var(--brand-soft);
+    background: var(--accent-soft);
   }
   /* 图标本体压在两本书之上 */
   .empty-state__icon > * {
@@ -1570,8 +1570,8 @@ button:not(:disabled):active {
   .chip[data-active="true"] {
     /* 选中态：强调色淡底 + 深一档的强调色字。直接用 accent 压在
        accent-soft 上只有 4.6:1，12.5px 的小字贴着下限走。 */
-    background: var(--brand-soft);
-    color: var(--brand-ink);
+    background: var(--accent-soft);
+    color: var(--accent-ink);
     font-weight: 500;
   }
 
@@ -1714,7 +1714,7 @@ button:not(:disabled):active {
     box-shadow var(--dur-fast) var(--ease-out);
 }
 .input-focus-ring:focus-within {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 /* 阅读器的浮层是暗场的，焦点环跟着走白色系 —— 与浮层里其它焦点
    （[data-tone="reader"] :focus-visible）保持一致。品牌色是暖橙，

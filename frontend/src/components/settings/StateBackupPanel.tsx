@@ -188,7 +188,7 @@ export default function StateBackupPanel() {
           >
             导出状态备份
           </button>
-          <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-brand">
+          <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-accent">
             <span className="btn btn-outline">选择备份文件</span>
             <span className="block mt-2 text-meta text-fg-muted break-all">
               {fileName || "JSON 格式，最大 32 MB"}

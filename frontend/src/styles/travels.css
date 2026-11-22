@@ -188,10 +188,10 @@
      宽屏上这张图才有「分布」的样子，而不是一排小方块。 */
   width: 100%;
   border-radius: 2px 2px 0 0;
-  background: color-mix(in srgb, var(--brand) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .travel-axis__year[aria-pressed="true"] .travel-axis__bar {
-  background: var(--brand);
+  background: var(--accent);
 }
 .travel-axis__count {
   /* 计数是次要信息，不是徽章：跟着正文那一档，别缩到 11.5px。 */
@@ -273,8 +273,8 @@
 }
 /* 去过的地方：按张数深浅。 */
 .travel-mini-map__region {
-  fill: var(--brand);
-  stroke: var(--brand);
+  fill: var(--accent);
+  stroke: var(--accent);
 }
 /* 没去过的地方：完整地图模式下当底图，整张地图才看得出形状。 */
 .travel-mini-map__empty {
@@ -283,7 +283,7 @@
 }
 /* 照片位置：一层泛开的光。 */
 .travel-mini-map__point {
-  fill: var(--brand);
+  fill: var(--accent);
 }
 
 /* --- 行程目录：年份倒序，两栏紧凑 ---
@@ -332,9 +332,9 @@
   background: transparent;
 }
 .travel-trip-card[data-selected="true"] {
-  border-top-color: color-mix(in srgb, var(--brand-ink) 40%, var(--border-faint));
+  border-top-color: color-mix(in srgb, var(--accent-ink) 40%, var(--border-faint));
   border-radius: var(--radius-tile);
-  background: color-mix(in srgb, var(--brand) 6%, var(--bg-elevated));
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-elevated));
 }
 .travel-trip-card__head {
   display: flex;
@@ -355,16 +355,16 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .travel-trip-card__date:hover {
-    color: var(--brand-ink);
+    color: var(--accent-ink);
   }
 }
 @media (hover: none), (pointer: coarse) {
   .travel-trip-card__date:active {
-    color: var(--brand-ink);
+    color: var(--accent-ink);
   }
 }
 .travel-trip-card[data-selected="true"] .travel-trip-card__date {
-  color: var(--brand-ink);
+  color: var(--accent-ink);
 }
 .travel-trip-card__meta {
   display: inline-flex;
@@ -404,13 +404,13 @@
 @media (hover: hover) and (pointer: fine) {
   .travel-trip-card__stop:hover {
     background: var(--bg-strong);
-    color: var(--brand-ink);
+    color: var(--accent-ink);
   }
 }
 @media (hover: none), (pointer: coarse) {
   .travel-trip-card__stop:active {
     background: var(--bg-strong);
-    color: var(--brand-ink);
+    color: var(--accent-ink);
   }
 }
 .travel-trip-card__stop-count {
@@ -510,22 +510,22 @@
   background: var(--bg-subtle);
 }
 .travel-preview__shape {
-  fill: color-mix(in srgb, var(--brand) 14%, transparent);
-  stroke: color-mix(in srgb, var(--brand-ink) 55%, transparent);
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: color-mix(in srgb, var(--accent-ink) 55%, transparent);
   stroke-width: 1;
   stroke-linejoin: round;
 }
 .travel-preview__route {
-  stroke: var(--brand-ink);
+  stroke: var(--accent-ink);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-dasharray: 5 3;
 }
 .travel-preview__arrowhead {
-  fill: var(--brand-ink);
+  fill: var(--accent-ink);
 }
 .travel-preview__step {
-  fill: var(--brand);
+  fill: var(--accent);
   stroke: var(--bg);
   stroke-width: 2;
 }
@@ -551,7 +551,7 @@
 }
 .travel-preview__stop-index {
   font-weight: 600;
-  color: var(--brand-ink);
+  color: var(--accent-ink);
   font-variant-numeric: tabular-nums;
 }
 /* 末尾那句「还有 N 站」占满整行，不挤进序号那一列。 */

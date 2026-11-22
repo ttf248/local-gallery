@@ -112,7 +112,7 @@ export default function AlbumFilterBar({
           }
           className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-meta transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
             state.collapse
-              ? "bg-brand/12 text-brand"
+              ? "bg-accent/12 text-accent"
               : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
           } disabled:cursor-not-allowed disabled:opacity-50`}
         >
@@ -257,14 +257,14 @@ function FilterDropdown({
         aria-haspopup="dialog"
         className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-meta transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
           count > 0
-            ? "bg-brand/12 text-brand"
+            ? "bg-accent/12 text-accent"
             : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
         }`}
       >
         <FilterIcon size={13} />
         {label}
         {count > 0 && (
-          <span className="rounded-full bg-brand/20 px-1.5 text-badge tabular-nums text-brand">
+          <span className="rounded-full bg-accent/20 px-1.5 text-badge tabular-nums text-accent">
             {count}
           </span>
         )}

@@ -149,7 +149,7 @@ export default function ScanProgress({
     ? "bg-success"
     : isError
       ? "bg-danger"
-      : "bg-brand";
+      : "bg-accent";
 
   // 状态文案 + 图标
   const StatusIcon = isComplete

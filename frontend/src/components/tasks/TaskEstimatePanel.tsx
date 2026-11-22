@@ -140,7 +140,7 @@ export default function TaskEstimatePanel({
                     key={row.mode}
                     className={
                       selected
-                        ? "bg-brand-soft/50"
+                        ? "bg-accent-soft/50"
                         : "border-t border-border-faint"
                     }
                   >
