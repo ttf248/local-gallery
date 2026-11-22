@@ -132,7 +132,7 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
             像渲染事故而不是标题。折叠后每个入口都有图标与提示，够了。 */}
         {!collapsed && (
           <div className="px-4 pb-1 flex items-center gap-2">
-            <span className="text-meta tracking-wide transition-colors text-rail-muted">
+            <span className="text-meta transition-colors text-rail-muted">
               {group.label}
             </span>
           </div>
@@ -214,11 +214,10 @@ const Sidebar = forwardRef<HTMLElement, Props>(function Sidebar(
           !collapsed ? (
             <div className="flex items-center gap-2.5 min-w-0">
               <Logo />
+              {/* 品牌行只留名字：副标题是一行小字，说的还是同一个
+                  产品的名字，读的人得不到新信息。 */}
               <div className="leading-none min-w-0 font-display font-semibold text-label truncate">
                 Local Gallery
-                <span className="block font-sans text-meta font-normal text-rail-muted mt-2">
-                  本地影像档案
-                </span>
               </div>
             </div>
           ) : null /* 折叠态下隐藏 logo,把整行让给展开按钮 */

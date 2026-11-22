@@ -57,6 +57,9 @@
   .app-sidebar {
     background: var(--rail-bg);
     color: var(--rail-fg);
+    /* 侧栏与画布是同一族冷灰，靠一条细线分开就够了 ——
+       不用深色侧栏把界面切成两半。 */
+    border-right: 1px solid var(--rail-line);
   }
   .sidebar-brand {
     height: 60px;
@@ -66,23 +69,25 @@
   .brand-mark {
     display: grid;
     place-items: center;
-    width: 36px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     flex-shrink: 0;
     background: var(--brand-soft);
     color: var(--brand-ink);
-    /* 书脊造型：右下角收成一个尖，是造型不是尺寸，不走圆角阶梯。 */
-    border-radius: 10px 10px 10px 2px;
-    font: 600 27px/1 var(--font-display);
+    /* 一枚圆角方块上的字：编辑式版面的品牌标记靠字重与留白立住，
+       不靠造型。 */
+    border-radius: var(--radius-media);
+    font: 600 18px/1 var(--font-display);
+    letter-spacing: 0.01em;
   }
   .nav-entry {
     display: flex;
     align-items: center;
     position: relative;
     gap: 12px;
-    height: 46px;
-    padding-inline: 14px;
-    border-radius: var(--radius-control);
+    height: 44px;
+    padding-inline: 12px;
+    border-radius: var(--radius-media);
     font-size: var(--text-body);
     color: var(--rail-muted);
     transition:
@@ -1396,7 +1401,8 @@ button:not(:disabled):active {
     font-size: var(--text-page);
     line-height: 1.2;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    /* 标题字距收紧：编辑式版面靠字距与字重分层，不靠换字族。 */
+    letter-spacing: -0.03em;
     color: var(--fg);
   }
   .page-title--sm {
@@ -1415,7 +1421,7 @@ button:not(:disabled):active {
     line-height: 1.4;
     font-weight: 600;
     color: var(--fg);
-    letter-spacing: 0;
+    letter-spacing: -0.01em;
   }
   .section-meta {
     font-size: var(--text-meta);
