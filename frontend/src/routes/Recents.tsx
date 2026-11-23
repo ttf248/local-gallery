@@ -14,7 +14,6 @@ import { useAppMode } from "../hooks/useAppMode";
 import { workbenchCopy } from "../utils/workbench";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import AlbumGrid from "../components/album/AlbumGrid";
-import VisitStamp from "../components/photo/VisitStamp";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
@@ -291,14 +290,16 @@ export default function Recents({ embedded = false }: { embedded?: boolean } = {
         <section className="page-shell">
           <div className="pb-10">
             {mode === "photo" ? (
-              /* 照片侧是一面卡片墙：这一页问的是「我刚才在翻什么」，
-                 答的是一份清单 —— 十几条一次摆出来，一屏扫得完。
-                 时刻压在封面角上：网格里只有角标还扫得读。 */
+              /* 照片侧是一面卡片墙：这一页问的是「我刚才在翻什么、
+                 什么时候翻的」。答案只有两样 —— 封面与相册名，加一句
+                 「上次 X」。张数、视频数与目录类型是技术读数，摆在那里
+                 只会把这两个答案挤到边上，因此这一页不摆它们。 */
               <AlbumGrid
                 items={filtered}
                 variant="grid"
                 density="dense"
-                coverBadge={(card) => <VisitStamp at={card.lastSeenAt} />}
+                showLastSeen
+                hideMeta
                 onRemoveHistory={removeHistory}
               />
             ) : (

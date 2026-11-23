@@ -110,9 +110,12 @@ test("看照片也记一次访问：照片出处的那本相册进最近浏览",
   const albumId = result.history[0].albumId;
   expect(albumId).toMatch(/^a_/);
   await page.goto("/photo/me/recents");
-  await expect(
-    page.locator(`a[href="/photo/albums/${albumId}"]`).first(),
-  ).toBeVisible();
+  const entry = page.locator(`a[href="/photo/albums/${albumId}"]`).first();
+  await expect(entry).toBeVisible();
+  // 最近浏览只回答两件事：翻的是什么、什么时候翻的。时刻写在名字
+  // 下面（不是封面角上的徽章），张数与类型这类技术读数不摆。
+  await expect(page.getByText(/上次 /).first()).toBeVisible();
+  await expect(entry).not.toContainText("张 ·");
 });
 
 for (const failure of ["history", "nodes"] as const) {

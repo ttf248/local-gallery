@@ -122,23 +122,24 @@ export default function SimilarityGroupCard({
                 <span title="这组照片没有拍摄时间，用的是文件修改时间">· 文件时间</span>
               ) : null}
             </div>
-          </div>
 
-          {/* 质量读数单独一列：各行的数字上下对齐，比谁更清楚、
-              谁更曝得过度，一眼就能比出来。 */}
-          {representative ? (
-            <div className="similarity-group__quality">
-              <span className="similarity-group__quality-label">
-                {group.representativeIsManual ? "当前代表" : "建议代表"}
-              </span>
-              <SimilarityQualityReadout quality={representative.quality} />
-              {group.representativeIsManual && recommended ? (
-                <span className="similarity-group__hint">
-                  建议的是另一张（清晰度 {Math.round(recommended.quality.sharpnessScore * 100)}）
+            {/* 质量读数退到次级排版：它解释「为什么是这张」，不是这一组
+                的主角。主角是照片与那个决定 —— 读数压在下面一行小字里，
+                眼睛先看到的是图，再往下扫到依据。 */}
+            {representative ? (
+              <div className="similarity-group__quality">
+                <span className="similarity-group__quality-label">
+                  {group.representativeIsManual ? "当前代表" : "建议代表"}
                 </span>
-              ) : null}
-            </div>
-          ) : null}
+                <SimilarityQualityReadout quality={representative.quality} />
+                {group.representativeIsManual && recommended ? (
+                  <span className="similarity-group__hint">
+                    建议的是另一张（清晰度 {Math.round(recommended.quality.sharpnessScore * 100)}）
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <div className="similarity-group__actions">
@@ -153,9 +154,12 @@ export default function SimilarityGroupCard({
           <button type="button" className="btn btn-sm" onClick={onPick} disabled={busy}>
             加入精选
           </button>
+          {/* 这一组的正事就是「处理掉」：它比另外两个动作重一档。
+              不用强调色实底 —— 一屏几十组，实底按钮会变成一片色块；
+              一圈细线就够把它从「展开」「加入精选」里挑出来。 */}
           <button
             type="button"
-            className="btn btn-sm"
+            className="btn btn-sm btn-outline"
             onClick={onReview}
             disabled={busy}
           >

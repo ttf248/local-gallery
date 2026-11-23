@@ -158,6 +158,13 @@ interface Props {
    * 徽章自己带底板，浅色封面上也读得清。
    */
   coverBadge?: ReactNode;
+  /**
+   * 藏起计数与来源，只留标题与时间。
+   *
+   * 「最近浏览」回答的是「我刚才在翻什么、什么时候翻的」：张数、视频
+   * 数与目录类型是技术读数，摆在那里只会把这两个答案挤到边上。
+   */
+  hideMeta?: boolean;
 }
 
 export type CoverRatio = "4/5" | "2/3" | "16/9" | "4/3" | "1/1";
@@ -189,6 +196,7 @@ export default function AlbumCard({
   alwaysShowFavorite = false,
   note,
   coverBadge,
+  hideMeta = false,
 }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
@@ -243,6 +251,7 @@ export default function AlbumCard({
           alwaysShowFavorite={alwaysShowFavorite}
           note={note}
           coverBadge={coverBadge}
+          hideMeta={hideMeta}
         />
       )}
       {menu && (
@@ -282,6 +291,7 @@ function GridCard({
   alwaysShowFavorite,
   note,
   coverBadge,
+  hideMeta,
 }: {
   data: CardData;
   showLastSeen?: boolean;
@@ -293,6 +303,7 @@ function GridCard({
   alwaysShowFavorite: boolean;
   note?: ReactNode;
   coverBadge?: ReactNode;
+  hideMeta?: boolean;
 }) {
   // 直接渲染 <img loading="lazy">：浏览器原生懒加载比我们自写的 IO 简单且更可靠
   // （自写 IO 在 React 18 StrictMode dev mount-twice + 卡片树整体重渲染时容易
@@ -535,7 +546,10 @@ function GridCard({
           )}
           {/* meta 行：数量是辅助信息（13px），与标题差一档。
               一屏几十张卡，15px 的数字与 16px 的标题挨在一起时两边
-              互相抬价，数量读起来比名字还响。 */}
+              互相抬价，数量读起来比名字还响。
+              「藏起计数」的那一页（最近浏览）不摆这一行：那一页问的是
+              「翻的是什么、什么时候翻的」，其余是技术读数。 */}
+          {hideMeta ? null : (
           <div
             className={`text-meta tabular-nums flex items-center gap-1.5 min-w-0 ${
               showTitleOnCover ? "text-fg-muted" : "text-fg-muted mt-1"
@@ -599,9 +613,10 @@ function GridCard({
             )}
 
           </div>
+          )}
           {/* 多根来源 badge：与标签副标题独立，作为视觉小标签放在元数据行。
               单一媒体根下每张卡片都挂同一句来源是噪音，multiRoot 为 false 时隐藏。 */}
-          {data.sourceName && multiRoot && (
+          {data.sourceName && multiRoot && !hideMeta && (
             <div className="text-meta text-fg-subtle mt-0.5 inline-flex items-center gap-1">
               <FolderIcon size={10} className="shrink-0" />
               <span className="truncate">来自 {data.sourceName}</span>

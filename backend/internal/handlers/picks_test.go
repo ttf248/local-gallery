@@ -19,7 +19,9 @@ func newPicksHandlerFixture(t *testing.T) (*fiber.App, *services.ResourceCatalog
 	t.Helper()
 	root := t.TempDir()
 	albumPath := filepath.Join(root, "album1")
-	first := filepath.Join(albumPath, "1.jpg")
+	// 文件名里带着日期：精选页的照片下方要写清它是什么时候拍的，
+	// 时间证据与照片时间线同一套口径（这里是文件名推断出来的）。
+	first := filepath.Join(albumPath, "IMG_20240102_120000.jpg")
 	second := filepath.Join(albumPath, "2.jpg")
 	result := &models.ScanResult{
 		Roots: []string{root}, AlbumCount: 1,
@@ -43,7 +45,7 @@ func newPicksHandlerFixture(t *testing.T) (*fiber.App, *services.ResourceCatalog
 	app := fiber.New()
 	app.Get("/api/picks", PicksListHandler(picks))
 	app.Post("/api/picks/batch", PicksBatchHandler(picks))
-	app.Get("/api/picks/media", PicksMediaPageHandler(catalog, picks, dimensions))
+	app.Get("/api/picks/media", PicksMediaPageHandler(catalog, picks, dimensions, services.NewPhotoTimelineService(nil)))
 	app.Get("/api/albums/:id/media", AlbumMediaPageHandler(catalog, dimensions, picks, services.NewAlbumFilterEngine(catalog, nil, nil, picks, nil)))
 
 	return app, catalog, picks, catalog.ExternalID(albumPath, services.ResourceAlbum), catalog.ExternalID(first, services.ResourceFile)
@@ -128,6 +130,32 @@ func TestPicksMediaPageListsPickedPhotos(t *testing.T) {
 	}
 	if item["picked"] != true {
 		t.Fatalf("expected picked flag: %v", item)
+	}
+}
+
+// 精选页的照片下方要写清来源与日期：日期按照片时间线同一套证据给出，
+// 并说明它是推断出来的还是真的拍摄时间。
+func TestPicksMediaPageCarriesDateEvidence(t *testing.T) {
+	app, _, _, _, fileID := newPicksHandlerFixture(t)
+	if status, payload := picksRequest(t, app, "POST", "/api/picks/batch", `{"ids":["`+fileID+`"],"action":"add"}`); status != 200 {
+		t.Fatalf("add picks: %d %v", status, payload)
+	}
+
+	status, payload := picksRequest(t, app, "GET", "/api/picks/media", "")
+	if status != 200 {
+		t.Fatalf("picks media status=%d (%v)", status, payload)
+	}
+	page, _ := payload["page"].(map[string]any)
+	items, _ := page["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 pick item, got %v", page)
+	}
+	item, _ := items[0].(map[string]any)
+	if item["capturedAt"] != "2024-01-02T12:00:00Z" {
+		t.Fatalf("unexpected capturedAt: %v", item)
+	}
+	if item["dateSource"] != "filename" || item["datePrecision"] != "day" {
+		t.Fatalf("unexpected date evidence: %v", item)
 	}
 }
 

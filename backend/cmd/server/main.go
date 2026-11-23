@@ -707,7 +707,7 @@ func main() {
 	// 照片级精选（与上面的相册级收藏是两份数据）
 	api.Get("/picks", handlers.PicksListHandler(picks))
 	api.Post("/picks/batch", handlers.PicksBatchHandler(picks))
-	api.Get("/picks/media", handlers.PicksMediaPageHandler(resourceCatalog, picks, mediaDimensions))
+	api.Get("/picks/media", handlers.PicksMediaPageHandler(resourceCatalog, picks, mediaDimensions, photoTimeline))
 	api.Get("/activity", handlers.ActivityGetHandler(activities))
 	api.Put("/activity", handlers.ActivityPutHandler(activities))
 	api.Delete("/activity", handlers.ActivityDeleteHandler(activities))

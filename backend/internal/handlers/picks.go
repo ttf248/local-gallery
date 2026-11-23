@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 
@@ -80,7 +81,7 @@ func PicksBatchHandler(picks *store.PickStore) fiber.Handler {
 //
 // 精选列表是用户数据，媒体目录是扫描数据，两者分开存；这里在请求期
 // 按当前目录解析 —— 文件被移出媒体库后它自然从精选页消失。
-func PicksMediaPageHandler(catalog *services.ResourceCatalog, picks *store.PickStore, dimensions *services.MediaDimensionService) fiber.Handler {
+func PicksMediaPageHandler(catalog *services.ResourceCatalog, picks *store.PickStore, dimensions *services.MediaDimensionService, timeline *services.PhotoTimelineService) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		limit, ok := parseLibraryPageLimit(c)
 		if !ok {
@@ -95,8 +96,30 @@ func PicksMediaPageHandler(catalog *services.ResourceCatalog, picks *store.PickS
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}
 		enrichPickDimensions(snapshot, page.Items, dimensions)
+		enrichPickDates(snapshot, page.Items, timeline)
 		setLibraryRevisionETag(c, snapshot.Revision())
 		return c.JSON(fiber.Map{"ok": true, "page": page})
+	}
+}
+
+// enrichPickDates 补齐精选项的时间证据，与照片时间线同一套口径。
+//
+// 精选页的照片下方要写清它是什么时候拍的：只认时间线认的那几种证据
+// （EXIF → 文件名 → 目录名 → 修改时间），来源与精度一并给出，界面
+// 才好照实说「这是推断出来的日期」。
+func enrichPickDates(snapshot services.CatalogSnapshot, items []services.PickItem, timeline *services.PhotoTimelineService) {
+	if timeline == nil || len(items) == 0 {
+		return
+	}
+	for i := range items {
+		evidence, ok := timeline.MediaDate(snapshot, items[i].AlbumID, items[i].Index)
+		if !ok || evidence.At.IsZero() || evidence.Source == "" {
+			continue
+		}
+		items[i].CapturedAt = evidence.At.UTC().Format(time.RFC3339)
+		items[i].DateSource = evidence.Source
+		items[i].DatePrecision = evidence.Precision
+		items[i].DateValue = evidence.Value
 	}
 }
 

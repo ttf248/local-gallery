@@ -112,6 +112,11 @@ type photoTimelineIndex struct {
 	// entries 是排好序的序列：有拍摄证据的在前（时间倒序），没有拍摄
 	// 证据的按修改时间倒序排在后面。
 	entries []timelineEntry
+	// byMedia 是按「相册 + 相册内序号」查时间证据的索引。
+	//
+	// 精选页要知道某张照片的拍摄日期，就得按位置反查 —— 那份索引与
+	// 排序用的序列是同一批数据，不必再存一份摘要。
+	byMedia map[string]timelineEntry
 	// years 是年份索引，供界面跳年与跳月。
 	years []TimelineYear
 }
@@ -212,9 +217,57 @@ func (s *PhotoTimelineService) build(snapshot CatalogSnapshot) *photoTimelineInd
 	built := &photoTimelineIndex{
 		epoch: epoch, catalogRevision: revision, recordsRevision: recordsRevision,
 		entries: entries,
+		byMedia: make(map[string]timelineEntry, len(entries)),
+	}
+	for _, entry := range entries {
+		built.byMedia[timelineMediaKey(entry.albumID, entry.index)] = entry
 	}
 	built.years = timelineYearIndex(entries)
 	return built
+}
+
+// timelineMediaKey 是「相册 + 相册内序号」的索引键。
+func timelineMediaKey(albumID string, index int) string {
+	return albumID + "\x00" + strconv.Itoa(index)
+}
+
+// MediaDateEvidence 是一条媒体的时间证据。
+//
+// Value 是按精度写好的日期（YYYY-MM-DD / YYYY-MM / YYYY）：界面照它
+// 显示，不必自己换算时区 —— 换算一遍就可能差一天。
+type MediaDateEvidence struct {
+	At        time.Time
+	Source    string
+	Precision string
+	Value     string
+}
+
+// MediaDate 返回某个相册里第 index 个媒体的时间证据。
+//
+// 时间的可信度与时间线一致：EXIF 的拍摄时间 → 文件名里的日期 →
+// 目录名里的日期 → 文件修改时间。返回值里的来源与精度要照实传给界面：
+// 推断出来的日期不是拍摄时间，修改时间更不是。
+//
+// 找不到时返回 false：这一张没有可用的时间证据。
+func (s *PhotoTimelineService) MediaDate(snapshot CatalogSnapshot, albumID string, index int) (MediaDateEvidence, bool) {
+	if s == nil {
+		return MediaDateEvidence{}, false
+	}
+	built := s.index(snapshot)
+	if built == nil || built.byMedia == nil {
+		return MediaDateEvidence{}, false
+	}
+	entry, ok := built.byMedia[timelineMediaKey(albumID, index)]
+	if !ok {
+		return MediaDateEvidence{}, false
+	}
+	precision := entry.precision.String()
+	return MediaDateEvidence{
+		At:        entry.at,
+		Source:    entry.source,
+		Precision: precision,
+		Value:     timelineDateValue(entry.at, precision),
+	}, true
 }
 
 // timelineMediaTime 取一个媒体在时间线上的时间与它的来源。

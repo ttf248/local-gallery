@@ -19,7 +19,8 @@ vi.mock("../hooks/usePickToggle", () => ({
   }),
 }));
 
-vi.mock("../components/wall/PhotoWall", () => ({
+// 多张精选走的是自然照片墙（瀑布流）：密排凑行会裁掉挑出来的照片。
+vi.mock("../components/wall/PhotoMasonry", () => ({
   default: ({
     items,
     loadMoreError,
@@ -46,11 +47,18 @@ vi.mock("../components/wall/PhotoWall", () => ({
 }));
 
 vi.mock("../components/wall/PickShowcase", () => ({
-  default: ({ items }: { items: PickItem[] }) => (
+  default: ({
+    items,
+    date,
+  }: {
+    items: PickItem[];
+    date?: (item: PickItem) => string | undefined;
+  }) => (
     <div data-testid="pick-showcase">
       {items.map((item) => (
         <span key={item.id} data-testid="pick-item">
           {item.name}
+          {date?.(item) ? ` · ${date?.(item)}` : ""}
         </span>
       ))}
     </div>
@@ -113,6 +121,49 @@ describe("精选页分页错误恢复", () => {
     expect(await screen.findByTestId("pick-showcase")).toBeInTheDocument();
     expect(screen.getByText("f_1.jpg")).toBeInTheDocument();
     expect(picksApi.media).toHaveBeenCalledTimes(2);
+  });
+
+  // 少量精选摆成陈列（照片按自己的比例摆），多起来换成自然照片墙：
+  // 密排凑行会裁掉挑出来的照片。
+  it("四张以内摆成陈列", async () => {
+    vi.mocked(picksApi.media).mockResolvedValue(
+      page(["f_1", "f_2", "f_3", "f_4"], 4),
+    );
+    renderPicks();
+    expect(await screen.findByTestId("pick-showcase")).toBeInTheDocument();
+    expect(screen.queryByTestId("picks-wall")).not.toBeInTheDocument();
+  });
+
+  // 多起来换成自然照片墙：密排凑行会裁掉挑出来的照片。
+  it("多起来换成照片墙", async () => {
+    vi.mocked(picksApi.media).mockResolvedValue(
+      page(["f_1", "f_2", "f_3", "f_4", "f_5"], 20),
+    );
+    renderPicks();
+    expect(await screen.findByTestId("picks-wall")).toBeInTheDocument();
+    expect(screen.queryByTestId("pick-showcase")).not.toBeInTheDocument();
+  });
+
+  // 照片下面写的是日期，不是文件名：文件名是文件系统里的编号。
+  it("精选的照片下方写日期", async () => {
+    vi.mocked(picksApi.media).mockResolvedValue({
+      ok: true,
+      page: {
+        revision: 1,
+        total: 1,
+        items: [
+          {
+            ...item("f_1"),
+            dateValue: "2023-08-24",
+            dateSource: "filename",
+          },
+        ],
+      },
+    });
+    renderPicks();
+    expect(await screen.findByTestId("pick-item")).toHaveTextContent(
+      "2023年8月24日",
+    );
   });
 
   it("后续分页失败保留照片、暂停自动续页并手动接续", async () => {

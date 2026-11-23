@@ -159,7 +159,7 @@ func newHarness(t *testing.T) *harness {
 	api.Get("/albums/:id/filters", handlers.AlbumFiltersHandler(catalog, services.NewAlbumFilterEngine(catalog, nil, nil, pickStore, nil)))
 	api.Get("/picks", handlers.PicksListHandler(pickStore))
 	api.Post("/picks/batch", handlers.PicksBatchHandler(pickStore))
-	api.Get("/picks/media", handlers.PicksMediaPageHandler(catalog, pickStore, dimensions))
+	api.Get("/picks/media", handlers.PicksMediaPageHandler(catalog, pickStore, dimensions, services.NewPhotoTimelineService(nil)))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(catalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(catalog))
 	api.Get("/search", handlers.SearchHandler(catalog))

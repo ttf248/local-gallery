@@ -95,4 +95,25 @@ describe("少量精选的陈列", () => {
     );
     expect(screen.getAllByText("2024")).toHaveLength(2);
   });
+
+  // 文件名（IMG_20230824_224824.jpg）是文件系统里的编号：摆在照片
+  // 下面读起来像一份技术清单。照片下面留的是「哪本相册、什么时候」。
+  it("照片下面写来源与日期，不摆文件名", () => {
+    render(
+      <PickShowcase
+        items={items}
+        onOpen={() => {}}
+        onTogglePick={() => {}}
+        name={(item) => item.name}
+        source={(item) => item.album}
+        date={() => "2023年8月24日"}
+      />,
+    );
+
+    expect(screen.getAllByText("2024")).toHaveLength(2);
+    expect(screen.getAllByText("2023年8月24日")).toHaveLength(2);
+    expect(screen.queryByText("竖幅.jpg")).not.toBeInTheDocument();
+    // 文件名退到悬停提示里，需要时还找得到。
+    expect(screen.getAllByText("2024")[0]).toHaveAttribute("title", "2024");
+  });
 });

@@ -8,8 +8,7 @@ import {
   usePhotoSelectionStore,
   type PhotoSelectionEntry,
 } from "../store/photoSelectionStore";
-import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
-import PhotoWall from "../components/wall/PhotoWall";
+import PhotoMasonry from "../components/wall/PhotoMasonry";
 import PickShowcase from "../components/wall/PickShowcase";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoCompare from "../components/wall/PhotoCompare";
@@ -28,6 +27,10 @@ import {
 } from "../components/common/Icon";
 import { albumRoute, homeRoute } from "../utils/path";
 import { photoCopy } from "../utils/workbench";
+import {
+  captureDateLabel,
+  captureDateSourceLabel,
+} from "../utils/date";
 
 /**
  * 精选照片页。
@@ -35,9 +38,10 @@ import { photoCopy } from "../utils/workbench";
  * 精选是跨相册的：用户在好几本相册里挑出的照片摆在一起。相册级
  * 收藏回答「哪些相册值得留着」，这一页回答「哪些照片值得留着」。
  *
- * 精选多的时候用照片墙 —— 与相册里的照片墙是同一个组件，排布规则、
- * 密度档位、悬停信息层都一致，用户不需要学第二套。精选少到几张时
- * 换成陈列摆法（见 PickShowcase）：照片墙是给「很多张」用的。
+ * 精选少到几张时摆成陈列（见 PickShowcase）：每张一个框，按自己的
+ * 比例完整地摆出来。多起来换成自然照片墙（瀑布流）：相册里的照片墙
+ * 会裁切凑行，那是给「一整本几千张」用的 —— 挑出来的照片被裁掉半张脸，
+ * 这一页就没有意义了。
  */
 
 /** 精选少到多少张时改用陈列摆法。 */
@@ -54,7 +58,6 @@ export default function Picks({
   const copy = photoCopy();
   const pushToast = useUIStore((s) => s.pushToast);
   const navigate = useNavigate();
-  const density = usePhotoStore((s) => s.density);
   const picks = usePickToggle();
 
   // 右键菜单：精选页的照片来自不同相册，用户常要跳回原来那本看看上下文。
@@ -251,7 +254,7 @@ export default function Picks({
         </header>
       )}
 
-      <div className="page-shell container--focused min-h-0 flex-1 pb-2">
+      <div className="page-shell min-h-0 flex-1 pb-2">
         {/* 嵌在「我的」里时页头由外层给：精选有多少张要说在这页上 ——
             收藏与最近浏览的页签都报「共 N 项」，精选只摆照片会显得
             像漏了计数。 */}
@@ -327,6 +330,14 @@ export default function Picks({
             /* 精选页的照片来自不同相册：出处要写在照片下面，
                用户才知道自己看的是哪本里的哪一张。 */
             source={(item) => item.albumName}
+            /* 日期比文件名有信息量：文件名是文件系统里的编号，
+               日期是这张照片发生的事。拿不出拍摄证据就不写。 */
+            date={(item) =>
+              captureDateLabel(item.dateValue, item.dateSource)
+            }
+            dateHint={(item) =>
+              captureDateSourceLabel(item.dateSource) || undefined
+            }
             /* 框按照片自己的形状长：竖幅不该被裁成横幅。 */
             ratio={(item) =>
               item.width && item.height ? item.width / item.height : undefined
@@ -337,14 +348,12 @@ export default function Picks({
             onContextMenu={menu.open}
           />
         ) : (
-          <PhotoWall
+          /* 多张精选：一面自然照片墙。
+             相册里的照片墙会裁切凑行 —— 那是给「一整本几千张」用的，
+             精选是用户挑出来的那几张，裁掉半张脸就毁了它。 */
+          <PhotoMasonry
             items={items}
-            total={total}
-            targetHeight={wallTargetHeight(density)}
-            hasNextPage={query.hasNextPage ?? false}
-            isLoadingMore={query.isFetchingNextPage}
-            loadMoreError={query.isFetchNextPageError}
-            onLoadMore={loadMore}
+            targetColumnWidth={260}
             onOpen={(_item, index) => wall.open(index)}
             /* 精选页的照片来自不同相册：悬停信息层说清出处，
                用户才知道自己看的是哪本里的哪一张。 */
@@ -354,10 +363,16 @@ export default function Picks({
             onToggleSelect={(item) => toggleSelect(item)}
             isPicked={picks.isPicked}
             onTogglePick={(item) => picks.toggle(item.id)}
+            onContextMenu={menu.open}
             /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
                不该把人丢回墙的顶上。 */
             scrollToIndex={wall.focusIndex}
-            onContextMenu={menu.open}
+            hasNextPage={query.hasNextPage ?? false}
+            isLoadingMore={query.isFetchingNextPage}
+            loadMoreError={query.isFetchNextPageError}
+            onLoadMore={loadMore}
+            /* 像素尺寸是技术读数：精选页的照片是拿来好好看的。 */
+            showDimensions={false}
           />
         )}
       </div>

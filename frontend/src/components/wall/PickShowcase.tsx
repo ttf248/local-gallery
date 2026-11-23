@@ -14,6 +14,16 @@ interface Props<T> {
   /** 照片的出处：它出自哪本相册。 */
   source?: (item: T) => string | undefined;
   /**
+   * 照片下方的日期。
+   *
+   * 「什么时候拍的」是选中一张照片之后最想知道的事；文件名
+   * （IMG_20230824_224824.jpg）只是文件系统里的编号，写在照片下面
+   * 读起来像一份技术清单。
+   */
+  date?: (item: T) => string | undefined;
+  /** 日期的来源说明：悬停提示照实说，推断出来的日期不是拍摄时间。 */
+  dateHint?: (item: T) => string | undefined;
+  /**
    * 照片的宽高比（宽 ÷ 高）。
    *
    * 框按照片自己的形状长：多出来的留白会让人以为照片缺了一块。
@@ -63,6 +73,8 @@ export default function PickShowcase<T extends { id: string }>({
   onTogglePick,
   name,
   source,
+  date,
+  dateHint,
   ratio,
   selecting = false,
   isSelected,
@@ -71,12 +83,14 @@ export default function PickShowcase<T extends { id: string }>({
 }: Props<T>) {
   return (
     <div
-      className="flex flex-wrap items-start justify-center gap-5 pb-4"
+      className="flex flex-wrap items-start gap-6 pb-4"
       data-testid="pick-showcase"
     >
       {items.map((item, index) => {
         const selected = isSelected?.(item.id) ?? false;
         const origin = source?.(item);
+        const takenAt = date?.(item);
+        const hint = dateHint?.(item);
         const raw = ratio?.(item);
         // 框按照片自己的形状长：多出来的留白会让人以为照片缺了一块。
         const frameRatio =
@@ -141,19 +155,24 @@ export default function PickShowcase<T extends { id: string }>({
                 <UncheckIcon size={13} />
               </button>
             </div>
+            {/* 照片下面写来源与日期。
+                文件名（IMG_20230824_224824.jpg）是文件系统里的编号，
+                摆在照片下面读起来像一份技术清单：它退到悬停提示里，
+                眼睛看到的是「这本相册里的、2024年1月2日的那张」。 */}
             <figcaption className="mt-2 min-w-0">
               <span
                 className="block truncate text-body text-fg"
-                title={name(item)}
+                title={
+                  hint
+                    ? `${origin ?? name(item)} · ${hint}`
+                    : (origin ?? name(item))
+                }
               >
-                {name(item)}
+                {origin ?? name(item)}
               </span>
-              {origin ? (
-                <span
-                  className="block truncate text-meta text-fg-muted"
-                  title={origin}
-                >
-                  {origin}
+              {takenAt ? (
+                <span className="block truncate text-meta text-fg-muted">
+                  {takenAt}
                 </span>
               ) : null}
             </figcaption>

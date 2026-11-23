@@ -179,17 +179,20 @@ it("已加载记录确实被筛选掉时仍可清除筛选", async () => {
 });
 
 // 照片侧是一面密集卡片墙：单列一条时间线在宽屏上只占左边一条，
-// 右半屏全是空白。时刻压在封面角上 —— 网格里只有角标还扫得读。
-it("照片侧排成密集卡片墙，时刻压在封面角上", async () => {
+// 右半屏全是空白。这一页只回答两件事 —— 翻的是什么、什么时候翻的：
+// 时刻写在名字下面，计数与类型这类技术读数不摆。
+it("照片侧排成密集卡片墙，只留对象与最近时刻", async () => {
   renderRecents();
   await waitFor(() => expect(screen.getByText("春游相册")).toBeInTheDocument());
   const props = mocks.gridProps.at(-1) as {
     density?: string;
-    coverBadge?: (item: unknown) => React.ReactNode;
+    showLastSeen?: boolean;
+    hideMeta?: boolean;
   };
   expect(props.density).toBe("dense");
-  const stamp = screen.getByTestId("visit-stamp");
-  expect(stamp.textContent).toMatch(/\d/);
+  expect(props.showLastSeen).toBe(true);
+  // 技术读数（张数、视频数、目录类型）退场：这一页只留对象与时刻。
+  expect(props.hideMeta).toBe(true);
 });
 
 // 这一页的天然顺序是「按最近看」：浏览足迹是一份日记，时刻要能排成一条轴。

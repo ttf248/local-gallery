@@ -21,6 +21,19 @@ export interface PickItem extends LibraryMediaItem {
   albumId: string;
   /** 所属相册的展示名。 */
   albumName: string;
+  /**
+   * 这张照片在时间线上的时间（RFC3339）。
+   *
+   * 没有时间证据时为空：文件修改时间不是拍摄时间，写出来会骗人，
+   * 因此只有拿得出拍摄证据的照片才带这个字段。
+   */
+  capturedAt?: string;
+  /** 时间来源：exif / filename / folder / modified。 */
+  dateSource?: string;
+  /** 时间证据的精度：day / month / year / unknown。 */
+  datePrecision?: string;
+  /** 按 datePrecision 输出的 YYYY-MM-DD / YYYY-MM / YYYY。 */
+  dateValue?: string;
 }
 
 export interface PickPage {

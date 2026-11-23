@@ -943,6 +943,12 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
   每项是媒体项加上 `albumId` 与 `albumName`（它属于哪本相册），并带 `picked: true`。
   文件被移出媒体库后它自然从这一页消失：精选说的是「库里的照片」，不是对磁盘路径的承诺。
   漫画相册里的文件不进这一页。
+  每项还带时间证据 `capturedAt`（RFC3339）、`dateSource`（`exif` / `filename` / `folder` /
+  `modified`）、`datePrecision`（`day` / `month` / `year` / `unknown`）与 `dateValue`
+  （按精度写好的 `YYYY-MM-DD` / `YYYY-MM` / `YYYY`）—— 与照片时间线同一套口径：
+  时间取自 EXIF 的拍摄时间，其次文件名里的日期，再次目录名里的日期，最后才是文件的
+  修改时间。界面照 `dateValue` 显示（自己换算时区会差一天）；`dateSource` 为 `modified`
+  时那不是拍摄时间，界面不把它当日期摆出来。
 
 精选页的分页游标作用域里带精选自身的 `revision`：精选一变，旧的游标立即返回
 `400 invalid_cursor`，客户端从第一页重取。这样新加入的照片不会把已经翻过的页顶走一格。

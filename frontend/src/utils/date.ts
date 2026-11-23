@@ -88,3 +88,40 @@ export function stampLabel(iso?: string | null): string {
   }
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
+
+/**
+ * 精选照片下方的日期。
+ *
+ * 照服务端给的 dateValue 写（YYYY-MM-DD / YYYY-MM / YYYY）：自己按
+ * 本地时区换算会差一天 —— 服务端算的是这张照片的日期，浏览器算的是
+ * 「这个时刻在我这里是几号」。
+ *
+ * 只写拿得出拍摄证据的日期：文件修改时间不是拍摄时间，写在照片下面
+ * 会骗人，因此 modified 一律不写。
+ */
+export function captureDateLabel(
+  value?: string | null,
+  source?: string | null,
+): string {
+  if (!value) return "";
+  if (source === "modified") return "";
+  const [year, month, day] = value.split("-");
+  if (!year) return "";
+  if (!month) return `${year}年`;
+  if (!day) return `${year}年${Number(month)}月`;
+  return `${year}年${Number(month)}月${Number(day)}日`;
+}
+
+/** 日期是从哪来的：悬停提示照实说，推断出来的日期不是拍摄时间。 */
+export function captureDateSourceLabel(source?: string | null): string {
+  switch (source) {
+    case "exif":
+      return "拍摄时间";
+    case "filename":
+      return "从文件名推断的日期";
+    case "folder":
+      return "从目录名推断的日期";
+    default:
+      return "";
+  }
+}

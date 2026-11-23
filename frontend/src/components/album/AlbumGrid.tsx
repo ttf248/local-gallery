@@ -76,6 +76,12 @@ interface Props {
    * 按卡片给：读数因书而异，写死在卡片组件里就成了一句假话。
    */
   note?: (item: CardData) => ReactNode;
+  /**
+   * 藏起卡片上的计数与来源，只留标题与时间。
+   *
+   * 「最近浏览」用：那一页问的是「翻的是什么、什么时候翻的」。
+   */
+  hideMeta?: boolean;
 }
 
 // 列表视图每一列的最小宽度。列数由可用宽度除以它得到 ——
@@ -114,6 +120,7 @@ export default function AlbumGrid({
   coverBadge,
   overlayAction,
   note,
+  hideMeta = false,
   showBulkActions = true,
 }: Props) {
   const selectionActive = useSelectionStore((s) => s.active);
@@ -218,6 +225,7 @@ export default function AlbumGrid({
         coverBadge={coverBadge?.(it)}
         overlayAction={overlayAction?.(it)}
         note={note?.(it)}
+        hideMeta={hideMeta}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY, item: it });
