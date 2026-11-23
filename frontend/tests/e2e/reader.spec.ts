@@ -584,6 +584,21 @@ test("窄屏阅读器不再显示右侧悬浮控件，阅读设置收进底部�
   await expect(page.getByText(new RegExp(`^2 / ${total}$`))).toBeVisible();
 });
 
+// 漫画工作台的暖棕：阅读器恒为暗场，选中的那一档与进度条用同一支暖棕。
+// 换色相不改机制 —— 这里只断言颜色没跑回品牌蓝。
+test("阅读器当前模式用漫画暖棕标出", async ({ page, request }) => {
+  const nodes = await scannedNodes(request, "comic");
+  const album = nodes.find((node) => node.name === "sample-comic")!;
+  expect(album).toBeDefined();
+  await page.goto(readerUrl(album.id, "?index=0"));
+  const active = page.getByRole("button", { name: "单页" });
+  await expect(active).toBeVisible();
+  await expect(active).toHaveAttribute("aria-pressed", "true");
+  const color = await active.evaluate((el) => getComputedStyle(el).color);
+  // --reader-accent：#d4aa80（深色档的暖棕）。
+  expect(color).toBe("rgb(212, 170, 128)");
+});
+
 test("阅读器连续模式按视口宽度请求预览图，不发原图", async ({ page }) => {
   const nodes = await scannedNodes(page.request);
   const album = nodes.find((node) => node.name === "sample-paged-images");

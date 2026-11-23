@@ -240,7 +240,7 @@ export default function PageSlider({
           className="relative h-1 w-full bg-white/15 rounded-full cursor-pointer group-hover:h-1.5 transition-all"
         >
           <div
-            className="absolute left-0 top-0 h-full bg-white/85 rounded-full"
+            className="reader-slider-fill absolute left-0 top-0 h-full rounded-full"
             style={{ width: `${pct}%` }}
           />
           {/* 拖动手柄 */}

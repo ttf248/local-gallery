@@ -652,6 +652,15 @@ async function main() {
           );
           continue;
         }
+        // 漫画侧没有相册网格页：/comic/albums/:id 直接进阅读器（沉浸场景，
+        // 不在 AppShell 下，通栏）。它已由 reader 一条单独审计，通栏页面
+        // 本来也不参与跨页容器比较 —— 这里量到的只会是阅读器第二遍。
+        if (route === "album" && mode === "comic") {
+          console.log(
+            `  · 跳过 ${theme} album：漫画侧打开一卷直接进阅读器（reader 已单独审计）`,
+          );
+          continue;
+        }
         if (route === "reader") {
           if (!(await openReader(page))) {
             console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);

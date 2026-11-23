@@ -208,7 +208,7 @@ function ToolButton({
       aria-pressed={active}
       className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
         active
-          ? "bg-white/20 text-white"
+          ? "reader-tool-active"
           : "text-white/80 hover:bg-white/10 hover:text-white"
       }`}
     >

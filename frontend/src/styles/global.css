@@ -335,10 +335,10 @@
        把实色段整体调浅会让书名落到渐变带里，对比度掉到 4:1 以下。 */
     background-image: linear-gradient(
       to top,
-      rgb(0 0 0 / 0.88) 0%,
-      rgb(0 0 0 / 0.88) 70%,
-      rgb(0 0 0 / 0.5) 88%,
-      rgb(0 0 0 / 0) 100%
+      var(--cover-band) 0%,
+      var(--cover-band) 70%,
+      color-mix(in srgb, var(--cover-band) 57%, transparent) 88%,
+      transparent 100%
     );
     pointer-events: none;
   }
@@ -358,10 +358,10 @@
     padding-top: 30px;
     background-image: linear-gradient(
       to top,
-      rgb(0 0 0 / 0.88) 0%,
-      rgb(0 0 0 / 0.88) 70%,
-      rgb(0 0 0 / 0.5) 88%,
-      rgb(0 0 0 / 0) 100%
+      var(--cover-band) 0%,
+      var(--cover-band) 70%,
+      color-mix(in srgb, var(--cover-band) 57%, transparent) 88%,
+      transparent 100%
     );
   }
   .cover-title__series {

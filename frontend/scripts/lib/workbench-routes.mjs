@@ -5,8 +5,22 @@
 // 量到的全是首页的数据，却报成「各页面对齐」。这里补上模式前缀，
 // 让审计真的走到它声称要审的页面。
 
-/** 读取当前工作台模式：根元素上的 data-mode 由 URL 推导。 */
+/**
+ * 读取当前工作台模式：根元素上的 data-mode 由 URL 推导。
+ *
+ * 根路径在水合服务端偏好之前一律显示为照片侧（偏好未就绪时先落在
+ * 默认值上），真正落到哪一侧要等服务端偏好到达后重定向完成。
+ * 不等这个重定向就读 data-mode，会把「漫画侧服务」误判成照片侧 ——
+ * 整轮审计量的是另一侧，结论却是绿的。因此先等地址落进某一侧。
+ */
 export async function resolveMode(page) {
+  await page
+    .waitForFunction(
+      () => /^\/(photo|comic)(\/|$)/.test(window.location.pathname),
+      undefined,
+      { timeout: 20000 },
+    )
+    .catch(() => {});
   const mode = await page.evaluate(
     () => document.documentElement.getAttribute("data-mode") || "photo",
   );

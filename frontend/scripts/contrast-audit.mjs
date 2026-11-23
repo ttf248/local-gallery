@@ -901,6 +901,14 @@ for (const theme of THEMES) {
       );
       continue;
     }
+    // 漫画侧没有相册网格页：/comic/albums/:id 直接进阅读器。阅读器已由
+    // reader 一条单独审计，这里再量一遍量到的还是阅读器。
+    if (route === "album" && mode === "comic") {
+      console.log(
+        `  · 跳过 ${theme} album：漫画侧打开一卷直接进阅读器（reader 已单独审计）`,
+      );
+      continue;
+    }
     if (route === "reader") {
       if (!(await openReader(page))) {
         console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);

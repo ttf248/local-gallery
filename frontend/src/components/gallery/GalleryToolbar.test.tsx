@@ -29,6 +29,18 @@ describe("GalleryToolbar 阅读控制", () => {
     expect(useGalleryStore.getState().mode).toBe("double");
   });
 
+  it("当前模式的那一档用漫画暖棕标出", () => {
+    useGalleryStore.setState({ mode: "double" });
+    renderToolbar();
+    const active = screen.getByRole("button", { name: "双页" });
+    expect(active).toHaveAttribute("aria-pressed", "true");
+    // 选中态走阅读器自己的暖棕类：深色画布上一眼能认出「现在是哪一档」。
+    expect(active.className).toContain("reader-tool-active");
+    expect(
+      screen.getByRole("button", { name: "单页" }).className,
+    ).not.toContain("reader-tool-active");
+  });
+
   it("适配按钮按 适应→按宽→按高→原始 循环", () => {
     useGalleryStore.setState({ fit: "fit" });
     renderToolbar();

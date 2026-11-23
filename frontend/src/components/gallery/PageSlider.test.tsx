@@ -2,6 +2,14 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import PageSlider from "./PageSlider";
 
+it("进度条的已读段用漫画暖棕，与工具条同一支色", () => {
+  const { container } = render(
+    <PageSlider total={3} index={1} onJump={vi.fn()} />,
+  );
+  const fill = container.querySelector(".reader-slider-fill");
+  expect(fill).not.toBeNull();
+});
+
 it.each([
   { key: "g", ctrlKey: true },
   { key: "g", altKey: true },

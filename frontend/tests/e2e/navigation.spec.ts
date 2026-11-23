@@ -52,6 +52,31 @@ test("照片与漫画两侧的导航各自成套", async ({ page, request }) => 
   await expect(sidebar.getByRole("link", { name: "发现" })).toHaveCount(0);
 });
 
+// 漫画工作台的暖棕：语义 token 在漫画侧重映射，照片侧仍是品牌蓝。
+// 换的是色相不是系统 —— 侧栏选中项与主按钮都跟着换。
+test("漫画工作台用暖棕强调色，照片工作台仍是品牌蓝", async ({
+  page,
+  request,
+}) => {
+  await setWorkbenchMode(request, "photo");
+  await page.goto("/photo");
+  const photoAccent = await page.evaluate(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim(),
+  );
+  expect(photoAccent.toLowerCase()).toBe("#476c8d");
+
+  await setWorkbenchMode(request, "comic");
+  await page.goto("/comic");
+  const comicAccent = await page.evaluate(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim(),
+  );
+  expect(comicAccent.toLowerCase()).toBe("#8e6848");
+});
+
 test("旧书签仍然打得开：它们重定向到新入口", async ({ page }) => {
   for (const [oldPath, newPath] of [
     ["/photo/recents", "/photo/me/recents"],

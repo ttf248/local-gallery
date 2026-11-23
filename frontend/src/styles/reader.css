@@ -62,4 +62,14 @@
     border-radius: var(--radius-tile);
     background: color-mix(in srgb, var(--reader-panel) 94%, transparent);
   }
+  /* 工具条里选中的那一档（单页 / 双页 / 连续）：用漫画侧的暖棕，
+     深色画布上一眼能认出「现在是哪一档」，又不至于亮到抢过画面。 */
+  .reader-tool-active {
+    background: color-mix(in srgb, var(--reader-accent) 24%, transparent);
+    color: var(--reader-accent);
+  }
+  /* 底部进度条的已读段：同一支暖棕。 */
+  .reader-slider-fill {
+    background: var(--reader-accent);
+  }
 }

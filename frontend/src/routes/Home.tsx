@@ -77,9 +77,11 @@ function HomeHeader({
     <section className="page-shell page-heading">
       <div className="home-heading">
         <div className="home-heading__title">
-          <h1 className="page-title page-title--sm">{title}</h1>
+          {/* 工作台首页的主标题是 32px（与照片侧同一档）：两侧都是入口页，
+              标题要压得住首屏；数量与时间退到下面一行的辅助字里。 */}
+          <h1 className="page-title">{title}</h1>
         </div>
-        <p className="home-heading__desc text-body text-fg-muted">
+        <p className="home-heading__desc text-meta text-fg-muted">
           {manifest ? (
             <>
               <span className="tabular-nums">{librarySize}</span>
