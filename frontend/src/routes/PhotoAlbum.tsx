@@ -30,6 +30,7 @@ import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 import PhotoWall from "../components/wall/PhotoWall";
 import AlbumFilterBar from "../components/wall/AlbumFilterBar";
+import DensityControl from "../components/wall/DensityControl";
 import ErrorBanner from "../components/common/ErrorBanner";
 import EmptyState from "../components/common/EmptyState";
 import PhotoViewer from "../components/wall/PhotoViewer";
@@ -401,8 +402,6 @@ export default function PhotoAlbum({ album }: Props) {
         album={album}
         title={title}
         multiRoot={multiRoot}
-        density={density}
-        onDensityChange={setDensity}
         selectionActive={selection.active}
         onToggleSelection={selection.toggleMode}
         isFavorite={isFavorite}
@@ -450,7 +449,15 @@ export default function PhotoAlbum({ album }: Props) {
           {/* 筛选条只在看全部照片时出现：分组里的照片已经是筛过的，
               再加一层筛选会让人以为那些分组还能再筛。 */}
           {!showingGroup ? (
-            <div className="ml-auto">
+            /* 「怎么看」的一组：密度、筛选、折叠相似。它们与照片怎么摆
+               有关，摆在同一行作伴；页头那一行只留身份与相册级动作。 */
+            <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+              {/* 密度只留宽屏：窄屏的照片墙固定两列，给一个改不动的
+                  控件只是噪音。 */}
+              <div className="hidden items-center gap-2 md:flex">
+                <span className="text-meta text-fg-subtle">密度</span>
+                <DensityControl value={density} onChange={setDensity} />
+              </div>
               <AlbumFilterBar
                 state={filter}
                 facets={facets}

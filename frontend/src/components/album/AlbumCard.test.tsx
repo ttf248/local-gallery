@@ -219,6 +219,52 @@ describe("AlbumCard 封面语义", () => {
     );
   });
 
+  // 照片侧的文件夹：一张主体照片铺满，辅以最多两张小图。
+  it("照片侧的文件夹封面是一张主体加最多两张小图", () => {
+    const { container } = renderCard(
+      card({
+        id: "collection-photo",
+        variant: "collection",
+        title: "2026 年",
+        count: 8,
+        contentKind: "photo",
+        covers: ["one", "two", "three", "four"],
+      }),
+    );
+
+    const stack = screen.getByTestId("card-cover-stack");
+    expect(stack).toBeInTheDocument();
+    expect(screen.queryByTestId("card-cover-mosaic")).not.toBeInTheDocument();
+    // 一张主体 + 两张小图 = 三张，不是四等分。
+    expect(container.querySelectorAll('[data-testid="card-cover"] img')).toHaveLength(
+      3,
+    );
+    expect(
+      stack.querySelector(".cover-stack__side")?.getAttribute("data-covers"),
+    ).toBe("2");
+  });
+
+  // 文件夹标识从封面上挪到标题前：封面不再压一块常驻的黑标签。
+  it("文件夹标识是标题前的一枚小图标，不再压在封面上", () => {
+    const { container } = renderCard(
+      card({
+        id: "collection-photo",
+        variant: "collection",
+        title: "2026 年",
+        count: 8,
+        contentKind: "photo",
+        covers: ["one"],
+      }),
+    );
+
+    const title = container.querySelector(".album-tile__title");
+    expect(title?.querySelector("svg")).toBeTruthy();
+    // 封面上没有「文件夹」角标了。
+    expect(container.querySelector('[data-testid="card-cover"]')?.textContent).not.toContain(
+      "文件夹",
+    );
+  });
+
   it("混合相册展示视频角标以及分开的图片、视频计数", () => {
     renderCard(
       card({

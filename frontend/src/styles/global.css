@@ -496,6 +496,41 @@
     grid-row: auto;
   }
   /* 四张走基础规则：2×2，每格都是竖版。 */
+
+  /* 文件夹封面：一张主体照片铺满，辅以最多两张小图。
+     四等分拼贴把主体挤成四分之一 —— 一屏几十个文件夹，每张都摊成
+     四张小图，谁也认不出这个文件夹里拍的是什么。一张主体说话，两张
+     小图补充，文件夹里「有照片」这件事就够了。
+     小图压在右下角：主体照片留在完整的位置，不被切掉一半。 */
+  .cover-stack {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+  .cover-stack__side {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    height: 34%;
+    display: flex;
+    gap: 2px;
+    /* 间隙用画布色：两张小图之间与它们与主体之间要分得开，
+       否则它们糊成一片，读起来像一张糊掉的照片。 */
+    padding: 2px;
+    background: var(--bg);
+  }
+  .cover-stack__side[data-covers="1"] {
+    width: 34%;
+  }
+  .cover-stack__side[data-covers="2"] {
+    width: 68%;
+  }
+  .cover-stack__cell {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .album-tile__meta {
     padding: 12px 0 7px;
   }

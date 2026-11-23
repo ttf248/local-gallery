@@ -40,6 +40,10 @@ test("从首页进图库，按目录找到相册并打开照片", async ({ page,
   await expect(tree).toBeVisible();
   await expect(tree.getByRole("button").first()).toBeVisible();
 
+  // 顶层时树只摆媒体根：根下面可能挂着上百个文件夹，全部摊开就是
+  // 一份巨大的导航列表。展开它才看得见下一层。
+  await tree.getByRole("button", { name: /^展开 / }).first().click();
+
   // 点目录里的那本相册，直接进照片墙。
   const albumInTree = tree.getByRole("button", { name: album!.name, exact: true });
   await expect(albumInTree).toBeVisible();
@@ -54,14 +58,18 @@ test("图库能按文件夹下钻，面包屑说清在哪一层", async ({ page,
   await scannedNodes(request, "photo");
   await page.goto("/photo/library");
   const tree = page.getByRole("navigation", { name: "目录" });
-  // 媒体根那一层默认展开着，从里面找一个文件夹点进去。
-  const folder = tree.getByRole("button", { name: /^[^/]*\d+ 个相册$/ });
-  if ((await folder.count()) > 0) {
-    await folder.first().click();
-    await expect(page).toHaveURL(/\/photo\/library\?node=/);
-    // 面包屑给出祖先链：至少是「图库 › 某文件夹」。
-    await expect(page.getByRole("navigation", { name: "目录位置" })).toBeVisible();
-  }
+  // 媒体根那一层默认收着（不摊开上百个文件夹），展开后从里面找一个
+  // 文件夹点进去。
+  await tree.getByRole("button", { name: /^展开 / }).first().click();
+  const folder = tree.getByRole("button", {
+    name: "zz-library-hierarchy",
+    exact: true,
+  });
+  await expect(folder).toBeVisible();
+  await folder.click();
+  await expect(page).toHaveURL(/\/photo\/library\?node=/);
+  // 面包屑给出祖先链：至少是「图库 › 某文件夹」。
+  await expect(page.getByRole("navigation", { name: "目录位置" })).toBeVisible();
 });
 
 /**
@@ -214,6 +222,9 @@ test("目录树根与集合读取失败时显示错误并可重试", async ({ pa
 
   await page.goto("/photo/library");
   const tree = page.getByRole("navigation", { name: "目录" });
+  // 根那一层默认收着（不摊开上百个文件夹）：展开它才会去读子项，
+  // 读不出来时也给得出重试的手柄。
+  await tree.getByRole("button", { name: /^展开 / }).first().click();
   await expect(tree.getByRole("alert")).toContainText("目录读取失败");
 
   // 放开失败再重试：目录读得出来了。

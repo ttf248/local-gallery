@@ -475,21 +475,14 @@ function GridCard({
           )}
 
           {/* 集合 / 标签 这类"类型"信息不属于阅读状态，已移到标题下的元信息行，
-              封面角位只留给状态（未读点 / 已读），避免角标互相打架。 */}
+              封面角位只留给状态（未读点 / 已读），避免角标互相打架。
 
-          {/* 文件夹角标：照片侧的文件夹与相册一眼要能分开。
-              文件夹点开是下一层，相册点开是照片 —— 这两件事不一样，
-              卡片的样子也得不一样：文件夹在封面上压一枚文件夹角标，
-              相册没有。
-              封面本身摆的是里面的真实照片（目录里的代表图），
-              不再用一块灰底加一枚图标代替：那一屏灰块既不回答
-              「里面有什么」，也让整页读成一排占位框。 */}
-          {isPhotoFolder && (
-            <span className="absolute left-2 bottom-2 inline-flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-badge text-white/90 backdrop-blur-sm">
-              <FolderIcon size={11} className="shrink-0" />
-              文件夹
-            </span>
-          )}
+              文件夹标识也不在封面上：那是一块常驻的黑标签，一屏几十个
+              文件夹就是几十块黑条，把照片本身挤成背景。标识挪到标题
+              前面（一个小图标）—— 一样能一眼分出文件夹与相册，却不再
+              盖住照片。封面摆的是里面的真实照片（目录里的代表图），
+              不用一块灰底加一枚图标代替：那一屏灰块既不回答「里面有
+              什么」，也让整页读成一排占位框。 */}
 
           {/* 阅读进度：百分比放深色蒙版 chip，进度条压在封面底边的暗色条上。
               以前整块用一层渐变蒙版，白字在亮封面（照片里的白墙、白纸）上
@@ -528,14 +521,23 @@ function GridCard({
               className="album-tile__title text-label font-medium text-fg truncate-2 leading-snug transition-colors group-hover:text-accent-ink"
               title={data.displayTitle ?? data.title}
             >
+              {/* 文件夹标识：一个小图标贴在标题前面。标题 16px 是这一层
+                  的骨架，标识跟着标题走，不必在封面上再压一块标签。 */}
+              {isPhotoFolder ? (
+                <FolderIcon
+                  size={12}
+                  className="mr-1 inline-block align-middle text-fg-subtle"
+                  aria-hidden="true"
+                />
+              ) : null}
               {data.displayTitle ?? data.title}
             </div>
           )}
-          {/* meta 行 12.5px → 13px：全量网格一次显示几十张卡，
-              12.5px 的中文在一屏里会糊成灰团，是"内容存在感不足"
-              的主要来源之一。 */}
+          {/* meta 行：数量是辅助信息（13px），与标题差一档。
+              一屏几十张卡，15px 的数字与 16px 的标题挨在一起时两边
+              互相抬价，数量读起来比名字还响。 */}
           <div
-            className={`text-body tabular-nums flex items-center gap-1.5 min-w-0 ${
+            className={`text-meta tabular-nums flex items-center gap-1.5 min-w-0 ${
               showTitleOnCover ? "text-fg-muted" : "text-fg-muted mt-1"
             }`}
           >

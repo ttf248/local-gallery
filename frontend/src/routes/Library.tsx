@@ -249,13 +249,11 @@ export default function Library() {
         return "全部内容";
     }
   }, [copy.albumTypeLabel, copy.collectionTypeLabel, filters.view]);
-  // 顶层时标题自己就说清了范围（全部……），不必再挂一个栏目眉标；
-  // 进了某一层，眉标才说得出「这一层在相册那一侧」。
+  // 顶层时标题自己就说清了范围（全部……）；往下一层，标题是这一层的
+  // 名字，位置由面包屑说明 —— 两边都不必再挂一个栏目眉标。
   const title = current
     ? current.displayName || current.name
     : (currentRoot?.name ?? scopeTitle);
-  // 顶层没有眉标，标题独占一行；往下走才有「栏目 + 名字」两层。
-  const showEyebrow = Boolean(nodeId);
   const total = list.summary?.total ?? 0;
   const hasContent = (manifest?.statistics.albumCount ?? 0) > 0;
   const hasActiveFilters =
@@ -265,15 +263,14 @@ export default function Library() {
 
   return (
     <div className="library-page min-h-full">
-      <div className="page-shell container--gallery">
-        {/* 页头：这一层是什么、在哪棵树上。 */}
+      {/* Standard 容器：这一页是目录而不是展陈墙，密度按内容页的节奏走
+          （封面 220–260px、桌面五六列），不必跟照片墙抢画面。 */}
+      <div className="page-shell container--standard">
+        {/* 页头：这一层是什么、在哪棵树上。
+            不挂栏目眉标：面包屑的第一段已经说了「相册 / 书架」，
+            再写一遍是同一句话说两遍。 */}
         <header className="library-head">
           <div className="min-w-0">
-            {showEyebrow ? (
-              <p className="page-eyebrow">
-                {mode === "comic" ? "书架" : "相册"}
-              </p>
-            ) : null}
             <h1 className="page-title page-title--sm truncate">{title}</h1>
             {nodeId ? (
               <Breadcrumb

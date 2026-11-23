@@ -62,14 +62,13 @@ export default function FolderTree({ mode, selectedId, onSelect }: Props) {
   );
   // 用户手动展开或收起的层级：手动优先于默认。
   const [manual, setManual] = useState<Record<string, boolean>>({});
-  // 默认展开到什么程度：媒体根那一层始终看得见（它就是库的第一层，
-  // 收起它等于树里什么都没有），更深的层级只展开当前所在的那条路。
-  const rootIds = useMemo(
-    () => new Set(roots.map((root) => root.id)),
-    [roots],
-  );
-  const isExpanded = (id: string) =>
-    manual[id] ?? (rootIds.has(id) || pathIds.has(id));
+  // 默认展开到什么程度：只展开当前所在的那条路。
+  //
+  // 媒体根那一层也默认收着：根下面常常是几十个年份文件夹，全部摊开
+  // 就是一份巨大的导航列表，而内容区此刻正摆着同一批文件夹 —— 树与
+  // 内容各说一遍，树上那份还把「我在哪儿」这件事挤没了。用户想翻目录
+  // 时点一下根即可。
+  const isExpanded = (id: string) => manual[id] ?? pathIds.has(id);
   const toggle = (id: string) =>
     setManual((previous) => ({ ...previous, [id]: !isExpanded(id) }));
 

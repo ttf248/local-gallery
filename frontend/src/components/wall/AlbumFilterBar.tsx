@@ -120,23 +120,27 @@ export default function AlbumFilterBar({
         </button>
       )}
 
-      <span className="text-meta tabular-nums text-fg-subtle">
-        {reduced ? (
-          <>
-            {resultCount} / {photoCount} 张
-          </>
-        ) : (
-          <>{photoCount} 张</>
-        )}
-        {missing > 0 && (
-          <span className="ml-1 text-fg-muted">· {missing} 张未纳入</span>
-        )}
-        {state.collapse && grouped > 0 && (
-          <span className="ml-1 text-fg-muted">
-            · 折叠 {groupedGroups} 组 / {grouped} 张
-          </span>
-        )}
-      </span>
+      {/* 张数只在「墙上真的少了东西」时才报：页头已经写着这本相册有
+          多少张，这里再写一遍是同一句话说两遍。而「13 / 20 张」这种
+          读数只有筛过或折叠过才带新消息 —— 那时它说的不是重复，
+          而是「现在墙上这些是从多少里挑出来的」。 */}
+      {reduced || missing > 0 ? (
+        <span className="text-meta tabular-nums text-fg-subtle">
+          {reduced ? (
+            <>
+              {resultCount} / {photoCount} 张
+            </>
+          ) : null}
+          {missing > 0 && (
+            <span className="ml-1 text-fg-muted">· {missing} 张未纳入</span>
+          )}
+          {state.collapse && grouped > 0 && (
+            <span className="ml-1 text-fg-muted">
+              · 折叠 {groupedGroups} 组 / {grouped} 张
+            </span>
+          )}
+        </span>
+      ) : null}
 
       {filtered && (
         <button

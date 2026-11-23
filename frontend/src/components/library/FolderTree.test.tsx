@@ -86,29 +86,27 @@ describe("目录树", () => {
     expect(screen.queryByRole("button", { name: "漫画根" })).toBeNull();
   });
 
-  it("默认只展开媒体根那一层，更深的层级不展开", async () => {
+  it("顶层时不摊开媒体根：根下面常常是几十个年份，全部列出来就是一份巨大的导航列表", async () => {
     vi.mocked(libraryApi.childrenAll).mockResolvedValue([
       node({ id: "c_1", name: "2025" }),
     ]);
     renderTree();
 
-    // 根那一层看得见：它就是库的第一层。
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "2025" })).toBeInTheDocument(),
-    );
-    // 更深的一层不展开：不站在那一层里，就不读它的子项。
-    expect(libraryApi.childrenAll).toHaveBeenCalledTimes(1);
-    expect(libraryApi.childrenAll).toHaveBeenCalledWith(
-      "r1",
-      "photo",
-      expect.anything(),
-    );
-    expect(screen.getByRole("button", { name: "展开 2025" })).toBeInTheDocument();
+    // 根自己看得见：它就是库的第一层。
+    expect(screen.getByRole("button", { name: "存照" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开 存照" })).toBeInTheDocument();
+    // 子项既不列出来，也不去取：没展开就不读。
+    expect(screen.queryByRole("button", { name: "2025" })).toBeNull();
+    expect(libraryApi.childrenAll).not.toHaveBeenCalled();
   });
 
   it("站在某一层里时自动展开到那一层", async () => {
+    // 祖先链从媒体根一路排到当前节点（后端就是这么给的）。
     vi.mocked(useLibraryAncestors).mockReturnValue({
-      data: [{ id: "c_1", sourceRoot: "r1" }],
+      data: [
+        { id: "r1", sourceRoot: "r1" },
+        { id: "c_1", sourceRoot: "r1" },
+      ],
       isLoading: false,
     } as never);
     vi.mocked(libraryApi.childrenAll).mockImplementation(async (id: string) =>
@@ -141,11 +139,18 @@ describe("目录树", () => {
     ]);
     renderTree();
 
+    // 展开根：子项列出来。
+    fireEvent.click(screen.getByRole("button", { name: "展开 存照" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "2025" })).toBeInTheDocument(),
     );
+    expect(libraryApi.childrenAll).toHaveBeenCalledWith(
+      "r1",
+      "photo",
+      expect.anything(),
+    );
 
-    // 收起根那一层：树里只剩根自己。
+    // 再收起：树里只剩根自己。
     fireEvent.click(screen.getByRole("button", { name: "收起 存照" }));
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "2025" })).toBeNull(),

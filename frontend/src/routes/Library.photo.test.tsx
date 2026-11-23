@@ -160,7 +160,7 @@ describe("照片相册页", () => {
     });
   });
 
-  it("顶层不挂栏目眉标，进了某一层才挂", async () => {
+  it("任何一层都不挂栏目眉标：面包屑已经说清了位置", async () => {
     const { unmount } = renderLibrary();
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
@@ -188,8 +188,8 @@ describe("照片相册页", () => {
     await waitFor(() => {
       expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("2025");
     });
-    // 眉标说的是「这一层在相册那一侧」；面包屑里也有一个「相册」，
-    // 因此这里按眉标定位。
-    expect(document.querySelector(".page-eyebrow")).toHaveTextContent("相册");
+    // 眉标说的是「这一层在相册那一侧」，而面包屑的第一段已经说了
+    // 「相册」—— 同一句话说两遍，眉标因此去掉。
+    expect(document.querySelector(".page-eyebrow")).toBeNull();
   });
 });

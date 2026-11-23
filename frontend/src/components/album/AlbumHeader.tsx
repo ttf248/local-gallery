@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { LibraryNodeSummary } from "../../api/library";
-import DensityControl from "../wall/DensityControl";
 import Popover, { PopoverItem, PopoverLabel } from "../common/Popover";
 import {
   ChevronLeftIcon,
@@ -14,7 +13,6 @@ import {
 } from "../common/Icon";
 import { albumRoute } from "../../utils/path";
 import { mediaCountParts } from "../../utils/mediaCount";
-import type { WallDensity } from "../../store/photoStore";
 
 interface Props {
   /** 相册摘要：标题、归属目录与数量。 */
@@ -23,9 +21,6 @@ interface Props {
   title: string;
   /** 媒体根数量：单根时不必在页头上重复来源。 */
   multiRoot: boolean;
-  /** 墙的密度。 */
-  density: WallDensity;
-  onDensityChange: (density: WallDensity) => void;
   /** 是否处于多选模式。 */
   selectionActive: boolean;
   onToggleSelection: () => void;
@@ -45,8 +40,11 @@ interface Props {
 /**
  * 相册页的页头。
  *
- * 它压成一行：返回 · 归属目录 · 相册名 · 数量，右侧是密度、多选、
- * 收藏与更多。照片墙是浏览页，页头占的每一行都是照片的位置。
+ * 它压成一行：返回 · 归属目录 · 相册名 · 数量，右侧是多选、收藏与更多。
+ * 照片墙是浏览页，页头占的每一行都是照片的位置。
+ *
+ * 「怎么看」的那些控件（密度、筛选、折叠相似）不在这一行：它们与
+ * 照片怎么摆有关，摆在第二行与筛选条作伴，页头只留身份与相册级动作。
  *
  * 相册级动作（收藏、复制链接、在文件管理器里打开）收在这一行里，
  * 不占用一整屏的封面区。
@@ -55,8 +53,6 @@ export default function AlbumHeader({
   album,
   title,
   multiRoot,
-  density,
-  onDensityChange,
   selectionActive,
   onToggleSelection,
   isFavorite,
@@ -140,25 +136,16 @@ export default function AlbumHeader({
             </div>
           </div>
 
-          {/* 右侧操作收成一组：多选、密度切换、收藏、更多。
+          {/* 右侧操作收成一组：多选、收藏、更多。
               组内用 hairline 分隔，读起来是一个工具条而不是几个孤立按钮。
 
               收藏与「更多」在窄屏也留着：窄屏上右键菜单用不了，
               没有这一组，这一页就再也点不到「收藏」「复制链接」
-              「设为封面」。密度切换只留宽屏 —— 窄屏的照片墙固定
-              两列，给一个改不动的控件只是噪音。 */}
+              「设为封面」。 */}
           <div className="flex items-center gap-2">
-            <div className="hidden items-center gap-2 md:flex">
-              <span className="text-meta text-fg-subtle">密度</span>
-              <DensityControl value={density} onChange={onDensityChange} />
-            </div>
-
             {/* 多选：批量加入精选、并排对比都从这里进。
                 它必须在窄屏也在 —— 触摸设备没有右键菜单，
-                批量挑选只能靠这个按钮。
-
-                放在密度控件之后：密度是「怎么看」，多选与收藏是
-                「对这一本做什么」，两组不是一件事。 */}
+                批量挑选只能靠这个按钮。 */}
             <button
               type="button"
               onClick={onToggleSelection}

@@ -71,8 +71,10 @@
 }
 
 @media (min-width: 1024px) {
+  /* 目录 240px：再宽，目录里的短名字与右侧那一大片空白会分成两个
+     世界；再窄，深一层的名字要缩成省略号。 */
   .library-layout {
-    grid-template-columns: 264px minmax(0, 1fr);
+    grid-template-columns: 240px minmax(0, 1fr);
     gap: 28px;
   }
 }
@@ -235,4 +237,11 @@
 
 .library-content .filter-strip {
   padding-top: 2px;
+}
+
+/* 图库网格的封面列宽：220–260px 之间（这里取 240px）。
+   这一页是目录不是展陈墙，封面要能一眼认出是哪一本，但不必抢照片墙
+   的画面。列数由内容区宽度决定：1440 下三列，1920 下五六列。 */
+.library-content .library-grid {
+  --library-col: 240px;
 }
