@@ -281,7 +281,9 @@ export default function GlobalSearch() {
           ))}
           {/* 面板底部：名字搜索与内容搜索的关系。
               两者检索的东西不一样（名字 vs 画面与图片文字），共用一个输入框
-              会让人以为搜不到就是没有。这里给一枚直接切换作用域的入口。 */}
+              会让人以为搜不到就是没有。这里给一枚直接切换作用域的入口 ——
+              作用域本身由输入框左边那枚按钮说明，这一行不再重复一遍
+              「内容」两个字。 */}
           {mode === "photo" ? (
             <div className="mt-1 border-t border-border-faint">
               <button
@@ -296,21 +298,19 @@ export default function GlobalSearch() {
               >
                 <FolderSearchIcon size={14} className="shrink-0" />
                 <span>改搜照片里的画面与文字</span>
-                <span className="ml-auto text-meta text-fg-subtle">内容</span>
               </button>
             </div>
           ) : null}
         </div>
       )}
 
-      {/* 内容搜索：没有逐条建议可给，但要说清搜的是什么、现在能不能搜。 */}
+      {/* 内容搜索：没有逐条建议可给，但要说清现在能不能搜。
+          搜的是哪一类由输入框左边的作用域按钮与输入框里的提示词说了，
+          这里只补运行状态 —— 同一句话不在一处说两遍。 */}
       {open && !nameScope && searchEnabled && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-bg-elevated border border-border rounded-lg shadow-lg overflow-hidden z-30 fade-up">
           <div className="px-3 py-2.5">
-            <p className="text-body text-fg">
-              按画面与图片文字找照片
-            </p>
-            <p className="mt-1 text-meta text-fg-muted">
+            <p className="text-meta text-fg-muted">
               {contentScopeNote(
                 embeddingStatus.data?.status,
                 embeddingStatus.isError,

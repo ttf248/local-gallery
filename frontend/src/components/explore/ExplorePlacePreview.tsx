@@ -5,6 +5,8 @@ import { aiJobsApi, type AIJob, type ChinaPlace } from "../../api/aiJobs";
 import { useChinaPlacesAll } from "../../hooks/useChinaLocations";
 import ErrorBanner from "../common/ErrorBanner";
 import RenditionImage from "../common/RenditionImage";
+import { ImageIcon } from "../common/Icon";
+import ExploreCard from "./ExploreCard";
 import { travelPlaceRoute, travelsRoute } from "../../utils/path";
 
 /** 预览最多列几个地方：这是入口，不是一张地点清单。 */
@@ -15,6 +17,9 @@ const PLACE_LIMIT = 8;
  *
  * 地点全部在本机解析（离线行政区边界），不请求在线地图：预览里摆的
  * 每一个地方都能点进去看到那几天的照片，点不动的空入口不摆。
+ *
+ * 卡片用真实的地理照片当画面：地名本身说明不了「那是哪儿」，一张照片
+ * 才说得出。没有照片的地方给一块带图标的底，而不是一块空白方框。
  */
 export default function ExplorePlacePreview() {
   const places = useChinaPlacesAll("city", null);
@@ -32,7 +37,7 @@ export default function ExplorePlacePreview() {
   );
 
   return (
-    <section className="page-shell page-section" aria-labelledby="explore-place">
+    <section className="page-section" aria-labelledby="explore-place">
       <div className="section-heading">
         <h2 id="explore-place" className="section-title">
           地点
@@ -74,12 +79,12 @@ export default function ExplorePlacePreview() {
 
       {items.length > 0 ? (
         <>
-          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="explore-grid">
             {items.map((place) => (
-              <PlaceRow key={place.adcode} place={place} />
+              <PlaceCard key={place.adcode} place={place} />
             ))}
-          </ul>
-          <p className="mt-3 text-meta text-fg-subtle">
+          </div>
+          <p className="mt-4 text-meta text-fg-subtle">
             位置来自照片自带的坐标与基站信息，全部在本机解析，不请求在线地图。
           </p>
         </>
@@ -88,32 +93,31 @@ export default function ExplorePlacePreview() {
   );
 }
 
-function PlaceRow({ place }: { place: ChinaPlace }) {
+function PlaceCard({ place }: { place: ChinaPlace }) {
   const cover = place.coverResourceIds?.[0];
   return (
-    <li>
-      <Link to={travelPlaceRoute(place.adcode)} className="tile-row">
-        <span className="tile-row__thumb">
-          {cover ? (
-            <RenditionImage
-              fileId={cover}
-              alt=""
-              displayWidth={96}
-              className="h-full w-full object-cover"
-            />
-          ) : null}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-body font-medium text-fg">
-            {place.name}
+    <ExploreCard
+      to={travelPlaceRoute(place.adcode)}
+      title={place.name}
+      meta={`${place.photoCount.toLocaleString("zh-CN")} 张${
+        place.visitCount > 0 ? ` · 去过 ${place.visitCount} 次` : ""
+      }`}
+      media={
+        cover ? (
+          <RenditionImage
+            fileId={cover}
+            alt=""
+            displayWidth={320}
+            sizes="(max-width: 640px) 45vw, 220px"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="explore-card__placeholder">
+            <ImageIcon size={22} />
           </span>
-          <span className="mt-0.5 block truncate text-meta tabular-nums text-fg-muted">
-            {place.photoCount.toLocaleString("zh-CN")} 张
-            {place.visitCount > 0 ? ` · 去过 ${place.visitCount} 次` : ""}
-          </span>
-        </span>
-      </Link>
-    </li>
+        )
+      }
+    />
   );
 }
 

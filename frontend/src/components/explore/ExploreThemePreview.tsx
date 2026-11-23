@@ -10,20 +10,23 @@ import { smartAlbumEvidenceDimensions, smartGroupHref } from "../../utils/smartA
 import ErrorBanner from "../common/ErrorBanner";
 import EmptyState from "../common/EmptyState";
 import RenditionImage from "../common/RenditionImage";
+import { SparkleIcon } from "../common/Icon";
+import ExploreCard from "./ExploreCard";
 import { smartAlbumsRoute } from "../../utils/path";
 
-/** 预览最多列几个主题。 */
-const THEME_LIMIT = 6;
+/** 预览最多列几个主题：只摆精选的几个，完整结果去主题页看。 */
+const THEME_LIMIT = 4;
 
 /**
  * 发现页的主题预览。
  *
- * 主题摆成**一行行的事**，不是一面大封面墙：用户要的是「这些照片凑
- * 在一起是什么」，标题、几张照片、出自哪本相册才是答案 —— 一张放大到
- * 撑满半屏的封面只说明「有照片」，不说明是什么。
+ * 主题摆成**几张卡**，不是一行行的事：用户要的是「这些照片凑在一起
+ * 是什么」，画面、名字与出处才是答案 —— 一张放大到撑满半屏的封面只
+ * 说明「有照片」，不说明是什么。
  *
- * 线索用用户的话写（时间 · 地点 · 人物 · 场景），不写「推荐」这种
- * 算法内部的说法。
+ * 卡片用实际成员的封面当画面（主题本来就是一组照片），线索收进悬停
+ * 提示：每张卡都挂一行「线索：时间 · 地点」，一屏四张就是四行几乎
+ * 一样的灰字，读不出差别。完整的主题清单在主题页。
  */
 export default function ExploreThemePreview() {
   const queryClient = useQueryClient();
@@ -56,7 +59,7 @@ export default function ExploreThemePreview() {
   }, [emptyFeatured, queryClient, task?.jobId, task?.status]);
 
   return (
-    <section className="page-shell page-section" aria-labelledby="explore-theme">
+    <section className="page-section" aria-labelledby="explore-theme">
       <div className="section-heading">
         <h2 id="explore-theme" className="section-title">
           主题
@@ -78,11 +81,11 @@ export default function ExploreThemePreview() {
             主题汇总暂时读不出来。
           </ErrorBanner>
         ) : (
-          <ul className="space-y-2">
+          <div className="explore-grid">
             {directory.items.map((item) => (
-              <ThemeRow key={`${item.albumId}-${item.group.id}`} item={item} />
+              <ThemeCard key={`${item.albumId}-${item.group.id}`} item={item} />
             ))}
-          </ul>
+          </div>
         )
       ) : allDirectory.isLoading || refresh.isLoading ? (
         <p className="text-body text-fg-muted" aria-live="polite">
@@ -145,44 +148,40 @@ export default function ExploreThemePreview() {
 }
 
 /**
- * 一个主题的一行。
+ * 一个主题的一张卡。
  *
- * 左边一张小图（让人认得出是照片），右边写清是什么、几张、出自哪里。
+ * 画面是这一组照片的实际成员封面：主题本来就是一组照片，用一张封面
+ * 说清「里面是什么」，比一枚抽象图标有说服力。
  */
-function ThemeRow({ item }: { item: SmartAlbumDirectoryItem }) {
+function ThemeCard({ item }: { item: SmartAlbumDirectoryItem }) {
   const group = item.group;
   const source = [item.parentName, item.albumName].filter(Boolean).join(" / ");
   const evidence = smartAlbumEvidenceDimensions(group);
   return (
-    <li>
-      <Link to={smartGroupHref(item)} className="tile-row">
-        <span className="tile-row__thumb">
-          {group.coverResourceId ? (
-            <RenditionImage
-              fileId={group.coverResourceId}
-              version={group.coverVersion}
-              alt=""
-              displayWidth={96}
-              className="h-full w-full object-cover"
-            />
-          ) : null}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-body font-medium text-fg">
-            {group.name}
+    <ExploreCard
+      to={smartGroupHref(item)}
+      title={group.name}
+      meta={`${group.photoCount.toLocaleString("zh-CN")} 张${
+        source ? ` · 来自 ${source}` : ""
+      }`}
+      hint={evidence.length > 0 ? `线索：${evidence.map(evidenceLabel).join(" · ")}` : undefined}
+      media={
+        group.coverResourceId ? (
+          <RenditionImage
+            fileId={group.coverResourceId}
+            version={group.coverVersion}
+            alt=""
+            displayWidth={320}
+            sizes="(max-width: 640px) 45vw, 220px"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <span className="explore-card__placeholder">
+            <SparkleIcon size={22} />
           </span>
-          <span className="mt-0.5 block truncate text-meta tabular-nums text-fg-muted">
-            {group.photoCount.toLocaleString("zh-CN")} 张
-            {source ? ` · 来自 ${source}` : ""}
-          </span>
-          {evidence.length > 0 ? (
-            <span className="mt-0.5 block truncate text-meta text-fg-subtle">
-              线索：{evidence.map(evidenceLabel).join(" · ")}
-            </span>
-          ) : null}
-        </span>
-      </Link>
-    </li>
+        )
+      }
+    />
   );
 }
 

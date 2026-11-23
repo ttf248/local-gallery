@@ -27,14 +27,19 @@ import {
   searchScopeFromParams,
   type SearchScope,
 } from "../utils/searchScope";
-import {
-  SEARCH_MATCH_ORDER_HINT,
-  searchMatchLabel,
-} from "../utils/searchMatch";
+import { searchMatchLabel } from "../utils/searchMatch";
 import type { CardData } from "../components/album/AlbumCard";
 import ContentSearchResults from "../components/search/ContentSearchResults";
 
 const SEARCH_PAGE_SIZE = 100;
+
+/** 一组结果：同一个命中理由下的所有卡片。 */
+interface ResultGroup {
+  key: string;
+  /** 命中理由；没有理由时（不该有）不写标题。 */
+  label: string | undefined;
+  items: CardData[];
+}
 
 /**
  * 搜索结果页。
@@ -46,6 +51,10 @@ const SEARCH_PAGE_SIZE = 100;
  * 一页管两类检索对象：容器的**名字**与照片里的**画面 / 文字**。
  * 两者的检索对象不同，界面上用一个分段控件说清当前是哪一类，
  * 关键词与作用域都住在地址里：刷新、前进、后退都对。
+ *
+ * 结果本身按命中理由分组：完全同名、开头相同、名字里含有……理由是
+ * 分组标题，不写在每一张卡上 —— 同一句话在一屏里重复几十遍，
+ * 说明不了任何事。卡片上留给照片、数量与来源。
  */
 export default function SearchResults() {
   const { mode } = useAppMode();
@@ -112,21 +121,28 @@ export default function SearchResults() {
   }, [cards, hits]);
 
   /**
-   * 只在这一段理由的第一张卡上写理由。
+   * 按命中理由分组。
    *
-   * 结果按相关度排，同一种命中理由是连着出现的。理由挂在每一张卡上，
-   * 一屏下来就是同一句话重复三遍 —— 重复的说明不说明任何事。每一段
-   * 的第一张带上它，读者扫一遍就知道后面这些为什么命中。
+   * 结果按相关度排，同一种命中理由是连着出现的。理由当分组标题：
+   * 一眼能看出「哪几条是完全同名、哪几条只是开头像」，又不用把同一句
+   * 话在每张卡上重复一遍。
    */
-  const reasonCarriers = useMemo(() => {
-    const ids = new Set<string>();
-    let previous: string | undefined;
+  const groups = useMemo<ResultGroup[]>(() => {
+    const list: ResultGroup[] = [];
     for (const card of cards) {
       const label = matchLabels.get(card.id);
-      if (label && label !== previous) ids.add(card.id);
-      previous = label;
+      const last = list[list.length - 1];
+      if (last && last.label === label) {
+        last.items.push(card);
+        continue;
+      }
+      list.push({
+        key: `${label ?? "hit"}-${list.length}`,
+        label,
+        items: [card],
+      });
     }
-    return ids;
+    return list;
   }, [cards, matchLabels]);
 
   const setScope = (next: SearchScope) => {
@@ -142,12 +158,11 @@ export default function SearchResults() {
   const heading = (
     <PageHeading
       title={query ? `「${query}」的搜索结果` : "搜索"}
-      eyebrow={isContent ? "按画面与文字找" : "按名字找"}
       description={
         query
           ? isContent
-            ? "在照片的画面与图片文字里找。命中按相似度排列。"
-            : `在${mode === "comic" ? "漫画" : "照片"}库里按名字找相册、文件夹与标签。${SEARCH_MATCH_ORDER_HINT}`
+            ? "在照片的画面与图片文字里找，按相似度排列。"
+            : `在${mode === "comic" ? "漫画" : "照片"}库里按名字找相册、文件夹与标签。`
           : "在顶栏的搜索框里输入关键词，按回车就能看到结果。"
       }
     />
@@ -201,7 +216,15 @@ export default function SearchResults() {
         <div className="shrink-0 overflow-y-auto pb-4">
           {heading}
           <div className="page-shell">{conditions}</div>
-          <div className="page-shell flex flex-wrap items-center gap-2 pt-3">
+          {/* 技术状态退到一行小字里：索引覆盖率与「重新搜索」是背景信息，
+              照片墙才是这一页的主角。 */}
+          <div className="page-shell flex flex-wrap items-center gap-3 pt-3">
+            {content.status ? (
+              <span className="text-meta tabular-nums text-fg-subtle">
+                {content.status.coverage.indexed.toLocaleString()} /{" "}
+                {content.status.coverage.total.toLocaleString()} 张已索引
+              </span>
+            ) : null}
             <button
               type="button"
               className="btn btn-sm btn-outline"
@@ -210,16 +233,10 @@ export default function SearchResults() {
             >
               重新搜索
             </button>
-            {content.status ? (
-              <span className="text-meta tabular-nums text-fg-subtle">
-                {content.status.coverage.indexed.toLocaleString()} /{" "}
-                {content.status.coverage.total.toLocaleString()} 张已索引
-              </span>
-            ) : null}
           </div>
           {content.status && !content.status.runtimeReady ? (
-            <div className="page-shell pt-3">
-              <p className="rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-meta text-fg-muted">
+            <div className="page-shell pt-2">
+              <p className="text-meta text-fg-muted">
                 本机画面模型未就绪，这次只能按图片里的文字找。
                 <Link
                   to="/tasks/storage"
@@ -273,15 +290,24 @@ export default function SearchResults() {
                 ? `显示 ${cards.length} / ${total} 项`
                 : `共 ${total} 项`}
             </p>
-            <AlbumGrid
-              items={cards}
-              variant={viewMode}
-              note={(item) =>
-                reasonCarriers.has(item.id)
-                  ? matchLabels.get(item.id)
-                  : undefined
-              }
-            />
+            {groups.map((group) => (
+              <section key={group.key} className="mb-5">
+                {group.label ? (
+                  <h3 className="mb-3 flex items-baseline gap-2">
+                    <span className="text-body font-medium text-fg">
+                      {group.label}
+                    </span>
+                    <span className="text-meta tabular-nums text-fg-subtle">
+                      {group.items.length} 项
+                    </span>
+                  </h3>
+                ) : null}
+                <AlbumGrid
+                  items={group.items}
+                  variant={viewMode}
+                />
+              </section>
+            ))}
             {search.hasNextPage ? (
               <button
                 type="button"

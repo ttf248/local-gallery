@@ -79,8 +79,26 @@ test("顶栏搜索可以切到画面与文字，回车进内容结果页", async
   ).toBeVisible();
 });
 
-test("搜索结果页能清除条件回到空态", async ({ page }) => {
-  await page.goto("/photo/search?q=旅行");
+/**
+ * 名称结果按命中理由分组。
+ *
+ * 临时库里有 105 本 `zz-search-load-more-*` 的相册，它们都是同一种命中
+ * 理由（名字以关键词开头）。理由因此只出现一次 —— 当分组标题，而不是在
+ * 一百张卡上把同一句话重复一百遍。
+ */
+test("名称结果按命中理由分组，理由不写在每张卡上", async ({ page }) => {
+  await page.goto("/photo/search?q=zz-search-load-more");
+
+  const heading = page.getByRole("heading", {
+    name: /名字(完全相同|以关键词开头|里含有关键词|标签命中|归属路径里含有关键词)/,
+  });
+  await expect(heading.first()).toBeVisible();
+  await expect(heading).toHaveCount(1);
+  // 卡片本身还在：理由成了标题，结果没有少。
+  await expect(page.getByTestId("album-card").first()).toBeVisible();
+});
+
+test("搜索结果页能清除条件回到空态", async ({ page }) => {  await page.goto("/photo/search?q=旅行");
   await expect(page.getByRole("heading", { name: /搜索结果/ })).toBeVisible();
 
   await page.getByRole("button", { name: "清除条件" }).click();
@@ -93,7 +111,8 @@ test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({
   await page.goto("/photo/explore");
 
   // 首屏：搜索入口 + 四个维度。
-  await expect(page.getByText("我要找什么")).toBeVisible();
+  // 找法就是那条输入框本身：页面上不再另起一个标题把同一件事说两遍。
+  await expect(page.getByRole("textbox", { name: "搜索" })).toBeVisible();
   const nav = page.getByRole("navigation", { name: "发现维度" });
   for (const label of ["时间", "人物", "地点", "主题"]) {
     await expect(nav.getByRole("link", { name: label })).toBeVisible();
@@ -139,6 +158,8 @@ test("地点预览列出能点进详情的城市", async ({ page, request }) => 
   const places = page.getByRole("region", { name: "地点" });
   const place = places.getByRole("link", { name: /杭州市|上海市|北京市/ }).first();
   await expect(place).toBeVisible();
+  // 地点卡片用真实的地理照片当画面，不是一块空白占位。
+  await expect(place.locator("img")).toBeVisible();
   await place.click();
 
   await expect(page).toHaveURL(/\/photo\/travels\/place\/\d+/);

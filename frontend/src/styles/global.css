@@ -1510,6 +1510,11 @@ button:not(:disabled):active {
   .page-title--sm {
     font-size: var(--text-page-sm);
   }
+  /* 内容页的主标题（发现页）：比工作台首页小一档，比列表页大两档 ——
+     它是内容入口，不是首页也不是一张列表。 */
+  .page-title--md {
+    font-size: var(--text-page-md);
+  }
   @media (max-width: 640px) {
     .page-title {
       font-size: var(--text-page-sm);

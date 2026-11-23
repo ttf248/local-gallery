@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 import { aiJobsApi, type AIJob, type PersonGroup } from "../../api/aiJobs";
 import PersonFaceThumb from "../people/PersonFaceThumb";
 import ErrorBanner from "../common/ErrorBanner";
+import ExploreCard from "./ExploreCard";
 import { peopleRoute } from "../../utils/path";
 
-/** 每一档最多摆几个头像：预览是入口，不是名单。 */
+/** 每一档最多摆几个人：预览是入口，不是名单。 */
 const NAMED_LIMIT = 6;
-const CANDIDATE_LIMIT = 10;
+const CANDIDATE_LIMIT = 6;
 
 /**
  * 发现页的人物预览。
@@ -37,7 +38,7 @@ export default function ExplorePeoplePreview() {
     .slice(0, CANDIDATE_LIMIT);
 
   return (
-    <section className="page-shell page-section" aria-labelledby="explore-people">
+    <section className="page-section" aria-labelledby="explore-people">
       <div className="section-heading">
         <h2 id="explore-people" className="section-title">
           人物
@@ -77,7 +78,7 @@ export default function ExplorePeoplePreview() {
       ) : null}
 
       {groups.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-8">
           {named.length > 0 ? (
             <PeopleGroup
               title="已命名"
@@ -116,33 +117,26 @@ function PeopleGroup({
 }) {
   return (
     <div>
-      <p className="mb-2 flex items-baseline gap-2 text-meta text-fg-muted">
+      <p className="mb-3 flex items-baseline gap-2 text-meta text-fg-muted">
         <span className="font-medium text-fg">{title}</span>
         <span>{hint}</span>
       </p>
-      <div
-        className="flex flex-wrap gap-x-3 gap-y-3"
-        data-testid={testId}
-      >
+      <div className="explore-grid" data-testid={testId}>
         {people.map((person) => (
-          <Link
+          <ExploreCard
             key={person.id}
             to={peopleRoute(person.id)}
-            className="group flex w-[76px] flex-col items-center gap-1"
-          >
-            <PersonFaceThumb
-              person={person}
-              size={56}
-              className="rounded-full"
-              testId="explore-person-thumbnail"
-            />
-            <span className="w-full truncate text-center text-meta text-fg">
-              {person.name}
-            </span>
-            <span className="text-meta tabular-nums text-fg-subtle">
-              {person.photoCount.toLocaleString("zh-CN")} 张
-            </span>
-          </Link>
+            title={person.name}
+            meta={`${person.photoCount.toLocaleString("zh-CN")} 张`}
+            media={
+              <PersonFaceThumb
+                person={person}
+                fill
+                className="h-full w-full"
+                testId="explore-person-thumbnail"
+              />
+            }
+          />
         ))}
       </div>
     </div>

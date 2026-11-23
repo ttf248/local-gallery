@@ -264,7 +264,9 @@ it("照片库信息加载时显示进度，不把加载中当成空库", () => {
 it("首屏先给找法：搜索入口与四个维度", () => {
   renderExplore();
 
-  expect(screen.getByText("我要找什么")).toBeInTheDocument();
+  // 找法就是那条输入框本身：页面上不再另起一个「我要找什么」的标题
+  // 把同一件事说两遍。
+  expect(screen.getByRole("textbox", { name: "搜索" })).toBeInTheDocument();
   const nav = screen.getByRole("navigation", { name: "发现维度" });
   for (const label of ["时间", "人物", "地点", "主题"]) {
     expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
@@ -465,7 +467,8 @@ it("主题预览写清标题、张数与来源", async () => {
   expect(
     screen.getByText(/24 张 · 来自 旅行 \/ 2019 旅行/),
   ).toBeInTheDocument();
-  expect(screen.getByText("线索：时间 · 地点")).toBeInTheDocument();
+  // 线索不再逐张卡片挂一行灰字，收进悬停提示里。
+  expect(screen.getByTitle("线索：时间 · 地点")).toBeInTheDocument();
   // 点进去落到那一组照片：分组是相册里照片的一种看法，地址带维度与组 id。
   const link = screen.getByRole("link", { name: /海边的日落/ });
   expect(link).toHaveAttribute(

@@ -1,0 +1,156 @@
+/* 发现页（/photo/explore）的卡片语言。
+ *
+ * 时间、人物、地点、主题这四段预览以前各用一套排法：年份是一行小卡，
+ * 人物是一排圆头像，地点是一格格列表行，主题是一行行的事。一屏里
+ * 四种节奏，读的人得先认一遍版式才知道每段摆的是什么。
+ *
+ * 现在四段共用一套发现卡：一样的方块画面、一样的标题与说明位置。
+ * 卡片之间靠留白与细线分开，不靠白底盒子 —— 照片工作台是展陈墙，
+ * 不是一堆卡片。
+ *
+ * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由
+ * 样式表的先后决定。@tailwind components 只为把这一份样式挂进
+ * components 层（工具类在 utilities 层，才能盖得住组件层）。
+ */
+@tailwind components;
+
+@layer components {
+  /* 四段预览共用的网格：列宽一样，段落之间才对得上。 */
+  .explore-grid {
+    display: grid;
+    gap: 20px 16px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+
+  /* 年份索引：一条横向的窄索引带。
+     年份是索引不是内容 —— 它一屏放不下，也不该占掉整屏。横向排一排，
+     首屏才装得下另外三个维度；照片卡仍是网格。 */
+  .explore-strip {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .explore-strip > .explore-card {
+    flex: 0 0 132px;
+    width: 132px;
+  }
+
+  /* 一张发现卡：画面在上，标题与说明在下。 */
+  .explore-card {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    text-align: left;
+    border-radius: var(--radius-media);
+  }
+
+  /* 卡片的画面：正方形，与图库网格的封面比例一致（1:1）。
+     人物的代表脸也按正方形裁 —— 脸的裁切框是按正方形算的，
+     容器一变形脸就被拉长了。 */
+  .explore-card__media {
+    position: relative;
+    display: block;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    border-radius: var(--radius-media);
+    background: var(--bg-subtle);
+  }
+  .explore-card__media > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* 没有照片时的一块底：明确是「这里本来就没有照片」，
+     不是一张加载失败的空卡片。 */
+  .explore-card__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: var(--fg-subtle);
+  }
+
+  .explore-card__title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-top: 10px;
+    /* 标题块固定两行高：名字长的主题不会被截成一行短句，
+       名字短的人物卡也不会把下面那行说明顶得高低不齐。 */
+    min-height: calc(2 * 1.35em);
+    font-size: var(--text-label);
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--fg);
+    overflow: hidden;
+  }
+  .explore-card__meta {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--text-meta);
+    line-height: 1.4;
+    color: var(--fg-muted);
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .explore-card:hover .explore-card__title {
+      color: var(--accent-ink);
+    }
+  }
+
+  /* 年份卡：年份本身没有封面，年份数字就是它的画面。
+     它与照片卡共用同一块方框，只是底色更淡 —— 年份是索引，
+     照片是内容，两者在页面上分得开。 */
+  .explore-card__media--plate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-subtle);
+  }
+  .explore-year__numeral {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 发现页的搜索入口：整页唯一的主入口，52px 高。
+     它不套白底面板 —— 画布本身就是底，一圈描边就够；重量由里面那枚
+     强调色按钮给，而不是靠一块白盒子把它框成「小部件」。 */
+  .explore-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 52px;
+    padding-inline: 14px 4px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-control);
+  }
+  .explore-search:focus-within {
+    border-color: var(--accent);
+  }
+  .explore-search__input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    background: transparent;
+    outline: none;
+    font-size: var(--text-body);
+    color: var(--fg);
+  }
+  .explore-search__input::placeholder {
+    color: var(--fg-subtle);
+  }
+}

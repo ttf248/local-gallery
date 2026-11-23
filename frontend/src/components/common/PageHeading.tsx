@@ -26,8 +26,10 @@ interface Props {
    * 工作台首页用「大」——首页是入口，标题要压得住首屏；
    * 列表页只是工作台里的一个视图，用同样大的标题会让两者看起来是
    * 同一级的东西，页面之间也就失去了主次。
+   * 「md」是内容页的中间档（发现页）：它是内容入口，比列表页重，
+   * 又不是工作台首页。
    */
-  size?: "sm" | "lg";
+  size?: "sm" | "md" | "lg";
 }
 
 export default function PageHeading({
@@ -44,7 +46,9 @@ export default function PageHeading({
         <div className="min-w-0">
           {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
           <h1
-            className={`page-title${size === "lg" ? "" : " page-title--sm"}`}
+            className={`page-title${
+              size === "lg" ? "" : size === "md" ? " page-title--md" : " page-title--sm"
+            }`}
           >
             {title}
           </h1>
