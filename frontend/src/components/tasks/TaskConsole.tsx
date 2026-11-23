@@ -1,5 +1,4 @@
 import type {
-  AIJob,
   AIJobEstimate,
   AIJobModule,
   AIWorkerStatus,
@@ -7,28 +6,16 @@ import type {
   AnalysisMode,
   AnalysisType,
 } from "../../api/aiJobs";
-import type { JobAction, TaskCenterSelection } from "../../hooks/useTaskCenter";
-import { formatDateTime } from "../../utils/date";
+import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
 import {
   formatCount,
   formatEstimateDuration,
-  formatTaskDuration,
-  formatTaskSpeed,
-  jobProgressPercent,
-  taskModeLabel,
-  taskStageLabel,
-  taskStatusLabel,
 } from "../../utils/taskFormat";
 import ModuleChips from "./ModuleChips";
 import Segmented from "../common/Segmented";
 import TaskEstimatePanel from "./TaskEstimatePanel";
-import TaskStatusDot from "./TaskStatusDot";
 
 interface Props {
-  /** 当前活动任务；没有时是空闲态。 */
-  active?: AIJob;
-  /** 最近一次已结束的任务，用来给空闲态一点上下文。 */
-  lastJob?: AIJob;
   loading: boolean;
   /** 启动或任务操作正在提交。 */
   busy: boolean;
@@ -38,8 +25,6 @@ interface Props {
   faceModelSaving: boolean;
   faceModelSaveError: boolean;
   onChangeFaceModel: (model: FaceModel) => void;
-  /** 队列里等待的任务数；为空时是真正的空闲。 */
-  queuedCount: number;
   embeddingStatus?: AIWorkerStatus;
   embeddingStatusLoading: boolean;
   /** 选中的模块与处理方式。 */
@@ -48,21 +33,17 @@ interface Props {
   estimate?: AIJobEstimate;
   estimateLoading: boolean;
   estimateError: boolean;
-  onStart: (type: AnalysisType, mode: AnalysisMode) => void;
   onStartAll: (mode: AnalysisMode) => void;
-  onAction: (id: string, action: JobAction) => void;
   onRefreshEstimate: () => void;
 }
 
 /**
- * 状态面板：这一页的主角。
+ * 这次要跑什么：选模块、选口径、看清楚要处理多少张。
  *
- * 空闲时给出「开始一次分析」的入口，运行中给出进度、读数与控制。
- * 两种状态共用一块面板，用户不需要在页面里找按钮在哪。
+ * 启动按钮不在这里 —— 它在上面的状态摘要里，紧挨着「现在是什么状态」
+ * 那一行，用户不用在页面里找按钮在哪。这一块只回答「跑什么、跑多少」。
  */
 export default function TaskConsole({
-  active,
-  lastJob,
   loading,
   busy,
   modules,
@@ -71,167 +52,179 @@ export default function TaskConsole({
   faceModelSaving,
   faceModelSaveError,
   onChangeFaceModel,
-  queuedCount,
   embeddingStatus,
   embeddingStatusLoading,
   selection,
   estimate,
   estimateLoading,
   estimateError,
-  onStart,
   onStartAll,
-  onAction,
   onRefreshEstimate,
 }: Props) {
   const { module: selectedModule, mode } = selection;
   const installedModules = modules.filter((module) => module.installed);
 
-  if (loading) {
-    return (
-      <div className="rounded-xl border border-border bg-bg-elevated px-5 py-6 sm:px-6">
-        <div className="h-4 w-32 animate-pulse rounded-full bg-bg-subtle" />
-        <div className="mt-4 h-3 w-2/3 animate-pulse rounded-full bg-bg-subtle" />
-        <div className="mt-6 h-2 w-full animate-pulse rounded-full bg-bg-subtle" />
-      </div>
-    );
-  }
+  // 加载中由上面的状态摘要占位：这里再摆一块骨架只是重复。
+  if (loading) return null;
 
-  if (!active) {
-    const isEmbedding = selectedModule === "embedding";
-    const embeddingReady = Boolean(
-      embeddingStatus?.runtimeReady && embeddingStatus.modelValid,
-    );
-    const buffaloReady = Boolean(embeddingStatus?.faceModels?.buffalo_m?.ready);
-    const qualityReady = Boolean(
-      embeddingStatus?.faceModels?.["quality-v2"]?.ready ??
+  const selectedName =
+    installedModules.find((module) => module.type === selectedModule)?.name ??
+    "照片元数据";
+  const selectedModuleVersion =
+    installedModules.find((module) => module.type === selectedModule)?.version ??
+    "";
+  const sequence = estimate ? estimate.sequence[mode] : null;
+  const buffaloReady = Boolean(embeddingStatus?.faceModels?.buffalo_m?.ready);
+  const qualityReady = Boolean(
+    embeddingStatus?.faceModels?.["quality-v2"]?.ready ??
       embeddingStatus?.modules?.face?.ready,
-    );
-    const selectedFaceModelReady =
-      faceModel === "buffalo_m" ? buffaloReady : qualityReady;
-    const selectedName =
-      installedModules.find((module) => module.type === selectedModule)?.name ??
-      "照片元数据";
-    const selectedModuleVersion =
-      installedModules.find((module) => module.type === selectedModule)
-        ?.version ?? "";
-    const canStart =
-      !busy &&
-      !(isEmbedding && !embeddingReady) &&
-      !(
-        selectedModule === "face" &&
-        (!peopleEnabled || !selectedFaceModelReady)
-      );
-    // 这次要干的活：选中模块在当前模式下的张数，以及按序启动全部的合计。
-    const estimateEntry = estimate?.modules.find(
-      (item) => item.type === selectedModule,
-    );
-    const currentEstimate =
-      estimateEntry && estimateEntry.available
-        ? mode === "incremental"
-          ? estimateEntry.incremental
-          : estimateEntry.full
-        : null;
-    const sequence = estimate ? estimate.sequence[mode] : null;
-    return (
-      <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border-faint px-5 py-4 sm:px-6">
-          <div className="flex items-center gap-3">
-            <TaskStatusDot status={queuedCount > 0 ? "pending" : "idle"} />
-            <span className="text-label font-medium text-fg">
-              {queuedCount > 0 ? `队列等待中 · ${queuedCount} 项` : "队列空闲"}
+  );
+  const selectedFaceModelReady =
+    faceModel === "buffalo_m" ? buffaloReady : qualityReady;
+
+  return (
+    <section className="tasks-section" aria-labelledby="run-config-heading">
+      <div className="tasks-section__head">
+        <div className="min-w-0">
+          <h2 id="run-config-heading" className="tasks-section__title">
+            这次要跑什么
+          </h2>
+          <p className="tasks-section__desc">
+            {moduleDescription(selectedModule)}
+          </p>
+        </div>
+      </div>
+
+      <div className="tasks-section__body">
+        <div className="tasks-field">
+          <span className="tasks-field__label">运行模块</span>
+          <div className="min-w-0">
+            <ModuleChips
+              modules={modules}
+              selected={[selectedModule]}
+              onToggle={(type) => selection.setModule(type)}
+              disabled={busy}
+              locked={peopleEnabled ? [] : ["face"]}
+            />
+          </div>
+        </div>
+
+        <div className="tasks-field">
+          <span className="tasks-field__label">处理方式</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Segmented
+              label="处理方式"
+              value={mode}
+              onChange={selection.setMode}
+              disabled={busy}
+              options={[
+                { value: "incremental", label: "增量" },
+                { value: "full", label: "全量" },
+              ]}
+            />
+            <span className="text-meta text-fg-subtle">
+              {modeHint(selectedModule, mode, selectedName)}
             </span>
           </div>
-          {lastJob ? (
+        </div>
+
+        <div className="tasks-field">
+          <span className="tasks-field__label">人脸模型</span>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Segmented
+              label="人脸分析模型"
+              value={faceModel}
+              onChange={onChangeFaceModel}
+              disabled={busy || faceModelSaving || embeddingStatusLoading}
+              options={[
+                {
+                  value: "quality-v2",
+                  label: "quality-v2",
+                  title: "当前质量优化版，128 维特征",
+                  disabled: !qualityReady,
+                },
+                {
+                  value: "buffalo_m",
+                  label: "Buffalo_m",
+                  title: "SCRFD 检测与 ResNet50 特征，512 维",
+                  disabled: !buffaloReady,
+                },
+              ]}
+            />
             <span className="text-meta text-fg-subtle">
-              上次运行 {formatDateTime(lastJob.createdAt)} ·{" "}
-              {taskModeLabel(lastJob.mode)} · 完成{" "}
-              {formatCount(lastJob.completed ?? lastJob.processed)} 张
+              {selectedFaceModelReady
+                ? faceModel === "buffalo_m"
+                  ? "512 维特征 · Buffalo_m"
+                  : "128 维特征 · quality-v2"
+                : "所选模型未就绪，请在本机存储页签安装模型"}
+            </span>
+            {faceModelSaving ? (
+              <span className="text-meta text-fg-subtle">
+                正在切换并重建人物索引…
+              </span>
+            ) : null}
+            {faceModelSaveError ? (
+              <span role="alert" className="text-meta text-danger">
+                模型切换失败，检查是否有正在运行的人脸任务后重试。
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="tasks-field tasks-field--stack">
+          <span className="tasks-field__label">本次规模</span>
+          <div className="min-w-0">
+            <TaskEstimatePanel
+              estimate={estimate}
+              loading={estimateLoading}
+              error={estimateError}
+              module={selectedModule}
+              mode={mode}
+              onRefresh={onRefreshEstimate}
+            />
+          </div>
+        </div>
+
+        <div className="tasks-actions">
+          <button
+            type="button"
+            className="btn btn-sm btn-outline"
+            disabled={busy || installedModules.length === 0}
+            onClick={() => onStartAll(mode)}
+          >
+            按序启动全部任务
+          </button>
+          {sequence && sequence.modules.length > 0 ? (
+            <span className="text-meta text-fg-subtle">
+              {`${sequence.modules.length} 个模块 · ${formatCount(sequence.count)} 张`}
+            </span>
+          ) : null}
+          {sequence && sequence.modules.length > 0 ? (
+            <span className="text-meta text-fg-subtle">
+              {formatEstimateDuration(sequence.estimatedDurationMs)}
             </span>
           ) : null}
         </div>
 
-        <div className="border-b border-border-faint px-5 py-4 sm:px-6">
-          <TaskEstimatePanel
-            estimate={estimate}
-            loading={estimateLoading}
-            error={estimateError}
-            module={selectedModule}
-            mode={mode}
-            onRefresh={onRefreshEstimate}
-          />
-        </div>
-
-        <div className="grid gap-5 px-5 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-10">
-          <div className="min-w-0">
-            <p className="max-w-2xl text-body leading-relaxed text-fg-muted">
-              {moduleDescription(selectedModule)}
-            </p>
-
-            <div className="mt-5">
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-meta text-fg-subtle">分析模块</p>
-                {selectedModuleVersion ? (
-                  <p className="break-all font-mono text-meta text-fg-subtle">
-                    {selectedModuleVersion}
-                  </p>
-                ) : null}
-              </div>
-              <div className="mt-2">
-                <ModuleChips
-                  modules={modules}
-                  selected={[selectedModule]}
-                  onToggle={(type) => selection.setModule(type)}
-                  disabled={busy}
-                  locked={peopleEnabled ? [] : ["face"]}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <Segmented
-                label="人脸分析模型"
-                value={faceModel}
-                onChange={onChangeFaceModel}
-                disabled={busy || faceModelSaving || embeddingStatusLoading}
-                options={[
-                  {
-                    value: "quality-v2",
-                    label: "quality-v2",
-                    title: "当前质量优化版，128 维特征",
-                    disabled: !qualityReady,
-                  },
-                  {
-                    value: "buffalo_m",
-                    label: "Buffalo_m",
-                    title: "SCRFD 检测与 ResNet50 特征，512 维",
-                    disabled: !buffaloReady,
-                  },
-                ]}
-              />
-              <span className="text-meta text-fg-subtle">
-                {selectedFaceModelReady
-                  ? faceModel === "buffalo_m"
-                    ? "512 维特征 · Buffalo_m"
-                    : "128 维特征 · quality-v2"
-                  : "所选模型未就绪，请在本机存储页签安装模型"}
-              </span>
-              {faceModelSaving ? (
-                <span className="text-meta text-fg-subtle">
-                  正在切换并重建人物索引…
-                </span>
-              ) : null}
-              {faceModelSaveError ? (
-                <span role="alert" className="text-meta text-danger">
-                  模型切换失败，检查是否有正在运行的人脸任务后重试。
-                </span>
-              ) : null}
-            </div>
-
-            <p className="mt-4 text-meta text-fg-subtle">
-              {modeHint(selectedModule, mode, selectedName)}
-            </p>
-
-            {isEmbedding ? (
+        {/* 高级信息：版本、运行环境与索引覆盖。日常用不到，但它决定
+            「为什么这次跑不起来」，所以收起来而不是删掉 —— 摘要里给出
+            的提示会指向这里。 */}
+        <details className="tasks-advanced">
+          <summary className="tasks-advanced__summary">
+            高级信息
+            <span className="text-meta text-fg-subtle">
+              {selectedModuleVersion
+                ? `模块版本 ${selectedModuleVersion}`
+                : "模块版本与运行环境"}
+            </span>
+          </summary>
+          <div className="tasks-advanced__body">
+            {selectedModuleVersion ? (
+              <p className="text-meta text-fg-muted">
+                当前模块：{selectedName} · {selectedModuleVersion}
+              </p>
+            ) : null}
+            {selectedModule === "embedding" ? (
               <EmbeddingRuntimeStatus
                 status={embeddingStatus}
                 loading={embeddingStatusLoading}
@@ -244,226 +237,10 @@ export default function TaskConsole({
               />
             ) : null}
           </div>
-
-          <div className="flex flex-wrap items-start gap-x-4 gap-y-3 lg:justify-end lg:border-l lg:border-border-faint lg:pl-10">
-            <Segmented
-              label="处理方式"
-              value={mode}
-              onChange={selection.setMode}
-              disabled={busy}
-              options={[
-                { value: "incremental", label: "增量" },
-                { value: "full", label: "全量" },
-              ]}
-            />
-            <div className="flex flex-col items-start gap-1">
-              <button
-                type="button"
-                className="btn btn-primary"
-                disabled={canStart === false}
-                onClick={() => onStart(selectedModule, mode)}
-              >
-                开始分析
-                {currentEstimate
-                  ? ` · ${formatCount(currentEstimate.count)} 张`
-                  : ""}
-              </button>
-              {currentEstimate ? (
-                <span className="text-meta text-fg-subtle">
-                  {formatEstimateDuration(currentEstimate.estimatedDurationMs)}
-                </span>
-              ) : null}
-            </div>
-            <div className="flex flex-col items-start gap-1">
-              <button
-                type="button"
-                className="btn btn-outline"
-                disabled={busy || installedModules.length === 0}
-                onClick={() => onStartAll(mode)}
-              >
-                按序启动全部任务
-              </button>
-              {sequence && sequence.modules.length > 0 ? (
-                <>
-                  <span className="text-meta text-fg-subtle">
-                    {`${sequence.modules.length} 个模块 · ${formatCount(sequence.count)} 张`}
-                  </span>
-                  <span className="text-meta text-fg-subtle">
-                    {formatEstimateDuration(sequence.estimatedDurationMs)}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          </div>
-        </div>
+        </details>
       </div>
-    );
-  }
-
-  const percent = jobProgressPercent(active);
-  const planned = active.planned ?? 0;
-  const settled =
-    active.status === "completed" ||
-    active.status === "cancelled" ||
-    active.status === "failed";
-
-  return (
-    <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border-faint px-5 py-4 sm:px-6">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <TaskStatusDot status={active.status} />
-          <span className="text-label font-medium text-fg">
-            {taskStatusLabel(active.status)} ·{" "}
-            {jobModuleName(active.type, modules)}
-          </span>
-          <span className="text-meta text-fg-muted">
-            {taskStageLabel(active.stage)}
-          </span>
-          <span className="text-meta text-fg-muted">
-            设备：{active.computeDevice === "gpu" ? "NVIDIA GPU" : "CPU"}
-          </span>
-          {active.type === "face" && active.faceModel ? (
-            <span className="text-meta text-fg-muted">
-              模型：
-              {active.faceModel === "buffalo_m" ? "Buffalo_m" : "quality-v2"}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {active.status === "running" ? (
-            <button
-              type="button"
-              className="btn btn-sm btn-outline"
-              disabled={busy}
-              onClick={() => onAction(active.id, "pause")}
-            >
-              暂停
-            </button>
-          ) : null}
-          {active.status === "paused" || active.status === "pending" ? (
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              disabled={busy}
-              onClick={() => onAction(active.id, "resume")}
-            >
-              继续
-            </button>
-          ) : null}
-          <button
-            type="button"
-            className="btn btn-sm btn-outline"
-            disabled={busy}
-            onClick={() => onAction(active.id, "cancel")}
-          >
-            取消任务
-          </button>
-        </div>
-      </div>
-
-      <div className="px-5 py-5 sm:px-6">
-        <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-          <div className="flex items-baseline gap-3">
-            <span className="font-mono text-page-sm font-medium tabular-nums text-fg">
-              {percent}%
-            </span>
-            <span className="text-meta tabular-nums text-fg-muted">
-              {planned > 0
-                ? `${formatCount(active.completed)} / ${formatCount(planned)} 张`
-                : settled
-                  ? "本次没有需要处理的图片"
-                  : "正在整理分析清单"}
-            </span>
-          </div>
-          <span className="text-meta text-fg-subtle">
-            {taskModeLabel(active.mode)} · 开始{" "}
-            {formatDateTime(active.startedAt ?? active.createdAt)} · 已运行{" "}
-            {formatTaskDuration(active.elapsedMs)}
-          </span>
-        </div>
-
-        <div
-          className="mt-3 h-2 overflow-hidden rounded-full bg-bg-subtle"
-          role="progressbar"
-          aria-label="任务进度"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={percent}
-        >
-          <div
-            className="h-full rounded-full bg-accent transition-[width] duration-300"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-
-        {active.checkpoint.batch > 0 || active.recoveredAfterRestart ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border-faint bg-bg-subtle/40 px-3 py-2 text-meta text-fg-muted">
-            <span>
-              {active.checkpoint.batch > 0
-                ? `已保存到第 ${formatCount(active.checkpoint.batch)} 批 · 位置 ${formatCount(active.checkpoint.offset)} / ${formatCount(active.total)}`
-                : "尚无已提交批次，将从任务起点继续"}
-            </span>
-            {active.recoveredAfterRestart ? (
-              <span className="font-medium text-fg">
-                {active.checkpoint.batch > 0
-                  ? "服务重启后从此处续跑"
-                  : "服务重启后重新开始"}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
-        <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border-faint bg-border-faint sm:grid-cols-3 lg:grid-cols-5">
-          <Readout label="已处理" value={formatCount(active.processed)} />
-          <Readout label="已跳过" value={formatCount(active.skipped)} />
-          <Readout
-            label="失败"
-            value={formatCount(active.failed)}
-            tone={active.failed > 0 ? "danger" : "default"}
-          />
-          <Readout
-            label="速度"
-            value={formatTaskSpeed(active.speedPerSecond)}
-          />
-          <Readout
-            label="预计剩余"
-            value={
-              active.estimatedRemainingMs > 0
-                ? formatTaskDuration(active.estimatedRemainingMs)
-                : "—"
-            }
-          />
-        </dl>
-      </div>
-    </div>
+    </section>
   );
-}
-
-function Readout({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "danger";
-}) {
-  return (
-    <div className="bg-bg-elevated px-3.5 py-3">
-      <dt className="text-meta text-fg-subtle">{label}</dt>
-      <dd
-        className={`mt-1 font-mono text-label font-medium tabular-nums ${
-          tone === "danger" ? "text-danger" : "text-fg"
-        }`}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function jobModuleName(type: AnalysisType, modules: AIJobModule[]): string {
-  return modules.find((module) => module.type === type)?.name ?? type;
 }
 
 function moduleDescription(type: AnalysisType): string {
@@ -506,12 +283,12 @@ function EmbeddingRuntimeStatus({
 }) {
   if (loading) {
     return (
-      <p className="mt-3 text-meta text-fg-subtle">正在读取本机 AI 状态…</p>
+      <p className="text-meta text-fg-subtle">正在读取本机 AI 状态…</p>
     );
   }
   if (!status) {
     return (
-      <p role="status" className="mt-3 text-meta text-warning">
+      <p role="status" className="text-meta text-warning">
         本机语义模型状态暂不可读，请检查 AI Worker 运行环境。
       </p>
     );
@@ -521,7 +298,7 @@ function EmbeddingRuntimeStatus({
       ? `${status.coverage.indexed.toLocaleString()} / ${status.coverage.total.toLocaleString()} 张已建向量`
       : "尚无可索引图片";
   return (
-    <div className="mt-3 grid gap-2 rounded-lg border border-border-faint bg-bg-subtle px-4 py-3 text-meta sm:grid-cols-2">
+    <div className="grid gap-2 text-meta sm:grid-cols-2">
       <p className="text-fg-muted">
         运行设备：
         <span className="text-fg">
@@ -561,12 +338,12 @@ function ImageModuleRuntimeStatus({
   const label = moduleType === "ocr" ? "文字识别" : "人脸识别";
   if (loading) {
     return (
-      <p className="mt-3 text-meta text-fg-subtle">正在检查{label}运行环境…</p>
+      <p className="text-meta text-fg-subtle">正在检查{label}运行环境…</p>
     );
   }
   if (!status) {
     return (
-      <p role="status" className="mt-3 text-meta text-warning">
+      <p role="status" className="text-meta text-warning">
         本机 AI 状态暂不可读，无法确认{label}环境。
       </p>
     );
@@ -574,13 +351,13 @@ function ImageModuleRuntimeStatus({
   const module = status.modules?.[moduleType];
   if (module?.ready) {
     return (
-      <p role="status" className="mt-3 text-meta text-success">
+      <p role="status" className="text-meta text-success">
         {label}已就绪 · {module.version}
       </p>
     );
   }
   return (
-    <p role="status" className="mt-3 text-meta text-warning">
+    <p role="status" className="text-meta text-warning">
       {moduleUnavailableMessage(module?.error)}
     </p>
   );

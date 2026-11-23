@@ -555,6 +555,89 @@ describe("任务中心", () => {
     ).not.toBeInTheDocument();
   });
 
+  // 状态摘要：打开任务中心先看到的是「现在在干什么、还剩多少、能做什么」。
+  it("状态摘要给出当前状态、待处理数量与主要操作", async () => {
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({ jobs: [], active: undefined }),
+    });
+    renderCenter("run");
+
+    const summary = await screen.findByRole("region", { name: "状态摘要" });
+    // 空闲：说清队列是空的，主要操作是启动分析。
+    expect(within(summary).getByText("队列空闲")).toBeInTheDocument();
+    expect(
+      within(summary).getByRole("button", { name: /开始分析/ }),
+    ).toBeInTheDocument();
+    // 启动按钮带本次张数：点了才知道要处理多少。
+    expect(
+      within(summary).getByRole("button", { name: /开始分析 · 320 张/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("队列积压时状态摘要报出待处理数量", async () => {
+    const pendingJob: AIJob = {
+      ...currentJob,
+      id: "job-pending",
+      status: "pending",
+      stage: "pending",
+    };
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({
+        jobs: [pendingJob],
+        active: undefined,
+        queue: [pendingJob.id],
+      }),
+    });
+    renderCenter("run");
+
+    const summary = await screen.findByRole("region", { name: "状态摘要" });
+    expect(
+      within(summary).getByText("队列等待中 · 1 项"),
+    ).toBeInTheDocument();
+  });
+
+  it("运行中状态摘要给出进度与控制动作", async () => {
+    renderCenter("run");
+
+    const summary = await screen.findByRole("region", { name: "状态摘要" });
+    expect(
+      within(summary).getByText("运行中 · 照片元数据"),
+    ).toBeInTheDocument();
+    expect(within(summary).getByText("96%")).toBeInTheDocument();
+    expect(within(summary).getByText("43 / 45 张")).toBeInTheDocument();
+    expect(
+      within(summary).getByRole("button", { name: "暂停" }),
+    ).toBeInTheDocument();
+    expect(
+      within(summary).getByRole("button", { name: "取消任务" }),
+    ).toBeInTheDocument();
+  });
+
+  it("上一次运行失败时状态摘要直说失败与原因", async () => {
+    const failedJob: AIJob = {
+      ...currentJob,
+      id: "job-failed",
+      status: "failed",
+      error: "部分图片分析失败",
+      finishedAt: "2026-11-11T02:03:00Z",
+    };
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({ jobs: [failedJob], active: undefined }),
+    });
+    renderCenter("run");
+
+    const summary = await screen.findByRole("region", { name: "状态摘要" });
+    expect(
+      within(summary).getByText(/上次运行失败/),
+    ).toBeInTheDocument();
+    expect(
+      within(summary).getByText(/部分图片分析失败/),
+    ).toBeInTheDocument();
+  });
+
   it("启动被活动任务拒绝时显示原因并刷新任务状态", async () => {
     const faceModules: AIJobSnapshot["modules"] = [
       ...modules,

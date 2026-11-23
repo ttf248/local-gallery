@@ -1,7 +1,11 @@
-/* 设置页与任务中心的分区面板样式。
+/* 设置页的分区样式。
  *
  * 这些规则原来写在 styles/global.css 里 —— 那是每个页面首屏都要
  * 下载的一张表。拆出来跟着各自的懒加载路由走，首屏样式表小了一圈。
+ *
+ * 设置页是一页窄内容：整页收在聚焦容器（1040px）里，分组是「标题 +
+ * 说明 + 一行行字段」，字段是标签列 + 控件列，分组之间只用一条细线 ——
+ * 套卡片会把内容挤成两栏，短的那栏底下空一大块。
  *
  * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由样式表
  * 的先后决定，拆出来不影响任何一条既有规则。
@@ -14,202 +18,160 @@
 @tailwind components;
 
 @layer components {
-/* 卡片与分组都是排版容器：卡里的一组设置行在容器够宽时排成两列，
-   标签与控件仍然挨着，不必隔着半张卡去找开关。
-   断点跟容器走，不跟视口走 —— 同一张卡在 24 寸上是半栏、在 27 寸
-   上是整幅，宽度不同，要不要分两列由它自己决定；这样两块屏上的
-   设置页是同一套排法，而不是「宽屏才换一版」。 */
-.settings-card,
-.settings-group {
-  container-type: inline-size;
-}
-.settings-rows > .settings-row {
-  border-top: 1px solid var(--border-faint);
-}
-.settings-rows > .settings-row:first-child {
-  border-top: 0;
-}
-@container (min-width: 520px) {
-  .settings-rows {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 设置页是一页窄内容：外层是聚焦容器（1040px），这里给它起一个
+     容器名，好让下面的分栏断点跟内容宽度走 —— 同一份设置在 24 寸与
+     27 寸上是同一套排法，而不是「宽屏才换一版」。 */
+  .settings-page {
+    container-type: inline-size;
+    container-name: settings;
   }
-  /* 两列的每一行各自成对：分隔线只画在每行的上沿，列与列之间
-     画一条竖线，读者一眼能看出「这里是两列」。 */
-  .settings-rows > .settings-row {
-    border-top: 0;
-  }
-  .settings-rows > .settings-row:nth-child(odd) {
+
+  /* 一个分组：标题 + 一句说明 + 一行行设置。
+     分组之间只用一条细线分开，不套白卡：设置页里的分组靠标题与细线
+     就分得开，描边与白底只是多一层「灰卡片」，还会把内容挤成两栏。 */
+  .settings-section {
+    margin-top: 28px;
+    padding-top: 26px;
     border-top: 1px solid var(--border-faint);
   }
-  .settings-rows > .settings-row:first-child {
+  .settings-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
     border-top: 0;
   }
-  .settings-rows > .settings-row:nth-child(even) {
-    border-left: 1px solid var(--border-faint);
-  }
-  /* 单列的一组设置（外观）：两列并排会把标签与控件拉得太开，
-     单列读下来更稳，也把这一张卡撑到与旁边那张接近 ——
-     两张卡一高一矮时，短的那张下面空出一大块。 */
-  .settings-rows--stack {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .settings-rows--stack > .settings-row:nth-child(odd),
-  .settings-rows--stack > .settings-row:nth-child(even) {
-    border-top: 1px solid var(--border-faint);
-    border-left: 0;
-  }
-  .settings-rows--stack > .settings-row:first-child {
-    border-top: 0;
-  }
-}
-.settings-columns {
-    max-width: 860px;
-  }
-.settings-section {
-    break-inside: avoid;
-    margin-bottom: 28px;
-  }
-.settings-section__heading {
+  .settings-section__head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 10px;
-    margin-bottom: 14px;
   }
-.settings-section__icon {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    flex-shrink: 0;
-    border-radius: var(--radius-media);
-    background: var(--accent-soft);
-    color: var(--accent-ink);
-    box-shadow: inset 0 0 0 1px
-      color-mix(in srgb, var(--accent) 26%, transparent);
-  }
-.settings-section__desc {
-    font-size: var(--text-meta);
-    color: var(--fg-subtle);
-  }
-.settings-section__body {
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-tile);
-    background: var(--bg-elevated);
-    box-shadow: var(--shadow-xs);
-  }
-.settings-grid {
-    display: grid;
-    gap: 24px;
-    align-items: start;
-  }
-@media (min-width: 1280px) {
-    .settings-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    /* 短卡与长卡 1:2 分栏：数据卡内容短，备份卡内容长（段落 + 两个动作
-       + 预览后的类别勾选与恢复报告）。长内容占宽列，读下来的顺序与视觉
-       顺序一致。 */
-    .settings-grid--aside {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-    }
-  }
-.settings-card {
-    /* 分组不再是一只盒子：标题 + 一条细线 + 一行行设置，底子透出画布。
-       设置页里的分组靠标题与细线就分得开，描边与白底只是多一层
-       「灰卡片」。 */
-    border-radius: 0;
-    background: transparent;
-    overflow: visible;
-  }
-.settings-card__head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    /* 标题与说明并排，但窄屏放不下时说明另起一行：把标题挤成竖着的
-       「导/航」，读起来像渲染事故。 */
-    flex-wrap: wrap;
-    padding: 0 0 10px;
-    border-bottom: 1px solid var(--border-faint);
-  }
-.settings-card__icon {
+  .settings-section__icon {
     display: grid;
     place-items: center;
     flex-shrink: 0;
+    margin-top: 3px;
     color: var(--fg-muted);
   }
-.settings-card__title {
+  .settings-section__headings {
+    min-width: 0;
+  }
+  .settings-section__title {
     font-family: var(--font-display);
     font-size: var(--text-label);
     font-weight: 600;
     color: var(--fg);
-    white-space: nowrap;
   }
-.settings-card__desc {
-    margin-left: auto;
+  /* 说明写在标题下面，不推到右缘：推到右缘会与标题之间空出一整段
+     纸，读起来像两个不相干的东西。 */
+  .settings-section__desc {
+    margin-top: 3px;
     font-size: var(--text-meta);
+    line-height: 1.6;
     color: var(--fg-subtle);
-    min-width: 0;
+    max-width: 68ch;
   }
-  /* 窄屏：说明另起一行，不与标题抢宽度。 */
-  @media (max-width: 639px) {
-    .settings-card__desc {
-      margin-left: 0;
-      flex-basis: 100%;
+  .settings-section__body {
+    margin-top: 14px;
+  }
+
+  /* 一组设置行：标签一列、控件一列。
+     控件从标签后面就开始，不甩到行的最右端 —— 中间隔着半张纸时，
+     「这一行管的是哪个开关」要靠眼睛来回找。 */
+  .settings-rows {
+    display: flex;
+    flex-direction: column;
+  }
+  .settings-row {
+    display: grid;
+    /* 标签列是定宽的：每一行的控件都从同一条竖线上开始，一列看下来
+       才像一份清单。 */
+    grid-template-columns: 240px minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    gap: 20px;
+    min-height: 46px;
+    padding: 7px 0;
+    border-top: 1px solid var(--border-faint);
+  }
+  /* 窄了就把标签与控件上下叠：两列挤在一行里，控件会被压成一条缝。 */
+  @container settings (max-width: 560px) {
+    .settings-row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
     }
   }
-.settings-split {
+  /* 开关一类只有一个控件的行：控件紧跟在标签后面（这一组在一栏之内，
+     右端对齐反而离标签太远）。 */
+  .settings-row--inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  /* 并排的两组设置（照片侧 / 漫画侧）。宽度够就并排，不够就上下叠 ——
+     断点跟容器走，跟视口走会让「宽屏但内容窄」的页面排出两栏。 */
+  .settings-split {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
-.settings-group + .settings-group {
-    border-top: 1px solid var(--border-faint);
-  }
-.settings-split > .settings-group + .settings-group {
-    border-top: 1px solid var(--border-faint);
-  }
-@media (min-width: 1280px) {
+  @container settings (min-width: 720px) {
     .settings-split {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: 32px;
     }
     .settings-split > .settings-group + .settings-group {
-      border-top: none;
       border-left: 1px solid var(--border-faint);
+      padding-left: 32px;
     }
   }
-.settings-group__label {
-    padding: 9px 14px 5px;
+  .settings-group__label {
+    padding: 12px 0 2px;
     font-size: var(--text-meta);
+    font-weight: 500;
     color: var(--fg-muted);
   }
-.settings-block {
-    padding: 12px 14px;
+
+  /* 一块说明性的内容（索引状态、监听状态）：标题在上、数据在下，
+     不与控件挤在同一行。 */
+  .settings-block {
+    padding: 12px 0;
   }
-.settings-note {
-    padding: 9px 14px 11px;
+  .settings-note {
+    margin-top: 12px;
     font-size: var(--text-meta);
+    line-height: 1.6;
     color: var(--fg-subtle);
   }
-.settings-footer {
+
+  /* 危险操作单独成组：会丢东西的动作不该混在一排普通设置里，
+     一眼扫过去要能认出它是「点了就没了」的那几个。 */
+  .settings-danger {
+    margin-top: 28px;
+    padding-top: 26px;
+    border-top: 1px solid var(--border-faint);
+  }
+  .settings-danger__title {
+    font-family: var(--font-display);
+    font-size: var(--text-label);
+    font-weight: 600;
+    color: var(--danger);
+  }
+  /* 危险操作里的一件：一行标题与动作，下面一句说明它到底丢什么。 */
+  .settings-danger__item {
+    border-left: 2px solid color-mix(in srgb, var(--danger) 45%, transparent);
+    padding: 10px 0 10px 16px;
+  }
+
+  /* 页脚一行（关于）。 */
+  .settings-footer {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 18px;
-    margin-top: 24px;
-    padding-top: 14px;
+    margin-top: 32px;
+    padding-top: 16px;
     border-top: 1px solid var(--border-faint);
     font-size: var(--text-meta);
     color: var(--fg-subtle);
-  }
-.settings-row {
-    min-height: 48px;
-  }
-@media (min-width: 1280px) {
-    .settings-columns {
-      max-width: none;
-      columns: 2;
-      column-gap: 28px;
-    }
   }
 }

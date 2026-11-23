@@ -331,11 +331,29 @@ test("设置页可加载服务端配置", async ({ page }) => {
 // 存储信息搬到任务中心之后，设置页不再摆这些。
 test("设置页不再展示模型路径与派生缓存占用", async ({ page }) => {
   await page.goto("/settings/data");
-  await expect(page.getByText("媒体库索引")).toBeVisible();
+  // 精确匹配：危险操作分组里还有一行「清空媒体库索引」，子串匹配会撞上。
+  await expect(page.getByText("媒体库索引", { exact: true })).toBeVisible();
   await expect(page.getByText("本机 AI 与存储")).toHaveCount(0);
   await expect(page.getByText("模型与缓存路径")).toHaveCount(0);
   await expect(page.getByText("缓存占用")).toHaveCount(0);
   await expect(page.getByText("一键全清")).toHaveCount(0);
+});
+
+// 会丢东西的动作单独成组：一眼扫过去要能认出哪几个是点了就没了的，
+// 并且每一件都写清它到底丢什么。
+test("设置页的危险操作单独成组并写清后果", async ({ page }) => {
+  await page.goto("/settings/data");
+  const danger = page.getByRole("region", { name: "危险操作" });
+  await expect(danger).toBeVisible();
+  await expect(danger.getByText("清空媒体库索引")).toBeVisible();
+  await expect(danger.getByText("清空最近访问")).toBeVisible();
+  await expect(
+    danger.getByText(/丢掉已经扫出来的相册与标签索引/),
+  ).toBeVisible();
+  await expect(danger.getByRole("button", { name: /清空索引/ })).toBeVisible();
+  await expect(
+    danger.getByRole("button", { name: "清空", exact: true }),
+  ).toBeVisible();
 });
 
 // 分区改成页面内的页签：点页签换内容，页签的 id 写进 URL，
@@ -355,7 +373,7 @@ test("设置页的分区改成页签，切页签写进 URL 并换内容", async 
 
   await page.getByRole("tab", { name: "数据" }).click();
   await expect(page).toHaveURL(/\/settings\/data$/);
-  await expect(page.getByText("媒体库索引")).toBeVisible();
+  await expect(page.getByText("媒体库索引", { exact: true })).toBeVisible();
   await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("数据");
 
   // 深链直接落在那一屏。

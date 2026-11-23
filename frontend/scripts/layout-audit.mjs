@@ -760,11 +760,18 @@ async function main() {
 
   // 当前容器方案的回归基线：同断点跨页左缘一致，阅读器除外。
   // 有意采用不同页面布局时同步更新适用范围；这不是不可更改的设计要求。
+  //
+  // 聚焦容器页（设置、任务中心）整页收在一栏里居中：它们的内容左缘
+  // 本来就不在其它页面的网格线上 —— 表单与控制台摊到 2560px 的画布
+  // 上只会把标签甩到左边、开关甩到右边。两页各自在自己的容器里排版，
+  // 容器边界（左右留白）仍然逐页一致。
+  const FOCUSED_ROUTES = /^\/(settings|tasks)(\/|$)/;
   const misaligned = [];
   {
     const groups = new Map();
     for (const r of report) {
       if (r.route === "reader" || r.alignmentLeft === null) continue;
+      if (FOCUSED_ROUTES.test(r.route)) continue;
       const key = `${r.vp}|${r.theme}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(r);

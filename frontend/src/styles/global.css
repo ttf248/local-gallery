@@ -1450,14 +1450,6 @@ button:not(:disabled):active {
     padding-left: max(var(--page-gutter), var(--safe-left));
     padding-right: max(var(--page-gutter), var(--safe-right));
   }
-  /* 设置页在宽屏（≥1280）改成两列：一列的分区按顺序读，另一列接着排。
-     分区不能被列切断，所以 break-inside: avoid。 */
-  @media (min-width: 1280px) {
-    .page-shell .settings-columns > * {
-      break-inside: avoid;
-    }
-  }
-
   /* 防御：组件内部若再套一层 .page-shell，会凭空多出左右内边距
      （历史上 YearTimeline 就踩过这个坑，整块右移 32px）。 */
   .page-shell .page-shell {
@@ -1488,9 +1480,10 @@ button:not(:disabled):active {
     --section-gap: 40px;
   }
   .container--focused {
-    /* 聚焦栏：内容窄一些、整体居中。放在页面里的一段上（精选陈列），
-       不放在整页上 —— 整页收窄会把页头与导航一起挤窄。 */
-    max-width: 960px;
+    /* 聚焦栏：内容窄一些、整体居中。设置页与任务中心用它 —— 这两页是
+       窄内容页（表单与控制台），铺满 2560px 的画布只会把一行标签和
+       一个开关甩到两头，中间空出一大片。 */
+    max-width: 1040px;
     margin-inline: auto;
   }
 
@@ -1666,6 +1659,27 @@ button:not(:disabled):active {
     .btn-ghost:not(:disabled):active {
       background: var(--bg-subtle);
       color: var(--fg);
+    }
+  }
+
+  /* 危险操作：描边 + 危险色，不垫实底。
+     实底红在一屏里会盖过「保存」这类主操作 —— 危险动作该显眼，但不该
+     抢走整页的注意力。 */
+  .btn-danger {
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+    color: var(--danger);
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-danger:not(:disabled):hover {
+      background: color-mix(in srgb, var(--danger) 8%, transparent);
+      border-color: var(--danger);
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    .btn-danger:not(:disabled):active {
+      background: color-mix(in srgb, var(--danger) 12%, transparent);
+      border-color: var(--danger);
     }
   }
 

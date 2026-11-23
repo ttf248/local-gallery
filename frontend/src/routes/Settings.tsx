@@ -273,8 +273,8 @@ export function SettingsView({
   );
   if (!data) {
     return (
-      <div className="page-shell settings-page pb-10">
-        <div className="max-w-3xl">
+      <div className="page-shell">
+        <div className="container--focused settings-page pb-10">
           <PageHeading
             title="设置"
             contained
@@ -291,27 +291,29 @@ export function SettingsView({
   }
 
   return (
-    <div className="page-shell settings-page pb-10">
-      <PageHeading
-        title="设置"
-        contained
-        description="外观、导航、阅读方式与本地媒体配置。"
-      />
-      {prefsError}
-      <PageTabs
-        tabs={SETTINGS_TABS}
-        active={tab}
-        onChange={onSelectTab}
-        label="设置页分区"
-        idPrefix="settings"
-        meta={SETTINGS_TAB_META[tab]}
-      />
-      {/* 每个页签独占整幅内容宽度，按自己的内容排布：
-          界面是两列卡片，阅读是一张整幅的卡（照片与漫画并排），
-          数据是短卡与长卡 1:2 分栏，服务端是三列面板。 */}
-      {visited.has("interface") && (
-        <PagePanel idPrefix="settings" tab={SETTINGS_TABS[0]} active={tab}>
-          <div className="settings-grid mt-6">
+    <div className="page-shell">
+      {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
+          标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
+      <div className="container--focused settings-page pb-10">
+        <PageHeading
+          title="设置"
+          contained
+          description="外观、导航、阅读方式与本地媒体配置。"
+        />
+        {prefsError}
+        <PageTabs
+          tabs={SETTINGS_TABS}
+          active={tab}
+          onChange={onSelectTab}
+          label="设置页分区"
+          idPrefix="settings"
+          meta={SETTINGS_TAB_META[tab]}
+        />
+        {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，
+            阅读是照片与漫画两组，数据是索引、备份与自动同步，服务端是
+            那几组自带标题的面板。分组之间只用一条细线。 */}
+        {visited.has("interface") && (
+          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[0]} active={tab}>
             <Section
               id="appearance"
               title="外观"
@@ -319,14 +321,14 @@ export function SettingsView({
             >
               {/* 这几行摆在一起，单列读下来最稳：标签与控件挨着，
                   不隔着半张卡。 */}
-              <div className="settings-rows settings-rows--stack">
+              <div className="settings-rows">
                 <Row label="主题">
                   <ThemeSwitcher />
                 </Row>
                 {/* 侧栏的折叠只属于宽屏：窄屏侧栏是抽屉，宽度不由折叠决定，
                     设置里也就不再摆这一行 —— 让人改一个当前看不见的东西，
                     等于把设置页变成第二本说明。 */}
-                <Row label="侧边栏" className="hidden lg:flex">
+                <Row label="侧边栏" className="hidden lg:grid">
                   <Segmented
                     label="侧边栏"
                     value={sidebarCollapsed ? "collapsed" : "expanded"}
@@ -373,7 +375,7 @@ export function SettingsView({
               title="导航"
               icon={<MenuIcon size={13} />}
               /* 这句话原来挂在卡片底下：它说的是这一节管什么，
-                 放在标题旁边更像说明，卡片底下那一行就省了。 */
+                 放在标题下面更像说明，卡片底下那一行就省了。 */
               description="收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入"
             >
               <div className="settings-split">
@@ -407,103 +409,104 @@ export function SettingsView({
                 </Group>
               </div>
             </Section>
-          </div>
-        </PagePanel>
-      )}
+          </PagePanel>
+        )}
 
-      {visited.has("reading") && (
-        <PagePanel idPrefix="settings" tab={SETTINGS_TABS[1]} active={tab}>
-          <Section
-            id="reading"
-            title="阅读"
-            icon={<ScrollPageIcon size={13} />}
-          >
-            {/* 整幅宽度下两组并排：最宽的一行（照片墙密度 + 四档分段控件）
-                实测约需 294px，半列只有 273px 放不下。 */}
-            <div className="settings-split">
-            <Group title="照片">
-              <Row label="照片墙密度">
-                <DensityControl value={density} onChange={setDensity} />
-              </Row>
-              <Row label="大图预览显示信息">
-                <Toggle
-                  label="大图预览显示信息"
-                  checked={showInfo}
-                  onChange={(v) => setShowInfo(v)}
-                />
-              </Row>
-            </Group>
-            <Group title="漫画">
-              <Row label="默认显示模式">
-                <Segmented
-                  label="默认显示模式"
-                  value={readerMode}
-                  onChange={setReaderMode}
-                  options={[
-                    { value: "single", label: "单页" },
-                    { value: "continuous", label: "连续" },
-                    { value: "double", label: "双页" },
-                  ]}
-                />
-              </Row>
-              {/* 漫画侧的媒体是页：写「图片适配」会与整册的用词冲突。 */}
-              <Row label="默认页面适配">
-                <Segmented
-                  label="默认页面适配"
-                  value={fit}
-                  onChange={setFit}
-                  options={[
-                    { value: "fit", label: "适应" },
-                    { value: "width", label: "按宽" },
-                    { value: "height", label: "按高" },
-                    { value: "original", label: "原始" },
-                  ]}
-                />
-              </Row>
-              <Row label="双页翻页方向">
-                <Segmented
-                  label="双页翻页方向"
-                  value={direction}
-                  onChange={setDirection}
-                  options={[
-                    { value: "ltr", label: "左→右" },
-                    { value: "rtl", label: "右→左" },
-                  ]}
-                />
-              </Row>
-              <Row label="阅读到末尾自动切换下一卷">
-                <Toggle
-                  label="阅读到末尾自动切换下一卷"
-                  checked={data.autoSwitchAlbum}
-                  disabled={patchPrefs.isPending}
-                  onChange={(v) => patchPrefs.mutate({ autoSwitchAlbum: v })}
-                />
-              </Row>
-              <Row label="切换时显示通知">
-                <Toggle
-                  label="切换时显示通知"
-                  checked={data.showSwitchNotif}
-                  disabled={patchPrefs.isPending}
-                  onChange={(v) => patchPrefs.mutate({ showSwitchNotif: v })}
-                />
-              </Row>
-            </Group>
-            </div>
-            <p className="settings-note">
-              显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
-            </p>
-          </Section>
-        </PagePanel>
-      )}
+        {visited.has("reading") && (
+          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[1]} active={tab}>
+            <Section
+              id="reading"
+              title="阅读"
+              icon={<ScrollPageIcon size={13} />}
+            >
+              {/* 整幅宽度下两组并排：最宽的一行（照片墙密度 + 四档分段控件）
+                  实测约需 294px，半列只有 273px 放不下。 */}
+              <div className="settings-split">
+                <Group title="照片">
+                  <Row label="照片墙密度">
+                    <DensityControl value={density} onChange={setDensity} />
+                  </Row>
+                  <Row label="大图预览显示信息">
+                    <Toggle
+                      label="大图预览显示信息"
+                      checked={showInfo}
+                      onChange={(v) => setShowInfo(v)}
+                    />
+                  </Row>
+                </Group>
+                <Group title="漫画">
+                  <Row label="默认显示模式">
+                    <Segmented
+                      label="默认显示模式"
+                      value={readerMode}
+                      onChange={setReaderMode}
+                      options={[
+                        { value: "single", label: "单页" },
+                        { value: "continuous", label: "连续" },
+                        { value: "double", label: "双页" },
+                      ]}
+                    />
+                  </Row>
+                  {/* 漫画侧的媒体是页：写「图片适配」会与整册的用词冲突。 */}
+                  <Row label="默认页面适配">
+                    <Segmented
+                      label="默认页面适配"
+                      value={fit}
+                      onChange={setFit}
+                      options={[
+                        { value: "fit", label: "适应" },
+                        { value: "width", label: "按宽" },
+                        { value: "height", label: "按高" },
+                        { value: "original", label: "原始" },
+                      ]}
+                    />
+                  </Row>
+                  <Row label="双页翻页方向">
+                    <Segmented
+                      label="双页翻页方向"
+                      value={direction}
+                      onChange={setDirection}
+                      options={[
+                        { value: "ltr", label: "左→右" },
+                        { value: "rtl", label: "右→左" },
+                      ]}
+                    />
+                  </Row>
+                  <Row label="阅读到末尾自动切换下一卷">
+                    <Toggle
+                      label="阅读到末尾自动切换下一卷"
+                      checked={data.autoSwitchAlbum}
+                      disabled={patchPrefs.isPending}
+                      onChange={(v) => patchPrefs.mutate({ autoSwitchAlbum: v })}
+                    />
+                  </Row>
+                  <Row label="切换时显示通知">
+                    <Toggle
+                      label="切换时显示通知"
+                      checked={data.showSwitchNotif}
+                      disabled={patchPrefs.isPending}
+                      onChange={(v) => patchPrefs.mutate({ showSwitchNotif: v })}
+                    />
+                  </Row>
+                </Group>
+              </div>
+              <p className="settings-note">
+                显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
+              </p>
+            </Section>
+          </PagePanel>
+        )}
 
-      {visited.has("data") && (
-        <PagePanel idPrefix="settings" tab={SETTINGS_TABS[2]} active={tab}>
-          <div className="settings-grid settings-grid--aside mt-6">
-            <Section id="data" title="数据" icon={<LibraryIcon size={13} />}>
-              {/* 索引这一项内容多：统计与三个动作挤在一行会读不清，
-                  改成标签在上、内容在下的一整块。统计本身也另起一行 ——
-                  这一列窄，「103 本相册 · 0 个标签 · 时间戳」与标题并排
-                  会从中间断开。 */}
+        {visited.has("data") && (
+          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[2]} active={tab}>
+            <Section
+              id="data"
+              title="数据"
+              icon={<LibraryIcon size={13} />}
+              description="索引与本机记录：这里动的是「已经扫出来的东西」，不会碰原始照片。"
+            >
+              {/* 索引这一项内容多：统计与动作挤在一行会读不清，
+                  改成标题在上、内容在下的一整块。 */}
               <div className="settings-block">
                 <div>
                   <span className="text-body text-fg">媒体库索引</span>
@@ -524,7 +527,7 @@ export function SettingsView({
                         queryKey: libraryQueryKeys.root,
                       })
                     }
-                    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border-faint hover:bg-bg-subtle text-meta transition-colors"
+                    className="btn btn-sm btn-outline"
                   >
                     <RefreshIcon size={11} />
                     <span>刷新</span>
@@ -532,7 +535,7 @@ export function SettingsView({
                   <button
                     onClick={() => startScan.mutate()}
                     disabled={startScan.isPending || sse.isRunning}
-                    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border-faint hover:bg-bg-subtle text-meta transition-colors disabled:opacity-50"
+                    className="btn btn-sm btn-outline"
                     title="扫描 (Ctrl+S)"
                   >
                     <RefreshIcon size={11} />
@@ -542,17 +545,6 @@ export function SettingsView({
                         : startScan.isPending
                           ? "启动中…"
                           : "重新扫描"}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => clearScanCache.mutate()}
-                    disabled={clearScanCache.isPending}
-                    className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-meta transition-colors disabled:opacity-50"
-                    title="清空媒体库索引（不会立即重新扫描）"
-                  >
-                    <TrashIcon size={11} />
-                    <span>
-                      {clearScanCache.isPending ? "清空中…" : "清空索引"}
                     </span>
                   </button>
                 </div>
@@ -565,34 +557,26 @@ export function SettingsView({
                   </div>
                 )}
               </div>
-              <Row label="最近访问保留条数">
-                <NumberInput
-                  value={data.maxRecent}
-                  disabled={patchPrefs.isPending}
-                  min={1}
-                  max={50}
-                  onChange={(v) => patchPrefs.mutate({ maxRecent: v })}
-                />
-              </Row>
-              <Row label="清理失效收藏">
-                <button
-                  onClick={() => pruneFav.mutate()}
-                  disabled={pruneFav.isPending}
-                  className="h-8 px-3 rounded-md border border-border-faint hover:bg-bg-subtle text-meta transition-colors disabled:opacity-50"
-                >
-                  {pruneFav.isPending ? "清理中…" : "清理"}
-                </button>
-              </Row>
-              <Row label="清空最近访问" danger>
-                <button
-                  onClick={() => clearHist.mutate()}
-                  disabled={clearHist.isPending}
-                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-danger/40 text-danger hover:bg-danger/5 text-meta transition-colors disabled:opacity-50"
-                >
-                  <TrashIcon size={11} />
-                  <span>{clearHist.isPending ? "清空中…" : "清空"}</span>
-                </button>
-              </Row>
+              <div className="settings-rows">
+                <Row label="最近访问保留条数">
+                  <NumberInput
+                    value={data.maxRecent}
+                    disabled={patchPrefs.isPending}
+                    min={1}
+                    max={50}
+                    onChange={(v) => patchPrefs.mutate({ maxRecent: v })}
+                  />
+                </Row>
+                <Row label="清理失效收藏">
+                  <button
+                    onClick={() => pruneFav.mutate()}
+                    disabled={pruneFav.isPending}
+                    className="btn btn-sm btn-outline"
+                  >
+                    {pruneFav.isPending ? "清理中…" : "清理"}
+                  </button>
+                </Row>
+              </div>
             </Section>
 
             <Section
@@ -604,64 +588,122 @@ export function SettingsView({
             </Section>
 
             <AutoSyncPanel />
-          </div>
-        </PagePanel>
-      )}
 
-      {visited.has("server") && (
-        <PagePanel idPrefix="settings" tab={SETTINGS_TABS[3]} active={tab}>
-          {/* 服务端这一段不是一张卡：它由七张自带顶栏的面板组成，再套一层
-              白卡就是白卡套白卡。标题与其它分区用同一套说法（图标 + 名字 +
-              说明），末尾一条细线收住这一段。 */}
-          <section id="server" aria-labelledby="server-heading">
-            <div className="flex items-center gap-2.5 mb-3">
-              <span className="text-fg-muted shrink-0">
-                <ServerIcon size={13} />
-              </span>
-              <h2 id="server-heading" className="settings-card__title">
-                服务端
+            {/* 危险操作单独成组：会丢东西的动作混在一排普通设置里，
+                一眼扫过去认不出哪几个是点了就没了的。 */}
+            <section
+              className="settings-danger"
+              aria-labelledby="danger-heading"
+            >
+              <h2 id="danger-heading" className="settings-danger__title">
+                危险操作
               </h2>
-              <span className="text-meta text-fg-subtle">
-                修改后自动保存，部分设置需重启
-              </span>
-              <span className="section-rule" />
-            </div>
-            <ServerConfigPanel />
-          </section>
-        </PagePanel>
-      )}
+              <p className="settings-section__desc">
+                这两个动作会丢掉本机已有的数据，且无法撤销。原始照片与已生成的分析结果不受影响。
+              </p>
+              <div className="mt-3 space-y-3">
+                <div className="settings-danger__item">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-body text-fg">清空媒体库索引</span>
+                    <button
+                      onClick={() => clearScanCache.mutate()}
+                      disabled={clearScanCache.isPending}
+                      className="btn btn-sm btn-danger"
+                      title="清空媒体库索引（不会立即重新扫描）"
+                    >
+                      <TrashIcon size={11} />
+                      <span>
+                        {clearScanCache.isPending ? "清空中…" : "清空索引"}
+                      </span>
+                    </button>
+                  </div>
+                  <p className="mt-1 text-meta text-fg-subtle">
+                    丢掉已经扫出来的相册与标签索引；重新扫描后会重新建立，原始文件不动。
+                  </p>
+                </div>
+                <div className="settings-danger__item">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-body text-fg">清空最近访问</span>
+                    <button
+                      onClick={() => clearHist.mutate()}
+                      disabled={clearHist.isPending}
+                      className="btn btn-sm btn-danger"
+                    >
+                      <TrashIcon size={11} />
+                      <span>{clearHist.isPending ? "清空中…" : "清空"}</span>
+                    </button>
+                  </div>
+                  <p className="mt-1 text-meta text-fg-subtle">
+                    丢掉最近浏览过的相册记录；收藏与精选不受影响。
+                  </p>
+                </div>
+              </div>
+            </section>
+          </PagePanel>
+        )}
 
-      {/* 关于：页脚一行，不再占一张卡。标题留着（只给读屏与分区跳转用），
-          看得见的还是版本与提示。 */}
-      <section
-        id="about"
-        className="settings-footer"
-        aria-labelledby="about-heading"
-      >
-        <h2 id="about-heading" className="sr-only">
-          关于
-        </h2>
-        <span className="font-display text-fg">Local Gallery · 本地画廊</span>
-        <span>Web 版 · v{__APP_VERSION__}</span>
-        <span className="flex items-center gap-1.5">
-          <KeyboardIcon size={12} />
-          <span>按</span>
-          <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
-            ?
-          </kbd>
-          <span>查看所有快捷键</span>
-        </span>
-        <span>媒体保存在本地，收藏与阅读记录由服务端保存</span>
-      </section>
+        {visited.has("server") && (
+          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[3]} active={tab}>
+            {/* 服务端这一段不是一张卡：它由七张自带顶栏的面板组成，再套一层
+                白卡就是白卡套白卡。标题与其它分区用同一套说法（图标 + 名字 +
+                说明），末尾一条细线收住这一段。 */}
+            <section
+              id="server"
+              className="settings-section"
+              aria-labelledby="server-heading"
+            >
+              <div className="settings-section__head">
+                <span className="settings-section__icon" aria-hidden="true">
+                  <ServerIcon size={13} />
+                </span>
+                <div className="settings-section__headings">
+                  <h2 id="server-heading" className="settings-section__title">
+                    服务端
+                  </h2>
+                  <p className="settings-section__desc">
+                    修改后自动保存，部分设置需重启
+                  </p>
+                </div>
+              </div>
+              <div className="settings-section__body">
+                <ServerConfigPanel />
+              </div>
+            </section>
+          </PagePanel>
+        )}
+
+        {/* 关于：页脚一行，不再占一张卡。标题留着（只给读屏与分区跳转用），
+            看得见的还是版本与提示。 */}
+        <section
+          id="about"
+          className="settings-footer"
+          aria-labelledby="about-heading"
+        >
+          <h2 id="about-heading" className="sr-only">
+            关于
+          </h2>
+          <span className="font-display text-fg">Local Gallery · 本地画廊</span>
+          <span>Web 版 · v{__APP_VERSION__}</span>
+          <span className="flex items-center gap-1.5">
+            <KeyboardIcon size={12} />
+            <span>按</span>
+            <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
+              ?
+            </kbd>
+            <span>查看所有快捷键</span>
+          </span>
+          <span>媒体保存在本地，收藏与阅读记录由服务端保存</span>
+        </section>
+      </div>
     </div>
   );
 }
 
 /**
- * 卡里的一组设置（照片 / 漫画）。
+ * 一组设置（照片 / 漫画）。
  *
- * 组标题只写一行字，不带底线：卡里已经有分组之间的细线，再加一条
- * 就是两套边界叠在一起。
+ * 组标题只写一行字，不带底线：这一页里分组之间的细线已经够用，再加
+ * 一条就是两套边界叠在一起。
  */
 function Group({
   title,
@@ -701,7 +743,7 @@ function NavRow({
   onChange: (visible: boolean) => void;
 }) {
   return (
-    <div className="settings-row settings-row--inline flex items-center justify-between gap-3 px-4 py-2.5 text-body">
+    <div className="settings-row settings-row--inline text-body">
       <span className="flex min-w-0 items-center gap-2.5">
         <entry.Icon size={15} className="shrink-0 text-fg-muted" />
         <span className="truncate">{entry.label}</span>

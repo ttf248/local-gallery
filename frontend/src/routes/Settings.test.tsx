@@ -371,6 +371,33 @@ it("关于页脚在每个页签下都在", async () => {
   expect(screen.getByRole("heading", { name: "关于" })).toBeInTheDocument();
 });
 
+// 危险操作单独成组：会丢东西的动作混在一排普通设置里，一眼扫过去
+// 认不出哪几个是点了就没了的。
+it("危险操作单独成组，每件都写清丢的是什么", async () => {
+  renderSettings("data");
+  const danger = await screen.findByRole("region", { name: "危险操作" });
+
+  expect(within(danger).getByText("清空媒体库索引")).toBeInTheDocument();
+  expect(within(danger).getByText("清空最近访问")).toBeInTheDocument();
+  // 说明要写清丢的是什么、还剩什么：用户点之前就该知道。
+  expect(
+    within(danger).getByText(/丢掉已经扫出来的相册与标签索引/),
+  ).toBeInTheDocument();
+  expect(
+    within(danger).getByText(/丢掉最近浏览过的相册记录/),
+  ).toBeInTheDocument();
+  // 两个动作各自带一个按钮，且不与普通设置里的同名动作混在一起。
+  expect(
+    within(danger).getByRole("button", { name: /清空索引/ }),
+  ).toBeInTheDocument();
+  expect(within(danger).getByRole("button", { name: "清空" })).toBeInTheDocument();
+  // 清空索引会丢掉索引：它不在普通设置行里。
+  const data = screen.getByRole("region", { name: "数据" });
+  expect(
+    within(data).queryByRole("button", { name: /清空索引/ }),
+  ).not.toBeInTheDocument();
+});
+
 // 导航分区按工作台分两组列出：两组各是一块，照片那一组在左。
 it("导航分区按工作台分成照片与漫画两组", async () => {
   renderSettings("interface");

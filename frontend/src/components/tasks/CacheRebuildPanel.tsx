@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { RefreshIcon } from "../common/Icon";
 import { ApiError } from "../../api/client";
 import { cacheApi, type CacheRebuildScope } from "../../api/cache";
 import { useCacheRebuild } from "../../hooks/useCacheRebuild";
 import { useUIStore } from "../../store/uiStore";
-import "../../styles/settings.css";
+import "../../styles/tasks.css";
 
 /**
  * 预览图重建的档位宽度。
@@ -106,18 +105,16 @@ export default function CacheRebuildPanel() {
   return (
     <section
       aria-labelledby="cache-rebuild-heading"
-      className="settings-section"
+      className="tasks-section"
     >
-      <div className="settings-section__heading">
-        <span className="settings-section__icon text-fg-muted">
-          <RefreshIcon size={13} />
-        </span>
-        <h2 id="cache-rebuild-heading" className="section-title">
-          缓存重建
-        </h2>
-        <span className="section-rule" />
+      <div className="tasks-section__head">
+        <div className="min-w-0">
+          <h2 id="cache-rebuild-heading" className="tasks-section__title">
+            缓存重建
+          </h2>
+        </div>
       </div>
-      <div className="settings-section__body p-5 space-y-4">
+      <div className="tasks-section__body space-y-4">
         <p className="text-body text-fg-muted">
           渲染图是懒生成的：清空之后要重新生成，否则第一次打开每一页都要现算，
           整页图片会卡住。重建在后台跑，有进度也能中途取消。

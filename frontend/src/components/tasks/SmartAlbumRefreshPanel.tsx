@@ -98,24 +98,24 @@ export default function SmartAlbumRefreshPanel() {
   return (
     <section
       aria-labelledby="smart-album-refresh-heading"
-      className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs"
+      className="tasks-section"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-border-faint px-5 py-4 sm:px-6">
+      <div className="tasks-section__head">
         <div className="min-w-0">
           <h2
             id="smart-album-refresh-heading"
-            className="text-title font-semibold text-fg"
+            className="tasks-section__title"
           >
             智能相册分组
           </h2>
-          <p className="mt-1 max-w-2xl text-meta text-fg-muted">
+          <p className="tasks-section__desc">
             按时间、地点、人物、场景分类并精选主题。只依据已完成的分析结果生成，原始照片保持不变。
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="btn btn-primary"
+            className="btn btn-sm btn-primary"
             onClick={() => void start(false)}
             disabled={running || starting}
           >
@@ -123,7 +123,7 @@ export default function SmartAlbumRefreshPanel() {
           </button>
           <button
             type="button"
-            className="btn btn-outline"
+            className="btn btn-sm btn-outline"
             onClick={() => void start(true)}
             disabled={running || starting}
             title="无视缓存，把所有相册的四类分类与精选推荐全部重算一遍"
@@ -133,7 +133,7 @@ export default function SmartAlbumRefreshPanel() {
           {running ? (
             <button
               type="button"
-              className="btn btn-ghost"
+              className="btn btn-sm btn-ghost"
               onClick={() => void cancel()}
             >
               取消
@@ -142,7 +142,7 @@ export default function SmartAlbumRefreshPanel() {
         </div>
       </div>
 
-      <div className="px-5 py-4 sm:px-6">
+      <div className="tasks-section__body">
         {running && progress ? (
           <div className="space-y-2" data-testid="smart-album-refresh-progress">
             <div

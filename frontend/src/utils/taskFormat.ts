@@ -1,4 +1,11 @@
-import type { AIJob, AIJobError, AIJobEstimateMode } from "../api/aiJobs";
+import type {
+  AIJob,
+  AIJobError,
+  AIJobEstimate,
+  AIJobEstimateMode,
+  AnalysisMode,
+  AnalysisType,
+} from "../api/aiJobs";
 
 /** 千分位计数。 */
 export function formatCount(value: number): string {
@@ -63,6 +70,22 @@ export function sumEstimateModes(
     duration += mode.estimatedDurationMs;
   }
   return { count, estimatedDurationMs: known ? duration : null };
+}
+
+/**
+ * 某个模块在一种口径下的核算结果。
+ *
+ * 模块没装或不可用时给 null：调用方据此说明「算不出来」，而不是拿 0 张
+ * 冒充「这次没什么可做」。
+ */
+export function estimateForModule(
+  estimate: AIJobEstimate | undefined,
+  type: AnalysisType,
+  mode: AnalysisMode,
+): AIJobEstimateMode | null {
+  const entry = estimate?.modules.find((item) => item.type === type);
+  if (!entry || !entry.available) return null;
+  return mode === "incremental" ? entry.incremental : entry.full;
 }
 
 /**

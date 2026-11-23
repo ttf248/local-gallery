@@ -131,88 +131,104 @@ export default function DailyPlanPanel({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
+    <section className="tasks-section" aria-labelledby="daily-plan-heading">
+      <div className="tasks-section__head">
+        <div className="min-w-0">
+          <h2 id="daily-plan-heading" className="tasks-section__title">
+            每日计划
+          </h2>
+          <p className="tasks-section__desc">
+            {"到点后依次扫描媒体目录、运行所选分析模块、生成智能相册；分析与分组在本机处理。按设备本地时间运行，错过计划时间后会在下次启动时补跑一次。"}
+          </p>
+        </div>
+        <label className="flex shrink-0 items-center gap-2.5 text-body text-fg">
+          <Toggle
+            label="启用每日自动任务"
+            checked={enabled}
+            disabled={disabled}
+            onChange={onEnabledChange}
+          />
+          <span>启用每日自动任务</span>
+        </label>
+      </div>
+
       <form
-        className="space-y-4 px-5 py-4 sm:px-6"
+        className="tasks-section__body"
         onSubmit={(event) => {
           event.preventDefault();
           onSave();
         }}
       >
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          <label className="flex items-center gap-3">
-            <Toggle
-              label="启用每日自动任务"
-              checked={enabled}
-              disabled={disabled}
-              onChange={onEnabledChange}
-            />
-            <span className="text-body text-fg">启用每日自动任务</span>
-          </label>
-
-          <label className="flex items-center gap-2 text-meta text-fg-muted">
-            <span>开始时间</span>
-            <input
-              type="time"
-              value={time}
-              disabled={disabled}
-              onChange={(event) => onTimeChange(event.target.value)}
-              className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-body text-fg disabled:opacity-60"
-              aria-label="每日自动任务开始时间"
-            />
-          </label>
+        <div className="tasks-field">
+          <span className="tasks-field__label">开始时间</span>
+          <input
+            type="time"
+            value={time}
+            disabled={disabled}
+            onChange={(event) => onTimeChange(event.currentTarget.value)}
+            className="field w-fit"
+            aria-label="每日自动任务开始时间"
+          />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="flex items-center gap-2 text-meta text-fg">
-            <input
-              type="checkbox"
-              checked={scanEnabled}
-              disabled={disabled}
-              onChange={(event) => onScanChange(event.target.checked)}
-            />
-            扫描所有媒体目录
-          </label>
-          <label className="flex items-center gap-2 text-meta text-fg">
-            <input
-              type="checkbox"
-              checked={smartAlbumsEnabled}
-              disabled={disabled}
-              onChange={(event) => onSmartAlbumsChange(event.target.checked)}
-            />
-            生成智能相册分组
-          </label>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start xl:gap-8">
-          <div className="min-w-0">
-            <p className="text-meta text-fg-subtle">AI 分析模块</p>
-            <div className="mt-2">
-              <ModuleChips
-                modules={modules}
-                selected={selectedModules}
-                onToggle={toggleModule}
+        <div className="tasks-field">
+          <span className="tasks-field__label">扫描与分组</span>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <label className="flex items-center gap-2 text-body text-fg">
+              <input
+                type="checkbox"
+                checked={scanEnabled}
                 disabled={disabled}
-                locked={peopleEnabled ? [] : ["face"]}
-                label="运行模块"
+                onChange={(event) => onScanChange(event.currentTarget.checked)}
               />
-            </div>
+              扫描所有媒体目录
+            </label>
+            <label className="flex items-center gap-2 text-body text-fg">
+              <input
+                type="checkbox"
+                checked={smartAlbumsEnabled}
+                disabled={disabled}
+                onChange={(event) =>
+                  onSmartAlbumsChange(event.currentTarget.checked)
+                }
+              />
+              生成智能相册分组
+            </label>
           </div>
+        </div>
 
-          <label className="flex items-center gap-2 text-meta text-fg">
+        <div className="tasks-field tasks-field--stack">
+          <span className="tasks-field__label">AI 分析模块</span>
+          <div className="min-w-0">
+            <ModuleChips
+              modules={modules}
+              selected={selectedModules}
+              onToggle={toggleModule}
+              disabled={disabled}
+              locked={peopleEnabled ? [] : ["face"]}
+              label="运行模块"
+            />
+          </div>
+        </div>
+
+        <div className="tasks-field">
+          <span className="tasks-field__label">人物分析</span>
+          <label className="flex items-center gap-2 text-body text-fg">
             <input
               type="checkbox"
               checked={peopleEnabled}
               disabled={disabled}
-              onChange={(event) => onPeopleEnabledChange(event.target.checked)}
+              onChange={(event) =>
+                onPeopleEnabledChange(event.currentTarget.checked)
+              }
             />
             启用人物分析（默认关闭）
           </label>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border-faint pt-4">
+        <div className="tasks-actions">
           <button
-            className="btn btn-outline"
+            className="btn btn-sm btn-primary"
             type="submit"
             disabled={disabled || (enabled && !hasSelectedTask)}
           >
@@ -247,12 +263,9 @@ export default function DailyPlanPanel({
         </div>
       </form>
 
-      <p className="border-t border-border-faint px-5 py-3 text-meta leading-relaxed text-fg-subtle sm:px-6">
-        到点后依次扫描媒体目录、运行所选分析模块、生成智能相册；分析与分组在本机处理。按设备本地时间运行，错过计划时间后会在下次启动时补跑一次。
-      </p>
-      {smartAlbumsEnabled && (
+      {smartAlbumsEnabled ? (
         <div
-          className="border-t border-border-faint px-5 py-3 text-meta leading-relaxed sm:px-6"
+          className="mt-3 text-meta leading-relaxed"
           role="status"
           aria-label="智能相册维度计划"
         >
@@ -270,8 +283,8 @@ export default function DailyPlanPanel({
             </p>
           )}
         </div>
-      )}
-    </div>
+      ) : null}
+    </section>
   );
 }
 

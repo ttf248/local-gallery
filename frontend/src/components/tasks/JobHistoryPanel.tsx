@@ -74,12 +74,18 @@ export default function JobHistoryPanel({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
-      {jobs.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-faint px-5 py-4 sm:px-6">
-          <p className="min-w-0 text-meta text-fg-subtle">
-            删除记录只清理任务日志，不会删除已生成的元数据、向量、文字或人脸结果。
+    <section className="tasks-section" aria-labelledby="task-history-heading">
+      <div className="tasks-section__head">
+        <div className="min-w-0">
+          <h2 id="task-history-heading" className="tasks-section__title">
+            任务记录
+          </h2>
+          <p className="tasks-section__desc">
+            每次已结束的任务的耗时、产出与失败原因都在这里。删除记录只清理任务日志，
+            不会删除已生成的元数据、向量、文字或人脸结果。
           </p>
+        </div>
+        {jobs.length > 0 ? (
           <button
             type="button"
             className="btn btn-sm btn-outline"
@@ -88,169 +94,160 @@ export default function JobHistoryPanel({
           >
             清理已结束记录
           </button>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
 
-      {jobs.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 border-b border-border-faint px-5 py-3 sm:px-6">
-          {HISTORY_FILTERS.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline"}`}
-              aria-pressed={filter === value}
-              onClick={() => setFilter(value)}
-            >
-              {label}{" "}
-              <span className="ml-1 font-mono tabular-nums">
-                {counts[value]}
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="tasks-section__body">
+        {jobs.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 pb-3">
+            {HISTORY_FILTERS.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline"}`}
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+              >
+                {label}{" "}
+                <span className="ml-1 font-mono tabular-nums">
+                  {counts[value]}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
 
-      {visibleJobs.length === 0 ? (
-        <EmptyState
-          inline
-          title={
-            jobs.length === 0 ? "还没有已结束的任务" : "没有符合条件的记录"
-          }
-          description={
-            jobs.length === 0
-              ? "运行一次分析后，耗时、产出和失败原因会显示在这里。"
-              : "选择其他状态查看任务记录。"
-          }
-        />
-      ) : (
-        <div className="divide-y divide-border-faint">
-          {visibleJobs.map((job) => (
-            <details
-              key={job.id}
-              onToggle={(event) =>
-                handleToggle(job.id, event.currentTarget.open)
-              }
-              className="group px-5 py-4"
-              data-testid="task-history-row"
-              data-job-id={job.id}
-            >
-              <summary className="flex cursor-pointer list-none items-start gap-3 [&::-webkit-details-marker]:hidden">
-                <TaskStatusDot status={job.status} className="mt-2" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="text-label font-medium text-fg">
-                      {taskTitle(job)}
-                    </span>
-                    <span className="text-meta text-fg-muted">
-                      {taskModeLabel(job.mode)}
-                    </span>
-                    <span className="text-meta text-fg-subtle">
-                      {taskStatusLabel(job.status)}
-                    </span>
+        {visibleJobs.length === 0 ? (
+          <EmptyState
+            inline
+            title={
+              jobs.length === 0 ? "还没有已结束的任务" : "没有符合条件的记录"
+            }
+            description={
+              jobs.length === 0
+                ? "运行一次分析后，耗时、产出和失败原因会显示在这里。"
+                : "选择其他状态查看任务记录。"
+            }
+          />
+        ) : (
+          <div className="tasks-list">
+            {visibleJobs.map((job) => (
+              <details
+                key={job.id}
+                onToggle={(event) =>
+                  handleToggle(job.id, event.currentTarget.open)
+                }
+                className="group border-t border-border-faint first:border-t-0"
+                data-testid="task-history-row"
+                data-job-id={job.id}
+              >
+                <summary className="flex cursor-pointer list-none items-start gap-3 py-3 [&::-webkit-details-marker]:hidden">
+                  <TaskStatusDot status={job.status} className="mt-2" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-label font-medium text-fg">
+                        {taskTitle(job)}
+                      </span>
+                      <span className="text-meta text-fg-muted">
+                        {taskModeLabel(job.mode)}
+                      </span>
+                      <span className="text-meta text-fg-subtle">
+                        {taskStatusLabel(job.status)}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-meta text-fg-subtle">
+                      <span>{formatDateTime(job.createdAt)}</span>
+                      <span>耗时 {formatTaskDuration(job.elapsedMs)}</span>
+                      <span className="tabular-nums">
+                        完成 {formatCount(job.completed)}
+                      </span>
+                      <span className="tabular-nums">
+                        跳过 {formatCount(job.skipped)}
+                      </span>
+                      <span
+                        className={`tabular-nums ${
+                          job.failed > 0 ? "text-danger" : ""
+                        }`}
+                      >
+                        失败 {formatCount(job.failed)}
+                      </span>
+                      {job.type === "face" ? (
+                        <span>模型 {faceModelLabel(job.faceModel)}</span>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-meta text-fg-subtle">
-                    <span>{formatDateTime(job.createdAt)}</span>
-                    <span>耗时 {formatTaskDuration(job.elapsedMs)}</span>
-                    <span className="tabular-nums">
-                      完成 {formatCount(job.completed)}
-                    </span>
-                    <span className="tabular-nums">
-                      跳过 {formatCount(job.skipped)}
-                    </span>
-                    <span
-                      className={`tabular-nums ${
-                        job.failed > 0 ? "text-danger" : ""
-                      }`}
-                    >
-                      失败 {formatCount(job.failed)}
-                    </span>
-                    {job.type === "face" ? (
-                      <span>模型 {faceModelLabel(job.faceModel)}</span>
-                    ) : null}
-                  </div>
-                </div>
-                <ChevronDownIcon
-                  size={16}
-                  className="mt-1 shrink-0 text-fg-subtle transition-transform group-open:rotate-180"
-                />
-              </summary>
+                  <ChevronDownIcon
+                    size={16}
+                    className="mt-1 shrink-0 text-fg-subtle transition-transform group-open:rotate-180"
+                  />
+                </summary>
 
-              <div className="mt-4 border-t border-border-faint pt-4">
-                <dl className="grid max-w-2xl gap-x-8 sm:grid-cols-2">
-                  <SpecRow label="开始" value={formatDateTime(job.startedAt)} />
-                  <SpecRow
-                    label="结束"
-                    value={formatDateTime(job.finishedAt)}
-                  />
-                  <SpecRow
-                    label="耗时"
-                    value={formatTaskDuration(job.elapsedMs)}
-                  />
-                  <SpecRow
-                    label="速度"
-                    value={formatTaskSpeed(job.speedPerSecond)}
-                  />
-                  <SpecRow
-                    label="模块版本"
-                    value={job.moduleVersion || "—"}
-                    fullWidth
-                  />
-                  {job.type === "face" ? (
+                <div className="border-t border-border-faint pb-4 pt-4">
+                  <dl className="grid max-w-2xl gap-x-8 sm:grid-cols-2">
+                    <SpecRow label="开始" value={formatDateTime(job.startedAt)} />
                     <SpecRow
-                      label="使用模型"
-                      value={faceModelLabel(job.faceModel)}
+                      label="结束"
+                      value={formatDateTime(job.finishedAt)}
+                    />
+                    <SpecRow
+                      label="耗时"
+                      value={formatTaskDuration(job.elapsedMs)}
+                    />
+                    <SpecRow
+                      label="速度"
+                      value={formatTaskSpeed(job.speedPerSecond)}
+                    />
+                    <SpecRow
+                      label="模块版本"
+                      value={job.moduleVersion || "—"}
                       fullWidth
                     />
-                  ) : null}
-                </dl>
+                    {job.type === "face" ? (
+                      <SpecRow
+                        label="使用模型"
+                        value={faceModelLabel(job.faceModel)}
+                        fullWidth
+                      />
+                    ) : null}
+                  </dl>
 
-                {job.error ? (
-                  <p className="mt-3 text-meta text-danger">
-                    任务原因：{job.error}
-                  </p>
-                ) : null}
-
-                <JobOutputSummary
-                  jobId={job.id}
-                  enabled={expandedIds.has(job.id)}
-                />
-
-                <OutputBreakdown job={job} />
-
-                {job.errors && job.errors.length > 0 ? (
-                  <div className="mt-4">
-                    <p className="mb-2 text-meta font-medium text-fg">
-                      失败文件
+                  {job.error ? (
+                    <p className="mt-3 text-meta text-danger">
+                      任务原因：{job.error}
                     </p>
-                    <FailureGroupList errors={job.errors} />
-                  </div>
-                ) : null}
+                  ) : null}
 
-                {job.status === "failed" ||
-                job.status === "cancelled" ||
-                job.failed > 0 ? (
+                  <JobOutputSummary
+                    jobId={job.id}
+                    enabled={expandedIds.has(job.id)}
+                  />
+
+                  <OutputBreakdown job={job} />
+
+                  {job.errors && job.errors.length > 0 ? (
+                    <div className="mt-4">
+                      <p className="mb-2 text-meta font-medium text-fg">
+                        失败文件
+                      </p>
+                      <FailureGroupList errors={job.errors} />
+                    </div>
+                  ) : null}
+
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline"
-                      disabled={retryDisabled}
-                      onClick={() => onRetry(job.id)}
-                    >
-                      {job.status === "cancelled"
-                        ? "重新运行未完成项"
-                        : "仅重试失败项"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline text-danger"
-                      disabled={busy}
-                      onClick={() => deleteJob(job.id, onDelete)}
-                    >
-                      删除任务记录
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-4">
+                    {job.status === "failed" ||
+                    job.status === "cancelled" ||
+                    job.failed > 0 ? (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline"
+                        disabled={retryDisabled}
+                        onClick={() => onRetry(job.id)}
+                      >
+                        {job.status === "cancelled"
+                          ? "重新运行未完成项"
+                          : "仅重试失败项"}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="btn btn-sm btn-outline text-danger"
@@ -260,13 +257,13 @@ export default function JobHistoryPanel({
                       删除任务记录
                     </button>
                   </div>
-                )}
-              </div>
-            </details>
-          ))}
-        </div>
-      )}
-    </div>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

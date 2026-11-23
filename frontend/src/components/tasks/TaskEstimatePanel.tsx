@@ -95,14 +95,13 @@ export default function TaskEstimatePanel({
 
   return (
     <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="text-meta text-fg-subtle">本次规模</p>
-        <p className="text-meta text-fg-muted">
-          {entry.name}
-          {entry.version ? ` · ${entry.version}` : ""} · 整库{" "}
-          {formatCount(estimate.totalImages)} 张
-        </p>
-      </div>
+      {/* 核算口径写在表格上方：这次要处理多少、凭什么估的。
+          「本次规模」这个标题由外层的字段标签给出，这里不再重复一遍。 */}
+      <p className="text-meta text-fg-muted">
+        {entry.name}
+        {entry.version ? ` · ${entry.version}` : ""} · 整库{" "}
+        {formatCount(estimate.totalImages)} 张
+      </p>
 
       {/* 表格按内容收紧：三个列头各自挨着它的数字，摊满整幅会读成三处孤立的数据。
           表格与那一句估算口径并排：卡片很宽，表格却只有三百来像素，

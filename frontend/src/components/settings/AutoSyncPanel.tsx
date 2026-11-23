@@ -93,7 +93,7 @@ export default function AutoSyncPanel() {
           </span>
         </div>
         {status && (
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-meta text-fg-muted">
+          <dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-meta text-fg-muted">
             <dt>监听目录</dt>
             <dd className="text-fg">
               {status.watchedDirs} / {status.maxWatchDirs}
