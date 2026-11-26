@@ -442,17 +442,35 @@ function GridCard({
         className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
         <div
-          className={`album-tile__cover rounded-lg transition duration-base motion-safe:group-hover:-translate-y-0.5 [.album-tile:hover_&]:shadow-2 relative ${COVER_RATIO_CLASS[coverRatio]} bg-sunken overflow-hidden${
-            showTitleOnCover ? " album-tile__cover--book book-binding rounded-[6px] shadow-[var(--cover-shadow)] transition duration-base motion-safe:group-hover:-translate-y-1" : ""
-          }`}
-          data-testid="card-cover"
+          data-stacked={data.variant === "collection" || undefined}
+          className={
+            data.variant === "collection"
+              ? "relative isolate mb-3 before:absolute before:inset-x-2 before:-bottom-1.5 before:-z-10 before:h-full before:rounded-lg before:bg-sunken-strong after:absolute after:inset-x-4 after:-bottom-3 after:-z-20 after:h-full after:rounded-lg after:bg-sunken motion-safe:before:transition-transform motion-safe:after:transition-transform motion-safe:group-hover:before:translate-y-px motion-safe:group-hover:after:translate-y-px"
+              : "relative"
+          }
         >
-          {/* 封面：相册用一张主封面，集合与文件夹用最多四张代表图拼出
+          <div
+            className={`album-tile__cover rounded-lg relative z-10 ${COVER_RATIO_CLASS[coverRatio]} bg-sunken overflow-hidden${
+              showTitleOnCover
+                ? " album-tile__cover--book book-binding rounded-[6px] shadow-[var(--cover-shadow)] transition duration-base motion-safe:group-hover:-translate-y-1"
+                : ""
+            }`}
+            data-testid="card-cover"
+          >
+            {/* 封面：相册用一张主封面，集合与文件夹用最多四张代表图拼出
               「里面有什么」。视频封面同样裁切填满：方形画幅里保留 16:9
               的完整画面会上下留出两条黑边，读起来像一只空信箱。 */}
-          <CardCover data={data} />
+            <CardCover data={data} />
+            {data.variant === "smart" && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-2 left-2 rounded-full bg-theater-scrim px-2 text-label text-white"
+              >
+                #
+              </span>
+            )}
 
-          {/* 封面左上角：状态槽。阅读状态（未读 / 已读完）与视频转码角标
+            {/* 封面左上角：状态槽。阅读状态（未读 / 已读完）与视频转码角标
               都在这一列，堆叠显示，互不遮挡。
 
               「已读完」原先放在右下角，和未读点分处两个角 —— 扫读一张
@@ -460,66 +478,70 @@ function GridCard({
               已读完不会同时成立），所以放进同一列不冲突。
               深色蒙版材质压在任何封面上都读得清（原来的实心绿块在
               深色主题 / 浅色封面上都会糊掉）。 */}
-          {isFinished && isComicAlbum && <div className="absolute right-12 top-2"><ReadChip /></div>}
-          <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
-            {coverBadge}
-            {data.coverKind === "video" && (
-              <TranscodeStatusBadge
-                videoPath={data.coverPath ?? ""}
-                size="sm"
-              />
+            {isFinished && isComicAlbum && (
+              <div className="absolute right-12 top-2">
+                <ReadChip />
+              </div>
             )}
-            {unread && <UnreadDot label={cardCopy.unreadTitle} />}
-          </div>
+            <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
+              {coverBadge}
+              {data.coverKind === "video" && (
+                <TranscodeStatusBadge
+                  videoPath={data.coverPath ?? ""}
+                  size="sm"
+                />
+              )}
+              {unread && <UnreadDot label={cardCopy.unreadTitle} />}
+            </div>
 
-          {/* 底部暗化蒙版（hover 时让进度条与徽章更清晰） */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+            {/* 底部暗化蒙版（hover 时让进度条与徽章更清晰） */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-          {/* 书名压条：标题印在封面上。书封上本来就有书名，
+            {/* 书名压条：标题印在封面上。书封上本来就有书名，
               网格因此读成一排书，而不是「一堆图片 + 一堆说明」。
               宽幅封面（首屏面板里的横版海报）用紧凑压条：两行标题
               会把半张封面压成一块黑。 */}
-          {showTitleOnCover && (
-            <BookCover
-              label={label}
-              coverSeries={coverSeries}
-              compact={coverRatio === "16/9"}
-            />
-          )}
-          {/* 阅读进度：百分比放深色蒙版 chip，进度条压在封面底边的暗色条上。
+            {showTitleOnCover && (
+              <BookCover
+                label={label}
+                coverSeries={coverSeries}
+                compact={coverRatio === "16/9"}
+              />
+            )}
+            {/* 阅读进度：百分比放深色蒙版 chip，进度条压在封面底边的暗色条上。
               以前整块用一层渐变蒙版，白字在亮封面（照片里的白墙、白纸）上
               会直接糊掉 —— 蒙版越往上越透明，而文字正好在透明那一侧。
 
               照片相册不显示百分比：它是「翻到了第几张」，不是「读完了一本」，
               百分比读数会让人误以为在读漫画。照片卡片只保留底边那条进度条，
               位置数字挪到元信息行。 */}
-          {isComicAlbum && progressPct !== null && progressPct > 0 && (
-            <>
-              {/* 百分比 chip 只在标题不在封面上时出现：封面上已经有
+            {isComicAlbum && progressPct !== null && progressPct > 0 && (
+              <>
+                {/* 百分比 chip 只在标题不在封面上时出现：封面上已经有
                   书名压条，再压一枚百分比 chip，两层深色蒙版叠在
                   封面下缘会互相干扰。书封形态把百分比放进封面
                   下方的说明行，与计数读在一起。 */}
-              {!isFinished && !showTitleOnCover && (
-                <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-caption font-medium text-white shadow-1">
-                  <ReaderIcon size={11} className="shrink-0" />
-                  <span className="tabular-nums">{progressPct}%</span>
+                {!isFinished && !showTitleOnCover && (
+                  <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-caption font-medium text-white shadow-1">
+                    <ReaderIcon size={11} className="shrink-0" />
+                    <span className="tabular-nums">{progressPct}%</span>
+                  </div>
+                )}
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] z-10 bg-black/55">
+                  <div
+                    className="h-full bg-white/90"
+                    style={{ width: `${progressPct}%` }}
+                  />
                 </div>
-              )}
-              <div className="absolute bottom-0 left-0 right-0 h-[3px] z-10 bg-black/55">
-                <div
-                  className="h-full bg-white/90"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
-
         <div className="album-tile__meta [html[data-mode=comic]_&]:[padding:9px_0_5px] [padding:12px_0_7px] max-sm:px-0 min-w-0">
           {/* 标题印在封面上时，这里不再重复标题：同一句话在一张卡上
               说两遍，封面的书名会被下面的说明读成回声。 */}
           {!showTitleOnCover && (
-            <div className="album-tile__title [html[data-mode=comic]_.library-grid_&]:min-h-[calc(2_*_1.375em)] [html[data-mode=photo]_.library-grid_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.library-grid_&]:[line-clamp:1] [html[data-mode=photo]_.shelf_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.shelf_&]:[line-clamp:1] text-label font-semibold text-ink truncate leading-snug transition-colors group-hover:text-primary">
+            <div className="album-tile__title truncate text-subheading text-ink [overflow-wrap:anywhere]">
               <AlbumName name={label} />
             </div>
           )}
@@ -554,10 +576,7 @@ function GridCard({
                             {media.lead}
                           </span>
                           {media.rest && (
-                            <span className="text-ink-2">
-                              {" "}
-                              · {media.rest}
-                            </span>
+                            <span className="text-ink-2"> · {media.rest}</span>
                           )}
                         </>
                       ) : (
@@ -569,7 +588,8 @@ function GridCard({
                 // collection / smart 变体：count + 计数单位（语义是子相册数）。
                 // 单位跟卡片所属的那一侧走：照片侧「本」，漫画侧「卷」。
                 return (
-                  <span className="shrink-0 whitespace-nowrap">
+                  <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+                    {data.variant === "collection" && <FolderIcon size={16} />}
                     {data.count} {albumCountUnit(data.contentKind ?? "photo")}
                   </span>
                 );
@@ -600,7 +620,7 @@ function GridCard({
               单一媒体根下每张卡片都挂同一句来源是噪音，multiRoot 为 false 时隐藏。 */}
           {data.sourceName && multiRoot && !hideMeta && (
             <div className="text-caption text-ink-3 mt-0.5 inline-flex items-center gap-1">
-              <FolderIcon size={10} className="shrink-0" />
+              <FolderIcon size={16} className="shrink-0" />
               <span className="truncate">来自 {data.sourceName}</span>
             </div>
           )}

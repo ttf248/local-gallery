@@ -27,7 +27,7 @@ describe("libraryCard", () => {
     expect(card.subtitle).toBe("旅行 · 2025");
   });
 
-  it("集合卡片使用聚合数量与拼贴封面", () => {
+  it("集合卡片使用聚合数量与代表封面候选", () => {
     const card = nodeSummaryToCard(
       node("c_year", "collection", {
         albumCount: 12,

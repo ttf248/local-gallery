@@ -2,7 +2,6 @@ import { ImageIcon } from "../../ui/icons";
 import { useState } from "react";
 import { RenditionImage } from "../common";
 import { VideoCoverImage } from "../common";
-import { FolderIcon } from "../../ui/icons";
 import type { CardData } from "./AlbumTile";
 
 interface Props {
@@ -21,39 +20,26 @@ interface Props {
   compact?: boolean;
 }
 
-interface CoverSource {
-  path: string;
-  version?: string;
-}
-
-export type EditorialCollageLayout =
-  "empty" | "single" | "split-2" | "feature-3" | "grid-4";
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function resolveCollageLayout(count: number): EditorialCollageLayout {
-  if (count <= 0) return "empty";
-  if (count === 1) return "single";
-  if (count === 2) return "split-2";
-  if (count === 3) return "feature-3";
-  return "grid-4";
-}
-
 export default function CardCover({
   data,
   loading = "lazy",
   compact = false,
 }: Props) {
-  const sources = getCoverSources(data);
-  const primary = sources[0];
-  if (!primary) return <CoverPlaceholder />;
-
+  const coverIndex =
+    data.covers?.findIndex((path) => Boolean(path.trim())) ?? -1;
+  const path = data.coverPath?.trim() || data.covers?.[coverIndex]?.trim();
+  if (!path) return <CoverPlaceholder />;
+  const version =
+    path === data.coverPath
+      ? data.coverVersion
+      : data.coverVersions?.[coverIndex];
   if (data.variant === "album" && data.coverKind === "video") {
     return (
       <div className="h-full w-full bg-media">
         <VideoCoverImage
-          key={primary.path}
-          videoPath={primary.path}
-          version={primary.version}
+          key={path}
+          videoPath={path}
+          version={version}
           displayWidth={compact ? 48 : 260}
           loading={loading}
           alt={data.title}
@@ -65,80 +51,17 @@ export default function CardCover({
     );
   }
 
-  if (data.variant === "album" || compact) {
-    return (
-      <CoverImage
-        key={primary.path}
-        path={primary.path}
-        version={primary.version}
-        alt={data.title}
-        loading={loading}
-        displayWidth={compact ? 48 : 260}
-        position={data.variant === "album" ? "50% 25%" : undefined}
-      />
-    );
-  }
-
-  const layout = resolveCollageLayout(sources.length);
   return (
-    <div
-      className="editorial-collage grid w-full h-full gap-0.5 [grid-template:minmax(0,1fr)_/_minmax(0,1fr)] overflow-hidden bg-canvas [&[data-cover-layout=split-2]]:grid-cols-2 [&[data-cover-layout=feature-3]]:[grid-template:repeat(2,minmax(0,1fr))_/_minmax(0,1.6fr)_minmax(0,1fr)] [&[data-cover-layout=feature-3]>:first-child]:[grid-row:span_2] [&[data-cover-layout=grid-4]]:[grid-template:repeat(2,minmax(0,1fr))_/_repeat(2,minmax(0,1fr))]"
-      data-cover-layout={layout}
-      data-testid="card-cover-collage"
-    >
-      {sources.map((source, index) => (
-        <div key={source.path} className="editorial-collage__cell min-w-0 min-h-0 overflow-hidden bg-sunken">
-          <CoverImage
-            path={source.path}
-            version={source.version}
-            alt={index === 0 ? data.title : ""}
-            loading={loading}
-            displayWidth={
-              layout === "single"
-                ? 260
-                : layout === "feature-3" && index === 0
-                  ? 180
-                  : 130
-            }
-          />
-        </div>
-      ))}
-    </div>
+    <CoverImage
+      key={path}
+      path={path}
+      version={version}
+      alt={data.title}
+      loading={loading}
+      displayWidth={compact ? 48 : 300}
+      position={data.variant === "album" ? "50% 25%" : undefined}
+    />
   );
-}
-
-/**
- * 封面来源与它们的版本号。
- *
- * 版本号跟着图一起取：去重之后下标会变，按下标去取版本号会取错 ——
- * 同一张图配着另一张的版本，封面就会显示成旧的那一张。
- */
-function getCoverSources(
-  data: Pick<
-    CardData,
-    "coverPath" | "coverVersion" | "covers" | "coverVersions" | "variant"
-  >,
-): CoverSource[] {
-  if (data.variant === "album") {
-    return data.coverPath
-      ? [{ path: data.coverPath, version: data.coverVersion }]
-      : [];
-  }
-
-  const seen = new Set<string>();
-  const list: CoverSource[] = [];
-  const covers = data.covers ?? [];
-  for (let index = 0; index < covers.length && list.length < 4; index += 1) {
-    const path = covers[index].trim();
-    if (!path || seen.has(path)) continue;
-    seen.add(path);
-    list.push({ path, version: data.coverVersions?.[index] });
-  }
-
-  if (list.length > 0) return list;
-  return data.coverPath
-    ? [{ path: data.coverPath, version: data.coverVersion }]
-    : [];
 }
 
 function CoverImage({
@@ -165,7 +88,7 @@ function CoverImage({
         role="img"
         aria-label={alt + "（封面不可用）"}
       >
-        <ImageIcon size={20} />
+        <ImageIcon size={24} />
       </div>
     );
 
@@ -178,15 +101,15 @@ function CoverImage({
       loading={loading}
       onError={() => setFailed(true)}
       style={{ objectPosition: position }}
-      className="w-full h-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.03] motion-safe:group-active:scale-[1.03]"
+      className="w-full h-full object-cover transition-transform duration-slow motion-safe:group-hover:scale-[1.03] motion-safe:group-active:scale-[1.03]"
     />
   );
 }
 
 function CoverPlaceholder() {
   return (
-    <div className="w-full h-full flex items-center justify-center bg-sunken text-ink-3">
-      <FolderIcon size={28} />
+    <div className="w-full h-full flex items-center justify-center bg-media text-ink-3">
+      <ImageIcon size={24} />
     </div>
   );
 }

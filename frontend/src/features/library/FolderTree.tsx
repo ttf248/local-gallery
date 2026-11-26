@@ -172,7 +172,11 @@ function TreeSearchResults({
     .map((item) => item.node);
 
   if (search.isLoading) {
-    return <p className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">正在查找…</p>;
+    return (
+      <p className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">
+        正在查找…
+      </p>
+    );
   }
   if (search.isError) {
     return (
@@ -191,17 +195,27 @@ function TreeSearchResults({
     );
   }
   if (nodes.length === 0) {
-    return <p className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">没有找到「{query}」。</p>;
+    return (
+      <p className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">
+        没有找到「{query}」。
+      </p>
+    );
   }
 
   return (
-    <ul className="library-tree__list [list-style:none] m-0 p-0" data-testid="tree-search-results">
+    <ul
+      className="library-tree__list [list-style:none] m-0 p-0"
+      data-testid="tree-search-results"
+    >
       {nodes.map((node) => {
         const isFolder = node.kind === "collection";
         const label = node.displayName || node.name;
         return (
           <li key={node.id} className="library-tree__item m-0">
-            <div className="library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-ink-2 hover:bg-sunken hover:text-ink [&.is-active]:text-ink [&.is-active]:font-semibold [&.is-active]:bg-raised [&.is-active]:shadow-1" style={{ paddingLeft: 8 }}>
+            <div
+              className="library-tree__row flex items-center gap-1 min-h-[30px] pr-2 rounded-sm text-ink-2 hover:bg-sunken hover:text-ink [&.is-active]:text-ink [&.is-active]:font-semibold [&.is-active]:bg-selected"
+              style={{ paddingLeft: 8 }}
+            >
               <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-ink-3 hover:bg-sunken-strong hover:text-ink touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
               <button
                 type="button"
@@ -227,7 +241,9 @@ function TreeSearchResults({
         );
       })}
       {nodes.length >= SEARCH_LIMIT ? (
-        <li className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">只列出了前 {SEARCH_LIMIT} 条。</li>
+        <li className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">
+          只列出了前 {SEARCH_LIMIT} 条。
+        </li>
       ) : null}
       <li className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">
         {mode === "comic" ? copy.albumTypeLabel : "相册"}点开是内容，
@@ -488,7 +504,7 @@ function TreeRow({
 }) {
   return (
     <div
-      className={`library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-ink-2 hover:bg-sunken hover:text-ink [&.is-active]:text-ink [&.is-active]:font-semibold [&.is-active]:bg-raised [&.is-active]:shadow-1${active ? " is-active" : ""}`}
+      className={`library-tree__row flex items-center gap-1 min-h-[30px] pr-2 rounded-sm text-ink-2 hover:bg-sunken hover:text-ink [&.is-active]:text-ink [&.is-active]:font-semibold [&.is-active]:bg-selected${active ? " is-active" : ""}`}
       style={{ paddingLeft: 8 + depth * 16 }}
     >
       {hasChildren ? (
@@ -517,7 +533,9 @@ function TreeRow({
         <span className="truncate">{label}</span>
       </button>
       {meta ? (
-        <span className="library-tree__meta shrink-0 text-caption text-ink-3 tabular-nums">{meta}</span>
+        <span className="library-tree__meta shrink-0 text-caption text-ink-3 tabular-nums">
+          {meta}
+        </span>
       ) : null}
     </div>
   );

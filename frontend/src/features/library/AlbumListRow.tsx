@@ -96,11 +96,11 @@ export default function AlbumListRow({
     // 字号：标题 14px，其余（类型 / 副标题 / 计数 / 进度）统一 13px ——
     // 与网格卡同一套层级。旧版列表用 12.5px，比网格卡低一档，两种视图
     // 放在一起看会像两套产品。
-    <div className="relative group flex items-center border-b border-line h-16">
+    <div className="relative group flex items-center border-b border-line-subtle h-14">
       <Link
         to={data.linkTo ?? data.to}
         aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
-        className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-sunken transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div
           className={`relative h-12 shrink-0 overflow-hidden bg-sunken ${
@@ -108,7 +108,7 @@ export default function AlbumListRow({
               ? "album-thumb--book book-binding relative rounded-sm shadow-[var(--cover-shadow)] aspect-[2/3]"
               : /* 照片侧是方形：与网格里的方照同一套画幅，
                    竖版缩略图把照片裁成一条，读不出内容。 */
-                "aspect-square rounded-tile"
+                "aspect-square rounded-sm"
           }`}
           data-testid="card-cover"
         >
@@ -127,7 +127,7 @@ export default function AlbumListRow({
         {/* 溢出裁掉而不是压到右栏上：这一块可以缩到比内容更窄，
             但里面的进度读数不缩，窄列时它会直接盖住右侧的页数。 */}
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col justify-center gap-1">
-          <div className="text-body font-medium text-ink truncate flex items-center gap-1.5">
+          <div className="text-label text-ink truncate flex items-center gap-1.5">
             <AlbumName name={rowTitle} />
             {unread && (
               <span

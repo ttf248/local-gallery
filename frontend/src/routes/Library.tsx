@@ -1,4 +1,4 @@
-import { LibraryToolbar, CompactLibraryToolbar } from "../features/library/LibraryToolbar";
+import { LibraryToolbar } from "../features/library/LibraryToolbar";
 import { Page } from "../shell/Page";
 import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -15,6 +15,7 @@ import FolderDrawer, {
   useFolderDrawer,
 } from "../features/library/FolderDrawer";
 import BreadcrumbMenu from "../features/library/BreadcrumbMenu";
+import { PageToolbar } from "../shell/PageToolbar";
 import { PageHero } from "../shell/PageHero";
 import { ChevronLeftIcon, FolderOpenIcon, ReaderIcon } from "../ui/icons";
 import { useAppMode } from "../hooks/useAppMode";
@@ -311,14 +312,12 @@ export default function Library() {
   ) : null;
 
   return (
-    <Page className="page-shell library-page pb-[var(--gutter)] [--folder-drawer-offset:calc(var(--topbar-h)_+_14px)] min-h-full">
+    <Page
+      variant="gallery"
+      className="library-page pb-[var(--gutter)] [--folder-drawer-offset:calc(var(--topbar-h)_+_14px)] min-h-full"
+    >
       <PageHero
         title={title}
-        chrome={{
-          actions: actions && (
-            <CompactLibraryToolbar>{actions}</CompactLibraryToolbar>
-          ),
-        }}
         meta={
           current?.albumCount != null
             ? [
@@ -332,30 +331,6 @@ export default function Library() {
             : list.summary
               ? `${total.toLocaleString("zh-CN")} 项`
               : undefined
-        }
-        actions={
-          drawer.desktop
-            ? actions
-            : actions && <LibraryToolbar>{actions}</LibraryToolbar>
-        }
-        toolbar={
-          hasActiveFilters && (
-            <div className="flex flex-wrap gap-1.5">
-              {filters.query && (
-                <button
-                  type="button"
-                  className="ui-chip"
-                  onClick={() => filters.setQuery("")}
-                  aria-label={`清除名称筛选「${filters.query}」`}
-                >
-                  名称 · {filters.query} <span aria-hidden>×</span>
-                </button>
-              )}
-              <button type="button" className="ui-chip" onClick={filters.reset}>
-                清除筛选
-              </button>
-            </div>
-          )
         }
         eyebrow={
           <div className="flex items-center gap-2">
@@ -401,6 +376,36 @@ export default function Library() {
           </div>
         }
       />
+      {actions && (
+        <PageToolbar
+          label="相册工具"
+          start={
+            drawer.desktop ? (
+              actions
+            ) : (
+              <LibraryToolbar>{actions}</LibraryToolbar>
+            )
+          }
+        >
+          {hasActiveFilters && (
+            <div className="flex flex-wrap gap-1.5">
+              {filters.query && (
+                <button
+                  type="button"
+                  className="ui-chip"
+                  onClick={() => filters.setQuery("")}
+                  aria-label={`清除名称筛选「${filters.query}」`}
+                >
+                  名称 · {filters.query} <span aria-hidden>×</span>
+                </button>
+              )}
+              <button type="button" className="ui-chip" onClick={filters.reset}>
+                清除筛选
+              </button>
+            </div>
+          )}
+        </PageToolbar>
+      )}
       <div className="library-layout flex items-start gap-5 pt-4 pb-8">
         <FolderDrawer
           open={drawer.open}
@@ -443,7 +448,9 @@ export default function Library() {
                 {workCards.length > 0 ? (
                   <section className="mb-10">
                     <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">作品</h2>
+                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+                        作品
+                      </h2>
                       <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
                         {workCards.length} 部
                       </span>
@@ -463,7 +470,9 @@ export default function Library() {
                 {looseCards.length > 0 ? (
                   <section className="mb-10">
                     <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">未归入作品</h2>
+                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+                        未归入作品
+                      </h2>
                       <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
                         {looseCards.length} 卷
                       </span>
@@ -481,7 +490,9 @@ export default function Library() {
                 {tagCards.length > 0 ? (
                   <section className="mb-10">
                     <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">标签</h2>
+                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+                        标签
+                      </h2>
                       <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
                         {tagCards.length} 个
                       </span>
@@ -511,7 +522,7 @@ export default function Library() {
                 filters.query
                   ? "没有匹配的内容"
                   : nodeId && mode === "photo"
-                    ? "这个文件夹里没有照片"
+                    ? "这个文件夹是空的"
                     : "这一层是空的"
               }
               description={

@@ -1,5 +1,4 @@
 import { type ReactNode, useState } from "react";
-import { usePageChromeState } from "../../shell/PageChrome";
 import { FilterDropdown } from "../common";
 
 export function LibraryToolbar({ children }: { children: ReactNode }) {
@@ -14,9 +13,4 @@ export function LibraryToolbar({ children }: { children: ReactNode }) {
       panel={children}
     />
   );
-}
-
-export function CompactLibraryToolbar({ children }: { children: ReactNode }) {
-  const { titleCollapsed } = usePageChromeState();
-  return titleCollapsed ? <LibraryToolbar>{children}</LibraryToolbar> : null;
 }

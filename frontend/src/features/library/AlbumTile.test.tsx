@@ -196,94 +196,47 @@ describe("AlbumCard 封面语义", () => {
     expect(screen.queryByTestId("card-cover-collage")).not.toBeInTheDocument();
   });
 
-  it("集合封面去重、忽略空值并最多展示四张", () => {
+  it("目录只加载单张代表图，叠影不额外请求图片", () => {
     const { container } = renderCard(
       card({
-        id: "collection-1",
         variant: "collection",
-        title: "2026 年",
-        count: 8,
-        coverPath: "legacy-cover",
-        covers: ["one", "two", "one", "  ", "three", "four", "five"],
+        coverPath: "one",
+        covers: ["two", "three"],
       }),
     );
-
-    const mosaic = screen.getByTestId("card-cover-collage");
-    expect(mosaic).toHaveAttribute("data-cover-layout", "grid-4");
+    expect(container.querySelector("[data-stacked]")).toBeTruthy();
+    const images = container.querySelectorAll('[data-testid="card-cover"] img');
+    expect(images).toHaveLength(1);
+    expect(images[0].getAttribute("src")).toContain("one");
+  });
+  it("主封面缺失时跳过空候选并保留代表图的版本", () => {
+    const { container } = renderCard(
+      card({
+        variant: "collection",
+        coverPath: "",
+        covers: ["", "two", "three"],
+        coverVersions: ["", "v2", "v3"],
+      }),
+    );
+    const image = container.querySelector('[data-testid="card-cover"] img')!;
+    expect(image.getAttribute("src")).toContain("two");
+    expect(image.getAttribute("src")).toContain("v2");
+    fireEvent.error(image);
     expect(
-      container.querySelectorAll('[data-testid="card-cover"] img'),
-    ).toHaveLength(4);
+      container.querySelector('[data-testid="card-cover"] [role="img"]'),
+    ).toBeTruthy();
     expect(
-      container.querySelector('img[src^="/api/thumbs/legacy-cover"]'),
+      container.querySelector('[data-testid="card-cover"] img'),
     ).toBeNull();
   });
-
-  it("集合没有 covers 时回退到旧 coverPath", () => {
+  it.each(["grid", "list"] as const)("标签的 %s 视图只加载主图", (variant) => {
     const { container } = renderCard(
-      card({
-        id: "smart-1",
-        variant: "smart",
-        title: "旅行",
-        count: 3,
-        covers: [],
-      }),
-    );
-
-    expect(screen.getByTestId("card-cover-collage")).toHaveAttribute(
-      "data-cover-layout",
-      "single",
-    );
-    expect(container.querySelector("img")?.getAttribute("src")).toContain(
-      "/api/thumbs/cover-main",
-    );
-  });
-
-  // 三张封面时主图通高，两张副图上下排列。
-  it("拼贴单格失败时保留其余照片", () => {
-    renderCard(
-      card({ variant: "collection", covers: ["first", "second", "third"] }),
-    );
-    const mosaic = screen.getByTestId("card-cover-collage");
-    const images = mosaic.querySelectorAll("img");
-    expect(images).toHaveLength(3);
-    fireEvent.error(images[0]);
-    expect(mosaic.querySelectorAll("img")).toHaveLength(2);
-    expect(mosaic.querySelector('[role="img"] svg')).toBeTruthy();
-  });
-  it("三张封面使用一张主体加两张副图", () => {
-    const { container } = renderCard(
-      card({
-        id: "collection-photo",
-        variant: "collection",
-        title: "2026 年",
-        count: 8,
-        contentKind: "photo",
-        covers: ["one", "two", "three"],
-      }),
-    );
-
-    expect(screen.getByTestId("card-cover-collage")).toHaveAttribute(
-      "data-cover-layout",
-      "feature-3",
+      card({ variant: "smart", coverPath: "main", covers: ["two", "three"] }),
+      variant,
     );
     expect(
       container.querySelectorAll('[data-testid="card-cover"] img'),
-    ).toHaveLength(3);
-  });
-
-  it("两张封面平分，列表仅加载主图", () => {
-    const data = card({ variant: "collection", covers: ["one", "two"] });
-    const grid = renderCard(data);
-    expect(screen.getByTestId("card-cover-collage")).toHaveAttribute(
-      "data-cover-layout",
-      "split-2",
-    );
-    grid.unmount();
-    const list = renderCard(data, "list");
-    expect(
-      list.container.querySelectorAll('[data-testid="card-cover"] img'),
     ).toHaveLength(1);
-    expect(screen.queryByTestId("card-cover-collage")).toBeNull();
   });
 
   // 文件夹标识从封面上挪到标题前：封面不再压一块常驻的黑标签。

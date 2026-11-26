@@ -38,6 +38,7 @@ import { EmptyState } from "../ui/EmptyState";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoCompare from "../features/viewer/PhotoCompare";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
+import { Inspector } from "../ui/Inspector";
 import AlbumHeader from "../features/album/AlbumHeader";
 import AlbumGroupPanel from "../features/album/AlbumGroupPanel";
 import AlbumMediaMenu from "../features/album/AlbumMediaMenu";
@@ -77,6 +78,8 @@ export default function PhotoAlbum({ album }: Props) {
   const density = usePhotoStore((s) => s.density);
   const setDensity = usePhotoStore((s) => s.setDensity);
   // 媒体根数量：单根时不必在页头上重复来源。
+  const inspector = useUIStore((state) => state.inspectorOpen);
+  const setInspector = useUIStore((state) => state.setInspectorOpen);
   const multiRoot = useUIStore((s) => s.multiRoot);
   const [filterOpen, setFilterOpen] = useState(false);
 
@@ -402,7 +405,7 @@ export default function PhotoAlbum({ album }: Props) {
   const compare = usePhotoCompare(() => title);
 
   return (
-    <Page className="page-shell flex h-full min-h-0 flex-col">
+    <Page variant="gallery" className="flex h-full min-h-0 flex-col">
       {mediaQuery.isFetchNextPageError && (
         <ErrorBanner
           kind="warning"
@@ -425,6 +428,7 @@ export default function PhotoAlbum({ album }: Props) {
         onToggleFavorite={toggleFavorite}
         canOpenInExplorer={actions.canOpenInExplorer}
         onOpenInExplorer={() => void openInExplorer()}
+        onInfo={() => setInspector(!inspector)}
         onProperties={() => setProperties({ kind: "node", id: album.id })}
         onCopyLink={() => void copyLink()}
         onBack={goBack}
@@ -542,87 +546,106 @@ export default function PhotoAlbum({ album }: Props) {
         />
       ) : null}
 
-      <div className="min-h-0 flex-1 pb-2">
-        {/* 分组摘要读不出来：分组里的照片没有快照可依，墙上是一片空白。
+      <div className="flex min-h-0 min-w-0 flex-1 pb-2">
+        <div className="min-h-0 min-w-0 flex-1">
+          {/* 分组摘要读不出来：分组里的照片没有快照可依，墙上是一片空白。
             说清是分组读不出来，并给一个重试的手柄。 */}
-        {showingGroup && smartGroupsQuery.isError ? (
-          <EmptyState
-            title="分组读取失败"
-            description="这一组的线索没有读出来，分组里的照片暂时取不到。"
-            action={
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => void smartGroupsQuery.refetch()}
-              >
-                重新加载
-              </button>
-            }
-          />
-        ) : mediaQuery.isError && mediaItems.length === 0 ? (
-          <EmptyState
-            title="媒体加载失败"
-            description="这一本相册暂时读不出来。"
-            action={
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => void mediaQuery.refetch()}
-              >
-                重新加载
-              </button>
-            }
-          />
-        ) : mediaQuery.isLoading && !mediaQuery.data ? (
-          <div
-            className="page-shell py-10 text-center text-body text-ink-2"
-            aria-live="polite"
-          >
-            正在读取相册媒体…
-          </div>
-        ) : mediaItems.length === 0 && mediaQuery.data ? (
-          filterCount > 0 ? (
+          {showingGroup && smartGroupsQuery.isError ? (
             <EmptyState
-              title="没有符合筛选条件的照片"
-              description="当前筛选条件没有匹配的照片。"
+              title="分组读取失败"
+              description="这一组的线索没有读出来，分组里的照片暂时取不到。"
               action={
                 <button
                   type="button"
                   className="btn btn-outline"
-                  onClick={clearFilter}
+                  onClick={() => void smartGroupsQuery.refetch()}
                 >
-                  清除筛选
+                  重新加载
                 </button>
               }
             />
-          ) : (
+          ) : mediaQuery.isError && mediaItems.length === 0 ? (
             <EmptyState
-              title="相册里还没有媒体"
-              description="这本相册里暂时没有可浏览的照片或视频。"
+              title="媒体加载失败"
+              description="这一本相册暂时读不出来。"
+              action={
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => void mediaQuery.refetch()}
+                >
+                  重新加载
+                </button>
+              }
             />
-          )
-        ) : (
-          <PhotoWall
-            items={mediaItems}
-            total={total}
-            targetHeight={wallTargetHeight(density)}
-            hasNextPage={mediaQuery.hasNextPage ?? false}
-            isLoadingMore={mediaQuery.isFetchingNextPage}
-            loadMoreError={mediaQuery.isFetchNextPageError}
-            onLoadMore={loadMore}
-            onOpen={(_item, index) => wall.open(index)}
-            selecting={selection.active}
-            isSelected={selection.isSelected}
-            onToggleSelect={selection.toggle}
-            isPicked={isPicked}
-            onTogglePick={togglePick}
-            itemAction={itemAction}
-            scrollToIndex={wall.focusIndex}
-            onContextMenu={menu.open}
-          />
-        )}
-      </div>
+          ) : mediaQuery.isLoading && !mediaQuery.data ? (
+            <div
+              className="page-shell py-10 text-center text-body text-ink-2"
+              aria-live="polite"
+            >
+              正在读取相册媒体…
+            </div>
+          ) : mediaItems.length === 0 && mediaQuery.data ? (
+            filterCount > 0 ? (
+              <EmptyState
+                title="没有符合筛选条件的照片"
+                description="当前筛选条件没有匹配的照片。"
+                action={
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={clearFilter}
+                  >
+                    清除筛选
+                  </button>
+                }
+              />
+            ) : (
+              <EmptyState
+                title="相册里还没有媒体"
+                description="这本相册里暂时没有可浏览的照片或视频。"
+              />
+            )
+          ) : (
+            <PhotoWall
+              items={mediaItems}
+              total={total}
+              targetHeight={wallTargetHeight(density)}
+              hasNextPage={mediaQuery.hasNextPage ?? false}
+              isLoadingMore={mediaQuery.isFetchingNextPage}
+              loadMoreError={mediaQuery.isFetchNextPageError}
+              onLoadMore={loadMore}
+              onOpen={(_item, index) => wall.open(index)}
+              selecting={selection.active}
+              isSelected={selection.isSelected}
+              onToggleSelect={selection.toggle}
+              isPicked={isPicked}
+              onTogglePick={togglePick}
+              itemAction={itemAction}
+              scrollToIndex={wall.focusIndex}
+              onContextMenu={menu.open}
+            />
+          )}
+        </div>
 
+        <Inspector
+          open={inspector}
+          title="相册信息"
+          onClose={() => setInspector(false)}
+          className="max-w-[60%]"
+        >
+          <h3 className="text-subheading">{title}</h3>
+          <p className="mt-1 text-caption text-ink-2">
+            {album.imageCount ?? 0} 张照片 · {album.videoCount ?? 0} 个视频
+          </p>
+          <h3 className="mb-1 mt-5 text-label">分析覆盖</h3>
+          <p className="text-caption text-ink-2">
+            {smartSummary
+              ? `已分析 ${smartSummary.coverage.analyzed} / ${smartSummary.coverage.total} 张`
+              : "打开相册分组可查看对应分析覆盖"}
+          </p>
+        </Inspector>
+      </div>
       {selection.active && (
         <PhotoSelectionBar
           selected={selection.entries}

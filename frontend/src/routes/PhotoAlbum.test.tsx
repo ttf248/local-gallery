@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   MemoryRouter,
@@ -334,9 +340,7 @@ describe("PhotoAlbum", () => {
     expect(screen.getByText("分析覆盖 3/4")).toBeInTheDocument();
     expect(screen.getByText("未分析 1 张")).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /^2025年6月18日/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^2025年6月18日/ }));
 
     expect(screen.getByTestId("photo-wall")).toHaveTextContent(
       "group-photo.jpg",
@@ -356,15 +360,10 @@ describe("PhotoAlbum", () => {
   // 两套条件不叠加：分组本身就是筛好的结果，筛选条件留在地址栏里
   // 只会让分组视图静默忽略它们。
   it("进入分组时结束冲突的筛选条件，回到全部照片后不再意外恢复", async () => {
-    renderPhotoAlbum(
-      album,
-      `/albums/${album.id}?dimension=time&picks=only`,
-    );
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time&picks=only`);
 
     // 分组视图里不摆筛选条：这里没有能再筛的东西。
-    fireEvent.click(
-      screen.getByRole("button", { name: /^2025年6月18日/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^2025年6月18日/ }));
 
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(
@@ -390,10 +389,7 @@ describe("PhotoAlbum", () => {
   // 分组被重建、删除之后原先选中的那一组已经不在了：退回全部照片。
   // 那是系统的纠错，改地址就行，别往历史里追加失效的地址。
   it("分组失效后自动退回全部照片，不往历史里追加地址", async () => {
-    renderPhotoAlbum(
-      album,
-      `/albums/${album.id}?dimension=time&group=sg_gone`,
-    );
+    renderPhotoAlbum(album, `/albums/${album.id}?dimension=time&group=sg_gone`);
 
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(
@@ -406,7 +402,10 @@ describe("PhotoAlbum", () => {
 
   // 分组参数没有维度作伴：它指向一个不存在的看法，删掉。
   it("没有维度的分组参数会被清掉", async () => {
-    renderPhotoAlbum(album, `/albums/${album.id}?group=sg_0123456789abcdef0123`);
+    renderPhotoAlbum(
+      album,
+      `/albums/${album.id}?group=sg_0123456789abcdef0123`,
+    );
 
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(
@@ -454,9 +453,7 @@ describe("PhotoAlbum", () => {
 
     // 作用域先落在这一本相册上，再勾选。
     await waitFor(() =>
-      expect(usePhotoSelectionStore.getState().scope).toBe(
-        `album:${album.id}`,
-      ),
+      expect(usePhotoSelectionStore.getState().scope).toBe(`album:${album.id}`),
     );
     act(() => {
       usePhotoSelectionStore.getState().start();
@@ -472,9 +469,7 @@ describe("PhotoAlbum", () => {
       expect(screen.getByText("已选 1 张")).toBeInTheDocument(),
     );
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /^2025年6月18日/ }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^2025年6月18日/ }));
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent("group="),
     );
@@ -483,7 +478,8 @@ describe("PhotoAlbum", () => {
     expect(usePhotoSelectionStore.getState().entries.f_1).toBeTruthy();
   });
 
-  it("场景维度缺少向量时只启动当前相册的语义分析", async () => {    vi.mocked(useSmartAlbumGroups).mockReturnValue({
+  it("场景维度缺少向量时只启动当前相册的语义分析", async () => {
+    vi.mocked(useSmartAlbumGroups).mockReturnValue({
       data: {
         ok: true,
         summary: {
@@ -814,7 +810,6 @@ describe("PhotoAlbum", () => {
     expect(screen.queryByRole("menuitem", { name: "移到照片库" })).toBeNull();
   });
 
-
   // 智能筛选：条件能组合、逐条能去掉，状态住在地址栏里。
   it("筛选条件写进地址，刷新不丢", async () => {
     renderPhotoAlbum();
@@ -1002,6 +997,15 @@ describe("PhotoAlbum", () => {
 
   // 没有上级（相册直接挂在媒体根下）：返回落到相册页，那一页按目录
   // 把内容摊开，比回到首页更接近「我刚才在看哪本」。
+  it("打开相册信息并通过关闭按钮收起", () => {
+    useUIStore.setState({ inspectorOpen: false });
+    renderPhotoAlbum();
+    fireEvent.click(screen.getByRole("button", { name: "相册信息" }));
+    expect(screen.getByRole("heading", { name: "相册信息" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "关闭信息面板" }));
+    expect(screen.queryByRole("heading", { name: "相册信息" })).toBeNull();
+  });
+
   it("没有上级时返回落到相册页", () => {
     renderPhotoAlbum();
 
