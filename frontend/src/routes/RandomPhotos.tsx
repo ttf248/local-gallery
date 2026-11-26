@@ -12,7 +12,7 @@ import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, type WallDensity } from "../store/photoStore";
 import PhotoMasonry from "../features/wall/PhotoMasonry";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { ShuffleIcon } from "../ui/icons";
 import { albumRoute } from "../utils/path";

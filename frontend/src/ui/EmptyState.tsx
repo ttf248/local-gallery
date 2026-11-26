@@ -8,14 +8,16 @@ interface Props extends ComponentPropsWithoutRef<"section"> {
   title: string;
   description?: ReactNode;
   action?: ReactNode;
+  icon?: ReactNode;
   tone?: "neutral" | "error";
-  size?: "page" | "inline";
+  size?: "page" | "inline" | "compact";
 }
 export const EmptyState = forwardRef<HTMLElement, Props>(function EmptyState(
   {
     title,
     description,
     action,
+    icon,
     tone = "neutral",
     size = "page",
     className,
@@ -31,20 +33,25 @@ export const EmptyState = forwardRef<HTMLElement, Props>(function EmptyState(
         "flex flex-col gap-3",
         size === "page"
           ? "min-h-[45vh] items-center justify-center text-center"
-          : "items-start py-4",
+          : size === "compact"
+            ? "items-center py-6 text-center"
+            : "items-start py-4",
         className,
       )}
     >
-      <h2
-        className={cx(
-          size === "page" ? "text-title" : "text-heading",
-          tone === "error" && "text-danger",
-        )}
-      >
+      {icon && (
+        <span
+          aria-hidden="true"
+          className="grid size-12 place-items-center rounded-full bg-sunken text-ink-2"
+        >
+          {icon}
+        </span>
+      )}
+      <h2 className={cx("text-heading", tone === "error" && "text-danger")}>
         {title}
       </h2>
       {description && (
-        <p className="max-w-[440px] text-body text-ink-2">{description}</p>
+        <div className="max-w-[420px] text-body text-ink-2">{description}</div>
       )}
       {action}
     </section>

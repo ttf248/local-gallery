@@ -12,10 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import {
-  ENABLED_MENU_ITEM_SELECTOR,
-  handleMenuKeyDown,
-} from "./menuKeyboard";
+import { ENABLED_MENU_ITEM_SELECTOR, handleMenuKeyDown } from "./menuKeyboard";
 
 type TriggerProps = {
   "aria-expanded"?: boolean;
@@ -185,8 +182,8 @@ export default function Popover({
   // 默认菜单样式 + 用户覆盖
   const baseCls =
     tone === "reader"
-      ? "min-w-[180px] bg-theater-surface border border-theater-border rounded-lg shadow-2xl p-1.5 text-body text-theater-fg backdrop-blur-md"
-      : "min-w-[180px] bg-raised border border-line rounded-lg shadow-3 p-1.5 text-body";
+      ? "motion-safe:animate-[scaleFade_180ms_var(--ease-spring)] min-w-[180px] bg-theater-surface border border-theater-border rounded-lg shadow-2 p-1 text-body text-theater-fg backdrop-blur-md"
+      : "motion-safe:animate-[scaleFade_180ms_var(--ease-spring)] min-w-[180px] bg-raised border border-line rounded-lg shadow-2 p-1 text-body";
   const enhancedTrigger = isValidElement(trigger)
     ? cloneElement(trigger as ReactElement<TriggerProps>, {
         "aria-haspopup": "menu",

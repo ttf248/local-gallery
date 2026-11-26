@@ -8,8 +8,8 @@ type IconProps = SVGProps<SVGSVGElement> & {
 };
 
 function base({
-  size = 18,
-  strokeWidth = 1.6,
+  size = 20,
+  strokeWidth = 1.75,
   ...rest
 }: IconProps): SVGProps<SVGSVGElement> {
   return {
@@ -603,5 +603,19 @@ export const SettingsFilledIcon = (p: IconProps) => (
   </svg>
 );
 
-export const HeartIcon=({filled,...props}:IconProps & {filled?:boolean})=><svg {...base(props)}><path fill={filled?"currentColor":"none"} d="M20.7 4.8a5.2 5.2 0 0 0-7.4 0L12 6.1l-1.3-1.3a5.2 5.2 0 0 0-7.4 7.4L12 21l8.7-8.8a5.2 5.2 0 0 0 0-7.4Z"/></svg>;
-export const HashIcon=(p:IconProps)=><svg {...base(p)}><path d="M5 9h15M4 15h15M10 3 7 21M17 3l-3 18"/></svg>;
+export const HeartIcon = ({
+  filled,
+  ...props
+}: IconProps & { filled?: boolean }) => (
+  <svg {...base(props)}>
+    <path
+      fill={filled ? "currentColor" : "none"}
+      d="M20.7 4.8a5.2 5.2 0 0 0-7.4 0L12 6.1l-1.3-1.3a5.2 5.2 0 0 0-7.4 7.4L12 21l8.7-8.8a5.2 5.2 0 0 0 0-7.4Z"
+    />
+  </svg>
+);
+export const HashIcon = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M5 9h15M4 15h15M10 3 7 21M17 3l-3 18" />
+  </svg>
+);

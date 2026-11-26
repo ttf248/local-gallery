@@ -8,6 +8,6 @@ export { default as LibrarySelectionActions } from "./LibrarySelectionActions";
 export { default as PropertiesDialog } from "./PropertiesDialog";
 export { default as HoverPreview } from "./HoverPreview";
 export { default as TranscodeStatusBadge } from "./TranscodeStatusBadge";
-export { default as EmptyState } from "./EmptyState";
+export { EmptyState } from "../../ui/EmptyState";
 export { ListFilterBar } from "./ListFilterBar";
 export { FilterDropdown } from "./FilterDropdown";

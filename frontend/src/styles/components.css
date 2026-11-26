@@ -1,55 +1,4 @@
 @layer components {
-  .field-frame {
-    @apply flex min-w-0 items-center gap-2 bg-raised px-3 shadow-1;
-  }
-  .field-frame:focus-within {
-    box-shadow:
-      0 0 0 1px var(--accent),
-      0 0 0 4px var(--accent-soft);
-  }
-  .field-frame input {
-    @apply h-full min-w-0 flex-1 bg-transparent outline-none;
-  }
-  .segments {
-    @apply relative isolate inline-flex items-center rounded-md bg-sunken p-[3px];
-  }
-  .segments::before {
-    content: "";
-    @apply absolute inset-y-[3px] left-0 -z-10 rounded-sm bg-raised shadow-1;
-    width: var(--segment-width);
-    transform: translateX(var(--segment-left));
-    transition:
-      transform var(--dur-base) var(--ease-standard),
-      width var(--dur-base);
-  }
-  .segments button {
-    @apply min-h-8 touch:min-h-10 touch:min-w-10 rounded-sm px-3 text-label text-ink-2 aria-checked:text-ink disabled:opacity-40;
-  }
-  .segments[data-size="sm"] button {
-    @apply min-h-8 touch:min-h-10 px-2;
-  }
-  .modal-surface {
-    @apply overflow-auto bg-raised text-ink shadow-3;
-  }
-  .modal-surface::backdrop {
-    background: rgb(0 0 0 / 0.4);
-    backdrop-filter: blur(4px);
-  }
-  .dialog-surface[open] {
-    animation: dialog-in var(--dur-base) var(--ease-spring);
-  }
-  .sheet-surface[open] {
-    animation: sheet-in var(--dur-slow) var(--ease-spring);
-  }
-  .sheet-surface[data-side="left"] {
-    --sheet-from: translateX(-100%);
-  }
-  .sheet-surface[data-side="right"] {
-    --sheet-from: translateX(100%);
-  }
-  .sheet-surface[data-side="bottom"] {
-    --sheet-from: translateY(100%);
-  }
   .memory-thumbnail {
     @apply rounded-tile bg-sunken object-contain;
     height: clamp(72px, 18dvh, 160px);
@@ -58,36 +7,6 @@
     max-width: min(27dvh, 240px);
     /* 缩略图可能已按 EXIF 旋转，加载后采用实际图像的比例。 */
     aspect-ratio: auto var(--memory-aspect);
-  }
-  .scroll-row {
-    scrollbar-width: none;
-  }
-  .scroll-row::-webkit-scrollbar {
-    display: none;
-  }
-  .skeleton {
-    animation: skeleton-light 1.6s ease-in-out infinite alternate;
-  }
-  .indeterminate {
-    animation: progress-slide 1.6s ease-in-out infinite alternate;
-  }
-}
-@media (pointer: coarse) {
-  .icon-control::before {
-    content: "";
-    position: absolute;
-    inset: -4px;
-  }
-  .scroll-arrow {
-    display: none;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sheet-surface[open],
-  .dialog-surface[open],
-  .skeleton,
-  .indeterminate {
-    animation: none;
   }
 }
 

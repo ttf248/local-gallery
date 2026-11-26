@@ -16,7 +16,7 @@ import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import AlbumGrid from "../features/library/AlbumGrid";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
 import { ListFilterBar } from "../features/common/ListFilterBar";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import { ClockIcon } from "../ui/icons";
 import { decodeFavPath, homeRoute } from "../utils/path";
 import { compareDatesDesc, timeAgo } from "../utils/date";
@@ -314,8 +314,7 @@ export default function Recents({
         <EmptyState
           title="没有匹配的最近访问"
           description={query ? `没有匹配"${query}"的结果` : ""}
-          /* 筛选条就在上面，空态紧跟着它说清楚即可。 */
-          dense
+          /* 筛选条就在上面，空态紧跟着它说清楚即可。 */ size="compact"
           action={
             <button onClick={resetFilters} className="btn btn-outline">
               清除筛选

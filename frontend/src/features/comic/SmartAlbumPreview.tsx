@@ -59,7 +59,7 @@ export default function SmartAlbumPreview({
           </Link>
         }
         icon={<span aria-hidden="true">✦</span>}
-        dense
+        size="compact"
       />
     );
   }

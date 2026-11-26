@@ -27,7 +27,7 @@ export default function WorkbenchSwitch({ mode, onChange, compact }: Props) {
       ]}
       value={mode}
       onChange={onChange}
-      className="w-full [&_.segments]:w-full [&_button]:flex-1"
+      className="w-full [&_[role=radiogroup]]:w-full [&_button]:flex-1"
     />
   );
 }

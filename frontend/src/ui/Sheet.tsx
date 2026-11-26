@@ -18,12 +18,14 @@ export const Sheet = forwardRef<HTMLDialogElement, Props>(function Sheet(
       onClose={onClose}
       data-side={side}
       className={cx(
-        "modal-surface sheet-surface p-5",
+        "overflow-auto bg-raised text-ink shadow-3 open:motion-safe:animate-[sheet-in_280ms_var(--ease-spring)] open:motion-reduce:animate-[fadeIn_120ms_linear] p-5",
         side === "bottom"
-          ? "inset-x-0 bottom-0 top-auto m-0 max-h-[85dvh] w-full max-w-full rounded-t-xl pb-[max(20px,env(safe-area-inset-bottom))]"
+          ? "[--sheet-from:translateY(100%)] inset-x-0 bottom-0 top-auto m-0 max-h-[85dvh] w-full max-w-full rounded-t-xl pb-[max(20px,env(safe-area-inset-bottom))]"
           : "inset-y-0 m-0 h-dvh max-h-dvh w-[clamp(320px,34vw,400px)] max-w-full",
-        side === "left" && "left-0 right-auto rounded-r-xl",
-        side === "right" && "left-auto right-0 rounded-l-xl",
+        side === "left" &&
+          "[--sheet-from:translateX(-100%)] left-0 right-auto rounded-r-xl",
+        side === "right" &&
+          "[--sheet-from:translateX(100%)] left-auto right-0 rounded-l-xl",
         className,
       )}
     >

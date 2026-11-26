@@ -75,9 +75,3 @@
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .sheet-surface[open],
-  .dialog-surface[open] {
-    animation: fadeIn 120ms linear both !important;
-  }
-}

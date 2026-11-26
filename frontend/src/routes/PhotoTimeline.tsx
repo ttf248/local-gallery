@@ -6,7 +6,7 @@ import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../features/wall/PhotoWall";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { ContextMenu } from "../ui/ContextMenu";
 import { useWallViewer } from "../hooks/useWallViewer";
@@ -384,8 +384,7 @@ export default function PhotoTimeline() {
           ) : items.length === 0 && !feed.isLoading ? (
             <EmptyState
               title="这一段没有照片"
-              description="换一个年份或月份看看，或者回到整条时间线。"
-              dense
+              description="换一个年份或月份看看，或者回到整条时间线。" size="compact"
               action={
                 <button
                   className="btn btn-outline"

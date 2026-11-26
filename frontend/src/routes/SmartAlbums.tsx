@@ -4,7 +4,7 @@ import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import SmartAlbumWall from "../features/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import Segmented from "../ui/Segmented";
 import type { SmartAlbumSort } from "../api/albums";
@@ -114,7 +114,7 @@ export default function SmartAlbums() {
             title="暂时没有精选推荐"
             description="精选推荐至少 12 张、至少两类线索一致，且不与所在文件夹重复；没有合适结果时可以留空。"
             icon={<span aria-hidden="true">✦</span>}
-            dense
+            size="compact"
           />
         ) : (
           <>

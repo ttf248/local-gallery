@@ -20,3 +20,13 @@ it("忙碌和禁用按钮阻止点击并保留变体", () => {
   fireEvent.click(button);
   expect(click).not.toHaveBeenCalled();
 });
+
+it("asChild 保留链接与按钮变体", () => {
+  render(
+    <Button asChild variant="accent">
+      <a href="/photo">照片</a>
+    </Button>,
+  );
+  expect(screen.getByRole("link", { name: "照片" })).toHaveClass("bg-accent");
+  expect(screen.getByRole("link")).toHaveAttribute("href", "/photo");
+});

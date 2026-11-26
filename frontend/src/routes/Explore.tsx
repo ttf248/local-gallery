@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { usePageChrome } from "../shell/PageChrome";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import YearRibbon from "../features/explore/YearRibbon";
 import PeopleRow from "../features/explore/PeopleRow";

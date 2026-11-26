@@ -2,7 +2,7 @@ import { forwardRef, type ComponentPropsWithoutRef } from "react";
 import { cx } from "./cx";
 const tones = {
   neutral: ["bg-sunken text-ink-2", "bg-ink text-canvas"],
-  signal: ["bg-accent-soft text-ink", "bg-accent text-white"],
+  accent: ["bg-accent-soft text-ink", "bg-accent text-on-accent"],
   success: ["bg-success/10 text-ink", "bg-success text-white"],
   warning: ["bg-warning/10 text-ink", "bg-warning text-white"],
   danger: ["bg-danger/10 text-ink", "bg-danger text-white"],
@@ -34,7 +34,7 @@ export const Badge = forwardRef<HTMLSpanElement, Props>(function Badge(
       {...props}
       ref={ref}
       className={cx(
-        "inline-flex h-5 items-center gap-1 rounded-full px-2 text-caption tabular-nums",
+        "inline-flex h-5 items-center gap-1 rounded-sm px-2 text-caption font-medium tabular-nums",
         tones[tone][variant === "soft" ? 0 : 1],
         className,
       )}

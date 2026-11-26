@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import {PageHeader} from "../shell/PageHeader";
 import RenditionImage from "../features/common/RenditionImage";
 import {
@@ -152,8 +152,7 @@ export default function PeopleAnnotate() {
             {items.length === 0 && !samples.isLoading ? (
               <EmptyState
                 title="没有可标注的样本"
-                description="先在人物相册里跑一次人脸分析，再回来抽样。"
-                dense
+                description="先在人物相册里跑一次人脸分析，再回来抽样。" size="compact"
               />
             ) : null}
             <a
@@ -185,8 +184,7 @@ export default function PeopleAnnotate() {
             ) : (
               <EmptyState
                 title="先选一张照片"
-                description="左边选一张待标注的照片开始。"
-                dense
+                description="左边选一张待标注的照片开始。" size="compact"
               />
             )}
           </div>
@@ -435,7 +433,7 @@ function AnnotationEditor({
     );
   }
   if (!detail) {
-    return <EmptyState title="加载中…" description="正在读取这张照片的检测结果。" dense />;
+    return <EmptyState title="加载中…" description="正在读取这张照片的检测结果。" size="compact" />;
   }
 
   return (

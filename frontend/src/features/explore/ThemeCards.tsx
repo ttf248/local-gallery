@@ -129,7 +129,7 @@ export default function ThemeCards() {
               : "主题分析已完成，目前没有形成可用的分类分组。"
           }
           icon={<span aria-hidden="true">✦</span>}
-          dense
+          size="compact"
         />
       ) : allDirectory.analysis ? (
         <p className="text-body text-ink-2">

@@ -14,6 +14,8 @@ interface Tab {
 }
 interface Props extends Omit<ComponentPropsWithoutRef<"div">, "onChange"> {
   items: Tab[];
+  as?: "nav" | "div";
+  variant?: "underline" | "pill";
   value: string;
   onChange?: (id: string) => void;
   orientation?: "vertical" | "horizontal";
@@ -23,6 +25,8 @@ interface Props extends Omit<ComponentPropsWithoutRef<"div">, "onChange"> {
 export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
   {
     items,
+    as,
+    variant = "underline",
     value,
     onChange,
     orientation = "horizontal",
@@ -36,7 +40,7 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
   const generated = useId(),
     prefix = idPrefix ?? generated,
     vertical = orientation === "vertical",
-    links = items.every((item) => item.href);
+    links = as === "nav" || items.every((item) => item.href);
   return (
     <div
       {...props}
@@ -44,6 +48,7 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
       role={links ? "navigation" : "tablist"}
       aria-orientation={links ? undefined : orientation}
       aria-label={label}
+      data-variant={variant}
       className={cx("flex gap-1", vertical && "flex-col", className)}
     >
       {items.map(({ id, label: caption, href, count }, i) => {
@@ -51,9 +56,9 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
         const style = cx(
           "relative inline-flex min-h-9 min-w-8 shrink-0 items-center whitespace-nowrap touch:min-h-10 touch:min-w-10 gap-2 px-3 text-label transition duration-base",
           selected ? "text-ink" : "text-ink-2 hover:text-ink",
-          vertical ? "rounded-md" : "border-b-2",
+          variant === "pill" || vertical ? "rounded-md" : "border-b-2",
           selected
-            ? vertical
+            ? variant === "pill" || vertical
               ? "bg-raised shadow-1"
               : "border-ink"
             : "border-transparent",
@@ -63,6 +68,7 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
             {caption}
             {count !== undefined && (
               <span
+                aria-hidden="true"
                 className={cx(
                   "text-caption tabular-nums",
                   selected ? "text-ink-2" : "text-ink-3",

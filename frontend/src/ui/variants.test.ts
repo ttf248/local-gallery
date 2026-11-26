@@ -17,3 +17,21 @@ it("按配置顺序应用默认值、覆盖与外部类名", () => {
     style({ tone: "alert", size: "sm" }),
   );
 });
+
+it("组合条件按部位生成样式", () => {
+  const style = variants({
+    base: "card",
+    slots: { label: "caption" },
+    variants: {
+      tone: { selected: { base: "selected", label: "bold" }, normal: "normal" },
+    },
+    defaults: { tone: "selected" },
+    compoundVariants: [
+      { when: { tone: "selected" }, className: { label: "active" } },
+    ],
+  });
+  expect(style.slots()).toEqual({
+    base: "card selected",
+    label: "caption bold active",
+  });
+});

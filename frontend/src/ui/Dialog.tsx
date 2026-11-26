@@ -5,6 +5,7 @@ import { IconButton } from "./IconButton";
 import { CloseIcon } from "./icons";
 interface Props extends ModalProps {
   title: string;
+  tone?: "theme" | "reader";
   description?: string;
   size?: "sm" | "md" | "lg";
   footer?: ReactNode;
@@ -12,6 +13,7 @@ interface Props extends ModalProps {
 export const Dialog = forwardRef<HTMLDialogElement, Props>(function Dialog(
   {
     title,
+    tone = "theme",
     description,
     size = "md",
     footer,
@@ -27,12 +29,16 @@ export const Dialog = forwardRef<HTMLDialogElement, Props>(function Dialog(
     <ModalSurface
       {...props}
       ref={ref}
+      data-tone={tone === "reader" ? "reader" : undefined}
       onClose={onClose}
       aria-labelledby={id}
       aria-describedby={description ? id + "-description" : undefined}
       className={cx(
-        "modal-surface dialog-surface m-auto max-h-[90dvh] max-w-[calc(100vw-32px)] rounded-xl p-6",
-        { sm: "w-[400px]", md: "w-[560px]", lg: "w-[760px]" }[size],
+        tone === "reader"
+          ? "bg-theater-surface text-theater-fg"
+          : "bg-raised text-ink",
+        "overflow-auto shadow-3 open:motion-safe:animate-[dialog-in_180ms_var(--ease-spring)] open:motion-reduce:animate-[fadeIn_120ms_linear] m-auto max-h-[90dvh] max-w-[calc(100vw-32px)] rounded-xl p-6",
+        { sm: "w-[400px]", md: "w-[560px]", lg: "w-[720px]" }[size],
         className,
       )}
     >

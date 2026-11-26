@@ -34,7 +34,7 @@ import PhotoWall from "../features/wall/PhotoWall";
 import AlbumFilterBar from "../features/album/AlbumFilterBar";
 import DensityControl from "../features/wall/DensityControl";
 import ErrorBanner from "../features/common/ErrorBanner";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoCompare from "../features/viewer/PhotoCompare";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";

@@ -95,7 +95,7 @@ export default function TimelineFilterPopover({
           <FilterIcon size={16} />
           筛选
           {active > 0 && (
-            <Badge tone="signal" aria-label={active + " 个筛选条件"}>
+            <Badge tone="accent" aria-label={active + " 个筛选条件"}>
               {active}
             </Badge>
           )}

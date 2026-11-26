@@ -16,11 +16,12 @@ export const Skeleton = forwardRef<HTMLDivElement, Props>(function Skeleton(
 ) {
   return (
     <div
+      data-skeleton=""
       aria-hidden="true"
       {...props}
       ref={ref}
       className={cx(
-        "skeleton bg-sunken",
+        "motion-safe:animate-[skeleton-light_1.6s_ease-in-out_infinite_alternate] bg-sunken",
         shape === "circle"
           ? "rounded-full"
           : shape === "text"

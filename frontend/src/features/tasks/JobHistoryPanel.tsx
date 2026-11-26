@@ -119,8 +119,7 @@ export default function JobHistoryPanel({
         ) : null}
 
         {visibleJobs.length === 0 ? (
-          <EmptyState
-            inline
+          <EmptyState size="inline"
             title={
               jobs.length === 0 ? "还没有已结束的任务" : "没有符合条件的记录"
             }

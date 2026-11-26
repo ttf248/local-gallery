@@ -304,7 +304,7 @@ export function groupFailures(
 }
 
 export function taskStatusTone(status: AIJob["status"] | "idle") {
-  if (status === "running") return "signal";
+  if (status === "running") return "accent";
   if (status === "failed") return "danger";
   if (status === "completed") return "success";
   return "neutral";

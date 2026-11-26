@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { usePageChrome } from "../../shell/PageChrome";
-import { SearchField } from "../../ui/Field";
+import { SearchField } from "../../ui/SearchField";
 import Segmented from "../../ui/Segmented";
 import type { SearchScope } from "../../utils/searchScope";
 
@@ -45,6 +45,15 @@ export function SearchToolbar({
       ]}
     />
   );
+  function submit(value: string) {
+    const keyword = value.trim();
+    setDraft(keyword);
+    if (window.matchMedia?.("(pointer: coarse)").matches) {
+      input.current?.blur();
+    }
+    if (keyword) onSubmit(keyword);
+    else onClear?.();
+  }
   usePageChrome({
     title,
     backTo,
@@ -64,20 +73,23 @@ export function SearchToolbar({
           }
           maxLength={200}
           value={draft}
-          onChange={setDraft}
-          onClear={() => {
-            setDraft("");
-            onClear?.();
+          onValueChange={(value) => {
+            setDraft(value);
+            if (!value) onClear?.();
           }}
-          onSubmit={(value) => {
-            const keyword = value.trim();
-            setDraft(keyword);
-            if (window.matchMedia?.("(pointer: coarse)").matches) {
-              input.current?.blur();
-            }
-            if (keyword) onSubmit(keyword);
-            else onClear?.();
-          }}
+          onSubmit={submit}
+          trailing={
+            draft && (
+              <button
+                type="button"
+                aria-label="提交搜索"
+                className="size-8 rounded-md hover:bg-hover touch:size-10"
+                onClick={() => submit(draft)}
+              >
+                ↵
+              </button>
+            )
+          }
         />
         {inlineScope && scopeControl}
       </div>

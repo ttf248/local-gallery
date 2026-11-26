@@ -31,7 +31,6 @@ const remaining = [
   "features/collection/PickShowcase.tsx",
   "features/comic/ContinueReadingHero.tsx",
   "features/comic/SmartAlbumPreview.tsx",
-  "features/common/EmptyState.tsx",
   "features/common/ErrorBanner.tsx",
   "features/common/FilterDropdown.tsx",
   "features/common/HoverPreview.tsx",
@@ -101,9 +100,6 @@ const remaining = [
   "routes/Travels.tsx",
   "routes/Unread.tsx",
   "routes/YearPhotos.tsx",
-  "shell/WorkbenchSwitch.tsx",
-  "ui/Field.tsx",
-  "ui/Segmented.tsx",
 ];
 it("待迁移文件只能随阶段减少", () => {
   expect(violations(root).sort()).toEqual([...remaining].sort());

@@ -11,7 +11,7 @@ it("悬停延迟显示，键盘聚焦立即显示，Esc 关闭", () => {
     );
     const button = screen.getByRole("button");
     fireEvent.pointerEnter(button);
-    act(() => vi.advanceTimersByTime(499));
+    act(() => vi.advanceTimersByTime(399));
     expect(screen.queryByRole("tooltip")).toBeNull();
     act(() => vi.advanceTimersByTime(1));
     expect(button).toHaveAttribute(

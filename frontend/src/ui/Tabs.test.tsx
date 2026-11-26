@@ -12,7 +12,13 @@ it("路由页签声明当前页", () => {
     <MemoryRouter>
       <Tabs
         label="分页"
-        items={items.map((item) => ({ ...item, href: "/" + item.id }))}
+        as="nav"
+        variant="underline"
+        items={items.map((item) => ({
+          ...item,
+          count: 3,
+          href: "/" + item.id,
+        }))}
         value="b"
       />
     </MemoryRouter>,

@@ -8,7 +8,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import { Switch } from "../ui/Switch";
 import { PageHeader } from "../shell/PageHeader";
 import RenditionImage from "../features/common/RenditionImage";
@@ -1177,8 +1177,7 @@ function PersonAlbum({ personId }: { personId: string }) {
       {items.length === 0 && !query.isLoading ? (
         <EmptyState
           title="这个人物分组暂时没有照片"
-          description="媒体库或分析结果变化后，该分组会按当前有效照片显示。"
-          dense
+          description="媒体库或分析结果变化后，该分组会按当前有效照片显示。" size="compact"
         />
       ) : (
         <div className="page-shell min-h-0 flex-1 pb-2 pt-3">

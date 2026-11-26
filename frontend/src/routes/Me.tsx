@@ -4,7 +4,7 @@ import { Tabs } from "../ui/Tabs";
 import { Page } from "../shell/Page";
 import { PageHeader } from "../shell/PageHeader";
 import AlbumGrid from "../features/library/AlbumGrid";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryDashboard } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";

@@ -148,7 +148,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
         tabIndex={-1}
         style={style}
         className={cx(
-          "fixed z-popover max-h-[calc(100dvh-8px)] min-w-44 max-w-[calc(100vw-8px)] overflow-auto rounded-xl bg-raised p-1 shadow-2",
+          "fixed z-popover max-h-[calc(100dvh-8px)] min-w-44 max-w-[calc(100vw-8px)] overflow-auto rounded-lg bg-raised motion-safe:animate-[scaleFade_180ms_var(--ease-spring)] p-1 shadow-2",
           className,
         )}
         onKeyDown={(event) => {
@@ -189,7 +189,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
                 item.onSelect();
               }}
               className={cx(
-                "flex min-h-9 w-full items-center gap-2 rounded-sm px-3 text-left text-label hover:bg-sunken focus:bg-sunken disabled:opacity-40",
+                "flex min-h-8 touch:min-h-11 w-full items-center gap-2 rounded-sm px-3 text-left text-label hover:bg-hover focus:bg-hover disabled:opacity-40",
                 item.danger && "text-danger",
               )}
             >

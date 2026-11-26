@@ -11,7 +11,7 @@ import type { LibraryNodeSummary } from "../api/library";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import {
   ChevronLeftIcon,
   StarIcon,
@@ -336,8 +336,7 @@ export default function Tag() {
                漫画侧写成「作品」会指向另一类东西。 */
             title="没有匹配的相册"
             description="试试修改搜索或排序条件。"
-            /* 筛选条就在上面，空态紧跟着它说清楚即可。 */
-            dense
+            /* 筛选条就在上面，空态紧跟着它说清楚即可。 */ size="compact"
           />
         ) : (
           <>

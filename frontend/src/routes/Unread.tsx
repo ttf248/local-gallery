@@ -8,7 +8,7 @@ import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import AlbumGrid from "../features/library/AlbumGrid";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
 import { ListFilterBar } from "../features/common/ListFilterBar";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import {
   SparkleIcon,
   ShuffleIcon,

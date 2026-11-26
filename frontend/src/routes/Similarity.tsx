@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
 import { PageHeader } from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import PhotoCompare, {
   type CompareItem,
@@ -623,7 +623,7 @@ export default function Similarity() {
             title={emptyTitle(statusInfo?.analyzed ?? 0, status)}
             description={emptyDescription(statusInfo?.analyzed ?? 0, status)}
             icon={<span aria-hidden="true">◧</span>}
-            dense
+            size="compact"
           />
         ) : (
           <Virtuoso

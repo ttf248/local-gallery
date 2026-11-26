@@ -13,7 +13,7 @@ import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
 import AlbumCard from "../features/library/AlbumTile";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
 import { ListFilterBar } from "../features/common/ListFilterBar";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import { StarIcon } from "../ui/icons";
 import { decodeFavPath, homeRoute } from "../utils/path";
 import { compareDatesDesc } from "../utils/date";
@@ -292,7 +292,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
                 去主页看看
               </button>
             }
-            dense={suggestions.length > 0}
+            size={suggestions.length > 0 ? "compact" : "page"}
           />
           {/* 空态不能只是一句话加一个按钮：整页会剩下一大片无意义的空白。
               这里直接把「可收藏的对象」摆出来 —— 一排真实封面 + 常驻的
@@ -370,8 +370,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
         <EmptyState
           title="没有匹配的收藏"
           description={query ? `没有匹配"${query}"的结果` : ""}
-          /* 筛选条就在上面，空态紧跟着它说清楚即可。 */
-          dense
+          /* 筛选条就在上面，空态紧跟着它说清楚即可。 */ size="compact"
           action={
             <button
               onClick={resetFilters}

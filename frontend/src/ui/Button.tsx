@@ -1,69 +1,132 @@
+import { cx } from "./cx";
 import {
+  cloneElement,
   forwardRef,
+  type ReactElement,
   type ComponentPropsWithoutRef,
   type ReactNode,
 } from "react";
 import { variants } from "./variants";
 import { Spinner } from "./Spinner";
 const styles = variants({
-  base: "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-4 transition duration-fast motion-safe:enabled:active:scale-[.98] disabled:cursor-default disabled:opacity-40",
+  base: "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-label transition duration-fast motion-safe:enabled:active:scale-[.98] disabled:cursor-default disabled:opacity-40",
   variants: {
     variant: {
       primary: "bg-primary text-on-primary",
-      secondary: "border border-line-strong hover:bg-sunken",
-      ghost: "hover:bg-sunken",
+      secondary: "border border-line-strong bg-raised hover:bg-hover",
+      ghost: "hover:bg-hover",
+      accent: "bg-accent text-on-accent",
       danger: "text-danger hover:bg-danger/10",
     },
     size: {
-      sm: "h-8 text-label",
-      md: "h-10 text-body",
-      lg: "h-12 text-body",
+      sm: "h-8 px-2.5 touch:min-h-10",
+      md: "h-9 px-3.5 touch:min-h-10",
+      lg: "h-11 px-[18px]",
     },
   },
   defaults: { variant: "primary", size: "md" },
 });
-export interface ButtonProps extends ComponentPropsWithoutRef<"button"> {
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+interface StyleProps {
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "accent";
   size?: "sm" | "md" | "lg";
   loading?: boolean;
+  disabled?: boolean;
   leadingIcon?: ReactNode;
   trailingIcon?: ReactNode;
 }
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  function Button(
-    {
-      variant,
-      size,
-      loading,
-      disabled,
-      leadingIcon,
-      trailingIcon,
-      children,
-      className,
-      ...props
-    },
-    ref,
-  ) {
+type AnchorProps = ComponentPropsWithoutRef<"a">;
+export type ButtonProps = StyleProps &
+  (
+    | (ComponentPropsWithoutRef<"button"> & { asChild?: false })
+    | (AnchorProps & { asChild: true; children: ReactElement<AnchorProps> })
+  );
+
+export const Button = forwardRef<
+  HTMLButtonElement | HTMLAnchorElement,
+  ButtonProps
+>(function Button(props, ref) {
+  const {
+    variant,
+    size,
+    loading,
+    disabled,
+    leadingIcon,
+    trailingIcon,
+    className,
+    children,
+    asChild,
+    ...rest
+  } = props;
+  const locked = Boolean(loading || disabled);
+  function content(children: ReactNode) {
     return (
-      <button
-        type="button"
-        {...props}
-        ref={ref}
-        disabled={loading || disabled}
-        aria-busy={loading || undefined}
-        className={styles({ variant, size, className })}
-      >
+      <>
         <span
-          className={
-            "inline-flex items-center gap-2" + (loading ? " invisible" : "")
-          }
+          className={cx(
+            "inline-flex items-center gap-2",
+            loading && "invisible",
+          )}
         >
           {leadingIcon}
           {children}
           {trailingIcon}
         </span>
         {loading && <Spinner className="absolute" />}
-      </button>
+      </>
     );
-  },
-);
+  }
+  if (asChild) {
+    const link = children;
+    const { onClick, ...attrs } = rest as AnchorProps;
+    const linkRef = (
+      link as ReactElement & { ref?: React.Ref<HTMLAnchorElement> }
+    ).ref;
+    return cloneElement(
+      link as ReactElement<
+        AnchorProps & React.RefAttributes<HTMLAnchorElement>
+      >,
+      {
+        ...attrs,
+        ref: (node) => {
+          for (const target of [ref, linkRef]) {
+            if (typeof target === "function") target(node);
+            else if (target)
+              (
+                target as React.MutableRefObject<HTMLAnchorElement | null>
+              ).current = node;
+          }
+        },
+        className: styles({
+          variant,
+          size,
+          className: cx(link.props.className, className),
+        }),
+        "aria-disabled": locked || undefined,
+        "aria-busy": loading || undefined,
+        tabIndex: locked ? -1 : (attrs.tabIndex ?? link.props.tabIndex),
+        onClick: (event) => {
+          if (locked) {
+            event.preventDefault();
+            return;
+          }
+          link.props.onClick?.(event);
+          if (!event.defaultPrevented) onClick?.(event);
+        },
+      },
+      content(link.props.children),
+    );
+  }
+  const attrs = rest as ComponentPropsWithoutRef<"button">;
+  return (
+    <button
+      type="button"
+      {...attrs}
+      ref={ref as React.Ref<HTMLButtonElement>}
+      disabled={locked}
+      aria-busy={loading || undefined}
+      className={styles({ variant, size, className })}
+    >
+      {content(children)}
+    </button>
+  );
+});

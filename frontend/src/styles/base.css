@@ -111,3 +111,5 @@ button {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+
+dialog::backdrop { background: rgb(0 0 0 / .4); backdrop-filter: blur(8px); }

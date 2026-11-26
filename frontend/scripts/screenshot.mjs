@@ -146,7 +146,7 @@ async function main() {
         }
         // 首屏数据与缩略图分别就绪。视口外的虚拟项和懒加载图片无需等待。
         const pending = page.locator(
-          "main [role=status]:has(.skeleton), main [aria-busy=true]",
+          "main [role=status]:has([data-skeleton]), main [aria-busy=true]",
         );
         await pending.first().waitFor({ state: "hidden", timeout: 15000 })
           .catch(() => console.log(`  · ${route} 的首屏仍有加载状态`));

@@ -7,7 +7,7 @@ import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
 import BulkActions, {
   SelectionToggle,
 } from "../features/common/LibrarySelectionActions";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import { InlineAlert } from "../ui/InlineAlert";
 import { ListFilterBar } from "../features/common/ListFilterBar";
 import FolderTree from "../features/library/FolderTree";

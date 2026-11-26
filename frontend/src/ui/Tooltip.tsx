@@ -22,7 +22,7 @@ interface Props extends Omit<
   children: ReactElement;
 }
 export const Tooltip = forwardRef<HTMLSpanElement, Props>(function Tooltip(
-  { content, side = "top", delay = 500, children, className, ...props },
+  { content, side = "top", delay = 400, children, className, ...props },
   ref,
 ) {
   const id = useId(),
@@ -97,7 +97,7 @@ export const Tooltip = forwardRef<HTMLSpanElement, Props>(function Tooltip(
             id={id}
             ref={tip}
             style={pos}
-            className="pointer-events-none fixed z-popover max-w-[calc(100vw-8px)] rounded-sm bg-inverse px-2 py-1.5 text-caption text-on-inverse"
+            className="pointer-events-none fixed z-popover max-w-[calc(100vw-8px)] rounded-sm bg-inverse px-2 py-1 text-caption text-on-inverse"
           >
             {content}
           </span>,

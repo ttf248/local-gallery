@@ -1,6 +1,7 @@
 import {
   forwardRef,
   useLayoutEffect,
+  useId,
   useRef,
   type ForwardedRef,
   type ComponentPropsWithoutRef,
@@ -26,7 +27,7 @@ interface Props<T extends string> extends Omit<
   value: T;
   onChange: (value: T) => void;
   /** 无障碍名称：这个分段控件管的是什么。 */
-  label: string;
+  label?: string;
   disabled?: boolean;
   /**
    * 紧凑档：按钮只放一枚小图形（密度切换用）。
@@ -68,6 +69,7 @@ function SegmentedControl<T extends string>(
   }: Props<T>,
   forwardedRef: ForwardedRef<HTMLDivElement>,
 ) {
+  const labelId = useId();
   const ref = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -115,14 +117,17 @@ function SegmentedControl<T extends string>(
         .filter(Boolean)
         .join(" ")}
     >
-      {showLabel ? (
-        <span className="shrink-0 text-caption text-ink-2">{label}</span>
+      {showLabel && label ? (
+        <span id={labelId} className="shrink-0 text-caption text-ink-2">
+          {label}
+        </span>
       ) : null}
       <div
         ref={ref}
         role="radiogroup"
-        aria-label={label}
-        className="segments"
+        aria-labelledby={showLabel && label ? labelId : undefined}
+        aria-label={showLabel ? undefined : (label ?? props["aria-label"])}
+        className="relative isolate inline-flex items-center rounded-md bg-sunken p-[3px] before:absolute before:inset-y-[3px] before:left-0 before:-z-10 before:w-[var(--segment-width)] before:translate-x-[var(--segment-left)] before:rounded-sm before:bg-raised before:shadow-1 before:transition-[transform,width] before:duration-base"
         data-size={size}
       >
         {options.map((option) => {
@@ -149,7 +154,13 @@ function SegmentedControl<T extends string>(
                   move(-1);
                 }
               }}
-              className={compact ? "min-w-8" : undefined}
+              className={[
+                "min-h-8 rounded-sm text-label text-ink-2 aria-checked:text-ink disabled:opacity-40 touch:min-h-10 touch:min-w-10",
+                size === "sm" ? "px-2" : "px-3",
+                compact && "min-w-8",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               tabIndex={
                 selected ||
                 (!options.some(

@@ -226,5 +226,5 @@ it("默认（theme 档）帮助浮层仍跟应用主题走", () => {
   render(<HelpOverlay context="image" open onClose={vi.fn()} />);
   const dialog = screen.getByRole("dialog");
   expect(dialog).not.toHaveAttribute("data-tone");
-  expect(dialog.className).toContain("modal-surface");
+  expect(dialog.className).toContain("bg-raised");
 });

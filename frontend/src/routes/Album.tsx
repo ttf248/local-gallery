@@ -13,7 +13,7 @@ import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
 import CollectionPhotoBand from "../features/album/CollectionPhotoBand";
 import YearTimeline from "../features/comic/YearTimeline";
 import { type AlbumLike, type CollectionLike } from "../utils/albumGrouping";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import {
   albumRoute,
   decodeFavPath,
@@ -655,7 +655,7 @@ function CollectionView({
             icon={<FilterIcon size={20} />}
             /* 筛选条就在上面：空态不必再撑满半屏，紧跟着它说清楚
                「是筛选筛没了」就行。 */
-            dense
+            size="compact"
           />
         ) : (
           /* 网格与页头共用同一条留白线：之前这里少了一层容器，

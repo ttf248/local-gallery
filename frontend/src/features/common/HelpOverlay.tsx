@@ -6,7 +6,7 @@ import {
 } from "../../utils/shortcutsTable";
 import { useAppMode } from "../../hooks/useAppMode";
 import { Dialog } from "../../ui/Dialog";
-import { SearchField } from "../../ui/Field";
+import { SearchField } from "../../ui/SearchField";
 import { Kbd } from "../../ui/Kbd";
 
 interface Props {
@@ -106,18 +106,17 @@ export default function HelpOverlay({
       onClose={onClose}
       initialFocus={searchRef}
       data-tone={dark ? "reader" : undefined}
-      className={dark ? "bg-theater-surface text-theater-fg" : undefined}
+      tone={dark ? "reader" : "theme"}
     >
       <SearchField
         ref={searchRef}
         aria-label="搜索快捷键"
         placeholder="搜索快捷键…"
         value={q}
-        onChange={(value) => {
+        onValueChange={(value) => {
           setQ(value);
           setSection("");
         }}
-        onSubmit={() => {}}
       />
       <div className="mt-4 grid gap-4 sm:grid-cols-[128px_minmax(0,1fr)]">
         <nav

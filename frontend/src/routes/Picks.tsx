@@ -14,7 +14,7 @@ import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoCompare from "../features/viewer/PhotoCompare";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
 import { ContextMenu } from "../ui/ContextMenu";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoCompare } from "../hooks/usePhotoCompare";

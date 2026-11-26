@@ -7,7 +7,7 @@ import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../features/wall/PhotoWall";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import { ContextMenu } from "../ui/ContextMenu";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
@@ -181,8 +181,7 @@ export default function YearPhotos() {
         ) : items.length === 0 && !feed.isLoading ? (
           <EmptyState
             title={`${label}没有照片`}
-            description="换一个年份看看，或者回照片库里挑一本相册。"
-            dense
+            description="换一个年份看看，或者回照片库里挑一本相册。" size="compact"
             action={
               <button
                 className="btn btn-outline"

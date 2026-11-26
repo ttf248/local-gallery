@@ -8,7 +8,7 @@ import { useHistoryCards } from "../hooks/useHistory";
 import { useImageActivities } from "../hooks/useImageActivity";
 import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import {
   ContinueReadingHero,
   UnreadHero,

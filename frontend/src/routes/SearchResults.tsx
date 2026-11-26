@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import AlbumGrid from "../features/library/AlbumGrid";
-import EmptyState from "../features/common/EmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { Page } from "../shell/Page";
 import { SearchToolbar } from "../features/search/SearchToolbar";
