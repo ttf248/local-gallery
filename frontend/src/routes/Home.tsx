@@ -1,3 +1,4 @@
+import { useConfirm } from "../features/common/ConfirmDialog";
 import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
@@ -136,6 +137,7 @@ function HomeHeader({
 
 /** 漫画首页：续读页。 */
 function ComicHome() {
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const manifestQuery = useLibraryManifest();
   const manifest = manifestQuery.data?.manifest;
@@ -212,11 +214,9 @@ function ComicHome() {
       },
     );
   };
-  const onClearContinue = () => {
+  const onClearContinue = async () => {
     if (!inProgressAll.length) return;
-    const ok = window.confirm(
-      `将 ${inProgressAll.length} 本相册全部标记为已读完？\n\n操作不会删除文件，只是把阅读进度推到末尾。`,
-    );
+    const ok = (await confirm({title:"更新阅读进度",description:<>{`将 ${inProgressAll.length} 本相册全部标记为已读完？\n\n操作不会删除文件，只是把阅读进度推到末尾。`} 原始文件会保留。</>,confirmLabel:"全部标记已读",tone:"danger"}));
     if (!ok) return;
     const items = inProgressAll.map((c) => ({
       albumId: decodeFavPath(c.to),

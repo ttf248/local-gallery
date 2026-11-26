@@ -1,3 +1,4 @@
+import { useConfirm } from "../common";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
@@ -30,6 +31,7 @@ function message(error: unknown) {
 }
 
 export default function StateBackupPanel() {
+  const confirm = useConfirm();
   const client = useQueryClient();
   const [fileName, setFileName] = useState("");
   const [backup, setBackup] = useState<unknown>();
@@ -117,9 +119,7 @@ export default function StateBackupPanel() {
     if (
       !preview ||
       selected.length === 0 ||
-      !window.confirm(
-        `将覆盖恢复：${selected.map((category) => backupLabels[category]).join("、")}。服务端会先保存恢复前备份，是否继续？`,
-      )
+      !(await confirm({title:"恢复备份",description:<>{`将覆盖恢复：${selected.map((category) => backupLabels[category]).join("、")}。服务端会先保存恢复前备份，是否继续？`} 原始文件会保留。</>,confirmLabel:"覆盖恢复",tone:"danger"}))
     )
       return;
     setPending(true);

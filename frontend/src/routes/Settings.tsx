@@ -29,7 +29,6 @@ import StateBackupPanel from "../features/settings/StateBackupPanel";
 import ServerConfigPanel from "../features/settings/ServerConfigPanel";
 import AutoSyncPanel from "../features/settings/AutoSyncPanel";
 import { SettingsGroup, SettingsRow } from "../ui/SettingsList";
-import { SplitLayout } from "../shell/SplitLayout";
 import { Page } from "../shell/Page";
 import { SettingsNav } from "../features/settings/SettingsNav";
 import { TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
@@ -280,7 +279,9 @@ export function SettingsView({ tab }: { tab: string }) {
       <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
         <PageHero title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
         {prefsError}
-        <SplitLayout settings navigation={<SettingsNav active={tab} />}>
+        <SettingsNav active={tab}/>
+        <div className="grid gap-12 xl:grid-cols-[minmax(0,760px)_200px]"><div className="min-w-0 max-w-[760px]">
+
           {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，
             阅读是照片与漫画两组，数据是索引、备份与自动同步，服务端是
             那几组自带标题的面板。分组之间只用一条细线。 */}
@@ -704,7 +705,13 @@ export function SettingsView({ tab }: { tab: string }) {
               </SettingsGroup>
             </section>
           )}
-        </SplitLayout>
+        </div>
+          {(tab==="interface" || tab==="data") && <nav aria-label="本页" className="sticky top-5 hidden self-start xl:grid">
+            <h2 className="mb-2 text-caption text-ink-3">本页</h2>
+            {(tab==="interface" ? [["appearance","外观"],["nav","导航"],["about","关于"]] : [["data","数据"],["backup","备份与恢复"],["danger","危险操作"]]).map(([id,label])=>
+              <a className="py-1.5 text-label text-ink-2 hover:text-ink" key={id} href={"#"+id}>{label}</a>)}
+          </nav>}
+        </div>
       </Page>
     </>
   );

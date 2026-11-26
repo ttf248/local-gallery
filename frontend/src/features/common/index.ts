@@ -11,3 +11,4 @@ export { default as TranscodeStatusBadge } from "./TranscodeStatusBadge";
 export { EmptyState } from "../../ui/EmptyState";
 export { ListFilterBar } from "./ListFilterBar";
 export { FilterDropdown } from "./FilterDropdown";
+export { useConfirm, ConfirmProvider } from "./ConfirmDialog";

@@ -62,8 +62,8 @@ test("本机备份下载、仅恢复收藏、过期预览拒绝覆盖", async ({
       /照片精选 ·/,
     ])
       await panel.getByRole("checkbox", { name: category }).uncheck();
-    page.once("dialog", (dialog) => void dialog.accept());
     await panel.getByRole("button", { name: "确认覆盖恢复" }).click();
+    await page.getByRole("dialog").getByRole("button",{name:"覆盖恢复",exact:true}).click();
     await expect(panel.getByText("已完成：收藏")).toBeVisible();
     const favorites = (await (await request.get("/api/favorites")).json()) as {
       favorites: string[];

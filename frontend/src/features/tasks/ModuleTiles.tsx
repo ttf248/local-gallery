@@ -114,9 +114,7 @@ export default function ModuleTiles({
               items={[
                 {
                   type: "label",
-                  label:
-                    module.name +
-                    (module.version ? " · " + module.version : ""),
+                  label:module.name,
                 },
                 {
                   type: "label",

@@ -24,7 +24,7 @@ export const SettingsGroup = forwardRef<HTMLElement, GroupProps>(
       >
         <h2
           id={id ? id + "-heading" : undefined}
-          className="flex items-center gap-2 text-heading"
+          className="flex items-center gap-2 px-4 pb-2 text-caption font-medium text-ink-3"
         >
           {icon && <span aria-hidden="true">{icon}</span>}
           {title}

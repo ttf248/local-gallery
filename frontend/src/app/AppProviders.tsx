@@ -1,3 +1,4 @@
+import { ConfirmProvider } from "../features/common/ConfirmDialog";
 import type { ReactNode } from "react";
 import { BrowserRouter } from "react-router-dom";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -8,7 +9,7 @@ export default function AppProviders({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <WorkbenchModeProvider>{children}</WorkbenchModeProvider>
+        <ConfirmProvider><WorkbenchModeProvider>{children}</WorkbenchModeProvider></ConfirmProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );

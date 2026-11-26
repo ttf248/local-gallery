@@ -27,5 +27,6 @@ it("选中模块展示勾选状态，未安装的模块仍可查看详情", () =
   fireEvent.click(missing);
   expect(toggle).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "元数据详情" }));
-  expect(screen.getByText("元数据 · v1")).toBeInTheDocument();
+  expect(screen.getByRole("menu")).toHaveTextContent("元数据");
+  expect(screen.getByRole("menu")).not.toHaveTextContent("v1");
 });

@@ -1,3 +1,4 @@
+import { useConfirm } from "../common";
 import {SettingsGroup} from "../../ui/SettingsList";
 import type { AIJob } from "../../api/aiJobs";
 import { formatDateTime } from "../../utils/date";
@@ -27,11 +28,10 @@ export default function TaskQueuePanel({
   onCancel,
   onClear,
 }: Props) {
-  function clearQueue() {
+  const confirm = useConfirm();
+  async function clearQueue() {
     if (
-      window.confirm(
-        `取消队列中的 ${jobs.length} 项等待任务？当前任务不会受影响。`,
-      )
+      (await confirm({title:"清空等待队列",description:<>{`取消队列中的 ${jobs.length} 项等待任务？当前任务不会受影响。`} 原始文件会保留。</>,confirmLabel:"清空队列",tone:"danger"}))
     ) {
       onClear();
     }

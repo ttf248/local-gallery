@@ -1,0 +1,240 @@
+import Segmented from "../../ui/Segmented";
+import {SettingsGroup,SettingsRow} from "../../ui/SettingsList";
+import type {TaskCenterPlan,TaskCenterSelection} from "../../hooks/useTaskCenter";
+import {Button} from "../../ui/Button";
+import type {
+  AIJobEstimate,
+  AnalysisMode,
+  FaceModel,AnalysisType,
+} from "../../api/aiJobs";
+import {
+  formatCount,
+  formatEstimateDuration,
+  moduleReasonLabel,
+  taskModeLabel,
+} from "../../utils/taskFormat";
+import { RefreshIcon } from "../../ui/icons";
+
+export interface RunSummaryPanelProps {
+  plan:TaskCenterPlan;
+  selection:TaskCenterSelection;
+  estimate:AIJobEstimate|null;
+  estimating:boolean;
+  running:boolean;
+  onModeChange:(mode:AnalysisMode)=>void;
+  onFaceModelChange:(model:FaceModel)=>void;
+  onStart:()=>void;
+  startDisabled?:boolean;
+  faceModel?: FaceModel;
+  faceModelSaving?:boolean;
+  faceModelSaveError?:boolean;
+  qualityReady?:boolean;
+  buffaloReady?:boolean;
+  embeddingStatusLoading?:boolean;
+  error?:boolean;
+  onRefresh?:()=>void;
+}
+/**
+ * 本次规模：启动之前先把「要处理多少张」和「大概要多久」摆出来。
+ *
+ * 增量与全量并排成两行而不是只给当前模式 —— 用户在两种口径之间做取舍时，
+ * 需要同时看到代价。切模式不重新请求：一次核算把四个模块的两种口径都
+ * 带来了。
+ */
+export default function RunSummaryPanel(props:RunSummaryPanelProps){
+  const {selection,estimate,running:busy,onModeChange,onFaceModelChange,faceModel="quality-v2",faceModelSaving,
+    faceModelSaveError,qualityReady=true,buffaloReady=true,embeddingStatusLoading}=props;
+  const {module:selectedModule,mode}=selection;
+  const selectedName=estimate?.modules.find(item=>item.type===selectedModule)?.name ?? "所选模块";
+  const selectedFaceModelReady=faceModel==="buffalo_m"?buffaloReady:qualityReady;
+  const count=estimate?.modules.find(item=>item.type===selectedModule)?.[mode]?.count;
+  return <>        <SettingsGroup title="处理方式">
+          <SettingsRow label="分析模式">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Segmented
+                label="处理方式"
+                value={mode}
+                onChange={onModeChange}
+                disabled={busy}
+                options={[
+                  { value: "incremental", label: "增量" },
+                  { value: "full", label: "全量" },
+                ]}
+              />
+              <span className="text-caption text-ink-3">
+                {modeHint(selectedModule, mode, selectedName)}
+              </span>
+            </div>
+          </SettingsRow>
+          <SettingsRow label="人脸模型">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Segmented
+                label="人脸分析模型"
+                value={faceModel}
+                onChange={onFaceModelChange}
+                disabled={busy || faceModelSaving || embeddingStatusLoading}
+                options={[
+                  {
+                    value: "quality-v2",
+                    label: "轻量",
+                    title: "当前质量优化版，128 维特征",
+                    disabled: !qualityReady,
+                  },
+                  {
+                    value: "buffalo_m",
+                    label: "标准（Buffalo_m）",
+                    title: "SCRFD 检测与 ResNet50 特征，512 维",
+                    disabled: !buffaloReady,
+                  },
+                ]}
+              />
+              <span className="text-caption text-ink-3">
+                {selectedFaceModelReady
+                  ? faceModel === "buffalo_m"
+                    ? "标准模型已就绪"
+                    : "轻量模型已就绪"
+                  : "所选模型未就绪，请在本机存储页签安装模型"}
+              </span>
+              {faceModelSaving ? (
+                <span className="text-caption text-ink-3">
+                  正在切换并重建人物索引…
+                </span>
+              ) : null}
+              {faceModelSaveError ? (
+                <span role="alert" className="text-caption text-danger">
+                  模型切换失败，检查是否有正在运行的人脸任务后重试。
+                </span>
+              ) : null}
+            </div>
+          </SettingsRow>
+        </SettingsGroup>
+
+    <SettingsGroup title="本次规模"><EstimateDetails {...props}/></SettingsGroup>
+    <Button disabled={busy || props.startDisabled || count===0 || (selectedModule==="face" && !props.plan.peopleEnabled)} onClick={props.onStart}>
+      {count===0 ? "全部已是最新" : "运行所选模块"}
+    </Button>
+  </>;
+}
+function EstimateDetails({estimate,estimating:loading,error,selection,onRefresh,onModeChange,running:disabled}:RunSummaryPanelProps){
+  const {module,mode}=selection;
+  if (loading) {
+    return (
+      <div>
+        <p className="text-caption text-ink-3">正在核算本次规模…</p>
+        <div className="mt-2 h-8 w-full animate-pulse rounded-lg bg-sunken" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <p role="status" className="text-caption text-warning">
+          本次规模核算失败，无法估算耗时，仍可直接开始分析。
+        </p>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline"
+          onClick={onRefresh}
+        >
+          <RefreshIcon size={14} />
+          重新核算
+        </button>
+      </div>
+    );
+  }
+
+  if (!estimate) return <p className="text-caption text-ink-3">无法估算耗时</p>;
+
+  if (!estimate.libraryReady) {
+    return (
+      <p className="text-caption text-ink-3">
+        媒体库尚未就绪，完成扫描后再看本次规模。
+      </p>
+    );
+  }
+
+  const entry = estimate.modules.find((item) => item.type === module);
+  if (!entry) return null;
+
+  if (!entry.available) {
+    return (
+      <p className="text-caption text-ink-3">
+        {entry.name}当前不可用：
+        {moduleReasonLabel(entry.reason ?? "")}，无法核算本次规模。
+      </p>
+    );
+  }
+
+  const modes = ["incremental", "full"] as const;
+  const active = entry[mode];
+  return (
+    <div>
+      {/* 核算口径写在表格上方：这次要处理多少、凭什么估的。
+          「本次规模」这个标题由外层的字段标签给出，这里不再重复一遍。 */}
+      <p className="text-caption text-ink-2">
+        {entry.name}
+         · 整库{" "}
+        {formatCount(estimate.totalImages)} 张
+      </p>
+
+      <div className="mt-3">
+        <fieldset
+          disabled={disabled}
+          aria-label="本次规模"
+          className="divide-y divide-line"
+        >
+          {modes.map((item) => {
+            const value = entry[item];
+            return (
+              <label
+                key={item}
+                className="flex min-h-12 cursor-pointer flex-wrap items-center gap-3"
+              >
+                <input
+                  type="radio"
+                  name="analysis-scale"
+                  value={item}
+                  checked={mode === item}
+                  onChange={() => onModeChange(item)}
+                />
+                <span>{taskModeLabel(item)}</span>
+                <span className="tabular-nums">
+                  {value ? formatCount(value.count) + " 张" : "张数未知"}
+                </span>
+                <span className="text-caption text-ink-2">
+                  {value?.estimatedDurationMs == null
+                    ? "无法估算（历史样本不足）"
+                    : formatEstimateDuration(value.estimatedDurationMs)}
+                </span>
+              </label>
+            );
+          })}
+        </fieldset>
+
+        <p className="min-w-[15rem] flex-1 text-caption text-ink-3">
+          {active && active.sampleCount > 0
+            ? `按最近 ${active.sampleCount} 次${entry.name}历史任务的速度估算，共 ${formatCount(active.sampleImages)} 张`
+            : "这个模块还没有跑过，耗时算不出来"}
+          {"；以启动时的实际清单为准。"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function modeHint(
+  type: AnalysisType,
+  mode: AnalysisMode,
+  moduleName: string,
+): string {
+  if (mode === "full") {
+    return type === "metadata"
+      ? "重新解析当前媒体库的全部图片"
+      : `重新运行${moduleName}分析`;
+  }
+  return type === "metadata"
+    ? "只处理新增、修改或解析器更新的图片"
+    : "只处理新增或变更的图片";
+}
+

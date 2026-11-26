@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { PageHero } from "../shell/PageHero";
-import { SplitLayout } from "../shell/SplitLayout";
 import { Page } from "../shell/Page";
-import { SplitNav } from "../shell/SplitLayout";
+import { PageTabs } from "../shell/PageTabs";
 import { useTaskCenter } from "../hooks/useTaskCenter";
 import { TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
 import TaskConsole from "../features/tasks/TaskConsole";
@@ -86,16 +85,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
           }
         />
 
-        <SplitLayout
-          navigation={
-            <SplitNav
-              page={TAB_PAGES.tasks}
-              active={tab}
-              label="任务中心分区"
-              runStatus={active?.status ?? history[0]?.status}
-            />
-          }
-        >
+        <PageTabs page={TAB_PAGES.tasks} active={tab} label="任务中心分区" runStatus={active?.status ?? history[0]?.status}/>
           {visited.has("run") && (
             <section
               aria-label="运行分区"
@@ -142,7 +132,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
                     onAction={center.act}
                   />
                 )}
-                <TaskConsole
+                <TaskConsole plan={plan} onStart={()=>center.start(center.selection.module,center.selection.mode)}
                   loading={center.loading}
                   busy={runBusy}
                   modules={snapshot?.modules ?? []}
@@ -265,7 +255,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
               </div>
             </section>
           )}
-        </SplitLayout>
+
       </Page>
     </>
   );

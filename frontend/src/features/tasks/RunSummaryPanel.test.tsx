@@ -1,7 +1,8 @@
+import type {TaskCenterPlan} from "../../hooks/useTaskCenter";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { AIJobEstimate } from "../../api/aiJobs";
-import TaskEstimatePanel from "./TaskEstimatePanel";
+import RunSummaryPanel from "./RunSummaryPanel";
 
 function estimateFixture(
   overrides: Partial<AIJobEstimate> = {},
@@ -48,16 +49,15 @@ function estimateFixture(
   };
 }
 
-describe("TaskEstimatePanel", () => {
+describe("RunSummaryPanel", () => {
   it("把增量与全量并排列出张数与预计耗时", () => {
     render(
-      <TaskEstimatePanel
+      <RunSummaryPanel plan={{peopleEnabled:true} as TaskCenterPlan} running={false} onStart={vi.fn()} onFaceModelChange={vi.fn()}
         onModeChange={vi.fn()}
         estimate={estimateFixture()}
-        loading={false}
+        estimating={false}
         error={false}
-        module="metadata"
-        mode="incremental"
+        selection={{module:"metadata",mode:"incremental",setMode:vi.fn(),setModule:vi.fn()}}
         onRefresh={() => {}}
       />,
     );
@@ -88,13 +88,12 @@ describe("TaskEstimatePanel", () => {
       sampleImages: 0,
     };
     render(
-      <TaskEstimatePanel
+      <RunSummaryPanel plan={{peopleEnabled:true} as TaskCenterPlan} running={false} onStart={vi.fn()} onFaceModelChange={vi.fn()}
         onModeChange={vi.fn()}
         estimate={estimate}
-        loading={false}
+        estimating={false}
         error={false}
-        module="metadata"
-        mode="incremental"
+        selection={{module:"metadata",mode:"incremental",setMode:vi.fn(),setModule:vi.fn()}}
         onRefresh={() => {}}
       />,
     );
@@ -110,12 +109,11 @@ describe("TaskEstimatePanel", () => {
 
   it("核算中先给一句话，不摆空表", () => {
     render(
-      <TaskEstimatePanel
+      <RunSummaryPanel plan={{peopleEnabled:true} as TaskCenterPlan} running={false} onStart={vi.fn()} onFaceModelChange={vi.fn()}
         onModeChange={vi.fn()}
-        loading
+        estimating estimate={null}
         error={false}
-        module="metadata"
-        mode="incremental"
+        selection={{module:"metadata",mode:"incremental",setMode:vi.fn(),setModule:vi.fn()}}
         onRefresh={() => {}}
       />,
     );
@@ -129,12 +127,11 @@ describe("TaskEstimatePanel", () => {
   it("核算失败时说明失败，并给出重新核算的入口", () => {
     const onRefresh = vi.fn();
     render(
-      <TaskEstimatePanel
+      <RunSummaryPanel plan={{peopleEnabled:true} as TaskCenterPlan} running={false} onStart={vi.fn()} onFaceModelChange={vi.fn()}
         onModeChange={vi.fn()}
-        loading={false}
-        error
-        module="metadata"
-        mode="incremental"
+        estimating={false}
+        error estimate={null}
+        selection={{module:"metadata",mode:"incremental",setMode:vi.fn(),setModule:vi.fn()}}
         onRefresh={onRefresh}
       />,
     );
@@ -151,13 +148,12 @@ describe("TaskEstimatePanel", () => {
     estimate.modules[0].incremental = null;
     estimate.modules[0].full = null;
     render(
-      <TaskEstimatePanel
+      <RunSummaryPanel plan={{peopleEnabled:true} as TaskCenterPlan} running={false} onStart={vi.fn()} onFaceModelChange={vi.fn()}
         onModeChange={vi.fn()}
         estimate={estimate}
-        loading={false}
+        estimating={false}
         error={false}
-        module="metadata"
-        mode="incremental"
+        selection={{module:"metadata",mode:"incremental",setMode:vi.fn(),setModule:vi.fn()}}
         onRefresh={() => {}}
       />,
     );
@@ -171,13 +167,12 @@ describe("TaskEstimatePanel", () => {
   it("媒体库没就绪时说明要先去扫描", () => {
     const estimate = estimateFixture({ libraryReady: false, totalImages: 0 });
     render(
-      <TaskEstimatePanel
+      <RunSummaryPanel plan={{peopleEnabled:true} as TaskCenterPlan} running={false} onStart={vi.fn()} onFaceModelChange={vi.fn()}
         onModeChange={vi.fn()}
         estimate={estimate}
-        loading={false}
+        estimating={false}
         error={false}
-        module="metadata"
-        mode="incremental"
+        selection={{module:"metadata",mode:"incremental",setMode:vi.fn(),setModule:vi.fn()}}
         onRefresh={() => {}}
       />,
     );

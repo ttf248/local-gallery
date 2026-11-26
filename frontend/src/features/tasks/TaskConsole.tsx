@@ -1,4 +1,3 @@
-import { SettingsGroup, SettingsRow } from "../../ui/SettingsList";
 import type {
   AIJob,
   AIJobEstimate,
@@ -8,13 +7,14 @@ import type {
   AnalysisMode,
   AnalysisType,
 } from "../../api/aiJobs";
-import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
+import type { TaskCenterSelection,TaskCenterPlan } from "../../hooks/useTaskCenter";
 import { formatCount, formatEstimateDuration } from "../../utils/taskFormat";
 import ModuleTiles from "./ModuleTiles";
-import Segmented from "../../ui/Segmented";
-import TaskEstimatePanel from "./TaskEstimatePanel";
+import RunSummaryPanel from "./RunSummaryPanel";
 
 interface Props {
+  plan:TaskCenterPlan;
+  onStart:()=>void;
   loading: boolean;
   /** 启动或任务操作正在提交。 */
   busy: boolean;
@@ -44,7 +44,7 @@ interface Props {
  * 那一行，用户不用在页面里找按钮在哪。这一块只回答「跑什么、跑多少」。
  */
 export default function TaskConsole({
-  loading,
+  plan,onStart,loading,
   busy,
   modules,
   history,
@@ -96,8 +96,8 @@ export default function TaskConsole({
         </div>
       </div>
 
-      <div className="min-w-0">
-        <div className="mb-6">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
+        <div className="mb-6 rounded-xl bg-sunken p-5">
           <div className="min-w-0">
             <ModuleTiles
               modules={modules}
@@ -112,81 +112,14 @@ export default function TaskConsole({
           </div>
         </div>
 
-        <SettingsGroup title="处理方式">
-          <SettingsRow label="分析模式">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Segmented
-                label="处理方式"
-                value={mode}
-                onChange={selection.setMode}
-                disabled={busy}
-                options={[
-                  { value: "incremental", label: "增量" },
-                  { value: "full", label: "全量" },
-                ]}
-              />
-              <span className="text-caption text-ink-3">
-                {modeHint(selectedModule, mode, selectedName)}
-              </span>
-            </div>
-          </SettingsRow>
-          <SettingsRow label="人脸模型">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Segmented
-                label="人脸分析模型"
-                value={faceModel}
-                onChange={onChangeFaceModel}
-                disabled={busy || faceModelSaving || embeddingStatusLoading}
-                options={[
-                  {
-                    value: "quality-v2",
-                    label: "quality-v2",
-                    title: "当前质量优化版，128 维特征",
-                    disabled: !qualityReady,
-                  },
-                  {
-                    value: "buffalo_m",
-                    label: "Buffalo_m",
-                    title: "SCRFD 检测与 ResNet50 特征，512 维",
-                    disabled: !buffaloReady,
-                  },
-                ]}
-              />
-              <span className="text-caption text-ink-3">
-                {selectedFaceModelReady
-                  ? faceModel === "buffalo_m"
-                    ? "512 维特征 · Buffalo_m"
-                    : "128 维特征 · quality-v2"
-                  : "所选模型未就绪，请在本机存储页签安装模型"}
-              </span>
-              {faceModelSaving ? (
-                <span className="text-caption text-ink-3">
-                  正在切换并重建人物索引…
-                </span>
-              ) : null}
-              {faceModelSaveError ? (
-                <span role="alert" className="text-caption text-danger">
-                  模型切换失败，检查是否有正在运行的人脸任务后重试。
-                </span>
-              ) : null}
-            </div>
-          </SettingsRow>
-        </SettingsGroup>
-        <SettingsGroup title="本次规模">
-          <div className="min-w-0">
-            <TaskEstimatePanel
-              onModeChange={selection.setMode}
-              disabled={busy}
-              estimate={estimate}
-              loading={estimateLoading}
-              error={estimateError}
-              module={selectedModule}
-              mode={mode}
-              onRefresh={onRefreshEstimate}
-            />
-          </div>
-        </SettingsGroup>
-
+        <aside className="min-w-0 rounded-xl bg-sunken p-4 xl:sticky xl:top-3">
+        <h3 className="mb-3 text-heading">本次运行</h3>
+        <RunSummaryPanel plan={plan} selection={selection} onFaceModelChange={onChangeFaceModel} onStart={onStart}
+          faceModel={faceModel} faceModelSaving={faceModelSaving} faceModelSaveError={faceModelSaveError}
+          buffaloReady={buffaloReady} qualityReady={qualityReady} embeddingStatusLoading={embeddingStatusLoading}
+          running={busy} startDisabled={!installedModules.some(module=>module.type===selectedModule) || (selectedModule==="face" && (!peopleEnabled || !selectedFaceModelReady))}
+          estimate={estimate ?? null} estimating={estimateLoading} error={estimateError}
+          onRefresh={onRefreshEstimate} onModeChange={selection.setMode}/>
         <div className="tasks-actions flex flex-wrap items-center gap-y-2 gap-x-4 py-3 px-0 border-t border-t-line">
           <button
             type="button"
@@ -208,16 +141,15 @@ export default function TaskConsole({
           ) : null}
         </div>
 
+        </aside>
         {/* 高级信息：版本、运行环境与索引覆盖。日常用不到，但它决定
             「为什么这次跑不起来」，所以收起来而不是删掉 —— 摘要里给出
             的提示会指向这里。 */}
-        <details className="tasks-advanced border-t border-t-line">
+        <details className="xl:col-span-2 tasks-advanced border-t border-t-line">
           <summary className="tasks-advanced__summary flex items-baseline gap-3 py-2.5 px-0 cursor-pointer text-body text-ink [list-style:none] [&::-webkit-details-marker]:hidden before:content-['▸'] before:text-caption before:text-ink-3 [.tasks-advanced[open]>&::before]:content-['▾']">
             高级信息
             <span className="text-caption text-ink-3">
-              {selectedModuleVersion
-                ? `模块版本 ${selectedModuleVersion}`
-                : "模块版本与运行环境"}
+模块版本与运行环境
             </span>
           </summary>
           <div className="tasks-advanced__body [padding:2px_0_14px]">
@@ -262,21 +194,6 @@ function moduleDescription(type: AnalysisType): string {
 }
 
 /** 一句话说明这次会处理多少 —— 不另起一段解释文字。 */
-function modeHint(
-  type: AnalysisType,
-  mode: AnalysisMode,
-  moduleName: string,
-): string {
-  if (mode === "full") {
-    return type === "metadata"
-      ? "重新解析当前媒体库的全部图片"
-      : `重新运行${moduleName}分析`;
-  }
-  return type === "metadata"
-    ? "只处理新增、修改或解析器更新的图片"
-    : "只处理新增或变更的图片";
-}
-
 function EmbeddingRuntimeStatus({
   status,
   loading,

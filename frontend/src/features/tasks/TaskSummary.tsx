@@ -75,7 +75,7 @@ export default function TaskSummary({
 }: Props) {
   if (loading) {
     return (
-      <div className="tasks-summary flex flex-wrap items-start justify-between gap-y-3.5 gap-x-6 p-[clamp(13px,2.2vw,23px)] border border-line rounded-tile bg-raised [&[data-status=failed]]:[border-color:color-mix(in_srgb,var(--danger)_32%,var(--line))] ui-surface border border-line rounded-tile bg-raised touch:[&_button]:min-h-11 touch:[&_button]:min-w-11" aria-busy="true">
+      <div className="tasks-summary flex flex-wrap items-start justify-between gap-y-3.5 gap-x-6 p-[clamp(13px,2.2vw,23px)] border border-line rounded-xl bg-sunken [&[data-status=failed]]:[border-color:color-mix(in_srgb,var(--danger)_32%,var(--line))] ui-surface border border-line rounded-xl bg-sunken touch:[&_button]:min-h-11 touch:[&_button]:min-w-11" aria-busy="true">
         <div className="min-w-0 flex-1">
           <div className="h-4 w-40 ui-skeleton rounded-tile bg-sunken-strong animate-pulse" />
           <div className="mt-2 h-3 w-2/3 animate-pulse rounded-full bg-sunken" />

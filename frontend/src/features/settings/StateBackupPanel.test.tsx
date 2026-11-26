@@ -1,3 +1,4 @@
+import {ConfirmProvider} from "../common";
 import {
   act,
   fireEvent,
@@ -44,7 +45,6 @@ const preview: StatePreview = {
 };
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   vi.mocked(stateBackupApi.preview).mockResolvedValue(preview);
 });
 function setup() {
@@ -53,7 +53,7 @@ function setup() {
   });
   render(
     <QueryClientProvider client={client}>
-      <StateBackupPanel />
+      <ConfirmProvider><StateBackupPanel/></ConfirmProvider>
     </QueryClientProvider>,
   );
   return client;
@@ -88,6 +88,7 @@ it("预览后可仅覆盖收藏，保留其他类别并展示结果", async () =
   ])
     fireEvent.click(screen.getByRole("checkbox", { name }));
   fireEvent.click(screen.getByRole("button", { name: "确认覆盖恢复" }));
+  fireEvent.click(await screen.findByRole("button",{name:"覆盖恢复"}));
   await waitFor(() =>
     expect(stateBackupApi.restore).toHaveBeenCalledWith(
       { version: 1 },
@@ -105,6 +106,7 @@ it("预览过期要求重新预览，恢复请求不自动重放", async () => {
   setup();
   await chooseFile();
   fireEvent.click(screen.getByRole("button", { name: "确认覆盖恢复" }));
+  fireEvent.click(await screen.findByRole("button",{name:"覆盖恢复"}));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "预览后状态已有变化",
   );
@@ -128,6 +130,7 @@ it("部分失败显示已完成和未执行类别", async () => {
   setup();
   await chooseFile();
   fireEvent.click(screen.getByRole("button", { name: "确认覆盖恢复" }));
+  fireEvent.click(await screen.findByRole("button",{name:"覆盖恢复"}));
   // 模拟偏好重新读取失败：已完成写入的报告仍须保留。
   expect(
     await screen.findByText("已完成：收藏、最近访问、服务端偏好"),

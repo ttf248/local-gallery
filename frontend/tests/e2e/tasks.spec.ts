@@ -200,8 +200,8 @@ test.describe("任务中心", () => {
     // 临时库的图都是无 EXIF 的 1×1 PNG，取不到拍摄时间 / 相机 / GPS，
     // 因此这里只断言解析结果这一行；字段产出的渲染由 Vitest 覆盖。
 
-    page.once("dialog", (dialog) => dialog.accept());
     await history.getByRole("button", { name: "删除任务记录" }).click();
+    await page.getByRole("dialog").getByRole("button",{name:"删除记录",exact:true}).click();
     await expect(history).toHaveCount(0);
     const response = await page.request.get("/api/ai/jobs");
     const body = (await response.json()) as {

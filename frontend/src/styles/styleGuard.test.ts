@@ -60,7 +60,7 @@ const remaining = [
   "features/tasks/SmartAlbumRefreshPanel.tsx",
   "features/tasks/StorageUsage.tsx",
   "features/tasks/TaskConsole.tsx",
-  "features/tasks/TaskEstimatePanel.tsx",
+  "features/tasks/RunSummaryPanel.tsx",
   "features/tasks/TaskQueuePanel.tsx",
   "features/tasks/TaskSummary.tsx",
   "features/travels/TravelMap.tsx",

@@ -1,3 +1,4 @@
+import {ConfirmProvider} from "../features/common/ConfirmDialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   fireEvent,
@@ -207,7 +208,7 @@ function renderCenter(tab = "run") {
   const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <TaskCenterView tab={tab} />
+        <ConfirmProvider><TaskCenterView tab={tab}/></ConfirmProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -217,7 +218,7 @@ function renderCenter(tab = "run") {
       view.rerender(
         <QueryClientProvider client={client}>
           <MemoryRouter>
-            <TaskCenterView tab={next} />
+            <ConfirmProvider><TaskCenterView tab={next}/></ConfirmProvider>
           </MemoryRouter>
         </QueryClientProvider>,
       ),
@@ -908,7 +909,7 @@ describe("任务中心", () => {
     const selector = await screen.findByRole("radiogroup", {
       name: "人脸分析模型",
     });
-    fireEvent.click(within(selector).getByRole("radio", { name: "Buffalo_m" }));
+    fireEvent.click(within(selector).getByRole("radio", { name: "标准（Buffalo_m）" }));
 
     await waitFor(() =>
       expect(aiJobsApi.updateFaceModel).toHaveBeenCalledWith("buffalo_m"),
@@ -1045,7 +1046,6 @@ describe("任务中心", () => {
         queue: [queued.id],
       }),
     });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     renderCenter("run");
 
     await screen.findByText("等待队列 · 1 项");
@@ -1055,9 +1055,9 @@ describe("任务中心", () => {
     expect(screen.getByText("等待队列 · 1 项")).toBeInTheDocument();
     expect(clearButton).toBeEnabled();
     fireEvent.click(clearButton);
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringContaining("当前任务不会受影响"),
-    );
+    const dialog=await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("当前任务不会受影响");
+    fireEvent.click(within(dialog).getByRole("button",{name:"清空队列"}));
     await waitFor(() => expect(aiJobsApi.clearQueue).toHaveBeenCalled());
   });
 
@@ -1081,7 +1081,6 @@ describe("任务中心", () => {
         active: undefined,
       }),
     });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     renderCenter("history");
 
     fireEvent.click(await screen.findByRole("button", { name: "失败 1" }));
@@ -1093,6 +1092,7 @@ describe("任务中心", () => {
         name: "删除任务记录",
       }),
     );
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button",{name:"删除记录"}));
     await waitFor(() =>
       expect(aiJobsApi.deleteHistoryItem).toHaveBeenCalledWith(failedJob.id),
     );
@@ -1154,15 +1154,14 @@ describe("任务中心", () => {
       ok: true,
       snapshot: snapshot({ jobs: [completedJob], active: undefined }),
     });
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     renderCenter("history");
 
     fireEvent.click(
       await screen.findByRole("button", { name: "清理已结束记录" }),
     );
-    expect(confirm).toHaveBeenCalledWith(
-      expect.stringContaining("分析结果和索引数据会保留"),
-    );
+    const dialog=await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("分析结果和索引数据会保留");
+    fireEvent.click(within(dialog).getByRole("button",{name:"清理记录"}));
     await waitFor(() => expect(aiJobsApi.clearHistory).toHaveBeenCalled());
   });
 

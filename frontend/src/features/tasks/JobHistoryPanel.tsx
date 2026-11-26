@@ -1,3 +1,4 @@
+import { useConfirm } from "../common";
 import { useState } from "react";
 import type { AIJob, FaceModel } from "../../api/aiJobs";
 import { formatDateTime } from "../../utils/date";
@@ -37,6 +38,7 @@ export default function JobHistoryPanel({
   onDelete,
   onClear,
 }: Props) {
+  const confirm = useConfirm();
   const [filter, setFilter] = useState<HistoryFilter>("all");
   // 展开态：只有展开的记录才去取它的产物占用。details 本身仍由浏览器
   // 控制（受控写法会让展开延迟到 React 状态回写，用户点下去要等一拍
@@ -63,12 +65,10 @@ export default function JobHistoryPanel({
   const visibleJobs =
     filter === "all" ? jobs : jobs.filter((job) => job.status === filter);
 
-  function clearHistory() {
+  async function clearHistory() {
     if (
       jobs.length > 0 &&
-      window.confirm(
-        `删除全部 ${jobs.length} 条已结束任务记录？分析结果和索引数据会保留。`,
-      )
+      (await confirm({title:"清理已结束记录",description:<>{`删除全部 ${jobs.length} 条已结束任务记录？分析结果和索引数据会保留。`} 原始文件会保留。</>,confirmLabel:"清理记录",tone:"danger"}))
     ) {
       onClear();
     }
@@ -259,7 +259,7 @@ export default function JobHistoryPanel({
                       type="button"
                       className="btn btn-sm btn-outline text-danger"
                       disabled={busy}
-                      onClick={() => deleteJob(job.id, onDelete)}
+                      onClick={async () => {if(await confirm({title:"删除任务记录",description:"仅删除这一条记录，分析结果和原始文件会保留。",confirmLabel:"删除记录",tone:"danger"}))onDelete(job.id);}}
                     >
                       删除任务记录
                     </button>
@@ -288,12 +288,6 @@ const HISTORY_FILTERS: { value: HistoryFilter; label: string }[] = [
   { value: "failed", label: "失败" },
   { value: "cancelled", label: "已取消" },
 ];
-
-function deleteJob(id: string, onDelete: (id: string) => void) {
-  if (window.confirm("删除这条任务记录？已生成的分析结果会保留。")) {
-    onDelete(id);
-  }
-}
 
 function SpecRow({
   label,

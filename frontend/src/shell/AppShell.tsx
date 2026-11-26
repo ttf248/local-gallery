@@ -16,7 +16,7 @@ import { PageChromeProvider } from "./PageChrome";
 const Sidebar = lazy(() => import("./Sidebar"));
 import { CanvasTopBar } from "./CanvasTopBar";
 import { MobileTabBar } from "./MobileTabBar";
-import { MoreSheet } from "./MoreSheet";
+const MoreSheet = lazy(() => import("./MoreSheet").then(({ MoreSheet }) => ({ default: MoreSheet })));
 import { useScanSession } from "./useScanSession";
 import { useShellShortcuts } from "./useShellShortcuts";
 import { useShuffle } from "./useShuffle";
@@ -112,11 +112,11 @@ export default function AppShell() {
               open={more}
               immersive={immersive || help || palette}
             />
-            <MoreSheet
-              open={more}
+            {more && <Suspense fallback={null}><MoreSheet
+              open
               onClose={() => setMore(false)}
               onHelp={() => setHelp(true)}
-            />
+            /></Suspense>}
           </>
         )}
         <Suspense fallback={null}>

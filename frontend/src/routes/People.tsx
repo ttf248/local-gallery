@@ -1,3 +1,4 @@
+import { useConfirm } from "../features/common/ConfirmDialog";
 import PersonFaceThumb from "../features/people/PersonFaceThumb";
 import { TextField } from "../ui/Field";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -44,6 +45,7 @@ export default function People() {
 }
 
 function PeopleList() {
+  const confirm = useConfirm();
   const client = useQueryClient();
   const pushToast = useUIStore((state) => state.pushToast);
   const [includeHidden, setIncludeHidden] = useState(false);
@@ -194,11 +196,9 @@ function PeopleList() {
                 type="button"
                 className="btn btn-outline"
                 disabled={clear.isPending}
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    window.confirm(
-                      "清除所有人脸分析结果、人物分组和手动修正？此操作不能撤销。",
-                    )
+                    (await confirm({title:"清除人物数据",description:<>{"清除所有人脸分析结果、人物分组和手动修正？此操作不能撤销。"} 原始文件会保留。</>,confirmLabel:"清除人物数据",tone:"danger"}))
                   ) {
                     clear.mutate();
                   }
