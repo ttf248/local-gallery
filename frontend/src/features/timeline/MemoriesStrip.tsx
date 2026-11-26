@@ -1,10 +1,26 @@
-import { useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  lazy,
+  Suspense,
+  useEffect,
+  useId,
+  useState,
+} from "react";
 import { Link } from "react-router-dom";
-import { useOnThisDayAlbums } from "../../hooks/useLibrary";
+import { usePhotoMemories } from "../../hooks/useLibrary";
 import { useUIStore } from "../../store/uiStore";
 import { ThumbImage } from "../common";
 import { albumRoute } from "../../utils/path";
-import { CloseIcon } from "../../ui/icons";
+import { useWallViewer } from "../../hooks/useWallViewer";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { ScrollRow } from "../../ui/ScrollRow";
+import {
+  onThisDayThumbWidth,
+  ON_THIS_DAY_THUMB_HEIGHT,
+} from "../../utils/onThisDay";
+import { ChevronDownIcon, CloseIcon } from "../../ui/icons";
+const PhotoViewer = lazy(() => import("../viewer/PhotoViewer"));
+
 export default function MemoriesStrip({
   resume,
 }: {
@@ -31,53 +47,117 @@ export default function MemoriesStrip({
     String(day).padStart(2, "0"),
   ].join("-");
   const dismissed = useUIStore((s) => s.memoriesDismissedOn === date);
-  const query = useOnThisDayAlbums("photo", month, day, 8, !dismissed, true);
-  const photos = (query.data?.page.items ?? []).filter((item) => item.photo);
+  const query = usePhotoMemories(date, !dismissed);
+  const photos = query.data?.items ?? [];
+  const wall = useWallViewer({
+    items: photos,
+    albumName: (item) => item.albumName,
+    albumHref: (item) => albumRoute("photo", item.albumId),
+  });
+  const shortScreen = useMediaQuery("(max-height: 520px)");
+  const [expanded, setExpanded] = useState<boolean | null>(null);
+  const showPhotos = expanded ?? !shortScreen;
+  const stripId = useId();
   if (dismissed || (!photos.length && !resume)) return null;
+
   return (
     <section
       aria-label="回忆"
       data-testid="on-this-day-strip"
-      className="flex shrink-0 items-center gap-2 pb-3"
+      className="min-w-0 shrink-0 pb-2"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-        {photos.map(
-          (item) =>
-            item.photo && (
-              <Link
-                key={item.id}
-                to={albumRoute("photo", item.id)}
-                title={item.photo.date + " 拍的照片"}
-                className="flex shrink-0 items-center gap-2 rounded-card bg-bg-subtle pr-3 text-caption"
-              >
-                <ThumbImage
-                  fileId={item.photo.id}
-                  version={item.photo.version}
-                  displayWidth={56}
-                  alt=""
-                  className="size-12 rounded-l-card object-cover"
-                />
-                {item.photo.date?.slice(0, 4)} 年的今天
-              </Link>
-            ),
+      <div className="flex min-w-0 items-center gap-2">
+        {photos.length > 0 && (
+          <h2 className="shrink-0">
+            <button
+              type="button"
+              aria-expanded={showPhotos}
+              aria-controls={stripId}
+              className="flex min-h-10 items-center gap-2 rounded-control text-body font-semibold"
+              onClick={() => setExpanded(!showPhotos)}
+            >
+              那年今日
+              <span className="text-caption font-normal tabular-nums text-fg-muted">
+                {photos.length} 张
+              </span>
+              <ChevronDownIcon
+                size={14}
+                className={showPhotos ? "" : "-rotate-90"}
+              />
+            </button>
+          </h2>
         )}
         {resume && (
           <Link
             to={resume.to}
-            className="shrink-0 rounded-card bg-bg-subtle px-3 py-4 text-caption"
+            title={resume.title}
+            className="ml-auto flex min-h-10 min-w-0 items-center rounded-control px-2 text-caption text-fg-muted hover:bg-bg-subtle hover:text-fg"
           >
-            接着看 · {resume.title}
+            <span className="truncate">接着看 · {resume.title}</span>
           </Link>
         )}
+        <button
+          type="button"
+          aria-label="今天隐藏回忆"
+          title="今天隐藏回忆"
+          className={
+            (resume ? "" : "ml-auto ") +
+            "grid size-10 shrink-0 place-items-center rounded-full text-fg-muted hover:bg-bg-subtle hover:text-fg"
+          }
+          onClick={() => useUIStore.getState().setMemoriesDismissedOn(date)}
+        >
+          <CloseIcon size={16} />
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label="今天隐藏回忆"
-        className="grid size-9 shrink-0 place-items-center rounded-full hover:bg-bg-subtle"
-        onClick={() => useUIStore.getState().setMemoriesDismissedOn(date)}
-      >
-        <CloseIcon size={16} />
-      </button>
+      {photos.length > 0 && (
+        <div id={stripId} hidden={!showPhotos}>
+          <ScrollRow label="回忆照片" gap={6}>
+            {photos.map((photo, index) => {
+              const width = onThisDayThumbWidth(photo.width, photo.height);
+              const [year, month, day] = photo.dateValue.split("-");
+              const anniversary = photo.dateValue.slice(5) === date.slice(5);
+              const label = anniversary
+                ? `${year} 年的今天`
+                : `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
+              return (
+                <button
+                  key={photo.id}
+                  type="button"
+                  aria-label={label + " · " + photo.name}
+                  title={photo.albumName + " · " + photo.name}
+                  onClick={() => wall.open(index)}
+                  style={
+                    {
+                      "--memory-aspect": width / ON_THIS_DAY_THUMB_HEIGHT,
+                    } as CSSProperties
+                  }
+                  className="flex flex-none flex-col items-start rounded-tile text-left focus-visible:ring-inset"
+                >
+                  <ThumbImage
+                    fileId={photo.id}
+                    version={photo.version}
+                    displayWidth={width}
+                    undecodable={photo.undecodable}
+                    alt=""
+                    className="memory-thumbnail"
+                  />
+                  <time
+                    dateTime={photo.dateValue}
+                    className="whitespace-nowrap pt-1 text-caption tabular-nums text-fg-muted"
+                  >
+                    {anniversary ? label : photo.dateValue.replaceAll("-", ".")}
+                  </time>
+                </button>
+              );
+            })}
+          </ScrollRow>
+        </div>
+      )}
+      {wall.viewer && (
+        <Suspense fallback={null}>
+          <PhotoViewer {...wall.viewer} />
+        </Suspense>
+      )}
     </section>
   );
 }

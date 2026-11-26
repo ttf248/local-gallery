@@ -194,14 +194,8 @@ vi.mock("../hooks/useLibrary", () => {
       isError: false,
       refetch: vi.fn(),
     }),
-    useOnThisDayAlbums: () => ({
-      data: {
-        page: {
-          revision: 1,
-          items: mocks.onThisDay,
-          total: mocks.onThisDay.length,
-        },
-      },
+    usePhotoMemories: () => ({
+      data: { items: mocks.onThisDay },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),

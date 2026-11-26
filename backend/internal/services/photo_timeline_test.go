@@ -809,3 +809,19 @@ func BenchmarkPhotoTimelinePage10K(b *testing.B) {
 		}
 	}
 }
+
+func TestMemoriesUsesPhotoEvidenceAndPrioritizesAnniversaries(t *testing.T) {
+	fixture := newTimelineFixture(t)
+	exifID := fixture.files[fixture.ids["目录带日期"]]
+	fixture.seedCaptureTime(t, exifID, "2021-04-06T08:00:00")
+	currentYear := fixture.files[fixture.ids["只有修改时间"]]
+	fixture.seedCaptureTime(t, currentYear, "2025-04-06T08:00:00")
+	items, err := fixture.service().Memories(fixture.catalog.Acquire(), time.Date(2025, 4, 6, 0, 0, 0, 0, time.UTC))
+	if err != nil || len(items) != 3 {
+		t.Fatalf("memories=%+v err=%v, want three dated photos", items, err)
+	}
+	if items[0].DateValue != "2024-04-06" || items[1].ID != exifID || items[1].DateSource != TimelineDateExif ||
+		items[2].DateValue != "2024-03-05" || items[0].AlbumID != items[2].AlbumID {
+		t.Fatalf("wrong memory order or date evidence: %+v", items)
+	}
+}

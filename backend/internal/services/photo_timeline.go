@@ -112,6 +112,8 @@ type photoTimelineIndex struct {
 	// entries 是排好序的序列：有拍摄证据的在前（时间倒序），没有拍摄
 	// 证据的按修改时间倒序排在后面。
 	entries []timelineEntry
+	// 每个闰年日序只存有逐张拍摄依据的条目下标，顺序沿用时间线。
+	memoryDays [366][]int
 	// byMedia 是按「相册 + 相册内序号」查时间证据的索引。
 	//
 	// 精选页要知道某张照片的拍摄日期，就得按位置反查 —— 那份索引与
@@ -219,7 +221,11 @@ func (s *PhotoTimelineService) build(snapshot CatalogSnapshot) *photoTimelineInd
 		entries: entries,
 		byMedia: make(map[string]timelineEntry, len(entries)),
 	}
-	for _, entry := range entries {
+	for position, entry := range entries {
+		if entry.source == TimelineDateExif || entry.source == TimelineDateFilename {
+			day := memoryDay(entry.at)
+			built.memoryDays[day] = append(built.memoryDays[day], position)
+		}
 		built.byMedia[timelineMediaKey(entry.albumID, entry.index)] = entry
 	}
 	built.years = timelineYearIndex(entries)
@@ -512,41 +518,9 @@ func (s *PhotoTimelineService) Page(
 	}
 	for _, position := range matched[start:end] {
 		entry := index.entries[position]
-		album, ok := library.nodes[entry.albumID]
-		if !ok {
-			continue
+		if item, ok := timelineFeedItem(library, entry); ok {
+			items = append(items, item)
 		}
-		media := library.media[entry.albumID]
-		if entry.index < 0 || entry.index >= len(media) {
-			continue
-		}
-		item := media[entry.index]
-		if item.sourcePath != "" {
-			if version, verr := MediaVersion(item.sourcePath); verr == nil {
-				item.Version = version
-			}
-		}
-		name := strings.TrimSpace(album.DisplayName)
-		if name == "" {
-			name = strings.TrimSpace(album.Name)
-		}
-		capturedAt := ""
-		// 旧字段继续对精确日与文件修改时间提供 RFC3339 值。年月/年份证据
-		// 不伪造第一天，使用新增 dateValue + datePrecision 字段表达。
-		if entry.precision == timelinePrecisionDay || entry.precision == timelinePrecisionUnknown {
-			if !entry.at.IsZero() {
-				capturedAt = entry.at.UTC().Format(time.RFC3339)
-			}
-		}
-		items = append(items, FeedMediaItem{
-			LibraryMediaItem: item,
-			AlbumID:          entry.albumID,
-			AlbumName:        name,
-			CapturedAt:       capturedAt,
-			DateSource:       entry.source,
-			DatePrecision:    entry.precision.String(),
-			DateValue:        timelineDateValue(entry.at, entry.precision.String()),
-		})
 	}
 	// 年份索引：跳年跳月用。它按媒体类型筛选（照片 / 视频），但不按年份筛 ——
 	// 选中年份后还要能换到别的年份。
@@ -644,4 +618,89 @@ func (f timelineFilter) scopeKey() string {
 		strconv.Itoa(f.month),
 		f.media,
 	}, "|")
+}
+
+func timelineFeedItem(library *libraryPageIndex, entry timelineEntry) (FeedMediaItem, bool) {
+	album, ok := library.nodes[entry.albumID]
+	if !ok {
+		return FeedMediaItem{}, false
+	}
+	media := library.media[entry.albumID]
+	if entry.index < 0 || entry.index >= len(media) {
+		return FeedMediaItem{}, false
+	}
+	item := media[entry.index]
+	if item.sourcePath != "" {
+		if version, verr := MediaVersion(item.sourcePath); verr == nil {
+			item.Version = version
+		}
+	}
+	name := strings.TrimSpace(album.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(album.Name)
+	}
+	capturedAt := ""
+	// 旧字段继续对精确日与文件修改时间提供 RFC3339 值。年月/年份证据
+	// 不伪造第一天，使用新增 dateValue + datePrecision 字段表达。
+	if entry.precision == timelinePrecisionDay || entry.precision == timelinePrecisionUnknown {
+		if !entry.at.IsZero() {
+			capturedAt = entry.at.UTC().Format(time.RFC3339)
+		}
+	}
+	return FeedMediaItem{
+		LibraryMediaItem: item,
+		AlbumID:          entry.albumID,
+		AlbumName:        name,
+		CapturedAt:       capturedAt,
+		DateSource:       entry.source,
+		DatePrecision:    entry.precision.String(),
+		DateValue:        timelineDateValue(entry.at, entry.precision.String()),
+	}, true
+}
+
+// 闰年包含全部月日，以同一把日历尺跨年比较距离。
+func memoryDay(date time.Time) int {
+	return time.Date(2000, date.Month(), date.Day(), 0, 0, 0, 0, time.UTC).YearDay() - 1
+}
+
+// Memories 按月日距离选取往年照片。同一月日沿用时间线顺序，同一本可贡献多张。
+func (s *PhotoTimelineService) Memories(snapshot CatalogSnapshot, today time.Time) ([]FeedMediaItem, error) {
+	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
+		return nil, ErrLibraryNotReady
+	}
+	const limit = 8
+	items := make([]FeedMediaItem, 0, limit)
+	seen := make(map[string]bool, limit)
+	index := s.index(snapshot)
+	center := memoryDay(today)
+	for distance := 0; distance <= len(index.memoryDays)/2; distance++ {
+		before := (center - distance + len(index.memoryDays)) % len(index.memoryDays)
+		after := (center + distance) % len(index.memoryDays)
+		days := []int{before}
+		if before != after {
+			days = append(days, after)
+		}
+		for _, day := range days {
+			for _, position := range index.memoryDays[day] {
+				entry := index.entries[position]
+				if entry.at.Year() >= today.Year() {
+					continue
+				}
+				id := snapshot.state.library.media[entry.albumID][entry.index].ID
+				if seen[id] {
+					continue
+				}
+				item, ok := timelineFeedItem(snapshot.state.library, entry)
+				if !ok {
+					continue
+				}
+				seen[id] = true
+				items = append(items, item)
+				if len(items) == limit {
+					return items, nil
+				}
+			}
+		}
+	}
+	return items, nil
 }

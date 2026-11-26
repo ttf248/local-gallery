@@ -375,6 +375,28 @@ func LibraryRecentHandler(catalog *services.ResourceCatalog) fiber.Handler {
 	}
 }
 
+// PhotoMemoriesHandler 按浏览器的本地日期返回首页回忆照片带。
+func PhotoMemoriesHandler(catalog *services.ResourceCatalog, dimensions *services.MediaDimensionService, timeline *services.PhotoTimelineService) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		date, err := time.Parse(time.DateOnly, c.Query("date"))
+		if err != nil {
+			return httputil.BadRequest(c, "invalid_on_this_day", "date must be YYYY-MM-DD")
+		}
+		snapshot := requestCatalogSnapshot(c, catalog)
+		items, err := timeline.Memories(snapshot, date)
+		if err != nil {
+			return writeLibraryPageError(c, err, snapshot.Revision())
+		}
+		if dimensions != nil {
+			for i := range items {
+				enrichMediaDimension(snapshot, &items[i].LibraryMediaItem, dimensions)
+			}
+			dimensions.Flush()
+		}
+		return c.JSON(fiber.Map{"ok": true, "items": items})
+	}
+}
+
 // LibraryOnThisDayHandler 返回往年同一天拍过照的相册。
 //
 // month 与 day 缺省时取服务端当天；它只认拍摄日期（来自文件名推断），

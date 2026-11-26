@@ -102,8 +102,8 @@ vi.mock("../hooks/useLibrary", () => {
       data: { page: { revision: 1, items: [], total: 0 } },
       isLoading: false,
     }),
-    useOnThisDayAlbums: () => ({
-      data: { page: { revision: 1, items: [], total: 0 } },
+    usePhotoMemories: () => ({
+      data: { items: [] },
       isLoading: false,
     }),
     useLibraryNodes: (ids: string[]) =>

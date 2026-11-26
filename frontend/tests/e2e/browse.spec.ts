@@ -2774,19 +2774,24 @@ test("首页「那年今日」摆的是当天那张照片，并能回到原相�
   request,
 }) => {
   await scannedNodes(request, "photo");
+  // 固定浏览器日期，夹具里 2024-01-15 的照片在每个测试日都能精确命中。
+  await page.clock.setFixedTime(new Date(2026, 0, 15, 12));
   await page.goto("/photo");
-
   const strip = page.getByTestId("on-this-day-strip");
-  await expect(strip).toBeVisible();
-  // 这一段摆的是照片本身，不是相册卡：相册的通用封面回答不了
-  // 「往年这天我拍到了什么」。点它就回到那本相册。
-  const photo = strip.getByRole("link", { name: /年的今天/ }).first();
+  const row = strip.getByRole("region", { name: "回忆照片" });
+  const photo = row.getByRole("button", { name: /2024 年的今天.*IMG_20240115/ });
   await expect(photo).toBeVisible();
-  // 缩略图要看得清：缩到认不出拍的是什么，这一行就退化成了装饰。
-  const box = await photo.locator("img").first().boundingBox();
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(48);
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(48);
+  await expect(row.getByRole("button", { name: /2023 年 1 月 14 日/ })).toBeVisible();
+  const box = await photo.locator("img").boundingBox();
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(120);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(96);
   await photo.click();
+  const viewer = page.getByRole("dialog", { name: /大图预览/ });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole("link", { name: "zz-capture-date" }).first()).toBeVisible();
+  await viewer.getByRole("button", { name: "下一张", exact: true }).click();
+  await expect(viewer.getByText(/第 2 张/).first()).toBeVisible();
+  await viewer.getByRole("link", { name: /.+/ }).first().click();
   await expect(page).toHaveURL(/\/photo\/albums\//);
 });
 

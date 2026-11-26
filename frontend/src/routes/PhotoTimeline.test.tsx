@@ -130,8 +130,8 @@ vi.mock("../hooks/useLibrary", () => ({
     },
     isLoading: false,
   }),
-  useOnThisDayAlbums: () => ({
-    data: { page: { items: [], total: 0 } },
+  usePhotoMemories: () => ({
+    data: { items: [] },
   }),
 }));
 

@@ -507,3 +507,41 @@ func TestLibraryOnThisDayHandlerMatchesEarlierYearsOnly(t *testing.T) {
 		t.Fatalf("month=13 status=%d, want 400", bad.StatusCode)
 	}
 }
+
+func TestPhotoMemoriesReturnsBoundedPhotosAcrossNewYear(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "trip")
+	names := []string{"IMG_20230101_a.jpg", "IMG_20230101_b.jpg", "IMG_20241231_a.jpg", "IMG_20250101_a.jpg"}
+	for i := 0; i < 10; i++ {
+		names = append(names, fmt.Sprintf("IMG_20240102_%02d.jpg", i))
+	}
+	var files []string
+	for _, name := range names {
+		files = append(files, filepath.Join(dir, name))
+	}
+	catalog := services.NewResourceCatalog()
+	catalog.SetContentKindPolicy(services.NewContentKindPolicy([]services.RootKind{{Path: root, Kind: models.ContentKindPhoto}}))
+	catalog.Publish(&models.ScanResult{Roots: []string{root}, AlbumCount: 1, Albums: []models.Album{{
+		Name: "trip", Type: "album", Path: dir, SourceRoot: root, ImageFiles: files, CoverImage: files[0], ImageCount: len(files),
+	}}}, []string{root})
+	app := fiber.New()
+	app.Get("/memories", PhotoMemoriesHandler(catalog, nil, services.NewPhotoTimelineService(nil)))
+	resp, err := app.Test(httptest.NewRequest("GET", "/memories?date=2025-01-01", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var data struct{ Items []services.FeedMediaItem }
+	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+		t.Fatal(err)
+	}
+	if len(data.Items) != 8 || data.Items[0].DateValue != "2023-01-01" || data.Items[1].DateValue != "2023-01-01" ||
+		data.Items[0].ID == data.Items[1].ID || data.Items[2].DateValue != "2024-12-31" || data.Items[7].DateValue != "2024-01-02" {
+		t.Fatalf("unexpected memory selection: %+v", data.Items)
+	}
+	bad, err := app.Test(httptest.NewRequest("GET", "/memories?date=2025-02-29", nil))
+	if err != nil || bad.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("invalid date: resp=%v err=%v", bad, err)
+	}
+	bad.Body.Close()
+}

@@ -50,6 +50,15 @@
   .sheet-surface[data-side="bottom"] {
     --sheet-from: translateY(100%);
   }
+  .memory-thumbnail {
+    @apply rounded-tile bg-bg-subtle object-contain;
+    height: clamp(72px, 18dvh, 160px);
+    width: auto;
+    min-width: 80px;
+    max-width: min(27dvh, 240px);
+    /* 缩略图可能已按 EXIF 旋转，加载后采用实际图像的比例。 */
+    aspect-ratio: auto var(--memory-aspect);
+  }
   .scroll-row {
     scrollbar-width: none;
   }

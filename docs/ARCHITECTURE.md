@@ -487,6 +487,8 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 **自然照片墙**（`features/wall/PhotoMasonry.tsx`，瀑布流）：每张按自己的比例占位，
 不裁不凑行 —— 同一套组件也给「随手看看」用，精选页额外打开多选与续页哨兵。
 
+首页回忆复用照片时间线索引。索引按月日保存具有 EXIF 或文件名日期的条目下标，查询只对入选照片补齐版本与尺寸。浏览器按本地日期缓存这一批，跨午夜后重新取数。
+
 精选照片的时间证据来自照片时间线那一份索引（`services.PhotoTimelineService`）：
 `/api/picks/media` 按「相册 + 相册内序号」反查拍摄日期，与时间线同一套口径
 （EXIF → 文件名 → 目录名 → 文件修改时间），连来源与精度一起给前端。
@@ -516,11 +518,11 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - **阅读器的媒体清单与相册页共用同一份查询缓存。** `hooks/useReaderMedia.ts` 走 `useAlbumMedia`（同一个查询键），并把剩下的页依次取完 —— 进阅读器不必重下整本，再次进入时先出图、刷新在后台进行。它顺带给出每一页的原始像素尺寸：连续模式按它先占好高度，图片加载前后页面不跳。阅读器路由组合画布、控制条和浮层。进度恢复、翻页与切卷由 `features/reader/useReaderController.ts` 协调，阅读设置面板与快捷键使用同一个阅读偏好 store。取数在 `useReaderMedia`、键盘在 `useReaderKeys`、跨卷导航在 `useAdjacentAlbum`、浮动控件显隐在 `useIdleChrome`。
 - **跨卷导航按作品内的顺序走，不绕圈。** 上下文（`utils/galleryContext.ts`）记的是「用户从哪个列表点进来的」：书架、作品页、未读页、收藏页各自写一份。阅读器用 `hooks/useAdjacentAlbum.ts` 在这份上下文里找相邻的一卷，找不到就用兄弟卷兜底 —— `useSiblingVolumes` 按当前卷的 `parentId` 取同一部作品里的卷（`GET /api/library/{id}/children`）。深链直接打开阅读器、或从首页「继续阅读」进来时，上下文未必覆盖这一卷，兜底让「下一卷」在作品内部接得上。两处规则一致：**走到头就没有下一卷**（不环绕回开头），当前卷不在列表里也不猜（不拿列表第一项当锚点乱跳）。
 - 模式也决定视觉基调：`<html data-mode>` 由 `WorkbenchModeProvider` 写入，CSS token 按 `:root[data-theme][data-mode]` 组合覆盖（`--brand*` / `--feature-bg` / `--mode-tint`），画布与文字保持中性灰阶。封面画幅同样按侧取默认值（照片 1:1、漫画 2:3），见 `utils/workbench.ts` 的 `coverRatioForMode`。
-- 首页首屏按侧各成一套：漫画是「继续阅读 / 未读」两块面板，随后是「最近阅读」；照片是按单张日期证据排下来的全库时间线（见上面的「照片时间线」一节）：页头之下是年份 / 月份 / 照片与视频的定位，时间来源与日期精度收在可展开的说明里，同一行右侧是密度、「那年今日」与「接着看」三枚入口。随手看看降为通往随手看看专页 `/photo/random` 的入口（`routes/RandomPhotos.tsx`）：那一页的数据源换成 `scope=stream` 的随机长流（`backend/internal/services/library_feed_stream.go`）—— 游标是长流里的照片下标，同一颗种子给出同一条长流，翻页与重进都接得上；走完一圈会绕回开头再来一圈。排布用瀑布流（`features/wall/PhotoMasonry.tsx` 与 `masonryLayout.ts`）：每张按原比例落进当前最矮的一列，与照片墙的 justified（凑行）不同。渲染按视口裁（`hooks/useVisibleWindow.ts`），一次排几千张也不会把 DOM 撑爆。页面上只有「换一批」这一个动作 —— 没有排序、筛选与「最近」。
+- 首页首屏按侧各成一套：漫画是「继续阅读 / 未读」两块面板，随后是「最近阅读」；照片是按单张日期证据排下来的全库时间线（见上面的「照片时间线」一节）：页头之下是年份 / 月份 / 照片与视频的定位，时间来源与日期精度收在可展开的说明里，页头提供密度控制，下方的回忆照片带可折叠，标题行保留「接着看」。随手看看降为通往随手看看专页 `/photo/random` 的入口（`routes/RandomPhotos.tsx`）：那一页的数据源换成 `scope=stream` 的随机长流（`backend/internal/services/library_feed_stream.go`）—— 游标是长流里的照片下标，同一颗种子给出同一条长流，翻页与重进都接得上；走完一圈会绕回开头再来一圈。排布用瀑布流（`features/wall/PhotoMasonry.tsx` 与 `masonryLayout.ts`）：每张按原比例落进当前最矮的一列，与照片墙的 justified（凑行）不同。渲染按视口裁（`hooks/useVisibleWindow.ts`），一次排几千张也不会把 DOM 撑爆。页面上只有「换一批」这一个动作 —— 没有排序、筛选与「最近」。
 - **照片页是时间线页，不是入口页。** 照片侧不列全部相册（那是相册页）、不列年份索引（那是发现）、不摆完整主题墙（那也是发现）；页头只留一句事实（多少张、跨多少年）与两个动作（进相册、随手看看）。漫画侧首页只讲续读、未读与最近阅读，作品与卷的清单在书架 `/comic/library` 里：漫画按作品与卷组织，目录结构对它不是主要路径。漫画侧的「最近阅读」与「继续阅读」不是一回事：前者是翻过的卷（回访），后者是还没读完的（待续）。它的卡片带阅读进度（`useImageActivities` 批量查 `POST /api/activity/query`），否则读过的卷会挂上一枚「未读」点。
 - 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，照片首页的「接着看」chip 与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。
 - 措辞与计数单位的唯一真相源是 `utils/workbench.ts` 的词表（`workbenchCopy(mode)`），两侧共用组件从**卡片自身的** `contentKind` 取词，而不是从当前工作台取：一张卡永远知道自己属于照片还是漫画，取不到时按照片兜底。照片说「张 / 本 / 浏览」，漫画说「页 / 卷 / 阅读」。中间目录的类型词走同一个词表（`collectionTypeWord(mode)`）：照片侧说「文件夹」、漫画侧说「作品」—— 服务端内部叫它「集合」，那是实现细节，界面上不出现。
-- 「那年今日」的下标表在发布期建好：把各相册从文件名推断出的拍摄日期按月-日归桶（`library_page.go` 的 `onThisDay`），请求期只按属性与年份过滤。它靠拍摄时间成立，因此只在照片侧有意义 —— 漫画侧不出现这一段。拍摄日期稀疏，多数日子里往年这天没拍过照；首页因此允许退回离这一天最近的、往年确实拍过照的那几天（`fallback=1`），标题与摘要跟着事实走：摆的是别的日子就不叫「那年今日」。
+- 首页回忆按单张日期给出大图预览和来源相册链接。按月日查相册的接口仍使用目录发布时生成的相册日期索引（`library_page.go` 的 `onThisDay`）。
 - 目录里的年份索引仍由 `features/comic/YearTimeline.tsx` 接收相册目录分组，点击打开旧目录年份墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`scope=year` 按目录年份范围取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。发现页的时间预览改用同一组件呈现 `scope=timeline` 的年份索引，年份与计数来自单张媒体日期证据，点击进入 `/photo?year=<年份>`；只有年份精度的媒体计入该年，不生成月份。漫画年份索引仍按作品目录分组，两侧共用 `features/comic/Timeline.tsx` 的视觉骨架。
 
 ### 查询、导航与网格

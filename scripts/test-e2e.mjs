@@ -106,6 +106,7 @@ async function makeFixtures(root) {
     }
   }
 
+  await writeFixture(media, 'zz-memory-neighbor/IMG_20230114_090000.png')
   const capture = await writeFixture(media, 'zz-capture-date/IMG_20240115_120000.png')
   await utimes(capture, new Date('2019-05-05T00:00:00Z'), new Date('2019-05-05T00:00:00Z'))
   await utimes(path.dirname(capture), new Date('2019-05-05T00:00:00Z'), new Date('2019-05-05T00:00:00Z'))

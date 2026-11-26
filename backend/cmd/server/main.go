@@ -552,6 +552,7 @@ func main() {
 	api.Get("/library/:id/children", handlers.LibraryChildrenPageHandler(resourceCatalog))
 	api.Post("/library/nodes/query", handlers.LibraryNodesQueryHandler(resourceCatalog))
 	api.Get("/library/recent", handlers.LibraryRecentHandler(resourceCatalog))
+	api.Get("/library/photo-memories", handlers.PhotoMemoriesHandler(resourceCatalog, mediaDimensions, photoTimeline))
 	api.Get("/library/on-this-day", handlers.LibraryOnThisDayHandler(resourceCatalog, mediaDimensions))
 	api.Get("/library/activity-summary", handlers.LibraryActivitySummaryHandler(resourceCatalog, activities, unreadIndex))
 	api.Get("/library/dashboard", handlers.LibraryHomeDashboardHandler(resourceCatalog, activities, unreadIndex))

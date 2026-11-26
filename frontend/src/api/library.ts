@@ -54,26 +54,6 @@ export interface LibraryManifest {
   warnings?: ScanWarning[];
 }
 
-/** 「那年今日」命中的一本相册：摘要 + 命中的那一天。 */
-export interface LibraryOnThisDayItem extends LibraryNodeSummary {
-  /** 命中的那一天，"YYYY-MM-DD"。 */
-  matchedDate: string;
-  /**
-   * 真正拍于那一天的那一张照片。
-   *
-   * 它的日期证据是文件名里推断出的拍摄时间：服务端给不出这一张时
-   * 这里是空的，界面上就不摆照片 —— 宁可少一张，也不拿相册的通用
-   * 封面冒充「那天拍的那张」。
-   */
-  photo?: LibraryOnThisDayPhoto;
-}
-
-/** 「那年今日」命中的那一张照片。 */
-export interface LibraryOnThisDayPhoto extends LibraryMediaItem {
-  /** 这张照片的拍摄日期，"YYYY-MM-DD"。 */
-  date: string;
-}
-
 export interface LibraryNodeSummary {
   id: string;
   kind: "album" | "collection";
@@ -736,24 +716,11 @@ export const libraryApi = {
       `/api/albums/${encodeURIComponent(albumId)}/filters`,
       { signal },
     ),
-  /**
-   * 往年同一天拍过照的相册。
-   *
-   * month/day 缺省时服务端取当天。只认拍摄日期（从文件名推断），
-   * 没有拍摄时间的相册不在其中。
-   */
-  onThisDay: (
-    kind: AppMode,
-    month?: number,
-    day?: number,
-    limit = 20,
-    signal?: AbortSignal,
-    fallback = false,
-  ) =>
-    api<PageResponse<LibraryOnThisDayItem>>("/api/library/on-this-day", {
-      params: { kind, month, day, limit, fallback: fallback ? 1 : undefined },
-      signal,
-    }),
+  photoMemories: (date: string, signal?: AbortSignal) =>
+    api<{ ok: boolean; items: (LibraryFeedItem & { dateValue: string })[] }>(
+      "/api/library/photo-memories",
+      { params: { date }, signal },
+    ),
   tagPage: (
     kind: AppMode,
     cursor?: string,
