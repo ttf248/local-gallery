@@ -3,7 +3,7 @@ import {
   continueReadingTarget,
   readingPercent,
 } from "./continueReading";
-import type { CardData } from "../components/album/AlbumGrid";
+import type { CardData } from "../features/library/AlbumGrid";
 
 function card(over: Partial<CardData> = {}): CardData {
   return {

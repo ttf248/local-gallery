@@ -22,11 +22,11 @@ vi.mock("../hooks/useGalleryContextSync", () => ({
 vi.mock("../hooks/useListFilters", () => ({
   useListFilters: vi.fn(),
 }));
-vi.mock("../components/common/ListFilterBar", () => ({
+vi.mock("../features/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
 // 网格用假组件替掉：这里要验的是分段结构与卡片上的动作，不是卡片本身。
-vi.mock("../components/album/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", () => ({
   default: ({
     items,
     overlayAction,
@@ -57,7 +57,7 @@ import {
 } from "../hooks/useLibrary";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useListFilters } from "../hooks/useListFilters";
-import type { CardData } from "../components/album/AlbumGrid";
+import type { CardData } from "../features/library/AlbumGrid";
 
 const workCard: CardData = {
   id: "c:work-1",

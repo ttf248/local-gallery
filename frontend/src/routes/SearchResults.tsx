@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import AlbumGrid from "../components/album/AlbumGrid";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
+import AlbumGrid from "../features/library/AlbumGrid";
+import EmptyState from "../features/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
 import {PageHeader} from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
 import { albumsApi, type SearchHit } from "../api/albums";
@@ -28,7 +28,7 @@ import {
   type SearchScope,
 } from "../utils/searchScope";
 import { searchMatchLabel } from "../utils/searchMatch";
-import type { CardData } from "../components/album/AlbumCard";
+import type { CardData } from "../features/library/AlbumTile";
 import ContentSearchResults from "../components/search/ContentSearchResults";
 
 const SEARCH_PAGE_SIZE = 100;

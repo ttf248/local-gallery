@@ -5,10 +5,10 @@ import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
 import { useUnreadAlbums } from "../hooks/useUnreadAlbums";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
-import AlbumGrid from "../components/album/AlbumGrid";
-import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
-import { ListFilterBar } from "../components/common/ListFilterBar";
-import EmptyState from "../components/common/EmptyState";
+import AlbumGrid from "../features/library/AlbumGrid";
+import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
+import { ListFilterBar } from "../features/common/ListFilterBar";
+import EmptyState from "../features/common/EmptyState";
 import {
   SparkleIcon,
   ShuffleIcon,
@@ -22,8 +22,8 @@ import { useViewedSort } from "../hooks/useHistory";
 import { comicCopy } from "../utils/workbench";
 
 import { cardMatchesQuery } from "../utils/libraryCard";
-import ViewedSortNotice from "../components/common/ViewedSortNotice";
-import { SelectionToggle } from "../components/album/BulkActions";
+import ViewedSortNotice from "../features/common/ViewedSortNotice";
+import { SelectionToggle } from "../features/common/LibrarySelectionActions";
 
 // 未读列表:跟 Recents / Favorites 同形,但源数据是「还没翻开过的相册」。
 //

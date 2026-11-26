@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { aiJobsApi, type AIJob, type PersonGroup } from "../../api/aiJobs";
 import PersonFaceThumb from "../people/PersonFaceThumb";
-import ErrorBanner from "../common/ErrorBanner";
+import ErrorBanner from "../../features/common/ErrorBanner";
 import ExploreCard from "./ExploreCard";
 import { peopleRoute } from "../../utils/path";
 

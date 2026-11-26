@@ -82,11 +82,10 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
       .click();
     mkdirSync(".smoke/roadmap-batch", { recursive: true });
     for (const theme of ["浅色", "深色"]) {
-      await page.getByRole("button", { name: /^主题:/ }).click();
+      await page.getByRole("button", { name: /^外观 ·/ }).click();
       await page
         .getByRole("menuitemradio", { name: theme, exact: true })
         .click();
-      await page.keyboard.press("Escape");
       for (const width of [390, 1440]) {
         await page.setViewportSize({ width, height: 900 });
         await page
@@ -102,7 +101,6 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
     await searchDraft.fill("zz-没有这样的相册");
     await expect(searchDraft).toHaveValue("zz-没有这样的相册");
     await expect(page).toHaveURL(/\/photo\/tags\//);
-    await page.keyboard.press("Escape");
     await page.keyboard.press("Escape");
     await expect(card).toHaveAttribute("aria-checked", "true");
     await expect(
@@ -169,21 +167,12 @@ for (const view of ["网格视图", "列表视图"] as const) {
       .click();
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.locator("main").evaluate((element) => {
-        element.scrollTop = element.scrollHeight;
-      });
-      await expect(
-        page.getByRole("checkbox", { name: /long-list-108/ }),
-      ).toBeVisible();
-      await page.locator("main").evaluate((element) => {
-        const toolbar = element.querySelector('[aria-label="批量操作"]');
-        const wrapper = toolbar?.parentElement;
-        if (!wrapper) throw new Error("选择列表不存在");
-        element.scrollTop =
-          wrapper.getBoundingClientRect().top -
-          element.getBoundingClientRect().top +
-          element.scrollTop;
-      });
+      const main = page.locator("main");
+      await expect(async () => {
+        await main.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+        await expect(page.getByRole("checkbox", { name: /long-list-108/ })).toBeInViewport({timeout: 500});
+      }).toPass({timeout: 10_000});
+      await main.evaluate((element) => { element.scrollTop = 0; });
       await expect(
         page.getByRole("checkbox", { name: /long-list-001/ }),
       ).toBeVisible();

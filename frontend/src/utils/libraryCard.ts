@@ -1,5 +1,5 @@
 import type { AppMode, LibraryNodeSummary, LibraryTagSummary } from "../api/library";
-import type { CardData } from "../components/album/AlbumCard";
+import type { CardData } from "../features/library/AlbumTile";
 import { albumRoute, tagRoute } from "./path";
 import { usableDate } from "./date";
 

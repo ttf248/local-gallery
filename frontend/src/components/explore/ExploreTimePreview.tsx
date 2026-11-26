@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMediaFeed } from "../../hooks/useMediaFeed";
-import ErrorBanner from "../common/ErrorBanner";
+import ErrorBanner from "../../features/common/ErrorBanner";
 
 /**
  * 发现页的时间预览。

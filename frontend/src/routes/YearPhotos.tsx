@@ -6,9 +6,9 @@ import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../features/wall/PhotoWall";
 import PhotoViewer from "../features/viewer/PhotoViewer";
-import ContextMenu from "../components/album/ContextMenu";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
+import { ContextMenu } from "../ui/ContextMenu";
+import EmptyState from "../features/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
 import type { LibraryFeedItem } from "../api/library";
@@ -228,10 +228,10 @@ export default function YearPhotos() {
               label: "在相册中打开",
               icon: <FolderIcon size={12} />,
             },
-          ]}
-          onSelect={(id) => {
+          ].map(action=>({...action,onSelect:()=>{const id=action.id;
+
             const target = menu.menu!.item;
-            menu.close();
+
             if (id === "open") {
               const index = items.findIndex((it) => it.id === target.id);
               if (index >= 0) wall.open(index);
@@ -240,7 +240,7 @@ export default function YearPhotos() {
             if (id === "album") {
               navigate(albumRoute("photo", target.albumId));
             }
-          }}
+}}))}
           onClose={menu.close}
         />
       )}

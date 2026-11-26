@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 // 卡片的样式会被每个页面首屏捎带着下载。
 import "../styles/travels.css";
 import Segmented from "../ui/Segmented";
-import ErrorBanner from "../components/common/ErrorBanner";
+import ErrorBanner from "../features/common/ErrorBanner";
 import TravelMiniMap from "../components/travels/TravelMiniMap";
 import type { MapScope } from "../components/travels/TravelMiniMap";
 import TravelStats from "../components/travels/TravelStats";

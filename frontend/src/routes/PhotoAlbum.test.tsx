@@ -376,7 +376,7 @@ describe("PhotoAlbum", () => {
     expect(screen.getByTestId("location")).not.toHaveTextContent("picks=only");
     // 界面上说清分组不叠加条件，不让用户自己猜。
     expect(
-      screen.getByText("分组已经是筛好的照片，不叠加其它条件"),
+      screen.getByText(/分组已经是筛好的照片，不叠加其它条件/),
     ).toBeInTheDocument();
 
     // 回到全部照片：真的回到全部，不再意外恢复那条被结束的筛选。
@@ -777,7 +777,7 @@ describe("PhotoAlbum", () => {
     });
     try {
       renderPhotoAlbum();
-      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+      fireEvent.click(screen.getByRole("button", { name: "相册更多操作" }));
       fireEvent.click(screen.getByRole("menuitem", { name: "复制相册链接" }));
       await waitFor(() =>
         expect(writeText).toHaveBeenCalledWith(
@@ -809,7 +809,7 @@ describe("PhotoAlbum", () => {
   it("「更多」菜单没有相册归类入口", () => {
     renderPhotoAlbum();
 
-    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+    fireEvent.click(screen.getByRole("button", { name: "相册更多操作" }));
     expect(screen.queryByRole("menuitem", { name: "移到漫画库" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "移到照片库" })).toBeNull();
   });

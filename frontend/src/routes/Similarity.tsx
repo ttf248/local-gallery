@@ -5,8 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
 import {PageHeader} from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
+import EmptyState from "../features/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
 import PhotoCompare, {
   type CompareItem,
 } from "../features/viewer/PhotoCompare";

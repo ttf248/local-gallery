@@ -1,4 +1,4 @@
-import type { CardData } from "../components/album/AlbumCard";
+import type { CardData } from "../features/library/AlbumTile";
 import type { SelectionItem } from "../store/selectionStore";
 import { decodeFavPath, favoriteResourceId } from "./path";
 

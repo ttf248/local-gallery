@@ -18,10 +18,10 @@ vi.mock("../hooks/useLibrary", () => ({
 vi.mock("../hooks/useGalleryContextSync", () => ({
   useGalleryContextSync: vi.fn(),
 }));
-vi.mock("../components/common/ListFilterBar", () => ({
+vi.mock("../features/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
-vi.mock("../components/album/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", () => ({
   default: ({ items }: { items: { id: string; title: string }[] }) => (
     <div data-testid="album-grid">
       {items.map((item) => (

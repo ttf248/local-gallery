@@ -51,7 +51,7 @@ vi.mock("../components/home/HomeHeroes", () => ({
   ContinueHero: () => null,
   UnreadHero: () => null,
 }));
-vi.mock("../components/album/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", () => ({
   default: ({ items }: { items: { id: string; title: string }[] }) => (
     <ol data-testid="sort-results">
       {items.map((item) => (

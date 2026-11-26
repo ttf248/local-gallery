@@ -15,7 +15,7 @@ import {
   type ServerConfig,
 } from "../../api/config";
 import { useUIStore } from "../../store/uiStore";
-import { ListFilterBar } from "../common/ListFilterBar";
+import { ListFilterBar } from "../../features/common/ListFilterBar";
 import { authApi } from "../../api/auth";
 import { ApiError } from "../../api/client";
 import { fsApi } from "../../api/fs";

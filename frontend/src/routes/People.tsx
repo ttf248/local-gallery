@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import EmptyState from "../components/common/EmptyState";
+import EmptyState from "../features/common/EmptyState";
 import {Switch} from "../ui/Switch";
 import {PageHeader} from "../shell/PageHeader";
 import RenditionImage from "../features/common/RenditionImage";

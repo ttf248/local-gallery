@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ContinueHero, UnreadHero } from "./HomeHeroes";
-import type { CardData } from "../album/AlbumGrid";
+import type { CardData } from "../../features/library/AlbumGrid";
 
 vi.mock("../../hooks/useFavorites", () => ({
   useFavorites: () => ({
@@ -16,11 +16,11 @@ vi.mock("../../hooks/useFavorites", () => ({
   useToggleFavorite: () => vi.fn(),
 }));
 
-vi.mock("../common/HoverPreview", () => ({
+vi.mock("../../features/common/HoverPreview", () => ({
   default: () => <div data-testid="hover-preview" />,
 }));
 
-vi.mock("../common/TranscodeStatusBadge", () => ({
+vi.mock("../../features/common/TranscodeStatusBadge", () => ({
   default: () => null,
 }));
 

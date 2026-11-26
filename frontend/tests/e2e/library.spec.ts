@@ -258,9 +258,9 @@ test("筛选结果为零时仍可调整条件并一键清除", async ({ page, re
   );
 
   await expect(page.getByRole("heading", { name: /没有匹配/ })).toBeVisible();
-  const filterBar = page.locator(".sticky-page-header");
+  const filterBar = page.locator("main header");
   await expect(filterBar).toBeVisible();
-  await expect(filterBar.getByRole("button", { name: /^全部/ })).toBeVisible();
+  await expect(filterBar.getByRole("tab", { name: /^全部/ })).toBeVisible();
   await expect(
     filterBar.getByRole("button", { name: `清除名称筛选「${query}」` }),
   ).toBeVisible();
@@ -271,7 +271,7 @@ test("筛选结果为零时仍可调整条件并一键清除", async ({ page, re
   await filterBar.getByRole("button", { name: "清除筛选" }).click();
   await expect(page).toHaveURL("/photo/library");
   await expect(
-    filterBar.getByRole("button", { name: /^全部/, pressed: true }),
+    filterBar.getByRole("tab", { name: /^全部/, selected: true }),
   ).toBeVisible();
 });
 
@@ -381,4 +381,13 @@ test("深层目录可直达与刷新，面包屑只显示一次当前节点", as
   await breadcrumbs.getByRole("button", { name: hierarchy!.name, exact: true }).click();
   await page.getByRole("menuitem", { name: hierarchy!.name, exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`[?&]node=${encodeURIComponent(hierarchy!.id)}(?:&|$)`));
+});
+
+test("宽屏相册封面保持四比三，文件夹名称和收藏各有独立焦点", async({page,request})=>{
+  await scannedNodes(request,"photo");await page.setViewportSize({width:2000,height:1000});
+  await page.goto("/photo/library");const tile=page.getByTestId("album-card").first();await expect(tile).toBeVisible();
+  const cover=await tile.locator(".album-tile__cover").boundingBox();expect(cover).not.toBeNull();
+  expect(cover!.width).toBeGreaterThanOrEqual(290);expect(cover!.width/cover!.height).toBeCloseTo(4/3,1);
+  await expect(tile.locator("a button")).toHaveCount(0);
+  const favorite=tile.getByRole("button",{name:/收藏/});await favorite.focus();await expect(favorite).toBeFocused();
 });

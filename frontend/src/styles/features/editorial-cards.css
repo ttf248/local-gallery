@@ -53,29 +53,15 @@
   .home-overview > .hero-panel:only-child .hero-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-  .album-tile {
-    border: 1px solid var(--card-border);
-    border-radius: var(--card-radius);
-    background: var(--card-bg);
-    padding: 8px;
-    transition:
-      box-shadow var(--dur),
-      transform var(--dur);
+  .album-tile__cover {
+    border-radius: var(--radius-card);
+    transition: transform 240ms var(--ease-standard), box-shadow 240ms var(--ease-standard);
   }
   @media (hover: hover) and (pointer: fine) {
-    .album-tile:hover {
-      box-shadow: var(--card-shadow);
-      transform: translateY(var(--card-lift));
+    .album-tile:hover .album-tile__cover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-2);
     }
-  }
-  @media (hover: none), (pointer: coarse) {
-    .album-tile:active {
-      box-shadow: var(--card-shadow);
-      transform: translateY(1px);
-    }
-  }
-  .album-tile__cover {
-    border-radius: var(--radius-media);
   }
   .album-tile__cover--book {
     border-radius: 9px 14px 14px 9px;
@@ -255,27 +241,15 @@
   }
 
   .library-grid {
+    --album-min: 240px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(var(--library-col), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--album-min)), 1fr));
+    gap: 36px 24px;
   }
-  .library-grid--dense {
-    grid-template-columns: repeat(
-      auto-fill,
-      minmax(var(--library-col-dense), 1fr)
-    );
-  }
-  .library-grid--spacious {
-    grid-template-columns: repeat(
-      auto-fill,
-      minmax(var(--library-col-spacious), 1fr)
-    );
-  }
-  .library-grid--comic {
-    grid-template-columns: repeat(
-      auto-fill,
-      minmax(var(--library-col-comic), 1fr)
-    );
-  }
+  @media (min-width:1440px) { .library-grid { --album-min:260px; } }
+  @media (min-width:1920px) { .library-grid { --album-min:300px; gap:44px 32px; } }
+  @media (min-width:2560px) { .library-grid { --album-min:340px; } }
+  .library-grid--comic { --album-min:180px; }
   .timeline-cover--book {
     position: relative;
     border-radius: 5px 8px 8px 5px;
@@ -345,10 +319,6 @@
     .detail-head__cover--book {
       width: 76px;
       height: 96px;
-    }
-    .album-tile {
-      padding: 5px;
-      border-radius: var(--radius-control);
     }
     .album-tile__meta {
       padding-inline: 0;
@@ -711,9 +681,6 @@
     min-height: 0;
     overflow: hidden;
     background: var(--bg-subtle);
-  }
-  .album-tile__cover:not(.album-tile__cover--book) {
-    border-radius: var(--radius-tile);
   }
 }
 @layer components {

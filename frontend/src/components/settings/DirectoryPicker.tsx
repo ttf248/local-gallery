@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api/client";
 import { fsApi, type DirectoryPage } from "../../api/fs";
 import { CloseIcon, FolderOpenIcon } from "../../ui/icons";
-import ErrorBanner from "../common/ErrorBanner";
+import ErrorBanner from "../../features/common/ErrorBanner";
 
 interface Props {
   initialDirectory: string;

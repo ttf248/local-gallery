@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import Library from "./Library";
@@ -29,10 +29,10 @@ vi.mock("../hooks/useGalleryContextSync", () => ({
 vi.mock("../hooks/useListFilters", () => ({
   useListFilters: vi.fn(),
 }));
-vi.mock("../components/common/ListFilterBar", () => ({
+vi.mock("../features/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
-vi.mock("../components/album/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", () => ({
   default: ({ items }: { items: { id: string; title: string }[] }) => (
     <div data-testid="album-grid">
       {items.map((item) => (
@@ -52,7 +52,7 @@ import {
 import { useListFilters } from "../hooks/useListFilters";
 import type { ViewKey } from "../utils/listFilterParams";
 
-function seedList() {
+function seedList(overrides: Partial<ReturnType<typeof useLibraryList>> = {}) {
   vi.mocked(useLibraryList).mockReturnValue({
     cards: [],
     summary: { counts: { all: 3, album: 1, collection: 1, smart: 1 } },
@@ -65,6 +65,7 @@ function seedList() {
     isFetching: false,
     refetch: vi.fn(),
     fetchNextPage: vi.fn(),
+    ...overrides,
   } as never);
 }
 
@@ -130,6 +131,33 @@ describe("照片相册页", () => {
     seedList();
   });
 
+  it("后续分页失败保留卡片并重试同一页", () => {
+    const fetchNextPage = vi.fn(),
+      refetch = vi.fn();
+    seedList({
+      cards: [
+        {
+          id: "album-1",
+          variant: "album",
+          title: "第一本",
+          coverPath: "",
+          count: 1,
+          to: "/photo/albums/album-1",
+        },
+      ],
+      isError: true,
+      isFetchNextPageError: true,
+      hasNextPage: true,
+      fetchNextPage,
+      refetch,
+    });
+    renderLibrary();
+    expect(screen.getByText("第一本")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "重试" }));
+    expect(fetchNextPage).toHaveBeenCalledOnce();
+    expect(refetch).not.toHaveBeenCalled();
+  });
+
   it("顶层默认视图混合相册、集合与标签，标题不叫「全部相册」", async () => {
     renderLibrary();
 
@@ -186,7 +214,9 @@ describe("照片相册页", () => {
     } as never);
     renderLibrary("/photo/library?node=c_year");
     await waitFor(() => {
-      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("2025");
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+        "2025",
+      );
     });
     // 眉标说的是「这一层在相册那一侧」，而面包屑的第一段已经说了
     // 「相册」—— 同一句话说两遍，眉标因此去掉。

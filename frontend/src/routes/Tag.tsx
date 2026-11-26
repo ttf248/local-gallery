@@ -1,3 +1,5 @@
+import { Page } from "../shell/Page";
+import { PageHeader } from "../shell/PageHeader";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -6,9 +8,9 @@ import { useFavorites } from "../hooks/useFavorites";
 import { useImageActivities } from "../hooks/useImageActivity";
 import type { LibraryNodeSummary } from "../api/library";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
-import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
-import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
-import EmptyState from "../components/common/EmptyState";
+import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
+import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
+import EmptyState from "../features/common/EmptyState";
 import {
   ChevronLeftIcon,
   StarIcon,
@@ -20,7 +22,7 @@ import {
 import RenditionImage from "../features/common/RenditionImage";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import { useLibraryList } from "../hooks/useLibraryList";
-import ListPagination from "../components/common/ListPagination";
+import ListPagination from "../features/common/ListPagination";
 import { useAppMode } from "../hooks/useAppMode";
 import { mediaCountParts } from "../utils/mediaCount";
 import { nodeSummaryToCard } from "../utils/libraryCard";
@@ -28,8 +30,8 @@ import { decodeFavPath, decodePathTail, homeRoute } from "../utils/path";
 import { usableDate } from "../utils/date";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { workbenchCopy } from "../utils/workbench";
-import { ListFilterBar } from "../components/common/ListFilterBar";
-import { SelectionToggle } from "../components/album/BulkActions";
+import { ListFilterBar } from "../features/common/ListFilterBar";
+import { SelectionToggle } from "../features/common/LibrarySelectionActions";
 
 // 标签页：展示一个标签下的全部文件夹，支持排序、阅读进度、收藏。
 /**
@@ -46,8 +48,7 @@ function TagHead({ tag, onBack }: { tag: string; onBack: () => void }) {
         <ChevronLeftIcon size={13} />
         <span>返回</span>
       </button>
-      <p className="page-eyebrow">由标签串起的故事</p>
-      <h1 className="page-title page-title--sm break-words mt-1">{tag}</h1>
+      <PageHeader title={tag} eyebrow="标签" />
     </div>
   );
 }
@@ -211,12 +212,11 @@ export default function Tag() {
   }
 
   return (
-    <div className="min-h-full">
-      <section className="page-shell page-heading">
+    <Page variant="gallery" className="page-shell min-h-full">
+      <section className="pb-5">
         <div className="tag-feature">
           <div className="min-w-0">
-            <p className="page-eyebrow mb-3">由标签串起的故事</p>
-            <h1 className="page-title page-title--sm break-words">{tag}</h1>
+            <PageHeader title={tag} eyebrow="标签" />
             <div className="mt-4">
               {" "}
               <button
@@ -311,7 +311,7 @@ export default function Tag() {
       </section>
 
       {/* 标签下的相册列表 */}
-      <section aria-label="相册列表" className="page-shell page-section pb-10">
+      <section aria-label="相册列表" className="pb-10">
         <ListFilterBar
           totalCount={albumsQuery.summary?.total ?? 0}
           showMinImageFilter={false}
@@ -352,7 +352,7 @@ export default function Tag() {
           </>
         )}
       </section>
-    </div>
+    </Page>
   );
 }
 
@@ -376,9 +376,7 @@ function Stat({
       <div className="text-section font-display font-semibold mt-1 tabular-nums">
         {value}
       </div>
-      {detail && (
-        <div className="text-meta text-fg-muted mt-0.5">{detail}</div>
-      )}
+      {detail && <div className="text-meta text-fg-muted mt-0.5">{detail}</div>}
     </div>
   );
 }

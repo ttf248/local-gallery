@@ -128,7 +128,7 @@ vi.mock("../components/home/HomeHeroes", () => ({
   ContinueHero: () => <div data-testid="continue-hero" />,
   UnreadHero: () => <div data-testid="unread-hero" />,
 }));
-vi.mock("../components/album/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", () => ({
   default: ({
     items,
   }: {

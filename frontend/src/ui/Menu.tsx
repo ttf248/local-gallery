@@ -51,11 +51,13 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
     ref,
   ) {
     const surface = useRef<HTMLDivElement | null>(null),
-      close = useRef(onClose);
+      close = useRef(onClose),
+      restoring = useRef(false);
     useLayoutEffect(() => {
       close.current = onClose;
     }, [onClose]);
     useLayoutEffect(() => {
+      restoring.current = false;
       const layer = surface.current;
       if (!layer) return;
       const before = restoreFocus ?? document.activeElement;
@@ -80,10 +82,18 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
         layer.style.left = point.left + "px";
         layer.style.top = point.top + "px";
       };
+      // 浏览器可能在右击离屏卡片后才派发已完成的滚动事件。
+      // 只在锚点所属滚动容器真正移动时关闭，避免刚打开的菜单闪退。
+      const offsets = new Map<Element, [number, number]>();
+      let parent = anchor instanceof HTMLElement ? anchor : restoreFocus;
+      while (parent) {
+        offsets.set(parent, [parent.scrollLeft, parent.scrollTop]);
+        parent = parent.parentElement;
+      }
       position();
       (
         layer.querySelector<HTMLElement>(ENABLED_MENU_ITEM_SELECTOR) ?? layer
-      ).focus();
+      ).focus({ preventScroll: true });
       function outside(event: PointerEvent) {
         if (
           !layer?.contains(event.target as Node) &&
@@ -95,7 +105,15 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
           close.current();
       }
       function scroll(event: Event) {
-        if (!layer?.contains(event.target as Node)) close.current();
+        const target =
+          event.target === document ? document.scrollingElement : event.target;
+        if (!(target instanceof Element)) return;
+        const start = offsets.get(target);
+        if (
+          start &&
+          (start[0] !== target.scrollLeft || start[1] !== target.scrollTop)
+        )
+          close.current();
       }
       const dismiss = () => close.current();
       window.addEventListener("resize", position);
@@ -103,6 +121,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
       document.addEventListener("pointerdown", outside);
       document.addEventListener("scroll", scroll, true);
       return () => {
+        restoring.current = true;
         window.removeEventListener("resize", position);
         window.removeEventListener("blur", dismiss);
         document.removeEventListener("pointerdown", outside);
@@ -142,6 +161,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
         }}
         onBlur={(event) => {
           if (
+            !restoring.current &&
             event.relatedTarget &&
             !event.currentTarget.contains(event.relatedTarget)
           )

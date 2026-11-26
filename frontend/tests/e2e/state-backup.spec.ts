@@ -86,7 +86,7 @@ test("本机备份下载、仅恢复收藏、过期预览拒绝覆盖", async ({
     expect(stale.status()).toBe(409);
     mkdirSync(".smoke/roadmap-backup", { recursive: true });
     for (const theme of ["浅色", "深色"]) {
-      await page.getByRole("button", { name: /^主题:/ }).click();
+      await page.getByRole("button", { name: /^外观 ·/ }).click();
       await page
         .getByRole("menuitemradio", { name: theme, exact: true })
         .click();

@@ -62,7 +62,14 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
           <>
             {caption}
             {count !== undefined && (
-              <span className="text-caption tabular-nums">{count}</span>
+              <span
+                className={cx(
+                  "text-caption tabular-nums",
+                  selected ? "text-fg-muted" : "text-fg-subtle",
+                )}
+              >
+                {count}
+              </span>
             )}
           </>
         );

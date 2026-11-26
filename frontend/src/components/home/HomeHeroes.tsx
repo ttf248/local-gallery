@@ -4,8 +4,8 @@ import { useFavorites } from "../../hooks/useFavorites";
 import { decodeFavPath, recentsRoute, unreadRoute } from "../../utils/path";
 import { readingPercent } from "../../utils/continueReading";
 import { comicCopy } from "../../utils/workbench";
-import AlbumCard from "../album/AlbumCard";
-import type { CardData } from "../album/AlbumGrid";
+import AlbumCard from "../../features/library/AlbumTile";
+import type { CardData } from "../../features/library/AlbumGrid";
 import Cover from "./Cover";
 import {
   ArrowRightLineIcon,

@@ -1,3 +1,5 @@
+import { Page } from "../shell/Page";
+import { InlineAlert } from "../ui/InlineAlert";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
@@ -29,17 +31,19 @@ import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 import PhotoWall from "../features/wall/PhotoWall";
-import AlbumFilterBar from "../components/wall/AlbumFilterBar";
+import AlbumFilterBar from "../features/album/AlbumFilterBar";
 import DensityControl from "../features/wall/DensityControl";
-import ErrorBanner from "../components/common/ErrorBanner";
-import EmptyState from "../components/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
+import EmptyState from "../features/common/EmptyState";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoCompare from "../features/viewer/PhotoCompare";
-import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
-import AlbumHeader from "../components/album/AlbumHeader";
-import AlbumGroupPanel from "../components/album/AlbumGroupPanel";
-import AlbumMediaMenu from "../components/album/AlbumMediaMenu";
-import PropertiesDialog from "../components/common/PropertiesDialog";
+import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
+import AlbumHeader from "../features/album/AlbumHeader";
+import AlbumGroupPanel from "../features/album/AlbumGroupPanel";
+import AlbumMediaMenu from "../features/album/AlbumMediaMenu";
+import PropertiesDialog, {
+  type PropertiesTarget,
+} from "../features/common/PropertiesDialog";
 import { CloseIcon, LayersIcon } from "../ui/icons";
 import { fileManagerErrorMessage } from "../utils/fileManager";
 import { useSafeBack, contextFallback } from "../utils/navigation";
@@ -174,7 +178,11 @@ export default function PhotoAlbum({ album }: Props) {
   );
 
   const analysis = useAlbumAnalysis({ albumId: album.id, dimension });
-  const selection = useAlbumSelection({ albumId: album.id, albumName: title, items: mediaItems });
+  const selection = useAlbumSelection({
+    albumId: album.id,
+    albumName: title,
+    items: mediaItems,
+  });
 
   useEffect(() => {
     if (smartSummary && !smartSummary.cacheHit) {
@@ -215,7 +223,7 @@ export default function PhotoAlbum({ album }: Props) {
 
   // 右键菜单：照片墙上的图片同样能查看属性、在文件管理器中定位。
   const menu = useContextMenu<LibraryMediaItem>();
-  const [propertiesFileId, setPropertiesFileId] = useState<string | null>(null);
+  const [properties, setProperties] = useState<PropertiesTarget | null>(null);
 
   // 精选：照片级的标记，与相册级收藏是两份数据。
   const { isPicked, mergeServerFlags, toggle: togglePickState } = usePicks();
@@ -401,7 +409,7 @@ export default function PhotoAlbum({ album }: Props) {
   const compare = usePhotoCompare(() => title);
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <Page variant="gallery" className="page-shell flex h-full min-h-0 flex-col">
       {mediaQuery.isFetchNextPageError && (
         <ErrorBanner
           kind="warning"
@@ -424,6 +432,7 @@ export default function PhotoAlbum({ album }: Props) {
         onToggleFavorite={toggleFavorite}
         canOpenInExplorer={actions.canOpenInExplorer}
         onOpenInExplorer={() => void openInExplorer()}
+        onProperties={() => setProperties({ kind: "node", id: album.id })}
         onCopyLink={() => void copyLink()}
         onBack={goBack}
         actions={
@@ -481,9 +490,10 @@ export default function PhotoAlbum({ album }: Props) {
               <>
                 {/* 分组视图不叠加普通筛选：这句话一直摆着，用户不必
                   猜为什么筛选条不见了。 */}
-                <span className="text-meta text-fg-subtle">
-                  分组已经是筛好的照片，不叠加其它条件
-                </span>
+                <InlineAlert tone="info">
+                  正在看分组：{selectedGroup?.name}
+                  。分组已经是筛好的照片，不叠加其它条件
+                </InlineAlert>
                 <button
                   type="button"
                   onClick={() => openGroup(null)}
@@ -539,7 +549,7 @@ export default function PhotoAlbum({ album }: Props) {
         />
       ) : null}
 
-      <div className="page-shell min-h-0 flex-1 pb-2">
+      <div className="min-h-0 flex-1 pb-2">
         {/* 分组摘要读不出来：分组里的照片没有快照可依，墙上是一片空白。
             说清是分组读不出来，并给一个重试的手柄。 */}
         {showingGroup && smartGroupsQuery.isError ? (
@@ -652,7 +662,7 @@ export default function PhotoAlbum({ album }: Props) {
               return;
             }
             if (action === "cover") {
-              setPropertiesFileId(null);
+              setProperties(null);
               void albumsApi
                 .setCover(album.id, item.id)
                 .then(() => {
@@ -664,7 +674,8 @@ export default function PhotoAlbum({ album }: Props) {
                 );
               return;
             }
-            if (action === "properties") setPropertiesFileId(item.id);
+            if (action === "properties")
+              setProperties({ kind: "image", id: item.id });
             if (action === "copy") void copyLink();
             if (action === "explorer") void openInExplorer();
             if (action === "representative" && item.similarityGroup) {
@@ -675,10 +686,8 @@ export default function PhotoAlbum({ album }: Props) {
       )}
 
       <PropertiesDialog
-        target={
-          propertiesFileId ? { kind: "image", id: propertiesFileId } : null
-        }
-        onClose={() => setPropertiesFileId(null)}
+        target={properties}
+        onClose={() => setProperties(null)}
       />
 
       {viewer && (
@@ -707,6 +716,6 @@ export default function PhotoAlbum({ album }: Props) {
           onSwap={compare.swap}
         />
       )}
-    </div>
+    </Page>
   );
 }

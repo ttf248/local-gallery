@@ -1,7 +1,7 @@
 import { useState } from "react";
 import RenditionImage from "../../features/common/RenditionImage";
 import { FolderIcon } from "../../ui/icons";
-import type { CardData } from "../album/AlbumGrid";
+import type { CardData } from "../../features/library/AlbumGrid";
 
 /**
  * 封面图。

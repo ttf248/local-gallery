@@ -11,7 +11,7 @@ import {
   taskStatusLabel,
   taskTitle,
 } from "../../utils/taskFormat";
-import EmptyState from "../common/EmptyState";
+import EmptyState from "../../features/common/EmptyState";
 import { ChevronDownIcon } from "../../ui/icons";
 import FailureGroupList from "./FailureGroupList";
 import JobOutputSummary from "./JobOutputSummary";

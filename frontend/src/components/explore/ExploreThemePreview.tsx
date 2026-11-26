@@ -7,8 +7,8 @@ import {
   useSmartAlbumDirectory,
 } from "../../hooks/useSmartAlbums";
 import { smartAlbumEvidenceDimensions, smartGroupHref } from "../../utils/smartAlbum";
-import ErrorBanner from "../common/ErrorBanner";
-import EmptyState from "../common/EmptyState";
+import ErrorBanner from "../../features/common/ErrorBanner";
+import EmptyState from "../../features/common/EmptyState";
 import RenditionImage from "../../features/common/RenditionImage";
 import { SparkleIcon } from "../../ui/icons";
 import ExploreCard from "./ExploreCard";

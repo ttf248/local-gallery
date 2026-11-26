@@ -1,24 +1,24 @@
+import { Page } from "../shell/Page";
 import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link, useNavigate } from "react-router-dom";
-import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
-import BulkActions, { SelectionToggle } from "../components/album/BulkActions";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
-import { ListFilterBar } from "../components/common/ListFilterBar";
-import FolderTree from "../components/library/FolderTree";
+import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
+import BulkActions, {
+  SelectionToggle,
+} from "../features/common/LibrarySelectionActions";
+import EmptyState from "../features/common/EmptyState";
+import { InlineAlert } from "../ui/InlineAlert";
+import { ListFilterBar } from "../features/common/ListFilterBar";
+import FolderTree from "../features/library/FolderTree";
 import FolderDrawer, {
   useFolderDrawer,
-} from "../components/library/FolderDrawer";
-import BreadcrumbMenu from "../components/library/BreadcrumbMenu";
-import {PageHeader} from "../shell/PageHeader";
-import { FilterDropdown } from "../components/wall/AlbumFilterBar";
+} from "../features/library/FolderDrawer";
+import BreadcrumbMenu from "../features/library/BreadcrumbMenu";
+import { usePageChromeState } from "../shell/PageChrome";
+import { PageHeader } from "../shell/PageHeader";
+import { FilterDropdown } from "../features/album/AlbumFilterBar";
 import type { ReactNode } from "react";
-import {
-  ChevronLeftIcon,
-  FolderOpenIcon,
-  ReaderIcon,
-} from "../ui/icons";
+import { ChevronLeftIcon, FolderOpenIcon, ReaderIcon } from "../ui/icons";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryList } from "../hooks/useLibraryList";
 import {
@@ -207,7 +207,11 @@ export default function Library() {
   // 分页是整页的事，不能只挂在某一段网格上 —— 页面被分成几段之后，
   // 末尾那一段不一定是被滚到的那一段，取页的触发也就落空了。
   const loadMore = useCallback(() => {
-    if (list.hasNextPage && !list.isFetchingNextPage) {
+    if (
+      list.hasNextPage &&
+      !list.isFetchingNextPage &&
+      !list.isFetchNextPageError
+    ) {
       void list.fetchNextPage();
     }
   }, [list]);
@@ -309,16 +313,34 @@ export default function Library() {
   ) : null;
 
   return (
-    <div className="library-page min-h-full">
-      <div className="page-shell"><PageHeader
-  title={title}
-  meta={list.summary ? `${total.toLocaleString("zh-CN")} 项` : undefined}
-  actions={
+    <Page variant="gallery" className="page-shell library-page min-h-full">
+      <PageHeader
+        title={title}
+        chrome={{
+          actions: actions && (
+            <CompactLibraryFilters>{actions}</CompactLibraryFilters>
+          ),
+        }}
+        meta={
+          current?.albumCount != null
+            ? [
+                current.albumCount + " 个相册",
+                current.imageCount != null
+                  ? current.imageCount.toLocaleString("zh-CN") + " 张"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : list.summary
+              ? `${total.toLocaleString("zh-CN")} 项`
+              : undefined
+        }
+        actions={
           drawer.desktop
             ? actions
             : actions && <LibraryFilters>{actions}</LibraryFilters>
         }
-  toolbar={
+        toolbar={
           hasActiveFilters && (
             <div className="flex flex-wrap gap-1.5">
               {filters.query && (
@@ -337,48 +359,51 @@ export default function Library() {
             </div>
           )
         }
-  eyebrow={<div className="flex items-center gap-2">{
-          <>
-            <button
-              ref={drawer.triggerRef}
-              type="button"
-              className="toolbar-icon"
-              title="切换目录抽屉"
-              aria-label="目录"
-              aria-keyshortcuts={"Control+\\ Meta+\\"}
-              aria-expanded={drawer.open}
-              aria-controls={drawer.open ? "library-tree" : undefined}
-              onClick={() => drawer.setOpen(!drawer.open)}
-            >
-              <FolderOpenIcon size={17} />
-            </button>
+        eyebrow={
+          <div className="flex items-center gap-2">
+            {
+              <>
+                <button
+                  ref={drawer.triggerRef}
+                  type="button"
+                  className="toolbar-icon"
+                  title="切换目录抽屉"
+                  aria-label="目录"
+                  aria-keyshortcuts={"Control+\\ Meta+\\"}
+                  aria-expanded={drawer.open}
+                  aria-controls={drawer.open ? "library-tree" : undefined}
+                  onClick={() => drawer.setOpen(!drawer.open)}
+                >
+                  <FolderOpenIcon size={17} />
+                </button>
+                {nodeId && (
+                  <button
+                    type="button"
+                    className="toolbar-icon"
+                    aria-label="返回上级"
+                    title="返回上级"
+                    onClick={() => selectNode(parentId)}
+                  >
+                    <ChevronLeftIcon size={16} />
+                  </button>
+                )}
+              </>
+            }{" "}
             {nodeId && (
-              <button
-                type="button"
-                className="toolbar-icon"
-                aria-label="返回上级"
-                title="返回上级"
-                onClick={() => selectNode(parentId)}
-              >
-                <ChevronLeftIcon size={16} />
-              </button>
+              <BreadcrumbMenu
+                mode={mode}
+                nodeId={nodeId}
+                roots={(manifest?.roots ?? []).filter(
+                  (root) => (root.contentKind ?? "photo") === mode,
+                )}
+                chain={ancestorChain}
+                onSelect={selectNode}
+              />
             )}
-          </>
-        } {
-          nodeId && (
-            <BreadcrumbMenu
-              mode={mode}
-              nodeId={nodeId}
-              roots={(manifest?.roots ?? []).filter(
-                (root) => (root.contentKind ?? "photo") === mode,
-              )}
-              chain={ancestorChain}
-              onSelect={selectNode}
-            />
-          )
-        }</div>}
-/></div>
-      <div className="page-shell library-layout">
+          </div>
+        }
+      />
+      <div className="library-layout">
         <FolderDrawer
           open={drawer.open}
           desktop={drawer.desktop}
@@ -392,13 +417,18 @@ export default function Library() {
         </FolderDrawer>
         <div className="library-content min-w-0">
           {list.isError ? (
-            <ErrorBanner
-              onRetry={() => void list.refetch()}
+            <InlineAlert
+              tone="danger"
+              onRetry={() =>
+                void (list.isFetchNextPageError
+                  ? list.fetchNextPage()
+                  : list.refetch())
+              }
               retrying={list.isFetching}
             >
               {mode === "comic" ? "书架" : "相册"}内容读取失败。
               {cards.length > 0 ? "仍显示已加载的内容。" : "请重试加载。"}
-            </ErrorBanner>
+            </InlineAlert>
           ) : null}
 
           {list.isLoading && cards.length === 0 ? (
@@ -469,7 +499,7 @@ export default function Library() {
             ) : (
               <AlbumGrid
                 selectable
-                coverRatio={mode === "photo" ? "4/3" : "4/5"}
+                coverRatio={mode === "photo" ? "4/3" : "2/3"}
                 items={cards}
                 variant={viewMode}
                 onEndReached={loadMore}
@@ -479,7 +509,13 @@ export default function Library() {
 
           {!list.isLoading && cards.length === 0 && hasContent ? (
             <EmptyState
-              title={filters.query ? "没有匹配的内容" : "这一层是空的"}
+              title={
+                filters.query
+                  ? "没有匹配的内容"
+                  : nodeId && mode === "photo"
+                    ? "这个文件夹里没有照片"
+                    : "这一层是空的"
+              }
               description={
                 filters.query
                   ? `这个目录里没有名字包含「${filters.query}」的${copy.albumTypeLabel}或${copy.collectionTypeLabel}。`
@@ -489,9 +525,9 @@ export default function Library() {
                 nodeId ? (
                   <button
                     className="btn btn-outline"
-                    onClick={() => selectNode("")}
+                    onClick={() => selectNode(parentId)}
                   >
-                    回到顶层
+                    返回上一级
                   </button>
                 ) : undefined
               }
@@ -511,7 +547,7 @@ export default function Library() {
           ) : null}
         </div>
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -527,4 +563,9 @@ function LibraryFilters({ children }: { children: ReactNode }) {
       panel={children}
     />
   );
+}
+
+function CompactLibraryFilters({ children }: { children: ReactNode }) {
+  const { titleCollapsed } = usePageChromeState();
+  return titleCollapsed ? <LibraryFilters>{children}</LibraryFilters> : null;
 }

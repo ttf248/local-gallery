@@ -6,7 +6,7 @@ import type { AppMode } from "../api/library";
 import { compareDatesDesc } from "../utils/date";
 import { useLibraryNodes } from "./useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
-import type { CardData } from "../components/album/AlbumCard";
+import type { CardData } from "../features/library/AlbumTile";
 
 const EMPTY_HISTORY: HistoryEntry[] = [];
 

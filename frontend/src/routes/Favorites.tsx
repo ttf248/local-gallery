@@ -1,5 +1,5 @@
 import {PageHeader} from "../shell/PageHeader";
-import ErrorBanner from "../components/common/ErrorBanner";
+import ErrorBanner from "../features/common/ErrorBanner";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -9,11 +9,11 @@ import { useImageActivities } from "../hooks/useImageActivity";
 import { useAppMode } from "../hooks/useAppMode";
 import { workbenchCopy, coverRatioForMode } from "../utils/workbench";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
-import AlbumGrid, { type CardData } from "../components/album/AlbumGrid";
-import AlbumCard from "../components/album/AlbumCard";
-import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
-import { ListFilterBar } from "../components/common/ListFilterBar";
-import EmptyState from "../components/common/EmptyState";
+import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
+import AlbumCard from "../features/library/AlbumTile";
+import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
+import { ListFilterBar } from "../features/common/ListFilterBar";
+import EmptyState from "../features/common/EmptyState";
 import { StarIcon } from "../ui/icons";
 import { decodeFavPath, homeRoute } from "../utils/path";
 import { compareDatesDesc } from "../utils/date";
@@ -26,7 +26,7 @@ import {
 } from "../hooks/useLibrary";
 import { useFavoritesByMode } from "../hooks/useFavoritesByMode";
 import { nodeSummaryToCard, cardMatchesQuery } from "../utils/libraryCard";
-import { SelectionToggle } from "../components/album/BulkActions";
+import { SelectionToggle } from "../features/common/LibrarySelectionActions";
 
 // 收藏页：合并 albums + smart collections 中的收藏。
 // 支持搜索 + 排序 + 阅读进度展示。

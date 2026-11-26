@@ -1,5 +1,5 @@
 import {PageHeader} from "../shell/PageHeader";
-import ErrorBanner from "../components/common/ErrorBanner";
+import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";

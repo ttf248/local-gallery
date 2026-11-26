@@ -286,8 +286,8 @@ export function mediaUnit(mode: "photo" | "comic"): string {
  * 也不像一张封面。4:5 仍是竖版（与照片侧的方形分得开），却能留住
  * 画面里真正有信息的那部分。
  */
-export function coverRatioForMode(mode: "photo" | "comic"): "1/1" | "4/5" {
-  return mode === "comic" ? "4/5" : "1/1";
+export function coverRatioForMode(mode: "photo" | "comic"): "4/3" | "2/3" {
+  return mode === "comic" ? "2/3" : "4/3";
 }
 
 /** 返回某个工作台模式对应的文案。 */

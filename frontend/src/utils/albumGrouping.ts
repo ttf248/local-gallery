@@ -6,7 +6,7 @@
 // 集合子树）早已被服务端取代，留着只会让人以为它是真相源。
 //
 // 这里保留的是 UI 需要的形状：卡片投影用的轻量结构与两条时间线的数据结构。
-import type { CardData } from "../components/album/AlbumCard";
+import type { CardData } from "../features/library/AlbumTile";
 import type { ContentKind } from "../api/library";
 
 export interface YearGroup {

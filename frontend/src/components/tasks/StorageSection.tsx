@@ -7,7 +7,7 @@ import StorageMediaCache from "./StorageMediaCache";
 import StorageModuleGrid from "./StorageModuleGrid";
 import StoragePaths from "./StoragePaths";
 import StorageUsage from "./StorageUsage";
-import ErrorBanner from "../common/ErrorBanner";
+import ErrorBanner from "../../features/common/ErrorBanner";
 
 /**
  * 本机存储：派生缓存、AI 模型与分析产物、以及它们各自的位置。

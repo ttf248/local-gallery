@@ -44,7 +44,7 @@ vi.mock("../hooks/useImageActivity", () => ({
 vi.mock("../hooks/useGalleryContextSync", () => ({
   useGalleryContextSync: vi.fn(),
 }));
-vi.mock("../components/album/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", () => ({
   default: ({ items }: { items: { title: string }[] }) => (
     <div>
       {items.map((item) => (

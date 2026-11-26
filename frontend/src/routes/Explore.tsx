@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import {PageHeader} from "../shell/PageHeader";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
+import EmptyState from "../features/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
 import ExploreSearchHero from "../components/explore/ExploreSearchHero";
 import ExploreTimePreview from "../components/explore/ExploreTimePreview";
 import ExplorePeoplePreview from "../components/explore/ExplorePeoplePreview";

@@ -8,7 +8,7 @@ import {
   type LibraryNodeSummary,
   type LibraryTagSummary,
 } from "../api/library";
-import type { CardData } from "../components/album/AlbumGrid";
+import type { CardData } from "../features/library/AlbumGrid";
 import { nodeSummaryToCard, tagSummaryToCard } from "../utils/libraryCard";
 
 /**

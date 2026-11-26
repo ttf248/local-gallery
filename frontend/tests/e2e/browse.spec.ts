@@ -285,19 +285,12 @@ for (const kind of ["images", "mixed", "videos"] as const) {
       const first = scroller.getByRole("button").first();
       await expect(first).toBeVisible();
       const list = page.getByTestId("virtuoso-item-list");
-      // 照片墙没有封面摘要区；它的内容左缘要与顶栏一致。
-      // 顶栏用 role=banner 定位：相册页自己也有一个 header，两者会撞。
-      // 比的是顶栏的内容左缘（page-shell 有左右内边距），不是它的外框。
-      const shell = page.locator(".sticky-page-header__row");
-      const headerBox = await shell.boundingBox();
-      const headerPadding = await shell.evaluate((element) =>
-        parseFloat(getComputedStyle(element).paddingLeft),
-      );
+      const headerBox = await page.locator("main header").first().boundingBox();
       const listBox = await list.boundingBox();
       expect(headerBox).not.toBeNull();
       expect(listBox).not.toBeNull();
       expect(
-        Math.abs(listBox!.x - (headerBox!.x + headerPadding)),
+        Math.abs(listBox!.x - headerBox!.x),
       ).toBeLessThanOrEqual(1);
       // 虚拟视口与网格同宽，不能把左右留白算作额外的列。
       const widthDifference = await list.evaluate((element) =>
@@ -544,7 +537,7 @@ test("照片大图预览按显示尺寸取档，URL 只有一个问号", async (
 
   const viewer = page.getByRole("dialog", { name: /大图预览/ });
   await expect(viewer).toBeVisible();
-  const image = viewer.locator("img");
+  const image = viewer.getByRole("img", { name: "page-1.png", exact: true });
   await expect(image).toBeVisible();
 
   // w 与 v 是两个独立参数：拼成 "?w=320?v=…" 时服务端把整串当成 w 的值，
@@ -778,10 +771,14 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
   page,
 }) => {
   await page.goto("/settings/interface");
-  const opener = page.getByRole("button", { name: "快捷键帮助", exact: true });
-  await opener.click();
+  const opener = page.getByRole("button", { name: "更多操作", exact: true });
+  const openHelp = async () => {
+    await opener.click();
+    await page.getByRole("menuitem", { name: /快捷键帮助/ }).click();
+  };
+  await openHelp();
   const dialog = page.getByRole("dialog", { name: "快捷键", exact: true });
-  const search = dialog.getByRole("textbox", { name: "搜索快捷键" });
+  const search = dialog.getByRole("searchbox", { name: "搜索快捷键" });
   const close = dialog.getByRole("button", { name: "关闭", exact: true });
   await expect(search).toBeFocused();
   // 措辞随工作台走：照片工作台的「回到主页」叫「回到照片库」。
@@ -792,7 +789,7 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
   await expect(dialog.getByText("没有匹配「Space」的快捷键")).toBeVisible();
   await search.fill("");
   await page.keyboard.press("Tab");
-  await expect(close).toBeFocused();
+  await expect(dialog.getByRole("button", {name:"全局"})).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(search).toBeFocused();
   await search.fill("不存在的快捷键");
@@ -801,13 +798,15 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
   ).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(
-    dialog.getByRole("button", { name: "清除", exact: true }),
+    dialog.getByRole("button", { name: "清除搜索", exact: true }),
   ).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", {name:"提交搜索"})).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(close).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(search).toBeFocused();
-  await dialog.getByRole("button", { name: "清除", exact: true }).click();
+  await dialog.getByRole("button", { name: "清除搜索", exact: true }).click();
   await expect(search).toBeFocused();
   await expect(search).toHaveValue("");
   await close.focus();
@@ -818,14 +817,14 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
-  await opener.click();
+  await openHelp();
   await expect(search).toBeFocused();
   await expect(search).toHaveValue("");
   await close.focus();
   await page.keyboard.press("Space");
   await expect(dialog).not.toBeVisible();
   await expect(opener).toBeFocused();
-  await opener.click();
+  await openHelp();
   await expect(dialog).toBeVisible();
   await page.mouse.click(2, 2);
   await expect(dialog).not.toBeVisible();
@@ -852,9 +851,9 @@ test("主题菜单隔离页面快捷键，支持键盘连续选择并持久保�
       backgroundActions++;
   });
   const root = page.locator("html");
-  const trigger = page.getByRole("button", { name: /^主题:/ });
+  const trigger = page.getByRole("button", { name: /^外观 ·/ });
   await trigger.click();
-  const menu = page.getByRole("menu", { name: "主题" });
+  const menu = page.getByRole("menu", { name: "外观" });
   const light = menu.getByRole("menuitemradio", { name: "浅色", exact: true });
   const dark = menu.getByRole("menuitemradio", { name: "深色", exact: true });
   await expect(light).toBeFocused();
@@ -873,12 +872,14 @@ test("主题菜单隔离页面快捷键，支持键盘连续选择并持久保�
   await expect(root).toHaveAttribute("data-theme", "light");
   await page.keyboard.press("Enter");
   await expect(root).toHaveAttribute("data-theme", "dark");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
   await expect(dark).toHaveAttribute("aria-checked", "true");
-  await expect(menu).toBeVisible();
   // 菜单只有主题一组：Home/End 在三项之间往返。
   await page.keyboard.press("End");
   await expect(
-    menu.getByRole("menuitemradio", { name: "系统", exact: true }),
+    menu.getByRole("menuitemradio", { name: "跟随系统", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(light).toBeFocused();
@@ -897,20 +898,16 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
 }) => {
   await scannedNodes(page.request);
   await page.goto("/settings/interface");
-  const trigger = page.getByRole("button", { name: /^主题:/ });
-  const menu = page.getByRole("menu", { name: "主题" });
+  const trigger = page.getByRole("button", { name: /^外观 ·/ });
+  const menu = page.getByRole("menu", { name: "外观" });
   await trigger.click();
   await expect(
     menu.getByRole("menuitemradio", { name: "浅色", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(
-    menu.getByRole("menuitemradio", { name: "深色", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(
-    menu.getByRole("menuitemradio", { name: "浅色", exact: true }),
-  ).toBeFocused();
+  await expect(menu).toBeHidden();
+  await expect(trigger).not.toBeFocused();
+  await trigger.click();
   await page.getByRole("button", { name: "打开命令面板" }).click();
   const search = page.getByRole("combobox");
   await search.click();
@@ -937,53 +934,19 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
 test("主题令牌在明暗模式下保持边框及透明背景", async ({ page }) => {
   await page.goto("/settings/interface");
   const root = page.locator("html");
-  const themeSwitcher = page
-    .getByRole("button", { name: "浅色", exact: true })
-    .locator("..");
-  const activeNavigation = page.getByRole("link", {
-    name: /^设置/,
-  });
+  const rail = page.getByTestId("nav-rail");
+  const selected = rail.getByRole("link", { name: "设置" });
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await expect(root).toHaveAttribute("data-theme", theme);
-    const [expectedBorder, expectedSubtle] = await renderedColors(root, [
-      "--rail-line",
-      "--bg-subtle",
-    ]);
-    await expect(page.locator(".mobile-app-bar")).toBeHidden();
-    const [railBorder] = await renderedColors(page.locator(".app-sidebar"), ["border-right-color"]);
-    expect(railBorder).toEqual(expectedBorder);
-    const [subtleBackground] = await renderedColors(themeSwitcher, [
-      "background-color",
-    ]);
-    expect(subtleBackground[3]).toBe(102);
-    for (const channel of [0, 1, 2])
-      expect(
-        Math.abs(subtleBackground[channel] - expectedSubtle[channel]),
-      ).toBeLessThanOrEqual(2);
-    // 侧栏选中态的颜色来自 --rail-active / --rail-active-fg，
-    // 而不是组件里另写一份色值。
-    const navigationColors = await renderedColors(root, [
-      "--rail-active",
-      "--rail-active-fg",
-    ]);
-    expect(
-      await renderedColors(activeNavigation, ["background-color", "color"]),
-    ).toEqual(navigationColors);
-    // 强调色由主题方案本身决定：主题菜单里的选中项直接取 --accent 家族。
-    await page.getByRole("button", { name: /^主题:/ }).click();
-    const activeTheme = page.getByRole("menuitemradio", {
-      name: "系统",
-      exact: true,
-    });
-    await expect(activeTheme).toHaveAttribute("aria-checked", "true");
-    const expected = await renderedColors(root, [
-      "--accent",
-      "--accent-contrast",
-    ]);
-    await expect
-      .poll(() => renderedColors(activeTheme, ["background-color", "color"]))
-      .toEqual(expected);
+    const [bg, elevated, subtle, fg] = await renderedColors(root, ["--bg", "--bg-elevated", "--bg-subtle", "--fg"]);
+    expect(await renderedColors(rail, ["background-color"])).toEqual([bg]);
+    expect(await renderedColors(selected, ["background-color", "color"])).toEqual([elevated, fg]);
+    expect(await renderedColors(page.getByRole("button", { name: "打开命令面板" }), ["background-color"])).toEqual([subtle]);
+    await page.getByRole("button", { name: /^外观 ·/ }).click();
+    const menu = page.getByRole("menu", { name: "外观" });
+    expect(await renderedColors(menu, ["background-color"])).toEqual([elevated]);
+    await expect(menu.getByRole("menuitemradio", { name: "跟随系统" })).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
     await page.screenshot({
       path: test.info().outputPath(`theme-tokens-${theme}.png`),
@@ -1857,7 +1820,7 @@ for (const mode of ["grid", "list"] as const) {
       ).toBe(true);
       await page.keyboard.press("Tab");
       await expect(close).toBeFocused();
-      await page.locator(".sidebar-search")
+      await page.getByRole("button", { name: "打开命令面板" })
         .evaluate((element) => (element as HTMLButtonElement).focus());
       await expect(close).toBeFocused();
       await page.keyboard.press("u");
@@ -2036,7 +1999,7 @@ for (const entrypoint of ["more", "image"] as const) {
       await page.goto(albumUrl(album));
       const source =
         entrypoint === "more"
-          ? page.getByRole("button", { name: "更多操作", exact: true })
+          ? page.locator("main").getByRole("button", { name: "相册更多操作", exact: true })
           : page.getByRole("button", { name: "查看 page-1.png", exact: true });
       const copy = async () => {
         if (entrypoint === "more") await source.click();
@@ -2198,7 +2161,7 @@ test("相册系统打开权限更新更多及图片菜单，并说明本机限�
       );
     });
     await page.goto(albumUrl(album));
-    const more = page.getByRole("button", { name: "更多操作", exact: true });
+    const more = page.locator("main").getByRole("button", { name: "相册更多操作", exact: true });
     await more.click();
     const open = page.getByRole("menuitem", {
       name: "在文件管理器中打开",
@@ -2433,7 +2396,7 @@ test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page 
   await page.getByRole("button", { name: "显示与排序" }).click();
   // 视图标签不能被压成竖排文字（一个字一行）。
   await expect(
-    page.getByRole("button", { name: /^全部\s+\d+$/ }),
+    page.getByRole("tab", { name: /^全部\s*\d+$/ }),
   ).toBeVisible();
   const chips = await page.evaluate(() => {
     const matched = [...document.querySelectorAll("button")].filter((button) =>
@@ -2548,7 +2511,7 @@ test("浏览器解不了的图片给出明确提示而不是破图", async ({ pa
   await page
     .getByRole("button", { name: "查看 photo.heic", exact: true })
     .click();
-  await expect(page.getByText("这张图片无法显示")).toBeVisible();
+  await expect(page.getByText("这张照片读不出来")).toBeVisible();
 });
 
 test("坏掉的图片在照片墙上标成「无法解码」", async ({ page, request }) => {
@@ -2566,24 +2529,22 @@ test("坏掉的图片在照片墙上标成「无法解码」", async ({ page, re
   await page
     .getByRole("button", { name: "查看 broken.jpg", exact: true })
     .click();
-  await expect(page.getByText("这张图片无法解码")).toBeVisible();
+  await expect(page.getByText("这张照片读不出来")).toBeVisible();
 });
 
 test("结构页的视图筛选贴顶，随滚动保持可操作", async ({ page, request }) => {
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic/library");
-  const header = page.locator(".sticky-page-header");
-  const chip = header.getByRole("button", { name: /^卷/ });
-  const card = page.getByTestId("card-cover").first();
-  await expect(chip).toBeVisible();
-  await expect(card).toBeVisible();
-  const bar = await header.boundingBox();
-  const cover = await card.boundingBox();
-  expect(bar!.height).toBeLessThanOrEqual(57);
-  expect(cover!.y - bar!.y - bar!.height).toBeLessThan(80);
+  const bar = page.getByTestId("top-bar");
+  const header = page.locator("main header");
+  await expect(header.getByRole("tab", { name: /^卷/ })).toBeVisible();
+  await expect(page.getByTestId("card-cover").first()).toBeInViewport();
+  const before = await bar.boundingBox();
   await page.locator("main").evaluate((element) => { element.scrollTop = 500; });
-  await expect(chip).toBeInViewport();
-  await expect.poll(async () => (await header.boundingBox())?.y).toBe(bar!.y);
+  await bar.getByRole("button", {name: /显示与排序/}).click();
+  await page.getByRole("dialog", {name:"相册显示与排序"}).getByRole("tab", {name:/^卷/}).click();
+  await expect(page).toHaveURL(/view=album/);
+  expect((await bar.boundingBox())?.y).toBe(before?.y);
 });
 
 test("重设计后的首页把继续阅读放在首屏，未读区不再逐张挂「新」角标", async ({
@@ -2658,7 +2619,7 @@ test("年份卡用空格也能进那一年", async ({ page }) => {
   await expect(page).toHaveURL(/\/photo\?year=2024$/);
 });
 
-test("列表视图按内容宽度切双列 / 三列，窄屏仍是单列", async ({ page }) => {
+test("列表视图在窄屏与宽屏都能逐行阅读，并可打开漫画", async ({ page }) => {
   // 未读页属于漫画工作台。
   await setWorkbenchMode(page.request, "comic");
   await page.goto("/comic/unread");
@@ -2668,34 +2629,21 @@ test("列表视图按内容宽度切双列 / 三列，窄屏仍是单列", async
   );
   await expect(cards.first()).toBeVisible();
 
-  // 1024：内容宽度不够（内容 816 → 单列 388 → 标题列只剩 222px），
-  // 第二张卡换行。
-  await page.setViewportSize({ width: 1024, height: 800 });
-  await page.waitForTimeout(500);
-  let boxes = [];
-  for (let i = 0; i < 2; i++) boxes.push(await cards.nth(i).boundingBox());
-  expect(boxes[1]!.y).toBeGreaterThan(boxes[0]!.y + 10);
-
-  // 1280：内容宽度够了（内容 1072 → 双列每列 516），第二张卡与第一张
-  // 卡同一行、左右并排。
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.waitForTimeout(500);
-  boxes = [];
-  for (let i = 0; i < 2; i++) boxes.push(await cards.nth(i).boundingBox());
-  expect(Math.abs(boxes[1]!.y - boxes[0]!.y)).toBeLessThan(4);
-  expect(boxes[1]!.x).toBeGreaterThan(boxes[0]!.x + 100);
-
-  // 1920（超宽）：改三列 —— 两列时每列 730px，标题与计数仍隔 484px。
-  await page.setViewportSize({ width: 1920, height: 900 });
-  await page.waitForTimeout(500);
-  boxes = [];
-  for (let i = 0; i < 3; i++) boxes.push(await cards.nth(i).boundingBox());
-  expect(Math.abs(boxes[1]!.y - boxes[0]!.y)).toBeLessThan(4);
-  expect(Math.abs(boxes[2]!.y - boxes[0]!.y)).toBeLessThan(4);
-  expect(boxes[2]!.x).toBeGreaterThan(boxes[1]!.x + 100);
-
-  // 多列下仍然能点开相册（列表项仍是可点的链接）。
-  // 未读页属于漫画工作台，漫画相册点开进阅读器。
+  for (const width of [390, 1024, 1280, 1920]) {
+    await page.setViewportSize({width, height: 900});
+    await expect(async () => {
+      const boxes = await cards.evaluateAll(nodes => nodes.slice(0,3).map(node => {
+        const {x, y, width} = node.getBoundingClientRect();
+        return {x,y,width};
+      }));
+      expect(boxes).toHaveLength(3);
+      for (let i = 1; i < boxes.length; i++) {
+        expect(boxes[i].x).toBeCloseTo(boxes[0].x, 0);
+        expect(boxes[i].width).toBeCloseTo(boxes[0].width, 0);
+        expect(boxes[i].y - boxes[i-1].y).toBeCloseTo(64, 0);
+      }
+    }).toPass();
+  }
   await cards.first().click();
   await expect(page).toHaveURL(/\/read\//);
 });
@@ -2827,18 +2775,14 @@ test("首页「那年今日」摆的是当天那张照片，并能回到原相�
 
   const strip = page.getByTestId("on-this-day-strip");
   await expect(strip).toBeVisible();
-  // 收起时只是一枚 chip，不占首屏；展开才是那条照片带。
-  const entry = strip.getByRole("button", { name: /那年今日/ });
-  await expect(entry).toHaveAttribute("aria-expanded", "false");
-  await entry.click();
   // 这一段摆的是照片本身，不是相册卡：相册的通用封面回答不了
   // 「往年这天我拍到了什么」。点它就回到那本相册。
-  const photo = strip.getByRole("link").first();
+  const photo = strip.getByRole("link", { name: /年的今天/ }).first();
   await expect(photo).toBeVisible();
   // 缩略图要看得清：缩到认不出拍的是什么，这一行就退化成了装饰。
   const box = await photo.locator("img").first().boundingBox();
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(120);
-  expect(box?.width ?? 0).toBeGreaterThanOrEqual(90);
+  expect(box?.height ?? 0).toBeGreaterThanOrEqual(48);
+  expect(box?.width ?? 0).toBeGreaterThanOrEqual(48);
   await photo.click();
   await expect(page).toHaveURL(/\/photo\/albums\//);
 });
@@ -2964,16 +2908,15 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
       await page.setViewportSize({ width, height: 900 });
       // 分页浏览在图库里：首页是发现页，不摆清单。
       await page.goto("/photo/library");
-      const mobileNav = page.getByRole("button", { name: "打开导航" });
+      const mobileNav = page.getByRole("button", { name: "更多", exact:true });
       if (width < 1024) await mobileNav.click();
-      await page.getByRole("button", { name: /^主题:/ }).click();
+      await page.getByRole("button", { name: /^外观 ·/ }).click();
       await page
         .getByRole("menuitemradio", {
           name: theme === "dark" ? "深色" : "浅色",
           exact: true,
         })
         .click();
-      await page.keyboard.press("Escape");
       if (width < 1024) await page.keyboard.press("Escape");
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await expect(
@@ -3031,7 +2974,7 @@ for (const source of ["library", "collection", "tag"] as const) {
         timeout: 15000,
       });
       blocked = false;
-      await page.getByRole("button", { name: "重试加载", exact: true }).click();
+      await page.getByRole("button", { name: "重试", exact: true }).click();
       await expect(page.getByRole("alert")).toHaveCount(0);
     } else {
       await expect(

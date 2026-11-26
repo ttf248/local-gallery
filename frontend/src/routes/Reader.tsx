@@ -24,7 +24,7 @@ import GalleryHeader from "../components/gallery/GalleryHeader";
 import GalleryToolbar from "../components/gallery/GalleryToolbar";
 import GalleryAlbumNav from "../components/gallery/GalleryAlbumNav";
 import PageOverview from "../components/gallery/PageOverview";
-import ContextMenu, { type AnyMenuItem } from "../components/album/ContextMenu";
+import {ContextMenu} from "../ui/ContextMenu";
 import {
   CloseIcon,
   ImageIcon,
@@ -1201,40 +1201,13 @@ export default function Reader() {
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
-          tone="reader"
-          items={
-            [
-              {
-                id: "set-cover",
-                label: "设为封面 (U)",
-                icon: <ImageIcon />,
-              },
-              hasCustomCover
-                ? {
-                    id: "clear-cover",
-                    label: "清除自定义封面 (⇧U)",
-                    icon: <RefreshIcon />,
-                  }
-                : {
-                    id: "clear-cover-disabled",
-                    label: "清除自定义封面",
-                    disabled: true,
-                  },
-              { id: "separator", separator: true },
-              {
-                id: "explorer",
-                label: "在文件管理器中打开",
-                icon: <ArrowUpRightIcon />,
-                disabled: !allowOsOpen,
-              },
-            ] satisfies AnyMenuItem[]
-          }
-          onSelect={(id) => {
-            setContextMenu(null);
-            if (id === "set-cover") onSetCover();
-            else if (id === "clear-cover") onClearCover();
-            else if (id === "explorer") onOpenInExplorer();
-          }}
+          className="bg-overlay-panel text-overlay-fg"
+          items={[
+            {id:"set-cover",label:"设为封面 (U)",icon:<ImageIcon/>, onSelect:onSetCover},
+            {id:"clear-cover",label:hasCustomCover?"清除自定义封面 (⇧U)":"清除自定义封面",disabled:!hasCustomCover,icon:<RefreshIcon/>,onSelect:onClearCover},
+            {type:"separator"},
+            {id:"explorer",label:"在文件管理器中打开",icon:<ArrowUpRightIcon/>,disabled:!allowOsOpen,onSelect:onOpenInExplorer},
+          ]}
           onClose={() => setContextMenu(null)}
         />
       )}

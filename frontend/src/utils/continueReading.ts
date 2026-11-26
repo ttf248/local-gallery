@@ -1,4 +1,4 @@
-import type { CardData } from "../components/album/AlbumGrid";
+import type { CardData } from "../features/library/AlbumGrid";
 import { decodeFavPath, readerRoute } from "./path";
 
 /**

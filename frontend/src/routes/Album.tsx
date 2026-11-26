@@ -5,15 +5,15 @@ import { useFavorites } from "../hooks/useFavorites";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useVisitRecorder } from "../hooks/useVisitRecorder";
 import { useLibraryList, listYearGroups } from "../hooks/useLibraryList";
-import ListPagination from "../components/common/ListPagination";
-import { ListFilterBar } from "../components/common/ListFilterBar";
+import ListPagination from "../features/common/ListPagination";
+import { ListFilterBar } from "../features/common/ListFilterBar";
 import { useUIStore } from "../store/uiStore";
-import AlbumGrid from "../components/album/AlbumGrid";
-import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
-import CollectionPhotoBand from "../components/album/CollectionPhotoBand";
+import AlbumGrid from "../features/library/AlbumGrid";
+import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
+import CollectionPhotoBand from "../features/album/CollectionPhotoBand";
 import YearTimeline from "../components/home/YearTimeline";
 import { type AlbumLike, type CollectionLike } from "../utils/albumGrouping";
-import EmptyState from "../components/common/EmptyState";
+import EmptyState from "../features/common/EmptyState";
 import {
   albumRoute,
   decodeFavPath,
@@ -22,7 +22,7 @@ import {
   readerRoute,
 } from "../utils/path";
 import { albumCountUnit, collectionTypeWord, workbenchCopy } from "../utils/workbench";
-import CardCover from "../components/album/CardCover";
+import CardCover from "../features/library/CardCover";
 import { useAppMode } from "../hooks/useAppMode";
 import { useSafeBack, contextFallback } from "../utils/navigation";
 import { usableDate } from "../utils/date";
@@ -40,7 +40,7 @@ import {
 } from "../api/library";
 import { useLibraryAncestors, useLibraryNodes } from "../hooks/useLibrary";
 import type { GalleryContextEntry } from "../utils/galleryContext";
-import { SelectionToggle } from "../components/album/BulkActions";
+import { SelectionToggle } from "../features/common/LibrarySelectionActions";
 
 interface CollectionDetail {
   albumCount: number;

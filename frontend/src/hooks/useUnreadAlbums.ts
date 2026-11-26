@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useFavorites } from "./useFavorites";
 import { useLibraryManifest, useLibraryUnreadAlbums } from "./useLibrary";
-import type { CardData } from "../components/album/AlbumGrid";
+import type { CardData } from "../features/library/AlbumGrid";
 import { nodeSummaryToCard } from "../utils/libraryCard";
 
 // useUnreadAlbums 只装配服务端已经筛好的未读摘要与本地收藏状态。

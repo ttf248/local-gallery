@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import { fsApi } from "../api/fs";
 import { ApiError } from "../api/client";
 import { useFsCapabilities } from "./useFsCapabilities";
-import type { CardData } from "../components/album/AlbumCard";
+import type { CardData } from "../features/library/AlbumTile";
 import { copyText } from "../utils/clipboard";
 import { decodeFavPath } from "../utils/path";
 

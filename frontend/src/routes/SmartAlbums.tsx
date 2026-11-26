@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import SmartAlbumWall from "../components/album/SmartAlbumWall";
-import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
+import SmartAlbumWall from "../features/album/SmartAlbumWall";
+import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
+import EmptyState from "../features/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
 import Segmented from "../ui/Segmented";
 import type { SmartAlbumSort } from "../api/albums";
 

@@ -12,10 +12,10 @@ import PhotoMasonry from "../features/wall/PhotoMasonry";
 import PickShowcase from "../components/wall/PickShowcase";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoCompare from "../features/viewer/PhotoCompare";
-import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
-import ContextMenu from "../components/album/ContextMenu";
-import EmptyState from "../components/common/EmptyState";
-import ErrorBanner from "../components/common/ErrorBanner";
+import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
+import { ContextMenu } from "../ui/ContextMenu";
+import EmptyState from "../features/common/EmptyState";
+import ErrorBanner from "../features/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoCompare } from "../hooks/usePhotoCompare";
 import { useContextMenu } from "../hooks/useContextMenu";
@@ -397,10 +397,10 @@ export default function Picks({
               label: "移出精选",
               icon: <UncheckIcon size={12} />,
             },
-          ]}
-          onSelect={(id) => {
+          ].map(action=>({...action,onSelect:()=>{const id=action.id;
+
             const item = menu.menu!.item;
-            menu.close();
+
             if (id === "open") {
               const index = items.findIndex((it) => it.id === item.id);
               if (index >= 0) wall.open(index);
@@ -420,7 +420,7 @@ export default function Picks({
                   pushToast({ kind: "error", message: "移出精选失败" }),
                 );
             }
-          }}
+}}))}
           onClose={menu.close}
         />
       )}

@@ -5,7 +5,7 @@ import YearTimeline from "./YearTimeline";
 import { useAppModeStore } from "../../store/appModeStore";
 import type { TimelineYear } from "../../api/library";
 import type { YearGroup } from "../../utils/albumGrouping";
-import type { CardData } from "../album/AlbumCard";
+import type { CardData } from "../../features/library/AlbumTile";
 
 const { navigate } = vi.hoisted(() => ({ navigate: vi.fn() }));
 
