@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -389,7 +390,7 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer approximateResponse.Body.Close()
-	var approximateBody struct {
+	type matchResponse struct {
 		Results []struct {
 			Item struct {
 				ID string `json:"id"`
@@ -398,6 +399,7 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 		} `json:"results"`
 		Total int `json:"total"`
 	}
+	var approximateBody matchResponse
 	if approximateResponse.StatusCode != fiber.StatusOK {
 		t.Fatalf("approximate OCR search status = %d", approximateResponse.StatusCode)
 	}
@@ -406,6 +408,22 @@ func TestSemanticSearchAPIUsesCurrentIndexedResources(t *testing.T) {
 	}
 	if approximateBody.Total != 1 || len(approximateBody.Results) != 1 || approximateBody.Results[0].Item.ID != secondID || len(approximateBody.Results[0].MatchReasons) != 1 || approximateBody.Results[0].MatchReasons[0] != "ocr_approximate" {
 		t.Fatalf("approximate OCR search response = %+v", approximateBody)
+	}
+	// 交集也使用倒排候选：近似命中的照片仍应同时标出语义和 OCR 原因。
+	intersection := httptest.NewRequest("POST", "/api/ai/search", strings.NewReader(`{"text":"蓝色山景","ocrText":"中关村科技园","matchMode":"all","kind":"photo"}`))
+	intersection.Header.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+	intersectionResponse, err := app.Test(intersection, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer intersectionResponse.Body.Close()
+	var intersectionBody matchResponse
+	if err := json.NewDecoder(intersectionResponse.Body).Decode(&intersectionBody); err != nil {
+		t.Fatal(err)
+	}
+	if intersectionResponse.StatusCode != fiber.StatusOK || intersectionBody.Total != 1 || len(intersectionBody.Results) != 1 ||
+		intersectionBody.Results[0].Item.ID != secondID || !slices.Equal(intersectionBody.Results[0].MatchReasons, []string{"semantic", "ocr_approximate"}) {
+		t.Fatalf("intersection search response = %+v", intersectionBody)
 	}
 	albumID := catalog.ExternalID(albumPath, services.ResourceAlbum)
 	if _, err := prefs.AddFavorite(albumID); err != nil {

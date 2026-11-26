@@ -197,11 +197,10 @@ func SemanticSearchHandler(
 				embeddingRecords[record.ResourceID] = record
 			}
 		}
-		ocrRecords := make(map[string]services.AIAnalysisRecord)
+		var ocrRecords map[string]services.AIAnalysisRecord
 		if request.OCRText != "" {
-			for _, record := range jobs.Records(services.AIJobTypeOCR) {
-				ocrRecords[record.ResourceID] = record
-			}
+			// 联合检索只需核对倒排索引选中的文字，语义候选仍独立参与排序。
+			ocrRecords = jobs.RecordsForResources(services.AIJobTypeOCR, ocrIndex.Candidates(request.OCRText))
 		}
 		metadataRecords := make(map[string]services.AIAnalysisRecord)
 		if request.Year != "" || request.Adcode > 0 {
@@ -246,8 +245,8 @@ func SemanticSearchHandler(
 			}
 		}
 		if request.OCRText != "" && (!semanticQuery || matchAny) {
-			for _, resourceID := range ocrIndex.Candidates(request.OCRText) {
-				if record, exists := ocrRecords[resourceID]; exists && record.Status == "recognized" && record.ModuleVersion == services.OCRAnalyzerVersion {
+			for resourceID, record := range ocrRecords {
+				if record.Status == "recognized" && record.ModuleVersion == services.OCRAnalyzerVersion {
 					if _, exists := candidateByID[resourceID]; !exists {
 						candidateByID[resourceID] = services.VectorMetadata{ResourceID: resourceID, Size: record.Size, MTimeNs: record.MTimeNs}
 					}
