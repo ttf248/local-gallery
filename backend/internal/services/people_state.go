@@ -156,7 +156,7 @@ func clonePeopleManualState(state peopleManualState) peopleManualState {
 // 纠错的字段清单只有这一份：复制、归一化、备份恢复都从这里取。
 func clonePeopleCorrectionProfile(profile PeopleCorrectionProfile) PeopleCorrectionProfile {
 	return PeopleCorrectionProfile{
-		Version: profile.Version, Names: cloneMap(profile.Names),
+		PortraitFaces: cloneMap(profile.PortraitFaces), Version: profile.Version, Names: cloneMap(profile.Names),
 		Hidden: cloneMap(profile.Hidden), Assignments: cloneMap(profile.Assignments),
 		PinnedFaces:     cloneMap(profile.PinnedFaces),
 		RetainedGroups:  cloneMap(profile.RetainedGroups),
@@ -428,6 +428,7 @@ func (s *PeopleService) Clear() error {
 	s.comparisons = 0
 	s.matchRelations = nil
 	s.matchRelationsStale = true
+	s.portraits = nil
 	s.manual = emptyPeopleManualState()
 	s.manualByModel = make(map[string]peopleManualState)
 	for _, model := range []string{FaceModelQualityV2, FaceModelBuffaloM} {

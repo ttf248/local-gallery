@@ -180,6 +180,8 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	api.Use(safety)
 	api.Get("/people", PeopleHandler(people, jobs, catalog, safetyState.Validate))
 	api.Delete("/people", PeopleHandler(people, jobs, catalog, safetyState.Validate))
+	api.Get("/people/:id/portraits", PortraitChoices(people))
+	api.Put("/people/:id/portraits", PortraitChoices(people))
 	api.Get("/people/:id/media", PersonMediaHandler(people, jobs, catalog, dimensions, safetyState.Validate))
 	api.Put("/people/:id", PersonHandler(people))
 	api.Post("/people/merge", PeopleMergeHandler(people))
@@ -221,6 +223,28 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 		t.Fatalf("similar faces were not grouped: %+v", listBody.People)
 	}
 
+	choicePath := "/api/people/" + repeated.ID + "/portraits"
+	var choices struct{ Choices []services.PortraitOption }
+	decodePeopleBody(t, peopleHandlerRequest(t, app, fiber.MethodGet, choicePath, ""), &choices)
+	if len(choices.Choices) != 6 {
+		t.Fatalf("unexpected choices %v", choices)
+	}
+	selected := choices.Choices[1]
+	body, _ := json.Marshal(map[string]string{"key": selected.Key})
+	resp := peopleHandlerRequest(t, app, fiber.MethodPut, choicePath, string(body))
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("set portrait returned %d", resp.StatusCode)
+	}
+	group, _, _ := people.GroupAndFaces(repeated.ID)
+	if group.PortraitURL != selected.URL {
+		t.Fatal("saved portrait differs from preview")
+	}
+	resp = peopleHandlerRequest(t, app, fiber.MethodPut, choicePath, `{"key":""}`)
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatal("restore auto failed")
+	}
 	mediaPath := "/api/people/" + repeated.ID + "/media"
 	media := peopleHandlerRequest(t, app, fiber.MethodGet, mediaPath, "")
 	mediaData, err := io.ReadAll(media.Body)
@@ -496,6 +520,11 @@ func TestPeopleHTTPListReturnsTop50ByPhotoCount(t *testing.T) {
 		t.Fatalf("returned photo-count range = %d..%d", listBody.People[0].PhotoCount, listBody.People[49].PhotoCount)
 	}
 
+	var next struct{ People []services.PersonGroup }
+	decodePeopleBody(t, peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people?offset=50", ""), &next)
+	if len(next.People) != listBody.TotalGroups-50 || next.People[0].PhotoCount >= listBody.People[49].PhotoCount {
+		t.Fatal("incorrect second page")
+	}
 	var target services.PersonGroup
 	for _, group := range people.Groups(true) {
 		if group.PhotoCount == 1 {

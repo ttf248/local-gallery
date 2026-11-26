@@ -197,7 +197,7 @@ func (s *AIJobService) loadState() error {
 		settingsChanged = true
 	}
 	if !s.settings.PeopleEnabled {
-		modules := withoutModule(s.settings.DailyModules, AIJobTypeFace)
+		modules := withoutModule(withoutModule(s.settings.DailyModules, AIJobTypeFace), AIJobTypePortrait)
 		if len(modules) != len(s.settings.DailyModules) {
 			s.settings.DailyModules = modules
 			settingsChanged = true
@@ -278,7 +278,7 @@ func (s *AIJobService) recoverInterruptedJobs() {
 			job.Total = minimumTotal
 			changed = true
 		}
-		if job.Type == AIJobTypeFace && !s.settings.PeopleEnabled && isAIJobActive(job.Status) {
+		if (job.Type == AIJobTypeFace || job.Type == AIJobTypePortrait) && !s.settings.PeopleEnabled && isAIJobActive(job.Status) {
 			job.Status = AIJobStatusCancelled
 			job.Stage = string(AIJobStatusCancelled)
 			job.Error = ErrPeopleAnalysisDisabled.Error()

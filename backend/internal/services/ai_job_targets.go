@@ -49,7 +49,7 @@ const (
 // aiTargetFilterForModule 返回模块对应的目标口径。
 func aiTargetFilterForModule(moduleType string) aiTargetFilter {
 	switch moduleType {
-	case AIJobTypeFace, AIJobTypeSimilarity:
+	case AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity:
 		return aiTargetPhotoOnly
 	default:
 		return aiTargetAllImages

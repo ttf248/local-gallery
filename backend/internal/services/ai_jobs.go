@@ -206,7 +206,7 @@ func probeAnalyzerReady(ctx context.Context, analyzer AIAnalyzer, moduleType, fa
 	if analyzer == nil {
 		return ErrAIAnalyzerUnavailable
 	}
-	if moduleType == AIJobTypeFace {
+	if moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait {
 		if _, ok := analyzer.(AIAnalyzerModelReadiness); ok {
 			return probeAnalyzerModelReady(ctx, analyzer, faceModel)
 		}
@@ -567,7 +567,7 @@ func (s *AIJobService) startAnalysis(moduleType, mode, albumID string, resourceI
 			return AIJob{}, false, err
 		}
 	}
-	if moduleType == AIJobTypeFace && !s.PeopleEnabled() {
+	if (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) && !s.PeopleEnabled() {
 		return AIJob{}, false, ErrPeopleAnalysisDisabled
 	}
 	analyzer, exists := s.analyzers[moduleType]
@@ -578,7 +578,7 @@ func (s *AIJobService) startAnalysis(moduleType, mode, albumID string, resourceI
 		return AIJob{}, false, errors.New("unknown analysis module")
 	}
 	faceModel := DefaultFaceModel
-	if moduleType == AIJobTypeFace {
+	if moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait {
 		faceModel = s.FaceModel()
 	}
 	if available, _ := aiAnalyzerAvailabilityForModel(analyzer, faceModel); !available {
@@ -599,13 +599,13 @@ func (s *AIJobService) startAnalysis(moduleType, mode, albumID string, resourceI
 	if s.closed {
 		return AIJob{}, false, errAIJobServiceClosed
 	}
-	if moduleType == AIJobTypeFace && s.settings.FaceModel != faceModel {
+	if (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) && s.settings.FaceModel != faceModel {
 		return AIJob{}, false, ErrAIJobActive
 	}
 	if s.dailyPlanActive {
 		return AIJob{}, false, ErrAIJobActive
 	}
-	if moduleType == AIJobTypeFace && !s.settings.PeopleEnabled {
+	if (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) && !s.settings.PeopleEnabled {
 		return AIJob{}, false, ErrPeopleAnalysisDisabled
 	}
 	if s.activeID != "" {
@@ -685,7 +685,7 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 	readyModules := make([]string, 0, len(moduleTypes))
 	skippedModules := make([]AIJobModule, 0)
 	for _, moduleType := range moduleTypes {
-		if moduleType == AIJobTypeFace && !peopleEnabled {
+		if (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) && !peopleEnabled {
 			skippedModules = append(skippedModules, AIJobModule{
 				Type: moduleType, Name: aiJobModuleName(moduleType), Reason: "people_analysis_disabled",
 			})
@@ -1138,6 +1138,9 @@ func (s *AIJobService) List() AIJobSnapshot {
 // modulesLocked 列出全部已知分析模块及其安装情况。
 func (s *AIJobService) modulesLocked() []AIJobModule {
 	known := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
+	if s.analyzers[AIJobTypePortrait] != nil {
+		known = append(known, AIJobTypePortrait)
+	}
 	modules := make([]AIJobModule, 0, len(known))
 	for _, moduleType := range known {
 		module := AIJobModule{Type: moduleType, Name: aiJobModuleName(moduleType)}
@@ -1165,14 +1168,14 @@ func aiAnalyzerAvailability(analyzer AIAnalyzer) (bool, string) {
 }
 
 func aiAnalyzerAvailabilityForModel(analyzer AIAnalyzer, model string) (bool, string) {
-	if availability, ok := analyzer.(AIAnalyzerModelAvailability); ok && analyzer.Type() == AIJobTypeFace {
+	if availability, ok := analyzer.(AIAnalyzerModelAvailability); ok && (analyzer.Type() == AIJobTypeFace || analyzer.Type() == AIJobTypePortrait) {
 		return availability.AvailableForModel(model)
 	}
 	return aiAnalyzerAvailability(analyzer)
 }
 
 func aiAnalyzerVersion(analyzer AIAnalyzer, model string) string {
-	if versioner, ok := analyzer.(AIAnalyzerModelVersion); ok && analyzer.Type() == AIJobTypeFace {
+	if versioner, ok := analyzer.(AIAnalyzerModelVersion); ok && (analyzer.Type() == AIJobTypeFace || analyzer.Type() == AIJobTypePortrait) {
 		if version, valid := versioner.VersionForModel(model); valid {
 			return version
 		}
@@ -1189,6 +1192,8 @@ func aiJobModuleName(moduleType string) string {
 		return "向量索引"
 	case AIJobTypeOCR:
 		return "文字识别"
+	case AIJobTypePortrait:
+		return "精选人物头像"
 	case AIJobTypeFace:
 		return "人脸识别"
 	case AIJobTypeSimilarity:
@@ -1235,7 +1240,7 @@ func (s *AIJobService) SetFaceModel(model string) (AIJobSettings, error) {
 	if s.closed {
 		return AIJobSettings{}, errAIJobServiceClosed
 	}
-	if s.dailyPlanActive || hasActiveAIJobType(s.jobs, AIJobTypeFace) {
+	if s.dailyPlanActive || (hasActiveAIJobType(s.jobs, AIJobTypeFace) || hasActiveAIJobType(s.jobs, AIJobTypePortrait)) {
 		return AIJobSettings{}, ErrAIJobActive
 	}
 	if s.settings.FaceModel == model {
@@ -1264,13 +1269,13 @@ func (s *AIJobService) SetPeopleEnabled(enabled bool) (AIJobSettings, error) {
 	if s.closed {
 		return AIJobSettings{}, errAIJobServiceClosed
 	}
-	if !enabled && hasActiveAIJobType(s.jobs, AIJobTypeFace) {
+	if !enabled && (hasActiveAIJobType(s.jobs, AIJobTypeFace) || hasActiveAIJobType(s.jobs, AIJobTypePortrait)) {
 		return AIJobSettings{}, ErrAIJobActive
 	}
 	previous := s.copySettingsLocked()
 	s.settings.PeopleEnabled = enabled
 	if !enabled {
-		s.settings.DailyModules = withoutModule(s.settings.DailyModules, AIJobTypeFace)
+		s.settings.DailyModules = withoutModule(withoutModule(s.settings.DailyModules, AIJobTypeFace), AIJobTypePortrait)
 	}
 	if err := s.persistLocked(); err != nil {
 		s.settings = previous
@@ -1433,7 +1438,7 @@ func (s *AIJobService) closeAnalyzers() {
 func (s *AIJobService) newJobLocked(moduleType, mode string) AIJob {
 	now := s.now()
 	faceModel := ""
-	if moduleType == AIJobTypeFace {
+	if moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait {
 		faceModel = s.settings.FaceModel
 		if faceModel == "" {
 			faceModel = DefaultFaceModel
@@ -1578,7 +1583,7 @@ func isAIJobActive(status string) bool {
 
 func validAIJobType(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity:
+	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity:
 		return true
 	default:
 		return false
@@ -1591,7 +1596,7 @@ func validAIJobType(moduleType string) bool {
 // 用标准库算，强制 GPU 只会让它们因为没有 CUDA 环境而失败。
 func aiJobModuleUsesGPU(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace:
+	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait:
 		return true
 	default:
 		return false
@@ -1600,7 +1605,7 @@ func aiJobModuleUsesGPU(moduleType string) bool {
 
 // aiJobTypeNeedsImageConversion 判断分析模块是否需要先把 HEIC 转成 JPEG。
 func aiJobTypeNeedsImageConversion(moduleType string) bool {
-	return moduleType == AIJobTypeFace || moduleType == AIJobTypeSimilarity
+	return (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) || moduleType == AIJobTypeSimilarity
 }
 
 // aiJobAnalysisMaxDimension 返回格式转换时保留的最大边长。

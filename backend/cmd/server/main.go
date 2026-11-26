@@ -331,7 +331,7 @@ func main() {
 		Catalog:        resourceCatalog,
 		ValidatePath:   safetyState.Validate,
 		ImageConverter: imageConverter,
-		Analyzers:      []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, services.SimilarityAnalyzer{}},
+		Analyzers:      []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, &services.PortraitAnalyzer{FaceAnalyzer: faceAnalyzer, People: peopleService}, services.SimilarityAnalyzer{}},
 		OnJobSettled: func(jobType string) {
 			// 人脸任务收尾时整体重建一次人物分组：
 			// 任务期间是按批次增量攒的，分组结果与批次到达顺序有关。
@@ -347,6 +347,7 @@ func main() {
 				log.Printf("更新 OCR 搜索索引失败: %v", indexErr)
 			}
 			if aiJobs != nil && aiJobs.PeopleEnabled() {
+				peopleService.ApplyPortraits(records)
 				if indexErr := peopleService.ApplyRecords(records); indexErr != nil {
 					log.Printf("更新人物索引失败: %v", indexErr)
 				}
@@ -392,7 +393,9 @@ func main() {
 		log.Printf("重建 OCR 搜索索引失败: %v", err)
 	}
 	syncPeopleRecords := func() error {
-		return peopleService.Sync(aiJobs.Records(services.AIJobTypeFace))
+		err := peopleService.Sync(aiJobs.Records(services.AIJobTypeFace))
+		peopleService.ApplyPortraits(aiJobs.Records(services.AIJobTypePortrait))
+		return err
 	}
 	peopleSynced := false
 	if aiJobs.PeopleEnabled() && resourceCatalog.Acquire().Ready() {
@@ -633,6 +636,9 @@ func main() {
 	api.Get("/tags", handlers.LibraryTagsPageHandler(resourceCatalog))
 	api.Post("/tags/query", handlers.LibraryTagsQueryHandler(resourceCatalog))
 	api.Get("/tags/:tag/albums", handlers.TagAlbumsPageHandler(resourceCatalog))
+	api.Get("/people/:id/portraits", handlers.PortraitChoices(peopleService))
+	api.Put("/people/:id/portraits", handlers.PortraitChoices(peopleService))
+	api.Get("/thumbs/:id/portrait/:person/:index", resourceParam, handlers.PortraitImage(peopleService, thumbs))
 	api.Get("/thumbs/:id", resourceParam, handlers.ThumbHandler(thumbs))
 	api.Post("/thumbs/cleanup", handlers.ThumbCleanupHandlerWithCacheStats(thumbs, cacheStats))
 	// 统一清空入口:scope=thumbs|faststart|transcode|all。

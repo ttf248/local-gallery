@@ -1248,7 +1248,8 @@ def portrait_quality(detection, aligned):
                  + gray[1:-1, :-2] - 4 * gray[1:-1, 1:-1])
     variance = float(laplacian.var())
     sharpness = variance / (variance + 100.0)
-    return round(0.65 * frontal + 0.35 * sharpness, 4)
+    exposure = float(((gray > 22) & (gray < 238)).mean())
+    return round((0.65 * frontal + 0.35 * sharpness) * (0.45 + 0.55 * exposure), 4)
 
 
 def analyze_face_image(
@@ -1317,6 +1318,8 @@ def analyze_face_image(
                     "box": [x, y, box_width, box_height],
                     "score": float(detection[-1]),
                     "portraitQuality": portrait_quality(detection, aligned),
+                    "eyeCenter": [float(detection[4] + detection[6]) * 0.5 * scale_x,
+                                  float(detection[5] + detection[7]) * 0.5 * scale_y],
                     "embedding": embedding,
                 })
                 if len(faces) == face_limit:

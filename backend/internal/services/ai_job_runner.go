@@ -119,6 +119,9 @@ func (s *AIJobService) run(id string, runtimeState *aiJobRuntime) {
 	} else {
 		targets = s.buildTargets(runtimeState.ctx, snapshot, filter, albumID)
 	}
+	if portraits, ok := analyzer.(*PortraitAnalyzer); ok {
+		targets = portraits.targets(targets)
+	}
 	digest := digestAITargets(targets, albumID)
 	candidates, err := s.selectTargets(id, targets, digest)
 	if err != nil {

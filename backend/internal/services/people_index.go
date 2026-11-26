@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 )
 
@@ -124,6 +125,10 @@ func (s *PeopleService) restoreAssignmentsLocked(faces map[string]PersonFace) {
 // 增量攒出来的分组与批次到达顺序有关。任务收尾时整体重建一次
 // （FinalizeRebuild），结果就与顺序无关了。
 func (s *PeopleService) ApplyRecords(records []AIAnalysisRecord) error {
+	// 每个任务批次仅包含一种分析结果；非人脸批次无需复制整个人物索引。
+	if !slices.ContainsFunc(records, func(r AIAnalysisRecord) bool { return r.Type == AIJobTypeFace }) {
+		return nil
+	}
 	s.persistMu.Lock()
 	defer s.persistMu.Unlock()
 	s.mu.RLock()

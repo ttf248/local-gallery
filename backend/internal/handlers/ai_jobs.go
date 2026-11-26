@@ -326,6 +326,7 @@ func AIJobSettingsHandler(service *services.AIJobService, people *services.Peopl
 			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_settings", "daily plan settings are invalid")
 		}
 		if settings.PeopleEnabled && !peopleWasEnabled && people != nil {
+			people.ApplyPortraits(service.Records(services.AIJobTypePortrait))
 			if err := people.Sync(service.Records(services.AIJobTypeFace)); err != nil {
 				return writeError(c, fiber.StatusInternalServerError, "people_index_unavailable", "people index could not be prepared")
 			}

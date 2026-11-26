@@ -105,6 +105,7 @@ type PersonFace struct {
 	Score           float32   `json:"score"`
 	Size            int64     `json:"-"`
 	MTimeNs         int64     `json:"-"`
+	portraitEyes    []float32
 	portraitQuality *float32
 	embedding       []float32
 	recordHash      string
@@ -125,6 +126,8 @@ type PersonCoverFace struct {
 }
 
 type PersonGroup struct {
+	firstResource   string
+	PortraitURL     string `json:"portraitUrl,omitempty"`
 	coverKey        string
 	coverScore      float64
 	ID              string `json:"id"`
@@ -175,6 +178,7 @@ type PeopleAlbumGroup struct {
 // PeopleCorrectionProfile 是一套人物纠错：命名、隐藏、人工分配、
 // 钉住的脸、保留的分组与排除的匹配对。
 type PeopleCorrectionProfile struct {
+	PortraitFaces   map[string]string      `json:"portraitFaces,omitempty"`
 	Version         int                    `json:"version"`
 	Names           map[string]string      `json:"names"`
 	Hidden          map[string]bool        `json:"hidden"`
@@ -244,6 +248,7 @@ type peopleClusterAnchor struct {
 // PeopleService keeps a rebuildable face grouping index separate from the small
 // user-owned names, visibility flags, and corrections stored under state/.
 type PeopleService struct {
+	portraits          map[string]portraitEvidence
 	mu                 sync.RWMutex
 	persistMu          sync.Mutex
 	statePath          string
@@ -345,6 +350,7 @@ func (s *PeopleService) SetFaceAnalyzerVersion(version string) error {
 		for key, face := range s.faces {
 			s.previousIDs[key] = face.PersonID
 		}
+		s.portraits = nil
 		s.faceModelVersion = version
 		s.embeddingDimension = dimension
 		s.cachedIDs = nil

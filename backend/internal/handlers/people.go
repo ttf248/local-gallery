@@ -202,6 +202,9 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 				}
 				return writeError(c, fiber.StatusInternalServerError, "people_clear_failed", "people analysis could not be disabled")
 			}
+			if err := jobs.ClearModuleRecords(services.AIJobTypePortrait); err != nil {
+				return writeError(c, 500, "portrait_clear_failed", "头像清除失败")
+			}
 			if err := jobs.ClearModuleRecords(services.AIJobTypeFace); err != nil {
 				return writeError(c, fiber.StatusInternalServerError, "people_clear_failed", "face analysis data could not be cleared")
 			}
@@ -217,6 +220,10 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		}
 		if sortOrder != peopleSortPhotos && sortOrder != peopleSortReview {
 			return writeError(c, fiber.StatusBadRequest, "invalid_people_sort", "sort must be photos or review")
+		}
+		offset, offsetErr := strconv.Atoi(c.Query("offset", "0"))
+		if offsetErr != nil || offset < 0 {
+			return writeError(c, 400, "invalid_offset", "invalid offset")
 		}
 		limit := peopleListLimit
 		if query != "" {
@@ -291,7 +298,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 				continue
 			}
 			visibleTotal++
-			if len(visibleGroups) < limit {
+			if visibleTotal > offset && len(visibleGroups) < limit {
 				visibleGroups = append(visibleGroups, group)
 			}
 		}

@@ -21,7 +21,7 @@ import (
 // 照片数是「出现在多少张不同的照片里」：同一张照片里同一个人的两张脸
 // 只算一张。用（分组, 照片）组成键去重，而不是给每个分组各建一张表 ——
 // 后者在一万张脸上要几万次分配，而分组列表每次请求都要算一遍。
-func peopleGroupList(
+func (s *PeopleService) peopleGroupList(
 	faces map[string]PersonFace,
 	effective func(PersonFace) string,
 	include func(resourceID, personID string) bool,
@@ -44,7 +44,7 @@ func peopleGroupList(
 			seen[key] = struct{}{}
 			group.PhotoCount++
 		}
-		group.considerCover(face)
+		s.considerPortrait(group, face)
 	}
 	return groups
 }
@@ -63,7 +63,11 @@ func (group *PersonGroup) considerCover(face PersonFace) {
 	// 旧记录只有检测分和像素。新记录还测量了正面程度和对齐人脸的细节。
 	quality := 0.75 * confidence
 	if face.portraitQuality != nil {
-		quality = 0.25*confidence + 0.75*float64(*face.portraitQuality)
+		quality = 0.2*confidence + 0.8*float64(*face.portraitQuality)
+		// 脸部短边足以填满 144px 头像后，额外像素只保留少量收益。
+		// 否则大而过曝的脸会压过尺寸足够、五官清楚的正脸。
+		usable := min(float64(min(face.Box[2], face.Box[3]))/144, 1)
+		resolution = usable * (0.85 + 0.15*resolution)
 	}
 	score := resolution * (0.35 + 0.65*quality)
 	if group.CoverFace != nil && (score < group.coverScore || score == group.coverScore && face.Key >= group.coverKey) {
@@ -86,10 +90,13 @@ func (s *PeopleService) PopulateCoverFaceSizes(groups []PersonGroup) {
 // 尺寸是按需查的（读一次图片头），所以只给**要返回给界面的**那几组补，
 // 不给全库几千个分组补。原图尺寸拿不到时留空，界面退回整张封面。
 func (s *PeopleService) fillCoverFaceSizes(groups []PersonGroup) {
-	if s.sourceDimensions == nil {
-		return
-	}
 	for i := range groups {
+		if f, ok := s.faces[groups[i].coverKey]; ok {
+			groups[i].PortraitURL = portraitURL(groups[i].ID, s.portraitFaceLocked(f))
+		}
+		if s.sourceDimensions == nil {
+			continue
+		}
 		face := groups[i].CoverFace
 		if face == nil || face.Width > 0 && face.Height > 0 {
 			continue
@@ -108,7 +115,7 @@ func (s *PeopleService) Groups(includeHidden bool) []PersonGroup {
 	defer s.mu.RUnlock()
 	ordinals := s.personOrdinalNamesLocked()
 	confirmed := peopleConfirmedPersonIDs(s.manual)
-	groups := peopleGroupList(s.faces, s.effectivePersonIDLocked, nil)
+	groups := s.peopleGroupList(s.faces, s.effectivePersonIDLocked, nil)
 	result := make([]PersonGroup, 0, len(groups))
 	for id, group := range groups {
 		group.Name = s.personNameLocked(id, ordinals)
@@ -207,7 +214,7 @@ func (s *PeopleService) RankedGroupSummaries(limit int, includeHidden bool, incl
 
 	ordinals := s.personOrdinalNamesLocked()
 	confirmed := peopleConfirmedPersonIDs(s.manual)
-	groups := peopleGroupList(s.faces, s.effectivePersonIDLocked, func(resourceID, personID string) bool {
+	groups := s.peopleGroupList(s.faces, s.effectivePersonIDLocked, func(resourceID, personID string) bool {
 		if includeResource != nil && !includeResource(resourceID) {
 			return false
 		}
@@ -316,7 +323,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 		}
 		group.FaceCount++
 		photos[id][face.ResourceID] = struct{}{}
-		group.considerCover(face)
+		s.considerPortrait(group, face)
 		if reviewOrder {
 			samples := qualitySamples[id]
 			if samples == nil {
@@ -395,7 +402,9 @@ func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFac
 		}
 		group.FaceCount++
 		photos[face.ResourceID] = struct{}{}
-		group.considerCover(face)
+		if s.sourceIsPhoto == nil || s.sourceIsPhoto(face.ResourceID) {
+			s.considerPortrait(&group, face)
+		}
 		face.PersonID = personID
 		face.embedding = nil
 		face.recordHash = ""
@@ -405,7 +414,9 @@ func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFac
 		return PersonGroup{}, nil, false
 	}
 	group.PhotoCount = len(photos)
-	s.fillCoverFaceSizes([]PersonGroup{group})
+	page := []PersonGroup{group}
+	s.fillCoverFaceSizes(page)
+	group = page[0]
 	sort.Slice(faces, func(i, j int) bool {
 		if faces[i].ResourceID == faces[j].ResourceID {
 			return faces[i].FaceIndex < faces[j].FaceIndex
@@ -528,8 +539,9 @@ func peopleGroupRanksBefore(left, right PersonGroup) bool {
 	if left.PhotoCount != right.PhotoCount {
 		return left.PhotoCount > right.PhotoCount
 	}
-	if left.CoverResourceID != right.CoverResourceID {
-		return left.CoverResourceID < right.CoverResourceID
+
+	if left.firstResource != right.firstResource {
+		return left.firstResource < right.firstResource
 	}
 	return left.ID < right.ID
 }

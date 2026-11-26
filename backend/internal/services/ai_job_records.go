@@ -99,7 +99,7 @@ func rewriteAIBatchWithout(path string, removed map[string]struct{}) error {
 
 // ClearModuleRecords removes a module's batch files and in-memory results.
 func (s *AIJobService) ClearModuleRecords(moduleType string) error {
-	if moduleType != AIJobTypeFace {
+	if moduleType != AIJobTypeFace && moduleType != AIJobTypePortrait {
 		return errors.New("only face analysis data can be cleared independently")
 	}
 	s.mu.Lock()
@@ -440,6 +440,9 @@ func cloneRecords(records []AIAnalysisRecord) []AIAnalysisRecord {
 }
 
 func aiRecordKeyForVersion(moduleType, version, resourceID string) string {
+	if moduleType == AIJobTypePortrait {
+		return moduleType + "\x00" + version + "\x00" + resourceID
+	}
 	if moduleType != AIJobTypeFace {
 		return aiRecordKey(moduleType, resourceID)
 	}

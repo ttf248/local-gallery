@@ -146,6 +146,18 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	estimate.TotalImages = len(targets.stats)
 	targetCounts := make(map[string]int, len(modules))
 	for _, module := range modules {
+		if module.Type == AIJobTypePortrait {
+			if a, ok := s.analyzers[module.Type].(*PortraitAnalyzer); ok {
+				a.People.mu.RLock()
+				for id := range a.People.facesByResource {
+					if stat, ok := targets.stats[id]; ok && stat.photo {
+						targetCounts[module.Type]++
+					}
+				}
+				a.People.mu.RUnlock()
+			}
+			continue
+		}
 		if aiTargetFilterForModule(module.Type) == aiTargetPhotoOnly {
 			targetCounts[module.Type] = targets.photoCount
 		} else {
@@ -193,7 +205,7 @@ func estimateModules(modules []AIJobModule, peopleEnabled bool, targetCounts map
 			Reason:    module.Reason,
 			Version:   module.Version,
 		}
-		if module.Type == AIJobTypeFace && !peopleEnabled {
+		if (module.Type == AIJobTypeFace || module.Type == AIJobTypePortrait) && !peopleEnabled {
 			entry.Available = false
 			entry.Reason = "people_analysis_disabled"
 		}
@@ -243,7 +255,7 @@ func estimateSequence(modules []AIJobEstimateModule) AIJobEstimateSequence {
 		duration := int64(0)
 		durationKnown := true
 		for _, module := range modules {
-			if !module.Available {
+			if !module.Available || module.Type == AIJobTypePortrait {
 				continue
 			}
 			entry := mode.pick(module)

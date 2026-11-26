@@ -39,11 +39,11 @@ func (s *AIJobService) ConfigureDaily(
 	if s.closed {
 		return AIJobSettings{}, errAIJobServiceClosed
 	}
-	if !peopleEnabled && hasActiveAIJobType(s.jobs, AIJobTypeFace) {
+	if !peopleEnabled && (hasActiveAIJobType(s.jobs, AIJobTypeFace) || hasActiveAIJobType(s.jobs, AIJobTypePortrait)) {
 		return AIJobSettings{}, ErrAIJobActive
 	}
 	if !peopleEnabled {
-		dailyModules = withoutModule(dailyModules, AIJobTypeFace)
+		dailyModules = withoutModule(withoutModule(dailyModules, AIJobTypeFace), AIJobTypePortrait)
 	}
 	modules, err := s.normalizeDailyModulesLocked(dailyModules, enabled && !dailyScan && !dailySmartAlbums)
 	if err != nil {
@@ -95,7 +95,7 @@ func (s *AIJobService) normalizeDailyModulesLocked(modules []string, enabled boo
 		selected[moduleType] = struct{}{}
 	}
 	ordered := make([]string, 0, len(selected))
-	for _, moduleType := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity} {
+	for _, moduleType := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity} {
 		if _, exists := selected[moduleType]; exists {
 			ordered = append(ordered, moduleType)
 		}
@@ -300,7 +300,7 @@ func (s *AIJobService) enqueueScheduledModules(modules []string) ([]string, erro
 	previousQueue := append([]string(nil), s.queue...)
 	created := make([]string, 0, len(modules))
 	for _, moduleType := range modules {
-		if moduleType == AIJobTypeFace && !s.settings.PeopleEnabled {
+		if (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) && !s.settings.PeopleEnabled {
 			continue
 		}
 		if _, installed := s.analyzers[moduleType]; !installed {
