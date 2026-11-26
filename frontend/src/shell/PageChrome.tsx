@@ -8,12 +8,13 @@ import {
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type ReactElement,
 } from "react";
 export interface PageChromeConfig {
   title: string;
   backTo?: string | (() => string);
   actions?: ReactNode;
-  search?: "global" | "none";
+  search?: "global" | "none" | ReactElement;
 }
 type State = PageChromeConfig & { titleCollapsed: boolean };
 const empty: State = { title: "", titleCollapsed: true };

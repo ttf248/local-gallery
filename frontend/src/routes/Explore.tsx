@@ -1,15 +1,17 @@
-import { Link } from "react-router-dom";
-import { PageHeader } from "../shell/PageHeader";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { SearchToolbar } from "../features/search/SearchToolbar";
+import { SEARCH_SCOPE_PARAM, type SearchScope } from "../utils/searchScope";
+import { searchRoute } from "../utils/path";
+import { LIST_PARAM } from "../utils/listFilterParams";
 import EmptyState from "../features/common/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
-import ExploreSearch from "../features/explore/ExploreSearch";
 import YearRibbon from "../features/explore/YearRibbon";
 import PeopleRow from "../features/explore/PeopleRow";
 import PlaceCards from "../features/explore/PlaceCards";
 import ThemeCards from "../features/explore/ThemeCards";
 import { useLibraryManifest } from "../hooks/useLibrary";
 import { Page } from "../shell/Page";
-import { useMediaFeed } from "../hooks/useMediaFeed";
 
 export default function Explore() {
   const manifestQuery = useLibraryManifest();
@@ -17,29 +19,29 @@ export default function Explore() {
   const photoAlbumCount = manifest?.statistics.photoAlbumCount ?? 0;
   const comicAlbumCount = manifest?.statistics.comicAlbumCount ?? 0;
 
-  const timeline = useMediaFeed(
-    { kind: "photo", scope: "timeline" },
-    photoAlbumCount > 0,
-  );
+  const navigate = useNavigate();
+  const [scope, setScope] = useState<SearchScope>("name");
   return (
     <Page
       variant="standard"
       className="page-shell explore-page min-h-full pb-12"
     >
-      <PageHeader
+      <SearchToolbar
         title="发现"
-        meta={
-          photoAlbumCount > 0
-            ? timeline.total
-              ? "在 " +
-                timeline.total.toLocaleString("zh-CN") +
-                " 项照片与视频里，按人、地点、时间或画面找。"
-              : "按人、地点、时间或画面找照片。"
-            : undefined
-        }
+        photo
+        scope={scope}
+        onScopeChange={setScope}
+        onSubmit={(query) => {
+          const params = new URLSearchParams({ [LIST_PARAM.query]: query });
+          if (scope === "content") params.set(SEARCH_SCOPE_PARAM, scope);
+          navigate(searchRoute("photo") + "?" + params);
+        }}
       />
       {manifestQuery.isLoading && !manifest ? (
-        <section className="page-section pt-[var(--section-gap)]" aria-live="polite">
+        <section
+          className="page-section pt-[var(--section-gap)]"
+          aria-live="polite"
+        >
           <p className="text-body text-fg-muted">正在读取照片库信息…</p>
         </section>
       ) : null}
@@ -94,7 +96,6 @@ export default function Explore() {
 
       {manifest && photoAlbumCount > 0 ? (
         <>
-          <ExploreSearch />
           <PeopleRow />
           <PlaceCards />
           <YearRibbon />

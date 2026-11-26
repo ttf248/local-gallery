@@ -143,17 +143,13 @@ export default function ContentSearchResults({
           title="搜索失败"
           description={semanticErrorMessage(submittedQuery.error)}
           action={
-            /* 页面自己已经给了「重新搜索」（传了 onRetry）就不再补一枚：
-               同一屏上两个同名的按钮会让人以为它们是两件事。 */
-            onRetry ? undefined : (
-              <button
-                type="button"
-                className="btn btn-outline"
-                onClick={() => void submittedQuery.refetch()}
-              >
-                重新搜索
-              </button>
-            )
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={onRetry ?? (() => void submittedQuery.refetch())}
+            >
+              重新搜索
+            </button>
           }
         />
         {viewer ? (

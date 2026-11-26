@@ -851,7 +851,7 @@ async function main() {
           await page.waitForTimeout(900);
         }
         await page
-          .locator("main .page-shell, .reader-shell")
+          .locator("main [data-page], main .page-shell, .reader-shell")
           .first()
           .waitFor({ state: "visible", timeout: 20000 });
         let m = await page.evaluate(MEASURE, {

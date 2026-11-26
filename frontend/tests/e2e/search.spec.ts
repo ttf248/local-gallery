@@ -38,8 +38,8 @@ test("命令面板回车进入可见的结果页", async ({ page, request }) => 
   // 回车落到结果页，而不是回到一个不显示结果的首页。
   await expect(page).toHaveURL(/\/photo\/search\?q=/);
   await expect(
-    page.getByRole("heading", { name: "「"+keyword+"」", level: 1 }),
-  ).toBeVisible();
+    page.getByRole("searchbox", { name: "搜索" }),
+  ).toHaveValue(keyword);
   await expect(page.getByText(/共 \d+ 项/).first()).toBeVisible();
   // 结果上写着类型与来源。
   await expect(page.getByTestId("album-card").first()).toBeVisible();

@@ -40,12 +40,17 @@ export default function YearRibbon() {
       ) : query.isPending ? (
         <PreviewSkeleton label="正在读取年份索引…" shape="year" />
       ) : query.years.length > 0 ? (
-        <ScrollRow label="按年份浏览" gap={0} data-testid="year-timeline">
+        <ScrollRow
+          label="按年份浏览"
+          gap={0}
+          data-testid="year-timeline"
+          style={{ maskImage: "none" }}
+        >
           {query.years.map((year) => (
             <button
               key={year.year}
               type="button"
-              className="group/year flex h-[72px] w-28 shrink-0 flex-col justify-center border-l border-line px-3 text-left first:border-l-0"
+              className="group/year flex h-[72px] w-28 shrink-0 flex-col justify-center border-l border-line bg-bg px-3 text-left first:border-l-0"
               onClick={() => navigate("/photo?year=" + year.year)}
             >
               <span className="flex items-center gap-2 text-[28px] leading-tight text-fg-muted tabular-nums group-hover/year:text-fg">

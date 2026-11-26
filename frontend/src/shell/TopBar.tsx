@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { isValidElement, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppMode } from "../hooks/useAppMode";
 import { useSafeBack } from "../utils/navigation";
@@ -35,6 +35,7 @@ export function TopBar({
     { mode } = useAppMode(),
     { pathname } = useLocation(),
     back = useSafeBack(backTo ?? "/");
+  const localSearch = isValidElement(search);
   const routeTitle = documentTitleFor(pathname, mode),
     fullTitle =
       title && !routeTitle.startsWith(title)
@@ -47,7 +48,10 @@ export function TopBar({
     <header
       data-testid="top-bar"
       className={cx(
-        "top-bar sticky top-0 z-topbar grid h-topbar shrink-0 grid-cols-[1fr_auto_auto] items-center gap-2 border-b px-[var(--page-gutter)] lg:grid-cols-[1fr_auto_1fr]",
+        "top-bar sticky top-0 z-topbar grid h-topbar shrink-0 items-center gap-2 border-b px-[var(--page-gutter)]",
+        localSearch
+          ? "grid-cols-[auto_minmax(0,1fr)_auto]"
+          : "grid-cols-[1fr_auto_auto] lg:grid-cols-[1fr_auto_1fr]",
         scrolled ? "border-line" : "border-transparent",
       )}
     >
@@ -57,41 +61,55 @@ export function TopBar({
             <ChevronLeftIcon />
           </IconButton>
         )}
-        {titleCollapsed && (
-          <span className="truncate text-title-3">
-            {title || routeTitle.split(" · ")[0]}
-          </span>
+        {localSearch ? (
+          <h1 className="sr-only whitespace-nowrap text-title-3 sm:not-sr-only sm:mr-3">
+            {title}
+          </h1>
+        ) : (
+          titleCollapsed && (
+            <span className="truncate text-title-3">
+              {title || routeTitle.split(" · ")[0]}
+            </span>
+          )
         )}
       </div>
-      {search !== "none" && (
-        <button
-          type="button"
-          aria-label="打开命令面板"
-          aria-keyshortcuts="Control+K Meta+K /"
-          data-command-trigger
-          onClick={onSearch}
-          className="flex h-10 w-10 items-center justify-center gap-3 rounded-full text-fg-muted lg:w-[clamp(280px,32vw,520px)] lg:justify-start lg:bg-bg-subtle lg:px-4"
-        >
-          <SearchIcon />
-          <span className="hidden flex-1 text-left text-callout lg:block">
-            {mode === "photo" ? "搜索相册、画面与文字" : "搜索作品与标签"}
-          </span>
-          <span className="hidden lg:block">
-            <Kbd keys={["Mod", "K"]} />
-          </span>
-        </button>
-      )}
+      {localSearch
+        ? search
+        : search !== "none" && (
+            <button
+              type="button"
+              aria-label="打开命令面板"
+              aria-keyshortcuts="Control+K Meta+K /"
+              data-command-trigger
+              onClick={onSearch}
+              className="flex h-10 w-10 items-center justify-center gap-3 rounded-full text-fg-muted lg:w-[clamp(280px,32vw,520px)] lg:justify-start lg:bg-bg-subtle lg:px-4"
+            >
+              <SearchIcon />
+              <span className="hidden flex-1 text-left text-callout lg:block">
+                {mode === "photo" ? "搜索相册、画面与文字" : "搜索作品与标签"}
+              </span>
+              <span className="hidden lg:block">
+                <Kbd keys={["Mod", "K"]} />
+              </span>
+            </button>
+          )}
       <div className="col-end-4 flex min-w-0 items-center justify-end gap-2">
         {actions}
         <Menu
           label="更多操作"
           align="end"
           trigger={
-            <IconButton label="更多操作">
+            <IconButton
+              label="更多操作"
+              data-command-trigger={localSearch || undefined}
+            >
               <MoreHorizontalIcon />
             </IconButton>
           }
           items={[
+            ...(localSearch
+              ? [{ id: "commands", label: "打开命令面板", onSelect: onSearch }]
+              : []),
             {
               id: "shuffle",
               label: workbenchCopy(mode).randomLabel,

@@ -567,6 +567,10 @@ test("关掉大图预览后照片墙回到刚才看的那一张", async ({ page 
   const tiles = scroller.getByRole("button", { name: /^查看 / });
   await expect(tiles.first()).toBeVisible({ timeout: 15000 });
 
+  // 为非浮动滚动条留槽后，照片行仍须完整放进实际滚动宽度。
+  await page.addStyleTag({ content: "[data-virtuoso-scroller] { scrollbar-gutter: stable; }" });
+  await expect.poll(() => scroller.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+
   // 从墙的顶上打开第一张，一路翻到第四十一张。
   await tiles.first().click();
   const viewer = page.getByRole("dialog", { name: /大图预览/ });

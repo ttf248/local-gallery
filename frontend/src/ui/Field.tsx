@@ -61,6 +61,7 @@ interface SearchProps extends Omit<
   value: string;
   onChange: (value: string) => void;
   onSubmit: (value: string) => void;
+  onClear?: () => void;
   scope?: ReactNode;
   size?: "md" | "lg";
 }
@@ -70,6 +71,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
       value,
       onChange,
       onSubmit,
+      onClear = () => onChange(""),
       placeholder,
       scope,
       size = "md",
@@ -117,7 +119,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
             if (event.key === "Escape") {
               event.stopPropagation();
               event.preventDefault();
-              if (value) onChange("");
+              if (value) onClear();
               else event.currentTarget.blur();
             }
           }}
@@ -129,8 +131,9 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
               className="grid size-10 place-items-center"
               type="button"
               aria-label="清除搜索"
+              title="清除搜索"
               onClick={() => {
-                onChange("");
+                onClear();
                 input.current?.focus();
               }}
             >
@@ -140,6 +143,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
               type="button"
               className="size-10"
               aria-label="提交搜索"
+              title="提交搜索"
               onClick={() => onSubmit(value)}
             >
               ↵

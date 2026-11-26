@@ -10,6 +10,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import { aiJobsApi, type AIJob, type ChinaPlace } from "../api/aiJobs";
 import { albumsApi } from "../api/albums";
+import { WithTopBar } from "../../tests/WithTopBar";
 import Explore from "./Explore";
 
 const mocks = vi.hoisted(() => ({
@@ -179,7 +180,7 @@ function renderExplore() {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/photo/explore"]}>
-        <Explore />
+        <WithTopBar><Explore /></WithTopBar>
         <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,

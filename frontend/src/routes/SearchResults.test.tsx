@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
+import { WithTopBar } from "../../tests/WithTopBar";
 import SearchResults from "./SearchResults";
 
 const mocks = vi.hoisted(() => ({
@@ -73,7 +74,9 @@ function renderResults(entry = "/photo/search?q=旅行") {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[entry]}>
-        <SearchResults />
+        <WithTopBar>
+          <SearchResults />
+        </WithTopBar>
         <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -114,12 +117,14 @@ beforeEach(() => {
   });
 });
 
-it("名称结果说清搜的是名字，并给出返回与清除条件", async () => {
+it("名称结果在顶栏显示关键词和范围，并可返回和清除", async () => {
   renderResults();
 
-  expect(screen.getByText("正在搜相册、文件夹与标签的名字")).toBeInTheDocument();
+  expect(screen.getByRole("searchbox")).toHaveValue("旅行");
+  expect(screen.getByRole("radio", { name: "名称" })).toBeChecked();
+  expect(screen.queryByRole("button", { name: "打开命令面板" })).toBeNull();
   expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "清除条件" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "清除搜索" })).toBeInTheDocument();
   // 命中理由：用户看得到「为什么是它」。
   expect(await screen.findByText("名字以关键词开头")).toBeInTheDocument();
   expect(mocks.embeddingStatus).not.toHaveBeenCalled();
@@ -128,12 +133,10 @@ it("名称结果说清搜的是名字，并给出返回与清除条件", async (
 it("清除条件把关键词从地址里去掉", async () => {
   renderResults();
 
-  fireEvent.click(screen.getByRole("button", { name: "清除条件" }));
+  fireEvent.click(screen.getByRole("button", { name: "清除搜索" }));
 
   await waitFor(() => {
-    expect(screen.getByTestId("location")).toHaveTextContent(
-      "/photo/search",
-    );
+    expect(screen.getByTestId("location")).toHaveTextContent("/photo/search");
     expect(screen.getByTestId("location").textContent).not.toContain("q=");
   });
 });
@@ -151,9 +154,24 @@ it("切到画面与文字时换掉检索对象，并保留关键词", async () =
     expect(location.searchParams.get("scope")).toBe("content");
     expect(location.searchParams.get("q")).toBe("旅行");
   });
+  expect(screen.getByRole("radio", { name: "画面与文字" })).toBeChecked();
+});
+
+it("在内容结果上编辑、提交和重复搜索", async () => {
+  renderResults("/photo/search?q=旅行&scope=content");
+  await waitFor(() => expect(mocks.semanticSearch).toHaveBeenCalledTimes(1));
+  const input = screen.getByRole("searchbox");
+  fireEvent.change(input, { target: { value: "南昌" } });
+  expect(mocks.semanticSearch).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(input, { key: "Enter" });
+  await waitFor(() => expect(mocks.semanticSearch).toHaveBeenCalledTimes(2));
   expect(
-    screen.getByText("正在搜照片里的画面与图片文字"),
-  ).toBeInTheDocument();
+    new URLSearchParams(
+      screen.getByTestId("location").textContent?.split("?")[1],
+    ).get("q"),
+  ).toBe("南昌");
+  fireEvent.click(screen.getByRole("button", { name: "提交搜索" }));
+  await waitFor(() => expect(mocks.semanticSearch).toHaveBeenCalledTimes(3));
 });
 
 it("画面结果没有命中时说清是画面索引还没建好", async () => {
@@ -179,16 +197,15 @@ it("画面搜索失败与没有结果是两回事", async () => {
   renderResults("/photo/search?q=旅行&scope=content");
 
   expect(await screen.findByText("搜索失败")).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "重新搜索" }),
-  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "重新搜索" })).toBeInTheDocument();
 });
 
 it("没有关键词时给出去哪找的入口", () => {
   renderResults("/photo/search");
 
   expect(screen.getByText("还没有搜索")).toBeInTheDocument();
-  expect(
-    screen.getByRole("link", { name: "去发现页找东西" }),
-  ).toHaveAttribute("href", "/photo/explore");
+  expect(screen.getByRole("link", { name: "去发现页找东西" })).toHaveAttribute(
+    "href",
+    "/photo/explore",
+  );
 });

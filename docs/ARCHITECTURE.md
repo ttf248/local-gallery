@@ -556,7 +556,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 `ui/` 提供无业务依赖的原语。`shell/` 管理导航、页面容器和浮层，`features/` 按媒体业务组织组件和控制器。跨领域复用通过领域的 `index.ts` 导出。`routes/` 解析地址、连接查询并组合界面。
 
-- `PageChrome` 由页面注册标题与操作，`TopBar` 根据大标题的可见性展示收缩标题。`Page` 提供 standard、gallery、focused、split 四类宽度。
+- `PageChrome` 由页面注册标题、操作与搜索控件。发现和结果页通过同一个搜索组件向顶栏提供输入框，草稿由页面管理，已提交条件由结果页地址确定。其他页面使用全局搜索入口。`TopBar` 根据大标题的可见性展示收缩标题。`Page` 提供 standard、gallery、focused、split 四类宽度。
 - `features/timeline/sectionPacking.ts` 把稀疏月份拼成确定高度的行，虚拟列表按行挂载。密度变化以资源 ID 恢复视口锚点。相册网格按可用列宽布局，照片瀑布流用媒体真实宽高比计算位置。
 - `tokens.css` 管理明暗主题和漫画强调色，业务界面的工具类随组件维护。共用样式、阅读器暗场和地图图层分别在 `components.css`、`reader.css` 与 `map.css`。
 

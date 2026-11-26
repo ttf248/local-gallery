@@ -54,8 +54,8 @@ test("命令面板按名称进结果页，结果带命中理由", async ({ page,
   await expect(page).toHaveURL(/\/photo\/search\?q=/);
   // 结果页说清搜的是名字。
   await expect(
-    page.getByText("正在搜相册、文件夹与标签的名字"),
-  ).toBeVisible();
+    page.getByRole("radio", { name: "名称" }),
+  ).toBeChecked();
   // 每条结果写明为什么是它。
   await expect(
     page.getByText(/名字(完全相同|以关键词开头|里含有关键词)/).first(),
@@ -71,7 +71,7 @@ test("命令面板可以切到画面与文字，回车进内容结果页", async
   await search.press("Enter");
 
   await expect(page).toHaveURL(/\/photo\/search\?q=.*scope=content/);
-  await expect(page.getByText("正在搜照片里的画面与图片文字")).toBeVisible();
+  await expect(page.getByRole("radio", { name: "画面与文字" })).toBeChecked();
   // 临时库没建过画面索引：零结果要说清是索引没准备好，而不是「没有匹配」。
   await expect(
     page.getByText(/还没有建立画面索引|画面搜索还没准备好/),
@@ -98,9 +98,9 @@ test("名称结果按命中理由分组，理由不写在每张卡上", async ({
 });
 
 test("搜索结果页能清除条件回到空态", async ({ page }) => {  await page.goto("/photo/search?q=旅行");
-  await expect(page.getByRole("heading", { name: "「旅行」", level: 1 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "搜索结果", level: 1 })).toBeVisible();
 
-  await page.getByRole("button", { name: "清除条件" }).click();
+  await page.getByRole("button", { name: "清除搜索" }).click();
 
   await expect(page.getByText("还没有搜索")).toBeVisible();
   await expect(page).not.toHaveURL(/q=/);
@@ -123,13 +123,29 @@ test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({
   await expect(page.getByText(/分组只是复核线索/)).toBeHidden();
 });
 
-test("发现页的搜索入口进的是搜索结果页", async ({ page }) => {
+test("从发现提交搜索后在同一顶栏改词，后退恢复原条件", async ({ page }) => {
   await page.goto("/photo/explore");
-
-  await page.getByRole("searchbox", { name: "搜索" }).fill("旅行");
-  await page.getByRole("button", { name: "提交搜索", exact: true }).click();
-
+  const bar = page.getByTestId("top-bar");
+  const input = bar.getByRole("searchbox");
+  await expect(page.getByRole("search")).toHaveCount(1);
+  await expect(bar.getByRole("button", { name: "打开命令面板" })).toHaveCount(0);
+  await input.fill("旅行");
+  await input.press("Enter");
   await expect(page).toHaveURL(/\/photo\/search\?q=/);
+  await expect(input).toHaveValue("旅行");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("main").getByRole("radio", { name: "名称" })).toBeChecked();
+  await expect(page.getByRole("searchbox")).toHaveCount(1);
+  await input.fill("sample-album");
+  await input.press("Enter");
+  await expect(page.getByTestId("album-card").first()).toBeVisible();
+  await page.goBack();
+  await expect(input).toHaveValue("旅行");
+  await page.goBack();
+  await expect(page).toHaveURL("/photo/explore");
+  await bar.getByRole("button", { name: "更多操作" }).click();
+  await page.getByRole("menuitem", { name: "打开命令面板" }).click();
+  await expect(page.getByRole("dialog", { name: "命令面板" })).toBeVisible();
 });
 
 test("人物这一档没有分析结果时说清原因，不摆假卡", async ({ page }) => {

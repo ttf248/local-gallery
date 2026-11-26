@@ -5,8 +5,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import AlbumGrid from "../features/library/AlbumGrid";
 import EmptyState from "../features/common/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
-import { PageHeader } from "../shell/PageHeader";
-import Segmented from "../ui/Segmented";
+import { Page } from "../shell/Page";
+import { SearchToolbar } from "../features/search/SearchToolbar";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryNodeSummary } from "../api/library";
 import { useLibraryNodes } from "../hooks/useLibrary";
@@ -22,7 +22,6 @@ import {
 import { nodeSummaryToCard } from "../utils/libraryCard";
 import { collectionTypeWord } from "../utils/workbench";
 import { LIST_PARAM } from "../utils/listFilterParams";
-import { useSafeBack } from "../utils/navigation";
 import {
   SEARCH_SCOPE_PARAM,
   searchScopeFromParams,
@@ -64,11 +63,6 @@ export default function SearchResults() {
   const scope: SearchScope =
     mode === "comic" ? "name" : searchScopeFromParams(params);
   const viewMode = useUIStore((s) => s.viewMode);
-  // 返回：应用内还有历史就回退；深链直接打开时回到能确认的来路 ——
-  // 照片侧回发现页（那儿是找东西的地方），漫画侧回书架。
-  const goBack = useSafeBack(() =>
-    mode === "photo" ? exploreRoute() : libraryRoute(mode),
-  );
   const isContent = scope === "content";
   const content = useContentScope(query, isContent);
 
@@ -146,219 +140,162 @@ export default function SearchResults() {
     return list;
   }, [cards, matchLabels]);
 
-  const setScope = (next: SearchScope) => {
-    const nextParams = new URLSearchParams(params);
-    if (next === "content") nextParams.set(SEARCH_SCOPE_PARAM, "content");
-    else nextParams.delete(SEARCH_SCOPE_PARAM);
-    setParams(nextParams, { replace: true });
-  };
-  const clearConditions = () => {
-    setParams(new URLSearchParams(), { replace: true });
-  };
-
-  const heading = (
-    <div className="page-shell">
-      <PageHeader
-        title={query ? "「" + query + "」" : "搜索"}
-        meta={
-          query
-            ? isContent
-              ? "画面与文字"
-              : "名称 · " + total.toLocaleString("zh-CN") + " 个结果"
-            : "输入关键词搜索照片与相册"
-        }
-      />
-    </div>
-  );
-  const conditions = (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
-      {mode === "photo" && (
-        <span className="text-caption text-fg-muted">搜索范围</span>
-      )}
-      {mode === "photo" ? (
-        <Segmented
-          label="搜索范围"
-          value={scope}
-          onChange={setScope}
-          options={[
-            { value: "name", label: "名称" },
-            { value: "content", label: "画面与文字" },
-          ]}
-        />
-      ) : (
-        <span className="chip">名称</span>
-      )}
-      <span className="text-caption text-fg-muted">
-        {isContent
-          ? "正在搜照片里的画面与图片文字"
-          : "正在搜相册、文件夹与标签的名字"}
-      </span>
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className="btn btn-sm btn-outline"
-          onClick={goBack}
-        >
-          返回
-        </button>
-        <button
-          type="button"
-          className="btn btn-sm btn-outline"
-          onClick={clearConditions}
-          disabled={!query}
-        >
-          清除条件
-        </button>
-      </div>
-    </div>
-  );
-
-  if (isContent) {
-    // 内容结果是一面照片墙：墙要一块确定高度的地方才排得出行。
-    // 因此这一档整页是一个定高的 flex 列，与「智能搜索」页同一套骨架。
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        <div className="shrink-0 overflow-y-auto pb-4">
-          {heading}
-          <div className="page-shell">{conditions}</div>
-          {/* 技术状态退到一行小字里：索引覆盖率与「重新搜索」是背景信息，
-              照片墙才是这一页的主角。 */}
-          <div className="page-shell flex flex-wrap items-center gap-3 pt-3">
-            <button
-              type="button"
-              className="btn btn-sm btn-outline"
-              onClick={content.resubmit}
-              disabled={!query || !content.submitted}
-            >
-              重新搜索
-            </button>
-          </div>
-          {content.status && !content.status.runtimeReady ? (
-            <div className="page-shell pt-2">
-              <InlineAlert tone="warning">
-                本机画面模型未就绪，这次只能按图片里的文字找。
-                <Link
-                  to="/tasks/storage"
-                  className="ml-1 text-accent underline-offset-2 hover:underline"
-                >
-                  查看任务中心
-                </Link>
-              </InlineAlert>
-            </div>
-          ) : null}
-        </div>
-        <div className="page-shell min-h-0 flex-1 pb-2">
-          <ContentSearchResults
-            submitted={content.submitted}
-            status={content.status}
-            statusError={content.statusError}
-            wantsSemantic
-            onRetry={content.resubmit}
-            idleTitle="输入关键词开始搜索"
-            idleDescription="同一个词同时检索画面内容与图片文字，任一命中就会显示。"
-          />
-        </div>
-        {content.status ? (
-          <span className="page-shell py-2 text-caption tabular-nums text-fg-subtle">
-            {content.status.coverage.indexed.toLocaleString()} /{" "}
-            {content.status.coverage.total.toLocaleString()} 张已索引
-          </span>
-        ) : null}
-      </div>
-    );
+  function updateConditions(
+    keyword: string,
+    next: SearchScope,
+    replace = false,
+  ) {
+    if (keyword === query && next === scope) return;
+    const nextParams = new URLSearchParams();
+    if (keyword) nextParams.set(LIST_PARAM.query, keyword);
+    if (next === "content") nextParams.set(SEARCH_SCOPE_PARAM, next);
+    setParams(nextParams, { replace });
   }
 
+  const toolbar = (
+    <SearchToolbar
+      title="搜索结果"
+      backTo={mode === "photo" ? exploreRoute() : libraryRoute(mode)}
+      photo={mode === "photo"}
+      query={query}
+      scope={scope}
+      onScopeChange={(next, draft) => updateConditions(draft, next)}
+      onClear={() => updateConditions("", "name", true)}
+      onSubmit={(keyword) => {
+        if (keyword !== query) updateConditions(keyword, scope);
+        else if (isContent) content.resubmit();
+        else void search.refetch();
+      }}
+    />
+  );
+
   return (
-    <div className="min-h-full">
-      {heading}
-
-      <div className="page-shell">{conditions}</div>
-
-      <div className="page-shell page-section pt-[var(--section-gap)]">
-        {search.isError ? (
-          <ErrorBanner
-            onRetry={() => void search.refetch()}
-            retrying={search.isFetching}
-          >
-            搜索暂时不可用。
-          </ErrorBanner>
-        ) : null}
-
-        {search.isFetching && cards.length === 0 ? (
-          <p className="text-body text-fg-muted">正在搜索…</p>
-        ) : null}
-
-        {cards.length > 0 ? (
-          <>
-            <p className="text-caption text-fg-subtle mb-1 tabular-nums">
-              {cards.length < total
-                ? `显示 ${cards.length} / ${total} 项`
-                : `共 ${total} 项`}
-            </p>
-            {groups.map((group) => (
-              <section key={group.key} className="mb-5">
-                {group.label ? (
-                  <h3 className="mb-3 flex items-baseline gap-2">
-                    <span className="text-body font-medium text-fg">
-                      {group.label}
-                    </span>
-                    <span className="text-caption tabular-nums text-fg-subtle">
-                      {group.items.length} 项
-                    </span>
-                  </h3>
-                ) : null}
-                <AlbumGrid items={group.items} variant={viewMode} />
-              </section>
-            ))}
-            {search.hasNextPage ? (
-              <button
-                type="button"
-                className="button-secondary mt-6"
-                onClick={() => void search.fetchNextPage()}
-                disabled={search.isFetchingNextPage}
+    <Page
+      variant="gallery"
+      className={isContent ? "flex h-full min-h-0 flex-col" : "min-h-full pb-6"}
+    >
+      {toolbar}
+      {isContent ? (
+        <>
+          {content.status && !content.status.runtimeReady && (
+            <InlineAlert tone="warning">
+              本机画面模型未就绪，这次只能按图片里的文字找。
+              <Link
+                to="/tasks/storage"
+                className="ml-1 text-accent hover:underline"
               >
-                {search.isFetchingNextPage
-                  ? "正在加载…"
-                  : `加载更多（还剩 ${total - cards.length} 项）`}
-              </button>
-            ) : null}
-          </>
-        ) : null}
+                查看任务中心
+              </Link>
+            </InlineAlert>
+          )}
+          <div className="min-h-0 flex-1 pt-2">
+            <ContentSearchResults
+              submitted={content.submitted}
+              status={content.status}
+              statusError={content.statusError}
+              wantsSemantic
+              onRetry={content.resubmit}
+              idleTitle="输入关键词开始搜索"
+              idleDescription="同一个词同时检索画面内容与图片文字，任一命中就会显示。"
+            />
+          </div>
+          {content.status && (
+            <p className="shrink-0 bg-bg py-1 text-caption tabular-nums text-fg-subtle">
+              {content.status.coverage.indexed.toLocaleString()} /{" "}
+              {content.status.coverage.total.toLocaleString()} 张已索引
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="pt-2">
+          {search.isError ? (
+            <ErrorBanner
+              onRetry={() => void search.refetch()}
+              retrying={search.isFetching}
+            >
+              搜索暂时不可用。
+            </ErrorBanner>
+          ) : null}
 
-        {!search.isFetching &&
-        !search.isError &&
-        cards.length === 0 &&
-        query ? (
-          <EmptyState
-            title={`没有匹配「${query}」的相册、文件夹或标签`}
-            description="名字里没有这几个字。换个说法，或者按画面内容找 —— 内容搜索能认出照片里的东西。"
-            action={
-              mode === "photo" ? (
+          {search.isFetching && cards.length === 0 ? (
+            <p className="text-body text-fg-muted">正在搜索…</p>
+          ) : null}
+
+          {cards.length > 0 ? (
+            <>
+              <p className="text-caption text-fg-subtle mb-1 tabular-nums">
+                {cards.length < total
+                  ? `显示 ${cards.length} / ${total} 项`
+                  : `共 ${total} 项`}
+              </p>
+              {groups.map((group) => (
+                <section key={group.key} className="mb-5">
+                  {group.label ? (
+                    <h2 className="mb-3 flex items-baseline gap-2">
+                      <span className="text-body font-medium text-fg">
+                        {group.label}
+                      </span>
+                      <span className="text-caption tabular-nums text-fg-subtle">
+                        {group.items.length} 项
+                      </span>
+                    </h2>
+                  ) : null}
+                  <AlbumGrid items={group.items} variant={viewMode} />
+                </section>
+              ))}
+              {search.hasNextPage ? (
                 <button
                   type="button"
-                  className="btn btn-outline"
-                  onClick={() => setScope("content")}
+                  className="button-secondary mt-6"
+                  onClick={() => void search.fetchNextPage()}
+                  disabled={search.isFetchingNextPage}
                 >
-                  按画面与文字再找一次
+                  {search.isFetchingNextPage
+                    ? "正在加载…"
+                    : `加载更多（还剩 ${total - cards.length} 项）`}
                 </button>
-              ) : undefined
-            }
-          />
-        ) : null}
+              ) : null}
+            </>
+          ) : null}
 
-        {!query ? (
-          <EmptyState
-            title="还没有搜索"
-            description="在顶栏的搜索框里输入相册、文件夹或标签的名字。"
-            action={
-              <Link className="btn btn-outline" to={exploreRoute()}>
-                去发现页找东西
-              </Link>
-            }
-          />
-        ) : null}
-      </div>
-    </div>
+          {!search.isFetching &&
+          !search.isError &&
+          cards.length === 0 &&
+          query ? (
+            <EmptyState
+              title={`没有匹配「${query}」的相册、文件夹或标签`}
+              description="名字里没有这几个字。换个说法，或者按画面内容找 —— 内容搜索能认出照片里的东西。"
+              action={
+                mode === "photo" ? (
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => updateConditions(query, "content")}
+                  >
+                    按画面与文字再找一次
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : null}
+
+          {!query ? (
+            <EmptyState
+              title="还没有搜索"
+              description="在顶栏的搜索框里输入相册、文件夹或标签的名字。"
+              action={
+                <Link
+                  className="btn btn-outline"
+                  to={mode === "photo" ? exploreRoute() : libraryRoute(mode)}
+                >
+                  {mode === "photo" ? "去发现页找东西" : "去书架看看"}
+                </Link>
+              }
+            />
+          ) : null}
+        </div>
+      )}
+    </Page>
   );
 }
 

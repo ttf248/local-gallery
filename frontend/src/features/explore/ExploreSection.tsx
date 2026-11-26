@@ -22,7 +22,10 @@ export function ExploreSection({
   const noteId = useId();
   const note = useRef<HTMLDivElement | null>(null);
   return (
-    <section className="min-w-0 pt-[var(--section-gap)]" aria-labelledby={id}>
+    <section
+      className="min-w-0 pt-[var(--section-gap)] first-of-type:pt-4"
+      aria-labelledby={id}
+    >
       <div className="mb-4 flex items-center gap-2">
         <h2 id={id} className="text-title-2">
           {title}

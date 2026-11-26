@@ -78,7 +78,7 @@ export default function PlaceCards() {
 
       {items.length > 0 ? (
         <>
-          <ScrollRow label="地点预览">
+          <ScrollRow label="地点预览" style={{ maskImage: "none" }}>
             {items.map((place) => (
               <PlaceCard key={place.adcode} place={place} />
             ))}

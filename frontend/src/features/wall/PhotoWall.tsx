@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -141,11 +142,17 @@ export default function PhotoWall<
   showPlaceholders = true,
 }: Props<T>) {
   const {
-    ref: containerRef,
+    ref: measureScroller,
     width,
     height,
     element: container,
   } = useElementSize<HTMLDivElement>();
+  // 按滚动区域的实际可用宽度排图，桌面滚动条会占用部分墙宽。
+  const scrollerRef = useCallback(
+    (node: HTMLElement | Window | null) =>
+      measureScroller(node instanceof HTMLDivElement ? node : null),
+    [measureScroller],
+  );
   const [videoTarget, setVideoTarget] = useState<LibraryMediaItem>();
   const focusedVideo = useDebounce(videoTarget, 180);
   const [videoDuration, setVideoDuration] = useState<{
@@ -433,62 +440,60 @@ export default function PhotoWall<
   }
   return (
     <div
-      ref={containerRef}
       className="h-full min-h-0"
       onScrollCapture={onVisibleGroupChange ? reportVisibleGroup : undefined}
     >
-      {width > 0 && (
-        <Virtuoso
-          ref={virtuosoRef}
-          data={entries}
-          style={{ height: "100%" }}
-          overscan={600}
-          increaseViewportBy={{ top: 600, bottom: 600 }}
-          defaultItemHeight={effectiveHeight + gap}
-          computeItemKey={(_index, entry) => entry.key}
-          rangeChanged={handleRangeChanged}
-          itemContent={(_index, entry) => {
-            if (entry.kind === "header")
-              return (
-                <div className="pt-8 pb-3" data-wall-group={entry.sectionKey}>
-                  {groupHeader?.(entry.sectionKey)}
-                </div>
-              );
-            if (entry.kind === "inline")
-              return (
-                <div
-                  className="flex items-end gap-8"
-                  data-wall-group={entry.segments[0].key}
-                  style={{ paddingBottom: gap }}
-                >
-                  {entry.segments.map((segment) => (
-                    <div
-                      key={segment.key}
-                      className="min-w-0"
-                      style={{ width: segment.width }}
-                    >
-                      <div className="overflow-hidden pt-8 pb-3">
-                        {groupHeader?.(segment.key)}
-                      </div>
-                      <div className="flex" style={{ gap }}>
-                        {renderTiles(segment.tiles, entry.tileHeight)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
+      <Virtuoso
+        scrollerRef={scrollerRef}
+        ref={virtuosoRef}
+        data={entries}
+        style={{ height: "100%" }}
+        overscan={600}
+        increaseViewportBy={{ top: 600, bottom: 600 }}
+        defaultItemHeight={effectiveHeight + gap}
+        computeItemKey={(_index, entry) => entry.key}
+        rangeChanged={handleRangeChanged}
+        itemContent={(_index, entry) => {
+          if (entry.kind === "header")
             return (
-              <div
-                className="flex items-start"
-                data-wall-group={entry.sectionKey || undefined}
-                style={{ height: entry.height, gap, paddingBottom: gap }}
-              >
-                {renderTiles(entry.tiles, entry.tileHeight)}
+              <div className="pt-8 pb-3" data-wall-group={entry.sectionKey}>
+                {groupHeader?.(entry.sectionKey)}
               </div>
             );
-          }}
-        />
-      )}
+          if (entry.kind === "inline")
+            return (
+              <div
+                className="flex items-end gap-8"
+                data-wall-group={entry.segments[0].key}
+                style={{ paddingBottom: gap }}
+              >
+                {entry.segments.map((segment) => (
+                  <div
+                    key={segment.key}
+                    className="min-w-0"
+                    style={{ width: segment.width }}
+                  >
+                    <div className="overflow-hidden pt-8 pb-3">
+                      {groupHeader?.(segment.key)}
+                    </div>
+                    <div className="flex" style={{ gap }}>
+                      {renderTiles(segment.tiles, entry.tileHeight)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          return (
+            <div
+              className="flex items-start"
+              data-wall-group={entry.sectionKey || undefined}
+              style={{ height: entry.height, gap, paddingBottom: gap }}
+            >
+              {renderTiles(entry.tiles, entry.tileHeight)}
+            </div>
+          );
+        }}
+      />
     </div>
   );
 }
