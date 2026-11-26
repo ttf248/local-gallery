@@ -21,10 +21,7 @@ import {
   recentsRoute,
 } from "../utils/path";
 import { timeAgo } from "../utils/date";
-import {
-  useLibraryDashboard,
-  useLibraryManifest,
-} from "../hooks/useLibrary";
+import { useLibraryDashboard, useLibraryManifest } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
 import { LibraryIcon, RefreshIcon } from "../components/common/Icon";
 
@@ -166,9 +163,7 @@ function ComicHome() {
   );
   const unreadCount = dashboard?.unreadCount ?? 0;
   const hasNoReadingActivity =
-    dashboardQuery.isSuccess &&
-    inProgressAll.length === 0 &&
-    unreadCount === 0;
+    dashboardQuery.isSuccess && inProgressAll.length === 0 && unreadCount === 0;
 
   const randomAlbum = useMutation({
     mutationFn: (scope: "any" | "unread") =>
@@ -292,7 +287,7 @@ function ComicHome() {
   );
 
   return (
-    <div className="home-page min-h-full">
+    <div className="home-page comic-library-home min-h-full">
       <HomeHeader
         title="漫画库"
         primaryAction={{ to: libraryRoute("comic"), label: "书架" }}
@@ -326,10 +321,9 @@ function ComicHome() {
       {/* 最近阅读：读过的卷。放在继续阅读与未读之后 —— 有在读的书时，
           「接着读」才是第一件事；读过的书是回访，不是待办。 */}
       {recentCards.length > 0 ? (
-        <section className="page-shell page-section">
+        <section className="page-shell page-section comic-library-home__recent">
           <div className="section-heading">
             <h2 className="section-title">最近阅读</h2>
-            <span className="section-meta">翻过的卷</span>
             <Link to={recentsRoute("comic")} className="chip ml-auto">
               全部
             </Link>

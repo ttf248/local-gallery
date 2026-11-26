@@ -69,7 +69,7 @@ export default function TaskQueuePanel({
             {jobs.map((job, index) => (
               <li
                 key={job.id}
-                className="tasks-list__row"
+                className="tasks-list__row tasks-queue-card"
                 data-testid="task-queue-row"
               >
                 <span className="w-7 shrink-0 text-right font-mono text-meta tabular-nums text-fg-subtle">

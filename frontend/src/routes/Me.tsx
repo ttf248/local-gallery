@@ -54,10 +54,10 @@ export default function Me() {
   return (
     /* 整页撑满内容区的高度：面板里的照片墙与相册网格都是虚拟列表，
        它们要一个确定的高度才排得出行。 */
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="me-page flex h-full min-h-0 flex-col">
       {/* 标题与页签共用一个容器：页签的起点与标题、下面照片的起点
           在同一条网格线上，翻页签时内容不会左右跳。 */}
-      <div className="page-shell container--standard shrink-0">
+      <div className="page-shell container--standard me-page__head shrink-0">
         <PageHeading
           contained
           title={mode === "comic" ? "我的漫画" : "珍藏"}

@@ -282,7 +282,7 @@ it("没有拍摄证据的那一段单独摆着", async () => {
 // 这一段时间是怎么来的。
 it("时间来源的分布收在可展开的说明里", async () => {
   renderTimeline();
-  const toggle = screen.getByRole("button", { name: "时间来源与日期精度" });
+  const toggle = screen.getByRole("button", { name: "筛选时间线" });
   expect(toggle).toHaveAttribute("aria-expanded", "false");
   expect(screen.queryByTestId("timeline-source-legend")).toBeNull();
 
@@ -348,7 +348,7 @@ it("显示年月与年份精度而不伪造月份或日期", async () => {
   expect(headers.map((node) => node.textContent).join(" ")).not.toContain(
     "2018 年 1 月",
   );
-  fireEvent.click(screen.getByRole("button", { name: "时间来源与日期精度" }));
+  fireEvent.click(screen.getByRole("button", { name: "筛选时间线" }));
   const legend = await screen.findByTestId("timeline-precision-legend");
   expect(legend.textContent).toContain("精确到日 1 张");
   expect(legend.textContent).toContain("仅年月 1 张");
@@ -358,9 +358,8 @@ it("显示年月与年份精度而不伪造月份或日期", async () => {
 // 跳年：年份进地址栏，服务端按年取材。
 it("跳年会把年份写进地址栏", async () => {
   renderTimeline();
-  fireEvent.change(screen.getByLabelText("年份"), {
-    target: { value: "2023" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "筛选时间线" }));
+  fireEvent.click(screen.getByRole("menuitemradio", { name: /^2023 年/ }));
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe("?year=2023"),
   );
@@ -370,7 +369,8 @@ it("跳年会把年份写进地址栏", async () => {
 // 跳年之后才有月份可选：月份只在年份之内有意义。
 it("选中年份后可以再选月份", async () => {
   renderTimeline("/photo?year=2024");
-  fireEvent.change(screen.getByLabelText("月份"), { target: { value: "5" } });
+  fireEvent.click(screen.getByRole("button", { name: "筛选时间线" }));
+  fireEvent.click(screen.getByRole("menuitemradio", { name: /^5 月/ }));
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe(
       "?year=2024&month=5",
@@ -393,9 +393,8 @@ it("可以只看视频", async () => {
 // 「日期未知」那一段有自己的入口：它不是某一年。
 it("可以单独看日期未知的那一段", async () => {
   renderTimeline();
-  fireEvent.change(screen.getByLabelText("年份"), {
-    target: { value: "unknown" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "筛选时间线" }));
+  fireEvent.click(screen.getByRole("menuitemradio", { name: /^日期未知/ }));
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe("?year=unknown"),
   );
@@ -405,17 +404,17 @@ it("可以单独看日期未知的那一段", async () => {
 // 清除筛选回到整条时间线。
 it("清除筛选回到整条时间线", async () => {
   renderTimeline("/photo?year=2024&media=video");
-  fireEvent.click(screen.getByRole("button", { name: "清除筛选" }));
+  fireEvent.click(screen.getByRole("button", { name: "筛选时间线" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "清除筛选" }));
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe(""),
   );
 });
 
-// 首页给得出通往相册的明确入口：目录结构在相册里，不在时间线上。
-it("有通往相册的明确入口", async () => {
-  renderTimeline();
-  const link = screen.getByRole("link", { name: "相册" });
-  expect(link).toHaveAttribute("href", "/photo/library");
+it("默认页头只有一行，生效的条件可独立移除", () => {
+  renderTimeline("/photo?year=2024&media=video");
+  fireEvent.click(screen.getByRole("button", { name: "2024 年" }));
+  expect(screen.getByTestId("location")).toHaveTextContent("?media=video");
 });
 
 // 「接着看」保留为一条紧凑的入口，不再是一整块专区。
@@ -448,7 +447,9 @@ it("首屏失败时给出清楚的错误信息与重试按钮", async () => {
   expect(
     screen.getByRole("heading", { name: "时间线加载失败" }),
   ).toBeInTheDocument();
-  expect(screen.getByText("网络没有连上，检查连接后重试。")).toBeInTheDocument();
+  expect(
+    screen.getByText("网络没有连上，检查连接后重试。"),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "重新加载" }));
   expect(feed.refetch).toHaveBeenCalledTimes(1);
 });
@@ -472,7 +473,9 @@ it("分页失败时保留已加载的照片，并给出可恢复的提示", asyn
   const banner = screen.getByRole("alert");
   expect(banner).toHaveTextContent("后续照片加载失败，已加载的照片仍可浏览。");
   // 已加载的照片还在墙上。
-  expect(screen.getByRole("button", { name: "查看 1.jpg" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "查看 1.jpg" }),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
   expect(feed.retryNextPage).toHaveBeenCalledTimes(1);
 });

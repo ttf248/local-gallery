@@ -46,7 +46,7 @@ test.describe("本机智能照片功能", () => {
     await page.goto("/photo/semantic");
     await expect(page.getByLabel("搜索相册或标签")).toHaveCount(0);
     const searchInput = page.getByLabel("搜索内容");
-    await page.keyboard.press("/");
+    await searchInput.click();
     await expect(searchInput).toBeFocused();
     await searchInput.fill("入口");
     await page.getByRole("button", { name: "搜索照片" }).click();

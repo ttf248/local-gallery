@@ -34,14 +34,11 @@ export default function Explore() {
   const comicAlbumCount = manifest?.statistics.comicAlbumCount ?? 0;
 
   return (
-    <div className="min-h-full">
+    <div className="explore-page min-h-full">
       <div className="page-shell container--standard">
-        <PageHeading
-          contained
-          title="发现"
-          size="md"
-          description="照片不只按文件夹摆着，还按时间、人、地方和画面里的内容聚在一起。"
-        />
+        <div className="explore-heading">
+          <PageHeading contained title="发现" size="md" />
+        </div>
 
         {manifestQuery.isLoading && !manifest ? (
           <section className="page-section" aria-live="polite">
@@ -101,8 +98,8 @@ export default function Explore() {
           <>
             <ExploreSearchHero />
             {/* 四个找法在一屏之内：想直接跳到某一维，不必往下翻。 */}
-            <nav aria-label="发现维度" className="pt-5">
-              <ul className="flex flex-wrap gap-2">
+            <nav aria-label="发现维度" className="explore-dimensions">
+              <ul className="flex flex-wrap justify-center gap-2">
                 {FINDINGS.map((finding) => (
                   <li key={finding.id}>
                     <a className="chip" href={`#${finding.id}`}>

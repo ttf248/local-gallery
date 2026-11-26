@@ -48,7 +48,7 @@ export default function ExploreSearchHero() {
       </h2>
       {/* 入口占住首屏最重的位置，但宽度有上限：一个词用不着一千多像素
           的输入框，按钮与输入框分得越开，越难当成一个整体。 */}
-      <form className="max-w-[720px]" onSubmit={submit}>
+      <form className="mx-auto max-w-[680px]" onSubmit={submit}>
         <div className="explore-search input-focus-ring">
           <SearchIcon size={16} className="shrink-0 text-fg-subtle" />
           <label className="sr-only" htmlFor="explore-search-input">

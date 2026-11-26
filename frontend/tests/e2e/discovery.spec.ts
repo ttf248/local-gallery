@@ -9,7 +9,7 @@ import {
 /**
  * 搜索与发现的验收用例。
  *
- * 覆盖三条主链路：顶栏搜索（名称与画面两档）、发现页的人物与地点预览、
+ * 覆盖三条主链路：命令面板（名称与画面两档）、发现页的人物与地点预览、
  * 以及这些预览点进去之后的深链。
  *
  * 临时库里没有跑过人脸分析（`peopleEnabled: false`，素材是纯色图），
@@ -38,7 +38,7 @@ async function gpsAlbumIds(
     .map((node) => node.id);
 }
 
-test("顶栏搜索按名称进结果页，结果带命中理由", async ({ page, request }) => {
+test("命令面板按名称进结果页，结果带命中理由", async ({ page, request }) => {
   const nodes = await scannedNodes(request, "photo");
   const target = nodes.find((node) => node.name);
   expect(target).toBeTruthy();
@@ -46,6 +46,7 @@ test("顶栏搜索按名称进结果页，结果带命中理由", async ({ page,
   expect(keyword.length).toBeGreaterThan(0);
 
   await page.goto("/photo");
+  await page.getByRole("button", { name: "打开命令面板" }).click();
   const search = page.getByRole("combobox", { name: "搜索相册或标签" });
   await search.fill(keyword);
   await search.press("Enter");
@@ -61,12 +62,10 @@ test("顶栏搜索按名称进结果页，结果带命中理由", async ({ page,
   ).toBeVisible();
 });
 
-test("顶栏搜索可以切到画面与文字，回车进内容结果页", async ({ page }) => {
+test("命令面板可以切到画面与文字，回车进内容结果页", async ({ page }) => {
   await page.goto("/photo");
-  const scope = page.getByRole("button", { name: /搜索范围/ });
-  await scope.click();
-  await page.getByRole("menuitemradio", { name: /画面/ }).click();
-
+  await page.getByRole("button", { name: "打开命令面板" }).click();
+  await page.getByRole("button", { name: "画面与文字" }).click();
   const search = page.getByRole("combobox", { name: "搜索照片里的画面与文字" });
   await search.fill("海边");
   await search.press("Enter");

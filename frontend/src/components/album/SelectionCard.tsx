@@ -33,7 +33,7 @@ export default function SelectionCard({
         className={`overflow-hidden rounded-sm bg-bg-subtle ${variant === "list" ? "h-14 w-14 shrink-0" : "w-full"}`}
         style={variant === "list" ? undefined : { aspectRatio: ratio }}
       >
-        <CardCover data={card} fit="cover" compact />
+        <CardCover data={card} compact />
       </div>
       <div className="min-w-0 py-2 pr-6">
         <div className="h-10 line-clamp-2 text-body font-medium">

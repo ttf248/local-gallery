@@ -10,7 +10,7 @@ export default {
     // 触屏没有悬停。hover 变体（连同 group-hover）只在
     // (hover: hover) and (pointer: fine) 下生效，否则点一下按钮
     // 底色就粘住不放 —— 手机上那一下「按下去」永远是「按住了」。
-    // 靠悬停才出现的元素因此要在触摸端另有安排，见 styles/global.css
+    // 靠悬停才出现的元素因此要在触摸端另有安排，见 styles/primitives.css
     // 的 .hover-reveal 与 .mouse-only。
     hoverOnlyWhenSupported: true,
   },
@@ -26,6 +26,10 @@ export default {
         fg: tokenColor("fg"),
         "fg-muted": tokenColor("fg-muted"),
         "fg-subtle": tokenColor("fg-subtle"),
+        "surface-glass": tokenColor("surface-glass"),
+        "surface-card": tokenColor("surface-card"),
+        "accent-muted": tokenColor("accent-muted"),
+        scrim: tokenColor("scrim"),
         accent: tokenColor("accent"),
         "accent-hover": tokenColor("accent-hover"),
         "accent-soft": tokenColor("accent-soft"),
@@ -71,6 +75,7 @@ export default {
       borderRadius: {
         DEFAULT: "var(--radius-xs)",
         sm: "var(--radius-media)",
+        media: "var(--radius-media)",
         md: "var(--radius-control)",
         lg: "var(--radius-tile)",
         xl: "var(--radius-tile)",
@@ -85,6 +90,7 @@ export default {
         page: "var(--text-page)",
       },
       boxShadow: {
+        float: "var(--shadow-float)",
         xs: "var(--shadow-xs)",
         sm: "var(--shadow-sm)",
         md: "var(--shadow-md)",

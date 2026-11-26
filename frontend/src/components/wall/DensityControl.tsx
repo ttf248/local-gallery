@@ -1,3 +1,4 @@
+import Popover, { PopoverItem } from "../common/Popover";
 import Segmented from "../common/Segmented";
 import { WALL_DENSITY_LABEL, type WallDensity } from "../../store/photoStore";
 
@@ -74,7 +75,14 @@ function AutoDensityGlyph() {
         strokeWidth={1.1}
         opacity={0.55}
       />
-      <rect x={2.8} y={3.6} width={5.8} height={8.8} rx={0.8} fill="currentColor" />
+      <rect
+        x={2.8}
+        y={3.6}
+        width={5.8}
+        height={8.8}
+        rx={0.8}
+        fill="currentColor"
+      />
       <rect
         x={9.7}
         y={3.6}
@@ -98,10 +106,48 @@ function AutoDensityGlyph() {
 export default function DensityControl({
   value,
   onChange,
+  presentation = "inline",
 }: {
   value: WallDensity;
   onChange: (next: WallDensity) => void;
+  presentation?: "inline" | "popover";
 }) {
+  if (presentation === "popover") {
+    return (
+      <Popover
+        aria-label="照片墙密度"
+        trigger={
+          <button
+            type="button"
+            className="toolbar-icon"
+            aria-label="密度"
+            title="照片墙密度"
+          >
+            {value === "auto" ? (
+              <AutoDensityGlyph />
+            ) : (
+              <DensityGlyph level={value} />
+            )}
+          </button>
+        }
+      >
+        {DENSITY_ORDER.map((key) => (
+          <PopoverItem
+            key={key}
+            active={key === value}
+            onClick={() => onChange(key)}
+          >
+            {key === "auto" ? (
+              <AutoDensityGlyph />
+            ) : (
+              <DensityGlyph level={key} />
+            )}
+            {WALL_DENSITY_LABEL[key]}
+          </PopoverItem>
+        ))}
+      </Popover>
+    );
+  }
   return (
     <Segmented
       compact

@@ -30,7 +30,7 @@ test("照片首页就是时间线：按日期精度分段，来源照实说", as
   await expect(headers.first()).toContainText("年");
   await expect(headers.first()).toContainText("月");
   // 时间来源的分布收在可展开的说明里：收起时看不见，展开一次就照实说。
-  const toggle = page.getByRole("button", { name: "时间来源与日期精度" });
+  const toggle = page.getByRole("button", { name: "筛选时间线" });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
   const legend = page.getByTestId("timeline-source-legend");
@@ -51,7 +51,7 @@ test("年份与年月目录保留原精度，不补出一月或某一天", async
   const yearHeader = page.getByTestId("timeline-group-header").first();
   await expect(yearHeader).toContainText("2018 年");
   await expect(yearHeader).not.toContainText("1 月");
-  await page.getByRole("button", { name: "时间来源与日期精度" }).click();
+  await page.getByRole("button", { name: "筛选时间线" }).click();
   await expect(page.getByTestId("timeline-precision-legend")).toContainText(
     "仅年份 1 张",
   );
@@ -60,7 +60,7 @@ test("年份与年月目录保留原精度，不补出一月或某一天", async
   const monthHeader = page.getByTestId("timeline-group-header").first();
   await expect(monthHeader).toContainText("2019 年 11 月");
   await expect(monthHeader).not.toContainText("11 月 1 日");
-  await page.getByRole("button", { name: "时间来源与日期精度" }).click();
+  await page.getByRole("button", { name: "筛选时间线" }).click();
   await expect(page.getByTestId("timeline-precision-legend")).toContainText(
     "仅年月 1 张",
   );
@@ -78,17 +78,15 @@ test("跳年与跳月写进地址栏，刷新与后退都还在原地", async ({
   await scannedNodes(request, "photo");
   await page.goto("/photo");
 
-  const year = page.getByLabel("年份");
-  await expect(year).toBeVisible();
-  await year.selectOption("2024");
+  const filter = page.getByRole("button", { name: "筛选时间线" });
+  await filter.click();
+  await page.getByRole("menuitemradio", { name: /^2024 年/ }).click();
   await expect(page).toHaveURL(/\?year=2024$/);
 
   await page.reload();
-  await expect(page.getByLabel("年份")).toHaveValue("2024");
-
-  const month = page.getByLabel("月份");
-  await expect(month).toBeVisible();
-  await month.selectOption({ index: 1 });
+  await filter.click();
+  await expect(page.getByRole("menuitemradio", { name: /^2024 年/ })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("group", { name: "月份" }).getByRole("menuitemradio").nth(1).click();
   await expect(page).toHaveURL(/year=2024&month=/);
 
   await page.goBack();
@@ -104,7 +102,8 @@ test("日期未知的媒体单独成段，不混进任何一年", async ({ page,
   await scannedNodes(request, "photo");
   await page.goto("/photo");
 
-  await page.getByLabel("年份").selectOption("unknown");
+  await page.getByRole("button", { name: "筛选时间线" }).click();
+  await page.getByRole("menuitemradio", { name: /^日期未知/ }).click();
   await expect(page).toHaveURL(/\?year=unknown$/);
   const header = page.getByTestId("timeline-group-header").first();
   await expect(header).toBeVisible();

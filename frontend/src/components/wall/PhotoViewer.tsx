@@ -657,7 +657,7 @@ export default function PhotoViewer({
         className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent"
       />
       {/* 顶栏：返回、标题、位置与操作 */}
-      <header className="relative flex h-14 shrink-0 items-center gap-3 px-3 sm:px-5">
+      <header className="photo-viewer-hud relative flex h-14 shrink-0 items-center gap-3 px-3 sm:px-5">
         <button
           type="button"
           onClick={onClose}
@@ -828,7 +828,7 @@ export default function PhotoViewer({
                 draggable={false}
                 /* 照片落在暗场里要有一道柔和的投影把它托住，
                    否则它和背景之间没有任何边界，读起来像贴上去的。 */
-                className="max-h-full max-w-full select-none object-contain shadow-[0_28px_90px_-24px_rgba(0,0,0,0.95)]"
+                className="photo-viewer-image max-h-full max-w-full select-none object-contain"
                 style={{
                   transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
                   cursor: zoom > 1 ? "grab" : "default",
@@ -839,17 +839,19 @@ export default function PhotoViewer({
         </div>
 
         {showInfo && !isVideo && (
-          <ImageInfoPanel
-            absPath={current.id}
-            onClose={() => setShowInfo(false)}
-          />
+          <div className="photo-viewer-drawer">
+            <ImageInfoPanel
+              absPath={current.id}
+              onClose={() => setShowInfo(false)}
+            />
+          </div>
         )}
       </div>
 
       {/* 底栏：上一张 / 下一张与缩放。
           控件收进一枚半透明药丸：一排散落的图标悬在黑底上像几枚
           掉出来的按键，药丸把它们收成一件工具。 */}
-      <footer className="relative flex h-14 shrink-0 items-center justify-center gap-3 px-3 sm:px-5">
+      <footer className="photo-viewer-hud relative flex h-14 shrink-0 items-center justify-center gap-3 px-3 sm:px-5">
         {/* 取下一页的反馈：翻到末尾时用户会等，这一栏告诉他「正在取」，
             失败时给一个重试的手柄，而不是让下一张按钮灰着不动。 */}
         <div

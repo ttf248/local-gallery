@@ -344,6 +344,7 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
     timeout: 15000,
   });
   await expect.poll(() => groupStatus(request, groupId)).toBe("pending");
+  await expect(ignored).toHaveCount(0);
 
   // 再忽略一次，然后标记已处理：撤销这次要回到「已忽略」。
   await card.getByRole("button", { name: "忽略", exact: true }).click();

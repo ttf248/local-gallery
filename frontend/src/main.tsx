@@ -1,19 +1,19 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { queryClient } from './api/queryClient'
-import WorkbenchModeProvider from './components/layout/WorkbenchModeProvider'
-import ErrorBoundary from './components/common/ErrorBoundary'
-import App from './App'
-import './styles/tokens.css'
-import './styles/global.css'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./api/queryClient";
+import WorkbenchModeProvider from "./components/layout/WorkbenchModeProvider";
+import ErrorBoundary from "./components/common/ErrorBoundary";
+import App from "./App";
+import "./styles/tokens.css";
+import "./styles/base.css";
 
 // #root 一定存在（index.html 里写死了），但这里不赌：createRoot(null)
 // 抛出的错没有上下文，用户只看到一片空白。
-const container = document.getElementById('root')
+const container = document.getElementById("root");
 if (!container) {
-  throw new Error('找不到挂载点 #root')
+  throw new Error("找不到挂载点 #root");
 }
 
 ReactDOM.createRoot(container).render(
@@ -33,4 +33,4 @@ ReactDOM.createRoot(container).render(
       </QueryClientProvider>
     </ErrorBoundary>
   </React.StrictMode>,
-)
+);

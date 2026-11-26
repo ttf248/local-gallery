@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import AlbumCard, { type CardData } from "./AlbumCard";
@@ -174,7 +180,7 @@ describe("AlbumCard 封面语义", () => {
     const images = container.querySelectorAll('[data-testid="card-cover"] img');
     expect(images).toHaveLength(1);
     expect(images[0].getAttribute("src")).toContain("/api/thumbs/cover-main");
-    expect(screen.queryByTestId("card-cover-mosaic")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("card-cover-collage")).not.toBeInTheDocument();
   });
 
   it("集合封面去重、忽略空值并最多展示四张", () => {
@@ -189,8 +195,8 @@ describe("AlbumCard 封面语义", () => {
       }),
     );
 
-    const mosaic = screen.getByTestId("card-cover-mosaic");
-    expect(mosaic).toHaveAttribute("data-cover-layout", "mosaic-4");
+    const mosaic = screen.getByTestId("card-cover-collage");
+    expect(mosaic).toHaveAttribute("data-cover-layout", "grid-4");
     expect(
       container.querySelectorAll('[data-testid="card-cover"] img'),
     ).toHaveLength(4);
@@ -210,7 +216,7 @@ describe("AlbumCard 封面语义", () => {
       }),
     );
 
-    expect(screen.getByTestId("card-cover-mosaic")).toHaveAttribute(
+    expect(screen.getByTestId("card-cover-collage")).toHaveAttribute(
       "data-cover-layout",
       "single",
     );
@@ -219,8 +225,8 @@ describe("AlbumCard 封面语义", () => {
     );
   });
 
-  // 照片侧的文件夹：一张主体照片铺满，辅以最多两张小图。
-  it("照片侧的文件夹封面是一张主体加最多两张小图", () => {
+  // 三张封面时主图通高，两张副图上下排列。
+  it("三张封面使用一张主体加两张副图", () => {
     const { container } = renderCard(
       card({
         id: "collection-photo",
@@ -228,20 +234,32 @@ describe("AlbumCard 封面语义", () => {
         title: "2026 年",
         count: 8,
         contentKind: "photo",
-        covers: ["one", "two", "three", "four"],
+        covers: ["one", "two", "three"],
       }),
     );
 
-    const stack = screen.getByTestId("card-cover-stack");
-    expect(stack).toBeInTheDocument();
-    expect(screen.queryByTestId("card-cover-mosaic")).not.toBeInTheDocument();
-    // 一张主体 + 两张小图 = 三张，不是四等分。
-    expect(container.querySelectorAll('[data-testid="card-cover"] img')).toHaveLength(
-      3,
+    expect(screen.getByTestId("card-cover-collage")).toHaveAttribute(
+      "data-cover-layout",
+      "feature-3",
     );
     expect(
-      stack.querySelector(".cover-stack__side")?.getAttribute("data-covers"),
-    ).toBe("2");
+      container.querySelectorAll('[data-testid="card-cover"] img'),
+    ).toHaveLength(3);
+  });
+
+  it("两张封面平分，列表仅加载主图", () => {
+    const data = card({ variant: "collection", covers: ["one", "two"] });
+    const grid = renderCard(data);
+    expect(screen.getByTestId("card-cover-collage")).toHaveAttribute(
+      "data-cover-layout",
+      "split-2",
+    );
+    grid.unmount();
+    const list = renderCard(data, "list");
+    expect(
+      list.container.querySelectorAll('[data-testid="card-cover"] img'),
+    ).toHaveLength(1);
+    expect(screen.queryByTestId("card-cover-collage")).toBeNull();
   });
 
   // 文件夹标识从封面上挪到标题前：封面不再压一块常驻的黑标签。
@@ -260,9 +278,9 @@ describe("AlbumCard 封面语义", () => {
     const title = container.querySelector(".album-tile__title");
     expect(title?.querySelector("svg")).toBeTruthy();
     // 封面上没有「文件夹」角标了。
-    expect(container.querySelector('[data-testid="card-cover"]')?.textContent).not.toContain(
-      "文件夹",
-    );
+    expect(
+      container.querySelector('[data-testid="card-cover"]')?.textContent,
+    ).not.toContain("文件夹");
   });
 
   it("混合相册展示视频角标以及分开的图片、视频计数", () => {
@@ -380,13 +398,17 @@ describe("AlbumCard 状态表达", () => {
     expect(screen.getByText("未读")).toBeInTheDocument();
     expect(screen.queryByText("新", { exact: true })).not.toBeInTheDocument();
     // 未读相册不能同时显示「已读」。
-    expect(screen.queryByText("已读完", { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("已读完", { exact: true }),
+    ).not.toBeInTheDocument();
   });
 
   // 阅读状态集中在封面左上角一列：未读点与已读完 chip 互斥，不会同时
   // 出现，但也不再散在两个方向 —— 扫读一张卡片时不用分别去找。
   it("已读完的相册在封面左上角显示已读 chip，且不再显示未读点", () => {
-    const { container } = renderCard(card({ progress: { index: 11, total: 12 } }));
+    const { container } = renderCard(
+      card({ progress: { index: 11, total: 12 } }),
+    );
 
     expect(screen.getByText("已读完", { exact: true })).toBeInTheDocument();
     expect(screen.queryByText("未读")).not.toBeInTheDocument();
@@ -413,13 +435,19 @@ describe("AlbumCard 状态表达", () => {
 
     expect(screen.queryByText("27%")).not.toBeInTheDocument();
     expect(screen.queryByText("读到 4 / 12")).not.toBeInTheDocument();
-    expect(screen.queryByText("已读完", { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("已读完", { exact: true }),
+    ).not.toBeInTheDocument();
   });
 
   it("照片相册不显示「已读完」chip，也不显示未读点", () => {
-    renderCard(card({ contentKind: "photo", progress: { index: 11, total: 12 } }));
+    renderCard(
+      card({ contentKind: "photo", progress: { index: 11, total: 12 } }),
+    );
 
-    expect(screen.queryByText("已读完", { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("已读完", { exact: true }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("未读")).not.toBeInTheDocument();
   });
 
@@ -521,7 +549,6 @@ describe("AlbumCard 收藏星标", () => {
     );
   });
 });
-
 
 describe("AlbumCard 触摸长按", () => {
   beforeEach(() => {

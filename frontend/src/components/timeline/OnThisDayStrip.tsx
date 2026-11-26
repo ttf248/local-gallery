@@ -62,22 +62,26 @@ export default function OnThisDayStrip({ enabled }: Props) {
   if (photos.length === 0) return null;
 
   return (
-    <div ref={rootRef} className="relative shrink-0" data-testid="on-this-day-strip">
+    <div
+      ref={rootRef}
+      className="timeline-memory shrink-0"
+      data-testid="on-this-day-strip"
+    >
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         title="往年这一天拍过的照片"
-        className="btn btn-sm btn-outline"
+        className="ui-btn ui-btn--ghost"
       >
         <ClockIcon size={13} />
-        那年今日 · {photos.length} 张
+        那年今日<span className="hidden sm:inline"> · {photos.length} 张</span>
       </button>
       {open ? (
         /* 窄屏时靠左展开（那一行的 chip 在左边），宽屏靠右（chip 在
            筛选行末尾）。两种对齐都贴着视口内侧，不让面板撑出屏幕。
            面板贴着内容宽：只有两张照片时不必留一块空板。 */
-        <div className="absolute left-0 top-full z-30 mt-2 w-max max-w-[min(560px,calc(100vw-24px))] rounded-lg border border-border bg-bg-elevated p-3 shadow-lg sm:left-auto sm:right-0">
+        <div className="timeline-memory__panel ui-popover p-3">
           <div className="flex items-center gap-2 overflow-x-auto scroll-thin">
             {photos.map((item) => {
               const photo = item.photo;

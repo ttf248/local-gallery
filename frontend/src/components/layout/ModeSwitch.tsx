@@ -1,69 +1,50 @@
 import type { AppMode } from "../../api/library";
+import { ImageIcon, ReaderIcon } from "../common/Icon";
 
 interface Props {
   mode: AppMode;
   onChange: (mode: AppMode) => void;
-  /**
-   * 落在哪一层表面上：
-   *   rail —— 侧栏的墨黑表面上（窄屏抽屉里用这一档）；
-   *   surface —— 页面画布上（顶栏用这一档）。
-   * 两层的对比体系不同，颜色不能混用。
-   */
-  tone?: "rail" | "surface";
+  compact?: boolean;
 }
 
-/**
- * 工作台模式切换器：照片 / 漫画。
- *
- * 模式就是目录的内容属性：照片目录的相册归照片工作台，漫画目录的归漫画工作台，
- * 两半互斥。这里只有两档，没有「全部」——不过滤的第三档会让两套菜单互相掺入。
- */
-export default function ModeSwitch({ mode, onChange, tone = "rail" }: Props) {
-  const options: { key: AppMode; label: string }[] = [
-    { key: "photo", label: "照片" },
-    { key: "comic", label: "漫画" },
-  ];
-  const onRail = tone === "rail";
+const options = [
+  { key: "photo", label: "照片", Icon: ImageIcon },
+  { key: "comic", label: "漫画", Icon: ReaderIcon },
+] as const;
+
+export default function ModeSwitch({ mode, onChange, compact }: Props) {
+  if (compact) {
+    const next = options.find(({ key }) => key !== mode) ?? options[0];
+    return (
+      <button
+        type="button"
+        className="toolbar-icon"
+        aria-label={`切换到${next.label}`}
+        title={`切换到${next.label}`}
+        onClick={() => onChange(next.key)}
+      >
+        <next.Icon size={17} />
+      </button>
+    );
+  }
+
   return (
     <div
       role="group"
       aria-label="工作台模式"
-      className={
-        onRail
-          ? "flex items-center gap-0.5 rounded-md border border-rail-line bg-rail-hover p-0.5"
-          : "flex items-center gap-0.5 rounded-md border border-border bg-bg-subtle p-0.5"
-      }
+      className="mode-switch ui-segmented"
+      data-mode={mode}
     >
-      {options.map((option) => {
-        const active = mode === option.key;
-        const title =
-          option.key === "photo"
-            ? "照片工作台：只列照片相册"
-            : "漫画工作台：只列漫画相册";
-        return (
-          <button
-            key={option.key}
-            type="button"
-            onClick={() => onChange(option.key)}
-            aria-pressed={active}
-            title={title}
-            className={`h-7 flex-1 rounded px-2.5 text-meta transition-colors ${
-              active
-                ? /* 选中态与侧栏的当前入口同一套说法：淡底 + 深一档的
-                     蓝字。抽屉里那一档用侧栏专用的淡底 —— 它是压在浅灰
-                     侧栏上的，得比画布上的那一档更蓝一点才看得出来。 */
-                  onRail
-                  ? "bg-rail-active text-rail-active-fg font-medium"
-                  : "bg-accent-soft text-accent-ink font-medium"
-                : onRail
-                  ? "text-rail-muted hover:text-rail-fg"
-                  : "text-fg-muted hover:text-fg"
-            }`}
-          >
-            {option.label}
-          </button>
-        );
-      })}
+      {options.map(({ key, label }) => (
+        <button
+          key={key}
+          type="button"
+          aria-pressed={mode === key}
+          onClick={() => onChange(key)}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

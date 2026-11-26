@@ -1,17 +1,3 @@
-/* 发现页（/photo/explore）的卡片语言。
- *
- * 时间、人物、地点、主题这四段预览以前各用一套排法：年份是一行小卡，
- * 人物是一排圆头像，地点是一格格列表行，主题是一行行的事。一屏里
- * 四种节奏，读的人得先认一遍版式才知道每段摆的是什么。
- *
- * 现在四段共用一套发现卡：一样的方块画面、一样的标题与说明位置。
- * 卡片之间靠留白与细线分开，不靠白底盒子 —— 照片工作台是展陈墙，
- * 不是一堆卡片。
- *
- * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由
- * 样式表的先后决定。@tailwind components 只为把这一份样式挂进
- * components 层（工具类在 utilities 层，才能盖得住组件层）。
- */
 @tailwind components;
 
 @layer components {
@@ -34,8 +20,8 @@
     scrollbar-width: thin;
   }
   .explore-strip > .explore-card {
-    flex: 0 0 132px;
-    width: 132px;
+    flex: 0 0 clamp(124px, 12vw, 184px);
+    width: clamp(124px, 12vw, 184px);
   }
 
   /* 一张发现卡：画面在上，标题与说明在下。 */
@@ -53,9 +39,9 @@
   .explore-card__media {
     position: relative;
     display: block;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 4 / 3;
     overflow: hidden;
-    border-radius: var(--radius-media);
+    border-radius: var(--radius-tile);
     background: var(--bg-subtle);
   }
   .explore-card__media > img {
@@ -153,4 +139,32 @@
   .explore-search__input::placeholder {
     color: var(--fg-subtle);
   }
+}
+
+@media (max-width: 639px) {
+  .year-index__item {
+    flex-basis: 172px;
+  }
+}
+.explore-heading,
+.explore-page .explore-search {
+  width: min(100%, 680px);
+  margin-inline: auto;
+}
+
+.explore-heading .page-heading > div:first-child {
+  justify-content: center;
+}
+
+.explore-heading h1 {
+  text-align: center;
+}
+
+.explore-page .explore-search {
+  background: var(--surface-card);
+  border-radius: var(--radius-tile);
+}
+
+.explore-dimensions {
+  padding-top: 14px;
 }

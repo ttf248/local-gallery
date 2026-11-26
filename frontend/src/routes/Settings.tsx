@@ -28,7 +28,12 @@ import ServerConfigPanel from "../components/settings/ServerConfigPanel";
 import AutoSyncPanel from "../components/settings/AutoSyncPanel";
 import { Row, Section } from "../components/settings/SettingsSection";
 import PageTabs, { PagePanel } from "../components/common/PageTabs";
-import { SETTINGS_TABS, TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
+import {
+  SETTINGS_TABS,
+  TAB_PAGES,
+  resolveTab,
+  tabRoute,
+} from "../utils/pageTabs";
 import ScanWarnings from "../components/common/ScanWarnings";
 import Toggle from "../components/common/Toggle";
 import { syncHistoryCache } from "../utils/historyCache";
@@ -265,10 +270,13 @@ export function SettingsView({
     onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
   });
   const prefsError = prefsQuery.isError && (
-    <ErrorBanner onRetry={() => void prefsQuery.refetch()} retrying={prefsQuery.isFetching} className="mb-6">
+    <ErrorBanner
+      onRetry={() => void prefsQuery.refetch()}
+      retrying={prefsQuery.isFetching}
+      className="mb-6"
+    >
       设置加载失败。
       {data ? "仍显示上次加载的设置。" : "请重试加载。"}
-
     </ErrorBanner>
   );
   if (!data) {
@@ -314,11 +322,7 @@ export function SettingsView({
             那几组自带标题的面板。分组之间只用一条细线。 */}
         {visited.has("interface") && (
           <PagePanel idPrefix="settings" tab={SETTINGS_TABS[0]} active={tab}>
-            <Section
-              id="appearance"
-              title="外观"
-              icon={<SunIcon size={13} />}
-            >
+            <Section id="appearance" title="外观" icon={<SunIcon size={13} />}>
               {/* 这几行摆在一起，单列读下来最稳：标签与控件挨着，
                   不隔着半张卡。 */}
               <div className="settings-rows">
@@ -477,7 +481,9 @@ export function SettingsView({
                       label="阅读到末尾自动切换下一卷"
                       checked={data.autoSwitchAlbum}
                       disabled={patchPrefs.isPending}
-                      onChange={(v) => patchPrefs.mutate({ autoSwitchAlbum: v })}
+                      onChange={(v) =>
+                        patchPrefs.mutate({ autoSwitchAlbum: v })
+                      }
                     />
                   </Row>
                   <Row label="切换时显示通知">
@@ -485,7 +491,9 @@ export function SettingsView({
                       label="切换时显示通知"
                       checked={data.showSwitchNotif}
                       disabled={patchPrefs.isPending}
-                      onChange={(v) => patchPrefs.mutate({ showSwitchNotif: v })}
+                      onChange={(v) =>
+                        patchPrefs.mutate({ showSwitchNotif: v })
+                      }
                     />
                   </Row>
                 </Group>
@@ -592,7 +600,7 @@ export function SettingsView({
             {/* 危险操作单独成组：会丢东西的动作混在一排普通设置里，
                 一眼扫过去认不出哪几个是点了就没了的。 */}
             <section
-              className="settings-danger"
+              className="settings-danger ui-surface"
               aria-labelledby="danger-heading"
             >
               <h2 id="danger-heading" className="settings-danger__title">
@@ -649,7 +657,7 @@ export function SettingsView({
                 说明），末尾一条细线收住这一段。 */}
             <section
               id="server"
-              className="settings-section"
+              className="settings-section ui-surface"
               aria-labelledby="server-heading"
             >
               <div className="settings-section__head">

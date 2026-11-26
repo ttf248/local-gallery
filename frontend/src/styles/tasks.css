@@ -1,13 +1,3 @@
-/* 任务中心的版面样式。
- *
- * 任务中心是控制台：状态、数字、动作与配置按「先看状态、再选配置、
- * 最后看队列」的顺序排在一栏里。各段之间只用一条细线分隔 —— 白色
- * 面板把状态、配置与队列隔成三块互不相干的盒子，读起来像三张报表，
- * 而不是一次运行的全貌。
- *
- * @tailwind components 只为把这一份样式挂进 components 层：Tailwind 的
- * 工具类在 utilities 层，components 层在它之前，工具类才盖得住组件层。
- */
 @tailwind components;
 
 @layer components {
@@ -25,15 +15,21 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 14px 24px;
-    padding: 4px 0 18px;
-    border-bottom: 1px solid var(--border-faint);
+    padding: clamp(13px, 2.2vw, 23px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--surface-card);
+  }
+  .tasks-summary__description {
+    flex: 1 1 18rem;
+    min-width: 0;
   }
   .tasks-summary__state {
     display: flex;
     align-items: center;
     gap: 9px;
     font-family: var(--font-display);
-    font-size: var(--text-section);
+    font-size: var(--text-page-sm);
     font-weight: 600;
     color: var(--fg);
   }
@@ -50,6 +46,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 12px;
+    max-width: 100%;
   }
   .tasks-summary__hint {
     font-size: var(--text-meta);
@@ -60,15 +57,11 @@
   /* --- 一段内容 ---
      标题 + 说明 + 正文。段落之间一条细线，不用盒子。 */
   .tasks-section {
-    margin-top: 26px;
-    padding-top: 22px;
-    border-top: 1px solid var(--border-faint);
-  }
-  /* 紧跟在状态摘要后面的那一段不再画线：摘要自己刚画过一条。 */
-  .tasks-summary + .tasks-section {
-    margin-top: 0;
-    padding-top: 22px;
-    border-top: 0;
+    margin-top: 16px;
+    padding: clamp(12px, 2vw, 22px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--surface-card);
   }
   .tasks-section__head {
     display: flex;
@@ -181,4 +174,121 @@
     font-size: var(--text-meta);
     color: var(--fg-subtle);
   }
+}
+.task-hero-progress {
+  height: 8px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-strong);
+}
+
+.tasks-summary > :last-child:not(.tasks-summary__actions) {
+  flex-basis: 100%;
+}
+
+.tasks-summary[data-status="failed"] {
+  border-color: color-mix(in srgb, var(--danger) 32%, var(--border));
+}
+
+.tasks-field--modules {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: stretch;
+  gap: 8px;
+}
+
+.task-module-matrix {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.task-module-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+  min-height: 96px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  text-align: left;
+  transition:
+    background var(--dur-fast),
+    border-color var(--dur-fast);
+}
+
+.task-module-card[aria-pressed="true"] {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.task-module-card:disabled {
+  cursor: not-allowed;
+  background: var(--bg-subtle);
+}
+
+.task-module-card__name {
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.task-module-card__state,
+.task-module-card__count {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: var(--text-meta);
+  color: var(--fg-muted);
+}
+
+.task-module-card__dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-subtle);
+}
+
+.task-module-card__dot[data-ready="true"] {
+  background: var(--success);
+}
+
+.task-module-card[aria-pressed="true"] .task-module-card__dot[data-ready="true"] {
+  background: var(--status-selected);
+}
+
+@container tasks (max-width: 690px) {
+  .task-module-matrix {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container tasks (max-width: 440px) {
+  .task-module-matrix {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.task-storage-meter {
+  display: flex;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--bg-strong);
+}
+
+.tasks-list .tasks-queue-card {
+  margin-block: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-control);
+  background: var(--bg);
+}
+
+.tasks-page
+  :is(.bg-bg-subtle, .bg-bg-subtle\/50, .bg-bg-strong)
+  .text-fg-subtle {
+  color: var(--fg-muted);
 }

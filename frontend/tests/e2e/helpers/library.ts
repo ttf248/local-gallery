@@ -91,18 +91,16 @@ export async function scannedNodes(
   kind: "photo" | "comic" = "photo",
 ) {
   await liveRoots(request);
-  const before = (await (
-    await request.get("/api/library/manifest")
-  ).json()) as Partial<ManifestResponse>;
-  const previousScannedAt = before.manifest?.scannedAt;
-  expect((await request.post("/api/scans")).ok()).toBeTruthy();
-  await expect
-    .poll(async () => {
-      const response = await request.get("/api/library/manifest");
-      if (!response.ok()) return previousScannedAt;
-      return ((await response.json()) as ManifestResponse).manifest.scannedAt;
-    })
-    .not.toBe(previousScannedAt);
+  const scan = await request.post("/api/scans");
+  expect(scan.ok()).toBeTruthy();
+  const { scanId } = (await scan.json()) as { scanId: string };
+  // 扫描可能复用仍在收尾的任务，此时清单时间戳已经发布。
+  const events = await request.get(
+    `/api/scans/${encodeURIComponent(scanId)}/events`,
+    { timeout: 15_000 },
+  );
+  expect(events.ok()).toBeTruthy();
+  expect(await events.text()).toMatch(/^event: complete\r?$/m);
   const manifest = (await (
     await request.get("/api/library/manifest")
   ).json()) as ManifestResponse;

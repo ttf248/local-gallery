@@ -40,8 +40,8 @@ export default function EmptyState({
   }
   return (
     <div
-      className={`page-shell empty-state flex flex-col items-center justify-center py-10 text-center fade-up ${
-        dense ? "pb-6" : "min-h-[26vh]"
+      className={`page-shell empty-state flex flex-col items-center justify-center py-12 text-center fade-up ${
+        dense ? "pb-8" : "min-h-[30vh]"
       }`}
     >
       {icon && (

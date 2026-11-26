@@ -104,9 +104,7 @@ export default function Popover({
         const menuLeft = align === "end" ? left - w : left;
         if (menuLeft + w > window.innerWidth - 8) {
           left =
-            align === "end"
-              ? window.innerWidth - 8
-              : window.innerWidth - 8 - w;
+            align === "end" ? window.innerWidth - 8 : window.innerWidth - 8 - w;
         }
         if (menuLeft < 8) left = align === "end" ? 8 + w : 8;
         // 下方放不下就翻到按钮上方；上方也不够就贴着视口下沿。
@@ -231,7 +229,7 @@ export default function Popover({
                   transform: align === "end" ? "translateX(-100%)" : "none",
                   zIndex: 60,
                 }}
-                className={`${baseCls} ${className}`}
+                className={`${baseCls} ${tone === "theme" ? "ui-popover" : ""} ${className}`}
               >
                 {children}
               </div>

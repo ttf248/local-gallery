@@ -585,7 +585,7 @@ test("窄屏阅读器不再显示右侧悬浮控件，阅读设置收进底部�
 });
 
 // 漫画工作台的暖棕：阅读器恒为暗场，选中的那一档与进度条用同一支暖棕。
-// 换色相不改机制 —— 这里只断言颜色没跑回品牌蓝。
+// 阅读器暗场保留漫画工作台的暖铜赭强调色。
 test("阅读器当前模式用漫画暖棕标出", async ({ page, request }) => {
   const nodes = await scannedNodes(request, "comic");
   const album = nodes.find((node) => node.name === "sample-comic")!;
@@ -595,8 +595,8 @@ test("阅读器当前模式用漫画暖棕标出", async ({ page, request }) => 
   await expect(active).toBeVisible();
   await expect(active).toHaveAttribute("aria-pressed", "true");
   const color = await active.evaluate((el) => getComputedStyle(el).color);
-  // --reader-accent：#d4aa80（深色档的暖棕）。
-  expect(color).toBe("rgb(212, 170, 128)");
+  // --reader-accent：#d9a074（深色档的暖棕）。
+  expect(color).toBe("rgb(217, 160, 116)");
 });
 
 test("阅读器连续模式按视口宽度请求预览图，不发原图", async ({ page }) => {
@@ -777,8 +777,7 @@ test("迟到的图片进度不会覆盖随后标记的已读或重置未读", as
   });
   try {
     // 清单在书架上：漫画首页只讲续读与未读。
-    await page.goto("/comic/library");
-    await page.getByRole("combobox").fill(album.name);
+    await page.goto(`/comic/library?q=${encodeURIComponent(album.name)}`);
     const card = page.locator(
       `main [data-virtuoso-scroller] a[href="/comic/albums/${album.id}"]`,
     );

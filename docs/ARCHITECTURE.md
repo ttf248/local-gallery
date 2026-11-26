@@ -289,7 +289,7 @@ OCR 额外维护 `derived/ai/ocr-search-index.json` 倒排索引，索引项仅�
 
 侧栏入口的清单也只有一份（`utils/navEntries.ts`）：侧栏按它渲染，设置页的「导航」分区也按它逐项开关。哪几项显示由服务端偏好 `hiddenNavItems` 决定（存的是生效的隐藏清单），`hooks/useNavVisibility.ts` 读它并给出可见性判断；偏好没读回来时用前端默认清单兜底，与服务端默认值一致，所以不会出现先全显示再收掉的闪动。工作台首页固定显示，收起它那一侧的侧栏就空了。
 
-**按钮上的描边由全局规则决定。** `styles/global.css` 里按钮只清宽度（`border-width: 0`）不动 `border-style`：Tailwind 的 `border` / `border-b-2` 只改宽度，样式一旦被重置成 none，按钮上的描边会整条消失。区域层次因此靠「白卡 + 浅色标题条 + 发丝线」建立，不依赖按钮描边。
+**按钮上的描边由全局规则决定。** `styles/base.css` 里按钮只清宽度（`border-width: 0`）不动 `border-style`：Tailwind 的 `border` / `border-b-2` 只改宽度，样式一旦被重置成 none，按钮上的描边会整条消失。区域层次因此靠「白卡 + 浅色标题条 + 发丝线」建立，不依赖按钮描边。
 
 存储信息分两层给。`GET /api/storage/usage` 经过普通访问门禁即可访问，路径一律相对缓存根目录（`derived/metadata/ocr`、`state/ai_jobs.json`），局域网客户端也能看；`GET /api/storage/paths` 仅限回环访问，给出缓存根目录、工作目录、配置文件、Python 环境与各权重文件的绝对路径。完整路径不进入浏览器持久 store，也不向局域网客户端开放。任务记录展开时按需读 `GET /api/ai/jobs/:jobId/output`，给出这次任务自己的批次目录与占用；折叠状态不发起请求。
 
@@ -528,7 +528,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 - TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
 - 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片时间线，年份与月份筛选在查询参数中，如 `?year=2024`）、`/photo/library`（相册）、`/photo/explore`（发现）、`/photo/me/:tab`（珍藏）、`/photo/search`（搜索结果，名称 / 画面与文字两档）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`（按目录年份取材的旧书签入口）、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底：`utils/navigation.ts` 的 `useSafeBack` 先看应用内历史（`history.state.idx > 0`），有就后退；没有就按「能确认的上级 → 该侧结构入口」的顺序回落，落点由资源摘要的 `parentId` 决定（兜底可以是函数，点击那一刻才求值）。兜底回落用 `replace` 而不是 `push`：深链打开时这一页就是历史里的第一条，再 `push` 一条就等于留了一枚回跳死循环（返回一次到上级，再返回一次又回到这一页）。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
-- **相册页（`routes/Library.tsx`）是结构页，不是一张清单。** 左侧 `components/library/FolderTree.tsx` 按需展开真实目录（媒体根 → 文件夹 → 相册），右侧是当前这一层的内容；当前层、排序、最少张数与视图都住在地址里（`node` 参数加 `hooks/useListFilters.ts` 的查询参数），复制链接能落到同一个文件夹。目录树默认只展开当前位置相关的那条路：媒体根那一行始终可见，但它的子项默认收着（根下面常常挂着几十个年份文件夹，全部摊开就是一份巨大的导航列表，而右侧内容区正摆着同一批文件夹），站在哪一层才展开到那一层，其余收起；每一层都能单独收起，树上方有定位框（按名字找到文件夹或相册后直接跳过去）。文件夹卡在相册页里指向它的下一层（`node` 参数），而不是跳去集合页 —— 换目录在相册页里比跳出去再跳回来短；集合的规范地址仍是集合页，收藏、属性与复制链接都用规范地址。照片侧界面上说「文件夹」，不说服务端的内部类型名「集合」。文件夹卡的封面由 `components/album/CardCover.tsx` 渲染：照片侧是一张主体照片铺满、辅以最多两张小图（`cover-mosaic` 的四等分拼贴留给漫画侧的书架），「这是文件夹」由标题前的一枚小图标说清，不在封面上压常驻标签。智能主题（时间、人物、地点、场景的聚合）不进相册页：拿自动分组冒充文件夹树，用户就找不到自己的文件。
+- **相册页（`routes/Library.tsx`）展示当前位置的内容。** `FolderDrawer` 按需挂载 `FolderTree`，桌面展开偏好通过 `uiStore` 版本 2 持久化，移动端开关只在当前页面生效。`BreadcrumbMenu` 打开时分页取同级目录。当前层、排序和筛选继续由地址参数驱动，文件夹收藏与复制链接使用原规范地址。`CardCover` 对目录的 1–4 张封面使用对应拼贴布局，紧凑列表使用首图。`CommandPalette` 复用 TanStack Query 与名称搜索端点，查询草稿及打开状态均为临时界面状态。
 - **相册页的目录树只按需取一层。** 子项用 `libraryQueryKeys.children(parentId, mode)` 做键（与库级查询同一套键注册表），展开一个节点才去读它的下一层；库一变（`["library"]` 失效）这些查询跟着重取，失败时树上给出显式的重试手柄而不是空目录。
 - 足迹页在 `/photo/travels`，地点详情在 `/photo/travels/place/<六位区划码>`。筛选状态（时间区间 `from`/`to`、时间跨度 `span`、归并粒度 `level`）放查询参数，时间区间是跨层级的一维：换粒度与下钻都带着它，缺省表示全部时间。`span` 取 `1y`/`3y`/`5y`/`10y`/`all`，缺省 `5y`：跨度圈的就是这一段，下面的行程目录与地图随之过滤。旧的 `/photo/locations` 与坐标聚类相册 ID 一并作废，不留兼容跳转。
 - 足迹页的组成：`routes/Travels.tsx` 是通栏两栏的骨架（抬头一条带：最左是跨度筛选，随后是规模带，右边是粒度控件，页面名只留在 `sr-only` 的 `h1` 里；正文左栏是行程目录，右栏是地图，`position: sticky` 随页面滚动），`components/travels/TravelMiniMap.tsx` 是右栏那块只读地图（离线行政边界 + 照片位置的点云，320–440 像素见方；`scope` 决定画面是裁到有数据的区域还是整张地图），`components/travels/TravelTrips.tsx` 是行程目录（按年分组，年份倒序，一段一张卡片，宽屏两栏并排，点开才就地展开照片）。段的照片按需取回：`hooks/useChinaLocations.ts` 的 `useChinaTripMedia` 在展开或点开时才发请求。
@@ -555,11 +555,11 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 页面的版式只有一处真相源，分三层：
 
-- **容器**：`.page-shell` 是唯一的内容容器（`styles/global.css`），宽度由 `--page-max`（2560px）封顶，左右留白由 `--page-gutter`（`clamp(20px, 3vw, 48px)`）给出，并让开安全区（`--safe-left/right`）。所有页面都用它，因此左右留白与内容左缘在翻页时不跳。防御规则 `.page-shell .page-shell` 把嵌套里的内边距清掉 —— 组件内部再套一层容器时不许凭空多出留白。
+- **容器**：`.page-shell` 是唯一的内容容器（`styles/primitives.css`），宽度由 `--page-max`（2560px）封顶，左右留白由 `--page-gutter`（`clamp(20px, 3vw, 48px)`）给出，并让开安全区（`--safe-left/right`）。所有页面都用它，因此左右留白与内容左缘在翻页时不跳。防御规则 `.page-shell .page-shell` 把嵌套里的内边距清掉 —— 组件内部再套一层容器时不许凭空多出留白。
 - **超宽档**：2240px 起（2560 宽的 27 寸）仍是单栏，只是列宽放大、首页页头并成一行；断点在样式表的 `@media (min-width: 2240px)` 与 `hooks/useMediaQuery.ts` 的 `ULTRAWIDE_LAYOUT_QUERY` 两处，改的时候一起改。超宽档不再另做两栏骨架 —— 理由见设计文档的「超宽档版式」。
 - **网格**：两套系统各有分工。`.library-grid`（含 `--dense` / `--spacious` / `--comic` 几档）是 CSS 网格，列宽由 `tokens.css` 的 `--library-col` 一族给定，按可用宽度自动分列；`masonryLayout.ts` 是 JS 排的瀑布流，用于照片内容（照片墙、随手看看、智能相册墙），按每张的真实宽高比落进当前最矮的一列。列宽的数值只在 tokens 与 `masonryColumnCount` 的入参里，组件里不写死。
 
-触摸设备另有一套约定：命中区不小于 44×44（`styles/global.css` 的触摸档规则把按钮与链接的本体撑大，视觉尺寸不变），贴边内容让开安全区（`--safe-*`），软键盘弹出时贴底浮层按 `--keyboard-inset` 上移（`hooks/useVisualViewport.ts`）。设计意图与理由见设计文档。
+触摸设备另有一套约定：命中区不小于 44×44（`styles/primitives.css` 的触摸档规则把按钮与链接的本体撑大，视觉尺寸不变），贴边内容让开安全区（`--safe-*`），软键盘弹出时贴底浮层按 `--keyboard-inset` 上移（`hooks/useVisualViewport.ts`）。设计意图与理由见设计文档。
 
 ### 活动、收藏与历史
 

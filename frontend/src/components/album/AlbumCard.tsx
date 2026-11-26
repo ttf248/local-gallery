@@ -314,7 +314,16 @@ function GridCard({
   const previewTimer = useRef<number | null>(null);
   // 进度、是否读完、未读标记、计数与作品名：网格与列表共用一份推导。
   const card = useCardState(data, showUnreadBadge);
-  const { progressPct, isFinished, isComicAlbum, cardCopy, unread, multiRoot, hasDuration, label } = card;
+  const {
+    progressPct,
+    isFinished,
+    isComicAlbum,
+    cardCopy,
+    unread,
+    multiRoot,
+    hasDuration,
+    label,
+  } = card;
   // 标题印在封面上：漫画工作台的默认形态。书架上的书在封面上写着
   // 书名，一排封面才读得出「一排书」；照片工作台是展陈墙，标题仍然
   // 压在封面下方（展品说明牌）。
@@ -385,8 +394,7 @@ function GridCard({
       if (previewTimer.current !== null)
         window.clearTimeout(previewTimer.current);
       if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-      if (pressTimer.current !== null)
-        window.clearTimeout(pressTimer.current);
+      if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
     };
   }, []);
 
@@ -436,7 +444,7 @@ function GridCard({
           {/* 封面：相册用一张主封面，集合与文件夹用最多四张代表图拼出
               「里面有什么」。视频封面同样裁切填满：方形画幅里保留 16:9
               的完整画面会上下留出两条黑边，读起来像一只空信箱。 */}
-          <CardCover data={data} fit="cover" />
+          <CardCover data={data} />
 
           {/* 封面左上角：状态槽。阅读状态（未读 / 已读完）与视频转码角标
               都在这一列，堆叠显示，互不遮挡。
@@ -473,7 +481,9 @@ function GridCard({
               data-testid="cover-title"
             >
               {coverSeries && (
-                <div className="cover-title__series truncate">{coverSeries}</div>
+                <div className="cover-title__series truncate">
+                  {coverSeries}
+                </div>
               )}
               <div
                 className={`cover-title__text ${
@@ -550,69 +560,72 @@ function GridCard({
               「藏起计数」的那一页（最近浏览）不摆这一行：那一页问的是
               「翻的是什么、什么时候翻的」，其余是技术读数。 */}
           {hideMeta ? null : (
-          <div
-            className={`text-meta tabular-nums flex items-center gap-1.5 min-w-0 ${
-              showTitleOnCover ? "text-fg-muted" : "text-fg-muted mt-1"
-            }`}
-          >
-            <TypeChip variant={data.variant} />
-            {(() => {
-              const media = card.counts;
-              if (media) {
-                // album 变体：按图/视频分别展示。
-                // 不允许换行 —— 「384 张 · 19 个视 频」这种断字很难看，
-                // 空间不够时应该让后面的来源副标题截断。
-                return (
-                  <span
-                    title={media.title}
-                    className="shrink-0 whitespace-nowrap"
-                  >
-                    {/* 数量是书封下方唯一剩下的信息，用正文色；其余
+            <div
+              className={`text-meta tabular-nums flex items-center gap-1.5 min-w-0 ${
+                showTitleOnCover ? "text-fg-muted" : "text-fg-muted mt-1"
+              }`}
+            >
+              <TypeChip variant={data.variant} />
+              {(() => {
+                const media = card.counts;
+                if (media) {
+                  // album 变体：按图/视频分别展示。
+                  // 不允许换行 —— 「384 张 · 19 个视 频」这种断字很难看，
+                  // 空间不够时应该让后面的来源副标题截断。
+                  return (
+                    <span
+                      title={media.title}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {/* 数量是书封下方唯一剩下的信息，用正文色；其余
                         补充信息退回次要色，层级才分得开。 */}
-                    {showTitleOnCover ? (
-                      <>
-                        <span className="text-fg font-medium">{media.lead}</span>
-                        {media.rest && (
-                          <span className="text-fg-muted"> · {media.rest}</span>
-                        )}
-                      </>
-                    ) : (
-                      media.label
-                    )}
+                      {showTitleOnCover ? (
+                        <>
+                          <span className="text-fg font-medium">
+                            {media.lead}
+                          </span>
+                          {media.rest && (
+                            <span className="text-fg-muted">
+                              {" "}
+                              · {media.rest}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        media.label
+                      )}
+                    </span>
+                  );
+                }
+                // collection / smart 变体：count + 计数单位（语义是子相册数）。
+                // 单位跟卡片所属的那一侧走：照片侧「本」，漫画侧「卷」。
+                return (
+                  <span className="shrink-0 whitespace-nowrap">
+                    {data.count} {albumCountUnit(data.contentKind ?? "photo")}
                   </span>
                 );
-              }
-              // collection / smart 变体：count + 计数单位（语义是子相册数）。
-              // 单位跟卡片所属的那一侧走：照片侧「本」，漫画侧「卷」。
-              return (
-                <span className="shrink-0 whitespace-nowrap">
-                  {data.count}{" "}
-                  {albumCountUnit(data.contentKind ?? "photo")}
-                </span>
-              );
-            })()}
-            {/* 阅读进度：书封形态下百分比放进说明行，与计数读在一起，
+              })()}
+              {/* 阅读进度：书封形态下百分比放进说明行，与计数读在一起，
                 封面上的书名压条不再压一枚 chip。 */}
-            {showTitleOnCover &&
-              isComicAlbum &&
-              progressPct !== null &&
-              progressPct > 0 &&
-              !isFinished && (
+              {showTitleOnCover &&
+                isComicAlbum &&
+                progressPct !== null &&
+                progressPct > 0 &&
+                !isFinished && (
+                  <>
+                    <span className="text-fg-subtle">·</span>
+                    <span className="text-accent-ink font-medium shrink-0 whitespace-nowrap">
+                      已读 {progressPct}%
+                    </span>
+                  </>
+                )}
+              {data.subtitle && (
                 <>
                   <span className="text-fg-subtle">·</span>
-                  <span className="text-accent-ink font-medium shrink-0 whitespace-nowrap">
-                    已读 {progressPct}%
-                  </span>
+                  <span className="truncate">{data.subtitle}</span>
                 </>
               )}
-            {data.subtitle && (
-              <>
-                <span className="text-fg-subtle">·</span>
-                <span className="truncate">{data.subtitle}</span>
-              </>
-            )}
-
-          </div>
+            </div>
           )}
           {/* 多根来源 badge：与标签副标题独立，作为视觉小标签放在元数据行。
               单一媒体根下每张卡片都挂同一句来源是噪音，multiRoot 为 false 时隐藏。 */}
@@ -623,7 +636,9 @@ function GridCard({
             </div>
           )}
           {note && (
-            <div className="text-meta text-fg-muted mt-0.5 truncate">{note}</div>
+            <div className="text-meta text-fg-muted mt-0.5 truncate">
+              {note}
+            </div>
           )}
           {showLastSeen && data.lastSeenAt && (
             <div
@@ -707,7 +722,16 @@ function ListCard({
   // 与 GridCard 一致：直接依赖 <img loading="lazy">，不重复自写 IO。
   // 进度、是否读完、未读标记、计数与作品名：与网格视图同源。
   const card = useCardState(data, showUnreadBadge);
-  const { progressPct, isFinished, isComicAlbum, cardCopy, unread, multiRoot, hasDuration, label } = card;
+  const {
+    progressPct,
+    isFinished,
+    isComicAlbum,
+    cardCopy,
+    unread,
+    multiRoot,
+    hasDuration,
+    label,
+  } = card;
   // 漫画侧的列表行也是书架：缩略图是一本书（竖版 + 装订边）。
   const isComicContent = data.contentKind === "comic";
   // 作品名补在卷名前面：列表行写「第1卷」时，这一卷属于哪部作品
@@ -736,16 +760,11 @@ function ListCard({
               ? "album-thumb--book aspect-[4/5]"
               : /* 照片侧是方形：与网格里的方照同一套画幅，
                    竖版缩略图把照片裁成一条，读不出内容。 */
-                "aspect-square rounded-md border border-border shadow-xs"
+                "aspect-square rounded-media"
           }`}
           data-testid="card-cover"
         >
-          <CardCover
-            data={data}
-            loading="eager"
-            compact
-            fit={isComicContent ? "cover" : "contain"}
-          />
+          <CardCover data={data} loading="eager" compact />
           {data.coverKind === "video" && (
             <div className="pointer-events-none absolute top-1 right-1 inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-badge font-medium px-1.5 h-5 rounded shadow-sm">
               <PlayFilledIcon size={9} className="text-accent" />
@@ -792,7 +811,9 @@ function ListCard({
           <div className="text-body text-fg-subtle flex items-center gap-2 min-w-0 overflow-hidden">
             <TypeChip variant={data.variant} />
             {data.subtitle && (
-              <span className="truncate max-w-[10rem] shrink">{data.subtitle}</span>
+              <span className="truncate max-w-[10rem] shrink">
+                {data.subtitle}
+              </span>
             )}
             {isComicAlbum && progressPct !== null && progressPct > 0 && (
               <>
@@ -831,8 +852,7 @@ function ListCard({
               }
               return (
                 <>
-                  {data.count}{" "}
-                  {albumCountUnit(data.contentKind ?? "photo")}
+                  {data.count} {albumCountUnit(data.contentKind ?? "photo")}
                 </>
               );
             })()}

@@ -630,6 +630,7 @@ for (const health of ["late", "error"] as const) {
       // 标签页取（那里仍列带这个标签的相册）。用全局搜索进标签页 ——
       // 这是应用内跳转，页面不重载，刚存好的健康状态不会被
       // /api/health 的假响应抹掉。
+      await page.getByRole("button", { name: "打开命令面板" }).click();
       await page.getByRole("combobox").fill("测试");
       const tagHit = page.getByRole("option", { name: /标签/ });
       await expect(tagHit).toBeVisible();

@@ -7,6 +7,13 @@ import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import FolderTree from "../components/library/FolderTree";
+import FolderDrawer, {
+  useFolderDrawer,
+} from "../components/library/FolderDrawer";
+import BreadcrumbMenu from "../components/library/BreadcrumbMenu";
+import StickyPageHeader from "../components/layout/StickyPageHeader";
+import { FilterDropdown } from "../components/wall/AlbumFilterBar";
+import type { ReactNode } from "react";
 import {
   ChevronLeftIcon,
   FolderOpenIcon,
@@ -26,13 +33,9 @@ import type { ViewKey } from "../utils/listFilterParams";
 import { useUIStore } from "../store/uiStore";
 import { decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
 import type { GalleryContextEntry } from "../utils/galleryContext";
-import type {
-  LibraryDashboardProgress,
-  LibraryNodeSummary,
-} from "../api/library";
+import type { LibraryDashboardProgress } from "../api/library";
 import { workbenchCopy } from "../utils/workbench";
 import { toSelectionItems } from "../utils/selectionItems";
-import "../styles/library.css";
 
 /** 相册页自己的地址参数。 */
 const LIBRARY_PARAM = {
@@ -57,7 +60,7 @@ export default function Library() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const nodeId = params.get(LIBRARY_PARAM.node) ?? "";
-  const [treeOpen, setTreeOpen] = useState(false);
+  const drawer = useFolderDrawer();
   const filters = useListFilters();
   const viewMode = useUIStore((s) => s.viewMode);
   const manifest = useLibraryManifest().data?.manifest;
@@ -71,7 +74,14 @@ export default function Library() {
       sort: filters.sortBy,
       minImageCount: filters.minImageCount,
     }),
-    [mode, nodeId, filters.view, filters.query, filters.sortBy, filters.minImageCount],
+    [
+      mode,
+      nodeId,
+      filters.view,
+      filters.query,
+      filters.sortBy,
+      filters.minImageCount,
+    ],
   );
 
   const list = useLibraryList(query, Boolean(manifest));
@@ -102,8 +112,7 @@ export default function Library() {
               )}`,
               // 照片侧的文件夹卡封面上已经压着「文件夹」角标：说明行
               // 再写一遍是同一句话说两遍。
-              subtitle:
-                mode === "photo" ? undefined : card.subtitle,
+              subtitle: mode === "photo" ? undefined : card.subtitle,
             }
           : card,
       ),
@@ -115,7 +124,7 @@ export default function Library() {
     if (id) next.set(LIBRARY_PARAM.node, id);
     else next.delete(LIBRARY_PARAM.node);
     setParams(next, { replace: false });
-    setTreeOpen(false);
+    if (!drawer.desktop) drawer.setOpen(false);
   };
 
   // 书架按作品陈列。
@@ -261,294 +270,262 @@ export default function Library() {
     filters.view !== "all" ||
     filters.minImageCount > 0;
 
+  const actions = hasContent ? (
+    <ListFilterBar
+      compact
+      hideTotalCount
+      viewChips={
+        nodeId
+          ? undefined
+          : [
+              { key: "all", label: "全部", count: list.summary?.counts.all },
+              {
+                key: "album",
+                label: copy.albumTypeLabel,
+                count: list.summary?.counts.album,
+              },
+              {
+                key: "collection",
+                label: copy.collectionTypeLabel,
+                count: list.summary?.counts.collection,
+              },
+              {
+                key: "smart",
+                label: "标签",
+                count: list.summary?.counts.smart,
+              },
+            ]
+      }
+      activeViewKey={filters.view}
+      onChangeView={(key) => filters.setView(key as ViewKey)}
+      totalCount={total}
+      sort={filters.sortBy}
+      onSortChange={filters.setSortBy}
+      minImageCount={filters.minImageCount}
+      onMinImageCountChange={filters.setMinImageCount}
+      /* 多选：一屏几十本相册，逐本收藏不现实。 */
+      trailing={<SelectionToggle />}
+    />
+  ) : null;
+
   return (
     <div className="library-page min-h-full">
-      {/* Standard 容器：这一页是目录而不是展陈墙，密度按内容页的节奏走
-          （封面 220–260px、桌面五六列），不必跟照片墙抢画面。 */}
-      <div className="page-shell container--standard">
-        {/* 页头：这一层是什么、在哪棵树上。
-            不挂栏目眉标：面包屑的第一段已经说了「相册 / 书架」，
-            再写一遍是同一句话说两遍。 */}
-        <header className="library-head">
-          <div className="min-w-0">
-            <h1 className="page-title page-title--sm truncate">{title}</h1>
-            {nodeId ? (
-              <Breadcrumb
-                mode={mode}
-                nodeId={nodeId}
-                rootName={currentRoot?.name}
-                currentName={current ? current.displayName || current.name : ""}
-                chain={ancestorChain}
-                onSelect={selectNode}
-              />
-            ) : null}
-          </div>
-          <div className="library-head__actions">
-            {/* 返回上级：目录越走越深时，得有一条明显的路回去。
-                面包屑能跳，但那是链上的任意一级；这一枚是「上一层」，
-                一步就回到刚才那一层。 */}
-            {nodeId ? (
+      <StickyPageHeader
+        title={title}
+        meta={list.summary ? `${total.toLocaleString("zh-CN")} 项` : undefined}
+        leading={
+          <>
+            <button
+              ref={drawer.triggerRef}
+              type="button"
+              className="toolbar-icon"
+              title="切换目录抽屉"
+              aria-label="目录"
+              aria-keyshortcuts={"Control+\\ Meta+\\"}
+              aria-expanded={drawer.open}
+              aria-controls={drawer.open ? "library-tree" : undefined}
+              onClick={() => drawer.setOpen(!drawer.open)}
+            >
+              <FolderOpenIcon size={17} />
+            </button>
+            {nodeId && (
               <button
                 type="button"
-                className="btn btn-sm btn-outline"
+                className="toolbar-icon"
+                aria-label="返回上级"
+                title="返回上级"
                 onClick={() => selectNode(parentId)}
               >
-                <ChevronLeftIcon size={13} />
-                返回上级
+                <ChevronLeftIcon size={16} />
               </button>
-            ) : null}
-            {/* 窄屏：目录是一块可展开的面板，展开后它盖在内容上方 ——
-                触摸设备没有 hover，目录不能只在悬停时才出现。 */}
-            <button
-              type="button"
-              className="btn btn-sm btn-outline lg:hidden"
-              onClick={() => setTreeOpen((v) => !v)}
-              aria-expanded={treeOpen}
-              aria-controls="library-tree"
-            >
-              <FolderOpenIcon size={14} />
-              目录
-            </button>
-          </div>
-        </header>
-      </div>
-
-      <div className="page-shell">
-        <div className="library-layout">
-          <aside
-            id="library-tree"
-            className={`library-tree-panel${treeOpen ? " is-open" : ""}`}
-          >
-            <FolderTree
+            )}
+          </>
+        }
+        breadcrumbs={
+          nodeId && (
+            <BreadcrumbMenu
               mode={mode}
-              selectedId={nodeId}
+              nodeId={nodeId}
+              roots={(manifest?.roots ?? []).filter(
+                (root) => (root.contentKind ?? "photo") === mode,
+              )}
+              chain={ancestorChain}
               onSelect={selectNode}
             />
-          </aside>
+          )
+        }
+        actions={
+          drawer.desktop
+            ? actions
+            : actions && <LibraryFilters>{actions}</LibraryFilters>
+        }
+        subbar={
+          hasActiveFilters && (
+            <div className="flex flex-wrap gap-1.5">
+              {filters.query && (
+                <button
+                  type="button"
+                  className="ui-chip"
+                  onClick={() => filters.setQuery("")}
+                  aria-label={`清除名称筛选「${filters.query}」`}
+                >
+                  名称 · {filters.query} <span aria-hidden>×</span>
+                </button>
+              )}
+              <button type="button" className="ui-chip" onClick={filters.reset}>
+                清除筛选
+              </button>
+            </div>
+          )
+        }
+      />
+      <div className="page-shell library-layout">
+        <FolderDrawer
+          open={drawer.open}
+          desktop={drawer.desktop}
+          triggerRef={drawer.triggerRef}
+          onClose={() => {
+            drawer.setOpen(false);
+            if (drawer.desktop) drawer.triggerRef.current?.focus();
+          }}
+        >
+          <FolderTree mode={mode} selectedId={nodeId} onSelect={selectNode} />
+        </FolderDrawer>
+        <div className="library-content min-w-0">
+          {list.isError ? (
+            <ErrorBanner
+              onRetry={() => void list.refetch()}
+              retrying={list.isFetching}
+            >
+              {mode === "comic" ? "书架" : "相册"}内容读取失败。
+              {cards.length > 0 ? "仍显示已加载的内容。" : "请重试加载。"}
+            </ErrorBanner>
+          ) : null}
 
-          <div className="library-content min-w-0">
-            {list.isError ? (
-              <ErrorBanner onRetry={() => void list.refetch()} retrying={list.isFetching}>
-                {mode === "comic" ? "书架" : "相册"}内容读取失败。
-                {cards.length > 0 ? "仍显示已加载的内容。" : "请重试加载。"}
-              </ErrorBanner>
-            ) : null}
+          {list.isLoading && cards.length === 0 ? (
+            <p className="text-body text-fg-muted py-8">正在读取目录…</p>
+          ) : null}
 
-            {hasContent ? (
-              <ListFilterBar
-                viewChips={
-                  nodeId
-                    ? undefined
-                    : [
-                        { key: "all", label: "全部", count: list.summary?.counts.all },
-                        {
-                          key: "album",
-                          label: copy.albumTypeLabel,
-                          count: list.summary?.counts.album,
-                        },
-                        {
-                          key: "collection",
-                          label: copy.collectionTypeLabel,
-                          count: list.summary?.counts.collection,
-                        },
-                        { key: "smart", label: "标签", count: list.summary?.counts.smart },
-                      ]
-                }
-                activeViewKey={filters.view}
-                onChangeView={(key) => filters.setView(key as ViewKey)}
-                filterQuery={filters.query}
-                onClearQuery={() => filters.setQuery("")}
-                onClearFilters={hasActiveFilters ? filters.reset : undefined}
-                totalCount={total}
-                sort={filters.sortBy}
-                onSortChange={filters.setSortBy}
-                minImageCount={filters.minImageCount}
-                onMinImageCountChange={filters.setMinImageCount}
-                /* 多选：一屏几十本相册，逐本收藏不现实。 */
-                trailing={<SelectionToggle />}
-              />
-            ) : null}
-
-            {list.isLoading && cards.length === 0 ? (
-              <p className="text-body text-fg-muted py-8">正在读取目录…</p>
-            ) : null}
-
-            {cards.length > 0 ? (
-              isComicShelf ? (
-                /* 书架：作品一排，没归入作品的散卷一排，标签一排。
+          {cards.length > 0 ? (
+            isComicShelf ? (
+              /* 书架：作品一排，没归入作品的散卷一排，标签一排。
                    分段摆开，层级才读得出来。 */
-                <>
-                  {/* 批量动作条只出现一次，覆盖整页已加载的条目。 */}
-                  <BulkActions loaded={selectionItems} />
-                  {workCards.length > 0 ? (
-                    <section className="mb-10">
-                      <div className="section-heading">
-                        <h2 className="section-title">作品</h2>
-                        <span className="section-meta tabular-nums">
-                          {workCards.length} 部
-                        </span>
-                      </div>
-                      <AlbumGrid
-                        selectable
-                        showBulkActions={false}
-                        items={workCards}
-                        variant={viewMode}
-                        overlayAction={workOverlayAction}
-                        note={workNote}
-                        onEndReached={loadMore}
-                      />
-                    </section>
-                  ) : null}
+              <>
+                {/* 批量动作条只出现一次，覆盖整页已加载的条目。 */}
+                <BulkActions loaded={selectionItems} />
+                {workCards.length > 0 ? (
+                  <section className="mb-10">
+                    <div className="section-heading">
+                      <h2 className="section-title">作品</h2>
+                      <span className="section-meta tabular-nums">
+                        {workCards.length} 部
+                      </span>
+                    </div>
+                    <AlbumGrid
+                      selectable
+                      showBulkActions={false}
+                      items={workCards}
+                      variant={viewMode}
+                      overlayAction={workOverlayAction}
+                      note={workNote}
+                      onEndReached={loadMore}
+                    />
+                  </section>
+                ) : null}
 
-                  {looseCards.length > 0 ? (
-                    <section className="mb-10">
-                      <div className="section-heading">
-                        <h2 className="section-title">未归入作品</h2>
-                        <span className="section-meta tabular-nums">
-                          {looseCards.length} 卷
-                        </span>
-                      </div>
-                      <AlbumGrid
-                        selectable
-                        showBulkActions={false}
-                        items={looseCards}
-                        variant={viewMode}
-                        onEndReached={loadMore}
-                      />
-                    </section>
-                  ) : null}
+                {looseCards.length > 0 ? (
+                  <section className="mb-10">
+                    <div className="section-heading">
+                      <h2 className="section-title">未归入作品</h2>
+                      <span className="section-meta tabular-nums">
+                        {looseCards.length} 卷
+                      </span>
+                    </div>
+                    <AlbumGrid
+                      selectable
+                      showBulkActions={false}
+                      items={looseCards}
+                      variant={viewMode}
+                      onEndReached={loadMore}
+                    />
+                  </section>
+                ) : null}
 
-                  {tagCards.length > 0 ? (
-                    <section className="mb-10">
-                      <div className="section-heading">
-                        <h2 className="section-title">标签</h2>
-                        <span className="section-meta tabular-nums">
-                          {tagCards.length} 个
-                        </span>
-                      </div>
-                      <AlbumGrid
-                        items={tagCards}
-                        variant={viewMode}
-                        onEndReached={loadMore}
-                      />
-                    </section>
-                  ) : null}
-                </>
-              ) : (
-                <AlbumGrid
-                  selectable
-                  items={cards}
-                  variant={viewMode}
-                  onEndReached={loadMore}
-                />
-              )
-            ) : null}
-
-            {!list.isLoading && cards.length === 0 && hasContent ? (
-              <EmptyState
-                title={filters.query ? "没有匹配的内容" : "这一层是空的"}
-                description={
-                  filters.query
-                    ? `这个目录里没有名字包含「${filters.query}」的${copy.albumTypeLabel}或${copy.collectionTypeLabel}。`
-                    : `这个目录下面没有${copy.albumTypeLabel}。换一个目录看看，或者回到顶层。`
-                }
-                action={
-                  nodeId ? (
-                    <button className="btn btn-outline" onClick={() => selectNode("")}>
-                      回到顶层
-                    </button>
-                  ) : undefined
-                }
+                {tagCards.length > 0 ? (
+                  <section className="mb-10">
+                    <div className="section-heading">
+                      <h2 className="section-title">标签</h2>
+                      <span className="section-meta tabular-nums">
+                        {tagCards.length} 个
+                      </span>
+                    </div>
+                    <AlbumGrid
+                      items={tagCards}
+                      variant={viewMode}
+                      onEndReached={loadMore}
+                    />
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <AlbumGrid
+                selectable
+                coverRatio={mode === "photo" ? "4/3" : "4/5"}
+                items={cards}
+                variant={viewMode}
+                onEndReached={loadMore}
               />
-            ) : null}
+            )
+          ) : null}
 
-            {!hasContent && !list.isLoading ? (
-              <EmptyState
-                title={`${mode === "comic" ? "书架" : "相册"}这边还没有内容`}
-                description="媒体库里还没有这一侧的内容。先到设置里添加媒体目录，或去另一边看看。"
-                action={
-                  <Link className="btn btn-outline" to="/settings/data">
-                    去设置
-                  </Link>
-                }
-              />
-            ) : null}
-          </div>
+          {!list.isLoading && cards.length === 0 && hasContent ? (
+            <EmptyState
+              title={filters.query ? "没有匹配的内容" : "这一层是空的"}
+              description={
+                filters.query
+                  ? `这个目录里没有名字包含「${filters.query}」的${copy.albumTypeLabel}或${copy.collectionTypeLabel}。`
+                  : `这个目录下面没有${copy.albumTypeLabel}。换一个目录看看，或者回到顶层。`
+              }
+              action={
+                nodeId ? (
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => selectNode("")}
+                  >
+                    回到顶层
+                  </button>
+                ) : undefined
+              }
+            />
+          ) : null}
+
+          {!hasContent && !list.isLoading ? (
+            <EmptyState
+              title={`${mode === "comic" ? "书架" : "相册"}这边还没有内容`}
+              description="媒体库里还没有这一侧的内容。先到设置里添加媒体目录，或去另一边看看。"
+              action={
+                <Link className="btn btn-outline" to="/settings/data">
+                  去设置
+                </Link>
+              }
+            />
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * 面包屑：这一层在目录树的哪条路上。
- *
- * 祖先集合逐级向上解析（节点摘要带 parentId，拿到上级才知道再上一级是谁）。
- * 顶层集合没有上级集合，这时用它的媒体根名收尾 —— 多根扫描时，
- * 「同一个叫『2011年』的文件夹」分属不同的根，用户需要知道自己站在哪一棵上。
- */
-function Breadcrumb({
-  mode,
-  nodeId,
-  rootName: selectedRootName,
-  currentName,
-  chain,
-  onSelect,
-}: {
-  mode: "photo" | "comic";
-  nodeId: string;
-  rootName?: string;
-  currentName: string;
-  /** 祖先链：最外层到紧邻当前节点的那一层。 */
-  chain: LibraryNodeSummary[];
-  onSelect: (id: string) => void;
-}) {
-  // 祖先链：节点摘要带 parentId，拿到上级才知道再上一级是谁。
-  const rootName = selectedRootName || chain[0]?.sourceName || "";
-
+function LibraryFilters({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
-    <nav aria-label="目录位置" className="library-crumbs">
-      <Link
-        to={libraryRoute(mode)}
-        className="library-crumbs__link"
-        onClick={(event) => {
-          if (nodeId) {
-            event.preventDefault();
-            onSelect("");
-          }
-        }}
-      >
-        {mode === "comic" ? "书架" : "相册"}
-      </Link>
-      {rootName ? (
-        <>
-          <span className="library-crumbs__sep" aria-hidden>
-            ›
-          </span>
-          <span className="library-crumbs__current">{rootName}</span>
-        </>
-      ) : null}
-      {chain.slice(0, -1).map((item) => (
-        <span key={item.id} className="contents">
-          <span className="library-crumbs__sep" aria-hidden>
-            ›
-          </span>
-          <Link
-            to={`${libraryRoute(mode)}?node=${encodeURIComponent(item.id)}`}
-            className="library-crumbs__link"
-          >
-            {item.displayName || item.name}
-          </Link>
-        </span>
-      ))}
-      {currentName ? (
-        <>
-          <span className="library-crumbs__sep" aria-hidden>
-            ›
-          </span>
-          <span className="library-crumbs__current">{currentName}</span>
-        </>
-      ) : null}
-    </nav>
+    <FilterDropdown
+      label="显示与排序"
+      dialogLabel="相册显示与排序"
+      count={0}
+      open={open}
+      onOpenChange={setOpen}
+      panel={children}
+    />
   );
 }

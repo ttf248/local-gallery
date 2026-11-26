@@ -66,13 +66,14 @@ function keyForms(key: string): string[] {
 function hasHandler(combo: string): boolean {
   // 带修饰键的组合一定写成字符串键（useKeyboard 的表）。
   if (combo.includes("+")) {
-    return SOURCES.some(({ text }) => text.includes(`"${combo}"`));
+    return SOURCES.some(({ text }) => text.includes(JSON.stringify(combo)));
   }
   for (const form of keyForms(combo)) {
-    const quoted = form.startsWith('"')
-      ? form
-      : `"${form}"`;
-    const objectKey = new RegExp(`^\\s*"?${form.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"?\\s*:`, "m");
+    const quoted = form.startsWith('"') ? form : `"${form}"`;
+    const objectKey = new RegExp(
+      `^\\s*"?${form.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"?\\s*:`,
+      "m",
+    );
     const found = SOURCES.some(
       ({ text }) => text.includes(quoted) || objectKey.test(text),
     );
@@ -84,9 +85,9 @@ function hasHandler(combo: string): boolean {
 describe("快捷键清单", () => {
   it("每一条都有对应的处理函数", () => {
     const missing = SHORTCUTS.filter((shortcut) => !hasHandler(shortcut.combo));
-    expect(missing.map((shortcut) => `${shortcut.id} (${shortcut.combo})`)).toEqual(
-      [],
-    );
+    expect(
+      missing.map((shortcut) => `${shortcut.id} (${shortcut.combo})`),
+    ).toEqual([]);
   });
 
   it("同一组里组合键不重复", () => {

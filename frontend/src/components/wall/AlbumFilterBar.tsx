@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import type {
   AlbumFilterFacets,
   AlbumFilterUnresolved,
@@ -17,6 +18,7 @@ import {
 import AlbumFilterPanel from "./AlbumFilterPanel";
 
 interface Props {
+  compact?: boolean;
   state: AlbumFilterState;
   facets?: AlbumFilterFacets;
   facetsLoading?: boolean;
@@ -47,6 +49,7 @@ interface Props {
  */
 export default function AlbumFilterBar({
   state,
+  compact = false,
   facets,
   facetsLoading,
   facetsError,
@@ -73,6 +76,45 @@ export default function AlbumFilterBar({
     (facets.similarity.available && facets.similarity.groupCount > 0);
   const collapseKnown = facets?.similarity.available === true;
 
+  const collapseControl = (!collapseKnown || collapseUsable) && (
+    <button
+      type="button"
+      onClick={() => onChange({ ...state, collapse: !state.collapse })}
+      disabled={!collapseUsable}
+      aria-pressed={state.collapse === true}
+      title={
+        collapseUsable
+          ? "把相似的照片折成一组，只在墙上留代表照片"
+          : "这本相册里还没有相似照片的分析结果"
+      }
+      className={`ui-btn ui-btn--ghost ${
+        state.collapse
+          ? "bg-accent/12 text-accent"
+          : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+      } disabled:cursor-not-allowed disabled:opacity-50`}
+    >
+      折叠相似
+    </button>
+  );
+  const summary =
+    reduced || missing > 0 ? (
+      <span className="text-meta tabular-nums text-fg-subtle">
+        {reduced ? (
+          <>
+            {resultCount} / {photoCount} 张
+          </>
+        ) : null}
+        {missing > 0 && (
+          <span className="ml-1 text-fg-muted">· {missing} 张未纳入</span>
+        )}
+        {state.collapse && grouped > 0 && (
+          <span className="ml-1 text-fg-muted">
+            · 折叠 {groupedGroups} 组 / {grouped} 张
+          </span>
+        )}
+      </span>
+    ) : null;
+
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <FilterDropdown
@@ -81,71 +123,47 @@ export default function AlbumFilterBar({
         open={filterOpen}
         onOpenChange={onFilterOpenChange}
         panel={
-          <AlbumFilterPanel
-            state={state}
-            facets={facets}
-            facetsLoading={facetsLoading}
-            facetsError={facetsError}
-            retryingFacets={retryingFacets}
-            onRetryFacets={onRetryFacets}
-            onChange={onChange}
-            onClear={onClear}
-            /* 面板底下报的是「照片」：视频不参与筛选，没条件时也不该
+          <>
+            <AlbumFilterPanel
+              state={state}
+              facets={facets}
+              facetsLoading={facetsLoading}
+              facetsError={facetsError}
+              retryingFacets={retryingFacets}
+              onRetryFacets={onRetryFacets}
+              onChange={onChange}
+              onClear={onClear}
+              /* 面板底下报的是「照片」：视频不参与筛选，没条件时也不该
                混进这个数里。 */
-            resultCount={reduced ? resultCount : photoCount}
-          />
+              resultCount={reduced ? resultCount : photoCount}
+            />
+            {compact && <div className="lg:hidden">{collapseControl}</div>}
+          </>
         }
       />
 
       {/* 相似折叠只在真有相似组时才摆出来：没有可折叠的东西时，
           给一个点了没反应的开关键只是噪音。 */}
-      {(!collapseKnown || collapseUsable) && (
-        <button
-          type="button"
-          onClick={() => onChange({ ...state, collapse: !state.collapse })}
-          disabled={!collapseUsable}
-          aria-pressed={state.collapse === true}
-          title={
-            collapseUsable
-              ? "把相似的照片折成一组，只在墙上留代表照片"
-              : "这本相册里还没有相似照片的分析结果"
-          }
-          className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-meta transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
-            state.collapse
-              ? "bg-accent/12 text-accent"
-              : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
-          } disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          折叠相似
-        </button>
+      {compact ? (
+        <div className="hidden lg:block">{collapseControl}</div>
+      ) : (
+        collapseControl
       )}
 
       {/* 张数只在「墙上真的少了东西」时才报：页头已经写着这本相册有
           多少张，这里再写一遍是同一句话说两遍。而「13 / 20 张」这种
           读数只有筛过或折叠过才带新消息 —— 那时它说的不是重复，
           而是「现在墙上这些是从多少里挑出来的」。 */}
-      {reduced || missing > 0 ? (
-        <span className="text-meta tabular-nums text-fg-subtle">
-          {reduced ? (
-            <>
-              {resultCount} / {photoCount} 张
-            </>
-          ) : null}
-          {missing > 0 && (
-            <span className="ml-1 text-fg-muted">· {missing} 张未纳入</span>
-          )}
-          {state.collapse && grouped > 0 && (
-            <span className="ml-1 text-fg-muted">
-              · 折叠 {groupedGroups} 组 / {grouped} 张
-            </span>
-          )}
-        </span>
-      ) : null}
+      {compact ? <span className="hidden xl:inline">{summary}</span> : summary}
 
       {filtered && (
         <button
           type="button"
-          className="btn-text text-meta text-fg-muted hover:text-fg"
+          className={
+            compact
+              ? "hidden lg:inline-flex ui-btn ui-btn--ghost"
+              : "btn-text text-meta text-fg-muted hover:text-fg"
+          }
           onClick={onClear}
         >
           清除
@@ -161,6 +179,7 @@ interface DropdownProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   panel: ReactNode;
+  dialogLabel?: string;
 }
 
 /**
@@ -172,12 +191,13 @@ interface DropdownProps {
  * 面板挂在视口上，不挂在按钮上：按钮在窄屏上贴着内容区的右边，
  * 面板右对齐到按钮就会有一半掉出屏幕。位置量出来再夹到视口里。
  */
-function FilterDropdown({
+export function FilterDropdown({
   label,
   count,
   open,
   onOpenChange,
   panel,
+  dialogLabel = "筛选照片",
 }: DropdownProps) {
   const [position, setPosition] = useState<{
     top: number;
@@ -189,13 +209,15 @@ function FilterDropdown({
 
   useEffect(() => {
     if (!open) return;
+    menuRef.current?.focus({ preventScroll: true });
     const onPointerDown = (event: MouseEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return;
       if (menuRef.current?.contains(event.target as Node)) return;
       onOpenChange(false);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
       event.stopPropagation();
       onOpenChange(false);
       triggerRef.current?.focus();
@@ -259,7 +281,7 @@ function FilterDropdown({
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-meta transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
+        className={`ui-btn ui-btn--ghost inline-flex items-center gap-1.5 text-meta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${
           count > 0
             ? "bg-accent/12 text-accent"
             : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
@@ -273,24 +295,27 @@ function FilterDropdown({
           </span>
         )}
       </button>
-      {open && (
-        <div
-          ref={menuRef}
-          role="dialog"
-          aria-label="筛选照片"
-          style={{
-            position: "fixed",
-            /* 位置量出来之前先挂在屏外：面板始终在 DOM 里，
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="dialog"
+            aria-label={dialogLabel}
+            tabIndex={-1}
+            style={{
+              position: "fixed",
+              /* 位置量出来之前先挂在屏外：面板始终在 DOM 里，
                量得到真实尺寸；布局阶段再把它挪到该在的地方。 */
-            top: position?.top ?? -9999,
-            left: position?.left ?? -9999,
-            zIndex: 60,
-          }}
-          className="w-[320px] max-w-[calc(100vw-16px)] rounded-lg border border-border bg-bg-elevated p-3 shadow-lg"
-        >
-          {panel}
-        </div>
-      )}
+              top: position?.top ?? -9999,
+              left: position?.left ?? -9999,
+              zIndex: 35,
+            }}
+            className="ui-popover w-[360px] max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] overflow-y-auto p-3"
+          >
+            {panel}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

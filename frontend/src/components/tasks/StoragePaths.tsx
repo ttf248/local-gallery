@@ -36,7 +36,7 @@ export default function StoragePaths({
     <details className="group overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-border-faint bg-bg-subtle px-4 py-2.5 text-label font-medium text-fg transition-colors hover:bg-bg-subtle [&::-webkit-details-marker]:hidden">
         <span>路径</span>
-        <span className="text-meta font-normal text-fg-subtle group-open:hidden">
+        <span className="text-meta font-normal text-fg-muted group-open:hidden">
           相对缓存根目录 · 展开查看
         </span>
       </summary>
@@ -63,15 +63,16 @@ export default function StoragePaths({
         ) : null}
 
         <div className="mt-4 border-t border-border-faint pt-3">
-          <h4 className="text-meta font-medium text-fg-muted">
-            本机绝对路径
-          </h4>
+          <h4 className="text-meta font-medium text-fg-muted">本机绝对路径</h4>
           {absolute ? (
             <dl className="mt-2 grid gap-x-6 sm:grid-cols-2">
               <PathEntry label="缓存根目录" path={absolute.cacheRoot} />
               <PathEntry label="工作目录" path={absolute.workingDirectory} />
               <PathEntry label="配置文件" path={absolute.configFile} />
-              <PathEntry label="Python 环境" path={absolute.pythonEnvironment} />
+              <PathEntry
+                label="Python 环境"
+                path={absolute.pythonEnvironment}
+              />
               <PathEntry
                 label="Python 启动器"
                 path={absolute.pythonExecutable}

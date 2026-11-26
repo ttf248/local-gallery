@@ -83,7 +83,7 @@ export default function PageTabs({
               focusTab(last.id);
             }
           }}
-          className="page-tabs__tab"
+          className="page-tabs__tab ui-tab"
         >
           {tab.label}
         </button>

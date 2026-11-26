@@ -47,7 +47,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark")
 //             伪造标签页数据，封面仍是真实缩略图）
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/library,/explore,/search,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag"
+  "/,/library,/explore,/comic,/comic/library,/search,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag"
 )
   .split(",")
   .map((p) => p.trim())
@@ -71,9 +71,9 @@ const PROFILES = resolveProfiles({
   ...profileOptionsFromEnv(),
 });
 
-const MIN_FONT_PX = 12.5;
+const MIN_FONT_PX = 13;
 // 门禁阈值：低于最小一档字号（tokens.css 的 --text-badge，徽章与键帽
-// 用的那一档）才算越界。12.5px 是正文的下限，徽章一档是设计上允许的
+// 用的那一档）才算越界。13px 是正文的下限，徽章一档是设计上允许的
 // 例外 —— 门禁卡的是「比设计允许的还小」。
 const MIN_FONT_FAIL_PX = 11.5;
 const MIN_CONTROL_PX = 28;
@@ -331,17 +331,66 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
       : null;
 
   const doc = document.documentElement;
+  const stickyRow = main?.querySelector(".sticky-page-header__row");
   const overflowPx = Math.max(
     0,
     doc.scrollWidth - doc.clientWidth,
     document.body.scrollWidth - doc.clientWidth,
+    (main?.scrollWidth ?? 0) - (main?.clientWidth ?? 0),
   );
 
   const viewportWidth = window.innerWidth;
   const contentWidth = Math.round(shellRect.width);
   const gutter = Math.max(0, Math.round((viewportWidth - contentWidth) / 2));
 
+  const rail = document.querySelector(".app-sidebar");
+  const mobileBar = document.querySelector(".mobile-app-bar");
+  const stickyBounds = stickyRow?.getBoundingClientRect();
+  const actions = stickyRow
+    ?.querySelector(".sticky-page-header__actions")
+    ?.getBoundingClientRect();
+  const tokens = getComputedStyle(document.documentElement);
+  const chromeIssues = [];
+  if (mainRect && viewportWidth >= 1024) {
+    const width = rail?.getBoundingClientRect().width ?? 0;
+    const expectedRail = parseFloat(
+      tokens.getPropertyValue(
+        rail?.dataset.collapsed === "true"
+          ? "--rail-width-compact"
+          : "--rail-width",
+      ),
+    );
+    if (width !== expectedRail)
+      chromeIssues.push(`侧栏宽度 ${width}px，预期 ${expectedRail}px`);
+    if (
+      mobileBar?.getBoundingClientRect().height ||
+      document.querySelector(".app-toolbar")
+    )
+      chromeIssues.push("桌面外壳出现独立顶栏");
+    if (mainRect.top > 1) chromeIssues.push("桌面正文未从视口顶部开始");
+  }
+  if (
+    mainRect &&
+    viewportWidth < 1024 &&
+    !mobileBar?.getBoundingClientRect().height
+  )
+    chromeIssues.push("缺少移动顶栏");
+  if (stickyBounds && stickyRow) {
+    const expectedHeight = parseFloat(
+      tokens.getPropertyValue("--sticky-header-height"),
+    );
+    if (Math.abs(stickyBounds.height - expectedHeight) > 1)
+      chromeIssues.push("页头主行高度异常");
+    if (getComputedStyle(stickyRow.parentElement).position !== "sticky")
+      chromeIssues.push("页头没有贴顶");
+    if (actions && actions.right > (mainRect?.right ?? viewportWidth) + 1)
+      chromeIssues.push("页头操作超出正文");
+  }
+  if (main?.querySelector(".library-page #library-tree"))
+    chromeIssues.push("目录抽屉默认应收起");
+
   return {
+    chromeIssues,
     viewport: { width: viewportWidth, height: window.innerHeight },
     dpr: window.devicePixelRatio,
     zoom: Math.round((window.outerWidth / window.innerWidth || 1) * 100),
@@ -360,9 +409,20 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     // 右侧留白：视口右缘到内容右缘。左右留白不等时，页面右侧会空出
     // 一块与左侧不同的空白 —— 27 寸上最显眼。
     rightGap:
-      effectiveRight === null ? null : Math.round(viewportWidth - effectiveRight),
+      effectiveRight === null
+        ? null
+        : Math.round(viewportWidth - effectiveRight),
     // 照片墙页头以返回按钮开头；文字左缘会多出按钮宽度，比较容器边界。
-    alignmentLeft: main?.querySelector(".album-bar") ? Math.round(main.querySelector(".album-bar").getBoundingClientRect().left) : effectiveLeft,
+    alignmentLeft: stickyBounds
+      ? Math.round(
+          stickyBounds.left +
+            parseFloat(getComputedStyle(stickyRow).paddingLeft),
+        )
+      : main?.querySelector(".album-bar")
+        ? Math.round(
+            main.querySelector(".album-bar").getBoundingClientRect().left,
+          )
+        : effectiveLeft,
     effectiveRatio:
       effectiveWidth === null
         ? null
@@ -446,11 +506,16 @@ async function checkMobileShell(page) {
   // 抽屉打开时按钮被盖住，点它关不了 —— 用 Esc（应用自己支持）。
   await page.keyboard.press("Escape");
   await page.waitForTimeout(250);
+  drawer.focusRestored = await trigger.evaluate(
+    (element) => document.activeElement === element,
+  );
+
+  const commandTrigger = page.locator(".mobile-app-bar [data-command-trigger]");
+  await commandTrigger.click();
+  await page.getByRole("dialog", { name: "命令面板" }).waitFor();
 
   const keyboard = await page.evaluate(async () => {
-    const input = document.querySelector(
-      'input:not([type="hidden"]):not([disabled]), textarea',
-    );
+    const input = document.querySelector(".command-palette input");
     if (!input) return { skipped: "这一页没有输入框" };
     input.focus();
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -464,7 +529,40 @@ async function checkMobileShell(page) {
     };
   });
 
-  return { drawer, keyboard };
+  await page.keyboard.press("Escape");
+  const commandFocusRestored = await commandTrigger.evaluate(
+    (element) =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() =>
+            resolve(document.activeElement === element),
+          ),
+        ),
+      ),
+  );
+  await page.goto(BASE + "/photo/library", { waitUntil: "domcontentloaded" });
+  const folderTrigger = page.getByRole("button", { name: "目录", exact: true });
+  await folderTrigger.click();
+  const folders = page.getByRole("dialog", { name: "目录抽屉" });
+  await folders.waitFor();
+  const folder = await folders.evaluate((element) => {
+    const main = document.querySelector(".app-main");
+    return {
+      focusInside: element.contains(document.activeElement),
+      backgroundInert: Boolean(main?.closest("[inert]")),
+      mainScrollLocked: getComputedStyle(main).overflowY === "hidden",
+    };
+  });
+  await page.keyboard.press("Shift+Tab");
+  folder.focusInside &&= await folders.evaluate((element) =>
+    element.contains(document.activeElement),
+  );
+  await page.keyboard.press("Escape");
+  await folders.waitFor({ state: "hidden" });
+  folder.focusRestored = await folderTrigger.evaluate(
+    (element) => document.activeElement === element,
+  );
+  return { drawer, keyboard, commandFocusRestored, folder };
 }
 
 async function setTheme(page, theme) {
@@ -472,7 +570,13 @@ async function setTheme(page, theme) {
     ({ t, vm }) => {
       const raw = localStorage.getItem("local-gallery-ui");
       const parsed = raw ? JSON.parse(raw) : { state: {} };
-      parsed.state = { ...(parsed.state ?? {}), theme: t, viewMode: vm };
+      parsed.state = {
+        ...(parsed.state ?? {}),
+        theme: t,
+        viewMode: vm,
+        folderDrawerOpen: false,
+        sidebarCollapsed: false,
+      };
       localStorage.setItem("local-gallery-ui", JSON.stringify(parsed));
     },
     { t: theme, vm: VIEWMODE },
@@ -566,27 +670,40 @@ async function main() {
   if (process.argv.includes("--self-test")) {
     try {
       const page = await browser.newPage();
-      for (const [offset, expected] of [[0,20],[12,32]]) {
-        await page.setContent(`<style>body{margin:0}.album-bar{display:flex;margin-left:${offset}px}button{width:45px;height:30px}h1{margin:0}</style><main style="padding:20px"><div class="album-bar"><button aria-label="返回"></button><h1>相册</h1></div></main>`);
-        const result = await page.evaluate(MEASURE,{minFontPx:MIN_FONT_PX,minControlPx:MIN_CONTROL_PX});
-        assert.equal(result.alignmentLeft,expected);
-        assert.equal(Math.abs(result.alignmentLeft-20)>2,offset!==0);
+      for (const [offset, expected] of [
+        [0, 20],
+        [12, 32],
+      ]) {
+        await page.setContent(
+          `<style>body{margin:0}.album-bar{display:flex;margin-left:${offset}px}button{width:45px;height:30px}h1{margin:0}</style><main style="padding:20px"><div class="album-bar"><button aria-label="返回"></button><h1>相册</h1></div></main>`,
+        );
+        const result = await page.evaluate(MEASURE, {
+          minFontPx: MIN_FONT_PX,
+          minControlPx: MIN_CONTROL_PX,
+        });
+        assert.equal(result.alignmentLeft, expected);
+        assert.equal(Math.abs(result.alignmentLeft - 20) > 2, offset !== 0);
       }
-      await page.setContent('<style>body{margin:0}h1{margin:0}</style><main style="padding:20px"><h1>列表</h1></main>');
-      const result=await page.evaluate(MEASURE,{minFontPx:MIN_FONT_PX,minControlPx:MIN_CONTROL_PX});
-      assert.equal(result.alignmentLeft,20);
+      await page.setContent(
+        '<style>body{margin:0}h1{margin:0}</style><main style="padding:20px"><h1>列表</h1></main>',
+      );
+      const result = await page.evaluate(MEASURE, {
+        minFontPx: MIN_FONT_PX,
+        minControlPx: MIN_CONTROL_PX,
+      });
+      assert.equal(result.alignmentLeft, 20);
       // 门禁判据本身的样本：容器认 .page-shell；读屏专用元素与
       // 勾选框本体不算太小的控件；低于最小字号档的文字要被抓出来；
       // 行内链接不算控件，独立成行的链接算。
       await page.setContent(
-        '<style>body{margin:0}.page-shell{width:800px;padding:0 24px}</style>' +
+        "<style>body{margin:0}.page-shell{width:800px;padding:0 24px}</style>" +
           '<main><div class="page-shell"><p style="font-size:11px">徽章</p>' +
           '<button style="height:20px">小按钮</button>' +
           '<input class="sr-only" style="width:1px;height:1px">' +
           '<input type="checkbox" style="width:13px;height:13px">' +
           '<p>正文里的<a href="/inline">行内链接</a>。</p>' +
           '<a href="/block" style="display:block;height:20px">独立链接</a>' +
-          '</div></main>',
+          "</div></main>",
       );
       const gate = await page.evaluate(MEASURE, {
         minFontPx: MIN_FONT_PX,
@@ -595,7 +712,10 @@ async function main() {
         minTouchTargetPx: MIN_TOUCH_TARGET_PX,
       });
       assert.equal(gate.shellLeft, 0);
-      assert.equal(gate.tinyText.some((t) => t.size < MIN_FONT_FAIL_PX), true);
+      assert.equal(
+        gate.tinyText.some((t) => t.size < MIN_FONT_FAIL_PX),
+        true,
+      );
       assert.equal(gate.smallControlsTotal, 2);
       assert.equal(gate.smallControls[0].text, "小按钮");
       assert.equal(
@@ -605,11 +725,14 @@ async function main() {
       console.log(
         "布局审计 self-test：普通列表、带返回按钮的照片墙、错误偏移、门禁判据均通过",
       );
-    } finally { await browser.close(); }
+    } finally {
+      await browser.close();
+    }
     return;
   }
   const report = [];
   const routeErrors = [];
+  const chromeViolations = [];
   // 触摸档的外壳检查（抽屉、软键盘）：与页面无关，一个页面上量一次。
   const shellChecks = [];
   // 三条门禁的失败清单（字号、控件高度、命中区）。
@@ -689,7 +812,7 @@ async function main() {
             .waitForFunction(
               () =>
                 Array.from(document.images).every(
-                  (img) => !img.complete || img.naturalWidth > 0,
+                  (img) => img.complete || img.loading === "lazy",
                 ),
               undefined,
               { timeout: 20000 },
@@ -697,6 +820,10 @@ async function main() {
             .catch(() => {});
           await page.waitForTimeout(900);
         }
+        await page
+          .locator("main .page-shell, .reader-shell")
+          .first()
+          .waitFor({ state: "visible", timeout: 20000 });
         let m = await page.evaluate(MEASURE, {
           minFontPx: MIN_FONT_PX,
           minControlPx: MIN_CONTROL_PX,
@@ -722,6 +849,13 @@ async function main() {
           ...m,
         });
         if (m.overflowPx > 0) failed = true;
+        if (m.chromeIssues.length)
+          chromeViolations.push({
+            theme,
+            route,
+            vp: profile.label,
+            issues: m.chromeIssues,
+          });
         // 字号门禁：低于最小一档（徽章档）就算越界。
         if ((m.tinyText ?? []).some((t) => t.size < MIN_FONT_FAIL_PX)) {
           fontViolations.push({ theme, route, vp: profile.label });
@@ -754,9 +888,22 @@ async function main() {
           drawer.opened &&
           (drawer.focusEscaped ||
             !drawer.backgroundInert ||
-            !drawer.mainScrollLocked)
+            !drawer.mainScrollLocked ||
+            !drawer.focusInside ||
+            !drawer.focusRestored ||
+            !shell.commandFocusRestored)
         ) {
           drawerViolations.push({ theme, vp: profile.label, ...drawer });
+        }
+        if (
+          shell.folder &&
+          Object.values(shell.folder).some((result) => !result)
+        ) {
+          drawerViolations.push({
+            theme,
+            vp: profile.label,
+            folder: shell.folder,
+          });
         }
         if (keyboard.covered) {
           keyboardViolations.push({ theme, vp: profile.label, ...keyboard });
@@ -774,13 +921,13 @@ async function main() {
   // 本来就不在其它页面的网格线上 —— 表单与控制台摊到 2560px 的画布
   // 上只会把标签甩到左边、开关甩到右边。两页各自在自己的容器里排版，
   // 容器边界（左右留白）仍然逐页一致。
-  const FOCUSED_ROUTES = /^\/(settings|tasks)(\/|$)/;
+  const OWN_ALIGNMENT_ROUTES = /(?:^\/(?:settings|tasks)(?:\/|$)|\/explore$)/;
   const misaligned = [];
   {
     const groups = new Map();
     for (const r of report) {
       if (r.route === "reader" || r.alignmentLeft === null) continue;
-      if (FOCUSED_ROUTES.test(r.route)) continue;
+      if (OWN_ALIGNMENT_ROUTES.test(r.route)) continue;
       const key = `${r.vp}|${r.theme}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(r);
@@ -848,7 +995,7 @@ async function main() {
   } else {
     console.log(
       [
-        "断点          主题   路由        内容宽  占比   左右留白  有效宽 有效左 有效右 右留白  溢出  <12.5px文本  小控件",
+        "断点          主题   路由        内容宽  占比   左右留白  有效宽 有效左 有效右 右留白  溢出  <13px文本  小控件",
         ...report.map((r) =>
           [
             r.vp.padEnd(14),
@@ -919,7 +1066,9 @@ async function main() {
         const list = r.touchTargets
           .map((t) => `${t.text || "(无文字)"} ${t.w}×${t.h}`)
           .join("，");
-        console.log(`  · ${r.vp} ${r.theme} ${r.route}：${r.touchTargetsTotal} 处 —— ${list}`);
+        console.log(
+          `  · ${r.vp} ${r.theme} ${r.route}：${r.touchTargetsTotal} 处 —— ${list}`,
+        );
       }
     }
     if (shellChecks.length > 0) {
@@ -936,6 +1085,10 @@ async function main() {
         );
       }
     }
+  }
+  if (chromeViolations.length > 0) {
+    console.error("\n外壳与页头几何门禁未通过", chromeViolations);
+    process.exit(1);
   }
   if (failed) {
     console.error("\n存在横向溢出。");

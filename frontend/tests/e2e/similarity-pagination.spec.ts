@@ -172,7 +172,7 @@ for (const failure of ["500", "断网"] as const) {
     const selectionBar = page.getByTestId("similarity-batch-bar");
     await expect(selectionBar).toContainText("已选 1 组");
 
-    await page.getByRole("button", { name: /再显示 60 组/ }).click();
+    await page.locator("main").evaluate((element) => { element.scrollTop = element.scrollHeight; });
     await expect(
       page.getByText("后续分组读取失败，已加载的分组仍可整理。"),
     ).toBeVisible({ timeout: 20_000 });

@@ -14,10 +14,10 @@
 @tailwind components;
 
 @layer components {
-.reader-shell {
+  .reader-shell {
     background: var(--reader-bg);
   }
-.reader-header {
+  .reader-header {
     /* 顶栏拆成左右两块浮层，而不是一条通栏。
        通栏浮层会一直压住画面顶端：漫画页的上缘因此永远看不见，
        而「这一页从头到尾都在屏幕上」正是阅读时最基本的一条。
@@ -34,7 +34,7 @@
     gap: 12px;
     pointer-events: none;
   }
-.reader-header__group {
+  .reader-header__group {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -43,24 +43,24 @@
     padding-inline: 12px;
     border: 1px solid var(--overlay-border);
     border-radius: var(--radius-control);
-    background: color-mix(in srgb, var(--reader-panel) 95%, transparent);
-    box-shadow: 0 4px 20px rgb(0 0 0 / 12%);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: var(--overlay-glass);
+    box-shadow: var(--shadow-float);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
     pointer-events: auto;
   }
-.reader-header__group--main {
+  .reader-header__group--main {
     /* 贴着内容收紧，不拉成一条长条：名字短的时候浮层就只有那么宽，
        画面上留出来的空隙才真的空。 */
     flex: 0 1 auto;
     max-width: 62%;
   }
-.reader-header__group--actions {
+  .reader-header__group--actions {
     flex: 0 0 auto;
   }
-.reader-control-panel {
+  .reader-control-panel {
     border-radius: var(--radius-tile);
-    background: color-mix(in srgb, var(--reader-panel) 94%, transparent);
+    background: var(--overlay-glass);
   }
   /* 工具条里选中的那一档（单页 / 双页 / 连续）：用漫画侧的暖棕，
      深色画布上一眼能认出「现在是哪一档」，又不至于亮到抢过画面。 */
@@ -72,4 +72,12 @@
   .reader-slider-fill {
     background: var(--reader-accent);
   }
+}
+
+.reader-glass {
+  background: var(--overlay-glass);
+  backdrop-filter: blur(16px) saturate(1.4);
+}
+.reader-shell :is(.page-slider__fill, input[type="range"]) {
+  accent-color: var(--reader-accent);
 }

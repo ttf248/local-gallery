@@ -42,12 +42,16 @@ export default function PageHeading({
 }: Props) {
   return (
     <section className={`${contained ? "" : "page-shell "}page-heading`}>
-      <div className="flex items-end justify-between gap-6 flex-wrap">
+      <div className="flex flex-wrap items-end justify-between gap-x-5 gap-y-2">
         <div className="min-w-0">
           {eyebrow ? <p className="page-eyebrow">{eyebrow}</p> : null}
           <h1
             className={`page-title${
-              size === "lg" ? "" : size === "md" ? " page-title--md" : " page-title--sm"
+              size === "lg"
+                ? ""
+                : size === "md"
+                  ? " page-title--md"
+                  : " page-title--sm"
             }`}
           >
             {title}
@@ -57,7 +61,7 @@ export default function PageHeading({
       </div>
       {description && (
         <div
-          className="text-body text-fg-muted mt-3 leading-relaxed"
+          className="mt-2 max-w-prose text-body leading-relaxed text-fg-muted"
           data-testid="page-heading-description"
         >
           {description}

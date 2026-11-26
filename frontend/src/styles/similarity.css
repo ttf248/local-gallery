@@ -1,31 +1,12 @@
-/*
- * 相似照片整理页。
- *
- * 这一页的主体是一列「决定」，不是一个网格：每一组相似照片是一个
- * 待处理的事项，用户看完要能说出留哪张、其余算不算重复。因此
- * 代表照片占据每组的左侧第一眼，其余成员收在展开区并排摆着。
- *
- * 外壳保持无彩灰阶 —— 页面里唯一有彩色的东西是照片本身。
- *
- * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由样式表
- * 的先后决定，拆出来不影响任何一条既有规则。
- *
- * @tailwind components 只为把这一份样式挂进 components 层：Tailwind 的
- * 工具类在 utilities 层，components 层在它之前，工具类才盖得住组件层。
- * 没有这条指令，PostCSS 会报「no matching @tailwind components
- * directive」。
- */
 @tailwind components;
 
 @layer components {
-  /* 一组相似照片。组与组之间只隔一条发丝线，不用卡片框住：
-     框会把这一页读成「一堆盒子」，而不是一份待办的清单。 */
   .similarity-group {
-    border-top: 1px solid var(--border-faint);
-    padding-block: 18px;
-  }
-  .similarity-group:last-child {
-    border-bottom: 1px solid var(--border-faint);
+    margin-block: 0 10px;
+    padding: clamp(12px, 2vw, 18px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-tile);
+    background: var(--surface-card);
   }
 
   .similarity-group__head {
@@ -82,7 +63,9 @@
     outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
-  .similarity-group__check input:checked + .similarity-group__checkbox-mark::after {
+  .similarity-group__check
+    input:checked
+    + .similarity-group__checkbox-mark::after {
     opacity: 1;
   }
 
@@ -302,8 +285,8 @@
     margin-top: 20px;
     padding: 10px 14px;
     border-radius: var(--radius-control);
-    background: var(--bg-elevated);
-    box-shadow: var(--shadow-md);
+    background: var(--surface-card);
+    box-shadow: var(--shadow-float);
     border: 1px solid var(--border);
   }
 

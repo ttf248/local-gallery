@@ -23,11 +23,16 @@ import {
 } from "./lib/device-profile.mjs";
 
 const BASE = process.env.LG_BASE ?? "http://127.0.0.1:5173";
-const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",").filter(Boolean);
+const THEMES = (process.env.LG_THEMES ?? "light,dark")
+  .split(",")
+  .filter(Boolean);
 // 页面清单：模式前缀由 buildRoute 补（审计脚本早就这么做了，截图脚本
 // 此前直接拼 BASE + route，/recents 落在兜底路由、截出来的其实是首页）。
 // 可以写伪路由 album / reader / tag：运行时现取真实相册与标签。
-const PAGES = (process.env.LG_PAGES ?? "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag")
+const PAGES = (
+  process.env.LG_PAGES ??
+  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag"
+)
   .split(",")
   .map((p) => p.trim())
   .filter(Boolean);
@@ -48,9 +53,7 @@ const PROFILES = resolveProfiles({
 
 const argv = process.argv.slice(2);
 const outArg = argv.indexOf("--out");
-const OUT = path.resolve(
-  outArg >= 0 ? argv[outArg + 1] : ".smoke/shots",
-);
+const OUT = path.resolve(outArg >= 0 ? argv[outArg + 1] : ".smoke/shots");
 const FULL = process.env.LG_FULL === "1";
 
 const slug = (route) =>
@@ -97,10 +100,13 @@ async function main() {
         // 伪路由：相册页与阅读器要现取一本真实相册。
         let target = route;
         if (route === "album" || route === "reader") {
-          const albumId = await resolveAlbumId(page, mode);
+          const sampleMode = route === "reader" ? "comic" : "photo";
+          const albumId = await resolveAlbumId(page, sampleMode);
           if (!albumId) continue;
           target =
-            route === "album" ? `/albums/${albumId}` : `/read/${albumId}`;
+            route === "album"
+              ? `/photo/albums/${albumId}`
+              : `/comic/read/${albumId}`;
         }
         // 不用 networkidle：页面里有 SSE 长连接，且 /api/previews 首次生成
         // 预览图可能耗时数秒，networkidle 会一直等不到而超时。
@@ -109,16 +115,24 @@ async function main() {
           timeout: 60000,
         });
         await page
+          .locator(
+            route === "reader"
+              ? '[data-testid="gallery-reader"]'
+              : "main .page-shell",
+          )
+          .first()
+          .waitFor({ state: "visible", timeout: 20000 });
+        await page.waitForTimeout(1200);
+        await page
           .waitForFunction(
             () =>
               Array.from(document.images).every(
-                (img) => !img.complete || img.naturalWidth > 0,
+                (img) => img.complete || img.loading === "lazy",
               ),
             undefined,
             { timeout: 20000 },
           )
           .catch(() => {});
-        await page.waitForTimeout(1200);
         const name = `${theme}-${profileSlug(profile)}-${slug(route)}.png`;
         await page.screenshot({
           path: path.join(OUT, name),

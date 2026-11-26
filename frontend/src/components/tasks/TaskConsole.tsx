@@ -1,4 +1,5 @@
 import type {
+  AIJob,
   AIJobEstimate,
   AIJobModule,
   AIWorkerStatus,
@@ -7,10 +8,7 @@ import type {
   AnalysisType,
 } from "../../api/aiJobs";
 import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
-import {
-  formatCount,
-  formatEstimateDuration,
-} from "../../utils/taskFormat";
+import { formatCount, formatEstimateDuration } from "../../utils/taskFormat";
 import ModuleChips from "./ModuleChips";
 import Segmented from "../common/Segmented";
 import TaskEstimatePanel from "./TaskEstimatePanel";
@@ -20,6 +18,7 @@ interface Props {
   /** 启动或任务操作正在提交。 */
   busy: boolean;
   modules: AIJobModule[];
+  history: AIJob[];
   peopleEnabled: boolean;
   faceModel: FaceModel;
   faceModelSaving: boolean;
@@ -47,6 +46,7 @@ export default function TaskConsole({
   loading,
   busy,
   modules,
+  history,
   peopleEnabled,
   faceModel,
   faceModelSaving,
@@ -71,13 +71,13 @@ export default function TaskConsole({
     installedModules.find((module) => module.type === selectedModule)?.name ??
     "照片元数据";
   const selectedModuleVersion =
-    installedModules.find((module) => module.type === selectedModule)?.version ??
-    "";
+    installedModules.find((module) => module.type === selectedModule)
+      ?.version ?? "";
   const sequence = estimate ? estimate.sequence[mode] : null;
   const buffaloReady = Boolean(embeddingStatus?.faceModels?.buffalo_m?.ready);
   const qualityReady = Boolean(
     embeddingStatus?.faceModels?.["quality-v2"]?.ready ??
-      embeddingStatus?.modules?.face?.ready,
+    embeddingStatus?.modules?.face?.ready,
   );
   const selectedFaceModelReady =
     faceModel === "buffalo_m" ? buffaloReady : qualityReady;
@@ -96,11 +96,14 @@ export default function TaskConsole({
       </div>
 
       <div className="tasks-section__body">
-        <div className="tasks-field">
+        <div className="tasks-field tasks-field--modules">
           <span className="tasks-field__label">运行模块</span>
           <div className="min-w-0">
             <ModuleChips
               modules={modules}
+              history={history}
+              estimate={estimate}
+              mode={mode}
               selected={[selectedModule]}
               onToggle={(type) => selection.setModule(type)}
               disabled={busy}
@@ -282,9 +285,7 @@ function EmbeddingRuntimeStatus({
   loading: boolean;
 }) {
   if (loading) {
-    return (
-      <p className="text-meta text-fg-subtle">正在读取本机 AI 状态…</p>
-    );
+    return <p className="text-meta text-fg-subtle">正在读取本机 AI 状态…</p>;
   }
   if (!status) {
     return (
@@ -337,9 +338,7 @@ function ImageModuleRuntimeStatus({
 }) {
   const label = moduleType === "ocr" ? "文字识别" : "人脸识别";
   if (loading) {
-    return (
-      <p className="text-meta text-fg-subtle">正在检查{label}运行环境…</p>
-    );
+    return <p className="text-meta text-fg-subtle">正在检查{label}运行环境…</p>;
   }
   if (!status) {
     return (

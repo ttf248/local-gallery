@@ -97,10 +97,13 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
         });
       }
     }
+    await page.getByRole("button", { name: "打开命令面板" }).click();
     const searchDraft = page.getByRole("combobox");
     await searchDraft.fill("zz-没有这样的相册");
     await expect(searchDraft).toHaveValue("zz-没有这样的相册");
     await expect(page).toHaveURL(/\/photo\/tags\//);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("Escape");
     await expect(card).toHaveAttribute("aria-checked", "true");
     await expect(
       page.getByRole("button", { name: "批量收藏", exact: true }),
@@ -116,8 +119,7 @@ test("漫画批量已读与重置只修改所选阅读活动", async ({ page, re
     await request.get("/api/admin/state/export")
   ).json();
   try {
-    await page.goto("/comic/library");
-    await page.getByRole("combobox").fill("sample-comic");
+    await page.goto("/comic/library?q=sample-comic");
     await page.getByRole("button", { name: "选择", exact: true }).click();
     await page
       .getByRole("button", { name: "选择已加载项", exact: true })
@@ -159,8 +161,7 @@ for (const view of ["网格视图", "列表视图"] as const) {
     await ensureLibraryReady(request);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto("/comic/library");
-    await page.getByRole("combobox").fill("long-list");
+    await page.goto("/comic/library?q=long-list");
     await page.getByRole("button", { name: view, exact: true }).click();
     await page.getByRole("button", { name: "选择", exact: true }).click();
     await page

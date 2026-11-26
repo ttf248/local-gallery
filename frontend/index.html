@@ -18,22 +18,21 @@
       // 真相源仍是 React —— 用户改主题、切换模式时立刻生效。
       (function () {
         var r = document.documentElement;
-        var t = "light";
+        var systemDark = matchMedia("(prefers-color-scheme: dark)").matches;
+        var t = systemDark ? "dark" : "light";
         try {
           var s =
             JSON.parse(localStorage.getItem("local-gallery-ui") || "{}")
               .state || {};
           t =
-            s.theme === "dark" ||
-            (s.theme !== "light" &&
-              matchMedia("(prefers-color-scheme: dark)").matches)
+            s.theme === "dark" || (s.theme !== "light" && systemDark)
               ? "dark"
               : "light";
         } catch (e) {}
         r.setAttribute("data-theme", t);
         r.setAttribute(
           "data-mode",
-          location.pathname.indexOf("/comic") === 0 ? "comic" : "photo",
+          /^\/comic(?:\/|$)/.test(location.pathname) ? "comic" : "photo",
         );
       })();
     </script>

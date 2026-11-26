@@ -17,145 +17,88 @@ interface Props {
     | "contentKind"
   >;
   loading?: "lazy" | "eager";
-  /**
-   * 紧凑模式：列表视图的缩略图很小，放不下「正在加载…」这类提示文字，
-   * 只保留转圈指示。
-   */
   compact?: boolean;
-  /**
-   * 视频封面怎么放进画幅。
-   *
-   * "contain" 保留完整画面，但竖版书封里一条 16:9 的视频会在上下留出
-   * 大片黑边，读起来像「缺图」；"cover" 铺满画幅，裁掉两侧，
-   * 封面因此像一张海报而不是一个空信箱。
-   */
-  fit?: "contain" | "cover";
 }
 
-/** 一张封面图与它的内容版本号。 */
 interface CoverSource {
   path: string;
   version?: string;
 }
 
-/**
- * 卡片封面的唯一渲染入口。
- *
- * 相册强调一个明确的主封面；集合与文件夹用一张主体照片配最多两张小图
- * （照片侧），漫画侧的作品仍用四等分拼贴。
- * `covers` 为空时继续使用 `coverPath`，让旧扫描结果也能得到完整封面。
- */
+export type EditorialCollageLayout =
+  "empty" | "single" | "split-2" | "feature-3" | "grid-4";
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function resolveCollageLayout(count: number): EditorialCollageLayout {
+  if (count <= 0) return "empty";
+  if (count === 1) return "single";
+  if (count === 2) return "split-2";
+  if (count === 3) return "feature-3";
+  return "grid-4";
+}
+
 export default function CardCover({
   data,
   loading = "lazy",
-  compact,
-  fit = "contain",
+  compact = false,
 }: Props) {
   const sources = getCoverSources(data);
+  const primary = sources[0];
+  if (!primary) return <CoverPlaceholder />;
 
-  if (sources.length === 0) return <CoverPlaceholder />;
-
-  if (data.variant === "album") {
-    if (data.coverKind === "video") {
-      return (
-        // 视频画幅固定 16:9，容器可能是 4:5 —— 深色画布让上下留边
-        // 读成"宽银幕"而不是"缺图"。竖版书封里留边太多，
-        // 那种封面改用铺满（见 fit），裁掉两侧而不是留一整块空信箱。
-        <div className="w-full h-full bg-bg-media">
-          <VideoCoverImage
-            key={sources[0].path}
-            videoPath={sources[0].path}
-            version={data.coverVersion}
-            displayWidth={260}
-            loading={loading}
-            alt={data.title}
-            showRetryAction={false}
-            showExtractingHint={!compact}
-            fit={fit}
-          />
-        </div>
-      );
-    }
-
+  if (data.variant === "album" && data.coverKind === "video") {
     return (
-      <CoverImage
-        key={sources[0].path}
-        path={sources[0].path}
-        version={data.coverVersion}
-        alt={data.title}
-        loading={loading}
-        /* 相册封面统一偏上取景：漫画封面的标题与人物头部在上方，
-           居中裁切会把它们切掉；横向照片本身是横向裁切，不受影响。 */
-        position="50% 25%"
-      />
-    );
-  }
-
-  // 漫画侧（书架）保留四等分拼贴：一本作品是竖版书脊，四张内页并排
-  // 才读得出「这一本里有什么」。照片侧的文件夹改用主体 + 小图。
-  const isComic = (data.contentKind ?? "photo") === "comic";
-  if (!isComic) {
-    // 列表视图的缩略图只有 48px 见方：那里放不下主体加小图，只摆
-    // 一张（主体），三张小图挤在一起只会糊成一片。
-    if (compact) {
-      return (
-        <CoverImage
-          path={sources[0].path}
-          version={sources[0].version}
-          alt={data.title}
+      <div className="h-full w-full bg-bg-media">
+        <VideoCoverImage
+          key={primary.path}
+          videoPath={primary.path}
+          version={primary.version}
+          displayWidth={compact ? 48 : 260}
           loading={loading}
-          displayWidth={96}
-        />
-      );
-    }
-    const [main, ...rest] = sources;
-    return (
-      <div className="cover-stack" data-testid="card-cover-stack">
-        <CoverImage
-          path={main.path}
-          version={main.version}
           alt={data.title}
-          loading={loading}
-          displayWidth={260}
+          showRetryAction={false}
+          showExtractingHint={!compact}
+          fit="cover"
         />
-        {rest.length > 0 ? (
-          <div className="cover-stack__side" data-covers={Math.min(rest.length, 2)}>
-            {rest.slice(0, 2).map((source) => (
-              <div key={source.path} className="cover-stack__cell">
-                <CoverImage
-                  path={source.path}
-                  version={source.version}
-                  alt=""
-                  loading={loading}
-                  displayWidth={90}
-                />
-              </div>
-            ))}
-          </div>
-        ) : null}
       </div>
     );
   }
 
+  if (data.variant === "album" || compact) {
+    return (
+      <CoverImage
+        key={primary.path}
+        path={primary.path}
+        version={primary.version}
+        alt={data.title}
+        loading={loading}
+        displayWidth={compact ? 48 : 260}
+        position={data.variant === "album" ? "50% 25%" : undefined}
+      />
+    );
+  }
+
+  const layout = resolveCollageLayout(sources.length);
   return (
     <div
-      className="cover-mosaic"
-      data-cover-layout={
-        sources.length === 1 ? "single" : `mosaic-${sources.length}`
-      }
-      data-testid="card-cover-mosaic"
+      className="editorial-collage"
+      data-cover-layout={layout}
+      data-testid="card-cover-collage"
     >
-      {sources.map((source) => (
-        <div
-          key={source.path}
-          className="cover-mosaic__cell min-w-0 min-h-0 overflow-hidden bg-bg-subtle"
-        >
+      {sources.map((source, index) => (
+        <div key={source.path} className="editorial-collage__cell">
           <CoverImage
             path={source.path}
             version={source.version}
-            alt=""
+            alt={index === 0 ? data.title : ""}
             loading={loading}
-            displayWidth={130}
+            displayWidth={
+              layout === "single"
+                ? 260
+                : layout === "feature-3" && index === 0
+                  ? 180
+                  : 130
+            }
           />
         </div>
       ))}
@@ -192,7 +135,9 @@ function getCoverSources(
   }
 
   if (list.length > 0) return list;
-  return data.coverPath ? [{ path: data.coverPath, version: data.coverVersion }] : [];
+  return data.coverPath
+    ? [{ path: data.coverPath, version: data.coverVersion }]
+    : [];
 }
 
 function CoverImage({
@@ -212,7 +157,8 @@ function CoverImage({
 }) {
   const [failed, setFailed] = useState(false);
 
-  if (failed) return <CoverPlaceholder />;
+  if (failed)
+    return <div className="h-full w-full bg-bg-strong" aria-hidden="true" />;
 
   return (
     <RenditionImage

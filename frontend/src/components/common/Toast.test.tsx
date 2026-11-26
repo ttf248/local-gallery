@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import ToastViewport from "./Toast";
@@ -20,44 +20,38 @@ describe("ToastViewport", () => {
     return screen.getByText("测试消息").parentElement as HTMLElement;
   }
 
-  it("普通页面下 toast 跟应用主题（浅色底）", () => {
+  it("普通页面下 toast 使用暗色玻璃", () => {
     useUIStore.setState({
-      toasts: [
-        { id: "t1", kind: "info", message: "测试消息", ttl: 0 },
-      ],
+      toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
     });
     const card = renderAt("/");
-    expect(card.className).toContain("bg-bg-elevated/95");
-    expect(card.className).not.toContain("bg-overlay-panel");
+    expect(card).toHaveClass("toast-message");
+    expect(card).toHaveAttribute("data-tone", "reader");
   });
 
   it("漫画阅读器路由下 toast 走深色底", () => {
     useUIStore.setState({
-      toasts: [
-        { id: "t1", kind: "info", message: "测试消息", ttl: 0 },
-      ],
+      toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
     });
     const card = renderAt("/comic/read/abc");
-    expect(card.className).toContain("bg-overlay-panel");
-    expect(card.className).not.toContain("bg-bg-elevated/95");
+    expect(card).toHaveClass("toast-message");
+    expect(card).toHaveAttribute("data-tone", "reader");
   });
 
   // 照片墙的大图预览也是深色浮层，路径却不是阅读器 —— 早先按路径前缀
   // 判断时，在预览里弹出的 toast 是一块浅色板。
   it("照片墙的大图预览打开时 toast 也走深色底", () => {
     useUIStore.setState({
-      toasts: [
-        { id: "t1", kind: "info", message: "测试消息", ttl: 0 },
-      ],
+      toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
       immersiveOverlay: true,
     });
     const card = renderAt("/photo/albums/a_1");
-    expect(card.className).toContain("bg-overlay-panel");
-    expect(card.className).not.toContain("bg-bg-elevated/95");
+    expect(card).toHaveClass("toast-message");
+    expect(card).toHaveAttribute("data-tone", "reader");
     useUIStore.setState({ immersiveOverlay: false });
   });
 
-  it("带撤销的提示会给出撤销按钮，点完就关掉自己", () => {
+  it("带撤销的提示会给出撤销按钮，执行后淡出", async () => {
     const undone = vi.fn();
     useUIStore.setState({
       toasts: [
@@ -78,7 +72,9 @@ describe("ToastViewport", () => {
     const undo = screen.getByRole("button", { name: "撤销" });
     fireEvent.click(undo);
     expect(undone).toHaveBeenCalledTimes(1);
-    // 撤销之后提示不再挂在屏幕上。
-    expect(screen.queryByText("已把这一组标记为已处理")).toBeNull();
+    expect(screen.queryByRole("button", { name: "撤销" })).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByText("已把这一组标记为已处理")).toBeNull(),
+    );
   });
 });

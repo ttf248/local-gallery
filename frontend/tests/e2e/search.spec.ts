@@ -18,7 +18,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 
-test("顶栏搜索回车进入可见的结果页", async ({ page, request }) => {
+test("命令面板回车进入可见的结果页", async ({ page, request }) => {
   const nodes = await scannedNodes(request, "photo");
   const target = nodes.find((node) => node.name);
   expect(target).toBeTruthy();
@@ -28,10 +28,11 @@ test("顶栏搜索回车进入可见的结果页", async ({ page, request }) => 
   await page.goto("/photo");
   // 顶栏搜索框：照片首页上还有年份 / 月份两个下拉，它们也是 combobox，
   // 这里要认准搜索框本身。
+  await page.getByRole("button", { name: "打开命令面板" }).click();
   const search = page.getByRole("combobox", { name: "搜索相册或标签" });
   await search.fill(keyword);
   // 下拉给出明确的匹配建议。
-  await expect(page.getByRole("option").first()).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("group", { name: "匹配内容" }).getByRole("option").first()).toBeVisible({ timeout: 10_000 });
   await search.press("Enter");
 
   // 回车落到结果页，而不是回到一个不显示结果的首页。
@@ -56,16 +57,18 @@ test("全局搜索草稿不覆盖列表筛选，回退后返回原列表地址",
   await scannedNodes(request, "photo");
   const listUrl = "/photo/library?q=list-filter-kept&min=2";
   await page.goto(listUrl);
+  await page.getByRole("button", { name: "打开命令面板" }).click();
   const search = page.getByRole("combobox");
   await expect(search).toHaveValue("");
 
   await search.fill("new-search-draft");
   await expect(page).toHaveURL(listUrl);
   await search.press("Enter");
-  await expect(page).toHaveURL("/photo/search?q=new-search-draft");
+  await expect(page).toHaveURL("/photo/search?q=new-search-draft&scope=name");
 
   await page.goBack();
   await expect(page).toHaveURL(listUrl);
+  await page.keyboard.press("Control+k");
   await expect(search).toHaveValue("");
 });
 
@@ -87,4 +90,23 @@ test("搜索超过一页时显示总数并可继续加载", async ({ page, reque
   await expect(
     page.getByRole("button", { name: /加载更多/ }),
   ).toHaveCount(0);
+});
+
+
+test("Ctrl+K 与斜杠打开命令面板并归还触发焦点", async ({ page }) => {
+  await page.goto("/photo");
+  const trigger = page.getByRole("button", { name: "打开命令面板" });
+  await trigger.focus();
+  await page.keyboard.press("Control+k");
+  const palette = page.getByRole("dialog", { name: "命令面板" });
+  const search = palette.getByRole("combobox");
+  await expect(search).toBeFocused();
+  await expect(page.locator("#root")).toHaveAttribute("inert", "");
+  await search.fill("测试");
+  await page.keyboard.press("Escape");
+  await expect(search).toHaveValue("");
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await page.keyboard.press("/");
+  await expect(search).toBeFocused();
 });

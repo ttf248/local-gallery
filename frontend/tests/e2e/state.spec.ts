@@ -45,9 +45,10 @@ test("新打开相册立即出现在最近阅读，媒体分页不重复记录�
   });
   await page.goto("/photo/me/recents");
   await expect(page.getByText("还没有最近浏览", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "打开命令面板" }).click();
   const search = page.getByRole("combobox");
   await search.fill("sample-paged-images");
-  await expect(page.getByRole("option").first()).toBeVisible();
+  await expect(page.getByRole("group", { name: "匹配内容" }).getByRole("option").first()).toBeVisible();
   // 方向键选中第一条建议，回车打开它：不按方向键时回车去结果页。
   await search.press("ArrowDown");
   await search.press("Enter");
@@ -379,9 +380,10 @@ for (const operation of ["limit", "clear", "visit"] as const) {
         });
       });
       if (operation === "visit") {
+        await page.getByRole("button", { name: "打开命令面板" }).click();
         const search = page.getByRole("combobox");
         await search.fill(second.name);
-        await expect(page.getByRole("option").first()).toBeVisible();
+        await expect(page.getByRole("group", { name: "匹配内容" }).getByRole("option").first()).toBeVisible();
         // 方向键选中建议，回车打开它（不选时回车去结果页）。
         await search.press("ArrowDown");
         await search.press("Enter");

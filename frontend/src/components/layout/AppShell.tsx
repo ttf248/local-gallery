@@ -1,6 +1,14 @@
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useLayoutEffect,
+} from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useUIStore } from "../../store/uiStore";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import {
@@ -24,7 +32,12 @@ import { scanApi } from "../../api/scan";
 import { useScanSSE } from "../../hooks/useScanSSE";
 import { useLibraryRevisionSync } from "../../hooks/useLibrarySync";
 import Sidebar from "./Sidebar";
-import Toolbar from "./Toolbar";
+import { useLibraryManifest } from "../../hooks/useLibrary";
+import { libraryQueryKeys } from "../../api/queryKeys";
+import { useMediaQuery, WIDE_LAYOUT_QUERY } from "../../hooks/useMediaQuery";
+import { hasOpenModal, normalizeKey } from "../../utils/shortcuts";
+import { MenuIcon, SearchIcon } from "../common/Icon";
+
 import ErrorBoundary from "../common/ErrorBoundary";
 import { libraryApi } from "../../api/library";
 
@@ -33,6 +46,7 @@ import { libraryApi } from "../../api/library";
 // 两者都是「有事才出现」的东西：扫描浮卡只在有扫描进度时可见，帮助浮层
 // 只在用户按下 ? 时打开。放在外壳里静态引入，等于让每个页面的首屏都为
 // 它们付钱 —— 扫描浮卡约 3.4 KB、帮助浮层约 2.9 KB 源码。
+const CommandPalette = lazy(() => import("./CommandPalette"));
 const ScanProgress = lazy(() => import("../album/ScanProgress"));
 const HelpOverlay = lazy(() => import("../common/HelpOverlay"));
 
@@ -47,6 +61,13 @@ export default function AppShell() {
   const { mode } = useAppMode();
   const immersiveOverlay = useUIStore((s) => s.immersiveOverlay);
   const helpContext = useUIStore((s) => s.helpContext);
+  const paletteOpen = useUIStore((s) => s.commandPaletteOpen);
+  const setPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const closePalette = useCallback(
+    () => setPaletteOpen(false),
+    [setPaletteOpen],
+  );
+  const isWide = useMediaQuery(WIDE_LAYOUT_QUERY);
   const [helpOpen, setHelpOpen] = useState(false);
   // 扫描浮卡挂载过就一直留着：终态时它要播一段淡出动画，progress 一空
   // 就卸载会让这段动画消失。第一次有扫描进度时才挂载 —— 在那之前这块
@@ -61,7 +82,7 @@ export default function AppShell() {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   // 键盘焦点关在抽屉里：Tab 不该走到被遮住的背景控件上。
-  useFocusTrap(sidebarRef, mobileNavOpen);
+  useFocusTrap(sidebarRef, mobileNavOpen && !paletteOpen);
   // 软键盘占掉的高度写进 --keyboard-inset，贴底浮层据此上移。
   useVisualViewport();
   // 阅读器（/read）占用单键快捷键：r 是旋转，u 不是「未读」。
@@ -70,6 +91,35 @@ export default function AppShell() {
   const immersive = isReaderPath(location.pathname) || immersiveOverlay;
   // 扫描进度 + 取消（提升到 AppShell 后所有路由都能看到顶部进度条）
   const scanSse = useScanSSE();
+  const queryClient = useQueryClient();
+  const warningCount =
+    useLibraryManifest().data?.manifest.statistics.warningCount ?? 0;
+  const startScan = useMutation({
+    mutationFn: () => scanApi.start(),
+    onSuccess: ({ scanId }) => {
+      scanSse.startWith(scanId);
+      pushToast({ kind: "info", message: "扫描已开始" });
+    },
+    onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
+  });
+
+  useEffect(() => {
+    if (!scanSse.isComplete || !scanSse.scanId) return;
+    void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.root });
+    void queryClient
+      .fetchQuery({
+        queryKey: libraryQueryKeys.manifest(),
+        queryFn: () => libraryApi.manifest(),
+      })
+      .then(({ manifest }) => {
+        pushToast({
+          kind: "success",
+          message: `扫描完成 · 共 ${manifest.statistics.albumCount} ${mode === "comic" ? "卷" : "本相册"}`,
+        });
+      })
+      .catch(() => pushToast({ kind: "error", message: "刷新媒体库失败" }));
+  }, [queryClient, scanSse.isComplete, scanSse.scanId, pushToast, mode]);
+
   useFsCapabilities();
   // 目录监听在后台更新图库时，界面上已经打开的列表要跟着换新数据。
   useLibraryRevisionSync();
@@ -79,6 +129,14 @@ export default function AppShell() {
   }, [location.pathname]);
 
   useEffect(() => {
+    setPaletteOpen(false);
+  }, [location.key, setPaletteOpen]);
+
+  useEffect(() => {
+    if (isWide) setMobileNavOpen(false);
+  }, [isWide]);
+
+  useEffect(() => {
     if (scanSse.progress) setScanCardMounted(true);
   }, [scanSse.progress]);
 
@@ -86,7 +144,7 @@ export default function AppShell() {
   // Tab 不该走到被遮住的控件上，读屏也不该读到它们。
   // 这条必须排在下面「关闭后归还焦点」之前：焦点归还要发生在
   // inert 撤掉之后，否则 focus() 落在 inert 元素上不生效。
-  useEffect(() => {
+  useLayoutEffect(() => {
     const background = [toolbarRef.current, mainRef.current].filter(
       (element): element is HTMLElement => Boolean(element),
     );
@@ -107,7 +165,12 @@ export default function AppShell() {
     }
     wasMobileNavOpen.current = true;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setMobileNavOpen(false);
+      if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !useUIStore.getState().commandPaletteOpen
+      )
+        setMobileNavOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -146,10 +209,7 @@ export default function AppShell() {
         if (section === "settings" || section === "tasks") {
           base = titles[`/${section}`];
         }
-        if (
-          (section === "photo" || section === "comic") &&
-          subpage === "me"
-        ) {
+        if ((section === "photo" || section === "comic") && subpage === "me") {
           base = titles[meRoute(mode)];
         }
         if (subpage === "search") {
@@ -196,35 +256,52 @@ export default function AppShell() {
     }
   }, [isCancellingScan, pushToast, scanSse.scanId]);
 
-  useKeyboard({
-    "ctrl+b": () => toggleSidebar(),
-    "ctrl+h": () => navigate(homeRoute(mode)),
-    // 收藏与最近浏览住在「我的」的页签里，快捷键跟着走。
-    "ctrl+d": () => navigate(meRoute(mode, "favorites")),
-    "ctrl+,": () => navigate("/settings"),
-    "ctrl+r": () => navigate(meRoute(mode, "recents")),
-    "?": () => setHelpOpen((v) => !v),
-    "/": () => {
-      const el =
-        document.querySelector<HTMLInputElement>(
-          'input[placeholder^="搜索"]',
-        ) ??
-        document.querySelector<HTMLInputElement>(
-          'input[aria-label="搜索内容"]',
-        );
-      el?.focus();
+  useEffect(() => {
+    const onCommandKey = (event: KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        normalizeKey(event) !== "ctrl+k"
+      )
+        return;
+      if (immersive || (hasOpenModal() && !mobileNavOpen && !paletteOpen))
+        return;
+      event.preventDefault();
+      if (!event.repeat) setPaletteOpen(!paletteOpen);
+    };
+    window.addEventListener("keydown", onCommandKey);
+    return () => window.removeEventListener("keydown", onCommandKey);
+  }, [immersive, mobileNavOpen, paletteOpen, setPaletteOpen]);
+
+  useKeyboard(
+    {
+      "ctrl+b": () => toggleSidebar(),
+      "ctrl+h": () => navigate(homeRoute(mode)),
+      // 收藏与最近浏览住在「我的」的页签里，快捷键跟着走。
+      "ctrl+d": () => navigate(meRoute(mode, "favorites")),
+      "ctrl+,": () => navigate("/settings"),
+      "ctrl+r": () => navigate(meRoute(mode, "recents")),
+      "?": () => setHelpOpen((v) => !v),
+      "/": () => {
+        if (!immersive && (!hasOpenModal() || mobileNavOpen))
+          setPaletteOpen(true);
+      },
+      "ctrl+s": () => {
+        if (!startScan.isPending && !scanSse.isRunning) startScan.mutate();
+      },
+      // 随机一卷：仅在非沉浸场景生效（阅读器与大图预览的 r 有别的含义）
+      r: () => {
+        if (immersive) return;
+        goShuffle();
+      },
+      // U → 未读页（未读只属于漫画工作台）
+      u: () => {
+        if (immersive || mode !== "comic") return;
+        navigate(unreadRoute());
+      },
     },
-    // 随机一卷：仅在非沉浸场景生效（阅读器与大图预览的 r 有别的含义）
-    r: () => {
-      if (immersive) return;
-      goShuffle();
-    },
-    // U → 未读页（未读只属于漫画工作台）
-    u: () => {
-      if (immersive || mode !== "comic") return;
-      navigate(unreadRoute());
-    },
-  });
+    !paletteOpen && !helpOpen,
+  );
 
   return (
     <div className="app-shell flex h-full bg-bg">
@@ -233,18 +310,41 @@ export default function AppShell() {
         collapsed={mobileNavOpen ? false : sidebarCollapsed}
         onToggle={toggleSidebar}
         mobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
+        onShuffle={goShuffle}
+        shufflePending={randomAlbum.isPending}
+        warningCount={warningCount}
+        onRefresh={() =>
+          void queryClient.invalidateQueries({
+            queryKey: libraryQueryKeys.root,
+          })
+        }
       />
       <div className="flex-1 flex flex-col min-w-0">
-        <div ref={toolbarRef}>
-          <Toolbar
-            onOpenMobileNav={() => setMobileNavOpen(true)}
-            mobileMenuButtonRef={mobileMenuButtonRef}
-          />
+        <div ref={toolbarRef} className="mobile-app-bar ui-glass-bar lg:hidden">
+          <button
+            ref={mobileMenuButtonRef}
+            className="toolbar-icon"
+            aria-label="打开导航"
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <MenuIcon size={19} />
+          </button>
+          <span className="font-semibold">Local Gallery</span>
+          <button
+            className="toolbar-icon ml-auto"
+            aria-label="打开命令面板"
+            data-command-trigger
+            onClick={() => setPaletteOpen(true)}
+          >
+            <SearchIcon size={18} />
+          </button>
         </div>
         <main
           ref={mainRef}
           className="app-main flex-1"
-          data-nav-open={mobileNavOpen ? "true" : undefined}
+          data-nav-open={mobileNavOpen || paletteOpen ? "true" : undefined}
         >
           {/* 路由层错误兜底:任意子组件 render 抛错都不会让整个 SPA 白屏。
               key 用 pageBoundaryKey：设置页与任务中心切页签时不重挂整页
@@ -262,15 +362,12 @@ export default function AppShell() {
           // 遮罩只是点一下就关抽屉的便签，不该出现在 Tab 顺序里：
           // 抽屉打开时焦点关在抽屉内，Tab 到遮罩上等于逃出去。
           tabIndex={-1}
-          className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+          className="fixed inset-0 z-40 bg-scrim lg:hidden"
         />
       )}
-      {/*
-        扫描进度卡：左下角浮动卡（fixed，相对 viewport）。
-        必须在 <main> 外面，否则会被 main 的 overflow-auto 影响 sticky/fixed 行为。
-        scanSse.startWith 由 Toolbar 在用户触发「重新扫描」/ Ctrl+S 时写 store.scanId。
-      */}
+
       <Suspense fallback={null}>
+        {paletteOpen ? <CommandPalette open onClose={closePalette} /> : null}
         {scanCardMounted ? (
           <ScanProgress
             progress={scanSse.progress}

@@ -30,14 +30,17 @@ interface SubUsage {
   available: boolean;
 }
 
-const SCOPES: { scope: MediaCacheScope; label: string; key: keyof Props["sub"] }[] =
-  [
-    { scope: "thumbs", label: "缩略图", key: "thumbs" },
-    { scope: "converted", label: "转换图", key: "converted" },
-    { scope: "previews", label: "预览图", key: "previews" },
-    { scope: "faststart", label: "faststart", key: "videoFaststart" },
-    { scope: "transcode", label: "转码", key: "videoTranscode" },
-  ];
+const SCOPES: {
+  scope: MediaCacheScope;
+  label: string;
+  key: keyof Props["sub"];
+}[] = [
+  { scope: "thumbs", label: "缩略图", key: "thumbs" },
+  { scope: "converted", label: "转换图", key: "converted" },
+  { scope: "previews", label: "预览图", key: "previews" },
+  { scope: "faststart", label: "faststart", key: "videoFaststart" },
+  { scope: "transcode", label: "转码", key: "videoTranscode" },
+];
 
 /**
  * 媒体派生缓存：浏览图片时顺手算出来的那些中间产物。
@@ -107,10 +110,7 @@ export default function StorageMediaCache({
           const entry = sub[item.key];
           const canClear = entry.available && entry.bytes > 0;
           return (
-            <li
-              key={item.scope}
-              className="flex items-center gap-3 px-4 py-2"
-            >
+            <li key={item.scope} className="flex items-center gap-3 px-4 py-2">
               <span className="w-20 shrink-0 text-meta text-fg-muted">
                 {item.label}
               </span>
@@ -118,7 +118,9 @@ export default function StorageMediaCache({
                 {entry.available ? formatSize(entry.bytes) : "—"}
               </span>
               <span className="w-16 shrink-0 text-right text-meta tabular-nums text-fg-subtle">
-                {entry.available ? `${entry.fileCount.toLocaleString()} 个` : ""}
+                {entry.available
+                  ? `${entry.fileCount.toLocaleString()} 个`
+                  : ""}
               </span>
               <button
                 type="button"

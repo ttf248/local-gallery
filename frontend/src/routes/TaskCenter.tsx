@@ -98,7 +98,7 @@ export function TaskCenterView({
         <PageHeading
           contained
           title="任务中心"
-          description="查看本机任务进度并管理等待队列与记录；每日计划可自动扫描媒体目录、运行分析并刷新智能相册。"
+          description="管理本机分析、等待队列及每日计划。"
           action={
             <Link className="btn btn-sm btn-outline" to="/settings/server">
               服务设置
@@ -147,6 +147,7 @@ export function TaskCenterView({
                   loading={center.loading}
                   busy={runBusy}
                   modules={snapshot?.modules ?? []}
+                  history={history}
                   peopleEnabled={plan.peopleEnabled}
                   faceModel={center.faceModel}
                   faceModelSaving={center.faceModelSaving}

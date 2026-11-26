@@ -2,10 +2,15 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   type MouseEvent,
   type ReactNode,
 } from "react";
 import { Virtuoso, type ListRange, type VirtuosoHandle } from "react-virtuoso";
+import { queryClient } from "../../api/queryClient";
+import { getVideoInfo } from "../../api/videos";
+import { useDebounce } from "../../hooks/useDebounce";
+import { formatDuration } from "../../utils/format";
 import type { LibraryMediaItem } from "../../api/library";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useMediaGridPagination } from "../../hooks/useMediaGridPagination";
@@ -88,6 +93,7 @@ interface Props<T extends LibraryMediaItem = LibraryMediaItem> {
   groupOf?: (item: T) => string | undefined;
   /** 分组标题的内容。 */
   groupHeader?: (groupKey: string) => ReactNode;
+  onVisibleGroupChange?: (groupKey: string) => void;
   /**
    * 要不要给未加载的条目留占位槽。
    *
@@ -111,7 +117,7 @@ type WallEntry =
   | { kind: "group"; key: string; group: string }
   | { kind: "row"; key: string; row: WallRow; startIndex: number };
 
-const GAP = 8;
+const GAP = 6;
 
 /**
  * 分组排布时每一段自己的行高区间（像素）。
@@ -153,9 +159,51 @@ export default function PhotoWall<
   scrollToIndex = null,
   groupOf,
   groupHeader,
+  onVisibleGroupChange,
   showPlaceholders = true,
 }: Props<T>) {
-  const { ref: containerRef, width, height } = useElementSize<HTMLDivElement>();
+  const {
+    ref: containerRef,
+    width,
+    height,
+    element: container,
+  } = useElementSize<HTMLDivElement>();
+  const [videoTarget, setVideoTarget] = useState<LibraryMediaItem>();
+  const focusedVideo = useDebounce(videoTarget, 180);
+  const [videoDuration, setVideoDuration] = useState<{
+    id: string;
+    text: string;
+  }>();
+
+  useEffect(() => {
+    if (!focusedVideo) return;
+    let current = true;
+    void queryClient
+      .fetchQuery({
+        queryKey: ["video-info", focusedVideo.id, focusedVideo.version],
+        queryFn: () => getVideoInfo(focusedVideo.id),
+        staleTime: 60_000,
+        retry: false,
+      })
+      .then(({ duration }) => {
+        if (
+          current &&
+          duration != null &&
+          Number.isFinite(duration) &&
+          duration > 0
+        ) {
+          setVideoDuration({
+            id: focusedVideo.id,
+            text: formatDuration(duration),
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, [focusedVideo]);
+
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   // 记住上一次处理过的下标：同一个下标不重复滚，避免用户手动滚了墙
   // 之后又被拉回去。
@@ -354,7 +402,25 @@ export default function PhotoWall<
     virtuosoRef.current?.scrollToIndex({ index: entryIndex, align: "center" });
   }, [scrollToIndex, entries, itemIndex]);
 
+  const visibleGroup = useRef<string>();
+  const reportVisibleGroup = () => {
+    const root = container;
+    if (!onVisibleGroupChange || !root) return;
+    const bounds = root.getBoundingClientRect();
+    const first = Array.from(
+      root.querySelectorAll<HTMLElement>("[data-wall-group]"),
+    ).find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.bottom > bounds.top + 1 && rect.top < bounds.bottom;
+    });
+    const group = first?.dataset.wallGroup;
+    if (!group || group === visibleGroup.current) return;
+    visibleGroup.current = group;
+    onVisibleGroupChange(group);
+  };
+
   const handleRangeChanged = (range: ListRange) => {
+    reportVisibleGroup();
     // 标题行不算媒体：可见范围要落在照片行上，否则翻页的边界会算错。
     let start = Number.POSITIVE_INFINITY;
     let end = -1;
@@ -369,7 +435,11 @@ export default function PhotoWall<
   };
 
   return (
-    <div ref={containerRef} className="h-full min-h-0">
+    <div
+      ref={containerRef}
+      className="h-full min-h-0"
+      onScrollCapture={onVisibleGroupChange ? reportVisibleGroup : undefined}
+    >
       {width > 0 && (
         <Virtuoso
           ref={virtuosoRef}
@@ -386,7 +456,10 @@ export default function PhotoWall<
                 /* 分段标题：上面留一整段空白，下面紧贴照片。标题是这一段
                    的骨架，空白就是它的层级 —— 挤在照片边上时读不出
                    「这一段从这儿开始」。 */
-                <div className="pb-2 pt-6">
+                <div
+                  className="timeline-group-space"
+                  data-wall-group={entry.group}
+                >
                   {groupHeader?.(entry.group)}
                 </div>
               );
@@ -395,6 +468,11 @@ export default function PhotoWall<
             return (
               <div
                 className="flex items-start"
+                data-wall-group={
+                  onVisibleGroupChange && items[entry.startIndex]
+                    ? groupOf?.(items[entry.startIndex])
+                    : undefined
+                }
                 style={{
                   height: row.height,
                   gap: GAP,
@@ -408,7 +486,7 @@ export default function PhotoWall<
                     return (
                       <div
                         key={tile.id}
-                        className="shrink-0 rounded bg-bg-subtle animate-pulse"
+                        className="ui-skeleton shrink-0 animate-pulse"
                         style={{ width: tile.width, height: row.tileHeight }}
                         aria-hidden="true"
                       />
@@ -437,11 +515,12 @@ export default function PhotoWall<
                       key={tile.id}
                       /* 墙上挂的是一张张照片：它们之间留一道缝、角上带一点
                          圆，彼此分开而不是糊成一张大图。 */
-                      className="group relative shrink-0 overflow-hidden rounded-md bg-bg-subtle shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
+                      className="photo-wall-tile group relative shrink-0 overflow-hidden rounded-media bg-bg-media"
                       style={{ width: tile.width, height: row.tileHeight }}
                     >
                       {isVideo ? (
                         <VideoCoverImage
+                          fit="cover"
                           videoPath={item.id}
                           version={item.version}
                           displayWidth={tile.width}
@@ -473,6 +552,18 @@ export default function PhotoWall<
                           if (selecting && onToggleSelect) onToggleSelect(item);
                           else onOpen(item, index);
                         }}
+                        onPointerEnter={
+                          isVideo ? () => setVideoTarget(item) : undefined
+                        }
+                        onPointerLeave={
+                          isVideo ? () => setVideoTarget(undefined) : undefined
+                        }
+                        onFocus={
+                          isVideo ? () => setVideoTarget(item) : undefined
+                        }
+                        onBlur={
+                          isVideo ? () => setVideoTarget(undefined) : undefined
+                        }
                         onContextMenu={(event) => onContextMenu?.(item, event)}
                         className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
                         title={
@@ -489,9 +580,13 @@ export default function PhotoWall<
                           角标带汉字，因此用 --text-meta 而不是 --text-badge：
                           徽章字号是拉丁字母与数字的下限，中文压不住。 */}
                       {isVideo && (
-                        <span className="pointer-events-none absolute right-1.5 top-1.5 z-0 inline-flex items-center gap-1 rounded-md bg-black/65 px-1.5 py-0.5 text-meta font-medium text-white/90 backdrop-blur">
+                        <span className="photo-wall-video-badge">
                           <PlayFilledIcon size={10} />
-                          <span>视频</span>
+                          <span>
+                            {videoDuration?.id === item.id
+                              ? videoDuration.text
+                              : "视频"}
+                          </span>
                         </span>
                       )}
                       {/* 精选角标：黑底白勾，与相册级收藏的琥珀色星标

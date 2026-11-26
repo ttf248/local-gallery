@@ -21,25 +21,23 @@ interface Props {
 export default function TimelineGroupHeader({ group }: Props) {
   return (
     <div
-      className="timeline-group flex flex-wrap items-baseline gap-x-3 gap-y-0.5"
+      className="timeline-group flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5"
       data-testid="timeline-group-header"
     >
       <h2 className="timeline-group__title">{group.label}</h2>
-      <span className="timeline-group__count tabular-nums">
-        {group.count} 张
-      </span>
-      {group.note ? (
-        <span
-          className="timeline-group__note"
-          data-testid="timeline-group-note"
-        >
-          · {group.note}
+      <div className="flex flex-wrap items-baseline gap-x-1.5">
+        <span className="timeline-group__count tabular-nums">
+          {group.count} 张
         </span>
-      ) : null}
-      {/* 标题后面一条细线：这一段的内容到这里为止。月份是时间线上的
-          骨架，线把「这一段」与下一段分开，读的人一眼知道照片从哪
-          开始、到哪结束。 */}
-      <span className="section-rule" aria-hidden />
+        {group.note ? (
+          <span
+            className="timeline-group__note"
+            data-testid="timeline-group-note"
+          >
+            · {group.note}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

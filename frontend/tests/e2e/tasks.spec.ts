@@ -24,7 +24,7 @@ test.describe("任务中心", () => {
     // 顶部状态摘要：现在是什么状态、队列里有没有等待、主要操作是哪一枚。
     const summary = page.getByRole("region", { name: "状态摘要" });
     await expect(summary).toBeVisible();
-    await expect(summary.getByText(/队列(空闲|等待中)/)).toBeVisible();
+    await expect(summary.getByRole("heading", { name: /队列(空闲|等待中)|上次运行失败/ })).toBeVisible();
     await expect(
       summary.getByRole("button", { name: /开始分析/ }),
     ).toBeVisible();

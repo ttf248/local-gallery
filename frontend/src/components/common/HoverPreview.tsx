@@ -185,7 +185,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
               ))}
             </div>
           ) : (
-            <CardCover data={data} loading="eager" fit="cover" />
+            <CardCover data={data} loading="eager" />
           )}
           {/* 顶部暗角：让标题更易读 */}
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent pointer-events-none" />

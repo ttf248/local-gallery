@@ -7,7 +7,7 @@ import type {
 } from "../api/library";
 import { albumPageExtras } from "../api/library";
 import { albumsApi } from "../api/albums";
-import { ApiError } from "../api/client";
+import { ApiError, isStaleCursorError } from "../api/client";
 import { similarityApi } from "../api/similarity";
 import { libraryQueryKeys } from "../api/queryKeys";
 import { useAlbumFilters, useAlbumMedia } from "../hooks/useLibrary";
@@ -40,7 +40,7 @@ import AlbumHeader from "../components/album/AlbumHeader";
 import AlbumGroupPanel from "../components/album/AlbumGroupPanel";
 import AlbumMediaMenu from "../components/album/AlbumMediaMenu";
 import PropertiesDialog from "../components/common/PropertiesDialog";
-import { CloseIcon } from "../components/common/Icon";
+import { CloseIcon, LayersIcon } from "../components/common/Icon";
 import { fileManagerErrorMessage } from "../utils/fileManager";
 import { useSafeBack, contextFallback } from "../utils/navigation";
 import { albumRoute } from "../utils/path";
@@ -100,8 +100,16 @@ export default function PhotoAlbum({ album }: Props) {
   const grouping = dimension !== null;
   const showingGroup = grouping && groupId !== null;
 
-  const rawMediaQuery = useAlbumMedia(album.id, undefined, !showingGroup, filter);
-  const albumFiltersQuery = useAlbumFilters(album.id, !showingGroup && filterOpen);
+  const rawMediaQuery = useAlbumMedia(
+    album.id,
+    undefined,
+    !showingGroup,
+    filter,
+  );
+  const albumFiltersQuery = useAlbumFilters(
+    album.id,
+    !showingGroup && filterOpen,
+  );
   const smartGroupsQuery = useSmartAlbumGroups(
     album.id,
     dimension ?? "recommended",
@@ -153,9 +161,7 @@ export default function PhotoAlbum({ album }: Props) {
         return;
       }
       const ended =
-        filterCount > 0 ||
-        filter.collapse === true ||
-        Boolean(filter.expand);
+        filterCount > 0 || filter.collapse === true || Boolean(filter.expand);
       setGroupId(id);
       if (ended) {
         pushToast({
@@ -189,7 +195,10 @@ export default function PhotoAlbum({ album }: Props) {
       setGroupId(null, { replace: true });
       return;
     }
-    if (smartSummary && !smartSummary.groups.some((group) => group.id === groupId)) {
+    if (
+      smartSummary &&
+      !smartSummary.groups.some((group) => group.id === groupId)
+    ) {
       setGroupId(null, { replace: true });
     }
   }, [dimension, groupId, setGroupId, smartSummary]);
@@ -231,14 +240,19 @@ export default function PhotoAlbum({ album }: Props) {
     return () => setHelpContext("library");
   }, [setHelpContext]);
 
+  const cursorInvalidated = isStaleCursorError(mediaQuery.error);
   const loadMore = useCallback(() => {
     // 分组里的照片有自己的分页链：游标失效时要从头重取，不是重试同一页。
     if (showingGroup) {
       smartGroupMediaQuery.retryNextPage();
       return;
     }
+    if (cursorInvalidated) {
+      void rawMediaQuery.refetch();
+      return;
+    }
     void rawMediaQuery.fetchNextPage({ cancelRefetch: false });
-  }, [rawMediaQuery, showingGroup, smartGroupMediaQuery]);
+  }, [cursorInvalidated, rawMediaQuery, showingGroup, smartGroupMediaQuery]);
 
   const copyLink = useCallback(async () => {
     try {
@@ -395,7 +409,9 @@ export default function PhotoAlbum({ album }: Props) {
           onRetry={loadMore}
           retrying={mediaQuery.isFetchingNextPage}
         >
-          后续媒体加载失败，已加载内容仍可浏览。
+          {cursorInvalidated
+            ? "媒体库刚刚变了，当前位置已经失效。重新加载会从头开始。"
+            : "后续媒体加载失败，已加载内容仍可浏览。"}
         </ErrorBanner>
       )}
       <AlbumHeader
@@ -410,90 +426,90 @@ export default function PhotoAlbum({ album }: Props) {
         onOpenInExplorer={() => void openInExplorer()}
         onCopyLink={() => void copyLink()}
         onBack={goBack}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => setDimension(grouping ? null : "recommended")}
+              className="ui-btn ui-btn--ghost album-group-trigger"
+              aria-label={grouping ? "分组浏览已开" : "按分组浏览"}
+              aria-pressed={grouping}
+            >
+              <LayersIcon size={16} />
+              <span>分组</span>
+            </button>
+            {!showingGroup && (
+              <>
+                <AlbumFilterBar
+                  compact
+                  state={filter}
+                  facets={facets}
+                  facetsLoading={albumFiltersQuery.isLoading}
+                  facetsError={albumFiltersQuery.isError}
+                  retryingFacets={albumFiltersQuery.isFetching}
+                  onRetryFacets={() => void albumFiltersQuery.refetch()}
+                  filterOpen={filterOpen}
+                  onFilterOpenChange={setFilterOpen}
+                  resultCount={wallPhotoCount}
+                  photoCount={photoCount}
+                  unresolved={unresolved}
+                  grouped={extras.grouped}
+                  groupedGroups={extras.groupedGroups}
+                  onChange={setFilter}
+                  onClear={clearFilter}
+                />
+                <div className="hidden md:block">
+                  <DensityControl
+                    value={density}
+                    onChange={setDensity}
+                    presentation="popover"
+                  />
+                </div>
+              </>
+            )}
+          </>
+        }
       >
-        <nav
-          aria-label="相册视图"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border-faint py-2"
-        >
-          {/* 分组：这本相册的另一种看法，不是另一本相册。
-              按下它面板开着，墙上还是这本相册里的照片。 */}
-          <button
-            type="button"
-            onClick={() => setDimension(grouping ? null : "recommended")}
-            className="chip"
-            aria-pressed={grouping}
-          >
-            {grouping ? "分组浏览已开" : "按分组浏览"}
-          </button>
-          {showingGroup && selectedGroup ? (
-            <span className="truncate text-meta text-fg-muted">
-              分组：{selectedGroup.name} · {selectedGroup.photoCount} 张
-            </span>
-          ) : null}
-          {showingGroup ? (
-            <>
-              {/* 分组视图不叠加普通筛选：这句话一直摆着，用户不必
-                  猜为什么筛选条不见了。 */}
-              <span className="text-meta text-fg-subtle">
-                分组已经是筛好的照片，不叠加其它条件
+        {(showingGroup || filterChips.length > 0 || filter.collapse) && (
+          <div className="album-active-filters">
+            {showingGroup && selectedGroup ? (
+              <span className="truncate text-meta text-fg-muted">
+                分组：{selectedGroup.name} · {selectedGroup.photoCount} 张
               </span>
-              <button
-                type="button"
-                onClick={() => openGroup(null)}
-                className="btn-text text-meta text-accent hover:underline"
-              >
-                回到全部照片
-              </button>
-            </>
-          ) : null}
-          {/* 筛选条只在看全部照片时出现：分组里的照片已经是筛过的，
-              再加一层筛选会让人以为那些分组还能再筛。 */}
-          {!showingGroup ? (
-            /* 「怎么看」的一组：密度、筛选、折叠相似。它们与照片怎么摆
-               有关，摆在同一行作伴；页头那一行只留身份与相册级动作。 */
-            <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
-              {/* 密度只留宽屏：窄屏的照片墙固定两列，给一个改不动的
-                  控件只是噪音。 */}
-              <div className="hidden items-center gap-2 md:flex">
-                <span className="text-meta text-fg-subtle">密度</span>
-                <DensityControl value={density} onChange={setDensity} />
+            ) : null}
+            {showingGroup ? (
+              <>
+                {/* 分组视图不叠加普通筛选：这句话一直摆着，用户不必
+                  猜为什么筛选条不见了。 */}
+                <span className="text-meta text-fg-subtle">
+                  分组已经是筛好的照片，不叠加其它条件
+                </span>
+                <button
+                  type="button"
+                  onClick={() => openGroup(null)}
+                  className="btn-text text-meta text-accent hover:underline"
+                >
+                  回到全部照片
+                </button>
+              </>
+            ) : null}
+
+            {!showingGroup && filterChips.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-border-faint py-1.5">
+                {filterChips.map((chip) => (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    onClick={() => setFilter(chip.clear)}
+                    className="inline-flex h-7 items-center gap-1 rounded-md bg-bg-subtle px-2 text-meta text-fg transition-colors hover:bg-bg-strong"
+                    title={`去掉这条条件：${chip.label}`}
+                  >
+                    {chip.label}
+                    <CloseIcon size={11} />
+                  </button>
+                ))}
               </div>
-              <AlbumFilterBar
-                state={filter}
-                facets={facets}
-                facetsLoading={albumFiltersQuery.isLoading}
-                facetsError={albumFiltersQuery.isError}
-                retryingFacets={albumFiltersQuery.isFetching}
-                onRetryFacets={() => void albumFiltersQuery.refetch()}
-                filterOpen={filterOpen}
-                onFilterOpenChange={setFilterOpen}
-                resultCount={wallPhotoCount}
-                photoCount={photoCount}
-                unresolved={unresolved}
-                grouped={extras.grouped}
-                groupedGroups={extras.groupedGroups}
-                onChange={setFilter}
-                onClear={clearFilter}
-              />
-            </div>
-          ) : null}
-        </nav>
-        {/* 生效的条件逐条摆出来：条件能组合，用户不必回到面板里
-            再点一次才能去掉其中一条。 */}
-        {!showingGroup && filterChips.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-border-faint py-1.5">
-            {filterChips.map((chip) => (
-              <button
-                key={chip.key}
-                type="button"
-                onClick={() => setFilter(chip.clear)}
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-bg-subtle px-2 text-meta text-fg transition-colors hover:bg-bg-strong"
-                title={`去掉这条条件：${chip.label}`}
-              >
-                {chip.label}
-                <CloseIcon size={11} />
-              </button>
-            ))}
+            )}
           </div>
         )}
       </AlbumHeader>

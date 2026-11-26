@@ -52,6 +52,7 @@ export interface ListFilterBarProps {
    * 按钮。放进这条工具条，列表页顶部就只有一行控件。
    */
   trailing?: ReactNode;
+  compact?: boolean;
 }
 
 export function ListFilterBar({
@@ -71,18 +72,19 @@ export function ListFilterBar({
   minImageCount,
   onMinImageCountChange,
   trailing,
+  compact = false,
 }: ListFilterBarProps) {
   const viewMode = useUIStore((s) => s.viewMode);
   const setViewMode = useUIStore((s) => s.setViewMode);
 
   return (
-    <div className="page-shell">
+    <div className={compact ? "compact-list-filter" : "page-shell"}>
       <div className="filter-strip flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex items-center gap-1 flex-wrap min-w-0">
           {filterQuery ? (
             <button
               type="button"
-              className="chip"
+              className="ui-chip"
               onClick={onClearQuery}
               aria-label={`清除名称筛选「${filterQuery}」`}
             >
@@ -101,16 +103,14 @@ export function ListFilterBar({
               >
                 <span>{v.label}</span>
                 {typeof v.count === "number" && (
-                  <span className="tabular-nums text-meta opacity-70">
-                    {v.count}
-                  </span>
+                  <span className="tabular-nums text-meta">{v.count}</span>
                 )}
               </button>
             );
           })}
           {/* 没有视图切换 chip 的页面（如未读 / 最近）：总数靠左，
               避免整条筛选条只剩右半边、左侧空一大片。 */}
-          {!viewChips?.length && (
+          {!hideTotalCount && !viewChips?.length && (
             <span
               className="text-meta text-fg-muted tabular-nums"
               data-testid="filter-bar-count"
@@ -140,7 +140,7 @@ export function ListFilterBar({
           {onClearFilters ? (
             <button
               type="button"
-              className="btn btn-sm btn-outline"
+              className="ui-btn ui-btn--ghost"
               onClick={onClearFilters}
             >
               清除筛选
@@ -155,18 +155,14 @@ export function ListFilterBar({
             <div
               role="group"
               aria-label="视图模式"
-              className="inline-flex items-center shrink-0 rounded-md border border-border bg-bg-subtle/40 overflow-hidden"
+              className="ui-segmented shrink-0"
             >
               <button
                 onClick={() => setViewMode("grid")}
                 title="网格"
                 aria-label="网格视图"
                 aria-pressed={viewMode === "grid"}
-                className={`inline-flex items-center justify-center w-[34px] h-[34px] transition-colors ${
-                  viewMode === "grid"
-                    ? "bg-bg-elevated text-fg shadow-xs"
-                    : "text-fg-subtle hover:text-fg hover:bg-bg-subtle/60"
-                }`}
+                className="inline-flex items-center justify-center"
               >
                 <GridIcon size={14} />
               </button>
@@ -175,11 +171,7 @@ export function ListFilterBar({
                 title="列表"
                 aria-label="列表视图"
                 aria-pressed={viewMode === "list"}
-                className={`inline-flex items-center justify-center w-[34px] h-[34px] transition-colors ${
-                  viewMode === "list"
-                    ? "bg-bg-elevated text-fg shadow-xs"
-                    : "text-fg-subtle hover:text-fg hover:bg-bg-subtle/60"
-                }`}
+                className="inline-flex items-center justify-center"
               >
                 <ListIcon size={14} />
               </button>
@@ -284,7 +276,7 @@ function SortMenu({
           id={optionsId}
           role="group"
           aria-label="排序选项"
-          className="absolute right-0 top-full mt-1.5 min-w-[140px] bg-bg-elevated border border-border rounded-lg shadow-lg py-1 z-40 fade-up"
+          className="absolute right-0 top-full mt-1.5 min-w-[140px] ui-popover py-1 z-40 fade-up"
         >
           {options.map((o) => (
             <button

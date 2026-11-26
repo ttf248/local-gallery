@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Sidebar from "./Sidebar";
+import { useUIStore } from "../../store/uiStore";
 import { historyApi, prefsApi } from "../../api/prefs";
 
 vi.mock("../../hooks/useLibrary", () => ({
@@ -75,7 +76,15 @@ function renderSidebar(collapsed = false, path = "/") {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
-        <Sidebar collapsed={collapsed} onToggle={() => {}} />
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => {}}
+          onCloseMobile={() => {}}
+          onShuffle={() => {}}
+          onRefresh={() => {}}
+          shufflePending={false}
+          warningCount={0}
+        />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -121,7 +130,7 @@ describe("Sidebar", () => {
   it("照片工作台列出照片、相册、发现、珍藏与整理", () => {
     appMode.mode = "photo";
     renderSidebar();
-    expect(screen.getByText("照片")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "照片" })).toBeInTheDocument();
     expect(screen.getByText("相册")).toBeInTheDocument();
     expect(screen.getByText("发现")).toBeInTheDocument();
     expect(screen.getByText("珍藏")).toBeInTheDocument();
@@ -156,7 +165,9 @@ describe("Sidebar", () => {
     expect(
       screen.queryByRole("button", { name: /外观/ }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /关于/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /关于/ }),
+    ).not.toBeInTheDocument();
     // 别的页面上不挂页签名。
     unmount();
     renderSidebar(false, "/");
@@ -187,13 +198,16 @@ describe("Sidebar", () => {
     expect(screen.queryByText("发现")).not.toBeInTheDocument();
     // 没收起的照旧在列，工作台首页永远在。
     expect(screen.getByText("相册")).toBeInTheDocument();
-    expect(screen.getByText("照片")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "照片" })).toBeInTheDocument();
   });
 
   it("未读入口带未读数量", () => {
     renderSidebar();
     const entry = screen.getByRole("link", { name: /未读/ });
-    expect(entry).toHaveAttribute("title", expect.stringContaining("还有 69 卷"));
+    expect(entry).toHaveAttribute(
+      "title",
+      expect.stringContaining("还有 69 卷"),
+    );
     expect(entry).toHaveTextContent("69");
   });
 
@@ -224,4 +238,25 @@ describe("Sidebar", () => {
     fireEvent.click(button);
     expect(button).toBeInTheDocument();
   });
+});
+
+it("侧栏提供模式切换、搜索、主题、帮助与刷新", () => {
+  renderSidebar();
+  expect(screen.getByRole("group", { name: "工作台模式" })).toBeInTheDocument();
+  for (const name of ["打开命令面板", "快捷键帮助", "刷新缓存"]) {
+    expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  }
+});
+
+it("人物详情提供持久化的人脸框开关", () => {
+  useUIStore.getState().setShowPersonFaceBoxes(false);
+  renderSidebar(false, "/photo/people/p_123456");
+  const option = screen.getByRole("button", { name: "显示当前人物的人脸框" });
+  expect(option).toHaveAttribute("aria-pressed", "false");
+  fireEvent.click(option);
+  expect(option).toHaveAttribute("aria-pressed", "true");
+  expect(
+    JSON.parse(localStorage.getItem("local-gallery-ui") ?? "{}").state
+      .showPersonFaceBoxes,
+  ).toBe(true);
 });

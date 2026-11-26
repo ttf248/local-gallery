@@ -33,7 +33,6 @@ async function childrenOf(
   return body.page.items;
 }
 
-
 test("照片与漫画两侧的导航各自成套", async ({ page, request }) => {
   await liveRoots(request);
   await setWorkbenchMode(request, "photo");
@@ -52,9 +51,7 @@ test("照片与漫画两侧的导航各自成套", async ({ page, request }) => 
   await expect(sidebar.getByRole("link", { name: "发现" })).toHaveCount(0);
 });
 
-// 漫画工作台的暖棕：语义 token 在漫画侧重映射，照片侧仍是品牌蓝。
-// 换的是色相不是系统 —— 侧栏选中项与主按钮都跟着换。
-test("漫画工作台用暖棕强调色，照片工作台仍是品牌蓝", async ({
+test("漫画工作台用暖铜赭强调色，照片工作台用炭黑强调色", async ({
   page,
   request,
 }) => {
@@ -65,7 +62,7 @@ test("漫画工作台用暖棕强调色，照片工作台仍是品牌蓝", async
       .getPropertyValue("--accent")
       .trim(),
   );
-  expect(photoAccent.toLowerCase()).toBe("#476c8d");
+  expect(photoAccent.toLowerCase()).toBe("#1c1917");
 
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic");
@@ -74,7 +71,7 @@ test("漫画工作台用暖棕强调色，照片工作台仍是品牌蓝", async
       .getPropertyValue("--accent")
       .trim(),
   );
-  expect(comicAccent.toLowerCase()).toBe("#8e6848");
+  expect(comicAccent.toLowerCase()).toBe("#8a4f2d");
 });
 
 test("旧书签仍然打得开：它们重定向到新入口", async ({ page }) => {

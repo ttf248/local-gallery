@@ -32,7 +32,12 @@ import {
   ArrowUpRightIcon,
 } from "../components/common/Icon";
 import { displayedPageIndex } from "../utils/progress";
-import { albumRoute, homeRoute, libraryRoute, readerRoute } from "../utils/path";
+import {
+  albumRoute,
+  homeRoute,
+  libraryRoute,
+  readerRoute,
+} from "../utils/path";
 import { useSafeBack } from "../utils/navigation";
 import { usePrefs } from "../hooks/usePrefs";
 import { useVideoActivity } from "../hooks/useVideoActivity";
@@ -247,7 +252,10 @@ export default function Reader() {
     continuousRange.path === pathParam ? continuousRange : undefined,
   );
   const imageActivityWritable =
-    !isVideo && ready && imageActivityReadyPath === pathParam && images.length > 0;
+    !isVideo &&
+    ready &&
+    imageActivityReadyPath === pathParam &&
+    images.length > 0;
 
   useEffect(() => {
     if (!imageActivityWritable) return;
@@ -331,8 +339,14 @@ export default function Reader() {
       .catch(() => {});
   }, [pathParam, historyName, historyImageCount, queryClient, historyReady]);
 
-  const onImageSaved = useCallback(() => clearProgressFailure("save"), [clearProgressFailure]);
-  const onImageSaveFailed = useCallback(() => reportProgressFailure("save"), [reportProgressFailure]);
+  const onImageSaved = useCallback(
+    () => clearProgressFailure("save"),
+    [clearProgressFailure],
+  );
+  const onImageSaveFailed = useCallback(
+    () => reportProgressFailure("save"),
+    [reportProgressFailure],
+  );
   // 可见区末页可能随画布宽度改变；进度同步不负责关闭信息面板。
   const imageProgress = useImageProgressSync({
     albumId: pathParam,
@@ -638,7 +652,16 @@ export default function Reader() {
     } else if (index > 0) {
       setIndex(index - 1);
     }
-  }, [isVideo, initialIndex, videos.length, goToVideo, mode, scrollStep, index, setIndex]);
+  }, [
+    isVideo,
+    initialIndex,
+    videos.length,
+    goToVideo,
+    mode,
+    scrollStep,
+    index,
+    setIndex,
+  ]);
 
   const next = useCallback(() => {
     if (isVideo) {
@@ -674,7 +697,18 @@ export default function Reader() {
       return;
     }
     onReachEnd();
-  }, [isVideo, initialIndex, videos.length, goToVideo, mode, scrollStep, index, setIndex, images.length, onReachEnd]);
+  }, [
+    isVideo,
+    initialIndex,
+    videos.length,
+    goToVideo,
+    mode,
+    scrollStep,
+    index,
+    setIndex,
+    images.length,
+    onReachEnd,
+  ]);
 
   const jumpTo = useCallback(
     (zeroBased: number) => {
@@ -994,7 +1028,7 @@ export default function Reader() {
         {progressFailure?.key === progressKey && (
           <div
             role="alert"
-            className="absolute top-20 left-3 right-3 z-30 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-md border border-overlay-border bg-overlay-panel backdrop-blur-md p-3 text-body text-white/85 shadow-lg"
+            className="absolute top-20 left-3 right-3 z-30 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-md border border-overlay-border reader-glass p-3 text-body text-white/85 shadow-lg"
           >
             <span>
               {progressFailure.operation === "restore"
@@ -1104,7 +1138,7 @@ export default function Reader() {
           /* 抬到底部浮动工具条之上：两者都在底部居中，落在同一处时
              收尾提示会压住工具条，工具条从提示底下露出半截，
              像两层没对齐的浮层。 */
-          className="absolute inset-x-0 bottom-28 z-30 mx-auto flex w-[min(560px,92vw)] items-center gap-3 rounded-lg border border-overlay-border bg-overlay-panel px-4 py-3 text-white shadow-lg backdrop-blur-md"
+          className="absolute inset-x-0 bottom-28 z-30 mx-auto flex w-[min(560px,92vw)] items-center gap-3 rounded-lg border border-overlay-border reader-glass px-4 py-3 text-white shadow-float"
         >
           <div className="min-w-0 flex-1">
             <div className="text-body font-medium text-white/90">

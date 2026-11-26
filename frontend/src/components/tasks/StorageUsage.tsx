@@ -66,7 +66,7 @@ export default function StorageUsage({
   ];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
+    <div className="ui-surface overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border-faint px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-mono text-section font-medium tabular-nums text-fg">
@@ -96,7 +96,7 @@ export default function StorageUsage({
 
       <div className="px-4 py-3">
         <div
-          className="flex h-1.5 overflow-hidden rounded-full bg-bg-subtle"
+          className="task-storage-meter"
           role="img"
           aria-label={segments
             .map((segment) => `${segment.label} ${formatSize(segment.bytes)}`)

@@ -36,7 +36,10 @@ test("从首页进图库，按目录找到相册并打开照片", async ({ page,
   ).toBeVisible();
 
   // 目录树给出真实的文件夹层级：媒体根下挂着文件夹与相册。
-  const tree = page.getByRole("navigation", { name: "目录" });
+  const drawer = page.getByRole("button", { name: "目录", exact: true });
+  await expect(drawer).toHaveAttribute("aria-expanded", "false");
+  await drawer.click();
+  const tree = page.getByRole("navigation", { name: "目录", exact: true });
   await expect(tree).toBeVisible();
   await expect(tree.getByRole("button").first()).toBeVisible();
 
@@ -57,7 +60,8 @@ test("从首页进图库，按目录找到相册并打开照片", async ({ page,
 test("图库能按文件夹下钻，面包屑说清在哪一层", async ({ page, request }) => {
   await scannedNodes(request, "photo");
   await page.goto("/photo/library");
-  const tree = page.getByRole("navigation", { name: "目录" });
+  await page.getByRole("button", { name: "目录", exact: true }).click();
+  const tree = page.getByRole("navigation", { name: "目录", exact: true });
   // 媒体根那一层默认收着（不摊开上百个文件夹），展开后从里面找一个
   // 文件夹点进去。
   await tree.getByRole("button", { name: /^展开 / }).first().click();
@@ -221,7 +225,8 @@ test("目录树根与集合读取失败时显示错误并可重试", async ({ pa
   });
 
   await page.goto("/photo/library");
-  const tree = page.getByRole("navigation", { name: "目录" });
+  await page.getByRole("button", { name: "目录", exact: true }).click();
+  const tree = page.getByRole("navigation", { name: "目录", exact: true });
   // 根那一层默认收着（不摊开上百个文件夹）：展开它才会去读子项，
   // 读不出来时也给得出重试的手柄。
   await tree.getByRole("button", { name: /^展开 / }).first().click();
@@ -253,11 +258,11 @@ test("筛选结果为零时仍可调整条件并一键清除", async ({ page, re
   );
 
   await expect(page.getByRole("heading", { name: /没有匹配/ })).toBeVisible();
-  const filterBar = page.locator(".filter-strip");
+  const filterBar = page.locator(".sticky-page-header");
   await expect(filterBar).toBeVisible();
-  await expect(filterBar.getByRole("button", { name: "全部" })).toBeVisible();
+  await expect(filterBar.getByRole("button", { name: /^全部/ })).toBeVisible();
   await expect(
-    filterBar.getByText(`名称：${query}`, { exact: true }),
+    filterBar.getByRole("button", { name: `清除名称筛选「${query}」` }),
   ).toBeVisible();
   await expect(
     filterBar.getByRole("button", { name: "清除筛选" }),
@@ -266,7 +271,7 @@ test("筛选结果为零时仍可调整条件并一键清除", async ({ page, re
   await filterBar.getByRole("button", { name: "清除筛选" }).click();
   await expect(page).toHaveURL("/photo/library");
   await expect(
-    filterBar.getByRole("button", { name: "全部", pressed: true }),
+    filterBar.getByRole("button", { name: /^全部/, pressed: true }),
   ).toBeVisible();
 });
 
@@ -284,7 +289,8 @@ test("同属性的多个媒体根可独立选择并限定右侧列表", async ({
   expect(roots).toHaveLength(2);
 
   await page.goto("/photo/library");
-  const tree = page.getByRole("navigation", { name: "目录" });
+  await page.getByRole("button", { name: "目录", exact: true }).click();
+  const tree = page.getByRole("navigation", { name: "目录", exact: true });
   await expect(tree.locator(".library-tree__row.is-active")).toHaveCount(0);
 
   const selectedRoot = roots[1]!;
@@ -353,7 +359,7 @@ test("深层目录可直达与刷新，面包屑只显示一次当前节点", as
   ).toBeVisible();
   await expect(breadcrumbs.getByText(root.name, { exact: true })).toHaveCount(1);
   await expect(
-    breadcrumbs.getByRole("link", { name: hierarchy!.name, exact: true }),
+    breadcrumbs.getByRole("button", { name: hierarchy!.name, exact: true }),
   ).toBeVisible();
   await expect(breadcrumbs.getByText(outer!.name, { exact: true })).toHaveCount(
     1,
@@ -372,4 +378,7 @@ test("深层目录可直达与刷新，面包屑只显示一次当前节点", as
   await expect(
     page.locator(".library-content").getByTestId("album-card"),
   ).toContainText("inner");
+  await breadcrumbs.getByRole("button", { name: hierarchy!.name, exact: true }).click();
+  await page.getByRole("menuitem", { name: hierarchy!.name, exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`[?&]node=${encodeURIComponent(hierarchy!.id)}(?:&|$)`));
 });

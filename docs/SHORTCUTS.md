@@ -13,7 +13,7 @@
 - **按键规范化**：`normalizeKey()` 把 `ctrl` / `alt` / `shift` 拼成 `+` 分隔的字符串
 - **跨键盘布局**：`?` / `+` / `=` 字面字符忽略 shift 前缀（AZERTY / QWERTZ 也能命中）
 - **分组**：`global` 为主页面，`photo` 为照片墙与大图预览，`reader` 为阅读器共用，`image` / `video` 为对应媒体操作。`HelpOverlay` 必须接收 `library` / `photo` / `image` / `video` 场景，先筛选分组再执行搜索
-- **修改流程**：改 `utils/shortcutsTable.ts` 的 `SHORTCUTS` 数组 → 同步核对 handler 注册（`Toolbar` / `AppShell` / `Reader` / `PhotoViewer` / `VideoPlayer` / `PageSlider`）→ 更新测试和本文件。`utils/shortcutsTable.test.ts` 会逐条核对清单里的组合键是否真有处理函数 —— 写了却没人处理，用户按下没反应，比不写这一行更糟
+- **修改流程**：改 `utils/shortcutsTable.ts` 的 `SHORTCUTS` 数组 → 同步核对 handler 注册（`AppShell` / `FolderDrawer` / `Reader` / `PhotoViewer` / `VideoPlayer` / `PageSlider`）→ 更新测试和本文件。`utils/shortcutsTable.test.ts` 会逐条核对清单里的组合键是否真有处理函数 —— 写了却没人处理，用户按下没反应，比不写这一行更糟
 
 ---
 
@@ -29,7 +29,9 @@
 | `Ctrl+D` | 珍藏 · 收藏 / 我的 · 收藏（随工作台模式）                       |
 | `Ctrl+,` | 设置                                                         |
 | `Ctrl+B` | 折叠 / 展开侧边栏                                            |
-| `/`      | 聚焦搜索框                                                   |
+| `/` | 在非输入和非沉浸场景打开命令面板 |
+| `Ctrl+K` / `⌘K` | 打开命令面板 |
+| `Ctrl+\` / `⌘\` | 在相册或书架切换目录抽屉 |
 | `R`      | 随机翻翻（照片工作台）/ 随机一卷（漫画工作台）               |
 | `U`      | 未读相册页（只属于漫画工作台，照片模式下不跳转）             |
 | `?`      | 显示快捷键帮助                                               |
@@ -40,9 +42,11 @@
 `R` 在主页面随机打开相册，在图片阅读器旋转图片；`U` 在主页面打开未读列表，在图片和视频阅读器设置封面。
 主页面两条的措辞随工作台模式变化：「随机翻翻 / 随机一卷」。未读只属于漫画工作台，照片模式下按 `U` 不跳转，帮助浮层里也不列出这条快捷键。
 
-工作台模式（照片 / 漫画）的切换**刻意不给快捷键**：常见候选（`Ctrl+Shift+M`、`Ctrl+Shift+P`、`Ctrl+Alt+M`）都被主流浏览器的开发者工具或打印占用，而模式切换在顶栏与设置页都是一步可达的控件，不需要再占一个全局键。
+工作台模式（照片 / 漫画）的切换**刻意不给快捷键**：常见候选（`Ctrl+Shift+M`、`Ctrl+Shift+P`、`Ctrl+Alt+M`）都被主流浏览器的开发者工具或打印占用，而模式切换在侧栏与设置页都是一步可达的控件，不需要再占一个全局键。
 
 ---
+
+命令面板内，方向键循环选择，Tab 在输入框、范围和关闭按钮间移动。Enter 打开选中的建议，Shift+Enter 查看全部名称结果。画面与文字范围按 Enter 提交搜索。Esc 先清空查询，再关闭并归还焦点。
 
 ## 页签
 

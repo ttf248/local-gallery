@@ -57,11 +57,10 @@ export default function Segmented<T extends string>({
     const enabled = options.filter((option) => !option.disabled);
     if (enabled.length === 0) return;
     const currentIndex = enabled.findIndex((option) => option.value === value);
-    const nextIndex =
-      (currentIndex + step + enabled.length) % enabled.length;
+    const nextIndex = (currentIndex + step + enabled.length) % enabled.length;
     onChange(enabled[nextIndex].value);
     const buttons = ref.current?.querySelectorAll<HTMLButtonElement>(
-      'button[role="radio"]',
+      'button[role="radio"]:not(:disabled)',
     );
     buttons?.[nextIndex]?.focus();
   }
@@ -75,7 +74,7 @@ export default function Segmented<T extends string>({
         ref={ref}
         role="radiogroup"
         aria-label={label}
-        className="inline-flex items-center overflow-hidden rounded-md border border-border bg-bg-subtle/40"
+        className="ui-segmented"
       >
         {options.map((option) => {
           const selected = option.value === value;
@@ -101,18 +100,16 @@ export default function Segmented<T extends string>({
                   move(-1);
                 }
               }}
-              className={
-                compact
-                  ? `inline-flex h-7 w-8 items-center justify-center transition-colors ${
-                      selected
-                        ? "bg-bg-elevated text-fg shadow-xs"
-                        : "text-fg-muted hover:text-fg"
-                    } disabled:opacity-50`
-                  : `h-8 px-3 text-meta transition-colors ${
-                      selected
-                        ? "bg-accent-soft text-accent-ink font-medium"
-                        : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
-                    } disabled:opacity-50`
+              className={compact ? "min-w-8" : undefined}
+              tabIndex={
+                selected ||
+                (!options.some(
+                  (item) => item.value === value && !item.disabled,
+                ) &&
+                  options.find((item) => !item.disabled)?.value ===
+                    option.value)
+                  ? 0
+                  : -1
               }
             >
               {option.label}

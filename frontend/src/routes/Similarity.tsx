@@ -95,6 +95,13 @@ interface UndoEntry {
  * 原始照片一个字节都不动。
  */
 export default function Similarity() {
+  const [scrollParent, setScrollParent] = useState<HTMLElement>();
+  const bindScrollParent = useCallback((element: HTMLDivElement | null) => {
+    if (element)
+      setScrollParent(
+        element.closest<HTMLElement>("main.app-main") ?? undefined,
+      );
+  }, []);
   const [searchParams, setSearchParams] = useSearchParams();
   const kind = readParam(searchParams.get(KIND_PARAM)) as
     SimilarityGroupKind | "";
@@ -460,7 +467,7 @@ export default function Similarity() {
   const isEmpty = !groups.isLoading && items.length === 0;
 
   return (
-    <div className="min-h-full pb-10">
+    <div className="similarity-page min-h-full pb-10" ref={bindScrollParent}>
       <PageHeading
         eyebrow="本机整理"
         title="相似照片与连拍"
@@ -640,7 +647,8 @@ export default function Similarity() {
         ) : (
           <Virtuoso
             data={items}
-            useWindowScroll
+            customScrollParent={scrollParent}
+            useWindowScroll={!scrollParent}
             overscan={200}
             increaseViewportBy={{ top: 500, bottom: 700 }}
             defaultItemHeight={240}
@@ -705,7 +713,7 @@ export default function Similarity() {
 
         {selectedIds.size > 0 ? (
           <div
-            className="similarity-actions"
+            className="similarity-actions float-bottom"
             data-testid="similarity-batch-bar"
           >
             <span className="text-meta text-fg-muted">

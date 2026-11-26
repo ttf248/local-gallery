@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMediaFeed } from "../hooks/useMediaFeed";
 import { ApiError } from "../api/client";
@@ -12,7 +12,11 @@ import ErrorBanner from "../components/common/ErrorBanner";
 import ContextMenu from "../components/album/ContextMenu";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
-import TimelineToolbar from "../components/timeline/TimelineToolbar";
+import TimelineFilterPopover, {
+  TimelineMediaControl,
+} from "../components/timeline/TimelineFilterPopover";
+import TimelineScrubber from "../components/timeline/TimelineScrubber";
+import StickyPageHeader from "../components/layout/StickyPageHeader";
 import TimelineGroupHeader from "../components/timeline/TimelineGroupHeader";
 import OnThisDayStrip from "../components/timeline/OnThisDayStrip";
 import {
@@ -21,12 +25,7 @@ import {
   timelineYearRange,
   type TimelineFilter,
 } from "../utils/timeline";
-import {
-  albumRoute,
-  homeRoute,
-  libraryRoute,
-  randomPhotosRoute,
-} from "../utils/path";
+import { albumRoute, homeRoute } from "../utils/path";
 import { FolderIcon, GridIcon, LibraryIcon } from "../components/common/Icon";
 import { useLibraryManifest } from "../hooks/useLibrary";
 import { useHistoryCards } from "../hooks/useHistory";
@@ -86,6 +85,8 @@ export default function PhotoTimeline() {
   const otherSideHasContent = (manifest?.statistics.comicAlbumCount ?? 0) > 0;
   const hasContent = sideHasContent;
 
+  const [visibleGroup, setVisibleGroup] = useState("");
+
   const filter = useMemo<TimelineFilter>(
     () => ({
       year: searchParams.get("year") ?? "",
@@ -134,7 +135,7 @@ export default function PhotoTimeline() {
       }
       const [year, month] = key.split("-");
       const entry = feed.years.find((item) => item.year === Number(year));
-      const found = entry?.months.find((item) => item.month === Number(month));
+      const found = entry?.months?.find((item) => item.month === Number(month));
       return found?.count ?? 0;
     },
     [feed.years, feed.unknown],
@@ -237,52 +238,21 @@ export default function PhotoTimeline() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-border-faint bg-bg">
-        <div className="page-shell">
-          {/* 页头：标题只说这一页是什么，数量与时间范围退到下面一行。
-              「全部照片」是这一页的内容；有多少张、跨哪几年是事实，
-              不是标题。 */}
-          <div className="album-bar">
-            <div className="min-w-0 flex-1">
-              <h1 className="page-title truncate">全部照片</h1>
-              <div
-                className="album-bar__meta mt-1 tabular-nums"
-                data-testid="timeline-meta"
-              >
-                <span>
-                  <span className="text-fg font-medium">{feed.total}</span> 张
-                </span>
-                {range ? (
-                  <>
-                    <span className="text-fg-subtle">·</span>
-                    <span>{range}</span>
-                  </>
-                ) : null}
-                {feed.isFetchingNextPage ? (
-                  <>
-                    <span className="text-fg-subtle">·</span>
-                    <span className="text-fg-subtle">正在加载下一批</span>
-                  </>
-                ) : null}
+      <StickyPageHeader
+        className="photo-timeline-header"
+        title="全部照片"
+        meta={
+          <span data-testid="timeline-meta">
+            {feed.total.toLocaleString("zh-CN")} 张{range ? ` · ${range}` : ""}
+          </span>
+        }
+        actions={
+          hasContent && (
+            <>
+              <div className="hidden md:block">
+                <TimelineMediaControl filter={filter} onChange={applyFilter} />
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link
-                to={libraryRoute("photo")}
-                className="btn btn-sm btn-outline"
-              >
-                相册
-              </Link>
-              <Link to={randomPhotosRoute()} className="btn btn-sm btn-outline">
-                随手看看
-              </Link>
-            </div>
-          </div>
-          {hasContent ? (
-            /* 筛选与回忆入口同在一行：这一页的第一屏是照片，能收进
-               头部的都收进头部，别让一条一条的横带往下推。 */
-            <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 pb-3 pt-1">
-              <TimelineToolbar
+              <TimelineFilterPopover
                 years={feed.years}
                 filter={filter}
                 dateSources={feed.dateSources}
@@ -290,35 +260,59 @@ export default function PhotoTimeline() {
                 unknown={feed.unknown}
                 onChange={applyFilter}
               />
-              <div className="flex flex-wrap items-center gap-2">
-                {/* 密度：默认是每段各算各的行高（稀疏的月份大一些，
-                    密集的月份保持浏览密度）。用户明确要一档时，
-                    整面墙都按那一档来 —— 明确选过的东西不该被
-                    自动改回去。窄屏不给：那里的墙固定两列，
-                    给一个改不动的控件只是噪音。 */}
-                <div className="hidden items-center gap-2 md:flex">
-                  <span className="text-meta text-fg-subtle">密度</span>
-                  <DensityControl value={density} onChange={setDensity} />
-                </div>
-                <OnThisDayStrip enabled={hasContent} />
-                {resume ? (
-                  /* 「接着看」是一个入口，不是一句说明：用次级按钮的样子，
-                     免得它读起来像一行正文。 */
-                  <Link
-                    to={resume.to}
-                    className="btn btn-sm btn-outline"
-                    title="回到最近翻过的那本相册"
-                  >
-                    接着看 · {resume.title}
-                  </Link>
-                ) : null}
+              <div className="hidden md:block">
+                <DensityControl
+                  value={density}
+                  onChange={setDensity}
+                  presentation="popover"
+                />
               </div>
+              <OnThisDayStrip enabled={hasContent} />
+              {resume && (
+                <Link
+                  to={resume.to}
+                  className="ui-btn ui-btn--ghost timeline-resume"
+                  title={resume.title}
+                >
+                  接着看
+                </Link>
+              )}
+            </>
+          )
+        }
+        subbar={
+          Boolean(filter.year || filter.media) && (
+            <div className="flex gap-1.5">
+              {filter.year && (
+                <button
+                  type="button"
+                  className="ui-chip"
+                  onClick={() =>
+                    applyFilter({ ...filter, year: "", month: "" })
+                  }
+                >
+                  {filter.year === "unknown"
+                    ? "日期未知"
+                    : `${filter.year} 年${filter.month ? ` ${filter.month} 月` : ""}`}{" "}
+                  <span aria-hidden>×</span>
+                </button>
+              )}
+              {filter.media && (
+                <button
+                  type="button"
+                  className="ui-chip"
+                  onClick={() => applyFilter({ ...filter, media: "" })}
+                >
+                  {filter.media === "video" ? "视频" : "照片"}{" "}
+                  <span aria-hidden>×</span>
+                </button>
+              )}
             </div>
-          ) : null}
-        </div>
-      </header>
+          )
+        }
+      />
 
-      <div className="page-shell min-h-0 flex-1 pb-2">
+      <div className="timeline-wall page-shell flex min-h-0 flex-1 flex-col pb-2">
         {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
             提示条说清影响范围，并给一个重试的手柄。 */}
         {feed.isFetchNextPageError ? (
@@ -372,6 +366,7 @@ export default function PhotoTimeline() {
             </div>
           ) : (
             <PhotoWall
+              key={searchParams.toString()}
               items={items}
               total={feed.total}
               targetHeight={wallTargetHeight(density)}
@@ -385,6 +380,7 @@ export default function PhotoTimeline() {
               /* 按月份分段：每一段标题写清是几月、时间是怎么来的。 */
               groupOf={groupOf}
               groupHeader={groupHeader}
+              onVisibleGroupChange={setVisibleGroup}
               /* 整库级别的墙不铺占位槽：跳到远处看到的是一屏灰格子，而且那些格子要把整库都取回来才填得上。 */
               showPlaceholders={false}
               isPicked={picks.isPicked}
@@ -393,6 +389,17 @@ export default function PhotoTimeline() {
               onContextMenu={menu.open}
             />
           ))}
+        {!emptyState && (
+          <TimelineScrubber
+            years={feed.years}
+            unknownCount={feed.unknown}
+            activeYear={filter.year || visibleGroup.split("-")[0]}
+            onSelectYear={(year) => {
+              if (year !== filter.year || filter.month)
+                applyFilter({ ...filter, year, month: "" });
+            }}
+          />
+        )}
       </div>
 
       {menu.menu && (

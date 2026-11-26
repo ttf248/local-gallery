@@ -14,13 +14,11 @@ import {
   formatCount,
   formatEstimateDuration,
   formatTaskDuration,
-  formatTaskSpeed,
-  jobProgressPercent,
   taskModeLabel,
   taskStageLabel,
   taskStatusLabel,
 } from "../../utils/taskFormat";
-import TaskStatusDot from "./TaskStatusDot";
+import TaskHeroCard from "./TaskHeroCard";
 
 interface Props {
   /** 当前活动任务；没有时是空闲态。 */
@@ -74,9 +72,9 @@ export default function TaskSummary({
 }: Props) {
   if (loading) {
     return (
-      <div className="tasks-summary" aria-busy="true">
+      <div className="tasks-summary ui-surface" aria-busy="true">
         <div className="min-w-0 flex-1">
-          <div className="h-4 w-40 animate-pulse rounded-full bg-bg-subtle" />
+          <div className="h-4 w-40 ui-skeleton animate-pulse" />
           <div className="mt-2 h-3 w-2/3 animate-pulse rounded-full bg-bg-subtle" />
         </div>
       </div>
@@ -87,7 +85,9 @@ export default function TaskSummary({
     ? `${taskStatusLabel(active.status)} · ${jobModuleName(active.type, modules)}`
     : queuedCount > 0
       ? `队列等待中 · ${queuedCount} 项`
-      : "队列空闲";
+      : lastJob?.status === "failed"
+        ? "上次运行失败"
+        : "队列空闲";
 
   const currentEstimate = estimateForModule(
     estimate,
@@ -104,7 +104,7 @@ export default function TaskSummary({
     faceModel === "buffalo_m"
       ? embeddingStatus?.faceModels?.buffalo_m?.ready
       : (embeddingStatus?.faceModels?.["quality-v2"]?.ready ??
-        embeddingStatus?.modules?.face?.ready),
+          embeddingStatus?.modules?.face?.ready),
   );
   const blockedReason = startBlockedReason({
     module: selection.module,
@@ -114,225 +114,122 @@ export default function TaskSummary({
   });
 
   return (
-    <section className="tasks-summary" aria-label="状态摘要">
-      <div className="min-w-0 flex-1">
-        <p className="tasks-summary__state">
-          <TaskStatusDot
-            status={active ? active.status : queuedCount > 0 ? "pending" : "idle"}
-          />
-          <span>{stateText}</span>
-        </p>
-
-        {active ? (
-          <>
-            <p className="tasks-summary__facts">
-              <span>{taskStageLabel(active.stage)}</span>
-              <span>
-                设备：{active.computeDevice === "gpu" ? "NVIDIA GPU" : "CPU"}
-              </span>
-              {active.type === "face" && active.faceModel ? (
-                <span>
-                  模型：
-                  {active.faceModel === "buffalo_m" ? "Buffalo_m" : "quality-v2"}
-                </span>
+    <TaskHeroCard
+      title={stateText}
+      active={active}
+      status={
+        active?.status ??
+        (queuedCount > 0
+          ? "pending"
+          : lastJob?.status === "failed"
+            ? "failed"
+            : "idle")
+      }
+      actions={
+        <>
+          {active ? (
+            <>
+              {active.status === "running" ? (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  disabled={busy}
+                  onClick={() => onAction(active.id, "pause")}
+                >
+                  暂停
+                </button>
               ) : null}
-              <span>
-                {taskModeLabel(active.mode)} · 开始{" "}
-                {formatDateTime(active.startedAt ?? active.createdAt)} · 已运行{" "}
-                {formatTaskDuration(active.elapsedMs)}
-              </span>
-            </p>
-            <ActiveProgress job={active} />
-          </>
-        ) : (
-          <p className="tasks-summary__facts">
-            {lastJob ? (
-              lastJob.status === "failed" ? (
-                /* 上一次跑砸了是最该先看见的事：写在状态这一行，
-                   不用翻到任务记录里去找原因。 */
-                <span className="text-danger">
-                  上次运行失败 · {jobModuleName(lastJob.type, modules)} ·{" "}
-                  {lastJob.error ?? "原因见任务记录"}
-                </span>
-              ) : (
-                <span>
-                  上次运行 {formatDateTime(lastJob.createdAt)} ·{" "}
-                  {taskModeLabel(lastJob.mode)} · 完成{" "}
-                  {formatCount(lastJob.completed ?? lastJob.processed)} 张
-                </span>
-              )
-            ) : (
-              <span>还没有在本机运行过分析。</span>
-            )}
-          </p>
-        )}
-      </div>
-
-      <div className="tasks-summary__actions">
-        {active ? (
-          <>
-            {active.status === "running" ? (
+              {active.status === "paused" || active.status === "pending" ? (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={busy}
+                  onClick={() => onAction(active.id, "resume")}
+                >
+                  继续
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-sm btn-outline"
                 disabled={busy}
-                onClick={() => onAction(active.id, "pause")}
+                onClick={() => onAction(active.id, "cancel")}
               >
-                暂停
+                取消任务
               </button>
-            ) : null}
-            {active.status === "paused" || active.status === "pending" ? (
+            </>
+          ) : (
+            <>
               <button
                 type="button"
                 className="btn btn-sm btn-primary"
-                disabled={busy}
-                onClick={() => onAction(active.id, "resume")}
+                disabled={busy || Boolean(blockedReason)}
+                onClick={onStart}
+                title={blockedReason}
               >
-                继续
+                开始分析
+                {currentEstimate
+                  ? ` · ${formatCount(currentEstimate.count)} 张`
+                  : ""}
               </button>
-            ) : null}
-            <button
-              type="button"
-              className="btn btn-sm btn-outline"
-              disabled={busy}
-              onClick={() => onAction(active.id, "cancel")}
-            >
-              取消任务
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              disabled={busy || Boolean(blockedReason)}
-              onClick={onStart}
-              title={blockedReason}
-            >
-              开始分析
-              {currentEstimate ? ` · ${formatCount(currentEstimate.count)} 张` : ""}
-            </button>
-            {currentEstimate ? (
-              /* 估不出来就明说估不出来：按钮上只有张数，没有时间，
+              {currentEstimate ? (
+                /* 估不出来就明说估不出来：按钮上只有张数，没有时间，
                  用户会以为点下去马上就完。 */
-              <span className="tasks-summary__hint">
-                {formatEstimateDuration(currentEstimate.estimatedDurationMs)}
+                <span className="tasks-summary__hint">
+                  {formatEstimateDuration(currentEstimate.estimatedDurationMs)}
+                </span>
+              ) : null}
+              {blockedReason ? (
+                <span className="tasks-summary__hint">{blockedReason}</span>
+              ) : null}
+            </>
+          )}
+        </>
+      }
+    >
+      {active ? (
+        <>
+          <p className="tasks-summary__facts">
+            <span>{taskStageLabel(active.stage)}</span>
+            <span>
+              设备：{active.computeDevice === "gpu" ? "NVIDIA GPU" : "CPU"}
+            </span>
+            {active.type === "face" && active.faceModel ? (
+              <span>
+                模型：
+                {active.faceModel === "buffalo_m" ? "Buffalo_m" : "quality-v2"}
               </span>
             ) : null}
-            {blockedReason ? (
-              <span className="tasks-summary__hint">{blockedReason}</span>
-            ) : null}
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/**
- * 运行中的读数：进度条 + 五个关键数字。
- *
- * 「已处理 / 已跳过 / 失败 / 速度 / 预计剩余」是判断一次运行要不要继续
- * 的全部依据，其余信息（批次号、模型版本）在下面一行。
- */
-function ActiveProgress({ job }: { job: AIJob }) {
-  const percent = jobProgressPercent(job);
-  const planned = job.planned ?? 0;
-  const settled =
-    job.status === "completed" ||
-    job.status === "cancelled" ||
-    job.status === "failed";
-
-  return (
-    <div className="mt-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <div className="flex items-baseline gap-3">
-          <span className="font-mono text-page-sm font-medium tabular-nums text-fg">
-            {percent}%
-          </span>
-          <span className="text-meta tabular-nums text-fg-muted">
-            {planned > 0
-              ? `${formatCount(job.completed)} / ${formatCount(planned)} 张`
-              : settled
-                ? "本次没有需要处理的图片"
-                : "正在整理分析清单"}
-          </span>
-        </div>
-      </div>
-
-      <div
-        className="mt-2 h-2 overflow-hidden rounded-full bg-bg-subtle"
-        role="progressbar"
-        aria-label="任务进度"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-      >
-        <div
-          className="h-full rounded-full bg-accent transition-[width] duration-300"
-          style={{ width: `${percent}%` }}
-        />
-      </div>
-
-      <dl className="mt-4 grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-5">
-        <Readout label="已处理" value={formatCount(job.processed)} />
-        <Readout label="已跳过" value={formatCount(job.skipped)} />
-        <Readout
-          label="失败"
-          value={formatCount(job.failed)}
-          tone={job.failed > 0 ? "danger" : "default"}
-        />
-        <Readout label="速度" value={formatTaskSpeed(job.speedPerSecond)} />
-        <Readout
-          label="预计剩余"
-          value={
-            job.estimatedRemainingMs > 0
-              ? formatTaskDuration(job.estimatedRemainingMs)
-              : "—"
-          }
-        />
-      </dl>
-
-      {job.checkpoint.batch > 0 || job.recoveredAfterRestart ? (
-        <p className="mt-3 flex flex-wrap items-center gap-x-4 text-meta text-fg-muted">
-          <span>
-            {job.checkpoint.batch > 0
-              ? `已保存到第 ${formatCount(job.checkpoint.batch)} 批 · 位置 ${formatCount(job.checkpoint.offset)} / ${formatCount(job.total)}`
-              : "尚无已提交批次，将从任务起点继续"}
-          </span>
-          {job.recoveredAfterRestart ? (
-            <span className="font-medium text-fg">
-              {job.checkpoint.batch > 0
-                ? "服务重启后从此处续跑"
-                : "服务重启后重新开始"}
+            <span>
+              {taskModeLabel(active.mode)} · 开始{" "}
+              {formatDateTime(active.startedAt ?? active.createdAt)} · 已运行{" "}
+              {formatTaskDuration(active.elapsedMs)}
             </span>
-          ) : null}
+          </p>
+        </>
+      ) : (
+        <p className="tasks-summary__facts">
+          {lastJob ? (
+            lastJob.status === "failed" ? (
+              /* 上一次跑砸了是最该先看见的事：写在状态这一行，
+                   不用翻到任务记录里去找原因。 */
+              <span className="text-danger">
+                {jobModuleName(lastJob.type, modules)} ·{" "}
+                {lastJob.error ?? "原因见任务记录"}
+              </span>
+            ) : (
+              <span>
+                上次运行 {formatDateTime(lastJob.createdAt)} ·{" "}
+                {taskModeLabel(lastJob.mode)} · 完成{" "}
+                {formatCount(lastJob.completed ?? lastJob.processed)} 张
+              </span>
+            )
+          ) : (
+            <span>还没有在本机运行过分析。</span>
+          )}
         </p>
-      ) : null}
-    </div>
-  );
-}
-
-function Readout({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "danger";
-}) {
-  return (
-    <div>
-      <dt className="text-meta text-fg-subtle">{label}</dt>
-      <dd
-        className={`mt-0.5 font-mono text-label font-medium tabular-nums ${
-          tone === "danger" ? "text-danger" : "text-fg"
-        }`}
-      >
-        {value}
-      </dd>
-    </div>
+      )}
+    </TaskHeroCard>
   );
 }
 

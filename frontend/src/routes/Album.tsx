@@ -41,7 +41,6 @@ import {
 import { useLibraryAncestors, useLibraryNodes } from "../hooks/useLibrary";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import { SelectionToggle } from "../components/album/BulkActions";
-import "../styles/album.css";
 
 interface CollectionDetail {
   albumCount: number;

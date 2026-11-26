@@ -44,7 +44,7 @@ test("抽屉开合：背景不滚、焦点不跑出去", async ({ page }) => {
   const locked =
     (await main.evaluate((el) => getComputedStyle(el).overflowY)) === "hidden";
   const inert = await page
-    .locator(".app-toolbar")
+    .locator(".mobile-app-bar")
     .evaluate(
       (el) => el.hasAttribute("inert") || Boolean(el.closest("[inert]")),
     );
