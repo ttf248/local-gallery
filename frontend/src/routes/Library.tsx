@@ -311,7 +311,7 @@ export default function Library() {
   ) : null;
 
   return (
-    <Page variant="gallery" className="page-shell library-page pb-[var(--page-gutter)] [--folder-drawer-offset:calc(var(--topbar-height)_+_14px)] min-h-full">
+    <Page className="page-shell library-page pb-[var(--page-gutter)] [--folder-drawer-offset:calc(var(--topbar-height)_+_14px)] min-h-full">
       <PageHeader
         title={title}
         chrome={{

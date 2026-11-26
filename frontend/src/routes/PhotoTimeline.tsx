@@ -275,7 +275,6 @@ export default function PhotoTimeline() {
 
   return (
     <Page
-      variant="gallery"
       className="page-shell flex h-full min-h-0 flex-col overflow-x-clip"
     >
       <PageHeader

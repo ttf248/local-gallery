@@ -1,67 +1,11 @@
-import { lazy, Suspense, type ComponentType } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import AppFrame from "./shell/AppFrame";
-import RouteLoading from "./features/common/RouteLoading";
+import AppRoutes from "./app/AppRoutes";
 import AccessGate from "./shell/AccessGate";
 import ErrorBoundary from "./features/common/ErrorBoundary";
 import ToastViewport from "./features/common/Toast";
 import { useSelectionScope } from "./store/selectionStore";
 import { useTheme } from "./hooks/useTheme";
-import { useAppMode, useAppModeHydration } from "./hooks/useAppMode";
+import { useAppModeHydration } from "./hooks/useAppMode";
 import { useLibraryActivitySync } from "./hooks/useLibrary";
-import { homeRoute, MODE_PREFIX, MODE_ROUTE_PATHS } from "./utils/path";
-import { PHOTO_ME_TABS, COMIC_ME_TABS } from "./utils/meTabs";
-import type { AppMode } from "./api/library";
-
-const Home = lazy(() => import("./routes/Home"));
-const Library = lazy(() => import("./routes/Library"));
-const Explore = lazy(() => import("./routes/Explore"));
-const Me = lazy(() => import("./routes/Me"));
-const SearchResults = lazy(() => import("./routes/SearchResults"));
-const YearPhotos = lazy(() => import("./routes/YearPhotos"));
-const Unread = lazy(() => import("./routes/Unread"));
-const Album = lazy(() => import("./routes/Album"));
-const Tag = lazy(() => import("./routes/Tag"));
-const Reader = lazy(() => import("./routes/Reader"));
-const Settings = lazy(() => import("./routes/Settings"));
-const TaskCenter = lazy(() => import("./routes/TaskCenter"));
-const Travels = lazy(() => import("./routes/Travels"));
-const TravelPlace = lazy(() => import("./routes/TravelPlace"));
-const People = lazy(() => import("./routes/People"));
-const PeopleAnnotate = lazy(() => import("./routes/PeopleAnnotate"));
-const SemanticSearch = lazy(() => import("./routes/SemanticSearch"));
-const RandomPhotos = lazy(() => import("./routes/RandomPhotos"));
-const SmartAlbums = lazy(() => import("./routes/SmartAlbums"));
-const Similarity = lazy(() => import("./routes/Similarity"));
-
-function lazyPage(Page: ComponentType) {
-  return (
-    <Suspense fallback={<RouteLoading />}>
-      <Page />
-    </Suspense>
-  );
-}
-
-/**
- * 模式路径 → 页面。
- *
- * 两个工作台共用同一批组件，差别在数据源与措辞，由 workbench.ts 统一收口。
- * 路径清单只有一个来源（utils/path.ts 的 MODE_ROUTE_PATHS）：子路径自带
- * 前导斜杠，完整路径 = 模式前缀 + 子路径。少一个斜杠就会拼出
- * "/photoalbums/*" 这种匹配不上的路径 —— 首页能开，点进相册却落回兜底。
- */
-const MODE_ROUTE_ELEMENTS: Record<string, ComponentType> = {
-  "": Home,
-  "/library": Library,
-  "/explore": Explore,
-  "/me/:tab": Me,
-  "/search": SearchResults,
-  "/albums/*": Album,
-  "/tags/*": Tag,
-};
-
-const MODES: AppMode[] = ["photo", "comic"];
-
 export default function App() {
   useSelectionScope();
   useTheme();
@@ -70,102 +14,10 @@ export default function App() {
   useLibraryActivitySync();
   return (
     <AccessGate>
-      {/* 阅读器（/comic/read）不挂在 AppFrame 下，没有内层错误边界；
-          这里再兜一层，渲染异常时至少给出提示和重试，而不是整页空白。 */}
       <ErrorBoundary>
-        <Routes>
-          <Route element={<AppFrame />}>
-            {MODES.flatMap((mode) =>
-              MODE_ROUTE_PATHS[mode].map((path) => (
-                <Route
-                  key={`${MODE_PREFIX[mode]}${path}`}
-                  path={`${MODE_PREFIX[mode]}${path}`}
-                  element={lazyPage(MODE_ROUTE_ELEMENTS[path])}
-                />
-              )),
-            )}
-            {/* 「我的」缺省落到第一个页签。 */}
-            <Route
-              path="/photo/me"
-              element={<Navigate to={`/photo/me/${PHOTO_ME_TABS[0].id}`} replace />}
-            />
-            <Route
-              path="/comic/me"
-              element={<Navigate to={`/comic/me/${COMIC_ME_TABS[0].id}`} replace />}
-            />
-            {/* 旧路径重定向到新入口：书签与外链照旧可用。
-                它们是一次普通导航（replace），不留一串跳来跳去的历史。 */}
-            <Route
-              path="/photo/picks"
-              element={<Navigate to="/photo/me/picks" replace />}
-            />
-            <Route
-              path="/photo/favorites"
-              element={<Navigate to="/photo/me/favorites" replace />}
-            />
-            <Route
-              path="/photo/recents"
-              element={<Navigate to="/photo/me/recents" replace />}
-            />
-            <Route
-              path="/comic/favorites"
-              element={<Navigate to="/comic/me/favorites" replace />}
-            />
-            <Route
-              path="/comic/recents"
-              element={<Navigate to="/comic/me/recents" replace />}
-            />
-            {/* 未读只属于漫画工作台：照片侧没有这个页面，路由表里也不注册。 */}
-            <Route path="/comic/unread" element={lazyPage(Unread)} />
-            {/* 年份墙也只属于照片侧：漫画按作品与卷组织，年份对它没有意义。 */}
-            <Route path="/photo/years/:year" element={lazyPage(YearPhotos)} />
-            <Route path="/photo/travels" element={lazyPage(Travels)} />
-            <Route path="/photo/travels/place/:placeId" element={lazyPage(TravelPlace)} />
-            <Route path="/photo/semantic" element={lazyPage(SemanticSearch)} />
-            <Route path="/photo/people" element={lazyPage(People)} />
-            <Route path="/photo/people/:personId" element={lazyPage(People)} />
-            {/* 标注工作台：接口只允许本机访问，远程打开会看到明确提示。 */}
-            <Route path="/photo/people/annotate" element={lazyPage(PeopleAnnotate)} />
-            {/* 随手看看：全库随机抽出的照片墙，只属于照片侧。 */}
-            <Route path="/photo/random" element={lazyPage(RandomPhotos)} />
-            {/* 智能相册：全库已生成的智能分组汇成的一面墙，只属于照片侧。 */}
-            <Route path="/photo/smart-albums" element={lazyPage(SmartAlbums)} />
-            {/* 相似照片与连拍整理：发现重复、裁剪改过的副本与连拍，只属于照片侧。 */}
-            <Route path="/photo/similarity" element={lazyPage(Similarity)} />
-            {/* 设置页与任务中心的页签在路径段里：切页签是一次普通导航，
-                前进后退能跨页签，深链也能直接分享。没有页签的那条路径
-                落到缺省页签。 */}
-            <Route
-              path="/tasks"
-              element={<Navigate to="/tasks/run" replace />}
-            />
-            <Route path="/tasks/:tab" element={lazyPage(TaskCenter)} />
-            <Route
-              path="/settings"
-              element={<Navigate to="/settings/interface" replace />}
-            />
-            <Route path="/settings/:tab" element={lazyPage(Settings)} />
-          </Route>
-          {/* 漫画阅读器：/comic/read/<album id>。它不在 AppFrame 下，
-              没有侧栏也没有工具栏，沉浸在一张画布里。 */}
-          <Route path="/comic/read/:albumId" element={lazyPage(Reader)} />
-          {/* 根路径按服务端偏好落到某一侧；旧链接统一落到这里。 */}
-          <Route path="/" element={<ModeHomeRedirect />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <AppRoutes />
       </ErrorBoundary>
       <ToastViewport />
     </AccessGate>
   );
-}
-
-/**
- * 根路径重定向：按服务端记住的偏好落到照片侧或漫画侧。
- *
- * 偏好还没回来之前不能急着跳——那会把漫画用户丢进照片库。
- */
-function ModeHomeRedirect() {
-  const { mode, ready } = useAppMode();
-  if (!ready) return <RouteLoading />;
-  return <Navigate to={homeRoute(mode)} replace />;
 }

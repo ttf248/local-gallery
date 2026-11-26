@@ -82,8 +82,10 @@ test("旧书签仍然打得开：它们重定向到新入口", async ({ page }) 
     ["/comic/recents", "/comic/me/recents"],
     ["/comic/favorites", "/comic/me/favorites"],
   ]) {
-    await page.goto(oldPath);
-    await expect(page).toHaveURL(new RegExp(newPath.replace("/", "\\/")));
+    await page.goto(oldPath + "?q=a%2Bb#item");
+    await expect(page).toHaveURL((url) =>
+      url.pathname === newPath && url.search === "?q=a%2Bb" && url.hash === "#item",
+    );
   }
 });
 

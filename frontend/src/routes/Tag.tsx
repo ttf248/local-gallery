@@ -213,7 +213,7 @@ export default function Tag() {
   }
 
   return (
-    <Page variant="gallery" className="page-shell min-h-full">
+    <Page className="page-shell min-h-full">
       <section className="pb-5">
         <div className={cx(
           "tag-feature grid items-center gap-6 rounded-card border border-line bg-bg-subtle p-5 sm:gap-8 sm:p-8",

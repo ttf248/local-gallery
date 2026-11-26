@@ -171,7 +171,6 @@ export default function SearchResults() {
 
   return (
     <Page
-      variant="gallery"
       className={isContent ? "flex h-full min-h-0 flex-col" : "min-h-full pb-6"}
     >
       {toolbar}

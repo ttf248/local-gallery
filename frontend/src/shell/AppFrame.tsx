@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { libraryQueryKeys } from "../api/queryKeys";
+import { useRouteMeta } from "../app/routeMeta";
 import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "../hooks/useAppMode";
 import { useVisualViewport } from "../hooks/useVisualViewport";
@@ -32,7 +33,7 @@ export default function AppFrame() {
     immersive = overlay || isReaderPath(location.pathname);
   const palette = useUIStore((s) => s.commandPaletteOpen),
     setPalette = useUIStore((s) => s.setCommandPaletteOpen),
-    helpContext = useUIStore((s) => s.helpContext);
+    helpContext = useRouteMeta()?.meta.help ?? "library";
   const [help, setHelp] = useState(false),
     [more, setMore] = useState(false),
     [scrolled, setScrolled] = useState(false),

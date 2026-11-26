@@ -241,13 +241,6 @@ export default function PhotoAlbum({ album }: Props) {
     isFavorite,
   });
 
-  // 照片墙的帮助浮层多一组大图预览的操作；离开本页时复位。
-  const setHelpContext = useUIStore((s) => s.setHelpContext);
-  useEffect(() => {
-    setHelpContext("photo");
-    return () => setHelpContext("library");
-  }, [setHelpContext]);
-
   const cursorInvalidated = isStaleCursorError(mediaQuery.error);
   const loadMore = useCallback(() => {
     // 分组里的照片有自己的分页链：游标失效时要从头重取，不是重试同一页。
@@ -409,7 +402,7 @@ export default function PhotoAlbum({ album }: Props) {
   const compare = usePhotoCompare(() => title);
 
   return (
-    <Page variant="gallery" className="page-shell flex h-full min-h-0 flex-col">
+    <Page className="page-shell flex h-full min-h-0 flex-col">
       {mediaQuery.isFetchNextPageError && (
         <ErrorBanner
           kind="warning"

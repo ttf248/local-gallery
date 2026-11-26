@@ -1,7 +1,6 @@
 import { isValidElement, useEffect } from "react";
-import { useLocation } from "react-router-dom";
 import { useAppMode } from "../hooks/useAppMode";
-import { useSafeBack } from "../utils/navigation";
+import { hasAppHistory, useSafeBack } from "../utils/navigation";
 import { workbenchCopy } from "../utils/workbench";
 import { IconButton } from "../ui/IconButton";
 import { Menu } from "../ui/Menu";
@@ -9,7 +8,8 @@ import { Kbd } from "../ui/Kbd";
 import { cx } from "../ui/cx";
 import { MoreHorizontalIcon, ChevronLeftIcon, SearchIcon } from "../ui/icons";
 import { usePageChromeState } from "./PageChrome";
-import { documentTitleFor } from "./documentTitle";
+import { useRouteMeta, documentTitle } from "../app/routeMeta";
+import { libraryRoute } from "../utils/path";
 interface Props {
   scrolled: boolean;
   onSearch: () => void;
@@ -33,14 +33,21 @@ export function TopBar({
   const { title, backTo, titleCollapsed, actions, search } =
       usePageChromeState(),
     { mode } = useAppMode(),
-    { pathname } = useLocation(),
-    back = useSafeBack(backTo ?? "/");
-  const localSearch = isValidElement(search);
-  const routeTitle = documentTitleFor(pathname, mode),
-    fullTitle =
-      title && !routeTitle.startsWith(title)
-        ? title + " · " + routeTitle
-        : routeTitle;
+    route = useRouteMeta();
+  const meta = route?.meta ?? null,
+    params = route?.params ?? {};
+  const configuredBack = meta?.chrome.back;
+  const fallback =
+    backTo ??
+    (configuredBack === "history"
+      ? libraryRoute(mode)
+      : configuredBack?.(params));
+  // 深链的上级由相册数据决定，交给页内的上下文返回入口。
+  const showBack = backTo || (configuredBack === "history" ? hasAppHistory() : configuredBack);
+  const back = useSafeBack(fallback ?? "/");
+  const localSearch = meta?.chrome.search === "local" && isValidElement(search);
+  const routeTitle = documentTitle(meta, params, mode);
+  const fullTitle = documentTitle(meta, params, mode, title);
   useEffect(() => {
     document.title = fullTitle;
   }, [fullTitle]);
@@ -56,7 +63,7 @@ export function TopBar({
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
-        {backTo && (
+        {showBack && (
           <IconButton label="返回" onClick={back}>
             <ChevronLeftIcon />
           </IconButton>
@@ -75,7 +82,8 @@ export function TopBar({
       </div>
       {localSearch
         ? search
-        : search !== "none" && (
+        : (meta?.chrome.search ?? "global") === "global" &&
+          search !== "none" && (
             <button
               type="button"
               aria-label="打开命令面板"

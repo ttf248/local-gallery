@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   MODE_PREFIX,
-  MODE_ROUTE_PATHS,
   albumRoute,
   counterpartRoute,
   decodeFavPath,
@@ -131,47 +130,6 @@ describe("decodePathTail", () => {
 describe("MODE_PREFIX", () => {
   it("两侧前缀互不相同", () => {
     expect(MODE_PREFIX.photo).not.toBe(MODE_PREFIX.comic);
-  });
-});
-
-describe("MODE_ROUTE_PATHS", () => {
-  // 少了前导斜杠就会拼出 "/photoalbums/*" 这种匹配不上的路径：
-  // 首页能开，点进相册却落回兜底路由。这条用例守住那个斜杠。
-  it("照片侧与漫画侧各自成套", () => {
-    expect(
-      MODE_ROUTE_PATHS.photo.map((p) => `${MODE_PREFIX.photo}${p}`),
-    ).toEqual([
-      "/photo",
-      "/photo/library",
-      "/photo/explore",
-      "/photo/me/:tab",
-      "/photo/search",
-      "/photo/albums/*",
-      "/photo/tags/*",
-    ]);
-    expect(
-      MODE_ROUTE_PATHS.comic.map((p) => `${MODE_PREFIX.comic}${p}`),
-    ).toEqual([
-      "/comic",
-      "/comic/library",
-      "/comic/me/:tab",
-      "/comic/search",
-      "/comic/albums/*",
-      "/comic/tags/*",
-    ]);
-  });
-
-  it("探索只属于照片侧", () => {
-    expect(MODE_ROUTE_PATHS.photo).toContain("/explore");
-    expect(MODE_ROUTE_PATHS.comic).not.toContain("/explore");
-  });
-
-  it("每条路径都能推出它所属的一侧", () => {
-    for (const mode of ["photo", "comic"] as const) {
-      for (const path of MODE_ROUTE_PATHS[mode]) {
-        expect(modeFromPath(`${MODE_PREFIX[mode]}${path}`)).toBe(mode);
-      }
-    }
   });
 });
 

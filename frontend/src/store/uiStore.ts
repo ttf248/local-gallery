@@ -63,14 +63,6 @@ export interface UIState {
   immersiveOverlay: boolean;
   setImmersiveOverlay: (v: boolean) => void;
 
-  /**
-   * 全局帮助浮层展示哪一组操作。主页面用 'library'，照片墙用 'photo'
-   * （多一组大图预览的操作）。页面挂载时设置，卸载时复位。
-   * 不进 localStorage：它由当前页面决定，不是用户偏好。
-   */
-  helpContext: "library" | "photo";
-  setHelpContext: (v: "library" | "photo") => void;
-
   toasts: Toast[];
   pushToast: (t: Omit<Toast, "id" | "ttl"> & { ttl?: number }) => string;
   dismissToast: (id: string) => void;
@@ -111,8 +103,6 @@ export const useUIStore = create<UIState>()(
       immersiveOverlay: false,
       setImmersiveOverlay: (v) => set({ immersiveOverlay: v }),
 
-      helpContext: "library",
-      setHelpContext: (v) => set({ helpContext: v }),
 
       toasts: [],
       pushToast: (t) => {

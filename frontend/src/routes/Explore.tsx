@@ -18,7 +18,6 @@ export default function Explore() {
   usePageChrome({ title: "发现" });
   return (
     <Page
-      variant="standard"
       className="page-shell explore-page min-h-full pb-12"
     >
       <h1 className="sr-only">发现</h1>

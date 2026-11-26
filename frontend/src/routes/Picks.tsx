@@ -74,14 +74,6 @@ export default function Picks({
     isFetchNextPageError,
   } = query;
 
-  // 帮助浮层跟着页面走：这一页是照片墙的另一种形态，
-  // 该列出的是照片墙与大图预览的那一组操作。
-  const setHelpContext = useUIStore((s) => s.setHelpContext);
-  useEffect(() => {
-    setHelpContext("photo");
-    return () => setHelpContext("library");
-  }, [setHelpContext]);
-
   const items = useMemo<PickItem[]>(
     () => query.data?.pages.flatMap((page) => page.items) ?? [],
     [query.data],

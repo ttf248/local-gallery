@@ -208,29 +208,6 @@ export function readerRoute(albumId: string, index?: number): string {
 }
 
 /**
- * 两个工作台各自的页面路径（相对模式前缀）。
- *
- * 子路径自带前导斜杠：完整路径 = 模式前缀 + 子路径。
- * 少了这个斜杠就会拼出 "/photoalbums/*" 这种匹配不上的路径 ——
- * 症状是页面能开首页，点进相册却落回兜底路由。
- *
- * 两侧的清单不同：探索只属于照片侧（漫画没有时间、人物、地点与主题），
- * 其余页面两侧共用同一批组件，差别在数据源与措辞。
- */
-export const MODE_ROUTE_PATHS: Record<AppMode, readonly string[]> = {
-  photo: [
-    "",
-    "/library",
-    "/explore",
-    "/me/:tab",
-    "/search",
-    "/albums/*",
-    "/tags/*",
-  ],
-  comic: ["", "/library", "/me/:tab", "/search", "/albums/*", "/tags/*"],
-};
-
-/**
  * 切到另一侧时该去的页面。
  *
  * 两侧都有对应物的页面（图库 / 搜索 / 标签 / 「我的」的同名页签）一一搬

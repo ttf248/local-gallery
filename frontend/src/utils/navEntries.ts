@@ -1,3 +1,4 @@
+import { matchRouteMeta, type NavKey } from "../app/routeMeta";
 import {
   CompassFilledIcon,
   CompassIcon,
@@ -52,7 +53,7 @@ export interface NavEntry {
   mobile: MobilePlacement;
   ActiveIcon?: typeof HomeIcon;
   /** 稳定 id：写入服务端偏好，跨版本不能变。 */
-  key: string;
+  key: NavKey;
   label: string;
   Icon: typeof HomeIcon;
   /** 路由路径。 */
@@ -273,19 +274,5 @@ export function isNavEntryActive(
   pathname: string,
   mode: AppMode,
 ) {
-  const path = pathname.replace(/\/+$/, "");
-  if (entry.mode && entry.mode !== mode) return false;
-  const within = (prefix: string) =>
-    path === prefix || path.startsWith(prefix + "/");
-  if (entry.to === homeRoute(mode)) return path === entry.to;
-  if (entry.to === libraryRoute(mode) && within(homeRoute(mode) + "/albums"))
-    return true;
-  if (
-    entry.to === exploreRoute() &&
-    ["people", "travels", "semantic", "smart-albums", "years", "random"].some(
-      (section) => within("/photo/" + section),
-    )
-  )
-    return true;
-  return within(entry.to);
+  return (!entry.mode || entry.mode === mode) && matchRouteMeta(pathname)?.meta.navKey === entry.key;
 }

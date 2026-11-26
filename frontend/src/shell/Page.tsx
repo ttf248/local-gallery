@@ -1,15 +1,18 @@
+import { useRouteMeta } from "../app/routeMeta";
 import type { ReactNode } from "react";
 import { cx } from "../ui/cx";
-export type PageVariant = "standard" | "gallery" | "focused" | "split";
+export type PageVariant = "standard" | "gallery" | "focused" | "split" | "workspace";
 export function Page({
-  variant,
+  variant: override,
   children,
   className,
 }: {
-  variant: PageVariant;
+  variant?: PageVariant;
   children: ReactNode;
   className?: string;
 }) {
+  const route = useRouteMeta();
+  const variant = override ?? route?.meta.page ?? "standard";
   return (
     <div
       data-page={variant}
@@ -19,6 +22,7 @@ export function Page({
           standard: "max-w-[var(--page-max)]",
           gallery: "max-w-[var(--page-max-wide)]",
           focused: "max-w-[var(--page-max-focused)]",
+          workspace: "max-w-[var(--page-max-wide)]",
           split: "max-w-[1280px]",
         }[variant],
         className,

@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { documentTitle, useRouteMeta } from "../app/routeMeta";
 import ImageInfoPanel from "../features/viewer/ImageInfoPanel";
 import HelpOverlay from "../features/common/HelpOverlay";
 import PageOverview from "../features/reader/PageOverview";
@@ -48,6 +50,11 @@ export default function Reader() {
     showOverview,
     showSwitchNotif,
   } = reader;
+  const route = useRouteMeta();
+  const title = documentTitle(route?.meta ?? null, route?.params ?? {}, "comic", headerName);
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
   if (!ready) {
     return (
       // 阅读器画布恒为深色：加载态、空态、失败态都跟着深色走，

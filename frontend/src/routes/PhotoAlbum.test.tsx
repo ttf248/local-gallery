@@ -814,12 +814,6 @@ describe("PhotoAlbum", () => {
     expect(screen.queryByRole("menuitem", { name: "移到照片库" })).toBeNull();
   });
 
-  it("照片墙期间帮助浮层切到照片场景，离开后复位", () => {
-    const { unmount } = renderPhotoAlbum();
-    expect(useUIStore.getState().helpContext).toBe("photo");
-    unmount();
-    expect(useUIStore.getState().helpContext).toBe("library");
-  });
 
   // 智能筛选：条件能组合、逐条能去掉，状态住在地址栏里。
   it("筛选条件写进地址，刷新不丢", async () => {
