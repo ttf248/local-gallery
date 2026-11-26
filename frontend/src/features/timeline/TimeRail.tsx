@@ -66,7 +66,7 @@ export function TimeRail({ marks, activeKey, onCommit }: TimeRailProps) {
       aria-valuetext={label + " · " + mark.count + " 张"}
       tabIndex={0}
       className={cx(
-        "group fixed bottom-6 right-2 top-[calc(var(--topbar-height)+16px)] z-rail hidden w-12 touch-none select-none rounded-full opacity-0 transition-opacity duration-base hover:opacity-100 focus:opacity-100 md:block",
+        "group fixed bottom-6 right-2 top-[calc(var(--topbar-h)+16px)] z-rail hidden w-12 touch-none select-none rounded-full opacity-0 transition-opacity duration-base hover:opacity-100 focus:opacity-100 md:block",
         (scrolling || preview !== null) && "opacity-100",
       )}
       onKeyDown={(e) => {

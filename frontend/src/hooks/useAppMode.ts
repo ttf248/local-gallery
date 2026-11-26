@@ -15,7 +15,7 @@ export interface WorkbenchModeValue {
   mode: AppMode;
   /** 模式是否已经确定。列表查询在它就绪前不发请求。 */
   ready: boolean;
-  /** 切到另一侧：导航到对应页面，并记住这个选择。 */
+  /** 切到另一侧：导航到目标工作台首页，并记住这个选择。 */
   setMode: (mode: AppMode) => void;
 }
 

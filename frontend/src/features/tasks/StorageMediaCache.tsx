@@ -94,7 +94,7 @@ export default function StorageMediaCache({
           </button>
           <button
             type="button"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 px-2 text-caption text-danger transition-colors hover:bg-danger/5 disabled:opacity-50"
+            className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 bg-canvas px-2 text-caption text-danger transition-colors hover:bg-danger/5 disabled:opacity-50"
             onClick={onClearAll}
             disabled={clearing === "all"}
             title="清空全部派生缓存"

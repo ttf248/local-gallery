@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { Tabs } from "../ui/Tabs";
 import { Page } from "../shell/Page";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import AlbumGrid from "../features/library/AlbumGrid";
 import { EmptyState } from "../ui/EmptyState";
 import { useAppMode } from "../hooks/useAppMode";
@@ -70,7 +70,7 @@ export default function Me() {
       {/* 标题与页签共用一个容器：页签的起点与标题、下面照片的起点
           在同一条网格线上，翻页签时内容不会左右跳。 */}
       <Page className="page-shell shrink-0">
-        <PageHeader
+        <PageHero
           title={mode === "comic" ? "我的漫画" : "珍藏"}
           meta={summary.id === active.id ? summary.label : active.hint}
           toolbar={

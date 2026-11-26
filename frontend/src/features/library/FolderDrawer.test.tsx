@@ -63,7 +63,7 @@ describe("目录抽屉", () => {
       await useUIStore.persist.rehydrate();
     });
     expect(useUIStore.getState()).toMatchObject({
-      sidebarCollapsed: true,
+      sidebar: "collapsed",
       theme: "dark",
       viewMode: "list",
       folderDrawerOpen: false,

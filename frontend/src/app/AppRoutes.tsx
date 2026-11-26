@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { useAppMode } from "../hooks/useAppMode";
 import { homeRoute } from "../utils/path";
-import AppFrame from "../shell/AppFrame";
+import AppShell from "../shell/AppShell";
 import RouteLoading from "../features/common/RouteLoading";
 import ErrorBoundary from "../features/common/ErrorBoundary";
 import { ROUTE_MANIFEST, ROUTE_REDIRECTS } from "./routeManifest";
@@ -57,7 +57,7 @@ function ModeHomeRedirect() {
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route element={<AppFrame />}>
+      <Route element={<AppShell />}>
         {pages
           .filter(({ meta }) => meta.chrome.shell === "app")
           .map(({ element }) => element)}

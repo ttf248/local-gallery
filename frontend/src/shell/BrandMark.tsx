@@ -2,8 +2,8 @@ export function BrandMark() {
   return (
     <svg
       role="presentation"
-      width="28"
-      height="28"
+      width="24"
+      height="24"
       viewBox="0 0 28 28"
       className="shrink-0 rounded-sm bg-primary text-on-primary"
       fill="none"

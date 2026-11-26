@@ -1,6 +1,6 @@
 import { Dialog } from "../ui/Dialog";
 import { Button } from "../ui/Button";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
@@ -122,7 +122,7 @@ export function SettingsView({ tab }: { tab: string }) {
   );
   const qc = useQueryClient();
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
-  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
+  const sidebarCollapsed = useUIStore((s) => s.sidebar === "collapsed");
   const viewMode = useUIStore((s) => s.viewMode);
   const setViewMode = useUIStore((s) => s.setViewMode);
   const pushToast = useUIStore((s) => s.pushToast);
@@ -261,8 +261,8 @@ export function SettingsView({ tab }: { tab: string }) {
   if (!data) {
     return (
       <>
-        <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="split">
-          <PageHeader title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
+        <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
+          <PageHero title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
           {prefsError || (
             <div role="status" className="text-ink-2 text-body">
               正在加载设置…
@@ -277,8 +277,8 @@ export function SettingsView({ tab }: { tab: string }) {
     <>
       {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
           标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
-      <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="split">
-        <PageHeader title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
+      <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
+        <PageHero title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
         {prefsError}
         <SplitLayout settings navigation={<SettingsNav active={tab} />}>
           {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，

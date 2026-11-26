@@ -23,6 +23,7 @@ export default function SelectionCard({
     <button
       type="button"
       role="checkbox"
+      data-resource-id={card.id}
       aria-checked={checked}
       aria-label={`选择“${card.displayTitle ?? card.title}”`}
       disabled={busy}

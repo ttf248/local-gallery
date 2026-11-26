@@ -25,7 +25,7 @@ export default function ToastViewport() {
 
   return (
     <div
-      className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+12px)] z-toast mx-auto grid max-w-[480px] justify-items-center gap-2 lg:bottom-6"
+      className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+8px)] z-toast mx-auto grid max-w-[480px] justify-items-center gap-2 lg:bottom-6 [body:has([data-floating-bar])_&]:-translate-y-[60px]"
       aria-live="polite"
     >
       {[...leaving, ...toasts].slice(-3).map((toast) => {
@@ -40,8 +40,8 @@ export default function ToastViewport() {
           <div
             key={toast.id}
             className={
-              "pointer-events-auto flex min-h-11 items-center gap-3 rounded-xl bg-inverse px-4 py-2 text-label text-on-inverse shadow-2 " +
-              (exiting ? "opacity-0 transition duration-base" : "fade-up [animation:fadeUp_320ms_var(--ease-spring)_both]")
+              "pointer-events-auto flex min-h-11 items-center gap-3 rounded-lg bg-inverse px-4 py-2 text-label text-on-inverse shadow-3 " +
+              (exiting ? "opacity-0 transition duration-base" : "fade-up [animation:fadeUp_280ms_var(--ease-spring)_both]")
             }
             aria-hidden={exiting || undefined}
             data-tone="inverse"
@@ -51,7 +51,7 @@ export default function ToastViewport() {
             {toast.action && (
               <button
                 type="button"
-                className="min-h-8 font-semibold underline"
+                className="min-h-8 font-semibold text-accent underline"
                 disabled={exiting}
                 onClick={() => {
                   toast.action?.onClick();

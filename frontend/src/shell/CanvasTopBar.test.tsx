@@ -3,15 +3,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { PageChromeProvider } from "./PageChrome";
-import { PageHeader } from "./PageHeader";
-import { TopBar } from "./TopBar";
+import { PageHero } from "./PageHero";
+import { CanvasTopBar } from "./CanvasTopBar";
 it("大标题离开视口时收进顶栏，详情有返回入口", () => {
   const noop = () => {};
   render(
     <QueryClientProvider client={new QueryClient()}>
       <MemoryRouter>
         <PageChromeProvider>
-          <TopBar
+          <CanvasTopBar
             scrolled={false}
             onSearch={noop}
             onHelp={noop}
@@ -21,7 +21,7 @@ it("大标题离开视口时收进顶栏，详情有返回入口", () => {
             canScan
             shufflePending={false}
           />
-          <PageHeader title="测试页面" chrome={{ backTo: "/photo" }} />
+          <PageHero title="测试页面" chrome={{ backTo: "/photo" }} />
         </PageChromeProvider>
       </MemoryRouter>
     </QueryClientProvider>,

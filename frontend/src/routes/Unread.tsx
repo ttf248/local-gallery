@@ -1,4 +1,4 @@
-import {PageHeader} from "../shell/PageHeader";
+import {PageHero} from "../shell/PageHero";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -110,7 +110,7 @@ export default function Unread() {
 
   return (
     <div className="min-h-full">
-      <div className="page-shell"><PageHeader
+      <div className="page-shell"><PageHero
   title={copy.unreadPageTitle}
   actions={
           count > 0 && (

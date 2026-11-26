@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import Segmented from "../ui/Segmented";
 import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
@@ -467,7 +467,7 @@ export default function Similarity() {
   return (
     <div className="similarity-page min-h-full pb-10" ref={bindScrollParent}>
       <Page variant="standard" className="page-shell">
-        <PageHeader
+        <PageHero
           eyebrow="本机整理"
           title="相似照片与连拍"
           meta={

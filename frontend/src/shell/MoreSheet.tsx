@@ -4,7 +4,7 @@ import { useNavVisibility } from "../hooks/useNavVisibility";
 import { moreEntriesFor } from "../utils/navEntries";
 import { Sheet } from "../ui/Sheet";
 import { Button } from "../ui/Button";
-import WorkbenchSwitch from "./WorkbenchSwitch";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { AppearanceMenu } from "./AppearanceMenu";
 export function MoreSheet({
   open,
@@ -19,7 +19,7 @@ export function MoreSheet({
     { isVisible } = useNavVisibility();
   return (
     <Sheet open={open} label="更多" side="bottom" onClose={onClose}>
-      <WorkbenchSwitch
+      <WorkspaceSwitcher mobile
         mode={mode}
         onChange={(value) => {
           setMode(value);

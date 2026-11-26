@@ -155,7 +155,7 @@ export default function StateBackupPanel() {
           client.setQueryData(["prefs"], saved);
           if (["light", "dark", "system"].includes(saved.theme))
             useUIStore.getState().setTheme(saved.theme);
-          useUIStore.setState({ sidebarCollapsed: saved.sidebarCollapsed });
+          useUIStore.setState({ sidebar: saved.sidebarCollapsed ? "collapsed" : "expanded" });
         } catch {
           if (mounted.current)
             setError("恢复结果已确认，但偏好刷新失败，请刷新页面。");

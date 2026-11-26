@@ -13,8 +13,8 @@ import { useMediaQuery, WIDE_LAYOUT_QUERY } from "../hooks/useMediaQuery";
 import { isReaderPath, pageBoundaryKey } from "../utils/path";
 import ErrorBoundary from "../features/common/ErrorBoundary";
 import { PageChromeProvider } from "./PageChrome";
-import NavRail from "./NavRail";
-import { TopBar } from "./TopBar";
+const Sidebar = lazy(() => import("./Sidebar"));
+import { CanvasTopBar } from "./CanvasTopBar";
 import { MobileTabBar } from "./MobileTabBar";
 import { MoreSheet } from "./MoreSheet";
 import { useScanSession } from "./useScanSession";
@@ -23,11 +23,11 @@ import { useShuffle } from "./useShuffle";
 const CommandPalette = lazy(() => import("./CommandPalette"));
 const ScanProgress = lazy(() => import("./ScanProgress"));
 const HelpOverlay = lazy(() => import("../features/common/HelpOverlay"));
-export default function AppFrame() {
+export default function AppShell() {
   const location = useLocation(),
     { mode } = useAppMode(),
     wide = useMediaQuery(WIDE_LAYOUT_QUERY);
-  const collapsed = useUIStore((s) => s.sidebarCollapsed),
+  const collapsed = useUIStore((s) => s.sidebar === "collapsed"),
     toggle = useUIStore((s) => s.toggleSidebar);
   const overlay = useUIStore((s) => s.immersiveOverlay),
     immersive = overlay || isReaderPath(location.pathname);
@@ -76,16 +76,17 @@ export default function AppFrame() {
   });
   return (
     <PageChromeProvider>
-      <div className="flex h-full min-w-0 gap-0 bg-app lg:gap-2">
+      <div className="grid h-dvh min-w-0 grid-cols-[minmax(0,1fr)] bg-app lg:grid-cols-[var(--sidebar-w)_minmax(0,1fr)] motion-safe:transition-[grid-template-columns] duration-slow ease-spring" style={{"--sidebar-w":collapsed?"72px":"240px"} as React.CSSProperties}>
         {wide && (
-          <NavRail
+          <Suspense fallback={<div aria-hidden="true"/>}><Sidebar
             collapsed={collapsed}
             onToggle={toggle}
+            onSearch={()=>setPalette(true)} onHelp={()=>setHelp(true)}
             warningCount={warningCount}
-          />
+          /></Suspense>
         )}
-        <div className="flex min-w-0 flex-1 flex-col bg-canvas">
-          <TopBar
+        <div data-canvas="" className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-canvas lg:m-2 lg:ml-0 lg:rounded-xl lg:shadow-canvas">
+          <CanvasTopBar
             scrolled={scrolled}
             onHelp={() => setHelp(true)}
             onSearch={() => setPalette(true)}

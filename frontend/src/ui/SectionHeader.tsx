@@ -28,7 +28,7 @@ export const SectionHeader = forwardRef<HTMLElement, SectionHeaderProps>(
         ref={forwardedRef}
         className={cx(
           "flex min-w-0 items-center justify-between gap-4 py-2",
-          sticky && "sticky top-0 z-toolbar bg-canvas/95 backdrop-blur",
+          sticky && "sticky top-[var(--sticky-offset,var(--topbar-h))] z-toolbar bg-canvas/95 backdrop-blur",
           className,
         )}
       >

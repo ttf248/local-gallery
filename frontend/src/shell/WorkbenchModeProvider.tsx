@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppModeStore } from "../store/appModeStore";
-import { counterpartRoute, modeFromPath } from "../utils/path";
+import { homeRoute, modeFromPath } from "../utils/path";
 import {
   WorkbenchModeContext,
   type WorkbenchModeValue,
@@ -37,8 +37,6 @@ export default function WorkbenchModeProvider({
 
   // 路径与模式放进 ref：setMode 因此保持稳定，普通导航不会让所有
   // 消费这个上下文的组件重绘。
-  const pathRef = useRef(location.pathname);
-  pathRef.current = location.pathname;
   const modeRef = useRef(mode);
   modeRef.current = mode;
 
@@ -46,7 +44,7 @@ export default function WorkbenchModeProvider({
     (target: AppMode) => {
       if (target === modeRef.current) return;
       switchPreference(target);
-      navigate(counterpartRoute(pathRef.current, target));
+      navigate(homeRoute(target));
     },
     [navigate, switchPreference],
   );

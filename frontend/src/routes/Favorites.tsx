@@ -1,4 +1,4 @@
-import {PageHeader} from "../shell/PageHeader";
+import {PageHero} from "../shell/PageHero";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect,useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -235,7 +235,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
   return (
     <div className="min-h-full">
       {embedded ? null : (
-      <div className="page-shell"><PageHeader
+      <div className="page-shell"><PageHero
   title={copy.favoritesTitle}
   eyebrow="值得反复翻看的"
   meta={

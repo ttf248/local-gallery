@@ -28,7 +28,7 @@ export default {
       spacing: {
         rail: "var(--nav-width)",
         "rail-compact": "var(--nav-width-compact)",
-        topbar: "var(--topbar-height)",
+        topbar: "var(--topbar-h)",
         tabbar: "var(--tabbar-height)",
       },
       zIndex: Object.fromEntries(

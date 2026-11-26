@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { aiJobsApi, type SemanticSearchRequest } from "../api/aiJobs";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryFeedItem } from "../api/library";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import { SearchIcon } from "../ui/icons";
 import ContentSearchResults from "../features/search/ContentSearchResults";
 import {
@@ -201,7 +201,7 @@ export default function SemanticSearch() {
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 overflow-y-auto pb-4">
         <div className="page-shell">
-          <PageHeader
+          <PageHero
             eyebrow="本地 AI · 组合检索"
             title="智能搜索"
             meta="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"

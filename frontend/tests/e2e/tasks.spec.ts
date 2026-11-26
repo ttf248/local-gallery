@@ -64,7 +64,7 @@ test.describe("任务中心", () => {
     // 这次扫描由 API 测试助手触发，页面没有收到浏览器内的扫描完成事件；
     // 重新加载以从已就绪的图库读取新的规模估算。
     await page.reload();
-    await expect(page.getByText("本次规模")).toBeVisible();
+    await expect(page.getByRole("heading",{name:"本次规模",exact:true})).toBeVisible();
     await expect(page.getByRole("group",{name:"本次规模"}).getByRole("radio",{name:/^增量/})).toBeVisible();
     await expect(page.getByRole("group",{name:"本次规模"}).getByRole("radio",{name:/^全量/})).toBeVisible();
     const fullScale = page.getByRole("group", {name:"本次规模"}).getByRole("radio", {name:/^全量/});

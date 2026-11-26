@@ -356,6 +356,9 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   );
   if (main && !immersive) {
     if (desktop) {
+      const canvas = document.querySelector("[data-canvas]");
+      const rect=canvas?.getBoundingClientRect();
+      if (!rect || Math.abs(rect.top-8)>1 || Math.abs(rect.bottom-window.innerHeight+8)>1 || Math.abs(rect.right-viewportWidth+8)>1 || Math.abs(rect.left-(rail?.getBoundingClientRect().right ?? 0))>1 || getComputedStyle(canvas).borderTopLeftRadius!=="16px") chromeIssues.push("画布内缩或圆角不符");
       const expected = rail?.dataset.collapsed === "true" ? 72 : 240;
       const width = rail?.getBoundingClientRect().width ?? 0;
       if (Math.abs(width - expected) > 1)
@@ -364,8 +367,8 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     const bounds = top?.getBoundingClientRect();
     if (
       !bounds ||
-      bounds.height !== (desktop ? 64 : 56) ||
-      Math.abs(bounds.top) > 1 ||
+      bounds.height !== (desktop ? 56 : 52) ||
+      Math.abs(bounds.top - (desktop ? 8 : 0)) > 1 ||
       getComputedStyle(top).position !== "sticky"
     )
       chromeIssues.push("顶栏高度或贴顶位置异常");
@@ -382,12 +385,13 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     chromeIssues.push("当前视图不应显示底栏");
   const variant = shell.dataset.page ?? "standard";
   const expectedMax = {
-    standard: 1680,
-    gallery: 2400,
-    focused: 960,
-    split: 1280,
+    standard: 1440,
+    gallery: "none",
+    focused: 760,
+    workspace: "none",
   }[variant];
-  const actualMax = parseFloat(getComputedStyle(shell).maxWidth);
+  const max = getComputedStyle(shell).maxWidth;
+  const actualMax = max === "none" ? max : parseFloat(max);
   if (main && !immersive && actualMax !== expectedMax)
     chromeIssues.push(
       "页面容器 " + variant + " 上限 " + actualMax + "，预期 " + expectedMax,
@@ -508,7 +512,7 @@ async function checkMobileShell(page) {
   );
 
   const commandTrigger = page.locator(
-    "[data-testid=top-bar] [data-command-trigger]",
+    "[data-command-trigger][aria-keyshortcuts]:visible",
   );
   await commandTrigger.click();
   await page.getByRole("dialog", { name: "命令面板" }).waitFor();
@@ -576,7 +580,7 @@ async function setTheme(page, theme) {
         theme: t,
         viewMode: vm,
         folderDrawerOpen: false,
-        sidebarCollapsed: false,
+        sidebar: "expanded",
       };
       localStorage.setItem("local-gallery-ui", JSON.stringify(parsed));
     },
@@ -672,18 +676,18 @@ async function main() {
     try {
       const page = await browser.newPage();
       for (const [variant, width] of Object.entries({
-        standard: 1680,
-        gallery: 2400,
-        focused: 960,
-        split: 1280,
+        standard: 1440,
+        gallery: "none",
+        focused: 760,
+        workspace: "none",
       })) {
         for (const valid of [true, false]) {
           await page.setContent(
             '<main><div data-page="' +
               variant +
               '" style="max-width:' +
-              (valid ? width : width - 10) +
-              'px">内容</div></main>',
+              (valid && width === "none" ? "none" : ((valid ? width : 100) + "px")) +
+              '">内容</div></main>',
           );
           const result = await page.evaluate(MEASURE, {
             minFontPx: MIN_FONT_PX,

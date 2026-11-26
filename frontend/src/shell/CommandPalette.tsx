@@ -2,7 +2,8 @@ import { Segmented } from "../ui/Segmented";
 import ThumbImage from "../features/common/ThumbImage";
 import { Kbd } from "../ui/Kbd";
 import { IconButton } from "../ui/IconButton";
-import "./command-palette.css";
+import {SearchField} from "../ui/SearchField";
+import {cx} from "../ui/cx";
 import {
   useEffect,
   useId,
@@ -385,7 +386,7 @@ function Palette({
     row.onSelect();
   }
 
-  function onPanelKey(event: KeyboardEvent<HTMLDivElement>) {
+  function onPanelKey(event: KeyboardEvent<HTMLElement>) {
     if (event.nativeEvent.isComposing) return;
     if (event.key !== "Escape") return;
     event.preventDefault();
@@ -399,7 +400,7 @@ function Palette({
 
   return (
     <div
-      className="command-backdrop fixed inset-x-0 top-0 z-dialog flex items-start justify-center bg-scrim/45 backdrop-blur-[1px]"
+      className="fixed inset-x-0 top-0 bottom-[var(--keyboard-inset)] z-dialog flex items-start justify-center bg-black/40 px-4 pb-4 pt-[max(8px,env(safe-area-inset-top))] backdrop-blur-[8px] sm:pt-[12dvh]"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -409,14 +410,11 @@ function Palette({
         role="dialog"
         aria-modal="true"
         aria-label="命令面板"
-        className="flex max-h-full w-full max-w-[688px] flex-col overflow-hidden rounded-xl bg-raised shadow-3"
+        className="flex max-h-full w-full max-w-[640px] flex-col overflow-hidden rounded-xl bg-raised shadow-3"
         onKeyDown={onPanelKey}
       >
-        <div className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-2 gap-y-2 border-b border-line p-3 sm:grid-cols-[1fr_auto_auto] sm:p-4">
-          <div className="command-query col-start-1 row-start-1 flex h-11 min-w-0 items-center gap-2.5 rounded-md border border-line bg-canvas px-3 text-ink-2">
-            <SearchIcon size={19} className="shrink-0" />
-            <input
-              className="h-full min-w-0 flex-1 bg-transparent text-base font-normal text-ink placeholder:text-ink-2"
+        <div className="flex shrink-0 items-center gap-1 border-b border-line-subtle px-2">
+            <SearchField size="lg" className="min-w-0 flex-1 !bg-transparent focus-within:!shadow-none"
               enterKeyHint="search"
               ref={input}
               role="combobox"
@@ -437,12 +435,13 @@ function Palette({
                   : `搜索${copy.albumTypeLabel}、标签或命令`
               }
               value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
+              onValueChange={(value) => {
+                setQuery(value);
                 setActiveId("");
               }}
               onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing) return;
+                if (event.nativeEvent.isComposing || event.keyCode === 229) return;
+                if (event.key === "Escape") { onPanelKey(event); return; }
                 if (
                   (event.key === "ArrowDown" || event.key === "ArrowUp") &&
                   rows.length
@@ -466,11 +465,9 @@ function Palette({
                   else showResults();
                 }
               }}
-            />
-          </div>
-          {mode === "photo" && (
+            trailing={mode === "photo" && (
             <Segmented<CommandScope>
-              className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1"
+              className="shrink-0"
               label="搜索范围"
               size="sm"
               value={scope}
@@ -484,7 +481,7 @@ function Palette({
                 { value: "content", label: "画面与文字" },
               ]}
             />
-          )}
+          )}/>
           <IconButton
             label="关闭命令面板"
             className="text-ink-2"
@@ -525,7 +522,7 @@ function Palette({
                   >
                     {label}
                   </div>
-                  <div className="command-options" data-layout={layout}>
+                  <div className={cx("grid gap-1", layout==="covers" && "grid-flow-col auto-cols-[72px] justify-start gap-2 overflow-x-auto", (layout==="commands" || layout==="navigation") && "grid-cols-2 gap-x-2")} data-layout={layout}>
                     {sectionRows.map((row) => (
                       <button
                         key={row.id}
@@ -535,11 +532,11 @@ function Palette({
                         aria-selected={row.id === activeId}
                         tabIndex={-1}
                         title={row.label}
-                        className="command-option"
+                        className={cx("flex min-h-11 min-w-0 items-center gap-2 rounded-md px-2 text-left text-label text-ink hover:bg-hover aria-selected:bg-selected aria-selected:ring-1 aria-selected:ring-accent",layout==="covers" && "flex-col items-stretch gap-1 p-1")}
                         onClick={() => choose(row)}
                         onMouseDown={(event) => event.preventDefault()}
                       >
-                        <span aria-hidden className="command-art">
+                        <span aria-hidden className={cx("grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-sunken text-ink-2",layout==="covers" && "aspect-square h-auto w-full bg-media",(layout==="commands" || layout==="navigation") && "bg-transparent")}>
                           {row.coverId ? (
                             <ThumbImage
                               key={row.coverId}

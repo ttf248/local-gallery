@@ -36,9 +36,9 @@ it("Ctrl+B 收起、Ctrl+K 切换，沉浸、模态及编辑状态让位", async
     </MemoryRouter>
   );
   const { rerender } = render(view());
-  useUIStore.getState().setSidebarCollapsed(false);
+  useUIStore.getState().setSidebar("expanded");
   fireEvent.keyDown(window, { key: "b", ctrlKey: true });
-  expect(useUIStore.getState().sidebarCollapsed).toBe(true);
+  expect(useUIStore.getState().sidebar).toBe("collapsed");
   fireEvent.keyDown(window, { key: "k", ctrlKey: true });
   expect(toggle).toHaveBeenCalledOnce();
   fireEvent.keyDown(screen.getByRole("textbox"), { key: "r" });

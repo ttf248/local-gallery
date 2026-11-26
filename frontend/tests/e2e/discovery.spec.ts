@@ -109,7 +109,7 @@ test("搜索结果页能清除条件回到空态", async ({ page }) => {  await 
 test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({ page }) => {
   await page.goto("/photo/explore");
 
-  await expect(page.getByTestId("top-bar").getByRole("button", { name: "打开命令面板" })).toBeVisible();
+  await expect(page.getByRole("complementary",{name:"主导航"}).getByRole("button", { name: "打开命令面板" })).toBeVisible();
   await expect(page.getByRole("searchbox")).toHaveCount(0);
   const sections=page.locator("main section[aria-labelledby^='explore-']");
   await expect(sections.getByRole("heading",{level:2})).toHaveText(["人物","地点","时间","主题"]);
@@ -126,7 +126,7 @@ test("从发现的全局搜索提交两种范围，结果页改词后可逐步�
   await page.goto("/photo/explore");
   const bar = page.getByTestId("top-bar");
   const input = bar.getByRole("searchbox");
-  const trigger = bar.getByRole("button", { name: "打开命令面板" });
+  const trigger = page.getByRole("button", { name: "打开命令面板" });
   const panel = page.getByRole("dialog", { name: "命令面板" });
   await trigger.click();
   await panel.getByRole("combobox").fill("旅行");

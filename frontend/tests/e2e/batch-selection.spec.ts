@@ -35,14 +35,12 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
     // —— 那里仍列带这个标签的相册。
     await page.goto(`/photo/tags/${encodeURIComponent("测试")}`);
     await page.getByRole("button", { name: "选择", exact: true }).click();
-    // 标签页上同名相册有两张：根目录的散图（标题带来源路径）与那本
-    // 相册本身 —— 按完整可访问名挑后者。
-    const albumName =
-      "zz-[测试][空 格][C++][100%][字面%20][字面%2F][字面%25] tagged-A";
-    const card = page.getByRole("checkbox", {
-      name: `选择“${albumName}”`,
-      exact: true,
-    });
+    // 同名条目可来自不同目录。记住实际资源 ID，排序后验证同一张卡。
+    const firstAlbum = page.getByRole("checkbox", { name: /tagged-A”$/ }).first();
+    await expect(firstAlbum).toBeVisible();
+    const resourceId = await firstAlbum.getAttribute("data-resource-id");
+    expect(resourceId).toBeTruthy();
+    const card = page.locator(`[role="checkbox"][data-resource-id="${resourceId}"]`);
     await card.click();
     await expect(card).toHaveAttribute("aria-checked", "true");
     await expect(page).toHaveURL(/\/photo\/tags\//);
@@ -55,7 +53,7 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
     await page.getByRole("button", { name: "排序", exact: true }).click();
     await page.getByRole("button", { name: "按最近改", exact: true }).click();
     await expect(
-      page.getByRole("checkbox", { name: `选择“${albumName}”`, exact: true }),
+      card,
     ).toHaveAttribute("aria-checked", "true");
     let fail = true;
     await page.route("**/api/favorites/batch", async (route) => {
@@ -82,7 +80,7 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
       .click();
     mkdirSync(".smoke/roadmap-batch", { recursive: true });
     for (const theme of ["浅色", "深色"]) {
-      await page.getByRole("button", { name: /^外观 ·/ }).click();
+      await page.getByRole("button", { name: /^外观 ·/ }).click({button:"right"});
       await page
         .getByRole("menuitemradio", { name: theme, exact: true })
         .click();
@@ -101,6 +99,8 @@ test("照片多选支持键盘、排序保留和失败重试，搜索草稿不�
     await searchDraft.fill("zz-没有这样的相册");
     await expect(searchDraft).toHaveValue("zz-没有这样的相册");
     await expect(page).toHaveURL(/\/photo\/tags\//);
+    await page.keyboard.press("Escape");
+    await expect(searchDraft).toHaveValue("");
     await page.keyboard.press("Escape");
     await expect(card).toHaveAttribute("aria-checked", "true");
     await expect(

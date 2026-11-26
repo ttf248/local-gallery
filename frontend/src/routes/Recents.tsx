@@ -1,4 +1,4 @@
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -206,7 +206,7 @@ export default function Recents({
     <div className="min-h-full">
       {embedded ? null : (
         <div className="page-shell">
-          <PageHeader
+          <PageHero
             title={copy.recentsTitle}
             eyebrow={copy.recentsEyebrow}
             meta={

@@ -23,28 +23,25 @@ interface Toast {
   action?: { label: string; onClick: () => void };
 }
 
-export interface UIState {
-  memoriesDismissedOn: string | null;
+export type SidebarState = "expanded" | "collapsed";
+export interface PersistedUIPrefs { theme: ThemePref;sidebar:SidebarState;viewMode: ViewMode;showPersonFaceBoxes:boolean;folderDrawerOpen:boolean;inspectorOpen:boolean;memoriesDismissedOn:string|null; }
+export interface UIState extends PersistedUIPrefs {
   setMemoriesDismissedOn: (date: string | null) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
-  folderDrawerOpen: boolean;
   setFolderDrawerOpen: (open: boolean) => void;
   toggleFolderDrawer: () => void;
 
-  sidebarCollapsed: boolean;
+  setInspectorOpen: (open:boolean) => void;
   toggleSidebar: () => void;
-  setSidebarCollapsed: (v: boolean) => void;
+  setSidebar: (value:SidebarState) => void;
 
-  theme: ThemePref;
   setTheme: (t: ThemePref) => void;
 
-  viewMode: ViewMode;
   setViewMode: (v: ViewMode) => void;
 
   /** 人物详情照片墙是否框出当前人物的人脸，默认关闭。 */
-  showPersonFaceBoxes: boolean;
   setShowPersonFaceBoxes: (v: boolean) => void;
 
   /**
@@ -83,10 +80,10 @@ export const useUIStore = create<UIState>()(
       toggleFolderDrawer: () =>
         set((s) => ({ folderDrawerOpen: !s.folderDrawerOpen })),
 
-      sidebarCollapsed: false,
+      sidebar:"expanded",inspectorOpen:false,setInspectorOpen: inspectorOpen => set({inspectorOpen}),
       toggleSidebar: () =>
-        set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+        set((s) => ({ sidebar:s.sidebar==="expanded"?"collapsed":"expanded" })),
+      setSidebar: sidebar => set({sidebar}),
 
       theme: "system",
       setTheme: (t) => set({ theme: t }),
@@ -125,14 +122,14 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "local-gallery-ui",
-      version: 3,
+      version: 4,
       migrate: (persisted, version) => {
         const old =
           typeof persisted === "object" && persisted !== null
             ? (persisted as Record<string, unknown>)
             : {};
         return {
-          sidebarCollapsed: old.sidebarCollapsed === true,
+          sidebar: old.sidebarCollapsed === true ? "collapsed" : "expanded", inspectorOpen:false,
           theme:
             old.theme === "light" || old.theme === "dark"
               ? old.theme
@@ -140,10 +137,10 @@ export const useUIStore = create<UIState>()(
           viewMode: old.viewMode === "list" ? "list" : "grid",
           showPersonFaceBoxes: old.showPersonFaceBoxes === true,
           folderDrawerOpen: version >= 2 && old.folderDrawerOpen === true,
-          memoriesDismissedOn: null,
+          memoriesDismissedOn: typeof old.memoriesDismissedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(old.memoriesDismissedOn) ? old.memoriesDismissedOn : null,
         } as Pick<
           UIState,
-          | "sidebarCollapsed"
+          | "sidebar" | "inspectorOpen"
           | "theme"
           | "viewMode"
           | "showPersonFaceBoxes"
@@ -154,7 +151,7 @@ export const useUIStore = create<UIState>()(
       partialize: (s) => ({
         memoriesDismissedOn: s.memoriesDismissedOn,
         folderDrawerOpen: s.folderDrawerOpen,
-        sidebarCollapsed: s.sidebarCollapsed,
+        sidebar: s.sidebar, inspectorOpen:s.inspectorOpen,
         theme: s.theme,
         viewMode: s.viewMode,
         showPersonFaceBoxes: s.showPersonFaceBoxes,

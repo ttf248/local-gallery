@@ -1,13 +1,13 @@
 import type { ReactNode } from "react";
 import { PageChromeProvider } from "../src/shell/PageChrome";
-import { TopBar } from "../src/shell/TopBar";
+import { CanvasTopBar } from "../src/shell/CanvasTopBar";
 
 const noop = () => {};
 
 export function WithTopBar({ children }: { children: ReactNode }) {
   return (
     <PageChromeProvider>
-      <TopBar
+      <CanvasTopBar
         scrolled={false}
         onSearch={noop}
         onHelp={noop}

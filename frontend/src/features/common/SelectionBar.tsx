@@ -63,9 +63,9 @@ export function SelectionBar({
   if (!visible) return null;
   return (
     <div
-      role="toolbar"
+      data-floating-bar="" role="toolbar"
       aria-label={label}
-      className="fixed inset-x-2 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+12px)] z-popover mx-auto flex min-h-[52px] w-fit max-w-[calc(100%-16px)] flex-wrap items-center justify-center gap-1 rounded-3xl bg-inverse px-2.5 py-1.5 text-caption text-on-inverse shadow-3 md:bottom-5"
+      className="fixed inset-x-2 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+12px)] z-floatingbar mx-auto flex min-h-[52px] w-fit max-w-[calc(100%-16px)] flex-wrap items-center justify-center gap-1 rounded-xl bg-inverse px-2.5 py-1.5 text-caption text-on-inverse shadow-3 lg:bottom-5"
     >
       <button
         type="button"

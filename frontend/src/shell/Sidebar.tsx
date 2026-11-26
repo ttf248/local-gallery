@@ -2,7 +2,10 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppMode } from "../hooks/useAppMode";
 import { useNavVisibility } from "../hooks/useNavVisibility";
-import { useLibraryActivitySummary } from "../hooks/useLibrary";
+import {useNavBadges,type NavBadges} from "./useNavBadges";
+import {useActiveJobSummary} from "../features/tasks/useActiveJobSummary";
+import {TaskIndicator} from "./TaskIndicator";
+import {SidebarSearch} from "./SidebarSearch";
 import {
   isNavEntryActive,
   navGroupsFor,
@@ -10,25 +13,25 @@ import {
   type NavEntry,
 } from "../utils/navEntries";
 import { currentTabRoute } from "../utils/pageTabs";
-import { Badge } from "../ui/Badge";
+
 import { IconButton } from "../ui/IconButton";
 import { Tooltip } from "../ui/Tooltip";
 import { cx } from "../ui/cx";
-import { AlertIcon, ChevronLeftIcon, ChevronRightIcon } from "../ui/icons";
-import WorkbenchSwitch from "./WorkbenchSwitch";
+import { AlertIcon, ChevronLeftIcon, ChevronRightIcon, HelpIcon } from "../ui/icons";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { AppearanceMenu } from "./AppearanceMenu";
-import { BrandMark } from "./BrandMark";
+
 
 function RailGroup({
   label,
   entries,
   collapsed,
-  count,
+  badges,showLabel,
 }: {
   label: string;
   entries: NavEntry[];
   collapsed: boolean;
-  count: number;
+  badges: NavBadges;showLabel:boolean;
 }) {
   const { mode } = useAppMode(),
     { pathname } = useLocation(),
@@ -63,17 +66,15 @@ function RailGroup({
         }
       }}
     >
-      {!collapsed && (
-        <p className="px-3 pb-1 text-caption text-ink-3">{label}</p>
+      {!collapsed && showLabel && (
+        <p className="px-3 pt-4 pb-1 text-caption font-medium text-ink-3">{label}</p>
       )}
       {entries.map((entry) => {
         const selected = entry === active,
           Icon = selected ? (entry.ActiveIcon ?? entry.Icon) : entry.Icon,
-          badge = entry.key === "comic.unread" ? count : 0;
-        const name =
-          collapsed && badge
-            ? entry.label + " · " + badge + " 卷"
-            : entry.label;
+          badge = badges[entry.key] ?? 0;
+        const unit = entry.key === "comic.unread" ? "卷" : "组";
+        const name = badge ? entry.label+" · "+badge+" "+unit : entry.label;
         const link = (
           <Link
             key={entry.key}
@@ -83,11 +84,11 @@ function RailGroup({
             tabIndex={tabStop === entry ? 0 : -1}
             onFocus={() => setFocus(entry.key)}
             className={cx(
-              "relative flex h-10 w-full items-center gap-3 rounded-md text-label",
+              "relative flex h-[34px] w-full items-center gap-3 rounded-md text-label",
               collapsed ? "justify-center" : "px-3",
               selected
-                ? "bg-raised font-semibold text-ink shadow-1"
-                : "text-ink-2 hover:bg-sunken hover:text-ink",
+                ? "bg-selected font-semibold text-ink before:absolute before:left-0 before:h-4 before:w-[3px] before:rounded-sm before:bg-accent"
+                : "text-ink-2 hover:bg-hover hover:text-ink",
             )}
           >
             <Icon size={20} />
@@ -98,7 +99,7 @@ function RailGroup({
               (collapsed ? (
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />
               ) : (
-                <Badge aria-label={"还有 " + badge + " 卷"}>{badge}</Badge>
+                <span aria-label={"还有 "+badge+" "+unit} className="text-caption tabular-nums text-ink-3">{badge>999?"999+":badge}</span>
               ))}
           </Link>
         );
@@ -118,68 +119,49 @@ function RailGroup({
     </nav>
   );
 }
-export default function NavRail({
+export default function Sidebar({
   collapsed,
   onToggle,
-  warningCount,
+  warningCount,onSearch,onHelp,
 }: {
   collapsed: boolean;
   onToggle: () => void;
-  warningCount: number;
+  warningCount: number;onSearch:()=>void;onHelp:()=>void;
 }) {
   const { mode, setMode } = useAppMode(),
     { isVisible } = useNavVisibility();
-  const count = useLibraryActivitySummary().data?.summary.unreadCount ?? 0;
+  const badges=useNavBadges(mode), summary=useActiveJobSummary();
   return (
     <aside
       aria-label="主导航"
       data-collapsed={collapsed}
       data-testid="nav-rail"
       className={cx(
-        "group/rail z-rail flex h-full shrink-0 flex-col gap-6 overflow-y-auto bg-app px-3 pb-4 transition-[width] duration-slow",
+        "group/rail z-rail flex h-full shrink-0 flex-col gap-1 overflow-y-auto bg-app p-3 transition-[width] duration-slow",
         collapsed ? "w-rail-compact" : "w-rail",
       )}
     >
-      <div>
-        <div className="relative flex h-16 items-center justify-between gap-2 px-1">
-          <div className="flex items-center gap-2">
-            <BrandMark />
-            {!collapsed && (
-              <span className="whitespace-nowrap text-label font-semibold">
-                Local Gallery
-              </span>
-            )}
-          </div>
-          <div
-            className={cx(
-              "opacity-0 group-focus-within/rail:opacity-100 group-hover/rail:opacity-100",
-              collapsed && "absolute inset-x-0 flex justify-center bg-app",
-            )}
-          >
-            <IconButton
-              label={collapsed ? "展开侧边栏" : "折叠侧边栏"}
-              size="sm"
-              onClick={onToggle}
-            >
-              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
-            </IconButton>
-          </div>
-        </div>
-        <WorkbenchSwitch mode={mode} onChange={setMode} compact={collapsed} />
-      </div>
-      {[...navGroupsFor(mode), MACHINE_GROUP].map((group) => (
+      <WorkspaceSwitcher mode={mode} onChange={setMode} compact={collapsed} />
+      <SidebarSearch collapsed={collapsed} onSearch={onSearch}/>
+      {navGroupsFor(mode).map((group,index) => (
         <RailGroup
           key={group.key}
           label={group.label}
           collapsed={collapsed}
-          count={count}
+          badges={badges} showLabel={index>0}
           entries={group.entries.filter(
             (entry) => !entry.mode || entry.locked || isVisible(entry.key),
           )}
         />
       ))}
-      <footer className="mt-auto flex flex-wrap items-center gap-2">
+      <div className="mt-auto pt-3">
+        <TaskIndicator summary={summary} collapsed={collapsed}/>
+        <RailGroup label={MACHINE_GROUP.label} entries={MACHINE_GROUP.entries} collapsed={collapsed} showLabel badges={badges}/>
+      </div>
+      <footer className="flex flex-wrap items-center gap-1">
         <AppearanceMenu />
+        <IconButton label="快捷键帮助" onClick={onHelp}><HelpIcon size={16}/></IconButton>
+        <IconButton label={collapsed?"展开侧边栏":"折叠侧边栏"} onClick={onToggle} aria-keyshortcuts="Control+B Meta+B">{collapsed?<ChevronRightIcon size={16}/>:<ChevronLeftIcon size={16}/>}</IconButton>
         {warningCount > 0 && (
           <Link
             to="/settings/data"

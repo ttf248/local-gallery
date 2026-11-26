@@ -15,7 +15,7 @@ vi.mock("./shell/AccessGate", () => ({
   default: ({ children }: { children: ReactNode }) => children,
 }));
 vi.mock("./features/common/Toast", () => ({ default: () => null }));
-vi.mock("./shell/AppFrame", () => ({
+vi.mock("./shell/AppShell", () => ({
   default: () => (
     <>
       <nav aria-label="主导航" />

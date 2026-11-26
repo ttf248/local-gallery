@@ -15,7 +15,7 @@ import FolderDrawer, {
   useFolderDrawer,
 } from "../features/library/FolderDrawer";
 import BreadcrumbMenu from "../features/library/BreadcrumbMenu";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import { ChevronLeftIcon, FolderOpenIcon, ReaderIcon } from "../ui/icons";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryList } from "../hooks/useLibraryList";
@@ -311,8 +311,8 @@ export default function Library() {
   ) : null;
 
   return (
-    <Page className="page-shell library-page pb-[var(--gutter)] [--folder-drawer-offset:calc(var(--topbar-height)_+_14px)] min-h-full">
-      <PageHeader
+    <Page className="page-shell library-page pb-[var(--gutter)] [--folder-drawer-offset:calc(var(--topbar-h)_+_14px)] min-h-full">
+      <PageHero
         title={title}
         chrome={{
           actions: actions && (

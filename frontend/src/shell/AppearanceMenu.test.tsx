@@ -16,7 +16,7 @@ async function openTheme() {
   );
   const trigger = screen.getByRole("button", { name: /^外观/ });
   trigger.focus();
-  fireEvent.click(trigger);
+  fireEvent.contextMenu(trigger);
   const menu = await screen.findByRole("menu", { name: "外观" });
   return { trigger, menu };
 }
@@ -95,7 +95,7 @@ it("快速卸载不会遗留延迟注册的全局监听任务", () => {
   const removed = vi.spyOn(window, "removeEventListener");
   try {
     const { unmount } = render(<AppearanceMenu />);
-    fireEvent.click(screen.getByRole("button", { name: /^外观/ }));
+    fireEvent.contextMenu(screen.getByRole("button", { name: /^外观/ }));
     unmount();
     vi.runOnlyPendingTimers();
     for (const [index, [type, listener]] of added.mock.calls.entries()) {
@@ -117,3 +117,5 @@ it("快速卸载不会遗留延迟注册的全局监听任务", () => {
     vi.useRealTimers();
   }
 });
+
+it("单击按浅色、深色、系统循环",()=>{render(<AppearanceMenu/>);const button=screen.getByRole("button",{name:/外观/});for(const theme of ["dark","system","light"]){fireEvent.click(button);expect(useUIStore.getState().theme).toBe(theme);} });

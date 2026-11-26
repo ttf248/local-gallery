@@ -3,7 +3,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { expect, it, vi } from "vitest";
 import AppRoutes from "./AppRoutes";
 
-vi.mock("../shell/AppFrame", () => ({
+vi.mock("../shell/AppShell", () => ({
   default: function Destination() {
     const { pathname, search, hash } = useLocation();
     return <output>{pathname}{search}{hash}</output>;

@@ -2,8 +2,8 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Sidebar from "./NavRail";
-import { TopBar } from "./TopBar";
+import Sidebar from "./Sidebar";
+import { CanvasTopBar } from "./CanvasTopBar";
 import { MobileTabBar } from "./MobileTabBar";
 import { MoreSheet } from "./MoreSheet";
 
@@ -81,14 +81,14 @@ function renderSidebar(collapsed = false, path = "/") {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
         {wideViewport ? (
-          <Sidebar collapsed={collapsed} onToggle={() => {}} warningCount={0} />
+          <Sidebar onSearch={()=>{}} onHelp={()=>{}} collapsed={collapsed} onToggle={() => {}} warningCount={0} />
         ) : (
           <>
             <MobileTabBar onMore={() => {}} />
             <MoreSheet open onClose={() => {}} onHelp={() => {}} />
           </>
         )}
-        <TopBar
+        <CanvasTopBar
           scrolled={false}
           onHelp={() => {}}
           onSearch={() => {}}
@@ -156,11 +156,12 @@ describe("Sidebar", () => {
   it("分组标题说清每一段是什么", () => {
     appMode.mode = "photo";
     renderSidebar();
-    expect(screen.getByText("浏览")).toBeInTheDocument();
+    expect(screen.queryByText("浏览")).toBeNull();
+    expect(screen.getByRole("navigation",{name:"浏览"})).toBeVisible();
     expect(screen.getByText("整理")).toBeInTheDocument();
     expect(screen.getByText("相似照片")).toBeInTheDocument();
     // 本机组：任务中心与设置排在内容入口之后。
-    expect(screen.getByText("本机")).toBeInTheDocument();
+    expect(screen.getByRole("navigation",{name:"本机"})).toBeVisible();
     expect(screen.getByText("任务中心")).toBeInTheDocument();
     expect(screen.getByText("设置")).toBeInTheDocument();
   });
@@ -254,10 +255,10 @@ describe("Sidebar", () => {
   });
 });
 
-it("工作台切换留在侧栏，搜索和系统动作可从顶栏使用", () => {
+it("侧栏提供搜索与切换工作台，系统操作可从顶栏使用", () => {
   renderSidebar();
   expect(
-    screen.getByRole("radiogroup", { name: "工作台模式" }),
+    screen.getByRole("button", { name: /切换工作台/ }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "打开命令面板" }),

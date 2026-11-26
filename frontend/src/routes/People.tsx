@@ -10,7 +10,7 @@ import {
 } from "@tanstack/react-query";
 import { EmptyState } from "../ui/EmptyState";
 import { Switch } from "../ui/Switch";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import RenditionImage from "../features/common/RenditionImage";
 import Segmented from "../ui/Segmented";
 import PhotoViewer from "../features/viewer/PhotoViewer";
@@ -943,7 +943,7 @@ function PersonAlbum({ personId }: { personId: string }) {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="page-shell shrink-0">
-        <PageHeader
+        <PageHero
           title={person?.name ?? "人物相册"}
           leading={
             person && (

@@ -46,8 +46,9 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
 
-  const switcher = page.getByRole("radiogroup", { name: "工作台模式" });
-  await switcher.getByRole("radio", { name: "漫画" }).click();
+  const switcher = page.getByRole("button",{name:/切换工作台/});
+  await switcher.click();
+  await page.getByRole("menuitemradio", { name: "漫画" }).click();
   await expect(page.getByRole("heading", { name: "漫画库" })).toBeVisible();
   // 漫画工作台的菜单换成漫画自己那套，照片那边的一点都不留。
   await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
@@ -805,8 +806,6 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
     dialog.getByRole("button", { name: "清除搜索", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(dialog.getByRole("button", {name:"提交搜索"})).toBeFocused();
-  await page.keyboard.press("Tab");
   await expect(close).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(search).toBeFocused();
@@ -856,7 +855,7 @@ test("主题菜单隔离页面快捷键，支持键盘连续选择并持久保�
   });
   const root = page.locator("html");
   const trigger = page.getByRole("button", { name: /^外观 ·/ });
-  await trigger.click();
+  await trigger.click({button:"right"});
   const menu = page.getByRole("menu", { name: "外观" });
   const light = menu.getByRole("menuitemradio", { name: "浅色", exact: true });
   const dark = menu.getByRole("menuitemradio", { name: "深色", exact: true });
@@ -878,7 +877,7 @@ test("主题菜单隔离页面快捷键，支持键盘连续选择并持久保�
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect(menu).toBeHidden();
   await expect(trigger).toBeFocused();
-  await trigger.click();
+  await trigger.click({button:"right"});
   await expect(dark).toHaveAttribute("aria-checked", "true");
   // 菜单只有主题一组：Home/End 在三项之间往返。
   await page.keyboard.press("End");
@@ -892,7 +891,7 @@ test("主题菜单隔离页面快捷键，支持键盘连续选择并持久保�
   await expect(trigger).toBeFocused();
   await page.reload();
   await expect(root).toHaveAttribute("data-theme", "dark");
-  await trigger.click();
+  await trigger.click({button:"right"});
   await expect(dark).toHaveAttribute("aria-checked", "true");
   expect(errors).toEqual([]);
 });
@@ -904,14 +903,14 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   await page.goto("/settings/interface");
   const trigger = page.getByRole("button", { name: /^外观 ·/ });
   const menu = page.getByRole("menu", { name: "外观" });
-  await trigger.click();
+  await trigger.click({button:"right"});
   await expect(
     menu.getByRole("menuitemradio", { name: "浅色", exact: true }),
   ).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(menu).toBeHidden();
   await expect(trigger).not.toBeFocused();
-  await trigger.click();
+  await trigger.click({button:"right"});
   await page.getByRole("button", { name: "打开命令面板" }).click();
   const search = page.getByRole("combobox");
   await search.click();
@@ -919,7 +918,7 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   await expect(search).toBeFocused();
   await page.keyboard.press("Escape");
   for (let attempt = 0; attempt < 5; attempt++) {
-    await trigger.click();
+    await trigger.click({button:"right"});
     await page.keyboard.press("Escape");
     await expect(menu).not.toBeVisible();
     await expect(trigger).toBeFocused();
@@ -927,10 +926,8 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   // 未读页只属于漫画工作台：照片模式下按 U 不跳转，切到漫画模式才跳。
   await page.keyboard.press("u");
   await expect(page).toHaveURL(/\/settings\/interface$/);
-  await page
-    .getByRole("radiogroup", { name: "工作台模式" })
-    .getByRole("radio", { name: "漫画" })
-    .click();
+  await page.getByRole("button",{name:/切换工作台/}).click();
+      await page.getByRole("menuitemradio",{name:"漫画"}).click();
   await page.keyboard.press("u");
   await expect(page).toHaveURL(/\/unread$/);
 });
@@ -943,13 +940,13 @@ test("主题令牌在明暗模式下保持边框及透明背景", async ({ page 
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await expect(root).toHaveAttribute("data-theme", theme);
-    const [bg, elevated, subtle, fg] = await renderedColors(root, ["--app", "--raised", "--sunken", "--ink"]);
+    const [bg, elevated, subtle, fg] = await renderedColors(root, ["--app", "--selected", "--raised", "--ink"]);
     expect(await renderedColors(rail, ["background-color"])).toEqual([bg]);
     expect(await renderedColors(selected, ["background-color", "color"])).toEqual([elevated, fg]);
     expect(await renderedColors(page.getByRole("button", { name: "打开命令面板" }), ["background-color"])).toEqual([subtle]);
-    await page.getByRole("button", { name: /^外观 ·/ }).click();
+    await page.getByRole("button", { name: /^外观 ·/ }).click({button:"right"});
     const menu = page.getByRole("menu", { name: "外观" });
-    expect(await renderedColors(menu, ["background-color"])).toEqual([elevated]);
+    expect(await renderedColors(menu, ["background-color"])).toEqual([subtle]);
     await expect(menu.getByRole("menuitemradio", { name: "跟随系统" })).toHaveAttribute("aria-checked", "true");
     await page.keyboard.press("Escape");
     await page.screenshot({
@@ -2400,7 +2397,7 @@ test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page 
   await page.getByRole("button", { name: "显示与排序" }).click();
   // 视图标签不能被压成竖排文字（一个字一行）。
   await expect(
-    page.getByRole("tab", { name: /^全部\s*\d+$/ }),
+    page.getByRole("tab", { name: "全部", exact: true }),
   ).toBeVisible();
   const tabs = page.getByRole("tablist", { name: "内容类型" }).getByRole("tab");
   expect(await tabs.count()).toBeGreaterThan(0);
@@ -2918,7 +2915,7 @@ test("分页浏览明暗主题与四个断点实际截图", async ({ page, reque
       await page.goto("/photo/library");
       const mobileNav = page.getByRole("button", { name: "更多", exact:true });
       if (width < 1024) await mobileNav.click();
-      await page.getByRole("button", { name: /^外观 ·/ }).click();
+      await page.getByRole("button", { name: /^外观 ·/ }).click({button:"right"});
       await page
         .getByRole("menuitemradio", {
           name: theme === "dark" ? "深色" : "浅色",

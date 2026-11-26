@@ -59,7 +59,7 @@
   --z-toast: 100;
   --nav-width: 240px;
   --nav-width-compact: 72px;
-  --topbar-height: 64px;
+  --topbar-h: 56px;
   --tabbar-height: 64px;
   --font-sans:
     "Inter Variable", "Inter", "Segoe UI Variable Text", "PingFang SC",
@@ -208,6 +208,6 @@
 
 @media (max-width: 1023px) {
   :root {
-    --topbar-height: 56px;
+    --topbar-h: 52px;
   }
 }

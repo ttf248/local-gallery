@@ -14,14 +14,15 @@ test("桌面导航与命令面板可用键盘操作", async ({ page, request }) 
   expect(album).toBeDefined();
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/photo");
-  const rail = page.getByTestId("nav-rail"),
+  await expect(page.locator("[data-canvas]")).toBeVisible();
+  const rail = page.getByRole("complementary", { name: "主导航" }),
     albums = rail.getByRole("link", { name: "相册" });
   await albums.click();
   await expect(page).toHaveURL(/\/photo\/library$/);
   await expect(albums).toHaveAttribute("aria-current", "page");
   await page.keyboard.press("Control+b");
   await expect(rail).toHaveCSS("width", "72px");
-  const search = page.getByRole("button", { name: "打开命令面板" });
+  const search = rail.getByRole("button", { name: "打开命令面板" });
   await search.click();
   const input = page.getByRole("combobox", { name: "搜索相册或标签" });
   await expect(input).toBeFocused();

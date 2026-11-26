@@ -21,7 +21,7 @@ export function MobileTabBar({
   return (
     <nav
       aria-label="主导航"
-      className="mobile-tabs fixed inset-x-0 bottom-0 z-tabbar flex border-t border-line pb-[env(safe-area-inset-bottom)]"
+      className="mobile-tabs fixed inset-x-0 bottom-0 z-tabbar flex border-t border-line-subtle bg-canvas/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]"
       data-open={open}
     >
       {tabs.map((entry) => {
@@ -34,7 +34,7 @@ export function MobileTabBar({
             aria-current={active ? "page" : undefined}
             className={cx(
               "flex h-tabbar flex-1 flex-col items-center justify-center gap-1 text-caption",
-              active ? "font-semibold text-ink" : "text-ink-3",
+              active ? "font-medium text-accent-text" : "text-ink-3",
             )}
           >
             <Icon size={24} />

@@ -21,7 +21,7 @@ import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
 import { buildTimeRailMarks } from "../features/timeline/timeRailMarks";
 import TimeRail from "../features/timeline/TimeRail";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import MonthHeader from "../features/timeline/MonthHeader";
 import MemoriesStrip from "../features/timeline/MemoriesStrip";
 import {
@@ -277,7 +277,7 @@ export default function PhotoTimeline() {
     <Page
       className="page-shell flex h-full min-h-0 flex-col overflow-x-clip"
     >
-      <PageHeader
+      <PageHero
         title="全部照片"
         meta={
           <span data-testid="timeline-meta">

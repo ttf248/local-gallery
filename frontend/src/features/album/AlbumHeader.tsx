@@ -13,7 +13,7 @@ import {
 } from "../../ui/icons";
 import { albumRoute } from "../../utils/path";
 import { mediaCountParts } from "../../utils/mediaCount";
-import { PageHeader } from "../../shell/PageHeader";
+import { PageHero } from "../../shell/PageHero";
 
 interface Props {
   album: LibraryNodeSummary;
@@ -51,7 +51,7 @@ export default function AlbumHeader({
   const counts = mediaCountParts(album);
   const parent = album.parentName;
   return (
-    <PageHeader
+    <PageHero
       title={title}
       meta={
         <>

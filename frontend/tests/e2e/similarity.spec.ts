@@ -106,7 +106,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
   await page.goto("/photo/me/picks");
   await expect(page.getByText("还没有精选照片")).toBeVisible();
   const sidebar = page.locator('aside[aria-label="主导航"]');
-  await sidebar.getByRole("link", { name: "相似照片", exact: true }).click();
+  await sidebar.getByRole("link", { name: /^相似照片(?:[，\s]|$)/ }).click();
   await expect(
     page.getByRole("heading", { name: "相似照片与连拍" }),
   ).toBeVisible();
@@ -135,7 +135,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
   await expect(page.getByText(/^\d+ 张精选$/)).toBeVisible();
   await expect(page.locator('button[aria-label*="移出精选"]').first()).toBeVisible();
 
-  await sidebar.getByRole("link", { name: "相似照片", exact: true }).click();
+  await sidebar.getByRole("link", { name: /^相似照片(?:[，\s]|$)/ }).click();
   const returnedCard = page.getByTestId("similarity-group").first();
 
   // 标记已处理：决定写进 state，重新读取仍在。

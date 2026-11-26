@@ -32,7 +32,7 @@ test("扫描并打开示例相册", async ({ page }) => {
   expect(repaired.ok()).toBeTruthy();
   await page.goto("/");
   await expect(
-    page.getByText("Local Gallery", { exact: false }).first(),
+    page.getByRole("button", { name: /当前工作台：照片/ }),
   ).toBeVisible();
 
   const scanButton = page
@@ -201,10 +201,8 @@ for (const recovery of ["manual", "automatic"] as const) {
         await expect(card).toBeVisible();
         // 「未读」只属于漫画工作台：先在侧栏切过去再点这个入口。
         // 不能刷新页面——刷新会丢掉扫描进度的本地状态，这条用例守的正是它。
-        await page
-          .getByRole("radiogroup", { name: "工作台模式" })
-          .getByRole("radio", { name: "漫画" })
-          .click();
+        await page.getByRole("button",{name:/切换工作台/}).click();
+      await page.getByRole("menuitemradio",{name:"漫画"}).click();
         await page
           .locator('aside[aria-label="主导航"]')
           .getByRole("link", { name: /^未读/ })

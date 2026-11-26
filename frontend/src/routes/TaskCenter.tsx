@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import { SplitLayout } from "../shell/SplitLayout";
 import { Page } from "../shell/Page";
 import { SplitNav } from "../shell/SplitLayout";
@@ -75,8 +75,8 @@ export function TaskCenterView({ tab }: { tab: string }) {
     <>
       {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
           宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
-      <Page variant="split" className="page-shell tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12">
-        <PageHeader
+      <Page variant="workspace" className="page-shell tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12">
+        <PageHero
           title="任务中心"
           meta="管理本机分析、等待队列及每日计划。"
           actions={

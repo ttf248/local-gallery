@@ -1,7 +1,7 @@
 import { useRouteMeta } from "../app/routeMeta";
 import type { ReactNode } from "react";
 import { cx } from "../ui/cx";
-export type PageVariant = "standard" | "gallery" | "focused" | "split" | "workspace";
+export type PageVariant = "standard" | "gallery" | "focused" | "workspace";
 export function Page({
   variant: override,
   children,
@@ -20,10 +20,10 @@ export function Page({
         "mx-auto w-full min-w-0 px-[var(--gutter)]",
         {
           standard: "max-w-[var(--page-max)]",
-          gallery: "max-w-[var(--page-max-wide)]",
+          gallery: "max-w-none",
           focused: "max-w-[var(--page-max-focused)]",
-          workspace: "max-w-[var(--page-max-wide)]",
-          split: "max-w-[1280px]",
+          workspace: "max-w-none",
+
         }[variant],
         className,
       )}

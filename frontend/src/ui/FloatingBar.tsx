@@ -34,10 +34,10 @@ export const FloatingBar = forwardRef<HTMLElement, FloatingBarProps>(
     if (!open) return null;
     return (
       <section
-        ref={forwardedRef}
+        data-floating-bar="" ref={forwardedRef}
         aria-label={label}
         className={cx(
-          "fixed inset-x-0 bottom-[calc(var(--tabbar-height)+var(--float-bottom))] z-floatingbar mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-xl bg-inverse px-3 py-2 text-on-inverse shadow-3 lg:bottom-5",
+          "fixed inset-x-0 bottom-[calc(var(--tabbar-height)+var(--float-bottom))] z-floatingbar min-h-[52px] mx-auto flex w-fit max-w-[calc(100%-2rem)] flex-wrap items-center gap-3 rounded-xl bg-inverse px-3 py-2 text-on-inverse shadow-3 lg:bottom-5",
           className,
         )}
       >

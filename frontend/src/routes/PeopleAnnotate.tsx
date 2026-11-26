@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "../ui/EmptyState";
-import {PageHeader} from "../shell/PageHeader";
+import {PageHero} from "../shell/PageHero";
 import RenditionImage from "../features/common/RenditionImage";
 import {
   peopleAnnotationsApi,
@@ -92,7 +92,7 @@ export default function PeopleAnnotate() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <div className="page-shell"><PageHeader
+      <div className="page-shell"><PageHero
   eyebrow="离线智能相册 · 本机工具"
   title="人物标注"
   meta="给真实照片里的人脸标上匿名身份，用来衡量检测与分组的实际效果。标注只保存在本机，不会改写人物分组、命名或原始照片。"

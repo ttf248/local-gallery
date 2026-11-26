@@ -11,7 +11,7 @@
 }
 
 @layer components {
-  .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--canvas) 96%, transparent); }
+  
   @supports (backdrop-filter: blur(1px)) {
     .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--canvas) 82%, transparent); backdrop-filter: blur(20px) saturate(1.6); }
   }

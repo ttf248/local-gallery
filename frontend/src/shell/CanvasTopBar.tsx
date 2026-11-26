@@ -1,10 +1,11 @@
+import {useMediaQuery,WIDE_LAYOUT_QUERY} from "../hooks/useMediaQuery";
 import { isValidElement, useEffect } from "react";
 import { useAppMode } from "../hooks/useAppMode";
 import { hasAppHistory, useSafeBack } from "../utils/navigation";
 import { workbenchCopy } from "../utils/workbench";
 import { IconButton } from "../ui/IconButton";
 import { Menu } from "../ui/Menu";
-import { Kbd } from "../ui/Kbd";
+
 import { cx } from "../ui/cx";
 import { MoreHorizontalIcon, ChevronLeftIcon, SearchIcon } from "../ui/icons";
 import { usePageChromeState } from "./PageChrome";
@@ -20,7 +21,7 @@ interface Props {
   canScan: boolean;
   shufflePending: boolean;
 }
-export function TopBar({
+export function CanvasTopBar({
   scrolled,
   onSearch,
   onHelp,
@@ -34,6 +35,7 @@ export function TopBar({
       usePageChromeState(),
     { mode } = useAppMode(),
     route = useRouteMeta();
+  const wide=useMediaQuery(WIDE_LAYOUT_QUERY);
   const meta = route?.meta ?? null,
     params = route?.params ?? {};
   const configuredBack = meta?.chrome.back;
@@ -55,11 +57,11 @@ export function TopBar({
     <header
       data-testid="top-bar"
       className={cx(
-        "top-bar sticky top-0 z-topbar grid h-topbar shrink-0 items-center gap-2 border-b px-[var(--gutter)]",
+        "top-bar sticky top-0 z-topbar grid h-topbar bg-canvas/80 backdrop-blur-xl backdrop-saturate-150 shrink-0 items-center gap-2 border-b px-[var(--gutter)]",
         localSearch
           ? "grid-cols-[auto_minmax(0,1fr)_auto]"
-          : "grid-cols-[1fr_auto_auto] lg:grid-cols-[1fr_auto_1fr]",
-        scrolled ? "border-line" : "border-transparent",
+          : "grid-cols-[minmax(0,1fr)_auto_auto]",
+        scrolled ? "border-line-subtle" : "border-transparent",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
@@ -74,7 +76,7 @@ export function TopBar({
           </h1>
         ) : (
           titleCollapsed && (
-            <span className="truncate text-heading">
+            <span className="truncate text-subheading motion-safe:animate-[fadeIn_180ms_linear]">
               {title || routeTitle.split(" · ")[0]}
             </span>
           )
@@ -82,7 +84,7 @@ export function TopBar({
       </div>
       {localSearch
         ? search
-        : (meta?.chrome.search ?? "global") === "global" &&
+        : !wide && (meta?.chrome.search ?? "global") === "global" &&
           search !== "none" && (
             <button
               type="button"
@@ -90,15 +92,8 @@ export function TopBar({
               aria-keyshortcuts="Control+K Meta+K /"
               data-command-trigger
               onClick={onSearch}
-              className="flex h-10 w-10 items-center justify-center gap-3 rounded-full text-ink-2 lg:w-[clamp(280px,32vw,520px)] lg:justify-start lg:bg-sunken lg:px-4"
-            >
-              <SearchIcon />
-              <span className="hidden flex-1 text-left text-label lg:block">
-                {mode === "photo" ? "搜索相册、画面与文字" : "搜索作品与标签"}
-              </span>
-              <span className="hidden lg:block">
-                <Kbd keys={["Mod", "K"]} />
-              </span>
+              className="grid size-10 place-items-center rounded-md text-ink-2 hover:bg-hover lg:hidden"
+            ><SearchIcon size={20}/>
             </button>
           )}
       <div className="col-end-4 flex min-w-0 items-center justify-end gap-2">
@@ -115,7 +110,7 @@ export function TopBar({
             </IconButton>
           }
           items={[
-            ...(localSearch
+            ...(!wide && localSearch
               ? [{ id: "commands", label: "打开命令面板", onSelect: onSearch }]
               : []),
             {

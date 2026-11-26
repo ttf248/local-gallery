@@ -129,7 +129,9 @@ test("首页搜索在窄屏和键盘占位下保留输入、范围和可滚动�
   const field = await input.boundingBox();
   const radio = await scope.boundingBox();
   expect(field).toBeTruthy();
-  expect(radio!.y).toBeGreaterThanOrEqual(field!.y + field!.height);
+  expect(radio!.x).toBeGreaterThanOrEqual(field!.x + field!.width);
+  expect(radio!.y).toBeLessThan(field!.y + field!.height);
+  expect(field!.width).toBeGreaterThan(80);
   await panel.getByRole("button", { name: "快捷操作" }).click();
   const box = await panel.boundingBox();
   expect(box!.y + box!.height).toBeLessThanOrEqual(390);

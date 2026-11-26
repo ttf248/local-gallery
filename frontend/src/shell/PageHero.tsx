@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { usePageChrome, type PageChromeConfig } from "./PageChrome";
-export interface PageHeaderProps {
+export interface PageHeroProps {
   title: string;
+  compact?:boolean;
   titleContent?: ReactNode;
   titleEditor?: ReactNode;
   leading?: ReactNode;
@@ -12,8 +13,8 @@ export interface PageHeaderProps {
   chips?: ReactNode;
   chrome?: Omit<PageChromeConfig, "title">;
 }
-export function PageHeader({
-  title,
+export function PageHero({
+  title,compact,
   titleContent,
   titleEditor,
   leading,
@@ -23,12 +24,12 @@ export function PageHeader({
   toolbar,
   chips,
   chrome,
-}: PageHeaderProps) {
+}: PageHeroProps) {
   const { titleRef } = usePageChrome({ title, ...chrome });
   return (
-    <header className="min-w-0 pb-6 pt-[clamp(24px,3vw,48px)]">
+    <header className={compact ? "min-w-0 pb-2 pt-3" : "min-w-0 pb-3 pt-5 lg:pb-5 lg:pt-8"}>
       {eyebrow && (
-        <div className="mb-2 text-caption text-ink-2">{eyebrow}</div>
+        <div className="mb-2 text-caption text-ink-3">{eyebrow}</div>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
@@ -39,14 +40,14 @@ export function PageHeader({
               className={
                 titleEditor
                   ? "sr-only"
-                  : "break-words font-display text-display"
+                  : compact ? "break-words text-title" : "break-words text-display"
               }
             >
               {titleEditor ? title : (titleContent ?? title)}
             </h1>
             {titleEditor}
             {meta && (
-              <div className="mt-1.5 text-caption tabular-nums text-ink-2">
+              <div className="mt-1 text-caption tabular-nums text-ink-2">
                 {meta}
               </div>
             )}

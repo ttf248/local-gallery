@@ -1,6 +1,6 @@
 import { cx } from "../ui/cx";
 import { Page } from "../shell/Page";
-import { PageHeader } from "../shell/PageHeader";
+import { PageHero } from "../shell/PageHero";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, Navigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -49,7 +49,7 @@ function TagHead({ tag, onBack }: { tag: string; onBack: () => void }) {
         <ChevronLeftIcon size={13} />
         <span>返回</span>
       </button>
-      <PageHeader title={tag} eyebrow="标签" />
+      <PageHero title={tag} eyebrow="标签" />
     </div>
   );
 }
@@ -220,7 +220,7 @@ export default function Tag() {
           mode === "comic" ? "sm:grid-cols-[minmax(0,1fr)_220px]" : "sm:grid-cols-[minmax(0,1fr)_240px]",
         )}>
           <div className="min-w-0">
-            <PageHeader title={tag} eyebrow="标签" />
+            <PageHero title={tag} eyebrow="标签" />
             <div className="mt-4">
               {" "}
               <button
