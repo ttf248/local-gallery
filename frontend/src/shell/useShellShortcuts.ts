@@ -66,6 +66,7 @@ export function useShellShortcuts({
         if (!immersive && mode === "comic") navigate(unreadRoute());
       },
     },
-    !paletteOpen && !helpOpen && !hasOpenModal(),
+    !paletteOpen && !helpOpen,
+    () => !hasOpenModal(),
   );
 }

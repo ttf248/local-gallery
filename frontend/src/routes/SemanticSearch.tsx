@@ -1,15 +1,13 @@
+import { InlineAlert } from "../ui/InlineAlert";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import {
-  aiJobsApi,
-  type SemanticSearchRequest,
-} from "../api/aiJobs";
+import { aiJobsApi, type SemanticSearchRequest } from "../api/aiJobs";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryFeedItem } from "../api/library";
-import {PageHeader} from "../shell/PageHeader";
+import { PageHeader } from "../shell/PageHeader";
 import { SearchIcon } from "../ui/icons";
-import ContentSearchResults from "../components/search/ContentSearchResults";
+import ContentSearchResults from "../features/search/ContentSearchResults";
 import {
   useContentSearchQuery,
   type ContentSearchSubmission,
@@ -201,11 +199,13 @@ export default function SemanticSearch() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 overflow-y-auto pb-4">
-        <div className="page-shell"><PageHeader
-  eyebrow="本地 AI · 组合检索"
-  title="智能搜索"
-  meta="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"
-/></div>
+        <div className="page-shell">
+          <PageHeader
+            eyebrow="本地 AI · 组合检索"
+            title="智能搜索"
+            meta="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"
+          />
+        </div>
         <section className="page-shell mt-5">
           <form
             className="rounded-xl border border-border bg-bg-elevated p-4 shadow-xs sm:p-5"
@@ -452,21 +452,6 @@ export default function SemanticSearch() {
                 </div>
               ) : null}
             </div>
-
-            {/* 运行环境是这一页的备注，不是与提交按钮并列的动作：
-                放在卡片底部单独一行，状态随字数变化也不会把按钮顶歪。 */}
-            {status && usesSemanticSearch ? (
-              <p className="mt-3 border-t border-border-faint pt-2 text-meta text-fg-subtle">
-                {status.device === "cuda"
-                  ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
-                  : status.runtimeReady
-                    ? "CPU 推理"
-                    : "本机运行环境未就绪"}
-                {" · "}
-                {status.coverage.indexed.toLocaleString()} /{" "}
-                {status.coverage.total.toLocaleString()} 张已索引
-              </p>
-            ) : null}
           </form>
 
           {statusQuery.isError && usesSemanticSearch ? (
@@ -477,17 +462,19 @@ export default function SemanticSearch() {
           {status &&
           usesSemanticSearch &&
           (!status.runtimeReady || !status.modelValid) ? (
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/5 px-4 py-3 text-meta text-fg-muted">
-              <span>
-                {!status.runtimeReady
-                  ? "Chinese-CLIP 运行环境尚未就绪。"
-                  : "Chinese-CLIP 权重缺失或校验未通过。"}{" "}
-                文字搜索仍可用；权重目录：cacheDir/derived/ai/models/。
-              </span>
-              <Link to="/tasks/storage" className="btn btn-sm btn-outline">
-                查看任务中心
-              </Link>
-            </div>
+            <InlineAlert tone="warning" className="mt-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <span>
+                  {!status.runtimeReady
+                    ? "Chinese-CLIP 运行环境尚未就绪。"
+                    : "Chinese-CLIP 权重缺失或校验未通过。"}{" "}
+                  文字搜索仍可用；权重目录：cacheDir/derived/ai/models/。
+                </span>
+                <Link to="/tasks/storage" className="btn btn-sm btn-outline">
+                  查看任务中心
+                </Link>
+              </div>
+            </InlineAlert>
           ) : null}
         </section>
       </div>
@@ -501,6 +488,18 @@ export default function SemanticSearch() {
           onFindSimilar={findSimilar}
         />
       </div>
+      {status && usesSemanticSearch ? (
+        <p className="page-shell shrink-0 py-2 text-caption text-fg-subtle">
+          {status.device === "cuda"
+            ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
+            : status.runtimeReady
+              ? "CPU 推理"
+              : "本机运行环境未就绪"}
+          {" · "}
+          {status.coverage.indexed.toLocaleString()} /{" "}
+          {status.coverage.total.toLocaleString()} 张已索引
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -99,10 +99,10 @@ test("「我的」用页签承载精选、收藏与最近浏览", async ({ page,
   await page.goto("/photo/me");
   await expect(page).toHaveURL(/\/photo\/me\/picks/);
   for (const label of ["精选照片", "收藏", "最近浏览"]) {
-    await expect(page.getByRole("tab", { name: label })).toBeVisible();
+    await expect(page.getByRole("link", { name: label, exact:true })).toBeVisible();
   }
   // 页签切换是一次普通导航：地址跟着变，后退能退回去。
-  await page.getByRole("tab", { name: "收藏" }).click();
+  await page.getByRole("link", { name: "收藏" }).click();
   await expect(page).toHaveURL(/\/photo\/me\/favorites/);
   await page.goBack();
   await expect(page).toHaveURL(/\/photo\/me\/picks/);
@@ -114,11 +114,11 @@ test("切换「我的」页签后保留已访问的面板", async ({ page, reque
   await page.goto("/photo/me/picks");
   await expect(page.locator("#me-panel-picks")).toBeVisible();
 
-  await page.getByRole("tab", { name: "收藏" }).click();
+  await page.getByRole("link", { name: "收藏" }).click();
   await expect(page).toHaveURL(/\/photo\/me\/favorites/);
   await expect(page.locator("#me-panel-favorites")).toBeVisible();
 
-  await page.getByRole("tab", { name: "精选照片" }).click();
+  await page.getByRole("link", { name: "精选照片" }).click();
   await expect(page).toHaveURL(/\/photo\/me\/picks/);
   await expect(page.locator("#me-panel-favorites")).toBeAttached();
   await expect(page.locator("#me-panel-favorites")).toBeHidden();

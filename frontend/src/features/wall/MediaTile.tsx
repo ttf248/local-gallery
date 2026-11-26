@@ -119,7 +119,7 @@ export default function MediaTile({
         </span>
       )}
       {badge && (
-        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/70 px-1.5 text-caption text-white">
+        <span className="hover-reveal pointer-events-none absolute bottom-1 left-1 max-w-[calc(100%-8px)] truncate rounded bg-black/70 px-1.5 text-caption text-white group-hover:opacity-100 group-focus-within:opacity-100">
           {badge}
         </span>
       )}

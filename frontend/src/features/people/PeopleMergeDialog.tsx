@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { Dialog } from "../../ui/Dialog";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { aiJobsApi, type PersonGroup } from "../../api/aiJobs";
 
@@ -15,9 +16,7 @@ export default function PeopleMergeDialog({
   onMerge,
   isMerging,
 }: Props) {
-  const dialogRef = useRef<HTMLDialogElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const titleId = useId();
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [targetId, setTargetId] = useState("");
@@ -31,56 +30,19 @@ export default function PeopleMergeDialog({
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const previous = document.activeElement;
-    dialog.showModal();
-    inputRef.current?.focus();
-    return () => {
-      if (dialog.open) dialog.close();
-      if (previous instanceof HTMLElement && previous.isConnected) {
-        previous.focus({ preventScroll: true });
-      }
-    };
-  }, []);
-
   const candidates = (result.data?.people ?? []).filter(
     (person) => person.id !== personId,
   );
   const selected = candidates.find((person) => person.id === targetId);
 
   return (
-    <dialog
-      ref={dialogRef}
-      aria-modal="true"
-      aria-labelledby={titleId}
-      className="fixed inset-0 m-auto w-[min(680px,94vw)] max-h-[86dvh] overflow-hidden rounded-2xl border border-border bg-bg-elevated p-0 text-fg shadow-xl backdrop:bg-overlay-scrim backdrop:backdrop-blur-[2px]"
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      onKeyDown={(event) => event.stopPropagation()}
+    <Dialog
+      open
+      title="合并到另一个人物"
+      onClose={onClose}
+      initialFocus={inputRef}
     >
-      <div className="flex max-h-[86dvh] flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-border-faint px-5 py-4">
-          <div>
-            <p className="page-eyebrow">人物整理</p>
-            <h2 id={titleId} className="mt-1 font-display text-label text-fg">
-              合并到另一个人物
-            </h2>
-          </div>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline"
-            onClick={onClose}
-          >
-            取消
-          </button>
-        </header>
+      <div className="flex max-h-[76dvh] flex-col">
         <div className="space-y-3 px-5 py-4">
           <label
             className="block text-meta text-fg-muted"
@@ -166,6 +128,6 @@ export default function PeopleMergeDialog({
           </button>
         </footer>
       </div>
-    </dialog>
+    </Dialog>
   );
 }

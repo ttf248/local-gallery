@@ -3,11 +3,11 @@ import type { ChinaTrip } from "../../api/aiJobs";
 import { useChinaTripMedia } from "../../hooks/useChinaLocations";
 import { usePickToggle } from "../../hooks/usePickToggle";
 import { usePhotoStore, wallTargetHeight } from "../../store/photoStore";
-import PhotoViewer from "../../features/viewer/PhotoViewer";
+import { PhotoViewer } from "../viewer";
 import { useWallViewer } from "../../hooks/useWallViewer";
-import PhotoWall from "../../features/wall/PhotoWall";
+import { PhotoWall } from "../wall";
 import { ChevronRightIcon } from "../../ui/icons";
-import ThumbImage from "../../features/common/ThumbImage";
+import { ThumbImage } from "../common";
 import TravelTripPreview from "./TravelTripPreview";
 import type { MapRegion } from "../../utils/travelMap";
 

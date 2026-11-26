@@ -31,7 +31,8 @@ vi.mock("../hooks/useLibraryList", async (original) => ({
 vi.mock("../hooks/useMediaFeed", () => ({
   useMediaFeed: () => mocks.timelineFeed,
 }));
-vi.mock("../hooks/useSmartAlbums", () => ({
+vi.mock("../hooks/useSmartAlbums", async (original) => ({
+  ...(await original<typeof import("../hooks/useSmartAlbums")>()),
   useSmartAlbumDirectory: (dimension: string) =>
     dimension === "featured" ? mocks.featuredDirectory : mocks.allDirectory,
 }));
@@ -266,20 +267,20 @@ it("首屏先给找法：搜索入口与四个维度", () => {
 
   // 找法就是那条输入框本身：页面上不再另起一个「我要找什么」的标题
   // 把同一件事说两遍。
-  expect(screen.getByRole("textbox", { name: "搜索" })).toBeInTheDocument();
-  const nav = screen.getByRole("navigation", { name: "发现维度" });
-  for (const label of ["时间", "人物", "地点", "主题"]) {
-    expect(within(nav).getByRole("link", { name: label })).toBeInTheDocument();
+  expect(screen.getByRole("searchbox", { name: "搜索" })).toBeInTheDocument();
+  for (const [label, destination] of [["人物","全部人物"],["地点","足迹"],["时间","时间线"],["主题","全部主题"]]) {
+    const section=screen.getByRole("region",{name:label});
+    expect(within(section).getByRole("link",{name:destination})).toBeInTheDocument();
   }
 });
 
 it("顶部搜索按名称进入名称结果页", async () => {
   renderExplore();
 
-  fireEvent.change(screen.getByRole("textbox", { name: "搜索" }), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索" }), {
     target: { value: "海边 日落" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+  fireEvent.click(screen.getByRole("button", { name: "提交搜索" }));
 
   await waitFor(() => {
     const location = new URL(
@@ -296,10 +297,10 @@ it("顶部搜索切到画面与文字后带上作用域", async () => {
   renderExplore();
 
   fireEvent.click(screen.getByRole("radio", { name: "画面与文字" }));
-  fireEvent.change(screen.getByRole("textbox", { name: "搜索" }), {
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索" }), {
     target: { value: "雪" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+  fireEvent.click(screen.getByRole("button", { name: "提交搜索" }));
 
   await waitFor(() => {
     const location = new URL(

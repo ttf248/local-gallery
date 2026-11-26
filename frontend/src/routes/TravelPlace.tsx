@@ -4,9 +4,9 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 // 卡片的样式会被每个页面首屏捎带着下载。
 import "../styles/travels.css";
 import ThumbImage from "../features/common/ThumbImage";
-import TravelMap from "../components/travels/TravelMap";
-import TravelPhotoWall from "../components/travels/TravelPhotoWall";
-import TravelTimeAxis from "../components/travels/TravelTimeAxis";
+import TravelMap from "../features/travels/TravelMap";
+import TravelPhotoWall from "../features/travels/TravelPhotoWall";
+import TravelTimeAxis from "../features/travels/TravelTimeAxis";
 import {
   useChinaOutline,
   useChinaRegionMedia,

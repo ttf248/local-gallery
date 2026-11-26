@@ -1,9 +1,10 @@
+import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
+import { ScrollRow } from "../../ui/ScrollRow";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { aiJobsApi, type AIJob, type PersonGroup } from "../../api/aiJobs";
-import PersonFaceThumb from "../people/PersonFaceThumb";
-import ErrorBanner from "../../features/common/ErrorBanner";
-import ExploreCard from "./ExploreCard";
+import { PersonFaceThumb } from "../people";
+import { InlineAlert } from "../../ui/InlineAlert";
 import { peopleRoute } from "../../utils/path";
 
 /** 每一档最多摆几个人：预览是入口，不是名单。 */
@@ -19,7 +20,7 @@ const CANDIDATE_LIMIT = 6;
  * 已命名与待确认分成两栏，不用一枚灰标签糊弄：分组是相似度聚出来的
  * 候选，**不是身份确认** —— 界面上不能让人以为认出来了。
  */
-export default function ExplorePeoplePreview() {
+export default function PeopleRow() {
   const people = useQuery({
     queryKey: ["people", false, "photos"],
     queryFn: () => aiJobsApi.people(false, "photos"),
@@ -38,36 +39,34 @@ export default function ExplorePeoplePreview() {
     .slice(0, CANDIDATE_LIMIT);
 
   return (
-    <section className="page-section" aria-labelledby="explore-people">
-      <div className="section-heading">
-        <h2 id="explore-people" className="section-title">
-          人物
-        </h2>
-        <span className="section-meta">照片里常出现的人</span>
-        <Link to={peopleRoute()} className="chip ml-auto">
-          全部人物
-        </Link>
-      </div>
-
+    <ExploreSection
+      id="explore-people"
+      title="人物"
+      to={peopleRoute()}
+      linkLabel="全部人物"
+      info="分组只是复核线索，不代表身份确认。改名或合并后，这里会跟着变。"
+    >
       {people.isError && people.data ? (
-        <ErrorBanner
+        <InlineAlert
+          tone="danger"
           onRetry={() => void people.refetch()}
           retrying={people.isFetching}
         >
           人物分组更新失败，下面仍显示上次读取到的内容。
-        </ErrorBanner>
+        </InlineAlert>
       ) : null}
       {people.isError && !people.data ? (
-        <ErrorBanner
+        <InlineAlert
+          tone="danger"
           onRetry={() => void people.refetch()}
           retrying={people.isFetching}
         >
           人物分组暂时读不出来。
-        </ErrorBanner>
+        </InlineAlert>
       ) : null}
 
       {people.isLoading && !people.data ? (
-        <p className="text-body text-fg-muted">正在读取人物候选…</p>
+        <PreviewSkeleton label="正在读取人物候选…" shape="person" />
       ) : null}
 
       {!people.isLoading && !people.isError && groups.length === 0 ? (
@@ -95,12 +94,9 @@ export default function ExplorePeoplePreview() {
               testId="explore-people-candidate"
             />
           ) : null}
-          <p className="text-meta text-fg-subtle">
-            分组只是复核线索，不代表身份确认。改名或合并后，这里会跟着变。
-          </p>
         </div>
       ) : null}
-    </section>
+    </ExploreSection>
   );
 }
 
@@ -121,24 +117,40 @@ function PeopleGroup({
         <span className="font-medium text-fg">{title}</span>
         <span>{hint}</span>
       </p>
-      <div className="explore-grid" data-testid={testId}>
+      <ScrollRow label={title} data-testid={testId}>
         {people.map((person) => (
-          <ExploreCard
+          <Link
             key={person.id}
             to={peopleRoute(person.id)}
-            title={person.name}
-            meta={`${person.photoCount.toLocaleString("zh-CN")} 张`}
-            media={
-              <PersonFaceThumb
-                person={person}
-                fill
-                className="h-full w-full"
-                testId="explore-person-thumbnail"
-              />
-            }
-          />
+            className="w-[120px] shrink-0 text-center 2xl:w-[136px]"
+          >
+            <span className="relative block aspect-square">
+              <span className="block size-full overflow-hidden rounded-full ring-1 ring-inset ring-line">
+                <PersonFaceThumb
+                  person={person}
+                  fill
+                  className="size-full"
+                  testId="explore-person-thumbnail"
+                />
+              </span>
+              {!person.confirmed && (
+                <span
+                  aria-label="待确认"
+                  className="absolute bottom-1 right-2 grid size-[18px] place-items-center rounded-full bg-bg-elevated text-micro shadow-1"
+                >
+                  ?
+                </span>
+              )}
+            </span>
+            <span className="mt-2 block truncate text-callout font-semibold">
+              {person.name}
+            </span>
+            <span className="text-caption tabular-nums text-fg-muted">
+              {person.photoCount.toLocaleString("zh-CN")} 张
+            </span>
+          </Link>
         ))}
-      </div>
+      </ScrollRow>
     </div>
   );
 }

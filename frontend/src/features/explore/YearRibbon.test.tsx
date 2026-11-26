@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { TimelineYear } from "../../api/library";
-import ExploreTimePreview from "./ExploreTimePreview";
+import YearRibbon from "./YearRibbon";
 
 const feed = vi.hoisted(() => ({
   years: [] as TimelineYear[],
@@ -29,7 +29,7 @@ function LocationProbe() {
 function renderPreview() {
   return render(
     <MemoryRouter>
-      <ExploreTimePreview />
+      <YearRibbon />
       <LocationProbe />
     </MemoryRouter>,
   );
@@ -75,4 +75,13 @@ describe("发现页时间预览", () => {
       screen.queryByText(/目前没有带日期证据的年份/),
     ).not.toBeInTheDocument();
   });
+});
+
+it("今年有标记，张数使用千分位", () => {
+  feed.isPending = false;
+  feed.isError = false;
+  feed.years = [{ year: new Date().getFullYear(), count: 12345, months: [] }];
+  renderPreview();
+  expect(screen.getByLabelText("今年")).toBeVisible();
+  expect(screen.getByText("12,345 张")).toBeVisible();
 });

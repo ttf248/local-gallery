@@ -46,7 +46,7 @@ vi.mock("../features/wall/PhotoMasonry", () => ({
   ),
 }));
 
-vi.mock("../components/wall/PickShowcase", () => ({
+vi.mock("../features/collection/PickShowcase", () => ({
   default: ({
     items,
     date,

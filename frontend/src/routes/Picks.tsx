@@ -9,7 +9,7 @@ import {
   type PhotoSelectionEntry,
 } from "../store/photoSelectionStore";
 import PhotoMasonry from "../features/wall/PhotoMasonry";
-import PickShowcase from "../components/wall/PickShowcase";
+import PickShowcase from "../features/collection/PickShowcase";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoCompare from "../features/viewer/PhotoCompare";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
@@ -19,18 +19,10 @@ import ErrorBanner from "../features/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoCompare } from "../hooks/usePhotoCompare";
 import { useContextMenu } from "../hooks/useContextMenu";
-import {
-  FolderIcon,
-  GridIcon,
-  PickIcon,
-  UncheckIcon,
-} from "../ui/icons";
+import { FolderIcon, GridIcon, PickIcon, UncheckIcon } from "../ui/icons";
 import { albumRoute, homeRoute } from "../utils/path";
 import { photoCopy } from "../utils/workbench";
-import {
-  captureDateLabel,
-  captureDateSourceLabel,
-} from "../utils/date";
+import { captureDateLabel, captureDateSourceLabel } from "../utils/date";
 
 /**
  * 精选照片页。
@@ -54,7 +46,8 @@ const SHOWCASE_LIMIT = 4;
  */
 export default function Picks({
   embedded = false,
-}: { embedded?: boolean } = {}) {
+  onSummary,
+}: { embedded?: boolean; onSummary?: (label: string) => void } = {}) {
   const copy = photoCopy();
   const pushToast = useUIStore((s) => s.pushToast);
   const navigate = useNavigate();
@@ -107,7 +100,22 @@ export default function Picks({
     onTogglePick: (item) => {
       void picks
         .remove([item.id])
-        .then(() => pushToast({ kind: "success", message: "已移出精选" }))
+        .then(() =>
+          pushToast({
+            kind: "success",
+            message: "已移出精选",
+            action: {
+              label: "撤销",
+              onClick: () => {
+                void picks
+                  .add([item.id])
+                  .catch(() =>
+                    pushToast({ kind: "error", message: "恢复精选失败" }),
+                  );
+              },
+            },
+          }),
+        )
         .catch(() => pushToast({ kind: "error", message: "操作失败" }));
     },
   });
@@ -181,12 +189,7 @@ export default function Picks({
   const loadMore = useCallback(() => {
     if (!hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
     void fetchNextPage({ cancelRefetch: false });
-  }, [
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    isFetchNextPageError,
-  ]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError]);
 
   const viewer = wall.viewer;
 
@@ -195,6 +198,12 @@ export default function Picks({
      用它排会缩在左边一角，竖幅还被裁掉半张 —— 用户挑出来的照片是拿来
      好好看的，不是拿来数的。数量少的时候摆成陈列：每张一个框，完整地
      摆出来，几个框并排摆开、整体居中。 */
+  const summary = query.data
+    ? total.toLocaleString("zh-CN") + " 张精选"
+    : undefined;
+  useEffect(() => {
+    if (summary) onSummary?.(summary);
+  }, [onSummary, summary]);
   const showcase = total > 0 && total <= SHOWCASE_LIMIT;
 
   return (
@@ -255,14 +264,6 @@ export default function Picks({
       )}
 
       <div className="page-shell min-h-0 flex-1 pb-2">
-        {/* 嵌在「我的」里时页头由外层给：精选有多少张要说在这页上 ——
-            收藏与最近浏览的页签都报「共 N 项」，精选只摆照片会显得
-            像漏了计数。 */}
-        {embedded && items.length > 0 ? (
-          <p className="pb-3 text-meta text-fg-muted tabular-nums">
-            共 {total} 张精选照片
-          </p>
-        ) : null}
         {query.isError && items.length > 0 ? (
           <div className="pb-2">
             <ErrorBanner
@@ -320,7 +321,23 @@ export default function Picks({
               void picks
                 .remove([item.id])
                 .then(() =>
-                  pushToast({ kind: "success", message: "已移出精选" }),
+                  pushToast({
+                    kind: "success",
+                    message: "已移出精选",
+                    action: {
+                      label: "撤销",
+                      onClick: () => {
+                        void picks
+                          .add([item.id])
+                          .catch(() =>
+                            pushToast({
+                              kind: "error",
+                              message: "恢复精选失败",
+                            }),
+                          );
+                      },
+                    },
+                  }),
                 )
                 .catch(() =>
                   pushToast({ kind: "error", message: "移出精选失败" }),
@@ -332,9 +349,7 @@ export default function Picks({
             source={(item) => item.albumName}
             /* 日期比文件名有信息量：文件名是文件系统里的编号，
                日期是这张照片发生的事。拿不出拍摄证据就不写。 */
-            date={(item) =>
-              captureDateLabel(item.dateValue, item.dateSource)
-            }
+            date={(item) => captureDateLabel(item.dateValue, item.dateSource)}
             dateHint={(item) =>
               captureDateSourceLabel(item.dateSource) || undefined
             }
@@ -354,6 +369,7 @@ export default function Picks({
           <PhotoMasonry
             items={items}
             targetColumnWidth={260}
+            gap={12}
             onOpen={(_item, index) => wall.open(index)}
             /* 精选页的照片来自不同相册：悬停信息层说清出处，
                用户才知道自己看的是哪本里的哪一张。 */
@@ -397,30 +413,50 @@ export default function Picks({
               label: "移出精选",
               icon: <UncheckIcon size={12} />,
             },
-          ].map(action=>({...action,onSelect:()=>{const id=action.id;
+          ].map((action) => ({
+            ...action,
+            onSelect: () => {
+              const id = action.id;
 
-            const item = menu.menu!.item;
+              const item = menu.menu!.item;
 
-            if (id === "open") {
-              const index = items.findIndex((it) => it.id === item.id);
-              if (index >= 0) wall.open(index);
-              return;
-            }
-            if (id === "album") {
-              navigate(albumRoute("photo", item.albumId));
-              return;
-            }
-            if (id === "unpick") {
-              void picks
-                .remove([item.id])
-                .then(() =>
-                  pushToast({ kind: "success", message: "已移出精选" }),
-                )
-                .catch(() =>
-                  pushToast({ kind: "error", message: "移出精选失败" }),
-                );
-            }
-}}))}
+              if (id === "open") {
+                const index = items.findIndex((it) => it.id === item.id);
+                if (index >= 0) wall.open(index);
+                return;
+              }
+              if (id === "album") {
+                navigate(albumRoute("photo", item.albumId));
+                return;
+              }
+              if (id === "unpick") {
+                void picks
+                  .remove([item.id])
+                  .then(() =>
+                    pushToast({
+                      kind: "success",
+                      message: "已移出精选",
+                      action: {
+                        label: "撤销",
+                        onClick: () => {
+                          void picks
+                            .add([item.id])
+                            .catch(() =>
+                              pushToast({
+                                kind: "error",
+                                message: "恢复精选失败",
+                              }),
+                            );
+                        },
+                      },
+                    }),
+                  )
+                  .catch(() =>
+                    pushToast({ kind: "error", message: "移出精选失败" }),
+                  );
+              }
+            },
+          }))}
           onClose={menu.close}
         />
       )}

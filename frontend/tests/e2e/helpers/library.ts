@@ -188,7 +188,7 @@ export async function openMeTab(page: Page, tab: string) {
     .locator('aside[aria-label="主导航"]')
     .getByRole("link", { name: /^(珍藏|我的)$/ })
     .click();
-  await page.getByRole("tab", { name: tab, exact: true }).click();
+  await page.getByRole("link", { name: tab, exact: true }).click();
 }
 
 // 收藏与最近访问各有自己的接口，不再跟着偏好一起返回。用例要复原这两份

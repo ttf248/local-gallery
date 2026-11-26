@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
+import { ScrollRow } from "../../ui/ScrollRow";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { albumsApi, type SmartAlbumDirectoryItem } from "../../api/albums";
@@ -6,12 +8,14 @@ import {
   smartAlbumQueryKeys,
   useSmartAlbumDirectory,
 } from "../../hooks/useSmartAlbums";
-import { smartAlbumEvidenceDimensions, smartGroupHref } from "../../utils/smartAlbum";
-import ErrorBanner from "../../features/common/ErrorBanner";
-import EmptyState from "../../features/common/EmptyState";
-import RenditionImage from "../../features/common/RenditionImage";
+import {
+  smartAlbumEvidenceDimensions,
+  smartGroupHref,
+} from "../../utils/smartAlbum";
+import { InlineAlert } from "../../ui/InlineAlert";
+import { EmptyState } from "../common";
+import { RenditionImage } from "../common";
 import { SparkleIcon } from "../../ui/icons";
-import ExploreCard from "./ExploreCard";
 import { smartAlbumsRoute } from "../../utils/path";
 
 /** 预览最多列几个主题：只摆精选的几个，完整结果去主题页看。 */
@@ -28,7 +32,7 @@ const THEME_LIMIT = 4;
  * 提示：每张卡都挂一行「线索：时间 · 地点」，一屏四张就是四行几乎
  * 一样的灰字，读不出差别。完整的主题清单在主题页。
  */
-export default function ExploreThemePreview() {
+export default function ThemeCards() {
   const queryClient = useQueryClient();
   const directory = useSmartAlbumDirectory("featured", true, {
     limit: THEME_LIMIT,
@@ -59,58 +63,59 @@ export default function ExploreThemePreview() {
   }, [emptyFeatured, queryClient, task?.jobId, task?.status]);
 
   return (
-    <section className="page-section" aria-labelledby="explore-theme">
-      <div className="section-heading">
-        <h2 id="explore-theme" className="section-title">
-          主题
-        </h2>
-        <span className="section-meta">自动聚在一起的照片</span>
-        <Link to={smartAlbumsRoute()} className="chip ml-auto">
-          全部主题
-        </Link>
-      </div>
-
+    <ExploreSection
+      id="explore-theme"
+      title="主题"
+      to={smartAlbumsRoute()}
+      linkLabel="全部主题"
+    >
       {!emptyFeatured ? (
         directory.isLoading && directory.items.length === 0 ? (
-          <p className="text-body text-fg-muted">正在汇总主题…</p>
+          <PreviewSkeleton label="正在汇总主题…" shape="theme" />
         ) : directory.isError ? (
-          <ErrorBanner
+          <InlineAlert
+            tone="danger"
             onRetry={() => void directory.refetch()}
             retrying={directory.isFetching}
           >
             主题汇总暂时读不出来。
-          </ErrorBanner>
+          </InlineAlert>
         ) : (
-          <div className="explore-grid">
+          <ScrollRow label="推荐主题">
             {directory.items.map((item) => (
               <ThemeCard key={`${item.albumId}-${item.group.id}`} item={item} />
             ))}
-          </div>
+          </ScrollRow>
         )
       ) : allDirectory.isLoading || refresh.isLoading ? (
         <p className="text-body text-fg-muted" aria-live="polite">
           正在检查主题分组状态…
         </p>
       ) : allDirectory.isError ? (
-        <ErrorBanner
+        <InlineAlert
+          tone="danger"
           onRetry={() => void allDirectory.refetch()}
           retrying={allDirectory.isFetching}
         >
           已生成主题索引，但汇总状态暂时读不出来。
-        </ErrorBanner>
+        </InlineAlert>
       ) : refresh.isError ? (
-        <ErrorBanner onRetry={() => void refresh.refetch()} retrying={refresh.isFetching}>
+        <InlineAlert
+          tone="danger"
+          onRetry={() => void refresh.refetch()}
+          retrying={refresh.isFetching}
+        >
           主题生成状态暂时读不出来。
-        </ErrorBanner>
+        </InlineAlert>
       ) : task?.status === "pending" || task?.status === "running" ? (
         <p className="text-body text-fg-muted" aria-live="polite">
           {task.status === "pending" ? "主题生成正在排队" : "正在生成主题"}
           {task.total > 0 ? ` · ${task.done}/${task.total}` : "…"}
         </p>
       ) : task?.status === "error" ? (
-        <ErrorBanner onRetry={() => void refresh.refetch()}>
+        <InlineAlert tone="danger" onRetry={() => void refresh.refetch()}>
           上次主题生成失败，请到任务中心重新运行。
-        </ErrorBanner>
+        </InlineAlert>
       ) : allDirectory.analysis?.complete ? (
         <EmptyState
           title={
@@ -139,11 +144,11 @@ export default function ExploreThemePreview() {
           </Link>
         </p>
       ) : (
-        <ErrorBanner onRetry={() => void allDirectory.refetch()}>
+        <InlineAlert tone="danger" onRetry={() => void allDirectory.refetch()}>
           暂时无法判断主题是否已分析，请重试。
-        </ErrorBanner>
+        </InlineAlert>
       )}
-    </section>
+    </ExploreSection>
   );
 }
 
@@ -155,33 +160,111 @@ export default function ExploreThemePreview() {
  */
 function ThemeCard({ item }: { item: SmartAlbumDirectoryItem }) {
   const group = item.group;
+  const coverRef = useRef<HTMLSpanElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = coverRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const summary = useQuery({
+    queryKey: smartAlbumQueryKeys.summary(item.albumId, group.dimension),
+    queryFn: ({ signal }) =>
+      albumsApi.smartGroups(item.albumId, group.dimension, signal),
+    enabled: visible && group.photoCount > 1,
+    staleTime: 30_000,
+  });
+  const snapshot = summary.data?.summary.snapshotKey ?? "";
+  const members = useQuery({
+    queryKey: [
+      "smart-albums",
+      "preview",
+      item.albumId,
+      group.dimension,
+      group.id,
+      snapshot,
+    ],
+    queryFn: ({ signal }) =>
+      albumsApi.smartGroupMedia(
+        item.albumId,
+        group.dimension,
+        group.id,
+        snapshot,
+        undefined,
+        signal,
+        4,
+      ),
+    enabled: visible && Boolean(snapshot),
+    staleTime: 60_000,
+  });
+  const covers =
+    members.data?.page.items
+      .filter((member) => member.kind === "image")
+      .slice(0, 4) ?? [];
   const source = [item.parentName, item.albumName].filter(Boolean).join(" / ");
   const evidence = smartAlbumEvidenceDimensions(group);
   return (
-    <ExploreCard
+    <Link
       to={smartGroupHref(item)}
-      title={group.name}
-      meta={`${group.photoCount.toLocaleString("zh-CN")} 张${
-        source ? ` · 来自 ${source}` : ""
-      }`}
-      hint={evidence.length > 0 ? `线索：${evidence.map(evidenceLabel).join(" · ")}` : undefined}
-      media={
-        group.coverResourceId ? (
+      title={
+        evidence.length
+          ? "线索：" + evidence.map(evidenceLabel).join(" · ")
+          : undefined
+      }
+      className="w-[min(300px,76vw)] shrink-0"
+    >
+      <span
+        ref={coverRef}
+        className={
+          "grid aspect-[4/3] gap-0.5 overflow-hidden rounded-card bg-bg-media " +
+          (covers.length > 1 ? "grid-cols-2" : "place-items-center")
+        }
+      >
+        {covers.length > 1 ? (
+          covers.map((member, index) => (
+            <span
+              key={member.id}
+              className={
+                "min-h-0 min-w-0 " +
+                (covers.length === 3 && index === 0 ? "row-span-2" : "")
+              }
+            >
+              <RenditionImage
+                fileId={member.id}
+                version={member.version}
+                alt=""
+                displayWidth={160}
+                className="size-full object-cover"
+              />
+            </span>
+          ))
+        ) : group.coverResourceId ? (
           <RenditionImage
             fileId={group.coverResourceId}
             version={group.coverVersion}
             alt=""
             displayWidth={320}
-            sizes="(max-width: 640px) 45vw, 220px"
-            className="h-full w-full object-cover"
+            className="size-full object-cover"
           />
         ) : (
-          <span className="explore-card__placeholder">
-            <SparkleIcon size={22} />
-          </span>
-        )
-      }
-    />
+          <SparkleIcon size={22} />
+        )}
+      </span>
+      <span className="mt-2 block text-callout font-semibold">
+        {group.name}
+      </span>
+      <span className="text-caption text-fg-muted">
+        {group.photoCount.toLocaleString("zh-CN")} 张
+        {source && " · 来自 " + source}
+      </span>
+    </Link>
   );
 }
 

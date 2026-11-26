@@ -121,9 +121,9 @@
   aspect-ratio: 1 / 1;
   max-height: 68vh;
   overflow: hidden;
-  border: 1px solid var(--border-faint);
-  border-radius: var(--radius-tile);
-  background: var(--bg-subtle);
+  box-shadow: var(--shadow-1);
+  border-radius: var(--radius-card);
+  background: var(--bg-elevated);
 }
 
 /* --- 时间轴：横在整页上的一条轴，不是卡片里的一排小柱 --- */
@@ -253,24 +253,24 @@
 /* 参照层：只画线，不填色（完整地图模式下铺成底图）。 */
 .travel-mini-map__base {
   fill: none;
-  stroke: var(--border-strong);
+  stroke: var(--fg-subtle);
 }
 .travel-mini-map__base--filled {
   fill: color-mix(in srgb, var(--fg) 7%, transparent);
 }
 /* 去过的地方：按张数深浅。 */
 .travel-mini-map__region {
-  fill: var(--accent);
-  stroke: var(--accent);
+  fill: var(--fg);
+  stroke: var(--fg-subtle);
 }
 /* 没去过的地方：完整地图模式下当底图，整张地图才看得出形状。 */
 .travel-mini-map__empty {
   fill: color-mix(in srgb, var(--fg) 7%, transparent);
-  stroke: var(--border-strong);
+  stroke: var(--fg-subtle);
 }
 /* 照片位置：一层泛开的光。 */
 .travel-mini-map__point {
-  fill: var(--accent);
+  fill: var(--fg);
 }
 
 /* --- 行程目录：年份倒序，两栏紧凑 ---
@@ -314,14 +314,10 @@
    选中（展开）的那一段仍然有底色，读得出哪一段是当前这段。 */
 .travel-trip-card {
   position: relative;
-  padding: 10px 10px 12px;
-  border-top: 1px solid var(--border-faint);
-  background: transparent;
+  padding: 12px 0;
 }
-.travel-trip-card[data-selected="true"] {
-  border-top-color: color-mix(in srgb, var(--accent-ink) 40%, var(--border-faint));
-  border-radius: var(--radius-tile);
-  background: color-mix(in srgb, var(--accent) 6%, var(--bg-elevated));
+.travel-trip-card[data-selected="true"] .travel-trip-card__date {
+  color: var(--signal);
 }
 .travel-trip-card__head {
   display: flex;
@@ -418,7 +414,7 @@
 .travel-trip-card__band {
   display: flex;
   gap: 4px;
-  height: 132px;
+  height: 96px;
   margin-top: 10px;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -427,7 +423,7 @@
   flex: 1 1 0;
   min-width: 104px;
   overflow: hidden;
-  border-radius: var(--radius-media);
+  border-radius: 6px;
   background: var(--bg-media);
 }
 .travel-trip-card__photo img {

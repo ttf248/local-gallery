@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import PhotoWall from "../../features/wall/PhotoWall";
-import PhotoViewer from "../../features/viewer/PhotoViewer";
+import { PhotoWall } from "../wall";
+import { PhotoViewer } from "../viewer";
 import type { ChinaTimeRange } from "../../api/aiJobs";
 import type { LibraryFeedItem } from "../../api/library";
 import { useChinaRegionMedia } from "../../hooks/useChinaLocations";

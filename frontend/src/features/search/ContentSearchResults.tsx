@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 import { ApiError } from "../../api/client";
 import { type AIWorkerStatus, type SemanticSearchHit } from "../../api/aiJobs";
 import type { LibraryFeedItem } from "../../api/library";
-import EmptyState from "../../features/common/EmptyState";
-import ErrorBanner from "../../features/common/ErrorBanner";
-import PhotoWall from "../../features/wall/PhotoWall";
-import PhotoViewer from "../../features/viewer/PhotoViewer";
+import { EmptyState } from "../common";
+import { ErrorBanner } from "../common";
+import { PhotoWall } from "../wall";
+import { PhotoViewer } from "../viewer";
 import { SearchIcon } from "../../ui/icons";
 import { usePickToggle } from "../../hooks/usePickToggle";
 import { usePhotoStore, wallTargetHeight } from "../../store/photoStore";
@@ -203,7 +203,7 @@ export default function ContentSearchResults({
           onLoadMore={loadMore}
           onOpen={(_item, index) => wall.open(index)}
           albumLabel={(item) => item.albumName}
-          itemBadge={(item) => matchBadge(item)}
+          itemBadge={(item) => matchBadge(item, submitted?.request.ocrText)}
           isPicked={picks.isPicked}
           onTogglePick={(item) => picks.toggle(item.id)}
           /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
@@ -270,20 +270,20 @@ export default function ContentSearchResults({
  * 「语义 0.82」说的是画面像不像，「文字匹配」说的是图里的字对不对 ——
  * 两件事，界面上分开写，用户才知道自己搜到了什么。
  */
-function matchBadge(item: ScoredFeedItem): string | undefined {
+function matchBadge(item: ScoredFeedItem, text?: string): string | undefined {
   const reasons = item.matchReasons ?? [];
   const labels = reasons.flatMap((reason) => {
     if (reason === "semantic") {
       return item.similarity === undefined
         ? ["画面相似"]
-        : [`画面 ${item.similarity.toFixed(2)}`];
+        : [`画面相似 ${item.similarity.toFixed(2)}`];
     }
     if (reason === "similar_image") {
       return item.similarity === undefined
         ? ["以图相似"]
         : [`以图 ${item.similarity.toFixed(2)}`];
     }
-    if (reason === "ocr_exact") return ["文字匹配"];
+    if (reason === "ocr_exact") return [text ? "文字：" + text : "文字匹配"];
     return ["文字近似"];
   });
   if (labels.length > 0) return labels.join(" · ");

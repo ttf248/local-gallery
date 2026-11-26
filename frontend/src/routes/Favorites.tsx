@@ -1,6 +1,6 @@
 import {PageHeader} from "../shell/PageHeader";
 import ErrorBanner from "../features/common/ErrorBanner";
-import { useMemo, useState } from "react";
+import { useEffect,useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
@@ -47,7 +47,7 @@ const SUGGEST_WIDTH = "flex-1 min-w-[148px] max-w-[360px]";
  * `embedded` 时不渲染页头：它被嵌在「我的」的页签里，页头由外层给，
  * 两处各写一个标题就是同一个名字出现两次。
  */
-export default function Favorites({ embedded = false }: { embedded?: boolean } = {}) {
+export default function Favorites({ embedded = false, onSummary }: { embedded?: boolean; onSummary?: (label:string)=>void } = {}) {
   const navigate = useNavigate();
   const viewMode = useUIStore((s) => s.viewMode);
   const pushToast = useUIStore((s) => s.pushToast);
@@ -82,6 +82,8 @@ export default function Favorites({ embedded = false }: { embedded?: boolean } =
     retry: retryFavorites,
   } = useFavoritesByMode(mode);
 
+  const summary = !detailsLoading && !nodesFailed && !tagsFailed ? favoritesCount.toLocaleString("zh-CN")+" 项收藏" : undefined;
+  useEffect(()=>{if(summary)onSummary?.(summary);},[onSummary,summary]);
   // 空态推荐位：给当前这一侧「现在可以马上收藏的东西」。
   // 漫画侧是还没翻开的漫画；照片侧没有阅读进度，改推最近加入的照片。
   const dashboardQuery = useLibraryDashboard();

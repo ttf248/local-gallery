@@ -50,11 +50,11 @@ test("照片可以加入精选，在精选页里聚在一起，重启后仍然�
   // 「我的 · 精选照片」把它列出来，并说得出它属于哪本相册。
   await page.goto("/photo/me/picks");
   await expect(
-    page.getByRole("tab", { name: "精选照片", exact: true }),
-  ).toHaveAttribute("aria-selected", "true");
+    page.getByRole("link", { name: "精选照片", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   // 计数在页头上，而这一页签嵌在「我的」里：页头由外层给，
   // 面板里给的是照片本身、它的出处，还有这一页有多少张。
-  await expect(page.getByText("共 1 张精选照片")).toBeVisible();
+  await expect(page.getByText("1 张精选", {exact:true})).toBeVisible();
   await expect(page.getByText("sample-album", { exact: true })).toBeVisible();
   const pickedTile = page.locator('button[aria-label*="移出精选"]').first();
   await expect(pickedTile).toBeVisible();
@@ -118,7 +118,7 @@ test("从大图加入精选，珍藏页立刻能看到；移出精选不动相�
 
   // 珍藏页立刻能看到这一张：它摆成陈列，不是一面密排的墙。
   await page.goto("/photo/me/picks");
-  await expect(page.getByText("共 1 张精选照片")).toBeVisible();
+  await expect(page.getByText("1 张精选", {exact:true})).toBeVisible();
   const showcase = page.getByTestId("pick-showcase");
   await expect(showcase).toBeVisible();
   await expect(showcase.locator("figure")).toHaveCount(1);
@@ -239,7 +239,7 @@ test("时间线与珍藏共用一份精选状态：一边改了，另一边跟�
 
   // 珍藏页立刻看到这一张。
   await page.goto("/photo/me/picks");
-  await expect(page.getByText("共 1 张精选照片")).toBeVisible();
+  await expect(page.getByText("1 张精选", {exact:true})).toBeVisible();
 
   // 回到时间线，那一张的角标已经是「移出精选」：状态是同一份。
   await page.goto("/photo");

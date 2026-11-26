@@ -35,9 +35,13 @@ describe("少量精选的陈列", () => {
     // 竖幅按自己的 0.39 摆，横幅按自己的 2:1 摆：都不裁。
     expect(frames[0].getAttribute("style")).toContain("aspect-ratio: 0.393");
     expect(frames[1].getAttribute("style")).toContain("aspect-ratio: 2");
-    // 框不宽过上限，竖幅也不高过上限：221 = 560 × 0.394。
-    expect(frames[0].getAttribute("style")).toContain("width: 221px");
-    expect(frames[1].getAttribute("style")).toContain("width: 420px");
+    for (const [index, frame] of Array.from(frames).entries()) {
+      const ratio = items[index].width / items[index].height;
+      const style = (frame as HTMLElement).style;
+      expect(style.maxWidth).toContain("520px");
+      expect(style.width).toContain("clamp(");
+      expect(parseFloat(style.width.slice(6))).toBeCloseTo(320 * ratio, 2);
+    }
   });
 
   it("点照片打开大图，角标把照片移出精选", () => {

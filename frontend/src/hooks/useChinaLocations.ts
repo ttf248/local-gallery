@@ -324,10 +324,12 @@ const CHINA_FEATURE_BATCH = 200;
 export function useChinaPoints(
   timeRange?: ChinaTimeRange,
   cell = 0.02,
+  enabled = true,
 ): UseQueryResult<ChinaPoints> {
   const from = timeRange?.from ?? null;
   const to = timeRange?.to ?? null;
   return useQuery({
+    enabled,
     queryKey: chinaPointsQueryKey(from, to, cell),
     queryFn: () =>
       aiJobsApi.chinaPoints(timeRange, cell).then((result) => result.points),

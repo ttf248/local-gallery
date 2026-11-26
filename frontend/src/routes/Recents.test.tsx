@@ -181,15 +181,15 @@ it("已加载记录确实被筛选掉时仍可清除筛选", async () => {
 // 照片侧是一面密集卡片墙：单列一条时间线在宽屏上只占左边一条，
 // 右半屏全是空白。这一页只回答两件事 —— 翻的是什么、什么时候翻的：
 // 时刻写在名字下面，计数与类型这类技术读数不摆。
-it("照片侧排成密集卡片墙，只留对象与最近时刻", async () => {
+it("照片侧按访问时段逐行显示相册与最近时刻", async () => {
   renderRecents();
   await waitFor(() => expect(screen.getByText("春游相册")).toBeInTheDocument());
   const props = mocks.gridProps.at(-1) as {
-    density?: string;
+    variant?: string;
     showLastSeen?: boolean;
     hideMeta?: boolean;
   };
-  expect(props.density).toBe("dense");
+  expect(props.variant).toBe("list");
   expect(props.showLastSeen).toBe(true);
   // 技术读数（张数、视频数、目录类型）退场：这一页只留对象与时刻。
   expect(props.hideMeta).toBe(true);

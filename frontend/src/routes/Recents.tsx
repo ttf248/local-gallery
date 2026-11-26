@@ -1,6 +1,6 @@
-import {PageHeader} from "../shell/PageHeader";
+import { PageHeader } from "../shell/PageHeader";
 import ErrorBanner from "../features/common/ErrorBanner";
-import { useCallback, useMemo } from "react";
+import { useEffect, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -30,7 +30,10 @@ import { cardMatchesQuery } from "../utils/libraryCard";
  *
  * `embedded` 时不渲染页头：它被嵌在「我的」的页签里。
  */
-export default function Recents({ embedded = false }: { embedded?: boolean } = {}) {
+export default function Recents({
+  embedded = false,
+  onSummary,
+}: { embedded?: boolean; onSummary?: (label: string) => void } = {}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const viewMode = useUIStore((s) => s.viewMode);
@@ -165,42 +168,78 @@ export default function Recents({ embedded = false }: { embedded?: boolean } = {
     if (nodesFailed) void nodesQuery.refetch();
   };
 
+  const summary =
+    historyQuery.data && !nodesQuery.isLoading
+      ? resolvedCount.toLocaleString("zh-CN") + " 项最近浏览"
+      : undefined;
+  useEffect(() => {
+    if (summary) onSummary?.(summary);
+  }, [onSummary, summary]);
+  const recentSections = useMemo(() => {
+    if (sortBy !== "viewed") return [{ title: "", items: filtered }];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const sections = ["今天", "昨天", "本周", "更早"].map((title) => ({
+      title,
+      items: [] as typeof filtered,
+    }));
+    for (const card of filtered) {
+      const date = Date.parse(card.lastSeenAt ?? "");
+      const index =
+        date >= +today
+          ? 0
+          : date >= +yesterday
+            ? 1
+            : date >= +weekStart
+              ? 2
+              : 3;
+      sections[index].items.push(card);
+    }
+    return sections.filter((section) => section.items.length > 0);
+  }, [filtered, sortBy]);
+
   return (
     <div className="min-h-full">
       {embedded ? null : (
-      <div className="page-shell"><PageHeader
-  title={copy.recentsTitle}
-  eyebrow={copy.recentsEyebrow}
-  meta={
-          // 这一页一条记录都没有时，页头不再写「还没有记录」：
-          // 下面的空态已经把同一句话说了一遍，两处都说等于没说什么。
-          // 有记录时也不报条数：筛选条上那行「共 N 项」说的就是它。
-          // 页头只留它给不出的信息 —— 最近一次打开的时间。
-          // 加载中与出错这两句仍然留着——那是状态，不是空态。
-          cards.length > 0 ||
-          historyQuery.isLoading ||
-          (history.length > 0 && nodesQuery.isLoading) ||
-          historyFailed ? (
-            <p className="text-body text-fg-muted mt-2 tabular-nums">
-              {cards.length > 0 ? (
-                <>
-                  最近打开{" "}
-                  <span className="text-fg">
-                    {timeAgo(cards[0]?.lastSeenAt)}
-                  </span>
-                </>
-              ) : historyQuery.isLoading ||
-                (history.length > 0 && nodesQuery.isLoading) ? (
-                // 记录已经在手、只是相册摘要还没到：这时说「还没有记录」
-                // 是把「还没加载完」说成了「没有」。
-                "正在加载记录…"
-              ) : (
-                "记录暂不可用"
-              )}
-            </p>
-          ) : null
-        }
-/></div>
+        <div className="page-shell">
+          <PageHeader
+            title={copy.recentsTitle}
+            eyebrow={copy.recentsEyebrow}
+            meta={
+              // 这一页一条记录都没有时，页头不再写「还没有记录」：
+              // 下面的空态已经把同一句话说了一遍，两处都说等于没说什么。
+              // 有记录时也不报条数：筛选条上那行「共 N 项」说的就是它。
+              // 页头只留它给不出的信息 —— 最近一次打开的时间。
+              // 加载中与出错这两句仍然留着——那是状态，不是空态。
+              cards.length > 0 ||
+              historyQuery.isLoading ||
+              (history.length > 0 && nodesQuery.isLoading) ||
+              historyFailed ? (
+                <p className="text-body text-fg-muted mt-2 tabular-nums">
+                  {cards.length > 0 ? (
+                    <>
+                      最近打开{" "}
+                      <span className="text-fg">
+                        {timeAgo(cards[0]?.lastSeenAt)}
+                      </span>
+                    </>
+                  ) : historyQuery.isLoading ||
+                    (history.length > 0 && nodesQuery.isLoading) ? (
+                    // 记录已经在手、只是相册摘要还没到：这时说「还没有记录」
+                    // 是把「还没加载完」说成了「没有」。
+                    "正在加载记录…"
+                  ) : (
+                    "记录暂不可用"
+                  )}
+                </p>
+              ) : null
+            }
+          />
+        </div>
       )}
 
       {loadFailed && (
@@ -278,10 +317,7 @@ export default function Recents({ embedded = false }: { embedded?: boolean } = {
           /* 筛选条就在上面，空态紧跟着它说清楚即可。 */
           dense
           action={
-            <button
-              onClick={resetFilters}
-              className="btn btn-outline"
-            >
+            <button onClick={resetFilters} className="btn btn-outline">
               清除筛选
             </button>
           }
@@ -290,18 +326,20 @@ export default function Recents({ embedded = false }: { embedded?: boolean } = {
         <section className="page-shell">
           <div className="pb-10">
             {mode === "photo" ? (
-              /* 照片侧是一面卡片墙：这一页问的是「我刚才在翻什么、
-                 什么时候翻的」。答案只有两样 —— 封面与相册名，加一句
-                 「上次 X」。张数、视频数与目录类型是技术读数，摆在那里
-                 只会把这两个答案挤到边上，因此这一页不摆它们。 */
-              <AlbumGrid
-                items={filtered}
-                variant="grid"
-                density="dense"
-                showLastSeen
-                hideMeta
-                onRemoveHistory={removeHistory}
-              />
+              recentSections.map((section) => (
+                <section key={section.title}>
+                  {section.title && (
+                    <h2 className="py-3 text-title-3">{section.title}</h2>
+                  )}
+                  <AlbumGrid
+                    items={section.items}
+                    variant="list"
+                    showLastSeen
+                    hideMeta
+                    onRemoveHistory={removeHistory}
+                  />
+                </section>
+              ))
             ) : (
               <AlbumGrid
                 items={filtered}

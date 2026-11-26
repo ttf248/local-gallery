@@ -1,10 +1,11 @@
+import { InlineAlert } from "../ui/InlineAlert";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import AlbumGrid from "../features/library/AlbumGrid";
 import EmptyState from "../features/common/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
-import {PageHeader} from "../shell/PageHeader";
+import { PageHeader } from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryNodeSummary } from "../api/library";
@@ -29,7 +30,7 @@ import {
 } from "../utils/searchScope";
 import { searchMatchLabel } from "../utils/searchMatch";
 import type { CardData } from "../features/library/AlbumTile";
-import ContentSearchResults from "../components/search/ContentSearchResults";
+import ContentSearchResults from "../features/search/ContentSearchResults";
 
 const SEARCH_PAGE_SIZE = 100;
 
@@ -156,20 +157,24 @@ export default function SearchResults() {
   };
 
   const heading = (
-    <div className="page-shell"><PageHeader
-  title={query ? `「${query}」的搜索结果` : "搜索"}
-  meta={
-        query
-          ? isContent
-            ? "在照片的画面与图片文字里找，按相似度排列。"
-            : `在${mode === "comic" ? "漫画" : "照片"}库里按名字找相册、文件夹与标签。`
-          : "在顶栏的搜索框里输入关键词，按回车就能看到结果。"
-      }
-/></div>
+    <div className="page-shell">
+      <PageHeader
+        title={query ? "「" + query + "」" : "搜索"}
+        meta={
+          query
+            ? isContent
+              ? "画面与文字"
+              : "名称 · " + total.toLocaleString("zh-CN") + " 个结果"
+            : "输入关键词搜索照片与相册"
+        }
+      />
+    </div>
   );
-
   const conditions = (
     <div className="flex flex-wrap items-center gap-2 border-b border-border-faint pb-3">
+      {mode === "photo" && (
+        <span className="text-caption text-fg-muted">搜索范围</span>
+      )}
       {mode === "photo" ? (
         <Segmented
           label="搜索范围"
@@ -219,12 +224,6 @@ export default function SearchResults() {
           {/* 技术状态退到一行小字里：索引覆盖率与「重新搜索」是背景信息，
               照片墙才是这一页的主角。 */}
           <div className="page-shell flex flex-wrap items-center gap-3 pt-3">
-            {content.status ? (
-              <span className="text-meta tabular-nums text-fg-subtle">
-                {content.status.coverage.indexed.toLocaleString()} /{" "}
-                {content.status.coverage.total.toLocaleString()} 张已索引
-              </span>
-            ) : null}
             <button
               type="button"
               className="btn btn-sm btn-outline"
@@ -236,7 +235,7 @@ export default function SearchResults() {
           </div>
           {content.status && !content.status.runtimeReady ? (
             <div className="page-shell pt-2">
-              <p className="text-meta text-fg-muted">
+              <InlineAlert tone="warning">
                 本机画面模型未就绪，这次只能按图片里的文字找。
                 <Link
                   to="/tasks/storage"
@@ -244,7 +243,7 @@ export default function SearchResults() {
                 >
                   查看任务中心
                 </Link>
-              </p>
+              </InlineAlert>
             </div>
           ) : null}
         </div>
@@ -259,6 +258,12 @@ export default function SearchResults() {
             idleDescription="同一个词同时检索画面内容与图片文字，任一命中就会显示。"
           />
         </div>
+        {content.status ? (
+          <span className="page-shell py-2 text-caption tabular-nums text-fg-subtle">
+            {content.status.coverage.indexed.toLocaleString()} /{" "}
+            {content.status.coverage.total.toLocaleString()} 张已索引
+          </span>
+        ) : null}
       </div>
     );
   }
@@ -302,10 +307,7 @@ export default function SearchResults() {
                     </span>
                   </h3>
                 ) : null}
-                <AlbumGrid
-                  items={group.items}
-                  variant={viewMode}
-                />
+                <AlbumGrid items={group.items} variant={viewMode} />
               </section>
             ))}
             {search.hasNextPage ? (
@@ -323,7 +325,10 @@ export default function SearchResults() {
           </>
         ) : null}
 
-        {!search.isFetching && !search.isError && cards.length === 0 && query ? (
+        {!search.isFetching &&
+        !search.isError &&
+        cards.length === 0 &&
+        query ? (
           <EmptyState
             title={`没有匹配「${query}」的相册、文件夹或标签`}
             description="名字里没有这几个字。换个说法，或者按画面内容找 —— 内容搜索能认出照片里的东西。"

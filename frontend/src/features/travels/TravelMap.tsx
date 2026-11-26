@@ -270,7 +270,7 @@ export default function TravelMap({
                         : "fill-bg-strong group-focus-visible:stroke-accent-ink"
                     }
                     fillOpacity={opacity}
-                    stroke={region.photoCount === 0 ? "transparent" : "accent"}
+                    stroke={region.photoCount === 0 ? "transparent" : "var(--fg-subtle)"}
                     strokeWidth={1.2}
                     strokeLinejoin="round"
                     fillRule="evenodd"

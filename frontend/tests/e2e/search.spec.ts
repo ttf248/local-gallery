@@ -20,9 +20,9 @@ test.beforeEach(async ({ request }) => {
 
 test("命令面板回车进入可见的结果页", async ({ page, request }) => {
   const nodes = await scannedNodes(request, "photo");
-  const target = nodes.find((node) => node.name);
+  const target = nodes.find((node) => node.name === "sample-album");
   expect(target).toBeTruthy();
-  const keyword = (target!.name ?? "").slice(0, 4);
+  const keyword = (target!.name ?? "").slice(0, -1);
   expect(keyword.length).toBeGreaterThan(0);
 
   await page.goto("/photo");
@@ -38,7 +38,7 @@ test("命令面板回车进入可见的结果页", async ({ page, request }) => 
   // 回车落到结果页，而不是回到一个不显示结果的首页。
   await expect(page).toHaveURL(/\/photo\/search\?q=/);
   await expect(
-    page.getByRole("heading", { name: new RegExp(`搜索结果`) }),
+    page.getByRole("heading", { name: "「"+keyword+"」", level: 1 }),
   ).toBeVisible();
   await expect(page.getByText(/共 \d+ 项/).first()).toBeVisible();
   // 结果上写着类型与来源。

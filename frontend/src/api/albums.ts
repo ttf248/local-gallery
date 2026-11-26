@@ -245,10 +245,11 @@ export const albumsApi = {
     snapshot: string,
     cursor?: string,
     signal?: AbortSignal,
+    limit = 200,
   ) {
     return api<{ ok: boolean; page: LibraryPage<LibraryMediaItem> }>(
       `/api/albums/${encodeURIComponent(albumId)}/smart-groups/${encodeURIComponent(groupId)}/media`,
-      { params: { dimension, snapshot, cursor, limit: 200 }, signal },
+      { params: { dimension, snapshot, cursor, limit }, signal },
     );
   },
   // 全库刷新：后台任务，返回任务号，进度与取消另有接口。

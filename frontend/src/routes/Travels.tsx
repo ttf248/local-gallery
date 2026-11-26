@@ -5,10 +5,10 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import "../styles/travels.css";
 import Segmented from "../ui/Segmented";
 import ErrorBanner from "../features/common/ErrorBanner";
-import TravelMiniMap from "../components/travels/TravelMiniMap";
-import type { MapScope } from "../components/travels/TravelMiniMap";
-import TravelStats from "../components/travels/TravelStats";
-import TravelTrips from "../components/travels/TravelTrips";
+import TravelMiniMap from "../features/travels/TravelMiniMap";
+import type { MapScope } from "../features/travels/TravelMiniMap";
+import TravelStats from "../features/travels/TravelStats";
+import TravelTrips from "../features/travels/TravelTrips";
 import {
   useChinaFeatures,
   useChinaPlaces,
@@ -99,7 +99,6 @@ export default function Travels() {
     [from, spanFrom, to],
   );
 
-
   // 行程不随时间区间重切：段的下标要能寻址到照片，两边必须同一套口径。
   const tripsQuery = useChinaTripsAll(level);
   const trips = useMemo(() => tripsQuery.data ?? [], [tripsQuery.data]);
@@ -118,14 +117,34 @@ export default function Travels() {
   const placeAdcodes = useMemo(
     // 省这一层用全国省图当底图，不必再按区划码取一遍。
     () =>
-      level === "province"
-        ? []
-        : wholePlaces.map((place) => place.adcode),
+      level === "province" ? [] : wholePlaces.map((place) => place.adcode),
     [level, wholePlaces],
   );
   const placeFeatures = useChinaFeatures(placeAdcodes);
+  const selectedTrip = trips.find((trip) => trip.id === selectedTripId);
+  const selectedFrom =
+    selectedTrip &&
+    [selectedTrip.startedAt.slice(0, 10), timeRange?.from ?? ""].sort().at(-1);
+  const selectedTo =
+    selectedTrip &&
+    [
+      selectedTrip.endedAt.slice(0, 10),
+      timeRange?.to ?? "9999-12-31",
+    ].sort()[0];
+  const selectionRange =
+    selectedFrom && selectedTo && selectedFrom <= selectedTo
+      ? { from: selectedFrom, to: selectedTo }
+      : undefined;
+  const tripPoints = useChinaPoints(
+    selectionRange,
+    MINI_MAP_CELL,
+    Boolean(selectionRange),
+  );
   const pointsQuery = useChinaPoints(timeRange, MINI_MAP_CELL);
-  const points = useMemo(() => pointsQuery.data?.items ?? [], [pointsQuery.data]);
+  const points = useMemo(
+    () => pointsQuery.data?.items ?? [],
+    [pointsQuery.data],
+  );
 
   const setSpan = useCallback(
     (next: TravelSpan) => {
@@ -189,8 +208,7 @@ export default function Travels() {
 
   const untimedCount = whole?.untimedPhotoCount ?? 0;
 
-  const error =
-    wholeQuery.isError || tripsQuery.isError;
+  const error = wholeQuery.isError || tripsQuery.isError;
 
   // 地图上的单元：去过的那些地方，各自的形状与区间内的张数。
   const counts = useMemo(() => {
@@ -293,11 +311,11 @@ export default function Travels() {
           <ErrorBanner
             className="mt-4"
             onRetry={() => {
-            void wholeQuery.refetch();
-            void tripsQuery.refetch();
+              void wholeQuery.refetch();
+              void tripsQuery.refetch();
             }}
             retryLabel="重新加载"
-            >
+          >
             足迹数据加载失败，请稍后重试。
           </ErrorBanner>
         </div>
@@ -323,6 +341,11 @@ export default function Travels() {
               regions={regions}
               backdrop={backdrop}
               points={points}
+              activePoints={
+                selectionRange && !tripPoints.isPlaceholderData
+                  ? tripPoints.data?.items
+                  : undefined
+              }
               levelTotal={levelTotal}
               scopeLabel="足迹"
               scope={mapScope}
@@ -354,8 +377,8 @@ export default function Travels() {
             AreaCity 2026 年 4
             月版省市区县数据，边界以高德为主并整合行政区划信息，坐标系为
             GCJ-02；不含乡镇边界。地图上的点按网格聚合（约二十公里一格），
-            不还原到单张照片的坐标；库里约四分之三的坐标来自基站与网络而非
-            GPS 芯片，行政区归属可能有百米量级的偏差。
+            不还原到单张照片的坐标；库里约四分之三的坐标来自基站与网络而非 GPS
+            芯片，行政区归属可能有百米量级的偏差。
           </p>
         </div>
       </div>

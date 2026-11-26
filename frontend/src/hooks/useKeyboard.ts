@@ -7,16 +7,18 @@ import { normalizeKey, shouldIgnoreShortcut } from "../utils/shortcuts";
 export function useKeyboard(
   handlers: Record<string, (e: KeyboardEvent) => void>,
   enabled = true,
+  canHandle?: () => boolean,
 ) {
-  const ref = useRef(handlers);
-  ref.current = handlers;
+  const ref = useRef({ handlers, canHandle });
+  ref.current = { handlers, canHandle };
 
   useEffect(() => {
     if (!enabled) return;
     const fn = (e: KeyboardEvent) => {
-      if (shouldIgnoreShortcut(e)) return;
+      if (shouldIgnoreShortcut(e) || ref.current.canHandle?.() === false)
+        return;
       const combo = normalizeKey(e);
-      const h = ref.current[combo];
+      const h = ref.current.handlers[combo];
       if (h) {
         e.preventDefault();
         h(e);

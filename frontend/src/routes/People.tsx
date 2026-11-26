@@ -1,3 +1,5 @@
+import PersonFaceThumb from "../features/people/PersonFaceThumb";
+import { TextField } from "../ui/Field";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -7,13 +9,13 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import EmptyState from "../features/common/EmptyState";
-import {Switch} from "../ui/Switch";
-import {PageHeader} from "../shell/PageHeader";
+import { Switch } from "../ui/Switch";
+import { PageHeader } from "../shell/PageHeader";
 import RenditionImage from "../features/common/RenditionImage";
 import Segmented from "../ui/Segmented";
 import PhotoViewer from "../features/viewer/PhotoViewer";
 import PhotoWall from "../features/wall/PhotoWall";
-import PeopleMergeDialog from "../components/people/PeopleMergeDialog";
+import PeopleMergeDialog from "../features/people/PeopleMergeDialog";
 import {
   aiJobsApi,
   type PeopleSort,
@@ -28,7 +30,12 @@ import { usePickToggle } from "../hooks/usePickToggle";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { useUIStore } from "../store/uiStore";
-import { albumRoute, homeRoute, peopleAnnotateRoute, peopleRoute } from "../utils/path";
+import {
+  albumRoute,
+  homeRoute,
+  peopleAnnotateRoute,
+  peopleRoute,
+} from "../utils/path";
 import { personFaceFrameStyle } from "../utils/personFaceFrame";
 
 export default function People() {
@@ -130,21 +137,26 @@ function PeopleList() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <div className="page-shell"><PageHeader
-  eyebrow="离线智能相册"
-  title="人物相册"
-  meta="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
-  actions={
-          <div className="flex flex-wrap gap-2">
-            <Link className="btn btn-sm btn-outline" to={peopleAnnotateRoute()}>
-              标注工具
-            </Link>
-            <Link className="btn btn-sm btn-outline" to="/tasks/plan">
-              人物分析设置
-            </Link>
-          </div>
-        }
-/></div>
+      <div className="page-shell">
+        <PageHeader
+          eyebrow="离线智能相册"
+          title="人物相册"
+          meta="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
+          actions={
+            <div className="flex flex-wrap gap-2">
+              <Link
+                className="btn btn-sm btn-outline"
+                to={peopleAnnotateRoute()}
+              >
+                标注工具
+              </Link>
+              <Link className="btn btn-sm btn-outline" to="/tasks/plan">
+                人物分析设置
+              </Link>
+            </div>
+          }
+        />
+      </div>
       {query.isError ? (
         <EmptyState
           title="人物列表加载失败"
@@ -265,14 +277,30 @@ function PeopleList() {
                   description="可在“待确认匹配”与“合照候选”中检查稀疏分组。"
                 />
               ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
-                  {groups.map((person) => (
-                    <PersonCard
-                      key={person.id}
-                      person={person}
-                      showQuality={sort === "review"}
-                    />
-                  ))}
+                <div className="space-y-6">
+                  {[false, true].map((confirmed) => {
+                    const section = groups.filter(
+                      (person) => Boolean(person.confirmed) === confirmed,
+                    );
+                    return (
+                      section.length > 0 && (
+                        <section key={String(confirmed)}>
+                          <h2 className="mb-3 text-title-3">
+                            {confirmed ? "已确认" : "待确认"}
+                          </h2>
+                          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(140px,100%),1fr))] gap-4">
+                            {section.map((person) => (
+                              <PersonCard
+                                key={person.id}
+                                person={person}
+                                showQuality={sort === "review"}
+                              />
+                            ))}
+                          </div>
+                        </section>
+                      )
+                    );
+                  })}
                 </div>
               )}
             </>
@@ -587,7 +615,10 @@ function MatchEvidenceStrip({
       <p className="text-meta text-fg-muted">{label}</p>
       <div className="mt-1 flex flex-wrap gap-2">
         {visible.map((item) => (
-          <EvidenceThumbnail key={`${item.resourceId}#${item.faceIndex}`} evidence={item} />
+          <EvidenceThumbnail
+            key={`${item.resourceId}#${item.faceIndex}`}
+            evidence={item}
+          />
         ))}
       </div>
       {evidence.length > 4 ? (
@@ -719,42 +750,20 @@ function PersonCard({
   return (
     <Link
       to={peopleRoute(person.id)}
-      className="group overflow-hidden rounded-lg border border-border-faint bg-bg-elevated transition-colors hover:border-border-strong"
+      className="group block min-w-0 rounded-card text-center"
     >
-      <div className="relative aspect-[1.7/1] overflow-hidden bg-bg-subtle">
-        {person.coverResourceId ? (
-          <RenditionImage
-            fileId={person.coverResourceId}
-            alt=""
-            displayWidth={560}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
-          />
-        ) : null}
-        <span className="absolute bottom-3 left-3 rounded-full bg-black/65 px-2.5 py-1 text-meta text-white backdrop-blur-sm">
-          {/* 说的是「这个人在多少张照片里出现过」；下面那行是「认出了
-              多少张脸」。两个数常常一样，摆在一起时得说清哪个是哪个，
-              否则读起来像同一个数字写了两遍。 */}
-          {person.photoCount.toLocaleString()} 张照片
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
-        <div className="min-w-0">
-          <h2 className="truncate font-display text-label font-medium text-fg">
-            {person.name}
-          </h2>
-          <p className="mt-0.5 text-meta text-fg-muted">
-            {person.faceCount.toLocaleString()} 张脸
-            {person.confirmed ? " · 已确认" : ""}
-            {person.hidden ? " · 已隐藏" : ""}
-          </p>
-        </div>
-        {/* 整张卡就是入口，不必每张都写一遍「打开相册 →」：
-            一屏十几张卡各写一句，那句话成了噪音。方向键与列表卡
-            同一套语言 —— 悬停才出现，触屏设备常驻。 */}
-        <span className="shrink-0 text-body text-fg-subtle hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-          ›
-        </span>
-      </div>
+      <span className="mx-auto block size-[120px] overflow-hidden rounded-full ring-1 ring-line">
+        <PersonFaceThumb person={person} fill className="size-full" />
+      </span>
+      <h3 className="mt-2 truncate text-callout font-semibold">
+        {person.name}
+      </h3>
+      <p className="text-caption text-fg-muted">
+        <span>{person.photoCount.toLocaleString()} 张照片</span> ·{" "}
+        {person.faceCount.toLocaleString()} 张脸
+        {person.confirmed ? " · 已确认" : ""}
+        {person.hidden ? " · 已隐藏" : ""}
+      </p>
       {showQuality && person.quality ? (
         <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border-faint px-4 py-2 text-meta text-fg-muted">
           <span>锚点 P10 {person.quality.anchorP10.toFixed(3)}</span>
@@ -775,6 +784,7 @@ function PersonAlbum({ personId }: { personId: string }) {
   const picks = usePickToggle();
   const pushToast = useUIStore((state) => state.pushToast);
   const [name, setName] = useState("");
+  const [editingName, setEditingName] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedFaces, setSelectedFaces] = useState<string[]>([]);
   const [visibleFaceCount, setVisibleFaceCount] = useState(facePageSize);
@@ -861,6 +871,7 @@ function PersonAlbum({ personId }: { personId: string }) {
 
   useEffect(() => {
     setName(person?.name ?? "");
+    setEditingName(false);
   }, [person?.id, person?.name]);
 
   if (query.isError || (!person && !query.isLoading)) {
@@ -876,28 +887,93 @@ function PersonAlbum({ personId }: { personId: string }) {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-border-faint bg-bg">
-        <div className="page-shell">
-          <div className="album-bar">
-            <div className="min-w-0 flex-1">
-              <p className="page-eyebrow">人物相册 · 可编辑候选分组</p>
-              <h1 className="album-bar__title truncate">
-                {person?.name ?? "人物相册"}
-              </h1>
-            </div>
-            <Switch label="显示当前人物的人脸框" checked={showPersonFaceBoxes} onChange={useUIStore.getState().setShowPersonFaceBoxes}/>
-            <Link className="btn btn-sm btn-outline" to={peopleRoute()}>
-              全部人物
-            </Link>
-          </div>
-        </div>
-      </header>
-      <div className="page-shell shrink-0 space-y-3 border-b border-border-faint py-3">
-        <p className="text-meta text-fg-muted">
-          {person?.photoCount.toLocaleString() ?? 0} 张照片 ·{" "}
-          {person?.faceCount.toLocaleString() ?? 0}{" "}
-          张脸。分组只表示相似度候选，不代表身份确认。
-        </p>
+      <div className="page-shell shrink-0">
+        <PageHeader
+          title={person?.name ?? "人物相册"}
+          leading={
+            person && (
+              <div className="size-24 shrink-0 overflow-hidden rounded-full">
+                <PersonFaceThumb person={person} fill className="size-full" />
+              </div>
+            )
+          }
+          titleContent={
+            person && (
+              <button
+                type="button"
+                aria-label={"重命名「" + person.name + "」"}
+                onClick={() => setEditingName(true)}
+              >
+                {person.name}
+              </button>
+            )
+          }
+          meta={
+            <>
+              {person?.photoCount.toLocaleString() ?? 0} 张照片 ·{" "}
+              {person?.faceCount.toLocaleString() ?? 0}{" "}
+              张脸。分组只表示相似度候选，不代表身份确认。
+            </>
+          }
+          titleEditor={
+            editingName && (
+              <form
+                className="flex items-end gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const value = name.trim();
+                  if (value)
+                    savePerson.mutate(
+                      { name: value },
+                      { onSuccess: () => setEditingName(false) },
+                    );
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setName(person?.name ?? "");
+                    setEditingName(false);
+                  }
+                }}
+              >
+                <TextField
+                  label="人物名称"
+                  autoFocus
+                  value={name}
+                  maxLength={60}
+                  onChange={(event) => setName(event.target.value)}
+                />
+                <button
+                  className="btn btn-outline"
+                  disabled={!name.trim() || savePerson.isPending}
+                >
+                  保存
+                </button>
+              </form>
+            )
+          }
+          actions={
+            <>
+              <button
+                className="btn btn-outline"
+                disabled={merge.isPending}
+                onClick={() => setMergeDialogOpen(true)}
+              >
+                合并人物
+              </button>
+              <Switch
+                label="显示当前人物的人脸框"
+                checked={showPersonFaceBoxes}
+                onChange={useUIStore.getState().setShowPersonFaceBoxes}
+              />
+              <Link className="btn btn-outline" to={peopleRoute()}>
+                全部人物
+              </Link>
+            </>
+          }
+        />
+      </div>
+      <div className="page-shell shrink-0 space-y-3 border-b border-line pb-3">
         {showPersonFaceBoxes ? (
           <p className="flex items-center gap-2 text-meta text-fg-muted">
             <span
@@ -909,28 +985,6 @@ function PersonAlbum({ personId }: { personId: string }) {
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
-          <form
-            className="flex flex-wrap items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              savePerson.mutate({ name });
-            }}
-          >
-            <input
-              className="w-48 rounded-md border border-border bg-bg-elevated px-3 py-2 text-body text-fg"
-              value={name}
-              maxLength={60}
-              onChange={(event) => setName(event.target.value)}
-              placeholder={person?.name ?? "人物名称"}
-              aria-label="人物名称"
-            />
-            <button
-              className="btn btn-sm btn-outline"
-              disabled={savePerson.isPending}
-            >
-              改名
-            </button>
-          </form>
           <button
             type="button"
             className="btn btn-sm btn-outline"
@@ -938,14 +992,6 @@ function PersonAlbum({ personId }: { personId: string }) {
             onClick={() => savePerson.mutate({ hidden: !person?.hidden })}
           >
             {person?.hidden ? "取消隐藏" : "隐藏分组"}
-          </button>
-          <button
-            type="button"
-            className="btn btn-sm btn-outline"
-            disabled={merge.isPending}
-            onClick={() => setMergeDialogOpen(true)}
-          >
-            合并人物
           </button>
         </div>
         {faces.length > 0 ? (

@@ -2,6 +2,9 @@ import type { ReactNode } from "react";
 import { usePageChrome, type PageChromeConfig } from "./PageChrome";
 export interface PageHeaderProps {
   title: string;
+  titleContent?: ReactNode;
+  titleEditor?: ReactNode;
+  leading?: ReactNode;
   eyebrow?: ReactNode;
   meta?: ReactNode;
   actions?: ReactNode;
@@ -11,6 +14,9 @@ export interface PageHeaderProps {
 }
 export function PageHeader({
   title,
+  titleContent,
+  titleEditor,
+  leading,
   eyebrow,
   meta,
   actions,
@@ -25,15 +31,26 @@ export function PageHeader({
         <div className="mb-2 text-caption text-fg-muted">{eyebrow}</div>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
-          <h1 ref={titleRef} className="break-words font-display text-title-1">
-            {title}
-          </h1>
-          {meta && (
-            <div className="mt-1.5 text-caption tabular-nums text-fg-muted">
-              {meta}
-            </div>
-          )}
+        <div className="flex min-w-0 items-center gap-4">
+          {leading}
+          <div className="min-w-0">
+            <h1
+              ref={titleRef}
+              className={
+                titleEditor
+                  ? "sr-only"
+                  : "break-words font-display text-title-1"
+              }
+            >
+              {titleEditor ? title : (titleContent ?? title)}
+            </h1>
+            {titleEditor}
+            {meta && (
+              <div className="mt-1.5 text-caption tabular-nums text-fg-muted">
+                {meta}
+              </div>
+            )}
+          </div>
         </div>
         {actions && (
           <div className="flex flex-wrap items-center gap-2">{actions}</div>

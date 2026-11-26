@@ -236,6 +236,7 @@ export default function AlbumTile({
     >
       {variant === "list" ? (
         <AlbumListRow
+          recentPhoto={hideMeta && showLastSeen}
           data={data}
           showLastSeen={showLastSeen}
           onToggleFavorite={onToggleFavorite}

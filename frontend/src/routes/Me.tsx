@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
-import PageTabs, { PagePanel } from "../components/common/PageTabs";
-import {PageHeader} from "../shell/PageHeader";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Navigate, useParams } from "react-router-dom";
+import { Tabs } from "../ui/Tabs";
+import { Page } from "../shell/Page";
+import { PageHeader } from "../shell/PageHeader";
 import AlbumGrid from "../features/library/AlbumGrid";
 import EmptyState from "../features/common/EmptyState";
 import { useAppMode } from "../hooks/useAppMode";
@@ -27,9 +28,20 @@ import Recents from "./Recents";
 export default function Me() {
   const { mode } = useAppMode();
   const { tab: tabParam } = useParams();
-  const navigate = useNavigate();
   const tabs = meTabsFor(mode);
   const active = resolveMeTab(mode, tabParam);
+
+  const [summary, setSummary] = useState({ id: "", label: "" });
+  const reportSummary = useCallback(
+    (label: string) => {
+      setSummary((value) =>
+        value.id === active.id && value.label === label
+          ? value
+          : { id: active.id, label },
+      );
+    },
+    [active.id],
+  );
 
   // 访问过的页签。切走的页签不卸载：面板里的筛选是组件内状态，
   // 一眼看别的页签就卸载等于把用户刚挑的排序扔了。没访问过的页签
@@ -57,35 +69,52 @@ export default function Me() {
     <div className="me-page flex h-full min-h-0 flex-col">
       {/* 标题与页签共用一个容器：页签的起点与标题、下面照片的起点
           在同一条网格线上，翻页签时内容不会左右跳。 */}
-      <div className="page-shell container--standard me-page__head shrink-0">
+      <Page variant="standard" className="page-shell shrink-0">
         <PageHeader
-  title={mode === "comic" ? "我的漫画" : "珍藏"}
-  meta={active.hint}
-/>
-
-        <PageTabs
-          tabs={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}
-          active={active.id}
-          onChange={(id) => navigate(meRoute(mode, id))}
-          label={mode === "comic" ? "我的分区" : "珍藏分区"}
-          idPrefix="me"
+          title={mode === "comic" ? "我的漫画" : "珍藏"}
+          meta={summary.id === active.id ? summary.label : active.hint}
+          toolbar={
+            <Tabs
+              items={tabs.map((tab) => ({
+                ...tab,
+                href: meRoute(mode, tab.id),
+              }))}
+              value={active.id}
+              label={mode === "comic" ? "我的分区" : "珍藏分区"}
+            />
+          }
         />
-      </div>
+      </Page>
 
       {tabs.map((tab) =>
         visited.has(tab.id) ? (
-          <PagePanel
+          <section
             key={tab.id}
-            idPrefix="me"
-            tab={{ id: tab.id, label: tab.label }}
-            active={active.id}
-            className="flex-1 min-h-0 overflow-y-auto"
+            id={"me-panel-" + tab.id}
+            aria-label={tab.label}
+            hidden={tab.id !== active.id}
+            className="min-h-0 flex-1 overflow-y-auto"
           >
-            {tab.id === "picks" ? <Picks embedded /> : null}
-            {tab.id === "favorites" ? <Favorites embedded /> : null}
-            {tab.id === "recents" ? <Recents embedded /> : null}
+            {tab.id === "picks" ? (
+              <Picks
+                embedded
+                onSummary={active.id === tab.id ? reportSummary : undefined}
+              />
+            ) : null}
+            {tab.id === "favorites" ? (
+              <Favorites
+                embedded
+                onSummary={active.id === tab.id ? reportSummary : undefined}
+              />
+            ) : null}
+            {tab.id === "recents" ? (
+              <Recents
+                embedded
+                onSummary={active.id === tab.id ? reportSummary : undefined}
+              />
+            ) : null}
             {tab.id === "reading" ? <ReadingPanel /> : null}
-          </PagePanel>
+          </section>
         ) : null,
       )}
     </div>

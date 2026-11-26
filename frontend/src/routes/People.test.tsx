@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   people: vi.fn(),
   searchPeople: vi.fn(),
+  updatePerson: vi.fn(),
   clearPeople: vi.fn(),
   peopleMatches: vi.fn(),
   groupPhotoCandidates: vi.fn(),
@@ -34,7 +35,7 @@ vi.mock("../api/aiJobs", () => ({
     excludePersonMatch: mocks.excludePersonMatch,
     retainPersonGroup: mocks.retainPersonGroup,
     personMedia: mocks.personMedia,
-    updatePerson: vi.fn(),
+    updatePerson: mocks.updatePerson,
     mergePeople: mocks.mergePeople,
     splitPerson: vi.fn(),
   },
@@ -482,6 +483,19 @@ describe("人物相册", () => {
     );
 
     expect(await screen.findByText("当前人物")).toBeInTheDocument();
+    const rename=screen.getByRole("button",{name:"重命名「当前人物」"});
+    fireEvent.click(rename);
+    const field=screen.getByRole("textbox",{name:"人物名称"});
+    fireEvent.change(field,{target:{value:"取消的草稿"}});
+    fireEvent.keyDown(field,{key:"Escape"});
+    expect(mocks.updatePerson).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button",{name:"重命名「当前人物」"}));
+    const restored=screen.getByRole("textbox",{name:"人物名称"});
+    expect(restored).toHaveValue("当前人物");
+    fireEvent.change(restored,{target:{value:"旅行伙伴"}});
+    fireEvent.click(screen.getByRole("button",{name:"保存"}));
+    await waitFor(()=>expect(mocks.updatePerson).toHaveBeenCalledWith("p_123456",{name:"旅行伙伴"}));
+
     expect(
       screen.queryByText(/照片框线标出属于「当前人物」分组的人脸/),
     ).not.toBeInTheDocument();

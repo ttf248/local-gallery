@@ -1,12 +1,13 @@
+import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
+import { ScrollRow } from "../../ui/ScrollRow";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { aiJobsApi, type AIJob, type ChinaPlace } from "../../api/aiJobs";
 import { useChinaPlacesAll } from "../../hooks/useChinaLocations";
-import ErrorBanner from "../../features/common/ErrorBanner";
-import RenditionImage from "../../features/common/RenditionImage";
+import { InlineAlert } from "../../ui/InlineAlert";
+import { RenditionImage } from "../common";
 import { ImageIcon } from "../../ui/icons";
-import ExploreCard from "./ExploreCard";
 import { travelPlaceRoute, travelsRoute } from "../../utils/path";
 
 /** 预览最多列几个地方：这是入口，不是一张地点清单。 */
@@ -21,7 +22,7 @@ const PLACE_LIMIT = 8;
  * 卡片用真实的地理照片当画面：地名本身说明不了「那是哪儿」，一张照片
  * 才说得出。没有照片的地方给一块带图标的底，而不是一块空白方框。
  */
-export default function ExplorePlacePreview() {
+export default function PlaceCards() {
   const places = useChinaPlacesAll("city", null);
   const jobs = useQuery({
     queryKey: ["ai-jobs"],
@@ -37,36 +38,34 @@ export default function ExplorePlacePreview() {
   );
 
   return (
-    <section className="page-section" aria-labelledby="explore-place">
-      <div className="section-heading">
-        <h2 id="explore-place" className="section-title">
-          地点
-        </h2>
-        <span className="section-meta">去过的地方</span>
-        <Link to={travelsRoute()} className="chip ml-auto">
-          足迹
-        </Link>
-      </div>
-
+    <ExploreSection
+      id="explore-place"
+      title="地点"
+      to={travelsRoute()}
+      linkLabel="足迹"
+      info="仅展示有 GPS 坐标的照片。地名在本机解析，不请求在线地图。"
+    >
       {places.isError && places.data ? (
-        <ErrorBanner
+        <InlineAlert
+          tone="danger"
           onRetry={() => void places.refetch()}
           retrying={places.isFetching}
         >
           地点数据更新失败，下面仍显示上次读取到的结果。
-        </ErrorBanner>
+        </InlineAlert>
       ) : null}
       {places.isError && !places.data ? (
-        <ErrorBanner
+        <InlineAlert
+          tone="danger"
           onRetry={() => void places.refetch()}
           retrying={places.isFetching}
         >
           地点数据暂时读不出来。
-        </ErrorBanner>
+        </InlineAlert>
       ) : null}
 
       {places.isLoading && !places.data ? (
-        <p className="text-body text-fg-muted">正在读取地点…</p>
+        <PreviewSkeleton label="正在读取地点…" shape="place" />
       ) : null}
 
       {!places.isLoading && !places.isError && items.length === 0 ? (
@@ -79,45 +78,44 @@ export default function ExplorePlacePreview() {
 
       {items.length > 0 ? (
         <>
-          <div className="explore-grid">
+          <ScrollRow label="地点预览">
             {items.map((place) => (
               <PlaceCard key={place.adcode} place={place} />
             ))}
-          </div>
-          <p className="mt-4 text-meta text-fg-subtle">
-            位置来自照片自带的坐标与基站信息，全部在本机解析，不请求在线地图。
-          </p>
+          </ScrollRow>
         </>
       ) : null}
-    </section>
+    </ExploreSection>
   );
 }
 
 function PlaceCard({ place }: { place: ChinaPlace }) {
   const cover = place.coverResourceIds?.[0];
   return (
-    <ExploreCard
+    <Link
       to={travelPlaceRoute(place.adcode)}
-      title={place.name}
-      meta={`${place.photoCount.toLocaleString("zh-CN")} 张${
-        place.visitCount > 0 ? ` · 去过 ${place.visitCount} 次` : ""
-      }`}
-      media={
-        cover ? (
-          <RenditionImage
-            fileId={cover}
-            alt=""
-            displayWidth={320}
-            sizes="(max-width: 640px) 45vw, 220px"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span className="explore-card__placeholder">
-            <ImageIcon size={22} />
-          </span>
-        )
-      }
-    />
+      className="group/place relative block aspect-[3/2] w-[min(300px,80vw)] shrink-0 overflow-hidden rounded-card bg-bg-media"
+    >
+      {cover ? (
+        <RenditionImage
+          fileId={cover}
+          alt=""
+          displayWidth={320}
+          className="size-full object-cover transition-transform group-hover/place:scale-[1.03]"
+        />
+      ) : (
+        <span className="grid size-full place-items-center text-fg-muted">
+          <ImageIcon />
+        </span>
+      )}
+      <span className="absolute inset-x-0 bottom-0 flex h-1/2 flex-col justify-end bg-gradient-to-t from-black/90 to-transparent p-4 text-white">
+        <span className="text-title-3">{place.name}</span>
+        <span className="text-caption text-white/80">
+          {place.photoCount.toLocaleString("zh-CN")} 张
+          {place.visitCount > 0 && " · 去过 " + place.visitCount + " 次"}
+        </span>
+      </span>
+    </Link>
   );
 }
 
@@ -145,16 +143,10 @@ function PlaceEmptyState({
     latestMetadataJob?.status === "paused";
 
   if (isLoading && !isError) {
-    return (
-      <p className="text-body text-fg-muted">正在检查 GPS 分析状态…</p>
-    );
+    return <p className="text-body text-fg-muted">正在检查 GPS 分析状态…</p>;
   }
   if (isError) {
-    return (
-      <ErrorBanner>
-        GPS 分析状态暂时读不出来。
-      </ErrorBanner>
-    );
+    return <InlineAlert tone="danger">GPS 分析状态暂时读不出来。</InlineAlert>;
   }
   if (running) {
     return (
@@ -185,7 +177,8 @@ function PlaceEmptyState({
   }
   return (
     <p className="text-body text-fg-muted">
-      尚未完成元数据 / GPS 分析。运行一次元数据分析后，这里会显示已解析出位置的照片。
+      尚未完成元数据 / GPS
+      分析。运行一次元数据分析后，这里会显示已解析出位置的照片。
       <Link
         className="ml-1 text-accent underline-offset-2 hover:underline"
         to="/tasks/plan"

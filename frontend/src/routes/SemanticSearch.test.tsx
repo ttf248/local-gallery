@@ -396,6 +396,6 @@ describe("智能搜索", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "搜索照片" }));
 
-    expect(await screen.findByText("画面 0.42 · 文字近似")).toBeInTheDocument();
+    expect(await screen.findByText("画面相似 0.42 · 文字近似")).toBeInTheDocument();
   });
 });

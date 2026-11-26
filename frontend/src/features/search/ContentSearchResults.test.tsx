@@ -18,7 +18,7 @@ vi.mock("../../hooks/usePickToggle", () => ({
   usePickToggle: () => ({ isPicked: () => false, toggle: vi.fn() }),
 }));
 
-vi.mock("../../features/wall/PhotoWall", () => ({
+vi.mock("../wall/PhotoWall", () => ({
   default: ({
     items,
     loadMoreError,

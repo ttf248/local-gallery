@@ -15,11 +15,13 @@ import { albumCountUnit } from "../../utils/workbench";
 export default function AlbumListRow({
   data,
   showLastSeen,
+  recentPhoto,
   onToggleFavorite,
   showUnreadBadge,
 }: {
   data: CardData;
   showLastSeen?: boolean;
+  recentPhoto?: boolean;
   onToggleFavorite: () => void;
   showUnreadBadge: boolean;
 }) {
@@ -42,6 +44,48 @@ export default function AlbumListRow({
   // 看不出来 —— 与网格的书封、阅读器顶栏同一套写法。
   const rowTitle = card.series ? `${card.series} · ${label}` : label;
 
+  if (recentPhoto) {
+    const when = data.lastSeenAt ? new Date(data.lastSeenAt) : null;
+    return (
+      <div className="group flex items-center gap-3 border-b border-line py-2">
+        <Link
+          to={data.linkTo ?? data.to}
+          aria-label={`打开相册“${label}”`}
+          className="flex min-w-0 flex-1 items-center gap-4"
+        >
+          <span
+            className="block size-24 shrink-0 overflow-hidden rounded-tile bg-bg-media"
+            data-testid="card-cover"
+          >
+            <CardCover data={data} compact loading="eager" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-callout font-semibold">
+              {label}
+            </span>
+            {when && Number.isFinite(when.getTime()) && (
+              <time
+                className="text-caption text-fg-muted"
+                dateTime={when.toISOString()}
+              >
+                上次{" "}
+                {when.toLocaleTimeString("zh-CN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: false,
+                })}
+              </time>
+            )}
+          </span>
+        </Link>
+        <FavoriteButton
+          label={label}
+          fav={Boolean(data.isFavorite)}
+          onToggle={onToggleFavorite}
+        />
+      </div>
+    );
+  }
   return (
     // 列表行：缩略图压到 48px，行高固定 64px —— 一屏能扫到更多条目。
     // 行高必须固定：超宽屏下同一行的两张卡并排，行高不一致时下面那张

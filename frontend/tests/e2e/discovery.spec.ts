@@ -98,7 +98,7 @@ test("名称结果按命中理由分组，理由不写在每张卡上", async ({
 });
 
 test("搜索结果页能清除条件回到空态", async ({ page }) => {  await page.goto("/photo/search?q=旅行");
-  await expect(page.getByRole("heading", { name: /搜索结果/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "「旅行」", level: 1 })).toBeVisible();
 
   await page.getByRole("button", { name: "清除条件" }).click();
 
@@ -111,23 +111,23 @@ test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({
 
   // 首屏：搜索入口 + 四个维度。
   // 找法就是那条输入框本身：页面上不再另起一个标题把同一件事说两遍。
-  await expect(page.getByRole("textbox", { name: "搜索" })).toBeVisible();
-  const nav = page.getByRole("navigation", { name: "发现维度" });
-  for (const label of ["时间", "人物", "地点", "主题"]) {
-    await expect(nav.getByRole("link", { name: label })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "搜索" })).toBeVisible();
+  const sections=page.locator("main section[aria-labelledby^='explore-']");
+  await expect(sections.getByRole("heading",{level:2})).toHaveText(["人物","地点","时间","主题"]);
+  for(const [label,link] of [["人物","全部人物"],["地点","足迹"],["时间","时间线"],["主题","全部主题"]]){
+    await expect(page.getByRole("region",{name:label,exact:true}).getByRole("link",{name:link,exact:true})).toBeVisible();
   }
-  // 四个维度依次给出紧凑预览。
-  await expect(page.getByRole("heading", { name: "时间" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "人物" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "地点" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "主题" })).toBeVisible();
+  await page.getByRole("button",{name:"人物说明"}).click();
+  await expect(page.getByText(/分组只是复核线索/)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText(/分组只是复核线索/)).toBeHidden();
 });
 
 test("发现页的搜索入口进的是搜索结果页", async ({ page }) => {
   await page.goto("/photo/explore");
 
-  await page.getByRole("textbox", { name: "搜索" }).fill("旅行");
-  await page.getByRole("button", { name: "搜索", exact: true }).click();
+  await page.getByRole("searchbox", { name: "搜索" }).fill("旅行");
+  await page.getByRole("button", { name: "提交搜索", exact: true }).click();
 
   await expect(page).toHaveURL(/\/photo\/search\?q=/);
 });

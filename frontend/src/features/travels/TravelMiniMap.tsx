@@ -1,9 +1,4 @@
-import {
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChinaPointCell } from "../../api/aiJobs";
 import {
   boundsOfPhotos,
@@ -22,6 +17,7 @@ interface TravelMiniMapProps {
   backdrop?: MapRegion[];
   /** 点位：照片位置的网格聚合。 */
   points?: ChinaPointCell[];
+  activePoints?: ChinaPointCell[];
   /** 本层的照片总数，作为色阶的分母。 */
   levelTotal: number;
   /** 这一层的说法。 */
@@ -53,6 +49,7 @@ export default function TravelMiniMap({
   regions,
   backdrop,
   points,
+  activePoints,
   levelTotal,
   scopeLabel,
   scope,
@@ -118,7 +115,12 @@ export default function TravelMiniMap({
     if (!contentBounds) return projection.viewBox;
     // contain：内容整个留下。这个尺寸下宁可两边留白，也不要切掉
     // 最远的那几张照片。
-    const viewport = photoViewport(projection, contentBounds, aspect, "contain");
+    const viewport = photoViewport(
+      projection,
+      contentBounds,
+      aspect,
+      "contain",
+    );
     const height = viewport.width * aspect;
     return `${viewport.centerX - viewport.width / 2} ${viewport.centerY - height / 2} ${viewport.width} ${height}`;
   }, [aspect, contentBounds, projection, scope]);
@@ -173,6 +175,7 @@ export default function TravelMiniMap({
         containerRef.current = node;
       }}
     >
+      {loading && !empty && <p role="status" className="absolute left-3 top-3 text-caption text-fg-muted">正在载入足迹…</p>}
       {empty ? (
         <p className="text-meta text-fg-muted">
           {loading ? "正在载入足迹…" : "还没有带位置的照片"}
@@ -251,6 +254,18 @@ export default function TravelMiniMap({
                 >
                   <title>{`${cell.count} 张 · ${cell.firstAt || "时间未知"} – ${cell.lastAt || "时间未知"}`}</title>
                 </circle>
+              );
+            })}
+            {activePoints?.map((cell) => {
+              const [cx, cy] = projection.project([cell.lon, cell.lat]);
+              return (
+                <circle
+                  key={"active-" + cell.lon + "-" + cell.lat}
+                  cx={cx}
+                  cy={cy}
+                  r={3.2 / Math.max(scale, 0.0001)}
+                  fill="var(--signal)"
+                />
               );
             })}
           </g>
