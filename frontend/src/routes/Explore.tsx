@@ -1,9 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { SearchToolbar } from "../features/search/SearchToolbar";
-import { SEARCH_SCOPE_PARAM, type SearchScope } from "../utils/searchScope";
-import { searchRoute } from "../utils/path";
-import { LIST_PARAM } from "../utils/listFilterParams";
+import { Link } from "react-router-dom";
+import { usePageChrome } from "../shell/PageChrome";
 import EmptyState from "../features/common/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import YearRibbon from "../features/explore/YearRibbon";
@@ -19,24 +15,13 @@ export default function Explore() {
   const photoAlbumCount = manifest?.statistics.photoAlbumCount ?? 0;
   const comicAlbumCount = manifest?.statistics.comicAlbumCount ?? 0;
 
-  const navigate = useNavigate();
-  const [scope, setScope] = useState<SearchScope>("name");
+  usePageChrome({ title: "发现" });
   return (
     <Page
       variant="standard"
       className="page-shell explore-page min-h-full pb-12"
     >
-      <SearchToolbar
-        title="发现"
-        photo
-        scope={scope}
-        onScopeChange={setScope}
-        onSubmit={(query) => {
-          const params = new URLSearchParams({ [LIST_PARAM.query]: query });
-          if (scope === "content") params.set(SEARCH_SCOPE_PARAM, scope);
-          navigate(searchRoute("photo") + "?" + params);
-        }}
-      />
+      <h1 className="sr-only">发现</h1>
       {manifestQuery.isLoading && !manifest ? (
         <section
           className="page-section pt-[var(--section-gap)]"

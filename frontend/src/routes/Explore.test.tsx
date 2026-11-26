@@ -1,12 +1,6 @@
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
 import { aiJobsApi, type AIJob, type ChinaPlace } from "../api/aiJobs";
 import { albumsApi } from "../api/albums";
@@ -163,16 +157,6 @@ function queryState(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function LocationProbe() {
-  const location = useLocation();
-  return (
-    <output data-testid="location">
-      {location.pathname}
-      {location.search}
-    </output>
-  );
-}
-
 function renderExplore() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -181,7 +165,6 @@ function renderExplore() {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/photo/explore"]}>
         <WithTopBar><Explore /></WithTopBar>
-        <LocationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -266,52 +249,14 @@ it("照片库信息加载时显示进度，不把加载中当成空库", () => {
 it("首屏先给找法：搜索入口与四个维度", () => {
   renderExplore();
 
-  // 找法就是那条输入框本身：页面上不再另起一个「我要找什么」的标题
-  // 把同一件事说两遍。
-  expect(screen.getByRole("searchbox", { name: "搜索" })).toBeInTheDocument();
+  const bar = within(screen.getByTestId("top-bar"));
+  expect(bar.getByRole("button", { name: "打开命令面板" })).toBeVisible();
+  expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+  expect(screen.queryByRole("radiogroup", { name: "搜索范围" })).not.toBeInTheDocument();
   for (const [label, destination] of [["人物","全部人物"],["地点","足迹"],["时间","时间线"],["主题","全部主题"]]) {
     const section=screen.getByRole("region",{name:label});
     expect(within(section).getByRole("link",{name:destination})).toBeInTheDocument();
   }
-});
-
-it("顶部搜索按名称进入名称结果页", async () => {
-  renderExplore();
-
-  fireEvent.change(screen.getByRole("searchbox", { name: "搜索" }), {
-    target: { value: "海边 日落" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "提交搜索" }));
-
-  await waitFor(() => {
-    const location = new URL(
-      screen.getByTestId("location").textContent ?? "",
-      "http://local",
-    );
-    expect(location.pathname).toBe("/photo/search");
-    expect(location.searchParams.get("q")).toBe("海边 日落");
-    expect(location.searchParams.get("scope")).toBeNull();
-  });
-});
-
-it("顶部搜索切到画面与文字后带上作用域", async () => {
-  renderExplore();
-
-  fireEvent.click(screen.getByRole("radio", { name: "画面与文字" }));
-  fireEvent.change(screen.getByRole("searchbox", { name: "搜索" }), {
-    target: { value: "雪" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "提交搜索" }));
-
-  await waitFor(() => {
-    const location = new URL(
-      screen.getByTestId("location").textContent ?? "",
-      "http://local",
-    );
-    expect(location.pathname).toBe("/photo/search");
-    expect(location.searchParams.get("q")).toBe("雪");
-    expect(location.searchParams.get("scope")).toBe("content");
-  });
 });
 
 it("人物预览把已命名与候选分组分开摆", async () => {

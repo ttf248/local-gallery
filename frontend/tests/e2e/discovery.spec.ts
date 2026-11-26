@@ -109,9 +109,8 @@ test("搜索结果页能清除条件回到空态", async ({ page }) => {  await 
 test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({ page }) => {
   await page.goto("/photo/explore");
 
-  // 首屏：搜索入口 + 四个维度。
-  // 找法就是那条输入框本身：页面上不再另起一个标题把同一件事说两遍。
-  await expect(page.getByRole("searchbox", { name: "搜索" })).toBeVisible();
+  await expect(page.getByTestId("top-bar").getByRole("button", { name: "打开命令面板" })).toBeVisible();
+  await expect(page.getByRole("searchbox")).toHaveCount(0);
   const sections=page.locator("main section[aria-labelledby^='explore-']");
   await expect(sections.getByRole("heading",{level:2})).toHaveText(["人物","地点","时间","主题"]);
   for(const [label,link] of [["人物","全部人物"],["地点","足迹"],["时间","时间线"],["主题","全部主题"]]){
@@ -123,14 +122,15 @@ test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({
   await expect(page.getByText(/分组只是复核线索/)).toBeHidden();
 });
 
-test("从发现提交搜索后在同一顶栏改词，后退恢复原条件", async ({ page }) => {
+test("从发现的全局搜索提交两种范围，结果页改词后可逐步返回", async ({ page }) => {
   await page.goto("/photo/explore");
   const bar = page.getByTestId("top-bar");
   const input = bar.getByRole("searchbox");
-  await expect(page.getByRole("search")).toHaveCount(1);
-  await expect(bar.getByRole("button", { name: "打开命令面板" })).toHaveCount(0);
-  await input.fill("旅行");
-  await input.press("Enter");
+  const trigger = bar.getByRole("button", { name: "打开命令面板" });
+  const panel = page.getByRole("dialog", { name: "命令面板" });
+  await trigger.click();
+  await panel.getByRole("combobox").fill("旅行");
+  await panel.getByRole("combobox").press("Shift+Enter");
   await expect(page).toHaveURL(/\/photo\/search\?q=/);
   await expect(input).toHaveValue("旅行");
   await page.setViewportSize({ width: 390, height: 844 });
@@ -143,9 +143,12 @@ test("从发现提交搜索后在同一顶栏改词，后退恢复原条件", as
   await expect(input).toHaveValue("旅行");
   await page.goBack();
   await expect(page).toHaveURL("/photo/explore");
-  await bar.getByRole("button", { name: "更多操作" }).click();
-  await page.getByRole("menuitem", { name: "打开命令面板" }).click();
-  await expect(page.getByRole("dialog", { name: "命令面板" })).toBeVisible();
+  await trigger.click();
+  await panel.getByRole("radio", { name: "画面与文字" }).click();
+  await panel.getByRole("combobox").fill("南昌");
+  await panel.getByRole("combobox").press("Enter");
+  await expect(page).toHaveURL(url => url.pathname === "/photo/search" && url.searchParams.get("q") === "南昌" && url.searchParams.get("scope") === "content");
+  await expect(input).toHaveValue("南昌");
 });
 
 test("人物这一档没有分析结果时说清原因，不摆假卡", async ({ page }) => {
