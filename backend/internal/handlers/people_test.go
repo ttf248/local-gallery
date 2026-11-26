@@ -233,13 +233,17 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	}
 	var mediaBody struct {
 		Page struct {
-			Faces []services.PersonFace    `json:"faces"`
-			Items []services.FeedMediaItem `json:"items"`
-			Total int                      `json:"total"`
+			Person services.PersonGroup     `json:"person"`
+			Faces  []services.PersonFace    `json:"faces"`
+			Items  []services.FeedMediaItem `json:"items"`
+			Total  int                      `json:"total"`
 		} `json:"page"`
 	}
 	if err := json.Unmarshal(mediaData, &mediaBody); err != nil {
 		t.Fatal(err)
+	}
+	if cover := mediaBody.Page.Person.CoverFace; cover == nil || cover.ResourceID != repeated.CoverResourceID || cover.Width != 1200 {
+		t.Fatalf("detail portrait differs from list: %+v", cover)
 	}
 	if mediaBody.Page.Total != 6 || len(mediaBody.Page.Faces) != 6 {
 		t.Fatalf("person media page = %+v", mediaBody.Page)

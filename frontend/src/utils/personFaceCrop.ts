@@ -15,11 +15,12 @@ import type { FaceBox } from "../api/aiJobs";
  * 收窄 —— 方块必须被图片盖满（span 不超过原图短边），否则方块边缘
  * 会露出空隙。
  */
-export function personFaceCropStyle(
+export function personFaceCrop(
   box: FaceBox,
   imageWidth: number,
   imageHeight: number,
-): CSSProperties | null {
+  slotWidth: number,
+): { style: CSSProperties; displayWidth: number } | null {
   if (
     box.length !== 4 ||
     ![imageWidth, imageHeight, ...box].every(Number.isFinite) ||
@@ -39,13 +40,18 @@ export function personFaceCropStyle(
   if (span <= 0) return null;
 
   return {
-    position: "absolute",
-    left: `${((span / 2 - centerX) / span) * 100}%`,
-    top: `${((span / 2 - centerY) / span) * 100}%`,
-    width: `${(imageWidth / span) * 100}%`,
-    height: `${(imageHeight / span) * 100}%`,
-    // Tailwind 的基础样式给图片加了 max-width: 100%，那会把放大后的
-    // 图片压回方块大小，脸就又缩回角落里去了。
-    maxWidth: "none",
+    displayWidth: Math.ceil(
+      Math.min(imageWidth, (slotWidth * imageWidth) / span),
+    ),
+    style: {
+      position: "absolute",
+      left: `${(-Math.min(imageWidth - span, Math.max(0, centerX - span / 2)) / span) * 100}%`,
+      top: `${(-Math.min(imageHeight - span, Math.max(0, centerY - span / 2)) / span) * 100}%`,
+      width: `${(imageWidth / span) * 100}%`,
+      height: `${(imageHeight / span) * 100}%`,
+      // Tailwind 的基础样式给图片加了 max-width: 100%，那会把放大后的
+      // 图片压回方块大小，脸就又缩回角落里去了。
+      maxWidth: "none",
+    },
   };
 }

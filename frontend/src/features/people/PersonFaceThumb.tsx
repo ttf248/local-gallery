@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { PersonGroup } from "../../api/aiJobs";
-import { personFaceCropStyle } from "../../utils/personFaceCrop";
+import { personFaceCrop } from "../../utils/personFaceCrop";
 import { RenditionImage } from "../common";
 import { PeopleIcon } from "../../ui/icons";
 
@@ -36,8 +37,15 @@ export default function PersonFaceThumb({
   testId,
 }: Props) {
   const face = person.coverFace;
+  const [rotatedResource, setRotatedResource] = useState<string>();
+  const rotated = rotatedResource === face?.resourceId;
   const crop = face
-    ? personFaceCropStyle(face.box, face.width, face.height)
+    ? personFaceCrop(
+        face.box,
+        rotated ? face.height : face.width,
+        rotated ? face.width : face.height,
+        size,
+      )
     : null;
   const resourceId = crop ? face?.resourceId : person.coverResourceId;
 
@@ -47,9 +55,7 @@ export default function PersonFaceThumb({
         fill ? "h-full w-full " : ""
       }${className}`}
       style={
-        fill
-          ? { width: "100%", height: "100%" }
-          : { width: size, height: size }
+        fill ? { width: "100%", height: "100%" } : { width: size, height: size }
       }
       data-testid={testId ? `${testId}-frame` : undefined}
     >
@@ -57,9 +63,18 @@ export default function PersonFaceThumb({
         <RenditionImage
           fileId={resourceId}
           alt=""
-          displayWidth={fill ? 360 : Math.round(size * 2)}
+          displayWidth={crop?.displayWidth ?? size}
           className={crop ? "block" : "h-full w-full object-cover"}
-          style={crop ?? undefined}
+          style={crop?.style}
+          onLoad={({ currentTarget }) => {
+            if (!face || !crop) return;
+            // 人脸框在转正的照片上，旧记录的尺寸可能取自旋转前的文件头。
+            const portrait =
+              currentTarget.naturalHeight > currentTarget.naturalWidth;
+            setRotatedResource(
+              portrait !== face.height > face.width ? resourceId : undefined,
+            );
+          }}
           testId={testId}
         />
       ) : (

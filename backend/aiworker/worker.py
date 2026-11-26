@@ -1230,6 +1230,27 @@ def valid_yunet_detection(detection, image_shape, minimum_score=YUNET_SCORE_THRE
     return eye_y < mouth_y and eye_y - height * 0.1 <= nose_y <= mouth_y + height * 0.1
 
 
+def portrait_quality(detection, aligned):
+    """只用于人物头像排序；沿双眼连线估计鼻尖与嘴部偏移，兼容歪头。"""
+    points = np.asarray(detection[4:14], dtype=np.float32).reshape(5, 2)
+    eyes, nose = points[:2], points[2]
+    mouth = points[3:].mean(axis=0)
+    axis = eyes[1] - eyes[0]
+    eye_span_squared = max(float(axis @ axis), 1.0)
+    middle = eyes.mean(axis=0)
+    nose_offset = abs(float((nose - middle) @ axis)) / eye_span_squared
+    mouth_offset = abs(float((mouth - middle) @ axis)) / eye_span_squared
+    frontal = max(0.0, 1.0 - 2.4 * nose_offset - mouth_offset)
+
+    # 在对齐后的人脸内部估计高频细节，避免背景边缘主导清晰度。
+    gray = aligned[24:96, 24:88].mean(axis=2, dtype=np.float32)
+    laplacian = (gray[2:, 1:-1] + gray[:-2, 1:-1] + gray[1:-1, 2:]
+                 + gray[1:-1, :-2] - 4 * gray[1:-1, 1:-1])
+    variance = float(laplacian.var())
+    sharpness = variance / (variance + 100.0)
+    return round(0.65 * frontal + 0.35 * sharpness, 4)
+
+
 def analyze_face_image(
     path: str,
     device_mode="cpu",
@@ -1295,6 +1316,7 @@ def analyze_face_image(
                 faces.append({
                     "box": [x, y, box_width, box_height],
                     "score": float(detection[-1]),
+                    "portraitQuality": portrait_quality(detection, aligned),
                     "embedding": embedding,
                 })
                 if len(faces) == face_limit:

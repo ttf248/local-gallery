@@ -103,18 +103,64 @@ func TestPeopleGroupsWithoutKnownSourceSizeKeepCoverFaceBox(t *testing.T) {
 	}
 }
 
-func TestPersonFaceMoreProminentPrefersLargerFace(t *testing.T) {
-	small := PersonFace{Key: "b", Score: 0.99, Box: []float32{0, 0, 40, 40}}
-	large := PersonFace{Key: "a", Score: 0.5, Box: []float32{0, 0, 400, 400}}
-	if !personFaceMoreProminent(large, small) {
-		t.Fatal("larger face should win over higher score")
+func TestPeopleCoverRanksAcrossPhotosAndRespectsResourceFilter(t *testing.T) {
+	root := t.TempDir()
+	people, err := OpenPeopleService(filepath.Join(root, "state.json"), filepath.Join(root, "index.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if personFaceMoreProminent(small, large) {
-		t.Fatal("smaller face should not win")
+	var records []AIAnalysisRecord
+	for _, sample := range []struct {
+		id      string
+		side    float32
+		quality float32
+	}{
+		{"a-small", 40, -1}, {"b-profile", 600, 0.2},
+		{"z-frontal", 360, 0.95}, {"y-frontal", 360, 0.95},
+	} {
+		record := peopleCoverFaceRecord(sample.id, [][]float32{{10, 20, sample.side, sample.side}}, [][]float32{peopleTestVector(0, 0)})
+		if sample.quality >= 0 {
+			var data struct {
+				Faces []map[string]json.RawMessage `json:"faces"`
+			}
+			if err := json.Unmarshal(record.Data, &data); err != nil {
+				t.Fatal(err)
+			}
+			data.Faces[0]["portraitQuality"], _ = json.Marshal(sample.quality)
+			record.Data, _ = json.Marshal(data)
+		}
+		records = append(records, record)
 	}
-	same := PersonFace{Key: "b", Score: 0.5, Box: []float32{0, 0, 40, 40}}
-	tie := PersonFace{Key: "a", Score: 0.5, Box: []float32{0, 0, 40, 40}}
-	if !personFaceMoreProminent(tie, same) {
-		t.Fatal("tie should be broken by the stable key")
+	if err := people.Sync(records); err != nil {
+		t.Fatal(err)
+	}
+	groups, _ := people.TopGroups(1, false, nil)
+	if len(groups) != 1 {
+		t.Fatalf("groups: %v", groups)
+	}
+	check := func(group PersonGroup, want string) {
+		t.Helper()
+		if group.CoverFace == nil || group.CoverResourceID != want || group.CoverFace.ResourceID != want {
+			t.Fatalf("unexpected cover: %+v, want %s", group, want)
+		}
+	}
+	check(groups[0], "y-frontal")
+	detail, _, _ := people.GroupAndFaces(groups[0].ID)
+	check(detail, "y-frontal")
+	search, _ := people.SearchGroups(groups[0].ID, 1, false, func(id string) bool { return id != "y-frontal" })
+	check(search[0], "z-frontal")
+}
+
+func TestPeopleCoverWithLegacyDetections(t *testing.T) {
+	group := PersonGroup{}
+	for _, face := range []PersonFace{
+		{Key: "small", ResourceID: "small", Box: []float32{0, 0, 40, 40}, Score: 0.99},
+		{Key: "large", ResourceID: "large", Box: []float32{0, 0, 400, 400}, Score: 0.8},
+		{Key: "clear", ResourceID: "clear", Box: []float32{0, 0, 350, 350}, Score: 0.95},
+	} {
+		group.considerCover(face)
+	}
+	if group.CoverResourceID != "clear" {
+		t.Fatalf("legacy cover = %s", group.CoverResourceID)
 	}
 }

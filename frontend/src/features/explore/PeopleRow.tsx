@@ -128,6 +128,7 @@ function PeopleGroup({
               <span className="block size-full overflow-hidden rounded-full ring-1 ring-inset ring-line">
                 <PersonFaceThumb
                   person={person}
+                  size={136}
                   fill
                   className="size-full"
                   testId="explore-person-thumbnail"

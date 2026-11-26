@@ -638,9 +638,10 @@ func peopleFacesFromRecordWithDimension(record AIAnalysisRecord, dimension int) 
 	}
 	var result struct {
 		Faces []struct {
-			Box       []float32 `json:"box"`
-			Score     float32   `json:"score"`
-			Embedding []float32 `json:"embedding"`
+			Box             []float32 `json:"box"`
+			Score           float32   `json:"score"`
+			PortraitQuality *float32  `json:"portraitQuality"`
+			Embedding       []float32 `json:"embedding"`
 		} `json:"faces"`
 	}
 	if json.Unmarshal(record.Data, &result) != nil || len(result.Faces) > PeopleMaxFacesPerPhoto {
@@ -672,10 +673,13 @@ func peopleFacesFromRecordWithDimension(record AIAnalysisRecord, dimension int) 
 		if vector == nil {
 			continue
 		}
+		if face.PortraitQuality != nil && (*face.PortraitQuality < 0 || *face.PortraitQuality > 1) {
+			face.PortraitQuality = nil
+		}
 		key := PersonFaceKey(record.ResourceID, index)
 		faces = append(faces, PersonFace{
 			Key: key, ResourceID: record.ResourceID, FaceIndex: index, Box: append([]float32(nil), face.Box...),
-			Score: face.Score, Size: record.Size, MTimeNs: record.MTimeNs, embedding: vector,
+			Score: face.Score, portraitQuality: face.PortraitQuality, Size: record.Size, MTimeNs: record.MTimeNs, embedding: vector,
 			recordHash: hex.EncodeToString(hash[:]),
 		})
 	}

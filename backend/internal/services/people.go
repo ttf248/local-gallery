@@ -97,17 +97,18 @@ var (
 )
 
 type PersonFace struct {
-	Key        string    `json:"key"`
-	ResourceID string    `json:"resourceId"`
-	FaceIndex  int       `json:"faceIndex"`
-	PersonID   string    `json:"personId"`
-	Box        []float32 `json:"box"`
-	Score      float32   `json:"score"`
-	Size       int64     `json:"-"`
-	MTimeNs    int64     `json:"-"`
-	embedding  []float32
-	recordHash string
-	originID   string
+	Key             string    `json:"key"`
+	ResourceID      string    `json:"resourceId"`
+	FaceIndex       int       `json:"faceIndex"`
+	PersonID        string    `json:"personId"`
+	Box             []float32 `json:"box"`
+	Score           float32   `json:"score"`
+	Size            int64     `json:"-"`
+	MTimeNs         int64     `json:"-"`
+	portraitQuality *float32
+	embedding       []float32
+	recordHash      string
+	originID        string
 }
 
 // PersonCoverFace 描述人物分组封面照片里的那张代表脸。
@@ -124,15 +125,17 @@ type PersonCoverFace struct {
 }
 
 type PersonGroup struct {
-	ID              string              `json:"id"`
-	Name            string              `json:"name"`
-	FaceCount       int                 `json:"faceCount"`
-	PhotoCount      int                 `json:"photoCount"`
-	CoverResourceID string              `json:"coverResourceId,omitempty"`
+	coverKey        string
+	coverScore      float64
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	FaceCount       int    `json:"faceCount"`
+	PhotoCount      int    `json:"photoCount"`
+	CoverResourceID string `json:"coverResourceId,omitempty"`
 	// CoverFace 是封面照片里的代表脸。尺寸未知时只有框，界面退回整张封面。
-	CoverFace *PersonCoverFace `json:"coverFace,omitempty"`
-	Confirmed bool              `json:"confirmed"`
-	Hidden    bool              `json:"hidden"`
+	CoverFace *PersonCoverFace    `json:"coverFace,omitempty"`
+	Confirmed bool                `json:"confirmed"`
+	Hidden    bool                `json:"hidden"`
 	Quality   *PersonGroupQuality `json:"quality,omitempty"`
 }
 

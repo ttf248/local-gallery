@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactEventHandler } from "react";
 import { thumbSrcSet, thumbUrl } from "../../api/thumbs";
 import { pickRenditionWidth, renditionCandidates } from "../../utils/rendition";
 
@@ -27,6 +27,7 @@ interface Props {
   className?: string;
   loading?: "lazy" | "eager";
   style?: CSSProperties;
+  onLoad?: ReactEventHandler<HTMLImageElement>;
   onError?: () => void;
 }
 
@@ -47,6 +48,7 @@ export default function RenditionImage({
   className,
   loading = "lazy",
   style,
+  onLoad,
   onError,
 }: Props) {
   return (
@@ -57,6 +59,7 @@ export default function RenditionImage({
       alt={alt}
       loading={loading}
       decoding="async"
+      onLoad={onLoad}
       onError={onError}
       className={className}
       style={style}

@@ -477,6 +477,18 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(1, len(result["data"]["faces"]))
         self.assertEqual([40.0, 40.0, 160.0, 80.0], result["data"]["faces"][0]["box"])
 
+    def test_portrait_quality_prefers_frontal_and_sharp_faces(self):
+        frontal = [0, 0, 100, 100, 30, 34, 70, 34, 50, 54, 32, 75, 68, 75, 0.9]
+        profile = frontal.copy()
+        profile[8] += 18
+        soft = np.full((112, 112, 3), 128, dtype=np.uint8)
+        textured = soft.copy()
+        textured[::4] = 32
+        with patch.object(worker, "np", np):
+            best = worker.portrait_quality(frontal, textured)
+            self.assertGreater(best, worker.portrait_quality(profile, textured))
+            self.assertGreater(best, worker.portrait_quality(frontal, soft))
+
     def test_yunet_detection_quality_gate_rejects_weak_or_invalid_faces(self):
         detection = np.asarray(
             [20, 20, 64, 64, 32, 38, 72, 38, 52, 51, 38, 70, 66, 70, 0.9],

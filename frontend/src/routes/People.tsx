@@ -753,7 +753,7 @@ function PersonCard({
       className="group block min-w-0 rounded-card text-center"
     >
       <span className="mx-auto block size-[120px] overflow-hidden rounded-full ring-1 ring-line">
-        <PersonFaceThumb person={person} fill className="size-full" />
+        <PersonFaceThumb person={person} size={120} fill className="size-full" />
       </span>
       <h3 className="mt-2 truncate text-callout font-semibold">
         {person.name}
@@ -893,7 +893,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           leading={
             person && (
               <div className="size-24 shrink-0 overflow-hidden rounded-full">
-                <PersonFaceThumb person={person} fill className="size-full" />
+                <PersonFaceThumb person={person} size={96} fill className="size-full" />
               </div>
             )
           }

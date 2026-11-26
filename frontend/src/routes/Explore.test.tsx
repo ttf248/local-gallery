@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -328,6 +328,15 @@ it("人物预览优先露出代表脸", async () => {
   const thumb = await screen.findByTestId("explore-person-thumbnail");
   expect(thumb).toHaveAttribute("src", expect.stringContaining("f_face"));
   expect(thumb.getAttribute("src")).not.toContain("f_whole");
+  expect(thumb).toHaveAttribute("sizes", "800px");
+  // 竖拍合照的文件头是横向尺寸，而人脸框已经按 EXIF 转正。
+  Object.defineProperties(thumb, {
+    naturalWidth: { value: 480 },
+    naturalHeight: { value: 640 },
+  });
+  fireEvent.load(thumb);
+  expect(thumb).toHaveAttribute("sizes", "600px");
+  expect(thumb).toHaveStyle({ width: "1200%", height: "1600%" });
 });
 
 it("区分人物分析尚未启用与已分析但没有候选", async () => {

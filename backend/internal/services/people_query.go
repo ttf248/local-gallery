@@ -27,16 +27,12 @@ func peopleGroupList(
 	include func(resourceID, personID string) bool,
 ) map[string]*PersonGroup {
 	groups := make(map[string]*PersonGroup)
-	photos := make(map[string]int)
 	seen := make(map[peopleGroupResource]struct{}, len(faces))
-	// 归属分组先记下来：第二遍要为每组挑代表脸，不必再算一次归属。
-	effectiveIDs := make(map[string]string, len(faces))
 	for _, face := range faces {
 		id := effective(face)
 		if include != nil && !include(face.ResourceID, id) {
 			continue
 		}
-		effectiveIDs[face.Key] = id
 		group := groups[id]
 		if group == nil {
 			group = &PersonGroup{ID: id}
@@ -46,64 +42,36 @@ func peopleGroupList(
 		key := peopleGroupResource{group: id, resource: face.ResourceID}
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
-			photos[id]++
-			if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
-				group.CoverResourceID = face.ResourceID
-			}
+			group.PhotoCount++
 		}
-	}
-	// 代表脸：封面照片里最大、最清晰的那张脸。
-	//
-	// 封面照片是按资源 ID 最小的那一张定的 —— 确定性强，但那张照片里
-	// 可能有好几张脸。第二遍只在该组的那张封面里挑，挑完再定，
-	// 因此结果与遍历顺序无关。
-	coverFaces := make(map[string]PersonFace, len(groups))
-	for key, face := range faces {
-		id := effectiveIDs[key]
-		if id == "" {
-			continue
-		}
-		group := groups[id]
-		if group == nil || face.ResourceID != group.CoverResourceID {
-			continue
-		}
-		if len(face.Box) != 4 || face.Box[2] <= 0 || face.Box[3] <= 0 {
-			continue
-		}
-		current, exists := coverFaces[id]
-		if !exists || personFaceMoreProminent(face, current) {
-			coverFaces[id] = face
-		}
-	}
-	for id, face := range coverFaces {
-		if len(face.Box) != 4 {
-			continue
-		}
-		groups[id].CoverFace = &PersonCoverFace{
-			ResourceID: face.ResourceID,
-			Box:        append([]float32(nil), face.Box...),
-		}
-	}
-	for id, group := range groups {
-		group.PhotoCount = photos[id]
+		group.considerCover(face)
 	}
 	return groups
 }
 
-// personFaceMoreProminent 判断两张脸哪一张更适合当代表脸。
-//
-// 先看脸在画面里有多大 —— 大脸认得出人，小脸只是一团模糊；
-// 一样大再看检测分；都一样就按稳定键取小的那个，结果与顺序无关。
-func personFaceMoreProminent(candidate, current PersonFace) bool {
-	candidateArea := float64(candidate.Box[2]) * float64(candidate.Box[3])
-	currentArea := float64(current.Box[2]) * float64(current.Box[3])
-	if candidateArea != currentArea {
-		return candidateArea > currentArea
+// considerCover 在当前分组内同时选择照片和人脸框。像素收益在高清头像所需的
+// 分辨率附近封顶，足够大的脸主要按朝向、局部清晰度与检测置信度取舍。
+func (group *PersonGroup) considerCover(face PersonFace) {
+	if len(face.Box) != 4 || min(face.Box[2], face.Box[3]) <= 0 {
+		if group.CoverFace == nil && (group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID) {
+			group.CoverResourceID = face.ResourceID
+		}
+		return
 	}
-	if candidate.Score != current.Score {
-		return candidate.Score > current.Score
+	resolution := min(float64(min(face.Box[2], face.Box[3]))/320, 1)
+	confidence := min(max(float64(face.Score), 0), 1)
+	// 旧记录只有检测分和像素。新记录还测量了正面程度和对齐人脸的细节。
+	quality := 0.75 * confidence
+	if face.portraitQuality != nil {
+		quality = 0.25*confidence + 0.75*float64(*face.portraitQuality)
 	}
-	return candidate.Key < current.Key
+	score := resolution * (0.35 + 0.65*quality)
+	if group.CoverFace != nil && (score < group.coverScore || score == group.coverScore && face.Key >= group.coverKey) {
+		return
+	}
+	group.coverKey, group.coverScore = face.Key, score
+	group.CoverResourceID = face.ResourceID
+	group.CoverFace = &PersonCoverFace{ResourceID: face.ResourceID, Box: append([]float32(nil), face.Box...)}
 }
 
 // PopulateCoverFaceSizes 在筛选、截页后仅为当前页的封面补尺寸。
@@ -348,9 +316,7 @@ func (s *PeopleService) searchGroups(query string, limit int, includeHidden bool
 		}
 		group.FaceCount++
 		photos[id][face.ResourceID] = struct{}{}
-		if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
-			group.CoverResourceID = face.ResourceID
-		}
+		group.considerCover(face)
 		if reviewOrder {
 			samples := qualitySamples[id]
 			if samples == nil {
@@ -429,9 +395,7 @@ func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFac
 		}
 		group.FaceCount++
 		photos[face.ResourceID] = struct{}{}
-		if group.CoverResourceID == "" || face.ResourceID < group.CoverResourceID {
-			group.CoverResourceID = face.ResourceID
-		}
+		group.considerCover(face)
 		face.PersonID = personID
 		face.embedding = nil
 		face.recordHash = ""
@@ -441,6 +405,7 @@ func (s *PeopleService) GroupAndFaces(personID string) (PersonGroup, []PersonFac
 		return PersonGroup{}, nil, false
 	}
 	group.PhotoCount = len(photos)
+	s.fillCoverFaceSizes([]PersonGroup{group})
 	sort.Slice(faces, func(i, j int) bool {
 		if faces[i].ResourceID == faces[j].ResourceID {
 			return faces[i].FaceIndex < faces[j].FaceIndex
