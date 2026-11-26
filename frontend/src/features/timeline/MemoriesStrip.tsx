@@ -60,6 +60,13 @@ export default function MemoriesStrip({
   const stripId = useId();
   if (dismissed || (!photos.length && !resume)) return null;
 
+  const photosByDate = new Map<string, typeof photos>();
+  for (const photo of photos) {
+    const group = photosByDate.get(photo.dateValue);
+    if (group) group.push(photo);
+    else photosByDate.set(photo.dateValue, [photo]);
+  }
+
   return (
     <section
       aria-label="回忆"
@@ -111,43 +118,67 @@ export default function MemoriesStrip({
       </div>
       {photos.length > 0 && (
         <div id={stripId} hidden={!showPhotos}>
-          <ScrollRow label="回忆照片" gap={6}>
-            {photos.map((photo, index) => {
-              const width = onThisDayThumbWidth(photo.width, photo.height);
-              const [year, month, day] = photo.dateValue.split("-");
-              const anniversary = photo.dateValue.slice(5) === date.slice(5);
+          <ScrollRow
+            label="回忆照片"
+            gap={16}
+            snap={false}
+            style={{ maskImage: "none" }}
+          >
+            {Array.from(photosByDate, ([dateValue, items]) => {
+              const [year, month, day] = dateValue.split("-");
+              const anniversary = dateValue.slice(5) === date.slice(5);
               const label = anniversary
-                ? `${year} 年的今天`
-                : `${year} 年 ${Number(month)} 月 ${Number(day)} 日`;
+                ? year + " 年的今天"
+                : year + " 年 " + Number(month) + " 月 " + Number(day) + " 日";
               return (
-                <button
-                  key={photo.id}
-                  type="button"
-                  aria-label={label + " · " + photo.name}
-                  title={photo.albumName + " · " + photo.name}
-                  onClick={() => wall.open(index)}
-                  style={
-                    {
-                      "--memory-aspect": width / ON_THIS_DAY_THUMB_HEIGHT,
-                    } as CSSProperties
-                  }
-                  className="flex flex-none flex-col items-start rounded-tile text-left focus-visible:ring-inset"
+                <div
+                  key={dateValue}
+                  role="group"
+                  aria-label={label}
+                  className="flex-none"
                 >
-                  <ThumbImage
-                    fileId={photo.id}
-                    version={photo.version}
-                    displayWidth={width}
-                    undecodable={photo.undecodable}
-                    alt=""
-                    className="memory-thumbnail"
-                  />
+                  <div className="flex gap-1">
+                    {items.map((photo) => {
+                      const width = onThisDayThumbWidth(
+                        photo.width,
+                        photo.height,
+                      );
+                      return (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          aria-label={label + " · " + photo.name}
+                          title={photo.albumName + " · " + photo.name}
+                          onClick={() => wall.openById(photo.id)}
+                          style={
+                            {
+                              "--memory-aspect":
+                                width / ON_THIS_DAY_THUMB_HEIGHT,
+                            } as CSSProperties
+                          }
+                          className="flex-none rounded-tile focus-visible:ring-inset"
+                        >
+                          <ThumbImage
+                            fileId={photo.id}
+                            version={photo.version}
+                            displayWidth={width}
+                            undecodable={photo.undecodable}
+                            alt=""
+                            className="memory-thumbnail"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
                   <time
-                    dateTime={photo.dateValue}
-                    className="whitespace-nowrap pt-1 text-caption tabular-nums text-fg-muted"
+                    dateTime={dateValue}
+                    className="sticky left-0 block w-max whitespace-nowrap pt-1 text-caption tabular-nums text-fg-muted"
                   >
-                    {anniversary ? label : photo.dateValue.replaceAll("-", ".")}
+                    {anniversary
+                      ? year + " 年"
+                      : dateValue.replaceAll("-", ".")}
                   </time>
-                </button>
+                </div>
               );
             })}
           </ScrollRow>

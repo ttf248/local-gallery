@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import MemoriesStrip from "./MemoriesStrip";
@@ -37,7 +37,7 @@ it("没有回忆和最近相册时不占位", () => {
   expect(screen.queryByRole("region")).toBeNull();
 });
 
-it("同册多张按各自拍摄日期展示，收起后可重新展开", () => {
+it("同日照片共用年份标签，邻近日子显示完整日期，折叠后可展开", () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date(2026, 10, 26, 12));
   const photo = {
@@ -52,19 +52,33 @@ it("同册多张按各自拍摄日期展示，收起后可重新展开", () => {
     width: 4000,
     height: 3000,
   };
-  photos.push(photo, { ...photo, id: "f_two", dateValue: "2020-11-25" });
+  photos.push(
+    photo,
+    { ...photo, id: "f_two", name: "合照.jpg" },
+    { ...photo, id: "f_three", dateValue: "2020-11-25" },
+  );
   render(
     <MemoryRouter>
       <MemoriesStrip />
     </MemoryRouter>,
   );
   const row = screen.getByRole("region", { name: "回忆照片" });
-  expect(screen.getByRole("button", { name: /2020 年的今天/ })).toBeVisible();
+  const group = within(row).getByRole("group", { name: "2020 年的今天" });
+  expect(within(group).getAllByRole("button")).toHaveLength(2);
+  expect(within(row).getByText("2020 年")).toHaveAttribute(
+    "datetime",
+    "2020-11-26",
+  );
+  expect(within(row).getByText("2020.11.25")).toHaveAttribute(
+    "datetime",
+    "2020-11-25",
+  );
+  expect(row.querySelectorAll("time")).toHaveLength(2);
   expect(
     screen.getByRole("button", { name: /2020 年 11 月 25 日/ }),
   ).toBeVisible();
   expect(row.querySelector("img")).toHaveAttribute("sizes", "213px");
-  const toggle = screen.getByRole("button", { name: /那年今日.*2 张/ });
+  const toggle = screen.getByRole("button", { name: /那年今日.*3 张/ });
   fireEvent.click(toggle);
   expect(row).not.toBeVisible();
   fireEvent.click(toggle);
