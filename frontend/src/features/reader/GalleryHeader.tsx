@@ -139,7 +139,7 @@ export default function GalleryHeader({
     /* 顶栏是两块浮层，不是一条通栏：通栏会压住画面顶端，
        漫画页的上缘就永远看不见了。中间留白透到画面上，
        点空白处还能翻页。 */
-    <header className="reader-header max-sm:left-2 max-sm:right-2 max-sm:top-[calc(8px_+_var(--safe-top))]">
+    <header className="reader-header">
       <div className="reader-header__group max-sm:h-[42px] max-sm:px-2 reader-header__group--main max-sm:max-w-[70%] text-white/85">
         <button
           onClick={onBack}

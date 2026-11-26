@@ -92,7 +92,8 @@ describe("UnreadHero", () => {
     const heroSection = screen.getByTestId("unread-hero");
     expect(heroSection.textContent).toMatch(/2\s*卷等你翻开/);
     // 随机未读按钮
-    const shuffleBtn = screen.getByRole("button", { name: "随机一卷未读" });
+    fireEvent.click(screen.getByRole("button",{name:"未读操作"}));
+    const shuffleBtn = screen.getByRole("menuitem", { name: "随机一卷未读" });
     fireEvent.click(shuffleBtn);
     expect(onShuffle).toHaveBeenCalledTimes(1);
     // 全部 → 链接跳到 /unread

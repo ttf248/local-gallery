@@ -70,15 +70,20 @@
 }
 
 .reader-header {
-  inset: 0 0 auto;
-  padding: calc(8px + var(--safe-top)) 16px 18px;
-  background: var(--theater-chrome-gradient);
+  top: calc(12px + var(--safe-top));
+  left: 12px;
+  right: 12px;
 }
-.reader-header__group {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
+.reader-header__group, .reader-control-panel, .reader-bottom-chrome {
+  background: var(--theater-scrim);
+  border: 1px solid var(--theater-border);
+  border-radius: var(--r-xl);
+  backdrop-filter: blur(24px);
 }
 .reader-bottom-chrome {
-  background: linear-gradient(to top, rgb(0 0 0 / .8), transparent);
+  inset-inline: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+}
+.reader-shell .page-slider__fill {
+  background: var(--theater-accent);
 }

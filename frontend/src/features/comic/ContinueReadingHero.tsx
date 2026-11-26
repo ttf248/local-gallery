@@ -1,3 +1,5 @@
+import { Button } from "../../ui/Button";
+import { Menu } from "../../ui/Menu";
 import { ScrollRow } from "../../ui/ScrollRow";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -12,7 +14,6 @@ import {
   ArrowRightLineIcon,
   CheckIcon,
   CloseIcon,
-  ShuffleIcon,
 } from "../../ui/icons";
 
 interface UnreadHeroProps {
@@ -58,15 +59,9 @@ export function UnreadHero({
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={onShuffle}
-            className="btn btn-sm btn-ghost"
-            title={copy.unreadButton}
-            aria-label={copy.unreadButton}
-          >
-            <ShuffleIcon size={15} />
-          </button>
+          <Menu label="未读操作" trigger={<Button variant="ghost" aria-label="未读操作">⋯</Button>}
+            items={[{id:"random",label:copy.unreadButton,onSelect:onShuffle}]}/>
+
           <Link
             to={unreadRoute()}
             className="btn btn-sm btn-ghost"
@@ -167,10 +162,11 @@ export function ContinueReadingHero({
           清空
         </button>
       </div>
-      <div className="mt-6 grid min-w-0 grid-cols-[minmax(104px,.8fr)_minmax(0,1fr)] items-center gap-4 sm:gap-6 sm:grid-cols-[minmax(160px,280px)_minmax(0,1fr)]">
+      <div className="relative isolate mt-4 grid min-w-0 grid-cols-[minmax(110px,.8fr)_minmax(0,1fr)] items-center gap-4 overflow-hidden rounded-xl bg-sunken p-4 sm:grid-cols-[clamp(160px,14vw,240px)_minmax(0,1fr)] sm:gap-8 sm:p-8">
+        {featured.coverPath && <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 scale-125 blur-[48px] saturate-[1.2]"><Cover card={featured}/></div>}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-canvas/70"/>
         <StagePoster card={featured} onClick={() => onContinue(featured)} />
         <div className="min-w-0">
-          <p className="hero-panel__muted text-ink-2 text-caption">上次，看到这里</p>
           {/* 作品名压在卷名上方：卷名只写「第1卷」时，这一卷属于哪部
               作品看不出来 —— 与书封、阅读器顶栏同一套写法。 */}
           {series && (
@@ -178,7 +174,7 @@ export function ContinueReadingHero({
               {series}
             </p>
           )}
-          <h3 className="line-clamp-2 font-display text-[clamp(28px,4vw,40px)] leading-tight">
+          <h3 className="line-clamp-2 text-display">
             {featured.displayTitle ?? featured.title}
           </h3>
           <StageInfo
@@ -229,7 +225,7 @@ function StagePoster({
       type="button"
       onClick={onClick}
       aria-label={`${copy.continueTitle}「${card.title}」`}
-      className="relative aspect-[2/3] w-full max-w-[280px] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]"
+      className="book-binding relative aspect-[2/3] w-full max-w-[240px] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]"
     >
       <Cover card={card} large />
     </button>
@@ -282,9 +278,9 @@ function StageInfo({
         )}
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onContinue} className="btn btn-primary">
+        <Button size="lg" onClick={onContinue}>
           {copy.continueButton} <ArrowRightLineIcon size={14} />
-        </button>
+        </Button>
         <button
           type="button"
           onClick={onRemove}
@@ -317,15 +313,16 @@ function QueueItem({
     card.parentName && card.parentName !== label ? card.parentName : undefined;
   const queueTitle = series ? `${series} · ${label}` : label;
   return (
-    <div className="group relative w-40 shrink-0">
+    <div className="group relative w-[140px] shrink-0">
       <button
         type="button"
         className="block w-full text-left"
         onClick={onOpen}
         aria-label={`${copy.continueTitle}「${queueTitle}」`}
       >
-        <span className="mb-2 block aspect-[2/3] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]">
+        <span className="relative mb-2 block aspect-[2/3] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]">
           <Cover card={card} />
+          {card.progress && <span className="absolute bottom-0 left-0 h-[3px] bg-primary" style={{width:readingPercent(card.progress)+"%"}}/>}
         </span>
         <span className="min-w-0">
           <span className="block truncate text-body font-medium">
@@ -340,7 +337,7 @@ function QueueItem({
       <button
         type="button"
         onClick={onRemove}
-        className="hero-queue__remove max-sm:opacity-100 absolute right-[-5px] top-[-5px] grid place-items-center size-8 touch:size-10 rounded-full bg-canvas text-ink-2 opacity-0 [.hero-queue\_\_item:hover_&]:opacity-100 touch:opacity-100 focus-visible:opacity-100"
+        className="hero-queue__remove max-sm:opacity-100 absolute right-[-5px] top-[-5px] grid place-items-center size-8 touch:size-10 rounded-full bg-canvas text-ink-2 opacity-0 group-hover:opacity-100 touch:opacity-100 focus-visible:opacity-100"
         title={`将「${card.title}」${copy.markFinishedLabel}`}
         aria-label={`将${card.title}${copy.markFinishedLabel}`}
       >
