@@ -9,11 +9,15 @@ import { useImageActivities } from "../hooks/useImageActivity";
 import { libraryApi } from "../api/library";
 import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
 import EmptyState from "../features/common/EmptyState";
-import { ContinueHero, UnreadHero } from "../components/home/HomeHeroes";
+import {
+  ContinueReadingHero,
+  UnreadHero,
+} from "../features/comic/ContinueReadingHero";
 import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "../hooks/useAppMode";
 import PhotoTimeline from "./PhotoTimeline";
 import {
+  readerRoute,
   albumRoute,
   decodeFavPath,
   homeRoute,
@@ -295,12 +299,14 @@ function ComicHome() {
 
       {hasContent && (inProgressAll.length > 0 || unreadCards.length > 0) ? (
         <div className="page-shell">
-          <div className="home-overview">
+          <div className="grid min-w-0 gap-[var(--section-gap)]">
             {inProgressAll.length > 0 ? (
-              <ContinueHero
+              <ContinueReadingHero
                 cards={inProgressAll}
                 onContinue={(card) =>
-                  navigate(albumRoute("comic", decodeFavPath(card.to)))
+                  navigate(
+                    readerRoute(decodeFavPath(card.to), card.progress?.index),
+                  )
                 }
                 onRemove={onRemoveContinue}
                 onClearAll={onClearContinue}

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { ContinueHero } from "../components/home/HomeHeroes";
+import { ContinueReadingHero } from "../features/comic/ContinueReadingHero";
 
 function makeCard(path: string, name: string, index: number, total: number) {
   return {
@@ -28,7 +28,7 @@ function renderHero(cards: ReturnType<typeof makeCard>[]) {
     onClearAll,
     ...render(
       <MemoryRouter>
-        <ContinueHero
+        <ContinueReadingHero
           cards={cards}
           onContinue={onContinue}
           onRemove={onRemove}
@@ -105,8 +105,8 @@ describe("ContinueReadingHero", () => {
   });
 
   it("卡片的可访问名不包含 X 按钮的文案", () => {
-    const { container } = renderHero([makeCard("/a", "A", 5, 20)]);
-    const card = container.querySelector(".hero-cover") as HTMLElement;
+    renderHero([makeCard("/a", "A", 5, 20)]);
+    const card = screen.getByRole("button", { name: "继续阅读「A」" });
     expect(card).not.toHaveAccessibleName(/标记为已读/);
   });
 
@@ -133,15 +133,14 @@ describe("ContinueReadingHero", () => {
 });
 
 it("主封面取够宽的渲染图，加载失败后仍可继续阅读", () => {
-  const { container, onContinue } = renderHero([makeCard("/a", "A", 5, 20)]);
-  const cover = container.querySelector(
-    ".hero-cover img",
-  ) as HTMLImageElement;
+  const { onContinue } = renderHero([makeCard("/a", "A", 5, 20)]);
+  const poster = screen.getByRole("button", { name: "继续阅读「A」" });
+  const cover = poster.querySelector("img") as HTMLImageElement;
   // hero 封面宽 176~260px，渲染图按档位取，宽度必须够这个槽位。
   expect(cover.src).toContain("/api/thumbs/");
   expect(cover.src).toContain("w=");
   fireEvent.error(cover);
-  expect(container.querySelector(".hero-cover img")).toBeNull();
+  expect(poster.querySelector("img")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "继续阅读「A」" }));
   expect(onContinue).toHaveBeenCalledTimes(1);
 });

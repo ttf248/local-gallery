@@ -18,7 +18,7 @@ it("选择卡片只切换选择，不包含相册导航或收藏动作", () => {
       }}
       checked={false}
       busy={false}
-      ratio="4/5"
+      ratio="2/3"
       variant="grid"
       onToggle={toggle}
     />,
@@ -40,7 +40,7 @@ it("选择卡片只切换选择，不包含相册导航或收藏动作", () => {
       }}
       checked
       busy
-      ratio="4/5"
+      ratio="2/3"
       variant="list"
       onToggle={toggle}
     />,

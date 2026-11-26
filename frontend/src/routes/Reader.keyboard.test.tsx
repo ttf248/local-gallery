@@ -82,7 +82,7 @@ vi.mock("../api/fs", () => ({
     capabilities: vi.fn(async () => ({ allowOsOpen: true })),
   },
 }));
-vi.mock("../components/gallery/ImageGallery", () => ({
+vi.mock("../features/reader/ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
 

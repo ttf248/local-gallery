@@ -81,3 +81,17 @@
 .reader-shell :is(.page-slider__fill, input[type="range"]) {
   accent-color: var(--reader-accent);
 }
+
+.reader-header {
+  inset: 0 0 auto;
+  padding: calc(8px + var(--safe-top)) 16px 18px;
+  background: var(--reader-chrome-gradient);
+}
+.reader-header__group {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.reader-bottom-chrome {
+  background: linear-gradient(to top, rgb(0 0 0 / .8), transparent);
+}

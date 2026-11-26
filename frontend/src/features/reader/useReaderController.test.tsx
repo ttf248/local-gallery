@@ -8,9 +8,9 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useGalleryStore } from "../store/galleryStore";
-import { useUIStore } from "../store/uiStore";
-import Reader from "./Reader";
+import { useGalleryStore } from "../../store/galleryStore";
+import { useUIStore } from "../../store/uiStore";
+import Reader from "../../routes/Reader";
 
 const mocks = vi.hoisted(() => ({
   getImage: vi.fn(),
@@ -18,8 +18,8 @@ const mocks = vi.hoisted(() => ({
   overview: vi.fn(),
 }));
 
-vi.mock("../api/library", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api/library")>();
+vi.mock("../../api/library", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../api/library")>();
   return {
     ...actual,
     libraryApi: {
@@ -47,22 +47,22 @@ vi.mock("../api/library", async (importOriginal) => {
     },
   };
 });
-vi.mock("../api/activity", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../api/activity")>()),
+vi.mock("../../api/activity", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../api/activity")>()),
   activityApi: {
     getImage: mocks.getImage,
     setImage: vi.fn(async () => ({})),
     keepalive: vi.fn(),
   },
 }));
-vi.mock("../api/prefs", () => ({
+vi.mock("../../api/prefs", () => ({
   historyApi: { add: vi.fn(async () => ({ history: [] })) },
   prefsApi: { get: mocks.getPrefs },
 }));
-vi.mock("../hooks/useFavorites", () => ({
+vi.mock("../../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], toggle: vi.fn() }),
 }));
-vi.mock("../components/gallery/ImageGallery", () => ({
+vi.mock("./ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
 

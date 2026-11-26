@@ -381,13 +381,17 @@ describe("ImageGallery 连续模式的高度预留", () => {
         dimensions={{ f_aaa: { width: 900, height: 1350 } }}
       />,
     );
-    const item = document.querySelector('[data-image-index="0"]') as HTMLElement;
+    const item = document.querySelector(
+      '[data-image-index="0"]',
+    ) as HTMLElement;
     expect(item.getAttribute("style")).toContain("900");
   });
 
   it("量不出尺寸时不占高度", () => {
     render(<ImageGallery images={["f_aaa"]} />);
-    const item = document.querySelector('[data-image-index="0"]') as HTMLElement;
+    const item = document.querySelector(
+      '[data-image-index="0"]',
+    ) as HTMLElement;
     expect(item.getAttribute("style") ?? "").not.toContain("aspect-ratio");
   });
 });

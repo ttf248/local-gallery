@@ -316,7 +316,7 @@ for (const kind of ["image", "video"] as const) {
     await page.getByRole("menuitem", { name: "快捷键", exact: false }).click();
     const dialog = page.getByRole("dialog", { name: "快捷键", exact: true });
     await expect(
-      dialog.getByRole("textbox", { name: "搜索快捷键" }),
+      dialog.getByRole("searchbox", { name: "搜索快捷键" }),
     ).toBeFocused();
     await expect(dialog.getByText("回到主页", { exact: true })).toHaveCount(0);
     await expect(
@@ -325,7 +325,7 @@ for (const kind of ["image", "video"] as const) {
     await expect(
       dialog.getByText("清除自定义封面", { exact: true }),
     ).toBeVisible();
-    const search = dialog.getByRole("textbox", { name: "搜索快捷键" });
+    const search = dialog.getByRole("searchbox", { name: "搜索快捷键" });
     if (kind === "video") {
       await expect(
         dialog.getByText("下一个视频", { exact: true }),
@@ -573,6 +573,15 @@ test("窄屏阅读器不再显示右侧悬浮控件，阅读设置收进底部�
   await expect(toolbar).toBeVisible();
   await toolbar.getByRole("button", { name: "双页" }).click();
   await expect(page.getByText("1–2 /")).toBeVisible();
+
+  await page.getByRole("button", {name:"更多",exact:true}).click();
+  await page.getByText("阅读设置", {exact:true}).click();
+  const settings = page.getByRole("dialog", {name:"阅读设置"});
+  await expect(settings).toBeVisible();
+  await expect(settings.getByRole("radio", {name:"双页"})).toBeChecked();
+  await settings.getByRole("radio", {name:"按高"}).click();
+  await settings.getByRole("button", {name:"关闭阅读设置"}).click();
+  await expect(settings).toHaveCount(0);
 
   // 翻页热区跟着阅读方向走：右→左时下一页在左边，点右半屏是往回翻。
   // 这条用例要验的是「工具条让开后热区仍然可用」，所以先切到左→右，

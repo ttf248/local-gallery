@@ -62,18 +62,18 @@ vi.mock("../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], toggle: vi.fn() }),
 }));
 vi.mock("../utils/fullscreen", () => ({ toggleFullscreen: vi.fn() }));
-vi.mock("../components/gallery/ImageGallery", () => ({
+vi.mock("../features/reader/ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
 vi.mock("../features/viewer/VideoPlayer", () => ({
   default: () => <div data-testid="video-player" />,
 }));
-vi.mock("../components/gallery/PageSlider", () => ({ default: () => null }));
-vi.mock("../components/gallery/GalleryHeader", () => ({
+vi.mock("../features/reader/PageSlider", () => ({ default: () => null }));
+vi.mock("../features/reader/GalleryHeader", () => ({
   default: ({ name }: { name: string }) => <h1>{name}</h1>,
 }));
-vi.mock("../components/gallery/GalleryAlbumNav", () => ({ default: () => null }));
-vi.mock("../components/gallery/GalleryToolbar", () => ({ default: () => null }));
+vi.mock("../features/reader/GalleryAlbumNav", () => ({ default: () => null }));
+vi.mock("../features/reader/GalleryToolbar", () => ({ default: () => null }));
 vi.mock("../features/viewer/ImageInfoPanel", () => ({ default: () => null }));
 vi.mock("../features/common/HelpOverlay", () => ({ default: () => null }));
 
@@ -170,7 +170,9 @@ it("没有所属作品时只写卷名", async () => {
   renderReader();
 
   await waitFor(() =>
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("第1卷"),
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "第1卷",
+    ),
   );
 });
 

@@ -55,7 +55,9 @@
     "Microsoft YaHei UI", "Segoe UI Variable Text", system-ui, sans-serif;
   --font-display:
     "SF Pro Display", "Segoe UI Variable Display", var(--font-sans);
+  --cover-shadow: 0 3px 8px rgb(56 34 18 / 0.22), 0 1px 2px rgb(56 34 18 / 0.16);
   --reader-bg: #070709;
+  --reader-chrome-gradient: linear-gradient(to bottom, rgb(0 0 0 / .8), transparent);
   --reader-panel: #141417;
   --overlay-glass: rgb(12 12 14 / 0.9);
   --overlay-bg: #000000;

@@ -69,22 +69,16 @@ vi.mock("../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], toggle: vi.fn() }),
 }));
 vi.mock("../utils/fullscreen", () => ({ toggleFullscreen: vi.fn() }));
-vi.mock("../components/gallery/ImageGallery", () => ({
+vi.mock("../features/reader/ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
 vi.mock("../features/viewer/VideoPlayer", () => ({
   default: () => <div data-testid="video-player" />,
 }));
-vi.mock("../components/gallery/PageSlider", () => ({ default: () => null }));
+vi.mock("../features/reader/PageSlider", () => ({ default: () => null }));
 // 顶栏换成带返回按钮的假件：这里要验的是返回落到哪里。
-vi.mock("../components/gallery/GalleryHeader", () => ({
-  default: ({
-    name,
-    onBack,
-  }: {
-    name: string;
-    onBack: () => void;
-  }) => (
+vi.mock("../features/reader/GalleryHeader", () => ({
+  default: ({ name, onBack }: { name: string; onBack: () => void }) => (
     <div>
       <h1>{name}</h1>
       <button type="button" onClick={onBack}>
@@ -93,8 +87,8 @@ vi.mock("../components/gallery/GalleryHeader", () => ({
     </div>
   ),
 }));
-vi.mock("../components/gallery/GalleryAlbumNav", () => ({ default: () => null }));
-vi.mock("../components/gallery/GalleryToolbar", () => ({ default: () => null }));
+vi.mock("../features/reader/GalleryAlbumNav", () => ({ default: () => null }));
+vi.mock("../features/reader/GalleryToolbar", () => ({ default: () => null }));
 vi.mock("../features/viewer/ImageInfoPanel", () => ({ default: () => null }));
 vi.mock("../features/common/HelpOverlay", () => ({ default: () => null }));
 
@@ -173,7 +167,9 @@ it("深链打开阅读器时返回所属作品", async () => {
     ),
   );
   fireEvent.click(screen.getByRole("button", { name: "返回" }));
-  expect(screen.getByTestId("location")).toHaveTextContent("/comic/albums/c_work");
+  expect(screen.getByTestId("location")).toHaveTextContent(
+    "/comic/albums/c_work",
+  );
 });
 
 it("不知道所属作品时返回书架", async () => {
@@ -181,7 +177,9 @@ it("不知道所属作品时返回书架", async () => {
   renderReader();
 
   await waitFor(() =>
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("第1卷"),
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
+      "第1卷",
+    ),
   );
   fireEvent.click(screen.getByRole("button", { name: "返回" }));
   expect(screen.getByTestId("location")).toHaveTextContent("/comic/library");

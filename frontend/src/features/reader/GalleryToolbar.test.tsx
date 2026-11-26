@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import GalleryToolbar from "./GalleryToolbar";
 import { useGalleryStore } from "../../store/galleryStore";
 
-function renderToolbar(props: Partial<Parameters<typeof GalleryToolbar>[0]> = {}) {
+function renderToolbar(
+  props: Partial<Parameters<typeof GalleryToolbar>[0]> = {},
+) {
   const onPrev = vi.fn();
   const onNext = vi.fn();
   const utils = render(
@@ -15,7 +17,9 @@ function renderToolbar(props: Partial<Parameters<typeof GalleryToolbar>[0]> = {}
 describe("GalleryToolbar 阅读控制", () => {
   it("是一个有中文可访问名的工具条", () => {
     renderToolbar();
-    expect(screen.getByRole("toolbar", { name: "阅读控制" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("toolbar", { name: "阅读控制" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "上一页" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "下一页" })).toBeInTheDocument();
   });

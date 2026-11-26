@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import RenditionImage from "../../features/common/RenditionImage";
+import { RenditionImage } from "../common";
 import { useAppMode } from "../../hooks/useAppMode";
 import { useEdgeFade } from "../../ui/useEdgeFade";
 import { FolderIcon } from "../../ui/icons";
@@ -74,9 +74,7 @@ function TimelineCard({ entry }: { entry: TimelineEntry }) {
       >
         <span
           className={`block shrink-0 overflow-hidden bg-bg-subtle ${
-            isComic
-              ? "timeline-cover--book w-12 h-14"
-              : "rounded-md w-12 h-12"
+            isComic ? "timeline-cover--book w-12 h-14" : "rounded-md w-12 h-12"
           }`}
         >
           {cover && cover !== failedSource ? (

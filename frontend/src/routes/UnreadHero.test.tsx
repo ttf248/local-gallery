@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { UnreadHero } from "../components/home/HomeHeroes";
+import { UnreadHero } from "../features/comic/ContinueReadingHero";
 import { useFavorites } from "../hooks/useFavorites";
 
 vi.mock("../hooks/useFavorites", () => ({
@@ -77,7 +77,7 @@ describe("UnreadHero", () => {
     const covers = container.querySelectorAll(".album-tile__cover");
     expect(covers.length).toBe(2);
     for (const cover of covers) {
-      expect(cover.className).toContain("aspect-[4/5]");
+      expect(cover.className).toContain("aspect-[2/3]");
     }
   });
 
@@ -105,7 +105,9 @@ describe("UnreadHero", () => {
     );
     const { container } = renderHero(eight, 8);
     // 发现区只预览四本，完整列表由明确链接承接。
-    const renderedCards = container.querySelectorAll('a[href^="/comic/albums/"]');
+    const renderedCards = container.querySelectorAll(
+      'a[href^="/comic/albums/"]',
+    );
     expect(renderedCards.length).toBe(4);
     expect(
       screen.getByRole("link", { name: "查看全部未读相册" }),
@@ -117,7 +119,9 @@ describe("UnreadHero", () => {
     const { container } = renderHero([makeCard("/a", "A")], 7);
     const heroSection = screen.getByTestId("unread-hero");
     expect(heroSection.textContent).toMatch(/7\s*卷等你翻开/);
-    expect(container.querySelectorAll('a[href^="/comic/albums/"]').length).toBe(1);
+    expect(container.querySelectorAll('a[href^="/comic/albums/"]').length).toBe(
+      1,
+    );
   });
 
   it("空 cards 数组仍渲染(调用方决定是否隐藏)", () => {

@@ -37,12 +37,16 @@ vi.mock("../../hooks/useMediaQuery", () => ({
 
 /** 目录网格的列数写在 grid-template-columns 上。 */
 function gridColumns(container: HTMLElement): number {
-  const grid = container.querySelector<HTMLElement>("[style*='grid-template-columns']");
+  const grid = container.querySelector<HTMLElement>(
+    "[style*='grid-template-columns']",
+  );
   const value = grid?.style.gridTemplateColumns ?? "";
   return Number(value.match(/repeat\((\d+)/)?.[1] ?? 0);
 }
 
-function renderOverview(props: Partial<React.ComponentProps<typeof PageOverview>> = {}) {
+function renderOverview(
+  props: Partial<React.ComponentProps<typeof PageOverview>> = {},
+) {
   const onJump = vi.fn();
   const onClose = vi.fn();
   render(
@@ -84,8 +88,9 @@ describe("PageOverview", () => {
     expect(
       screen.getByRole("button", { name: "跳到第 1 页" }).querySelector("img"),
     ).toBeNull();
-    expect(screen.getByRole("button", { name: "跳到第 2 页" }).querySelector("img"))
-      .not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "跳到第 2 页" }).querySelector("img"),
+    ).not.toBeNull();
   });
 
   it("页头写明页数与关闭方式", () => {

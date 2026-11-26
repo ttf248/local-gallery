@@ -83,7 +83,7 @@ vi.mock("../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], toggle: vi.fn() }),
 }));
 vi.mock("../utils/fullscreen", () => ({ toggleFullscreen: vi.fn() }));
-vi.mock("../components/gallery/ImageGallery", () => ({
+vi.mock("../features/reader/ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
 vi.mock("../features/viewer/VideoPlayer", () => ({
@@ -92,16 +92,16 @@ vi.mock("../features/viewer/VideoPlayer", () => ({
     return <div data-testid="video-player" />;
   },
 }));
-vi.mock("../components/gallery/PageSlider", () => ({
+vi.mock("../features/reader/PageSlider", () => ({
   default: () => null,
 }));
-vi.mock("../components/gallery/GalleryHeader", () => ({
+vi.mock("../features/reader/GalleryHeader", () => ({
   default: ({ name }: { name: string }) => <h1>{name}</h1>,
 }));
-vi.mock("../components/gallery/GalleryAlbumNav", () => ({
+vi.mock("../features/reader/GalleryAlbumNav", () => ({
   default: () => null,
 }));
-vi.mock("../components/gallery/GalleryToolbar", () => ({
+vi.mock("../features/reader/GalleryToolbar", () => ({
   default: () => null,
 }));
 vi.mock("../features/viewer/ImageInfoPanel", () => ({
@@ -436,9 +436,7 @@ describe("Reader 媒体活动恢复门禁", () => {
     mocks.getImage.mockReturnValue(lookup.promise);
 
     const view = renderReader();
-    await waitFor(() =>
-      expect(mocks.media.mock.calls[0]?.[0]).toBe(albumId),
-    );
+    await waitFor(() => expect(mocks.media.mock.calls[0]?.[0]).toBe(albumId));
     await waitFor(() => expect(activityApi.getImage).toHaveBeenCalled());
     view.unmount();
 

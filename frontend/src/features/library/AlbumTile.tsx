@@ -135,7 +135,7 @@ interface Props {
   titleOnCover?: boolean;
   /**
    * 封面画幅比例。
-   * 默认 "4/3" 用于照片卡片；也支持 "4/5"、"2/3" 和 "16/9"。
+   * 默认 "4/3" 用于照片卡片；也支持 "2/3" 和 "16/9"。
    */
   coverRatio?: CoverRatio;
   /**
@@ -169,10 +169,9 @@ interface Props {
   hideMeta?: boolean;
 }
 
-export type CoverRatio = "4/5" | "2/3" | "16/9" | "4/3" | "1/1";
+export type CoverRatio = "2/3" | "16/9" | "4/3" | "1/1";
 
 const COVER_RATIO_CLASS: Record<CoverRatio, string> = {
-  "4/5": "aspect-[4/5]",
   "2/3": "aspect-[2/3]",
   "16/9": "aspect-video",
   "4/3": "aspect-[4/3]",
@@ -461,6 +460,7 @@ function GridCard({
               已读完不会同时成立），所以放进同一列不冲突。
               深色蒙版材质压在任何封面上都读得清（原来的实心绿块在
               深色主题 / 浅色封面上都会糊掉）。 */}
+          {isFinished && isComicAlbum && <div className="absolute right-12 top-2"><ReadChip /></div>}
           <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
             {coverBadge}
             {data.coverKind === "video" && (
@@ -470,7 +470,6 @@ function GridCard({
               />
             )}
             {unread && <UnreadDot label={cardCopy.unreadTitle} />}
-            {isFinished && isComicAlbum && <ReadChip />}
           </div>
 
           {/* 底部暗化蒙版（hover 时让进度条与徽章更清晰） */}
@@ -506,7 +505,7 @@ function GridCard({
                   <span className="tabular-nums">{progressPct}%</span>
                 </div>
               )}
-              <div className="absolute bottom-0 left-0 right-0 h-1 z-10 bg-black/55">
+              <div className="absolute bottom-0 left-0 right-0 h-[3px] z-10 bg-black/55">
                 <div
                   className="h-full bg-white/90"
                   style={{ width: `${progressPct}%` }}

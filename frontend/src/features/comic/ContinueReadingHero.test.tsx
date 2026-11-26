@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
-import { ContinueHero, UnreadHero } from "./HomeHeroes";
-import type { CardData } from "../../features/library/AlbumGrid";
+import { ContinueReadingHero, UnreadHero } from "./ContinueReadingHero";
+import type { CardData } from "../library";
 
 vi.mock("../../hooks/useFavorites", () => ({
   useFavorites: () => ({
@@ -16,11 +16,11 @@ vi.mock("../../hooks/useFavorites", () => ({
   useToggleFavorite: () => vi.fn(),
 }));
 
-vi.mock("../../features/common/HoverPreview", () => ({
+vi.mock("../common/HoverPreview", () => ({
   default: () => <div data-testid="hover-preview" />,
 }));
 
-vi.mock("../../features/common/TranscodeStatusBadge", () => ({
+vi.mock("../common/TranscodeStatusBadge", () => ({
   default: () => null,
 }));
 
@@ -45,7 +45,7 @@ function renderContinue(cards: CardData[]) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <ContinueHero
+        <ContinueReadingHero
           cards={cards}
           onContinue={vi.fn()}
           onRemove={vi.fn()}
@@ -115,10 +115,7 @@ it("没有所属作品时只写卷名", () => {
 
 // 队列里只写「第2卷」时，这一卷属于哪部作品看不出来。
 it("继续阅读的队列项补上所属作品", () => {
-  renderContinue([
-    card(1),
-    { ...card(2), parentName: "夏日纪事" },
-  ]);
+  renderContinue([card(1), { ...card(2), parentName: "夏日纪事" }]);
 
   expect(screen.getByText("夏日纪事 · 第2卷")).toBeInTheDocument();
 });

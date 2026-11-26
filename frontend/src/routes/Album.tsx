@@ -11,7 +11,7 @@ import { useUIStore } from "../store/uiStore";
 import AlbumGrid from "../features/library/AlbumGrid";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
 import CollectionPhotoBand from "../features/album/CollectionPhotoBand";
-import YearTimeline from "../components/home/YearTimeline";
+import YearTimeline from "../features/comic/YearTimeline";
 import { type AlbumLike, type CollectionLike } from "../utils/albumGrouping";
 import EmptyState from "../features/common/EmptyState";
 import {
@@ -21,7 +21,11 @@ import {
   homeRoute,
   readerRoute,
 } from "../utils/path";
-import { albumCountUnit, collectionTypeWord, workbenchCopy } from "../utils/workbench";
+import {
+  albumCountUnit,
+  collectionTypeWord,
+  workbenchCopy,
+} from "../utils/workbench";
 import CardCover from "../features/library/CardCover";
 import { useAppMode } from "../hooks/useAppMode";
 import { useSafeBack, contextFallback } from "../utils/navigation";
@@ -610,7 +614,8 @@ function CollectionView({
                   onClick={() => setYearFilter(null)}
                   aria-label="取消年份筛选"
                 >
-                  只看 {yearFilter === "other" ? "未标年份的" : `${yearFilter} 年的`}
+                  只看{" "}
+                  {yearFilter === "other" ? "未标年份的" : `${yearFilter} 年的`}
                   子项 ×
                 </button>
               ) : null}

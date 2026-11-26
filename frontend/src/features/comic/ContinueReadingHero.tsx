@@ -1,11 +1,12 @@
+import { ScrollRow } from "../../ui/ScrollRow";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useFavorites } from "../../hooks/useFavorites";
 import { decodeFavPath, recentsRoute, unreadRoute } from "../../utils/path";
 import { readingPercent } from "../../utils/continueReading";
 import { comicCopy } from "../../utils/workbench";
-import AlbumCard from "../../features/library/AlbumTile";
-import type { CardData } from "../../features/library/AlbumGrid";
+import { AlbumTile as AlbumCard } from "../library";
+import type { CardData } from "../library";
 import Cover from "./Cover";
 import {
   ArrowRightLineIcon,
@@ -37,7 +38,7 @@ export function UnreadHero({
   const remaining = Math.max(0, count - shownCards.length);
   return (
     <section
-      className="hero-panel"
+      className="min-w-0"
       data-testid="unread-hero"
       aria-labelledby="unread-heading"
     >
@@ -75,7 +76,7 @@ export function UnreadHero({
           </Link>
         </div>
       </div>
-      <div className="hero-grid">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(min(160px,100%),1fr))] gap-4 2xl:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
         {shownCards.map((card) => (
           <AlbumCard
             key={card.id}
@@ -84,10 +85,10 @@ export function UnreadHero({
               isFavorite: favoriteIds.has(decodeFavPath(card.to)),
             }}
             showUnreadBadge={false}
-            /* 竖版书封（4:5），与网格和整页的书架语言一致。
+            /* 竖版书封（2:3），与网格和整页的书架语言一致。
                早先用 4:3 横幅：右栏因此比左栏矮一大截，两块面板
                读起来像两个产品；竖版之后两栏高度自然接近。 */
-            coverRatio="4/5"
+            coverRatio="2/3"
             overlayAction={
               <button
                 type="button"
@@ -126,7 +127,7 @@ interface ContinueHeroProps {
 }
 
 // 继续阅读区只出现在漫画工作台：照片那边不记录阅读位置。
-export function ContinueHero({
+export function ContinueReadingHero({
   cards,
   onContinue,
   onRemove,
@@ -144,7 +145,7 @@ export function ContinueHero({
       : undefined;
   return (
     <section
-      className="hero-panel"
+      className="min-w-0"
       data-testid="continue-hero"
       aria-labelledby="continue-heading"
     >
@@ -166,7 +167,7 @@ export function ContinueHero({
           清空
         </button>
       </div>
-      <div className="hero-panel__feature">
+      <div className="mt-6 grid min-w-0 grid-cols-[minmax(104px,.8fr)_minmax(0,1fr)] items-center gap-4 sm:gap-6 sm:grid-cols-[minmax(160px,280px)_minmax(0,1fr)]">
         <StagePoster card={featured} onClick={() => onContinue(featured)} />
         <div className="min-w-0">
           <p className="hero-panel__muted">上次，看到这里</p>
@@ -177,7 +178,7 @@ export function ContinueHero({
               {series}
             </p>
           )}
-          <h3 className="hero-panel__title line-clamp-2">
+          <h3 className="line-clamp-2 font-display text-[clamp(28px,4vw,40px)] leading-tight">
             {featured.displayTitle ?? featured.title}
           </h3>
           <StageInfo
@@ -188,23 +189,27 @@ export function ContinueHero({
         </div>
       </div>
       {rest.length > 0 && (
-        <div className="hero-queue">
-          {rest.map((card) => (
-            <QueueItem
-              key={card.id}
-              card={card}
-              onOpen={() => onContinue(card)}
-              onRemove={() => onRemove(card)}
-            />
-          ))}
-        </div>
+        <section className="mt-8">
+          <h3 className="mb-3 text-title-3">在读</h3>
+          <ScrollRow label="在读">
+            {rest.map((card) => (
+              <QueueItem
+                key={card.id}
+                card={card}
+                onOpen={() => onContinue(card)}
+                onRemove={() => onRemove(card)}
+              />
+            ))}
+          </ScrollRow>
+        </section>
       )}
       {cards.length > 4 && (
         <Link
           to={recentsRoute("comic")}
           className="hero-panel__muted inline-flex items-center gap-2 self-end mt-4 min-h-7"
         >
-          还有 {cards.length - 4} {copy.collectionUnit}在读 <ArrowRightLineIcon size={12} />
+          还有 {cards.length - 4} {copy.collectionUnit}在读{" "}
+          <ArrowRightLineIcon size={12} />
         </Link>
       )}
     </section>
@@ -224,7 +229,7 @@ function StagePoster({
       type="button"
       onClick={onClick}
       aria-label={`${copy.continueTitle}「${card.title}」`}
-      className="hero-cover hero-cover--book"
+      className="relative aspect-[2/3] w-full max-w-[280px] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]"
     >
       <Cover card={card} large />
     </button>
@@ -262,7 +267,7 @@ function StageInfo({
           <div
             /* 窄屏下轨道缩到一截：与页码并排才读得出「进度条 + 读到哪里」。
                独占一行时它就是一条分隔线。 */
-            className="h-1.5 w-24 sm:w-40 shrink-0 rounded-full bg-accent/20 overflow-hidden"
+            className="h-1 w-24 sm:w-40 shrink-0 rounded-full bg-accent/20 overflow-hidden"
             role="progressbar"
             aria-valuenow={percent}
             aria-valuemin={0}
@@ -312,14 +317,14 @@ function QueueItem({
     card.parentName && card.parentName !== label ? card.parentName : undefined;
   const queueTitle = series ? `${series} · ${label}` : label;
   return (
-    <div className="hero-queue__item group">
+    <div className="group relative w-40 shrink-0">
       <button
         type="button"
-        className="hero-queue__open"
+        className="block w-full text-left"
         onClick={onOpen}
         aria-label={`${copy.continueTitle}「${queueTitle}」`}
       >
-        <span className="hero-queue__cover">
+        <span className="mb-2 block aspect-[2/3] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]">
           <Cover card={card} />
         </span>
         <span className="min-w-0">

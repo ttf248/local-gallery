@@ -430,7 +430,7 @@ describe("AlbumCard 状态表达", () => {
 
   // 阅读状态集中在封面左上角一列：未读点与已读完 chip 互斥，不会同时
   // 出现，但也不再散在两个方向 —— 扫读一张卡片时不用分别去找。
-  it("已读完的相册在封面左上角显示已读 chip，且不再显示未读点", () => {
+  it("已读完的相册在封面右上角显示已读标记，且不再显示未读点", () => {
     const { container } = renderCard(
       card({ progress: { index: 11, total: 12 } }),
     );
@@ -438,7 +438,7 @@ describe("AlbumCard 状态表达", () => {
     expect(screen.getByText("已读完", { exact: true })).toBeInTheDocument();
     expect(screen.queryByText("未读")).not.toBeInTheDocument();
     const chip = screen.getByText("已读完", { exact: true }).closest("div");
-    const slot = container.querySelector(".album-tile__cover > div");
+    const slot = container.querySelector(".album-tile__cover > .right-12");
     expect(slot).not.toBeNull();
     expect(slot?.contains(chip)).toBe(true);
   });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
-import RenditionImage from "../../features/common/RenditionImage";
+import { RenditionImage } from "../common";
 import { CloseIcon, SinglePageIcon } from "../../ui/icons";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 
@@ -145,7 +145,9 @@ export default function PageOverview({
           itemContent={(_index, row) => (
             <div
               className="grid gap-2 pb-2"
-              style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+              style={{
+                gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              }}
             >
               {row.items.map((item) => (
                 <button

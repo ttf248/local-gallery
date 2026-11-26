@@ -46,9 +46,9 @@ vi.mock("../hooks/useImageActivity", () => ({
   useMarkAlbumRead: () => ({ mutateAsync: vi.fn() }),
   useMarkAlbumsRead: () => ({ mutateAsync: vi.fn() }),
 }));
-vi.mock("../components/home/YearTimeline", () => ({ default: () => null }));
-vi.mock("../components/home/HomeHeroes", () => ({
-  ContinueHero: () => null,
+vi.mock("../features/comic/YearTimeline", () => ({ default: () => null }));
+vi.mock("../features/comic/ContinueReadingHero", () => ({
+  ContinueReadingHero: () => null,
   UnreadHero: () => null,
 }));
 vi.mock("../features/library/AlbumGrid", () => ({

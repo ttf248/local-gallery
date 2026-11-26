@@ -63,22 +63,22 @@ vi.mock("../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], toggle: vi.fn() }),
 }));
 vi.mock("../utils/fullscreen", () => ({ toggleFullscreen: vi.fn() }));
-vi.mock("../components/gallery/ImageGallery", () => ({
+vi.mock("../features/reader/ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
 vi.mock("../features/viewer/VideoPlayer", () => ({
   default: () => <div data-testid="video-player" />,
 }));
-vi.mock("../components/gallery/PageSlider", () => ({
+vi.mock("../features/reader/PageSlider", () => ({
   default: () => null,
 }));
-vi.mock("../components/gallery/GalleryHeader", () => ({
+vi.mock("../features/reader/GalleryHeader", () => ({
   default: ({ name }: { name: string }) => <h1>{name}</h1>,
 }));
-vi.mock("../components/gallery/GalleryAlbumNav", () => ({
+vi.mock("../features/reader/GalleryAlbumNav", () => ({
   default: () => null,
 }));
-vi.mock("../components/gallery/GalleryToolbar", () => ({
+vi.mock("../features/reader/GalleryToolbar", () => ({
   default: () => null,
 }));
 vi.mock("../features/viewer/ImageInfoPanel", () => ({
@@ -91,7 +91,9 @@ vi.mock("../features/common/HelpOverlay", () => ({
 const albumId = "a_0000000000000000000001";
 
 function renderReader(query = "") {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   function Providers(_props: { children: ReactNode }) {
     return (
       <QueryClientProvider client={client}>

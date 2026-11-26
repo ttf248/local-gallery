@@ -77,8 +77,8 @@
     background: linear-gradient(
       to right,
       rgb(0 0 0 / 0.5) 0,
-      rgb(0 0 0 / 0.18) 9px,
-      rgb(0 0 0 / 0) 26px
+      rgb(0 0 0 / 0.18) 2px,
+      rgb(0 0 0 / 0) 3px
     );
   }
   .album-tile__cover--book::before,
@@ -249,7 +249,7 @@
   @media (min-width:1440px) { .library-grid { --album-min:260px; } }
   @media (min-width:1920px) { .library-grid { --album-min:300px; gap:44px 32px; } }
   @media (min-width:2560px) { .library-grid { --album-min:340px; } }
-  .library-grid--comic { --album-min:180px; }
+  .library-grid--comic { --album-min:160px; }
   .timeline-cover--book {
     position: relative;
     border-radius: 5px 8px 8px 5px;
@@ -416,7 +416,7 @@
     background: var(--bg-media);
   }
   .hero-cover--book {
-    aspect-ratio: 4 / 5;
+    aspect-ratio: 2 / 3;
     justify-self: center;
     border-radius: 12px 16px 16px 12px;
     box-shadow: 8px 12px 22px rgb(0 0 0 / 18%);
@@ -698,4 +698,9 @@
   .comic-library-home__recent {
     padding-bottom: var(--section-gap);
   }
+}
+
+@layer components {
+  .album-tile__cover--book { border-radius: 6px; box-shadow: var(--cover-shadow); }
+  @media (min-width: 1536px) { .library-grid--comic { --album-min: 200px; } }
 }

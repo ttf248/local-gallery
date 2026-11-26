@@ -276,7 +276,12 @@ export default function ImageGallery({
       return { ...base, width: "100%", height: "auto" };
     }
     if (aspect.mode === "height") {
-      return { ...base, height: "var(--gallery-fit-height)", width: "auto", maxWidth: "100%" };
+      return {
+        ...base,
+        height: "var(--gallery-fit-height)",
+        width: "auto",
+        maxWidth: "100%",
+      };
     }
     // 原始尺寸：按像素原样显示，由容器滚动查看。
     // flex 子项默认会被压缩到容器宽度；Tailwind preflight 还给 img 设了
@@ -563,8 +568,7 @@ const ContinuousImage = memo(function ContinuousImage({
       ? `${size.width} / ${size.height}`
       : undefined;
   const reservesHeight =
-    ratio !== undefined &&
-    (aspect.mode === "fit" || aspect.mode === "width");
+    ratio !== undefined && (aspect.mode === "fit" || aspect.mode === "width");
 
   // 缩放：连续模式下用 transform，避免破坏流式布局。
   // transform-origin: top center → 缩放时图片从顶部对齐，下方自然溢出形成滚动。

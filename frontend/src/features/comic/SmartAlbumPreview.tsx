@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import type { SmartAlbumDirectoryItem } from "../../api/albums";
 import { smartAlbumPreviewColumns } from "../../utils/smartAlbum";
-import SmartAlbumWall from "../../features/album/SmartAlbumWall";
-import AlbumGridSkeleton from "../../features/library/AlbumGridSkeleton";
-import EmptyState from "../../features/common/EmptyState";
-import ErrorBanner from "../../features/common/ErrorBanner";
+import { SmartAlbumWall } from "../album";
+import { AlbumGridSkeleton } from "../library";
+import { EmptyState } from "../common";
+import { ErrorBanner } from "../common";
 
 /** 首页精选最多六个不同来源文件夹的推荐主题。 */
 export const HOME_SMART_ALBUM_PREVIEW = 6;

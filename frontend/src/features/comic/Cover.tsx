@@ -1,7 +1,7 @@
 import { useState } from "react";
-import RenditionImage from "../../features/common/RenditionImage";
+import { RenditionImage } from "../common";
 import { FolderIcon } from "../../ui/icons";
-import type { CardData } from "../../features/library/AlbumGrid";
+import type { CardData } from "../library";
 
 /**
  * 封面图。
@@ -25,7 +25,7 @@ export default function Cover({
       fileId={src}
       version={card.coverVersion}
       alt=""
-      displayWidth={large ? 160 : 48}
+      displayWidth={large ? 280 : 160}
       loading={large ? "eager" : "lazy"}
       onError={() => setFailedSource(src)}
       className="w-full h-full object-cover object-[50%_30%]"

@@ -43,6 +43,7 @@ interface Props {
   onToggleFavorite: () => void;
   onToggleInfo: () => void;
   onToggleHelp: () => void;
+  onOpenSettings?: () => void;
   /** 上一张 / 下一张。图片模式由底部工具条提供，这里只服务视频模式。 */
   onPrev: () => void;
   onNext: () => void;
@@ -85,6 +86,7 @@ export default function GalleryHeader({
   onToggleFavorite,
   onToggleInfo,
   onToggleHelp,
+  onOpenSettings,
   onPrev,
   onNext,
   onPrevAlbum,
@@ -254,6 +256,9 @@ export default function GalleryHeader({
               <span>目录</span>
               <span className="ml-auto text-meta text-white/55">T</span>
             </PopoverItem>
+          )}
+          {!isVideo && onOpenSettings && (
+            <PopoverItem onClick={onOpenSettings}>阅读设置</PopoverItem>
           )}
           <PopoverItem onClick={onToggleHelp}>
             <KeyboardIcon size={13} />

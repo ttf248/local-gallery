@@ -81,7 +81,7 @@ vi.mock("../hooks/useImageActivity", () => ({
   useMarkAlbumsRead: () => ({ mutateAsync: vi.fn() }),
 }));
 // 英雄区与时间线用占位元素代替：这里只关心「筛选条相对它们的位置」。
-vi.mock("../components/home/YearTimeline", () => ({
+vi.mock("../features/comic/YearTimeline", () => ({
   default: () => <div data-testid="year-timeline" />,
 }));
 // 智能相册墙按容器宽度排布：测试里给一个固定宽度。
@@ -124,8 +124,8 @@ vi.mock("../hooks/useMediaFeed", () => ({
     isFetchingNextPage: false,
   }),
 }));
-vi.mock("../components/home/HomeHeroes", () => ({
-  ContinueHero: () => <div data-testid="continue-hero" />,
+vi.mock("../features/comic/ContinueReadingHero", () => ({
+  ContinueReadingHero: () => <div data-testid="continue-hero" />,
   UnreadHero: () => <div data-testid="unread-hero" />,
 }));
 vi.mock("../features/library/AlbumGrid", () => ({
@@ -383,4 +383,3 @@ it("漫画首页摆出「最近阅读」专区", async () => {
     "/comic/albums/a_c1",
   );
 });
-

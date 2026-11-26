@@ -156,12 +156,12 @@ export default function AlbumGrid({
   // 漫画侧用书架那一套：封面竖版本身就窄，按展陈墙的列宽铺开，
   // 每张卡会撑成巨幅海报，一屏只看得到四本。
   const gridColsClass =
-    density === "spacious"
-      ? "library-grid library-grid--spacious"
-      : density === "dense"
-        ? "library-grid library-grid--dense"
-        : workbench === "comic"
-          ? "library-grid library-grid--comic"
+    workbench === "comic"
+      ? "library-grid library-grid--comic"
+      : density === "spacious"
+        ? "library-grid library-grid--spacious"
+        : density === "dense"
+          ? "library-grid library-grid--dense"
           : "library-grid";
 
   if (items.length === 0) return <>{empty}</>;
