@@ -44,13 +44,13 @@ import { SelectionToggle } from "../features/common/LibrarySelectionActions";
  */
 function TagHead({ tag, onBack }: { tag: string; onBack: () => void }) {
   return (
-    <div className="page-shell page-section pt-[var(--section)] pb-5">
+    <Page className="page-section pt-[var(--section)] pb-5">
       <button onClick={onBack} className="btn btn-sm btn-ghost mb-4">
         <ChevronLeftIcon size={13} />
         <span>返回</span>
       </button>
       <PageHero title={tag} eyebrow="标签" />
-    </div>
+    </Page>
   );
 }
 

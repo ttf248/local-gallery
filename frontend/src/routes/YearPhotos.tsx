@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {PageHero} from "../shell/PageHero";
 import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMediaFeed } from "../hooks/useMediaFeed";
@@ -80,54 +82,15 @@ export default function YearPhotos() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <header className="shrink-0 border-b border-line bg-canvas">
-        <div className="page-shell">
-          <div className="album-bar flex items-center gap-3.5 py-3 max-sm:flex-wrap">
-            <div className="min-w-0 flex-1">
-              {/* 眉标说清这一页是什么：年份是浏览入口，
-                  与相册页的「这一本」不是一回事。 */}
-              <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em]">按相册目录年份浏览</p>
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                <h1 className="album-bar__title font-display text-title leading-[1.25] font-semibold tracking-[-0.02em] text-ink [overflow-wrap:anywhere] truncate">{label}</h1>
-                <div className="album-bar__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-1 text-caption text-ink-2 [.album-bar_&]:mt-0 tabular-nums">
-                  <span>
-                    <span className="text-ink font-medium">{total}</span> 张
-                  </span>
-                  {feed.albums.length > 0 && (
-                    <>
-                      <span className="text-ink-3">·</span>
-                      <span>
-                        来自{" "}
-                        <span className="text-ink font-medium">
-                          {feed.albums.length}
-                        </span>{" "}
-                        本相册
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* 回到照片库：年份页是首页那一条路的中段，
-                  浏览器后退之外还要有一条明确的回路。 */}
-              <button
-                type="button"
-                onClick={() => navigate(homeRoute("photo"))}
-                className="btn btn-sm btn-outline"
-              >
-                照片库
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Page><PageHero compact title={label} eyebrow="按相册目录年份浏览"
+        meta={<>{total} 张{feed.albums.length>0 && ` · 来自 ${feed.albums.length} 本相册`}</>}
+        actions={<button className="rounded-md border border-line px-3 py-2" onClick={()=>navigate(homeRoute("photo"))}>照片库</button>}/></Page>
 
       {/* 来源集合：年份对应的那个集合是这一页的「结构视图」——
           照片墙看的是内容，集合看的是它由哪几本相册组成。两条路
           各管一件事，入口摆在一起，用户不必猜哪一个是哪一个。 */}
       {feed.sources.length > 0 && (
-        <div className="page-shell pt-3">
+        <Page className="pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-caption text-ink-3">来源</span>
             {feed.sources.map((source) => (
@@ -140,10 +103,10 @@ export default function YearPhotos() {
               </Link>
             ))}
           </div>
-        </div>
+        </Page>
       )}
 
-      <div className="page-shell min-h-0 flex-1 pb-2">
+      <Page className="min-h-0 flex-1 pb-2">
         {feed.isError && items.length > 0 ? (
           <div className="pb-2">
             <ErrorBanner
@@ -210,7 +173,7 @@ export default function YearPhotos() {
             onContextMenu={menu.open}
           />
         )}
-      </div>
+      </Page>
 
       {menu.menu && (
         <ContextMenu

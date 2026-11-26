@@ -1,3 +1,4 @@
+import { SectionHeader } from "../ui/SectionHeader";
 import { PageHero } from "../shell/PageHero";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect, useCallback, useMemo } from "react";
@@ -328,7 +329,7 @@ export default function Recents({
               recentSections.map((section) => (
                 <section key={section.title}>
                   {section.title && (
-                    <h2 className="py-3 text-heading">{section.title}</h2>
+                    <SectionHeader title={section.title}/>
                   )}
                   <AlbumGrid
                     items={section.items}

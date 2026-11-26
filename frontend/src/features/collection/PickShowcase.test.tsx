@@ -38,9 +38,9 @@ describe("少量精选的陈列", () => {
     for (const [index, frame] of Array.from(frames).entries()) {
       const ratio = items[index].width / items[index].height;
       const style = (frame as HTMLElement).style;
-      expect(style.maxWidth).toContain("520px");
-      expect(style.width).toContain("clamp(");
-      expect(parseFloat(style.width.slice(6))).toBeCloseTo(320 * ratio, 2);
+      expect(style.maxWidth).toBe("100%");
+      expect(style.width).toContain("420px");
+      expect(style.width).toContain(String(560 * ratio));
     }
   });
 

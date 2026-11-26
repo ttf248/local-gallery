@@ -1,7 +1,8 @@
-import { useEffect, useMemo } from "react";
+import {useRef,useEffect,useState,useMemo} from "react";
+import {useQuery} from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ApiError } from "../../api/client";
-import { type AIWorkerStatus, type SemanticSearchHit } from "../../api/aiJobs";
+import { aiJobsApi,type AIWorkerStatus, type SemanticSearchHit } from "../../api/aiJobs";
 import type { LibraryFeedItem } from "../../api/library";
 import { EmptyState } from "../common";
 import { ErrorBanner } from "../common";
@@ -199,7 +200,9 @@ export default function ContentSearchResults({
           onLoadMore={loadMore}
           onOpen={(_item, index) => wall.open(index)}
           albumLabel={(item) => item.albumName}
-          itemBadge={(item) => matchBadge(item, submitted?.request.ocrText)}
+          itemBadge={item=>matchBadge(item,submitted?.request.ocrText)}
+          itemOverlay={item=>item.matchReasons?.some(reason=>reason.startsWith("ocr_")) && submitted?.request.ocrText
+            ? <TextExcerpt resourceId={item.id} query={submitted.request.ocrText}/> : null}
           isPicked={picks.isPicked}
           onTogglePick={(item) => picks.toggle(item.id)}
           /* 关掉预览后墙回到刚才看的那张：翻了几百张再关掉，
@@ -296,4 +299,27 @@ function semanticErrorMessage(error: unknown): string {
       return "本机 AI 运行环境不可用，请检查 Python 3.11 与 CUDA 安装。";
   }
   return "语义搜索暂不可用，请稍后重试。";
+}
+
+
+function TextExcerpt({resourceId,query}:{resourceId:string;query:string}) {
+  const anchor=useRef<HTMLSpanElement>(null);
+  const [active,setActive]=useState(false);
+  useEffect(()=>{
+    const tile=anchor.current?.closest<HTMLElement>("[data-media-id]");
+    if(!tile)return;
+    const show=()=>setActive(true),hide=()=>setActive(false);
+    tile.addEventListener("mouseenter",show);tile.addEventListener("focusin",show);
+    tile.addEventListener("mouseleave",hide);tile.addEventListener("focusout",hide);
+    return ()=>{tile.removeEventListener("mouseenter",show);tile.removeEventListener("focusin",show);
+      tile.removeEventListener("mouseleave",hide);tile.removeEventListener("focusout",hide);};
+  },[resourceId]);
+  const result=useQuery({queryKey:["image-analysis",resourceId],queryFn:()=>aiJobsApi.analysis(resourceId),enabled:active,staleTime:60000});
+  const text=result.data?.ocr.text ?? "";
+  const index=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+  return <span ref={anchor} className="pointer-events-none absolute inset-x-2 bottom-8 z-10">
+    {active && text && <span role="tooltip" className="line-clamp-3 rounded-md bg-raised px-2 py-1 text-caption text-ink shadow-1">
+      {index<0 ? text.slice(0,80) : <>{text.slice(Math.max(0,index-20),index)}<mark className="bg-accent-soft text-ink">{text.slice(index,index+query.length)}</mark>{text.slice(index+query.length,index+query.length+40)}</>}
+    </span>}
+  </span>;
 }

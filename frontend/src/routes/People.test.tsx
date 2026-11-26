@@ -308,14 +308,14 @@ describe("人物相册", () => {
     expect(await screen.findByText("可能的同一人")).toBeInTheDocument();
     expect(screen.getByText(/特征相似度 0\.820/)).toBeInTheDocument();
     expect(mocks.mergePeople).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "排除此建议" }));
+    fireEvent.click(screen.getByRole("button", { name: "不是" }));
     await waitFor(() =>
       expect(mocks.excludePersonMatch).toHaveBeenCalledWith(
         "p_source",
         "p_target",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "确认合并" }));
+    fireEvent.click(screen.getByRole("button", { name: "是 TA" }));
     await waitFor(() =>
       expect(mocks.mergePeople).toHaveBeenCalledWith("p_source", "p_target"),
     );

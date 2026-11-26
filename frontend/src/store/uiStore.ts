@@ -28,7 +28,8 @@ export interface PersistedUIPrefs { theme: ThemePref;sidebar:SidebarState;viewMo
 export interface UIState extends PersistedUIPrefs {
   setMemoriesDismissedOn: (date: string | null) => void;
   commandPaletteOpen: boolean;
-  setCommandPaletteOpen: (open: boolean) => void;
+  commandScope?: "name" | "content";
+  setCommandPaletteOpen: (open: boolean, scope?: "name" | "content") => void;
   toggleCommandPalette: () => void;
   setFolderDrawerOpen: (open: boolean) => void;
   toggleFolderDrawer: () => void;
@@ -72,9 +73,9 @@ export const useUIStore = create<UIState>()(
       setMemoriesDismissedOn: (memoriesDismissedOn) =>
         set({ memoriesDismissedOn }),
       commandPaletteOpen: false,
-      setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      setCommandPaletteOpen: (open,scope) => set({ commandPaletteOpen: open, commandScope:scope }),
       toggleCommandPalette: () =>
-        set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
+        set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen,commandScope:undefined })),
       folderDrawerOpen: false,
       setFolderDrawerOpen: (open) => set({ folderDrawerOpen: open }),
       toggleFolderDrawer: () =>

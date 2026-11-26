@@ -1,6 +1,6 @@
 import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
 import { ScrollRow } from "../../ui/ScrollRow";
-import { useEffect, useRef, useState } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { albumsApi, type SmartAlbumDirectoryItem } from "../../api/albums";
@@ -82,7 +82,7 @@ export default function ThemeCards() {
           </InlineAlert>
         ) : (
           <ScrollRow label="推荐主题">
-            {directory.items.map((item) => (
+            {directory.items.slice(0,4).map((item) => (
               <ThemeCard key={`${item.albumId}-${item.group.id}`} item={item} />
             ))}
           </ScrollRow>
@@ -160,54 +160,6 @@ export default function ThemeCards() {
  */
 function ThemeCard({ item }: { item: SmartAlbumDirectoryItem }) {
   const group = item.group;
-  const coverRef = useRef<HTMLSpanElement>(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const el = coverRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setVisible(true);
-        observer.disconnect();
-      }
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-  const summary = useQuery({
-    queryKey: smartAlbumQueryKeys.summary(item.albumId, group.dimension),
-    queryFn: ({ signal }) =>
-      albumsApi.smartGroups(item.albumId, group.dimension, signal),
-    enabled: visible && group.photoCount > 1,
-    staleTime: 30_000,
-  });
-  const snapshot = summary.data?.summary.snapshotKey ?? "";
-  const members = useQuery({
-    queryKey: [
-      "smart-albums",
-      "preview",
-      item.albumId,
-      group.dimension,
-      group.id,
-      snapshot,
-    ],
-    queryFn: ({ signal }) =>
-      albumsApi.smartGroupMedia(
-        item.albumId,
-        group.dimension,
-        group.id,
-        snapshot,
-        undefined,
-        signal,
-        4,
-      ),
-    enabled: visible && Boolean(snapshot),
-    staleTime: 60_000,
-  });
-  const covers =
-    members.data?.page.items
-      .filter((member) => member.kind === "image")
-      .slice(0, 4) ?? [];
   const source = [item.parentName, item.albumName].filter(Boolean).join(" / ");
   const evidence = smartAlbumEvidenceDimensions(group);
   return (
@@ -220,32 +172,8 @@ function ThemeCard({ item }: { item: SmartAlbumDirectoryItem }) {
       }
       className="w-[min(300px,76vw)] shrink-0"
     >
-      <span
-        ref={coverRef}
-        className={
-          "grid aspect-[4/3] gap-0.5 overflow-hidden rounded-lg bg-media " +
-          (covers.length > 1 ? "grid-cols-2" : "place-items-center")
-        }
-      >
-        {covers.length > 1 ? (
-          covers.map((member, index) => (
-            <span
-              key={member.id}
-              className={
-                "min-h-0 min-w-0 " +
-                (covers.length === 3 && index === 0 ? "row-span-2" : "")
-              }
-            >
-              <RenditionImage
-                fileId={member.id}
-                version={member.version}
-                alt=""
-                displayWidth={160}
-                className="size-full object-cover"
-              />
-            </span>
-          ))
-        ) : group.coverResourceId ? (
+      <span className="grid aspect-[4/3] place-items-center overflow-hidden rounded-lg bg-media">
+        {group.coverResourceId ? (
           <RenditionImage
             fileId={group.coverResourceId}
             version={group.coverVersion}

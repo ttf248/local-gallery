@@ -1,3 +1,4 @@
+import { QueryClient,QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,10 +29,10 @@ function LocationProbe() {
 
 function renderPreview() {
   return render(
-    <MemoryRouter>
+    <QueryClientProvider client={new QueryClient()}><MemoryRouter>
       <YearRibbon />
       <LocationProbe />
-    </MemoryRouter>,
+    </MemoryRouter></QueryClientProvider>,
   );
 }
 

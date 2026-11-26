@@ -63,7 +63,7 @@ export default function PickShowcase<T extends { id: string }>({
 }: Props<T>) {
   return (
     <div
-      className="flex flex-wrap items-start justify-center gap-8 pb-4 pt-12"
+      className="flex flex-wrap items-start justify-center gap-8 rounded-xl bg-sunken px-4 py-12"
       data-testid="pick-showcase"
     >
       {items.map((item, index) => {
@@ -82,15 +82,8 @@ export default function PickShowcase<T extends { id: string }>({
             <div
               className="relative overflow-hidden rounded-lg bg-media shadow-2"
               style={{
-                width:
-                  "clamp(" +
-                  320 * frameRatio +
-                  "px," +
-                  56 * frameRatio +
-                  "vh," +
-                  640 * frameRatio +
-                  "px)",
-                maxWidth: "min(100%, 520px)",
+                width: `min(420px, ${560 * frameRatio}px, 76vw)`,
+                maxWidth: "100%",
                 aspectRatio: String(frameRatio),
               }}
             >

@@ -1,5 +1,5 @@
 import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
-import { ScrollRow } from "../../ui/ScrollRow";
+
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -78,11 +78,10 @@ export default function PlaceCards() {
 
       {items.length > 0 ? (
         <>
-          <ScrollRow label="地点预览" style={{ maskImage: "none" }}>
-            {items.map((place) => (
-              <PlaceCard key={place.adcode} place={place} />
-            ))}
-          </ScrollRow>
+          <PlaceCard place={items[0]}/>
+          <ul className="mt-2 divide-y divide-line-subtle">{items.slice(1,4).map(place=><li key={place.adcode}><Link className="flex min-h-10 items-center justify-between gap-3 rounded-md px-2 text-label hover:bg-hover" to={travelPlaceRoute(place.adcode)}>
+            <span>{place.name}</span><span className="text-caption tabular-nums text-ink-3">{place.photoCount.toLocaleString("zh-CN")} 张 · 去过 {place.visitCount} 次</span>
+          </Link></li>)}</ul>
         </>
       ) : null}
     </ExploreSection>
@@ -94,7 +93,7 @@ function PlaceCard({ place }: { place: ChinaPlace }) {
   return (
     <Link
       to={travelPlaceRoute(place.adcode)}
-      className="group/place relative block aspect-[3/2] w-[min(300px,80vw)] shrink-0 overflow-hidden rounded-lg bg-media"
+      className="group/place relative block aspect-[3/2] w-full overflow-hidden rounded-lg bg-media"
     >
       {cover ? (
         <RenditionImage

@@ -1,21 +1,13 @@
+import {useQuery} from "@tanstack/react-query";
+import {libraryApi,type LibraryFeedItem,type TimelineYear} from "../../api/library";
+import {RenditionImage} from "../common";
 import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
 import { ScrollRow } from "../../ui/ScrollRow";
-import { useMemo } from "react";
+import { useMemo,useRef,useEffect,useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMediaFeed } from "../../hooks/useMediaFeed";
 import { InlineAlert } from "../../ui/InlineAlert";
 
-/**
- * 发现页的时间预览。
- *
- * 年份索引直接取自照片时间线：年份、数量和点击后的照片范围都按单张
- * 媒体的日期证据计算。只有年份精度的媒体也计入对应年份，不补月份。
- *
- * 年份没有封面 —— 时间线索引只给年份与数量，给不出这一年的代表照。
- * 与其摆一块空框或一枚文件夹图标（读起来像「这里缺一张图」），不如把
- * 年份本身当成画面：数字占住与照片卡一样的那块方框，年份是索引，
- * 照片是内容，两者在页面上分得开。
- */
 export default function YearRibbon() {
   const navigate = useNavigate();
   const query = useMediaFeed(
@@ -42,35 +34,11 @@ export default function YearRibbon() {
       ) : query.years.length > 0 ? (
         <ScrollRow
           label="按年份浏览"
-          gap={0}
+          gap={12}
           data-testid="year-timeline"
           style={{ maskImage: "none" }}
         >
-          {query.years.map((year) => (
-            <button
-              key={year.year}
-              type="button"
-              className="group/year flex h-[72px] w-28 shrink-0 flex-col justify-center border-l border-line bg-canvas px-3 text-left first:border-l-0"
-              onClick={() => navigate("/photo?year=" + year.year)}
-            >
-              <span className="flex items-center gap-2 text-[28px] leading-tight text-ink-2 tabular-nums group-hover/year:text-ink">
-                {year.year}
-                {year.year === new Date().getFullYear() && (
-                  <span
-                    aria-label="今年"
-                    className="size-1.5 rounded-full bg-accent"
-                  />
-                )}
-              </span>
-              <span className="text-caption tabular-nums text-ink-2">
-                {year.count.toLocaleString("zh-CN")} 张
-              </span>
-              <span
-                aria-hidden
-                className="mt-1 h-0.5 w-5 bg-ink opacity-0 group-hover/year:opacity-100 group-focus-visible/year:opacity-100"
-              />
-            </button>
-          ))}
+          {query.years.map(year=><YearCard key={year.year} year={year} initial={query.items?.find(item=>item.kind==="image" && item.dateValue?.startsWith(String(year.year)))} onOpen={()=>navigate("/photo?year="+year.year)}/>)}
         </ScrollRow>
       ) : (
         <p className="text-body text-ink-2">
@@ -79,4 +47,27 @@ export default function YearRibbon() {
       )}
     </ExploreSection>
   );
+}
+
+function YearCard({year,initial,onOpen}:{year:TimelineYear; initial?:LibraryFeedItem;onOpen:()=>void}){
+  const ref=useRef<HTMLButtonElement>(null);
+  const [visible,setVisible]=useState(false);
+  useEffect(()=>{
+    if(!ref.current)return;
+    if(typeof IntersectionObserver==="undefined"){setVisible(true);return;}
+    const observer=new IntersectionObserver(([entry])=>{if(entry.isIntersecting){setVisible(true);observer.disconnect();}});
+    observer.observe(ref.current);return ()=>observer.disconnect();
+  },[]);
+  const cover=useQuery({
+    queryKey:["library","year-cover",year.year,year.count],enabled:visible && !initial,staleTime:60000,
+    queryFn:({signal})=>libraryApi.mediaFeed({kind:"photo",scope:"timeline",year:String(year.year),media:"photo"},undefined,signal,1).then(result=>result.page.items[0] ?? null),
+  });
+  const image=initial ?? cover.data;
+  return <button ref={ref} className="relative h-[88px] w-[120px] shrink-0 overflow-hidden rounded-lg bg-media text-left" onClick={onOpen}>
+    {image && <RenditionImage fileId={image.id} version={image.version} displayWidth={120} alt="" className="size-full object-cover"/>}
+    <span className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/85 to-transparent p-2 text-white">
+      <span className="flex items-center gap-2 text-subheading">{year.year}{year.year===new Date().getFullYear() && <i aria-label="今年" className="size-1.5 rounded-full bg-accent"/>}</span>
+      <span className="text-caption">{year.count.toLocaleString("zh-CN")} 张</span>
+    </span>
+  </button>;
 }

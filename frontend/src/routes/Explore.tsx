@@ -1,5 +1,9 @@
 import { Link } from "react-router-dom";
-import { usePageChrome } from "../shell/PageChrome";
+import {useRef,useState} from "react";
+import { PageHero } from "../shell/PageHero";
+import {SearchField} from "../ui/SearchField";
+import Segmented from "../ui/Segmented";
+import {useUIStore} from "../store/uiStore";
 import { EmptyState } from "../ui/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import YearRibbon from "../features/explore/YearRibbon";
@@ -15,12 +19,20 @@ export default function Explore() {
   const photoAlbumCount = manifest?.statistics.photoAlbumCount ?? 0;
   const comicAlbumCount = manifest?.statistics.comicAlbumCount ?? 0;
 
-  usePageChrome({ title: "发现" });
+  const [scope,setScope]=useState<"name"|"content">("name");
+  const focusOpened=useRef(false);
+  const open=()=>useUIStore.getState().setCommandPaletteOpen(true,scope);
   return (
     <Page
-      className="page-shell explore-page min-h-full pb-12"
+      className="min-h-full pb-12"
     >
-      <h1 className="sr-only">发现</h1>
+      <PageHero title="发现"/>
+      <SearchField size="lg" value="" readOnly aria-label="搜索照片库" placeholder="搜索相册、画面与文字" aria-haspopup="dialog"
+        onValueChange={()=>{}} onClick={open} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();open();}}}
+        onFocus={()=>{if(!focusOpened.current){focusOpened.current=true;open();}}}
+        onBlur={()=>{if(!useUIStore.getState().commandPaletteOpen)focusOpened.current=false;}}
+        trailing={<Segmented compact label="搜索范围" value={scope} onChange={setScope} options={[{value:"name",label:"名称"},{value:"content",label:"画面与文字"}]}/>}
+      />
       {manifestQuery.isLoading && !manifest ? (
         <section
           className="page-section pt-[var(--section)]"
@@ -79,12 +91,12 @@ export default function Explore() {
       ) : null}
 
       {manifest && photoAlbumCount > 0 ? (
-        <>
+        <div className="mt-4 grid grid-cols-12 items-start gap-4">
           <PeopleRow />
           <PlaceCards />
           <YearRibbon />
           <ThemeCards />
-        </>
+        </div>
       ) : null}
     </Page>
   );

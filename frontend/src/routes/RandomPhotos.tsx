@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {PageHero} from "../shell/PageHero";
 import {
   lazy,
   Suspense,
@@ -91,13 +93,7 @@ export default function RandomPhotos() {
     <div className="min-h-full pb-10">
       {/* 页头压成一条：这一页是往下滑的照片墙，页头占太高就把照片挤到
           下面去了。说明文字挪到墙的上方，随页面一起滚走。 */}
-      <header className="sticky top-0 z-20 border-b border-line bg-canvas">
-        <div className="page-shell flex items-center justify-between gap-4 py-3">
-          <div className="flex min-w-0 items-baseline gap-3">
-            <span className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em] shrink-0">随手看看</span>
-            <h1 className="page-title [.page-heading_&]:mt-2 font-display text-display leading-[1.25] font-semibold tracking-[-0.02em] text-ink [@media(max-width:640px)]:text-title [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere] page-title--sm text-title truncate">随机照片</h1>
-          </div>
-          <button
+      <Page><PageHero compact title="随机照片" eyebrow="随手看看" actions={          <button
             type="button"
             className="btn btn-outline btn-sm shrink-0"
             onClick={reshuffle}
@@ -105,11 +101,9 @@ export default function RandomPhotos() {
           >
             <ShuffleIcon size={12} />
             <span>{refreshing ? "换一批…" : "换一批"}</span>
-          </button>
-        </div>
-      </header>
+          </button>}/></Page>
 
-      <div className="page-shell pt-4">
+      <Page className="pt-4">
         <p className="mb-3 text-caption text-ink-2">
           全是随机抽的：跨相册取照片，不按时间、不看最近。往下滑会接着抽下一批。
         </p>
@@ -145,7 +139,7 @@ export default function RandomPhotos() {
             ) : null}
           </>
         )}
-      </div>
+      </Page>
 
       {viewerIndex !== null && items[viewerIndex] && (
         <Suspense fallback={null}>

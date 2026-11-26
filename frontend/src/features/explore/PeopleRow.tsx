@@ -122,13 +122,13 @@ function PeopleGroup({
           <Link
             key={person.id}
             to={peopleRoute(person.id)}
-            className="w-[120px] shrink-0 text-center 2xl:w-[136px]"
+            className="w-[88px] shrink-0 text-center min-[1600px]:w-[120px]"
           >
             <span className="relative block aspect-square">
-              <span className="block size-full overflow-hidden rounded-full ring-1 ring-inset ring-line">
+              <span className={`block size-full overflow-hidden rounded-full ring-2 ring-inset ${person.confirmed ? "ring-line" : "ring-warning"}`}>
                 <PersonFaceThumb
                   person={person}
-                  size={136}
+                  size={120}
                   fill
                   className="size-full"
                   testId="explore-person-thumbnail"

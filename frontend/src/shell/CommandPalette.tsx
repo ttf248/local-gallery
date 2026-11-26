@@ -110,7 +110,7 @@ function Palette({
   const onResults = pathname === searchRoute(mode);
   const [query, setQuery] = useState(onResults ? (params.get("q") ?? "") : "");
   const [scope, setScope] = useState<CommandScope>(
-    mode === "photo" && onResults && params.get("scope") === "content"
+    mode === "photo" && (useUIStore.getState().commandScope === "content" || (onResults && params.get("scope") === "content"))
       ? "content"
       : "name",
   );

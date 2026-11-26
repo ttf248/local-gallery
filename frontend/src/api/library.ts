@@ -616,10 +616,10 @@ export const libraryApi = {
     api<{ ok: boolean; manifest: LibraryManifest }>("/api/library/manifest", {
       signal,
     }),
-  mediaFeed: (query: MediaFeedQuery, cursor?: string, signal?: AbortSignal) => {
+  mediaFeed: (query: MediaFeedQuery, cursor?: string, signal?: AbortSignal, pageSize?: number) => {
     const paged = query.scope !== "recent" && query.scope !== "random";
     const limit =
-      paged && !cursor ? MEDIA_FEED_FIRST_PAGE_LIMIT : LIBRARY_PAGE_LIMIT;
+      pageSize ?? (paged && !cursor ? MEDIA_FEED_FIRST_PAGE_LIMIT : LIBRARY_PAGE_LIMIT);
     return api<{ ok: boolean; page: LibraryFeedPage }>("/api/library/media-feed", {
       params: { ...query, cursor, limit },
       signal,

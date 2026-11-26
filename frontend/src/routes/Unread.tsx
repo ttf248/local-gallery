@@ -1,3 +1,4 @@
+import {Page} from "../shell/Page";
 import {PageHero} from "../shell/PageHero";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -110,7 +111,7 @@ export default function Unread() {
 
   return (
     <div className="min-h-full">
-      <div className="page-shell"><PageHero
+      <Page ><PageHero
   title={copy.unreadPageTitle}
   actions={
           count > 0 && (
@@ -141,7 +142,7 @@ export default function Unread() {
             )}
           </p>
         }
-/></div>
+/></Page>
 
       {needsHistory && <ViewedSortNotice query={historyQuery} />}
       {count > 0 && (
@@ -199,7 +200,7 @@ export default function Unread() {
           }
         />
       ) : (
-        <section className="page-shell">
+        <Page >
           <div className="pb-10">
             <AlbumGrid
               selectable
@@ -208,7 +209,7 @@ export default function Unread() {
               showUnreadBadge={false}
             />
           </div>
-        </section>
+        </Page>
       )}
       <div className="h-12" />
     </div>

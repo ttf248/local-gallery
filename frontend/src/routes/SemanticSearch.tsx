@@ -498,7 +498,7 @@ export default function SemanticSearch() {
               : "本机运行环境未就绪"}
           {" · "}
           {status.coverage.indexed.toLocaleString()} /{" "}
-          {status.coverage.total.toLocaleString()} 张已索引
+          {status.coverage.total.toLocaleString()} 张已索引 · <Link to="/tasks/run" className="underline">任务中心</Link>
         </p>
       ) : null}
     </div>

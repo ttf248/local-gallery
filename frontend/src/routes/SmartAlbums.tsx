@@ -1,3 +1,6 @@
+import {Page} from "../shell/Page";
+import {PageHero} from "../shell/PageHero";
+import {PageToolbar} from "../shell/PageToolbar";
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
@@ -83,22 +86,17 @@ export default function SmartAlbums() {
 
   return (
     <div className="min-h-full pb-10">
-      <div className="page-shell pt-4">
+      <Page className="pt-4">
         {/* 标题栏：这一页只有精选推荐，没有分类页签；排序是这一页唯一的
             操作，放在标题这一行的右端 —— 它排的是下面这面墙，贴着墙
             才说得清它管的是哪一片。 */}
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em]">智能相册</p>
-            <h1 className="page-title [.page-heading_&]:mt-2 font-display text-display leading-[1.25] font-semibold tracking-[-0.02em] text-ink [@media(max-width:640px)]:text-title [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere] page-title--sm text-title">精选推荐</h1>
-          </div>
-          <Segmented
+        <PageHero title="精选推荐" eyebrow="智能相册"/>
+        <PageToolbar label="主题排序" start={          <Segmented
             label="推荐主题排序"
             value={sort}
             onChange={changeSort}
             options={SORT_OPTIONS}
-          />
-        </div>
+          />}/>
         {isInitialLoading ? (
           <AlbumGridSkeleton count={10} bare label="正在加载精选推荐…" />
         ) : directory.isError && items.length === 0 ? (
@@ -138,7 +136,7 @@ export default function SmartAlbums() {
             ) : null}
           </>
         )}
-      </div>
+      </Page>
     </div>
   );
 }

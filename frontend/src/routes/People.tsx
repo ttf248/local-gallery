@@ -319,7 +319,7 @@ function PeopleList() {
                           <h2 className="mb-3 text-heading">
                             {confirmed ? "已确认" : "待确认"}
                           </h2>
-                          <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
+                          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(140px,100%),1fr))] gap-x-3 gap-y-6">
                             {section.map((person) => (
                               <PersonCard key={person.id} person={person} />
                             ))}
@@ -576,7 +576,7 @@ function MatchSuggestionCard({
                       disabled={pending}
                       onClick={() => onMerge(candidate.person.id)}
                     >
-                      确认合并
+                      是 TA
                     </button>
                     <button
                       type="button"
@@ -584,7 +584,7 @@ function MatchSuggestionCard({
                       disabled={pending}
                       onClick={() => onExclude(candidate.person.id)}
                     >
-                      排除此建议
+                      不是
                     </button>
                   </div>
                 </div>
@@ -782,10 +782,10 @@ function PersonCard({ person }: { person: PersonGroup }) {
       to={peopleRoute(person.id)}
       className="group block min-w-0 rounded-lg text-center"
     >
-      <span className="mx-auto block size-28 xl:size-36 overflow-hidden rounded-full ring-1 ring-line">
+      <span className="mx-auto block size-[120px] overflow-hidden rounded-full ring-1 ring-line">
         <PersonFaceThumb
           person={person}
-          size={144}
+          size={120}
           fill
           className="size-full"
         />
@@ -947,7 +947,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           title={person?.name ?? "人物相册"}
           leading={
             person && (
-              <div className="size-24 shrink-0 overflow-hidden rounded-full">
+              <div className="size-[88px] shrink-0 overflow-hidden rounded-full">
                 <PersonFaceThumb
                   person={person}
                   size={96}

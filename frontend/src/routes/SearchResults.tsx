@@ -1,3 +1,4 @@
+import { SectionHeader } from "../ui/SectionHeader";
 import { InlineAlert } from "../ui/InlineAlert";
 import { useMemo } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -201,7 +202,7 @@ export default function SearchResults() {
           {content.status && (
             <p className="shrink-0 bg-canvas py-1 text-caption tabular-nums text-ink-3">
               {content.status.coverage.indexed.toLocaleString()} /{" "}
-              {content.status.coverage.total.toLocaleString()} 张已索引
+              {content.status.coverage.total.toLocaleString()} 张已索引 · <Link to="/tasks/run" className="underline">任务中心</Link>
             </p>
           )}
         </>
@@ -230,14 +231,7 @@ export default function SearchResults() {
               {groups.map((group) => (
                 <section key={group.key} className="mb-5">
                   {group.label ? (
-                    <h2 className="mb-3 flex items-baseline gap-2">
-                      <span className="text-body font-medium text-ink">
-                        {group.label}
-                      </span>
-                      <span className="text-caption tabular-nums text-ink-3">
-                        {group.items.length} 项
-                      </span>
-                    </h2>
+                    <SectionHeader title={group.label} count={group.items.length+" 项"} />
                   ) : null}
                   <AlbumGrid items={group.items} variant={viewMode} />
                 </section>

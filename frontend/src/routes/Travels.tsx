@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {PageHero} from "../shell/PageHero";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 // 足迹页的样式跟着这一页走：它在 styles/global.css 里时，地图与行程
@@ -261,10 +263,10 @@ export default function Travels() {
   return (
     <div className="h-full overflow-y-auto pb-12">
       <header className="border-b border-line bg-canvas">
-        <div className="page-shell">
+        <Page >
           {/* 页面名不再显示在内容区（侧栏那一项已经说明了），但这一页仍要
               有一个标题，否则读屏用户进来时不知道自己在哪。 */}
-          <h1 className="sr-only">足迹</h1>
+          <PageHero compact title="足迹"/>
           <div className="travel-head grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[clamp(20px,3vw,44px)] py-4 max-lg:grid-cols-1 max-lg:gap-y-3 max-lg:gap-x-4">
             {/* 规模带：说的是这个库的事实，不随区间变。跨度筛选排在最左边
                 —— 它管的是范围，规模管的是体量，两件事并成一行。 */}
@@ -303,11 +305,11 @@ export default function Travels() {
               />
             </div>
           </div>
-        </div>
+        </Page>
       </header>
 
       {error ? (
-        <div className="page-shell">
+        <Page >
           <ErrorBanner
             className="mt-4"
             onRetry={() => {
@@ -318,10 +320,10 @@ export default function Travels() {
           >
             足迹数据加载失败，请稍后重试。
           </ErrorBanner>
-        </div>
+        </Page>
       ) : null}
 
-      <div className="page-shell travel-layout grid grid-cols-[minmax(0,1fr)_clamp(300px,24vw,440px)] gap-x-[clamp(20px,2.4vw,36px)] pt-5 [align-items:start] max-lg:grid-cols-1 max-lg:gap-y-5">
+      <Page className="travel-layout grid grid-cols-[minmax(0,1fr)_clamp(300px,24vw,440px)] gap-x-[clamp(20px,2.4vw,36px)] pt-5 [align-items:start] max-lg:grid-cols-1 max-lg:gap-y-5">
         {/* 地图占着右栏，滚动时一直跟着 —— 读行程的时候手边得有个方位。 */}
         <aside className="travel-layout__aside col-start-1 row-start-1 lg:col-start-2 sticky top-3 flex flex-col gap-2 max-lg:static">
           <div className="travel-aside__bar relative z-[2] flex items-center justify-between gap-3 min-h-7">
@@ -336,7 +338,7 @@ export default function Travels() {
               ]}
             />
           </div>
-          <div className="travel-aside__map relative z-[1] aspect-[1_/_1] max-h-[68vh] overflow-hidden shadow-1 rounded-lg bg-raised max-lg:aspect-[4_/_3] max-lg:max-h-[46vh]">
+          <div className="travel-aside__map relative z-[1] aspect-[1_/_1] max-h-[68vh] overflow-hidden shadow-1 rounded-xl bg-raised max-lg:aspect-[4_/_3] max-lg:max-h-[46vh]">
             <TravelMiniMap
               regions={regions}
               backdrop={backdrop}
@@ -381,7 +383,7 @@ export default function Travels() {
             芯片，行政区归属可能有百米量级的偏差。
           </p>
         </div>
-      </div>
+      </Page>
     </div>
   );
 }

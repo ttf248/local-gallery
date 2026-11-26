@@ -58,7 +58,7 @@ export function SearchToolbar({
     title,
     backTo,
     search: (
-      <div className="flex w-full min-w-0 max-w-[760px] items-center gap-3">
+      <div className="flex w-full min-w-0 max-w-[640px] items-center gap-3">
         <SearchField
           ref={input}
           className="min-w-0 flex-1"

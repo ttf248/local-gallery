@@ -121,7 +121,7 @@ it("页头说清是哪一年、多少张、来自几本相册", async () => {
   renderYear();
   expect(screen.getByRole("heading", { name: "2024 年目录照片" })).toBeTruthy();
   expect(screen.getByText("按相册目录年份浏览")).toBeTruthy();
-  await waitFor(() => expect(screen.getByText("449")).toBeTruthy());
+  await waitFor(() => expect(screen.getByText(/449 张/)).toBeTruthy());
   expect(screen.getByText(/来自/)).toBeTruthy();
 });
 

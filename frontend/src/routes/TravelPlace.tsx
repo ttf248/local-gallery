@@ -1,3 +1,4 @@
+import {Page} from "../shell/Page";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 // 足迹页的样式跟着这一页走：它在 styles/global.css 里时，地图与行程
@@ -113,7 +114,7 @@ export default function TravelPlace() {
   return (
     <div className="h-full overflow-y-auto pb-12">
       <header className="border-b border-line bg-canvas">
-        <div className="page-shell">
+        <Page >
           <div className="album-bar flex items-center gap-3.5 py-3 max-sm:flex-wrap">
             <Link to={backTo} className="btn btn-sm btn-outline shrink-0">
               返回足迹
@@ -157,10 +158,10 @@ export default function TravelPlace() {
               </span>
             ) : null}
           </div>
-        </div>
+        </Page>
       </header>
 
-      <div className="page-shell">
+      <Page >
         {regionsQuery.isError ? (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-raised px-4 py-3 text-body text-danger">
             <span>这个地方的照片暂时读不出来。</span>
@@ -241,7 +242,7 @@ export default function TravelPlace() {
             </ol>
           </section>
         ) : null}
-      </div>
+      </Page>
     </div>
   );
 }

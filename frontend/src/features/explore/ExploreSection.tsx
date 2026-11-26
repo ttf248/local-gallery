@@ -23,7 +23,7 @@ export function ExploreSection({
   const note = useRef<HTMLDivElement | null>(null);
   return (
     <section
-      className="min-w-0 pt-[var(--section)] first-of-type:pt-4"
+      className={`col-span-12 min-w-0 rounded-xl bg-sunken p-5 ${id==="explore-people" ? "xl:col-span-8" : id==="explore-place" ? "xl:col-span-4" : ""}`}
       aria-labelledby={id}
     >
       <div className="mb-4 flex items-center gap-2">

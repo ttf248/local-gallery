@@ -96,14 +96,14 @@ export default function AlbumListRow({
     // 字号：标题 14px，其余（类型 / 副标题 / 计数 / 进度）统一 13px ——
     // 与网格卡同一套层级。旧版列表用 12.5px，比网格卡低一档，两种视图
     // 放在一起看会像两套产品。
-    <div className="relative group flex items-center border-b border-line-subtle h-14">
+    <div className={`relative group flex items-center border-b border-line-subtle ${showLastSeen ? "h-[72px]" : "h-14"}`}>
       <Link
         to={data.linkTo ?? data.to}
         aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
         className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div
-          className={`relative h-12 shrink-0 overflow-hidden bg-sunken ${
+          className={`relative ${showLastSeen ? "h-16" : "h-12"} shrink-0 overflow-hidden bg-sunken ${
             isComicContent
               ? "album-thumb--book book-binding relative rounded-sm shadow-[var(--cover-shadow)] aspect-[2/3]"
               : /* 照片侧是方形：与网格里的方照同一套画幅，
