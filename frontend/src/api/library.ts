@@ -1,6 +1,8 @@
 import { api, ApiError } from "./client";
 
 export const LIBRARY_PAGE_LIMIT = 200;
+// 先取够排首屏的媒体，滚动续页恢复整批，避免首屏等待屏外图片的尺寸探测。
+const MEDIA_FEED_FIRST_PAGE_LIMIT = 64;
 export const LIBRARY_NODE_BATCH_LIMIT = 500;
 
 /** 媒体目录的内容属性：照片目录还是漫画目录。 */
@@ -634,11 +636,15 @@ export const libraryApi = {
     api<{ ok: boolean; manifest: LibraryManifest }>("/api/library/manifest", {
       signal,
     }),
-  mediaFeed: (query: MediaFeedQuery, cursor?: string, signal?: AbortSignal) =>
-    api<{ ok: boolean; page: LibraryFeedPage }>("/api/library/media-feed", {
-      params: { ...query, cursor, limit: LIBRARY_PAGE_LIMIT },
+  mediaFeed: (query: MediaFeedQuery, cursor?: string, signal?: AbortSignal) => {
+    const paged = query.scope !== "recent" && query.scope !== "random";
+    const limit =
+      paged && !cursor ? MEDIA_FEED_FIRST_PAGE_LIMIT : LIBRARY_PAGE_LIMIT;
+    return api<{ ok: boolean; page: LibraryFeedPage }>("/api/library/media-feed", {
+      params: { ...query, cursor, limit },
       signal,
-    }),
+    });
+  },
   activitySummary: (kind: AppMode, signal?: AbortSignal) =>
     api<{ ok: boolean; summary: LibraryActivitySummary }>(
       "/api/library/activity-summary",

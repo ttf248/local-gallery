@@ -44,7 +44,7 @@ export default function TaskCenter() {
  * 载 —— 已选的分析模块、增量/全量与没保存的每日计划草稿都在里面。
  */
 export function TaskCenterView({ tab }: { tab: string }) {
-  const center = useTaskCenter();
+  const center = useTaskCenter(tab);
   const { snapshot, active, queue, history, plan } = center;
   const taskActionsBusy = center.busy || center.gpuSaving;
   // 队列里排着人脸任务时不能切换模型：换了会让两个任务用不同的模型。

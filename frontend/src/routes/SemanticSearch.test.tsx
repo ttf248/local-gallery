@@ -189,6 +189,8 @@ describe("智能搜索", () => {
       "aria-expanded",
       "false",
     );
+    expect(mocks.chinaPlaces).not.toHaveBeenCalled();
+    expect(mocks.people).not.toHaveBeenCalled();
     expect(screen.queryByLabelText("GPS 地点")).not.toBeInTheDocument();
     // 搜索方式是一枚分段控件（与主题切换、视图切换同一套语言），
     // 互斥选项用 radio 语义。

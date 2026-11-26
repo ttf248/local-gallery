@@ -122,6 +122,7 @@ it("名称结果说清搜的是名字，并给出返回与清除条件", async (
   expect(screen.getByRole("button", { name: "清除条件" })).toBeInTheDocument();
   // 命中理由：用户看得到「为什么是它」。
   expect(await screen.findByText("名字以关键词开头")).toBeInTheDocument();
+  expect(mocks.embeddingStatus).not.toHaveBeenCalled();
 });
 
 it("清除条件把关键词从地址里去掉", async () => {

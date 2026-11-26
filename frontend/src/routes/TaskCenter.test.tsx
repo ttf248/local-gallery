@@ -268,6 +268,20 @@ const emptyAbsolutePaths: StorageAbsolutePaths = {
 describe("任务中心", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("只在可见页签查询所需的规模预估与运行环境", async () => {
+    const view = renderCenter("history");
+    await waitFor(() => expect(aiJobsApi.list).toHaveBeenCalled());
+    expect(aiJobsApi.estimate).not.toHaveBeenCalled();
+    expect(aiJobsApi.embeddingStatus).not.toHaveBeenCalled();
+
+    view.rerenderWithTab("plan");
+    await waitFor(() => expect(aiJobsApi.estimate).toHaveBeenCalled());
+    expect(aiJobsApi.embeddingStatus).not.toHaveBeenCalled();
+
+    view.rerenderWithTab("run");
+    await waitFor(() => expect(aiJobsApi.embeddingStatus).toHaveBeenCalled());
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     sseHarness.onEvent = null;

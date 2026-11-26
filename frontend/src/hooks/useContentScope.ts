@@ -23,8 +23,9 @@ export interface ContentScope {
  * 用户要的一直是「画面」；系统退成只查文字这件事，在结果为零时必须
  * 说出来（见 utils/contentSearchState.ts）。
  */
-export function useContentScope(query: string): ContentScope {
+export function useContentScope(query: string, enabled: boolean): ContentScope {
   const statusQuery = useQuery({
+    enabled,
     queryKey: ["ai-embedding-status"],
     queryFn: aiJobsApi.embeddingStatus,
     staleTime: 30_000,
@@ -38,7 +39,7 @@ export function useContentScope(query: string): ContentScope {
   const submittedKey = useRef("");
 
   useEffect(() => {
-    if (!query) {
+    if (!enabled || !query) {
       submittedKey.current = "";
       setSubmitted(null);
       return;
@@ -57,7 +58,7 @@ export function useContentScope(query: string): ContentScope {
       },
       token: Date.now(),
     });
-  }, [query, embeddingReady, statusQuery.isError, statusQuery.isSuccess]);
+  }, [enabled, query, embeddingReady, statusQuery.isError, statusQuery.isSuccess]);
 
   const resubmit = useCallback(() => {
     setSubmitted((current) =>

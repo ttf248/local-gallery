@@ -109,7 +109,7 @@ export interface TaskCenterSelection {
  *
  * 页面组件只负责排版；数据来源只有这一处，避免页面各处各算一份。
  */
-export function useTaskCenter(): TaskCenterState {
+export function useTaskCenter(tab: string): TaskCenterState {
   const queryClient = useQueryClient();
   // 任务状态变了，核算也跟着变：跑完一轮增量张数会归零，清掉历史会少掉
   // 可参考的样本。
@@ -132,11 +132,13 @@ export function useTaskCenter(): TaskCenterState {
     },
   });
   const embeddingStatusQuery = useQuery({
+    enabled: tab === "run",
     queryKey: ["ai-embedding-status"],
     queryFn: aiJobsApi.embeddingStatus,
     refetchInterval: 30_000,
   });
   const estimateQuery = useQuery({
+    enabled: tab === "run" || tab === "plan",
     queryKey: ESTIMATE_KEY,
     queryFn: aiJobsApi.estimate,
     staleTime: 30_000,

@@ -22,7 +22,14 @@ test("照片首页就是时间线：按日期精度分段，来源照实说", as
   request,
 }) => {
   await scannedNodes(request, "photo");
+  const firstFeed = page.waitForResponse((response) =>
+    response.url().includes("/api/library/media-feed?"),
+  );
   await page.goto("/photo");
+  const { page: firstPage } = await (await firstFeed).json();
+  expect(firstPage.items).toHaveLength(64);
+  expect(firstPage.total).toBeGreaterThan(64);
+  expect(firstPage.nextCursor).toBeTruthy();
 
   await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
   const headers = page.getByTestId("timeline-group-header");

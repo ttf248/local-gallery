@@ -209,8 +209,9 @@ export function useChinaPlaces(
  * 地图上的形状取这一份：拖时间区间时地图不该重画 —— 位置稳定的图比
  * 每次都换一张的图好读。区间里的张数另取一份。
  */
-export function useChinaPlacesAll(level: string, parent: number | null) {
+export function useChinaPlacesAll(level: string, parent: number | null, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: chinaPlacesQueryKey("all", level, parent, null, null),
     queryFn: () =>
       aiJobsApi

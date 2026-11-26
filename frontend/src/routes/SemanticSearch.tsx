@@ -47,19 +47,20 @@ export default function SemanticSearch() {
   // 没法用来挑一个地方。
   // 地点清单走共享的 hook：键与足迹页的同一份查询一致，
   // 同一份数据不会因为键不同而被取两次。
-  const provincePlacesQuery = useChinaPlacesAll("province", null);
-  const cityPlacesQuery = useChinaPlacesAll("city", null);
+  const provincePlacesQuery = useChinaPlacesAll("province", null, advancedOpen);
+  const cityPlacesQuery = useChinaPlacesAll("city", null, advancedOpen);
   const provincePlaces = provincePlacesQuery.data ?? [];
   const cityPlaces = cityPlacesQuery.data ?? [];
   const peopleQuery = useQuery({
-    queryKey: ["people", false],
+    enabled: advancedOpen,
+    queryKey: ["people", false, "photos"],
     queryFn: () => aiJobsApi.people(false),
     staleTime: 60_000,
   });
   const albumQuery = useQuery({
     queryKey: ["semantic-album-filter", albumText],
     queryFn: () => albumsApi.search(albumText, "photo", 12),
-    enabled: !album && albumText.trim().length >= 2,
+    enabled: advancedOpen && !album && albumText.trim().length >= 2,
   });
   const status = statusQuery.data?.status;
   const embeddingReady = Boolean(status?.runtimeReady && status.modelValid);

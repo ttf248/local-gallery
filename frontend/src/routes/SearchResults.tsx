@@ -70,7 +70,7 @@ export default function SearchResults() {
     mode === "photo" ? exploreRoute() : libraryRoute(mode),
   );
   const isContent = scope === "content";
-  const content = useContentScope(query);
+  const content = useContentScope(query, isContent);
 
   const search = useInfiniteQuery({
     queryKey: ["library", "search", mode, query, SEARCH_PAGE_SIZE],
