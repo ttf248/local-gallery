@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { Page } from "../shell/Page";
 import { ReviewLayout } from "../features/similarity/ReviewLayout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -102,34 +103,34 @@ export default function PeopleAnnotate() {
       variant="workspace"
       className="flex min-h-full flex-col pb-12 xl:h-full"
     >
-      <div className="page-shell">
+      <Page >
         <PageHero
           eyebrow="离线智能相册 · 本机工具"
           title="人物标注"
           meta="给真实照片里的人脸标上匿名身份，用来衡量检测与分组的实际效果。标注只保存在本机，不会改写人物分组、命名或原始照片。"
           actions={
-            <Link className="btn btn-sm btn-outline" to={peopleRoute()}>
+            <Link className={buttonStyles({variant:"secondary",size:"sm"})} to={peopleRoute()}>
               回到人物相册
             </Link>
           }
         />
-      </div>
+      </Page>
       {samples.isError ? (
-        <section className="page-shell mt-6">
+        <Page as="section" className="mt-6">
           <EmptyState
             title="标注工作台不可用"
             description="这个工具只能在运行服务的本机打开。局域网访问时服务端会拒绝这些请求。"
             action={
               <button
                 type="button"
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={() => void samples.refetch()}
               >
                 重新加载
               </button>
             }
           />
-        </section>
+        </Page>
       ) : (
         <ReviewLayout
           listWidth={320}
@@ -139,7 +140,7 @@ export default function PeopleAnnotate() {
                 <h2 className="font-display text-body text-ink">待标注样本</h2>
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline"
+                  className={buttonStyles({variant:"secondary",size:"sm"})}
                   disabled={resample.isPending}
                   onClick={() => resample.mutate()}
                 >
@@ -171,7 +172,7 @@ export default function PeopleAnnotate() {
                 />
               ) : null}
               <a
-                className="btn btn-sm btn-outline"
+                className={buttonStyles({variant:"secondary",size:"sm"})}
                 href={peopleAnnotationsApi.datasetUrl()}
                 download
               >
@@ -453,7 +454,7 @@ function AnnotationEditor({
         action={
           <button
             type="button"
-            className="btn btn-outline"
+            className={buttonStyles({variant:"secondary"})}
             onClick={() => void photo.refetch()}
           >
             重新加载
@@ -488,21 +489,21 @@ function AnnotationEditor({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className={`btn btn-sm ${drawing ? "btn-primary" : "btn-outline"}`}
+            className={`inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] h-8 px-2.5 text-caption touch:min-h-10 ${drawing ? "bg-primary text-on-primary" : "border border-line-strong bg-raised hover:bg-hover"}`}
             onClick={() => setDrawing((value) => !value)}
           >
             {drawing ? "正在画框…" : "画框补检 / 纠正"}
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             onClick={() => setReviewed((value) => !value)}
           >
             {reviewed ? "取消复核标记" : "标记已复核"}
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-primary"
+            className={buttonStyles({variant:"primary",size:"sm"})}
             disabled={save.isPending}
             onClick={() => save.mutate()}
           >
@@ -585,7 +586,7 @@ function AnnotationEditor({
             >
               <button
                 type="button"
-                className="btn btn-sm btn-outline"
+                className={buttonStyles({variant:"secondary",size:"sm"})}
                 onClick={() =>
                   setSelectedFaceID(face.id === selectedFaceID ? "" : face.id)
                 }
@@ -603,7 +604,7 @@ function AnnotationEditor({
               />
               <button
                 type="button"
-                className="btn btn-sm btn-outline"
+                className={buttonStyles({variant:"secondary",size:"sm"})}
                 onClick={() =>
                   setFaces((current) =>
                     current.filter((item) => item.id !== face.id),
@@ -673,7 +674,7 @@ function IdentityPicker({
         />
         <button
           type="button"
-          className="btn btn-sm btn-primary"
+          className={buttonStyles({variant:"primary",size:"sm"})}
           onClick={async () => {
             const identity = await onCreate(label);
             onChange(identity.id);
@@ -685,7 +686,7 @@ function IdentityPicker({
         </button>
         <button
           type="button"
-          className="btn btn-sm btn-outline"
+          className={buttonStyles({variant:"secondary",size:"sm"})}
           onClick={() => setCreating(false)}
         >
           取消
@@ -713,7 +714,7 @@ function IdentityPicker({
       </select>
       <button
         type="button"
-        className="btn btn-sm btn-outline"
+        className={buttonStyles({variant:"secondary",size:"sm"})}
         onClick={() => setCreating(true)}
       >
         新建身份

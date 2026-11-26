@@ -41,7 +41,7 @@ export default function ModuleTiles({
 
   return (
     <div
-      className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,120px),1fr))] gap-2"
+      className="grid grid-cols-2 gap-2 md:grid-cols-3 min-[1440px]:grid-cols-5"
       role="group"
       aria-label={label}
     >

@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 interface Props {
   hasNextPage?: boolean;
   isFetchingNextPage: boolean;
@@ -14,7 +15,7 @@ export default function ListPagination({
   return (
     <div className="flex justify-center py-5" role="status">
       <button
-        className="btn btn-outline"
+        className={buttonStyles({variant:"secondary"})}
         disabled={isFetchingNextPage}
         onClick={load}
       >

@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import { Fragment, useEffect, useMemo } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -252,7 +254,7 @@ export default function Album() {
         description="资源可能已移动，或者媒体库尚未完成扫描。"
         icon={<FolderSearchIcon size={20} />}
         action={
-          <button onClick={() => navigate("/")} className="btn btn-outline">
+          <button onClick={() => navigate("/")} className={buttonStyles({variant:"secondary"})}>
             返回主页
           </button>
         }
@@ -289,7 +291,7 @@ export default function Album() {
         title="列表加载失败"
         action={
           <button
-            className="btn btn-outline"
+            className={buttonStyles({variant:"secondary"})}
             onClick={() => void childrenQuery.refetch()}
           >
             重试
@@ -305,7 +307,7 @@ export default function Album() {
         description="资源可能已移动，或者媒体库尚未完成扫描。"
         icon={<FolderSearchIcon size={20} />}
         action={
-          <button onClick={() => navigate("/")} className="btn btn-outline">
+          <button onClick={() => navigate("/")} className={buttonStyles({variant:"secondary"})}>
             返回主页
           </button>
         }
@@ -373,13 +375,13 @@ function CollectionHead({
   // 只有多根库才需要在页头标来源：单根时顶栏已经写着同一个目录名。
   const multiRoot = useUIStore((s) => s.multiRoot);
   return (
-    <div className="page-shell page-heading pt-[var(--space-8)] pb-[var(--space-5)] max-sm:pt-5 max-sm:pb-4">
+    <Page className="page-heading pt-8 pb-5 max-sm:pt-5 max-sm:pb-4">
       {/* 返回 + 面包屑同一行：「返回」只说得出「回去」，祖先链才说得出
           「回到哪」。集合越嵌越深，这一行就越重要。 */}
       <div className="mb-4 flex items-center gap-3 min-w-0">
         <button
           onClick={onBack}
-          className="btn btn-sm btn-ghost -ml-2 shrink-0"
+          className={buttonStyles({variant:"ghost",size:"sm",className:"-ml-2 shrink-0"})}
         >
           <ChevronLeftIcon size={13} />
           <span>返回</span>
@@ -502,7 +504,7 @@ function CollectionHead({
           </div>
         </div>
       </div>
-    </div>
+    </Page>
   );
 }
 
@@ -598,7 +600,7 @@ function CollectionView({
               真正按年分组,这时显示时间线才有用。 */}
         {realYearBuckets >= 2 && (
           <div className="py-6">
-            <div className="page-shell flex items-center gap-3 mb-4">
+            <Page className="flex items-center gap-3 mb-4">
               <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">时间线</h2>
               <span className="section-meta text-caption leading-[1.45] text-ink-2">
                 {detail.contentKind === "comic"
@@ -610,7 +612,7 @@ function CollectionView({
               {yearFilter !== null ? (
                 <button
                   type="button"
-                  className="chip ml-auto"
+                  className="ml-auto rounded-md bg-sunken px-3 py-1 text-label hover:bg-hover"
                   onClick={() => setYearFilter(null)}
                   aria-label="取消年份筛选"
                 >
@@ -619,12 +621,12 @@ function CollectionView({
                   子项 ×
                 </button>
               ) : null}
-            </div>
+            </Page>
             {/* 年份卡与下面的网格共用同一条左缘：这里少一层容器，
                 整条索引会比网格左移一截。 */}
-            <div className="page-shell">
+            <Page >
               <YearTimeline groups={yearGroups} />
-            </div>
+            </Page>
           </div>
         )}
 
@@ -633,7 +635,7 @@ function CollectionView({
             title="列表加载失败"
             action={
               <button
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={() => void list.refetch()}
               >
                 重试
@@ -660,7 +662,7 @@ function CollectionView({
         ) : (
           /* 网格与页头共用同一条留白线：之前这里少了一层容器，
              卡片贴到了侧栏边上，与其它页面的左缘对不齐。 */
-          <section className="page-shell container--gallery">
+          <Page as="section" className="container--gallery">
             <div className="pb-10">
               <AlbumGrid
                 selectable
@@ -676,7 +678,7 @@ function CollectionView({
                 load={() => void list.fetchNextPage()}
               />
             </div>
-          </section>
+          </Page>
         )}
       </div>
     </div>

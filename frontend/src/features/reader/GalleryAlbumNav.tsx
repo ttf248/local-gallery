@@ -76,7 +76,7 @@ function NavButton({
       </button>
       {/* 目标卷名：只在悬停时浮出，平时不占画面。 */}
       {label && (
-        <span className="pointer-events-none max-w-[10rem] truncate rounded-md bg-theater-surface/80 px-2 py-1 text-caption text-theater-fg hover-reveal backdrop-blur-[2px] transition-opacity duration-150 group-hover/nav:opacity-100 group-focus-within/nav:opacity-100">
+        <span className="pointer-events-none max-w-[10rem] truncate rounded-md bg-theater-surface/80 px-2 py-1 text-caption text-theater-fg opacity-100 pointer-fine:opacity-0 backdrop-blur-[2px] transition-opacity duration-150 group-hover/nav:opacity-100 group-focus-within/nav:opacity-100">
           {label}
         </span>
       )}

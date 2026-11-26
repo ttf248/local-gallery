@@ -212,10 +212,10 @@ Atelier 将内容放在独立画布上。每屏保留一个主要浏览或操作
 
 按需运行以下 frontend 命令，并结合行为测试检查交互：
 
-- npm run audit:layout：当前实现的溢出、触控和布局检查。
+- npm run audit:layout：检查侧栏 240/72px、画布 8px 内缩与 16px 圆角、顶栏 56/52px、窄屏底栏 ≥64px，以及页面容器、溢出和触控目标。
 - npm run audit:contrast：当前实现的文字和图形对比检查。
 - npm run audit:crash：页面崩溃探针。
-- npm run audit:size：生产首屏体积检查。
+- npm run audit:size：生产首屏 HTML、JS、CSS 传输上限为 120 KiB，本地字体独立上限为 80 KiB。构建入口上限为 420 KiB。
 - npm run shot：生成主题、视口与页面截图。
 - npm run test:e2e：跨层用户路径验证。
 

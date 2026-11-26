@@ -1,3 +1,4 @@
+import { similarityStatusKey } from "../api/queryKeys";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { PropsWithChildren } from "react";
@@ -6,7 +7,6 @@ import { similarityApi } from "../api/similarity";
 import { picksQueryKey } from "./usePicks";
 import {
   similarityGroupsQueryKey,
-  similarityStatusKey,
   useSimilarityGroups,
 } from "./useSimilarity";
 

@@ -412,17 +412,33 @@ export async function ensureMetadataReady(
   await runMetadataJob(request, { type: "metadata", mode: "full" });
 }
 
+export async function startAnalysisJob(
+  request: APIRequestContext,
+  body: { type: "metadata" | "similarity"; mode: "full" | "incremental"; albumId?: string },
+) {
+  // 409 到下一次读取队列之间，原任务可能已经结束。等到自己的相册任务入队。
+  let jobId = "";
+  await expect
+    .poll(
+      async () => {
+        const response = await request.post("/api/ai/jobs", { data: body });
+        if (response.status() === 409) return false;
+        expect(response.ok()).toBeTruthy();
+        jobId = ((await response.json()) as { job: { id: string } }).job.id;
+        return true;
+      },
+      { timeout: 180_000 },
+    )
+    .toBe(true);
+  return jobId;
+}
+
 /** 排一次元数据分析并等它跑完。 */
 async function runMetadataJob(
   request: APIRequestContext,
-  body: { type: string; mode: string; albumId?: string },
+  body: { type: "metadata"; mode: "full" | "incremental"; albumId?: string },
 ) {
-  const started = await request.post("/api/ai/jobs", { data: body });
-  // 409 表示已有任务在跑：等那一个，不抢。
-  expect(started.ok() || started.status() === 409).toBeTruthy();
-  const jobId = started.ok()
-    ? ((await started.json()) as { job: { id: string } }).job.id
-    : await activeJobId(request);
+  const jobId = await startAnalysisJob(request, body);
   await expect
     .poll(
       async () => {
@@ -440,17 +456,4 @@ async function runMetadataJob(
       { timeout: 180_000 },
     )
     .toMatch(/^(completed|failed|cancelled)$/);
-}
-
-/** 正在跑的那个分析任务。 */
-async function activeJobId(request: APIRequestContext) {
-  const response = await request.get("/api/ai/jobs");
-  const body = (await response.json()) as {
-    snapshot: { jobs: { id: string; status: string }[]; queue: string[] };
-  };
-  const running = body.snapshot.jobs.find(
-    (job) => job.status === "running" || job.status === "pending",
-  );
-  expect(running, "没有正在运行的分析任务").toBeTruthy();
-  return running!.id;
 }

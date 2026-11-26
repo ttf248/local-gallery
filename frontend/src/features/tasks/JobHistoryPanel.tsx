@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useConfirm } from "../common";
 import { useState } from "react";
 import type { AIJob, FaceModel } from "../../api/aiJobs";
@@ -89,7 +90,7 @@ export default function JobHistoryPanel({
         {jobs.length > 0 ? (
           <button
             type="button"
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             disabled={busy}
             onClick={clearHistory}
           >
@@ -105,7 +106,7 @@ export default function JobHistoryPanel({
               <button
                 key={value}
                 type="button"
-                className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline"}`}
+                className={`inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] h-8 px-2.5 text-caption touch:min-h-10 ${filter === value ? "bg-primary text-on-primary" : "border border-line-strong bg-raised hover:bg-hover"}`}
                 aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
               >
@@ -246,7 +247,7 @@ export default function JobHistoryPanel({
                     job.failed > 0 ? (
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline"
+                        className={buttonStyles({variant:"secondary",size:"sm"})}
                         disabled={retryDisabled}
                         onClick={() => onRetry(job.id)}
                       >
@@ -257,7 +258,7 @@ export default function JobHistoryPanel({
                     ) : null}
                     <button
                       type="button"
-                      className="btn btn-sm btn-outline text-danger"
+                      className={buttonStyles({variant:"secondary",size:"sm",className:"text-danger"})}
                       disabled={busy}
                       onClick={async () => {if(await confirm({title:"删除任务记录",description:"仅删除这一条记录，分析结果和原始文件会保留。",confirmLabel:"删除记录",tone:"danger"}))onDelete(job.id);}}
                     >

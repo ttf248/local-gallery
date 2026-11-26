@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { Button } from "../../ui/Button";
 import { Menu } from "../../ui/Menu";
 import { ScrollRow } from "../../ui/ScrollRow";
@@ -64,7 +65,7 @@ export function UnreadHero({
 
           <Link
             to={unreadRoute()}
-            className="btn btn-sm btn-ghost"
+            className={buttonStyles({variant:"ghost",size:"sm"})}
             aria-label={`查看全部${copy.unreadTitle}相册`}
           >
             全部 <ArrowRightLineIcon size={14} />
@@ -92,7 +93,7 @@ export function UnreadHero({
                   event.stopPropagation();
                   onMarkRead(card);
                 }}
-                className="size-8 touch:size-10 rounded-full bg-black/65 text-white flex items-center justify-center hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
+                className="size-8 touch:size-10 rounded-full bg-black/65 text-white flex items-center justify-center opacity-100 pointer-fine:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 transition-opacity"
                 title={`将「${card.title}」${copy.markFinishedLabel}`}
                 aria-label={`将${card.title}${copy.markFinishedLabel}`}
               >
@@ -225,7 +226,7 @@ function StagePoster({
       type="button"
       onClick={onClick}
       aria-label={`${copy.continueTitle}「${card.title}」`}
-      className="book-binding relative aspect-[2/3] w-full max-w-[240px] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]"
+      className="book-binding relative aspect-[2/3] w-full max-w-[240px] overflow-hidden rounded-[6px] shadow-cover"
     >
       <Cover card={card} large />
     </button>
@@ -284,7 +285,7 @@ function StageInfo({
         <button
           type="button"
           onClick={onRemove}
-          className="btn btn-sm btn-ghost"
+          className={buttonStyles({variant:"ghost",size:"sm"})}
           title={`将「${card.title}」${copy.markFinishedLabel}`}
           aria-label={`将${card.title}${copy.markFinishedLabel}`}
         >
@@ -320,7 +321,7 @@ function QueueItem({
         onClick={onOpen}
         aria-label={`${copy.continueTitle}「${queueTitle}」`}
       >
-        <span className="relative mb-2 block aspect-[2/3] overflow-hidden rounded-[6px] shadow-[var(--cover-shadow)]">
+        <span className="relative mb-2 block aspect-[2/3] overflow-hidden rounded-[6px] shadow-cover">
           <Cover card={card} />
           {card.progress && <span className="absolute bottom-0 left-0 h-[3px] bg-primary" style={{width:readingPercent(card.progress)+"%"}}/>}
         </span>

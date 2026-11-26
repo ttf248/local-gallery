@@ -1,5 +1,5 @@
 import { Tabs } from "../ui/Tabs";
-import { tabRoute,type TabbedPage } from "../utils/pageTabs";
+import { tabRoute, type TabbedPage } from "../utils/pageTabs";
 export function PageTabs({
   page,
   active,
@@ -11,7 +11,6 @@ export function PageTabs({
   label: string;
   runStatus?: string;
 }) {
-
   return (
     <Tabs
       label={label}
@@ -43,4 +42,3 @@ export function PageTabs({
     />
   );
 }
-

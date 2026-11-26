@@ -32,13 +32,13 @@ describe("AlbumGridSkeleton 加载骨架", () => {
     expect(status.querySelector("[aria-hidden='true']")).not.toBeNull();
   });
 
-  it("bare 模式不自带 page-shell，避免与调用方的容器叠加留白", () => {
+  it("bare 模式不自带 px-gutter，避免与调用方的容器叠加留白", () => {
     const { container } = render(<AlbumGridSkeleton bare />);
-    expect(container.firstElementChild?.className).not.toContain("page-shell");
+    expect(container.firstElementChild?.className).not.toContain("px-gutter");
 
     const withShell = render(<AlbumGridSkeleton />);
     expect(withShell.container.firstElementChild?.className).toContain(
-      "page-shell",
+      "px-gutter",
     );
   });
 });

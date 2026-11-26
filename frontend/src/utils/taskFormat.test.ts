@@ -1,10 +1,10 @@
+import { jobProgressPercent } from "./taskProgress";
 import { describe, expect, it } from "vitest";
 import {
   formatEstimateDuration,
   formatTaskDuration,
   formatTaskSpeed,
   groupFailures,
-  jobProgressPercent,
   moduleReasonLabel,
   sumEstimateModes,
   taskFieldLabel,

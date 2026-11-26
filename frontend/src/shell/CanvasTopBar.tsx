@@ -57,7 +57,7 @@ export function CanvasTopBar({
     <header
       data-testid="top-bar"
       className={cx(
-        "top-bar sticky top-0 z-topbar grid h-topbar bg-canvas/80 backdrop-blur-xl backdrop-saturate-150 shrink-0 items-center gap-2 border-b px-[var(--gutter)]",
+        "top-bar sticky top-0 z-topbar grid h-topbar bg-canvas/80 backdrop-blur-xl backdrop-saturate-150 shrink-0 items-center gap-2 border-b px-gutter",
         localSearch
           ? "grid-cols-[auto_minmax(0,1fr)_auto]"
           : "grid-cols-[minmax(0,1fr)_auto_auto]",

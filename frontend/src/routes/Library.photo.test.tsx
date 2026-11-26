@@ -32,7 +32,8 @@ vi.mock("../hooks/useListFilters", () => ({
 vi.mock("../features/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
-vi.mock("../features/library/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../features/library/AlbumGrid")>(),
   default: ({ items }: { items: { id: string; title: string }[] }) => (
     <div data-testid="album-grid">
       {items.map((item) => (

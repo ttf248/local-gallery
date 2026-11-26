@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import {Page} from "../shell/Page";
 import {PageHero} from "../shell/PageHero";
 import { useMemo } from "react";
@@ -117,7 +118,7 @@ export default function Unread() {
           count > 0 && (
             <button
               onClick={onShuffleUnread}
-              className="btn btn-sm btn-outline"
+              className={buttonStyles({variant:"secondary",size:"sm"})}
               title={`从${copy.unreadTitle}里随机挑一本`}
             >
               <ShuffleIcon size={11} />
@@ -171,14 +172,14 @@ export default function Unread() {
             total === 0 ? (
               <button
                 onClick={() => navigate("/settings")}
-                className="btn btn-primary"
+                className={buttonStyles({variant:"primary"})}
               >
                 去设置
               </button>
             ) : (
               <button
                 onClick={() => navigate(homeRoute("comic"))}
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
               >
                 回主页
               </button>
@@ -193,7 +194,7 @@ export default function Unread() {
           action={
             <button
               onClick={resetFilters}
-              className="btn btn-outline"
+              className={buttonStyles({variant:"secondary"})}
             >
               清除筛选
             </button>

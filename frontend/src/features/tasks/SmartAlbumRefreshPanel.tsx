@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
@@ -112,7 +113,7 @@ export default function SmartAlbumRefreshPanel() {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="btn btn-sm btn-primary"
+            className={buttonStyles({variant:"primary",size:"sm"})}
             onClick={() => void start(false)}
             disabled={running || starting}
           >
@@ -120,7 +121,7 @@ export default function SmartAlbumRefreshPanel() {
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             onClick={() => void start(true)}
             disabled={running || starting}
             title="无视缓存，把所有相册的四类分类与精选推荐全部重算一遍"
@@ -130,7 +131,7 @@ export default function SmartAlbumRefreshPanel() {
           {running ? (
             <button
               type="button"
-              className="btn btn-sm btn-ghost"
+              className={buttonStyles({variant:"ghost",size:"sm"})}
               onClick={() => void cancel()}
             >
               取消

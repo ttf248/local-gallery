@@ -128,7 +128,8 @@ vi.mock("../features/comic/ContinueReadingHero", () => ({
   ContinueReadingHero: () => <div data-testid="continue-hero" />,
   UnreadHero: () => <div data-testid="unread-hero" />,
 }));
-vi.mock("../features/library/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../features/library/AlbumGrid")>(),
   default: ({
     items,
   }: {

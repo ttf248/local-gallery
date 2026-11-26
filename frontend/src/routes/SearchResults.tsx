@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { SectionHeader } from "../ui/SectionHeader";
 import { InlineAlert } from "../ui/InlineAlert";
 import { useMemo } from "react";
@@ -262,7 +263,7 @@ export default function SearchResults() {
                 mode === "photo" ? (
                   <button
                     type="button"
-                    className="btn btn-outline"
+                    className={buttonStyles({variant:"secondary"})}
                     onClick={() => updateConditions(query, "content")}
                   >
                     按画面与文字再找一次
@@ -278,7 +279,7 @@ export default function SearchResults() {
               description="在顶栏的搜索框里输入相册、文件夹或标签的名字。"
               action={
                 <Link
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   to={mode === "photo" ? exploreRoute() : libraryRoute(mode)}
                 >
                   {mode === "photo" ? "去发现页找东西" : "去书架看看"}

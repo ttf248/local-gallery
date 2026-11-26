@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { Dialog } from "../ui/Dialog";
 import { Button } from "../ui/Button";
 import { PageHero } from "../shell/PageHero";
@@ -30,7 +31,7 @@ import ServerConfigPanel from "../features/settings/ServerConfigPanel";
 import AutoSyncPanel from "../features/settings/AutoSyncPanel";
 import { SettingsGroup, SettingsRow } from "../ui/SettingsList";
 import { Page } from "../shell/Page";
-import { SettingsNav } from "../features/settings/SettingsNav";
+import {PageTabs} from "../shell/PageTabs";
 import { TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
 import ScanWarnings from "../features/common/ScanWarnings";
 import { Switch } from "../ui/Switch";
@@ -260,7 +261,7 @@ export function SettingsView({ tab }: { tab: string }) {
   if (!data) {
     return (
       <>
-        <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
+        <Page className="settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
           <PageHero title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
           {prefsError || (
             <div role="status" className="text-ink-2 text-body">
@@ -276,10 +277,10 @@ export function SettingsView({ tab }: { tab: string }) {
     <>
       {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
           标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
-      <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
+      <Page className="settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
         <PageHero title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
         {prefsError}
-        <SettingsNav active={tab}/>
+        <PageTabs page={TAB_PAGES.settings} active={tab} label="设置页分区"/>
         <div className="grid gap-12 xl:grid-cols-[minmax(0,760px)_200px]"><div className="min-w-0 max-w-[760px]">
 
           {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，
@@ -566,7 +567,7 @@ export function SettingsView({ tab }: { tab: string }) {
                           queryKey: libraryQueryKeys.root,
                         })
                       }
-                      className="btn btn-sm btn-outline"
+                      className={buttonStyles({variant:"secondary",size:"sm"})}
                     >
                       <RefreshIcon size={11} />
                       <span>刷新</span>
@@ -574,7 +575,7 @@ export function SettingsView({ tab }: { tab: string }) {
                     <button
                       onClick={() => startScan.mutate()}
                       disabled={startScan.isPending || sse.isRunning}
-                      className="btn btn-sm btn-outline"
+                      className={buttonStyles({variant:"secondary",size:"sm"})}
                       title="扫描 (Ctrl+S)"
                     >
                       <RefreshIcon size={11} />
@@ -610,7 +611,7 @@ export function SettingsView({ tab }: { tab: string }) {
                     <button
                       onClick={() => pruneFav.mutate()}
                       disabled={pruneFav.isPending}
-                      className="btn btn-sm btn-outline"
+                      className={buttonStyles({variant:"secondary",size:"sm"})}
                     >
                       {pruneFav.isPending ? "清理中…" : "清理"}
                     </button>
@@ -706,11 +707,23 @@ export function SettingsView({ tab }: { tab: string }) {
             </section>
           )}
         </div>
-          {(tab==="interface" || tab==="data") && <nav aria-label="本页" className="sticky top-5 hidden self-start xl:grid">
-            <h2 className="mb-2 text-caption text-ink-3">本页</h2>
-            {(tab==="interface" ? [["appearance","外观"],["nav","导航"],["about","关于"]] : [["data","数据"],["backup","备份与恢复"],["danger","危险操作"]]).map(([id,label])=>
-              <a className="py-1.5 text-label text-ink-2 hover:text-ink" key={id} href={"#"+id}>{label}</a>)}
-          </nav>}
+          {(tab === "interface" || tab === "data") && (
+            <nav aria-label="本页" className="sticky top-5 hidden self-start xl:grid">
+              <h2 className="mb-2 text-caption text-ink-3">本页</h2>
+              {(tab === "interface"
+                ? [["appearance", "外观"], ["nav", "导航"], ["about", "关于"]]
+                : [["data", "数据"], ["backup", "备份与恢复"], ["danger", "危险操作"]]
+              ).map(([id, label]) => (
+                <a
+                  className="flex min-h-8 items-center text-label text-ink-2 hover:text-ink touch:min-h-10"
+                  key={id}
+                  href={`#${id}`}
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
+          )}
         </div>
       </Page>
     </>

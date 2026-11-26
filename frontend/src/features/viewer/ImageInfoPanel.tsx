@@ -217,7 +217,7 @@ export default function ImageInfoPanel({
                       </p>
                       <button
                         type="button"
-                        className="btn-text text-caption text-white/50 hover:text-white"
+                        className="inline-flex items-center min-h-8 text-caption text-white/50 hover:text-white"
                         onClick={() => setSelectedFace(null)}
                       >
                         收起

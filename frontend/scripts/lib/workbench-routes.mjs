@@ -72,3 +72,17 @@ export function buildRoute(route, mode) {
   if (route.startsWith("/")) return `/${mode}${route}`;
   return route;
 }
+
+/** 从实际相册的第一张照片打开大图，避免时间线首屏回忆占满视口时虚拟行尚未挂载。 */
+export async function openPhotoViewer(page, base, source = page) {
+  const albumId = await resolveAlbumId(source, "photo");
+  if (!albumId) return false;
+  await page.goto(base + "/photo/albums/" + encodeURIComponent(albumId), {
+    waitUntil: "domcontentloaded",
+  });
+  const tile = page.locator('[data-testid="media-tile"] [data-open]').first();
+  await tile.waitFor({ state: "visible", timeout: 60_000 });
+  await tile.click();
+  await page.getByTestId("photo-viewer").waitFor();
+  return true;
+}

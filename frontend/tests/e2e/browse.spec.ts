@@ -1563,7 +1563,7 @@ test("排序选项支持键盘确认取消和自然移出焦点", async ({ page 
     await expect(trigger).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(
-      page.getByRole("button", { name: "最少页数", exact: true }),
+      page.getByRole("button", { name: "筛选", exact: true }),
     ).toBeFocused();
     await expect(options).toHaveCount(0);
   });

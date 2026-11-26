@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -186,7 +187,7 @@ function TreeSearchResults({
         </p>
         <button
           type="button"
-          className="btn btn-sm btn-outline"
+          className={buttonStyles({variant:"secondary",size:"sm"})}
           onClick={() => void search.refetch()}
         >
           重试
@@ -453,7 +454,7 @@ function TreeChildrenContent({
           </span>
           <button
             type="button"
-            className="btn btn-sm btn-outline min-h-11"
+            className={buttonStyles({variant:"secondary",size:"sm",className:"min-h-11"})}
             onClick={onRetry}
           >
             重试

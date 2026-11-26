@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { SelectionBar } from "./SelectionBar";
 import { useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -33,7 +34,7 @@ export function SelectionToggle() {
   if (active) return null;
   return (
     <button
-      className="btn btn-sm btn-outline"
+      className={buttonStyles({variant:"secondary",size:"sm"})}
       disabled={busy}
       onClick={() => useSelectionStore.getState().start()}
     >

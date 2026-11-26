@@ -226,7 +226,7 @@ export default function Popover({
                   transform: align === "end" ? "translateX(-100%)" : "none",
                   zIndex: 60,
                 }}
-                className={`${baseCls} ${tone === "theme" ? "ui-popover [&.timeline-filter-popover]:[backdrop-filter:blur(16px)_saturate(1.4)]" : ""} ${className}`}
+                className={`${baseCls} ${tone === "theme" ? "border border-line [border-top-color:color-mix(in_srgb,var(--line),var(--line)_50%)] rounded-tile bg-raised shadow-2 touch:[&_:is(button,_a[href])]:min-h-11 touch:[&_:is(button,_a[href])]:min-w-11 [&.timeline-filter-popover]:[backdrop-filter:blur(16px)_saturate(1.4)]" : ""} ${className}`}
               >
                 {children}
               </div>

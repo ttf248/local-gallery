@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import { useConfirm } from "../features/common/ConfirmDialog";
 import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -76,7 +78,7 @@ function HomeHeader({
   });
 
   return (
-    <section className="page-shell page-heading pt-[var(--space-8)] pb-[var(--space-5)] max-sm:pt-5 max-sm:pb-4">
+    <Page as="section" className="page-heading pt-8 pb-5 max-sm:pt-5 max-sm:pb-4">
       <div className="home-heading grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 [align-items:end] [@media(min-width:2240px)]:grid-cols-[auto_minmax(0,1fr)_auto] [@media(min-width:2240px)]:gap-y-0 [@media(min-width:2240px)]:[align-items:last_baseline]">
         <div className="home-heading__title col-span-2 row-start-1 min-[2240px]:col-span-1 min-w-0">
           {/* 工作台首页的主标题是 32px（与照片侧同一档）：两侧都是入口页，
@@ -106,7 +108,7 @@ function HomeHeader({
               （「相册相册」），因此这里显式给一个可访问名。 */}
           <Link
             to={primaryAction.to}
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             aria-label={primaryAction.label}
           >
             <LibraryIcon size={13} />
@@ -116,7 +118,7 @@ function HomeHeader({
           <button
             onClick={() => startScan.mutate()}
             disabled={startScan.isPending || sse.isRunning}
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             title="扫描 (Ctrl+S)"
             aria-label="重新扫描媒体目录"
           >
@@ -131,7 +133,7 @@ function HomeHeader({
           </button>
         </div>
       </div>
-    </section>
+    </Page>
   );
 }
 
@@ -216,7 +218,12 @@ function ComicHome() {
   };
   const onClearContinue = async () => {
     if (!inProgressAll.length) return;
-    const ok = (await confirm({title:"更新阅读进度",description:<>{`将 ${inProgressAll.length} 本相册全部标记为已读完？\n\n操作不会删除文件，只是把阅读进度推到末尾。`} 原始文件会保留。</>,confirmLabel:"全部标记已读",tone:"danger"}));
+    const ok = await confirm({
+      title: "更新阅读进度",
+      description: `将 ${inProgressAll.length} 本相册全部标记为已读完？原始文件会保留。`,
+      confirmLabel: "全部标记已读",
+      tone: "danger",
+    });
     if (!ok) return;
     const items = inProgressAll.map((c) => ({
       albumId: decodeFavPath(c.to),
@@ -298,8 +305,8 @@ function ComicHome() {
       />
 
       {hasContent && (inProgressAll.length > 0 || unreadCards.length > 0) ? (
-        <div className="page-shell">
-          <div className="grid min-w-0 gap-[var(--section)]">
+        <Page >
+          <div className="grid min-w-0 gap-section">
             {inProgressAll.length > 0 ? (
               <ContinueReadingHero
                 cards={inProgressAll}
@@ -321,40 +328,40 @@ function ComicHome() {
               />
             ) : null}
           </div>
-        </div>
+        </Page>
       ) : null}
 
       {/* 最近阅读：读过的卷。放在继续阅读与未读之后 —— 有在读的书时，
           「接着读」才是第一件事；读过的书是回访，不是待办。 */}
       {recentCards.length > 0 ? (
-        <section className="page-shell page-section pt-[var(--section)] comic-library-home__recent pb-[var(--section)]">
-          <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+        <Page as="section" className="page-section pt-section comic-library-home__recent pb-section">
+          <div className="section-heading flex items-baseline flex-wrap gap-3 mb-4">
             <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">最近阅读</h2>
-            <Link to={recentsRoute("comic")} className="chip ml-auto">
+            <Link to={recentsRoute("comic")} className="ml-auto inline-flex min-h-8 items-center rounded-md bg-sunken px-3 text-label touch:min-h-10">
               全部
             </Link>
           </div>
           <AlbumGrid items={recentCards} variant="grid" />
-        </section>
+        </Page>
       ) : null}
 
       {hasContent && hasNoReadingActivity ? (
-        <section className="page-shell">
+        <Page as="section" >
           <EmptyState
             title="还没有开始阅读"
             description="从书架打开一卷漫画。开始阅读后，这里会记住进度并列出未读内容。"
             icon={<LibraryIcon size={20} />}
             action={
-              <Link to={libraryRoute("comic")} className="btn btn-primary">
+              <Link to={libraryRoute("comic")} className={buttonStyles({variant:"primary"})}>
                 去书架看看
               </Link>
             }
           />
-        </section>
+        </Page>
       ) : null}
 
       {!hasContent && !isLoadingInitial ? (
-        <section className="page-shell">
+        <Page as="section" >
           {libraryHasContent ? (
             <EmptyState
               title="漫画这边还没有内容"
@@ -366,11 +373,11 @@ function ComicHome() {
               icon={<LibraryIcon size={20} />}
               action={
                 <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className="btn btn-outline">
+                  <Link to="/settings/server" className={buttonStyles({variant:"secondary"})}>
                     去设置里改属性
                   </Link>
                   {otherSideHasContent && (
-                    <Link to={homeRoute("photo")} className="btn btn-primary">
+                    <Link to={homeRoute("photo")} className={buttonStyles({variant:"primary"})}>
                       去照片库看看
                     </Link>
                   )}
@@ -384,17 +391,17 @@ function ComicHome() {
               icon={<LibraryIcon size={20} />}
               action={
                 <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className="btn btn-outline">
+                  <Link to="/settings/server" className={buttonStyles({variant:"secondary"})}>
                     设置媒体目录
                   </Link>
-                  <Link to="/settings/data" className="btn btn-primary">
+                  <Link to="/settings/data" className={buttonStyles({variant:"primary"})}>
                     去设置
                   </Link>
                 </div>
               }
             />
           )}
-        </section>
+        </Page>
       ) : null}
 
       <div className="h-8" />

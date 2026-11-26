@@ -452,7 +452,7 @@ function GridCard({
           <div
             className={`album-tile__cover rounded-lg relative z-10 ${COVER_RATIO_CLASS[coverRatio]} bg-sunken overflow-hidden${
               showTitleOnCover
-                ? " album-tile__cover--book book-binding rounded-[6px] shadow-[var(--cover-shadow)] transition duration-base motion-safe:group-hover:-translate-y-1"
+                ? " album-tile__cover--book book-binding rounded-[6px] shadow-cover transition duration-base motion-safe:group-hover:-translate-y-1"
                 : ""
             }`}
             data-testid="card-cover"

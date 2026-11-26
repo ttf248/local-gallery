@@ -32,7 +32,7 @@ export function FavoriteButton({
   const visibility =
     fav || alwaysVisible
       ? "opacity-100"
-      : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100";
+      : "opacity-100 pointer-fine:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100";
   return (
     <button
       type="button"

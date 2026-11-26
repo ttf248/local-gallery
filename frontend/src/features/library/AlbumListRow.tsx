@@ -105,7 +105,7 @@ export default function AlbumListRow({
         <div
           className={`relative ${showLastSeen ? "h-16" : "h-12"} shrink-0 overflow-hidden bg-sunken ${
             isComicContent
-              ? "album-thumb--book book-binding relative rounded-sm shadow-[var(--cover-shadow)] aspect-[2/3]"
+              ? "album-thumb--book book-binding relative rounded-sm shadow-cover aspect-[2/3]"
               : /* 照片侧是方形：与网格里的方照同一套画幅，
                    竖版缩略图把照片裁成一条，读不出内容。 */
                 "aspect-square rounded-sm"
@@ -219,7 +219,7 @@ export default function AlbumListRow({
             {(data.date || data.modTime)?.slice(0, 10)}
           </time>
         )}
-        <div className="text-ink-3 hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pr-1">
+        <div className="text-ink-3 opacity-100 pointer-fine:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pr-1">
           <span className="text-body">›</span>
         </div>
       </Link>

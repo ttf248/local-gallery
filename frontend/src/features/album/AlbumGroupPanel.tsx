@@ -1,3 +1,5 @@
+import {Page} from "../../shell/Page";
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import type {
@@ -249,7 +251,7 @@ export default function AlbumGroupPanel({
       aria-label="分组浏览"
       className="shrink-0 border-b border-line bg-canvas"
     >
-      <div className="page-shell py-3">
+      <Page className="py-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-body font-medium text-ink">分组浏览</span>
           <span className="text-caption text-ink-3">
@@ -260,7 +262,7 @@ export default function AlbumGroupPanel({
               <button
                 type="button"
                 onClick={() => setShowHiddenGroups((value) => !value)}
-                className="btn btn-sm btn-ghost"
+                className={buttonStyles({variant:"ghost",size:"sm"})}
                 aria-pressed={showHiddenGroups}
               >
                 {showHiddenGroups
@@ -295,7 +297,7 @@ export default function AlbumGroupPanel({
             <button
               type="button"
               onClick={onClose}
-              className="btn btn-sm btn-ghost"
+              className={buttonStyles({variant:"ghost",size:"sm"})}
               aria-label="收起分组浏览"
             >
               <CloseIcon size={13} />
@@ -342,7 +344,7 @@ export default function AlbumGroupPanel({
               {emptyState.description}
             </p>
             {emptyState.action === "enable-people" ? (
-              <Link to="/tasks/plan" className="btn btn-sm btn-outline mt-4">
+              <Link to="/tasks/plan" className={buttonStyles({variant:"secondary",size:"sm",className:"mt-4"})}>
                 去任务中心启用
               </Link>
             ) : emptyState.action === "retry-module" ? (
@@ -352,7 +354,7 @@ export default function AlbumGroupPanel({
                   onAnalyzeDimension(requiredModule[dimension])
                 }
                 disabled={analyzing}
-                className="btn btn-sm btn-outline mt-4"
+                className={buttonStyles({variant:"secondary",size:"sm",className:"mt-4"})}
               >
                 {analyzing
                   ? "已加入分析队列…"
@@ -365,7 +367,7 @@ export default function AlbumGroupPanel({
                   onAnalyzeDimension(requiredModule[dimension])
                 }
                 disabled={analyzing}
-                className="btn btn-sm btn-outline mt-4"
+                className={buttonStyles({variant:"secondary",size:"sm",className:"mt-4"})}
               >
                 {analyzing
                   ? "已加入分析队列…"
@@ -380,7 +382,7 @@ export default function AlbumGroupPanel({
                     type="button"
                     onClick={() => onAnalyzeDimension(type)}
                     disabled={analyzing}
-                    className="btn btn-sm btn-outline"
+                    className={buttonStyles({variant:"secondary",size:"sm"})}
                   >
                     {analyzing
                       ? "已加入分析队列…"
@@ -395,7 +397,7 @@ export default function AlbumGroupPanel({
                 type="button"
                 onClick={onRebuild}
                 disabled={rebuilding}
-                className="btn btn-sm btn-outline mt-4"
+                className={buttonStyles({variant:"secondary",size:"sm",className:"mt-4"})}
               >
                 {rebuilding ? "正在重建…" : "重建分组"}
               </button>
@@ -515,14 +517,14 @@ export default function AlbumGroupPanel({
                           />
                           <button
                             type="submit"
-                            className="btn-text text-caption text-primary hover:underline"
+                            className="inline-flex items-center min-h-8 text-caption text-primary hover:underline"
                           >
                             保存
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingGroupId(null)}
-                            className="btn-text text-caption text-ink-2 hover:text-ink"
+                            className="inline-flex items-center min-h-8 text-caption text-ink-2 hover:text-ink"
                           >
                             取消
                           </button>
@@ -632,7 +634,7 @@ export default function AlbumGroupPanel({
             ) : null}
           </div>
         ) : null}
-      </div>
+      </Page>
     </section>
   );
 }

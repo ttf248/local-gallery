@@ -1,4 +1,4 @@
-import { albumGridClass } from "./albumGridClass";
+import { albumGridClass } from "./AlbumGrid";
 import type { ViewMode } from "../../store/uiStore";
 
 interface Props {
@@ -39,7 +39,7 @@ export default function AlbumGridSkeleton({
   bare = false,
   label,
 }: Props) {
-  const shell = bare ? "" : "page-shell";
+  const shell = bare ? "" : "mx-auto w-full min-w-0 max-w-page px-gutter";
   const text =
     label ?? (variant === "list" ? "正在加载列表…" : "正在加载图像…");
   if (variant === "list") {

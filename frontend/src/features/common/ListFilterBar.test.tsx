@@ -156,18 +156,18 @@ it("未启用时最少页数只留漏斗按钮，点开后才出现输入框", (
   render(<Harness />);
   // 0 本来就是「不过滤」，摆一个「≥ 0」在筛选条里读不出任何意思。
   expect(screen.queryByRole("spinbutton")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: /最少/ }));
+  fireEvent.click(screen.getByRole("button", { name: "筛选" }));
   const input = screen.getByRole("spinbutton");
-  expect(input).toHaveFocus();
+  expect(input).toHaveAccessibleName(/最少/);
   fireEvent.change(input, { target: { value: "12" } });
-  fireEvent.blur(input);
-  expect(screen.getByRole("spinbutton")).toHaveValue(12);
+  fireEvent.click(screen.getByRole("button", { name: "应用" }));
+  expect(screen.getByRole("button", { name: /至少 12/ })).toBeVisible();
 });
 
 it("启用后显示当前阈值并可一键清除", () => {
   render(<Harness initialMin={8} />);
-  expect(screen.getByRole("spinbutton")).toHaveValue(8);
-  fireEvent.click(screen.getByRole("button", { name: "清除最小图数" }));
+  expect(screen.getByText(/至少 8/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: /至少 8/ }));
   expect(screen.queryByRole("spinbutton")).toBeNull();
 });
 

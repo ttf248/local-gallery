@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useMemo } from "react";
 import { monthBuckets, type MonthCount } from "../../utils/travelMap";
 
@@ -87,7 +88,7 @@ export default function TravelTimeAxis({
           {!isAll ? (
             <button
               type="button"
-              className="btn btn-sm btn-outline"
+              className={buttonStyles({variant:"secondary",size:"sm"})}
               onClick={() => onChange(null, null)}
             >
               看全部时间

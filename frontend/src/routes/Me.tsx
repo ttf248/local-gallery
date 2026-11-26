@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useParams } from "react-router-dom";
 import { Tabs } from "../ui/Tabs";
@@ -69,7 +70,7 @@ export default function Me() {
     <div className="me-page flex h-full min-h-0 flex-col">
       {/* 标题与页签共用一个容器：页签的起点与标题、下面照片的起点
           在同一条网格线上，翻页签时内容不会左右跳。 */}
-      <Page className="page-shell shrink-0">
+      <Page className="shrink-0">
         <PageHero
           title={mode === "comic" ? "我的漫画" : "珍藏"}
           meta={summary.id === active.id ? summary.label : active.hint}
@@ -141,45 +142,45 @@ function ReadingPanel() {
 
   if (dashboard.isLoading) {
     return (
-      <div className="page-shell page-section pt-[var(--section)]">
+      <Page className="page-section pt-section">
         <p className="text-body text-ink-2">正在读取阅读进度…</p>
-      </div>
+      </Page>
     );
   }
 
   if (dashboard.isError) {
     return (
-      <div className="page-shell page-section pt-[var(--section)]">
+      <Page className="page-section pt-section">
         <EmptyState
           title="阅读进度读取失败"
           description="服务端暂时没有返回在读清单，稍后重试即可。"
           action={
             <button
-              className="btn btn-outline"
+              className={buttonStyles({variant:"secondary"})}
               onClick={() => void dashboard.refetch()}
             >
               重试
             </button>
           }
         />
-      </div>
+      </Page>
     );
   }
 
   if (cards.length === 0) {
     return (
-      <div className="page-shell page-section pt-[var(--section)]">
+      <Page className="page-section pt-section">
         <EmptyState
           title="没有读到一半的卷"
           description="打开任何一卷，读过几页，它就会出现在这里。"
         />
-      </div>
+      </Page>
     );
   }
 
   return (
-    <div className="page-shell page-section pt-[var(--section)]">
+    <Page className="page-section pt-section">
       <AlbumGrid items={cards} variant="grid" />
-    </div>
+    </Page>
   );
 }

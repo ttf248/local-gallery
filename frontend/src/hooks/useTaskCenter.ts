@@ -1,3 +1,4 @@
+import { jobsQueryKey } from "../api/queryKeys";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, sse } from "../api/client";
@@ -13,7 +14,7 @@ import {
   type AnalysisMode,
 } from "../api/aiJobs";
 
-const JOBS_KEY = ["ai-jobs"] as const;
+
 const ESTIMATE_KEY = ["ai-job-estimate"] as const;
 const JOB_EVENTS = [
   "pending",
@@ -114,11 +115,11 @@ export function useTaskCenter(tab: string): TaskCenterState {
   // 任务状态变了，核算也跟着变：跑完一轮增量张数会归零，清掉历史会少掉
   // 可参考的样本。
   const invalidateJobs = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: JOBS_KEY });
+    void queryClient.invalidateQueries({ queryKey: jobsQueryKey });
     void queryClient.invalidateQueries({ queryKey: ESTIMATE_KEY });
   }, [queryClient]);
   const jobsQuery = useQuery({
-    queryKey: JOBS_KEY,
+    queryKey: jobsQueryKey,
     queryFn: aiJobsApi.list,
     refetchInterval: (query) => {
       const snapshot = query.state.data?.snapshot;
@@ -216,7 +217,7 @@ export function useTaskCenter(tab: string): TaskCenterState {
         if (!isAIJob(value)) return;
         setDisconnectedJob(undefined);
         queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
-          JOBS_KEY,
+          jobsQueryKey,
           (current) => {
             if (!current) return current;
             const existing = current.snapshot.jobs.filter(
@@ -319,7 +320,7 @@ export function useTaskCenter(tab: string): TaskCenterState {
         peopleEnabled: settings.peopleEnabled,
       });
       queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
-        JOBS_KEY,
+        jobsQueryKey,
         (current) =>
           current
             ? { ...current, snapshot: { ...current.snapshot, settings } }
@@ -332,13 +333,13 @@ export function useTaskCenter(tab: string): TaskCenterState {
   const hardwareMutation = useMutation({
     mutationFn: (gpuEnabled: boolean) => aiJobsApi.updateHardware(gpuEnabled),
     onMutate: async (gpuEnabled) => {
-      await queryClient.cancelQueries({ queryKey: JOBS_KEY });
+      await queryClient.cancelQueries({ queryKey: jobsQueryKey });
       const previous = queryClient.getQueryData<{
         ok: boolean;
         snapshot: AIJobSnapshot;
-      }>(JOBS_KEY);
+      }>(jobsQueryKey);
       queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
-        JOBS_KEY,
+        jobsQueryKey,
         (current) =>
           current
             ? {
@@ -354,31 +355,31 @@ export function useTaskCenter(tab: string): TaskCenterState {
     },
     onError: (_error, _gpuEnabled, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(JOBS_KEY, context.previous);
+        queryClient.setQueryData(jobsQueryKey, context.previous);
       }
     },
     onSuccess: ({ settings }) => {
       queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
-        JOBS_KEY,
+        jobsQueryKey,
         (current) =>
           current
             ? { ...current, snapshot: { ...current.snapshot, settings } }
             : current,
       );
     },
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: JOBS_KEY }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: jobsQueryKey }),
   });
   const faceModelMutation = useMutation({
     mutationFn: (model: FaceModel) => aiJobsApi.updateFaceModel(model),
     onSuccess: ({ settings }) => {
       queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
-        JOBS_KEY,
+        jobsQueryKey,
         (current) =>
           current
             ? { ...current, snapshot: { ...current.snapshot, settings } }
             : current,
       );
-      void queryClient.invalidateQueries({ queryKey: JOBS_KEY });
+      void queryClient.invalidateQueries({ queryKey: jobsQueryKey });
       void queryClient.invalidateQueries({ queryKey: ESTIMATE_KEY });
     },
   });

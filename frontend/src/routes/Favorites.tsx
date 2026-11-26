@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import {PageHero} from "../shell/PageHero";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect,useMemo, useState } from "react";
@@ -235,7 +237,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
   return (
     <div className="min-h-full">
       {embedded ? null : (
-      <div className="page-shell"><PageHero
+      <Page ><PageHero
   title={copy.favoritesTitle}
   eyebrow="值得反复翻看的"
   meta={
@@ -245,14 +247,14 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
           // 剩下的情况只留筛选条给不出的信息 —— 失效条目与加载状态。
           showStatus ? status : null
         }
-/></div>
+/></Page>
       )}
       {embedded && showStatus ? (
-        <div className="page-shell pt-4">{status}</div>
+        <Page className="pt-4">{status}</Page>
       ) : null}
 
       {loadFailed && (
-        <div className="page-shell mb-4">
+        <Page className="mb-4">
           <ErrorBanner onRetry={retryLoad} retrying={retrying}>
             {favoritesFailed
               ? "收藏加载失败。"
@@ -261,7 +263,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
                 : "最近访问加载失败，无法更新最近看排序。"}
             {cards.length > 0 ? "仍显示已加载的收藏。" : "请重试加载。"}
           </ErrorBanner>
-        </div>
+        </Page>
       )}
       {cards.length > 0 && (
         <ListFilterBar
@@ -287,7 +289,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
             action={
               <button
                 onClick={() => navigate(homeRoute(mode))}
-                className="btn btn-primary"
+                className={buttonStyles({variant:"primary"})}
               >
                 去主页看看
               </button>
@@ -298,7 +300,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
               这里直接把「可收藏的对象」摆出来 —— 一排真实封面 + 常驻的
               星标，用户点一下就完成收藏，不必先去主页找。 */}
           {suggestions.length > 0 && (
-            <section className="page-shell pb-14">
+            <Page as="section" className="pb-14">
               <div className="flex items-baseline gap-3 flex-wrap mb-4">
                 <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">从这里挑一个收藏</h2>
                 <span className="section-meta text-caption leading-[1.45] text-ink-2">点封面右上角的星标</span>
@@ -318,7 +320,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
                   </div>
                 ))}
               </div>
-            </section>
+            </Page>
           )}
         </>
       ) : cards.length === 0 ? (
@@ -332,14 +334,14 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
                 <button
                   onClick={onCleanMissing}
                   disabled={cleaning}
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   title="移除这些永远渲染不出来的收藏条目"
                 >
                   {cleaning ? "清理中…" : `清理 ${missingCount} 项失效收藏`}
                 </button>
                 <button
                   onClick={() => navigate(homeRoute(mode))}
-                  className="btn btn-primary"
+                  className={buttonStyles({variant:"primary"})}
                 >
                   去主页看看
                 </button>
@@ -359,7 +361,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
             action={
               <button
                 onClick={() => setMode(otherMode)}
-                className="btn btn-primary"
+                className={buttonStyles({variant:"primary"})}
               >
                 去{otherLibraryTitle}看看
               </button>
@@ -374,14 +376,14 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
           action={
             <button
               onClick={resetFilters}
-              className="btn btn-outline"
+              className={buttonStyles({variant:"secondary"})}
             >
               清除筛选
             </button>
           }
         />
       ) : (
-        <section className="page-shell container--gallery">
+        <Page as="section" className="container--gallery">
           <div className="pb-10">
             {/* 收藏是"精选陈列"，不是"全量浏览"：用更疏的网格，
             与未读 / 最近 / 全部图像的密集清单区分开。 */}
@@ -392,7 +394,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
               density="spacious"
             />
           </div>
-        </section>
+        </Page>
       )}
       <div className="h-12" />
     </div>

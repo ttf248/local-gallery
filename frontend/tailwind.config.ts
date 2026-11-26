@@ -25,7 +25,10 @@ export default {
       "3xl": "2240px",
     },
     extend: {
+      maxWidth:{page:"var(--page-max)"},
       spacing: {
+        gutter:"var(--gutter)", section:"var(--section)", "float-bottom":"var(--float-bottom)",
+        "drawer-offset":"var(--folder-drawer-offset)", "gallery-fit":"var(--gallery-fit-height)", "safe-top":"var(--safe-top)",
         rail: "var(--nav-width)",
         "rail-compact": "var(--nav-width-compact)",
         topbar: "var(--topbar-h)",
@@ -107,6 +110,7 @@ export default {
         ],
       },
       boxShadow: {
+        cover:"var(--cover-shadow)",
         1: "var(--e1)",
         2: "var(--e2)",
         3: "var(--e3)",

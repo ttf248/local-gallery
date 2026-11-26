@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import { SectionHeader } from "../ui/SectionHeader";
 import { PageHero } from "../shell/PageHero";
 import ErrorBanner from "../features/common/ErrorBanner";
@@ -206,7 +208,7 @@ export default function Recents({
   return (
     <div className="min-h-full">
       {embedded ? null : (
-        <div className="page-shell">
+        <Page >
           <PageHero
             title={copy.recentsTitle}
             eyebrow={copy.recentsEyebrow}
@@ -240,18 +242,18 @@ export default function Recents({
               ) : null
             }
           />
-        </div>
+        </Page>
       )}
 
       {loadFailed && (
-        <div className="page-shell mb-4">
+        <Page className="mb-4">
           <ErrorBanner onRetry={retryLoad} retrying={retrying}>
             {historyFailed
               ? copy.recentsLoadError
               : copy.recentsAlbumsLoadError}
             {cards.length > 0 ? "仍显示已加载的记录。" : "请重试加载。"}
           </ErrorBanner>
-        </div>
+        </Page>
       )}
       {cards.length > 0 && (
         <ListFilterBar
@@ -286,7 +288,7 @@ export default function Recents({
             action={
               <button
                 onClick={() => navigate(homeRoute(mode))}
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
               >
                 去主页看看
               </button>
@@ -304,7 +306,7 @@ export default function Recents({
             action={
               <button
                 onClick={() => navigate(homeRoute(mode))}
-                className="btn btn-primary"
+                className={buttonStyles({variant:"primary"})}
               >
                 去主页看看
               </button>
@@ -317,13 +319,13 @@ export default function Recents({
           description={query ? `没有匹配"${query}"的结果` : ""}
           /* 筛选条就在上面，空态紧跟着它说清楚即可。 */ size="compact"
           action={
-            <button onClick={resetFilters} className="btn btn-outline">
+            <button onClick={resetFilters} className={buttonStyles({variant:"secondary"})}>
               清除筛选
             </button>
           }
         />
       ) : (
-        <section className="page-shell">
+        <Page as="section" >
           <div className="pb-10">
             {mode === "photo" ? (
               recentSections.map((section) => (
@@ -349,7 +351,7 @@ export default function Recents({
               />
             )}
           </div>
-        </section>
+        </Page>
       )}
       <div className="h-8" />
     </div>

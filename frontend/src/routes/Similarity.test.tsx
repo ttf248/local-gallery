@@ -550,10 +550,11 @@ describe("相似照片整理页", () => {
     renderPage();
     expect(await screen.findAllByTestId("similarity-group")).toHaveLength(6);
 
+    expect(screen.getByRole("button", { name: /再显示 60 组/ })).toBeEnabled();
     while (virtualState.loadedGroups < 5000) {
       const expected = Math.min(virtualState.loadedGroups + 60, 5000);
       fireEvent.click(
-        await screen.findByRole("button", { name: /再显示 60 组/ }),
+        await screen.findByText(/再显示 60 组/),
       );
       await waitFor(() =>
         expect(screen.getByTestId("similarity-virtual-list")).toHaveAttribute(

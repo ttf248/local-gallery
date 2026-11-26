@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { Dialog } from "../../ui/Dialog";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -120,7 +121,7 @@ export default function PeopleMergeDialog({
           </p>
           <button
             type="button"
-            className="btn btn-primary"
+            className={buttonStyles({variant:"primary"})}
             disabled={!targetId || isMerging}
             onClick={() => onMerge(targetId)}
           >

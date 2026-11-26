@@ -26,7 +26,8 @@ vi.mock("../hooks/useImageActivity", () => ({
 vi.mock("../hooks/useGalleryContextSync", () => ({
   useGalleryContextSync: vi.fn(),
 }));
-vi.mock("../features/library/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../features/library/AlbumGrid")>(),
   default: (props: {
     items: { title: string; lastSeenAt?: string }[];
     coverBadge?: (item: unknown) => React.ReactNode;

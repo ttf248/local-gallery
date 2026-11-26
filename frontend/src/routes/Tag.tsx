@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { cx } from "../ui/cx";
 import { Page } from "../shell/Page";
 import { PageHero } from "../shell/PageHero";
@@ -44,8 +45,8 @@ import { SelectionToggle } from "../features/common/LibrarySelectionActions";
  */
 function TagHead({ tag, onBack }: { tag: string; onBack: () => void }) {
   return (
-    <Page className="page-section pt-[var(--section)] pb-5">
-      <button onClick={onBack} className="btn btn-sm btn-ghost mb-4">
+    <Page className="page-section pt-section pb-5">
+      <button onClick={onBack} className={buttonStyles({variant:"ghost",size:"sm",className:"mb-4"})}>
         <ChevronLeftIcon size={13} />
         <span>返回</span>
       </button>
@@ -176,7 +177,7 @@ export default function Tag() {
           description="没能读到这个标签下的相册。"
           action={
             <button
-              className="btn btn-outline"
+              className={buttonStyles({variant:"secondary"})}
               onClick={() => void albumsQuery.refetch()}
             >
               重试
@@ -202,7 +203,7 @@ export default function Tag() {
           action={
             <button
               onClick={() => navigate(homeRoute(mode))}
-              className="btn btn-primary"
+              className={buttonStyles({variant:"primary"})}
             >
               回到{workbenchCopy(mode).libraryTitle}
             </button>
@@ -213,7 +214,7 @@ export default function Tag() {
   }
 
   return (
-    <Page className="page-shell min-h-full">
+    <Page className="min-h-full">
       <section className="pb-5">
         <div className={cx(
           "tag-feature grid items-center gap-6 rounded-lg border border-line bg-sunken p-5 sm:gap-8 sm:p-8",
@@ -303,7 +304,7 @@ export default function Tag() {
             <div className={cx(
               "tag-feature__image overflow-hidden",
               mode === "comic"
-                ? "book-binding relative aspect-[2/3] w-40 justify-self-center rounded-md shadow-[var(--cover-shadow)] sm:w-[200px]"
+                ? "book-binding relative aspect-[2/3] w-40 justify-self-center rounded-md shadow-cover sm:w-[200px]"
                 : "h-40 rounded-tile border border-line bg-raised p-2.5 shadow-1 sm:h-60",
             )}>
               <RenditionImage

@@ -1,3 +1,4 @@
+import { similarityStatusKey } from "../api/queryKeys";
 import { useCallback, useMemo } from "react";
 import {
   useInfiniteQuery,
@@ -19,8 +20,7 @@ import {
 /** 分组列表的查询键。筛选条件进键里：换筛选就是换一份数据。 */
 export const similarityGroupsKey = ["similarity", "groups"] as const;
 
-/** 整理模块状态的查询键。 */
-export const similarityStatusKey = ["similarity", "status"] as const;
+
 const SIMILARITY_PAGE_SIZE = 60;
 
 /** 当前筛选切面共用一个无限分页缓存，页码由 pageParams 管理。 */

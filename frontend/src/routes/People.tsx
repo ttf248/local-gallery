@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import { useConfirm } from "../features/common/ConfirmDialog";
 import PersonFaceThumb from "../features/people/PersonFaceThumb";
 import { TextField } from "../ui/Field";
@@ -161,11 +163,11 @@ function PeopleList() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <div className="page-shell">
+      <Page >
         <header className="flex items-center justify-between gap-3 pt-5">
           <h1 className="text-display font-semibold">人物相册</h1>
           <details className="relative">
-            <summary className="btn btn-sm btn-outline cursor-pointer">
+            <summary className={buttonStyles({variant:"secondary",size:"sm",className:"cursor-pointer"})}>
               管理
             </summary>
             <div className="absolute right-0 z-20 mt-2 grid w-52 gap-2 rounded-lg border border-line bg-raised p-3 shadow-1">
@@ -176,12 +178,12 @@ function PeopleList() {
                 </p>
               </details>
               <Link
-                className="btn btn-sm btn-outline"
+                className={buttonStyles({variant:"secondary",size:"sm"})}
                 to={peopleAnnotateRoute()}
               >
                 标注工具
               </Link>
-              <Link className="btn btn-sm btn-outline" to="/tasks/plan">
+              <Link className={buttonStyles({variant:"secondary",size:"sm"})} to="/tasks/plan">
                 人物分析设置
               </Link>
               <label className="flex items-center gap-2 text-caption text-ink-2">
@@ -194,7 +196,7 @@ function PeopleList() {
               </label>
               <button
                 type="button"
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 disabled={clear.isPending}
                 onClick={async () => {
                   if (
@@ -209,7 +211,7 @@ function PeopleList() {
             </div>
           </details>
         </header>
-      </div>
+      </Page>
       {query.isError ? (
         <EmptyState
           title="人物列表加载失败"
@@ -217,7 +219,7 @@ function PeopleList() {
           action={
             <button
               type="button"
-              className="btn btn-outline"
+              className={buttonStyles({variant:"secondary"})}
               onClick={() => void query.refetch()}
             >
               重新加载
@@ -233,13 +235,13 @@ function PeopleList() {
           title="人物分析默认关闭"
           description="前往任务中心启用人物分析并运行人脸识别。分析只在本机处理。"
           action={
-            <Link className="btn btn-outline" to="/tasks/plan">
+            <Link className={buttonStyles({variant:"secondary"})} to="/tasks/plan">
               打开任务中心
             </Link>
           }
         />
       ) : (
-        <section className="page-shell mt-4">
+        <Page as="section" className="mt-4">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div
               role="tablist"
@@ -330,7 +332,7 @@ function PeopleList() {
                   })}
                   {query.hasNextPage && (
                     <button
-                      className="btn btn-outline"
+                      className={buttonStyles({variant:"secondary"})}
                       disabled={query.isFetchingNextPage}
                       onClick={() => void query.fetchNextPage()}
                     >
@@ -421,7 +423,7 @@ function PeopleList() {
               ) : null}
             </>
           ) : null}
-        </section>
+        </Page>
       )}
     </div>
   );
@@ -459,7 +461,7 @@ function ReviewLoadError({ onRetry }: { onRetry: () => void }) {
       title="复核列表加载失败"
       description="请稍后重试。"
       action={
-        <button type="button" className="btn btn-outline" onClick={onRetry}>
+        <button type="button" className={buttonStyles({variant:"secondary"})} onClick={onRetry}>
           重新加载
         </button>
       }
@@ -478,7 +480,7 @@ function LoadMoreButton({
     <div className="mt-6 flex justify-center">
       <button
         type="button"
-        className="btn btn-outline"
+        className={buttonStyles({variant:"secondary"})}
         disabled={loading}
         onClick={onClick}
       >
@@ -519,7 +521,7 @@ function MatchSuggestionCard({
           </p>
           <button
             type="button"
-            className="btn btn-sm btn-outline mt-3"
+            className={buttonStyles({variant:"secondary",size:"sm",className:"mt-3"})}
             disabled={pending}
             onClick={onRetain}
           >
@@ -572,7 +574,7 @@ function MatchSuggestionCard({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="btn btn-sm btn-primary"
+                      className={buttonStyles({variant:"primary",size:"sm"})}
                       disabled={pending}
                       onClick={() => onMerge(candidate.person.id)}
                     >
@@ -580,7 +582,7 @@ function MatchSuggestionCard({
                     </button>
                     <button
                       type="button"
-                      className="btn btn-sm btn-outline"
+                      className={buttonStyles({variant:"secondary",size:"sm"})}
                       disabled={pending}
                       onClick={() => onExclude(candidate.person.id)}
                     >
@@ -660,7 +662,7 @@ function MatchEvidenceStrip({
       {evidence.length > 4 ? (
         <button
           type="button"
-          className="btn btn-sm btn-outline mt-2"
+          className={buttonStyles({variant:"secondary",size:"sm",className:"mt-2"})}
           onClick={() => setExpanded((value) => !value)}
         >
           {expanded ? "收起照片" : `再显示 ${evidence.length - 4} 张`}
@@ -737,7 +739,7 @@ function GroupPhotoCandidateCard({
       <div className="border-t border-line p-4">
         <button
           type="button"
-          className="btn btn-sm btn-outline"
+          className={buttonStyles({variant:"secondary",size:"sm"})}
           disabled={pending}
           onClick={onRetain}
         >
@@ -931,18 +933,18 @@ function PersonAlbum({ personId }: { personId: string }) {
 
   if (query.isError || (!person && !query.isLoading)) {
     return (
-      <div className="page-shell py-12 text-body text-ink-2">
+      <Page className="py-12 text-body text-ink-2">
         人物分组已失效或照片加载失败。
         <Link className="ml-1 underline" to={homeRoute("photo")}>
           回照片库
         </Link>
-      </div>
+      </Page>
     );
   }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="page-shell shrink-0">
+      <Page className="shrink-0">
         <PageHero
           title={person?.name ?? "人物相册"}
           leading={
@@ -1004,7 +1006,7 @@ function PersonAlbum({ personId }: { personId: string }) {
                   onChange={(event) => setName(event.target.value)}
                 />
                 <button
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   disabled={!name.trim() || savePerson.isPending}
                 >
                   保存
@@ -1015,7 +1017,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           actions={
             <>
               <button
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 disabled={merge.isPending}
                 onClick={() => setMergeDialogOpen(true)}
               >
@@ -1026,23 +1028,23 @@ function PersonAlbum({ personId }: { personId: string }) {
                 checked={showPersonFaceBoxes}
                 onChange={useUIStore.getState().setShowPersonFaceBoxes}
               />
-              <Link className="btn btn-outline" to={peopleRoute()}>
+              <Link className={buttonStyles({variant:"secondary"})} to={peopleRoute()}>
                 全部人物
               </Link>
             </>
           }
         />
-      </div>
-      <div className="page-shell shrink-0">
+      </Page>
+      <Page className="shrink-0">
         <button
-          className="btn btn-sm btn-outline"
+          className={buttonStyles({variant:"secondary",size:"sm"})}
           aria-expanded={choosing}
           onClick={() => setChoosing(!choosing)}
         >
           更换头像
         </button>
         <button
-          className="btn btn-sm ml-2"
+          className={buttonStyles({variant:"secondary",size:"sm",className:"ml-2"})}
           aria-expanded={showReview}
           onClick={() => setShowReview(!showReview)}
         >
@@ -1060,12 +1062,12 @@ function PersonAlbum({ personId }: { personId: string }) {
         {choosing && (
           <section className="my-3 max-h-56 overflow-auto rounded-lg border border-line p-3">
             <div className="mb-3 flex gap-2">
-              <button className="btn btn-sm" onClick={() => choose.mutate("")}>
+              <button className={buttonStyles({variant:"secondary",size:"sm"})} onClick={() => choose.mutate("")}>
                 恢复自动精选
               </button>
               {choices.hasNextPage && (
                 <button
-                  className="btn btn-sm"
+                  className={buttonStyles({variant:"secondary",size:"sm"})}
                   disabled={choices.isFetchingNextPage}
                   onClick={() => void choices.fetchNextPage()}
                 >
@@ -1096,8 +1098,8 @@ function PersonAlbum({ personId }: { personId: string }) {
             </div>
           </section>
         )}
-      </div>
-      <div className="page-shell shrink-0 space-y-3 border-b border-line pb-3">
+      </Page>
+      <Page className="shrink-0 space-y-3 border-b border-line pb-3">
         {showPersonFaceBoxes ? (
           <p className="flex items-center gap-2 text-caption text-ink-2">
             <span
@@ -1111,7 +1113,7 @@ function PersonAlbum({ personId }: { personId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             disabled={savePerson.isPending}
             onClick={() => savePerson.mutate({ hidden: !person?.hidden })}
           >
@@ -1153,7 +1155,7 @@ function PersonAlbum({ personId }: { personId: string }) {
             {faces.length > visibleFaceCount ? (
               <button
                 type="button"
-                className="btn btn-sm btn-outline mt-2"
+                className={buttonStyles({variant:"secondary",size:"sm",className:"mt-2"})}
                 onClick={() =>
                   setVisibleFaceCount((count) => count + facePageSize)
                 }
@@ -1163,7 +1165,7 @@ function PersonAlbum({ personId }: { personId: string }) {
             ) : null}
             <button
               type="button"
-              className="btn btn-sm btn-outline mt-2"
+              className={buttonStyles({variant:"secondary",size:"sm",className:"mt-2"})}
               disabled={selectedFaces.length === 0 || split.isPending}
               onClick={() => split.mutate()}
             >
@@ -1173,14 +1175,14 @@ function PersonAlbum({ personId }: { personId: string }) {
             </button>
           </details>
         ) : null}
-      </div>
+      </Page>
       {items.length === 0 && !query.isLoading ? (
         <EmptyState
           title="这个人物分组暂时没有照片"
           description="媒体库或分析结果变化后，该分组会按当前有效照片显示。" size="compact"
         />
       ) : (
-        <div className="page-shell min-h-0 flex-1 pb-2 pt-3">
+        <Page className="min-h-0 flex-1 pb-2 pt-3">
           <PhotoWall
             items={items}
             total={total}
@@ -1225,7 +1227,7 @@ function PersonAlbum({ personId }: { personId: string }) {
                不该把人丢回墙的顶上。 */
             scrollToIndex={wall.focusIndex}
           />
-        </div>
+        </Page>
       )}
       {viewer ? <PhotoViewer {...viewer} /> : null}
       {mergeDialogOpen ? (

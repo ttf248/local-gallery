@@ -1,3 +1,4 @@
+import { buttonStyles } from "../../ui/buttonStyles";
 import type {
   AIJob,
   AIJobEstimate,
@@ -7,14 +8,17 @@ import type {
   AnalysisMode,
   AnalysisType,
 } from "../../api/aiJobs";
-import type { TaskCenterSelection,TaskCenterPlan } from "../../hooks/useTaskCenter";
+import type {
+  TaskCenterSelection,
+  TaskCenterPlan,
+} from "../../hooks/useTaskCenter";
 import { formatCount, formatEstimateDuration } from "../../utils/taskFormat";
 import ModuleTiles from "./ModuleTiles";
 import RunSummaryPanel from "./RunSummaryPanel";
 
 interface Props {
-  plan:TaskCenterPlan;
-  onStart:()=>void;
+  plan: TaskCenterPlan;
+  onStart: () => void;
   loading: boolean;
   /** 启动或任务操作正在提交。 */
   busy: boolean;
@@ -44,7 +48,9 @@ interface Props {
  * 那一行，用户不用在页面里找按钮在哪。这一块只回答「跑什么、跑多少」。
  */
 export default function TaskConsole({
-  plan,onStart,loading,
+  plan,
+  onStart,
+  loading,
   busy,
   modules,
   history,
@@ -112,35 +118,53 @@ export default function TaskConsole({
           </div>
         </div>
 
-        <aside className="min-w-0 rounded-xl bg-sunken p-4 xl:sticky xl:top-3">
-        <h3 className="mb-3 text-heading">本次运行</h3>
-        <RunSummaryPanel plan={plan} selection={selection} onFaceModelChange={onChangeFaceModel} onStart={onStart}
-          faceModel={faceModel} faceModelSaving={faceModelSaving} faceModelSaveError={faceModelSaveError}
-          buffaloReady={buffaloReady} qualityReady={qualityReady} embeddingStatusLoading={embeddingStatusLoading}
-          running={busy} startDisabled={!installedModules.some(module=>module.type===selectedModule) || (selectedModule==="face" && (!peopleEnabled || !selectedFaceModelReady))}
-          estimate={estimate ?? null} estimating={estimateLoading} error={estimateError}
-          onRefresh={onRefreshEstimate} onModeChange={selection.setMode}/>
-        <div className="tasks-actions flex flex-wrap items-center gap-y-2 gap-x-4 py-3 px-0 border-t border-t-line">
-          <button
-            type="button"
-            className="btn btn-sm btn-outline"
-            disabled={busy || installedModules.length === 0}
-            onClick={() => onStartAll(mode)}
-          >
-            按序启动全部任务
-          </button>
-          {sequence && sequence.modules.length > 0 ? (
-            <span className="text-caption text-ink-3">
-              {`${sequence.modules.length} 个模块 · ${formatCount(sequence.count)} 张`}
-            </span>
-          ) : null}
-          {sequence && sequence.modules.length > 0 ? (
-            <span className="text-caption text-ink-3">
-              {formatEstimateDuration(sequence.estimatedDurationMs)}
-            </span>
-          ) : null}
-        </div>
-
+        <aside className="min-w-0 rounded-xl border border-line bg-raised p-5 xl:sticky xl:top-4">
+          <h3 className="mb-3 text-heading">本次运行</h3>
+          <RunSummaryPanel
+            plan={plan}
+            selection={selection}
+            onFaceModelChange={onChangeFaceModel}
+            onStart={onStart}
+            faceModel={faceModel}
+            faceModelSaving={faceModelSaving}
+            faceModelSaveError={faceModelSaveError}
+            buffaloReady={buffaloReady}
+            qualityReady={qualityReady}
+            embeddingStatusLoading={embeddingStatusLoading}
+            running={busy}
+            startDisabled={
+              !installedModules.some(
+                (module) => module.type === selectedModule,
+              ) ||
+              (selectedModule === "face" &&
+                (!peopleEnabled || !selectedFaceModelReady))
+            }
+            estimate={estimate ?? null}
+            estimating={estimateLoading}
+            error={estimateError}
+            onRefresh={onRefreshEstimate}
+            onModeChange={selection.setMode}
+          />
+          <div className="tasks-actions flex flex-wrap items-center gap-y-2 gap-x-4 py-3 px-0 border-t border-t-line">
+            <button
+              type="button"
+              className={buttonStyles({ variant: "secondary", size: "sm" })}
+              disabled={busy || installedModules.length === 0}
+              onClick={() => onStartAll(mode)}
+            >
+              按序启动全部任务
+            </button>
+            {sequence && sequence.modules.length > 0 ? (
+              <span className="text-caption text-ink-3">
+                {`${sequence.modules.length} 个模块 · ${formatCount(sequence.count)} 张`}
+              </span>
+            ) : null}
+            {sequence && sequence.modules.length > 0 ? (
+              <span className="text-caption text-ink-3">
+                {formatEstimateDuration(sequence.estimatedDurationMs)}
+              </span>
+            ) : null}
+          </div>
         </aside>
         {/* 高级信息：版本、运行环境与索引覆盖。日常用不到，但它决定
             「为什么这次跑不起来」，所以收起来而不是删掉 —— 摘要里给出
@@ -148,9 +172,7 @@ export default function TaskConsole({
         <details className="xl:col-span-2 tasks-advanced border-t border-t-line">
           <summary className="tasks-advanced__summary flex items-baseline gap-3 py-2.5 px-0 cursor-pointer text-body text-ink [list-style:none] [&::-webkit-details-marker]:hidden before:content-['▸'] before:text-caption before:text-ink-3 [.tasks-advanced[open]>&::before]:content-['▾']">
             高级信息
-            <span className="text-caption text-ink-3">
-模块版本与运行环境
-            </span>
+            <span className="text-caption text-ink-3">模块版本与运行环境</span>
           </summary>
           <div className="tasks-advanced__body [padding:2px_0_14px]">
             {selectedModuleVersion ? (
@@ -183,7 +205,8 @@ function moduleDescription(type: AnalysisType): string {
       return "用本机 Chinese-CLIP 为照片建立中文语义向量，可按描述搜索，也能按照片查找相似画面。";
     case "ocr":
       return "用本机 OCR 识别照片中的文字，结果可在图片详情中查看。";
-    case "portrait":return "逐张核对已有的人脸分组，优先选择清晰、接近正面的头像。";
+    case "portrait":
+      return "逐张核对已有的人脸分组，优先选择清晰、接近正面的头像。";
     case "face":
       return "检测照片中的人脸并生成本机特征向量，可查找相似人脸；不会推断或标注真实姓名。";
     case "similarity":

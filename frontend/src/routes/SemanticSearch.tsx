@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import { InlineAlert } from "../ui/InlineAlert";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -190,7 +192,7 @@ export default function SemanticSearch() {
         (hasSemanticQuery && !embeddingReady) ||
         !hasSearchCondition
       }
-      className="btn btn-primary"
+      className={buttonStyles({variant:"primary"})}
     >
       <SearchIcon size={14} />
       {submittedQuery.isFetching ? "搜索中…" : "搜索照片"}
@@ -200,14 +202,14 @@ export default function SemanticSearch() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 overflow-y-auto pb-4">
-        <div className="page-shell">
+        <Page >
           <PageHero
             eyebrow="本地 AI · 组合检索"
             title="智能搜索"
             meta="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"
           />
-        </div>
-        <section className="page-shell mt-5">
+        </Page>
+        <Page as="section" className="mt-5">
           <form
             className="rounded-xl border border-line bg-raised p-4 shadow-1 sm:p-5"
             onSubmit={onSubmit}
@@ -269,7 +271,7 @@ export default function SemanticSearch() {
                   </p>
                 ) : (
                   <label className="flex flex-wrap items-center gap-3 text-body text-ink">
-                    <span className="btn btn-sm btn-outline">选择图片</span>
+                    <span className={buttonStyles({variant:"secondary",size:"sm"})}>选择图片</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -471,16 +473,16 @@ export default function SemanticSearch() {
                     : "Chinese-CLIP 权重缺失或校验未通过。"}{" "}
                   文字搜索仍可用；权重目录：cacheDir/derived/ai/models/。
                 </span>
-                <Link to="/tasks/storage" className="btn btn-sm btn-outline">
+                <Link to="/tasks/storage" className={buttonStyles({variant:"secondary",size:"sm"})}>
                   查看任务中心
                 </Link>
               </div>
             </InlineAlert>
           ) : null}
-        </section>
+        </Page>
       </div>
 
-      <div className="page-shell min-h-0 flex-1 pb-2">
+      <Page className="min-h-0 flex-1 pb-2">
         <ContentSearchResults
           submitted={submitted}
           status={status}
@@ -488,9 +490,9 @@ export default function SemanticSearch() {
           wantsSemantic={wantsSemantic}
           onFindSimilar={findSimilar}
         />
-      </div>
+      </Page>
       {status && usesSemanticSearch ? (
-        <p className="page-shell shrink-0 py-2 text-caption text-ink-3">
+        <Page as="p" className="shrink-0 py-2 text-caption text-ink-3">
           {status.device === "cuda"
             ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
             : status.runtimeReady
@@ -499,7 +501,7 @@ export default function SemanticSearch() {
           {" · "}
           {status.coverage.indexed.toLocaleString()} /{" "}
           {status.coverage.total.toLocaleString()} 张已索引 · <Link to="/tasks/run" className="underline">任务中心</Link>
-        </p>
+        </Page>
       ) : null}
     </div>
   );

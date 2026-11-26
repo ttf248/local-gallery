@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { Page } from "../shell/Page";
 import { InlineAlert } from "../ui/InlineAlert";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -361,7 +362,7 @@ export default function PhotoAlbum({ album }: Props) {
               ? "收起这一组"
               : `这一组有 ${group.albumSize} 张相似的照片，点开就地比较`
           }
-          className={`hover-reveal absolute right-1.5 bottom-1.5 z-10 min-h-8 rounded-md bg-black/80 px-2 py-1 text-caption text-white touch:min-h-10 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100 group-focus-within:opacity-100 ${
+          className={`opacity-100 pointer-fine:opacity-0 absolute right-1.5 bottom-1.5 z-10 min-h-8 rounded-md bg-black/80 px-2 py-1 text-caption text-white touch:min-h-10 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100 group-focus-within:opacity-100 ${
             expanded ? "opacity-100" : ""
           }`}
         >
@@ -437,7 +438,7 @@ export default function PhotoAlbum({ album }: Props) {
             <button
               type="button"
               onClick={() => setDimension(grouping ? null : "recommended")}
-              className="btn btn-ghost album-group-trigger max-md:[&>span]:hidden"
+              className={buttonStyles({variant:"ghost",className:"album-group-trigger max-md:[&>span]:hidden"})}
               aria-label={grouping ? "分组浏览已开" : "按分组浏览"}
               aria-pressed={grouping}
             >
@@ -494,7 +495,7 @@ export default function PhotoAlbum({ album }: Props) {
                 <button
                   type="button"
                   onClick={() => openGroup(null)}
-                  className="btn-text text-caption text-primary hover:underline"
+                  className="inline-flex items-center min-h-8 text-caption text-primary hover:underline"
                 >
                   回到全部照片
                 </button>
@@ -557,7 +558,7 @@ export default function PhotoAlbum({ album }: Props) {
               action={
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   onClick={() => void smartGroupsQuery.refetch()}
                 >
                   重新加载
@@ -571,7 +572,7 @@ export default function PhotoAlbum({ album }: Props) {
               action={
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   onClick={() => void mediaQuery.refetch()}
                 >
                   重新加载
@@ -579,12 +580,12 @@ export default function PhotoAlbum({ album }: Props) {
               }
             />
           ) : mediaQuery.isLoading && !mediaQuery.data ? (
-            <div
-              className="page-shell py-10 text-center text-body text-ink-2"
+            <Page
+              className="py-10 text-center text-body text-ink-2"
               aria-live="polite"
             >
               正在读取相册媒体…
-            </div>
+            </Page>
           ) : mediaItems.length === 0 && mediaQuery.data ? (
             filterCount > 0 ? (
               <EmptyState
@@ -593,7 +594,7 @@ export default function PhotoAlbum({ album }: Props) {
                 action={
                   <button
                     type="button"
-                    className="btn btn-outline"
+                    className={buttonStyles({variant:"secondary"})}
                     onClick={clearFilter}
                   >
                     清除筛选

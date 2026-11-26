@@ -15,6 +15,7 @@ import path from "node:path";
 import {
   buildRoute,
   resolveAlbumId,
+  openPhotoViewer,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
 import {
@@ -87,20 +88,17 @@ async function main() {
         locale: "zh-CN",
         colorScheme: theme,
       });
-      const page = await ctx.newPage();
-      page.on("pageerror", (e) =>
-        errors.push(`[${theme}/${viewport.width}] ${e.message}`),
-      );
-      await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-      await setTheme(page, theme);
+      const setup = await ctx.newPage();
+      await setup.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+      await setTheme(setup, theme);
       // 工作台模式决定路由前缀：两侧的页面各在 /photo 与 /comic 下。
-      const mode = await resolveMode(page);
+      const mode = await resolveMode(setup);
 
       for (const route of PAGES) {
         // 伪路由：相册页与阅读器要现取一本真实相册。
         let target = route;
         if (route === "tag") {
-          const response = await page.request.get(
+          const response = await setup.request.get(
             BASE + "/api/tags?kind=" + mode,
           );
           if (!response.ok()) throw new Error("读取标签失败");
@@ -111,10 +109,10 @@ async function main() {
           }
           target = "/" + mode + "/tags/" + encodeURIComponent(tag);
         }
-        if (route === "viewer") target = "/photo";
+
         if (route === "album" || route === "reader") {
           const sampleMode = route === "reader" ? "comic" : "photo";
-          const albumId = await resolveAlbumId(page, sampleMode);
+          const albumId = await resolveAlbumId(setup, sampleMode);
           if (!albumId) continue;
           target =
             route === "album"
@@ -123,35 +121,87 @@ async function main() {
         }
         // 不用 networkidle：页面里有 SSE 长连接，且 /api/previews 首次生成
         // 预览图可能耗时数秒，networkidle 会一直等不到而超时。
-        await page.goto(BASE + buildRoute(target, mode), {
-          waitUntil: "domcontentloaded",
-          timeout: 60000,
-        });
-        await page
-          .locator(
-            route === "reader"
-              ? '[data-testid="gallery-reader"]'
-              : "main [data-page], main .page-shell",
+        const page = await ctx.newPage();
+        const dataRequests = new Set();
+        const loaded = new Set();
+        const requestKey = (request) =>
+          [request.method(), request.url(), request.postData()].join("\n");
+        page.on("request", (request) => {
+          if (
+            ["xhr", "fetch"].includes(request.resourceType()) &&
+            new URL(request.url()).pathname.startsWith("/api/") &&
+            !new URL(request.url()).pathname.endsWith("/events") &&
+            !loaded.has(requestKey(request))
           )
-          .first()
-          .waitFor({ state: "visible", timeout: 20000 });
+            dataRequests.add(request);
+        });
+        // 首次响应决定首屏内容。任务中心会持续轮询同一个请求。
+        page.on("requestfinished", (request) => {
+          if (dataRequests.delete(request)) loaded.add(requestKey(request));
+        });
+        page.on("requestfailed", (request) => dataRequests.delete(request));
+        page.on("pageerror", (e) =>
+          errors.push(`[${theme}/${viewport.width}] ${e.message}`),
+        );
         if (route === "viewer") {
-          const content = await page.waitForSelector(
-            '[data-testid="media-tile"] [data-open], .empty-state',
-          );
-          if (!(await content.evaluate((el) => el.hasAttribute("data-open"))))
+          if (!(await openPhotoViewer(page, BASE, setup))) {
+            await page.close();
             continue;
-          await content.click();
-          await page.getByTestId("photo-viewer").waitFor();
+          }
+        } else {
+          await page.goto(BASE + buildRoute(target, mode), {
+            waitUntil: "domcontentloaded",
+            timeout: 60000,
+          });
+          await page
+            .locator(
+              route === "reader"
+                ? '[data-testid="gallery-reader"]'
+                : "main [data-page]",
+            )
+            .first()
+            .waitFor({ state: "visible", timeout: 20000 });
         }
         // 首屏数据与缩略图分别就绪。视口外的虚拟项和懒加载图片无需等待。
-        const pending = page.locator(
-          "main [role=status]:has([data-skeleton]), main [aria-busy=true]",
+        // SSE 长连接不参与就绪判断。虚拟列表取得数据后才会创建需要解码的缩略图。
+        let quietSince = Date.now();
+        const deadline = quietSince + 60_000;
+        while (Date.now() - quietSince < 450) {
+          if (Date.now() > deadline)
+            throw new Error(
+              route +
+                " 的首屏数据未就绪：" +
+                [...dataRequests]
+                  .map((r) => new URL(r.url()).pathname)
+                  .join("、"),
+            );
+          if (dataRequests.size) quietSince = Date.now();
+          await page.waitForTimeout(100);
+        }
+        await page.waitForFunction(
+          () => {
+            const markers = document.querySelectorAll(
+              "main [data-skeleton], main [aria-busy=true], main [role=status] .animate-pulse, main .ui-skeleton",
+            );
+            return Array.from(markers).every((el) => {
+              const r = el.getBoundingClientRect();
+              return (
+                r.width === 0 ||
+                r.height === 0 ||
+                r.bottom <= 0 ||
+                r.top >= innerHeight ||
+                r.right <= 0 ||
+                r.left >= innerWidth
+              );
+            });
+          },
+          undefined,
+          { timeout: 45_000 },
         );
-        await pending.first().waitFor({ state: "hidden", timeout: 15000 })
-          .catch(() => console.log(`  · ${route} 的首屏仍有加载状态`));
         if (route.endsWith("/travels")) {
-          await page.getByText("正在载入足迹…", { exact: true }).first()
+          await page
+            .getByText("正在载入足迹…", { exact: true })
+            .first()
             .waitFor({ state: "hidden", timeout: 45000 });
         }
         await page.waitForTimeout(350);
@@ -160,9 +210,13 @@ async function main() {
             () =>
               Array.from(document.images).every((img) => {
                 const bounds = img.getBoundingClientRect();
-                const visible = bounds.width > 0 && bounds.height > 0 &&
-                  bounds.bottom > 0 && bounds.top < innerHeight &&
-                  bounds.right > 0 && bounds.left < innerWidth;
+                const visible =
+                  bounds.width > 0 &&
+                  bounds.height > 0 &&
+                  bounds.bottom > 0 &&
+                  bounds.top < innerHeight &&
+                  bounds.right > 0 &&
+                  bounds.left < innerWidth;
                 return !visible || img.complete;
               }),
             undefined,
@@ -174,6 +228,7 @@ async function main() {
           path: path.join(OUT, name),
           fullPage: FULL,
         });
+        await page.close();
         count++;
       }
       await ctx.close();

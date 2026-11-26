@@ -1,12 +1,15 @@
 import { useRouteMeta } from "../app/routeMeta";
-import type { ReactNode } from "react";
+import type { ReactNode, HTMLAttributes } from "react";
 import { cx } from "../ui/cx";
 export type PageVariant = "standard" | "gallery" | "focused" | "workspace";
 export function Page({
   variant: override,
+  as: Tag = "div",
   children,
   className,
-}: {
+  ...props
+}: HTMLAttributes<HTMLElement> & {
+  as?: "div" | "section" | "p";
   variant?: PageVariant;
   children: ReactNode;
   className?: string;
@@ -14,21 +17,21 @@ export function Page({
   const route = useRouteMeta();
   const variant = override ?? route?.meta.page ?? "standard";
   return (
-    <div
+    <Tag
+      {...props}
       data-page={variant}
       className={cx(
-        "mx-auto w-full min-w-0 px-[var(--gutter)]",
+        "mx-auto w-full min-w-0 px-gutter",
         {
           standard: "max-w-[var(--page-max)]",
           gallery: "max-w-none",
           focused: "max-w-[var(--page-max-focused)]",
           workspace: "max-w-none",
-
         }[variant],
         className,
       )}
     >
       {children}
-    </div>
+    </Tag>
   );
 }

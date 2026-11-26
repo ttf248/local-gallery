@@ -54,16 +54,44 @@ export default defineConfig({
     //
     // 本地排查堆栈时用 LOCAL_GALLERY_SOURCEMAP=hidden npm run build，
     // 映射会生成在 dist 里但不随发行包分发。
-    sourcemap: process.env.LOCAL_GALLERY_SOURCEMAP === "hidden" ? "hidden" : false,
+    sourcemap:
+      process.env.LOCAL_GALLERY_SOURCEMAP === "hidden" ? "hidden" : false,
     target: "es2022",
     // 拆 vendor 把 react / query / virtuoso 单独 chunk,提升缓存命中 —
     // 业务代码改动时 vendor 不动,用户浏览器只需重新下载业务 chunk。
     rollupOptions: {
+      // 展示组件与公开导出没有初始化副作用。时间线引用缩略图时无需预取相册卡及悬停详情。
+      treeshake: {
+        moduleSideEffects(id) {
+          return !/\/features\/(?:common|library|album)\/(?:index\.ts|(?:HoverPreview|PropertiesDialog|LibrarySelectionActions|AlbumContextMenu|AlbumGrid|AlbumTile|AlbumListRow|AlbumCardParts|BookCover|CardCover|SelectionCard)\.tsx)$/.test(
+            id.replaceAll("\\", "/"),
+          );
+        },
+      },
       output: {
-        manualChunks: {
-          react: ["react", "react-dom", "react-router-dom"],
-          query: ["@tanstack/react-query"],
-          virtuoso: ["react-virtuoso"],
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          const path = id.replaceAll("\\", "/");
+          if (
+            /\/node_modules\/(?:react|react-dom|react-router|react-router-dom|scheduler|@remix-run)\//.test(
+              path,
+            )
+          )
+            return "react";
+          if (path.includes("/node_modules/@tanstack/")) return "query";
+          if (path.includes("/node_modules/react-virtuoso/")) return "virtuoso";
+          if (
+            /\/features\/(?:common\/(?:HoverPreview|PropertiesDialog|LibrarySelectionActions)|album\/AlbumContextMenu)\./.test(
+              path,
+            )
+          )
+            return "album-cards";
+          if (
+            /\/features\/library\/(?:AlbumGrid|AlbumTile|AlbumListRow|AlbumCardParts|BookCover|CardCover|SelectionCard|useCardState)\./.test(
+              path,
+            )
+          )
+            return "album-cards";
         },
       },
     },

@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../api/client";
@@ -141,14 +142,14 @@ export default function CacheRebuildPanel() {
 
         <div className="flex flex-wrap gap-2">
           <button
-            className="btn btn-primary"
+            className={buttonStyles({variant:"primary"})}
             onClick={() => void startRebuild(false)}
             disabled={rebuild.isRunning || starting || scopes.length === 0}
           >
             {rebuild.isRunning ? "重建中…" : "重建缓存"}
           </button>
           <button
-            className="btn btn-outline"
+            className={buttonStyles({variant:"secondary"})}
             onClick={() => void startRebuild(true)}
             disabled={rebuild.isRunning || starting || scopes.length === 0}
           >
@@ -156,7 +157,7 @@ export default function CacheRebuildPanel() {
           </button>
           {rebuild.isRunning && (
             <button
-              className="btn btn-ghost"
+              className={buttonStyles({variant:"ghost"})}
               onClick={() => void cancelRebuild()}
             >
               取消

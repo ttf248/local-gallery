@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useConfirm } from "../common";
 import {SettingsGroup} from "../../ui/SettingsList";
 import type { AIJob } from "../../api/aiJobs";
@@ -42,7 +43,7 @@ export default function TaskQueuePanel({
       <div className="flex justify-end pt-2 pr-4">
         <button
           type="button"
-          className="btn btn-sm btn-outline"
+          className={buttonStyles({variant:"secondary",size:"sm"})}
           disabled={loading || busy || jobs.length === 0}
           onClick={clearQueue}
         >
@@ -86,7 +87,7 @@ export default function TaskQueuePanel({
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline px-2"
+                    className={buttonStyles({variant:"secondary",size:"sm",className:"px-2"})}
                     aria-label={`上移 ${taskTitle(job)}`}
                     title="上移"
                     disabled={busy || index === 0}
@@ -96,7 +97,7 @@ export default function TaskQueuePanel({
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline px-2"
+                    className={buttonStyles({variant:"secondary",size:"sm",className:"px-2"})}
                     aria-label={`下移 ${taskTitle(job)}`}
                     title="下移"
                     disabled={busy || index === jobs.length - 1}
@@ -106,7 +107,7 @@ export default function TaskQueuePanel({
                   </button>
                   <button
                     type="button"
-                    className="btn btn-sm btn-outline px-2 text-danger"
+                    className={buttonStyles({variant:"secondary",size:"sm",className:"px-2 text-danger"})}
                     aria-label={`取消排队 ${taskTitle(job)}`}
                     title="取消排队"
                     disabled={busy}

@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { Link } from "react-router-dom";
 import {useRef,useState} from "react";
 import { PageHero } from "../shell/PageHero";
@@ -35,7 +36,7 @@ export default function Explore() {
       />
       {manifestQuery.isLoading && !manifest ? (
         <section
-          className="page-section pt-[var(--section)]"
+          className="page-section pt-section"
           aria-live="polite"
         >
           <p className="text-body text-ink-2">正在读取照片库信息…</p>
@@ -43,7 +44,7 @@ export default function Explore() {
       ) : null}
 
       {manifestQuery.isError && !manifest ? (
-        <section className="page-section pt-[var(--section)]">
+        <section className="page-section pt-section">
           <ErrorBanner
             onRetry={() => void manifestQuery.refetch()}
             retrying={manifestQuery.isFetching}
@@ -65,7 +66,7 @@ export default function Explore() {
       ) : null}
 
       {manifest && photoAlbumCount === 0 ? (
-        <section className="page-section pt-[var(--section)]">
+        <section className="page-section pt-section">
           <EmptyState
             title="照片库还没有相册"
             description={
@@ -77,11 +78,11 @@ export default function Explore() {
             action={
               <div className="flex flex-wrap items-center justify-center gap-3">
                 {comicAlbumCount > 0 ? (
-                  <Link className="btn btn-outline" to="/comic">
+                  <Link className={buttonStyles({variant:"secondary"})} to="/comic">
                     去漫画库看看
                   </Link>
                 ) : null}
-                <Link className="btn btn-primary" to="/settings/data">
+                <Link className={buttonStyles({variant:"primary"})} to="/settings/data">
                   设置照片目录
                 </Link>
               </div>

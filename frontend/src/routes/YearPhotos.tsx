@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import {Page} from "../shell/Page";
 import {PageHero} from "../shell/PageHero";
 import { useCallback, useMemo } from "react";
@@ -97,7 +98,7 @@ export default function YearPhotos() {
               <Link
                 key={source.id}
                 to={albumRoute("photo", source.id)}
-                className="chip hover:bg-sunken"
+                className="inline-flex min-h-8 items-center rounded-md px-3 text-label hover:bg-sunken"
               >
                 <span>{source.name}</span>
               </Link>
@@ -133,7 +134,7 @@ export default function YearPhotos() {
             action={
               <button
                 type="button"
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={() => void feed.refetch()}
                 disabled={feed.isFetching}
               >
@@ -147,7 +148,7 @@ export default function YearPhotos() {
             description="换一个年份看看，或者回照片库里挑一本相册。" size="compact"
             action={
               <button
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={() => navigate(homeRoute("photo"))}
               >
                 回照片库

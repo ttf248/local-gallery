@@ -41,7 +41,7 @@ export default function MediaTile({
 }: Props) {
   const video = item.kind === "video";
   const reveal =
-    "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100";
+    "opacity-100 pointer-fine:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100";
   return (
     <div
       className={
@@ -121,7 +121,7 @@ export default function MediaTile({
         </span>
       )}
       {badge && (
-        <span className="hover-reveal pointer-events-none absolute bottom-1 left-1 max-w-[calc(100%-8px)] truncate rounded bg-black/70 px-1.5 text-caption text-white group-hover:opacity-100 group-focus-within:opacity-100">
+        <span className="opacity-100 pointer-fine:opacity-0 pointer-events-none absolute bottom-1 left-1 max-w-[calc(100%-8px)] truncate rounded bg-black/70 px-1.5 text-caption text-white group-hover:opacity-100 group-focus-within:opacity-100">
           {badge}
         </span>
       )}

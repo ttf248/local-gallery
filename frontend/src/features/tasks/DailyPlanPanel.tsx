@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import type {
   AIJobEstimate,
   AIJobModule,
@@ -243,7 +244,7 @@ export default function DailyPlanPanel({
 
         <div className="tasks-actions flex flex-wrap items-center gap-y-2 gap-x-4 py-3 px-0 border-t border-t-line">
           <button
-            className="btn btn-sm btn-primary"
+            className={buttonStyles({variant:"primary",size:"sm"})}
             type="submit"
             disabled={disabled || (enabled && !hasSelectedTask)}
           >

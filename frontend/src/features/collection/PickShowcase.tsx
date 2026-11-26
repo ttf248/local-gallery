@@ -118,7 +118,7 @@ export default function PickShowcase<T extends { id: string }>({
                 onClick={() => onTogglePick(item)}
                 aria-label={`把 ${name(item)} 移出精选`}
                 title="移出精选"
-                className="hover-reveal absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-raised text-favorite shadow-1 group-hover:opacity-100 group-focus-within:opacity-100"
+                className="opacity-100 pointer-fine:opacity-0 absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-raised text-favorite shadow-1 group-hover:opacity-100 group-focus-within:opacity-100"
               >
                 <StarIcon size={18} filled />
               </button>

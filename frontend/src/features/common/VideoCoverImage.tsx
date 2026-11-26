@@ -103,7 +103,7 @@ export default function VideoCoverImage({
               if (onRetry) onRetry();
               else retry();
             }}
-            className="btn-text relative z-10 text-caption text-white/85 hover:underline"
+            className="inline-flex items-center min-h-8 relative z-10 text-caption text-white/85 hover:underline"
           >
             重试
           </button>

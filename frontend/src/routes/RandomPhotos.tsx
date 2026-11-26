@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import {Page} from "../shell/Page";
 import {PageHero} from "../shell/PageHero";
 import {
@@ -95,7 +96,7 @@ export default function RandomPhotos() {
           下面去了。说明文字挪到墙的上方，随页面一起滚走。 */}
       <Page><PageHero compact title="随机照片" eyebrow="随手看看" actions={          <button
             type="button"
-            className="btn btn-outline btn-sm shrink-0"
+            className={buttonStyles({variant:"secondary",size:"sm",className:"shrink-0"})}
             onClick={reshuffle}
             disabled={refreshing}
           >

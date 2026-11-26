@@ -131,3 +131,7 @@ export function activityAffectedKeys(): readonly (readonly unknown[])[] {
     ]),
   ];
 }
+
+/** 侧栏与整理、任务页面共享的服务端状态。 */
+export const similarityStatusKey = ["similarity", "status"] as const;
+export const jobsQueryKey = ["ai-jobs"] as const;

@@ -123,7 +123,7 @@ export default function DirectoryPicker({
             type="button"
             aria-label="关闭"
             onClick={onClose}
-            className="btn-text p-1 text-ink-2 hover:text-ink"
+            className="inline-flex items-center min-h-8 p-1 text-ink-2 hover:text-ink"
           >
             <CloseIcon size={14} />
           </button>

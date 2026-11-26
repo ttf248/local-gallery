@@ -163,7 +163,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
         <div
           className={`relative bg-sunken ${
             /* 漫画侧也是一本书（装订边 + 竖版），与网格卡同一套语言。 */
-            isComic ? "album-thumb--book book-binding relative rounded-sm shadow-[var(--cover-shadow)]" : ""
+            isComic ? "album-thumb--book book-binding relative rounded-sm shadow-cover" : ""
           }`}
           style={{ width: COVER_W, height: coverH }}
         >

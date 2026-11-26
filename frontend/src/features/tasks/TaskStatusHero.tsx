@@ -1,10 +1,10 @@
+import { jobProgressPercent } from "../../utils/taskProgress";
 import type { ReactNode } from "react";
 import type { AIJob, AnalysisStatus } from "../../api/aiJobs";
 import {
   formatCount,
   formatTaskDuration,
   formatTaskSpeed,
-  jobProgressPercent,
 } from "../../utils/taskFormat";
 import { Badge } from "../../ui/Badge";
 import { taskStatusTone } from "../../utils/taskFormat";

@@ -61,7 +61,7 @@ export default function Reader() {
       // 否则浅色主题下会先闪一屏白底，再跳到黑色画布。
       <div className="reader-shell flex flex-col h-full">
         {/* 顶部条：返回 / 名称（常驻） */}
-        <div className="px-4 h-[calc(2.25rem+var(--safe-top))] pt-[var(--safe-top)] text-caption text-white/60 border-b border-white/10 bg-theater-surface/60 flex items-center gap-3">
+        <div className="px-4 h-[calc(2.25rem+var(--safe-top))] pt-safe-top text-caption text-white/60 border-b border-white/10 bg-theater-surface/60 flex items-center gap-3">
           <button
             type="button"
             onClick={goBack}

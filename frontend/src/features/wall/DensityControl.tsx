@@ -119,7 +119,7 @@ export default function DensityControl({
         trigger={
           <button
             type="button"
-            className="toolbar-icon"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
             aria-label="密度"
             title="照片墙密度"
           >

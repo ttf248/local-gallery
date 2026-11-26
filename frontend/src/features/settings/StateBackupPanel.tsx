@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useConfirm } from "../common";
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -182,14 +183,14 @@ export default function StateBackupPanel() {
         </p>
         <div className="flex flex-wrap items-start gap-3">
           <button
-            className="btn btn-outline"
+            className={buttonStyles({variant:"secondary"})}
             onClick={() => void exportBackup()}
             disabled={pending}
           >
             导出状态备份
           </button>
           <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-primary">
-            <span className="btn btn-outline">选择备份文件</span>
+            <span className={buttonStyles({variant:"secondary"})}>选择备份文件</span>
             <span className="block mt-2 text-caption text-ink-2 break-all">
               {fileName || "JSON 格式，最大 32 MB"}
             </span>
@@ -234,7 +235,7 @@ export default function StateBackupPanel() {
       </div>
       {backup !== undefined && !preview && !pending && (
         <button
-          className="btn btn-outline"
+          className={buttonStyles({variant:"secondary"})}
           onClick={() => void previewBackup(backup)}
         >
           重新预览备份
@@ -285,7 +286,7 @@ export default function StateBackupPanel() {
             </p>
           )}
           <button
-            className="btn btn-primary"
+            className={buttonStyles({variant:"primary"})}
             disabled={pending || selected.length === 0}
             onClick={() => void restore()}
           >

@@ -1,4 +1,4 @@
-import { FilterDropdown } from "../common";
+import { FilterBar } from "../common";
 import type {
   AlbumFilterFacets,
   AlbumFilterUnresolved,
@@ -79,7 +79,7 @@ export default function AlbumFilterBar({
           ? "把相似的照片折成一组，只在墙上留代表照片"
           : "这本相册里还没有相似照片的分析结果"
       }
-      className={`btn btn-ghost ${
+      className={`inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] hover:bg-hover text-ink-2 ${
         state.collapse
           ? "bg-primary/12 text-primary"
           : "text-ink-2 hover:bg-sunken hover:text-ink"
@@ -109,7 +109,7 @@ export default function AlbumFilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <FilterDropdown
+      <FilterBar
         label="筛选"
         count={count}
         open={filterOpen}
@@ -153,8 +153,8 @@ export default function AlbumFilterBar({
           type="button"
           className={
             compact
-              ? "hidden lg:inline-flex btn btn-ghost"
-              : "btn-text text-caption text-ink-2 hover:text-ink"
+              ? "hidden lg:inline-flex inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] hover:bg-hover text-ink-2"
+              : "inline-flex items-center min-h-8 text-caption text-ink-2 hover:text-ink"
           }
           onClick={onClear}
         >

@@ -115,7 +115,7 @@ export default function AlbumFilterPanel({
         <span className="text-body text-ink">筛选照片</span>
         <button
           type="button"
-          className="btn-text text-caption text-ink-2 hover:text-ink"
+          className="inline-flex items-center min-h-8 text-caption text-ink-2 hover:text-ink"
           onClick={onClear}
         >
           清除全部

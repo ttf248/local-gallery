@@ -1,3 +1,5 @@
+import {Page} from "../shell/Page";
+import {buttonStyles} from "../ui/buttonStyles";
 import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -202,7 +204,7 @@ export default function Picks({
     <div className="flex h-full min-h-0 flex-col">
       {embedded ? null : (
         <header className="shrink-0 border-b border-line bg-canvas">
-          <div className="page-shell">
+          <Page >
             <div className="album-bar flex items-center gap-3.5 py-3 max-sm:flex-wrap">
               <div className="min-w-0 flex-1">
                 {/* 眉标说清这一页是什么：精选是跨相册的挑选，
@@ -251,11 +253,11 @@ export default function Picks({
                 </button>
               </div>
             </div>
-          </div>
+          </Page>
         </header>
       )}
 
-      <div className="page-shell min-h-0 flex-1 pb-2">
+      <Page className="min-h-0 flex-1 pb-2">
         {query.isError && items.length > 0 ? (
           <div className="pb-2">
             <ErrorBanner
@@ -280,7 +282,7 @@ export default function Picks({
             action={
               <button
                 type="button"
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={() => void query.refetch()}
                 disabled={query.isFetching}
               >
@@ -297,7 +299,7 @@ export default function Picks({
                按钮直接把人送到照片库。 */
             action={
               <button
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={() => navigate(homeRoute("photo"))}
               >
                 去照片库
@@ -383,7 +385,7 @@ export default function Picks({
             showDimensions={false}
           />
         )}
-      </div>
+      </Page>
 
       {menu.menu && (
         <ContextMenu

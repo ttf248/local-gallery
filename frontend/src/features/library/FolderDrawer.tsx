@@ -57,7 +57,7 @@ export default function FolderDrawer({
     return (
       <aside
         id="library-tree"
-        className="folder-drawer bg-canvas overflow-y-auto [overscroll-behavior:contain] [padding:8px_12px_14px] [animation:drawer-in_var(--dur-base)_var(--ease-spring)] folder-drawer--pinned sticky top-[var(--folder-drawer-offset)] [flex:0_0_264px] max-h-[calc(100dvh_-_var(--folder-drawer-offset)_-_16px)] border-r border-line-subtle"
+        className="folder-drawer bg-canvas overflow-y-auto [overscroll-behavior:contain] [padding:8px_12px_14px] [animation:drawer-in_var(--dur-base)_var(--ease-spring)] folder-drawer--pinned sticky top-drawer-offset [flex:0_0_264px] max-h-[calc(100dvh_-_var(--folder-drawer-offset)_-_16px)] border-r border-line-subtle"
         aria-label="目录抽屉"
       >
         <FolderDrawerContent onClose={onClose}>{children}</FolderDrawerContent>
@@ -90,7 +90,7 @@ function FolderDrawerContent({
         <h2>目录</h2>
         <button
           type="button"
-          className="toolbar-icon"
+          className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
           aria-label="关闭目录抽屉"
           onClick={onClose}
         >

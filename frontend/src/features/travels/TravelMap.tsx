@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import {
   useCallback,
   useMemo,
@@ -206,7 +207,7 @@ export default function TravelMap({
             type="button"
             aria-pressed={cropToPhotos}
             onClick={() => setCropToPhotos((value) => !value)}
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
           >
             {cropToPhotos ? "看全国范围" : "缩到有照片的地方"}
           </button>

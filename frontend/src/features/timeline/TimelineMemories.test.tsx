@@ -1,6 +1,6 @@
 import { act, render, screen, fireEvent } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import MemoriesStrip from "./MemoriesStrip";
+import TimelineMemories from "./MemoriesHero";
 import { useUIStore } from "../../store/uiStore";
 import type { LibraryFeedItem } from "../../api/library";
 const photos: LibraryFeedItem[] = [];
@@ -25,7 +25,7 @@ it("隐藏按本机日期生效，次日恢复", () => {
     kindIndex: 0,
     dateValue: "2024-10-31",
   });
-  render(<MemoriesStrip />);
+  render(<TimelineMemories />);
   fireEvent.click(screen.getByRole("button", { name: "回忆选项" }));
   fireEvent.click(screen.getByRole("menuitem", { name: "今天不再显示" }));
   expect(useUIStore.getState().memoriesDismissedOn).toBe("2026-10-31");

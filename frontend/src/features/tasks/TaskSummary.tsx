@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { Button } from "../../ui/Button";
 import type {
   AIJob,
@@ -145,7 +146,7 @@ export default function TaskSummary({
               {active.status === "running" ? (
                 <button
                   type="button"
-                  className="btn btn-sm btn-outline"
+                  className={buttonStyles({variant:"secondary",size:"sm"})}
                   disabled={busy}
                   onClick={() => onAction(active.id, "pause")}
                 >
@@ -155,7 +156,7 @@ export default function TaskSummary({
               {active.status === "paused" || active.status === "pending" ? (
                 <button
                   type="button"
-                  className="btn btn-sm btn-primary"
+                  className={buttonStyles({variant:"primary",size:"sm"})}
                   disabled={busy}
                   onClick={() => onAction(active.id, "resume")}
                 >
@@ -176,8 +177,8 @@ export default function TaskSummary({
             <>
               <button
                 type="button"
-                className="btn btn-sm btn-primary"
-                disabled={busy || Boolean(blockedReason)}
+                className={buttonStyles({variant:"primary",size:"sm"})}
+                disabled={busy || Boolean(blockedReason) || currentEstimate?.count === 0}
                 onClick={onStart}
                 title={blockedReason}
               >

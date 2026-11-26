@@ -36,7 +36,7 @@ export default function TravelStats({
     <div className="travel-stats flex flex-wrap items-baseline gap-y-1.5 gap-x-5 max-lg:gap-y-2.5">
       {children ? <div className="travel-stats__scope flex items-center self-center pr-5 border-r border-r-line max-lg:pr-0 max-lg:[border-right:none]">{children}</div> : null}
       <p className="travel-stats__hero flex items-baseline gap-2">
-        <span className="travel-stats__hero-value font-display text-[30px] leading-[1.05] font-semibold tracking-[-0.02em] text-ink tabular-nums">
+        <span className="travel-stats__hero-value font-display text-title leading-[1.05] font-semibold tracking-[-0.02em] text-ink tabular-nums">
           {totalPhotos === null ? "—" : totalPhotos.toLocaleString()}
         </span>
         <span className="travel-stats__hero-label text-caption text-ink-2">张照片 · 全库</span>

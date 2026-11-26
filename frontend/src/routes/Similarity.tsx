@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { GroupList } from "../features/similarity/GroupList";
 import { ReviewLayout } from "../features/similarity/ReviewLayout";
 import { ReviewStage } from "../features/similarity/ReviewStage";
@@ -26,7 +27,7 @@ import PhotoCompare, {
 } from "../features/viewer/PhotoCompare";
 
 import { FolderIcon } from "../ui/icons";
-import SimilarityGroupCard from "../features/similarity/SimilarityGroupCard";
+import GroupGridCard from "../features/similarity/GroupGridCard";
 import { useSimilarityStatus } from "../hooks/useSimilarity";
 import { aiJobsApi } from "../api/aiJobs";
 import { ApiError } from "../api/client";
@@ -621,7 +622,7 @@ export default function Similarity() {
                 <Menu
                   label="按文件夹查看整理结果"
                   trigger={
-                    <button type="button" className="btn btn-sm">
+                    <button type="button" className={buttonStyles({variant:"secondary",size:"sm"})}>
                       <FolderIcon size={14} />
                       {folder || "全部文件夹"}
                     </button>
@@ -731,7 +732,7 @@ export default function Similarity() {
             computeItemKey={(_index, group) => group.id}
             endReached={loadMoreGroups}
             itemContent={(_index, group) => (
-              <SimilarityGroupCard
+              <GroupGridCard
                 key={group.id}
                 group={group}
                 expanded={expandedIds.has(group.id)}
@@ -776,7 +777,7 @@ export default function Similarity() {
           <div className="mt-4 flex justify-center">
             <button
               type="button"
-              className="btn"
+              className={buttonStyles({variant:"secondary"})}
               onClick={
                 groups.isFetchNextPageError ? retryNextPage : loadMoreGroups
               }
@@ -827,7 +828,7 @@ export default function Similarity() {
         )}
         {!reviewing && selectedIds.size > 0 ? (
           <div
-            className="similarity-actions sticky bottom-[var(--float-bottom)] z-20 flex items-center gap-2.5 flex-wrap mt-5 py-2.5 px-3.5 rounded-md bg-raised shadow-2 border border-line float-bottom [[data-keyboard]_&]:[translate:0_calc(-1_*_var(--keyboard-inset))]"
+            className="similarity-actions sticky bottom-float-bottom z-20 flex items-center gap-2.5 flex-wrap mt-5 py-2.5 px-3.5 rounded-md bg-raised shadow-2 border border-line float-bottom [[data-keyboard]_&]:[translate:0_calc(-1_*_var(--keyboard-inset))]"
             data-testid="similarity-batch-bar"
           >
             <span className="text-caption text-ink-2">
@@ -835,7 +836,7 @@ export default function Similarity() {
             </span>
             <button
               type="button"
-              className="btn btn-sm"
+              className={buttonStyles({variant:"secondary",size:"sm"})}
               onClick={() => void handleBatch("pick")}
               disabled={groups.batch.isPending}
             >
@@ -843,7 +844,7 @@ export default function Similarity() {
             </button>
             <button
               type="button"
-              className="btn btn-sm"
+              className={buttonStyles({variant:"secondary",size:"sm"})}
               onClick={() => void handleBatch("review")}
               disabled={groups.batch.isPending}
             >
@@ -851,7 +852,7 @@ export default function Similarity() {
             </button>
             <button
               type="button"
-              className="btn btn-sm"
+              className={buttonStyles({variant:"secondary",size:"sm"})}
               onClick={() => void handleBatch("ignore")}
               disabled={groups.batch.isPending}
             >
@@ -859,7 +860,7 @@ export default function Similarity() {
             </button>
             <button
               type="button"
-              className="btn btn-sm btn-ghost"
+              className={buttonStyles({variant:"ghost",size:"sm"})}
               onClick={() => setSelectedIds(new Set())}
             >
               取消选择
@@ -900,7 +901,7 @@ function RebuildButton({
   return (
     <button
       type="button"
-      className="btn"
+      className={buttonStyles({variant:"secondary"})}
       onClick={onRebuild}
       disabled={rebuilding}
       title="按当前特征重算分组"
@@ -952,7 +953,7 @@ function AnalyzeButton({ onStarted }: { onStarted: () => void }) {
   return (
     <button
       type="button"
-      className="btn btn-primary"
+      className={buttonStyles({variant:"primary"})}
       onClick={() => start.mutate()}
       disabled={running || pending || start.isPending}
     >

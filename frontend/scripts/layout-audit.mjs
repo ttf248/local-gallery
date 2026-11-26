@@ -29,6 +29,7 @@ import { chromium } from "@playwright/test";
 import {
   buildRoute,
   resolveAlbumId,
+  openPhotoViewer,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
 import {
@@ -120,12 +121,12 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   // 必须单独报出来（相册详情页偶发爆栈就是这一类）。
   const routeError = !!document.querySelector('[role="alert"]');
 
-  // 主内容容器：正文里的第一个 .page-shell，再退回 <main> 与 body。
+  // 主内容容器：正文里的第一个 [data-page]，再退回 <main> 与 body。
   // 取第一个有实际宽度的 —— 页面级的容器有些是 display: contents，
   // 没有盒子。
   const shellCandidates = [
     main?.querySelector("[data-page]"),
-    main?.querySelector(".page-shell"),
+    main?.querySelector("[data-page]"),
     main,
     document.body,
   ];
@@ -699,12 +700,12 @@ async function main() {
           );
         }
       }
-      // 门禁判据本身的样本：容器认 .page-shell；读屏专用元素与
+      // 门禁判据本身的样本：容器认 [data-page]；读屏专用元素与
       // 勾选框本体不算太小的控件；低于最小字号档的文字要被抓出来；
       // 行内链接不算控件，独立成行的链接算。
       await page.setContent(
-        "<style>body{margin:0}.page-shell{width:800px;padding:0 24px}</style>" +
-          '<main><div class="page-shell"><p style="font-size:11px">徽章</p>' +
+        "<style>body{margin:0}[data-page]{width:800px;padding:0 24px}</style>" +
+          '<main><div data-page="standard"><p style="font-size:11px">徽章</p>' +
           '<button style="height:20px">小按钮</button>' +
           '<input class="sr-only" style="width:1px;height:1px">' +
           '<input type="checkbox" style="width:13px;height:13px">' +
@@ -808,16 +809,10 @@ async function main() {
           continue;
         }
         if (route === "viewer") {
-          await page.goto(BASE + "/photo", { waitUntil: "domcontentloaded" });
-          const first = await page.waitForSelector(
-            '[data-testid="media-tile"] [data-open], .empty-state',
-          );
-          if (!(await first.evaluate((el) => el.hasAttribute("data-open")))) {
+          if (!(await openPhotoViewer(page, BASE))) {
             console.log("  · 当前图库缺少可预览的照片");
             continue;
           }
-          await first.click();
-          await page.getByTestId("photo-viewer").waitFor();
         } else if (route === "reader") {
           if (!(await openReader(page))) {
             console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);
@@ -855,7 +850,7 @@ async function main() {
           await page.waitForTimeout(900);
         }
         await page
-          .locator("main [data-page], main .page-shell, .reader-shell")
+          .locator("main [data-page], .reader-shell")
           .first()
           .waitFor({ state: "visible", timeout: 20000 });
         let m = await page.evaluate(MEASURE, {

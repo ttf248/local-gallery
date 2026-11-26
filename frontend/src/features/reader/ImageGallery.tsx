@@ -460,7 +460,7 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
       return "w-full h-auto";
     }
     if (aspect.mode === "height") {
-      return "h-[var(--gallery-fit-height)] w-auto max-w-full";
+      return "h-gallery-fit w-auto max-w-full";
     }
     return "w-auto h-auto";
   }

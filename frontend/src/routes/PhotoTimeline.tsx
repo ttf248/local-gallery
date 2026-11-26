@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import {
   lazy,
   Suspense,
@@ -35,7 +36,7 @@ import {
 } from "../utils/timeline";
 import { PageHero } from "../shell/PageHero";
 import MonthHeader from "../features/timeline/MonthHeader";
-import MemoriesStrip from "../features/timeline/MemoriesStrip";
+import TimelineMemories from "../features/timeline/MemoriesHero";
 import {
   buildTimelineGroups,
   timelineGroupKey,
@@ -294,11 +295,11 @@ export default function PhotoTimeline() {
           icon={<LibraryIcon size={20} />}
           action={
             <div className="flex items-center gap-3">
-              <Link to="/settings/server" className="btn btn-outline">
+              <Link to="/settings/server" className={buttonStyles({variant:"secondary"})}>
                 去设置里改属性
               </Link>
               {otherSideHasContent && (
-                <Link to={homeRoute("comic")} className="btn btn-primary">
+                <Link to={homeRoute("comic")} className={buttonStyles({variant:"primary"})}>
                   去漫画库看看
                 </Link>
               )}
@@ -339,7 +340,7 @@ export default function PhotoTimeline() {
         !filter.year &&
         !filter.month &&
         !filter.media &&
-        !localFilter && <MemoriesStrip />}
+        !localFilter && <TimelineMemories />}
       {hasContent && (
         <TimelineToolbar
           years={feed.years}
@@ -428,7 +429,7 @@ export default function PhotoTimeline() {
               action={
                 <button
                   type="button"
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   onClick={() => void feed.refetch()}
                   disabled={feed.isFetching}
                 >
@@ -445,7 +446,7 @@ export default function PhotoTimeline() {
               size="compact"
               action={
                 <button
-                  className="btn btn-outline"
+                  className={buttonStyles({variant:"secondary"})}
                   onClick={() =>
                     applyFilter({ year: "", month: "", media: "" })
                   }

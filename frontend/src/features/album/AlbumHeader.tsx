@@ -79,7 +79,7 @@ export default function AlbumHeader({
           <>
             <button
               type="button"
-              className={`toolbar-icon ${isFavorite ? "text-favorite" : ""}`}
+              className={`inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11 ${isFavorite ? "text-favorite" : ""}`}
               title={isFavorite ? "取消收藏" : "收藏"}
               aria-label={isFavorite ? "取消收藏" : "收藏"}
               onClick={onToggleFavorite}
@@ -92,7 +92,7 @@ export default function AlbumHeader({
               trigger={
                 <button
                   type="button"
-                  className="toolbar-icon"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
                   title="更多"
                   aria-label="相册更多操作"
                 >
@@ -121,7 +121,7 @@ export default function AlbumHeader({
             {
               <button
                 type="button"
-                className="toolbar-icon"
+                className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
                 aria-label="返回"
                 onClick={onBack}
               >
@@ -154,7 +154,7 @@ export default function AlbumHeader({
             {actions}
             <button
               type="button"
-              className="toolbar-icon"
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
               aria-pressed={selectionActive}
               title={selectionActive ? "退出选择" : "选择照片"}
               aria-label={selectionActive ? "退出选择" : "选择照片"}

@@ -41,7 +41,8 @@ vi.mock("../features/wall/PhotoWall", () => ({
 
 // 真实网格是虚拟化的，jsdom 里量不出高度、不会渲染卡片；
 // 这里换成普通列表，才能验到卡片上的说明。
-vi.mock("../features/library/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../features/library/AlbumGrid")>(),
   default: ({
     items,
     note,

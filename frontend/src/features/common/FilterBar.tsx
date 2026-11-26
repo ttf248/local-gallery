@@ -26,7 +26,7 @@ interface DropdownProps {
  * 面板挂在视口上，不挂在按钮上：按钮在窄屏上贴着内容区的右边，
  * 面板右对齐到按钮就会有一半掉出屏幕。位置量出来再夹到视口里。
  */
-export function FilterDropdown({
+export function FilterBar({
   label,
   count,
   open,
@@ -116,7 +116,7 @@ export function FilterDropdown({
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`btn btn-ghost inline-flex items-center gap-1.5 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+        className={`inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] hover:bg-hover text-ink-2 inline-flex items-center gap-1.5 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
           count > 0
             ? "bg-primary/12 text-primary"
             : "text-ink-2 hover:bg-sunken hover:text-ink"
@@ -145,7 +145,7 @@ export function FilterDropdown({
               left: position?.left ?? -9999,
               zIndex: 35,
             }}
-            className="ui-popover w-[360px] max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] overflow-y-auto p-3"
+            className="border border-line [border-top-color:color-mix(in_srgb,var(--line),var(--line)_50%)] rounded-tile bg-raised shadow-2 touch:[&_:is(button,_a[href])]:min-h-11 touch:[&_:is(button,_a[href])]:min-w-11 w-[360px] max-w-[calc(100vw-16px)] max-h-[calc(100dvh-16px)] overflow-y-auto p-3"
           >
             {panel}
           </div>,

@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import {Page} from "../shell/Page";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
@@ -116,7 +117,7 @@ export default function TravelPlace() {
       <header className="border-b border-line bg-canvas">
         <Page >
           <div className="album-bar flex items-center gap-3.5 py-3 max-sm:flex-wrap">
-            <Link to={backTo} className="btn btn-sm btn-outline shrink-0">
+            <Link to={backTo} className={buttonStyles({variant:"secondary",size:"sm",className:"shrink-0"})}>
               返回足迹
             </Link>
             <div className="min-w-0 flex-1">
@@ -167,7 +168,7 @@ export default function TravelPlace() {
             <span>这个地方的照片暂时读不出来。</span>
             <button
               type="button"
-              className="btn btn-sm btn-outline"
+              className={buttonStyles({variant:"secondary",size:"sm"})}
               onClick={() => void regionsQuery.refetch()}
             >
               重新加载
@@ -203,7 +204,7 @@ export default function TravelPlace() {
                 <li key={child.adcode}>
                   <Link
                     to={travelPlaceRoute(child.adcode)}
-                    className="chip"
+                    className="inline-flex min-h-8 items-center rounded-md bg-sunken px-3 text-label"
                     aria-label={`${child.name}，${child.photoCount.toLocaleString()} 张`}
                   >
                     <span>{child.name}</span>

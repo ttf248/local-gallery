@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { PageHero } from "../shell/PageHero";
@@ -74,12 +75,12 @@ export function TaskCenterView({ tab }: { tab: string }) {
     <>
       {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
           宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
-      <Page variant="workspace" className="page-shell tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12">
+      <Page variant="workspace" className="tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12">
         <PageHero
           title="任务中心"
           meta="管理本机分析、等待队列及每日计划。"
           actions={
-            <Link className="btn btn-sm btn-outline" to="/settings/server">
+            <Link className={buttonStyles({variant:"secondary",size:"sm"})} to="/settings/server">
               服务设置
             </Link>
           }
@@ -103,7 +104,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
                     <h2 className="text-title">与服务端的连接中断</h2>
                     <button
                       type="button"
-                      className="btn btn-outline mt-3"
+                      className={buttonStyles({variant:"secondary",className:"mt-3"})}
                       onClick={center.reconnect}
                     >
                       重新连接

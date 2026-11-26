@@ -283,11 +283,11 @@ OCR 额外维护 `derived/ai/ocr-search-index.json` 倒排索引，索引项仅�
 
 任务中心的界面拆成四个页签：运行（当前任务的进度、读数与控制，空闲时是开始分析的入口）、每日计划（开关、时间、扫描/分析/智能相册任务选择与人物开关）、任务记录（历史任务与失败项）、本机存储（派生缓存占用、AI 模型权重与各模块产物、相对路径与本机绝对路径）。等待队列作为「运行」页签的附属面板贴在它下面，始终显示并明确呈现空队列状态。运行页签顶部是一条状态摘要（`features/tasks/TaskSummary.tsx`）：当前运行状态、队列待处理数量与主要操作（开始分析 / 暂停 / 继续 / 取消）；启动按钮与进度读数都归它，配置表单（`features/tasks/TaskConsole.tsx`）只回答「跑什么、跑多少」。运行面板之后是「智能相册分组」面板：增量更新与强制重建两个入口跑全库刷新，面板显示当前相册、维度与进度，可中途取消；生成结束后首页汇总与相册页的分组摘要一起失效重读。任务中心整页收在聚焦容器（`.container--focused`，1040px）里，各页签独占该容器宽度：状态摘要在上、配置与队列在下，分段之间用细线而不是白卡。任务数据层收在 `hooks/useTaskCenter.ts`，存储数据层收在 `hooks/useStorage.ts`，面板在 `features/tasks/`；路由组件只排版。分析模块用可选择的卡片列出（`features/tasks/ModuleTiles.tsx`），互斥选项用分段控件（`ui/Segmented.tsx`），两类控件在各页共用同一套语义与键盘行为。单项启动和“按序启动全部任务”都复用 `AIJobService` 的持久队列；全部任务固定按 metadata、embedding、OCR、人脸顺序入队，缺少依赖或模型的模块跳过，前端在每项终结后刷新活动任务以跟上下一项，等待中的任务按执行顺序排列显示。失败项按「错误码 + 原因」在前端分组，同一原因的几百条路径折叠起来只留计数，展开才列路径。进度分母是本次任务实际要处理的张数（`planned`），不是整库规模：增量任务里整库大部分文件已经是最新的，拿整库当分母会让进度一上来就接近满格。
 
-空闲时先给数字再给按钮：运行页签的「这次要跑什么」里有一条「本次规模」（`features/tasks/TaskEstimatePanel.tsx`），把增量与全量两种口径的张数与预计耗时并排列出，当前模式那一行高亮；启动按钮在它上方的状态摘要里，按钮上带着本次张数。四个模块 × 两种口径由一次核算带来，切模式与切模块都不重新请求。模块与模式的选择态放在 `hooks/useTaskCenter.ts` 而不是组件里 —— 规模表、按钮上的张数说明与真正发出去的启动请求必须读到同一个 mode，分开存必然漂移。任务进入终态、用户清空历史、媒体库重新扫描之后都要让核算失效重算。每日计划按增量口径给出「预计下次运行」的张数与耗时。
+空闲时先给数字再给按钮：运行页签的「这次要跑什么」里有一条「本次规模」（`features/tasks/RunSummaryPanel.tsx`），把增量与全量两种口径的张数与预计耗时并排列出，当前模式那一行高亮；启动按钮在它上方的状态摘要里，按钮上带着本次张数。四个模块 × 两种口径由一次核算带来，切模式与切模块都不重新请求。模块与模式的选择态放在 `hooks/useTaskCenter.ts` 而不是组件里 —— 规模表、按钮上的张数说明与真正发出去的启动请求必须读到同一个 mode，分开存必然漂移。任务进入终态、用户清空历史、媒体库重新扫描之后都要让核算失效重算。每日计划按增量口径给出「预计下次运行」的张数与耗时。
 
-本机存储页签使用 `GET /api/cache/stats` 和 `GET /api/storage/usage` 读取媒体派生缓存、模型权重与分析产物。设置的界面、阅读、数据和服务端四个页签共用 `shell/SplitLayout.tsx`。设置行由 `ui/SettingsList.tsx` 呈现，索引与历史清理独立分组，关于信息位于界面分区内。
+本机存储页签使用 `GET /api/cache/stats` 和 `GET /api/storage/usage` 读取媒体派生缓存、模型权重与分析产物。设置的界面、阅读、数据和服务端四个页签共用 `shell/PageTabs.tsx`。设置行由 `ui/SettingsList.tsx` 呈现，索引与历史清理独立分组，关于信息位于界面分区内。
 
-`shell/NavRail.tsx`、`MobileTabBar.tsx` 和 `MoreSheet.tsx` 共享 `utils/navEntries.ts` 的入口定义。设置与任务中心使用 `utils/pageTabs.ts` 定义分区。切换分区是普通导航，`pageBoundaryKey` 保留同页错误边界和已访问面板，服务端配置草稿、备份预览和记录筛选可随前进后退恢复。
+`shell/Sidebar.tsx`、`MobileTabBar.tsx` 和 `MoreSheet.tsx` 共享 `utils/navEntries.ts` 的入口定义。设置与任务中心使用 `utils/pageTabs.ts` 定义分区。切换分区是普通导航，`pageBoundaryKey` 保留同页错误边界和已访问面板，服务端配置草稿、备份预览和记录筛选可随前进后退恢复。
 
 侧栏入口的清单也只有一份（`utils/navEntries.ts`）：侧栏按它渲染，设置页的「导航」分区也按它逐项开关。哪几项显示由服务端偏好 `hiddenNavItems` 决定（存的是生效的隐藏清单），`hooks/useNavVisibility.ts` 读它并给出可见性判断；偏好没读回来时用前端默认清单兜底，与服务端默认值一致，所以不会出现先全显示再收掉的闪动。工作台首页固定显示，收起它那一侧的侧栏就空了。
 
@@ -512,11 +512,11 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 排序另有一层回落：用户亲手选过的顺序对所有列表页生效，存在 `store/sortPreference.ts`；地址里的 `sort` 是逐页的显式选择，优先于它。浏览足迹页的天然顺序是「按最近看」，各页没有显式选择时用它。其余筛选不再跨页共享 —— 每页的筛选是这一页的事。
 - 工具条的全局搜索框使用独立草稿，列表页自身的 `q` 仍只负责列表筛选；只有 `/photo/search` 与 `/comic/search` 从地址里的 `q` 预填。搜索框左端有一枚**作用域**按钮：名称（相册 / 文件夹 / 标签）与画面（照片里的画面与图片文字）两档，后端是两套接口 —— 界面上必须说清当前搜的是哪一类，作用域住在地址的 `scope` 参数里（缺省 `name`）。回车若没有选中某条建议，导航到搜索结果页并把关键词写进 `q`（画面档另带 `scope=content`）；输入时不改当前地址，浏览器返回仍恢复原列表筛选。换排序与视图用 `push`（后退键能退回上一个排序）。
 - **搜索结果页（`routes/SearchResults.tsx`）一页管两档检索对象。** 名称档走 `GET /api/search`（每条命中带 `match`，说明它为什么算命中：完全同名 / 开头相同 / 名字里含有 / 标签命中 / 路径命中）；结果按命中理由分组，理由当分组标题 —— 同一句话不在每张卡上重复。画面档走 `POST /api/ai/search`，与「智能搜索」页共用 `features/search/ContentSearchResults.tsx` 与 `hooks/useContentSearchQuery.ts` —— 同一套检索与呈现，两处不各写一遍。画面这一档整页是定高的 flex 列：照片墙要一块确定高度才排得出行；索引覆盖率与模型是否就绪退到一行小字里，不占主要空间。三种「没搜到」在 `utils/contentSearchState.ts` 里分派：请求失败（可重试）、画面模型没就绪或还没建索引（说清原因并给任务中心入口）、确实没有匹配。用户要的是画面而系统只查了文字时，也照实说明，不伪装成零结果。
-- 发现页使用 `TopBar` 的全局搜索入口，查询由 `CommandPalette` 提交。`PeopleRow`、`PlaceCards`、`YearRibbon` 和 `ThemeCards` 独立呈现人物、地点、时间和主题数据，对应查询的空态与重试由各段承接。
+- 发现页使用桌面侧栏与窄屏顶栏共用的搜索入口，查询由 `CommandPalette` 提交。`PeopleRow`、`PlaceCards`、`YearRibbon` 和 `ThemeCards` 独立呈现人物、地点、时间和主题数据，对应查询的空态与重试由各段承接。
 - 查询键集中注册在 `api/queryKeys.ts`：媒体库（`libraryQueryKeys`）、偏好、收藏与最近访问各只有一处定义。键散落在各处各拼各的，「刷新列表」就不知道该失效哪些 —— 手抄一遍字符串，漏一个就有一条旧数据留在界面上。注册表只放键，不放取数函数：取数函数属于各自的 api 模块，测试替换那一层时不必连带替换这里。
 - 前端查询键带模式段（`["library", ..., "mode", mode]`），切模式即换键自动重取，旧模式缓存保留。媒体清单与 `nodes/query` 与模式无关，键不带模式。收藏与历史的资源 ID 集合不分类型，由前端按摘要里的 `contentKind` 客户端过滤；`hooks/useFavoritesByMode.ts` 把「当前侧可见的卡片 / 本侧计数 / 真失效的条目」收在一处，收藏页与首页共用它，口径不再分叉。
 - 收藏里的智能标签按名解析（`POST /api/tags/query`），接口同时给出两侧的册数：客户端据此区分「这个标签在库里不存在」（失效，可清理）与「它只属于另一侧」（不可见，但不是失效）。把两者混为一谈会导致用户在另一侧点一次「清理失效收藏」就删掉自己的收藏。
-- 阅读器整屏脱离 AppFrame，侧栏不可见，顶部提供工作台 chip 切模式（切模式即离开阅读器回到外壳）。
+- 阅读器整屏脱离 AppShell，侧栏不可见，顶部提供工作台 chip 切模式（切模式即离开阅读器回到外壳）。
 - **阅读器的媒体清单与相册页共用同一份查询缓存。** `hooks/useReaderMedia.ts` 走 `useAlbumMedia`（同一个查询键），并把剩下的页依次取完 —— 进阅读器不必重下整本，再次进入时先出图、刷新在后台进行。它顺带给出每一页的原始像素尺寸：连续模式按它先占好高度，图片加载前后页面不跳。阅读器路由组合画布、控制条和浮层。进度恢复、翻页与切卷由 `features/reader/useReaderController.ts` 协调，阅读设置面板与快捷键使用同一个阅读偏好 store。取数在 `useReaderMedia`、键盘在 `useReaderKeys`、跨卷导航在 `useAdjacentAlbum`、浮动控件显隐在 `useIdleChrome`。
 - **跨卷导航按作品内的顺序走，不绕圈。** 上下文（`utils/galleryContext.ts`）记的是「用户从哪个列表点进来的」：书架、作品页、未读页、收藏页各自写一份。阅读器用 `hooks/useAdjacentAlbum.ts` 在这份上下文里找相邻的一卷，找不到就用兄弟卷兜底 —— `useSiblingVolumes` 按当前卷的 `parentId` 取同一部作品里的卷（`GET /api/library/{id}/children`）。深链直接打开阅读器、或从首页「继续阅读」进来时，上下文未必覆盖这一卷，兜底让「下一卷」在作品内部接得上。两处规则一致：**走到头就没有下一卷**（不环绕回开头），当前卷不在列表里也不猜（不拿列表第一项当锚点乱跳）。
 - 模式也决定视觉基调：`<html data-mode>` 由 `WorkbenchModeProvider` 写入，CSS token 按 `:root[data-theme][data-mode]` 组合覆盖（`--brand*` / `--feature-bg` / `--mode-tint`），画布与文字保持中性灰阶。封面画幅同样按侧取默认值（照片 1:1、漫画 2:3），见 `utils/workbench.ts` 的 `coverRatioForMode`。
@@ -529,9 +529,9 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 ### 查询、导航与网格
 
-`AppFrame` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
+`AppShell` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
 
-- TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppFrame 但仍有错误边界与访问门禁。
+- TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
 - `app/routeManifest.tsx` 统一声明页面、懒加载入口、导航归属、标题、帮助与外壳模式。
   `app/AppRoutes.tsx` 按清单注册页面与保留查询串、片段的重定向，`app/routeMeta.ts` 用 React Router 的匹配优先级读取同一份元信息。根入口通过 `app/AppProviders.tsx` 装配全局上下文，**模式进 URL 路径**：`/photo`（照片时间线，年份与月份筛选在查询参数中，如 `?year=2024`）、`/photo/library`（相册）、`/photo/explore`（发现）、`/photo/me/:tab`（珍藏）、`/photo/search`（搜索结果，名称 / 画面与文字两档）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`（按目录年份取材的旧书签入口）、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底：`utils/navigation.ts` 的 `useSafeBack` 先看应用内历史（`history.state.idx > 0`），有就后退；没有就按「能确认的上级 → 该侧结构入口」的顺序回落，落点由资源摘要的 `parentId` 决定（兜底可以是函数，点击那一刻才求值）。兜底回落用 `replace` 而不是 `push`：深链打开时这一页就是历史里的第一条，再 `push` 一条就等于留了一枚回跳死循环（返回一次到上级，再返回一次又回到这一页）。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
 - **相册页（`routes/Library.tsx`）展示当前位置的内容。** `FolderDrawer` 按需挂载 `FolderTree`，桌面展开偏好通过 `uiStore` 版本 3 持久化，移动端开关只在当前页面生效。`BreadcrumbMenu` 打开时分页取同级目录。当前层、排序和筛选继续由地址参数驱动，文件夹收藏与复制链接使用原规范地址。`CardCover` 对目录的 1–4 张封面使用对应拼贴布局，紧凑列表使用首图。`CommandPalette` 复用 TanStack Query 与名称搜索端点，查询草稿及打开状态均为临时界面状态。
@@ -561,9 +561,9 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 `ui/` 提供无业务依赖的原语。`shell/` 管理导航、页面容器和浮层，`features/` 按媒体业务组织组件和控制器。跨领域复用通过领域的 `index.ts` 导出。`routes/` 解析地址、连接查询并组合界面。
 
-- `PageChrome` 由页面注册标题、操作与搜索控件。结果页通过 `SearchToolbar` 向顶栏提供输入框，草稿由页面管理，已提交条件由结果页地址确定。其他页面使用全局搜索入口。`TopBar` 根据大标题的可见性展示收缩标题。`Page` 提供 standard、gallery、focused、split 四类宽度。
+- `PageChrome` 由页面注册标题、操作与搜索控件。结果页通过 `SearchToolbar` 向顶栏提供输入框，草稿由页面管理，已提交条件由结果页地址确定。其他页面使用全局搜索入口。`CanvasTopBar` 根据大标题的可见性展示收缩标题。`Page` 提供 standard、gallery、focused、workspace 四类宽度。
 - `features/timeline/sectionPacking.ts` 把稀疏月份拼成确定高度的行，虚拟列表按行挂载。密度变化以资源 ID 恢复视口锚点。相册网格按可用列宽布局，照片瀑布流用媒体真实宽高比计算位置。
-- `tokens.css` 管理明暗主题和漫画强调色，业务界面的工具类随组件维护。共用样式、阅读器暗场和地图图层分别在 `components.css`、`reader.css` 与 `map.css`。
+- `tokens.css` 管理明暗主题和漫画强调色，业务界面的工具类随组件维护。按钮、页签、筛选条件等外观由 `ui/` 中的组件及变体函数提供，共享布局与动效在 `base.css` 和 `motion.css` 中维护。阅读器与地图分别使用 `reader.css` 和 `map.css`。
 
 ### 活动、收藏与历史
 

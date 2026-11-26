@@ -99,8 +99,8 @@ export function useSimilarityReview(
     fetchNextPage,
   ]);
   function select(id: string) {
-    if (!groups.some(group=>group.id===id)) return;
-    latest.current={...latest.current,groupId:id};
+    if (!groups.some((group) => group.id === id)) return;
+    latest.current = { ...latest.current, groupId: id };
     latest.current.replaceGroupId(id);
   }
   function step(delta: number) {

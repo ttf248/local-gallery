@@ -20,6 +20,7 @@ import { chromium } from "@playwright/test";
 import {
   buildRoute,
   resolveAlbumId,
+  openPhotoViewer,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
 import {
@@ -37,7 +38,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",");
 //             伪造标签页数据，封面仍是真实缩略图）
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,viewer,reader,tag,palette"
+  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/comic,/comic/library,/photo/similarity,/travels,/smart-albums,album,viewer,reader,tag,palette"
 )
   .split(",")
   .map((p) => p.trim())
@@ -1002,16 +1003,10 @@ for (const theme of THEMES) {
         await page.getByRole("dialog", { name: "命令面板" }).waitFor();
         await waitForStable(page);
       } else if (route === "viewer") {
-        await page.goto(BASE + "/photo", { waitUntil: "domcontentloaded" });
-        const first = await page.waitForSelector(
-          '[data-testid="media-tile"], .empty-state',
-        );
-        if ((await first.getAttribute("data-testid")) !== "media-tile") {
-          console.log("  · 当前图库缺少可预览的照片");
-          continue;
-        }
-        await first.click();
-        await page.getByTestId("photo-viewer").waitFor();
+        if (!(await openPhotoViewer(page, BASE))) {
+            console.log("  · 当前图库缺少可预览的照片");
+            continue;
+          }
         await waitForStable(page);
       } else if (route === "reader") {
         if (!(await openReader(page))) {

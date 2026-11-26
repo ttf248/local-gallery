@@ -201,9 +201,9 @@ scripts\install-ffmpeg.bat
 | frontend/ | npm run typecheck | TypeScript 检查（含测试文件） |
 | frontend/ | npm run build | 应用工程类型检查与生产构建 |
 | frontend/ | npm run test:e2e | 独立临时媒体库的全栈浏览器测试 |
-| frontend/ | npm run audit:layout | 当前布局回归门禁：溢出、容器变体与外壳尺寸、文字/控件尺寸、命中区、抽屉与键盘可达性 |
+| frontend/ | npm run audit:layout | 画布内缩、侧栏与导航尺寸、页面宽度、溢出、字号、触控与键盘可达性 |
 | frontend/ | npm run audit:contrast | 对比度审计：明暗主题下的文本与图标对比度 |
-| frontend/ | npm run audit:size | 首屏体积审计（`-- --dist` 只量构建产物） |
+| frontend/ | npm run audit:size | 首屏静态传输 ≤120 KiB，字体 ≤80 KiB；`-- --dist` 验证构建入口 ≤420 KiB |
 | frontend/ | npm run shot | 多断点、明暗主题截图，产物在 `.smoke/` 不入库 |
 | 仓库根 | `build.bat` | Windows 全栈构建 |
 | 仓库根 | `scripts/package-release.bat 2.0.0 windows amd64` | 生成 Windows 发布包 |

@@ -906,10 +906,9 @@ describe("任务中心", () => {
     });
     renderCenter("run");
 
-    const selector = await screen.findByRole("radiogroup", {
-      name: "人脸分析模型",
-    });
-    fireEvent.click(within(selector).getByRole("radio", { name: "标准（Buffalo_m）" }));
+    fireEvent.click(await screen.findByRole("button", { name: /人脸分析模型/ }));
+    const selector = screen.getByRole("menu", { name: "人脸分析模型" });
+    fireEvent.click(within(selector).getByText("标准（Buffalo_m）"));
 
     await waitFor(() =>
       expect(aiJobsApi.updateFaceModel).toHaveBeenCalledWith("buffalo_m"),

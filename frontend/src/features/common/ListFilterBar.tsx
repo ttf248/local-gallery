@@ -1,8 +1,18 @@
-import {Tabs} from "../../ui/Tabs";
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { buttonStyles } from "../../ui/buttonStyles";
+import { FilterBar } from "./FilterBar";
+import { FilterChip } from "../../ui/FilterChip";
+import { Tabs } from "../../ui/Tabs";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { SortKey } from "../../utils/listFilterParams";
 import { useUIStore } from "../../store/uiStore";
-import { ChevronDownIcon, GridIcon, ListIcon, FilterIcon } from "../../ui/icons";
+import { ChevronDownIcon, GridIcon, ListIcon } from "../../ui/icons";
 import { useAppMode } from "../../hooks/useAppMode";
 import type { AppMode } from "../../api/library";
 
@@ -79,13 +89,19 @@ export function ListFilterBar({
   const setViewMode = useUIStore((s) => s.setViewMode);
 
   return (
-    <div className={compact ? "compact-list-filter [&_.ui-chip]:whitespace-nowrap [@media(min-width:1024px)_and_(max-width:1279px)]:[&_.ui-chip>span:nth-child(2)]:hidden touch:[&_:is(button,_input)]:min-h-11 touch:[&_:is(button,_input)]:min-w-11" : "page-shell"}>
-      <div className="filter-strip mb-[var(--space-4)] border-b border-b-line py-2.5 [.compact-list-filter_&]:flex-nowrap [.compact-list-filter_&]:gap-1.5 [.compact-list-filter_&]:m-0 [.compact-list-filter_&]:p-0 [.compact-list-filter_&]:[border:0] [.compact-list-filter_&>div]:flex-nowrap max-lg:[.compact-list-filter_&]:flex-wrap max-lg:[.compact-list-filter_&>div]:flex-wrap max-lg:[.compact-list-filter_&]:justify-start flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+    <div
+      className={
+        compact
+          ? "compact-list-filter [&_button]:whitespace-nowrap [@media(min-width:1024px)_and_(max-width:1279px)]:[&_button>span:nth-child(2)]:hidden touch:[&_:is(button,_input)]:min-h-11 touch:[&_:is(button,_input)]:min-w-11"
+          : "mx-auto w-full min-w-0 max-w-page px-gutter"
+      }
+    >
+      <div className="filter-strip mb-4 border-b border-b-line py-2.5 [.compact-list-filter_&]:flex-nowrap [.compact-list-filter_&]:gap-1.5 [.compact-list-filter_&]:m-0 [.compact-list-filter_&]:p-0 [.compact-list-filter_&]:[border:0] [.compact-list-filter_&>div]:flex-nowrap max-lg:[.compact-list-filter_&]:flex-wrap max-lg:[.compact-list-filter_&>div]:flex-wrap max-lg:[.compact-list-filter_&]:justify-start flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex items-center gap-1 flex-wrap min-w-0">
           {filterQuery ? (
             <button
               type="button"
-              className="ui-chip"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-caption text-ink-2 whitespace-nowrap transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink aria-pressed:bg-selected aria-pressed:text-primary aria-pressed:font-medium [&[data-active=true]]:bg-selected [&[data-active=true]]:text-primary [&[data-active=true]]:font-medium"
               onClick={onClearQuery}
               aria-label={`清除名称筛选「${filterQuery}」`}
             >
@@ -93,7 +109,19 @@ export function ListFilterBar({
               <span aria-hidden>×</span>
             </button>
           ) : null}
-          {!!viewChips?.length && <Tabs className="max-w-full flex-wrap" label="内容类型" items={viewChips.map(chip=>({id:chip.key,label:chip.label,count:chip.count}))} value={activeViewKey ?? "all"} onChange={onChangeView}/>}
+          {!!viewChips?.length && (
+            <Tabs
+              className="max-w-full flex-wrap"
+              label="内容类型"
+              items={viewChips.map((chip) => ({
+                id: chip.key,
+                label: chip.label,
+                count: chip.count,
+              }))}
+              value={activeViewKey ?? "all"}
+              onChange={onChangeView}
+            />
+          )}
           {/* 没有视图切换 chip 的页面（如未读 / 最近）：总数靠左，
               避免整条筛选条只剩右半边、左侧空一大片。 */}
           {!hideTotalCount && !viewChips?.length && (
@@ -126,7 +154,7 @@ export function ListFilterBar({
           {onClearFilters ? (
             <button
               type="button"
-              className="btn btn-ghost"
+              className={buttonStyles({ variant: "ghost" })}
               onClick={onClearFilters}
             >
               清除筛选
@@ -141,7 +169,7 @@ export function ListFilterBar({
             <div
               role="group"
               aria-label="视图模式"
-              className="ui-segmented shrink-0"
+              className="inline-flex items-stretch gap-0.5 rounded-md bg-sunken p-0.5 [&>button]:relative [&>button]:min-h-8 [&>button]:px-2.5 [&>button]:rounded-sm [&>button]:text-caption [&>button]:text-ink-2 [&>button]:transition [&>button]:duration-base [&>button:is([aria-checked=true],_[aria-pressed=true])]:bg-selected [&>button:is([aria-checked=true],_[aria-pressed=true])]:text-primary [&>button:is([aria-checked=true],_[aria-pressed=true])]:font-semibold [&>button:disabled]:[opacity:0.5] touch:[&>button]:min-w-11 touch:[&>button]:min-h-11 shrink-0"
             >
               <button
                 onClick={() => setViewMode("grid")}
@@ -248,7 +276,7 @@ function SortMenu({
         ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="btn btn-sm btn-outline"
+        className={buttonStyles({ variant: "secondary", size: "sm" })}
         title="排序"
         aria-label="排序"
         aria-expanded={open}
@@ -262,7 +290,7 @@ function SortMenu({
           id={optionsId}
           role="group"
           aria-label="排序选项"
-          className="absolute right-0 top-full mt-1.5 min-w-[140px] ui-popover py-1 z-40 fade-up [animation:fadeUp_320ms_var(--ease-spring)_both]"
+          className="absolute right-0 top-full mt-1.5 min-w-[140px] border border-line [border-top-color:color-mix(in_srgb,var(--line),var(--line)_50%)] rounded-tile bg-raised shadow-2 touch:[&_:is(button,_a[href])]:min-h-11 touch:[&_:is(button,_a[href])]:min-w-11 py-1 z-40 fade-up [animation:fadeUp_320ms_var(--ease-spring)_both]"
         >
           {options.map((o) => (
             <button
@@ -308,93 +336,67 @@ function MinImageFilter({
   value: number;
   onChange: (v: number) => void;
 }) {
-  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(String(value));
-  const active = value > 0;
   const { mode } = useAppMode();
-  // 计数单位跟着工作台走:照片说「张」,漫画说「页」。
   const unit = mode === "comic" ? "页" : "张";
-  // 被过滤掉的东西是什么,也跟着工作台走:照片过滤掉的是"照片太少的
-  // 相册",漫画是"页数太少的卷"。早先两边都写「册」,照片这边读着像
-  // 从漫画那边漏过来的词。
-  const label =
-    mode === "comic" ? "隐藏少于 N 页的卷" : "隐藏少于 N 张的本相册";
-  const inputRef = useRef<HTMLInputElement>(null);
-  // 漏斗按钮点开后输入框才挂上来，得主动把焦点送进去，
-  // 否则用户还得再点一次才能输数字。
-  useEffect(() => {
-    if (editing) inputRef.current?.focus();
-  }, [editing]);
-  // 关闭编辑时把 draft 写回 store(允许"键入数字后点别处"这种 commit)
-  function commit() {
-    const n = parseInt(draft, 10);
-    if (Number.isFinite(n) && n >= 0) onChange(n);
-    else setDraft(String(value));
-    setEditing(false);
-  }
-  // 未启用且没在编辑:只给一枚漏斗按钮。
-  if (!active && !editing) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setEditing(true);
-          setDraft("0");
-        }}
-        className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md border border-line text-ink-2 hover:bg-sunken hover:text-ink transition-colors shrink-0"
-        title={label}
-        aria-label={`最少${unit}数`}
-      >
-        <FilterIcon size={12} className="shrink-0" />
-      </button>
-    );
+  const label = `最少${unit}数`;
+  const changeOpen = useCallback(
+    (next: boolean) => {
+      if (next) setDraft(String(value));
+      setOpen(next);
+    },
+    [value],
+  );
+  function apply() {
+    const parsed = Number(draft);
+    if (!Number.isInteger(parsed) || parsed < 0 || parsed > 9999) return;
+    onChange(parsed);
+    setOpen(false);
   }
   return (
-    <div
-      className={`inline-flex items-center gap-1 h-[34px] px-2.5 rounded-md border transition-colors ${
-        active
-          ? "border-primary/40 bg-selected text-primary"
-          : "border-line text-ink-2 hover:bg-sunken"
-      }`}
-      title={label}
-    >
-      <FilterIcon size={11} className="shrink-0" />
-      <span className="text-caption whitespace-nowrap">≥</span>
-      <input
-        ref={inputRef}
-        type="number"
-        min={0}
-        max={9999}
-        value={editing ? draft : value}
-        onChange={(e) => setDraft(e.target.value.replace(/[^\d]/g, ""))}
-        onFocus={() => {
-          setEditing(true);
-          setDraft(String(value));
-        }}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            (e.target as HTMLInputElement).blur();
-          } else if (e.key === "Escape") {
-            setEditing(false);
-            setDraft(String(value));
-            (e.target as HTMLInputElement).blur();
-          }
-        }}
-        className="w-9 h-7 bg-transparent border-0 outline-none text-caption tabular-nums text-right focus:outline-none"
-        aria-label={`最少${unit}数`}
+    <>
+      <FilterBar
+        label="筛选"
+        dialogLabel={label}
+        count={value > 0 ? 1 : 0}
+        open={open}
+        onOpenChange={changeOpen}
+        panel={
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              apply();
+            }}
+            className="flex items-end gap-2"
+          >
+            <label className="flex flex-1 flex-col gap-2 text-label">
+              {label}
+              <input
+                type="number"
+                required
+                min={0}
+                max={9999}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                className="h-10 w-full rounded-md border border-line bg-canvas px-3"
+              />
+            </label>
+            <button
+              type="submit"
+              className={buttonStyles({ variant: "primary", size: "sm" })}
+            >
+              应用
+            </button>
+          </form>
+        }
       />
-      {active && (
-        <button
-          onClick={() => onChange(0)}
-          className="btn-text text-ink-3 hover:text-ink text-body leading-none px-0.5"
-          title="清除"
-          aria-label="清除最小图数"
-        >
-          ×
-        </button>
+      {value > 0 && (
+        <FilterChip
+          label={`至少 ${value} ${unit}`}
+          onRemove={() => onChange(0)}
+        />
       )}
-    </div>
+    </>
   );
 }

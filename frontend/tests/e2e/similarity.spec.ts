@@ -4,10 +4,10 @@ import {
   setWorkbenchMode,
 } from "./helpers/library";
 import { expect, test } from "@playwright/test";
+import { runSimilarityAnalysis } from "./helpers/similarity";
 
-// 特征分析要真的跑一遍：临时库有五百多张图，第一条用例还要连扫描
-// 一起等，默认的 30 秒超时不够。
-test.setTimeout(240_000);
+// 真实全量分析的用时取决于临时图库规模，后台停滞由进度检查单独检出。
+test.setTimeout(600_000);
 
 /**
  * 相似照片整理的跨层主链路。
@@ -34,41 +34,6 @@ interface SimilarityPage {
     groups: SimilarityGroup[];
     summary: { exact: number; near: number; burst: number };
   };
-}
-
-/** 跑一次相似照片特征分析并等到它结束。 */
-async function runSimilarityAnalysis(
-  request: Parameters<typeof ensureLibraryReady>[0],
-) {
-  // 队列里已经有任务时，服务端会拒绝新任务（409）。等那个跑完再排自己的，
-  // 而不是去抢别人的队列位置。
-  let jobId = "";
-  await expect
-    .poll(
-      async () => {
-        const started = await request.post("/api/ai/jobs", {
-          data: { type: "similarity", mode: "full" },
-        });
-        if (!started.ok()) return false;
-        jobId = ((await started.json()) as { job: { id: string } }).job.id;
-        return true;
-      },
-      { timeout: 180_000 },
-    )
-    .toBe(true);
-  await expect
-    .poll(
-      async () => {
-        const response = await request.get(
-          `/api/ai/jobs/${encodeURIComponent(jobId)}`,
-        );
-        if (!response.ok()) return "missing";
-        // 单项任务快照是平铺的：字段直接在这一层。
-        return ((await response.json()) as { status: string }).status;
-      },
-      { timeout: 180_000 },
-    )
-    .toMatch(/^(completed|failed|cancelled)$/);
 }
 
 test("相似照片能分组列出、跨页加入精选，人工决定重启后仍在", async ({

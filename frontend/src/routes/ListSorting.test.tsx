@@ -51,7 +51,8 @@ vi.mock("../features/comic/ContinueReadingHero", () => ({
   ContinueReadingHero: () => null,
   UnreadHero: () => null,
 }));
-vi.mock("../features/library/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../features/library/AlbumGrid")>(),
   default: ({ items }: { items: { id: string; title: string }[] }) => (
     <ol data-testid="sort-results">
       {items.map((item) => (

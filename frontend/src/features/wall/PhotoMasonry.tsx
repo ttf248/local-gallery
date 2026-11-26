@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import type { LibraryMediaItem } from "../../api/library";
 import { useElementSize } from "../../hooks/useElementSize";
@@ -262,7 +263,7 @@ export default function PhotoMasonry<
                   className={`absolute left-0 top-0 z-10 grid size-8 place-items-center rounded-full transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white touch:size-11 ${
                     picked
                       ? "opacity-100"
-                      : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100"
+                      : "opacity-100 pointer-fine:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
                   }`}
                 >
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/25">
@@ -274,7 +275,7 @@ export default function PhotoMasonry<
                   跨相册的墙上，照片来自不同的本 —— 先说清它出自哪本。
                   显隐由 .hover-reveal 管：鼠标设备上悬停才浮出，
                   触摸设备上常驻（像素尺寸在触摸端收起）。 */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 translate-y-1 bg-gradient-to-t from-black/75 to-transparent px-2.5 pb-2 pt-6 hover-reveal transition-opacity duration-200 motion-safe:group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:opacity-100">
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-0 translate-y-1 bg-gradient-to-t from-black/75 to-transparent px-2.5 pb-2 pt-6 opacity-100 pointer-fine:opacity-0 transition-opacity duration-200 motion-safe:group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:opacity-100">
                 <p className="truncate text-caption font-medium text-white/95">
                   {sourceLabel ?? item.name}
                 </p>
@@ -294,7 +295,7 @@ export default function PhotoMasonry<
         <div className="pb-4 pt-3 text-center">
           <button
             type="button"
-            className="btn btn-sm btn-outline"
+            className={buttonStyles({variant:"secondary",size:"sm"})}
             onClick={onLoadMore}
             disabled={isLoadingMore}
           >

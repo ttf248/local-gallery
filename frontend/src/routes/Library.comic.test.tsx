@@ -26,7 +26,8 @@ vi.mock("../features/common/ListFilterBar", () => ({
   ListFilterBar: () => <div data-testid="filter-bar" />,
 }));
 // 网格用假组件替掉：这里要验的是分段结构与卡片上的动作，不是卡片本身。
-vi.mock("../features/library/AlbumGrid", () => ({
+vi.mock("../features/library/AlbumGrid", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../features/library/AlbumGrid")>(),
   default: ({
     items,
     overlayAction,

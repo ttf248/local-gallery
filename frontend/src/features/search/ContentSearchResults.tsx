@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import {useRef,useEffect,useState,useMemo} from "react";
 import {useQuery} from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -146,7 +147,7 @@ export default function ContentSearchResults({
           action={
             <button
               type="button"
-              className="btn btn-outline"
+              className={buttonStyles({variant:"secondary"})}
               onClick={onRetry ?? (() => void submittedQuery.refetch())}
             >
               重新搜索
@@ -234,13 +235,13 @@ export default function ContentSearchResults({
           description={empty.description}
           action={
             empty.action === "tasks" ? (
-              <Link to="/tasks/run" className="btn btn-outline">
+              <Link to="/tasks/run" className={buttonStyles({variant:"secondary"})}>
                 打开任务中心
               </Link>
             ) : empty.action === "retry" && onRetry ? (
               <button
                 type="button"
-                className="btn btn-outline"
+                className={buttonStyles({variant:"secondary"})}
                 onClick={onRetry}
               >
                 重新搜索

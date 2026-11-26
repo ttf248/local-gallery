@@ -1,3 +1,4 @@
+import {buttonStyles} from "../ui/buttonStyles";
 import { LibraryToolbar } from "../features/library/LibraryToolbar";
 import { Page } from "../shell/Page";
 import { useCallback, useMemo } from "react";
@@ -314,7 +315,7 @@ export default function Library() {
   return (
     <Page
       variant="gallery"
-      className="library-page pb-[var(--gutter)] [--folder-drawer-offset:calc(var(--topbar-h)_+_14px)] min-h-full"
+      className="library-page pb-gutter [--folder-drawer-offset:calc(var(--topbar-h)_+_14px)] min-h-full"
     >
       <PageHero
         title={title}
@@ -339,7 +340,7 @@ export default function Library() {
                 <button
                   ref={drawer.triggerRef}
                   type="button"
-                  className="toolbar-icon"
+                  className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
                   title="切换目录抽屉"
                   aria-label="目录"
                   aria-keyshortcuts={"Control+\\ Meta+\\"}
@@ -352,7 +353,7 @@ export default function Library() {
                 {nodeId && (
                   <button
                     type="button"
-                    className="toolbar-icon"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
                     aria-label="返回上级"
                     title="返回上级"
                     onClick={() => selectNode(parentId)}
@@ -392,14 +393,14 @@ export default function Library() {
               {filters.query && (
                 <button
                   type="button"
-                  className="ui-chip"
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-caption text-ink-2 whitespace-nowrap transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink aria-pressed:bg-selected aria-pressed:text-primary aria-pressed:font-medium [&[data-active=true]]:bg-selected [&[data-active=true]]:text-primary [&[data-active=true]]:font-medium"
                   onClick={() => filters.setQuery("")}
                   aria-label={`清除名称筛选「${filters.query}」`}
                 >
                   名称 · {filters.query} <span aria-hidden>×</span>
                 </button>
               )}
-              <button type="button" className="ui-chip" onClick={filters.reset}>
+              <button type="button" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-caption text-ink-2 whitespace-nowrap transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink aria-pressed:bg-selected aria-pressed:text-primary aria-pressed:font-medium [&[data-active=true]]:bg-selected [&[data-active=true]]:text-primary [&[data-active=true]]:font-medium" onClick={filters.reset}>
                 清除筛选
               </button>
             </div>
@@ -447,7 +448,7 @@ export default function Library() {
                 <BulkActions loaded={selectionItems} />
                 {workCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-4">
                       <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
                         作品
                       </h2>
@@ -469,7 +470,7 @@ export default function Library() {
 
                 {looseCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-4">
                       <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
                         未归入作品
                       </h2>
@@ -489,7 +490,7 @@ export default function Library() {
 
                 {tagCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-4">
                       <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
                         标签
                       </h2>
@@ -533,7 +534,7 @@ export default function Library() {
               action={
                 nodeId ? (
                   <button
-                    className="btn btn-outline"
+                    className={buttonStyles({variant:"secondary"})}
                     onClick={() => selectNode(parentId)}
                   >
                     返回上一级
@@ -548,7 +549,7 @@ export default function Library() {
               title={`${mode === "comic" ? "书架" : "相册"}这边还没有内容`}
               description="媒体库里还没有这一侧的内容。先到设置里添加媒体目录，或去另一边看看。"
               action={
-                <Link className="btn btn-outline" to="/settings/data">
+                <Link className={buttonStyles({variant:"secondary"})} to="/settings/data">
                   去设置
                 </Link>
               }

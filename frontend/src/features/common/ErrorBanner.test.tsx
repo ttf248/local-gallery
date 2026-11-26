@@ -49,7 +49,7 @@ describe("ErrorBanner", () => {
     // .btn-text 给它 28px 的高度（触摸档 44px）：它看着像一段文本，
     // 但它是能点的控件，命中区得按控件算。
     expect(screen.getByRole("button", { name: "重试加载" }).className).toContain(
-      "btn-text",
+      "min-h-8",
     );
   });
 

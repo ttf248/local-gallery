@@ -1,3 +1,4 @@
+import {buttonStyles} from "../../ui/buttonStyles";
 import { useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
@@ -153,7 +154,7 @@ function CrumbMenu({
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className="btn btn-ghost"
+            className={buttonStyles({variant:"ghost"})}
             onClick={() => void children.refetch()}
           >
             重试读取同级目录
@@ -164,7 +165,7 @@ function CrumbMenu({
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className="btn btn-ghost"
+            className={buttonStyles({variant:"ghost"})}
             disabled={children.isFetchingNextPage}
             onClick={() => void children.fetchNextPage()}
           >
