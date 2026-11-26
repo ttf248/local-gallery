@@ -49,7 +49,7 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
       {items.map(({ id, label: caption, href, count }, i) => {
         const selected = id === value;
         const style = cx(
-          "relative inline-flex min-h-9 items-center gap-2 px-3 text-callout transition duration-2",
+          "relative inline-flex min-h-9 min-w-8 shrink-0 items-center whitespace-nowrap touch:min-h-10 touch:min-w-10 gap-2 px-3 text-callout transition duration-2",
           selected ? "text-fg" : "text-fg-muted hover:text-fg",
           vertical ? "rounded-control" : "border-b-2",
           selected

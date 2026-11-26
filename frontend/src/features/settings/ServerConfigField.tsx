@@ -110,7 +110,7 @@ export function ServerConfigField({
             onCompositionStart={composition.start}
             onCompositionEnd={(e) => composition.finish(e.currentTarget.value)}
             onBlur={(e) => composition.finish(e.currentTarget.value)}
-            className="bg-bg-subtle border border-border-faint rounded-md h-8 px-2.5 text-body font-mono w-full max-w-[40vw] focus:outline-none focus:border-accent"
+            className="bg-bg-subtle border border-line rounded-md h-8 px-2.5 text-body font-mono w-full max-w-[40vw] focus:outline-none focus:border-accent"
           />
         ) : def.kind === "number" ? (
           <input
@@ -126,7 +126,7 @@ export function ServerConfigField({
             onCompositionStart={composition.start}
             onCompositionEnd={(e) => composition.finish(e.currentTarget.value)}
             onBlur={(e) => composition.finish(e.currentTarget.value)}
-            className="bg-bg-subtle border border-border-faint rounded-md h-8 px-2.5 text-body font-mono w-24 text-right tabular-nums focus:outline-none focus:border-accent"
+            className="bg-bg-subtle border border-line rounded-md h-8 px-2.5 text-body font-mono w-24 text-right tabular-nums focus:outline-none focus:border-accent"
           />
         ) : (
           <Switch

@@ -89,8 +89,8 @@ export default function SmartAlbums() {
             才说得清它管的是哪一片。 */}
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <p className="page-eyebrow">智能相册</p>
-            <h1 className="page-title page-title--sm">精选推荐</h1>
+            <p className="page-eyebrow flex items-center gap-2 text-accent text-caption font-semibold tracking-[0.02em]">智能相册</p>
+            <h1 className="page-title [.page-heading_&]:mt-2 font-display text-title-1 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [@media(max-width:640px)]:text-title-2 [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere] page-title--sm text-title-2">精选推荐</h1>
           </div>
           <Segmented
             label="推荐主题排序"
@@ -132,7 +132,7 @@ export default function SmartAlbums() {
               data-testid="smart-albums-sentinel"
             />
             {isFetchingNextPage ? (
-              <p className="py-4 text-center text-meta text-fg-subtle">
+              <p className="py-4 text-center text-caption text-fg-subtle">
                 正在接下一批…
               </p>
             ) : null}

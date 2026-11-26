@@ -279,13 +279,13 @@ OCR 额外维护 `derived/ai/ocr-search-index.json` 倒排索引，索引项仅�
 
 任务快照分两类字段：事实与派生。`results`（按解析状态分类的计数）与 `fields`（按字段统计的产出）是事实，随每个 32 张的批次原子提交并落盘；重启时按批次文件重放，与失败计数走同一条恢复路径。`planned`、`completed`、`estimatedRemainingMs` 与速度是派生值，每次快照按落盘的计数重算，不写入状态文件 —— 写进去就等于把某一刻的估计当成事实。已注册的分析模块清单由后端给出，客户端不维护第二份模块名表。
 
-任务中心的界面拆成四个页签：运行（当前任务的进度、读数与控制，空闲时是开始分析的入口）、每日计划（开关、时间、扫描/分析/智能相册任务选择与人物开关）、任务记录（历史任务与失败项）、本机存储（派生缓存占用、AI 模型权重与各模块产物、相对路径与本机绝对路径）。等待队列作为「运行」页签的附属面板贴在它下面，始终显示并明确呈现空队列状态。运行页签顶部是一条状态摘要（`components/tasks/TaskSummary.tsx`）：当前运行状态、队列待处理数量与主要操作（开始分析 / 暂停 / 继续 / 取消）；启动按钮与进度读数都归它，配置表单（`components/tasks/TaskConsole.tsx`）只回答「跑什么、跑多少」。运行面板之后是「智能相册分组」面板：增量更新与强制重建两个入口跑全库刷新，面板显示当前相册、维度与进度，可中途取消；生成结束后首页汇总与相册页的分组摘要一起失效重读。任务中心整页收在聚焦容器（`.container--focused`，1040px）里，各页签独占该容器宽度：状态摘要在上、配置与队列在下，分段之间用细线而不是白卡（`styles/tasks.css`）。任务数据层收在 `hooks/useTaskCenter.ts`，存储数据层收在 `hooks/useStorage.ts`，面板在 `components/tasks/`；路由组件只排版。分析模块用芯片列出（`components/tasks/ModuleChips.tsx`），互斥选项用分段控件（`components/common/Segmented.tsx`），两类控件在各页共用同一套语义与键盘行为。单项启动和“按序启动全部任务”都复用 `AIJobService` 的持久队列；全部任务固定按 metadata、embedding、OCR、人脸顺序入队，缺少依赖或模型的模块跳过，前端在每项终结后刷新活动任务以跟上下一项，等待中的任务按执行顺序排列显示。失败项按「错误码 + 原因」在前端分组，同一原因的几百条路径折叠起来只留计数，展开才列路径。进度分母是本次任务实际要处理的张数（`planned`），不是整库规模：增量任务里整库大部分文件已经是最新的，拿整库当分母会让进度一上来就接近满格。
+任务中心的界面拆成四个页签：运行（当前任务的进度、读数与控制，空闲时是开始分析的入口）、每日计划（开关、时间、扫描/分析/智能相册任务选择与人物开关）、任务记录（历史任务与失败项）、本机存储（派生缓存占用、AI 模型权重与各模块产物、相对路径与本机绝对路径）。等待队列作为「运行」页签的附属面板贴在它下面，始终显示并明确呈现空队列状态。运行页签顶部是一条状态摘要（`features/tasks/TaskSummary.tsx`）：当前运行状态、队列待处理数量与主要操作（开始分析 / 暂停 / 继续 / 取消）；启动按钮与进度读数都归它，配置表单（`features/tasks/TaskConsole.tsx`）只回答「跑什么、跑多少」。运行面板之后是「智能相册分组」面板：增量更新与强制重建两个入口跑全库刷新，面板显示当前相册、维度与进度，可中途取消；生成结束后首页汇总与相册页的分组摘要一起失效重读。任务中心整页收在聚焦容器（`.container--focused`，1040px）里，各页签独占该容器宽度：状态摘要在上、配置与队列在下，分段之间用细线而不是白卡。任务数据层收在 `hooks/useTaskCenter.ts`，存储数据层收在 `hooks/useStorage.ts`，面板在 `features/tasks/`；路由组件只排版。分析模块用可选择的卡片列出（`features/tasks/ModuleTiles.tsx`），互斥选项用分段控件（`ui/Segmented.tsx`），两类控件在各页共用同一套语义与键盘行为。单项启动和“按序启动全部任务”都复用 `AIJobService` 的持久队列；全部任务固定按 metadata、embedding、OCR、人脸顺序入队，缺少依赖或模型的模块跳过，前端在每项终结后刷新活动任务以跟上下一项，等待中的任务按执行顺序排列显示。失败项按「错误码 + 原因」在前端分组，同一原因的几百条路径折叠起来只留计数，展开才列路径。进度分母是本次任务实际要处理的张数（`planned`），不是整库规模：增量任务里整库大部分文件已经是最新的，拿整库当分母会让进度一上来就接近满格。
 
-空闲时先给数字再给按钮：运行页签的「这次要跑什么」里有一条「本次规模」（`components/tasks/TaskEstimatePanel.tsx`），把增量与全量两种口径的张数与预计耗时并排列出，当前模式那一行高亮；启动按钮在它上方的状态摘要里，按钮上带着本次张数。四个模块 × 两种口径由一次核算带来，切模式与切模块都不重新请求。模块与模式的选择态放在 `hooks/useTaskCenter.ts` 而不是组件里 —— 规模表、按钮上的张数说明与真正发出去的启动请求必须读到同一个 mode，分开存必然漂移。任务进入终态、用户清空历史、媒体库重新扫描之后都要让核算失效重算。每日计划按增量口径给出「预计下次运行」的张数与耗时。
+空闲时先给数字再给按钮：运行页签的「这次要跑什么」里有一条「本次规模」（`features/tasks/TaskEstimatePanel.tsx`），把增量与全量两种口径的张数与预计耗时并排列出，当前模式那一行高亮；启动按钮在它上方的状态摘要里，按钮上带着本次张数。四个模块 × 两种口径由一次核算带来，切模式与切模块都不重新请求。模块与模式的选择态放在 `hooks/useTaskCenter.ts` 而不是组件里 —— 规模表、按钮上的张数说明与真正发出去的启动请求必须读到同一个 mode，分开存必然漂移。任务进入终态、用户清空历史、媒体库重新扫描之后都要让核算失效重算。每日计划按增量口径给出「预计下次运行」的张数与耗时。
 
-本机存储信息集中在任务中心的「本机存储」页签：媒体派生缓存的占用与清理读取既有的 `GET /api/cache/stats`，AI 模型权重与各模块产物的占用读取 `GET /api/storage/usage`。设置页只保留外观与导航、阅读偏好、服务端配置、状态备份和关于，按四个页签分组（`utils/pageTabs.ts`）：界面（外观 + 导航）、阅读、数据（媒体库索引 + 备份与恢复）、服务端；关于是页脚一行，不占页签。设置页整页收在聚焦容器（`.container--focused`，1040px）里，每个页签独占该容器宽度，按自己的内容排（`styles/settings.css` 的 `.settings-section` / `.settings-rows` / `.settings-danger`）：分组是「标题 + 说明 + 一行行字段」，字段是标签列 + 控件列，分组之间用细线；会丢数据的动作（清空索引、清空最近访问）单独成组。服务端那七组面板自带标题条排三列，一组一块，不再是白卡里的白卡。
+本机存储页签使用 `GET /api/cache/stats` 和 `GET /api/storage/usage` 读取媒体派生缓存、模型权重与分析产物。设置的界面、阅读、数据和服务端四个页签共用 `shell/SplitLayout.tsx`。设置行由 `ui/SettingsList.tsx` 呈现，索引与历史清理独立分组，关于信息位于界面分区内。
 
-导航只有一条竖轴：应用级在左侧栏（`components/layout/Sidebar.tsx`），侧栏分「浏览」与「本机」两组。页面级分区不在侧栏挂第二层菜单 —— 它由页面内的页签条承担（`components/common/PageTabs.tsx`，`role="tablist"` / `role="tab"` / `role="tabpanel"`，方向键在页签条内切换，不注册为全局快捷键）。页签清单只有一份（`utils/pageTabs.ts`），页签条、页面面板、浏览器标题与侧栏上的当前页签名都从它出。页签的 id 进 URL 路径段（`/settings/data`、`/tasks/plan`）：`/settings` 与 `/tasks` 重定向到缺省页签，不认识的页签由 `resolveTab` 回落并 `replace`。切页签不重挂页面 —— `utils/path.ts#pageBoundaryKey` 把这两页的子路径折叠成同一个错误边界 key，面板第一次打开后保留挂载（用 `hidden` 藏起来），服务端配置的草稿、备份预览与任务记录的筛选因此不丢。侧栏在窄屏是抽屉；侧栏自身可滚动，窗口不够高时不会把底部入口挤出侧栏。
+`shell/NavRail.tsx`、`MobileTabBar.tsx` 和 `MoreSheet.tsx` 共享 `utils/navEntries.ts` 的入口定义。设置与任务中心使用 `utils/pageTabs.ts` 定义分区。切换分区是普通导航，`pageBoundaryKey` 保留同页错误边界和已访问面板，服务端配置草稿、备份预览和记录筛选可随前进后退恢复。
 
 侧栏入口的清单也只有一份（`utils/navEntries.ts`）：侧栏按它渲染，设置页的「导航」分区也按它逐项开关。哪几项显示由服务端偏好 `hiddenNavItems` 决定（存的是生效的隐藏清单），`hooks/useNavVisibility.ts` 读它并给出可见性判断；偏好没读回来时用前端默认清单兜底，与服务端默认值一致，所以不会出现先全显示再收掉的闪动。工作台首页固定显示，收起它那一侧的侧栏就空了。
 
@@ -392,7 +392,7 @@ EXIF 的 `dateTimeOriginal` 通常不含时区，因此保留相机记录的墙�
 - 像素预算闸门是加权信号量，容量就是预算本身：一次申请超过容量的权重会永远阻塞，把整条渲染链路（连同 HTTP 请求）一起挂死。因此权重永远压在预算以内，超过预算的大图（拼接全景能到 277MP）改走 ffmpeg 按目标宽度缩放后再解码，内存有界；ffmpeg 不可用时才退回进程内解码。本机实测：一张 6184×44767 的全景把重建任务卡在最后一项，修复后同一张图 3.9 秒出图，峰值内存约 1.2GB。
 - HEIC/HEIF/TIFF 通过可选 ffmpeg 转换，整图转换与缩略图缓存分开。工具缺失或失败返回不支持格式，前端提供占位与说明。
 - 连续阅读使用按目标宽度缓存的 `/api/previews`，单张/双张使用原图；预览规则与响应字段在 API 维护。
-- 前端所有渲染图走 `components/common/RenditionImage.tsx` 一个出口：按槽位宽度与像素比选档，给出 `srcset` 与 `sizes`。照片模式的大图预览不走 `srcset`，而是按舞台尺寸与图片原始比例算出实际显示宽再乘像素比与缩放倍数取档 —— 视口宽不是显示宽，照视口宽要图会命中 4096 档（服务端对更窄的源图原样返回原图），一张 3.7MB 的原图就为了看 788 像素宽的一屏被整个拉下来。舞台尺寸用 `ResizeObserver` 量，量到之后才发请求，避免先要一张再改 URL。
+- 前端所有渲染图走 `features/common/RenditionImage.tsx` 一个出口：按槽位宽度与像素比选档，给出 `srcset` 与 `sizes`。照片模式的大图预览不走 `srcset`，而是按舞台尺寸与图片原始比例算出实际显示宽再乘像素比与缩放倍数取档 —— 视口宽不是显示宽，照视口宽要图会命中 4096 档（服务端对更窄的源图原样返回原图），一张 3.7MB 的原图就为了看 788 像素宽的一屏被整个拉下来。舞台尺寸用 `ResizeObserver` 量，量到之后才发请求，避免先要一张再改 URL。
 - 视频封面优先 ffmpeg（同文件合并、全局最多两个任务），按视频流时长定位、短视频取片头，无帧时从片头重试。等比缩小、不放大、不补边；没有服务端封面时浏览器通过 Range 抽帧并回传。
 - `useVideoCover` 的一次 effect 拥有探测、抽帧、上传整条链，切换/重试/卸载均取消并忽略迟到结果。探测 20 秒、抽帧 30 秒期限包含挂起请求；完成释放媒体元素、canvas、网络监听和计时器。
 
@@ -400,7 +400,7 @@ EXIF 的 `dateTimeOriginal` 通常不含时区，因此保留相机记录的墙�
 
 `internal/services/cache_rebuild.go` 的 `CacheRebuildService` 在后台重建派生缓存：枚举库快照里的相册与媒体（只在本机内部用绝对路径），按所选范围（缩略图 / 预览图）生成对应档位，video 不参与（ffmpeg 抽帧与转码代价另算）。任务状态机与 SSE 订阅复刻扫描任务的做法：终态事件后关闭连接。运行期间每 500ms 推一次进度快照 —— 逐项推太密，不推进度条就十分钟不动，看着像卡死了。
 
-前端 `components/tasks/CacheRebuildPanel.tsx` 发起任务（随派生缓存一起收在任务中心的本机存储段），`hooks/useCacheRebuild.ts` 订阅 SSE，`store/cacheRebuildStore.ts` 持有 jobId 与进度 —— 只持久化 jobId，进度每次连接重新获取。切走页面再回来，任务仍在跑，进度接得上。
+前端 `features/tasks/CacheRebuildPanel.tsx` 发起任务（随派生缓存一起收在任务中心的本机存储段），`hooks/useCacheRebuild.ts` 订阅 SSE，`store/cacheRebuildStore.ts` 持有 jobId 与进度 —— 只持久化 jobId，进度每次连接重新获取。切走页面再回来，任务仍在跑，进度接得上。
 
 ### 视频元数据与转码
 
@@ -480,7 +480,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 一次权威结果；写失败退回原样，界面不停在服务端并不认可的状态上。服务端在媒体项上
 另带 `picked` 标记，集合尚未回来时用它先把状态画出来。
 
-精选少到几张时换一种摆法（`components/wall/PickShowcase.tsx`）：照片墙是给「很多张」
+精选少到几张时换一种摆法（`features/collection/PickShowcase.tsx`）：照片墙是给「很多张」
 用的（密排、裁切、按固定行高铺满），三五张用它排会缩在页面一角、竖幅还被裁掉半张。
 陈列给每张照片一个自己的框，**框按照片自己的宽高比长**（极端竖幅与横幅按上下限收一下），
 完整地摆出来、不裁不拉伸，几个框并排摆开，照片下面写来源与日期。数量多起来换成
@@ -492,7 +492,7 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 （EXIF → 文件名 → 目录名 → 文件修改时间），连来源与精度一起给前端。
 界面照服务端的 `dateValue` 显示：自己按本地时区换算会差一天。
 
-提示条（`components/common/Toast.tsx`）可以带一个撤销动作。会让人从眼前消失的写操作
+提示条（`features/common/Toast.tsx`）可以带一个撤销动作。会让人从眼前消失的写操作
 （相似组标记已处理或忽略之后它离开待处理列表）留一条带「撤销」的提示；
 撤销走回原来那条路 —— 单组的用单组写入，批量的用批量写入。
 
@@ -507,12 +507,12 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 列表页的筛选状态在地址里：`q`（关键词）、`sort`（排序）、`min`（最少张数），相册页另有 `view`（视图）。`year`（年份）由集合页的年份索引写进地址，集合页的子项网格按它过滤（服务端 `GET /api/library/overview` 的 `year` 参数支持按年过滤，筛选的是子项标题里的 4 位年份，与年份索引用的同一套口径）。链接可以分享，浏览器后退能取消筛选，刷新页面也不会丢。参数名与解析只有一份实现（`utils/listFilterParams.ts`），状态只有一个来源（`hooks/useListFilters.ts` 读 `useSearchParams`）—— 不再另存一份在 localStorage 里。
 - 排序另有一层回落：用户亲手选过的顺序对所有列表页生效，存在 `store/sortPreference.ts`；地址里的 `sort` 是逐页的显式选择，优先于它。浏览足迹页的天然顺序是「按最近看」，各页没有显式选择时用它。其余筛选不再跨页共享 —— 每页的筛选是这一页的事。
 - 工具条的全局搜索框使用独立草稿，列表页自身的 `q` 仍只负责列表筛选；只有 `/photo/search` 与 `/comic/search` 从地址里的 `q` 预填。搜索框左端有一枚**作用域**按钮：名称（相册 / 文件夹 / 标签）与画面（照片里的画面与图片文字）两档，后端是两套接口 —— 界面上必须说清当前搜的是哪一类，作用域住在地址的 `scope` 参数里（缺省 `name`）。回车若没有选中某条建议，导航到搜索结果页并把关键词写进 `q`（画面档另带 `scope=content`）；输入时不改当前地址，浏览器返回仍恢复原列表筛选。换排序与视图用 `push`（后退键能退回上一个排序）。
-- **搜索结果页（`routes/SearchResults.tsx`）一页管两档检索对象。** 名称档走 `GET /api/search`（每条命中带 `match`，说明它为什么算命中：完全同名 / 开头相同 / 名字里含有 / 标签命中 / 路径命中）；结果按命中理由分组，理由当分组标题 —— 同一句话不在每张卡上重复。画面档走 `POST /api/ai/search`，与「智能搜索」页共用 `components/search/ContentSearchResults.tsx` 与 `hooks/useContentSearchQuery.ts` —— 同一套检索与呈现，两处不各写一遍。画面这一档整页是定高的 flex 列：照片墙要一块确定高度才排得出行；索引覆盖率与模型是否就绪退到一行小字里，不占主要空间。三种「没搜到」在 `utils/contentSearchState.ts` 里分派：请求失败（可重试）、画面模型没就绪或还没建索引（说清原因并给任务中心入口）、确实没有匹配。用户要的是画面而系统只查了文字时，也照实说明，不伪装成零结果。
-- **发现页（`routes/Explore.tsx`）顶部是发现入口，下面是各维度的预览。** 入口是 `components/explore/ExploreSearchHero.tsx`（名字 / 画面与文字两档）与四个维度跳转；预览拆成 `ExploreTimePreview` / `ExplorePeoplePreview` / `ExplorePlacePreview` / `ExploreThemePreview` 四个组件，四段共用 `components/explore/ExploreCard.tsx` 这一张发现卡（卡片样式在 `styles/explore.css` 里，跟着这个懒加载路由走）。人物预览用服务端给的代表脸框（`components/people/PersonFaceThumb.tsx` 与 `utils/personFaceCrop.ts`）把脸放到缩略图中央，已命名与待确认分组分两栏摆 —— 分组是相似度聚出来的候选，不是身份确认。地点预览复用 `hooks/useChinaLocations.ts` 的地点索引，每一张卡链到 `/photo/travels/place/<区划码>`；主题预览用 `hooks/useSmartAlbums.ts` 的精选目录，只摆精选的少量几项，写清标题、张数与来源，线索收在悬停提示里。
+- **搜索结果页（`routes/SearchResults.tsx`）一页管两档检索对象。** 名称档走 `GET /api/search`（每条命中带 `match`，说明它为什么算命中：完全同名 / 开头相同 / 名字里含有 / 标签命中 / 路径命中）；结果按命中理由分组，理由当分组标题 —— 同一句话不在每张卡上重复。画面档走 `POST /api/ai/search`，与「智能搜索」页共用 `features/search/ContentSearchResults.tsx` 与 `hooks/useContentSearchQuery.ts` —— 同一套检索与呈现，两处不各写一遍。画面这一档整页是定高的 flex 列：照片墙要一块确定高度才排得出行；索引覆盖率与模型是否就绪退到一行小字里，不占主要空间。三种「没搜到」在 `utils/contentSearchState.ts` 里分派：请求失败（可重试）、画面模型没就绪或还没建索引（说清原因并给任务中心入口）、确实没有匹配。用户要的是画面而系统只查了文字时，也照实说明，不伪装成零结果。
+- 发现页的搜索入口属于 `features/explore/ExploreSearch.tsx`。`PeopleRow`、`PlaceCards`、`YearRibbon` 和 `ThemeCards` 独立呈现人物、地点、时间和主题数据，对应查询的空态与重试由各段承接。
 - 查询键集中注册在 `api/queryKeys.ts`：媒体库（`libraryQueryKeys`）、偏好、收藏与最近访问各只有一处定义。键散落在各处各拼各的，「刷新列表」就不知道该失效哪些 —— 手抄一遍字符串，漏一个就有一条旧数据留在界面上。注册表只放键，不放取数函数：取数函数属于各自的 api 模块，测试替换那一层时不必连带替换这里。
 - 前端查询键带模式段（`["library", ..., "mode", mode]`），切模式即换键自动重取，旧模式缓存保留。媒体清单与 `nodes/query` 与模式无关，键不带模式。收藏与历史的资源 ID 集合不分类型，由前端按摘要里的 `contentKind` 客户端过滤；`hooks/useFavoritesByMode.ts` 把「当前侧可见的卡片 / 本侧计数 / 真失效的条目」收在一处，收藏页与首页共用它，口径不再分叉。
 - 收藏里的智能标签按名解析（`POST /api/tags/query`），接口同时给出两侧的册数：客户端据此区分「这个标签在库里不存在」（失效，可清理）与「它只属于另一侧」（不可见，但不是失效）。把两者混为一谈会导致用户在另一侧点一次「清理失效收藏」就删掉自己的收藏。
-- 阅读器整屏脱离 AppShell，侧栏不可见，顶部提供工作台 chip 切模式（切模式即离开阅读器回到外壳）。
+- 阅读器整屏脱离 AppFrame，侧栏不可见，顶部提供工作台 chip 切模式（切模式即离开阅读器回到外壳）。
 - **阅读器的媒体清单与相册页共用同一份查询缓存。** `hooks/useReaderMedia.ts` 走 `useAlbumMedia`（同一个查询键），并把剩下的页依次取完 —— 进阅读器不必重下整本，再次进入时先出图、刷新在后台进行。它顺带给出每一页的原始像素尺寸：连续模式按它先占好高度，图片加载前后页面不跳。阅读器路由组合画布、控制条和浮层。进度恢复、翻页与切卷由 `features/reader/useReaderController.ts` 协调，阅读设置面板与快捷键使用同一个阅读偏好 store。取数在 `useReaderMedia`、键盘在 `useReaderKeys`、跨卷导航在 `useAdjacentAlbum`、浮动控件显隐在 `useIdleChrome`。
 - **跨卷导航按作品内的顺序走，不绕圈。** 上下文（`utils/galleryContext.ts`）记的是「用户从哪个列表点进来的」：书架、作品页、未读页、收藏页各自写一份。阅读器用 `hooks/useAdjacentAlbum.ts` 在这份上下文里找相邻的一卷，找不到就用兄弟卷兜底 —— `useSiblingVolumes` 按当前卷的 `parentId` 取同一部作品里的卷（`GET /api/library/{id}/children`）。深链直接打开阅读器、或从首页「继续阅读」进来时，上下文未必覆盖这一卷，兜底让「下一卷」在作品内部接得上。两处规则一致：**走到头就没有下一卷**（不环绕回开头），当前卷不在列表里也不猜（不拿列表第一项当锚点乱跳）。
 - 模式也决定视觉基调：`<html data-mode>` 由 `WorkbenchModeProvider` 写入，CSS token 按 `:root[data-theme][data-mode]` 组合覆盖（`--brand*` / `--feature-bg` / `--mode-tint`），画布与文字保持中性灰阶。封面画幅同样按侧取默认值（照片 1:1、漫画 2:3），见 `utils/workbench.ts` 的 `coverRatioForMode`。
@@ -521,32 +521,32 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 - 照片侧的「接着看」与漫画侧的「继续阅读」对称，数据源不同：漫画读的是阅读进度，照片读的是访问历史。`hooks/useHistory.ts` 的 `useHistoryCards` 把 `GET /api/history` 与 `POST /api/library/nodes/query` 合成按侧收敛的卡片列表，照片首页的「接着看」chip 与「最近浏览」页共用它。它额外返回 `resolvedCount`（仍存在于媒体库里的访问记录条数），用来区分「这一侧没有记录」与「访问过的相册全被移出媒体库」——两者的提示语不同，后者才提「相册可能已移动」。
 - 措辞与计数单位的唯一真相源是 `utils/workbench.ts` 的词表（`workbenchCopy(mode)`），两侧共用组件从**卡片自身的** `contentKind` 取词，而不是从当前工作台取：一张卡永远知道自己属于照片还是漫画，取不到时按照片兜底。照片说「张 / 本 / 浏览」，漫画说「页 / 卷 / 阅读」。中间目录的类型词走同一个词表（`collectionTypeWord(mode)`）：照片侧说「文件夹」、漫画侧说「作品」—— 服务端内部叫它「集合」，那是实现细节，界面上不出现。
 - 「那年今日」的下标表在发布期建好：把各相册从文件名推断出的拍摄日期按月-日归桶（`library_page.go` 的 `onThisDay`），请求期只按属性与年份过滤。它靠拍摄时间成立，因此只在照片侧有意义 —— 漫画侧不出现这一段。拍摄日期稀疏，多数日子里往年这天没拍过照；首页因此允许退回离这一天最近的、往年确实拍过照的那几天（`fallback=1`），标题与摘要跟着事实走：摆的是别的日子就不叫「那年今日」。
-- 目录里的年份索引仍由 `components/home/YearTimeline.tsx` 接收相册目录分组，点击打开旧目录年份墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`scope=year` 按目录年份范围取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。发现页的时间预览改用同一组件呈现 `scope=timeline` 的年份索引，年份与计数来自单张媒体日期证据，点击进入 `/photo?year=<年份>`；只有年份精度的媒体计入该年，不生成月份。漫画年份索引仍按作品目录分组，两侧共用 `components/home/Timeline.tsx` 的视觉骨架。
+- 目录里的年份索引仍由 `features/comic/YearTimeline.tsx` 接收相册目录分组，点击打开旧目录年份墙（`routes/YearPhotos.tsx`，`/photo/years/<年份>`）：`scope=year` 按目录年份范围取出各相册的照片，每张带 `albumId` / `albumName`，大图预览的标题可点回原相册。发现页的时间预览改用同一组件呈现 `scope=timeline` 的年份索引，年份与计数来自单张媒体日期证据，点击进入 `/photo?year=<年份>`；只有年份精度的媒体计入该年，不生成月份。漫画年份索引仍按作品目录分组，两侧共用 `features/comic/Timeline.tsx` 的视觉骨架。
 
 ### 查询、导航与网格
 
-`AppShell` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
+`AppFrame` 的错误边界重置键把 `/photo/me/:tab` 与 `/comic/me/:tab` 分别折叠到工作台级别，切换「我的」页签时保留已访问面板；设置页和任务中心也按页签共用重置键，其余路径变化仍逐页重挂。
 
-- TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppShell 但仍有错误边界与访问门禁。
+- TanStack Query 管理库、媒体、偏好、收藏与历史；Zustand 管理本机 UI、阅读器和扫描连接会话。主题与 Toast 在应用层统一挂载，阅读器独立于 AppFrame 但仍有错误边界与访问门禁。
 - 路由在 `App.tsx` 懒加载，**模式进 URL 路径**：`/photo`（照片时间线，年份与月份筛选在查询参数中，如 `?year=2024`）、`/photo/library`（相册）、`/photo/explore`（发现）、`/photo/me/:tab`（珍藏）、`/photo/search`（搜索结果，名称 / 画面与文字两档）、`/photo/albums/*`、`/photo/tags/*`、`/photo/years/:year`（按目录年份取材的旧书签入口）、`/photo/travels`（足迹）、`/photo/people`（人物候选）、`/photo/smart-albums`（智能相册，全库分组的瀑布流墙）、`/photo/random`（随手看看，随机照片墙）；`/comic`（漫画首页）、`/comic/library`（书架）、`/comic/me/:tab`、`/comic/search`、`/comic/unread`、`/comic/albums/*`、`/comic/tags/*`；漫画阅读器 `/comic/read/:albumId` 使用相册 ID 和 0-based index，视频加 `type=video`；设置页 `/settings` 与模式无关。根路径 `/` 按服务端记住的偏好落到某一侧。标签按单个路径段编码，路径段只解码一次（从原始 pathname 切段，不用 `useParams`），直接打开链接的返回有应用内兜底：`utils/navigation.ts` 的 `useSafeBack` 先看应用内历史（`history.state.idx > 0`），有就后退；没有就按「能确认的上级 → 该侧结构入口」的顺序回落，落点由资源摘要的 `parentId` 决定（兜底可以是函数，点击那一刻才求值）。兜底回落用 `replace` 而不是 `push`：深链打开时这一页就是历史里的第一条，再 `push` 一条就等于留了一枚回跳死循环（返回一次到上级，再返回一次又回到这一页）。旧的 `/photo/recents`、`/photo/favorites`、`/photo/picks`、`/comic/recents`、`/comic/favorites` 重定向到「我的」的对应页签 —— 书签与外链照旧可用。
-- **相册页（`routes/Library.tsx`）展示当前位置的内容。** `FolderDrawer` 按需挂载 `FolderTree`，桌面展开偏好通过 `uiStore` 版本 2 持久化，移动端开关只在当前页面生效。`BreadcrumbMenu` 打开时分页取同级目录。当前层、排序和筛选继续由地址参数驱动，文件夹收藏与复制链接使用原规范地址。`CardCover` 对目录的 1–4 张封面使用对应拼贴布局，紧凑列表使用首图。`CommandPalette` 复用 TanStack Query 与名称搜索端点，查询草稿及打开状态均为临时界面状态。
+- **相册页（`routes/Library.tsx`）展示当前位置的内容。** `FolderDrawer` 按需挂载 `FolderTree`，桌面展开偏好通过 `uiStore` 版本 3 持久化，移动端开关只在当前页面生效。`BreadcrumbMenu` 打开时分页取同级目录。当前层、排序和筛选继续由地址参数驱动，文件夹收藏与复制链接使用原规范地址。`CardCover` 对目录的 1–4 张封面使用对应拼贴布局，紧凑列表使用首图。`CommandPalette` 复用 TanStack Query 与名称搜索端点，查询草稿及打开状态均为临时界面状态。
 - **相册页的目录树只按需取一层。** 子项用 `libraryQueryKeys.children(parentId, mode)` 做键（与库级查询同一套键注册表），展开一个节点才去读它的下一层；库一变（`["library"]` 失效）这些查询跟着重取，失败时树上给出显式的重试手柄而不是空目录。
 - 足迹页在 `/photo/travels`，地点详情在 `/photo/travels/place/<六位区划码>`。筛选状态（时间区间 `from`/`to`、时间跨度 `span`、归并粒度 `level`）放查询参数，时间区间是跨层级的一维：换粒度与下钻都带着它，缺省表示全部时间。`span` 取 `1y`/`3y`/`5y`/`10y`/`all`，缺省 `5y`：跨度圈的就是这一段，下面的行程目录与地图随之过滤。旧的 `/photo/locations` 与坐标聚类相册 ID 一并作废，不留兼容跳转。
-- 足迹页的组成：`routes/Travels.tsx` 是通栏两栏的骨架（抬头一条带：最左是跨度筛选，随后是规模带，右边是粒度控件，页面名只留在 `sr-only` 的 `h1` 里；正文左栏是行程目录，右栏是地图，`position: sticky` 随页面滚动），`components/travels/TravelMiniMap.tsx` 是右栏那块只读地图（离线行政边界 + 照片位置的点云，320–440 像素见方；`scope` 决定画面是裁到有数据的区域还是整张地图），`components/travels/TravelTrips.tsx` 是行程目录（按年分组，年份倒序，一段一张卡片，宽屏两栏并排，点开才就地展开照片）。段的照片按需取回：`hooks/useChinaLocations.ts` 的 `useChinaTripMedia` 在展开或点开时才发请求。
+- 足迹页的组成：`routes/Travels.tsx` 是通栏两栏的骨架（抬头一条带：最左是跨度筛选，随后是规模带，右边是粒度控件，页面名只留在 `sr-only` 的 `h1` 里；正文左栏是行程目录，右栏是地图，`position: sticky` 随页面滚动），`features/travels/TravelMiniMap.tsx` 是右栏那块只读地图（离线行政边界 + 照片位置的点云，320–440 像素见方；`scope` 决定画面是裁到有数据的区域还是整张地图），`features/travels/TravelTrips.tsx` 是行程目录（按年分组，年份倒序，一段一张卡片，宽屏两栏并排，点开才就地展开照片）。段的照片按需取回：`hooks/useChinaLocations.ts` 的 `useChinaTripMedia` 在展开或点开时才发请求。
 - **行程不随时间区间重切。** 段是按「粒度 + 两周间隔」切出来的，`/trips/:index/media` 按段的下标寻址 —— 段若随区间重排，下标就再也指不到同一段照片了。因此足迹页的行程列表与行程照片端点**都不带时间区间**，抬头选定的跨度（`span`）与地址里带来的区间（`from`/`to`）只决定哪些段被点亮、地图与地点清单过滤到什么范围；抬头的规模带取的是全量汇总（`useChinaSummaryAll`），说的是这个库的事实。查询键里因此有「全量」与「区间」两套（`useChinaTripsAll` / `useChinaSummaryAll` / `useChinaPlacesAll`），两者不能共用同一个键，否则会互相顶掉。
-- **模式有且只有一个真相源：URL 路径前缀。** 服务端 `Prefs.appMode` 只决定根路径落到哪一侧；前端 `appModeStore` 只镜像这个偏好，不持有「当前模式」。`WorkbenchModeProvider`（`components/layout/`）挂在应用最外层，从 `useLocation` 推导模式并经上下文下发，因此整屏脱离外壳的阅读器也在同一套上下文里。切换模式 = 导航到对侧对应页 + 写回偏好，两件事缺一不可。
+- **模式有且只有一个真相源：URL 路径前缀。** 服务端 `Prefs.appMode` 只决定根路径落到哪一侧；前端 `appModeStore` 只镜像这个偏好，不持有「当前模式」。`WorkbenchModeProvider`（`shell/`）挂在应用最外层，从 `useLocation` 推导模式并经上下文下发，因此整屏脱离外壳的阅读器也在同一套上下文里。切换模式 = 导航到对侧对应页 + 写回偏好，两件事缺一不可。
 - 模式切换的语义只有一张表（`utils/path.ts` 的 `counterpartRoute`）：两侧都有的同名页（相册页 / 搜索 / 标签 / 「我的」的同名页签）一一对应；相册与阅读器只属于一侧，未读只属于漫画侧，精选只属于照片侧，它们都回落到对侧首页。
 - 相册入口按内容属性分派：照片目录的相册 `/photo/albums/<相册 id>` 直接渲染照片墙，漫画目录的相册重定向到阅读器。属性由服务端给出（所属目录的 `kind`），前端不按图片数量推断。
 - **照片相册页只有一套内容：这本相册里的照片。** 分组（按时间、地点、人物、场景与精选推荐）是同一批照片的一种看法，不是另一本相册：分组面板（`features/album/AlbumGroupPanel.tsx`）开着时墙上仍然是这本相册的照片，选一组只是先看那一组，「全部照片」那一条与「回到全部照片」的入口负责恢复。地址里只有 `dimension` 与 `group` 两个参数（没有「换个相册」的开关），面板收起即回到原始照片墙。分析覆盖率、重建与算法口径收在面板底部按需展开的「分析说明」与分析 / 重建的更多菜单里，不占页面主视觉。
 - **筛选属于原始照片墙，分组不叠加条件。** `hooks/useAlbumViewState.ts` 把筛选参数（`from`/`to`/`personId`/`adcode`/`picks`/`scene` 与相似折叠）与 `dimension`/`group` 放在同一处地址状态里。分组是服务端算好的一段照片（`GET /api/albums/:id/smart-groups/:groupId/media` 不接受筛选参数），因此 `setGroupId(分组)` 会把原始照片墙的参数一并从地址里去掉 —— 留着就是「地址栏说着一套条件、墙上摆着另一批照片」的静默忽略。回到全部照片时这些参数已经不在，回到的是这本相册的全部照片。用户主动选分组用 `push`（后退键要能退回全部照片），系统纠错用 `replace`（分组被删 / 被重建 / ID 失效时退回全部照片；不往历史里追加失效的地址，否则后退一次就多一条死链）。分组没有维度作伴时那个参数没有意义，一并删掉。
 - **分页失败的重试由用户发起。** 自动补页的条件（已到已加载末尾、还有下一页、没在加载中）一旦成立就会发请求，因此取下一页失败时必须带上失败标志停下自动续页 —— 否则条件一直成立，失败一次接一次，成了无限请求。重试分两种：断网与服务端出错重试同一页（继续从正确的游标往下走，已加载的不重复也不丢）；游标失效（媒体库变了，`api/client.ts` 的 `isStaleCursorError`）则从头重取 —— 失效的游标重试多少次都是那一份错位的数据。
-- **相册页的职责拆成几块，各管一段。** `routes/PhotoAlbum.tsx` 只做组装：`hooks/useAlbumViewState.ts` 管地址里的状态（筛选条件、分组维度、选中的分组），`hooks/useAlbumAnalysis.ts` 管分析与重建（只发任务、写提示、刷新分组摘要），`hooks/useAlbumSelection.ts` 管多选与精选的写入，`features/album/AlbumHeader.tsx` 管页头与相册级动作，`features/album/AlbumGroupPanel.tsx` 管分组面板，`components/album/AlbumMediaMenu.tsx` 管照片的右键菜单。服务端状态不复制进本地：分组摘要、媒体页与筛选维度都直接从 TanStack Query 读，页面只持有视图状态。
+- **相册页的职责拆成几块，各管一段。** `routes/PhotoAlbum.tsx` 只做组装：`hooks/useAlbumViewState.ts` 管地址里的状态（筛选条件、分组维度、选中的分组），`hooks/useAlbumAnalysis.ts` 管分析与重建（只发任务、写提示、刷新分组摘要），`hooks/useAlbumSelection.ts` 管多选与精选的写入，`features/album/AlbumHeader.tsx` 管页头与相册级动作，`features/album/AlbumGroupPanel.tsx` 管分组面板，`features/album/AlbumMediaMenu.tsx` 管照片的右键菜单。服务端状态不复制进本地：分组摘要、媒体页与筛选维度都直接从 TanStack Query 读，页面只持有视图状态。
 - **智能分组默认展示精选推荐，并按时间、地点、人物和场景提供详细分类**；点开分组后复用同一分页照片墙和大图预览。跨文件夹的汇总专页 `/photo/smart-albums`（`routes/SmartAlbums.tsx`）只展示精选主题；时间、地点、人物、场景详细分组仍由后台生成并缓存，作为推荐计算输入并可在来源相册内浏览。页面固定请求 `dimension=recommended`，不再加载分类目录或计数；旧分类深链会移除 `dimension` 并回到推荐。`/api/smart-albums` 只读取已生成缓存，不为未生成的文件夹触发分析，也不在浏览时重算分组（重算由全库刷新任务负责）；分组仍归属来源相册，卡片链接以 `dimension` 与 `group` 直达对应分组。照片侧首页的主题预览以不同来源文件夹轮流精选，最多六组；漫画侧首页不摆清单，作品与卷在书架里。分析入口只把当前相册 ID 发给现有分析队列，名称与隐藏操作只写服务端用户状态。推荐维度的空态分「模块没就绪」「分析有失败项」「还没有分析结果」「照片不够」「没形成主题」几种，每种给出对应的下一步；判据取自分析模块安装状态与分析任务记录（推荐维度的 `coverage` 是合并口径，拿不到模块级进度），因此不为判空态额外请求相册级分组摘要。
-- **智能相册专页铺成一面等高的方格墙。** 数据源是 `GET /api/smart-albums`（`hooks/useSmartAlbums.ts` 的 `useSmartAlbumDirectory`），默认 `dimension=recommended`；时间、地点、人物、场景为详细分类，`dimension=all` 汇总四类详细分组（不含精选推荐），`dimension=featured` 给首页提供按质量排序并按来源文件夹轮流取样的预览。专页始终请求精选推荐，不发起详细分类目录或计数请求，也不显示分类导航和组数。推荐为默认视图，URL 不保留 `dimension` 参数；旧分类链接会规范化到推荐视图。推荐卡第三行是证据维度芯片（`evidenceDimensions` 映射成时间、地点、人物、场景），质量分只参与后端排序、不上屏；点击后直达对应相册与分组。排布复用照片墙的瀑布流算法（`components/wall/masonryLayout.ts`）：封面**槽位**是正方形（`utils/smartAlbum.ts` 的 `SMART_ALBUM_COVER_SLOT_RATIO`），说明区固定为 74px，因此每张卡等高、行底对齐；照片本身按原比例完整放进槽里、不裁切，空出来的地方用同一张照片放大虚化铺满做底（`components/album/SmartAlbumCover.tsx`），渲染图取哪一档由槽位实际宽度决定，不写死；渲染按视口裁，一次排几千组也不撑 DOM。精选推荐这一页是排序的特例：它排的是跨相册的主题，不按相册分块，整面墙按用户选的 `sort` 排 —— 默认组内最新一张照片的拍摄时间倒序（拍摄时间从元数据记录里取，成员动辄上万条，因此只读这一个字段，不复制整条记录），另有照片张数与推荐分两种排法；排序进了游标的 scope，换排序后旧游标不再适用。往下滑自动接下一批。首页预览批次大小为六，查询键与专页分开；首页只有六张卡，列数取能整除它的因数（`utils/smartAlbum.ts` 的 `smartAlbumPreviewColumns`），末行才不是孤零零一张。
+- **智能相册专页铺成一面等高的方格墙。** 数据源是 `GET /api/smart-albums`（`hooks/useSmartAlbums.ts` 的 `useSmartAlbumDirectory`），默认 `dimension=recommended`；时间、地点、人物、场景为详细分类，`dimension=all` 汇总四类详细分组（不含精选推荐），`dimension=featured` 给首页提供按质量排序并按来源文件夹轮流取样的预览。专页始终请求精选推荐，不发起详细分类目录或计数请求，也不显示分类导航和组数。推荐为默认视图，URL 不保留 `dimension` 参数；旧分类链接会规范化到推荐视图。推荐卡第三行是证据维度芯片（`evidenceDimensions` 映射成时间、地点、人物、场景），质量分只参与后端排序、不上屏；点击后直达对应相册与分组。排布复用照片墙的瀑布流算法（`features/wall/masonryLayout.ts`）：封面**槽位**是正方形（`utils/smartAlbum.ts` 的 `SMART_ALBUM_COVER_SLOT_RATIO`），说明区固定为 74px，因此每张卡等高、行底对齐；照片本身按原比例完整放进槽里、不裁切，空出来的地方用同一张照片放大虚化铺满做底（`features/album/SmartAlbumCover.tsx`），渲染图取哪一档由槽位实际宽度决定，不写死；渲染按视口裁，一次排几千组也不撑 DOM。精选推荐这一页是排序的特例：它排的是跨相册的主题，不按相册分块，整面墙按用户选的 `sort` 排 —— 默认组内最新一张照片的拍摄时间倒序（拍摄时间从元数据记录里取，成员动辄上万条，因此只读这一个字段，不复制整条记录），另有照片张数与推荐分两种排法；排序进了游标的 scope，换排序后旧游标不再适用。往下滑自动接下一批。首页预览批次大小为六，查询键与专页分开；首页只有六张卡，列数取能整除它的因数（`utils/smartAlbum.ts` 的 `smartAlbumPreviewColumns`），末行才不是孤零零一张。
 - **汇总按相册排序，来源写在卡上。** 目录接口把同一本相册的分组挨在一起返回，翻的时候认得出「这几组是同一本里的」；相册之间的次序由这本相册「最新的一组」决定：时间维度取那一组封面照片的 EXIF 拍摄时间（组在缓存里就是从新到旧排的，第一组即最新的一组），其余维度取张数最多的那一组，读不到时间信息的相册排在后面。封面图的元数据一次批量取回，不逐本相册去查，因此这一步不额外读文件。前端不再按相册切块 —— 精选推荐收紧后多数相册只剩一条推荐，分块会退化成只挂一张卡的窄带；来源相册写在卡片第二行。
 - 常驻导航仅取 activity-summary、随机相册或已加载 dashboard；首页一次取得未读计数、有限预览与在读摘要，不下载全库。完整未读索引按“库 revision + 活动版本”复用，列表按需分页。
 - `AlbumGrid` 绑定最近的纵向滚动祖先，网格/列表只挂视口附近条目。
-- 照片墙（`components/wall`）按每张图的真实宽高比做自适应排布：宽高比来自服务端媒体分页返回的像素宽高（由 `MediaDimensionService` 读图片头得到并缓存），排布算法是纯函数，容器宽度或密度变化时重算。行高度由算法确定，`Virtuoso` 只负责按行虚拟化；虚拟窗口参数保持在安全范围内，避免尺寸树展开过深触发爆栈。总数占位保留整本相册的滚动长度，行范围换算回媒体序号后由 `useMediaGridPagination` 连续补页，失败保留内容并暂停自动请求，显式重试恢复。容器与窗口的验证要求见设计文档。
+- 照片墙（`features/wall`）按每张图的真实宽高比做自适应排布：宽高比来自服务端媒体分页返回的像素宽高（由 `MediaDimensionService` 读图片头得到并缓存），排布算法是纯函数，容器宽度或密度变化时重算。行高度由算法确定，`Virtuoso` 只负责按行虚拟化；虚拟窗口参数保持在安全范围内，避免尺寸树展开过深触发爆栈。总数占位保留整本相册的滚动长度，行范围换算回媒体序号后由 `useMediaGridPagination` 连续补页，失败保留内容并暂停自动请求，显式重试恢复。容器与窗口的验证要求见设计文档。
 - **大图预览跨页连续浏览**（`features/viewer/PhotoViewer.tsx`）：预览翻到的位置是「已加载序列」里的下标，序列本身分页到达。翻到已加载末尾时预览自己去取下一页（`hasNextPage` / `onLoadMore`），取到后自动接上下一张，不必回墙上继续；离末尾还有三张时预加载下一页。连按「下一张」时位置记在 ref 里而不是 props 上（props 一次按键只更新一次，连按会被吞掉一半），没加载出来的次数先记着，页到了一次补上。取页失败保留已加载内容并给出手柄（底栏「重试」），再按一次「下一张」也会重试。页数读数报的是服务端总数，不报已加载条数。关掉预览时照片墙按 `scrollToIndex` 回到刚才看的那张 —— 这一条对所有照片墙成立，见下。
 - **照片墙的会话状态只有一份实现。** 照片墙散在十处（相册、时间线、精选、年份、人物、语义搜索、地点、行程、照片带、随手看看），每处的预览、精选与右键本该是同一件事。`hooks/useWallViewer.ts` 收着大图预览（下标、翻页、关掉后回到刚才那张）、`hooks/usePhotoCompare.ts` 收着并排对比（钉一张、再钉一张成对、互换、关掉）、`hooks/useContextMenu.ts` 收着右键菜单的位置与开关。开着的是哪一张按资源 ID 记，下标由它算出来：分页取到新的一页时列表会变，按下标记的「当前看第几张」会漂到别的照片上。预览的各项属性由 hook 一次算好，各路由只写自己这一页特有的部分（相册级收藏与封面、智能分组的入口）。
 
@@ -554,13 +554,11 @@ SIGINT/SIGTERM 触发停止接收连接、取消扫描/转码并强制刷新扫�
 
 ### 前端布局骨架
 
-页面的版式只有一处真相源，分三层：
+`ui/` 提供无业务依赖的原语。`shell/` 管理导航、页面容器和浮层，`features/` 按媒体业务组织组件和控制器。跨领域复用通过领域的 `index.ts` 导出。`routes/` 解析地址、连接查询并组合界面。
 
-- **容器**：`.page-shell` 是唯一的内容容器（`styles/primitives.css`），宽度由 `--page-max`（2560px）封顶，左右留白由 `--page-gutter`（`clamp(20px, 3vw, 48px)`）给出，并让开安全区（`--safe-left/right`）。所有页面都用它，因此左右留白与内容左缘在翻页时不跳。防御规则 `.page-shell .page-shell` 把嵌套里的内边距清掉 —— 组件内部再套一层容器时不许凭空多出留白。
-- **超宽档**：2240px 起（2560 宽的 27 寸）仍是单栏，只是列宽放大、首页页头并成一行；断点在样式表的 `@media (min-width: 2240px)` 与 `hooks/useMediaQuery.ts` 的 `ULTRAWIDE_LAYOUT_QUERY` 两处，改的时候一起改。超宽档不再另做两栏骨架 —— 理由见设计文档的「超宽档版式」。
-- **网格**：两套系统各有分工。`.library-grid`（含 `--dense` / `--spacious` / `--comic` 几档）是 CSS 网格，列宽由 `tokens.css` 的 `--library-col` 一族给定，按可用宽度自动分列；`masonryLayout.ts` 是 JS 排的瀑布流，用于照片内容（照片墙、随手看看、智能相册墙），按每张的真实宽高比落进当前最矮的一列。列宽的数值只在 tokens 与 `masonryColumnCount` 的入参里，组件里不写死。
-
-触摸设备另有一套约定：命中区不小于 44×44（`styles/primitives.css` 的触摸档规则把按钮与链接的本体撑大，视觉尺寸不变），贴边内容让开安全区（`--safe-*`），软键盘弹出时贴底浮层按 `--keyboard-inset` 上移（`hooks/useVisualViewport.ts`）。设计意图与理由见设计文档。
+- `PageChrome` 由页面注册标题与操作，`TopBar` 根据大标题的可见性展示收缩标题。`Page` 提供 standard、gallery、focused、split 四类宽度。
+- `features/timeline/sectionPacking.ts` 把稀疏月份拼成确定高度的行，虚拟列表按行挂载。密度变化以资源 ID 恢复视口锚点。相册网格按可用列宽布局，照片瀑布流用媒体真实宽高比计算位置。
+- `tokens.css` 管理明暗主题和漫画强调色，业务界面的工具类随组件维护。共用样式、阅读器暗场和地图图层分别在 `components.css`、`reader.css` 与 `map.css`。
 
 ### 活动、收藏与历史
 

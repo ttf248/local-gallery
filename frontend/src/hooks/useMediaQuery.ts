@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 /**
  * 宽版布局的断点。
  *
- * 与 Tailwind 的 `lg` 一致（1024px）：侧栏在这条线以下收进抽屉，
+ * 与 Tailwind 的 `lg` 一致（1024px）：窄于这条线时使用底栏，
  * 顶栏在它以上才有足够宽度容纳工作台切换。
  */
 export const WIDE_LAYOUT_QUERY = "(min-width: 1024px)";

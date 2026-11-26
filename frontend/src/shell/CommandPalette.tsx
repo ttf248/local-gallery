@@ -477,7 +477,7 @@ function Palette({
                       )}
                       <span className="flex-1 truncate">{row.label}</span>
                       {row.detail && (
-                        <span className="text-meta text-fg-muted">
+                        <span className="text-caption text-fg-muted">
                           {row.detail}
                         </span>
                       )}

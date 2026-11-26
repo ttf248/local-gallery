@@ -223,7 +223,7 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
         </p>
       ) : null}
       {missingCount > 0 && (
-        <span className="text-meta text-fg-subtle">
+        <span className="text-caption text-fg-subtle">
           其中 {missingCount} 项暂时找不到
         </span>
       )}
@@ -300,10 +300,10 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
           {suggestions.length > 0 && (
             <section className="page-shell pb-14">
               <div className="flex items-baseline gap-3 flex-wrap mb-4">
-                <h2 className="section-title">从这里挑一个收藏</h2>
-                <span className="section-meta">点封面右上角的星标</span>
+                <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">从这里挑一个收藏</h2>
+                <span className="section-meta text-caption leading-[1.45] text-fg-muted">点封面右上角的星标</span>
               </div>
-              <div className="shelf">
+              <div className="shelf flex items-start gap-3.5 overflow-x-auto [overscroll-behavior-x:contain] [scroll-snap-type:x_proximity] pb-1.5 [&>*]:[scroll-snap-align:start]">
                 {suggestions.map((card) => (
                   <div key={card.id} className={SUGGEST_WIDTH}>
                     <AlbumCard

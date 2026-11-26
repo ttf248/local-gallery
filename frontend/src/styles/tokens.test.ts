@@ -34,7 +34,7 @@ const roles =
 it("纸白与暗房均定义全套颜色角色", () => {
   for (const theme of [light, dark])
     for (const role of roles) expect(token(theme, role)).toBeTruthy();
-  expect(css).not.toMatch(/--rail-/);
+  expect(css).not.toMatch(/--(?:rail|sidebar)-/);
   expect(token(light, "signal")).toBe("#2f6bff");
   expect(token(dark, "signal")).toBe("#7fa4ff");
 });

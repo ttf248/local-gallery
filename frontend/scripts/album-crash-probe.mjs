@@ -101,9 +101,14 @@ for (let i = 0; i < VISITS; i++) {
   await page.goto(`${BASE}/photo/albums/${album.id}`, {
     waitUntil: "domcontentloaded",
   });
-  await page
-    .waitForSelector("[data-virtuoso-scroller]", { timeout: 15000 })
-    .catch(() => {});
+  const rendered = await page
+    .locator('[data-testid="media-tile"]')
+    .first()
+    .waitFor({ state: "visible", timeout: 15000 })
+    .then(
+      () => true,
+      () => false,
+    );
   await page.waitForTimeout(1200);
   const alert = page.locator('[role="alert"]').first();
   const broken = (await alert.count()) > 0;
@@ -111,9 +116,9 @@ for (let i = 0; i < VISITS; i++) {
     ? (await alert.innerText()).replace(/\s+/g, " ").trim()
     : "";
   const crashed = broken && /call stack|加载异常/i.test(text);
-  if (crashed) {
+  if (crashed || !rendered) {
     crashes++;
-    console.log(`  #${i} 崩了：${text.slice(0, 80)}`);
+    console.log(`  #${i} 崩了：${text.slice(0, 80) || "未渲染媒体瓦片"}`);
   } else {
     console.log(`  #${i} 正常`);
   }
@@ -126,4 +131,4 @@ if (stacks.size > 0) {
   console.log("首个错误：");
   for (const line of stacks) console.log(`  ${line}`);
 }
-process.exit(crashes > 0 ? 1 : 0);
+process.exit(crashes > 0 || stacks.size > 0 ? 1 : 0);

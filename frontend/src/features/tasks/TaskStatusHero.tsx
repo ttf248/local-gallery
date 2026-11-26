@@ -30,14 +30,14 @@ export default function TaskStatusHero({
       aria-label="状态摘要"
       data-status={status}
     >
-      <div className="tasks-summary__description">
+      <div className="tasks-summary__description [flex:1_1_18rem] min-w-0">
         <h2 className="flex items-center gap-2 text-title-2">
           <Badge variant="dot" tone={taskStatusTone(status)} />
           {title}
         </h2>
         {children}
       </div>
-      <div className="tasks-summary__actions">{actions}</div>
+      <div className="tasks-summary__actions flex flex-wrap items-center gap-y-2 gap-x-3 max-w-full [.tasks-summary>:last-child:not(&)]:basis-[100%]">{actions}</div>
       {active && <ActiveProgress job={active} />}
     </section>
   );
@@ -61,10 +61,10 @@ function ActiveProgress({ job }: { job: AIJob }) {
     <div className="mt-3 sm:col-span-2">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
         <div className="flex items-baseline gap-3">
-          <span className="font-mono text-page-sm font-medium tabular-nums text-fg">
+          <span className="font-mono text-title-2 font-medium tabular-nums text-fg">
             {percent}%
           </span>
-          <span className="text-meta tabular-nums text-fg-muted">
+          <span className="text-caption tabular-nums text-fg-muted">
             {planned > 0
               ? `${formatCount(job.completed)} / ${formatCount(planned)} 张`
               : settled
@@ -108,7 +108,7 @@ function ActiveProgress({ job }: { job: AIJob }) {
       </dl>
 
       {job.checkpoint.batch > 0 || job.recoveredAfterRestart ? (
-        <p className="mt-3 flex flex-wrap items-center gap-x-4 text-meta text-fg-muted">
+        <p className="mt-3 flex flex-wrap items-center gap-x-4 text-caption text-fg-muted">
           <span>
             {job.checkpoint.batch > 0
               ? `已保存到第 ${formatCount(job.checkpoint.batch)} 批 · 位置 ${formatCount(job.checkpoint.offset)} / ${formatCount(job.total)}`
@@ -138,9 +138,9 @@ function Readout({
 }) {
   return (
     <div>
-      <dt className="text-meta text-fg-subtle">{label}</dt>
+      <dt className="text-caption text-fg-subtle">{label}</dt>
       <dd
-        className={`mt-0.5 font-mono text-label font-medium tabular-nums ${
+        className={`mt-0.5 font-mono text-body font-medium tabular-nums ${
           tone === "danger" ? "text-danger" : "text-fg"
         }`}
       >

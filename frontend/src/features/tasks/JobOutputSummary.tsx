@@ -19,16 +19,16 @@ export default function JobOutputSummary({ jobId, enabled }: Props) {
   if (!enabled) return null;
 
   if (query.isLoading) {
-    return <p className="mt-4 text-meta text-fg-subtle">读取产物信息…</p>;
+    return <p className="mt-4 text-caption text-fg-subtle">读取产物信息…</p>;
   }
 
   if (query.isError) {
     return (
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-meta text-fg-subtle">
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-caption text-fg-subtle">
         <span>产物信息读取失败。</span>
         <button
           type="button"
-          className="inline-flex h-7 items-center rounded-md border border-border-faint px-2.5 text-meta text-fg-muted transition-colors hover:bg-bg-subtle"
+          className="inline-flex h-7 items-center rounded-md border border-line px-2.5 text-caption text-fg-muted transition-colors hover:bg-bg-subtle"
           onClick={() => void query.refetch()}
         >
           重试
@@ -42,8 +42,8 @@ export default function JobOutputSummary({ jobId, enabled }: Props) {
 
   return (
     <div className="mt-4">
-      <p className="text-meta font-medium text-fg">本次产物</p>
-      <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-meta">
+      <p className="text-caption font-medium text-fg">本次产物</p>
+      <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-caption">
         <span className="text-fg-muted">
           {output.available
             ? `${formatSize(output.bytes)} · ${output.fileCount.toLocaleString()} 个批次文件`
@@ -53,7 +53,7 @@ export default function JobOutputSummary({ jobId, enabled }: Props) {
           每批 {output.batchSize} 张
         </span>
       </div>
-      <p className="mt-1 break-all font-mono text-meta leading-relaxed text-fg-subtle">
+      <p className="mt-1 break-all font-mono text-caption leading-relaxed text-fg-subtle">
         {output.path}
       </p>
     </div>

@@ -233,7 +233,7 @@ function PeopleList() {
                   ]}
                 />
               ) : null}
-              <label className="flex items-center gap-2 text-meta text-fg-muted">
+              <label className="flex items-center gap-2 text-caption text-fg-muted">
                 <input
                   type="checkbox"
                   checked={includeHidden}
@@ -260,13 +260,13 @@ function PeopleList() {
             </div>
           </div>
           {clear.isError ? (
-            <p role="alert" className="mb-4 text-meta text-danger">
+            <p role="alert" className="mb-4 text-caption text-danger">
               清除失败。请确认没有人脸识别任务正在运行后重试。
             </p>
           ) : null}
           {activeTab === "common" ? (
             <>
-              <p className="mb-4 text-meta text-fg-muted">
+              <p className="mb-4 text-caption text-fg-muted">
                 {sort === "review"
                   ? "复核线索按组内锚点、中心相似度和检测质量排序；这些数值不代表身份概率。"
                   : `人物 ${totalGroups.toLocaleString()} 组${filteredGroups > 0 ? ` · ${filteredGroups.toLocaleString()} 组只出现在合照中，见“合照候选”` : ""}`}
@@ -307,7 +307,7 @@ function PeopleList() {
           ) : null}
           {activeTab === "matches" ? (
             <>
-              <p className="mb-4 text-meta text-fg-muted">
+              <p className="mb-4 text-caption text-fg-muted">
                 每条建议都需要你打开照片确认后再合并。相似度、差值和照片数只描述当前模型的线索，不是身份概率。
               </p>
               {matches.isError ? (
@@ -352,7 +352,7 @@ function PeopleList() {
           ) : null}
           {activeTab === "groupPhotos" ? (
             <>
-              <p className="mb-4 text-meta text-fg-muted">
+              <p className="mb-4 text-caption text-fg-muted">
                 只在合照中出现的组单独列出。判定参考检测脸数与脸部相对画面尺寸；确认保留后会固定为独立人物，不会自动合并。
               </p>
               {groupPhotoCandidates.isError ? (
@@ -406,10 +406,10 @@ function PeopleTab({
       role="tab"
       aria-selected={active}
       onClick={onClick}
-      className={`rounded-full border px-4 py-2 text-meta transition-colors ${
+      className={`rounded-full border px-4 py-2 text-caption transition-colors ${
         active
-          ? "border-border-strong bg-bg-elevated text-fg"
-          : "border-border-faint text-fg-muted hover:text-fg"
+          ? "border-line-strong bg-bg-elevated text-fg"
+          : "border-line text-fg-muted hover:text-fg"
       }`}
     >
       {children}
@@ -466,10 +466,10 @@ function MatchSuggestionCard({
   onRetain: () => void;
 }) {
   return (
-    <article className="overflow-hidden rounded-xl border border-border-faint bg-bg-elevated">
+    <article className="overflow-hidden rounded-xl border border-line bg-bg-elevated">
       <div className="grid gap-4 p-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.6fr)]">
         <div>
-          <p className="mb-2 text-meta text-fg-muted">待确认的人物组</p>
+          <p className="mb-2 text-caption text-fg-muted">待确认的人物组</p>
           <PersonReviewImage person={item.source} />
           <Link
             className="mt-3 inline-block font-medium text-fg hover:underline"
@@ -477,7 +477,7 @@ function MatchSuggestionCard({
           >
             {item.source.name}
           </Link>
-          <p className="mt-1 text-meta text-fg-muted">
+          <p className="mt-1 text-caption text-fg-muted">
             {item.source.photoCount.toLocaleString()} 张照片 ·{" "}
             {item.source.faceCount.toLocaleString()} 张脸
           </p>
@@ -491,9 +491,9 @@ function MatchSuggestionCard({
           </button>
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-label text-fg">可能的匹配对象</h2>
+          <h2 className="font-display text-body text-fg">可能的匹配对象</h2>
           {item.candidates.length === 0 ? (
-            <p className="mt-3 rounded-lg bg-bg-subtle p-4 text-meta text-fg-muted">
+            <p className="mt-3 rounded-lg bg-bg-subtle p-4 text-caption text-fg-muted">
               当前没有达到提示门槛的候选。你可以先保留为独立人物，之后再从人物详情检查。
             </p>
           ) : (
@@ -501,7 +501,7 @@ function MatchSuggestionCard({
               {item.candidates.map((candidate) => (
                 <div
                   key={candidate.person.id}
-                  className="rounded-lg border border-border-faint p-3"
+                  className="rounded-lg border border-line p-3"
                 >
                   <div className="flex flex-wrap items-center gap-3">
                     <PersonReviewImage person={candidate.person} compact />
@@ -512,12 +512,12 @@ function MatchSuggestionCard({
                       >
                         {candidate.person.name}
                       </Link>
-                      <p className="mt-1 text-meta text-fg-muted">
+                      <p className="mt-1 text-caption text-fg-muted">
                         {candidate.person.photoCount.toLocaleString()} 张照片 ·
                         特征相似度 {candidate.similarity.toFixed(3)} · 差值{" "}
                         {candidate.margin.toFixed(3)}
                       </p>
-                      <p className="mt-1 text-meta text-fg-subtle">
+                      <p className="mt-1 text-caption text-fg-subtle">
                         跨照互证 {candidate.independentPhotoPairs} 对 ·
                         源/目标照片证据 {candidate.sourceEvidencePhotos}/
                         {candidate.targetEvidencePhotos}
@@ -581,7 +581,7 @@ function MatchRiskNote({ candidate }: { candidate: PersonMatchCandidate }) {
         ? "证据尚可，但仍有需要核对的地方。"
         : "跨照片证据较多；仍需你打开照片确认。";
   return (
-    <div className={`mt-1 text-meta ${tone}`}>
+    <div className={`mt-1 text-caption ${tone}`}>
       <p>{headline}</p>
       {candidate.riskReasons?.length ? (
         <ul className="mt-1 list-disc space-y-0.5 pl-4">
@@ -612,7 +612,7 @@ function MatchEvidenceStrip({
   const visible = expanded ? evidence : evidence.slice(0, 4);
   return (
     <div className="mt-3">
-      <p className="text-meta text-fg-muted">{label}</p>
+      <p className="text-caption text-fg-muted">{label}</p>
       <div className="mt-1 flex flex-wrap gap-2">
         {visible.map((item) => (
           <EvidenceThumbnail
@@ -659,7 +659,7 @@ function EvidenceThumbnail({ evidence }: { evidence: PersonMatchEvidence }) {
         />
       ) : null}
       {evidence.year ? (
-        <figcaption className="absolute bottom-0 left-0 right-0 bg-black/65 px-1 py-0.5 text-center text-meta text-white">
+        <figcaption className="absolute bottom-0 left-0 right-0 bg-black/65 px-1 py-0.5 text-center text-caption text-white">
           {evidence.year}
         </figcaption>
       ) : null}
@@ -678,18 +678,18 @@ function GroupPhotoCandidateCard({
 }) {
   const { person, stats } = candidate;
   return (
-    <article className="overflow-hidden rounded-xl border border-border-faint bg-bg-elevated">
+    <article className="overflow-hidden rounded-xl border border-line bg-bg-elevated">
       <Link className="group block" to={peopleRoute(person.id)}>
         <PersonReviewImage person={person} wide />
         <div className="p-4">
-          <h2 className="truncate font-display text-label text-fg">
+          <h2 className="truncate font-display text-body text-fg">
             {person.name}
           </h2>
-          <p className="mt-1 text-meta text-fg-muted">
+          <p className="mt-1 text-caption text-fg-muted">
             {person.photoCount.toLocaleString()} 张合照 ·{" "}
             {person.faceCount.toLocaleString()} 张脸
           </p>
-          <p className="mt-2 text-meta text-fg-subtle">
+          <p className="mt-2 text-caption text-fg-subtle">
             相对脸部尺寸 P10{" "}
             {stats.relativeFaceSizeP10 > 0
               ? `${(stats.relativeFaceSizeP10 * 100).toFixed(1)}%`
@@ -698,7 +698,7 @@ function GroupPhotoCandidateCard({
           </p>
         </div>
       </Link>
-      <div className="border-t border-border-faint p-4">
+      <div className="border-t border-line p-4">
         <button
           type="button"
           className="btn btn-sm btn-outline"
@@ -765,7 +765,7 @@ function PersonCard({
         {person.hidden ? " · 已隐藏" : ""}
       </p>
       {showQuality && person.quality ? (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-border-faint px-4 py-2 text-meta text-fg-muted">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-line px-4 py-2 text-caption text-fg-muted">
           <span>锚点 P10 {person.quality.anchorP10.toFixed(3)}</span>
           <span>中心 P10 {person.quality.centroidP10.toFixed(3)}</span>
           <span>检测 P10 {person.quality.detectionP10.toFixed(3)}</span>
@@ -975,7 +975,7 @@ function PersonAlbum({ personId }: { personId: string }) {
       </div>
       <div className="page-shell shrink-0 space-y-3 border-b border-line pb-3">
         {showPersonFaceBoxes ? (
-          <p className="flex items-center gap-2 text-meta text-fg-muted">
+          <p className="flex items-center gap-2 text-caption text-fg-muted">
             <span
               aria-hidden="true"
               className="h-4 w-4 shrink-0 rounded border-2 border-white bg-bg-subtle shadow-[0_0_0_2px_var(--overlay-bg)]"
@@ -996,7 +996,7 @@ function PersonAlbum({ personId }: { personId: string }) {
         </div>
         {faces.length > 0 ? (
           <details>
-            <summary className="cursor-pointer text-meta text-fg-muted">
+            <summary className="cursor-pointer text-caption text-fg-muted">
               拆分选中的人脸（当前已加载照片）
             </summary>
             <div className="mt-2 grid max-h-40 grid-cols-1 gap-x-4 gap-y-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
@@ -1007,7 +1007,7 @@ function PersonAlbum({ personId }: { personId: string }) {
                 return (
                   <label
                     key={face.key}
-                    className="flex items-center gap-2 truncate text-meta text-fg"
+                    className="flex items-center gap-2 truncate text-caption text-fg"
                   >
                     <input
                       type="checkbox"

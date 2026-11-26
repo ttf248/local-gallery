@@ -88,8 +88,8 @@ export default function FolderTree({ mode, selectedId, onSelect }: Props) {
 
   if (roots.length === 0) return null;
   return (
-    <nav aria-label="目录" className="library-tree">
-      <div className="library-tree__search">
+    <nav aria-label="目录" className="library-tree text-body">
+      <div className="library-tree__search flex items-center gap-1.5 h-8 [padding:0_4px_0_8px] mb-2 border border-line rounded-control bg-bg focus-within:border-signal focus-within:[outline:2px_solid_var(--signal)] focus-within:[outline-offset:1px] touch:min-h-11 touch:min-w-11">
         <SearchIcon size={13} className="shrink-0 text-fg-subtle" />
         <input
           type="search"
@@ -103,7 +103,7 @@ export default function FolderTree({ mode, selectedId, onSelect }: Props) {
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="library-tree__search-clear"
+            className="library-tree__search-clear inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-sm text-fg-subtle hover:bg-bg-subtle hover:text-fg touch:min-h-11 touch:min-w-11"
             aria-label="清除定位"
           >
             <CloseIcon size={12} />
@@ -121,7 +121,7 @@ export default function FolderTree({ mode, selectedId, onSelect }: Props) {
           }}
         />
       ) : (
-        <ul className="library-tree__list">
+        <ul className="library-tree__list [list-style:none] m-0 p-0">
           {roots.map((root) => (
             <TreeRoot
               key={root.id}
@@ -172,11 +172,11 @@ function TreeSearchResults({
     .map((item) => item.node);
 
   if (search.isLoading) {
-    return <p className="library-tree__hint">正在查找…</p>;
+    return <p className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">正在查找…</p>;
   }
   if (search.isError) {
     return (
-      <div className="library-tree__hint">
+      <div className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">
         <p role="alert" className="text-danger">
           查找失败。
         </p>
@@ -191,21 +191,21 @@ function TreeSearchResults({
     );
   }
   if (nodes.length === 0) {
-    return <p className="library-tree__hint">没有找到「{query}」。</p>;
+    return <p className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">没有找到「{query}」。</p>;
   }
 
   return (
-    <ul className="library-tree__list" data-testid="tree-search-results">
+    <ul className="library-tree__list [list-style:none] m-0 p-0" data-testid="tree-search-results">
       {nodes.map((node) => {
         const isFolder = node.kind === "collection";
         const label = node.displayName || node.name;
         return (
-          <li key={node.id} className="library-tree__item">
-            <div className="library-tree__row" style={{ paddingLeft: 8 }}>
-              <span className="library-tree__toggle library-tree__toggle--leaf" />
+          <li key={node.id} className="library-tree__item m-0">
+            <div className="library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-fg-muted hover:bg-bg-subtle hover:text-fg [&.is-active]:text-fg [&.is-active]:font-semibold [&.is-active]:bg-bg-elevated [&.is-active]:shadow-1" style={{ paddingLeft: 8 }}>
+              <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-fg-subtle hover:bg-bg-strong hover:text-fg touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
               <button
                 type="button"
-                className="library-tree__label"
+                className="library-tree__label flex items-center gap-[7px] flex-1 min-w-0 py-[3px] px-0 text-left text-body [color:inherit] touch:min-h-11 touch:min-w-11"
                 onClick={() => {
                   if (isFolder) {
                     onPickFolder(node.id);
@@ -217,7 +217,7 @@ function TreeSearchResults({
                 {isFolder ? <FolderIcon size={14} /> : <ImageIcon size={14} />}
                 <span className="truncate">{label}</span>
               </button>
-              <span className="library-tree__meta tabular-nums">
+              <span className="library-tree__meta shrink-0 text-caption text-fg-subtle tabular-nums">
                 {isFolder
                   ? `${node.albumCount ?? 0} ${albumCountUnit(mode)}`
                   : `${node.imageCount ?? 0} ${mediaUnit(mode)}`}
@@ -227,9 +227,9 @@ function TreeSearchResults({
         );
       })}
       {nodes.length >= SEARCH_LIMIT ? (
-        <li className="library-tree__hint">只列出了前 {SEARCH_LIMIT} 条。</li>
+        <li className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">只列出了前 {SEARCH_LIMIT} 条。</li>
       ) : null}
-      <li className="library-tree__hint">
+      <li className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">
         {mode === "comic" ? copy.albumTypeLabel : "相册"}点开是内容，
         {copy.collectionTypeLabel}点开是下一层。
       </li>
@@ -261,7 +261,7 @@ function TreeRoot({
 }) {
   const children = useFolderChildren(id, mode, expanded);
   return (
-    <li className="library-tree__item">
+    <li className="library-tree__item m-0">
       <TreeRow
         label={name}
         icon={<FolderIcon size={15} />}
@@ -315,7 +315,7 @@ function TreeCollection({
   const children = useFolderChildren(node.id, mode, expanded);
   const count = node.albumCount ?? 0;
   return (
-    <li className="library-tree__item">
+    <li className="library-tree__item m-0">
       <TreeRow
         label={node.displayName || node.name}
         icon={<FolderIcon size={15} />}
@@ -366,7 +366,7 @@ function TreeChildren({
   const navigate = useNavigate();
   if (items.length === 0) return null;
   return (
-    <ul className="library-tree__list">
+    <ul className="library-tree__list [list-style:none] m-0 p-0">
       {items.map((node) =>
         node.kind === "collection" ? (
           <TreeCollection
@@ -382,7 +382,7 @@ function TreeChildren({
             onToggleChild={onToggle}
           />
         ) : (
-          <li key={node.id} className="library-tree__item">
+          <li key={node.id} className="library-tree__item m-0">
             <TreeRow
               label={node.displayName || node.name}
               icon={<ImageIcon size={14} />}
@@ -432,7 +432,7 @@ function TreeChildrenContent({
     <>
       {error ? (
         <div className="flex flex-wrap items-center gap-2 py-2" style={indent}>
-          <span role="alert" className="text-meta text-danger">
+          <span role="alert" className="text-caption text-danger">
             目录读取失败。
           </span>
           <button
@@ -445,7 +445,7 @@ function TreeChildrenContent({
         </div>
       ) : null}
       {loading && items.length === 0 ? (
-        <p className="py-2 text-meta text-fg-muted" style={indent}>
+        <p className="py-2 text-caption text-fg-muted" style={indent}>
           正在读取目录…
         </p>
       ) : null}
@@ -488,28 +488,28 @@ function TreeRow({
 }) {
   return (
     <div
-      className={`library-tree__row${active ? " is-active" : ""}`}
+      className={`library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-fg-muted hover:bg-bg-subtle hover:text-fg [&.is-active]:text-fg [&.is-active]:font-semibold [&.is-active]:bg-bg-elevated [&.is-active]:shadow-1${active ? " is-active" : ""}`}
       style={{ paddingLeft: 8 + depth * 16 }}
     >
       {hasChildren ? (
         <button
           type="button"
-          className="library-tree__toggle"
+          className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-fg-subtle hover:bg-bg-strong hover:text-fg touch:min-h-11 touch:min-w-11"
           onClick={onToggle}
           aria-expanded={expanded}
           aria-label={expanded ? `收起 ${label}` : `展开 ${label}`}
         >
           <ChevronRightIcon
             size={13}
-            className={`library-tree__chevron${expanded ? " is-open" : ""}`}
+            className={`library-tree__chevron transition duration-2 [&.is-open]:[transform:rotate(90deg)]${expanded ? " is-open" : ""}`}
           />
         </button>
       ) : (
-        <span className="library-tree__toggle library-tree__toggle--leaf" />
+        <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-fg-subtle hover:bg-bg-strong hover:text-fg touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
       )}
       <button
         type="button"
-        className="library-tree__label"
+        className="library-tree__label flex items-center gap-[7px] flex-1 min-w-0 py-[3px] px-0 text-left text-body [color:inherit] touch:min-h-11 touch:min-w-11"
         onClick={onSelect}
         aria-current={active ? "location" : undefined}
       >
@@ -517,7 +517,7 @@ function TreeRow({
         <span className="truncate">{label}</span>
       </button>
       {meta ? (
-        <span className="library-tree__meta tabular-nums">{meta}</span>
+        <span className="library-tree__meta shrink-0 text-caption text-fg-subtle tabular-nums">{meta}</span>
       ) : null}
     </div>
   );

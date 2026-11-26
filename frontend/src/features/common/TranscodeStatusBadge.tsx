@@ -26,8 +26,8 @@ const TERMINAL_STATUS = new Set<TranscodeStatusValue>([
 // 角标文字是中文（「排队」「转码中」「转码失败」），所以字号不能压到 9px：
 // 9px 的汉字已经糊成一团，等于把状态藏起来。两档只差内边距，字号统一。
 const SIZE_CLASS = {
-  sm: "h-5 px-1.5 text-meta gap-1",
-  lg: "h-5 px-2 text-meta gap-1.5",
+  sm: "h-5 px-1.5 text-caption gap-1",
+  lg: "h-5 px-2 text-caption gap-1.5",
 } as const;
 
 // 状态 → 用户可见的简短文本 + 颜色
@@ -47,7 +47,7 @@ const STATUS_STYLE: Record<
   queued: { text: "排队", cls: "bg-bg-strong text-fg-muted" },
   running: { text: "转码中", cls: "bg-bg-strong text-fg" },
   // 危险色在深色主题里是浅红：字色跟着 token 走，不写死白色。
-  failed: { text: "转码失败", cls: "bg-danger text-danger-ink" },
+  failed: { text: "转码失败", cls: "bg-danger text-accent-contrast" },
   // pending：需要转码但还没开始（按需触发，播放时才启动）。
   // 这不是故障，不显示角标。
   pending: null,

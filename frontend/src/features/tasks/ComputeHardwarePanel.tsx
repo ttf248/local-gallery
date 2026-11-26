@@ -50,8 +50,8 @@ export default function ComputeHardwarePanel({
         />
         {saving && <span role="status">保存中…</span>}
       </SettingsRow>
-      <div className="tasks-section__body">
-        <p className="text-meta text-fg-subtle" role="status">
+      <div className="tasks-section__body mt-3">
+        <p className="text-caption text-fg-subtle" role="status">
           {statusLoading
             ? "正在检查本机 GPU 运行环境…"
             : gpuReady
@@ -61,22 +61,22 @@ export default function ComputeHardwarePanel({
                 : "未检测到可用的 NVIDIA CUDA 运行环境；GPU 模式下的模型任务会记录错误。"}
         </p>
         {saveError ? (
-          <p role="alert" className="mt-2 text-meta text-danger">
+          <p role="alert" className="mt-2 text-caption text-danger">
             硬件方案保存失败，请重试。
           </p>
         ) : null}
 
-        <details className="tasks-advanced">
-          <summary className="tasks-advanced__summary">
+        <details className="tasks-advanced border-t border-t-line">
+          <summary className="tasks-advanced__summary flex items-baseline gap-3 py-2.5 px-0 cursor-pointer text-body text-fg [list-style:none] [&::-webkit-details-marker]:hidden before:content-['▸'] before:text-micro before:text-fg-subtle [.tasks-advanced[open]>&::before]:content-['▾']">
             硬件与运行环境详情
           </summary>
-          <div className="tasks-advanced__body">
-            <p className="text-meta leading-relaxed text-fg-muted">
+          <div className="tasks-advanced__body [padding:2px_0_14px]">
+            <p className="text-caption leading-relaxed text-fg-muted">
               {gpuEnabled
                 ? "新建的向量、文字识别和人脸分析任务强制使用 NVIDIA GPU；GPU 不可用或推理失败时，任务会失败并记录原因，不会转用 CPU。已排队任务保留创建时的设备选择。照片元数据解析始终由 CPU 处理。"
                 : "新建的向量、文字识别和人脸分析任务使用 CPU 推理。已排队任务保留创建时的设备选择；照片元数据解析始终由 CPU 处理。"}
             </p>
-            <p className="mt-2 text-meta text-fg-subtle">
+            <p className="mt-2 text-caption text-fg-subtle">
               推理设备与模型状态在运行页的「高级信息」里；模型权重在「本机存储」页签。
             </p>
           </div>

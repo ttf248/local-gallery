@@ -57,7 +57,7 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
   return (
     <>
       {query.isLoading && (
-        <p role="status" className="text-fg-muted text-meta">
+        <p role="status" className="text-fg-muted text-caption">
           加载中…
         </p>
       )}
@@ -73,7 +73,7 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
       )}
       {node && (
         <>
-          <dl className="divide-y divide-border-faint">
+          <dl className="divide-y divide-line">
             <Field
               label="名称"
               value={node.virtual && node.location ? node.location : node.name}
@@ -153,7 +153,7 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
               <Field label="标签" value={node.tags.join(" · ")} />
             )}
           </dl>
-          <p className="text-meta text-fg-subtle">根据最近一次扫描记录展示。</p>
+          <p className="text-caption text-fg-subtle">根据最近一次扫描记录展示。</p>
         </>
       )}
     </>
@@ -165,7 +165,7 @@ function ImageProperties({ fileId }: { fileId: string }) {
   return (
     <>
       {loading && (
-        <p role="status" className="text-fg-muted text-meta">
+        <p role="status" className="text-fg-muted text-caption">
           加载中…
         </p>
       )}
@@ -177,7 +177,7 @@ function ImageProperties({ fileId }: { fileId: string }) {
         />
       )}
       {info && (
-        <dl className="divide-y divide-border-faint">
+        <dl className="divide-y divide-line">
           <Field label="文件名" value={info.name} copyable />
           <Field label="格式" value={info.format.toUpperCase()} />
           <Field label="尺寸" value={`${info.width} × ${info.height} px`} />
@@ -203,7 +203,7 @@ function LoadError({
 }) {
   return (
     <ErrorBanner
-      className="rounded-lg p-3 text-meta"
+      className="rounded-lg p-3 text-caption"
       onRetry={(event) => {
         // 重试会暂时移除错误提示，将焦点留在仍可操作的关闭按钮上。
         event.currentTarget
@@ -235,13 +235,13 @@ function Field({
        原先标签在上、值在下，八个字段把弹窗撑到近 600px 高，
        下面大半是空的；规格表本来就该横向扫读。 */
     <div className="flex items-start gap-4 py-1.5">
-      <dt className="w-20 shrink-0 text-meta font-medium text-fg-muted leading-6">
+      <dt className="w-20 shrink-0 text-caption font-medium text-fg-muted leading-6">
         {label}
       </dt>
       <dd className="flex-1 min-w-0 flex items-start gap-1.5">
         <span
           className={`break-all leading-6 ${
-            mono ? "font-mono text-meta text-fg-muted" : "text-body"
+            mono ? "font-mono text-caption text-fg-muted" : "text-body"
           }`}
         >
           {value}

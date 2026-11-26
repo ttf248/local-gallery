@@ -27,7 +27,7 @@ export const SMART_ALBUM_RECOMMENDATION_CAPTION_HEIGHT = 74;
  * 三倍，底边参差不齐、中间留洞。槽位固定成方形后每张卡一样高，行自然对齐。
  *
  * 槽位是方的，**照片不是被裁成方的**：照片按原比例完整放进槽里，空出来
- * 的地方用同一张照片放大虚化补齐（见 `components/album/SmartAlbumCover.tsx`）。
+ * 的地方用同一张照片放大虚化补齐（见 `features/album/SmartAlbumCover.tsx`）。
  * 早期版本用 object-cover 把照片裁成方形，竖幅照片因此被切掉上下大半。
  */
 export const SMART_ALBUM_COVER_SLOT_RATIO = 1;

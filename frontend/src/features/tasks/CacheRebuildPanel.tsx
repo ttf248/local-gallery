@@ -4,7 +4,6 @@ import { ApiError } from "../../api/client";
 import { cacheApi, type CacheRebuildScope } from "../../api/cache";
 import { useCacheRebuild } from "../../hooks/useCacheRebuild";
 import { useUIStore } from "../../store/uiStore";
-import "../../styles/tasks.css";
 
 /**
  * 预览图重建的档位宽度。
@@ -103,22 +102,22 @@ export default function CacheRebuildPanel() {
       : 0;
 
   return (
-    <section aria-labelledby="cache-rebuild-heading" className="tasks-section">
-      <div className="tasks-section__head">
+    <section aria-labelledby="cache-rebuild-heading" className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated">
+      <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="cache-rebuild-heading" className="tasks-section__title">
+          <h2 id="cache-rebuild-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
             缓存重建
           </h2>
         </div>
       </div>
-      <div className="tasks-section__body space-y-4">
+      <div className="tasks-section__body mt-3 space-y-4">
         <p className="text-body text-fg-muted">
           渲染图是懒生成的：清空之后要重新生成，否则第一次打开每一页都要现算，
           整页图片会卡住。重建在后台跑，有进度也能中途取消。
         </p>
 
         <fieldset className="space-y-2">
-          <legend className="text-meta text-fg-muted">要重建的缓存</legend>
+          <legend className="text-caption text-fg-muted">要重建的缓存</legend>
           <div className="flex flex-wrap gap-4">
             {(["thumbs", "previews"] as CacheRebuildScope[]).map((scope) => (
               <label key={scope} className="flex items-center gap-2 text-body">
@@ -132,7 +131,7 @@ export default function CacheRebuildPanel() {
               </label>
             ))}
           </div>
-          <p className="text-meta text-fg-muted">
+          <p className="text-caption text-fg-muted">
             预览图按 1280 宽生成，本机一万三千多项约合 3.3GB
             磁盘，只有确实需要大图时才值得。 冷重建按本机实测：缩略图约每秒 20
             张，预览图约每秒 10 张 —— 满库要十分钟到二十多分钟，
@@ -180,7 +179,7 @@ export default function CacheRebuildPanel() {
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <p className="text-meta text-fg-muted tabular-nums">
+            <p className="text-caption text-fg-muted tabular-nums">
               {progress.scopes.map((scope) => SCOPE_LABEL[scope]).join(" + ")}
               {" · "}
               {progress.done} / {progress.total}
@@ -193,7 +192,7 @@ export default function CacheRebuildPanel() {
 
         {rebuild.isComplete && (
           <p
-            className="text-meta text-success"
+            className="text-caption text-success"
             data-testid="cache-rebuild-done"
           >
             重建完成
@@ -201,14 +200,14 @@ export default function CacheRebuildPanel() {
           </p>
         )}
         {rebuild.isCancelled && (
-          <p className="text-meta text-fg-muted">重建已取消</p>
+          <p className="text-caption text-fg-muted">重建已取消</p>
         )}
         {rebuild.isError && (
-          <p className="text-meta text-danger">
+          <p className="text-caption text-danger">
             重建失败：{progress?.error ?? "未知错误"}
           </p>
         )}
-        {error && <p className="text-meta text-danger">{error}</p>}
+        {error && <p className="text-caption text-danger">{error}</p>}
       </div>
     </section>
   );

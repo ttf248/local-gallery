@@ -955,7 +955,7 @@ describe("PhotoAlbum", () => {
         pages: [
           {
             total: 0,
-            albumTotal: 0,
+            albumTotal: 7,
             photoTotal: 0,
             videoTotal: 0,
             items: [],
@@ -972,6 +972,7 @@ describe("PhotoAlbum", () => {
     } as never);
     renderPhotoAlbum(album, `/albums/${album.id}?personId=p_1`);
 
+    expect(screen.getByText("0 / 7 张")).toBeVisible();
     expect(
       screen.getByRole("heading", { name: "没有符合筛选条件的照片" }),
     ).toBeInTheDocument();

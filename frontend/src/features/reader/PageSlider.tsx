@@ -157,7 +157,7 @@ export default function PageSlider({
       );
 
   return (
-    <div className="relative h-11 flex items-center gap-3 px-3 sm:px-5 text-white/85 select-none scrim-bottom">
+    <div className="relative h-11 flex items-center gap-3 px-3 sm:px-5 text-white/85 select-none scrim-bottom [background-image:linear-gradient(to_top,rgba(0,0,0,0.88)_0%,rgba(0,0,0,0.88)_68%,rgba(0,0,0,0)_100%)]">
       {/* 缩略图条：拖拽时浮现 */}
       {showStrip && (
         <div
@@ -170,7 +170,7 @@ export default function PageSlider({
             return (
               <div
                 key={i}
-                className={`bg-overlay-panel border-2 rounded overflow-hidden shadow-lg transition-all ${
+                className={`bg-overlay-panel border-2 rounded overflow-hidden shadow-3 transition-all ${
                   isCenter
                     ? "border-white scale-105"
                     : "border-white/30 opacity-80"
@@ -193,7 +193,7 @@ export default function PageSlider({
               </div>
             );
           })}
-          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-meta text-white/75 tabular-nums">
+          <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-caption text-white/75 tabular-nums">
             第 {labelFor(scrubIndex)} / {total} 页
           </div>
         </div>
@@ -217,19 +217,19 @@ export default function PageSlider({
           }}
           onBlur={commit}
           autoFocus
-          className="w-12 h-7 px-1.5 text-center text-meta tabular-nums bg-overlay-panel/80 text-white rounded border border-overlay-border outline-none"
+          className="w-12 h-7 px-1.5 text-center text-caption tabular-nums bg-overlay-panel/80 text-white rounded border border-overlay-border outline-none"
           inputMode="numeric"
         />
       ) : (
         <button
           onClick={startEditing}
-          className="min-w-[44px] h-7 px-1.5 rounded text-meta tabular-nums text-white/85 hover:bg-white/10 transition-colors"
+          className="min-w-[44px] h-7 px-1.5 rounded text-caption tabular-nums text-white/85 hover:bg-white/10 transition-colors"
           title="跳转到指定页 (G)"
         >
           {pageLabel}
         </button>
       )}
-      <span className="text-white/70 text-meta tabular-nums">/ {total}</span>
+      <span className="text-white/70 text-caption tabular-nums">/ {total}</span>
 
       {/* 进度条 */}
       <div className="flex-1 relative h-9 flex items-center group">
@@ -245,7 +245,7 @@ export default function PageSlider({
           />
           {/* 拖动手柄 */}
           <div
-            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md transition-transform"
+            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-2 transition-transform"
             style={{
               left: `calc(${pct}% - 6px)`,
               transform:
@@ -258,8 +258,8 @@ export default function PageSlider({
       </div>
 
       {/* 快捷键提示 */}
-      <span className="text-meta text-white/55 hidden md:inline">
-        <kbd className="kbd-light">G</kbd> 跳转
+      <span className="text-caption text-white/55 hidden md:inline">
+        <kbd className="kbd-light inline-flex items-center font-mono text-caption leading-[1] py-0.5 px-[5px] rounded-sm [border:1px_solid_rgba(255,255,255,0.18)] [background:rgba(255,255,255,0.08)] [color:rgba(255,255,255,0.75)] min-w-[19px] justify-center">G</kbd> 跳转
       </span>
     </div>
   );

@@ -1,9 +1,4 @@
-@import "./legacy-tokens.css";
 @import "./components.css";
-@import "./primitives.css";
-@import "./features/shell.css";
-@import "./features/gallery.css";
-@import "./features/editorial-cards.css";
 
 @tailwind base;
 @tailwind components;
@@ -26,8 +21,8 @@ html {
   background: var(--bg);
   color: var(--fg);
   transition:
-    background var(--dur) var(--ease),
-    color var(--dur) var(--ease);
+    background var(--dur-2) var(--ease-standard),
+    color var(--dur-2) var(--ease-standard);
 }
 
 body {
@@ -52,8 +47,8 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: var(--radius-xs);
+  background: var(--line-strong);
+  border-radius: var(--radius-sm);
   border: 2px solid var(--bg);
 }
 @media (hover: hover) and (pointer: fine) {
@@ -115,8 +110,10 @@ button {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
-button:not(:disabled):active {
-  transform: translateY(0.5px);
+@media (prefers-reduced-motion: no-preference) {
+  button:not(:disabled):active {
+    transform: translateY(0.5px);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   html {

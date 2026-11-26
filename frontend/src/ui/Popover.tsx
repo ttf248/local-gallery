@@ -186,7 +186,7 @@ export default function Popover({
   const baseCls =
     tone === "reader"
       ? "min-w-[180px] bg-overlay-panel border border-overlay-border rounded-lg shadow-2xl p-1.5 text-body text-overlay-fg backdrop-blur-md"
-      : "min-w-[180px] bg-bg-elevated border border-border rounded-lg shadow-lg p-1.5 text-body";
+      : "min-w-[180px] bg-bg-elevated border border-line rounded-lg shadow-3 p-1.5 text-body";
   const enhancedTrigger = isValidElement(trigger)
     ? cloneElement(trigger as ReactElement<TriggerProps>, {
         "aria-haspopup": "menu",
@@ -229,7 +229,7 @@ export default function Popover({
                   transform: align === "end" ? "translateX(-100%)" : "none",
                   zIndex: 60,
                 }}
-                className={`${baseCls} ${tone === "theme" ? "ui-popover" : ""} ${className}`}
+                className={`${baseCls} ${tone === "theme" ? "ui-popover [&.timeline-filter-popover]:[backdrop-filter:blur(16px)_saturate(1.4)]" : ""} ${className}`}
               >
                 {children}
               </div>
@@ -296,7 +296,7 @@ export function PopoverSeparator() {
   const tone = useContext(PopoverToneContext);
   return (
     <div
-      className={`my-1 h-px ${tone === "reader" ? "bg-white/12" : "bg-border-faint"}`}
+      className={`my-1 h-px ${tone === "reader" ? "bg-white/12" : "bg-line"}`}
     />
   );
 }
@@ -306,7 +306,7 @@ export function PopoverLabel({ children }: { children: ReactNode }) {
   const tone = useContext(PopoverToneContext);
   return (
     <div
-      className={`px-2.5 pt-2 pb-1.5 text-meta font-medium ${
+      className={`px-2.5 pt-2 pb-1.5 text-caption font-medium ${
         tone === "reader" ? "text-white/50" : "text-fg-subtle"
       }`}
     >

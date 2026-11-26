@@ -47,8 +47,8 @@ export default function TravelTimeAxis({
 
   if (years.length === 0) {
     return (
-      <section aria-label="时间轴" className="travel-axis">
-        <p className="text-meta text-fg-muted">
+      <section aria-label="时间轴" className="travel-axis pt-1 pb-1.5">
+        <p className="text-caption text-fg-muted">
           这些照片没有拍摄时间，暂时画不出时间轴。
         </p>
       </section>
@@ -77,11 +77,11 @@ export default function TravelTimeAxis({
   };
 
   return (
-    <section aria-label="时间轴" className="travel-axis">
+    <section aria-label="时间轴" className="travel-axis pt-1 pb-1.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
-        <h2 className="font-display text-label font-medium text-fg">时间轴</h2>
+        <h2 className="font-display text-body font-medium text-fg">时间轴</h2>
         <div className="flex items-center gap-3">
-          <span className="text-meta text-fg-muted">
+          <span className="text-caption text-fg-muted">
             {isAll ? "全部时间" : `${from} – ${to}`}
           </span>
           {!isAll ? (
@@ -95,7 +95,7 @@ export default function TravelTimeAxis({
           ) : null}
         </div>
       </div>
-      <div className="travel-axis__track">
+      <div className="travel-axis__track flex items-end gap-[3px] h-[118px] pb-[1px] border-b border-b-line-strong overflow-x-auto [scrollbar-width:thin]">
         {years.map((bucket) => {
           const yearStart = `${bucket.year}-01`;
           const yearEnd = `${bucket.year}-12`;
@@ -112,14 +112,14 @@ export default function TravelTimeAxis({
               aria-pressed={selected}
               aria-label={`${bucket.year} 年，${bucket.count.toLocaleString()} 张照片`}
               onClick={(event) => pick(yearStart, yearEnd, event.shiftKey)}
-              className="travel-axis__year"
+              className="travel-axis__year flex flex-col items-center justify-end gap-[3px] [flex:1_1_0] min-w-11 [padding:6px_2px_4px] rounded-sm transition duration-2 hover:bg-bg-subtle touch:active:bg-bg-subtle aria-pressed:bg-accent-soft"
             >
-              <span className="travel-axis__count tabular-nums">
+              <span className="travel-axis__count text-caption text-fg-subtle tabular-nums [.travel-axis\_\_year[aria-pressed=true]_&]:text-fg tabular-nums">
                 {bucket.count.toLocaleString()}
               </span>
               <span
                 aria-hidden="true"
-                className="travel-axis__bar"
+                className="travel-axis__bar w-full rounded-[2px_2px_0_0] [background:color-mix(in_srgb,var(--accent)_30%,transparent)] [.travel-axis\_\_year[aria-pressed=true]_&]:bg-accent [.travel-axis\_\_month_&]:w-[60%] [.travel-axis\_\_month_&]:max-w-[18px]"
                 style={{
                   height: `${Math.max(
                     4,
@@ -127,7 +127,7 @@ export default function TravelTimeAxis({
                   )}px`,
                 }}
               />
-              <span className="text-meta tabular-nums text-fg-subtle">
+              <span className="text-caption tabular-nums text-fg-subtle">
                 {bucket.year}
               </span>
             </button>
@@ -135,7 +135,7 @@ export default function TravelTimeAxis({
         })}
       </div>
       {monthList.length > 0 ? (
-        <div className="travel-axis__months">
+        <div className="travel-axis__months flex items-end gap-1 h-14 mt-2.5 pt-1.5 border-t border-t-line overflow-x-auto">
           {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => {
             const key = `${singleYear}-${String(month).padStart(2, "0")}`;
             const entry = monthList.find((item) => item.month === key);
@@ -148,11 +148,11 @@ export default function TravelTimeAxis({
                 aria-pressed={selected}
                 aria-label={`${singleYear} 年 ${month} 月，${count.toLocaleString()} 张照片`}
                 onClick={(event) => pick(key, key, event.shiftKey)}
-                className="travel-axis__month"
+                className="travel-axis__month flex flex-col items-center justify-end gap-[3px] [flex:1_1_0] min-w-[34px] py-1 px-0.5 rounded-sm hover:bg-bg-subtle touch:active:bg-bg-subtle aria-pressed:bg-accent-soft"
               >
                 <span
                   aria-hidden="true"
-                  className="travel-axis__bar"
+                  className="travel-axis__bar w-full rounded-[2px_2px_0_0] [background:color-mix(in_srgb,var(--accent)_30%,transparent)] [.travel-axis\_\_year[aria-pressed=true]_&]:bg-accent [.travel-axis\_\_month_&]:w-[60%] [.travel-axis\_\_month_&]:max-w-[18px]"
                   style={{
                     height: `${Math.max(
                       3,
@@ -160,7 +160,7 @@ export default function TravelTimeAxis({
                     )}px`,
                   }}
                 />
-                <span className="text-meta tabular-nums text-fg-subtle">
+                <span className="text-caption tabular-nums text-fg-subtle">
                   {String(month).padStart(2, "0")}
                 </span>
               </button>
@@ -169,7 +169,7 @@ export default function TravelTimeAxis({
         </div>
       ) : null}
       {untimedCount > 0 ? (
-        <p className="mt-2 text-meta text-fg-subtle">
+        <p className="mt-2 text-caption text-fg-subtle">
           {untimedCount.toLocaleString()} 张照片没有拍摄时间，未计入时间轴。
         </p>
       ) : null}

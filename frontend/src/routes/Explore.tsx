@@ -39,13 +39,13 @@ export default function Explore() {
         }
       />
       {manifestQuery.isLoading && !manifest ? (
-        <section className="page-section" aria-live="polite">
+        <section className="page-section pt-[var(--section-gap)]" aria-live="polite">
           <p className="text-body text-fg-muted">正在读取照片库信息…</p>
         </section>
       ) : null}
 
       {manifestQuery.isError && !manifest ? (
-        <section className="page-section">
+        <section className="page-section pt-[var(--section-gap)]">
           <ErrorBanner
             onRetry={() => void manifestQuery.refetch()}
             retrying={manifestQuery.isFetching}
@@ -67,7 +67,7 @@ export default function Explore() {
       ) : null}
 
       {manifest && photoAlbumCount === 0 ? (
-        <section className="page-section">
+        <section className="page-section pt-[var(--section-gap)]">
           <EmptyState
             title="照片库还没有相册"
             description={

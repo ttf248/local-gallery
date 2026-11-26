@@ -1,3 +1,4 @@
+import { albumGridClass } from "./albumGridClass";
 import type { ViewMode } from "../../store/uiStore";
 
 interface Props {
@@ -49,7 +50,7 @@ export default function AlbumGridSkeleton({
           {Array.from({ length: rows }).map((_, i) => (
             <div
               key={i}
-              className="flex items-center gap-3.5 border-b border-border-faint h-16"
+              className="flex items-center gap-3.5 border-b border-line h-16"
             >
               <div className="w-14 h-[70px] rounded-md bg-bg-subtle shrink-0" />
               <div className="flex-1 min-w-0 space-y-2">
@@ -73,10 +74,10 @@ export default function AlbumGridSkeleton({
       <div
         aria-hidden="true"
         data-testid="album-skeleton-cards"
-        className="library-grid"
+        className={albumGridClass(false)}
       >
         {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className="album-tile min-w-0">
+          <div key={i} className="album-tile [html[data-mode=comic]_&]:p-0 [html[data-mode=comic]_&]:[border:none] [html[data-mode=comic]_&]:rounded-0 [html[data-mode=comic]_&]:bg-transparent [html[data-mode=comic]_&:hover]:shadow-none [html[data-mode=comic]_&:hover]:[transform:none] touch:[html[data-mode=comic]_&:active]:shadow-none touch:[html[data-mode=comic]_&:active]:[transform:none] min-w-0">
             <div className="relative aspect-[4/3] rounded-card bg-bg-subtle" />
             <div className="pt-3 space-y-2">
               <div className="h-3.5 w-3/4 rounded bg-bg-subtle" />

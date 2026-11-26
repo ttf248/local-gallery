@@ -98,14 +98,14 @@ export default function SmartAlbumRefreshPanel() {
   return (
     <section
       aria-labelledby="smart-album-refresh-heading"
-      className="tasks-section"
+      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated"
     >
-      <div className="tasks-section__head">
+      <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="smart-album-refresh-heading" className="tasks-section__title">
+          <h2 id="smart-album-refresh-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
             智能相册分组
           </h2>
-          <p className="tasks-section__desc">
+          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-fg-subtle max-w-[68ch]">
             按时间、地点、人物、场景分类并精选主题。只依据已完成的分析结果生成，原始照片保持不变。
           </p>
         </div>
@@ -139,7 +139,7 @@ export default function SmartAlbumRefreshPanel() {
         </div>
       </div>
 
-      <div className="tasks-section__body">
+      <div className="tasks-section__body mt-3">
         {running && progress ? (
           <div className="space-y-2" data-testid="smart-album-refresh-progress">
             <div
@@ -155,7 +155,7 @@ export default function SmartAlbumRefreshPanel() {
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <p className="text-meta tabular-nums text-fg-muted">
+            <p className="text-caption tabular-nums text-fg-muted">
               {`正在生成 ${progress.done} / ${progress.total}`}
               {progress.currentAlbumName
                 ? ` · ${progress.currentAlbumName} · ${
@@ -172,7 +172,7 @@ export default function SmartAlbumRefreshPanel() {
         {refresh.isComplete && progress ? (
           <p
             role="status"
-            className="text-meta text-success"
+            className="text-caption text-success"
             data-testid="smart-album-refresh-done"
           >
             {`上次生成完成 · ${stampLabel(progress.finishedAt)} · ${progress.albums} 个相册 · 重算 ${progress.rebuilt} · 复用 ${progress.reused} · ${progress.groups} 个分组 · 用时 ${Math.round(progress.elapsedMs / 1000)} 秒`}
@@ -180,25 +180,25 @@ export default function SmartAlbumRefreshPanel() {
         ) : null}
 
         {refresh.isCancelled ? (
-          <p role="status" className="text-meta text-fg-muted">
+          <p role="status" className="text-caption text-fg-muted">
             生成已取消
           </p>
         ) : null}
 
         {refresh.isError ? (
-          <p role="alert" className="text-meta text-danger">
+          <p role="alert" className="text-caption text-danger">
             {failureText(progress?.error)}
           </p>
         ) : null}
 
         {!running && !progress ? (
-          <p className="text-meta text-fg-subtle">
+          <p className="text-caption text-fg-subtle">
             还没有生成分组。分析完成后生成一次，首页与相册页就能按线索浏览。
           </p>
         ) : null}
 
         {error ? (
-          <p role="alert" className="mt-2 text-meta text-danger">
+          <p role="alert" className="mt-2 text-caption text-danger">
             {error}
           </p>
         ) : null}

@@ -46,7 +46,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           role="alert"
           className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center"
         >
-          <div className="text-page-sm font-semibold text-fg">
+          <div className="text-title-2 font-semibold text-fg">
             {this.props.title ?? "图像库加载异常"}
           </div>
           <div className="max-w-md text-body text-fg-muted">
@@ -55,7 +55,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           <button
             type="button"
             onClick={this.handleRetry}
-            className="rounded-md border border-border bg-bg-elevated px-4 py-2 text-body hover:bg-bg-subtle"
+            className="rounded-md border border-line bg-bg-elevated px-4 py-2 text-body hover:bg-bg-subtle"
           >
             重试
           </button>

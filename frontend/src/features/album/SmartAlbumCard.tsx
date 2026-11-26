@@ -47,10 +47,10 @@ export default function SmartAlbumCard({
   const source = [item.parentName, item.albumName].filter(Boolean).join(" / ");
 
   return (
-    <article className="h-full overflow-hidden rounded-xl bg-bg-elevated shadow-sm ring-1 ring-inset ring-border transition-shadow hover:shadow-md">
+    <article className="h-full overflow-hidden rounded-xl bg-bg-elevated shadow-1 ring-1 ring-inset ring-line transition-shadow hover:shadow-2">
       <Link
         to={smartGroupHref(item)}
-        className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+        className="group block h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
         aria-label={`打开智能相册 ${group.name}，来自 ${source}，${group.photoCount} 张照片`}
       >
         <div
@@ -63,18 +63,18 @@ export default function SmartAlbumCard({
             version={group.coverVersion}
             displayWidth={coverWidth}
           />
-          {/* 角标里是汉字：按字号阶梯，带汉字的角标走 --text-meta，
+          {/* 角标里是汉字：按字号阶梯，带汉字的角标走 --text-caption，
               不占 11.5px 那一档（那一档只给拉丁字母与数字）。
               压在照片上时用 --fg 而不是 --fg-muted：角标的底色是半透明的，
               遇到亮照片底色会被照片提亮，次要灰就压不住字了。 */}
           <span
-            className="absolute left-3 top-3 rounded-full border border-border/70 bg-bg/95 px-2 py-1 text-meta text-fg backdrop-blur-sm"
+            className="absolute left-3 top-3 rounded-full border border-line/70 bg-bg/95 px-2 py-1 text-caption text-fg"
             data-testid="smart-album-dimension"
           >
             {SMART_ALBUM_DIMENSION_LABELS[group.dimension] ?? group.dimension}
           </span>
           {group.overrideConflict && (
-            <span className="absolute right-3 top-3 rounded-full border border-warning/50 bg-bg/95 px-2 py-1 text-meta text-warning backdrop-blur-sm">
+            <span className="absolute right-3 top-3 rounded-full border border-warning/50 bg-bg/95 px-2 py-1 text-caption text-warning">
               修改待确认
             </span>
           )}
@@ -87,7 +87,7 @@ export default function SmartAlbumCard({
             {group.name}
           </h3>
           <p
-            className="mt-1 truncate text-meta leading-4 text-fg-muted"
+            className="mt-1 truncate text-caption leading-4 text-fg-muted"
             title={source}
           >
             {group.photoCount} 张 · {source}
@@ -99,7 +99,7 @@ export default function SmartAlbumCard({
               </span>
             ) : (
               <p
-                className="mt-1 truncate text-meta leading-4 text-fg-subtle"
+                className="mt-1 truncate text-caption leading-4 text-fg-subtle"
                 title={reasons.join(" · ")}
               >
                 {reasons.join(" · ")}

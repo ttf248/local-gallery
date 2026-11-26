@@ -83,17 +83,17 @@ export default function AutoSyncPanel() {
           onChange={(value) => void apply({ autoAnalyze: value })}
         />
       </SettingsRow>
-      <div className="settings-block">
+      <div className="settings-block py-3 px-0">
         <div>
           <span className="text-body text-fg">监听状态</span>
-          <span className="block mt-0.5 text-meta text-fg-muted">
+          <span className="block mt-0.5 text-caption text-fg-muted">
             {status
               ? describeWatchState(enabled, status.running, status.degraded)
               : "正在读取…"}
           </span>
         </div>
         {status && (
-          <dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-meta text-fg-muted">
+          <dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-caption text-fg-muted">
             <dt>监听目录</dt>
             <dd className="text-fg">
               {status.watchedDirs} / {status.maxWatchDirs}
@@ -113,7 +113,7 @@ export default function AutoSyncPanel() {
           </dl>
         )}
         {(failure || error) && (
-          <p className="mt-2 text-meta text-danger">{error || failure}</p>
+          <p className="mt-2 text-caption text-danger">{error || failure}</p>
         )}
       </div>
     </SettingsGroup>

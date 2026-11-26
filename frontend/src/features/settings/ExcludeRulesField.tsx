@@ -55,7 +55,7 @@ export default function ExcludeRulesField({
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col">
             <span className="text-fg">排除模式</span>
-            <span className="text-meta text-fg-subtle mt-0.5">
+            <span className="text-caption text-fg-subtle mt-0.5">
               一行一条,glob 匹配单个目录/文件名(任意深度)。例如
               <code className="font-mono mx-1 text-fg-muted">node_modules</code>
               <code className="font-mono mx-1 text-fg-muted">temp*</code>
@@ -72,14 +72,14 @@ export default function ExcludeRulesField({
           placeholder="node_modules&#10;temp*&#10;~$*"
           onChange={(e) => onPatternsChange(linesToList(e.target.value))}
           onBlur={onPatternsCommit}
-          className="mt-2 w-full bg-bg-subtle border border-border-faint rounded-md px-2.5 py-2 text-body font-mono focus:outline-none focus:border-accent resize-y min-h-[80px]"
+          className="mt-2 w-full bg-bg-subtle border border-line rounded-md px-2.5 py-2 text-body font-mono focus:outline-none focus:border-accent resize-y min-h-[80px]"
         />
       </div>
 
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-fg">跳过隐藏目录</span>
-          <span className="text-meta text-fg-subtle mt-0.5">
+          <span className="text-caption text-fg-subtle mt-0.5">
             任何以 <code className="font-mono text-fg-muted">.</code>{" "}
             开头的子目录(. <code className="font-mono text-fg-muted">.git</code>{" "}
             / <code className="font-mono text-fg-muted">.cache</code> 等)
@@ -100,7 +100,7 @@ export default function ExcludeRulesField({
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col">
             <span className="text-fg">额外的系统白名单</span>
-            <span className="text-meta text-fg-subtle mt-0.5">
+            <span className="text-caption text-fg-subtle mt-0.5">
               在内置 <code className="font-mono text-fg-muted">Thumbs.db</code>{" "}
               / <code className="font-mono text-fg-muted">desktop.ini</code> /{" "}
               <code className="font-mono text-fg-muted">.DS_Store</code>{" "}
@@ -117,7 +117,7 @@ export default function ExcludeRulesField({
           placeholder=".Spotlight-V100&#10;~$*"
           onChange={(e) => onSystemFilesChange(linesToList(e.target.value))}
           onBlur={onSystemFilesCommit}
-          className="mt-2 w-full bg-bg-subtle border border-border-faint rounded-md px-2.5 py-2 text-body font-mono focus:outline-none focus:border-accent resize-y min-h-[60px]"
+          className="mt-2 w-full bg-bg-subtle border border-line rounded-md px-2.5 py-2 text-body font-mono focus:outline-none focus:border-accent resize-y min-h-[60px]"
         />
       </div>
     </div>

@@ -152,17 +152,17 @@ export default function PhotoCompare({
           <CloseIcon size={16} />
         </button>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-display text-label font-semibold text-white/95">
+          <div className="truncate font-display text-body font-semibold text-white/95">
             并排对比
           </div>
-          <div className="text-meta text-white/55">
+          <div className="text-caption text-white/55">
             两侧同一档放大，细节可比
           </div>
         </div>
         <button
           type="button"
           onClick={onSwap}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-meta text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-caption text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           title="交换左右 (X)"
         >
           <ArrowsIcon size={14} />
@@ -199,7 +199,7 @@ export default function PhotoCompare({
           >
             <MinusIcon size={15} />
           </button>
-          <span className="w-14 text-center text-meta tabular-nums text-white/75">
+          <span className="w-14 text-center text-caption tabular-nums text-white/75">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -379,22 +379,22 @@ function ComparePane({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2 border-t border-white/10 px-3 py-2">
-        <span className="truncate text-meta text-white/85" title={item.name}>
+        <span className="truncate text-caption text-white/85" title={item.name}>
           {item.name}
         </span>
         {source.width > 0 && (
-          <span className="shrink-0 text-badge tabular-nums text-white/50">
+          <span className="shrink-0 text-micro tabular-nums text-white/50">
             {source.width}×{source.height}
           </span>
         )}
         {item.albumName && (
-          <span className="hidden shrink-0 truncate text-badge text-white/45 sm:inline">
+          <span className="hidden shrink-0 truncate text-micro text-white/45 sm:inline">
             {item.albumName}
           </span>
         )}
         {picked && (
           <span
-            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-badge text-white/90"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-micro text-white/90"
             title="这张照片在精选里"
           >
             <PickIcon size={11} />

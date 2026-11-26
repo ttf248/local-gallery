@@ -80,13 +80,13 @@ export default function DirectoryPicker({
   }, [initialDirectory, browse]);
 
   const buttonClass =
-    "h-8 px-3 rounded-md border border-border-faint text-meta text-fg-muted hover:text-fg hover:bg-bg-subtle disabled:opacity-40";
+    "h-8 px-3 rounded-md border border-line text-caption text-fg-muted hover:text-fg hover:bg-bg-subtle disabled:opacity-40";
   return (
     <dialog
       ref={dialogRef}
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 m-auto w-[640px] max-w-[94vw] max-h-[85dvh] overflow-hidden rounded-xl border border-border bg-bg-elevated p-0 text-fg shadow-lg backdrop:bg-overlay-scrim backdrop:backdrop-blur-[2px]"
+      className="fixed inset-0 m-auto w-[640px] max-w-[94vw] max-h-[85dvh] overflow-hidden rounded-xl border border-line bg-bg-elevated p-0 text-fg shadow-3 backdrop:bg-overlay-scrim backdrop:backdrop-blur-[2px]"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -115,7 +115,7 @@ export default function DirectoryPicker({
       onContextMenu={(event) => event.stopPropagation()}
     >
       <div className="flex h-[min(560px,85dvh)] flex-col">
-        <header className="flex items-center justify-between px-5 h-12 shrink-0 border-b border-border-faint">
+        <header className="flex items-center justify-between px-5 h-12 shrink-0 border-b border-line">
           <h2 id={titleId} className="text-body font-medium">
             选择目录
           </h2>
@@ -142,7 +142,7 @@ export default function DirectoryPicker({
               aria-label="目录路径"
               value={address}
               onChange={(event) => setAddress(event.target.value)}
-              className="min-w-0 flex-1 h-8 px-2.5 rounded-md border border-border-faint bg-bg-subtle font-mono text-body focus:outline-none focus:border-accent"
+              className="min-w-0 flex-1 h-8 px-2.5 rounded-md border border-line bg-bg-subtle font-mono text-body focus:outline-none focus:border-accent"
             />
             <button type="submit" className={buttonClass}>
               前往
@@ -175,12 +175,12 @@ export default function DirectoryPicker({
               </button>
             ))}
           </nav>
-          <p className="text-meta text-fg-subtle">
+          <p className="text-caption text-fg-subtle">
             打开文件夹浏览，确认后使用当前目录。
           </p>
         </div>
         <div
-          className="min-h-0 flex-1 overflow-y-auto m-5 border border-border-faint rounded-md"
+          className="min-h-0 flex-1 overflow-y-auto m-5 border border-line rounded-md"
           aria-busy={loading}
         >
           {error && (
@@ -192,7 +192,7 @@ export default function DirectoryPicker({
             </ErrorBanner>
           )}
           {page && (
-            <ul aria-label="子目录" className="divide-y divide-border-faint">
+            <ul aria-label="子目录" className="divide-y divide-line">
               {page.items.map((item) => (
                 <li key={item.path}>
                   <button
@@ -208,19 +208,19 @@ export default function DirectoryPicker({
             </ul>
           )}
           {loading && (
-            <p role="status" className="p-4 text-meta text-fg-muted">
+            <p role="status" className="p-4 text-caption text-fg-muted">
               读取目录中…
             </p>
           )}
           {!loading && !error && page?.items.length === 0 && (
-            <p className="p-4 text-meta text-fg-muted">
+            <p className="p-4 text-caption text-fg-muted">
               没有子目录，可以使用当前目录。
             </p>
           )}
           {page?.nextAfter && !loading && !error && (
             <button
               type="button"
-              className="w-full p-3 text-meta text-accent hover:bg-bg-subtle"
+              className="w-full p-3 text-caption text-accent hover:bg-bg-subtle"
               onClick={() => void browse(page.directory, page.nextAfter)}
             >
               加载更多目录
@@ -235,7 +235,7 @@ export default function DirectoryPicker({
             type="button"
             disabled={loading || !page || address !== page.directory}
             onClick={() => page && onPick(page.directory)}
-            className="h-8 px-3 rounded-md bg-accent text-accent-contrast text-meta disabled:opacity-40"
+            className="h-8 px-3 rounded-md bg-accent text-accent-contrast text-caption disabled:opacity-40"
           >
             使用此目录
           </button>

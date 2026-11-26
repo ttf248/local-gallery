@@ -75,13 +75,13 @@ export default function JobHistoryPanel({
   }
 
   return (
-    <section className="tasks-section" aria-labelledby="task-history-heading">
-      <div className="tasks-section__head">
+    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated" aria-labelledby="task-history-heading">
+      <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="task-history-heading" className="tasks-section__title">
+          <h2 id="task-history-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
             任务记录
           </h2>
-          <p className="tasks-section__desc">
+          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-fg-subtle max-w-[68ch]">
             每次已结束的任务的耗时、产出与失败原因都在这里。删除记录只清理任务日志，
             不会删除已生成的元数据、向量、文字或人脸结果。
           </p>
@@ -98,7 +98,7 @@ export default function JobHistoryPanel({
         ) : null}
       </div>
 
-      <div className="tasks-section__body">
+      <div className="tasks-section__body mt-3">
         {jobs.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 pb-3">
             {HISTORY_FILTERS.map(({ value, label }) => (
@@ -131,14 +131,14 @@ export default function JobHistoryPanel({
             }
           />
         ) : (
-          <div className="tasks-list">
+          <div className="tasks-list border-t border-t-line">
             {visibleJobs.map((job) => (
               <details
                 key={job.id}
                 onToggle={(event) =>
                   handleToggle(job.id, event.currentTarget.open)
                 }
-                className="group border-t border-border-faint first:border-t-0"
+                className="group border-t border-line first:border-t-0"
                 data-testid="task-history-row"
                 data-job-id={job.id}
               >
@@ -150,17 +150,17 @@ export default function JobHistoryPanel({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="text-label font-medium text-fg">
+                      <span className="text-body font-medium text-fg">
                         {taskTitle(job)}
                       </span>
-                      <span className="text-meta text-fg-muted">
+                      <span className="text-caption text-fg-muted">
                         {taskModeLabel(job.mode)}
                       </span>
-                      <span className="text-meta text-fg-subtle">
+                      <span className="text-caption text-fg-subtle">
                         {taskStatusLabel(job.status)}
                       </span>
                     </div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-meta text-fg-subtle">
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-caption text-fg-subtle">
                       <span>{formatDateTime(job.createdAt)}</span>
                       <span>耗时 {formatTaskDuration(job.elapsedMs)}</span>
                       <span className="tabular-nums">
@@ -187,7 +187,7 @@ export default function JobHistoryPanel({
                   />
                 </summary>
 
-                <div className="border-t border-border-faint pb-4 pt-4">
+                <div className="border-t border-line pb-4 pt-4">
                   <dl className="grid max-w-2xl gap-x-8 sm:grid-cols-2">
                     <SpecRow
                       label="开始"
@@ -220,7 +220,7 @@ export default function JobHistoryPanel({
                   </dl>
 
                   {job.error ? (
-                    <p className="mt-3 text-meta text-danger">
+                    <p className="mt-3 text-caption text-danger">
                       任务原因：{job.error}
                     </p>
                   ) : null}
@@ -234,7 +234,7 @@ export default function JobHistoryPanel({
 
                   {job.errors && job.errors.length > 0 ? (
                     <div className="mt-4">
-                      <p className="mb-2 text-meta font-medium text-fg">
+                      <p className="mb-2 text-caption font-medium text-fg">
                         失败文件
                       </p>
                       <FailureGroupList errors={job.errors} />
@@ -307,13 +307,13 @@ function SpecRow({
 }) {
   return (
     <div
-      className={`flex items-baseline justify-between gap-4 border-b border-border-faint py-1.5 ${fullWidth ? "sm:col-span-2" : ""}`}
+      className={`flex items-baseline justify-between gap-4 border-b border-line py-1.5 ${fullWidth ? "sm:col-span-2" : ""}`}
     >
-      <dt className="shrink-0 whitespace-nowrap text-meta text-fg-subtle">
+      <dt className="shrink-0 whitespace-nowrap text-caption text-fg-subtle">
         {label}
       </dt>
       <dd
-        className={`min-w-0 font-mono text-meta tabular-nums text-fg ${fullWidth ? "break-all text-right" : ""}`}
+        className={`min-w-0 font-mono text-caption tabular-nums text-fg ${fullWidth ? "break-all text-right" : ""}`}
       >
         {value}
       </dd>
@@ -334,11 +334,11 @@ function OutputBreakdown({ job }: { job: AIJob }) {
 
   return (
     <div className="mt-4">
-      <p className="text-meta font-medium text-fg">产出明细</p>
+      <p className="text-caption font-medium text-fg">产出明细</p>
       <div className="mt-2 space-y-1.5">
         {results.length > 0 ? (
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-            <span className="text-meta text-fg-subtle">
+            <span className="text-caption text-fg-subtle">
               {job.type === "metadata" ? "解析结果" : "处理结果"}
             </span>
             {results.map(([key, value]) => (
@@ -352,7 +352,7 @@ function OutputBreakdown({ job }: { job: AIJob }) {
         ) : null}
         {fields.length > 0 ? (
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-            <span className="text-meta text-fg-subtle">提取字段</span>
+            <span className="text-caption text-fg-subtle">提取字段</span>
             {fields.map(([key, value]) => (
               <CountChip
                 key={`field-${key}`}
@@ -369,7 +369,7 @@ function OutputBreakdown({ job }: { job: AIJob }) {
 
 function CountChip({ label, value }: { label: string; value: number }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border-faint px-2.5 py-1 text-meta">
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-caption">
       <span className="text-fg-subtle">{label}</span>
       <span className="font-mono tabular-nums text-fg">
         {formatCount(value)}

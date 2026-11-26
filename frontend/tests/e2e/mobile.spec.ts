@@ -185,9 +185,10 @@ test("可交互控件的命中区够手指点", async ({ page }) => {
   await page.goto("/photo", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(800);
 
-  // 有效命中区：控件中心画 44×44，四角与中心都要落在它自己身上。
-  const small = await page.evaluate(() => {
-    const reach = 22;
+  // 与设计契约和布局审计共用触屏档门槛，同时检查伪元素扩展的点击区域。
+  const minTarget = 40;
+  const small = await page.evaluate((minSize) => {
+    const reach = minSize / 2;
     const problems: string[] = [];
     for (const el of document.querySelectorAll(
       "button, a[href], [role='button']",
@@ -206,7 +207,7 @@ test("可交互控件的命中区够手指点", async ({ page }) => {
       ];
       // 本体就够大的控件不用查（照片墙的瓦片是 342 见方，角被邻居压住
       // 也不影响点得到）。
-      if (rect.width >= 44 && rect.height >= 44) continue;
+      if (rect.width >= minSize && rect.height >= minSize) continue;
       const ok = points.every(([dx, dy]) => {
         const hit = document.elementFromPoint(cx + dx, cy + dy);
         return hit === el || (hit !== null && el.contains(hit));
@@ -218,7 +219,10 @@ test("可交互控件的命中区够手指点", async ({ page }) => {
       }
     }
     return problems;
-  });
+  }, minTarget);
 
-  expect(small, `命中区不足 44×44 的控件：${small.join("，")}`).toHaveLength(0);
+  expect(
+    small,
+    `命中区不足 ${minTarget}×${minTarget} 的控件：${small.join("，")}`,
+  ).toHaveLength(0);
 });

@@ -201,7 +201,7 @@ scripts\install-ffmpeg.bat
 | frontend/ | npm run typecheck | TypeScript 检查（含测试文件） |
 | frontend/ | npm run build | 应用工程类型检查与生产构建 |
 | frontend/ | npm run test:e2e | 独立临时媒体库的全栈浏览器测试 |
-| frontend/ | npm run audit:layout | 当前布局回归门禁：溢出、容器与对齐、文字/控件尺寸、命中区、抽屉与键盘可达性 |
+| frontend/ | npm run audit:layout | 当前布局回归门禁：溢出、容器变体与外壳尺寸、文字/控件尺寸、命中区、抽屉与键盘可达性 |
 | frontend/ | npm run audit:contrast | 对比度审计：明暗主题下的文本与图标对比度 |
 | frontend/ | npm run audit:size | 首屏体积审计（`-- --dist` 只量构建产物） |
 | frontend/ | npm run shot | 多断点、明暗主题截图，产物在 `.smoke/` 不入库 |
@@ -222,7 +222,7 @@ backend/
   aiworker/           本机 AI Worker、依赖与环境安装脚本
   internal/           配置、资源索引、媒体服务、API 与 JSON 存储
 frontend/
-  src/                React 页面、API、hooks、store 与界面组件
+  src/                routes 页面、ui 原语、shell 外壳、features 业务界面，以及 API、hooks 与 store
   tests/e2e/          Playwright 全栈测试
 scripts/              BAT 入口与跨平台 E2E 辅助脚本
 docs/                 产品契约、API、架构、快捷键、设计与发布文档

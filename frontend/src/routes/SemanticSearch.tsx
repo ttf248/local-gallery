@@ -208,7 +208,7 @@ export default function SemanticSearch() {
         </div>
         <section className="page-shell mt-5">
           <form
-            className="rounded-xl border border-border bg-bg-elevated p-4 shadow-xs sm:p-5"
+            className="rounded-xl border border-line bg-bg-elevated p-4 shadow-1 sm:p-5"
             onSubmit={onSubmit}
           >
             {/* 检索框、搜索方式与提交按钮在同一行：输入框不必横跨整张
@@ -232,7 +232,7 @@ export default function SemanticSearch() {
                 /* 输入框与提交按钮是一组：窄屏上整组换到下一行，
                    输入框不会被挤成一个字的宽。 */
                 <div className="flex min-w-0 flex-1 basis-56 items-center gap-2">
-                  <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-border bg-bg focus-within:border-focus focus-within:ring-2 focus-within:ring-focus/20">
+                  <div className="flex h-10 min-w-0 flex-1 items-center rounded-lg border border-line bg-bg focus-within:border-signal focus-within:ring-2 focus-within:ring-signal/20">
                     <label className="sr-only" htmlFor="semantic-search-query">
                       搜索内容
                     </label>
@@ -252,15 +252,15 @@ export default function SemanticSearch() {
             </div>
 
             {mode === "text" ? (
-              <p className="mt-2 text-meta text-fg-subtle">{textHelp}</p>
+              <p className="mt-2 text-caption text-fg-subtle">{textHelp}</p>
             ) : (
-              <div className="mt-4 rounded-lg border border-dashed border-border-strong bg-bg-subtle px-4 py-4">
+              <div className="mt-4 rounded-lg border border-dashed border-line-strong bg-bg-subtle px-4 py-4">
                 {similarResourceId ? (
                   <p className="text-body text-fg">
                     正在用当前照片查找相似图片。
                     <button
                       type="button"
-                      className="ml-2 text-meta text-fg-muted underline underline-offset-2"
+                      className="ml-2 text-caption text-fg-muted underline underline-offset-2"
                       onClick={() => setSimilarResourceId("")}
                     >
                       改为上传图片
@@ -277,22 +277,22 @@ export default function SemanticSearch() {
                         setImageFile(event.target.files?.[0])
                       }
                     />
-                    <span className="min-w-0 truncate text-meta text-fg-muted">
+                    <span className="min-w-0 truncate text-caption text-fg-muted">
                       {imageFile?.name ?? "支持常见图片格式，单张不超过 64 MiB"}
                     </span>
                   </label>
                 )}
-                <label className="mt-4 block text-meta text-fg-muted">
+                <label className="mt-4 block text-caption text-fg-muted">
                   <span className="mb-1.5 block">图片文字筛选（可选）</span>
                   <input
                     value={imageOCRText}
                     onChange={(event) => setImageOCRText(event.target.value)}
                     maxLength={200}
                     placeholder="例如：照片里的招牌或日期"
-                    className="h-10 w-full rounded-md border border-border bg-bg px-3 text-body text-fg placeholder:text-fg-subtle"
+                    className="h-10 w-full rounded-md border border-line bg-bg px-3 text-body text-fg placeholder:text-fg-subtle"
                   />
                 </label>
-                <p className="mt-1.5 text-meta text-fg-subtle">
+                <p className="mt-1.5 text-caption text-fg-subtle">
                   需先运行文字识别；不需要 Chinese-CLIP。
                 </p>
                 <div className="mt-4">{submitButton}</div>
@@ -305,7 +305,7 @@ export default function SemanticSearch() {
                 aria-expanded={advancedOpen}
                 aria-controls="semantic-advanced-filters"
                 onClick={() => setAdvancedOpen((open) => !open)}
-                className="flex min-h-10 w-full items-center justify-between rounded-lg border border-border-faint bg-bg-subtle px-3 text-left text-meta font-medium text-fg hover:bg-bg-strong sm:w-auto sm:min-w-64"
+                className="flex min-h-10 w-full items-center justify-between rounded-lg border border-line bg-bg-subtle px-3 text-left text-caption font-medium text-fg hover:bg-bg-strong sm:w-auto sm:min-w-64"
               >
                 <span>高级筛选</span>
                 <span className="flex items-center gap-2 text-fg-muted">
@@ -318,15 +318,15 @@ export default function SemanticSearch() {
               {advancedOpen ? (
                 <div
                   id="semantic-advanced-filters"
-                  className="mt-3 rounded-lg border border-border-faint bg-bg-subtle/60 p-3"
+                  className="mt-3 rounded-lg border border-line bg-bg-subtle/60 p-3"
                 >
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <label className="min-w-0 text-meta text-fg-muted">
+                    <label className="min-w-0 text-caption text-fg-muted">
                       <span className="mb-1.5 block">限定相册</span>
                       {album ? (
                         <button
                           type="button"
-                          className="flex h-10 w-full items-center justify-between rounded-md border border-border bg-bg px-3 text-left text-body text-fg"
+                          className="flex h-10 w-full items-center justify-between rounded-md border border-line bg-bg px-3 text-left text-body text-fg"
                           onClick={() => {
                             setAlbum(undefined);
                             setAlbumText("");
@@ -345,7 +345,7 @@ export default function SemanticSearch() {
                           value={albumText}
                           onChange={(event) => setAlbumText(event.target.value)}
                           placeholder="输入相册名搜索"
-                          className="h-10 w-full rounded-md border border-border bg-bg px-3 text-body text-fg placeholder:text-fg-subtle"
+                          className="h-10 w-full rounded-md border border-line bg-bg px-3 text-body text-fg placeholder:text-fg-subtle"
                         />
                       )}
                       {!album &&
@@ -366,7 +366,7 @@ export default function SemanticSearch() {
                             </button>
                           ))}
                     </label>
-                    <label className="text-meta text-fg-muted">
+                    <label className="text-caption text-fg-muted">
                       <span className="mb-1.5 block">拍摄年份</span>
                       <input
                         inputMode="numeric"
@@ -377,15 +377,15 @@ export default function SemanticSearch() {
                           )
                         }
                         placeholder="例如 2024"
-                        className="h-10 w-full rounded-md border border-border bg-bg px-3 text-body text-fg placeholder:text-fg-subtle"
+                        className="h-10 w-full rounded-md border border-line bg-bg px-3 text-body text-fg placeholder:text-fg-subtle"
                       />
                     </label>
-                    <label className="text-meta text-fg-muted">
+                    <label className="text-caption text-fg-muted">
                       <span className="mb-1.5 block">拍摄地点</span>
                       <select
                         value={adcode}
                         onChange={(event) => setAdcode(event.target.value)}
-                        className="h-10 w-full rounded-md border border-border bg-bg px-3 text-body text-fg"
+                        className="h-10 w-full rounded-md border border-line bg-bg px-3 text-body text-fg"
                       >
                         <option value="">所有地点</option>
                         {provincePlaces.length > 0 ? (
@@ -410,12 +410,12 @@ export default function SemanticSearch() {
                         ) : null}
                       </select>
                     </label>
-                    <label className="text-meta text-fg-muted">
+                    <label className="text-caption text-fg-muted">
                       <span className="mb-1.5 block">人物</span>
                       <select
                         value={personId}
                         onChange={(event) => setPersonId(event.target.value)}
-                        className="h-10 w-full rounded-md border border-border bg-bg px-3 text-body text-fg"
+                        className="h-10 w-full rounded-md border border-line bg-bg px-3 text-body text-fg"
                       >
                         <option value="">所有人物</option>
                         {(peopleQuery.data?.people ?? []).map((person) => (
@@ -428,7 +428,7 @@ export default function SemanticSearch() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-meta text-fg-muted">
+                    <label className="flex items-center gap-2 text-caption text-fg-muted">
                       <input
                         type="checkbox"
                         checked={favoriteOnly}
@@ -438,7 +438,7 @@ export default function SemanticSearch() {
                       />
                       仅来自收藏相册
                     </label>
-                    <label className="flex items-center gap-2 text-meta text-fg-muted">
+                    <label className="flex items-center gap-2 text-caption text-fg-muted">
                       <input
                         type="checkbox"
                         checked={pickedOnly}
@@ -455,7 +455,7 @@ export default function SemanticSearch() {
           </form>
 
           {statusQuery.isError && usesSemanticSearch ? (
-            <p role="alert" className="mt-2 text-meta text-danger">
+            <p role="alert" className="mt-2 text-caption text-danger">
               本机 AI 状态读取失败，请检查后端服务。
             </p>
           ) : null}

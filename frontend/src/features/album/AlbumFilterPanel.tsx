@@ -26,7 +26,7 @@ interface Props {
 /** 一段标题：说明这一段管的是什么。 */
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-0.5 pb-1.5 pt-3 text-meta font-medium text-fg-subtle first:pt-0">
+    <div className="px-0.5 pb-1.5 pt-3 text-caption font-medium text-fg-subtle first:pt-0">
       {children}
     </div>
   );
@@ -35,7 +35,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 /** 一句说明：这一段现在为什么不能用。 */
 function Reason({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-0.5 py-1 text-meta leading-relaxed text-fg-subtle">
+    <p className="px-0.5 py-1 text-caption leading-relaxed text-fg-subtle">
       {children}
     </p>
   );
@@ -112,10 +112,10 @@ export default function AlbumFilterPanel({
   return (
     <div>
       <div className="flex items-center justify-between pb-1">
-        <span className="text-label text-fg">筛选照片</span>
+        <span className="text-body text-fg">筛选照片</span>
         <button
           type="button"
-          className="btn-text text-meta text-fg-muted hover:text-fg"
+          className="btn-text text-caption text-fg-muted hover:text-fg"
           onClick={onClear}
         >
           清除全部
@@ -156,7 +156,7 @@ export default function AlbumFilterPanel({
                     <button
                       type="button"
                       onClick={() => selectYear(year)}
-                      className={`flex-1 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
+                      className={`flex-1 rounded-md px-2 py-1.5 text-left text-caption transition-colors ${
                         selected
                           ? "bg-accent/12 text-accent"
                           : "text-fg hover:bg-bg-subtle"
@@ -194,7 +194,7 @@ export default function AlbumFilterPanel({
                             type="button"
                             onClick={() => selectMonth(bucket.month)}
                             aria-pressed={active}
-                            className={`rounded-md px-2 py-1 text-meta tabular-nums transition-colors ${
+                            className={`rounded-md px-2 py-1 text-caption tabular-nums transition-colors ${
                               active
                                 ? "bg-accent/12 text-accent"
                                 : inRange
@@ -228,7 +228,7 @@ export default function AlbumFilterPanel({
                   type="button"
                   onClick={() => togglePerson(person.id)}
                   aria-pressed={active}
-                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
+                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-caption transition-colors ${
                     active
                       ? "bg-accent/12 text-accent"
                       : "text-fg hover:bg-bg-subtle"
@@ -257,7 +257,7 @@ export default function AlbumFilterPanel({
                   type="button"
                   onClick={() => togglePlace(place.adcode)}
                   aria-pressed={active}
-                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-meta transition-colors ${
+                  className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-caption transition-colors ${
                     active
                       ? "bg-accent/12 text-accent"
                       : "text-fg hover:bg-bg-subtle"
@@ -332,7 +332,7 @@ export default function AlbumFilterPanel({
         )}
       </div>
 
-      <div className="mt-2 border-t border-border-faint pt-2 text-meta text-fg-subtle">
+      <div className="mt-2 border-t border-line pt-2 text-caption text-fg-subtle">
         看到 {resultCount} 张
       </div>
     </div>

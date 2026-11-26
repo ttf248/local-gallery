@@ -23,10 +23,10 @@
       width var(--dur-2);
   }
   .segments button {
-    @apply min-h-[30px] rounded-sm px-3 text-callout text-fg-muted aria-checked:text-fg disabled:opacity-40;
+    @apply min-h-8 touch:min-h-10 touch:min-w-10 rounded-sm px-3 text-callout text-fg-muted aria-checked:text-fg disabled:opacity-40;
   }
   .segments[data-size="sm"] button {
-    @apply min-h-[26px] px-2;
+    @apply min-h-8 touch:min-h-10 px-2;
   }
   .modal-surface {
     @apply overflow-auto bg-bg-elevated text-fg shadow-3;
@@ -114,3 +114,101 @@
 }
 
 body:has(dialog[open], [role="dialog"][aria-modal="true"]) .app-main { overflow-y: hidden; }
+
+@layer components {
+  .page-shell:where(:not([data-page])) {
+    @apply mx-auto w-full min-w-0 max-w-[var(--page-max)] px-[var(--page-gutter)];
+  }
+  .page-shell .page-shell:where(:not([data-page])) {
+    @apply max-w-none px-0;
+  }
+  .hover-reveal {
+    @apply opacity-100 pointer-fine:opacity-0;
+  }
+  .btn-text {
+    @apply inline-flex items-center min-h-8;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-control text-body font-medium whitespace-nowrap transition duration-2 disabled:[opacity:0.45] disabled:cursor-[not-allowed];
+  }
+  .btn-sm {
+    @apply h-8 px-3 text-caption rounded-control;
+  }
+  .btn-primary {
+    @apply bg-accent text-accent-contrast enabled:hover:bg-accent touch:enabled:active:bg-accent motion-safe:enabled:active:translate-y-px;
+  }
+  .btn-outline {
+    @apply bg-transparent border border-line text-fg enabled:hover:bg-bg-subtle enabled:hover:border-line-strong touch:enabled:active:bg-bg-subtle touch:enabled:active:border-line-strong;
+  }
+  .btn-ghost {
+    @apply bg-transparent text-fg-muted enabled:hover:bg-bg-subtle enabled:hover:text-fg touch:enabled:active:bg-bg-subtle touch:enabled:active:text-fg;
+  }
+  .field {
+    @apply h-10 px-3 border border-line rounded-control bg-bg-elevated text-fg text-body transition duration-2 placeholder:text-fg-subtle focus-visible:border-signal;
+  }
+  .chip, .ui-chip {
+    @apply inline-flex items-center gap-1.5 h-8 px-3 rounded-control text-caption text-fg-muted whitespace-nowrap transition duration-2 hover:bg-bg-subtle hover:text-fg touch:active:bg-bg-subtle touch:active:text-fg aria-pressed:bg-accent-soft aria-pressed:text-accent aria-pressed:font-medium [&[data-active=true]]:bg-accent-soft [&[data-active=true]]:text-accent [&[data-active=true]]:font-medium;
+  }
+  .ui-popover {
+    @apply border border-line [border-top-color:color-mix(in_srgb,var(--line),var(--line)_50%)] rounded-tile bg-bg-elevated shadow-2 touch:[&_:is(button,_a[href])]:min-h-11 touch:[&_:is(button,_a[href])]:min-w-11;
+  }
+  .ui-segmented {
+    @apply inline-flex items-stretch gap-0.5 rounded-control bg-bg-subtle p-0.5 [&>button]:relative [&>button]:min-h-8 [&>button]:px-2.5 [&>button]:rounded-sm [&>button]:text-caption [&>button]:text-fg-muted [&>button]:transition [&>button]:duration-2 [&>button:is([aria-checked=true],_[aria-pressed=true])]:bg-accent-soft [&>button:is([aria-checked=true],_[aria-pressed=true])]:text-accent [&>button:is([aria-checked=true],_[aria-pressed=true])]:font-semibold [&>button:disabled]:[opacity:0.5] touch:[&>button]:min-w-11 touch:[&>button]:min-h-11;
+  }
+  .toolbar-icon {
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-control text-fg-subtle transition duration-2 hover:bg-bg-subtle hover:text-fg touch:active:bg-bg-subtle touch:active:text-fg touch:w-11 touch:h-11;
+  }
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes scaleFade {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer base {
+  :where(button, select, input:not([type=hidden]), [role=button], [role=tab]) { min-height: 32px; min-width: 32px; }
+  @media (pointer: coarse) {
+    :where(button, select, input:not([type=hidden]), a[href], label:has(input[type=checkbox], input[type=radio])) { min-height: 40px; min-width: 40px; }
+  }
+}
+
+@layer components {
+  .book-binding::after, .book-binding::before {
+    content: "";
+    @apply pointer-events-none absolute z-[1];
+  }
+  .book-binding::after {
+    @apply inset-0;
+    background: linear-gradient(to right, rgb(0 0 0 / .5), rgb(0 0 0 / .18) 2px, transparent 4px);
+  }
+  .book-binding::before {
+    @apply inset-y-0 right-0 w-[3px];
+    background: linear-gradient(to left, rgb(255 255 255 / .34), transparent);
+  }
+}

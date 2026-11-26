@@ -14,7 +14,7 @@ interface Props {
  * 所以这一行只摆「哪几类线索对上了」，不摆分数：分数是排序用的，
  * 不是给人看的依据。
  *
- * 汉字标签走 `--text-meta`（12.5px），不占 11.5px 那一档 ——
+ * 汉字标签走 `--text-caption`（12.5px），不占 11.5px 那一档 ——
  * 那一档只给拉丁字母与数字，中文在那个尺寸上读不清。
  */
 export default function SmartAlbumEvidence({ dimensions }: Props) {
@@ -30,7 +30,7 @@ export default function SmartAlbumEvidence({ dimensions }: Props) {
       {dimensions.map((dimension) => (
         <span
           key={dimension}
-          className="shrink-0 rounded-full border border-border bg-bg-subtle px-1.5 text-meta leading-4 text-fg-muted"
+          className="shrink-0 rounded-full border border-line bg-bg-subtle px-1.5 text-caption leading-4 text-fg-muted"
         >
           {SMART_ALBUM_DIMENSION_LABELS[dimension]}
         </span>

@@ -101,16 +101,16 @@ function PlaceCard({ place }: { place: ChinaPlace }) {
           fileId={cover}
           alt=""
           displayWidth={320}
-          className="size-full object-cover transition-transform group-hover/place:scale-[1.03]"
+          className="size-full object-cover transition-transform motion-safe:group-hover/place:scale-[1.03]"
         />
       ) : (
         <span className="grid size-full place-items-center text-fg-muted">
           <ImageIcon />
         </span>
       )}
-      <span className="absolute inset-x-0 bottom-0 flex h-1/2 flex-col justify-end bg-gradient-to-t from-black/90 to-transparent p-4 text-white">
-        <span className="text-title-3">{place.name}</span>
-        <span className="text-caption text-white/80">
+      <span className="absolute inset-x-0 bottom-0 flex h-1/2 flex-col justify-end bg-gradient-to-t from-black/95 via-black/75 to-transparent p-4 text-white">
+        <span className="w-fit text-title-3">{place.name}</span>
+        <span className="w-fit text-caption text-white">
           {place.photoCount.toLocaleString("zh-CN")} 张
           {place.visitCount > 0 && " · 去过 " + place.visitCount + " 次"}
         </span>

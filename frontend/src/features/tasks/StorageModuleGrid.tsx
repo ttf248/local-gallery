@@ -18,11 +18,11 @@ interface Props {
 export default function StorageModuleGrid({ modules }: Props) {
   if (modules.length === 0) return null;
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-xs">
-      <h3 className="border-b border-border-faint bg-bg-subtle px-4 py-2.5 text-label font-medium text-fg">
+    <section className="overflow-hidden rounded-xl border border-line bg-bg-elevated shadow-1">
+      <h3 className="border-b border-line bg-bg-subtle px-4 py-2.5 text-body font-medium text-fg">
         AI 模型与产物
       </h3>
-      <ul className="divide-y divide-border-faint">
+      <ul className="divide-y divide-line">
         {modules.map((module) => {
           const modelNames = module.modelFiles
             .map((file) => file.name)
@@ -33,10 +33,10 @@ export default function StorageModuleGrid({ modules }: Props) {
           return (
             <li key={module.type} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-label font-medium text-fg">
+                <span className="text-body font-medium text-fg">
                   {module.name}
                 </span>
-                <span className="font-mono text-meta tabular-nums text-fg-muted">
+                <span className="font-mono text-caption tabular-nums text-fg-muted">
                   模型 {formatSize(module.modelBytes)} · 产物{" "}
                   {formatSize(module.outputBytes)}
                 </span>
@@ -54,10 +54,10 @@ export default function StorageModuleGrid({ modules }: Props) {
                     return (
                       <li
                         key={profile.model}
-                        className="rounded-lg border border-border-faint bg-bg-subtle px-3 py-2"
+                        className="rounded-lg border border-line bg-bg-subtle px-3 py-2"
                       >
                         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                          <span className="text-meta font-medium text-fg">
+                          <span className="text-caption font-medium text-fg">
                             {faceModelLabel(profile.model)}
                             {profile.active ? (
                               <span className="ml-2 text-success">
@@ -65,19 +65,19 @@ export default function StorageModuleGrid({ modules }: Props) {
                               </span>
                             ) : null}
                           </span>
-                          <span className="font-mono text-meta tabular-nums text-fg-muted">
+                          <span className="font-mono text-caption tabular-nums text-fg-muted">
                             模型 {formatSize(profile.modelBytes)} · 产物{" "}
                             {formatSize(profile.outputBytes)}
                           </span>
                         </div>
                         <p
-                          className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                          className="mt-1 truncate font-mono text-caption text-fg-subtle"
                           title={profileModelNames}
                         >
                           {profileModelNames || "未发现模型文件"}
                         </p>
                         <p
-                          className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                          className="mt-1 truncate font-mono text-caption text-fg-subtle"
                           title={profileOutputPaths}
                         >
                           {profileOutputPaths}
@@ -90,23 +90,23 @@ export default function StorageModuleGrid({ modules }: Props) {
                 <>
                   {module.modelFiles.length > 0 ? (
                     <p
-                      className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                      className="mt-1 truncate font-mono text-caption text-fg-subtle"
                       title={modelNames}
                     >
                       {modelNames}
                     </p>
                   ) : module.modelLocation === "none" ? (
-                    <p className="mt-1 text-meta text-fg-subtle">
+                    <p className="mt-1 text-caption text-fg-subtle">
                       使用 Go 内置 EXIF/GPS 解析器，无需权重。
                     </p>
                   ) : (
-                    <p className="mt-1 text-meta text-warning">
+                    <p className="mt-1 text-caption text-warning">
                       未发现模型文件
                     </p>
                   )}
 
                   <p
-                    className="mt-1 truncate font-mono text-meta text-fg-subtle"
+                    className="mt-1 truncate font-mono text-caption text-fg-subtle"
                     title={outputPaths}
                   >
                     {outputPaths}

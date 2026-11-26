@@ -25,10 +25,10 @@ export default function FailureGroupList({ errors }: Props) {
       {groups.map((group) => (
         <details
           key={`${group.code}-${group.message}`}
-          className="group rounded-lg border border-border-faint"
+          className="group rounded-lg border border-line"
           data-testid="task-failure-group"
         >
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-meta [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-2.5 text-caption [&::-webkit-details-marker]:hidden">
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-fg">{group.message}</span>
               <span className="shrink-0 tabular-nums text-fg-subtle">
@@ -40,14 +40,14 @@ export default function FailureGroupList({ errors }: Props) {
               className="shrink-0 text-fg-subtle transition-transform group-open:rotate-180"
             />
           </summary>
-          <ul className="border-t border-border-faint px-3.5 py-2">
+          <ul className="border-t border-line px-3.5 py-2">
             {group.items.slice(0, VISIBLE_LIMIT).map((item, index) => (
               <li
                 key={`${item.resourceId}-${index}`}
                 className="flex items-center gap-2 py-1"
               >
                 <span
-                  className="min-w-0 flex-1 truncate font-mono text-meta text-fg-muted"
+                  className="min-w-0 flex-1 truncate font-mono text-caption text-fg-muted"
                   title={item.path || item.resourceId}
                 >
                   {item.path || "当前媒体库中不可用"}
@@ -59,7 +59,7 @@ export default function FailureGroupList({ errors }: Props) {
               </li>
             ))}
             {group.items.length > VISIBLE_LIMIT ? (
-              <li className="py-1 text-meta text-fg-subtle">
+              <li className="py-1 text-caption text-fg-subtle">
                 …还有 {group.items.length - VISIBLE_LIMIT} 条
               </li>
             ) : null}

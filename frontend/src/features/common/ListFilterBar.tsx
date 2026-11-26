@@ -79,8 +79,8 @@ export function ListFilterBar({
   const setViewMode = useUIStore((s) => s.setViewMode);
 
   return (
-    <div className={compact ? "compact-list-filter" : "page-shell"}>
-      <div className="filter-strip flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+    <div className={compact ? "compact-list-filter [&_.ui-chip]:whitespace-nowrap [@media(min-width:1024px)_and_(max-width:1279px)]:[&_.ui-chip>span:nth-child(2)]:hidden touch:[&_:is(button,_input)]:min-h-11 touch:[&_:is(button,_input)]:min-w-11" : "page-shell"}>
+      <div className="filter-strip mb-[var(--space-4)] border-b border-b-line py-2.5 [.compact-list-filter_&]:flex-nowrap [.compact-list-filter_&]:gap-1.5 [.compact-list-filter_&]:m-0 [.compact-list-filter_&]:p-0 [.compact-list-filter_&]:[border:0] [.compact-list-filter_&>div]:flex-nowrap max-lg:[.compact-list-filter_&]:flex-wrap max-lg:[.compact-list-filter_&>div]:flex-wrap max-lg:[.compact-list-filter_&]:justify-start flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div className="flex items-center gap-1 flex-wrap min-w-0">
           {filterQuery ? (
             <button
@@ -93,12 +93,12 @@ export function ListFilterBar({
               <span aria-hidden>×</span>
             </button>
           ) : null}
-          {!!viewChips?.length && <Tabs label="内容类型" items={viewChips.map(chip=>({id:chip.key,label:chip.label,count:chip.count}))} value={activeViewKey ?? "all"} onChange={onChangeView}/>}
+          {!!viewChips?.length && <Tabs className="max-w-full flex-wrap" label="内容类型" items={viewChips.map(chip=>({id:chip.key,label:chip.label,count:chip.count}))} value={activeViewKey ?? "all"} onChange={onChangeView}/>}
           {/* 没有视图切换 chip 的页面（如未读 / 最近）：总数靠左，
               避免整条筛选条只剩右半边、左侧空一大片。 */}
           {!hideTotalCount && !viewChips?.length && (
             <span
-              className="text-meta text-fg-muted tabular-nums"
+              className="text-caption text-fg-muted tabular-nums"
               data-testid="filter-bar-count"
             >
               共 {totalCount} 项
@@ -116,7 +116,7 @@ export function ListFilterBar({
           viewChips?.length &&
           totalCount !== viewChips.find((c) => c.key === "all")?.count ? (
             <span
-              className="text-meta text-fg-muted tabular-nums"
+              className="text-caption text-fg-muted tabular-nums"
               data-testid="filter-bar-count"
             >
               共 {totalCount} 项
@@ -126,7 +126,7 @@ export function ListFilterBar({
           {onClearFilters ? (
             <button
               type="button"
-              className="ui-btn ui-btn--ghost"
+              className="btn btn-ghost"
               onClick={onClearFilters}
             >
               清除筛选
@@ -262,7 +262,7 @@ function SortMenu({
           id={optionsId}
           role="group"
           aria-label="排序选项"
-          className="absolute right-0 top-full mt-1.5 min-w-[140px] ui-popover py-1 z-40 fade-up"
+          className="absolute right-0 top-full mt-1.5 min-w-[140px] ui-popover py-1 z-40 fade-up [animation:fadeUp_320ms_var(--ease-emphasized)_both]"
         >
           {options.map((o) => (
             <button
@@ -341,7 +341,7 @@ function MinImageFilter({
           setEditing(true);
           setDraft("0");
         }}
-        className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md border border-border text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors shrink-0"
+        className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md border border-line text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors shrink-0"
         title={label}
         aria-label={`最少${unit}数`}
       >
@@ -354,12 +354,12 @@ function MinImageFilter({
       className={`inline-flex items-center gap-1 h-[34px] px-2.5 rounded-md border transition-colors ${
         active
           ? "border-accent/40 bg-accent-soft text-accent"
-          : "border-border text-fg-muted hover:bg-bg-subtle"
+          : "border-line text-fg-muted hover:bg-bg-subtle"
       }`}
       title={label}
     >
       <FilterIcon size={11} className="shrink-0" />
-      <span className="text-meta whitespace-nowrap">≥</span>
+      <span className="text-caption whitespace-nowrap">≥</span>
       <input
         ref={inputRef}
         type="number"
@@ -382,7 +382,7 @@ function MinImageFilter({
             (e.target as HTMLInputElement).blur();
           }
         }}
-        className="w-9 h-7 bg-transparent border-0 outline-none text-meta tabular-nums text-right focus:outline-none"
+        className="w-9 h-7 bg-transparent border-0 outline-none text-caption tabular-nums text-right focus:outline-none"
         aria-label={`最少${unit}数`}
       />
       {active && (

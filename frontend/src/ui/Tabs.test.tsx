@@ -36,6 +36,14 @@ it.each(["vertical", "horizontal"] as const)(
       />,
     );
     const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((tab) => tab.tabIndex)).toEqual([0, -1, -1]);
+    expect(tabs.map((tab) => tab.getAttribute("aria-selected"))).toEqual([
+      "true",
+      "false",
+      "false",
+    ]);
+    fireEvent.click(tabs[2]);
+    expect(change).toHaveBeenLastCalledWith("c");
     const next = orientation === "vertical" ? "ArrowDown" : "ArrowRight";
     for (const [i, key, j] of [
       [0, next, 1],

@@ -1,4 +1,13 @@
 :root {
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --keyboard-inset: 0px;
+  --float-bottom: calc(var(--safe-bottom) + var(--keyboard-inset) + 12px);
+  --scrim: rgb(0 0 0 / 0.52);
+  --year-index-item: clamp(160px, 12vw, 240px);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

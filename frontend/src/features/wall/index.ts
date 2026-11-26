@@ -5,3 +5,4 @@ export { layoutMasonry } from "./masonryLayout";
 export { masonryColumnCount } from "./masonryLayout";
 export type { MasonryInput } from "./masonryLayout";
 export { default as PhotoWall } from "./PhotoWall";
+export { default as DensityControl } from "./DensityControl";

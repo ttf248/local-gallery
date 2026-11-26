@@ -125,7 +125,7 @@ export default function TaskConsole({
                   { value: "full", label: "全量" },
                 ]}
               />
-              <span className="text-meta text-fg-subtle">
+              <span className="text-caption text-fg-subtle">
                 {modeHint(selectedModule, mode, selectedName)}
               </span>
             </div>
@@ -152,7 +152,7 @@ export default function TaskConsole({
                   },
                 ]}
               />
-              <span className="text-meta text-fg-subtle">
+              <span className="text-caption text-fg-subtle">
                 {selectedFaceModelReady
                   ? faceModel === "buffalo_m"
                     ? "512 维特征 · Buffalo_m"
@@ -160,12 +160,12 @@ export default function TaskConsole({
                   : "所选模型未就绪，请在本机存储页签安装模型"}
               </span>
               {faceModelSaving ? (
-                <span className="text-meta text-fg-subtle">
+                <span className="text-caption text-fg-subtle">
                   正在切换并重建人物索引…
                 </span>
               ) : null}
               {faceModelSaveError ? (
-                <span role="alert" className="text-meta text-danger">
+                <span role="alert" className="text-caption text-danger">
                   模型切换失败，检查是否有正在运行的人脸任务后重试。
                 </span>
               ) : null}
@@ -187,7 +187,7 @@ export default function TaskConsole({
           </div>
         </SettingsGroup>
 
-        <div className="tasks-actions">
+        <div className="tasks-actions flex flex-wrap items-center gap-y-2 gap-x-4 py-3 px-0 border-t border-t-line">
           <button
             type="button"
             className="btn btn-sm btn-outline"
@@ -197,12 +197,12 @@ export default function TaskConsole({
             按序启动全部任务
           </button>
           {sequence && sequence.modules.length > 0 ? (
-            <span className="text-meta text-fg-subtle">
+            <span className="text-caption text-fg-subtle">
               {`${sequence.modules.length} 个模块 · ${formatCount(sequence.count)} 张`}
             </span>
           ) : null}
           {sequence && sequence.modules.length > 0 ? (
-            <span className="text-meta text-fg-subtle">
+            <span className="text-caption text-fg-subtle">
               {formatEstimateDuration(sequence.estimatedDurationMs)}
             </span>
           ) : null}
@@ -211,18 +211,18 @@ export default function TaskConsole({
         {/* 高级信息：版本、运行环境与索引覆盖。日常用不到，但它决定
             「为什么这次跑不起来」，所以收起来而不是删掉 —— 摘要里给出
             的提示会指向这里。 */}
-        <details className="tasks-advanced">
-          <summary className="tasks-advanced__summary">
+        <details className="tasks-advanced border-t border-t-line">
+          <summary className="tasks-advanced__summary flex items-baseline gap-3 py-2.5 px-0 cursor-pointer text-body text-fg [list-style:none] [&::-webkit-details-marker]:hidden before:content-['▸'] before:text-micro before:text-fg-subtle [.tasks-advanced[open]>&::before]:content-['▾']">
             高级信息
-            <span className="text-meta text-fg-subtle">
+            <span className="text-caption text-fg-subtle">
               {selectedModuleVersion
                 ? `模块版本 ${selectedModuleVersion}`
                 : "模块版本与运行环境"}
             </span>
           </summary>
-          <div className="tasks-advanced__body">
+          <div className="tasks-advanced__body [padding:2px_0_14px]">
             {selectedModuleVersion ? (
-              <p className="text-meta text-fg-muted">
+              <p className="text-caption text-fg-muted">
                 当前模块：{selectedName} · {selectedModuleVersion}
               </p>
             ) : null}
@@ -284,11 +284,11 @@ function EmbeddingRuntimeStatus({
   loading: boolean;
 }) {
   if (loading) {
-    return <p className="text-meta text-fg-subtle">正在读取本机 AI 状态…</p>;
+    return <p className="text-caption text-fg-subtle">正在读取本机 AI 状态…</p>;
   }
   if (!status) {
     return (
-      <p role="status" className="text-meta text-warning">
+      <p role="status" className="text-caption text-warning">
         本机语义模型状态暂不可读，请检查 AI Worker 运行环境。
       </p>
     );
@@ -298,7 +298,7 @@ function EmbeddingRuntimeStatus({
       ? `${status.coverage.indexed.toLocaleString()} / ${status.coverage.total.toLocaleString()} 张已建向量`
       : "尚无可索引图片";
   return (
-    <div className="grid gap-2 text-meta sm:grid-cols-2">
+    <div className="grid gap-2 text-caption sm:grid-cols-2">
       <p className="text-fg-muted">
         运行设备：
         <span className="text-fg">
@@ -337,11 +337,11 @@ function ImageModuleRuntimeStatus({
 }) {
   const label = moduleType === "ocr" ? "文字识别" : "人脸识别";
   if (loading) {
-    return <p className="text-meta text-fg-subtle">正在检查{label}运行环境…</p>;
+    return <p className="text-caption text-fg-subtle">正在检查{label}运行环境…</p>;
   }
   if (!status) {
     return (
-      <p role="status" className="text-meta text-warning">
+      <p role="status" className="text-caption text-warning">
         本机 AI 状态暂不可读，无法确认{label}环境。
       </p>
     );
@@ -349,13 +349,13 @@ function ImageModuleRuntimeStatus({
   const module = status.modules?.[moduleType];
   if (module?.ready) {
     return (
-      <p role="status" className="text-meta text-success">
+      <p role="status" className="text-caption text-success">
         {label}已就绪 · {module.version}
       </p>
     );
   }
   return (
-    <p role="status" className="text-meta text-warning">
+    <p role="status" className="text-caption text-warning">
       {moduleUnavailableMessage(module?.error)}
     </p>
   );

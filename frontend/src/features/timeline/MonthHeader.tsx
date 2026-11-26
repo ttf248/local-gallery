@@ -17,7 +17,7 @@ export default function MonthHeader({
       {showYear && (
         <div aria-hidden className="mb-3 flex items-center gap-3 text-title-2">
           {group.year}
-          <span className="h-px flex-1 bg-border" />
+          <span className="h-px flex-1 bg-line" />
         </div>
       )}
       <div

@@ -171,7 +171,7 @@ export default function SearchResults() {
     </div>
   );
   const conditions = (
-    <div className="flex flex-wrap items-center gap-2 border-b border-border-faint pb-3">
+    <div className="flex flex-wrap items-center gap-2 border-b border-line pb-3">
       {mode === "photo" && (
         <span className="text-caption text-fg-muted">搜索范围</span>
       )}
@@ -188,7 +188,7 @@ export default function SearchResults() {
       ) : (
         <span className="chip">名称</span>
       )}
-      <span className="text-meta text-fg-muted">
+      <span className="text-caption text-fg-muted">
         {isContent
           ? "正在搜照片里的画面与图片文字"
           : "正在搜相册、文件夹与标签的名字"}
@@ -274,7 +274,7 @@ export default function SearchResults() {
 
       <div className="page-shell">{conditions}</div>
 
-      <div className="page-shell page-section">
+      <div className="page-shell page-section pt-[var(--section-gap)]">
         {search.isError ? (
           <ErrorBanner
             onRetry={() => void search.refetch()}
@@ -290,7 +290,7 @@ export default function SearchResults() {
 
         {cards.length > 0 ? (
           <>
-            <p className="text-meta text-fg-subtle mb-1 tabular-nums">
+            <p className="text-caption text-fg-subtle mb-1 tabular-nums">
               {cards.length < total
                 ? `显示 ${cards.length} / ${total} 项`
                 : `共 ${total} 项`}
@@ -302,7 +302,7 @@ export default function SearchResults() {
                     <span className="text-body font-medium text-fg">
                       {group.label}
                     </span>
-                    <span className="text-meta tabular-nums text-fg-subtle">
+                    <span className="text-caption tabular-nums text-fg-subtle">
                       {group.items.length} 项
                     </span>
                   </h3>

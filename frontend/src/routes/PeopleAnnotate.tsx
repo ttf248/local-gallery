@@ -122,7 +122,7 @@ export default function PeopleAnnotate() {
         <section className="page-shell mt-6 grid gap-6 lg:grid-cols-[minmax(240px,0.6fr)_minmax(0,1.8fr)]">
           <aside className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-display text-label text-fg">待标注样本</h2>
+              <h2 className="font-display text-body text-fg">待标注样本</h2>
               <button
                 type="button"
                 className="btn btn-sm btn-outline"
@@ -133,7 +133,7 @@ export default function PeopleAnnotate() {
               </button>
             </div>
             {progress ? (
-              <p className="text-meta text-fg-muted">
+              <p className="text-caption text-fg-muted">
                 已复核 {progress.reviewedCount}/{progress.sampleCount} 张 ·{" "}
                 {progress.annotatedPhotoCount} 张已标注 ·{" "}
                 {progress.faceCount} 张脸 · {progress.identityCount} 个匿名身份
@@ -163,7 +163,7 @@ export default function PeopleAnnotate() {
             >
               导出评测集
             </a>
-            <p className="text-meta text-fg-subtle">
+            <p className="text-caption text-fg-subtle">
               导出的是 schemaVersion=1 的本地标注集，可直接交给
               evaluate_people.py 比较不同模型与检测方式。
             </p>
@@ -213,8 +213,8 @@ function SampleRow({
         aria-current={active}
         className={`flex w-full items-center gap-3 rounded-lg border p-2 text-left transition-colors ${
           active
-            ? "border-border-strong bg-bg-elevated"
-            : "border-border-faint hover:border-border-strong"
+            ? "border-line-strong bg-bg-elevated"
+            : "border-line hover:border-line-strong"
         }`}
       >
         <span className="h-14 w-14 shrink-0 overflow-hidden rounded bg-bg-subtle">
@@ -229,11 +229,11 @@ function SampleRow({
           <span className="block truncate text-body text-fg">
             {REASON_LABELS[sample.reason] ?? sample.reason}
           </span>
-          <span className="mt-0.5 block text-meta text-fg-muted">
+          <span className="mt-0.5 block text-caption text-fg-muted">
             {sample.faceCount} 张脸
             {sample.personName ? ` · ${sample.personName}` : ""}
           </span>
-          <span className="mt-0.5 block text-meta text-fg-subtle">
+          <span className="mt-0.5 block text-caption text-fg-subtle">
             {sample.reviewed
               ? "已复核"
               : sample.identities?.length
@@ -442,9 +442,9 @@ function AnnotationEditor({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-label text-fg">标注这张照片</h2>
+          <h2 className="font-display text-body text-fg">标注这张照片</h2>
           <p
-            className="mt-1 text-meta text-fg-muted"
+            className="mt-1 text-caption text-fg-muted"
             data-testid="people-annotate-summary"
           >
             检出 {detail.detected.length} 张脸 · 已标身份 {labelled} 张
@@ -536,18 +536,18 @@ function AnnotationEditor({
         ) : null}
       </div>
       {drawing ? (
-        <p className="text-meta text-fg-muted">
+        <p className="text-caption text-fg-muted">
           在照片上按住拖动画出人脸框。先选中一张脸再画框，就是纠正那张脸的检测框。
         </p>
       ) : null}
 
       <div>
-        <h3 className="font-display text-label text-fg">人脸与身份</h3>
+        <h3 className="font-display text-body text-fg">人脸与身份</h3>
         <ul className="mt-2 space-y-2">
           {faces.map((face) => (
             <li
               key={face.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-border-faint p-2"
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-line p-2"
             >
               <button
                 type="button"
@@ -558,7 +558,7 @@ function AnnotationEditor({
               >
                 {face.source === "manual" ? "补检" : "检出"}框
               </button>
-              <span className="text-meta text-fg-muted">
+              <span className="text-caption text-fg-muted">
                 {Math.round(face.box[2])}×{Math.round(face.box[3])} px
               </span>
               <IdentityPicker
@@ -582,14 +582,14 @@ function AnnotationEditor({
           ))}
         </ul>
         {faces.length === 0 ? (
-          <p className="mt-2 text-meta text-fg-muted">
+          <p className="mt-2 text-caption text-fg-muted">
             这张照片没有检出人脸。若确实有人，用「画框补检」手动补一个。
           </p>
         ) : null}
       </div>
 
       <div>
-        <h3 className="font-display text-label text-fg">拍摄场景</h3>
+        <h3 className="font-display text-body text-fg">拍摄场景</h3>
         <div className="mt-2 flex flex-wrap gap-2">
           {scenarioTags.map((tag) => (
             <button
@@ -597,10 +597,10 @@ function AnnotationEditor({
               type="button"
               aria-pressed={tags.includes(tag)}
               onClick={() => toggleTag(tag)}
-              className={`rounded-full border px-3 py-1.5 text-meta transition-colors ${
+              className={`rounded-full border px-3 py-1.5 text-caption transition-colors ${
                 tags.includes(tag)
-                  ? "border-border-strong bg-bg-elevated text-fg"
-                  : "border-border-faint text-fg-muted hover:text-fg"
+                  ? "border-line-strong bg-bg-elevated text-fg"
+                  : "border-line text-fg-muted hover:text-fg"
               }`}
             >
               {SCENARIO_LABELS[tag] ?? tag}
@@ -630,7 +630,7 @@ function IdentityPicker({
     return (
       <span className="flex flex-wrap items-center gap-2">
         <input
-          className="w-36 rounded-md border border-border bg-bg-elevated px-2 py-1 text-body text-fg"
+          className="w-36 rounded-md border border-line bg-bg-elevated px-2 py-1 text-body text-fg"
           value={label}
           maxLength={40}
           placeholder="编号或备注"
@@ -663,7 +663,7 @@ function IdentityPicker({
   return (
     <span className="flex flex-wrap items-center gap-2">
       <select
-        className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-body text-fg"
+        className="rounded-md border border-line bg-bg-elevated px-2 py-1 text-body text-fg"
         value={value}
         aria-label="匿名身份"
         onChange={(event) => onChange(event.target.value)}

@@ -424,7 +424,7 @@ function GridCard({
         }
         setPreviewOn(false);
       }}
-      className="album-tile relative group select-none"
+      className="album-tile [html[data-mode=comic]_&]:p-0 [html[data-mode=comic]_&]:[border:none] [html[data-mode=comic]_&]:rounded-0 [html[data-mode=comic]_&]:bg-transparent [html[data-mode=comic]_&:hover]:shadow-none [html[data-mode=comic]_&:hover]:[transform:none] touch:[html[data-mode=comic]_&:active]:shadow-none touch:[html[data-mode=comic]_&:active]:[transform:none] relative group select-none"
       data-testid="album-card"
     >
       <Link
@@ -439,11 +439,11 @@ function GridCard({
           longPressedRef.current = false;
         }}
         aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
-        className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <div
-          className={`album-tile__cover relative ${COVER_RATIO_CLASS[coverRatio]} bg-bg-subtle overflow-hidden${
-            showTitleOnCover ? " album-tile__cover--book" : ""
+          className={`album-tile__cover rounded-card transition duration-2 motion-safe:group-hover:-translate-y-0.5 [.album-tile:hover_&]:shadow-2 relative ${COVER_RATIO_CLASS[coverRatio]} bg-bg-subtle overflow-hidden${
+            showTitleOnCover ? " album-tile__cover--book book-binding rounded-[6px] shadow-[var(--cover-shadow)] transition duration-2 motion-safe:group-hover:-translate-y-1" : ""
           }`}
           data-testid="card-cover"
         >
@@ -500,7 +500,7 @@ function GridCard({
                   封面下缘会互相干扰。书封形态把百分比放进封面
                   下方的说明行，与计数读在一起。 */}
               {!isFinished && !showTitleOnCover && (
-                <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/65 backdrop-blur-sm ring-1 ring-white/20 px-1.5 h-5 text-badge font-medium text-white shadow-sm">
+                <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-micro font-medium text-white shadow-1">
                   <ReaderIcon size={11} className="shrink-0" />
                   <span className="tabular-nums">{progressPct}%</span>
                 </div>
@@ -515,11 +515,11 @@ function GridCard({
           )}
         </div>
 
-        <div className="album-tile__meta min-w-0">
+        <div className="album-tile__meta [html[data-mode=comic]_&]:[padding:9px_0_5px] [padding:12px_0_7px] max-sm:px-0 min-w-0">
           {/* 标题印在封面上时，这里不再重复标题：同一句话在一张卡上
               说两遍，封面的书名会被下面的说明读成回声。 */}
           {!showTitleOnCover && (
-            <div className="album-tile__title text-callout font-semibold text-fg truncate leading-snug transition-colors group-hover:text-accent-ink">
+            <div className="album-tile__title [html[data-mode=comic]_.library-grid_&]:min-h-[calc(2_*_1.375em)] [html[data-mode=photo]_.library-grid_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.library-grid_&]:[line-clamp:1] [html[data-mode=photo]_.shelf_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.shelf_&]:[line-clamp:1] text-callout font-semibold text-fg truncate leading-snug transition-colors group-hover:text-accent">
               <AlbumName name={label} />
             </div>
           )}
@@ -583,7 +583,7 @@ function GridCard({
                 !isFinished && (
                   <>
                     <span className="text-fg-subtle">·</span>
-                    <span className="text-accent-ink font-medium shrink-0 whitespace-nowrap">
+                    <span className="text-accent font-medium shrink-0 whitespace-nowrap">
                       已读 {progressPct}%
                     </span>
                   </>
@@ -599,19 +599,19 @@ function GridCard({
           {/* 多根来源 badge：与标签副标题独立，作为视觉小标签放在元数据行。
               单一媒体根下每张卡片都挂同一句来源是噪音，multiRoot 为 false 时隐藏。 */}
           {data.sourceName && multiRoot && !hideMeta && (
-            <div className="text-meta text-fg-subtle mt-0.5 inline-flex items-center gap-1">
+            <div className="text-caption text-fg-subtle mt-0.5 inline-flex items-center gap-1">
               <FolderIcon size={10} className="shrink-0" />
               <span className="truncate">来自 {data.sourceName}</span>
             </div>
           )}
           {note && (
-            <div className="text-meta text-fg-muted mt-0.5 truncate">
+            <div className="text-caption text-fg-muted mt-0.5 truncate">
               {note}
             </div>
           )}
           {showLastSeen && data.lastSeenAt && (
             <div
-              className="text-meta text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
+              className="text-caption text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
               title={`上次 ${timeAgo(data.lastSeenAt)}`}
             >
               <ClockIcon size={10} className="shrink-0 text-fg-subtle" />
@@ -648,7 +648,7 @@ function GridCard({
         />
         {overlayAction}
         {data.coverKind === "video" && (
-          <div className="pointer-events-none inline-flex items-center gap-1 bg-bg-elevated/90 backdrop-blur text-fg text-badge font-medium px-1.5 h-5 rounded shadow-sm">
+          <div className="pointer-events-none inline-flex items-center gap-1 bg-bg-elevated/90 text-fg text-micro font-medium px-1.5 h-5 rounded shadow-1">
             <PlayFilledIcon size={9} className="text-accent" />
             {/* 时长未知时不要显示 "—"：一个破折号看起来像"读不出来 / 坏了"，
                 而不是"视频时长暂不可用"。只留播放图标。 */}
@@ -725,7 +725,7 @@ function ReadChip() {
   const title = comicCopy().finishedLabel;
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-md bg-black/65 backdrop-blur-sm ring-1 ring-white/20 px-1.5 h-5 text-meta font-medium text-white shadow-sm"
+      className="inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-caption font-medium text-white shadow-1"
       title={title}
     >
       <CheckIcon size={10} className="text-overlay-success" />

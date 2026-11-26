@@ -49,7 +49,7 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
       {progressFailure?.key === progressKey && (
         <div
           role="alert"
-          className="absolute top-20 left-3 right-3 z-30 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-md border border-overlay-border reader-glass p-3 text-body text-white/85 shadow-lg"
+          className="absolute top-20 left-3 right-3 z-30 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-md border border-overlay-border reader-glass p-3 text-body text-white/85 shadow-3"
         >
           <span>
             {progressFailure.operation === "restore"

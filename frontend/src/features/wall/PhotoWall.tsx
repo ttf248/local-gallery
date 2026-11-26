@@ -63,6 +63,8 @@ interface Props<T extends LibraryMediaItem = LibraryMediaItem> {
   itemBadge?: (item: T) => string | undefined;
   /** 照片上的额外标记，如人物相册中属于当前分组的人脸框。 */
   itemOverlay?: (item: T, tile: { width: number; height: number }) => ReactNode;
+  /** 独立于图片缩放层的瓦片操作，例如展开相似组。 */
+  itemAction?: (item: T) => ReactNode;
   /** 是否处于多选模式。多选时点击照片改为勾选，不再打开大图。 */
   selecting?: boolean;
   /** 某张照片是否已被勾选。 */
@@ -126,6 +128,7 @@ export default function PhotoWall<
   albumLabel,
   itemBadge,
   itemOverlay,
+  itemAction,
   selecting = false,
   isSelected,
   onToggleSelect,
@@ -406,6 +409,7 @@ export default function PhotoWall<
           }
           sourceLabel={albumLabel?.(item)}
           badge={itemBadge?.(item)}
+          action={itemAction?.(item)}
           overlay={itemOverlay?.(item, {
             width: tile.width,
             height: tileHeight,

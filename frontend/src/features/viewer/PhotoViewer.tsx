@@ -1,3 +1,4 @@
+import { ViewerChrome } from "./ViewerChrome";
 import { useIdleChrome } from "../../hooks/useIdleChrome";
 import { useReducedMotion } from "../../hooks/useReducedMotion";
 import { useZoomTransition } from "./useZoomTransition";
@@ -32,7 +33,6 @@ import ImageInfoPanel from "./ImageInfoPanel";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  CloseIcon,
   DoublePageIcon,
   FullscreenIcon,
   InfoIcon,
@@ -742,62 +742,7 @@ export default function PhotoViewer({
       aria-modal="true"
       aria-label={`${albumName} 大图预览`}
     >
-      {/* 上下各一层渐隐：控件压在纯黑上像浮在虚空里，
-          有了渐隐才读得出「画面上方还有一段空间」。 */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/80 to-transparent"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent"
-      />
-      {/* 顶栏：返回、标题、位置与操作 */}
-      <header
-        className={
-          "relative z-10 flex h-16 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-2 transition-opacity focus-within:opacity-100 sm:px-5 " +
-          (chromeVisible ? "" : "opacity-0")
-        }
-      >
-        <button
-          type="button"
-          onClick={close}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-          title="关闭 (Esc)"
-          aria-label="关闭大图预览"
-        >
-          <CloseIcon size={16} />
-        </button>
-        <div className="min-w-0 flex-1">
-          {/* 相册名用衬线：与照片工作台的标题同一套字体，
-              大图预览也是这个工作台的一部分。
-              精选页的照片来自不同相册，标题给出去处，并可点回那本。 */}
-          {albumHref ? (
-            <Link
-              to={albumHref}
-              title={`回到相册「${albumName}」`}
-              className="block truncate font-display text-label font-semibold text-white/95 underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              {albumName}
-            </Link>
-          ) : (
-            <div className="truncate font-display text-label font-semibold text-white/95">
-              {albumName}
-            </div>
-          )}
-          {/* 位置读数只在能翻的时候出现：一张照片时说「第 1 张 ·
-              共 1 张」是废话，界面上只留相册名。 */}
-          {(current.dateValue || current.capturedAt) && (
-            <p className="text-caption text-white/70">
-              {current.dateValue || current.capturedAt?.slice(0, 10)}
-            </p>
-          )}
-          {items.length > 1 && (
-            <div className="text-meta tabular-nums text-white/55">
-              第 {index + 1} 张 · 共 {totalCount ?? items.length} 张
-            </div>
-          )}
-        </div>
+      <ViewerChrome chromeVisible={chromeVisible} onClose={close} albumHref={albumHref} albumName={albumName} date={current.dateValue || current.capturedAt?.slice(0, 10)} multiple={items.length > 1} index={index} total={totalCount ?? items.length}>
         <div className="flex items-center gap-0.5">
           {!isVideo && (
             <button
@@ -875,7 +820,7 @@ export default function PhotoViewer({
             <button
               type="button"
               onClick={onSetCover}
-              className="hidden h-9 items-center gap-1.5 rounded-md px-2.5 text-meta text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:inline-flex"
+              className="hidden h-9 items-center gap-1.5 rounded-md px-2.5 text-caption text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:inline-flex"
               title={hasCustomCover ? "更换封面" : "设为封面"}
             >
               设为封面
@@ -911,7 +856,7 @@ export default function PhotoViewer({
             <FullscreenIcon size={15} />
           </button>
         </div>
-      </header>
+      </ViewerChrome>
 
       {/* 画布 */}
       <div className="relative flex min-h-0 flex-1">
@@ -1043,7 +988,7 @@ export default function PhotoViewer({
         {/* 取下一页的反馈：翻到末尾时用户会等，这一栏告诉他「正在取」，
             失败时给一个重试的手柄，而不是让下一张按钮灰着不动。 */}
         <div
-          className="flex items-center gap-2 text-meta"
+          className="flex items-center gap-2 text-caption"
           aria-live="polite"
           data-testid="photo-viewer-more"
         >
@@ -1100,7 +1045,7 @@ export default function PhotoViewer({
               >
                 <MinusIcon size={15} />
               </button>
-              <span className="w-14 text-center text-meta tabular-nums text-white/75">
+              <span className="w-14 text-center text-caption tabular-nums text-white/75">
                 {Math.round(zoom * 100)}%
               </span>
               <button

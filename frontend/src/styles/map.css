@@ -1,0 +1,98 @@
+/* 地图图层、行政边界、点位与路线标注。 */
+
+.travel-mini-map {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.travel-mini-map svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.travel-mini-map p {
+  padding-inline: 12px;
+  text-align: center;
+}
+
+.travel-mini-map__base {
+  fill: none;
+  stroke: var(--fg-subtle);
+}
+
+.travel-mini-map__base--filled {
+  fill: color-mix(in srgb, var(--fg) 7%, transparent);
+}
+
+.travel-mini-map__region {
+  fill: var(--fg);
+  stroke: var(--fg-subtle);
+}
+
+.travel-mini-map__empty {
+  fill: color-mix(in srgb, var(--fg) 7%, transparent);
+  stroke: var(--fg-subtle);
+}
+
+.travel-mini-map__point {
+  fill: var(--fg);
+}
+
+.travel-preview__map {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-tile);
+  background: var(--bg-subtle);
+}
+
+.travel-preview__shape {
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 55%, transparent);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+
+.travel-preview__route {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 5 3;
+}
+
+.travel-preview__arrowhead {
+  fill: var(--accent);
+}
+
+.travel-preview__step {
+  fill: var(--accent);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+
+.travel-preview__step-label {
+  fill: var(--bg);
+  font-size: var(--text-micro);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.travel-map {
+  position: relative;
+  border-radius: var(--radius-tile);
+  background: var(--bg-subtle);
+  overflow: hidden;
+}
+
+.travel-map svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}

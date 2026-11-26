@@ -59,11 +59,11 @@ export default function TravelPhotoWall({
 
   return (
     <div className="flex h-[min(84vh,980px)] min-h-[460px] flex-col">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-border-faint px-5 py-4">
-        <h2 className="font-display text-section font-medium text-fg">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line px-5 py-4">
+        <h2 className="font-display text-title-3 font-medium text-fg">
           {name}
         </h2>
-        <span className="text-label font-medium tabular-nums text-accent-ink">
+        <span className="text-body font-medium tabular-nums text-accent">
           {total.toLocaleString()} 张
         </span>
       </div>

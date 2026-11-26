@@ -117,13 +117,13 @@ export default function PageOverview({
       aria-label="目录"
     >
       <header className="flex h-14 shrink-0 items-center gap-3 px-5 border-b border-white/10">
-        <h2 className="text-label font-medium text-white/90">目录</h2>
-        <span className="text-meta tabular-nums text-white/50">
+        <h2 className="text-body font-medium text-white/90">目录</h2>
+        <span className="text-caption tabular-nums text-white/50">
           共 {images.length} 页
         </span>
         {/* 快捷键提示放在关闭键旁边：目录是按需打开的浮层，
             用完立刻关掉是常态，怎么关得写在眼前。 */}
-        <span className="ml-auto text-meta text-white/35">T / Esc 关闭</span>
+        <span className="ml-auto text-caption text-white/35">T / Esc 关闭</span>
         <button
           type="button"
           onClick={onClose}
@@ -184,7 +184,7 @@ export default function PageOverview({
                   {/* 当前页的页码反过来印（白底深字）：一屏几十张缩略图
                       里，只有这一张要能一眼认出来。 */}
                   <span
-                    className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-badge tabular-nums ${
+                    className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-micro tabular-nums ${
                       item.index === index
                         ? "bg-white text-black"
                         : "bg-black/65 text-white/90"

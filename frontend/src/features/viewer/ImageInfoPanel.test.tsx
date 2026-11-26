@@ -100,7 +100,7 @@ describe("ImageInfoPanel", () => {
     const panel = screen.getByTestId("image-info-panel");
     expect(panel.className).toContain("bg-overlay-panel");
     expect(panel.className).not.toContain("glass");
-    expect(panel.className).not.toContain("border-border-faint");
+    expect(panel.className).not.toContain("border-line");
   });
 
   it("关闭按钮有可访问名，点击后回调关闭", async () => {

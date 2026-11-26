@@ -92,10 +92,10 @@ export default function ImageInfoPanel({
           <CloseIcon size={13} />
         </button>
       </div>
-      <div className="flex-1 overflow-auto p-4 text-body scroll-thin">
-        {loading && <div className="text-white/60 text-meta">加载中…</div>}
+      <div className="flex-1 overflow-auto p-4 text-body scroll-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5">
+        {loading && <div className="text-white/60 text-caption">加载中…</div>}
         {err !== null && (
-          <div className="text-overlay-danger text-meta">
+          <div className="text-overlay-danger text-caption">
             错误: {apiErrorMessage(err, "无法读取图片信息")}
           </div>
         )}
@@ -114,7 +114,7 @@ export default function ImageInfoPanel({
             <Row label="格式" value={info.format.toUpperCase()} />
             <Row label="大小" value={formatSize(info.size)} />
             <Row label="修改时间" value={formatDateTime(info.mtime)} />
-            <div className="my-2 border-t border-white/10 pt-2 text-meta font-medium text-white/70">
+            <div className="my-2 border-t border-white/10 pt-2 text-caption font-medium text-white/70">
               EXIF 与 GPS
             </div>
             {metadataQuery.data?.status === "pending" ? (
@@ -197,7 +197,7 @@ export default function ImageInfoPanel({
                 <p className="whitespace-pre-wrap break-words text-body leading-relaxed">
                   {analysisQuery.data.ocr.text}
                 </p>
-                <p className="mt-1 text-meta text-white/50">
+                <p className="mt-1 text-caption text-white/50">
                   检出 {analysisQuery.data.ocr.lines?.length ?? 0} 行文字
                 </p>
               </div>
@@ -212,7 +212,7 @@ export default function ImageInfoPanel({
             />
             {analysisQuery.data?.face.status === "faces_found" ? (
               <div className="py-2">
-                <p className="text-meta text-white/70">
+                <p className="text-caption text-white/70">
                   检测到 {analysisQuery.data.face.faces?.length ?? 0} 张人脸
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -220,7 +220,7 @@ export default function ImageInfoPanel({
                     <button
                       key={`${index}-${face.box.join(",")}`}
                       type="button"
-                      className="rounded border border-white/15 px-2.5 py-1.5 text-meta text-white/80 transition-colors hover:bg-white/10"
+                      className="rounded border border-white/15 px-2.5 py-1.5 text-caption text-white/80 transition-colors hover:bg-white/10"
                       onClick={() => setSelectedFace(index)}
                     >
                       人脸 {index + 1} · 找相似
@@ -230,21 +230,21 @@ export default function ImageInfoPanel({
                 {selectedFace !== null ? (
                   <div className="mt-3 rounded-md border border-white/10 bg-black/15 p-2.5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-meta font-medium text-white/80">
+                      <p className="text-caption font-medium text-white/80">
                         相似照片
                       </p>
                       <button
                         type="button"
-                        className="btn-text text-meta text-white/50 hover:text-white"
+                        className="btn-text text-caption text-white/50 hover:text-white"
                         onClick={() => setSelectedFace(null)}
                       >
                         收起
                       </button>
                     </div>
                     {faceSearchQuery.isLoading ? (
-                      <p className="mt-2 text-meta text-white/55">正在检索…</p>
+                      <p className="mt-2 text-caption text-white/55">正在检索…</p>
                     ) : faceSearchQuery.isError ? (
-                      <p className="mt-2 text-meta text-overlay-danger">
+                      <p className="mt-2 text-caption text-overlay-danger">
                         {apiErrorMessage(
                           faceSearchQuery.error,
                           "相似人脸检索失败",
@@ -268,14 +268,14 @@ export default function ImageInfoPanel({
                                 className="h-12 w-12 shrink-0 rounded object-cover"
                               />
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-meta text-white/85">
+                                <span className="block truncate text-caption text-white/85">
                                   {hit.item.name}
                                 </span>
-                                <span className="block truncate text-meta text-white/50">
+                                <span className="block truncate text-caption text-white/50">
                                   {hit.item.albumName}
                                 </span>
                               </span>
-                              <span className="font-mono text-meta tabular-nums text-white/55">
+                              <span className="font-mono text-caption tabular-nums text-white/55">
                                 {Math.round(hit.similarity * 100)}%
                               </span>
                             </Link>
@@ -283,11 +283,11 @@ export default function ImageInfoPanel({
                         ))}
                       </ul>
                     ) : (
-                      <p className="mt-2 text-meta text-white/55">
+                      <p className="mt-2 text-caption text-white/55">
                         没有找到相似人脸
                       </p>
                     )}
-                    <p className="mt-2 text-meta leading-relaxed text-white/40">
+                    <p className="mt-2 text-caption leading-relaxed text-white/40">
                       相似度用于找回同一人物的照片，不代表身份确认。
                     </p>
                   </div>
@@ -324,7 +324,7 @@ export default function ImageInfoPanel({
 
 function AnalysisHeading({ children }: { children: string }) {
   return (
-    <div className="my-2 border-t border-white/10 pt-2 text-meta font-medium text-white/70">
+    <div className="my-2 border-t border-white/10 pt-2 text-caption font-medium text-white/70">
       {children}
     </div>
   );
@@ -344,21 +344,21 @@ function ImageAnalysisStatus({
   emptyLabel: string;
 }) {
   if (loading)
-    return <p className="py-1 text-meta text-white/45">正在读取分析结果…</p>;
+    return <p className="py-1 text-caption text-white/45">正在读取分析结果…</p>;
   if (status === "pending")
-    return <p className="py-1 text-meta text-white/45">{pendingLabel}</p>;
+    return <p className="py-1 text-caption text-white/45">{pendingLabel}</p>;
   if (status === "no_text" || status === "no_faces") {
-    return <p className="py-1 text-meta text-white/45">{emptyLabel}</p>;
+    return <p className="py-1 text-caption text-white/45">{emptyLabel}</p>;
   }
   if (status === "failed") {
     return (
-      <p className="py-1 text-meta text-overlay-danger">
+      <p className="py-1 text-caption text-overlay-danger">
         {error ?? "分析失败，可在任务中心重试。"}
       </p>
     );
   }
   if (!status)
-    return <p className="py-1 text-meta text-white/45">分析状态暂不可用</p>;
+    return <p className="py-1 text-caption text-white/45">分析状态暂不可用</p>;
   return null;
 }
 
@@ -373,13 +373,13 @@ interface RowProps {
 function Row({ label, value, mono, copyable, copyValue }: RowProps) {
   return (
     <div className="flex items-start gap-3 py-2">
-      <dt className="w-14 shrink-0 text-meta text-white/50 leading-5">
+      <dt className="w-14 shrink-0 text-caption text-white/50 leading-5">
         {label}
       </dt>
       <dd className="flex-1 min-w-0 flex items-start gap-1.5">
         <span
           className={`break-all leading-5 ${
-            mono ? "font-mono text-meta text-white/70" : "text-white/90"
+            mono ? "font-mono text-caption text-white/70" : "text-white/90"
           }`}
         >
           {value}

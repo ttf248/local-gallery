@@ -68,7 +68,7 @@ export default function MediaRootsField({
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col">
           <span className="text-fg">媒体根目录</span>
-          <span className="text-meta text-fg-subtle mt-0.5">
+          <span className="text-caption text-fg-subtle mt-0.5">
             多个目录都会扫描，相册按来源分组，徽标显示所属目录。每个目录
             选定一种内容属性：照片目录用照片墙浏览，漫画目录用阅读器。 按 Esc
             撤销整组编辑草稿。
@@ -98,7 +98,7 @@ export default function MediaRootsField({
               onRemove={() => removeAt(i)}
             />
             <div className="flex items-center gap-2">
-              <span className="text-meta text-fg-subtle shrink-0">
+              <span className="text-caption text-fg-subtle shrink-0">
                 内容属性
               </span>
               <KindRadio
@@ -113,7 +113,7 @@ export default function MediaRootsField({
       <button
         type="button"
         onClick={addEmpty}
-        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border-faint text-fg-muted hover:text-fg hover:border-border-strong text-meta transition-colors"
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-line text-fg-muted hover:text-fg hover:border-line-strong text-caption transition-colors"
       >
         <PlusIcon size={12} />
         添加根目录

@@ -1,5 +1,6 @@
+import { LibraryToolbar, CompactLibraryToolbar } from "../features/library/LibraryToolbar";
 import { Page } from "../shell/Page";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Link, useNavigate } from "react-router-dom";
 import AlbumGrid, { type CardData } from "../features/library/AlbumGrid";
@@ -14,10 +15,7 @@ import FolderDrawer, {
   useFolderDrawer,
 } from "../features/library/FolderDrawer";
 import BreadcrumbMenu from "../features/library/BreadcrumbMenu";
-import { usePageChromeState } from "../shell/PageChrome";
 import { PageHeader } from "../shell/PageHeader";
-import { FilterDropdown } from "../features/album/AlbumFilterBar";
-import type { ReactNode } from "react";
 import { ChevronLeftIcon, FolderOpenIcon, ReaderIcon } from "../ui/icons";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryList } from "../hooks/useLibraryList";
@@ -182,7 +180,7 @@ export default function Library() {
             event.stopPropagation();
             navigate(readerRoute(entry.album.id));
           }}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white backdrop-blur-sm ring-1 ring-white/20 transition-colors hover:bg-black/80"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white ring-1 ring-white/20 transition-colors hover:bg-black/80"
           title={`继续读「${volumeName}」`}
           aria-label={`继续读「${volumeName}」`}
         >
@@ -313,12 +311,12 @@ export default function Library() {
   ) : null;
 
   return (
-    <Page variant="gallery" className="page-shell library-page min-h-full">
+    <Page variant="gallery" className="page-shell library-page pb-[var(--page-gutter)] [--folder-drawer-offset:calc(var(--topbar-height)_+_14px)] min-h-full">
       <PageHeader
         title={title}
         chrome={{
           actions: actions && (
-            <CompactLibraryFilters>{actions}</CompactLibraryFilters>
+            <CompactLibraryToolbar>{actions}</CompactLibraryToolbar>
           ),
         }}
         meta={
@@ -338,7 +336,7 @@ export default function Library() {
         actions={
           drawer.desktop
             ? actions
-            : actions && <LibraryFilters>{actions}</LibraryFilters>
+            : actions && <LibraryToolbar>{actions}</LibraryToolbar>
         }
         toolbar={
           hasActiveFilters && (
@@ -403,7 +401,7 @@ export default function Library() {
           </div>
         }
       />
-      <div className="library-layout">
+      <div className="library-layout flex items-start gap-5 pt-4 pb-8">
         <FolderDrawer
           open={drawer.open}
           desktop={drawer.desktop}
@@ -415,7 +413,7 @@ export default function Library() {
         >
           <FolderTree mode={mode} selectedId={nodeId} onSelect={selectNode} />
         </FolderDrawer>
-        <div className="library-content min-w-0">
+        <div className="library-content min-w-0 flex-auto min-w-0">
           {list.isError ? (
             <InlineAlert
               tone="danger"
@@ -444,9 +442,9 @@ export default function Library() {
                 <BulkActions loaded={selectionItems} />
                 {workCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading">
-                      <h2 className="section-title">作品</h2>
-                      <span className="section-meta tabular-nums">
+                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+                      <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">作品</h2>
+                      <span className="section-meta text-caption leading-[1.45] text-fg-muted tabular-nums">
                         {workCards.length} 部
                       </span>
                     </div>
@@ -464,9 +462,9 @@ export default function Library() {
 
                 {looseCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading">
-                      <h2 className="section-title">未归入作品</h2>
-                      <span className="section-meta tabular-nums">
+                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+                      <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">未归入作品</h2>
+                      <span className="section-meta text-caption leading-[1.45] text-fg-muted tabular-nums">
                         {looseCards.length} 卷
                       </span>
                     </div>
@@ -482,9 +480,9 @@ export default function Library() {
 
                 {tagCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading">
-                      <h2 className="section-title">标签</h2>
-                      <span className="section-meta tabular-nums">
+                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+                      <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">标签</h2>
+                      <span className="section-meta text-caption leading-[1.45] text-fg-muted tabular-nums">
                         {tagCards.length} 个
                       </span>
                     </div>
@@ -549,23 +547,4 @@ export default function Library() {
       </div>
     </Page>
   );
-}
-
-function LibraryFilters({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <FilterDropdown
-      label="显示与排序"
-      dialogLabel="相册显示与排序"
-      count={0}
-      open={open}
-      onOpenChange={setOpen}
-      panel={children}
-    />
-  );
-}
-
-function CompactLibraryFilters({ children }: { children: ReactNode }) {
-  const { titleCollapsed } = usePageChromeState();
-  return titleCollapsed ? <LibraryFilters>{children}</LibraryFilters> : null;
 }

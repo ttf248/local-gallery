@@ -91,11 +91,11 @@ export default function RandomPhotos() {
     <div className="min-h-full pb-10">
       {/* 页头压成一条：这一页是往下滑的照片墙，页头占太高就把照片挤到
           下面去了。说明文字挪到墙的上方，随页面一起滚走。 */}
-      <header className="sticky top-0 z-20 border-b border-border-faint bg-bg">
+      <header className="sticky top-0 z-20 border-b border-line bg-bg">
         <div className="page-shell flex items-center justify-between gap-4 py-3">
           <div className="flex min-w-0 items-baseline gap-3">
-            <span className="page-eyebrow shrink-0">随手看看</span>
-            <h1 className="page-title page-title--sm truncate">随机照片</h1>
+            <span className="page-eyebrow flex items-center gap-2 text-accent text-caption font-semibold tracking-[0.02em] shrink-0">随手看看</span>
+            <h1 className="page-title [.page-heading_&]:mt-2 font-display text-title-1 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [@media(max-width:640px)]:text-title-2 [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere] page-title--sm text-title-2 truncate">随机照片</h1>
           </div>
           <button
             type="button"
@@ -110,7 +110,7 @@ export default function RandomPhotos() {
       </header>
 
       <div className="page-shell pt-4">
-        <p className="mb-3 text-meta text-fg-muted">
+        <p className="mb-3 text-caption text-fg-muted">
           全是随机抽的：跨相册取照片，不按时间、不看最近。往下滑会接着抽下一批。
         </p>
         {feed.isError ? (
@@ -139,7 +139,7 @@ export default function RandomPhotos() {
               data-testid="random-photos-sentinel"
             />
             {isFetchingNextPage ? (
-              <p className="py-4 text-center text-meta text-fg-subtle">
+              <p className="py-4 text-center text-caption text-fg-subtle">
                 正在抽下一批…
               </p>
             ) : null}

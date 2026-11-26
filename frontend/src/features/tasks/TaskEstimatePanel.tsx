@@ -44,7 +44,7 @@ export default function TaskEstimatePanel({
   if (loading) {
     return (
       <div>
-        <p className="text-meta text-fg-subtle">正在核算本次规模…</p>
+        <p className="text-caption text-fg-subtle">正在核算本次规模…</p>
         <div className="mt-2 h-8 w-full animate-pulse rounded-lg bg-bg-subtle" />
       </div>
     );
@@ -53,7 +53,7 @@ export default function TaskEstimatePanel({
   if (error) {
     return (
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <p role="status" className="text-meta text-warning">
+        <p role="status" className="text-caption text-warning">
           本次规模核算失败，仍可直接开始分析。
         </p>
         <button
@@ -72,7 +72,7 @@ export default function TaskEstimatePanel({
 
   if (!estimate.libraryReady) {
     return (
-      <p className="text-meta text-fg-subtle">
+      <p className="text-caption text-fg-subtle">
         媒体库尚未就绪，完成扫描后再看本次规模。
       </p>
     );
@@ -83,7 +83,7 @@ export default function TaskEstimatePanel({
 
   if (!entry.available) {
     return (
-      <p className="text-meta text-fg-subtle">
+      <p className="text-caption text-fg-subtle">
         {entry.name}当前不可用：
         {moduleReasonLabel(entry.reason ?? "")}，无法核算本次规模。
       </p>
@@ -96,7 +96,7 @@ export default function TaskEstimatePanel({
     <div>
       {/* 核算口径写在表格上方：这次要处理多少、凭什么估的。
           「本次规模」这个标题由外层的字段标签给出，这里不再重复一遍。 */}
-      <p className="text-meta text-fg-muted">
+      <p className="text-caption text-fg-muted">
         {entry.name}
         {entry.version ? ` · ${entry.version}` : ""} · 整库{" "}
         {formatCount(estimate.totalImages)} 张
@@ -135,7 +135,7 @@ export default function TaskEstimatePanel({
             );
           })}
         </fieldset>
-        <p className="min-w-[15rem] flex-1 text-meta text-fg-subtle">
+        <p className="min-w-[15rem] flex-1 text-caption text-fg-subtle">
           {active && active.sampleCount > 0
             ? `按最近 ${active.sampleCount} 次${entry.name}历史任务的速度估算，共 ${formatCount(active.sampleImages)} 张`
             : "这个模块还没有跑过，耗时算不出来"}

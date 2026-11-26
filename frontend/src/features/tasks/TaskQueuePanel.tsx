@@ -50,35 +50,35 @@ export default function TaskQueuePanel({
         </button>
       </div>
 
-      <div className="tasks-section__body">
+      <div className="tasks-section__body mt-3">
         {loading ? (
-          <p className="tasks-empty">正在读取等待队列…</p>
+          <p className="tasks-empty py-3.5 px-0 text-caption text-fg-subtle">正在读取等待队列…</p>
         ) : jobs.length === 0 ? (
-          <p className="tasks-empty">
+          <p className="tasks-empty py-3.5 px-0 text-caption text-fg-subtle">
             当前没有等待中的任务。
           </p>
         ) : (
-          <ol className="tasks-list">
+          <ol className="tasks-list border-t border-t-line">
             {jobs.map((job, index) => (
               <li
                 key={job.id}
-                className="tasks-list__row tasks-queue-card"
+                className="tasks-list__row flex flex-wrap items-center gap-y-2.5 gap-x-4 py-[11px] px-0 border-t border-t-line first:[border-top:0] tasks-queue-card [.tasks-list_&]:my-1.5 [.tasks-list_&]:py-2 [.tasks-list_&]:px-2.5 [.tasks-list_&]:border [.tasks-list_&]:border-line [.tasks-list_&]:rounded-control [.tasks-list_&]:bg-bg"
                 data-testid="task-queue-row"
               >
-                <span className="w-7 shrink-0 text-right font-mono text-meta tabular-nums text-fg-subtle">
+                <span className="w-7 shrink-0 text-right font-mono text-caption tabular-nums text-fg-subtle">
                   {String(index + 1).padStart(2, "0")}
                 </span>
                 <Badge variant="dot" tone="neutral" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="text-label font-medium text-fg">
+                    <span className="text-body font-medium text-fg">
                       {taskTitle(job)}
                     </span>
-                    <span className="text-meta text-fg-muted">
+                    <span className="text-caption text-fg-muted">
                       {taskModeLabel(job.mode)}
                     </span>
                   </div>
-                  <p className="mt-1 text-meta text-fg-subtle">
+                  <p className="mt-1 text-caption text-fg-subtle">
                     {job.scheduled ? "每日计划" : "手动加入"} ·{" "}
                     {formatDateTime(job.createdAt)}
                   </p>

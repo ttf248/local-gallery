@@ -346,7 +346,7 @@ export default function ServerConfigPanel() {
       queryError instanceof ApiError &&
       queryError.code === "local_access_required";
     return (
-      <div className="rounded-md border border-border-faint bg-bg-elevated px-4 py-4">
+      <div className="rounded-md border border-line bg-bg-elevated px-4 py-4">
         <p className="text-body text-fg">
           {localOnly
             ? "服务端设置仅可在运行服务的计算机上管理"
@@ -355,7 +355,7 @@ export default function ServerConfigPanel() {
         {!localOnly && (
           <button
             type="button"
-            className="mt-3 h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-subtle"
+            className="mt-3 h-8 px-3 rounded-md border border-line text-caption hover:bg-bg-subtle"
             onClick={() => void refetch()}
           >
             重试
@@ -398,13 +398,13 @@ export default function ServerConfigPanel() {
           <div className="flex flex-wrap items-center gap-2">
             {save.isReading ? (
               <>
-                <span className="text-meta text-fg-muted">
+                <span className="text-caption text-fg-muted">
                   正在重新读取配置…
                 </span>
                 <button
                   type="button"
                   onClick={save.cancelRead}
-                  className="h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-subtle"
+                  className="h-8 px-3 rounded-md border border-line text-caption hover:bg-bg-subtle"
                 >
                   取消读取
                 </button>
@@ -415,7 +415,7 @@ export default function ServerConfigPanel() {
                   type="button"
                   disabled={!save.canRetry}
                   onClick={() => save.retryFailed()}
-                  className="h-8 px-3 rounded-md bg-accent text-accent-contrast text-meta disabled:opacity-50"
+                  className="h-8 px-3 rounded-md bg-accent text-accent-contrast text-caption disabled:opacity-50"
                 >
                   重试保存
                 </button>
@@ -423,7 +423,7 @@ export default function ServerConfigPanel() {
                   type="button"
                   disabled={save.hasPending}
                   onClick={() => void save.readCurrent()}
-                  className="h-8 px-3 rounded-md border border-border text-meta hover:bg-bg-subtle disabled:opacity-50"
+                  className="h-8 px-3 rounded-md border border-line text-caption hover:bg-bg-subtle disabled:opacity-50"
                 >
                   重新读取配置
                 </button>
@@ -524,13 +524,13 @@ export default function ServerConfigPanel() {
                 <div className="text-body text-fg">
                   {data.accessMode === "lan" ? "局域网令牌保护" : "仅本机访问"}
                 </div>
-                <p className="text-meta text-fg-subtle mt-1 leading-5 max-w-xl">
+                <p className="text-caption text-fg-subtle mt-1 leading-5 max-w-xl">
                   {data.accessMode === "lan"
                     ? "远程浏览器必须用令牌换取 8 小时会话；令牌不会回显。"
                     : "默认模式，所有 API 只允许运行服务的计算机访问。"}
                 </p>
               </div>
-              <span className="shrink-0 rounded-full border border-border px-2 py-1 text-meta text-fg-muted">
+              <span className="shrink-0 rounded-full border border-line px-2 py-1 text-caption text-fg-muted">
                 {data.accessMode === "lan" ? "LAN" : "LOCAL"}
               </span>
             </div>
@@ -554,7 +554,7 @@ export default function ServerConfigPanel() {
                     ? "输入至少 32 位新令牌以轮换"
                     : "至少 32 个无空白字符"
                 }
-                className="h-9 min-w-72 flex-1 rounded-md border border-border-faint bg-bg-subtle px-3 font-mono text-body focus:outline-none focus:border-accent"
+                className="h-9 min-w-72 flex-1 rounded-md border border-line bg-bg-subtle px-3 font-mono text-body focus:outline-none focus:border-accent"
               />
               <button
                 type="button"
@@ -562,7 +562,7 @@ export default function ServerConfigPanel() {
                   update.isPending || accessTokenDraft.trim().length < 32
                 }
                 onClick={() => void enableLANAccess()}
-                className="h-9 px-3 rounded-md bg-accent text-accent-contrast text-meta font-medium disabled:opacity-50"
+                className="h-9 px-3 rounded-md bg-accent text-accent-contrast text-caption font-medium disabled:opacity-50"
               >
                 {data.accessMode === "lan" ? "轮换令牌" : "开启 LAN 访问"}
               </button>
@@ -571,18 +571,18 @@ export default function ServerConfigPanel() {
                   type="button"
                   disabled={update.isPending}
                   onClick={() => void disableLANAccess()}
-                  className="h-9 px-3 rounded-md border border-border text-meta text-fg-muted hover:bg-bg-subtle disabled:opacity-50"
+                  className="h-9 px-3 rounded-md border border-line text-caption text-fg-muted hover:bg-bg-subtle disabled:opacity-50"
                 >
                   切换为仅本机
                 </button>
               )}
             </div>
             {accessError && (
-              <p role="alert" className="mt-2 text-meta text-danger">
+              <p role="alert" className="mt-2 text-caption text-danger">
                 {accessError}
               </p>
             )}
-            <p className="mt-2 text-meta text-fg-subtle">
+            <p className="mt-2 text-caption text-fg-subtle">
               对外访问还需将监听地址设为局域网 IP 或
               0.0.0.0；修改监听地址需重启。内置服务不提供
               TLS，请仅用于可信家庭网络。
@@ -592,7 +592,7 @@ export default function ServerConfigPanel() {
 
         {FIELDS.map((group) => (
           <SettingsGroup key={group.section} title={group.section}>
-            <div className="divide-y divide-border-faint">
+            <div className="divide-y divide-line">
               {group.defs.map((def) => {
                 const statusKey = def.key;
                 const st = fieldStatus(statusKey);
@@ -659,7 +659,7 @@ export default function ServerConfigPanel() {
                   pushToast({ kind: "error", message: "启动扫描失败" });
                 }
               }}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-accent/40 text-accent hover:bg-accent/10 text-meta transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-accent/40 text-accent hover:bg-accent/10 text-caption transition-colors disabled:opacity-50"
             >
               <RefreshIcon size={11} />
               立即重新扫描
@@ -667,7 +667,7 @@ export default function ServerConfigPanel() {
           </div>
         )}
 
-        <div className="text-meta text-fg-subtle leading-relaxed px-1">
+        <div className="text-caption text-fg-subtle leading-relaxed px-1">
           配置文件路径:
           <code className="font-mono text-fg-muted">{data.configPath}</code>;
           改完自动写回 YAML,无需手动保存。

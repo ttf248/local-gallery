@@ -82,12 +82,12 @@ export default function CardCover({
   const layout = resolveCollageLayout(sources.length);
   return (
     <div
-      className="editorial-collage"
+      className="editorial-collage grid w-full h-full gap-0.5 [grid-template:minmax(0,1fr)_/_minmax(0,1fr)] overflow-hidden bg-bg [&[data-cover-layout=split-2]]:grid-cols-2 [&[data-cover-layout=feature-3]]:[grid-template:repeat(2,minmax(0,1fr))_/_minmax(0,1.6fr)_minmax(0,1fr)] [&[data-cover-layout=feature-3]>:first-child]:[grid-row:span_2] [&[data-cover-layout=grid-4]]:[grid-template:repeat(2,minmax(0,1fr))_/_repeat(2,minmax(0,1fr))]"
       data-cover-layout={layout}
       data-testid="card-cover-collage"
     >
       {sources.map((source, index) => (
-        <div key={source.path} className="editorial-collage__cell">
+        <div key={source.path} className="editorial-collage__cell min-w-0 min-h-0 overflow-hidden bg-bg-subtle">
           <CoverImage
             path={source.path}
             version={source.version}
@@ -178,7 +178,7 @@ function CoverImage({
       loading={loading}
       onError={() => setFailed(true)}
       style={{ objectPosition: position }}
-      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
+      className="w-full h-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.03] motion-safe:group-active:scale-[1.03]"
     />
   );
 }

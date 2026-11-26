@@ -38,7 +38,7 @@ export default function SmartAlbumCover({
   if (!fileId || failed) {
     return (
       <div
-        className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-meta text-fg-subtle"
+        className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-caption text-fg-subtle"
         data-testid="smart-album-cover-empty"
       >
         暂无封面
@@ -74,7 +74,7 @@ export default function SmartAlbumCover({
           alt=""
           displayWidth={displayWidth}
           sizes={sizes}
-          className="max-h-full max-w-full rounded-sm object-contain shadow-md ring-1 ring-inset ring-border/50 transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
+          className="max-h-full max-w-full rounded-sm object-contain shadow-2 ring-1 ring-inset ring-line/50 transition-transform duration-300 motion-safe:group-hover:scale-[1.03] motion-safe:group-active:scale-[1.03]"
           testId="smart-album-cover-photo"
           onError={() => setFailed(true)}
         />

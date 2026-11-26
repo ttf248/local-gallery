@@ -35,7 +35,7 @@ export default function BreadcrumbMenu({
         id === source?.sourceRoot || name === source?.sourceName,
     );
   return (
-    <nav aria-label="目录位置" className="library-crumbs">
+    <nav aria-label="目录位置" className="library-crumbs flex items-center gap-1 mt-1.5 text-caption text-fg-subtle flex-nowrap m-0 min-w-0">
       <Link
         to={libraryRoute(mode)}
         onClick={(event) => {
@@ -44,7 +44,7 @@ export default function BreadcrumbMenu({
           event.preventDefault();
           onSelect("");
         }}
-        className="library-crumbs__link"
+        className="library-crumbs__link text-fg-muted no-underline rounded-sm hover:text-fg hover:underline hover:[text-underline-offset:3px] inline-flex gap-[3px] items-center min-w-0 max-w-[120px] whitespace-nowrap touch:min-h-11 touch:min-w-11"
       >
         {mode === "comic" ? "书架" : "相册"}
       </Link>
@@ -113,7 +113,7 @@ function CrumbMenu({
     ? choices
     : [item, ...choices];
   return (
-    <span className="library-crumbs__segment">
+    <span className="library-crumbs__segment flex items-center flex-nowrap gap-1 m-0 min-w-0 [&>div]:min-w-0 [&>div]:shrink">
       <ChevronRightIcon
         size={12}
         className="shrink-0 text-fg-muted"
@@ -124,11 +124,11 @@ function CrumbMenu({
         align="start"
         open={open}
         onOpenChange={setOpen}
-        className="breadcrumb-menu scroll-thin"
+        className="breadcrumb-menu max-w-[calc(100vw_-_20px)] max-h-[min(55dvh,420px)] overflow-auto touch:[&_button]:min-h-11 touch:[&_button]:min-w-11 scroll-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5"
         trigger={
           <button
             type="button"
-            className="library-crumbs__link"
+            className="library-crumbs__link text-fg-muted no-underline rounded-sm hover:text-fg hover:underline hover:[text-underline-offset:3px] inline-flex gap-[3px] items-center min-w-0 max-w-[120px] whitespace-nowrap touch:min-h-11 touch:min-w-11"
             aria-current={current ? "location" : undefined}
             title={item.name}
           >
@@ -153,7 +153,7 @@ function CrumbMenu({
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className="ui-btn ui-btn--ghost"
+            className="btn btn-ghost"
             onClick={() => void children.refetch()}
           >
             重试读取同级目录
@@ -164,7 +164,7 @@ function CrumbMenu({
             type="button"
             role="menuitem"
             tabIndex={-1}
-            className="ui-btn ui-btn--ghost"
+            className="btn btn-ghost"
             disabled={children.isFetchingNextPage}
             onClick={() => void children.fetchNextPage()}
           >

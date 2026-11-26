@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 // 足迹页的样式跟着这一页走：它在 styles/global.css 里时，地图与行程
 // 卡片的样式会被每个页面首屏捎带着下载。
-import "../styles/travels.css";
+import "../styles/map.css";
 import Segmented from "../ui/Segmented";
 import ErrorBanner from "../features/common/ErrorBanner";
 import TravelMiniMap from "../features/travels/TravelMiniMap";
@@ -260,12 +260,12 @@ export default function Travels() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <header className="border-b border-border-faint bg-bg">
+      <header className="border-b border-line bg-bg">
         <div className="page-shell">
           {/* 页面名不再显示在内容区（侧栏那一项已经说明了），但这一页仍要
               有一个标题，否则读屏用户进来时不知道自己在哪。 */}
           <h1 className="sr-only">足迹</h1>
-          <div className="travel-head">
+          <div className="travel-head grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[clamp(20px,3vw,44px)] py-4 max-lg:grid-cols-1 max-lg:gap-y-3 max-lg:gap-x-4">
             {/* 规模带：说的是这个库的事实，不随区间变。跨度筛选排在最左边
                 —— 它管的是范围，规模管的是体量，两件事并成一行。 */}
             <TravelStats
@@ -290,7 +290,7 @@ export default function Travels() {
             </TravelStats>
 
             {/* 粒度是整页的：地图上的区划与行程的切法都跟着它变。 */}
-            <div className="travel-head__actions">
+            <div className="travel-head__actions flex flex-wrap items-center gap-2.5 justify-self-end max-lg:justify-self-start">
               <Segmented
                 label="归并粒度"
                 value={level}
@@ -321,11 +321,11 @@ export default function Travels() {
         </div>
       ) : null}
 
-      <div className="page-shell travel-layout">
+      <div className="page-shell travel-layout grid grid-cols-[minmax(0,1fr)_clamp(300px,24vw,440px)] gap-x-[clamp(20px,2.4vw,36px)] pt-5 [align-items:start] max-lg:grid-cols-1 max-lg:gap-y-5">
         {/* 地图占着右栏，滚动时一直跟着 —— 读行程的时候手边得有个方位。 */}
-        <aside className="travel-layout__aside">
-          <div className="travel-aside__bar">
-            <span className="travel-aside__label">足迹地图</span>
+        <aside className="travel-layout__aside col-start-1 row-start-1 lg:col-start-2 sticky top-3 flex flex-col gap-2 max-lg:static">
+          <div className="travel-aside__bar relative z-[2] flex items-center justify-between gap-3 min-h-7">
+            <span className="travel-aside__label text-caption tracking-[0.06em] text-fg-subtle">足迹地图</span>
             <Segmented
               label="地图范围"
               value={mapScope}
@@ -336,7 +336,7 @@ export default function Travels() {
               ]}
             />
           </div>
-          <div className="travel-aside__map">
+          <div className="travel-aside__map relative z-[1] aspect-[1_/_1] max-h-[68vh] overflow-hidden shadow-1 rounded-card bg-bg-elevated max-lg:aspect-[4_/_3] max-lg:max-h-[46vh]">
             <TravelMiniMap
               regions={regions}
               backdrop={backdrop}
@@ -354,7 +354,7 @@ export default function Travels() {
           </div>
         </aside>
 
-        <div className="travel-layout__trips">
+        <div className="travel-layout__trips col-start-1 row-start-2 lg:row-start-1 min-w-0">
           {whole ? (
             <TravelTrips
               trips={windowTrips}
@@ -371,7 +371,7 @@ export default function Travels() {
             </div>
           )}
 
-          <p className="travel-footnote">
+          <p className="travel-footnote [padding:24px_0_8px] border-t border-t-line text-caption leading-[1.7] text-fg-subtle">
             坐标与边界均在本机处理；时间按 EXIF
             拍摄时间的日历日计算，跨时区旅行按拍摄地的当地日期。 离线边界采用
             AreaCity 2026 年 4

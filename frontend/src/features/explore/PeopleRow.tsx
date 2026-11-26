@@ -113,7 +113,7 @@ function PeopleGroup({
 }) {
   return (
     <div>
-      <p className="mb-3 flex items-baseline gap-2 text-meta text-fg-muted">
+      <p className="mb-3 flex items-baseline gap-2 text-caption text-fg-muted">
         <span className="font-medium text-fg">{title}</span>
         <span>{hint}</span>
       </p>

@@ -177,7 +177,7 @@ export default function TravelMiniMap({
     >
       {loading && !empty && <p role="status" className="absolute left-3 top-3 text-caption text-fg-muted">正在载入足迹…</p>}
       {empty ? (
-        <p className="text-meta text-fg-muted">
+        <p className="text-caption text-fg-muted">
           {loading ? "正在载入足迹…" : "还没有带位置的照片"}
         </p>
       ) : (

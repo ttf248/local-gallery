@@ -145,7 +145,7 @@ export default function PhotoAlbum({ album }: Props) {
   const photoCount = Math.max(0, extras.albumTotal - extras.videoTotal);
   /* 墙上现在摆着几张照片：视频不参与分析类筛选，折叠也只对照片生效，
      拿媒体总数充数会让计数与页头对不上。 */
-  const wallPhotoCount = extras.photoTotal || photoCount;
+  const wallPhotoCount = extras.photoTotal;
   const unresolved = extras.unresolved;
   const filterChips = useMemo(
     () => albumFilterChips(filter, facets),
@@ -338,7 +338,7 @@ export default function PhotoAlbum({ album }: Props) {
 
   /* 墙上的相似组角标。它只在「这一组在本相册里不止一张」时出现 ——
      一张照片单独一组，说不出「相似」是什么意思。 */
-  const itemOverlay = useCallback(
+  const itemAction = useCallback(
     (item: LibraryMediaItem) => {
       const group = item.similarityGroup;
       if (!group || group.albumSize < 2) return null;
@@ -346,7 +346,7 @@ export default function PhotoAlbum({ album }: Props) {
         // 展开的成员：标出它跟代表照片是同一组。
         if (expandedGroupId !== group.id) return null;
         return (
-          <span className="pointer-events-none absolute right-1.5 top-1.5 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-meta text-white/90 backdrop-blur">
+          <span className="pointer-events-none absolute right-1.5 top-1.5 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-caption text-white/90">
             同组
           </span>
         );
@@ -365,7 +365,7 @@ export default function PhotoAlbum({ album }: Props) {
               ? "收起这一组"
               : `这一组有 ${group.albumSize} 张相似的照片，点开就地比较`
           }
-          className={`hover-reveal absolute right-1.5 top-1.5 z-10 rounded-md bg-black/70 px-1.5 py-0.5 text-meta text-white/90 backdrop-blur transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100 group-focus-within:opacity-100 ${
+          className={`hover-reveal absolute right-1.5 bottom-1.5 z-10 min-h-8 rounded-md bg-black/80 px-2 py-1 text-caption text-white touch:min-h-10 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100 group-focus-within:opacity-100 ${
             expanded ? "opacity-100" : ""
           }`}
         >
@@ -440,7 +440,7 @@ export default function PhotoAlbum({ album }: Props) {
             <button
               type="button"
               onClick={() => setDimension(grouping ? null : "recommended")}
-              className="ui-btn ui-btn--ghost album-group-trigger"
+              className="btn btn-ghost album-group-trigger max-md:[&>span]:hidden"
               aria-label={grouping ? "分组浏览已开" : "按分组浏览"}
               aria-pressed={grouping}
             >
@@ -480,9 +480,9 @@ export default function PhotoAlbum({ album }: Props) {
         }
       >
         {(showingGroup || filterChips.length > 0 || filter.collapse) && (
-          <div className="album-active-filters">
+          <div className="album-active-filters flex flex-wrap items-center gap-1.5 py-1">
             {showingGroup && selectedGroup ? (
-              <span className="truncate text-meta text-fg-muted">
+              <span className="truncate text-caption text-fg-muted">
                 分组：{selectedGroup.name} · {selectedGroup.photoCount} 张
               </span>
             ) : null}
@@ -497,7 +497,7 @@ export default function PhotoAlbum({ album }: Props) {
                 <button
                   type="button"
                   onClick={() => openGroup(null)}
-                  className="btn-text text-meta text-accent hover:underline"
+                  className="btn-text text-caption text-accent hover:underline"
                 >
                   回到全部照片
                 </button>
@@ -505,13 +505,13 @@ export default function PhotoAlbum({ album }: Props) {
             ) : null}
 
             {!showingGroup && filterChips.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 border-t border-border-faint py-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-line py-1.5">
                 {filterChips.map((chip) => (
                   <button
                     key={chip.key}
                     type="button"
                     onClick={() => setFilter(chip.clear)}
-                    className="inline-flex h-7 items-center gap-1 rounded-md bg-bg-subtle px-2 text-meta text-fg transition-colors hover:bg-bg-strong"
+                    className="inline-flex min-h-8 min-w-8 items-center gap-1 rounded-md bg-bg-subtle px-2 text-caption text-fg transition-colors hover:bg-bg-strong touch:min-h-10 touch:min-w-10"
                     title={`去掉这条条件：${chip.label}`}
                   >
                     {chip.label}
@@ -623,7 +623,7 @@ export default function PhotoAlbum({ album }: Props) {
             onToggleSelect={selection.toggle}
             isPicked={isPicked}
             onTogglePick={togglePick}
-            itemOverlay={itemOverlay}
+            itemAction={itemAction}
             scrollToIndex={wall.focusIndex}
             onContextMenu={menu.open}
           />

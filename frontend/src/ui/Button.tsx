@@ -6,7 +6,7 @@ import {
 import { variants } from "./variants";
 import { Spinner } from "./Spinner";
 const styles = variants({
-  base: "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-control px-4 transition duration-1 enabled:active:scale-[.98] disabled:cursor-default disabled:opacity-40",
+  base: "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-control px-4 transition duration-1 motion-safe:enabled:active:scale-[.98] disabled:cursor-default disabled:opacity-40",
   variants: {
     variant: {
       primary: "bg-accent text-accent-contrast",

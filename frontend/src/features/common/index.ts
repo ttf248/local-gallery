@@ -10,3 +10,4 @@ export { default as HoverPreview } from "./HoverPreview";
 export { default as TranscodeStatusBadge } from "./TranscodeStatusBadge";
 export { default as EmptyState } from "./EmptyState";
 export { ListFilterBar } from "./ListFilterBar";
+export { FilterDropdown } from "./FilterDropdown";

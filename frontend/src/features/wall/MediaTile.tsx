@@ -14,6 +14,7 @@ interface Props {
   sourceLabel?: string;
   badge?: string;
   overlay?: ReactNode;
+  action?: ReactNode;
   onOpen: () => void;
   onSelect?: (range: boolean) => void;
   onPick?: () => void;
@@ -31,6 +32,7 @@ export default function MediaTile({
   sourceLabel,
   badge,
   overlay,
+  action,
   onOpen,
   onSelect,
   onPick,
@@ -55,7 +57,7 @@ export default function MediaTile({
       <div
         className={
           "h-full w-full transition-transform duration-3 " +
-          (selected ? "scale-[.92]" : "group-hover:scale-[1.015]")
+          (selected ? "scale-[.92]" : "motion-safe:group-hover:scale-[1.015]")
         }
       >
         {video ? (
@@ -107,7 +109,7 @@ export default function MediaTile({
       >
         <span className="truncate">{sourceLabel || item.name}</span>
         {Boolean(item.width && item.height) && !video && (
-          <span className="mouse-only shrink-0 tabular-nums">
+          <span className="mouse-only touch:hidden shrink-0 tabular-nums">
             {item.width}×{item.height}
           </span>
         )}
@@ -123,6 +125,7 @@ export default function MediaTile({
           {badge}
         </span>
       )}
+      {action}
       {onSelect && (
         <button
           type="button"

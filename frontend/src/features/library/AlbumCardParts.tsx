@@ -44,7 +44,7 @@ export function FavoriteButton({
       aria-pressed={fav}
       aria-label={fav ? `取消收藏「${label}」` : `收藏「${label}」`}
       title={fav ? "取消收藏" : "收藏"}
-      className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-bg-elevated/90 backdrop-blur shadow-sm transition-opacity ${visibility} ${
+      className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-bg-elevated/90 shadow-1 transition-opacity ${visibility} ${
         fav ? "text-favorite" : "text-fg-muted hover:text-fg"
       } ${className}`}
     >

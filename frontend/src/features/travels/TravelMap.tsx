@@ -188,7 +188,7 @@ export default function TravelMap({
     return (
       <div className="flex min-h-[180px] flex-col items-center justify-center gap-2 px-6 text-center">
         <p className="text-body font-medium text-fg">这一层没有更细的边界</p>
-        <p className="max-w-sm text-meta leading-relaxed text-fg-muted">
+        <p className="max-w-sm text-caption leading-relaxed text-fg-muted">
           这个区域的照片仍然计入上级统计，可以回到上一级继续查看。
         </p>
       </div>
@@ -199,7 +199,7 @@ export default function TravelMap({
     <div>
       {cropToggle ? (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-meta text-fg-muted">
+          <p className="text-caption text-fg-muted">
             {cropToPhotos ? "已缩放到有照片的区域" : "全国范围"}
           </p>
           <button
@@ -266,8 +266,8 @@ export default function TravelMap({
                     d={path}
                     className={
                       hasPhotos
-                        ? "fill-accent group-hover:fill-accent-ink group-focus-visible:stroke-accent-ink"
-                        : "fill-bg-strong group-focus-visible:stroke-accent-ink"
+                        ? "fill-accent group-hover:fill-accent group-focus-visible:stroke-accent"
+                        : "fill-bg-strong group-focus-visible:stroke-accent"
                     }
                     fillOpacity={opacity}
                     stroke={region.photoCount === 0 ? "transparent" : "var(--fg-subtle)"}
@@ -292,14 +292,14 @@ export default function TravelMap({
         {tooltip ? (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-border-faint bg-bg-strong px-3 py-2 text-left shadow-lg"
+            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-line bg-bg-strong px-3 py-2 text-left shadow-3"
             style={{
               left: tooltip.x,
               top: tooltip.y - 10,
             }}
           >
-            <p className="text-label font-medium text-fg">{tooltip.region.name}</p>
-            <p className="mt-0.5 text-meta tabular-nums text-fg-muted">
+            <p className="text-body font-medium text-fg">{tooltip.region.name}</p>
+            <p className="mt-0.5 text-caption tabular-nums text-fg-muted">
               {tooltip.region.photoCount.toLocaleString()} 张 · 占本层{" "}
               {(shareOf(tooltip.region.photoCount, levelTotal) * 100).toFixed(1)}%
             </p>
@@ -307,7 +307,7 @@ export default function TravelMap({
         ) : null}
       </div>
       {legend === null ? null : (
-        <p className="mt-2 text-meta text-fg-muted">
+        <p className="mt-2 text-caption text-fg-muted">
           {legend ?? `基准：${scopeLabel} · ${levelTotal.toLocaleString()} 张`}
         </p>
       )}

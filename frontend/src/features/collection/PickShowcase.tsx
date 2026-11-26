@@ -113,10 +113,10 @@ export default function PickShowcase<T extends { id: string }>({
                     ? `选择「${name(item)}」`
                     : `查看 ${name(item)}`
                 }
-                className="absolute inset-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                className="absolute inset-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
               />
               {selected ? (
-                <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-accent px-1.5 py-0.5 text-meta text-accent-contrast">
+                <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-accent px-1.5 py-0.5 text-caption text-accent-contrast">
                   已选
                 </span>
               ) : null}

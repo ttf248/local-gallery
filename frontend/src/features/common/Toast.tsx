@@ -41,7 +41,7 @@ export default function ToastViewport() {
             key={toast.id}
             className={
               "pointer-events-auto flex min-h-11 items-center gap-3 rounded-xl bg-inverse-bg px-4 py-2 text-callout text-inverse-fg shadow-2 " +
-              (exiting ? "opacity-0 transition duration-2" : "fade-up")
+              (exiting ? "opacity-0 transition duration-2" : "fade-up [animation:fadeUp_320ms_var(--ease-emphasized)_both]")
             }
             aria-hidden={exiting || undefined}
             data-tone="inverse"

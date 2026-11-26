@@ -262,7 +262,7 @@ export default function ImageGallery({
     const base: React.CSSProperties = {
       transform,
       transformOrigin: "center",
-      transition: dragRef.current ? "none" : "transform 200ms var(--ease-out)",
+      transition: dragRef.current ? "none" : "transform 200ms var(--ease-emphasized)",
     };
     if (aspect.mode === "fit") {
       return {
@@ -594,7 +594,7 @@ const ContinuousImage = memo(function ContinuousImage({
         alt={`第 ${index + 1} 页`}
         loading={nearIndex ? "eager" : "lazy"}
         decoding={nearIndex ? "sync" : "async"}
-        className="select-none scale-fade"
+        className="select-none scale-fade [animation:scaleFade_240ms_var(--ease-emphasized)]"
         style={style}
       />
     </div>
@@ -636,7 +636,7 @@ function GalleryImage({
         title="该图片无法显示"
       >
         <ImageIcon size={28} />
-        <span className="text-meta">该图片无法显示</span>
+        <span className="text-caption">该图片无法显示</span>
       </div>
     );
   }

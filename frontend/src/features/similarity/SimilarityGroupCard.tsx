@@ -102,23 +102,23 @@ export default function SimilarityGroupCard({
           />
         </button>
 
-        <div className="similarity-group__body">
-          <div className="similarity-group__text">
-            <div className="similarity-group__title">
+        <div className="similarity-group__body [flex:1_1_260px] min-w-0 [align-self:flex-start]">
+          <div className="similarity-group__text min-w-0">
+            <div className="similarity-group__title flex items-center gap-2 flex-wrap">
               <Badge title={similarityKindHint(group.kind)}>
                 {similarityKindLabel(group.kind)}
               </Badge>
-              <span className="similarity-group__count">
+              <span className="similarity-group__count text-[var(--text-caption,var(--text-body))] text-fg-muted">
                 {group.members.length} 张
               </span>
               {group.redundant > 0 ? (
-                <span className="similarity-group__count">
+                <span className="similarity-group__count text-[var(--text-caption,var(--text-body))] text-fg-muted">
                   多余 {group.redundant} 张
                 </span>
               ) : null}
               {group.crossFolder ? (
                 <span
-                  className="similarity-group__count"
+                  className="similarity-group__count text-[var(--text-caption,var(--text-body))] text-fg-muted"
                   title="这一组的照片分散在多个文件夹"
                 >
                   跨文件夹
@@ -129,7 +129,7 @@ export default function SimilarityGroupCard({
               </Badge>
             </div>
 
-            <div className="similarity-group__meta">
+            <div className="similarity-group__meta flex items-center gap-1.5 mt-1 text-[var(--text-caption,var(--text-body))] text-fg-subtle min-w-0">
               <span className="truncate" title={group.folder}>
                 {group.folder}
               </span>
@@ -147,13 +147,13 @@ export default function SimilarityGroupCard({
                 的主角。主角是照片与那个决定 —— 读数压在下面一行小字里，
                 眼睛先看到的是图，再往下扫到依据。 */}
             {representative ? (
-              <div className="similarity-group__quality">
-                <span className="similarity-group__quality-label">
+              <div className="similarity-group__quality flex items-center gap-2.5 flex-wrap mt-1.5 text-[var(--text-caption,var(--text-body))] text-fg-subtle">
+                <span className="similarity-group__quality-label text-fg-subtle">
                   {group.representativeIsManual ? "当前代表" : "建议代表"}
                 </span>
                 <SimilarityQualityReadout quality={representative.quality} />
                 {group.representativeIsManual && recommended ? (
-                  <span className="similarity-group__hint">
+                  <span className="similarity-group__hint text-fg-subtle">
                     建议的是另一张（清晰度{" "}
                     {Math.round(recommended.quality.sharpnessScore * 100)}）
                   </span>
@@ -273,13 +273,13 @@ function MemberTile({
   const isRecommended = member.resourceId === group.recommended;
   return (
     <div
-      className={`similarity-member${isRepresentative ? " similarity-member--current" : ""}`}
+      className={`similarity-member flex flex-col gap-2 p-2 rounded-tile bg-bg-subtle min-w-0${isRepresentative ? " similarity-member--current [box-shadow:inset_0_0_0_2px_var(--fg)]" : ""}`}
       style={{ width: 180, flexShrink: 0 }}
       data-testid="similarity-member"
     >
       <button
         type="button"
-        className="similarity-member__image"
+        className="similarity-member__image relative block w-full rounded-sm overflow-hidden bg-bg-strong cursor-pointer focus-visible:[outline:2px_solid_var(--signal)] focus-visible:[outline-offset:2px]"
         onClick={() => onSetRepresentative(member.resourceId)}
         title="把这张设为代表照片"
         aria-pressed={isRepresentative}
@@ -288,24 +288,24 @@ function MemberTile({
         <ThumbImage
           fileId={member.resourceId}
           alt="组内照片"
-          className="similarity-member__thumb"
+          className="similarity-member__thumb block w-full h-[180px] object-cover"
           displayWidth={220}
         />
         {isRepresentative ? (
-          <span className="similarity-member__flag">代表</span>
+          <span className="similarity-member__flag absolute left-1.5 top-1.5 py-0.5 px-[7px] rounded-tile text-micro [background:rgb(0_0_0_/_0.72)] [color:#fff] [backdrop-filter:blur(4px)]">代表</span>
         ) : null}
         {isRecommended && !isRepresentative ? (
-          <span className="similarity-member__flag similarity-member__flag--quiet">
+          <span className="similarity-member__flag absolute left-1.5 top-1.5 py-0.5 px-[7px] rounded-tile text-micro [background:rgb(0_0_0_/_0.72)] [color:#fff] [backdrop-filter:blur(4px)] similarity-member__flag--quiet [background:rgb(0_0_0_/_0.5)] [color:rgb(255_255_255_/_0.85)]">
             建议
           </span>
         ) : null}
       </button>
-      <div className="similarity-member__meta">
+      <div className="similarity-member__meta flex flex-col gap-[3px] min-w-0 text-[var(--text-caption,var(--text-body))] text-fg-muted">
         <span className="truncate" title={member.albumName}>
           {member.albumName || "照片"}
         </span>
         <SimilarityQualityReadout quality={member.quality} />
-        <span className="similarity-member__distance">
+        <span className="similarity-member__distance text-fg-subtle tabular-nums">
           {group.kind === "exact"
             ? "内容一致"
             : group.kind === "burst"
@@ -316,7 +316,7 @@ function MemberTile({
       {group.members.length > 1 ? (
         <button
           type="button"
-          className="btn btn-sm similarity-member__compare"
+          className="btn btn-sm similarity-member__compare [align-self:flex-start]"
           onClick={() => onCompare(group.representative, member.resourceId)}
           disabled={isRepresentative}
           title={isRepresentative ? "这张已经是代表照片" : "与代表照片并排对比"}
@@ -335,7 +335,7 @@ function SimilarityQualityReadout({
   quality: SimilarityGroup["members"][number]["quality"];
 }) {
   return (
-    <span className="similarity-quality">
+    <span className="similarity-quality inline-flex items-center gap-2 text-[var(--text-caption,var(--text-body))] text-fg-muted tabular-nums">
       <span title="清晰度分项">
         清晰 {Math.round(quality.sharpnessScore * 100)}
       </span>

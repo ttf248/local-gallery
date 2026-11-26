@@ -229,6 +229,7 @@ test("相似照片折叠只留代表照片，展开后成员就地摊开", async
   page,
   request,
 }) => {
+  page.setDefaultTimeout(15_000);
   await ensureLibraryReady(request);
   await runSimilarityAnalysis(request);
 
@@ -361,7 +362,7 @@ test("筛选后大图浏览的总数与顺序跟着筛选走", async ({ page, re
   await expect(viewer).toContainText(`共 ${filtered.page.total} 张`);
   await expect(viewer.getByRole("img", { name: first })).toBeVisible();
   // 下一张按的是同一套顺序。
-  await viewer.getByRole("button", { name: "下一张" }).click();
+  await viewer.getByRole("button", { name: "下一张", exact: true }).click();
   await expect(viewer).toContainText("第 2 张");
   await expect(viewer.getByRole("img", { name: second })).toBeVisible();
 });

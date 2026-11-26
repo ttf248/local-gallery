@@ -2398,22 +2398,21 @@ test("窄屏下顶栏不横向溢出，筛选标签保持一行", async ({ page 
   await expect(
     page.getByRole("tab", { name: /^全部\s*\d+$/ }),
   ).toBeVisible();
-  const chips = await page.evaluate(() => {
-    const matched = [...document.querySelectorAll("button")].filter((button) =>
-      // 两侧的类型词：叶级目录都叫「相册」，集合词分侧
-      // （照片「集合」/ 漫画「作品」）。
-      /^(全部|文件夹|集合|相册|作品|标签)\s*\d*$/.test(
-        (button.textContent ?? "").trim(),
-      ),
-    );
-    return matched.map((button) => ({
-      text: (button.textContent ?? "").trim(),
-      height: Math.round(button.getBoundingClientRect().height),
-    }));
-  });
-  expect(chips.length).toBeGreaterThan(0);
-  for (const chip of chips) {
-    expect(chip.height, `标签「${chip.text}」被压成竖排`).toBeLessThan(40);
+  const tabs = page.getByRole("tablist", { name: "内容类型" }).getByRole("tab");
+  expect(await tabs.count()).toBeGreaterThan(0);
+  for (const tab of await tabs.all()) {
+    const lines = await tab.evaluate(button => {
+      const walker = document.createTreeWalker(button, NodeFilter.SHOW_TEXT);
+      const centers = [];
+      while (walker.nextNode()) {
+        if (!walker.currentNode.textContent?.trim()) continue;
+        const range = document.createRange();
+        range.selectNodeContents(walker.currentNode);
+        for (const box of range.getClientRects()) centers.push(box.top + box.height / 2);
+      }
+      return Math.max(...centers) - Math.min(...centers);
+    });
+    expect(lines, "标签名称与计数应保持同行").toBeLessThan(4);
   }
 });
 

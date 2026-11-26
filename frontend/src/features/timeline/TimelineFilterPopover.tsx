@@ -142,7 +142,7 @@ export default function TimelineFilterPopover({
       {(sources.length > 0 || precisions.length > 0) && (
         <>
           <PopoverSeparator />
-          <div className="timeline-filter-legend">
+          <div className="timeline-filter-legend py-1.5 px-2.5 text-caption text-fg-muted">
             {sources.length > 0 && (
               <p data-testid="timeline-source-legend">
                 时间来源 · {sources.join(" · ")}
@@ -161,7 +161,7 @@ export default function TimelineFilterPopover({
           type="button"
           role="menuitem"
           tabIndex={-1}
-          className="ui-btn ui-btn--ghost"
+          className="btn btn-ghost"
           onClick={() => onChange({ year: "", month: "", media: "" })}
         >
           清除筛选

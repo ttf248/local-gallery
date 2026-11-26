@@ -1,16 +1,3 @@
-/* 阅读器（/comic/read/*）的顶栏与浮动控件。
- *
- * 这些规则原来写在 styles/global.css 里 —— 那是每个页面首屏都要
- * 下载的一张表。拆出来跟着各自的懒加载路由走，首屏样式表小了一圈。
- *
- * 仍然放在 @layer components 里：与 global.css 同层，层叠顺序只由样式表
- * 的先后决定，拆出来不影响任何一条既有规则。
- *
- * @tailwind components 只为把这一份样式挂进 components 层：Tailwind 的
- * 工具类在 utilities 层，components 层在它之前，工具类才盖得住组件层。
- * 没有这条指令，PostCSS 会报「no matching @tailwind components
- * directive」。
- */
 @tailwind components;
 
 @layer components {
@@ -44,7 +31,7 @@
     border: 1px solid var(--overlay-border);
     border-radius: var(--radius-control);
     background: var(--overlay-glass);
-    box-shadow: var(--shadow-float);
+    box-shadow: var(--shadow-2);
     backdrop-filter: blur(16px) saturate(1.4);
     -webkit-backdrop-filter: blur(16px) saturate(1.4);
     pointer-events: auto;

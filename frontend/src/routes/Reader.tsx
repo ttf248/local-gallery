@@ -54,7 +54,7 @@ export default function Reader() {
       // 否则浅色主题下会先闪一屏白底，再跳到黑色画布。
       <div className="reader-shell flex flex-col h-full">
         {/* 顶部条：返回 / 名称（常驻） */}
-        <div className="px-4 h-[calc(2.25rem+var(--safe-top))] pt-[var(--safe-top)] text-meta text-white/60 border-b border-white/10 bg-overlay-panel/60 flex items-center gap-3">
+        <div className="px-4 h-[calc(2.25rem+var(--safe-top))] pt-[var(--safe-top)] text-caption text-white/60 border-b border-white/10 bg-overlay-panel/60 flex items-center gap-3">
           <button
             type="button"
             onClick={goBack}
@@ -70,7 +70,7 @@ export default function Reader() {
         <div className="flex-1 flex items-center justify-center px-6">
           {media.status === "no-album" ? (
             <div className="text-center">
-              <div className="font-display text-section font-semibold text-white/90">
+              <div className="font-display text-title-3 font-semibold text-white/90">
                 无可显示的图片
               </div>
               <div className="text-body text-white/50 mt-1.5">
@@ -79,7 +79,7 @@ export default function Reader() {
             </div>
           ) : media.status === "empty" || media.status === "error" ? (
             <div className="text-center max-w-sm">
-              <div className="font-display text-section font-semibold text-white/90 mb-2">
+              <div className="font-display text-title-3 font-semibold text-white/90 mb-2">
                 {media.status === "empty"
                   ? isVideo
                     ? "这个相册没有视频"
@@ -169,13 +169,13 @@ export default function Reader() {
           /* 抬到底部浮动工具条之上：两者都在底部居中，落在同一处时
              收尾提示会压住工具条，工具条从提示底下露出半截，
              像两层没对齐的浮层。 */
-          className="absolute inset-x-0 bottom-28 z-30 mx-auto flex w-[min(560px,92vw)] items-center gap-3 rounded-lg border border-overlay-border reader-glass px-4 py-3 text-white shadow-float"
+          className="absolute inset-x-0 bottom-28 z-30 mx-auto flex w-[min(560px,92vw)] items-center gap-3 rounded-lg border border-overlay-border reader-glass px-4 py-3 text-white shadow-2"
         >
           <div className="min-w-0 flex-1">
             <div className="text-body font-medium text-white/90">
               {hasNextVolume ? "这卷读完了" : "这一部读完了"}
             </div>
-            <div className="text-meta text-white/55">
+            <div className="text-caption text-white/55">
               {hasNextVolume
                 ? "可以接着读下一卷，或回到书架继续浏览。"
                 : "这是这一部的最后一卷，没有下一卷了。"}
@@ -193,7 +193,7 @@ export default function Reader() {
                   albumsOnly: true,
                 });
               }}
-              className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-meta text-white/90 transition-colors hover:bg-white/10"
+              className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-caption text-white/90 transition-colors hover:bg-white/10"
             >
               下一卷
             </button>
@@ -204,7 +204,7 @@ export default function Reader() {
               setShowFinished(false);
               goBack();
             }}
-            className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-meta text-white/90 transition-colors hover:bg-white/10"
+            className="shrink-0 rounded border border-white/20 px-3 py-1.5 text-caption text-white/90 transition-colors hover:bg-white/10"
           >
             {albumSide === "comic" ? "回到书架" : "回到相册"}
           </button>

@@ -112,7 +112,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
               这个媒体库已开启局域网访问保护。令牌只用于换取本浏览器的短期会话，不会保存在本地存储或
               URL 中。
             </p>
-            <p className="mt-2 text-meta text-fg-subtle leading-5">
+            <p className="mt-2 text-caption text-fg-subtle leading-5">
               请仅在可信家庭网络中使用；内置服务不提供 TLS，不适合互联网或不可信
               Wi-Fi。
             </p>
@@ -159,7 +159,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
             <button
               type="button"
               onClick={checkSession}
-              className="mt-4 h-9 px-4 rounded-lg border border-border text-body hover:bg-bg-subtle"
+              className="mt-4 h-9 px-4 rounded-lg border border-line text-body hover:bg-bg-subtle"
             >
               重试
             </button>

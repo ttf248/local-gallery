@@ -75,14 +75,14 @@ function HomeHeader({
   });
 
   return (
-    <section className="page-shell page-heading">
-      <div className="home-heading">
-        <div className="home-heading__title">
+    <section className="page-shell page-heading pt-[var(--space-8)] pb-[var(--space-5)] max-sm:pt-5 max-sm:pb-4">
+      <div className="home-heading grid grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 [align-items:end] [@media(min-width:2240px)]:grid-cols-[auto_minmax(0,1fr)_auto] [@media(min-width:2240px)]:gap-y-0 [@media(min-width:2240px)]:[align-items:last_baseline]">
+        <div className="home-heading__title col-span-2 row-start-1 min-[2240px]:col-span-1 min-w-0">
           {/* 工作台首页的主标题是 32px（与照片侧同一档）：两侧都是入口页，
               标题要压得住首屏；数量与时间退到下面一行的辅助字里。 */}
-          <h1 className="page-title">{title}</h1>
+          <h1 className="page-title [.page-heading_&]:mt-2 font-display text-title-1 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [@media(max-width:640px)]:text-title-2 [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere]">{title}</h1>
         </div>
-        <p className="home-heading__desc text-meta text-fg-muted">
+        <p className="home-heading__desc col-start-1 row-start-2 min-[2240px]:col-start-2 min-[2240px]:row-start-1 min-w-0 text-caption text-fg-muted">
           {manifest ? (
             <>
               <span className="tabular-nums">{librarySize}</span>
@@ -99,7 +99,7 @@ function HomeHeader({
             "尚未加载图像库"
           )}
         </p>
-        <div className="home-heading__actions flex items-center gap-2">
+        <div className="home-heading__actions col-start-2 row-start-2 justify-self-end min-[2240px]:col-start-3 min-[2240px]:row-start-1 flex items-center gap-2">
           {/* 通向完整相册的明确入口：首页给的是照片，目录在相册里。
               两段文字按断点各显示一段，屏幕阅读器却会把两段都读出来
               （「相册相册」），因此这里显式给一个可访问名。 */}
@@ -327,9 +327,9 @@ function ComicHome() {
       {/* 最近阅读：读过的卷。放在继续阅读与未读之后 —— 有在读的书时，
           「接着读」才是第一件事；读过的书是回访，不是待办。 */}
       {recentCards.length > 0 ? (
-        <section className="page-shell page-section comic-library-home__recent">
-          <div className="section-heading">
-            <h2 className="section-title">最近阅读</h2>
+        <section className="page-shell page-section pt-[var(--section-gap)] comic-library-home__recent pb-[var(--section-gap)]">
+          <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
+            <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">最近阅读</h2>
             <Link to={recentsRoute("comic")} className="chip ml-auto">
               全部
             </Link>

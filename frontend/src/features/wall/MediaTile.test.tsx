@@ -23,7 +23,18 @@ it("精选按钮独立聚焦，勾选状态可读取且视频标记常驻", () =
     onSelect,
     onVideoFocus: vi.fn(),
   };
-  const { rerender } = render(<MediaTile {...props} />);
+  const expand = vi.fn();
+  const { rerender } = render(
+    <MediaTile
+      {...props}
+      action={<button onClick={expand}>展开相似组</button>}
+    />,
+  );
+  const action = screen.getByRole("button", { name: "展开相似组" });
+  expect(action.parentElement).toBe(screen.getByTestId("media-tile"));
+  fireEvent.click(action);
+  expect(expand).toHaveBeenCalledOnce();
+  expect(onOpen).not.toHaveBeenCalled();
   const pick = screen.getByRole("button", { name: /加入精选/ });
   pick.focus();
   expect(pick).toHaveFocus();

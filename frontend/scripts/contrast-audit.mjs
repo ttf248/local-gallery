@@ -34,7 +34,10 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",");
 //   reader —— 阅读器（见下方 openReader）
 //   tag    —— 标签页（真实库里可能一个标签都没有，用仪表盘里的真实相册
 //             伪造标签页数据，封面仍是真实缩略图）
-const PAGES = (process.env.LG_PAGES ?? "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,reader,tag")
+const PAGES = (
+  process.env.LG_PAGES ??
+  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,viewer,reader,tag"
+)
   .split(",")
   .map((p) => p.trim())
   .filter(Boolean);
@@ -56,6 +59,35 @@ const PROFILES = resolveProfiles({
 });
 
 // 在页面里跑的取色 / 判定逻辑。
+// 横向滚动行以及独立滚动的正文可能只露出卡片的一部分。
+// 像素采样必须与当前绘制区域相交，避免把旁边画布的像素当作照片底色。
+function installGeometryProbe() {
+  window.auditPaintRect = (el) => {
+    const modal = document.querySelector("dialog:modal");
+    if (modal && !modal.contains(el)) return null;
+    const rect = el.getBoundingClientRect();
+    let left = Math.max(0, rect.left),
+      top = Math.max(0, rect.top);
+    let right = Math.min(innerWidth, rect.right),
+      bottom = Math.min(innerHeight, rect.bottom);
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const style = getComputedStyle(p),
+        bounds = p.getBoundingClientRect();
+      if (/hidden|clip|auto|scroll/.test(style.overflowX)) {
+        left = Math.max(left, bounds.left);
+        right = Math.min(right, bounds.right);
+      }
+      if (/hidden|clip|auto|scroll/.test(style.overflowY)) {
+        top = Math.max(top, bounds.top);
+        bottom = Math.min(bottom, bounds.bottom);
+      }
+    }
+    return right > left && bottom > top
+      ? { x: left, y: top, w: right - left, h: bottom - top }
+      : null;
+  };
+}
+
 const AUDIT = () => {
   const parseColor = (value) => {
     const s = String(value).trim();
@@ -70,7 +102,12 @@ const AUDIT = () => {
     );
     if (m) {
       const alpha = alphaOf(m[4]);
-      return { r: +m[1], g: +m[2], b: +m[3], a: Number.isFinite(alpha) ? alpha : 1 };
+      return {
+        r: +m[1],
+        g: +m[2],
+        b: +m[3],
+        a: Number.isFinite(alpha) ? alpha : 1,
+      };
     }
     m = s.match(
       /color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.%]+))?\s*\)/,
@@ -228,11 +265,7 @@ const AUDIT = () => {
       )
         continue;
       if (!layerBelow(el, layer)) continue;
-      if (
-        !hit ||
-        layer.z > hit.z ||
-        (layer.z === hit.z && layer.dom > hit.dom)
-      )
+      if (!hit || layer.z > hit.z || (layer.z === hit.z && layer.dom > hit.dom))
         hit = layer;
     }
     // 两者里画得更上面的那个才是真正的背板
@@ -290,6 +323,8 @@ const AUDIT = () => {
     if (!text) continue;
     const el = node.parentElement;
     if (!el || seen.has(el)) continue;
+    const modal = document.querySelector("dialog:modal");
+    if (modal && !modal.contains(el)) continue;
     seen.add(el);
     const cs = getComputedStyle(el);
     if (cs.visibility === "hidden" || cs.display === "none") continue;
@@ -312,7 +347,8 @@ const AUDIT = () => {
 
     // 背景：先问"背板是谁"（绘制顺序 + 几何），再决定这条文字能不能静态判。
     const backdrop = findBackdrop(el, rect);
-    const onImage = backdrop.kind === "image" || backdrop.kind === "translucent";
+    const onImage =
+      backdrop.kind === "image" || backdrop.kind === "translucent";
 
     let bg;
     if (backdrop.kind === "opaque" && backdrop.color) {
@@ -369,7 +405,9 @@ const AUDIT = () => {
          ring —— 文字压在别的一层上，取包围盒外一圈像素，
                  并裁剪到那一层的矩形内（不能采到那一层之外的像素，
                  否则会把照片上更亮 / 更暗的地方当成背板）。 */
-      sampleMode: backdrop.kind === "translucent" && backdrop.self ? "self" : "ring",
+      sampleMode:
+        backdrop.kind === "translucent" && backdrop.self ? "self" : "ring",
+      clip: window.auditPaintRect(el),
       region: backdrop.region,
       radius: backdrop.radius ?? 0,
       rect: {
@@ -402,14 +440,29 @@ const ICONS = () => {
       /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,/\s]+([\d.%]+))?\s*\)/,
     );
     if (m) {
-      const alpha = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
-      return { r: +m[1], g: +m[2], b: +m[3], a: Number.isFinite(alpha) ? alpha : 1 };
+      const alpha =
+        m[4] === undefined
+          ? 1
+          : m[4].endsWith("%")
+            ? parseFloat(m[4]) / 100
+            : parseFloat(m[4]);
+      return {
+        r: +m[1],
+        g: +m[2],
+        b: +m[3],
+        a: Number.isFinite(alpha) ? alpha : 1,
+      };
     }
     m = s.match(
       /color\(\s*srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.%]+))?\s*\)/,
     );
     if (m) {
-      const alpha = m[4] === undefined ? 1 : m[4].endsWith("%") ? parseFloat(m[4]) / 100 : parseFloat(m[4]);
+      const alpha =
+        m[4] === undefined
+          ? 1
+          : m[4].endsWith("%")
+            ? parseFloat(m[4]) / 100
+            : parseFloat(m[4]);
       return {
         r: Math.round(+m[1] * 255),
         g: Math.round(+m[2] * 255),
@@ -472,6 +525,9 @@ const ICONS = () => {
       fg: cs.color,
       fgRgb: fg,
       need: 3,
+      sampleMode:
+        (parseColor(cs.backgroundColor)?.a ?? 0) >= 0.99 ? "self" : "ring",
+      clip: window.auditPaintRect(svg),
       size: rect.width,
       rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
     });
@@ -511,6 +567,7 @@ const PIXELS = async ({ dataUrl, targets, dpr }) => {
     (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 
   return targets.map((t) => {
+    if (t.clip === null) return { ...t, pixelRatio: null };
     const x = Math.round(t.rect.x * dpr);
     const y = Math.round(t.rect.y * dpr);
     const w = Math.round(t.rect.w * dpr);
@@ -589,6 +646,20 @@ const PIXELS = async ({ dataUrl, targets, dpr }) => {
       const inside =
         px >= x - rx && px < x - rx + w && py >= y - ry && py < y - ry + h;
       if (inside) continue;
+      // 允许在可见文字周围采样，但不越过实际截断它的滚动边缘。
+      if (t.clip) {
+        const gx = (rx + px) / dpr,
+          gy = (ry + py) / dpr;
+        if (
+          (t.clip.x > t.rect.x + 1 && gx < t.clip.x) ||
+          (t.clip.y > t.rect.y + 1 && gy < t.clip.y) ||
+          (t.clip.x + t.clip.w < t.rect.x + t.rect.w - 1 &&
+            gx >= t.clip.x + t.clip.w) ||
+          (t.clip.y + t.clip.h < t.rect.y + t.rect.h - 1 &&
+            gy >= t.clip.y + t.clip.h)
+        )
+          continue;
+      }
       // 只取四条"贴着字"的直边，不取四个角上的方块。
       //
       // 角上的方块离字形最远，却常常根本没有背板：药丸 / 角标是圆角的，
@@ -671,9 +742,19 @@ const SELF_TEST = () => {
     document.body.appendChild(d);
     top += 60;
   };
-  mk("rgb(255,255,255)", "rgb(255,255,255)", "自检-坏-白字压白底", "self-test-bad");
+  mk(
+    "rgb(255,255,255)",
+    "rgb(255,255,255)",
+    "自检-坏-白字压白底",
+    "self-test-bad",
+  );
   mk("rgb(0,0,0)", "rgb(255,255,255)", "自检-好-白字压黑底", "self-test-good");
-  mk("rgb(120,120,120)", "rgb(255,255,255)", "自检-坏-白字压中灰底", "self-test-bad2");
+  mk(
+    "rgb(120,120,120)",
+    "rgb(255,255,255)",
+    "自检-坏-白字压中灰底",
+    "self-test-bad2",
+  );
 
   // 兄弟层自检：文字**不在**图的 DOM 子树里，而是靠 z-index 压在图上
   // —— 标签页 / 相册页的 hero 标题就是这个结构。祖先链查不到它，
@@ -830,7 +911,8 @@ async function prepareTagRoute(page, mode) {
   tagAuditState = state;
   if (!state.faked) return; // 真实数据：不用拦截
   await page.route(
-    (url) => url.pathname.includes("/api/tags/") && url.pathname.endsWith("/albums"),
+    (url) =>
+      url.pathname.includes("/api/tags/") && url.pathname.endsWith("/albums"),
     async (route) => {
       // 伪造的数据用当前模式下的真实相册：封面与配色都能量到，
       // 空列表只能量到一个空页面。
@@ -868,133 +950,151 @@ const coverage = [];
 const routeErrors = [];
 
 for (const theme of THEMES) {
- for (const profile of PROFILES) {
-  const ctx = await browser.newContext({
-    viewport: profile.viewport,
-    locale: "zh-CN",
-    colorScheme: theme,
-    hasTouch: profile.hasTouch,
-    deviceScaleFactor: profile.deviceScaleFactor,
-  });
-  const page = await ctx.newPage();
-  await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
-  // 工作台模式决定路由前缀：两侧的页面各在 /photo 与 /comic 下。
-  const mode = await resolveMode(page);
-  await prepareTagRoute(page, mode);
-  await page.evaluate(({ t, vm }) => {
-    const raw = localStorage.getItem("local-gallery-ui");
-    const parsed = raw ? JSON.parse(raw) : { state: {} };
-    parsed.state = { ...(parsed.state ?? {}), theme: t, viewMode: vm };
-    localStorage.setItem("local-gallery-ui", JSON.stringify(parsed));
-  }, { t: theme, vm: VIEWMODE });
-
-  for (const route of PAGES) {
-    // 未读页只属于漫画工作台：照片侧没有这个路由，硬走会落回首页。
-    if (route === "/unread" && mode !== "comic") {
-      console.log(`  · 跳过 ${theme} /unread：只有漫画工作台有未读页`);
-      continue;
-    }
-    // 智能相册墙只属于照片侧：分组线索来自照片的元数据与人脸分析。
-    if (route === "/smart-albums" && mode !== "photo") {
-      console.log(
-        `  · 跳过 ${theme} /smart-albums：只有照片工作台有智能相册墙`,
-      );
-      continue;
-    }
-    // 漫画侧没有相册网格页：/comic/albums/:id 直接进阅读器。阅读器已由
-    // reader 一条单独审计，这里再量一遍量到的还是阅读器。
-    if (route === "album" && mode === "comic") {
-      console.log(
-        `  · 跳过 ${theme} album：漫画侧打开一卷直接进阅读器（reader 已单独审计）`,
-      );
-      continue;
-    }
-    if (route === "reader") {
-      if (!(await openReader(page))) {
-        console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);
-        continue;
-      }
-    } else {
-      // 伪路由 album：相册详情页的 id 运行时现取。
-      // 伪路由 tag：标签页用固定的标签名，数据由 prepareTagRoute 伪造。
-      const target =
-        route === "album"
-          ? await resolveAlbumRoute(page, mode)
-          : route === "tag"
-            ? `/${mode}/tags/${encodeURIComponent(tagAuditState.tag)}`
-            : buildRoute(route, mode);
-      if (!target) {
-        console.log(`  · 跳过 ${theme} ${route}：库里没有可打开的相册`);
-        continue;
-      }
-      // 任务中心有 SSE 长连接（任务在跑时订阅事件流），networkidle 会
-      // 一直等不到空闲；这类页面改用 domcontentloaded 再等画面稳定。
-      await page.goto(BASE + target, {
-        waitUntil: route.startsWith("/tasks")
-          ? "domcontentloaded"
-          : "networkidle",
-      });
-      await waitForStable(page);
-    }
-    if (SELF_TEST_ONLY) await page.evaluate(SELF_TEST);
-    let items = await page.evaluate(AUDIT);
-    // 偶发的渲染异常（相册页的虚拟列表爆栈）重试一次再判。
-    if (await page.evaluate(ROUTE_ERROR)) {
-      await page.reload({ waitUntil: "domcontentloaded" });
-      await waitForStable(page);
-      items = await page.evaluate(AUDIT);
-    }
-    const overImage = items.filter((i) => i.onImage);
-    const icons = await page.evaluate(ICONS);
-
-    // 图片 / 渐变上的文字 + 全部图标：截屏后按包围盒采样真实像素。
-    if (overImage.length || icons.length) {
-      const shot = await page.screenshot({ type: "png" });
-      const dataUrl = `data:image/png;base64,${shot.toString("base64")}`;
-      const checked = await page.evaluate(PIXELS, {
-        dataUrl,
-        targets: overImage,
-        // 截图是设备像素：坐标要按真实像素比换算，否则采样框会错位。
-        dpr: await page.evaluate(() => window.devicePixelRatio),
-      });
-      for (const c of checked) {
-        if (c.pixelRatio === null) continue;
-        pixelResults.push({ theme, route, ...c });
-        if (c.pixelRatio < c.need) {
-          pixelViolations.push({ theme, route, ...c });
-        }
-      }
-      // 图标通道：阈值 3:1（WCAG 1.4.11 非文本对比度）
-      const checkedIcons = await page.evaluate(PIXELS, {
-        dataUrl,
-        targets: icons,
-        dpr: await page.evaluate(() => window.devicePixelRatio),
-      });
-      for (const c of checkedIcons) {
-        if (c.pixelRatio === null) continue;
-        iconResults.push({ theme, route, ...c });
-        if (c.pixelRatio < c.need) {
-          iconViolations.push({ theme, route, ...c });
-        }
-      }
-    }
-
-    const routeError = await page.evaluate(ROUTE_ERROR);
-    if (routeError) routeErrors.push({ theme, route });
-    coverage.push({
-      theme,
-      route,
-      count: items.length,
-      overImage: overImage.length,
-      routeError,
+  for (const profile of PROFILES) {
+    const ctx = await browser.newContext({
+      viewport: profile.viewport,
+      locale: "zh-CN",
+      colorScheme: theme,
+      hasTouch: profile.hasTouch,
+      deviceScaleFactor: profile.deviceScaleFactor,
     });
-    for (const item of items) {
-      if (item.onImage) continue;
-      if (item.ratio < item.need) violations.push({ theme, route, ...item });
+    const page = await ctx.newPage();
+    await page.addInitScript(installGeometryProbe);
+    await page.goto(BASE + "/", { waitUntil: "domcontentloaded" });
+    // 工作台模式决定路由前缀：两侧的页面各在 /photo 与 /comic 下。
+    const mode = await resolveMode(page);
+    await prepareTagRoute(page, mode);
+    await page.evaluate(
+      ({ t, vm }) => {
+        const raw = localStorage.getItem("local-gallery-ui");
+        const parsed = raw ? JSON.parse(raw) : { state: {} };
+        parsed.state = { ...(parsed.state ?? {}), theme: t, viewMode: vm };
+        localStorage.setItem("local-gallery-ui", JSON.stringify(parsed));
+      },
+      { t: theme, vm: VIEWMODE },
+    );
+
+    for (const route of PAGES) {
+      // 未读页只属于漫画工作台：照片侧没有这个路由，硬走会落回首页。
+      if (route === "/unread" && mode !== "comic") {
+        console.log(`  · 跳过 ${theme} /unread：只有漫画工作台有未读页`);
+        continue;
+      }
+      // 智能相册墙只属于照片侧：分组线索来自照片的元数据与人脸分析。
+      if (route === "/smart-albums" && mode !== "photo") {
+        console.log(
+          `  · 跳过 ${theme} /smart-albums：只有照片工作台有智能相册墙`,
+        );
+        continue;
+      }
+      // 漫画侧没有相册网格页：/comic/albums/:id 直接进阅读器。阅读器已由
+      // reader 一条单独审计，这里再量一遍量到的还是阅读器。
+      if (route === "album" && mode === "comic") {
+        console.log(
+          `  · 跳过 ${theme} album：漫画侧打开一卷直接进阅读器（reader 已单独审计）`,
+        );
+        continue;
+      }
+      if (route === "viewer") {
+        await page.goto(BASE + "/photo", { waitUntil: "domcontentloaded" });
+        const first = await page.waitForSelector(
+          '[data-testid="media-tile"], .empty-state',
+        );
+        if ((await first.getAttribute("data-testid")) !== "media-tile") {
+          console.log("  · 当前图库缺少可预览的照片");
+          continue;
+        }
+        await first.click();
+        await page.getByTestId("photo-viewer").waitFor();
+        await waitForStable(page);
+      } else if (route === "reader") {
+        if (!(await openReader(page))) {
+          console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);
+          continue;
+        }
+      } else {
+        // 伪路由 album：相册详情页的 id 运行时现取。
+        // 伪路由 tag：标签页用固定的标签名，数据由 prepareTagRoute 伪造。
+        const target =
+          route === "album"
+            ? await resolveAlbumRoute(page, mode)
+            : route === "tag"
+              ? `/${mode}/tags/${encodeURIComponent(tagAuditState.tag)}`
+              : buildRoute(route, mode);
+        if (!target) {
+          console.log(`  · 跳过 ${theme} ${route}：库里没有可打开的相册`);
+          continue;
+        }
+        // SSE 与按需预览图会持续发请求；页面入口和实际绘制内容决定取样时机。
+        await page.goto(BASE + target, {
+          waitUntil: "domcontentloaded",
+          timeout: 60000,
+        });
+        await page
+          .locator("main .page-shell, main [data-page], .reader-shell")
+          .first()
+          .waitFor();
+        await waitForStable(page);
+      }
+      if (SELF_TEST_ONLY) await page.evaluate(SELF_TEST);
+      let items = await page.evaluate(AUDIT);
+      // 偶发的渲染异常（相册页的虚拟列表爆栈）重试一次再判。
+      if (await page.evaluate(ROUTE_ERROR)) {
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await waitForStable(page);
+        items = await page.evaluate(AUDIT);
+      }
+      const overImage = items.filter((i) => i.onImage);
+      const icons = await page.evaluate(ICONS);
+
+      // 图片 / 渐变上的文字 + 全部图标：截屏后按包围盒采样真实像素。
+      if (overImage.length || icons.length) {
+        const shot = await page.screenshot({ type: "png" });
+        const dataUrl = `data:image/png;base64,${shot.toString("base64")}`;
+        const checked = await page.evaluate(PIXELS, {
+          dataUrl,
+          targets: overImage,
+          // 截图是设备像素：坐标要按真实像素比换算，否则采样框会错位。
+          dpr: await page.evaluate(() => window.devicePixelRatio),
+        });
+        for (const c of checked) {
+          if (c.pixelRatio === null) continue;
+          pixelResults.push({ theme, route, ...c });
+          if (c.pixelRatio < c.need) {
+            pixelViolations.push({ theme, route, ...c });
+          }
+        }
+        // 图标通道：阈值 3:1（WCAG 1.4.11 非文本对比度）
+        const checkedIcons = await page.evaluate(PIXELS, {
+          dataUrl,
+          targets: icons,
+          dpr: await page.evaluate(() => window.devicePixelRatio),
+        });
+        for (const c of checkedIcons) {
+          if (c.pixelRatio === null) continue;
+          iconResults.push({ theme, route, ...c });
+          if (c.pixelRatio < c.need) {
+            iconViolations.push({ theme, route, ...c });
+          }
+        }
+      }
+
+      const routeError = await page.evaluate(ROUTE_ERROR);
+      if (routeError) routeErrors.push({ theme, route });
+      coverage.push({
+        theme,
+        route,
+        count: items.length,
+        overImage: overImage.length,
+        routeError,
+      });
+      for (const item of items) {
+        if (item.onImage) continue;
+        if (item.ratio < item.need) violations.push({ theme, route, ...item });
+      }
     }
+    await ctx.close();
   }
-  await ctx.close();
- }
 }
 await browser.close();
 
@@ -1019,8 +1119,7 @@ for (const c of coverage) {
   );
 }
 console.log();
-if (bad.length === 0)
-  console.log("✓ DOM 判定：没有低于 AA 阈值的文字。");
+if (bad.length === 0) console.log("✓ DOM 判定：没有低于 AA 阈值的文字。");
 else {
   console.log(`✗ DOM 判定：${bad.length} 处文字低于 AA 阈值：\n`);
   for (const v of bad) {
@@ -1034,7 +1133,9 @@ else {
 if (badPixels.length === 0)
   console.log("✓ 像素判定：图片 / 渐变上的文字也全部达标。");
 else {
-  console.log(`\n✗ 像素判定：${badPixels.length} 处图片上的文字低于 AA 阈值：\n`);
+  console.log(
+    `\n✗ 像素判定：${badPixels.length} 处图片上的文字低于 AA 阈值：\n`,
+  );
   for (const v of badPixels) {
     console.log(
       `  [${v.theme}] ${v.route}  ${v.pixelRatio}:1 (需 ${v.need})  ${v.size}px/${v.weight}  「${v.text}」`,
@@ -1072,7 +1173,9 @@ const badIcons = uniq(iconViolations);
 if (badIcons.length === 0)
   console.log("✓ 图标判定：所有图标与周边底色的对比度都 ≥ 3:1。");
 else {
-  console.log(`\n✗ 图标判定：${badIcons.length} 处图标低于 3:1（非文本内容阈值）：\n`);
+  console.log(
+    `\n✗ 图标判定：${badIcons.length} 处图标低于 3:1（非文本内容阈值）：\n`,
+  );
   for (const v of badIcons) {
     console.log(
       `  [${v.theme}] ${v.route}  ${v.pixelRatio}:1 (需 ${v.need})  ${v.size}px  「${v.text}」`,
@@ -1081,8 +1184,10 @@ else {
     console.log(`      前景 ${v.fg}  采样背景 ${v.pixelBg}`);
   }
 }
-const worstIcons = uniq(iconResults.filter((r) => r.pixelRatio !== null))
-  .slice(0, 10);
+const worstIcons = uniq(iconResults.filter((r) => r.pixelRatio !== null)).slice(
+  0,
+  10,
+);
 if (worstIcons.length) {
   console.log("\n· 图标里最吃紧的几处（用于人工复核）：");
   for (const v of worstIcons) {
@@ -1120,8 +1225,7 @@ if (SELF_TEST_ONLY) {
     badIcon.pixelRatio < badIcon.need &&
     !!goodIcon &&
     goodIcon.pixelRatio >= goodIcon.need;
-  const fmt = (r) =>
-    r ? `${r.pixelRatio}:1（需 ${r.need}）` : "未采到样本";
+  const fmt = (r) => (r ? `${r.pixelRatio}:1（需 ${r.need}）` : "未采到样本");
   console.log(
     ok
       ? "✓ 自检通过：文字与图标的坏样本都被判不合格，好样本都被判合格。"

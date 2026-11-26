@@ -14,7 +14,6 @@ import DailyPlanPanel from "../features/tasks/DailyPlanPanel";
 import JobHistoryPanel from "../features/tasks/JobHistoryPanel";
 import SmartAlbumRefreshPanel from "../features/tasks/SmartAlbumRefreshPanel";
 import StorageSection from "../features/tasks/StorageSection";
-import "../styles/tasks.css";
 
 /**
  * 任务中心。
@@ -73,10 +72,10 @@ export function TaskCenterView({ tab }: { tab: string }) {
   }, [tab]);
 
   return (
-    <div className="page-shell">
+    <>
       {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
           宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
-      <Page variant="split" className="tasks-page pb-12">
+      <Page variant="split" className="page-shell tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-bg-subtle,_.bg-bg-subtle\/50,_.bg-bg-strong)_.text-fg-subtle]:text-fg-muted pb-12">
         <PageHeader
           title="任务中心"
           meta="管理本机分析、等待队列及每日计划。"
@@ -181,7 +180,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
                 />
                 <SmartAlbumRefreshPanel />
                 {center.sequenceSkipped && center.sequenceSkipped.length > 0 ? (
-                  <p role="status" className="mt-3 text-meta text-warning">
+                  <p role="status" className="mt-3 text-caption text-warning">
                     本次按序启动已跳过未就绪模块：
                     {center.sequenceSkipped
                       .map((module) => module.name)
@@ -190,7 +189,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
                   </p>
                 ) : null}
                 {center.operationError ? (
-                  <p role="alert" className="mt-2 text-meta text-danger">
+                  <p role="alert" className="mt-2 text-caption text-danger">
                     {center.operationError}
                   </p>
                 ) : null}
@@ -268,6 +267,6 @@ export function TaskCenterView({ tab }: { tab: string }) {
           )}
         </SplitLayout>
       </Page>
-    </div>
+    </>
   );
 }

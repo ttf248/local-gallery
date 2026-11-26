@@ -33,7 +33,7 @@ import { SplitLayout } from "../shell/SplitLayout";
 import { Page } from "../shell/Page";
 import { SettingsNav } from "../features/settings/SettingsNav";
 import { TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
-import ScanWarnings from "../components/common/ScanWarnings";
+import ScanWarnings from "../features/common/ScanWarnings";
 import { Switch } from "../ui/Switch";
 import { syncHistoryCache } from "../utils/historyCache";
 import { useAppMode } from "../hooks/useAppMode";
@@ -56,7 +56,6 @@ import {
   PHOTO_NAV,
   type NavEntry,
 } from "../utils/navEntries";
-import "../styles/settings.css";
 
 /**
  * 设置页。
@@ -261,8 +260,8 @@ export function SettingsView({ tab }: { tab: string }) {
   );
   if (!data) {
     return (
-      <div className="page-shell">
-        <Page className="settings-page pb-10" variant="split">
+      <>
+        <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="split">
           <PageHeader title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
           {prefsError || (
             <div role="status" className="text-fg-muted text-body">
@@ -270,15 +269,15 @@ export function SettingsView({ tab }: { tab: string }) {
             </div>
           )}
         </Page>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="page-shell">
+    <>
       {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
           标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
-      <Page className="settings-page pb-10" variant="split">
+      <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="split">
         <PageHeader title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
         {prefsError}
         <SplitLayout settings navigation={<SettingsNav active={tab} />}>
@@ -298,7 +297,7 @@ export function SettingsView({ tab }: { tab: string }) {
               >
                 {/* 这几行摆在一起，单列读下来最稳：标签与控件挨着，
                   不隔着半张卡。 */}
-                <div className="settings-rows">
+                <div className="settings-rows flex flex-col">
                   <SettingsRow label="主题">
                     <Segmented
                       label="主题"
@@ -388,7 +387,7 @@ export function SettingsView({ tab }: { tab: string }) {
                  放在标题下面更像说明，卡片底下那一行就省了。 */
                 description="收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入"
               >
-                <div className="settings-split">
+                <div className="settings-split grid grid-cols-1 [@container_settings_(min-width:960px)]:grid-cols-2 [@container_settings_(min-width:960px)]:gap-x-8">
                   <Group title="照片侧">
                     {PHOTO_NAV.map((entry) => (
                       <NavRow
@@ -428,7 +427,7 @@ export function SettingsView({ tab }: { tab: string }) {
                   <span className="flex items-center gap-1.5">
                     <KeyboardIcon size={12} />
                     <span>按</span>
-                    <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
+                    <kbd className="font-mono px-1.5 py-0.5 rounded border border-line bg-bg-subtle text-fg-muted">
                       ?
                     </kbd>
                     <span>查看所有快捷键</span>
@@ -452,7 +451,7 @@ export function SettingsView({ tab }: { tab: string }) {
               >
                 {/* 整幅宽度下两组并排：最宽的一行（照片墙密度 + 四档分段控件）
                   实测约需 294px，半列只有 273px 放不下。 */}
-                <div className="settings-split">
+                <div className="settings-split grid grid-cols-1 [@container_settings_(min-width:960px)]:grid-cols-2 [@container_settings_(min-width:960px)]:gap-x-8">
                   <Group title="照片">
                     <SettingsRow label="照片墙密度">
                       <DensityControl value={density} onChange={setDensity} />
@@ -525,7 +524,7 @@ export function SettingsView({ tab }: { tab: string }) {
                     </SettingsRow>
                   </Group>
                 </div>
-                <p className="settings-note">
+                <p className="settings-note mt-3 text-caption leading-[1.6] text-fg-subtle">
                   显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
                 </p>
               </SettingsGroup>
@@ -546,10 +545,10 @@ export function SettingsView({ tab }: { tab: string }) {
               >
                 {/* 索引这一项内容多：统计与动作挤在一行会读不清，
                   改成标题在上、内容在下的一整块。 */}
-                <div className="settings-block">
+                <div className="settings-block py-3 px-0">
                   <div>
                     <span className="text-body text-fg">媒体库索引</span>
-                    <span className="block mt-0.5 text-meta text-fg-muted">
+                    <span className="block mt-0.5 text-caption text-fg-muted">
                       {manifest
                         ? `${manifest.statistics.albumCount} 本相册 · ${manifest.statistics.tagCount} 个标签${
                             manifest.scannedAt
@@ -596,7 +595,7 @@ export function SettingsView({ tab }: { tab: string }) {
                     </div>
                   )}
                 </div>
-                <div className="settings-rows">
+                <div className="settings-rows flex flex-col">
                   <SettingsRow label="最近访问保留条数">
                     <NumberInput
                       value={data.maxRecent}
@@ -707,7 +706,7 @@ export function SettingsView({ tab }: { tab: string }) {
           )}
         </SplitLayout>
       </Page>
-    </div>
+    </>
   );
 }
 
@@ -725,9 +724,9 @@ function Group({
   children: React.ReactNode;
 }) {
   return (
-    <div className="settings-group">
-      <div className="settings-group__label">{title}</div>
-      <div className="settings-rows">{children}</div>
+    <div className="settings-group [@container_settings_(min-width:960px)]:[.settings-split>.settings-group_+_&]:border-l [@container_settings_(min-width:960px)]:[.settings-split>.settings-group_+_&]:border-l-line [@container_settings_(min-width:960px)]:[.settings-split>.settings-group_+_&]:pl-8">
+      <div className="settings-group__label [padding:12px_0_2px] text-caption font-medium text-fg-muted">{title}</div>
+      <div className="settings-rows flex flex-col">{children}</div>
     </div>
   );
 }
@@ -761,7 +760,7 @@ function NavRow({
           <entry.Icon size={15} className="shrink-0 text-fg-muted" />
           <span className="truncate">{entry.label}</span>
           {entry.locked && (
-            <span className="shrink-0 text-meta text-fg-subtle">固定显示</span>
+            <span className="shrink-0 text-caption text-fg-subtle">固定显示</span>
           )}
         </span>
       }
@@ -792,7 +791,7 @@ function NumberInput({
   onChange: (v: number) => void;
 }) {
   return (
-    <div className="inline-flex items-center border border-border-faint rounded-md overflow-hidden">
+    <div className="inline-flex items-center border border-line rounded-md overflow-hidden">
       <button
         aria-label="减少最近访问保留条数"
         disabled={disabled}

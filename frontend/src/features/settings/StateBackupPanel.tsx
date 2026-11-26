@@ -190,7 +190,7 @@ export default function StateBackupPanel() {
           </button>
           <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-accent">
             <span className="btn btn-outline">选择备份文件</span>
-            <span className="block mt-2 text-meta text-fg-muted break-all">
+            <span className="block mt-2 text-caption text-fg-muted break-all">
               {fileName || "JSON 格式，最大 32 MB"}
             </span>
             <input
@@ -242,11 +242,11 @@ export default function StateBackupPanel() {
       )}
       {preview && (
         <>
-          <p className="text-meta text-fg-muted">
+          <p className="text-caption text-fg-muted">
             恢复按类别覆盖，缺失资源记录保留；封面重新校验，失效项跳过。仅适用于相同媒体根身份与相对路径，移动目录或更换媒体根后暂不支持自动迁移映射。
           </p>
           {!preview.ready && (
-            <p className="text-meta text-fg-muted">
+            <p className="text-caption text-fg-muted">
               当前库尚未扫描完成，自定义封面暂不可恢复。
             </p>
           )}
@@ -280,7 +280,7 @@ export default function StateBackupPanel() {
             ))}
           </div>
           {preview.skippedCovers > 0 && (
-            <p className="text-meta text-fg-muted">
+            <p className="text-caption text-fg-muted">
               {preview.skippedCovers} 条封面无效，将跳过。
             </p>
           )}
@@ -294,17 +294,17 @@ export default function StateBackupPanel() {
         </>
       )}
       {pending && (
-        <p role="status" className="text-meta text-fg-muted">
+        <p role="status" className="text-caption text-fg-muted">
           正在处理，请稍候…
         </p>
       )}
       {error && (
-        <p role="alert" className="text-meta text-danger">
+        <p role="alert" className="text-caption text-danger">
           {error}
         </p>
       )}
       {notice && (
-        <p role="status" className="text-meta text-fg-muted">
+        <p role="status" className="text-caption text-fg-muted">
           {notice}
         </p>
       )}

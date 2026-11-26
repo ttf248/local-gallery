@@ -64,7 +64,7 @@ export default function ThumbImage({
       >
         <ImageIcon size={iconSize} />
         {showLabel && (
-          <span className="px-1 text-center text-meta leading-tight">
+          <span className="px-1 text-center text-caption leading-tight">
             无法解码
           </span>
         )}

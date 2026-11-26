@@ -6,15 +6,12 @@ import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import PhotoWall from "../features/wall/PhotoWall";
-import DensityControl from "../features/wall/DensityControl";
 import EmptyState from "../features/common/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { ContextMenu } from "../ui/ContextMenu";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
-import TimelineFilterPopover, {
-  TimelineMediaControl,
-} from "../features/timeline/TimelineFilterPopover";
+import { TimelineToolbar } from "../features/timeline/TimelineToolbar";
 import { Page } from "../shell/Page";
 import { Sheet } from "../ui/Sheet";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -290,35 +287,7 @@ export default function PhotoTimeline() {
         }
         actions={
           hasContent && (
-            <>
-              <div className="hidden md:block">
-                <TimelineMediaControl filter={filter} onChange={applyFilter} />
-              </div>
-              <TimelineFilterPopover
-                years={feed.years}
-                filter={filter}
-                dateSources={feed.dateSources}
-                datePrecisions={feed.datePrecisions}
-                unknown={feed.unknown}
-                onChange={applyFilter}
-              />
-              <div className="hidden md:block">
-                <DensityControl
-                  value={density}
-                  onChange={setDensity}
-                  presentation="popover"
-                />
-              </div>
-              {marks.length > 0 && (
-                <button
-                  type="button"
-                  className="rounded-lg px-2 py-2 text-caption md:hidden"
-                  onClick={() => setJumpOpen(true)}
-                >
-                  跳转
-                </button>
-              )}
-            </>
+            <TimelineToolbar years={feed.years} filter={filter} dateSources={feed.dateSources} datePrecisions={feed.datePrecisions} unknown={feed.unknown} onChange={applyFilter} density={density} setDensity={setDensity} onJump={marks.length ? () => setJumpOpen(true) : undefined} />
           )
         }
         toolbar={
@@ -381,7 +350,7 @@ export default function PhotoTimeline() {
             ))}
         </div>
       </Sheet>
-      <div className="timeline-wall flex min-h-0 flex-1 flex-col pb-2">
+      <div className="timeline-wall relative [&>:has([data-virtuoso-scroller])]:flex-auto [&>:has([data-virtuoso-scroller])]:min-h-0 flex min-h-0 flex-1 flex-col pb-2">
         {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
             提示条说清影响范围，并给一个重试的手柄。 */}
         {feed.isFetchNextPageError ? (

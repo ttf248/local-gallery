@@ -114,13 +114,13 @@ export default function PhotoStrip<
                       version={item.version}
                       displayWidth={tile.width}
                       undecodable={item.undecodable}
-                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03] group-active:scale-[1.03]"
+                      className="h-full w-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-[1.03] motion-safe:group-active:scale-[1.03]"
                     />
                   )}
                   <button
                     type="button"
                     onClick={() => onOpen?.(item, index)}
-                    className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                    className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
                     title={source ? `${source} · ${item.name}` : item.name}
                     aria-label={
                       isVideo ? `播放 ${item.name}` : `查看 ${item.name}`
@@ -132,8 +132,8 @@ export default function PhotoStrip<
                       触摸设备上它常驻（没有悬停可等），背板换成一小段
                       渐变加文字描边，见 .wall-tile-info。 */}
                   {source && (
-                    <span className="wall-tile-info pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-end px-2.5 pb-1.5 pt-8 scrim-bottom hover-reveal transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
-                      <span className="truncate text-meta text-white">
+                    <span className="wall-tile-info touch:[background-image:linear-gradient(to_top,rgba(0,0,0,0.86)_0%,rgba(0,0,0,0.86)_50%,rgba(0,0,0,0)_100%)] touch:[&>span]:[text-shadow:0_1px_2px_rgba(0,0,0,0.92),0_0_6px_rgba(0,0,0,0.7)] pointer-events-none absolute inset-x-0 bottom-0 z-0 flex items-end px-2.5 pb-1.5 pt-8 scrim-bottom [background-image:linear-gradient(to_top,rgba(0,0,0,0.88)_0%,rgba(0,0,0,0.88)_68%,rgba(0,0,0,0)_100%)] hover-reveal transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100">
+                      <span className="truncate text-caption text-white">
                         {source}
                       </span>
                     </span>

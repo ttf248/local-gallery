@@ -1,3 +1,4 @@
+import { albumGridClass } from "./albumGridClass";
 import {
   forwardRef,
   useCallback,
@@ -43,9 +44,7 @@ interface Props {
   /**
    * 网格密度：越疏朗，一行放的相册越少。
    *
-   * 真正的列宽由 CSS 的 `.library-grid` 家族决定（列宽下限 210px /
-   * 250px / 176px），这里只选哪一套 —— 名字里带具体像素会让读代码的
-   * 人以为列宽在这里定，改宽度时改错地方。
+   * 书架与照片的列宽由 albumGridClass 根据工作台和断点选择。
    */
   density?: "default" | "spacious" | "dense";
   /**
@@ -152,17 +151,7 @@ export default function AlbumGrid({
   const { mode: workbench } = useAppMode();
   const ratio = coverRatio ?? coverRatioForMode(workbench);
 
-  // 当前提供标准、宽松与书架三套网格，断点由语义样式统一维护。
-  // 漫画侧用书架那一套：封面竖版本身就窄，按展陈墙的列宽铺开，
-  // 每张卡会撑成巨幅海报，一屏只看得到四本。
-  const gridColsClass =
-    workbench === "comic"
-      ? "library-grid library-grid--comic"
-      : density === "spacious"
-        ? "library-grid library-grid--spacious"
-        : density === "dense"
-          ? "library-grid library-grid--dense"
-          : "library-grid";
+  const gridColsClass = albumGridClass(workbench === "comic", density);
 
   if (items.length === 0) return <>{empty}</>;
 

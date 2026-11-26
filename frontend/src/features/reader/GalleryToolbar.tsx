@@ -138,7 +138,7 @@ export default function GalleryToolbar({
           onClick={zoomReset}
           title="实际大小 (0)"
           aria-label={`实际大小，当前 ${Math.round(zoom * 100)}%`}
-          className="hidden sm:inline-flex h-8 min-w-[46px] items-center justify-center rounded-md px-1 text-meta tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          className="hidden sm:inline-flex h-8 min-w-[46px] items-center justify-center rounded-md px-1 text-caption tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
         >
           {Math.round(zoom * 100)}%
         </button>
@@ -159,7 +159,7 @@ export default function GalleryToolbar({
                 读起来像一个待填的空读数。同一页的进度条也是这个规矩
                 —— 空轨道不出现。 */}
             {rotation !== 0 && (
-              <span className="text-meta tabular-nums">{rotation}°</span>
+              <span className="text-caption tabular-nums">{rotation}°</span>
             )}
           </span>
         </ToolButton>
