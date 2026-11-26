@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/tianlongxiang/local-gallery/internal/middleware"
@@ -55,8 +56,7 @@ func TestAIJobPerImageFailureKeepsStableErrorCode(t *testing.T) {
 // TestAIJobEstimateSharesFileFingerprintsAcrossModules 守住规模核算不再重复采集指纹。
 //
 // 核算一次要看四五个模块，而它们要的其实是同一份文件指纹。
-// 缓存按口径分组后，一次核算最多留下「全部图片」与「仅照片侧」两份清单；
-// 按模块分组会让同一批文件在一次核算里被 stat 五六遍。
+// 照片与漫画的模块范围不同，同一张照片的路径只校验一次。
 func TestAIJobEstimateSharesFileFingerprintsAcrossModules(t *testing.T) {
 	root := t.TempDir()
 	files := writeAIJobImages(t, root, 4)
@@ -72,6 +72,12 @@ func TestAIJobEstimateSharesFileFingerprintsAcrossModules(t *testing.T) {
 		t.Fatalf("SetPeopleEnabled(true) error = %v", err)
 	}
 
+	var lookups atomic.Int64
+	validate := service.validatePath
+	service.validatePath = func(path string) (string, error) {
+		lookups.Add(1)
+		return validate(path)
+	}
 	estimate, err := service.Estimate(context.Background())
 	if err != nil {
 		t.Fatalf("Estimate() error = %v", err)
@@ -79,15 +85,8 @@ func TestAIJobEstimateSharesFileFingerprintsAcrossModules(t *testing.T) {
 	if estimate.TotalImages != 4 {
 		t.Fatalf("estimate total images = %d, want 4", estimate.TotalImages)
 	}
-	service.targetCacheMu.Lock()
-	cached := service.targetCache
-	entries := 0
-	if cached != nil {
-		entries = len(cached.targets)
-	}
-	service.targetCacheMu.Unlock()
-	if entries > 2 {
-		t.Fatalf("target cache entries = %d, want at most 2 (全部图片 / 仅照片侧)", entries)
+	if got := lookups.Load(); got != int64(len(files)) {
+		t.Fatalf("path validations = %d, want one per image (%d)", got, len(files))
 	}
 }
 

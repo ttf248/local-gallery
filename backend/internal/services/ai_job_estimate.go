@@ -82,6 +82,7 @@ type aiRecordFact struct {
 
 // aiTargetStat 是某个目标的当前文件指纹。
 type aiTargetStat struct {
+	photo   bool
 	size    int64
 	mtimeNs int64
 }
@@ -138,33 +139,26 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 		return estimate, nil
 	}
 
-	targetCounts := make(map[string]int, len(modules))
-	statsByModule := make(map[string]map[string]aiTargetStat, len(modules))
-	for _, module := range modules {
-		if module.Type == AIJobTypeFace && !peopleEnabled {
-			continue
-		}
-		filter := aiTargetFilterForModule(module.Type)
-		targets := s.targetsFor(ctx, snapshot, filter)
-		targetCounts[module.Type] = len(targets)
-		stats := make(map[string]aiTargetStat, len(targets))
-		for _, target := range targets {
-			stats[target.resourceID] = aiTargetStat{size: target.size, mtimeNs: target.mtimeNs}
-		}
-		statsByModule[module.Type] = stats
-	}
-	if err := ctx.Err(); err != nil {
+	targets, err := s.estimateTargets(ctx, snapshot)
+	if err != nil {
 		return AIJobEstimate{}, err
 	}
-	allTargets := s.targetsFor(ctx, snapshot, aiTargetAllImages)
-	estimate.TotalImages = len(allTargets)
+	estimate.TotalImages = len(targets.stats)
+	targetCounts := make(map[string]int, len(modules))
+	for _, module := range modules {
+		if aiTargetFilterForModule(module.Type) == aiTargetPhotoOnly {
+			targetCounts[module.Type] = targets.photoCount
+		} else {
+			targetCounts[module.Type] = estimate.TotalImages
+		}
+	}
 
 	// 仍然有效的结果数：按模块各数一遍。待处理张数 = 目标总数 - 有效张数，
 	// 与 selectTargets 的候选集完全等价。
 	current := map[string]int{}
 	for _, fact := range facts {
-		stat, ok := statsByModule[fact.moduleType][fact.resourceID]
-		if !ok {
+		stat, ok := targets.stats[fact.resourceID]
+		if !ok || (aiTargetFilterForModule(fact.moduleType) == aiTargetPhotoOnly && !stat.photo) {
 			// 文件已经不在库里，这条记录不再参与计数。
 			continue
 		}
@@ -371,33 +365,34 @@ func estimateDuration(count int, perImage float64, known bool) *int64 {
 	return &duration
 }
 
-// targetsFor 返回当前媒体库的文件指纹清单，短时间复用上次采集的结果。
-//
-// 缓存只服务空闲时的规模预估：任务开跑必须用当下真实的 stat，否则文件刚
-// 被改过时会被误判成「已经是最新的」而跳过重跑。
-//
-// 缓存按口径而不是按模块分组：一次核算要看四五个模块，它们要的其实是
-// 同一份文件指纹，分开 stat 只是把同样的 IO 做了五遍。
-func (s *AIJobService) targetsFor(ctx context.Context, snapshot CatalogSnapshot, filter aiTargetFilter) []aiJobTarget {
-	revision := snapshot.Revision()
+// estimateTargets 为每张图片采集一次文件指纹，照片侧模块复用同一份结果。
+// 任务执行时仍重新验证目标。取消的请求不能发布不完整的指纹清单。
+func (s *AIJobService) estimateTargets(ctx context.Context, snapshot CatalogSnapshot) (*aiTargetCache, error) {
 	s.targetCacheMu.Lock()
 	cached := s.targetCache
-	if cached != nil && cached.revision == revision && s.now().Sub(cached.builtAt) < aiTargetCacheTTL {
-		if targets, exists := cached.targets[filter]; exists {
-			s.targetCacheMu.Unlock()
-			return targets
-		}
-	}
 	s.targetCacheMu.Unlock()
+	if cached != nil && cached.revision == snapshot.Revision() && s.now().Sub(cached.builtAt) < aiTargetCacheTTL {
+		return cached, ctx.Err()
+	}
 
-	targets := s.buildTargets(ctx, snapshot, filter)
-	s.targetCacheMu.Lock()
-	cached = s.targetCache
-	if cached == nil || cached.revision != revision || s.now().Sub(cached.builtAt) >= aiTargetCacheTTL {
-		cached = &aiTargetCache{revision: revision, builtAt: s.now(), targets: make(map[aiTargetFilter][]aiJobTarget)}
-		s.targetCache = cached
+	targets := s.buildTargets(ctx, snapshot, aiTargetAllImages)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	cached.targets[filter] = targets
+	result := &aiTargetCache{
+		revision: snapshot.Revision(), builtAt: s.now(), stats: make(map[string]aiTargetStat, len(targets)),
+	}
+	for _, target := range targets {
+		photo := snapshot.IsPhotoImage(target.resourceID)
+		if photo {
+			result.photoCount++
+		}
+		result.stats[target.resourceID] = aiTargetStat{size: target.size, mtimeNs: target.mtimeNs, photo: photo}
+	}
+	s.targetCacheMu.Lock()
+	if s.targetCache == nil || s.targetCache.revision <= result.revision {
+		s.targetCache = result
+	}
 	s.targetCacheMu.Unlock()
-	return targets
+	return result, nil
 }

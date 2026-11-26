@@ -58,9 +58,10 @@ func aiTargetFilterForModule(moduleType string) aiTargetFilter {
 
 // aiTargetCache 是一次文件指纹采集的结果，按媒体库 revision 归类。
 type aiTargetCache struct {
-	revision uint64
-	builtAt  time.Time
-	targets  map[aiTargetFilter][]aiJobTarget
+	revision   uint64
+	builtAt    time.Time
+	stats      map[string]aiTargetStat
+	photoCount int
 }
 
 func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, filter aiTargetFilter, albumIDs ...string) []aiJobTarget {
