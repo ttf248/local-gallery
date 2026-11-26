@@ -51,7 +51,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
   const runBusy =
     taskActionsBusy ||
     center.faceModelSaving ||
-    queue.some((job) => job.type === "face");
+    queue.some((job) => job.type === "face" || job.type === "portrait");
 
   // 访问过的页签不卸载：面板里的筛选与展开状态是组件内状态，切走再切回
   // 不该归零。没访问过的页签不挂载。

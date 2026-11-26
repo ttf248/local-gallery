@@ -183,7 +183,7 @@ export function useTaskCenter(tab: string): TaskCenterState {
     () =>
       (snapshot?.modules ?? [])
         .filter((module) => module.installed)
-        .filter((module) => module.type !== "face" || peopleEnabled),
+        .filter((module) => (module.type !== "face" && module.type !== "portrait") || peopleEnabled),
     [snapshot?.modules, peopleEnabled],
   );
 

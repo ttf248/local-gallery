@@ -51,9 +51,31 @@ function PeopleList() {
   const [activeTab, setActiveTab] = useState<
     "common" | "matches" | "groupPhotos"
   >("common");
-  const query = useQuery({
-    queryKey: ["people", includeHidden, sort],
-    queryFn: () => aiJobsApi.people(includeHidden, sort),
+  const jobs = useQuery({
+    queryKey: ["ai-jobs"],
+    queryFn: aiJobsApi.list,
+    refetchInterval: (q) =>
+      q.state.data?.snapshot.jobs.some(
+        (j) => j.type === "portrait" && j.status === "running",
+      )
+        ? 10000
+        : false,
+  });
+  const refining = jobs.data?.snapshot.jobs.some(
+    (j) => j.type === "portrait" && j.status === "running",
+  );
+  const query = useInfiniteQuery({
+    refetchInterval: refining ? 15000 : false,
+    queryKey: ["people", "pages", includeHidden, sort],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      aiJobsApi.people(includeHidden, sort, pageParam),
+    getNextPageParam: (page, pages) => {
+      const loaded = pages.reduce((sum, item) => sum + item.people.length, 0);
+      return page.people.length && loaded < page.totalGroups
+        ? loaded
+        : undefined;
+    },
   });
   const matches = useInfiniteQuery({
     queryKey: ["people-matches", includeHidden],
@@ -71,7 +93,7 @@ function PeopleList() {
     getNextPageParam: (page) => (page.hasMore ? page.nextOffset : undefined),
     enabled: activeTab === "groupPhotos",
   });
-  const jobs = useQuery({ queryKey: ["ai-jobs"], queryFn: aiJobsApi.list });
+
   const peopleEnabled = jobs.data?.snapshot.settings.peopleEnabled ?? false;
   const refreshPeople = async () =>
     Promise.all([
@@ -124,9 +146,9 @@ function PeopleList() {
     },
     onError: () => pushToast({ kind: "error", message: "保留人物组失败" }),
   });
-  const groups = query.data?.people ?? [];
-  const totalGroups = query.data?.totalGroups ?? groups.length;
-  const filteredGroups = query.data?.filteredGroups ?? 0;
+  const groups = query.data?.pages.flatMap((page) => page.people) ?? [];
+  const totalGroups = query.data?.pages[0]?.totalGroups ?? groups.length;
+  const filteredGroups = query.data?.pages[0]?.filteredGroups ?? 0;
   const matchItems = matches.data?.pages.flatMap((page) => page.items) ?? [];
   const totalSources = matches.data?.pages[0]?.totalSources ?? 0;
   const photoItems =
@@ -138,12 +160,19 @@ function PeopleList() {
   return (
     <div className="h-full overflow-y-auto pb-12">
       <div className="page-shell">
-        <PageHeader
-          eyebrow="离线智能相册"
-          title="人物相册"
-          meta="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
-          actions={
-            <div className="flex flex-wrap gap-2">
+        <header className="flex items-center justify-between gap-3 pt-5">
+          <h1 className="text-title-1 font-semibold">人物相册</h1>
+          <details className="relative">
+            <summary className="btn btn-sm btn-outline cursor-pointer">
+              管理
+            </summary>
+            <div className="absolute right-0 z-20 mt-2 grid w-52 gap-2 rounded-card border border-line bg-bg-elevated p-3 shadow-1">
+              <details className="text-caption text-fg-muted">
+                <summary className="cursor-pointer py-1">人物分组说明</summary>
+                <p className="mt-1">
+                  照片按本机识别的人脸相似度分组。姓名和合并关系由你确认。
+                </p>
+              </details>
               <Link
                 className="btn btn-sm btn-outline"
                 to={peopleAnnotateRoute()}
@@ -153,9 +182,33 @@ function PeopleList() {
               <Link className="btn btn-sm btn-outline" to="/tasks/plan">
                 人物分析设置
               </Link>
+              <label className="flex items-center gap-2 text-caption text-fg-muted">
+                <input
+                  type="checkbox"
+                  checked={includeHidden}
+                  onChange={(event) => setIncludeHidden(event.target.checked)}
+                />
+                显示隐藏分组
+              </label>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={clear.isPending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "清除所有人脸分析结果、人物分组和手动修正？此操作不能撤销。",
+                    )
+                  ) {
+                    clear.mutate();
+                  }
+                }}
+              >
+                {clear.isPending ? "清除中…" : "清除人物数据"}
+              </button>
             </div>
-          }
-        />
+          </details>
+        </header>
       </div>
       {query.isError ? (
         <EmptyState
@@ -186,12 +239,12 @@ function PeopleList() {
           }
         />
       ) : (
-        <section className="page-shell mt-6">
+        <section className="page-shell mt-4">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div
               role="tablist"
               aria-label="人物分组分类"
-              className="flex flex-wrap gap-2"
+              className="flex max-w-full gap-1 overflow-x-auto whitespace-nowrap"
             >
               <PeopleTab
                 active={activeTab === "common"}
@@ -208,7 +261,7 @@ function PeopleList() {
               >
                 待确认匹配{" "}
                 <span className="ml-1 text-fg-subtle">
-                  {totalSources.toLocaleString()}
+                  {matches.data ? totalSources.toLocaleString() : ""}
                 </span>
               </PeopleTab>
               <PeopleTab
@@ -217,7 +270,9 @@ function PeopleList() {
               >
                 合照候选{" "}
                 <span className="ml-1 text-fg-subtle">
-                  {totalPhotoCandidates.toLocaleString()}
+                  {groupPhotoCandidates.data
+                    ? totalPhotoCandidates.toLocaleString()
+                    : ""}
                 </span>
               </PeopleTab>
             </div>
@@ -233,30 +288,6 @@ function PeopleList() {
                   ]}
                 />
               ) : null}
-              <label className="flex items-center gap-2 text-caption text-fg-muted">
-                <input
-                  type="checkbox"
-                  checked={includeHidden}
-                  onChange={(event) => setIncludeHidden(event.target.checked)}
-                />
-                显示隐藏分组
-              </label>
-              <button
-                type="button"
-                className="btn btn-outline"
-                disabled={clear.isPending}
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      "清除所有人脸分析结果、人物分组和手动修正？此操作不能撤销。",
-                    )
-                  ) {
-                    clear.mutate();
-                  }
-                }}
-              >
-                {clear.isPending ? "清除中…" : "清除人物数据"}
-              </button>
             </div>
           </div>
           {clear.isError ? (
@@ -266,11 +297,11 @@ function PeopleList() {
           ) : null}
           {activeTab === "common" ? (
             <>
-              <p className="mb-4 text-caption text-fg-muted">
-                {sort === "review"
-                  ? "复核线索按组内锚点、中心相似度和检测质量排序；这些数值不代表身份概率。"
-                  : `人物 ${totalGroups.toLocaleString()} 组${filteredGroups > 0 ? ` · ${filteredGroups.toLocaleString()} 组只出现在合照中，见“合照候选”` : ""}`}
-              </p>
+              {sort === "review" && (
+                <p className="mb-3 text-caption text-fg-muted">
+                  按组内相似度和检测质量排序，这些数值不代表身份概率。
+                </p>
+              )}
               {groups.length === 0 && !query.isLoading ? (
                 <EmptyState
                   title="还没有常见人物组"
@@ -278,7 +309,7 @@ function PeopleList() {
                 />
               ) : (
                 <div className="space-y-6">
-                  {[false, true].map((confirmed) => {
+                  {[true, false].map((confirmed) => {
                     const section = groups.filter(
                       (person) => Boolean(person.confirmed) === confirmed,
                     );
@@ -288,19 +319,24 @@ function PeopleList() {
                           <h2 className="mb-3 text-title-3">
                             {confirmed ? "已确认" : "待确认"}
                           </h2>
-                          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(140px,100%),1fr))] gap-4">
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
                             {section.map((person) => (
-                              <PersonCard
-                                key={person.id}
-                                person={person}
-                                showQuality={sort === "review"}
-                              />
+                              <PersonCard key={person.id} person={person} />
                             ))}
                           </div>
                         </section>
                       )
                     );
                   })}
+                  {query.hasNextPage && (
+                    <button
+                      className="btn btn-outline"
+                      disabled={query.isFetchingNextPage}
+                      onClick={() => void query.fetchNextPage()}
+                    >
+                      加载更多人物
+                    </button>
+                  )}
                 </div>
               )}
             </>
@@ -740,37 +776,27 @@ function PersonReviewImage({
   );
 }
 
-function PersonCard({
-  person,
-  showQuality,
-}: {
-  person: PersonGroup;
-  showQuality: boolean;
-}) {
+function PersonCard({ person }: { person: PersonGroup }) {
   return (
     <Link
       to={peopleRoute(person.id)}
       className="group block min-w-0 rounded-card text-center"
     >
-      <span className="mx-auto block size-[120px] overflow-hidden rounded-full ring-1 ring-line">
-        <PersonFaceThumb person={person} size={120} fill className="size-full" />
+      <span className="mx-auto block size-28 xl:size-36 overflow-hidden rounded-full ring-1 ring-line">
+        <PersonFaceThumb
+          person={person}
+          size={144}
+          fill
+          className="size-full"
+        />
       </span>
       <h3 className="mt-2 truncate text-callout font-semibold">
         {person.name}
       </h3>
       <p className="text-caption text-fg-muted">
-        <span>{person.photoCount.toLocaleString()} 张照片</span> ·{" "}
-        {person.faceCount.toLocaleString()} 张脸
-        {person.confirmed ? " · 已确认" : ""}
+        <span>{person.photoCount.toLocaleString()} 张照片</span>
         {person.hidden ? " · 已隐藏" : ""}
       </p>
-      {showQuality && person.quality ? (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-line px-4 py-2 text-caption text-fg-muted">
-          <span>锚点 P10 {person.quality.anchorP10.toFixed(3)}</span>
-          <span>中心 P10 {person.quality.centroidP10.toFixed(3)}</span>
-          <span>检测 P10 {person.quality.detectionP10.toFixed(3)}</span>
-        </div>
-      ) : null}
     </Link>
   );
 }
@@ -784,6 +810,35 @@ function PersonAlbum({ personId }: { personId: string }) {
   const picks = usePickToggle();
   const pushToast = useUIStore((state) => state.pushToast);
   const [name, setName] = useState("");
+  const [choosing, setChoosing] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const review = useQuery({
+    queryKey: ["person-review", personId],
+    queryFn: () => aiJobsApi.searchPeople(personId, "review", true),
+    enabled: showReview,
+  });
+  const quality = review.data?.people.find(
+    (group) => group.id === personId,
+  )?.quality;
+  const choices = useInfiniteQuery({
+    queryKey: ["person-portraits", personId],
+    queryFn: ({ pageParam }) => aiJobsApi.portraitChoices(personId, pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (page) => (page.hasMore ? page.nextOffset : undefined),
+    enabled: choosing,
+  });
+  const choose = useMutation({
+    mutationFn: (key: string) => aiJobsApi.setPortrait(personId, key),
+    onSuccess: async () => {
+      setChoosing(false);
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["people"] }),
+        client.invalidateQueries({ queryKey: ["person-media", personId] }),
+        client.invalidateQueries({ queryKey: ["person-portraits", personId] }),
+      ]);
+    },
+    onError: () => pushToast({ kind: "error", message: "头像保存失败" }),
+  });
   const [editingName, setEditingName] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [selectedFaces, setSelectedFaces] = useState<string[]>([]);
@@ -893,7 +948,12 @@ function PersonAlbum({ personId }: { personId: string }) {
           leading={
             person && (
               <div className="size-24 shrink-0 overflow-hidden rounded-full">
-                <PersonFaceThumb person={person} size={96} fill className="size-full" />
+                <PersonFaceThumb
+                  person={person}
+                  size={96}
+                  fill
+                  className="size-full"
+                />
               </div>
             )
           }
@@ -972,6 +1032,70 @@ function PersonAlbum({ personId }: { personId: string }) {
             </>
           }
         />
+      </div>
+      <div className="page-shell shrink-0">
+        <button
+          className="btn btn-sm btn-outline"
+          aria-expanded={choosing}
+          onClick={() => setChoosing(!choosing)}
+        >
+          更换头像
+        </button>
+        <button
+          className="btn btn-sm ml-2"
+          aria-expanded={showReview}
+          onClick={() => setShowReview(!showReview)}
+        >
+          复核信息
+        </button>
+        {showReview && (
+          <p className="my-2 text-caption text-fg-muted">
+            {quality
+              ? `锚点 P10 ${quality.anchorP10.toFixed(3)} · 中心 P10 ${quality.centroidP10.toFixed(3)} · 检测 P10 ${quality.detectionP10.toFixed(3)}`
+              : review.isLoading
+                ? "正在加载…"
+                : "暂无复核指标"}
+          </p>
+        )}
+        {choosing && (
+          <section className="my-3 max-h-56 overflow-auto rounded-card border border-line p-3">
+            <div className="mb-3 flex gap-2">
+              <button className="btn btn-sm" onClick={() => choose.mutate("")}>
+                恢复自动精选
+              </button>
+              {choices.hasNextPage && (
+                <button
+                  className="btn btn-sm"
+                  disabled={choices.isFetchingNextPage}
+                  onClick={() => void choices.fetchNextPage()}
+                >
+                  从更多照片选择
+                </button>
+              )}
+            </div>
+            {choices.isLoading && "正在加载头像…"}
+            {choices.isError && "头像加载失败"}
+            <div className="flex flex-wrap gap-3">
+              {choices.data?.pages
+                .flatMap((page) => page.choices)
+                .map((c, i) => (
+                  <button
+                    key={c.key}
+                    disabled={choose.isPending}
+                    aria-label={`使用头像 ${i + 1}`}
+                    onClick={() => choose.mutate(c.key)}
+                  >
+                    <img
+                      className="size-20 rounded-full"
+                      src={c.url}
+                      alt=""
+                      loading="lazy"
+                    />
+                  </button>
+                ))}
+            </div>
+          </section>
+        )}
       </div>
       <div className="page-shell shrink-0 space-y-3 border-b border-line pb-3">
         {showPersonFaceBoxes ? (

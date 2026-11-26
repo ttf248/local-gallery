@@ -145,6 +145,7 @@ export function taskStageLabel(stage: string): string {
       return "批量推理并写入语义向量";
     case "ocr":
       return "批量识别并保存文字";
+    case "portrait": return "精选人物头像";
     case "face":
       return "批量识别人脸并保存特征";
     case "similarity":
@@ -174,6 +175,7 @@ function taskModuleLabel(type: AIJob["type"]): string {
       return "向量索引";
     case "ocr":
       return "文字识别";
+    case "portrait":return "精选人物头像";
     case "face":
       return "人脸识别";
     case "similarity":

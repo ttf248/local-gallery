@@ -37,6 +37,7 @@ export default function PersonFaceThumb({
   testId,
 }: Props) {
   const face = person.coverFace;
+  const [failedUrl, setFailedUrl] = useState<string>();
   const [rotatedResource, setRotatedResource] = useState<string>();
   const rotated = rotatedResource === face?.resourceId;
   const crop = face
@@ -59,7 +60,18 @@ export default function PersonFaceThumb({
       }
       data-testid={testId ? `${testId}-frame` : undefined}
     >
-      {resourceId ? (
+      {person.portraitUrl && failedUrl !== person.portraitUrl ? (
+        <img
+          onError={() => setFailedUrl(person.portraitUrl)}
+          src={person.portraitUrl}
+          srcSet={`${person.portraitUrl}&w=320 2x`}
+          loading="lazy"
+          decoding="async"
+          alt=""
+          className="h-full w-full object-cover"
+          data-testid={testId}
+        />
+      ) : resourceId && !person.portraitUrl ? (
         <RenditionImage
           fileId={resourceId}
           alt=""

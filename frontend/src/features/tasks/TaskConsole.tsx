@@ -251,6 +251,7 @@ function moduleDescription(type: AnalysisType): string {
       return "用本机 Chinese-CLIP 为照片建立中文语义向量，可按描述搜索，也能按照片查找相似画面。";
     case "ocr":
       return "用本机 OCR 识别照片中的文字，结果可在图片详情中查看。";
+    case "portrait":return "逐张核对已有的人脸分组，优先选择清晰、接近正面的头像。";
     case "face":
       return "检测照片中的人脸并生成本机特征向量，可查找相似人脸；不会推断或标注真实姓名。";
     case "similarity":

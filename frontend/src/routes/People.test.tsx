@@ -1,10 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useUIStore } from "../store/uiStore";
@@ -15,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   people: vi.fn(),
   searchPeople: vi.fn(),
   updatePerson: vi.fn(),
+  portraitChoices: vi.fn(),
+  setPortrait: vi.fn(),
   clearPeople: vi.fn(),
   peopleMatches: vi.fn(),
   groupPhotoCandidates: vi.fn(),
@@ -36,6 +33,8 @@ vi.mock("../api/aiJobs", () => ({
     retainPersonGroup: mocks.retainPersonGroup,
     personMedia: mocks.personMedia,
     updatePerson: mocks.updatePerson,
+    portraitChoices: mocks.portraitChoices,
+    setPortrait: mocks.setPortrait,
     mergePeople: mocks.mergePeople,
     splitPerson: vi.fn(),
   },
@@ -70,7 +69,7 @@ describe("人物相册", () => {
     vi.clearAllMocks();
     mocks.list.mockResolvedValue({
       ok: true,
-      snapshot: { settings: { peopleEnabled: false } },
+      snapshot: { jobs: [], settings: { peopleEnabled: false } },
     });
     mocks.people.mockResolvedValue({
       ok: true,
@@ -147,9 +146,9 @@ describe("人物相册", () => {
     renderPeople();
 
     expect(await screen.findByText("旅行同伴")).toBeInTheDocument();
-    expect(screen.getByText(/6\s*张脸/)).toBeInTheDocument();
-    expect(screen.getByText(/人物 1 组.*见“合照候选”/)).toBeInTheDocument();
-    expect(mocks.people).toHaveBeenCalledWith(false, "photos");
+    expect(screen.getByText(/6\s*张照片/)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /合照候选/ })).toBeInTheDocument();
+    expect(mocks.people).toHaveBeenCalledWith(false, "photos", 0);
     expect(screen.queryByText(/组中心|代表脸|边界脸/)).not.toBeInTheDocument();
     expect(
       screen.getByText(
@@ -163,7 +162,7 @@ describe("人物相册", () => {
   it("只出现在合照中的分组可从独立候选页检查", async () => {
     mocks.list.mockResolvedValue({
       ok: true,
-      snapshot: { settings: { peopleEnabled: true } },
+      snapshot: { jobs: [], settings: { peopleEnabled: true } },
     });
     mocks.people.mockResolvedValue({
       ok: true,
@@ -250,17 +249,16 @@ describe("人物相册", () => {
 
     fireEvent.click(await screen.findByRole("radio", { name: "审查优先" }));
 
-    expect(await screen.findByText("锚点 P10 0.731")).toBeInTheDocument();
-    expect(screen.getByText("中心 P10 0.812")).toBeInTheDocument();
-    expect(screen.getByText("检测 P10 0.754")).toBeInTheDocument();
+    expect(await screen.findByText("待复核人物")).toBeInTheDocument();
+    expect(screen.queryByText(/锚点 P10/)).toBeNull();
     expect(screen.getByText(/这些数值不代表身份概率/)).toBeInTheDocument();
-    expect(mocks.people).toHaveBeenLastCalledWith(false, "review");
+    expect(mocks.people).toHaveBeenLastCalledWith(false, "review", 0);
   });
 
   it("匹配建议必须由用户操作合并或排除", async () => {
     mocks.list.mockResolvedValue({
       ok: true,
-      snapshot: { settings: { peopleEnabled: true } },
+      snapshot: { jobs: [], settings: { peopleEnabled: true } },
     });
     mocks.peopleMatches.mockResolvedValue({
       ok: true,
@@ -326,7 +324,7 @@ describe("人物相册", () => {
   it("没有匹配对象时允许保留独立人物", async () => {
     mocks.list.mockResolvedValue({
       ok: true,
-      snapshot: { settings: { peopleEnabled: true } },
+      snapshot: { jobs: [], settings: { peopleEnabled: true } },
     });
     mocks.peopleMatches.mockResolvedValue({
       ok: true,
@@ -362,7 +360,7 @@ describe("人物相册", () => {
     );
   });
 
-  it("说明列表仅展示照片数最多的前50组", async () => {
+  it("常见人物首批展示50组并支持继续加载", async () => {
     mocks.people.mockResolvedValue({
       ok: true,
       people: Array.from({ length: 50 }, (_, index) => ({
@@ -382,9 +380,23 @@ describe("人物相册", () => {
     });
     renderPeople();
 
-    expect(await screen.findByText(/人物 83 组/)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("tab", { name: /常见人物.*83/ }),
+    ).toBeInTheDocument();
     expect(screen.getByText("人物 0")).toBeInTheDocument();
     expect(screen.getByText("人物 49")).toBeInTheDocument();
+    mocks.people.mockResolvedValueOnce({
+      people: [
+        { id: "p_next", name: "下一页人物", faceCount: 1, photoCount: 1 },
+      ],
+      totalGroups: 51,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "加载更多人物" }));
+    expect(await screen.findByText("下一页人物")).toBeInTheDocument();
+    expect(mocks.people).toHaveBeenLastCalledWith(false, "photos", 50);
+    expect(
+      screen.queryByRole("button", { name: "加载更多人物" }),
+    ).not.toBeInTheDocument();
   });
 
   it("人物相册的拆分列表分批显示已加载人脸", async () => {
@@ -430,6 +442,60 @@ describe("人物相册", () => {
     expect(screen.getAllByRole("checkbox")).toHaveLength(200);
     fireEvent.click(screen.getByRole("button", { name: /继续显示 5 张脸/ }));
     expect(screen.getAllByRole("checkbox")).toHaveLength(205);
+  });
+
+  it("详情按需加载备选头像、保存选择并查看复核指标", async () => {
+    const person = {
+      id: "p_album",
+      name: "人物",
+      faceCount: 6,
+      photoCount: 6,
+      hidden: false,
+    };
+    mocks.personMedia.mockResolvedValue({
+      page: { person, items: [], faces: [], total: 0 },
+    });
+    mocks.searchPeople.mockResolvedValue({
+      people: [
+        {
+          ...person,
+          quality: { anchorP10: 0.73, centroidP10: 0.82, detectionP10: 0.96 },
+        },
+      ],
+    });
+    mocks.portraitChoices.mockImplementation((_id: string, offset: number) =>
+      Promise.resolve({
+        choices: Array.from({ length: offset === 0 ? 5 : 1 }, (_, i) => ({
+          key: `test-${offset + i}`,
+          url: `/preview/${offset + i}`,
+        })),
+        hasMore: offset === 0,
+        nextOffset: offset === 0 ? 5 : 6,
+      }),
+    );
+    mocks.setPortrait.mockResolvedValue({ ok: true });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/photo/people/p_album"]}>
+          <Routes>
+            <Route path="/photo/people/:personId" element={<People />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "更换头像" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "从更多照片选择" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "使用头像 6" }));
+    await waitFor(() =>
+      expect(mocks.setPortrait).toHaveBeenCalledWith("p_album", "test-5"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "复核信息" }));
+    expect(await screen.findByText(/锚点 P10 0.730/)).toBeInTheDocument();
   });
 
   it("详情页不请求全量人物表，打开合并弹窗后才按需搜索", async () => {
@@ -483,25 +549,34 @@ describe("人物相册", () => {
     );
 
     expect(await screen.findByText("当前人物")).toBeInTheDocument();
-    const rename=screen.getByRole("button",{name:"重命名「当前人物」"});
+    const rename = screen.getByRole("button", { name: "重命名「当前人物」" });
     fireEvent.click(rename);
-    const field=screen.getByRole("textbox",{name:"人物名称"});
-    fireEvent.change(field,{target:{value:"取消的草稿"}});
-    fireEvent.keyDown(field,{key:"Escape"});
+    const field = screen.getByRole("textbox", { name: "人物名称" });
+    fireEvent.change(field, { target: { value: "取消的草稿" } });
+    fireEvent.keyDown(field, { key: "Escape" });
     expect(mocks.updatePerson).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button",{name:"重命名「当前人物」"}));
-    const restored=screen.getByRole("textbox",{name:"人物名称"});
+    fireEvent.click(screen.getByRole("button", { name: "重命名「当前人物」" }));
+    const restored = screen.getByRole("textbox", { name: "人物名称" });
     expect(restored).toHaveValue("当前人物");
-    fireEvent.change(restored,{target:{value:"旅行伙伴"}});
-    fireEvent.click(screen.getByRole("button",{name:"保存"}));
-    await waitFor(()=>expect(mocks.updatePerson).toHaveBeenCalledWith("p_123456",{name:"旅行伙伴"}));
+    fireEvent.change(restored, { target: { value: "旅行伙伴" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+    await waitFor(() =>
+      expect(mocks.updatePerson).toHaveBeenCalledWith("p_123456", {
+        name: "旅行伙伴",
+      }),
+    );
 
     expect(
       screen.queryByText(/照片框线标出属于「当前人物」分组的人脸/),
     ).not.toBeInTheDocument();
-    const boxes=screen.getByRole("switch",{name:"显示当前人物的人脸框"});
-    expect(boxes).toHaveAttribute("aria-checked","false");fireEvent.click(boxes);expect(boxes).toHaveAttribute("aria-checked","true");
-    expect(JSON.parse(localStorage.getItem("local-gallery-ui")??"{}").state.showPersonFaceBoxes).toBe(true);
+    const boxes = screen.getByRole("switch", { name: "显示当前人物的人脸框" });
+    expect(boxes).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(boxes);
+    expect(boxes).toHaveAttribute("aria-checked", "true");
+    expect(
+      JSON.parse(localStorage.getItem("local-gallery-ui") ?? "{}").state
+        .showPersonFaceBoxes,
+    ).toBe(true);
     expect(
       screen.getByText(/照片框线标出属于「当前人物」分组的人脸/),
     ).toBeInTheDocument();

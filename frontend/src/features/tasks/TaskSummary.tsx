@@ -270,7 +270,7 @@ function startBlockedReason({
   if (module === "embedding" && !embeddingReady) {
     return "本机语义模型未就绪，先在「本机存储」页签装好模型。";
   }
-  if (module === "face") {
+  if (module === "face" || module === "portrait") {
     if (!peopleEnabled) {
       return "人物分析未启用，先在「每日计划」页签打开。";
     }

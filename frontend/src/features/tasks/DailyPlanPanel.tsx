@@ -207,7 +207,7 @@ export default function DailyPlanPanel({
               description={
                 !module.installed
                   ? "不可用：缺少模型或运行环境"
-                  : module.type === "face" && !peopleEnabled
+                  : (module.type === "face" || module.type === "portrait") && !peopleEnabled
                     ? "需先启用人物分析"
                     : undefined
               }
@@ -218,7 +218,7 @@ export default function DailyPlanPanel({
                 disabled={
                   disabled ||
                   !module.installed ||
-                  (module.type === "face" && !peopleEnabled)
+                  ((module.type === "face" || module.type === "portrait") && !peopleEnabled)
                 }
                 onChange={() => toggleModule(module.type)}
               />

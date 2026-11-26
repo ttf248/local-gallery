@@ -1,7 +1,7 @@
 import { api } from "./client";
 import type { AppMode, LibraryFeedItem, LibraryPage } from "./library";
 
-export type AnalysisType = "metadata" | "embedding" | "ocr" | "face" | "similarity";
+export type AnalysisType = "metadata" | "embedding" | "ocr" | "face" | "portrait" | "similarity";
 export type FaceModel = "quality-v2" | "buffalo_m";
 export type AnalysisMode = "full" | "incremental";
 export type AnalysisStatus =
@@ -596,6 +596,7 @@ export interface PersonCoverFace {
 }
 
 export interface PersonGroup {
+ portraitUrl?:string;
   id: string;
   name: string;
   faceCount: number;
@@ -940,7 +941,7 @@ export const aiJobsApi = {
       body,
     });
   },
-  people: (includeHidden = false, sort: PeopleSort = "photos") =>
+  people: (includeHidden = false, sort: PeopleSort = "photos", offset = 0) =>
     api<{
       ok: boolean;
       people: PersonGroup[];
@@ -954,8 +955,8 @@ export const aiJobsApi = {
       anchorThreshold: number;
       sort: PeopleSort;
       revision: number;
-    }>("/api/people", { params: { includeHidden, sort } }),
-  searchPeople: (query: string) =>
+    }>("/api/people", { params: { includeHidden, sort, offset } }),
+  searchPeople: (query: string, sort: PeopleSort = "photos", includeHidden=false) =>
     api<{
       ok: boolean;
       people: PersonGroup[];
@@ -965,7 +966,7 @@ export const aiJobsApi = {
       centroidThreshold: number;
       anchorThreshold: number;
       revision: number;
-    }>("/api/people", { params: { q: query, limit: 20 } }),
+    }>("/api/people", { params: { q: query, limit: 20, sort, includeHidden } }),
   peopleMatches: (includeHidden = false, limit = 20, offset = 0) =>
     api<PeopleMatchPage>("/api/people/matches", {
       params: { includeHidden, limit, offset },
@@ -995,6 +996,12 @@ export const aiJobsApi = {
       `/api/people/${encodeURIComponent(id)}/media`,
       { params: { cursor, limit: 200 } },
     ),
+  portraitChoices: (id: string, offset: number) =>
+    api<{choices: {key: string; url: string}[]; nextOffset: number; hasMore: boolean}>(
+      `/api/people/${encodeURIComponent(id)}/portraits`,
+      {params: {offset, limit: offset === 0 ? 5 : 50}},
+    ),
+  setPortrait: (id:string,key:string) => api(`/api/people/${encodeURIComponent(id)}/portraits`, {method:"PUT",body:{key}}),
   updatePerson: (id: string, body: { name?: string; hidden?: boolean }) =>
     api<{ ok: boolean }>(`/api/people/${encodeURIComponent(id)}`, {
       method: "PUT",
