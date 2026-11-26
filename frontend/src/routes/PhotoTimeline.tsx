@@ -1,4 +1,11 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMediaFeed } from "../hooks/useMediaFeed";
 import { ApiError } from "../api/client";
@@ -21,6 +28,11 @@ import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
 import { buildTimeRailMarks } from "../features/timeline/timeRailMarks";
 import TimeRail from "../features/timeline/TimeRail";
+import {
+  itemDatePrecision,
+  parseTimelinePrecision,
+  parseTimelineSource,
+} from "../utils/timeline";
 import { PageHero } from "../shell/PageHero";
 import MonthHeader from "../features/timeline/MonthHeader";
 import MemoriesStrip from "../features/timeline/MemoriesStrip";
@@ -91,6 +103,13 @@ export default function PhotoTimeline() {
   const otherSideHasContent = (manifest?.statistics.comicAlbumCount ?? 0) > 0;
   const hasContent = sideHasContent;
 
+  const [scrollParent, setScrollParent] = useState<HTMLElement>();
+  const findMain = useCallback(
+    (el: HTMLDivElement | null) =>
+      setScrollParent(el?.closest<HTMLElement>(".app-main") ?? undefined),
+    [],
+  );
+  const [pinnedGroup, setPinnedGroup] = useState("");
   const [visibleGroup, setVisibleGroup] = useState("");
 
   const filter = useMemo<TimelineFilter>(
@@ -98,6 +117,8 @@ export default function PhotoTimeline() {
       year: searchParams.get("year") ?? "",
       month: searchParams.get("month") ?? "",
       media: searchParams.get("media") ?? "",
+      source: parseTimelineSource(searchParams.get("source")),
+      precision: parseTimelinePrecision(searchParams.get("precision")),
     }),
     [searchParams],
   );
@@ -115,7 +136,43 @@ export default function PhotoTimeline() {
     [filter, isYearNumber],
   );
   const feed = useMediaFeed(query);
-  const items = feed.items;
+  const localFilter = Boolean(filter.source || filter.precision);
+  const items = useMemo(
+    () =>
+      localFilter
+        ? feed.items.filter(
+            (item) =>
+              (!filter.source ||
+                (item.dateSource ?? "modified") === filter.source) &&
+              (!filter.precision ||
+                itemDatePrecision(item) === filter.precision),
+          )
+        : feed.items,
+    [feed.items, filter.source, filter.precision, localFilter],
+  );
+  const total = localFilter ? items.length : feed.total;
+  const [requestedMatches, setRequestedMatches] = useState(1);
+  const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } = feed;
+  useEffect(() => {
+    if (
+      localFilter &&
+      items.length < requestedMatches &&
+      hasNextPage &&
+      !isFetching &&
+      !isFetchNextPageError
+    ) {
+      void fetchNextPage({ cancelRefetch: false });
+    }
+  }, [
+    localFilter,
+    items.length,
+    requestedMatches,
+    hasNextPage,
+    isFetching,
+    isFetchNextPageError,
+    fetchNextPage,
+  ]);
+
   const selection = useAlbumSelection({
     albumId: "",
     albumName: "",
@@ -140,7 +197,10 @@ export default function PhotoTimeline() {
       if (next.year) params.set("year", next.year);
       if (next.month) params.set("month", next.month);
       if (next.media) params.set("media", next.media);
-      setSearchParams(params);
+      if (next.source) params.set("source", next.source);
+      if (next.precision) params.set("precision", next.precision);
+      setRequestedMatches(1);
+      setSearchParams(params, { replace: true });
     },
     [setSearchParams],
   );
@@ -167,35 +227,26 @@ export default function PhotoTimeline() {
     (item: LibraryFeedItem) => timelineGroupKey(item),
     [],
   );
-  const yearStarts = useMemo(
-    () =>
-      new Set(
-        groups
-          .filter(
-            (group, i) =>
-              group.year && i > 0 && group.year !== groups[i - 1].year,
-          )
-          .map((group) => group.key),
-      ),
-    [groups],
-  );
   const groupHeader = useCallback(
     (key: string) => {
       const group = groups.find((entry) => entry.key === key);
       if (!group) return null;
       return (
         <MonthHeader
-          showYear={!filter.year && yearStarts.has(key)}
-          group={{ ...group, count: groupCount(key) || group.count }}
+          group={{
+            ...group,
+            count: localFilter ? group.count : groupCount(key) || group.count,
+          }}
         />
       );
     },
-    [groups, groupCount, filter.year, yearStarts],
+    [groups, groupCount, localFilter],
   );
 
   const loadMore = useCallback(() => {
+    if (localFilter) setRequestedMatches(items.length + 1);
     feed.retryNextPage();
-  }, [feed]);
+  }, [feed, localFilter, items.length]);
 
   const togglePick = useCallback(
     (id: string) => {
@@ -209,7 +260,7 @@ export default function PhotoTimeline() {
   // 大图预览：下标、翻页与「关掉后回到刚才那张」只有一份实现。
   const wall = useWallViewer({
     items,
-    total: feed.total,
+    total,
     albumName: (item) => item.albumName,
     albumHref: (item) => albumRoute("photo", item.albumId),
     hasNextPage: feed.hasNextPage ?? false,
@@ -256,16 +307,16 @@ export default function PhotoTimeline() {
         />
       ) : (
         <EmptyState
-          title="欢迎使用本地画廊"
+          title="还没有照片"
           description="首次使用请先设置媒体目录，再开始扫描。目录离线时可在设置中修复。"
           icon={<LibraryIcon size={20} />}
           action={
             <div className="flex items-center gap-3">
-              <Link to="/settings/server" className="btn btn-outline">
+              <Link
+                to="/settings/server"
+                className="inline-flex min-h-10 items-center rounded-md bg-primary px-4 text-on-primary"
+              >
                 设置媒体目录
-              </Link>
-              <Link to="/settings/data" className="btn btn-primary">
-                去设置
               </Link>
             </div>
           }
@@ -274,55 +325,49 @@ export default function PhotoTimeline() {
     ) : null;
 
   return (
-    <Page
-      className="page-shell flex h-full min-h-0 flex-col overflow-x-clip"
-    >
+    <Page variant="gallery" className="min-h-full">
       <PageHero
         title="全部照片"
         meta={
           <span data-testid="timeline-meta">
-            {feed.total.toLocaleString("zh-CN")} 张{range ? ` · ${range}` : ""}
+            {localFilter && feed.hasNextPage ? "已找到 " : ""}
+            {total.toLocaleString("zh-CN")} 张{range ? ` · ${range}` : ""}
           </span>
         }
-        actions={
-          hasContent && (
-            <TimelineToolbar years={feed.years} filter={filter} dateSources={feed.dateSources} datePrecisions={feed.datePrecisions} unknown={feed.unknown} onChange={applyFilter} density={density} setDensity={setDensity} onJump={marks.length ? () => setJumpOpen(true) : undefined} />
-          )
-        }
-        toolbar={
-          Boolean(filter.year || filter.media) && (
-            <div className="flex gap-1.5">
-              {filter.year && (
-                <button
-                  type="button"
-                  className="ui-chip"
-                  onClick={() =>
-                    applyFilter({ ...filter, year: "", month: "" })
-                  }
-                >
-                  {filter.year === "unknown"
-                    ? "日期未知"
-                    : `${filter.year} 年${filter.month ? ` ${filter.month} 月` : ""}`}{" "}
-                  <span aria-hidden>×</span>
-                </button>
-              )}
-              {filter.media && (
-                <button
-                  type="button"
-                  className="ui-chip"
-                  onClick={() => applyFilter({ ...filter, media: "" })}
-                >
-                  {filter.media === "video" ? "视频" : "照片"}{" "}
-                  <span aria-hidden>×</span>
-                </button>
-              )}
-            </div>
-          )
-        }
       />
-
-      {hasContent && !filter.year && !filter.month && !filter.media && (
-        <MemoriesStrip resume={resume} />
+      {hasContent &&
+        !filter.year &&
+        !filter.month &&
+        !filter.media &&
+        !localFilter && <MemoriesStrip />}
+      {hasContent && (
+        <TimelineToolbar
+          years={feed.years}
+          filter={filter}
+          dateSources={feed.dateSources}
+          datePrecisions={feed.datePrecisions}
+          unknown={feed.unknown}
+          density={density}
+          setDensity={setDensity}
+          onChange={applyFilter}
+          selecting={selection.active}
+          onSelect={selection.toggleMode}
+          onJump={marks.length ? () => setJumpOpen(true) : undefined}
+          resume={
+            resume &&
+            !filter.year &&
+            !filter.media &&
+            !filter.month &&
+            !localFilter ? (
+              <Link
+                className="max-w-48 truncate rounded-md px-2 py-2 text-caption text-ink-2"
+                to={resume.to}
+              >
+                接着看 · {resume.title}
+              </Link>
+            ) : undefined
+          }
+        />
       )}
       <Sheet
         label="跳转年份"
@@ -349,7 +394,17 @@ export default function PhotoTimeline() {
             ))}
         </div>
       </Sheet>
-      <div className="timeline-wall relative [&>:has([data-virtuoso-scroller])]:flex-auto [&>:has([data-virtuoso-scroller])]:min-h-0 flex min-h-0 flex-1 flex-col pb-2">
+      <div ref={findMain} className="timeline-wall relative min-w-0 pb-2">
+        {pinnedGroup && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none sticky top-[calc(var(--sticky-offset,var(--topbar-h))-var(--topbar-h))] z-toolbar h-0"
+          >
+            <div className="bg-canvas/95 backdrop-blur">
+              {groupHeader(pinnedGroup)}
+            </div>
+          </div>
+        )}
         {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
             提示条说清影响范围，并给一个重试的手柄。 */}
         {feed.isFetchNextPageError ? (
@@ -381,10 +436,13 @@ export default function PhotoTimeline() {
                 </button>
               }
             />
-          ) : items.length === 0 && !feed.isLoading ? (
+          ) : items.length === 0 &&
+            !feed.isLoading &&
+            !(localFilter && feed.hasNextPage) ? (
             <EmptyState
               title="这一段没有照片"
-              description="换一个年份或月份看看，或者回到整条时间线。" size="compact"
+              description="换一个年份或月份看看，或者回到整条时间线。"
+              size="compact"
               action={
                 <button
                   className="btn btn-outline"
@@ -396,7 +454,8 @@ export default function PhotoTimeline() {
                 </button>
               }
             />
-          ) : feed.isLoading ? (
+          ) : feed.isLoading ||
+            (localFilter && items.length === 0 && feed.hasNextPage) ? (
             <div
               aria-label="正在按时间排列照片"
               role="status"
@@ -423,7 +482,7 @@ export default function PhotoTimeline() {
             <PhotoWall
               key={searchParams.toString()}
               items={items}
-              total={feed.total}
+              total={total}
               targetHeight={wallTargetHeight(density)}
               hasNextPage={feed.hasNextPage ?? false}
               isLoadingMore={feed.isFetchingNextPage}
@@ -435,6 +494,8 @@ export default function PhotoTimeline() {
               /* 按月份分段：每一段标题写清是几月、时间是怎么来的。 */
               groupOf={groupOf}
               groupHeader={groupHeader}
+              scrollParent={scrollParent}
+              onPinnedGroupChange={setPinnedGroup}
               onVisibleGroupChange={setVisibleGroup}
               /* 整库级别的墙不铺占位槽：跳到远处看到的是一屏灰格子，而且那些格子要把整库都取回来才填得上。 */
               showPlaceholders={false}

@@ -91,7 +91,7 @@ export function useZoomTransition({
       animation.current?.finish();
       if (!el.animate) return;
       const next = el.animate(opening ? [source, dest] : [dest, source], {
-        duration: reducedMotion ? 150 : flip ? 320 : 200,
+        duration: reducedMotion ? 150 : flip ? 360 : 200,
         easing: "cubic-bezier(.3,0,0,1)",
       });
       animation.current = next;

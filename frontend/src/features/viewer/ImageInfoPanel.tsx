@@ -1,6 +1,7 @@
+import { Inspector } from "../../ui/Inspector";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CloseIcon } from "../../ui/icons";
+
 import { CopyButton } from "../common";
 import { useImageInfo } from "../../hooks/useImageInfo";
 import { formatSize } from "../../utils/format";
@@ -15,6 +16,7 @@ interface Props {
   albumName?: string;
   albumHref?: string;
   absPath: string | null;
+  inline?:boolean;
   onClose: () => void;
 }
 
@@ -31,6 +33,7 @@ export default function ImageInfoPanel({
   absPath,
   albumName,
   albumHref,
+  inline=false,
   onClose,
 }: Props) {
   const [selectedFace, setSelectedFace] = useState<number | null>(null);
@@ -70,28 +73,7 @@ export default function ImageInfoPanel({
   return (
     /* 宽屏时面板是画面右侧独立的一栏，从顶栏下方一直到底：
        它是这一屏的规格栏，不是浮在画面上的小卡片。 */
-    <aside
-      data-testid="image-info-panel"
-      className="
-        absolute inset-x-0 bottom-0 top-[76px] z-30 flex flex-col
-        border-t border-theater-border bg-theater-surface backdrop-blur-md
-        md:static md:inset-auto md:z-auto md:w-[21rem] md:shrink-0
-        md:border-l md:border-t-0
-      "
-    >
-      <div className="flex items-center justify-between px-4 h-11 border-b border-white/10 shrink-0">
-        <h2 className="font-display text-body font-medium text-white/85">
-          图片信息
-        </h2>
-        <button
-          onClick={onClose}
-          className="inline-flex h-7 w-7 items-center justify-center rounded text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-          title="关闭 (I)"
-          aria-label="关闭图片信息"
-        >
-          <CloseIcon size={13} />
-        </button>
-      </div>
+    <Inspector open title="图片信息" closeLabel="关闭图片信息" onClose={onClose} width={360} data-testid="image-info-panel" className={["flex flex-col border-theater-border bg-theater-surface text-theater-fg",inline ? "h-full" : "absolute inset-x-0 bottom-0 top-[76px] z-30 md:static md:z-auto md:h-full"].join(" ")}>
       <div className="flex-1 overflow-auto p-4 text-body scroll-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5">
         {loading && <div className="text-white/60 text-caption">加载中…</div>}
         {err !== null && (
@@ -103,7 +85,7 @@ export default function ImageInfoPanel({
           /* 两列的规格表：标签在左一窄列，值在右。原先标签在上、值在下，
              一屏读不到几行，剩下半屏是空的；规格表本来就该能横向扫读。 */
           <dl className="divide-y divide-white/10">
-            <AnalysisHeading>尺寸与文件</AnalysisHeading>
+            <AnalysisHeading>文件</AnalysisHeading>
             <Row
               label="文件名"
               value={info.name}
@@ -115,7 +97,7 @@ export default function ImageInfoPanel({
             <Row label="大小" value={formatSize(info.size)} />
             <Row label="修改时间" value={formatDateTime(info.mtime)} />
             <div className="my-2 border-t border-white/10 pt-2 text-caption font-medium text-white/70">
-              EXIF 与 GPS
+              拍摄
             </div>
             {metadataQuery.data?.status === "pending" ? (
               <Row label="分析状态" value="等待元数据分析任务" />
@@ -202,7 +184,7 @@ export default function ImageInfoPanel({
                 </p>
               </div>
             ) : null}
-            <AnalysisHeading>人脸识别</AnalysisHeading>
+            <AnalysisHeading>人物</AnalysisHeading>
             <ImageAnalysisStatus
               status={analysisQuery.data?.face.status}
               error={analysisQuery.data?.face.error?.message}
@@ -318,7 +300,7 @@ export default function ImageInfoPanel({
           </dl>
         )}
       </div>
-    </aside>
+    </Inspector>
   );
 }
 

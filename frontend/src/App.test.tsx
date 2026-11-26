@@ -25,6 +25,7 @@ vi.mock("./shell/AppShell", () => ({
 }));
 
 // 页面数据由各领域测试覆盖，这里单独验证真实路由表选择的懒加载入口。
+vi.mock("./routes/PhotoTimeline", () => ({ default: () => <h1>照片时间线</h1> }));
 vi.mock("./routes/Home", () => ({ default: () => <h1>工作台首页</h1> }));
 vi.mock("./routes/Library", () => ({ default: () => <h1>目录浏览</h1> }));
 vi.mock("./routes/Explore", () => ({ default: () => <h1>发现</h1> }));
@@ -55,7 +56,7 @@ function Location() {
 }
 
 const entries = [
-  ["/photo", "工作台首页"],
+  ["/photo", "照片时间线"],
   ["/photo/library", "目录浏览"],
   ["/photo/me/favorites", "个人收藏"],
   ["/photo/search", "搜索结果"],

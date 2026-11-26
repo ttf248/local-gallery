@@ -38,14 +38,14 @@ export function ViewerChrome({
       {/* 顶栏：返回、标题、位置与操作 */}
       <header
         className={
-          "relative z-10 flex h-16 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-2 transition-opacity focus-within:opacity-100 sm:px-5 " +
+          "relative z-10 flex h-16 shrink-0 items-center gap-2 bg-gradient-to-b from-theater-scrim to-transparent px-2 transition-opacity focus-within:opacity-100 sm:px-5 " +
           (chromeVisible ? "" : "opacity-0")
         }
       >
         <button
           type="button"
           onClick={onClose}
-          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          className="inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur text-theater-fg transition-colors hover:bg-theater-surface-strong hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           title="关闭 (Esc)"
           aria-label="关闭大图预览"
         >
@@ -59,12 +59,12 @@ export function ViewerChrome({
             <Link
               to={albumHref}
               title={`回到相册「${albumName}」`}
-              className="flex min-h-8 min-w-8 items-center touch:min-h-10 touch:min-w-10 font-display text-body font-semibold text-white/95 underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              className="flex min-h-8 min-w-8 items-center touch:min-h-10 touch:min-w-10 text-label font-medium text-white/95 underline decoration-white/30 underline-offset-4 transition-colors hover:decoration-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             >
               <span className="truncate">{albumName}</span>
             </Link>
           ) : (
-            <div className="truncate font-display text-body font-semibold text-white/95">
+            <div className="truncate text-label font-medium text-white/95">
               {albumName}
             </div>
           )}

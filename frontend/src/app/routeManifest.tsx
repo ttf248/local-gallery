@@ -11,7 +11,7 @@ export const ROUTE_MANIFEST: readonly RouteMeta[] = [
     help: "photo",
     chrome: { shell: "app", search: "global" },
     title: () => "照片",
-    component: () => import("../routes/Home"),
+    component: () => import("../routes/PhotoTimeline"),
   },
   {
     id: "photo.library",

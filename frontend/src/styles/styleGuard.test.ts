@@ -65,7 +65,6 @@ const remaining = [
   "features/tasks/TaskEstimatePanel.tsx",
   "features/tasks/TaskQueuePanel.tsx",
   "features/tasks/TaskSummary.tsx",
-  "features/timeline/TimelineFilterPopover.tsx",
   "features/travels/TravelMap.tsx",
   "features/travels/TravelStats.tsx",
   "features/travels/TravelTimeAxis.tsx",

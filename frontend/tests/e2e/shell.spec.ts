@@ -102,7 +102,7 @@ test("密度步进后中心照片留在视口中", async ({ page, request }) => 
   const tiles = page.getByTestId("media-tile");
   await expect(tiles.first()).toBeVisible();
   const anchor = await page
-    .locator("[data-virtuoso-scroller]")
+    .getByRole("main")
     .evaluate((el) => {
       const r = el.getBoundingClientRect(),
         x = r.left + r.width / 2,

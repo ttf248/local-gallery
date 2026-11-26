@@ -131,7 +131,7 @@ async function main() {
           .locator(
             route === "reader"
               ? '[data-testid="gallery-reader"]'
-              : "main .page-shell",
+              : "main [data-page], main .page-shell",
           )
           .first()
           .waitFor({ state: "visible", timeout: 20000 });

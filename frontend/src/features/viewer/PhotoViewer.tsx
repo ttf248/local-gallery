@@ -748,7 +748,7 @@ export default function PhotoViewer({
             <button
               type="button"
               aria-label="旋转照片"
-              className="grid size-9 place-items-center rounded-full hover:bg-white/10"
+              className="grid size-10 place-items-center rounded-full border border-theater-border bg-white/10 backdrop-blur hover:bg-theater-surface-strong"
               onClick={() => setRotation((r) => (r + 90) % 360)}
             >
               <RotateIcon size={16} />
@@ -759,7 +759,7 @@ export default function PhotoViewer({
               type="button"
               aria-label="胶片条"
               aria-pressed={stripVisible}
-              className="grid size-9 place-items-center rounded-full hover:bg-white/10"
+              className="grid size-10 place-items-center rounded-full border border-theater-border bg-white/10 backdrop-blur hover:bg-theater-surface-strong"
               onClick={() => setStripVisible((v) => !v)}
             >
               <GridIcon size={16} />
@@ -771,7 +771,7 @@ export default function PhotoViewer({
             <button
               type="button"
               onClick={onToggleFavorite}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              className="inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur text-white/80 transition-colors hover:bg-theater-surface-strong hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               title={isFavorite ? "取消收藏这本相册" : "收藏这本相册"}
               aria-label={isFavorite ? "取消收藏这本相册" : "收藏这本相册"}
             >
@@ -785,10 +785,10 @@ export default function PhotoViewer({
               type="button"
               onClick={onTogglePick}
               aria-pressed={isPicked}
-              className={`inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+              className={`inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
                 isPicked
                   ? "bg-white/20 text-white"
-                  : "text-white/80 hover:bg-white/10 hover:text-white"
+                  : "text-white/80 hover:bg-theater-surface-strong hover:text-white"
               }`}
               title={isPicked ? "移出精选 (P)" : "加入精选 (P)"}
               aria-label={isPicked ? "把这张移出精选" : "把这张加入精选"}
@@ -801,10 +801,10 @@ export default function PhotoViewer({
               type="button"
               onClick={onToggleCompare}
               aria-pressed={comparePinned}
-              className={`inline-flex h-9 w-9 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+              className={`inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
                 comparePinned
                   ? "bg-white/20 text-white"
-                  : "text-white/80 hover:bg-white/10 hover:text-white"
+                  : "text-white/80 hover:bg-theater-surface-strong hover:text-white"
               }`}
               title={
                 comparePinned
@@ -820,7 +820,7 @@ export default function PhotoViewer({
             <button
               type="button"
               onClick={onSetCover}
-              className="hidden h-9 items-center gap-1.5 rounded-md px-2.5 text-caption text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:inline-flex"
+              className="hidden h-9 items-center gap-1.5 rounded-full border border-theater-border bg-white/10 backdrop-blur px-2.5 text-caption text-white/80 transition-colors hover:bg-theater-surface-strong hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 sm:inline-flex"
               title={hasCustomCover ? "更换封面" : "设为封面"}
             >
               设为封面
@@ -830,7 +830,7 @@ export default function PhotoViewer({
             <button
               type="button"
               onClick={onFindSimilar}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+              className="inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur text-white/80 transition-colors hover:bg-theater-surface-strong hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               title="查找相似照片"
               aria-label="查找相似照片"
             >
@@ -840,7 +840,7 @@ export default function PhotoViewer({
           <button
             type="button"
             onClick={() => setShowInfo(!showInfo)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur text-white/80 transition-colors hover:bg-theater-surface-strong hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             title="图片信息 (I)"
             aria-label="图片信息"
           >
@@ -849,7 +849,7 @@ export default function PhotoViewer({
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+            className="inline-flex size-10 items-center justify-center rounded-full border border-theater-border bg-white/10 backdrop-blur text-white/80 transition-colors hover:bg-theater-surface-strong hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             title={isFullscreen() ? "退出全屏 (F)" : "全屏 (F)"}
             aria-label="全屏"
           >
@@ -965,8 +965,8 @@ export default function PhotoViewer({
         </div>
 
         {showInfo && !isVideo && (
-          <div className="relative h-full w-[min(360px,75%)] shrink-0 overflow-auto bg-theater-surface [&>aside]:static [&>aside]:h-full [&>aside]:w-full">
-            <ImageInfoPanel
+          <div className="relative h-full w-[min(360px,75%)] shrink-0 overflow-auto bg-theater-surface">
+            <ImageInfoPanel inline
               absPath={current.id}
               albumName={currentAlbumName}
               albumHref={albumHref}

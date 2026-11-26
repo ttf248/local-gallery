@@ -45,7 +45,7 @@ export default function MediaTile({
   return (
     <div
       className={
-        "photo-wall-tile group relative shrink-0 overflow-hidden rounded-tile " +
+        "photo-wall-tile group relative shrink-0 overflow-hidden rounded-tile hover:brightness-[1.04] " +
         (selected ? "bg-accent-soft" : "bg-media")
       }
       data-testid="media-tile"

@@ -6,6 +6,8 @@ import { IconButton } from "./IconButton";
 export interface InspectorProps {
   className?: string;
   open: boolean;
+  closeLabel?:string;
+  "data-testid"?: string;
   title: string;
   onClose: () => void;
   width?: 320 | 360 | 400;
@@ -13,7 +15,7 @@ export interface InspectorProps {
 }
 export const Inspector = forwardRef<HTMLElement, InspectorProps>(
   function Inspector(
-    { className, open, title, onClose, width = 360, children },
+    { className, open, title, onClose, width = 360, children, closeLabel="关闭信息面板", ...props },
     forwardedRef,
   ) {
     const id = useId(),
@@ -29,7 +31,7 @@ export const Inspector = forwardRef<HTMLElement, InspectorProps>(
     }, [open]);
     if (!open) return null;
     return (
-      <aside
+      <aside {...props}
         ref={(node) => {
           panel.current = node;
           if (typeof forwardedRef === "function") forwardedRef(node);
@@ -53,7 +55,7 @@ export const Inspector = forwardRef<HTMLElement, InspectorProps>(
           <h2 id={id} className="text-heading">
             {title}
           </h2>
-          <IconButton label="关闭信息面板" onClick={onClose}>
+          <IconButton label={closeLabel} onClick={onClose}>
             <CloseIcon />
           </IconButton>
         </header>

@@ -14,7 +14,7 @@ export function Filmstrip({
   const { ref, width } = useElementSize<HTMLElement>();
   // 两侧各留 12px，缩略图间距 6px。窄屏减少渲染数量，保留触摸目标。
   const count = width
-    ? Math.max(1, Math.min(9, Math.floor((width - 18) / 46)))
+    ? Math.max(1, Math.min(9, Math.floor((width - 18) / 54)))
     : 5;
   const start = Math.max(
     0,
@@ -24,7 +24,7 @@ export function Filmstrip({
     <nav
       ref={ref}
       aria-label="胶片条"
-      className="flex h-[72px] shrink-0 items-center justify-center gap-1.5 overflow-hidden px-3"
+      className="flex h-16 shrink-0 items-center justify-center gap-1.5 overflow-hidden px-3"
     >
       {items.slice(start, start + count).map((item, i) => (
         <button
@@ -32,7 +32,7 @@ export function Filmstrip({
           key={item.id}
           aria-label={"跳到第 " + (start + i + 1) + " 张"}
           aria-current={start + i === index || undefined}
-          className="relative h-12 min-w-10 max-w-20 flex-1 overflow-hidden rounded-tile bg-theater-surface opacity-65 transition-transform aria-current:z-10 motion-safe:aria-current:scale-110 aria-current:opacity-100 aria-current:ring-2 aria-current:ring-white"
+          className="relative size-12 shrink-0 overflow-hidden rounded-sm bg-theater-surface opacity-65 transition-transform aria-current:z-10 aria-current:opacity-100 aria-current:ring-2 aria-current:ring-white"
           onClick={() => onChange(start + i)}
         >
           {item.kind === "video" ? (
@@ -43,7 +43,7 @@ export function Filmstrip({
               alt=""
               version={item.version}
               undecodable={item.undecodable}
-              displayWidth={80}
+              displayWidth={48}
               className="h-full w-full object-cover"
             />
           )}

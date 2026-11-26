@@ -94,6 +94,8 @@ interface Props<T extends LibraryMediaItem = LibraryMediaItem> {
   /** 分组标题的内容。 */
   groupHeader?: (groupKey: string) => ReactNode;
   onVisibleGroupChange?: (groupKey: string) => void;
+  scrollParent?: HTMLElement;
+  onPinnedGroupChange?: (groupKey: string) => void;
   /**
    * 要不要给未加载的条目留占位槽。
    *
@@ -138,15 +140,16 @@ export default function PhotoWall<
   scrollToIndex = null,
   groupOf,
   groupHeader,
-  onVisibleGroupChange,
+  onVisibleGroupChange, scrollParent, onPinnedGroupChange,
   showPlaceholders = true,
 }: Props<T>) {
   const {
     ref: measureScroller,
     width,
-    height,
+    height: measuredHeight,
     element: container,
   } = useElementSize<HTMLDivElement>();
+  const height = scrollParent?.clientHeight ?? measuredHeight;
   // 按滚动区域的实际可用宽度排图，桌面滚动条会占用部分墙宽。
   const scrollerRef = useCallback(
     (node: HTMLElement | Window | null) =>
@@ -222,7 +225,7 @@ export default function PhotoWall<
   // 窄屏的上下限：容器只有三百多像素宽时，「标准」的行高放得下一张就放
   // 不下第二张，一百多张照片要滚几十屏；反过来行高太大也会退化成
   // 一行一张的列表。
-  const gap = targetHeight === 150 ? 2 : targetHeight === 290 ? 6 : 4;
+  const gap = targetHeight === 150 ? 2 : targetHeight === 290 ? 8 : 4;
   const narrowBound = width > 0 ? Math.max(96, Math.round(width / 3.2)) : 0;
   // 自适应只在「更疏」的方向上动：照片少时把画面让给每一张，照片多时
   // 保持浏览密度，不因为自适应反而变得更挤。
@@ -291,7 +294,7 @@ export default function PhotoWall<
     autoResolvedHeight: effectiveHeight,
     getAnchorId: () => {
       if (!container) return null;
-      const rect = container.getBoundingClientRect();
+      const rect = (scrollParent ?? container).getBoundingClientRect();
       const hit = document.elementFromPoint(
         rect.left + rect.width / 2,
         rect.top + rect.height / 2,
@@ -352,21 +355,29 @@ export default function PhotoWall<
   }, [scrollToIndex, items, bandIndex, container]);
 
   const visibleGroup = useRef<string>();
-  const reportVisibleGroup = () => {
-    const root = container;
-    if (!onVisibleGroupChange || !root) return;
-    const bounds = root.getBoundingClientRect();
-    const first = Array.from(
-      root.querySelectorAll<HTMLElement>("[data-wall-group]"),
-    ).find((element) => {
+  const reportVisibleGroup = useCallback(() => {
+    if (!onVisibleGroupChange || !container) return;
+    const bounds = (scrollParent ?? container).getBoundingClientRect();
+    const toolbar = scrollParent?.querySelector<HTMLElement>("[data-stuck=true]");
+    const top = toolbar?.getBoundingClientRect().bottom ?? bounds.top;
+    const first = Array.from(container.querySelectorAll<HTMLElement>("[data-wall-group]")).find(element => {
       const rect = element.getBoundingClientRect();
-      return rect.bottom > bounds.top + 1 && rect.top < bounds.bottom;
+      return rect.bottom > top + 1 && rect.top < bounds.bottom;
     });
     const group = first?.dataset.wallGroup;
+    if(onPinnedGroupChange) {
+      const header = first?.querySelector<HTMLElement>("[data-testid=timeline-group-header]");
+      onPinnedGroupChange(first && first.getBoundingClientRect().top <= top && (!header || header.getBoundingClientRect().bottom<=top) ? group ?? "" : "");
+    }
     if (!group || group === visibleGroup.current) return;
     visibleGroup.current = group;
     onVisibleGroupChange(group);
-  };
+  },[container,scrollParent,onVisibleGroupChange,onPinnedGroupChange]);
+  useEffect(()=>{
+    if(!scrollParent)return;
+    scrollParent.addEventListener("scroll",reportVisibleGroup,{passive:true});
+    return ()=>scrollParent.removeEventListener("scroll",reportVisibleGroup);
+  },[scrollParent,reportVisibleGroup]);
 
   const handleRangeChanged = (range: ListRange) => {
     reportVisibleGroup();
@@ -440,14 +451,16 @@ export default function PhotoWall<
   }
   return (
     <div
-      className="h-full min-h-0"
+      ref={scrollParent ? measureScroller : undefined}
+      className={scrollParent ? "min-w-0" : "h-full min-h-0"}
       onScrollCapture={onVisibleGroupChange ? reportVisibleGroup : undefined}
     >
       <Virtuoso
-        scrollerRef={scrollerRef}
+        customScrollParent={scrollParent}
+        scrollerRef={scrollParent ? undefined : scrollerRef}
         ref={virtuosoRef}
         data={entries}
-        style={{ height: "100%" }}
+        style={scrollParent ? undefined : { height: "100%" }}
         overscan={600}
         increaseViewportBy={{ top: 600, bottom: 600 }}
         defaultItemHeight={effectiveHeight + gap}

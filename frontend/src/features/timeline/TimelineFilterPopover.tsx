@@ -6,6 +6,8 @@ import type {
   TimelineYear,
 } from "../../api/library";
 import {
+  parseTimelinePrecision,
+  parseTimelineSource,
   timelinePrecisionLabel,
   timelineSourceLabel,
   type TimelineFilter,
@@ -53,22 +55,23 @@ export default function TimelineFilterPopover({
 }: Props) {
   const year = years.find((entry) => String(entry.year) === filter.year);
   const [open, setOpen] = useState(false);
-  const active = [filter.year, filter.month, filter.media].filter(
-    Boolean,
-  ).length;
+  const active = Object.values(filter).filter(Boolean).length;
   const sources = (
     Object.entries(dateSources) as [TimelineDateSource, number][]
   )
     .filter(([, count]) => count > 0)
-    .map(([source, count]) => `${timelineSourceLabel(source)} ${count} 张`);
+    .map(([value, count]) => ({
+      value,
+      label: timelineSourceLabel(value) + " " + count + " 张",
+    }));
   const precisions = (
     Object.entries(datePrecisions) as [TimelineDatePrecision, number][]
   )
     .filter(([, count]) => count > 0)
-    .map(
-      ([precision, count]) =>
-        `${timelinePrecisionLabel(precision)} ${count} 张`,
-    );
+    .map(([value, count]) => ({
+      value,
+      label: timelinePrecisionLabel(value) + " " + count + " 张",
+    }));
   const yearChoices = [
     { value: "", label: "全部年份" },
     ...years.map((entry) => ({
@@ -85,7 +88,7 @@ export default function TimelineFilterPopover({
       open={open}
       onOpenChange={setOpen}
       aria-label="时间线筛选"
-      className="w-[min(360px,calc(100vw-16px))] space-y-2 p-3"
+      className="max-h-[75dvh] overflow-y-auto w-[min(360px,calc(100vw-16px))] space-y-2 p-3"
       trigger={
         <button
           type="button"
@@ -142,18 +145,35 @@ export default function TimelineFilterPopover({
       {(sources.length > 0 || precisions.length > 0) && (
         <>
           <PopoverSeparator />
-          <div className="timeline-filter-legend py-1.5 px-2.5 text-caption text-ink-2">
-            {sources.length > 0 && (
-              <p data-testid="timeline-source-legend">
-                时间来源 · {sources.join(" · ")}
-              </p>
-            )}
-            {precisions.length > 0 && (
-              <p data-testid="timeline-precision-legend">
-                日期精度 · {precisions.join(" · ")}
-              </p>
-            )}
-          </div>
+          {sources.length > 0 && (
+            <div data-testid="timeline-source-legend">
+              <PopoverLabel>时间来源</PopoverLabel>
+              <FilterChoices
+                name="时间来源"
+                choices={[{ value: "", label: "全部来源" }, ...sources]}
+                selected={filter.source ?? ""}
+                onSelect={(value) =>
+                  onChange({ ...filter, source: parseTimelineSource(value) })
+                }
+              />
+            </div>
+          )}
+          {precisions.length > 0 && (
+            <div data-testid="timeline-precision-legend">
+              <PopoverLabel>日期精度</PopoverLabel>
+              <FilterChoices
+                name="日期精度"
+                choices={[{ value: "", label: "全部精度" }, ...precisions]}
+                selected={filter.precision ?? ""}
+                onSelect={(value) =>
+                  onChange({
+                    ...filter,
+                    precision: parseTimelinePrecision(value),
+                  })
+                }
+              />
+            </div>
+          )}
         </>
       )}
       {active > 0 && (
@@ -161,7 +181,7 @@ export default function TimelineFilterPopover({
           type="button"
           role="menuitem"
           tabIndex={-1}
-          className="btn btn-ghost"
+          className="min-h-9 rounded-md px-3 text-label hover:bg-hover"
           onClick={() => onChange({ year: "", month: "", media: "" })}
         >
           清除筛选

@@ -66,8 +66,8 @@ export function TimeRail({ marks, activeKey, onCommit }: TimeRailProps) {
       aria-valuetext={label + " · " + mark.count + " 张"}
       tabIndex={0}
       className={cx(
-        "group fixed bottom-6 right-2 top-[calc(var(--topbar-h)+16px)] z-rail hidden w-12 touch-none select-none rounded-full opacity-0 transition-opacity duration-base hover:opacity-100 focus:opacity-100 md:block",
-        (scrolling || preview !== null) && "opacity-100",
+        "group fixed bottom-6 right-2 top-[calc(var(--topbar-h)+16px)] z-rail hidden w-7 touch-none select-none border-r-2 border-line-subtle md:block",
+        (scrolling || preview !== null) && "border-line",
       )}
       onKeyDown={(e) => {
         let i = index;
@@ -142,7 +142,16 @@ export function TimeRail({ marks, activeKey, onCommit }: TimeRailProps) {
               style={{ top: item.fraction * 100 + "%" }}
               className="pointer-events-none absolute right-0 flex -translate-y-1/2 items-center gap-1 text-caption text-ink-3"
             >
-              {show && (item.level === "unknown" ? "未知" : item.label)}
+              {show && (
+                <span
+                  className={cx(
+                    "opacity-0 group-hover:opacity-100 group-focus:opacity-100",
+                    (scrolling || preview !== null) && "opacity-100",
+                  )}
+                >
+                  {item.level === "unknown" ? "未知" : item.label}
+                </span>
+              )}
               <i className="w-1.5 border-t border-current" />
             </span>
           );

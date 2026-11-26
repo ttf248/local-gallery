@@ -78,12 +78,13 @@ test("年份与年月目录保留原精度，不补出一月或某一天", async
  *
  * 跳过去是一个能分享、能后退的地址，而不是一次回不去的操作。
  */
-test("跳年与跳月写进地址栏，刷新与后退都还在原地", async ({
+test("跳年与跳月替换地址栏条件，刷新保留，后退返回来源页", async ({
   page,
   request,
 }) => {
   await scannedNodes(request, "photo");
-  await page.goto("/photo");
+  await page.goto("/photo/library");
+  await page.getByRole("link",{name:"照片",exact:true}).click();
 
   const filter = page.getByRole("button", { name: "筛选时间线" });
   await filter.click();
@@ -97,7 +98,7 @@ test("跳年与跳月写进地址栏，刷新与后退都还在原地", async ({
   await expect(page).toHaveURL(/year=2024&month=/);
 
   await page.goBack();
-  await expect(page).toHaveURL(/\?year=2024$/);
+  await expect(page).toHaveURL(/\/photo\/library$/);
 });
 
 /**
@@ -110,13 +111,13 @@ test("日期未知的媒体单独成段，不混进任何一年", async ({ page,
   await page.goto("/photo");
 
   await page.getByRole("button", { name: "筛选时间线" }).click();
-  await page.getByRole("menuitemradio", { name: /^日期未知/ }).click();
+  await page.getByRole("group",{name:"年份"}).getByRole("menuitemradio", { name: /^日期未知/ }).click();
   await expect(page).toHaveURL(/\?year=unknown$/);
   const header = page.getByTestId("timeline-group-header").first();
   await expect(header).toBeVisible();
   await expect(header).toContainText("日期未知");
   await expect(page.getByTestId("timeline-group-note").first()).toContainText(
-    "只有文件修改时间，不是拍摄时间",
+    "无拍摄时间",
   );
 });
 
@@ -130,7 +131,7 @@ test("时间线上的照片能左右翻、能回到来源相册，退出后位�
   await scannedNodes(request, "photo");
   await page.goto("/photo");
 
-  const scroller = page.locator("main [data-virtuoso-scroller]");
+  const scroller = page.getByRole("main");
   const tile = scroller.getByRole("button", { name: /^查看 / }).first();
   await expect(tile).toBeVisible({ timeout: 20_000 });
   await tile.click();
@@ -167,10 +168,10 @@ test("只看视频时时间线只留视频", async ({ page, request }) => {
   await page.getByRole("radio", { name: "视频", exact: true }).click();
   await expect(page).toHaveURL(/\?media=video$/);
   const videos = page.locator(
-    'main [data-virtuoso-scroller] button[aria-label^="播放"]',
+    'main button[aria-label^="播放"]',
   );
   const photos = page.locator(
-    'main [data-virtuoso-scroller] button[aria-label^="查看"]',
+    'main button[aria-label^="查看"]',
   );
   await expect
     .poll(async () => (await videos.count()) + (await photos.count()), {
@@ -264,8 +265,7 @@ test("后续分页失败时保留已加载的照片，并给出可恢复的提�
 
   // 滚到已加载的末尾：自动接下一页，那一页失败。
   await page
-    .locator("[data-virtuoso-scroller]")
-    .first()
+    .getByRole("main")
     .evaluate((element) => {
       element.scrollTop = element.scrollHeight;
     });
@@ -274,7 +274,7 @@ test("后续分页失败时保留已加载的照片，并给出可恢复的提�
   );
   // 已加载的照片还在墙上（滚到底之后看到的是最后一段）。
   await expect(
-    page.locator("main [data-virtuoso-scroller] button[aria-label^='查看'], main [data-virtuoso-scroller] button[aria-label^='播放']").first(),
+    page.locator("main button[aria-label^='查看'], main button[aria-label^='播放']").first(),
   ).toBeVisible();
 
   // 失败状态下不再自动续页：否则失败一次接一次，成了无限请求。
@@ -313,12 +313,28 @@ test("游标失效时说清要从头重取", async ({ page, request }) => {
   await page.goto("/photo");
   await expect(page.getByTestId("timeline-group-header").first()).toBeVisible();
   await page
-    .locator("[data-virtuoso-scroller]")
-    .first()
+    .getByRole("main")
     .evaluate((element) => {
       element.scrollTop = element.scrollHeight;
     });
   await expect(page.getByRole("alert")).toContainText(
     "媒体库刚刚变了，这一页的位置已经失效。重新加载会从头开始。",
   );
+});
+
+test("回忆按年浏览，关闭回到封面，向下浏览后工具条吸顶",async ({page, request})=>{
+  await scannedNodes(request,"photo");
+  const response=await request.get("/api/library/media-feed?kind=photo&scope=timeline");
+  const feed=await response.json();
+  const images=feed.page.items.filter((item:{kind:string})=>item.kind==="image").slice(0,2);
+  expect(images.length).toBe(2);
+  await page.route("**/api/library/photo-memories?*",route=>route.fulfill({json:{ok:true,items:images.map((item:object)=>({...item,dateValue:"2018-11-27"}))}}));
+  await page.setViewportSize({width:1440,height:900});
+  await page.goto("/photo");
+  const card=page.getByRole("button",{name:/2018 年，2 张/});
+  await card.click();
+  await expect(page.getByRole("dialog",{name:/大图预览/})).toBeVisible();
+  await page.keyboard.press("Escape");await expect(card).toBeFocused();
+  await page.getByRole("main").evaluate(el=>el.scrollTo(0,1000));
+  await expect(page.locator("[data-stuck=true]").getByRole("toolbar",{name:"时间线工具"})).toBeVisible();
 });

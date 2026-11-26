@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, within, waitFor } from "@testing-library/react";
 import { forwardRef, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -242,8 +242,8 @@ it("时间线按月份分段，标题写清是几月", async () => {
   const headers = await screen.findAllByTestId("timeline-group-header");
   expect(headers.map((node) => node.textContent)).toEqual([
     "2024 年 5 月1 张",
-    "2023 年 8 月1 张含推断时间",
-    "日期未知1 张只有文件修改时间，不是拍摄时间",
+    "2023 年 8 月1 张推断",
+    "日期未知1 张无拍摄时间",
   ]);
 });
 
@@ -260,7 +260,7 @@ it("段落数量取自年份索引", async () => {
 it("推断出来的月份会标出来", async () => {
   renderTimeline();
   const notes = await screen.findAllByTestId("timeline-group-note");
-  expect(notes.map((node) => node.textContent)).toContain("含推断时间");
+  expect(notes.map((node) => node.textContent)).toContain("推断");
 });
 
 // 没有拍摄证据的那一段单独摆着，不混进任何一年。
@@ -273,7 +273,7 @@ it("没有拍摄证据的那一段单独摆着", async () => {
   const notes = await screen.findAllByTestId("timeline-group-note");
   expect(
     notes.some((node) =>
-      node.textContent?.includes("只有文件修改时间，不是拍摄时间"),
+      node.textContent?.includes("无拍摄时间"),
     ),
   ).toBe(true);
 });
@@ -394,7 +394,7 @@ it("可以只看视频", async () => {
 it("可以单独看日期未知的那一段", async () => {
   renderTimeline();
   fireEvent.click(screen.getByRole("button", { name: "筛选时间线" }));
-  fireEvent.click(screen.getByRole("menuitemradio", { name: /^日期未知/ }));
+  fireEvent.click(within(screen.getByRole("group",{name:"年份"})).getByRole("menuitemradio", { name: /^日期未知/ }));
   await waitFor(() =>
     expect(screen.getByTestId("location").textContent).toBe("?year=unknown"),
   );
@@ -413,7 +413,7 @@ it("清除筛选回到整条时间线", async () => {
 
 it("默认页头只有一行，生效的条件可独立移除", () => {
   renderTimeline("/photo?year=2024&media=video");
-  fireEvent.click(screen.getByRole("button", { name: "2024 年" }));
+  fireEvent.click(screen.getByRole("button", { name: "移除筛选：2024 年" }));
   expect(screen.getByTestId("location")).toHaveTextContent("?media=video");
 });
 

@@ -56,7 +56,7 @@ export function timelineGroupKey(item: LibraryFeedItem): string {
   return captured.slice(0, 7);
 }
 
-function itemDatePrecision(item: LibraryFeedItem): TimelineDatePrecision {
+export function itemDatePrecision(item: LibraryFeedItem): TimelineDatePrecision {
   if (item.datePrecision) return item.datePrecision;
   if (item.dateSource === "modified" || !item.capturedAt) return "unknown";
   return "day";
@@ -193,7 +193,15 @@ export function timelineYearRange(years: readonly { year: number }[]): string {
  * 它同时也是地址栏里的查询参数：跳到某一年是一个可以分享、可以后退的
  * 地址，而不是一次回不去的操作。
  */
+export function parseTimelineSource(value: string | null): TimelineDateSource | undefined {
+  if(value === "exif" || value === "filename" || value === "folder" || value === "modified") return value;
+}
+export function parseTimelinePrecision(value: string | null): TimelineDatePrecision | undefined {
+  if(value === "day" || value === "month" || value === "year" || value === "unknown") return value;
+}
 export interface TimelineFilter {
+  source?: TimelineDateSource;
+  precision?: TimelineDatePrecision;
   /** 选中的年份；空串是全部；"unknown" 是「日期未知」那一段。 */
   year: string;
   /** 选中的月份；空串是全部。 */

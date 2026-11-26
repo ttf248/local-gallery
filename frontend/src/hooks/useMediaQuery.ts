@@ -8,6 +8,8 @@ import { useEffect, useState } from "react";
  */
 export const WIDE_LAYOUT_QUERY = "(min-width: 1024px)";
 
+export const SHORT_VIEWPORT_QUERY = "(max-height: 759px)";
+
 export const SPLIT_LAYOUT_QUERY = "(min-width: 1280px)";
 
 /**

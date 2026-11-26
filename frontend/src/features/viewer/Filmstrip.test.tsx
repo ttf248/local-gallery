@@ -19,7 +19,7 @@ it("按容器宽度给每项保留触摸宽度，翻到末尾仍显示当前项"
   const { rerender } = render(
     <Filmstrip items={items} index={19} onChange={onChange} />,
   );
-  expect(screen.getAllByRole("button")).toHaveLength(8);
+  expect(screen.getAllByRole("button")).toHaveLength(6);
   expect(screen.getByRole("button", { name: "跳到第 20 张" })).toHaveAttribute(
     "aria-current",
     "true",
