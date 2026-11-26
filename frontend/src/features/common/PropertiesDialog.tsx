@@ -57,7 +57,7 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
   return (
     <>
       {query.isLoading && (
-        <p role="status" className="text-fg-muted text-caption">
+        <p role="status" className="text-ink-2 text-caption">
           加载中…
         </p>
       )}
@@ -153,7 +153,7 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
               <Field label="标签" value={node.tags.join(" · ")} />
             )}
           </dl>
-          <p className="text-caption text-fg-subtle">根据最近一次扫描记录展示。</p>
+          <p className="text-caption text-ink-3">根据最近一次扫描记录展示。</p>
         </>
       )}
     </>
@@ -165,7 +165,7 @@ function ImageProperties({ fileId }: { fileId: string }) {
   return (
     <>
       {loading && (
-        <p role="status" className="text-fg-muted text-caption">
+        <p role="status" className="text-ink-2 text-caption">
           加载中…
         </p>
       )}
@@ -235,13 +235,13 @@ function Field({
        原先标签在上、值在下，八个字段把弹窗撑到近 600px 高，
        下面大半是空的；规格表本来就该横向扫读。 */
     <div className="flex items-start gap-4 py-1.5">
-      <dt className="w-20 shrink-0 text-caption font-medium text-fg-muted leading-6">
+      <dt className="w-20 shrink-0 text-caption font-medium text-ink-2 leading-6">
         {label}
       </dt>
       <dd className="flex-1 min-w-0 flex items-start gap-1.5">
         <span
           className={`break-all leading-6 ${
-            mono ? "font-mono text-caption text-fg-muted" : "text-body"
+            mono ? "font-mono text-caption text-ink-2" : "text-body"
           }`}
         >
           {value}

@@ -6,16 +6,16 @@ import {
 import { variants } from "./variants";
 import { Spinner } from "./Spinner";
 const styles = variants({
-  base: "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-control px-4 transition duration-1 motion-safe:enabled:active:scale-[.98] disabled:cursor-default disabled:opacity-40",
+  base: "relative inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-4 transition duration-fast motion-safe:enabled:active:scale-[.98] disabled:cursor-default disabled:opacity-40",
   variants: {
     variant: {
-      primary: "bg-accent text-accent-contrast",
-      secondary: "border border-line-strong hover:bg-bg-subtle",
-      ghost: "hover:bg-bg-subtle",
+      primary: "bg-primary text-on-primary",
+      secondary: "border border-line-strong hover:bg-sunken",
+      ghost: "hover:bg-sunken",
       danger: "text-danger hover:bg-danger/10",
     },
     size: {
-      sm: "h-8 text-callout",
+      sm: "h-8 text-label",
       md: "h-10 text-body",
       lg: "h-12 text-body",
     },

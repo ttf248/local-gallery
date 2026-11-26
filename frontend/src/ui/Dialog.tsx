@@ -31,13 +31,13 @@ export const Dialog = forwardRef<HTMLDialogElement, Props>(function Dialog(
       aria-labelledby={id}
       aria-describedby={description ? id + "-description" : undefined}
       className={cx(
-        "modal-surface dialog-surface m-auto max-h-[90dvh] max-w-[calc(100vw-32px)] rounded-sheet p-6",
+        "modal-surface dialog-surface m-auto max-h-[90dvh] max-w-[calc(100vw-32px)] rounded-xl p-6",
         { sm: "w-[400px]", md: "w-[560px]", lg: "w-[760px]" }[size],
         className,
       )}
     >
       <header className="mb-4 flex items-center justify-between gap-4">
-        <h2 id={id} className="text-title-3">
+        <h2 id={id} className="text-heading">
           {title}
         </h2>
         <IconButton label="关闭" onClick={onClose}>
@@ -45,7 +45,7 @@ export const Dialog = forwardRef<HTMLDialogElement, Props>(function Dialog(
         </IconButton>
       </header>
       {description && (
-        <p className="mb-4 text-fg-muted" id={id + "-description"}>
+        <p className="mb-4 text-ink-2" id={id + "-description"}>
           {description}
         </p>
       )}

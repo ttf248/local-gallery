@@ -98,14 +98,14 @@ export default function SmartAlbumRefreshPanel() {
   return (
     <section
       aria-labelledby="smart-album-refresh-heading"
-      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated"
+      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised"
     >
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="smart-album-refresh-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
+          <h2 id="smart-album-refresh-heading" className="tasks-section__title font-display text-body font-semibold text-ink">
             智能相册分组
           </h2>
-          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-fg-subtle max-w-[68ch]">
+          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-ink-3 max-w-[68ch]">
             按时间、地点、人物、场景分类并精选主题。只依据已完成的分析结果生成，原始照片保持不变。
           </p>
         </div>
@@ -143,7 +143,7 @@ export default function SmartAlbumRefreshPanel() {
         {running && progress ? (
           <div className="space-y-2" data-testid="smart-album-refresh-progress">
             <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-bg-subtle"
+              className="h-1.5 w-full overflow-hidden rounded-full bg-sunken"
               role="progressbar"
               aria-valuenow={percent}
               aria-valuemin={0}
@@ -151,11 +151,11 @@ export default function SmartAlbumRefreshPanel() {
               aria-label="智能相册生成进度"
             >
               <div
-                className="h-full rounded-full bg-accent transition-[width] duration-300"
+                className="h-full rounded-full bg-primary transition-[width] duration-300"
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <p className="text-caption tabular-nums text-fg-muted">
+            <p className="text-caption tabular-nums text-ink-2">
               {`正在生成 ${progress.done} / ${progress.total}`}
               {progress.currentAlbumName
                 ? ` · ${progress.currentAlbumName} · ${
@@ -180,7 +180,7 @@ export default function SmartAlbumRefreshPanel() {
         ) : null}
 
         {refresh.isCancelled ? (
-          <p role="status" className="text-caption text-fg-muted">
+          <p role="status" className="text-caption text-ink-2">
             生成已取消
           </p>
         ) : null}
@@ -192,7 +192,7 @@ export default function SmartAlbumRefreshPanel() {
         ) : null}
 
         {!running && !progress ? (
-          <p className="text-caption text-fg-subtle">
+          <p className="text-caption text-ink-3">
             还没有生成分组。分析完成后生成一次，首页与相册页就能按线索浏览。
           </p>
         ) : null}

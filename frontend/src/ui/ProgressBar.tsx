@@ -19,11 +19,11 @@ export const ProgressBar = forwardRef<
       aria-valuenow={
         progress === undefined ? undefined : Math.round(progress * 100)
       }
-      className={cx("h-1 overflow-hidden rounded-full bg-bg-strong", className)}
+      className={cx("h-1 overflow-hidden rounded-full bg-sunken-strong", className)}
     >
       <div
         className={cx(
-          "h-full rounded-full bg-signal",
+          "h-full rounded-full bg-accent",
           progress === undefined && "indeterminate",
         )}
         style={{ width: progress === undefined ? "35%" : progress * 100 + "%" }}

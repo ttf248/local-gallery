@@ -57,7 +57,7 @@ export default function VideoCoverImage({
 
   if (!enabled) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-bg-media text-white/45">
+      <div className="w-full h-full flex items-center justify-center bg-media text-white/45">
         <FolderIcon size={28} />
       </div>
     );
@@ -68,13 +68,13 @@ export default function VideoCoverImage({
   // 一片闪烁的噪点。静态图标 + 文案就够了 —— 封面位置本来就是固定的，
   // 预览出现时直接铺上去，不会跳动。
   //
-  // 底色用深色画布（--bg-media 令牌，工具类名是 bg-bg-media）：视频封面是
+  // 底色用深色画布（--media 令牌，工具类名是 bg-media）：视频封面是
   // 16:9，塞进 4:5 的卡片必然
   // 上下留边。留边如果落在浅灰底上会被读成"图片缺了一块"，落在深色画布上
   // 才是宽银幕的常规观感。
   if (status === "loading" || status === "missing" || status === "extracting") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-bg-media gap-2.5">
+      <div className="w-full h-full flex flex-col items-center justify-center bg-media gap-2.5">
         <span className="w-11 h-11 rounded-full border border-white/25 bg-white/10 flex items-center justify-center">
           <PlayFilledIcon size={18} className="text-white/85" />
         </span>
@@ -90,7 +90,7 @@ export default function VideoCoverImage({
   // 抽帧失败 → 占位 + 可选重试
   if (status === "error") {
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-bg-media gap-2">
+      <div className="w-full h-full flex flex-col items-center justify-center bg-media gap-2">
         <span className="w-11 h-11 rounded-full border border-white/20 bg-white/8 flex items-center justify-center">
           <FolderIcon size={20} className="text-white/70" />
         </span>
@@ -119,7 +119,7 @@ export default function VideoCoverImage({
       alt={alt}
       loading={loading}
       decoding="async"
-      className={`w-full h-full scale-fade [animation:scaleFade_240ms_var(--ease-emphasized)] ${
+      className={`w-full h-full scale-fade [animation:scaleFade_240ms_var(--ease-spring)] ${
         fit === "cover" ? "object-cover" : "object-contain"
       }`}
     />

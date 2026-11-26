@@ -23,18 +23,18 @@ export function ExploreSection({
   const note = useRef<HTMLDivElement | null>(null);
   return (
     <section
-      className="min-w-0 pt-[var(--section-gap)] first-of-type:pt-4"
+      className="min-w-0 pt-[var(--section)] first-of-type:pt-4"
       aria-labelledby={id}
     >
       <div className="mb-4 flex items-center gap-2">
-        <h2 id={id} className="text-title-2">
+        <h2 id={id} className="text-title">
           {title}
         </h2>
         {info && (
           <>
             <button
               type="button"
-              className="grid size-9 place-items-center text-fg-muted"
+              className="grid size-9 place-items-center text-ink-2"
               aria-label={title + "说明"}
               aria-controls={noteId}
               onClick={(event) => {
@@ -60,7 +60,7 @@ export function ExploreSection({
                 note.current = node;
                 node?.setAttribute("popover", "auto");
               }}
-              className="fixed inset-auto m-0 max-w-[min(360px,90vw)] rounded-card bg-bg-elevated p-4 text-callout text-fg shadow-2"
+              className="fixed inset-auto m-0 max-w-[min(360px,90vw)] rounded-lg bg-raised p-4 text-label text-ink shadow-2"
             >
               {info}
             </div>
@@ -68,7 +68,7 @@ export function ExploreSection({
         )}
         <Link
           to={to}
-          className="ml-auto inline-flex min-h-10 items-center gap-1 text-callout text-fg-muted hover:text-fg"
+          className="ml-auto inline-flex min-h-10 items-center gap-1 text-label text-ink-2 hover:text-ink"
         >
           {linkLabel}
           <ArrowRightLineIcon size={16} />

@@ -13,11 +13,11 @@ body:has(.command-backdrop) .top-bar [data-command-trigger][aria-keyshortcuts] {
   opacity: 0;
 }
 .command-query:focus-within {
-  border-color: var(--fg-subtle);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  border-color: var(--ink-3);
+  box-shadow: 0 0 0 2px var(--selected);
 }
 .command-query:focus-within > svg {
-  color: var(--signal-text);
+  color: var(--accent-text);
 }
 .command-query input:focus-visible {
   outline: none;
@@ -32,16 +32,16 @@ body:has(.command-backdrop) .top-bar [data-command-trigger][aria-keyshortcuts] {
   @apply grid-cols-1 gap-x-2 min-[360px]:grid-cols-2 sm:grid-cols-3;
 }
 .command-option {
-  @apply flex min-h-10 min-w-0 items-center gap-2.5 rounded-control px-2 text-left text-callout text-fg hover:bg-bg-subtle aria-selected:bg-bg-subtle aria-selected:ring-1 aria-selected:ring-inset aria-selected:ring-signal;
+  @apply flex min-h-10 min-w-0 items-center gap-2.5 rounded-md px-2 text-left text-label text-ink hover:bg-sunken aria-selected:bg-sunken aria-selected:ring-1 aria-selected:ring-inset aria-selected:ring-accent;
 }
 .command-art {
-  @apply grid size-8 shrink-0 place-items-center overflow-hidden rounded-sm bg-bg-subtle text-fg-muted;
+  @apply grid size-8 shrink-0 place-items-center overflow-hidden rounded-sm bg-sunken text-ink-2;
 }
 [data-layout="covers"] .command-option {
   @apply flex-col items-stretch gap-1.5 p-1;
 }
 [data-layout="covers"] .command-art {
-  @apply aspect-[3/2] h-auto w-full rounded-control bg-bg-media;
+  @apply aspect-[3/2] h-auto w-full rounded-md bg-media;
 }
 [data-layout="commands"] .command-art {
   @apply size-7 bg-transparent;
@@ -54,7 +54,7 @@ body:has(.command-backdrop) .top-bar [data-command-trigger][aria-keyshortcuts] {
   @apply grid-cols-2 gap-1.5 sm:grid-cols-5;
 }
 [data-layout="navigation"] .command-option {
-  @apply gap-1 rounded-control bg-bg px-2 hover:bg-bg-subtle;
+  @apply gap-1 rounded-md bg-canvas px-2 hover:bg-sunken;
 }
 [data-layout="navigation"] .command-art {
   @apply size-6 bg-transparent;

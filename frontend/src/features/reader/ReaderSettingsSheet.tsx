@@ -26,7 +26,7 @@ export function ReaderSettingsSheet({
       onClose={onClose}
     >
       <header className="mb-5 flex items-center justify-between">
-        <h2 className="text-title-2">阅读设置</h2>
+        <h2 className="text-title">阅读设置</h2>
         <IconButton label="关闭阅读设置" onClick={onClose}>
           <CloseIcon />
         </IconButton>

@@ -389,16 +389,16 @@ function CollectionHead({
             <span className="h-4 w-px shrink-0 bg-line" aria-hidden="true" />
             <nav
               aria-label="上级路径"
-              className="flex items-center gap-1 min-w-0 text-caption text-fg-muted"
+              className="flex items-center gap-1 min-w-0 text-caption text-ink-2"
             >
               {ancestors.map((ancestor, index) => (
                 <Fragment key={ancestor.id}>
                   {index > 0 && (
-                    <span className="text-fg-subtle shrink-0">／</span>
+                    <span className="text-ink-3 shrink-0">／</span>
                   )}
                   <Link
                     to={albumRoute(mode, ancestor.id)}
-                    className="truncate hover:text-accent transition-colors"
+                    className="truncate hover:text-primary transition-colors"
                   >
                     {ancestor.displayName || ancestor.name}
                   </Link>
@@ -413,7 +413,7 @@ function CollectionHead({
           封面是书脊与厚度，仍是这一页的锚点，保留。 */}
       <div className={`detail-head grid grid-cols-[auto_minmax(0,1fr)] [align-items:start] gap-[clamp(16px,2vw,24px)] max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:gap-3.5${isComic ? "" : " detail-head--plain grid-cols-1"}`}>
         {isComic && (
-          <div className="detail-head__cover w-[104px] h-[104px] overflow-hidden rounded-tile bg-bg-subtle shadow-1 max-sm:w-[72px] max-sm:h-[72px] detail-head__cover--book w-44 h-[220px] rounded-[10px_16px_16px_10px] [box-shadow:var(--cover-shadow)] after:content-[''] after:absolute after:inset-0 after:z-[1] after:pointer-events-none after:[background:linear-gradient(to_right,rgb(0_0_0_/_0.5)_0,rgb(0_0_0_/_0.18)_2px,rgb(0_0_0_/_0)_3px)] before:content-[''] before:absolute before:inset-y-0 before:right-0 before:w-[3px] before:z-[1] before:pointer-events-none before:[background:linear-gradient(to_left,rgb(255_255_255_/_0.34),rgb(255_255_255_/_0))] max-sm:w-[76px] max-sm:h-24">
+          <div className="detail-head__cover w-[104px] h-[104px] overflow-hidden rounded-tile bg-sunken shadow-1 max-sm:w-[72px] max-sm:h-[72px] detail-head__cover--book w-44 h-[220px] rounded-[10px_16px_16px_10px] [box-shadow:var(--cover-shadow)] after:content-[''] after:absolute after:inset-0 after:z-[1] after:pointer-events-none after:[background:linear-gradient(to_right,rgb(0_0_0_/_0.5)_0,rgb(0_0_0_/_0.18)_2px,rgb(0_0_0_/_0)_3px)] before:content-[''] before:absolute before:inset-y-0 before:right-0 before:w-[3px] before:z-[1] before:pointer-events-none before:[background:linear-gradient(to_left,rgb(255_255_255_/_0.34),rgb(255_255_255_/_0))] max-sm:w-[76px] max-sm:h-24">
             <CardCover
               data={{
                 variant: "collection",
@@ -427,12 +427,12 @@ function CollectionHead({
           </div>
         )}
         <div className="detail-head__body flex flex-col items-start py-1 min-w-0">
-          <p className="page-eyebrow flex items-center gap-2 text-accent text-caption font-semibold tracking-[0.02em]">
+          <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em]">
             {collectionTypeWord(detail.contentKind)}
             {/* 来源是身份的一部分，不占计数行：多根库下它告诉用户这一屏
                 来自哪个目录；单根库里它只是重复了顶栏已知的事实。 */}
             {multiRoot && detail.sourceName && (
-              <span className="page-eyebrow__source ml-2.5 pl-2.5 border-l border-l-line text-fg-subtle">
+              <span className="page-eyebrow__source ml-2.5 pl-2.5 border-l border-l-line text-ink-3">
                 来自 {detail.sourceName}
               </span>
             )}
@@ -442,7 +442,7 @@ function CollectionHead({
               计数行下面又读起来像页脚的杂项。放在标题行末，它与
               它作用的对象挨着，又不抢标题的位置。 */}
           <div className="detail-head__row flex items-center flex-wrap gap-y-2.5 gap-x-4 w-full">
-            <h1 className="detail-head__title font-display text-title-2 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [overflow-wrap:anywhere] mt-2">{detail.name}</h1>
+            <h1 className="detail-head__title font-display text-title leading-[1.25] font-semibold tracking-[-0.02em] text-ink [overflow-wrap:anywhere] mt-2">{detail.name}</h1>
             <div className="detail-head__actions flex items-center gap-2 mt-0">
               {/* 收藏是一枚星标，不是一行字：标题旁边挂一个写着
                   「收藏」的胶囊，短标题读起来像给标题加了个标签。
@@ -456,32 +456,32 @@ function CollectionHead({
                 className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
                   isFavorite
                     ? "bg-favorite/10 text-favorite hover:bg-favorite/15"
-                    : "border border-line text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                    : "border border-line text-ink-2 hover:bg-sunken hover:text-ink"
                 }`}
               >
                 <StarIcon size={14} filled={isFavorite} />
               </button>
             </div>
           </div>
-          <div className="detail-head__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-[9px] text-body text-fg-muted">
+          <div className="detail-head__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-[9px] text-body text-ink-2">
             <span>
-              <span className="detail-head__value text-fg font-semibold tabular-nums">{albumCount}</span>{" "}
+              <span className="detail-head__value text-ink font-semibold tabular-nums">{albumCount}</span>{" "}
               {albumCountUnit(detail.contentKind)}
             </span>
             {collectionCount > 0 && (
               <>
-                <span className="text-fg-subtle">·</span>
+                <span className="text-ink-3">·</span>
                 <span>
-                  <span className="detail-head__value text-fg font-semibold tabular-nums">{collectionCount}</span>{" "}
+                  <span className="detail-head__value text-ink font-semibold tabular-nums">{collectionCount}</span>{" "}
                   {isComic ? "个子作品" : "个文件夹"}
                 </span>
               </>
             )}
             {detail.imageCount > 0 && (
               <>
-                <span className="text-fg-subtle">·</span>
+                <span className="text-ink-3">·</span>
                 <span>
-                  <span className="detail-head__value text-fg font-semibold tabular-nums">
+                  <span className="detail-head__value text-ink font-semibold tabular-nums">
                     {detail.imageCount}
                   </span>{" "}
                   {copy.mediaUnit}
@@ -490,9 +490,9 @@ function CollectionHead({
             )}
             {detail.videoCount > 0 && (
               <>
-                <span className="text-fg-subtle">·</span>
+                <span className="text-ink-3">·</span>
                 <span>
-                  <span className="detail-head__value text-fg font-semibold tabular-nums">
+                  <span className="detail-head__value text-ink font-semibold tabular-nums">
                     {detail.videoCount}
                   </span>{" "}
                   个视频
@@ -599,8 +599,8 @@ function CollectionView({
         {realYearBuckets >= 2 && (
           <div className="py-6">
             <div className="page-shell flex items-center gap-3 mb-4">
-              <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">时间线</h2>
-              <span className="section-meta text-caption leading-[1.45] text-fg-muted">
+              <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">时间线</h2>
+              <span className="section-meta text-caption leading-[1.45] text-ink-2">
                 {detail.contentKind === "comic"
                   ? "按年份浏览 — 当前作品下的子卷 / 子系列"
                   : "按年份浏览 — 当前文件夹下的子相册 / 子文件夹"}

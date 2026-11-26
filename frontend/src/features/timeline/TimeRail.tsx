@@ -66,7 +66,7 @@ export function TimeRail({ marks, activeKey, onCommit }: TimeRailProps) {
       aria-valuetext={label + " · " + mark.count + " 张"}
       tabIndex={0}
       className={cx(
-        "group fixed bottom-6 right-2 top-[calc(var(--topbar-height)+16px)] z-rail hidden w-12 touch-none select-none rounded-full opacity-0 transition-opacity duration-2 hover:opacity-100 focus:opacity-100 md:block",
+        "group fixed bottom-6 right-2 top-[calc(var(--topbar-height)+16px)] z-rail hidden w-12 touch-none select-none rounded-full opacity-0 transition-opacity duration-base hover:opacity-100 focus:opacity-100 md:block",
         (scrolling || preview !== null) && "opacity-100",
       )}
       onKeyDown={(e) => {
@@ -140,7 +140,7 @@ export function TimeRail({ marks, activeKey, onCommit }: TimeRailProps) {
               key={item.key}
               aria-hidden="true"
               style={{ top: item.fraction * 100 + "%" }}
-              className="pointer-events-none absolute right-0 flex -translate-y-1/2 items-center gap-1 text-micro text-fg-subtle"
+              className="pointer-events-none absolute right-0 flex -translate-y-1/2 items-center gap-1 text-caption text-ink-3"
             >
               {show && (item.level === "unknown" ? "未知" : item.label)}
               <i className="w-1.5 border-t border-current" />
@@ -149,12 +149,12 @@ export function TimeRail({ marks, activeKey, onCommit }: TimeRailProps) {
         })}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute right-0 h-6 w-0.5 -translate-y-1/2 bg-signal"
+        className="pointer-events-none absolute right-0 h-6 w-0.5 -translate-y-1/2 bg-accent"
         style={{ top: mark.fraction * 100 + "%" }}
       />
       {preview && (
         <output
-          className="pointer-events-none absolute right-full mr-2 -translate-y-1/2 whitespace-nowrap rounded-full bg-inverse-bg px-3 py-2 text-caption text-inverse-fg"
+          className="pointer-events-none absolute right-full mr-2 -translate-y-1/2 whitespace-nowrap rounded-full bg-inverse px-3 py-2 text-caption text-on-inverse"
           style={{ top: mark.fraction * 100 + "%" }}
         >
           {label} · {mark.count} 张

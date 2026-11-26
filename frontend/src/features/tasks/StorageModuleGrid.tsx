@@ -18,8 +18,8 @@ interface Props {
 export default function StorageModuleGrid({ modules }: Props) {
   if (modules.length === 0) return null;
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-bg-elevated shadow-1">
-      <h3 className="border-b border-line bg-bg-subtle px-4 py-2.5 text-body font-medium text-fg">
+    <section className="overflow-hidden rounded-xl border border-line bg-raised shadow-1">
+      <h3 className="border-b border-line bg-sunken px-4 py-2.5 text-body font-medium text-ink">
         AI 模型与产物
       </h3>
       <ul className="divide-y divide-line">
@@ -33,10 +33,10 @@ export default function StorageModuleGrid({ modules }: Props) {
           return (
             <li key={module.type} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-body font-medium text-fg">
+                <span className="text-body font-medium text-ink">
                   {module.name}
                 </span>
-                <span className="font-mono text-caption tabular-nums text-fg-muted">
+                <span className="font-mono text-caption tabular-nums text-ink-2">
                   模型 {formatSize(module.modelBytes)} · 产物{" "}
                   {formatSize(module.outputBytes)}
                 </span>
@@ -54,10 +54,10 @@ export default function StorageModuleGrid({ modules }: Props) {
                     return (
                       <li
                         key={profile.model}
-                        className="rounded-lg border border-line bg-bg-subtle px-3 py-2"
+                        className="rounded-lg border border-line bg-sunken px-3 py-2"
                       >
                         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                          <span className="text-caption font-medium text-fg">
+                          <span className="text-caption font-medium text-ink">
                             {faceModelLabel(profile.model)}
                             {profile.active ? (
                               <span className="ml-2 text-success">
@@ -65,19 +65,19 @@ export default function StorageModuleGrid({ modules }: Props) {
                               </span>
                             ) : null}
                           </span>
-                          <span className="font-mono text-caption tabular-nums text-fg-muted">
+                          <span className="font-mono text-caption tabular-nums text-ink-2">
                             模型 {formatSize(profile.modelBytes)} · 产物{" "}
                             {formatSize(profile.outputBytes)}
                           </span>
                         </div>
                         <p
-                          className="mt-1 truncate font-mono text-caption text-fg-subtle"
+                          className="mt-1 truncate font-mono text-caption text-ink-3"
                           title={profileModelNames}
                         >
                           {profileModelNames || "未发现模型文件"}
                         </p>
                         <p
-                          className="mt-1 truncate font-mono text-caption text-fg-subtle"
+                          className="mt-1 truncate font-mono text-caption text-ink-3"
                           title={profileOutputPaths}
                         >
                           {profileOutputPaths}
@@ -90,13 +90,13 @@ export default function StorageModuleGrid({ modules }: Props) {
                 <>
                   {module.modelFiles.length > 0 ? (
                     <p
-                      className="mt-1 truncate font-mono text-caption text-fg-subtle"
+                      className="mt-1 truncate font-mono text-caption text-ink-3"
                       title={modelNames}
                     >
                       {modelNames}
                     </p>
                   ) : module.modelLocation === "none" ? (
-                    <p className="mt-1 text-caption text-fg-subtle">
+                    <p className="mt-1 text-caption text-ink-3">
                       使用 Go 内置 EXIF/GPS 解析器，无需权重。
                     </p>
                   ) : (
@@ -106,7 +106,7 @@ export default function StorageModuleGrid({ modules }: Props) {
                   )}
 
                   <p
-                    className="mt-1 truncate font-mono text-caption text-fg-subtle"
+                    className="mt-1 truncate font-mono text-caption text-ink-3"
                     title={outputPaths}
                   >
                     {outputPaths}

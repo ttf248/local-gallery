@@ -85,29 +85,29 @@ export default function AutoSyncPanel() {
       </SettingsRow>
       <div className="settings-block py-3 px-0">
         <div>
-          <span className="text-body text-fg">监听状态</span>
-          <span className="block mt-0.5 text-caption text-fg-muted">
+          <span className="text-body text-ink">监听状态</span>
+          <span className="block mt-0.5 text-caption text-ink-2">
             {status
               ? describeWatchState(enabled, status.running, status.degraded)
               : "正在读取…"}
           </span>
         </div>
         {status && (
-          <dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-caption text-fg-muted">
+          <dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-caption text-ink-2">
             <dt>监听目录</dt>
-            <dd className="text-fg">
+            <dd className="text-ink">
               {status.watchedDirs} / {status.maxWatchDirs}
             </dd>
             <dt>最近检测</dt>
-            <dd className="text-fg">{status.lastDetected} 项</dd>
+            <dd className="text-ink">{status.lastDetected} 项</dd>
             <dt>最近更新</dt>
-            <dd className="text-fg">{status.lastUpdated} 项</dd>
+            <dd className="text-ink">{status.lastUpdated} 项</dd>
             <dt>上次校验</dt>
-            <dd className="text-fg">
+            <dd className="text-ink">
               {formatTime(status.lastVerifyAt) || "尚未校验"}
             </dd>
             <dt>上次同步</dt>
-            <dd className="text-fg">
+            <dd className="text-ink">
               {formatTime(status.lastSyncAt) || "尚未同步"}
             </dd>
           </dl>

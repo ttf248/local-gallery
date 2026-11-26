@@ -368,10 +368,10 @@ describe("本机存储", () => {
     expect(await screen.findByText(/3\.9 KB · 3 个文件/)).toBeInTheDocument();
     // 「缩略图」在重建范围勾选项里也有一份，这里认的是占用徽章。
     expect(
-      screen.getByText("缩略图", { selector: "span.text-fg-muted.text-caption" }),
+      screen.getByText("缩略图", { selector: "span.text-ink-2.text-caption" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("转换图", { selector: "span.text-fg-muted.text-caption" }),
+      screen.getByText("转换图", { selector: "span.text-ink-2.text-caption" }),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "清空 缩略图 缓存" }));

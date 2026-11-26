@@ -475,7 +475,7 @@ export default function PhotoAlbum({ album }: Props) {
         {(showingGroup || filterChips.length > 0 || filter.collapse) && (
           <div className="album-active-filters flex flex-wrap items-center gap-1.5 py-1">
             {showingGroup && selectedGroup ? (
-              <span className="truncate text-caption text-fg-muted">
+              <span className="truncate text-caption text-ink-2">
                 分组：{selectedGroup.name} · {selectedGroup.photoCount} 张
               </span>
             ) : null}
@@ -490,7 +490,7 @@ export default function PhotoAlbum({ album }: Props) {
                 <button
                   type="button"
                   onClick={() => openGroup(null)}
-                  className="btn-text text-caption text-accent hover:underline"
+                  className="btn-text text-caption text-primary hover:underline"
                 >
                   回到全部照片
                 </button>
@@ -504,7 +504,7 @@ export default function PhotoAlbum({ album }: Props) {
                     key={chip.key}
                     type="button"
                     onClick={() => setFilter(chip.clear)}
-                    className="inline-flex min-h-8 min-w-8 items-center gap-1 rounded-md bg-bg-subtle px-2 text-caption text-fg transition-colors hover:bg-bg-strong touch:min-h-10 touch:min-w-10"
+                    className="inline-flex min-h-8 min-w-8 items-center gap-1 rounded-md bg-sunken px-2 text-caption text-ink transition-colors hover:bg-sunken-strong touch:min-h-10 touch:min-w-10"
                     title={`去掉这条条件：${chip.label}`}
                   >
                     {chip.label}
@@ -575,7 +575,7 @@ export default function PhotoAlbum({ album }: Props) {
           />
         ) : mediaQuery.isLoading && !mediaQuery.data ? (
           <div
-            className="page-shell py-10 text-center text-body text-fg-muted"
+            className="page-shell py-10 text-center text-body text-ink-2"
             aria-live="polite"
           >
             正在读取相册媒体…

@@ -56,7 +56,7 @@ export default function ErrorBanner({
           type="button"
           onClick={onRetry}
           disabled={retrying}
-          className="btn-text shrink-0 text-accent hover:underline disabled:opacity-50"
+          className="btn-text shrink-0 text-primary hover:underline disabled:opacity-50"
         >
           {retrying ? "正在重试…" : (retryLabel ?? "重试加载")}
         </button>

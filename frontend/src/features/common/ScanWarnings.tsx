@@ -58,12 +58,12 @@ export default function ScanWarnings({ warnings = [], total }: Props) {
             </div>
           )}
           {warnings.length > 0 ? (
-            <ul className="max-h-40 space-y-1 overflow-auto text-fg-muted">
+            <ul className="max-h-40 space-y-1 overflow-auto text-ink-2">
               {warnings.map((warning, index) => (
                 <li key={`${warning.code}-${warning.path ?? ""}-${index}`}>
-                  <span className="text-fg">{warning.message}</span>
+                  <span className="text-ink">{warning.message}</span>
                   {warning.path && (
-                    <span className="ml-2 font-mono text-fg-subtle">
+                    <span className="ml-2 font-mono text-ink-3">
                       {warning.path}
                     </span>
                   )}
@@ -71,10 +71,10 @@ export default function ScanWarnings({ warnings = [], total }: Props) {
               ))}
             </ul>
           ) : (
-            <p className="text-fg-muted">当前扫描未返回可展开的详情。</p>
+            <p className="text-ink-2">当前扫描未返回可展开的详情。</p>
           )}
           {total > warnings.length && (
-            <p className="mt-2 text-fg-subtle">
+            <p className="mt-2 text-ink-3">
               仅展示前 {warnings.length} 条，完整数量为 {total} 条。
             </p>
           )}

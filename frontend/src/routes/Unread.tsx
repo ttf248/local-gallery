@@ -125,17 +125,17 @@ export default function Unread() {
           )
         }
   meta={
-          <p className="text-body text-fg-muted tabular-nums">
+          <p className="text-body text-ink-2 tabular-nums">
             {isLoading ? (
               // 加载中不要报「0 本」：那是"还没数出来"，不是"没有未读"。
               <span>正在统计未读相册…</span>
             ) : (
               <span>
-                还有 <span className="text-fg">{count}</span>{" "}
+                还有 <span className="text-ink">{count}</span>{" "}
                 {copy.collectionUnit}
                 {copy.unreadCountVerb}
-                <span className="text-fg-subtle mx-1.5">·</span>
-                全库 <span className="text-fg">{total}</span>{" "}
+                <span className="text-ink-3 mx-1.5">·</span>
+                全库 <span className="text-ink">{total}</span>{" "}
                 {copy.collectionUnit}
               </span>
             )}

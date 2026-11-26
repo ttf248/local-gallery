@@ -50,12 +50,12 @@ export default class ErrorBoundary extends Component<Props, State> {
           role="alert"
           className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center"
         >
-          <div className="text-title-2 font-semibold text-fg">
+          <div className="text-title font-semibold text-ink">
             {chunkError
               ? "页面已更新，刷新以载入新版本"
               : (this.props.title ?? "图像库加载异常")}
           </div>
-          <div className="max-w-md text-body text-fg-muted">
+          <div className="max-w-md text-body text-ink-2">
             {this.state.error.message || "未知错误，详见浏览器控制台"}
           </div>
           <button
@@ -63,7 +63,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             onClick={
               chunkError ? () => window.location.reload() : this.handleRetry
             }
-            className="rounded-md border border-line bg-bg-elevated px-4 py-2 text-body hover:bg-bg-subtle"
+            className="rounded-md border border-line bg-raised px-4 py-2 text-body hover:bg-sunken"
           >
             {chunkError ? "刷新" : "重试"}
           </button>

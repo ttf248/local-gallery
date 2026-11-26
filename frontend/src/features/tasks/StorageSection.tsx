@@ -31,7 +31,7 @@ export default function StorageSection() {
       {usage.isLoading ? (
         <div
           role="status"
-          className="rounded-xl border border-line bg-bg-elevated p-4 text-body text-fg-muted"
+          className="rounded-xl border border-line bg-raised p-4 text-body text-ink-2"
         >
           正在读取本机存储信息…
         </div>

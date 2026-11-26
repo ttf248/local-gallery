@@ -60,19 +60,19 @@ export default function TravelPhotoWall({
   return (
     <div className="flex h-[min(84vh,980px)] min-h-[460px] flex-col">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-line px-5 py-4">
-        <h2 className="font-display text-title-3 font-medium text-fg">
+        <h2 className="font-display text-heading font-medium text-ink">
           {name}
         </h2>
-        <span className="text-body font-medium tabular-nums text-accent">
+        <span className="text-body font-medium tabular-nums text-primary">
           {total.toLocaleString()} 张
         </span>
       </div>
       {query.isError ? (
-        <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-body text-fg-muted">
+        <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-body text-ink-2">
           这个区域的照片暂时读不出来。
         </div>
       ) : items.length === 0 && !query.isLoading ? (
-        <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-body text-fg-muted">
+        <div className="flex flex-1 items-center justify-center px-6 py-12 text-center text-body text-ink-2">
           这个区域暂时没有照片。
         </div>
       ) : (

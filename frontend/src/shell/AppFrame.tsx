@@ -76,7 +76,7 @@ export default function AppFrame() {
   });
   return (
     <PageChromeProvider>
-      <div className="flex h-full min-w-0 gap-0 bg-bg lg:gap-2">
+      <div className="flex h-full min-w-0 gap-0 bg-app lg:gap-2">
         {wide && (
           <NavRail
             collapsed={collapsed}
@@ -84,7 +84,7 @@ export default function AppFrame() {
             warningCount={warningCount}
           />
         )}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col bg-canvas">
           <TopBar
             scrolled={scrolled}
             onHelp={() => setHelp(true)}

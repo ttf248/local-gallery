@@ -70,10 +70,10 @@ function TimelineCard({ entry }: { entry: TimelineEntry }) {
       <button
         type="button"
         onClick={entry.onActivate}
-        className="year-index__open flex items-center gap-3 w-full p-2 rounded-tile text-left transition duration-2 [.year-index\_\_item[data-active=true]_&]:bg-accent-soft [.year-index\_\_item[data-active=true]_&]:text-accent hover:bg-bg-subtle [.year-index\_\_item[data-active=true]_&:hover]:bg-accent-soft touch:active:bg-bg-subtle touch:[.year-index\_\_item[data-active=true]_&:active]:bg-accent-soft"
+        className="year-index__open flex items-center gap-3 w-full p-2 rounded-tile text-left transition duration-base [.year-index\_\_item[data-active=true]_&]:bg-selected [.year-index\_\_item[data-active=true]_&]:text-primary hover:bg-sunken [.year-index\_\_item[data-active=true]_&:hover]:bg-selected touch:active:bg-sunken touch:[.year-index\_\_item[data-active=true]_&:active]:bg-selected"
       >
         <span
-          className={`block shrink-0 overflow-hidden bg-bg-subtle ${
+          className={`block shrink-0 overflow-hidden bg-sunken ${
             isComic ? "timeline-cover--book after:content-[''] after:absolute after:inset-0 after:z-[1] after:pointer-events-none after:[background:linear-gradient(to_right,rgb(0_0_0_/_0.48)_0,rgb(0_0_0_/_0.14)_5px,rgb(0_0_0_/_0)_13px)] relative rounded-[5px_8px_8px_5px] [box-shadow:0_6px_14px_-10px_rgb(0_0_0_/_0.5)] w-12 h-14" : "rounded-md w-12 h-12"
           }`}
         >
@@ -88,20 +88,20 @@ function TimelineCard({ entry }: { entry: TimelineEntry }) {
               className="w-full h-full object-cover"
             />
           ) : (
-            <span className="flex items-center justify-center w-full h-full text-fg-subtle">
+            <span className="flex items-center justify-center w-full h-full text-ink-3">
               <FolderIcon size={18} />
             </span>
           )}
         </span>
         <span className="min-w-0">
           <span
-            className={`block font-display text-title-3 font-semibold leading-tight text-fg truncate ${
+            className={`block font-display text-heading font-semibold leading-tight text-ink truncate ${
               entry.numeric ? "tabular-nums" : ""
             }`}
           >
             {entry.label}
           </span>
-          <span className="block text-caption text-fg-muted mt-1 tabular-nums">
+          <span className="block text-caption text-ink-2 mt-1 tabular-nums">
             {entry.count}
           </span>
         </span>

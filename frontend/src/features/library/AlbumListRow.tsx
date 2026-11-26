@@ -54,18 +54,18 @@ export default function AlbumListRow({
           className="flex min-w-0 flex-1 items-center gap-4"
         >
           <span
-            className="block size-24 shrink-0 overflow-hidden rounded-tile bg-bg-media"
+            className="block size-24 shrink-0 overflow-hidden rounded-tile bg-media"
             data-testid="card-cover"
           >
             <CardCover data={data} compact loading="eager" />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-callout font-semibold">
+            <span className="block truncate text-label font-semibold">
               {label}
             </span>
             {when && Number.isFinite(when.getTime()) && (
               <time
-                className="text-caption text-fg-muted"
+                className="text-caption text-ink-2"
                 dateTime={when.toISOString()}
               >
                 上次{" "}
@@ -100,10 +100,10 @@ export default function AlbumListRow({
       <Link
         to={data.linkTo ?? data.to}
         aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
-        className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-bg-subtle transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+        className="group flex flex-1 min-w-0 items-center gap-3.5 py-2 px-2.5 -mx-2.5 rounded-lg hover:bg-sunken transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <div
-          className={`relative h-12 shrink-0 overflow-hidden bg-bg-subtle ${
+          className={`relative h-12 shrink-0 overflow-hidden bg-sunken ${
             isComicContent
               ? "album-thumb--book book-binding relative rounded-sm shadow-[var(--cover-shadow)] aspect-[2/3]"
               : /* 照片侧是方形：与网格里的方照同一套画幅，
@@ -114,8 +114,8 @@ export default function AlbumListRow({
         >
           <CardCover data={data} loading="eager" compact />
           {data.coverKind === "video" && (
-            <div className="pointer-events-none absolute top-1 right-1 inline-flex items-center gap-1 bg-bg-elevated/90 text-fg text-micro font-medium px-1.5 h-5 rounded shadow-1">
-              <PlayFilledIcon size={9} className="text-accent" />
+            <div className="pointer-events-none absolute top-1 right-1 inline-flex items-center gap-1 bg-raised/90 text-ink text-caption font-medium px-1.5 h-5 rounded shadow-1">
+              <PlayFilledIcon size={9} className="text-primary" />
               {/* 时长未知时不显示数字：破折号看起来像"读不出来 / 坏了"。 */}
               {hasDuration && <span>{formatDuration(data.durationSec)}</span>}
             </div>
@@ -127,24 +127,24 @@ export default function AlbumListRow({
         {/* 溢出裁掉而不是压到右栏上：这一块可以缩到比内容更窄，
             但里面的进度读数不缩，窄列时它会直接盖住右侧的页数。 */}
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col justify-center gap-1">
-          <div className="text-body font-medium text-fg truncate flex items-center gap-1.5">
+          <div className="text-body font-medium text-ink truncate flex items-center gap-1.5">
             <AlbumName name={rowTitle} />
             {unread && (
               <span
-                className="inline-flex items-center gap-1 text-body font-medium text-fg-muted shrink-0"
+                className="inline-flex items-center gap-1 text-body font-medium text-ink-2 shrink-0"
                 title={cardCopy.unreadTitle}
               >
                 {/* 未读点用品牌色：它是「这一本还没翻开」的信号，
                     近黑的强调色在这里读起来只是一个句点。 */}
                 <span
-                  className="h-2 w-2 rounded-full bg-accent"
+                  className="h-2 w-2 rounded-full bg-primary"
                   aria-hidden="true"
                 />
                 <span>{cardCopy.unreadTitle}</span>
               </span>
             )}
             {isFinished && isComicAlbum && (
-              <span className="inline-flex items-center gap-0.5 text-body font-medium text-fg-muted shrink-0">
+              <span className="inline-flex items-center gap-0.5 text-body font-medium text-ink-2 shrink-0">
                 <CheckIcon size={11} className="text-success" />
                 <span>{cardCopy.finishedLabel}</span>
               </span>
@@ -154,7 +154,7 @@ export default function AlbumListRow({
               轨道只在真有进度时出现：一条永远空着的灰条压在短标题下面，
               读起来是标题的下划线，不是进度条。「还没翻开」这件事由
               标题行上的未读标记承担，不必再用一个空轨道说一遍。 */}
-          <div className="text-body text-fg-subtle flex items-center gap-2 min-w-0 overflow-hidden">
+          <div className="text-body text-ink-3 flex items-center gap-2 min-w-0 overflow-hidden">
             <TypeChip variant={data.variant} />
             {data.subtitle && (
               <span className="truncate max-w-[10rem] shrink">
@@ -165,9 +165,9 @@ export default function AlbumListRow({
               <>
                 {/* 轨道给固定宽度，不占满整行：一条横贯半屏的空条
                     读起来是分隔线，不是进度条。 */}
-                <span className="w-20 shrink-0 h-[3px] bg-bg-strong rounded-full overflow-hidden">
+                <span className="w-20 shrink-0 h-[3px] bg-sunken-strong rounded-full overflow-hidden">
                   <span
-                    className="block h-full bg-accent"
+                    className="block h-full bg-primary"
                     style={{
                       width: `${progressPct}%`,
                     }}
@@ -180,7 +180,7 @@ export default function AlbumListRow({
               </>
             )}
             {data.sourceName && multiRoot && (
-              <span className="text-fg-subtle inline-flex items-center gap-0.5 shrink-0">
+              <span className="text-ink-3 inline-flex items-center gap-0.5 shrink-0">
                 <FolderIcon size={11} className="shrink-0" />
                 <span className="truncate">来自 {data.sourceName}</span>
               </span>
@@ -190,7 +190,7 @@ export default function AlbumListRow({
 
         {/* 右侧信息列：张数 / 最近查看固定右对齐，逐行对齐便于扫读。 */}
         <div className="shrink-0 w-24 sm:w-32 text-right flex flex-col items-end gap-1">
-          <span className="text-body text-fg tabular-nums font-medium">
+          <span className="text-body text-ink tabular-nums font-medium">
             {(() => {
               const media = card.counts;
               if (media) {
@@ -204,8 +204,8 @@ export default function AlbumListRow({
             })()}
           </span>
           {showLastSeen && data.lastSeenAt && (
-            <span className="text-body text-fg-subtle inline-flex items-center gap-1">
-              <ClockIcon size={11} className="shrink-0 text-fg-subtle" />
+            <span className="text-body text-ink-3 inline-flex items-center gap-1">
+              <ClockIcon size={11} className="shrink-0 text-ink-3" />
               <span>上次 {timeAgo(data.lastSeenAt)}</span>
             </span>
           )}
@@ -213,13 +213,13 @@ export default function AlbumListRow({
 
         {(data.date || data.modTime) && (
           <time
-            className="hidden w-24 shrink-0 text-right text-caption tabular-nums text-fg-subtle lg:block"
+            className="hidden w-24 shrink-0 text-right text-caption tabular-nums text-ink-3 lg:block"
             dateTime={data.date || data.modTime}
           >
             {(data.date || data.modTime)?.slice(0, 10)}
           </time>
         )}
-        <div className="text-fg-subtle hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pr-1">
+        <div className="text-ink-3 hover-reveal group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity pr-1">
           <span className="text-body">›</span>
         </div>
       </Link>

@@ -85,7 +85,7 @@ export default function CopyButton({ value, title, onDark }: Props) {
       className={`inline-flex items-center justify-center w-6 h-6 -m-1 rounded transition-colors ${
         onDark
           ? "text-white/60 hover:text-white hover:bg-white/10"
-          : "text-fg-subtle hover:text-fg hover:bg-bg-subtle"
+          : "text-ink-3 hover:text-ink hover:bg-sunken"
       }`}
       title={label}
       aria-label={label}

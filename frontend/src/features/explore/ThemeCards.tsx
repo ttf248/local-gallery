@@ -88,7 +88,7 @@ export default function ThemeCards() {
           </ScrollRow>
         )
       ) : allDirectory.isLoading || refresh.isLoading ? (
-        <p className="text-body text-fg-muted" aria-live="polite">
+        <p className="text-body text-ink-2" aria-live="polite">
           正在检查主题分组状态…
         </p>
       ) : allDirectory.isError ? (
@@ -108,7 +108,7 @@ export default function ThemeCards() {
           主题生成状态暂时读不出来。
         </InlineAlert>
       ) : task?.status === "pending" || task?.status === "running" ? (
-        <p className="text-body text-fg-muted" aria-live="polite">
+        <p className="text-body text-ink-2" aria-live="polite">
           {task.status === "pending" ? "主题生成正在排队" : "正在生成主题"}
           {task.total > 0 ? ` · ${task.done}/${task.total}` : "…"}
         </p>
@@ -132,12 +132,12 @@ export default function ThemeCards() {
           dense
         />
       ) : allDirectory.analysis ? (
-        <p className="text-body text-fg-muted">
+        <p className="text-body text-ink-2">
           {allDirectory.analysis.analyzedAlbums > 0
             ? `主题分析尚未完成（${allDirectory.analysis.analyzedAlbums}/${allDirectory.analysis.totalAlbums} 本相册已生成）。`
             : "主题尚未生成。"}{" "}
           <Link
-            className="text-accent underline-offset-2 hover:underline"
+            className="text-primary underline-offset-2 hover:underline"
             to="/tasks"
           >
             前往任务中心运行智能相册生成
@@ -223,7 +223,7 @@ function ThemeCard({ item }: { item: SmartAlbumDirectoryItem }) {
       <span
         ref={coverRef}
         className={
-          "grid aspect-[4/3] gap-0.5 overflow-hidden rounded-card bg-bg-media " +
+          "grid aspect-[4/3] gap-0.5 overflow-hidden rounded-lg bg-media " +
           (covers.length > 1 ? "grid-cols-2" : "place-items-center")
         }
       >
@@ -257,10 +257,10 @@ function ThemeCard({ item }: { item: SmartAlbumDirectoryItem }) {
           <SparkleIcon size={22} />
         )}
       </span>
-      <span className="mt-2 block text-callout font-semibold">
+      <span className="mt-2 block text-label font-semibold">
         {group.name}
       </span>
-      <span className="text-caption text-fg-muted">
+      <span className="text-caption text-ink-2">
         {group.photoCount.toLocaleString("zh-CN")} 张
         {source && " · 来自 " + source}
       </span>

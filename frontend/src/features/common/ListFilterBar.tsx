@@ -98,7 +98,7 @@ export function ListFilterBar({
               避免整条筛选条只剩右半边、左侧空一大片。 */}
           {!hideTotalCount && !viewChips?.length && (
             <span
-              className="text-caption text-fg-muted tabular-nums"
+              className="text-caption text-ink-2 tabular-nums"
               data-testid="filter-bar-count"
             >
               共 {totalCount} 项
@@ -116,7 +116,7 @@ export function ListFilterBar({
           viewChips?.length &&
           totalCount !== viewChips.find((c) => c.key === "all")?.count ? (
             <span
-              className="text-caption text-fg-muted tabular-nums"
+              className="text-caption text-ink-2 tabular-nums"
               data-testid="filter-bar-count"
             >
               共 {totalCount} 项
@@ -134,7 +134,7 @@ export function ListFilterBar({
           ) : null}
           {/* 网格 / 列表：一条分段控件（跟主题切换同一套语言）。
               早先两个 30px 的方块各自带一圈边框，激活态只是把底色改成
-              --bg-subtle，在浅色画布上几乎看不出差别 —— 两个图标悬在
+              --sunken，在浅色画布上几乎看不出差别 —— 两个图标悬在
               筛选条右端像两枚散落的方块。现在轨道有一个底，选中的那一段
               抬起来成为白底深色字。 */}
           {!hideViewToggle && (
@@ -262,7 +262,7 @@ function SortMenu({
           id={optionsId}
           role="group"
           aria-label="排序选项"
-          className="absolute right-0 top-full mt-1.5 min-w-[140px] ui-popover py-1 z-40 fade-up [animation:fadeUp_320ms_var(--ease-emphasized)_both]"
+          className="absolute right-0 top-full mt-1.5 min-w-[140px] ui-popover py-1 z-40 fade-up [animation:fadeUp_320ms_var(--ease-spring)_both]"
         >
           {options.map((o) => (
             <button
@@ -280,8 +280,8 @@ function SortMenu({
                    一列灰字里夹着一行深字，得逐行读才知道选了哪个。
                    与全局搜索的结果列表同一套高亮。 */
                 o.value === value
-                  ? "bg-bg-subtle text-fg font-medium"
-                  : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                  ? "bg-sunken text-ink font-medium"
+                  : "text-ink-2 hover:bg-sunken hover:text-ink"
               }`}
             >
               {o.label}
@@ -341,7 +341,7 @@ function MinImageFilter({
           setEditing(true);
           setDraft("0");
         }}
-        className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md border border-line text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors shrink-0"
+        className="inline-flex items-center justify-center w-[34px] h-[34px] rounded-md border border-line text-ink-2 hover:bg-sunken hover:text-ink transition-colors shrink-0"
         title={label}
         aria-label={`最少${unit}数`}
       >
@@ -353,8 +353,8 @@ function MinImageFilter({
     <div
       className={`inline-flex items-center gap-1 h-[34px] px-2.5 rounded-md border transition-colors ${
         active
-          ? "border-accent/40 bg-accent-soft text-accent"
-          : "border-line text-fg-muted hover:bg-bg-subtle"
+          ? "border-primary/40 bg-selected text-primary"
+          : "border-line text-ink-2 hover:bg-sunken"
       }`}
       title={label}
     >
@@ -388,7 +388,7 @@ function MinImageFilter({
       {active && (
         <button
           onClick={() => onChange(0)}
-          className="btn-text text-fg-subtle hover:text-fg text-body leading-none px-0.5"
+          className="btn-text text-ink-3 hover:text-ink text-body leading-none px-0.5"
           title="清除"
           aria-label="清除最小图数"
         >

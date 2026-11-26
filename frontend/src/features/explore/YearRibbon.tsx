@@ -50,30 +50,30 @@ export default function YearRibbon() {
             <button
               key={year.year}
               type="button"
-              className="group/year flex h-[72px] w-28 shrink-0 flex-col justify-center border-l border-line bg-bg px-3 text-left first:border-l-0"
+              className="group/year flex h-[72px] w-28 shrink-0 flex-col justify-center border-l border-line bg-canvas px-3 text-left first:border-l-0"
               onClick={() => navigate("/photo?year=" + year.year)}
             >
-              <span className="flex items-center gap-2 text-[28px] leading-tight text-fg-muted tabular-nums group-hover/year:text-fg">
+              <span className="flex items-center gap-2 text-[28px] leading-tight text-ink-2 tabular-nums group-hover/year:text-ink">
                 {year.year}
                 {year.year === new Date().getFullYear() && (
                   <span
                     aria-label="今年"
-                    className="size-1.5 rounded-full bg-signal"
+                    className="size-1.5 rounded-full bg-accent"
                   />
                 )}
               </span>
-              <span className="text-caption tabular-nums text-fg-muted">
+              <span className="text-caption tabular-nums text-ink-2">
                 {year.count.toLocaleString("zh-CN")} 张
               </span>
               <span
                 aria-hidden
-                className="mt-1 h-0.5 w-5 bg-fg opacity-0 group-hover/year:opacity-100 group-focus-visible/year:opacity-100"
+                className="mt-1 h-0.5 w-5 bg-ink opacity-0 group-hover/year:opacity-100 group-focus-visible/year:opacity-100"
               />
             </button>
           ))}
         </ScrollRow>
       ) : (
-        <p className="text-body text-fg-muted">
+        <p className="text-body text-ink-2">
           目前没有带日期证据的年份。只有文件修改时间的媒体不会归入某一年，可在照片页的「日期未知」中查看。
         </p>
       )}

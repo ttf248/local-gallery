@@ -400,7 +400,7 @@ export default function PhotoWall<
           <div
             key={tile.id}
             aria-hidden="true"
-            className="shrink-0 animate-pulse rounded-tile bg-bg-media"
+            className="shrink-0 animate-pulse rounded-tile bg-media"
             style={{ width: tile.width, height: tileHeight }}
           />
         );

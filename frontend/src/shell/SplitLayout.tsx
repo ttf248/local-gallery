@@ -35,7 +35,7 @@ export function SplitNav({
                   className={
                     "size-2 rounded-full " +
                     (runStatus === "running"
-                      ? "bg-signal motion-safe:animate-pulse"
+                      ? "bg-accent motion-safe:animate-pulse"
                       : "bg-danger")
                   }
                 />

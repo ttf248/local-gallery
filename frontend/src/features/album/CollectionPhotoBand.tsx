@@ -47,10 +47,10 @@ export default function CollectionPhotoBand({
   if (items.length === 0) return null;
 
   return (
-    <section className="page-shell page-section pt-[var(--section-gap)]">
+    <section className="page-shell page-section pt-[var(--section)]">
       <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-        <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">照片带</h2>
-        <span className="section-meta text-caption leading-[1.45] text-fg-muted">
+        <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">照片带</h2>
+        <span className="section-meta text-caption leading-[1.45] text-ink-2">
           来自这里的 {feed.albums.length} 本相册
         </span>
       </div>

@@ -15,7 +15,7 @@ export default function MonthHeader({
   return (
     <>
       {showYear && (
-        <div aria-hidden className="mb-3 flex items-center gap-3 text-title-2">
+        <div aria-hidden className="mb-3 flex items-center gap-3 text-title">
           {group.year}
           <span className="h-px flex-1 bg-line" />
         </div>
@@ -24,8 +24,8 @@ export default function MonthHeader({
         data-testid="timeline-group-header"
         className="flex flex-wrap items-baseline gap-x-2 gap-y-1"
       >
-        <h2 className="text-title-3">{group.label}</h2>
-        <span className="text-caption tabular-nums text-fg-subtle">
+        <h2 className="text-heading">{group.label}</h2>
+        <span className="text-caption tabular-nums text-ink-3">
           {group.count} 张
         </span>
         {group.note && (

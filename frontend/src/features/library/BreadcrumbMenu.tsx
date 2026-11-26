@@ -35,7 +35,7 @@ export default function BreadcrumbMenu({
         id === source?.sourceRoot || name === source?.sourceName,
     );
   return (
-    <nav aria-label="目录位置" className="library-crumbs flex items-center gap-1 mt-1.5 text-caption text-fg-subtle flex-nowrap m-0 min-w-0">
+    <nav aria-label="目录位置" className="library-crumbs flex items-center gap-1 mt-1.5 text-caption text-ink-3 flex-nowrap m-0 min-w-0">
       <Link
         to={libraryRoute(mode)}
         onClick={(event) => {
@@ -44,7 +44,7 @@ export default function BreadcrumbMenu({
           event.preventDefault();
           onSelect("");
         }}
-        className="library-crumbs__link text-fg-muted no-underline rounded-sm hover:text-fg hover:underline hover:[text-underline-offset:3px] inline-flex gap-[3px] items-center min-w-0 max-w-[120px] whitespace-nowrap touch:min-h-11 touch:min-w-11"
+        className="library-crumbs__link text-ink-2 no-underline rounded-sm hover:text-ink hover:underline hover:[text-underline-offset:3px] inline-flex gap-[3px] items-center min-w-0 max-w-[120px] whitespace-nowrap touch:min-h-11 touch:min-w-11"
       >
         {mode === "comic" ? "书架" : "相册"}
       </Link>
@@ -116,7 +116,7 @@ function CrumbMenu({
     <span className="library-crumbs__segment flex items-center flex-nowrap gap-1 m-0 min-w-0 [&>div]:min-w-0 [&>div]:shrink">
       <ChevronRightIcon
         size={12}
-        className="shrink-0 text-fg-muted"
+        className="shrink-0 text-ink-2"
         aria-hidden
       />
       <Popover
@@ -128,7 +128,7 @@ function CrumbMenu({
         trigger={
           <button
             type="button"
-            className="library-crumbs__link text-fg-muted no-underline rounded-sm hover:text-fg hover:underline hover:[text-underline-offset:3px] inline-flex gap-[3px] items-center min-w-0 max-w-[120px] whitespace-nowrap touch:min-h-11 touch:min-w-11"
+            className="library-crumbs__link text-ink-2 no-underline rounded-sm hover:text-ink hover:underline hover:[text-underline-offset:3px] inline-flex gap-[3px] items-center min-w-0 max-w-[120px] whitespace-nowrap touch:min-h-11 touch:min-w-11"
             aria-current={current ? "location" : undefined}
             title={item.name}
           >

@@ -96,23 +96,23 @@ export default function AccessGate({ children }: { children: ReactNode }) {
   if (state === "unlocked") return <>{children}</>;
 
   return (
-    <main className="min-h-screen bg-bg text-fg flex items-center justify-center px-5">
-      <section className="w-full max-w-[400px] rounded-sheet bg-bg-elevated p-7 shadow-1">
+    <main className="min-h-screen bg-canvas text-ink flex items-center justify-center px-5">
+      <section className="w-full max-w-[400px] rounded-xl bg-raised p-7 shadow-1">
         <BrandMark />
-        <h1 className="mt-4 text-title-2">
+        <h1 className="mt-4 text-title">
           {state === "locked" ? "输入访问令牌" : "本地媒体库"}
         </h1>
         {state === "checking" && (
-          <p className="mt-3 text-body text-fg-muted">正在确认访问权限…</p>
+          <p className="mt-3 text-body text-ink-2">正在确认访问权限…</p>
         )}
 
         {state === "locked" && (
           <form className="mt-5" onSubmit={submit}>
-            <p className="text-body text-fg-muted leading-6">
+            <p className="text-body text-ink-2 leading-6">
               这个媒体库已开启局域网访问保护。令牌只用于换取本浏览器的短期会话，不会保存在本地存储或
               URL 中。
             </p>
-            <p className="mt-2 text-caption text-fg-subtle leading-5">
+            <p className="mt-2 text-caption text-ink-3 leading-5">
               请仅在可信家庭网络中使用；内置服务不提供 TLS，不适合互联网或不可信
               Wi-Fi。
             </p>
@@ -146,7 +146,7 @@ export default function AccessGate({ children }: { children: ReactNode }) {
 
         {state === "local-only" && (
           <div className="mt-4">
-            <p className="text-body text-fg-muted leading-6">
+            <p className="text-body text-ink-2 leading-6">
               服务当前仅允许运行它的计算机访问。若需在局域网中使用，请先在服务端配置
               `accessMode: lan` 和强访问令牌。
             </p>
@@ -155,11 +155,11 @@ export default function AccessGate({ children }: { children: ReactNode }) {
 
         {state === "offline" && (
           <div className="mt-4">
-            <p className="text-body text-fg-muted">无法连接媒体库服务。</p>
+            <p className="text-body text-ink-2">无法连接媒体库服务。</p>
             <button
               type="button"
               onClick={checkSession}
-              className="mt-4 h-9 px-4 rounded-lg border border-line text-body hover:bg-bg-subtle"
+              className="mt-4 h-9 px-4 rounded-lg border border-line text-body hover:bg-sunken"
             >
               重试
             </button>

@@ -260,7 +260,7 @@ export default function Travels() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <header className="border-b border-line bg-bg">
+      <header className="border-b border-line bg-canvas">
         <div className="page-shell">
           {/* 页面名不再显示在内容区（侧栏那一项已经说明了），但这一页仍要
               有一个标题，否则读屏用户进来时不知道自己在哪。 */}
@@ -325,7 +325,7 @@ export default function Travels() {
         {/* 地图占着右栏，滚动时一直跟着 —— 读行程的时候手边得有个方位。 */}
         <aside className="travel-layout__aside col-start-1 row-start-1 lg:col-start-2 sticky top-3 flex flex-col gap-2 max-lg:static">
           <div className="travel-aside__bar relative z-[2] flex items-center justify-between gap-3 min-h-7">
-            <span className="travel-aside__label text-caption tracking-[0.06em] text-fg-subtle">足迹地图</span>
+            <span className="travel-aside__label text-caption tracking-[0.06em] text-ink-3">足迹地图</span>
             <Segmented
               label="地图范围"
               value={mapScope}
@@ -336,7 +336,7 @@ export default function Travels() {
               ]}
             />
           </div>
-          <div className="travel-aside__map relative z-[1] aspect-[1_/_1] max-h-[68vh] overflow-hidden shadow-1 rounded-card bg-bg-elevated max-lg:aspect-[4_/_3] max-lg:max-h-[46vh]">
+          <div className="travel-aside__map relative z-[1] aspect-[1_/_1] max-h-[68vh] overflow-hidden shadow-1 rounded-lg bg-raised max-lg:aspect-[4_/_3] max-lg:max-h-[46vh]">
             <TravelMiniMap
               regions={regions}
               backdrop={backdrop}
@@ -366,12 +366,12 @@ export default function Travels() {
               backdrop={backdrop}
             />
           ) : (
-            <div className="flex min-h-64 items-center justify-center text-body text-fg-muted">
+            <div className="flex min-h-64 items-center justify-center text-body text-ink-2">
               正在载入足迹…
             </div>
           )}
 
-          <p className="travel-footnote [padding:24px_0_8px] border-t border-t-line text-caption leading-[1.7] text-fg-subtle">
+          <p className="travel-footnote [padding:24px_0_8px] border-t border-t-line text-caption leading-[1.7] text-ink-3">
             坐标与边界均在本机处理；时间按 EXIF
             拍摄时间的日历日计算，跨时区旅行按拍摄地的当地日期。 离线边界采用
             AreaCity 2026 年 4

@@ -30,7 +30,7 @@ export default function SmartAlbumEvidence({ dimensions }: Props) {
       {dimensions.map((dimension) => (
         <span
           key={dimension}
-          className="shrink-0 rounded-full border border-line bg-bg-subtle px-1.5 text-caption leading-4 text-fg-muted"
+          className="shrink-0 rounded-full border border-line bg-sunken px-1.5 text-caption leading-4 text-ink-2"
         >
           {SMART_ALBUM_DIMENSION_LABELS[dimension]}
         </span>

@@ -132,7 +132,7 @@ export default function PhotoCompare({
     <dialog
       ref={dialogRef}
       data-testid="photo-compare"
-      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-theater-bg p-0 text-theater-fg backdrop:bg-transparent"
       role="dialog"
       aria-modal="true"
       aria-label="两张照片并排对比"
@@ -383,18 +383,18 @@ function ComparePane({
           {item.name}
         </span>
         {source.width > 0 && (
-          <span className="shrink-0 text-micro tabular-nums text-white/50">
+          <span className="shrink-0 text-caption tabular-nums text-white/50">
             {source.width}×{source.height}
           </span>
         )}
         {item.albumName && (
-          <span className="hidden shrink-0 truncate text-micro text-white/45 sm:inline">
+          <span className="hidden shrink-0 truncate text-caption text-white/45 sm:inline">
             {item.albumName}
           </span>
         )}
         {picked && (
           <span
-            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-micro text-white/90"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 text-caption text-white/90"
             title="这张照片在精选里"
           >
             <PickIcon size={11} />

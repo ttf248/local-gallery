@@ -116,7 +116,7 @@ function SegmentedControl<T extends string>(
         .join(" ")}
     >
       {showLabel ? (
-        <span className="shrink-0 text-caption text-fg-muted">{label}</span>
+        <span className="shrink-0 text-caption text-ink-2">{label}</span>
       ) : null}
       <div
         ref={ref}

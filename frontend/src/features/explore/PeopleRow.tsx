@@ -113,8 +113,8 @@ function PeopleGroup({
 }) {
   return (
     <div>
-      <p className="mb-3 flex items-baseline gap-2 text-caption text-fg-muted">
-        <span className="font-medium text-fg">{title}</span>
+      <p className="mb-3 flex items-baseline gap-2 text-caption text-ink-2">
+        <span className="font-medium text-ink">{title}</span>
         <span>{hint}</span>
       </p>
       <ScrollRow label={title} data-testid={testId}>
@@ -137,16 +137,16 @@ function PeopleGroup({
               {!person.confirmed && (
                 <span
                   aria-label="待确认"
-                  className="absolute bottom-1 right-2 grid size-[18px] place-items-center rounded-full bg-bg-elevated text-micro shadow-1"
+                  className="absolute bottom-1 right-2 grid size-[18px] place-items-center rounded-full bg-raised text-caption shadow-1"
                 >
                   ?
                 </span>
               )}
             </span>
-            <span className="mt-2 block truncate text-callout font-semibold">
+            <span className="mt-2 block truncate text-label font-semibold">
               {person.name}
             </span>
-            <span className="text-caption tabular-nums text-fg-muted">
+            <span className="text-caption tabular-nums text-ink-2">
               {person.photoCount.toLocaleString("zh-CN")} 张
             </span>
           </Link>
@@ -176,10 +176,10 @@ function PeopleEmptyState({
 
   if (!enabled) {
     return (
-      <p className="text-body text-fg-muted">
+      <p className="text-body text-ink-2">
         人物分析尚未启用。前往任务中心开启分析后，这里才会出现候选分组。
         <Link
-          className="ml-1 text-accent underline-offset-2 hover:underline"
+          className="ml-1 text-primary underline-offset-2 hover:underline"
           to="/tasks/plan"
         >
           打开任务中心
@@ -189,17 +189,17 @@ function PeopleEmptyState({
   }
   if (running || paused) {
     return (
-      <p className="text-body text-fg-muted" aria-live="polite">
+      <p className="text-body text-ink-2" aria-live="polite">
         {paused ? "人物分析已暂停。" : "人物分析正在运行，候选分组稍后更新。"}
       </p>
     );
   }
   if (latestFaceJob?.status === "failed") {
     return (
-      <p className="text-body text-fg-muted">
+      <p className="text-body text-ink-2">
         上次人物分析失败，暂时无法确认是否有候选分组。
         <Link
-          className="ml-1 text-accent underline-offset-2 hover:underline"
+          className="ml-1 text-primary underline-offset-2 hover:underline"
           to="/tasks"
         >
           查看任务记录
@@ -209,10 +209,10 @@ function PeopleEmptyState({
   }
   if (latestFaceJob?.status === "cancelled") {
     return (
-      <p className="text-body text-fg-muted">
+      <p className="text-body text-ink-2">
         上次人物分析已取消，尚未完成；可以到任务中心重新运行。
         <Link
-          className="ml-1 text-accent underline-offset-2 hover:underline"
+          className="ml-1 text-primary underline-offset-2 hover:underline"
           to="/tasks"
         >
           查看任务中心
@@ -222,10 +222,10 @@ function PeopleEmptyState({
   }
   if (latestFaceJob?.status !== "completed") {
     return (
-      <p className="text-body text-fg-muted">
+      <p className="text-body text-ink-2">
         人物分析尚未运行。前往任务中心启动人脸分析后，这里才会出现候选分组。
         <Link
-          className="ml-1 text-accent underline-offset-2 hover:underline"
+          className="ml-1 text-primary underline-offset-2 hover:underline"
           to="/tasks/plan"
         >
           打开任务中心
@@ -234,7 +234,7 @@ function PeopleEmptyState({
     );
   }
   return (
-    <p className="text-body text-fg-muted">
+    <p className="text-body text-ink-2">
       人脸分析已完成，目前没有形成可用的候选分组；这不表示照片里没有人物。
     </p>
   );

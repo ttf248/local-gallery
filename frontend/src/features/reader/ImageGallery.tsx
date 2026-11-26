@@ -262,7 +262,7 @@ export default function ImageGallery({
     const base: React.CSSProperties = {
       transform,
       transformOrigin: "center",
-      transition: dragRef.current ? "none" : "transform 200ms var(--ease-emphasized)",
+      transition: dragRef.current ? "none" : "transform 200ms var(--ease-spring)",
     };
     if (aspect.mode === "fit") {
       return {
@@ -336,7 +336,7 @@ export default function ImageGallery({
             style={imgStyleFor()}
           />
         ) : (
-          <div className="text-fg-muted">未选择图片</div>
+          <div className="text-ink-2">未选择图片</div>
         )}
       </div>
     );
@@ -594,7 +594,7 @@ const ContinuousImage = memo(function ContinuousImage({
         alt={`第 ${index + 1} 页`}
         loading={nearIndex ? "eager" : "lazy"}
         decoding={nearIndex ? "sync" : "async"}
-        className="select-none scale-fade [animation:scaleFade_240ms_var(--ease-emphasized)]"
+        className="select-none scale-fade [animation:scaleFade_240ms_var(--ease-spring)]"
         style={style}
       />
     </div>
@@ -630,7 +630,7 @@ function GalleryImage({
   if (failed) {
     return (
       <div
-        className={`flex flex-col items-center justify-center gap-2 text-fg-subtle ${className ?? ""}`}
+        className={`flex flex-col items-center justify-center gap-2 text-ink-3 ${className ?? ""}`}
         role="img"
         aria-label={alt}
         title="该图片无法显示"

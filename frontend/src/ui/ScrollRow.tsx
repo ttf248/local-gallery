@@ -58,7 +58,7 @@ export const ScrollRow = forwardRef<HTMLDivElement, Props>(function ScrollRow(
               key={direction}
               aria-label={direction < 0 ? "向左滚动" : "向右滚动"}
               className={cx(
-                "scroll-arrow absolute top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-bg-elevated opacity-0 shadow-2 transition-opacity focus:opacity-100 group-hover:opacity-100",
+                "scroll-arrow absolute top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-raised opacity-0 shadow-2 transition-opacity focus:opacity-100 group-hover:opacity-100",
                 direction < 0 ? "left-1" : "right-1",
               )}
               onClick={() => scroll(direction)}

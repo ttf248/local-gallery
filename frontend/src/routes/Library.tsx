@@ -311,7 +311,7 @@ export default function Library() {
   ) : null;
 
   return (
-    <Page className="page-shell library-page pb-[var(--page-gutter)] [--folder-drawer-offset:calc(var(--topbar-height)_+_14px)] min-h-full">
+    <Page className="page-shell library-page pb-[var(--gutter)] [--folder-drawer-offset:calc(var(--topbar-height)_+_14px)] min-h-full">
       <PageHeader
         title={title}
         chrome={{
@@ -430,7 +430,7 @@ export default function Library() {
           ) : null}
 
           {list.isLoading && cards.length === 0 ? (
-            <p className="text-body text-fg-muted py-8">正在读取目录…</p>
+            <p className="text-body text-ink-2 py-8">正在读取目录…</p>
           ) : null}
 
           {cards.length > 0 ? (
@@ -443,8 +443,8 @@ export default function Library() {
                 {workCards.length > 0 ? (
                   <section className="mb-10">
                     <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-                      <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">作品</h2>
-                      <span className="section-meta text-caption leading-[1.45] text-fg-muted tabular-nums">
+                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">作品</h2>
+                      <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
                         {workCards.length} 部
                       </span>
                     </div>
@@ -463,8 +463,8 @@ export default function Library() {
                 {looseCards.length > 0 ? (
                   <section className="mb-10">
                     <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-                      <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">未归入作品</h2>
-                      <span className="section-meta text-caption leading-[1.45] text-fg-muted tabular-nums">
+                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">未归入作品</h2>
+                      <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
                         {looseCards.length} 卷
                       </span>
                     </div>
@@ -481,8 +481,8 @@ export default function Library() {
                 {tagCards.length > 0 ? (
                   <section className="mb-10">
                     <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-                      <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">标签</h2>
-                      <span className="section-meta text-caption leading-[1.45] text-fg-muted tabular-nums">
+                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">标签</h2>
+                      <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
                         {tagCards.length} 个
                       </span>
                     </div>

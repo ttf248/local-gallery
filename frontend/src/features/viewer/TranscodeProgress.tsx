@@ -168,7 +168,7 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
           <>
             <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
               <div
-                className="h-full bg-accent transition-all duration-300"
+                className="h-full bg-primary transition-all duration-300"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -181,7 +181,7 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
 
         {/* 失败 */}
         {status.status === "failed" && (
-          <div className="text-caption text-overlay-danger text-center max-w-xs break-words">
+          <div className="text-caption text-theater-danger text-center max-w-xs break-words">
             {status.error || "未知错误"}
           </div>
         )}

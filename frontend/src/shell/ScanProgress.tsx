@@ -127,7 +127,7 @@ export default function ScanProgress({
     ? "bg-success"
     : isError
       ? "bg-danger"
-      : "bg-accent";
+      : "bg-primary";
 
   // 状态文案 + 图标
   const StatusIcon = isComplete
@@ -152,7 +152,7 @@ export default function ScanProgress({
       ? "text-danger"
       : connectionLost
         ? "text-warning"
-        : "text-fg";
+        : "text-ink";
 
   const phaseLabel =
     progress.phase === "smart-grouping"
@@ -164,7 +164,7 @@ export default function ScanProgress({
   return (
     <div
       // 左下角浮动卡 — fixed 到 viewport（不挂 main 内部，避开 main 滚动影响）
-      className="fixed bottom-[calc(24px+var(--tabbar-height)+env(safe-area-inset-bottom))] right-4 z-popover w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl bg-bg-elevated shadow-2 lg:bottom-6 lg:right-6"
+      className="fixed bottom-[calc(24px+var(--tabbar-height)+env(safe-area-inset-bottom))] right-4 z-popover w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl bg-raised shadow-2 lg:bottom-6 lg:right-6"
       role="status"
       aria-live="polite"
       data-testid="scan-progress"
@@ -175,7 +175,7 @@ export default function ScanProgress({
           <button
             type="button"
             onClick={() => setCollapsed(false)}
-            className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5 h-full text-caption text-left hover:bg-bg-subtle/30 transition-colors rounded-l-xl"
+            className="flex-1 min-w-0 flex items-center gap-2.5 px-3.5 h-full text-caption text-left hover:bg-sunken/30 transition-colors rounded-l-xl"
             aria-expanded={false}
             aria-label="展开扫描详情"
           >
@@ -185,7 +185,7 @@ export default function ScanProgress({
             </span>
 
             {/* 进度条（accent 渐变） — flex-1 占据中间最大空间 */}
-            <span className="flex-1 relative h-1 rounded-full bg-bg-subtle overflow-hidden min-w-0">
+            <span className="flex-1 relative h-1 rounded-full bg-sunken overflow-hidden min-w-0">
               <span
                 className={`absolute inset-y-0 left-0 ${barColor} transition-[width] duration-200 ease-out`}
                 style={{ width: `${isComplete ? 100 : pct}%` }}
@@ -196,18 +196,18 @@ export default function ScanProgress({
             {isRunning && (
               <span
                 title="按根目录和阶段估算，不代表剩余文件数或耗时"
-                className="tabular-nums text-fg-muted shrink-0"
+                className="tabular-nums text-ink-2 shrink-0"
               >
                 约{pct}%
               </span>
             )}
             {!isRunning && (
-              <span className="tabular-nums text-fg-subtle shrink-0">
+              <span className="tabular-nums text-ink-3 shrink-0">
                 {elapsedSec}s
               </span>
             )}
 
-            <ChevronUpIcon size={12} className="text-fg-subtle shrink-0" />
+            <ChevronUpIcon size={12} className="text-ink-3 shrink-0" />
           </button>
 
           {connectionLost && onReconnect && (
@@ -216,7 +216,7 @@ export default function ScanProgress({
               onClick={onReconnect}
               aria-label="重新连接进度"
               title="重新连接进度"
-              className="mr-2 p-1 rounded text-warning hover:bg-bg-subtle shrink-0"
+              className="mr-2 p-1 rounded text-warning hover:bg-sunken shrink-0"
             >
               <RefreshIcon size={12} />
             </button>
@@ -226,7 +226,7 @@ export default function ScanProgress({
               type="button"
               onClick={onCancel}
               disabled={isCancelling}
-              className="mr-2 p-1 rounded text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors disabled:cursor-wait disabled:opacity-50 shrink-0"
+              className="mr-2 p-1 rounded text-ink-2 hover:text-ink hover:bg-sunken transition-colors disabled:cursor-wait disabled:opacity-50 shrink-0"
               title={isCancelling ? "正在取消扫描" : "取消扫描"}
               aria-label="取消扫描"
               aria-busy={isCancelling}
@@ -250,19 +250,19 @@ export default function ScanProgress({
             {isRunning && (
               <span
                 title="按根目录和阶段估算，不代表剩余文件数或耗时"
-                className="tabular-nums text-fg-muted text-caption shrink-0"
+                className="tabular-nums text-ink-2 text-caption shrink-0"
               >
                 约{pct}%
               </span>
             )}
-            <span className="tabular-nums text-fg-subtle text-caption shrink-0">
+            <span className="tabular-nums text-ink-3 text-caption shrink-0">
               {elapsedSec}s
             </span>
 
             <button
               type="button"
               onClick={() => setCollapsed(true)}
-              className="p-1 rounded text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors"
+              className="p-1 rounded text-ink-2 hover:text-ink hover:bg-sunken transition-colors"
               title="折叠为药丸"
               aria-label="折叠扫描详情"
             >
@@ -272,7 +272,7 @@ export default function ScanProgress({
               <button
                 type="button"
                 onClick={() => setPhase("out")}
-                className="p-1 rounded text-fg-muted hover:text-fg hover:bg-bg-subtle transition-colors"
+                className="p-1 rounded text-ink-2 hover:text-ink hover:bg-sunken transition-colors"
                 title="关闭"
                 aria-label="关闭扫描卡片"
               >
@@ -283,7 +283,7 @@ export default function ScanProgress({
 
           {/* 进度条 */}
           <div className="px-3.5 pt-3">
-            <div className="relative h-1.5 rounded-full bg-bg-subtle overflow-hidden">
+            <div className="relative h-1.5 rounded-full bg-sunken overflow-hidden">
               <div
                 className={`absolute inset-y-0 left-0 ${barColor} transition-[width] duration-200 ease-out`}
                 style={{ width: `${isComplete ? 100 : pct}%` }}
@@ -292,14 +292,14 @@ export default function ScanProgress({
           </div>
 
           {/* 详情：阶段 + 统计 */}
-          <div className="px-3.5 py-2.5 text-caption text-fg-muted space-y-1.5">
+          <div className="px-3.5 py-2.5 text-caption text-ink-2 space-y-1.5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>
-                阶段 <span className="text-fg">{phaseLabel}</span>
+                阶段 <span className="text-ink">{phaseLabel}</span>
               </span>
               <span>
                 已发现{" "}
-                <span className="text-fg tabular-nums">
+                <span className="text-ink tabular-nums">
                   {progress.albumsFound}
                 </span>{" "}
                 {unit}
@@ -314,15 +314,15 @@ export default function ScanProgress({
             {/* 当前路径 */}
             {progress.currentPath && (
               <div
-                className="truncate text-fg-subtle font-mono"
+                className="truncate text-ink-3 font-mono"
                 title={progress.currentPath}
               >
-                <span className="text-fg-subtle mr-1">↳</span>
+                <span className="text-ink-3 mr-1">↳</span>
                 {progress.currentPath}
               </div>
             )}
             {!progress.currentPath && fileName && (
-              <div className="truncate text-fg-subtle">{fileName}</div>
+              <div className="truncate text-ink-3">{fileName}</div>
             )}
           </div>
 
@@ -341,7 +341,7 @@ export default function ScanProgress({
                   <button
                     type="button"
                     onClick={onReconnect}
-                    className="h-8 px-3 rounded-md border border-warning/40 hover:bg-bg-subtle text-warning"
+                    className="h-8 px-3 rounded-md border border-warning/40 hover:bg-sunken text-warning"
                   >
                     重新连接进度
                   </button>
@@ -350,14 +350,14 @@ export default function ScanProgress({
                   <button
                     type="button"
                     onClick={onStopTracking}
-                    className="h-8 px-3 rounded-md border border-line text-fg-muted hover:bg-bg-subtle"
+                    className="h-8 px-3 rounded-md border border-line text-ink-2 hover:bg-sunken"
                   >
                     停止跟踪
                   </button>
                 )}
               </div>
               {onStopTracking && (
-                <p className="text-fg-muted">停止跟踪不会取消后台扫描。</p>
+                <p className="text-ink-2">停止跟踪不会取消后台扫描。</p>
               )}
             </div>
           )}
@@ -370,7 +370,7 @@ export default function ScanProgress({
                 disabled={isCancelling}
                 aria-label="取消扫描"
                 aria-busy={isCancelling}
-                className="w-full h-8 rounded-md border border-line bg-bg-subtle/40 hover:bg-bg-subtle text-fg-muted hover:text-fg text-caption transition-colors disabled:cursor-wait disabled:opacity-50"
+                className="w-full h-8 rounded-md border border-line bg-sunken/40 hover:bg-sunken text-ink-2 hover:text-ink text-caption transition-colors disabled:cursor-wait disabled:opacity-50"
               >
                 {isCancelling ? "正在取消…" : "取消扫描"}
               </button>

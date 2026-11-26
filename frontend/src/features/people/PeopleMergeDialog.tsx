@@ -45,7 +45,7 @@ export default function PeopleMergeDialog({
       <div className="flex max-h-[76dvh] flex-col">
         <div className="space-y-3 px-5 py-4">
           <label
-            className="block text-caption text-fg-muted"
+            className="block text-caption text-ink-2"
             htmlFor="people-merge-search"
           >
             搜索人物名称或编号后六位
@@ -53,7 +53,7 @@ export default function PeopleMergeDialog({
           <input
             ref={inputRef}
             id="people-merge-search"
-            className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-body text-fg outline-none focus:border-line-strong"
+            className="w-full rounded-lg border border-line bg-canvas px-3 py-2.5 text-body text-ink outline-none focus:border-line-strong"
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
@@ -62,7 +62,7 @@ export default function PeopleMergeDialog({
             placeholder="例如：家人、7f873d"
             autoComplete="off"
           />
-          <div className="flex items-center justify-between text-caption text-fg-subtle">
+          <div className="flex items-center justify-between text-caption text-ink-3">
             <span>
               {result.isPending
                 ? "正在查找…"
@@ -89,33 +89,33 @@ export default function PeopleMergeDialog({
                 onClick={() => setTargetId(person.id)}
                 className={`flex w-full items-center justify-between gap-4 rounded-lg px-3 py-3 text-left transition-colors ${
                   targetId === person.id
-                    ? "bg-bg-subtle text-fg"
-                    : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                    ? "bg-sunken text-ink"
+                    : "text-ink-2 hover:bg-sunken hover:text-ink"
                 }`}
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-fg">
+                  <span className="block truncate font-medium text-ink">
                     {person.name}
                   </span>
-                  <span className="mt-0.5 block text-caption text-fg-subtle">
+                  <span className="mt-0.5 block text-caption text-ink-3">
                     {person.photoCount.toLocaleString()} 张照片 ·{" "}
                     {person.faceCount.toLocaleString()} 张脸
                   </span>
                 </span>
-                <span className="shrink-0 text-caption text-fg-subtle">
+                <span className="shrink-0 text-caption text-ink-3">
                   {targetId === person.id ? "已选择" : "选择"}
                 </span>
               </button>
             </li>
           ))}
           {!result.isPending && !result.isError && candidates.length === 0 ? (
-            <li className="px-3 py-8 text-center text-caption text-fg-muted">
+            <li className="px-3 py-8 text-center text-caption text-ink-2">
               {query.trim() ? "没有匹配的人物" : "暂时没有可合并的人物"}
             </li>
           ) : null}
         </ul>
         <footer className="flex items-center justify-between gap-3 px-5 py-4">
-          <p className="max-w-[55%] text-caption text-fg-subtle">
+          <p className="max-w-[55%] text-caption text-ink-3">
             合并后会把当前组的人脸移动到目标组。
           </p>
           <button

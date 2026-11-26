@@ -31,29 +31,29 @@ export default function EmptyState({
 }: Props) {
   if (inline) {
     return (
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-5 py-4 text-caption text-fg-subtle sm:px-6">
-        {icon ? <span className="shrink-0 text-fg-muted">{icon}</span> : null}
-        <span className="text-fg-muted">{title}</span>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-5 py-4 text-caption text-ink-3 sm:px-6">
+        {icon ? <span className="shrink-0 text-ink-2">{icon}</span> : null}
+        <span className="text-ink-2">{title}</span>
         {description ? <span>{description}</span> : null}
       </div>
     );
   }
   return (
     <div
-      className={`page-shell empty-state flex flex-col items-center justify-center py-12 text-center fade-up [animation:fadeUp_320ms_var(--ease-emphasized)_both] ${
+      className={`page-shell empty-state flex flex-col items-center justify-center py-12 text-center fade-up [animation:fadeUp_320ms_var(--ease-spring)_both] ${
         dense ? "pb-8" : "min-h-[30vh]"
       }`}
     >
       {icon && (
-        <div className="empty-state__icon relative isolate w-14 h-[60px] text-accent [transform:rotate(-5deg)] before:content-[''] before:absolute before:inset-0 before:z-[-1] before:rounded-[14px_14px_14px_3px] before:bg-bg-strong before:[transform:translate(8px,8px)] after:content-[''] after:absolute after:inset-0 after:z-0 after:rounded-[14px_14px_14px_3px] after:border after:border-line after:bg-accent-soft [&>*]:relative [&>*]:z-[1] flex items-center justify-center mb-4">
+        <div className="empty-state__icon relative isolate w-14 h-[60px] text-primary [transform:rotate(-5deg)] before:content-[''] before:absolute before:inset-0 before:z-[-1] before:rounded-[14px_14px_14px_3px] before:bg-sunken-strong before:[transform:translate(8px,8px)] after:content-[''] after:absolute after:inset-0 after:z-0 after:rounded-[14px_14px_14px_3px] after:border after:border-line after:bg-selected [&>*]:relative [&>*]:z-[1] flex items-center justify-center mb-4">
           {icon}
         </div>
       )}
-      <h2 className="font-display text-title-3 font-semibold text-fg">
+      <h2 className="font-display text-heading font-semibold text-ink">
         {title}
       </h2>
       {description && (
-        <div className="text-body text-fg-muted mt-2 max-w-md leading-relaxed">
+        <div className="text-body text-ink-2 mt-2 max-w-md leading-relaxed">
           {description}
         </div>
       )}

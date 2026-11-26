@@ -212,7 +212,7 @@ export default function TravelTripPreview({
 
   if (!view || !toCanvas || route.length === 0) {
     return (
-      <p className="text-caption text-fg-muted">
+      <p className="text-caption text-ink-2">
         这一段没有可画的地点 —— 边界数据里还没有它们的形状。
       </p>
     );
@@ -291,9 +291,9 @@ export default function TravelTripPreview({
 
       <ol className="travel-preview__stops flex flex-col gap-0.5 mt-2">
         {trip.stops.slice(0, MAX_LISTED_STOPS).map((stop, index) => (
-          <li key={index} className="travel-preview__stop grid grid-cols-[16px_minmax(0,1fr)_auto] items-baseline gap-2 text-caption text-fg-muted">
-            <span className="travel-preview__stop-index font-semibold text-accent tabular-nums">{index + 1}</span>
-            <span className="travel-preview__stop-name text-fg overflow-hidden text-ellipsis whitespace-nowrap">{stop.name}</span>
+          <li key={index} className="travel-preview__stop grid grid-cols-[16px_minmax(0,1fr)_auto] items-baseline gap-2 text-caption text-ink-2">
+            <span className="travel-preview__stop-index font-semibold text-primary tabular-nums">{index + 1}</span>
+            <span className="travel-preview__stop-name text-ink overflow-hidden text-ellipsis whitespace-nowrap">{stop.name}</span>
             <span className="travel-preview__stop-meta tabular-nums">
               {stop.at === stop.until
                 ? stop.at.slice(5)
@@ -304,7 +304,7 @@ export default function TravelTripPreview({
           </li>
         ))}
         {trip.stops.length > MAX_LISTED_STOPS ? (
-          <li className="travel-preview__stop grid grid-cols-[16px_minmax(0,1fr)_auto] items-baseline gap-2 text-caption text-fg-muted travel-preview__stop--more block text-fg-subtle">
+          <li className="travel-preview__stop grid grid-cols-[16px_minmax(0,1fr)_auto] items-baseline gap-2 text-caption text-ink-2 travel-preview__stop--more block text-ink-3">
             还有 {trip.stops.length - MAX_LISTED_STOPS} 站，见上方序号
           </li>
         ) : null}

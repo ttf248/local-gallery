@@ -71,7 +71,7 @@ export function ServerConfigField({
         <span className="inline-flex flex-wrap items-center gap-2">
           {def.label}
           {requiresRestart && (
-            <span className="inline-flex items-center gap-1 text-caption text-fg-muted">
+            <span className="inline-flex items-center gap-1 text-caption text-ink-2">
               <RestartIcon size={10} />
               需重启
             </span>
@@ -110,7 +110,7 @@ export function ServerConfigField({
             onCompositionStart={composition.start}
             onCompositionEnd={(e) => composition.finish(e.currentTarget.value)}
             onBlur={(e) => composition.finish(e.currentTarget.value)}
-            className="bg-bg-subtle border border-line rounded-md h-8 px-2.5 text-body font-mono w-full max-w-[40vw] focus:outline-none focus:border-accent"
+            className="bg-sunken border border-line rounded-md h-8 px-2.5 text-body font-mono w-full max-w-[40vw] focus:outline-none focus:border-primary"
           />
         ) : def.kind === "number" ? (
           <input
@@ -126,7 +126,7 @@ export function ServerConfigField({
             onCompositionStart={composition.start}
             onCompositionEnd={(e) => composition.finish(e.currentTarget.value)}
             onBlur={(e) => composition.finish(e.currentTarget.value)}
-            className="bg-bg-subtle border border-line rounded-md h-8 px-2.5 text-body font-mono w-24 text-right tabular-nums focus:outline-none focus:border-accent"
+            className="bg-sunken border border-line rounded-md h-8 px-2.5 text-body font-mono w-24 text-right tabular-nums focus:outline-none focus:border-primary"
           />
         ) : (
           <Switch

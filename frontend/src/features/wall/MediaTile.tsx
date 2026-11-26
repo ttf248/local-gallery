@@ -46,7 +46,7 @@ export default function MediaTile({
     <div
       className={
         "photo-wall-tile group relative shrink-0 overflow-hidden rounded-tile " +
-        (selected ? "bg-signal-soft" : "bg-bg-media")
+        (selected ? "bg-accent-soft" : "bg-media")
       }
       data-testid="media-tile"
       data-media-id={item.id}
@@ -56,7 +56,7 @@ export default function MediaTile({
     >
       <div
         className={
-          "h-full w-full transition-transform duration-3 " +
+          "h-full w-full transition-transform duration-slow " +
           (selected ? "scale-[.92]" : "motion-safe:group-hover:scale-[1.015]")
         }
       >
@@ -103,7 +103,7 @@ export default function MediaTile({
       <div
         data-testid="wall-tile-info"
         className={
-          "tile-overlay pointer-events-none absolute inset-x-0 bottom-0 flex h-2/5 items-end justify-between gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pb-1.5 text-micro text-white transition-opacity " +
+          "tile-overlay pointer-events-none absolute inset-x-0 bottom-0 flex h-2/5 items-end justify-between gap-2 bg-gradient-to-t from-black/55 to-transparent px-2 pb-1.5 text-caption text-white transition-opacity " +
           reveal
         }
       >
@@ -115,7 +115,7 @@ export default function MediaTile({
         )}
       </div>
       {video && (
-        <span className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-micro text-white">
+        <span className="pointer-events-none absolute bottom-1 right-1 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-caption text-white">
           <PlayFilledIcon size={10} />
           {duration ?? "视频"}
         </span>
@@ -142,7 +142,7 @@ export default function MediaTile({
             className={
               "grid size-[22px] place-items-center rounded-full border-[1.5px] text-white " +
               (selected
-                ? "border-signal bg-signal"
+                ? "border-accent bg-accent"
                 : "border-white bg-black/25")
             }
           >

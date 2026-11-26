@@ -75,7 +75,7 @@ export default function SmartAlbumPreview({
         }
       />
       {typeof total === "number" && (
-        <p className="mt-4 text-caption tabular-nums text-fg-subtle">
+        <p className="mt-4 text-caption tabular-nums text-ink-3">
           全库有 {total} 个推荐主题，这里精选了 {preview.length} 个
         </p>
       )}

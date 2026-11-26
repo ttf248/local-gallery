@@ -97,7 +97,7 @@ export default function PathField({
             : "停止输入后自动保存；Esc 撤销整组编辑草稿"
         }
         aria-keyshortcuts="Enter Escape"
-        className="flex-1 min-w-0 bg-bg-subtle border border-line rounded-md h-8 px-2.5 text-body font-mono focus:outline-none focus:border-accent"
+        className="flex-1 min-w-0 bg-sunken border border-line rounded-md h-8 px-2.5 text-body font-mono focus:outline-none focus:border-primary"
       />
       {/* 「选择目录」 */}
       <button
@@ -105,7 +105,7 @@ export default function PathField({
         onClick={() => setPicking(true)}
         title="选择本地目录"
         aria-label="选择本地目录"
-        className={`inline-flex items-center justify-center ${btnSize} rounded-md border border-line text-fg-muted hover:text-fg hover:border-line-strong transition-colors disabled:opacity-40`}
+        className={`inline-flex items-center justify-center ${btnSize} rounded-md border border-line text-ink-2 hover:text-ink hover:border-line-strong transition-colors disabled:opacity-40`}
       >
         <FolderSearchIcon size={iconSize} />
       </button>
@@ -116,7 +116,7 @@ export default function PathField({
           onClick={onOpenInExplorer}
           title="在系统文件管理器中打开此目录"
           aria-label="在系统文件管理器中打开此目录"
-          className={`inline-flex items-center justify-center ${btnSize} rounded-md border border-line text-fg-muted hover:text-fg hover:border-line-strong transition-colors`}
+          className={`inline-flex items-center justify-center ${btnSize} rounded-md border border-line text-ink-2 hover:text-ink hover:border-line-strong transition-colors`}
         >
           <FolderOpenIcon size={iconSize} />
         </button>
@@ -130,7 +130,7 @@ export default function PathField({
             onRemove();
           }}
           title="删除此根目录"
-          className={`inline-flex items-center justify-center ${btnSize} rounded-md border border-line text-fg-subtle hover:text-danger hover:border-danger/40 transition-colors`}
+          className={`inline-flex items-center justify-center ${btnSize} rounded-md border border-line text-ink-3 hover:text-danger hover:border-danger/40 transition-colors`}
         >
           <TrashIcon size={iconSize} />
         </button>

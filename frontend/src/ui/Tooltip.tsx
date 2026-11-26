@@ -97,7 +97,7 @@ export const Tooltip = forwardRef<HTMLSpanElement, Props>(function Tooltip(
             id={id}
             ref={tip}
             style={pos}
-            className="pointer-events-none fixed z-popover max-w-[calc(100vw-8px)] rounded-sm bg-inverse-bg px-2 py-1.5 text-micro text-inverse-fg"
+            className="pointer-events-none fixed z-popover max-w-[calc(100vw-8px)] rounded-sm bg-inverse px-2 py-1.5 text-caption text-on-inverse"
           >
             {content}
           </span>,

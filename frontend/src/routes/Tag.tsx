@@ -44,7 +44,7 @@ import { SelectionToggle } from "../features/common/LibrarySelectionActions";
  */
 function TagHead({ tag, onBack }: { tag: string; onBack: () => void }) {
   return (
-    <div className="page-shell page-section pt-[var(--section-gap)] pb-5">
+    <div className="page-shell page-section pt-[var(--section)] pb-5">
       <button onClick={onBack} className="btn btn-sm btn-ghost mb-4">
         <ChevronLeftIcon size={13} />
         <span>返回</span>
@@ -216,7 +216,7 @@ export default function Tag() {
     <Page className="page-shell min-h-full">
       <section className="pb-5">
         <div className={cx(
-          "tag-feature grid items-center gap-6 rounded-card border border-line bg-bg-subtle p-5 sm:gap-8 sm:p-8",
+          "tag-feature grid items-center gap-6 rounded-lg border border-line bg-sunken p-5 sm:gap-8 sm:p-8",
           mode === "comic" ? "sm:grid-cols-[minmax(0,1fr)_220px]" : "sm:grid-cols-[minmax(0,1fr)_240px]",
         )}>
           <div className="min-w-0">
@@ -238,7 +238,7 @@ export default function Tag() {
                 className={`inline-flex items-center justify-center h-9 w-9 rounded-md transition-colors ${
                   isFav
                     ? "bg-favorite/10 text-favorite hover:bg-favorite/15"
-                    : "bg-bg-elevated border border-line text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                    : "bg-raised border border-line text-ink-2 hover:bg-sunken hover:text-ink"
                 }`}
               >
                 <StarIcon size={14} filled={isFav} />
@@ -303,8 +303,8 @@ export default function Tag() {
             <div className={cx(
               "tag-feature__image overflow-hidden",
               mode === "comic"
-                ? "book-binding relative aspect-[2/3] w-40 justify-self-center rounded-control shadow-[var(--cover-shadow)] sm:w-[200px]"
-                : "h-40 rounded-tile border border-line bg-bg-elevated p-2.5 shadow-1 sm:h-60",
+                ? "book-binding relative aspect-[2/3] w-40 justify-self-center rounded-md shadow-[var(--cover-shadow)] sm:w-[200px]"
+                : "h-40 rounded-tile border border-line bg-raised p-2.5 shadow-1 sm:h-60",
             )}>
               <RenditionImage
                 key={cover.id}
@@ -378,14 +378,14 @@ function Stat({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-caption text-fg-muted">
+      <div className="flex items-center gap-1.5 text-caption text-ink-2">
         {icon}
         <span>{label}</span>
       </div>
-      <div className="text-title-3 font-display font-semibold mt-1 tabular-nums">
+      <div className="text-heading font-display font-semibold mt-1 tabular-nums">
         {value}
       </div>
-      {detail && <div className="text-caption text-fg-muted mt-0.5">{detail}</div>}
+      {detail && <div className="text-caption text-ink-2 mt-0.5">{detail}</div>}
     </div>
   );
 }

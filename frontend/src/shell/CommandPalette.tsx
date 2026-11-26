@@ -409,14 +409,14 @@ function Palette({
         role="dialog"
         aria-modal="true"
         aria-label="命令面板"
-        className="flex max-h-full w-full max-w-[688px] flex-col overflow-hidden rounded-sheet bg-bg-elevated shadow-3"
+        className="flex max-h-full w-full max-w-[688px] flex-col overflow-hidden rounded-xl bg-raised shadow-3"
         onKeyDown={onPanelKey}
       >
         <div className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-2 gap-y-2 border-b border-line p-3 sm:grid-cols-[1fr_auto_auto] sm:p-4">
-          <div className="command-query col-start-1 row-start-1 flex h-11 min-w-0 items-center gap-2.5 rounded-control border border-line bg-bg px-3 text-fg-muted">
+          <div className="command-query col-start-1 row-start-1 flex h-11 min-w-0 items-center gap-2.5 rounded-md border border-line bg-canvas px-3 text-ink-2">
             <SearchIcon size={19} className="shrink-0" />
             <input
-              className="h-full min-w-0 flex-1 bg-transparent text-base font-normal text-fg placeholder:text-fg-muted"
+              className="h-full min-w-0 flex-1 bg-transparent text-base font-normal text-ink placeholder:text-ink-2"
               enterKeyHint="search"
               ref={input}
               role="combobox"
@@ -487,7 +487,7 @@ function Palette({
           )}
           <IconButton
             label="关闭命令面板"
-            className="text-fg-muted"
+            className="text-ink-2"
             onClick={onClose}
           >
             <CloseIcon />
@@ -500,12 +500,12 @@ function Palette({
           aria-label="命令与搜索结果"
         >
           {nameSearch && (debounced !== term || suggestions.isFetching) && (
-            <p role="status" className="px-3 py-2 text-micro text-fg-subtle">
+            <p role="status" className="px-3 py-2 text-caption text-ink-3">
               正在搜索…
             </p>
           )}
           {nameSearch && suggestions.isError && (
-            <p role="status" className="px-3 py-2 text-micro text-fg-subtle">
+            <p role="status" className="px-3 py-2 text-caption text-ink-3">
               名称建议读取失败，可打开结果页重试。
             </p>
           )}
@@ -521,7 +521,7 @@ function Palette({
                 >
                   <div
                     aria-hidden
-                    className="mb-1.5 px-1 text-caption font-medium text-fg-muted"
+                    className="mb-1.5 px-1 text-caption font-medium text-ink-2"
                   >
                     {label}
                   </div>
@@ -555,12 +555,12 @@ function Palette({
                         </span>
                         <span className="min-w-0 truncate">{row.label}</span>
                         {row.detail && (
-                          <span className="ml-auto shrink-0 text-caption text-fg-muted">
+                          <span className="ml-auto shrink-0 text-caption text-ink-2">
                             {row.detail}
                           </span>
                         )}
                         {row.shortcut && (
-                          <kbd className="ml-auto hidden shrink-0 font-sans text-micro text-fg-subtle sm:pointer-fine:inline">
+                          <kbd className="ml-auto hidden shrink-0 font-sans text-caption text-ink-3 sm:pointer-fine:inline">
                             {row.shortcut}
                           </kbd>
                         )}
@@ -572,14 +572,14 @@ function Palette({
           )}
         </div>
         <footer
-          className={`shrink-0 items-center gap-3 border-t border-line px-4 text-micro text-fg-muted ${term ? "hidden py-2 pointer-fine:flex" : "flex py-1"}`}
+          className={`shrink-0 items-center gap-3 border-t border-line px-4 text-caption text-ink-2 ${term ? "hidden py-2 pointer-fine:flex" : "flex py-1"}`}
         >
           {!term && (
             <button
               type="button"
               aria-expanded={actionsOpen}
               aria-controls={listId}
-              className="mr-auto flex min-h-10 items-center gap-1 rounded-control px-2 text-caption hover:bg-bg-subtle"
+              className="mr-auto flex min-h-10 items-center gap-1 rounded-md px-2 text-caption hover:bg-sunken"
               onClick={(event) => {
                 setActionsOpen(!actionsOpen);
                 setActiveId(

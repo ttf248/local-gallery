@@ -17,9 +17,9 @@ export const InlineAlert = forwardRef<HTMLDivElement, Props>(
         {...props}
         ref={ref}
         className={cx(
-          "flex items-center gap-3 rounded-control border-l-[3px] bg-bg-subtle px-4 py-3",
+          "flex items-center gap-3 rounded-md border-l-[3px] bg-sunken px-4 py-3",
           {
-            info: "border-signal",
+            info: "border-accent",
             warning: "border-warning",
             danger: "border-danger",
           }[tone],

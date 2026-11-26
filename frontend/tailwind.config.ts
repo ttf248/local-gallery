@@ -1,3 +1,4 @@
+import { COLOR_ROLES } from "./src/styles/tokens";
 import plugin from "tailwindcss/plugin";
 import type { Config } from "tailwindcss";
 
@@ -19,9 +20,9 @@ export default {
       sm: "640px",
       md: "768px",
       lg: "1024px",
-      xl: "1440px",
-      "2xl": "1920px",
-      "3xl": "2560px",
+      xl: "1280px",
+      "2xl": "1600px",
+      "3xl": "2240px",
     },
     extend: {
       spacing: {
@@ -34,6 +35,8 @@ export default {
         [
           "rail",
           "topbar",
+          "toolbar",
+          "floatingbar",
           "tabbar",
           "popover",
           "sheet",
@@ -43,118 +46,72 @@ export default {
         ].map((k) => [k, "var(--z-" + k + ")"]),
       ),
       transitionDuration: {
-        1: "var(--dur-1)",
-        2: "var(--dur-2)",
-        3: "var(--dur-3)",
+        fast: "var(--dur-fast)",
+        base: "var(--dur-base)",
+        slow: "var(--dur-slow)",
+        page: "var(--dur-page)",
       },
       transitionTimingFunction: {
         standard: "var(--ease-standard)",
-        emphasized: "var(--ease-emphasized)",
+        spring: "var(--ease-spring)",
         exit: "var(--ease-exit)",
       },
-      textColor: {
-        ...Object.fromEntries(
-          ["success", "warning", "danger", "favorite", "signal"].map((name) => [
-            name,
-            tokenColor(name + "-text"),
-          ]),
-        ),
-      },
-      colors: {
-        line: tokenColor("line"),
-        "line-strong": tokenColor("line-strong"),
-        signal: tokenColor("signal"),
-        "signal-soft": tokenColor("signal-soft"),
-        "inverse-bg": tokenColor("inverse-bg"),
-        "inverse-fg": tokenColor("inverse-fg"),
-        // 主题颜色统一从 tokens.css 取得，不在工具类中重复维护色值。
-        bg: tokenColor("bg"),
-        "bg-elevated": tokenColor("bg-elevated"),
-        "bg-subtle": tokenColor("bg-subtle"),
-        "bg-strong": tokenColor("bg-strong"),
-        "bg-media": tokenColor("bg-media"),
-        fg: tokenColor("fg"),
-        "fg-muted": tokenColor("fg-muted"),
-        "fg-subtle": tokenColor("fg-subtle"),
-        scrim: tokenColor("scrim"),
-        accent: tokenColor("accent"),
-        "accent-soft": tokenColor("accent-soft"),
-        "accent-contrast": tokenColor("accent-contrast"),
-        danger: tokenColor("danger"),
-        success: tokenColor("success"),
-        warning: tokenColor("warning"),
-        favorite: tokenColor("favorite"),
-        "reader-bg": tokenColor("reader-bg"),
-        "reader-panel": tokenColor("reader-panel"),
-        "overlay-bg": tokenColor("overlay-bg"),
-        "overlay-panel": tokenColor("overlay-panel"),
-        "overlay-panel-strong": tokenColor("overlay-panel-strong"),
-        "overlay-border": tokenColor("overlay-border"),
-        "overlay-fg": tokenColor("overlay-fg"),
-        "overlay-scrim": tokenColor("overlay-scrim"),
-        "overlay-danger": tokenColor("overlay-danger"),
-        "overlay-warning": tokenColor("overlay-warning"),
-        "overlay-success": tokenColor("overlay-success"),
-        "overlay-favorite": tokenColor("overlay-favorite"),
-      },
-      // 圆角数值只有一份来源（tokens.css 的语义 token）。Tailwind 侧保留
-      // 数字档名，避免同一个圆角出现「rounded-lg」和「rounded-tile」两套
-      // 叫法；样式表内部一律用语义名 var(--radius-tile) 之类。
+      colors: Object.fromEntries(
+        [
+          ...COLOR_ROLES,
+          "scrim",
+          "theater-glass",
+          "theater-danger",
+          "theater-warning",
+          "theater-success",
+          "theater-favorite",
+        ].map((name) => [name, tokenColor(name)]),
+      ),
       borderRadius: {
-        DEFAULT: "var(--radius-sm)",
-        sm: "var(--radius-sm)",
-        tile: "var(--radius-tile)",
-        control: "var(--radius-control)",
-        card: "var(--radius-card)",
-        sheet: "var(--radius-sheet)",
-        full: "var(--radius-pill)",
-
-        md: "var(--radius-control)",
-        lg: "var(--radius-tile)",
-        xl: "var(--radius-tile)",
+        DEFAULT: "var(--r-sm)",
+        tile: "var(--r-tile)",
+        sm: "var(--r-sm)",
+        md: "var(--r-md)",
+        lg: "var(--r-lg)",
+        xl: "var(--r-xl)",
+        full: "var(--r-full)",
       },
       fontSize: {
         display: [
           "var(--text-display)",
-          { lineHeight: "48px", letterSpacing: "-0.035em", fontWeight: "650" },
+          { lineHeight: "1.15", fontWeight: "600", letterSpacing: "-0.025em" },
         ],
-        "title-1": [
-          "var(--text-title-1)",
-          {
-            lineHeight: "calc(var(--text-title-1) + 8px)",
-            letterSpacing: "-0.03em",
-            fontWeight: "650",
-          },
+        title: [
+          "var(--text-title)",
+          { lineHeight: "32px", fontWeight: "600", letterSpacing: "-0.02em" },
         ],
-        "title-2": [
-          "var(--text-title-2)",
-          { lineHeight: "30px", letterSpacing: "-0.02em", fontWeight: "600" },
+        heading: [
+          "var(--text-heading)",
+          { lineHeight: "24px", fontWeight: "600", letterSpacing: "-0.01em" },
         ],
-        "title-3": [
-          "var(--text-title-3)",
-          { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "600" },
+        subheading: [
+          "var(--text-subheading)",
+          { lineHeight: "22px", fontWeight: "600", letterSpacing: "0em" },
         ],
         body: [
           "var(--text-body)",
-          { lineHeight: "24px", letterSpacing: "0em", fontWeight: "400" },
+          { lineHeight: "22px", fontWeight: "400", letterSpacing: "0em" },
         ],
-        callout: [
-          "var(--text-callout)",
-          { lineHeight: "20px", letterSpacing: "0em", fontWeight: "500" },
+        label: [
+          "var(--text-label)",
+          { lineHeight: "18px", fontWeight: "500", letterSpacing: "0em" },
         ],
         caption: [
           "var(--text-caption)",
-          { lineHeight: "18px", letterSpacing: "0em", fontWeight: "400" },
-        ],
-        micro: [
-          "var(--text-micro)",
-          { lineHeight: "16px", letterSpacing: "0.01em", fontWeight: "500" },
+          { lineHeight: "16px", fontWeight: "400", letterSpacing: "0.01em" },
         ],
       },
       boxShadow: {
-        1: "var(--shadow-1)",
-        2: "var(--shadow-2)",
-        3: "var(--shadow-3)",
+        1: "var(--e1)",
+        2: "var(--e2)",
+        3: "var(--e3)",
+        canvas: "var(--canvas-shadow)",
+        focus: "var(--focus-ring)",
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

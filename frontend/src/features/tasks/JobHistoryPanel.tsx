@@ -75,13 +75,13 @@ export default function JobHistoryPanel({
   }
 
   return (
-    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated" aria-labelledby="task-history-heading">
+    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised" aria-labelledby="task-history-heading">
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="task-history-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
+          <h2 id="task-history-heading" className="tasks-section__title font-display text-body font-semibold text-ink">
             任务记录
           </h2>
-          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-fg-subtle max-w-[68ch]">
+          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-ink-3 max-w-[68ch]">
             每次已结束的任务的耗时、产出与失败原因都在这里。删除记录只清理任务日志，
             不会删除已生成的元数据、向量、文字或人脸结果。
           </p>
@@ -150,17 +150,17 @@ export default function JobHistoryPanel({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                      <span className="text-body font-medium text-fg">
+                      <span className="text-body font-medium text-ink">
                         {taskTitle(job)}
                       </span>
-                      <span className="text-caption text-fg-muted">
+                      <span className="text-caption text-ink-2">
                         {taskModeLabel(job.mode)}
                       </span>
-                      <span className="text-caption text-fg-subtle">
+                      <span className="text-caption text-ink-3">
                         {taskStatusLabel(job.status)}
                       </span>
                     </div>
-                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-caption text-fg-subtle">
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-caption text-ink-3">
                       <span>{formatDateTime(job.createdAt)}</span>
                       <span>耗时 {formatTaskDuration(job.elapsedMs)}</span>
                       <span className="tabular-nums">
@@ -183,7 +183,7 @@ export default function JobHistoryPanel({
                   </div>
                   <ChevronDownIcon
                     size={16}
-                    className="mt-1 shrink-0 text-fg-subtle transition-transform group-open:rotate-180"
+                    className="mt-1 shrink-0 text-ink-3 transition-transform group-open:rotate-180"
                   />
                 </summary>
 
@@ -234,7 +234,7 @@ export default function JobHistoryPanel({
 
                   {job.errors && job.errors.length > 0 ? (
                     <div className="mt-4">
-                      <p className="mb-2 text-caption font-medium text-fg">
+                      <p className="mb-2 text-caption font-medium text-ink">
                         失败文件
                       </p>
                       <FailureGroupList errors={job.errors} />
@@ -309,11 +309,11 @@ function SpecRow({
     <div
       className={`flex items-baseline justify-between gap-4 border-b border-line py-1.5 ${fullWidth ? "sm:col-span-2" : ""}`}
     >
-      <dt className="shrink-0 whitespace-nowrap text-caption text-fg-subtle">
+      <dt className="shrink-0 whitespace-nowrap text-caption text-ink-3">
         {label}
       </dt>
       <dd
-        className={`min-w-0 font-mono text-caption tabular-nums text-fg ${fullWidth ? "break-all text-right" : ""}`}
+        className={`min-w-0 font-mono text-caption tabular-nums text-ink ${fullWidth ? "break-all text-right" : ""}`}
       >
         {value}
       </dd>
@@ -334,11 +334,11 @@ function OutputBreakdown({ job }: { job: AIJob }) {
 
   return (
     <div className="mt-4">
-      <p className="text-caption font-medium text-fg">产出明细</p>
+      <p className="text-caption font-medium text-ink">产出明细</p>
       <div className="mt-2 space-y-1.5">
         {results.length > 0 ? (
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-            <span className="text-caption text-fg-subtle">
+            <span className="text-caption text-ink-3">
               {job.type === "metadata" ? "解析结果" : "处理结果"}
             </span>
             {results.map(([key, value]) => (
@@ -352,7 +352,7 @@ function OutputBreakdown({ job }: { job: AIJob }) {
         ) : null}
         {fields.length > 0 ? (
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-            <span className="text-caption text-fg-subtle">提取字段</span>
+            <span className="text-caption text-ink-3">提取字段</span>
             {fields.map(([key, value]) => (
               <CountChip
                 key={`field-${key}`}
@@ -370,8 +370,8 @@ function OutputBreakdown({ job }: { job: AIJob }) {
 function CountChip({ label, value }: { label: string; value: number }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-caption">
-      <span className="text-fg-subtle">{label}</span>
-      <span className="font-mono tabular-nums text-fg">
+      <span className="text-ink-3">{label}</span>
+      <span className="font-mono tabular-nums text-ink">
         {formatCount(value)}
       </span>
     </span>

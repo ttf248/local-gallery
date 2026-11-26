@@ -185,8 +185,8 @@ export default function Popover({
   // 默认菜单样式 + 用户覆盖
   const baseCls =
     tone === "reader"
-      ? "min-w-[180px] bg-overlay-panel border border-overlay-border rounded-lg shadow-2xl p-1.5 text-body text-overlay-fg backdrop-blur-md"
-      : "min-w-[180px] bg-bg-elevated border border-line rounded-lg shadow-3 p-1.5 text-body";
+      ? "min-w-[180px] bg-theater-surface border border-theater-border rounded-lg shadow-2xl p-1.5 text-body text-theater-fg backdrop-blur-md"
+      : "min-w-[180px] bg-raised border border-line rounded-lg shadow-3 p-1.5 text-body";
   const enhancedTrigger = isValidElement(trigger)
     ? cloneElement(trigger as ReactElement<TriggerProps>, {
         "aria-haspopup": "menu",
@@ -266,8 +266,8 @@ export function PopoverItem({
         ? "bg-white/15 text-white"
         : "text-white/80 hover:text-white hover:bg-white/10"
       : active
-        ? "bg-bg-subtle text-fg"
-        : "text-fg-muted hover:text-fg hover:bg-bg-subtle/70";
+        ? "bg-sunken text-ink"
+        : "text-ink-2 hover:text-ink hover:bg-sunken/70";
   return (
     <button
       type="button"
@@ -307,7 +307,7 @@ export function PopoverLabel({ children }: { children: ReactNode }) {
   return (
     <div
       className={`px-2.5 pt-2 pb-1.5 text-caption font-medium ${
-        tone === "reader" ? "text-white/50" : "text-fg-subtle"
+        tone === "reader" ? "text-white/50" : "text-ink-3"
       }`}
     >
       {children}

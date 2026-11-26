@@ -74,7 +74,7 @@ export default function ImageInfoPanel({
       data-testid="image-info-panel"
       className="
         absolute inset-x-0 bottom-0 top-[76px] z-30 flex flex-col
-        border-t border-overlay-border bg-overlay-panel backdrop-blur-md
+        border-t border-theater-border bg-theater-surface backdrop-blur-md
         md:static md:inset-auto md:z-auto md:w-[21rem] md:shrink-0
         md:border-l md:border-t-0
       "
@@ -95,7 +95,7 @@ export default function ImageInfoPanel({
       <div className="flex-1 overflow-auto p-4 text-body scroll-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5">
         {loading && <div className="text-white/60 text-caption">加载中…</div>}
         {err !== null && (
-          <div className="text-overlay-danger text-caption">
+          <div className="text-theater-danger text-caption">
             错误: {apiErrorMessage(err, "无法读取图片信息")}
           </div>
         )}
@@ -244,7 +244,7 @@ export default function ImageInfoPanel({
                     {faceSearchQuery.isLoading ? (
                       <p className="mt-2 text-caption text-white/55">正在检索…</p>
                     ) : faceSearchQuery.isError ? (
-                      <p className="mt-2 text-caption text-overlay-danger">
+                      <p className="mt-2 text-caption text-theater-danger">
                         {apiErrorMessage(
                           faceSearchQuery.error,
                           "相似人脸检索失败",
@@ -352,7 +352,7 @@ function ImageAnalysisStatus({
   }
   if (status === "failed") {
     return (
-      <p className="py-1 text-caption text-overlay-danger">
+      <p className="py-1 text-caption text-theater-danger">
         {error ?? "分析失败，可在任务中心重试。"}
       </p>
     );

@@ -1,45 +1,45 @@
 @layer components {
   .field-frame {
-    @apply flex min-w-0 items-center gap-2 bg-bg-elevated px-3 shadow-1;
+    @apply flex min-w-0 items-center gap-2 bg-raised px-3 shadow-1;
   }
   .field-frame:focus-within {
     box-shadow:
-      0 0 0 1px var(--signal),
-      0 0 0 4px var(--signal-soft);
+      0 0 0 1px var(--accent),
+      0 0 0 4px var(--accent-soft);
   }
   .field-frame input {
     @apply h-full min-w-0 flex-1 bg-transparent outline-none;
   }
   .segments {
-    @apply relative isolate inline-flex items-center rounded-control bg-bg-subtle p-[3px];
+    @apply relative isolate inline-flex items-center rounded-md bg-sunken p-[3px];
   }
   .segments::before {
     content: "";
-    @apply absolute inset-y-[3px] left-0 -z-10 rounded-sm bg-bg-elevated shadow-1;
+    @apply absolute inset-y-[3px] left-0 -z-10 rounded-sm bg-raised shadow-1;
     width: var(--segment-width);
     transform: translateX(var(--segment-left));
     transition:
-      transform var(--dur-2) var(--ease-standard),
-      width var(--dur-2);
+      transform var(--dur-base) var(--ease-standard),
+      width var(--dur-base);
   }
   .segments button {
-    @apply min-h-8 touch:min-h-10 touch:min-w-10 rounded-sm px-3 text-callout text-fg-muted aria-checked:text-fg disabled:opacity-40;
+    @apply min-h-8 touch:min-h-10 touch:min-w-10 rounded-sm px-3 text-label text-ink-2 aria-checked:text-ink disabled:opacity-40;
   }
   .segments[data-size="sm"] button {
     @apply min-h-8 touch:min-h-10 px-2;
   }
   .modal-surface {
-    @apply overflow-auto bg-bg-elevated text-fg shadow-3;
+    @apply overflow-auto bg-raised text-ink shadow-3;
   }
   .modal-surface::backdrop {
     background: rgb(0 0 0 / 0.4);
     backdrop-filter: blur(4px);
   }
   .dialog-surface[open] {
-    animation: dialog-in var(--dur-2) var(--ease-emphasized);
+    animation: dialog-in var(--dur-base) var(--ease-spring);
   }
   .sheet-surface[open] {
-    animation: sheet-in var(--dur-3) var(--ease-emphasized);
+    animation: sheet-in var(--dur-slow) var(--ease-spring);
   }
   .sheet-surface[data-side="left"] {
     --sheet-from: translateX(-100%);
@@ -51,7 +51,7 @@
     --sheet-from: translateY(100%);
   }
   .memory-thumbnail {
-    @apply rounded-tile bg-bg-subtle object-contain;
+    @apply rounded-tile bg-sunken object-contain;
     height: clamp(72px, 18dvh, 160px);
     width: auto;
     min-width: 80px;
@@ -70,28 +70,6 @@
   }
   .indeterminate {
     animation: progress-slide 1.6s ease-in-out infinite alternate;
-  }
-}
-@keyframes dialog-in {
-  from {
-    transform: scale(0.97);
-    opacity: 0;
-  }
-}
-@keyframes sheet-in {
-  from {
-    transform: var(--sheet-from);
-    opacity: 0;
-  }
-}
-@keyframes skeleton-light {
-  to {
-    opacity: 0.45;
-  }
-}
-@keyframes progress-slide {
-  to {
-    transform: translateX(185%);
   }
 }
 @media (pointer: coarse) {
@@ -114,9 +92,9 @@
 }
 
 @layer components {
-  .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--bg) 96%, transparent); }
+  .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--canvas) 96%, transparent); }
   @supports (backdrop-filter: blur(1px)) {
-    .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--bg) 82%, transparent); backdrop-filter: blur(20px) saturate(1.6); }
+    .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--canvas) 82%, transparent); backdrop-filter: blur(20px) saturate(1.6); }
   }
   :root[data-keyboard] .mobile-tabs,
   body:has(dialog[open], [role="dialog"][aria-modal="true"]) .mobile-tabs { visibility: hidden; }
@@ -126,7 +104,7 @@ body:has(dialog[open], [role="dialog"][aria-modal="true"]) .app-main { overflow-
 
 @layer components {
   .page-shell:where(:not([data-page])) {
-    @apply mx-auto w-full min-w-0 max-w-[var(--page-max)] px-[var(--page-gutter)];
+    @apply mx-auto w-full min-w-0 max-w-[var(--page-max)] px-[var(--gutter)];
   }
   .page-shell .page-shell:where(:not([data-page])) {
     @apply max-w-none px-0;
@@ -138,67 +116,39 @@ body:has(dialog[open], [role="dialog"][aria-modal="true"]) .app-main { overflow-
     @apply inline-flex items-center min-h-8;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-control text-body font-medium whitespace-nowrap transition duration-2 disabled:[opacity:0.45] disabled:cursor-[not-allowed];
+    @apply inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed];
   }
   .btn-sm {
-    @apply h-8 px-3 text-caption rounded-control;
+    @apply h-8 px-3 text-caption rounded-md;
   }
   .btn-primary {
-    @apply bg-accent text-accent-contrast enabled:hover:bg-accent touch:enabled:active:bg-accent motion-safe:enabled:active:translate-y-px;
+    @apply bg-primary text-on-primary enabled:hover:bg-primary touch:enabled:active:bg-primary motion-safe:enabled:active:translate-y-px;
   }
   .btn-outline {
-    @apply bg-transparent border border-line text-fg enabled:hover:bg-bg-subtle enabled:hover:border-line-strong touch:enabled:active:bg-bg-subtle touch:enabled:active:border-line-strong;
+    @apply bg-transparent border border-line text-ink enabled:hover:bg-sunken enabled:hover:border-line-strong touch:enabled:active:bg-sunken touch:enabled:active:border-line-strong;
   }
   .btn-ghost {
-    @apply bg-transparent text-fg-muted enabled:hover:bg-bg-subtle enabled:hover:text-fg touch:enabled:active:bg-bg-subtle touch:enabled:active:text-fg;
+    @apply bg-transparent text-ink-2 enabled:hover:bg-sunken enabled:hover:text-ink touch:enabled:active:bg-sunken touch:enabled:active:text-ink;
   }
   .field {
-    @apply h-10 px-3 border border-line rounded-control bg-bg-elevated text-fg text-body transition duration-2 placeholder:text-fg-subtle focus-visible:border-signal;
+    @apply h-10 px-3 border border-line rounded-md bg-raised text-ink text-body transition duration-base placeholder:text-ink-3 focus-visible:border-accent;
   }
   .chip, .ui-chip {
-    @apply inline-flex items-center gap-1.5 h-8 px-3 rounded-control text-caption text-fg-muted whitespace-nowrap transition duration-2 hover:bg-bg-subtle hover:text-fg touch:active:bg-bg-subtle touch:active:text-fg aria-pressed:bg-accent-soft aria-pressed:text-accent aria-pressed:font-medium [&[data-active=true]]:bg-accent-soft [&[data-active=true]]:text-accent [&[data-active=true]]:font-medium;
+    @apply inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-caption text-ink-2 whitespace-nowrap transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink aria-pressed:bg-selected aria-pressed:text-primary aria-pressed:font-medium [&[data-active=true]]:bg-selected [&[data-active=true]]:text-primary [&[data-active=true]]:font-medium;
   }
   .ui-popover {
-    @apply border border-line [border-top-color:color-mix(in_srgb,var(--line),var(--line)_50%)] rounded-tile bg-bg-elevated shadow-2 touch:[&_:is(button,_a[href])]:min-h-11 touch:[&_:is(button,_a[href])]:min-w-11;
+    @apply border border-line [border-top-color:color-mix(in_srgb,var(--line),var(--line)_50%)] rounded-tile bg-raised shadow-2 touch:[&_:is(button,_a[href])]:min-h-11 touch:[&_:is(button,_a[href])]:min-w-11;
   }
   .ui-segmented {
-    @apply inline-flex items-stretch gap-0.5 rounded-control bg-bg-subtle p-0.5 [&>button]:relative [&>button]:min-h-8 [&>button]:px-2.5 [&>button]:rounded-sm [&>button]:text-caption [&>button]:text-fg-muted [&>button]:transition [&>button]:duration-2 [&>button:is([aria-checked=true],_[aria-pressed=true])]:bg-accent-soft [&>button:is([aria-checked=true],_[aria-pressed=true])]:text-accent [&>button:is([aria-checked=true],_[aria-pressed=true])]:font-semibold [&>button:disabled]:[opacity:0.5] touch:[&>button]:min-w-11 touch:[&>button]:min-h-11;
+    @apply inline-flex items-stretch gap-0.5 rounded-md bg-sunken p-0.5 [&>button]:relative [&>button]:min-h-8 [&>button]:px-2.5 [&>button]:rounded-sm [&>button]:text-caption [&>button]:text-ink-2 [&>button]:transition [&>button]:duration-base [&>button:is([aria-checked=true],_[aria-pressed=true])]:bg-selected [&>button:is([aria-checked=true],_[aria-pressed=true])]:text-primary [&>button:is([aria-checked=true],_[aria-pressed=true])]:font-semibold [&>button:disabled]:[opacity:0.5] touch:[&>button]:min-w-11 touch:[&>button]:min-h-11;
   }
   .toolbar-icon {
-    @apply inline-flex items-center justify-center w-9 h-9 rounded-control text-fg-subtle transition duration-2 hover:bg-bg-subtle hover:text-fg touch:active:bg-bg-subtle touch:active:text-fg touch:w-11 touch:h-11;
+    @apply inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11;
   }
 }
 
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
 
-@keyframes scaleFade {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
 
 @layer base {
   :where(button, select, input:not([type=hidden]), [role=button], [role=tab]) { min-height: 32px; min-width: 32px; }

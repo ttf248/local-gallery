@@ -38,7 +38,7 @@ export default function SmartAlbumCover({
   if (!fileId || failed) {
     return (
       <div
-        className="absolute inset-0 flex items-center justify-center bg-bg-subtle text-caption text-fg-subtle"
+        className="absolute inset-0 flex items-center justify-center bg-sunken text-caption text-ink-3"
         data-testid="smart-album-cover-empty"
       >
         暂无封面

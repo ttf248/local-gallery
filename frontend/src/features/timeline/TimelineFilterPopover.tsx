@@ -89,7 +89,7 @@ export default function TimelineFilterPopover({
       trigger={
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-caption hover:bg-bg-subtle"
+          className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-caption hover:bg-sunken"
           aria-label="筛选时间线"
         >
           <FilterIcon size={16} />
@@ -142,7 +142,7 @@ export default function TimelineFilterPopover({
       {(sources.length > 0 || precisions.length > 0) && (
         <>
           <PopoverSeparator />
-          <div className="timeline-filter-legend py-1.5 px-2.5 text-caption text-fg-muted">
+          <div className="timeline-filter-legend py-1.5 px-2.5 text-caption text-ink-2">
             {sources.length > 0 && (
               <p data-testid="timeline-source-legend">
                 时间来源 · {sources.join(" · ")}
@@ -201,7 +201,7 @@ function FilterChoices({
           type="button"
           tabIndex={-1}
           aria-checked={value === selected}
-          className="rounded-md px-1 py-1.5 text-caption tabular-nums hover:bg-bg-subtle aria-checked:bg-signal-soft disabled:opacity-40"
+          className="rounded-md px-1 py-1.5 text-caption tabular-nums hover:bg-sunken aria-checked:bg-accent-soft disabled:opacity-40"
           onClick={() => onSelect(value)}
         >
           {label}

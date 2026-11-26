@@ -330,14 +330,14 @@ export default function PhotoTimeline() {
         open={jumpOpen}
         onClose={() => setJumpOpen(false)}
       >
-        <h2 className="mb-4 text-title-3">跳转年份</h2>
+        <h2 className="mb-4 text-heading">跳转年份</h2>
         <div className="grid grid-cols-3 gap-2">
           {marks
             .filter((mark) => mark.level !== "month")
             .map((mark) => (
               <button
                 type="button"
-                className="rounded-lg bg-bg-subtle p-2"
+                className="rounded-lg bg-sunken p-2"
                 key={mark.key}
                 onClick={() => {
                   applyFilter({ ...filter, year: mark.key, month: "" });
@@ -405,14 +405,14 @@ export default function PhotoTimeline() {
             >
               {[0, 1, 2].map((section) => (
                 <div key={section} className="pt-8">
-                  <div className="mb-3 h-4 w-28 animate-pulse rounded bg-bg-subtle" />
+                  <div className="mb-3 h-4 w-28 animate-pulse rounded bg-sunken" />
                   {[0, 1].map((row) => (
                     <div key={row} className="mb-1 flex h-32 gap-1">
                       {[3, 2, 4, 3].map((width, i) => (
                         <div
                           key={i}
                           style={{ flex: width + ((section + row + i) % 3) }}
-                          className="animate-pulse rounded-tile bg-bg-subtle"
+                          className="animate-pulse rounded-tile bg-sunken"
                         />
                       ))}
                     </div>

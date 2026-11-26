@@ -59,16 +59,16 @@ test("漫画工作台用暖铜赭强调色，照片工作台用炭黑强调色",
   await page.goto("/photo");
   const photoAccent = await page.evaluate(() =>
     getComputedStyle(document.documentElement)
-      .getPropertyValue("--accent")
+      .getPropertyValue("--primary")
       .trim(),
   );
-  expect(photoAccent.toLowerCase()).toBe("#111110");
+  expect(photoAccent.toLowerCase()).toBe("#18181b");
 
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic");
   const comicAccent = await page.evaluate(() =>
     getComputedStyle(document.documentElement)
-      .getPropertyValue("--accent")
+      .getPropertyValue("--primary")
       .trim(),
   );
   expect(comicAccent.toLowerCase()).toBe("#8a4f2d");

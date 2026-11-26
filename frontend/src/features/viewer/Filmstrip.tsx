@@ -32,7 +32,7 @@ export function Filmstrip({
           key={item.id}
           aria-label={"跳到第 " + (start + i + 1) + " 张"}
           aria-current={start + i === index || undefined}
-          className="relative h-12 min-w-10 max-w-20 flex-1 overflow-hidden rounded-tile bg-overlay-panel opacity-65 transition-transform aria-current:z-10 motion-safe:aria-current:scale-110 aria-current:opacity-100 aria-current:ring-2 aria-current:ring-white"
+          className="relative h-12 min-w-10 max-w-20 flex-1 overflow-hidden rounded-tile bg-theater-surface opacity-65 transition-transform aria-current:z-10 motion-safe:aria-current:scale-110 aria-current:opacity-100 aria-current:ring-2 aria-current:ring-white"
           onClick={() => onChange(start + i)}
         >
           {item.kind === "video" ? (

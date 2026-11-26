@@ -70,13 +70,13 @@ function NavButton({
         onClick={onClick}
         title={title}
         aria-label={label ? `${title}：${label}` : title}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-overlay-panel/55 text-overlay-fg backdrop-blur-[2px] ring-1 ring-overlay-border transition-colors hover:bg-overlay-panel/75 hover:text-overlay-fg"
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-theater-surface/55 text-theater-fg backdrop-blur-[2px] ring-1 ring-theater-border transition-colors hover:bg-theater-surface/75 hover:text-theater-fg"
       >
         {children}
       </button>
       {/* 目标卷名：只在悬停时浮出，平时不占画面。 */}
       {label && (
-        <span className="pointer-events-none max-w-[10rem] truncate rounded-md bg-overlay-panel/80 px-2 py-1 text-caption text-overlay-fg hover-reveal backdrop-blur-[2px] transition-opacity duration-150 group-hover/nav:opacity-100 group-focus-within/nav:opacity-100">
+        <span className="pointer-events-none max-w-[10rem] truncate rounded-md bg-theater-surface/80 px-2 py-1 text-caption text-theater-fg hover-reveal backdrop-blur-[2px] transition-opacity duration-150 group-hover/nav:opacity-100 group-focus-within/nav:opacity-100">
           {label}
         </span>
       )}

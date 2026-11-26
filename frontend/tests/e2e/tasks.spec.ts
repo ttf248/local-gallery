@@ -88,7 +88,7 @@ test.describe("任务中心", () => {
     ).toBeVisible();
     // 「缩略图」在重建范围勾选项里也有一份，这里认的是占用行。
     await expect(
-      page.locator("span.text-fg-muted", { hasText: /^缩略图$/ }),
+      page.locator("span.text-ink-2", { hasText: /^缩略图$/ }),
     ).toBeVisible();
     await expect(page.getByText("转换图", { exact: true })).toBeVisible();
     // 路径默认收起，展开后相对路径对所有设备可见；本机浏览器还能看到绝对锚点。

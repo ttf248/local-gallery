@@ -111,7 +111,7 @@ export default function PageOverview({
     <dialog
       ref={dialogRef}
       data-testid="page-overview"
-      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-theater-bg p-0 text-theater-fg backdrop:bg-transparent"
       role="dialog"
       aria-modal="true"
       aria-label="目录"
@@ -184,7 +184,7 @@ export default function PageOverview({
                   {/* 当前页的页码反过来印（白底深字）：一屏几十张缩略图
                       里，只有这一张要能一眼认出来。 */}
                   <span
-                    className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-micro tabular-nums ${
+                    className={`absolute bottom-1 right-1 rounded px-1.5 py-0.5 text-caption tabular-nums ${
                       item.index === index
                         ? "bg-white text-black"
                         : "bg-black/65 text-white/90"

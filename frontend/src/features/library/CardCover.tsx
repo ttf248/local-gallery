@@ -49,7 +49,7 @@ export default function CardCover({
 
   if (data.variant === "album" && data.coverKind === "video") {
     return (
-      <div className="h-full w-full bg-bg-media">
+      <div className="h-full w-full bg-media">
         <VideoCoverImage
           key={primary.path}
           videoPath={primary.path}
@@ -82,12 +82,12 @@ export default function CardCover({
   const layout = resolveCollageLayout(sources.length);
   return (
     <div
-      className="editorial-collage grid w-full h-full gap-0.5 [grid-template:minmax(0,1fr)_/_minmax(0,1fr)] overflow-hidden bg-bg [&[data-cover-layout=split-2]]:grid-cols-2 [&[data-cover-layout=feature-3]]:[grid-template:repeat(2,minmax(0,1fr))_/_minmax(0,1.6fr)_minmax(0,1fr)] [&[data-cover-layout=feature-3]>:first-child]:[grid-row:span_2] [&[data-cover-layout=grid-4]]:[grid-template:repeat(2,minmax(0,1fr))_/_repeat(2,minmax(0,1fr))]"
+      className="editorial-collage grid w-full h-full gap-0.5 [grid-template:minmax(0,1fr)_/_minmax(0,1fr)] overflow-hidden bg-canvas [&[data-cover-layout=split-2]]:grid-cols-2 [&[data-cover-layout=feature-3]]:[grid-template:repeat(2,minmax(0,1fr))_/_minmax(0,1.6fr)_minmax(0,1fr)] [&[data-cover-layout=feature-3]>:first-child]:[grid-row:span_2] [&[data-cover-layout=grid-4]]:[grid-template:repeat(2,minmax(0,1fr))_/_repeat(2,minmax(0,1fr))]"
       data-cover-layout={layout}
       data-testid="card-cover-collage"
     >
       {sources.map((source, index) => (
-        <div key={source.path} className="editorial-collage__cell min-w-0 min-h-0 overflow-hidden bg-bg-subtle">
+        <div key={source.path} className="editorial-collage__cell min-w-0 min-h-0 overflow-hidden bg-sunken">
           <CoverImage
             path={source.path}
             version={source.version}
@@ -161,7 +161,7 @@ function CoverImage({
   if (failed)
     return (
       <div
-        className="grid h-full w-full place-items-center bg-bg-media text-fg-subtle"
+        className="grid h-full w-full place-items-center bg-media text-ink-3"
         role="img"
         aria-label={alt + "（封面不可用）"}
       >
@@ -185,7 +185,7 @@ function CoverImage({
 
 function CoverPlaceholder() {
   return (
-    <div className="w-full h-full flex items-center justify-center bg-bg-subtle text-fg-subtle">
+    <div className="w-full h-full flex items-center justify-center bg-sunken text-ink-3">
       <FolderIcon size={28} />
     </div>
   );

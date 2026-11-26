@@ -80,16 +80,16 @@ function HomeHeader({
         <div className="home-heading__title col-span-2 row-start-1 min-[2240px]:col-span-1 min-w-0">
           {/* 工作台首页的主标题是 32px（与照片侧同一档）：两侧都是入口页，
               标题要压得住首屏；数量与时间退到下面一行的辅助字里。 */}
-          <h1 className="page-title [.page-heading_&]:mt-2 font-display text-title-1 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [@media(max-width:640px)]:text-title-2 [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere]">{title}</h1>
+          <h1 className="page-title [.page-heading_&]:mt-2 font-display text-display leading-[1.25] font-semibold tracking-[-0.02em] text-ink [@media(max-width:640px)]:text-title [.album-summary_&]:text-[clamp(26px,2.8vw,38px)] [.album-summary_&]:[overflow-wrap:anywhere]">{title}</h1>
         </div>
-        <p className="home-heading__desc col-start-1 row-start-2 min-[2240px]:col-start-2 min-[2240px]:row-start-1 min-w-0 text-caption text-fg-muted">
+        <p className="home-heading__desc col-start-1 row-start-2 min-[2240px]:col-start-2 min-[2240px]:row-start-1 min-w-0 text-caption text-ink-2">
           {manifest ? (
             <>
               <span className="tabular-nums">{librarySize}</span>
               {manifest.scannedAt ? (
                 <>
-                  <span className="text-fg-subtle">，</span>
-                  <span className="text-fg-subtle">
+                  <span className="text-ink-3">，</span>
+                  <span className="text-ink-3">
                     上次更新 {timeAgo(manifest.scannedAt)}
                   </span>
                 </>
@@ -299,7 +299,7 @@ function ComicHome() {
 
       {hasContent && (inProgressAll.length > 0 || unreadCards.length > 0) ? (
         <div className="page-shell">
-          <div className="grid min-w-0 gap-[var(--section-gap)]">
+          <div className="grid min-w-0 gap-[var(--section)]">
             {inProgressAll.length > 0 ? (
               <ContinueReadingHero
                 cards={inProgressAll}
@@ -327,9 +327,9 @@ function ComicHome() {
       {/* 最近阅读：读过的卷。放在继续阅读与未读之后 —— 有在读的书时，
           「接着读」才是第一件事；读过的书是回访，不是待办。 */}
       {recentCards.length > 0 ? (
-        <section className="page-shell page-section pt-[var(--section-gap)] comic-library-home__recent pb-[var(--section-gap)]">
+        <section className="page-shell page-section pt-[var(--section)] comic-library-home__recent pb-[var(--section)]">
           <div className="section-heading flex items-baseline flex-wrap gap-3 mb-[var(--space-4)]">
-            <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">最近阅读</h2>
+            <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">最近阅读</h2>
             <Link to={recentsRoute("comic")} className="chip ml-auto">
               全部
             </Link>

@@ -36,23 +36,23 @@ export default function TravelStats({
     <div className="travel-stats flex flex-wrap items-baseline gap-y-1.5 gap-x-5 max-lg:gap-y-2.5">
       {children ? <div className="travel-stats__scope flex items-center self-center pr-5 border-r border-r-line max-lg:pr-0 max-lg:[border-right:none]">{children}</div> : null}
       <p className="travel-stats__hero flex items-baseline gap-2">
-        <span className="travel-stats__hero-value font-display text-[30px] leading-[1.05] font-semibold tracking-[-0.02em] text-fg tabular-nums">
+        <span className="travel-stats__hero-value font-display text-[30px] leading-[1.05] font-semibold tracking-[-0.02em] text-ink tabular-nums">
           {totalPhotos === null ? "—" : totalPhotos.toLocaleString()}
         </span>
-        <span className="travel-stats__hero-label text-caption text-fg-muted">张照片 · 全库</span>
+        <span className="travel-stats__hero-label text-caption text-ink-2">张照片 · 全库</span>
       </p>
       {/* 还没取到时一律写「—」：加载途中先摆一排 0，读的人会以为库里
           真的没有带位置的照片 —— 那是这一页最不该说错的一句。 */}
-      <div className="travel-stats__rest flex flex-wrap items-baseline gap-y-[3px] gap-x-4 pl-5 border-l border-l-line text-body text-fg-muted">
+      <div className="travel-stats__rest flex flex-wrap items-baseline gap-y-[3px] gap-x-4 pl-5 border-l border-l-line text-body text-ink-2">
         <span>
-          <b className="travel-stats__value text-fg font-semibold tabular-nums">{count(gpsPhotos)}</b> 张带位置
+          <b className="travel-stats__value text-ink font-semibold tabular-nums">{count(gpsPhotos)}</b> 张带位置
         </span>
         <span>
-          <b className="travel-stats__value text-fg font-semibold tabular-nums">{count(provinces)}</b> 个省
-          <b className="travel-stats__value text-fg font-semibold tabular-nums ml-2">{count(cities)}</b> 个市
+          <b className="travel-stats__value text-ink font-semibold tabular-nums">{count(provinces)}</b> 个省
+          <b className="travel-stats__value text-ink font-semibold tabular-nums ml-2">{count(cities)}</b> 个市
         </span>
         <span>
-          <b className="travel-stats__value text-fg font-semibold tabular-nums">{count(untimed)}</b> 张没有拍摄时间
+          <b className="travel-stats__value text-ink font-semibold tabular-nums">{count(untimed)}</b> 张没有拍摄时间
         </span>
       </div>
     </div>

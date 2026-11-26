@@ -170,7 +170,7 @@ export default function PageSlider({
             return (
               <div
                 key={i}
-                className={`bg-overlay-panel border-2 rounded overflow-hidden shadow-3 transition-all ${
+                className={`bg-theater-surface border-2 rounded overflow-hidden shadow-3 transition-all ${
                   isCenter
                     ? "border-white scale-105"
                     : "border-white/30 opacity-80"
@@ -188,7 +188,7 @@ export default function PageSlider({
                     draggable={false}
                   />
                 ) : (
-                  <div className="w-full h-full bg-overlay-panel-strong" />
+                  <div className="w-full h-full bg-theater-surface-strong" />
                 )}
               </div>
             );
@@ -217,7 +217,7 @@ export default function PageSlider({
           }}
           onBlur={commit}
           autoFocus
-          className="w-12 h-7 px-1.5 text-center text-caption tabular-nums bg-overlay-panel/80 text-white rounded border border-overlay-border outline-none"
+          className="w-12 h-7 px-1.5 text-center text-caption tabular-nums bg-theater-surface/80 text-white rounded border border-theater-border outline-none"
           inputMode="numeric"
         />
       ) : (

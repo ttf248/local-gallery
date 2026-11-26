@@ -17,7 +17,7 @@ export function Page({
     <div
       data-page={variant}
       className={cx(
-        "mx-auto w-full min-w-0 px-[var(--page-gutter)]",
+        "mx-auto w-full min-w-0 px-[var(--gutter)]",
         {
           standard: "max-w-[var(--page-max)]",
           gallery: "max-w-[var(--page-max-wide)]",

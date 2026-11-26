@@ -86,7 +86,7 @@ export function SearchToolbar({
 
   return !inlineScope && photo ? (
     <div className="flex shrink-0 items-center justify-between gap-2 py-1">
-      <span aria-hidden="true" className="text-callout font-medium">
+      <span aria-hidden="true" className="text-label font-medium">
         {title}
       </span>
       {scopeControl}

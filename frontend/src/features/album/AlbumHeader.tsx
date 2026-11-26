@@ -140,13 +140,13 @@ export default function AlbumHeader({
               <Link
                 to={albumRoute("photo", album.parentId)}
                 title={`回到「${parent}」`}
-                className="album-parent-link inline-flex items-center gap-1 max-w-full text-fg-muted text-caption [&>svg]:shrink-0"
+                className="album-parent-link inline-flex items-center gap-1 max-w-full text-ink-2 text-caption [&>svg]:shrink-0"
               >
                 <FolderIcon size={14} />
                 <span className="truncate">{parent}</span>
               </Link>
             ) : (
-              <span className="album-parent-link inline-flex items-center gap-1 max-w-full text-fg-muted text-caption [&>svg]:shrink-0">{parent}</span>
+              <span className="album-parent-link inline-flex items-center gap-1 max-w-full text-ink-2 text-caption [&>svg]:shrink-0">{parent}</span>
             ))}
         </div>
       }

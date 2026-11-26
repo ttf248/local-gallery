@@ -187,7 +187,7 @@ export default function PhotoMasonry<
             <div
               key={tile.id}
               data-masonry-index={tile.index}
-              className="group absolute overflow-hidden rounded-md bg-bg-subtle shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
+              className="group absolute overflow-hidden rounded-md bg-sunken shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
               style={{
                 transform: `translate(${tile.x}px, ${tile.y}px)`,
                 width: tile.width,
@@ -221,7 +221,7 @@ export default function PhotoMasonry<
                     : onOpen(item, tile.index)
                 }
                 onContextMenu={(event) => onContextMenu?.(item, event)}
-                className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
+                className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
                 title={
                   sourceLabel ? `${sourceLabel} · ${item.name}` : item.name
                 }
@@ -234,7 +234,7 @@ export default function PhotoMasonry<
                 }
               />
               {selected ? (
-                <span className="pointer-events-none absolute left-1.5 top-1.5 z-10 inline-flex h-5 items-center gap-1 rounded-md bg-accent px-1.5 text-micro font-medium text-accent-contrast">
+                <span className="pointer-events-none absolute left-1.5 top-1.5 z-10 inline-flex h-5 items-center gap-1 rounded-md bg-primary px-1.5 text-caption font-medium text-on-primary">
                   <CheckIcon size={11} />
                   已选
                 </span>

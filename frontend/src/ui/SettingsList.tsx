@@ -24,15 +24,15 @@ export const SettingsGroup = forwardRef<HTMLElement, GroupProps>(
       >
         <h2
           id={id ? id + "-heading" : undefined}
-          className="flex items-center gap-2 text-title-3"
+          className="flex items-center gap-2 text-heading"
         >
           {icon && <span aria-hidden="true">{icon}</span>}
           {title}
         </h2>
         {description && (
-          <p className="mt-1 text-caption text-fg-muted">{description}</p>
+          <p className="mt-1 text-caption text-ink-2">{description}</p>
         )}
-        <div className="mt-3 rounded-2xl bg-bg-elevated pl-4 shadow-1">
+        <div className="mt-3 rounded-2xl bg-raised pl-4 shadow-1">
           {children}
         </div>
       </section>
@@ -67,7 +67,7 @@ export const SettingsRow = forwardRef<HTMLDivElement, RowProps>(
         data-setting-row=""
         className={cx(
           "grid min-h-14 items-center gap-3 border-b border-line py-3 pr-4 last:border-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,.85fr)]",
-          danger && "rounded-control border border-danger/30 p-3",
+          danger && "rounded-md border border-danger/30 p-3",
           className,
         )}
       >
@@ -76,7 +76,7 @@ export const SettingsRow = forwardRef<HTMLDivElement, RowProps>(
             {label}
           </label>
           {description && (
-            <p className="text-caption text-fg-muted">{description}</p>
+            <p className="text-caption text-ink-2">{description}</p>
           )}
         </div>
         <div className="min-w-0">{control ?? children}</div>

@@ -81,8 +81,8 @@ export default function AlbumFilterBar({
       }
       className={`btn btn-ghost ${
         state.collapse
-          ? "bg-accent/12 text-accent"
-          : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+          ? "bg-primary/12 text-primary"
+          : "text-ink-2 hover:bg-sunken hover:text-ink"
       } disabled:cursor-not-allowed disabled:opacity-50`}
     >
       折叠相似
@@ -90,17 +90,17 @@ export default function AlbumFilterBar({
   );
   const summary =
     reduced || missing > 0 ? (
-      <span className="text-caption tabular-nums text-fg-subtle">
+      <span className="text-caption tabular-nums text-ink-3">
         {reduced ? (
           <>
             {resultCount} / {photoCount} 张
           </>
         ) : null}
         {missing > 0 && (
-          <span className="ml-1 text-fg-muted">· {missing} 张未纳入</span>
+          <span className="ml-1 text-ink-2">· {missing} 张未纳入</span>
         )}
         {state.collapse && grouped > 0 && (
-          <span className="ml-1 text-fg-muted">
+          <span className="ml-1 text-ink-2">
             · 折叠 {groupedGroups} 组 / {grouped} 张
           </span>
         )}
@@ -154,7 +154,7 @@ export default function AlbumFilterBar({
           className={
             compact
               ? "hidden lg:inline-flex btn btn-ghost"
-              : "btn-text text-caption text-fg-muted hover:text-fg"
+              : "btn-text text-caption text-ink-2 hover:text-ink"
           }
           onClick={onClear}
         >

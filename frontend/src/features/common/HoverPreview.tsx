@@ -156,12 +156,12 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
       }}
       className="select-none"
     >
-      {/* 圆角用 --radius-tile（16px）：这是一个浮起的卡片，不是面板。 */}
-      <div className="bg-bg-elevated border border-line rounded-lg shadow-3 overflow-hidden scale-fade [animation:scaleFade_240ms_var(--ease-emphasized)]">
+      {/* 圆角用 --r-tile（16px）：这是一个浮起的卡片，不是面板。 */}
+      <div className="bg-raised border border-line rounded-lg shadow-3 overflow-hidden scale-fade [animation:scaleFade_240ms_var(--ease-spring)]">
         {/* 封面：与网格卡走同一个渲染入口，卡片是拼贴的卡片在预览里
             也是拼贴 —— 同一本相册不能在两处是两个样子。 */}
         <div
-          className={`relative bg-bg-subtle ${
+          className={`relative bg-sunken ${
             /* 漫画侧也是一本书（装订边 + 竖版），与网格卡同一套语言。 */
             isComic ? "album-thumb--book book-binding relative rounded-sm shadow-[var(--cover-shadow)]" : ""
           }`}
@@ -191,8 +191,8 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent pointer-events-none" />
           {/* 视频角标：▶ + 数量 */}
           {data.coverKind === 'video' && (
-            <div className="absolute top-3 left-3 inline-flex items-center gap-1 bg-bg-elevated/90 text-fg text-caption font-medium px-2 py-0.5 rounded-md shadow-1">
-              <PlayFilledIcon size={10} className="text-accent" />
+            <div className="absolute top-3 left-3 inline-flex items-center gap-1 bg-raised/90 text-ink text-caption font-medium px-2 py-0.5 rounded-md shadow-1">
+              <PlayFilledIcon size={10} className="text-primary" />
               <span>视频</span>
             </div>
           )}
@@ -215,13 +215,13 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
             {/* 作品名压在卷名上方：漫画的卷名只写「第1卷」，这一卷
                 属于哪部作品看不出来 —— 与书封压条同一套写法。 */}
             {series && (
-              <div className="text-caption text-fg-muted truncate">{series}</div>
+              <div className="text-caption text-ink-2 truncate">{series}</div>
             )}
-            <div className="text-body font-medium text-fg leading-snug line-clamp-2">
+            <div className="text-body font-medium text-ink leading-snug line-clamp-2">
               {data.title}
             </div>
             {data.subtitle && (
-              <div className="text-caption text-fg-muted mt-1 truncate">{data.subtitle}</div>
+              <div className="text-caption text-ink-2 mt-1 truncate">{data.subtitle}</div>
             )}
           </div>
 
@@ -232,8 +232,8 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
               而库里的列表（首页的最近加入、集合页…）并不带这个字段。
               不知道的时候不能写「尚未浏览」——那本相册明明刚看过。 */}
           {data.variant === 'album' && lastSeenAt !== undefined && (
-            <div className="flex items-center gap-1.5 text-caption text-fg-muted">
-              <CalendarIcon size={11} className="text-fg-subtle shrink-0" />
+            <div className="flex items-center gap-1.5 text-caption text-ink-2">
+              <CalendarIcon size={11} className="text-ink-3 shrink-0" />
               <span className="truncate">
                 {lastSeenAt
                   ? `上次${copy.lastSeenVerb} ${timeAgo(lastSeenAt)}`
@@ -248,15 +248,15 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
               同一套。 */}
           {isComic && data.variant === 'album' && progressPct !== null && progressPct > 0 && (
             <div>
-              <div className="flex items-center justify-between text-caption text-fg-subtle mb-1">
+              <div className="flex items-center justify-between text-caption text-ink-3 mb-1">
                 <span className="inline-flex items-center gap-1">
                   <ReaderIcon size={10} />
                   <span>阅读进度</span>
                 </span>
                 <span className="tabular-nums">{progressPct}%</span>
               </div>
-              <div className="h-1 bg-bg-subtle rounded-full overflow-hidden">
-                <div className="h-full bg-accent" style={{ width: `${progressPct}%` }} />
+              <div className="h-1 bg-sunken rounded-full overflow-hidden">
+                <div className="h-full bg-primary" style={{ width: `${progressPct}%` }} />
               </div>
             </div>
           )}

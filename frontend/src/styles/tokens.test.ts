@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { COLOR_ROLES } from "./tokens";
+import { expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -27,26 +28,18 @@ const dark = block(':root[data-theme="dark"]');
 const comic = block(':root[data-mode="comic"]');
 
 const comicDark = block(':root[data-mode="comic"][data-theme="dark"]');
-const roles =
-  "bg bg-elevated bg-subtle bg-strong bg-media fg fg-muted fg-subtle line line-strong accent accent-contrast accent-soft signal signal-soft favorite success warning danger inverse-bg inverse-fg".split(
-    " ",
-  );
-it("纸白与暗房均定义全套颜色角色", () => {
-  for (const theme of [light, dark])
-    for (const role of roles) expect(token(theme, role)).toBeTruthy();
-  expect(css).not.toMatch(/--(?:rail|sidebar)-/);
-  expect(token(light, "signal")).toBe("#2f6bff");
-  expect(token(dark, "signal")).toBe("#7fa4ff");
+it("两套主题都定义全套颜色角色", () => {
+  for (const theme of [light, dark]) {
+    for (const role of COLOR_ROLES) expect(token(theme, role)).toBeTruthy();
+  }
 });
-it.each([
-  [comic, "#8a4f2d"],
-  [comicDark, "#d9a074"],
-])("漫画仅替换强调与书脊", (source, accent) => {
-  expect([...source.matchAll(/--([\w-]+):/g)].map((m) => m[1]).sort()).toEqual(
-    ["accent", "accent-contrast", "accent-soft", "cover-band"],
-  );
-  expect(token(source, "accent")).toBe(accent);
-  expect(token(source, "cover-band")).toContain("74 48 29");
+it.each([comic, comicDark])("漫画仅覆盖主按钮与封面四项", (source) => {
+  expect([...source.matchAll(/--([\w-]+):/g)].map((m) => m[1]).sort()).toEqual([
+    "brand-soft",
+    "cover-band",
+    "on-primary",
+    "primary",
+  ]);
 });
 function luminance(hex: string): number {
   const rgb = [1, 3, 5].map((index) => {
@@ -56,43 +49,34 @@ function luminance(hex: string): number {
   return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
 }
 
-describe.each([
-  ["纸白", light, "#f7f7f5"],
-  ["暗房", dark, "#0a0a0b"],
-])("%s", (_theme, source, background) => {
-  it("画布颜色符合方案，正文、辅助文字和主要操作达到 AA", () => {
-    expect(token(source, "bg")).toBe(background);
-    for (const [foreground, base] of [
-      ["fg", "bg"],
-      ["fg-muted", "bg-subtle"],
-      ["fg-subtle", "bg"],
-      ["accent-contrast", "accent"],
-      ["signal-text", "bg"],
-      ["danger-text", "bg"],
-      ["success-text", "bg"],
-      ["warning-text", "bg"],
-      ["favorite-text", "bg"],
-    ]) {
-      const pair = [
-        luminance(
-          token(source, foreground).startsWith("var(")
-            ? token(source, foreground.replace("-text", ""))
-            : token(source, foreground),
-        ),
-        luminance(token(source, base)),
-      ];
-      const ratio = (Math.max(...pair) + 0.05) / (Math.min(...pair) + 0.05);
-      expect(ratio, `${foreground} / ${base}`).toBeGreaterThanOrEqual(4.5);
-    }
-  });
+function color(theme: string, name: string) {
+  const value = token(theme, name);
+  const ref = /^var\(--([\w-]+)\)$/.exec(value);
+  return luminance(ref ? token(css, ref[1]) : value);
+}
+function contrast(theme: string, fg: string, bg: string) {
+  const a = color(theme, fg),
+    b = color(theme, bg);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+it.each([light, dark])("前景文字、选中与焦点达到对比度下限", (theme) => {
+  for (const [fg, bg] of [
+    ["ink", "canvas"],
+    ["ink-2", "sunken"],
+    ["ink-3", "app"],
+    ["ink-3", "raised"],
+    ["on-primary", "primary"],
+    ["on-accent", "accent"],
+    ["accent-text", "canvas"],
+    ["danger", "canvas"],
+    ["success", "canvas"],
+    ["warning", "canvas"],
+    ["favorite", "canvas"],
+    ["on-inverse", "inverse"],
+  ])
+    expect(contrast(theme, fg, bg), fg + "/" + bg).toBeGreaterThanOrEqual(4.5);
+  expect(contrast(theme, "accent", "canvas")).toBeGreaterThanOrEqual(3);
 });
-
-it.each([comic, comicDark])("漫画主按钮文字达到 AA", (source) => {
-  const pair = [
-    luminance(token(source, "accent")),
-    luminance(token(source, "accent-contrast")),
-  ];
-  expect(
-    (Math.max(...pair) + 0.05) / (Math.min(...pair) + 0.05),
-  ).toBeGreaterThanOrEqual(4.5);
+it.each([comic, comicDark])("漫画主按钮达到 AA", (theme) => {
+  expect(contrast(theme, "on-primary", "primary")).toBeGreaterThanOrEqual(4.5);
 });

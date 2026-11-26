@@ -33,10 +33,10 @@ export default function StoragePaths({
     absoluteError.code === "local_access_required";
 
   return (
-    <details className="group overflow-hidden rounded-xl border border-line bg-bg-elevated shadow-1">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-line bg-bg-subtle px-4 py-2.5 text-body font-medium text-fg transition-colors hover:bg-bg-subtle [&::-webkit-details-marker]:hidden">
+    <details className="group overflow-hidden rounded-xl border border-line bg-raised shadow-1">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 border-b border-line bg-sunken px-4 py-2.5 text-body font-medium text-ink transition-colors hover:bg-sunken [&::-webkit-details-marker]:hidden">
         <span>路径</span>
-        <span className="text-caption font-normal text-fg-muted group-open:hidden">
+        <span className="text-caption font-normal text-ink-2 group-open:hidden">
           相对缓存根目录 · 展开查看
         </span>
       </summary>
@@ -63,7 +63,7 @@ export default function StoragePaths({
         ) : null}
 
         <div className="mt-4 border-t border-line pt-3">
-          <h4 className="text-caption font-medium text-fg-muted">本机绝对路径</h4>
+          <h4 className="text-caption font-medium text-ink-2">本机绝对路径</h4>
           {absolute ? (
             <dl className="mt-2 grid gap-x-6 sm:grid-cols-2">
               <PathEntry label="缓存根目录" path={absolute.cacheRoot} />
@@ -88,16 +88,16 @@ export default function StoragePaths({
               )}
             </dl>
           ) : localOnly ? (
-            <p className="mt-2 text-caption leading-relaxed text-fg-subtle">
+            <p className="mt-2 text-caption leading-relaxed text-ink-3">
               完整路径只在运行服务的计算机上显示；此处列出的是相对缓存根目录的路径。
             </p>
           ) : absoluteError ? (
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-caption text-fg-subtle">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-caption text-ink-3">
               <span>本机绝对路径读取失败。</span>
               {onRetryAbsolute ? (
                 <button
                   type="button"
-                  className="inline-flex h-7 items-center rounded-md border border-line px-2.5 text-caption text-fg-muted transition-colors hover:bg-bg-subtle"
+                  className="inline-flex h-7 items-center rounded-md border border-line px-2.5 text-caption text-ink-2 transition-colors hover:bg-sunken"
                   onClick={onRetryAbsolute}
                 >
                   重试
@@ -114,8 +114,8 @@ export default function StoragePaths({
 function PathEntry({ label, path }: { label: string; path: string }) {
   return (
     <div className="min-w-0 border-t border-line py-2 first:border-0">
-      <dt className="text-caption text-fg-subtle">{label}</dt>
-      <dd className="mt-0.5 break-all font-mono text-caption leading-relaxed text-fg">
+      <dt className="text-caption text-ink-3">{label}</dt>
+      <dd className="mt-0.5 break-all font-mono text-caption leading-relaxed text-ink">
         {path || "未配置"}
       </dd>
     </div>

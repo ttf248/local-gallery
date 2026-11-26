@@ -98,7 +98,7 @@ describe("ImageInfoPanel", () => {
     expect(await screen.findByText("a.png")).toBeInTheDocument();
 
     const panel = screen.getByTestId("image-info-panel");
-    expect(panel.className).toContain("bg-overlay-panel");
+    expect(panel.className).toContain("bg-theater-surface");
     expect(panel.className).not.toContain("glass");
     expect(panel.className).not.toContain("border-line");
   });

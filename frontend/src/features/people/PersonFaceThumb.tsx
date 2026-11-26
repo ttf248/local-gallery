@@ -52,7 +52,7 @@ export default function PersonFaceThumb({
 
   return (
     <div
-      className={`relative shrink-0 overflow-hidden bg-bg-subtle ${
+      className={`relative shrink-0 overflow-hidden bg-sunken ${
         fill ? "h-full w-full " : ""
       }${className}`}
       style={
@@ -90,7 +90,7 @@ export default function PersonFaceThumb({
           testId={testId}
         />
       ) : (
-        <span className="flex h-full w-full items-center justify-center text-fg-subtle">
+        <span className="flex h-full w-full items-center justify-center text-ink-3">
           <PeopleIcon size={20} />
         </span>
       )}

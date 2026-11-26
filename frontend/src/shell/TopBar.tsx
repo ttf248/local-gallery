@@ -55,7 +55,7 @@ export function TopBar({
     <header
       data-testid="top-bar"
       className={cx(
-        "top-bar sticky top-0 z-topbar grid h-topbar shrink-0 items-center gap-2 border-b px-[var(--page-gutter)]",
+        "top-bar sticky top-0 z-topbar grid h-topbar shrink-0 items-center gap-2 border-b px-[var(--gutter)]",
         localSearch
           ? "grid-cols-[auto_minmax(0,1fr)_auto]"
           : "grid-cols-[1fr_auto_auto] lg:grid-cols-[1fr_auto_1fr]",
@@ -69,12 +69,12 @@ export function TopBar({
           </IconButton>
         )}
         {localSearch ? (
-          <h1 className="sr-only whitespace-nowrap text-title-3 sm:not-sr-only sm:mr-3">
+          <h1 className="sr-only whitespace-nowrap text-heading sm:not-sr-only sm:mr-3">
             {title}
           </h1>
         ) : (
           titleCollapsed && (
-            <span className="truncate text-title-3">
+            <span className="truncate text-heading">
               {title || routeTitle.split(" · ")[0]}
             </span>
           )
@@ -90,10 +90,10 @@ export function TopBar({
               aria-keyshortcuts="Control+K Meta+K /"
               data-command-trigger
               onClick={onSearch}
-              className="flex h-10 w-10 items-center justify-center gap-3 rounded-full text-fg-muted lg:w-[clamp(280px,32vw,520px)] lg:justify-start lg:bg-bg-subtle lg:px-4"
+              className="flex h-10 w-10 items-center justify-center gap-3 rounded-full text-ink-2 lg:w-[clamp(280px,32vw,520px)] lg:justify-start lg:bg-sunken lg:px-4"
             >
               <SearchIcon />
-              <span className="hidden flex-1 text-left text-callout lg:block">
+              <span className="hidden flex-1 text-left text-label lg:block">
                 {mode === "photo" ? "搜索相册、画面与文字" : "搜索作品与标签"}
               </span>
               <span className="hidden lg:block">

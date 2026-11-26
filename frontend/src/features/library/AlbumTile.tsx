@@ -439,11 +439,11 @@ function GridCard({
           longPressedRef.current = false;
         }}
         aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
-        className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
         <div
-          className={`album-tile__cover rounded-card transition duration-2 motion-safe:group-hover:-translate-y-0.5 [.album-tile:hover_&]:shadow-2 relative ${COVER_RATIO_CLASS[coverRatio]} bg-bg-subtle overflow-hidden${
-            showTitleOnCover ? " album-tile__cover--book book-binding rounded-[6px] shadow-[var(--cover-shadow)] transition duration-2 motion-safe:group-hover:-translate-y-1" : ""
+          className={`album-tile__cover rounded-lg transition duration-base motion-safe:group-hover:-translate-y-0.5 [.album-tile:hover_&]:shadow-2 relative ${COVER_RATIO_CLASS[coverRatio]} bg-sunken overflow-hidden${
+            showTitleOnCover ? " album-tile__cover--book book-binding rounded-[6px] shadow-[var(--cover-shadow)] transition duration-base motion-safe:group-hover:-translate-y-1" : ""
           }`}
           data-testid="card-cover"
         >
@@ -500,7 +500,7 @@ function GridCard({
                   封面下缘会互相干扰。书封形态把百分比放进封面
                   下方的说明行，与计数读在一起。 */}
               {!isFinished && !showTitleOnCover && (
-                <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-micro font-medium text-white shadow-1">
+                <div className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-caption font-medium text-white shadow-1">
                   <ReaderIcon size={11} className="shrink-0" />
                   <span className="tabular-nums">{progressPct}%</span>
                 </div>
@@ -519,7 +519,7 @@ function GridCard({
           {/* 标题印在封面上时，这里不再重复标题：同一句话在一张卡上
               说两遍，封面的书名会被下面的说明读成回声。 */}
           {!showTitleOnCover && (
-            <div className="album-tile__title [html[data-mode=comic]_.library-grid_&]:min-h-[calc(2_*_1.375em)] [html[data-mode=photo]_.library-grid_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.library-grid_&]:[line-clamp:1] [html[data-mode=photo]_.shelf_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.shelf_&]:[line-clamp:1] text-callout font-semibold text-fg truncate leading-snug transition-colors group-hover:text-accent">
+            <div className="album-tile__title [html[data-mode=comic]_.library-grid_&]:min-h-[calc(2_*_1.375em)] [html[data-mode=photo]_.library-grid_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.library-grid_&]:[line-clamp:1] [html[data-mode=photo]_.shelf_&]:[-webkit-line-clamp:1] [html[data-mode=photo]_.shelf_&]:[line-clamp:1] text-label font-semibold text-ink truncate leading-snug transition-colors group-hover:text-primary">
               <AlbumName name={label} />
             </div>
           )}
@@ -531,7 +531,7 @@ function GridCard({
           {hideMeta ? null : (
             <div
               className={`text-caption tabular-nums flex items-center gap-1.5 min-w-0 ${
-                showTitleOnCover ? "text-fg-muted" : "text-fg-muted mt-1"
+                showTitleOnCover ? "text-ink-2" : "text-ink-2 mt-1"
               }`}
             >
               <TypeChip variant={data.variant} />
@@ -550,11 +550,11 @@ function GridCard({
                         补充信息退回次要色，层级才分得开。 */}
                       {showTitleOnCover ? (
                         <>
-                          <span className="text-fg font-medium">
+                          <span className="text-ink font-medium">
                             {media.lead}
                           </span>
                           {media.rest && (
-                            <span className="text-fg-muted">
+                            <span className="text-ink-2">
                               {" "}
                               · {media.rest}
                             </span>
@@ -582,15 +582,15 @@ function GridCard({
                 progressPct > 0 &&
                 !isFinished && (
                   <>
-                    <span className="text-fg-subtle">·</span>
-                    <span className="text-accent font-medium shrink-0 whitespace-nowrap">
+                    <span className="text-ink-3">·</span>
+                    <span className="text-primary font-medium shrink-0 whitespace-nowrap">
                       已读 {progressPct}%
                     </span>
                   </>
                 )}
               {data.subtitle && (
                 <>
-                  <span className="text-fg-subtle">·</span>
+                  <span className="text-ink-3">·</span>
                   <span className="truncate">{data.subtitle}</span>
                 </>
               )}
@@ -599,22 +599,22 @@ function GridCard({
           {/* 多根来源 badge：与标签副标题独立，作为视觉小标签放在元数据行。
               单一媒体根下每张卡片都挂同一句来源是噪音，multiRoot 为 false 时隐藏。 */}
           {data.sourceName && multiRoot && !hideMeta && (
-            <div className="text-caption text-fg-subtle mt-0.5 inline-flex items-center gap-1">
+            <div className="text-caption text-ink-3 mt-0.5 inline-flex items-center gap-1">
               <FolderIcon size={10} className="shrink-0" />
               <span className="truncate">来自 {data.sourceName}</span>
             </div>
           )}
           {note && (
-            <div className="text-caption text-fg-muted mt-0.5 truncate">
+            <div className="text-caption text-ink-2 mt-0.5 truncate">
               {note}
             </div>
           )}
           {showLastSeen && data.lastSeenAt && (
             <div
-              className="text-caption text-fg-subtle mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
+              className="text-caption text-ink-3 mt-0.5 tabular-nums flex items-center gap-1.5 truncate"
               title={`上次 ${timeAgo(data.lastSeenAt)}`}
             >
-              <ClockIcon size={10} className="shrink-0 text-fg-subtle" />
+              <ClockIcon size={10} className="shrink-0 text-ink-3" />
               {isComicAlbum &&
                 data.progress &&
                 data.progress.total > 0 &&
@@ -624,7 +624,7 @@ function GridCard({
                       {cardCopy.positionVerb} {data.progress.index + 1} /{" "}
                       {data.progress.total}
                     </span>
-                    <span className="text-fg-subtle">·</span>
+                    <span className="text-ink-3">·</span>
                   </>
                 )}
               <span>上次 {timeAgo(data.lastSeenAt)}</span>
@@ -648,8 +648,8 @@ function GridCard({
         />
         {overlayAction}
         {data.coverKind === "video" && (
-          <div className="pointer-events-none inline-flex items-center gap-1 bg-bg-elevated/90 text-fg text-micro font-medium px-1.5 h-5 rounded shadow-1">
-            <PlayFilledIcon size={9} className="text-accent" />
+          <div className="pointer-events-none inline-flex items-center gap-1 bg-raised/90 text-ink text-caption font-medium px-1.5 h-5 rounded shadow-1">
+            <PlayFilledIcon size={9} className="text-primary" />
             {/* 时长未知时不要显示 "—"：一个破折号看起来像"读不出来 / 坏了"，
                 而不是"视频时长暂不可用"。只留播放图标。 */}
             {hasDuration && <span>{formatDuration(data.durationSec)}</span>}
@@ -728,7 +728,7 @@ function ReadChip() {
       className="inline-flex items-center gap-1 rounded-md bg-black/65 ring-1 ring-white/20 px-1.5 h-5 text-caption font-medium text-white shadow-1"
       title={title}
     >
-      <CheckIcon size={10} className="text-overlay-success" />
+      <CheckIcon size={10} className="text-theater-success" />
       <span>{title}</span>
     </span>
   );

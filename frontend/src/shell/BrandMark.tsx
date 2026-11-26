@@ -5,7 +5,7 @@ export function BrandMark() {
       width="28"
       height="28"
       viewBox="0 0 28 28"
-      className="shrink-0 rounded-sm bg-accent text-accent-contrast"
+      className="shrink-0 rounded-sm bg-primary text-on-primary"
       fill="none"
     >
       <path

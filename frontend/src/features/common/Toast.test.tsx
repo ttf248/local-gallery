@@ -25,7 +25,7 @@ describe("ToastViewport", () => {
       toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
     });
     const card = renderAt("/");
-    expect(card).toHaveClass("bg-inverse-bg");
+    expect(card).toHaveClass("bg-inverse");
     expect(card).toHaveAttribute("data-tone", "inverse");
   });
 
@@ -34,7 +34,7 @@ describe("ToastViewport", () => {
       toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
     });
     const card = renderAt("/comic/read/abc");
-    expect(card).toHaveClass("bg-inverse-bg");
+    expect(card).toHaveClass("bg-inverse");
     expect(card).toHaveAttribute("data-tone", "inverse");
   });
 
@@ -46,7 +46,7 @@ describe("ToastViewport", () => {
       immersiveOverlay: true,
     });
     const card = renderAt("/photo/albums/a_1");
-    expect(card).toHaveClass("bg-inverse-bg");
+    expect(card).toHaveClass("bg-inverse");
     expect(card).toHaveAttribute("data-tone", "inverse");
     useUIStore.setState({ immersiveOverlay: false });
   });

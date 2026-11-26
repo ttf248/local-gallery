@@ -106,7 +106,7 @@ export default function HelpOverlay({
       onClose={onClose}
       initialFocus={searchRef}
       data-tone={dark ? "reader" : undefined}
-      className={dark ? "bg-overlay-panel text-overlay-fg" : undefined}
+      className={dark ? "bg-theater-surface text-theater-fg" : undefined}
     >
       <SearchField
         ref={searchRef}
@@ -127,7 +127,7 @@ export default function HelpOverlay({
           {filteredGroups.map((group) => (
             <button
               key={group.title}
-              className="min-h-9 rounded-control px-3 text-left text-callout aria-pressed:bg-bg-subtle aria-pressed:text-fg"
+              className="min-h-9 rounded-md px-3 text-left text-label aria-pressed:bg-sunken aria-pressed:text-ink"
               aria-pressed={section === group.title}
               onClick={() =>
                 setSection(section === group.title ? "" : group.title)
@@ -139,7 +139,7 @@ export default function HelpOverlay({
         </nav>
         <div className="max-h-[55dvh] overflow-y-auto">
           {total === 0 && (
-            <p className="py-6 text-fg-muted">没有匹配「{q}」的快捷键</p>
+            <p className="py-6 text-ink-2">没有匹配「{q}」的快捷键</p>
           )}
           {filteredGroups
             .filter((group) => !section || group.title === section)
@@ -152,7 +152,7 @@ export default function HelpOverlay({
                 {group.items.map((shortcut) => (
                   <li
                     key={shortcut.id}
-                    className="flex items-center justify-between gap-2 text-callout"
+                    className="flex items-center justify-between gap-2 text-label"
                   >
                     <span>{describe(shortcut)}</span>
                     <Kbd keys={[shortcut.label]} />

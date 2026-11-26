@@ -219,11 +219,11 @@ export default function Recents({
               historyQuery.isLoading ||
               (history.length > 0 && nodesQuery.isLoading) ||
               historyFailed ? (
-                <p className="text-body text-fg-muted mt-2 tabular-nums">
+                <p className="text-body text-ink-2 mt-2 tabular-nums">
                   {cards.length > 0 ? (
                     <>
                       最近打开{" "}
-                      <span className="text-fg">
+                      <span className="text-ink">
                         {timeAgo(cards[0]?.lastSeenAt)}
                       </span>
                     </>
@@ -329,7 +329,7 @@ export default function Recents({
               recentSections.map((section) => (
                 <section key={section.title}>
                   {section.title && (
-                    <h2 className="py-3 text-title-3">{section.title}</h2>
+                    <h2 className="py-3 text-heading">{section.title}</h2>
                   )}
                   <AlbumGrid
                     items={section.items}

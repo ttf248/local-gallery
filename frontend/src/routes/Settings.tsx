@@ -264,7 +264,7 @@ export function SettingsView({ tab }: { tab: string }) {
         <Page className="page-shell settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="split">
           <PageHeader title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
           {prefsError || (
-            <div role="status" className="text-fg-muted text-body">
+            <div role="status" className="text-ink-2 text-body">
               正在加载设置…
             </div>
           )}
@@ -419,15 +419,15 @@ export function SettingsView({ tab }: { tab: string }) {
                 </div>
               </SettingsGroup>
               <SettingsGroup id="about" title="关于">
-                <div className="flex flex-wrap items-center gap-3 py-4 text-caption text-fg-muted">
-                  <span className="font-display text-fg">
+                <div className="flex flex-wrap items-center gap-3 py-4 text-caption text-ink-2">
+                  <span className="font-display text-ink">
                     Local Gallery · 本地画廊
                   </span>
                   <span>Web 版 · v{__APP_VERSION__}</span>
                   <span className="flex items-center gap-1.5">
                     <KeyboardIcon size={12} />
                     <span>按</span>
-                    <kbd className="font-mono px-1.5 py-0.5 rounded border border-line bg-bg-subtle text-fg-muted">
+                    <kbd className="font-mono px-1.5 py-0.5 rounded border border-line bg-sunken text-ink-2">
                       ?
                     </kbd>
                     <span>查看所有快捷键</span>
@@ -524,7 +524,7 @@ export function SettingsView({ tab }: { tab: string }) {
                     </SettingsRow>
                   </Group>
                 </div>
-                <p className="settings-note mt-3 text-caption leading-[1.6] text-fg-subtle">
+                <p className="settings-note mt-3 text-caption leading-[1.6] text-ink-3">
                   显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
                 </p>
               </SettingsGroup>
@@ -547,8 +547,8 @@ export function SettingsView({ tab }: { tab: string }) {
                   改成标题在上、内容在下的一整块。 */}
                 <div className="settings-block py-3 px-0">
                   <div>
-                    <span className="text-body text-fg">媒体库索引</span>
-                    <span className="block mt-0.5 text-caption text-fg-muted">
+                    <span className="text-body text-ink">媒体库索引</span>
+                    <span className="block mt-0.5 text-caption text-ink-2">
                       {manifest
                         ? `${manifest.statistics.albumCount} 本相册 · ${manifest.statistics.tagCount} 个标签${
                             manifest.scannedAt
@@ -725,7 +725,7 @@ function Group({
 }) {
   return (
     <div className="settings-group [@container_settings_(min-width:960px)]:[.settings-split>.settings-group_+_&]:border-l [@container_settings_(min-width:960px)]:[.settings-split>.settings-group_+_&]:border-l-line [@container_settings_(min-width:960px)]:[.settings-split>.settings-group_+_&]:pl-8">
-      <div className="settings-group__label [padding:12px_0_2px] text-caption font-medium text-fg-muted">{title}</div>
+      <div className="settings-group__label [padding:12px_0_2px] text-caption font-medium text-ink-2">{title}</div>
       <div className="settings-rows flex flex-col">{children}</div>
     </div>
   );
@@ -757,10 +757,10 @@ function NavRow({
     <SettingsRow
       label={
         <span className="flex min-w-0 items-center gap-2.5">
-          <entry.Icon size={15} className="shrink-0 text-fg-muted" />
+          <entry.Icon size={15} className="shrink-0 text-ink-2" />
           <span className="truncate">{entry.label}</span>
           {entry.locked && (
-            <span className="shrink-0 text-caption text-fg-subtle">固定显示</span>
+            <span className="shrink-0 text-caption text-ink-3">固定显示</span>
           )}
         </span>
       }
@@ -796,7 +796,7 @@ function NumberInput({
         aria-label="减少最近访问保留条数"
         disabled={disabled}
         onClick={() => onChange(Math.max(min, value - 1))}
-        className="w-8 h-8 text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors disabled:opacity-50"
+        className="w-8 h-8 text-ink-2 hover:bg-sunken hover:text-ink transition-colors disabled:opacity-50"
       >
         −
       </button>
@@ -807,7 +807,7 @@ function NumberInput({
         aria-label="增加最近访问保留条数"
         disabled={disabled}
         onClick={() => onChange(Math.min(max, value + 1))}
-        className="w-8 h-8 text-fg-muted hover:bg-bg-subtle hover:text-fg transition-colors disabled:opacity-50"
+        className="w-8 h-8 text-ink-2 hover:bg-sunken hover:text-ink transition-colors disabled:opacity-50"
       >
         +
       </button>

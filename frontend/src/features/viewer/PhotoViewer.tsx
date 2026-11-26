@@ -730,7 +730,7 @@ export default function PhotoViewer({
     <dialog
       ref={dialogRef}
       data-testid="photo-viewer"
-      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-theater-bg p-0 text-theater-fg backdrop:bg-transparent"
       onCancel={(event) => {
         event.preventDefault();
         if (!compareOpen) {
@@ -885,7 +885,7 @@ export default function PhotoViewer({
               />
             </div>
           ) : failed || current.undecodable ? (
-            <div className="px-6 text-center text-body text-overlay-fg">
+            <div className="px-6 text-center text-body text-theater-fg">
               <p>这张照片读不出来</p>
               <p className="my-2 text-caption">{current.name}</p>
               {albumHref && (
@@ -965,7 +965,7 @@ export default function PhotoViewer({
         </div>
 
         {showInfo && !isVideo && (
-          <div className="relative h-full w-[min(360px,75%)] shrink-0 overflow-auto bg-overlay-panel [&>aside]:static [&>aside]:h-full [&>aside]:w-full">
+          <div className="relative h-full w-[min(360px,75%)] shrink-0 overflow-auto bg-theater-surface [&>aside]:static [&>aside]:h-full [&>aside]:w-full">
             <ImageInfoPanel
               absPath={current.id}
               albumName={currentAlbumName}

@@ -32,7 +32,7 @@ export function MoreSheet({
             key={entry.key}
             to={entry.to}
             onClick={onClose}
-            className="flex h-[52px] items-center gap-3 rounded-control px-3 text-body hover:bg-bg-subtle"
+            className="flex h-[52px] items-center gap-3 rounded-md px-3 text-body hover:bg-sunken"
           >
             <entry.Icon size={20} />
             {entry.label}

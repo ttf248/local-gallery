@@ -177,7 +177,7 @@ export default function StateBackupPanel() {
     // 断点按视口算（sm）—— 备份卡在「数据」页签的宽列里，宽屏下够宽。
     <div className="p-4 space-y-4">
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-        <p className="text-body text-fg-muted">
+        <p className="text-body text-ink-2">
           备份收藏、最近访问、服务端偏好、阅读/播放活动、自定义封面、照片精选、人物分组与智能相册修正。不会备份人脸特征向量、媒体文件、服务配置或此浏览器的阅读器偏好。
         </p>
         <div className="flex flex-wrap items-start gap-3">
@@ -188,9 +188,9 @@ export default function StateBackupPanel() {
           >
             导出状态备份
           </button>
-          <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-accent">
+          <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-primary">
             <span className="btn btn-outline">选择备份文件</span>
-            <span className="block mt-2 text-caption text-fg-muted break-all">
+            <span className="block mt-2 text-caption text-ink-2 break-all">
               {fileName || "JSON 格式，最大 32 MB"}
             </span>
             <input
@@ -242,11 +242,11 @@ export default function StateBackupPanel() {
       )}
       {preview && (
         <>
-          <p className="text-caption text-fg-muted">
+          <p className="text-caption text-ink-2">
             恢复按类别覆盖，缺失资源记录保留；封面重新校验，失效项跳过。仅适用于相同媒体根身份与相对路径，移动目录或更换媒体根后暂不支持自动迁移映射。
           </p>
           {!preview.ready && (
-            <p className="text-caption text-fg-muted">
+            <p className="text-caption text-ink-2">
               当前库尚未扫描完成，自定义封面暂不可恢复。
             </p>
           )}
@@ -280,7 +280,7 @@ export default function StateBackupPanel() {
             ))}
           </div>
           {preview.skippedCovers > 0 && (
-            <p className="text-caption text-fg-muted">
+            <p className="text-caption text-ink-2">
               {preview.skippedCovers} 条封面无效，将跳过。
             </p>
           )}
@@ -294,7 +294,7 @@ export default function StateBackupPanel() {
         </>
       )}
       {pending && (
-        <p role="status" className="text-caption text-fg-muted">
+        <p role="status" className="text-caption text-ink-2">
           正在处理，请稍候…
         </p>
       )}
@@ -304,7 +304,7 @@ export default function StateBackupPanel() {
         </p>
       )}
       {notice && (
-        <p role="status" className="text-caption text-fg-muted">
+        <p role="status" className="text-caption text-ink-2">
           {notice}
         </p>
       )}

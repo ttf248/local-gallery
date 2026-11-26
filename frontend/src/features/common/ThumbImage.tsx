@@ -57,7 +57,7 @@ export default function ThumbImage({
     const showLabel = (displayWidth ?? 0) >= LABEL_MIN_WIDTH;
     return (
       <div
-        className={`flex flex-col items-center justify-center gap-1 bg-bg-subtle text-fg-subtle ${className}`}
+        className={`flex flex-col items-center justify-center gap-1 bg-sunken text-ink-3 ${className}`}
         role="img"
         aria-label={`${alt}（无法解码）`}
         title="无法解码"
@@ -75,7 +75,7 @@ export default function ThumbImage({
   if (failed) {
     return (
       <div
-        className={`flex items-center justify-center bg-bg-subtle text-fg-subtle ${className}`}
+        className={`flex items-center justify-center bg-sunken text-ink-3 ${className}`}
         role="img"
         aria-label={alt}
         title="缩略图不可用"

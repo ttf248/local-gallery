@@ -80,7 +80,7 @@ export default function PickShowcase<T extends { id: string }>({
           <figure key={item.id} className="group relative m-0 w-fit max-w-full">
             {/* 框：照片完整地摆在框里，多余的地方留白而不是裁掉。 */}
             <div
-              className="relative overflow-hidden rounded-card bg-bg-media shadow-2"
+              className="relative overflow-hidden rounded-lg bg-media shadow-2"
               style={{
                 width:
                   "clamp(" +
@@ -113,10 +113,10 @@ export default function PickShowcase<T extends { id: string }>({
                     ? `选择「${name(item)}」`
                     : `查看 ${name(item)}`
                 }
-                className="absolute inset-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
+                className="absolute inset-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
               />
               {selected ? (
-                <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-accent px-1.5 py-0.5 text-caption text-accent-contrast">
+                <span className="pointer-events-none absolute left-2 top-2 rounded-md bg-primary px-1.5 py-0.5 text-caption text-on-primary">
                   已选
                 </span>
               ) : null}
@@ -125,7 +125,7 @@ export default function PickShowcase<T extends { id: string }>({
                 onClick={() => onTogglePick(item)}
                 aria-label={`把 ${name(item)} 移出精选`}
                 title="移出精选"
-                className="hover-reveal absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-bg-elevated text-favorite shadow-1 group-hover:opacity-100 group-focus-within:opacity-100"
+                className="hover-reveal absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-raised text-favorite shadow-1 group-hover:opacity-100 group-focus-within:opacity-100"
               >
                 <StarIcon size={18} filled />
               </button>
@@ -136,7 +136,7 @@ export default function PickShowcase<T extends { id: string }>({
                 眼睛看到的是「这本相册里的、2024年1月2日的那张」。 */}
             <figcaption className="mt-2 min-w-0">
               <span
-                className="block truncate text-callout font-semibold text-fg"
+                className="block truncate text-label font-semibold text-ink"
                 title={
                   hint
                     ? `${origin ?? name(item)} · ${hint}`
@@ -146,7 +146,7 @@ export default function PickShowcase<T extends { id: string }>({
                 {origin ?? name(item)}
               </span>
               {takenAt ? (
-                <span className="block truncate text-caption text-fg-muted">
+                <span className="block truncate text-caption text-ink-2">
                   {takenAt}
                 </span>
               ) : null}

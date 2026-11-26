@@ -181,7 +181,7 @@ export default function SearchResults() {
               本机画面模型未就绪，这次只能按图片里的文字找。
               <Link
                 to="/tasks/storage"
-                className="ml-1 text-accent hover:underline"
+                className="ml-1 text-primary hover:underline"
               >
                 查看任务中心
               </Link>
@@ -199,7 +199,7 @@ export default function SearchResults() {
             />
           </div>
           {content.status && (
-            <p className="shrink-0 bg-bg py-1 text-caption tabular-nums text-fg-subtle">
+            <p className="shrink-0 bg-canvas py-1 text-caption tabular-nums text-ink-3">
               {content.status.coverage.indexed.toLocaleString()} /{" "}
               {content.status.coverage.total.toLocaleString()} 张已索引
             </p>
@@ -217,12 +217,12 @@ export default function SearchResults() {
           ) : null}
 
           {search.isFetching && cards.length === 0 ? (
-            <p className="text-body text-fg-muted">正在搜索…</p>
+            <p className="text-body text-ink-2">正在搜索…</p>
           ) : null}
 
           {cards.length > 0 ? (
             <>
-              <p className="text-caption text-fg-subtle mb-1 tabular-nums">
+              <p className="text-caption text-ink-3 mb-1 tabular-nums">
                 {cards.length < total
                   ? `显示 ${cards.length} / ${total} 项`
                   : `共 ${total} 项`}
@@ -231,10 +231,10 @@ export default function SearchResults() {
                 <section key={group.key} className="mb-5">
                   {group.label ? (
                     <h2 className="mb-3 flex items-baseline gap-2">
-                      <span className="text-body font-medium text-fg">
+                      <span className="text-body font-medium text-ink">
                         {group.label}
                       </span>
-                      <span className="text-caption tabular-nums text-fg-subtle">
+                      <span className="text-caption tabular-nums text-ink-3">
                         {group.items.length} 项
                       </span>
                     </h2>

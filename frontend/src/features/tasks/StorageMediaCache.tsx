@@ -62,11 +62,11 @@ export default function StorageMediaCache({
   onClearAll,
 }: Props) {
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-bg-elevated shadow-1">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-bg-subtle px-4 py-2.5">
+    <section className="overflow-hidden rounded-xl border border-line bg-raised shadow-1">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b border-line bg-sunken px-4 py-2.5">
         <div className="min-w-0">
-          <h3 className="text-body font-medium text-fg">派生缓存</h3>
-          <p className="mt-0.5 text-caption tabular-nums text-fg-subtle">
+          <h3 className="text-body font-medium text-ink">派生缓存</h3>
+          <p className="mt-0.5 text-caption tabular-nums text-ink-3">
             {loading
               ? "计算中…"
               : totalBytes === undefined
@@ -80,14 +80,14 @@ export default function StorageMediaCache({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-fg-muted transition-colors hover:bg-bg-subtle disabled:opacity-50"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-ink-2 transition-colors hover:bg-sunken disabled:opacity-50"
             onClick={onRefresh}
             disabled={refreshing}
             title="重新扫描磁盘计算缓存占用"
             aria-label="刷新派生缓存占用"
           >
             {refreshing ? (
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-fg-muted border-t-transparent" />
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-ink-2 border-t-transparent" />
             ) : (
               <RefreshIcon size={11} />
             )}
@@ -111,27 +111,27 @@ export default function StorageMediaCache({
           const canClear = entry.available && entry.bytes > 0;
           return (
             <li key={item.scope} className="flex items-center gap-3 px-4 py-2">
-              <span className="w-20 shrink-0 text-caption text-fg-muted">
+              <span className="w-20 shrink-0 text-caption text-ink-2">
                 {item.label}
               </span>
-              <span className="min-w-0 flex-1 font-mono text-caption tabular-nums text-fg">
+              <span className="min-w-0 flex-1 font-mono text-caption tabular-nums text-ink">
                 {entry.available ? formatSize(entry.bytes) : "—"}
               </span>
-              <span className="w-16 shrink-0 text-right text-caption tabular-nums text-fg-subtle">
+              <span className="w-16 shrink-0 text-right text-caption tabular-nums text-ink-3">
                 {entry.available
                   ? `${entry.fileCount.toLocaleString()} 个`
                   : ""}
               </span>
               <button
                 type="button"
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-fg-subtle transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-ink-3 transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
                 disabled={!canClear || clearing === item.scope}
                 onClick={() => onClear(item.scope)}
                 title={canClear ? `清空 ${item.label} 缓存` : "暂无内容"}
                 aria-label={`清空 ${item.label} 缓存`}
               >
                 {clearing === item.scope ? (
-                  <span className="inline-block h-2 w-2 animate-spin rounded-full border-2 border-fg-muted border-t-transparent" />
+                  <span className="inline-block h-2 w-2 animate-spin rounded-full border-2 border-ink-2 border-t-transparent" />
                 ) : (
                   <TrashIcon size={10} />
                 )}
@@ -142,7 +142,7 @@ export default function StorageMediaCache({
       </ul>
 
       <details className="group border-t border-line px-4 py-2.5">
-        <summary className="cursor-pointer list-none text-caption text-fg-muted transition-colors hover:text-fg [&::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer list-none text-caption text-ink-2 transition-colors hover:text-ink [&::-webkit-details-marker]:hidden">
           重建渲染缓存（缩略图 / 预览图）
         </summary>
         <div className="mt-3">

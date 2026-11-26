@@ -943,7 +943,7 @@ test("主题令牌在明暗模式下保持边框及透明背景", async ({ page 
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await expect(root).toHaveAttribute("data-theme", theme);
-    const [bg, elevated, subtle, fg] = await renderedColors(root, ["--bg", "--bg-elevated", "--bg-subtle", "--fg"]);
+    const [bg, elevated, subtle, fg] = await renderedColors(root, ["--app", "--raised", "--sunken", "--ink"]);
     expect(await renderedColors(rail, ["background-color"])).toEqual([bg]);
     expect(await renderedColors(selected, ["background-color", "color"])).toEqual([elevated, fg]);
     expect(await renderedColors(page.getByRole("button", { name: "打开命令面板" }), ["background-color"])).toEqual([subtle]);
@@ -1840,8 +1840,8 @@ for (const mode of ["grid", "list"] as const) {
             theme,
           );
           const expected = await renderedColors(page.locator("html"), [
-            "--fg",
-            "--bg-elevated",
+            "--ink",
+            "--raised",
           ]);
           await expect
             .poll(() => renderedColors(dialog, ["color", "background-color"]))

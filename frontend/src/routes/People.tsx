@@ -161,13 +161,13 @@ function PeopleList() {
     <div className="h-full overflow-y-auto pb-12">
       <div className="page-shell">
         <header className="flex items-center justify-between gap-3 pt-5">
-          <h1 className="text-title-1 font-semibold">人物相册</h1>
+          <h1 className="text-display font-semibold">人物相册</h1>
           <details className="relative">
             <summary className="btn btn-sm btn-outline cursor-pointer">
               管理
             </summary>
-            <div className="absolute right-0 z-20 mt-2 grid w-52 gap-2 rounded-card border border-line bg-bg-elevated p-3 shadow-1">
-              <details className="text-caption text-fg-muted">
+            <div className="absolute right-0 z-20 mt-2 grid w-52 gap-2 rounded-lg border border-line bg-raised p-3 shadow-1">
+              <details className="text-caption text-ink-2">
                 <summary className="cursor-pointer py-1">人物分组说明</summary>
                 <p className="mt-1">
                   照片按本机识别的人脸相似度分组。姓名和合并关系由你确认。
@@ -182,7 +182,7 @@ function PeopleList() {
               <Link className="btn btn-sm btn-outline" to="/tasks/plan">
                 人物分析设置
               </Link>
-              <label className="flex items-center gap-2 text-caption text-fg-muted">
+              <label className="flex items-center gap-2 text-caption text-ink-2">
                 <input
                   type="checkbox"
                   checked={includeHidden}
@@ -251,7 +251,7 @@ function PeopleList() {
                 onClick={() => setActiveTab("common")}
               >
                 常见人物{" "}
-                <span className="ml-1 text-fg-subtle">
+                <span className="ml-1 text-ink-3">
                   {totalGroups.toLocaleString()}
                 </span>
               </PeopleTab>
@@ -260,7 +260,7 @@ function PeopleList() {
                 onClick={() => setActiveTab("matches")}
               >
                 待确认匹配{" "}
-                <span className="ml-1 text-fg-subtle">
+                <span className="ml-1 text-ink-3">
                   {matches.data ? totalSources.toLocaleString() : ""}
                 </span>
               </PeopleTab>
@@ -269,7 +269,7 @@ function PeopleList() {
                 onClick={() => setActiveTab("groupPhotos")}
               >
                 合照候选{" "}
-                <span className="ml-1 text-fg-subtle">
+                <span className="ml-1 text-ink-3">
                   {groupPhotoCandidates.data
                     ? totalPhotoCandidates.toLocaleString()
                     : ""}
@@ -298,7 +298,7 @@ function PeopleList() {
           {activeTab === "common" ? (
             <>
               {sort === "review" && (
-                <p className="mb-3 text-caption text-fg-muted">
+                <p className="mb-3 text-caption text-ink-2">
                   按组内相似度和检测质量排序，这些数值不代表身份概率。
                 </p>
               )}
@@ -316,7 +316,7 @@ function PeopleList() {
                     return (
                       section.length > 0 && (
                         <section key={String(confirmed)}>
-                          <h2 className="mb-3 text-title-3">
+                          <h2 className="mb-3 text-heading">
                             {confirmed ? "已确认" : "待确认"}
                           </h2>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
@@ -343,7 +343,7 @@ function PeopleList() {
           ) : null}
           {activeTab === "matches" ? (
             <>
-              <p className="mb-4 text-caption text-fg-muted">
+              <p className="mb-4 text-caption text-ink-2">
                 每条建议都需要你打开照片确认后再合并。相似度、差值和照片数只描述当前模型的线索，不是身份概率。
               </p>
               {matches.isError ? (
@@ -388,7 +388,7 @@ function PeopleList() {
           ) : null}
           {activeTab === "groupPhotos" ? (
             <>
-              <p className="mb-4 text-caption text-fg-muted">
+              <p className="mb-4 text-caption text-ink-2">
                 只在合照中出现的组单独列出。判定参考检测脸数与脸部相对画面尺寸；确认保留后会固定为独立人物，不会自动合并。
               </p>
               {groupPhotoCandidates.isError ? (
@@ -444,8 +444,8 @@ function PeopleTab({
       onClick={onClick}
       className={`rounded-full border px-4 py-2 text-caption transition-colors ${
         active
-          ? "border-line-strong bg-bg-elevated text-fg"
-          : "border-line text-fg-muted hover:text-fg"
+          ? "border-line-strong bg-raised text-ink"
+          : "border-line text-ink-2 hover:text-ink"
       }`}
     >
       {children}
@@ -502,18 +502,18 @@ function MatchSuggestionCard({
   onRetain: () => void;
 }) {
   return (
-    <article className="overflow-hidden rounded-xl border border-line bg-bg-elevated">
+    <article className="overflow-hidden rounded-xl border border-line bg-raised">
       <div className="grid gap-4 p-4 md:grid-cols-[minmax(180px,0.7fr)_minmax(0,1.6fr)]">
         <div>
-          <p className="mb-2 text-caption text-fg-muted">待确认的人物组</p>
+          <p className="mb-2 text-caption text-ink-2">待确认的人物组</p>
           <PersonReviewImage person={item.source} />
           <Link
-            className="mt-3 inline-block font-medium text-fg hover:underline"
+            className="mt-3 inline-block font-medium text-ink hover:underline"
             to={peopleRoute(item.source.id)}
           >
             {item.source.name}
           </Link>
-          <p className="mt-1 text-caption text-fg-muted">
+          <p className="mt-1 text-caption text-ink-2">
             {item.source.photoCount.toLocaleString()} 张照片 ·{" "}
             {item.source.faceCount.toLocaleString()} 张脸
           </p>
@@ -527,9 +527,9 @@ function MatchSuggestionCard({
           </button>
         </div>
         <div className="min-w-0">
-          <h2 className="font-display text-body text-fg">可能的匹配对象</h2>
+          <h2 className="font-display text-body text-ink">可能的匹配对象</h2>
           {item.candidates.length === 0 ? (
-            <p className="mt-3 rounded-lg bg-bg-subtle p-4 text-caption text-fg-muted">
+            <p className="mt-3 rounded-lg bg-sunken p-4 text-caption text-ink-2">
               当前没有达到提示门槛的候选。你可以先保留为独立人物，之后再从人物详情检查。
             </p>
           ) : (
@@ -543,17 +543,17 @@ function MatchSuggestionCard({
                     <PersonReviewImage person={candidate.person} compact />
                     <div className="min-w-0 flex-1">
                       <Link
-                        className="font-medium text-fg hover:underline"
+                        className="font-medium text-ink hover:underline"
                         to={peopleRoute(candidate.person.id)}
                       >
                         {candidate.person.name}
                       </Link>
-                      <p className="mt-1 text-caption text-fg-muted">
+                      <p className="mt-1 text-caption text-ink-2">
                         {candidate.person.photoCount.toLocaleString()} 张照片 ·
                         特征相似度 {candidate.similarity.toFixed(3)} · 差值{" "}
                         {candidate.margin.toFixed(3)}
                       </p>
-                      <p className="mt-1 text-caption text-fg-subtle">
+                      <p className="mt-1 text-caption text-ink-3">
                         跨照互证 {candidate.independentPhotoPairs} 对 ·
                         源/目标照片证据 {candidate.sourceEvidencePhotos}/
                         {candidate.targetEvidencePhotos}
@@ -609,7 +609,7 @@ function MatchRiskNote({ candidate }: { candidate: PersonMatchCandidate }) {
       ? "text-danger"
       : candidate.risk === "medium"
         ? "text-warning"
-        : "text-fg-subtle";
+        : "text-ink-3";
   const headline =
     candidate.risk === "high"
       ? "证据薄弱，建议逐张核对后再决定。"
@@ -648,7 +648,7 @@ function MatchEvidenceStrip({
   const visible = expanded ? evidence : evidence.slice(0, 4);
   return (
     <div className="mt-3">
-      <p className="text-caption text-fg-muted">{label}</p>
+      <p className="text-caption text-ink-2">{label}</p>
       <div className="mt-1 flex flex-wrap gap-2">
         {visible.map((item) => (
           <EvidenceThumbnail
@@ -679,7 +679,7 @@ function EvidenceThumbnail({ evidence }: { evidence: PersonMatchEvidence }) {
     96,
   );
   return (
-    <figure className="relative h-24 w-24 overflow-hidden rounded-md bg-bg-subtle">
+    <figure className="relative h-24 w-24 overflow-hidden rounded-md bg-sunken">
       <RenditionImage
         fileId={evidence.resourceId}
         alt=""
@@ -690,7 +690,7 @@ function EvidenceThumbnail({ evidence }: { evidence: PersonMatchEvidence }) {
         <span
           aria-hidden="true"
           data-testid="people-match-evidence-box"
-          className="absolute rounded border-2 border-white shadow-[0_0_0_2px_var(--overlay-bg)]"
+          className="absolute rounded border-2 border-white shadow-[0_0_0_2px_var(--theater-bg)]"
           style={style}
         />
       ) : null}
@@ -714,18 +714,18 @@ function GroupPhotoCandidateCard({
 }) {
   const { person, stats } = candidate;
   return (
-    <article className="overflow-hidden rounded-xl border border-line bg-bg-elevated">
+    <article className="overflow-hidden rounded-xl border border-line bg-raised">
       <Link className="group block" to={peopleRoute(person.id)}>
         <PersonReviewImage person={person} wide />
         <div className="p-4">
-          <h2 className="truncate font-display text-body text-fg">
+          <h2 className="truncate font-display text-body text-ink">
             {person.name}
           </h2>
-          <p className="mt-1 text-caption text-fg-muted">
+          <p className="mt-1 text-caption text-ink-2">
             {person.photoCount.toLocaleString()} 张合照 ·{" "}
             {person.faceCount.toLocaleString()} 张脸
           </p>
-          <p className="mt-2 text-caption text-fg-subtle">
+          <p className="mt-2 text-caption text-ink-3">
             相对脸部尺寸 P10{" "}
             {stats.relativeFaceSizeP10 > 0
               ? `${(stats.relativeFaceSizeP10 * 100).toFixed(1)}%`
@@ -763,7 +763,7 @@ function PersonReviewImage({
       ? "aspect-[1.7/1] w-full"
       : "aspect-[1.7/1] w-full rounded-lg";
   return (
-    <div className={`overflow-hidden bg-bg-subtle ${imageClass}`}>
+    <div className={`overflow-hidden bg-sunken ${imageClass}`}>
       {person.coverResourceId ? (
         <RenditionImage
           fileId={person.coverResourceId}
@@ -780,7 +780,7 @@ function PersonCard({ person }: { person: PersonGroup }) {
   return (
     <Link
       to={peopleRoute(person.id)}
-      className="group block min-w-0 rounded-card text-center"
+      className="group block min-w-0 rounded-lg text-center"
     >
       <span className="mx-auto block size-28 xl:size-36 overflow-hidden rounded-full ring-1 ring-line">
         <PersonFaceThumb
@@ -790,10 +790,10 @@ function PersonCard({ person }: { person: PersonGroup }) {
           className="size-full"
         />
       </span>
-      <h3 className="mt-2 truncate text-callout font-semibold">
+      <h3 className="mt-2 truncate text-label font-semibold">
         {person.name}
       </h3>
-      <p className="text-caption text-fg-muted">
+      <p className="text-caption text-ink-2">
         <span>{person.photoCount.toLocaleString()} 张照片</span>
         {person.hidden ? " · 已隐藏" : ""}
       </p>
@@ -931,7 +931,7 @@ function PersonAlbum({ personId }: { personId: string }) {
 
   if (query.isError || (!person && !query.isLoading)) {
     return (
-      <div className="page-shell py-12 text-body text-fg-muted">
+      <div className="page-shell py-12 text-body text-ink-2">
         人物分组已失效或照片加载失败。
         <Link className="ml-1 underline" to={homeRoute("photo")}>
           回照片库
@@ -1049,7 +1049,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           复核信息
         </button>
         {showReview && (
-          <p className="my-2 text-caption text-fg-muted">
+          <p className="my-2 text-caption text-ink-2">
             {quality
               ? `锚点 P10 ${quality.anchorP10.toFixed(3)} · 中心 P10 ${quality.centroidP10.toFixed(3)} · 检测 P10 ${quality.detectionP10.toFixed(3)}`
               : review.isLoading
@@ -1058,7 +1058,7 @@ function PersonAlbum({ personId }: { personId: string }) {
           </p>
         )}
         {choosing && (
-          <section className="my-3 max-h-56 overflow-auto rounded-card border border-line p-3">
+          <section className="my-3 max-h-56 overflow-auto rounded-lg border border-line p-3">
             <div className="mb-3 flex gap-2">
               <button className="btn btn-sm" onClick={() => choose.mutate("")}>
                 恢复自动精选
@@ -1099,10 +1099,10 @@ function PersonAlbum({ personId }: { personId: string }) {
       </div>
       <div className="page-shell shrink-0 space-y-3 border-b border-line pb-3">
         {showPersonFaceBoxes ? (
-          <p className="flex items-center gap-2 text-caption text-fg-muted">
+          <p className="flex items-center gap-2 text-caption text-ink-2">
             <span
               aria-hidden="true"
-              className="h-4 w-4 shrink-0 rounded border-2 border-white bg-bg-subtle shadow-[0_0_0_2px_var(--overlay-bg)]"
+              className="h-4 w-4 shrink-0 rounded border-2 border-white bg-sunken shadow-[0_0_0_2px_var(--theater-bg)]"
             />
             照片框线标出属于「{person?.name ?? "当前人物"}
             」分组的人脸；合照里未框住的人脸不在本组。
@@ -1120,7 +1120,7 @@ function PersonAlbum({ personId }: { personId: string }) {
         </div>
         {faces.length > 0 ? (
           <details>
-            <summary className="cursor-pointer text-caption text-fg-muted">
+            <summary className="cursor-pointer text-caption text-ink-2">
               拆分选中的人脸（当前已加载照片）
             </summary>
             <div className="mt-2 grid max-h-40 grid-cols-1 gap-x-4 gap-y-1 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
@@ -1131,7 +1131,7 @@ function PersonAlbum({ personId }: { personId: string }) {
                 return (
                   <label
                     key={face.key}
-                    className="flex items-center gap-2 truncate text-caption text-fg"
+                    className="flex items-center gap-2 truncate text-caption text-ink"
                   >
                     <input
                       type="checkbox"
@@ -1211,7 +1211,7 @@ function PersonAlbum({ personId }: { personId: string }) {
                       <span
                         key={face.key}
                         data-testid="person-face-highlight"
-                        className="absolute rounded border-2 border-white shadow-[0_0_0_2px_var(--overlay-bg)]"
+                        className="absolute rounded border-2 border-white shadow-[0_0_0_2px_var(--theater-bg)]"
                         style={style}
                       />
                     ) : null;

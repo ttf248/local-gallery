@@ -102,22 +102,22 @@ export default function CacheRebuildPanel() {
       : 0;
 
   return (
-    <section aria-labelledby="cache-rebuild-heading" className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated">
+    <section aria-labelledby="cache-rebuild-heading" className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised">
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="cache-rebuild-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
+          <h2 id="cache-rebuild-heading" className="tasks-section__title font-display text-body font-semibold text-ink">
             缓存重建
           </h2>
         </div>
       </div>
       <div className="tasks-section__body mt-3 space-y-4">
-        <p className="text-body text-fg-muted">
+        <p className="text-body text-ink-2">
           渲染图是懒生成的：清空之后要重新生成，否则第一次打开每一页都要现算，
           整页图片会卡住。重建在后台跑，有进度也能中途取消。
         </p>
 
         <fieldset className="space-y-2">
-          <legend className="text-caption text-fg-muted">要重建的缓存</legend>
+          <legend className="text-caption text-ink-2">要重建的缓存</legend>
           <div className="flex flex-wrap gap-4">
             {(["thumbs", "previews"] as CacheRebuildScope[]).map((scope) => (
               <label key={scope} className="flex items-center gap-2 text-body">
@@ -131,7 +131,7 @@ export default function CacheRebuildPanel() {
               </label>
             ))}
           </div>
-          <p className="text-caption text-fg-muted">
+          <p className="text-caption text-ink-2">
             预览图按 1280 宽生成，本机一万三千多项约合 3.3GB
             磁盘，只有确实需要大图时才值得。 冷重建按本机实测：缩略图约每秒 20
             张，预览图约每秒 10 张 —— 满库要十分钟到二十多分钟，
@@ -167,7 +167,7 @@ export default function CacheRebuildPanel() {
         {rebuild.isRunning && progress && (
           <div className="space-y-2" data-testid="cache-rebuild-progress">
             <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-bg-subtle"
+              className="h-1.5 w-full overflow-hidden rounded-full bg-sunken"
               role="progressbar"
               aria-valuenow={percent}
               aria-valuemin={0}
@@ -175,11 +175,11 @@ export default function CacheRebuildPanel() {
               aria-label="缓存重建进度"
             >
               <div
-                className="h-full rounded-full bg-accent transition-[width]"
+                className="h-full rounded-full bg-primary transition-[width]"
                 style={{ width: `${percent}%` }}
               />
             </div>
-            <p className="text-caption text-fg-muted tabular-nums">
+            <p className="text-caption text-ink-2 tabular-nums">
               {progress.scopes.map((scope) => SCOPE_LABEL[scope]).join(" + ")}
               {" · "}
               {progress.done} / {progress.total}
@@ -200,7 +200,7 @@ export default function CacheRebuildPanel() {
           </p>
         )}
         {rebuild.isCancelled && (
-          <p className="text-caption text-fg-muted">重建已取消</p>
+          <p className="text-caption text-ink-2">重建已取消</p>
         )}
         {rebuild.isError && (
           <p className="text-caption text-danger">

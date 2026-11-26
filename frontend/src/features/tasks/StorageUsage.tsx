@@ -49,7 +49,7 @@ export default function StorageUsage({
       label: "媒体派生缓存",
       bytes: mediaBytes,
       count: `${mediaFileCount.toLocaleString()} 个文件`,
-      shade: "bg-signal",
+      shade: "bg-accent",
     },
     {
       label: "AI 分析产物",
@@ -66,13 +66,13 @@ export default function StorageUsage({
   ];
 
   return (
-    <div className="ui-surface border border-line rounded-tile bg-bg-elevated touch:[&_button]:min-h-11 touch:[&_button]:min-w-11 overflow-hidden">
+    <div className="ui-surface border border-line rounded-tile bg-raised touch:[&_button]:min-h-11 touch:[&_button]:min-w-11 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="font-mono text-title-3 font-medium tabular-nums text-fg">
+          <span className="font-mono text-heading font-medium tabular-nums text-ink">
             {formatSize(totalBytes)}
           </span>
-          <span className="text-caption tabular-nums text-fg-subtle">
+          <span className="text-caption tabular-nums text-ink-3">
             合计 · {totalFiles.toLocaleString()} 个文件
           </span>
         </div>
@@ -81,11 +81,11 @@ export default function StorageUsage({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-caption text-fg-muted transition-colors hover:bg-bg-subtle hover:text-fg disabled:opacity-50"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-caption text-ink-2 transition-colors hover:bg-sunken hover:text-ink disabled:opacity-50"
             title="重新扫描磁盘计算占用"
           >
             {refreshing ? (
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-fg-muted border-t-transparent" />
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-ink-2 border-t-transparent" />
             ) : (
               <RefreshIcon size={11} />
             )}
@@ -96,7 +96,7 @@ export default function StorageUsage({
 
       <div className="px-4 py-3">
         <div
-          className="task-storage-meter flex h-2 overflow-hidden rounded-full bg-bg-strong"
+          className="task-storage-meter flex h-2 overflow-hidden rounded-full bg-sunken-strong"
           role="img"
           aria-label={segments
             .map((segment) => `${segment.label} ${formatSize(segment.bytes)}`)
@@ -116,7 +116,7 @@ export default function StorageUsage({
         <dl className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-3">
           {segments.map((segment) => (
             <div key={segment.label}>
-              <dt className="flex items-center gap-2 text-caption text-fg-muted">
+              <dt className="flex items-center gap-2 text-caption text-ink-2">
                 <span
                   aria-hidden="true"
                   className={`h-2 w-2 shrink-0 rounded-full ${segment.shade}`}
@@ -124,10 +124,10 @@ export default function StorageUsage({
                 {segment.label}
               </dt>
               <dd className="mt-1 flex flex-wrap items-baseline gap-x-2">
-                <span className="font-mono text-body tabular-nums text-fg">
+                <span className="font-mono text-body tabular-nums text-ink">
                   {formatSize(segment.bytes)}
                 </span>
-                <span className="text-caption tabular-nums text-fg-subtle">
+                <span className="text-caption tabular-nums text-ink-3">
                   {segment.count}
                 </span>
               </dd>

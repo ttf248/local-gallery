@@ -214,16 +214,16 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
   const status = (
     <div className="flex items-baseline gap-2.5 flex-wrap">
       {favoritesQuery.isLoading ? (
-        <p className="text-body text-fg-muted tabular-nums">正在加载收藏…</p>
+        <p className="text-body text-ink-2 tabular-nums">正在加载收藏…</p>
       ) : favoritesFailed && favorites.length === 0 ? (
-        <p className="text-body text-fg-muted tabular-nums">收藏暂不可用</p>
+        <p className="text-body text-ink-2 tabular-nums">收藏暂不可用</p>
       ) : cards.length === 0 ? (
-        <p className="text-body text-fg-muted tabular-nums">
+        <p className="text-body text-ink-2 tabular-nums">
           {favoritesCount} 项
         </p>
       ) : null}
       {missingCount > 0 && (
-        <span className="text-caption text-fg-subtle">
+        <span className="text-caption text-ink-3">
           其中 {missingCount} 项暂时找不到
         </span>
       )}
@@ -300,8 +300,8 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
           {suggestions.length > 0 && (
             <section className="page-shell pb-14">
               <div className="flex items-baseline gap-3 flex-wrap mb-4">
-                <h2 className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">从这里挑一个收藏</h2>
-                <span className="section-meta text-caption leading-[1.45] text-fg-muted">点封面右上角的星标</span>
+                <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">从这里挑一个收藏</h2>
+                <span className="section-meta text-caption leading-[1.45] text-ink-2">点封面右上角的星标</span>
               </div>
               <div className="shelf flex items-start gap-3.5 overflow-x-auto [overscroll-behavior-x:contain] [scroll-snap-type:x_proximity] pb-1.5 [&>*]:[scroll-snap-align:start]">
                 {suggestions.map((card) => (

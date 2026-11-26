@@ -37,14 +37,14 @@ export const EmptyState = forwardRef<HTMLElement, Props>(function EmptyState(
     >
       <h2
         className={cx(
-          size === "page" ? "text-title-2" : "text-title-3",
+          size === "page" ? "text-title" : "text-heading",
           tone === "error" && "text-danger",
         )}
       >
         {title}
       </h2>
       {description && (
-        <p className="max-w-[440px] text-body text-fg-muted">{description}</p>
+        <p className="max-w-[440px] text-body text-ink-2">{description}</p>
       )}
       {action}
     </section>

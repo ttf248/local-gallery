@@ -21,13 +21,13 @@ export const IconButton = forwardRef<HTMLButtonElement, Props>(
           aria-label={label}
           aria-pressed={pressed}
           className={cx(
-            "icon-control relative inline-grid shrink-0 place-items-center rounded-control transition duration-1 aria-pressed:bg-signal-soft disabled:opacity-40",
+            "icon-control relative inline-grid shrink-0 place-items-center rounded-md transition duration-fast aria-pressed:bg-accent-soft disabled:opacity-40",
             size === "sm"
               ? "size-8 [&_svg]:size-4"
               : "size-10 [&_svg]:size-[18px]",
             {
-              ghost: "hover:bg-bg-subtle",
-              secondary: "border border-line-strong hover:bg-bg-subtle",
+              ghost: "hover:bg-sunken",
+              secondary: "border border-line-strong hover:bg-sunken",
               overlay: "bg-black/40 text-white backdrop-blur-md",
             }[variant],
             className,

@@ -65,27 +65,27 @@ export default function ModuleTiles({
               aria-pressed={isSelected}
               disabled={isDisabled}
               onClick={() => onToggle(module.type)}
-              className="flex h-28 w-full flex-col items-start justify-center gap-1 rounded-card border-2 border-transparent bg-bg-elevated px-3 pr-5 text-left shadow-1 aria-pressed:border-signal disabled:opacity-50"
+              className="flex h-28 w-full flex-col items-start justify-center gap-1 rounded-lg border-2 border-transparent bg-raised px-3 pr-5 text-left shadow-1 aria-pressed:border-accent disabled:opacity-50"
             >
               {isSelected && (
                 <CheckIcon
                   size={14}
                   aria-hidden="true"
-                  className="absolute right-2 top-2 text-signal"
+                  className="absolute right-2 top-2 text-accent"
                 />
               )}
-              <span className="text-callout font-medium">{module.name}</span>
-              <span className="text-title-3 tabular-nums">
+              <span className="text-label font-medium">{module.name}</span>
+              <span className="text-heading tabular-nums">
                 {amount ? formatCount(amount.count) : "—"}
                 <small className="ml-1 text-caption">张</small>
               </span>
-              <span className="flex items-center gap-1 text-caption text-fg-muted">
+              <span className="flex items-center gap-1 text-caption text-ink-2">
                 <span
                   aria-hidden="true"
                   className={
                     "size-1.5 shrink-0 rounded-full " +
                     (!module.installed || isLocked
-                      ? "bg-fg-subtle"
+                      ? "bg-ink-3"
                       : previous?.status === "failed"
                         ? "bg-danger"
                         : "bg-success")
@@ -105,7 +105,7 @@ export default function ModuleTiles({
               trigger={
                 <button
                   type="button"
-                  className="grid size-8 place-items-center rounded-control text-fg-muted"
+                  className="grid size-8 place-items-center rounded-md text-ink-2"
                   aria-label={module.name + "详情"}
                 >
                   <MoreHorizontalIcon size={15} />

@@ -26,7 +26,7 @@ interface Props {
 /** 一段标题：说明这一段管的是什么。 */
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-0.5 pb-1.5 pt-3 text-caption font-medium text-fg-subtle first:pt-0">
+    <div className="px-0.5 pb-1.5 pt-3 text-caption font-medium text-ink-3 first:pt-0">
       {children}
     </div>
   );
@@ -35,7 +35,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 /** 一句说明：这一段现在为什么不能用。 */
 function Reason({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-0.5 py-1 text-caption leading-relaxed text-fg-subtle">
+    <p className="px-0.5 py-1 text-caption leading-relaxed text-ink-3">
       {children}
     </p>
   );
@@ -112,10 +112,10 @@ export default function AlbumFilterPanel({
   return (
     <div>
       <div className="flex items-center justify-between pb-1">
-        <span className="text-body text-fg">筛选照片</span>
+        <span className="text-body text-ink">筛选照片</span>
         <button
           type="button"
-          className="btn-text text-caption text-fg-muted hover:text-fg"
+          className="btn-text text-caption text-ink-2 hover:text-ink"
           onClick={onClear}
         >
           清除全部
@@ -158,8 +158,8 @@ export default function AlbumFilterPanel({
                       onClick={() => selectYear(year)}
                       className={`flex-1 rounded-md px-2 py-1.5 text-left text-caption transition-colors ${
                         selected
-                          ? "bg-accent/12 text-accent"
-                          : "text-fg hover:bg-bg-subtle"
+                          ? "bg-primary/12 text-primary"
+                          : "text-ink hover:bg-sunken"
                       }`}
                       aria-pressed={selected}
                     >
@@ -167,7 +167,7 @@ export default function AlbumFilterPanel({
                     </button>
                     <button
                       type="button"
-                      className="rounded-md p-1 text-fg-subtle transition-colors hover:bg-bg-subtle hover:text-fg"
+                      className="rounded-md p-1 text-ink-3 transition-colors hover:bg-sunken hover:text-ink"
                       onClick={() =>
                         setOpenYear(expanded && openYear === year ? null : year)
                       }
@@ -196,10 +196,10 @@ export default function AlbumFilterPanel({
                             aria-pressed={active}
                             className={`rounded-md px-2 py-1 text-caption tabular-nums transition-colors ${
                               active
-                                ? "bg-accent/12 text-accent"
+                                ? "bg-primary/12 text-primary"
                                 : inRange
-                                  ? "text-fg hover:bg-bg-subtle"
-                                  : "text-fg-subtle hover:bg-bg-subtle"
+                                  ? "text-ink hover:bg-sunken"
+                                  : "text-ink-3 hover:bg-sunken"
                             }`}
                           >
                             {Number(bucket.month.slice(5, 7))}月 ·{" "}
@@ -230,12 +230,12 @@ export default function AlbumFilterPanel({
                   aria-pressed={active}
                   className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-caption transition-colors ${
                     active
-                      ? "bg-accent/12 text-accent"
-                      : "text-fg hover:bg-bg-subtle"
+                      ? "bg-primary/12 text-primary"
+                      : "text-ink hover:bg-sunken"
                   }`}
                 >
                   <span className="truncate">{person.name}</span>
-                  <span className="shrink-0 tabular-nums text-fg-subtle">
+                  <span className="shrink-0 tabular-nums text-ink-3">
                     {person.count}
                   </span>
                 </button>
@@ -259,12 +259,12 @@ export default function AlbumFilterPanel({
                   aria-pressed={active}
                   className={`flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-caption transition-colors ${
                     active
-                      ? "bg-accent/12 text-accent"
-                      : "text-fg hover:bg-bg-subtle"
+                      ? "bg-primary/12 text-primary"
+                      : "text-ink hover:bg-sunken"
                   }`}
                 >
                   <span className="truncate">{place.name}</span>
-                  <span className="shrink-0 tabular-nums text-fg-subtle">
+                  <span className="shrink-0 tabular-nums text-ink-3">
                     {place.count}
                   </span>
                 </button>
@@ -332,7 +332,7 @@ export default function AlbumFilterPanel({
         )}
       </div>
 
-      <div className="mt-2 border-t border-line pt-2 text-caption text-fg-subtle">
+      <div className="mt-2 border-t border-line pt-2 text-caption text-ink-3">
         看到 {resultCount} 张
       </div>
     </div>

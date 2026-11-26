@@ -49,13 +49,13 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
       {items.map(({ id, label: caption, href, count }, i) => {
         const selected = id === value;
         const style = cx(
-          "relative inline-flex min-h-9 min-w-8 shrink-0 items-center whitespace-nowrap touch:min-h-10 touch:min-w-10 gap-2 px-3 text-callout transition duration-2",
-          selected ? "text-fg" : "text-fg-muted hover:text-fg",
-          vertical ? "rounded-control" : "border-b-2",
+          "relative inline-flex min-h-9 min-w-8 shrink-0 items-center whitespace-nowrap touch:min-h-10 touch:min-w-10 gap-2 px-3 text-label transition duration-base",
+          selected ? "text-ink" : "text-ink-2 hover:text-ink",
+          vertical ? "rounded-md" : "border-b-2",
           selected
             ? vertical
-              ? "bg-bg-elevated shadow-1"
-              : "border-fg"
+              ? "bg-raised shadow-1"
+              : "border-ink"
             : "border-transparent",
         );
         const content = (
@@ -65,7 +65,7 @@ export const Tabs = forwardRef<HTMLDivElement, Props>(function Tabs(
               <span
                 className={cx(
                   "text-caption tabular-nums",
-                  selected ? "text-fg-muted" : "text-fg-subtle",
+                  selected ? "text-ink-2" : "text-ink-3",
                 )}
               >
                 {count}

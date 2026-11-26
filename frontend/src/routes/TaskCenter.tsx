@@ -75,7 +75,7 @@ export function TaskCenterView({ tab }: { tab: string }) {
     <>
       {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
           宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
-      <Page variant="split" className="page-shell tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-bg-subtle,_.bg-bg-subtle\/50,_.bg-bg-strong)_.text-fg-subtle]:text-fg-muted pb-12">
+      <Page variant="split" className="page-shell tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12">
         <PageHeader
           title="任务中心"
           meta="管理本机分析、等待队列及每日计划。"
@@ -108,9 +108,9 @@ export function TaskCenterView({ tab }: { tab: string }) {
                   <section
                     aria-label="状态摘要"
                     role="alert"
-                    className="rounded-card bg-bg-elevated p-7 shadow-1"
+                    className="rounded-lg bg-raised p-7 shadow-1"
                   >
-                    <h2 className="text-title-2">与服务端的连接中断</h2>
+                    <h2 className="text-title">与服务端的连接中断</h2>
                     <button
                       type="button"
                       className="btn btn-outline mt-3"

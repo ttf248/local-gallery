@@ -604,7 +604,7 @@ test("阅读器当前模式用漫画暖棕标出", async ({ page, request }) => 
   await expect(active).toBeVisible();
   await expect(active).toHaveAttribute("aria-pressed", "true");
   const color = await active.evaluate((el) => getComputedStyle(el).color);
-  // --reader-accent：#d9a074（深色档的暖棕）。
+  // --theater-accent：#d9a074（深色档的暖棕）。
   expect(color).toBe("rgb(217, 160, 116)");
 });
 

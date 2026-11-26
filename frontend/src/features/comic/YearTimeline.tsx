@@ -110,7 +110,7 @@ export default function YearTimeline({
           <button
             type="button"
             onClick={triggerFilter}
-            className="year-index__filter absolute top-2 right-2 grid place-items-center size-8 touch:size-10 [background:color-mix(in_srgb,var(--bg-elevated)_88%,transparent)] [backdrop-filter:blur(6px)] border border-line rounded-sm text-fg-muted transition duration-2 opacity-0 [.year-index\_\_item:focus-within_&]:opacity-100 [.year-index\_\_item[data-active=true]_&]:opacity-100 [.year-index\_\_item:hover_&]:opacity-100 touch:opacity-100 hover:text-fg hover:bg-bg-elevated touch:active:text-fg touch:active:bg-bg-elevated"
+            className="year-index__filter absolute top-2 right-2 grid place-items-center size-8 touch:size-10 [background:color-mix(in_srgb,var(--raised)_88%,transparent)] [backdrop-filter:blur(6px)] border border-line rounded-sm text-ink-2 transition duration-base opacity-0 [.year-index\_\_item:focus-within_&]:opacity-100 [.year-index\_\_item[data-active=true]_&]:opacity-100 [.year-index\_\_item:hover_&]:opacity-100 touch:opacity-100 hover:text-ink hover:bg-raised touch:active:text-ink touch:active:bg-raised"
             aria-label={isActive ? "取消年份筛选" : "筛选该年份"}
             title={isActive ? "取消筛选" : "只筛选该年份"}
           >

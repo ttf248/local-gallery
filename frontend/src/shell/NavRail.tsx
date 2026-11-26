@@ -64,7 +64,7 @@ function RailGroup({
       }}
     >
       {!collapsed && (
-        <p className="px-3 pb-1 text-micro text-fg-subtle">{label}</p>
+        <p className="px-3 pb-1 text-caption text-ink-3">{label}</p>
       )}
       {entries.map((entry) => {
         const selected = entry === active,
@@ -83,11 +83,11 @@ function RailGroup({
             tabIndex={tabStop === entry ? 0 : -1}
             onFocus={() => setFocus(entry.key)}
             className={cx(
-              "relative flex h-10 w-full items-center gap-3 rounded-control text-callout",
+              "relative flex h-10 w-full items-center gap-3 rounded-md text-label",
               collapsed ? "justify-center" : "px-3",
               selected
-                ? "bg-bg-elevated font-semibold text-fg shadow-1"
-                : "text-fg-muted hover:bg-bg-subtle hover:text-fg",
+                ? "bg-raised font-semibold text-ink shadow-1"
+                : "text-ink-2 hover:bg-sunken hover:text-ink",
             )}
           >
             <Icon size={20} />
@@ -96,7 +96,7 @@ function RailGroup({
             )}
             {badge > 0 &&
               (collapsed ? (
-                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-signal" />
+                <span className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />
               ) : (
                 <Badge aria-label={"还有 " + badge + " 卷"}>{badge}</Badge>
               ))}
@@ -136,7 +136,7 @@ export default function NavRail({
       data-collapsed={collapsed}
       data-testid="nav-rail"
       className={cx(
-        "group/rail z-rail flex h-full shrink-0 flex-col gap-6 overflow-y-auto bg-bg px-3 pb-4 transition-[width] duration-3",
+        "group/rail z-rail flex h-full shrink-0 flex-col gap-6 overflow-y-auto bg-app px-3 pb-4 transition-[width] duration-slow",
         collapsed ? "w-rail-compact" : "w-rail",
       )}
     >
@@ -145,7 +145,7 @@ export default function NavRail({
           <div className="flex items-center gap-2">
             <BrandMark />
             {!collapsed && (
-              <span className="whitespace-nowrap text-callout font-semibold">
+              <span className="whitespace-nowrap text-label font-semibold">
                 Local Gallery
               </span>
             )}
@@ -153,7 +153,7 @@ export default function NavRail({
           <div
             className={cx(
               "opacity-0 group-focus-within/rail:opacity-100 group-hover/rail:opacity-100",
-              collapsed && "absolute inset-x-0 flex justify-center bg-bg",
+              collapsed && "absolute inset-x-0 flex justify-center bg-app",
             )}
           >
             <IconButton

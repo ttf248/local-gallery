@@ -75,10 +75,10 @@ export default function TaskSummary({
 }: Props) {
   if (loading) {
     return (
-      <div className="tasks-summary flex flex-wrap items-start justify-between gap-y-3.5 gap-x-6 p-[clamp(13px,2.2vw,23px)] border border-line rounded-tile bg-bg-elevated [&[data-status=failed]]:[border-color:color-mix(in_srgb,var(--danger)_32%,var(--line))] ui-surface border border-line rounded-tile bg-bg-elevated touch:[&_button]:min-h-11 touch:[&_button]:min-w-11" aria-busy="true">
+      <div className="tasks-summary flex flex-wrap items-start justify-between gap-y-3.5 gap-x-6 p-[clamp(13px,2.2vw,23px)] border border-line rounded-tile bg-raised [&[data-status=failed]]:[border-color:color-mix(in_srgb,var(--danger)_32%,var(--line))] ui-surface border border-line rounded-tile bg-raised touch:[&_button]:min-h-11 touch:[&_button]:min-w-11" aria-busy="true">
         <div className="min-w-0 flex-1">
-          <div className="h-4 w-40 ui-skeleton rounded-tile bg-bg-strong animate-pulse" />
-          <div className="mt-2 h-3 w-2/3 animate-pulse rounded-full bg-bg-subtle" />
+          <div className="h-4 w-40 ui-skeleton rounded-tile bg-sunken-strong animate-pulse" />
+          <div className="mt-2 h-3 w-2/3 animate-pulse rounded-full bg-sunken" />
         </div>
       </div>
     );
@@ -189,12 +189,12 @@ export default function TaskSummary({
               {currentEstimate ? (
                 /* 估不出来就明说估不出来：按钮上只有张数，没有时间，
                  用户会以为点下去马上就完。 */
-                <span className="tasks-summary__hint text-caption text-fg-subtle max-w-[30ch]">
+                <span className="tasks-summary__hint text-caption text-ink-3 max-w-[30ch]">
                   {formatEstimateDuration(currentEstimate.estimatedDurationMs)}
                 </span>
               ) : null}
               {blockedReason ? (
-                <span className="tasks-summary__hint text-caption text-fg-subtle max-w-[30ch]">{blockedReason}</span>
+                <span className="tasks-summary__hint text-caption text-ink-3 max-w-[30ch]">{blockedReason}</span>
               ) : null}
             </>
           )}
@@ -203,7 +203,7 @@ export default function TaskSummary({
     >
       {active ? (
         <>
-          <p className="tasks-summary__facts flex flex-wrap gap-y-0.5 gap-x-4 mt-[7px] text-caption text-fg-muted">
+          <p className="tasks-summary__facts flex flex-wrap gap-y-0.5 gap-x-4 mt-[7px] text-caption text-ink-2">
             <span>{taskStageLabel(active.stage)}</span>
             <span>
               设备：{active.computeDevice === "gpu" ? "NVIDIA GPU" : "CPU"}
@@ -222,7 +222,7 @@ export default function TaskSummary({
           </p>
         </>
       ) : (
-        <p className="tasks-summary__facts flex flex-wrap gap-y-0.5 gap-x-4 mt-[7px] text-caption text-fg-muted">
+        <p className="tasks-summary__facts flex flex-wrap gap-y-0.5 gap-x-4 mt-[7px] text-caption text-ink-2">
           {lastJob ? (
             lastJob.status === "failed" ? (
               /* 上一次跑砸了是最该先看见的事：写在状态这一行，

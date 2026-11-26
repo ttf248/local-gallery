@@ -148,7 +148,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
         tabIndex={-1}
         style={style}
         className={cx(
-          "fixed z-popover max-h-[calc(100dvh-8px)] min-w-44 max-w-[calc(100vw-8px)] overflow-auto rounded-xl bg-bg-elevated p-1 shadow-2",
+          "fixed z-popover max-h-[calc(100dvh-8px)] min-w-44 max-w-[calc(100vw-8px)] overflow-auto rounded-xl bg-raised p-1 shadow-2",
           className,
         )}
         onKeyDown={(event) => {
@@ -173,7 +173,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
             item.type === "separator" ? (
               <hr key={index} role="separator" className="my-1 border-line" />
             ) : (
-              <div key={index} className="px-3 py-1 text-micro text-fg-subtle">
+              <div key={index} className="px-3 py-1 text-caption text-ink-3">
                 {item.label}
               </div>
             )
@@ -189,7 +189,7 @@ export const MenuSurface = forwardRef<HTMLDivElement, SurfaceProps>(
                 item.onSelect();
               }}
               className={cx(
-                "flex min-h-9 w-full items-center gap-2 rounded-sm px-3 text-left text-callout hover:bg-bg-subtle focus:bg-bg-subtle disabled:opacity-40",
+                "flex min-h-9 w-full items-center gap-2 rounded-sm px-3 text-left text-label hover:bg-sunken focus:bg-sunken disabled:opacity-40",
                 item.danger && "text-danger",
               )}
             >

@@ -82,7 +82,7 @@ export default function TravelTrips({
 
   if (trips.length === 0) {
     return (
-      <p className="py-12 text-center text-body text-fg-muted">
+      <p className="py-12 text-center text-body text-ink-2">
         这段时间还没有拍出带位置的行程。
       </p>
     );
@@ -92,7 +92,7 @@ export default function TravelTrips({
     <div className="travel-trips mt-[22px]">
       {groups.map((group) => (
         <section key={group.year} className="travel-trips__group [.travel-trips\_\_group_+_&]:mt-[18px]">
-          <h3 className="travel-trips__year sticky top-0 z-[5] py-1.5 font-display text-body font-medium text-fg-muted bg-bg">{group.year}</h3>
+          <h3 className="travel-trips__year sticky top-0 z-[5] py-1.5 font-display text-body font-medium text-ink-2 bg-canvas">{group.year}</h3>
           <ul className="travel-trips__list grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr] [&>li[data-selected=true]]:col-[1_/_-1]">
             {group.trips.map((trip) => (
               <li
@@ -235,7 +235,7 @@ function TravelTripCard({
           type="button"
           onClick={onSelect}
           aria-pressed={selected}
-          className="travel-trip-card__date [.travel-trip-card[data-selected=true]_&]:text-accent inline-flex items-baseline min-h-8 touch:min-h-10 rounded-sm font-mono text-body tabular-nums text-fg text-left hover:text-accent touch:active:text-accent"
+          className="travel-trip-card__date [.travel-trip-card[data-selected=true]_&]:text-primary inline-flex items-baseline min-h-8 touch:min-h-10 rounded-sm font-mono text-body tabular-nums text-ink text-left hover:text-primary touch:active:text-primary"
           aria-label={`${trip.startedAt} 至 ${trip.endedAt}，${trip.dayCount} 天，${
             selected ? "收起这段的照片" : "看这段去了哪儿"
           }`}
@@ -246,12 +246,12 @@ function TravelTripCard({
           </span>
         </button>
 
-        <span className="travel-trip-card__meta inline-flex [flex:none] items-baseline gap-2.5 text-caption text-fg-muted">
+        <span className="travel-trip-card__meta inline-flex [flex:none] items-baseline gap-2.5 text-caption text-ink-2">
           <span
             className={
               trip.kind === "stay"
-                ? "travel-trip-card__kind tracking-[0.08em] text-fg-muted travel-trip-card__kind--stay text-fg-subtle"
-                : "travel-trip-card__kind tracking-[0.08em] text-fg-muted"
+                ? "travel-trip-card__kind tracking-[0.08em] text-ink-2 travel-trip-card__kind--stay text-ink-3"
+                : "travel-trip-card__kind tracking-[0.08em] text-ink-2"
             }
           >
             {trip.kind === "stay" ? "停留" : "行程"}
@@ -265,23 +265,23 @@ function TravelTripCard({
         {stops.map((stop, index) => (
           <span key={`${stop.adcode}-${stop.at}`} className="flex items-center gap-1">
             {index > 0 ? (
-              <ChevronRightIcon size={12} className="travel-trip-card__arrow [flex:none] text-fg-muted" />
+              <ChevronRightIcon size={12} className="travel-trip-card__arrow [flex:none] text-ink-2" />
             ) : null}
             <button
               type="button"
               onClick={() => onOpenPlace(stop.adcode)}
-              className="travel-trip-card__stop inline-flex items-baseline gap-1.5 min-h-8 touch:min-h-10 py-0.5 px-[9px] rounded-tile bg-bg-subtle text-caption text-fg hover:bg-bg-strong hover:text-accent touch:active:bg-bg-strong touch:active:text-accent"
+              className="travel-trip-card__stop inline-flex items-baseline gap-1.5 min-h-8 touch:min-h-10 py-0.5 px-[9px] rounded-tile bg-sunken text-caption text-ink hover:bg-sunken-strong hover:text-primary touch:active:bg-sunken-strong touch:active:text-primary"
               title={`${stop.name} · ${stop.photoCount} 张`}
             >
               {stop.name}
-              <span className="travel-trip-card__stop-count text-fg-muted tabular-nums">
+              <span className="travel-trip-card__stop-count text-ink-2 tabular-nums">
                 {stop.photoCount.toLocaleString()}
               </span>
             </button>
           </span>
         ))}
         {hiddenStops > 0 ? (
-          <span className="travel-trip-card__more text-caption text-fg-subtle">还有 {hiddenStops} 处</span>
+          <span className="travel-trip-card__more text-caption text-ink-3">还有 {hiddenStops} 处</span>
         ) : null}
       </div>
 
@@ -290,8 +290,8 @@ function TravelTripCard({
         <div
           className={
             previewAbove
-              ? "travel-trip-card__preview absolute top-[calc(100%_+_6px)] left-0 z-30 w-[min(460px,100%)] [padding:12px_14px_14px] border border-line rounded-tile bg-bg-elevated [backdrop-filter:blur(16px)_saturate(1.4)] shadow-2 pointer-events-none sm:w-[460px] sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:right-0 sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:left-auto travel-trip-card__preview--above top-auto bottom-[calc(100%_+_6px)]"
-              : "travel-trip-card__preview absolute top-[calc(100%_+_6px)] left-0 z-30 w-[min(460px,100%)] [padding:12px_14px_14px] border border-line rounded-tile bg-bg-elevated [backdrop-filter:blur(16px)_saturate(1.4)] shadow-2 pointer-events-none sm:w-[460px] sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:right-0 sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:left-auto"
+              ? "travel-trip-card__preview absolute top-[calc(100%_+_6px)] left-0 z-30 w-[min(460px,100%)] [padding:12px_14px_14px] border border-line rounded-tile bg-raised [backdrop-filter:blur(16px)_saturate(1.4)] shadow-2 pointer-events-none sm:w-[460px] sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:right-0 sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:left-auto travel-trip-card__preview--above top-auto bottom-[calc(100%_+_6px)]"
+              : "travel-trip-card__preview absolute top-[calc(100%_+_6px)] left-0 z-30 w-[min(460px,100%)] [padding:12px_14px_14px] border border-line rounded-tile bg-raised [backdrop-filter:blur(16px)_saturate(1.4)] shadow-2 pointer-events-none sm:w-[460px] sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:right-0 sm:[.travel-trips\\_\\_list>li:nth-child(even)_&]:left-auto"
           }
           role="group"
           aria-label="这一段的行程轨迹"
@@ -312,7 +312,7 @@ function TravelTripCard({
                 <button
                   key={id}
                   type="button"
-                  className="travel-trip-card__photo [flex:1_1_0] min-w-[104px] overflow-hidden rounded-[6px] bg-bg-media [&_img]:block [&_img]:w-full [&_img]:h-full [&_img]:object-cover [&_img]:transition [&_img]:duration-2 [&:hover_img]:[transform:scale(1.03)] touch:[&:active_img]:[transform:scale(1.03)]"
+                  className="travel-trip-card__photo [flex:1_1_0] min-w-[104px] overflow-hidden rounded-[6px] bg-media [&_img]:block [&_img]:w-full [&_img]:h-full [&_img]:object-cover [&_img]:transition [&_img]:duration-base [&:hover_img]:[transform:scale(1.03)] touch:[&:active_img]:[transform:scale(1.03)]"
                   onClick={() => {
                     setViewerHeld(true);
                     wall.openById(id);
@@ -332,11 +332,11 @@ function TravelTripCard({
 
           <div className="travel-trip-card__grid mt-2.5 h-[min(62vh,620px)] overflow-hidden rounded-tile">
             {media.isError ? (
-              <p className="py-8 text-center text-body text-fg-muted">
+              <p className="py-8 text-center text-body text-ink-2">
                 这一段的照片暂时读不出来。
               </p>
             ) : items.length === 0 && !media.isLoading ? (
-              <p className="py-8 text-center text-body text-fg-muted">
+              <p className="py-8 text-center text-body text-ink-2">
                 这一段没有照片。
               </p>
             ) : (

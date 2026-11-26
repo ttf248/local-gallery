@@ -28,9 +28,9 @@ export const Switch = forwardRef<HTMLButtonElement, Props>(function Switch(
     >
       <span
         aria-hidden="true"
-        className="relative h-6 w-10 rounded-full bg-bg-strong transition-colors group-aria-checked:bg-signal"
+        className="relative h-6 w-10 rounded-full bg-sunken-strong transition-colors group-aria-checked:bg-accent"
       >
-        <span className="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow-1 transition-transform duration-2 group-aria-checked:translate-x-4" />
+        <span className="absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow-1 transition-transform duration-base group-aria-checked:translate-x-4" />
       </span>
       {description && (
         <span className="sr-only" id={id}>

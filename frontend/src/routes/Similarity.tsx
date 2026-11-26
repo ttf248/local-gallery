@@ -557,19 +557,19 @@ export default function Similarity() {
              长句：一句里挤七八个数字，读的人要在中间反复找自己在找
              哪个。数字与它的名字挨在一起，扫一遍就知道每类各有多少。 */
           <div
-            className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-caption text-fg-subtle"
+            className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-caption text-ink-3"
             data-testid="similarity-summary"
           >
             <span>
               共{" "}
-              <span className="font-medium text-fg tabular-nums">
+              <span className="font-medium text-ink tabular-nums">
                 {summary.exact + summary.near + summary.burst}
               </span>{" "}
               组
             </span>
             <span>
               多余照片{" "}
-              <span className="font-medium text-fg tabular-nums">
+              <span className="font-medium text-ink tabular-nums">
                 {summary.redundant}
               </span>{" "}
               张
@@ -598,7 +598,7 @@ export default function Similarity() {
         {/* 索引状态与召回上限不是统计，是「结果怎么来的」：单独一行，
             不与上面的数字混在一起读。 */}
         {statusInfo || groups.page?.limited ? (
-          <p className="mb-4 text-caption text-fg-subtle">
+          <p className="mb-4 text-caption text-ink-3">
             {statusInfo?.hasVectors
               ? "语义索引可用，近似判定更准"
               : "没有语义索引，近似判定已收紧"}
@@ -615,7 +615,7 @@ export default function Similarity() {
             整理结果暂时读不出来。
           </ErrorBanner>
         ) : groups.isLoading && items.length === 0 ? (
-          <p className="py-8 text-center text-caption text-fg-subtle">
+          <p className="py-8 text-center text-caption text-ink-3">
             正在读取整理结果…
           </p>
         ) : isEmpty ? (
@@ -694,10 +694,10 @@ export default function Similarity() {
 
         {selectedIds.size > 0 ? (
           <div
-            className="similarity-actions sticky bottom-[var(--float-bottom)] z-20 flex items-center gap-2.5 flex-wrap mt-5 py-2.5 px-3.5 rounded-control bg-bg-elevated shadow-2 border border-line float-bottom [[data-keyboard]_&]:[translate:0_calc(-1_*_var(--keyboard-inset))]"
+            className="similarity-actions sticky bottom-[var(--float-bottom)] z-20 flex items-center gap-2.5 flex-wrap mt-5 py-2.5 px-3.5 rounded-md bg-raised shadow-2 border border-line float-bottom [[data-keyboard]_&]:[translate:0_calc(-1_*_var(--keyboard-inset))]"
             data-testid="similarity-batch-bar"
           >
-            <span className="text-caption text-fg-muted">
+            <span className="text-caption text-ink-2">
               已选 {selectedIds.size} 组
             </span>
             <button

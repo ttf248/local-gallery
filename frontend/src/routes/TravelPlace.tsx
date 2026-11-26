@@ -97,8 +97,8 @@ export default function TravelPlace() {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div>
-          <p className="text-body font-medium text-fg">这个地方不存在</p>
-          <Link to={travelsRoute()} className="mt-2 inline-block text-accent underline">
+          <p className="text-body font-medium text-ink">这个地方不存在</p>
+          <Link to={travelsRoute()} className="mt-2 inline-block text-primary underline">
             回到足迹
           </Link>
         </div>
@@ -112,20 +112,20 @@ export default function TravelPlace() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <header className="border-b border-line bg-bg">
+      <header className="border-b border-line bg-canvas">
         <div className="page-shell">
           <div className="album-bar flex items-center gap-3.5 py-3 max-sm:flex-wrap">
             <Link to={backTo} className="btn btn-sm btn-outline shrink-0">
               返回足迹
             </Link>
             <div className="min-w-0 flex-1">
-              <p className="page-eyebrow flex items-center gap-2 text-accent text-caption font-semibold tracking-[0.02em]">
+              <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em]">
                 足迹 · {LEVEL_LABEL[region?.level ?? ""] ?? ""}
               </p>
               <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <h1 className="album-bar__title font-display text-title-2 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [overflow-wrap:anywhere] truncate">{region?.name ?? "…"}</h1>
+                <h1 className="album-bar__title font-display text-title leading-[1.25] font-semibold tracking-[-0.02em] text-ink [overflow-wrap:anywhere] truncate">{region?.name ?? "…"}</h1>
                 {region ? (
-                  <span className="album-bar__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-1 text-caption text-fg-muted [.album-bar_&]:mt-0 tabular-nums">
+                  <span className="album-bar__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-1 text-caption text-ink-2 [.album-bar_&]:mt-0 tabular-nums">
                     {region.photoCount.toLocaleString()} 张 · {region.visitCount} 次到访
                     {region.firstAt && region.lastAt
                       ? ` · ${region.firstAt} – ${region.lastAt}`
@@ -162,7 +162,7 @@ export default function TravelPlace() {
 
       <div className="page-shell">
         {regionsQuery.isError ? (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-bg-elevated px-4 py-3 text-body text-danger">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-danger/30 bg-raised px-4 py-3 text-body text-danger">
             <span>这个地方的照片暂时读不出来。</span>
             <button
               type="button"
@@ -194,7 +194,7 @@ export default function TravelPlace() {
 
         {regionsQuery.data && regionsQuery.data.regions.length > 0 ? (
           <section aria-label="下级地点" className="mt-8">
-            <h2 className="font-display text-title-3 font-medium text-fg">
+            <h2 className="font-display text-heading font-medium text-ink">
               下级地点
             </h2>
             <ul className="mt-3 flex flex-wrap gap-2">
@@ -218,14 +218,14 @@ export default function TravelPlace() {
 
         {visits.length > 0 ? (
           <section aria-label="到访记录" className="mt-8">
-            <h2 className="font-display text-title-3 font-medium text-fg">
+            <h2 className="font-display text-heading font-medium text-ink">
               到访记录
             </h2>
-            <p className="mt-1.5 text-caption text-fg-muted">
+            <p className="mt-1.5 text-caption text-ink-2">
               相邻两张照片隔不超过两天算同一次到访，跨夜的行程不会被切成两半。
               点一次到访看那几天拍的照片。
             </p>
-            <ol className="mt-3 divide-y divide-line rounded-2xl border border-line bg-bg-elevated">
+            <ol className="mt-3 divide-y divide-line rounded-2xl border border-line bg-raised">
               {visits.map((visit, index) => (
                 <VisitRow
                   key={`${visit.startedAt}-${visit.endedAt}`}
@@ -285,30 +285,30 @@ function VisitRow({
         aria-expanded={open}
         className="flex w-full flex-wrap items-baseline gap-x-3 gap-y-1 text-left"
       >
-        <span className="font-mono text-caption tabular-nums text-fg">
+        <span className="font-mono text-caption tabular-nums text-ink">
           {startedAt}
           {endedAt !== startedAt ? ` – ${endedAt.slice(5)}` : ""}
         </span>
-        <span className="text-caption text-fg-muted">
+        <span className="text-caption text-ink-2">
           {dayCount} 天 · {photoCount.toLocaleString()} 张
         </span>
         {regions.length > 0 ? (
-          <span className="text-caption text-fg-subtle">
+          <span className="text-caption text-ink-3">
             期间还去了：{regions.join("、")}
           </span>
         ) : null}
-        <span className="ml-auto text-caption text-accent">
+        <span className="ml-auto text-caption text-primary">
           {open ? "收起" : "看照片"}
         </span>
       </button>
       {open ? (
         <div className="mt-2">
           {media.isError ? (
-            <p className="text-caption text-fg-muted">
+            <p className="text-caption text-ink-2">
               这几天的照片暂时读不出来。
             </p>
           ) : items.length === 0 && !media.isLoading ? (
-            <p className="text-caption text-fg-muted">这几天没有照片。</p>
+            <p className="text-caption text-ink-2">这几天没有照片。</p>
           ) : (
             <div className="flex gap-1">
               {items.slice(0, 12).map((item) => (

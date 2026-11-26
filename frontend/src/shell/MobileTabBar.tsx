@@ -33,8 +33,8 @@ export function MobileTabBar({
             to={entry.to}
             aria-current={active ? "page" : undefined}
             className={cx(
-              "flex h-tabbar flex-1 flex-col items-center justify-center gap-1 text-micro",
-              active ? "font-semibold text-fg" : "text-fg-subtle",
+              "flex h-tabbar flex-1 flex-col items-center justify-center gap-1 text-caption",
+              active ? "font-semibold text-ink" : "text-ink-3",
             )}
           >
             <Icon size={24} />
@@ -47,7 +47,7 @@ export function MobileTabBar({
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={onMore}
-        className="flex h-tabbar flex-1 flex-col items-center justify-center gap-1 text-micro text-fg-muted"
+        className="flex h-tabbar flex-1 flex-col items-center justify-center gap-1 text-caption text-ink-2"
       >
         <MoreHorizontalIcon size={24} />
         更多

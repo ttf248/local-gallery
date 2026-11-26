@@ -201,25 +201,25 @@ export default function Picks({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {embedded ? null : (
-        <header className="shrink-0 border-b border-line bg-bg">
+        <header className="shrink-0 border-b border-line bg-canvas">
           <div className="page-shell">
             <div className="album-bar flex items-center gap-3.5 py-3 max-sm:flex-wrap">
               <div className="min-w-0 flex-1">
                 {/* 眉标说清这一页是什么：精选是跨相册的挑选，
                   与相册级收藏不是一回事。 */}
-                <p className="page-eyebrow flex items-center gap-2 text-accent text-caption font-semibold tracking-[0.02em]">跨相册挑选</p>
+                <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em]">跨相册挑选</p>
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <h1 className="album-bar__title font-display text-title-2 leading-[1.25] font-semibold tracking-[-0.02em] text-fg [overflow-wrap:anywhere] truncate">{title}</h1>
-                  <div className="album-bar__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-1 text-caption text-fg-muted [.album-bar_&]:mt-0 tabular-nums">
+                  <h1 className="album-bar__title font-display text-title leading-[1.25] font-semibold tracking-[-0.02em] text-ink [overflow-wrap:anywhere] truncate">{title}</h1>
+                  <div className="album-bar__meta flex flex-wrap items-baseline gap-y-0.5 gap-x-2.5 mt-1 text-caption text-ink-2 [.album-bar_&]:mt-0 tabular-nums">
                     <span>
-                      <span className="text-fg font-medium">{total}</span> 张
+                      <span className="text-ink font-medium">{total}</span> 张
                     </span>
                     {picks.total !== total && (
                       <>
-                        <span className="text-fg-subtle">·</span>
+                        <span className="text-ink-3">·</span>
                         <span>
                           共{" "}
-                          <span className="text-fg font-medium">
+                          <span className="text-ink font-medium">
                             {picks.total}
                           </span>{" "}
                           张在精选
@@ -237,10 +237,10 @@ export default function Picks({
                     if (state.active) state.clear();
                     else state.start();
                   }}
-                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal ${
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-body transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
                     selectionActive
-                      ? "bg-accent/15 text-accent"
-                      : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                      ? "bg-primary/15 text-primary"
+                      : "text-ink-2 hover:bg-sunken hover:text-ink"
                   }`}
                   aria-pressed={selectionActive}
                 >

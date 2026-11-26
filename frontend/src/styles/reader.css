@@ -2,7 +2,7 @@
 
 @layer components {
   .reader-shell {
-    background: var(--reader-bg);
+    background: var(--theater-bg);
   }
   .reader-header {
     /* 顶栏拆成左右两块浮层，而不是一条通栏。
@@ -28,10 +28,10 @@
     min-width: 0;
     height: 48px;
     padding-inline: 12px;
-    border: 1px solid var(--overlay-border);
-    border-radius: var(--radius-control);
-    background: var(--overlay-glass);
-    box-shadow: var(--shadow-2);
+    border: 1px solid var(--theater-border);
+    border-radius: var(--r-md);
+    background: var(--theater-glass);
+    box-shadow: var(--e2);
     backdrop-filter: blur(16px) saturate(1.4);
     -webkit-backdrop-filter: blur(16px) saturate(1.4);
     pointer-events: auto;
@@ -46,33 +46,33 @@
     flex: 0 0 auto;
   }
   .reader-control-panel {
-    border-radius: var(--radius-tile);
-    background: var(--overlay-glass);
+    border-radius: var(--r-tile);
+    background: var(--theater-glass);
   }
   /* 工具条里选中的那一档（单页 / 双页 / 连续）：用漫画侧的暖棕，
      深色画布上一眼能认出「现在是哪一档」，又不至于亮到抢过画面。 */
   .reader-tool-active {
-    background: color-mix(in srgb, var(--reader-accent) 24%, transparent);
-    color: var(--reader-accent);
+    background: color-mix(in srgb, var(--theater-accent) 24%, transparent);
+    color: var(--theater-accent);
   }
   /* 底部进度条的已读段：同一支暖棕。 */
   .reader-slider-fill {
-    background: var(--reader-accent);
+    background: var(--theater-accent);
   }
 }
 
 .reader-glass {
-  background: var(--overlay-glass);
+  background: var(--theater-glass);
   backdrop-filter: blur(16px) saturate(1.4);
 }
 .reader-shell :is(.page-slider__fill, input[type="range"]) {
-  accent-color: var(--reader-accent);
+  accent-color: var(--theater-accent);
 }
 
 .reader-header {
   inset: 0 0 auto;
   padding: calc(8px + var(--safe-top)) 16px 18px;
-  background: var(--reader-chrome-gradient);
+  background: var(--theater-chrome-gradient);
 }
 .reader-header__group {
   border-color: transparent;

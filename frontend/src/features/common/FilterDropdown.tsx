@@ -116,16 +116,16 @@ export function FilterDropdown({
         onClick={() => onOpenChange(!open)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        className={`btn btn-ghost inline-flex items-center gap-1.5 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal ${
+        className={`btn btn-ghost inline-flex items-center gap-1.5 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
           count > 0
-            ? "bg-accent/12 text-accent"
-            : "text-fg-muted hover:bg-bg-subtle hover:text-fg"
+            ? "bg-primary/12 text-primary"
+            : "text-ink-2 hover:bg-sunken hover:text-ink"
         }`}
       >
         <FilterIcon size={13} />
         {label}
         {count > 0 && (
-          <span className="rounded-full bg-accent/20 px-1.5 text-micro tabular-nums text-accent">
+          <span className="rounded-full bg-primary/20 px-1.5 text-caption tabular-nums text-primary">
             {count}
           </span>
         )}

@@ -131,19 +131,19 @@ export default function DailyPlanPanel({
   }
 
   return (
-    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-bg-elevated" aria-labelledby="daily-plan-heading">
+    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised" aria-labelledby="daily-plan-heading">
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="daily-plan-heading" className="tasks-section__title font-display text-body font-semibold text-fg">
+          <h2 id="daily-plan-heading" className="tasks-section__title font-display text-body font-semibold text-ink">
             每日计划
           </h2>
-          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-fg-subtle max-w-[68ch]">
+          <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-ink-3 max-w-[68ch]">
             {
               "到点后依次扫描媒体目录、运行所选分析模块、生成智能相册；分析与分组在本机处理。按设备本地时间运行，错过计划时间后会在下次启动时补跑一次。"
             }
           </p>
         </div>
-        <label className="flex shrink-0 items-center gap-2.5 text-body text-fg">
+        <label className="flex shrink-0 items-center gap-2.5 text-body text-ink">
           <Switch
             label="启用每日自动任务"
             checked={enabled}
@@ -162,7 +162,7 @@ export default function DailyPlanPanel({
         }}
       >
         <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
-          <span className="tasks-field__label text-caption text-fg-muted">开始时间</span>
+          <span className="tasks-field__label text-caption text-ink-2">开始时间</span>
           <input
             type="time"
             value={time}
@@ -174,9 +174,9 @@ export default function DailyPlanPanel({
         </div>
 
         <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
-          <span className="tasks-field__label text-caption text-fg-muted">扫描与分组</span>
+          <span className="tasks-field__label text-caption text-ink-2">扫描与分组</span>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-            <label className="flex items-center gap-2 text-body text-fg">
+            <label className="flex items-center gap-2 text-body text-ink">
               <input
                 type="checkbox"
                 checked={scanEnabled}
@@ -185,7 +185,7 @@ export default function DailyPlanPanel({
               />
               扫描所有媒体目录
             </label>
-            <label className="flex items-center gap-2 text-body text-fg">
+            <label className="flex items-center gap-2 text-body text-ink">
               <input
                 type="checkbox"
                 checked={smartAlbumsEnabled}
@@ -227,8 +227,8 @@ export default function DailyPlanPanel({
         </SettingsGroup>
 
         <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
-          <span className="tasks-field__label text-caption text-fg-muted">人物分析</span>
-          <label className="flex items-center gap-2 text-body text-fg">
+          <span className="tasks-field__label text-caption text-ink-2">人物分析</span>
+          <label className="flex items-center gap-2 text-body text-ink">
             <input
               type="checkbox"
               checked={peopleEnabled}
@@ -249,7 +249,7 @@ export default function DailyPlanPanel({
           >
             {saving ? "保存中…" : "保存计划"}
           </button>
-          <span className="text-caption text-fg-subtle">
+          <span className="text-caption text-ink-3">
             {lastScheduledDate
               ? `最近执行 ${lastScheduledDate}${scheduledStatus ? ` · ${scheduledStatus}` : ""}`
               : "尚未自动运行过"}
@@ -263,10 +263,10 @@ export default function DailyPlanPanel({
             />
           ) : null}
           {saved ? (
-            <span className="text-caption text-fg-muted">已保存</span>
+            <span className="text-caption text-ink-2">已保存</span>
           ) : null}
           {enabled && !hasSelectedTask ? (
-            <span className="text-caption text-fg-muted">
+            <span className="text-caption text-ink-2">
               至少选择扫描、分析模块或智能相册中的一项。
             </span>
           ) : null}
@@ -284,7 +284,7 @@ export default function DailyPlanPanel({
           role="status"
           aria-label="智能相册维度计划"
         >
-          <p className="text-fg-muted">
+          <p className="text-ink-2">
             本轮具备生成线索：
             {generatedDimensions.length > 0
               ? generatedDimensions.join("、")
@@ -292,7 +292,7 @@ export default function DailyPlanPanel({
             。
           </p>
           {unavailableDimensions.length > 0 && (
-            <p className="mt-1 text-fg-subtle">
+            <p className="mt-1 text-ink-3">
               其他维度仍会刷新已有结果；补齐前置分析：
               {unavailableDimensions.join("；")}。
             </p>
@@ -322,12 +322,12 @@ function DailyPlanEstimate({
 }) {
   if (loading) {
     return (
-      <span className="text-caption text-fg-subtle">预计下次运行：核算中…</span>
+      <span className="text-caption text-ink-3">预计下次运行：核算中…</span>
     );
   }
   if (error) {
     return (
-      <span className="text-caption text-fg-subtle">预计下次运行：预估失败</span>
+      <span className="text-caption text-ink-3">预计下次运行：预估失败</span>
     );
   }
   if (!estimate) return null;
@@ -347,7 +347,7 @@ function DailyPlanEstimate({
     usable.map((entry) => entry?.incremental ?? null),
   );
   return (
-    <span className="text-caption text-fg-subtle">
+    <span className="text-caption text-ink-3">
       {`分析预计：${formatCount(total.count)} 张 · ${formatEstimateDuration(total.estimatedDurationMs)}`}
     </span>
   );

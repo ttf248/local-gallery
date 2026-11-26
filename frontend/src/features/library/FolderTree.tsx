@@ -89,21 +89,21 @@ export default function FolderTree({ mode, selectedId, onSelect }: Props) {
   if (roots.length === 0) return null;
   return (
     <nav aria-label="目录" className="library-tree text-body">
-      <div className="library-tree__search flex items-center gap-1.5 h-8 [padding:0_4px_0_8px] mb-2 border border-line rounded-control bg-bg focus-within:border-signal focus-within:[outline:2px_solid_var(--signal)] focus-within:[outline-offset:1px] touch:min-h-11 touch:min-w-11">
-        <SearchIcon size={13} className="shrink-0 text-fg-subtle" />
+      <div className="library-tree__search flex items-center gap-1.5 h-8 [padding:0_4px_0_8px] mb-2 border border-line rounded-md bg-canvas focus-within:border-accent focus-within:[outline:2px_solid_var(--accent)] focus-within:[outline-offset:1px] touch:min-h-11 touch:min-w-11">
+        <SearchIcon size={13} className="shrink-0 text-ink-3" />
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="定位文件夹或相册"
           aria-label="在目录中定位"
-          className="h-full min-w-0 flex-1 bg-transparent text-body text-fg outline-none placeholder:text-fg-subtle"
+          className="h-full min-w-0 flex-1 bg-transparent text-body text-ink outline-none placeholder:text-ink-3"
         />
         {query ? (
           <button
             type="button"
             onClick={() => setQuery("")}
-            className="library-tree__search-clear inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-sm text-fg-subtle hover:bg-bg-subtle hover:text-fg touch:min-h-11 touch:min-w-11"
+            className="library-tree__search-clear inline-flex items-center justify-center w-7 h-7 shrink-0 rounded-sm text-ink-3 hover:bg-sunken hover:text-ink touch:min-h-11 touch:min-w-11"
             aria-label="清除定位"
           >
             <CloseIcon size={12} />
@@ -172,11 +172,11 @@ function TreeSearchResults({
     .map((item) => item.node);
 
   if (search.isLoading) {
-    return <p className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">正在查找…</p>;
+    return <p className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">正在查找…</p>;
   }
   if (search.isError) {
     return (
-      <div className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">
+      <div className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">
         <p role="alert" className="text-danger">
           查找失败。
         </p>
@@ -191,7 +191,7 @@ function TreeSearchResults({
     );
   }
   if (nodes.length === 0) {
-    return <p className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">没有找到「{query}」。</p>;
+    return <p className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">没有找到「{query}」。</p>;
   }
 
   return (
@@ -201,8 +201,8 @@ function TreeSearchResults({
         const label = node.displayName || node.name;
         return (
           <li key={node.id} className="library-tree__item m-0">
-            <div className="library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-fg-muted hover:bg-bg-subtle hover:text-fg [&.is-active]:text-fg [&.is-active]:font-semibold [&.is-active]:bg-bg-elevated [&.is-active]:shadow-1" style={{ paddingLeft: 8 }}>
-              <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-fg-subtle hover:bg-bg-strong hover:text-fg touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
+            <div className="library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-ink-2 hover:bg-sunken hover:text-ink [&.is-active]:text-ink [&.is-active]:font-semibold [&.is-active]:bg-raised [&.is-active]:shadow-1" style={{ paddingLeft: 8 }}>
+              <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-ink-3 hover:bg-sunken-strong hover:text-ink touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
               <button
                 type="button"
                 className="library-tree__label flex items-center gap-[7px] flex-1 min-w-0 py-[3px] px-0 text-left text-body [color:inherit] touch:min-h-11 touch:min-w-11"
@@ -217,7 +217,7 @@ function TreeSearchResults({
                 {isFolder ? <FolderIcon size={14} /> : <ImageIcon size={14} />}
                 <span className="truncate">{label}</span>
               </button>
-              <span className="library-tree__meta shrink-0 text-caption text-fg-subtle tabular-nums">
+              <span className="library-tree__meta shrink-0 text-caption text-ink-3 tabular-nums">
                 {isFolder
                   ? `${node.albumCount ?? 0} ${albumCountUnit(mode)}`
                   : `${node.imageCount ?? 0} ${mediaUnit(mode)}`}
@@ -227,9 +227,9 @@ function TreeSearchResults({
         );
       })}
       {nodes.length >= SEARCH_LIMIT ? (
-        <li className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">只列出了前 {SEARCH_LIMIT} 条。</li>
+        <li className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">只列出了前 {SEARCH_LIMIT} 条。</li>
       ) : null}
-      <li className="library-tree__hint py-1.5 px-2 text-caption text-fg-subtle">
+      <li className="library-tree__hint py-1.5 px-2 text-caption text-ink-3">
         {mode === "comic" ? copy.albumTypeLabel : "相册"}点开是内容，
         {copy.collectionTypeLabel}点开是下一层。
       </li>
@@ -445,7 +445,7 @@ function TreeChildrenContent({
         </div>
       ) : null}
       {loading && items.length === 0 ? (
-        <p className="py-2 text-caption text-fg-muted" style={indent}>
+        <p className="py-2 text-caption text-ink-2" style={indent}>
           正在读取目录…
         </p>
       ) : null}
@@ -488,24 +488,24 @@ function TreeRow({
 }) {
   return (
     <div
-      className={`library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-fg-muted hover:bg-bg-subtle hover:text-fg [&.is-active]:text-fg [&.is-active]:font-semibold [&.is-active]:bg-bg-elevated [&.is-active]:shadow-1${active ? " is-active" : ""}`}
+      className={`library-tree__row flex items-center gap-1 min-h-8 pr-2 rounded-sm text-ink-2 hover:bg-sunken hover:text-ink [&.is-active]:text-ink [&.is-active]:font-semibold [&.is-active]:bg-raised [&.is-active]:shadow-1${active ? " is-active" : ""}`}
       style={{ paddingLeft: 8 + depth * 16 }}
     >
       {hasChildren ? (
         <button
           type="button"
-          className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-fg-subtle hover:bg-bg-strong hover:text-fg touch:min-h-11 touch:min-w-11"
+          className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-ink-3 hover:bg-sunken-strong hover:text-ink touch:min-h-11 touch:min-w-11"
           onClick={onToggle}
           aria-expanded={expanded}
           aria-label={expanded ? `收起 ${label}` : `展开 ${label}`}
         >
           <ChevronRightIcon
             size={13}
-            className={`library-tree__chevron transition duration-2 [&.is-open]:[transform:rotate(90deg)]${expanded ? " is-open" : ""}`}
+            className={`library-tree__chevron transition duration-base [&.is-open]:[transform:rotate(90deg)]${expanded ? " is-open" : ""}`}
           />
         </button>
       ) : (
-        <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-fg-subtle hover:bg-bg-strong hover:text-fg touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
+        <span className="library-tree__toggle inline-flex items-center justify-center w-7 h-7 ml-[-4px] shrink-0 rounded-sm text-ink-3 hover:bg-sunken-strong hover:text-ink touch:min-h-11 touch:min-w-11 library-tree__toggle--leaf pointer-events-none" />
       )}
       <button
         type="button"
@@ -517,7 +517,7 @@ function TreeRow({
         <span className="truncate">{label}</span>
       </button>
       {meta ? (
-        <span className="library-tree__meta shrink-0 text-caption text-fg-subtle tabular-nums">{meta}</span>
+        <span className="library-tree__meta shrink-0 text-caption text-ink-3 tabular-nums">{meta}</span>
       ) : null}
     </div>
   );

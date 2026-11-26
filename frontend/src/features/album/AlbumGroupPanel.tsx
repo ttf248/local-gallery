@@ -247,12 +247,12 @@ export default function AlbumGroupPanel({
   return (
     <section
       aria-label="分组浏览"
-      className="shrink-0 border-b border-line bg-bg"
+      className="shrink-0 border-b border-line bg-canvas"
     >
       <div className="page-shell py-3">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-body font-medium text-fg">分组浏览</span>
-          <span className="text-caption text-fg-subtle">
+          <span className="text-body font-medium text-ink">分组浏览</span>
+          <span className="text-caption text-ink-3">
             只在本相册内分组，原始照片与文件保持不变
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -274,7 +274,7 @@ export default function AlbumGroupPanel({
               trigger={
                 <button
                   type="button"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-bg-subtle hover:text-fg"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-sunken hover:text-ink"
                   title="分析与重建"
                   aria-label="分析与重建"
                 >
@@ -318,8 +318,8 @@ export default function AlbumGroupPanel({
               onClick={() => onDimensionChange(key)}
               className={`rounded-full border px-3 py-1 text-caption transition-colors ${
                 dimension === key
-                  ? "border-accent/40 bg-accent/10 text-accent"
-                  : "border-line bg-bg-elevated text-fg-muted hover:text-fg"
+                  ? "border-primary/40 bg-primary/10 text-primary"
+                  : "border-line bg-raised text-ink-2 hover:text-ink"
               }`}
             >
               {label}
@@ -332,13 +332,13 @@ export default function AlbumGroupPanel({
             智能分组读取失败，请重试。
           </ErrorBanner>
         ) : loading || !summary ? (
-          <div className="mt-3 rounded-xl border border-line bg-bg-elevated p-4 text-body text-fg-muted">
+          <div className="mt-3 rounded-xl border border-line bg-raised p-4 text-body text-ink-2">
             正在读取这本相册的分析线索…
           </div>
         ) : visibleGroups.length === 0 ? (
-          <div className="mt-3 rounded-xl border border-dashed border-line bg-bg-elevated/60 px-6 py-10 text-center">
-            <h3 className="text-body font-medium text-fg">{emptyState.title}</h3>
-            <p className="mt-2 text-caption text-fg-muted">
+          <div className="mt-3 rounded-xl border border-dashed border-line bg-raised/60 px-6 py-10 text-center">
+            <h3 className="text-body font-medium text-ink">{emptyState.title}</h3>
+            <p className="mt-2 text-caption text-ink-2">
               {emptyState.description}
             </p>
             {emptyState.action === "enable-people" ? (
@@ -413,14 +413,14 @@ export default function AlbumGroupPanel({
                 aria-pressed={groupId === null}
                 className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors ${
                   groupId === null
-                    ? "border-accent/40 bg-accent/10"
-                    : "border-line bg-bg-elevated hover:border-line-strong"
+                    ? "border-primary/40 bg-primary/10"
+                    : "border-line bg-raised hover:border-line-strong"
                 }`}
               >
-                <span className="min-w-0 flex-1 truncate text-body text-fg">
+                <span className="min-w-0 flex-1 truncate text-body text-ink">
                   全部照片
                 </span>
-                <span className="shrink-0 text-caption tabular-nums text-fg-muted">
+                <span className="shrink-0 text-caption tabular-nums text-ink-2">
                   {totalPhotos} 张
                 </span>
               </button>
@@ -434,8 +434,8 @@ export default function AlbumGroupPanel({
                   <div
                     className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
                       active
-                        ? "border-accent/40 bg-accent/10"
-                        : "border-line bg-bg-elevated"
+                        ? "border-primary/40 bg-primary/10"
+                        : "border-line bg-raised"
                     }`}
                   >
                     <button
@@ -447,7 +447,7 @@ export default function AlbumGroupPanel({
                       {/* 封面组件内部是绝对定位的：外层必须是定位容器，
                           否则那张图会飘到面板外面挡住别的控件。 */}
                       <span
-                        className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-bg-subtle"
+                        className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-sunken"
                         data-testid="smart-album-cover"
                       >
                         <SmartAlbumCover
@@ -458,11 +458,11 @@ export default function AlbumGroupPanel({
                       </span>
                       <span className="min-w-0 flex-1">
                         {editingGroupId === group.id ? null : (
-                          <span className="block truncate text-body text-fg">
+                          <span className="block truncate text-body text-ink">
                             {group.name}
                           </span>
                         )}
-                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-caption text-fg-muted">
+                        <span className="mt-0.5 flex flex-wrap items-center gap-2 text-caption text-ink-2">
                           <span className="tabular-nums">
                             {group.photoCount} 张
                           </span>
@@ -478,12 +478,12 @@ export default function AlbumGroupPanel({
                               </span>
                             ))}
                           {group.hidden ? (
-                            <span className="rounded-full bg-bg-subtle px-1.5 py-0.5 text-caption text-fg-subtle">
+                            <span className="rounded-full bg-sunken px-1.5 py-0.5 text-caption text-ink-3">
                               已隐藏
                             </span>
                           ) : null}
                           {group.overrideConflict ? (
-                            <span className="rounded-full bg-bg-subtle px-1.5 py-0.5 text-caption text-warning">
+                            <span className="rounded-full bg-sunken px-1.5 py-0.5 text-caption text-warning">
                               修改待确认
                             </span>
                           ) : null}
@@ -511,18 +511,18 @@ export default function AlbumGroupPanel({
                             }
                             maxLength={60}
                             aria-label="分组名称"
-                            className="min-w-0 w-32 rounded-md border border-line bg-bg px-2 py-1 text-caption text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-signal"
+                            className="min-w-0 w-32 rounded-md border border-line bg-canvas px-2 py-1 text-caption text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           />
                           <button
                             type="submit"
-                            className="btn-text text-caption text-accent hover:underline"
+                            className="btn-text text-caption text-primary hover:underline"
                           >
                             保存
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingGroupId(null)}
-                            className="btn-text text-caption text-fg-muted hover:text-fg"
+                            className="btn-text text-caption text-ink-2 hover:text-ink"
                           >
                             取消
                           </button>
@@ -539,7 +539,7 @@ export default function AlbumGroupPanel({
                                   : group.suggestedName,
                               );
                             }}
-                            className="rounded px-1.5 py-1 text-caption text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                            className="rounded px-1.5 py-1 text-caption text-ink-2 hover:bg-sunken hover:text-ink"
                             aria-label={`重命名 ${group.name}`}
                           >
                             重命名
@@ -551,7 +551,7 @@ export default function AlbumGroupPanel({
                                 hidden: !group.hidden,
                               })
                             }
-                            className="rounded px-1.5 py-1 text-caption text-fg-muted hover:bg-bg-subtle hover:text-fg"
+                            className="rounded px-1.5 py-1 text-caption text-ink-2 hover:bg-sunken hover:text-ink"
                           >
                             {group.hidden ? "取消隐藏" : "隐藏"}
                           </button>
@@ -573,7 +573,7 @@ export default function AlbumGroupPanel({
               type="button"
               onClick={() => setDetailsOpen((value) => !value)}
               aria-expanded={detailsOpen}
-              className="inline-flex items-center gap-1.5 text-caption text-fg-muted hover:text-fg"
+              className="inline-flex items-center gap-1.5 text-caption text-ink-2 hover:text-ink"
             >
               <ChevronRightIcon
                 size={12}
@@ -582,7 +582,7 @@ export default function AlbumGroupPanel({
               分析说明
             </button>
             {detailsOpen ? (
-              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-line bg-bg-elevated px-4 py-3 text-caption text-fg-muted">
+              <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-line bg-raised px-4 py-3 text-caption text-ink-2">
                 <span>
                   分析覆盖 {summary.coverage.analyzed}/{summary.coverage.total}
                 </span>
@@ -619,13 +619,13 @@ export default function AlbumGroupPanel({
                       覆盖 {summary.totalPhotos - summary.ungroupedPhotos} 张
                     </span>
                     <span>可用照片 {summary.availablePhotos}</span>
-                    <span className="text-fg-subtle">
+                    <span className="text-ink-3">
                       推荐至少 {RECOMMENDATION_MINIMUM_PHOTOS} 张照片、至少两类
                       线索一致，且不与所在文件夹重复。
                     </span>
                   </>
                 ) : null}
-                <span className="text-fg-subtle">
+                <span className="text-ink-3">
                   分组由本机分析算出，重建只改分组，不动任何原始文件。
                 </span>
               </div>

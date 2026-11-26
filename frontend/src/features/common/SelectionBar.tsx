@@ -65,7 +65,7 @@ export function SelectionBar({
     <div
       role="toolbar"
       aria-label={label}
-      className="fixed inset-x-2 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+12px)] z-popover mx-auto flex min-h-[52px] w-fit max-w-[calc(100%-16px)] flex-wrap items-center justify-center gap-1 rounded-3xl bg-inverse-bg px-2.5 py-1.5 text-caption text-inverse-fg shadow-3 md:bottom-5"
+      className="fixed inset-x-2 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+12px)] z-popover mx-auto flex min-h-[52px] w-fit max-w-[calc(100%-16px)] flex-wrap items-center justify-center gap-1 rounded-3xl bg-inverse px-2.5 py-1.5 text-caption text-on-inverse shadow-3 md:bottom-5"
     >
       <button
         type="button"
@@ -92,7 +92,7 @@ export function SelectionBar({
           onClick={() => void action.onRun()}
           className={
             "inline-flex min-h-9 items-center gap-1.5 rounded-full px-2 hover:bg-white/15 disabled:opacity-45 " +
-            (action.tone === "danger" ? "text-overlay-danger" : "")
+            (action.tone === "danger" ? "text-theater-danger" : "")
           }
         >
           {action.icon}

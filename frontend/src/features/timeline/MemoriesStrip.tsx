@@ -80,11 +80,11 @@ export default function MemoriesStrip({
               type="button"
               aria-expanded={showPhotos}
               aria-controls={stripId}
-              className="flex min-h-10 items-center gap-2 rounded-control text-body font-semibold"
+              className="flex min-h-10 items-center gap-2 rounded-md text-body font-semibold"
               onClick={() => setExpanded(!showPhotos)}
             >
               那年今日
-              <span className="text-caption font-normal tabular-nums text-fg-muted">
+              <span className="text-caption font-normal tabular-nums text-ink-2">
                 {photos.length} 张
               </span>
               <ChevronDownIcon
@@ -98,7 +98,7 @@ export default function MemoriesStrip({
           <Link
             to={resume.to}
             title={resume.title}
-            className="ml-auto flex min-h-10 min-w-0 items-center rounded-control px-2 text-caption text-fg-muted hover:bg-bg-subtle hover:text-fg"
+            className="ml-auto flex min-h-10 min-w-0 items-center rounded-md px-2 text-caption text-ink-2 hover:bg-sunken hover:text-ink"
           >
             <span className="truncate">接着看 · {resume.title}</span>
           </Link>
@@ -109,7 +109,7 @@ export default function MemoriesStrip({
           title="今天隐藏回忆"
           className={
             (resume ? "" : "ml-auto ") +
-            "grid size-10 shrink-0 place-items-center rounded-full text-fg-muted hover:bg-bg-subtle hover:text-fg"
+            "grid size-10 shrink-0 place-items-center rounded-full text-ink-2 hover:bg-sunken hover:text-ink"
           }
           onClick={() => useUIStore.getState().setMemoriesDismissedOn(date)}
         >
@@ -172,7 +172,7 @@ export default function MemoriesStrip({
                   </div>
                   <time
                     dateTime={dateValue}
-                    className="sticky left-0 block w-max whitespace-nowrap pt-1 text-caption tabular-nums text-fg-muted"
+                    className="sticky left-0 block w-max whitespace-nowrap pt-1 text-caption tabular-nums text-ink-2"
                   >
                     {anniversary
                       ? year + " 年"

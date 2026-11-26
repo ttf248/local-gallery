@@ -95,7 +95,7 @@ export default function PhotoStrip<
               return (
                 <div
                   key={tile.id}
-                  className="group relative shrink-0 overflow-hidden rounded-md bg-bg-subtle shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
+                  className="group relative shrink-0 overflow-hidden rounded-md bg-sunken shadow-[0_1px_2px_rgba(0,0,0,0.18)] transition-shadow duration-200 hover:shadow-[0_6px_18px_rgba(0,0,0,0.28)]"
                   style={{ width: tile.width, height: row.tileHeight }}
                 >
                   {isVideo ? (
@@ -120,7 +120,7 @@ export default function PhotoStrip<
                   <button
                     type="button"
                     onClick={() => onOpen?.(item, index)}
-                    className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-signal"
+                    className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
                     title={source ? `${source} · ${item.name}` : item.name}
                     aria-label={
                       isVideo ? `播放 ${item.name}` : `查看 ${item.name}`

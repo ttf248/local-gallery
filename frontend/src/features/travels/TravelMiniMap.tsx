@@ -175,9 +175,9 @@ export default function TravelMiniMap({
         containerRef.current = node;
       }}
     >
-      {loading && !empty && <p role="status" className="absolute left-3 top-3 text-caption text-fg-muted">正在载入足迹…</p>}
+      {loading && !empty && <p role="status" className="absolute left-3 top-3 text-caption text-ink-2">正在载入足迹…</p>}
       {empty ? (
-        <p className="text-caption text-fg-muted">
+        <p className="text-caption text-ink-2">
           {loading ? "正在载入足迹…" : "还没有带位置的照片"}
         </p>
       ) : (
@@ -264,7 +264,7 @@ export default function TravelMiniMap({
                   cx={cx}
                   cy={cy}
                   r={3.2 / Math.max(scale, 0.0001)}
-                  fill="var(--signal)"
+                  fill="var(--accent)"
                 />
               );
             })}

@@ -94,7 +94,7 @@ function PlaceCard({ place }: { place: ChinaPlace }) {
   return (
     <Link
       to={travelPlaceRoute(place.adcode)}
-      className="group/place relative block aspect-[3/2] w-[min(300px,80vw)] shrink-0 overflow-hidden rounded-card bg-bg-media"
+      className="group/place relative block aspect-[3/2] w-[min(300px,80vw)] shrink-0 overflow-hidden rounded-lg bg-media"
     >
       {cover ? (
         <RenditionImage
@@ -104,12 +104,12 @@ function PlaceCard({ place }: { place: ChinaPlace }) {
           className="size-full object-cover transition-transform motion-safe:group-hover/place:scale-[1.03]"
         />
       ) : (
-        <span className="grid size-full place-items-center text-fg-muted">
+        <span className="grid size-full place-items-center text-ink-2">
           <ImageIcon />
         </span>
       )}
       <span className="absolute inset-x-0 bottom-0 flex h-1/2 flex-col justify-end bg-gradient-to-t from-black/95 via-black/75 to-transparent p-4 text-white">
-        <span className="w-fit text-title-3">{place.name}</span>
+        <span className="w-fit text-heading">{place.name}</span>
         <span className="w-fit text-caption text-white">
           {place.photoCount.toLocaleString("zh-CN")} 张
           {place.visitCount > 0 && " · 去过 " + place.visitCount + " 次"}
@@ -143,24 +143,24 @@ function PlaceEmptyState({
     latestMetadataJob?.status === "paused";
 
   if (isLoading && !isError) {
-    return <p className="text-body text-fg-muted">正在检查 GPS 分析状态…</p>;
+    return <p className="text-body text-ink-2">正在检查 GPS 分析状态…</p>;
   }
   if (isError) {
     return <InlineAlert tone="danger">GPS 分析状态暂时读不出来。</InlineAlert>;
   }
   if (running) {
     return (
-      <p className="text-body text-fg-muted" aria-live="polite">
+      <p className="text-body text-ink-2" aria-live="polite">
         元数据分析正在进行，地点结果会在完成后更新。
       </p>
     );
   }
   if (latestMetadataJob?.status === "failed") {
     return (
-      <p className="text-body text-fg-muted">
+      <p className="text-body text-ink-2">
         上次元数据分析失败，暂时无法确认地点结果。
         <Link
-          className="ml-1 text-accent underline-offset-2 hover:underline"
+          className="ml-1 text-primary underline-offset-2 hover:underline"
           to="/tasks"
         >
           查看任务记录
@@ -170,17 +170,17 @@ function PlaceEmptyState({
   }
   if (latestMetadataJob?.status === "completed") {
     return (
-      <p className="text-body text-fg-muted">
+      <p className="text-body text-ink-2">
         元数据分析已完成，目前没有解析出可用于足迹的位置。
       </p>
     );
   }
   return (
-    <p className="text-body text-fg-muted">
+    <p className="text-body text-ink-2">
       尚未完成元数据 / GPS
       分析。运行一次元数据分析后，这里会显示已解析出位置的照片。
       <Link
-        className="ml-1 text-accent underline-offset-2 hover:underline"
+        className="ml-1 text-primary underline-offset-2 hover:underline"
         to="/tasks/plan"
       >
         打开任务中心

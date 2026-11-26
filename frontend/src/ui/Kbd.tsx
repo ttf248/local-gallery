@@ -10,7 +10,7 @@ export const Kbd = forwardRef<
       {...props}
       ref={ref}
       className={cx(
-        "rounded-md bg-bg-subtle px-1.5 py-0.5 font-sans text-micro",
+        "rounded-md bg-sunken px-1.5 py-0.5 font-sans text-caption",
         className,
       )}
     >

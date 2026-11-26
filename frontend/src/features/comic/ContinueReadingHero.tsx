@@ -44,13 +44,13 @@ export function UnreadHero({
     >
       <div className="flex items-start justify-between gap-3 mb-5">
         <div className="min-w-0 flex-1">
-          <p className="page-eyebrow flex items-center gap-2 text-accent text-caption font-semibold tracking-[0.02em] mb-2">{copy.unreadEyebrow}</p>
+          <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em] mb-2">{copy.unreadEyebrow}</p>
           {/* 标题后接一条细线：这一段的内容到这里为止 —— 与时间线上的
               月份标题同一套写法。 */}
           <div className="flex items-baseline gap-3">
-            <h2 id="unread-heading" className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">
+            <h2 id="unread-heading" className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
               {copy.unreadTitle}{" "}
-              <span className="font-sans text-body font-normal text-fg-muted ml-2 tabular-nums">
+              <span className="font-sans text-body font-normal text-ink-2 ml-2 tabular-nums">
                 {count} {copy.unreadCountLabel}
               </span>
             </h2>
@@ -110,7 +110,7 @@ export function UnreadHero({
       {/* 还剩几本没摆出来。写法与「继续阅读」面板的「还有 N 卷在读」
           同一套：总数与摆出来的数必须能对上。 */}
       {remaining > 0 && (
-        <p className="hero-panel__muted text-fg-muted text-caption self-end mt-4">
+        <p className="hero-panel__muted text-ink-2 text-caption self-end mt-4">
           还有 {remaining} {copy.collectionUnit}
           {copy.unreadCountVerb}
         </p>
@@ -150,17 +150,17 @@ export function ContinueReadingHero({
       aria-labelledby="continue-heading"
     >
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 id="continue-heading" className="section-title font-display text-title-3 leading-[1.4] font-semibold text-fg tracking-[-0.01em]">
+        <h2 id="continue-heading" className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
           {copy.continueTitle}
         </h2>
-        <span className="hero-panel__muted text-fg-muted text-caption tabular-nums">
+        <span className="hero-panel__muted text-ink-2 text-caption tabular-nums">
           {cards.length} {copy.unfinishedCountLabel}
         </span>
         <span className="section-rule [flex:1_1_32px] h-[1px] self-center bg-line" aria-hidden />
         <button
           type="button"
           onClick={onClearAll}
-          className="hero-panel__muted text-fg-muted text-caption inline-flex items-center gap-1 min-h-8 touch:min-h-10 px-1 rounded"
+          className="hero-panel__muted text-ink-2 text-caption inline-flex items-center gap-1 min-h-8 touch:min-h-10 px-1 rounded"
           title={copy.markAllTitle}
         >
           <CloseIcon size={12} />
@@ -170,11 +170,11 @@ export function ContinueReadingHero({
       <div className="mt-6 grid min-w-0 grid-cols-[minmax(104px,.8fr)_minmax(0,1fr)] items-center gap-4 sm:gap-6 sm:grid-cols-[minmax(160px,280px)_minmax(0,1fr)]">
         <StagePoster card={featured} onClick={() => onContinue(featured)} />
         <div className="min-w-0">
-          <p className="hero-panel__muted text-fg-muted text-caption">上次，看到这里</p>
+          <p className="hero-panel__muted text-ink-2 text-caption">上次，看到这里</p>
           {/* 作品名压在卷名上方：卷名只写「第1卷」时，这一卷属于哪部
               作品看不出来 —— 与书封、阅读器顶栏同一套写法。 */}
           {series && (
-            <p className="hero-panel__muted text-fg-muted text-caption mt-1 text-micro tracking-[0.06em]">
+            <p className="hero-panel__muted text-ink-2 text-caption mt-1 text-caption tracking-[0.06em]">
               {series}
             </p>
           )}
@@ -190,7 +190,7 @@ export function ContinueReadingHero({
       </div>
       {rest.length > 0 && (
         <section className="mt-8">
-          <h3 className="mb-3 text-title-3">在读</h3>
+          <h3 className="mb-3 text-heading">在读</h3>
           <ScrollRow label="在读">
             {rest.map((card) => (
               <QueueItem
@@ -206,7 +206,7 @@ export function ContinueReadingHero({
       {cards.length > 4 && (
         <Link
           to={recentsRoute("comic")}
-          className="hero-panel__muted text-fg-muted text-caption inline-flex items-center gap-2 self-end mt-4 min-h-8 touch:min-h-10"
+          className="hero-panel__muted text-ink-2 text-caption inline-flex items-center gap-2 self-end mt-4 min-h-8 touch:min-h-10"
         >
           还有 {cards.length - 4} {copy.collectionUnit}在读{" "}
           <ArrowRightLineIcon size={12} />
@@ -257,7 +257,7 @@ function StageInfo({
       {/* 轨道与页码并排、缩到一截：横贯整列的空条读作一条分隔线，
           压在页码下面尤其像下划线。侧栏的续读卡也是这个写法。 */}
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <p className="hero-panel__muted text-fg-muted text-caption tabular-nums">
+        <p className="hero-panel__muted text-ink-2 text-caption tabular-nums">
           {copy.positionVerb} {index + 1} / {total}
         </p>
         {/* 空轨道不出现：刚翻开第一页时进度是 0%，一条全灰的横条
@@ -267,7 +267,7 @@ function StageInfo({
           <div
             /* 窄屏下轨道缩到一截：与页码并排才读得出「进度条 + 读到哪里」。
                独占一行时它就是一条分隔线。 */
-            className="h-1 w-24 sm:w-40 shrink-0 rounded-full bg-accent/20 overflow-hidden"
+            className="h-1 w-24 sm:w-40 shrink-0 rounded-full bg-primary/20 overflow-hidden"
             role="progressbar"
             aria-valuenow={percent}
             aria-valuemin={0}
@@ -275,7 +275,7 @@ function StageInfo({
             aria-label={`「${card.title}」${copy.continueTitle}进度`}
           >
             <div
-              className="h-full bg-accent rounded-full transition-[width]"
+              className="h-full bg-primary rounded-full transition-[width]"
               style={{ width: `${percent}%` }}
             />
           </div>
@@ -331,7 +331,7 @@ function QueueItem({
           <span className="block truncate text-body font-medium">
             {queueTitle}
           </span>
-          <span className="hero-panel__muted text-fg-muted text-caption block mt-1 tabular-nums">
+          <span className="hero-panel__muted text-ink-2 text-caption block mt-1 tabular-nums">
             {copy.positionVerb} {(card.progress?.index ?? 0) + 1} /{" "}
             {card.progress?.total ?? 0}
           </span>
@@ -340,7 +340,7 @@ function QueueItem({
       <button
         type="button"
         onClick={onRemove}
-        className="hero-queue__remove max-sm:opacity-100 absolute right-[-5px] top-[-5px] grid place-items-center size-8 touch:size-10 rounded-full bg-bg text-fg-muted opacity-0 [.hero-queue\_\_item:hover_&]:opacity-100 touch:opacity-100 focus-visible:opacity-100"
+        className="hero-queue__remove max-sm:opacity-100 absolute right-[-5px] top-[-5px] grid place-items-center size-8 touch:size-10 rounded-full bg-canvas text-ink-2 opacity-0 [.hero-queue\_\_item:hover_&]:opacity-100 touch:opacity-100 focus-visible:opacity-100"
         title={`将「${card.title}」${copy.markFinishedLabel}`}
         aria-label={`将${card.title}${copy.markFinishedLabel}`}
       >

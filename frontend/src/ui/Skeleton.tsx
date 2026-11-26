@@ -20,7 +20,7 @@ export const Skeleton = forwardRef<HTMLDivElement, Props>(function Skeleton(
       {...props}
       ref={ref}
       className={cx(
-        "skeleton bg-bg-subtle",
+        "skeleton bg-sunken",
         shape === "circle"
           ? "rounded-full"
           : shape === "text"

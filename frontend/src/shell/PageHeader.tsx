@@ -28,7 +28,7 @@ export function PageHeader({
   return (
     <header className="min-w-0 pb-6 pt-[clamp(24px,3vw,48px)]">
       {eyebrow && (
-        <div className="mb-2 text-caption text-fg-muted">{eyebrow}</div>
+        <div className="mb-2 text-caption text-ink-2">{eyebrow}</div>
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
@@ -39,14 +39,14 @@ export function PageHeader({
               className={
                 titleEditor
                   ? "sr-only"
-                  : "break-words font-display text-title-1"
+                  : "break-words font-display text-display"
               }
             >
               {titleEditor ? title : (titleContent ?? title)}
             </h1>
             {titleEditor}
             {meta && (
-              <div className="mt-1.5 text-caption tabular-nums text-fg-muted">
+              <div className="mt-1.5 text-caption tabular-nums text-ink-2">
                 {meta}
               </div>
             )}

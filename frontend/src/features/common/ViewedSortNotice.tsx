@@ -19,7 +19,7 @@ export default function ViewedSortNotice({
   }
   if (query.isLoading) {
     return (
-      <div role="status" className="page-shell mb-4 text-body text-fg-muted">
+      <div role="status" className="page-shell mb-4 text-body text-ink-2">
         正在加载最近访问…
       </div>
     );

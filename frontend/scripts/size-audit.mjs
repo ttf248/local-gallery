@@ -37,6 +37,7 @@ const VIEWPORTS = (process.env.LG_VIEWPORTS ?? "1440x900")
 // 首屏 HTML + JS + CSS 的传输量。它与媒体库大小无关，是能长期守住的那条线：
 // 路由级懒加载与 manualChunks 已经把首屏压到这个量级，加新依赖或新 chunk
 // 时这条线会先响。
+const FONT_BUDGET_BYTES = 80 * 1024;
 const STATIC_BUDGET_BYTES = 120 * 1024;
 
 const argv = process.argv.slice(2);
@@ -114,14 +115,15 @@ async function measure(page, url) {
     const nav = performance.getEntriesByType("navigation")[0];
     const sum = (predicate) =>
       resources
-        .filter((r) => predicate(r.initiatorType))
+        .filter((r) => predicate(r.initiatorType, r.name))
         .reduce((a, r) => a + r.transferSize, 0);
     const largest = performance.getEntriesByName("first-contentful-paint")[0];
     return {
       // transferSize 是实际过网的字节：命中浏览器缓存时为 0。
       staticBytes:
         (nav?.transferSize ?? 0) +
-        sum((t) => t === "script" || t === "link" || t === "css"),
+        sum((t, url) => !/\.woff2(?:$|[?#])/i.test(url) && (t === "script" || t === "link" || t === "css")),
+      fontBytes: sum((_, url) => /\.woff2(?:$|[?#])/i.test(url)),
       mediaBytes: sum((t) => t === "img" || t === "video"),
       requests: resources.length + 1,
       fcpMs: largest ? Math.round(largest.startTime) : null,
@@ -170,7 +172,7 @@ for (const viewport of VIEWPORTS) {
 await browser.close();
 
 if (JSON_OUT) {
-  console.log(JSON.stringify({ budget: STATIC_BUDGET_BYTES, results }, null, 2));
+  console.log(JSON.stringify({ budget: STATIC_BUDGET_BYTES, fontBudget: FONT_BUDGET_BYTES, results }, null, 2));
 } else {
   console.log(`静态载荷预算：${(STATIC_BUDGET_BYTES / 1024).toFixed(0)} KB\n`);
   for (const r of results) {
@@ -186,13 +188,13 @@ if (JSON_OUT) {
         ? "  ← 超出预算"
         : "";
     console.log(
-      `${r.route} @${r.viewport}：静态 ${staticKB} KB · 媒体 ${mediaKB} KB · ` +
+      `${r.route} @${r.viewport}：静态 ${staticKB} KB · 字体 ${(r.fontBytes / 1024).toFixed(1)} KB · 媒体 ${mediaKB} KB · ` +
         `${r.requests} 请求 · FCP ${r.fcpMs}ms · LCP ${r.lcpMs}ms${over}`,
     );
   }
 }
 
 const failed = results.some(
-  (r) => r.error || (!r.isDevServer && r.staticBytes > STATIC_BUDGET_BYTES),
+  (r) => r.error || (!r.isDevServer && (r.staticBytes > STATIC_BUDGET_BYTES || r.fontBytes > FONT_BUDGET_BYTES)),
 );
 process.exit(failed ? 1 : 0);

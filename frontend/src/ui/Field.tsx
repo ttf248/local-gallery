@@ -24,10 +24,10 @@ export const TextField = forwardRef<HTMLInputElement, TextProps>(
     const inputId = id ?? generated;
     return (
       <div className={cx("grid gap-1.5", className)}>
-        <label htmlFor={inputId} className="text-callout">
+        <label htmlFor={inputId} className="text-label">
           {label}
         </label>
-        <div className="field-frame h-10 rounded-control">
+        <div className="field-frame h-10 rounded-md">
           {leading}
           <input
             {...props}
@@ -43,7 +43,7 @@ export const TextField = forwardRef<HTMLInputElement, TextProps>(
         {(error || hint) && (
           <p
             className={
-              error ? "text-caption text-danger" : "text-caption text-fg-muted"
+              error ? "text-caption text-danger" : "text-caption text-ink-2"
             }
             id={inputId + "-hint"}
           >
@@ -87,7 +87,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
         role="search"
         className={cx(
           "field-frame",
-          size === "lg" ? "h-14 rounded-card" : "h-10 rounded-control",
+          size === "lg" ? "h-14 rounded-lg" : "h-10 rounded-md",
           className,
         )}
       >
