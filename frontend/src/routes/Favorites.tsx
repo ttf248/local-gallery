@@ -1,4 +1,4 @@
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -233,17 +233,17 @@ export default function Favorites({ embedded = false }: { embedded?: boolean } =
   return (
     <div className="min-h-full">
       {embedded ? null : (
-      <PageHeading
-        title={copy.favoritesTitle}
-        eyebrow="值得反复翻看的"
-        description={
+      <div className="page-shell"><PageHeader
+  title={copy.favoritesTitle}
+  eyebrow="值得反复翻看的"
+  meta={
           // 页头只在筛选条不出现时（这一侧看不到任何收藏）报条数：
           // 有内容时筛选条上那行「共 N 项」说的就是它，两处各写一遍
           // 同一个数，读起来像两处不同的统计。
           // 剩下的情况只留筛选条给不出的信息 —— 失效条目与加载状态。
           showStatus ? status : null
         }
-      />
+/></div>
       )}
       {embedded && showStatus ? (
         <div className="page-shell pt-4">{status}</div>

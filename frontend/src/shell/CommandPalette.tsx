@@ -1,3 +1,5 @@
+import { Segmented } from "../ui/Segmented";
+import { thumbUrl } from "../api/thumbs";
 import {
   useEffect,
   useId,
@@ -9,13 +11,13 @@ import {
 import { createPortal } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { albumsApi } from "../../api/albums";
-import { libraryApi } from "../../api/library";
-import { useAppMode } from "../../hooks/useAppMode";
-import { useDebounce } from "../../hooks/useDebounce";
-import { useFocusTrap } from "../../ui/useFocusTrap";
-import { useHistoryCards } from "../../hooks/useHistory";
-import { useUIStore, type ThemePref } from "../../store/uiStore";
+import { albumsApi } from "../api/albums";
+import { libraryApi } from "../api/library";
+import { useAppMode } from "../hooks/useAppMode";
+import { useDebounce } from "../hooks/useDebounce";
+import { useFocusTrap } from "../ui/useFocusTrap";
+import { useHistoryCards } from "../hooks/useHistory";
+import { useUIStore, type ThemePref } from "../store/uiStore";
 import {
   albumRoute,
   homeRoute,
@@ -23,9 +25,9 @@ import {
   randomPhotosRoute,
   searchRoute,
   tagRoute,
-} from "../../utils/path";
-import { workbenchCopy } from "../../utils/workbench";
-import { CloseIcon, SearchIcon } from "../../ui/icons";
+} from "../utils/path";
+import { workbenchCopy } from "../utils/workbench";
+import { CloseIcon, SearchIcon } from "../ui/icons";
 
 export type CommandScope = "name" | "content";
 
@@ -40,6 +42,9 @@ export interface CommandQuickAction {
 
 export interface CommandPaletteProps {
   open: boolean;
+  onRefresh?: () => void;
+  onScan?: () => void;
+  canScan?: boolean;
   onClose: () => void;
 }
 
@@ -47,16 +52,23 @@ interface CommandRow {
   id: string;
   label: string;
   detail?: string;
+  thumb?: string;
   onSelect: () => void;
 }
 
-export default function CommandPalette({ open, onClose }: CommandPaletteProps) {
-  return open
-    ? createPortal(<Palette onClose={onClose} />, document.body)
-    : null;
+export default function CommandPalette({
+  open,
+  ...props
+}: CommandPaletteProps) {
+  return open ? createPortal(<Palette {...props} />, document.body) : null;
 }
 
-function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
+function Palette({
+  onClose,
+  onRefresh,
+  onScan,
+  canScan = true,
+}: Omit<CommandPaletteProps, "open">) {
   const { mode, setMode } = useAppMode();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
@@ -151,6 +163,29 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
       group: "navigation",
       onSelect: () => navigate("/tasks/run"),
     },
+    ...(onRefresh
+      ? [
+          {
+            id: "refresh",
+            label: "刷新媒体库",
+            keywords: ["刷新", "缓存"],
+            group: "action" as const,
+            onSelect: onRefresh,
+          },
+        ]
+      : []),
+    ...(onScan && canScan
+      ? [
+          {
+            id: "scan",
+            label: "重新扫描",
+            keywords: ["扫描"],
+            shortcut: "Ctrl+S",
+            group: "action" as const,
+            onSelect: onScan,
+          },
+        ]
+      : []),
     {
       id: "settings",
       label: "设置",
@@ -212,6 +247,9 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
       ? (suggestions.data?.results ?? []).map((hit) => ({
           id: `hit-${hit.path}`,
           label: hit.name,
+          thumb: hit.coverImage
+            ? thumbUrl(hit.coverImage, hit.coverImageVersion, 320)
+            : undefined,
           detail:
             hit.kind === "smartCollection"
               ? "标签"
@@ -229,6 +267,9 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
   const recent = cards.slice(0, 5).map((card) => ({
     id: `recent-${card.to}`,
     label: card.title,
+    thumb: card.coverPath
+      ? thumbUrl(card.coverPath, card.coverVersion, 320)
+      : undefined,
     onSelect: () => navigate(card.to),
   }));
   const quickMatches = quickActions.filter(
@@ -259,7 +300,7 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
         },
       ]
     : [
-        { label: "最近访问", rows: recent },
+        { label: "最近浏览", rows: recent },
         ...(["navigation", "action"] as const).map((group) => ({
           label: group === "navigation" ? "快捷导航" : "快捷操作",
           rows: quickActions
@@ -297,7 +338,7 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
 
   return (
     <div
-      className="command-scrim"
+      className="fixed inset-0 z-dialog flex items-start justify-center bg-black/[.32] px-4 pt-[14dvh] backdrop-blur-[2px]"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -307,12 +348,13 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
         role="dialog"
         aria-modal="true"
         aria-label="命令面板"
-        className="command-palette ui-popover fade-up"
+        className="flex max-h-[78dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-sheet bg-bg-elevated shadow-3"
         onKeyDown={onPanelKey}
       >
-        <div className="command-palette__input">
+        <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-line px-3">
           <SearchIcon size={19} className="shrink-0 text-fg-muted" />
           <input
+            className="h-14 min-w-0 flex-1 bg-transparent text-title-3"
             ref={input}
             role="combobox"
             aria-autocomplete="list"
@@ -356,33 +398,27 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
                 event.preventDefault();
                 if (event.shiftKey || scope === "content") showResults();
                 else if (activeIndex >= 0) choose(rows[activeIndex]);
+                else if (matches[0]?.label === term) choose(matches[0]);
                 else showResults();
               }
             }}
           />
-          <div
-            className="ui-segmented command-palette__scopes"
-            role="group"
-            aria-label="搜索范围"
-          >
-            {(mode === "photo"
-              ? (["name", "content"] as const)
-              : (["name"] as const)
-            ).map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={scope === option}
-                onClick={() => {
-                  setScope(option);
-                  setActiveId("");
-                  input.current?.focus();
-                }}
-              >
-                {option === "name" ? "名称" : "画面与文字"}
-              </button>
-            ))}
-          </div>
+          {mode === "photo" && (
+            <Segmented<CommandScope>
+              label="搜索范围"
+              size="sm"
+              value={scope}
+              onChange={(next) => {
+                setScope(next);
+                setActiveId("");
+                input.current?.focus();
+              }}
+              options={[
+                { value: "name", label: "名称" },
+                { value: "content", label: "画面与文字" },
+              ]}
+            />
+          )}
           <button
             type="button"
             aria-label="关闭命令面板"
@@ -393,18 +429,18 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
           </button>
         </div>
         <div
-          className="command-palette__results"
+          className="min-h-0 overflow-y-auto p-2"
           id={listId}
           role="listbox"
           aria-label="命令与搜索结果"
         >
           {nameSearch && (debounced !== term || suggestions.isFetching) && (
-            <p role="status" className="command-palette__label">
+            <p role="status" className="px-3 py-2 text-micro text-fg-subtle">
               正在搜索…
             </p>
           )}
           {nameSearch && suggestions.isError && (
-            <p role="status" className="command-palette__label">
+            <p role="status" className="px-3 py-2 text-micro text-fg-subtle">
               名称建议读取失败，可打开结果页重试。
             </p>
           )}
@@ -412,7 +448,10 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
             ({ label, rows: sectionRows }) =>
               sectionRows.length > 0 && (
                 <div key={label} role="group" aria-label={label}>
-                  <div aria-hidden className="command-palette__label">
+                  <div
+                    aria-hidden
+                    className="px-3 py-2 text-micro text-fg-subtle"
+                  >
                     {label}
                   </div>
                   {(sectionRows as CommandRow[]).map((row) => (
@@ -423,11 +462,20 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
                       role="option"
                       aria-selected={row.id === activeId}
                       tabIndex={-1}
-                      className="command-palette__option"
+                      className="flex min-h-12 w-full items-center gap-3 rounded-control px-3 text-left text-callout hover:bg-bg-subtle aria-selected:bg-bg-subtle"
                       onClick={() => choose(row)}
                       onMouseDown={(event) => event.preventDefault()}
                     >
-                      <span className="truncate">{row.label}</span>
+                      {row.thumb && (
+                        <img
+                          src={row.thumb}
+                          width={32}
+                          height={32}
+                          alt=""
+                          className="size-8 rounded-md object-cover"
+                        />
+                      )}
+                      <span className="flex-1 truncate">{row.label}</span>
                       {row.detail && (
                         <span className="text-meta text-fg-muted">
                           {row.detail}
@@ -439,6 +487,9 @@ function Palette({ onClose }: Pick<CommandPaletteProps, "onClose">) {
               ),
           )}
         </div>
+        <footer className="flex min-h-9 items-center border-t border-line px-4 text-micro text-fg-muted">
+          ↑↓ 选择 · ↵ 打开{mode === "photo" ? " · Tab 切换范围" : ""} · Esc 关闭
+        </footer>
       </div>
     </div>
   );

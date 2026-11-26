@@ -1,3 +1,7 @@
+import { Button } from "../ui/Button";
+import { TextField } from "../ui/Field";
+import { InlineAlert } from "../ui/InlineAlert";
+import { BrandMark } from "./BrandMark";
 import {
   type FormEvent,
   type ReactNode,
@@ -9,8 +13,8 @@ import {
   ApiError,
   AUTH_ESTABLISHED_EVENT,
   AUTH_REQUIRED_EVENT,
-} from "../../api/client";
-import { authApi, SESSION_CHECK_TIMEOUT_MS } from "../../api/auth";
+} from "../api/client";
+import { authApi, SESSION_CHECK_TIMEOUT_MS } from "../api/auth";
 
 type GateState = "checking" | "unlocked" | "locked" | "local-only" | "offline";
 
@@ -93,12 +97,11 @@ export default function AccessGate({ children }: { children: ReactNode }) {
 
   return (
     <main className="min-h-screen bg-bg text-fg flex items-center justify-center px-5">
-      <section className="w-full max-w-sm rounded-2xl border border-border bg-bg-elevated shadow-lg p-7">
-        <div className="w-11 h-11 rounded-xl bg-accent/10 text-accent flex items-center justify-center text-page-sm mb-5">
-          ◈
-        </div>
-        <h1 className="text-page-sm font-semibold tracking-tight">本地媒体库</h1>
-
+      <section className="w-full max-w-[400px] rounded-sheet bg-bg-elevated p-7 shadow-1">
+        <BrandMark />
+        <h1 className="mt-4 text-title-2">
+          {state === "locked" ? "输入访问令牌" : "本地媒体库"}
+        </h1>
         {state === "checking" && (
           <p className="mt-3 text-body text-fg-muted">正在确认访问权限…</p>
         )}
@@ -113,14 +116,10 @@ export default function AccessGate({ children }: { children: ReactNode }) {
               请仅在可信家庭网络中使用；内置服务不提供 TLS，不适合互联网或不可信
               Wi-Fi。
             </p>
-            <label
-              className="block mt-5 text-meta font-medium text-fg-muted"
-              htmlFor="access-token"
-            >
-              访问令牌
-            </label>
-            <input
+            <TextField
+              className="mt-5"
               id="access-token"
+              label="访问令牌"
               type="password"
               value={token}
               onChange={(event) => setToken(event.target.value)}
@@ -128,20 +127,20 @@ export default function AccessGate({ children }: { children: ReactNode }) {
               spellCheck={false}
               maxLength={256}
               autoFocus
-              className="mt-2 w-full h-10 rounded-lg border border-border bg-bg px-3 text-body outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
             {error && (
-              <p role="alert" className="mt-2 text-meta text-danger">
+              <InlineAlert className="mt-3" tone="danger">
                 {error}
-              </p>
+              </InlineAlert>
             )}
-            <button
+            <Button
               type="submit"
-              disabled={submitting || token.trim().length === 0}
-              className="mt-5 w-full h-10 rounded-lg bg-accent text-accent-contrast text-body font-medium disabled:opacity-50"
+              className="mt-5 w-full"
+              loading={submitting}
+              disabled={!token.trim()}
             >
-              {submitting ? "正在验证…" : "进入媒体库"}
-            </button>
+              进入媒体库
+            </Button>
           </form>
         )}
 

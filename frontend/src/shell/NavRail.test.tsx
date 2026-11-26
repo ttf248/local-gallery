@@ -2,17 +2,20 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import Sidebar from "./Sidebar";
-import { useUIStore } from "../../store/uiStore";
-import { historyApi, prefsApi } from "../../api/prefs";
+import Sidebar from "./NavRail";
+import { TopBar } from "./TopBar";
+import { MobileTabBar } from "./MobileTabBar";
+import { MoreSheet } from "./MoreSheet";
 
-vi.mock("../../hooks/useLibrary", () => ({
+import { historyApi, prefsApi } from "../api/prefs";
+
+vi.mock("../hooks/useLibrary", () => ({
   useLibraryActivitySummary: () => ({
     data: { summary: { unreadCount: 69 } },
   }),
 }));
 
-vi.mock("../../api/prefs", () => ({
+vi.mock("../api/prefs", () => ({
   historyApi: { list: vi.fn().mockResolvedValue({ history: [] }) },
   prefsApi: { get: vi.fn() },
 }));
@@ -38,7 +41,7 @@ vi.mocked(prefsApi.get).mockImplementation(async () => prefsFixture());
 // 工作台模式：默认覆盖漫画工作台（侧栏分组与措辞），
 // 单个用例可以改写 mode 切到照片工作台。
 const appMode = { mode: "comic" as "comic" | "photo", setMode: vi.fn() };
-vi.mock("../../hooks/useAppMode", () => ({
+vi.mock("../hooks/useAppMode", () => ({
   useAppMode: () => ({
     mode: appMode.mode,
     ready: true,
@@ -46,7 +49,7 @@ vi.mock("../../hooks/useAppMode", () => ({
   }),
 }));
 
-vi.mock("../../api/library", () => ({
+vi.mock("../api/library", () => ({
   libraryApi: {
     randomAlbums: vi.fn().mockResolvedValue({ albums: [{ id: "x" }] }),
   },
@@ -68,6 +71,7 @@ beforeAll(() => {
   })) as unknown as typeof window.matchMedia;
 });
 
+const shuffle = vi.fn();
 function renderSidebar(collapsed = false, path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // 偏好先入缓存：侧栏的入口清单随偏好变化，首帧就该是最终状态，
@@ -76,14 +80,23 @@ function renderSidebar(collapsed = false, path = "/") {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
-        <Sidebar
-          collapsed={collapsed}
-          onToggle={() => {}}
-          onCloseMobile={() => {}}
-          onShuffle={() => {}}
+        {wideViewport ? (
+          <Sidebar collapsed={collapsed} onToggle={() => {}} warningCount={0} />
+        ) : (
+          <>
+            <MobileTabBar onMore={() => {}} />
+            <MoreSheet open onClose={() => {}} onHelp={() => {}} />
+          </>
+        )}
+        <TopBar
+          scrolled={false}
+          onHelp={() => {}}
+          onSearch={() => {}}
           onRefresh={() => {}}
+          onScan={() => {}}
+          onShuffle={shuffle}
+          canScan
           shufflePending={false}
-          warningCount={0}
         />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -131,7 +144,7 @@ describe("Sidebar", () => {
     appMode.mode = "photo";
     renderSidebar();
     expect(screen.getByRole("link", { name: "照片" })).toBeInTheDocument();
-    expect(screen.getByText("相册")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "相册" })).toBeInTheDocument();
     expect(screen.getByText("发现")).toBeInTheDocument();
     expect(screen.getByText("珍藏")).toBeInTheDocument();
     expect(screen.getByText("相似照片")).toBeInTheDocument();
@@ -160,10 +173,11 @@ describe("Sidebar", () => {
     expect(entry).toHaveAttribute("href", "/settings/data");
     // 页签名是这一页的状态，不是入口的名字：链接的可访问名仍是「设置」。
     expect(entry).toHaveAccessibleName("设置");
-    expect(screen.getByTestId("nav-tab-label")).toHaveTextContent("数据");
+    expect(screen.queryByTestId("nav-tab-label")).toBeNull();
+    expect(document.title).toContain("设置 · 数据");
     // 旧的分区入口没有了。
     expect(
-      screen.queryByRole("button", { name: /外观/ }),
+      screen.queryByRole("button", { name: /^外观$/ }),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /关于/ }),
@@ -183,7 +197,7 @@ describe("Sidebar", () => {
       expect(
         screen.queryByRole("button", { name: /折叠侧边栏|展开侧边栏/ }),
       ).not.toBeInTheDocument();
-      expect(screen.getByText("Local Gallery")).toBeInTheDocument();
+      expect(screen.getByRole("dialog", { name: "更多" })).toBeInTheDocument();
     } finally {
       wideViewport = true;
     }
@@ -197,17 +211,14 @@ describe("Sidebar", () => {
     renderSidebar();
     expect(screen.queryByText("发现")).not.toBeInTheDocument();
     // 没收起的照旧在列，工作台首页永远在。
-    expect(screen.getByText("相册")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "相册" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "照片" })).toBeInTheDocument();
   });
 
   it("未读入口带未读数量", () => {
     renderSidebar();
     const entry = screen.getByRole("link", { name: /未读/ });
-    expect(entry).toHaveAttribute(
-      "title",
-      expect.stringContaining("还有 69 卷"),
-    );
+    expect(screen.getByLabelText("还有 69 卷")).toBeInTheDocument();
     expect(entry).toHaveTextContent("69");
   });
 
@@ -215,12 +226,14 @@ describe("Sidebar", () => {
     renderSidebar();
     expect(screen.queryByText("随机未读")).not.toBeInTheDocument();
     // 「随机一本」保留
+    fireEvent.click(screen.getByLabelText("更多操作"));
     expect(screen.getByText("随机一卷")).toBeInTheDocument();
   });
 
   it("随机翻翻在照片侧说照片，在漫画侧说漫画", () => {
     appMode.mode = "photo";
     renderSidebar();
+    fireEvent.click(screen.getByLabelText("更多操作"));
     expect(screen.getByText("随机翻翻")).toBeInTheDocument();
   });
 
@@ -234,29 +247,22 @@ describe("Sidebar", () => {
 
   it("随机翻阅按钮可点", () => {
     renderSidebar();
-    const button = screen.getByTitle("随机一卷 (R)");
+    fireEvent.click(screen.getByLabelText("更多操作"));
+    const button = screen.getByRole("menuitem", { name: /随机一卷/ });
     fireEvent.click(button);
-    expect(button).toBeInTheDocument();
+    expect(shuffle).toHaveBeenCalled();
   });
 });
 
-it("侧栏提供模式切换、搜索、主题、帮助与刷新", () => {
+it("工作台切换留在侧栏，搜索和系统动作可从顶栏使用", () => {
   renderSidebar();
-  expect(screen.getByRole("group", { name: "工作台模式" })).toBeInTheDocument();
-  for (const name of ["打开命令面板", "快捷键帮助", "刷新缓存"]) {
-    expect(screen.getByRole("button", { name })).toBeInTheDocument();
-  }
-});
-
-it("人物详情提供持久化的人脸框开关", () => {
-  useUIStore.getState().setShowPersonFaceBoxes(false);
-  renderSidebar(false, "/photo/people/p_123456");
-  const option = screen.getByRole("button", { name: "显示当前人物的人脸框" });
-  expect(option).toHaveAttribute("aria-pressed", "false");
-  fireEvent.click(option);
-  expect(option).toHaveAttribute("aria-pressed", "true");
   expect(
-    JSON.parse(localStorage.getItem("local-gallery-ui") ?? "{}").state
-      .showPersonFaceBoxes,
-  ).toBe(true);
+    screen.getByRole("radiogroup", { name: "工作台模式" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "打开命令面板" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("更多操作"));
+  for (const name of [/快捷键帮助/, /刷新媒体库/])
+    expect(screen.getByRole("menuitem", { name })).toBeInTheDocument();
 });

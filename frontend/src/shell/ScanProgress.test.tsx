@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import ScanProgress from "./ScanProgress";
-import type { ProgressEvent } from "../../api/scan";
+import type { ProgressEvent } from "../api/scan";
 
 // 进度事件构造助手
 function makeProgress(overrides: Partial<ProgressEvent> = {}): ProgressEvent {

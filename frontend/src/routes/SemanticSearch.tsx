@@ -7,7 +7,7 @@ import {
 } from "../api/aiJobs";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryFeedItem } from "../api/library";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import { SearchIcon } from "../ui/icons";
 import ContentSearchResults from "../components/search/ContentSearchResults";
 import {
@@ -201,11 +201,11 @@ export default function SemanticSearch() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="shrink-0 overflow-y-auto pb-4">
-        <PageHeading
-          eyebrow="本地 AI · 组合检索"
-          title="智能搜索"
-          description="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"
-        />
+        <div className="page-shell"><PageHeader
+  eyebrow="本地 AI · 组合检索"
+  title="智能搜索"
+  meta="同一个词自动查找画面内容与图片文字，也可附加相册、年份与地点条件。"
+/></div>
         <section className="page-shell mt-5">
           <form
             className="rounded-xl border border-border bg-bg-elevated p-4 shadow-xs sm:p-5"

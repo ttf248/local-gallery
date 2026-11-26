@@ -1,4 +1,4 @@
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
@@ -283,11 +283,10 @@ export function SettingsView({
     return (
       <div className="page-shell">
         <div className="container--focused settings-page pb-10">
-          <PageHeading
-            title="设置"
-            contained
-            description="调整外观、阅读方式与本地媒体配置。"
-          />
+          <PageHeader
+  title="设置"
+  meta="调整外观、阅读方式与本地媒体配置。"
+/>
           {prefsError || (
             <div role="status" className="text-fg-muted text-body">
               正在加载设置…
@@ -303,11 +302,10 @@ export function SettingsView({
       {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
           标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
       <div className="container--focused settings-page pb-10">
-        <PageHeading
-          title="设置"
-          contained
-          description="外观、导航、阅读方式与本地媒体配置。"
-        />
+        <PageHeader
+  title="设置"
+  meta="外观、导航、阅读方式与本地媒体配置。"
+/>
         {prefsError}
         <PageTabs
           tabs={SETTINGS_TABS}

@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
-  act,
   fireEvent,
   render,
   screen,
@@ -486,7 +485,9 @@ describe("人物相册", () => {
     expect(
       screen.queryByText(/照片框线标出属于「当前人物」分组的人脸/),
     ).not.toBeInTheDocument();
-    act(() => useUIStore.getState().setShowPersonFaceBoxes(true));
+    const boxes=screen.getByRole("switch",{name:"显示当前人物的人脸框"});
+    expect(boxes).toHaveAttribute("aria-checked","false");fireEvent.click(boxes);expect(boxes).toHaveAttribute("aria-checked","true");
+    expect(JSON.parse(localStorage.getItem("local-gallery-ui")??"{}").state.showPersonFaceBoxes).toBe(true);
     expect(
       screen.getByText(/照片框线标出属于「当前人物」分组的人脸/),
     ).toBeInTheDocument();

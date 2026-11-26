@@ -6,11 +6,11 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { authApi, SESSION_CHECK_TIMEOUT_MS } from "../../api/auth";
-import { AUTH_ESTABLISHED_EVENT, AUTH_REQUIRED_EVENT } from "../../api/client";
+import { authApi, SESSION_CHECK_TIMEOUT_MS } from "../api/auth";
+import { AUTH_ESTABLISHED_EVENT, AUTH_REQUIRED_EVENT } from "../api/client";
 import AccessGate from "./AccessGate";
 
-vi.mock("../../api/auth", () => ({
+vi.mock("../api/auth", () => ({
   SESSION_CHECK_TIMEOUT_MS: 15000,
   authApi: {
     status: vi.fn(),

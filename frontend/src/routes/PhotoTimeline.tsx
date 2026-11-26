@@ -16,7 +16,7 @@ import TimelineFilterPopover, {
   TimelineMediaControl,
 } from "../components/timeline/TimelineFilterPopover";
 import TimelineScrubber from "../components/timeline/TimelineScrubber";
-import StickyPageHeader from "../components/layout/StickyPageHeader";
+import {PageHeader} from "../shell/PageHeader";
 import TimelineGroupHeader from "../components/timeline/TimelineGroupHeader";
 import OnThisDayStrip from "../components/timeline/OnThisDayStrip";
 import {
@@ -238,15 +238,14 @@ export default function PhotoTimeline() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <StickyPageHeader
-        className="photo-timeline-header"
-        title="全部照片"
-        meta={
+      <div className="page-shell"><PageHeader
+  title="全部照片"
+  meta={
           <span data-testid="timeline-meta">
             {feed.total.toLocaleString("zh-CN")} 张{range ? ` · ${range}` : ""}
           </span>
         }
-        actions={
+  actions={
           hasContent && (
             <>
               <div className="hidden md:block">
@@ -280,7 +279,7 @@ export default function PhotoTimeline() {
             </>
           )
         }
-        subbar={
+  toolbar={
           Boolean(filter.year || filter.media) && (
             <div className="flex gap-1.5">
               {filter.year && (
@@ -310,7 +309,7 @@ export default function PhotoTimeline() {
             </div>
           )
         }
-      />
+/></div>
 
       <div className="timeline-wall page-shell flex min-h-0 flex-1 flex-col pb-2">
         {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。

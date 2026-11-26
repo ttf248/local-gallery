@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   forwardRef,
   useId,
@@ -78,6 +79,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
     },
     ref,
   ) {
+    const input = useRef<HTMLInputElement | null>(null);
     return (
       <div
         role="search"
@@ -94,7 +96,11 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
           {...props}
           placeholder={placeholder}
           value={value}
-          ref={ref}
+          ref={(el) => {
+            input.current = el;
+            if (typeof ref === "function") ref(el);
+            else if (ref) ref.current = el;
+          }}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={(event) => {
             onKeyDown?.(event);
@@ -123,7 +129,10 @@ export const SearchField = forwardRef<HTMLInputElement, SearchProps>(
               className="grid size-10 place-items-center"
               type="button"
               aria-label="清除搜索"
-              onClick={() => onChange("")}
+              onClick={() => {
+                onChange("");
+                input.current?.focus();
+              }}
             >
               <CloseIcon />
             </button>

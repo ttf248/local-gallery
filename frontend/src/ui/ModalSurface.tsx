@@ -85,6 +85,7 @@ export const ModalSurface = forwardRef<HTMLDialogElement, ModalProps>(
           if (layers.at(-1) === local.current) onClose();
         }}
         onKeyDown={(event) => {
+          event.stopPropagation();
           onKeyDown?.(event);
           if (
             !event.defaultPrevented &&

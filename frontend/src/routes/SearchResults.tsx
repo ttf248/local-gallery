@@ -4,7 +4,7 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import AlbumGrid from "../components/album/AlbumGrid";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryNodeSummary } from "../api/library";
@@ -156,16 +156,16 @@ export default function SearchResults() {
   };
 
   const heading = (
-    <PageHeading
-      title={query ? `「${query}」的搜索结果` : "搜索"}
-      description={
+    <div className="page-shell"><PageHeader
+  title={query ? `「${query}」的搜索结果` : "搜索"}
+  meta={
         query
           ? isContent
             ? "在照片的画面与图片文字里找，按相似度排列。"
             : `在${mode === "comic" ? "漫画" : "照片"}库里按名字找相册、文件夹与标签。`
           : "在顶栏的搜索框里输入关键词，按回车就能看到结果。"
       }
-    />
+/></div>
   );
 
   const conditions = (

@@ -65,7 +65,7 @@ test("命令面板按名称进结果页，结果带命中理由", async ({ page,
 test("命令面板可以切到画面与文字，回车进内容结果页", async ({ page }) => {
   await page.goto("/photo");
   await page.getByRole("button", { name: "打开命令面板" }).click();
-  await page.getByRole("button", { name: "画面与文字" }).click();
+  await page.getByRole("radio", { name: "画面与文字" }).click();
   const search = page.getByRole("combobox", { name: "搜索照片里的画面与文字" });
   await search.fill("海边");
   await search.press("Enter");

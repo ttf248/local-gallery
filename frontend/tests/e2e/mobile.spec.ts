@@ -19,11 +19,11 @@ test("抽屉开合：背景不滚、焦点不跑出去", async ({ page }) => {
   await scannedNodes(page.request, "photo");
   await page.goto("/photo");
 
-  const trigger = page.getByRole("button", { name: "打开导航" });
+  const trigger = page.getByRole("button", { name: "更多", exact:true });
   await expect(trigger).toBeVisible();
   await trigger.click();
 
-  const nav = page.locator('aside[aria-label="主导航"]');
+  const nav = page.getByRole('dialog',{name:'更多'});
   await expect(nav).toBeVisible();
 
   // 焦点关在抽屉里：连按二十次 Tab 都不该跑到背景上去。
@@ -31,7 +31,7 @@ test("抽屉开合：背景不滚、焦点不跑出去", async ({ page }) => {
   for (let index = 0; index < 20; index += 1) {
     await page.keyboard.press("Tab");
     const inside = await page.evaluate(() => {
-      const nav = document.querySelector('aside[aria-label="主导航"]');
+      const nav = document.querySelector('dialog[open][aria-label="更多"]');
       const active = document.activeElement;
       return Boolean(nav && active && nav.contains(active));
     });
@@ -44,7 +44,7 @@ test("抽屉开合：背景不滚、焦点不跑出去", async ({ page }) => {
   const locked =
     (await main.evaluate((el) => getComputedStyle(el).overflowY)) === "hidden";
   const inert = await page
-    .locator(".mobile-app-bar")
+    .getByTestId("top-bar")
     .evaluate(
       (el) => el.hasAttribute("inert") || Boolean(el.closest("[inert]")),
     );
@@ -58,11 +58,7 @@ test("抽屉开合：背景不滚、焦点不跑出去", async ({ page }) => {
   await expect(nav).toBeHidden();
 
   // 关闭后焦点回到触发按钮，背景恢复可聚焦、可滚。
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.activeElement?.getAttribute("aria-label")),
-    )
-    .toBe("打开导航");
+  await expect(trigger).toBeFocused();
   expect(
     await page
       .locator(".app-main")
@@ -117,8 +113,7 @@ test("漫画首页在窄屏上使用漫画标题与书架入口", async ({ page 
   await expect(shelfAction).toHaveAccessibleName("书架");
   await expect(shelfAction).toHaveAttribute("href", "/comic/library");
 
-  await page.getByRole("button", { name: "打开导航" }).click();
-  const nav = page.locator('aside[aria-label="主导航"]');
+  const nav = page.getByRole("navigation",{name:"主导航",exact:true});
   await expect(nav.getByRole("link", { name: "书架" })).toBeVisible();
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useSmartAlbumDirectory } from "../hooks/useSmartAlbums";
-import { useMediaQuery, ULTRAWIDE_LAYOUT_QUERY } from "../hooks/useMediaQuery";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import SmartAlbumWall from "../components/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
@@ -39,7 +39,7 @@ export default function SmartAlbums() {
   const directory = useSmartAlbumDirectory("recommended", true, { sort });
   // 超宽档（≥2240px）上这一页仍是单栏，只是每张卡放大到 300px ——
   // 墙占满整宽，列数从 5 列变 7 列，缩略图大到能认出人脸。
-  const ultrawide = useMediaQuery(ULTRAWIDE_LAYOUT_QUERY);
+  const ultrawide = useMediaQuery("(min-width: 1920px)");
 
   const items = directory.items;
   const isInitialLoading = directory.isLoading && items.length === 0;

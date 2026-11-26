@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import PageTabs, { PagePanel } from "../components/common/PageTabs";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import AlbumGrid from "../components/album/AlbumGrid";
 import EmptyState from "../components/common/EmptyState";
 import { useAppMode } from "../hooks/useAppMode";
@@ -58,11 +58,10 @@ export default function Me() {
       {/* 标题与页签共用一个容器：页签的起点与标题、下面照片的起点
           在同一条网格线上，翻页签时内容不会左右跳。 */}
       <div className="page-shell container--standard me-page__head shrink-0">
-        <PageHeading
-          contained
-          title={mode === "comic" ? "我的漫画" : "珍藏"}
-          description={active.hint}
-        />
+        <PageHeader
+  title={mode === "comic" ? "我的漫画" : "珍藏"}
+  meta={active.hint}
+/>
 
         <PageTabs
           tabs={tabs.map((tab) => ({ id: tab.id, label: tab.label }))}

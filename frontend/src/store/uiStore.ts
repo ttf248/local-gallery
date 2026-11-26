@@ -24,6 +24,8 @@ interface Toast {
 }
 
 export interface UIState {
+  memoriesDismissedOn: string | null;
+  setMemoriesDismissedOn: (date: string | null) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
@@ -77,6 +79,9 @@ export interface UIState {
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
+      memoriesDismissedOn: null,
+      setMemoriesDismissedOn: (memoriesDismissedOn) =>
+        set({ memoriesDismissedOn }),
       commandPaletteOpen: false,
       setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
       toggleCommandPalette: () =>
@@ -119,7 +124,7 @@ export const useUIStore = create<UIState>()(
           ttl: t.ttl ?? 2800,
           action: t.action,
         };
-        set({ toasts: [...get().toasts, toast] });
+        set({ toasts: [...get().toasts.slice(-2), toast] });
         if (toast.ttl > 0) {
           setTimeout(() => get().dismissToast(id), toast.ttl);
         }
@@ -130,18 +135,34 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "local-gallery-ui",
-      version: 2,
-      migrate: (persisted) => {
-        const state = (persisted ?? {}) as Partial<UIState>;
+      version: 3,
+      migrate: (persisted, version) => {
+        const old =
+          typeof persisted === "object" && persisted !== null
+            ? (persisted as Record<string, unknown>)
+            : {};
         return {
-          sidebarCollapsed: state.sidebarCollapsed ?? false,
-          theme: state.theme ?? "system",
-          viewMode: state.viewMode ?? "grid",
-          showPersonFaceBoxes: state.showPersonFaceBoxes ?? false,
-          folderDrawerOpen: false,
-        };
+          sidebarCollapsed: old.sidebarCollapsed === true,
+          theme:
+            old.theme === "light" || old.theme === "dark"
+              ? old.theme
+              : "system",
+          viewMode: old.viewMode === "list" ? "list" : "grid",
+          showPersonFaceBoxes: old.showPersonFaceBoxes === true,
+          folderDrawerOpen: version >= 2 && old.folderDrawerOpen === true,
+          memoriesDismissedOn: null,
+        } as Pick<
+          UIState,
+          | "sidebarCollapsed"
+          | "theme"
+          | "viewMode"
+          | "showPersonFaceBoxes"
+          | "folderDrawerOpen"
+          | "memoriesDismissedOn"
+        >;
       },
       partialize: (s) => ({
+        memoriesDismissedOn: s.memoriesDismissedOn,
         folderDrawerOpen: s.folderDrawerOpen,
         sidebarCollapsed: s.sidebarCollapsed,
         theme: s.theme,

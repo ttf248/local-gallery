@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import ExploreSearchHero from "../components/explore/ExploreSearchHero";
@@ -37,7 +37,9 @@ export default function Explore() {
     <div className="explore-page min-h-full">
       <div className="page-shell container--standard">
         <div className="explore-heading">
-          <PageHeading contained title="发现" size="md" />
+          <PageHeader
+  title="发现"
+/>
         </div>
 
         {manifestQuery.isLoading && !manifest ? (

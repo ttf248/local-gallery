@@ -1,4 +1,4 @@
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -110,9 +110,9 @@ export default function Unread() {
 
   return (
     <div className="min-h-full">
-      <PageHeading
-        title={copy.unreadPageTitle}
-        action={
+      <div className="page-shell"><PageHeader
+  title={copy.unreadPageTitle}
+  actions={
           count > 0 && (
             <button
               onClick={onShuffleUnread}
@@ -124,7 +124,7 @@ export default function Unread() {
             </button>
           )
         }
-        description={
+  meta={
           <p className="text-body text-fg-muted tabular-nums">
             {isLoading ? (
               // 加载中不要报「0 本」：那是"还没数出来"，不是"没有未读"。
@@ -141,7 +141,7 @@ export default function Unread() {
             )}
           </p>
         }
-      />
+/></div>
 
       {needsHistory && <ViewedSortNotice query={historyQuery} />}
       {count > 0 && (

@@ -84,7 +84,7 @@ vi.mock("../components/gallery/GalleryToolbar", () => ({
 vi.mock("../components/common/ImageInfoPanel", () => ({
   default: () => null,
 }));
-vi.mock("../components/common/HelpOverlay", () => ({
+vi.mock("../features/common/HelpOverlay", () => ({
   default: () => null,
 }));
 

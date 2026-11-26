@@ -13,7 +13,7 @@ import AlbumContextMenu from "./AlbumContextMenu";
 import type { CardData } from "./AlbumCard";
 import { fsApi } from "../../api/fs";
 import { ApiError } from "../../api/client";
-import ToastViewport from "../common/Toast";
+import ToastViewport from "../../features/common/Toast";
 import { useUIStore } from "../../store/uiStore";
 import {
   fsCapabilitiesQueryKey,

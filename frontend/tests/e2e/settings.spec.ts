@@ -202,8 +202,8 @@ for (const recovery of ["manual", "automatic"] as const) {
         // 「未读」只属于漫画工作台：先在侧栏切过去再点这个入口。
         // 不能刷新页面——刷新会丢掉扫描进度的本地状态，这条用例守的正是它。
         await page
-          .getByRole("group", { name: "工作台模式" })
-          .getByRole("button", { name: "漫画" })
+          .getByRole("radiogroup", { name: "工作台模式" })
+          .getByRole("radio", { name: "漫画" })
           .click();
         await page
           .locator('aside[aria-label="主导航"]')
@@ -369,12 +369,14 @@ test("设置页的分区改成页签，切页签写进 URL 并换内容", async 
   // 侧栏里没有二级菜单了，只在条目上标出当前页签。
   const sidebar = page.locator('aside[aria-label="主导航"]');
   await expect(sidebar.getByRole("button", { name: "数据" })).toHaveCount(0);
-  await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("界面");
+  await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
+    await expect(page).toHaveTitle(/ · 界面 · Local Gallery$/);
 
   await page.getByRole("tab", { name: "数据" }).click();
   await expect(page).toHaveURL(/\/settings\/data$/);
   await expect(page.getByText("媒体库索引", { exact: true })).toBeVisible();
-  await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("数据");
+  await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
+    await expect(page).toHaveTitle(/ · 数据 · Local Gallery$/);
 
   // 深链直接落在那一屏。
   await page.goto("/settings/server");

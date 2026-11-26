@@ -1,10 +1,10 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import AppShell from "./components/layout/AppShell";
-import RouteLoading from "./components/common/RouteLoading";
-import AccessGate from "./components/auth/AccessGate";
-import ErrorBoundary from "./components/common/ErrorBoundary";
-import ToastViewport from "./components/common/Toast";
+import AppFrame from "./shell/AppFrame";
+import RouteLoading from "./features/common/RouteLoading";
+import AccessGate from "./shell/AccessGate";
+import ErrorBoundary from "./features/common/ErrorBoundary";
+import ToastViewport from "./features/common/Toast";
 import { useSelectionScope } from "./store/selectionStore";
 import { useTheme } from "./hooks/useTheme";
 import { useAppMode, useAppModeHydration } from "./hooks/useAppMode";
@@ -70,11 +70,11 @@ export default function App() {
   useLibraryActivitySync();
   return (
     <AccessGate>
-      {/* 阅读器（/comic/read）不挂在 AppShell 下，没有内层错误边界；
+      {/* 阅读器（/comic/read）不挂在 AppFrame 下，没有内层错误边界；
           这里再兜一层，渲染异常时至少给出提示和重试，而不是整页空白。 */}
       <ErrorBoundary>
         <Routes>
-          <Route element={<AppShell />}>
+          <Route element={<AppFrame />}>
             {MODES.flatMap((mode) =>
               MODE_ROUTE_PATHS[mode].map((path) => (
                 <Route
@@ -146,7 +146,7 @@ export default function App() {
             />
             <Route path="/settings/:tab" element={lazyPage(Settings)} />
           </Route>
-          {/* 漫画阅读器：/comic/read/<album id>。它不在 AppShell 下，
+          {/* 漫画阅读器：/comic/read/<album id>。它不在 AppFrame 下，
               没有侧栏也没有工具栏，沉浸在一张画布里。 */}
           <Route path="/comic/read/:albumId" element={lazyPage(Reader)} />
           {/* 根路径按服务端偏好落到某一侧；旧链接统一落到这里。 */}

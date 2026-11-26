@@ -3,7 +3,7 @@ import "../styles/similarity.css";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
@@ -468,16 +468,16 @@ export default function Similarity() {
 
   return (
     <div className="similarity-page min-h-full pb-10" ref={bindScrollParent}>
-      <PageHeading
-        eyebrow="本机整理"
-        title="相似照片与连拍"
-        description={
+      <div className="page-shell"><PageHeader
+  eyebrow="本机整理"
+  title="相似照片与连拍"
+  meta={
           <>
             完全重复按文件内容判定，近似重复按画面判定，连拍只标出「同一个瞬间」，
             不当成重复。这一页只记录你的决定，原始照片一个字节都不动。
           </>
         }
-        action={
+  actions={
           <div className="flex items-center gap-2">
             <RebuildButton
               stale={Boolean(groups.page?.stale)}
@@ -508,7 +508,7 @@ export default function Similarity() {
             />
           </div>
         }
-      />
+/></div>
 
       <div className="page-shell">
         <div className="filter-strip flex flex-wrap items-center gap-x-5 gap-y-3">

@@ -12,7 +12,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import AlbumContextMenu from "./AlbumContextMenu";
 import type { CardData } from "./AlbumCard";
-import ToastViewport from "../common/Toast";
+import ToastViewport from "../../features/common/Toast";
 import { useUIStore } from "../../store/uiStore";
 
 vi.mock("../../hooks/useFavorites", () => ({

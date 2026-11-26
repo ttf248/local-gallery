@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import PageTabs, { PagePanel } from "../components/common/PageTabs";
 import { useTaskCenter } from "../hooks/useTaskCenter";
 import { TASK_TABS, TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
@@ -95,16 +95,15 @@ export function TaskCenterView({
       {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
           宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
       <div className="container--focused tasks-page pb-12">
-        <PageHeading
-          contained
-          title="任务中心"
-          description="管理本机分析、等待队列及每日计划。"
-          action={
+        <PageHeader
+  title="任务中心"
+  meta="管理本机分析、等待队列及每日计划。"
+  actions={
             <Link className="btn btn-sm btn-outline" to="/settings/server">
               服务设置
             </Link>
           }
-        />
+/>
 
         {center.loadError ? (
           <div className="mt-6 rounded-lg border border-border bg-bg-elevated p-5 text-body text-fg-muted">

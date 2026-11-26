@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import EmptyState from "../components/common/EmptyState";
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import RenditionImage from "../components/common/RenditionImage";
 import {
   peopleAnnotationsApi,
@@ -92,16 +92,16 @@ export default function PeopleAnnotate() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <PageHeading
-        eyebrow="离线智能相册 · 本机工具"
-        title="人物标注"
-        description="给真实照片里的人脸标上匿名身份，用来衡量检测与分组的实际效果。标注只保存在本机，不会改写人物分组、命名或原始照片。"
-        action={
+      <div className="page-shell"><PageHeader
+  eyebrow="离线智能相册 · 本机工具"
+  title="人物标注"
+  meta="给真实照片里的人脸标上匿名身份，用来衡量检测与分组的实际效果。标注只保存在本机，不会改写人物分组、命名或原始照片。"
+  actions={
           <Link className="btn btn-sm btn-outline" to={peopleRoute()}>
             回到人物相册
           </Link>
         }
-      />
+/></div>
       {samples.isError ? (
         <section className="page-shell mt-6">
           <EmptyState

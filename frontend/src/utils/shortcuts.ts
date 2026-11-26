@@ -32,7 +32,7 @@ export function shouldIgnoreShortcut(event: KeyboardEvent): boolean {
 export function hasOpenModal(): boolean {
   if (typeof document === "undefined") return false;
   return (
-    document.querySelector('[role="dialog"][aria-modal="true"]') !== null
+    document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]') !== null
   );
 }
 

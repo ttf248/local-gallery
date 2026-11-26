@@ -103,3 +103,14 @@
     animation: none;
   }
 }
+
+@layer components {
+  .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--bg) 96%, transparent); }
+  @supports (backdrop-filter: blur(1px)) {
+    .top-bar, .mobile-tabs { background: color-mix(in srgb,var(--bg) 82%, transparent); backdrop-filter: blur(20px) saturate(1.6); }
+  }
+  :root[data-keyboard] .mobile-tabs,
+  body:has(dialog[open], [role="dialog"][aria-modal="true"]) .mobile-tabs { visibility: hidden; }
+}
+
+body:has(dialog[open], [role="dialog"][aria-modal="true"]) .app-main { overflow-y: hidden; }

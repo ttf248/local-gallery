@@ -12,7 +12,7 @@ import {
 } from "../../ui/icons";
 import { albumRoute } from "../../utils/path";
 import { mediaCountParts } from "../../utils/mediaCount";
-import StickyPageHeader from "../layout/StickyPageHeader";
+import {PageHeader} from "../../shell/PageHeader";
 
 interface Props {
   album: LibraryNodeSummary;
@@ -48,42 +48,16 @@ export default function AlbumHeader({
   const counts = mediaCountParts(album);
   const parent = album.parentName;
   return (
-    <StickyPageHeader
-      className="photo-album-header"
-      title={title}
-      leading={
-        <button
-          type="button"
-          className="toolbar-icon"
-          aria-label="返回"
-          onClick={onBack}
-        >
-          <ChevronLeftIcon size={18} />
-        </button>
-      }
-      breadcrumbs={
-        parent &&
-        (album.parentId ? (
-          <Link
-            to={albumRoute("photo", album.parentId)}
-            title={`回到「${parent}」`}
-            className="album-parent-link"
-          >
-            <FolderIcon size={14} />
-            <span className="truncate">{parent}</span>
-          </Link>
-        ) : (
-          <span className="album-parent-link">{parent}</span>
-        ))
-      }
-      meta={
+    <div className="page-shell"><PageHeader
+  title={title}
+  meta={
         <>
           {counts.lead}
           {counts.rest && ` · ${counts.rest}`}
           {multiRoot && album.sourceName && ` · 来自 ${album.sourceName}`}
         </>
       }
-      actions={
+  actions={
         <>
           {actions}
           <button
@@ -132,7 +106,31 @@ export default function AlbumHeader({
           </Popover>
         </>
       }
-      subbar={children}
-    />
+  toolbar={children}
+  eyebrow={<div className="flex items-center gap-2">{
+        <button
+          type="button"
+          className="toolbar-icon"
+          aria-label="返回"
+          onClick={onBack}
+        >
+          <ChevronLeftIcon size={18} />
+        </button>
+      } {
+        parent &&
+        (album.parentId ? (
+          <Link
+            to={albumRoute("photo", album.parentId)}
+            title={`回到「${parent}」`}
+            className="album-parent-link"
+          >
+            <FolderIcon size={14} />
+            <span className="truncate">{parent}</span>
+          </Link>
+        ) : (
+          <span className="album-parent-link">{parent}</span>
+        ))
+      }</div>}
+/></div>
   );
 }

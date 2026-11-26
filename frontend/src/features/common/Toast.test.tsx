@@ -20,34 +20,34 @@ describe("ToastViewport", () => {
     return screen.getByText("测试消息").parentElement as HTMLElement;
   }
 
-  it("普通页面下 toast 使用暗色玻璃", () => {
+  it("普通页面下 toast 使用反色底", () => {
     useUIStore.setState({
       toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
     });
     const card = renderAt("/");
-    expect(card).toHaveClass("toast-message");
-    expect(card).toHaveAttribute("data-tone", "reader");
+    expect(card).toHaveClass("bg-inverse-bg");
+    expect(card).toHaveAttribute("data-tone", "inverse");
   });
 
-  it("漫画阅读器路由下 toast 走深色底", () => {
+  it("漫画阅读器路由下 toast 走反色底", () => {
     useUIStore.setState({
       toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
     });
     const card = renderAt("/comic/read/abc");
-    expect(card).toHaveClass("toast-message");
-    expect(card).toHaveAttribute("data-tone", "reader");
+    expect(card).toHaveClass("bg-inverse-bg");
+    expect(card).toHaveAttribute("data-tone", "inverse");
   });
 
   // 照片墙的大图预览也是深色浮层，路径却不是阅读器 —— 早先按路径前缀
   // 判断时，在预览里弹出的 toast 是一块浅色板。
-  it("照片墙的大图预览打开时 toast 也走深色底", () => {
+  it("照片墙的大图预览打开时 toast 也走反色底", () => {
     useUIStore.setState({
       toasts: [{ id: "t1", kind: "info", message: "测试消息", ttl: 0 }],
       immersiveOverlay: true,
     });
     const card = renderAt("/photo/albums/a_1");
-    expect(card).toHaveClass("toast-message");
-    expect(card).toHaveAttribute("data-tone", "reader");
+    expect(card).toHaveClass("bg-inverse-bg");
+    expect(card).toHaveAttribute("data-tone", "inverse");
     useUIStore.setState({ immersiveOverlay: false });
   });
 

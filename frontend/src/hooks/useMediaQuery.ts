@@ -8,14 +8,7 @@ import { useEffect, useState } from "react";
  */
 export const WIDE_LAYOUT_QUERY = "(min-width: 1024px)";
 
-/**
- * 超宽档的断点。
- *
- * 2240px 起（2560 宽的 27 寸）：版式仍是单栏，但卡片放大、每行多放
- * 几列，页头也并成一行。1920 与 1440 上不生效 —— 这条线与样式表里
- * 那条 `@media (min-width: 2240px)` 是同一个数，两边必须一起改。
- */
-export const ULTRAWIDE_LAYOUT_QUERY = "(min-width: 2240px)";
+export const SPLIT_LAYOUT_QUERY = "(min-width: 1280px)";
 
 /**
  * 订阅一条媒体查询。

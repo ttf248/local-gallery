@@ -10,17 +10,17 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import CommandPalette from "./CommandPalette";
-import { albumsApi } from "../../api/albums";
+import { albumsApi } from "../api/albums";
 
 let mode: "photo" | "comic" = "photo";
 
-vi.mock("../../api/albums", () => ({
+vi.mock("../api/albums", () => ({
   albumsApi: { search: vi.fn() },
 }));
-vi.mock("../../hooks/useAppMode", () => ({
+vi.mock("../hooks/useAppMode", () => ({
   useAppMode: () => ({ mode, setMode: vi.fn(), ready: true }),
 }));
-vi.mock("../../hooks/useHistory", () => ({
+vi.mock("../hooks/useHistory", () => ({
   useHistoryCards: () => ({
     cards: Array.from({ length: 6 }, (_, i) => ({
       to: `/photo/albums/recent-${i}`,
@@ -139,7 +139,7 @@ describe("命令面板", () => {
 
   it("画面与文字只在提交时跳转，漫画只提供名称", async () => {
     const { input } = openPalette();
-    fireEvent.click(screen.getByRole("button", { name: "画面与文字" }));
+    fireEvent.click(screen.getByRole("radio", { name: "画面与文字" }));
     expect(input).toHaveAccessibleName("搜索照片里的画面与文字");
     fireEvent.change(input, { target: { value: "海边" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -152,8 +152,9 @@ describe("命令面板", () => {
   it("漫画只提供名称作用域", () => {
     mode = "comic";
     openPalette("/comic");
-    expect(screen.getByRole("button", { name: "名称" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "画面与文字" })).toBeNull();
+    expect(screen.getByRole("combobox")).toHaveAccessibleName(/作品|漫画|标签/);
+    expect(screen.queryByRole("radiogroup", { name: "搜索范围" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "画面与文字" })).toBeNull();
   });
 
   it("焦点绕回面板，Esc 先清空再关闭并归还焦点", async () => {
@@ -162,7 +163,7 @@ describe("命令面板", () => {
     for (const item of [
       input,
       close,
-      ...screen.getAllByRole("button", { name: /名称|画面与文字/ }),
+      ...screen.getAllByRole("radio", { name: /名称|画面与文字/ }),
     ]) {
       vi.spyOn(item, "offsetWidth", "get").mockReturnValue(44);
     }

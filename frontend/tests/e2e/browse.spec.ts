@@ -46,8 +46,8 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
   await expect(sidebar.getByRole("link", { name: "书架" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "全部照片" })).toBeVisible();
 
-  const switcher = page.getByRole("group", { name: "工作台模式" });
-  await switcher.getByRole("button", { name: "漫画" }).click();
+  const switcher = page.getByRole("radiogroup", { name: "工作台模式" });
+  await switcher.getByRole("radio", { name: "漫画" }).click();
   await expect(page.getByRole("heading", { name: "漫画库" })).toBeVisible();
   // 漫画工作台的菜单换成漫画自己那套，照片那边的一点都不留。
   await expect(sidebar.getByRole("link", { name: "首页" })).toBeVisible();
@@ -927,8 +927,8 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   await page.keyboard.press("u");
   await expect(page).toHaveURL(/\/settings\/interface$/);
   await page
-    .getByRole("group", { name: "工作台模式" })
-    .getByRole("button", { name: "漫画" })
+    .getByRole("radiogroup", { name: "工作台模式" })
+    .getByRole("radio", { name: "漫画" })
     .click();
   await page.keyboard.press("u");
   await expect(page).toHaveURL(/\/unread$/);

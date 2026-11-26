@@ -19,7 +19,7 @@ import ImageGallery from "../components/gallery/ImageGallery";
 import VideoPlayer from "../components/gallery/VideoPlayer";
 import PageSlider from "../components/gallery/PageSlider";
 import ImageInfoPanel from "../components/common/ImageInfoPanel";
-import HelpOverlay from "../components/common/HelpOverlay";
+import HelpOverlay from "../features/common/HelpOverlay";
 import GalleryHeader from "../components/gallery/GalleryHeader";
 import GalleryToolbar from "../components/gallery/GalleryToolbar";
 import GalleryAlbumNav from "../components/gallery/GalleryAlbumNav";

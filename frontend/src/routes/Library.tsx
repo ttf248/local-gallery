@@ -11,7 +11,7 @@ import FolderDrawer, {
   useFolderDrawer,
 } from "../components/library/FolderDrawer";
 import BreadcrumbMenu from "../components/library/BreadcrumbMenu";
-import StickyPageHeader from "../components/layout/StickyPageHeader";
+import {PageHeader} from "../shell/PageHeader";
 import { FilterDropdown } from "../components/wall/AlbumFilterBar";
 import type { ReactNode } from "react";
 import {
@@ -310,10 +310,34 @@ export default function Library() {
 
   return (
     <div className="library-page min-h-full">
-      <StickyPageHeader
-        title={title}
-        meta={list.summary ? `${total.toLocaleString("zh-CN")} 项` : undefined}
-        leading={
+      <div className="page-shell"><PageHeader
+  title={title}
+  meta={list.summary ? `${total.toLocaleString("zh-CN")} 项` : undefined}
+  actions={
+          drawer.desktop
+            ? actions
+            : actions && <LibraryFilters>{actions}</LibraryFilters>
+        }
+  toolbar={
+          hasActiveFilters && (
+            <div className="flex flex-wrap gap-1.5">
+              {filters.query && (
+                <button
+                  type="button"
+                  className="ui-chip"
+                  onClick={() => filters.setQuery("")}
+                  aria-label={`清除名称筛选「${filters.query}」`}
+                >
+                  名称 · {filters.query} <span aria-hidden>×</span>
+                </button>
+              )}
+              <button type="button" className="ui-chip" onClick={filters.reset}>
+                清除筛选
+              </button>
+            </div>
+          )
+        }
+  eyebrow={<div className="flex items-center gap-2">{
           <>
             <button
               ref={drawer.triggerRef}
@@ -340,8 +364,7 @@ export default function Library() {
               </button>
             )}
           </>
-        }
-        breadcrumbs={
+        } {
           nodeId && (
             <BreadcrumbMenu
               mode={mode}
@@ -353,32 +376,8 @@ export default function Library() {
               onSelect={selectNode}
             />
           )
-        }
-        actions={
-          drawer.desktop
-            ? actions
-            : actions && <LibraryFilters>{actions}</LibraryFilters>
-        }
-        subbar={
-          hasActiveFilters && (
-            <div className="flex flex-wrap gap-1.5">
-              {filters.query && (
-                <button
-                  type="button"
-                  className="ui-chip"
-                  onClick={() => filters.setQuery("")}
-                  aria-label={`清除名称筛选「${filters.query}」`}
-                >
-                  名称 · {filters.query} <span aria-hidden>×</span>
-                </button>
-              )}
-              <button type="button" className="ui-chip" onClick={filters.reset}>
-                清除筛选
-              </button>
-            </div>
-          )
-        }
-      />
+        }</div>}
+/></div>
       <div className="page-shell library-layout">
         <FolderDrawer
           open={drawer.open}

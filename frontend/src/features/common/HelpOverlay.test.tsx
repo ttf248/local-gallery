@@ -27,7 +27,7 @@ it("通过具名原生模态 dialog 打开帮助并聚焦搜索", () => {
   expect(dialog).toBeInstanceOf(HTMLDialogElement);
   expect(dialog).toHaveAttribute("open");
   expect(dialog).toHaveAccessibleName("快捷键");
-  expect(screen.getByRole("textbox", { name: "搜索快捷键" })).toHaveFocus();
+  expect(screen.getByRole("searchbox", { name: "搜索快捷键" })).toHaveFocus();
 });
 
 it("过滤和清除搜索，清除按钮消失时焦点回到搜索框", () => {
@@ -37,7 +37,7 @@ it("过滤和清除搜索，清除按钮消失时焦点回到搜索框", () => {
   expect(
     screen.getByText("没有匹配「不存在的快捷键」的快捷键"),
   ).toBeInTheDocument();
-  const clear = screen.getByRole("button", { name: "清除" });
+  const clear = screen.getByRole("button", { name: "清除搜索" });
   clear.focus();
   fireEvent.click(clear);
   expect(search).toHaveValue("");
@@ -79,6 +79,7 @@ it.each(["button", "backdrop"])(
       target === "button"
         ? screen.getByRole("button", { name: "关闭" })
         : dialog,
+      {clientX:-8,clientY:-8},
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(opener).toHaveFocus();
@@ -189,7 +190,7 @@ it("未读快捷键只在漫画工作台出现", () => {
 
 it("视频帮助搜索不显示图片操作，并可按视频别名查找播放操作", () => {
   render(<HelpOverlay context="video" open onClose={vi.fn()} />);
-  const search = screen.getByRole("textbox", { name: "搜索快捷键" });
+  const search = screen.getByRole("searchbox", { name: "搜索快捷键" });
   fireEvent.change(search, { target: { value: "旋转" } });
   expect(screen.getByText("没有匹配「旋转」的快捷键")).toBeInTheDocument();
   fireEvent.change(search, { target: { value: "Space" } });
@@ -199,7 +200,7 @@ it("视频帮助搜索不显示图片操作，并可按视频别名查找播放�
 
 it("切换媒体场景时保留搜索词，展示该按键在新场景的含义", () => {
   const view = render(<HelpOverlay context="image" open onClose={vi.fn()} />);
-  const search = screen.getByRole("textbox", { name: "搜索快捷键" });
+  const search = screen.getByRole("searchbox", { name: "搜索快捷键" });
   fireEvent.change(search, { target: { value: "Space" } });
   expect(screen.getByText("幻灯片播放/暂停")).toBeInTheDocument();
   view.rerender(<HelpOverlay context="video" open onClose={vi.fn()} />);
@@ -218,12 +219,12 @@ it("tone=reader 时帮助浮层走深色，并标记 data-tone 供焦点环取�
   expect(dialog.className).toContain("bg-overlay-panel");
   expect(dialog.className).not.toContain("bg-bg-elevated");
   // 键帽走暗色变体（.kbd-light），否则白底键帽浮在深色浮层上很扎眼。
-  expect(document.querySelector(".kbd-light")).not.toBeNull();
+  expect(dialog.querySelector("kbd")).not.toBeNull();
 });
 
 it("默认（theme 档）帮助浮层仍跟应用主题走", () => {
   render(<HelpOverlay context="image" open onClose={vi.fn()} />);
   const dialog = screen.getByRole("dialog");
   expect(dialog).not.toHaveAttribute("data-tone");
-  expect(dialog.className).toContain("bg-bg-elevated");
+  expect(dialog.className).toContain("modal-surface");
 });

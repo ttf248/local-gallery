@@ -7,7 +7,8 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import EmptyState from "../components/common/EmptyState";
-import PageHeading from "../components/common/PageHeading";
+import {Switch} from "../ui/Switch";
+import {PageHeader} from "../shell/PageHeader";
 import RenditionImage from "../components/common/RenditionImage";
 import Segmented from "../ui/Segmented";
 import PhotoViewer from "../components/wall/PhotoViewer";
@@ -129,11 +130,11 @@ function PeopleList() {
 
   return (
     <div className="h-full overflow-y-auto pb-12">
-      <PageHeading
-        eyebrow="离线智能相册"
-        title="人物相册"
-        description="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
-        action={
+      <div className="page-shell"><PageHeader
+  eyebrow="离线智能相册"
+  title="人物相册"
+  meta="人物组由本机人脸特征整理，姓名和合并关系由你确认。相似度只用于寻找复核线索，不代表身份概率。"
+  actions={
           <div className="flex flex-wrap gap-2">
             <Link className="btn btn-sm btn-outline" to={peopleAnnotateRoute()}>
               标注工具
@@ -143,7 +144,7 @@ function PeopleList() {
             </Link>
           </div>
         }
-      />
+/></div>
       {query.isError ? (
         <EmptyState
           title="人物列表加载失败"
@@ -884,6 +885,7 @@ function PersonAlbum({ personId }: { personId: string }) {
                 {person?.name ?? "人物相册"}
               </h1>
             </div>
+            <Switch label="显示当前人物的人脸框" checked={showPersonFaceBoxes} onChange={useUIStore.getState().setShowPersonFaceBoxes}/>
             <Link className="btn btn-sm btn-outline" to={peopleRoute()}>
               全部人物
             </Link>

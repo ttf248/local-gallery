@@ -1,4 +1,4 @@
-import PageHeading from "../components/common/PageHeading";
+import {PageHeader} from "../shell/PageHeader";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -168,10 +168,10 @@ export default function Recents({ embedded = false }: { embedded?: boolean } = {
   return (
     <div className="min-h-full">
       {embedded ? null : (
-      <PageHeading
-        title={copy.recentsTitle}
-        eyebrow={copy.recentsEyebrow}
-        description={
+      <div className="page-shell"><PageHeader
+  title={copy.recentsTitle}
+  eyebrow={copy.recentsEyebrow}
+  meta={
           // 这一页一条记录都没有时，页头不再写「还没有记录」：
           // 下面的空态已经把同一句话说了一遍，两处都说等于没说什么。
           // 有记录时也不报条数：筛选条上那行「共 N 项」说的就是它。
@@ -200,7 +200,7 @@ export default function Recents({ embedded = false }: { embedded?: boolean } = {
             </p>
           ) : null
         }
-      />
+/></div>
       )}
 
       {loadFailed && (

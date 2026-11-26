@@ -96,7 +96,7 @@ vi.mock("../components/gallery/GalleryHeader", () => ({
 vi.mock("../components/gallery/GalleryAlbumNav", () => ({ default: () => null }));
 vi.mock("../components/gallery/GalleryToolbar", () => ({ default: () => null }));
 vi.mock("../components/common/ImageInfoPanel", () => ({ default: () => null }));
-vi.mock("../components/common/HelpOverlay", () => ({ default: () => null }));
+vi.mock("../features/common/HelpOverlay", () => ({ default: () => null }));
 
 const albumId = "a_0000000000000000000001";
 

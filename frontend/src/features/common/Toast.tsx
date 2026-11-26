@@ -24,8 +24,11 @@ export default function ToastViewport() {
   if (!toasts.length && !leaving.length) return null;
 
   return (
-    <div className="toast-viewport float-bottom" aria-live="polite">
-      {[...toasts, ...leaving].map((toast) => {
+    <div
+      className="pointer-events-none fixed inset-x-4 bottom-[calc(var(--tabbar-height)+env(safe-area-inset-bottom)+12px)] z-toast mx-auto grid max-w-[480px] justify-items-center gap-2 lg:bottom-6"
+      aria-live="polite"
+    >
+      {[...leaving, ...toasts].slice(-3).map((toast) => {
         const exiting = leaving.includes(toast);
         const Icon =
           toast.kind === "success"
@@ -37,19 +40,18 @@ export default function ToastViewport() {
           <div
             key={toast.id}
             className={
-              exiting
-                ? "toast-message toast-message--leaving"
-                : "toast-message fade-up"
+              "pointer-events-auto flex min-h-11 items-center gap-3 rounded-xl bg-inverse-bg px-4 py-2 text-callout text-inverse-fg shadow-2 " +
+              (exiting ? "opacity-0 transition duration-2" : "fade-up")
             }
             aria-hidden={exiting || undefined}
-            data-tone="reader"
+            data-tone="inverse"
           >
             <Icon size={15} className="shrink-0" />
             <div className="max-w-80 flex-1 leading-snug">{toast.message}</div>
             {toast.action && (
               <button
                 type="button"
-                className="ui-btn font-semibold"
+                className="min-h-8 font-semibold underline"
                 disabled={exiting}
                 onClick={() => {
                   toast.action?.onClick();
@@ -61,7 +63,7 @@ export default function ToastViewport() {
             )}
             <button
               type="button"
-              className="toolbar-icon shrink-0"
+              className="grid size-8 shrink-0 place-items-center"
               aria-label="关闭"
               disabled={exiting}
               onClick={() => dismiss(toast.id)}

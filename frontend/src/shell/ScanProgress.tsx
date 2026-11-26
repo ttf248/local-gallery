@@ -1,31 +1,9 @@
-// 扫描进度卡：左下角浮动卡（v3，从「顶部 sticky」改为「左下浮动」）
-//
-// 设计动机：
-//   - 之前 v2 是「顶部 sticky 36px 细条」，但因为挂在 <main>（overflow-auto）
-//     内部，sticky 是相对 main 容器而不是 viewport，一旦用户在某个 route
-//     滚到中部就完全看不到进度了。
-//   - 用户实际行为是「点扫描 → 切去别处干别的 → 回来想看进度」，
-//     进度必须常驻 viewport，不受 main 滚动影响。
-//
-// 视觉与交互：
-//   - 位置：fixed bottom-4 left-56 sm:bottom-6 sm:left-60
-//     （避开 208px 宽的侧边栏，从 224px 起；折叠态窄一些时可贴 left-4）
-//   - 宽度：w-[400px] max-w-[calc(100vw-2rem)]
-//   - z-index：50（在 toast z-60 下面，但不会跟 toast 重叠 — toast 在右下）
-//   - 默认展开：标题 + 进度条 + 当前路径 + 统计 + 取消按钮
-//   - 可折叠：点 ⌃ 变成药丸（状态 + 进度 + 百分比 + 耗时 + 展开按钮）
-//   - 终态：5s 内继续可见（让用户看到「完成」反馈），然后滑出
-//
-// 显示策略：
-//   - progress === null → 不渲染
-//   - status === 'running' / 'pending' → 显示
-//   - status === 'complete' / 'cancelled' / 'error' → 继续显示 FADE_DELAY_MS 后滑出
 const FADE_DELAY_MS = 5000;
 
 import { useEffect, useState } from "react";
-import { ProgressEvent } from "../../api/scan";
-import type { ScanConnectionState } from "../../store/scanStore";
-import { useAppMode } from "../../hooks/useAppMode";
+import { ProgressEvent } from "../api/scan";
+import type { ScanConnectionState } from "../store/scanStore";
+import { useAppMode } from "../hooks/useAppMode";
 import {
   CloseIcon,
   CheckIcon,
@@ -34,7 +12,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   RefreshIcon,
-} from "../../ui/icons";
+} from "../ui/icons";
 
 interface Props {
   progress: ProgressEvent | null;
@@ -57,10 +35,10 @@ const SCAN_ERROR_TEXT: Record<string, string> = {
   root_not_dir: "媒体根不是目录",
   root_unreadable: "媒体根无法读取",
   root_changed: "媒体根在扫描期间发生变化",
-}
+};
 
 function scanErrorText(code: string): string {
-  return SCAN_ERROR_TEXT[code] ?? code
+  return SCAN_ERROR_TEXT[code] ?? code;
 }
 
 export default function ScanProgress({
@@ -186,7 +164,7 @@ export default function ScanProgress({
   return (
     <div
       // 左下角浮动卡 — fixed 到 viewport（不挂 main 内部，避开 main 滚动影响）
-      className="float-bottom fixed bottom-[calc(var(--safe-bottom)+1rem)] left-4 sm:bottom-[calc(var(--safe-bottom)+1.5rem)] sm:left-60 z-50 w-[400px] max-w-[calc(100vw-2rem)] rounded-xl border border-border shadow-2xl glass-strong fade-up"
+      className="fixed bottom-[calc(24px+var(--tabbar-height)+env(safe-area-inset-bottom))] right-4 z-popover w-[340px] max-w-[calc(100vw-2rem)] rounded-2xl bg-bg-elevated shadow-2 lg:bottom-6 lg:right-6"
       role="status"
       aria-live="polite"
       data-testid="scan-progress"

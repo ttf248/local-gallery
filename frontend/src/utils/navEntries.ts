@@ -1,12 +1,21 @@
 import {
+  CompassFilledIcon,
   CompassIcon,
+  CopyFilledIcon,
   CopyIcon,
+  HomeFilledIcon,
   HomeIcon,
+  ImageFilledIcon,
   ImageIcon,
+  LibraryFilledIcon,
   LibraryIcon,
+  SparkleFilledIcon,
   SparkleIcon,
+  TasksFilledIcon,
   TasksIcon,
+  SettingsFilledIcon,
   SettingsIcon,
+  UserFilledIcon,
   UserIcon,
 } from "../ui/icons";
 import {
@@ -38,7 +47,10 @@ import type { AppMode } from "../api/library";
  * 操作也不互相沾边。两组的路径也各属一侧（/photo/… 与 /comic/…）：
  * 菜单项不是同一个页面换了个名字，而是两套互不相干的路由。
  */
+export type MobilePlacement = "tab" | "more";
 export interface NavEntry {
+  mobile: MobilePlacement;
+  ActiveIcon?: typeof HomeIcon;
   /** 稳定 id：写入服务端偏好，跨版本不能变。 */
   key: string;
   label: string;
@@ -72,6 +84,8 @@ export const PHOTO_NAV: NavEntry[] = [
     // 类型的（相册 / 探索 / 我的），唯独这一项挂个房子，读起来像
     // 「首页」没改名。
     Icon: ImageIcon,
+    ActiveIcon: ImageFilledIcon,
+    mobile: "tab",
     to: homeRoute("photo"),
     mode: "photo",
     locked: true,
@@ -80,6 +94,8 @@ export const PHOTO_NAV: NavEntry[] = [
     key: "photo.library",
     label: "相册",
     Icon: LibraryIcon,
+    ActiveIcon: LibraryFilledIcon,
+    mobile: "tab",
     to: libraryRoute("photo"),
     mode: "photo",
   },
@@ -87,6 +103,8 @@ export const PHOTO_NAV: NavEntry[] = [
     key: "photo.explore",
     label: "发现",
     Icon: CompassIcon,
+    ActiveIcon: CompassFilledIcon,
+    mobile: "tab",
     to: exploreRoute(),
     mode: "photo",
   },
@@ -94,6 +112,8 @@ export const PHOTO_NAV: NavEntry[] = [
     key: "photo.me",
     label: "珍藏",
     Icon: UserIcon,
+    ActiveIcon: UserFilledIcon,
+    mobile: "tab",
     to: meRoute("photo"),
     mode: "photo",
   },
@@ -101,6 +121,8 @@ export const PHOTO_NAV: NavEntry[] = [
     key: "photo.organize",
     label: "相似照片",
     Icon: CopyIcon,
+    ActiveIcon: CopyFilledIcon,
+    mobile: "more",
     to: similarityRoute(),
     mode: "photo",
   },
@@ -111,6 +133,8 @@ export const COMIC_NAV: NavEntry[] = [
     key: "comic.home",
     label: "首页",
     Icon: HomeIcon,
+    ActiveIcon: HomeFilledIcon,
+    mobile: "tab",
     to: homeRoute("comic"),
     mode: "comic",
     locked: true,
@@ -119,6 +143,8 @@ export const COMIC_NAV: NavEntry[] = [
     key: "comic.library",
     label: "书架",
     Icon: LibraryIcon,
+    ActiveIcon: LibraryFilledIcon,
+    mobile: "tab",
     to: libraryRoute("comic"),
     mode: "comic",
   },
@@ -126,6 +152,8 @@ export const COMIC_NAV: NavEntry[] = [
     key: "comic.me",
     label: "我的",
     Icon: UserIcon,
+    ActiveIcon: UserFilledIcon,
+    mobile: "tab",
     to: meRoute("comic"),
     mode: "comic",
   },
@@ -133,6 +161,8 @@ export const COMIC_NAV: NavEntry[] = [
     key: "comic.unread",
     label: "未读",
     Icon: SparkleIcon,
+    ActiveIcon: SparkleFilledIcon,
+    mobile: "tab",
     to: unreadRoute(),
     mode: "comic",
   },
@@ -171,12 +201,16 @@ export const MACHINE_GROUP: NavGroup = {
       key: "machine.tasks",
       label: "任务中心",
       Icon: TasksIcon,
+      ActiveIcon: TasksFilledIcon,
+      mobile: "more",
       to: "/tasks",
     },
     {
       key: "machine.settings",
       label: "设置",
       Icon: SettingsIcon,
+      ActiveIcon: SettingsFilledIcon,
+      mobile: "more",
       to: "/settings",
     },
   ],
@@ -208,4 +242,50 @@ export function navGroupsFor(mode: AppMode): NavGroup[] {
 /** 某个工作台的入口 key 清单（设置页的「导航」分区按它渲染）。 */
 export function navKeysFor(mode: AppMode): string[] {
   return navEntriesFor(mode).map((entry) => entry.key);
+}
+
+export function mobileTabsFor(
+  mode: AppMode,
+  isVisible: (key: string) => boolean,
+) {
+  return navEntriesFor(mode)
+    .filter(
+      (entry) =>
+        entry.mobile === "tab" && (entry.locked || isVisible(entry.key)),
+    )
+    .slice(0, 4);
+}
+export function moreEntriesFor(
+  mode: AppMode,
+  isVisible: (key: string) => boolean,
+) {
+  const tabs = mobileTabsFor(mode, isVisible);
+  return [
+    ...navEntriesFor(mode).filter(
+      (entry) =>
+        !tabs.includes(entry) && (entry.locked || isVisible(entry.key)),
+    ),
+    ...MACHINE_GROUP.entries,
+  ];
+}
+export function isNavEntryActive(
+  entry: NavEntry,
+  pathname: string,
+  mode: AppMode,
+) {
+  const path = pathname.replace(/\/+$/, "");
+  if (entry.mode && entry.mode !== mode) return false;
+  const within = (prefix: string) =>
+    path === prefix || path.startsWith(prefix + "/");
+  if (entry.to === homeRoute(mode)) return path === entry.to;
+  if (entry.to === libraryRoute(mode) && within(homeRoute(mode) + "/albums"))
+    return true;
+  if (
+    entry.to === exploreRoute() &&
+    ["people", "travels", "semantic", "smart-albums", "years", "random"].some(
+      (section) => within("/photo/" + section),
+    )
+  )
+    return true;
+  return within(entry.to);
 }

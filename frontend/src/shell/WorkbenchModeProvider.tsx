@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useAppModeStore } from "../../store/appModeStore";
-import { counterpartRoute, modeFromPath } from "../../utils/path";
+import { useAppModeStore } from "../store/appModeStore";
+import { counterpartRoute, modeFromPath } from "../utils/path";
 import {
   WorkbenchModeContext,
   type WorkbenchModeValue,
-} from "../../hooks/useAppMode";
-import type { AppMode } from "../../api/library";
+} from "../hooks/useAppMode";
+import type { AppMode } from "../api/library";
 
 /**
  * 工作台模式的提供者。

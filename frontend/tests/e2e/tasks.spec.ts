@@ -34,12 +34,14 @@ test.describe("任务中心", () => {
     await expect(sidebar.getByRole("button", { name: /本机存储/ })).toHaveCount(
       0,
     );
-    await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("运行");
+    await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
+    await expect(page).toHaveTitle(/ · 运行 · Local Gallery$/);
 
     await page.getByRole("tab", { name: "本机存储" }).click();
     await expect(page).toHaveURL(/\/tasks\/storage$/);
     await expect(page.getByRole("heading", { name: "派生缓存" })).toBeVisible();
-    await expect(sidebar.getByTestId("nav-tab-label")).toHaveText("本机存储");
+    await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
+    await expect(page).toHaveTitle(/ · 本机存储 · Local Gallery$/);
 
     // 深链直接落在那一屏。
     await page.goto("/tasks/plan");

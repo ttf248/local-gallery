@@ -62,7 +62,7 @@ test("漫画工作台用暖铜赭强调色，照片工作台用炭黑强调色",
       .getPropertyValue("--accent")
       .trim(),
   );
-  expect(photoAccent.toLowerCase()).toBe("#1c1917");
+  expect(photoAccent.toLowerCase()).toBe("#111110");
 
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic");
