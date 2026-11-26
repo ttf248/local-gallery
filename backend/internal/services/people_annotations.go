@@ -470,7 +470,7 @@ func peopleBuildAnnotationPlan(people *PeopleService, isPhotoImage func(string) 
 	}
 	// 合照候选：只在合照里出现的组。这里只要分类，不要人脸相对尺寸的分位数。
 	classes := people.GroupPhotoClassifications(isPhotoImage, peopleAnnotationGroupPhotoFaceThreshold)
-	topGroups, _ := people.TopGroups(0, false, isPhotoImage)
+	topGroups, _ := people.RankedGroupSummaries(0, false, isPhotoImage)
 	for _, group := range topGroups {
 		groupClasses := classes[group.ID]
 		if groupClasses.PhotoCount == 0 || groupClasses.LargeGroupPhotoCount != groupClasses.PhotoCount {

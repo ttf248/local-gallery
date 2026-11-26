@@ -106,6 +106,13 @@ func personFaceMoreProminent(candidate, current PersonFace) bool {
 	return candidate.Key < current.Key
 }
 
+// PopulateCoverFaceSizes 在筛选、截页后仅为当前页的封面补尺寸。
+func (s *PeopleService) PopulateCoverFaceSizes(groups []PersonGroup) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	s.fillCoverFaceSizes(groups)
+}
+
 // fillCoverFaceSizes 补齐代表脸的原图尺寸。
 //
 // 尺寸是按需查的（读一次图片头），所以只给**要返回给界面的**那几组补，
@@ -220,6 +227,13 @@ func (s *PeopleService) AlbumGroups(fingerprints map[string]smartAlbumFileFinger
 // people. A nil resource filter includes every indexed resource; limit <= 0
 // returns all matching groups.
 func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource func(string) bool) ([]PersonGroup, int) {
+	groups, total := s.RankedGroupSummaries(limit, includeHidden, includeResource)
+	s.PopulateCoverFaceSizes(groups)
+	return groups, total
+}
+
+// RankedGroupSummaries 只在内存中排序，供还要筛选或分页的调用方使用。
+func (s *PeopleService) RankedGroupSummaries(limit int, includeHidden bool, includeResource func(string) bool) ([]PersonGroup, int) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -271,7 +285,6 @@ func (s *PeopleService) TopGroups(limit int, includeHidden bool, includeResource
 	sort.Slice(result, func(i, j int) bool {
 		return peopleGroupRanksBefore(result[i], result[j])
 	})
-	s.fillCoverFaceSizes(result)
 	return result, total
 }
 

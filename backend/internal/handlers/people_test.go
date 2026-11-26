@@ -193,6 +193,24 @@ func TestPeopleHTTPGroupingCorrectionsAndClear(t *testing.T) {
 	if len(listBody.People) != 2 {
 		t.Fatalf("people groups = %+v, want two groups", listBody.People)
 	}
+	sizeLookups := 0
+	people.SetSourceDimensions(func(string) services.MediaDimensions {
+		sizeLookups++
+		return services.MediaDimensions{Width: 1200, Height: 800}
+	})
+	page := peopleHandlerRequest(t, app, fiber.MethodGet, "/api/people?limit=1", "")
+	var firstPage struct {
+		People      []services.PersonGroup
+		TotalGroups int
+	}
+	decodePeopleBody(t, page, &firstPage)
+	if firstPage.TotalGroups != 2 || len(firstPage.People) != 1 || firstPage.People[0].ID != listBody.People[0].ID {
+		t.Fatalf("unexpected first page: %+v", firstPage)
+	}
+	if face := firstPage.People[0].CoverFace; sizeLookups != 1 || face == nil || face.Width != 1200 {
+		t.Fatalf("cover = %+v, size lookups = %d, want only the visible cover", face, sizeLookups)
+	}
+
 	var repeated *services.PersonGroup
 	for index := range listBody.People {
 		if listBody.People[index].FaceCount == 6 {

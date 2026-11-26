@@ -48,7 +48,7 @@ func PeopleGroupPhotoCandidatesHandler(people *services.PeopleService, catalog *
 		// 分两步：先算出合影分类挑出候选，再只给候选算人脸相对尺寸。
 		// 相对尺寸要查原图尺寸（落盘校验路径），对全部分组都算一遍就是一秒多。
 		classes := people.GroupPhotoClassifications(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold)
-		groups, _ := people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
+		groups, _ := people.RankedGroupSummaries(0, includeHidden, snapshot.IsPhotoImage)
 		candidateIDs := make(map[string]struct{})
 		candidateGroups := make([]services.PersonGroup, 0)
 		for _, group := range groups {
@@ -60,34 +60,33 @@ func PeopleGroupPhotoCandidatesHandler(people *services.PeopleService, catalog *
 			candidateGroups = append(candidateGroups, group)
 		}
 		stats := people.GroupPhotoStatsForGroups(snapshot.IsPhotoImage, peopleListGroupPhotoFaceThreshold, candidateIDs)
-		candidates := make([]peopleGroupPhotoCandidate, 0, len(candidateGroups))
-		for _, group := range candidateGroups {
-			candidates = append(candidates, peopleGroupPhotoCandidate{Person: group, Stats: stats[group.ID]})
-		}
-		sort.Slice(candidates, func(i, j int) bool {
-			left, right := candidates[i], candidates[j]
-			if left.Stats.PhotoCount != right.Stats.PhotoCount {
-				return left.Stats.PhotoCount > right.Stats.PhotoCount
+		sort.Slice(candidateGroups, func(i, j int) bool {
+			left, right := candidateGroups[i], candidateGroups[j]
+			ls, rs := stats[left.ID], stats[right.ID]
+			if ls.PhotoCount != rs.PhotoCount {
+				return ls.PhotoCount > rs.PhotoCount
 			}
-			if left.Person.FaceCount != right.Person.FaceCount {
-				return left.Person.FaceCount > right.Person.FaceCount
+			if left.FaceCount != right.FaceCount {
+				return left.FaceCount > right.FaceCount
 			}
-			if left.Stats.RelativeFaceSizeP10 != right.Stats.RelativeFaceSizeP10 {
-				return left.Stats.RelativeFaceSizeP10 > right.Stats.RelativeFaceSizeP10
+			if ls.RelativeFaceSizeP10 != rs.RelativeFaceSizeP10 {
+				return ls.RelativeFaceSizeP10 > rs.RelativeFaceSizeP10
 			}
-			if left.Stats.DetectionP10 != right.Stats.DetectionP10 {
-				return left.Stats.DetectionP10 > right.Stats.DetectionP10
+			if ls.DetectionP10 != rs.DetectionP10 {
+				return ls.DetectionP10 > rs.DetectionP10
 			}
-			return left.Person.ID < right.Person.ID
+			return left.ID < right.ID
 		})
-		end := min(offset+limit, len(candidates))
-		items := []peopleGroupPhotoCandidate{}
-		if offset < len(candidates) {
-			items = candidates[offset:end]
+		end := min(offset+limit, len(candidateGroups))
+		page := candidateGroups[min(offset, end):end]
+		people.PopulateCoverFaceSizes(page)
+		items := make([]peopleGroupPhotoCandidate, 0, len(page))
+		for _, group := range page {
+			items = append(items, peopleGroupPhotoCandidate{Person: group, Stats: stats[group.ID]})
 		}
 		return c.JSON(fiber.Map{
-			"ok": true, "items": items, "total": len(candidates),
-			"offset": offset, "nextOffset": end, "hasMore": end < len(candidates),
+			"ok": true, "items": items, "total": len(candidateGroups),
+			"offset": offset, "nextOffset": end, "hasMore": end < len(candidateGroups),
 			"faceCountThreshold":        peopleListGroupPhotoFaceThreshold,
 			"minimumFaceCount":          services.PeopleGroupPhotoMinimumFaces,
 			"relativeFaceSizeThreshold": services.PeopleGroupPhotoRelativeFaceSizeThreshold,
@@ -275,7 +274,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		if sortOrder == peopleSortReview {
 			groups, total = people.SearchGroupsForReview(query, len(photoClasses)+1, includeHidden, snapshot.IsPhotoImage)
 		} else {
-			groups, total = people.TopGroups(0, includeHidden, snapshot.IsPhotoImage)
+			groups, total = people.RankedGroupSummaries(0, includeHidden, snapshot.IsPhotoImage)
 		}
 
 		visibleGroups := make([]services.PersonGroup, 0, min(limit, len(groups)))
@@ -299,6 +298,7 @@ func PeopleHandler(people *services.PeopleService, jobs *services.AIJobService, 
 		if total > len(groups) {
 			filteredGroups += total - len(groups)
 		}
+		people.PopulateCoverFaceSizes(visibleGroups)
 		response["people"] = visibleGroups
 		response["totalGroups"] = visibleTotal
 		response["filteredGroups"] = filteredGroups
