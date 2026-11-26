@@ -1,3 +1,4 @@
+import { MemoryRouter } from "react-router-dom";
 import {
   act,
   fireEvent,
@@ -29,7 +30,7 @@ vi.mock("../hooks/useScanSSE", () => ({
 vi.mock("../hooks/useLibrary", () => ({
   useLibraryManifest: () => ({ data: undefined }),
 }));
-vi.mock("../components/settings/ServerConfigPanel", () => ({
+vi.mock("../features/settings/ServerConfigPanel", () => ({
   default: () => <div>服务端设置</div>,
 }));
 
@@ -57,7 +58,9 @@ const clientForTest = () =>
 function renderSettings(tab = "interface", client = clientForTest()) {
   const view = render(
     <QueryClientProvider client={client}>
-      <SettingsView tab={tab} onSelectTab={vi.fn()} />
+      <MemoryRouter>
+        <SettingsView tab={tab} />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
   return {
@@ -65,7 +68,9 @@ function renderSettings(tab = "interface", client = clientForTest()) {
     rerenderWithTab: (next: string) =>
       view.rerender(
         <QueryClientProvider client={client}>
-          <SettingsView tab={next} onSelectTab={vi.fn()} />
+          <MemoryRouter>
+            <SettingsView tab={next} />
+          </MemoryRouter>
         </QueryClientProvider>,
       ),
   };
@@ -85,14 +90,12 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const savedHistory: HistoryEntry[] = ["a_first", "a_second"].map(
-  (albumId) => ({
-    albumId,
-    name: albumId,
-    imageCount: 3,
-    openedAt: "2026-10-31T10:00:00Z",
-  }),
-);
+const savedHistory: HistoryEntry[] = ["a_first", "a_second"].map((albumId) => ({
+  albumId,
+  name: albumId,
+  imageCount: 3,
+  openedAt: "2026-10-31T10:00:00Z",
+}));
 
 it("清理失效收藏成功后收藏列表立即更新", async () => {
   const client = clientForTest();
@@ -148,6 +151,7 @@ it("清空成功立即清空共享历史", async () => {
   vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清空" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
       expect.objectContaining({ message: "已清空最近访问" }),
@@ -163,6 +167,7 @@ it("清空失败不丢弃原有共享历史", async () => {
   vi.mocked(historyApi.clear).mockRejectedValue(new Error("offline"));
   renderSettings("data", client);
   fireEvent.click(await screen.findByRole("button", { name: "清空" }));
+  fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
       expect.objectContaining({ message: "清空最近访问失败" }),
@@ -303,8 +308,8 @@ it("读取设置失败提供重试，恢复后可操作", async () => {
 // 页签条：四个页签，只有当前这一个是选中的；面板的可访问名就是页签名。
 it("页签条有四个页签，只有当前这一个被选中", async () => {
   renderSettings("data");
-  const tablist = await screen.findByRole("tablist", { name: "设置页分区" });
-  const tabs = within(tablist).getAllByRole("tab");
+  const tablist = await screen.findByRole("navigation", { name: "设置页分区" });
+  const tabs = within(tablist).getAllByRole("link");
   expect(tabs.map((tab) => tab.textContent)).toEqual([
     "界面",
     "阅读",
@@ -312,21 +317,26 @@ it("页签条有四个页签，只有当前这一个被选中", async () => {
     "服务端",
   ]);
   expect(
-    tabs.filter((tab) => tab.getAttribute("aria-selected") === "true"),
+    tabs.filter((tab) => tab.getAttribute("aria-current") === "page"),
   ).toHaveLength(1);
-  expect(
-    within(tablist).getByRole("tab", { name: "数据" }),
-  ).toHaveAttribute("aria-selected", "true");
+  expect(within(tablist).getByRole("link", { name: "数据" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
 });
 
 it("当前页签的面板以页签名为可访问名，其余页签的面板不在 DOM 里", async () => {
   renderSettings("data");
-  const panel = await screen.findByRole("tabpanel", { name: "数据" });
+  const panel = await screen.findByRole("region", { name: "数据分区" });
   expect(panel).toBeInTheDocument();
-  expect(screen.queryByRole("tabpanel", { name: "界面" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("tabpanel", { name: "阅读" })).not.toBeInTheDocument();
   expect(
-    screen.queryByRole("tabpanel", { name: "服务端" }),
+    screen.queryByRole("region", { name: "界面分区" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("region", { name: "阅读分区" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("region", { name: "服务端分区" }),
   ).not.toBeInTheDocument();
 });
 
@@ -337,14 +347,18 @@ it("每个页签各自承载对应的一组设置", async () => {
     await screen.findByRole("region", { name: "外观" }),
   ).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "导航" })).toBeInTheDocument();
-  expect(screen.queryByRole("region", { name: "阅读" })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("region", { name: "阅读" }),
+  ).not.toBeInTheDocument();
 
   // 阅读：一张整幅的卡。
   ui.rerenderWithTab("reading");
   expect(
     await screen.findByRole("region", { name: "阅读" }),
   ).toBeInTheDocument();
-  expect(screen.queryByRole("region", { name: "外观" })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("region", { name: "外观" }),
+  ).not.toBeInTheDocument();
 
   // 数据：数据卡与备份卡。
   ui.rerenderWithTab("data");
@@ -390,7 +404,9 @@ it("危险操作单独成组，每件都写清丢的是什么", async () => {
   expect(
     within(danger).getByRole("button", { name: /清空索引/ }),
   ).toBeInTheDocument();
-  expect(within(danger).getByRole("button", { name: "清空" })).toBeInTheDocument();
+  expect(
+    within(danger).getByRole("button", { name: "清空" }),
+  ).toBeInTheDocument();
   // 清空索引会丢掉索引：它不在普通设置行里。
   const data = screen.getByRole("region", { name: "数据" });
   expect(
@@ -420,14 +436,16 @@ it("一组设置行装在同一个行组里", async () => {
   const appearance = await screen.findByRole("region", { name: "外观" });
   const appearanceRows = appearance.querySelector(".settings-rows");
   expect(appearanceRows).not.toBeNull();
-  expect(appearanceRows?.querySelectorAll(".settings-row").length).toBe(4);
+  expect(appearanceRows?.querySelectorAll("[data-setting-row]").length).toBe(4);
 
   await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   const nav = screen.getByRole("region", { name: "导航" });
   for (const group of nav.querySelectorAll(".settings-group")) {
     const rows = group.querySelector(".settings-rows");
     expect(rows).not.toBeNull();
-    expect(rows?.querySelectorAll(".settings-row").length).toBeGreaterThan(0);
+    expect(rows?.querySelectorAll("[data-setting-row]").length).toBeGreaterThan(
+      0,
+    );
   }
 });
 
@@ -530,6 +548,8 @@ for (const kind of ["prune", "history"] as const) {
       name: buttonName,
     });
     fireEvent.click(button);
+    if (kind === "history")
+      fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
     await waitFor(() =>
       expect(useUIStore.getState().toasts).toContainEqual(
         expect.objectContaining({ kind: "error", message }),
@@ -537,6 +557,8 @@ for (const kind of ["prune", "history"] as const) {
     );
     expect(button).toBeEnabled();
     fireEvent.click(button);
+    if (kind === "history")
+      fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
     await waitFor(() =>
       expect(useUIStore.getState().toasts).toContainEqual(
         expect.objectContaining({ kind: "success" }),
@@ -553,8 +575,11 @@ for (const kind of ["prune", "history"] as const) {
       name: buttonName,
     });
     fireEvent.click(button);
+    if (kind === "history")
+      fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
     await waitFor(() => expect(button).toBeDisabled());
     fireEvent.click(button);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(operation).toHaveBeenCalledTimes(1);
   });
 }
@@ -575,5 +600,7 @@ it("设置页不再展示模型、路径与派生缓存占用", async () => {
 
   // 设置页仍然保留它自己的东西。
   expect(screen.getByText("媒体库索引")).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "关于" })).toBeInTheDocument();
+  expect(
+    screen.queryByRole("heading", { name: "关于" }),
+  ).not.toBeInTheDocument();
 });

@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
-import {PageHeader} from "../shell/PageHeader";
-import PageTabs, { PagePanel } from "../components/common/PageTabs";
+import { Link, Navigate, useParams } from "react-router-dom";
+import { PageHeader } from "../shell/PageHeader";
+import { SplitLayout } from "../shell/SplitLayout";
+import { Page } from "../shell/Page";
+import { SplitNav } from "../shell/SplitLayout";
 import { useTaskCenter } from "../hooks/useTaskCenter";
-import { TASK_TABS, TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
-import TaskConsole from "../components/tasks/TaskConsole";
-import TaskSummary from "../components/tasks/TaskSummary";
-import TaskQueuePanel from "../components/tasks/TaskQueuePanel";
-import ComputeHardwarePanel from "../components/tasks/ComputeHardwarePanel";
-import DailyPlanPanel from "../components/tasks/DailyPlanPanel";
-import JobHistoryPanel from "../components/tasks/JobHistoryPanel";
-import SmartAlbumRefreshPanel from "../components/tasks/SmartAlbumRefreshPanel";
-import StorageSection from "../components/tasks/StorageSection";
+import { TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
+import TaskConsole from "../features/tasks/TaskConsole";
+import TaskSummary from "../features/tasks/TaskSummary";
+import TaskQueuePanel from "../features/tasks/TaskQueuePanel";
+import ComputeHardwarePanel from "../features/tasks/ComputeHardwarePanel";
+import DailyPlanPanel from "../features/tasks/DailyPlanPanel";
+import JobHistoryPanel from "../features/tasks/JobHistoryPanel";
+import SmartAlbumRefreshPanel from "../features/tasks/SmartAlbumRefreshPanel";
+import StorageSection from "../features/tasks/StorageSection";
 import "../styles/tasks.css";
 
 /**
@@ -27,19 +29,13 @@ import "../styles/tasks.css";
  */
 export default function TaskCenter() {
   const { tab: tabParam } = useParams();
-  const navigate = useNavigate();
   const page = TAB_PAGES.tasks;
   const tab = resolveTab(page, tabParam);
   // 不认识的页签落回缺省页签。
   if (tabParam !== undefined && tabParam !== tab) {
     return <Navigate to={tabRoute(page, tab)} replace />;
   }
-  return (
-    <TaskCenterView
-      tab={tab}
-      onSelectTab={(id) => navigate(tabRoute(page, id))}
-    />
-  );
+  return <TaskCenterView tab={tab} />;
 }
 
 /**
@@ -48,13 +44,7 @@ export default function TaskCenter() {
  * 与路由分开，是为了单测能直接渲染它；数据 hook 留在这一层，页面不重挂
  * 载 —— 已选的分析模块、增量/全量与没保存的每日计划草稿都在里面。
  */
-export function TaskCenterView({
-  tab,
-  onSelectTab,
-}: {
-  tab: string;
-  onSelectTab: (id: string) => void;
-}) {
+export function TaskCenterView({ tab }: { tab: string }) {
   const center = useTaskCenter();
   const { snapshot, active, queue, history, plan } = center;
   const taskActionsBusy = center.busy || center.gpuSaving;
@@ -82,66 +72,77 @@ export function TaskCenterView({
       ?.scrollTo({ top: 0, behavior: "instant" });
   }, [tab]);
 
-  // 页签条右侧的一句补充：这一屏在做什么。
-  const meta = {
-    run: active ? "当前任务的进度与控制" : "队列状态与启动入口",
-    plan: "按设备本地时间自动检查",
-    history: `${history.length} 项`,
-    storage: "派生缓存、模型与产物",
-  }[tab];
-
   return (
     <div className="page-shell">
       {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
           宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
-      <div className="container--focused tasks-page pb-12">
+      <Page variant="split" className="tasks-page pb-12">
         <PageHeader
-  title="任务中心"
-  meta="管理本机分析、等待队列及每日计划。"
-  actions={
+          title="任务中心"
+          meta="管理本机分析、等待队列及每日计划。"
+          actions={
             <Link className="btn btn-sm btn-outline" to="/settings/server">
               服务设置
             </Link>
           }
-/>
+        />
 
-        {center.loadError ? (
-          <div className="mt-6 rounded-lg border border-border bg-bg-elevated p-5 text-body text-fg-muted">
-            任务状态读取失败。请检查后端是否运行，然后刷新页面。
-          </div>
-        ) : null}
-
-        <div className="mt-6">
-          <PageTabs
-            tabs={TASK_TABS}
-            active={tab}
-            onChange={onSelectTab}
-            label="任务中心分区"
-            idPrefix="tasks"
-            meta={meta}
-          />
-
+        <SplitLayout
+          navigation={
+            <SplitNav
+              page={TAB_PAGES.tasks}
+              active={tab}
+              label="任务中心分区"
+              runStatus={active?.status ?? history[0]?.status}
+            />
+          }
+        >
           {visited.has("run") && (
-            <PagePanel idPrefix="tasks" tab={TASK_TABS[0]} active={tab}>
+            <section
+              aria-label="运行分区"
+              id="tasks-panel-run"
+              hidden={tab !== "run"}
+            >
               <div className="mt-6">
                 {/* 状态摘要：现在在干什么、还剩多少、能做什么。 */}
-                <TaskSummary
-                  active={active}
-                  lastJob={history[0]}
-                  loading={center.loading}
-                  busy={runBusy}
-                  modules={snapshot?.modules ?? []}
-                  queuedCount={queue.length}
-                  selection={center.selection}
-                  estimate={center.estimate}
-                  embeddingStatus={center.embeddingStatus}
-                  peopleEnabled={plan.peopleEnabled}
-                  faceModel={center.faceModel}
-                  onStart={() =>
-                    center.start(center.selection.module, center.selection.mode)
-                  }
-                  onAction={center.act}
-                />
+                {center.loadError ? (
+                  <section
+                    aria-label="状态摘要"
+                    role="alert"
+                    className="rounded-card bg-bg-elevated p-7 shadow-1"
+                  >
+                    <h2 className="text-title-2">与服务端的连接中断</h2>
+                    <button
+                      type="button"
+                      className="btn btn-outline mt-3"
+                      onClick={center.reconnect}
+                    >
+                      重新连接
+                    </button>
+                  </section>
+                ) : (
+                  <TaskSummary
+                    active={active}
+                    lastJob={history[0]}
+                    loading={center.loading}
+                    busy={runBusy}
+                    cancelling={center.cancelling}
+                    modules={snapshot?.modules ?? []}
+                    queuedCount={queue.length}
+                    selection={center.selection}
+                    estimate={center.estimate}
+                    embeddingStatus={center.embeddingStatus}
+                    peopleEnabled={plan.peopleEnabled}
+                    faceModel={center.faceModel}
+                    onStart={() =>
+                      center.start(
+                        center.selection.module,
+                        center.selection.mode,
+                      )
+                    }
+                    onAction={center.act}
+                  />
+                )}
                 <TaskConsole
                   loading={center.loading}
                   busy={runBusy}
@@ -194,11 +195,15 @@ export function TaskCenterView({
                   </p>
                 ) : null}
               </div>
-            </PagePanel>
+            </section>
           )}
 
           {visited.has("plan") && (
-            <PagePanel idPrefix="tasks" tab={TASK_TABS[1]} active={tab}>
+            <section
+              aria-label="每日计划分区"
+              id="tasks-panel-plan"
+              hidden={tab !== "plan"}
+            >
               <div className="mt-6">
                 <DailyPlanPanel
                   enabled={plan.enabled}
@@ -228,11 +233,15 @@ export function TaskCenterView({
                   estimateError={center.estimateError}
                 />
               </div>
-            </PagePanel>
+            </section>
           )}
 
           {visited.has("history") && (
-            <PagePanel idPrefix="tasks" tab={TASK_TABS[2]} active={tab}>
+            <section
+              aria-label="任务记录分区"
+              id="tasks-panel-history"
+              hidden={tab !== "history"}
+            >
               <div className="mt-6">
                 <JobHistoryPanel
                   jobs={history}
@@ -243,18 +252,22 @@ export function TaskCenterView({
                   onClear={center.clearHistory}
                 />
               </div>
-            </PagePanel>
+            </section>
           )}
 
           {visited.has("storage") && (
-            <PagePanel idPrefix="tasks" tab={TASK_TABS[3]} active={tab}>
+            <section
+              aria-label="本机存储分区"
+              id="tasks-panel-storage"
+              hidden={tab !== "storage"}
+            >
               <div className="mt-6">
                 <StorageSection />
               </div>
-            </PagePanel>
+            </section>
           )}
-        </div>
-      </div>
+        </SplitLayout>
+      </Page>
     </div>
   );
 }

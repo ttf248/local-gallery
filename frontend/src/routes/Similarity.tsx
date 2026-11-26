@@ -1,21 +1,20 @@
+import { Page } from "../shell/Page";
+import { Menu } from "../ui/Menu";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import "../styles/similarity.css";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
-import {PageHeader} from "../shell/PageHeader";
+import { PageHeader } from "../shell/PageHeader";
 import Segmented from "../ui/Segmented";
 import EmptyState from "../features/common/EmptyState";
 import ErrorBanner from "../features/common/ErrorBanner";
 import PhotoCompare, {
   type CompareItem,
 } from "../features/viewer/PhotoCompare";
-import Popover, {
-  PopoverItem,
-  PopoverLabel,
-} from "../ui/Popover";
+
 import { FolderIcon } from "../ui/icons";
-import SimilarityGroupCard from "../components/similarity/SimilarityGroupCard";
+import SimilarityGroupCard from "../features/similarity/SimilarityGroupCard";
 import {
   useSimilarityGroups,
   useSimilarityStatus,
@@ -311,7 +310,7 @@ export default function Similarity() {
       await handleSetStatus(
         group,
         undo ? "pending" : "reviewed",
-        undo ? "已放回待处理" : "已把这一组标记为已处理",
+        undo ? "已放回待处理" : "已标记 1 组",
       );
     },
     [handleSetStatus],
@@ -468,49 +467,50 @@ export default function Similarity() {
 
   return (
     <div className="similarity-page min-h-full pb-10" ref={bindScrollParent}>
-      <div className="page-shell"><PageHeader
-  eyebrow="本机整理"
-  title="相似照片与连拍"
-  meta={
-          <>
-            完全重复按文件内容判定，近似重复按画面判定，连拍只标出「同一个瞬间」，
-            不当成重复。这一页只记录你的决定，原始照片一个字节都不动。
-          </>
-        }
-  actions={
-          <div className="flex items-center gap-2">
-            <RebuildButton
-              stale={Boolean(groups.page?.stale)}
-              rebuilding={groups.rebuild.isPending}
-              onRebuild={() => {
-                void groups.rebuild
-                  .mutateAsync()
-                  .then(() => {
-                    pushToast({ kind: "success", message: "分组已重算" });
-                  })
-                  .catch((error: unknown) => {
-                    pushToast({
-                      kind: "error",
-                      message: `没能重算分组：${describeError(error)}`,
+      <Page variant="standard" className="page-shell">
+        <PageHeader
+          eyebrow="本机整理"
+          title="相似照片与连拍"
+          meta={
+            <>
+              完全重复按文件内容判定，近似重复按画面判定，连拍只标出「同一个瞬间」，
+              不当成重复。这一页只记录你的决定，原始照片一个字节都不动。
+            </>
+          }
+          actions={
+            <div className="flex items-center gap-2">
+              <RebuildButton
+                stale={Boolean(groups.page?.stale)}
+                rebuilding={groups.rebuild.isPending}
+                onRebuild={() => {
+                  void groups.rebuild
+                    .mutateAsync()
+                    .then(() => {
+                      pushToast({ kind: "success", message: "分组已重算" });
+                    })
+                    .catch((error: unknown) => {
+                      pushToast({
+                        kind: "error",
+                        message: `没能重算分组：${describeError(error)}`,
+                      });
+                    })
+                    .finally(() => {
+                      void queryClient.invalidateQueries({
+                        queryKey: ["similarity"],
+                      });
                     });
+                }}
+              />
+              <AnalyzeButton
+                onStarted={() =>
+                  void queryClient.invalidateQueries({
+                    queryKey: ["similarity"],
                   })
-                  .finally(() => {
-                    void queryClient.invalidateQueries({
-                      queryKey: ["similarity"],
-                    });
-                  });
-              }}
-            />
-            <AnalyzeButton
-              onStarted={() =>
-                void queryClient.invalidateQueries({ queryKey: ["similarity"] })
-              }
-            />
-          </div>
-        }
-/></div>
-
-      <div className="page-shell">
+                }
+              />
+            </div>
+          }
+        />
         <div className="filter-strip flex flex-wrap items-center gap-x-5 gap-y-3">
           <Segmented
             label="结果类别"
@@ -527,47 +527,29 @@ export default function Similarity() {
             options={STATUS_OPTIONS}
           />
           {folders.length > 0 ? (
-            <Popover
-              align="start"
-              aria-label="按文件夹查看整理结果"
-              className="similarity-folder-menu"
+            <Menu
+              label="按文件夹查看整理结果"
               trigger={
                 <button type="button" className="btn btn-sm">
                   <FolderIcon size={14} />
-                  <span className="max-w-[220px] truncate">
-                    {folder || "全部文件夹"}
-                  </span>
-                  {folder ? (
-                    <span className="tabular-nums text-fg-subtle">
-                      {folders.find((item) => item.folder === folder)?.groups ??
-                        0}
-                    </span>
-                  ) : (
-                    <span className="tabular-nums text-fg-subtle">
-                      {folders.length}
-                    </span>
-                  )}
+                  {folder || "全部文件夹"}
                 </button>
               }
-            >
-              <PopoverLabel>按文件夹查看</PopoverLabel>
-              <PopoverItem onClick={() => updateParam(FOLDER_PARAM, "")}>
-                全部文件夹
-              </PopoverItem>
-              {folders.map((item) => (
-                <PopoverItem
-                  key={item.folder}
-                  onClick={() => updateParam(FOLDER_PARAM, item.folder)}
-                >
-                  <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate">{item.folder}</span>
-                    <span className="tabular-nums text-fg-subtle">
-                      {item.groups}
-                    </span>
-                  </span>
-                </PopoverItem>
-              ))}
-            </Popover>
+              items={[
+                {
+                  id: "all",
+                  label: "全部文件夹",
+                  checked: !folder,
+                  onSelect: () => updateParam(FOLDER_PARAM, ""),
+                },
+                ...folders.map((item) => ({
+                  id: "folder-" + item.folder,
+                  label: item.folder + " " + item.groups,
+                  checked: folder === item.folder,
+                  onSelect: () => updateParam(FOLDER_PARAM, item.folder),
+                })),
+              ]}
+            />
           ) : null}
         </div>
 
@@ -752,7 +734,7 @@ export default function Similarity() {
             </button>
           </div>
         ) : null}
-      </div>
+      </Page>
 
       {compareItems ? (
         <PhotoCompare

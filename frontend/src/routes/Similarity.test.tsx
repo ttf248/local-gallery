@@ -391,7 +391,8 @@ describe("相似照片整理页", () => {
       }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "忽略" }));
+    fireEvent.click(screen.getByRole("button", { name: "更多组操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "忽略" }));
     await waitFor(() =>
       expect(updates).toContainEqual({
         id: "exact-1",
@@ -608,12 +609,12 @@ describe("相似照片整理页", () => {
       expect(
         useUIStore
           .getState()
-          .toasts.some((toast) => toast.message === "已把这一组标记为已处理"),
+          .toasts.some((toast) => toast.message === "已标记 1 组"),
       ).toBe(true),
     );
     const toast = useUIStore
       .getState()
-      .toasts.find((item) => item.message === "已把这一组标记为已处理");
+      .toasts.find((item) => item.message === "已标记 1 组");
     expect(toast?.action?.label).toBe("撤销");
 
     await act(async () => {
@@ -686,7 +687,7 @@ describe("相似照片整理页", () => {
 
     const toast = useUIStore
       .getState()
-      .toasts.find((item) => item.message === "已把这一组标记为已处理");
+      .toasts.find((item) => item.message === "已标记 1 组");
     expect(toast?.action?.label).toBe("撤销");
     await act(async () => {
       toast?.action?.onClick();
@@ -706,7 +707,8 @@ describe("相似照片整理页", () => {
     renderPage();
     await screen.findByTestId("similarity-group");
 
-    fireEvent.click(screen.getByRole("button", { name: "忽略" }));
+    fireEvent.click(screen.getByRole("button", { name: "更多组操作" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "忽略" }));
     await waitFor(() => expect(updates).toHaveLength(1));
     expect(updates[0].body).toEqual({ status: "ignored" });
 
@@ -819,7 +821,7 @@ describe("相似照片整理页", () => {
     );
     const toast = useUIStore
       .getState()
-      .toasts.find((item) => item.message === "已把这一组标记为已处理");
+      .toasts.find((item) => item.message === "已标记 1 组");
     await act(async () => {
       toast?.action?.onClick();
     });

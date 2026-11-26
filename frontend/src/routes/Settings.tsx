@@ -1,7 +1,9 @@
-import {PageHeader} from "../shell/PageHeader";
+import { Dialog } from "../ui/Dialog";
+import { Button } from "../ui/Button";
+import { PageHeader } from "../shell/PageHeader";
 import ErrorBanner from "../features/common/ErrorBanner";
 import { useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   prefsApi,
@@ -18,33 +20,31 @@ import {
 import { prefsQueryOptions } from "../hooks/usePrefs";
 import { scanApi } from "../api/scan";
 import { useScanSSE } from "../hooks/useScanSSE";
-import ThemeSwitcher from "../components/common/ThemeSwitcher";
+
 import Segmented from "../ui/Segmented";
 import DensityControl from "../features/wall/DensityControl";
 import { useUIStore } from "../store/uiStore";
 import { useLibraryManifest } from "../hooks/useLibrary";
-import StateBackupPanel from "../components/settings/StateBackupPanel";
-import ServerConfigPanel from "../components/settings/ServerConfigPanel";
-import AutoSyncPanel from "../components/settings/AutoSyncPanel";
-import { Row, Section } from "../components/settings/SettingsSection";
-import PageTabs, { PagePanel } from "../components/common/PageTabs";
-import {
-  SETTINGS_TABS,
-  TAB_PAGES,
-  resolveTab,
-  tabRoute,
-} from "../utils/pageTabs";
+import StateBackupPanel from "../features/settings/StateBackupPanel";
+import ServerConfigPanel from "../features/settings/ServerConfigPanel";
+import AutoSyncPanel from "../features/settings/AutoSyncPanel";
+import { SettingsGroup, SettingsRow } from "../ui/SettingsList";
+import { SplitLayout } from "../shell/SplitLayout";
+import { Page } from "../shell/Page";
+import { SettingsNav } from "../features/settings/SettingsNav";
+import { TAB_PAGES, resolveTab, tabRoute } from "../utils/pageTabs";
 import ScanWarnings from "../components/common/ScanWarnings";
-import Toggle from "../components/common/Toggle";
+import { Switch } from "../ui/Switch";
 import { syncHistoryCache } from "../utils/historyCache";
 import { useAppMode } from "../hooks/useAppMode";
 import { usePhotoStore } from "../store/photoStore";
 import { useGalleryStore } from "../store/galleryStore";
 import {
   RefreshIcon,
-  TrashIcon,
   LibraryIcon,
   SunIcon,
+  MoonIcon,
+  MonitorIcon,
   KeyboardIcon,
   ServerIcon,
   ScrollPageIcon,
@@ -71,33 +71,14 @@ import "../styles/settings.css";
  */
 export default function Settings() {
   const { tab: tabParam } = useParams();
-  const navigate = useNavigate();
   const page = TAB_PAGES.settings;
   const tab = resolveTab(page, tabParam);
   // 不认识的页签落回缺省页签（书签里的旧链接也不会白屏）。
   if (tabParam !== undefined && tabParam !== tab) {
     return <Navigate to={tabRoute(page, tab)} replace />;
   }
-  return (
-    <SettingsView
-      tab={tab}
-      onSelectTab={(id) => navigate(tabRoute(page, id))}
-    />
-  );
+  return <SettingsView tab={tab} />;
 }
-
-/**
- * 页签条右侧的一句补充：这一屏在做什么。
- *
- * 页签名只有两个字（「界面」「数据」），光看名字说不清里面装了什么；
- * 这一句补在右边，宽屏上读一眼就知道该往哪看。
- */
-const SETTINGS_TAB_META: Record<string, string> = {
-  interface: "外观与左侧导航栏",
-  reading: "照片与漫画的阅读方式",
-  data: "本机数据与备份恢复",
-  server: "服务配置与运行环境",
-};
 
 /**
  * 设置页的内容。
@@ -105,13 +86,12 @@ const SETTINGS_TAB_META: Record<string, string> = {
  * 与路由分开，是为了单测能直接渲染它 —— 页签切换由外层接住，内容自己不
  * 依赖路由。
  */
-export function SettingsView({
-  tab,
-  onSelectTab,
-}: {
-  tab: string;
-  onSelectTab: (id: string) => void;
-}) {
+export function SettingsView({ tab }: { tab: string }) {
+  const [clearTarget, setClearTarget] = useState<"index" | "history" | null>(
+    null,
+  );
+  const theme = useUIStore((state) => state.theme);
+  const setTheme = useUIStore((state) => state.setTheme);
   const prefsQuery = useQuery(prefsQueryOptions);
   const { data } = prefsQuery;
   // 访问过的页签。切走的页签不卸载：面板里的草稿与筛选是组件内状态
@@ -282,17 +262,14 @@ export function SettingsView({
   if (!data) {
     return (
       <div className="page-shell">
-        <div className="container--focused settings-page pb-10">
-          <PageHeader
-  title="设置"
-  meta="调整外观、阅读方式与本地媒体配置。"
-/>
+        <Page className="settings-page pb-10" variant="split">
+          <PageHeader title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
           {prefsError || (
             <div role="status" className="text-fg-muted text-body">
               正在加载设置…
             </div>
           )}
-        </div>
+        </Page>
       </div>
     );
   }
@@ -301,406 +278,435 @@ export function SettingsView({
     <div className="page-shell">
       {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
           标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
-      <div className="container--focused settings-page pb-10">
-        <PageHeader
-  title="设置"
-  meta="外观、导航、阅读方式与本地媒体配置。"
-/>
+      <Page className="settings-page pb-10" variant="split">
+        <PageHeader title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
         {prefsError}
-        <PageTabs
-          tabs={SETTINGS_TABS}
-          active={tab}
-          onChange={onSelectTab}
-          label="设置页分区"
-          idPrefix="settings"
-          meta={SETTINGS_TAB_META[tab]}
-        />
-        {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，
+        <SplitLayout settings navigation={<SettingsNav active={tab} />}>
+          {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，
             阅读是照片与漫画两组，数据是索引、备份与自动同步，服务端是
             那几组自带标题的面板。分组之间只用一条细线。 */}
-        {visited.has("interface") && (
-          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[0]} active={tab}>
-            <Section id="appearance" title="外观" icon={<SunIcon size={13} />}>
-              {/* 这几行摆在一起，单列读下来最稳：标签与控件挨着，
+          {visited.has("interface") && (
+            <section
+              aria-label="界面分区"
+              id="settings-panel-interface"
+              hidden={tab !== "interface"}
+            >
+              <SettingsGroup
+                id="appearance"
+                title="外观"
+                icon={<SunIcon size={13} />}
+              >
+                {/* 这几行摆在一起，单列读下来最稳：标签与控件挨着，
                   不隔着半张卡。 */}
-              <div className="settings-rows">
-                <Row label="主题">
-                  <ThemeSwitcher />
-                </Row>
-                {/* 侧栏的折叠只属于宽屏：窄屏侧栏是抽屉，宽度不由折叠决定，
+                <div className="settings-rows">
+                  <SettingsRow label="主题">
+                    <Segmented
+                      label="主题"
+                      value={theme}
+                      onChange={setTheme}
+                      options={[
+                        {
+                          value: "light",
+                          label: (
+                            <>
+                              <SunIcon size={14} />
+                              浅色
+                            </>
+                          ),
+                        },
+                        {
+                          value: "dark",
+                          label: (
+                            <>
+                              <MoonIcon size={14} />
+                              深色
+                            </>
+                          ),
+                        },
+                        {
+                          value: "system",
+                          label: (
+                            <>
+                              <MonitorIcon size={14} />
+                              跟随系统
+                            </>
+                          ),
+                        },
+                      ]}
+                    />
+                  </SettingsRow>
+                  {/* 侧栏的折叠只属于宽屏：窄屏侧栏是抽屉，宽度不由折叠决定，
                     设置里也就不再摆这一行 —— 让人改一个当前看不见的东西，
                     等于把设置页变成第二本说明。 */}
-                <Row label="侧边栏" className="hidden lg:grid">
-                  <Segmented
-                    label="侧边栏"
-                    value={sidebarCollapsed ? "collapsed" : "expanded"}
-                    onChange={(value) => {
-                      if ((value === "collapsed") !== sidebarCollapsed) {
-                        toggleSidebar();
-                      }
-                    }}
-                    options={[
-                      { value: "expanded", label: "展开" },
-                      { value: "collapsed", label: "折叠" },
-                    ]}
-                  />
-                </Row>
-                <Row label="默认视图">
-                  <Segmented
-                    label="默认视图"
-                    value={viewMode}
-                    onChange={setViewMode}
-                    options={[
-                      { value: "grid", label: "网格" },
-                      { value: "list", label: "列表" },
-                    ]}
-                  />
-                </Row>
-                {/* 工作台：应用当前面向哪一类目录。它决定列表呈现什么、
+                  <SettingsRow label="侧边栏" className="hidden lg:grid">
+                    <Segmented
+                      label="侧边栏"
+                      value={sidebarCollapsed ? "collapsed" : "expanded"}
+                      onChange={(value) => {
+                        if ((value === "collapsed") !== sidebarCollapsed) {
+                          toggleSidebar();
+                        }
+                      }}
+                      options={[
+                        { value: "expanded", label: "展开" },
+                        { value: "collapsed", label: "折叠" },
+                      ]}
+                    />
+                  </SettingsRow>
+                  <SettingsRow label="默认视图">
+                    <Segmented
+                      label="默认视图"
+                      value={viewMode}
+                      onChange={setViewMode}
+                      options={[
+                        { value: "grid", label: "网格" },
+                        { value: "list", label: "列表" },
+                      ]}
+                    />
+                  </SettingsRow>
+                  {/* 工作台：应用当前面向哪一类目录。它决定列表呈现什么、
                     页面用什么措辞；两类目录的属性在「服务端 › 媒体根目录」里设定。 */}
-                <Row label="默认工作台">
-                  <Segmented
-                    label="默认工作台"
-                    value={workbenchMode}
-                    onChange={setWorkbenchMode}
-                    options={[
-                      { value: "photo", label: "照片" },
-                      { value: "comic", label: "漫画" },
-                    ]}
-                  />
-                </Row>
-              </div>
-            </Section>
+                  <SettingsRow label="默认工作台">
+                    <Segmented
+                      label="默认工作台"
+                      value={workbenchMode}
+                      onChange={setWorkbenchMode}
+                      options={[
+                        { value: "photo", label: "照片" },
+                        { value: "comic", label: "漫画" },
+                      ]}
+                    />
+                  </SettingsRow>
+                </div>
+              </SettingsGroup>
 
-            <Section
-              id="nav"
-              title="导航"
-              icon={<MenuIcon size={13} />}
-              /* 这句话原来挂在卡片底下：它说的是这一节管什么，
+              <SettingsGroup
+                id="nav"
+                title="导航"
+                icon={<MenuIcon size={13} />}
+                /* 这句话原来挂在卡片底下：它说的是这一节管什么，
                  放在标题下面更像说明，卡片底下那一行就省了。 */
-              description="收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入"
-            >
-              <div className="settings-split">
-                <Group title="照片侧">
-                  {PHOTO_NAV.map((entry) => (
-                    <NavRow
-                      key={entry.key}
-                      entry={entry}
-                      scope="照片"
-                      visible={!hiddenNavItems.has(entry.key)}
-                      disabled={patchNavItem.isPending}
-                      onChange={(visible) =>
-                        patchNavItem.mutate({ key: entry.key, visible })
-                      }
-                    />
-                  ))}
-                </Group>
-                <Group title="漫画侧">
-                  {COMIC_NAV.map((entry) => (
-                    <NavRow
-                      key={entry.key}
-                      entry={entry}
-                      scope="漫画"
-                      visible={!hiddenNavItems.has(entry.key)}
-                      disabled={patchNavItem.isPending}
-                      onChange={(visible) =>
-                        patchNavItem.mutate({ key: entry.key, visible })
-                      }
-                    />
-                  ))}
-                </Group>
-              </div>
-            </Section>
-          </PagePanel>
-        )}
-
-        {visited.has("reading") && (
-          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[1]} active={tab}>
-            <Section
-              id="reading"
-              title="阅读"
-              icon={<ScrollPageIcon size={13} />}
-            >
-              {/* 整幅宽度下两组并排：最宽的一行（照片墙密度 + 四档分段控件）
-                  实测约需 294px，半列只有 273px 放不下。 */}
-              <div className="settings-split">
-                <Group title="照片">
-                  <Row label="照片墙密度">
-                    <DensityControl value={density} onChange={setDensity} />
-                  </Row>
-                  <Row label="大图预览显示信息">
-                    <Toggle
-                      label="大图预览显示信息"
-                      checked={showInfo}
-                      onChange={(v) => setShowInfo(v)}
-                    />
-                  </Row>
-                </Group>
-                <Group title="漫画">
-                  <Row label="默认显示模式">
-                    <Segmented
-                      label="默认显示模式"
-                      value={readerMode}
-                      onChange={setReaderMode}
-                      options={[
-                        { value: "single", label: "单页" },
-                        { value: "continuous", label: "连续" },
-                        { value: "double", label: "双页" },
-                      ]}
-                    />
-                  </Row>
-                  {/* 漫画侧的媒体是页：写「图片适配」会与整册的用词冲突。 */}
-                  <Row label="默认页面适配">
-                    <Segmented
-                      label="默认页面适配"
-                      value={fit}
-                      onChange={setFit}
-                      options={[
-                        { value: "fit", label: "适应" },
-                        { value: "width", label: "按宽" },
-                        { value: "height", label: "按高" },
-                        { value: "original", label: "原始" },
-                      ]}
-                    />
-                  </Row>
-                  <Row label="双页翻页方向">
-                    <Segmented
-                      label="双页翻页方向"
-                      value={direction}
-                      onChange={setDirection}
-                      options={[
-                        { value: "ltr", label: "左→右" },
-                        { value: "rtl", label: "右→左" },
-                      ]}
-                    />
-                  </Row>
-                  <Row label="阅读到末尾自动切换下一卷">
-                    <Toggle
-                      label="阅读到末尾自动切换下一卷"
-                      checked={data.autoSwitchAlbum}
-                      disabled={patchPrefs.isPending}
-                      onChange={(v) =>
-                        patchPrefs.mutate({ autoSwitchAlbum: v })
-                      }
-                    />
-                  </Row>
-                  <Row label="切换时显示通知">
-                    <Toggle
-                      label="切换时显示通知"
-                      checked={data.showSwitchNotif}
-                      disabled={patchPrefs.isPending}
-                      onChange={(v) =>
-                        patchPrefs.mutate({ showSwitchNotif: v })
-                      }
-                    />
-                  </Row>
-                </Group>
-              </div>
-              <p className="settings-note">
-                显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
-              </p>
-            </Section>
-          </PagePanel>
-        )}
-
-        {visited.has("data") && (
-          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[2]} active={tab}>
-            <Section
-              id="data"
-              title="数据"
-              icon={<LibraryIcon size={13} />}
-              description="索引与本机记录：这里动的是「已经扫出来的东西」，不会碰原始照片。"
-            >
-              {/* 索引这一项内容多：统计与动作挤在一行会读不清，
-                  改成标题在上、内容在下的一整块。 */}
-              <div className="settings-block">
-                <div>
-                  <span className="text-body text-fg">媒体库索引</span>
-                  <span className="block mt-0.5 text-meta text-fg-muted">
-                    {manifest
-                      ? `${manifest.statistics.albumCount} 本相册 · ${manifest.statistics.tagCount} 个标签${
-                          manifest.scannedAt
-                            ? ` · ${new Date(manifest.scannedAt).toLocaleString("zh-CN", { hour12: false })}`
-                            : " · 尚未扫描"
-                        }`
-                      : "尚未加载"}
+                description="收起的入口不再出现在左侧导航栏，页面本身仍能从别处进入"
+              >
+                <div className="settings-split">
+                  <Group title="照片侧">
+                    {PHOTO_NAV.map((entry) => (
+                      <NavRow
+                        key={entry.key}
+                        entry={entry}
+                        scope="照片"
+                        visible={!hiddenNavItems.has(entry.key)}
+                        disabled={patchNavItem.isPending}
+                        onChange={(visible) =>
+                          patchNavItem.mutate({ key: entry.key, visible })
+                        }
+                      />
+                    ))}
+                  </Group>
+                  <Group title="漫画侧">
+                    {COMIC_NAV.map((entry) => (
+                      <NavRow
+                        key={entry.key}
+                        entry={entry}
+                        scope="漫画"
+                        visible={!hiddenNavItems.has(entry.key)}
+                        disabled={patchNavItem.isPending}
+                        onChange={(visible) =>
+                          patchNavItem.mutate({ key: entry.key, visible })
+                        }
+                      />
+                    ))}
+                  </Group>
+                </div>
+              </SettingsGroup>
+              <SettingsGroup id="about" title="关于">
+                <div className="flex flex-wrap items-center gap-3 py-4 text-caption text-fg-muted">
+                  <span className="font-display text-fg">
+                    Local Gallery · 本地画廊
                   </span>
+                  <span>Web 版 · v{__APP_VERSION__}</span>
+                  <span className="flex items-center gap-1.5">
+                    <KeyboardIcon size={12} />
+                    <span>按</span>
+                    <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
+                      ?
+                    </kbd>
+                    <span>查看所有快捷键</span>
+                  </span>
+                  <span>媒体保存在本地，收藏与阅读记录由服务端保存</span>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() =>
-                      void qc.invalidateQueries({
-                        queryKey: libraryQueryKeys.root,
-                      })
-                    }
-                    className="btn btn-sm btn-outline"
-                  >
-                    <RefreshIcon size={11} />
-                    <span>刷新</span>
-                  </button>
-                  <button
-                    onClick={() => startScan.mutate()}
-                    disabled={startScan.isPending || sse.isRunning}
-                    className="btn btn-sm btn-outline"
-                    title="扫描 (Ctrl+S)"
-                  >
-                    <RefreshIcon size={11} />
-                    <span>
-                      {sse.isRunning
-                        ? "扫描中…"
-                        : startScan.isPending
-                          ? "启动中…"
-                          : "重新扫描"}
-                    </span>
-                  </button>
-                </div>
-                {manifest && (
-                  <div className="mt-2">
-                    <ScanWarnings
-                      warnings={manifest.warnings}
-                      total={manifest.statistics.warningCount}
-                    />
-                  </div>
-                )}
-              </div>
-              <div className="settings-rows">
-                <Row label="最近访问保留条数">
-                  <NumberInput
-                    value={data.maxRecent}
-                    disabled={patchPrefs.isPending}
-                    min={1}
-                    max={50}
-                    onChange={(v) => patchPrefs.mutate({ maxRecent: v })}
-                  />
-                </Row>
-                <Row label="清理失效收藏">
-                  <button
-                    onClick={() => pruneFav.mutate()}
-                    disabled={pruneFav.isPending}
-                    className="btn btn-sm btn-outline"
-                  >
-                    {pruneFav.isPending ? "清理中…" : "清理"}
-                  </button>
-                </Row>
-              </div>
-            </Section>
+              </SettingsGroup>
+            </section>
+          )}
 
-            <Section
-              id="backup"
-              title="备份与恢复"
-              icon={<LibraryIcon size={13} />}
-            >
-              <StateBackupPanel />
-            </Section>
-
-            <AutoSyncPanel />
-
-            {/* 危险操作单独成组：会丢东西的动作混在一排普通设置里，
-                一眼扫过去认不出哪几个是点了就没了的。 */}
+          {visited.has("reading") && (
             <section
-              className="settings-danger ui-surface"
-              aria-labelledby="danger-heading"
+              aria-label="阅读分区"
+              id="settings-panel-reading"
+              hidden={tab !== "reading"}
             >
-              <h2 id="danger-heading" className="settings-danger__title">
-                危险操作
-              </h2>
-              <p className="settings-section__desc">
-                这两个动作会丢掉本机已有的数据，且无法撤销。原始照片与已生成的分析结果不受影响。
-              </p>
-              <div className="mt-3 space-y-3">
-                <div className="settings-danger__item">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-body text-fg">清空媒体库索引</span>
+              <SettingsGroup
+                id="reading"
+                title="阅读"
+                icon={<ScrollPageIcon size={13} />}
+              >
+                {/* 整幅宽度下两组并排：最宽的一行（照片墙密度 + 四档分段控件）
+                  实测约需 294px，半列只有 273px 放不下。 */}
+                <div className="settings-split">
+                  <Group title="照片">
+                    <SettingsRow label="照片墙密度">
+                      <DensityControl value={density} onChange={setDensity} />
+                    </SettingsRow>
+                    <SettingsRow label="大图预览显示信息">
+                      <Switch
+                        label="大图预览显示信息"
+                        checked={showInfo}
+                        onChange={(v) => setShowInfo(v)}
+                      />
+                    </SettingsRow>
+                  </Group>
+                  <Group title="漫画">
+                    <SettingsRow label="默认显示模式">
+                      <Segmented
+                        label="默认显示模式"
+                        value={readerMode}
+                        onChange={setReaderMode}
+                        options={[
+                          { value: "single", label: "单页" },
+                          { value: "continuous", label: "连续" },
+                          { value: "double", label: "双页" },
+                        ]}
+                      />
+                    </SettingsRow>
+                    {/* 漫画侧的媒体是页：写「图片适配」会与整册的用词冲突。 */}
+                    <SettingsRow label="默认页面适配">
+                      <Segmented
+                        label="默认页面适配"
+                        value={fit}
+                        onChange={setFit}
+                        options={[
+                          { value: "fit", label: "适应" },
+                          { value: "width", label: "按宽" },
+                          { value: "height", label: "按高" },
+                          { value: "original", label: "原始" },
+                        ]}
+                      />
+                    </SettingsRow>
+                    <SettingsRow label="双页翻页方向">
+                      <Segmented
+                        label="双页翻页方向"
+                        value={direction}
+                        onChange={setDirection}
+                        options={[
+                          { value: "ltr", label: "左→右" },
+                          { value: "rtl", label: "右→左" },
+                        ]}
+                      />
+                    </SettingsRow>
+                    <SettingsRow label="阅读到末尾自动切换下一卷">
+                      <Switch
+                        label="阅读到末尾自动切换下一卷"
+                        checked={data.autoSwitchAlbum}
+                        disabled={patchPrefs.isPending}
+                        onChange={(v) =>
+                          patchPrefs.mutate({ autoSwitchAlbum: v })
+                        }
+                      />
+                    </SettingsRow>
+                    <SettingsRow label="切换时显示通知">
+                      <Switch
+                        label="切换时显示通知"
+                        checked={data.showSwitchNotif}
+                        disabled={patchPrefs.isPending}
+                        onChange={(v) =>
+                          patchPrefs.mutate({ showSwitchNotif: v })
+                        }
+                      />
+                    </SettingsRow>
+                  </Group>
+                </div>
+                <p className="settings-note">
+                  显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
+                </p>
+              </SettingsGroup>
+            </section>
+          )}
+
+          {visited.has("data") && (
+            <section
+              aria-label="数据分区"
+              id="settings-panel-data"
+              hidden={tab !== "data"}
+            >
+              <SettingsGroup
+                id="data"
+                title="数据"
+                icon={<LibraryIcon size={13} />}
+                description="索引与本机记录：这里动的是「已经扫出来的东西」，不会碰原始照片。"
+              >
+                {/* 索引这一项内容多：统计与动作挤在一行会读不清，
+                  改成标题在上、内容在下的一整块。 */}
+                <div className="settings-block">
+                  <div>
+                    <span className="text-body text-fg">媒体库索引</span>
+                    <span className="block mt-0.5 text-meta text-fg-muted">
+                      {manifest
+                        ? `${manifest.statistics.albumCount} 本相册 · ${manifest.statistics.tagCount} 个标签${
+                            manifest.scannedAt
+                              ? ` · ${new Date(manifest.scannedAt).toLocaleString("zh-CN", { hour12: false })}`
+                              : " · 尚未扫描"
+                          }`
+                        : "尚未加载"}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <button
-                      onClick={() => clearScanCache.mutate()}
-                      disabled={clearScanCache.isPending}
-                      className="btn btn-sm btn-danger"
-                      title="清空媒体库索引（不会立即重新扫描）"
+                      onClick={() =>
+                        void qc.invalidateQueries({
+                          queryKey: libraryQueryKeys.root,
+                        })
+                      }
+                      className="btn btn-sm btn-outline"
                     >
-                      <TrashIcon size={11} />
+                      <RefreshIcon size={11} />
+                      <span>刷新</span>
+                    </button>
+                    <button
+                      onClick={() => startScan.mutate()}
+                      disabled={startScan.isPending || sse.isRunning}
+                      className="btn btn-sm btn-outline"
+                      title="扫描 (Ctrl+S)"
+                    >
+                      <RefreshIcon size={11} />
                       <span>
-                        {clearScanCache.isPending ? "清空中…" : "清空索引"}
+                        {sse.isRunning
+                          ? "扫描中…"
+                          : startScan.isPending
+                            ? "启动中…"
+                            : "重新扫描"}
                       </span>
                     </button>
                   </div>
-                  <p className="mt-1 text-meta text-fg-subtle">
-                    丢掉已经扫出来的相册与标签索引；重新扫描后会重新建立，原始文件不动。
-                  </p>
+                  {manifest && (
+                    <div className="mt-2">
+                      <ScanWarnings
+                        warnings={manifest.warnings}
+                        total={manifest.statistics.warningCount}
+                      />
+                    </div>
+                  )}
                 </div>
-                <div className="settings-danger__item">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-body text-fg">清空最近访问</span>
+                <div className="settings-rows">
+                  <SettingsRow label="最近访问保留条数">
+                    <NumberInput
+                      value={data.maxRecent}
+                      disabled={patchPrefs.isPending}
+                      min={1}
+                      max={50}
+                      onChange={(v) => patchPrefs.mutate({ maxRecent: v })}
+                    />
+                  </SettingsRow>
+                  <SettingsRow label="清理失效收藏">
                     <button
-                      onClick={() => clearHist.mutate()}
-                      disabled={clearHist.isPending}
-                      className="btn btn-sm btn-danger"
+                      onClick={() => pruneFav.mutate()}
+                      disabled={pruneFav.isPending}
+                      className="btn btn-sm btn-outline"
                     >
-                      <TrashIcon size={11} />
-                      <span>{clearHist.isPending ? "清空中…" : "清空"}</span>
+                      {pruneFav.isPending ? "清理中…" : "清理"}
                     </button>
-                  </div>
-                  <p className="mt-1 text-meta text-fg-subtle">
-                    丢掉最近浏览过的相册记录；收藏与精选不受影响。
-                  </p>
+                  </SettingsRow>
                 </div>
-              </div>
-            </section>
-          </PagePanel>
-        )}
+              </SettingsGroup>
 
-        {visited.has("server") && (
-          <PagePanel idPrefix="settings" tab={SETTINGS_TABS[3]} active={tab}>
-            {/* 服务端这一段不是一张卡：它由七张自带顶栏的面板组成，再套一层
-                白卡就是白卡套白卡。标题与其它分区用同一套说法（图标 + 名字 +
-                说明），末尾一条细线收住这一段。 */}
+              <SettingsGroup
+                id="backup"
+                title="备份与恢复"
+                icon={<LibraryIcon size={13} />}
+              >
+                <StateBackupPanel />
+              </SettingsGroup>
+
+              <AutoSyncPanel />
+
+              <SettingsGroup
+                id="danger"
+                title="危险操作"
+                description="清空的数据无法撤销。"
+              >
+                <SettingsRow
+                  danger
+                  label="清空媒体库索引"
+                  description="丢掉已经扫出来的相册与标签索引，下次扫描时重新建立。"
+                >
+                  <Button
+                    variant="danger"
+                    disabled={clearScanCache.isPending}
+                    onClick={() => setClearTarget("index")}
+                  >
+                    清空索引
+                  </Button>
+                </SettingsRow>
+                <SettingsRow
+                  danger
+                  label="清空最近访问"
+                  description="丢掉最近浏览过的相册记录，保留收藏与精选。"
+                >
+                  <Button
+                    variant="danger"
+                    disabled={clearHist.isPending}
+                    onClick={() => setClearTarget("history")}
+                  >
+                    清空
+                  </Button>
+                </SettingsRow>
+              </SettingsGroup>
+              <Dialog
+                open={clearTarget !== null && tab === "data"}
+                title={
+                  clearTarget === "index"
+                    ? "清空媒体库索引？"
+                    : "清空最近访问？"
+                }
+                description="此操作无法撤销，不会修改原始文件。"
+                onClose={() => setClearTarget(null)}
+                size="sm"
+                footer={
+                  <>
+                    <Button onClick={() => setClearTarget(null)}>取消</Button>
+                    <Button
+                      variant="danger"
+                      onClick={() => {
+                        if (clearTarget === "index") clearScanCache.mutate();
+                        if (clearTarget === "history") clearHist.mutate();
+                        setClearTarget(null);
+                      }}
+                    >
+                      确认清空
+                    </Button>
+                  </>
+                }
+              />
+            </section>
+          )}
+
+          {visited.has("server") && (
             <section
-              id="server"
-              className="settings-section ui-surface"
-              aria-labelledby="server-heading"
+              aria-label="服务端分区"
+              id="settings-panel-server"
+              hidden={tab !== "server"}
             >
-              <div className="settings-section__head">
-                <span className="settings-section__icon" aria-hidden="true">
-                  <ServerIcon size={13} />
-                </span>
-                <div className="settings-section__headings">
-                  <h2 id="server-heading" className="settings-section__title">
-                    服务端
-                  </h2>
-                  <p className="settings-section__desc">
-                    修改后自动保存，部分设置需重启
-                  </p>
-                </div>
-              </div>
-              <div className="settings-section__body">
+              <SettingsGroup
+                id="server"
+                title="服务端"
+                icon={<ServerIcon size={13} />}
+                description="修改后自动保存，部分设置需重启"
+              >
                 <ServerConfigPanel />
-              </div>
+              </SettingsGroup>
             </section>
-          </PagePanel>
-        )}
-
-        {/* 关于：页脚一行，不再占一张卡。标题留着（只给读屏与分区跳转用），
-            看得见的还是版本与提示。 */}
-        <section
-          id="about"
-          className="settings-footer"
-          aria-labelledby="about-heading"
-        >
-          <h2 id="about-heading" className="sr-only">
-            关于
-          </h2>
-          <span className="font-display text-fg">Local Gallery · 本地画廊</span>
-          <span>Web 版 · v{__APP_VERSION__}</span>
-          <span className="flex items-center gap-1.5">
-            <KeyboardIcon size={12} />
-            <span>按</span>
-            <kbd className="font-mono px-1.5 py-0.5 rounded border border-border-faint bg-bg-subtle text-fg-muted">
-              ?
-            </kbd>
-            <span>查看所有快捷键</span>
-          </span>
-          <span>媒体保存在本地，收藏与阅读记录由服务端保存</span>
-        </section>
-      </div>
+          )}
+        </SplitLayout>
+      </Page>
     </div>
   );
 }
@@ -749,23 +755,26 @@ function NavRow({
   onChange: (visible: boolean) => void;
 }) {
   return (
-    <div className="settings-row settings-row--inline text-body">
-      <span className="flex min-w-0 items-center gap-2.5">
-        <entry.Icon size={15} className="shrink-0 text-fg-muted" />
-        <span className="truncate">{entry.label}</span>
-        {entry.locked && (
-          <span className="shrink-0 text-meta text-fg-subtle">固定显示</span>
-        )}
-      </span>
+    <SettingsRow
+      label={
+        <span className="flex min-w-0 items-center gap-2.5">
+          <entry.Icon size={15} className="shrink-0 text-fg-muted" />
+          <span className="truncate">{entry.label}</span>
+          {entry.locked && (
+            <span className="shrink-0 text-meta text-fg-subtle">固定显示</span>
+          )}
+        </span>
+      }
+    >
       {!entry.locked && (
-        <Toggle
+        <Switch
           label={`在${scope}导航栏显示${entry.label}`}
           checked={visible}
           disabled={disabled}
           onChange={onChange}
         />
       )}
-    </div>
+    </SettingsRow>
   );
 }
 

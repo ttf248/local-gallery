@@ -132,7 +132,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
     .toBeGreaterThan(0);
   await sidebar.getByRole("link", { name: "珍藏", exact: true }).click();
   await expect(page).toHaveURL(/\/photo\/me\/picks$/);
-  await expect(page.getByText(/共 \d+ 张精选照片/)).toBeVisible();
+  await expect(page.getByText(/^\d+ 张精选$/)).toBeVisible();
   await expect(page.locator('button[aria-label*="移出精选"]').first()).toBeVisible();
 
   await sidebar.getByRole("link", { name: "相似照片", exact: true }).click();
@@ -149,7 +149,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
     .toBe(true);
 
   // 反馈说清做了什么，并留一条撤销。
-  await expect(page.getByText("已把这一组标记为已处理")).toBeVisible();
+  await expect(page.getByText("已标记 1 组")).toBeVisible();
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 
   // 这一组离开待处理列表了：切到已处理才看得见它。
@@ -332,7 +332,8 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
   const groupId = (await card.getAttribute("data-group-id")) ?? "";
 
   // 先忽略这一组，再撤销它 —— 撤销要回到待处理。
-  await card.getByRole("button", { name: "忽略", exact: true }).click();
+  await card.getByRole("button", { name: "更多组操作" }).click();
+  await page.getByRole("menuitem", {name:"忽略",exact:true}).click();
   const ignored = page.getByText("已忽略这一组");
   await expect(ignored).toBeVisible();
   // 等状态真的写进磁盘再撤销：不然后面读到的状态对不上，撤销会被
@@ -347,7 +348,8 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
   await expect(ignored).toHaveCount(0);
 
   // 再忽略一次，然后标记已处理：撤销这次要回到「已忽略」。
-  await card.getByRole("button", { name: "忽略", exact: true }).click();
+  await page.getByTestId("similarity-group").and(page.locator("[data-group-id=" + JSON.stringify(groupId) + "]")).getByRole("button", { name: "更多组操作" }).click();
+  await page.getByRole("menuitem", {name:"忽略",exact:true}).click();
   await expect(page.getByText("已忽略这一组")).toBeVisible();
   await expect.poll(() => groupStatus(request, groupId)).toBe("ignored");
 
@@ -360,7 +362,7 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
   await ignoredCard
     .getByRole("button", { name: "标记已处理", exact: true })
     .click();
-  const reviewed = page.getByText("已把这一组标记为已处理");
+  const reviewed = page.getByText("已标记 1 组");
   await expect(reviewed).toBeVisible();
   await expect.poll(() => groupStatus(request, groupId)).toBe("reviewed");
   await reviewed.locator("..").getByRole("button", { name: "撤销" }).click();

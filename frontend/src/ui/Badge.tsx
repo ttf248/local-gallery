@@ -10,12 +10,25 @@ const tones = {
 } as const;
 interface Props extends ComponentPropsWithoutRef<"span"> {
   tone?: keyof typeof tones;
-  variant?: "soft" | "solid";
+  variant?: "soft" | "solid" | "dot";
 }
 export const Badge = forwardRef<HTMLSpanElement, Props>(function Badge(
   { tone = "neutral", variant = "soft", className, ...props },
   ref,
 ) {
+  if (variant === "dot")
+    return (
+      <span
+        {...props}
+        ref={ref}
+        aria-hidden="true"
+        className={cx(
+          "inline-block size-2 shrink-0 rounded-full",
+          tones[tone][1],
+          className,
+        )}
+      />
+    );
   return (
     <span
       {...props}
@@ -28,3 +41,27 @@ export const Badge = forwardRef<HTMLSpanElement, Props>(function Badge(
     />
   );
 });
+
+const feedbackLabels = { saving: "保存中", saved: "已保存", error: "保存失败" };
+export function SaveBadge({
+  status,
+}: {
+  status: "idle" | keyof typeof feedbackLabels;
+}) {
+  if (status === "idle") return null;
+  return (
+    <Badge
+      role="status"
+      aria-label={feedbackLabels[status]}
+      tone={
+        status === "saved"
+          ? "success"
+          : status === "error"
+            ? "danger"
+            : "neutral"
+      }
+    >
+      {feedbackLabels[status]}
+    </Badge>
+  );
+}

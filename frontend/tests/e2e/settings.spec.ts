@@ -360,11 +360,11 @@ test("设置页的危险操作单独成组并写清后果", async ({ page }) => 
 // 前进后退与深链都跟着走。侧栏不再挂二级菜单，只标出当前页签。
 test("设置页的分区改成页签，切页签写进 URL 并换内容", async ({ page }) => {
   await page.goto("/settings/interface");
-  const tablist = page.getByRole("tablist", { name: "设置页分区" });
+  const tablist = page.getByRole("navigation", { name: "设置页分区" });
   await expect(tablist).toBeVisible();
-  await expect(page.getByRole("tab", { name: "界面" })).toHaveAttribute(
-    "aria-selected",
-    "true",
+  await expect(page.getByRole("link", { name: "界面" })).toHaveAttribute(
+    "aria-current",
+    "page",
   );
   // 侧栏里没有二级菜单了，只在条目上标出当前页签。
   const sidebar = page.locator('aside[aria-label="主导航"]');
@@ -372,7 +372,7 @@ test("设置页的分区改成页签，切页签写进 URL 并换内容", async 
   await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
     await expect(page).toHaveTitle(/ · 界面 · Local Gallery$/);
 
-  await page.getByRole("tab", { name: "数据" }).click();
+  await page.getByRole("link", { name: "数据" }).click();
   await expect(page).toHaveURL(/\/settings\/data$/);
   await expect(page.getByText("媒体库索引", { exact: true })).toBeVisible();
   await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
@@ -471,17 +471,18 @@ for (const operation of ["prefs", "prune", "history"] as const) {
               name: operation === "prune" ? /^清理(?:中…)?$/ : /^清空(?:中…)?$/,
             });
       await action.click();
+      if (operation === "history") await page.getByRole("button",{name:"确认清空"}).click();
       await expect(action).toBeDisabled();
       if (operation === "prefs") {
         await expect(
           page.getByRole("switch", { name: "切换时显示通知" }),
         ).toBeDisabled();
         // 这次保存也压着数据页签里的输入：切过去看，它同样不能动。
-        await page.getByRole("tab", { name: "数据" }).click();
+        await page.getByRole("link", { name: "数据" }).click();
         await expect(
           page.getByRole("button", { name: "增加最近访问保留条数" }),
         ).toBeDisabled();
-        await page.getByRole("tab", { name: "阅读" }).click();
+        await page.getByRole("link", { name: "阅读" }).click();
       }
       release();
       const message = {
@@ -498,6 +499,7 @@ for (const operation of ["prefs", "prune", "history"] as const) {
         );
       blocked = false;
       await action.click();
+      if (operation === "history") await page.getByRole("button",{name:"确认清空"}).click();
       if (operation === "prefs") {
         await expect(action).toHaveAttribute(
           "aria-checked",
@@ -587,7 +589,7 @@ for (const health of ["late", "error"] as const) {
       await page.goto("/");
       await initialHealth;
       await page.getByRole("link", { name: "设置", exact: true }).click();
-      await page.getByRole("tab", { name: "服务端" }).click();
+      await page.getByRole("link", { name: "服务端" }).click();
       const toggle = page.getByRole("switch", {
         name: "允许在系统文件管理器中打开",
         exact: true,
@@ -1200,7 +1202,7 @@ for (const failFirst of [false, true]) {
       // 工作台首页入口：照片侧叫「照片」，漫画侧叫「首页」。
       await page.getByRole("link", { name: /^(首页|照片)$/ }).click();
       await page.getByRole("link", { name: "设置", exact: true }).click();
-      await page.getByRole("tab", { name: "服务端" }).click();
+      await page.getByRole("link", { name: "服务端" }).click();
       await expect(input).toHaveValue("/queue/latest");
       release[0]();
       await expect.poll(() => writes.length).toBe(2);
@@ -1293,7 +1295,7 @@ test("配置保存失败离开后仍保留输入，按 Enter 显式重试且不�
     release();
     expect((await failed).status()).toBe(500);
     await page.getByRole("link", { name: "设置", exact: true }).click();
-    await page.getByRole("tab", { name: "服务端" }).click();
+    await page.getByRole("link", { name: "服务端" }).click();
     await expect(input).toHaveValue("/retry/photos");
     await expect(page.getByRole("button", { name: "重试保存" })).toBeVisible();
     await page.clock.runFor(1500);

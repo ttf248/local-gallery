@@ -300,3 +300,10 @@ export function groupFailures(
     (left, right) => right.items.length - left.items.length,
   );
 }
+
+export function taskStatusTone(status: AIJob["status"] | "idle") {
+  if (status === "running") return "signal";
+  if (status === "failed") return "danger";
+  if (status === "completed") return "success";
+  return "neutral";
+}

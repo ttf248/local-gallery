@@ -58,6 +58,7 @@ export interface TaskCenterState {
   history: AIJob[];
   loading: boolean;
   loadError: boolean;
+  reconnect: () => void;
   plan: TaskCenterPlan;
   /** 当前选中的分析模块与处理方式。 */
   selection: TaskCenterSelection;
@@ -70,6 +71,7 @@ export interface TaskCenterState {
   clearHistory: () => void;
   /** 启动或任务操作正在提交。 */
   busy: boolean;
+  cancelling: boolean;
   operationError: string | null;
   embeddingStatus?: AIWorkerStatus;
   embeddingStatusLoading: boolean;
@@ -147,6 +149,8 @@ export function useTaskCenter(): TaskCenterState {
       (job) => job.status === "running" || job.status === "paused",
     );
   const activeId = active?.id;
+  const [disconnectedJob, setDisconnectedJob] = useState<string>();
+  const [connectionAttempt, setConnectionAttempt] = useState(0);
 
   // 扫描一结束，媒体库就换了：规模核算要按新库重做。
   const scanStatus = useScanStore((state) => state.progress?.status);
@@ -208,6 +212,7 @@ export function useTaskCenter(): TaskCenterState {
       `/api/ai/jobs/${encodeURIComponent(activeId)}/events`,
       (_eventName, value) => {
         if (!isAIJob(value)) return;
+        setDisconnectedJob(undefined);
         queryClient.setQueryData<{ ok: boolean; snapshot: AIJobSnapshot }>(
           JOBS_KEY,
           (current) => {
@@ -239,10 +244,14 @@ export function useTaskCenter(): TaskCenterState {
           void invalidateJobs();
         }
       },
-      { events: JOB_EVENTS, signal: controller.signal },
+      {
+        events: JOB_EVENTS,
+        signal: controller.signal,
+        onError: () => setDisconnectedJob(activeId),
+      },
     );
     return () => controller.abort();
-  }, [activeId, invalidateJobs, queryClient]);
+  }, [activeId, connectionAttempt, invalidateJobs, queryClient]);
 
   const startMutation = useMutation({
     mutationFn: ({ type, mode }: { type: AnalysisType; mode: AnalysisMode }) =>
@@ -396,7 +405,12 @@ export function useTaskCenter(): TaskCenterState {
     queue,
     history,
     loading: jobsQuery.isLoading,
-    loadError: jobsQuery.isError,
+    loadError:
+      jobsQuery.isError || Boolean(activeId && disconnectedJob === activeId),
+    reconnect: () => {
+      setConnectionAttempt((n) => n + 1);
+      void jobsQuery.refetch();
+    },
     plan: {
       enabled: planDraft?.enabled ?? false,
       time: planDraft?.time ?? "03:00",
@@ -455,6 +469,8 @@ export function useTaskCenter(): TaskCenterState {
     deleteHistoryItem: (id: string) =>
       managementMutation.mutate({ type: "deleteHistory", id }),
     clearHistory: () => managementMutation.mutate({ type: "clearHistory" }),
+    cancelling:
+      actionMutation.isPending && actionMutation.variables?.action === "cancel",
     busy:
       startMutation.isPending ||
       startAllMutation.isPending ||

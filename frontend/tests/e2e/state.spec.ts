@@ -393,13 +393,14 @@ for (const operation of ["limit", "clear", "visit"] as const) {
           page.locator(`main a[href="/photo/albums/${second.id}"]`).first(),
         ).toBeVisible();
         await page.getByRole("link", { name: "设置", exact: true }).click();
-        await page.getByRole("tab", { name: "数据" }).click();
+        await page.getByRole("link", { name: "数据" }).click();
         await page
           .getByRole("button", {
             name: operation === "limit" ? "减少最近访问保留条数" : "清空",
             exact: true,
           })
           .click();
+        if (operation === "clear") await page.getByRole("button", {name: "确认清空"}).click();
       }
       await expect
         .poll(async () => {
@@ -477,7 +478,7 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
     await expect(count).toHaveText(`共 ${seededCount - 1} 项`);
     await expect(page.getByText("其中 1 项暂时找不到")).toBeVisible();
     await page.getByRole("link", { name: "设置", exact: true }).click();
-    await page.getByRole("tab", { name: "数据" }).click();
+    await page.getByRole("link", { name: "数据" }).click();
     let failedReads = 0;
     await page.route("**/api/favorites", async (route) => {
       if (route.request().method() !== "GET") return route.continue();
