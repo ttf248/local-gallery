@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Toggle from "../common/Toggle";
-import { RestartIcon } from "../common/Icon";
+import { RestartIcon } from "../../ui/icons";
 import PathField from "./PathField";
 import { openConfiguredDirectory } from "./openConfiguredDirectory";
 import StatusBadge from "./StatusBadge";

@@ -15,7 +15,7 @@ import { createPortal } from "react-dom";
 import {
   ENABLED_MENU_ITEM_SELECTOR,
   handleMenuKeyDown,
-} from "../../utils/menuKeyboard";
+} from "../../ui/menuKeyboard";
 
 type TriggerProps = {
   "aria-expanded"?: boolean;

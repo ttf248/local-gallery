@@ -6,7 +6,7 @@ import SmartAlbumWall from "../components/album/SmartAlbumWall";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 import type { SmartAlbumSort } from "../api/albums";
 
 const DIMENSION_PARAM = "dimension";

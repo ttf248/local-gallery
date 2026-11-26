@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import Segmented from "../common/Segmented";
-import { SearchIcon } from "../common/Icon";
+import Segmented from "../../ui/Segmented";
+import { SearchIcon } from "../../ui/icons";
 import {
   SEARCH_SCOPE_PARAM,
   type SearchScope,

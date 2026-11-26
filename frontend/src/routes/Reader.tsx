@@ -30,7 +30,7 @@ import {
   ImageIcon,
   RefreshIcon,
   ArrowUpRightIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import { displayedPageIndex } from "../utils/progress";
 import {
   albumRoute,

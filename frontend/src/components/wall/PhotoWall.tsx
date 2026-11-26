@@ -16,7 +16,7 @@ import { useElementSize } from "../../hooks/useElementSize";
 import { useMediaGridPagination } from "../../hooks/useMediaGridPagination";
 import ThumbImage from "../common/ThumbImage";
 import VideoCoverImage from "../common/VideoCoverImage";
-import { CheckIcon, PickIcon, PlayFilledIcon, PlusIcon } from "../common/Icon";
+import { CheckIcon, PickIcon, PlayFilledIcon, PlusIcon } from "../../ui/icons";
 import {
   autoTargetHeight,
   effectiveTargetHeight,

@@ -15,7 +15,7 @@ import {
   CheckIcon,
   ClockIcon,
   PlayFilledIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import HoverPreview from "../common/HoverPreview";
 import TranscodeStatusBadge from "../common/TranscodeStatusBadge";
 import { useUIStore, type ViewMode } from "../../store/uiStore";

@@ -16,7 +16,7 @@ import {
   ClockIcon,
   FolderIcon,
   FolderSearchIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import RenditionImage from "../components/common/RenditionImage";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import { useLibraryList } from "../hooks/useLibraryList";

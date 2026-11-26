@@ -10,7 +10,7 @@ import type {
   AlbumFilterFacets,
   AlbumFilterUnresolved,
 } from "../../api/library";
-import { FilterIcon } from "../common/Icon";
+import { FilterIcon } from "../../ui/icons";
 import {
   albumFilterCount,
   type AlbumFilterState,

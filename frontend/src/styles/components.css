@@ -1,0 +1,105 @@
+@layer components {
+  .field-frame {
+    @apply flex min-w-0 items-center gap-2 bg-bg-elevated px-3 shadow-1;
+  }
+  .field-frame:focus-within {
+    box-shadow:
+      0 0 0 1px var(--signal),
+      0 0 0 4px var(--signal-soft);
+  }
+  .field-frame input {
+    @apply h-full min-w-0 flex-1 bg-transparent outline-none;
+  }
+  .segments {
+    @apply relative isolate inline-flex items-center rounded-control bg-bg-subtle p-[3px];
+  }
+  .segments::before {
+    content: "";
+    @apply absolute inset-y-[3px] left-0 -z-10 rounded-sm bg-bg-elevated shadow-1;
+    width: var(--segment-width);
+    transform: translateX(var(--segment-left));
+    transition:
+      transform var(--dur-2) var(--ease-standard),
+      width var(--dur-2);
+  }
+  .segments button {
+    @apply min-h-[30px] rounded-sm px-3 text-callout text-fg-muted aria-checked:text-fg disabled:opacity-40;
+  }
+  .segments[data-size="sm"] button {
+    @apply min-h-[26px] px-2;
+  }
+  .modal-surface {
+    @apply overflow-auto bg-bg-elevated text-fg shadow-3;
+  }
+  .modal-surface::backdrop {
+    background: rgb(0 0 0 / 0.4);
+    backdrop-filter: blur(4px);
+  }
+  .dialog-surface[open] {
+    animation: dialog-in var(--dur-2) var(--ease-emphasized);
+  }
+  .sheet-surface[open] {
+    animation: sheet-in var(--dur-3) var(--ease-emphasized);
+  }
+  .sheet-surface[data-side="left"] {
+    --sheet-from: translateX(-100%);
+  }
+  .sheet-surface[data-side="right"] {
+    --sheet-from: translateX(100%);
+  }
+  .sheet-surface[data-side="bottom"] {
+    --sheet-from: translateY(100%);
+  }
+  .scroll-row {
+    scrollbar-width: none;
+  }
+  .scroll-row::-webkit-scrollbar {
+    display: none;
+  }
+  .skeleton {
+    animation: skeleton-light 1.6s ease-in-out infinite alternate;
+  }
+  .indeterminate {
+    animation: progress-slide 1.6s ease-in-out infinite alternate;
+  }
+}
+@keyframes dialog-in {
+  from {
+    transform: scale(0.97);
+    opacity: 0;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: var(--sheet-from);
+    opacity: 0;
+  }
+}
+@keyframes skeleton-light {
+  to {
+    opacity: 0.45;
+  }
+}
+@keyframes progress-slide {
+  to {
+    transform: translateX(185%);
+  }
+}
+@media (pointer: coarse) {
+  .icon-control::before {
+    content: "";
+    position: absolute;
+    inset: -4px;
+  }
+  .scroll-arrow {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-surface[open],
+  .dialog-surface[open],
+  .skeleton,
+  .indeterminate {
+    animation: none;
+  }
+}

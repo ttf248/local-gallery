@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import RenditionImage from "../common/RenditionImage";
 import { useAppMode } from "../../hooks/useAppMode";
-import { useEdgeFade } from "../../hooks/useEdgeFade";
-import { FolderIcon } from "../common/Icon";
+import { useEdgeFade } from "../../ui/useEdgeFade";
+import { FolderIcon } from "../../ui/icons";
 
 export interface TimelineEntry {
   /** 稳定键。 */

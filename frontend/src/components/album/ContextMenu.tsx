@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { handleMenuKeyDown } from "../../utils/menuKeyboard";
+import { handleMenuKeyDown } from "../../ui/menuKeyboard";
 
 export interface MenuItem {
   id: string;

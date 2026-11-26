@@ -23,7 +23,7 @@ import {
 import { timeAgo } from "../utils/date";
 import { useLibraryDashboard, useLibraryManifest } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
-import { LibraryIcon, RefreshIcon } from "../components/common/Icon";
+import { LibraryIcon, RefreshIcon } from "../ui/icons";
 
 /**
  * 工作台首页。

@@ -12,7 +12,7 @@ import {
   taskTitle,
 } from "../../utils/taskFormat";
 import EmptyState from "../common/EmptyState";
-import { ChevronDownIcon } from "../common/Icon";
+import { ChevronDownIcon } from "../../ui/icons";
 import FailureGroupList from "./FailureGroupList";
 import JobOutputSummary from "./JobOutputSummary";
 import TaskStatusDot from "./TaskStatusDot";

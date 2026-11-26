@@ -9,7 +9,7 @@ import {
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useGalleryStore } from "../../store/galleryStore";
 import { imageUrl, previewUrl } from "../../api/images";
-import { ImageIcon } from "../common/Icon";
+import { ImageIcon } from "../../ui/icons";
 
 interface Props {
   images: string[];

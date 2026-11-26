@@ -8,10 +8,10 @@ import {
 import { createPortal } from "react-dom";
 import { useUIStore } from "../../store/uiStore";
 import { useMediaQuery, WIDE_LAYOUT_QUERY } from "../../hooks/useMediaQuery";
-import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useFocusTrap } from "../../ui/useFocusTrap";
 import { useKeyboard } from "../../hooks/useKeyboard";
 import { hasOpenModal } from "../../utils/shortcuts";
-import { CloseIcon } from "../common/Icon";
+import { CloseIcon } from "../../ui/icons";
 
 // eslint-disable-next-line react-refresh/only-export-components
 export function useFolderDrawer() {

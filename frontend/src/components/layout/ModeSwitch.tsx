@@ -1,5 +1,5 @@
 import type { AppMode } from "../../api/library";
-import { ImageIcon, ReaderIcon } from "../common/Icon";
+import { ImageIcon, ReaderIcon } from "../../ui/icons";
 
 interface Props {
   mode: AppMode;

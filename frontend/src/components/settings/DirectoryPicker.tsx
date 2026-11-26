@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api/client";
 import { fsApi, type DirectoryPage } from "../../api/fs";
-import { CloseIcon, FolderOpenIcon } from "../common/Icon";
+import { CloseIcon, FolderOpenIcon } from "../../ui/icons";
 import ErrorBanner from "../common/ErrorBanner";
 
 interface Props {

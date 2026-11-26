@@ -1,6 +1,6 @@
 import PathField from "./PathField";
 import StatusBadge from "./StatusBadge";
-import { PlusIcon } from "../common/Icon";
+import { PlusIcon } from "../../ui/icons";
 import type { FieldStatus } from "../../hooks/useServerConfigSave";
 import type { MediaRootConfig } from "../../api/config";
 import type { ContentKind } from "../../api/library";

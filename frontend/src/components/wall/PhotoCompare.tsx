@@ -16,7 +16,7 @@ import {
   MinusIcon,
   PickIcon,
   PlusIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 export interface CompareItem {
   id: string;

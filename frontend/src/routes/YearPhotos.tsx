@@ -12,7 +12,7 @@ import ErrorBanner from "../components/common/ErrorBanner";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
 import type { LibraryFeedItem } from "../api/library";
-import { FolderIcon, GridIcon } from "../components/common/Icon";
+import { FolderIcon, GridIcon } from "../ui/icons";
 import { albumRoute, homeRoute } from "../utils/path";
 
 /**

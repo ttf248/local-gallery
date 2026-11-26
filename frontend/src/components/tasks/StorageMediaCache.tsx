@@ -1,6 +1,6 @@
 import { formatSize } from "../../utils/format";
 import type { MediaCacheScope } from "../../hooks/useStorage";
-import { RefreshIcon, TrashIcon } from "../common/Icon";
+import { RefreshIcon, TrashIcon } from "../../ui/icons";
 import CacheRebuildPanel from "./CacheRebuildPanel";
 
 interface Props {

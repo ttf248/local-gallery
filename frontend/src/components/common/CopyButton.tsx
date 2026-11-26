@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useUIStore } from "../../store/uiStore";
 import { copyText } from "../../utils/clipboard";
-import { CopyIcon, CheckIcon } from "./Icon";
+import { CopyIcon, CheckIcon } from "../../ui/icons";
 
 interface Props {
   /** 复制到剪贴板的文本。 */

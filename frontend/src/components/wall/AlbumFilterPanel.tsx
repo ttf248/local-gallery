@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { AlbumFilterFacets } from "../../api/library";
 import ErrorBanner from "../common/ErrorBanner";
-import Segmented from "../common/Segmented";
+import Segmented from "../../ui/Segmented";
 import {
   albumMonthInRange,
   albumMonthRange,

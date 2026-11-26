@@ -5,7 +5,7 @@ import {
   FolderOpenIcon,
   FolderSearchIcon,
   TrashIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import { useConfigComposition } from "../../hooks/useConfigComposition";
 import type { FieldStatus } from "../../hooks/useServerConfigSave";
 

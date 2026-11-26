@@ -31,7 +31,7 @@ import {
   StarIcon,
   FilterIcon,
   FolderSearchIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import PhotoAlbum from "./PhotoAlbum";
 import {
   type AppMode,

@@ -4,7 +4,7 @@ import { useElementSize } from "../../hooks/useElementSize";
 import { useVisibleWindow } from "../../hooks/useVisibleWindow";
 import ThumbImage from "../common/ThumbImage";
 import VideoCoverImage from "../common/VideoCoverImage";
-import { CheckIcon, PickIcon, PlayFilledIcon, PlusIcon } from "../common/Icon";
+import { CheckIcon, PickIcon, PlayFilledIcon, PlusIcon } from "../../ui/icons";
 import {
   DEFAULT_MASONRY_RATIO,
   layoutMasonry,

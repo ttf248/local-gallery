@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useUIStore, type UIState } from "../../store/uiStore";
-import { CloseIcon, InfoIcon, CheckIcon, AlertIcon } from "./Icon";
+import { CloseIcon, InfoIcon, CheckIcon, AlertIcon } from "../../ui/icons";
 
 export default function ToastViewport() {
   const toasts = useUIStore((s) => s.toasts);

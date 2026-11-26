@@ -3,6 +3,13 @@ import tsPlugin from '@typescript-eslint/eslint-plugin'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
+import { existsSync, readdirSync } from 'node:fs'
+
+const featureRoot = new URL('./src/features/', import.meta.url)
+const domains = existsSync(featureRoot)
+  ? readdirSync(featureRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name)
+  : []
+
 export default [
   {
     ignores: [
@@ -40,4 +47,22 @@ export default [
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    files: ['src/ui/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [{
+        regex: '(?:^|/)(?:hooks|store|api|features|shell|routes|components|utils)/',
+        message: '界面原语只依赖展示层。'
+      }] }]
+    }
+  },
+  ...domains.map(domain => ({
+    files: [`src/features/${domain}/**/*.{ts,tsx}`],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: domains.filter(other => other !== domain).map(other => ({
+        regex: `(?:^|/)${other}/(?!index(?:\\\\.tsx?)?$).+`,
+        message: '跨领域组件从公开入口导入。'
+      })) }]
+    }
+  }))
 ]

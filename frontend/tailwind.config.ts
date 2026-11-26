@@ -15,8 +15,58 @@ export default {
     hoverOnlyWhenSupported: true,
   },
   theme: {
+    screens: {
+      sm: "640px",
+      md: "768px",
+      lg: "1024px",
+      xl: "1440px",
+      "2xl": "1920px",
+      "3xl": "2560px",
+    },
     extend: {
+      spacing: {
+        rail: "var(--nav-width)",
+        "rail-compact": "var(--nav-width-compact)",
+        topbar: "var(--topbar-height)",
+        tabbar: "var(--tabbar-height)",
+      },
+      zIndex: Object.fromEntries(
+        [
+          "rail",
+          "topbar",
+          "tabbar",
+          "popover",
+          "sheet",
+          "dialog",
+          "viewer",
+          "toast",
+        ].map((k) => [k, "var(--z-" + k + ")"]),
+      ),
+      transitionDuration: {
+        1: "var(--dur-1)",
+        2: "var(--dur-2)",
+        3: "var(--dur-3)",
+      },
+      transitionTimingFunction: {
+        standard: "var(--ease-standard)",
+        emphasized: "var(--ease-emphasized)",
+        exit: "var(--ease-exit)",
+      },
+      textColor: {
+        ...Object.fromEntries(
+          ["success", "warning", "danger", "favorite", "signal"].map((name) => [
+            name,
+            tokenColor(name + "-text"),
+          ]),
+        ),
+      },
       colors: {
+        line: tokenColor("line"),
+        "line-strong": tokenColor("line-strong"),
+        signal: tokenColor("signal"),
+        "signal-soft": tokenColor("signal-soft"),
+        "inverse-bg": tokenColor("inverse-bg"),
+        "inverse-fg": tokenColor("inverse-fg"),
         // 主题颜色统一从 tokens.css 取得，不在工具类中重复维护色值。
         bg: tokenColor("bg"),
         "bg-elevated": tokenColor("bg-elevated"),
@@ -74,7 +124,12 @@ export default {
       // 卡片与面板同属一档（12px），xl 是 lg 的别名。
       borderRadius: {
         DEFAULT: "var(--radius-xs)",
-        sm: "var(--radius-media)",
+        sm: "var(--radius-sm)",
+        tile: "var(--radius-tile)",
+        control: "var(--radius-control)",
+        card: "var(--radius-card)",
+        sheet: "var(--radius-sheet)",
+        full: "var(--radius-pill)",
         media: "var(--radius-media)",
         md: "var(--radius-control)",
         lg: "var(--radius-tile)",
@@ -83,13 +138,52 @@ export default {
       fontSize: {
         badge: "var(--text-badge)",
         meta: "var(--text-meta)",
-        body: "var(--text-body)",
+        display: [
+          "var(--text-display)",
+          { lineHeight: "48px", letterSpacing: "-0.035em", fontWeight: "650" },
+        ],
+        "title-1": [
+          "var(--text-title-1)",
+          {
+            lineHeight: "calc(var(--text-title-1) + 8px)",
+            letterSpacing: "-0.03em",
+            fontWeight: "650",
+          },
+        ],
+        "title-2": [
+          "var(--text-title-2)",
+          { lineHeight: "30px", letterSpacing: "-0.02em", fontWeight: "600" },
+        ],
+        "title-3": [
+          "var(--text-title-3)",
+          { lineHeight: "24px", letterSpacing: "-0.01em", fontWeight: "600" },
+        ],
+        body: [
+          "var(--text-body)",
+          { lineHeight: "24px", letterSpacing: "0em", fontWeight: "400" },
+        ],
+        callout: [
+          "var(--text-callout)",
+          { lineHeight: "20px", letterSpacing: "0em", fontWeight: "500" },
+        ],
+        caption: [
+          "var(--text-caption)",
+          { lineHeight: "18px", letterSpacing: "0em", fontWeight: "400" },
+        ],
+        micro: [
+          "var(--text-micro)",
+          { lineHeight: "16px", letterSpacing: "0.01em", fontWeight: "500" },
+        ],
         label: "var(--text-label)",
         section: "var(--text-section)",
         "page-sm": "var(--text-page-sm)",
         page: "var(--text-page)",
       },
       boxShadow: {
+        1: "var(--shadow-1)",
+        2: "var(--shadow-2)",
+        3: "var(--shadow-3)",
+
         float: "var(--shadow-float)",
         xs: "var(--shadow-xs)",
         sm: "var(--shadow-sm)",

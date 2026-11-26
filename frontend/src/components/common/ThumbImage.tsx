@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { thumbSrcSet, thumbUrl } from "../../api/thumbs";
 import { pickRenditionWidth, renditionCandidates } from "../../utils/rendition";
-import { ImageIcon } from "./Icon";
+import { ImageIcon } from "../../ui/icons";
 
 interface Props {
   /** 文件资源 ID（f_xxx）。 */

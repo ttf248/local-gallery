@@ -10,7 +10,7 @@ import {
   moduleReasonLabel,
   taskModeLabel,
 } from "../../utils/taskFormat";
-import { RefreshIcon } from "../common/Icon";
+import { RefreshIcon } from "../../ui/icons";
 
 interface Props {
   estimate?: AIJobEstimate;

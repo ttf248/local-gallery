@@ -9,7 +9,7 @@ import {
 } from "../../api/library";
 import { libraryRoute } from "../../utils/path";
 import Popover, { PopoverItem, PopoverLabel } from "../common/Popover";
-import { ChevronDownIcon, ChevronRightIcon } from "../common/Icon";
+import { ChevronDownIcon, ChevronRightIcon } from "../../ui/icons";
 
 type Crumb = { id: string; name: string };
 

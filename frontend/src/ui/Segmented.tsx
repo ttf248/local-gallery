@@ -1,4 +1,11 @@
-import { useRef, type ReactNode } from "react";
+import {
+  forwardRef,
+  useLayoutEffect,
+  useRef,
+  type ForwardedRef,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+} from "react";
 
 export interface SegmentedOption<T extends string> {
   /** 按钮内容：文字，或图形（图形要另给 ariaLabel 当可访问名）。 */
@@ -10,7 +17,11 @@ export interface SegmentedOption<T extends string> {
   title?: string;
 }
 
-interface Props<T extends string> {
+interface Props<T extends string> extends Omit<
+  ComponentPropsWithoutRef<"div">,
+  "onChange"
+> {
+  size?: "sm" | "md";
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
@@ -42,17 +53,48 @@ interface Props<T extends string> {
  * 长得一样，用户看一眼就知道这是「二选一」。用 radio 语义并支持左右
  * 方向键，键盘用户不必逐个 Tab 过去。
  */
-export default function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-  label,
-  disabled = false,
-  compact = false,
-  showLabel = false,
-}: Props<T>) {
+function SegmentedControl<T extends string>(
+  {
+    options,
+    value,
+    onChange,
+    label,
+    disabled = false,
+    compact = false,
+    showLabel = false,
+    size = "md",
+    className,
+    ...props
+  }: Props<T>,
+  forwardedRef: ForwardedRef<HTMLDivElement>,
+) {
   const ref = useRef<HTMLDivElement>(null);
 
+  useLayoutEffect(() => {
+    const group = ref.current;
+    if (!group) return;
+    const position = () => {
+      const selected = group.querySelector<HTMLElement>(
+        '[aria-checked="true"]',
+      );
+      group.style.setProperty(
+        "--segment-left",
+        (selected?.offsetLeft ?? 0) + "px",
+      );
+      group.style.setProperty(
+        "--segment-width",
+        (selected?.offsetWidth ?? 0) + "px",
+      );
+    };
+    position();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? undefined
+        : new ResizeObserver(position);
+    observer?.observe(group);
+    for (const child of group.children) observer?.observe(child);
+    return () => observer?.disconnect();
+  }, [value, options]);
   function move(step: number) {
     const enabled = options.filter((option) => !option.disabled);
     if (enabled.length === 0) return;
@@ -66,15 +108,22 @@ export default function Segmented<T extends string>({
   }
 
   return (
-    <div className="inline-flex items-center gap-2">
+    <div
+      {...props}
+      ref={forwardedRef}
+      className={["inline-flex items-center gap-2", className]
+        .filter(Boolean)
+        .join(" ")}
+    >
       {showLabel ? (
-        <span className="shrink-0 text-meta text-fg-muted">{label}</span>
+        <span className="shrink-0 text-caption text-fg-muted">{label}</span>
       ) : null}
       <div
         ref={ref}
         role="radiogroup"
         aria-label={label}
-        className="ui-segmented"
+        className="segments"
+        data-size={size}
       >
         {options.map((option) => {
           const selected = option.value === value;
@@ -120,3 +169,8 @@ export default function Segmented<T extends string>({
     </div>
   );
 }
+
+export const Segmented = forwardRef(SegmentedControl) as <T extends string>(
+  props: Props<T> & { ref?: ForwardedRef<HTMLDivElement> },
+) => JSX.Element;
+export default Segmented;

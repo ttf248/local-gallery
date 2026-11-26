@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CloseIcon } from "./Icon";
+import { CloseIcon } from "../../ui/icons";
 import CopyButton from "./CopyButton";
 import { useImageInfo } from "../../hooks/useImageInfo";
 import { formatSize } from "../../utils/format";

@@ -6,7 +6,7 @@ import type { TimelineYear } from "../../api/library";
 import type { YearGroup } from "../../utils/albumGrouping";
 import { albumCountUnit } from "../../utils/workbench";
 import { yearRoute } from "../../utils/path";
-import { FilterIcon } from "../common/Icon";
+import { FilterIcon } from "../../ui/icons";
 import Timeline, { type TimelineEntry } from "./Timeline";
 
 interface Props {

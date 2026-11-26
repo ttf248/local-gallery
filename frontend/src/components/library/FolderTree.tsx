@@ -7,7 +7,7 @@ import {
   FolderIcon,
   ImageIcon,
   SearchIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import { libraryApi, type AppMode, type LibraryNodeSummary } from "../../api/library";
 import { libraryQueryKeys } from "../../api/queryKeys";
 import { useLibraryAncestors, useLibraryManifest } from "../../hooks/useLibrary";

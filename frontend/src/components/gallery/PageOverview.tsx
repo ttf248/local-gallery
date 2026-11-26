@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import RenditionImage from "../common/RenditionImage";
-import { CloseIcon, SinglePageIcon } from "../common/Icon";
+import { CloseIcon, SinglePageIcon } from "../../ui/icons";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 interface Props {

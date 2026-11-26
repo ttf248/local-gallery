@@ -9,7 +9,7 @@ import {
   InfoIcon,
   PickIcon,
   UncheckIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 interface Props {
   x: number;

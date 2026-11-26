@@ -9,7 +9,7 @@ import {
 import EmptyState from "../components/common/EmptyState";
 import PageHeading from "../components/common/PageHeading";
 import RenditionImage from "../components/common/RenditionImage";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 import PhotoViewer from "../components/wall/PhotoViewer";
 import PhotoWall from "../components/wall/PhotoWall";
 import PeopleMergeDialog from "../components/people/PeopleMergeDialog";

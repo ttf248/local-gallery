@@ -6,7 +6,7 @@ import {
 } from "../../hooks/useLibrarySync";
 import Toggle from "../common/Toggle";
 import { Row, Section } from "./SettingsSection";
-import { RefreshIcon } from "../common/Icon";
+import { RefreshIcon } from "../../ui/icons";
 
 /** 把时间戳显示成本地时间；没有时间戳时返回空串。 */
 function formatTime(value?: string): string {

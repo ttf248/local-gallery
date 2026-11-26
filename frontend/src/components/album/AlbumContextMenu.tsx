@@ -20,7 +20,7 @@ import {
   CheckIcon,
   RewindIcon,
   TrashIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 interface Props {
   item: CardData;

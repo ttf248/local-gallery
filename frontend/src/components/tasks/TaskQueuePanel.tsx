@@ -1,7 +1,7 @@
 import type { AIJob } from "../../api/aiJobs";
 import { formatDateTime } from "../../utils/date";
 import { taskModeLabel, taskTitle } from "../../utils/taskFormat";
-import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from "../common/Icon";
+import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from "../../ui/icons";
 import TaskStatusDot from "./TaskStatusDot";
 
 interface Props {

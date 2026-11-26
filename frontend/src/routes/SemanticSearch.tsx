@@ -8,14 +8,14 @@ import {
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryFeedItem } from "../api/library";
 import PageHeading from "../components/common/PageHeading";
-import { SearchIcon } from "../components/common/Icon";
+import { SearchIcon } from "../ui/icons";
 import ContentSearchResults from "../components/search/ContentSearchResults";
 import {
   useContentSearchQuery,
   type ContentSearchSubmission,
 } from "../hooks/useContentSearchQuery";
 import { useChinaPlacesAll } from "../hooks/useChinaLocations";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 
 type SearchMode = "text" | "image";
 

@@ -26,7 +26,7 @@ import {
   type TimelineFilter,
 } from "../utils/timeline";
 import { albumRoute, homeRoute } from "../utils/path";
-import { FolderIcon, GridIcon, LibraryIcon } from "../components/common/Icon";
+import { FolderIcon, GridIcon, LibraryIcon } from "../ui/icons";
 import { useLibraryManifest } from "../hooks/useLibrary";
 import { useHistoryCards } from "../hooks/useHistory";
 import type { LibraryFeedItem } from "../api/library";

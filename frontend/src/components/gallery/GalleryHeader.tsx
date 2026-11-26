@@ -15,7 +15,7 @@ import {
   GridIcon,
   LibraryIcon,
   ReaderIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import Popover, {
   PopoverItem,
   PopoverSeparator,

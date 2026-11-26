@@ -1,4 +1,4 @@
-import { ArrowUpIcon, ArrowDownIcon } from "../common/Icon";
+import { ArrowUpIcon, ArrowDownIcon } from "../../ui/icons";
 
 interface Props {
   visible: boolean;

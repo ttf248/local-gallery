@@ -13,7 +13,7 @@ import { albumsApi } from "../../api/albums";
 import { libraryApi } from "../../api/library";
 import { useAppMode } from "../../hooks/useAppMode";
 import { useDebounce } from "../../hooks/useDebounce";
-import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useFocusTrap } from "../../ui/useFocusTrap";
 import { useHistoryCards } from "../../hooks/useHistory";
 import { useUIStore, type ThemePref } from "../../store/uiStore";
 import {
@@ -25,7 +25,7 @@ import {
   tagRoute,
 } from "../../utils/path";
 import { workbenchCopy } from "../../utils/workbench";
-import { CloseIcon, SearchIcon } from "../common/Icon";
+import { CloseIcon, SearchIcon } from "../../ui/icons";
 
 export type CommandScope = "name" | "content";
 

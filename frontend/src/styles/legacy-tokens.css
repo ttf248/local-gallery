@@ -1,0 +1,141 @@
+/* 迁移期间为旧页面提供的角色与尺寸，随页面样式一起移除。 */
+:root,
+:root[data-theme="light"] {
+  --surface-glass: rgba(250, 249, 246, 0.82);
+  --accent-hover: #2e2a27;
+  --accent-ink: var(--accent);
+  --comic-accent: #8a4f2d;
+  --comic-accent-hover: #733f23;
+  --comic-accent-soft: #f4eae1;
+  --comic-accent-ink: #6b3b1e;
+  --comic-accent-contrast: #ffffff;
+  --danger-ink: #ffffff;
+  --status-selected: var(--signal);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --border-faint: #efece6;
+  --rail-bg: var(--bg);
+  --rail-line: #e8e5de;
+  --rail-hover: var(--bg-subtle);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.04);
+  --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.09);
+  --shadow-lg: var(--shadow-float);
+  --shadow-float:
+    0 12px 32px -4px rgb(0 0 0 / 0.12), 0 4px 10px -2px rgb(0 0 0 / 0.06);
+  --float-highlight: transparent;
+  --scrim: rgb(0 0 0 / 0.42);
+  --comic-rail-active: var(--comic-accent-soft);
+  --comic-rail-active-fg: var(--comic-accent-ink);
+  --focus: var(--signal);
+  --rail-fg: var(--fg);
+  --rail-muted: var(--fg-muted);
+  --rail-active: var(--bg-elevated);
+  --rail-active-fg: var(--fg);
+  --rail-accent: var(--accent);
+  --rail-accent-fg: var(--accent-contrast);
+  --radius-xs: 6px;
+  --radius-media: 6px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --float-bottom: calc(var(--safe-bottom) + var(--keyboard-inset) + 12px);
+  --keyboard-inset: 0px;
+  --library-col: 210px;
+  --library-col-dense: 176px;
+  --library-col-spacious: 250px;
+  --library-col-comic: 168px;
+  --year-index-item: 184px;
+  --page-head-pad-top: 28px;
+  --page-head-pad-bottom: 20px;
+  --block-gap: 16px;
+  --font-mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+  --text-badge: var(--text-micro);
+  --text-meta: var(--text-caption);
+  --text-label: var(--text-body);
+  --text-section: var(--text-title-3);
+  --text-bar: 22px;
+  --text-page-sm: 22px;
+  --text-page-md: 28px;
+  --text-page: var(--text-title-1);
+  --cover-shadow: 0 10px 22px -14px rgb(0 0 0 / 0.55);
+  --cover-title-ink: #ffffff;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: var(--dur-1);
+  --dur: var(--dur-2);
+  --dur-slow: var(--dur-3);
+  --surface-card: var(--bg-elevated);
+  --accent-muted: var(--accent-soft);
+  --rail-width: var(--nav-width);
+  --rail-width-compact: var(--nav-width-compact);
+  --sticky-header-height: 56px;
+}
+
+:root[data-theme="dark"] {
+  --surface-glass: rgba(12, 12, 14, 0.8);
+  --accent-hover: #e2e0d8;
+  --accent-ink: var(--accent);
+  --comic-accent: #d9a074;
+  --comic-accent-hover: #efb68a;
+  --comic-accent-soft: #2a1f18;
+  --comic-accent-ink: #e8bc98;
+  --comic-accent-contrast: #0c0c0e;
+  --danger-ink: #0c0c0e;
+  --status-selected: var(--signal);
+  --border: var(--line);
+  --border-strong: var(--line-strong);
+  --border-faint: #1a1a20;
+  --rail-bg: var(--bg);
+  --rail-line: #1f1f25;
+  --rail-hover: var(--bg-subtle);
+  --shadow-xs: 0 1px 2px rgb(0 0 0 / 0.24);
+  --shadow-sm: 0 2px 6px rgb(0 0 0 / 0.28);
+  --shadow-md: 0 8px 24px rgb(0 0 0 / 0.36);
+  --shadow-float:
+    0 12px 32px -4px rgb(0 0 0 / 0.55), 0 4px 10px -2px rgb(0 0 0 / 0.3);
+  --float-highlight: rgb(255 255 255 / 0.08);
+  --scrim: rgb(0 0 0 / 0.6);
+}
+
+.reader-shell {
+}
+@media (max-width: 639px) {
+  .reader-shell {
+    }
+}
+
+:root {
+  --card-bg: transparent;
+  --card-border: transparent;
+  --card-radius: var(--radius-tile);
+  --card-shadow: none;
+  --card-lift: 0px;
+
+  --panel-bg: transparent;
+  --panel-fg: var(--fg);
+  --panel-muted: var(--fg-muted);
+  --hero-cover-col: 176px;
+  --section-index-font: var(--font-mono);
+}
+
+:root[data-mode="comic"] {
+  --card-bg: var(--bg-elevated);
+  --card-border: var(--border-faint);
+  --card-radius: var(--radius-tile);
+  --card-shadow: var(--shadow-sm);
+  --card-lift: -3px;
+
+  --hero-cover-col: 260px;
+
+  --accent-hover: var(--comic-accent-hover);
+  --accent-ink: var(--accent);
+  --focus: var(--signal);
+  --rail-active: var(--bg-elevated);
+  --rail-active-fg: var(--fg);
+  --rail-accent: var(--comic-accent);
+  --rail-accent-fg: var(--comic-accent-contrast);
+
+}

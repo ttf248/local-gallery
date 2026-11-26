@@ -19,7 +19,7 @@ import { prefsQueryOptions } from "../hooks/usePrefs";
 import { scanApi } from "../api/scan";
 import { useScanSSE } from "../hooks/useScanSSE";
 import ThemeSwitcher from "../components/common/ThemeSwitcher";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 import DensityControl from "../components/wall/DensityControl";
 import { useUIStore } from "../store/uiStore";
 import { useLibraryManifest } from "../hooks/useLibrary";
@@ -49,7 +49,7 @@ import {
   ServerIcon,
   ScrollPageIcon,
   MenuIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import {
   COMIC_NAV,
   DEFAULT_HIDDEN_NAV_ITEMS,

@@ -1,7 +1,7 @@
 import type { CardData, CoverRatio } from "./AlbumCard";
 import { mediaCountParts } from "../../utils/mediaCount";
 import CardCover from "./CardCover";
-import { CheckIcon } from "../common/Icon";
+import { CheckIcon } from "../../ui/icons";
 import type { ViewMode } from "../../store/uiStore";
 
 export default function SelectionCard({

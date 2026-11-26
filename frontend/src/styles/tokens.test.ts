@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 const TOKENS = path.resolve(__dirname, "tokens.css");
-const css = readFileSync(TOKENS, "utf-8");
+const css = readFileSync(TOKENS, "utf-8").replace(/\r\n/g, "\n");
 
 /** 取某个选择器块里的内容（按第一个 '{' 与配对的 '}' 截取）。 */
 function block(selector: string): string {
@@ -26,50 +26,27 @@ const light = block(':root,\n:root[data-theme="light"]');
 const dark = block(':root[data-theme="dark"]');
 const comic = block(':root[data-mode="comic"]');
 
-describe("漫画工作台的暖棕强调色", () => {
-  it("两套主题都给出漫画强调色这一族", () => {
-    for (const source of [light, dark]) {
-      for (const name of [
-        "comic-accent",
-        "comic-accent-hover",
-        "comic-accent-soft",
-        "comic-accent-ink",
-        "comic-accent-contrast",
-      ]) {
-        expect(token(source, name), `${name} 缺失`).not.toBe("");
-      }
-    }
-  });
-
-  it("浅色用 #8A4F2D，深色用 #D9A074", () => {
-    expect(token(light, "comic-accent").toLowerCase()).toBe("#8a4f2d");
-    expect(token(dark, "comic-accent").toLowerCase()).toBe("#d9a074");
-  });
-
-  it("漫画侧把强调色一族指向暖棕，焦点环与侧栏选中项一起换", () => {
-    expect(token(comic, "accent")).toBe("var(--comic-accent)");
-    expect(token(comic, "accent-hover")).toBe("var(--comic-accent-hover)");
-    expect(token(comic, "accent-soft")).toBe("var(--comic-accent-soft)");
-    expect(token(comic, "accent-ink")).toBe("var(--comic-accent-ink)");
-    expect(token(comic, "accent-contrast")).toBe(
-      "var(--comic-accent-contrast)",
-    );
-    expect(token(comic, "focus")).toBe("var(--comic-accent)");
-    expect(token(comic, "rail-active")).toBe("var(--comic-rail-active)");
-    expect(token(comic, "rail-active-fg")).toBe("var(--comic-rail-active-fg)");
-  });
-
-  it("照片工作台使用炭黑与象牙白", () => {
-    expect(token(light, "accent").toLowerCase()).not.toContain("comic");
-    expect(token(light, "accent").toLowerCase()).toBe("#1c1917");
-    expect(token(dark, "accent").toLowerCase()).toBe("#f4f3ef");
-  });
-
-  it("书名压条用暖棕：漫画侧的封面标签不是近黑", () => {
-    expect(token(comic, "cover-band")).toContain("74 48 29");
-    // 基础档（照片侧）仍用近黑：那条压条在照片侧不出现，但留着无害且统一。
-    expect(token(light, "cover-band")).toContain("0 0 0");
-  });
+const comicDark = block(':root[data-mode="comic"][data-theme="dark"]');
+const roles =
+  "bg bg-elevated bg-subtle bg-strong bg-media fg fg-muted fg-subtle line line-strong accent accent-contrast accent-soft signal signal-soft favorite success warning danger inverse-bg inverse-fg".split(
+    " ",
+  );
+it("纸白与暗房均定义全套颜色角色", () => {
+  for (const theme of [light, dark])
+    for (const role of roles) expect(token(theme, role)).toBeTruthy();
+  expect(css).not.toMatch(/--rail-/);
+  expect(token(light, "signal")).toBe("#2f6bff");
+  expect(token(dark, "signal")).toBe("#7fa4ff");
+});
+it.each([
+  [comic, "#8a4f2d"],
+  [comicDark, "#d9a074"],
+])("漫画仅替换强调与书脊", (source, accent) => {
+  expect([...source.matchAll(/--([\w-]+):/g)].map((m) => m[1]).sort()).toEqual(
+    ["accent", "accent-contrast", "accent-soft", "cover-band"],
+  );
+  expect(token(source, "accent")).toBe(accent);
+  expect(token(source, "cover-band")).toContain("74 48 29");
 });
 function luminance(hex: string): number {
   const rgb = [1, 3, 5].map((index) => {
@@ -80,8 +57,8 @@ function luminance(hex: string): number {
 }
 
 describe.each([
-  ["暖白画廊", light, "#faf9f6"],
-  ["曜石暗房", dark, "#0c0c0e"],
+  ["纸白", light, "#f7f7f5"],
+  ["暗房", dark, "#0a0a0b"],
 ])("%s", (_theme, source, background) => {
   it("画布颜色符合方案，正文、辅助文字和主要操作达到 AA", () => {
     expect(token(source, "bg")).toBe(background);
@@ -90,20 +67,32 @@ describe.each([
       ["fg-muted", "bg-subtle"],
       ["fg-subtle", "bg"],
       ["accent-contrast", "accent"],
-      ["accent-ink", "accent-soft"],
-      ["comic-accent-contrast", "comic-accent"],
-      ["comic-accent-ink", "comic-accent-soft"],
-      ["danger", "bg"],
-      ["success", "bg"],
-      ["warning", "bg"],
-      ["favorite", "bg"],
+      ["signal-text", "bg"],
+      ["danger-text", "bg"],
+      ["success-text", "bg"],
+      ["warning-text", "bg"],
+      ["favorite-text", "bg"],
     ]) {
       const pair = [
-        luminance(token(source, foreground)),
+        luminance(
+          token(source, foreground).startsWith("var(")
+            ? token(source, foreground.replace("-text", ""))
+            : token(source, foreground),
+        ),
         luminance(token(source, base)),
       ];
       const ratio = (Math.max(...pair) + 0.05) / (Math.min(...pair) + 0.05);
       expect(ratio, `${foreground} / ${base}`).toBeGreaterThanOrEqual(4.5);
     }
   });
+});
+
+it.each([comic, comicDark])("漫画主按钮文字达到 AA", (source) => {
+  const pair = [
+    luminance(token(source, "accent")),
+    luminance(token(source, "accent-contrast")),
+  ];
+  expect(
+    (Math.max(...pair) + 0.05) / (Math.min(...pair) + 0.05),
+  ).toBeGreaterThanOrEqual(4.5);
 });

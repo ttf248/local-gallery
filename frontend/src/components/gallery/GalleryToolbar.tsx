@@ -11,7 +11,7 @@ import {
   MinusIcon,
   PlusIcon,
   RotateIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import {
   useGalleryStore,
   type FitMode,

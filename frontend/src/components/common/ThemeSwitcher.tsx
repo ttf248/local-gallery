@@ -1,5 +1,5 @@
 import { useUIStore, type ThemePref } from "../../store/uiStore";
-import { SunIcon, MoonIcon, MonitorIcon, CheckIcon } from "./Icon";
+import { SunIcon, MoonIcon, MonitorIcon, CheckIcon } from "../../ui/icons";
 import Popover from "./Popover";
 
 // 主题切换：

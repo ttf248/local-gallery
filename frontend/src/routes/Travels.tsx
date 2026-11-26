@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 // 足迹页的样式跟着这一页走：它在 styles/global.css 里时，地图与行程
 // 卡片的样式会被每个页面首屏捎带着下载。
 import "../styles/travels.css";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 import ErrorBanner from "../components/common/ErrorBanner";
 import TravelMiniMap from "../components/travels/TravelMiniMap";
 import type { MapScope } from "../components/travels/TravelMiniMap";

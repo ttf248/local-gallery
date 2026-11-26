@@ -1,3 +1,5 @@
+@import "./legacy-tokens.css";
+@import "./components.css";
 @import "./primitives.css";
 @import "./features/shell.css";
 @import "./features/gallery.css";
@@ -33,7 +35,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-size: var(--text-body);
-  line-height: 1.5;
+  line-height: 1.6;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.005em;
   font-weight: 400;
@@ -60,7 +62,7 @@ body {
   }
 }
 ::selection {
-  background: var(--accent-soft);
+  background: var(--signal-soft);
   color: var(--fg);
 }
 
@@ -80,7 +82,7 @@ body {
   outline: none;
 }
 :focus-visible {
-  outline: 2px solid var(--focus);
+  outline: 2px solid var(--signal);
   outline-offset: 2px;
 }
 button:focus-visible,
@@ -95,7 +97,7 @@ textarea:focus-visible {
   outline-offset: 1px;
 }
 [data-tone="reader"] :focus-visible {
-  outline-color: rgba(255, 255, 255, 0.85);
+  outline-color: var(--signal);
 }
 input,
 button,

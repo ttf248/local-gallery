@@ -34,7 +34,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   RefreshIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 interface Props {
   progress: ProgressEvent | null;

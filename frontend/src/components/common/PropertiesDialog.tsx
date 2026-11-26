@@ -11,7 +11,7 @@ import {
   mediaUnit,
 } from "../../utils/workbench";
 import { isCompleted } from "../../utils/progress";
-import { CloseIcon } from "./Icon";
+import { CloseIcon } from "../../ui/icons";
 import ErrorBanner from "./ErrorBanner";
 import CopyButton from "./CopyButton";
 

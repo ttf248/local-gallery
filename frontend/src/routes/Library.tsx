@@ -18,7 +18,7 @@ import {
   ChevronLeftIcon,
   FolderOpenIcon,
   ReaderIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryList } from "../hooks/useLibraryList";
 import {

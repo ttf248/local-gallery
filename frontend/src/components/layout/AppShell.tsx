@@ -25,7 +25,7 @@ import {
 import { tabLabelFor } from "../../utils/pageTabs";
 import { workbenchCopy } from "../../utils/workbench";
 import { useFsCapabilities } from "../../hooks/useFsCapabilities";
-import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useFocusTrap } from "../../ui/useFocusTrap";
 import { useVisualViewport } from "../../hooks/useVisualViewport";
 import { useAppMode } from "../../hooks/useAppMode";
 import { scanApi } from "../../api/scan";
@@ -36,7 +36,7 @@ import { useLibraryManifest } from "../../hooks/useLibrary";
 import { libraryQueryKeys } from "../../api/queryKeys";
 import { useMediaQuery, WIDE_LAYOUT_QUERY } from "../../hooks/useMediaQuery";
 import { hasOpenModal, normalizeKey } from "../../utils/shortcuts";
-import { MenuIcon, SearchIcon } from "../common/Icon";
+import { MenuIcon, SearchIcon } from "../../ui/icons";
 
 import ErrorBoundary from "../common/ErrorBoundary";
 import { libraryApi } from "../../api/library";

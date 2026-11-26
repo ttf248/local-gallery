@@ -10,7 +10,7 @@ import {
   HelpIcon,
   PeopleIcon,
   RefreshIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import { useUIStore } from "../../store/uiStore";
 import { useLibraryActivitySummary } from "../../hooks/useLibrary";
 import { useAppMode } from "../../hooks/useAppMode";

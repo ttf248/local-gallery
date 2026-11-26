@@ -9,7 +9,7 @@ import {
   MoreHorizontalIcon,
   SelectIcon,
   StarIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import { albumRoute } from "../../utils/path";
 import { mediaCountParts } from "../../utils/mediaCount";
 import StickyPageHeader from "../layout/StickyPageHeader";

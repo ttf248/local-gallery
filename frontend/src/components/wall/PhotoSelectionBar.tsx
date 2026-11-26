@@ -6,7 +6,7 @@ import {
   DoublePageIcon,
   PickIcon,
   UncheckIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 interface Props {
   /** 当前选中的照片。 */

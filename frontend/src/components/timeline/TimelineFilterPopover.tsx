@@ -8,9 +8,9 @@ import {
   timelineSourceLabel,
   type TimelineFilter,
 } from "../../utils/timeline";
-import { FilterIcon } from "../common/Icon";
+import { FilterIcon } from "../../ui/icons";
 import Popover, { PopoverLabel, PopoverSeparator } from "../common/Popover";
-import Segmented from "../common/Segmented";
+import Segmented from "../../ui/Segmented";
 
 const MEDIA_OPTIONS = [
   { value: "", label: "全部" },

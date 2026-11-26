@@ -5,7 +5,7 @@ import {
   type ShortcutContext,
 } from "../../utils/shortcutsTable";
 import { useAppMode } from "../../hooks/useAppMode";
-import { CloseIcon, SearchIcon, KeyboardIcon } from "./Icon";
+import { CloseIcon, SearchIcon, KeyboardIcon } from "../../ui/icons";
 
 interface Props {
   open: boolean;

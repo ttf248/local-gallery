@@ -13,7 +13,7 @@ import {
   SparkleIcon,
   ShuffleIcon,
   FilterIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import { albumRoute, decodeFavPath, homeRoute } from "../utils/path";
 import { compareDatesDesc } from "../utils/date";

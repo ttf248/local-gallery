@@ -17,7 +17,7 @@ import AlbumGrid from "../components/album/AlbumGrid";
 import AlbumGridSkeleton from "../components/album/AlbumGridSkeleton";
 import { ListFilterBar } from "../components/common/ListFilterBar";
 import EmptyState from "../components/common/EmptyState";
-import { ClockIcon } from "../components/common/Icon";
+import { ClockIcon } from "../ui/icons";
 import { decodeFavPath, homeRoute } from "../utils/path";
 import { compareDatesDesc, timeAgo } from "../utils/date";
 import { compareByAdded } from "../utils/cardSorting";

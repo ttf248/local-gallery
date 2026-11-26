@@ -10,7 +10,7 @@ import type {
 import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
 import { formatCount, formatEstimateDuration } from "../../utils/taskFormat";
 import ModuleChips from "./ModuleChips";
-import Segmented from "../common/Segmented";
+import Segmented from "../../ui/Segmented";
 import TaskEstimatePanel from "./TaskEstimatePanel";
 
 interface Props {

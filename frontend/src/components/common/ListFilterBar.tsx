@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { SortKey } from "../../utils/listFilterParams";
 import { useUIStore } from "../../store/uiStore";
-import { ChevronDownIcon, GridIcon, ListIcon, FilterIcon } from "./Icon";
+import { ChevronDownIcon, GridIcon, ListIcon, FilterIcon } from "../../ui/icons";
 import { useAppMode } from "../../hooks/useAppMode";
 import type { AppMode } from "../../api/library";
 

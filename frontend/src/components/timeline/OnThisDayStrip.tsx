@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useOnThisDayAlbums } from "../../hooks/useLibrary";
 import ThumbImage from "../common/ThumbImage";
-import { ClockIcon } from "../common/Icon";
+import { ClockIcon } from "../../ui/icons";
 import { albumRoute } from "../../utils/path";
 import {
   ON_THIS_DAY_THUMB_HEIGHT,

@@ -8,7 +8,7 @@ import {
   TasksIcon,
   SettingsIcon,
   UserIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import {
   exploreRoute,
   homeRoute,

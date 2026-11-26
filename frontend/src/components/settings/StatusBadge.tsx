@@ -1,4 +1,4 @@
-import { CheckIcon, AlertIcon } from "../common/Icon";
+import { CheckIcon, AlertIcon } from "../../ui/icons";
 import type { FieldStatus } from "../../hooks/useServerConfigSave";
 
 /** 字段的保存状态指示：空 / 保存中 / 已保存 / 保存失败。 */

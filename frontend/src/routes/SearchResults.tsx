@@ -5,7 +5,7 @@ import AlbumGrid from "../components/album/AlbumGrid";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import PageHeading from "../components/common/PageHeading";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 import { albumsApi, type SearchHit } from "../api/albums";
 import type { LibraryNodeSummary } from "../api/library";
 import { useLibraryNodes } from "../hooks/useLibrary";

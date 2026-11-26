@@ -12,7 +12,7 @@ import {
   ChevronRightIcon,
   CloseIcon,
   MoreHorizontalIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 import SmartAlbumCover from "./SmartAlbumCover";
 import SmartAlbumEvidence from "./SmartAlbumEvidence";
 

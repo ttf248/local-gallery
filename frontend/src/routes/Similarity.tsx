@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
 import PageHeading from "../components/common/PageHeading";
-import Segmented from "../components/common/Segmented";
+import Segmented from "../ui/Segmented";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import PhotoCompare, {
@@ -14,7 +14,7 @@ import Popover, {
   PopoverItem,
   PopoverLabel,
 } from "../components/common/Popover";
-import { FolderIcon } from "../components/common/Icon";
+import { FolderIcon } from "../ui/icons";
 import SimilarityGroupCard from "../components/similarity/SimilarityGroupCard";
 import {
   useSimilarityGroups,

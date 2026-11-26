@@ -1,6 +1,6 @@
 import type { AIJobError } from "../../api/aiJobs";
 import CopyButton from "../common/CopyButton";
-import { ChevronDownIcon } from "../common/Icon";
+import { ChevronDownIcon } from "../../ui/icons";
 import { groupFailures } from "../../utils/taskFormat";
 
 /** 每组最多列出的路径条数；其余只给一条计数。 */

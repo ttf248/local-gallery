@@ -26,9 +26,11 @@ const FOCUSABLE = [
 /** 元素当前是否可见（display:none 的元素不算可聚焦）。 */
 function isVisible(element: HTMLElement): boolean {
   return (
-    element.offsetWidth > 0 ||
-    element.offsetHeight > 0 ||
-    element.getClientRects().length > 0
+    element.tabIndex >= 0 && !element.closest("[hidden],[inert]") &&
+    getComputedStyle(element).visibility !== "hidden" &&
+    (typeof element.checkVisibility === "function"
+      ? element.checkVisibility()
+      : getComputedStyle(element).display !== "none")
   );
 }
 

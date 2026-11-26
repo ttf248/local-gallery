@@ -12,7 +12,7 @@ import {
   CheckIcon,
   CloseIcon,
   ShuffleIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 interface UnreadHeroProps {
   cards: CardData[];

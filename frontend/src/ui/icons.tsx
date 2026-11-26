@@ -275,7 +275,6 @@ export const RewindIcon = (p: IconProps) => (
   </svg>
 );
 
-
 // 更多：水平三点（用于菜单折叠入口）
 export const MoreHorizontalIcon = (p: IconProps) => (
   <svg {...base(p)}>
@@ -550,5 +549,56 @@ export const LayersIcon = (p: IconProps) => (
     <path d="m12 3 9 5-9 5-9-5z" />
     <path d="m3.5 12.5 8.5 4.7 8.5-4.7" />
     <path d="m3.5 16.5 8.5 4.7 8.5-4.7" />
+  </svg>
+);
+
+export const ImageFilledIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path
+      fillRule="evenodd"
+      d="M4 3h16a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm3 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm-3 12h16l-5-7-4 5-3-3Z"
+    />
+  </svg>
+);
+export const LibraryFilledIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor">
+    <path d="M3 4h4v16H3zm6 0h4v16H9zm6 1 4-1 3 15-4 1z" />
+  </svg>
+);
+export const CompassFilledIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path
+      fillRule="evenodd"
+      d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm5 5-3 7-7 3 3-7Z"
+    />
+  </svg>
+);
+export const UserFilledIcon = (p: IconProps) => (
+  <UserIcon fill="currentColor" {...p} />
+);
+export const HomeFilledIcon = (p: IconProps) => (
+  <HomeIcon fill="currentColor" {...p} />
+);
+export const CopyFilledIcon = (p: IconProps) => (
+  <CopyIcon fill="currentColor" {...p} />
+);
+export const SparkleFilledIcon = (p: IconProps) => (
+  <SparkleIcon fill="currentColor" {...p} />
+);
+export const TasksFilledIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor">
+    <path
+      fillRule="evenodd"
+      stroke="none"
+      d="M5 2h14a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm2 5v2h10V7Zm0 5v2h10v-2Zm0 5v2h6v-2Z"
+    />
+  </svg>
+);
+export const SettingsFilledIcon = (p: IconProps) => (
+  <svg {...base(p)} fill="currentColor" stroke="none">
+    <path
+      fillRule="evenodd"
+      d="m10 2-.8 2.3-2.3 1L4.6 5 2 9l1.7 1.8v2.4L2 15l2.6 4 2.3-.3 2.3 1L10 22h4l.8-2.3 2.3-1 2.3.3 2.6-4-1.7-1.8v-2.4L22 9l-2.6-4-2.3.3-2.3-1L14 2Zm2 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z"
+    />
   </svg>
 );

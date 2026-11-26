@@ -1,5 +1,5 @@
 import Popover, { PopoverItem } from "../common/Popover";
-import Segmented from "../common/Segmented";
+import Segmented from "../../ui/Segmented";
 import { WALL_DENSITY_LABEL, type WallDensity } from "../../store/photoStore";
 
 /** 每档手动密度用多少个小方块示意疏密。 */

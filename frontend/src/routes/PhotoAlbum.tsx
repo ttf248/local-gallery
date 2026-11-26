@@ -40,7 +40,7 @@ import AlbumHeader from "../components/album/AlbumHeader";
 import AlbumGroupPanel from "../components/album/AlbumGroupPanel";
 import AlbumMediaMenu from "../components/album/AlbumMediaMenu";
 import PropertiesDialog from "../components/common/PropertiesDialog";
-import { CloseIcon, LayersIcon } from "../components/common/Icon";
+import { CloseIcon, LayersIcon } from "../ui/icons";
 import { fileManagerErrorMessage } from "../utils/fileManager";
 import { useSafeBack, contextFallback } from "../utils/navigation";
 import { albumRoute } from "../utils/path";

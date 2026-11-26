@@ -1,5 +1,5 @@
 import { formatSize } from "../../utils/format";
-import { RefreshIcon } from "../common/Icon";
+import { RefreshIcon } from "../../ui/icons";
 
 export interface StorageUsageProps {
   /** 媒体派生缓存（缩略图 / 预览图 / 转换图 / 视频产物）。 */

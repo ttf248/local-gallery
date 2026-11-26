@@ -6,7 +6,7 @@ import { usePhotoStore, wallTargetHeight } from "../../store/photoStore";
 import PhotoViewer from "../wall/PhotoViewer";
 import { useWallViewer } from "../../hooks/useWallViewer";
 import PhotoWall from "../wall/PhotoWall";
-import { ChevronRightIcon } from "../common/Icon";
+import { ChevronRightIcon } from "../../ui/icons";
 import ThumbImage from "../common/ThumbImage";
 import TravelTripPreview from "./TravelTripPreview";
 import type { MapRegion } from "../../utils/travelMap";

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ScanWarning } from "../../api/library";
-import { AlertIcon, ChevronDownIcon, ChevronUpIcon } from "./Icon";
+import { AlertIcon, ChevronDownIcon, ChevronUpIcon } from "../../ui/icons";
 
 interface Props {
   warnings?: ScanWarning[];

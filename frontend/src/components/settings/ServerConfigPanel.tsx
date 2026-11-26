@@ -19,7 +19,7 @@ import { ConfigGroup, ConfigRow, type FieldDef } from "./ConfigRow";
 import ExcludeRulesField from "./ExcludeRulesField";
 import MediaRootsField from "./MediaRootsField";
 import { openConfiguredDirectory } from "./openConfiguredDirectory";
-import { RefreshIcon } from "../common/Icon";
+import { RefreshIcon } from "../../ui/icons";
 
 // 哪些字段改动后需要重启才生效。
 const REQUIRES_RESTART = new Set([

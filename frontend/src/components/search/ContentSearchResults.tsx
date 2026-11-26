@@ -7,7 +7,7 @@ import EmptyState from "../common/EmptyState";
 import ErrorBanner from "../common/ErrorBanner";
 import PhotoWall from "../wall/PhotoWall";
 import PhotoViewer from "../wall/PhotoViewer";
-import { SearchIcon } from "../common/Icon";
+import { SearchIcon } from "../../ui/icons";
 import { usePickToggle } from "../../hooks/usePickToggle";
 import { usePhotoStore, wallTargetHeight } from "../../store/photoStore";
 import { useWallViewer } from "../../hooks/useWallViewer";

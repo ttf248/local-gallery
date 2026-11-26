@@ -36,7 +36,7 @@ import {
   SearchIcon,
   PlusIcon,
   StarIcon,
-} from "../common/Icon";
+} from "../../ui/icons";
 
 export interface PhotoViewerProps {
   /**

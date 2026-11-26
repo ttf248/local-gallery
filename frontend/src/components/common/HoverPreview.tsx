@@ -11,7 +11,7 @@ import {
   ImageIcon,
   CalendarIcon,
   PlayFilledIcon,
-} from './Icon'
+} from '../../ui/icons'
 import CardCover from '../album/CardCover'
 import ThumbImage from './ThumbImage'
 import type { CardData } from '../album/AlbumCard'

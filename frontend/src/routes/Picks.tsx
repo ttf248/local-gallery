@@ -24,7 +24,7 @@ import {
   GridIcon,
   PickIcon,
   UncheckIcon,
-} from "../components/common/Icon";
+} from "../ui/icons";
 import { albumRoute, homeRoute } from "../utils/path";
 import { photoCopy } from "../utils/workbench";
 import {

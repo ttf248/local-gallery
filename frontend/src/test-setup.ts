@@ -1,9 +1,9 @@
-import '@testing-library/jest-dom'
+import "@testing-library/jest-dom";
 
 // jsdom 还没实现原生 <dialog> 的模态方法：属性面板、帮助浮层、目录选择
 // 与并排对比都用 <dialog> + showModal()，测试里得先补上这两个方法。
 // 焦点循环与背景不可聚焦由浏览器用例验证，这里只补「开」与「关」。
-if (typeof HTMLDialogElement !== 'undefined') {
+if (typeof HTMLDialogElement !== "undefined") {
   Object.assign(HTMLDialogElement.prototype, {
     showModal(this: HTMLDialogElement) {
       this.open = true;
@@ -75,3 +75,32 @@ globalThis.IntersectionObserver =
     );
   }
 };
+
+// jsdom 缺少 Web Animations 与指针捕获。用例可替换 animate 并控制 finished。
+if (!Element.prototype.animate) {
+  Object.defineProperty(Element.prototype, "animate", {
+    configurable: true,
+    writable: true,
+    value: () => ({
+      finished: Promise.resolve(),
+      cancel() {},
+      finish() {},
+    }),
+  });
+}
+if (!Element.prototype.setPointerCapture) {
+  const captured = new WeakMap<Element, Set<number>>();
+  Object.assign(Element.prototype, {
+    setPointerCapture(this: Element, id: number) {
+      const ids = captured.get(this) ?? new Set<number>();
+      ids.add(id);
+      captured.set(this, ids);
+    },
+    releasePointerCapture(this: Element, id: number) {
+      captured.get(this)?.delete(id);
+    },
+    hasPointerCapture(this: Element, id: number) {
+      return captured.get(this)?.has(id) ?? false;
+    },
+  });
+}

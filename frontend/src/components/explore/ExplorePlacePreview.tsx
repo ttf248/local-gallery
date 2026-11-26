@@ -5,7 +5,7 @@ import { aiJobsApi, type AIJob, type ChinaPlace } from "../../api/aiJobs";
 import { useChinaPlacesAll } from "../../hooks/useChinaLocations";
 import ErrorBanner from "../common/ErrorBanner";
 import RenditionImage from "../common/RenditionImage";
-import { ImageIcon } from "../common/Icon";
+import { ImageIcon } from "../../ui/icons";
 import ExploreCard from "./ExploreCard";
 import { travelPlaceRoute, travelsRoute } from "../../utils/path";
 

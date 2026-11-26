@@ -1,6 +1,6 @@
 import { useVideoCover } from "../../hooks/useVideoCover";
 import { pickRenditionWidth } from "../../utils/rendition";
-import { FolderIcon, PlayFilledIcon } from "./Icon";
+import { FolderIcon, PlayFilledIcon } from "../../ui/icons";
 
 interface Props {
   /** 视频文件资源 ID（也是 thumbUrl 要请求的标识） */

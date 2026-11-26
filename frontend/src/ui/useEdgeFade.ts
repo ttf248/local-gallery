@@ -40,17 +40,25 @@ export function useEdgeFade<T extends HTMLElement>() {
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(update) : null;
     observer?.observe(el);
     for (const child of Array.from(el.children)) observer?.observe(child);
+    const mutations = new MutationObserver(() => {
+      observer?.disconnect();
+      observer?.observe(el);
+      for (const child of el.children) observer?.observe(child);
+      update();
+    });
+    mutations.observe(el, { childList: true });
     window.addEventListener("resize", update);
     return () => {
       el.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
       observer?.disconnect();
+      mutations.disconnect();
     };
   }, [update]);
 
   const maskImage = `linear-gradient(to right, ${
-    fade.start ? "transparent 0, #000 28px" : "#000 0"
-  }, ${fade.end ? "#000 calc(100% - 28px), transparent 100%" : "#000 100%"})`;
+    fade.start ? "transparent 0, #000 48px" : "#000 0"
+  }, ${fade.end ? "#000 calc(100% - 48px), transparent 100%" : "#000 100%"})`;
 
   return { ref, maskImage, fade };
 }
