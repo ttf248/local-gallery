@@ -9,11 +9,11 @@ import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import PhotoCompare, {
   type CompareItem,
-} from "../components/wall/PhotoCompare";
+} from "../features/viewer/PhotoCompare";
 import Popover, {
   PopoverItem,
   PopoverLabel,
-} from "../components/common/Popover";
+} from "../ui/Popover";
 import { FolderIcon } from "../ui/icons";
 import SimilarityGroupCard from "../components/similarity/SimilarityGroupCard";
 import {

@@ -86,7 +86,7 @@ test("跳年与跳月写进地址栏，刷新与后退都还在原地", async ({
   await page.reload();
   await filter.click();
   await expect(page.getByRole("menuitemradio", { name: /^2024 年/ })).toHaveAttribute("aria-checked", "true");
-  await page.getByRole("group", { name: "月份" }).getByRole("menuitemradio").nth(1).click();
+  await page.getByRole("group", { name: "月份" }).locator('[role="menuitemradio"]:enabled').nth(1).click();
   await expect(page).toHaveURL(/year=2024&month=/);
 
   await page.goBack();

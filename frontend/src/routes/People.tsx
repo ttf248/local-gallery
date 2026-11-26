@@ -9,10 +9,10 @@ import {
 import EmptyState from "../components/common/EmptyState";
 import {Switch} from "../ui/Switch";
 import {PageHeader} from "../shell/PageHeader";
-import RenditionImage from "../components/common/RenditionImage";
+import RenditionImage from "../features/common/RenditionImage";
 import Segmented from "../ui/Segmented";
-import PhotoViewer from "../components/wall/PhotoViewer";
-import PhotoWall from "../components/wall/PhotoWall";
+import PhotoViewer from "../features/viewer/PhotoViewer";
+import PhotoWall from "../features/wall/PhotoWall";
 import PeopleMergeDialog from "../components/people/PeopleMergeDialog";
 import {
   aiJobsApi,

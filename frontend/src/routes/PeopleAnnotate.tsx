@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import EmptyState from "../components/common/EmptyState";
 import {PageHeader} from "../shell/PageHeader";
-import RenditionImage from "../components/common/RenditionImage";
+import RenditionImage from "../features/common/RenditionImage";
 import {
   peopleAnnotationsApi,
   type PeopleAnnotationFace,

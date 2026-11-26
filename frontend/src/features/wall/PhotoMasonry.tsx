@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, type MouseEvent } from "react";
 import type { LibraryMediaItem } from "../../api/library";
 import { useElementSize } from "../../hooks/useElementSize";
 import { useVisibleWindow } from "../../hooks/useVisibleWindow";
-import ThumbImage from "../common/ThumbImage";
-import VideoCoverImage from "../common/VideoCoverImage";
+import { ThumbImage } from "../common";
+import { VideoCoverImage } from "../common";
 import { CheckIcon, PickIcon, PlayFilledIcon, PlusIcon } from "../../ui/icons";
 import {
   DEFAULT_MASONRY_RATIO,
@@ -222,7 +222,9 @@ export default function PhotoMasonry<
                 }
                 onContextMenu={(event) => onContextMenu?.(item, event)}
                 className="absolute inset-0 z-0 block h-full w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
-                title={sourceLabel ? `${sourceLabel} · ${item.name}` : item.name}
+                title={
+                  sourceLabel ? `${sourceLabel} · ${item.name}` : item.name
+                }
                 aria-label={
                   selecting && onToggleSelect
                     ? `选择「${item.name}」`
@@ -258,7 +260,9 @@ export default function PhotoMasonry<
                   }
                   title={picked ? "移出精选" : "加入精选"}
                   className={`absolute left-0 top-0 z-10 grid place-items-center rounded-full transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white ${
-                    picked ? "opacity-100" : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100"
+                    picked
+                      ? "opacity-100"
+                      : "hover-reveal group-hover:opacity-100 group-focus-within:opacity-100"
                   }`}
                 >
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-black/70 text-white ring-1 ring-white/25 backdrop-blur">

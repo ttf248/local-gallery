@@ -22,11 +22,11 @@ vi.mock("../hooks/usePicks", () => ({
   usePicks: () => ({ isPicked: () => false, toggle: vi.fn() }),
 }));
 
-vi.mock("../components/wall/PhotoWall", () => ({
+vi.mock("../features/wall/PhotoWall", () => ({
   default: () => <div data-testid="photo-wall" />,
 }));
 
-vi.mock("../components/wall/PhotoViewer", () => ({
+vi.mock("../features/viewer/PhotoViewer", () => ({
   default: () => <div data-testid="photo-viewer" />,
 }));
 

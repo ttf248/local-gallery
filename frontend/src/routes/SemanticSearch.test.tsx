@@ -25,7 +25,7 @@ vi.mock("../api/albums", () => ({
   albumsApi: { search: mocks.albumSearch },
 }));
 
-vi.mock("../components/wall/PhotoWall", () => ({
+vi.mock("../features/wall/PhotoWall", () => ({
   default: ({
     items,
     itemBadge,

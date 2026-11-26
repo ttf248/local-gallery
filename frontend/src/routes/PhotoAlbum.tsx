@@ -28,13 +28,13 @@ import { useAlbumSelection } from "../hooks/useAlbumSelection";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { usePhotoSelectionStore } from "../store/photoSelectionStore";
-import PhotoWall from "../components/wall/PhotoWall";
+import PhotoWall from "../features/wall/PhotoWall";
 import AlbumFilterBar from "../components/wall/AlbumFilterBar";
-import DensityControl from "../components/wall/DensityControl";
+import DensityControl from "../features/wall/DensityControl";
 import ErrorBanner from "../components/common/ErrorBanner";
 import EmptyState from "../components/common/EmptyState";
-import PhotoViewer from "../components/wall/PhotoViewer";
-import PhotoCompare from "../components/wall/PhotoCompare";
+import PhotoViewer from "../features/viewer/PhotoViewer";
+import PhotoCompare from "../features/viewer/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
 import AlbumHeader from "../components/album/AlbumHeader";
 import AlbumGroupPanel from "../components/album/AlbumGroupPanel";
@@ -174,7 +174,7 @@ export default function PhotoAlbum({ album }: Props) {
   );
 
   const analysis = useAlbumAnalysis({ albumId: album.id, dimension });
-  const selection = useAlbumSelection({ albumId: album.id, albumName: title });
+  const selection = useAlbumSelection({ albumId: album.id, albumName: title, items: mediaItems });
 
   useEffect(() => {
     if (smartSummary && !smartSummary.cacheHit) {

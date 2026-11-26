@@ -242,8 +242,8 @@ it("时间线按月份分段，标题写清是几月", async () => {
   const headers = await screen.findAllByTestId("timeline-group-header");
   expect(headers.map((node) => node.textContent)).toEqual([
     "2024 年 5 月1 张",
-    "2023 年 8 月1 张· 含推断时间",
-    "日期未知1 张· 只有文件修改时间，不是拍摄时间",
+    "2023 年 8 月1 张含推断时间",
+    "日期未知1 张只有文件修改时间，不是拍摄时间",
   ]);
 });
 
@@ -260,7 +260,7 @@ it("段落数量取自年份索引", async () => {
 it("推断出来的月份会标出来", async () => {
   renderTimeline();
   const notes = await screen.findAllByTestId("timeline-group-note");
-  expect(notes.map((node) => node.textContent)).toContain("· 含推断时间");
+  expect(notes.map((node) => node.textContent)).toContain("含推断时间");
 });
 
 // 没有拍摄证据的那一段单独摆着，不混进任何一年。
@@ -489,4 +489,10 @@ it("游标失效时说清要从头重取", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent(
     "媒体库刚刚变了，这一页的位置已经失效。重新加载会从头开始。",
   );
+});
+
+it("筛选时收起回忆与接着看入口",()=>{
+  feed.historyCards=[{to:"/photo/albums/a_1",title:"旅行"}];
+  renderTimeline("/photo?year=2024");
+  expect(screen.queryByRole("region",{name:"回忆"})).toBeNull();
 });

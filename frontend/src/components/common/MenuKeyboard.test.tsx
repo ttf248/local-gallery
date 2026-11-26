@@ -2,7 +2,7 @@ import { useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import ContextMenu from "../album/ContextMenu";
-import Popover, { PopoverItem } from "./Popover";
+import Popover, { PopoverItem } from "../../ui/Popover";
 
 type MenuKind = "popover" | "context";
 

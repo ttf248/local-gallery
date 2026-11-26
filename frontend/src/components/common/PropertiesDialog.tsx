@@ -13,7 +13,7 @@ import {
 import { isCompleted } from "../../utils/progress";
 import { CloseIcon } from "../../ui/icons";
 import ErrorBanner from "./ErrorBanner";
-import CopyButton from "./CopyButton";
+import CopyButton from "../../features/common/CopyButton";
 
 export type PropertiesTarget =
   { kind: "node"; id: string } | { kind: "image"; id: string };

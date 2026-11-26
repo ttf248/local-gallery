@@ -100,8 +100,9 @@ export default function ThumbImage({
       alt={alt}
       loading={loading}
       decoding="async"
+      onLoad={event=>{event.currentTarget.dataset.loaded="true";}}
       onError={() => setFailed(true)}
-      className={className}
+      className={"opacity-0 transition-opacity duration-200 data-[loaded=true]:opacity-100 motion-reduce:transition-none "+className}
     />
   );
 }

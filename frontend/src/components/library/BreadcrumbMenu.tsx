@@ -8,7 +8,7 @@ import {
   type LibraryRootSummary,
 } from "../../api/library";
 import { libraryRoute } from "../../utils/path";
-import Popover, { PopoverItem, PopoverLabel } from "../common/Popover";
+import Popover, { PopoverItem, PopoverLabel } from "../../ui/Popover";
 import { ChevronDownIcon, ChevronRightIcon } from "../../ui/icons";
 
 type Crumb = { id: string; name: string };

@@ -1,6 +1,6 @@
 import { useState } from "react";
-import RenditionImage from "../common/RenditionImage";
-import VideoCoverImage from "../common/VideoCoverImage";
+import RenditionImage from "../../features/common/RenditionImage";
+import VideoCoverImage from "../../features/common/VideoCoverImage";
 import { FolderIcon } from "../../ui/icons";
 import type { CardData } from "./AlbumCard";
 

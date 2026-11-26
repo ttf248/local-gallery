@@ -20,7 +20,7 @@ import Popover, {
   PopoverItem,
   PopoverSeparator,
   PopoverLabel,
-} from "../common/Popover";
+} from "../../ui/Popover";
 import { useGalleryStore } from "../../store/galleryStore";
 import { toggleFullscreen as toggleFullscreenImpl } from "../../utils/fullscreen";
 import type { AppMode } from "../../api/library";

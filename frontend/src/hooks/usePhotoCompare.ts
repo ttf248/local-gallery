@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { CompareItem } from "../components/wall/PhotoCompare";
+import type { CompareItem } from "../features/viewer/PhotoCompare";
 import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 import type { WallViewerItem } from "./useWallViewer";
 

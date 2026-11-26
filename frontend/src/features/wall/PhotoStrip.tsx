@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import type { LibraryMediaItem } from "../../api/library";
 import { useElementSize } from "../../hooks/useElementSize";
-import ThumbImage from "../common/ThumbImage";
-import VideoCoverImage from "../common/VideoCoverImage";
+import { ThumbImage } from "../common";
+import { VideoCoverImage } from "../common";
 import { layoutJustified, tileRatio, type WallTile } from "./justifiedLayout";
 
 interface Props<T extends LibraryMediaItem = LibraryMediaItem> {
@@ -42,7 +42,9 @@ const GAP = 8;
  * 首页的「随手看看」与集合页的预览条要的都是这个 ——
  * 一面看得完的墙，而不是一个可以一直往下翻的列表。
  */
-export default function PhotoStrip<T extends LibraryMediaItem = LibraryMediaItem>({
+export default function PhotoStrip<
+  T extends LibraryMediaItem = LibraryMediaItem,
+>({
   items,
   targetHeight,
   limit,
@@ -59,8 +61,7 @@ export default function PhotoStrip<T extends LibraryMediaItem = LibraryMediaItem
     [items, limit],
   );
   const tiles = useMemo<WallTile[]>(
-    () =>
-      shown.map((item) => ({ id: item.id, ratio: tileRatio(item) })),
+    () => shown.map((item) => ({ id: item.id, ratio: tileRatio(item) })),
     [shown],
   );
   const rows = useMemo(() => {

@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { useMediaFeed } from "../../hooks/useMediaFeed";
 import { usePicks } from "../../hooks/usePicks";
 import { useUIStore } from "../../store/uiStore";
-import PhotoStrip from "../wall/PhotoStrip";
-import PhotoViewer from "../wall/PhotoViewer";
+import PhotoStrip from "../../features/wall/PhotoStrip";
+import PhotoViewer from "../../features/viewer/PhotoViewer";
 import { albumRoute } from "../../utils/path";
 
 interface Props {

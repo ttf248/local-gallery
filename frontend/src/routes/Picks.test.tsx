@@ -20,7 +20,7 @@ vi.mock("../hooks/usePickToggle", () => ({
 }));
 
 // 多张精选走的是自然照片墙（瀑布流）：密排凑行会裁掉挑出来的照片。
-vi.mock("../components/wall/PhotoMasonry", () => ({
+vi.mock("../features/wall/PhotoMasonry", () => ({
   default: ({
     items,
     loadMoreError,

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import RenditionImage from "../common/RenditionImage";
+import RenditionImage from "../../features/common/RenditionImage";
 import { FolderIcon } from "../../ui/icons";
 import type { CardData } from "../album/AlbumGrid";
 

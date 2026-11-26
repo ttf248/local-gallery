@@ -1,5 +1,5 @@
 import { useState } from "react";
-import RenditionImage from "../common/RenditionImage";
+import RenditionImage from "../../features/common/RenditionImage";
 
 interface Props {
   /** 文件资源 ID（f_xxx）；没有封面时显示占位。 */

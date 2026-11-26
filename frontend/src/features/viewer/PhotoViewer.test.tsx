@@ -232,10 +232,10 @@ describe("大图预览的 Esc", () => {
     expect(screen.getByRole("button", { name: "放大" })).toBeInTheDocument();
   });
 
-  it("面板没开时，Esc 退出预览", () => {
+  it("面板没开时，Esc 退出预览", async () => {
     const onClose = renderViewer();
     fireEvent.keyDown(window, { key: "Escape" });
-    expect(onClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 });
 

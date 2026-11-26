@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import RenditionImage from "../common/RenditionImage";
+import RenditionImage from "../../features/common/RenditionImage";
 import { useAppMode } from "../../hooks/useAppMode";
 import { useEdgeFade } from "../../ui/useEdgeFade";
 import { FolderIcon } from "../../ui/icons";

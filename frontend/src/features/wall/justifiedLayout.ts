@@ -122,7 +122,8 @@ export function layoutJustified(
     const next: WallTile = { id: tile.id, ratio };
     const candidateRatio = sumRatio + ratio;
     const candidateCount = current.length + 1;
-    const candidateWidth = candidateRatio * targetHeight + gap * (candidateCount - 1);
+    const candidateWidth =
+      candidateRatio * targetHeight + gap * (candidateCount - 1);
     if (current.length > 0 && candidateWidth > containerWidth) {
       flush(false);
       current = [next];
@@ -337,7 +338,10 @@ export function autoTargetHeight(
 ): number {
   const { containerWidth, containerHeight, gap, minTargetHeight } = options;
   const floor = Math.max(1, Math.round(minTargetHeight));
-  const ceiling = Math.max(floor, Math.round(options.maxTargetHeight ?? Infinity));
+  const ceiling = Math.max(
+    floor,
+    Math.round(options.maxTargetHeight ?? Infinity),
+  );
   if (containerWidth <= 0 || containerHeight <= 0 || tiles.length === 0) {
     return floor;
   }

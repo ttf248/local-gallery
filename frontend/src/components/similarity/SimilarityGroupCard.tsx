@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import ThumbImage from "../common/ThumbImage";
+import ThumbImage from "../../features/common/ThumbImage";
 import {
   similarityKindHint,
   similarityKindLabel,

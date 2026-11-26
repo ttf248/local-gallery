@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { LibraryMediaItem } from "../api/library";
-import type { PhotoViewerProps } from "../components/wall/PhotoViewer";
+import type { PhotoViewerProps } from "../features/viewer/PhotoViewer";
 
 /**
  * 大图预览认的媒体项：墙上的项，外加「它出自哪本相册」。

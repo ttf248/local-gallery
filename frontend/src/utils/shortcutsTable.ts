@@ -381,6 +381,8 @@ export const SHORTCUTS: Shortcut[] = [
     group: "video",
   },
   // 照片墙与大图预览
+  {id:"densityDenser",label:"[",description:"照片墙更密",combo:"[",group:"photo"},
+  {id:"densityLooser",label:"]",description:"照片墙更松",combo:"]",group:"photo"},
   {
     id: "photoPrev",
     label: "←",

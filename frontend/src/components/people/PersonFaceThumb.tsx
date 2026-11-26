@@ -1,6 +1,6 @@
 import type { PersonGroup } from "../../api/aiJobs";
 import { personFaceCropStyle } from "../../utils/personFaceCrop";
-import RenditionImage from "../common/RenditionImage";
+import RenditionImage from "../../features/common/RenditionImage";
 import { PeopleIcon } from "../../ui/icons";
 
 interface Props {

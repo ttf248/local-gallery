@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { LibraryNodeSummary } from "../../api/library";
-import Popover, { PopoverItem, PopoverLabel } from "../common/Popover";
+import Popover, { PopoverItem, PopoverLabel } from "../../ui/Popover";
 import {
   ChevronLeftIcon,
   CopyIcon,

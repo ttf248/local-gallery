@@ -10,7 +10,10 @@ import { persist } from "zustand/middleware";
 export type WallDensity = "auto" | "compact" | "cozy" | "large";
 
 /** 手动档位对应的目标行高（像素）。 */
-export const WALL_DENSITY_HEIGHT: Record<Exclude<WallDensity, "auto">, number> = {
+export const WALL_DENSITY_HEIGHT: Record<
+  Exclude<WallDensity, "auto">,
+  number
+> = {
   compact: 150,
   cozy: 210,
   large: 290,
@@ -24,7 +27,32 @@ export const WALL_DENSITY_LABEL: Record<WallDensity, string> = {
 };
 
 /** 手动密度档位，自适应模式不算在内。 */
-export const WALL_DENSITY_KEYS = ["compact", "cozy", "large"] as const;
+export const WALL_DENSITY_ORDER = ["compact", "cozy", "large"] as const;
+
+export function nextDensity(
+  current: WallDensity,
+  step: 1 | -1,
+  autoResolved: number,
+): WallDensity {
+  const resolved =
+    current === "auto"
+      ? WALL_DENSITY_ORDER.reduce((best, candidate) =>
+          Math.abs(WALL_DENSITY_HEIGHT[candidate] - autoResolved) <
+          Math.abs(WALL_DENSITY_HEIGHT[best] - autoResolved)
+            ? candidate
+            : best,
+        )
+      : current;
+  return WALL_DENSITY_ORDER[
+    Math.max(
+      0,
+      Math.min(
+        WALL_DENSITY_ORDER.length - 1,
+        WALL_DENSITY_ORDER.indexOf(resolved) + step,
+      ),
+    )
+  ];
+}
 
 /**
  * 照片墙实际使用的目标行高。

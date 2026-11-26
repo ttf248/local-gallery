@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CloseIcon } from "../../ui/icons";
-import CopyButton from "./CopyButton";
+import { CopyButton } from "../common";
 import { useImageInfo } from "../../hooks/useImageInfo";
 import { formatSize } from "../../utils/format";
 import { formatDateTime } from "../../utils/date";
@@ -12,6 +12,8 @@ import { previewUrl } from "../../api/images";
 import { albumRoute } from "../../utils/path";
 
 interface Props {
+  albumName?: string;
+  albumHref?: string;
   absPath: string | null;
   onClose: () => void;
 }
@@ -25,7 +27,12 @@ interface Props {
 // 配色：阅读器画布恒为深色，顶栏和右侧控件都用白色系。
 // 面板同样按阅读器的深色约定渲染，不用应用主题色——否则浅色主题下会
 // 出现"黑底阅读器里嵌一块白板"，且白底上的深色小字与深色画布割裂。
-export default function ImageInfoPanel({ absPath, onClose }: Props) {
+export default function ImageInfoPanel({
+  absPath,
+  albumName,
+  albumHref,
+  onClose,
+}: Props) {
   const [selectedFace, setSelectedFace] = useState<number | null>(null);
   const previousAbsPath = useRef(absPath);
   const { info, err, loading } = useImageInfo(absPath);
@@ -96,6 +103,7 @@ export default function ImageInfoPanel({ absPath, onClose }: Props) {
           /* 两列的规格表：标签在左一窄列，值在右。原先标签在上、值在下，
              一屏读不到几行，剩下半屏是空的；规格表本来就该能横向扫读。 */
           <dl className="divide-y divide-white/10">
+            <AnalysisHeading>尺寸与文件</AnalysisHeading>
             <Row
               label="文件名"
               value={info.name}
@@ -163,6 +171,18 @@ export default function ImageInfoPanel({ absPath, onClose }: Props) {
               <Row label="分析状态" value="元数据暂不可用" />
             ) : (
               <Row label="分析状态" value="尚未分析" />
+            )}
+            {albumName && (
+              <>
+                <AnalysisHeading>所属相册</AnalysisHeading>
+                {albumHref ? (
+                  <Link className="block py-2 underline" to={albumHref}>
+                    {albumName}
+                  </Link>
+                ) : (
+                  <p>{albumName}</p>
+                )}
+              </>
             )}
             <AnalysisHeading>文字识别</AnalysisHeading>
             <ImageAnalysisStatus

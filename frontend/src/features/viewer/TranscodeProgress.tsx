@@ -1,32 +1,35 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   subscribeTranscodeEvents,
   cancelTranscode,
   type TranscodeStatus,
   type TranscodeStatusValue,
-} from '../../api/videos'
+} from "../../api/videos";
 
 interface Props {
   /** 视频绝对路径 */
-  src: string
+  src: string;
   /** 转码完成（cached）时触发 —— 父组件用这个重挂载 <video> */
-  onReady?: () => void
+  onReady?: () => void;
   /** 用户主动关闭面板 */
-  onDismiss?: () => void
+  onDismiss?: () => void;
 }
 
 // 文案映射：状态 → 给人看的标题 + 描述
-const STATUS_TEXT: Record<TranscodeStatusValue, { title: string; desc?: string }> = {
-  unknown: { title: '正在准备…' },
-  skipped: { title: '无需转码' },
-  unavailable: { title: '服务端转码不可用', desc: 'ffmpeg 未配置或不可执行' },
-  not_needed: { title: '视频已可直接播放' },
-  cached: { title: '转码完成', desc: '即将开始播放…' },
-  queued: { title: '正在排队…', desc: '前面还有别的视频在转码' },
-  running: { title: '正在转码', desc: '服务端正在把视频转成浏览器能播的格式' },
-  failed: { title: '转码失败' },
-  pending: { title: '正在准备转码…', desc: '开始播放后会自动转码' },
-}
+const STATUS_TEXT: Record<
+  TranscodeStatusValue,
+  { title: string; desc?: string }
+> = {
+  unknown: { title: "正在准备…" },
+  skipped: { title: "无需转码" },
+  unavailable: { title: "服务端转码不可用", desc: "ffmpeg 未配置或不可执行" },
+  not_needed: { title: "视频已可直接播放" },
+  cached: { title: "转码完成", desc: "即将开始播放…" },
+  queued: { title: "正在排队…", desc: "前面还有别的视频在转码" },
+  running: { title: "正在转码", desc: "服务端正在把视频转成浏览器能播的格式" },
+  failed: { title: "转码失败" },
+  pending: { title: "正在准备转码…", desc: "开始播放后会自动转码" },
+};
 
 /**
  * 转码进度面板 — 盖在 <video> 上面，给用户「正在转码 X% 预计还要 Y 分钟」
@@ -40,61 +43,61 @@ const STATUS_TEXT: Record<TranscodeStatusValue, { title: string; desc?: string }
  * cache miss 时会自动重转）。
  */
 export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
-  const [status, setStatus] = useState<TranscodeStatus | null>(null)
+  const [status, setStatus] = useState<TranscodeStatus | null>(null);
   // 用户主动取消：服务端把任务标记成 failed，但那是用户自己的选择，
   // 不能显示成「转码失败」。这里单独记住取消动作，给出「已取消」的文案。
-  const [cancelled, setCancelled] = useState(false)
+  const [cancelled, setCancelled] = useState(false);
   // 父组件每次渲染都会新建 onReady（内联箭头函数）。若把它放进依赖数组，
   // 订阅会在每次父组件重渲染时重建：面板状态被清空、进度连接反复重连。
   // 这里用 ref 持有最新回调，effect 只依赖 src。
-  const onReadyRef = useRef(onReady)
-  onReadyRef.current = onReady
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
 
   useEffect(() => {
-    setStatus(null)
-    setCancelled(false)
-    let closed = false
-    let close: (() => void) | null = null
-    let retryTimer: ReturnType<typeof setTimeout> | null = null
-    let retries = 0
+    setStatus(null);
+    setCancelled(false);
+    let closed = false;
+    let close: (() => void) | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let retries = 0;
 
     const connect = () => {
-      if (closed) return
+      if (closed) return;
       close = subscribeTranscodeEvents(src, {
         onProgress: (s) => {
           // 剩余时间由服务端按「已耗时 × 剩余比例」估算(etaSec);
           // 进度刚开始时服务端给 0,此时不显示预计时间。
-          setStatus(s)
+          setStatus(s);
         },
         onDone: (s) => {
-          setStatus(s)
-          if (s.status === 'cached') {
-            onReadyRef.current?.()
-            return
+          setStatus(s);
+          if (s.status === "cached") {
+            onReadyRef.current?.();
+            return;
           }
           // pending：视频需要转码但任务还没起来（转码由媒体请求触发）。
           // 服务端此时没有可订阅的任务，连接会立刻关闭——稍后重连一次，
           // 等任务真正开始后就能收到进度。
-          if (s.status === 'pending' && retries < 10) {
-            retries += 1
-            retryTimer = setTimeout(connect, 800)
+          if (s.status === "pending" && retries < 10) {
+            retries += 1;
+            retryTimer = setTimeout(connect, 800);
           }
         },
-      })
-    }
+      });
+    };
 
-    connect()
+    connect();
     return () => {
-      closed = true
-      if (retryTimer) clearTimeout(retryTimer)
-      close?.()
-    }
-  }, [src])
+      closed = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      close?.();
+    };
+  }, [src]);
 
   const onCancel = useCallback(async () => {
-    await cancelTranscode(src)
-    setCancelled(true)
-  }, [src])
+    await cancelTranscode(src);
+    setCancelled(true);
+  }, [src]);
 
   if (cancelled) {
     return (
@@ -109,9 +112,9 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
               type="button"
               className="text-meta px-3 py-1 rounded border border-white/30 hover:bg-white/10"
               onClick={() => {
-                setCancelled(false)
+                setCancelled(false);
                 // 重挂 <video> 会重新请求媒体，服务端随之重新排队转码。
-                onReady?.()
+                onReady?.();
               }}
             >
               重新转码
@@ -128,7 +131,7 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   if (!status) {
@@ -138,16 +141,16 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
           正在连接转码服务…
         </div>
       </div>
-    )
+    );
   }
 
-  const text = STATUS_TEXT[status.status] || STATUS_TEXT.unknown
-  const pct = Math.round(status.progress * 100)
-  const etaSec = status.etaSec ?? 0
+  const text = STATUS_TEXT[status.status] || STATUS_TEXT.unknown;
+  const pct = Math.round(status.progress * 100);
+  const etaSec = status.etaSec ?? 0;
 
   // 终态（cached / failed / unavailable）:不一样的展示
-  if (status.status === 'cached') {
-    return null // 父组件已收到 onReady,马上会重挂 <video>,不再叠这层
+  if (status.status === "cached") {
+    return null; // 父组件已收到 onReady,马上会重挂 <video>,不再叠这层
   }
 
   return (
@@ -156,10 +159,12 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
         {/* 标题 */}
         <div className="font-medium text-label">{text.title}</div>
         {/* 描述 */}
-        {text.desc && <div className="text-meta text-white/60 text-center">{text.desc}</div>}
+        {text.desc && (
+          <div className="text-meta text-white/60 text-center">{text.desc}</div>
+        )}
 
         {/* 进度条（running/queued 时显示）*/}
-        {(status.status === 'running' || status.status === 'queued') && (
+        {(status.status === "running" || status.status === "queued") && (
           <>
             <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
               <div
@@ -168,22 +173,22 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
               />
             </div>
             <div className="text-meta text-white/70 tabular-nums">
-              {status.status === 'queued' ? '等待中' : `${pct}%`}
+              {status.status === "queued" ? "等待中" : `${pct}%`}
               {etaSec > 0 && ` · 预计 ${Math.ceil(etaSec / 60)} 分钟`}
             </div>
           </>
         )}
 
         {/* 失败 */}
-        {status.status === 'failed' && (
+        {status.status === "failed" && (
           <div className="text-meta text-overlay-danger text-center max-w-xs break-words">
-            {status.error || '未知错误'}
+            {status.error || "未知错误"}
           </div>
         )}
 
         {/* 按钮 */}
         <div className="flex items-center gap-2 mt-1">
-          {status.status === 'running' || status.status === 'queued' ? (
+          {status.status === "running" || status.status === "queued" ? (
             <button
               type="button"
               className="text-meta px-3 py-1 rounded border border-white/30 hover:bg-white/10"
@@ -191,13 +196,13 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
             >
               取消转码
             </button>
-          ) : status.status === 'failed' ? (
+          ) : status.status === "failed" ? (
             <button
               type="button"
               className="text-meta px-3 py-1 rounded border border-white/30 hover:bg-white/10"
               onClick={() => {
                 // 重新触发：重挂载 <video> 就会重新走 Resolve
-                onReady?.()
+                onReady?.();
               }}
             >
               重试
@@ -215,5 +220,5 @@ export default function TranscodeProgress({ src, onReady, onDismiss }: Props) {
         </div>
       </div>
     </div>
-  )
+  );
 }

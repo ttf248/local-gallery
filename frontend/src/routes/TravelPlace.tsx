@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 // 足迹页的样式跟着这一页走：它在 styles/global.css 里时，地图与行程
 // 卡片的样式会被每个页面首屏捎带着下载。
 import "../styles/travels.css";
-import ThumbImage from "../components/common/ThumbImage";
+import ThumbImage from "../features/common/ThumbImage";
 import TravelMap from "../components/travels/TravelMap";
 import TravelPhotoWall from "../components/travels/TravelPhotoWall";
 import TravelTimeAxis from "../components/travels/TravelTimeAxis";

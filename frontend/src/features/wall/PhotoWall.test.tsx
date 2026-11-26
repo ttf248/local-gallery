@@ -356,8 +356,24 @@ it("分组标题插在每一组的第一行之前", () => {
 // 一个月里只有两三张照片时，那几张不铺满整行：铺满了看起来像加载失败。
 it("稀疏的一段不铺满宽度，密集的一段仍然铺满", () => {
   const sparseItems = [
-    { id: "s_1", kind: "image" as const, name: "s1.jpg", index: 0, kindIndex: 0, width: 3, height: 2 },
-    { id: "s_2", kind: "image" as const, name: "s2.jpg", index: 1, kindIndex: 1, width: 3, height: 2 },
+    {
+      id: "s_1",
+      kind: "image" as const,
+      name: "s1.jpg",
+      index: 0,
+      kindIndex: 0,
+      width: 3,
+      height: 2,
+    },
+    {
+      id: "s_2",
+      kind: "image" as const,
+      name: "s2.jpg",
+      index: 1,
+      kindIndex: 1,
+      width: 3,
+      height: 2,
+    },
   ];
   const denseItems = Array.from({ length: 12 }, (_, index) => ({
     id: `d_${index}`,

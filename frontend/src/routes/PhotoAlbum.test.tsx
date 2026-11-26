@@ -51,7 +51,7 @@ vi.mock("../api/albums", () => ({
     setCover: vi.fn(async () => ({})),
   },
 }));
-vi.mock("../components/wall/PhotoWall", () => ({
+vi.mock("../features/wall/PhotoWall", () => ({
   default: ({
     items,
     onOpen,
@@ -77,7 +77,7 @@ vi.mock("../components/wall/PhotoWall", () => ({
     </div>
   ),
 }));
-vi.mock("../components/wall/PhotoViewer", () => ({
+vi.mock("../features/viewer/PhotoViewer", () => ({
   default: ({ albumName }: { albumName: string }) => (
     <div data-testid="photo-viewer">大图:{albumName}</div>
   ),

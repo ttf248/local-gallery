@@ -8,10 +8,10 @@ import {
   usePhotoSelectionStore,
   type PhotoSelectionEntry,
 } from "../store/photoSelectionStore";
-import PhotoMasonry from "../components/wall/PhotoMasonry";
+import PhotoMasonry from "../features/wall/PhotoMasonry";
 import PickShowcase from "../components/wall/PickShowcase";
-import PhotoViewer from "../components/wall/PhotoViewer";
-import PhotoCompare from "../components/wall/PhotoCompare";
+import PhotoViewer from "../features/viewer/PhotoViewer";
+import PhotoCompare from "../features/viewer/PhotoCompare";
 import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
 import ContextMenu from "../components/album/ContextMenu";
 import EmptyState from "../components/common/EmptyState";

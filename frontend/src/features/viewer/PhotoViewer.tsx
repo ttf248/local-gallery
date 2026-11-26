@@ -1,3 +1,8 @@
+import { useIdleChrome } from "../../hooks/useIdleChrome";
+import { useReducedMotion } from "../../hooks/useReducedMotion";
+import { useZoomTransition } from "./useZoomTransition";
+import { Filmstrip } from "./Filmstrip";
+import { RotateIcon, GridIcon } from "../../ui/icons";
 import { Link } from "react-router-dom";
 import {
   useCallback,
@@ -22,8 +27,8 @@ import { isFullscreen, toggleFullscreen } from "../../utils/fullscreen";
 import { shouldIgnoreShortcut } from "../../utils/shortcuts";
 import { usePhotoStore } from "../../store/photoStore";
 import { useUIStore } from "../../store/uiStore";
-import VideoPlayer from "../gallery/VideoPlayer";
-import ImageInfoPanel from "../common/ImageInfoPanel";
+import VideoPlayer from "./VideoPlayer";
+import ImageInfoPanel from "./ImageInfoPanel";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -45,7 +50,12 @@ export interface PhotoViewerProps {
    * 跨相册的序列（首页照片墙、年份墙、足迹、精选）里的每一项带着它
    * 出自哪本相册：翻到哪一张，「最近浏览」就记哪一本。
    */
-  items: (LibraryMediaItem & { albumId?: string; albumName?: string })[];
+  items: (LibraryMediaItem & {
+    albumId?: string;
+    albumName?: string;
+    dateValue?: string;
+    capturedAt?: string;
+  })[];
   /** 当前查看的序号（0 基）。 */
   index: number;
   /** 相册名，用于标题与信息。 */
@@ -165,9 +175,13 @@ export default function PhotoViewer({
 }: PhotoViewerProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [showInfo, setShowInfo] = useState(
-    () => usePhotoStore.getState().showInfo,
-  );
+  const showInfo = usePhotoStore((s) => s.showInfo);
+  const setShowInfo = usePhotoStore((s) => s.setShowInfo);
+  const [stripVisible, setStripVisible] = useState(true);
+  const [rotation, setRotation] = useState(0);
+  const [loadedId, setLoadedId] = useState("");
+  const { chromeVisible } = useIdleChrome();
+  const reducedMotion = useReducedMotion();
   const [failed, setFailed] = useState(false);
 
   // 浮层打开时接管单键：全局的 r / u 必须让位，否则按 r 会一边旋转
@@ -209,6 +223,8 @@ export default function PhotoViewer({
     originY: number;
     moved: boolean;
   } | null>(null);
+  const touchPoints = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; zoom: number } | null>(null);
   const swipeRef = useRef<{ x: number; y: number } | null>(null);
 
   // 跨页连续浏览的几件状态。
@@ -232,6 +248,36 @@ export default function PhotoViewer({
   const indexRef = useRef(index);
 
   const current = items[index];
+  const transitionRef = useRef<HTMLDivElement>(null);
+  const entered = useRef(false);
+  const closing = useRef(false);
+  const sourceTile = useCallback(
+    () =>
+      current &&
+      Array.from(
+        document.querySelectorAll<HTMLElement>("[data-media-id]"),
+      ).find((tile) => tile.dataset.mediaId === current.id),
+    [current],
+  );
+  const getSourceRect = useCallback(
+    () => sourceTile()?.getBoundingClientRect() ?? null,
+    [sourceTile],
+  );
+  const { enter, exit } = useZoomTransition({ getSourceRect, reducedMotion });
+  const thumbnail = useMemo(
+    () => sourceTile()?.querySelector("img")?.currentSrc,
+    [sourceTile],
+  );
+  const close = () => {
+    if (closing.current) return;
+    const el = transitionRef.current;
+    if (!el?.animate) {
+      onClose();
+      return;
+    }
+    closing.current = true;
+    void exit(el).then(onClose);
+  };
   const isVideo = current?.kind === "video";
 
   // 看照片＝看过那本相册。
@@ -261,6 +307,16 @@ export default function PhotoViewer({
     height: number;
   } | null>(null);
   const [stageMeasured, setStageMeasured] = useState(false);
+
+  useEffect(() => {
+    if (entered.current || !transitionRef.current || !stageMeasured || !current)
+      return;
+    entered.current = true;
+    void enter(
+      transitionRef.current,
+      (current.width ?? 0) / (current.height ?? 0),
+    );
+  }, [stageMeasured, current, enter]);
 
   // 放大时按放大倍数向上一档取图：否则放大看到的只是被拉大的像素。
   // 档位固定，缩放过程中 URL 只在跨档时变一次，不会来回重下。
@@ -418,6 +474,7 @@ export default function PhotoViewer({
     setZoom(1);
     setPan({ x: 0, y: 0 });
     setFailed(false);
+    setRotation(0);
   }, [current?.id]);
 
   useEffect(() => {
@@ -494,10 +551,10 @@ export default function PhotoViewer({
           // 一次 Esc 关掉面板，再一次才退出预览，两层浮层才分得清。
           if (showInfo) {
             setShowInfo(false);
-            usePhotoStore.getState().setShowInfo(false);
+
             break;
           }
-          onClose();
+          close();
           break;
         case "ArrowLeft":
           event.preventDefault();
@@ -548,13 +605,7 @@ export default function PhotoViewer({
         case "i":
         case "I":
           event.preventDefault();
-          setShowInfo((value) => {
-            const next = !value;
-            // 信息面板的开合是照片模式的偏好：记在本地 store 里，
-            // 下次打开大图预览时沿用。
-            usePhotoStore.getState().setShowInfo(next);
-            return next;
-          });
+          setShowInfo(!showInfo);
           break;
         case "p":
         case "P":
@@ -587,6 +638,21 @@ export default function PhotoViewer({
 
   const onPointerDown = (event: React.PointerEvent) => {
     if (event.button !== 0) return;
+    if (event.pointerType === "touch") {
+      const points = touchPoints.current;
+      points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      if (points.size === 2) {
+        const [a, b] = Array.from(points.values());
+        pinch.current = {
+          distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+          zoom,
+        };
+        dragRef.current = null;
+        swipeRef.current = null;
+        return;
+      }
+    }
     swipeRef.current = { x: event.clientX, y: event.clientY };
     if (zoom > 1) {
       dragRef.current = {
@@ -603,6 +669,20 @@ export default function PhotoViewer({
 
   const onPointerMove = (event: React.PointerEvent) => {
     const drag = dragRef.current;
+    if (touchPoints.current.has(event.pointerId)) {
+      touchPoints.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      if (pinch.current && touchPoints.current.size === 2) {
+        const [a, b] = Array.from(touchPoints.current.values());
+        applyZoom(
+          (pinch.current.zoom * Math.hypot(a.x - b.x, a.y - b.y)) /
+            pinch.current.distance,
+        );
+        return;
+      }
+    }
     if (!drag || drag.pointerId !== event.pointerId) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
@@ -611,6 +691,12 @@ export default function PhotoViewer({
   };
 
   const onPointerUp = (event: React.PointerEvent) => {
+    touchPoints.current.delete(event.pointerId);
+    if (pinch.current) {
+      pinch.current = null;
+      swipeRef.current = null;
+      return;
+    }
     const drag = dragRef.current;
     dragRef.current = null;
     if (drag?.moved) {
@@ -619,10 +705,13 @@ export default function PhotoViewer({
     }
     const swipe = swipeRef.current;
     swipeRef.current = null;
-    if (!swipe) return;
+    if (!swipe || zoom > 1) return;
     const dx = event.clientX - swipe.x;
     const dy = event.clientY - swipe.y;
-    // 触摸左右滑动切换照片；纵向滑动留给页面，不做处理。
+    if (event.pointerType === "touch" && dy > 120 && dy > Math.abs(dx) * 1.2) {
+      close();
+      return;
+    }
     if (Math.abs(dx) > 48 && Math.abs(dx) > Math.abs(dy) * 1.2) {
       go(dx < 0 ? 1 : -1);
     }
@@ -642,6 +731,13 @@ export default function PhotoViewer({
       ref={dialogRef}
       data-testid="photo-viewer"
       className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-overlay-bg p-0 text-overlay-fg backdrop:bg-transparent"
+      onCancel={(event) => {
+        event.preventDefault();
+        if (!compareOpen) {
+          if (showInfo) setShowInfo(false);
+          else close();
+        }
+      }}
       role="dialog"
       aria-modal="true"
       aria-label={`${albumName} 大图预览`}
@@ -657,10 +753,15 @@ export default function PhotoViewer({
         className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 to-transparent"
       />
       {/* 顶栏：返回、标题、位置与操作 */}
-      <header className="photo-viewer-hud relative flex h-14 shrink-0 items-center gap-3 px-3 sm:px-5">
+      <header
+        className={
+          "relative z-10 flex h-16 shrink-0 items-center gap-2 bg-gradient-to-b from-black/60 to-transparent px-2 transition-opacity focus-within:opacity-100 sm:px-5 " +
+          (chromeVisible ? "" : "opacity-0")
+        }
+      >
         <button
           type="button"
-          onClick={onClose}
+          onClick={close}
           className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           title="关闭 (Esc)"
           aria-label="关闭大图预览"
@@ -686,13 +787,40 @@ export default function PhotoViewer({
           )}
           {/* 位置读数只在能翻的时候出现：一张照片时说「第 1 张 ·
               共 1 张」是废话，界面上只留相册名。 */}
+          {(current.dateValue || current.capturedAt) && (
+            <p className="text-caption text-white/70">
+              {current.dateValue || current.capturedAt?.slice(0, 10)}
+            </p>
+          )}
           {items.length > 1 && (
             <div className="text-meta tabular-nums text-white/55">
               第 {index + 1} 张 · 共 {totalCount ?? items.length} 张
             </div>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
+          {!isVideo && (
+            <button
+              type="button"
+              aria-label="旋转照片"
+              className="grid size-9 place-items-center rounded-full hover:bg-white/10"
+              onClick={() => setRotation((r) => (r + 90) % 360)}
+            >
+              <RotateIcon size={16} />
+            </button>
+          )}
+          {items.length > 1 && (
+            <button
+              type="button"
+              aria-label="胶片条"
+              aria-pressed={stripVisible}
+              className="grid size-9 place-items-center rounded-full hover:bg-white/10"
+              onClick={() => setStripVisible((v) => !v)}
+            >
+              <GridIcon size={16} />
+            </button>
+          )}
+
           {/* 相册级收藏：这颗星说的是「这一本值得留着」。 */}
           {onToggleFavorite && (
             <button
@@ -766,7 +894,7 @@ export default function PhotoViewer({
           )}
           <button
             type="button"
-            onClick={() => setShowInfo((value) => !value)}
+            onClick={() => setShowInfo(!showInfo)}
             className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
             title="图片信息 (I)"
             aria-label="图片信息"
@@ -789,11 +917,16 @@ export default function PhotoViewer({
       <div className="relative flex min-h-0 flex-1">
         <div
           ref={stageRef}
-          className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden"
+          className="relative flex min-h-0 min-w-0 flex-1 touch-none items-center justify-center overflow-hidden"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerCancel={(e) => {
+            touchPoints.current.delete(e.pointerId);
+            pinch.current = null;
+            dragRef.current = null;
+            swipeRef.current = null;
+          }}
           onDoubleClick={onDoubleClick}
         >
           {isVideo ? (
@@ -806,42 +939,92 @@ export default function PhotoViewer({
                 seekWithArrows={false}
               />
             </div>
-          ) : failed ? (
-            <div className="px-6 text-center text-body text-white/60">
-              这张图片无法显示
-            </div>
-          ) : current.undecodable ? (
-            // 服务端已判定这张图解码不出来：不去请求渲染图，
-            // 直接说清楚原因，别让人对着空白页猜。
-            <div className="px-6 text-center text-body text-white/60">
-              这张图片无法解码
+          ) : failed || current.undecodable ? (
+            <div className="px-6 text-center text-body text-overlay-fg">
+              <p>这张照片读不出来</p>
+              <p className="my-2 text-caption">{current.name}</p>
+              {albumHref && (
+                <Link className="underline" to={albumHref}>
+                  在相册中打开
+                </Link>
+              )}
             </div>
           ) : (
-            stageMeasured && (
-              <img
-                ref={imageRef}
-                src={previewUrl(current.id, previewWidth, current.version)}
-                alt={current.name}
-                decoding="async"
-                onLoad={measureFitted}
-                onError={() => setFailed(true)}
-                draggable={false}
-                /* 照片落在暗场里要有一道柔和的投影把它托住，
-                   否则它和背景之间没有任何边界，读起来像贴上去的。 */
-                className="photo-viewer-image max-h-full max-w-full select-none object-contain"
-                style={{
-                  transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-                  cursor: zoom > 1 ? "grab" : "default",
-                }}
-              />
-            )
+            <div
+              ref={transitionRef}
+              className="relative flex h-full w-full items-center justify-center md:p-6"
+            >
+              {thumbnail && loadedId !== current.id && (
+                <img
+                  aria-hidden
+                  alt=""
+                  src={thumbnail}
+                  className="pointer-events-none absolute inset-0 h-full w-full object-contain md:p-6"
+                />
+              )}
+              {stageMeasured && (
+                <img
+                  key={current.id}
+                  ref={imageRef}
+                  src={previewUrl(current.id, previewWidth, current.version)}
+                  alt={current.name}
+                  decoding="async"
+                  onLoad={() => {
+                    setLoadedId(current.id);
+                    measureFitted();
+                  }}
+                  onError={() => setFailed(true)}
+                  draggable={false}
+                  className="max-h-full max-w-full select-none object-contain"
+                  style={{
+                    transform:
+                      "translate(" +
+                      pan.x +
+                      "px, " +
+                      pan.y +
+                      "px) scale(" +
+                      zoom +
+                      ") rotate(" +
+                      rotation +
+                      "deg)",
+                    cursor: zoom > 1 ? "grab" : "default",
+                  }}
+                />
+              )}
+            </div>
           )}
+          {zoom === 1 &&
+            !isVideo &&
+            ([-1, 1] as const).map((step) => (
+              <button
+                key={step}
+                type="button"
+                tabIndex={-1}
+                aria-label={step < 0 ? "翻到上一张" : "翻到下一张"}
+                disabled={
+                  step < 0
+                    ? index <= 0
+                    : index + 1 >= items.length && !hasNextPage
+                }
+                className={
+                  "absolute inset-y-0 hidden w-[15%] items-center justify-center text-white opacity-0 hover:opacity-100 disabled:pointer-events-none md:flex " +
+                  (step < 0 ? "left-0" : "right-0")
+                }
+                onClick={() => go(step)}
+              >
+                <span className="grid size-12 place-items-center rounded-full bg-black/55">
+                  {step < 0 ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+                </span>
+              </button>
+            ))}
         </div>
 
         {showInfo && !isVideo && (
-          <div className="photo-viewer-drawer">
+          <div className="relative h-full w-[min(360px,75%)] shrink-0 overflow-auto bg-overlay-panel [&>aside]:static [&>aside]:h-full [&>aside]:w-full">
             <ImageInfoPanel
               absPath={current.id}
+              albumName={currentAlbumName}
+              albumHref={albumHref}
               onClose={() => setShowInfo(false)}
             />
           </div>
@@ -851,7 +1034,12 @@ export default function PhotoViewer({
       {/* 底栏：上一张 / 下一张与缩放。
           控件收进一枚半透明药丸：一排散落的图标悬在黑底上像几枚
           掉出来的按键，药丸把它们收成一件工具。 */}
-      <footer className="photo-viewer-hud relative flex h-14 shrink-0 items-center justify-center gap-3 px-3 sm:px-5">
+      <footer
+        className={
+          "relative flex h-12 shrink-0 items-center justify-center gap-3 px-3 transition-opacity focus-within:opacity-100 sm:px-5 " +
+          (chromeVisible ? "" : "opacity-0")
+        }
+      >
         {/* 取下一页的反馈：翻到末尾时用户会等，这一栏告诉他「正在取」，
             失败时给一个重试的手柄，而不是让下一张按钮灰着不动。 */}
         <div
@@ -929,6 +1117,9 @@ export default function PhotoViewer({
           )}
         </div>
       </footer>
+      {stripVisible && items.length > 1 && (
+        <Filmstrip items={items} index={index} onChange={onIndexChange} />
+      )}
     </dialog>
   );
 }

@@ -7,7 +7,7 @@ import type {
 import type { AIJob, AIJobModule, AnalysisType } from "../../api/aiJobs";
 import { smartAlbumEvidenceDimensions } from "../../utils/smartAlbum";
 import ErrorBanner from "../common/ErrorBanner";
-import Popover, { PopoverItem, PopoverLabel } from "../common/Popover";
+import Popover, { PopoverItem, PopoverLabel } from "../../ui/Popover";
 import {
   ChevronRightIcon,
   CloseIcon,

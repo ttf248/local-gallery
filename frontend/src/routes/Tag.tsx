@@ -17,7 +17,7 @@ import {
   FolderIcon,
   FolderSearchIcon,
 } from "../ui/icons";
-import RenditionImage from "../components/common/RenditionImage";
+import RenditionImage from "../features/common/RenditionImage";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import { useLibraryList } from "../hooks/useLibraryList";
 import ListPagination from "../components/common/ListPagination";

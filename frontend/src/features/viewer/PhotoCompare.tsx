@@ -155,7 +155,9 @@ export default function PhotoCompare({
           <div className="truncate font-display text-label font-semibold text-white/95">
             并排对比
           </div>
-          <div className="text-meta text-white/55">两侧同一档放大，细节可比</div>
+          <div className="text-meta text-white/55">
+            两侧同一档放大，细节可比
+          </div>
         </div>
         <button
           type="button"

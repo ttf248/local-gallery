@@ -1,4 +1,4 @@
-import Popover, { PopoverItem } from "../common/Popover";
+import Popover from "../../ui/Popover";
 import Segmented from "../../ui/Segmented";
 import { WALL_DENSITY_LABEL, type WallDensity } from "../../store/photoStore";
 
@@ -131,20 +131,15 @@ export default function DensityControl({
           </button>
         }
       >
-        {DENSITY_ORDER.map((key) => (
-          <PopoverItem
-            key={key}
-            active={key === value}
-            onClick={() => onChange(key)}
-          >
-            {key === "auto" ? (
-              <AutoDensityGlyph />
-            ) : (
-              <DensityGlyph level={key} />
-            )}
-            {WALL_DENSITY_LABEL[key]}
-          </PopoverItem>
-        ))}
+        <Segmented
+          label="照片墙密度"
+          options={DENSITY_ORDER.map((key) => ({
+            value: key,
+            label: WALL_DENSITY_LABEL[key],
+          }))}
+          value={value}
+          onChange={onChange}
+        />
       </Popover>
     );
   }

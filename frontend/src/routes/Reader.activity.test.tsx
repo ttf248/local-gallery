@@ -86,7 +86,7 @@ vi.mock("../utils/fullscreen", () => ({ toggleFullscreen: vi.fn() }));
 vi.mock("../components/gallery/ImageGallery", () => ({
   default: () => <div data-testid="image-gallery" />,
 }));
-vi.mock("../components/gallery/VideoPlayer", () => ({
+vi.mock("../features/viewer/VideoPlayer", () => ({
   default: (props: MockVideoProps) => {
     mocks.videoProps = props;
     return <div data-testid="video-player" />;
@@ -104,7 +104,7 @@ vi.mock("../components/gallery/GalleryAlbumNav", () => ({
 vi.mock("../components/gallery/GalleryToolbar", () => ({
   default: () => null,
 }));
-vi.mock("../components/common/ImageInfoPanel", () => ({
+vi.mock("../features/viewer/ImageInfoPanel", () => ({
   default: () => null,
 }));
 vi.mock("../features/common/HelpOverlay", () => ({

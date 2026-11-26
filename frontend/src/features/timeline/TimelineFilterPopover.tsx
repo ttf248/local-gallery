@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Badge } from "../../ui/Badge";
 import type {
   TimelineDatePrecision,
   TimelineDateSource,
@@ -9,7 +11,7 @@ import {
   type TimelineFilter,
 } from "../../utils/timeline";
 import { FilterIcon } from "../../ui/icons";
-import Popover, { PopoverLabel, PopoverSeparator } from "../common/Popover";
+import Popover, { PopoverLabel, PopoverSeparator } from "../../ui/Popover";
 import Segmented from "../../ui/Segmented";
 
 const MEDIA_OPTIONS = [
@@ -50,7 +52,10 @@ export default function TimelineFilterPopover({
   onChange,
 }: Props) {
   const year = years.find((entry) => String(entry.year) === filter.year);
-  const active = Boolean(filter.year || filter.month || filter.media);
+  const [open, setOpen] = useState(false);
+  const active = [filter.year, filter.month, filter.media].filter(
+    Boolean,
+  ).length;
   const sources = (
     Object.entries(dateSources) as [TimelineDateSource, number][]
   )
@@ -77,18 +82,22 @@ export default function TimelineFilterPopover({
 
   return (
     <Popover
+      open={open}
+      onOpenChange={setOpen}
       aria-label="时间线筛选"
-      className="timeline-filter-popover"
+      className="w-[min(360px,calc(100vw-16px))] space-y-2 p-3"
       trigger={
         <button
           type="button"
-          className="ui-btn ui-btn--ghost timeline-filter-trigger"
+          className="inline-flex items-center gap-2 rounded-lg px-2 py-2 text-caption hover:bg-bg-subtle"
           aria-label="筛选时间线"
         >
           <FilterIcon size={16} />
           筛选
-          {active && (
-            <span className="timeline-filter-dot" aria-label="有筛选条件" />
+          {active > 0 && (
+            <Badge tone="signal" aria-label={active + " 个筛选条件"}>
+              {active}
+            </Badge>
           )}
         </button>
       }
@@ -108,10 +117,16 @@ export default function TimelineFilterPopover({
             selected={filter.month}
             choices={[
               { value: "", label: "全部月份" },
-              ...(year.months ?? []).map((entry) => ({
-                value: String(entry.month),
-                label: `${entry.month} 月（${entry.count}）`,
-              })),
+              ...Array.from({ length: 12 }, (_, i) => {
+                const month = i + 1,
+                  count =
+                    year.months?.find((m) => m.month === month)?.count ?? 0;
+                return {
+                  value: String(month),
+                  label: month + " 月（" + count + "）",
+                  disabled: count === 0,
+                };
+              }),
             ]}
             onSelect={(month) => onChange({ ...filter, month })}
           />
@@ -141,7 +156,7 @@ export default function TimelineFilterPopover({
           </div>
         </>
       )}
-      {active && (
+      {active > 0 && (
         <button
           type="button"
           role="menuitem"
@@ -152,6 +167,15 @@ export default function TimelineFilterPopover({
           清除筛选
         </button>
       )}
+      <button
+        type="button"
+        role="menuitem"
+        tabIndex={-1}
+        className="rounded-lg px-3 py-2 text-caption"
+        onClick={() => setOpen(false)}
+      >
+        完成
+      </button>
     </Popover>
   );
 }
@@ -163,20 +187,21 @@ function FilterChoices({
   onSelect,
 }: {
   name: string;
-  choices: { value: string; label: string }[];
+  choices: { value: string; label: string; disabled?: boolean }[];
   selected: string;
   onSelect: (value: string) => void;
 }) {
   return (
-    <div role="group" aria-label={name} className="timeline-filter-choices">
-      {choices.map(({ value, label }) => (
+    <div role="group" aria-label={name} className="grid grid-cols-4 gap-1">
+      {choices.map(({ value, label, disabled }) => (
         <button
           key={value}
+          disabled={disabled}
           role="menuitemradio"
           type="button"
           tabIndex={-1}
           aria-checked={value === selected}
-          className="ui-chip"
+          className="rounded-md px-1 py-1.5 text-caption tabular-nums hover:bg-bg-subtle aria-checked:bg-signal-soft disabled:opacity-40"
           onClick={() => onSelect(value)}
         >
           {label}

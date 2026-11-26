@@ -20,7 +20,7 @@ import { scanApi } from "../api/scan";
 import { useScanSSE } from "../hooks/useScanSSE";
 import ThemeSwitcher from "../components/common/ThemeSwitcher";
 import Segmented from "../ui/Segmented";
-import DensityControl from "../components/wall/DensityControl";
+import DensityControl from "../features/wall/DensityControl";
 import { useUIStore } from "../store/uiStore";
 import { useLibraryManifest } from "../hooks/useLibrary";
 import StateBackupPanel from "../components/settings/StateBackupPanel";

@@ -11,13 +11,13 @@ import { useMediaFeed } from "../hooks/useMediaFeed";
 import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, type WallDensity } from "../store/photoStore";
-import PhotoMasonry from "../components/wall/PhotoMasonry";
+import PhotoMasonry from "../features/wall/PhotoMasonry";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
 import { ShuffleIcon } from "../ui/icons";
 import { albumRoute } from "../utils/path";
 // 大图预览按需加载：这一页的首屏是照片，预览用不上。
-const PhotoViewer = lazy(() => import("../components/wall/PhotoViewer"));
+const PhotoViewer = lazy(() => import("../features/viewer/PhotoViewer"));
 
 /**
  * 随手看看：全库随机抽出来的照片墙。

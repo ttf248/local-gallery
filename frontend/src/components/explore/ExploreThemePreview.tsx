@@ -9,7 +9,7 @@ import {
 import { smartAlbumEvidenceDimensions, smartGroupHref } from "../../utils/smartAlbum";
 import ErrorBanner from "../common/ErrorBanner";
 import EmptyState from "../common/EmptyState";
-import RenditionImage from "../common/RenditionImage";
+import RenditionImage from "../../features/common/RenditionImage";
 import { SparkleIcon } from "../../ui/icons";
 import ExploreCard from "./ExploreCard";
 import { smartAlbumsRoute } from "../../utils/path";

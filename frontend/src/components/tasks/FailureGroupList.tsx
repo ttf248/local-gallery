@@ -1,5 +1,5 @@
 import type { AIJobError } from "../../api/aiJobs";
-import CopyButton from "../common/CopyButton";
+import CopyButton from "../../features/common/CopyButton";
 import { ChevronDownIcon } from "../../ui/icons";
 import { groupFailures } from "../../utils/taskFormat";
 

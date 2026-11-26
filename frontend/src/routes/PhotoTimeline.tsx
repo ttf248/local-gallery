@@ -5,20 +5,28 @@ import { ApiError } from "../api/client";
 import { usePicks } from "../hooks/usePicks";
 import { useUIStore } from "../store/uiStore";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
-import PhotoWall from "../components/wall/PhotoWall";
-import DensityControl from "../components/wall/DensityControl";
+import PhotoWall from "../features/wall/PhotoWall";
+import DensityControl from "../features/wall/DensityControl";
 import EmptyState from "../components/common/EmptyState";
 import ErrorBanner from "../components/common/ErrorBanner";
-import ContextMenu from "../components/album/ContextMenu";
+import { ContextMenu } from "../ui/ContextMenu";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { useContextMenu } from "../hooks/useContextMenu";
 import TimelineFilterPopover, {
   TimelineMediaControl,
-} from "../components/timeline/TimelineFilterPopover";
-import TimelineScrubber from "../components/timeline/TimelineScrubber";
-import {PageHeader} from "../shell/PageHeader";
-import TimelineGroupHeader from "../components/timeline/TimelineGroupHeader";
-import OnThisDayStrip from "../components/timeline/OnThisDayStrip";
+} from "../features/timeline/TimelineFilterPopover";
+import { Page } from "../shell/Page";
+import { Sheet } from "../ui/Sheet";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useAlbumSelection } from "../hooks/useAlbumSelection";
+import { usePhotoCompare } from "../hooks/usePhotoCompare";
+import { usePhotoSelectionStore } from "../store/photoSelectionStore";
+import PhotoSelectionBar from "../components/wall/PhotoSelectionBar";
+import { buildTimeRailMarks } from "../features/timeline/timeRailMarks";
+import TimeRail from "../features/timeline/TimeRail";
+import { PageHeader } from "../shell/PageHeader";
+import MonthHeader from "../features/timeline/MonthHeader";
+import MemoriesStrip from "../features/timeline/MemoriesStrip";
 import {
   buildTimelineGroups,
   timelineGroupKey,
@@ -31,7 +39,8 @@ import { useLibraryManifest } from "../hooks/useLibrary";
 import { useHistoryCards } from "../hooks/useHistory";
 import type { LibraryFeedItem } from "../api/library";
 
-const PhotoViewer = lazy(() => import("../components/wall/PhotoViewer"));
+const PhotoCompare = lazy(() => import("../features/viewer/PhotoCompare"));
+const PhotoViewer = lazy(() => import("../features/viewer/PhotoViewer"));
 
 /**
  * 首屏读不出来时说清是哪一类失败。
@@ -110,6 +119,22 @@ export default function PhotoTimeline() {
   );
   const feed = useMediaFeed(query);
   const items = feed.items;
+  const selection = useAlbumSelection({
+    albumId: "",
+    albumName: "",
+    items,
+    scope: "timeline:" + searchParams.toString(),
+  });
+  const compare = usePhotoCompare<LibraryFeedItem>((item) => item.albumName);
+  const [jumpOpen, setJumpOpen] = useState(false);
+  const shortScreen = useMediaQuery("(max-height: 479px)");
+  const marks = useMemo(
+    () =>
+      buildTimeRailMarks(feed.years, feed.unknown, {
+        railHeight: shortScreen ? 479 : Infinity,
+      }),
+    [feed.years, feed.unknown, shortScreen],
+  );
 
   // 筛选条件进地址栏：跳到某一年是一个能分享、能后退的地址。
   const applyFilter = useCallback(
@@ -145,15 +170,30 @@ export default function PhotoTimeline() {
     (item: LibraryFeedItem) => timelineGroupKey(item),
     [],
   );
+  const yearStarts = useMemo(
+    () =>
+      new Set(
+        groups
+          .filter(
+            (group, i) =>
+              group.year && i > 0 && group.year !== groups[i - 1].year,
+          )
+          .map((group) => group.key),
+      ),
+    [groups],
+  );
   const groupHeader = useCallback(
     (key: string) => {
       const group = groups.find((entry) => entry.key === key);
       if (!group) return null;
       return (
-        <TimelineGroupHeader group={{ ...group, count: groupCount(key) }} />
+        <MonthHeader
+          showYear={!filter.year && yearStarts.has(key)}
+          group={{ ...group, count: groupCount(key) || group.count }}
+        />
       );
     },
-    [groups, groupCount],
+    [groups, groupCount, filter.year, yearStarts],
   );
 
   const loadMore = useCallback(() => {
@@ -237,15 +277,18 @@ export default function PhotoTimeline() {
     ) : null;
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="page-shell"><PageHeader
-  title="全部照片"
-  meta={
+    <Page
+      variant="gallery"
+      className="page-shell flex h-full min-h-0 flex-col overflow-x-clip"
+    >
+      <PageHeader
+        title="全部照片"
+        meta={
           <span data-testid="timeline-meta">
             {feed.total.toLocaleString("zh-CN")} 张{range ? ` · ${range}` : ""}
           </span>
         }
-  actions={
+        actions={
           hasContent && (
             <>
               <div className="hidden md:block">
@@ -266,20 +309,19 @@ export default function PhotoTimeline() {
                   presentation="popover"
                 />
               </div>
-              <OnThisDayStrip enabled={hasContent} />
-              {resume && (
-                <Link
-                  to={resume.to}
-                  className="ui-btn ui-btn--ghost timeline-resume"
-                  title={resume.title}
+              {marks.length > 0 && (
+                <button
+                  type="button"
+                  className="rounded-lg px-2 py-2 text-caption md:hidden"
+                  onClick={() => setJumpOpen(true)}
                 >
-                  接着看
-                </Link>
+                  跳转
+                </button>
               )}
             </>
           )
         }
-  toolbar={
+        toolbar={
           Boolean(filter.year || filter.media) && (
             <div className="flex gap-1.5">
               {filter.year && (
@@ -309,13 +351,41 @@ export default function PhotoTimeline() {
             </div>
           )
         }
-/></div>
+      />
 
-      <div className="timeline-wall page-shell flex min-h-0 flex-1 flex-col pb-2">
+      {hasContent && !filter.year && !filter.month && !filter.media && (
+        <MemoriesStrip resume={resume} />
+      )}
+      <Sheet
+        label="跳转年份"
+        side="bottom"
+        open={jumpOpen}
+        onClose={() => setJumpOpen(false)}
+      >
+        <h2 className="mb-4 text-title-3">跳转年份</h2>
+        <div className="grid grid-cols-3 gap-2">
+          {marks
+            .filter((mark) => mark.level !== "month")
+            .map((mark) => (
+              <button
+                type="button"
+                className="rounded-lg bg-bg-subtle p-2"
+                key={mark.key}
+                onClick={() => {
+                  applyFilter({ ...filter, year: mark.key, month: "" });
+                  setJumpOpen(false);
+                }}
+              >
+                {mark.label}
+              </button>
+            ))}
+        </div>
+      </Sheet>
+      <div className="timeline-wall flex min-h-0 flex-1 flex-col pb-2">
         {/* 后续分页失败：已加载的照片仍然能翻，失败的是没取到的那一段。
             提示条说清影响范围，并给一个重试的手柄。 */}
         {feed.isFetchNextPageError ? (
-          <div className="pb-2">
+          <div className="relative z-popover pb-2">
             <ErrorBanner
               kind="warning"
               onRetry={loadMore}
@@ -360,8 +430,27 @@ export default function PhotoTimeline() {
               }
             />
           ) : feed.isLoading ? (
-            <div className="flex h-full items-center justify-center text-body text-fg-muted">
-              正在按时间排列照片…
+            <div
+              aria-label="正在按时间排列照片"
+              role="status"
+              className="overflow-hidden"
+            >
+              {[0, 1, 2].map((section) => (
+                <div key={section} className="pt-8">
+                  <div className="mb-3 h-4 w-28 animate-pulse rounded bg-bg-subtle" />
+                  {[0, 1].map((row) => (
+                    <div key={row} className="mb-1 flex h-32 gap-1">
+                      {[3, 2, 4, 3].map((width, i) => (
+                        <div
+                          key={i}
+                          style={{ flex: width + ((section + row + i) % 3) }}
+                          className="animate-pulse rounded-tile bg-bg-subtle"
+                        />
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             <PhotoWall
@@ -382,6 +471,9 @@ export default function PhotoTimeline() {
               onVisibleGroupChange={setVisibleGroup}
               /* 整库级别的墙不铺占位槽：跳到远处看到的是一屏灰格子，而且那些格子要把整库都取回来才填得上。 */
               showPlaceholders={false}
+              selecting={selection.active}
+              isSelected={selection.isSelected}
+              onToggleSelect={selection.toggle}
               isPicked={picks.isPicked}
               onTogglePick={(item) => togglePick(item.id)}
               scrollToIndex={wall.focusIndex}
@@ -389,18 +481,32 @@ export default function PhotoTimeline() {
             />
           ))}
         {!emptyState && (
-          <TimelineScrubber
-            years={feed.years}
-            unknownCount={feed.unknown}
-            activeYear={filter.year || visibleGroup.split("-")[0]}
-            onSelectYear={(year) => {
-              if (year !== filter.year || filter.month)
-                applyFilter({ ...filter, year, month: "" });
+          <TimeRail
+            marks={marks}
+            activeKey={visibleGroup || filter.year}
+            onCommit={(mark) => {
+              const [year, month] = mark.key.split("-");
+              applyFilter({
+                ...filter,
+                year,
+                month: month ? String(Number(month)) : "",
+              });
             }}
           />
         )}
       </div>
 
+      {selection.active && (
+        <PhotoSelectionBar
+          selected={selection.entries}
+          pickedCount={selection.pickedCount}
+          onAddPicks={selection.addToPicks}
+          onRemovePicks={selection.removeFromPicks}
+          onCompare={compare.compareSelected}
+          onExit={() => usePhotoSelectionStore.getState().clear()}
+          busy={selection.busy}
+        />
+      )}
       {menu.menu && (
         <ContextMenu
           x={menu.menu.x}
@@ -409,35 +515,59 @@ export default function PhotoTimeline() {
             {
               id: "open",
               label: "查看大图",
-              icon: <GridIcon size={12} />,
+              icon: <GridIcon size={14} />,
+              onSelect: () => {
+                const index = items.findIndex(
+                  (item) => item.id === menu.menu?.item.id,
+                );
+                if (index >= 0) wall.open(index);
+              },
             },
             {
               id: "album",
               label: "在相册中打开",
-              icon: <FolderIcon size={12} />,
+              icon: <FolderIcon size={14} />,
+              onSelect: () => {
+                if (menu.menu)
+                  navigate(albumRoute("photo", menu.menu.item.albumId));
+              },
+            },
+            {
+              id: "pick",
+              label: picks.isPicked(menu.menu.item.id)
+                ? "移出精选"
+                : "加入精选",
+              onSelect: () => {
+                if (menu.menu) togglePick(menu.menu.item.id);
+              },
             },
           ]}
-          onSelect={(id) => {
-            const target = menu.menu!.item;
-            menu.close();
-            if (id === "open") {
-              const index = items.findIndex((it) => it.id === target.id);
-              if (index >= 0) wall.open(index);
-              return;
-            }
-            if (id === "album") {
-              navigate(albumRoute("photo", target.albumId));
-            }
-          }}
           onClose={menu.close}
         />
       )}
 
       {viewer && (
         <Suspense fallback={null}>
-          <PhotoViewer {...viewer} />
+          <PhotoViewer
+            {...viewer}
+            compareOpen={Boolean(compare.pair)}
+            comparePinned={compare.pin?.id === viewer.items[viewer.index]?.id}
+            onToggleCompare={() => compare.togglePin(items[viewer.index])}
+          />
         </Suspense>
       )}
-    </div>
+      {compare.pair && (
+        <Suspense fallback={null}>
+          <PhotoCompare
+            left={compare.pair[0]}
+            right={compare.pair[1]}
+            leftPicked={picks.isPicked(compare.pair[0].id)}
+            rightPicked={picks.isPicked(compare.pair[1].id)}
+            onClose={compare.close}
+            onSwap={compare.swap}
+          />
+        </Suspense>
+      )}
+    </Page>
   );
 }

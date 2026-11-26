@@ -34,7 +34,7 @@ vi.mock("../hooks/useLibrary", () => ({
   useLibraryNodes: () => ({ data: { items: [] } }),
 }));
 
-vi.mock("../components/wall/PhotoWall", () => ({
+vi.mock("../features/wall/PhotoWall", () => ({
   default: () => <div data-testid="photo-wall" />,
 }));
 

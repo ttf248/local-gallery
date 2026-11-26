@@ -1,5 +1,5 @@
 import type { MouseEvent } from "react";
-import ThumbImage from "../common/ThumbImage";
+import ThumbImage from "../../features/common/ThumbImage";
 import { UncheckIcon } from "../../ui/icons";
 
 interface Props<T> {

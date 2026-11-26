@@ -13,7 +13,7 @@ import {
   PlayFilledIcon,
 } from '../../ui/icons'
 import CardCover from '../album/CardCover'
-import ThumbImage from './ThumbImage'
+import ThumbImage from '../../features/common/ThumbImage'
 import type { CardData } from '../album/AlbumCard'
 
 interface Props {

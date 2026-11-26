@@ -78,9 +78,9 @@ describe("layoutJustified", () => {
   });
 
   it("容器宽度或目标行高无效时返回空结果", () => {
-    expect(layoutJustified(tiles(3), { ...options, containerWidth: 0 })).toEqual(
-      [],
-    );
+    expect(
+      layoutJustified(tiles(3), { ...options, containerWidth: 0 }),
+    ).toEqual([]);
     expect(layoutJustified([], options)).toEqual([]);
   });
 
@@ -170,7 +170,8 @@ describe("layoutGroup", () => {
   });
 });
 
-describe("tileRatio", () => {  it("优先使用服务端给出的像素尺寸", () => {
+describe("tileRatio", () => {
+  it("优先使用服务端给出的像素尺寸", () => {
     expect(tileRatio({ kind: "image", width: 1600, height: 900 })).toBeCloseTo(
       16 / 9,
       5,
@@ -186,7 +187,6 @@ describe("tileRatio", () => {  it("优先使用服务端给出的像素尺寸", 
     expect(tileRatio(undefined)).toBe(DEFAULT_TILE_RATIO);
   });
 });
-
 
 describe("autoTargetHeight", () => {
   const auto = {

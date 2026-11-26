@@ -13,7 +13,7 @@ import { create } from "zustand";
 // 一次最多能选多少张。照片墙可能一屏就有几十张，全选一本大相册
 // 会到几千张 —— 但真要一次处理几千张精选的人几乎没有，
 // 上限挡住的是误操作而不是正当需求。
-const MAX_SELECTION = 2000;
+export const MAX_SELECTION = 2000;
 
 export interface PhotoSelectionEntry {
   id: string;

@@ -24,7 +24,12 @@ const right = {
 describe("并排对比", () => {
   it("两侧同时摆出来，各自带文件名与尺寸", () => {
     render(
-      <PhotoCompare left={left} right={right} onClose={() => {}} onSwap={() => {}} />,
+      <PhotoCompare
+        left={left}
+        right={right}
+        onClose={() => {}}
+        onSwap={() => {}}
+      />,
     );
 
     expect(screen.getByTestId("photo-compare")).toBeInTheDocument();
@@ -36,7 +41,12 @@ describe("并排对比", () => {
 
   it("两侧共用一个缩放倍数：要比的是同一档放大下的细节", () => {
     render(
-      <PhotoCompare left={left} right={right} onClose={() => {}} onSwap={() => {}} />,
+      <PhotoCompare
+        left={left}
+        right={right}
+        onClose={() => {}}
+        onSwap={() => {}}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "放大" }));
@@ -47,7 +57,12 @@ describe("并排对比", () => {
   it("交换左右", () => {
     const onSwap = vi.fn();
     render(
-      <PhotoCompare left={left} right={right} onClose={() => {}} onSwap={onSwap} />,
+      <PhotoCompare
+        left={left}
+        right={right}
+        onClose={() => {}}
+        onSwap={onSwap}
+      />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: /交换/ }));
@@ -57,7 +72,12 @@ describe("并排对比", () => {
   it("Esc 关闭", () => {
     const onClose = vi.fn();
     render(
-      <PhotoCompare left={left} right={right} onClose={onClose} onSwap={() => {}} />,
+      <PhotoCompare
+        left={left}
+        right={right}
+        onClose={onClose}
+        onSwap={() => {}}
+      />,
     );
 
     fireEvent.keyDown(window, { key: "Escape" });

@@ -1,6 +1,6 @@
 import { useUIStore, type ThemePref } from "../../store/uiStore";
 import { SunIcon, MoonIcon, MonitorIcon, CheckIcon } from "../../ui/icons";
-import Popover from "./Popover";
+import Popover from "../../ui/Popover";
 
 // 主题切换：
 //  - compact：主题菜单，可连续选择后用 Esc 或外部焦点关闭

@@ -70,13 +70,8 @@ function hasHandler(combo: string): boolean {
   }
   for (const form of keyForms(combo)) {
     const quoted = form.startsWith('"') ? form : `"${form}"`;
-    const objectKey = new RegExp(
-      `^\\s*"?${form.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}"?\\s*:`,
-      "m",
-    );
-    const found = SOURCES.some(
-      ({ text }) => text.includes(quoted) || objectKey.test(text),
-    );
+    const found = SOURCES.some(({text}) => text.includes(quoted) ||
+      text.split("\n").some(line => line.trimStart().startsWith(form+":")));
     if (found) return true;
   }
   return false;

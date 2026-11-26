@@ -10,7 +10,7 @@ import {
   layoutMasonry,
   masonryColumnCount,
   type MasonryInput,
-} from "../wall/masonryLayout";
+} from "../../features/wall/masonryLayout";
 import SmartAlbumCard from "./SmartAlbumCard";
 
 interface Props {

@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { LibraryMediaItem } from "../api/library";
 import { usePicks } from "./usePicks";
 import { useUIStore } from "../store/uiStore";
 import {
   usePhotoSelectionStore,
+  MAX_SELECTION,
   type PhotoSelectionEntry,
 } from "../store/photoSelectionStore";
 
+type WallItem = LibraryMediaItem & { albumId?: string; albumName?: string };
 interface Options {
+  items?: readonly WallItem[];
+  scope?: string;
   /** 相册 id：选择的作用域是这一本。 */
   albumId: string;
   /** 相册名：写进选择条目，并排对比时用得上。 */
@@ -26,7 +30,7 @@ export interface AlbumSelection {
   /** 这张照片是不是选中了。 */
   isSelected: (id: string) => boolean;
   /** 勾选 / 取消勾选一张。 */
-  toggle: (item: LibraryMediaItem) => void;
+  toggle: (item: WallItem, range?: boolean) => void;
   /** 进出多选模式。 */
   toggleMode: () => void;
   /** 把选中的照片加入精选。 */
@@ -45,17 +49,20 @@ export interface AlbumSelection {
 export function useAlbumSelection({
   albumId,
   albumName,
+  items,
+  scope = "album:" + albumId,
 }: Options): AlbumSelection {
   const pushToast = useUIStore((s) => s.pushToast);
   const { isPicked, add: addPicks, remove: removePicks } = usePicks();
 
   // 多选：作用域是这一本相册，换一本相册选择就清空。
-  const scope = `album:${albumId}`;
+  const anchor = useRef<string | null>(null);
   const entries = usePhotoSelectionStore((s) => s.entries);
   const active = usePhotoSelectionStore((s) => s.active);
   const busy = usePhotoSelectionStore((s) => s.busy);
   useEffect(() => {
     usePhotoSelectionStore.getState().ensureScope(scope);
+    anchor.current = null;
   }, [scope]);
 
   const selectedEntries = useMemo(() => Object.values(entries), [entries]);
@@ -65,11 +72,11 @@ export function useAlbumSelection({
   );
 
   const toEntry = useCallback(
-    (item: LibraryMediaItem): PhotoSelectionEntry => ({
+    (item: WallItem): PhotoSelectionEntry => ({
       id: item.id,
       name: item.name,
-      albumId,
-      albumName,
+      albumId: item.albumId ?? albumId,
+      albumName: item.albumName ?? albumName,
       kind: item.kind,
       version: item.version,
       width: item.width,
@@ -78,18 +85,62 @@ export function useAlbumSelection({
     [albumId, albumName],
   );
 
-  const toggle = useCallback(
-    (item: LibraryMediaItem) => {
+  const selectRange = useCallback(
+    (range: readonly WallItem[]) => {
       const state = usePhotoSelectionStore.getState();
       if (state.busy) return;
-      // 返回 false 有两种原因：已经在上限上，或者正忙。
-      // 只有前者值得提示，后者不该打扰用户。
-      if (!state.toggle(toEntry(item)) && !state.entries[item.id]) {
-        pushToast({ kind: "info", message: "最多选择 2,000 张，请减少范围" });
-      }
+      const room = MAX_SELECTION - Object.keys(state.entries).length;
+      const incoming = range.filter((item) => !state.entries[item.id]);
+      state.selectMany(incoming.slice(0, room).map(toEntry));
+      if (incoming.length > room)
+        pushToast({ kind: "info", message: "已达到 2,000 张选择上限" });
     },
     [pushToast, toEntry],
   );
+  const toggle = useCallback(
+    (item: WallItem, range = false) => {
+      const state = usePhotoSelectionStore.getState();
+      if (state.busy) return;
+      if (!state.active) state.start();
+      const first =
+        items?.findIndex((candidate) => candidate.id === anchor.current) ?? -1;
+      const last =
+        items?.findIndex((candidate) => candidate.id === item.id) ?? -1;
+      anchor.current = item.id;
+      if (range && items && first >= 0 && last >= 0)
+        selectRange(
+          items.slice(Math.min(first, last), Math.max(first, last) + 1),
+        );
+      else if (!state.toggle(toEntry(item)))
+        pushToast({ kind: "info", message: "最多选择 2,000 张，请减少范围" });
+    },
+    [items, pushToast, selectRange, toEntry],
+  );
+
+  useEffect(() => {
+    if (!active || !items) return;
+    function selectLoaded(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.altKey ||
+        event.key.toLowerCase() !== "a" ||
+        document.querySelector("dialog[open]")
+      )
+        return;
+      if (
+        event.target instanceof HTMLElement &&
+        (event.target.isContentEditable ||
+          event.target.closest("input,textarea,select"))
+      )
+        return;
+      event.preventDefault();
+      selectRange(items ?? []);
+    }
+    document.addEventListener("keydown", selectLoaded);
+    return () => document.removeEventListener("keydown", selectLoaded);
+  }, [active, items, selectRange]);
 
   const isSelected = useCallback(
     (id: string) => Boolean(entries[id]),

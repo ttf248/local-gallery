@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   usePhotoStore,
   wallTargetHeight,
+  nextDensity,
   WALL_DENSITY_HEIGHT,
 } from "./photoStore";
 
@@ -26,4 +27,11 @@ describe("照片墙密度", () => {
     );
     expect(WALL_DENSITY_HEIGHT.cozy).toBeLessThan(WALL_DENSITY_HEIGHT.large);
   });
+});
+
+it("自适应先取最近行高再步进，到达两端停住",()=>{
+  expect(nextDensity("auto",1,151)).toBe("cozy");
+  expect(nextDensity("auto",-1,284)).toBe("cozy");
+  expect(nextDensity("large",1,210)).toBe("large");
+  expect(nextDensity("compact",-1,210)).toBe("compact");
 });
