@@ -145,16 +145,23 @@ func TestChinaLocationMatchesCountyAndAggregatesToCity(t *testing.T) {
 
 func TestChinaLocationsMatchCurrentGPSPhotosToProvinceAndDistrict(t *testing.T) {
 	root := t.TempDir()
-	files := writeAIJobImages(t, root, 3)
+	files := writeAIJobImages(t, root, 4)
 	catalog := aiJobCatalog(root, files)
 	snapshot := catalog.Acquire()
-	validator := aiTestPathValidator(t, root)
+	validate := aiTestPathValidator(t, root)
+	checked := 0
+	validator := func(path string) (string, error) {
+		checked++
+		return validate(path)
+	}
 	records := chinaTestRecords(t, catalog, files, []chinaTestPhoto{
 		{Coordinate: [2]float64{39.915309, 116.366794}}, // 北京西城
 		{Coordinate: [2]float64{31.2304, 121.4737}},     // 上海
 		{Coordinate: [2]float64{40.7128, -74.006}},      // 中国境外
+		{},
 	})
 
+	records[3].Data = []byte(`{"dateTimeOriginal":"2024-01-01"}`)
 	service := NewChinaLocationService()
 	summary, err := service.Summary(snapshot, records, 1, validator, ChinaTimeRange{})
 	if err != nil {
@@ -162,6 +169,9 @@ func TestChinaLocationsMatchCurrentGPSPhotosToProvinceAndDistrict(t *testing.T) 
 	}
 	if summary.GPSPhotoCount != 3 || summary.ChinaPhotoCount != 2 || summary.UnassignedPhotoCount != 1 {
 		t.Fatalf("photo totals = GPS %d, China %d, unassigned %d", summary.GPSPhotoCount, summary.ChinaPhotoCount, summary.UnassignedPhotoCount)
+	}
+	if checked != 3 {
+		t.Fatalf("validated %d paths, want only the three GPS photos", checked)
 	}
 	if len(summary.Provinces) != 34 {
 		t.Fatalf("embedded administrative areas = %d provinces", len(summary.Provinces))

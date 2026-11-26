@@ -277,14 +277,6 @@ func matchChinaLocations(
 		if !ok || ref.Kind != ResourceFile || !models.IsImageFile(ref.AbsolutePath) {
 			continue
 		}
-		path, err := validatePath(ref.AbsolutePath)
-		if err != nil {
-			continue
-		}
-		info, err := os.Stat(path)
-		if err != nil || !info.Mode().IsRegular() || info.Size() != record.Size || info.ModTime().UnixNano() != record.MTimeNs {
-			continue
-		}
 		fileRef, ok := snapshot.state.library.mediaByFile[record.ResourceID]
 		if !ok {
 			continue
@@ -299,6 +291,15 @@ func matchChinaLocations(
 		}
 		var metadata ImageMetadata
 		if json.Unmarshal(record.Data, &metadata) != nil || metadata.GPS == nil || !validCoordinates(metadata.GPS.Latitude, metadata.GPS.Longitude) {
+			continue
+		}
+		// 只有能进入足迹统计的照片才需要检查当前路径与文件指纹。
+		path, err := validatePath(ref.AbsolutePath)
+		if err != nil {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil || !info.Mode().IsRegular() || info.Size() != record.Size || info.ModTime().UnixNano() != record.MTimeNs {
 			continue
 		}
 		match.gpsPhotoCount++
