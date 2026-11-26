@@ -1,5 +1,8 @@
 import { Segmented } from "../ui/Segmented";
-import { thumbUrl } from "../api/thumbs";
+import ThumbImage from "../features/common/ThumbImage";
+import { Kbd } from "../ui/Kbd";
+import { IconButton } from "../ui/IconButton";
+import "./command-palette.css";
 import {
   useEffect,
   useId,
@@ -27,13 +30,34 @@ import {
   tagRoute,
 } from "../utils/path";
 import { workbenchCopy } from "../utils/workbench";
-import { CloseIcon, SearchIcon } from "../ui/icons";
+import {
+  ArrowRightLineIcon,
+  ChevronDownIcon,
+  CloseIcon,
+  FolderIcon,
+  HashIcon,
+  HomeIcon,
+  ImageIcon,
+  LibraryIcon,
+  MonitorIcon,
+  MoonIcon,
+  ReaderIcon,
+  RefreshIcon,
+  ScanIcon,
+  SearchIcon,
+  SettingsIcon,
+  ShuffleIcon,
+  SparkleIcon,
+  SunIcon,
+  TasksIcon,
+} from "../ui/icons";
 
 export type CommandScope = "name" | "content";
 
 export interface CommandQuickAction {
   id: string;
   label: string;
+  icon: typeof SearchIcon;
   keywords: string[];
   shortcut?: string;
   group: "navigation" | "action";
@@ -52,8 +76,17 @@ interface CommandRow {
   id: string;
   label: string;
   detail?: string;
-  thumb?: string;
+  icon: typeof SearchIcon;
+  coverId?: string;
+  coverVersion?: string;
+  shortcut?: string;
   onSelect: () => void;
+}
+
+interface CommandSection {
+  label: string;
+  layout: "covers" | "navigation" | "commands" | "list";
+  rows: CommandRow[];
 }
 
 export default function CommandPalette({
@@ -80,8 +113,10 @@ function Palette({
       ? "content"
       : "name",
   );
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [activeId, setActiveId] = useState("");
   const panel = useRef<HTMLDivElement>(null);
+  const commandGroup = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const copy = workbenchCopy(mode);
@@ -144,6 +179,7 @@ function Palette({
   const quickActions: CommandQuickAction[] = [
     {
       id: "home",
+      icon: HomeIcon,
       label: mode === "comic" ? "漫画首页" : "照片库",
       keywords: ["首页"],
       group: "navigation",
@@ -151,6 +187,7 @@ function Palette({
     },
     {
       id: "library",
+      icon: LibraryIcon,
       label: mode === "comic" ? "书架" : "相册",
       keywords: ["目录"],
       group: "navigation",
@@ -158,6 +195,7 @@ function Palette({
     },
     {
       id: "tasks",
+      icon: TasksIcon,
       label: "任务中心",
       keywords: ["分析", "任务"],
       group: "navigation",
@@ -167,6 +205,7 @@ function Palette({
       ? [
           {
             id: "refresh",
+            icon: RefreshIcon,
             label: "刷新媒体库",
             keywords: ["刷新", "缓存"],
             group: "action" as const,
@@ -178,6 +217,7 @@ function Palette({
       ? [
           {
             id: "scan",
+            icon: ScanIcon,
             label: "重新扫描",
             keywords: ["扫描"],
             shortcut: "Ctrl+S",
@@ -188,6 +228,7 @@ function Palette({
       : []),
     {
       id: "settings",
+      icon: SettingsIcon,
       label: "设置",
       keywords: ["偏好"],
       shortcut: "Ctrl+,",
@@ -196,6 +237,7 @@ function Palette({
     },
     {
       id: "mode",
+      icon: mode === "comic" ? ImageIcon : ReaderIcon,
       label: mode === "comic" ? "切换到照片" : "切换到漫画",
       keywords: ["工作台"],
       group: "action",
@@ -203,11 +245,12 @@ function Palette({
     },
     ...(
       [
-        ["light", "浅色"],
-        ["dark", "深色"],
-        ["system", "跟随系统"],
-      ] satisfies [ThemePref, string][]
-    ).map(([theme, label]) => ({
+        ["light", "浅色", SunIcon],
+        ["dark", "深色", MoonIcon],
+        ["system", "跟随系统", MonitorIcon],
+      ] satisfies [ThemePref, string, typeof SunIcon][]
+    ).map(([theme, label, icon]) => ({
+      icon,
       id: theme,
       label: `主题 · ${label}`,
       keywords: ["主题", "外观"],
@@ -218,6 +261,7 @@ function Palette({
       ? [
           {
             id: "random-photos",
+            icon: SparkleIcon,
             label: "随手看看",
             keywords: ["随机照片"],
             group: "navigation" as const,
@@ -227,6 +271,7 @@ function Palette({
       : []),
     {
       id: "shuffle",
+      icon: ShuffleIcon,
       label: copy.randomLabel,
       keywords: ["随机"],
       shortcut: "R",
@@ -247,9 +292,14 @@ function Palette({
       ? (suggestions.data?.results ?? []).map((hit) => ({
           id: `hit-${hit.path}`,
           label: hit.name,
-          thumb: hit.coverImage
-            ? thumbUrl(hit.coverImage, hit.coverImageVersion, 320)
-            : undefined,
+          coverId: hit.coverImage || undefined,
+          coverVersion: hit.coverImageVersion,
+          icon:
+            hit.kind === "smartCollection"
+              ? HashIcon
+              : hit.kind === "collection"
+                ? FolderIcon
+                : LibraryIcon,
           detail:
             hit.kind === "smartCollection"
               ? "标签"
@@ -267,9 +317,9 @@ function Palette({
   const recent = cards.slice(0, 5).map((card) => ({
     id: `recent-${card.to}`,
     label: card.title,
-    thumb: card.coverPath
-      ? thumbUrl(card.coverPath, card.coverVersion, 320)
-      : undefined,
+    coverId: card.coverPath,
+    coverVersion: card.coverVersion,
+    icon: mode === "comic" ? ReaderIcon : LibraryIcon,
     onSelect: () => navigate(card.to),
   }));
   const quickMatches = quickActions.filter(
@@ -278,39 +328,50 @@ function Palette({
       (scope === "name" &&
         [label, ...keywords].some((word) => word.includes(term))),
   );
-  const sections = term
+  const sections: CommandSection[] = term
     ? [
-        { label: "匹配内容", rows: matches },
+        { label: "匹配内容", layout: "list", rows: matches },
         {
           label: "快捷操作",
-          rows: quickMatches.map((action) => ({
-            ...action,
-            detail: action.shortcut,
-          })),
+          layout: "list",
+          rows: quickMatches,
         },
         {
           label: "搜索",
+          layout: "list",
           rows: [
             {
               id: "results",
+              icon: ArrowRightLineIcon,
               label: scope === "name" ? "查看全部结果" : "搜索画面与文字",
               onSelect: showResults,
-            } as CommandRow,
+            },
           ],
         },
       ]
     : [
-        { label: "最近浏览", rows: recent },
-        ...(["navigation", "action"] as const).map((group) => ({
-          label: group === "navigation" ? "快捷导航" : "快捷操作",
-          rows: quickActions
-            .filter((action) => action.group === group)
-            .map((action) => ({ ...action, detail: action.shortcut })),
-        })),
+        { label: "最近浏览", layout: "covers", rows: recent },
+        {
+          label: "快捷导航",
+          layout: "navigation",
+          rows: quickActions.filter((action) => action.group === "navigation"),
+        },
+        {
+          label: "快捷操作",
+          layout: "commands",
+          rows: actionsOpen
+            ? quickActions.filter((action) => action.group === "action")
+            : [],
+        },
       ];
-  const rows = sections.flatMap(({ rows }) => rows as CommandRow[]);
+  const rows = sections.flatMap((section) => section.rows);
   const activeIndex = rows.findIndex(({ id }) => id === activeId);
   const optionId = (index: number) => `${listId}-${index}`;
+
+  useEffect(() => {
+    if (actionsOpen)
+      commandGroup.current?.scrollIntoView?.({ block: "nearest" });
+  }, [actionsOpen]);
 
   useEffect(() => {
     if (activeIndex >= 0)
@@ -338,7 +399,7 @@ function Palette({
 
   return (
     <div
-      className="fixed inset-0 z-dialog flex items-start justify-center bg-black/[.32] px-4 pt-[14dvh] backdrop-blur-[2px]"
+      className="command-backdrop fixed inset-x-0 top-0 z-dialog flex items-start justify-center bg-scrim/45 backdrop-blur-[1px]"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -348,63 +409,68 @@ function Palette({
         role="dialog"
         aria-modal="true"
         aria-label="命令面板"
-        className="flex max-h-[78dvh] w-full max-w-[640px] flex-col overflow-hidden rounded-sheet bg-bg-elevated shadow-3"
+        className="flex max-h-full w-full max-w-[688px] flex-col overflow-hidden rounded-sheet bg-bg-elevated shadow-3"
         onKeyDown={onPanelKey}
       >
-        <div className="flex min-h-14 shrink-0 items-center gap-2 border-b border-line px-3">
-          <SearchIcon size={19} className="shrink-0 text-fg-muted" />
-          <input
-            className="h-14 min-w-0 flex-1 bg-transparent text-title-3"
-            ref={input}
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded
-            aria-controls={listId}
-            aria-activedescendant={
-              activeIndex >= 0 ? optionId(activeIndex) : undefined
-            }
-            aria-label={
-              scope === "content"
-                ? "搜索照片里的画面与文字"
-                : `搜索${copy.albumTypeLabel}或标签`
-            }
-            placeholder={
-              scope === "content"
-                ? "描述画面或输入照片里的文字…"
-                : "搜索名称或命令…"
-            }
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setActiveId("");
-            }}
-            onKeyDown={(event) => {
-              if (event.nativeEvent.isComposing) return;
-              if (
-                (event.key === "ArrowDown" || event.key === "ArrowUp") &&
-                rows.length
-              ) {
-                event.preventDefault();
-                const step = event.key === "ArrowDown" ? 1 : -1;
-                const next =
-                  activeIndex < 0
-                    ? step === 1
-                      ? 0
-                      : rows.length - 1
-                    : (activeIndex + step + rows.length) % rows.length;
-                setActiveId(rows[next].id);
+        <div className="grid shrink-0 grid-cols-[1fr_auto] items-center gap-x-2 gap-y-2 border-b border-line p-3 sm:grid-cols-[1fr_auto_auto] sm:p-4">
+          <div className="command-query col-start-1 row-start-1 flex h-11 min-w-0 items-center gap-2.5 rounded-control border border-line bg-bg px-3 text-fg-muted">
+            <SearchIcon size={19} className="shrink-0" />
+            <input
+              className="h-full min-w-0 flex-1 bg-transparent text-base font-normal text-fg placeholder:text-fg-muted"
+              enterKeyHint="search"
+              ref={input}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded
+              aria-controls={listId}
+              aria-activedescendant={
+                activeIndex >= 0 ? optionId(activeIndex) : undefined
               }
-              if (event.key === "Enter") {
-                event.preventDefault();
-                if (event.shiftKey || scope === "content") showResults();
-                else if (activeIndex >= 0) choose(rows[activeIndex]);
-                else if (matches[0]?.label === term) choose(matches[0]);
-                else showResults();
+              aria-label={
+                scope === "content"
+                  ? "搜索照片里的画面与文字"
+                  : `搜索${copy.albumTypeLabel}或标签`
               }
-            }}
-          />
+              placeholder={
+                scope === "content"
+                  ? "描述画面或输入照片里的文字…"
+                  : `搜索${copy.albumTypeLabel}、标签或命令`
+              }
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActiveId("");
+              }}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
+                if (
+                  (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+                  rows.length
+                ) {
+                  event.preventDefault();
+                  const step = event.key === "ArrowDown" ? 1 : -1;
+                  const next =
+                    activeIndex < 0
+                      ? step === 1
+                        ? 0
+                        : rows.length - 1
+                      : (activeIndex + step + rows.length) % rows.length;
+                  setActiveId(rows[next].id);
+                }
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  if (term && (event.shiftKey || scope === "content"))
+                    showResults();
+                  else if (activeIndex >= 0) choose(rows[activeIndex]);
+                  else if (matches[0]?.label === term) choose(matches[0]);
+                  else showResults();
+                }
+              }}
+            />
+          </div>
           {mode === "photo" && (
             <Segmented<CommandScope>
+              className="col-span-2 row-start-2 sm:col-span-1 sm:col-start-2 sm:row-start-1"
               label="搜索范围"
               size="sm"
               value={scope}
@@ -419,17 +485,16 @@ function Palette({
               ]}
             />
           )}
-          <button
-            type="button"
-            aria-label="关闭命令面板"
-            className="toolbar-icon"
+          <IconButton
+            label="关闭命令面板"
+            className="text-fg-muted"
             onClick={onClose}
           >
-            <CloseIcon size={17} />
-          </button>
+            <CloseIcon />
+          </IconButton>
         </div>
         <div
-          className="min-h-0 overflow-y-auto p-2"
+          className="min-h-0 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
           id={listId}
           role="listbox"
           aria-label="命令与搜索结果"
@@ -445,50 +510,103 @@ function Palette({
             </p>
           )}
           {sections.map(
-            ({ label, rows: sectionRows }) =>
+            ({ label, layout, rows: sectionRows }) =>
               sectionRows.length > 0 && (
-                <div key={label} role="group" aria-label={label}>
+                <div
+                  key={label}
+                  ref={layout === "commands" ? commandGroup : undefined}
+                  role="group"
+                  aria-label={label}
+                  className="mb-4 last:mb-0"
+                >
                   <div
                     aria-hidden
-                    className="px-3 py-2 text-micro text-fg-subtle"
+                    className="mb-1.5 px-1 text-caption font-medium text-fg-muted"
                   >
                     {label}
                   </div>
-                  {(sectionRows as CommandRow[]).map((row) => (
-                    <button
-                      key={row.id}
-                      id={optionId(rows.indexOf(row))}
-                      type="button"
-                      role="option"
-                      aria-selected={row.id === activeId}
-                      tabIndex={-1}
-                      className="flex min-h-12 w-full items-center gap-3 rounded-control px-3 text-left text-callout hover:bg-bg-subtle aria-selected:bg-bg-subtle"
-                      onClick={() => choose(row)}
-                      onMouseDown={(event) => event.preventDefault()}
-                    >
-                      {row.thumb && (
-                        <img
-                          src={row.thumb}
-                          width={32}
-                          height={32}
-                          alt=""
-                          className="size-8 rounded-md object-cover"
-                        />
-                      )}
-                      <span className="flex-1 truncate">{row.label}</span>
-                      {row.detail && (
-                        <span className="text-caption text-fg-muted">
-                          {row.detail}
+                  <div className="command-options" data-layout={layout}>
+                    {sectionRows.map((row) => (
+                      <button
+                        key={row.id}
+                        id={optionId(rows.indexOf(row))}
+                        type="button"
+                        role="option"
+                        aria-selected={row.id === activeId}
+                        tabIndex={-1}
+                        title={row.label}
+                        className="command-option"
+                        onClick={() => choose(row)}
+                        onMouseDown={(event) => event.preventDefault()}
+                      >
+                        <span aria-hidden className="command-art">
+                          {row.coverId ? (
+                            <ThumbImage
+                              key={row.coverId}
+                              fileId={row.coverId}
+                              version={row.coverVersion}
+                              alt=""
+                              displayWidth={layout === "covers" ? 128 : 36}
+                              className="size-full object-cover"
+                            />
+                          ) : (
+                            <row.icon size={18} />
+                          )}
                         </span>
-                      )}
-                    </button>
-                  ))}
+                        <span className="min-w-0 truncate">{row.label}</span>
+                        {row.detail && (
+                          <span className="ml-auto shrink-0 text-caption text-fg-muted">
+                            {row.detail}
+                          </span>
+                        )}
+                        {row.shortcut && (
+                          <kbd className="ml-auto hidden shrink-0 font-sans text-micro text-fg-subtle sm:pointer-fine:inline">
+                            {row.shortcut}
+                          </kbd>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ),
           )}
         </div>
-        <footer className="flex min-h-9 items-center border-t border-line px-4 text-micro text-fg-muted">
-          ↑↓ 选择 · ↵ 打开{mode === "photo" ? " · Tab 切换范围" : ""} · Esc 关闭
+        <footer
+          className={`shrink-0 items-center gap-3 border-t border-line px-4 text-micro text-fg-muted ${term ? "hidden py-2 pointer-fine:flex" : "flex py-1"}`}
+        >
+          {!term && (
+            <button
+              type="button"
+              aria-expanded={actionsOpen}
+              aria-controls={listId}
+              className="mr-auto flex min-h-10 items-center gap-1 rounded-control px-2 text-caption hover:bg-bg-subtle"
+              onClick={(event) => {
+                setActionsOpen(!actionsOpen);
+                setActiveId(
+                  !actionsOpen && event.detail === 0
+                    ? (quickActions.find((action) => action.group === "action")
+                        ?.id ?? "")
+                    : "",
+                );
+                if (event.detail === 0) input.current?.focus();
+              }}
+            >
+              快捷操作
+              <ChevronDownIcon
+                size={14}
+                className={actionsOpen ? "rotate-180" : undefined}
+              />
+            </button>
+          )}
+          <span className="hidden pointer-fine:inline">
+            <Kbd keys={["↑↓"]} /> 选择
+          </span>
+          <span className="hidden pointer-fine:inline">
+            <Kbd keys={["↵"]} /> 打开
+          </span>
+          <span className="hidden pointer-fine:inline">
+            <Kbd keys={["Esc"]} /> {query ? "清空" : "关闭"}
+          </span>
         </footer>
       </div>
     </div>

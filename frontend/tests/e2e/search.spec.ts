@@ -110,3 +110,35 @@ test("Ctrl+K 与斜杠打开命令面板并归还触发焦点", async ({ page })
   await page.keyboard.press("/");
   await expect(search).toBeFocused();
 });
+
+
+test("首页搜索在窄屏和键盘占位下保留输入、范围和可滚动的命令", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto("/photo");
+  const trigger = page.getByRole("button", { name: "打开命令面板" });
+  await trigger.click();
+  const panel = page.getByRole("dialog", { name: "命令面板" });
+  await panel.getByRole("combobox").waitFor();
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty("--keyboard-inset", "310px"),
+  );
+  const scope = panel.getByRole("radio", { name: "画面与文字" });
+  const input = panel.getByRole("combobox");
+  const field = await input.boundingBox();
+  const radio = await scope.boundingBox();
+  expect(field).toBeTruthy();
+  expect(radio!.y).toBeGreaterThanOrEqual(field!.y + field!.height);
+  await panel.getByRole("button", { name: "快捷操作" }).click();
+  const box = await panel.boundingBox();
+  expect(box!.y + box!.height).toBeLessThanOrEqual(390);
+  const results = panel.getByRole("listbox");
+  expect(
+    await results.evaluate((el) => el.scrollHeight > el.clientHeight),
+  ).toBe(true);
+  await scope.click();
+  await expect(input).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+});

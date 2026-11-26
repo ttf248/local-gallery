@@ -99,6 +99,25 @@ describe("命令面板", () => {
     expect(screen.getByLabelText("当前地址")).toHaveTextContent("/photo/tags/");
   });
 
+  it("首页收起快捷操作，展开后能用键盘选择，直接输入也能找到命令", async () => {
+    const { input } = openPalette();
+    const more = screen.getByRole("button", { name: "快捷操作" });
+    expect(more).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("option", { name: "主题 · 深色" })).toBeNull();
+    fireEvent.click(more);
+    expect(more).toHaveAttribute("aria-expanded", "true");
+    expect(input).toHaveFocus();
+    expect(input).toHaveAttribute(
+      "aria-activedescendant",
+      screen.getByRole("option", { name: "切换到漫画" }).id,
+    );
+    fireEvent.click(more);
+    fireEvent.change(input, { target: { value: "深色" } });
+    expect(
+      await screen.findByRole("option", { name: "主题 · 深色" }),
+    ).toBeInTheDocument();
+  });
+
   it("名称建议防抖 180ms，Shift+Enter 打开全量名称结果", async () => {
     vi.useFakeTimers();
     try {

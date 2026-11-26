@@ -30,13 +30,14 @@ import {
 const BASE = process.env.LG_BASE ?? "http://127.0.0.1:5173";
 const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",");
 // 页面清单里可以写伪路由：
+//   palette —— 首页搜索面板，采样打开后的文字和控件
 //   album  —— 相册详情页（id 每次运行不同，从仪表盘现取一本图多的相册）
 //   reader —— 阅读器（见下方 openReader）
 //   tag    —— 标签页（真实库里可能一个标签都没有，用仪表盘里的真实相册
 //             伪造标签页数据，封面仍是真实缩略图）
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,viewer,reader,tag"
+  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,viewer,reader,tag,palette"
 )
   .split(",")
   .map((p) => p.trim())
@@ -88,7 +89,7 @@ function installGeometryProbe() {
   };
 }
 
-const AUDIT = () => {
+const AUDIT = (root) => {
   const parseColor = (value) => {
     const s = String(value).trim();
     const alphaOf = (raw) =>
@@ -315,7 +316,7 @@ const AUDIT = () => {
   };
 
   const items = [];
-  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const seen = new Set();
   let node;
   while ((node = walk.nextNode())) {
@@ -433,7 +434,7 @@ const ROUTE_ERROR = () => !!document.querySelector('[role="alert"]');
 //
 // 判定模型与文字一致：取图标包围盒外一圈像素当底色，按"最不利的一侧"
 // 算对比度（浅色图标取最亮的一边，深色图标取最暗的一边）。
-const ICONS = () => {
+const ICONS = (root) => {
   const parseColor = (value) => {
     const s = String(value).trim();
     let m = s.match(
@@ -491,7 +492,7 @@ const ICONS = () => {
   };
 
   const items = [];
-  for (const svg of document.querySelectorAll("svg")) {
+  for (const svg of root.querySelectorAll("svg")) {
     const rect = svg.getBoundingClientRect();
     if (rect.width < 6 || rect.height < 6) continue;
     const cs = getComputedStyle(svg);
@@ -995,7 +996,12 @@ for (const theme of THEMES) {
         );
         continue;
       }
-      if (route === "viewer") {
+      if (route === "palette") {
+        await page.goto(BASE + "/" + mode, { waitUntil: "domcontentloaded" });
+        await page.getByRole("button", { name: "打开命令面板" }).click();
+        await page.getByRole("dialog", { name: "命令面板" }).waitFor();
+        await waitForStable(page);
+      } else if (route === "viewer") {
         await page.goto(BASE + "/photo", { waitUntil: "domcontentloaded" });
         const first = await page.waitForSelector(
           '[data-testid="media-tile"], .empty-state',
@@ -1037,15 +1043,18 @@ for (const theme of THEMES) {
         await waitForStable(page);
       }
       if (SELF_TEST_ONLY) await page.evaluate(SELF_TEST);
-      let items = await page.evaluate(AUDIT);
+      const surface = route === "palette"
+        ? page.getByRole("dialog", { name: "命令面板" })
+        : page.locator("body");
+      let items = await surface.evaluate(AUDIT);
       // 偶发的渲染异常（相册页的虚拟列表爆栈）重试一次再判。
       if (await page.evaluate(ROUTE_ERROR)) {
         await page.reload({ waitUntil: "domcontentloaded" });
         await waitForStable(page);
-        items = await page.evaluate(AUDIT);
+        items = await surface.evaluate(AUDIT);
       }
       const overImage = items.filter((i) => i.onImage);
-      const icons = await page.evaluate(ICONS);
+      const icons = await surface.evaluate(ICONS);
 
       // 图片 / 渐变上的文字 + 全部图标：截屏后按包围盒采样真实像素。
       if (overImage.length || icons.length) {
