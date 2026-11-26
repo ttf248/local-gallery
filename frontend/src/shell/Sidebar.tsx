@@ -99,7 +99,7 @@ function RailGroup({
               (collapsed ? (
                 <span className="absolute right-1 top-1 size-1.5 rounded-full bg-accent" />
               ) : (
-                <span aria-label={"还有 "+badge+" "+unit} className="text-caption tabular-nums text-ink-3">{badge>999?"999+":badge}</span>
+                <span aria-label={"还有 "+badge+" "+unit} className="text-caption tabular-nums text-ink-2">{badge>999?"999+":badge}</span>
               ))}
           </Link>
         );

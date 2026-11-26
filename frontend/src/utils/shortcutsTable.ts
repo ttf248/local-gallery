@@ -6,7 +6,7 @@
 // 匹配逻辑（normalizeKey / shouldIgnoreShortcut / hasOpenModal）在
 // shortcuts.ts —— 那一侧每个页面都要用。
 
-export type ShortcutContext = "library" | "photo" | "image" | "video";
+export type ShortcutContext = "library" | "photo" | "image" | "video" | "review";
 
 export interface Shortcut {
   id: string;
@@ -17,7 +17,7 @@ export interface Shortcut {
   /** 触发条件：包含 ctrl/alt/shift 等修饰键 */
   combo: string;
   /** 所属分组（用于 HelpOverlay） */
-  group: "global" | "reader" | "photo" | "image" | "video";
+  group: "global" | "reader" | "photo" | "image" | "video" | "review";
   /**
    * 随工作台模式变化的措辞。
    *
@@ -40,6 +40,17 @@ export interface Shortcut {
 // HelpOverlay 直接消费此表作为单一事实来源。
 
 export const SHORTCUTS: Shortcut[] = [
+  { id:"review-next",label:"J / ↓",combo:"j",description:"下一组",group:"review" },
+  { id:"review-prev",label:"K / ↑",combo:"k",description:"上一组",group:"review" },
+  { id:"review-member",label:"← / →",combo:"arrowright",description:"切换聚焦成员",group:"review" },
+  { id:"review-representative",label:"1–9",combo:"1",description:"设为代表照片",group:"review" },
+  { id:"review-decide",label:"Enter / E",combo:"enter",description:"标记已处理",group:"review" },
+  { id:"review-ignore",label:"X",combo:"x",description:"忽略这一组",group:"review" },
+  { id:"review-pick",label:"P",combo:"p",description:"将聚焦照片加入精选",group:"review" },
+  { id:"review-check",label:"Space",combo:"space",description:"勾选当前组",group:"review" },
+  { id:"review-undo",label:"Ctrl / ⌘ + Z",combo:"ctrl+z",description:"撤销最近决定",group:"review" },
+  { id:"review-back",label:"Esc",combo:"escape",description:"取消勾选或返回列表",group:"review" },
+
   {
     id: "sidebar",
     label: "Ctrl+B",

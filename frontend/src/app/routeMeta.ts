@@ -29,7 +29,7 @@ export interface RouteMeta {
   mode?: AppMode;
   page: PageVariant;
   navKey?: NavKey;
-  help: "library" | "photo";
+  help: "library" | "photo" | "review";
   chrome: RouteChrome;
   title: (ctx: { params: Params; mode: AppMode }) => string;
   component: () => Promise<{ default: ComponentType }>;

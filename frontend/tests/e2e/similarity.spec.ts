@@ -107,6 +107,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
   await expect(page.getByText("还没有精选照片")).toBeVisible();
   const sidebar = page.locator('aside[aria-label="主导航"]');
   await sidebar.getByRole("link", { name: /^相似照片(?:[，\s]|$)/ }).click();
+  await page.getByRole("radio",{name:"网格",exact:true}).click();
   await expect(
     page.getByRole("heading", { name: "相似照片与连拍" }),
   ).toBeVisible();
@@ -136,6 +137,7 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
   await expect(page.locator('button[aria-label*="移出精选"]').first()).toBeVisible();
 
   await sidebar.getByRole("link", { name: /^相似照片(?:[，\s]|$)/ }).click();
+  await page.getByRole("radio",{name:"网格",exact:true}).click();
   const returnedCard = page.getByTestId("similarity-group").first();
 
   // 标记已处理：决定写进 state，重新读取仍在。
@@ -153,7 +155,8 @@ test("相似照片能分组列出、跨页加入精选，人工决定重启后�
   await expect(page.getByRole("button", { name: "撤销" })).toBeVisible();
 
   // 这一组离开待处理列表了：切到已处理才看得见它。
-  await page.getByRole("radio", { name: "已处理" }).click();
+  await page.getByRole("button",{name:/^状态：/}).click();
+  await page.getByRole("menuitemradio",{name:/^已处理/}).click();
   await expect(
     page.getByTestId("similarity-group").first(),
   ).toHaveAttribute("data-group-status", "reviewed");
@@ -200,7 +203,7 @@ test("人工指定的代表照片刷新后仍在", async ({ page, request }) => 
   }
 
   // 看连拍组：它们的成员少，展开后逐张比较不会刷出几千张图。
-  await page.goto("/photo/similarity?kind=burst");
+  await page.goto("/photo/similarity?view=grid&kind=burst");
   const card = page.getByTestId("similarity-group").first();
   await expect(card).toBeVisible();
 
@@ -325,7 +328,7 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
   ).json()) as SimilarityPage;
   expect(pending.page.groups.length).toBeGreaterThan(0);
 
-  await page.goto("/photo/similarity");
+  await page.goto("/photo/similarity?view=grid");
   const card = page.getByTestId("similarity-group").first();
   await expect(card).toBeVisible();
   // 以页面上这一张卡为准：用户点的是看得见的那一张。
@@ -354,7 +357,8 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
   await expect.poll(() => groupStatus(request, groupId)).toBe("ignored");
 
   // 切到已忽略这一档：这一组就在里面，按钮也换成了「取消忽略」。
-  await page.getByRole("radio", { name: "已忽略" }).click();
+  await page.getByRole("button",{name:/^状态：/}).click();
+  await page.getByRole("menuitemradio",{name:/^已忽略/}).click();
   const ignoredCard = page.locator(
     `[data-testid="similarity-group"][data-group-id="${groupId}"]`,
   );
@@ -376,7 +380,8 @@ test("撤销按操作前的状态恢复：已忽略的组标记已处理后撤�
 
   // 刷新之后照样是「已忽略」：决定写在磁盘上。
   await page.reload();
-  await page.getByRole("radio", { name: "已忽略" }).click();
+  await page.getByRole("button",{name:/^状态：/}).click();
+  await page.getByRole("menuitemradio",{name:/^已忽略/}).click();
   const reloaded = page.locator(
     `[data-testid="similarity-group"][data-group-id="${groupId}"]`,
   );
@@ -394,7 +399,7 @@ test("混合状态的批量修改，撤销按每组各自恢复", async ({ page,
   await setWorkbenchMode(request, "photo");
   await ensureSimilarityGroups(request);
 
-  await page.goto("/photo/similarity?status=all");
+  await page.goto("/photo/similarity?view=grid&status=all");
   const cards = page.getByTestId("similarity-group");
   await expect(cards.first()).toBeVisible();
   // 以「全部」视图里看得见的两张卡为准：混合状态正是这个视图的常态。

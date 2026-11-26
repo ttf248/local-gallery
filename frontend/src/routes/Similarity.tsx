@@ -1,6 +1,19 @@
+import { GroupList } from "../features/similarity/GroupList";
+import { ReviewLayout } from "../features/similarity/ReviewLayout";
+import { ReviewStage } from "../features/similarity/ReviewStage";
+import { resolveSimilarityView } from "../features/similarity/reviewNavigation";
+import { useSimilarityReview } from "../features/similarity/useSimilarityReview";
+import { useReviewShortcuts } from "../features/similarity/useReviewShortcuts";
+import { useMediaQuery, SPLIT_LAYOUT_QUERY } from "../hooks/useMediaQuery";
+import { FloatingBar } from "../ui/FloatingBar";
+import { Sheet } from "../ui/Sheet";
+import Popover from "../ui/Popover";
+import { InlineAlert } from "../ui/InlineAlert";
+import { Button } from "../ui/Button";
+import { PageToolbar } from "../shell/PageToolbar";
 import { Page } from "../shell/Page";
 import { Menu } from "../ui/Menu";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Virtuoso } from "react-virtuoso";
@@ -14,10 +27,7 @@ import PhotoCompare, {
 
 import { FolderIcon } from "../ui/icons";
 import SimilarityGroupCard from "../features/similarity/SimilarityGroupCard";
-import {
-  useSimilarityGroups,
-  useSimilarityStatus,
-} from "../hooks/useSimilarity";
+import { useSimilarityStatus } from "../hooks/useSimilarity";
 import { aiJobsApi } from "../api/aiJobs";
 import { ApiError } from "../api/client";
 import { useUIStore } from "../store/uiStore";
@@ -111,13 +121,57 @@ export default function Similarity() {
   const [comparePair, setComparePair] = useState<[string, string] | null>(null);
 
   const pushToast = useUIStore((state) => state.pushToast);
-  const groups = useSimilarityGroups({
-    kind,
-    // 「全部」是不带状态筛选；其余三档原样传给后端。
-    status: status === "all" ? "" : status,
-    folder,
-  });
+  const wide = useMediaQuery(SPLIT_LAYOUT_QUERY);
+  const view = resolveSimilarityView(searchParams.get("view"), wide);
+  const reviewing = view === "review";
+  const changeWorkspace = useCallback(
+    (mode: string | null, groupId?: string | null) => {
+      setSearchParams(
+        (previous) => {
+          const params = new URLSearchParams(previous);
+          if (mode) params.set("view", mode);
+          else params.delete("view");
+          if (groupId !== undefined) {
+            if (groupId) params.set("group", groupId);
+            else params.delete("group");
+          }
+          return params;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const replaceGroupId = (id: string | null) =>
+    changeWorkspace(searchParams.get("view"), id);
+  const review = useSimilarityReview(
+    { kind, status: status === "all" ? "" : status, folder },
+    {
+      groupId: searchParams.get("group"),
+      replaceGroupId,
+      enabled: reviewing,
+    },
+  );
+  const groups = review.source;
+  const returnToList = useCallback(
+    () =>
+      document
+        .querySelector<HTMLButtonElement>(
+          "[data-review-layout] button[aria-current]",
+        )
+        ?.focus(),
+    [],
+  );
+  useReviewShortcuts(review, reviewing, returnToList);
   const moduleStatus = useSimilarityStatus();
+  const builtAt = moduleStatus.status?.builtAt;
+  const previousBuild = useRef(builtAt);
+  const reload = groups.refetch;
+  useEffect(() => {
+    if (builtAt && previousBuild.current && builtAt !== previousBuild.current)
+      void reload();
+    previousBuild.current = builtAt;
+  }, [builtAt, reload]);
   const queryClient = useQueryClient();
   const {
     fetchNextPage,
@@ -466,15 +520,22 @@ export default function Similarity() {
 
   return (
     <div className="similarity-page min-h-full pb-10" ref={bindScrollParent}>
-      <Page variant="standard" className="page-shell">
+      <Page
+        variant="workspace"
+        className={
+          wide && reviewing
+            ? "flex h-[calc(100dvh-var(--topbar-h)-2rem)] flex-col"
+            : ""
+        }
+      >
         <PageHero
-          eyebrow="本机整理"
           title="相似照片与连拍"
           meta={
-            <>
-              完全重复按文件内容判定，近似重复按画面判定，连拍只标出「同一个瞬间」，
-              不当成重复。这一页只记录你的决定，原始照片一个字节都不动。
-            </>
+            summary && (
+              <span data-testid="similarity-summary">
+                待处理 {summary.pending} 组 · 可释放 {summary.redundant} 张
+              </span>
+            )
           }
           actions={
             <div className="flex items-center gap-2">
@@ -510,102 +571,121 @@ export default function Similarity() {
             </div>
           }
         />
-        <div className="filter-strip mb-[var(--space-4)] border-b border-b-line py-2.5 [.compact-list-filter_&]:flex-nowrap [.compact-list-filter_&]:gap-1.5 [.compact-list-filter_&]:m-0 [.compact-list-filter_&]:p-0 [.compact-list-filter_&]:[border:0] [.compact-list-filter_&>div]:flex-nowrap max-lg:[.compact-list-filter_&]:flex-wrap max-lg:[.compact-list-filter_&>div]:flex-wrap max-lg:[.compact-list-filter_&]:justify-start flex flex-wrap items-center gap-x-5 gap-y-3">
-          <Segmented
-            label="结果类别"
-            showLabel
-            value={kind}
-            onChange={(value) => updateParam(KIND_PARAM, value)}
-            options={KIND_OPTIONS}
-          />
-          <Segmented
-            label="处理状态"
-            showLabel
-            value={status}
-            onChange={(value) => updateParam(STATUS_PARAM, value)}
-            options={STATUS_OPTIONS}
-          />
-          {folders.length > 0 ? (
-            <Menu
-              label="按文件夹查看整理结果"
-              trigger={
-                <button type="button" className="btn btn-sm">
-                  <FolderIcon size={14} />
-                  {folder || "全部文件夹"}
-                </button>
-              }
-              items={[
-                {
-                  id: "all",
-                  label: "全部文件夹",
-                  checked: !folder,
-                  onSelect: () => updateParam(FOLDER_PARAM, ""),
-                },
-                ...folders.map((item) => ({
-                  id: "folder-" + item.folder,
-                  label: item.folder + " " + item.groups,
-                  checked: folder === item.folder,
-                  onSelect: () => updateParam(FOLDER_PARAM, item.folder),
-                })),
-              ]}
-            />
-          ) : null}
-        </div>
-
-        {summary ? (
-          /* 统计拆成一行可扫读的数字，不用「共 N 组 · A 组… · B 组…」的
-             长句：一句里挤七八个数字，读的人要在中间反复找自己在找
-             哪个。数字与它的名字挨在一起，扫一遍就知道每类各有多少。 */
-          <div
-            className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-caption text-ink-3"
-            data-testid="similarity-summary"
-          >
-            <span>
-              共{" "}
-              <span className="font-medium text-ink tabular-nums">
-                {summary.exact + summary.near + summary.burst}
-              </span>{" "}
-              组
-            </span>
-            <span>
-              多余照片{" "}
-              <span className="font-medium text-ink tabular-nums">
-                {summary.redundant}
-              </span>{" "}
-              张
-            </span>
-            <span>
-              完全重复 <span className="tabular-nums">{summary.exact}</span> 组
-            </span>
-            <span>
-              近似重复 <span className="tabular-nums">{summary.near}</span> 组
-            </span>
-            <span>
-              连拍 <span className="tabular-nums">{summary.burst}</span> 组
-            </span>
-            <span>
-              待处理 <span className="tabular-nums">{summary.pending}</span> 组
-            </span>
-            <span>
-              已处理 <span className="tabular-nums">{summary.reviewed}</span> 组
-            </span>
-            <span>
-              已忽略 <span className="tabular-nums">{summary.ignored}</span> 组
-            </span>
-          </div>
-        ) : null}
-
-        {/* 索引状态与召回上限不是统计，是「结果怎么来的」：单独一行，
-            不与上面的数字混在一起读。 */}
-        {statusInfo || groups.page?.limited ? (
-          <p className="mb-4 text-caption text-ink-3">
-            {statusInfo?.hasVectors
-              ? "语义索引可用，近似判定更准"
-              : "没有语义索引，近似判定已收紧"}
-            {groups.page?.limited ? " · 本次召回触到上限，结果可能不完整" : ""}
-          </p>
-        ) : null}
-
+        <PageToolbar
+          label="相似照片筛选"
+          start={
+            <>
+              <Segmented
+                label="类型"
+                showLabel
+                value={kind}
+                onChange={(value) => updateParam(KIND_PARAM, value)}
+                options={KIND_OPTIONS.map((option) => ({
+                  ...option,
+                  ariaLabel: option.label,
+                  label: (
+                    <>
+                      {option.label}
+                      {summary && option.value && (
+                        <small className="ml-1 text-caption tabular-nums">
+                          {summary[option.value]}
+                        </small>
+                      )}
+                    </>
+                  ),
+                }))}
+              />
+              <Menu
+                label="处理状态"
+                trigger={
+                  <Button variant="secondary">
+                    状态：
+                    {
+                      STATUS_OPTIONS.find((item) => item.value === status)
+                        ?.label
+                    }
+                  </Button>
+                }
+                items={STATUS_OPTIONS.map((option) => ({
+                  id: option.value,
+                  label:
+                    option.label +
+                    (summary && option.value !== "all"
+                      ? " " + summary[option.value]
+                      : ""),
+                  checked: status === option.value,
+                  onSelect: () => updateParam(STATUS_PARAM, option.value),
+                }))}
+              />
+              {folders.length > 0 ? (
+                <Menu
+                  label="按文件夹查看整理结果"
+                  trigger={
+                    <button type="button" className="btn btn-sm">
+                      <FolderIcon size={14} />
+                      {folder || "全部文件夹"}
+                    </button>
+                  }
+                  items={[
+                    {
+                      id: "all",
+                      label: "全部文件夹",
+                      checked: !folder,
+                      onSelect: () => updateParam(FOLDER_PARAM, ""),
+                    },
+                    ...folders.map((item) => ({
+                      id: "folder-" + item.folder,
+                      label: item.folder + " " + item.groups,
+                      checked: folder === item.folder,
+                      onSelect: () => updateParam(FOLDER_PARAM, item.folder),
+                    })),
+                  ]}
+                />
+              ) : null}
+            </>
+          }
+          end={
+            <>
+              <Popover
+                trigger={
+                  <Button variant="ghost" aria-label="分组说明">
+                    ⓘ
+                  </Button>
+                }
+              >
+                <div className="max-w-xs space-y-2 p-3 text-caption">
+                  <p>完全重复按文件内容判定。</p>
+                  <p>近似重复按画面判定。</p>
+                  <p>连拍记录同一个瞬间的不同照片。</p>
+                  {statusInfo && (
+                    <p>
+                      {statusInfo.hasVectors
+                        ? "语义索引可用，近似判定更准"
+                        : "没有语义索引，近似判定已收紧"}
+                    </p>
+                  )}
+                  {groups.page?.limited && (
+                    <p>本次召回触到上限，结果可能不完整</p>
+                  )}
+                </div>
+              </Popover>
+              <Segmented
+                label="查看方式"
+                value={view}
+                options={[
+                  { value: "review", label: "逐组审阅" },
+                  { value: "grid", label: "网格" },
+                ]}
+                onChange={(value) =>
+                  changeWorkspace(value === "review" && wide ? null : value)
+                }
+              />
+            </>
+          }
+        />
+        {groups.page?.stale && (
+          <InlineAlert tone="warning">分组基于旧的分析结果</InlineAlert>
+        )}
         {groups.isError && items.length === 0 ? (
           <ErrorBanner
             className="rounded-xl"
@@ -624,6 +704,21 @@ export default function Similarity() {
             description={emptyDescription(statusInfo?.analyzed ?? 0, status)}
             icon={<span aria-hidden="true">◧</span>}
             size="compact"
+            action={
+              status === "pending" && statusInfo?.analyzed ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => updateParam(STATUS_PARAM, "reviewed")}
+                >
+                  查看已处理
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : reviewing && wide ? (
+          <ReviewLayout
+            list={<GroupList review={review} />}
+            stage={<ReviewStage review={review} />}
           />
         ) : (
           <Virtuoso
@@ -640,7 +735,11 @@ export default function Similarity() {
                 key={group.id}
                 group={group}
                 expanded={expandedIds.has(group.id)}
-                onToggleExpand={() => toggleExpanded(group.id)}
+                onToggleExpand={() =>
+                  wide
+                    ? toggleExpanded(group.id)
+                    : changeWorkspace("review", group.id)
+                }
                 selected={selectedIds.has(group.id)}
                 onToggleSelect={() => toggleSelected(group.id)}
                 onSetRepresentative={(resourceId) =>
@@ -692,7 +791,41 @@ export default function Similarity() {
           </div>
         ) : null}
 
-        {selectedIds.size > 0 ? (
+        {reviewing && !wide && review.active && (
+          <Sheet
+            open
+            side="right"
+            label="逐组审阅"
+            className="!w-full !rounded-none"
+            onClose={() => changeWorkspace("grid")}
+          >
+            <Button variant="ghost" onClick={() => changeWorkspace("grid")}>
+              返回网格
+            </Button>
+            <ReviewStage review={review} />
+          </Sheet>
+        )}
+        {reviewing && (
+          <FloatingBar
+            open={review.state.checked.size > 0}
+            label="批量整理"
+            summary={`已选 ${review.state.checked.size} 组`}
+            onClose={review.clearChecked}
+            actions={
+              <>
+                {(["review", "ignore", "pick"] as const).map((action, i) => (
+                  <button
+                    key={action}
+                    onClick={() => void review.batch(action)}
+                  >
+                    {["全部标记已处理", "忽略", "代表照片加入精选"][i]}
+                  </button>
+                ))}
+              </>
+            }
+          />
+        )}
+        {!reviewing && selectedIds.size > 0 ? (
           <div
             className="similarity-actions sticky bottom-[var(--float-bottom)] z-20 flex items-center gap-2.5 flex-wrap mt-5 py-2.5 px-3.5 rounded-md bg-raised shadow-2 border border-line float-bottom [[data-keyboard]_&]:[translate:0_calc(-1_*_var(--keyboard-inset))]"
             data-testid="similarity-batch-bar"

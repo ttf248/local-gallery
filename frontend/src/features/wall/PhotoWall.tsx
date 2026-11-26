@@ -321,6 +321,8 @@ export default function PhotoWall<
       return nearest;
     },
     restoreAnchor: (id) => {
+      const tile=Array.from(container?.querySelectorAll<HTMLElement>("[data-media-id]") ?? []).find(node=>node.dataset.mediaId===id);
+      if(tile){tile.scrollIntoView({block:"center",inline:"nearest",behavior:"instant"});return;}
       const index = latestBands.current.get(id);
       if (index !== undefined)
         virtuosoRef.current?.scrollToIndex({ index, align: "center" });

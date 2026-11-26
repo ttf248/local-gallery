@@ -162,7 +162,7 @@ export const ROUTE_MANIFEST: readonly RouteMeta[] = [
     mode: "photo",
     page: "workspace",
     navKey: "photo.organize",
-    help: "library",
+    help: "review",
     chrome: { shell: "app", search: "global" },
     title: () => "相似照片",
     component: () => import("../routes/Similarity"),

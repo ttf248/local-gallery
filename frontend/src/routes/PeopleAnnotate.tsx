@@ -1,8 +1,10 @@
+import { Page } from "../shell/Page";
+import { ReviewLayout } from "../features/similarity/ReviewLayout";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { EmptyState } from "../ui/EmptyState";
-import {PageHero} from "../shell/PageHero";
+import { PageHero } from "../shell/PageHero";
 import RenditionImage from "../features/common/RenditionImage";
 import {
   peopleAnnotationsApi,
@@ -60,7 +62,9 @@ export default function PeopleAnnotate() {
   const resample = useMutation({
     mutationFn: () => peopleAnnotationsApi.samples(true),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ["people-annotation-samples"] });
+      await client.invalidateQueries({
+        queryKey: ["people-annotation-samples"],
+      });
       pushToast({ kind: "success", message: "已重新抽取标注样本" });
     },
     onError: () => pushToast({ kind: "error", message: "重新抽样失败" }),
@@ -68,7 +72,9 @@ export default function PeopleAnnotate() {
   const createIdentity = useMutation({
     mutationFn: (label: string) => peopleAnnotationsApi.createIdentity(label),
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ["people-annotation-identities"] });
+      await client.invalidateQueries({
+        queryKey: ["people-annotation-identities"],
+      });
     },
     onError: () => pushToast({ kind: "error", message: "创建身份失败" }),
   });
@@ -78,7 +84,8 @@ export default function PeopleAnnotate() {
   const progress = samples.data?.progress;
 
   useEffect(() => {
-    if (selectedID && items.some((item) => item.resourceId === selectedID)) return;
+    if (selectedID && items.some((item) => item.resourceId === selectedID))
+      return;
     setSelectedID(items[0]?.resourceId ?? "");
   }, [items, selectedID]);
 
@@ -91,17 +98,22 @@ export default function PeopleAnnotate() {
   );
 
   return (
-    <div className="h-full overflow-y-auto pb-12">
-      <div className="page-shell"><PageHero
-  eyebrow="离线智能相册 · 本机工具"
-  title="人物标注"
-  meta="给真实照片里的人脸标上匿名身份，用来衡量检测与分组的实际效果。标注只保存在本机，不会改写人物分组、命名或原始照片。"
-  actions={
-          <Link className="btn btn-sm btn-outline" to={peopleRoute()}>
-            回到人物相册
-          </Link>
-        }
-/></div>
+    <Page
+      variant="workspace"
+      className="flex min-h-full flex-col pb-12 xl:h-full"
+    >
+      <div className="page-shell">
+        <PageHero
+          eyebrow="离线智能相册 · 本机工具"
+          title="人物标注"
+          meta="给真实照片里的人脸标上匿名身份，用来衡量检测与分组的实际效果。标注只保存在本机，不会改写人物分组、命名或原始照片。"
+          actions={
+            <Link className="btn btn-sm btn-outline" to={peopleRoute()}>
+              回到人物相册
+            </Link>
+          }
+        />
+      </div>
       {samples.isError ? (
         <section className="page-shell mt-6">
           <EmptyState
@@ -119,78 +131,85 @@ export default function PeopleAnnotate() {
           />
         </section>
       ) : (
-        <section className="page-shell mt-6 grid gap-6 lg:grid-cols-[minmax(240px,0.6fr)_minmax(0,1.8fr)]">
-          <aside className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-display text-body text-ink">待标注样本</h2>
-              <button
-                type="button"
-                className="btn btn-sm btn-outline"
-                disabled={resample.isPending}
-                onClick={() => resample.mutate()}
-              >
-                {resample.isPending ? "抽样中…" : "重新抽样"}
-              </button>
-            </div>
-            {progress ? (
-              <p className="text-caption text-ink-2">
-                已复核 {progress.reviewedCount}/{progress.sampleCount} 张 ·{" "}
-                {progress.annotatedPhotoCount} 张已标注 ·{" "}
-                {progress.faceCount} 张脸 · {progress.identityCount} 个匿名身份
-              </p>
-            ) : null}
-            <ul className="space-y-2">
-              {items.map((item) => (
-                <SampleRow
-                  key={item.resourceId}
-                  sample={item}
-                  active={item.resourceId === activeID}
-                  onSelect={() => setSelectedID(item.resourceId)}
+        <ReviewLayout
+          listWidth={320}
+          list={
+            <aside className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-body text-ink">待标注样本</h2>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  disabled={resample.isPending}
+                  onClick={() => resample.mutate()}
+                >
+                  {resample.isPending ? "抽样中…" : "重新抽样"}
+                </button>
+              </div>
+              {progress ? (
+                <p className="text-caption text-ink-2">
+                  已复核 {progress.reviewedCount}/{progress.sampleCount} 张 ·{" "}
+                  {progress.annotatedPhotoCount} 张已标注 · {progress.faceCount}{" "}
+                  张脸 · {progress.identityCount} 个匿名身份
+                </p>
+              ) : null}
+              <ul className="space-y-2">
+                {items.map((item) => (
+                  <SampleRow
+                    key={item.resourceId}
+                    sample={item}
+                    active={item.resourceId === activeID}
+                    onSelect={() => setSelectedID(item.resourceId)}
+                  />
+                ))}
+              </ul>
+              {items.length === 0 && !samples.isLoading ? (
+                <EmptyState
+                  title="没有可标注的样本"
+                  description="先在人物相册里跑一次人脸分析，再回来抽样。"
+                  size="compact"
                 />
-              ))}
-            </ul>
-            {items.length === 0 && !samples.isLoading ? (
-              <EmptyState
-                title="没有可标注的样本"
-                description="先在人物相册里跑一次人脸分析，再回来抽样。" size="compact"
-              />
-            ) : null}
-            <a
-              className="btn btn-sm btn-outline"
-              href={peopleAnnotationsApi.datasetUrl()}
-              download
-            >
-              导出评测集
-            </a>
-            <p className="text-caption text-ink-3">
-              导出的是 schemaVersion=1 的本地标注集，可直接交给
-              evaluate_people.py 比较不同模型与检测方式。
-            </p>
-          </aside>
-          <div className="min-w-0">
-            {activeID ? (
-              <AnnotationEditor
-                key={activeID}
-                resourceID={activeID}
-                identities={identities.data?.items ?? []}
-                scenarioTags={samples.data?.scenarioTags ?? []}
-                onCreateIdentity={handleCreateIdentity}
-                onSaved={async () => {
-                  await client.invalidateQueries({
-                    queryKey: ["people-annotation-samples"],
-                  });
-                }}
-              />
-            ) : (
-              <EmptyState
-                title="先选一张照片"
-                description="左边选一张待标注的照片开始。" size="compact"
-              />
-            )}
-          </div>
-        </section>
+              ) : null}
+              <a
+                className="btn btn-sm btn-outline"
+                href={peopleAnnotationsApi.datasetUrl()}
+                download
+              >
+                导出评测集
+              </a>
+              <p className="text-caption text-ink-3">
+                导出的是 schemaVersion=1 的本地标注集，可直接交给
+                evaluate_people.py 比较不同模型与检测方式。
+              </p>
+            </aside>
+          }
+          stage={
+            <div className="min-w-0">
+              {activeID ? (
+                <AnnotationEditor
+                  key={activeID}
+                  resourceID={activeID}
+                  identities={identities.data?.items ?? []}
+                  scenarioTags={samples.data?.scenarioTags ?? []}
+                  onCreateIdentity={handleCreateIdentity}
+                  onSaved={async () => {
+                    await client.invalidateQueries({
+                      queryKey: ["people-annotation-samples"],
+                    });
+                  }}
+                />
+              ) : (
+                <EmptyState
+                  title="先选一张照片"
+                  description="左边选一张待标注的照片开始。"
+                  size="compact"
+                />
+              )}
+            </div>
+          }
+        />
       )}
-    </div>
+    </Page>
   );
 }
 
@@ -267,7 +286,9 @@ function AnnotationEditor({
   const [reviewed, setReviewed] = useState(false);
   const [selectedFaceID, setSelectedFaceID] = useState("");
   const [drawing, setDrawing] = useState(false);
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   const [dragEnd, setDragEnd] = useState<{ x: number; y: number } | null>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
 
@@ -370,13 +391,20 @@ function AnnotationEditor({
     setDragEnd(null);
     setDrawing(false);
     if (boxWidth < 4 || boxHeight < 4) return;
-    const box: [number, number, number, number] = [left, top, boxWidth, boxHeight];
+    const box: [number, number, number, number] = [
+      left,
+      top,
+      boxWidth,
+      boxHeight,
+    ];
     setFaces((current) => {
       const selected = current.find((face) => face.id === selectedFaceID);
       if (selected) {
         // 选中了某张脸再画框，就是在纠正它。
         return current.map((face) =>
-          face.id === selectedFaceID ? { ...face, box, source: "manual" as const } : face,
+          face.id === selectedFaceID
+            ? { ...face, box, source: "manual" as const }
+            : face,
         );
       }
       return [
@@ -393,7 +421,9 @@ function AnnotationEditor({
 
   const assignIdentity = (faceID: string, identity: string) => {
     setFaces((current) =>
-      current.map((face) => (face.id === faceID ? { ...face, identity } : face)),
+      current.map((face) =>
+        face.id === faceID ? { ...face, identity } : face,
+      ),
     );
   };
 
@@ -433,7 +463,13 @@ function AnnotationEditor({
     );
   }
   if (!detail) {
-    return <EmptyState title="加载中…" description="正在读取这张照片的检测结果。" size="compact" />;
+    return (
+      <EmptyState
+        title="加载中…"
+        description="正在读取这张照片的检测结果。"
+        size="compact"
+      />
+    );
   }
 
   return (
@@ -669,7 +705,9 @@ function IdentityPicker({
         <option value="">未标注身份</option>
         {identities.map((identity) => (
           <option key={identity.id} value={identity.id}>
-            {identity.label ? `${identity.id} · ${identity.label}` : identity.id}
+            {identity.label
+              ? `${identity.id} · ${identity.label}`
+              : identity.id}
           </option>
         ))}
       </select>

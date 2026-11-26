@@ -258,7 +258,7 @@ test("筛选结果为零时仍可调整条件并一键清除", async ({ page, re
   );
 
   await expect(page.getByRole("heading", { name: /没有匹配/ })).toBeVisible();
-  const filterBar = page.locator("main header");
+  const filterBar = page.getByRole("toolbar",{name:"相册工具"});
   await expect(filterBar).toBeVisible();
   await expect(filterBar.getByRole("tab", { name: /^全部/ })).toBeVisible();
   await expect(

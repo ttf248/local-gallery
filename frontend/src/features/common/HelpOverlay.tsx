@@ -28,6 +28,7 @@ const GROUP_ORDER: Array<{
   key: Shortcut["group"];
   title: string;
 }> = [
+  {key:"review",title:"逐组审阅"},
   { key: "global", title: "全局" },
   { key: "photo", title: "照片墙" },
   { key: "reader", title: "阅读器" },
@@ -82,7 +83,7 @@ export default function HelpOverlay({
   // 按 group 字段分组，渲染顺序由 GROUP_ORDER 决定
   // 照片墙是主页面的一种形态：全局操作照旧，再多一组大图预览的操作。
   const activeGroups: Shortcut["group"][] =
-    context === "library"
+    context === "review" ? ["global","review"] : context === "library"
       ? ["global"]
       : context === "photo"
         ? ["global", "photo"]

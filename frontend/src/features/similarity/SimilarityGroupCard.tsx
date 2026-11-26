@@ -90,7 +90,7 @@ export default function SimilarityGroupCard({
           aria-label={`${expanded ? "收起" : "展开"}这一组的 ${group.members.length} 张照片`}
         >
           {group.recommended === group.representative && (
-            <Badge tone="success" className="absolute left-2 top-2 z-10">
+            <Badge tone="success" className="absolute left-2 top-2 z-10 !bg-raised !text-ink">
               建议保留
             </Badge>
           )}

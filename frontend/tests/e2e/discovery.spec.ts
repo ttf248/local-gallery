@@ -110,7 +110,7 @@ test("发现页首屏给出找法，下面是各维度的紧凑预览", async ({
   await page.goto("/photo/explore");
 
   await expect(page.getByRole("complementary",{name:"主导航"}).getByRole("button", { name: "打开命令面板" })).toBeVisible();
-  await expect(page.getByRole("searchbox")).toHaveCount(0);
+  await expect(page.getByRole("searchbox",{name:"搜索照片库"})).toBeVisible();
   const sections=page.locator("main section[aria-labelledby^='explore-']");
   await expect(sections.getByRole("heading",{level:2})).toHaveText(["人物","地点","时间","主题"]);
   for(const [label,link] of [["人物","全部人物"],["地点","足迹"],["时间","时间线"],["主题","全部主题"]]){

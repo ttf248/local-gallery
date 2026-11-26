@@ -12,12 +12,18 @@ export function useDensityShortcuts(options: Options) {
   latest.current = options;
   useEffect(() => {
     let frame = 0;
+    let anchor:string|null=null;
     const unsubscribe = usePhotoStore.subscribe((state, previous) => {
       if (state.density === previous.density || !latest.current.enabled) return;
-      const id = latest.current.getAnchorId();
+      anchor ??= latest.current.getAnchorId();
       cancelAnimationFrame(frame);
-      if (id)
-        frame = requestAnimationFrame(() => latest.current.restoreAnchor(id));
+      if(anchor)frame=requestAnimationFrame(()=>{
+        // 第一帧提交照片墙的新布局，下一帧 Virtuoso 已测量新行高。
+        frame=requestAnimationFrame(()=>{
+          if(anchor)latest.current.restoreAnchor(anchor);
+          frame=requestAnimationFrame(()=>{anchor=null;});
+        });
+      });
     });
     function keydown(event: KeyboardEvent) {
       if (

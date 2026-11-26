@@ -310,10 +310,14 @@ function LocationProbe() {
 }
 
 function renderPage(initialEntry = "/photo/similarity") {
+  const address=new URL(initialEntry,"http://localhost");
+  address.searchParams.set("view","grid");
+  vi.spyOn(window,"matchMedia").mockImplementation(query=>({matches:query==="(min-width: 1280px)",media:query,onchange:null,
+     addEventListener:vi.fn(),removeEventListener:vi.fn(),addListener:vi.fn(),removeListener:vi.fn(),dispatchEvent:vi.fn()}));
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={[initialEntry]}>
+      <MemoryRouter initialEntries={[address.pathname+address.search]}>
         <Similarity />
         <LocationProbe />
       </MemoryRouter>
@@ -356,7 +360,7 @@ describe("相似照片整理页", () => {
     expect(within(card).getByText(/12\.0MP/)).toBeInTheDocument();
     expect(within(card).getByText(/曝光 90/)).toBeInTheDocument();
     expect(screen.getByTestId("similarity-summary")).toHaveTextContent(
-      "完全重复 60 组",
+      "可释放",
     );
   });
 
@@ -579,17 +583,16 @@ describe("相似照片整理页", () => {
     await screen.findByTestId("similarity-group");
 
     expect(requests[0].status).toBe("pending");
-    expect(screen.getByRole("radio", { name: "待处理" })).toHaveAttribute(
-      "aria-checked",
-      "true",
-    );
+    fireEvent.click(screen.getByRole("button",{name:"状态：待处理"}));
+    expect(screen.getByRole("menuitemradio",{name:/待处理/})).toHaveAttribute("aria-checked","true");
   });
 
   it("切到已处理会改筛选，并把状态写进地址栏", async () => {
     renderPage();
     await screen.findByTestId("similarity-group");
 
-    fireEvent.click(screen.getByRole("radio", { name: "已处理" }));
+    fireEvent.click(screen.getByRole("button",{name:"状态：待处理"}));
+    fireEvent.click(screen.getByRole("menuitemradio",{name:/已处理/}));
 
     await waitFor(() => {
       expect(requests.some((request) => request.status === "reviewed")).toBe(

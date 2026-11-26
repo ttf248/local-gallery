@@ -9,7 +9,7 @@ export function TaskIndicator({summary,collapsed}:{summary:ActiveJobSummary|null
  return <Link to="/tasks/run" aria-label={summary.label+(summary.status==="failed"?"，重试":"")} className="block rounded-lg bg-sunken p-3 hover:bg-hover">
   {collapsed?<ProgressRing value={percent} size={24} label={summary.label}/>:<>
    <StatusDot status={summary.status} label={summary.label}/>
-   {summary.status==="failed"?<div className="mt-1 text-caption text-danger">上次失败 · 重试</div>:<div className="mt-2 flex items-center gap-2"><ProgressBar className="h-0.5 flex-1" value={summary.progress ?? undefined} label="任务进度"/><span className="text-caption text-ink-2">{percent===null?"进行中":percent+"%"}</span></div>}
+   {summary.status==="failed"?<div className="mt-1 text-caption text-ink-2">上次失败 · 重试</div>:<div className="mt-2 flex items-center gap-2"><ProgressBar className="h-0.5 flex-1" value={summary.progress ?? undefined} label="任务进度"/><span className="text-caption text-ink-2">{percent===null?"进行中":percent+"%"}</span></div>}
   </>}
  </Link>;
 }
