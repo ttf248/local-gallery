@@ -554,7 +554,7 @@ describe("任务中心", () => {
     expect(
       moduleGroup.getByRole("button", { name: "向量索引" }),
     ).toHaveAttribute("title", expect.stringContaining("未安装"));
-    fireEvent.click(screen.getByRole("radio", { name: "全量" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^全量/ }));
     fireEvent.click(screen.getByRole("button", { name: /开始分析/ }));
     await waitFor(() =>
       expect(aiJobsApi.start).toHaveBeenCalledWith("metadata", "full"),
@@ -585,14 +585,11 @@ describe("任务中心", () => {
     renderCenter("run");
 
     const summary = await screen.findByRole("region", { name: "状态摘要" });
-    // 空闲：说清队列是空的，主要操作是启动分析。
     expect(within(summary).getByText("队列空闲")).toBeInTheDocument();
-    expect(
-      within(summary).getByRole("button", { name: /开始分析/ }),
-    ).toBeInTheDocument();
+    expect(within(summary).queryByRole("button", { name: /开始分析/ })).toBeNull();
     // 启动按钮带本次张数：点了才知道要处理多少。
     expect(
-      within(summary).getByRole("button", { name: /开始分析 · 320 张/ }),
+      screen.getByRole("button", { name: /开始分析 · 照片元数据 · 320 张/ }),
     ).toBeInTheDocument();
   });
 
@@ -651,6 +648,8 @@ describe("任务中心", () => {
     const summary = await screen.findByRole("region", { name: "状态摘要" });
     expect(within(summary).getByText(/上次运行失败/)).toBeInTheDocument();
     expect(within(summary).getByText(/部分图片分析失败/)).toBeInTheDocument();
+    expect(within(summary).getByRole("link", {name:"查看原因"})).toHaveAttribute("href", "/tasks/history?job=job-failed");
+    expect(within(summary).getByRole("button", {name:"重试照片元数据失败项"})).toBeEnabled();
   });
 
   it("启动被活动任务拒绝时显示原因并刷新任务状态", async () => {
@@ -744,11 +743,11 @@ describe("任务中心", () => {
     renderCenter("run");
 
     expect(
-      await screen.findByRole("button", { name: /开始分析 · 320 张/ }),
+      await screen.findByRole("button", { name: /开始分析 · 照片元数据 · 320 张/ }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: "全量" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^全量/ }));
     expect(
-      await screen.findByRole("button", { name: /开始分析 · 12,345 张/ }),
+      await screen.findByRole("button", { name: /开始分析 · 照片元数据 · 12,345 张/ }),
     ).toBeInTheDocument();
     // 两种口径一次核算带来，切模式不重发请求。
     expect(aiJobsApi.estimate).toHaveBeenCalledTimes(1);
@@ -791,7 +790,7 @@ describe("任务中心", () => {
     expect(await screen.findAllByText("无法估算（历史样本不足）")).toHaveLength(
       2,
     );
-    expect(screen.getByText("暂无历史记录，无法预估")).toBeInTheDocument();
+    expect(screen.getByText(/这个模块还没有跑过/)).toBeInTheDocument();
     expect(screen.getByText("320 张")).toBeInTheDocument();
   });
 
@@ -901,7 +900,8 @@ describe("任务中心", () => {
       snapshot: snapshot({
         jobs: [],
         active: undefined,
-        settings: { ...snapshot().settings, faceModel: "quality-v2" },
+        modules: [{type:"face", name:"人脸识别", installed:true, version:"v1"}],
+        settings: { ...snapshot().settings, peopleEnabled:true, faceModel: "quality-v2" },
       }),
     });
     renderCenter("run");
@@ -928,7 +928,7 @@ describe("任务中心", () => {
       "href",
       "/settings/server",
     );
-    fireEvent.click(screen.getByRole("radio", { name: "全量" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^全量/ }));
     fireEvent.click(screen.getByRole("button", { name: "按序启动全部任务" }));
     await waitFor(() =>
       expect(aiJobsApi.startAll).toHaveBeenCalledWith("full"),
@@ -1185,7 +1185,7 @@ describe("任务中心", () => {
         { name: "向量索引" },
       ),
     );
-    fireEvent.click(screen.getByRole("radio", { name: "全量" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^全量/ }));
     fireEvent.click(screen.getByRole("button", { name: /开始分析/ }));
     await waitFor(() =>
       expect(aiJobsApi.start).toHaveBeenCalledWith("embedding", "full"),
@@ -1264,13 +1264,13 @@ describe("任务中心", () => {
     expect(
       screen.getByText("文字识别已就绪 · rapidocr-v1"),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "开始分析" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /开始分析/ })).toBeEnabled();
 
     fireEvent.click(moduleGroup.getByRole("button", { name: "人脸识别" }));
     expect(
       await screen.findByText(/检测照片中的人脸并生成本机特征向量/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "开始分析" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /开始分析/ })).toBeEnabled();
   });
 
   it("每日计划用开关与时间输入，保存后写回设置", async () => {
@@ -1371,7 +1371,7 @@ describe("任务中心", () => {
     });
     expect(faceModule).toBeDisabled();
     fireEvent.click(
-      screen.getByRole("checkbox", { name: "启用人物分析（默认关闭）" }),
+      screen.getByRole("checkbox", { name: "启用人物分析（手动与每日任务共用）" }),
     );
     expect(faceModule).toBeEnabled();
     fireEvent.click(faceModule);

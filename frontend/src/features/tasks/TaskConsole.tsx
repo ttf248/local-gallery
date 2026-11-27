@@ -8,16 +8,15 @@ import type {
   AnalysisMode,
   AnalysisType,
 } from "../../api/aiJobs";
-import type {
-  TaskCenterSelection,
-  TaskCenterPlan,
-} from "../../hooks/useTaskCenter";
+import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
 import { formatCount, formatEstimateDuration } from "../../utils/taskFormat";
 import ModuleTiles from "./ModuleTiles";
 import RunSummaryPanel from "./RunSummaryPanel";
 
 interface Props {
-  plan: TaskCenterPlan;
+  gpuEnabled: boolean;
+  active: boolean;
+  connected: boolean;
   onStart: () => void;
   loading: boolean;
   /** 启动或任务操作正在提交。 */
@@ -41,14 +40,10 @@ interface Props {
   onRefreshEstimate: () => void;
 }
 
-/**
- * 这次要跑什么：选模块、选口径、看清楚要处理多少张。
- *
- * 启动按钮不在这里 —— 它在上面的状态摘要里，紧挨着「现在是什么状态」
- * 那一行，用户不用在页面里找按钮在哪。这一块只回答「跑什么、跑多少」。
- */
 export default function TaskConsole({
-  plan,
+  gpuEnabled,
+  active,
+  connected,
   onStart,
   loading,
   busy,
@@ -90,11 +85,11 @@ export default function TaskConsole({
     faceModel === "buffalo_m" ? buffaloReady : qualityReady;
 
   return (
-    <section className="mt-8" aria-labelledby="run-config-heading">
+    <section className="mt-4" aria-labelledby="run-config-heading">
       <div className="mb-3">
         <div className="min-w-0">
           <h2 id="run-config-heading" className="text-heading">
-            这次要跑什么
+            选择分析模块
           </h2>
           <p className="mt-1 text-caption text-ink-2">
             {moduleDescription(selectedModule)}
@@ -102,8 +97,8 @@ export default function TaskConsole({
         </div>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <div className="mb-6 rounded-xl bg-sunken p-5">
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="rounded-lg bg-sunken p-2">
           <div className="min-w-0">
             <ModuleTiles
               modules={modules}
@@ -113,15 +108,17 @@ export default function TaskConsole({
               selected={[selectedModule]}
               onToggle={(type) => selection.setModule(type)}
               disabled={busy}
-              locked={peopleEnabled ? [] : ["face"]}
+              locked={peopleEnabled ? [] : ["face", "portrait"]}
             />
           </div>
         </div>
 
-        <aside className="min-w-0 rounded-xl border border-line bg-raised p-5 xl:sticky xl:top-4">
+        <aside className="min-w-0 rounded-xl border border-line bg-raised p-5">
           <h3 className="mb-3 text-heading">本次运行</h3>
+          {["embedding", "ocr", "face"].includes(selectedModule) && <a href="#hardware" className="mb-2 inline-block text-caption text-ink-2 underline">新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案</a>}
           <RunSummaryPanel
-            plan={plan}
+            active={active}
+            moduleName={selectedName}
             selection={selection}
             onFaceModelChange={onChangeFaceModel}
             onStart={onStart}
@@ -133,10 +130,15 @@ export default function TaskConsole({
             embeddingStatusLoading={embeddingStatusLoading}
             running={busy}
             startDisabled={
+              !connected ||
+              (selectedModule === "embedding" &&
+                !(
+                  embeddingStatus?.runtimeReady && embeddingStatus.modelValid
+                )) ||
               !installedModules.some(
                 (module) => module.type === selectedModule,
               ) ||
-              (selectedModule === "face" &&
+              ((selectedModule === "face" || selectedModule === "portrait") &&
                 (!peopleEnabled || !selectedFaceModelReady))
             }
             estimate={estimate ?? null}
@@ -149,7 +151,12 @@ export default function TaskConsole({
             <button
               type="button"
               className={buttonStyles({ variant: "secondary", size: "sm" })}
-              disabled={busy || installedModules.length === 0}
+              disabled={
+                !connected ||
+                busy ||
+                installedModules.length === 0 ||
+                sequence?.modules.length === 0
+              }
               onClick={() => onStartAll(mode)}
             >
               按序启动全部任务
@@ -169,7 +176,7 @@ export default function TaskConsole({
         {/* 高级信息：版本、运行环境与索引覆盖。日常用不到，但它决定
             「为什么这次跑不起来」，所以收起来而不是删掉 —— 摘要里给出
             的提示会指向这里。 */}
-        <details className="xl:col-span-2 tasks-advanced border-t border-t-line">
+        <details className="lg:col-span-2 tasks-advanced border-t border-t-line">
           <summary className="tasks-advanced__summary flex items-baseline gap-3 py-2.5 px-0 cursor-pointer text-body text-ink [list-style:none] [&::-webkit-details-marker]:hidden before:content-['▸'] before:text-caption before:text-ink-3 [.tasks-advanced[open]>&::before]:content-['▾']">
             高级信息
             <span className="text-caption text-ink-3">模块版本与运行环境</span>

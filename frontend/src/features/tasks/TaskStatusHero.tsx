@@ -26,18 +26,20 @@ export default function TaskStatusHero({
 }: Props) {
   return (
     <section
-      className="relative grid gap-4 rounded-[20px] bg-raised p-7 shadow-1 sm:grid-cols-[1fr_auto]"
+      className="relative grid gap-2 rounded-lg border border-line bg-raised p-4 sm:grid-cols-[1fr_auto]"
       aria-label="状态摘要"
       data-status={status}
     >
       <div className="tasks-summary__description [flex:1_1_18rem] min-w-0">
-        <h2 className="flex items-center gap-2 text-title">
+        <h2 className="flex items-center gap-2 text-heading">
           <Badge variant="dot" tone={taskStatusTone(status)} />
           {title}
         </h2>
         {children}
       </div>
-      <div className="tasks-summary__actions flex flex-wrap items-center gap-y-2 gap-x-3 max-w-full [.tasks-summary>:last-child:not(&)]:basis-[100%]">{actions}</div>
+      <div className="tasks-summary__actions flex flex-wrap items-center gap-y-2 gap-x-3 max-w-full [.tasks-summary>:last-child:not(&)]:basis-[100%]">
+        {actions}
+      </div>
       {active && <ActiveProgress job={active} />}
     </section>
   );

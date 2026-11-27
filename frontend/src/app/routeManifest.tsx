@@ -277,7 +277,7 @@ export const ROUTE_MANIFEST: readonly RouteMeta[] = [
   {
     id: "machine.tasks",
     path: "/tasks/:tab",
-    page: "workspace",
+    page: "system",
     navKey: "machine.tasks",
     help: "library",
     chrome: { shell: "app", search: "global" },
@@ -290,7 +290,7 @@ export const ROUTE_MANIFEST: readonly RouteMeta[] = [
   {
     id: "machine.settings",
     path: "/settings/:tab",
-    page: "standard",
+    page: "system",
     navKey: "machine.settings",
     help: "library",
     chrome: { shell: "app", search: "global" },

@@ -21,6 +21,7 @@ describe("DailyPlanPanel", () => {
         onPeopleEnabledChange={vi.fn()}
         onSave={vi.fn()}
         saving={false}
+        dirty
         saved={false}
         error={false}
         modules={[]}
@@ -29,6 +30,7 @@ describe("DailyPlanPanel", () => {
       />,
     );
 
+    expect(screen.getByText("有未保存的更改")).toBeVisible();
     const dimensions = screen.getByRole("status", {
       name: "智能相册维度计划",
     });
@@ -56,6 +58,7 @@ describe("DailyPlanPanel", () => {
         onPeopleEnabledChange={vi.fn()}
         onSave={vi.fn()}
         saving={false}
+        dirty={false}
         saved={false}
         error={false}
         modules={[]}

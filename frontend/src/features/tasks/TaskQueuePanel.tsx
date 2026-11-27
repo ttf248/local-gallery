@@ -1,6 +1,6 @@
-import {buttonStyles} from "../../ui/buttonStyles";
+import { buttonStyles } from "../../ui/buttonStyles";
 import { useConfirm } from "../common";
-import {SettingsGroup} from "../../ui/SettingsList";
+import { SettingsGroup } from "../../ui/SettingsList";
 import type { AIJob } from "../../api/aiJobs";
 import { formatDateTime } from "../../utils/date";
 import { taskModeLabel, taskTitle } from "../../utils/taskFormat";
@@ -32,18 +32,42 @@ export default function TaskQueuePanel({
   const confirm = useConfirm();
   async function clearQueue() {
     if (
-      (await confirm({title:"清空等待队列",description:<>{`取消队列中的 ${jobs.length} 项等待任务？当前任务不会受影响。`} 原始文件会保留。</>,confirmLabel:"清空队列",tone:"danger"}))
+      await confirm({
+        title: "清空等待队列",
+        description: (
+          <>
+            {`取消队列中的 ${jobs.length} 项等待任务？当前任务不会受影响。`}{" "}
+            原始文件会保留。
+          </>
+        ),
+        confirmLabel: "清空队列",
+        tone: "danger",
+      })
     ) {
       onClear();
     }
   }
 
+  if (!loading && jobs.length === 0)
+    return (
+      <section
+        aria-label="等待队列"
+        className="flex items-center gap-4 border-y border-line py-3"
+      >
+        <h2 className="text-body font-medium">等待队列 · 0 项</h2>
+        <p className="text-caption text-ink-2">当前没有等待中的任务。</p>
+      </section>
+    );
+
   return (
-    <SettingsGroup id="task-queue" title={"等待队列 · " + (loading ? "…" : jobs.length + " 项")}>
+    <SettingsGroup
+      id="task-queue"
+      title={"等待队列 · " + (loading ? "…" : jobs.length + " 项")}
+    >
       <div className="flex justify-end pt-2 pr-4">
         <button
           type="button"
-          className={buttonStyles({variant:"secondary",size:"sm"})}
+          className={buttonStyles({ variant: "secondary", size: "sm" })}
           disabled={loading || busy || jobs.length === 0}
           onClick={clearQueue}
         >
@@ -53,10 +77,8 @@ export default function TaskQueuePanel({
 
       <div className="tasks-section__body mt-3">
         {loading ? (
-          <p className="tasks-empty py-3.5 px-0 text-caption text-ink-3">正在读取等待队列…</p>
-        ) : jobs.length === 0 ? (
           <p className="tasks-empty py-3.5 px-0 text-caption text-ink-3">
-            当前没有等待中的任务。
+            正在读取等待队列…
           </p>
         ) : (
           <ol className="tasks-list border-t border-t-line">
@@ -87,7 +109,11 @@ export default function TaskQueuePanel({
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    className={buttonStyles({variant:"secondary",size:"sm",className:"px-2"})}
+                    className={buttonStyles({
+                      variant: "secondary",
+                      size: "sm",
+                      className: "px-2",
+                    })}
                     aria-label={`上移 ${taskTitle(job)}`}
                     title="上移"
                     disabled={busy || index === 0}
@@ -97,7 +123,11 @@ export default function TaskQueuePanel({
                   </button>
                   <button
                     type="button"
-                    className={buttonStyles({variant:"secondary",size:"sm",className:"px-2"})}
+                    className={buttonStyles({
+                      variant: "secondary",
+                      size: "sm",
+                      className: "px-2",
+                    })}
                     aria-label={`下移 ${taskTitle(job)}`}
                     title="下移"
                     disabled={busy || index === jobs.length - 1}
@@ -107,7 +137,11 @@ export default function TaskQueuePanel({
                   </button>
                   <button
                     type="button"
-                    className={buttonStyles({variant:"secondary",size:"sm",className:"px-2 text-danger"})}
+                    className={buttonStyles({
+                      variant: "secondary",
+                      size: "sm",
+                      className: "px-2 text-danger",
+                    })}
                     aria-label={`取消排队 ${taskTitle(job)}`}
                     title="取消排队"
                     disabled={busy}

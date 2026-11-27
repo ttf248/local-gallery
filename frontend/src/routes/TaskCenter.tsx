@@ -1,4 +1,4 @@
-import {buttonStyles} from "../ui/buttonStyles";
+import { buttonStyles } from "../ui/buttonStyles";
 import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { PageHero } from "../shell/PageHero";
@@ -73,190 +73,198 @@ export function TaskCenterView({ tab }: { tab: string }) {
 
   return (
     <>
-      {/* 任务中心是一页窄内容：状态摘要、控制台与队列排在一栏里，
-          宽屏上不会把「状态」甩到左边、把「按钮」甩到右边。 */}
-      <Page variant="workspace" className="tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12">
+      <Page
+        variant="system"
+        className="tasks-page [container-type:inline-size] [container-name:tasks] [&_:is(.bg-sunken,_.bg-sunken\/50,_.bg-sunken-strong)_.text-ink-3]:text-ink-2 pb-12"
+      >
         <PageHero
+          compact
           title="任务中心"
           meta="管理本机分析、等待队列及每日计划。"
           actions={
-            <Link className={buttonStyles({variant:"secondary",size:"sm"})} to="/settings/server">
+            <Link
+              className={buttonStyles({ variant: "secondary", size: "sm" })}
+              to="/settings/server"
+            >
               服务设置
             </Link>
           }
         />
 
-        <PageTabs page={TAB_PAGES.tasks} active={tab} label="任务中心分区" runStatus={active?.status ?? history[0]?.status}/>
-          {visited.has("run") && (
-            <section
-              aria-label="运行分区"
-              id="tasks-panel-run"
-              hidden={tab !== "run"}
-            >
-              <div className="mt-6">
-                {/* 状态摘要：现在在干什么、还剩多少、能做什么。 */}
-                {center.loadError ? (
-                  <section
-                    aria-label="状态摘要"
-                    role="alert"
-                    className="rounded-lg bg-raised p-7 shadow-1"
+        <PageTabs
+          page={TAB_PAGES.tasks}
+          active={tab}
+          label="任务中心分区"
+          runStatus={active?.status ?? history[0]?.status}
+        />
+        {visited.has("run") && (
+          <section
+            aria-label="运行分区"
+            id="tasks-panel-run"
+            hidden={tab !== "run"}
+          >
+            <div className="mt-4">
+              {/* 状态摘要：现在在干什么、还剩多少、能做什么。 */}
+              {center.loadError ? (
+                <section
+                  aria-label="状态摘要"
+                  role="alert"
+                  className="rounded-lg bg-raised p-7 shadow-1"
+                >
+                  <h2 className="text-title">与服务端的连接中断</h2>
+                  <button
+                    type="button"
+                    className={buttonStyles({
+                      variant: "secondary",
+                      className: "mt-3",
+                    })}
+                    onClick={center.reconnect}
                   >
-                    <h2 className="text-title">与服务端的连接中断</h2>
-                    <button
-                      type="button"
-                      className={buttonStyles({variant:"secondary",className:"mt-3"})}
-                      onClick={center.reconnect}
-                    >
-                      重新连接
-                    </button>
-                  </section>
-                ) : (
-                  <TaskSummary
-                    active={active}
-                    lastJob={history[0]}
-                    loading={center.loading}
-                    busy={runBusy}
-                    cancelling={center.cancelling}
-                    modules={snapshot?.modules ?? []}
-                    queuedCount={queue.length}
-                    selection={center.selection}
-                    estimate={center.estimate}
-                    embeddingStatus={center.embeddingStatus}
-                    peopleEnabled={plan.peopleEnabled}
-                    faceModel={center.faceModel}
-                    onStart={() =>
-                      center.start(
-                        center.selection.module,
-                        center.selection.mode,
-                      )
-                    }
-                    onAction={center.act}
-                  />
-                )}
-                <TaskConsole plan={plan} onStart={()=>center.start(center.selection.module,center.selection.mode)}
+                    重新连接
+                  </button>
+                </section>
+              ) : (
+                <TaskSummary
+                  active={active}
+                  lastJob={history[0]}
                   loading={center.loading}
                   busy={runBusy}
+                  cancelling={center.cancelling}
                   modules={snapshot?.modules ?? []}
-                  history={history}
-                  peopleEnabled={plan.peopleEnabled}
-                  faceModel={center.faceModel}
-                  faceModelSaving={center.faceModelSaving}
-                  faceModelSaveError={center.faceModelSaveError}
-                  onChangeFaceModel={center.setFaceModel}
-                  embeddingStatus={center.embeddingStatus}
-                  embeddingStatusLoading={center.embeddingStatusLoading}
-                  selection={center.selection}
-                  estimate={center.estimate}
-                  estimateLoading={center.estimateLoading}
-                  estimateError={center.estimateError}
-                  onStartAll={center.startAll}
-                  onRefreshEstimate={center.refreshEstimate}
+                  queuedCount={queue.length}
+                  onAction={center.act}
                 />
-                <TaskQueuePanel
-                  jobs={queue}
-                  busy={center.busy}
-                  loading={center.loading}
-                  onMove={center.moveQueued}
-                  onCancel={(id) => center.act(id, "cancel")}
-                  onClear={center.clearQueue}
-                />
-                <ComputeHardwarePanel
-                  gpuEnabled={center.gpuEnabled}
-                  disabled={center.loading}
-                  saving={center.gpuSaving}
-                  saveError={center.gpuSaveError}
-                  status={center.embeddingStatus}
-                  statusLoading={center.embeddingStatusLoading}
-                  onChange={center.setGPUEnabled}
-                />
-                <SmartAlbumRefreshPanel />
-                {center.sequenceSkipped && center.sequenceSkipped.length > 0 ? (
-                  <p role="status" className="mt-3 text-caption text-warning">
-                    本次按序启动已跳过未就绪模块：
-                    {center.sequenceSkipped
-                      .map((module) => module.name)
-                      .join("、")}
-                    。可在「本机存储」页签查看模型与运行环境。
-                  </p>
-                ) : null}
-                {center.operationError ? (
-                  <p role="alert" className="mt-2 text-caption text-danger">
-                    {center.operationError}
-                  </p>
-                ) : null}
-              </div>
-            </section>
-          )}
+              )}
+              <TaskQueuePanel
+                jobs={queue}
+                busy={center.busy}
+                loading={center.loading}
+                onMove={center.moveQueued}
+                onCancel={(id) => center.act(id, "cancel")}
+                onClear={center.clearQueue}
+              />
+              <TaskConsole
+                gpuEnabled={center.gpuEnabled}
+                active={Boolean(active)}
+                connected={!center.loadError}
+                onStart={() =>
+                  center.start(center.selection.module, center.selection.mode)
+                }
+                loading={center.loading}
+                busy={runBusy}
+                modules={snapshot?.modules ?? []}
+                history={history}
+                peopleEnabled={snapshot?.settings.peopleEnabled ?? false}
+                faceModel={center.faceModel}
+                faceModelSaving={center.faceModelSaving}
+                faceModelSaveError={center.faceModelSaveError}
+                onChangeFaceModel={center.setFaceModel}
+                embeddingStatus={center.embeddingStatus}
+                embeddingStatusLoading={center.embeddingStatusLoading}
+                selection={center.selection}
+                estimate={center.estimate}
+                estimateLoading={center.estimateLoading}
+                estimateError={center.estimateError}
+                onStartAll={center.startAll}
+                onRefreshEstimate={center.refreshEstimate}
+              />
+              <ComputeHardwarePanel
+                gpuEnabled={center.gpuEnabled}
+                disabled={center.loading}
+                saving={center.gpuSaving}
+                saveError={center.gpuSaveError}
+                status={center.embeddingStatus}
+                statusLoading={center.embeddingStatusLoading}
+                onChange={center.setGPUEnabled}
+              />
+              <SmartAlbumRefreshPanel />
+              {center.sequenceSkipped && center.sequenceSkipped.length > 0 ? (
+                <p role="status" className="mt-3 text-caption text-warning">
+                  本次按序启动已跳过未就绪模块：
+                  {center.sequenceSkipped
+                    .map((module) => module.name)
+                    .join("、")}
+                  。可在「本机存储」页签查看模型与运行环境。
+                </p>
+              ) : null}
+              {center.operationError ? (
+                <p role="alert" className="mt-2 text-caption text-danger">
+                  {center.operationError}
+                </p>
+              ) : null}
+            </div>
+          </section>
+        )}
 
-          {visited.has("plan") && (
-            <section
-              aria-label="每日计划分区"
-              id="tasks-panel-plan"
-              hidden={tab !== "plan"}
-            >
-              <div className="mt-6">
-                <DailyPlanPanel
-                  enabled={plan.enabled}
-                  time={plan.time}
-                  selectedModules={plan.modules}
-                  scanEnabled={plan.scan}
-                  smartAlbumsEnabled={plan.smartAlbums}
-                  peopleEnabled={plan.peopleEnabled}
-                  ready={plan.ready}
-                  onEnabledChange={plan.setEnabled}
-                  onTimeChange={plan.setTime}
-                  onModulesChange={plan.setModules}
-                  onScanChange={plan.setScan}
-                  onSmartAlbumsChange={plan.setSmartAlbums}
-                  onPeopleEnabledChange={plan.setPeopleEnabled}
-                  onSave={plan.save}
-                  saving={plan.saving}
-                  saved={plan.saved}
-                  error={plan.error}
-                  lastScheduledDate={snapshot?.settings.lastScheduledDate}
-                  lastScheduledStatus={snapshot?.settings.lastScheduledStatus}
-                  lastScheduledStage={snapshot?.settings.lastScheduledStage}
-                  lastScheduledError={snapshot?.settings.lastScheduledError}
-                  modules={snapshot?.modules ?? []}
-                  estimate={center.estimate}
-                  estimateLoading={center.estimateLoading}
-                  estimateError={center.estimateError}
-                />
-              </div>
-            </section>
-          )}
+        {visited.has("plan") && (
+          <section
+            aria-label="每日计划分区"
+            id="tasks-panel-plan"
+            hidden={tab !== "plan"}
+          >
+            <div className="mt-4">
+              <DailyPlanPanel
+                enabled={plan.enabled}
+                time={plan.time}
+                selectedModules={plan.modules}
+                scanEnabled={plan.scan}
+                smartAlbumsEnabled={plan.smartAlbums}
+                peopleEnabled={plan.peopleEnabled}
+                ready={plan.ready}
+                onEnabledChange={plan.setEnabled}
+                onTimeChange={plan.setTime}
+                onModulesChange={plan.setModules}
+                onScanChange={plan.setScan}
+                onSmartAlbumsChange={plan.setSmartAlbums}
+                onPeopleEnabledChange={plan.setPeopleEnabled}
+                onSave={plan.save}
+                saving={plan.saving}
+                dirty={plan.dirty}
+                saved={plan.saved}
+                error={plan.error}
+                lastScheduledDate={snapshot?.settings.lastScheduledDate}
+                lastScheduledStatus={snapshot?.settings.lastScheduledStatus}
+                lastScheduledStage={snapshot?.settings.lastScheduledStage}
+                lastScheduledError={snapshot?.settings.lastScheduledError}
+                modules={snapshot?.modules ?? []}
+                estimate={center.estimate}
+                estimateLoading={center.estimateLoading}
+                estimateError={center.estimateError}
+              />
+            </div>
+          </section>
+        )}
 
-          {visited.has("history") && (
-            <section
-              aria-label="任务记录分区"
-              id="tasks-panel-history"
-              hidden={tab !== "history"}
-            >
-              <div className="mt-6">
-                <JobHistoryPanel
-                  jobs={history}
-                  retryDisabled={Boolean(active) || taskActionsBusy}
-                  busy={taskActionsBusy}
-                  onRetry={(id) => center.act(id, "retry")}
-                  onDelete={center.deleteHistoryItem}
-                  onClear={center.clearHistory}
-                />
-              </div>
-            </section>
-          )}
+        {visited.has("history") && (
+          <section
+            aria-label="任务记录分区"
+            id="tasks-panel-history"
+            hidden={tab !== "history"}
+          >
+            <div className="mt-4">
+              <JobHistoryPanel
+                jobs={history}
+                retryDisabled={Boolean(active) || taskActionsBusy}
+                busy={taskActionsBusy}
+                onRetry={(id) => center.act(id, "retry")}
+                onDelete={center.deleteHistoryItem}
+                onClear={center.clearHistory}
+              />
+            </div>
+          </section>
+        )}
 
-          {visited.has("storage") && (
-            <section
-              aria-label="本机存储分区"
-              id="tasks-panel-storage"
-              hidden={tab !== "storage"}
-            >
-              <div className="mt-6">
-                <StorageSection />
-              </div>
-            </section>
-          )}
-
+        {visited.has("storage") && (
+          <section
+            aria-label="本机存储分区"
+            id="tasks-panel-storage"
+            hidden={tab !== "storage"}
+          >
+            <div className="mt-4">
+              <StorageSection />
+            </div>
+          </section>
+        )}
       </Page>
     </>
   );

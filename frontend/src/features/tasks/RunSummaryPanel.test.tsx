@@ -1,4 +1,3 @@
-import type { TaskCenterPlan } from "../../hooks/useTaskCenter";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { AIJobEstimate } from "../../api/aiJobs";
@@ -61,7 +60,7 @@ describe("RunSummaryPanel", () => {
     const onStart = vi.fn();
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         estimating={false}
         estimate={estimate}
@@ -76,7 +75,7 @@ describe("RunSummaryPanel", () => {
         }}
       />,
     );
-    const action = screen.getByRole("button", { name: "全部已是最新" });
+    const action = screen.getByRole("button", { name: "开始分析 · 照片元数据 · 0 张" });
     expect(action).toBeDisabled();
     fireEvent.click(action);
     expect(onStart).not.toHaveBeenCalled();
@@ -85,7 +84,7 @@ describe("RunSummaryPanel", () => {
   it("把增量与全量并排列出张数与预计耗时", () => {
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         onStart={vi.fn()}
         onFaceModelChange={vi.fn()}
@@ -130,7 +129,7 @@ describe("RunSummaryPanel", () => {
     };
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         onStart={vi.fn()}
         onFaceModelChange={vi.fn()}
@@ -160,7 +159,7 @@ describe("RunSummaryPanel", () => {
   it("核算中先给一句话，不摆空表", () => {
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         onStart={vi.fn()}
         onFaceModelChange={vi.fn()}
@@ -188,7 +187,7 @@ describe("RunSummaryPanel", () => {
     const onRefresh = vi.fn();
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         onStart={vi.fn()}
         onFaceModelChange={vi.fn()}
@@ -219,7 +218,7 @@ describe("RunSummaryPanel", () => {
     estimate.modules[0].full = null;
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         onStart={vi.fn()}
         onFaceModelChange={vi.fn()}
@@ -247,7 +246,7 @@ describe("RunSummaryPanel", () => {
     const estimate = estimateFixture({ libraryReady: false, totalImages: 0 });
     render(
       <RunSummaryPanel
-        plan={{ peopleEnabled: true } as TaskCenterPlan}
+        moduleName="照片元数据" active={false}
         running={false}
         onStart={vi.fn()}
         onFaceModelChange={vi.fn()}

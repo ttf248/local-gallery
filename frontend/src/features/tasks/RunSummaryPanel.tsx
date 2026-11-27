@@ -2,10 +2,7 @@ import { Menu } from "../../ui/Menu";
 import { buttonStyles } from "../../ui/buttonStyles";
 import Segmented from "../../ui/Segmented";
 import { SettingsGroup, SettingsRow } from "../../ui/SettingsList";
-import type {
-  TaskCenterPlan,
-  TaskCenterSelection,
-} from "../../hooks/useTaskCenter";
+import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
 import { Button } from "../../ui/Button";
 import type {
   AIJobEstimate,
@@ -22,7 +19,8 @@ import {
 import { RefreshIcon } from "../../ui/icons";
 
 export interface RunSummaryPanelProps {
-  plan: TaskCenterPlan;
+  active: boolean;
+  moduleName: string;
   selection: TaskCenterSelection;
   estimate: AIJobEstimate | null;
   estimating: boolean;
@@ -62,9 +60,6 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
     embeddingStatusLoading,
   } = props;
   const { module: selectedModule, mode } = selection;
-  const selectedName =
-    estimate?.modules.find((item) => item.type === selectedModule)?.name ??
-    "所选模块";
   const selectedFaceModelReady =
     faceModel === "buffalo_m" ? buffaloReady : qualityReady;
   const count = estimate?.modules.find(
@@ -73,94 +68,94 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
   return (
     <>
       {" "}
-      <SettingsGroup title="处理方式">
-        <SettingsRow label="分析模式">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {(selectedModule === "face" || selectedModule === "portrait") && (
+        <SettingsGroup title="人物分析">
+          <SettingsRow label="人脸模型">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Menu
+                label="人脸分析模型"
+                trigger={
+                  <Button
+                    variant="secondary"
+                    aria-label={`人脸分析模型 · ${faceModel === "buffalo_m" ? "标准" : "轻量"}`}
+                    disabled={busy || faceModelSaving || embeddingStatusLoading}
+                  >
+                    {faceModel === "buffalo_m" ? "标准（Buffalo_m）" : "轻量"}
+                  </Button>
+                }
+                items={[
+                  {
+                    id: "quality-v2",
+                    label: "轻量",
+                    checked: faceModel === "quality-v2",
+                    disabled: !qualityReady,
+                    onSelect: () => onFaceModelChange("quality-v2"),
+                  },
+                  {
+                    id: "buffalo_m",
+                    label: "标准（Buffalo_m）",
+                    checked: faceModel === "buffalo_m",
+                    disabled: !buffaloReady,
+                    onSelect: () => onFaceModelChange("buffalo_m"),
+                  },
+                ]}
+              />
+              <span className="text-caption text-ink-3">
+                {selectedFaceModelReady
+                  ? faceModel === "buffalo_m"
+                    ? "标准模型已就绪"
+                    : "轻量模型已就绪"
+                  : "所选模型未就绪，请在本机存储页签安装模型"}
+              </span>
+              {faceModelSaving ? (
+                <span className="text-caption text-ink-3">
+                  正在切换并重建人物索引…
+                </span>
+              ) : null}
+              {faceModelSaveError ? (
+                <span role="alert" className="text-caption text-danger">
+                  模型切换失败，检查是否有正在运行的人脸任务后重试。
+                </span>
+              ) : null}
+            </div>
+          </SettingsRow>
+        </SettingsGroup>
+      )}
+      <SettingsGroup title="本次规模">
+        <div className="p-3 pl-0">
+          {(!estimate?.libraryReady ||
+            !estimate.modules.find((item) => item.type === selectedModule)
+              ?.available ||
+            props.error ||
+            props.estimating) && (
             <Segmented
               label="处理方式"
               value={mode}
-              onChange={onModeChange}
               disabled={busy}
+              onChange={onModeChange}
               options={[
                 { value: "incremental", label: "增量" },
                 { value: "full", label: "全量" },
               ]}
             />
-            <span className="text-caption text-ink-3">
-              {modeHint(selectedModule, mode, selectedName)}
-            </span>
-          </div>
-        </SettingsRow>
-        <SettingsRow label="人脸模型">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <Menu
-              label="人脸分析模型"
-              trigger={
-                <Button
-                  variant="secondary"
-                  aria-label={`人脸分析模型 · ${faceModel === "buffalo_m" ? "标准" : "轻量"}`}
-                  disabled={busy || faceModelSaving || embeddingStatusLoading}
-                >
-                  {faceModel === "buffalo_m" ? "标准（Buffalo_m）" : "轻量"}
-                </Button>
-              }
-              items={[
-                {
-                  id: "quality-v2",
-                  label: "轻量",
-                  checked: faceModel === "quality-v2",
-                  disabled: !qualityReady,
-                  onSelect: () => onFaceModelChange("quality-v2"),
-                },
-                {
-                  id: "buffalo_m",
-                  label: "标准（Buffalo_m）",
-                  checked: faceModel === "buffalo_m",
-                  disabled: !buffaloReady,
-                  onSelect: () => onFaceModelChange("buffalo_m"),
-                },
-              ]}
-            />
-            <span className="text-caption text-ink-3">
-              {selectedFaceModelReady
-                ? faceModel === "buffalo_m"
-                  ? "标准模型已就绪"
-                  : "轻量模型已就绪"
-                : "所选模型未就绪，请在本机存储页签安装模型"}
-            </span>
-            {faceModelSaving ? (
-              <span className="text-caption text-ink-3">
-                正在切换并重建人物索引…
-              </span>
-            ) : null}
-            {faceModelSaveError ? (
-              <span role="alert" className="text-caption text-danger">
-                模型切换失败，检查是否有正在运行的人脸任务后重试。
-              </span>
-            ) : null}
-          </div>
-        </SettingsRow>
+          )}
+          <EstimateDetails {...props} />
+          <p className="mt-2 text-caption text-ink-2">
+            {modeHint(selectedModule, mode, props.moduleName)}
+          </p>
+        </div>
       </SettingsGroup>
-      <SettingsGroup title="本次规模">
-        <EstimateDetails {...props} />
-      </SettingsGroup>
-      <Button
-        size="lg"
-        className="mt-3 w-full"
-        disabled={
-          busy ||
-          props.startDisabled ||
-          count === 0 ||
-          (selectedModule === "face" && !props.plan.peopleEnabled)
-        }
-        onClick={props.onStart}
-      >
-        {count === 0
-          ? "全部已是最新"
-          : count === undefined
-            ? "运行所选模块"
-            : `运行所选模块 · ${formatCount(count)} 张`}
-      </Button>
+      {!props.active && (
+        <Button
+          size="lg"
+          className="mt-3 w-full"
+          disabled={busy || props.startDisabled || count === 0}
+          onClick={props.onStart}
+        >
+          开始分析 · {props.moduleName}
+          {count === undefined ? "" : " · " + formatCount(count) + " 张"}
+        </Button>
+      )}
     </>
   );
 }
@@ -248,6 +243,7 @@ function EstimateDetails({
               >
                 <input
                   type="radio"
+                  className="!size-4 accent-accent"
                   name="analysis-scale"
                   value={item}
                   checked={mode === item}

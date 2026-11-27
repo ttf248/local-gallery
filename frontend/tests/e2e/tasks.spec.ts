@@ -16,8 +16,8 @@ test.describe("任务中心", () => {
         name: "照片元数据", exact:true,
       }),
     ).toBeVisible();
-    await expect(page.getByRole("radiogroup",{name:"处理方式"}).getByRole("radio",{name:"增量",exact:true})).toBeVisible();
-    await expect(page.getByRole("radiogroup",{name:"处理方式"}).getByRole("radio",{name:"全量",exact:true})).toBeVisible();
+    await expect(page.getByRole("radio",{name:/^增量/})).toBeVisible();
+    await expect(page.getByRole("radio",{name:/^全量/})).toBeVisible();
     // 按钮文案带上本次张数，所以按正则找。
     await expect(page.getByRole("button", { name: /开始分析/ })).toBeVisible();
 
@@ -25,9 +25,7 @@ test.describe("任务中心", () => {
     const summary = page.getByRole("region", { name: "状态摘要" });
     await expect(summary).toBeVisible();
     await expect(summary.getByRole("heading", { name: /队列(空闲|等待中)|上次运行失败/ })).toBeVisible();
-    await expect(
-      summary.getByRole("button", { name: /开始分析/ }),
-    ).toBeVisible();
+    await expect(summary.getByRole("button", {name:/开始分析/})).toHaveCount(0);
 
     // 侧栏不再挂二级菜单，只在条目上标出当前页签。
     const sidebar = page.locator('aside[aria-label="主导航"]');
@@ -71,12 +69,12 @@ test.describe("任务中心", () => {
     await expect(fullScale).toHaveAccessibleName(/全量.*[\d,]+ 张.*(约|无法估算|秒|分钟)/);
     // 开始按钮带上本次要处理的张数。
     await expect(
-      page.getByRole("button", { name: /开始分析 · [\d,]+ 张/ }),
+      page.getByRole("button", { name: /开始分析 · 照片元数据 · [\d,]+ 张/ }),
     ).toBeVisible();
     // 切到全量，按钮上的张数跟着换，表格不重新请求。
-    await page.getByRole("radiogroup",{name:"处理方式"}).getByRole("radio",{name:"全量",exact:true}).click();
+    await page.getByRole("radio",{name:/^全量/}).click();
     await expect(
-      page.getByRole("button", { name: /开始分析 · [\d,]+ 张/ }),
+      page.getByRole("button", { name: /开始分析 · 照片元数据 · [\d,]+ 张/ }),
     ).toBeVisible();
   });
 
@@ -147,11 +145,35 @@ test.describe("任务中心", () => {
     await expect(page.getByRole("button", { name: "取消" })).toHaveCount(0);
   });
 
+  test("失败摘要打开对应记录并重试该次任务", async ({ page }) => {
+    const jobId = "job-failed-metadata";
+    await page.route("**/api/ai/jobs", async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.snapshot.active = null;
+      body.snapshot.queue = [];
+      body.snapshot.jobs = [{
+        id: jobId, type: "metadata", mode: "incremental", status: "failed",
+        createdAt: new Date().toISOString(), error: "图片解析失败",
+        processed: 0, completed: 1, failed: 1, skipped: 0,
+      }];
+      await route.fulfill({response, json:body});
+    });
+    await page.route("**/api/ai/jobs/" + jobId + "/retry", route => route.fulfill({json:{ok:true}}));
+    await page.goto("/tasks/run");
+    await page.getByRole("link", { name: "查看原因" }).click();
+    const record = page.locator('[data-job-id="' + jobId + '"]');
+    await expect(record.getByText("任务原因：图片解析失败")).toBeVisible();
+    const retry = page.waitForRequest(request => request.url().endsWith("/" + jobId + "/retry") && request.method() === "POST");
+    await record.getByRole("button", {name:"仅重试失败项"}).click();
+    await retry;
+  });
+
   test("跑完一次分析后任务记录里出现新的任务与产出明细", async ({ page }) => {
     test.setTimeout(180_000);
     await page.goto("/tasks/run");
     await scannedNodes(page.request);
-    await expect(page.getByRole("radiogroup",{name:"处理方式"}).getByRole("radio",{name:"全量",exact:true})).toBeVisible();
+    await expect(page.getByRole("radio",{name:/^全量/})).toBeVisible();
     const start = page.getByRole("button", { name: /开始分析/ });
     await expect(start).toBeVisible();
     const startResponse = page.waitForResponse(
@@ -159,7 +181,7 @@ test.describe("任务中心", () => {
         response.url().endsWith("/api/ai/jobs") &&
         response.request().method() === "POST",
     );
-    await page.getByRole("radiogroup",{name:"处理方式"}).getByRole("radio",{name:"全量",exact:true}).click();
+    await page.getByRole("radio",{name:/^全量/}).click();
     await start.click();
     const startedJob = (await (await startResponse).json()).job as {
       id: string;

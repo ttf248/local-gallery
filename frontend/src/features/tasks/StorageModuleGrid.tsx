@@ -5,16 +5,6 @@ interface Props {
   modules: StorageModule[];
 }
 
-/**
- * AI 模型与产物：每个分析模块一块。
- *
- * 之前每个模块是一张满宽大卡，模型文件路径、产物路径各占一行，四个模块
- * 就是一千多像素的滚动条。这里压成三行：模块名与两个数字一行、模型文件
- * 一行、产物路径一行 —— 要查的细节还在，但不占版面。
- *
- * 侧栏只有 360 像素，文件名再长也不断词：超出的部分用省略号收掉，
- * 完整内容留在 title 里，断词断在 "onnx" 中间比省略号更难读。
- */
 export default function StorageModuleGrid({ modules }: Props) {
   if (modules.length === 0) return null;
   return (
@@ -32,87 +22,91 @@ export default function StorageModuleGrid({ modules }: Props) {
             .join("、");
           return (
             <li key={module.type} className="px-4 py-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <span className="text-body font-medium text-ink">
-                  {module.name}
-                </span>
-                <span className="font-mono text-caption tabular-nums text-ink-2">
-                  模型 {formatSize(module.modelBytes)} · 产物{" "}
-                  {formatSize(module.outputBytes)}
-                </span>
-              </div>
+              <details>
+                <summary className="cursor-pointer list-item gap-x-3 gap-y-1">
+                  <span className="text-body font-medium text-ink">
+                    {module.name}
+                  </span>
+                  <span className="ml-3 font-mono text-caption tabular-nums text-ink-2">
+                    模型 {formatSize(module.modelBytes)} · 产物{" "}
+                    {formatSize(module.outputBytes)}
+                  </span>
+                </summary>
 
-              {module.profiles?.length ? (
-                <ul className="mt-2 space-y-2">
-                  {module.profiles.map((profile) => {
-                    const profileModelNames = profile.modelFiles
-                      .map((file) => file.name)
-                      .join("、");
-                    const profileOutputPaths = profile.outputs
-                      .map((output) => `${output.label}：${output.path}`)
-                      .join("、");
-                    return (
-                      <li
-                        key={profile.model}
-                        className="rounded-lg border border-line bg-sunken px-3 py-2"
+                {module.profiles?.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {module.profiles.map((profile) => {
+                      const profileModelNames = profile.modelFiles
+                        .map((file) => file.name)
+                        .join("、");
+                      const profileOutputPaths = profile.outputs
+                        .map((output) => `${output.label}：${output.path}`)
+                        .join("、");
+                      return (
+                        <li
+                          key={profile.model}
+                          className="rounded-lg border border-line bg-sunken px-3 py-2"
+                        >
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                            <span className="text-caption font-medium text-ink">
+                              {faceModelLabel(profile.model)}
+                              {profile.active ? (
+                                <span className="ml-2 text-success">
+                                  当前使用
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="font-mono text-caption tabular-nums text-ink-2">
+                              模型 {formatSize(profile.modelBytes)} · 产物{" "}
+                              {formatSize(profile.outputBytes)}
+                            </span>
+                          </div>
+                          <p
+                            className="mt-1 break-all font-mono text-caption text-ink-3"
+                            title={profileModelNames}
+                          >
+                            {profileModelNames || "未发现模型文件"}
+                          </p>
+                          <p
+                            className="mt-1 break-all font-mono text-caption text-ink-3"
+                            title={profileOutputPaths}
+                          >
+                            {profileOutputPaths}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <>
+                    {module.modelFiles.length > 0 ? (
+                      <p
+                        className="mt-1 break-all font-mono text-caption text-ink-3"
+                        title={modelNames}
                       >
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                          <span className="text-caption font-medium text-ink">
-                            {faceModelLabel(profile.model)}
-                            {profile.active ? (
-                              <span className="ml-2 text-success">
-                                当前使用
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="font-mono text-caption tabular-nums text-ink-2">
-                            模型 {formatSize(profile.modelBytes)} · 产物{" "}
-                            {formatSize(profile.outputBytes)}
-                          </span>
-                        </div>
-                        <p
-                          className="mt-1 truncate font-mono text-caption text-ink-3"
-                          title={profileModelNames}
-                        >
-                          {profileModelNames || "未发现模型文件"}
-                        </p>
-                        <p
-                          className="mt-1 truncate font-mono text-caption text-ink-3"
-                          title={profileOutputPaths}
-                        >
-                          {profileOutputPaths}
-                        </p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <>
-                  {module.modelFiles.length > 0 ? (
-                    <p
-                      className="mt-1 truncate font-mono text-caption text-ink-3"
-                      title={modelNames}
-                    >
-                      {modelNames}
-                    </p>
-                  ) : module.modelLocation === "none" ? (
-                    <p className="mt-1 text-caption text-ink-3">
-                      使用 Go 内置 EXIF/GPS 解析器，无需权重。
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-caption text-warning">
-                      未发现模型文件
-                    </p>
-                  )}
+                        {modelNames}
+                      </p>
+                    ) : module.modelLocation === "none" ? (
+                      <p className="mt-1 text-caption text-ink-3">
+                        {module.type === "metadata"
+                          ? "使用 Go 内置 EXIF/GPS 解析器，无需权重。"
+                          : "使用内置算法，无需模型权重。"}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-caption text-warning">
+                        未发现模型文件
+                      </p>
+                    )}
 
-                  <p
-                    className="mt-1 truncate font-mono text-caption text-ink-3"
-                    title={outputPaths}
-                  >
-                    {outputPaths}
-                  </p>
-                </>
-              )}
+                    <p
+                      className="mt-1 break-all font-mono text-caption text-ink-3"
+                      title={outputPaths}
+                    >
+                      {outputPaths}
+                    </p>
+                  </>
+                )}
+              </details>
             </li>
           );
         })}

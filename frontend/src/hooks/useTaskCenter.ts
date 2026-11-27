@@ -45,6 +45,7 @@ export interface TaskCenterPlan {
   setPeopleEnabled: (value: boolean) => void;
   save: () => void;
   saving: boolean;
+  dirty: boolean;
   saved: boolean;
   error: boolean;
 }
@@ -178,8 +179,8 @@ export function useTaskCenter(tab: string): TaskCenterState {
   const [selectedModule, setSelectedModule] =
     useState<AnalysisType>("metadata");
   const [mode, setMode] = useState<AnalysisMode>("incremental");
-  // 人物开关按草稿走：芯片在草稿里解锁了，选中项就不该被弹回去。
-  const peopleEnabled = planDraft?.peopleEnabled ?? false;
+  // 手动任务读取服务端已保存的人物授权。
+  const peopleEnabled = snapshot?.settings.peopleEnabled ?? false;
   const runnableModules = useMemo(
     () =>
       (snapshot?.modules ?? [])
@@ -450,7 +451,7 @@ export function useTaskCenter(tab: string): TaskCenterState {
                 peopleEnabled: value,
                 modules: value
                   ? current.modules
-                  : current.modules.filter((type) => type !== "face"),
+                  : current.modules.filter((type) => type !== "face" && type !== "portrait"),
               }
             : current,
         ),
@@ -458,6 +459,14 @@ export function useTaskCenter(tab: string): TaskCenterState {
         if (planDraft) settingsMutation.mutate(planDraft);
       },
       saving: settingsMutation.isPending,
+      dirty: Boolean(snapshot && planDraft && (
+        planDraft.enabled !== snapshot.settings.dailyEnabled ||
+        planDraft.time !== (snapshot.settings.dailyTime || "03:00") ||
+        planDraft.scan !== (snapshot.settings.dailyScan ?? true) ||
+        planDraft.smartAlbums !== (snapshot.settings.dailySmartAlbums ?? true) ||
+        planDraft.peopleEnabled !== (snapshot.settings.peopleEnabled ?? false) ||
+        [...planDraft.modules].sort().join() !== [...(snapshot.settings.dailyModules ?? ["metadata"])].sort().join()
+      )),
       saved: settingsMutation.isSuccess,
       error: settingsMutation.isError,
     },

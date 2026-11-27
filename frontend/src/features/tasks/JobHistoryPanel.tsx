@@ -1,6 +1,7 @@
-import {buttonStyles} from "../../ui/buttonStyles";
+import { buttonStyles } from "../../ui/buttonStyles";
 import { useConfirm } from "../common";
-import { useState } from "react";
+import { useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import type { AIJob, FaceModel } from "../../api/aiJobs";
 import { formatDateTime } from "../../utils/date";
 import {
@@ -41,12 +42,19 @@ export default function JobHistoryPanel({
 }: Props) {
   const confirm = useConfirm();
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  // 展开态：只有展开的记录才去取它的产物占用。details 本身仍由浏览器
-  // 控制（受控写法会让展开延迟到 React 状态回写，用户点下去要等一拍
-  // 才看到内容），这里只监听 toggle 事件记住谁开着。
+  // 展开的记录才请求产物占用，支持从失败摘要直接定位。
   const [expandedIds, setExpandedIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
+  const location = useLocation();
+  useEffect(() => {
+    if (location.pathname !== "/tasks/history") return;
+    const id = new URLSearchParams(location.search).get("job");
+    if (!id) return;
+    setFilter("all");
+    setExpandedIds((current) => new Set([...current, id]));
+  }, [location.key, location.pathname, location.search]);
 
   function handleToggle(jobId: string, open: boolean) {
     setExpandedIds((current) => {
@@ -69,17 +77,33 @@ export default function JobHistoryPanel({
   async function clearHistory() {
     if (
       jobs.length > 0 &&
-      (await confirm({title:"清理已结束记录",description:<>{`删除全部 ${jobs.length} 条已结束任务记录？分析结果和索引数据会保留。`} 原始文件会保留。</>,confirmLabel:"清理记录",tone:"danger"}))
+      (await confirm({
+        title: "清理已结束记录",
+        description: (
+          <>
+            {`删除全部 ${jobs.length} 条已结束任务记录？分析结果和索引数据会保留。`}{" "}
+            原始文件会保留。
+          </>
+        ),
+        confirmLabel: "清理记录",
+        tone: "danger",
+      }))
     ) {
       onClear();
     }
   }
 
   return (
-    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised" aria-labelledby="task-history-heading">
+    <section
+      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised"
+      aria-labelledby="task-history-heading"
+    >
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="task-history-heading" className="tasks-section__title font-display text-body font-semibold text-ink">
+          <h2
+            id="task-history-heading"
+            className="tasks-section__title font-display text-body font-semibold text-ink"
+          >
             任务记录
           </h2>
           <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-ink-3 max-w-[68ch]">
@@ -90,7 +114,7 @@ export default function JobHistoryPanel({
         {jobs.length > 0 ? (
           <button
             type="button"
-            className={buttonStyles({variant:"secondary",size:"sm"})}
+            className={buttonStyles({ variant: "secondary", size: "sm" })}
             disabled={busy}
             onClick={clearHistory}
           >
@@ -120,7 +144,8 @@ export default function JobHistoryPanel({
         ) : null}
 
         {visibleJobs.length === 0 ? (
-          <EmptyState size="inline"
+          <EmptyState
+            size="inline"
             title={
               jobs.length === 0 ? "还没有已结束的任务" : "没有符合条件的记录"
             }
@@ -135,6 +160,7 @@ export default function JobHistoryPanel({
             {visibleJobs.map((job) => (
               <details
                 key={job.id}
+                open={expandedIds.has(job.id)}
                 onToggle={(event) =>
                   handleToggle(job.id, event.currentTarget.open)
                 }
@@ -148,7 +174,7 @@ export default function JobHistoryPanel({
                     tone={taskStatusTone(job.status)}
                     className="mt-2"
                   />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 lg:grid lg:grid-cols-[minmax(15rem,1fr)_2fr] lg:items-center">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="text-body font-medium text-ink">
                         {taskTitle(job)}
@@ -164,7 +190,7 @@ export default function JobHistoryPanel({
                       <span>{formatDateTime(job.createdAt)}</span>
                       <span>耗时 {formatTaskDuration(job.elapsedMs)}</span>
                       <span className="tabular-nums">
-                        完成 {formatCount(job.completed)}
+                        已处理 {formatCount(job.completed)}
                       </span>
                       <span className="tabular-nums">
                         跳过 {formatCount(job.skipped)}
@@ -247,7 +273,10 @@ export default function JobHistoryPanel({
                     job.failed > 0 ? (
                       <button
                         type="button"
-                        className={buttonStyles({variant:"secondary",size:"sm"})}
+                        className={buttonStyles({
+                          variant: "secondary",
+                          size: "sm",
+                        })}
                         disabled={retryDisabled}
                         onClick={() => onRetry(job.id)}
                       >
@@ -258,9 +287,24 @@ export default function JobHistoryPanel({
                     ) : null}
                     <button
                       type="button"
-                      className={buttonStyles({variant:"secondary",size:"sm",className:"text-danger"})}
+                      className={buttonStyles({
+                        variant: "secondary",
+                        size: "sm",
+                        className: "text-danger",
+                      })}
                       disabled={busy}
-                      onClick={async () => {if(await confirm({title:"删除任务记录",description:"仅删除这一条记录，分析结果和原始文件会保留。",confirmLabel:"删除记录",tone:"danger"}))onDelete(job.id);}}
+                      onClick={async () => {
+                        if (
+                          await confirm({
+                            title: "删除任务记录",
+                            description:
+                              "仅删除这一条记录，分析结果和原始文件会保留。",
+                            confirmLabel: "删除记录",
+                            tone: "danger",
+                          })
+                        )
+                          onDelete(job.id);
+                      }}
                     >
                       删除任务记录
                     </button>

@@ -1,4 +1,4 @@
-import {buttonStyles} from "../../ui/buttonStyles";
+import { buttonStyles } from "../../ui/buttonStyles";
 import type {
   AIJobEstimate,
   AIJobModule,
@@ -29,6 +29,7 @@ interface Props {
   onPeopleEnabledChange: (value: boolean) => void;
   onSave: () => void;
   saving: boolean;
+  dirty: boolean;
   saved: boolean;
   error: boolean;
   /** 后端记录的上次计划执行日期。 */
@@ -65,6 +66,7 @@ export default function DailyPlanPanel({
   onPeopleEnabledChange,
   onSave,
   saving,
+  dirty,
   saved,
   error,
   lastScheduledDate,
@@ -132,10 +134,16 @@ export default function DailyPlanPanel({
   }
 
   return (
-    <section className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised" aria-labelledby="daily-plan-heading">
+    <section
+      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised"
+      aria-labelledby="daily-plan-heading"
+    >
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">
-          <h2 id="daily-plan-heading" className="tasks-section__title font-display text-body font-semibold text-ink">
+          <h2
+            id="daily-plan-heading"
+            className="tasks-section__title font-display text-body font-semibold text-ink"
+          >
             每日计划
           </h2>
           <p className="tasks-section__desc mt-[3px] text-caption leading-[1.6] text-ink-3 max-w-[68ch]">
@@ -163,7 +171,9 @@ export default function DailyPlanPanel({
         }}
       >
         <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
-          <span className="tasks-field__label text-caption text-ink-2">开始时间</span>
+          <span className="tasks-field__label text-caption text-ink-2">
+            开始时间
+          </span>
           <input
             type="time"
             value={time}
@@ -175,10 +185,13 @@ export default function DailyPlanPanel({
         </div>
 
         <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
-          <span className="tasks-field__label text-caption text-ink-2">扫描与分组</span>
+          <span className="tasks-field__label text-caption text-ink-2">
+            扫描目录
+          </span>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <label className="flex items-center gap-2 text-body text-ink">
               <input
+                className="!size-4 accent-accent"
                 type="checkbox"
                 checked={scanEnabled}
                 disabled={disabled}
@@ -186,51 +199,16 @@ export default function DailyPlanPanel({
               />
               扫描所有媒体目录
             </label>
-            <label className="flex items-center gap-2 text-body text-ink">
-              <input
-                type="checkbox"
-                checked={smartAlbumsEnabled}
-                disabled={disabled}
-                onChange={(event) =>
-                  onSmartAlbumsChange(event.currentTarget.checked)
-                }
-              />
-              生成智能相册分组
-            </label>
           </div>
         </div>
 
-        <SettingsGroup id="plan-modules" title="运行模块">
-          {modules.map((module) => (
-            <SettingsRow
-              key={module.type}
-              label={module.name}
-              description={
-                !module.installed
-                  ? "不可用：缺少模型或运行环境"
-                  : (module.type === "face" || module.type === "portrait") && !peopleEnabled
-                    ? "需先启用人物分析"
-                    : undefined
-              }
-            >
-              <Switch
-                label={module.name}
-                checked={selectedModules.includes(module.type)}
-                disabled={
-                  disabled ||
-                  !module.installed ||
-                  ((module.type === "face" || module.type === "portrait") && !peopleEnabled)
-                }
-                onChange={() => toggleModule(module.type)}
-              />
-            </SettingsRow>
-          ))}
-        </SettingsGroup>
-
         <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
-          <span className="tasks-field__label text-caption text-ink-2">人物分析</span>
+          <span className="tasks-field__label text-caption text-ink-2">
+            人物分析
+          </span>
           <label className="flex items-center gap-2 text-body text-ink">
             <input
+              className="!size-4 accent-accent"
               type="checkbox"
               checked={peopleEnabled}
               disabled={disabled}
@@ -238,13 +216,58 @@ export default function DailyPlanPanel({
                 onPeopleEnabledChange(event.currentTarget.checked)
               }
             />
-            启用人物分析（默认关闭）
+            启用人物分析（手动与每日任务共用）
           </label>
         </div>
 
+        <SettingsGroup id="plan-modules" title="运行模块">
+          <div className="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+            {modules.map((module) => (
+              <SettingsRow
+                key={module.type}
+                label={module.name}
+                description={
+                  !module.installed
+                    ? "不可用：缺少模型或运行环境"
+                    : (module.type === "face" || module.type === "portrait") &&
+                        !peopleEnabled
+                      ? "需先启用人物分析"
+                      : undefined
+                }
+              >
+                <Switch
+                  label={module.name}
+                  checked={selectedModules.includes(module.type)}
+                  disabled={
+                    disabled ||
+                    !module.installed ||
+                    ((module.type === "face" || module.type === "portrait") &&
+                      !peopleEnabled)
+                  }
+                  onChange={() => toggleModule(module.type)}
+                />
+              </SettingsRow>
+            ))}
+          </div>
+        </SettingsGroup>
+        <div className="flex items-center gap-6 border-t border-line py-3">
+          <span className="text-caption text-ink-2">刷新相册</span>{" "}
+          <label className="flex items-center gap-2 text-body text-ink">
+            <input
+              className="!size-4 accent-accent"
+              type="checkbox"
+              checked={smartAlbumsEnabled}
+              disabled={disabled}
+              onChange={(event) =>
+                onSmartAlbumsChange(event.currentTarget.checked)
+              }
+            />
+            生成智能相册分组
+          </label>
+        </div>
         <div className="tasks-actions flex flex-wrap items-center gap-y-2 gap-x-4 py-3 px-0 border-t border-t-line">
           <button
-            className={buttonStyles({variant:"primary",size:"sm"})}
+            className={buttonStyles({ variant: "primary", size: "sm" })}
             type="submit"
             disabled={disabled || (enabled && !hasSelectedTask)}
           >
@@ -263,7 +286,9 @@ export default function DailyPlanPanel({
               modules={selectedModules}
             />
           ) : null}
-          {saved ? (
+          {dirty ? (
+            <span className="text-caption text-ink-2">有未保存的更改</span>
+          ) : saved ? (
             <span className="text-caption text-ink-2">已保存</span>
           ) : null}
           {enabled && !hasSelectedTask ? (

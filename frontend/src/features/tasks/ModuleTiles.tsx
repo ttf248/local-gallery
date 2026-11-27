@@ -1,5 +1,5 @@
-import { CheckIcon, MoreHorizontalIcon } from "../../ui/icons";
 import { Menu } from "../../ui/Menu";
+import { CheckIcon, MoreHorizontalIcon } from "../../ui/icons";
 import type {
   AIJob,
   AIJobEstimate,
@@ -10,8 +10,7 @@ import type {
 import {
   estimateForModule,
   formatCount,
-  moduleReasonLabel,
-  taskStatusLabel,
+  moduleReasonLabel, taskStatusLabel,
 } from "../../utils/taskFormat";
 
 interface Props {
@@ -40,11 +39,7 @@ export default function ModuleTiles({
   if (modules.length === 0) return null;
 
   return (
-    <div
-      className="grid grid-cols-2 gap-2 md:grid-cols-3 min-[1440px]:grid-cols-5"
-      role="group"
-      aria-label={label}
-    >
+    <div className="grid gap-1" role="group" aria-label={label}>
       {modules.map((module) => {
         const isSelected = selected.includes(module.type);
         const isLocked = locked.includes(module.type);
@@ -65,17 +60,17 @@ export default function ModuleTiles({
               aria-pressed={isSelected}
               disabled={isDisabled}
               onClick={() => onToggle(module.type)}
-              className="flex h-28 w-full flex-col items-start justify-center gap-1 rounded-lg border-2 border-transparent bg-raised px-3 pr-5 text-left shadow-1 aria-pressed:border-accent disabled:opacity-50"
+              className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border-2 border-transparent bg-raised pl-7 pr-11 text-left shadow-1 aria-pressed:border-accent disabled:opacity-50"
             >
               {isSelected && (
                 <CheckIcon
                   size={14}
                   aria-hidden="true"
-                  className="absolute right-2 top-2 text-accent"
+                  className="absolute left-2 text-accent"
                 />
               )}
               <span className="text-label font-medium">{module.name}</span>
-              <span className="text-heading tabular-nums">
+              <span className="text-body tabular-nums">
                 {amount ? formatCount(amount.count) : "—"}
                 <small className="ml-1 text-caption">张</small>
               </span>
@@ -93,7 +88,7 @@ export default function ModuleTiles({
                 />
                 {!module.installed
                   ? "不可用：" + readiness
-                  : previous?.status === "failed"
+                  : isLocked ? readiness : previous?.status === "failed"
                     ? "上次失败"
                     : readiness}
               </span>
@@ -101,7 +96,7 @@ export default function ModuleTiles({
             <Menu
               label={module.name + "详情"}
               align="end"
-              className="absolute bottom-1 right-0"
+              className="absolute right-1 top-1/2 -translate-y-1/2"
               trigger={
                 <button
                   type="button"

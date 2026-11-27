@@ -387,6 +387,7 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   const variant = shell.dataset.page ?? "standard";
   const expectedMax = {
     standard: 1440,
+    system: 1200,
     gallery: "none",
     focused: 760,
     workspace: "none",
@@ -678,6 +679,7 @@ async function main() {
       const page = await browser.newPage();
       for (const [variant, width] of Object.entries({
         standard: 1440,
+        system: 1200,
         gallery: "none",
         focused: 760,
         workspace: "none",
