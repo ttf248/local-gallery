@@ -93,7 +93,7 @@ export default function AutoSyncPanel() {
           </span>
         </div>
         {status && (
-          <dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-caption text-ink-2">
+          <details><summary className="cursor-pointer py-2 text-caption">监听统计</summary><dl className="mt-2 grid max-w-md grid-cols-2 gap-x-8 gap-y-1 text-caption text-ink-2">
             <dt>监听目录</dt>
             <dd className="text-ink">
               {status.watchedDirs} / {status.maxWatchDirs}
@@ -110,7 +110,7 @@ export default function AutoSyncPanel() {
             <dd className="text-ink">
               {formatTime(status.lastSyncAt) || "尚未同步"}
             </dd>
-          </dl>
+          </dl></details>
         )}
         {(failure || error) && (
           <p className="mt-2 text-caption text-danger">{error || failure}</p>

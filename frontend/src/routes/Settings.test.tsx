@@ -363,7 +363,7 @@ it("每个页签各自承载对应的一组设置", async () => {
   // 数据：数据卡与备份卡。
   ui.rerenderWithTab("data");
   expect(
-    await screen.findByRole("region", { name: "数据" }),
+    await screen.findByRole("region", { name: "媒体库索引" }),
   ).toBeInTheDocument();
   expect(
     screen.getByRole("region", { name: "备份与恢复" }),
@@ -372,7 +372,7 @@ it("每个页签各自承载对应的一组设置", async () => {
   // 服务端：七组面板，不套卡。
   ui.rerenderWithTab("server");
   expect(
-    await screen.findByRole("region", { name: "服务端" }),
+    await screen.findByRole("region", { name: "服务端分区" }),
   ).toBeInTheDocument();
 });
 
@@ -408,7 +408,7 @@ it("危险操作单独成组，每件都写清丢的是什么", async () => {
     within(danger).getByRole("button", { name: "清空" }),
   ).toBeInTheDocument();
   // 清空索引会丢掉索引：它不在普通设置行里。
-  const data = screen.getByRole("region", { name: "数据" });
+  const data = screen.getByRole("region", { name: "媒体库索引" });
   expect(
     within(data).queryByRole("button", { name: /清空索引/ }),
   ).not.toBeInTheDocument();
@@ -590,7 +590,7 @@ for (const kind of ["prune", "history"] as const) {
 // 索引与派生缓存的清理入口，模型权重与分析产物在任务中心。
 it("设置页不再展示模型、路径与派生缓存占用", async () => {
   renderSettings("data");
-  await screen.findByText("媒体库索引");
+  await screen.findByRole("heading", {name:"媒体库索引"});
 
   expect(screen.queryByText("缓存占用")).not.toBeInTheDocument();
   expect(screen.queryByText("本机 AI 与存储")).not.toBeInTheDocument();
@@ -599,7 +599,7 @@ it("设置页不再展示模型、路径与派生缓存占用", async () => {
   expect(screen.queryByRole("button", { name: /清空 .* 缓存/ })).toBeNull();
 
   // 设置页仍然保留它自己的东西。
-  expect(screen.getByText("媒体库索引")).toBeInTheDocument();
+  expect(screen.getByRole("heading", {name:"媒体库索引"})).toBeInTheDocument();
   expect(
     screen.queryByRole("heading", { name: "关于" }),
   ).not.toBeInTheDocument();

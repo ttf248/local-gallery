@@ -434,7 +434,7 @@ export default function ServerConfigPanel() {
       )}
       <fieldset disabled={save.isReading} className="min-w-0 space-y-6">
         {/* 媒体库 — 多根(独立渲染) */}
-        <SettingsGroup title="媒体库">
+        <SettingsGroup id="server-媒体库" title="媒体库">
           <MediaRootsField
             // 草稿优先，其次是保存中与失败的输入，最后使用服务端确认值。
             roots={
@@ -463,7 +463,7 @@ export default function ServerConfigPanel() {
         </SettingsGroup>
 
         {/* 扫描 — 排除规则(独立渲染,行为与 MediaRootsField 类似但用 textarea) */}
-        <SettingsGroup title="扫描">
+        <SettingsGroup id="server-扫描" title="扫描">
           <ExcludeRulesField
             patterns={
               draft.excludePatterns ??
@@ -517,7 +517,7 @@ export default function ServerConfigPanel() {
           />
         </SettingsGroup>
 
-        <SettingsGroup title="访问控制">
+        <SettingsGroup id="server-访问控制" title="访问控制">
           <div className="px-4 py-4">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -591,7 +591,7 @@ export default function ServerConfigPanel() {
         </SettingsGroup>
 
         {FIELDS.map((group) => (
-          <SettingsGroup key={group.section} title={group.section}>
+          <SettingsGroup key={group.section} id={"server-" + group.section} title={group.section}>
             <div className="divide-y divide-line">
               {group.defs.map((def) => {
                 const statusKey = def.key;

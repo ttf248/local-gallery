@@ -46,7 +46,6 @@ import {
   MoonIcon,
   MonitorIcon,
   KeyboardIcon,
-  ServerIcon,
   ScrollPageIcon,
   MenuIcon,
 } from "../ui/icons";
@@ -261,8 +260,8 @@ export function SettingsView({ tab }: { tab: string }) {
   if (!data) {
     return (
       <>
-        <Page className="settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
-          <PageHero title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
+        <Page className="settings-page [&_[role=radio]]:whitespace-nowrap [&_[role=radio]]:inline-flex [&_[role=radio]]:items-center [&_[role=radio]]:gap-1 [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="system">
+          <PageHero compact title="设置" meta="调整外观、阅读方式与本地媒体配置。" />
           {prefsError || (
             <div role="status" className="text-ink-2 text-body">
               正在加载设置…
@@ -277,11 +276,11 @@ export function SettingsView({ tab }: { tab: string }) {
     <>
       {/* 设置页是一页窄内容：聚焦容器把表单收在一栏里，宽屏上不会把
           标签甩到左边、开关甩到右边，中间空出一整张纸。 */}
-      <Page className="settings-page [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="standard">
-        <PageHero title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
+      <Page className="settings-page [&_[role=radio]]:whitespace-nowrap [&_[role=radio]]:inline-flex [&_[role=radio]]:items-center [&_[role=radio]]:gap-1 [container-type:inline-size] [container-name:settings] max-sm:[&_.settings-row--inline]:flex-row max-sm:[&_.settings-row--inline]:items-center max-sm:[&_.settings-row--inline]:gap-3 pb-10" variant="system">
+        <PageHero compact title="设置" meta="外观、导航、阅读方式与本地媒体配置。" />
         {prefsError}
         <PageTabs page={TAB_PAGES.settings} active={tab} label="设置页分区"/>
-        <div className="grid gap-12 xl:grid-cols-[minmax(0,760px)_200px]"><div className="min-w-0 max-w-[760px]">
+        <div className="grid gap-5 xl:has-[nav]:grid-cols-[minmax(0,1fr)_144px]"><div className="min-w-0">
 
           {/* 每个页签独占整幅内容宽度，按自己的内容排布：界面是两组设置，
             阅读是照片与漫画两组，数据是索引、备份与自动同步，服务端是
@@ -451,10 +450,8 @@ export function SettingsView({ tab }: { tab: string }) {
                 title="阅读"
                 icon={<ScrollPageIcon size={13} />}
               >
-                {/* 整幅宽度下两组并排：最宽的一行（照片墙密度 + 四档分段控件）
-                  实测约需 294px，半列只有 273px 放不下。 */}
-                <div className="settings-split grid grid-cols-1 [@container_settings_(min-width:960px)]:grid-cols-2 [@container_settings_(min-width:960px)]:gap-x-8">
-                  <Group title="照片">
+                <div className="grid divide-y divide-line">
+                  <Group title="照片 · 本浏览器">
                     <SettingsRow label="照片墙密度">
                       <DensityControl value={density} onChange={setDensity} />
                     </SettingsRow>
@@ -466,7 +463,7 @@ export function SettingsView({ tab }: { tab: string }) {
                       />
                     </SettingsRow>
                   </Group>
-                  <Group title="漫画">
+                  <Group title="漫画 · 本浏览器">
                     <SettingsRow label="默认显示模式">
                       <Segmented
                         label="默认显示模式"
@@ -504,6 +501,8 @@ export function SettingsView({ tab }: { tab: string }) {
                         ]}
                       />
                     </SettingsRow>
+                  </Group>
+                  <Group title="漫画 · 所有设备">
                     <SettingsRow label="阅读到末尾自动切换下一卷">
                       <Switch
                         label="阅读到末尾自动切换下一卷"
@@ -526,9 +525,7 @@ export function SettingsView({ tab }: { tab: string }) {
                     </SettingsRow>
                   </Group>
                 </div>
-                <p className="settings-note mt-3 text-caption leading-[1.6] text-ink-3">
-                  显示模式、适配与方向只保存在本机浏览器；自动切换与通知保存在服务端，所有设备共享。
-                </p>
+
               </SettingsGroup>
             </section>
           )}
@@ -541,7 +538,7 @@ export function SettingsView({ tab }: { tab: string }) {
             >
               <SettingsGroup
                 id="data"
-                title="数据"
+                title="媒体库索引"
                 icon={<LibraryIcon size={13} />}
                 description="索引与本机记录：这里动的是「已经扫出来的东西」，不会碰原始照片。"
               >
@@ -549,7 +546,7 @@ export function SettingsView({ tab }: { tab: string }) {
                   改成标题在上、内容在下的一整块。 */}
                 <div className="settings-block py-3 px-0">
                   <div>
-                    <span className="text-body text-ink">媒体库索引</span>
+
                     <span className="block mt-0.5 text-caption text-ink-2">
                       {manifest
                         ? `${manifest.statistics.albumCount} 本相册 · ${manifest.statistics.tagCount} 个标签${
@@ -597,6 +594,9 @@ export function SettingsView({ tab }: { tab: string }) {
                     </div>
                   )}
                 </div>
+              </SettingsGroup>
+              <AutoSyncPanel />
+              <SettingsGroup id="records" title="收藏与最近访问">
                 <div className="settings-rows flex flex-col">
                   <SettingsRow label="最近访问保留条数">
                     <NumberInput
@@ -627,7 +627,7 @@ export function SettingsView({ tab }: { tab: string }) {
                 <StateBackupPanel />
               </SettingsGroup>
 
-              <AutoSyncPanel />
+
 
               <SettingsGroup
                 id="danger"
@@ -696,23 +696,17 @@ export function SettingsView({ tab }: { tab: string }) {
               id="settings-panel-server"
               hidden={tab !== "server"}
             >
-              <SettingsGroup
-                id="server"
-                title="服务端"
-                icon={<ServerIcon size={13} />}
-                description="修改后自动保存，部分设置需重启"
-              >
-                <ServerConfigPanel />
-              </SettingsGroup>
+              <p className="mb-3 text-caption text-ink-2">修改后自动保存，标记为需重启的设置在重启服务后生效。</p>
+              <ServerConfigPanel />
             </section>
           )}
         </div>
-          {(tab === "interface" || tab === "data") && (
+          {(tab === "interface" || tab === "data" || tab === "server") && (
             <nav aria-label="本页" className="sticky top-5 hidden self-start xl:grid">
               <h2 className="mb-2 text-caption text-ink-3">本页</h2>
               {(tab === "interface"
                 ? [["appearance", "外观"], ["nav", "导航"], ["about", "关于"]]
-                : [["data", "数据"], ["backup", "备份与恢复"], ["danger", "危险操作"]]
+                : tab === "server" ? ["媒体库","扫描","访问控制","缓存","网络","静态资源","安全"].map(label => ["server-" + label, label]) : [["data", "媒体库索引"], ["auto-sync", "自动发现文件变化"], ["records", "收藏与最近访问"], ["backup", "备份与恢复"], ["danger", "危险操作"]]
               ).map(([id, label]) => (
                 <a
                   className="flex min-h-8 items-center text-label text-ink-2 hover:text-ink touch:min-h-10"
@@ -777,7 +771,6 @@ function NavRow({
     <SettingsRow
       label={
         <span className="flex min-w-0 items-center gap-2.5">
-          <entry.Icon size={15} className="shrink-0 text-ink-2" />
           <span className="truncate">{entry.label}</span>
           {entry.locked && (
             <span className="shrink-0 text-caption text-ink-3">固定显示</span>

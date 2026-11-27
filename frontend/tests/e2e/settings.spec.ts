@@ -330,7 +330,7 @@ test("设置页可加载服务端配置", async ({ page }) => {
 test("设置页不再展示模型路径与派生缓存占用", async ({ page }) => {
   await page.goto("/settings/data");
   // 精确匹配：危险操作分组里还有一行「清空媒体库索引」，子串匹配会撞上。
-  await expect(page.getByText("媒体库索引", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", {name:"媒体库索引", exact:true})).toBeVisible();
   await expect(page.getByText("本机 AI 与存储")).toHaveCount(0);
   await expect(page.getByText("模型与缓存路径")).toHaveCount(0);
   await expect(page.getByText("缓存占用")).toHaveCount(0);
@@ -372,7 +372,7 @@ test("设置页的分区改成页签，切页签写进 URL 并换内容", async 
 
   await page.getByRole("link", { name: "数据" }).click();
   await expect(page).toHaveURL(/\/settings\/data$/);
-  await expect(page.getByText("媒体库索引", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", {name:"媒体库索引", exact:true})).toBeVisible();
   await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
     await expect(page).toHaveTitle(/ · 数据 · Local Gallery$/);
 

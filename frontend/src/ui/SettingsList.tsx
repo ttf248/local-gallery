@@ -20,11 +20,11 @@ export const SettingsGroup = forwardRef<HTMLElement, GroupProps>(
         ref={ref}
         id={id}
         aria-labelledby={id ? id + "-heading" : undefined}
-        className={cx("mb-7 w-full", className)}
+        className={cx("mb-4 w-full", className)}
       >
         <h2
           id={id ? id + "-heading" : undefined}
-          className="flex items-center gap-2 px-4 pb-2 text-caption font-medium text-ink-3"
+          className="flex items-center gap-2 text-body font-semibold text-ink"
         >
           {icon && <span aria-hidden="true">{icon}</span>}
           {title}
@@ -32,7 +32,7 @@ export const SettingsGroup = forwardRef<HTMLElement, GroupProps>(
         {description && (
           <p className="mt-1 text-caption text-ink-2">{description}</p>
         )}
-        <div className="mt-3 rounded-lg border border-line bg-raised pl-4">
+        <div className="mt-2 rounded-lg border border-line bg-raised pl-4">
           {children}
         </div>
       </section>
@@ -66,7 +66,7 @@ export const SettingsRow = forwardRef<HTMLDivElement, RowProps>(
         ref={ref}
         data-setting-row=""
         className={cx(
-          "grid min-h-14 items-center gap-3 border-b border-line-subtle py-3 pr-4 last:border-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,.85fr)]",
+          "grid min-h-11 items-center gap-3 border-b border-line-subtle py-1.5 pr-4 last:border-0 sm:grid-cols-[minmax(0,min(44%,18rem))_minmax(0,1fr)] has-[[role=switch]]:grid-cols-[minmax(0,min(55%,18rem))_auto]",
           danger && "rounded-md border border-danger/30 p-3",
           className,
         )}
