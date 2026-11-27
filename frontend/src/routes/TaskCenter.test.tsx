@@ -201,10 +201,9 @@ function estimateFixture(
  * 页签切换由外层接住，内容自己不依赖路由 —— 测试直接给页签 id。
  * 面板按页签条件渲染，所以每个用例都要指明自己在哪一屏。
  */
-function renderCenter(tab = "run") {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+function renderCenter(tab = "run", client = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})) {
   const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -417,6 +416,17 @@ describe("任务中心", () => {
         scannedAt: "2026-11-11T02:05:00Z",
       },
     });
+  });
+
+  it("返回运行页时复用刚完成的估算", async () => {
+    const client = new QueryClient();
+    const first = renderCenter("run", client);
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(aiJobsApi.estimate).toHaveBeenCalledTimes(1);
+    first.unmount();
+    renderCenter("run", client);
+    await waitFor(() => expect(client.isFetching()).toBe(0));
+    expect(aiJobsApi.estimate).toHaveBeenCalledTimes(1);
   });
 
   it("页签条有四个页签，只有当前这一个被选中", async () => {

@@ -190,3 +190,28 @@ func aiBenchmarkPathValidator(root string) func(string) (string, error) {
 	_, state := middleware.PathSafetyMiddleware([]string{root})
 	return state.Validate
 }
+
+func BenchmarkAIJobEstimateUnready(b *testing.B) {
+	service, err := NewAIJobService(AIJobServiceOptions{
+		StatePath:    filepath.Join(b.TempDir(), "jobs.json"),
+		MetadataDir:  b.TempDir(),
+		Catalog:      NewResourceCatalog(),
+		ValidatePath: aiBenchmarkPathValidator(b.TempDir()),
+		Analyzers:    []AIAnalyzer{MetadataAnalyzer{}},
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer func() { _ = service.Shutdown(context.Background()) }()
+	for i := 0; i < 50000; i++ {
+		id := fmt.Sprint(i)
+		service.records[id] = AIAnalysisRecord{ResourceID: id, Type: AIJobTypeMetadata}
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := service.Estimate(context.Background()); err != nil {
+			b.Fatal(err)
+		}
+	}
+	b.StopTimer()
+}

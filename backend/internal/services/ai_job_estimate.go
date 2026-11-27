@@ -110,6 +110,23 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	modules := s.modulesLocked()
 	peopleEnabled := s.settings.PeopleEnabled
 	faceModel := s.settings.FaceModel
+	samples := s.estimateSamplesLocked()
+	versions := make(map[string]string, len(s.analyzers))
+	validators := make(map[string]AIAnalyzerRecordValidator, len(s.analyzers))
+	for moduleType, analyzer := range s.analyzers {
+		versions[moduleType] = aiAnalyzerVersion(analyzer, faceModel)
+		validators[moduleType], _ = analyzer.(AIAnalyzerRecordValidator)
+	}
+	if !estimate.LibraryReady {
+		s.mu.Unlock()
+		estimate.Modules = estimateModules(modules, peopleEnabled, nil, nil, versions, samples)
+		estimate.Sequence = AIJobEstimateSequence{
+			Incremental: AIJobEstimateTotal{Modules: []string{}},
+			Full:        AIJobEstimateTotal{Modules: []string{}},
+		}
+		return estimate, nil
+	}
+
 	facts := make([]aiRecordFact, 0, len(s.records))
 	for _, record := range s.records {
 		facts = append(facts, aiRecordFact{
@@ -121,23 +138,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 			status:        record.Status,
 		})
 	}
-	samples := s.estimateSamplesLocked()
-	versions := make(map[string]string, len(s.analyzers))
-	validators := make(map[string]AIAnalyzerRecordValidator, len(s.analyzers))
-	for moduleType, analyzer := range s.analyzers {
-		versions[moduleType] = aiAnalyzerVersion(analyzer, faceModel)
-		validators[moduleType], _ = analyzer.(AIAnalyzerRecordValidator)
-	}
 	s.mu.Unlock()
-
-	if !estimate.LibraryReady {
-		estimate.Modules = estimateModules(modules, peopleEnabled, nil, nil, versions, samples)
-		estimate.Sequence = AIJobEstimateSequence{
-			Incremental: AIJobEstimateTotal{Modules: []string{}},
-			Full:        AIJobEstimateTotal{Modules: []string{}},
-		}
-		return estimate, nil
-	}
 
 	targets, err := s.estimateTargets(ctx, snapshot)
 	if err != nil {

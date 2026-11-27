@@ -35,6 +35,7 @@ export const libraryQueryKeys = {
    */
   mode: (mode: AppMode) => [...libraryQueryKeys.root, "mode", mode] as const,
   // 与模式无关：切模式不重取。
+  jobEstimate: () => [...libraryQueryKeys.root, "ai-job-estimate"] as const,
   manifest: () => [...libraryQueryKeys.root, "manifest"] as const,
   /**
    * 相册里的媒体。

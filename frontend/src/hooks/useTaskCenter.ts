@@ -1,8 +1,7 @@
-import { jobsQueryKey } from "../api/queryKeys";
+import { jobsQueryKey, libraryQueryKeys } from "../api/queryKeys";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, sse } from "../api/client";
-import { useScanStore } from "../store/scanStore";
 import {
   aiJobsApi,
   type AIJob,
@@ -15,7 +14,7 @@ import {
 } from "../api/aiJobs";
 
 
-const ESTIMATE_KEY = ["ai-job-estimate"] as const;
+const ESTIMATE_KEY = libraryQueryKeys.jobEstimate();
 const JOB_EVENTS = [
   "pending",
   "running",
@@ -144,7 +143,6 @@ export function useTaskCenter(tab: string): TaskCenterState {
     queryKey: ESTIMATE_KEY,
     queryFn: aiJobsApi.estimate,
     staleTime: 30_000,
-    refetchOnMount: "always",
   });
   const snapshot = jobsQuery.data?.snapshot;
   const active =
@@ -155,13 +153,6 @@ export function useTaskCenter(tab: string): TaskCenterState {
   const activeId = active?.id;
   const [disconnectedJob, setDisconnectedJob] = useState<string>();
   const [connectionAttempt, setConnectionAttempt] = useState(0);
-
-  // 扫描一结束，媒体库就换了：规模核算要按新库重做。
-  const scanStatus = useScanStore((state) => state.progress?.status);
-  useEffect(() => {
-    if (scanStatus !== "complete") return;
-    void queryClient.invalidateQueries({ queryKey: ESTIMATE_KEY });
-  }, [queryClient, scanStatus]);
 
   // 每日计划是草稿：先等服务器设置到达，再允许编辑。
   // 没等就渲染会让用户改到一个随后被覆盖的假值上。
