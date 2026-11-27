@@ -36,8 +36,7 @@ vi.mock("./routes/Unread", () => ({ default: () => <h1>未读</h1> }));
 vi.mock("./routes/Album", () => ({ default: () => <h1>相册详情</h1> }));
 vi.mock("./routes/Tag", () => ({ default: () => <h1>标签</h1> }));
 vi.mock("./routes/Reader", () => ({ default: () => <h1>阅读器</h1> }));
-vi.mock("./routes/Settings", () => ({ default: () => <h1>设置</h1> }));
-vi.mock("./routes/TaskCenter", () => ({ default: () => <h1>任务中心</h1> }));
+vi.mock("./routes/Settings", () => ({ default: () => <h1>设置与任务</h1> }));
 vi.mock("./routes/Travels", () => ({ default: () => <h1>足迹</h1> }));
 vi.mock("./routes/TravelPlace", () => ({ default: () => <h1>地点详情</h1> }));
 vi.mock("./routes/People", () => ({ default: () => <h1>人物</h1> }));
@@ -83,14 +82,10 @@ const entries = [
   ["/photo/smart-albums", "智能相册"],
   ["/photo/similarity", "相似整理"],
   ["/comic/read/a", "阅读器"],
-  ["/tasks/run", "任务中心"],
-  ["/tasks/plan", "任务中心"],
-  ["/tasks/history", "任务中心"],
-  ["/tasks/storage", "任务中心"],
-  ["/settings/interface", "设置"],
-  ["/settings/reading", "设置"],
-  ["/settings/data", "设置"],
-  ["/settings/server", "设置"],
+  ["/settings/general", "设置与任务"],
+  ["/settings/tasks", "设置与任务"],
+  ["/settings/storage", "设置与任务"],
+  ["/settings/server", "设置与任务"],
 ] as const;
 
 it.each(entries)("%s 挂载对应入口并选择导航外壳", async (path, title) => {
@@ -110,8 +105,16 @@ it.each([
   ["/unknown", "/photo"],
   ["/photo/me", "/photo/me/picks"],
   ["/comic/me", "/comic/me/favorites"],
-  ["/tasks", "/tasks/run"],
-  ["/settings", "/settings/interface"],
+  ["/tasks", "/settings/tasks"],
+  ["/settings", "/settings/general"],
+  ["/settings/interface", "/settings/general"],
+  ["/settings/reading", "/settings/general"],
+  ["/settings/data", "/settings/storage"],
+  ["/tasks/run", "/settings/tasks"],
+  ["/tasks/plan", "/settings/tasks"],
+  ["/tasks/history", "/settings/tasks"],
+  ["/tasks/storage", "/settings/storage"],
+  ["/tasks/unknown", "/settings/tasks"],
   ["/photo/picks", "/photo/me/picks"],
   ["/photo/favorites", "/photo/me/favorites"],
   ["/photo/recents", "/photo/me/recents"],

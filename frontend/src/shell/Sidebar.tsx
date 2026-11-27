@@ -1,3 +1,4 @@
+import { settingsRoute } from "../utils/path";
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAppMode } from "../hooks/useAppMode";
@@ -164,7 +165,7 @@ export default function Sidebar({
         <IconButton label={collapsed?"展开侧边栏":"折叠侧边栏"} onClick={onToggle} aria-keyshortcuts="Control+B Meta+B">{collapsed?<ChevronRightIcon size={16}/>:<ChevronLeftIcon size={16}/>}</IconButton>
         {warningCount > 0 && (
           <Link
-            to="/settings/data"
+            to={settingsRoute("storage", { hash: "library-index" })}
             className="inline-flex min-h-10 items-center gap-1 text-warning"
             aria-label={"扫描告警，共 " + warningCount + " 条"}
           >

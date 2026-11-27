@@ -12,8 +12,6 @@ import {
   LibraryIcon,
   SparkleFilledIcon,
   SparkleIcon,
-  TasksFilledIcon,
-  TasksIcon,
   SettingsFilledIcon,
   SettingsIcon,
   UserFilledIcon,
@@ -199,16 +197,8 @@ export const MACHINE_GROUP: NavGroup = {
   label: "本机",
   entries: [
     {
-      key: "machine.tasks",
-      label: "任务中心",
-      Icon: TasksIcon,
-      ActiveIcon: TasksFilledIcon,
-      mobile: "more",
-      to: "/tasks",
-    },
-    {
       key: "machine.settings",
-      label: "设置",
+      label: "设置与任务",
       Icon: SettingsIcon,
       ActiveIcon: SettingsFilledIcon,
       mobile: "more",

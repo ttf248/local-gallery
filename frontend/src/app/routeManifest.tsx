@@ -1,5 +1,5 @@
 import type { RouteMeta, RouteRedirect } from "./routeMeta";
-import { tabLabelFor } from "../utils/pageTabs";
+import { LEGACY_SETTINGS_TAB_REDIRECTS, tabLabelFor } from "../utils/pageTabs";
 
 export const ROUTE_MANIFEST: readonly RouteMeta[] = [
   {
@@ -275,19 +275,6 @@ export const ROUTE_MANIFEST: readonly RouteMeta[] = [
     component: () => import("../routes/SearchResults"),
   },
   {
-    id: "machine.tasks",
-    path: "/tasks/:tab",
-    page: "system",
-    navKey: "machine.tasks",
-    help: "library",
-    chrome: { shell: "app", search: "global" },
-    title: ({ params }) =>
-      ["任务中心", tabLabelFor("/tasks/" + params.tab)]
-        .filter(Boolean)
-        .join(" · "),
-    component: () => import("../routes/TaskCenter"),
-  },
-  {
     id: "machine.settings",
     path: "/settings/:tab",
     page: "system",
@@ -295,7 +282,7 @@ export const ROUTE_MANIFEST: readonly RouteMeta[] = [
     help: "library",
     chrome: { shell: "app", search: "global" },
     title: ({ params }) =>
-      ["设置", tabLabelFor("/settings/" + params.tab)]
+      ["设置与任务", tabLabelFor("/settings/" + params.tab)]
         .filter(Boolean)
         .join(" · "),
     component: () => import("../routes/Settings"),
@@ -310,6 +297,5 @@ export const ROUTE_REDIRECTS: readonly RouteRedirect[] = [
   { from: "/photo/recents", to: "/photo/me/recents" },
   { from: "/comic/favorites", to: "/comic/me/favorites" },
   { from: "/comic/recents", to: "/comic/me/recents" },
-  { from: "/tasks", to: "/tasks/run" },
-  { from: "/settings", to: "/settings/interface" },
+  ...LEGACY_SETTINGS_TAB_REDIRECTS,
 ];

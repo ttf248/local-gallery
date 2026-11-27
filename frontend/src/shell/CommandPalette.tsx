@@ -22,7 +22,7 @@ import { useDebounce } from "../hooks/useDebounce";
 import { useFocusTrap } from "../ui/useFocusTrap";
 import { useHistoryCards } from "../hooks/useHistory";
 import { useUIStore, type ThemePref } from "../store/uiStore";
-import {
+import { settingsRoute,
   albumRoute,
   homeRoute,
   libraryRoute,
@@ -197,10 +197,10 @@ function Palette({
     {
       id: "tasks",
       icon: TasksIcon,
-      label: "任务中心",
-      keywords: ["分析", "任务"],
+      label: "分析与计划",
+      keywords: ["任务", "分析", "队列", "计划", "记录"],
       group: "navigation",
-      onSelect: () => navigate("/tasks/run"),
+      onSelect: () => navigate(settingsRoute("tasks")),
     },
     ...(onRefresh
       ? [
@@ -230,11 +230,11 @@ function Palette({
     {
       id: "settings",
       icon: SettingsIcon,
-      label: "设置",
-      keywords: ["偏好"],
+      label: "设置与任务",
+      keywords: ["设置", "偏好", "外观", "服务端", "存储"],
       shortcut: "Ctrl+,",
       group: "navigation",
-      onSelect: () => navigate("/settings"),
+      onSelect: () => navigate(settingsRoute()),
     },
     {
       id: "mode",

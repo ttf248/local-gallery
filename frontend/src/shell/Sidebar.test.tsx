@@ -162,20 +162,20 @@ describe("Sidebar", () => {
     expect(screen.getByText("相似照片")).toBeInTheDocument();
     // 本机组：任务中心与设置排在内容入口之后。
     expect(screen.getByRole("navigation",{name:"本机"})).toBeVisible();
-    expect(screen.getByText("任务中心")).toBeInTheDocument();
-    expect(screen.getByText("设置")).toBeInTheDocument();
+    expect(screen.queryByText("任务中心")).toBeNull();
+    expect(screen.getByText("设置与任务")).toBeInTheDocument();
   });
 
   // 页面级分区搬进了页面内的页签条：侧栏不再展开二级菜单，
   // 只在激活的那一格里挂一枚当前页签 —— 侧栏仍然能回答「我在这一页的哪一段」。
   it("分区页不再展开二级菜单，只在条目上标出当前页签", () => {
-    const { unmount } = renderSidebar(false, "/settings/data");
+    const { unmount } = renderSidebar(false, "/settings/storage");
     const entry = screen.getByRole("link", { name: /设置/ });
-    expect(entry).toHaveAttribute("href", "/settings/data");
+    expect(entry).toHaveAttribute("href", "/settings/storage");
     // 页签名是这一页的状态，不是入口的名字：链接的可访问名仍是「设置」。
-    expect(entry).toHaveAccessibleName("设置");
+    expect(entry).toHaveAccessibleName("设置与任务");
     expect(screen.queryByTestId("nav-tab-label")).toBeNull();
-    expect(document.title).toContain("设置 · 数据");
+    expect(document.title).toContain("设置与任务 · 数据与存储");
     // 旧的分区入口没有了。
     expect(
       screen.queryByRole("button", { name: /^外观$/ }),

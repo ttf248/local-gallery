@@ -26,7 +26,7 @@ export function Page({
           standard: "max-w-[var(--page-max)]",
           gallery: "max-w-none",
           focused: "max-w-[var(--page-max-focused)]",
-          system: "max-w-[1200px]",
+          system: "max-w-[var(--page-max)]",
           workspace: "max-w-none",
         }[variant],
         className,

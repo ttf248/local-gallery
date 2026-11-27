@@ -34,7 +34,7 @@ const pages = ROUTE_MANIFEST.map((meta) => {
   };
 });
 
-function Redirect({ to }: Pick<RouteRedirect, "to">) {
+function Redirect({ to, hash: defaultHash }: Pick<RouteRedirect, "to" | "hash">) {
   const { search, hash } = useLocation();
   const params = useParams();
   return (
@@ -43,7 +43,7 @@ function Redirect({ to }: Pick<RouteRedirect, "to">) {
       to={{
         pathname: typeof to === "function" ? to(params) : to,
         search,
-        hash,
+        hash: hash || (defaultHash ? "#" + defaultHash : ""),
       }}
     />
   );
@@ -65,8 +65,8 @@ export default function AppRoutes() {
       {pages
         .filter(({ meta }) => meta.chrome.shell === "immersive")
         .map(({ element }) => element)}
-      {ROUTE_REDIRECTS.map(({ from, to }) => (
-        <Route key={from} path={from} element={<Redirect to={to} />} />
+      {ROUTE_REDIRECTS.map(({ from, to, hash }) => (
+        <Route key={from} path={from} element={<Redirect to={to} hash={hash} />} />
       ))}
       <Route path="/" element={<ModeHomeRedirect />} />
       <Route path="*" element={<Redirect to="/" />} />

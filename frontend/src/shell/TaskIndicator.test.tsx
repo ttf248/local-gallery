@@ -9,5 +9,5 @@ it("空闲隐藏，运行进度和失败入口可读",()=>{
  rerender(renderItem({status:"running",label:"正在分析 · 人脸",progress:.62,failedCount:0},true));
  expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow","62");
  rerender(renderItem({status:"failed",label:"人脸分析",progress:null,failedCount:3}));
- expect(screen.getByRole("link",{name:/重试/})).toHaveAttribute("href","/tasks/run");
+ expect(screen.getByRole("link",{name:/重试/})).toHaveAttribute("href","/settings/tasks");
 });

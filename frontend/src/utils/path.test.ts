@@ -10,6 +10,7 @@ import {
   isReaderPath,
   modeFromPath,
   pageBoundaryKey,
+  settingsRoute,
   recentsRoute,
   readerRoute,
   tagRoute,
@@ -138,10 +139,10 @@ describe("pageBoundaryKey", () => {
   // 整页 —— 任务中心里已选的分析模块与没保存的每日计划草稿都在页面状态里。
   it("设置页与任务中心的各个页签共用一个键", () => {
     expect(pageBoundaryKey("/settings")).toBe("settings");
-    expect(pageBoundaryKey("/settings/interface")).toBe("settings");
+    expect(pageBoundaryKey("/settings/general")).toBe("settings");
     expect(pageBoundaryKey("/settings/server")).toBe("settings");
-    expect(pageBoundaryKey("/tasks")).toBe("tasks");
-    expect(pageBoundaryKey("/tasks/storage")).toBe("tasks");
+    expect(pageBoundaryKey("/tasks")).toBe("settings");
+    expect(pageBoundaryKey("/tasks/storage")).toBe("settings");
   });
 
   it("同一工作台的我的页签共用边界键，切换工作台时区分", () => {
@@ -160,4 +161,9 @@ describe("pageBoundaryKey", () => {
     expect(pageBoundaryKey("/photo/albums/a_1")).toBe("/photo/albums/a_1");
     expect(pageBoundaryKey("/comic/read/c_1")).toBe("/comic/read/c_1");
   });
+});
+
+it("设置链接单独编码查询参数和锚点", () => {
+  expect(settingsRoute()).toBe("/settings/general");
+  expect(settingsRoute("tasks", { query: { job: "a+b" }, hash: "#task-history" })).toBe("/settings/tasks?job=a%2Bb#task-history");
 });

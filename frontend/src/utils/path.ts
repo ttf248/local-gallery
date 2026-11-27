@@ -1,3 +1,4 @@
+import { TAB_PAGES, tabRoute, type SettingsTabId } from "./pageTabs";
 import type { AppMode } from "../api/library";
 import { meTabsFor } from "./meTabs";
 
@@ -290,7 +291,7 @@ export function favoriteResourceId(item: {
  * 错误边界的重置键。
  *
  * 路由层用路径当 key：路径一变，整页重挂，渲染出错时兜底一次就干净。
- * 但设置页与任务中心的页签也在路径里（`/settings/data`），切页签不该
+ * 但设置页与任务中心的页签也在路径里（`/settings/storage`），切页签不该
  * 重挂整页 —— 任务中心里已选的分析模块与没保存的每日计划草稿都在页面
  * 状态里，重挂一次就丢了。
  *
@@ -302,10 +303,19 @@ export function pageBoundaryKey(pathname: string): string {
   const segments = pathname.split("/").filter(Boolean);
   const [section, page] = segments;
   if (section === "settings" || section === "tasks") {
-    return section;
+    return "settings";
   }
   if ((section === "photo" || section === "comic") && page === "me") {
     return `${section}/me`;
   }
   return pathname;
+}
+
+export function settingsRoute(
+  tab: SettingsTabId = "general",
+  options?: { hash?: string; query?: Record<string, string> },
+): string {
+  const search = new URLSearchParams(options?.query).toString();
+  const hash = options?.hash?.replace(/^#/, "");
+  return tabRoute(TAB_PAGES.settings, tab) + (search ? "?" + search : "") + (hash ? "#" + hash : "");
 }

@@ -15,7 +15,6 @@ export type NavKey =
   | "comic.library"
   | "comic.me"
   | "comic.unread"
-  | "machine.tasks"
   | "machine.settings";
 
 export interface RouteChrome {
@@ -36,6 +35,7 @@ export interface RouteMeta {
 }
 export interface RouteRedirect {
   from: string;
+  hash?: string;
   to: string | ((params: Params) => string);
 }
 

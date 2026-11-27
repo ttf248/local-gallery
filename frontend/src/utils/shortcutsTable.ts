@@ -88,7 +88,7 @@ export const SHORTCUTS: Shortcut[] = [
   {
     id: "settings",
     label: "Ctrl+,",
-    description: "设置",
+    description: "设置与任务",
     combo: "ctrl+,",
     group: "global",
   },

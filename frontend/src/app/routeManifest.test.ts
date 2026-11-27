@@ -14,8 +14,8 @@ it.each([
   ["/photo/explore", "发现"],
   ["/photo/me/picks", "珍藏"],
   ["/comic/unread", "未读"],
-  ["/tasks/run", "任务中心 · 运行"],
-  ["/settings/data", "设置 · 数据"],
+  ["/settings/tasks", "设置与任务 · 分析与计划"],
+  ["/settings/general", "设置与任务 · 通用与阅读"],
   ["/photo/people/p", "人物相册"],
   ["/photo/travels/place/id", "足迹"],
   ["/photo/tags/C%2B%25xx%2520", "C+%xx%20"],
@@ -30,8 +30,8 @@ it.each([
 });
 
 it("每条内容路由均有唯一标识和有效的页面归属", () => {
-  expect(ROUTE_MANIFEST).toHaveLength(27);
-  expect(new Set(ROUTE_MANIFEST.map((meta) => meta.id)).size).toBe(27);
+  expect(ROUTE_MANIFEST).toHaveLength(26);
+  expect(new Set(ROUTE_MANIFEST.map((meta) => meta.id)).size).toBe(26);
   const keys = [...PHOTO_NAV, ...COMIC_NAV, ...MACHINE_GROUP.entries].map(
     (e) => e.key,
   );
@@ -49,7 +49,7 @@ it("每条内容路由均有唯一标识和有效的页面归属", () => {
   );
   expect(matchRouteMeta("/photo/albums/example")?.meta.help).toBe("photo");
   expect(matchRouteMeta("/comic/library")?.meta.help).toBe("library");
-  expect(ROUTE_REDIRECTS).toHaveLength(9);
+  expect(ROUTE_REDIRECTS).toHaveLength(17);
 });
 
 it("页面标题仅在提供额外信息时拼入", () => {
