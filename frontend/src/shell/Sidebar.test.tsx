@@ -72,7 +72,7 @@ beforeAll(() => {
 });
 
 const shuffle = vi.fn();
-function renderSidebar(collapsed = false, path = "/") {
+function renderSidebar(collapsed = false, path = "/", warningCount = 0) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // 偏好先入缓存：侧栏的入口清单随偏好变化，首帧就该是最终状态，
   // 不必等一次请求回来。
@@ -81,7 +81,7 @@ function renderSidebar(collapsed = false, path = "/") {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
         {wideViewport ? (
-          <Sidebar onSearch={()=>{}} onHelp={()=>{}} collapsed={collapsed} onToggle={() => {}} warningCount={0} />
+          <Sidebar onSearch={()=>{}} onHelp={()=>{}} collapsed={collapsed} onToggle={() => {}} warningCount={warningCount} />
         ) : (
           <>
             <MobileTabBar onMore={() => {}} />
@@ -168,6 +168,11 @@ describe("Sidebar", () => {
 
   // 页面级分区搬进了页面内的页签条：侧栏不再展开二级菜单，
   // 只在激活的那一格里挂一枚当前页签 —— 侧栏仍然能回答「我在这一页的哪一段」。
+  it("扫描告警直接指向媒体库索引", () => {
+    renderSidebar(false, "/photo", 2);
+    expect(screen.getByRole("link", {name: "扫描告警，共 2 条"})).toHaveAttribute("href", "/settings/storage#library-index");
+  });
+
   it("分区页不再展开二级菜单，只在条目上标出当前页签", () => {
     const { unmount } = renderSidebar(false, "/settings/storage");
     const entry = screen.getByRole("link", { name: /设置/ });

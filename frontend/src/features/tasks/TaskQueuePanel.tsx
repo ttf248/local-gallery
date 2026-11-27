@@ -52,7 +52,7 @@ export default function TaskQueuePanel({
     return (
       <section
         aria-label="等待队列"
-        className="flex items-center gap-4 border-y border-line py-3"
+        className="flex min-h-10 items-center gap-4 rounded-lg border border-line px-4"
       >
         <h2 className="text-body font-medium">等待队列 · 0 项</h2>
         <p className="text-caption text-ink-2">当前没有等待中的任务。</p>

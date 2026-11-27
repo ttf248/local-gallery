@@ -106,7 +106,7 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
                   ? faceModel === "buffalo_m"
                     ? "标准模型已就绪"
                     : "轻量模型已就绪"
-                  : "所选模型未就绪，请在本机存储页签安装模型"}
+                  : "所选模型未就绪，请在数据与存储页签查看模型与路径"}
               </span>
               {faceModelSaving ? (
                 <span className="text-caption text-ink-3">

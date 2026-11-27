@@ -216,7 +216,7 @@ describe("ServerConfigPanel", () => {
     },
   );
 
-  it("远程访问设置时显示仅本机提示而不是永久加载", async () => {
+  it.each([false, true])("远程访问服务端设置时仅显示本机提示（已有缓存 %s）", async (cached) => {
     vi.mocked(configApi.get).mockRejectedValue(
       new ApiError(
         403,
@@ -225,7 +225,9 @@ describe("ServerConfigPanel", () => {
         "local_access_required",
       ),
     );
-    renderPanel();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    if (cached) client.setQueryData(["server-config"], baseConfig);
+    renderPanel(client);
     expect(
       await screen.findByText("服务端设置仅可在运行服务的计算机上管理"),
     ).toBeInTheDocument();

@@ -10,7 +10,8 @@ import type {
 import {
   estimateForModule,
   formatCount,
-  moduleReasonLabel, taskStatusLabel,
+  moduleReasonLabel,
+  taskStatusLabel,
 } from "../../utils/taskFormat";
 
 interface Props {
@@ -53,72 +54,94 @@ export default function ModuleTiles({
         const previous = history.find((job) => job.type === module.type);
         return (
           <div key={module.type} className="relative min-w-0">
-            <button
-              type="button"
-              title={module.name + " · " + readiness}
-              aria-label={module.name}
-              aria-pressed={isSelected}
-              disabled={isDisabled}
-              onClick={() => onToggle(module.type)}
-              className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border-2 border-transparent bg-raised pl-7 pr-11 text-left shadow-1 aria-pressed:border-accent disabled:opacity-50"
-            >
-              {isSelected && (
-                <CheckIcon
-                  size={14}
-                  aria-hidden="true"
-                  className="absolute left-2 text-accent"
-                />
-              )}
-              <span className="text-label font-medium">{module.name}</span>
-              <span className="text-body tabular-nums">
-                {amount ? formatCount(amount.count) : "—"}
-                <small className="ml-1 text-caption">张</small>
-              </span>
-              <span className="flex items-center gap-1 text-caption text-ink-2">
-                <span
-                  aria-hidden="true"
-                  className={
-                    "size-1.5 shrink-0 rounded-full " +
-                    (!module.installed || isLocked
-                      ? "bg-ink-3"
+            <div className="relative">
+              <button
+                type="button"
+                title={module.name + " · " + readiness}
+                aria-label={module.name}
+                aria-pressed={isSelected}
+                disabled={isDisabled}
+                onClick={() => onToggle(module.type)}
+                className="grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 rounded-lg border-2 border-transparent bg-raised pl-7 pr-11 text-left shadow-1 aria-pressed:border-accent disabled:opacity-50"
+              >
+                {isSelected && (
+                  <CheckIcon
+                    size={14}
+                    aria-hidden="true"
+                    className="absolute left-2 text-accent"
+                  />
+                )}
+                <span className="text-label font-medium">{module.name}</span>
+                <span className="text-body tabular-nums">
+                  {amount ? formatCount(amount.count) : "—"}
+                  <small className="ml-1 text-caption">张</small>
+                </span>
+                <span className="flex items-center gap-1 text-caption text-ink-2">
+                  <span
+                    aria-hidden="true"
+                    className={
+                      "size-1.5 shrink-0 rounded-full " +
+                      (!module.installed || isLocked
+                        ? "bg-ink-3"
+                        : previous?.status === "failed"
+                          ? "bg-danger"
+                          : "bg-success")
+                    }
+                  />
+                  {!module.installed
+                    ? "不可用：" + readiness
+                    : isLocked
+                      ? readiness
                       : previous?.status === "failed"
-                        ? "bg-danger"
-                        : "bg-success")
-                  }
-                />
-                {!module.installed
-                  ? "不可用：" + readiness
-                  : isLocked ? readiness : previous?.status === "failed"
-                    ? "上次失败"
-                    : readiness}
-              </span>
-            </button>
-            <Menu
-              label={module.name + "详情"}
-              align="end"
-              className="absolute right-1 top-1/2 -translate-y-1/2"
-              trigger={
-                <button
-                  type="button"
-                  className="grid size-8 place-items-center rounded-md text-ink-2"
-                  aria-label={module.name + "详情"}
-                >
-                  <MoreHorizontalIcon size={15} />
-                </button>
-              }
-              items={[
-                {
-                  type: "label",
-                  label:module.name,
-                },
-                {
-                  type: "label",
-                  label: previous
-                    ? "上次 · " + taskStatusLabel(previous.status)
-                    : readiness,
-                },
-              ]}
-            />
+                        ? "上次失败"
+                        : readiness}
+                </span>
+              </button>
+              <Menu
+                label={module.name + "详情"}
+                align="end"
+                className="absolute right-1 top-1/2 -translate-y-1/2"
+                trigger={
+                  <button
+                    type="button"
+                    className="grid size-8 touch:size-10 place-items-center rounded-md text-ink-2"
+                    aria-label={module.name + "详情"}
+                  >
+                    <MoreHorizontalIcon size={15} />
+                  </button>
+                }
+                items={[
+                  {
+                    type: "label",
+                    label: module.name,
+                  },
+                  {
+                    type: "label",
+                    label: previous
+                      ? "上次 · " + taskStatusLabel(previous.status)
+                      : readiness,
+                  },
+                ]}
+              />
+            </div>
+            {isLocked && (
+              <a
+                href="#daily-plan-people"
+                className="inline-flex min-h-8 items-center px-2 text-caption text-accent underline touch:min-h-10"
+                onClick={(event) => {
+                  const input = document.getElementById("daily-plan-people");
+                  if (!input) return;
+                  event.preventDefault();
+                  input.focus({ preventScroll: true });
+                  input.scrollIntoView?.({
+                    behavior: "smooth",
+                    block: "center",
+                  });
+                }}
+              >
+                需先启用人物分析 · 每日计划
+              </a>
+            )}
           </div>
         );
       })}

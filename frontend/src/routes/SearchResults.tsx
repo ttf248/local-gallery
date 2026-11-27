@@ -15,7 +15,7 @@ import { useLibraryNodes } from "../hooks/useLibrary";
 import { useAppMode } from "../hooks/useAppMode";
 import { useContentScope } from "../hooks/useContentScope";
 import { useUIStore } from "../store/uiStore";
-import {
+import { settingsRoute,
   albumRoute,
   exploreRoute,
   libraryRoute,
@@ -182,7 +182,7 @@ export default function SearchResults() {
             <InlineAlert tone="warning">
               本机画面模型未就绪，这次只能按图片里的文字找。
               <Link
-                to="/tasks/storage"
+                to={settingsRoute("storage")}
                 className="ml-1 text-primary hover:underline"
               >
                 查看任务中心
@@ -203,7 +203,7 @@ export default function SearchResults() {
           {content.status && (
             <p className="shrink-0 bg-canvas py-1 text-caption tabular-nums text-ink-3">
               {content.status.coverage.indexed.toLocaleString()} /{" "}
-              {content.status.coverage.total.toLocaleString()} 张已索引 · <Link to="/tasks/run" className="underline">任务中心</Link>
+              {content.status.coverage.total.toLocaleString()} 张已索引 · <Link to={settingsRoute("tasks")} className="underline">任务中心</Link>
             </p>
           )}
         </>

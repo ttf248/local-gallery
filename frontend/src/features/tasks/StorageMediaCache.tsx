@@ -80,7 +80,7 @@ export default function StorageMediaCache({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-line text-ink-2 transition-colors hover:bg-sunken disabled:opacity-50"
+            className="inline-flex min-h-8 min-w-8 touch:min-h-10 touch:min-w-10 items-center justify-center rounded-md border border-line text-ink-2 transition-colors hover:bg-sunken disabled:opacity-50"
             onClick={onRefresh}
             disabled={refreshing}
             title="重新扫描磁盘计算缓存占用"
@@ -94,7 +94,7 @@ export default function StorageMediaCache({
           </button>
           <button
             type="button"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-danger/40 bg-canvas px-2 text-caption text-danger transition-colors hover:bg-danger/5 disabled:opacity-50"
+            className="inline-flex min-h-8 min-w-8 touch:min-h-10 touch:min-w-10 items-center gap-1 rounded-md border border-danger/40 bg-canvas px-2 text-caption text-danger transition-colors hover:bg-danger/5 disabled:opacity-50"
             onClick={onClearAll}
             disabled={clearing === "all"}
             title="清空全部派生缓存"
@@ -124,7 +124,7 @@ export default function StorageMediaCache({
               </span>
               <button
                 type="button"
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-ink-3 transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
+                className="inline-flex min-h-8 min-w-8 touch:min-h-10 touch:min-w-10 shrink-0 items-center justify-center rounded text-ink-3 transition-colors hover:bg-danger/10 hover:text-danger disabled:opacity-30"
                 disabled={!canClear || clearing === item.scope}
                 onClick={() => onClear(item.scope)}
                 title={canClear ? `清空 ${item.label} 缓存` : "暂无内容"}

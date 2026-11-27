@@ -1,3 +1,4 @@
+import { settingsRoute } from "../utils/path";
 import {Page} from "../shell/Page";
 import {buttonStyles} from "../ui/buttonStyles";
 import { InlineAlert } from "../ui/InlineAlert";
@@ -477,7 +478,7 @@ export default function SemanticSearch() {
                     : "Chinese-CLIP 权重缺失或校验未通过。"}{" "}
                   文字搜索仍可用；权重目录：cacheDir/derived/ai/models/。
                 </span>
-                <Link to="/tasks/storage" className={buttonStyles({variant:"secondary",size:"sm"})}>
+                <Link to={settingsRoute("storage")} className={buttonStyles({variant:"secondary",size:"sm"})}>
                   查看任务中心
                 </Link>
               </div>
@@ -504,7 +505,7 @@ export default function SemanticSearch() {
               : "本机运行环境未就绪"}
           {" · "}
           {status.coverage.indexed.toLocaleString()} /{" "}
-          {status.coverage.total.toLocaleString()} 张已索引 · <Link to="/tasks/run" className="underline">任务中心</Link>
+          {status.coverage.total.toLocaleString()} 张已索引 · <Link to={settingsRoute("tasks")} className="underline">任务中心</Link>
         </Page>
       ) : null}
     </div>

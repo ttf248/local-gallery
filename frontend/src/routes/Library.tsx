@@ -31,7 +31,7 @@ import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useListFilters } from "../hooks/useListFilters";
 import type { ViewKey } from "../utils/listFilterParams";
 import { useUIStore } from "../store/uiStore";
-import { decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
+import { settingsRoute, decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import type { LibraryDashboardProgress } from "../api/library";
 import { workbenchCopy } from "../utils/workbench";
@@ -549,7 +549,7 @@ export default function Library() {
               title={`${mode === "comic" ? "书架" : "相册"}这边还没有内容`}
               description="媒体库里还没有这一侧的内容。先到设置里添加媒体目录，或去另一边看看。"
               action={
-                <Link className={buttonStyles({variant:"secondary"})} to="/settings/data">
+                <Link className={buttonStyles({variant:"secondary"})} to={settingsRoute("storage")}>
                   去设置
                 </Link>
               }

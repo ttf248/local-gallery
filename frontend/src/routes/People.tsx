@@ -33,7 +33,7 @@ import { usePickToggle } from "../hooks/usePickToggle";
 import { useWallViewer } from "../hooks/useWallViewer";
 import { usePhotoStore, wallTargetHeight } from "../store/photoStore";
 import { useUIStore } from "../store/uiStore";
-import {
+import { settingsRoute,
   albumRoute,
   homeRoute,
   peopleAnnotateRoute,
@@ -183,7 +183,7 @@ function PeopleList() {
               >
                 标注工具
               </Link>
-              <Link className={buttonStyles({variant:"secondary",size:"sm"})} to="/tasks/plan">
+              <Link className={buttonStyles({variant:"secondary",size:"sm"})} to={settingsRoute("tasks", { hash: "daily-plan" })}>
                 人物分析设置
               </Link>
               <label className="flex items-center gap-2 text-caption text-ink-2">
@@ -235,7 +235,7 @@ function PeopleList() {
           title="人物分析默认关闭"
           description="前往任务中心启用人物分析并运行人脸识别。分析只在本机处理。"
           action={
-            <Link className={buttonStyles({variant:"secondary"})} to="/tasks/plan">
+            <Link className={buttonStyles({variant:"secondary"})} to={settingsRoute("tasks", { hash: "daily-plan" })}>
               打开任务中心
             </Link>
           }

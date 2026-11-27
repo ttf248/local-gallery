@@ -1,3 +1,4 @@
+import { settingsRoute } from "../utils/path";
 import {buttonStyles} from "../ui/buttonStyles";
 import { Link } from "react-router-dom";
 import {useRef,useState} from "react";
@@ -82,7 +83,7 @@ export default function Explore() {
                     去漫画库看看
                   </Link>
                 ) : null}
-                <Link className={buttonStyles({variant:"primary"})} to="/settings/data">
+                <Link className={buttonStyles({variant:"primary"})} to={settingsRoute("storage")}>
                   设置照片目录
                 </Link>
               </div>

@@ -14,12 +14,13 @@ import {
   taskStatusLabel,
   taskTitle,
 } from "../../utils/taskFormat";
-import { EmptyState } from "../common";
 import { ChevronDownIcon } from "../../ui/icons";
 import FailureGroupList from "./FailureGroupList";
 import JobOutputSummary from "./JobOutputSummary";
 import { Badge } from "../../ui/Badge";
 import { taskStatusTone } from "../../utils/taskFormat";
+
+const DEFAULT_VISIBLE_JOBS = 8;
 
 interface Props {
   jobs: AIJob[];
@@ -48,13 +49,30 @@ export default function JobHistoryPanel({
   );
 
   const location = useLocation();
+  const [showAll, setShowAll] = useState(false);
+  const [focusJob, setFocusJob] = useState<string | null>(null);
+  const jobId =
+    location.pathname === "/settings/tasks"
+      ? new URLSearchParams(location.search).get("job")
+      : null;
+  const targetIndex = jobId ? jobs.findIndex((job) => job.id === jobId) : -1;
+  const found = targetIndex >= 0;
+  const beyondLimit = targetIndex >= DEFAULT_VISIBLE_JOBS;
   useEffect(() => {
-    if (location.pathname !== "/tasks/history") return;
-    const id = new URLSearchParams(location.search).get("job");
-    if (!id) return;
+    if (!jobId || !found) return;
     setFilter("all");
-    setExpandedIds((current) => new Set([...current, id]));
-  }, [location.key, location.pathname, location.search]);
+    if (beyondLimit) setShowAll(true);
+    setExpandedIds((current) => new Set([...current, jobId]));
+    setFocusJob(jobId);
+  }, [location.key, jobId, found, beyondLimit]);
+
+  useEffect(() => {
+    if (!focusJob) return;
+    const row = document.getElementById("history-job-" + focusJob);
+    row?.querySelector("summary")?.focus({ preventScroll: true });
+    row?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    setFocusJob(null);
+  }, [focusJob]);
 
   function handleToggle(jobId: string, open: boolean) {
     setExpandedIds((current) => {
@@ -95,7 +113,8 @@ export default function JobHistoryPanel({
 
   return (
     <section
-      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised"
+      className="min-w-0 rounded-xl border border-line bg-raised p-4 sm:p-5"
+      id="task-history"
       aria-labelledby="task-history-heading"
     >
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
@@ -112,25 +131,12 @@ export default function JobHistoryPanel({
           </p>
         </div>
         {jobs.length > 0 ? (
-          <button
-            type="button"
-            className={buttonStyles({ variant: "secondary", size: "sm" })}
-            disabled={busy}
-            onClick={clearHistory}
-          >
-            清理已结束记录
-          </button>
-        ) : null}
-      </div>
-
-      <div className="tasks-section__body mt-3">
-        {jobs.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 pb-3">
             {HISTORY_FILTERS.map(({ value, label }) => (
               <button
                 key={value}
                 type="button"
-                className={`inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-md text-body font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] h-8 px-2.5 text-caption touch:min-h-10 ${filter === value ? "bg-primary text-on-primary" : "border border-line-strong bg-raised hover:bg-hover"}`}
+                className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition duration-base disabled:[opacity:0.45] disabled:cursor-[not-allowed] min-h-8 min-w-8 px-2.5 text-caption touch:min-h-10 touch:min-w-10 ${filter === value ? "bg-primary text-on-primary" : "border border-line-strong bg-raised hover:bg-hover"}`}
                 aria-pressed={filter === value}
                 onClick={() => setFilter(value)}
               >
@@ -143,21 +149,29 @@ export default function JobHistoryPanel({
           </div>
         ) : null}
 
+        {jobs.length > 0 ? (
+          <button
+            type="button"
+            className={buttonStyles({ variant: "secondary", size: "sm" })}
+            disabled={busy}
+            onClick={clearHistory}
+          >
+            清理已结束记录
+          </button>
+        ) : null}
+      </div>
+
+      <div className="tasks-section__body mt-3">
         {visibleJobs.length === 0 ? (
-          <EmptyState
-            size="inline"
-            title={
-              jobs.length === 0 ? "还没有已结束的任务" : "没有符合条件的记录"
-            }
-            description={
-              jobs.length === 0
-                ? "运行一次分析后，耗时、产出和失败原因会显示在这里。"
-                : "选择其他状态查看任务记录。"
-            }
-          />
+          <p className="py-2 text-body text-ink-2">
+            {jobs.length === 0 ? "还没有已结束的任务" : "没有符合条件的记录"}
+          </p>
         ) : (
           <div className="tasks-list border-t border-t-line">
-            {visibleJobs.map((job) => (
+            {(showAll
+              ? visibleJobs
+              : visibleJobs.slice(0, DEFAULT_VISIBLE_JOBS)
+            ).map((job) => (
               <details
                 key={job.id}
                 open={expandedIds.has(job.id)}
@@ -167,8 +181,9 @@ export default function JobHistoryPanel({
                 className="group border-t border-line first:border-t-0"
                 data-testid="task-history-row"
                 data-job-id={job.id}
+                id={"history-job-" + job.id}
               >
-                <summary className="flex cursor-pointer list-none items-start gap-3 py-3 [&::-webkit-details-marker]:hidden">
+                <summary className="focus-visible:ring-1 focus-visible:ring-accent flex cursor-pointer list-none items-start gap-3 py-3 [&::-webkit-details-marker]:hidden">
                   <Badge
                     variant="dot"
                     tone={taskStatusTone(job.status)}
@@ -315,6 +330,18 @@ export default function JobHistoryPanel({
           </div>
         )}
       </div>
+      {visibleJobs.length > DEFAULT_VISIBLE_JOBS && (
+        <button
+          type="button"
+          className={buttonStyles({ variant: "secondary", size: "sm" })}
+          aria-expanded={showAll}
+          onClick={() => setShowAll(!showAll)}
+        >
+          {showAll
+            ? "收起记录"
+            : `展开其余 ${visibleJobs.length - DEFAULT_VISIBLE_JOBS} 条记录`}
+        </button>
+      )}
     </section>
   );
 }

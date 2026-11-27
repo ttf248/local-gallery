@@ -1,3 +1,4 @@
+import { settingsRoute } from "../../utils/path";
 import {Page} from "../../shell/Page";
 import {buttonStyles} from "../../ui/buttonStyles";
 import { useState } from "react";
@@ -345,7 +346,7 @@ export default function AlbumGroupPanel({
               {emptyState.description}
             </p>
             {emptyState.action === "enable-people" ? (
-              <Link to="/tasks/plan" className={buttonStyles({variant:"secondary",size:"sm",className:"mt-4"})}>
+              <Link to={settingsRoute("tasks", { hash: "daily-plan" })} className={buttonStyles({variant:"secondary",size:"sm",className:"mt-4"})}>
                 去任务中心启用
               </Link>
             ) : emptyState.action === "retry-module" ? (

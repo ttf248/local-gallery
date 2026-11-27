@@ -17,7 +17,7 @@ import {
   FilterIcon,
 } from "../ui/icons";
 import type { GalleryContextEntry } from "../utils/galleryContext";
-import { albumRoute, decodeFavPath, homeRoute } from "../utils/path";
+import { settingsRoute, albumRoute, decodeFavPath, homeRoute } from "../utils/path";
 import { compareDatesDesc } from "../utils/date";
 import { compareByAdded } from "../utils/cardSorting";
 import { useViewedSort } from "../hooks/useHistory";
@@ -171,7 +171,7 @@ export default function Unread() {
           action={
             total === 0 ? (
               <button
-                onClick={() => navigate("/settings")}
+                onClick={() => navigate(settingsRoute("server"))}
                 className={buttonStyles({variant:"primary"})}
               >
                 去设置

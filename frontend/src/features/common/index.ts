@@ -12,3 +12,4 @@ export { EmptyState } from "../../ui/EmptyState";
 export { ListFilterBar } from "./ListFilterBar";
 export { FilterBar } from "./FilterBar";
 export { useConfirm, ConfirmProvider } from "./ConfirmDialog";
+export { default as ScanWarnings } from "./ScanWarnings";

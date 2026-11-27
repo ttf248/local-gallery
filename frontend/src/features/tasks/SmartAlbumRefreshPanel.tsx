@@ -99,7 +99,7 @@ export default function SmartAlbumRefreshPanel() {
   return (
     <section
       aria-labelledby="smart-album-refresh-heading"
-      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised"
+      className="min-w-0 rounded-xl border border-line bg-raised p-4 sm:p-5"
     >
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
         <div className="min-w-0">

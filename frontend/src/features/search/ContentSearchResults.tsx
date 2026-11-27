@@ -17,7 +17,7 @@ import {
   useContentSearchQuery,
   type ContentSearchSubmission,
 } from "../../hooks/useContentSearchQuery";
-import { albumRoute } from "../../utils/path";
+import { settingsRoute, albumRoute } from "../../utils/path";
 import { contentEmptyState } from "../../utils/contentSearchState";
 
 type ScoredFeedItem = LibraryFeedItem & {
@@ -235,7 +235,7 @@ export default function ContentSearchResults({
           description={empty.description}
           action={
             empty.action === "tasks" ? (
-              <Link to="/tasks/run" className={buttonStyles({variant:"secondary"})}>
+              <Link to={settingsRoute("tasks")} className={buttonStyles({variant:"secondary"})}>
                 打开任务中心
               </Link>
             ) : empty.action === "retry" && onRetry ? (

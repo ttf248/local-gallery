@@ -8,7 +8,7 @@ import { useChinaPlacesAll } from "../../hooks/useChinaLocations";
 import { InlineAlert } from "../../ui/InlineAlert";
 import { RenditionImage } from "../common";
 import { ImageIcon } from "../../ui/icons";
-import { travelPlaceRoute, travelsRoute } from "../../utils/path";
+import { settingsRoute, travelPlaceRoute, travelsRoute } from "../../utils/path";
 
 /** 预览最多列几个地方：这是入口，不是一张地点清单。 */
 const PLACE_LIMIT = 8;
@@ -160,7 +160,7 @@ function PlaceEmptyState({
         上次元数据分析失败，暂时无法确认地点结果。
         <Link
           className="ml-1 text-primary underline-offset-2 hover:underline"
-          to="/tasks"
+          to={settingsRoute("tasks")}
         >
           查看任务记录
         </Link>
@@ -180,7 +180,7 @@ function PlaceEmptyState({
       分析。运行一次元数据分析后，这里会显示已解析出位置的照片。
       <Link
         className="ml-1 text-primary underline-offset-2 hover:underline"
-        to="/tasks/plan"
+        to={settingsRoute("tasks", { hash: "daily-plan" })}
       >
         打开任务中心
       </Link>

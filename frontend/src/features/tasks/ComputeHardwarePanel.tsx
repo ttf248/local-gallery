@@ -77,7 +77,7 @@ export default function ComputeHardwarePanel({
                 : "新建的向量、文字识别和人脸分析任务使用 CPU 推理。已排队任务保留创建时的设备选择；照片元数据解析始终由 CPU 处理。"}
             </p>
             <p className="mt-2 text-caption text-ink-3">
-              推理设备与模型状态在运行页的「高级信息」里；模型权重在「本机存储」页签。
+              推理设备与模型状态在同页的「高级信息」里；模型权重在「数据与存储」页签。
             </p>
           </div>
         </details>

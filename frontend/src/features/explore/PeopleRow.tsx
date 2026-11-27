@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { aiJobsApi, type AIJob, type PersonGroup } from "../../api/aiJobs";
 import { PersonFaceThumb } from "../people";
 import { InlineAlert } from "../../ui/InlineAlert";
-import { peopleRoute } from "../../utils/path";
+import { settingsRoute, peopleRoute } from "../../utils/path";
 
 /** 每一档最多摆几个人：预览是入口，不是名单。 */
 const NAMED_LIMIT = 6;
@@ -180,7 +180,7 @@ function PeopleEmptyState({
         人物分析尚未启用。前往任务中心开启分析后，这里才会出现候选分组。
         <Link
           className="ml-1 text-primary underline-offset-2 hover:underline"
-          to="/tasks/plan"
+          to={settingsRoute("tasks", { hash: "daily-plan" })}
         >
           打开任务中心
         </Link>
@@ -200,7 +200,7 @@ function PeopleEmptyState({
         上次人物分析失败，暂时无法确认是否有候选分组。
         <Link
           className="ml-1 text-primary underline-offset-2 hover:underline"
-          to="/tasks"
+          to={settingsRoute("tasks")}
         >
           查看任务记录
         </Link>
@@ -213,7 +213,7 @@ function PeopleEmptyState({
         上次人物分析已取消，尚未完成；可以到任务中心重新运行。
         <Link
           className="ml-1 text-primary underline-offset-2 hover:underline"
-          to="/tasks"
+          to={settingsRoute("tasks")}
         >
           查看任务中心
         </Link>
@@ -226,7 +226,7 @@ function PeopleEmptyState({
         人物分析尚未运行。前往任务中心启动人脸分析后，这里才会出现候选分组。
         <Link
           className="ml-1 text-primary underline-offset-2 hover:underline"
-          to="/tasks/plan"
+          to={settingsRoute("tasks", { hash: "daily-plan" })}
         >
           打开任务中心
         </Link>

@@ -19,7 +19,7 @@ import {
 import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "../hooks/useAppMode";
 import PhotoTimeline from "./PhotoTimeline";
-import {
+import { settingsRoute,
   readerRoute,
   albumRoute,
   decodeFavPath,
@@ -373,7 +373,7 @@ function ComicHome() {
               icon={<LibraryIcon size={20} />}
               action={
                 <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className={buttonStyles({variant:"secondary"})}>
+                  <Link to={settingsRoute("server")} className={buttonStyles({variant:"secondary"})}>
                     去设置里改属性
                   </Link>
                   {otherSideHasContent && (
@@ -391,10 +391,10 @@ function ComicHome() {
               icon={<LibraryIcon size={20} />}
               action={
                 <div className="flex items-center gap-3">
-                  <Link to="/settings/server" className={buttonStyles({variant:"secondary"})}>
+                  <Link to={settingsRoute("server")} className={buttonStyles({variant:"secondary"})}>
                     设置媒体目录
                   </Link>
-                  <Link to="/settings/data" className={buttonStyles({variant:"primary"})}>
+                  <Link to={settingsRoute("storage")} className={buttonStyles({variant:"primary"})}>
                     去设置
                   </Link>
                 </div>

@@ -9,7 +9,7 @@ import {
   formatEstimateDuration,
   sumEstimateModes,
 } from "../../utils/taskFormat";
-import { SettingsGroup, SettingsRow } from "../../ui/SettingsList";
+import { SettingsRow } from "../../ui/SettingsList";
 import { Switch } from "../../ui/Switch";
 
 interface Props {
@@ -135,7 +135,8 @@ export default function DailyPlanPanel({
 
   return (
     <section
-      className="tasks-section mt-4 p-[clamp(12px,2vw,22px)] border border-line rounded-tile bg-raised"
+      className="[container-type:inline-size] [container-name:plan] min-w-0 rounded-xl border border-line bg-raised p-4 sm:p-5"
+      id="daily-plan"
       aria-labelledby="daily-plan-heading"
     >
       <div className="tasks-section__head flex flex-wrap items-start justify-between gap-y-2.5 gap-x-5">
@@ -170,7 +171,7 @@ export default function DailyPlanPanel({
           onSave();
         }}
       >
-        <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
+        <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_plan_(max-width:560px)]:grid-cols-1 [@container_plan_(max-width:560px)]:gap-1.5">
           <span className="tasks-field__label text-caption text-ink-2">
             开始时间
           </span>
@@ -184,7 +185,7 @@ export default function DailyPlanPanel({
           />
         </div>
 
-        <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
+        <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_plan_(max-width:560px)]:grid-cols-1 [@container_plan_(max-width:560px)]:gap-1.5">
           <span className="tasks-field__label text-caption text-ink-2">
             扫描目录
           </span>
@@ -202,7 +203,7 @@ export default function DailyPlanPanel({
           </div>
         </div>
 
-        <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_tasks_(max-width:560px)]:grid-cols-1 [@container_tasks_(max-width:560px)]:gap-1.5">
+        <div className="tasks-field grid grid-cols-[92px_minmax(0,1fr)] items-center [justify-items:start] gap-4 py-2.5 px-0 border-t border-t-line [@container_plan_(max-width:560px)]:grid-cols-1 [@container_plan_(max-width:560px)]:gap-1.5">
           <span className="tasks-field__label text-caption text-ink-2">
             人物分析
           </span>
@@ -210,6 +211,7 @@ export default function DailyPlanPanel({
             <input
               className="!size-4 accent-accent"
               type="checkbox"
+              id="daily-plan-people"
               checked={peopleEnabled}
               disabled={disabled}
               onChange={(event) =>
@@ -220,8 +222,9 @@ export default function DailyPlanPanel({
           </label>
         </div>
 
-        <SettingsGroup id="plan-modules" title="运行模块">
-          <div className="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
+        <fieldset className="min-w-0 border-t border-line py-3">
+          <legend className="text-label">运行模块</legend>
+          <div className="grid gap-x-3 [@container_plan_(min-width:350px)]:grid-cols-2">
             {modules.map((module) => (
               <SettingsRow
                 key={module.type}
@@ -249,7 +252,7 @@ export default function DailyPlanPanel({
               </SettingsRow>
             ))}
           </div>
-        </SettingsGroup>
+        </fieldset>
         <div className="flex items-center gap-6 border-t border-line py-3">
           <span className="text-caption text-ink-2">刷新相册</span>{" "}
           <label className="flex items-center gap-2 text-body text-ink">

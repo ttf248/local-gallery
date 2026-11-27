@@ -16,7 +16,7 @@ import { InlineAlert } from "../../ui/InlineAlert";
 import { EmptyState } from "../common";
 import { RenditionImage } from "../common";
 import { SparkleIcon } from "../../ui/icons";
-import { smartAlbumsRoute } from "../../utils/path";
+import { settingsRoute, smartAlbumsRoute } from "../../utils/path";
 
 /** 预览最多列几个主题：只摆精选的几个，完整结果去主题页看。 */
 const THEME_LIMIT = 4;
@@ -138,7 +138,7 @@ export default function ThemeCards() {
             : "主题尚未生成。"}{" "}
           <Link
             className="text-primary underline-offset-2 hover:underline"
-            to="/tasks"
+            to={settingsRoute("tasks")}
           >
             前往任务中心运行智能相册生成
           </Link>

@@ -17,6 +17,7 @@ import {
   type Prefs,
 } from "../api/prefs";
 import { useUIStore } from "../store/uiStore";
+import type { SettingsTabId } from "../utils/pageTabs";
 import { SettingsView } from "./Settings";
 
 vi.mock("../api/prefs", () => ({
@@ -55,7 +56,7 @@ const clientForTest = () =>
  * 不指明就会看到「这一屏没有这个控件」的假失败，或者更糟 —— 断言在
  * 另一屏的控件上假通过。
  */
-function renderSettings(tab = "interface", client = clientForTest()) {
+function renderSettings(tab: SettingsTabId = "general", client = clientForTest()) {
   const view = render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -65,7 +66,7 @@ function renderSettings(tab = "interface", client = clientForTest()) {
   );
   return {
     ...view,
-    rerenderWithTab: (next: string) =>
+    rerenderWithTab: (next: SettingsTabId) =>
       view.rerender(
         <QueryClientProvider client={client}>
           <MemoryRouter>
@@ -103,7 +104,7 @@ it("清理失效收藏成功后收藏列表立即更新", async () => {
   client.setQueryData(["favorites"], { favorites });
   vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(favoritesApi.prune).mockResolvedValue({ removed: ["a_missing"] });
-  renderSettings("data", client);
+  renderSettings("storage", client);
   fireEvent.click(await screen.findByRole("button", { name: "清理" }));
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
@@ -119,7 +120,7 @@ it("清理时尚未读取收藏列表，不凭删除项伪造空列表", async (
   const client = clientForTest();
   vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(favoritesApi.prune).mockResolvedValue({ removed: ["a_missing"] });
-  renderSettings("data", client);
+  renderSettings("storage", client);
   fireEvent.click(await screen.findByRole("button", { name: "清理" }));
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
@@ -135,7 +136,7 @@ it("清理失败不移除缓存收藏", async () => {
   client.setQueryData(["favorites"], { favorites });
   vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(favoritesApi.prune).mockRejectedValue(new Error("offline"));
-  renderSettings("data", client);
+  renderSettings("storage", client);
   fireEvent.click(await screen.findByRole("button", { name: "清理" }));
   await waitFor(() =>
     expect(useUIStore.getState().toasts).toContainEqual(
@@ -149,7 +150,7 @@ it("清空成功立即清空共享历史", async () => {
   const client = clientForTest();
   client.setQueryData(["history"], { history: savedHistory });
   vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
-  renderSettings("data", client);
+  renderSettings("storage", client);
   fireEvent.click(await screen.findByRole("button", { name: "清空" }));
   fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
   await waitFor(() =>
@@ -165,7 +166,7 @@ it("清空失败不丢弃原有共享历史", async () => {
   client.setQueryData(["history"], { history: savedHistory });
   vi.mocked(prefsApi.get).mockResolvedValue(basePrefs);
   vi.mocked(historyApi.clear).mockRejectedValue(new Error("offline"));
-  renderSettings("data", client);
+  renderSettings("storage", client);
   fireEvent.click(await screen.findByRole("button", { name: "清空" }));
   fireEvent.click(await screen.findByRole("button", { name: "确认清空" }));
   await waitFor(() =>
@@ -181,7 +182,7 @@ it("修改保留条数后最近访问重新读取，由服务端按新上限裁�
   client.setQueryData(["history"], { history: savedHistory });
   vi.mocked(prefsApi.get).mockResolvedValue({ ...basePrefs, maxRecent: 2 });
   vi.mocked(prefsApi.patch).mockResolvedValue({ ...basePrefs, maxRecent: 1 });
-  renderSettings("data", client);
+  renderSettings("storage", client);
   const decrease = await screen.findByRole("button", {
     name: "减少最近访问保留条数",
   });
@@ -198,7 +199,7 @@ it("修改保留条数后最近访问重新读取，由服务端按新上限裁�
 it("修改其他阅读偏好不覆盖更晚加载的历史快照", async () => {
   const client = clientForTest();
   client.setQueryData(["history"], { history: savedHistory });
-  renderSettings("reading", client);
+  renderSettings("general", client);
   fireEvent.click(
     await screen.findByRole("switch", { name: "阅读到末尾自动切换下一卷" }),
   );
@@ -213,7 +214,7 @@ it("修改其他阅读偏好不覆盖更晚加载的历史快照", async () => {
 
 // 导航分区：逐项开关侧栏入口，存的是生效的隐藏清单。
 it("导航分区按当前偏好显示每一项的开关状态", async () => {
-  renderSettings("interface");
+  renderSettings("general");
   // 新导航默认全部显示：每个一级入口回答一个不同的问题，
   // 收起任何一个都会让那一类内容少一条路。
   expect(
@@ -238,7 +239,7 @@ it("导航分区按当前偏好显示每一项的开关状态", async () => {
 });
 
 it("工作台首页固定显示，不提供开关", async () => {
-  renderSettings("interface");
+  renderSettings("general");
   await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   expect(
     screen.queryByRole("switch", { name: "在照片导航栏显示照片" }),
@@ -252,7 +253,7 @@ it("关掉导航项后把生效的隐藏清单写回服务端", async () => {
     ...basePrefs,
     ...patch,
   }));
-  renderSettings("interface", client);
+  renderSettings("general", client);
   fireEvent.click(
     await screen.findByRole("switch", { name: "在照片导航栏显示发现" }),
   );
@@ -271,7 +272,7 @@ it("关掉导航项后把生效的隐藏清单写回服务端", async () => {
 
 it("保存导航设置失败保留原值并提示", async () => {
   vi.mocked(prefsApi.patch).mockRejectedValueOnce(new Error("offline"));
-  renderSettings("interface");
+  renderSettings("general");
   fireEvent.click(
     await screen.findByRole("switch", { name: "在照片导航栏显示发现" }),
   );
@@ -287,17 +288,19 @@ it("保存导航设置失败保留原值并提示", async () => {
 
 it("读取设置期间显示加载状态", () => {
   vi.mocked(prefsApi.get).mockReturnValue(new Promise(() => {}));
-  renderSettings("interface");
+  renderSettings("general");
   expect(screen.getByRole("status")).toHaveTextContent("正在加载设置");
 });
 
 it("读取设置失败提供重试，恢复后可操作", async () => {
   vi.mocked(prefsApi.get).mockRejectedValueOnce(new Error("offline"));
-  renderSettings("reading");
+  renderSettings("general");
   expect(await screen.findByRole("alert")).toHaveTextContent("设置加载失败");
   expect(
     screen.queryByText("加载中…", { exact: true }),
   ).not.toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "深色" })).toBeEnabled();
+  expect(screen.queryByRole("switch", { name: "阅读到末尾自动切换下一卷" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "重试加载" }));
   expect(
     await screen.findByRole("switch", { name: "阅读到末尾自动切换下一卷" }),
@@ -307,61 +310,51 @@ it("读取设置失败提供重试，恢复后可操作", async () => {
 
 // 页签条：四个页签，只有当前这一个是选中的；面板的可访问名就是页签名。
 it("页签条有四个页签，只有当前这一个被选中", async () => {
-  renderSettings("data");
-  const tablist = await screen.findByRole("navigation", { name: "设置页分区" });
+  renderSettings("storage");
+  const tablist = await screen.findByRole("navigation", { name: "设置与任务分区" });
   const tabs = within(tablist).getAllByRole("link");
   expect(tabs.map((tab) => tab.textContent)).toEqual([
-    "界面",
-    "阅读",
-    "数据",
-    "服务端",
+    "通用与阅读",
+    "分析与计划",
+    "数据与存储",
+    "媒体库与服务",
   ]);
   expect(
     tabs.filter((tab) => tab.getAttribute("aria-current") === "page"),
   ).toHaveLength(1);
-  expect(within(tablist).getByRole("link", { name: "数据" })).toHaveAttribute(
+  expect(within(tablist).getByRole("link", { name: "数据与存储" })).toHaveAttribute(
     "aria-current",
     "page",
   );
 });
 
 it("当前页签的面板以页签名为可访问名，其余页签的面板不在 DOM 里", async () => {
-  renderSettings("data");
-  const panel = await screen.findByRole("region", { name: "数据分区" });
+  renderSettings("storage");
+  const panel = await screen.findByRole("region", { name: "数据与存储分区" });
   expect(panel).toBeInTheDocument();
   expect(
-    screen.queryByRole("region", { name: "界面分区" }),
+    screen.queryByRole("region", { name: "通用与阅读分区" }),
   ).not.toBeInTheDocument();
   expect(
-    screen.queryByRole("region", { name: "阅读分区" }),
+    screen.queryByRole("region", { name: "分析与计划分区" }),
   ).not.toBeInTheDocument();
   expect(
-    screen.queryByRole("region", { name: "服务端分区" }),
+    screen.queryByRole("region", { name: "媒体库与服务分区" }),
   ).not.toBeInTheDocument();
 });
 
 it("每个页签各自承载对应的一组设置", async () => {
   // 界面：外观与导航。
-  const ui = renderSettings("interface");
+  const ui = renderSettings("general");
   expect(
     await screen.findByRole("region", { name: "外观" }),
   ).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "导航" })).toBeInTheDocument();
-  expect(
-    screen.queryByRole("region", { name: "阅读" }),
-  ).not.toBeInTheDocument();
-
-  // 阅读：一张整幅的卡。
-  ui.rerenderWithTab("reading");
-  expect(
-    await screen.findByRole("region", { name: "阅读" }),
-  ).toBeInTheDocument();
-  expect(
-    screen.queryByRole("region", { name: "外观" }),
-  ).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "漫画阅读" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "照片浏览" })).toBeInTheDocument();
 
   // 数据：数据卡与备份卡。
-  ui.rerenderWithTab("data");
+  ui.rerenderWithTab("storage");
   expect(
     await screen.findByRole("region", { name: "媒体库索引" }),
   ).toBeInTheDocument();
@@ -369,26 +362,23 @@ it("每个页签各自承载对应的一组设置", async () => {
     screen.getByRole("region", { name: "备份与恢复" }),
   ).toBeInTheDocument();
 
-  // 服务端：七组面板，不套卡。
+  // 媒体库与服务独立挂载配置面板。
   ui.rerenderWithTab("server");
   expect(
-    await screen.findByRole("region", { name: "服务端分区" }),
+    await screen.findByRole("region", { name: "媒体库与服务分区" }),
   ).toBeInTheDocument();
 });
 
-// 关于是页脚一行，四个页签之外常驻。
-it("关于页脚在每个页签下都在", async () => {
-  renderSettings("interface");
-  expect(
-    await screen.findByRole("region", { name: "关于" }),
-  ).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "关于" })).toBeInTheDocument();
+it("通用页的关于条给出版本和快捷键", async () => {
+  renderSettings("general");
+  expect(await screen.findByText("查看所有快捷键")).toBeVisible();
+  expect(screen.getByText(/Web 版/)).toBeVisible();
 });
 
 // 危险操作单独成组：会丢东西的动作混在一排普通设置里，一眼扫过去
 // 认不出哪几个是点了就没了的。
 it("危险操作单独成组，每件都写清丢的是什么", async () => {
-  renderSettings("data");
+  renderSettings("storage");
   const danger = await screen.findByRole("region", { name: "危险操作" });
 
   expect(within(danger).getByText("清空媒体库索引")).toBeInTheDocument();
@@ -416,7 +406,7 @@ it("危险操作单独成组，每件都写清丢的是什么", async () => {
 
 // 导航分区按工作台分两组列出：两组各是一块，照片那一组在左。
 it("导航分区按工作台分成照片与漫画两组", async () => {
-  renderSettings("interface");
+  renderSettings("general");
   await screen.findByRole("switch", { name: "在漫画导航栏显示未读" });
   const nav = screen.getByRole("region", { name: "导航" });
   expect(within(nav).getByText("照片侧")).toBeInTheDocument();
@@ -432,7 +422,7 @@ it("导航分区按工作台分成照片与漫画两组", async () => {
 // 仍然挨着（分列由 styles/settings.css 的容器查询决定，跟卡宽走，
 // 不跟视口走）。分组丢了，两列的排法就没有落脚点。
 it("一组设置行装在同一个行组里", async () => {
-  renderSettings("interface");
+  renderSettings("general");
   const appearance = await screen.findByRole("region", { name: "外观" });
   const appearanceRows = appearance.querySelector(".settings-rows");
   expect(appearanceRows).not.toBeNull();
@@ -453,7 +443,7 @@ it("后台读取失败保留上次设置", async () => {
   const client = clientForTest();
   client.setQueryData(["prefs"], basePrefs);
   vi.mocked(prefsApi.get).mockRejectedValue(new Error("offline"));
-  renderSettings("reading", client);
+  renderSettings("general", client);
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "仍显示上次加载的设置",
   );
@@ -464,7 +454,7 @@ it("后台读取失败保留上次设置", async () => {
 
 it("保存阅读设置失败保留原值并提示，随后可以再次保存", async () => {
   vi.mocked(prefsApi.patch).mockRejectedValueOnce(new Error("offline"));
-  renderSettings("reading");
+  renderSettings("general");
   const toggle = await screen.findByRole("switch", {
     name: "阅读到末尾自动切换下一卷",
   });
@@ -486,7 +476,7 @@ it("保存阅读设置失败保留原值并提示，随后可以再次保存", a
 });
 
 it("保存成功后刷新失败仍展示服务端已确认的新设置", async () => {
-  renderSettings("reading");
+  renderSettings("general");
   const toggle = await screen.findByRole("switch", {
     name: "阅读到末尾自动切换下一卷",
   });
@@ -508,7 +498,7 @@ it("阅读设置保存期间禁止重复请求和交错修改", async () => {
       finish = resolve;
     }),
   );
-  const view = renderSettings("reading");
+  const view = renderSettings("general");
   const toggle = await screen.findByRole("switch", {
     name: "阅读到末尾自动切换下一卷",
   });
@@ -516,7 +506,7 @@ it("阅读设置保存期间禁止重复请求和交错修改", async () => {
   await waitFor(() => expect(toggle).toBeDisabled());
   expect(screen.getByRole("switch", { name: "切换时显示通知" })).toBeDisabled();
   // 切到数据页签后，保存仍在进行中：那里的控件同样不该能改。
-  view.rerenderWithTab("data");
+  view.rerenderWithTab("storage");
   await waitFor(() =>
     expect(
       screen.getByRole("button", { name: "增加最近访问保留条数" }),
@@ -543,7 +533,7 @@ for (const kind of ["prune", "history"] as const) {
   it(`${buttonName}失败明确提示且可以重新操作`, async () => {
     const operation = kind === "prune" ? favoritesApi.prune : historyApi.clear;
     vi.mocked(operation).mockRejectedValueOnce(new Error("offline"));
-    renderSettings("data");
+    renderSettings("storage");
     const button = await screen.findByRole("button", {
       name: buttonName,
     });
@@ -570,7 +560,7 @@ for (const kind of ["prune", "history"] as const) {
   it(`${buttonName}执行中禁止重复请求`, async () => {
     const operation = kind === "prune" ? favoritesApi.prune : historyApi.clear;
     vi.mocked(operation).mockReturnValue(new Promise<never>(() => {}));
-    renderSettings("data");
+    renderSettings("storage");
     const button = await screen.findByRole("button", {
       name: buttonName,
     });
@@ -584,23 +574,37 @@ for (const kind of ["prune", "history"] as const) {
   });
 }
 
-// 存储信息搬到任务中心之后，设置页就不该再摆这些。
-//
-// 两页各叫「缓存」会让用户分不清说的是哪一个：设置页留下的是媒体库
-// 索引与派生缓存的清理入口，模型权重与分析产物在任务中心。
-it("设置页不再展示模型、路径与派生缓存占用", async () => {
-  renderSettings("data");
-  await screen.findByRole("heading", {name:"媒体库索引"});
+it("数据与存储同时呈现索引、备份与派生缓存", async () => {
+  renderSettings("storage");
+  for (const name of ["媒体库索引", "备份与恢复", "派生缓存"]) {
+    expect(await screen.findByRole("heading", {name})).toBeVisible();
+  }
+});
 
-  expect(screen.queryByText("缓存占用")).not.toBeInTheDocument();
-  expect(screen.queryByText("本机 AI 与存储")).not.toBeInTheDocument();
-  expect(screen.queryByText("模型与缓存路径")).not.toBeInTheDocument();
-  expect(screen.queryByText("一键全清")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /清空 .* 缓存/ })).toBeNull();
+it("数据页的确认框初始聚焦取消，离开后清理未确认操作", async () => {
+  const view = renderSettings("storage");
+  const trigger = await screen.findByRole("button", {name: "清空索引"});
+  trigger.focus();
+  fireEvent.click(trigger);
+  const cancel = screen.getByRole("button", {name: "取消"});
+  expect(cancel).toHaveFocus();
+  fireEvent.click(cancel);
+  expect(trigger).toHaveFocus();
+  fireEvent.click(trigger);
+  view.rerenderWithTab("general");
+  expect(screen.queryByRole("dialog")).toBeNull();
+  view.rerenderWithTab("storage");
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
 
-  // 设置页仍然保留它自己的东西。
-  expect(screen.getByRole("heading", {name:"媒体库索引"})).toBeInTheDocument();
-  expect(
-    screen.queryByRole("heading", { name: "关于" }),
-  ).not.toBeInTheDocument();
+it("偏好读取失败时仍可浏览本机配置和存储", async () => {
+  vi.mocked(prefsApi.get).mockRejectedValue(new Error("offline"));
+  const view = renderSettings("general");
+  expect(await screen.findByText(/设置加载失败/)).toBeVisible();
+  fireEvent.click(screen.getByRole("radio", {name: "深色"}));
+  expect(useUIStore.getState().theme).toBe("dark");
+  view.rerenderWithTab("server");
+  expect(screen.getByText("服务端设置")).toBeVisible();
+  view.rerenderWithTab("storage");
+  expect(screen.getByRole("button", {name: "重新扫描"})).toBeEnabled();
 });

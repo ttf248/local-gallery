@@ -692,7 +692,7 @@ describe("PhotoAlbum", () => {
     expect(screen.getByText(/人物分组依赖人脸分析/)).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "去任务中心启用" }),
-    ).toHaveAttribute("href", "/tasks/plan");
+    ).toHaveAttribute("href", "/settings/tasks#daily-plan");
     expect(aiJobsApi.start).not.toHaveBeenCalled();
   });
 

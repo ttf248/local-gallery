@@ -1,3 +1,4 @@
+import { settingsRoute } from "../../utils/path";
 import { Link } from "react-router-dom";
 import { buttonStyles } from "../../ui/buttonStyles";
 import { Button } from "../../ui/Button";
@@ -78,7 +79,7 @@ export default function TaskSummary({
             <>
               <Link
                 className={buttonStyles({ variant: "secondary", size: "sm" })}
-                to={"/tasks/history?job=" + encodeURIComponent(lastJob.id)}
+                to={settingsRoute("tasks", { query: { job: lastJob.id }, hash: "task-history" })}
               >
                 查看原因
               </Link>

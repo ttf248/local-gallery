@@ -43,7 +43,7 @@ import {
   timelineYearRange,
   type TimelineFilter,
 } from "../utils/timeline";
-import { albumRoute, homeRoute } from "../utils/path";
+import { settingsRoute, albumRoute, homeRoute } from "../utils/path";
 import { FolderIcon, GridIcon, LibraryIcon } from "../ui/icons";
 import { useLibraryManifest } from "../hooks/useLibrary";
 import { useHistoryCards } from "../hooks/useHistory";
@@ -295,7 +295,7 @@ export default function PhotoTimeline() {
           icon={<LibraryIcon size={20} />}
           action={
             <div className="flex items-center gap-3">
-              <Link to="/settings/server" className={buttonStyles({variant:"secondary"})}>
+              <Link to={settingsRoute("server")} className={buttonStyles({variant:"secondary"})}>
                 去设置里改属性
               </Link>
               {otherSideHasContent && (
@@ -314,7 +314,7 @@ export default function PhotoTimeline() {
           action={
             <div className="flex items-center gap-3">
               <Link
-                to="/settings/server"
+                to={settingsRoute("server")}
                 className="inline-flex min-h-10 items-center rounded-md bg-primary px-4 text-on-primary"
               >
                 设置媒体目录

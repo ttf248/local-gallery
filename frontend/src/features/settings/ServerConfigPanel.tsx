@@ -341,10 +341,9 @@ export default function ServerConfigPanel() {
     return <div className="text-body text-ink-2">加载中…</div>;
   }
 
-  if (!data) {
-    const localOnly =
-      queryError instanceof ApiError &&
-      queryError.code === "local_access_required";
+  const localOnly =
+    queryError instanceof ApiError && queryError.code === "local_access_required";
+  if (!data || localOnly) {
     return (
       <div className="rounded-md border border-line bg-raised px-4 py-4">
         <p className="text-body text-ink">
@@ -385,8 +384,55 @@ export default function ServerConfigPanel() {
     return status[key] ?? "idle";
   };
 
+  const renderFields = (group: (typeof FIELDS)[number]) => (
+    <div className="divide-y divide-line">
+      {group.defs.map((def) => {
+        const statusKey = def.key;
+        const st = fieldStatus(statusKey);
+        const requiresRestart = REQUIRES_RESTART.has(def.key as string);
+        const isPath = PATH_FIELDS.has(def.key as string);
+        return (
+          <ServerConfigField
+            key={def.key}
+            def={def}
+            value={fieldValue(def.key)}
+            status={st}
+            requiresRestart={requiresRestart}
+            isPath={isPath}
+            allowOsOpen={data.allowOsOpen}
+            onChange={(v) => {
+              // 每次输入只更新草稿;非路径字段 debounce 后再 flush,
+              // 路径字段由 onBlur 触发 flush
+              setDraft((d) => ({ ...d, [def.key]: v as never }));
+              if (isPath) {
+                pathDirtyRef.current[def.key] = v;
+                setStatus((s) =>
+                  s[statusKey] === "saved" ? { ...s, [statusKey]: "idle" } : s,
+                );
+              } else {
+                setStatus((s) =>
+                  s[statusKey] === "saved" ? { ...s, [statusKey]: "idle" } : s,
+                );
+              }
+            }}
+            onCommit={isPath ? () => flushPathField(def.key) : undefined}
+            onConfirm={() => confirmPathField(def.key)}
+            onCancel={() => cancelPathField(def.key)}
+            onCompositionChange={(active) => setFieldComposing(def.key, active)}
+          />
+        );
+      })}
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-caption text-ink-2">
+        <p>修改后自动保存，标记为需重启的设置在重启服务后生效。</p>
+        <p className="min-w-0 break-all">
+          配置文件路径: <code>{data.configPath}</code>
+        </p>
+      </div>
       {save.hasFailures && (
         <div
           role="alert"
@@ -432,245 +478,227 @@ export default function ServerConfigPanel() {
           </div>
         </div>
       )}
-      <fieldset disabled={save.isReading} className="min-w-0 space-y-6">
+      {save.needsScan && (
+        <div className="bg-primary/5 border border-primary/30 rounded-md px-4 py-3 flex items-center justify-between gap-3 text-body">
+          <div className="flex items-center gap-2 text-ink">
+            <RefreshIcon size={14} />
+            <span>媒体根目录配置已确认，建议重新扫描以刷新媒体库</span>
+          </div>
+          <button
+            disabled={!save.canScan || scanSSE.isRunning}
+            onClick={async () => {
+              try {
+                const { scanId } = await scanApi.start();
+                scanSSE.startWith(scanId);
+                save.clearScanNotice();
+                pushToast({ kind: "success", message: "已开始重新扫描" });
+              } catch {
+                pushToast({ kind: "error", message: "启动扫描失败" });
+              }
+            }}
+            className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-primary/40 text-primary hover:bg-primary/10 text-caption transition-colors disabled:opacity-50"
+          >
+            <RefreshIcon size={11} />
+            立即重新扫描
+          </button>
+        </div>
+      )}
+
+      <fieldset disabled={save.isReading} className="min-w-0 space-y-5">
         {/* 媒体库 — 多根(独立渲染) */}
-        <SettingsGroup id="server-媒体库" title="媒体库">
-          <MediaRootsField
-            // 草稿优先，其次是保存中与失败的输入，最后使用服务端确认值。
-            roots={
-              draft.mediaRoots ??
-              pendingValues.mediaRoots ??
-              failedValues.mediaRoots ??
-              data.mediaRoots ??
-              []
-            }
-            status={fieldStatus("mediaRoots")}
-            allowOsOpen={data.allowOsOpen}
-            onChange={(next) => {
-              setDraft((d) => ({ ...d, mediaRoots: next }));
-              pathDirtyRef.current.mediaRoots = next;
-              setStatus((s) =>
-                s["mediaRoots"] === "saved" ? { ...s, mediaRoots: "idle" } : s,
-              );
-            }}
-            onOpenInExplorer={openConfiguredDirectory}
-            onCancel={() => cancelPathField("mediaRoots")}
-            onConfirm={() => save.retryFailed(["mediaRoots"])}
-            onCompositionChange={(active) =>
-              setFieldComposing("mediaRoots", active)
-            }
-          />
-        </SettingsGroup>
+        <div className="grid items-start gap-5 xl:grid-cols-12">
+          <SettingsGroup
+            className="xl:col-span-7"
+            id="server-媒体库"
+            title="媒体库"
+          >
+            <MediaRootsField
+              // 草稿优先，其次是保存中与失败的输入，最后使用服务端确认值。
+              roots={
+                draft.mediaRoots ??
+                pendingValues.mediaRoots ??
+                failedValues.mediaRoots ??
+                data.mediaRoots ??
+                []
+              }
+              status={fieldStatus("mediaRoots")}
+              allowOsOpen={data.allowOsOpen}
+              onChange={(next) => {
+                setDraft((d) => ({ ...d, mediaRoots: next }));
+                pathDirtyRef.current.mediaRoots = next;
+                setStatus((s) =>
+                  s["mediaRoots"] === "saved"
+                    ? { ...s, mediaRoots: "idle" }
+                    : s,
+                );
+              }}
+              onOpenInExplorer={openConfiguredDirectory}
+              onCancel={() => cancelPathField("mediaRoots")}
+              onConfirm={() => save.retryFailed(["mediaRoots"])}
+              onCompositionChange={(active) =>
+                setFieldComposing("mediaRoots", active)
+              }
+            />
+          </SettingsGroup>
 
-        {/* 扫描 — 排除规则(独立渲染,行为与 MediaRootsField 类似但用 textarea) */}
-        <SettingsGroup id="server-扫描" title="扫描">
-          <ExcludeRulesField
-            patterns={
-              draft.excludePatterns ??
-              pendingValues.excludePatterns ??
-              failedValues.excludePatterns ??
-              data.excludePatterns ??
-              []
-            }
-            systemFiles={
-              draft.systemFiles ??
-              pendingValues.systemFiles ??
-              failedValues.systemFiles ??
-              data.systemFiles ??
-              []
-            }
-            skipHidden={
-              draft.skipHidden ??
-              pendingValues.skipHidden ??
-              failedValues.skipHidden ??
-              data.skipHidden
-            }
-            patternsStatus={fieldStatus("excludePatterns")}
-            systemFilesStatus={fieldStatus("systemFiles")}
-            skipHiddenStatus={fieldStatus("skipHidden")}
-            onPatternsChange={(next) => {
-              setDraft((d) => ({ ...d, excludePatterns: next }));
-              pathDirtyRef.current.excludePatterns = next;
-              setStatus((s) =>
-                s["excludePatterns"] === "saved"
-                  ? { ...s, excludePatterns: "idle" }
-                  : s,
-              );
-            }}
-            onSystemFilesChange={(next) => {
-              setDraft((d) => ({ ...d, systemFiles: next }));
-              pathDirtyRef.current.systemFiles = next;
-              setStatus((s) =>
-                s["systemFiles"] === "saved"
-                  ? { ...s, systemFiles: "idle" }
-                  : s,
-              );
-            }}
-            onSkipHiddenChange={(v) => {
-              setDraft((d) => ({ ...d, skipHidden: v }));
-              setStatus((s) =>
-                s["skipHidden"] === "saved" ? { ...s, skipHidden: "idle" } : s,
-              );
-            }}
-            onPatternsCommit={() => flushPathField("excludePatterns")}
-            onSystemFilesCommit={() => flushPathField("systemFiles")}
-          />
-        </SettingsGroup>
-
-        <SettingsGroup id="server-访问控制" title="访问控制">
-          <div className="px-4 py-4">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className="text-body text-ink">
-                  {data.accessMode === "lan" ? "局域网令牌保护" : "仅本机访问"}
+          {/* 扫描 — 排除规则(独立渲染,行为与 MediaRootsField 类似但用 textarea) */}
+          <SettingsGroup
+            className="xl:col-span-5"
+            id="server-扫描"
+            title="扫描"
+          >
+            <ExcludeRulesField
+              patterns={
+                draft.excludePatterns ??
+                pendingValues.excludePatterns ??
+                failedValues.excludePatterns ??
+                data.excludePatterns ??
+                []
+              }
+              systemFiles={
+                draft.systemFiles ??
+                pendingValues.systemFiles ??
+                failedValues.systemFiles ??
+                data.systemFiles ??
+                []
+              }
+              skipHidden={
+                draft.skipHidden ??
+                pendingValues.skipHidden ??
+                failedValues.skipHidden ??
+                data.skipHidden
+              }
+              patternsStatus={fieldStatus("excludePatterns")}
+              systemFilesStatus={fieldStatus("systemFiles")}
+              skipHiddenStatus={fieldStatus("skipHidden")}
+              onPatternsChange={(next) => {
+                setDraft((d) => ({ ...d, excludePatterns: next }));
+                pathDirtyRef.current.excludePatterns = next;
+                setStatus((s) =>
+                  s["excludePatterns"] === "saved"
+                    ? { ...s, excludePatterns: "idle" }
+                    : s,
+                );
+              }}
+              onSystemFilesChange={(next) => {
+                setDraft((d) => ({ ...d, systemFiles: next }));
+                pathDirtyRef.current.systemFiles = next;
+                setStatus((s) =>
+                  s["systemFiles"] === "saved"
+                    ? { ...s, systemFiles: "idle" }
+                    : s,
+                );
+              }}
+              onSkipHiddenChange={(v) => {
+                setDraft((d) => ({ ...d, skipHidden: v }));
+                setStatus((s) =>
+                  s["skipHidden"] === "saved"
+                    ? { ...s, skipHidden: "idle" }
+                    : s,
+                );
+              }}
+              onPatternsCommit={() => flushPathField("excludePatterns")}
+              onSystemFilesCommit={() => flushPathField("systemFiles")}
+            />
+          </SettingsGroup>
+        </div>
+        <div className="grid items-start gap-5 xl:grid-cols-2">
+          {FIELDS.filter((group) => group.section === "缓存").map((group) => (
+            <SettingsGroup
+              key={group.section}
+              id="server-缓存"
+              title="缓存策略"
+            >
+              {renderFields(group)}
+            </SettingsGroup>
+          ))}
+          <div className="min-w-0 space-y-5">
+            <SettingsGroup id="server-访问控制" title="访问控制">
+              <div className="px-4 py-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="text-body text-ink">
+                      {data.accessMode === "lan"
+                        ? "局域网令牌保护"
+                        : "仅本机访问"}
+                    </div>
+                    <p className="text-caption text-ink-3 mt-1 leading-5 max-w-xl">
+                      {data.accessMode === "lan"
+                        ? "远程浏览器必须用令牌换取 8 小时会话；令牌不会回显。"
+                        : "默认模式，所有 API 只允许运行服务的计算机访问。"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-line px-2 py-1 text-caption text-ink-2">
+                    {data.accessMode === "lan" ? "LAN" : "LOCAL"}
+                  </span>
                 </div>
-                <p className="text-caption text-ink-3 mt-1 leading-5 max-w-xl">
-                  {data.accessMode === "lan"
-                    ? "远程浏览器必须用令牌换取 8 小时会话；令牌不会回显。"
-                    : "默认模式，所有 API 只允许运行服务的计算机访问。"}
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <input
+                    type="password"
+                    value={accessTokenDraft}
+                    onChange={(event) => {
+                      setAccessTokenDraft(event.target.value);
+                      setAccessError("");
+                    }}
+                    autoComplete="new-password"
+                    spellCheck={false}
+                    maxLength={256}
+                    aria-label={
+                      data.accessMode === "lan" ? "新访问令牌" : "LAN 访问令牌"
+                    }
+                    placeholder={
+                      data.accessMode === "lan" && data.accessTokenConfigured
+                        ? "输入至少 32 位新令牌以轮换"
+                        : "至少 32 个无空白字符"
+                    }
+                    className="h-9 min-w-0 basis-64 flex-1 rounded-md border border-line bg-sunken px-3 font-mono text-body focus:outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    disabled={
+                      update.isPending || accessTokenDraft.trim().length < 32
+                    }
+                    onClick={() => void enableLANAccess()}
+                    className="h-9 px-3 rounded-md bg-primary text-on-primary text-caption font-medium disabled:opacity-50"
+                  >
+                    {data.accessMode === "lan" ? "轮换令牌" : "开启 LAN 访问"}
+                  </button>
+                  {data.accessMode === "lan" && (
+                    <button
+                      type="button"
+                      disabled={update.isPending}
+                      onClick={() => void disableLANAccess()}
+                      className="h-9 px-3 rounded-md border border-line text-caption text-ink-2 hover:bg-sunken disabled:opacity-50"
+                    >
+                      切换为仅本机
+                    </button>
+                  )}
+                </div>
+                {accessError && (
+                  <p role="alert" className="mt-2 text-caption text-danger">
+                    {accessError}
+                  </p>
+                )}
+                <p className="mt-2 text-caption text-ink-3">
+                  对外访问还需将监听地址设为局域网 IP 或
+                  0.0.0.0；修改监听地址需重启。内置服务不提供
+                  TLS，请仅用于可信家庭网络。
                 </p>
               </div>
-              <span className="shrink-0 rounded-full border border-line px-2 py-1 text-caption text-ink-2">
-                {data.accessMode === "lan" ? "LAN" : "LOCAL"}
-              </span>
-            </div>
+            </SettingsGroup>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <input
-                type="password"
-                value={accessTokenDraft}
-                onChange={(event) => {
-                  setAccessTokenDraft(event.target.value);
-                  setAccessError("");
-                }}
-                autoComplete="new-password"
-                spellCheck={false}
-                maxLength={256}
-                aria-label={
-                  data.accessMode === "lan" ? "新访问令牌" : "LAN 访问令牌"
-                }
-                placeholder={
-                  data.accessMode === "lan" && data.accessTokenConfigured
-                    ? "输入至少 32 位新令牌以轮换"
-                    : "至少 32 个无空白字符"
-                }
-                className="h-9 min-w-72 flex-1 rounded-md border border-line bg-sunken px-3 font-mono text-body focus:outline-none focus:border-primary"
-              />
-              <button
-                type="button"
-                disabled={
-                  update.isPending || accessTokenDraft.trim().length < 32
-                }
-                onClick={() => void enableLANAccess()}
-                className="h-9 px-3 rounded-md bg-primary text-on-primary text-caption font-medium disabled:opacity-50"
-              >
-                {data.accessMode === "lan" ? "轮换令牌" : "开启 LAN 访问"}
-              </button>
-              {data.accessMode === "lan" && (
-                <button
-                  type="button"
-                  disabled={update.isPending}
-                  onClick={() => void disableLANAccess()}
-                  className="h-9 px-3 rounded-md border border-line text-caption text-ink-2 hover:bg-sunken disabled:opacity-50"
-                >
-                  切换为仅本机
-                </button>
+            <SettingsGroup id="server-运行安全" title="网络与运行安全">
+              {FIELDS.filter((group) => group.section !== "缓存").map(
+                (group) => (
+                  <div key={group.section} id={"server-" + group.section}>
+                    <h3 className="pt-3 text-label">{group.section}</h3>
+                    {renderFields(group)}
+                  </div>
+                ),
               )}
-            </div>
-            {accessError && (
-              <p role="alert" className="mt-2 text-caption text-danger">
-                {accessError}
-              </p>
-            )}
-            <p className="mt-2 text-caption text-ink-3">
-              对外访问还需将监听地址设为局域网 IP 或
-              0.0.0.0；修改监听地址需重启。内置服务不提供
-              TLS，请仅用于可信家庭网络。
-            </p>
+            </SettingsGroup>
           </div>
-        </SettingsGroup>
-
-        {FIELDS.map((group) => (
-          <SettingsGroup key={group.section} id={"server-" + group.section} title={group.section}>
-            <div className="divide-y divide-line">
-              {group.defs.map((def) => {
-                const statusKey = def.key;
-                const st = fieldStatus(statusKey);
-                const requiresRestart = REQUIRES_RESTART.has(def.key as string);
-                const isPath = PATH_FIELDS.has(def.key as string);
-                return (
-                  <ServerConfigField
-                    key={def.key}
-                    def={def}
-                    value={fieldValue(def.key)}
-                    status={st}
-                    requiresRestart={requiresRestart}
-                    isPath={isPath}
-                    allowOsOpen={data.allowOsOpen}
-                    onChange={(v) => {
-                      // 每次输入只更新草稿;非路径字段 debounce 后再 flush,
-                      // 路径字段由 onBlur 触发 flush
-                      setDraft((d) => ({ ...d, [def.key]: v as never }));
-                      if (isPath) {
-                        pathDirtyRef.current[def.key] = v;
-                        setStatus((s) =>
-                          s[statusKey] === "saved"
-                            ? { ...s, [statusKey]: "idle" }
-                            : s,
-                        );
-                      } else {
-                        setStatus((s) =>
-                          s[statusKey] === "saved"
-                            ? { ...s, [statusKey]: "idle" }
-                            : s,
-                        );
-                      }
-                    }}
-                    onCommit={
-                      isPath ? () => flushPathField(def.key) : undefined
-                    }
-                    onConfirm={() => confirmPathField(def.key)}
-                    onCancel={() => cancelPathField(def.key)}
-                    onCompositionChange={(active) =>
-                      setFieldComposing(def.key, active)
-                    }
-                  />
-                );
-              })}
-            </div>
-          </SettingsGroup>
-        ))}
-
-        {save.needsScan && (
-          <div className="bg-primary/5 border border-primary/30 rounded-md px-4 py-3 flex items-center justify-between gap-3 text-body">
-            <div className="flex items-center gap-2 text-ink">
-              <RefreshIcon size={14} />
-              <span>媒体根目录配置已确认，建议重新扫描以刷新媒体库</span>
-            </div>
-            <button
-              disabled={!save.canScan || scanSSE.isRunning}
-              onClick={async () => {
-                try {
-                  const { scanId } = await scanApi.start();
-                  scanSSE.startWith(scanId);
-                  save.clearScanNotice();
-                  pushToast({ kind: "success", message: "已开始重新扫描" });
-                } catch {
-                  pushToast({ kind: "error", message: "启动扫描失败" });
-                }
-              }}
-              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-primary/40 text-primary hover:bg-primary/10 text-caption transition-colors disabled:opacity-50"
-            >
-              <RefreshIcon size={11} />
-              立即重新扫描
-            </button>
-          </div>
-        )}
-
-        <div className="text-caption text-ink-3 leading-relaxed px-1">
-          配置文件路径:
-          <code className="font-mono text-ink-2">{data.configPath}</code>;
-          改完自动写回 YAML,无需手动保存。
         </div>
       </fieldset>
     </div>

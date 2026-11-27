@@ -85,7 +85,7 @@ export default function TaskConsole({
     faceModel === "buffalo_m" ? buffaloReady : qualityReady;
 
   return (
-    <section className="mt-4" aria-labelledby="run-config-heading">
+    <section className="min-w-0 rounded-xl border border-line bg-raised p-4 sm:p-5 [container-type:inline-size] [container-name:console]" aria-labelledby="run-config-heading">
       <div className="mb-3">
         <div className="min-w-0">
           <h2 id="run-config-heading" className="text-heading">
@@ -97,7 +97,7 @@ export default function TaskConsole({
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid items-start gap-4 [@container_console_(min-width:640px)]:grid-cols-2">
         <div className="rounded-lg bg-sunken p-2">
           <div className="min-w-0">
             <ModuleTiles
@@ -113,7 +113,7 @@ export default function TaskConsole({
           </div>
         </div>
 
-        <aside className="min-w-0 rounded-xl border border-line bg-raised p-5">
+        <aside className="min-w-0 rounded-xl border border-line p-3">
           <h3 className="mb-3 text-heading">本次运行</h3>
           {["embedding", "ocr", "face", "albumCover"].includes(selectedModule) && <a href="#hardware" className="mb-2 inline-block text-caption text-ink-2 underline">新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案</a>}
           <RunSummaryPanel
@@ -176,7 +176,7 @@ export default function TaskConsole({
         {/* 高级信息：版本、运行环境与索引覆盖。日常用不到，但它决定
             「为什么这次跑不起来」，所以收起来而不是删掉 —— 摘要里给出
             的提示会指向这里。 */}
-        <details className="lg:col-span-2 tasks-advanced border-t border-t-line">
+        <details className="[@container_console_(min-width:640px)]:col-span-2 tasks-advanced border-t border-t-line">
           <summary className="tasks-advanced__summary flex items-baseline gap-3 py-2.5 px-0 cursor-pointer text-body text-ink [list-style:none] [&::-webkit-details-marker]:hidden before:content-['▸'] before:text-caption before:text-ink-3 [.tasks-advanced[open]>&::before]:content-['▾']">
             高级信息
             <span className="text-caption text-ink-3">模块版本与运行环境</span>

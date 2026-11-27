@@ -66,7 +66,7 @@ export default function StorageUsage({
   ];
 
   return (
-    <div className="ui-surface border border-line rounded-tile bg-raised touch:[&_button]:min-h-11 touch:[&_button]:min-w-11 overflow-hidden">
+    <div className="ui-surface border border-line rounded-xl bg-raised touch:[&_button]:min-h-11 touch:[&_button]:min-w-11 overflow-hidden">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line px-4 py-3">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-mono text-heading font-medium tabular-nums text-ink">
@@ -81,7 +81,7 @@ export default function StorageUsage({
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line px-2.5 text-caption text-ink-2 transition-colors hover:bg-sunken hover:text-ink disabled:opacity-50"
+            className="inline-flex min-h-8 min-w-8 touch:min-h-10 touch:min-w-10 items-center gap-1.5 rounded-md border border-line px-2.5 text-caption text-ink-2 transition-colors hover:bg-sunken hover:text-ink disabled:opacity-50"
             title="重新扫描磁盘计算占用"
           >
             {refreshing ? (

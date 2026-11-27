@@ -35,20 +35,30 @@ export const LEGACY_SETTINGS_TAB_REDIRECTS = [
   { from: "/tasks/*", to: "/settings/tasks" },
 ];
 
-export function resolveTab<T extends string>(page: TabbedPage<T>, tabId?: string): T {
+export function resolveTab<T extends string>(
+  page: TabbedPage<T>,
+  tabId?: string,
+): T {
   return page.tabs.find(({ id }) => id === tabId)?.id ?? page.defaultTab;
 }
 
-export function tabRoute<T extends string>(page: TabbedPage<T>, tabId: T): string {
+export function tabRoute<T extends string>(
+  page: TabbedPage<T>,
+  tabId: T,
+): string {
   return page.base + "/" + tabId;
 }
 
 export function currentTabRoute(pathname: string): string | null {
   const [, section, tab] = pathname.split("/");
-  return section === "settings" ? tabRoute(TAB_PAGES.settings, resolveTab(TAB_PAGES.settings, tab)) : null;
+  return section === "settings"
+    ? tabRoute(TAB_PAGES.settings, resolveTab(TAB_PAGES.settings, tab))
+    : null;
 }
 
 export function tabLabelFor(pathname: string): string | undefined {
   const route = currentTabRoute(pathname);
-  return SETTINGS_TABS.find(({ id }) => route === tabRoute(TAB_PAGES.settings, id))?.label;
+  return SETTINGS_TABS.find(
+    ({ id }) => route === tabRoute(TAB_PAGES.settings, id),
+  )?.label;
 }

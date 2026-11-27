@@ -41,31 +41,42 @@ export default function StoragePaths({
         </span>
       </summary>
 
-      <div className="border-t border-line px-4 py-3">
+      <div className="grid gap-5 border-t border-line px-4 py-3 sm:grid-cols-2">
         {relative ? (
-          <dl className="grid gap-x-6 sm:grid-cols-2">
-            <PathEntry label="状态目录" path={relative.stateDirectory} />
-            <PathEntry label="任务状态文件" path={relative.jobsFile} />
-            <PathEntry label="分析批次目录" path={relative.metadataDirectory} />
-            <PathEntry label="AI 派生目录" path={relative.aiDerivedDirectory} />
-            <PathEntry label="向量目录" path={relative.vectorDirectory} />
-            <PathEntry label="模型目录" path={relative.modelDirectory} />
-            {modules?.flatMap((module) =>
-              module.modelFiles.map((file) => (
-                <PathEntry
-                  key={`${module.type}:${file.path}`}
-                  label={`${module.name} · ${file.name}`}
-                  path={file.path}
-                />
-              )),
-            )}
-          </dl>
+          <div className="min-w-0">
+            <h4 className="text-caption font-medium text-ink-2">
+              相对缓存根目录
+            </h4>
+            <dl className="mt-2">
+              <PathEntry label="状态目录" path={relative.stateDirectory} />
+              <PathEntry label="任务状态文件" path={relative.jobsFile} />
+              <PathEntry
+                label="分析批次目录"
+                path={relative.metadataDirectory}
+              />
+              <PathEntry
+                label="AI 派生目录"
+                path={relative.aiDerivedDirectory}
+              />
+              <PathEntry label="向量目录" path={relative.vectorDirectory} />
+              <PathEntry label="模型目录" path={relative.modelDirectory} />
+              {modules?.flatMap((module) =>
+                module.modelFiles.map((file) => (
+                  <PathEntry
+                    key={`${module.type}:${file.path}`}
+                    label={`${module.name} · ${file.name}`}
+                    path={file.path}
+                  />
+                )),
+              )}
+            </dl>
+          </div>
         ) : null}
 
-        <div className="mt-4 border-t border-line pt-3">
+        <div className="min-w-0">
           <h4 className="text-caption font-medium text-ink-2">本机绝对路径</h4>
-          {absolute ? (
-            <dl className="mt-2 grid gap-x-6 sm:grid-cols-2">
+          {absolute && !localOnly ? (
+            <dl className="mt-2">
               <PathEntry label="缓存根目录" path={absolute.cacheRoot} />
               <PathEntry label="工作目录" path={absolute.workingDirectory} />
               <PathEntry label="配置文件" path={absolute.configFile} />
@@ -97,7 +108,7 @@ export default function StoragePaths({
               {onRetryAbsolute ? (
                 <button
                   type="button"
-                  className="inline-flex h-7 items-center rounded-md border border-line px-2.5 text-caption text-ink-2 transition-colors hover:bg-sunken"
+                  className="inline-flex min-h-8 min-w-8 touch:min-h-10 touch:min-w-10 items-center rounded-md border border-line px-2.5 text-caption text-ink-2 transition-colors hover:bg-sunken"
                   onClick={onRetryAbsolute}
                 >
                   重试
