@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useVideoCover } from "../../hooks/useVideoCover";
 import { pickRenditionWidth } from "../../utils/rendition";
 import { FolderIcon, PlayFilledIcon } from "../../ui/icons";
@@ -18,6 +19,7 @@ interface Props {
   loading?: "lazy" | "eager";
   alt?: string;
   /** 加载失败时点按回调（用于 retry 按钮），不传则不显示 */
+  onFailure?: () => void;
   onRetry?: () => void;
   /** 是否显示 "正在生成预览" 文字（默认 true） */
   showExtractingHint?: boolean;
@@ -46,6 +48,7 @@ export default function VideoCoverImage({
   loading = "lazy",
   alt = "",
   onRetry,
+  onFailure,
   showExtractingHint = true,
   showRetryAction = true,
   fit = "contain",
@@ -54,6 +57,10 @@ export default function VideoCoverImage({
     version,
     width: pickRenditionWidth(displayWidth ?? 320),
   });
+
+  useEffect(() => {
+    if (status === "error") onFailure?.();
+  }, [status, onFailure]);
 
   if (!enabled) {
     return (

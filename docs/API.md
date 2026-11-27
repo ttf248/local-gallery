@@ -221,6 +221,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 集合本身而不是集合的父目录。作品索引的索引项取自根目录下的集合（集合的成员由服务端
 聚合成 `albumCount`）—— 那一面索引现在住在书架里。集合摘要的 `albumCount`、`imageCount`、`videoCount`、
 `mediaCount` 和 `folderSize` 均包含所有后代，`childCount` 仍只表示直属子项数量。
+任务中心接受 `type: "albumCover"`，支持全量与增量。照片节点摘要的 `coverCandidates` 给出最多五项 `{id,kind,version}`，`kind` 为 `image` 或 `video`。空缺表示没有入选项，手设封面时仅返回该项。
+
 相册摘要的 `hasCustomCover` 为 `true` 时表示当前 revision 已应用用户设置的人工封面；
 失效的覆盖记录不会出现在此字段中。
 
@@ -745,7 +747,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `DELETE /api/albums/:albumId/cover`
 
-清除自定义封面并恢复扫描器默认封面。
+清除自定义封面。照片相册页恢复从评分入选项中抽图。
 
 ### 智能相册分组
 

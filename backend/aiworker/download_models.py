@@ -14,6 +14,9 @@ from model_cache import resolve_model_dir
 
 
 MODELS = (
+    ("相册封面审美模型 V2.5",
+     "https://huggingface.co/fsw/aesthetic-predictor-v2-5_onnx/resolve/e9a8e5e4ff7c566a14cae9d18377fccd0bad0079/aesthetic_predictor_v2_5.onnx",
+     "aesthetic/cover.onnx", "7dd2f7424eb799f60fd63289b2b0c437fe2f06121695325e80e298718818a826"),
     (
         "RapidOCR PP-OCRv6 检测",
         "https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_small.onnx",

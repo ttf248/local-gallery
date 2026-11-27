@@ -368,6 +368,12 @@ func aiStorageModules(layout CacheLayout) []AIStorageModule {
 				{Kind: AIStorageOutputIndex, Label: "人工决定", Path: filepath.Join(layout.StateDir, "similarity.json")},
 			},
 		},
+		{
+			Type: AIJobTypeAlbumCover, Name: aiJobModuleName(AIJobTypeAlbumCover),
+			ModelLocation: AIStorageModelCache, ModelDirectory: filepath.Join(layout.AIModelsDir, "aesthetic"),
+			ModelFiles: []AIStorageFile{modelFile(filepath.Join(layout.AIModelsDir, "aesthetic", "cover.onnx"), AIStorageModelCache)},
+			Outputs:    []AIStorageOutput{{Kind: AIStorageOutputBatches, Label: "封面评分", Path: filepath.Join(layout.MetadataDir, AIJobTypeAlbumCover)}},
+		},
 	}
 }
 

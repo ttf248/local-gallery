@@ -24,6 +24,7 @@ export function taskModuleLabel(type: AIJob["type"]): string {
       return "向量索引";
     case "ocr":
       return "文字识别";
+    case "albumCover": return "相册封面精选";
     case "portrait":
       return "精选人物头像";
     case "face":

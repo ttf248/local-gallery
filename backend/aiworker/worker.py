@@ -109,12 +109,13 @@ ocr_gpu_runtime_failed = False
 cuda_inference_failed = False
 face_runtime_error = ""
 face_profile_runtime_errors = {}
+cover_sessions = {}
 model_file_validation = {}
 last_model_activity = None
 
 
 def has_loaded_models() -> bool:
-    return model is not None or bool(model_cache) or bool(rapid_ocr) or bool(face_models)
+    return model is not None or bool(model_cache) or bool(rapid_ocr) or bool(face_models) or bool(cover_sessions)
 
 
 def release_idle_models(now=None) -> bool:
@@ -137,6 +138,7 @@ def release_idle_models(now=None) -> bool:
     model_device = None
     preprocess = None
     model_cache.clear()
+    cover_sessions.clear()
     rapid_ocr.clear()
     with face_models_lock:
         face_models.clear()
@@ -206,6 +208,7 @@ def status() -> dict:
         "modelLoaded": model is not None,
         "runtimeError": runtime_error,
         "modules": {
+            "albumCover": cover_status(),
             "ocr": ocr_module_status(),
             "face": face_module_status(),
         },
@@ -229,6 +232,61 @@ def module_error(module: str) -> str:
     if module == "face" and face_runtime_error:
         return face_runtime_error
     return ""
+
+
+def cover_status():
+    path = model_dir / "aesthetic" / "cover.onnx"
+    ready = (importlib.util.find_spec("onnxruntime") is not None
+             and file_state(path, "7dd2f7424eb799f60fd63289b2b0c437fe2f06121695325e80e298718818a826"))
+    return {"ready": ready, "error": "" if ready else "cover_model_missing_or_checksum_invalid"}
+
+
+def score_cover(path, session, device_mode):
+    import numpy as np
+    import cv2
+    from PIL import Image as PILImage, ImageOps
+    try:
+        with PILImage.open(path) as source:
+            width, height = source.size
+            source.draft("RGB", (768, 768))
+            rgb = ImageOps.exif_transpose(source).convert("RGB")
+        frame = rgb.resize((384, 384), PILImage.Resampling.BICUBIC)
+        tensor = (np.asarray(frame, dtype=np.float32) / 127.5 - 1).transpose(2, 0, 1)[None]
+        gray = np.asarray(frame.convert("L"))
+        thumb = np.asarray(rgb.convert("L").resize((9, 8), PILImage.Resampling.LANCZOS))
+        fingerprint = np.packbits(thumb[:, 1:] > thumb[:, :-1]).tobytes().hex()
+        quality = {"width": width, "height": height, "sharpness": cv2.Laplacian(gray, cv2.CV_64F).var(),
+                   "exposure": gray.mean() / 255, "clippedHigh": (gray >= 250).mean(),
+                   "clippedLow": (gray <= 5).mean()}
+    except Exception:
+        return {"error": "image_analysis_failed"}
+    try:
+        raw = float(session.run(None, {"input": tensor})[0].reshape(-1)[0])
+        if not np.isfinite(raw):
+            raise ValueError()
+        return {"data": {"aesthetic": float(np.clip((raw - 1) / 9, 0, 1)),
+                         "feature": quality, "hash": fingerprint}}
+    except Exception:
+        return {"error": "gpu_inference_failed" if device_mode == "gpu" else "image_analysis_failed"}
+
+
+def score_covers(paths, device_mode):
+    if not cover_status()["ready"]:
+        return {"error": "cover_model_missing_or_checksum_invalid"}
+    import onnxruntime as ort
+    gpu = device_mode == "gpu"
+    if gpu and not gpu_available(require_onnx=True):
+        return {"error": "gpu_unavailable"}
+    if device_mode not in cover_sessions:
+        providers = ["CUDAExecutionProvider"] if gpu else ["CPUExecutionProvider"]
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = min(4, os.cpu_count() or 1)
+        session = ort.InferenceSession(str(model_dir / "aesthetic" / "cover.onnx"), options, providers=providers)
+        if gpu and session.get_providers()[0] != providers[0]:
+            return {"error": "gpu_inference_failed"}
+        session.disable_fallback()
+        cover_sessions[device_mode] = session
+    return run_image_analysis(paths, lambda path: score_cover(path, cover_sessions[device_mode], device_mode))
 
 
 def ocr_module_status() -> dict:
@@ -1483,6 +1541,8 @@ def _process_request(request: dict) -> dict:
     device_mode = request.get("device", "auto")
     if device_mode not in ("auto", "cpu", "gpu"):
         return {"error": "invalid_device_mode"}
+    if action == "score_covers":
+        return score_covers(request.get("paths"), device_mode)
     if action == "ocr_images":
         ocr_status = ocr_module_status()
         if not ocr_status["ready"]:
@@ -1552,7 +1612,7 @@ def process(request: dict) -> dict:
     try:
         return _process_request(request)
     finally:
-        inference_actions = ("embed_images", "embed_texts", "ocr_images", "face_images")
+        inference_actions = ("embed_images", "embed_texts", "ocr_images", "face_images", "score_covers")
         if action in inference_actions and has_loaded_models():
             mark_model_activity()
 

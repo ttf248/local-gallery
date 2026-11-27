@@ -228,6 +228,9 @@ export function useTaskCenter(tab: string): TaskCenterState {
           value.status === "failed" ||
           value.status === "cancelled"
         ) {
+          if (value.type === "albumCover") {
+            void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.mode("photo") });
+          }
           void invalidateJobs();
         }
       },

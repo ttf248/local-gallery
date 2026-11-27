@@ -36,6 +36,7 @@ type ResourceRef struct {
 }
 
 type resourceCatalogState struct {
+	curated       map[string][]CoverCandidate
 	revision      uint64
 	byID          map[string]ResourceRef
 	byPathKind    map[string]string
@@ -62,9 +63,10 @@ type CatalogSnapshot struct {
 // ResourceCatalog 保存不可变的资源索引；重扫时原子替换整份快照。
 // handler 只能通过 ID 解析路径，业务响应不再暴露绝对路径。
 type ResourceCatalog struct {
-	state     atomic.Pointer[resourceCatalogState]
-	revision  atomic.Uint64
-	publishMu sync.Mutex
+	coverScores map[string]albumCoverScore
+	state       atomic.Pointer[resourceCatalogState]
+	revision    atomic.Uint64
+	publishMu   sync.Mutex
 	// contentPolicy 是「媒体根 → 内容属性」的映射。
 	// 只在 publishMu 保护下读写，随每次发布一起进入快照。
 	contentPolicy ContentKindPolicy
@@ -261,6 +263,7 @@ func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string, cus
 				indexAlbum(state, &state.result.SmartCollections[i].Albums[j])
 			}
 		}
+		state.curated = buildCuratedCovers(state, c.coverScores)
 		state.library = buildLibraryPageIndex(state)
 	}
 	c.state.Store(state)

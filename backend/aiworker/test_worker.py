@@ -59,6 +59,25 @@ class FakeModel:
         return self
 
 
+class CoverScoreTests(unittest.TestCase):
+    def test_cover_score_uses_upright_rgb_tensor(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "photo.jpg"
+            photo = Image.new("RGB", (90, 40), (255, 0, 0))
+            exif = photo.getexif()
+            exif[274] = 6
+            photo.save(path, exif=exif)
+            def infer(_, inputs):
+                self.assertEqual(inputs["input"].shape, (1, 3, 384, 384))
+                self.assertGreater(inputs["input"][0, 0].mean(), .95)
+                return [np.array([[5.5]])]
+            data = worker.score_cover(path, SimpleNamespace(run=infer), "cpu")["data"]
+            self.assertEqual(data["aesthetic"], .5)
+            self.assertEqual(len(data["hash"]), 16)
+            self.assertEqual(data["feature"]["width"], 90)
+
+
 class WorkerTests(unittest.TestCase):
     def setUp(self):
         self.originals = {

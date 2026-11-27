@@ -1,7 +1,7 @@
 import { api } from "./client";
 import type { AppMode, LibraryFeedItem, LibraryPage } from "./library";
 
-export type AnalysisType = "metadata" | "embedding" | "ocr" | "face" | "portrait" | "similarity";
+export type AnalysisType = "metadata" | "embedding" | "ocr" | "face" | "portrait" | "albumCover" | "similarity";
 export type FaceModel = "quality-v2" | "buffalo_m";
 export type AnalysisMode = "full" | "incremental";
 export type AnalysisStatus =
@@ -180,7 +180,7 @@ export interface AIWorkerStatus {
     ready: boolean;
   };
   coverage: { indexed: number; total: number };
-  modules?: Partial<Record<"ocr" | "face", AIWorkerModuleStatus>>;
+  modules?: Partial<Record<"ocr" | "face" | "albumCover", AIWorkerModuleStatus>>;
   faceModels?: Partial<Record<FaceModel, AIWorkerModuleStatus>>;
 }
 

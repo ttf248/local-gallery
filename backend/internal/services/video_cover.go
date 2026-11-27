@@ -268,10 +268,14 @@ func (e *VideoCoverExtractor) seekPosition(duration float64) float64 {
 //   - 接 ErrFFmpegUnavailable → 完全回退到客户端流程(原 ErrVideoCoverMissing)
 //   - 其它错误 → 也回退(容错优先,视频文件损坏时不应 500)
 func (e *VideoCoverExtractor) Extract(absPath string) ([]byte, error) {
+	return e.extractContext(context.Background(), absPath)
+}
+
+func (e *VideoCoverExtractor) extractContext(parent context.Context, absPath string) ([]byte, error) {
 	if e == nil || e.ffmpegPath == "" {
 		return nil, ErrFFmpegUnavailable
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), e.timeout)
+	ctx, cancel := context.WithTimeout(parent, e.timeout)
 	defer cancel()
 
 	// 1) 拿时长,计算 seek 位置

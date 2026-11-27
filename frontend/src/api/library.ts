@@ -54,7 +54,14 @@ export interface LibraryManifest {
   warnings?: ScanWarning[];
 }
 
+export interface CoverCandidate {
+  id: string;
+  kind: "image" | "video";
+  version: string;
+}
+
 export interface LibraryNodeSummary {
+  coverCandidates?: CoverCandidate[];
   id: string;
   kind: "album" | "collection";
   name: string;

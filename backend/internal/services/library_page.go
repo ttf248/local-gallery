@@ -114,14 +114,15 @@ const libraryManifestWarningLimit = 100
 // LibraryNodeSummary 是 root/collection 直属子节点的统一卡片 DTO。
 // CoverImages 最多四项，可直接用于 collection 的拼贴封面。
 type LibraryNodeSummary struct {
-	ID          string   `json:"id"`
-	Kind        string   `json:"kind"`
-	Name        string   `json:"name"`
-	DisplayName string   `json:"displayName"`
-	SourceRoot  string   `json:"sourceRoot,omitempty"`
-	SourceName  string   `json:"sourceName,omitempty"`
-	CoverImage  string   `json:"coverImage,omitempty"`
-	CoverImages []string `json:"coverImages"`
+	CoverCandidates []CoverCandidate `json:"coverCandidates,omitempty"`
+	ID              string           `json:"id"`
+	Kind            string           `json:"kind"`
+	Name            string           `json:"name"`
+	DisplayName     string           `json:"displayName"`
+	SourceRoot      string           `json:"sourceRoot,omitempty"`
+	SourceName      string           `json:"sourceName,omitempty"`
+	CoverImage      string           `json:"coverImage,omitempty"`
+	CoverImages     []string         `json:"coverImages"`
 	// CoverImageVersion / CoverImageVersions 是封面文件的内容版本号，
 	// 与 CoverImage / CoverImages 一一对应。前端把它拼进封面 URL，
 	// 服务端据此回 immutable，重复打开页面时封面不用再走网络。
@@ -1681,6 +1682,7 @@ func albumSummary(state *resourceCatalogState, album models.Album) LibraryNodeSu
 	}
 	tags := append([]string(nil), album.Tags...)
 	return LibraryNodeSummary{
+		CoverCandidates:    state.curated[id],
 		ID:                 id,
 		Kind:               string(ResourceAlbum),
 		Name:               album.Name,
@@ -1771,6 +1773,7 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 	}
 	albumCount, imageCount, videoCount, folderSize := collectionTotals(collection)
 	return LibraryNodeSummary{
+		CoverCandidates:    state.curated[id],
 		ID:                 id,
 		Kind:               string(ResourceCollection),
 		Name:               collection.Name,

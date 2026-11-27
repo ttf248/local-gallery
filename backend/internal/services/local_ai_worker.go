@@ -312,8 +312,9 @@ func (w *localAIWorker) analyzeImages(ctx context.Context, action string, paths 
 
 func unavailableImageModules(code string) map[string]AIWorkerModuleStatus {
 	return map[string]AIWorkerModuleStatus{
-		AIJobTypeOCR:  {Error: code},
-		AIJobTypeFace: {Error: code},
+		AIJobTypeAlbumCover: {Error: code},
+		AIJobTypeOCR:        {Error: code},
+		AIJobTypeFace:       {Error: code},
 	}
 }
 

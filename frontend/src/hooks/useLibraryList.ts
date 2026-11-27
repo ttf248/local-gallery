@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, isRetryableStatus } from "../api/client";
 import {
@@ -12,11 +12,28 @@ import { useImageActivities } from "./useImageActivity";
 import { decodeFavPath } from "../utils/path";
 import { nodeSummaryToCard, tagSummaryToCard } from "../utils/libraryCard";
 
-export function listItemToCard(item: LibraryListItem, query: LibraryListQuery) {
+export function listItemToCard(
+  item: LibraryListItem,
+  query: LibraryListQuery,
+  seed = 0,
+) {
   const card =
     item.kind === "smart"
       ? tagSummaryToCard(item.tag, query.kind)
       : nodeSummaryToCard(item.node);
+  if (item.kind !== "smart" && item.node.contentKind === "photo") {
+    const pool = item.node.coverCandidates ?? [];
+    let hash = seed;
+    for (const char of item.node.id)
+      hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    const index = pool.length ? (hash >>> 0) % pool.length : 0;
+    card.candidates = [...pool.slice(index), ...pool.slice(0, index)];
+    card.coverPath = card.candidates[0]?.id ?? "";
+    card.coverVersion = card.candidates[0]?.version;
+    card.coverKind = card.candidates[0]?.kind;
+    card.covers = card.candidates.map((candidate) => candidate.id);
+    card.coverVersions = card.candidates.map((candidate) => candidate.version);
+  }
   if (query.parent && item.kind !== "smart" && item.node.virtual) {
     return { ...card, title: "散图", subtitle: "" };
   }
@@ -24,6 +41,7 @@ export function listItemToCard(item: LibraryListItem, query: LibraryListQuery) {
 }
 
 export function useLibraryList(query: LibraryListQuery, enabled = true) {
+  const [seed] = useState(() => Math.floor(Math.random() * 0x100000000));
   const { ready } = useAppMode();
   const client = useQueryClient();
   const key = useMemo(() => libraryQueryKeys.list(query), [query]);
@@ -51,9 +69,9 @@ export function useLibraryList(query: LibraryListQuery, enabled = true) {
   const rawCards = useMemo(
     () =>
       result.data?.pages.flatMap((page) =>
-        page.items.map((item) => listItemToCard(item, query)),
+        page.items.map((item) => listItemToCard(item, query, seed)),
       ) ?? [],
-    [result.data, query],
+    [result.data, query, seed],
   );
   const progressIds = useMemo(
     () =>
@@ -105,6 +123,8 @@ export function listYearGroups(
     videoTotal: group.videoTotal,
     totalFiles: group.imageTotal + group.videoTotal,
     coverPreviewPaths: group.coverImage ? [group.coverImage] : [],
-    coverPreviewVersions: group.coverImageVersion ? [group.coverImageVersion] : [],
+    coverPreviewVersions: group.coverImageVersion
+      ? [group.coverImageVersion]
+      : [],
   }));
 }

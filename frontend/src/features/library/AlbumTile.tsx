@@ -33,6 +33,7 @@ import CardCover from "./CardCover";
 export type CardVariant = "album" | "collection" | "smart";
 
 export interface CardData {
+  candidates?: import("../../api/library").CoverCandidate[];
   id: string;
   variant: CardVariant;
   // 原始名（来自后端 album.name）

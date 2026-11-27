@@ -100,6 +100,7 @@ const requiredModuleNames: Record<AnalysisType, string> = {
   embedding: "语义向量",
   ocr: "OCR 文字",
   face: "人脸",
+  albumCover: "相册封面精选",
   portrait: "人物头像",
   similarity: "相似照片特征",
 };

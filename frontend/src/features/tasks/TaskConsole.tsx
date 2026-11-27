@@ -115,7 +115,7 @@ export default function TaskConsole({
 
         <aside className="min-w-0 rounded-xl border border-line bg-raised p-5">
           <h3 className="mb-3 text-heading">本次运行</h3>
-          {["embedding", "ocr", "face"].includes(selectedModule) && <a href="#hardware" className="mb-2 inline-block text-caption text-ink-2 underline">新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案</a>}
+          {["embedding", "ocr", "face", "albumCover"].includes(selectedModule) && <a href="#hardware" className="mb-2 inline-block text-caption text-ink-2 underline">新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案</a>}
           <RunSummaryPanel
             active={active}
             moduleName={selectedName}
@@ -212,6 +212,7 @@ function moduleDescription(type: AnalysisType): string {
       return "用本机 Chinese-CLIP 为照片建立中文语义向量，可按描述搜索，也能按照片查找相似画面。";
     case "ocr":
       return "用本机 OCR 识别照片中的文字，结果可在图片详情中查看。";
+    case "albumCover": return "按画质与画面审美评分，为相册和文件夹精选封面。";
     case "portrait":
       return "逐张核对已有的人脸分组，优先选择清晰、接近正面的头像。";
     case "face":
@@ -321,6 +322,8 @@ function moduleUnavailableMessage(code?: string): string {
       return "OCR 模型加载失败，请重新运行安装脚本并查看终端错误。";
     case "face_dependencies_missing":
       return "人脸识别依赖未安装，请运行 backend/aiworker/setup.bat。";
+    case "cover_model_missing_or_checksum_invalid":
+      return "封面评分权重缺失或校验失败，请运行模型下载脚本。";
     case "face_model_missing_or_checksum_invalid":
       return "人脸权重缺失或校验失败，请运行 backend/aiworker/download-model.bat。";
     case "face_model_load_failed":

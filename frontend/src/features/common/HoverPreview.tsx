@@ -94,7 +94,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
   // 这两个 hook 必须在下面的提前 return 之前：hook 的调用顺序在两次
   // 渲染之间必须一致，早退分支跳过它们就会触发 React 的
   // 「渲染的 hook 比上一次多」错误。
-  const albumId = !isComic && !isCollection ? decodeFavPath(data.to) : ''
+  const albumId = !data.candidates && !isComic && !isCollection ? decodeFavPath(data.to) : ''
   const mediaQuery = useAlbumMedia(albumId)
   const previewItems = useMemo(() => {
     const items = mediaQuery.data?.pages[0]?.items ?? []
@@ -167,7 +167,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
           }`}
           style={{ width: COVER_W, height: coverH }}
         >
-          {previewItems.length > 0 ? (
+          {!data.candidates && previewItems.length > 0 ? (
             /* 实拍拼贴：这一本的前几张照片。2×2 正好铺满方形的预览框，
                与照片墙的观感一致 —— 悬停一下就知道这本书里拍的是什么。 */
             <div className="grid grid-cols-2 grid-rows-2 h-full w-full gap-0.5">

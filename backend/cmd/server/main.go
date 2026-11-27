@@ -331,8 +331,11 @@ func main() {
 		Catalog:        resourceCatalog,
 		ValidatePath:   safetyState.Validate,
 		ImageConverter: imageConverter,
-		Analyzers:      []services.AIAnalyzer{services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, &services.PortraitAnalyzer{FaceAnalyzer: faceAnalyzer, People: peopleService}, services.SimilarityAnalyzer{}},
+		Analyzers:      []services.AIAnalyzer{services.NewAlbumCoverAnalyzer(aiWorker, videoCover), services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, &services.PortraitAnalyzer{FaceAnalyzer: faceAnalyzer, People: peopleService}, services.SimilarityAnalyzer{}},
 		OnJobSettled: func(jobType string) {
+			if jobType == services.AIJobTypeAlbumCover {
+				resourceCatalog.SetCoverScores(aiJobs.Records(jobType))
+			}
 			// 人脸任务收尾时整体重建一次人物分组：
 			// 任务期间是按批次增量攒的，分组结果与批次到达顺序有关。
 			if jobType != services.AIJobTypeFace || !aiJobs.PeopleEnabled() {
@@ -405,6 +408,7 @@ func main() {
 			peopleSynced = true
 		}
 	}
+	resourceCatalog.SetCoverScores(aiJobs.Records(services.AIJobTypeAlbumCover))
 	aiJobs.StartPending()
 	smartAlbums, err := services.OpenSmartAlbumService(services.SmartAlbumServiceOptions{
 		StatePath:    filepath.Join(cacheLayout.StateDir, "smart_album_overrides.json"),

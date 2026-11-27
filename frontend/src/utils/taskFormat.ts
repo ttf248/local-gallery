@@ -130,6 +130,7 @@ export function taskStageLabel(stage: string): string {
       return "批量推理并写入语义向量";
     case "ocr":
       return "批量识别并保存文字";
+    case "albumCover": return "相册封面精选";
     case "portrait": return "精选人物头像";
     case "face":
       return "批量识别人脸并保存特征";
@@ -165,6 +166,8 @@ export function moduleReasonLabel(reason: string): string {
       return "OCR 模型加载失败";
     case "face_dependencies_missing":
       return "缺少人脸依赖";
+    case "cover_model_missing_or_checksum_invalid":
+      return "封面评分权重缺失或校验失败，请运行模型下载脚本。";
     case "face_model_missing_or_checksum_invalid":
       return "人脸权重缺失或校验失败";
     case "face_model_load_failed":
@@ -187,6 +190,8 @@ export function taskTitle(job: AIJob): string {
 /** 解析结果分类的中文名。 */
 export function taskResultLabel(key: string): string {
   switch (key) {
+    case "scored":
+      return "已评分";
     case "parsed":
       return "已解析";
     case "no_exif":

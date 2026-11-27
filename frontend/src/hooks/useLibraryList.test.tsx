@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { libraryApi, type LibraryListQuery } from "../api/library";
 import { activityApi } from "../api/activity";
 import { ApiError } from "../api/client";
-import { useLibraryList } from "./useLibraryList";
+import { listItemToCard, useLibraryList } from "./useLibraryList";
 import { listFixture } from "../test-library-list";
 
 vi.mock("./useAppMode", () => ({ useAppMode: () => ({ ready: true }) }));
@@ -34,6 +34,16 @@ const node = (id: string) => ({
   coverImages: [],
   imageCount: 3,
 });
+it("相册封面只从精选池抽取，同一访问保持稳定", () => {
+  const item = {kind: "album" as const, node: {...node("album"), contentKind:"photo" as const,
+    coverImage:"unrated", coverCandidates:["one","two"].map(id => ({id,kind:"image" as const,version:"v"}))}};
+  const card = (seed:number) => listItemToCard(item, {kind:"photo"}, seed);
+  expect(card(3).coverPath).toBe(card(3).coverPath);
+  expect(new Set([card(3).coverPath, card(4).coverPath])).toEqual(new Set(["one","two"]));
+  item.node.coverCandidates = [];
+  expect(card(3).coverPath).toBe("");
+});
+
 function page(id: string, nextCursor?: string) {
   return {
     ok: true,

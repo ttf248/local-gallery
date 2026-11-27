@@ -5,6 +5,8 @@ import (
 	"math"
 	"sort"
 	"time"
+
+	"github.com/tianlongxiang/local-gallery/internal/models"
 )
 
 const (
@@ -83,6 +85,7 @@ type aiRecordFact struct {
 // aiTargetStat 是某个目标的当前文件指纹。
 type aiTargetStat struct {
 	photo   bool
+	video   bool
 	size    int64
 	mtimeNs int64
 }
@@ -144,9 +147,13 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	if err != nil {
 		return AIJobEstimate{}, err
 	}
-	estimate.TotalImages = len(targets.stats)
+	estimate.TotalImages = len(targets.stats) - targets.videoCount
 	targetCounts := make(map[string]int, len(modules))
 	for _, module := range modules {
+		if module.Type == AIJobTypeAlbumCover {
+			targetCounts[module.Type] = targets.photoCount + targets.videoCount
+			continue
+		}
 		if module.Type == AIJobTypePortrait {
 			if a, ok := s.analyzers[module.Type].(*PortraitAnalyzer); ok {
 				a.People.mu.RLock()
@@ -171,7 +178,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	current := map[string]int{}
 	for _, fact := range facts {
 		stat, ok := targets.stats[fact.resourceID]
-		if !ok || (aiTargetFilterForModule(fact.moduleType) == aiTargetPhotoOnly && !stat.photo) {
+		if !ok || (fact.moduleType == AIJobTypeAlbumCover && !stat.photo && !stat.video) || (stat.video && fact.moduleType != AIJobTypeAlbumCover) || (aiTargetFilterForModule(fact.moduleType) == aiTargetPhotoOnly && !stat.photo) {
 			// 文件已经不在库里，这条记录不再参与计数。
 			continue
 		}
@@ -388,7 +395,7 @@ func (s *AIJobService) estimateTargets(ctx context.Context, snapshot CatalogSnap
 		return cached, ctx.Err()
 	}
 
-	targets := s.buildTargets(ctx, snapshot, aiTargetAllImages)
+	targets := s.buildTargets(ctx, snapshot, aiTargetEstimateMedia)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -400,7 +407,11 @@ func (s *AIJobService) estimateTargets(ctx context.Context, snapshot CatalogSnap
 		if photo {
 			result.photoCount++
 		}
-		result.stats[target.resourceID] = aiTargetStat{size: target.size, mtimeNs: target.mtimeNs, photo: photo}
+		video := models.IsVideoFile(target.path)
+		if video {
+			result.videoCount++
+		}
+		result.stats[target.resourceID] = aiTargetStat{video: video, size: target.size, mtimeNs: target.mtimeNs, photo: photo}
 	}
 	s.targetCacheMu.Lock()
 	if s.targetCache == nil || s.targetCache.revision <= result.revision {

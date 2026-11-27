@@ -95,7 +95,7 @@ func (s *AIJobService) normalizeDailyModulesLocked(modules []string, enabled boo
 		selected[moduleType] = struct{}{}
 	}
 	ordered := make([]string, 0, len(selected))
-	for _, moduleType := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity} {
+	for _, moduleType := range []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeAlbumCover, AIJobTypeSimilarity} {
 		if _, exists := selected[moduleType]; exists {
 			ordered = append(ordered, moduleType)
 		}

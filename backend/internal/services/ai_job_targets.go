@@ -44,11 +44,15 @@ const (
 	aiTargetAllImages aiTargetFilter = iota
 	// aiTargetPhotoOnly 只包含照片侧的图片。
 	aiTargetPhotoOnly
+	aiTargetPhotoMedia
+	aiTargetEstimateMedia
 )
 
 // aiTargetFilterForModule 返回模块对应的目标口径。
 func aiTargetFilterForModule(moduleType string) aiTargetFilter {
 	switch moduleType {
+	case AIJobTypeAlbumCover:
+		return aiTargetPhotoMedia
 	case AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity:
 		return aiTargetPhotoOnly
 	default:
@@ -62,6 +66,7 @@ type aiTargetCache struct {
 	builtAt    time.Time
 	stats      map[string]aiTargetStat
 	photoCount int
+	videoCount int
 }
 
 func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, filter aiTargetFilter, albumIDs ...string) []aiJobTarget {
@@ -70,7 +75,16 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 		return nil
 	} else if albumID != "" {
 		var exists bool
-		ids, exists = snapshot.AlbumImageIDs(albumID)
+		if filter == aiTargetPhotoMedia && snapshot.Ready() {
+			items, found := snapshot.state.library.media[albumID]
+			exists = found
+			ids = make([]string, 0, len(items))
+			for _, item := range items {
+				ids = append(ids, item.ID)
+			}
+		} else {
+			ids, exists = snapshot.AlbumImageIDs(albumID)
+		}
 		if !exists {
 			return nil
 		}
@@ -94,7 +108,16 @@ func (s *AIJobService) buildTargetsForResources(
 	targets := make([]aiJobTarget, 0, len(ids))
 	for _, id := range ids {
 		ref, ok := snapshot.Lookup(id)
-		if !ok || !models.IsImageFile(ref.AbsolutePath) {
+		if !ok {
+			continue
+		}
+		image := models.IsImageFile(ref.AbsolutePath)
+		if filter == aiTargetPhotoMedia || (!image && filter == aiTargetEstimateMedia) {
+			media, exists := snapshot.state.library.mediaByFile[id]
+			if !exists || snapshot.state.library.nodes[media.albumID].ContentKind != "photo" {
+				continue
+			}
+		} else if !image {
 			continue
 		}
 		// 人脸与相似照片只处理照片侧：漫画是另一套工作区，

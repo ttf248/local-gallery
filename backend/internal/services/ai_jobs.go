@@ -656,6 +656,9 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 		}
 	}
 	moduleTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
+	if albumID == "" && s.analyzers[AIJobTypeAlbumCover] != nil {
+		moduleTypes = append(moduleTypes, AIJobTypeAlbumCover)
+	}
 	if albumID != "" {
 		// Album regrouping only needs EXIF/GPS, scene vectors, and face groups.
 		// OCR remains a separate user-requested task.
@@ -1141,6 +1144,9 @@ func (s *AIJobService) modulesLocked() []AIJobModule {
 	if s.analyzers[AIJobTypePortrait] != nil {
 		known = append(known, AIJobTypePortrait)
 	}
+	if s.analyzers[AIJobTypeAlbumCover] != nil {
+		known = append(known, AIJobTypeAlbumCover)
+	}
 	modules := make([]AIJobModule, 0, len(known))
 	for _, moduleType := range known {
 		module := AIJobModule{Type: moduleType, Name: aiJobModuleName(moduleType)}
@@ -1192,6 +1198,8 @@ func aiJobModuleName(moduleType string) string {
 		return "向量索引"
 	case AIJobTypeOCR:
 		return "文字识别"
+	case AIJobTypeAlbumCover:
+		return "相册封面精选"
 	case AIJobTypePortrait:
 		return "精选人物头像"
 	case AIJobTypeFace:
@@ -1583,7 +1591,7 @@ func isAIJobActive(status string) bool {
 
 func validAIJobType(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity:
+	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeAlbumCover, AIJobTypeSimilarity:
 		return true
 	default:
 		return false
@@ -1596,7 +1604,7 @@ func validAIJobType(moduleType string) bool {
 // 用标准库算，强制 GPU 只会让它们因为没有 CUDA 环境而失败。
 func aiJobModuleUsesGPU(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait:
+	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeAlbumCover:
 		return true
 	default:
 		return false
@@ -1605,7 +1613,7 @@ func aiJobModuleUsesGPU(moduleType string) bool {
 
 // aiJobTypeNeedsImageConversion 判断分析模块是否需要先把 HEIC 转成 JPEG。
 func aiJobTypeNeedsImageConversion(moduleType string) bool {
-	return (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) || moduleType == AIJobTypeSimilarity
+	return (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) || moduleType == AIJobTypeSimilarity || moduleType == AIJobTypeAlbumCover
 }
 
 // aiJobAnalysisMaxDimension 返回格式转换时保留的最大边长。
