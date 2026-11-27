@@ -1,3 +1,4 @@
+import { taskActivity } from "../utils/taskProgress";
 import { jobsQueryKey, libraryQueryKeys } from "../api/queryKeys";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -122,14 +123,9 @@ export function useTaskCenter(tab: string): TaskCenterState {
     queryKey: jobsQueryKey,
     queryFn: aiJobsApi.list,
     refetchInterval: (query) => {
-      const snapshot = query.state.data?.snapshot;
-      if (snapshot?.settings.lastScheduledStatus === "running") return 2_000;
-      const hasActiveJob =
-        snapshot?.active ||
-        snapshot?.jobs.some(
-          (job) => job.status === "running" || job.status === "paused",
-        );
-      return hasActiveJob || snapshot?.queue?.length ? 15_000 : false;
+      const { scheduled, busy } = taskActivity(query.state.data?.snapshot);
+      if (scheduled) return 2_000;
+      return busy ? 15_000 : false;
     },
   });
   const embeddingStatusQuery = useQuery({
@@ -145,11 +141,7 @@ export function useTaskCenter(tab: string): TaskCenterState {
     staleTime: 30_000,
   });
   const snapshot = jobsQuery.data?.snapshot;
-  const active =
-    snapshot?.active ??
-    snapshot?.jobs.find(
-      (job) => job.status === "running" || job.status === "paused",
-    );
+  const { active } = taskActivity(snapshot);
   const activeId = active?.id;
   const [disconnectedJob, setDisconnectedJob] = useState<string>();
   const [connectionAttempt, setConnectionAttempt] = useState(0);

@@ -1,3 +1,5 @@
+import { taskActivity } from "../utils/taskProgress";
+import { activeJobSummary } from "../features/tasks/useActiveJobSummary";
 import {ConfirmProvider} from "../features/common/ConfirmDialog";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -416,6 +418,19 @@ describe("任务中心", () => {
         scannedAt: "2026-11-11T02:05:00Z",
       },
     });
+  });
+
+  it("侧栏摘要与轮询从同一快照识别活动、暂停、排队、计划和失败", () => {
+    for (const status of ["running", "paused", "failed"] as const) {
+      const data = snapshot({active: undefined, jobs: [{...currentJob, status}]});
+      expect(activeJobSummary(data)?.status).toBe(status);
+      expect(taskActivity(data).busy).toBe(status !== "failed");
+    }
+    const idle = snapshot({active: undefined, jobs: []});
+    expect(taskActivity(idle).busy).toBe(false);
+    expect(taskActivity({...idle, queue:["waiting"]}).busy).toBe(true);
+    const scheduled = {...idle, settings:{...idle.settings, lastScheduledStatus:"running" as const}};
+    expect(taskActivity(scheduled)).toMatchObject({busy:true, scheduled:true});
   });
 
   it("返回运行页时复用刚完成的估算", async () => {

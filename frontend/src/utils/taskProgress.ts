@@ -1,4 +1,4 @@
-import type { AIJob } from "../api/aiJobs";
+import type { AIJob, AIJobSnapshot } from "../api/aiJobs";
 
 /**
  * 本次任务的完成百分比。
@@ -33,4 +33,14 @@ export function taskModuleLabel(type: AIJob["type"]): string {
     default:
       return type;
   }
+}
+
+/** 用同一份快照判断当前任务和轮询节奏，兼容只在历史列表里返回活动项的快照。 */
+export function taskActivity(snapshot?: AIJobSnapshot) {
+  const active = snapshot?.active ?? snapshot?.jobs.find(
+    job => job.status === "running" || job.status === "paused",
+  );
+  const scheduled = snapshot?.settings.lastScheduledStatus === "running";
+  const busy = Boolean(active || scheduled || snapshot?.queue?.length);
+  return { active, busy, scheduled };
 }

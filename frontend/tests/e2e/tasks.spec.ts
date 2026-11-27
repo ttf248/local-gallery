@@ -145,6 +145,30 @@ test.describe("任务中心", () => {
     await expect(page.getByRole("button", { name: "取消" })).toHaveCount(0);
   });
 
+  test("离开任务中心后侧栏会刷新仅列在历史中的活动任务", async ({ page }) => {
+    let finished = false;
+    await page.route("**/api/ai/jobs", async route => {
+      const response = await route.fetch();
+      const body = await response.json();
+      Object.assign(body.snapshot, {
+        active: null, queue: [],
+        jobs: [{...body.snapshot.jobs[0], createdAt: new Date().toISOString(),
+          processed: 5, skipped: 0, total: 10, elapsedMs: 1000, speedPerSecond: 5,
+          id: "history-active", type: "metadata", mode: "incremental",
+          status: finished ? "completed" : "running", planned: 10, completed: 5, failed: 0}],
+      });
+      await route.fulfill({ response, json: body });
+    });
+    await page.goto("/tasks/run");
+    const indicator = page.getByRole("link", {name: /正在分析 · 元数据分析/});
+    await expect(indicator).toBeVisible();
+    await page.getByRole("link", {name:"照片", exact:true}).first().click();
+    await expect(page).toHaveURL(/\/photo$/);
+    await expect(indicator).toBeVisible();
+    finished = true;
+    await expect(indicator).toHaveCount(0, {timeout: 20_000});
+  });
+
   test("失败摘要打开对应记录并重试该次任务", async ({ page }) => {
     const jobId = "job-failed-metadata";
     await page.route("**/api/ai/jobs", async route => {

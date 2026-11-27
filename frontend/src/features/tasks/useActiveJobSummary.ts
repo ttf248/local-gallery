@@ -1,7 +1,7 @@
 import { jobsQueryKey } from "../../api/queryKeys";
 import { useQuery } from "@tanstack/react-query";
 import { aiJobsApi, type AIJobSnapshot } from "../../api/aiJobs";
-import { jobProgressPercent, taskModuleLabel } from "../../utils/taskProgress";
+import { jobProgressPercent, taskActivity, taskModuleLabel } from "../../utils/taskProgress";
 export interface ActiveJobSummary {
   status: "running" | "paused" | "failed" | "idle";
   label: string;
@@ -12,11 +12,7 @@ export function activeJobSummary(
   snapshot?: AIJobSnapshot,
 ): ActiveJobSummary | null {
   if (!snapshot) return null;
-  const active =
-    snapshot.active ??
-    snapshot.jobs.find(
-      (job) => job.status === "running" || job.status === "paused",
-    );
+  const { active } = taskActivity(snapshot);
   const recent = snapshot.jobs[0];
   const job = active ?? (recent?.status === "failed" ? recent : undefined);
   if (
@@ -41,7 +37,7 @@ export function useActiveJobSummary() {
     queryKey: jobsQueryKey,
     queryFn: aiJobsApi.list,
     staleTime: 15000,
-    refetchInterval: (q) => (q.state.data?.snapshot.active ? 15000 : 60000),
+    refetchInterval: (q) => (taskActivity(q.state.data?.snapshot).busy ? 15000 : 60000),
   });
   return query.isError ? null : activeJobSummary(query.data?.snapshot);
 }
