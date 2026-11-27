@@ -212,6 +212,25 @@ func (s *AIJobService) statTarget(target *aiJobTarget) {
 	target.mtimeNs = info.ModTime().UnixNano()
 }
 
+// rememberedFileFailure 仅复用同一模块版本、同一文件指纹的逐文件失败。
+// 批量调用异常、磁盘离线或 GPU 故障仍交给下一轮常规任务重试。
+func rememberedFileFailure(record AIAnalysisRecord, target aiJobTarget, version string) bool {
+	if record.Status != "failed" || target.statCode != "" || record.Size != target.size || record.MTimeNs != target.mtimeNs || record.ModuleVersion != version {
+		return false
+	}
+	switch record.ErrorCode {
+	case "image_analysis_failed", "image_embedding_failed":
+		return true
+	case "unsupported":
+		return record.Type == AIJobTypeSimilarity
+	case aiFailureAnalysisFailed:
+		// 元数据解析器逐文件运行，历史 EXIF 解析错误使用这个通用码。
+		return record.Type == AIJobTypeMetadata
+	default:
+		return false
+	}
+}
+
 // aiRecordIsCurrent 判断既有结果对某个目标文件是否仍然有效。
 //
 // 增量任务跳过与否、空闲时的规模预估，用的是同一条判据 —— 只有一份实现，
@@ -256,20 +275,24 @@ func (s *AIJobService) selectTargets(jobID string, targets []aiJobTarget, digest
 
 	candidates := make([]aiJobTarget, 0, len(targets))
 	if job.Mode == AIJobModeFull && !job.RetryFailedOnly {
-		if job.Total > 0 && job.Checkpoint.TargetDigest == digest {
-			for _, target := range targets {
-				if target.position >= job.Checkpoint.Offset {
-					candidates = append(candidates, target)
-				}
-			}
-		} else {
+		if job.Total == 0 || job.Checkpoint.TargetDigest != digest {
 			job.Total = len(targets)
 			job.Processed, job.Skipped, job.Failed, job.Done = 0, 0, 0, 0
 			job.Checkpoint = AIJobCheckpoint{ModuleVersion: version, TargetDigest: digest}
 			job.Errors = nil
 			job.Results, job.Fields = nil, nil
-			candidates = append(candidates, targets...)
 		}
+		for _, target := range targets {
+			if target.position < job.Checkpoint.Offset {
+				continue
+			}
+			record := s.records[aiRecordKeyForVersion(job.Type, version, target.resourceID)]
+			if !rememberedFileFailure(record, target, version) {
+				candidates = append(candidates, target)
+			}
+		}
+		job.Skipped = job.Total - job.Processed - job.Failed - len(candidates)
+		job.Done = job.Total - len(candidates)
 	} else {
 		if job.Total == 0 {
 			job.Total = len(targets)
@@ -284,7 +307,7 @@ func (s *AIJobService) selectTargets(jobID string, targets []aiJobTarget, digest
 				}
 				continue
 			}
-			if current {
+			if current || rememberedFileFailure(record, target, version) {
 				continue
 			}
 			candidates = append(candidates, target)

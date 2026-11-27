@@ -62,9 +62,10 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
   const { module: selectedModule, mode } = selection;
   const selectedFaceModelReady =
     faceModel === "buffalo_m" ? buffaloReady : qualityReady;
-  const count = estimate?.modules.find(
+  const moduleEstimate = estimate?.modules.find(
     (item) => item.type === selectedModule,
-  )?.[mode]?.count;
+  );
+  const count = moduleEstimate?.[mode]?.count;
   return (
     <>
       {" "}
@@ -141,7 +142,9 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
           )}
           <EstimateDetails {...props} />
           <p className="mt-2 text-caption text-ink-2">
-            {modeHint(selectedModule, mode, props.moduleName)}
+            {moduleEstimate?.knownFileFailures
+              ? `本次跳过 ${formatCount(moduleEstimate.knownFileFailures)} 张已有解析失败记录的图片。文件或分析器更新后会重新处理，也可在任务记录中重试失败项。`
+              : modeHint(selectedModule, mode, props.moduleName)}
           </p>
         </div>
       </SettingsGroup>

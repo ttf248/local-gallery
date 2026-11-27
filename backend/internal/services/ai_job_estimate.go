@@ -33,9 +33,10 @@ type AIJobEstimateMode struct {
 
 // AIJobEstimateModule 是单个分析模块的核算结果。
 type AIJobEstimateModule struct {
-	Type      string `json:"type"`
-	Name      string `json:"name"`
-	Installed bool   `json:"installed"`
+	KnownFileFailures int    `json:"knownFileFailures,omitempty"`
+	Type              string `json:"type"`
+	Name              string `json:"name"`
+	Installed         bool   `json:"installed"`
 	// Available 表示现在能不能启动：已就绪且没有被人物开关锁住。
 	Available bool   `json:"available"`
 	Reason    string `json:"reason,omitempty"`
@@ -80,14 +81,16 @@ type aiRecordFact struct {
 	mtimeNs       int64
 	moduleVersion string
 	status        string
+	errorCode     string
 }
 
 // aiTargetStat 是某个目标的当前文件指纹。
 type aiTargetStat struct {
-	photo   bool
-	video   bool
-	size    int64
-	mtimeNs int64
+	statCode string
+	photo    bool
+	video    bool
+	size     int64
+	mtimeNs  int64
 }
 
 // aiEstimateSample 是一次历史任务给出的吞吐样本。
@@ -122,7 +125,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	}
 	if !estimate.LibraryReady {
 		s.mu.Unlock()
-		estimate.Modules = estimateModules(modules, peopleEnabled, nil, nil, versions, samples)
+		estimate.Modules = estimateModules(modules, peopleEnabled, nil, nil, nil, versions, samples)
 		estimate.Sequence = AIJobEstimateSequence{
 			Incremental: AIJobEstimateTotal{Modules: []string{}},
 			Full:        AIJobEstimateTotal{Modules: []string{}},
@@ -139,6 +142,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 			mtimeNs:       record.MTimeNs,
 			moduleVersion: record.ModuleVersion,
 			status:        record.Status,
+			errorCode:     record.ErrorCode,
 		})
 	}
 	s.mu.Unlock()
@@ -176,6 +180,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	// 仍然有效的结果数：按模块各数一遍。待处理张数 = 目标总数 - 有效张数，
 	// 与 selectTargets 的候选集完全等价。
 	current := map[string]int{}
+	failures := map[string]int{}
 	for _, fact := range facts {
 		stat, ok := targets.stats[fact.resourceID]
 		if !ok || (fact.moduleType == AIJobTypeAlbumCover && !stat.photo && !stat.video) || (stat.video && fact.moduleType != AIJobTypeAlbumCover) || (aiTargetFilterForModule(fact.moduleType) == aiTargetPhotoOnly && !stat.photo) {
@@ -189,20 +194,33 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 			MTimeNs:       fact.mtimeNs,
 			ModuleVersion: fact.moduleVersion,
 			Status:        fact.status,
+			ErrorCode:     fact.errorCode,
 		}
-		target := aiJobTarget{resourceID: fact.resourceID, size: stat.size, mtimeNs: stat.mtimeNs}
-		if aiRecordIsCurrent(record, true, target, versions[fact.moduleType], validators[fact.moduleType]) {
+		target := aiJobTarget{resourceID: fact.resourceID, size: stat.size, mtimeNs: stat.mtimeNs, statCode: stat.statCode}
+		if rememberedFileFailure(record, target, versions[fact.moduleType]) {
+			if fact.moduleType == AIJobTypePortrait {
+				if a, ok := s.analyzers[fact.moduleType].(*PortraitAnalyzer); ok {
+					a.People.mu.RLock()
+					hasFaces := len(a.People.facesByResource[fact.resourceID]) > 0
+					a.People.mu.RUnlock()
+					if !hasFaces {
+						continue
+					}
+				}
+			}
+			failures[fact.moduleType]++
+		} else if aiRecordIsCurrent(record, true, target, versions[fact.moduleType], validators[fact.moduleType]) {
 			current[fact.moduleType]++
 		}
 	}
 
-	estimate.Modules = estimateModules(modules, peopleEnabled, targetCounts, current, versions, samples)
+	estimate.Modules = estimateModules(modules, peopleEnabled, targetCounts, current, failures, versions, samples)
 	estimate.Sequence = estimateSequence(estimate.Modules)
 	return estimate, nil
 }
 
 // estimateModules 组装每个模块的两种模式结果。
-func estimateModules(modules []AIJobModule, peopleEnabled bool, targetCounts map[string]int, current map[string]int, versions map[string]string, samples map[string][]aiEstimateSample) []AIJobEstimateModule {
+func estimateModules(modules []AIJobModule, peopleEnabled bool, targetCounts map[string]int, current, failures map[string]int, versions map[string]string, samples map[string][]aiEstimateSample) []AIJobEstimateModule {
 	result := make([]AIJobEstimateModule, 0, len(modules))
 	for _, module := range modules {
 		entry := AIJobEstimateModule{
@@ -224,7 +242,8 @@ func estimateModules(modules []AIJobModule, peopleEnabled bool, targetCounts map
 			continue
 		}
 		version := versions[module.Type]
-		totalImages := targetCounts[module.Type]
+		entry.KnownFileFailures = failures[module.Type]
+		totalImages := targetCounts[module.Type] - entry.KnownFileFailures
 		pending := 0
 		if current != nil {
 			pending = totalImages - current[module.Type]
@@ -411,7 +430,7 @@ func (s *AIJobService) estimateTargets(ctx context.Context, snapshot CatalogSnap
 		if video {
 			result.videoCount++
 		}
-		result.stats[target.resourceID] = aiTargetStat{video: video, size: target.size, mtimeNs: target.mtimeNs, photo: photo}
+		result.stats[target.resourceID] = aiTargetStat{statCode: target.statCode, video: video, size: target.size, mtimeNs: target.mtimeNs, photo: photo}
 	}
 	s.targetCacheMu.Lock()
 	if s.targetCache == nil || s.targetCache.revision <= result.revision {

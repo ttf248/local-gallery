@@ -493,6 +493,27 @@ func TestAIJobServiceRetriesOnlyFailedAndUncommittedResources(t *testing.T) {
 		t.Fatalf("failed image path = %q, want relative path ending in %q", job.Errors[0].Path, failedName)
 	}
 	waitForAIJobIdle(t, service)
+	shutdownAIJobService(t, service)
+	service = newTestAIJobService(t, statePath, metadataDir, catalog, MetadataAnalyzer{})
+	estimate, err := service.Estimate(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	module := estimateModule(t, estimate, AIJobTypeMetadata)
+	if module.KnownFileFailures != 1 || module.Full.Count != 1 || module.Incremental.Count != 0 {
+		t.Fatalf("estimate: %+v", module)
+	}
+	for _, mode := range []string{AIJobModeIncremental, AIJobModeFull} {
+		next, _, err := service.Start(AIJobTypeMetadata, mode)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next = waitForAIJob(t, service, next.ID, AIJobStatusCompleted)
+		if next.Planned != map[string]int{AIJobModeFull: 1, AIJobModeIncremental: 0}[mode] || next.Done != 2 || next.Skipped+next.Processed != 2 {
+			t.Fatalf("wrong %s totals: %+v", mode, next)
+		}
+		waitForAIJobIdle(t, service)
+	}
 
 	retry, err := service.Retry(job.ID)
 	if err != nil {
@@ -503,6 +524,28 @@ func TestAIJobServiceRetriesOnlyFailedAndUncommittedResources(t *testing.T) {
 		t.Fatalf("retry job = %+v", retry)
 	}
 	shutdownAIJobService(t, service)
+}
+
+func TestRememberedFileFailureRequiresUnchangedInput(t *testing.T) {
+	target := aiJobTarget{size: 12, mtimeNs: 34}
+	record := AIAnalysisRecord{Type: AIJobTypeMetadata, Status: "failed", Size: 12, MTimeNs: 34, ModuleVersion: "v1", ErrorCode: "analysis_failed"}
+	if !rememberedFileFailure(record, target, "v1") {
+		t.Fatal("lost parse failure")
+	}
+	if rememberedFileFailure(record, target, "v2") || rememberedFileFailure(record, aiJobTarget{size: 13, mtimeNs: 34}, "v1") || rememberedFileFailure(record, aiJobTarget{size: 12, mtimeNs: 35}, "v1") {
+		t.Fatal("stale failure suppressed a new attempt")
+	}
+	for _, code := range []string{"gpu_unavailable", "gpu_inference_failed", "source_changed", "source_unavailable", "image_conversion_failed"} {
+		record.ErrorCode = code
+		if rememberedFileFailure(record, target, "v1") {
+			t.Fatalf("transient failure suppressed: %s", code)
+		}
+	}
+	record.Type = AIJobTypeOCR
+	record.ErrorCode = "analysis_failed"
+	if rememberedFileFailure(record, target, "v1") {
+		t.Fatal("batch failure suppressed")
+	}
 }
 
 func TestAIJobServicePauseResumeAndShutdownRecovery(t *testing.T) {

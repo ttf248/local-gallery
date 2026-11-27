@@ -110,6 +110,7 @@ export interface AIJobEstimateMode {
 
 /** 单个分析模块的核算结果。 */
 export interface AIJobEstimateModule {
+  knownFileFailures?: number;
   type: AnalysisType;
   name: string;
   /** 模块已注册且运行环境就绪。 */

@@ -158,6 +158,7 @@ function estimateFixture(
         installed: true,
         available: true,
         version: "metadata-v1",
+        knownFileFailures: 13,
         incremental: {
           count: 320,
           estimatedDurationMs: 45000,
@@ -745,7 +746,8 @@ describe("任务中心", () => {
     });
     renderCenter("run");
 
-    expect(await screen.findByText("本次规模")).toBeInTheDocument();
+    expect(await screen.findByText(/本次跳过 13 张已有解析失败记录/)).toBeInTheDocument();
+    expect(screen.getByText("本次规模")).toBeInTheDocument();
     const table = screen.getByRole("group", { name: "本次规模" });
     expect(within(table).getByText("320 张")).toBeInTheDocument();
     expect(within(table).getByText("12,345 张")).toBeInTheDocument();
