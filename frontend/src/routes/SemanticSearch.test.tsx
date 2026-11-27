@@ -182,6 +182,13 @@ describe("智能搜索", () => {
     mocks.albumSearch.mockResolvedValue({ results: [] });
   });
 
+  it("刷新只限定相册的地址会恢复筛选并提交一次", async () => {
+    renderSearch("/photo/semantic?albumId=a%2Bb&albumName=旅行");
+    expect(await screen.findByRole("button", { name: /旅行/ })).toBeVisible();
+    await waitFor(() => expect(mocks.semanticSearch).toHaveBeenCalledTimes(1));
+    expect(mocks.semanticSearch.mock.calls[0][0]).toMatchObject({ albumId: "a+b" });
+  });
+
   it("一个词同时搜索画面与图片文字", async () => {
     renderSearch();
     await screen.findByText(/NVIDIA GeForce RTX 3060/);

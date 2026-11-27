@@ -1,7 +1,7 @@
 import {Page} from "../shell/Page";
 import {buttonStyles} from "../ui/buttonStyles";
 import { InlineAlert } from "../ui/InlineAlert";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { aiJobsApi, type SemanticSearchRequest } from "../api/aiJobs";
@@ -22,14 +22,15 @@ type SearchMode = "text" | "image";
 export default function SemanticSearch() {
   const [searchParams, setSearchParams] = useSearchParams();
   const routeQuery = searchParams.get("q")?.trim() ?? "";
-  const routeSubmittedRef = useRef("");
+  const handledRoute = useRef<string | null>(null);
+  const [submittedSemantic, setSubmittedSemantic] = useState(false);
   const [mode, setMode] = useState<SearchMode>("text");
   const [text, setText] = useState(routeQuery);
   const [imageOCRText, setImageOCRText] = useState("");
   const [imageFile, setImageFile] = useState<File | undefined>();
   const [similarResourceId, setSimilarResourceId] = useState("");
   const [albumText, setAlbumText] = useState("");
-  const [album, setAlbum] = useState<SearchHit | undefined>();
+  const [album, setAlbum] = useState<Pick<SearchHit, "name" | "path">>();
   const [year, setYear] = useState("");
   const [adcode, setAdcode] = useState("");
   const [personId, setPersonId] = useState("");
@@ -72,12 +73,6 @@ export default function SemanticSearch() {
     mode === "text"
       ? Boolean(text.trim() && embeddingReady)
       : Boolean(similarResourceId || imageFile);
-  // 用户想按画面找 —— 与「这次实际查了什么」分开：画面模型没就绪时，
-  // 系统会退成只查图片里的文字，零结果时要说清是环境没准备好。
-  const wantsSemantic =
-    mode === "text"
-      ? Boolean(text.trim())
-      : Boolean(similarResourceId || imageFile);
   const hasOCRQuery =
     mode === "text" ? Boolean(text.trim()) : Boolean(imageOCRText.trim());
   const usesSemanticSearch =
@@ -100,75 +95,82 @@ export default function SemanticSearch() {
     Number(favoriteOnly) +
     Number(pickedOnly);
 
-  const search = (resourceId?: string, file?: File) => {
+  const submitRoute = useCallback((params: URLSearchParams, file?: File) => {
+    const query = params.get("q")?.trim();
+    const resourceId = params.get("resourceId");
+    const ocrText = params.get("ocr") || query;
+    const albumId = params.get("albumId");
+    const year = params.get("year");
+    const personId = params.get("personId");
+    const adcode = Number(params.get("adcode"));
     const request: SemanticSearchRequest = {
       kind: "photo",
-      ...(mode === "text" && !resourceId && text.trim() && embeddingReady
-        ? { text: text.trim(), ocrText: text.trim(), matchMode: "any" as const }
-        : mode === "text" && !resourceId && text.trim()
-          ? { ocrText: text.trim() }
-          : mode === "image" && imageOCRText.trim()
-            ? { ocrText: imageOCRText.trim() }
-            : {}),
+      ...(query && embeddingReady ? { text: query, matchMode: "any" } : {}),
+      ...(ocrText ? { ocrText } : {}),
       ...(resourceId ? { resourceId } : {}),
-      ...(album ? { albumId: album.path } : {}),
-      ...(year.trim() ? { year: year.trim() } : {}),
-      ...(adcode ? { adcode: Number(adcode) } : {}),
+      ...(albumId ? { albumId } : {}),
+      ...(year ? { year } : {}),
       ...(personId ? { personId } : {}),
-      ...(favoriteOnly ? { favoriteOnly: true } : {}),
-      ...(pickedOnly ? { pickedOnly: true } : {}),
+      ...(adcode ? { adcode } : {}),
+      ...(params.get("favoriteOnly") === "1" ? { favoriteOnly: true } : {}),
+      ...(params.get("pickedOnly") === "1" ? { pickedOnly: true } : {}),
     };
-    setSubmitted({ request, image: file, token: Date.now() });
-  };
+    setSubmittedSemantic(Boolean(query || resourceId || file));
+    setSubmitted((Object.keys(request).length > 1 || file) &&
+      (!params.has("upload") || file)
+      ? { request, image: file, token: Date.now() }
+      : null);
+  }, [embeddingReady]);
 
-  // 探索页的快捷搜索通过 q 带入文字；读到模型状态后再提交，
-  // 这样模型可用时会同时查画面语义与 OCR，不可用时仍能查 OCR。
   useEffect(() => {
-    if (!routeQuery) {
-      routeSubmittedRef.current = "";
-      return;
-    }
-    setMode("text");
+    const key = searchParams.toString();
+    if (handledRoute.current === key) return;
+    if (routeQuery && !statusQuery.isSuccess && !statusQuery.isError) return;
+    handledRoute.current = key;
     setText(routeQuery);
+    setMode(searchParams.get("mode") === "image" ? "image" : "text");
     setImageFile(undefined);
-    setSimilarResourceId("");
-    if (routeSubmittedRef.current === routeQuery) return;
-    if (!statusQuery.isSuccess && !statusQuery.isError) return;
+    setSimilarResourceId(searchParams.get("resourceId") ?? "");
+    setImageOCRText(searchParams.get("ocr") ?? "");
+    const path = searchParams.get("albumId");
+    setAlbum(path ? { path, name: searchParams.get("albumName") || path } : undefined);
+    setAlbumText("");
+    setYear(searchParams.get("year") ?? "");
+    setAdcode(searchParams.get("adcode") ?? "");
+    setPersonId(searchParams.get("personId") ?? "");
+    setFavoriteOnly(searchParams.get("favoriteOnly") === "1");
+    setPickedOnly(searchParams.get("pickedOnly") === "1");
+    setAdvancedOpen(["albumId", "year", "adcode", "personId", "favoriteOnly", "pickedOnly"].some(k => searchParams.has(k)));
+    submitRoute(searchParams);
+  }, [searchParams, routeQuery, statusQuery.isSuccess, statusQuery.isError, submitRoute]);
 
-    routeSubmittedRef.current = routeQuery;
-    setSubmitted({
-      request: {
-        kind: "photo",
-        ...(embeddingReady
-          ? { text: routeQuery, ocrText: routeQuery, matchMode: "any" as const }
-          : { ocrText: routeQuery }),
-      },
-      token: Date.now(),
-    });
-  }, [embeddingReady, routeQuery, statusQuery.isError, statusQuery.isSuccess]);
+  function search(resourceId?: string, file?: File) {
+    const params = new URLSearchParams();
+    if (mode === "image" || resourceId) {
+      params.set("mode", "image");
+      if (resourceId) params.set("resourceId", resourceId);
+      if (file) params.set("upload", "1");
+      if (mode === "image" && imageOCRText.trim()) params.set("ocr", imageOCRText.trim());
+    } else if (text.trim()) params.set("q", text.trim());
+    if (album) {
+      params.set("albumId", album.path);
+      params.set("albumName", album.name);
+    }
+    if (year) params.set("year", year);
+    if (adcode) params.set("adcode", adcode);
+    if (personId) params.set("personId", personId);
+    if (favoriteOnly) params.set("favoriteOnly", "1");
+    if (pickedOnly) params.set("pickedOnly", "1");
+    handledRoute.current = params.toString();
+    setSearchParams(params, { replace: params.toString() === searchParams.toString() });
+    submitRoute(params, file);
+  }
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (hasSemanticQuery && !embeddingReady) return;
-    const nextParams = new URLSearchParams(searchParams);
-    if (mode === "text" && text.trim()) {
-      routeSubmittedRef.current = text.trim();
-      nextParams.set("q", text.trim());
-    } else {
-      routeSubmittedRef.current = "";
-      nextParams.delete("q");
-    }
-    setSearchParams(nextParams, { replace: true });
-    if (similarResourceId) {
-      search(similarResourceId);
-      return;
-    }
-    if (mode === "image" && imageFile) {
-      search(undefined, imageFile);
-      return;
-    }
-    if (mode === "text") setSimilarResourceId("");
-    search();
+    search(mode === "image" ? similarResourceId || undefined : undefined,
+      mode === "image" ? imageFile : undefined);
   };
 
   const findSimilar = (item: LibraryFeedItem) => {
@@ -281,7 +283,7 @@ export default function SemanticSearch() {
                       }
                     />
                     <span className="min-w-0 truncate text-caption text-ink-2">
-                      {imageFile?.name ?? "支持常见图片格式，单张不超过 64 MiB"}
+                      {imageFile?.name ?? (searchParams.has("upload") ? "请重新选择用于搜索的图片" : "支持常见图片格式，单张不超过 64 MiB")}
                     </span>
                   </label>
                 )}
@@ -313,7 +315,7 @@ export default function SemanticSearch() {
                 <span>高级筛选</span>
                 <span className="flex items-center gap-2 text-ink-2">
                   {advancedFilterCount > 0
-                    ? `${advancedFilterCount} 项已生效`
+                    ? `${advancedFilterCount} 项已选择`
                     : "相册 · 年份 · 地点 · 人物"}
                   <span aria-hidden="true">{advancedOpen ? "−" : "+"}</span>
                 </span>
@@ -329,6 +331,7 @@ export default function SemanticSearch() {
                       {album ? (
                         <button
                           type="button"
+                          aria-label={`移除相册筛选，${album.name}`}
                           className="flex h-10 w-full items-center justify-between rounded-md border border-line bg-canvas px-3 text-left text-body text-ink"
                           onClick={() => {
                             setAlbum(undefined);
@@ -358,6 +361,7 @@ export default function SemanticSearch() {
                           .map((hit) => (
                             <button
                               key={hit.path}
+                              aria-label={hit.name}
                               type="button"
                               className="mt-1 block w-full truncate rounded-md bg-raised px-3 py-2 text-left text-body text-ink hover:bg-sunken-strong"
                               onClick={() => {
@@ -487,7 +491,7 @@ export default function SemanticSearch() {
           submitted={submitted}
           status={status}
           statusError={statusQuery.isError}
-          wantsSemantic={wantsSemantic}
+          wantsSemantic={submittedSemantic}
           onFindSimilar={findSimilar}
         />
       </Page>
