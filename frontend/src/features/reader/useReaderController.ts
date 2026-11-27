@@ -35,6 +35,15 @@ import { useReaderMedia } from "../../hooks/useReaderMedia";
 import { useReaderKeys } from "../../hooks/useReaderKeys";
 import type { AppMode } from "../../api/library";
 
+import { clampPage, spreadAt } from "./readerLayout";
+import type {
+  JumpSource,
+  ReaderJump,
+  ReaderObservation,
+  ReaderCommandTarget,
+  ReaderViewportHandle,
+} from "./useReaderViewport";
+
 export function useReaderController() {
   const [params] = useSearchParams();
   const routeParams = useParams();
@@ -44,10 +53,10 @@ export function useReaderController() {
 
   // 漫画阅读器的路由是 /comic/read/<album id>。
   const pathParam = decodeURIComponent(routeParams["albumId"] ?? "");
-  const initialIndex = Math.max(
-    0,
-    Math.floor(Number(params.get("index") ?? 0) || 0),
-  );
+  const parsedIndex = Number(params.get("index"));
+  const initialIndex = Number.isFinite(parsedIndex)
+    ? Math.max(0, Math.floor(parsedIndex))
+    : 0;
   // type=video 走 VideoPlayer；其它（含未传）走 ImageGallery。
   // 视频播放进度将在独立模型中持久化，不能复用相册的页码进度。
   const typeParam = (params.get("type") ?? "image") as "image" | "video";
@@ -59,11 +68,16 @@ export function useReaderController() {
   const { images, videos, dimensions, reload: reloadMedia } = media;
   const ready = media.status === "ready";
 
-  const [continuousRange, setContinuousRange] = useState({
-    path: "",
-    startIndex: 0,
-    endIndex: 0,
+  const viewportRef = useRef<ReaderViewportHandle>(null);
+  const sequence = useRef(0);
+  const [request, setRequest] = useState<ReaderJump>({
+    index: 0,
+    epoch: 0,
+    source: "restore",
   });
+  const [observation, setObservation] = useState<ReaderObservation | null>(
+    null,
+  );
   const [imageActivityReadyPath, setImageActivityReadyPath] = useState("");
 
   const index = useGalleryStore((s) => s.index);
@@ -75,6 +89,11 @@ export function useReaderController() {
 
   const [showInfo, setShowInfo] = useState(false);
   const { mode: workbenchMode, setMode: setWorkbenchMode } = useAppMode();
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [infoTarget, setInfoTarget] = useState<ReaderCommandTarget | null>(
+    null,
+  );
   const [showHelp, setShowHelp] = useState(false);
   // 目录：整本缩略图，按需打开，不打断连续阅读。
   const [showOverview, setShowOverview] = useState(false);
@@ -84,13 +103,14 @@ export function useReaderController() {
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
+    target: ReaderCommandTarget;
   } | null>(null);
   // 「阅读到末尾自动切换下一卷」「切换时显示通知」两个阅读偏好。
   // 未加载前按服务端默认值处理（都是开启）。
   const { data: prefs } = usePrefs();
   const autoSwitchAlbum = prefs?.autoSwitchAlbum ?? true;
   const showSwitchNotif = prefs?.showSwitchNotif ?? true;
-  const [markingRead, setMarkingRead] = useState(false);
+
   const [reloadKey, setReloadKey] = useState(0);
   const [progressFailure, setProgressFailure] = useState<{
     key: string;
@@ -190,8 +210,13 @@ export function useReaderController() {
     }
     lastPathRef.current = pathParam;
     setImageActivityReadyPath("");
-    setContinuousRange({ path: "", startIndex: 0, endIndex: 0 });
+    setObservation(null);
+    setShowFinished(false);
+    setContextMenu(null);
+    setInfoTarget(null);
+    progressRef.current = { path: "", index: 0, total: 0 };
     finishedRef.current = false;
+    restoringRef.current = false;
   }, [pathParam]);
 
   const videoItemIndex = isVideo
@@ -223,17 +248,46 @@ export function useReaderController() {
     },
     [progressKey],
   );
-  const imageActivityPageIndex = displayedPageIndex(
-    mode,
-    index,
-    images.length,
-    continuousRange.path === pathParam ? continuousRange : undefined,
-  );
+  const observedLast =
+    observation?.albumId === pathParam && observation.epoch === request.epoch
+      ? displayedPageIndex(observation.last, images.length)
+      : null;
+  const imageActivityPageIndex = observedLast ?? 0;
   const imageActivityWritable =
     !isVideo &&
     ready &&
     imageActivityReadyPath === pathParam &&
-    images.length > 0;
+    observedLast !== null;
+  const jumpImage = useCallback(
+    (raw: number, source: JumpSource = "key") => {
+      if (!images.length) return;
+      const target = clampPage(raw, images.length);
+      if (source !== "restore") restoringRef.current = false;
+      setObservation(null);
+      setShowFinished(false);
+      setIndex(target);
+      setRequest({ index: target, source, epoch: ++sequence.current });
+    },
+    [images.length, setIndex],
+  );
+  const onInvalidate = useCallback(() => setObservation(null), []);
+  const onObserve = useCallback(
+    (o: ReaderObservation) => {
+      if (o.albumId !== pathParam || o.epoch !== sequence.current) return;
+      setObservation((prev) =>
+        prev?.first === o.first &&
+        prev.last === o.last &&
+        prev.epoch === o.epoch &&
+        prev.atTop === o.atTop &&
+        prev.atBottom === o.atBottom
+          ? prev
+          : o,
+      );
+      const current = useGalleryStore.getState().index;
+      if (current < o.first || current > o.last) setIndex(o.first);
+    },
+    [pathParam, setIndex],
+  );
 
   useEffect(() => {
     if (!imageActivityWritable) return;
@@ -252,7 +306,7 @@ export function useReaderController() {
     if (!ready) return;
     const list = isVideo ? videos : images;
     if (!isVideo) {
-      setIndex(Math.max(0, Math.min(list.length - 1, initialIndex)));
+      jumpImage(initialIndex, params.has("index") ? "link" : "restore");
     }
     // 切到新 album 时重置缩放/旋转（视频模式不需要；切视频时由
     // <video key=src> 自然重挂载）
@@ -273,22 +327,21 @@ export function useReaderController() {
     let cancelled = false;
     // 这次定位是「恢复」而不是「刚读完」：末页恢复不该弹收尾提示。
     restoringRef.current = true;
+    const restoreEpoch = sequence.current;
     activityApi
       .getImage(pathParam)
       .then((rp) => {
         if (cancelled) return;
         // pageIndex 表示已展示的最末页；双页模式恢复时对齐到跨页左侧。
         const pageIndex = Math.max(0, Math.min(list.length - 1, rp.pageIndex));
-        const anchorIndex =
-          useGalleryStore.getState().mode === "double"
-            ? pageIndex - (pageIndex % 2)
-            : pageIndex;
-        setIndex(anchorIndex);
+        if (sequence.current === restoreEpoch) jumpImage(pageIndex, "restore");
+        else restoringRef.current = false;
         setImageActivityReadyPath(pathParam);
         clearProgressFailure("restore");
       })
       .catch((error) => {
         if (!cancelled && isActivityNotFound(error)) {
+          restoringRef.current = false;
           setImageActivityReadyPath(pathParam);
           clearProgressFailure("restore");
         } else if (!cancelled) {
@@ -344,6 +397,7 @@ export function useReaderController() {
   const currentMediaId = (isVideo ? currentVideo : images[index]) ?? null;
   useEffect(() => {
     setShowInfo(false);
+    setInfoTarget(null);
   }, [currentMediaId]);
 
   // 视频的播放位置（毫秒）由 useVideoActivity 单独管：恢复 → 节流写入 →
@@ -389,103 +443,18 @@ export function useReaderController() {
     }
   }
 
-  const scrollContinuousTo = useCallback(
-    (targetIndex: number) => {
-      if (images.length === 0) return;
-      // ImageGallery 通过 VirtuosoHandle 监听 store.index 并完成真实滚动；不再
-      // 查询可能尚未被虚拟列表挂载的 DOM 节点。
-      setIndex(Math.max(0, Math.min(images.length - 1, targetIndex)));
-    },
-    [images.length, setIndex],
-  );
-
-  const onContinuousVisibleRangeChange = useCallback(
-    (startIndex: number, endIndex: number) => {
-      if (useGalleryStore.getState().mode !== "continuous") return;
-      if (images.length === 0) return;
-      const nextStartIndex = Math.max(
-        0,
-        Math.min(images.length - 1, Math.floor(startIndex)),
-      );
-      const nextEndIndex = Math.max(
-        nextStartIndex,
-        Math.min(images.length - 1, Math.floor(endIndex)),
-      );
-      setContinuousRange({
-        path: pathParam,
-        startIndex: nextStartIndex,
-        endIndex: nextEndIndex,
-      });
-      if (useGalleryStore.getState().index !== nextStartIndex) {
-        setIndex(nextStartIndex);
-      }
-    },
-    [images.length, pathParam, setIndex],
-  );
-
-  // 切到连续模式后,容器需要滚到当前 index 对应的那张图。
-  // ImageGallery 挂载 Virtuoso 后需要用当前 index 完成首次定位，避免用户
-  // (尤其从 saved progress 恢复)看到的是 index 0,跟 slider / 计数对不上。
-  // 用 ref 标记只在「首次进入 continuous」时跑一次，后续切页由 index 驱动。
-  // 注意:首次 mount 模式就是 continuous (galleryStore 从 localStorage 恢复)
-  // 也要触发,所以不能用 prevModeRef (初始值就是 continuous,判断失效)。
-  const continuousScrolledRef = useRef(false);
   useEffect(() => {
-    if (
-      !continuousScrolledRef.current &&
-      mode === "continuous" &&
-      ready &&
-      images.length > 0
-    ) {
-      continuousScrolledRef.current = true;
-      // queueMicrotask 确保 Virtuoso ref 已挂载，再由 ImageGallery 滚到目标项。
-      queueMicrotask(() => scrollContinuousTo(index));
-    } else if (mode !== "continuous") {
-      // 离开 continuous 后,允许下次再进入时重新滚一次
-      continuousScrolledRef.current = false;
-    }
-  }, [mode, ready, images.length, index, scrollContinuousTo]);
-
-  // 滚到最后一张：自动标记为「已读」一次。
-  useEffect(() => {
-    if (isVideo) return;
-    if (markingRead) return;
-    if (!imageActivityWritable || !pathParam) return;
-    if (imageActivityPageIndex < images.length - 1) {
+    if (!imageActivityWritable) return;
+    if (imageActivityPageIndex !== images.length - 1) {
       finishedRef.current = false;
-      // 恢复到中间某一页：这次恢复到此为止，之后翻到末页仍算「刚读完」。
       restoringRef.current = false;
+      setShowFinished(false);
       return;
     }
-    if (finishedRef.current) return;
+    if (!finishedRef.current && !restoringRef.current) setShowFinished(true);
     finishedRef.current = true;
-    // 恢复到上次位置的那一次不算「刚读完」：那一卷本来就读完了，
-    // 打开它不该弹收尾提示。
-    const restored = restoringRef.current;
     restoringRef.current = false;
-    setMarkingRead(true);
-    activityApi
-      .setImage(pathParam, images.length - 1, images.length)
-      .then(() => {
-        clearProgressFailure("save");
-        pushToast({ kind: "success", message: "已读完 🎉", ttl: 1500 });
-        // 读到末页就是一个明确的结束界面：读完这一卷、还有没有下一卷，
-        // 在这里一次说清楚。
-        if (!restored) setShowFinished(true);
-      })
-      .catch(() => reportProgressFailure("save"))
-      .finally(() => setMarkingRead(false));
-  }, [
-    imageActivityPageIndex,
-    imageActivityWritable,
-    images.length,
-    pathParam,
-    isVideo,
-    markingRead,
-    pushToast,
-    clearProgressFailure,
-    reportProgressFailure,
-  ]);
+  }, [imageActivityPageIndex, imageActivityWritable, images.length]);
 
   useEffect(() => {
     const flushCurrentActivity = () => {
@@ -517,23 +486,6 @@ export function useReaderController() {
     return () =>
       window.removeEventListener("gallery:open-help", off as EventListener);
   }, []);
-
-  useEffect(() => {
-    if (isVideo || !slideshow) return;
-    const t = setInterval(() => {
-      const cur = useGalleryStore.getState().index;
-      const step = mode === "double" ? 2 : 1;
-      if (cur + step < images.length) {
-        setIndex(cur + step);
-      } else {
-        // 末尾:对齐手动 next() 的反馈(避免幻灯片 loop 回 0 与
-        // 手动翻页的"已是最后一张"行为割裂),toast + 自动停。
-        onReachEnd();
-      }
-    }, slideshowInterval);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isVideo, slideshow, slideshowInterval, images.length, setIndex, mode]);
 
   // 视频项由 URL 的 index 参数定位（以 initialIndex 为真相源），
   // 切视频必须改 URL 的 index 参数，
@@ -567,7 +519,7 @@ export function useReaderController() {
   });
   // 有没有下一卷：跨卷导航算出来的目标卷名就是答案（没有下一卷时
   // 它是空串）。收尾提示据此换一句话、也据此决定要不要留那个按钮。
-  const hasNextVolume = Boolean(adjacentNames.next);
+  const hasNextVolume = Boolean(adjacentNames.next || adjacentNames.more);
 
   // 已到末尾的统一反馈：toast + 自动停幻灯片。
   // 用 ref 持有,避免 setInterval 闭包捕获旧的 onReachEnd 引用
@@ -603,15 +555,6 @@ export function useReaderController() {
   };
   const onReachEnd = useCallback(() => onReachEndRef.current(), []);
 
-  const scrollStep = useCallback((dir: -1 | 1) => {
-    const container = document.querySelector(
-      "[data-image-gallery]",
-    ) as HTMLDivElement | null;
-    if (!container) return;
-    const delta = container.clientHeight * 0.9 * dir;
-    container.scrollBy({ top: delta, behavior: "smooth" });
-  }, []);
-
   const prev = useCallback(() => {
     if (isVideo) {
       const cur = Math.max(
@@ -622,13 +565,13 @@ export function useReaderController() {
       return;
     }
     if (mode === "continuous") {
-      scrollStep(-1);
+      viewportRef.current?.scrollScreen(-1);
       return;
     }
     if (mode === "double") {
-      if (index > 0) setIndex(Math.max(0, index - 2));
+      if (index >= 2) jumpImage(spreadAt(index, images.length)[0] - 2);
     } else if (index > 0) {
-      setIndex(index - 1);
+      jumpImage(index - 1);
     }
   }, [
     isVideo,
@@ -636,9 +579,9 @@ export function useReaderController() {
     videos.length,
     goToVideo,
     mode,
-    scrollStep,
+    jumpImage,
     index,
-    setIndex,
+    images.length,
   ]);
 
   const next = useCallback(() => {
@@ -655,23 +598,21 @@ export function useReaderController() {
       return;
     }
     if (mode === "continuous") {
-      scrollStep(1);
+      if (!viewportRef.current?.scrollScreen(1) && observation?.atBottom)
+        void onReachEnd();
       return;
     }
     if (mode === "double") {
-      if (index + 2 < images.length) {
-        setIndex(index + 2);
-        return;
-      }
-      if (index < images.length - 1) {
-        setIndex(Math.max(0, images.length - 2));
+      const start = spreadAt(index, images.length)[0];
+      if (start + 2 < images.length) {
+        jumpImage(start + 2);
         return;
       }
       onReachEnd();
       return;
     }
     if (index < images.length - 1) {
-      setIndex(index + 1);
+      jumpImage(index + 1);
       return;
     }
     onReachEnd();
@@ -681,28 +622,48 @@ export function useReaderController() {
     videos.length,
     goToVideo,
     mode,
-    scrollStep,
+    jumpImage,
     index,
-    setIndex,
+    observation?.atBottom,
     images.length,
     onReachEnd,
   ]);
 
   const jumpTo = useCallback(
-    (zeroBased: number) => {
-      if (isVideo) {
-        goToVideo(zeroBased);
-        return;
-      }
-      const i = Math.max(0, Math.min(images.length - 1, zeroBased));
-      setIndex(i);
-      // continuous 模式：setIndex 不会自动滚动，单独触发一次
-      if (useGalleryStore.getState().mode === "continuous") {
-        scrollContinuousTo(i);
-      }
+    (i: number, source: JumpSource = "slider") => {
+      if (isVideo) goToVideo(i);
+      else jumpImage(i, source);
     },
-    [isVideo, images.length, scrollContinuousTo, setIndex, goToVideo],
+    [isVideo, goToVideo, jumpImage],
   );
+
+  const advanceRef = useRef(next);
+  advanceRef.current = next;
+  useEffect(() => {
+    if (
+      isVideo ||
+      !ready ||
+      !slideshow ||
+      showHelp ||
+      showOverview ||
+      settingsOpen ||
+      menuOpen ||
+      contextMenu
+    )
+      return;
+    const timer = setInterval(() => advanceRef.current(), slideshowInterval);
+    return () => clearInterval(timer);
+  }, [
+    isVideo,
+    ready,
+    slideshow,
+    slideshowInterval,
+    showHelp,
+    showOverview,
+    settingsOpen,
+    menuOpen,
+    contextMenu,
+  ]);
 
   const onToggleFavorite = useCallback(() => {
     if (!pathParam) return;
@@ -721,25 +682,29 @@ export function useReaderController() {
   // 在系统文件管理器里定位当前这一份媒体文件。
   // 服务端对文件资源走 explorer /select 的方式打开所在目录并高亮该文件，
   // 这正是"我正在看的就是磁盘上这一份"的诉求。
-  const onOpenInExplorer = useCallback(() => {
-    const id = currentRef.current;
-    if (!id) return;
-    void fsApi
-      .openInExplorer(id)
-      .then(() =>
-        pushToast({
-          kind: "success",
-          message: "已请求打开文件",
-          ttl: 1200,
-        }),
-      )
-      .catch((error: unknown) =>
-        pushToast({
-          kind: "error",
-          message: fileManagerErrorMessage(error),
-        }),
-      );
-  }, [pushToast]);
+  const onOpenInExplorer = useCallback(
+    (target?: ReaderCommandTarget) => {
+      if (!allowOsOpen || (target && target.albumId !== pathParam)) return;
+      const id = target?.fileId ?? currentRef.current;
+      if (!id) return;
+      void fsApi
+        .openInExplorer(id)
+        .then(() =>
+          pushToast({
+            kind: "success",
+            message: "已请求打开文件",
+            ttl: 1200,
+          }),
+        )
+        .catch((error: unknown) =>
+          pushToast({
+            kind: "error",
+            message: fileManagerErrorMessage(error),
+          }),
+        );
+    },
+    [pushToast, pathParam, allowOsOpen],
+  );
 
   // 把当前展示的图片/视频设为本相册的封面。成功后统一失效摘要查询，
   // 卡片、搜索和阅读器的封面状态会从同一个新 revision 重新读取。
@@ -747,24 +712,30 @@ export function useReaderController() {
   // 注：current 是在组件后段计算的（依赖 isVideo / images / videos / index），
   // 因此这里在 callback 内通过 useGalleryStore.getState() 读 index、images、videos
   // 实时算 current，避免依赖数组出现 forward reference；每次按键都拿到当前真实文件。
-  const onSetCover = useCallback(() => {
-    if (!pathParam) return;
-    const cur = currentRef.current;
-    if (!cur) return;
-    albumsApi
-      .setCover(pathParam, cur)
-      .then(() => {
-        setHasCustomCover(true);
-        void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.root });
-        pushToast({ kind: "success", message: "已设为封面", ttl: 1200 });
-      })
-      .catch((e) => {
-        pushToast({
-          kind: "error",
-          message: apiErrorMessage(e, "设置封面失败"),
+  const onSetCover = useCallback(
+    async (target?: ReaderCommandTarget) => {
+      if (!pathParam) return;
+      if (target && target.albumId !== pathParam) return;
+      const cur = target?.fileId ?? currentRef.current;
+      if (!cur) return;
+      await albumsApi
+        .setCover(pathParam, cur)
+        .then(() => {
+          setHasCustomCover(true);
+          void queryClient.invalidateQueries({
+            queryKey: libraryQueryKeys.root,
+          });
+          pushToast({ kind: "success", message: "已设为封面", ttl: 1200 });
+        })
+        .catch((e) => {
+          pushToast({
+            kind: "error",
+            message: apiErrorMessage(e, "设置封面失败"),
+          });
         });
-      });
-  }, [pathParam, queryClient, pushToast]);
+    },
+    [pathParam, queryClient, pushToast],
+  );
 
   // 清除自定义封面：回退到扫描器默认（images[0] / videos[0]）。
   const onClearCover = useCallback(() => {
@@ -799,36 +770,20 @@ export function useReaderController() {
       isVideo,
       prev,
       next,
-      jumpToFirst: () => {
-        if (isVideo) {
-          goToVideo(0);
-        } else if (useGalleryStore.getState().mode === "continuous") {
-          scrollContinuousTo(0);
-        } else {
-          setIndex(0);
-        }
-      },
-      jumpToLast: () => {
-        if (isVideo) {
-          if (videos.length > 0) goToVideo(videos.length - 1);
-        } else if (useGalleryStore.getState().mode === "continuous") {
-          scrollContinuousTo(images.length - 1);
-        } else {
-          setIndex(images.length - 1);
-        }
-      },
+      jumpToFirst: () => jumpTo(0, "key"),
+      jumpToLast: () => jumpTo((isVideo ? videos : images).length - 1, "key"),
       toggleInfo: () => setShowInfo((v) => !v),
       toggleOverview: () => setShowOverview((v) => !v),
       toggleHelp: () => setShowHelp((v) => !v),
       toggleFinished: () => setShowFinished((v) => !v),
       toggleFavorite: onToggleFavorite,
-      setCover: onSetCover,
+      setCover: () => void onSetCover(),
       clearCover: onClearCover,
       nextAlbum: () => {
-        void goAdjacent(1, { notify: showSwitchNotif });
+        void goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true });
       },
       prevAlbum: () => {
-        void goAdjacent(-1, { notify: showSwitchNotif });
+        void goAdjacent(-1, { notify: showSwitchNotif, albumsOnly: true });
       },
       onEscape: goBack,
     },
@@ -852,6 +807,8 @@ export function useReaderController() {
 
   return {
     adjacentNames,
+    autoSwitchAlbum,
+    observation,
     albumSide,
     allowOsOpen,
     chromeVisible,
@@ -876,7 +833,15 @@ export function useReaderController() {
     mode,
     next,
     onClearCover,
-    onContinuousVisibleRangeChange,
+    onObserve,
+    onInvalidate,
+    request,
+    viewportRef,
+    infoTarget,
+    setInfoTarget,
+    settingsOpen,
+    setSettingsOpen,
+    setMenuOpen,
     onOpenInExplorer,
     onSetCover,
     onToggleFavorite,

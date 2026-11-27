@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { ModalSurface } from "../../ui/ModalSurface";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { RenditionImage } from "../common";
 import { CloseIcon, SinglePageIcon } from "../../ui/icons";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -33,6 +34,8 @@ export default function PageOverview({
   onJump,
   onClose,
 }: Props) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const virtuoso = useRef<VirtuosoHandle>(null);
   const small = useMediaQuery("(min-width: 640px)");
   const medium = useMediaQuery("(min-width: 1024px)");
   const wide = useMediaQuery("(min-width: 1440px)");
@@ -72,49 +75,52 @@ export default function PageOverview({
     return list;
   }, [images, columns]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   // 换了一本册子，上一本的失败记录就不再作数。
   useEffect(() => {
     setFailed(new Set<string>());
   }, [images]);
 
-  // 原生 <dialog> 的模态：焦点关在目录里，背景的漫画页读屏器够不着。
-  const dialogRef = useRef<HTMLDialogElement | null>(null);
-  useEffect(() => {
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const previous = document.activeElement;
-    dialog.showModal();
-    return () => {
-      if (dialog.open) dialog.close();
-      if (
-        previous instanceof HTMLElement &&
-        previous.isConnected &&
-        previous !== document.body
-      ) {
-        previous.focus({ preventScroll: true });
-      }
-    };
-  }, []);
-
   return (
-    <dialog
-      ref={dialogRef}
+    <ModalSurface
+      open
+      onClose={onClose}
+      onKeyDown={(event) => {
+        if (event.key.toLowerCase() === "t") {
+          event.preventDefault();
+          onClose();
+          return;
+        }
+        const changes: Record<string, number> = {
+          ArrowRight: 1,
+          ArrowLeft: -1,
+          ArrowDown: columns,
+          ArrowUp: -columns,
+        };
+        if (!(event.key in changes)) return;
+        const active =
+          event.target instanceof HTMLElement
+            ? event.target.closest<HTMLElement>("[data-overview-index]")
+            : null;
+        const target = Math.max(
+          0,
+          Math.min(
+            images.length - 1,
+            Number(active?.dataset.overviewIndex ?? index) + changes[event.key],
+          ),
+        );
+        event.preventDefault();
+        virtuoso.current?.scrollIntoView({
+          index: Math.floor(target / columns),
+          done: () =>
+            dialog.current
+              ?.querySelector<HTMLElement>(`[data-overview-index="${target}"]`)
+              ?.focus(),
+        });
+      }}
+      ref={dialog}
       data-testid="page-overview"
-      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-theater-bg p-0 text-theater-fg backdrop:bg-transparent"
-      role="dialog"
-      aria-modal="true"
       aria-label="目录"
+      className="fixed inset-0 m-0 flex h-full max-h-none w-full max-w-none flex-col border-0 bg-theater-bg p-0 text-theater-fg backdrop:bg-transparent"
     >
       <header className="flex h-14 shrink-0 items-center gap-3 px-5 border-b border-white/10">
         <h2 className="text-body font-medium text-white/90">目录</h2>
@@ -137,6 +143,8 @@ export default function PageOverview({
 
       <div className="min-h-0 flex-1 px-5 pb-5 pt-4">
         <Virtuoso
+          ref={virtuoso}
+          initialTopMostItemIndex={Math.floor(index / columns)}
           data={rows}
           style={{ height: "100%" }}
           overscan={400}
@@ -151,6 +159,7 @@ export default function PageOverview({
             >
               {row.items.map((item) => (
                 <button
+                  data-overview-index={item.index}
                   key={item.id}
                   type="button"
                   onClick={() => onJump(item.index)}
@@ -198,6 +207,6 @@ export default function PageOverview({
           )}
         />
       </div>
-    </dialog>
+    </ModalSurface>
   );
 }

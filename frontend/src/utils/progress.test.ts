@@ -9,24 +9,12 @@ import {
 
 describe("progress 语义边界", () => {
   describe("displayedPageIndex", () => {
-    it("双页模式记录跨页中实际展示的末页", () => {
-      expect(displayedPageIndex("double", 8, 10)).toBe(9);
-      expect(displayedPageIndex("double", 8, 9)).toBe(8);
-    });
-
-    it("连续模式记录当前可见区末页并忽略陈旧范围", () => {
-      expect(
-        displayedPageIndex("continuous", 2, 10, {
-          startIndex: 2,
-          endIndex: 4,
-        }),
-      ).toBe(4);
-      expect(
-        displayedPageIndex("continuous", 6, 10, {
-          startIndex: 2,
-          endIndex: 4,
-        }),
-      ).toBe(6);
+    it("仅接受当前视口已确认且有效的末页", () => {
+      expect(displayedPageIndex(6, 8)).toBe(6);
+      expect(displayedPageIndex(7, 8)).toBe(7);
+      for (const last of [undefined, NaN, -1, 8, 1.5])
+        expect(displayedPageIndex(last, 8)).toBeNull();
+      expect(displayedPageIndex(0, 0)).toBeNull();
     });
   });
 

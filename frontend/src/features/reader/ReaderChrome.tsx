@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { spreadAt } from "./readerLayout";
 import { ReaderSettingsSheet } from "./ReaderSettingsSheet";
 import PageSlider from "./PageSlider";
 import GalleryHeader from "./GalleryHeader";
@@ -7,7 +7,7 @@ import GalleryAlbumNav from "./GalleryAlbumNav";
 import type { ReaderController } from "./useReaderController";
 
 export function ReaderChrome({ reader }: { reader: ReaderController }) {
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { settingsOpen, setSettingsOpen } = reader;
   const {
     adjacentNames,
     chromeVisible,
@@ -33,7 +33,6 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
     progressKey,
     retryProgress,
     retryingProgress,
-    setIndex,
     setShowHelp,
     setShowInfo,
     setShowOverview,
@@ -69,7 +68,9 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
       <GalleryHeader
         onOpenSettings={() => setSettingsOpen(true)}
         name={headerName}
-        index={index}
+        index={
+          mode === "double" && !isVideo ? spreadAt(index, total)[0] : index
+        }
         itemIndex={isVideo ? itemIndex : undefined}
         total={total}
         isFavorite={isFav}
@@ -79,21 +80,25 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
         onToggleHelp={() => setShowHelp((v) => !v)}
         onPrev={prev}
         onNext={next}
-        onPrevAlbum={() => void goAdjacent(-1, { notify: showSwitchNotif })}
-        onNextAlbum={() => void goAdjacent(1, { notify: showSwitchNotif })}
-        onSetCover={onSetCover}
+        onPrevAlbum={() =>
+          void goAdjacent(-1, { notify: showSwitchNotif, albumsOnly: true })
+        }
+        onNextAlbum={() =>
+          void goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true })
+        }
+        onSetCover={() => void onSetCover()}
         onClearCover={onClearCover}
         hasCustomCover={hasCustomCover}
         onToggleOverview={() => setShowOverview((v) => !v)}
         workbenchMode={workbenchMode}
         onOpenWorkbench={openWorkbench}
-        onJumpToFirst={isVideo ? () => goToVideo(0) : () => setIndex(0)}
+        onJumpToFirst={isVideo ? () => goToVideo(0) : () => jumpTo(0, "menu")}
         onJumpToLast={
           isVideo
             ? () => {
                 if (videos.length > 0) goToVideo(videos.length - 1);
               }
-            : () => setIndex(Math.max(0, images.length - 1))
+            : () => jumpTo(images.length - 1, "menu")
         }
       />
 
@@ -115,8 +120,12 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
       {!isVideo && (
         <GalleryAlbumNav
           visible={chromeVisible}
-          onPrevAlbum={() => void goAdjacent(-1, { notify: showSwitchNotif })}
-          onNextAlbum={() => void goAdjacent(1, { notify: showSwitchNotif })}
+          onPrevAlbum={() =>
+            void goAdjacent(-1, { notify: showSwitchNotif, albumsOnly: true })
+          }
+          onNextAlbum={() =>
+            void goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true })
+          }
           prevLabel={adjacentNames.prev}
           nextLabel={adjacentNames.next}
         />
@@ -131,7 +140,9 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
         <div className="reader-bottom-chrome absolute bottom-0 inset-x-0 z-10">
           <PageSlider
             total={images.length}
-            index={index}
+            index={
+              mode === "double" && !isVideo ? spreadAt(index, total)[0] : index
+            }
             onJump={jumpTo}
             images={images}
             double={mode === "double"}

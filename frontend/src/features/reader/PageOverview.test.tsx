@@ -114,3 +114,19 @@ describe("PageOverview", () => {
     expect(gridColumns(document.body)).toBe(5);
   });
 });
+
+it("目录自己处理 Esc 和 T", () => {
+  const close = vi.fn();
+  render(
+    <PageOverview
+      images={["f_a"]}
+      index={0}
+      onJump={vi.fn()}
+      onClose={close}
+    />,
+  );
+  const dialog = screen.getByRole("dialog", { name: "目录" });
+  fireEvent.keyDown(dialog, { key: "t" });
+  fireEvent.keyDown(dialog, { key: "Escape" });
+  expect(close).toHaveBeenCalledTimes(2);
+});

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { libraryApi } from "../api/library";
@@ -10,7 +10,7 @@ import {
   type GalleryContextEntry,
 } from "../utils/galleryContext";
 import { albumRoute } from "../utils/path";
-import { useGalleryStore } from "../store/galleryStore";
+
 import { useUIStore } from "../store/uiStore";
 
 /**
@@ -154,6 +154,7 @@ export function useAdjacentAlbum({
   const navigate = useNavigate();
   const pushToast = useUIStore((s) => s.pushToast);
 
+  const [revision, setRevision] = useState(0);
   const adjacentPending = useRef(false);
   const adjacentController = useRef<AbortController>();
   useEffect(() => () => adjacentController.current?.abort(), [pathParam]);
@@ -172,7 +173,7 @@ export function useAdjacentAlbum({
       let ctx = pickContext(pathParam, fallbackEntries);
       try {
         // 前向到达已加载边界时继续取页；反向环绕需要找到真正的末尾。
-        while (ctx?.pagination?.nextCursor) {
+        while (direction === 1 && ctx?.pagination?.nextCursor) {
           const current = ctx.list.findIndex(
             (entry) => entry.key === pathParam,
           );
@@ -184,11 +185,7 @@ export function useAdjacentAlbum({
                 (!albumsOnly ||
                   (isVideo ? entry.videoCount : entry.imageCount) !== 0),
             );
-          if (
-            (direction === 1 && remaining) ||
-            (direction === -1 && current > 0)
-          )
-            break;
+          if (remaining) break;
           const page = await libraryApi.overview(
             ctx.pagination.query,
             ctx.pagination.nextCursor,
@@ -214,7 +211,9 @@ export function useAdjacentAlbum({
             list: [...ctx.list, ...entries],
             pagination: { ...ctx.pagination, nextCursor: page.page.nextCursor },
           };
+          if (controller.signal.aborted) return false;
           setGalleryContext(ctx);
+          setRevision((n) => n + 1);
         }
       } catch {
         if (controller.signal.aborted) return false;
@@ -268,13 +267,17 @@ export function useAdjacentAlbum({
         // ignore
       }
       onBeforeNavigate?.();
-      // 双页模式下把索引对齐到偶数（左页），跟手动翻页保持一致。
-      const state = useGalleryStore.getState();
-      state.setMode(state.mode);
       navigate(readerUrl, { replace: false });
       return true;
     },
-    [pathParam, pushToast, navigate, isVideo, onBeforeNavigate, fallbackEntries],
+    [
+      pathParam,
+      pushToast,
+      navigate,
+      isVideo,
+      onBeforeNavigate,
+      fallbackEntries,
+    ],
   );
 
   // 跨卷导航按钮上的目标卷名。
@@ -285,13 +288,17 @@ export function useAdjacentAlbum({
     const ctx = pickContext(pathParam, fallbackEntries);
     const pick = (direction: 1 | -1) =>
       resolveAdjacentEntry(ctx, pathParam, direction, {
-        albumsOnly: false,
+        albumsOnly: true,
         isVideo,
       })?.entry;
     const nameOf = (entry: GalleryContextEntry | undefined) =>
       entry ? entryDisplayName(entry) : "";
-    return { prev: nameOf(pick(-1)), next: nameOf(pick(1)) };
-  }, [pathParam, isVideo, fallbackEntries]);
+    return {
+      prev: nameOf(pick(-1)),
+      next: nameOf(pick(1)),
+      more: Boolean(ctx?.pagination?.nextCursor),
+    };
+  }, [pathParam, isVideo, fallbackEntries, revision]);
 
   return { goAdjacent, adjacentNames };
 }

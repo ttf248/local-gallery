@@ -1,3 +1,4 @@
+import { useEffect, type ComponentProps } from "react";
 import type { ReactNode } from "react";
 import {
   act,
@@ -84,7 +85,36 @@ vi.mock("../hooks/useFavorites", () => ({
 }));
 vi.mock("../utils/fullscreen", () => ({ toggleFullscreen: vi.fn() }));
 vi.mock("../features/reader/ImageGallery", () => ({
-  default: () => <div data-testid="image-gallery" />,
+  default: function ObservedGallery({
+    albumId = "",
+    request,
+    onObserve,
+    images,
+  }: ComponentProps<typeof import("../features/reader/ImageGallery").default>) {
+    const index = useGalleryStore((s) => s.index);
+    const fileId = images[index];
+    useEffect(() => {
+      if (request && fileId)
+        onObserve?.({
+          albumId,
+          epoch: request.epoch,
+          first: index,
+          last: index,
+          atTop: index === 0,
+          atBottom: index === images.length - 1,
+          anchor: {
+            albumId,
+            fileId,
+            index,
+            u: 0.5,
+            v: 0.5,
+            viewportU: 0.5,
+            viewportV: 0.5,
+          },
+        });
+    }, [albumId, fileId, index, request, onObserve, images.length]);
+    return <div data-testid="image-gallery" />;
+  },
 }));
 vi.mock("../features/viewer/VideoPlayer", () => ({
   default: (props: MockVideoProps) => {

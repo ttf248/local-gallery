@@ -221,6 +221,20 @@ describe("Reader 按媒体类型隔离快捷键", () => {
     expect(screen.getByTitle("下一个视频 (PageDown)")).toBeInTheDocument();
   });
 
+  it("打开目录后数字与翻页快捷键不改变背景", async () => {
+    renderReader("image");
+    await screen.findByTestId("image-gallery");
+    await pressKey("t");
+    const dialog = await screen.findByRole("dialog", { name: "目录" });
+    const before = useGalleryStore.getState().index;
+    fireEvent.keyDown(dialog, { key: "3" });
+    await pressKey("PageDown");
+    expect(useGalleryStore.getState().mode).toBe("single");
+    expect(useGalleryStore.getState().index).toBe(before);
+    fireEvent.keyDown(dialog, { key: "t" });
+    expect(screen.queryByRole("dialog", { name: "目录" })).toBeNull();
+  });
+
   it("图片模式保留左右翻页与空格幻灯片", async () => {
     renderReader("image");
     await screen.findByTestId("image-gallery");

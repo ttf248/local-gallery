@@ -44,51 +44,58 @@ export function useReaderKeys(
   overlays: ReaderOverlayState,
 ) {
   const { isVideo, ...rest } = handlers;
-  useKeyboard({
-    // 视频方向键和空格由 VideoPlayer 处理，不注册图片操作。
-    ...(isVideo
-      ? {}
-      : {
-          arrowleft: rest.prev,
-          arrowright: rest.next,
-          "+": () => useGalleryStore.getState().zoomIn(),
-          "-": () => useGalleryStore.getState().zoomOut(),
-          "=": () => useGalleryStore.getState().zoomIn(),
-          "0": () => useGalleryStore.getState().zoomReset(),
-          r: () => useGalleryStore.getState().rotate(90),
-          space: () => useGalleryStore.getState().toggleSlideshow(),
-          i: rest.toggleInfo,
-          t: rest.toggleOverview,
-          "1": () => useGalleryStore.getState().setMode("single"),
-          "2": () => useGalleryStore.getState().setMode("continuous"),
-          "3": () => useGalleryStore.getState().setMode("double"),
-          f: () => useGalleryStore.getState().cycleFit(),
-          l: () => {
-            const cur = useGalleryStore.getState().direction;
-            useGalleryStore
-              .getState()
-              .setDirection(cur === "ltr" ? "rtl" : "ltr");
-          },
-        }),
-    pageup: rest.prev,
-    pagedown: rest.next,
-    home: rest.jumpToFirst,
-    end: rest.jumpToLast,
-    f11: () => toggleFullscreenImpl(),
-    "ctrl+/": rest.toggleHelp,
-    "?": rest.toggleHelp,
-    n: rest.nextAlbum,
-    p: rest.prevAlbum,
-    s: rest.toggleFavorite,
-    u: rest.setCover,
-    "shift+u": rest.clearCover,
-    escape: () => {
-      if (overlays.showHelp) rest.toggleHelp();
-      else if (overlays.showOverview) rest.toggleOverview();
-      else if (overlays.showInfo) rest.toggleInfo();
-      else if (overlays.showFinished) rest.toggleFinished();
-      // 仅在当前媒体就绪后返回；视频不依赖图片列表。
-      else if (overlays.ready) rest.onEscape();
+  useKeyboard(
+    {
+      // 视频方向键和空格由 VideoPlayer 处理，不注册图片操作。
+      ...(isVideo
+        ? {}
+        : {
+            arrowleft: rest.prev,
+            arrowright: rest.next,
+            "+": () => useGalleryStore.getState().zoomIn(),
+            "-": () => useGalleryStore.getState().zoomOut(),
+            "=": () => useGalleryStore.getState().zoomIn(),
+            "0": () => useGalleryStore.getState().zoomReset(),
+            r: () => useGalleryStore.getState().rotate(90),
+            space: () => useGalleryStore.getState().toggleSlideshow(),
+            i: rest.toggleInfo,
+            t: rest.toggleOverview,
+            "1": () => useGalleryStore.getState().setMode("single"),
+            "2": () => useGalleryStore.getState().setMode("continuous"),
+            "3": () => useGalleryStore.getState().setMode("double"),
+            f: () => useGalleryStore.getState().cycleFit(),
+            l: () => {
+              const cur = useGalleryStore.getState().direction;
+              useGalleryStore
+                .getState()
+                .setDirection(cur === "ltr" ? "rtl" : "ltr");
+            },
+          }),
+      pageup: rest.prev,
+      pagedown: rest.next,
+      home: rest.jumpToFirst,
+      end: rest.jumpToLast,
+      f11: () => toggleFullscreenImpl(),
+      "ctrl+/": rest.toggleHelp,
+      "?": rest.toggleHelp,
+      n: rest.nextAlbum,
+      p: rest.prevAlbum,
+      s: rest.toggleFavorite,
+      u: rest.setCover,
+      "shift+u": rest.clearCover,
+      escape: () => {
+        if (overlays.showHelp) rest.toggleHelp();
+        else if (overlays.showOverview) rest.toggleOverview();
+        else if (overlays.showInfo) rest.toggleInfo();
+        else if (overlays.showFinished) rest.toggleFinished();
+        // 仅在当前媒体就绪后返回；视频不依赖图片列表。
+        else if (overlays.ready) rest.onEscape();
+      },
     },
-  });
+    true,
+    () =>
+      !document.querySelector(
+        'dialog[open], [role="dialog"][aria-modal="true"], [role="menu"]',
+      ),
+  );
 }

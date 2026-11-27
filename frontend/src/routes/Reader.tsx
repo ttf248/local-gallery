@@ -19,6 +19,8 @@ export default function Reader() {
   const reader = useReaderController();
   const {
     albumSide,
+    infoTarget,
+    setInfoTarget,
     allowOsOpen,
     contextMenu,
     current,
@@ -51,7 +53,12 @@ export default function Reader() {
     showSwitchNotif,
   } = reader;
   const route = useRouteMeta();
-  const title = documentTitle(route?.meta ?? null, route?.params ?? {}, "comic", headerName);
+  const title = documentTitle(
+    route?.meta ?? null,
+    route?.params ?? {},
+    "comic",
+    headerName,
+  );
   useEffect(() => {
     document.title = title;
   }, [title]);
@@ -145,7 +152,18 @@ export default function Reader() {
         // 是图片区,这里统一捕获后弹自定义菜单。
         e.preventDefault();
         if (!pathParam) return;
-        setContextMenu({ x: e.clientX, y: e.clientY });
+        const page =
+          e.target instanceof Element
+            ? e.target.closest<HTMLElement>("[data-reader-page]")
+            : null;
+        const targetIndex = page ? Number(page.dataset.readerPage) : index;
+        const fileId = isVideo ? current : images[targetIndex];
+        if (fileId)
+          setContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            target: { albumId: pathParam, index: targetIndex, fileId },
+          });
       }}
     >
       {/* 舞台：画布 + 顶栏 + 浮层控件 + 底部进度条。
@@ -157,7 +175,13 @@ export default function Reader() {
       </div>
 
       {showInfo && !isVideo && current && (
-        <ImageInfoPanel absPath={current} onClose={() => setShowInfo(false)} />
+        <ImageInfoPanel
+          absPath={infoTarget?.fileId ?? current}
+          onClose={() => {
+            setShowInfo(false);
+            setInfoTarget(null);
+          }}
+        />
       )}
       {showOverview && !isVideo && (
         <PageOverview
@@ -165,7 +189,7 @@ export default function Reader() {
           index={index}
           onJump={(target) => {
             setShowOverview(false);
-            jumpTo(target);
+            jumpTo(target, "overview");
           }}
           onClose={() => setShowOverview(false)}
         />
@@ -241,11 +265,23 @@ export default function Reader() {
           y={contextMenu.y}
           className="bg-theater-surface text-theater-fg"
           items={[
+            ...(!isVideo
+              ? [
+                  {
+                    id: "info",
+                    label: `第 ${contextMenu.target.index + 1} 页 · 图片信息`,
+                    onSelect: () => {
+                      setInfoTarget(contextMenu.target);
+                      setShowInfo(true);
+                    },
+                  },
+                ]
+              : []),
             {
               id: "set-cover",
               label: "设为封面 (U)",
               icon: <ImageIcon />,
-              onSelect: onSetCover,
+              onSelect: () => void onSetCover(contextMenu.target),
             },
             {
               id: "clear-cover",
@@ -260,7 +296,7 @@ export default function Reader() {
               label: "在文件管理器中打开",
               icon: <ArrowUpRightIcon />,
               disabled: !allowOsOpen,
-              onSelect: onOpenInExplorer,
+              onSelect: () => onOpenInExplorer(contextMenu.target),
             },
           ]}
           onClose={() => setContextMenu(null)}

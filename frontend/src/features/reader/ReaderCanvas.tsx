@@ -11,7 +11,11 @@ export function ReaderCanvas({ reader }: { reader: ReaderController }) {
     initialIndex,
     isVideo,
     next,
-    onContinuousVisibleRangeChange,
+    onObserve,
+    onInvalidate,
+    pathParam,
+    request,
+    viewportRef,
     prev,
     pushToast,
     videoActivity,
@@ -66,7 +70,12 @@ export function ReaderCanvas({ reader }: { reader: ReaderController }) {
           <ImageGallery
             images={images}
             dimensions={dimensions}
-            onVisibleRangeChange={onContinuousVisibleRangeChange}
+            key={pathParam}
+            albumId={pathParam}
+            request={request}
+            viewportRef={viewportRef}
+            onObserve={onObserve}
+            onInvalidate={onInvalidate}
             onClickNavigate={(dir) => {
               if (dir === -1) prev();
               else if (dir === 1) next();

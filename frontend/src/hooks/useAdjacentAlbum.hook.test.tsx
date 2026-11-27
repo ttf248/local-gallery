@@ -75,5 +75,6 @@ describe("跨卷导航的上下文兜底", () => {
     ]);
     expect(result.current.adjacentNames.next).toBe("");
     expect(result.current.adjacentNames.prev).toBe("第b卷");
+    expect(result.current.adjacentNames.more).toBe(false);
   });
 });

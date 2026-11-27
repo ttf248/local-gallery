@@ -180,6 +180,15 @@ describe("Reader 读到末尾自动切换下一本", () => {
       "/read/a_test?index=2",
     );
   });
+  it("双页切回单页继续停在原逻辑页", async () => {
+    renderReader(1);
+    await screen.findByTestId("image-gallery");
+    await waitFor(() => expect(useGalleryStore.getState().index).toBe(1));
+    fireEvent.keyDown(window, { key: "3" });
+    expect(useGalleryStore.getState().mode).toBe("double");
+    fireEvent.keyDown(window, { key: "1" });
+    expect(useGalleryStore.getState().index).toBe(1);
+  });
   it("已加载边界继续取页，跳过集合并进入下一卷", async () => {
     setContext([{ key: "a_test", to: "/albums/a_test", name: "当前相册" }]);
     const context = JSON.parse(

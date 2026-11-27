@@ -18,29 +18,19 @@ export interface ProgressLike {
   total: number;
 }
 
-export type GalleryDisplayMode = "single" | "continuous" | "double";
-
-export interface VisiblePageRange {
-  startIndex: number;
-  endIndex: number;
-}
-
-// 活动页码表示当前视图中已展示的最末页；UI 的 index 在双页/连续模式下
-// 只是左页或可见区首项，不能直接用于完成判定。
+// 活动只接受实际露出的末页。首次测量和正在定位时没有可保存的位置。
 export function displayedPageIndex(
-  mode: GalleryDisplayMode,
-  index: number,
+  lastVisible: number | undefined,
   total: number,
-  visibleRange?: VisiblePageRange,
-): number {
-  if (total <= 0) return 0;
-  let pageIndex = index;
-  if (mode === "double") {
-    pageIndex = index + 1;
-  } else if (mode === "continuous" && visibleRange?.startIndex === index) {
-    pageIndex = visibleRange.endIndex;
-  }
-  return Math.max(0, Math.min(total - 1, Math.floor(pageIndex)));
+): number | null {
+  if (
+    lastVisible === undefined ||
+    !Number.isInteger(lastVisible) ||
+    lastVisible < 0 ||
+    lastVisible >= total
+  )
+    return null;
+  return lastVisible;
 }
 
 export function isUnread(p: ProgressLike | null | undefined): boolean {

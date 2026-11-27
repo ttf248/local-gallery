@@ -31,6 +31,7 @@ function dispatchPointerEvent(
 vi.mock("react-virtuoso", async () => {
   const React = await import("react");
   interface MockVirtuosoProps {
+    scrollerRef?: (el: HTMLElement | null) => void;
     rangeChanged?: (range: { startIndex: number; endIndex: number }) => void;
     data?: string[];
     itemContent?: (index: number, item: string) => React.ReactNode;
@@ -40,13 +41,28 @@ vi.mock("react-virtuoso", async () => {
     Virtuoso: React.forwardRef<
       { scrollToIndex: typeof virtuosoMocks.scrollToIndex },
       MockVirtuosoProps
-    >(function MockVirtuoso({ rangeChanged, data, itemContent }, ref) {
+    >(function MockVirtuoso(
+      { rangeChanged, data, itemContent, scrollerRef },
+      ref,
+    ) {
       React.useImperativeHandle(ref, () => ({
         scrollToIndex: virtuosoMocks.scrollToIndex,
       }));
       return React.createElement(
         "div",
-        null,
+        {
+          ref: React.useCallback(
+            (el: HTMLElement | null) => {
+              if (el)
+                Object.defineProperties(el, {
+                  clientHeight: { value: 600, configurable: true },
+                  clientWidth: { value: 800, configurable: true },
+                });
+              scrollerRef?.(el);
+            },
+            [scrollerRef],
+          ),
+        },
         React.createElement(
           "button",
           {
@@ -59,13 +75,15 @@ vi.mock("react-virtuoso", async () => {
         React.createElement(
           "div",
           { "data-testid": "virtuoso-items" },
-          (data ?? []).map((item, i) =>
-            React.createElement(
-              React.Fragment,
-              { key: i },
-              itemContent?.(i, item),
+          (data ?? [])
+            .slice(0, 2)
+            .map((item, i) =>
+              React.createElement(
+                React.Fragment,
+                { key: i },
+                itemContent?.(i, item),
+              ),
             ),
-          ),
         ),
       );
     }),
@@ -85,22 +103,17 @@ describe("ImageGallery 连续模式", () => {
     });
   });
 
-  it("把顶部可见图片索引上报给父组件且不产生反向滚动", () => {
-    const onVisibleRangeChange = vi.fn((startIndex: number) => {
-      useGalleryStore.getState().setIndex(startIndex);
-    });
+  it("预渲染范围不能产生进度或反向滚动", async () => {
+    const onObserve = vi.fn();
     render(
-      <ImageGallery
-        images={["/1.jpg", "/2.jpg", "/3.jpg", "/4.jpg"]}
-        onVisibleRangeChange={onVisibleRangeChange}
-      />,
+      <ImageGallery images={["1", "2", "3", "4"]} onObserve={onObserve} />,
     );
-    virtuosoMocks.scrollToIndex.mockClear();
-
     fireEvent.click(screen.getByTestId("virtuoso-range"));
-
-    expect(onVisibleRangeChange).toHaveBeenCalledWith(2, 3);
-    expect(useGalleryStore.getState().index).toBe(2);
+    await act(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+    );
+    expect(onObserve).not.toHaveBeenCalled();
     expect(virtuosoMocks.scrollToIndex).not.toHaveBeenCalled();
   });
 

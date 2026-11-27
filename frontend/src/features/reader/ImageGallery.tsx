@@ -1,5 +1,8 @@
 import {
   memo,
+  useImperativeHandle,
+  useCallback,
+  type Ref,
   useEffect,
   useMemo,
   useRef,
@@ -11,14 +14,24 @@ import { useGalleryStore } from "../../store/galleryStore";
 import { imageUrl, previewUrl } from "../../api/images";
 import { ImageIcon } from "../../ui/icons";
 
+import { spreadAt } from "./readerLayout";
+import {
+  useReaderViewport,
+  type ReaderObservation,
+  type ReaderJump,
+  type ReaderViewportHandle,
+} from "./useReaderViewport";
 interface Props {
+  albumId?: string;
+  request?: ReaderJump;
+  viewportRef?: Ref<ReaderViewportHandle>;
+  onObserve?: (value: ReaderObservation) => void;
+  onInvalidate?: () => void;
   images: string[];
   /** 每页的原始像素尺寸。连续模式按它预留高度，图片加载前后页面不跳。 */
   dimensions?: Record<string, { width: number; height: number }>;
   /** 点击图片时触发：根据 clickX 在容器宽度的左/中/右决定动作。父组件传入 prev/next 即可。 */
   onClickNavigate?: (dir: -1 | 0 | 1) => void;
-  /** 连续模式可见范围变化时，上报首尾两个 0-based 索引。 */
-  onVisibleRangeChange?: (startIndex: number, endIndex: number) => void;
 }
 
 type Aspect =
@@ -37,7 +50,11 @@ export default function ImageGallery({
   images,
   dimensions,
   onClickNavigate,
-  onVisibleRangeChange,
+  albumId = "",
+  request,
+  viewportRef,
+  onObserve,
+  onInvalidate,
 }: Props) {
   const index = useGalleryStore((s) => s.index);
   const zoom = useGalleryStore((s) => s.zoom);
@@ -46,9 +63,29 @@ export default function ImageGallery({
   const fit = useGalleryStore((s) => s.fit);
   const direction = useGalleryStore((s) => s.direction);
 
-  const containerRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
-  const continuousVisibleIndexRef = useRef<number | null>(null);
+  const view = useReaderViewport({
+    albumId,
+    images,
+    index,
+    mode,
+    rotation,
+    request: request ?? { epoch: index, index, source: "key" },
+    virtuoso: virtuosoRef,
+    layoutKey: [mode, fit, rotation, zoom, direction].join("/"),
+    onObserve,
+    onInvalidate,
+  });
+  useImperativeHandle(viewportRef, () => view);
+  const setScroller = view.setScroller;
+  const setContainer = useCallback(
+    (el: HTMLDivElement | null) => {
+      containerRef.current = el;
+      if (mode !== "continuous") setScroller(el);
+    },
+    [mode, setScroller],
+  );
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [imgKey, setImgKey] = useState(0);
   const dragRef = useRef<{
@@ -104,22 +141,6 @@ export default function ImageGallery({
       containerRef.current.scrollLeft = 0;
     }
   }, [mode]);
-
-  // 连续模式下，外部的页码跳转（恢复进度、滑杆、Home/End）通过 store.index
-  // 驱动 Virtuoso 定位；自然滚动上报 index 时会先更新 visible ref，因此不会
-  // 反向触发 scrollToIndex 形成滚动反馈环。
-  useEffect(() => {
-    if (mode !== "continuous" || images.length === 0) {
-      continuousVisibleIndexRef.current = null;
-      return;
-    }
-    const targetIndex = Math.max(
-      0,
-      Math.min(images.length - 1, Math.floor(index)),
-    );
-    if (continuousVisibleIndexRef.current === targetIndex) return;
-    virtuosoRef.current?.scrollToIndex({ index: targetIndex, align: "start" });
-  }, [mode, images.length, index]);
 
   // 滚轮缩放：所有模式统一为 Ctrl/Cmd + wheel 才触发。
   // 普通 wheel 留给浏览器原生滚动（单/双页溢出滚动、连续模式翻页）。
@@ -262,7 +283,9 @@ export default function ImageGallery({
     const base: React.CSSProperties = {
       transform,
       transformOrigin: "center",
-      transition: dragRef.current ? "none" : "transform 200ms var(--ease-spring)",
+      transition: dragRef.current
+        ? "none"
+        : "transform 200ms var(--ease-spring)",
     };
     if (aspect.mode === "fit") {
       return {
@@ -306,7 +329,7 @@ export default function ImageGallery({
   if (isSingle) {
     return (
       <div
-        ref={containerRef}
+        ref={setContainer}
         className={containerCls}
         style={containerStyle}
         onPointerDown={onPointerDown}
@@ -319,6 +342,7 @@ export default function ImageGallery({
       >
         {current ? (
           <GalleryImage
+            pageIndex={index}
             key={imgKey}
             src={imageUrl(current)}
             alt={`第 ${index + 1} 页`}
@@ -354,7 +378,7 @@ export default function ImageGallery({
     //   - 切页 index 变时 Virtuoso 用 itemContent 重新计算,大本下应能正确跟随
     return (
       <div
-        ref={containerRef}
+        ref={setContainer}
         className={containerCls}
         onContextMenu={(e) => e.preventDefault()}
         onClick={onContainerClick}
@@ -370,19 +394,8 @@ export default function ImageGallery({
           // 下一张在滚动到位之前就已经加载好了。
           overscan={720}
           minOverscanItemCount={{ top: 1, bottom: 1 }}
-          rangeChanged={(range) => {
-            if (images.length === 0) return;
-            const startIndex = Math.max(
-              0,
-              Math.min(images.length - 1, range.startIndex),
-            );
-            const endIndex = Math.max(
-              startIndex,
-              Math.min(images.length - 1, range.endIndex),
-            );
-            continuousVisibleIndexRef.current = startIndex;
-            onVisibleRangeChange?.(startIndex, endIndex);
-          }}
+          scrollerRef={view.setScroller}
+          rangeChanged={view.schedule}
           itemContent={(i, src) => (
             <ContinuousImage
               src={src}
@@ -405,7 +418,7 @@ export default function ImageGallery({
   // double mode
   return (
     <div
-      ref={containerRef}
+      ref={setContainer}
       className={containerCls}
       onContextMenu={(e) => e.preventDefault()}
       onClick={onContainerClick}
@@ -413,7 +426,7 @@ export default function ImageGallery({
     >
       <DoublePage
         images={images}
-        index={index}
+        index={spreadAt(index, images.length)[0]}
         aspect={aspect}
         direction={direction}
         imgKey={imgKey}
@@ -491,7 +504,8 @@ function DoublePage({ images, index, aspect, direction, imgKey }: DoubleProps) {
           {p.src ? (
             <GalleryImage
               src={imageUrl(p.src)}
-              alt={`第 ${p.key === "left" ? "左" : "右"} 页`}
+              pageIndex={p.key === "left" ? index : index + 1}
+              alt={`第 ${p.key === "left" ? index + 1 : index + 2} 页`}
               loading="eager"
               className={`select-none ${pageClass()}`}
             />
@@ -591,6 +605,7 @@ const ContinuousImage = memo(function ContinuousImage({
     >
       <GalleryImage
         src={previewWidth ? previewUrl(src, previewWidth) : imageUrl(src)}
+        pageIndex={index}
         alt={`第 ${index + 1} 页`}
         loading={nearIndex ? "eager" : "lazy"}
         decoding={nearIndex ? "sync" : "async"}
@@ -607,6 +622,7 @@ const ContinuousImage = memo(function ContinuousImage({
 // 源文件被删除或损坏时也会 404。破图图标没有任何说明，用户无从判断
 // 是图片坏了还是网络断了。
 function GalleryImage({
+  pageIndex,
   src,
   alt,
   className,
@@ -615,6 +631,7 @@ function GalleryImage({
   decoding = "async",
   onDoubleClick,
 }: {
+  pageIndex: number;
   src: string;
   alt: string;
   className?: string;
@@ -644,6 +661,7 @@ function GalleryImage({
   return (
     <img
       src={src}
+      data-reader-page={pageIndex}
       alt={alt}
       draggable={false}
       loading={loading}
