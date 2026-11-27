@@ -48,7 +48,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark")
 //             伪造标签页数据，封面仍是真实缩略图）
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/library,/explore,/comic,/comic/library,/comic/unread,/comic/me/reading,/search,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,/photo/random,/photo/semantic,/photo/people,/photo/people/annotate,/photo/similarity,album,viewer,reader,tag"
+  "/,/library,/explore,/comic,/comic/library,/comic/unread,/comic/me/reading,/search,/me/picks,/me/favorites,/me/recents,/unread,/settings/general,/settings/tasks,/settings/storage,/settings/server,/travels,/smart-albums,/photo/random,/photo/semantic,/photo/people,/photo/people/annotate,/photo/similarity,album,viewer,reader,tag"
 )
   .split(",")
   .map((p) => p.trim())
@@ -387,7 +387,7 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
   const variant = shell.dataset.page ?? "standard";
   const expectedMax = {
     standard: 1440,
-    system: 1200,
+    system: 1440,
     gallery: "none",
     focused: 760,
     workspace: "none",
@@ -679,7 +679,7 @@ async function main() {
       const page = await browser.newPage();
       for (const [variant, width] of Object.entries({
         standard: 1440,
-        system: 1200,
+        system: 1440,
         gallery: "none",
         focused: 760,
         workspace: "none",

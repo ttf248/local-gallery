@@ -7,7 +7,7 @@ test("任务中心评分后，相册卡片使用已入选的封面", async ({ pa
   const runtime = await request.get("/api/ai/semantic/status");
   expect(runtime.ok()).toBeTruthy();
   const ready = (await runtime.json()).status.modules.albumCover.ready;
-  await page.goto("/tasks/run");
+  await page.goto("/settings/tasks");
   const module = page.getByRole("button", {
     name: "相册封面精选",
     exact: true,

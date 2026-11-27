@@ -381,6 +381,7 @@ function NavRow({
 }) {
   return (
     <SettingsRow
+      className="!grid-cols-[minmax(0,1fr)_auto]"
       label={
         <span className="flex min-w-0 items-center gap-2.5">
           <span className="truncate">{entry.label}</span>

@@ -46,7 +46,7 @@ test("手机底栏展开更多并归还焦点，时间线没有横向溢出", as
   await expect(
     page
       .getByRole("dialog", { name: "更多" })
-      .getByRole("link", { name: "设置" }),
+      .getByRole("link", { name: "设置与任务" }),
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(more).toBeFocused();

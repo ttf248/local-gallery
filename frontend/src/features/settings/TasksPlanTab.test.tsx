@@ -1080,10 +1080,13 @@ describe("任务中心", () => {
     });
     expect(screen.getByText("等待队列 · 1 项")).toBeInTheDocument();
     expect(clearButton).toBeEnabled();
-    fireEvent.click(clearButton);
-    const dialog=await screen.findByRole("dialog");
+    await act(async () => {
+      fireEvent.click(clearButton);
+      await vi.dynamicImportSettled();
+    });
+    const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("当前任务不会受影响");
-    fireEvent.click(within(dialog).getByRole("button",{name:"清空队列"}));
+    fireEvent.click(within(dialog).getByRole("button", { name: "清空队列" }));
     await waitFor(() => expect(aiJobsApi.clearQueue).toHaveBeenCalled());
   });
 

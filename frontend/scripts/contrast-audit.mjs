@@ -38,7 +38,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark").split(",");
 //             伪造标签页数据，封面仍是真实缩略图）
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/comic,/comic/library,/photo/similarity,/travels,/smart-albums,album,viewer,reader,tag,palette"
+  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/unread,/settings/general,/settings/tasks,/settings/storage,/settings/server,/comic,/comic/library,/photo/similarity,/travels,/smart-albums,album,viewer,reader,tag,palette"
 )
   .split(",")
   .map((p) => p.trim())

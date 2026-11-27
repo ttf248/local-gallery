@@ -22,7 +22,7 @@ test("本机备份下载、仅恢复收藏、过期预览拒绝覆盖", async ({
     expect(
       (await request.post("/api/favorites", { data: { resourceId: id } })).ok(),
     ).toBeTruthy();
-    await page.goto("/settings/data");
+    await page.goto("/settings/storage");
     const panel = page.getByRole("region", { name: "备份与恢复" });
     await panel.scrollIntoViewIfNeeded();
     const downloaded = page.waitForEvent("download");
@@ -49,6 +49,9 @@ test("本机备份下载、仅恢复收藏、过期预览拒绝覆盖", async ({
     await expect(
       panel.getByRole("button", { name: "确认覆盖恢复" }),
     ).toBeVisible();
+    await page.getByRole("link", { name: "通用与阅读" }).click();
+    await page.goBack();
+    await expect(panel.getByRole("button", { name: "确认覆盖恢复" })).toBeVisible();
     mkdirSync(".smoke/roadmap-backup", { recursive: true });
     await page.setViewportSize({ width: 390, height: 900 });
     await panel.scrollIntoViewIfNeeded();

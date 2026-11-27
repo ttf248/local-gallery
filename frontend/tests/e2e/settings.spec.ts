@@ -184,7 +184,7 @@ for (const recovery of ["manual", "automatic"] as const) {
     });
     try {
       await page.clock.install();
-      await page.goto("/settings/data");
+      await page.goto("/settings/storage");
       const scan = page.getByTitle("扫描 (Ctrl+S)", { exact: true });
       await scan.click();
       const card = page.getByTestId("scan-progress");
@@ -208,7 +208,7 @@ for (const recovery of ["manual", "automatic"] as const) {
           .getByRole("link", { name: /^未读/ })
           .click();
         await expect(card).toContainText("进度连接中断");
-        await page.getByRole("link", { name: "设置", exact: true }).click();
+        await page.getByRole("link", { name: "设置与任务", exact: true }).click();
         await page.getByRole("button", { name: "折叠扫描详情" }).click();
         await page
           .getByRole("button", { name: "重新连接进度", exact: true })
@@ -258,7 +258,7 @@ test("扫描进度任务无法读取时可停止跟踪，停止操作不取消�
       json: { code: "scan_not_found", message: "scan not found" },
     }),
   );
-  await page.goto("/settings/data");
+  await page.goto("/settings/storage");
   const scan = page.getByTitle("扫描 (Ctrl+S)", { exact: true });
   await scan.click();
   const card = page.getByTestId("scan-progress");
@@ -286,7 +286,7 @@ test("扫描 error 业务事件显示任务失败，连接错误不混入业务�
       body: `event: error\ndata: ${JSON.stringify({ scanId, status: "error", progress: 0, albumsFound: 0, elapsedMs: 500, error: "root_missing" })}\n\n`,
     });
   });
-  await page.goto("/settings/data");
+  await page.goto("/settings/storage");
   const scan = page.getByRole("button", { name: "重新扫描", exact: true });
   await scan.click();
   const card = page.getByTestId("scan-progress");
@@ -304,7 +304,7 @@ test("扫描 error 业务事件显示任务失败，连接错误不混入业务�
 test("设置页可加载服务端配置", async ({ page }) => {
   await page.goto("/settings/server");
   await expect(
-    page.getByText("服务端", { exact: false }).first(),
+    page.getByRole("link", { name: "媒体库与服务", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByText("媒体根目录", { exact: false }).first(),
@@ -326,21 +326,17 @@ test("设置页可加载服务端配置", async ({ page }) => {
   ).toBeVisible();
 });
 
-// 存储信息搬到任务中心之后，设置页不再摆这些。
-test("设置页不再展示模型路径与派生缓存占用", async ({ page }) => {
-  await page.goto("/settings/data");
-  // 精确匹配：危险操作分组里还有一行「清空媒体库索引」，子串匹配会撞上。
-  await expect(page.getByRole("heading", {name:"媒体库索引", exact:true})).toBeVisible();
-  await expect(page.getByText("本机 AI 与存储")).toHaveCount(0);
-  await expect(page.getByText("模型与缓存路径")).toHaveCount(0);
-  await expect(page.getByText("缓存占用")).toHaveCount(0);
-  await expect(page.getByText("一键全清")).toHaveCount(0);
+test("数据与存储同时呈现媒体库索引、模型与派生缓存", async ({ page }) => {
+  await page.goto("/settings/storage");
+  for (const name of ["媒体库索引", "派生缓存", "AI 模型与产物"]) {
+    await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  }
 });
 
 // 会丢东西的动作单独成组：一眼扫过去要能认出哪几个是点了就没了的，
 // 并且每一件都写清它到底丢什么。
 test("设置页的危险操作单独成组并写清后果", async ({ page }) => {
-  await page.goto("/settings/data");
+  await page.goto("/settings/storage");
   const danger = page.getByRole("region", { name: "危险操作" });
   await expect(danger).toBeVisible();
   await expect(danger.getByText("清空媒体库索引")).toBeVisible();
@@ -357,24 +353,24 @@ test("设置页的危险操作单独成组并写清后果", async ({ page }) => 
 // 分区改成页面内的页签：点页签换内容，页签的 id 写进 URL，
 // 前进后退与深链都跟着走。侧栏不再挂二级菜单，只标出当前页签。
 test("设置页的分区改成页签，切页签写进 URL 并换内容", async ({ page }) => {
-  await page.goto("/settings/interface");
-  const tablist = page.getByRole("navigation", { name: "设置页分区" });
+  await page.goto("/settings/general");
+  const tablist = page.getByRole("navigation", { name: "设置与任务分区" });
   await expect(tablist).toBeVisible();
-  await expect(page.getByRole("link", { name: "界面" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "通用与阅读" })).toHaveAttribute(
     "aria-current",
     "page",
   );
   // 侧栏里没有二级菜单了，只在条目上标出当前页签。
   const sidebar = page.locator('aside[aria-label="主导航"]');
-  await expect(sidebar.getByRole("button", { name: "数据" })).toHaveCount(0);
+  await expect(sidebar.getByRole("button", { name: "数据与存储" })).toHaveCount(0);
   await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
-    await expect(page).toHaveTitle(/ · 界面 · Local Gallery$/);
+    await expect(page).toHaveTitle(/ · 通用与阅读 · Local Gallery$/);
 
-  await page.getByRole("link", { name: "数据" }).click();
-  await expect(page).toHaveURL(/\/settings\/data$/);
+  await page.getByRole("link", { name: "数据与存储" }).click();
+  await expect(page).toHaveURL(/\/settings\/storage$/);
   await expect(page.getByRole("heading", {name:"媒体库索引", exact:true})).toBeVisible();
   await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
-    await expect(page).toHaveTitle(/ · 数据 · Local Gallery$/);
+    await expect(page).toHaveTitle(/ · 数据与存储 · Local Gallery$/);
 
   // 深链直接落在那一屏。
   await page.goto("/settings/server");
@@ -391,7 +387,7 @@ test("设置读取失败可重试，恢复后显示阅读设置", async ({ page 
       });
     else await route.continue();
   });
-  await page.goto("/settings/reading");
+  await page.goto("/settings/general#reading");
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("设置加载失败", { timeout: 15_000 });
   await expect(page.getByText("加载中…", { exact: true })).toHaveCount(0);
@@ -460,7 +456,7 @@ for (const operation of ["prefs", "prune", "history"] as const) {
     );
     try {
       await page.goto(
-        operation === "prefs" ? "/settings/reading" : "/settings/data",
+        operation === "prefs" ? "/settings/general#reading" : "/settings/storage",
       );
       const action =
         operation === "prefs"
@@ -476,11 +472,11 @@ for (const operation of ["prefs", "prune", "history"] as const) {
           page.getByRole("switch", { name: "切换时显示通知" }),
         ).toBeDisabled();
         // 这次保存也压着数据页签里的输入：切过去看，它同样不能动。
-        await page.getByRole("link", { name: "数据" }).click();
+        await page.getByRole("link", { name: "数据与存储" }).click();
         await expect(
           page.getByRole("button", { name: "增加最近访问保留条数" }),
         ).toBeDisabled();
-        await page.getByRole("link", { name: "阅读" }).click();
+        await page.getByRole("link", { name: "通用与阅读" }).click();
       }
       release();
       const message = {
@@ -586,8 +582,8 @@ for (const health of ["late", "error"] as const) {
       const initialHealth = page.waitForRequest("**/api/health");
       await page.goto("/");
       await initialHealth;
-      await page.getByRole("link", { name: "设置", exact: true }).click();
-      await page.getByRole("link", { name: "服务端" }).click();
+      await page.getByRole("link", { name: "设置与任务", exact: true }).click();
+      await page.getByRole("link", { name: "媒体库与服务" }).click();
       const toggle = page.getByRole("switch", {
         name: "允许在系统文件管理器中打开",
         exact: true,
@@ -1199,8 +1195,8 @@ for (const failFirst of [false, true]) {
       await expect(input).toHaveValue("/queue/latest");
       // 工作台首页入口：照片侧叫「照片」，漫画侧叫「首页」。
       await page.getByRole("link", { name: /^(首页|照片)$/ }).click();
-      await page.getByRole("link", { name: "设置", exact: true }).click();
-      await page.getByRole("link", { name: "服务端" }).click();
+      await page.getByRole("link", { name: "设置与任务", exact: true }).click();
+      await page.getByRole("link", { name: "媒体库与服务" }).click();
       await expect(input).toHaveValue("/queue/latest");
       release[0]();
       await expect.poll(() => writes.length).toBe(2);
@@ -1292,8 +1288,8 @@ test("配置保存失败离开后仍保留输入，按 Enter 显式重试且不�
     );
     release();
     expect((await failed).status()).toBe(500);
-    await page.getByRole("link", { name: "设置", exact: true }).click();
-    await page.getByRole("link", { name: "服务端" }).click();
+    await page.getByRole("link", { name: "设置与任务", exact: true }).click();
+    await page.getByRole("link", { name: "媒体库与服务" }).click();
     await expect(input).toHaveValue("/retry/photos");
     await expect(page.getByRole("button", { name: "重试保存" })).toBeVisible();
     await page.clock.runFor(1500);
@@ -1482,5 +1478,44 @@ test("配置保存等待 LAN 会话建立后再发送后续写入", async ({ pag
     closing = true;
     releaseLogin();
     await page.close();
+  }
+});
+
+test("旧书签保留查询和片段，浏览器后退回到来源页", async ({ page }) => {
+  for (const [oldPath, target] of [
+    ["/settings", "/settings/general"], ["/settings/interface", "/settings/general"],
+    ["/settings/reading", "/settings/general#reading"], ["/settings/data", "/settings/storage"],
+    ["/tasks", "/settings/tasks"], ["/tasks/run", "/settings/tasks"],
+    ["/tasks/plan", "/settings/tasks#daily-plan"], ["/tasks/plan#custom", "/settings/tasks#custom"],
+    ["/tasks/history?job=abc", "/settings/tasks?job=abc#task-history"],
+    ["/tasks/storage", "/settings/storage"], ["/tasks/unknown", "/settings/tasks"],
+    ["/settings/unknown?q=1#custom", "/settings/general?q=1#custom"],
+  ]) {
+    await page.goto(oldPath);
+    await expect(page).toHaveURL(url => url.pathname + url.search + url.hash === target);
+  }
+  await page.getByRole("link", { name: "分析与计划" }).click();
+  const time = page.getByLabel("每日自动任务开始时间");
+  await time.fill("07:28");
+  await page.getByRole("link", { name: "数据与存储" }).click();
+  await page.goBack();
+  await expect(time).toHaveValue("07:28");
+});
+
+test("双栏中的分段控件和固定导航标签完整落在所属卡片内", async ({ page }) => {
+  await page.goto("/settings/general");
+  await expect(page.getByRole("region", { name: "导航" }).getByText("固定显示").first()).toBeVisible();
+  for (const width of [1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    const groups = page.locator("#settings-panel-general [role=radiogroup]:visible");
+    await expect.poll(() => groups.evaluateAll(elements => elements.every(element => {
+      const card = element.closest("section")!.getBoundingClientRect();
+      const control = element.getBoundingClientRect();
+      return control.left >= card.left && control.right <= card.right;
+    }))).toBe(true);
+    for (const label of ["照片", "首页"]) {
+      const text = page.getByRole("region", { name: "导航" }).getByText(label, { exact: true });
+      expect(await text.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    }
   }
 });

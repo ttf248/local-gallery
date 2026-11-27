@@ -80,7 +80,7 @@ test("工作台模式切换：两套菜单完全隔离，模式持久化在服�
 // 设置页的「导航」分区管的就是侧栏显示哪些入口：开关写进服务端偏好，
 // 侧栏随即变化，刷新后也还是这一套。
 test("设置页的导航分区开关侧栏入口", async ({ page }) => {
-  await page.goto("/settings/interface");
+  await page.goto("/settings/general");
   const sidebar = page.locator('aside[aria-label="主导航"]');
   // 默认全部显示：关掉「发现」后它从侧栏消失。
   const exploreSwitch = page.getByRole("switch", {
@@ -651,11 +651,11 @@ test("离开相册会取消浏览器抽帧且不继续上传封面", async ({ pa
     await expect.poll(() => started).toBeGreaterThan(0);
     // 设置页没有视频卡片，避免新页面的抽帧上传混入旧任务的取消断言。
     // 使用 SPA 导航，确保中止来自组件清理，而非整页卸载。
-    await page.getByRole("link", { name: "设置", exact: true }).click();
-    await expect(page).toHaveURL(/\/settings\/interface$/);
+    await page.getByRole("link", { name: "设置与任务", exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/general$/);
     // URL 更新后懒加载页面可能尚未提交，等旧相册卸载后再放行媒体响应。
     await expect(
-      page.getByRole("heading", { name: "设置", level: 1, exact: true }),
+      page.getByRole("heading", { name: "设置与任务", level: 1, exact: true }),
     ).toBeVisible();
     release();
     await expect.poll(() => cancelled).toBeGreaterThan(0);
@@ -777,7 +777,7 @@ test("视频信息重复访问后移除媒体根仍拒绝旧文件ID", async ({ 
 test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清空搜索", async ({
   page,
 }) => {
-  await page.goto("/settings/interface");
+  await page.goto("/settings/general");
   const opener = page.getByRole("button", { name: "更多操作", exact: true });
   const openHelp = async () => {
     await opener.click();
@@ -817,7 +817,7 @@ test("快捷键帮助限制焦点与背景操作，关闭后恢复入口并清�
   await close.focus();
   await page.keyboard.press("u");
   await page.keyboard.press("/");
-  await expect(page).toHaveURL(/\/settings\/interface$/);
+  await expect(page).toHaveURL(/\/settings\/general$/);
   await expect(close).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
@@ -902,7 +902,7 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   page,
 }) => {
   await scannedNodes(page.request);
-  await page.goto("/settings/interface");
+  await page.goto("/settings/general");
   const trigger = page.getByRole("button", { name: /^外观 ·/ });
   const menu = page.getByRole("menu", { name: "外观" });
   await trigger.click({button:"right"});
@@ -927,7 +927,7 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
   }
   // 未读页只属于漫画工作台：照片模式下按 U 不跳转，切到漫画模式才跳。
   await page.keyboard.press("u");
-  await expect(page).toHaveURL(/\/settings\/interface$/);
+  await expect(page).toHaveURL(/\/settings\/general$/);
   await page.getByRole("button",{name:/切换工作台/}).click();
       await page.getByRole("menuitemradio",{name:"漫画"}).click();
   await page.keyboard.press("u");
@@ -935,10 +935,10 @@ test("主题菜单保留 Tab 操作和外部焦点，关闭后恢复页面快捷
 });
 
 test("主题令牌在明暗模式下保持边框及透明背景", async ({ page }) => {
-  await page.goto("/settings/interface");
+  await page.goto("/settings/general");
   const root = page.locator("html");
   const rail = page.getByTestId("nav-rail");
-  const selected = rail.getByRole("link", { name: "设置" });
+  const selected = rail.getByRole("link", { name: "设置与任务" });
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
     await expect(root).toHaveAttribute("data-theme", theme);

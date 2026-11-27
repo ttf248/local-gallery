@@ -33,7 +33,7 @@ export const SettingsGroup = forwardRef<HTMLElement, GroupProps>(
         id={id}
         aria-labelledby={id ? id + "-heading" : undefined}
         className={cx(
-          "min-w-0 w-full rounded-xl border border-line bg-raised p-4 sm:p-5",
+          "[container-type:inline-size] [container-name:settings-card] min-w-0 w-full rounded-xl border border-line bg-raised p-4 sm:p-5",
           !flush && "mb-4",
           className,
         )}
@@ -83,7 +83,7 @@ export const SettingsRow = forwardRef<HTMLDivElement, RowProps>(
         ref={ref}
         data-setting-row=""
         className={cx(
-          "grid min-h-11 items-center gap-3 border-b border-line-subtle py-1.5 last:border-0 sm:grid-cols-[minmax(0,min(42%,14rem))_minmax(0,1fr)] has-[[role=switch]]:grid-cols-[minmax(0,min(55%,18rem))_auto]",
+          "grid min-h-11 items-center gap-3 border-b border-line-subtle py-1.5 last:border-0 sm:grid-cols-[minmax(0,min(42%,14rem))_minmax(0,1fr)] [@container_settings-card_(max-width:26rem)]:has-[[role=radiogroup]]:grid-cols-1 has-[[role=switch]]:grid-cols-[minmax(0,min(55%,18rem))_auto]",
           danger && "rounded-md border border-danger/30 p-3",
           className,
         )}

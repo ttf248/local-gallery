@@ -32,7 +32,7 @@ const THEMES = (process.env.LG_THEMES ?? "light,dark")
 // 可以写伪路由 album / reader / tag：运行时现取真实相册与标签。
 const PAGES = (
   process.env.LG_PAGES ??
-  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/comic,/comic/library,/comic/unread,/comic/me/reading,/photo/search,/photo/semantic,/photo/random,/photo/people,/photo/people/annotate,/photo/similarity,/settings/interface,/settings/reading,/settings/data,/settings/server,/tasks/run,/tasks/plan,/tasks/history,/tasks/storage,/travels,/smart-albums,album,viewer,reader,tag"
+  "/,/library,/explore,/me/picks,/me/favorites,/me/recents,/comic,/comic/library,/comic/unread,/comic/me/reading,/photo/search,/photo/semantic,/photo/random,/photo/people,/photo/people/annotate,/photo/similarity,/settings/general,/settings/tasks,/settings/storage,/settings/server,/travels,/smart-albums,album,viewer,reader,tag"
 )
   .split(",")
   .map((p) => p.trim())
@@ -165,7 +165,8 @@ async function main() {
         // 首屏数据与缩略图分别就绪。视口外的虚拟项和懒加载图片无需等待。
         // SSE 长连接不参与就绪判断。虚拟列表取得数据后才会创建需要解码的缩略图。
         let quietSince = Date.now();
-        const deadline = quietSince + 60_000;
+        // 任务估算的服务端期限本身就是 60 秒，留出响应传输与 UI 更新的时间。
+        const deadline = quietSince + (route === "/settings/tasks" ? 90_000 : 60_000);
         while (Date.now() - quietSince < 450) {
           if (Date.now() > deadline)
             throw new Error(
@@ -227,6 +228,10 @@ async function main() {
         await page.screenshot({
           path: path.join(OUT, name),
           fullPage: FULL,
+          // 系统页在画布内部滚动，整页模式需要让文档接管滚动才能截到下方表单。
+          style: FULL && route.startsWith("/settings/")
+            ? ".grid:has(> [data-canvas]) { height: auto; min-height: 100dvh } [data-canvas] > .app-main { overflow: visible; padding-bottom: 0 } nav.mobile-tabs { position: static; grid-column: 1 / -1 }"
+            : undefined,
         });
         await page.close();
         count++;

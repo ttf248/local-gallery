@@ -3,10 +3,10 @@ import { scannedNodes } from "./helpers/library";
 
 test.describe("任务中心", () => {
   test("四个页签各自承载一段内容，切页签写进 URL", async ({ page }) => {
-    await page.goto("/tasks/run");
-    const tablist = page.getByRole("navigation", { name: "任务中心分区" });
+    await page.goto("/settings/tasks");
+    const tablist = page.getByRole("navigation", { name: "设置与任务分区" });
     await expect(tablist).toBeVisible();
-    await expect(page.getByRole("link", { name: "运行" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "分析与计划" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -33,21 +33,21 @@ test.describe("任务中心", () => {
       0,
     );
     await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
-    await expect(page).toHaveTitle(/ · 运行 · Local Gallery$/);
+    await expect(page).toHaveTitle(/ · 分析与计划 · Local Gallery$/);
 
-    await page.getByRole("link", { name: "本机存储" }).click();
-    await expect(page).toHaveURL(/\/tasks\/storage$/);
+    await page.getByRole("link", { name: "数据与存储" }).click();
+    await expect(page).toHaveURL(/\/settings\/storage$/);
     await expect(page.getByRole("heading", { name: "派生缓存" })).toBeVisible();
     await expect(sidebar.getByTestId("nav-tab-label")).toHaveCount(0);
-    await expect(page).toHaveTitle(/ · 本机存储 · Local Gallery$/);
+    await expect(page).toHaveTitle(/ · 数据与存储 · Local Gallery$/);
 
     // 深链直接落在那一屏。
-    await page.goto("/tasks/plan");
+    await page.goto("/settings/tasks#daily-plan");
     await expect(page.getByLabel("每日自动任务开始时间")).toBeVisible();
   });
 
   test("空闲时给出增量与全量的规模对比，并带上本次张数", async ({ page }) => {
-    await page.goto("/tasks/run");
+    await page.goto("/settings/tasks");
     await scannedNodes(page.request);
     await expect
       .poll(async () => {
@@ -79,7 +79,7 @@ test.describe("任务中心", () => {
   });
 
   test("本机存储给出派生缓存占用、模型与产物路径", async ({ page }) => {
-    await page.goto("/tasks/storage");
+    await page.goto("/settings/storage");
     await expect(page.getByRole("heading", { name: "派生缓存" })).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "AI 模型与产物" }),
@@ -96,7 +96,7 @@ test.describe("任务中心", () => {
   });
 
   test("每日计划的时间可以保存并在刷新后保留", async ({ page }) => {
-    await page.goto("/tasks/plan");
+    await page.goto("/settings/tasks#daily-plan");
     const timeInput = page.getByLabel("每日自动任务开始时间");
     const planSwitch = page.getByRole("switch", { name: "启用每日自动任务" });
     const scanTask = page.getByRole("checkbox", { name: "扫描所有媒体目录" });
@@ -127,22 +127,23 @@ test.describe("任务中心", () => {
 
   test("任务中心能手动生成智能相册分组", async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto("/tasks/run");
+    await page.goto("/settings/tasks");
     await scannedNodes(page.request, "photo");
 
-    const start = page.getByRole("button", { name: "增量更新" });
+    const panel = page.getByRole("region", { name: "智能相册分组" });
+    const start = panel.getByRole("button", { name: "增量更新" });
     await expect(start).toBeVisible();
     await start.click();
 
     // 后台任务跑完，面板上给出重算与复用的数量。
-    await expect(page.getByTestId("smart-album-refresh-done")).toBeVisible({
+    await expect(panel.getByTestId("smart-album-refresh-done")).toBeVisible({
       timeout: 90_000,
     });
-    await expect(page.getByTestId("smart-album-refresh-done")).toContainText(
+    await expect(panel.getByTestId("smart-album-refresh-done")).toContainText(
       "个相册",
     );
     // 任务结束就不再提供「取消」。
-    await expect(page.getByRole("button", { name: "取消" })).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "取消", exact: true })).toHaveCount(0);
   });
 
   test("离开任务中心后侧栏会刷新仅列在历史中的活动任务", async ({ page }) => {
@@ -159,7 +160,7 @@ test.describe("任务中心", () => {
       });
       await route.fulfill({ response, json: body });
     });
-    await page.goto("/tasks/run");
+    await page.goto("/settings/tasks");
     const indicator = page.getByRole("link", {name: /正在分析 · 元数据分析/});
     await expect(indicator).toBeVisible();
     await page.getByRole("link", {name:"照片", exact:true}).first().click();
@@ -184,7 +185,7 @@ test.describe("任务中心", () => {
       await route.fulfill({response, json:body});
     });
     await page.route("**/api/ai/jobs/" + jobId + "/retry", route => route.fulfill({json:{ok:true}}));
-    await page.goto("/tasks/run");
+    await page.goto("/settings/tasks");
     await page.getByRole("link", { name: "查看原因" }).click();
     const record = page.locator('[data-job-id="' + jobId + '"]');
     await expect(record.getByText("任务原因：图片解析失败")).toBeVisible();
@@ -195,7 +196,7 @@ test.describe("任务中心", () => {
 
   test("跑完一次分析后任务记录里出现新的任务与产出明细", async ({ page }) => {
     test.setTimeout(180_000);
-    await page.goto("/tasks/run");
+    await page.goto("/settings/tasks");
     await scannedNodes(page.request);
     await expect(page.getByRole("radio",{name:/^全量/})).toBeVisible();
     const start = page.getByRole("button", { name: /开始分析/ });
@@ -230,7 +231,7 @@ test.describe("任务中心", () => {
       .toMatch(/^(completed|failed|cancelled)$/);
 
     // 任务结束后任务记录里多出一行，展开后有产出明细。
-    await page.getByRole("link", { name: "任务记录" }).click();
+    await expect(page.getByRole("heading", { name: "任务记录" })).toBeVisible();
     const history = page.locator(
       `[data-testid="task-history-row"][data-job-id="${startedJob.id}"]`,
     );

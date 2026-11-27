@@ -36,7 +36,7 @@ test.describe("本机智能照片功能", () => {
       sort: "review",
     });
     await page.getByRole("link", { name: "打开任务中心" }).click();
-    await expect(page).toHaveURL(/\/tasks\/plan$/);
+    await expect(page).toHaveURL(/\/settings\/tasks#daily-plan$/);
     await expect(
       page.getByRole("checkbox", { name: "启用人物分析（手动与每日任务共用）" }),
     ).toBeVisible();
