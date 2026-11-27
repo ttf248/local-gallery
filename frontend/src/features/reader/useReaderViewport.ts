@@ -112,6 +112,7 @@ export function useReaderViewport(options: Options) {
     index: number;
     anchor: ReaderAnchor | null;
     sought: boolean;
+    soughtHeight?: number;
     stable?: boolean;
   } | null>(null);
   const measure = useRef<() => void>(() => {});
@@ -190,7 +191,8 @@ export function useReaderViewport(options: Options) {
         `[data-reader-page="${target.index}"]`,
       );
       if (!n && mode === "continuous") {
-        if (!target.sought) {
+        if (!target.sought || target.soughtHeight !== root.scrollHeight) {
+          target.soughtHeight = root.scrollHeight;
           virtuoso.current?.scrollToIndex({
             index: target.index,
             align: "start",
@@ -269,12 +271,20 @@ export function useReaderViewport(options: Options) {
     const fresh = !prev || prev.epoch !== options.request.epoch;
     if (fresh || prev.key !== options.layoutKey || prev.root !== root) {
       latest.current.onInvalidate?.();
-      const saved = fresh ? null : anchor.current;
+      let saved = fresh ? null : anchor.current;
+      const position = saved ? latest.current.images.indexOf(saved.fileId) : -1;
+      if (saved && position >= 0) saved = { ...saved, index: position };
+      if (
+        saved &&
+        latest.current.mode === "single" &&
+        saved.index !== latest.current.index
+      )
+        saved = null;
       pending.current = {
         index: clampPage(
           fresh
             ? options.request.index
-            : (saved?.index ?? pending.current?.index ?? latest.current.index),
+            : (saved?.index ?? latest.current.index),
           latest.current.images.length,
         ),
         anchor: saved,

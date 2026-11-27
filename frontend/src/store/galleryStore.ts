@@ -19,7 +19,7 @@ export interface GalleryState {
   // 当前图片索引（-1 = 未选择）
   index: number;
   zoom: number; // 1.0 = 100%
-  rotation: number; // 0/90/180/270
+  rotation: 0 | 90 | 180 | 270; // 0/90/180/270
   slideshow: boolean;
   slideshowInterval: number; // ms
   mode: ReaderMode;
@@ -62,7 +62,16 @@ export const useGalleryStore = create<GalleryState>()(
       zoomOut: () => set({ zoom: clamp(get().zoom / 1.2, 0.1, 5) }),
       zoomReset: () => set({ zoom: 1 }),
       rotate: (deg = 90) =>
-        set({ rotation: (((get().rotation + deg) % 360) + 360) % 360 }),
+        set({
+          rotation: ([0, 90, 180, 270] as const)[
+            ((Math.round(
+              (get().rotation + (Number.isFinite(deg) ? deg : 0)) / 90,
+            ) %
+              4) +
+              4) %
+              4
+          ],
+        }),
       resetView: () => set({ zoom: 1, rotation: 0 }),
       toggleSlideshow: () => set({ slideshow: !get().slideshow }),
       setSlideshowInterval: (ms) => set({ slideshowInterval: ms }),

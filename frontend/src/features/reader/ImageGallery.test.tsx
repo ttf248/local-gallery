@@ -9,6 +9,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useGalleryStore } from "../../store/galleryStore";
 import ImageGallery from "./ImageGallery";
 
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(900);
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(800);
+});
 const virtuosoMocks = vi.hoisted(() => ({
   scrollToIndex: vi.fn(),
 }));
@@ -397,14 +401,30 @@ describe("ImageGallery 连续模式的高度预留", () => {
     const item = document.querySelector(
       '[data-image-index="0"]',
     ) as HTMLElement;
-    expect(item.getAttribute("style")).toContain("900");
+    expect(item.style.height).toBe("600px");
+    expect(screen.getByAltText("第 1 页").style.width).toBe("400px");
   });
 
-  it("量不出尺寸时不占高度", () => {
+  it("未知尺寸按 2:3 比例预留行高", () => {
     render(<ImageGallery images={["f_aaa"]} />);
     const item = document.querySelector(
       '[data-image-index="0"]',
     ) as HTMLElement;
-    expect(item.getAttribute("style") ?? "").not.toContain("aspect-ratio");
+    expect(item.style.height).toBe("600px");
+    expect(screen.getByRole("img").style.width).toBe("400px");
   });
+});
+
+it("双击仅缩放，失败重试重新挂载同一页", () => {
+  useGalleryStore.setState({ mode: "single", index: 0, zoom: 1 });
+  const flip = vi.fn();
+  render(<ImageGallery images={["f_one"]} onClickNavigate={flip} />);
+  const img = screen.getByRole("img");
+  fireEvent.click(img, { detail: 1 });
+  fireEvent.doubleClick(img);
+  expect(useGalleryStore.getState().zoom).toBe(1.2);
+  expect(flip).not.toHaveBeenCalled();
+  fireEvent.error(img);
+  fireEvent.click(screen.getByRole("button", { name: "重试" }));
+  expect(screen.getByAltText("第 1 页")).toBeInTheDocument();
 });

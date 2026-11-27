@@ -414,7 +414,11 @@ export async function ensureMetadataReady(
 
 export async function startAnalysisJob(
   request: APIRequestContext,
-  body: { type: "metadata" | "similarity"; mode: "full" | "incremental"; albumId?: string },
+  body: {
+    type: "metadata" | "similarity";
+    mode: "full" | "incremental";
+    albumId?: string;
+  },
 ) {
   // 409 到下一次读取队列之间，原任务可能已经结束。等到自己的相册任务入队。
   let jobId = "";
@@ -456,4 +460,22 @@ async function runMetadataJob(
       { timeout: 180_000 },
     )
     .toMatch(/^(completed|failed|cancelled)$/);
+}
+
+export async function geometryAlbum(
+  request: APIRequestContext,
+  count: 1 | 8 | 9 | 1001,
+) {
+  const nodes = await scannedNodes(request, "comic");
+  const collection = nodes.find((node) => node.name === "zz-几何验收");
+  expect(collection).toBeDefined();
+  const response = await request.get(
+    `/api/library/${collection!.id}/children?limit=100&kind=comic`,
+  );
+  const { page } = (await response.json()) as {
+    page: { items: { id: string; name: string }[] };
+  };
+  const album = page.items.find((item) => item.name === `几何-${count}`);
+  expect(album).toBeDefined();
+  return album!.id;
 }
