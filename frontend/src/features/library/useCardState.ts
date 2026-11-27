@@ -1,6 +1,6 @@
 import { useUIStore } from "../../store/uiStore";
 import { isCompleted, isUnread, progressPercent } from "../../utils/progress";
-import { comicCopy } from "../../utils/workbench";
+import { comicCopy,workbenchCopy } from "../../utils/workbench";
 import { mediaCountParts, type MediaCountParts } from "../../utils/mediaCount";
 import type { CardData } from "./AlbumTile";
 
@@ -78,11 +78,10 @@ export function showUnreadMark(
  * 卡片打开的是什么东西。
  *
  * 照片侧的文件夹是磁盘上真实存在的目录，叫「文件夹」；漫画侧的集合叫
- * 「作品」。相册两侧都叫「相册」—— 那句提示语是用户读得懂的日常词，
- * 不跟着工作台换。
+ * 「作品」。叶节点沿用该工作台的相册或卷称谓。
  */
 export function openTargetWord(data: CardData): string {
-  if (data.variant === "album") return "相册";
+  if (data.variant === "album") return workbenchCopy(data.contentKind??"photo").albumTypeLabel;
   if (data.variant === "collection")
     return data.contentKind === "comic" ? "作品" : "文件夹";
   return "智能视图";

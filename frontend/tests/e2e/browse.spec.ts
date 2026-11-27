@@ -121,12 +121,13 @@ test("设置页的导航分区开关侧栏入口", async ({ page }) => {
  *
  * 网格里的标签卡与集合卡用的是同一个 testid（都是 AlbumCard），
  * 页面上第一张未必是相册 —— 首页首屏的照片墙又把它推到了后面。
- * 按「里面有打开相册的链接」筛，才是测试真正要的那一张。
+ * 用工作台对应的链接名称区分照片相册和漫画卷。
  */
-function albumCard(page: Page) {
+function albumCard(page: Page, kind: "photo" | "comic" = "comic") {
+  const name = kind === "photo" ? /^打开相册/ : /^打开卷/;
   return page
     .locator('[data-testid="album-card"]')
-    .filter({ has: page.getByRole("link", { name: /^打开相册/ }) })
+    .filter({ has: page.getByRole("link", { name }) })
     .first();
 }
 
@@ -140,7 +141,7 @@ test("两侧的措辞与计数单位各归各", async ({ page }) => {
   // 验证（那里仍列带这个标签的相册）。
   // 取一张卡片上的链接，而不是页面上第一个「打开相册」链接：首屏专区
   // 里也有指向相册的链接（随手看看的封面），它不是卡片，没有悬停预览。
-  const photoCard = albumCard(page).getByRole("link", { name: /打开相册/ });
+  const photoCard = albumCard(page,"photo").getByRole("link", { name: /打开相册/ });
   await expect(photoCard).toBeVisible();
   await photoCard.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await photoCard.hover();
@@ -155,7 +156,7 @@ test("两侧的措辞与计数单位各归各", async ({ page }) => {
   await setWorkbenchMode(page.request, "comic");
   await scannedNodes(page.request, "comic");
   await page.goto("/comic");
-  const comicCard = albumCard(page).getByRole("link", { name: /打开相册/ });
+  const comicCard = albumCard(page).getByRole("link", { name: /^打开卷/ });
   await expect(comicCard).toBeVisible();
   await comicCard.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await comicCard.hover();
@@ -2362,7 +2363,7 @@ test("卡片悬停预览完整落在视口内，不被视口下缘裁掉", async
   await page.goto("/comic");
   // 明确取一张卡片上的链接：首屏专区里也有指向相册的链接（未读 / 继续
   // 阅读的封面），它不是卡片，没有悬停预览。
-  const card = albumCard(page).getByRole("link", { name: /打开相册/ });
+  const card = albumCard(page).getByRole("link", { name: /^打开卷/ });
   await expect(card).toBeVisible();
   // 把卡片滚到视口下缘：预览会向下溢出，只有按整体高度夹紧才不会越界。
   await card.evaluate((el) => el.scrollIntoView({ block: "end" }));
@@ -2426,7 +2427,7 @@ test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ pa
   // 明确取一张卡片，而不是页面上第一个「打开相册」链接：首屏专区里也有
   // 指向相册的链接（未读 / 继续阅读的封面），它不是卡片，也没有星标。
   const card = albumCard(page);
-  const link = card.getByRole("link", { name: /^打开相册/ });
+  const link = card.getByRole("link", { name: /^打开卷/ });
   const href = await link.getAttribute("href");
   expect(href).toBeTruthy();
   const albumId = decodeURIComponent(href!.split("/albums/")[1] ?? "");
@@ -2434,7 +2435,7 @@ test("卡片右上角的星标可以直接收藏，且不会跳转", async ({ pa
 
   // 星标按相册名精确定位：页面上还有标签卡片的星标，不能拿「第一个收藏按钮」。
   const title = (await link.getAttribute("aria-label"))!
-    .replace(/^打开相册“/, "")
+    .replace(/^打开卷“/, "")
     .replace(/”$/, "");
   const star = card.getByRole("button", {
     name: `收藏「${title}」`,

@@ -45,10 +45,10 @@ describe("GalleryToolbar 阅读控制", () => {
     ).not.toContain("reader-tool-active");
   });
 
-  it("适配按钮按 适应→按宽→按高→原始 循环", () => {
+  it("适配按钮按 整页→按宽→按高→原始 循环", () => {
     useGalleryStore.setState({ fit: "fit" });
     renderToolbar();
-    const fit = screen.getByRole("button", { name: "适配方式：适应" });
+    const fit = screen.getByRole("button", { name: "适配方式：整页" });
     fireEvent.click(fit);
     expect(useGalleryStore.getState().fit).toBe("width");
     expect(
@@ -75,21 +75,19 @@ describe("GalleryToolbar 阅读控制", () => {
     expect(onNext).toHaveBeenCalled();
   });
 
-  // 工具条压在画面上，空闲后淡出。淡出时不能还挡着点击。
-  it("隐藏时淡出并且不再接收点击", () => {
-    renderToolbar({ visible: false });
-    const bar = screen.getByRole("toolbar", { name: "阅读控制" });
-    expect(bar.className).toContain("opacity-0");
-    expect(bar.className).toContain("pointer-events-none");
+  it("卷末能跨卷时前进按钮标明下一卷", () => {
+    const { onNext } = renderToolbar({ nextVolume: true });
+    fireEvent.click(screen.getByRole("button", { name: "下一卷" }));
+    expect(onNext).toHaveBeenCalledOnce();
   });
-
-  it("显示时保持可点", () => {
-    renderToolbar({ visible: true });
-    const bar = screen.getByRole("toolbar", { name: "阅读控制" });
-    expect(bar.className).toContain("opacity-100");
-    expect(bar.className).not.toContain("pointer-events-none");
+  it("窄屏设置入口与当前倍率复位都可操作", () => {
+    const onSettings = vi.fn();
+    renderToolbar({ onSettings });
+    fireEvent.click(screen.getByRole("button", { name: "设置" }));
+    expect(onSettings).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("button", { name: /重置当前倍率/ }));
+    expect(useGalleryStore.getState().zoom).toBe(1);
   });
-
   it("翻页按钮把事件交给父组件", () => {
     const { onPrev, onNext } = renderToolbar();
     fireEvent.click(screen.getByRole("button", { name: "上一页" }));

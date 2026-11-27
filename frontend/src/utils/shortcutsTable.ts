@@ -260,7 +260,7 @@ export const SHORTCUTS: Shortcut[] = [
   {
     id: "fit",
     label: "F",
-    description: "图片适配循环（适应→按宽→按高→原始）",
+    description: "图片适配循环（整页→按宽→按高→原始）",
     combo: "f",
     group: "image",
   },
@@ -288,7 +288,7 @@ export const SHORTCUTS: Shortcut[] = [
   {
     id: "zoomReset",
     label: "0",
-    description: "实际大小 / 重置",
+    description: "重置当前适配倍率至 100%",
     combo: "0",
     group: "image",
   },

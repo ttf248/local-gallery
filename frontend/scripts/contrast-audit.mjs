@@ -20,6 +20,8 @@ import { chromium } from "@playwright/test";
 import {
   buildRoute,
   resolveAlbumId,
+  readerAuditStates,
+  openReaderControls,
   openPhotoViewer,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
@@ -976,7 +978,7 @@ for (const theme of THEMES) {
       { t: theme, vm: VIEWMODE },
     );
 
-    for (const route of PAGES) {
+    for (const route of PAGES.flatMap((p) => p === "reader" ? readerAuditStates : p)) {
       // 未读页只属于漫画工作台：照片侧没有这个路由，硬走会落回首页。
       if (route === "/unread" && mode !== "comic") {
         console.log(`  · 跳过 ${theme} /unread：只有漫画工作台有未读页`);
@@ -1008,11 +1010,13 @@ for (const theme of THEMES) {
             continue;
           }
         await waitForStable(page);
-      } else if (route === "reader") {
+      } else if (readerAuditStates.includes(route)) {
         if (!(await openReader(page))) {
+          if (process.env.LG_PAGES === "reader") throw new Error("阅读器审计缺少漫画样本");
           console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);
           continue;
         }
+        await openReaderControls(page, route);
       } else {
         // 伪路由 album：相册详情页的 id 运行时现取。
         // 伪路由 tag：标签页用固定的标签名，数据由 prepareTagRoute 伪造。
@@ -1040,7 +1044,7 @@ for (const theme of THEMES) {
       if (SELF_TEST_ONLY) await page.evaluate(SELF_TEST);
       const surface = route === "palette"
         ? page.getByRole("dialog", { name: "命令面板" })
-        : page.locator("body");
+        : route==="reader-menu"?page.getByRole("menu"):route==="reader-settings"?page.getByRole("dialog",{name:"阅读设置"}):page.locator("body");
       let items = await surface.evaluate(AUDIT);
       // 偶发的渲染异常（相册页的虚拟列表爆栈）重试一次再判。
       if (await page.evaluate(ROUTE_ERROR)) {

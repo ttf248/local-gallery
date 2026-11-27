@@ -33,7 +33,6 @@ export default function Reader() {
     index,
     isVideo,
     jumpTo,
-    markActive,
     media,
     onClearCover,
     onOpenInExplorer,
@@ -138,6 +137,25 @@ export default function Reader() {
     );
   }
 
+  function openPageMenu(element: EventTarget | null, x: number, y: number) {
+    if (!pathParam) return;
+    const page =
+      element instanceof Element
+        ? element.closest<HTMLElement>("[data-reader-page]")
+        : null;
+    const targetIndex = page
+      ? Number(page.dataset.readerPage)
+      : (reader.viewportRef.current?.captureAnchor()?.index ?? index);
+    const fileId = isVideo
+      ? current
+      : (page?.dataset.fileId ?? images[targetIndex]);
+    if (fileId)
+      setContextMenu({
+        x,
+        y,
+        target: { albumId: pathParam, index: targetIndex, fileId },
+      });
+  }
   return (
     <div
       data-testid="gallery-reader"
@@ -145,31 +163,30 @@ export default function Reader() {
       // 用 dvh 而不是 vh：移动端浏览器地址栏收起 / 展开时，100vh 不等于
       // 实际可视高度，底部的页码进度条会被推到屏幕外。
       style={{ height: "100dvh" }}
-      onMouseMove={markActive}
       onContextMenu={(e) => {
-        // 屏蔽浏览器默认右键菜单(图片另存为等),改用我们自己的。
-        // 子组件 (ImageGallery/VideoPlayer) 内部各自 preventDefault + 标记
-        // 是图片区,这里统一捕获后弹自定义菜单。
         e.preventDefault();
-        if (!pathParam) return;
-        const page =
-          e.target instanceof Element
-            ? e.target.closest<HTMLElement>("[data-reader-page]")
-            : null;
-        const targetIndex = page ? Number(page.dataset.readerPage) : index;
-        const fileId = isVideo ? current : images[targetIndex];
-        if (fileId)
-          setContextMenu({
-            x: e.clientX,
-            y: e.clientY,
-            target: { albumId: pathParam, index: targetIndex, fileId },
-          });
+        openPageMenu(e.target, e.clientX, e.clientY);
+      }}
+      onKeyDown={(e) => {
+        if (
+          (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) &&
+          !contextMenu
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          const rect = (e.target as Element).getBoundingClientRect();
+          openPageMenu(
+            e.target,
+            Math.min(innerWidth - 8, Math.max(8, rect.x + rect.width / 2)),
+            Math.min(innerHeight - 8, Math.max(8, rect.y + rect.height / 2)),
+          );
+        }
       }}
     >
       {/* 舞台：画布 + 顶栏 + 浮层控件 + 底部进度条。
           信息面板打开时（md+）这一列横向收缩，面板成为独立的一栏；
           窄屏时面板改为浮在顶栏下方的整宽浮层，不遮挡顶栏。 */}
-      <div className="relative flex-1 min-w-0">
+      <div className="reader-workspace relative flex-1 min-w-0">
         <ReaderCanvas reader={reader} />
         <ReaderChrome reader={reader} />
       </div>
@@ -207,9 +224,11 @@ export default function Reader() {
               {hasNextVolume ? "这卷读完了" : "这一部读完了"}
             </div>
             <div className="text-caption text-white/55">
-              {hasNextVolume
-                ? "可以接着读下一卷，或回到书架继续浏览。"
-                : "这是这一部的最后一卷，没有下一卷了。"}
+              {media.siblingCount > 0
+                ? `图片已看完 · 还有 ${media.siblingCount} 个视频`
+                : hasNextVolume
+                  ? "可以接着读下一卷，或回到书架继续浏览。"
+                  : "这是这一部的最后一卷，没有下一卷了。"}
             </div>
           </div>
           {/* 没有下一卷时不摆这个按钮：点了只会得到一句「没有下一卷」，

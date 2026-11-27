@@ -73,7 +73,7 @@ export default function ImageInfoPanel({
   return (
     /* 宽屏时面板是画面右侧独立的一栏，从顶栏下方一直到底：
        它是这一屏的规格栏，不是浮在画面上的小卡片。 */
-    <Inspector open title="图片信息" closeLabel="关闭图片信息" onClose={onClose} width={360} data-testid="image-info-panel" className={["flex flex-col border-theater-border bg-theater-surface text-theater-fg",inline ? "h-full" : "absolute inset-x-0 bottom-0 top-[76px] z-30 md:static md:z-auto md:h-full"].join(" ")}>
+    <Inspector open title="图片信息" closeLabel="关闭图片信息" onClose={onClose} width={360} data-testid="image-info-panel" className={["flex flex-col border-theater-border bg-theater-surface text-theater-fg",inline ? "h-full" : "absolute inset-x-0 bottom-0 reader-info-panel z-30 md:static md:z-auto md:h-full"].join(" ")}>
       <div className="flex-1 overflow-auto p-4 text-body scroll-thin [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5">
         {loading && <div className="text-white/60 text-caption">加载中…</div>}
         {err !== null && (

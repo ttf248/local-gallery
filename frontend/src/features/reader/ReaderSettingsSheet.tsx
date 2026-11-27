@@ -13,15 +13,21 @@ export function ReaderSettingsSheet({
   open: boolean;
   onClose: () => void;
 }) {
+  const slideshow = useGalleryStore((s) => s.slideshow),
+    toggleSlideshow = useGalleryStore((s) => s.toggleSlideshow);
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
   const mode = useGalleryStore((state) => state.mode);
   const fit = useGalleryStore((state) => state.fit);
   const direction = useGalleryStore((state) => state.direction);
-  const { setMode, setFit, setDirection } = useGalleryStore.getState();
+  const { setMode, setFit, setDirection, zoomIn, zoomOut, zoomReset, rotate } =
+    useGalleryStore.getState();
+  const zoom = useGalleryStore((s) => s.zoom),
+    rotation = useGalleryStore((s) => s.rotation);
   return (
     <Sheet
       side={wide ? "right" : "bottom"}
       open={open}
+      className="reader-settings-sheet"
       label="阅读设置"
       onClose={onClose}
     >
@@ -39,8 +45,8 @@ export function ReaderSettingsSheet({
             onChange={setMode}
             options={[
               { value: "single", label: "单页" },
-              { value: "double", label: "双页" },
               { value: "continuous", label: "连续" },
+              { value: "double", label: "双页" },
             ]}
           />
         </SettingsRow>
@@ -61,12 +67,48 @@ export function ReaderSettingsSheet({
             value={fit}
             onChange={setFit}
             options={[
-              { value: "fit", label: "适应" },
+              { value: "fit", label: "整页" },
               { value: "width", label: "按宽" },
               { value: "height", label: "按高" },
               { value: "original", label: "原始" },
             ]}
           />
+        </SettingsRow>
+        <SettingsRow label="相对倍率">
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" disabled={zoom <= 0.1} onClick={zoomOut}>
+              缩小
+            </button>
+            <button type="button" onClick={zoomReset} title="重置当前倍率">
+              相对
+              {
+                {
+                  fit: "整页",
+                  width: "按宽",
+                  height: "按高",
+                  original: "原始",
+                }[fit]
+              }{" "}
+              {Math.round(zoom * 100)}%
+            </button>
+            <button type="button" disabled={zoom >= 5} onClick={zoomIn}>
+              放大
+            </button>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="旋转">
+          <button type="button" onClick={() => rotate(90)}>
+            顺时针 90° · 当前 {rotation}°
+          </button>
+        </SettingsRow>
+        <SettingsRow label="幻灯片">
+          <button
+            type="button"
+            aria-pressed={slideshow}
+            onClick={toggleSlideshow}
+          >
+            {slideshow ? "停止播放" : "自动翻页"}
+          </button>
         </SettingsRow>
       </SettingsGroup>
     </Sheet>

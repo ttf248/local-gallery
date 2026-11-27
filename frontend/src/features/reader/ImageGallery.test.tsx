@@ -157,7 +157,7 @@ describe("ImageGallery 单页触摸手势", () => {
     });
   });
 
-  it("左滑翻到下一张且不会再被合成 click 重复触发", () => {
+  it("左滑翻到下一张且不会再被合成 click 重复触发", async () => {
     const onClickNavigate = vi.fn();
     render(
       <ImageGallery
@@ -187,14 +187,13 @@ describe("ImageGallery 单页触摸手势", () => {
       clientY: 205,
     });
 
-    expect(onClickNavigate).toHaveBeenCalledTimes(1);
-    expect(onClickNavigate).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(onClickNavigate).toHaveBeenCalledWith(1));
 
     fireEvent.click(container, { clientX: 300, clientY: 200 });
     expect(onClickNavigate).toHaveBeenCalledTimes(1);
   });
 
-  it("右滑翻到上一张", () => {
+  it("右滑翻到上一张", async () => {
     const onClickNavigate = vi.fn();
     render(
       <ImageGallery
@@ -218,7 +217,7 @@ describe("ImageGallery 单页触摸手势", () => {
       clientY: 205,
     });
 
-    expect(onClickNavigate).toHaveBeenCalledWith(-1);
+    await waitFor(() => expect(onClickNavigate).toHaveBeenCalledWith(-1));
   });
 });
 
@@ -291,7 +290,7 @@ describe("ImageGallery 翻页方向", () => {
     expect(onClickNavigate).toHaveBeenLastCalledWith(-1);
   });
 
-  it("右→左时往右划露出下一页", () => {
+  it("右→左时往右划露出下一页", async () => {
     useGalleryStore.setState({ direction: "rtl" });
     const onClickNavigate = vi.fn();
     render(
@@ -316,7 +315,7 @@ describe("ImageGallery 翻页方向", () => {
       clientY: 205,
     });
 
-    expect(onClickNavigate).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(onClickNavigate).toHaveBeenCalledWith(1));
   });
 });
 

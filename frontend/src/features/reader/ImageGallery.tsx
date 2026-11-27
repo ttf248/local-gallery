@@ -22,6 +22,7 @@ import {
 } from "./readerLayout";
 import {
   useReaderViewport,
+  type JumpSource,
   type ReaderObservation,
   type ReaderJump,
   type ReaderViewportHandle,
@@ -30,8 +31,13 @@ interface Props {
   albumId?: string;
   request?: ReaderJump;
   viewportRef?: Ref<ReaderViewportHandle>;
+  onJump?: (index: number, source: JumpSource) => void;
   onObserve?: (value: ReaderObservation) => void;
-  onInvalidate?: () => void;
+  onInvalidate?: (
+    requestEpoch: number,
+    relayout: boolean,
+    reindexedTarget?: number,
+  ) => number;
   images: string[];
   /** 每页的原始像素尺寸。连续模式按它预留高度，图片加载前后页面不跳。 */
   dimensions?: Record<string, { width: number; height: number }>;
@@ -62,6 +68,9 @@ function PageImage({
   const [failed, setFailed] = useState<string | null>(null);
   return (
     <div
+      tabIndex={0}
+      role="group"
+      aria-label={`漫画第 ${box.index + 1} 页`}
       data-reader-page={box.index}
       data-file-id={box.fileId}
       className="absolute overflow-hidden"
@@ -131,8 +140,11 @@ export default function ImageGallery({
     zoom,
     viewport.width,
     viewport.height,
-    Object.keys(decoded).length,
   ].join("/");
+  const geometry = useMemo(
+    () => ({ dimensions, decoded }),
+    [dimensions, decoded],
+  );
   const view = useReaderViewport({
     albumId,
     images,
@@ -141,6 +153,8 @@ export default function ImageGallery({
     rotation,
     request: request ?? { epoch: index, index, source: "key" },
     layoutKey,
+    onJump: rest.onJump,
+    geometry,
     virtuoso,
     onObserve,
     onInvalidate,
@@ -211,6 +225,20 @@ export default function ImageGallery({
     mode !== "continuous" &&
     zoom <= 1 &&
     (!root || root.scrollWidth <= root.clientWidth + 1);
+  useEffect(() => {
+    const el = container.current;
+    if (!el || !canSwipe) return;
+    // 横向翻页归阅读器。原生纵向滚动与多指操作仍交给浏览器。
+    const move = (event: TouchEvent) => {
+      const start = gesture.current;
+      if (!start || event.touches.length !== 1 || !event.cancelable) return;
+      const dx = Math.abs(event.touches[0].clientX - start.x),
+        dy = Math.abs(event.touches[0].clientY - start.y);
+      if (dx > 5 && dx > dy * 1.2) event.preventDefault();
+    };
+    el.addEventListener("touchmove", move, { passive: false });
+    return () => el.removeEventListener("touchmove", move);
+  }, [canSwipe]);
   function pointerDown(e: PointerEvent<HTMLDivElement>) {
     if (
       (e.pointerType === "mouse" && e.button !== 0) ||
@@ -255,7 +283,11 @@ export default function ImageGallery({
       Math.abs(dx) >= 48 &&
       Math.abs(dx) > Math.abs(dy) * 1.2
     ) {
-      onClickNavigate?.((direction === "rtl" ? dx > 0 : dx < 0) ? 1 : -1);
+      e.preventDefault();
+      const step = (direction === "rtl" ? dx > 0 : dx < 0) ? 1 : -1;
+      // 等同一轮原生 touchend 送达原页，再卸载它；否则 Chromium 会吞掉下一次按钮点击。
+      clearTimeout(clickTimer.current);
+      clickTimer.current = setTimeout(() => onClickNavigate?.(step), 0);
     }
   }
   function row(indices: readonly number[]) {

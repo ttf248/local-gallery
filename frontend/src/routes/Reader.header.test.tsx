@@ -70,7 +70,7 @@ vi.mock("../features/viewer/VideoPlayer", () => ({
 }));
 vi.mock("../features/reader/PageSlider", () => ({ default: () => null }));
 vi.mock("../features/reader/GalleryHeader", () => ({
-  default: ({ name }: { name: string }) => <h1>{name}</h1>,
+  default: ({ name,onPrevAlbum }: { name: string;onPrevAlbum?:()=>void }) => <><h1>{name}</h1><button disabled={!onPrevAlbum}>上一卷</button></>,
 }));
 vi.mock("../features/reader/GalleryAlbumNav", () => ({ default: () => null }));
 vi.mock("../features/reader/GalleryToolbar", () => ({ default: () => null }));
@@ -174,6 +174,7 @@ it("没有所属作品时只写卷名", async () => {
       "第1卷",
     ),
   );
+  expect(screen.getByRole("button",{name:"上一卷"})).toBeDisabled();
 });
 
 beforeEach(() => {

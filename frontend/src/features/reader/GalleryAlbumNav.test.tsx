@@ -5,7 +5,6 @@ import GalleryAlbumNav from "./GalleryAlbumNav";
 it("跨卷导航用「卷」的说法，并给出目标卷名", () => {
   render(
     <GalleryAlbumNav
-      visible
       onPrevAlbum={() => {}}
       onNextAlbum={() => {}}
       prevLabel="2015年09月"
@@ -23,6 +22,6 @@ it("跨卷导航用「卷」的说法，并给出目标卷名", () => {
 });
 
 it("没有上下文时不渲染任何按钮", () => {
-  render(<GalleryAlbumNav visible />);
+  render(<GalleryAlbumNav />);
   expect(screen.queryByRole("button")).toBeNull();
 });

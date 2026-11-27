@@ -154,7 +154,10 @@ export function useAdjacentAlbum({
   const navigate = useNavigate();
   const pushToast = useUIStore((s) => s.pushToast);
 
-  const [revision, setRevision] = useState(0);
+  const [loaded, setLoaded] = useState<{
+    path: string;
+    context: NonNullable<ReturnType<typeof pickContext>>;
+  } | null>(null);
   const adjacentPending = useRef(false);
   const adjacentController = useRef<AbortController>();
   useEffect(() => () => adjacentController.current?.abort(), [pathParam]);
@@ -213,7 +216,7 @@ export function useAdjacentAlbum({
           };
           if (controller.signal.aborted) return false;
           setGalleryContext(ctx);
-          setRevision((n) => n + 1);
+          setLoaded({ path: pathParam, context: ctx });
         }
       } catch {
         if (controller.signal.aborted) return false;
@@ -285,7 +288,10 @@ export function useAdjacentAlbum({
   // 光有两枚箭头，用户不知道点下去会翻到哪一卷 —— 名称在悬停时浮出，
   // 箭头本身仍然只是箭头，不抢画面的注意力。
   const adjacentNames = useMemo(() => {
-    const ctx = pickContext(pathParam, fallbackEntries);
+    const ctx =
+      loaded?.path === pathParam
+        ? loaded.context
+        : pickContext(pathParam, fallbackEntries);
     const pick = (direction: 1 | -1) =>
       resolveAdjacentEntry(ctx, pathParam, direction, {
         albumsOnly: true,
@@ -298,7 +304,7 @@ export function useAdjacentAlbum({
       next: nameOf(pick(1)),
       more: Boolean(ctx?.pagination?.nextCursor),
     };
-  }, [pathParam, isVideo, fallbackEntries, revision]);
+  }, [pathParam, isVideo, fallbackEntries, loaded]);
 
   return { goAdjacent, adjacentNames };
 }

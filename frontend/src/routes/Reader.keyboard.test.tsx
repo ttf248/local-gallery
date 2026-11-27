@@ -1,3 +1,4 @@
+import {useEffect,type ComponentProps} from "react";
 import {
   act,
   fireEvent,
@@ -83,7 +84,36 @@ vi.mock("../api/fs", () => ({
   },
 }));
 vi.mock("../features/reader/ImageGallery", () => ({
-  default: () => <div data-testid="image-gallery" />,
+  default: function ObservedGallery({
+    albumId = "",
+    request,
+    onObserve,
+    images,
+  }: ComponentProps<typeof import("../features/reader/ImageGallery").default>) {
+    const index = useGalleryStore((s) => s.index);
+    const fileId = images[index];
+    useEffect(() => {
+      if (request && fileId)
+        onObserve?.({
+          albumId,
+          epoch: request.epoch,
+          first: index,
+          last: index,
+          atTop: index === 0,
+          atBottom: index === images.length - 1,
+          anchor: {
+            albumId,
+            fileId,
+            index,
+            u: 0.5,
+            v: 0.5,
+            viewportU: 0.5,
+            viewportV: 0.5,
+          },
+        });
+    }, [albumId, fileId, index, request, onObserve, images.length]);
+    return <div data-testid="image-gallery" />;
+  },
 }));
 
 function Location() {
@@ -266,9 +296,7 @@ describe("Reader 按媒体类型隔离快捷键", () => {
     await waitFor(() => expect(useGalleryStore.getState().index).toBe(1));
     await pressKey("End");
     await pressKey("ArrowRight");
-    expect(useUIStore.getState().toasts.at(-1)?.message).toBe(
-      "图片已看完 · 还有 3 个视频",
-    );
+    expect(await screen.findByText("图片已看完 · 还有 3 个视频")).toBeVisible();
   });
 
   it("视频阅读器的更多菜单不说图片，也不提供没有实现的图片信息", async () => {

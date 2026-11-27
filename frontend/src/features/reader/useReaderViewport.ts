@@ -61,8 +61,17 @@ function rotateUnit({ x, y }: Point, degrees: number): Point {
 }
 const unit = (n: number) => Math.max(0, Math.min(1, n));
 
+function clientRect(root: HTMLElement) {
+  const rect = root.getBoundingClientRect();
+  return new DOMRect(
+    rect.left + root.clientLeft,
+    rect.top + root.clientTop,
+    root.clientWidth,
+    root.clientHeight,
+  );
+}
 export function visiblePages(root: HTMLElement) {
-  const viewport = root.getBoundingClientRect();
+  const viewport = clientRect(root);
   const pages = Array.from(
     root.querySelectorAll<HTMLElement>("[data-reader-page]"),
   )
@@ -96,9 +105,15 @@ interface Options {
   mode: ReaderMode;
   rotation: number;
   layoutKey: string;
+  onJump?: (index: number, source: JumpSource) => void;
+  geometry?: object;
   request: ReaderJump;
   virtuoso: RefObject<VirtuosoHandle>;
-  onInvalidate?: () => void;
+  onInvalidate?: (
+    requestEpoch: number,
+    relayout: boolean,
+    reindexedTarget?: number,
+  ) => number;
   onObserve?: (value: ReaderObservation) => void;
 }
 
@@ -107,6 +122,7 @@ export function useReaderViewport(options: Options) {
   latest.current = options;
   const [root, setRoot] = useState<HTMLElement | null>(null);
   const frame = useRef(0);
+  const epoch = useRef(options.request.epoch);
   const anchor = useRef<ReaderAnchor | null>(null);
   const pending = useRef<{
     index: number;
@@ -123,9 +139,12 @@ export function useReaderViewport(options: Options) {
         measure.current();
       });
   }, []);
-  function readAnchor(at?: { clientX: number; clientY: number }) {
+  function readAnchor(
+    at?: { clientX: number; clientY: number },
+    measurement?: ReturnType<typeof visiblePages>,
+  ) {
     if (!root) return null;
-    const { viewport, pages } = visiblePages(root);
+    const { viewport, pages } = measurement ?? visiblePages(root);
     const { albumId, images, index, rotation } = latest.current;
     const cx = at?.clientX ?? viewport.left + viewport.width / 2,
       cy = at?.clientY ?? viewport.top + viewport.height / 2;
@@ -169,13 +188,13 @@ export function useReaderViewport(options: Options) {
   }
   const captureAnchor = (at?: { clientX: number; clientY: number }) =>
     (anchor.current = readAnchor(at));
-  const restoreAnchor = (saved: ReaderAnchor, epoch: number) => {
-    if (saved.albumId !== options.albumId || epoch !== options.request.epoch)
+  const restoreAnchor = (saved: ReaderAnchor, generation: number) => {
+    if (saved.albumId !== options.albumId || generation !== epoch.current)
       return;
     const i = options.images.indexOf(saved.fileId);
     pending.current = {
       index: i < 0 ? clampPage(saved.index, options.images.length) : i,
-      anchor: saved,
+      anchor: i >= 0 ? saved : null,
       sought: false,
     };
     schedule();
@@ -183,7 +202,7 @@ export function useReaderViewport(options: Options) {
   measure.current = () => {
     if (!root || !root.isConnected || !root.clientWidth || !root.clientHeight)
       return;
-    const { images, mode, request, rotation, albumId, virtuoso, onObserve } =
+    const { images, mode, rotation, albumId, virtuoso, onObserve } =
       latest.current;
     const target = pending.current;
     if (target) {
@@ -203,7 +222,7 @@ export function useReaderViewport(options: Options) {
       }
       if (!n) return;
       const rect = n.getBoundingClientRect(),
-        v = root.getBoundingClientRect();
+        v = clientRect(root);
       if (!rect.width || !rect.height) return;
       let dx = 0,
         dy = 0;
@@ -231,7 +250,8 @@ export function useReaderViewport(options: Options) {
         return;
       }
     }
-    const { pages } = visiblePages(root);
+    const measurement = visiblePages(root);
+    const { pages } = measurement;
     if (
       !pages.length ||
       (target && !pages.some((p) => p.index === target.index))
@@ -243,14 +263,14 @@ export function useReaderViewport(options: Options) {
       return;
     }
     pending.current = null;
-    const saved = readAnchor();
+    const saved = readAnchor(undefined, measurement);
     if (!saved) return;
     anchor.current = saved;
     const first = pages[0].index,
       last = pages[pages.length - 1].index;
     onObserve?.({
       albumId,
-      epoch: request.epoch,
+      epoch: epoch.current,
       first,
       last,
       anchor: saved,
@@ -264,35 +284,58 @@ export function useReaderViewport(options: Options) {
   const previous = useRef<{
     epoch: number;
     key: string;
+    geometry?: object;
+    images: string[];
     root: HTMLElement | null;
   } | null>(null);
   useLayoutEffect(() => {
     const prev = previous.current;
     const fresh = !prev || prev.epoch !== options.request.epoch;
-    if (fresh || prev.key !== options.layoutKey || prev.root !== root) {
-      latest.current.onInvalidate?.();
+    if (
+      fresh ||
+      prev.key !== options.layoutKey ||
+      prev.root !== root ||
+      prev.geometry !== options.geometry ||
+      prev.images !== options.images
+    ) {
+      const { images, index, mode } = latest.current;
+      let target = clampPage(
+        fresh ? options.request.index : index,
+        images.length,
+      );
+      if (!fresh && prev.images !== images) {
+        const oldFile = prev.images[index];
+        const moved = oldFile ? images.indexOf(oldFile) : -1;
+        if (moved >= 0) target = moved;
+      }
+      epoch.current =
+        latest.current.onInvalidate?.(
+          options.request.epoch,
+          !fresh,
+          !fresh && target !== index ? target : undefined,
+        ) ?? options.request.epoch;
       let saved = fresh ? null : anchor.current;
-      const position = saved ? latest.current.images.indexOf(saved.fileId) : -1;
-      if (saved && position >= 0) saved = { ...saved, index: position };
-      if (
-        saved &&
-        latest.current.mode === "single" &&
-        saved.index !== latest.current.index
-      )
-        saved = null;
+      if (saved) {
+        const position = images.indexOf(saved.fileId);
+        // 单页和双页只能回到本次渲染的页组，连续模式可以定位任意行。
+        const rendered =
+          mode === "continuous" ||
+          position === target ||
+          (mode === "double" &&
+            Math.floor(position / 2) === Math.floor(target / 2));
+        saved =
+          position >= 0 && rendered ? { ...saved, index: position } : null;
+      }
       pending.current = {
-        index: clampPage(
-          fresh
-            ? options.request.index
-            : (saved?.index ?? latest.current.index),
-          latest.current.images.length,
-        ),
+        index: saved?.index ?? target,
         anchor: saved,
         sought: false,
       };
       previous.current = {
         epoch: options.request.epoch,
         key: options.layoutKey,
+        geometry: options.geometry,
+        images: options.images,
         root,
       };
     }
@@ -301,6 +344,8 @@ export function useReaderViewport(options: Options) {
     options.request.epoch,
     options.request.index,
     options.layoutKey,
+    options.geometry,
+    options.images,
     root,
     schedule,
   ]);
@@ -332,7 +377,12 @@ export function useReaderViewport(options: Options) {
     schedule,
     captureAnchor,
     restoreAnchor,
-    jumpTo(index: number) {
+    jumpTo(raw: number, source: JumpSource) {
+      const index = clampPage(raw, latest.current.images.length);
+      if (latest.current.onJump) {
+        latest.current.onJump(index, source);
+        return;
+      }
       pending.current = { index, anchor: null, sought: false };
       schedule();
     },

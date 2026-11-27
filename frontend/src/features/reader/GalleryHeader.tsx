@@ -1,3 +1,4 @@
+import { useRef, useLayoutEffect, useState } from "react";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -6,8 +7,6 @@ import {
   InfoIcon,
   MoreHorizontalIcon,
   KeyboardIcon,
-  ArrowUpIcon,
-  ArrowDownIcon,
   ImageIcon,
   RefreshIcon,
   ArrowRightLineIcon,
@@ -22,10 +21,12 @@ import Popover, {
   PopoverLabel,
 } from "../../ui/Popover";
 import { useGalleryStore } from "../../store/galleryStore";
-import { toggleFullscreen as toggleFullscreenImpl } from "../../utils/fullscreen";
+import { supportsFullscreen } from "../../utils/fullscreen";
 import type { AppMode } from "../../api/library";
 
 interface Props {
+  onMenuChange?: (open: boolean) => void;
+  fullscreen: () => void;
   name: string;
   /**
    * 图片阅读器 store 中的 0-based 页码。视频模式不复用这份状态。
@@ -51,8 +52,8 @@ interface Props {
   onPrevAlbum?: () => void;
   onNextAlbum?: () => void;
   /** 跳到列表首/尾（视频模式下需要走 URL 切视频，不能用 setIndex）。 */
-  onJumpToFirst?: () => void;
-  onJumpToLast?: () => void;
+  onJumpToFirst: () => void;
+  onJumpToLast: () => void;
   /** 把当前图片/视频设为本相册的封面。 */
   onSetCover?: () => void;
   /** 清除本相册的自定义封面（回到扫描器默认）。 */
@@ -69,13 +70,7 @@ interface Props {
   onOpenWorkbench?: (mode: AppMode) => void;
 }
 
-// 画廊顶部常驻条：返回 / 名称 / 页码 / 收藏 / 全屏 / 更多
-//
-// 2026-11 重设计：顶栏只保留"我在这 / 我是谁 / 我要离开"三类信息 ——
-// 返回、相册名、页码、收藏、全屏与溢出菜单。
-// 阅读模式 / 适配 / 缩放 / 旋转这类"看图"操作已移到画面底部的浮动
-// 工具条（GalleryToolbar）：它们与顶栏控件挤在一起时，1440px 下顶栏
-// 会出现 6 组并列控件；而底部才是拇指可达区，也是阅读器软件的惯例位置。
+// 按阅读列的实际宽度收纳工作台、收藏和全屏。
 export default function GalleryHeader({
   name,
   index,
@@ -99,17 +94,32 @@ export default function GalleryHeader({
   onToggleOverview,
   workbenchMode,
   onOpenWorkbench,
+  onMenuChange,
+  fullscreen,
 }: Props) {
   const mode = useGalleryStore((s) => s.mode);
   const direction = useGalleryStore((s) => s.direction);
   const setDirection = useGalleryStore((s) => s.setDirection);
-  const setIndex = useGalleryStore((s) => s.setIndex);
-  // 全屏走 utils/fullscreen.toggFullscreen() 直接调浏览器 API,不再
-  // 走 store(老 store.toggleFullscreen 是空 set action,已删除)。
-  const toggleFullscreen = () => {
-    toggleFullscreenImpl();
-  };
-
+  const header = useRef<HTMLElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const el = header.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width) return;
+      setNarrow(rect.width < 640);
+      el.closest<HTMLElement>(".reader-shell")?.style.setProperty(
+        "--reader-header-height",
+        rect.height + "px",
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
   // 显示 / 翻页禁用都用 item index；未传时回退到 index（仅图库模式安全）
   const displayIndex = itemIndex !== undefined ? itemIndex : Math.floor(index);
   const isVideo = itemIndex !== undefined;
@@ -128,21 +138,12 @@ export default function GalleryHeader({
     return `${displayIndex + 1} / ${total}`;
   })();
 
-  // 跳到首/尾（菜单里的快捷入口）。视频模式必须用父组件传的
-  // onJumpToFirst/Last（基于 URL 切视频）；图片模式回退到 setIndex。
-  const jumpToFirst = onJumpToFirst ?? (() => setIndex(0));
-  const jumpToLast = onJumpToLast ?? (() => setIndex(Math.max(0, total - 1)));
-
-  const hasAlbumNav = !!(onPrevAlbum || onNextAlbum);
-
   return (
-    /* 顶栏是两块浮层，不是一条通栏：通栏会压住画面顶端，
-       漫画页的上缘就永远看不见了。中间留白透到画面上，
-       点空白处还能翻页。 */
-    <header className="reader-header">
-      <div className="reader-header__group max-sm:h-[42px] max-sm:px-2 reader-header__group--main max-sm:max-w-[70%] text-white/85">
+    <header ref={header} className="reader-header">
+      <div className="reader-header__group reader-header__group--main text-white/85">
         <button
           onClick={onBack}
+          aria-label="返回"
           title="返回 (Esc)"
           className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-body transition-colors hover:bg-white/10"
         >
@@ -150,7 +151,10 @@ export default function GalleryHeader({
           <span className="hidden sm:inline">返回</span>
         </button>
 
-        <h1 className="flex min-w-0 flex-1 items-baseline gap-2.5 sm:gap-3">
+        <h1
+          title={name}
+          className="flex min-w-0 flex-1 items-baseline gap-2.5 sm:gap-3"
+        >
           <span className="truncate text-body font-medium text-white">
             {name}
           </span>
@@ -160,11 +164,12 @@ export default function GalleryHeader({
         </h1>
       </div>
 
-      <div className="reader-header__group max-sm:h-[42px] max-sm:px-2 reader-header__group--actions text-white/85">
+      <div className="reader-header__group reader-header__group--actions text-white/85">
         {/* 工作台切换：阅读器没有侧栏，这里是唯一能换工作台的地方。
           切换意味着离开阅读器回到外壳，所以它是一个「打开某个库」的动作。 */}
-        {onOpenWorkbench && workbenchMode && (
+        {!narrow && onOpenWorkbench && workbenchMode && (
           <Popover
+            onOpenChange={onMenuChange}
             align="end"
             tone="reader"
             trigger={
@@ -213,27 +218,27 @@ export default function GalleryHeader({
           </div>
         )}
 
-        <HeaderIconButton
-          onClick={onToggleFavorite}
-          active={isFavorite}
-          title={isFavorite ? "取消收藏 (S)" : "加入收藏 (S)"}
-        >
-          <StarIcon
-            size={14}
-            filled={isFavorite}
-            className={isFavorite ? "text-theater-favorite" : ""}
-          />
-        </HeaderIconButton>
-
-        <HeaderIconButton
-          onClick={toggleFullscreen}
-          title="全屏 (F11)"
-          hideOnMobile
-        >
-          <FullscreenIcon size={14} />
-        </HeaderIconButton>
+        {!narrow && (
+          <HeaderIconButton
+            onClick={onToggleFavorite}
+            active={isFavorite}
+            title={isFavorite ? "取消收藏 (S)" : "加入收藏 (S)"}
+          >
+            <StarIcon
+              size={14}
+              filled={isFavorite}
+              className={isFavorite ? "text-theater-favorite" : ""}
+            />
+          </HeaderIconButton>
+        )}
+        {!narrow && supportsFullscreen() && (
+          <HeaderIconButton onClick={fullscreen} title="全屏 (F11)">
+            <FullscreenIcon size={14} />
+          </HeaderIconButton>
+        )}
 
         <Popover
+          onOpenChange={onMenuChange}
           align="end"
           tone="reader"
           trigger={
@@ -242,6 +247,26 @@ export default function GalleryHeader({
             </HeaderIconButton>
           }
         >
+          {narrow && (
+            <>
+              {onOpenWorkbench && (
+                <>
+                  <PopoverItem onClick={() => onOpenWorkbench("comic")}>
+                    打开漫画库
+                  </PopoverItem>
+                  <PopoverItem onClick={() => onOpenWorkbench("photo")}>
+                    打开照片库
+                  </PopoverItem>
+                </>
+              )}
+              <PopoverItem active={isFavorite} onClick={onToggleFavorite}>
+                {isFavorite ? "取消收藏" : "加入收藏"}
+              </PopoverItem>
+              {supportsFullscreen() && (
+                <PopoverItem onClick={fullscreen}>全屏</PopoverItem>
+              )}
+            </>
+          )}
           <PopoverLabel>内容</PopoverLabel>
           {!isVideo && (
             <PopoverItem onClick={onToggleInfo}>
@@ -292,29 +317,29 @@ export default function GalleryHeader({
               <span className="ml-auto text-caption text-white/55">L</span>
             </PopoverItem>
           )}
-          {hasAlbumNav && <PopoverSeparator />}
-          {hasAlbumNav && <PopoverLabel>列表</PopoverLabel>}
-          {onPrevAlbum && (
-            <PopoverItem onClick={onPrevAlbum}>
-              <ArrowUpIcon size={13} />
-              <span>上一本</span>
-              <span className="ml-auto text-caption text-white/55">P</span>
-            </PopoverItem>
-          )}
-          {onNextAlbum && (
-            <PopoverItem onClick={onNextAlbum}>
-              <ArrowDownIcon size={13} />
-              <span>下一本</span>
-              <span className="ml-auto text-caption text-white/55">N</span>
-            </PopoverItem>
-          )}
+          <PopoverSeparator />
+          <PopoverLabel>卷导航</PopoverLabel>
+          <PopoverItem
+            onClick={onPrevAlbum}
+            disabled={!onPrevAlbum}
+            title={!onPrevAlbum ? "已到首卷" : undefined}
+          >
+            上一卷
+          </PopoverItem>
+          <PopoverItem
+            onClick={onNextAlbum}
+            disabled={!onNextAlbum}
+            title={!onNextAlbum ? "已到末卷" : undefined}
+          >
+            下一卷
+          </PopoverItem>
           <PopoverSeparator />
           <PopoverLabel>跳转</PopoverLabel>
-          <PopoverItem onClick={jumpToFirst}>
+          <PopoverItem onClick={onJumpToFirst}>
             <span>{isVideo ? "第一个视频" : "第一页"}</span>
             <span className="ml-auto text-caption text-white/55">Home</span>
           </PopoverItem>
-          <PopoverItem onClick={jumpToLast}>
+          <PopoverItem onClick={onJumpToLast}>
             <span>{isVideo ? "最后一个视频" : "最后一页"}</span>
             <span className="ml-auto text-caption text-white/55">End</span>
           </PopoverItem>
@@ -331,7 +356,7 @@ function HeaderIconButton({
   title,
   ariaLabel,
   active,
-  hideOnMobile,
+  ...aria
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -340,17 +365,18 @@ function HeaderIconButton({
   /** 可访问名；缺省时退回 title（图标按钮的可访问名不能只靠图标）。 */
   ariaLabel?: string;
   active?: boolean;
-  hideOnMobile?: boolean;
+  "aria-expanded"?: boolean;
+  "aria-haspopup"?: "menu";
 }) {
   return (
     <button
+      {...aria}
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-pressed={active}
       aria-label={ariaLabel ?? title}
       className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${
-        hideOnMobile ? "hidden sm:inline-flex" : ""
-      } ${
         active
           ? "bg-white/15 text-white"
           : "text-white/80 hover:bg-white/10 hover:text-white"

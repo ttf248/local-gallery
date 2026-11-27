@@ -50,8 +50,8 @@ export default function PageSlider({
   const pct = total > 1 ? (effective / (total - 1)) * 100 : 0;
   // 双页时当前显示的是两页：页码写成区间，与顶栏一致。
   const labelFor = (i: number) => {
-    const first = i + 1;
-    const last = Math.min(i + 2, total);
+    const first = (double ? 2 * Math.floor(i / 2) : i) + 1;
+    const last = Math.min(first + 1, total);
     if (double && last > first) return `${first}–${last}`;
     return String(first);
   };
@@ -85,7 +85,14 @@ export default function PageSlider({
   // 全局快捷键：G 进入输入态（与 vim/git 习惯一致）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.altKey || e.metaKey || shouldIgnoreShortcut(e)) return;
+      if (
+        document.querySelector('dialog[open],[role="menu"]') ||
+        e.ctrlKey ||
+        e.altKey ||
+        e.metaKey ||
+        shouldIgnoreShortcut(e)
+      )
+        return;
       if (e.key === "g" && !editing) {
         e.preventDefault();
         startEditing();
@@ -115,37 +122,26 @@ export default function PageSlider({
   // 看到的还是创建时的旧值，导致「拖到中段松手不跳转」）。
   const scrubIndexRef = useRef<number | null>(null);
 
-  function onTrackPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (total <= 1) return;
-    const el = trackRef.current;
-    if (!el) return;
-    el.setPointerCapture(e.pointerId);
-    const rect = el.getBoundingClientRect();
-    const update = (clientX: number) => {
-      const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
-      const ratio = rect.width === 0 ? 0 : x / rect.width;
-      const i = Math.round(ratio * (total - 1));
-      scrubIndexRef.current = i;
-      setScrubIndex(i);
-    };
-    update(e.clientX);
-    const onMove = (ev: PointerEvent) => update(ev.clientX);
-    const onUp = (ev: PointerEvent) => {
-      // 拖拽结束时真正跳转：从 ref 读最新值，避开闭包陷阱
-      const finalIdx = scrubIndexRef.current;
-      if (finalIdx !== null) onJump(finalIdx);
-      scrubIndexRef.current = null;
-      setScrubIndex(null);
-      el.releasePointerCapture(ev.pointerId);
-      el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onUp);
-    };
-    el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onUp);
+  const pointer = useRef<number | null>(null);
+  function update(clientX: number) {
+    const bounds = trackRef.current?.getBoundingClientRect();
+    if (!bounds?.width) return;
+    const value = Math.round(
+      Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width)) *
+        (total - 1),
+    );
+    scrubIndexRef.current = value;
+    setScrubIndex(value);
   }
-
+  function finish(e: React.PointerEvent<HTMLDivElement>, commit: boolean) {
+    if (pointer.current !== e.pointerId) return;
+    pointer.current = null;
+    if (commit && scrubIndexRef.current !== null) onJump(scrubIndexRef.current);
+    scrubIndexRef.current = null;
+    setScrubIndex(null);
+    if (e.currentTarget.hasPointerCapture?.(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId);
+  }
   // 缩略图条：拖拽时显示 5 张（当前 ± 2）；非拖拽时用当前页 + 1/2 截图概览
   const showStrip = scrubIndex !== null && images && images.length > 0;
   const strip = showStrip
@@ -157,7 +153,7 @@ export default function PageSlider({
       );
 
   return (
-    <div className="relative h-11 flex items-center gap-3 px-3 sm:px-5 text-white/85 select-none scrim-bottom [background-image:linear-gradient(to_top,rgba(0,0,0,0.88)_0%,rgba(0,0,0,0.88)_68%,rgba(0,0,0,0)_100%)]">
+    <div className="reader-slider relative flex min-w-0 flex-1 items-center gap-1 text-theater-fg">
       {/* 缩略图条：拖拽时浮现 */}
       {showStrip && (
         <div
@@ -232,35 +228,64 @@ export default function PageSlider({
       <span className="text-white/70 text-caption tabular-nums">/ {total}</span>
 
       {/* 进度条 */}
-      <div className="flex-1 relative h-9 flex items-center group">
-        <div
-          ref={trackRef}
-          onPointerDown={onTrackPointerDown}
-          data-testid="page-slider-track"
-          className="relative h-1 w-full bg-white/15 rounded-full cursor-pointer group-hover:h-1.5 transition-all"
-        >
+      {total > 1 && (
+        <div className="min-w-0 flex-1 relative flex items-center group">
           <div
-            className="reader-slider-fill absolute left-0 top-0 h-full rounded-full"
-            style={{ width: `${pct}%` }}
-          />
-          {/* 拖动手柄 */}
-          <div
-            className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-2 transition-transform"
-            style={{
-              left: `calc(${pct}% - 6px)`,
-              transform:
-                scrubIndex !== null
-                  ? "translateY(-50%) scale(1.3)"
-                  : "translateY(-50%)",
+            ref={trackRef}
+            role="slider"
+            tabIndex={0}
+            aria-label="阅读进度"
+            aria-valuemin={1}
+            aria-valuemax={total}
+            aria-valuenow={effective + 1}
+            aria-valuetext={`第 ${labelFor(effective)} / ${total} 页`}
+            onKeyDown={(e) => {
+              const offset = double ? 2 : 1;
+              const keys: Record<string, number> = {
+                ArrowLeft: safeIndex - offset,
+                ArrowRight: safeIndex + offset,
+                Home: 0,
+                End: total - 1,
+              };
+              if (e.key in keys) {
+                e.preventDefault();
+                e.stopPropagation();
+                onJump(Math.max(0, Math.min(total - 1, keys[e.key])));
+              }
             }}
-          />
+            onPointerDown={(e) => {
+              if (pointer.current !== null || e.button > 0) return;
+              pointer.current = e.pointerId;
+              e.currentTarget.setPointerCapture?.(e.pointerId);
+              update(e.clientX);
+            }}
+            onPointerMove={(e) => {
+              if (pointer.current === e.pointerId) update(e.clientX);
+            }}
+            onPointerCancel={(e) => finish(e, false)}
+            onLostPointerCapture={(e) => finish(e, false)}
+            onPointerUp={(e) => finish(e, true)}
+            data-testid="page-slider-track"
+            className="reader-slider-track relative h-10 w-full touch-none cursor-pointer"
+          >
+            <div
+              className="reader-slider-fill absolute left-0 top-1/2 -translate-y-1/2 h-1 rounded-full"
+              style={{ width: `${pct}%` }}
+            />
+            {/* 拖动手柄 */}
+            <div
+              className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-2 transition-transform"
+              style={{
+                left: `calc(${pct}% - 6px)`,
+                transform:
+                  scrubIndex !== null
+                    ? "translateY(-50%) scale(1.3)"
+                    : "translateY(-50%)",
+              }}
+            />
+          </div>
         </div>
-      </div>
-
-      {/* 快捷键提示 */}
-      <span className="text-caption text-white/55 hidden md:inline">
-        <kbd className="kbd-light inline-flex items-center font-mono text-caption leading-[1] py-0.5 px-[5px] rounded-sm [border:1px_solid_rgba(255,255,255,0.18)] [background:rgba(255,255,255,0.08)] [color:rgba(255,255,255,0.75)] min-w-[19px] justify-center">G</kbd> 跳转
-      </span>
+      )}
     </div>
   );
 }

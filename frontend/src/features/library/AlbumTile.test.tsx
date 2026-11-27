@@ -314,7 +314,7 @@ describe("AlbumCard 封面语义", () => {
     (variant) => {
       renderCard(card(), variant);
 
-      const link = screen.getByRole("link", { name: "打开相册“周末记录”" });
+      const link = screen.getByRole("link", { name: "打开卷“周末记录”" });
       expect(link).toHaveAttribute("href", "/albums/album-1");
       expect(link.querySelector("button")).toBeNull();
       expect(screen.getByTestId("card-cover")).toHaveClass(
@@ -490,7 +490,7 @@ describe("AlbumCard 收藏星标", () => {
       renderCard(card(), variant);
 
       // 星标必须是链接的兄弟节点：在 <a> 里嵌按钮会让 Enter 冒泡触发跳转。
-      const link = screen.getByRole("link", { name: "打开相册“周末记录”" });
+      const link = screen.getByRole("link", { name: "打开卷“周末记录”" });
       expect(link.querySelector("button")).toBeNull();
 
       const star = screen.getByRole("button", { name: "收藏「周末记录」" });
@@ -625,4 +625,11 @@ describe("AlbumCard 触摸长按", () => {
     fireEvent.click(screen.getByRole("link"));
     expect(screen.getByText("album-page")).toBeInTheDocument();
   });
+});
+
+
+it("照片册、漫画卷和作品的打开链接按内容类型命名",()=>{
+  for(const [variant,contentKind,word] of [["album","photo","相册"],["album","comic","卷"],["collection","comic","作品"]] as const){
+    const view=renderCard(card({variant,contentKind}),"grid");expect(screen.getByRole("link",{name:`打开${word}“周末记录”`})).toBeInTheDocument();view.unmount();
+  }
 });

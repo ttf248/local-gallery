@@ -212,12 +212,15 @@ export default function Popover({
                 onKeyDown={(event) =>
                   handleMenuKeyDown(event, () => setOpen(false))
                 }
+                onFocusCapture={event=>{if(event.target!==event.currentTarget)event.target.scrollIntoView?.({block:"nearest"})}}
                 onBlur={(event) => {
                   if (!event.currentTarget.contains(event.relatedTarget))
                     setOpen(false);
                 }}
                 style={{
                   position: "fixed",
+                  maxHeight:"calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+                  overflowY:"auto",overscrollBehavior:"contain",
                   /* 位置量出来之前先挂在屏外：菜单始终在 DOM 里，
                      量得到真实尺寸；布局阶段再把它挪到该在的地方，
                      不会出现「先闪一下再跳位」。 */

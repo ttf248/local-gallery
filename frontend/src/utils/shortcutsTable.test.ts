@@ -97,3 +97,9 @@ describe("快捷键清单", () => {
     expect(duplicated).toEqual([]);
   });
 });
+
+
+it("倍率复位与原始像素有独立说明",()=>{
+ expect(SHORTCUTS.find(s=>s.combo==="0")?.description).toContain("当前适配倍率");
+ expect(SHORTCUTS.some(s=>s.description.includes("整页→按宽→按高→原始"))).toBe(true);
+});

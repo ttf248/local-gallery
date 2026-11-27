@@ -17,6 +17,7 @@ describe("Popover", () => {
     const item = await screen.findByRole("menuitem", { name: "执行操作" });
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(item).toHaveFocus();
+    expect(screen.getByRole("menu").style.overflowY).toBe("auto");
 
     fireEvent.click(item);
 

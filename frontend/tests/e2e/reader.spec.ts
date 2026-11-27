@@ -459,8 +459,9 @@ test("阅读器放大与旋转真正作用到图片上", async ({ page }) => {
   // 初始为原图
   expect((await matrix())[0]).toBeCloseTo(1, 1);
   // 放大：矩阵的缩放分量必须真的变大（而不是只有右侧面板的数字变了）
+  const before=(await img.boundingBox())!.width;
   await page.keyboard.press("+");
-  await expect.poll(async () => (await matrix())[0]).toBeGreaterThan(1.1);
+  await expect.poll(async () => (await img.boundingBox())!.width/before).toBeCloseTo(1.2,1);
   // 旋转 90°：矩阵出现旋转分量
   await page.keyboard.press("r");
   await expect
@@ -571,7 +572,9 @@ test("窄屏阅读器不再显示右侧悬浮控件，阅读设置收进底部�
   // 阅读设置改由底部浮动工具条提供（窄屏也直接可点，不需要再开菜单）。
   const toolbar = page.getByRole("toolbar", { name: "阅读控制" });
   await expect(toolbar).toBeVisible();
-  await toolbar.getByRole("button", { name: "双页" }).click();
+  await toolbar.getByRole("button",{name:"设置"}).click();
+  await page.getByRole("radio",{name:"双页"}).click();
+  await page.getByRole("button",{name:"关闭阅读设置"}).click();
   await expect(page.getByText("1–2 /")).toBeVisible();
 
   await page.getByRole("button", {name:"更多",exact:true}).click();
@@ -587,7 +590,9 @@ test("窄屏阅读器不再显示右侧悬浮控件，阅读设置收进底部�
   // 这条用例要验的是「工具条让开后热区仍然可用」，所以先切到左→右，
   // 让「右三分之一翻到下一页」这句断言仍然成立。
   await page.keyboard.press("l");
-  await toolbar.getByRole("button", { name: "单页" }).click();
+  await toolbar.getByRole("button",{name:"设置"}).click();
+  await page.getByRole("radio",{name:"单页"}).click();
+  await page.getByRole("button",{name:"关闭阅读设置"}).click();
   await expect(page.getByText(new RegExp(`^1 / ${total}$`))).toBeVisible();
   await page.mouse.click(360, 300);
   await expect(page.getByText(new RegExp(`^2 / ${total}$`))).toBeVisible();
@@ -682,7 +687,7 @@ test("阅读器底部工具条常驻阅读模式与适配方式，切换后写�
 
   // 适配方式：一个按钮循环 适应 → 按宽 → 按高 → 原始。
   const fit = toolbar.getByRole("button", { name: /^适配方式：/ });
-  await expect(fit).toHaveAttribute("aria-label", "适配方式：适应");
+  await expect(fit).toHaveAttribute("aria-label", "适配方式：整页");
   await fit.click();
   await expect(fit).toHaveAttribute("aria-label", "适配方式：按宽");
 

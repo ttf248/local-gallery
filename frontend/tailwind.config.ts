@@ -28,7 +28,7 @@ export default {
       maxWidth:{page:"var(--page-max)"},
       spacing: {
         gutter:"var(--gutter)", section:"var(--section)", "float-bottom":"var(--float-bottom)",
-        "drawer-offset":"var(--folder-drawer-offset)", "gallery-fit":"var(--gallery-fit-height)", "safe-top":"var(--safe-top)",
+        "drawer-offset":"var(--folder-drawer-offset)", "safe-top":"var(--safe-top)",
         rail: "var(--nav-width)",
         "rail-compact": "var(--nav-width-compact)",
         topbar: "var(--topbar-h)",

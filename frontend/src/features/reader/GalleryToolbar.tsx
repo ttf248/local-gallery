@@ -27,14 +27,10 @@ interface Props {
   /** 当前是否第一页 / 最后一页（用于禁用翻页按钮）。 */
   atStart?: boolean;
   atEnd?: boolean;
-  /**
-   * 是否显示。
-   *
-   * 阅读时它压在画面上，常驻会一直挡着画。空闲后淡出，鼠标靠近底部
-   * 或按下任意键就回来 —— 顶部条与底部页码进度条始终常驻，所以
-   * 「现在在哪一页」这件事永远不需要先找到工具条。
-   */
-  visible?: boolean;
+  singlePage?: boolean;
+  nextVolume?: boolean;
+  onSettings?: () => void;
+  children?: React.ReactNode;
 }
 
 const MODE_OPTIONS: {
@@ -49,7 +45,7 @@ const MODE_OPTIONS: {
 ];
 
 const FIT_LABEL: Record<FitMode, string> = {
-  fit: "适应",
+  fit: "整页",
   width: "按宽",
   height: "按高",
   original: "原始",
@@ -67,7 +63,10 @@ export default function GalleryToolbar({
   onNext,
   atStart,
   atEnd,
-  visible = true,
+  singlePage = false,
+  nextVolume = false,
+  onSettings,
+  children,
 }: Props) {
   const mode = useGalleryStore((s) => s.mode);
   const setMode = useGalleryStore((s) => s.setMode);
@@ -81,99 +80,117 @@ export default function GalleryToolbar({
   const rotate = useGalleryStore((s) => s.rotate);
 
   return (
-    <div
-      className={`absolute bottom-[52px] left-1/2 z-20 -translate-x-1/2 transition-opacity duration-300 ${
-        visible ? "opacity-100" : "opacity-0 pointer-events-none"
-      }`}
-      role="toolbar"
-      aria-label="阅读控制"
-    >
-      <div className="reader-control-panel flex items-center gap-0.5 p-1.5 shadow-2xl ring-1 ring-white/15 backdrop-blur-xl">
-        <ToolButton
-          onClick={onPrev}
-          disabled={atStart}
-          title="上一页 (←)"
-          ariaLabel="上一页"
-        >
-          <ChevronLeftIcon size={16} />
-        </ToolButton>
+    <div className="reader-bottom-chrome" role="toolbar" aria-label="阅读控制">
+      <div className="reader-control-panel">
+        {!singlePage && (
+          <ToolButton
+            onClick={onPrev}
+            disabled={atStart}
+            title="上一页 (←)"
+            ariaLabel="上一页"
+          >
+            <ChevronLeftIcon size={16} />
+          </ToolButton>
+        )}
 
-        <Divider />
+        {children}
+        <div className="reader-mode-tools">
+          <div
+            className="flex items-center gap-0.5"
+            role="group"
+            aria-label="阅读模式"
+          >
+            {MODE_OPTIONS.map((o) => (
+              <ToolButton
+                key={o.value}
+                onClick={() => setMode(o.value)}
+                active={mode === o.value}
+                title={`${o.label} (${o.key})`}
+                ariaLabel={o.label}
+              >
+                <o.icon size={15} />
+              </ToolButton>
+            ))}
+          </div>
 
-        <div
-          className="flex items-center gap-0.5"
-          role="group"
-          aria-label="阅读模式"
-        >
-          {MODE_OPTIONS.map((o) => (
+          <Divider />
+
+          <span className="reader-wide-tool">
             <ToolButton
-              key={o.value}
-              onClick={() => setMode(o.value)}
-              active={mode === o.value}
-              title={`${o.label} (${o.key})`}
-              ariaLabel={o.label}
+              onClick={cycleFit}
+              title={`适配方式：${FIT_LABEL[fit]}（F 循环）`}
+              ariaLabel={`适配方式：${FIT_LABEL[fit]}`}
             >
-              <o.icon size={15} />
+              {FIT_ICON[fit]}
             </ToolButton>
-          ))}
-        </div>
 
-        <Divider />
+            <Divider />
+          </span>
+          <ToolButton
+            disabled={zoom <= 0.1}
+            onClick={zoomOut}
+            title="缩小 (-)"
+            ariaLabel="缩小"
+          >
+            <MinusIcon size={15} />
+          </ToolButton>
+          <button
+            type="button"
+            onClick={zoomReset}
+            title="重置当前倍率 (0)"
+            aria-label={`重置当前倍率，相对${FIT_LABEL[fit]} ${Math.round(zoom * 100)}%`}
+            className="hidden sm:inline-flex h-8 min-w-[46px] items-center justify-center rounded-md px-1 text-caption tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            相对{FIT_LABEL[fit]} {Math.round(zoom * 100)}%
+          </button>
+          <ToolButton
+            disabled={zoom >= 5}
+            onClick={zoomIn}
+            title="放大 (+)"
+            ariaLabel="放大"
+          >
+            <PlusIcon size={15} />
+          </ToolButton>
 
-        <ToolButton
-          onClick={cycleFit}
-          title={`适配方式：${FIT_LABEL[fit]}（F 循环）`}
-          ariaLabel={`适配方式：${FIT_LABEL[fit]}`}
-        >
-          {FIT_ICON[fit]}
-        </ToolButton>
+          <Divider />
 
-        <Divider />
-
-        <ToolButton onClick={zoomOut} title="缩小 (-)" ariaLabel="缩小">
-          <MinusIcon size={15} />
-        </ToolButton>
-        <button
-          type="button"
-          onClick={zoomReset}
-          title="实际大小 (0)"
-          aria-label={`实际大小，当前 ${Math.round(zoom * 100)}%`}
-          className="hidden sm:inline-flex h-8 min-w-[46px] items-center justify-center rounded-md px-1 text-caption tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <ToolButton onClick={zoomIn} title="放大 (+)" ariaLabel="放大">
-          <PlusIcon size={15} />
-        </ToolButton>
-
-        <Divider />
-
-        <ToolButton
-          onClick={() => rotate(90)}
-          title={`旋转 90°（当前 ${rotation}°）`}
-          ariaLabel={`旋转 90 度，当前 ${rotation} 度`}
-        >
-          <span className="inline-flex items-center gap-1">
-            <RotateIcon size={15} />
-            {/* 角度读数只在真的转过之后出现：平时一枚「0°」占着位置，
+          <span className="reader-wide-tool">
+            <ToolButton
+              onClick={() => rotate(90)}
+              title={`旋转 90°（当前 ${rotation}°）`}
+              ariaLabel={`旋转 90 度，当前 ${rotation} 度`}
+            >
+              <span className="inline-flex items-center gap-1">
+                <RotateIcon size={15} />
+                {/* 角度读数只在真的转过之后出现：平时一枚「0°」占着位置，
                 读起来像一个待填的空读数。同一页的进度条也是这个规矩
                 —— 空轨道不出现。 */}
-            {rotation !== 0 && (
-              <span className="text-caption tabular-nums">{rotation}°</span>
-            )}
+                {rotation !== 0 && (
+                  <span className="text-caption tabular-nums">{rotation}°</span>
+                )}
+              </span>
+            </ToolButton>
           </span>
-        </ToolButton>
-
-        <Divider />
-
-        <ToolButton
-          onClick={onNext}
-          disabled={atEnd}
-          title="下一页 (→)"
-          ariaLabel="下一页"
-        >
-          <ChevronRightIcon size={16} />
-        </ToolButton>
+        </div>
+        {onSettings && (
+          <button
+            className="reader-settings-button"
+            type="button"
+            onClick={onSettings}
+          >
+            设置
+          </button>
+        )}
+        {(!singlePage || nextVolume) && (
+          <ToolButton
+            onClick={onNext}
+            disabled={atEnd}
+            title={nextVolume ? "下一卷" : "下一页 (→)"}
+            ariaLabel={nextVolume ? "下一卷" : "下一页"}
+          >
+            <ChevronRightIcon size={16} />
+          </ToolButton>
+        )}
       </div>
     </div>
   );

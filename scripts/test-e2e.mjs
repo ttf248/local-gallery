@@ -51,19 +51,74 @@ function run(command, commandArgs, options = {}) {
 }
 
 // 带四角、上下边和中央页码的索引色 PNG，用几 KB 的图像验证真实比例与方向。
-function markedPage(width,height,number) {
-  const pixels=Buffer.alloc((width+1)*height)
-  const digits=["111101101101111","010110010010111","111001111100111","111001111001111","101101111001001","111100111001111","111100111101111","111001001001001","111101111101111","111101111001111"]
-  const paint=(x,y,w,h,color)=>{for(let row=y;row<y+h;row++)pixels.fill(color,row*(width+1)+1+x,row*(width+1)+1+x+w)}
-  paint(0,0,width,12,1);paint(0,height-12,width,12,2)
-  for(const [i,[x,y]] of [[0,0],[width-50,0],[0,height-50],[width-50,height-50]].entries())paint(x,y,50,50,i+1)
-  const label=String(number)
-  for(const [i,char] of [...label].entries())for(let j=0;j<15;j++){
-    if(digits[Number(char)][j]==="1")paint(Math.floor(width/2)-label.length*20+i*40+j%3*10,Math.floor(height/2)-25+Math.floor(j/3)*10,10,10,4)
+function markedPage(width, height, number) {
+  const pixels = Buffer.alloc((width + 1) * height)
+  const digits = [
+    '111101101101111',
+    '010110010010111',
+    '111001111100111',
+    '111001111001111',
+    '101101111001001',
+    '111100111001111',
+    '111100111101111',
+    '111001001001001',
+    '111101111101111',
+    '111101111001111',
+  ]
+  const paint = (x, y, w, h, color) => {
+    for (let row = y; row < y + h; row++)
+      pixels.fill(
+        color,
+        row * (width + 1) + 1 + x,
+        row * (width + 1) + 1 + x + w,
+      )
   }
-  const chunk=(name,data)=>{const body=Buffer.concat([Buffer.from(name),data]);const size=Buffer.alloc(4),crc=Buffer.alloc(4);size.writeUInt32BE(data.length);crc.writeUInt32BE(crc32(body));return Buffer.concat([size,body,crc])}
-  const ihdr=Buffer.alloc(13);ihdr.writeUInt32BE(width);ihdr.writeUInt32BE(height,4);ihdr[8]=8;ihdr[9]=3
-  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk("IHDR",ihdr),chunk("PLTE",Buffer.from([231,225,208,190,93,61,54,130,113,64,100,155,41,44,49])),chunk("IDAT",deflateSync(pixels)),chunk("IEND",Buffer.alloc(0))])
+  paint(0, 0, width, 12, 1)
+  paint(0, height - 12, width, 12, 2)
+  for (const [i, [x, y]] of [
+    [0, 0],
+    [width - 50, 0],
+    [0, height - 50],
+    [width - 50, height - 50],
+  ].entries())
+    paint(x, y, 50, 50, i + 1)
+  const label = String(number)
+  for (const [i, char] of [...label].entries())
+    for (let j = 0; j < 15; j++) {
+      if (digits[Number(char)][j] === '1')
+        paint(
+          Math.floor(width / 2) - label.length * 20 + i * 40 + (j % 3) * 10,
+          Math.floor(height / 2) - 25 + Math.floor(j / 3) * 10,
+          10,
+          10,
+          4,
+        )
+    }
+  const chunk = (name, data) => {
+    const body = Buffer.concat([Buffer.from(name), data])
+    const size = Buffer.alloc(4),
+      crc = Buffer.alloc(4)
+    size.writeUInt32BE(data.length)
+    crc.writeUInt32BE(crc32(body))
+    return Buffer.concat([size, body, crc])
+  }
+  const ihdr = Buffer.alloc(13)
+  ihdr.writeUInt32BE(width)
+  ihdr.writeUInt32BE(height, 4)
+  ihdr[8] = 8
+  ihdr[9] = 3
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', ihdr),
+    chunk(
+      'PLTE',
+      Buffer.from([
+        231, 225, 208, 190, 93, 61, 54, 130, 113, 64, 100, 155, 41, 44, 49,
+      ]),
+    ),
+    chunk('IDAT', deflateSync(pixels)),
+    chunk('IEND', Buffer.alloc(0)),
+  ])
 }
 
 async function writeFixture(root, relative, data = png) {
@@ -143,11 +198,22 @@ async function makeFixtures(root) {
   }
 
   for (let i = 1; i <= 3; i++) await writeFixture(comic, 'sample-comic/page-' + i + '.png')
-  const repeated=markedPage(900,1350,1)
-  for(const count of [1,8,9,1001]){
-    for(let i=1;i<=count;i++){
-      const bytes=count===1001?repeated:markedPage(900,count===9&&i===1?697:i===1?1462:1350,i)
-      await writeFixture(comic,`zz-几何验收/几何-${count}/p${String(i).padStart(4,"0")}.png`,bytes)
+  const repeated = markedPage(900, 1350, 1)
+  for (const count of [1, 8, 9, 1001]) {
+    for (let i = 1; i <= count; i++) {
+      const bytes =
+        count === 1001
+          ? repeated
+          : markedPage(
+              900,
+              count === 9 && i === 1 ? 697 : i === 1 ? 1462 : 1350,
+              i,
+            )
+      await writeFixture(
+        comic,
+        `zz-几何验收/几何-${count}/p${String(i).padStart(4, '0')}.png`,
+        bytes,
+      )
     }
   }
   const collection = path.join(comic, 'zz-scroll-collection')

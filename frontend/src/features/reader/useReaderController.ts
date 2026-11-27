@@ -26,7 +26,7 @@ import { useSafeBack } from "../../utils/navigation";
 import { usePrefs } from "../../hooks/usePrefs";
 import { useVideoActivity } from "../../hooks/useVideoActivity";
 import { useAppMode } from "../../hooks/useAppMode";
-import { useIdleChrome } from "../../hooks/useIdleChrome";
+import { toggleFullscreen } from "../../utils/fullscreen";
 import {
   useAdjacentAlbum,
   useSiblingVolumes,
@@ -53,6 +53,7 @@ export function useReaderController() {
 
   // 漫画阅读器的路由是 /comic/read/<album id>。
   const pathParam = decodeURIComponent(routeParams["albumId"] ?? "");
+  const hasExplicitIndex = params.has("index");
   const parsedIndex = Number(params.get("index"));
   const initialIndex = Number.isFinite(parsedIndex)
     ? Math.max(0, Math.floor(parsedIndex))
@@ -69,7 +70,8 @@ export function useReaderController() {
   const ready = media.status === "ready";
 
   const viewportRef = useRef<ReaderViewportHandle>(null);
-  const sequence = useRef(0);
+  const sequence = useRef(0),
+    lastJump = useRef(0);
   const [request, setRequest] = useState<ReaderJump>({
     index: 0,
     epoch: 0,
@@ -94,6 +96,10 @@ export function useReaderController() {
   const [infoTarget, setInfoTarget] = useState<ReaderCommandTarget | null>(
     null,
   );
+  const toggleInfo = useCallback(() => {
+    setInfoTarget(null);
+    setShowInfo((v) => !v);
+  }, []);
   const [showHelp, setShowHelp] = useState(false);
   // 目录：整本缩略图，按需打开，不打断连续阅读。
   const [showOverview, setShowOverview] = useState(false);
@@ -133,10 +139,10 @@ export function useReaderController() {
   // 而不是用 effect 闭包里的新 pathParam（会写错位置）。
   const lastPathRef = useRef<string>("");
 
-  // 浮层显隐：鼠标移动时显出，2s 无动作后自动隐藏。
-  // 不影响顶部常驻条（始终可见）。
-  const { chromeVisible, toolbarVisible, markActive } = useIdleChrome();
-
+  const fullscreen = useCallback(async () => {
+    if (!(await toggleFullscreen()))
+      pushToast({ kind: "error", message: "当前无法进入或退出全屏" });
+  }, [pushToast]);
   const { favorites, toggle: toggleFavorite } = useFavorites();
   const isFav = pathParam ? favorites.includes(pathParam) : false;
   // 服务端是否允许打开系统文件管理器（配置项 allowOsOpen）。
@@ -249,7 +255,7 @@ export function useReaderController() {
     [progressKey],
   );
   const observedLast =
-    observation?.albumId === pathParam && observation.epoch === request.epoch
+    observation?.albumId === pathParam && observation.epoch === sequence.current
       ? displayedPageIndex(observation.last, images.length)
       : null;
   const imageActivityPageIndex = observedLast ?? 0;
@@ -266,11 +272,20 @@ export function useReaderController() {
       setObservation(null);
       setShowFinished(false);
       setIndex(target);
-      setRequest({ index: target, source, epoch: ++sequence.current });
+      lastJump.current = ++sequence.current;
+      setRequest({ index: target, source, epoch: lastJump.current });
     },
     [images.length, setIndex],
   );
-  const onInvalidate = useCallback(() => setObservation(null), []);
+  const onInvalidate = useCallback(
+    (requestEpoch: number, relayout: boolean, reindexedTarget?: number) => {
+      if (requestEpoch !== lastJump.current) return requestEpoch;
+      if (reindexedTarget !== undefined) setIndex(reindexedTarget);
+      setObservation(null);
+      return relayout ? ++sequence.current : sequence.current;
+    },
+    [setIndex],
+  );
   const onObserve = useCallback(
     (o: ReaderObservation) => {
       if (o.albumId !== pathParam || o.epoch !== sequence.current) return;
@@ -298,6 +313,10 @@ export function useReaderController() {
     };
   }, [imageActivityPageIndex, imageActivityWritable, images.length, pathParam]);
 
+  useEffect(() => {
+    if (!isVideo) useGalleryStore.getState().resetView();
+  }, [pathParam, isVideo]);
+
   // 恢复阅读进度：媒体就绪后按 URL 里的 index 或服务端记录定位。
   //
   // reloadKey 参与依赖：重试时要再恢复一次（失败提示里的「重试进度」
@@ -308,34 +327,31 @@ export function useReaderController() {
     if (!isVideo) {
       jumpImage(initialIndex, params.has("index") ? "link" : "restore");
     }
-    // 切到新 album 时重置缩放/旋转（视频模式不需要；切视频时由
-    // <video key=src> 自然重挂载）
-    if (!isVideo) {
-      useGalleryStore.getState().resetView();
-    }
     if (!pathParam) return;
     // URL 显式带 index= 时表示「用户点了某张图/某条链接」,跳过 progress 恢复
     // — 否则会从后端图片活动拉出上次位置把 initialIndex 顶掉,
     // 导致「点任意图都跳到上次看到的那张」(Album 详情缩略图 / AlbumCard
     // hover preview 跳进来都会撞这个)。
-    const hasExplicitIndex = params.has("index");
     if (hasExplicitIndex) {
       if (!isVideo) setImageActivityReadyPath(pathParam);
       return;
     }
     if (isVideo) return;
+    setImageActivityReadyPath("");
     let cancelled = false;
     // 这次定位是「恢复」而不是「刚读完」：末页恢复不该弹收尾提示。
     restoringRef.current = true;
-    const restoreEpoch = sequence.current;
+    const restoreEpoch = lastJump.current;
     activityApi
       .getImage(pathParam)
       .then((rp) => {
         if (cancelled) return;
-        // pageIndex 表示已展示的最末页；双页模式恢复时对齐到跨页左侧。
+        // 保存的是已展示的末页，画布依据它计算跨页。
         const pageIndex = Math.max(0, Math.min(list.length - 1, rp.pageIndex));
-        if (sequence.current === restoreEpoch) jumpImage(pageIndex, "restore");
-        else restoringRef.current = false;
+        if (lastJump.current === restoreEpoch) {
+          restoringRef.current = rp.pageIndex >= list.length - 1;
+          jumpImage(pageIndex, "restore");
+        } else restoringRef.current = false;
         setImageActivityReadyPath(pathParam);
         clearProgressFailure("restore");
       })
@@ -352,7 +368,7 @@ export function useReaderController() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, pathParam, isVideo, reloadKey]);
+  }, [ready, pathParam, isVideo, reloadKey, hasExplicitIndex, initialIndex]);
 
   // 标题和图片总数来自相册摘要，不用 URL 提示或当前视频列表改写访问记录。
   const historyReady = ready && albumSummary?.kind === "album";
@@ -525,29 +541,47 @@ export function useReaderController() {
   // 用 ref 持有,避免 setInterval 闭包捕获旧的 onReachEnd 引用
   // (slideshow effect 的 deps 不包含 pushToast/toggleSlideshow,这些会
   // 因 user 操作 stale,但回调需要读最新 store + push 最新 toast)。
+  const advancing = useRef(false);
   const onReachEndRef = useRef<() => void>(() => {});
   onReachEndRef.current = async () => {
     // 「阅读到末尾自动切换下一卷」：读完直接进入上下文里的下一卷，
     // 幻灯片也跟着继续（不当作异常终止）。
     if (
-      autoSwitchAlbum &&
-      (await goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true }))
-    ) {
+      !isVideo &&
+      (observation?.epoch !== sequence.current ||
+        observation.albumId !== pathParam ||
+        observation.last !== images.length - 1)
+    )
       return;
+    if (autoSwitchAlbum && (isVideo || hasNextVolume)) {
+      if (advancing.current) return;
+      advancing.current = true;
+      const epoch = sequence.current;
+      try {
+        const moved = await goAdjacent(1, {
+          notify: showSwitchNotif,
+          albumsOnly: true,
+        });
+        if (
+          moved ||
+          activeProgressKey.current !== progressKey ||
+          epoch !== sequence.current
+        )
+          return;
+      } finally {
+        advancing.current = false;
+      }
     }
-    pushToast({
-      kind: "info",
-      message: isVideo
-        ? media.siblingCount > 0
-          ? `已是最后一个视频 · 相册里另有 ${media.siblingCount} 页图片`
-          : "已是最后一个视频"
-        : media.siblingCount > 0
-          ? `图片已看完 · 还有 ${media.siblingCount} 个视频`
-          : "已是最后一页",
-      ttl: 1500,
-    });
-    // 读完一卷后给一个明确的收尾入口：接着读下一卷，或回到相册。
-    if (!isVideo) setShowFinished(true);
+    if (isVideo) {
+      pushToast({
+        kind: "info",
+        message:
+          media.siblingCount > 0
+            ? `已是最后一个视频 · 相册里另有 ${media.siblingCount} 页图片`
+            : "已是最后一个视频",
+        ttl: 1500,
+      });
+    } else setShowFinished(true);
     if (useGalleryStore.getState().slideshow) {
       toggleSlideshow();
       pushToast({ kind: "info", message: "幻灯片已自动停止" });
@@ -768,11 +802,12 @@ export function useReaderController() {
   useReaderKeys(
     {
       isVideo,
+      fullscreen,
       prev,
       next,
       jumpToFirst: () => jumpTo(0, "key"),
       jumpToLast: () => jumpTo((isVideo ? videos : images).length - 1, "key"),
-      toggleInfo: () => setShowInfo((v) => !v),
+      toggleInfo,
       toggleOverview: () => setShowOverview((v) => !v),
       toggleHelp: () => setShowHelp((v) => !v),
       toggleFinished: () => setShowFinished((v) => !v),
@@ -811,7 +846,8 @@ export function useReaderController() {
     observation,
     albumSide,
     allowOsOpen,
-    chromeVisible,
+    fullscreen,
+    toggleInfo,
     contextMenu,
     current,
     dimensions,
@@ -828,7 +864,6 @@ export function useReaderController() {
     isVideo,
     itemIndex,
     jumpTo,
-    markActive,
     media,
     mode,
     next,
@@ -866,7 +901,6 @@ export function useReaderController() {
     showInfo,
     showOverview,
     showSwitchNotif,
-    toolbarVisible,
     total,
     videoActivity,
     videoActivityKey,

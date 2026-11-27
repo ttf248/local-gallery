@@ -10,7 +10,6 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
   const { settingsOpen, setSettingsOpen } = reader;
   const {
     adjacentNames,
-    chromeVisible,
     goAdjacent,
     goBack,
     goToVideo,
@@ -34,14 +33,28 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
     retryProgress,
     retryingProgress,
     setShowHelp,
-    setShowInfo,
     setShowOverview,
     showSwitchNotif,
-    toolbarVisible,
     total,
     videos,
     workbenchMode,
   } = reader;
+  const group =
+    mode === "double" && !isVideo ? spreadAt(index, total) : [index];
+  const start =
+    mode === "continuous"
+      ? (reader.observation?.atTop ?? index === 0)
+      : group[0] <= 0;
+  const end =
+    mode === "continuous"
+      ? (reader.observation?.atBottom ?? false)
+      : group.at(-1) === total - 1;
+  const prevAlbum = adjacentNames.prev
+    ? () => void goAdjacent(-1, { notify: showSwitchNotif, albumsOnly: true })
+    : undefined;
+  const nextAlbum = reader.hasNextVolume
+    ? () => void goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true })
+    : undefined;
   return (
     <>
       {/* 顶部常驻条：返回 / 名称 / 页码 / 全屏 / 菜单 */}
@@ -76,16 +89,14 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
         isFavorite={isFav}
         onBack={goBack}
         onToggleFavorite={onToggleFavorite}
-        onToggleInfo={() => setShowInfo((v) => !v)}
+        onToggleInfo={reader.toggleInfo}
         onToggleHelp={() => setShowHelp((v) => !v)}
         onPrev={prev}
         onNext={next}
-        onPrevAlbum={() =>
-          void goAdjacent(-1, { notify: showSwitchNotif, albumsOnly: true })
-        }
-        onNextAlbum={() =>
-          void goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true })
-        }
+        onPrevAlbum={prevAlbum}
+        onNextAlbum={nextAlbum}
+        onMenuChange={reader.setMenuOpen}
+        fullscreen={reader.fullscreen}
         onSetCover={() => void onSetCover()}
         onClearCover={onClearCover}
         hasCustomCover={hasCustomCover}
@@ -102,52 +113,32 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
         }
       />
 
-      {/* 阅读控制：底部浮动工具条（翻页 / 模式 / 适配 / 缩放 / 旋转）。
-            它压在画面上，常驻会一直挡着画，所以空闲后淡出，鼠标靠近
-            底部就回来；位置信息交给常驻的顶部条与底部页码条。
-            视频模式不显示（视频有原生 controls）。 */}
       {!isVideo && (
-        <GalleryToolbar
-          onPrev={prev}
-          onNext={next}
-          atStart={index <= 0}
-          atEnd={index >= images.length - 1}
-          visible={toolbarVisible}
-        />
-      )}
-
-      {/* 跨卷导航：画面左侧竖排，低频但需要常驻可见 */}
-      {!isVideo && (
-        <GalleryAlbumNav
-          visible={chromeVisible}
-          onPrevAlbum={() =>
-            void goAdjacent(-1, { notify: showSwitchNotif, albumsOnly: true })
-          }
-          onNextAlbum={() =>
-            void goAdjacent(1, { notify: showSwitchNotif, albumsOnly: true })
-          }
-          prevLabel={adjacentNames.prev}
-          nextLabel={adjacentNames.next}
-        />
-      )}
-
-      {/* 底部进度条 + 跳转：常驻显示。
-            它是被动信息（当前在第几张）+ 长相册的主要导航手段（拖拽刮擦 +
-            浮出缩略图条），按 idle 淡出会让用户在一本 300 张的漫画里
-            彻底失去位置感 —— 而它本身只占 44px。
-            视频模式下隐藏（<video> 自带 controls）。 */}
-      {!isVideo && (
-        <div className="reader-bottom-chrome absolute bottom-0 inset-x-0 z-10">
-          <PageSlider
-            total={images.length}
-            index={
-              mode === "double" && !isVideo ? spreadAt(index, total)[0] : index
-            }
-            onJump={jumpTo}
-            images={images}
-            double={mode === "double"}
+        <>
+          <GalleryAlbumNav
+            onPrevAlbum={prevAlbum}
+            onNextAlbum={nextAlbum}
+            prevLabel={adjacentNames.prev}
+            nextLabel={adjacentNames.next}
           />
-        </div>
+          <GalleryToolbar
+            singlePage={total === 1}
+            onPrev={prev}
+            onNext={next}
+            atStart={start}
+            atEnd={total === 1 && !reader.hasNextVolume}
+            nextVolume={end && reader.autoSwitchAlbum && reader.hasNextVolume}
+            onSettings={() => setSettingsOpen(true)}
+          >
+            <PageSlider
+              total={total}
+              index={group[0] ?? 0}
+              onJump={jumpTo}
+              images={images}
+              double={mode === "double"}
+            />
+          </GalleryToolbar>
+        </>
       )}
       {settingsOpen && (
         <ReaderSettingsSheet open onClose={() => setSettingsOpen(false)} />

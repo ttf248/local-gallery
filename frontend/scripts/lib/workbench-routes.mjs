@@ -30,8 +30,8 @@ export async function resolveMode(page) {
 /**
  * 取一本相册的 id。
  *
- * 优先从媒体根的子节点里找图多且没有视频的相册（封面与排版更有代表性）；
- * 找不到就退回第一本。kind 决定取照片侧还是漫画侧：漫画相册才有阅读器。
+ * 按层、按页查找媒体根或作品子目录中的相册，同一页优先选图多且没有视频的相册。
+ * kind 决定取照片侧还是漫画侧：漫画相册才有阅读器。
  */
 export async function resolveAlbumId(page, kind = "photo") {
   return page.evaluate(async (want) => {
@@ -41,20 +41,51 @@ export async function resolveAlbumId(page, kind = "photo") {
     const roots = (manifest.manifest?.roots ?? []).filter(
       (r) => (r.contentKind ?? "photo") === want,
     );
-    for (const root of roots) {
-      const res = await fetch(
-        `/api/library/${encodeURIComponent(root.id)}/children?kind=${want}&limit=50`,
-      );
-      if (!res.ok) continue;
-      const items = (await res.json()).page?.items ?? [];
-      const albums = items.filter((i) => i.kind === "album");
-      const hit =
-        albums.find((a) => (a.imageCount ?? 0) > 3 && !(a.videoCount > 0)) ??
-        albums[0];
-      if (hit) return hit.id;
+    const directories = roots.map((root) => root.id);
+    for (const id of directories) {
+      const params = new URLSearchParams({ kind: want, limit: "50" });
+      for (;;) {
+        const res = await fetch(
+          `/api/library/${encodeURIComponent(id)}/children?${params}`,
+        );
+        if (!res.ok) break;
+        const { page } = await res.json();
+        const items = page?.items ?? [];
+        const albums = items.filter((item) => item.kind === "album");
+        const hit =
+          albums.find((a) => (a.imageCount ?? 0) > 3 && !(a.videoCount > 0)) ??
+          albums[0];
+        if (hit) return hit.id;
+        for (const item of items) {
+          if (item.kind === "collection") directories.push(item.id);
+        }
+        if (!page?.nextCursor) break;
+        params.set("cursor", page.nextCursor);
+      }
     }
     return null;
   }, kind);
+}
+
+export const readerAuditStates = ["reader", "reader-menu", "reader-settings"];
+
+export async function openReaderControls(page, state) {
+  if (state === "reader") return;
+  await page.getByRole("button", { name: "更多", exact: true }).click();
+  if (state === "reader-settings") {
+    await page.getByRole("menuitem", { name: "阅读设置" }).click();
+    await page.getByRole("dialog", { name: "阅读设置" }).waitFor();
+  } else {
+    await page.getByRole("menu").waitFor();
+  }
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => {})),
+    ),
+  );
 }
 
 /**

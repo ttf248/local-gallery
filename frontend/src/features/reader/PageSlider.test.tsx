@@ -68,11 +68,34 @@ it("双页并排时页码写成区间", () => {
 });
 
 it("双页并排且卷末只剩一页时页码不写区间", () => {
-  render(<PageSlider total={8} index={7} onJump={vi.fn()} double />);
-  expect(screen.getByTitle("跳转到指定页 (G)")).toHaveTextContent("8");
+  render(<PageSlider total={9} index={8} onJump={vi.fn()} double />);
+  expect(screen.getByTitle("跳转到指定页 (G)")).toHaveTextContent("9");
 });
 
 it("单页时页码是一个数字", () => {
   render(<PageSlider total={8} index={0} onJump={vi.fn()} />);
   expect(screen.getByTitle("跳转到指定页 (G)")).toHaveTextContent("1");
+});
+
+it("取消拖动不跳页，松手只提交一次，聚焦轨道支持首尾键", () => {
+  const jump = vi.fn();
+  render(<PageSlider total={8} index={0} onJump={jump} />);
+  const track = screen.getByRole("slider");
+  track.getBoundingClientRect = () => new DOMRect(0, 0, 100, 40);
+  function pointer(name: string, x: number) {
+    const e = new Event(name, { bubbles: true });
+    Object.defineProperties(e, {
+      pointerId: { value: 1 },
+      clientX: { value: x },
+    });
+    fireEvent(track, e);
+  }
+  pointer("pointerdown", 50);
+  pointer("pointercancel", 50);
+  expect(jump).not.toHaveBeenCalled();
+  pointer("pointerdown", 90);
+  pointer("pointerup", 90);
+  expect(jump).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(track, { key: "End" });
+  expect(jump).toHaveBeenLastCalledWith(7);
 });

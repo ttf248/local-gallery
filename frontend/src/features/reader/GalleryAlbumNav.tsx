@@ -1,7 +1,6 @@
 import { ArrowUpIcon, ArrowDownIcon } from "../../ui/icons";
 
 interface Props {
-  visible: boolean;
   onPrevAlbum?: () => void;
   onNextAlbum?: () => void;
   /** 目标卷名：悬停时浮在箭头旁边，回答「点下去会翻到哪一卷」。 */
@@ -9,22 +8,8 @@ interface Props {
   nextLabel?: string;
 }
 
-// 跨卷导航（上一卷 / 下一卷）。
-//
-// 2026-11 重设计后，阅读控制已经全部收到画面底部的浮动工具条里，
-// 画面右侧不再竖排控件 —— 那里会压住图片右缘，也会挡住窄屏唯一
-// 可靠的翻页热区（点击右侧三分之一）。
-//
-// 跨卷导航保留在画面左侧竖排：它是低频但有辨识度的操作（这个项目的
-// 卖点之一就是「读完这卷接着翻下一卷」），需要常驻可见，不能藏进菜单。
-//
-// 样式刻意做轻 —— 不带玻璃面板，只在 hover 时浮出浅底，避免和图片抢戏。
-// 但"轻"不能等于"看不见"：箭头是白图标，压在亮照片上时白/70 的实际
-// 对比度只有 1.4:1（WCAG 对非文本控件要求 ≥3:1），实拍确认箭头在明亮
-// 画面上几乎消失。所以给每枚箭头配一层恒定的深色圆底 —— 底色只盖
-// 36px 的小圆，比玻璃面板轻得多，却保证箭头的局部背景永远是深色。
+// 宽屏显示同作品的相邻卷，较窄时归入更多菜单。
 export default function GalleryAlbumNav({
-  visible,
   onPrevAlbum,
   onNextAlbum,
   prevLabel,
@@ -33,11 +18,7 @@ export default function GalleryAlbumNav({
   if (!onPrevAlbum && !onNextAlbum) return null;
 
   return (
-    <div
-      className={`absolute left-2 sm:left-3 top-1/2 z-10 hidden -translate-y-1/2 flex-col gap-1 transition-opacity duration-300 md:flex ${
-        visible ? "opacity-100" : "opacity-0 pointer-events-none"
-      }`}
-    >
+    <div className="reader-volume-nav absolute left-2 top-1/2 z-10 -translate-y-1/2 flex-col gap-1">
       {onPrevAlbum && (
         <NavButton onClick={onPrevAlbum} title="上一卷 (P)" label={prevLabel}>
           <ArrowUpIcon size={17} />

@@ -1,5 +1,7 @@
+import {mkdir} from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import {
+  geometryAlbum,readerUrl,
   resetWorkbenchMode,
   scannedNodes,
   setWorkbenchMode,
@@ -226,3 +228,102 @@ test("可交互控件的命中区够手指点", async ({ page }) => {
     `命中区不足 ${minTarget}×${minTarget} 的控件：${small.join("，")}`,
   ).toHaveLength(0);
 });
+
+for (const theme of ["light", "dark"] as const)
+  test("漫画触摸设置、菜单和翻页可达 " + theme, async ({ page }, info) => {
+    const album = await geometryAlbum(page.request, 8);
+    await page.addInitScript(
+      (t) =>
+        localStorage.setItem(
+          "local-gallery-ui",
+          JSON.stringify({ version: 0, state: { theme: t } }),
+        ),
+      theme,
+    );
+    await page.goto(readerUrl(album, "?index=1"));
+    const toolbar = page.getByRole("toolbar", { name: "阅读控制" });
+    await expect(toolbar).toBeVisible();
+    const landscape = info.project.name === "mobile-landscape";
+    const sizes = landscape
+      ? [[844, 390]]
+      : [
+          [390, 844],
+          [360, 800],
+          [320, 640],
+        ];
+    for (const [width, height] of sizes) {
+      await page.setViewportSize({ width, height });
+      if (width === 320)
+        await page.evaluate(
+          () => (document.documentElement.style.fontSize = "200%"),
+        );
+      const bounds = await toolbar
+        .locator("button:visible,[role=slider]:visible")
+        .evaluateAll((els) =>
+          els.map((el) => {
+            const r = el.getBoundingClientRect();
+            return [r.left, r.right, r.width, r.height];
+          }),
+        );
+      for (const [left, right, w, h] of bounds) {
+        expect(left).toBeGreaterThanOrEqual(0);
+        expect(right).toBeLessThanOrEqual(width);
+        expect(w).toBeGreaterThanOrEqual(40);
+        expect(h).toBeGreaterThanOrEqual(40);
+      }
+    }
+    await page.evaluate(() =>
+      document.documentElement.style.removeProperty("font-size"),
+    );
+    const [w, h] = sizes[0];
+    await page.setViewportSize({ width: w, height: h });
+    if (!landscape) {
+      await page.touchscreen.tap(45, 300);
+      await expect(page.getByTitle("跳转到指定页 (G)")).toHaveText("3");
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: 80, y: 310 }],
+      });
+      for (const x of [120, 180, 240])
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x, y: 311 }],
+        });
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await expect(page.getByTitle("跳转到指定页 (G)")).toHaveText("4");
+      await page.waitForFunction(() =>
+        document
+          .querySelector('[data-reader-page="3"] img')
+          ?.matches(":not([hidden])"),
+      );
+    }
+    const dir = ".smoke/comic-plan-b-after";
+    await mkdir(dir, { recursive: true });
+    await toolbar.getByRole("button", { name: "设置", exact: true }).tap();
+    const settings = page.getByRole("dialog", { name: "阅读设置" });
+    await expect(settings).toBeVisible();
+    await settings.getByRole("radio", { name: "按高" }).tap();
+    await page.screenshot({
+      animations: "disabled",
+      path: `${dir}/${theme}-${w}x${h}-settings.png`,
+    });
+    await settings.getByRole("button", { name: "关闭阅读设置" }).tap();
+    await page.getByRole("button", { name: "更多", exact: true }).tap();
+    const menu = page.getByRole("menu");
+    await expect(menu).toBeVisible();
+    const box = (await menu.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(7);
+    expect(box.y + box.height).toBeLessThanOrEqual(h - 7);
+    const last = menu.getByRole("menuitem", { name: /最后一页/ });
+    await last.scrollIntoViewIfNeeded();
+    await page.screenshot({
+      animations: "disabled",
+      path: `${dir}/${theme}-${w}x${h}-menu.png`,
+    });
+    await last.tap();
+    await expect(page.getByTitle("跳转到指定页 (G)")).toHaveText("8");
+  });

@@ -85,10 +85,8 @@
   --media-highlight: rgb(255 255 255 / 0.25);
   --cover-shadow:
     0 3px 8px rgb(56 34 18 / 0.22), 0 1px 2px rgb(56 34 18 / 0.16);
-  --gallery-fit-height: 100dvh;
 
-  --reader-chrome-top: 62px;
-  --reader-chrome-bottom: 44px;
+  --reader-bar-height: 52px;
 }
 
 :root,

@@ -29,6 +29,8 @@ import { chromium } from "@playwright/test";
 import {
   buildRoute,
   resolveAlbumId,
+  readerAuditStates,
+  openReaderControls,
   openPhotoViewer,
   resolveMode,
 } from "./lib/workbench-routes.mjs";
@@ -349,6 +351,40 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     document.querySelector('.reader-shell, [data-testid="photo-viewer"]'),
   );
   const chromeIssues = [];
+  if (document.querySelector(".reader-workspace")) {
+    const stage = document
+      .querySelector(".reader-stage")
+      ?.getBoundingClientRect();
+    const top = document
+      .querySelector(".reader-header")
+      ?.getBoundingClientRect();
+    const bottom = document
+      .querySelector(".reader-bottom-chrome")
+      ?.getBoundingClientRect();
+    if (
+      !stage ||
+      !top ||
+      stage.top < top.bottom - 0.5 ||
+      (bottom && stage.bottom > bottom.top + 0.5)
+    )
+      chromeIssues.push("阅读控件遮挡图片");
+    for (const el of document.querySelectorAll(
+      ".reader-header button,.reader-bottom-chrome button,[role=slider],[role=menu]",
+    )) {
+      const r = el.getBoundingClientRect();
+      if (!r.width || el.disabled) continue;
+      if (
+        r.x < -0.5 ||
+        r.right > innerWidth + 0.5 ||
+        r.y < -0.5 ||
+        r.bottom > innerHeight + 0.5
+      )
+        chromeIssues.push(
+          "命中区越界 " +
+            (el.title || el.getAttribute("aria-label") || el.textContent),
+        );
+    }
+  }
   const desktop = viewportWidth >= 1024;
   const hasBottom = Boolean(
     bottom &&
@@ -787,7 +823,7 @@ async function main() {
         }
       }
 
-      for (const route of PAGES) {
+      for (const route of PAGES.flatMap((p) => p === "reader" ? readerAuditStates : p)) {
         // 未读页只属于漫画工作台：照片侧没有这个路由，硬走会落回首页，
         // 量到的还是首页的数据。直接跳过。
         if (route === "/unread" && mode !== "comic") {
@@ -815,11 +851,13 @@ async function main() {
             console.log("  · 当前图库缺少可预览的照片");
             continue;
           }
-        } else if (route === "reader") {
+        } else if (readerAuditStates.includes(route)) {
           if (!(await openReader(page))) {
+            if (process.env.LG_PAGES === "reader") throw new Error("阅读器审计缺少漫画样本");
             console.log(`  · 跳过 ${theme} reader：库里没有漫画相册`);
             continue;
           }
+          await openReaderControls(page, route);
         } else {
           // 伪路由 album：相册详情页的 id 运行时现取。
           // 伪路由 tag：标签页用固定的标签名，数据由 prepareTagRoute 伪造。

@@ -1,3 +1,4 @@
+import { useEffect, type ComponentProps } from "react";
 import {
   act,
   fireEvent,
@@ -63,7 +64,36 @@ vi.mock("../../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [], toggle: vi.fn() }),
 }));
 vi.mock("./ImageGallery", () => ({
-  default: () => <div data-testid="image-gallery" />,
+  default: function ObservedGallery({
+    albumId = "",
+    request,
+    onObserve,
+    images,
+  }: ComponentProps<typeof import("./ImageGallery").default>) {
+    const index = useGalleryStore((s) => s.index);
+    const fileId = images[index];
+    useEffect(() => {
+      if (request && fileId)
+        onObserve?.({
+          albumId,
+          epoch: request.epoch,
+          first: index,
+          last: index,
+          atTop: index === 0,
+          atBottom: index === images.length - 1,
+          anchor: {
+            albumId,
+            fileId,
+            index,
+            u: 0.5,
+            v: 0.5,
+            viewportU: 0.5,
+            viewportV: 0.5,
+          },
+        });
+    }, [albumId, fileId, index, request, onObserve, images.length]);
+    return <div data-testid="image-gallery" />;
+  },
 }));
 
 function Location() {
@@ -138,7 +168,7 @@ describe("Reader 读到末尾自动切换下一本", () => {
     ]);
     renderReader(2);
     await waitFor(() =>
-      expect(screen.getByTestId("image-gallery")).toBeInTheDocument(),
+      expect(screen.getByTestId("reader-finished")).toBeInTheDocument(),
     );
 
     await act(async () => {
@@ -169,7 +199,7 @@ describe("Reader 读到末尾自动切换下一本", () => {
     ]);
     renderReader(2);
     await waitFor(() =>
-      expect(screen.getByTestId("image-gallery")).toBeInTheDocument(),
+      expect(screen.getByTestId("reader-finished")).toBeInTheDocument(),
     );
 
     await act(async () => {
@@ -224,7 +254,7 @@ describe("Reader 读到末尾自动切换下一本", () => {
     });
     renderReader(2);
     await waitFor(() =>
-      expect(screen.getByTestId("image-gallery")).toBeInTheDocument(),
+      expect(screen.getByTestId("reader-finished")).toBeInTheDocument(),
     );
     await act(async () => {
       fireEvent.keyDown(window, { key: "ArrowRight" });

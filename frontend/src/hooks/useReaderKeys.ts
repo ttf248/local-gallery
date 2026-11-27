@@ -1,10 +1,10 @@
 import { useKeyboard } from "./useKeyboard";
 import { useGalleryStore } from "../store/galleryStore";
-import { toggleFullscreen as toggleFullscreenImpl } from "../utils/fullscreen";
 
 export interface ReaderKeyHandlers {
   /** 视频模式：方向键与空格归视频播放器管，阅读器不注册图片操作。 */
   isVideo: boolean;
+  fullscreen: () => void;
   prev: () => void;
   next: () => void;
   jumpToFirst: () => void;
@@ -75,7 +75,7 @@ export function useReaderKeys(
       pagedown: rest.next,
       home: rest.jumpToFirst,
       end: rest.jumpToLast,
-      f11: () => toggleFullscreenImpl(),
+      f11: rest.fullscreen,
       "ctrl+/": rest.toggleHelp,
       "?": rest.toggleHelp,
       n: rest.nextAlbum,
@@ -94,6 +94,7 @@ export function useReaderKeys(
     },
     true,
     () =>
+      !document.activeElement?.closest('[role="slider"]') &&
       !document.querySelector(
         'dialog[open], [role="dialog"][aria-modal="true"], [role="menu"]',
       ),
