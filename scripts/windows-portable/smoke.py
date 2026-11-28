@@ -53,7 +53,7 @@ def verify(bundle: Path, work: Path, version: str) -> None:
         process = subprocess.Popen(f'cmd.exe /d /s /c ""{launcher}""', cwd=work, env=env,
                                    stdin=subprocess.DEVNULL, stdout=log, stderr=log)
         try:
-            for _ in range(75):
+            for _ in range(120):
                 if process.poll() is not None:
                     raise RuntimeError(f"启动器提前退出：{process.returncode}")
                 try:
@@ -84,7 +84,7 @@ def verify(bundle: Path, work: Path, version: str) -> None:
             raise
         finally:
             if process.poll() is None:
-                subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"], env=env, check=True)
+                subprocess.run(["taskkill.exe", "/PID", str(process.pid), "/T", "/F"], env=env, check=False)
             process.wait(timeout=20)
 
     worker = bundle / "aiworker"
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     parser.add_argument("archive", type=Path)
     parser.add_argument("version")
     args = parser.parse_args()
-    with TemporaryDirectory(prefix="local-gallery-smoke-") as temp:
+    with TemporaryDirectory(prefix="local-gallery-smoke-", ignore_cleanup_errors=True) as temp:
         work = Path(temp) / "绿色版 验收"
         work.mkdir()
         with ZipFile(args.archive) as archive:

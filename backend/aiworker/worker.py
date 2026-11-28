@@ -910,13 +910,18 @@ def load_face_models(device_mode="cpu", face_model=FACE_MODEL_DEFAULT):
                     "detector": detector, "recognizer": recognizer,
                 }
             else:
+                # OpenCV 的路径重载在 Windows 上无法打开部分 Unicode 文件名。
+                empty_config = np.empty(0, dtype=np.uint8)
                 face_models[cache_key] = {
                     "device": mode,
                     "profile": face_model,
                     "detector": cv2.FaceDetectorYN_create(
-                        detector_path, "", (320, 320), YUNET_SCORE_THRESHOLD, 0.3, 5000
+                        "onnx", np.fromfile(detector_path, dtype=np.uint8), empty_config,
+                        (320, 320), YUNET_SCORE_THRESHOLD, 0.3, 5000,
                     ),
-                    "recognizer": cv2.FaceRecognizerSF_create(recognizer_path, ""),
+                    "recognizer": cv2.FaceRecognizerSF_create(
+                        "onnx", np.fromfile(recognizer_path, dtype=np.uint8), empty_config,
+                    ),
                 }
         except RuntimeError:
             raise

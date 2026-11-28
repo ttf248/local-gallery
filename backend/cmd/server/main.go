@@ -264,7 +264,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化本地语义搜索 Worker 失败")
 	}
-	workerStatusCtx, workerStatusCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	workerStatusTimeout := 20 * time.Second
+	if workerOptions.Portable {
+		// 首次解压后读取 Python 原生库和校验模型可能超过开发环境的启动时限。
+		workerStatusTimeout = 90 * time.Second
+	}
+	workerStatusCtx, workerStatusCancel := context.WithTimeout(context.Background(), workerStatusTimeout)
 	workerStatus, _ := aiWorker.Status(workerStatusCtx)
 	workerStatusCancel()
 	vectorIndex, err := services.OpenVectorIndex(cacheLayout.AIVectorsDir, services.ChineseCLIPModelVersion)
