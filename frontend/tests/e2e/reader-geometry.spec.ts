@@ -51,19 +51,32 @@ for (const theme of ["light", "dark"] as const) {
       expect(b.y + b.height).toBeLessThanOrEqual(v.y + v.height + 1);
       await shot(page, theme + "-1440x900-single-default");
       await page.keyboard.press("f");
-      await stage.evaluate((el) => (el.scrollTop = 0));
       await expect
         .poll(async () => (await box()).width)
         .toBeCloseTo(v.width, 0);
-      await stage.evaluate((el) => (el.scrollTop = 0));
-      await expect.poll(async () => (await box()).y - v.y).toBeCloseTo(0, 0);
+      const scrollToEdge = (edge: "top" | "bottom") =>
+        expect
+          .poll(() =>
+            stage.evaluate(async (el, target) => {
+              el.scrollTop = target === "top" ? 0 : el.scrollHeight;
+              // 适配切换时，阅读器会在后续动画帧恢复阅读锚点。
+              await new Promise<void>((resolve) => {
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() => resolve()),
+                );
+              });
+              return target === "top"
+                ? el.scrollTop
+                : el.scrollHeight - el.clientHeight - el.scrollTop;
+            }, edge),
+          )
+          .toBeLessThan(1);
+      await scrollToEdge("top");
+      expect((await box()).y - v.y).toBeCloseTo(0, 0);
       await shot(page, theme + "-1440x900-width-top");
-      await stage.evaluate((el) => (el.scrollTop = el.scrollHeight));
-      await expect
-        .poll(async () =>
-          Math.abs((await box()).y + (await box()).height - v.y - v.height),
-        )
-        .toBeLessThan(1.5);
+      await scrollToEdge("bottom");
+      b = await box();
+      expect(Math.abs(b.y + b.height - v.y - v.height)).toBeLessThan(1.5);
       await shot(page, theme + "-1440x900-width-bottom");
       await page.keyboard.press("+");
       await page.keyboard.press("r");

@@ -186,26 +186,40 @@ test.describe("任务中心", () => {
 
   test("失败摘要打开对应记录并重试该次任务", async ({ page }) => {
     const jobId = "job-failed-metadata";
-    await page.route("**/api/ai/jobs", async route => {
-      const response = await route.fetch();
-      const body = await response.json();
-      body.snapshot.active = null;
-      body.snapshot.queue = [];
-      body.snapshot.jobs = [{
-        id: jobId, type: "metadata", mode: "incremental", status: "failed",
-        createdAt: new Date().toISOString(), error: "图片解析失败",
-        processed: 0, completed: 1, failed: 1, skipped: 0,
-      }];
-      await route.fulfill({response, json:body});
-    });
-    await page.route("**/api/ai/jobs/" + jobId + "/retry", route => route.fulfill({json:{ok:true}}));
+    const response = await page.request.get("/api/ai/jobs");
+    await expect(response).toBeOK();
+    const body = await response.json();
+    body.snapshot.active = null;
+    body.snapshot.queue = [];
+    body.snapshot.jobs = [
+      {
+        id: jobId,
+        type: "metadata",
+        mode: "incremental",
+        status: "failed",
+        createdAt: new Date().toISOString(),
+        error: "图片解析失败",
+        processed: 0,
+        completed: 1,
+        failed: 1,
+        skipped: 0,
+      },
+    ];
+    await page.route("**/api/ai/jobs", (route) => route.fulfill({ json: body }));
+    await page.route("**/api/ai/jobs/" + jobId + "/retry", (route) =>
+      route.fulfill({ json: { ok: true } }),
+    );
     await page.goto("/settings/tasks");
     await page.getByRole("link", { name: "查看原因" }).click();
     const record = page.locator('[data-job-id="' + jobId + '"]');
     await expect(record.getByText("任务原因：图片解析失败")).toBeVisible();
-    const retry = page.waitForRequest(request => request.url().endsWith("/" + jobId + "/retry") && request.method() === "POST");
-    await record.getByRole("button", {name:"仅重试失败项"}).click();
-    await retry;
+    const retry = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/" + jobId + "/retry") &&
+        response.request().method() === "POST",
+    );
+    await record.getByRole("button", { name: "仅重试失败项" }).click();
+    expect((await retry).ok()).toBe(true);
   });
 
   test("跑完一次分析后任务记录里出现新的任务与产出明细", async ({ page }) => {

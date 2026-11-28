@@ -73,8 +73,17 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: 全栈端到端验证
+        id: e2e
         working-directory: frontend
         run: npm run test:e2e
+
+      - name: 保留失败的浏览器报告
+        if: failure() && steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ runner.os }}-${{ github.sha }}
+          path: frontend/playwright-report/
+          retention-days: 7
 
       - name: 前端首屏体积预算
         if: runner.os == 'Linux'

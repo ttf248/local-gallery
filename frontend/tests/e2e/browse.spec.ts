@@ -1197,21 +1197,21 @@ test("列表页的筛选写进地址，刷新不丢，后退退得回上一个�
   );
 
   // 工具条先保留本地草稿，回车才进入名称搜索结果页；列表筛选地址不变。
-  await page.getByRole("button", { name: "打开命令面板" }).click();
+  const openCommandPalette = page.getByRole("button", {
+    name: "打开命令面板",
+  });
+  await openCommandPalette.click();
   const search = page.getByRole("combobox");
   await search.fill("sample");
   await expect(page).toHaveURL(/\/comic\/library\?sort=viewed$/);
   await search.press("Enter");
   await expect(page).toHaveURL("/comic/search?q=sample&scope=name");
   await page.reload();
-  await page.keyboard.press("Control+k");
-  await expect(page.getByRole("combobox")).toHaveValue("sample");
-  await page.keyboard.press("Escape");
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("searchbox")).toHaveValue("sample");
   await page.goBack();
   await expect(page).toHaveURL(/\/comic\/library\?sort=viewed$/);
-  await page.keyboard.press("Control+k");
-  await expect(page.getByRole("combobox")).toHaveValue("");
+  await openCommandPalette.click();
+  await expect(search).toHaveValue("");
   await page.keyboard.press("Escape");
 
   // 换排序是一次普通导航：后退键退得回去。
