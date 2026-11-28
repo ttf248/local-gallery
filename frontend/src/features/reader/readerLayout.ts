@@ -10,10 +10,51 @@ export function clampPage(index: number, total: number): number {
   );
 }
 
-export function spreadAt(target: number, total: number): number[] {
+export function spreadAt(
+  target: number,
+  total: number,
+  coverOffset = false,
+  wideFlags?: readonly boolean[],
+): number[] {
   if (total <= 0) return [];
-  const first = 2 * Math.floor(clampPage(target, total) / 2);
+  const page = clampPage(target, total);
+  if (wideFlags) {
+    for (let i = 0; i < total;) {
+      const single =
+        (coverOffset && i === 0) ||
+        wideFlags[i] ||
+        wideFlags[i + 1] ||
+        i + 1 === total;
+      const end = single ? i : i + 1;
+      if (page <= end) return single ? [i] : [i, end];
+      i = end + 1;
+    }
+  }
+  if (coverOffset && page === 0) return [0];
+  const offset = coverOffset ? 1 : 0;
+  const first = offset + 2 * Math.floor((page - offset) / 2);
   return first + 1 < total ? [first, first + 1] : [first];
+}
+
+export function nextSpreadIndex(
+  current: number,
+  total: number,
+  coverOffset = false,
+  wideFlags?: readonly boolean[],
+) {
+  const pages = spreadAt(current, total, coverOffset, wideFlags);
+  return clampPage((pages.at(-1) ?? -1) + 1, total);
+}
+export function prevSpreadIndex(
+  current: number,
+  total: number,
+  coverOffset = false,
+  wideFlags?: readonly boolean[],
+) {
+  const start = spreadAt(current, total, coverOffset, wideFlags)[0] ?? 0;
+  return (
+    spreadAt(clampPage(start - 1, total), total, coverOffset, wideFlags)[0] ?? 0
+  );
 }
 
 export type Rotation = 0 | 90 | 180 | 270;

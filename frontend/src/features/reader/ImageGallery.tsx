@@ -42,10 +42,16 @@ interface Props {
   /** 每页的原始像素尺寸。连续模式按它预留高度，图片加载前后页面不跳。 */
   dimensions?: Record<string, { width: number; height: number }>;
   /** 点击图片时触发：根据 clickX 在容器宽度的左/中/右决定动作。父组件传入 prev/next 即可。 */
+  footer?: React.ReactNode;
   onClickNavigate?: (dir: -1 | 0 | 1) => void;
 }
 
 type DecodedSize = { size: Size; original: boolean };
+const continuousParts = {
+  Footer: ({ context }: { context?: { footer?: React.ReactNode } }) => (
+    <>{context?.footer}</>
+  ),
+};
 const steps = [320, 640, 1280, 1920, 2560, 4096];
 function previewWidth(width: number, source?: Size) {
   const wanted = Math.min(
@@ -117,7 +123,8 @@ export default function ImageGallery({
 }: Props) {
   const { request, viewportRef, onObserve, onInvalidate, onClickNavigate } =
     rest;
-  const { index, zoom, rotation, mode, fit, direction } = useGalleryStore();
+  const { index, zoom, rotation, mode, fit, direction, coverOffset } =
+    useGalleryStore();
   const container = useRef<HTMLDivElement | null>(null),
     virtuoso = useRef<VirtuosoHandle>(null);
   const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 });
@@ -390,14 +397,15 @@ export default function ImageGallery({
           suppress.current = false;
           return;
         }
-        if (e.detail > 1 || zoom > 1 || (e.target as Element).closest("button"))
-          return;
+        if (e.detail > 1 || (e.target as Element).closest("button")) return;
         const rect = e.currentTarget.getBoundingClientRect(),
           fraction = (e.clientX - rect.left) / rect.width;
         const step = fraction < 0.35 ? -1 : fraction > 0.65 ? 1 : 0;
-        if (!step) return;
+        if (step && zoom > 1) return;
         const go = () =>
-          onClickNavigate?.((direction === "rtl" ? -step : step) as -1 | 1);
+          onClickNavigate?.(
+            step === 0 ? 0 : ((direction === "rtl" ? -step : step) as -1 | 1),
+          );
         clearTimeout(clickTimer.current);
         if (e.detail === 0) go();
         else clickTimer.current = setTimeout(go, 280);
@@ -408,6 +416,8 @@ export default function ImageGallery({
             <Virtuoso
               ref={virtuoso}
               data={images}
+              context={{ footer: rest.footer }}
+              components={continuousParts}
               initialTopMostItemIndex={Math.max(0, request?.index ?? index)}
               totalListHeightChanged={schedule}
               style={{ height: "100%", direction: "ltr" }}
@@ -419,7 +429,11 @@ export default function ImageGallery({
               itemContent={(i) => row([i])}
             />
           )
-        : row(mode === "double" ? spreadAt(index, images.length) : [index])}
+        : row(
+            mode === "double"
+              ? spreadAt(index, images.length, coverOffset)
+              : [index],
+          )}
     </div>
   );
 }

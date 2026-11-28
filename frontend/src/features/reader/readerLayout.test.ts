@@ -13,6 +13,23 @@ describe("跨页配对", () => {
   });
 });
 
+import { nextSpreadIndex, prevSpreadIndex } from "./readerLayout";
+for (const total of [0, 1, 2, 3, 10])
+  for (const offset of [false, true])
+    it(`覆盖 ${total} 页偏移 ${offset}`, () => {
+      const pages: number[] = [];
+      let first = 0;
+      while (first < total) {
+        const spread = spreadAt(first, total, offset);
+        pages.push(...spread);
+        if (spread.at(-1) === total - 1) break;
+        const next = nextSpreadIndex(first, total, offset);
+        expect(prevSpreadIndex(next, total, offset)).toBe(first);
+        first = next;
+      }
+      expect(pages).toEqual(Array.from({ length: total }, (_, i) => i));
+      if (total && offset) expect(spreadAt(0, total, true)).toEqual([0]);
+    });
 import { layoutPages, type LayoutInput } from "./readerLayout";
 for (const mode of ["single", "continuous", "double"] as const)
   for (const fit of ["fit", "width", "height", "original"] as const) {

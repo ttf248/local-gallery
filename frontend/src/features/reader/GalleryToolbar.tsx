@@ -29,6 +29,7 @@ interface Props {
   atEnd?: boolean;
   singlePage?: boolean;
   nextVolume?: boolean;
+  onChapters?: () => void;
   onSettings?: () => void;
   children?: React.ReactNode;
 }
@@ -66,6 +67,7 @@ export default function GalleryToolbar({
   singlePage = false,
   nextVolume = false,
   onSettings,
+  onChapters,
   children,
 }: Props) {
   const mode = useGalleryStore((s) => s.mode);
@@ -137,11 +139,11 @@ export default function GalleryToolbar({
           <button
             type="button"
             onClick={zoomReset}
-            title="重置当前倍率 (0)"
+            title="相对整页缩放，点击重置"
             aria-label={`重置当前倍率，相对${FIT_LABEL[fit]} ${Math.round(zoom * 100)}%`}
             className="hidden sm:inline-flex h-8 min-w-[46px] items-center justify-center rounded-md px-1 text-caption tabular-nums text-white/80 transition-colors hover:bg-white/10 hover:text-white"
           >
-            相对{FIT_LABEL[fit]} {Math.round(zoom * 100)}%
+            {Math.round(zoom * 100)}%
           </button>
           <ToolButton
             disabled={zoom >= 5}
@@ -172,6 +174,15 @@ export default function GalleryToolbar({
             </ToolButton>
           </span>
         </div>
+        {onChapters && (
+          <ToolButton
+            onClick={onChapters}
+            title="章节目录 (C)"
+            ariaLabel="章节目录"
+          >
+            <span>目录</span>
+          </ToolButton>
+        )}
         {onSettings && (
           <button
             className="reader-settings-button"

@@ -1,5 +1,7 @@
 import { useGalleryStore } from "../../store/galleryStore";
 import { WIDE_LAYOUT_QUERY, useMediaQuery } from "../../hooks/useMediaQuery";
+import { Button } from "../../ui/Button";
+import { Switch } from "../../ui/Switch";
 import { Sheet } from "../../ui/Sheet";
 import { SettingsGroup, SettingsRow } from "../../ui/SettingsList";
 import Segmented from "../../ui/Segmented";
@@ -17,6 +19,8 @@ export function ReaderSettingsSheet({
     toggleSlideshow = useGalleryStore((s) => s.toggleSlideshow);
   const wide = useMediaQuery(WIDE_LAYOUT_QUERY);
   const mode = useGalleryStore((state) => state.mode);
+  const offset = useGalleryStore((s) => s.coverOffset),
+    immersive = useGalleryStore((s) => s.immersiveAutoHide);
   const fit = useGalleryStore((state) => state.fit);
   const direction = useGalleryStore((state) => state.direction);
   const { setMode, setFit, setDirection, zoomIn, zoomOut, zoomReset, rotate } =
@@ -74,12 +78,40 @@ export function ReaderSettingsSheet({
             ]}
           />
         </SettingsRow>
+        <SettingsRow
+          label="首单页封面偏移"
+          description={mode !== "double" ? "仅双页模式可用" : undefined}
+        >
+          <Switch
+            label="首单页封面偏移"
+            checked={offset}
+            disabled={mode !== "double"}
+            onChange={useGalleryStore.getState().setCoverOffset}
+          />
+        </SettingsRow>
+        <SettingsRow label="沉浸自动隐藏">
+          <Switch
+            label="沉浸自动隐藏"
+            checked={immersive}
+            onChange={useGalleryStore.getState().setImmersiveAutoHide}
+          />
+        </SettingsRow>
         <SettingsRow label="相对倍率">
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" disabled={zoom <= 0.1} onClick={zoomOut}>
+            <Button
+              variant="ghost"
+              type="button"
+              disabled={zoom <= 0.1}
+              onClick={zoomOut}
+            >
               缩小
-            </button>
-            <button type="button" onClick={zoomReset} title="重置当前倍率">
+            </Button>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={zoomReset}
+              title="重置当前倍率"
+            >
               相对
               {
                 {
@@ -90,25 +122,31 @@ export function ReaderSettingsSheet({
                 }[fit]
               }{" "}
               {Math.round(zoom * 100)}%
-            </button>
-            <button type="button" disabled={zoom >= 5} onClick={zoomIn}>
+            </Button>
+            <Button
+              variant="ghost"
+              type="button"
+              disabled={zoom >= 5}
+              onClick={zoomIn}
+            >
               放大
-            </button>
+            </Button>
           </div>
         </SettingsRow>
         <SettingsRow label="旋转">
-          <button type="button" onClick={() => rotate(90)}>
+          <Button variant="ghost" type="button" onClick={() => rotate(90)}>
             顺时针 90° · 当前 {rotation}°
-          </button>
+          </Button>
         </SettingsRow>
         <SettingsRow label="幻灯片">
-          <button
+          <Button
+            variant="ghost"
             type="button"
             aria-pressed={slideshow}
             onClick={toggleSlideshow}
           >
             {slideshow ? "停止播放" : "自动翻页"}
-          </button>
+          </Button>
         </SettingsRow>
       </SettingsGroup>
     </Sheet>

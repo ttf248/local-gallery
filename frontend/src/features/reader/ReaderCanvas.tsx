@@ -1,3 +1,4 @@
+import { ChapterEndBanner } from "./ChapterEndBanner";
 import ImageGallery from "./ImageGallery";
 import { VideoPlayer } from "../viewer";
 import type { ReaderController } from "./useReaderController";
@@ -57,6 +58,7 @@ export function ReaderCanvas({ reader }: { reader: ReaderController }) {
         ) : (
           <ImageGallery
             images={images}
+            footer={<ChapterEndBanner reader={reader} />}
             dimensions={dimensions}
             key={pathParam}
             albumId={pathParam}
@@ -66,7 +68,8 @@ export function ReaderCanvas({ reader }: { reader: ReaderController }) {
             onObserve={onObserve}
             onInvalidate={onInvalidate}
             onClickNavigate={(dir) => {
-              if (dir === -1) prev();
+              if (dir === 0) reader.chrome.toggle();
+              else if (dir === -1) prev();
               else if (dir === 1) next();
             }}
           />

@@ -33,14 +33,15 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
     retryProgress,
     retryingProgress,
     setShowHelp,
-    setShowOverview,
     showSwitchNotif,
     total,
     videos,
     workbenchMode,
   } = reader;
   const group =
-    mode === "double" && !isVideo ? spreadAt(index, total) : [index];
+    mode === "double" && !isVideo
+      ? spreadAt(index, total, reader.coverOffset)
+      : [index];
   const start =
     mode === "continuous"
       ? (reader.observation?.atTop ?? index === 0)
@@ -78,68 +79,74 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
           </button>
         </div>
       )}
-      <GalleryHeader
-        onOpenSettings={() => setSettingsOpen(true)}
-        name={headerName}
-        index={
-          mode === "double" && !isVideo ? spreadAt(index, total)[0] : index
-        }
-        itemIndex={isVideo ? itemIndex : undefined}
-        total={total}
-        isFavorite={isFav}
-        onBack={goBack}
-        onToggleFavorite={onToggleFavorite}
-        onToggleInfo={reader.toggleInfo}
-        onToggleHelp={() => setShowHelp((v) => !v)}
-        onPrev={prev}
-        onNext={next}
-        onPrevAlbum={prevAlbum}
-        onNextAlbum={nextAlbum}
-        onMenuChange={reader.setMenuOpen}
-        fullscreen={reader.fullscreen}
-        onSetCover={() => void onSetCover()}
-        onClearCover={onClearCover}
-        hasCustomCover={hasCustomCover}
-        onToggleOverview={() => setShowOverview((v) => !v)}
-        workbenchMode={workbenchMode}
-        onOpenWorkbench={openWorkbench}
-        onJumpToFirst={isVideo ? () => goToVideo(0) : () => jumpTo(0, "menu")}
-        onJumpToLast={
-          isVideo
-            ? () => {
-                if (videos.length > 0) goToVideo(videos.length - 1);
-              }
-            : () => jumpTo(images.length - 1, "menu")
-        }
-      />
+      <div className="contents" {...reader.chrome.chromeFocusProps}>
+        <GalleryHeader
+          onToggleChrome={reader.chrome.toggle}
+          onOpenSettings={() => setSettingsOpen(true)}
+          name={headerName}
+          index={
+            mode === "double" && !isVideo
+              ? spreadAt(index, total, reader.coverOffset)[0]
+              : index
+          }
+          itemIndex={isVideo ? itemIndex : undefined}
+          total={total}
+          isFavorite={isFav}
+          onBack={goBack}
+          onToggleFavorite={onToggleFavorite}
+          onToggleInfo={reader.toggleInfo}
+          onToggleHelp={() => setShowHelp((v) => !v)}
+          onPrev={prev}
+          onNext={next}
+          onPrevAlbum={prevAlbum}
+          onNextAlbum={nextAlbum}
+          onMenuChange={reader.setMenuOpen}
+          fullscreen={reader.fullscreen}
+          onSetCover={() => void onSetCover()}
+          onClearCover={onClearCover}
+          hasCustomCover={hasCustomCover}
+          onToggleOverview={() => reader.toggleDrawer("pages")}
+          workbenchMode={workbenchMode}
+          onOpenWorkbench={openWorkbench}
+          onJumpToFirst={isVideo ? () => goToVideo(0) : () => jumpTo(0, "menu")}
+          onJumpToLast={
+            isVideo
+              ? () => {
+                  if (videos.length > 0) goToVideo(videos.length - 1);
+                }
+              : () => jumpTo(images.length - 1, "menu")
+          }
+        />
 
-      {!isVideo && (
-        <>
-          <GalleryAlbumNav
-            onPrevAlbum={prevAlbum}
-            onNextAlbum={nextAlbum}
-            prevLabel={adjacentNames.prev}
-            nextLabel={adjacentNames.next}
-          />
-          <GalleryToolbar
-            singlePage={total === 1}
-            onPrev={prev}
-            onNext={next}
-            atStart={start}
-            atEnd={total === 1 && !reader.hasNextVolume}
-            nextVolume={end && reader.autoSwitchAlbum && reader.hasNextVolume}
-            onSettings={() => setSettingsOpen(true)}
-          >
-            <PageSlider
-              total={total}
-              index={group[0] ?? 0}
-              onJump={jumpTo}
-              images={images}
-              double={mode === "double"}
+        {!isVideo && (
+          <>
+            <GalleryAlbumNav
+              onPrevAlbum={prevAlbum}
+              onNextAlbum={nextAlbum}
+              prevLabel={adjacentNames.prev}
+              nextLabel={adjacentNames.next}
             />
-          </GalleryToolbar>
-        </>
-      )}
+            <GalleryToolbar
+              onChapters={() => reader.toggleDrawer("chapters")}
+              singlePage={total === 1}
+              onPrev={prev}
+              onNext={next}
+              atStart={start}
+              atEnd={total === 1 && !reader.hasNextVolume}
+              nextVolume={end && reader.autoSwitchAlbum && reader.hasNextVolume}
+              onSettings={() => setSettingsOpen(true)}
+            >
+              <PageSlider
+                total={total}
+                index={group[0] ?? 0}
+                onJump={jumpTo}
+                images={images}
+                double={mode === "double" && group.length === 2}
+              />
+            </GalleryToolbar>
+          </>
+        )}
+      </div>
       {settingsOpen && (
         <ReaderSettingsSheet open onClose={() => setSettingsOpen(false)} />
       )}

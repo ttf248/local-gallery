@@ -36,7 +36,13 @@ import { useReaderMedia } from "../../hooks/useReaderMedia";
 import { useReaderKeys } from "../../hooks/useReaderKeys";
 import type { AppMode } from "../../api/library";
 
-import { clampPage, spreadAt } from "./readerLayout";
+import { useReaderChrome } from "./useReaderChrome";
+import {
+  clampPage,
+  spreadAt,
+  nextSpreadIndex,
+  prevSpreadIndex,
+} from "./readerLayout";
 import type {
   JumpSource,
   ReaderJump,
@@ -90,6 +96,9 @@ export function useReaderController() {
   const toggleSlideshow = useGalleryStore((s) => s.toggleSlideshow);
   const mode = useGalleryStore((s) => s.mode);
 
+  const coverOffset = useGalleryStore((s) => s.coverOffset);
+  const autoHide = useGalleryStore((s) => s.immersiveAutoHide);
+  const [drawerTab, setDrawerTab] = useState<"pages" | "chapters">("pages");
   const [showInfo, setShowInfo] = useState(false);
   const { mode: workbenchMode, setMode: setWorkbenchMode } = useAppMode();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -114,6 +123,21 @@ export function useReaderController() {
   } | null>(null);
   // 「阅读到末尾自动切换下一卷」「切换时显示通知」两个阅读偏好。
   // 未加载前按服务端默认值处理（都是开启）。
+  const chrome = useReaderChrome({
+    autoHide: autoHide && !isVideo,
+    lockedOpen:
+      isVideo ||
+      showOverview ||
+      showHelp ||
+      settingsOpen ||
+      menuOpen ||
+      showInfo ||
+      Boolean(contextMenu),
+  });
+  const toggleDrawer = (tab: "pages" | "chapters") => {
+    setShowOverview(!showOverview || tab !== drawerTab);
+    setDrawerTab(tab);
+  };
   const { data: prefs } = usePrefs();
   const autoSwitchAlbum = prefs?.autoSwitchAlbum ?? true;
   const showSwitchNotif = prefs?.showSwitchNotif ?? true;
@@ -156,7 +180,13 @@ export function useReaderController() {
   const albumSummary = albumSummaryQuery.data?.items.find(
     (item) => item.id === pathParam,
   );
+  const parentSummary = useLibraryNodes(
+    albumSummary?.parentId ? [albumSummary.parentId] : [],
+  ).data?.items[0];
   const name =
+    [albumSummary?.comic?.chapterLabel, albumSummary?.comic?.cleanTitle]
+      .filter((v, i, a) => v && a.indexOf(v) === i)
+      .join(" · ") ||
     albumSummary?.displayName ||
     albumSummary?.name ||
     params.get("name") ||
@@ -164,10 +194,10 @@ export function useReaderController() {
   // 顶栏里的名字：漫画的卷名只写「第1卷」，这一卷属于哪部作品
   // 看不出来。作品名补在前面，与书封上的写法一致 —— 翻开一本时
   // 顶栏该说的是「星海漫步 · 第1卷」。
+  const parentName =
+    parentSummary?.comic?.cleanTitle || albumSummary?.parentName;
   const headerName =
-    albumSummary?.parentName && albumSummary.parentName !== name
-      ? `${albumSummary.parentName} · ${name}`
-      : name;
+    parentName && parentName !== name ? `${parentName} · ${name}` : name;
 
   // 返回：优先回到应用内的上一页；没有可回退历史时回到能确认的来路。
   // 直接打开阅读器链接（刷新、复制链接到新标签页）时，navigate(-1) 会
@@ -526,7 +556,7 @@ export function useReaderController() {
   // 「继续阅读」进来说卷时，那份上下文里未必有这一卷 —— 没有兜底，
   // 「下一卷」就没有落脚点。同一作品里的卷一次取全，跨卷导航在作品
   // 内部至少接得上。
-  const siblingEntries = useSiblingVolumes(albumSummary?.parentId);
+  const siblingEntries = useSiblingVolumes(albumSummary?.parentId, pathParam);
   const closeInfo = useCallback(() => setShowInfo(false), []);
   const { goAdjacent, adjacentNames } = useAdjacentAlbum({
     pathParam,
@@ -604,7 +634,8 @@ export function useReaderController() {
       return;
     }
     if (mode === "double") {
-      if (index >= 2) jumpImage(spreadAt(index, images.length)[0] - 2);
+      if (index > 0)
+        jumpImage(prevSpreadIndex(index, images.length, coverOffset));
     } else if (index > 0) {
       jumpImage(index - 1);
     }
@@ -614,6 +645,7 @@ export function useReaderController() {
     videos.length,
     goToVideo,
     mode,
+    coverOffset,
     jumpImage,
     index,
     images.length,
@@ -638,9 +670,9 @@ export function useReaderController() {
       return;
     }
     if (mode === "double") {
-      const start = spreadAt(index, images.length)[0];
-      if (start + 2 < images.length) {
-        jumpImage(start + 2);
+      const last = spreadAt(index, images.length, coverOffset).at(-1) ?? 0;
+      if (last + 1 < images.length) {
+        jumpImage(nextSpreadIndex(index, images.length, coverOffset));
         return;
       }
       onReachEnd();
@@ -657,6 +689,7 @@ export function useReaderController() {
     videos.length,
     goToVideo,
     mode,
+    coverOffset,
     jumpImage,
     index,
     observation?.atBottom,
@@ -816,12 +849,36 @@ export function useReaderController() {
     {
       isVideo,
       fullscreen,
-      prev,
-      next,
+      prev: () => {
+        chrome.show();
+        prev();
+      },
+      next: () => {
+        chrome.show();
+        next();
+      },
       jumpToFirst: () => jumpTo(0, "key"),
       jumpToLast: () => jumpTo((isVideo ? videos : images).length - 1, "key"),
       toggleInfo,
-      toggleOverview: () => setShowOverview((v) => !v),
+      toggleOverview: () => toggleDrawer("pages"),
+      toggleChapters: () => toggleDrawer("chapters"),
+      toggleChrome: chrome.toggle,
+      advance: () => {
+        if (mode === "continuous" && observation?.atBottom && hasNextVolume)
+          void goAdjacent(1, { albumsOnly: true });
+        else next();
+      },
+      toggleOffset: () => {
+        if (mode === "double") {
+          useGalleryStore.getState().setCoverOffset(!coverOffset);
+          pushToast({
+            kind: "info",
+            message: coverOffset
+              ? "已关闭封面单页偏移"
+              : "已开启封面单页偏移（1 | 2-3）",
+          });
+        }
+      },
       toggleHelp: () => setShowHelp((v) => !v),
       toggleFinished: () => setShowFinished((v) => !v),
       toggleFavorite: onToggleFavorite,
@@ -854,6 +911,12 @@ export function useReaderController() {
   const itemIndex = videoItemIndex;
 
   return {
+    chrome,
+    coverOffset,
+    drawerTab,
+    setDrawerTab,
+    toggleDrawer,
+    albumSummary,
     adjacentNames,
     autoSwitchAlbum,
     observation,

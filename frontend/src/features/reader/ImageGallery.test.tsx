@@ -322,6 +322,7 @@ describe("ImageGallery 翻页方向", () => {
 describe("ImageGallery 双页并排", () => {
   beforeEach(() => {
     useGalleryStore.setState({
+      coverOffset: false,
       index: 0,
       mode: "double",
       zoom: 1,

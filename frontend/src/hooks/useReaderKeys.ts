@@ -11,6 +11,10 @@ export interface ReaderKeyHandlers {
   jumpToLast: () => void;
   toggleInfo: () => void;
   toggleOverview: () => void;
+  toggleChrome?: () => void;
+  toggleChapters?: () => void;
+  toggleOffset?: () => void;
+  advance?: () => void;
   toggleHelp: () => void;
   /** 读完一卷后的收尾提示。 */
   toggleFinished: () => void;
@@ -57,7 +61,10 @@ export function useReaderKeys(
             "=": () => useGalleryStore.getState().zoomIn(),
             "0": () => useGalleryStore.getState().zoomReset(),
             r: () => useGalleryStore.getState().rotate(90),
-            space: () => useGalleryStore.getState().toggleSlideshow(),
+            space: rest.advance ?? rest.next,
+            ...(rest.toggleChrome ? { h: rest.toggleChrome } : {}),
+            ...(rest.toggleChapters ? { c: rest.toggleChapters } : {}),
+            ...(rest.toggleOffset ? { o: rest.toggleOffset } : {}),
             i: rest.toggleInfo,
             t: rest.toggleOverview,
             "1": () => useGalleryStore.getState().setMode("single"),

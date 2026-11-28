@@ -24,6 +24,10 @@ export interface GalleryState {
   slideshowInterval: number; // ms
   mode: ReaderMode;
   fit: FitMode;
+  coverOffset: boolean;
+  immersiveAutoHide: boolean;
+  setCoverOffset: (value: boolean) => void;
+  setImmersiveAutoHide: (value: boolean) => void;
   direction: ReadDirection;
 
   setIndex: (i: number) => void;
@@ -55,6 +59,10 @@ export const useGalleryStore = create<GalleryState>()(
       mode: "single",
       fit: "fit",
       direction: "rtl",
+      coverOffset: true,
+      immersiveAutoHide: false,
+      setCoverOffset: (coverOffset) => set({ coverOffset }),
+      setImmersiveAutoHide: (immersiveAutoHide) => set({ immersiveAutoHide }),
 
       setIndex: (i) => set({ index: i }),
       setZoom: (z) => set({ zoom: clamp(z, 0.1, 5) }),
@@ -91,6 +99,12 @@ export const useGalleryStore = create<GalleryState>()(
           persisted && typeof persisted === "object" ? persisted : {};
         return {
           ...current,
+          coverOffset: !(
+            "coverOffset" in preferences && preferences.coverOffset === false
+          ),
+          immersiveAutoHide:
+            "immersiveAutoHide" in preferences &&
+            preferences.immersiveAutoHide === true,
           mode:
             "mode" in preferences &&
             (preferences.mode === "continuous" || preferences.mode === "double")
@@ -115,6 +129,8 @@ export const useGalleryStore = create<GalleryState>()(
         mode: s.mode,
         fit: s.fit,
         direction: s.direction,
+        coverOffset: s.coverOffset,
+        immersiveAutoHide: s.immersiveAutoHide,
       }),
     },
   ),

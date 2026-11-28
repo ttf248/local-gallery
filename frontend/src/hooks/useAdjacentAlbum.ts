@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useChapterPages } from "./useChapterPages";
 import { libraryApi } from "../api/library";
 import {
   entryDisplayName,
@@ -66,29 +66,24 @@ export function resolveAdjacentEntry(
  */
 export function useSiblingVolumes(
   parentId: string | undefined,
+  currentId?: string,
 ): GalleryContextEntry[] {
-  const query = useQuery({
-    queryKey: ["library", "children", parentId ?? "", "comic"],
-    queryFn: ({ signal }) =>
-      libraryApi.childrenAll(parentId ?? "", "comic", signal),
-    enabled: Boolean(parentId),
-    staleTime: 60_000,
-  });
+  const { nodes } = useChapterPages(parentId, currentId);
   return useMemo(
     () =>
-      (query.data ?? [])
+      nodes
         .filter((node) => node.kind === "album")
         .map((node) => ({
           key: node.id,
           to: albumRoute(node.contentKind, node.id),
-          name: node.name,
+          name: node.comic?.cleanTitle || node.name,
           parentName: node.parentName,
           kind: "album" as const,
           imageCount: node.imageCount,
           videoCount: node.videoCount,
           contentKind: node.contentKind,
         })),
-    [query.data],
+    [nodes],
   );
 }
 
@@ -300,6 +295,7 @@ export function useAdjacentAlbum({
     const nameOf = (entry: GalleryContextEntry | undefined) =>
       entry ? entryDisplayName(entry) : "";
     return {
+      nextPages: pick(1)?.imageCount,
       prev: nameOf(pick(-1)),
       next: nameOf(pick(1)),
       more: Boolean(ctx?.pagination?.nextCursor),

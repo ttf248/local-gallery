@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { documentTitle, useRouteMeta } from "../app/routeMeta";
 import ImageInfoPanel from "../features/viewer/ImageInfoPanel";
 import HelpOverlay from "../features/common/HelpOverlay";
-import PageOverview from "../features/reader/PageOverview";
+import ReaderDrawer from "../features/reader/ReaderDrawer";
 import { ContextMenu } from "../ui/ContextMenu";
 import {
   CloseIcon,
@@ -187,7 +187,13 @@ export default function Reader() {
       {/* 舞台：画布 + 顶栏 + 浮层控件 + 底部进度条。
           信息面板打开时（md+）这一列横向收缩，面板成为独立的一栏；
           窄屏时面板改为浮在顶栏下方的整宽浮层，不遮挡顶栏。 */}
-      <div className="reader-workspace relative flex-1 min-w-0">
+      <div
+        className="reader-workspace relative flex-1 min-w-0"
+        data-chrome={reader.chrome.visible ? "visible" : "hidden"}
+        onPointerMove={(e) =>
+          reader.chrome.notifyEdgeActivity(e.clientY, window.innerHeight)
+        }
+      >
         <ReaderCanvas reader={reader} />
         <ReaderChrome reader={reader} />
       </div>
@@ -202,7 +208,8 @@ export default function Reader() {
         />
       )}
       {showOverview && !isVideo && (
-        <PageOverview
+        <ReaderDrawer
+          reader={reader}
           images={images}
           index={index}
           onJump={(target) => {

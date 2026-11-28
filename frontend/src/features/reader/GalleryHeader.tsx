@@ -61,6 +61,7 @@ interface Props {
   /** 当前相册是否已有自定义封面（决定 Popover 显示哪种文案）。 */
   hasCustomCover?: boolean;
   /** 打开目录（整本缩略图）。可选：不提供时不显示入口。 */
+  onToggleChrome?: () => void;
   onToggleOverview?: () => void;
   /**
    * 工作台切换。阅读器整屏脱离 AppShell，侧栏不可见，
@@ -92,6 +93,7 @@ export default function GalleryHeader({
   onJumpToFirst,
   onJumpToLast,
   onToggleOverview,
+  onToggleChrome,
   workbenchMode,
   onOpenWorkbench,
   onMenuChange,
@@ -274,6 +276,9 @@ export default function GalleryHeader({
               <span>图片信息</span>
               <span className="ml-auto text-caption text-white/55">I</span>
             </PopoverItem>
+          )}
+          {!isVideo && onToggleChrome && (
+            <PopoverItem onClick={onToggleChrome}>切换沉浸模式 (H)</PopoverItem>
           )}
           {!isVideo && onToggleOverview && (
             <PopoverItem onClick={onToggleOverview}>
