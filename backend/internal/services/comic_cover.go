@@ -165,6 +165,40 @@ type comicPick struct {
 func sameComicImage(a, b comicPick, dist int) bool {
 	return a.ID == b.ID || a.hashed && b.hashed && bits.OnesCount64(a.hash^b.hash) <= dist
 }
+
+// 尚未评齐的候选只用目录证据比较，避免一个已评分的内页压倒所有未评分的首卷扉页。
+func comicRulePicks(pages []comicPick) []comicPick {
+	picks := slices.Clone(pages)
+	for i := range picks {
+		p := &picks[i]
+		p.score = -1
+		if p.explicit {
+			p.score += .25
+		}
+		p.hashed = false
+		p.ocr = ""
+	}
+	return picks
+}
+
+func comicPicksReady(pages []comicPick) bool {
+	return !slices.ContainsFunc(pages, func(p comicPick) bool { return !p.hashed })
+}
+
+func topComicPicks(pool []comicPick) []comicPick {
+	rankComic(pool)
+	unique := make([]comicPick, 0, min(5, len(pool)))
+	for _, p := range pool {
+		if !slices.ContainsFunc(unique, func(q comicPick) bool { return sameComicImage(p, q, 6) }) {
+			unique = append(unique, p)
+			if len(unique) == 5 {
+				break
+			}
+		}
+	}
+	return unique
+}
+
 func rankComic(p []comicPick) {
 	sort.SliceStable(p, func(i, j int) bool { return p[i].score > p[j].score })
 }
@@ -278,13 +312,16 @@ func (c *ResourceCatalog) buildComicCovers(st *resourceCatalogState) {
 		var previous comicPick
 		for _, id := range ids {
 			best := slices.Clone(pages[id])
+			if !comicPicksReady(best) {
+				best = comicRulePicks(best)
+			}
 			reason := "fallback_first"
 			dedup := false
 			for i, p := range best {
 				if p.hashed {
 					reason = "aesthetic_poster"
 				}
-				if ix, ok := clusterOf[p.ID]; ok && clusters[ix].freq >= 2 && parent != "" {
+				if ix, ok := clusterOf[p.ID]; p.hashed && ok && clusters[ix].freq >= 2 && parent != "" {
 					if clusters[ix].owner == id {
 						best[i].score -= .05
 					} else {
@@ -318,11 +355,15 @@ func (c *ResourceCatalog) buildComicCovers(st *resourceCatalogState) {
 			}
 		}
 	}
-	var collect func(models.Collection) []comicPick
-	collect = func(work models.Collection) []comicPick {
+	type workCoverPool struct {
+		selected, fallback []comicPick
+		ready              bool
+	}
+	var collect func(models.Collection) workCoverPool
+	collect = func(work models.Collection) workCoverPool {
 		id := externalID(st, work.Path, ResourceCollection)
 		if work.ContentKind != "comic" {
-			return nil
+			return workCoverPool{ready: true}
 		}
 		ids := groups[id]
 		hasMain := slices.ContainsFunc(ids, func(a string) bool {
@@ -331,6 +372,8 @@ func (c *ResourceCatalog) buildComicCovers(st *resourceCatalogState) {
 		})
 		regular := 0
 		pool := []comicPick{}
+		fallbackPool := []comicPick{}
+		ready := true
 		firstID := ""
 		for _, aid := range ids {
 			if st.albums[aid].Virtual || len(st.albums[aid].ImageFiles) == 0 {
@@ -358,31 +401,48 @@ func (c *ResourceCatalog) buildComicCovers(st *resourceCatalogState) {
 			if main {
 				regular++
 			}
-			picks := slices.Clone(pages[aid])
-			for j := range picks {
-				p := &picks[j]
-				if st.albums[aid].Virtual && p.explicit {
-					p.score += 3
-				}
-				if main && regular == 1 && p.index == 0 {
-					p.score += .12
-				}
-				if ep.EpisodeType == ComicEpisodeExtra || ep.EpisodeType == ComicEpisodeSpecial {
-					p.score -= .25
-				}
-				if strings.Contains(p.ocr, st.comics[id].CleanTitle) {
-					p.score += .25
-				}
+			eligible := pages[aid]
+			if !take {
+				eligible = slices.DeleteFunc(slices.Clone(eligible), func(p comicPick) bool { return !p.explicit })
 			}
-			rankComic(picks)
-			for j, p := range picks {
-				if take && j < 2 || p.explicit {
-					pool = append(pool, p)
+			if len(eligible) == 0 {
+				continue
+			}
+			ready = ready && comicPicksReady(eligible)
+			addCandidates := func(dest []comicPick, picks []comicPick) []comicPick {
+				for j := range picks {
+					p := &picks[j]
+					if st.albums[aid].Virtual && p.explicit {
+						p.score += 3
+					}
+					if main && regular == 1 && p.index == 0 {
+						p.score += .12
+					}
+					if ep.EpisodeType == ComicEpisodeExtra || ep.EpisodeType == ComicEpisodeSpecial {
+						p.score -= .25
+					}
+					if p.ocr != "" && strings.Contains(p.ocr, st.comics[id].CleanTitle) {
+						p.score += .25
+					}
 				}
+				rankComic(picks)
+				for j, p := range picks {
+					if take && j < 2 || p.explicit {
+						dest = append(dest, p)
+					}
+				}
+				return dest
+			}
+			fallbackPool = addCandidates(fallbackPool, comicRulePicks(eligible))
+			if ready {
+				pool = addCandidates(pool, slices.Clone(eligible))
 			}
 		}
 		for _, sub := range work.Collections {
-			pool = append(pool, collect(sub)...)
+			childPool := collect(sub)
+			ready = ready && childPool.ready
+			pool = append(pool, childPool.selected...)
+			fallbackPool = append(fallbackPool, childPool.fallback...)
 			if firstID == "" {
 				child := st.comics[externalID(st, sub.Path, ResourceCollection)]
 				if child.FirstEpisodeID != "" {
@@ -394,15 +454,10 @@ func (c *ResourceCatalog) buildComicCovers(st *resourceCatalogState) {
 				}
 			}
 		}
-		rankComic(pool)
-		unique := []comicPick{}
-		for _, p := range pool {
-			if !slices.ContainsFunc(unique, func(q comicPick) bool { return sameComicImage(p, q, 6) }) {
-				unique = append(unique, p)
-				if len(unique) == 5 {
-					break
-				}
-			}
+		fallback := topComicPicks(fallbackPool)
+		unique := fallback
+		if ready {
+			unique = topComicPicks(pool)
 		}
 		reason := "fallback_first"
 		if len(unique) > 0 {
@@ -425,14 +480,18 @@ func (c *ResourceCatalog) buildComicCovers(st *resourceCatalogState) {
 				}
 				if fid != "" && version != "" && safe && st.byID[fid].RootID == st.byID[id].RootID {
 					p := comicPick{CoverCandidate: CoverCandidate{fid, "image", version}}
-					unique = slices.DeleteFunc(unique, func(q comicPick) bool { return q.ID == p.ID })
-					unique = append([]comicPick{p}, unique...)
+					promote := func(list []comicPick) []comicPick {
+						others := slices.DeleteFunc(slices.Clone(list), func(q comicPick) bool { return q.ID == p.ID })
+						return append([]comicPick{p}, others[:min(4, len(others))]...)
+					}
+					unique = promote(unique)
+					fallback = promote(fallback)
 					reason = "manual"
 				}
 			}
 		}
 		save(id, unique, reason)
-		return unique
+		return workCoverPool{selected: unique, fallback: fallback, ready: ready}
 	}
 	for _, w := range st.result.Collections {
 		collect(w)

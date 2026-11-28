@@ -295,7 +295,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/ai/jobs` / `POST /api/ai/jobs`
 
-读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face" | "similarity", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。全量分析当前范围内的图片，增量分析新增、修改或模块版本变化的图片。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`similarity` 在本机提取照片的内容指纹、感知哈希与质量指标，用于发现重复、裁剪压缩过的副本与连拍（该模块不需要本机 Python 依赖与权重）；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型。两种模型的每张照片分析记录分别持久化；切换后会加载该模型已有记录，增量只补齐该模型缺失或过期的照片。人物索引和人工修正同样按模型隔离；人物相册与智能相册人物维度始终使用当前选择模型的数据，切换后不会展示另一模型生成的缓存结果。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。embedding、OCR 与人脸三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`；相似照片特征任务只用本机标准库，不受这些条件影响。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
+读取任务历史、活动任务、等待队列与每日计划；启动请求为 `{ "type": "metadata" | "embedding" | "ocr" | "face" | "portrait" | "similarity" | "albumCover" | "comicCover" | "comicMeta", "mode": "full" | "incremental", "albumId"?: "a_…" }`。不传 `albumId` 时分析当前库；传入时只分析该照片相册内的图片，非照片相册或失效 ID 返回 `400 invalid_analysis_album`。漫画任务省略 `albumId`，`comicCover` 按卷抽样页评分，`comicMeta` 按作品识别资料。单部作品可通过 `POST /api/comics/:id/meta/refresh` 刷新。全量任务处理当前范围内的目标，增量任务处理新增、修改或模块版本变化的目标。`metadata` 读取 EXIF/GPS；`embedding` 使用本机 Chinese-CLIP 生成语义向量；`ocr` 使用 RapidOCR 识别文字；`similarity` 在本机提取照片的内容指纹、感知哈希与质量指标，用于发现重复、裁剪压缩过的副本与连拍（该模块不需要本机 Python 依赖与权重）；`face` 使用当前选定的人脸模型检测并生成人脸特征：`quality-v2` 是 YuNet + SFace（128 维），`buffalo_m` 是 SCRFD + ResNet50（512 维）。任务快照中的 `faceModel` 固定记录创建任务时使用的模型。两种模型的每张照片分析记录分别持久化；切换后会加载该模型已有记录，增量只补齐该模型缺失或过期的照片。人物索引和人工修正同样按模型隔离；人物相册与智能相册人物维度始终使用当前选择模型的数据，切换后不会展示另一模型生成的缓存结果。模型可在任务中心切换，见 `PUT /api/ai/jobs/face-model`。embedding、OCR 与人脸三类任务需要对应本机 Python 依赖与权重，缺失时返回 `503 ai_runtime_unavailable`、`503 ai_model_missing` 或 `503 ai_module_unavailable`；相似照片特征任务只用本机标准库，不受这些条件影响。已有活动或等待中的任务时返回 `409 analysis_job_active`；模块类型或模式无效时返回 `400 analysis_start_failed`。响应含任务快照与 `reused`。
 
 任务快照的 `jobs` 按创建时间倒序提供任务记录，`active` 是当前执行或暂停的任务，`queue` 是按执行顺序排列的等待任务 ID，不包含 `active`。任务记录包含等待队列任务以及所有终态记录。队列 ID 与任务状态会一起持久化到 `state/ai_jobs.json`；旧状态文件缺少 `queue` 时会按待执行任务的创建顺序恢复，服务重启时未完成的当前任务会插回队首续跑。
 
@@ -312,7 +312,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `POST /api/ai/jobs/sequence`
 
-请求为 `{ "mode": "full" | "incremental", "albumId"?: "a_…" }`，一次创建所有已就绪模块的任务，并按固定顺序加入既有任务队列。全库任务依次执行 metadata、embedding、OCR、face、similarity；传入照片 `albumId` 时仅排入 metadata、embedding、face、similarity，并且每项只处理该相册图片。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
+请求为 `{ "mode": "full" | "incremental", "albumId"?: "a_…" }`，一次创建所有已就绪模块的任务，并按固定顺序加入既有任务队列。全库任务依次执行 metadata、embedding、OCR、face、similarity，再按注册情况排入 comicCover、comicMeta 和 albumCover。传入照片 `albumId` 时仅排入 metadata、embedding、face、similarity，并且每项只处理该相册图片。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
 
 ### `GET /api/ai/jobs/estimate`
 

@@ -30,6 +30,15 @@ func TestComicCoverSamplingAndDedup(t *testing.T) {
 			records = append(records, AIAnalysisRecord{Type: AIJobTypeComicCover, ModuleVersion: comicCoverVersion, Status: "scored", ResourceID: snap.ExternalID(p, ResourceFile), MTimeNs: st.ModTime().UnixNano(), Size: st.Size(), Data: data})
 		}
 	}
+	// 分批任务可能先完成首卷内页；暂停或重启时仍应选中首卷扉页。
+	s.Catalog.SetComicCoverScores(records[3:4])
+	partial := s.Catalog.Acquire()
+	for _, nodeID := range []string{id, partial.ExternalID(work.Albums[1].Path, ResourceAlbum)} {
+		n, _ := partial.LibraryNode(nodeID)
+		if n.CoverImage != records[2].ResourceID || n.Comic.CoverReason != "fallback_first" {
+			t.Fatalf("部分评分改变了默认封面：%+v", n)
+		}
+	}
 	s.Catalog.SetComicCoverScores(records)
 	snap = s.Catalog.Acquire()
 	d, _ := s.ResolveNodeMeta(snap, id)
