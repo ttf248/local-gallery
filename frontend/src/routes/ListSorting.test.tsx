@@ -185,7 +185,7 @@ function renderPage(
 ) {
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[path.startsWith("/unread")?path+(path.includes("?")?"&":"?")+"groupBy=album":path]}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/albums/*" element={<Album />} />

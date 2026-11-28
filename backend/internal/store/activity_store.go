@@ -210,6 +210,54 @@ func (s *ActivityStore) setBatch(activities []models.Activity, result *models.Ac
 	return nil
 }
 
+// UpdateWorkRead 在同一个写锁内检验当前阅读记录并提交全部变更。
+func (s *ActivityStore) UpdateWorkRead(counts map[string]int, reset bool) ([]string, error) {
+	if err := s.ensureLoaded(); err != nil {
+		return nil, err
+	}
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	s.mu.RLock()
+	current := s.items
+	s.mu.RUnlock()
+	next := current
+	started := map[string]bool{}
+	if !reset {
+		for _, a := range current {
+			started[a.AlbumID] = true
+		}
+	}
+	changed := []string{}
+	now := time.Now().UTC()
+	for id, n := range counts {
+		a := models.Activity{AlbumID: id, MediaKind: models.MediaKindImage, PageCount: n, PageIndex: n - 1, Status: models.ActivityCompleted, Updated: now}
+		key, ok := a.Identity().Key()
+		if !ok || n <= 0 {
+			return nil, errors.New("invalid work album")
+		}
+		_, exists := current[key]
+		if (reset && !exists) || (!reset && started[id]) {
+			continue
+		}
+		if len(changed) == 0 {
+			next = cloneActivityMap(current)
+		}
+		if reset {
+			delete(next, key)
+		} else {
+			next[key] = a
+		}
+		changed = append(changed, id)
+	}
+	if len(changed) > 0 {
+		if err := s.commitLocked(next); err != nil {
+			return nil, err
+		}
+	}
+	sort.Strings(changed)
+	return changed, nil
+}
+
 // Delete 删除单条活动，不存在时保持幂等。
 func (s *ActivityStore) Delete(identity models.ActivityIdentity) (bool, error) {
 	key, ok := identity.Key()

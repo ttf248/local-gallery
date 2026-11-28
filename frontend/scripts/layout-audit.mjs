@@ -404,7 +404,7 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     const bounds = top?.getBoundingClientRect();
     if (
       !bounds ||
-      bounds.height !== (desktop ? 56 : 52) ||
+      bounds.height !== (desktop ? 44 : 48) ||
       Math.abs(bounds.top - (desktop ? 8 : 0)) > 1 ||
       getComputedStyle(top).position !== "sticky"
     )

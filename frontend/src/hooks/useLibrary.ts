@@ -76,11 +76,14 @@ export function useLibraryDashboard() {
 }
 
 // 未读页直接取得服务端筛好的相册，不能先下载全库再批量查询每条阅读活动。
-export function useLibraryUnreadAlbums() {
+export function useLibraryUnreadAlbums(q = "", workId = "") {
   const { mode, ready } = useAppMode();
-  return useQuery({
-    queryKey: libraryQueryKeys.unreadAlbums(mode),
-    queryFn: ({ signal }) => libraryApi.allUnreadAlbums(mode, signal),
+  return useInfiniteQuery({
+    queryKey: [...libraryQueryKeys.unreadAlbums(mode), "volumes", q, workId],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({signal,pageParam}) => libraryApi.unreadVolumePage(q,workId,pageParam,signal),
+    getNextPageParam: last => last.page.nextCursor,
+    select: data => ({...data.pages[0].page, items:data.pages.flatMap(p=>p.page.items)}),
     staleTime: 30_000,
     enabled: ready,
   });

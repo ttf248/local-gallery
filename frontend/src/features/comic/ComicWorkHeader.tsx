@@ -4,6 +4,8 @@ import { Menu } from "../../ui/Menu";
 import { Button } from "../../ui/Button";
 import { ChevronLeftIcon } from "../../ui/icons";
 import { useUIStore } from "../../store/uiStore";
+import {activityApi} from "../../api/activity";
+import {useConfirm} from "../common/ConfirmDialog";
 import { fsApi } from "../../api/fs";
 import type { LibraryNodeSummary } from "../../api/library";
 import { comicSourceLabels } from "../../api/comicMeta";
@@ -65,6 +67,7 @@ export default function ComicWorkHeader({
   const dash = useLibraryDashboard();
   const [editing, setEditing] = useState<"info" | "cover" | null>(null),
     [expanded, setExpanded] = useState(false);
+  const confirm=useConfirm();
   const toast = useUIStore(s => s.pushToast);
   const m = detail.data?.meta ?? node.comic;
   const title = m?.cleanTitle ?? node.displayName;
@@ -205,6 +208,7 @@ export default function ComicWorkHeader({
           <Menu label="更多" trigger={<Button variant="ghost">更多</Button>} items={[
             {id:"refresh",label:"重新识别内容",disabled:refresh.isPending,onSelect:identify},
             {id:"cover",label:"更换总封面",onSelect:()=>setEditing("cover")},
+            {id:"resetReading",label:"重置整部阅读进度",onSelect:()=>void (async()=>{if(!await confirm({title:"重置整部阅读进度？",description:"所有章节将恢复为未读。",confirmLabel:"重置"}))return;try{const r=await activityApi.markWorkRead(node.id,"reset");toast({kind:"success",message:`已重置 ${r.updatedCount} 话阅读进度`})}catch{toast({kind:"error",message:"重置阅读进度失败"})}})()},
             {id:"folder",label:"在文件管理器中打开",onSelect:()=>void fsApi.openInExplorer(node.id).catch(()=>toast({kind:"error",message:"无法在文件管理器中打开"}))}
           ]}/>
         </div>

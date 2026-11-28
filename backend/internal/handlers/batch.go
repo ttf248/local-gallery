@@ -2,12 +2,44 @@ package handlers
 
 import (
 	"errors"
+	"github.com/tianlongxiang/local-gallery/internal/services"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/tianlongxiang/local-gallery/internal/httputil"
 	"github.com/tianlongxiang/local-gallery/internal/models"
 	"github.com/tianlongxiang/local-gallery/internal/store"
 )
+
+func ActivityWorkMarkReadHandler(catalog *services.ResourceCatalog, activities *store.ActivityStore) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		s := requestCatalogSnapshot(c, catalog)
+		if !s.Ready() {
+			return writeLibraryPageError(c, services.ErrLibraryNotReady, s.Revision())
+		}
+		id := c.Params("id")
+		n, ok := s.LibraryNode(id)
+		if !ok {
+			return httputil.NotFound(c, "resource_not_found", "resource not found")
+		}
+		if n.Kind != "collection" || n.ContentKind != "comic" {
+			return httputil.BadRequest(c, "invalid_work_target", "expected a comic work")
+		}
+		var input struct {
+			Mode string `json:"mode"`
+		}
+		if len(c.Body()) > 0 && c.BodyParser(&input) != nil {
+			return httputil.BadRequest(c, "invalid_work_target", "invalid request")
+		}
+		if input.Mode != "" && input.Mode != "mark_read" && input.Mode != "reset" {
+			return httputil.BadRequest(c, "invalid_work_target", "invalid work action")
+		}
+		ids, err := activities.UpdateWorkRead(s.WorkImageCounts(id), input.Mode == "reset")
+		if err != nil {
+			return activityInternalError(c)
+		}
+		return c.JSON(fiber.Map{"ok": true, "workId": id, "affectedAlbums": ids, "updatedCount": len(ids)})
+	}
+}
 
 const maxSelectionBatch = 1000
 

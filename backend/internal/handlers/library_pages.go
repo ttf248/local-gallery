@@ -176,7 +176,19 @@ func LibraryUnreadAlbumsPageHandler(catalog *services.ResourceCatalog, activitie
 			return httputil.Internal(c, "activity_unavailable", "activity storage is unavailable")
 		}
 		snapshot := catalog.Acquire()
-		page, err := unreadIndex.Page(snapshot, started, activityRevision, kind, c.Query("cursor"), limit)
+		group := c.Query("groupBy", "album")
+		if group == "work" {
+			page, err := unreadIndex.PageWorks(snapshot, started, activityRevision, kind, c.Query("q"), c.Query("cursor"), limit)
+			if err != nil {
+				return writeLibraryPageError(c, err, snapshot.Revision())
+			}
+			setLibraryRevisionETag(c, snapshot.Revision())
+			return c.JSON(fiber.Map{"ok": true, "page": page})
+		}
+		if group != "album" {
+			return httputil.BadRequest(c, "invalid_group_by", "invalid unread grouping")
+		}
+		page, err := unreadIndex.PageAlbumsMatching(snapshot, started, activityRevision, kind, c.Query("workId"), c.Query("q"), c.Query("cursor"), limit)
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}

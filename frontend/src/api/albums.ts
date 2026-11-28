@@ -118,6 +118,8 @@ export interface SmartAlbumOverride {
 }
 
 export interface SearchHit {
+  parentName?:string;
+  chapterLabel?:string;
   kind: "album" | "collection" | "smartCollection";
   path: string;
   name: string;
@@ -154,9 +156,10 @@ export const albumsApi = {
     limit = 50,
     cursor?: string,
     signal?: AbortSignal,
+    type?:string,
   ) {
     return api<SearchResponse>(`/api/search`, {
-      params: { q, limit, kind, cursor },
+      params: { q, limit, kind, cursor, type },
       signal,
     });
   },

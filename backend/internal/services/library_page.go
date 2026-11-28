@@ -131,6 +131,7 @@ type LibraryNodeSummary struct {
 	CoverImageVersion  string    `json:"coverImageVersion,omitempty"`
 	CoverImageVersions []string  `json:"coverImageVersions,omitempty"`
 	CoverKind          string    `json:"coverKind,omitempty"`
+	TotalImageCount    int       `json:"totalImageCount,omitempty"`
 	ImageCount         int       `json:"imageCount,omitempty"`
 	VideoCount         int       `json:"videoCount,omitempty"`
 	MediaCount         int       `json:"mediaCount,omitempty"`
@@ -211,10 +212,12 @@ type LibraryTagSummary struct {
 
 // LibrarySearchHit 是预计算搜索索引的对外条目，不包含目录树或绝对路径。
 type LibrarySearchHit struct {
-	comicSearch string
-	Kind        string `json:"kind"`
-	Path        string `json:"path"`
-	Name        string `json:"name"`
+	ParentName   string `json:"parentName,omitempty"`
+	ChapterLabel string `json:"chapterLabel,omitempty"`
+	comicSearch  string
+	Kind         string `json:"kind"`
+	Path         string `json:"path"`
+	Name         string `json:"name"`
 	// Virtual 标记散图（"本目录媒体"）。它的 Name 是归属目录路径，
 	// 与同名集合难以区分，前端据此显示类型标签。
 	Virtual    bool     `json:"virtual,omitempty"`
@@ -602,8 +605,18 @@ func buildLibraryPageIndex(state *resourceCatalogState) *libraryPageIndex {
 func buildLibrarySearchIndex(index *libraryPageIndex) []LibrarySearchHit {
 	hits := make([]LibrarySearchHit, 0, len(index.albums)+len(index.nodes)+len(index.tags))
 	for _, album := range index.albums {
+		parentName, chapterLabel := "", ""
+		if album.ContentKind == "comic" {
+			parentName = album.ParentName
+			if p := index.nodes[album.ParentID]; p.Comic != nil && p.Comic.CleanTitle != "" {
+				parentName = p.Comic.CleanTitle
+			}
+			if album.Comic != nil {
+				chapterLabel = album.Comic.ChapterLabel
+			}
+		}
 		hits = append(hits, LibrarySearchHit{
-			Kind: "album", Path: album.ID, Name: searchHitName(album), comicSearch: album.comicSearch,
+			Kind: "album", Path: album.ID, Name: searchHitName(album), ParentName: parentName, ChapterLabel: chapterLabel, comicSearch: album.comicSearch,
 			Virtual:           album.Virtual,
 			Tags:              append([]string(nil), album.Tags...),
 			Count:             album.ImageCount,
@@ -1225,7 +1238,7 @@ func SearchLibrary(snapshot CatalogSnapshot, query string, kind LibraryKindScope
 }
 
 // PageLibrarySearch 在稳定的搜索排序上按游标返回一页结果。
-func PageLibrarySearch(snapshot CatalogSnapshot, query string, kind LibraryKindScope, cursor string, limit int) (LibraryPage[LibrarySearchHit], error) {
+func PageLibrarySearch(snapshot CatalogSnapshot, query string, kind LibraryKindScope, cursor string, limit int, types ...string) (LibraryPage[LibrarySearchHit], error) {
 	if !snapshot.Ready() || snapshot.state == nil || snapshot.state.library == nil {
 		return LibraryPage[LibrarySearchHit]{}, ErrLibraryNotReady
 	}
@@ -1235,6 +1248,16 @@ func PageLibrarySearch(snapshot CatalogSnapshot, query string, kind LibraryKindS
 	}
 
 	scored := rankedLibrarySearch(snapshot, needle, kind)
+	if len(types) > 0 && types[0] != "" && types[0] != "all" {
+		filtered := scored[:0]
+		for _, h := range scored {
+			if h.hit.Kind == types[0] {
+				filtered = append(filtered, h)
+			}
+		}
+		scored = filtered
+		needle += ":" + types[0]
+	}
 	scope := libraryScope("library-search:"+needle, kind)
 	start, err := pageOffset(snapshot, cursor, scope)
 	if err != nil {
@@ -1796,6 +1819,7 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 		CoverImageVersions: coverVersions,
 		CoverKind:          coverKind,
 		ImageCount:         imageCount,
+		TotalImageCount:    imageCount,
 		VideoCount:         videoCount,
 		MediaCount:         imageCount + videoCount,
 		AlbumCount:         albumCount,

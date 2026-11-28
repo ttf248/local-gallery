@@ -173,7 +173,7 @@ export default function Recents({
 
   const summary =
     historyQuery.data && !nodesQuery.isLoading
-      ? resolvedCount.toLocaleString("zh-CN") + " 项最近浏览"
+      ? resolvedCount.toLocaleString("zh-CN") + (mode==="comic"?" 项最近阅读":" 项最近浏览")
       : undefined;
   useEffect(() => {
     if (summary) onSummary?.(summary);

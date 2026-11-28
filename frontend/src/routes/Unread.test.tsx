@@ -83,7 +83,7 @@ function seedUnread(
   } as never);
 }
 
-function renderUnread(entry = "/comic/unread") {
+function renderUnread(entry = "/comic/unread?groupBy=album") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
@@ -160,7 +160,7 @@ describe("Unread", () => {
 
   it("最少图数写进地址后立即重新筛选", async () => {
     seedUnread([baseAlbum("/a", "A", 2), baseAlbum("/b", "B", 10)]);
-    renderUnread("/comic/unread?min=5");
+    renderUnread("/comic/unread?groupBy=album&min=5");
 
     await waitFor(() =>
       expect(screen.queryByText("A")).not.toBeInTheDocument(),
@@ -177,7 +177,7 @@ describe("Unread", () => {
       baseAlbum("/b", "B"),
     ]);
     // 关键词也在地址里：目录名能搜到散图相册。
-    renderUnread("/comic/unread?q=2020年");
+    renderUnread("/comic/unread?groupBy=album&q=2020年");
 
     await waitFor(() =>
       expect(screen.queryByText("B")).not.toBeInTheDocument(),

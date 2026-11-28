@@ -753,6 +753,7 @@ func main() {
 	api.Put("/activity", handlers.ActivityPutHandler(activities))
 	api.Delete("/activity", handlers.ActivityDeleteHandler(activities))
 	api.Post("/activity/query", handlers.ActivityQueryHandler(activities))
+	api.Post("/activity/works/:id/mark-read", handlers.ActivityWorkMarkReadHandler(resourceCatalog, activities))
 	api.Delete("/activity/batch", handlers.ActivityBatchDeleteHandler(activities))
 	api.Put("/activity/batch", handlers.ActivityBatchPutHandler(activities))
 	api.Delete("/activity/all", handlers.ActivityClearHandler(activities))

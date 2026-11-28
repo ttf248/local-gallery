@@ -11,7 +11,7 @@ import {
 } from "./useLibrary";
 
 vi.mock("../api/library", () => ({
-  libraryApi: { allUnreadAlbums: vi.fn() },
+  libraryApi: { unreadVolumePage: vi.fn() },
 }));
 
 // 列表查询等模式水合后才发请求；这里直接给出就绪状态。
@@ -56,8 +56,8 @@ it("活动变化同时失效未打开页面的阅读摘要，并保留静态库�
 
 it("离开未读页后变化不下载列表，返回时立即刷新未过期的旧缓存", async () => {
   const { wrapper } = setup();
-  vi.mocked(libraryApi.allUnreadAlbums)
-    .mockResolvedValueOnce({
+  vi.mocked(libraryApi.unreadVolumePage)
+    .mockResolvedValueOnce({ok:true,page:{
       revision: 1,
       total: 1,
       items: [
@@ -71,8 +71,8 @@ it("离开未读页后变化不下载列表，返回时立即刷新未过期的�
           imageCount: 1,
         },
       ],
-    })
-    .mockResolvedValue({ revision: 1, total: 0, items: [] });
+    }})
+    .mockResolvedValue({ok:true,page:{ revision: 1, total: 0, items: [] }});
   function UnreadCount() {
     const query = useLibraryUnreadAlbums();
     return <output>{query.data?.total ?? "加载中"}</output>;
@@ -87,10 +87,10 @@ it("离开未读页后变化不下载列表，返回时立即刷新未过期的�
   act(() => {
     window.dispatchEvent(new Event(ACTIVITY_CHANGED_EVENT));
   });
-  expect(libraryApi.allUnreadAlbums).toHaveBeenCalledTimes(1);
+  expect(libraryApi.unreadVolumePage).toHaveBeenCalledTimes(1);
   rerender(<Application showUnread />);
   expect(await screen.findByText("0")).toBeInTheDocument();
-  expect(libraryApi.allUnreadAlbums).toHaveBeenCalledTimes(2);
+  expect(libraryApi.unreadVolumePage).toHaveBeenCalledTimes(2);
 });
 
 it("应用卸载后移除活动同步监听", () => {

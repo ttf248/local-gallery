@@ -83,6 +83,12 @@ describe("命令面板", () => {
       });
   });
 
+  it("漫画章节展示所属作品，并能复用和清空搜索词",async()=>{
+    mode="comic";vi.mocked(albumsApi.search).mockResolvedValue({ok:true,count:1,results:[{kind:"album",path:"a_01",name:"番外1",parentName:"星海",chapterLabel:"番外1",count:8}]});
+    const {input,trigger}=openPalette("/comic");fireEvent.change(input,{target:{value:"番外1"}});expect(await screen.findByText("星海 · 番外1")).toBeInTheDocument();fireEvent.keyDown(input,{key:"Enter",shiftKey:true});fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole("combobox"),{key:"Escape"});fireEvent.click(screen.getByRole("button",{name:"番外1"}));expect(screen.getByRole("combobox")).toHaveValue("番外1");
+    fireEvent.keyDown(screen.getByRole("combobox"),{key:"Escape"});fireEvent.click(screen.getByText("清空最近搜索"));expect(screen.queryByLabelText("最近搜索")).toBeNull();
+  });
   it("空查询最多显示五条最近访问，方向键高亮并打开结果", async () => {
     const { input } = openPalette();
     expect(input).toHaveFocus();

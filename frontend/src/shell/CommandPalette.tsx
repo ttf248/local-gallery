@@ -53,6 +53,7 @@ import {
   TasksIcon,
 } from "../ui/icons";
 
+import {useSearchHistory} from "../store/searchHistoryStore";
 export type CommandScope = "name" | "content";
 
 export interface CommandQuickAction {
@@ -67,6 +68,7 @@ export interface CommandQuickAction {
 
 export interface CommandPaletteProps {
   open: boolean;
+  onHelp?: () => void;
   onRefresh?: () => void;
   onScan?: () => void;
   canScan?: boolean;
@@ -99,6 +101,7 @@ export default function CommandPalette({
 
 function Palette({
   onClose,
+  onHelp,
   onRefresh,
   onScan,
   canScan = true,
@@ -123,18 +126,21 @@ function Palette({
   const copy = workbenchCopy(mode);
   const pushToast = useUIStore((s) => s.pushToast);
   const setTheme = useUIStore((s) => s.setTheme);
-  const term = query.trim();
+  const raw=query.trim(), command=raw.startsWith(">"), tag=raw.startsWith("#");
+  const term=(command||tag)?raw.slice(1).trim():raw;
+  const history=useSearchHistory(s=>s.entries[mode]);
+  const {save,remove,clear}=useSearchHistory.getState();
   const debounced = useDebounce(term, 180);
-  const nameSearch = scope === "name" && term.length > 0;
+  const nameSearch = !command && (tag||scope === "name") && term.length > 0;
   const suggestions = useQuery({
-    queryKey: ["library", "search", mode, debounced, 10],
+    queryKey: ["library", "search", mode, debounced, 10,tag],
     queryFn: ({ signal }) =>
-      albumsApi.search(debounced, mode, 10, undefined, signal),
+      tag?albumsApi.search(debounced,mode,10,undefined,signal,"smartCollection"):albumsApi.search(debounced, mode, 10, undefined, signal),
     enabled: nameSearch && debounced === term,
     staleTime: 30_000,
     retry: false,
   });
-  const { cards } = useHistoryCards(mode, !term);
+  const { cards } = useHistoryCards(mode, !raw);
   const shuffle = useMutation({
     mutationFn: () => libraryApi.randomAlbums(mode),
     onSuccess: ({ albums }) => {
@@ -178,6 +184,7 @@ function Palette({
   }, []);
 
   const quickActions: CommandQuickAction[] = [
+    ...(onHelp?[{id:"help",label:"快捷键说明",icon:SettingsIcon,keywords:["帮助","快捷键"],group:"action" as const,onSelect:onHelp}]:[]),
     {
       id: "home",
       icon: HomeIcon,
@@ -282,9 +289,11 @@ function Palette({
   ];
 
   function showResults() {
-    if (!term) return;
+    if (!term || command) return;
+    save(mode,raw);
     onClose();
     const next = new URLSearchParams({ q: term, scope });
+    if(tag){next.set("type","smartCollection");next.set("scope","name")}
     navigate(`${searchRoute(mode)}?${next}`);
   }
 
@@ -302,7 +311,7 @@ function Palette({
                 ? FolderIcon
                 : LibraryIcon,
           detail:
-            hit.kind === "smartCollection"
+            mode==="comic" && hit.parentName ? hit.parentName+" · "+(hit.chapterLabel||hit.name) : hit.kind === "smartCollection"
               ? "标签"
               : hit.kind === "collection"
                 ? copy.collectionTypeLabel
@@ -329,7 +338,7 @@ function Palette({
       (scope === "name" &&
         [label, ...keywords].some((word) => word.includes(term))),
   );
-  const sections: CommandSection[] = term
+  const sections: CommandSection[] = command?[{label:"快捷命令",layout:"list",rows:quickMatches}]:tag?[{label:"匹配标签",layout:"list",rows:matches}]:term
     ? [
         { label: "匹配内容", layout: "list", rows: matches },
         {
@@ -351,7 +360,7 @@ function Palette({
         },
       ]
     : [
-        { label: "最近浏览", layout: "covers", rows: recent },
+        { label: mode==="comic"?"最近阅读":"最近浏览", layout: "covers", rows: recent },
         {
           label: "快捷导航",
           layout: "navigation",
@@ -382,7 +391,8 @@ function Palette({
   }, [activeIndex, listId]);
 
   function choose(row: CommandRow) {
-    onClose();
+    if(row.id.startsWith("hit-"))save(mode,raw);
+    if(row.id!=="results")onClose();
     row.onSelect();
   }
 
@@ -458,7 +468,9 @@ function Palette({
                 }
                 if (event.key === "Enter") {
                   event.preventDefault();
-                  if (term && (event.shiftKey || scope === "content"))
+                  if(command && activeIndex<0 && quickMatches[0])choose(quickMatches[0]);
+                  else if(tag && activeIndex<0 && matches[0])choose(matches[0]);
+                  else if (term && (event.shiftKey || scope === "content"))
                     showResults();
                   else if (activeIndex >= 0) choose(rows[activeIndex]);
                   else if (matches[0]?.label === term) choose(matches[0]);
@@ -490,6 +502,7 @@ function Palette({
             <CloseIcon />
           </IconButton>
         </div>
+        {!raw && history.length>0 && <section aria-label="最近搜索" className="shrink-0 px-4 pt-2"><div className="flex items-center justify-between text-caption"><span>最近搜索</span><button onClick={()=>clear(mode)}>清空最近搜索</button></div><div className="flex flex-wrap gap-1">{history.map(value=><span key={value} className="inline-flex items-center rounded-full bg-sunken px-2 text-caption"><button className="min-h-8" onClick={()=>{setQuery(value);input.current?.focus()}}>{value}</button><button className="ml-1" aria-label={"删除搜索 "+value} onClick={()=>remove(mode,value)}>×</button></span>)}</div></section>}
         <div
           className="min-h-0 overflow-y-auto overscroll-contain px-3 py-3 sm:px-4"
           id={listId}
@@ -536,7 +549,7 @@ function Palette({
                         onClick={() => choose(row)}
                         onMouseDown={(event) => event.preventDefault()}
                       >
-                        <span aria-hidden className={cx("grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-sunken text-ink-2",layout==="covers" && "aspect-square h-auto w-full bg-media",(layout==="commands" || layout==="navigation") && "bg-transparent")}>
+                        <span aria-hidden className={cx("grid size-8 shrink-0 place-items-center overflow-hidden rounded-md bg-sunken text-ink-2",layout==="covers" ? (mode==="comic"?"aspect-[2/3] h-auto w-full bg-media":"aspect-square h-auto w-full bg-media") : (row.coverId && (mode==="comic"?"aspect-[2/3] h-auto w-8":"size-9")),(layout==="commands" || layout==="navigation") && "bg-transparent")}>
                           {row.coverId ? (
                             <ThumbImage
                               key={row.coverId}
@@ -552,7 +565,7 @@ function Palette({
                         </span>
                         <span className="min-w-0 truncate">{row.label}</span>
                         {row.detail && (
-                          <span className="ml-auto shrink-0 text-caption text-ink-2">
+                          <span className="ml-auto min-w-0 max-w-[55%] truncate text-caption text-ink-2">
                             {row.detail}
                           </span>
                         )}

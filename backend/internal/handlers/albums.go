@@ -138,7 +138,7 @@ func SearchHandler(catalog *services.ResourceCatalog) fiber.Handler {
 		if !snapshot.Ready() {
 			return c.JSON(fiber.Map{"ok": true, "results": []services.LibrarySearchHit{}, "count": 0, "scanned": false})
 		}
-		page, err := services.PageLibrarySearch(snapshot, q, kind, c.Query("cursor"), limit)
+		page, err := services.PageLibrarySearch(snapshot, q, kind, c.Query("cursor"), limit, c.Query("type"))
 		if err != nil {
 			return writeLibraryPageError(c, err, snapshot.Revision())
 		}

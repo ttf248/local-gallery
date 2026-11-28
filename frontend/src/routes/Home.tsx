@@ -4,9 +4,7 @@ import { useConfirm } from "../features/common/ConfirmDialog";
 import { useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { useScanSSE } from "../hooks/useScanSSE";
 import { useMarkAlbumRead, useMarkAlbumsRead } from "../hooks/useImageActivity";
-import { scanApi } from "../api/scan";
 import { useHistoryCards } from "../hooks/useHistory";
 import { useImageActivities } from "../hooks/useImageActivity";
 import { libraryApi } from "../api/library";
@@ -30,7 +28,7 @@ import { settingsRoute,
 import { timeAgo } from "../utils/date";
 import { useLibraryDashboard, useLibraryManifest } from "../hooks/useLibrary";
 import { nodeSummaryToCard } from "../utils/libraryCard";
-import { LibraryIcon, RefreshIcon } from "../ui/icons";
+import { LibraryIcon } from "../ui/icons";
 
 /**
  * 工作台首页。
@@ -62,20 +60,11 @@ function HomeHeader({
   const manifestQuery = useLibraryManifest();
   const manifest = manifestQuery.data?.manifest;
   const { mode } = useAppMode();
-  const sse = useScanSSE();
-  const pushToast = useUIStore((s) => s.pushToast);
   const librarySize =
     mode === "comic"
       ? `${manifest?.statistics.comicAlbumCount ?? 0} 卷`
       : `${manifest?.statistics.photoAlbumCount ?? 0} 本相册`;
-  const startScan = useMutation({
-    mutationFn: () => scanApi.start(),
-    onSuccess: (r) => {
-      sse.startWith(r.scanId);
-      pushToast({ kind: "info", message: "扫描已开始" });
-    },
-    onError: () => pushToast({ kind: "error", message: "启动扫描失败" }),
-  });
+
 
   return (
     <Page as="section" className="page-heading pt-8 pb-5 max-sm:pt-5 max-sm:pb-4">
@@ -115,22 +104,7 @@ function HomeHeader({
             <span className="hidden sm:inline">{primaryAction.label}</span>
             <span className="sm:hidden">{primaryAction.label}</span>
           </Link>
-          <button
-            onClick={() => startScan.mutate()}
-            disabled={startScan.isPending || sse.isRunning}
-            className={buttonStyles({variant:"secondary",size:"sm"})}
-            title="扫描 (Ctrl+S)"
-            aria-label="重新扫描媒体目录"
-          >
-            <RefreshIcon size={13} />
-            <span className="hidden sm:inline">
-              {sse.isRunning
-                ? "扫描中…"
-                : startScan.isPending
-                  ? "启动中…"
-                  : "重新扫描"}
-            </span>
-          </button>
+
         </div>
       </div>
     </Page>

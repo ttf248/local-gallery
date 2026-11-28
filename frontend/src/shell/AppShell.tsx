@@ -86,7 +86,7 @@ export default function AppShell() {
           /></Suspense>
         )}
         <div data-canvas="" className="relative flex min-h-0 min-w-0 flex-col overflow-hidden bg-canvas lg:m-2 lg:ml-0 lg:rounded-xl lg:shadow-canvas">
-          <CanvasTopBar
+          <CanvasTopBar onMenu={()=>setMore(true)}
             scrolled={scrolled}
             onHelp={() => setHelp(true)}
             onSearch={() => setPalette(true)}
@@ -123,6 +123,7 @@ export default function AppShell() {
           {palette && (
             <CommandPalette
               open
+              onHelp={()=>setHelp(true)}
               onClose={closePalette}
               onRefresh={refresh}
               onScan={scan.start}

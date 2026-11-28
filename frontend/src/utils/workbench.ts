@@ -208,7 +208,7 @@ const COMIC: ComicCopy = {
   unfinishedCountLabel: "卷还没读完",
   markAllTitle: "把当前所有未读相册标记为已读完(不影响收藏 / 最近)",
   unreadTitle: "未读",
-  unreadPageTitle: "未读相册",
+  unreadPageTitle: "待读漫画",
   unreadCountVerb: "没读",
   unreadEmptyHint:
     "漫画都读完了，可以在「主页」随机翻一卷，或去「收藏」里找回老朋友。",

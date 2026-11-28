@@ -49,7 +49,7 @@ export function nodeSummaryToCard(
     count: isAlbum ? (node.imageCount ?? 0) : (node.albumCount ?? 0),
     imageCount:
       node.contentKind === "comic"
-        ? node.imageCount
+        ? node.totalImageCount ?? node.imageCount
         : isAlbum
           ? (node.imageCount ?? 0)
           : undefined,

@@ -60,7 +60,9 @@ export interface CoverCandidate {
   version: string;
 }
 
+export interface UnreadWorkGroup {work:LibraryNodeSummary; nextChapter:LibraryNodeSummary; unreadCount:number;totalCount:number;isStandalone?:boolean}
 export interface LibraryNodeSummary {
+  totalImageCount?:number;
   comic?: import("./comicMeta").ComicNodeMeta;
   coverCandidates?: CoverCandidate[];
   id: string;
@@ -616,6 +618,8 @@ async function queryNodes(
 }
 
 export const libraryApi = {
+  unreadWorkPage:(q:string,cursor?:string,signal?:AbortSignal)=>api<PageResponse<UnreadWorkGroup>>("/api/library/unread",{params:{kind:"comic",groupBy:"work",q,cursor,limit:50},signal}),
+  unreadVolumePage:(q:string,workId:string,cursor?:string,signal?:AbortSignal)=>api<PageResponse<LibraryNodeSummary>>("/api/library/unread",{params:{kind:"comic",groupBy:"album",q,workId,cursor,limit:100},signal}),
   overview: (query: LibraryListQuery, cursor?: string, signal?: AbortSignal) =>
     api<{ ok: boolean; page: LibraryListPage }>("/api/library/overview", {
       params: { ...query, cursor, limit: LIBRARY_PAGE_LIMIT },

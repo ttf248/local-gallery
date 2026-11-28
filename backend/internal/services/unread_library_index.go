@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/tianlongxiang/local-gallery/internal/models"
@@ -31,6 +32,7 @@ type UnreadLibraryIndex struct {
 	catalogRevision  uint64
 	activityRevision uint64
 	albumIndexes     []int
+	workGroups       []UnreadWorkGroup
 }
 
 func NewUnreadLibraryIndex() *UnreadLibraryIndex {
@@ -57,6 +59,134 @@ func (i *UnreadLibraryIndex) Page(snapshot CatalogSnapshot, started StartedAlbum
 	return LibraryPage[LibraryNodeSummary]{
 		Revision: snapshot.Revision(), Items: i.summaries(snapshot, indexes[start:end]), Total: len(indexes), NextCursor: next,
 	}, nil
+}
+
+type UnreadWorkGroup struct {
+	Work         LibraryNodeSummary `json:"work"`
+	NextChapter  LibraryNodeSummary `json:"nextChapter"`
+	UnreadCount  int                `json:"unreadCount"`
+	TotalCount   int                `json:"totalCount"`
+	IsStandalone bool               `json:"isStandalone,omitempty"`
+}
+
+func buildUnreadWorkGroups(snapshot CatalogSnapshot, indexes []int) []UnreadWorkGroup {
+	groups := []UnreadWorkGroup{}
+	positions := map[string]int{}
+	for _, index := range indexes {
+		album := snapshot.state.library.albums[index]
+		work, found := snapshot.state.library.nodes[album.ParentID]
+		if !found {
+			work = album
+		}
+		pos, exists := positions[work.ID]
+		if !exists {
+			pos = len(groups)
+			positions[work.ID] = pos
+			groups = append(groups, UnreadWorkGroup{Work: work, NextChapter: album, TotalCount: max(1, work.AlbumCount), IsStandalone: !found})
+		}
+		g := &groups[pos]
+		g.UnreadCount++
+		main := func(n LibraryNodeSummary) bool { return n.Comic != nil && n.Comic.EpisodeType == ComicEpisodeMain }
+		if (main(album) && !main(g.NextChapter)) || (main(album) == main(g.NextChapter) && naturalLess(album.Name, g.NextChapter.Name)) {
+			g.NextChapter = album
+		}
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		a, b := groups[i].Work, groups[j].Work
+		if a.DisplayName == b.DisplayName {
+			return a.ID < b.ID
+		}
+		return naturalLess(a.DisplayName, b.DisplayName)
+	})
+	return groups
+}
+func (i *UnreadLibraryIndex) PageWorks(snapshot CatalogSnapshot, started StartedAlbums, activityRevision uint64, kind LibraryKindScope, searchQuery, cursor string, limit int) (LibraryPage[UnreadWorkGroup], error) {
+	indexes, err := i.albumIndexesFor(snapshot, started, activityRevision)
+	if err != nil {
+		return LibraryPage[UnreadWorkGroup]{}, err
+	}
+	i.mu.RLock()
+	groups := i.workGroups
+	valid := i.catalogRevision == snapshot.Revision() && i.activityRevision == activityRevision
+	i.mu.RUnlock()
+	if !valid {
+		groups = buildUnreadWorkGroups(snapshot, indexes)
+	}
+	q := strings.ToLower(strings.TrimSpace(searchQuery))
+	scope := fmt.Sprintf("unread-work:%s:%d:%q", kind, activityRevision, q)
+	if kind != LibraryKindComic {
+		groups = nil
+	} else if q != "" {
+		filtered := []UnreadWorkGroup{}
+		for _, g := range groups {
+			if matchesUnreadQuery(g.Work, q) || matchesUnreadQuery(g.NextChapter, q) {
+				filtered = append(filtered, g)
+			}
+		}
+		groups = filtered
+	}
+	offset, err := pageOffset(snapshot, cursor, scope)
+	if err != nil {
+		return LibraryPage[UnreadWorkGroup]{}, err
+	}
+	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", offset, len(groups), limit)
+	if err != nil {
+		return LibraryPage[UnreadWorkGroup]{}, err
+	}
+	items := make([]UnreadWorkGroup, end-start)
+	copy(items, groups[start:end])
+	return LibraryPage[UnreadWorkGroup]{Revision: snapshot.Revision(), Items: items, NextCursor: next, Total: len(groups)}, nil
+}
+func matchesUnreadQuery(n LibraryNodeSummary, q string) bool {
+	text := n.Name + " " + n.DisplayName
+	if n.Comic != nil {
+		text += " " + n.Comic.CleanTitle + " " + n.Comic.Author + " " + n.comicSearch
+	}
+	return strings.Contains(strings.ToLower(text), q)
+}
+func (i *UnreadLibraryIndex) PageAlbumsMatching(snapshot CatalogSnapshot, started StartedAlbums, activityRevision uint64, kind LibraryKindScope, workID, q, cursor string, limit int) (LibraryPage[LibraryNodeSummary], error) {
+	if workID == "" && q == "" {
+		return i.Page(snapshot, started, activityRevision, kind, cursor, limit)
+	}
+	indexes, err := i.albumIndexesFor(snapshot, started, activityRevision)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	q = strings.ToLower(strings.TrimSpace(q))
+	scope := fmt.Sprintf("unread-albums:%s:%d:%s:%q", kind, activityRevision, workID, q)
+	selected := []int{}
+	for _, ix := range indexes {
+		n := snapshot.state.library.albums[ix]
+		if n.ContentKind == string(kind) && (workID == "" || workID == n.ParentID || workID == n.ID) && matchesUnreadQuery(n, q) {
+			selected = append(selected, ix)
+		}
+	}
+	off, err := pageOffset(snapshot, cursor, scope)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	start, end, next, err := pageBounds(snapshot.Revision(), scope, cursor != "", off, len(selected), limit)
+	if err != nil {
+		return LibraryPage[LibraryNodeSummary]{}, err
+	}
+	return LibraryPage[LibraryNodeSummary]{Revision: snapshot.Revision(), Total: len(selected), NextCursor: next, Items: i.summaries(snapshot, selected[start:end])}, nil
+}
+
+// WorkImageCounts 返回已发布快照中该作品后代卷的实际页数。
+func (s CatalogSnapshot) WorkImageCounts(id string) map[string]int {
+	counts := map[string]int{}
+	for _, n := range s.state.library.albums {
+		if n.ContentKind != "comic" || n.ImageCount == 0 {
+			continue
+		}
+		for p := n.ParentID; p != ""; p = s.state.library.nodes[p].ParentID {
+			if p == id {
+				counts[n.ID] = n.ImageCount
+				break
+			}
+		}
+	}
+	return counts
 }
 
 // Summary 为常驻导航返回未读计数。它与分页、首页和随机未读共用同一份下标，
@@ -107,8 +237,23 @@ func (i *UnreadLibraryIndex) Dashboard(snapshot CatalogSnapshot, imageActivities
 		Revision:    snapshot.Revision(),
 		AlbumCount:  albumCountForKind(snapshot, kind),
 		UnreadCount: len(unread),
-		Unread:      i.summaries(snapshot, unread[:min(len(unread), libraryDashboardUnreadPreviewLimit)]),
+		Unread:      []LibraryNodeSummary{},
 		InProgress:  []LibraryDashboardProgress{},
+	}
+	seen := map[string]bool{}
+	for _, ix := range unread {
+		n := snapshot.state.library.albums[ix]
+		id := n.ParentID
+		if id == "" {
+			id = n.ID
+		}
+		if !seen[id] {
+			dashboard.Unread = append(dashboard.Unread, cloneNodeSummary(n))
+			seen[id] = true
+		}
+		if len(dashboard.Unread) == libraryDashboardUnreadPreviewLimit {
+			break
+		}
 	}
 	// 在读位置按相册建索引：同一本相册只有一条漫画阅读记录。
 	activitiesByAlbum := make(map[string]models.Activity, len(imageActivities))
@@ -200,6 +345,7 @@ func (i *UnreadLibraryIndex) albumIndexesFor(snapshot CatalogSnapshot, started S
 	i.ready = true
 	i.catalogRevision = catalogRevision
 	i.activityRevision = activityRevision
+	i.workGroups = buildUnreadWorkGroups(snapshot, indexes)
 	i.albumIndexes = indexes
 	return i.albumIndexes, nil
 }

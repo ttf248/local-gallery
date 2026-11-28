@@ -14,6 +14,7 @@ export interface PageChromeConfig {
   title: string;
   backTo?: string | (() => string);
   actions?: ReactNode;
+  compactActions?: ReactNode;
   search?: "global" | "none" | ReactElement;
 }
 type State = PageChromeConfig & { titleCollapsed: boolean };
@@ -68,6 +69,7 @@ export function usePageChrome({
   title,
   backTo,
   actions,
+  compactActions,
   search,
 }: PageChromeConfig) {
   const registry = useContext(Context),
@@ -93,10 +95,11 @@ export function usePageChrome({
         title,
         backTo,
         actions,
+        compactActions,
         search,
         titleCollapsed: element === null || !visible,
       });
-  }, [registry, title, backTo, actions, search, element, visible]);
+  }, [registry, title, backTo, actions, compactActions, search, element, visible]);
   useLayoutEffect(() => {
     const id = key.current;
     return () => {

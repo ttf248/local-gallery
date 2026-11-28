@@ -7,13 +7,14 @@ import { IconButton } from "../ui/IconButton";
 import { Menu } from "../ui/Menu";
 
 import { cx } from "../ui/cx";
-import { MoreHorizontalIcon, ChevronLeftIcon, SearchIcon } from "../ui/icons";
+import { MenuIcon, MoreHorizontalIcon, ChevronLeftIcon, SearchIcon } from "../ui/icons";
 import { usePageChromeState } from "./PageChrome";
 import { useRouteMeta, documentTitle } from "../app/routeMeta";
 import { libraryRoute } from "../utils/path";
 interface Props {
   scrolled: boolean;
   onSearch: () => void;
+  onMenu?: () => void;
   onHelp: () => void;
   onRefresh: () => void;
   onScan: () => void;
@@ -24,6 +25,7 @@ interface Props {
 export function CanvasTopBar({
   scrolled,
   onSearch,
+  onMenu,
   onHelp,
   onRefresh,
   onScan,
@@ -31,7 +33,7 @@ export function CanvasTopBar({
   canScan,
   shufflePending,
 }: Props) {
-  const { title, backTo, titleCollapsed, actions, search } =
+  const { title, backTo, titleCollapsed, actions, compactActions, search } =
       usePageChromeState(),
     { mode } = useAppMode(),
     route = useRouteMeta();
@@ -57,14 +59,17 @@ export function CanvasTopBar({
     <header
       data-testid="top-bar"
       className={cx(
-        "top-bar sticky top-0 z-topbar grid h-topbar bg-canvas/80 backdrop-blur-xl backdrop-saturate-150 shrink-0 items-center gap-2 border-b px-gutter",
+        "top-bar sticky top-0 z-topbar grid h-topbar transition-[background-color,border-color] duration-150 shrink-0 items-center gap-2 border-b px-gutter",
         localSearch
           ? "grid-cols-[auto_minmax(0,1fr)_auto]"
           : "grid-cols-[minmax(0,1fr)_auto_auto]",
-        scrolled ? "border-line-subtle" : "border-transparent",
+        scrolled ? "border-line-subtle bg-surface/90 backdrop-blur-md shadow-1" : "border-transparent bg-canvas lg:bg-transparent",
+        wide && !localSearch && !showBack && "lg:-mb-11",
+        wide && !localSearch && !showBack && !scrolled && "pointer-events-none [&_button]:pointer-events-auto [&_a]:pointer-events-auto",
       )}
     >
       <div className="flex min-w-0 items-center gap-1">
+        {!wide && !showBack && onMenu && <IconButton label="打开导航菜单" className="size-10" onClick={onMenu}><MenuIcon/></IconButton>}
         {showBack && (
           <IconButton label="返回" onClick={back}>
             <ChevronLeftIcon />
@@ -75,8 +80,8 @@ export function CanvasTopBar({
             {title}
           </h1>
         ) : (
-          titleCollapsed && (
-            <span className="truncate text-subheading motion-safe:animate-[fadeIn_180ms_linear]">
+          (!wide || (scrolled && titleCollapsed)) && (
+            <span className="pointer-events-none absolute left-1/2 max-w-[40%] -translate-x-1/2 truncate text-subheading lg:static lg:max-w-full lg:translate-x-0 motion-safe:animate-[fadeIn_180ms_linear]">
               {title || routeTitle.split(" · ")[0]}
             </span>
           )
@@ -97,7 +102,7 @@ export function CanvasTopBar({
             </button>
           )}
       <div className="col-end-4 flex min-w-0 items-center justify-end gap-2">
-        {actions}
+        {wide ? actions : compactActions ?? actions}
         <Menu
           label="更多操作"
           align="end"

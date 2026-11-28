@@ -2,7 +2,8 @@ import {buttonStyles} from "../ui/buttonStyles";
 import {Page} from "../shell/Page";
 import {PageHero} from "../shell/PageHero";
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { UnreadWorks } from "../features/comic/UnreadWorkCard";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
 import { useUnreadAlbums } from "../hooks/useUnreadAlbums";
@@ -35,6 +36,15 @@ import { SelectionToggle } from "../features/common/LibrarySelectionActions";
 //     的核心场景
 //  3. 全部看完时给一个明确「🎉 看完了」空态,而不是灰底 placeholder
 export default function Unread() {
+  const [params,setParams]=useSearchParams();
+  const flat=params.get("groupBy")==="album";
+  const change=(group:string,workId="")=>setParams(prev=>{const p=new URLSearchParams(prev);p.set("groupBy",group);if(workId)p.set("workId",workId);else p.delete("workId");return p});
+  return <><Page className="pt-3"><div role="group" aria-label="待读视图" className="flex gap-1">
+  {(["work","album"] as const).map(group=><button key={group} aria-pressed={group===(flat?"album":"work")} className={buttonStyles({variant:group===(flat?"album":"work")?"secondary":"ghost",size:"sm"})} onClick={()=>change(group)}>{group==="work"?"按作品":"按卷"}</button>)}</div></Page>
+  {flat?<UnreadAlbums workId={params.get("workId")??""}/>:<UnreadWorks q={params.get("q")??""} openVolumes={id=>change("album",id)} setQuery={q=>setParams(prev=>{const p=new URLSearchParams(prev);if(q)p.set("q",q);else p.delete("q");return p},{replace:true})}/>}</>;
+}
+
+function UnreadAlbums({workId}:{workId:string}) {
   const navigate = useNavigate();
   const viewMode = useUIStore((s) => s.viewMode);
   const {
@@ -46,7 +56,7 @@ export default function Unread() {
     reset: resetFilters,
   } = useListFilters();
   const pushToast = useUIStore((s) => s.pushToast);
-  const { cards, count, total, isLoading } = useUnreadAlbums();
+  const { cards, count, total, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useUnreadAlbums(query,workId);
   const copy = comicCopy();
   const needsHistory = sortBy === "viewed" && cards.length > 0;
   const { query: historyQuery, compareViewed } = useViewedSort(needsHistory);
@@ -103,7 +113,7 @@ export default function Unread() {
 
   function onShuffleUnread() {
     if (filtered.length === 0) {
-      pushToast({ kind: "info", message: "没有未读相册可跳" });
+      pushToast({ kind: "info", message: "没有未读卷可跳" });
       return;
     }
     const pick = filtered[Math.floor(Math.random() * filtered.length)];
@@ -130,7 +140,7 @@ export default function Unread() {
           <p className="text-body text-ink-2 tabular-nums">
             {isLoading ? (
               // 加载中不要报「0 本」：那是"还没数出来"，不是"没有未读"。
-              <span>正在统计未读相册…</span>
+              <span>正在统计未读卷…</span>
             ) : (
               <span>
                 还有 <span className="text-ink">{count}</span>{" "}
@@ -158,7 +168,7 @@ export default function Unread() {
       )}
 
       {isLoading && count === 0 ? (
-        <AlbumGridSkeleton variant={viewMode} label="正在加载未读相册…" />
+        <AlbumGridSkeleton variant={viewMode} label="正在加载未读卷…" />
       ) : count === 0 ? (
         <EmptyState
           title={total === 0 ? "尚未加载图像库" : copy.unreadEmpty}
@@ -188,7 +198,7 @@ export default function Unread() {
         />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title="没有匹配的未读相册"
+          title="没有匹配的未读卷"
           description={query ? `没有匹配"${query}"的结果` : ""}
           icon={<FilterIcon size={20} />}
           action={
@@ -212,7 +222,7 @@ export default function Unread() {
           </div>
         </Page>
       )}
-      <div className="h-12" />
+      {hasNextPage && <Page><button disabled={isFetchingNextPage} onClick={()=>void fetchNextPage()}>加载更多卷</button></Page>}<div className="h-12" />
     </div>
   );
 }

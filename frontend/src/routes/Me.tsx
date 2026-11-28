@@ -4,11 +4,15 @@ import { Navigate, useParams } from "react-router-dom";
 import { Tabs } from "../ui/Tabs";
 import { Page } from "../shell/Page";
 import { PageHero } from "../shell/PageHero";
-import AlbumGrid from "../features/library/AlbumGrid";
+import {activityApi} from "../api/activity";
+import {useUIStore} from "../store/uiStore";
+import {Link} from "react-router-dom";
+import {readerRoute} from "../utils/path";
+import ThumbImage from "../features/common/ThumbImage";
 import { EmptyState } from "../ui/EmptyState";
 import { useAppMode } from "../hooks/useAppMode";
 import { useLibraryDashboard } from "../hooks/useLibrary";
-import { nodeSummaryToCard } from "../utils/libraryCard";
+
 import { meRoute } from "../utils/path";
 import { meTabsFor, resolveMeTab } from "../utils/meTabs";
 import Favorites from "./Favorites";
@@ -114,7 +118,7 @@ export default function Me() {
                 onSummary={active.id === tab.id ? reportSummary : undefined}
               />
             ) : null}
-            {tab.id === "reading" ? <ReadingPanel /> : null}
+            {tab.id === "reading" ? <ReadingPanel onSummary={active.id===tab.id?reportSummary:undefined}/> : null}
           </section>
         ) : null,
       )}
@@ -128,18 +132,16 @@ export default function Me() {
  * 它来自服务端按真实阅读活动派生的在读清单，与「最近阅读」不是同一份
  * 数据：最近阅读是访问历史（打开过就算），在读是进度（真的翻过页）。
  */
-function ReadingPanel() {
+function ReadingPanel({onSummary}:{onSummary?:(value:string)=>void}) {
+  const toast=useUIStore(s=>s.pushToast);
   const dashboard = useLibraryDashboard();
   const items = dashboard.data?.dashboard.inProgress;
   const cards = useMemo(
-    () =>
-      (items ?? []).map((item) => ({
-        ...nodeSummaryToCard(item.album),
-        progress: { index: item.pageIndex, total: item.pageCount },
-      })),
+    () => {const seen=new Set<string>();return (items??[]).filter(({album})=>{const id=album.parentId||album.id;if(seen.has(id))return false;seen.add(id);return true})},
     [items],
   );
 
+  useEffect(()=>{if(items)onSummary?.(`${cards.length} 部作品在读`)},[items,cards.length,onSummary]);
   if (dashboard.isLoading) {
     return (
       <Page className="page-section pt-section">
@@ -180,7 +182,7 @@ function ReadingPanel() {
 
   return (
     <Page className="page-section pt-section">
-      <AlbumGrid items={cards} variant="grid" />
+      <div className="grid gap-3 lg:grid-cols-2">{cards.map(({album,pageIndex,pageCount})=><article key={album.id} className="flex items-center gap-3 rounded-xl border border-border p-3"><ThumbImage fileId={album.coverImage??""} alt="" className="w-14 aspect-[2/3] rounded object-cover"/><div className="min-w-0"><h2 className="truncate text-subheading">{album.parentName||album.displayName}</h2><p className="text-caption text-ink-2">{album.comic?.chapterLabel||album.displayName} · 第 {pageIndex+1} / {pageCount} 页</p><Link className={buttonStyles({variant:"secondary",size:"sm"})} to={readerRoute(album.id,pageIndex)}>继续阅读</Link><button className={buttonStyles({variant:"ghost",size:"sm"})} onClick={()=>void activityApi.setImage(album.id,pageCount-1,pageCount,"explicit").then(()=>dashboard.refetch()).catch(()=>toast({kind:"error",message:"更新阅读进度失败"}))}>标为已读</button></div></article>)}</div>
     </Page>
   );
 }

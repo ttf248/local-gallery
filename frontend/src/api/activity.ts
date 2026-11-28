@@ -98,6 +98,7 @@ export function afterImageActivityWrites<T>(
 }
 
 export const activityApi = {
+  markWorkRead:(workId:string,mode:"mark_read"|"reset"="mark_read")=>imageWrites.barrier(()=>withActivityChanged(api<{ok:boolean;updatedCount:number;affectedAlbums:string[]}>(`/api/activity/works/${encodeURIComponent(workId)}/mark-read`,{method:"POST",body:{mode}}))),
   removeImages: (albumIds: string[]) =>
     imageWrites.barrier(() =>
       withActivityChanged(
