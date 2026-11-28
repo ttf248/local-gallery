@@ -4,9 +4,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from zipfile import ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile
 
 
 WINDOWS_FILES = Path(__file__).resolve().parent
@@ -32,16 +33,17 @@ MODEL_LICENSES = (
 )
 
 
-def bundle_runtime(bundle: Path, work: Path) -> None:
+def bundle_runtime(bundle: Path) -> None:
     worker = bundle / "aiworker"
     sys.path.insert(0, str(worker))
     from download_models import download, install_models
 
-    with TemporaryDirectory(prefix="dependencies-", dir=work) as temp:
+    with TemporaryDirectory(prefix="dependencies-", dir=bundle.parent) as temp:
         staging = Path(temp)
         archive = staging / "python.tar.gz"
         download("Python 3.11", PYTHON_URL, archive, PYTHON_SHA256)
-        subprocess.run(["tar.exe", "-xzf", archive, "-C", staging], check=True)
+        with tarfile.open(archive, "r:gz") as source:
+            source.extractall(staging, filter="data")
         runtime = worker / "runtime"
         (staging / "python").rename(runtime)
         python = runtime / "python.exe"
@@ -77,11 +79,19 @@ def bundle_runtime(bundle: Path, work: Path) -> None:
         for name, url, digest in MODEL_LICENSES:
             download(name, url, bundle / name, digest)
 
-    for name in ("config.yaml", "start.bat", "download-extra-models.bat", "第三方组件.md"):
+    for name in ("config.yaml", "第三方组件.md"):
         shutil.copyfile(WINDOWS_FILES / name, bundle / name)
+    for name in ("start.bat", "download-extra-models.bat"):
+        text = (WINDOWS_FILES / name).read_text(encoding="ascii")
+        (bundle / name).write_text(text, encoding="ascii", newline="\r\n")
     cache = os.environ.get("LG_RELEASE_MODEL_CACHE")
     install_models(bundle / ".local-gallery/derived/ai/models", "portable", Path(cache) if cache else None)
 
 
 if __name__ == "__main__":
-    bundle_runtime(Path(sys.argv[1]), Path(sys.argv[2]))
+    bundle = Path(sys.argv[1])
+    bundle_runtime(bundle)
+    with ZipFile(sys.argv[2], "w", compression=ZIP_DEFLATED, compresslevel=5) as archive:
+        for path in sorted(bundle.rglob("*")):
+            if path.is_file():
+                archive.write(path, path.relative_to(bundle.parent).as_posix())

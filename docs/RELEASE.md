@@ -61,7 +61,7 @@ scripts\watch-github-actions.bat <commit-sha>
 4. CI 与打包验收通过后，工作流创建注释标签、上传五个平台包与 `SHA256SUMS` 到草稿，再公开 Release。公开后附件以该版本为准，后续修复使用新版本。
 5. 从 GitHub Release 下载 Windows ZIP 与 `SHA256SUMS` 到本机临时目录。对比 `Get-FileHash -Algorithm SHA256`，再运行下方的解压验收命令并查看实际页面。
 
-Windows 可用 Go、Node.js、Python 3.11 和系统 `tar.exe` 本地打包。先运行 `npm --prefix frontend ci`，再执行：
+Windows 可用 Go、Node.js 和 Python 3.11 本地打包。先运行 `npm --prefix frontend ci`，再执行：
 
 ```bat
 node scripts/package-release.mjs 2.0.0 windows amd64

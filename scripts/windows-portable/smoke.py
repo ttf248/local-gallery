@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from zipfile import ZipFile
 
 
 def fetch(base, path):
@@ -25,7 +26,7 @@ def verify(bundle: Path, work: Path, version: str) -> None:
     ffmpeg = bundle / "ffmpeg" / "ffmpeg.exe"
     ffprobe = bundle / "ffmpeg" / "ffprobe.exe"
     env = os.environ.copy()
-    windows = Path(env["SystemRoot"])
+    windows = Path(os.environ["SystemRoot"])
     env.update(PATH=f"{windows / 'System32'};{windows}", PYTHONHOME="invalid", PYTHONPATH="invalid",
                HTTP_PROXY="http://127.0.0.1:1", HTTPS_PROXY="http://127.0.0.1:1", NO_PROXY="127.0.0.1")
     media = work / "媒体 样本"
@@ -129,5 +130,6 @@ if __name__ == "__main__":
     with TemporaryDirectory(prefix="local-gallery-smoke-") as temp:
         work = Path(temp) / "绿色版 验收"
         work.mkdir()
-        subprocess.run(["tar.exe", "-xf", args.archive.resolve(), "-C", work], check=True)
+        with ZipFile(args.archive) as archive:
+            archive.extractall(work)
         verify(work / f"local-gallery-v{args.version}-windows-amd64-portable", work, args.version)

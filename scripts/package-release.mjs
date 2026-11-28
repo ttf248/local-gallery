@@ -55,8 +55,7 @@ try {
     cpSync(join(worker, file), join(bundle, "aiworker", file));
   }
   if (windows) {
-    run("python", ["-X", "utf8", join(root, "scripts", "windows-portable", "bundle.py"), bundle, work]);
-    run("tar.exe", ["--format", "zip", "-cf", partial, "-C", work, name]);
+    run("python", ["-X", "utf8", join(root, "scripts", "windows-portable", "bundle.py"), bundle, partial]);
   } else {
     run("tar", ["-czf", partial, "-C", work, name]);
   }

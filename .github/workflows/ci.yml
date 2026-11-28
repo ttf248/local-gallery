@@ -14,7 +14,7 @@ concurrency:
 jobs:
   verify:
     name: 验证与构建 (${{ matrix.os }})
-    timeout-minutes: 35
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
