@@ -1610,7 +1610,8 @@ func aiTestPathValidator(t *testing.T, root string) func(string) (string, error)
 
 func waitForAIJob(t *testing.T, service *AIJobService, id, status string) AIJob {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
+	// 千张样本用例会同步写入多批向量和检查点，给共享运行器留出磁盘时间。
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if job, ok := service.Get(id); ok && job.Status == status {
 			return job

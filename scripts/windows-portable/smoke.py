@@ -7,6 +7,7 @@ import os
 import re
 import socket
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -68,7 +69,8 @@ def verify(bundle: Path, work: Path, version: str) -> None:
             for path in re.findall(r'(?:src|href)="(/assets/[^\"]+\.m?js)"', html):
                 assert fetch(base, path), path
             assert "/assets/" in html
-            assert any(f"Web 版 · v" in path.read_text(encoding="utf-8") and version in path.read_text(encoding="utf-8")
+            marker = re.compile(r"Web 版 · v.{0,24}" + re.escape(version))
+            assert any(marker.search(path.read_text(encoding="utf-8"))
                        for path in (bundle / "dist" / "assets").glob("Settings-*.js")), "前端发布版本未注入"
             status = json.loads(fetch(base, "/api/ai/semantic/status"))["status"]
             assert status["portable"] and status["runtimeReady"] and status["modelValid"], status
@@ -118,6 +120,8 @@ def verify(bundle: Path, work: Path, version: str) -> None:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("version")
