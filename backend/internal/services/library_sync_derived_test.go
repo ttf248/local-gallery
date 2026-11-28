@@ -167,6 +167,8 @@ func TestLibrarySync_PendingAnalysisSurvivesRestart(t *testing.T) {
 
 	second.pumpAnalysis(ctx)
 	waitForAnalyzed(t, analyzer, 1)
+	// 分析器返回后才会提交批次，等待任务完成后再读取派生索引。
+	waitForAIJobIdle(t, second.opts.Jobs)
 
 	// 派生索引要与实际媒体库一致：这张照片要有分析结果。
 	records := second.opts.Jobs.Records(AIJobTypeMetadata)

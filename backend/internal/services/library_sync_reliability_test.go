@@ -27,7 +27,12 @@ import (
 // 那次并发也抓出来。
 func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 	root := t.TempDir()
-	seen := map[string]struct{}{}
+	const total = 300
+	album := filepath.Join(root, "album")
+	pending := make(map[string]struct{}, total)
+	for i := 0; i < total; i++ {
+		pending[filepath.Join(album, fmt.Sprintf("f%03d.jpg", i))] = struct{}{}
+	}
 	var seenMu sync.Mutex
 	changed := make(chan struct{}, 1)
 	watcher, err := NewChangeWatcher(ChangeWatcherOptions{
@@ -39,7 +44,7 @@ func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 		OnChange: func(changes *SyncChangeSet) {
 			seenMu.Lock()
 			for file := range changes.Files {
-				seen[file] = struct{}{}
+				delete(pending, file)
 			}
 			seenMu.Unlock()
 			select {
@@ -56,11 +61,9 @@ func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 	}
 	defer watcher.Close()
 
-	album := filepath.Join(root, "album")
 	if err := os.MkdirAll(album, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	const total = 300
 	for i := 0; i < total; i++ {
 		path := filepath.Join(album, fmt.Sprintf("f%03d.jpg", i))
 		if err := os.WriteFile(path, []byte("image"), 0o644); err != nil {
@@ -71,7 +74,7 @@ func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 	defer deadline.Stop()
 	for {
 		seenMu.Lock()
-		count := len(seen)
+		count := total - len(pending)
 		seenMu.Unlock()
 		if count == total {
 			return
