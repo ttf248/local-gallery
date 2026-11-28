@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: stable-release
+  group: stable-release-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -139,6 +139,9 @@ jobs:
     name: 公开 GitHub Release
     needs: [prepare, verify, package]
     runs-on: ubuntu-latest
+    concurrency:
+      group: stable-release-publish
+      cancel-in-progress: false
     permissions:
       contents: write
     env:

@@ -14,6 +14,9 @@ import (
 	"github.com/tianlongxiang/local-gallery/internal/services"
 )
 
+// 真实缩略图会解码、缩放并写入缓存，测试时也会经过竞态检测器。
+const thumbnailTestTimeoutMS = 10_000
+
 func writeThumbFixture(t *testing.T, size int) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "image.jpg")
@@ -44,7 +47,7 @@ func TestThumbnailRenditionWidthBuckets(t *testing.T) {
 	path := writeThumbFixture(t, 800)
 	app := newThumbApp(t, path)
 
-	small, err := app.Test(httptest.NewRequest("GET", "/thumb?w=32", nil))
+	small, err := app.Test(httptest.NewRequest("GET", "/thumb?w=32", nil), thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +59,7 @@ func TestThumbnailRenditionWidthBuckets(t *testing.T) {
 	}
 	smallETag := small.Header.Get("ETag")
 
-	large, err := app.Test(httptest.NewRequest("GET", "/thumb?w=500", nil))
+	large, err := app.Test(httptest.NewRequest("GET", "/thumb?w=500", nil), thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +85,7 @@ func TestThumbnailVersionedURLGetsImmutable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plain, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320", nil))
+	plain, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320", nil), thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +94,7 @@ func TestThumbnailVersionedURLGetsImmutable(t *testing.T) {
 		t.Fatalf("unversioned URL must revalidate, got %q", got)
 	}
 
-	versioned, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320&v="+version, nil))
+	versioned, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320&v="+version, nil), thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +106,7 @@ func TestThumbnailVersionedURLGetsImmutable(t *testing.T) {
 		t.Fatal("same rendition must share one ETag")
 	}
 
-	stale, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320&v=0-0-r0", nil))
+	stale, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320&v=0-0-r0", nil), thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +122,7 @@ func TestThumbnailConditionalRequestHonoursRenditionETag(t *testing.T) {
 	path := writeThumbFixture(t, 800)
 	app := newThumbApp(t, path)
 
-	first, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320", nil))
+	first, err := app.Test(httptest.NewRequest("GET", "/thumb?w=320", nil), thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +131,7 @@ func TestThumbnailConditionalRequestHonoursRenditionETag(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/thumb?w=320", nil)
 	req.Header.Set("If-None-Match", etag)
-	second, err := app.Test(req)
+	second, err := app.Test(req, thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +143,7 @@ func TestThumbnailConditionalRequestHonoursRenditionETag(t *testing.T) {
 	// 换了档位，ETag 不匹配，必须回 200 与新内容。
 	req = httptest.NewRequest("GET", "/thumb?w=640", nil)
 	req.Header.Set("If-None-Match", etag)
-	third, err := app.Test(req)
+	third, err := app.Test(req, thumbnailTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}

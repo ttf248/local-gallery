@@ -58,7 +58,7 @@ scripts\watch-github-actions.bat <commit-sha>
 1. 运行 `node scripts/release-version.mjs patch` 预览版本。首发为 `v2.0.0`，以后从最高的正式 v2 标签递增。选 `minor` 时递增次版本并清零补丁号。
 2. 在 `docs/release-notes/v2.x.y.md` 准备中文说明，将代码与说明提交并推送 CNB。等同一提交同步到 GitHub 默认分支。
 3. 在 GitHub Actions 手动运行 Release，选择同一个 `increment`。`version` 可留空。如果上次发布已建立标签或草稿，填写原版本并从同一提交重跑该工作流，或在默认分支仍指向该提交时重新触发。
-4. CI 与打包验收通过后，工作流创建注释标签、上传五个平台包与 `SHA256SUMS` 到草稿，再公开 Release。公开后附件以该版本为准，后续修复使用新版本。
+4. CI 与打包验收通过后，工作流创建注释标签、上传五个平台包与 `SHA256SUMS` 到草稿，再公开 Release。可同时验证不同提交，正式标签和附件的写入串行执行。公开后附件以该版本为准，后续修复使用新版本。
 5. 从 GitHub Release 下载 Windows ZIP 与 `SHA256SUMS` 到本机临时目录。对比 `Get-FileHash -Algorithm SHA256`，再运行下方的解压验收命令并查看实际页面。
 
 Windows 可用 Go、Node.js 和 Python 3.11 本地打包。先运行 `npm --prefix frontend ci`，再执行：
