@@ -108,7 +108,7 @@ function Palette({
   const { pathname, search } = useLocation();
   const params = new URLSearchParams(search);
   const onResults = pathname === searchRoute(mode);
-  const [query, setQuery] = useState(onResults ? (params.get("q") ?? "") : "");
+  const [query, setQuery] = useState(useUIStore.getState().commandSeed || (onResults ? (params.get("q") ?? "") : ""));
   const [scope, setScope] = useState<CommandScope>(
     mode === "photo" && (useUIStore.getState().commandScope === "content" || (onResults && params.get("scope") === "content"))
       ? "content"

@@ -27,9 +27,10 @@ export type SidebarState = "expanded" | "collapsed";
 export interface PersistedUIPrefs { theme: ThemePref;sidebar:SidebarState;viewMode: ViewMode;showPersonFaceBoxes:boolean;folderDrawerOpen:boolean;inspectorOpen:boolean;memoriesDismissedOn:string|null; }
 export interface UIState extends PersistedUIPrefs {
   setMemoriesDismissedOn: (date: string | null) => void;
+  commandSeed?: string;
   commandPaletteOpen: boolean;
   commandScope?: "name" | "content";
-  setCommandPaletteOpen: (open: boolean, scope?: "name" | "content") => void;
+  setCommandPaletteOpen: (open: boolean, scope?: "name" | "content", seed?:string) => void;
   toggleCommandPalette: () => void;
   setFolderDrawerOpen: (open: boolean) => void;
   toggleFolderDrawer: () => void;
@@ -73,11 +74,11 @@ export const useUIStore = create<UIState>()(
       setMemoriesDismissedOn: (memoriesDismissedOn) =>
         set({ memoriesDismissedOn }),
       commandPaletteOpen: false,
-      setCommandPaletteOpen: (open, scope) =>
-        set({ commandPaletteOpen: open, commandScope: scope }),
+      setCommandPaletteOpen: (open, scope, seed) =>
+        set({ commandPaletteOpen: open, commandScope: scope, commandSeed: seed }),
       toggleCommandPalette: () =>
         set((s) => ({
-          commandPaletteOpen: !s.commandPaletteOpen,
+          commandPaletteOpen: !s.commandPaletteOpen, commandSeed: undefined,
           commandScope: undefined,
         })),
       folderDrawerOpen: false,

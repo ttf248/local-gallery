@@ -61,6 +61,7 @@ interface ResultGroup {
 export default function SearchResults() {
   const { mode } = useAppMode();
   const [params, setParams] = useSearchParams();
+  const type = params.get("type") ?? "all";
   const query = (params.get(LIST_PARAM.query) ?? "").trim();
   const scope: SearchScope =
     mode === "comic" ? "name" : searchScopeFromParams(params);
@@ -127,6 +128,7 @@ export default function SearchResults() {
   const groups = useMemo<ResultGroup[]>(() => {
     const list: ResultGroup[] = [];
     for (const card of cards) {
+      if (type !== "all" && card.variant !== type) continue;
       const label = matchLabels.get(card.id);
       const last = list[list.length - 1];
       if (last && last.label === label) {
@@ -140,7 +142,7 @@ export default function SearchResults() {
       });
     }
     return list;
-  }, [cards, matchLabels]);
+  }, [cards, matchLabels,type]);
 
   function updateConditions(
     keyword: string,
@@ -182,7 +184,7 @@ export default function SearchResults() {
             <InlineAlert tone="warning">
               本机画面模型未就绪，这次只能按图片里的文字找。
               <Link
-                to={settingsRoute("storage")}
+                to={settingsRoute("tasks")}
                 className="ml-1 text-primary hover:underline"
               >
                 查看任务中心
@@ -209,6 +211,7 @@ export default function SearchResults() {
         </>
       ) : (
         <div className="pt-2">
+          {query && <div role="group" aria-label="结果类型" className="mb-3 flex flex-wrap gap-2">{[["all","全部"],["collection",mode==="comic"?"作品":"文件夹"],["album",mode==="comic"?"单卷":"相册"],["smart","标签"]].map(([key,label])=><button key={key} aria-pressed={type===key} className={buttonStyles({variant:type===key?"secondary":"ghost",size:"sm"})} onClick={()=>{const next=new URLSearchParams(params); if(key==="all")next.delete("type");else next.set("type",key);setParams(next);}}>{label}</button>)}</div>}
           {search.isError ? (
             <ErrorBanner
               onRetry={() => void search.refetch()}
@@ -229,6 +232,7 @@ export default function SearchResults() {
                   ? `显示 ${cards.length} / ${total} 项`
                   : `共 ${total} 项`}
               </p>
+              {groups.length===0 && <p className="text-caption text-ink-2">当前已加载的结果中没有这一类型。</p>}
               {groups.map((group) => (
                 <section key={group.key} className="mb-5">
                   {group.label ? (
@@ -240,7 +244,7 @@ export default function SearchResults() {
               {search.hasNextPage ? (
                 <button
                   type="button"
-                  className="button-secondary mt-6"
+                  className={buttonStyles({variant:"secondary", className:"mt-6"})}
                   onClick={() => void search.fetchNextPage()}
                   disabled={search.isFetchingNextPage}
                 >
@@ -257,8 +261,8 @@ export default function SearchResults() {
           cards.length === 0 &&
           query ? (
             <EmptyState
-              title={`没有匹配「${query}」的相册、文件夹或标签`}
-              description="名字里没有这几个字。换个说法，或者按画面内容找 —— 内容搜索能认出照片里的东西。"
+              title={`没有匹配「${query}」的${mode==="comic"?"作品、单卷或标签":"相册、文件夹或标签"}`}
+              description={mode==="comic"?"试试作品名、章节名或标签。":"名字里没有这几个字。换个说法，或者按画面内容找。"}
               action={
                 mode === "photo" ? (
                   <button

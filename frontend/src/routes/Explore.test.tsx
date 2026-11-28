@@ -251,6 +251,8 @@ it("首屏先给找法：搜索入口与四个维度", () => {
 
   const bar = within(screen.getByTestId("top-bar"));
   expect(bar.getByRole("button", { name: "打开命令面板" })).toBeVisible();
+  screen.getByRole("searchbox",{name:"搜索照片库"}).focus();
+  expect(screen.queryByRole("dialog")).toBeNull();
   expect(screen.getByRole("searchbox",{name:"搜索照片库"})).toHaveAttribute("aria-haspopup","dialog");
   expect(screen.getByRole("radiogroup", { name: "搜索范围" })).toBeVisible();
   for (const [label, destination] of [["人物","全部人物"],["地点","足迹"],["时间","时间线"],["主题","全部主题"]]) {

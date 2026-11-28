@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { it, expect, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import ComicWorkPreview from "./ComicWorkPreview";
 import type { CardData } from "../library";
 vi.mock("../../hooks/useLibrary", () => ({
@@ -17,6 +18,7 @@ vi.mock("../../hooks/useLibrary", () => ({
     },
   }),
 }));
+const renderPreview = (ui: React.ReactElement) => render(ui, {wrapper: MemoryRouter});
 const card: CardData = {
   id: "c:one",
   title: "星海",
@@ -28,7 +30,7 @@ const card: CardData = {
 };
 it("右侧边缘翻转，展示五行故事并响应 Esc", () => {
   const r = new DOMRect(window.innerWidth - 30, 10, 20, 100);
-  render(
+  renderPreview(
     <ComicWorkPreview
       anchorRect={r}
       data={{
@@ -41,17 +43,19 @@ it("右侧边缘翻转，展示五行故事并响应 Esc", () => {
       }}
     />,
   );
-  const el = screen.getByRole("dialog");
+  const el = screen.getByRole("region");
   expect(parseFloat(el.style.left)).toBeLessThan(r.left);
-  expect(screen.getByText("故事".repeat(150))).toHaveClass("line-clamp-5");
+  expect(screen.getByText("故事".repeat(150))).toHaveClass("line-clamp-4");
   fireEvent.keyDown(window, { key: "Escape" });
-  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.queryByRole("region")).toBeNull();
 });
 it("缺少故事时展示卷数，单集仅显示前三页", () => {
   const r = new DOMRect(10, 10, 60, 100);
-  const v = render(<ComicWorkPreview anchorRect={r} data={card} />);
+  const v = renderPreview(<ComicWorkPreview anchorRect={r} data={card} />);
   expect(screen.getByText("暂无故事大纲")).toBeVisible();
   expect(screen.getByText("3 卷")).toBeVisible();
+  expect(screen.queryByText(/0 页/)).toBeNull();
+  expect(screen.getByRole("link", {name:"查看全卷"})).toHaveAttribute("href",card.to);
   v.rerender(
     <ComicWorkPreview anchorRect={r} data={{ ...card, variant: "album" }} />,
   );

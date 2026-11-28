@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import HoverPreview from "./HoverPreview";
 import type { CardData } from "../library";
 
@@ -45,7 +46,7 @@ function renderPreview(
   anchor = new DOMRect(0, 0, 100, 100),
 ) {
   return render(
-    <HoverPreview data={data} anchorRect={anchor} lastSeenAt={lastSeenAt} />,
+    <HoverPreview data={data} anchorRect={anchor} lastSeenAt={lastSeenAt} />, {wrapper:MemoryRouter},
   );
 }
 
@@ -125,7 +126,7 @@ describe("HoverPreview 按内容属性取词", () => {
     const offsetHeight = vi
       .spyOn(HTMLElement.prototype, "offsetHeight", "get")
       .mockImplementation(function (this: HTMLElement) {
-        return this.getAttribute("role") === "dialog" ? measuredHeight : 0;
+        return this.getAttribute("role") === "region" ? measuredHeight : 0;
       });
 
     let notifyResize: (() => void) | undefined;
@@ -148,7 +149,7 @@ describe("HoverPreview 按内容属性取词", () => {
       undefined,
       new DOMRect(0, 700, 100, 100),
     );
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("region");
 
     expect(dialog.style.top).toBe(`${window.innerHeight - 360 - 12}px`);
     measuredHeight = 500;

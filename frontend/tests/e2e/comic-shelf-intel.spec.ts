@@ -16,7 +16,7 @@ test("书架展示本地作品信息，编辑简介与总封面后刷新可恢�
   await expect(card).toBeVisible();
   await card.hover();
   await expect(
-    page.getByRole("dialog", { name: "预览 斗罗大陆" }),
+    page.getByRole("region", { name: "预览 斗罗大陆" }),
   ).toContainText("少年踏上寻找失落书页的旅途。");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);

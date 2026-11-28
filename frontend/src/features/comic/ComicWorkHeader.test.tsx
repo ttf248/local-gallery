@@ -50,6 +50,10 @@ it("显示作品卷页数、完整简介及首个正篇入口，支持键盘编�
   expect(
     screen.getByRole("link", { name: "开始阅读 · 第 1 话" }),
   ).toHaveAttribute("href", "/comic/read/a_1");
+  fireEvent.click(screen.getByRole("button", {name:"更多"}));
+  expect(screen.getByRole("menu")).toBeVisible();
+  fireEvent.keyDown(screen.getByRole("menu"), {key:"Escape"});
+  expect(screen.queryByRole("menu")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "编辑信息" }));
   expect(screen.getByRole("dialog")).toBeVisible();
 });

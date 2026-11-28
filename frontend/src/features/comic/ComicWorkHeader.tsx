@@ -1,5 +1,9 @@
 import { useState, useLayoutEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { Menu } from "../../ui/Menu";
+import { Button } from "../../ui/Button";
+import { ChevronLeftIcon } from "../../ui/icons";
+import { useUIStore } from "../../store/uiStore";
 import { fsApi } from "../../api/fs";
 import type { LibraryNodeSummary } from "../../api/library";
 import { comicSourceLabels } from "../../api/comicMeta";
@@ -60,8 +64,8 @@ export default function ComicWorkHeader({
   const multi = useMultiRoot("comic");
   const dash = useLibraryDashboard();
   const [editing, setEditing] = useState<"info" | "cover" | null>(null),
-    [expanded, setExpanded] = useState(false),
-    [notice, setNotice] = useState("");
+    [expanded, setExpanded] = useState(false);
+  const toast = useUIStore(s => s.pushToast);
   const m = detail.data?.meta ?? node.comic;
   const title = m?.cleanTitle ?? node.displayName;
   const syn = detail.data?.meta.fullSynopsis ?? m?.synopsis;
@@ -92,8 +96,8 @@ export default function ComicWorkHeader({
   const target = resume?.album.id ?? first;
   const identify = () =>
     refresh.mutate(undefined, {
-      onSuccess: (r) => setNotice(r?.warning ?? "作品信息已更新"),
-      onError: () => setNotice("识别失败，请重试。"),
+      onSuccess: (r) => toast({kind:"info", message:r?.warning ?? "作品信息已更新"}),
+      onError: () => toast({kind:"error",message:"识别失败，请重试。"}),
     });
   return (
     <section className="comic-work-header flex flex-col gap-4 py-5 md:flex-row md:gap-6">
@@ -102,10 +106,10 @@ export default function ComicWorkHeader({
           fileId={node.coverImage ?? ""}
           version={node.coverImageVersion}
           alt={title + " 总封面"}
-          className="book-binding--series aspect-[2/3] w-full object-cover"
+          className="book-binding--series aspect-[2/3] w-full rounded-xl object-cover shadow-1"
         />
         <button
-          className="absolute inset-x-0 bottom-0 bg-theater-surface px-2 py-2 text-caption text-theater-fg pointer-fine:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+          className="absolute inset-x-0 bottom-0 rounded-b-xl bg-gradient-to-t from-theater-bg to-transparent px-2 py-2 text-caption text-theater-fg pointer-fine:opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
           onClick={() => setEditing("cover")}
         >
           更换封面
@@ -113,7 +117,7 @@ export default function ComicWorkHeader({
       </div>
       <div className="min-w-0 flex-1 space-y-2">
         <nav className="text-caption text-ink-2">
-          <Link to="/comic/library">书架</Link> /{" "}
+          <Link className="inline-flex min-h-10 items-center gap-1" to="/comic/library"><ChevronLeftIcon size={16} />书架</Link> /{" "}
           {multi && node.sourceName ? node.sourceName + " / " : ""}
           {title}
         </nav>
@@ -149,12 +153,12 @@ export default function ComicWorkHeader({
               {syn}
             </p>
             {(expanded || overflows) && (
-              <button
+              <Button size="sm" variant="ghost"
                 aria-expanded={expanded}
                 onClick={() => setExpanded(!expanded)}
               >
                 {expanded ? "收起" : "展开全文"}
-              </button>
+              </Button>
             )}
             <p className="text-caption text-ink-3">
               简介来源：
@@ -164,10 +168,10 @@ export default function ComicWorkHeader({
         ) : (
           <p className="text-ink-2">
             暂无故事大纲{" "}
-            <button disabled={refresh.isPending} onClick={identify}>
+            <Button variant="ghost" size="sm" disabled={refresh.isPending} onClick={identify}>
               智能识别
-            </button>{" "}
-            · <button onClick={() => setEditing("info")}>手动添加</button>
+            </Button>{" "}
+            <Button variant="ghost" size="sm" onClick={() => setEditing("info")}>手动添加</Button>
           </p>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -187,7 +191,7 @@ export default function ComicWorkHeader({
             className={buttonStyles({ variant: "secondary" })}
             aria-pressed={fav.favorites.includes(node.id)}
             onClick={() =>
-              void fav.toggle(node.id).catch(() => setNotice("收藏操作失败"))
+              void fav.toggle(node.id).catch(() => toast({kind:"error",message:"收藏操作失败"}))
             }
           >
             {fav.favorites.includes(node.id) ? "取消收藏" : "收藏"}
@@ -198,18 +202,12 @@ export default function ComicWorkHeader({
           >
             编辑信息
           </button>
-          <details className="relative">
-            <summary className="cursor-pointer">更多</summary>
-            <div className="absolute z-10 grid w-max gap-2 rounded-md border border-line bg-raised p-3">
-              <button disabled={refresh.isPending} onClick={identify}>
-                重新识别内容
-              </button>
-              <button onClick={() => setEditing("cover")}>更换总封面</button>
-              <OpenDirectory id={node.id} />
-            </div>
-          </details>
+          <Menu label="更多" trigger={<Button variant="ghost">更多</Button>} items={[
+            {id:"refresh",label:"重新识别内容",disabled:refresh.isPending,onSelect:identify},
+            {id:"cover",label:"更换总封面",onSelect:()=>setEditing("cover")},
+            {id:"folder",label:"在文件管理器中打开",onSelect:()=>void fsApi.openInExplorer(node.id).catch(()=>toast({kind:"error",message:"无法在文件管理器中打开"}))}
+          ]}/>
         </div>
-        {notice && <p role="status">{notice}</p>}
       </div>
       {editing && (
         <ComicMetaEditDialog
@@ -219,15 +217,5 @@ export default function ComicWorkHeader({
         />
       )}
     </section>
-  );
-}
-function OpenDirectory({ id }: { id: string }) {
-  const [failed, setFailed] = useState(false);
-  return (
-    <button
-      onClick={() => void fsApi.openInExplorer(id).catch(() => setFailed(true))}
-    >
-      {failed ? "无法在文件管理器中打开" : "在文件管理器中打开"}
-    </button>
   );
 }

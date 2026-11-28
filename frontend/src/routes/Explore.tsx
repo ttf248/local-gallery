@@ -1,7 +1,7 @@
 import { settingsRoute } from "../utils/path";
 import {buttonStyles} from "../ui/buttonStyles";
 import { Link } from "react-router-dom";
-import {useRef,useState} from "react";
+import {useState} from "react";
 import { PageHero } from "../shell/PageHero";
 import {SearchField} from "../ui/SearchField";
 import Segmented from "../ui/Segmented";
@@ -22,17 +22,14 @@ export default function Explore() {
   const comicAlbumCount = manifest?.statistics.comicAlbumCount ?? 0;
 
   const [scope,setScope]=useState<"name"|"content">("name");
-  const focusOpened=useRef(false);
-  const open=()=>useUIStore.getState().setCommandPaletteOpen(true,scope);
+  const open=(seed="")=>useUIStore.getState().setCommandPaletteOpen(true,scope,seed);
   return (
     <Page
       className="min-h-full pb-12"
     >
       <PageHero title="发现"/>
       <SearchField size="lg" value="" readOnly aria-label="搜索照片库" placeholder="搜索相册、画面与文字" aria-haspopup="dialog"
-        onValueChange={()=>{}} onClick={open} onKeyDown={event=>{if(event.key==="Enter"){event.preventDefault();open();}}}
-        onFocus={()=>{if(!focusOpened.current){focusOpened.current=true;open();}}}
-        onBlur={()=>{if(!useUIStore.getState().commandPaletteOpen)focusOpened.current=false;}}
+        onValueChange={()=>{}} onClick={()=>open()} onKeyDown={event=>{if(event.key==="Enter" || (event.key.length===1 && !event.altKey && !event.ctrlKey && !event.metaKey)){event.preventDefault();open(event.key==="Enter"?"":event.key);}}}
         trailing={<Segmented compact label="搜索范围" value={scope} onChange={setScope} options={[{value:"name",label:"名称"},{value:"content",label:"画面与文字"}]}/>}
       />
       {manifestQuery.isLoading && !manifest ? (
@@ -83,7 +80,7 @@ export default function Explore() {
                     去漫画库看看
                   </Link>
                 ) : null}
-                <Link className={buttonStyles({variant:"primary"})} to={settingsRoute("storage")}>
+                <Link className={buttonStyles({variant:"primary"})} to={settingsRoute("server")}>
                   设置照片目录
                 </Link>
               </div>

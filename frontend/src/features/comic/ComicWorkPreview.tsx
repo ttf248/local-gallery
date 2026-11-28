@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { buttonStyles } from "../../ui/buttonStyles";
 import { createPortal } from "react-dom";
 import { useComicMeta } from "../../hooks/useComicMeta";
 import { useAlbumMedia } from "../../hooks/useLibrary";
@@ -92,12 +94,12 @@ export default function ComicWorkPreview({
   return createPortal(
     <div
       ref={box}
-      role="dialog"
+      role="region"
       aria-label={`预览 ${data.title}`}
       style={{ ...pos, width: 340 }}
       onMouseEnter={onPointerEnter}
       onMouseLeave={onPointerLeave}
-      className="comic-preview fixed max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] space-y-3 overflow-auto rounded-lg border border-line bg-raised p-4 text-ink shadow-3"
+      className="comic-preview fixed max-h-[calc(100dvh-24px)] max-w-[calc(100vw-24px)] space-y-3 overflow-auto rounded-2xl border border-line bg-raised p-4 text-ink shadow-3"
     >
       <div className="flex gap-3">
         {!album && (
@@ -105,7 +107,7 @@ export default function ComicWorkPreview({
             fileId={data.coverPath}
             version={data.coverVersion}
             alt=""
-            className="book-binding--series aspect-[2/3] w-20 shrink-0 self-start object-cover"
+            className="book-binding--series aspect-[2/3] w-[76px] rounded-lg shrink-0 self-start object-cover"
           />
         )}
         <div className="min-w-0 space-y-1">
@@ -124,15 +126,15 @@ export default function ComicWorkPreview({
           <p className="text-caption text-ink-2">
             {!album && (
               <>
-                <span>{data.count} 卷</span> ·{" "}
+                <span>{data.count} 卷</span>
               </>
             )}
-            {data.imageCount ?? 0} 页
+            {(data.imageCount ?? 0) > 0 && `${album ? "" : " · "}${data.imageCount?.toLocaleString()} 页`}
           </p>
           {meta?.genres?.length ? (
-            <p className="text-caption">{meta.genres.join(" · ")}</p>
+            <div className="flex flex-wrap gap-1">{meta.genres.slice(0,3).map(tag => <span key={tag} className="rounded-full bg-sunken px-2 py-0.5 text-caption">{tag}</span>)}</div>
           ) : null}
-          {meta?.locked && <span>已锁定</span>}
+          {meta?.locked && <span aria-label="已锁定" title="已锁定">🔒</span>}
         </div>
       </div>
       {album ? (
@@ -153,7 +155,7 @@ export default function ComicWorkPreview({
           {data.progress && (
             <p>
               阅读进度{" "}
-              <progress max={100} value={progressPercent(data.progress) ?? 0} />
+              <span role="progressbar" aria-label="阅读进度" aria-valuenow={progressPercent(data.progress) ?? 0} aria-valuemin={0} aria-valuemax={100} className="block h-1.5 overflow-hidden rounded-full bg-sunken"><span className="block h-full bg-primary" style={{width: `${progressPercent(data.progress) ?? 0}%`}} /></span>
             </p>
           )}
           {lastSeenAt !== undefined && (
@@ -165,9 +167,9 @@ export default function ComicWorkPreview({
         <EpisodeExcerpt id={decodeFavPath(data.to)} />
       )}
       {meta?.synopsis ? (
-        <section>
+        <section className="border-t border-line pt-2.5">
           <h4>故事大纲</h4>
-          <p className={album ? "line-clamp-2" : "line-clamp-5"}>
+          <p className={album ? "line-clamp-2" : "line-clamp-4"}>
             {meta.synopsis}
           </p>
           <small>{comicSourceLabels[meta.metaSource]}</small>
@@ -184,11 +186,12 @@ export default function ComicWorkPreview({
       )}
       <div className="flex flex-wrap gap-3 text-primary">
         {data.resumeId && (
-          <a href={readerRoute(data.resumeId)}>继续读 · {data.resumeLabel}</a>
+          <Link className={buttonStyles({variant:"primary",size:"sm"})} onClick={onDismiss} to={readerRoute(data.resumeId)}>继续读 · {data.resumeLabel}</Link>
         )}
-        <a href={data.linkTo ?? data.to}>{album ? "阅读本话" : "查看详情"}</a>
+        {!data.resumeId && !album && meta?.firstEpisodeId && <Link onClick={onDismiss} className={buttonStyles({variant:"primary",size:"sm"})} to={readerRoute(meta.firstEpisodeId)}>开始阅读</Link>}
+        <Link className={buttonStyles({variant:"secondary",size:"sm"})} onClick={onDismiss} to={data.linkTo ?? data.to}>{album ? "阅读本话" : "查看全卷"}</Link>
         {!album && onEdit && (
-          <button onClick={onEdit}>
+          <button className={buttonStyles({variant:"ghost",size:"sm"})} onClick={onEdit}>
             {meta?.synopsis ? "编辑简介" : "添加简介"}
           </button>
         )}

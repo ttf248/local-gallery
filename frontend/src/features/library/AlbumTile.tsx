@@ -377,7 +377,7 @@ function GridCard({
     }
   };
   const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (window.matchMedia("(pointer: coarse)").matches) return;
+    if (window.matchMedia("(pointer: coarse)").matches || (data.contentKind === "comic" && !window.matchMedia("(hover: hover) and (pointer: fine)").matches)) return;
     if (closeTimer.current !== null) {
       window.clearTimeout(closeTimer.current);
       closeTimer.current = null;
@@ -404,7 +404,7 @@ function GridCard({
         setPreviewRect(target.getBoundingClientRect());
         setPreviewOn(true);
       },
-      data.contentKind === "comic" ? 320 : 350,
+      data.contentKind === "comic" ? 260 : 350,
     );
   };
   const onLeave = () => {
@@ -419,7 +419,7 @@ function GridCard({
         setPreviewOn(false);
         closeTimer.current = null;
       },
-      data.contentKind === "comic" ? 180 : 150,
+      150,
     );
   };
 

@@ -1,4 +1,7 @@
 import { useState } from "react";
+import ComicCoverPickerTab from "./ComicCoverPickerTab";
+import { Switch } from "../../ui/Switch";
+import { useUIStore } from "../../store/uiStore";
 import { Dialog } from "../../ui/Dialog";
 import { buttonStyles } from "../../ui/buttonStyles";
 import {
@@ -86,6 +89,7 @@ function Editor({
     setError("");
     try {
       await fn();
+      useUIStore.getState().pushToast({kind:"success",message:"作品信息已更新"});
       if (close) onClose();
     } catch {
       setError("保存失败，请检查内容后重试。");
@@ -95,7 +99,7 @@ function Editor({
     <div className="space-y-4">
       {meta.kind === "collection" && (
         <div className="flex gap-2">
-          {["基本与大纲", "封面"].map((t) => (
+          {["基本与大纲", "封面", "从章节挑图"].map((t) => (
             <button
               key={t}
               aria-pressed={t === tab}
@@ -109,7 +113,7 @@ function Editor({
           ))}
         </div>
       )}
-      {tab === "封面" ? (
+      {tab === "从章节挑图" ? <ComicCoverPickerTab workId={meta.nodeId} firstId={meta.firstEpisodeId} busy={busy} onPick={id=>void run(()=>pick.mutateAsync(id))}/> : tab === "封面" ? (
         <section className="space-y-3">
           <h3>作品总封面</h3>
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
@@ -118,7 +122,7 @@ function Editor({
                 key={p.id}
                 aria-label={i === 0 ? "当前封面" : `候选封面 ${i + 1}`}
                 disabled={busy}
-                className="space-y-1 rounded-md text-caption focus-visible:ring-2"
+                aria-pressed={i===0} className="space-y-1 rounded-md text-caption focus-visible:ring-2 aria-pressed:ring-2 aria-pressed:ring-primary aria-pressed:ring-offset-2"
                 onClick={() => void run(() => pick.mutateAsync(p.id))}
               >
                 <ThumbImage
@@ -133,7 +137,7 @@ function Editor({
             ))}
           </div>
           <p className="text-caption text-ink-2">
-            从任意卷中挑选时，请在阅读器的页面菜单中选择「设为所属作品总封面」。
+            从章节挑图可选择任意卷的页面。
           </p>
           <button
             disabled={busy || !meta.hasCustomCover}
@@ -220,6 +224,7 @@ function Editor({
               <button
                 type="button"
                 key={t}
+                className="inline-flex items-center gap-1 rounded-full bg-sunken px-2.5 py-1 text-caption"
                 aria-label={`移除标签 ${t}`}
                 onClick={() => setTags(tags.filter((v) => v !== t))}
               >
@@ -259,11 +264,7 @@ function Editor({
             {Array.from(synopsis).length} / 2000
           </p>
           <label className="flex gap-2">
-            <input
-              type="checkbox"
-              checked={locked}
-              onChange={(e) => setLocked(e.target.checked)}
-            />
+            <Switch label="锁定人工修改" checked={locked} onChange={setLocked} />
             锁定人工修改
           </label>
           <div className="flex justify-between">

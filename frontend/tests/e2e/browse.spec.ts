@@ -160,7 +160,7 @@ test("两侧的措辞与计数单位各归各", async ({ page }) => {
   await expect(comicCard).toBeVisible();
   await comicCard.evaluate((el) => el.scrollIntoView({ block: "center" }));
   await comicCard.hover();
-  const comicPreview = page.getByRole("dialog", { name: /预览/ });
+  const comicPreview = page.getByRole("region", { name: /预览/ });
   await expect(comicPreview).toBeVisible();
   // 漫画侧的预览不说「浏览」。
   await expect(comicPreview).not.toContainText("尚未浏览");
