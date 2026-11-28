@@ -70,7 +70,7 @@ node scripts/package-release.mjs 2.0.0 windows amd64
 python scripts\windows-portable\smoke.py artifacts\local-gallery-v2.0.0-windows-amd64-portable.zip 2.0.0
 ```
 
-打包脚本拉取并校验 Python、FFmpeg 和模型的 SHA256。打包时可通过 `LG_RELEASE_MODEL_CACHE` 复用已有模型目录，校验通过后复制。Windows 验收使用独立端口和带空格及中文的临时路径，检查启动器、前后端版本、样本扫描、FFmpeg 和内置模型的实际推理。使用方法见 [README](../README.md#使用发布包)。
+打包脚本拉取并校验 Python、FFmpeg 和模型的 SHA256。打包时可通过 `LG_RELEASE_MODEL_CACHE` 复用已有模型目录，校验通过后复制。Windows 验收使用独立端口和带空格及中文的临时路径，检查启动器、前后端版本、样本扫描、FFmpeg 和内置模型的实际推理。使用方法见 [README](../README.md#开始使用)。
 
 **发布包不含源码映射。** 前端构建默认不产出 `.map` —— 那是一份完整的
 TS/TSX 源码，随包分发等于把源码公开。需要排查线上堆栈时用
