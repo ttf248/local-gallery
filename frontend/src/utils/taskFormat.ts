@@ -130,8 +130,14 @@ export function taskStageLabel(stage: string): string {
       return "批量推理并写入语义向量";
     case "ocr":
       return "批量识别并保存文字";
-    case "albumCover": return "相册封面精选";
-    case "portrait": return "精选人物头像";
+    case "comicCover":
+      return "漫画封面精选";
+    case "comicMeta":
+      return "漫画内容识别";
+    case "albumCover":
+      return "相册封面精选";
+    case "portrait":
+      return "精选人物头像";
     case "face":
       return "批量识别人脸并保存特征";
     case "similarity":

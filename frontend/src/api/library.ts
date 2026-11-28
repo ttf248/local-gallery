@@ -61,6 +61,7 @@ export interface CoverCandidate {
 }
 
 export interface LibraryNodeSummary {
+  comic?: import("./comicMeta").ComicNodeMeta;
   coverCandidates?: CoverCandidate[];
   id: string;
   kind: "album" | "collection";
@@ -481,6 +482,7 @@ export interface LibraryNodeQueryResult {
 }
 
 export interface LibraryListQuery {
+  episodeType?: "all" | "main" | "extra";
   kind: AppMode;
   parent?: string;
   tag?: string;

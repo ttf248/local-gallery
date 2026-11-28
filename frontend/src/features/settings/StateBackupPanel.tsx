@@ -106,7 +106,10 @@ export default function StateBackupPanel() {
       setPreview(response);
       setSelected(
         backupCategories.filter(
-          (category) => category !== "covers" || response.ready,
+          (category) =>
+            (category !== "covers" || response.ready) &&
+            (category !== "comicOverrides" ||
+              (response.ready && response.counts.comicOverrides !== undefined)),
         ),
       );
     } catch (error: unknown) {
@@ -183,14 +186,16 @@ export default function StateBackupPanel() {
         </p>
         <div className="flex flex-wrap items-start gap-3">
           <button
-            className={buttonStyles({variant:"secondary"})}
+            className={buttonStyles({ variant: "secondary" })}
             onClick={() => void exportBackup()}
             disabled={pending}
           >
             导出状态备份
           </button>
           <label className="block rounded-md text-body focus-within:ring-2 focus-within:ring-primary">
-            <span className={buttonStyles({variant:"secondary"})}>选择备份文件</span>
+            <span className={buttonStyles({ variant: "secondary" })}>
+              选择备份文件
+            </span>
             <span className="block mt-2 text-caption text-ink-2 break-all">
               {fileName || "JSON 格式，最大 32 MB"}
             </span>
@@ -235,7 +240,7 @@ export default function StateBackupPanel() {
       </div>
       {backup !== undefined && !preview && !pending && (
         <button
-          className={buttonStyles({variant:"secondary"})}
+          className={buttonStyles({ variant: "secondary" })}
           onClick={() => void previewBackup(backup)}
         >
           重新预览备份
@@ -252,33 +257,42 @@ export default function StateBackupPanel() {
             </p>
           )}
           <div className="space-y-2">
-            {backupCategories.map((category) => (
-              <label
-                key={category}
-                className="flex min-h-9 items-center gap-3 text-body"
-              >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(category)}
-                  disabled={
-                    pending || (category === "covers" && !preview.ready)
-                  }
-                  onChange={(event) =>
-                    setSelected((current) =>
-                      event.target.checked
-                        ? [...current, category]
-                        : current.filter((value) => value !== category),
-                    )
-                  }
-                />
-                <span>
-                  {backupLabels[category]} · {preview.counts[category]} 条
-                  {(preview.missing[category] ?? 0) > 0
-                    ? `，${preview.missing[category]} 条资源缺失`
-                    : ""}
-                </span>
-              </label>
-            ))}
+            {backupCategories
+              .filter(
+                (category) =>
+                  category !== "comicOverrides" ||
+                  preview.counts.comicOverrides !== undefined,
+              )
+              .map((category) => (
+                <label
+                  key={category}
+                  className="flex min-h-9 items-center gap-3 text-body"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(category)}
+                    disabled={
+                      pending ||
+                      ((category === "covers" ||
+                        category === "comicOverrides") &&
+                        !preview.ready)
+                    }
+                    onChange={(event) =>
+                      setSelected((current) =>
+                        event.target.checked
+                          ? [...current, category]
+                          : current.filter((value) => value !== category),
+                      )
+                    }
+                  />
+                  <span>
+                    {backupLabels[category]} · {preview.counts[category]} 条
+                    {(preview.missing[category] ?? 0) > 0
+                      ? `，${preview.missing[category]} 条资源缺失`
+                      : ""}
+                  </span>
+                </label>
+              ))}
           </div>
           {preview.skippedCovers > 0 && (
             <p className="text-caption text-ink-2">
@@ -286,7 +300,7 @@ export default function StateBackupPanel() {
             </p>
           )}
           <button
-            className={buttonStyles({variant:"primary"})}
+            className={buttonStyles({ variant: "primary" })}
             disabled={pending || selected.length === 0}
             onClick={() => void restore()}
           >

@@ -20,13 +20,22 @@ export function nodeSummaryToCard(
   const isVirtualAlbum = isAlbum && node.virtual === true;
   const virtualLocation = node.location?.trim();
   const title =
-    isVirtualAlbum && virtualLocation ? virtualLocation : node.name;
+    isVirtualAlbum && virtualLocation
+      ? virtualLocation
+      : node.comic?.cleanTitle || node.name;
   return {
     id: idPrefix + node.id,
     variant: node.kind,
     title,
+    comic: node.comic,
+    candidates:
+      node.contentKind === "comic"
+        ? (node.coverCandidates ?? (node.comic ? [] : undefined))
+        : undefined,
     displayTitle:
-      isVirtualAlbum && virtualLocation ? virtualLocation : node.displayName,
+      isVirtualAlbum && virtualLocation
+        ? virtualLocation
+        : node.comic?.cleanTitle || node.displayName,
     subtitle: isVirtualAlbum
       ? "散图"
       : isAlbum
@@ -35,10 +44,15 @@ export function nodeSummaryToCard(
           // 搜索结果、属性面板是同一个词。照片侧叫「文件夹」：那是磁盘
           // 上真实存在的目录，用户不需要知道它内部叫「集合」。
           node.contentKind === "comic"
-          ? "作品"
+          ? undefined
           : "文件夹",
     count: isAlbum ? (node.imageCount ?? 0) : (node.albumCount ?? 0),
-    imageCount: isAlbum ? (node.imageCount ?? 0) : undefined,
+    imageCount:
+      node.contentKind === "comic"
+        ? node.imageCount
+        : isAlbum
+          ? (node.imageCount ?? 0)
+          : undefined,
     videoCount: isAlbum ? (node.videoCount ?? 0) : undefined,
     modTime: usableDate(node.modTime),
     // 业务日期：拍摄时间 > 文件夹名日期 > 修改时间（后端给出的口径）。
@@ -79,5 +93,7 @@ export function tagSummaryToCard(tag: LibraryTagSummary, mode: AppMode): CardDat
 export function cardMatchesQuery(card: CardData, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;
-  return `${card.title} ${card.subtitle ?? ""}`.toLowerCase().includes(q);
+  return `${card.title} ${card.subtitle ?? ""} ${card.comic?.originalName ?? ""} ${card.comic?.author ?? ""}`
+    .toLowerCase()
+    .includes(q);
 }

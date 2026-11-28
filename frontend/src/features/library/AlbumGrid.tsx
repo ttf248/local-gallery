@@ -11,6 +11,7 @@ import { LibrarySelectionActions as BulkActions } from "../common";
 import SelectionCard from "./SelectionCard";
 import { useSelectionStore } from "../../store/selectionStore";
 import AlbumCard, { type CardData, type CoverRatio } from "./AlbumTile";
+import { ComicMetaEditDialog } from "../comic";
 import { AlbumContextMenu } from "../album";
 import { PropertiesDialog } from "../common";
 import { useFavorites } from "../../hooks/useFavorites";
@@ -78,6 +79,7 @@ interface Props {
    *
    * 「最近浏览」用：那一页问的是「翻的是什么、什么时候翻的」。
    */
+  hideSeriesOnCover?: boolean;
   hideMeta?: boolean;
 }
 
@@ -116,6 +118,7 @@ export default function AlbumGrid({
   coverBadge,
   overlayAction,
   note,
+  hideSeriesOnCover,
   hideMeta = false,
   showBulkActions = true,
 }: Props) {
@@ -128,6 +131,9 @@ export default function AlbumGrid({
     y: number;
     item: CardData;
   } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; cover: boolean } | null>(
+    null,
+  );
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
   const [scrollParent, setScrollParent] = useState<HTMLElement>();
   const bindScrollParent = useCallback((container: HTMLDivElement | null) => {
@@ -187,6 +193,7 @@ export default function AlbumGrid({
         overlayAction={overlayAction?.(it)}
         note={note?.(it)}
         hideMeta={hideMeta}
+        hideSeriesOnCover={hideSeriesOnCover}
         onContextMenu={(e) => {
           e.preventDefault();
           setMenu({ x: e.clientX, y: e.clientY, item: it });
@@ -238,7 +245,20 @@ export default function AlbumGrid({
           y={menu.y}
           onRemoveHistory={onRemoveHistory}
           onClose={() => setMenu(null)}
+          onComicEdit={(tab) =>
+            setEditing({
+              id: favoriteResourceId(menu.item),
+              cover: tab === "cover",
+            })
+          }
           onShowProperties={setPropertiesId}
+        />
+      )}
+      {editing && (
+        <ComicMetaEditDialog
+          id={editing.id}
+          cover={editing.cover}
+          onClose={() => setEditing(null)}
         />
       )}
       <PropertiesDialog

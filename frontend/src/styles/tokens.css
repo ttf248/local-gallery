@@ -209,3 +209,14 @@
     --topbar-h: 52px;
   }
 }
+
+:root[data-mode="comic"] {
+  --book-page-edge: #ebe4db;
+  --book-page-edge-line: rgb(74 48 29 / 18%);
+  --cover-band-subtle: rgb(42 28 18 / 88%);
+}
+:root[data-mode="comic"][data-theme="dark"] {
+  --book-page-edge: #2c2724;
+  --book-page-edge-line: rgb(255 255 255 / 12%);
+  --cover-band-subtle: rgb(24 18 14 / 90%);
+}

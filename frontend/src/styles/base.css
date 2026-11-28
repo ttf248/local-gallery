@@ -139,3 +139,9 @@ dialog::backdrop { background: rgb(0 0 0 / .4); backdrop-filter: blur(8px); }
 body:has(dialog[open], [role="dialog"][aria-modal="true"]) .mobile-tabs {visibility:hidden}
 body:has(dialog[open], [role="dialog"][aria-modal="true"]) .app-main {overflow-y:hidden}
 [data-page] [data-page] {padding-inline:0;max-width:none}
+
+.book-binding--series {
+  border-radius: 4px 8px 8px 4px;
+  box-shadow: inset 4px 0 0 var(--book-page-edge-line), 3px 0 0 -1px var(--book-page-edge), 4px 0 0 -1px var(--book-page-edge-line), 6px 0 0 -2px var(--book-page-edge), var(--cover-shadow);
+}
+.comic-preview { z-index:var(--z-popover); animation: fadeIn 120ms ease-out; }

@@ -85,7 +85,10 @@ export default function TaskConsole({
     faceModel === "buffalo_m" ? buffaloReady : qualityReady;
 
   return (
-    <section className="min-w-0 rounded-xl border border-line bg-raised p-4 sm:p-5 [container-type:inline-size] [container-name:console]" aria-labelledby="run-config-heading">
+    <section
+      className="min-w-0 rounded-xl border border-line bg-raised p-4 sm:p-5 [container-type:inline-size] [container-name:console]"
+      aria-labelledby="run-config-heading"
+    >
       <div className="mb-3">
         <div className="min-w-0">
           <h2 id="run-config-heading" className="text-heading">
@@ -115,7 +118,21 @@ export default function TaskConsole({
 
         <aside className="min-w-0 rounded-xl border border-line p-3">
           <h3 className="mb-3 text-heading">本次运行</h3>
-          {["embedding", "ocr", "face", "albumCover"].includes(selectedModule) && <a href="#hardware" className="mb-2 inline-block text-caption text-ink-2 underline">新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案</a>}
+          {[
+            "embedding",
+            "ocr",
+            "face",
+            "comicCover",
+            "comicMeta",
+            "albumCover",
+          ].includes(selectedModule) && (
+            <a
+              href="#hardware"
+              className="mb-2 inline-block text-caption text-ink-2 underline"
+            >
+              新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案
+            </a>
+          )}
           <RunSummaryPanel
             active={active}
             moduleName={selectedName}
@@ -212,7 +229,12 @@ function moduleDescription(type: AnalysisType): string {
       return "用本机 Chinese-CLIP 为照片建立中文语义向量，可按描述搜索，也能按照片查找相似画面。";
     case "ocr":
       return "用本机 OCR 识别照片中的文字，结果可在图片详情中查看。";
-    case "albumCover": return "按画质与画面审美评分，为相册和文件夹精选封面。";
+    case "comicCover":
+      return "为漫画作品与各卷挑选封面，减少重复扉页。";
+    case "comicMeta":
+      return "从本地元数据和卷首页面识别作品信息。";
+    case "albumCover":
+      return "按画质与画面审美评分，为相册和文件夹精选封面。";
     case "portrait":
       return "逐张核对已有的人脸分组，优先选择清晰、接近正面的头像。";
     case "face":

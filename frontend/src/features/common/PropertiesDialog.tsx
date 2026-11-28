@@ -1,5 +1,6 @@
 import { Dialog } from "../../ui/Dialog";
 import { useImageInfo } from "../../hooks/useImageInfo";
+import { comicSourceLabels } from "../../api/comicMeta";
 import { useLibraryNodes } from "../../hooks/useLibrary";
 import { useImageActivities } from "../../hooks/useImageActivity";
 import { formatSize } from "../../utils/format";
@@ -74,6 +75,24 @@ function NodeProperties({ nodeId }: { nodeId: string }) {
       {node && (
         <>
           <dl className="divide-y divide-line">
+            {node.comic && (
+              <>
+                <Field label="识别书名" value={node.comic.cleanTitle} />
+                <Field
+                  label="原始目录名"
+                  value={node.comic.originalName ?? node.name}
+                />
+                <Field label="作者" value={node.comic.author || "未知"} />
+                <Field
+                  label="故事大纲"
+                  value={node.comic.synopsis || "暂无故事大纲"}
+                />
+                <Field
+                  label="元数据来源"
+                  value={comicSourceLabels[node.comic.metaSource]}
+                />
+              </>
+            )}
             <Field
               label="名称"
               value={node.virtual && node.location ? node.location : node.name}

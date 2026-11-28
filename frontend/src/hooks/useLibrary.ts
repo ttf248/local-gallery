@@ -16,17 +16,25 @@ import { useUIStore } from "../store/uiStore";
 import { useAppMode } from "./useAppMode";
 import type { AppMode } from "../api/library";
 
+export function useMultiRoot(mode: AppMode) {
+  return useUIStore((s) => s.multiRootByMode[mode]);
+}
 export function useLibraryManifest() {
   const query = useQuery({
     queryKey: libraryQueryKeys.manifest(),
     queryFn: ({ signal }) => libraryApi.manifest(signal),
   });
   // 多根时才需要在卡片上标来源：单一根下每张卡片都挂「来自 X」是噪音。
-  const rootCount = query.data?.manifest.roots?.length ?? 0;
+  const roots = query.data?.manifest.roots;
+  const photo =
+    (roots?.filter((root) => (root.contentKind ?? "photo") === "photo")
+      .length ?? 0) > 1;
+  const comic =
+    (roots?.filter((root) => root.contentKind === "comic").length ?? 0) > 1;
   const setMultiRoot = useUIStore((s) => s.setMultiRoot);
   useEffect(() => {
-    setMultiRoot(rootCount > 1);
-  }, [rootCount, setMultiRoot]);
+    setMultiRoot({ photo, comic });
+  }, [photo, comic, setMultiRoot]);
   return query;
 }
 

@@ -1,4 +1,4 @@
-import {buttonStyles} from "../../ui/buttonStyles";
+import { buttonStyles } from "../../ui/buttonStyles";
 import { Link } from "react-router-dom";
 import type { SmartAlbumDirectoryItem } from "../../api/albums";
 import { smartAlbumPreviewColumns } from "../../utils/smartAlbum";
@@ -55,7 +55,10 @@ export default function SmartAlbumPreview({
         title="暂时没有精选推荐"
         description="精选主题只展示至少 12 张、至少两类线索一致且不与所在文件夹重复的照片组合。"
         action={
-          <Link to="/photo/smart-albums" className={buttonStyles({variant:"secondary",size:"sm"})}>
+          <Link
+            to="/photo/smart-albums"
+            className={buttonStyles({ variant: "secondary", size: "sm" })}
+          >
             查看精选推荐
           </Link>
         }

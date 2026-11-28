@@ -23,7 +23,9 @@ import {
   TrashIcon,
 } from "../../ui/icons";
 
+import { useRefreshComicMeta } from "../../hooks/useComicMeta";
 interface Props {
+  onComicEdit?: (tab: "info" | "cover") => void;
   item: CardData;
   x: number;
   y: number;
@@ -38,6 +40,7 @@ export default function AlbumContextMenu({
   x,
   y,
   onClose,
+  onComicEdit,
   onShowProperties,
   onRemoveHistory,
 }: Props) {
@@ -48,6 +51,7 @@ export default function AlbumContextMenu({
   const pushToast = useUIStore((state) => state.pushToast);
   const isAlbum = item.variant === "album";
   const resourceId = favoriteResourceId(item);
+  const refresh = useRefreshComicMeta(resourceId);
   const imageCount = item.imageCount ?? item.progress?.total ?? item.count;
   const completed = isCompleted(item.progress);
   // 阅读进度只属于漫画工作台：照片相册没有「读完」这回事，
@@ -69,6 +73,13 @@ export default function AlbumContextMenu({
       icon: <StarIcon size={12} />,
     },
   ];
+  if (!isAlbum && item.variant === "collection" && isComic && onComicEdit) {
+    items.push(
+      { id: "comic-info", label: "编辑作品信息" },
+      { id: "comic-cover", label: "更换总封面" },
+      { id: "comic-refresh", label: "重新识别内容" },
+    );
+  }
   if (isAlbum && isComic && imageCount > 0) {
     items.push(
       { type: "separator" },
@@ -116,6 +127,22 @@ export default function AlbumContextMenu({
 
   function select(id: string) {
     switch (id) {
+      case "comic-info":
+        onComicEdit?.("info");
+        break;
+      case "comic-cover":
+        onComicEdit?.("cover");
+        break;
+      case "comic-refresh":
+        refresh.mutate(undefined, {
+          onSuccess: (r) =>
+            pushToast({
+              kind: "success",
+              message: r.warning ?? "作品信息已更新",
+            }),
+          onError: () => pushToast({ kind: "error", message: "识别失败" }),
+        });
+        break;
       case "open":
         actions.open();
         break;

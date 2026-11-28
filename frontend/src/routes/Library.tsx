@@ -1,4 +1,8 @@
-import {buttonStyles} from "../ui/buttonStyles";
+import { useComicEpisodeType } from "../hooks/useComicMeta";
+import ComicWorkHeader, {
+  ComicEpisodeFilter,
+} from "../features/comic/ComicWorkHeader";
+import { buttonStyles } from "../ui/buttonStyles";
 import { LibraryToolbar } from "../features/library/LibraryToolbar";
 import { Page } from "../shell/Page";
 import { useCallback, useMemo } from "react";
@@ -31,10 +35,19 @@ import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useListFilters } from "../hooks/useListFilters";
 import type { ViewKey } from "../utils/listFilterParams";
 import { useUIStore } from "../store/uiStore";
-import { settingsRoute, decodeFavPath, libraryRoute, readerRoute } from "../utils/path";
+import {
+  settingsRoute,
+  decodeFavPath,
+  libraryRoute,
+  readerRoute,
+} from "../utils/path";
 import type { GalleryContextEntry } from "../utils/galleryContext";
 import type { LibraryDashboardProgress } from "../api/library";
-import { workbenchCopy } from "../utils/workbench";
+import {
+  workbenchCopy,
+  comicShelfSortLabels,
+  comicChapterSortLabels,
+} from "../utils/workbench";
 import { toSelectionItems } from "../utils/selectionItems";
 
 /** 相册页自己的地址参数。 */
@@ -60,6 +73,7 @@ export default function Library() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const nodeId = params.get(LIBRARY_PARAM.node) ?? "";
+  const episodeType = useComicEpisodeType();
   const drawer = useFolderDrawer();
   const filters = useListFilters();
   const viewMode = useUIStore((s) => s.viewMode);
@@ -69,6 +83,7 @@ export default function Library() {
     () => ({
       kind: mode,
       parent: nodeId || undefined,
+      episodeType: mode === "comic" && nodeId ? episodeType : undefined,
       view: filters.view,
       q: filters.query || undefined,
       sort: filters.sortBy,
@@ -77,6 +92,7 @@ export default function Library() {
     [
       mode,
       nodeId,
+      episodeType,
       filters.view,
       filters.query,
       filters.sortBy,
@@ -121,6 +137,7 @@ export default function Library() {
 
   const selectNode = (id: string) => {
     const next = new URLSearchParams(params);
+    next.delete("ep");
     if (id) next.set(LIBRARY_PARAM.node, id);
     else next.delete(LIBRARY_PARAM.node);
     setParams(next, { replace: false });
@@ -182,7 +199,7 @@ export default function Library() {
             event.stopPropagation();
             navigate(readerRoute(entry.album.id));
           }}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-black/65 text-white ring-1 ring-white/20 transition-colors hover:bg-black/80"
+          className="inline-flex h-8 w-8 touch:h-10 touch:w-10 items-center justify-center rounded-full bg-black/65 text-white ring-1 ring-white/20 transition-colors hover:bg-black/80"
           title={`继续读「${volumeName}」`}
           aria-label={`继续读「${volumeName}」`}
         >
@@ -266,7 +283,7 @@ export default function Library() {
   // 名字，位置由面包屑说明 —— 两边都不必再挂一个栏目眉标。
   const title = current
     ? current.displayName || current.name
-    : (currentRoot?.name ?? scopeTitle);
+    : (currentRoot?.name ?? (isComicShelf ? "书架" : scopeTitle));
   const total = list.summary?.total ?? 0;
   const hasContent = (manifest?.statistics.albumCount ?? 0) > 0;
   const hasActiveFilters =
@@ -276,8 +293,16 @@ export default function Library() {
 
   const actions = hasContent ? (
     <ListFilterBar
+      sortLabels={
+        mode === "comic"
+          ? nodeId
+            ? comicChapterSortLabels
+            : comicShelfSortLabels
+          : undefined
+      }
       compact
       hideTotalCount
+      hideEmptyViews={mode === "comic"}
       viewChips={
         nodeId
           ? undefined
@@ -317,75 +342,101 @@ export default function Library() {
       variant="gallery"
       className="library-page pb-gutter [--folder-drawer-offset:calc(var(--topbar-h)_+_14px)] min-h-full"
     >
-      <PageHero
-        title={title}
-        meta={
-          current?.albumCount != null
-            ? [
-                current.albumCount + " 个相册",
-                current.imageCount != null
-                  ? current.imageCount.toLocaleString("zh-CN") + " 张"
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ")
-            : list.summary
-              ? `${total.toLocaleString("zh-CN")} 项`
-              : undefined
-        }
-        eyebrow={
-          <div className="flex items-center gap-2">
-            {
-              <>
-                <button
-                  ref={drawer.triggerRef}
-                  type="button"
-                  className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
-                  title="切换目录抽屉"
-                  aria-label="目录"
-                  aria-keyshortcuts={"Control+\\ Meta+\\"}
-                  aria-expanded={drawer.open}
-                  aria-controls={drawer.open ? "library-tree" : undefined}
-                  onClick={() => drawer.setOpen(!drawer.open)}
-                >
-                  <FolderOpenIcon size={17} />
-                </button>
+      {current?.contentKind === "comic" && current.kind === "collection" ? (
+        <ComicWorkHeader node={current} />
+      ) : (
+        <PageHero
+          title={title}
+          meta={
+            isComicShelf && list.summary
+              ? `${list.summary.scopeCounts?.collection ?? list.summary.counts.collection} 部作品 · ${(list.summary.series ?? []).reduce((n, s) => n + s.count, 0).toLocaleString("zh-CN")} 卷`
+              : current?.albumCount != null
+                ? [
+                    current.albumCount + " 个相册",
+                    current.imageCount != null
+                      ? current.imageCount.toLocaleString("zh-CN") + " 张"
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : list.summary
+                  ? `${total.toLocaleString("zh-CN")} 项`
+                  : undefined
+          }
+          eyebrow={
+            mode === "comic" ? undefined : (
+              <div className="flex items-center gap-2">
+                {
+                  <>
+                    <button
+                      ref={drawer.triggerRef}
+                      type="button"
+                      className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
+                      title="切换目录抽屉"
+                      aria-label="目录"
+                      aria-keyshortcuts={"Control+\\ Meta+\\"}
+                      aria-expanded={drawer.open}
+                      aria-controls={drawer.open ? "library-tree" : undefined}
+                      onClick={() => drawer.setOpen(!drawer.open)}
+                    >
+                      <FolderOpenIcon size={17} />
+                    </button>
+                    {nodeId && (
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
+                        aria-label="返回上级"
+                        title="返回上级"
+                        onClick={() => selectNode(parentId)}
+                      >
+                        <ChevronLeftIcon size={16} />
+                      </button>
+                    )}
+                  </>
+                }{" "}
                 {nodeId && (
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-md text-ink-3 transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink touch:w-11 touch:h-11"
-                    aria-label="返回上级"
-                    title="返回上级"
-                    onClick={() => selectNode(parentId)}
-                  >
-                    <ChevronLeftIcon size={16} />
-                  </button>
+                  <BreadcrumbMenu
+                    mode={mode}
+                    nodeId={nodeId}
+                    roots={(manifest?.roots ?? []).filter(
+                      (root) => (root.contentKind ?? "photo") === mode,
+                    )}
+                    chain={ancestorChain}
+                    onSelect={selectNode}
+                  />
                 )}
-              </>
-            }{" "}
-            {nodeId && (
-              <BreadcrumbMenu
-                mode={mode}
-                nodeId={nodeId}
-                roots={(manifest?.roots ?? []).filter(
-                  (root) => (root.contentKind ?? "photo") === mode,
-                )}
-                chain={ancestorChain}
-                onSelect={selectNode}
-              />
-            )}
-          </div>
-        }
-      />
-      {actions && (
-        <PageToolbar
-          label="相册工具"
-          start={
-            drawer.desktop ? (
-              actions
-            ) : (
-              <LibraryToolbar>{actions}</LibraryToolbar>
+              </div>
             )
+          }
+        />
+      )}
+      {(actions || mode === "comic") && (
+        <PageToolbar
+          label={mode === "comic" ? "书架工具" : "相册工具"}
+          start={
+            <>
+              {mode === "comic" && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    ref={drawer.triggerRef}
+                    type="button"
+                    aria-expanded={drawer.open}
+                    aria-label="目录"
+                    className={buttonStyles({ variant: "ghost" })}
+                    onClick={() => drawer.setOpen(!drawer.open)}
+                  >
+                    <FolderOpenIcon size={16} />
+                    目录
+                  </button>
+                  {current && <ComicEpisodeFilter node={current} />}
+                </div>
+              )}
+              {drawer.desktop ? (
+                actions
+              ) : (
+                <LibraryToolbar>{actions}</LibraryToolbar>
+              )}
+            </>
           }
         >
           {hasActiveFilters && (
@@ -400,7 +451,11 @@ export default function Library() {
                   名称 · {filters.query} <span aria-hidden>×</span>
                 </button>
               )}
-              <button type="button" className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-caption text-ink-2 whitespace-nowrap transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink aria-pressed:bg-selected aria-pressed:text-primary aria-pressed:font-medium [&[data-active=true]]:bg-selected [&[data-active=true]]:text-primary [&[data-active=true]]:font-medium" onClick={filters.reset}>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-caption text-ink-2 whitespace-nowrap transition duration-base hover:bg-sunken hover:text-ink touch:active:bg-sunken touch:active:text-ink aria-pressed:bg-selected aria-pressed:text-primary aria-pressed:font-medium [&[data-active=true]]:bg-selected [&[data-active=true]]:text-primary [&[data-active=true]]:font-medium"
+                onClick={filters.reset}
+              >
                 清除筛选
               </button>
             </div>
@@ -448,18 +503,24 @@ export default function Library() {
                 <BulkActions loaded={selectionItems} />
                 {workCards.length > 0 ? (
                   <section className="mb-10">
-                    <div className="section-heading flex items-baseline flex-wrap gap-3 mb-4">
-                      <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
-                        作品
-                      </h2>
-                      <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
-                        {workCards.length} 部
-                      </span>
-                    </div>
+                    {(looseCards.length > 0 || tagCards.length > 0) && (
+                      <div className="section-heading flex items-baseline flex-wrap gap-3 mb-4">
+                        <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+                          作品
+                        </h2>
+                        <span className="section-meta text-caption leading-[1.45] text-ink-2 tabular-nums">
+                          {workCards.length} 部
+                        </span>
+                      </div>
+                    )}
                     <AlbumGrid
                       selectable
                       showBulkActions={false}
-                      items={workCards}
+                      items={workCards.map((c) => ({
+                        ...c,
+                        resumeId: resumeOf(c)?.album.id,
+                        resumeLabel: resumeOf(c)?.album.displayName,
+                      }))}
                       variant={viewMode}
                       overlayAction={workOverlayAction}
                       note={workNote}
@@ -509,6 +570,7 @@ export default function Library() {
             ) : (
               <AlbumGrid
                 selectable
+                hideSeriesOnCover={mode === "comic" && Boolean(nodeId)}
                 coverRatio={mode === "photo" ? "4/3" : "2/3"}
                 items={cards}
                 variant={viewMode}
@@ -534,7 +596,7 @@ export default function Library() {
               action={
                 nodeId ? (
                   <button
-                    className={buttonStyles({variant:"secondary"})}
+                    className={buttonStyles({ variant: "secondary" })}
                     onClick={() => selectNode(parentId)}
                   >
                     返回上一级
@@ -549,7 +611,10 @@ export default function Library() {
               title={`${mode === "comic" ? "书架" : "相册"}这边还没有内容`}
               description="媒体库里还没有这一侧的内容。先到设置里添加媒体目录，或去另一边看看。"
               action={
-                <Link className={buttonStyles({variant:"secondary"})} to={settingsRoute("storage")}>
+                <Link
+                  className={buttonStyles({ variant: "secondary" })}
+                  to={settingsRoute("storage")}
+                >
                   去设置
                 </Link>
               }

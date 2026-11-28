@@ -15,12 +15,14 @@ import { albumCountUnit } from "../../utils/workbench";
 export default function AlbumListRow({
   data,
   showLastSeen,
+  hideSeriesOnCover,
   recentPhoto,
   onToggleFavorite,
   showUnreadBadge,
 }: {
   data: CardData;
   showLastSeen?: boolean;
+  hideSeriesOnCover?: boolean;
   recentPhoto?: boolean;
   onToggleFavorite: () => void;
   showUnreadBadge: boolean;
@@ -42,7 +44,14 @@ export default function AlbumListRow({
   const isComicContent = data.contentKind === "comic";
   // 作品名补在卷名前面：列表行写「第1卷」时，这一卷属于哪部作品
   // 看不出来 —— 与网格的书封、阅读器顶栏同一套写法。
-  const rowTitle = card.series ? `${card.series} · ${label}` : label;
+  const rowTitle =
+    hideSeriesOnCover &&
+    data.comic?.chapterLabel &&
+    data.comic.chapterLabel !== label
+      ? data.comic.chapterLabel + " · " + label
+      : !hideSeriesOnCover && card.series
+        ? `${card.series} · ${label}`
+        : label;
 
   if (recentPhoto) {
     const when = data.lastSeenAt ? new Date(data.lastSeenAt) : null;
@@ -96,7 +105,9 @@ export default function AlbumListRow({
     // 字号：标题 14px，其余（类型 / 副标题 / 计数 / 进度）统一 13px ——
     // 与网格卡同一套层级。旧版列表用 12.5px，比网格卡低一档，两种视图
     // 放在一起看会像两套产品。
-    <div className={`relative group flex items-center border-b border-line-subtle ${showLastSeen ? "h-[72px]" : "h-14"}`}>
+    <div
+      className={`relative group flex items-center border-b border-line-subtle ${showLastSeen ? "h-[72px]" : "h-14"}`}
+    >
       <Link
         to={data.linkTo ?? data.to}
         aria-label={`打开${openTargetWord(data)}“${data.displayTitle ?? data.title}”`}
@@ -155,7 +166,13 @@ export default function AlbumListRow({
               读起来是标题的下划线，不是进度条。「还没翻开」这件事由
               标题行上的未读标记承担，不必再用一个空轨道说一遍。 */}
           <div className="text-body text-ink-3 flex items-center gap-2 min-w-0 overflow-hidden">
-            <TypeChip variant={data.variant} />
+            <TypeChip
+              variant={data.variant}
+              book={data.contentKind === "comic"}
+            />
+            {data.comic?.synopsis && (
+              <span className="truncate">{data.comic.synopsis}</span>
+            )}
             {data.subtitle && (
               <span className="truncate max-w-[10rem] shrink">
                 {data.subtitle}
@@ -181,7 +198,9 @@ export default function AlbumListRow({
             )}
             {data.sourceName && multiRoot && (
               <span className="text-ink-3 inline-flex items-center gap-0.5 shrink-0">
-                <FolderIcon size={11} className="shrink-0" />
+                {data.contentKind !== "comic" && (
+                  <FolderIcon size={11} className="shrink-0" />
+                )}
                 <span className="truncate">来自 {data.sourceName}</span>
               </span>
             )}

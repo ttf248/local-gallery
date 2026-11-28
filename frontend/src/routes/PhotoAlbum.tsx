@@ -81,7 +81,7 @@ export default function PhotoAlbum({ album }: Props) {
   // 媒体根数量：单根时不必在页头上重复来源。
   const inspector = useUIStore((state) => state.inspectorOpen);
   const setInspector = useUIStore((state) => state.setInspectorOpen);
-  const multiRoot = useUIStore((s) => s.multiRoot);
+  const multiRoot = useUIStore((s) => s.multiRootByMode.photo);
   const [filterOpen, setFilterOpen] = useState(false);
 
   // 视图状态住在地址栏：筛选条件、分组维度与选中的分组。

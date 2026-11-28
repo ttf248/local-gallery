@@ -1,7 +1,16 @@
 import { api } from "./client";
 import type { AppMode, LibraryFeedItem, LibraryPage } from "./library";
 
-export type AnalysisType = "metadata" | "embedding" | "ocr" | "face" | "portrait" | "albumCover" | "similarity";
+export type AnalysisType =
+  | "metadata"
+  | "embedding"
+  | "ocr"
+  | "face"
+  | "portrait"
+  | "comicCover"
+  | "comicMeta"
+  | "albumCover"
+  | "similarity";
 export type FaceModel = "quality-v2" | "buffalo_m";
 export type AnalysisMode = "full" | "incremental";
 export type AnalysisStatus =

@@ -3,6 +3,11 @@ import {buttonStyles} from "../ui/buttonStyles";
 import { Fragment, useEffect, useMemo } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
+import { comicChapterSortLabels } from "../utils/workbench";
+import { useComicEpisodeType } from "../hooks/useComicMeta";
+import ComicWorkHeader, {
+  ComicEpisodeFilter,
+} from "../features/comic/ComicWorkHeader";
 import { useFavorites } from "../hooks/useFavorites";
 import { useGalleryContextSync } from "../hooks/useGalleryContextSync";
 import { useVisitRecorder } from "../hooks/useVisitRecorder";
@@ -150,15 +155,17 @@ export default function Album() {
   //
   // 年份筛选也在这里生效：上方年份索引上的漏斗把年份写进地址，
   // 网格就得按它过滤 —— 漏斗改了地址却不改内容，那是一枚骗人的控件。
+  const episodeType = useComicEpisodeType();
   const listQuery = useMemo(
     () => ({
       kind: node?.contentKind ?? mode,
       parent: node?.id,
+      episodeType: node?.contentKind === "comic" ? episodeType : undefined,
       q: query,
       sort: sortBy,
       year: yearFilter === null ? undefined : String(yearFilter),
     }),
-    [node?.contentKind, node?.id, mode, query, sortBy, yearFilter],
+    [node?.contentKind, node?.id, mode, query, sortBy, yearFilter, episodeType],
   );
   const childrenQuery = useLibraryList(listQuery, node?.kind === "collection");
 
@@ -318,6 +325,7 @@ export default function Album() {
   const isFav = favorites.includes(detail.path);
   return (
     <CollectionView
+      node={node!}
       detail={detail}
       ancestors={ancestors}
       mode={mode}
@@ -373,7 +381,7 @@ function CollectionHead({
   // 首页的作品索引也是同一个词。两处用同一个词，用户才认得出这是同一类东西。
   const isComic = detail.contentKind === "comic";
   // 只有多根库才需要在页头标来源：单根时顶栏已经写着同一个目录名。
-  const multiRoot = useUIStore((s) => s.multiRoot);
+  const multiRoot = useUIStore((s) => s.multiRootByMode[mode]);
   return (
     <Page className="page-heading pt-8 pb-5 max-sm:pt-5 max-sm:pb-4">
       {/* 返回 + 面包屑同一行：「返回」只说得出「回去」，祖先链才说得出
@@ -509,6 +517,7 @@ function CollectionHead({
 }
 
 function CollectionView({
+  node,
   detail,
   ancestors,
   mode,
@@ -522,6 +531,7 @@ function CollectionView({
   ancestors: LibraryNodeSummary[];
   mode: AppMode;
   // 复用全局 SortKey:Album 详情也支持「最近看」('viewed' 用 history 排序)
+  node: LibraryNodeSummary;
   list: ReturnType<typeof useLibraryList>;
   viewMode: "grid" | "list";
   onBack: () => void;
@@ -567,14 +577,21 @@ function CollectionView({
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <CollectionHead
-        detail={detail}
-        ancestors={ancestors}
-        mode={mode}
-        isFavorite={isFavorite}
-        onToggleFav={onToggleFav}
-        onBack={onBack}
-      />
+      {node.contentKind === "comic" ? (
+        <Page>
+          <ComicWorkHeader node={node} />
+          <ComicEpisodeFilter node={node} />
+        </Page>
+      ) : (
+        <CollectionHead
+          detail={detail}
+          ancestors={ancestors}
+          mode={mode}
+          isFavorite={isFavorite}
+          onToggleFav={onToggleFav}
+          onBack={onBack}
+        />
+      )}
       <div className="flex-1 min-h-0 overflow-auto">
         {/* 照片带先于筛选条：筛选条只管下面那张网格，夹在照片带与
             网格之间会让它离自己控制的东西太远。 */}
@@ -585,6 +602,9 @@ function CollectionView({
           />
         )}
         <ListFilterBar
+          sortLabels={
+            node.contentKind === "comic" ? comicChapterSortLabels : undefined
+          }
           totalCount={list.summary?.total ?? 0}
           showMinImageFilter={false}
           sort={sortBy}
@@ -601,7 +621,9 @@ function CollectionView({
         {realYearBuckets >= 2 && (
           <div className="py-6">
             <Page className="flex items-center gap-3 mb-4">
-              <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">时间线</h2>
+              <h2 className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+                时间线
+              </h2>
               <span className="section-meta text-caption leading-[1.45] text-ink-2">
                 {detail.contentKind === "comic"
                   ? "按年份浏览 — 当前作品下的子卷 / 子系列"
@@ -624,7 +646,7 @@ function CollectionView({
             </Page>
             {/* 年份卡与下面的网格共用同一条左缘：这里少一层容器，
                 整条索引会比网格左移一截。 */}
-            <Page >
+            <Page>
               <YearTimeline groups={yearGroups} />
             </Page>
           </div>
@@ -635,7 +657,7 @@ function CollectionView({
             title="列表加载失败"
             action={
               <button
-                className={buttonStyles({variant:"secondary"})}
+                className={buttonStyles({ variant: "secondary" })}
                 onClick={() => void list.refetch()}
               >
                 重试
@@ -665,6 +687,7 @@ function CollectionView({
           <Page as="section" className="container--gallery">
             <div className="pb-10">
               <AlbumGrid
+                hideSeriesOnCover={node.contentKind === "comic"}
                 selectable
                 items={cards}
                 variant={viewMode}

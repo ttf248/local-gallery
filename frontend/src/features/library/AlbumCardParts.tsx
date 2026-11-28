@@ -1,6 +1,13 @@
 import { HeartIcon, FolderIcon, ImageIcon, HashIcon } from "../../ui/icons";
 import type { CardVariant } from "./AlbumTile";
-export function TypeChip({ variant }: { variant: CardVariant }) {
+export function TypeChip({
+  variant,
+  book,
+}: {
+  variant: CardVariant;
+  book?: boolean;
+}) {
+  if (book && variant !== "smart") return null;
   const Icon =
     variant === "album"
       ? ImageIcon
@@ -44,7 +51,7 @@ export function FavoriteButton({
       aria-pressed={fav}
       aria-label={fav ? `取消收藏「${label}」` : `收藏「${label}」`}
       title={fav ? "取消收藏" : "收藏"}
-      className={`inline-flex items-center justify-center w-8 h-8 rounded-full bg-raised/90 shadow-1 transition-opacity ${visibility} ${
+      className={`inline-flex items-center justify-center w-8 h-8 touch:h-10 touch:w-10 rounded-full bg-raised/90 shadow-1 transition-opacity ${visibility} ${
         fav ? "text-favorite" : "text-ink-2 hover:text-ink"
       } ${className}`}
     >

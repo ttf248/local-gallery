@@ -33,6 +33,9 @@ import CardCover from "./CardCover";
 export type CardVariant = "album" | "collection" | "smart";
 
 export interface CardData {
+  resumeId?: string;
+  resumeLabel?: string;
+  comic?: import("../../api/comicMeta").ComicNodeMeta;
   candidates?: import("../../api/library").CoverCandidate[];
   id: string;
   variant: CardVariant;
@@ -134,6 +137,7 @@ interface Props {
    * 封面下方留一行标题更清楚，那里显式关掉。
    */
   titleOnCover?: boolean;
+  hideSeriesOnCover?: boolean;
   /**
    * 封面画幅比例。
    * 默认 "4/3" 用于照片卡片；也支持 "2/3" 和 "16/9"。
@@ -186,6 +190,7 @@ const COVER_RATIO_CLASS: Record<CoverRatio, string> = {
 //  - 阅读进度以底部细线 + 数字显示
 //  - 智能集合有专属角标
 //  - showLastSeen=true 时在标题下加一行「上次 X · 看到 Y/Z」
+import { ComicMetaEditDialog } from "../comic";
 export default function AlbumTile({
   data,
   variant = "grid",
@@ -194,12 +199,14 @@ export default function AlbumTile({
   overlayAction,
   showUnreadBadge = true,
   titleOnCover,
+  hideSeriesOnCover,
   coverRatio = "4/3",
   alwaysShowFavorite = false,
   note,
   coverBadge,
   hideMeta = false,
 }: Props) {
+  const [editor, setEditor] = useState<"info" | "cover" | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [propertiesId, setPropertiesId] = useState<string | null>(null);
   const toggleFavorite = useToggleFavorite();
@@ -236,6 +243,7 @@ export default function AlbumTile({
     >
       {variant === "list" ? (
         <AlbumListRow
+          hideSeriesOnCover={hideSeriesOnCover}
           recentPhoto={hideMeta && showLastSeen}
           data={data}
           showLastSeen={showLastSeen}
@@ -249,12 +257,21 @@ export default function AlbumTile({
           onToggleFavorite={onToggleFavorite}
           overlayAction={overlayAction}
           showUnreadBadge={showUnreadBadge}
+          onEdit={() => setEditor("info")}
           titleOnCover={titleOnCover}
+          hideSeriesOnCover={hideSeriesOnCover}
           coverRatio={coverRatio}
           alwaysShowFavorite={alwaysShowFavorite}
           note={note}
           coverBadge={coverBadge}
           hideMeta={hideMeta}
+        />
+      )}
+      {editor && (
+        <ComicMetaEditDialog
+          id={favoriteResourceId(data)}
+          cover={editor === "cover"}
+          onClose={() => setEditor(null)}
         />
       )}
       {menu && (
@@ -263,6 +280,7 @@ export default function AlbumTile({
           x={menu.x}
           y={menu.y}
           onClose={() => setMenu(null)}
+          onComicEdit={setEditor}
           onShowProperties={setPropertiesId}
         />
       )}
@@ -284,12 +302,14 @@ export default function AlbumTile({
 // 漫画里一张图就是「一页」，与阅读器的「第 N 页」说法一致。
 
 function GridCard({
+  onEdit,
   data,
   showLastSeen,
   onToggleFavorite,
   overlayAction,
   showUnreadBadge,
   titleOnCover,
+  hideSeriesOnCover,
   coverRatio,
   alwaysShowFavorite,
   note,
@@ -301,7 +321,9 @@ function GridCard({
   onToggleFavorite: () => void;
   overlayAction?: ReactNode;
   showUnreadBadge: boolean;
+  onEdit?: () => void;
   titleOnCover?: boolean;
+  hideSeriesOnCover?: boolean;
   coverRatio: CoverRatio;
   alwaysShowFavorite: boolean;
   note?: ReactNode;
@@ -334,12 +356,26 @@ function GridCard({
   // 作品名印在书名上方：漫画侧的卷名只写「第1卷」，一屏里两本「第1卷」
   // 分属不同作品，光看封面分不出谁是谁。真实书封就是这么排的 ——
   // 作品名在上，卷名在下。
-  const coverSeries = showTitleOnCover ? card.series : undefined;
+  const coverSeries = showTitleOnCover
+    ? hideSeriesOnCover
+      ? data.comic?.chapterLabel !== label
+        ? data.comic?.chapterLabel
+        : undefined
+      : card.series
+    : undefined;
 
   // 悬停预览：350ms 后弹出，移出卡片或预览延迟 150ms 关闭。
   // （延迟是为了让用户能从卡片顺利移到预览上，预览是 portal 元素，
   //   鼠标在 card→preview 的过渡中会先触发 card mouseleave。）
   const closeTimer = useRef<number | null>(null);
+  const pendingEvents = useRef<AbortController | null>(null);
+  const cancelPendingPreview = () => {
+    pendingEvents.current?.abort();
+    if (previewTimer.current !== null) {
+      window.clearTimeout(previewTimer.current);
+      previewTimer.current = null;
+    }
+  };
   const onEnter = (e: React.MouseEvent<HTMLDivElement>) => {
     if (window.matchMedia("(pointer: coarse)").matches) return;
     if (closeTimer.current !== null) {
@@ -347,21 +383,44 @@ function GridCard({
       closeTimer.current = null;
     }
     const target = e.currentTarget;
-    previewTimer.current = window.setTimeout(() => {
-      setPreviewRect(target.getBoundingClientRect());
-      setPreviewOn(true);
-    }, 350);
+    cancelPendingPreview();
+    const controller = new AbortController();
+    pendingEvents.current = controller;
+    window.addEventListener("scroll", cancelPendingPreview, {
+      capture: true,
+      signal: controller.signal,
+    });
+    window.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key === "Escape") cancelPendingPreview();
+      },
+      { signal: controller.signal },
+    );
+    previewTimer.current = window.setTimeout(
+      () => {
+        controller.abort();
+        previewTimer.current = null;
+        setPreviewRect(target.getBoundingClientRect());
+        setPreviewOn(true);
+      },
+      data.contentKind === "comic" ? 320 : 350,
+    );
   };
   const onLeave = () => {
+    pendingEvents.current?.abort();
     if (previewTimer.current !== null) {
       window.clearTimeout(previewTimer.current);
       previewTimer.current = null;
     }
     // 延迟关闭：给用户时间移到预览上
-    closeTimer.current = window.setTimeout(() => {
-      setPreviewOn(false);
-      closeTimer.current = null;
-    }, 150);
+    closeTimer.current = window.setTimeout(
+      () => {
+        setPreviewOn(false);
+        closeTimer.current = null;
+      },
+      data.contentKind === "comic" ? 180 : 150,
+    );
   };
 
   // 触摸设备长按 500ms 打开相同位置的上下文菜单。
@@ -401,6 +460,7 @@ function GridCard({
       if (previewTimer.current !== null)
         window.clearTimeout(previewTimer.current);
       if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+      pendingEvents.current?.abort();
       if (pressTimer.current !== null) window.clearTimeout(pressTimer.current);
     };
   }, []);
@@ -419,6 +479,7 @@ function GridCard({
          还没到点的预览定时器也要撤掉 —— 否则它在菜单打开之后
          才把预览放出来，菜单照样被压住。 */
       onContextMenu={() => {
+        pendingEvents.current?.abort();
         if (previewTimer.current !== null) {
           window.clearTimeout(previewTimer.current);
           previewTimer.current = null;
@@ -431,6 +492,8 @@ function GridCard({
       <Link
         to={data.linkTo ?? data.to}
         onClick={(e) => {
+          cancelPendingPreview();
+          setPreviewOn(false);
           // 长按刚唤起过预览：这一下抬手不是「打开相册」。
           if (longPressedRef.current) {
             e.preventDefault();
@@ -443,9 +506,12 @@ function GridCard({
         className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
         <div
-          data-stacked={data.variant === "collection" || undefined}
+          data-stacked={
+            (data.variant === "collection" && data.contentKind !== "comic") ||
+            undefined
+          }
           className={
-            data.variant === "collection"
+            data.variant === "collection" && data.contentKind !== "comic"
               ? "relative isolate mb-3 before:absolute before:inset-x-2 before:-bottom-1.5 before:-z-10 before:h-full before:rounded-lg before:bg-sunken-strong after:absolute after:inset-x-4 after:-bottom-3 after:-z-20 after:h-full after:rounded-lg after:bg-sunken motion-safe:before:transition-transform motion-safe:after:transition-transform motion-safe:group-hover:before:translate-y-px motion-safe:group-hover:after:translate-y-px"
               : "relative"
           }
@@ -453,7 +519,10 @@ function GridCard({
           <div
             className={`album-tile__cover rounded-lg relative z-10 ${COVER_RATIO_CLASS[coverRatio]} bg-sunken overflow-hidden${
               showTitleOnCover
-                ? " album-tile__cover--book book-binding rounded-[6px] shadow-cover transition duration-base motion-safe:group-hover:-translate-y-1"
+                ? (data.variant === "collection"
+                    ? " book-binding--series"
+                    : "") +
+                  " album-tile__cover--book book-binding rounded-[6px] shadow-cover transition duration-base motion-safe:group-hover:-translate-y-1"
                 : ""
             }`}
             data-testid="card-cover"
@@ -557,7 +626,10 @@ function GridCard({
                 showTitleOnCover ? "text-ink-2" : "text-ink-2 mt-1"
               }`}
             >
-              <TypeChip variant={data.variant} />
+              <TypeChip
+                variant={data.variant}
+                book={data.contentKind === "comic"}
+              />
               {(() => {
                 const media = card.counts;
                 if (media) {
@@ -590,7 +662,6 @@ function GridCard({
                 // 单位跟卡片所属的那一侧走：照片侧「本」，漫画侧「卷」。
                 return (
                   <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
-                    {data.variant === "collection" && <FolderIcon size={16} />}
                     {data.count} {albumCountUnit(data.contentKind ?? "photo")}
                   </span>
                 );
@@ -609,6 +680,9 @@ function GridCard({
                     </span>
                   </>
                 )}
+              {data.contentKind === "comic" && note && (
+                <span className="truncate text-primary"> · {note}</span>
+              )}
               {data.subtitle && (
                 <>
                   <span className="text-ink-3">·</span>
@@ -621,11 +695,13 @@ function GridCard({
               单一媒体根下每张卡片都挂同一句来源是噪音，multiRoot 为 false 时隐藏。 */}
           {data.sourceName && multiRoot && !hideMeta && (
             <div className="text-caption text-ink-3 mt-0.5 inline-flex items-center gap-1">
-              <FolderIcon size={16} className="shrink-0" />
+              {data.contentKind !== "comic" && (
+                <FolderIcon size={16} className="shrink-0" />
+              )}
               <span className="truncate">来自 {data.sourceName}</span>
             </div>
           )}
-          {note && (
+          {note && data.contentKind !== "comic" && (
             <div className="text-caption text-ink-2 mt-0.5 truncate">
               {note}
             </div>
@@ -683,6 +759,11 @@ function GridCard({
         <HoverPreview
           data={data}
           anchorRect={previewRect}
+          onEdit={() => {
+            setPreviewOn(false);
+            onEdit?.();
+          }}
+          onDismiss={() => setPreviewOn(false)}
           lastSeenAt={data.lastSeenAt}
           onPointerEnter={() => {
             // 鼠标进入预览时取消正在等待的关闭 timer

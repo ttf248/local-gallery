@@ -74,7 +74,9 @@ function TimelineCard({ entry }: { entry: TimelineEntry }) {
       >
         <span
           className={`block shrink-0 overflow-hidden bg-sunken ${
-            isComic ? "timeline-cover--book after:content-[''] after:absolute after:inset-0 after:z-[1] after:pointer-events-none after:[background:linear-gradient(to_right,rgb(0_0_0_/_0.48)_0,rgb(0_0_0_/_0.14)_5px,rgb(0_0_0_/_0)_13px)] relative rounded-[5px_8px_8px_5px] [box-shadow:0_6px_14px_-10px_rgb(0_0_0_/_0.5)] w-12 h-14" : "rounded-md w-12 h-12"
+            isComic
+              ? "timeline-cover--book after:content-[''] after:absolute after:inset-0 after:z-[1] after:pointer-events-none after:[background:linear-gradient(to_right,rgb(0_0_0_/_0.48)_0,rgb(0_0_0_/_0.14)_5px,rgb(0_0_0_/_0)_13px)] relative rounded-[5px_8px_8px_5px] [box-shadow:0_6px_14px_-10px_rgb(0_0_0_/_0.5)] w-12 h-14"
+              : "rounded-md w-12 h-12"
           }`}
         >
           {cover && cover !== failedSource ? (

@@ -34,6 +34,16 @@ export function listItemToCard(
     card.covers = card.candidates.map((candidate) => candidate.id);
     card.coverVersions = card.candidates.map((candidate) => candidate.version);
   }
+  if (
+    item.kind !== "smart" &&
+    item.node.contentKind === "comic" &&
+    card.candidates?.length
+  ) {
+    const first = card.candidates[0];
+    card.coverPath = first.id;
+    card.coverKind = first.kind;
+    card.coverVersion = first.version;
+  }
   if (query.parent && item.kind !== "smart" && item.node.virtual) {
     return { ...card, title: "散图", subtitle: "" };
   }

@@ -39,6 +39,7 @@ const preview: StatePreview = {
     people: 0,
     smartAlbums: 0,
     similarity: 0,
+    comicOverrides: 1,
   },
   missing: { favorites: 1 },
   skippedCovers: 0,
@@ -85,6 +86,7 @@ it("预览后可仅覆盖收藏，保留其他类别并展示结果", async () =
     /人物分组与手动修正 ·/,
     /智能相册命名与隐藏状态 ·/,
     /相似照片整理的人工决定 ·/,
+    /漫画作品信息 ·/,
   ])
     fireEvent.click(screen.getByRole("checkbox", { name }));
   fireEvent.click(screen.getByRole("button", { name: "确认覆盖恢复" }));

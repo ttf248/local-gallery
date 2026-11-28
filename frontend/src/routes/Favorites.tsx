@@ -6,6 +6,7 @@ import { useEffect,useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
 import { useUIStore } from "../store/uiStore";
+import { useLibraryList } from "../hooks/useLibraryList";
 import { useFavorites } from "../hooks/useFavorites";
 import { useImageActivities } from "../hooks/useImageActivity";
 import { useAppMode } from "../hooks/useAppMode";
@@ -90,8 +91,17 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
   // 漫画侧是还没翻开的漫画；照片侧没有阅读进度，改推最近加入的照片。
   const dashboardQuery = useLibraryDashboard();
   const recentQuery = useLibraryRecentAlbums(mode, 6);
+  const works = useLibraryList(
+    { kind: "comic", view: "collection", sort: "name" },
+    mode === "comic" && favoritesCount === 0,
+  );
   const suggestions = useMemo<CardData[]>(() => {
     if (mode === "comic") {
+      if (works.isPending) return [];
+      const available = works.cards
+        .filter((c) => !favorites.includes(decodeFavPath(c.to)))
+        .slice(0, 6);
+      if (available.length) return available;
       return (dashboardQuery.data?.dashboard?.unread ?? [])
         .slice(0, 6)
         .map((album) => nodeSummaryToCard(album, "u:"));
@@ -99,7 +109,14 @@ export default function Favorites({ embedded = false, onSummary }: { embedded?: 
     return (recentQuery.data?.page.items ?? [])
       .slice(0, 6)
       .map((album) => nodeSummaryToCard(album, "r:"));
-  }, [mode, dashboardQuery.data, recentQuery.data]);
+  }, [
+    mode,
+    dashboardQuery.data,
+    recentQuery.data,
+    works.cards,
+    works.isPending,
+    favorites,
+  ]);
 
   const progressPaths = useMemo(
     () =>

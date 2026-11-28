@@ -1,4 +1,4 @@
-import {buttonStyles} from "../../ui/buttonStyles";
+import { buttonStyles } from "../../ui/buttonStyles";
 import { Button } from "../../ui/Button";
 import { Menu } from "../../ui/Menu";
 import { ScrollRow } from "../../ui/ScrollRow";
@@ -11,11 +11,7 @@ import { comicCopy } from "../../utils/workbench";
 import { AlbumTile as AlbumCard } from "../library";
 import type { CardData } from "../library";
 import Cover from "./Cover";
-import {
-  ArrowRightLineIcon,
-  CheckIcon,
-  CloseIcon,
-} from "../../ui/icons";
+import { ArrowRightLineIcon, CheckIcon, CloseIcon } from "../../ui/icons";
 
 interface UnreadHeroProps {
   cards: CardData[];
@@ -46,26 +42,43 @@ export function UnreadHero({
     >
       <div className="flex items-start justify-between gap-3 mb-5">
         <div className="min-w-0 flex-1">
-          <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em] mb-2">{copy.unreadEyebrow}</p>
+          <p className="page-eyebrow flex items-center gap-2 text-primary text-caption font-semibold tracking-[0.02em] mb-2">
+            {copy.unreadEyebrow}
+          </p>
           {/* 标题后接一条细线：这一段的内容到这里为止 —— 与时间线上的
               月份标题同一套写法。 */}
           <div className="flex items-baseline gap-3">
-            <h2 id="unread-heading" className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+            <h2
+              id="unread-heading"
+              className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]"
+            >
               {copy.unreadTitle}{" "}
               <span className="font-sans text-body font-normal text-ink-2 ml-2 tabular-nums">
                 {count} {copy.unreadCountLabel}
               </span>
             </h2>
-            <span className="section-rule [flex:1_1_32px] h-[1px] self-center bg-line" aria-hidden />
+            <span
+              className="section-rule [flex:1_1_32px] h-[1px] self-center bg-line"
+              aria-hidden
+            />
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <Menu label="未读操作" trigger={<Button variant="ghost" aria-label="未读操作">⋯</Button>}
-            items={[{id:"random",label:copy.unreadButton,onSelect:onShuffle}]}/>
+          <Menu
+            label="未读操作"
+            trigger={
+              <Button variant="ghost" aria-label="未读操作">
+                ⋯
+              </Button>
+            }
+            items={[
+              { id: "random", label: copy.unreadButton, onSelect: onShuffle },
+            ]}
+          />
 
           <Link
             to={unreadRoute()}
-            className={buttonStyles({variant:"ghost",size:"sm"})}
+            className={buttonStyles({ variant: "ghost", size: "sm" })}
             aria-label={`查看全部${copy.unreadTitle}相册`}
           >
             全部 <ArrowRightLineIcon size={14} />
@@ -146,13 +159,19 @@ export function ContinueReadingHero({
       aria-labelledby="continue-heading"
     >
       <div className="flex items-center gap-3 flex-wrap">
-        <h2 id="continue-heading" className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]">
+        <h2
+          id="continue-heading"
+          className="section-title font-display text-heading leading-[1.4] font-semibold text-ink tracking-[-0.01em]"
+        >
           {copy.continueTitle}
         </h2>
         <span className="hero-panel__muted text-ink-2 text-caption tabular-nums">
           {cards.length} {copy.unfinishedCountLabel}
         </span>
-        <span className="section-rule [flex:1_1_32px] h-[1px] self-center bg-line" aria-hidden />
+        <span
+          className="section-rule [flex:1_1_32px] h-[1px] self-center bg-line"
+          aria-hidden
+        />
         <button
           type="button"
           onClick={onClearAll}
@@ -164,8 +183,18 @@ export function ContinueReadingHero({
         </button>
       </div>
       <div className="relative isolate mt-4 grid min-w-0 grid-cols-[minmax(110px,.8fr)_minmax(0,1fr)] items-center gap-4 overflow-hidden rounded-xl bg-sunken p-4 sm:grid-cols-[clamp(160px,14vw,240px)_minmax(0,1fr)] sm:gap-8 sm:p-8">
-        {featured.coverPath && <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 scale-125 blur-[48px] saturate-[1.2]"><Cover card={featured}/></div>}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 bg-canvas/70"/>
+        {featured.coverPath && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 scale-125 blur-[48px] saturate-[1.2]"
+          >
+            <Cover card={featured} />
+          </div>
+        )}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-canvas/70"
+        />
         <StagePoster card={featured} onClick={() => onContinue(featured)} />
         <div className="min-w-0">
           {/* 作品名压在卷名上方：卷名只写「第1卷」时，这一卷属于哪部
@@ -285,7 +314,7 @@ function StageInfo({
         <button
           type="button"
           onClick={onRemove}
-          className={buttonStyles({variant:"ghost",size:"sm"})}
+          className={buttonStyles({ variant: "ghost", size: "sm" })}
           title={`将「${card.title}」${copy.markFinishedLabel}`}
           aria-label={`将${card.title}${copy.markFinishedLabel}`}
         >
@@ -323,7 +352,12 @@ function QueueItem({
       >
         <span className="relative mb-2 block aspect-[2/3] overflow-hidden rounded-[6px] shadow-cover">
           <Cover card={card} />
-          {card.progress && <span className="absolute bottom-0 left-0 h-[3px] bg-primary" style={{width:readingPercent(card.progress)+"%"}}/>}
+          {card.progress && (
+            <span
+              className="absolute bottom-0 left-0 h-[3px] bg-primary"
+              style={{ width: readingPercent(card.progress) + "%" }}
+            />
+          )}
         </span>
         <span className="min-w-0">
           <span className="block truncate text-body font-medium">

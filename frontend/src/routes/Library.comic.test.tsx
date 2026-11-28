@@ -164,6 +164,7 @@ describe("漫画书架", () => {
     await waitFor(() => {
       expect(screen.getByText("作品")).toBeInTheDocument();
     });
+    expect(screen.getByRole("heading", { name: "书架" })).toBeInTheDocument();
     expect(screen.getByText("未归入作品")).toBeInTheDocument();
     // 段标题带上各自的量：作品是「部」，卷是「卷」。
     expect(screen.getByText("1 部")).toBeInTheDocument();

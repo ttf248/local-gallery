@@ -34,9 +34,9 @@ export interface UIState extends PersistedUIPrefs {
   setFolderDrawerOpen: (open: boolean) => void;
   toggleFolderDrawer: () => void;
 
-  setInspectorOpen: (open:boolean) => void;
+  setInspectorOpen: (open: boolean) => void;
   toggleSidebar: () => void;
-  setSidebar: (value:SidebarState) => void;
+  setSidebar: (value: SidebarState) => void;
 
   setTheme: (t: ThemePref) => void;
 
@@ -49,8 +49,8 @@ export interface UIState extends PersistedUIPrefs {
    * 是否配置了多个媒体根。只有多根时卡片才显示「来自 X」来源标记——
    * 单一根下每张卡片都挂同一句来源纯属噪音。
    */
-  multiRoot: boolean;
-  setMultiRoot: (v: boolean) => void;
+  multiRootByMode: { photo: boolean; comic: boolean };
+  setMultiRoot: (v: { photo: boolean; comic: boolean }) => void;
 
   /**
    * 是否有一个沉浸浮层正开着（照片墙的大图预览）。
@@ -73,18 +73,26 @@ export const useUIStore = create<UIState>()(
       setMemoriesDismissedOn: (memoriesDismissedOn) =>
         set({ memoriesDismissedOn }),
       commandPaletteOpen: false,
-      setCommandPaletteOpen: (open,scope) => set({ commandPaletteOpen: open, commandScope:scope }),
+      setCommandPaletteOpen: (open, scope) =>
+        set({ commandPaletteOpen: open, commandScope: scope }),
       toggleCommandPalette: () =>
-        set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen,commandScope:undefined })),
+        set((s) => ({
+          commandPaletteOpen: !s.commandPaletteOpen,
+          commandScope: undefined,
+        })),
       folderDrawerOpen: false,
       setFolderDrawerOpen: (open) => set({ folderDrawerOpen: open }),
       toggleFolderDrawer: () =>
         set((s) => ({ folderDrawerOpen: !s.folderDrawerOpen })),
 
-      sidebar:"expanded",inspectorOpen:false,setInspectorOpen: inspectorOpen => set({inspectorOpen}),
+      sidebar: "expanded",
+      inspectorOpen: false,
+      setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
       toggleSidebar: () =>
-        set((s) => ({ sidebar:s.sidebar==="expanded"?"collapsed":"expanded" })),
-      setSidebar: sidebar => set({sidebar}),
+        set((s) => ({
+          sidebar: s.sidebar === "expanded" ? "collapsed" : "expanded",
+        })),
+      setSidebar: (sidebar) => set({ sidebar }),
 
       theme: "system",
       setTheme: (t) => set({ theme: t }),
@@ -95,12 +103,11 @@ export const useUIStore = create<UIState>()(
       showPersonFaceBoxes: false,
       setShowPersonFaceBoxes: (v) => set({ showPersonFaceBoxes: v }),
 
-      multiRoot: false,
-      setMultiRoot: (v) => set({ multiRoot: v }),
+      multiRootByMode: { photo: false, comic: false },
+      setMultiRoot: (v) => set({ multiRootByMode: v }),
 
       immersiveOverlay: false,
       setImmersiveOverlay: (v) => set({ immersiveOverlay: v }),
-
 
       toasts: [],
       pushToast: (t) => {
@@ -130,7 +137,8 @@ export const useUIStore = create<UIState>()(
             ? (persisted as Record<string, unknown>)
             : {};
         return {
-          sidebar: old.sidebarCollapsed === true ? "collapsed" : "expanded", inspectorOpen:false,
+          sidebar: old.sidebarCollapsed === true ? "collapsed" : "expanded",
+          inspectorOpen: false,
           theme:
             old.theme === "light" || old.theme === "dark"
               ? old.theme
@@ -138,10 +146,15 @@ export const useUIStore = create<UIState>()(
           viewMode: old.viewMode === "list" ? "list" : "grid",
           showPersonFaceBoxes: old.showPersonFaceBoxes === true,
           folderDrawerOpen: version >= 2 && old.folderDrawerOpen === true,
-          memoriesDismissedOn: typeof old.memoriesDismissedOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(old.memoriesDismissedOn) ? old.memoriesDismissedOn : null,
+          memoriesDismissedOn:
+            typeof old.memoriesDismissedOn === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(old.memoriesDismissedOn)
+              ? old.memoriesDismissedOn
+              : null,
         } as Pick<
           UIState,
-          | "sidebar" | "inspectorOpen"
+          | "sidebar"
+          | "inspectorOpen"
           | "theme"
           | "viewMode"
           | "showPersonFaceBoxes"
@@ -152,7 +165,8 @@ export const useUIStore = create<UIState>()(
       partialize: (s) => ({
         memoriesDismissedOn: s.memoriesDismissedOn,
         folderDrawerOpen: s.folderDrawerOpen,
-        sidebar: s.sidebar, inspectorOpen:s.inspectorOpen,
+        sidebar: s.sidebar,
+        inspectorOpen: s.inspectorOpen,
         theme: s.theme,
         viewMode: s.viewMode,
         showPersonFaceBoxes: s.showPersonFaceBoxes,

@@ -46,7 +46,9 @@ export function useCardState(
     isComicAlbum,
     cardCopy: comicCopy(),
     unread: showUnreadMark(data, showUnreadBadge),
-    multiRoot: useUIStore((s) => s.multiRoot),
+    multiRoot: useUIStore(
+      (s) => s.multiRootByMode[data.contentKind ?? "photo"],
+    ),
     hasDuration:
       typeof data.durationSec === "number" &&
       Number.isFinite(data.durationSec) &&

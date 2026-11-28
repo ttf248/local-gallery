@@ -29,6 +29,7 @@ export const historyQueryKey = ["history"] as const;
  */
 export const libraryQueryKeys = {
   root: ["library"] as const,
+  comicMeta: (id: string) => ["comic-meta", id] as const,
   /**
    * 模式维度。列表型查询都带上模式：切换工作台等于换一组查询键，
    * React Query 会自动去拉新数据，旧模式的缓存留着，切回来是秒开。

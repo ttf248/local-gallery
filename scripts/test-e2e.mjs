@@ -198,6 +198,11 @@ async function makeFixtures(root) {
   }
 
   for (let i = 1; i <= 3; i++) await writeFixture(comic, 'sample-comic/page-' + i + '.png')
+  const sampleWork = 'douluodalu 斗罗大陆'
+  for (const episode of ['0001 番外1', '0016 第1话 唐三穿越(上)', '0017 第2话 重逢']) {
+    for (let page = 1; page <= 3; page++) await writeFixture(comic, sampleWork + '/' + episode + '/' + page + '.png', markedPage(96, 144, page))
+  }
+  await writeFile(path.join(comic, sampleWork, 'series.json'), JSON.stringify({ author: '示例作者', synopsis: '少年踏上寻找失落书页的旅途。', genres: ['冒险'] }))
   const repeated = markedPage(900, 1350, 1)
   for (const count of [1, 8, 9, 1001]) {
     for (let i = 1; i <= count; i++) {

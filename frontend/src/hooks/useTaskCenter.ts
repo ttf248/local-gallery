@@ -228,8 +228,10 @@ export function useTaskCenter(options: { active: boolean }): TaskCenterState {
           value.status === "failed" ||
           value.status === "cancelled"
         ) {
-          if (value.type === "albumCover") {
-            void queryClient.invalidateQueries({ queryKey: libraryQueryKeys.mode("photo") });
+          if (["albumCover", "comicCover", "comicMeta"].includes(value.type)) {
+            void queryClient.invalidateQueries({
+              queryKey: libraryQueryKeys.mode("photo"),
+            });
           }
           void invalidateJobs();
         }

@@ -202,12 +202,23 @@ describe("AlbumCard 封面语义", () => {
         variant: "collection",
         coverPath: "one",
         covers: ["two", "three"],
+        contentKind: "photo",
       }),
     );
     expect(container.querySelector("[data-stacked]")).toBeTruthy();
     const images = container.querySelectorAll('[data-testid="card-cover"] img');
     expect(images).toHaveLength(1);
     expect(images[0].getAttribute("src")).toContain("one");
+  });
+  it("漫画作品采用精装书口，计数行没有文件夹图标", () => {
+    const { container } = renderCard(
+      card({ variant: "collection", contentKind: "comic" }),
+    );
+    expect(container.querySelector("[data-stacked]")).toBeNull();
+    expect(screen.getByTestId("card-cover")).toHaveClass(
+      "book-binding--series",
+    );
+    expect(container.querySelector(".tabular-nums svg")).toBeNull();
   });
   it("主封面缺失时跳过空候选并保留代表图的版本", () => {
     const { container } = renderCard(
@@ -327,12 +338,12 @@ describe("AlbumCard 封面语义", () => {
     (variant) => {
       const withSource = card({ sourceName: "存照", sourceRoot: "r_1" });
 
-      useUIStore.getState().setMultiRoot(false);
+      useUIStore.getState().setMultiRoot({ photo: false, comic: false });
       const { unmount } = renderCard(withSource, variant);
       expect(screen.queryByText(/来自 存照/)).not.toBeInTheDocument();
       unmount();
 
-      useUIStore.getState().setMultiRoot(true);
+      useUIStore.getState().setMultiRoot({ photo: true, comic: true });
       renderCard(withSource, variant);
       expect(screen.getByText(/来自 存照/)).toBeInTheDocument();
     },

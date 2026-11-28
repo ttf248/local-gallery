@@ -24,6 +24,7 @@ import type { AppMode } from "../../api/library";
 // - 控件之间用 gap-2 分组，不画分隔线，避免视觉噪声
 export interface ListFilterBarProps {
   // 视图 chips (全部 / 文件夹 / 集合 / 标签),不需要就传 undefined
+  hideEmptyViews?: boolean;
   viewChips?: { key: string; label: string; count?: number }[];
   // 当前激活的 view chip key
   activeViewKey?: string;
@@ -63,11 +64,14 @@ export interface ListFilterBarProps {
    * 按钮。放进这条工具条，列表页顶部就只有一行控件。
    */
   trailing?: ReactNode;
+  sortLabels?: Partial<Record<SortKey, string>>;
   compact?: boolean;
 }
 
 export function ListFilterBar({
-  viewChips,
+  viewChips: allChips,
+  hideEmptyViews = false,
+  sortLabels,
   activeViewKey,
   onChangeView,
   totalCount,
@@ -85,6 +89,18 @@ export function ListFilterBar({
   trailing,
   compact = false,
 }: ListFilterBarProps) {
+  const chips = hideEmptyViews
+    ? allChips?.filter(
+        (c) => c.count !== 0 || c.key === activeViewKey || c.key === "all",
+      )
+    : allChips;
+  const viewChips =
+    hideEmptyViews &&
+    chips &&
+    chips.filter((c) => c.key !== "all").length <= 1 &&
+    (!activeViewKey || activeViewKey === "all")
+      ? undefined
+      : chips;
   const viewMode = useUIStore((s) => s.viewMode);
   const setViewMode = useUIStore((s) => s.setViewMode);
 
@@ -150,7 +166,13 @@ export function ListFilterBar({
               共 {totalCount} 项
             </span>
           ) : null}
-          {!hideSort && <SortMenu value={sort} onChange={onSortChange} />}
+          {!hideSort && (
+            <SortMenu
+              labels={sortLabels}
+              value={sort}
+              onChange={onSortChange}
+            />
+          )}
           {onClearFilters ? (
             <button
               type="button"
@@ -226,9 +248,11 @@ function sortOptions(
 }
 
 function SortMenu({
+  labels,
   value,
   onChange,
 }: {
+  labels?: Partial<Record<SortKey, string>>;
   value: SortKey;
   onChange: (v: SortKey) => void;
 }) {
@@ -249,7 +273,10 @@ function SortMenu({
   }, [open]);
 
   const { mode } = useAppMode();
-  const options = sortOptions(mode);
+  const options = sortOptions(mode).map((o) => ({
+    ...o,
+    label: labels?.[o.value] ?? o.label,
+  }));
   const cur = options.find((o) => o.value === value) ?? options[0];
 
   return (

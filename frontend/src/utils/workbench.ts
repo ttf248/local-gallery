@@ -252,6 +252,8 @@ export function collectionUnit(mode: "photo" | "comic"): string {
  * 光秃秃一个「本」看不出是什么：照片侧说「7 本相册」，漫画侧说
  * 「7 卷」。集合页头、网格卡片与侧栏共用这一个说法。
  */
+export const comicShelfSortLabels = { count: "按卷数" } as const;
+export const comicChapterSortLabels = { name: "按话序" } as const;
 export function albumCountUnit(mode: "photo" | "comic"): string {
   return mode === "comic" ? collectionUnit(mode) : "个相册";
 }

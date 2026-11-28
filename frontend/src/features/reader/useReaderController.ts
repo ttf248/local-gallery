@@ -1,3 +1,4 @@
+import { useSetCollectionCover } from "../../hooks/useComicMeta";
 import { useImageProgressSync } from "../../hooks/useImageProgressSync";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
@@ -746,6 +747,18 @@ export function useReaderController() {
   // 注：current 是在组件后段计算的（依赖 isVideo / images / videos / index），
   // 因此这里在 callback 内通过 useGalleryStore.getState() 读 index、images、videos
   // 实时算 current，避免依赖数组出现 forward reference；每次按键都拿到当前真实文件。
+  const workCover = useSetCollectionCover(albumSummary?.parentId ?? "");
+  const onSetWorkCover = albumSummary?.parentId
+    ? (target: ReaderCommandTarget) => {
+        if (target.albumId === pathParam)
+          workCover.mutate(target.fileId, {
+            onSuccess: () =>
+              pushToast({ kind: "success", message: "已设为作品总封面" }),
+            onError: () =>
+              pushToast({ kind: "error", message: "设置总封面失败" }),
+          });
+      }
+    : undefined;
   const onSetCover = useCallback(
     async (target?: ReaderCommandTarget) => {
       if (!pathParam) return;
@@ -878,6 +891,7 @@ export function useReaderController() {
     setSettingsOpen,
     setMenuOpen,
     onOpenInExplorer,
+    onSetWorkCover,
     onSetCover,
     onToggleFavorite,
     openWorkbench,

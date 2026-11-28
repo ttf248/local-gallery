@@ -37,6 +37,7 @@ export default function Reader() {
     onClearCover,
     onOpenInExplorer,
     onSetCover,
+    onSetWorkCover,
     pathParam,
     ready,
     reload,
@@ -302,6 +303,15 @@ export default function Reader() {
               icon: <ImageIcon />,
               onSelect: () => void onSetCover(contextMenu.target),
             },
+            ...(onSetWorkCover && !isVideo
+              ? [
+                  {
+                    id: "work-cover",
+                    label: "设为所属作品总封面",
+                    onSelect: () => onSetWorkCover(contextMenu.target),
+                  },
+                ]
+              : []),
             {
               id: "clear-cover",
               label: hasCustomCover ? "清除自定义封面 (⇧U)" : "清除自定义封面",

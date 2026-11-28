@@ -16,16 +16,19 @@ import { CardCover } from '../library'
 import ThumbImage from './ThumbImage'
 import type { CardData } from '../library'
 
+import { ComicWorkPreview } from "../comic";
 interface Props {
-  data: CardData
+  onDismiss?: () => void;
+  onEdit?: () => void;
+  data: CardData;
   /** 触发预览的卡片 DOMRect（getBoundingClientRect）。 */
-  anchorRect: DOMRect
+  anchorRect: DOMRect;
   /** 上次看过的时间（ISO）；无则不显示。 */
-  lastSeenAt?: string | null
+  lastSeenAt?: string | null;
   /** 鼠标进入预览：父组件应取消正在等待的关闭 timer。 */
-  onPointerEnter?: () => void
+  onPointerEnter?: () => void;
   /** 鼠标离开预览：父组件应安排关闭 timer。 */
-  onPointerLeave?: () => void
+  onPointerLeave?: () => void;
 }
 
 // 悬停预览：在卡片右侧（或左侧）弹出一个更大、更详细的卡片。
@@ -45,46 +48,59 @@ const COVER_H_PHOTO = 240
 const GAP = 14
 const MARGIN = 12 // 视口边距
 
-export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEnter, onPointerLeave }: Props) {
+export default function HoverPreview(props: Props) {
+  return props.data.contentKind === "comic" ? (
+    <ComicWorkPreview {...props} />
+  ) : (
+    <PhotoPreview {...props} />
+  );
+}
+function PhotoPreview({
+  data,
+  anchorRect,
+  lastSeenAt,
+  onPointerEnter,
+  onPointerLeave,
+}: Props) {
   // 客户端尺寸（避免 SSR 不一致；本项目无 SSR，加 useState 仅为防御性）
-  const [vp, setVp] = useState({ w: 0, h: 0 })
+  const [vp, setVp] = useState({ w: 0, h: 0 });
   // 预览整体高度：封面高度固定，信息区随内容（标题行数、有无进度条）变化，
   // 垂直夹紧必须用实测高度，否则靠近视口下缘时信息区会被裁掉。
-  const boxRef = useRef<HTMLDivElement>(null)
-  const [boxHeight, setBoxHeight] = useState(COVER_H_COMIC)
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [boxHeight, setBoxHeight] = useState(COVER_H_COMIC);
 
   // 措辞与单位跟着这张卡自己的属性走，而不是跟着当前工作台：
   // 悬停预览出现在两侧共用的卡片上，卡片属于照片还是漫画服务端恒给得出。
-  const kind = data.contentKind ?? 'photo'
+  const kind = data.contentKind ?? "photo";
   // 阅读进度只属于漫画：照片相册没有进度可言，预览里也不该出现进度条。
-  const isComic = kind === 'comic'
+  const isComic = kind === "comic";
   // 百分比口径与卡片、列表、首屏一致，避免同一本书在几处显示不同的进度。
-  const progressPct = progressPercent(data.progress)
-  const coverH = isComic ? COVER_H_COMIC : COVER_H_PHOTO
+  const progressPct = progressPercent(data.progress);
+  const coverH = isComic ? COVER_H_COMIC : COVER_H_PHOTO;
 
-  const viewportReady = vp.w > 0 && vp.h > 0
+  const viewportReady = vp.w > 0 && vp.h > 0;
 
   useEffect(() => {
-    const update = () => setVp({ w: window.innerWidth, h: window.innerHeight })
-    update()
-    window.addEventListener('scroll', update, true)
-    window.addEventListener('resize', update)
+    const update = () => setVp({ w: window.innerWidth, h: window.innerHeight });
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
     return () => {
-      window.removeEventListener('scroll', update, true)
-      window.removeEventListener('resize', update)
-    }
-  }, [])
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
-  const isCollection = data.variant === 'collection'
+  const isCollection = data.variant === "collection";
   // 所属作品：漫画卷的名字只写「第1卷」，预览里要说得清是哪一部。
   const series =
-    data.variant === 'album' &&
-    data.contentKind === 'comic' &&
+    data.variant === "album" &&
+    data.contentKind === "comic" &&
     data.parentName &&
     data.parentName !== data.title
       ? data.parentName
-      : undefined
-  const copy = workbenchCopy(kind)
+      : undefined;
+  const copy = workbenchCopy(kind);
 
   // 照片相册的悬停预览给「里面有什么」：直接铺这一本的前几张实拍。
   // 只放大封面等于把卡片上的那张图再放一遍 —— 照片库里真正的问题
@@ -94,51 +110,51 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
   // 这两个 hook 必须在下面的提前 return 之前：hook 的调用顺序在两次
   // 渲染之间必须一致，早退分支跳过它们就会触发 React 的
   // 「渲染的 hook 比上一次多」错误。
-  const albumId = !data.candidates && !isComic && !isCollection ? decodeFavPath(data.to) : ''
-  const mediaQuery = useAlbumMedia(albumId)
+  const albumId =
+    !data.candidates && !isComic && !isCollection ? decodeFavPath(data.to) : "";
+  const mediaQuery = useAlbumMedia(albumId);
   const previewItems = useMemo(() => {
-    const items = mediaQuery.data?.pages[0]?.items ?? []
-    return items.filter((item) => item.kind === 'image').slice(0, 4)
-  }, [mediaQuery.data])
+    const items = mediaQuery.data?.pages[0]?.items ?? [];
+    return items.filter((item) => item.kind === "image").slice(0, 4);
+  }, [mediaQuery.data]);
 
   // 首次显示时测量一次；后续由 ResizeObserver 跟踪内容带来的高度变化。
   // 浏览器没有 ResizeObserver 时，props 变化和视口尺寸变化仍会触发测量。
   useLayoutEffect(() => {
-    if (!viewportReady) return
-    const el = boxRef.current
-    if (!el) return
+    if (!viewportReady) return;
+    const el = boxRef.current;
+    if (!el) return;
 
     const measure = () => {
-      const h = el.offsetHeight
-      setBoxHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h))
-    }
-    measure()
+      const h = el.offsetHeight;
+      setBoxHeight((prev) => (Math.abs(prev - h) < 1 ? prev : h));
+    };
+    measure();
 
     const observer =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    observer?.observe(el)
-    window.addEventListener('resize', measure)
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(measure);
+    observer?.observe(el);
+    window.addEventListener("resize", measure);
 
     return () => {
-      observer?.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [data, lastSeenAt, previewItems, viewportReady])
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [data, lastSeenAt, previewItems, viewportReady]);
 
-  if (vp.w === 0 || vp.h === 0) return null
+  if (vp.w === 0 || vp.h === 0) return null;
 
   // 水平：默认在右侧；右侧放不下则放左侧
-  const wantRight = anchorRect.right + GAP + COVER_W + MARGIN <= vp.w
+  const wantRight = anchorRect.right + GAP + COVER_W + MARGIN <= vp.w;
   const left = wantRight
     ? anchorRect.right + GAP
-    : Math.max(MARGIN, anchorRect.left - GAP - COVER_W)
+    : Math.max(MARGIN, anchorRect.left - GAP - COVER_W);
 
   // 垂直：先居中，再夹紧到视口
-  const idealTop = anchorRect.top + anchorRect.height / 2 - coverH / 2
-  const top = Math.max(
-    MARGIN,
-    Math.min(idealTop, vp.h - boxHeight - MARGIN),
-  )
+  const idealTop = anchorRect.top + anchorRect.height / 2 - coverH / 2;
+  const top = Math.max(MARGIN, Math.min(idealTop, vp.h - boxHeight - MARGIN));
 
   return createPortal(
     <div
@@ -148,7 +164,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
       onMouseEnter={onPointerEnter}
       onMouseLeave={onPointerLeave}
       style={{
-        position: 'fixed',
+        position: "fixed",
         top,
         left,
         width: COVER_W,
@@ -163,7 +179,9 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
         <div
           className={`relative bg-sunken ${
             /* 漫画侧也是一本书（装订边 + 竖版），与网格卡同一套语言。 */
-            isComic ? "album-thumb--book book-binding relative rounded-sm shadow-cover" : ""
+            isComic
+              ? "album-thumb--book book-binding relative rounded-sm shadow-cover"
+              : ""
           }`}
           style={{ width: COVER_W, height: coverH }}
         >
@@ -190,7 +208,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
           {/* 顶部暗角：让标题更易读 */}
           <div className="absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-black/35 to-transparent pointer-events-none" />
           {/* 视频角标：▶ + 数量 */}
-          {data.coverKind === 'video' && (
+          {data.coverKind === "video" && (
             <div className="absolute top-3 left-3 inline-flex items-center gap-1 bg-raised/90 text-ink text-caption font-medium px-2 py-0.5 rounded-md shadow-1">
               <PlayFilledIcon size={10} className="text-primary" />
               <span>视频</span>
@@ -221,7 +239,9 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
               {data.title}
             </div>
             {data.subtitle && (
-              <div className="text-caption text-ink-2 mt-1 truncate">{data.subtitle}</div>
+              <div className="text-caption text-ink-2 mt-1 truncate">
+                {data.subtitle}
+              </div>
             )}
           </div>
 
@@ -231,7 +251,7 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
               lastSeenAt 为 undefined 表示「不知道」：这一行来自浏览历史，
               而库里的列表（首页的最近加入、集合页…）并不带这个字段。
               不知道的时候不能写「尚未浏览」——那本相册明明刚看过。 */}
-          {data.variant === 'album' && lastSeenAt !== undefined && (
+          {data.variant === "album" && lastSeenAt !== undefined && (
             <div className="flex items-center gap-1.5 text-caption text-ink-2">
               <CalendarIcon size={11} className="text-ink-3 shrink-0" />
               <span className="truncate">
@@ -246,23 +266,29 @@ export default function HoverPreview({ data, anchorRect, lastSeenAt, onPointerEn
               0% 时不画 —— 一条空轨道读起来是分隔线，不是进度条；「还没翻开」
               已经由上面的未读标记承担。填充色用品牌色，与列表行、首屏续读
               同一套。 */}
-          {isComic && data.variant === 'album' && progressPct !== null && progressPct > 0 && (
-            <div>
-              <div className="flex items-center justify-between text-caption text-ink-3 mb-1">
-                <span className="inline-flex items-center gap-1">
-                  <ReaderIcon size={10} />
-                  <span>阅读进度</span>
-                </span>
-                <span className="tabular-nums">{progressPct}%</span>
+          {isComic &&
+            data.variant === "album" &&
+            progressPct !== null &&
+            progressPct > 0 && (
+              <div>
+                <div className="flex items-center justify-between text-caption text-ink-3 mb-1">
+                  <span className="inline-flex items-center gap-1">
+                    <ReaderIcon size={10} />
+                    <span>阅读进度</span>
+                  </span>
+                  <span className="tabular-nums">{progressPct}%</span>
+                </div>
+                <div className="h-1 bg-sunken rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-1 bg-sunken rounded-full overflow-hidden">
-                <div className="h-full bg-primary" style={{ width: `${progressPct}%` }} />
-              </div>
-            </div>
-          )}
+            )}
         </div>
       </div>
     </div>,
     document.body,
-  )
+  );
 }

@@ -10,6 +10,12 @@ export interface MediaRootConfig {
 }
 
 export interface ServerConfig {
+  comicMeta?: {
+    onlineEnabled: boolean;
+    provider: "bangumi";
+    timeoutSec: number;
+    proxyURL: string;
+  };
   mediaRoots: MediaRootConfig[];
   host: string;
   port: number;
@@ -47,6 +53,7 @@ type ServerConfigFields = Partial<
     ServerConfig,
     | "mediaRoots"
     | "host"
+    | "comicMeta"
     | "port"
     | "accessMode"
     | "cacheDir"

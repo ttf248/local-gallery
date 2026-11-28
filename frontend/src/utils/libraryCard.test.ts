@@ -19,6 +19,13 @@ function node(
 }
 
 describe("libraryCard", () => {
+  it("漫画候选全部解码失败时使用占位，忽略旧拼贴预览", () => {
+    const card = nodeSummaryToCard(node("c_comic", "collection", {
+      contentKind: "comic", comic: { cleanTitle: "作品", metaSource: "rule" },
+      coverImages: ["f_failed"],
+    }));
+    expect(card.candidates).toEqual([]);
+  });
   it("相册卡片以全部标签作为副标题", () => {
     const card = nodeSummaryToCard(
       node("a_trip", "album", { tags: ["旅行", "2025"] }),
