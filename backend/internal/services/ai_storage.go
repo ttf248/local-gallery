@@ -369,6 +369,10 @@ func aiStorageModules(layout CacheLayout) []AIStorageModule {
 			},
 		},
 		{
+			Type: AIJobTypeComicMeta, Name: aiJobModuleName(AIJobTypeComicMeta), ModelLocation: AIStorageModelCache, ModelDirectory: ocrModelDirectory, ModelFiles: scanAIModelFiles(ocrModelDirectory), Outputs: []AIStorageOutput{{Kind: AIStorageOutputBatches, Label: "识别批次", Path: filepath.Join(layout.MetadataDir, AIJobTypeComicMeta)}, {Kind: AIStorageOutputIndex, Label: "漫画识别结果", Path: layout.ComicDerivedDir}, {Kind: AIStorageOutputIndex, Label: "人工修正", Path: layout.ComicOverridesPath}},
+		}, {
+			Type: AIJobTypeComicCover, Name: aiJobModuleName(AIJobTypeComicCover), ModelLocation: AIStorageModelCache, ModelDirectory: filepath.Join(layout.AIModelsDir, "aesthetic"), ModelFiles: []AIStorageFile{modelFile(filepath.Join(layout.AIModelsDir, "aesthetic", "cover.onnx"), AIStorageModelCache)}, Outputs: []AIStorageOutput{{Kind: AIStorageOutputBatches, Label: "漫画封面评分", Path: filepath.Join(layout.MetadataDir, AIJobTypeComicCover)}},
+		}, {
 			Type: AIJobTypeAlbumCover, Name: aiJobModuleName(AIJobTypeAlbumCover),
 			ModelLocation: AIStorageModelCache, ModelDirectory: filepath.Join(layout.AIModelsDir, "aesthetic"),
 			ModelFiles: []AIStorageFile{modelFile(filepath.Join(layout.AIModelsDir, "aesthetic", "cover.onnx"), AIStorageModelCache)},
@@ -383,6 +387,16 @@ func scanAIStorage(cacheRoot string) AIStorageUsage {
 	layout := ResolveCacheLayout(root)
 	modules := aiStorageModules(layout)
 	summary := AIStorageSummary{}
+	seenModelFiles := map[string]bool{}
+	countModels := func(files []AIStorageFile) {
+		for _, f := range files {
+			if !seenModelFiles[f.Path] {
+				seenModelFiles[f.Path] = true
+				summary.ModelBytes += f.SizeBytes
+				summary.ModelFileCount++
+			}
+		}
+	}
 	for index := range modules {
 		module := &modules[index]
 		statModelFiles(module)
@@ -417,8 +431,7 @@ func scanAIStorage(cacheRoot string) AIStorageUsage {
 				module.ModelBytes += file.SizeBytes
 			}
 			module.ModelDirectory = relativePath(root, module.ModelDirectory)
-			summary.ModelBytes += module.ModelBytes
-			summary.ModelFileCount += len(module.ModelFiles)
+			countModels(module.ModelFiles)
 			summary.OutputBytes += module.OutputBytes
 			summary.OutputFileCount += module.OutputFileCount
 			continue
@@ -429,8 +442,7 @@ func scanAIStorage(cacheRoot string) AIStorageUsage {
 			module.ModelBytes += file.SizeBytes
 		}
 		module.ModelDirectory = relativePath(root, module.ModelDirectory)
-		summary.ModelBytes += module.ModelBytes
-		summary.ModelFileCount += len(module.ModelFiles)
+		countModels(module.ModelFiles)
 
 		for outputIndex := range module.Outputs {
 			output := &module.Outputs[outputIndex]

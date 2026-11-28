@@ -32,19 +32,21 @@ type BackupPreferences struct {
 	HiddenNavItems []string `json:"hiddenNavItems"`
 }
 type BackupCover struct {
+	Kind    string `json:"kind,omitempty"`
 	AlbumID string `json:"albumId"`
 	ItemID  string `json:"itemId"`
 }
 
 // StateBackup 只包含可移交的用户状态，不导出配置、令牌或扫描缓存。
 type StateBackup struct {
-	Version     int                   `json:"version"`
-	ExportedAt  time.Time             `json:"exportedAt"`
-	Favorites   []string              `json:"favorites"`
-	History     []models.HistoryEntry `json:"history"`
-	Preferences *BackupPreferences    `json:"preferences"`
-	Activities  []models.Activity     `json:"activities"`
-	Covers      []BackupCover         `json:"covers"`
+	ComicOverrides *ComicMetaBackup      `json:"comicOverrides,omitempty"`
+	Version        int                   `json:"version"`
+	ExportedAt     time.Time             `json:"exportedAt"`
+	Favorites      []string              `json:"favorites"`
+	History        []models.HistoryEntry `json:"history"`
+	Preferences    *BackupPreferences    `json:"preferences"`
+	Activities     []models.Activity     `json:"activities"`
+	Covers         []BackupCover         `json:"covers"`
 	// Picks 是照片级精选的文件 ID。旧备份没有这一项，恢复时按空精选处理；
 	// 它与相册级收藏是两份数据，恢复其中一份不动另一份。
 	Picks []string `json:"picks,omitempty"`
@@ -73,6 +75,7 @@ type RestoreResult struct {
 	SkippedCovers int      `json:"skippedCovers"`
 }
 type backupSnapshot struct {
+	comics      *ComicMetaBackup
 	prefs       models.Prefs
 	activities  []models.Activity
 	covers      map[string]CoverOverride
@@ -85,6 +88,7 @@ type backupSnapshot struct {
 
 // StateBackupService 的路径验证由装配层注入，service 不依赖 HTTP 或中间件。
 type StateBackupService struct {
+	ComicMeta    *ComicMetaService
 	Prefs        *store.PrefsStore
 	Activities   *store.ActivityStore
 	Covers       *CoverOverrideStore
@@ -108,6 +112,10 @@ func (s *StateBackupService) snapshot() (backupSnapshot, error) {
 		return backupSnapshot{}, err
 	}
 	snapshot := backupSnapshot{prefs: p, activities: a, covers: s.Covers.Snapshot(), picks: s.Picks.Get(), catalog: s.Catalog.Acquire()}
+	if s.ComicMeta != nil {
+		b := s.ComicMeta.BackupOverrides(snapshot.catalog)
+		snapshot.comics = &b
+	}
 	if s.People != nil {
 		corrections := s.People.Corrections()
 		snapshot.people = &corrections
@@ -128,19 +136,24 @@ func backupDigest(value interface{}) string {
 	return hex.EncodeToString(sum[:])
 }
 func (state backupSnapshot) versions() map[string]string {
-	return map[string]string{"preferences": backupDigest(state.prefs), "activities": backupDigest(state.activities), "covers": backupDigest(state.covers), "picks": backupDigest(state.picks), "people": backupDigest(state.people), "smartAlbums": backupDigest(state.smartAlbums), "similarity": backupDigest(state.similarity)}
+	return map[string]string{"comicOverrides": backupDigest(state.comics), "preferences": backupDigest(state.prefs), "activities": backupDigest(state.activities), "covers": backupDigest(state.covers), "picks": backupDigest(state.picks), "people": backupDigest(state.people), "smartAlbums": backupDigest(state.smartAlbums), "similarity": backupDigest(state.similarity)}
 }
 func (state backupSnapshot) export() StateBackup {
 	p := state.prefs
-	backup := StateBackup{Version: 1, ExportedAt: time.Now().UTC(), Favorites: append([]string{}, p.Favorites...), History: append([]models.HistoryEntry{}, p.History...), Activities: state.activities, Covers: []BackupCover{}, Picks: append([]string{}, state.picks...), People: state.people, SmartAlbums: state.smartAlbums, Similarity: state.similarity, Preferences: &BackupPreferences{p.MaxRecent, p.AutoSwitchAlbum, p.ShowSwitchNotif, p.Theme, p.SidebarCollapsed, p.AppMode, append([]string{}, p.HiddenNavItems...)}}
+	backup := StateBackup{ComicOverrides: state.comics, Version: 1, ExportedAt: time.Now().UTC(), Favorites: append([]string{}, p.Favorites...), History: append([]models.HistoryEntry{}, p.History...), Activities: state.activities, Covers: []BackupCover{}, Picks: append([]string{}, state.picks...), People: state.people, SmartAlbums: state.smartAlbums, Similarity: state.similarity, Preferences: &BackupPreferences{p.MaxRecent, p.AutoSwitchAlbum, p.ShowSwitchNotif, p.Theme, p.SidebarCollapsed, p.AppMode, append([]string{}, p.HiddenNavItems...)}}
 	for album, cover := range state.covers {
-		aid := state.catalog.ExternalID(album, ResourceAlbum)
+		kind := ResourceAlbum
+		if p, ok := strings.CutPrefix(album, "collection:"); ok {
+			kind = ResourceCollection
+			album = p
+		}
+		aid := state.catalog.ExternalID(album, kind)
 		fid := state.catalog.ExternalID(cover.File, ResourceFile)
 		if aid == "" || fid == "" {
 			backup.UnresolvedCovers++
 			continue
 		}
-		backup.Covers = append(backup.Covers, BackupCover{aid, fid})
+		backup.Covers = append(backup.Covers, BackupCover{Kind: string(kind), AlbumID: aid, ItemID: fid})
 	}
 	sort.Slice(backup.Covers, func(i, j int) bool { return backup.Covers[i].AlbumID < backup.Covers[j].AlbumID })
 	return backup
@@ -156,6 +169,16 @@ func (s *StateBackupService) Export() (StateBackup, error) {
 func ValidateStateBackup(backup StateBackup) error {
 	if backup.Version != 1 || backup.Preferences == nil || backup.Favorites == nil || backup.History == nil || backup.Activities == nil || backup.Covers == nil || backup.ExportedAt.IsZero() {
 		return ErrInvalidBackup
+	}
+	if backup.ComicOverrides != nil {
+		for id, o := range *backup.ComicOverrides {
+			if !(models.IsAlbumID(id) || strings.HasPrefix(id, "c_") && models.IsFavoriteResourceID(id)) {
+				return ErrInvalidBackup
+			}
+			if _, err := (ComicWorkOverridePatch{Title: o.Title, Author: o.Author, Synopsis: o.Synopsis, Genres: o.Genres, Status: o.Status}).apply(ComicWorkOverride{}); err != nil {
+				return ErrInvalidBackup
+			}
+		}
 	}
 	p := backup.Preferences
 	if p.MaxRecent < 1 || p.MaxRecent > 10000 || (p.Theme != "light" && p.Theme != "dark" && p.Theme != "system") || !models.IsValidAppMode(string(p.AppMode)) || len(backup.Favorites) > 500 {
@@ -195,7 +218,11 @@ func ValidateStateBackup(backup StateBackup) error {
 	}
 	seen = map[string]bool{}
 	for _, cover := range backup.Covers {
-		if !models.IsAlbumID(cover.AlbumID) || !models.IsFileID(cover.ItemID) || seen[cover.AlbumID] {
+		valid := models.IsAlbumID(cover.AlbumID) && (cover.Kind == "" || cover.Kind == "album")
+		if cover.Kind == "collection" {
+			valid = strings.HasPrefix(cover.AlbumID, "c_") && models.IsFavoriteResourceID(cover.AlbumID)
+		}
+		if !valid || !models.IsFileID(cover.ItemID) || seen[cover.AlbumID] {
 			return ErrInvalidBackup
 		}
 		seen[cover.AlbumID] = true
@@ -291,12 +318,20 @@ func (s *StateBackupService) coverPaths(snapshot CatalogSnapshot, covers []Backu
 	for _, cover := range covers {
 		album, ok := snapshot.Lookup(cover.AlbumID)
 		file, fileOK := snapshot.Lookup(cover.ItemID)
-		if !ok || !fileOK || album.Kind != ResourceAlbum || file.Kind != ResourceFile || s.ValidatePath == nil {
+		if !ok || !fileOK || (album.Kind != ResourceAlbum && album.Kind != ResourceCollection) || album.RootID != file.RootID || file.Kind != ResourceFile || s.ValidatePath == nil {
 			skipped++
 			continue
 		}
 		model, ok := snapshot.state.albums[cover.AlbumID]
-		if !ok || !albumContainsMedia(model, file.AbsolutePath) {
+		key := album.AbsolutePath
+		if album.Kind == ResourceCollection {
+			rel, err := filepath.Rel(album.AbsolutePath, file.AbsolutePath)
+			ok = cover.Kind == "collection" && snapshot.state.collections[cover.AlbumID].ContentKind == "comic" && err == nil && !relEscapesRoot(rel) && models.IsImageFile(file.AbsolutePath)
+			key = collectionCoverKey(key)
+		} else {
+			ok = ok && albumContainsMedia(model, file.AbsolutePath)
+		}
+		if !ok {
 			skipped++
 			continue
 		}
@@ -313,7 +348,7 @@ func (s *StateBackupService) coverPaths(snapshot CatalogSnapshot, covers []Backu
 			skipped++
 			continue
 		}
-		result[album.AbsolutePath] = CoverOverride{File: file.AbsolutePath}
+		result[key] = CoverOverride{File: file.AbsolutePath}
 	}
 	return result, skipped
 }
@@ -346,6 +381,14 @@ func (s *StateBackupService) Preview(backup StateBackup) (BackupPreview, error) 
 		similarityCount = len(backup.Similarity.Reviewed) + len(backup.Similarity.Ignored) + len(backup.Similarity.Representatives)
 	}
 	preview := BackupPreview{Versions: state.versions(), LibraryRevision: state.catalog.Revision(), Ready: state.catalog.Ready(), Counts: map[string]int{"favorites": len(backup.Favorites), "history": len(backup.History), "preferences": 1, "activities": len(backup.Activities), "covers": len(backup.Covers), "picks": len(backup.Picks), "people": peopleCount, "smartAlbums": smartAlbumCount, "similarity": similarityCount}, Missing: map[string]int{}, SkippedCovers: skipped}
+	if backup.ComicOverrides != nil {
+		preview.Counts["comicOverrides"] = len(*backup.ComicOverrides)
+		for id := range *backup.ComicOverrides {
+			if _, ok := state.catalog.Lookup(id); !ok {
+				preview.Missing["comicOverrides"]++
+			}
+		}
+	}
 	missing := func(id string) bool { _, ok := state.catalog.Lookup(id); return !ok }
 	for _, id := range backup.Favorites {
 		if strings.HasPrefix(id, "smart:") {
@@ -384,7 +427,7 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 	}
 	selected := map[string]bool{}
 	for _, category := range categories {
-		if selected[category] || (category != "favorites" && category != "history" && category != "preferences" && category != "activities" && category != "covers" && category != "picks" && category != "people" && category != "smartAlbums" && category != "similarity") {
+		if selected[category] || (category != "favorites" && category != "history" && category != "preferences" && category != "activities" && category != "covers" && category != "picks" && category != "people" && category != "smartAlbums" && category != "similarity" && category != "comicOverrides") {
 			return RestoreResult{}, ErrInvalidBackup
 		}
 		selected[category] = true
@@ -454,7 +497,7 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 		return RestoreResult{}, err
 	}
 	result := RestoreResult{Completed: []string{}, Pending: []string{}}
-	order := []string{"favorites", "history", "preferences", "activities", "covers", "picks", "people", "smartAlbums", "similarity"}
+	order := []string{"favorites", "history", "preferences", "activities", "covers", "picks", "people", "smartAlbums", "similarity", "comicOverrides"}
 	fail := func(category string, err error) (RestoreResult, error) {
 		result.Failed = category
 		result.Code = "state_restore_failed"
@@ -524,6 +567,16 @@ func (s *StateBackupService) Restore(backup StateBackup, categories []string, ve
 		result.Completed = append(result.Completed, "covers")
 		delete(selected, "covers")
 
+	}
+	if selected["comicOverrides"] {
+		if s.ComicMeta == nil || backup.ComicOverrides == nil {
+			return fail("comicOverrides", ErrInvalidBackup)
+		}
+		if err = s.ComicMeta.CompareAndRestoreOverrides(versions["comicOverrides"], *backup.ComicOverrides, s.Catalog.Acquire()); err != nil {
+			return fail("comicOverrides", err)
+		}
+		result.Completed = append(result.Completed, "comicOverrides")
+		delete(selected, "comicOverrides")
 	}
 	if selected["picks"] {
 		if err = s.Picks.Replace(backup.Picks); err != nil {

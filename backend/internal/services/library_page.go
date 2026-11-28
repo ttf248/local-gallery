@@ -114,6 +114,8 @@ const libraryManifestWarningLimit = 100
 // LibraryNodeSummary 是 root/collection 直属子节点的统一卡片 DTO。
 // CoverImages 最多四项，可直接用于 collection 的拼贴封面。
 type LibraryNodeSummary struct {
+	Comic           *ComicNodeMeta `json:"comic,omitempty"`
+	comicSearch     string
 	CoverCandidates []CoverCandidate `json:"coverCandidates,omitempty"`
 	ID              string           `json:"id"`
 	Kind            string           `json:"kind"`
@@ -209,9 +211,10 @@ type LibraryTagSummary struct {
 
 // LibrarySearchHit 是预计算搜索索引的对外条目，不包含目录树或绝对路径。
 type LibrarySearchHit struct {
-	Kind string `json:"kind"`
-	Path string `json:"path"`
-	Name string `json:"name"`
+	comicSearch string
+	Kind        string `json:"kind"`
+	Path        string `json:"path"`
+	Name        string `json:"name"`
 	// Virtual 标记散图（"本目录媒体"）。它的 Name 是归属目录路径，
 	// 与同名集合难以区分，前端据此显示类型标签。
 	Virtual    bool     `json:"virtual,omitempty"`
@@ -600,7 +603,7 @@ func buildLibrarySearchIndex(index *libraryPageIndex) []LibrarySearchHit {
 	hits := make([]LibrarySearchHit, 0, len(index.albums)+len(index.nodes)+len(index.tags))
 	for _, album := range index.albums {
 		hits = append(hits, LibrarySearchHit{
-			Kind: "album", Path: album.ID, Name: searchHitName(album),
+			Kind: "album", Path: album.ID, Name: searchHitName(album), comicSearch: album.comicSearch,
 			Virtual:           album.Virtual,
 			Tags:              append([]string(nil), album.Tags...),
 			Count:             album.ImageCount,
@@ -626,7 +629,7 @@ func buildLibrarySearchIndex(index *libraryPageIndex) []LibrarySearchHit {
 	})
 	for _, collection := range collections {
 		hits = append(hits, LibrarySearchHit{
-			Kind: "collection", Path: collection.ID, Name: collection.DisplayName,
+			Kind: "collection", Path: collection.ID, Name: collection.DisplayName, comicSearch: collection.comicSearch,
 			Count: collection.AlbumCount, CoverImage: collection.CoverImage,
 			CoverImageVersion: collection.CoverImageVersion,
 			ContentKind:       collection.ContentKind,
@@ -1381,6 +1384,9 @@ func searchHitScore(hit LibrarySearchHit, needle string) (rank int, pos int, ok 
 		}
 		return 0, 0, false
 	}
+	if hit.comicSearch != "" && !strings.Contains(name, needle) && strings.Contains(hit.comicSearch, needle) {
+		return searchRankContain, 0, true
+	}
 	if name == needle {
 		return searchRankExact, 0, true
 	}
@@ -1681,7 +1687,7 @@ func albumSummary(state *resourceCatalogState, album models.Album) LibraryNodeSu
 		coverVersions = append(coverVersions, mediaVersionOfID(state, cover))
 	}
 	tags := append([]string(nil), album.Tags...)
-	return LibraryNodeSummary{
+	return comicSummary(state, LibraryNodeSummary{
 		CoverCandidates:    state.curated[id],
 		ID:                 id,
 		Kind:               string(ResourceAlbum),
@@ -1709,7 +1715,7 @@ func albumSummary(state *resourceCatalogState, album models.Album) LibraryNodeSu
 		ParentName:         parentNameFor(state, album),
 		ParentID:           parentCollectionID(state, album.Path, album.Virtual),
 		ContentKind:        album.ContentKind,
-	}
+	})
 }
 
 // parentNameFor 返回相册直接上级集合的名字，也就是「所属系列」。
@@ -1730,7 +1736,11 @@ func parentCollectionID(state *resourceCatalogState, path string, virtual bool) 
 			return id
 		}
 	}
-	return externalID(state, filepath.Dir(filepath.Clean(path)), ResourceCollection)
+	dir := filepath.Dir(filepath.Clean(path))
+	if dir == filepath.Clean(path) {
+		return ""
+	}
+	return externalID(state, dir, ResourceCollection)
 }
 
 func parentNameFor(state *resourceCatalogState, album models.Album) string {
@@ -1772,7 +1782,7 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 		cover = covers[0]
 	}
 	albumCount, imageCount, videoCount, folderSize := collectionTotals(collection)
-	return LibraryNodeSummary{
+	return comicSummary(state, LibraryNodeSummary{
 		CoverCandidates:    state.curated[id],
 		ID:                 id,
 		Kind:               string(ResourceCollection),
@@ -1797,7 +1807,8 @@ func collectionSummary(state *resourceCatalogState, collection models.Collection
 		Date:               collection.Date,
 		DateSource:         collection.DateSource,
 		DatePrecision:      collection.DatePrecision,
-	}
+		HasCustomCover:     state.comics[id].CoverReason == "manual",
+	})
 }
 
 func collectionTotals(collection models.Collection) (albumCount, imageCount, videoCount int, folderSize int64) {

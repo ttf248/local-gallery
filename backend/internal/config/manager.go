@@ -44,6 +44,10 @@ func NewManager(path string) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	if cfg.ComicMeta == (ComicMetaConfig{}) {
+		cfg = cloneConfig(cfg)
+		cfg.ComicMeta = Default().ComicMeta
+	}
 	m := &Manager{current: cfg}
 	p := path
 	m.path.Store(&p)
@@ -53,6 +57,10 @@ func NewManager(path string) (*Manager, error) {
 // NewManagerWith 直接以已加载的 *Config 构造 Manager（用于测试或
 // 已在外层 LoadFile 过的场景）。path 为空时不启用磁盘持久化。
 func NewManagerWith(cfg *Config, path string) *Manager {
+	if cfg.ComicMeta == (ComicMetaConfig{}) {
+		cfg = cloneConfig(cfg)
+		cfg.ComicMeta = Default().ComicMeta
+	}
 	m := &Manager{current: cfg}
 	if path != "" {
 		p := path
@@ -298,6 +306,11 @@ func marshalConfig(cfg *Config) ([]byte, error) {
 		rootsNode.Content = append(rootsNode.Content, entry)
 	}
 	addKV("mediaRoots", rootsNode)
+	comic := &yaml.Node{}
+	if err := comic.Encode(cfg.ComicMeta); err != nil {
+		return nil, err
+	}
+	addKV("comicMeta", comic)
 
 	addKV("host", scalarString(cfg.Host))
 	addKV("port", scalarInt(cfg.Port))
@@ -372,6 +385,20 @@ func applyPatch(dst *Config, p *ConfigPatch) {
 	}
 	if p.CacheMaxSizeMBSet {
 		dst.CacheMaxSizeMB = p.CacheMaxSizeMB
+	}
+	if m := p.ComicMeta; m != nil {
+		if m.OnlineEnabled != nil {
+			dst.ComicMeta.OnlineEnabled = *m.OnlineEnabled
+		}
+		if m.Provider != nil {
+			dst.ComicMeta.Provider = *m.Provider
+		}
+		if m.TimeoutSec != nil {
+			dst.ComicMeta.TimeoutSec = *m.TimeoutSec
+		}
+		if m.ProxyURL != nil {
+			dst.ComicMeta.ProxyURL = *m.ProxyURL
+		}
 	}
 	if p.AllowOsOpenSet {
 		dst.AllowOsOpen = p.AllowOsOpen

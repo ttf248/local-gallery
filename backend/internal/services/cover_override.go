@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/tianlongxiang/local-gallery/internal/models"
@@ -47,6 +48,24 @@ func NewCoverOverrideStore(path string) *CoverOverrideStore {
 }
 
 // Load 从磁盘加载。如果文件不存在，store 保持空。
+func collectionCoverKey(path string) string { return "collection:" + filepath.Clean(path) }
+func (s *CoverOverrideStore) SetCollection(path, file string) error {
+	return s.Set(collectionCoverKey(path), file)
+}
+func (s *CoverOverrideStore) ClearCollection(path string) error {
+	return s.Clear(collectionCoverKey(path))
+}
+func (s *CoverOverrideStore) CollectionSnapshot() map[string]CoverOverride {
+	out := map[string]CoverOverride{}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for key, v := range s.data {
+		if path, ok := strings.CutPrefix(key, "collection:"); ok {
+			out[path] = v
+		}
+	}
+	return out
+}
 func (s *CoverOverrideStore) Load() error {
 	data, err := os.ReadFile(s.path)
 	if err != nil {

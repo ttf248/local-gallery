@@ -75,6 +75,7 @@ type AIJobEstimate struct {
 //
 // 从 s.records 里拷出来，避免在任务状态锁内做 map 查找与索引查询。
 type aiRecordFact struct {
+	comicData     []byte
 	resourceID    string
 	moduleType    string
 	size          int64
@@ -135,7 +136,11 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 
 	facts := make([]aiRecordFact, 0, len(s.records))
 	for _, record := range s.records {
-		facts = append(facts, aiRecordFact{
+		var comicData []byte
+		if record.Type == AIJobTypeComicMeta {
+			comicData = record.Data
+		}
+		facts = append(facts, aiRecordFact{comicData: comicData,
 			resourceID:    record.ResourceID,
 			moduleType:    record.Type,
 			size:          record.Size,
@@ -154,6 +159,14 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	estimate.TotalImages = len(targets.stats) - targets.videoCount
 	targetCounts := make(map[string]int, len(modules))
 	for _, module := range modules {
+		switch module.Type {
+		case AIJobTypeComicMeta:
+			targetCounts[module.Type] = len(snapshot.state.comicTargets)
+			continue
+		case AIJobTypeComicCover:
+			targetCounts[module.Type] = len(snapshot.state.comicSamples)
+			continue
+		}
 		if module.Type == AIJobTypeAlbumCover {
 			targetCounts[module.Type] = targets.photoCount + targets.videoCount
 			continue
@@ -182,6 +195,9 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 	current := map[string]int{}
 	failures := map[string]int{}
 	for _, fact := range facts {
+		if fact.moduleType == AIJobTypeComicMeta && snapshot.state.comicTargets[fact.resourceID] == "" || fact.moduleType == AIJobTypeComicCover && snapshot.state.comicSamples[fact.resourceID] == "" {
+			continue
+		}
 		stat, ok := targets.stats[fact.resourceID]
 		if !ok || (fact.moduleType == AIJobTypeAlbumCover && !stat.photo && !stat.video) || (stat.video && fact.moduleType != AIJobTypeAlbumCover) || (aiTargetFilterForModule(fact.moduleType) == aiTargetPhotoOnly && !stat.photo) {
 			// 文件已经不在库里，这条记录不再参与计数。
@@ -194,7 +210,7 @@ func (s *AIJobService) Estimate(ctx context.Context) (AIJobEstimate, error) {
 			MTimeNs:       fact.mtimeNs,
 			ModuleVersion: fact.moduleVersion,
 			Status:        fact.status,
-			ErrorCode:     fact.errorCode,
+			ErrorCode:     fact.errorCode, Data: fact.comicData,
 		}
 		target := aiJobTarget{resourceID: fact.resourceID, size: stat.size, mtimeNs: stat.mtimeNs, statCode: stat.statCode}
 		if rememberedFileFailure(record, target, versions[fact.moduleType]) {

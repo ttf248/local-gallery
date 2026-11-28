@@ -1,6 +1,10 @@
 package config
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"errors"
+)
 
 // ConfigPatch 用于 Update() 的部分更新 payload。
 //
@@ -11,30 +15,36 @@ import "encoding/json"
 // MediaRoots 用数组替换语义：显式空数组 `[]` 表示"用户清空所有根"，
 // 未提供字段表示"不修改"；区分通过 MediaRootsSet 实现。
 type ConfigPatch struct {
-	CacheMaxSizeMB     int64      `json:"cacheMaxSizeMB,omitempty"`
-	CacheMaxSizeMBSet  bool       `json:"-"`
+	ComicMeta *struct {
+		OnlineEnabled *bool   `json:"onlineEnabled"`
+		Provider      *string `json:"provider"`
+		TimeoutSec    *int    `json:"timeoutSec"`
+		ProxyURL      *string `json:"proxyURL"`
+	} `json:"comicMeta,omitempty"`
+	CacheMaxSizeMB     int64       `json:"cacheMaxSizeMB,omitempty"`
+	CacheMaxSizeMBSet  bool        `json:"-"`
 	MediaRoots         []MediaRoot `json:"mediaRoots,omitempty"`
-	MediaRootsSet      bool       `json:"-"`
-	Host               string   `json:"host,omitempty"`
-	HostSet            bool     `json:"-"`
-	Port               int      `json:"port,omitempty"`
-	PortSet            bool     `json:"-"`
-	AccessMode         string   `json:"accessMode,omitempty"`
-	AccessModeSet      bool     `json:"-"`
-	AccessToken        string   `json:"accessToken,omitempty"`
-	AccessTokenSet     bool     `json:"-"`
-	CacheDir           string   `json:"cacheDir,omitempty"`
-	CacheDirSet        bool     `json:"-"`
-	ThumbCacheSize     int      `json:"thumbCacheSize,omitempty"`
-	ThumbCacheSizeSet  bool     `json:"-"`
-	CacheMaxAgeDays    int      `json:"cacheMaxAgeDays,omitempty"`
-	CacheMaxAgeDaysSet bool     `json:"-"`
-	AllowOsOpen        bool     `json:"allowOsOpen,omitempty"`
-	AllowOsOpenSet     bool     `json:"-"`
-	StaticDir          string   `json:"staticDir,omitempty"`
-	StaticDirSet       bool     `json:"-"`
-	FFmpegPath         string   `json:"ffmpegPath,omitempty"`
-	FFmpegPathSet      bool     `json:"-"`
+	MediaRootsSet      bool        `json:"-"`
+	Host               string      `json:"host,omitempty"`
+	HostSet            bool        `json:"-"`
+	Port               int         `json:"port,omitempty"`
+	PortSet            bool        `json:"-"`
+	AccessMode         string      `json:"accessMode,omitempty"`
+	AccessModeSet      bool        `json:"-"`
+	AccessToken        string      `json:"accessToken,omitempty"`
+	AccessTokenSet     bool        `json:"-"`
+	CacheDir           string      `json:"cacheDir,omitempty"`
+	CacheDirSet        bool        `json:"-"`
+	ThumbCacheSize     int         `json:"thumbCacheSize,omitempty"`
+	ThumbCacheSizeSet  bool        `json:"-"`
+	CacheMaxAgeDays    int         `json:"cacheMaxAgeDays,omitempty"`
+	CacheMaxAgeDaysSet bool        `json:"-"`
+	AllowOsOpen        bool        `json:"allowOsOpen,omitempty"`
+	AllowOsOpenSet     bool        `json:"-"`
+	StaticDir          string      `json:"staticDir,omitempty"`
+	StaticDirSet       bool        `json:"-"`
+	FFmpegPath         string      `json:"ffmpegPath,omitempty"`
+	FFmpegPathSet      bool        `json:"-"`
 
 	// 排除规则:SkipHidden 走 Set 标记(默认 true,允许 false 覆盖);
 	// SystemFiles / ExcludePatterns 用数组替换语义(显式空数组 = 清空)。
@@ -62,6 +72,16 @@ func (p *ConfigPatch) UnmarshalJSON(data []byte) error {
 	var pp plain
 	if err := json.Unmarshal(data, &pp); err != nil {
 		return err
+	}
+	if data, ok := raw["comicMeta"]; ok {
+		if pp.ComicMeta == nil {
+			return errors.New("comicMeta must be an object")
+		}
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(pp.ComicMeta); err != nil {
+			return err
+		}
 	}
 	*p = ConfigPatch(pp)
 	if _, ok := raw["mediaRoots"]; ok {

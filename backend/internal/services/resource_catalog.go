@@ -36,17 +36,21 @@ type ResourceRef struct {
 }
 
 type resourceCatalogState struct {
-	curated       map[string][]CoverCandidate
-	revision      uint64
-	byID          map[string]ResourceRef
-	byPathKind    map[string]string
-	roots         []ResourceRef
-	result        *models.ScanResult
-	albums        map[string]models.Album
-	collections   map[string]models.Collection
-	customCovers  map[string]bool
-	contentPolicy ContentKindPolicy
-	library       *libraryPageIndex
+	comicSignatures map[string]string
+	comicTargets    map[string]string
+	comicSamples    map[string]string
+	comics          map[string]ComicMetaDetail
+	curated         map[string][]CoverCandidate
+	revision        uint64
+	byID            map[string]ResourceRef
+	byPathKind      map[string]string
+	roots           []ResourceRef
+	result          *models.ScanResult
+	albums          map[string]models.Album
+	collections     map[string]models.Collection
+	customCovers    map[string]bool
+	contentPolicy   ContentKindPolicy
+	library         *libraryPageIndex
 	// collectionNames 是「集合绝对路径 → 展示名」的对照表。
 	// 相册的直接上级集合就是它所在目录的路径，查这张表即可得到
 	// 「所属系列」——漫画工作台按它把同一连载的卷分节展示。
@@ -63,10 +67,14 @@ type CatalogSnapshot struct {
 // ResourceCatalog 保存不可变的资源索引；重扫时原子替换整份快照。
 // handler 只能通过 ID 解析路径，业务响应不再暴露绝对路径。
 type ResourceCatalog struct {
-	coverScores map[string]albumCoverScore
-	state       atomic.Pointer[resourceCatalogState]
-	revision    atomic.Uint64
-	publishMu   sync.Mutex
+	comicService           *ComicMetaService
+	comicLocal             map[string]ComicWorkIntel
+	comicCoverScores       map[string]comicPageRecord
+	collectionCustomCovers map[string]CoverOverride
+	coverScores            map[string]albumCoverScore
+	state                  atomic.Pointer[resourceCatalogState]
+	revision               atomic.Uint64
+	publishMu              sync.Mutex
 	// contentPolicy 是「媒体根 → 内容属性」的映射。
 	// 只在 publishMu 保护下读写，随每次发布一起进入快照。
 	contentPolicy ContentKindPolicy
@@ -112,6 +120,7 @@ func (c *ResourceCatalog) CommitScan(
 	overrides := map[string]CoverOverride{}
 	if covers != nil {
 		overrides = covers.Snapshot()
+		c.collectionCustomCovers = covers.CollectionSnapshot()
 		published, _ = ApplyCoverOverridesToResult(result, overrides)
 	}
 	revision := c.publish(published, roots, activeCustomCoverPaths(published, overrides))
@@ -152,6 +161,7 @@ func (c *ResourceCatalog) refreshCoversLocked(cache *ScanResultCache, covers *Co
 	overrides := map[string]CoverOverride{}
 	if covers != nil {
 		overrides = covers.Snapshot()
+		c.collectionCustomCovers = covers.CollectionSnapshot()
 	}
 	next, _ := RebuildCoverView(current.result, overrides)
 	roots := make([]string, 0, len(current.roots))
@@ -264,7 +274,21 @@ func (c *ResourceCatalog) publish(result *models.ScanResult, roots []string, cus
 			}
 		}
 		state.curated = buildCuratedCovers(state, c.coverScores)
+		if c.comicLocal == nil || result != c.state.Load().result {
+			c.comicLocal = map[string]ComicWorkIntel{}
+		}
+		c.buildComicMeta(state)
+		c.buildComicCovers(state)
 		state.library = buildLibraryPageIndex(state)
+		snap := CatalogSnapshot{state}
+		state.comicTargets = comicSampleIDs(snap, aiTargetComicMeta)
+		state.comicSamples = comicSampleIDs(snap, aiTargetComicCoverSample)
+		state.comicSignatures = map[string]string{}
+		for fid, id := range state.comicTargets {
+			node := state.library.nodes[id]
+			a := state.albums[state.library.mediaByFile[fid].albumID]
+			state.comicSignatures[id] = backupDigest([]any{fid, node.AlbumCount, node.ImageCount, node.ModTime, a.ImageFiles, a.ImageModTimes, c.comicLocal[id]})
+		}
 	}
 	c.state.Store(state)
 	return revision

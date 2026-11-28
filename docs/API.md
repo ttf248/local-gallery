@@ -235,6 +235,23 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 取消活动扫描，使它的提交令牌失效，并清除内存资源快照与磁盘扫描缓存；不会立即发起新扫描。
 
+### 漫画作品信息与封面
+
+漫画节点摘要包含 `comic`，提供 `cleanTitle`、`originalName`、`chapterLabel`、`chapterNumber`、`episodeType`、作者、题材、来源、锁定状态及作品的正篇和番外计数。列表最多返回 400 字简介。作品内部的单集从详情接口读取简介。`coverCandidates` 按默认展示顺序排列。
+
+| 接口 | 请求与结果 |
+| --- | --- |
+| `GET /api/comics/:id/meta` | 返回 `{ok,revision,meta}`。详情含 `fullSynopsis`、`aliases`、`provider`、`confidence`、`hasCustomCover`、封面候选及可用的首篇入口。非漫画节点为 400 `not_comic_resource`，缺失为 404 `comic_not_found`。 |
+| `PUT /api/comics/:id/meta` | 提交 `title,author,synopsis,genres,status,locked` 的部分字段。标题最多 120 字，作者 80 字，简介 2000 字，题材最多 8 项、每项 24 字。无效输入为 400 `invalid_comic_meta`。 |
+| `DELETE /api/comics/:id/meta` | 清除人工覆盖并返回同结构的新视图。 |
+| `POST /api/comics/:id/meta/refresh` | 重新读取本地文件、抽取卷首内容，接受 `force` 和 `allowOnline`。未开启公开匹配却显式请求在线查询时为 403 `online_meta_disabled`。公开源不可用时返回本地结果与 `warning`。 |
+| `PUT /api/collections/:id/cover?file=<fileId>` | 使用作品子树内的普通图片。返回 `{ok,collectionId,coverImage,coverKind,revision}`；跨作品返回 400 `file_outside_collection`。 |
+| `DELETE /api/collections/:id/cover` | 恢复智能候选或规则封面。 |
+
+作品内 `/api/library/overview` 可传 `episodeType=all|main|extra`。任务中心接受 `comicCover` 与 `comicMeta` 的增量及全量任务。状态备份增加 `comicOverrides` 类别，封面项的 `kind` 区分作品与单卷。
+
+本机配置接口支持热更新 `comicMeta.onlineEnabled`（默认关闭）、`provider`（bangumi）、`timeoutSec`（默认 8，范围 1–60）与 `proxyURL`（默认空）。外部匹配仅查询规范书名。
+
 ### `GET /api/library-sync`
 
 返回自动发现文件变化的开关与运行状态。

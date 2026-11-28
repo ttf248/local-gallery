@@ -236,13 +236,17 @@ func main() {
 	if err := coverOverrides.Load(); err != nil {
 		log.Printf("警告：加载封面覆盖失败 %v", err)
 	}
+	comicMeta, err := services.OpenComicMetaService(services.ComicMetaServiceOptions{Catalog: resourceCatalog, Layout: cacheLayout, ValidatePath: safetyState.Validate})
+	if err != nil {
+		log.Fatal("加载漫画作品信息失败")
+	}
 	if r := scanCache.Get(); r != nil {
 		published, applied := services.ApplyCoverOverridesToResult(r, coverOverrides.Snapshot())
 		if applied > 0 {
 			scanCache.Set(published)
 			log.Printf("  应用了 %d 条用户封面覆盖", applied)
 		}
-		resourceCatalog.Publish(published, currentRoots)
+		resourceCatalog.CommitScan(published, currentRoots, nil, coverOverrides)
 	}
 	runner.SetCache(scanCache)
 	runner.SetCatalog(resourceCatalog)
@@ -320,6 +324,12 @@ func main() {
 	// 边界索引要 6 秒才能建好，放到后台预热，别让第一个打开地点页的人等。
 	services.PrewarmChinaBoundaries()
 	var aiJobs *services.AIJobService
+	comicMeta.ConfigureAnalysis(aiWorker, func() config.ComicMetaConfig { return mgr.Get().ComicMeta }, func() string {
+		if aiJobs.ComicGPUEnabled() {
+			return "gpu"
+		}
+		return "cpu"
+	})
 	// 本机存储统计：模型权重与各模块产物的占用。批次提交后产物字节变了，
 	// 让缓存失效，下一次读取重新统计。
 	storageUsage := services.NewAIStorageService(30 * time.Second)
@@ -331,8 +341,16 @@ func main() {
 		Catalog:        resourceCatalog,
 		ValidatePath:   safetyState.Validate,
 		ImageConverter: imageConverter,
-		Analyzers:      []services.AIAnalyzer{services.NewAlbumCoverAnalyzer(aiWorker, videoCover), services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, &services.PortraitAnalyzer{FaceAnalyzer: faceAnalyzer, People: peopleService}, services.SimilarityAnalyzer{}},
+		Analyzers:      []services.AIAnalyzer{&services.ComicCoverAnalyzer{AlbumCoverAnalyzer: services.NewAlbumCoverAnalyzer(aiWorker, videoCover)}, &services.ComicMetaAnalyzer{OCRAnalyzer: ocrAnalyzer, Service: comicMeta}, services.NewAlbumCoverAnalyzer(aiWorker, videoCover), services.MetadataAnalyzer{}, embeddingAnalyzer, ocrAnalyzer, faceAnalyzer, &services.PortraitAnalyzer{FaceAnalyzer: faceAnalyzer, People: peopleService}, services.SimilarityAnalyzer{}},
 		OnJobSettled: func(jobType string) {
+			if jobType == services.AIJobTypeComicCover || jobType == services.AIJobTypeOCR {
+				resourceCatalog.SetComicCoverScores(aiJobs.Records(services.AIJobTypeComicCover), aiJobs.Records(services.AIJobTypeOCR))
+			}
+			if jobType == services.AIJobTypeComicMeta {
+				if err := comicMeta.ApplyRecords(aiJobs.Records(jobType)); err != nil {
+					log.Print("漫画元数据发布失败")
+				}
+			}
 			if jobType == services.AIJobTypeAlbumCover {
 				resourceCatalog.SetCoverScores(aiJobs.Records(jobType))
 			}
@@ -409,6 +427,10 @@ func main() {
 		}
 	}
 	resourceCatalog.SetCoverScores(aiJobs.Records(services.AIJobTypeAlbumCover))
+	resourceCatalog.SetComicCoverScores(aiJobs.Records(services.AIJobTypeComicCover), aiJobs.Records(services.AIJobTypeOCR))
+	if err := comicMeta.ApplyRecords(aiJobs.Records(services.AIJobTypeComicMeta)); err != nil {
+		log.Printf("恢复漫画元信息失败: %v", err)
+	}
 	aiJobs.StartPending()
 	smartAlbums, err := services.OpenSmartAlbumService(services.SmartAlbumServiceOptions{
 		StatePath:    filepath.Join(cacheLayout.StateDir, "smart_album_overrides.json"),
@@ -634,8 +656,16 @@ func main() {
 	api.Get("/albums/:id/filters", handlers.AlbumFiltersHandler(resourceCatalog, albumFilters))
 	// 自定义封面：用户可在阅读器内手动设置/清除每本相册的封面。
 	// file 必须是 path 子路径 + 真实存在的文件；越权请求会被 400 拒绝。
-	api.Put("/albums/:id/cover", resourceParam, handlers.AlbumSetCoverHandler(scanCache, coverOverrides, resourceCatalog))
+	api.Put("/albums/:id/cover", resourceParam, handlers.AlbumSetCoverHandler(scanCache, coverOverrides, resourceCatalog, safetyState))
 	api.Delete("/albums/:id/cover", resourceParam, handlers.AlbumClearCoverHandler(scanCache, coverOverrides, resourceCatalog))
+	comicHandler := handlers.ComicMetaHandler(comicMeta, safetyState)
+	api.Get("/comics/:id/meta", comicHandler)
+	api.Put("/comics/:id/meta", comicHandler)
+	api.Delete("/comics/:id/meta", comicHandler)
+	api.Post("/comics/:id/meta/refresh", comicHandler)
+	collectionCover := handlers.CollectionCoverHandler(resourceCatalog, scanCache, coverOverrides, safetyState)
+	api.Put("/collections/:id/cover", collectionCover)
+	api.Delete("/collections/:id/cover", collectionCover)
 	api.Get("/search", handlers.SearchHandler(resourceCatalog))
 	api.Get("/tags", handlers.LibraryTagsPageHandler(resourceCatalog))
 	api.Post("/tags/query", handlers.LibraryTagsQueryHandler(resourceCatalog))
@@ -681,7 +711,7 @@ func main() {
 	api.Get("/admin/people/annotations/dataset", middleware.LoopbackOnly(), handlers.PeopleAnnotationDatasetHandler(peopleAnnotations, resourceCatalog, safetyState.Validate))
 
 	// 配置读写
-	backupService := &services.StateBackupService{Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, SmartAlbums: smartAlbums, Similarity: similarityService, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
+	backupService := &services.StateBackupService{ComicMeta: comicMeta, Prefs: prefs, Activities: activities, Covers: coverOverrides, Picks: picks, People: peopleService, SmartAlbums: smartAlbums, Similarity: similarityService, Catalog: resourceCatalog, ScanCache: scanCache, ValidatePath: safetyState.Validate, BackupDir: services.StateBackupDirectory(cacheLayout)}
 	api.Get("/admin/state/export", middleware.LoopbackOnly(), handlers.StateExportHandler(backupService))
 	api.Post("/admin/state/import/preview", middleware.LoopbackOnly(), handlers.StatePreviewHandler(backupService))
 	api.Post("/admin/state/import", middleware.LoopbackOnly(), handlers.StateImportHandler(backupService))

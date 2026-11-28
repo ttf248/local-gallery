@@ -11,7 +11,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,11 +48,17 @@ const (
 	aiTargetPhotoOnly
 	aiTargetPhotoMedia
 	aiTargetEstimateMedia
+	aiTargetComicCoverSample
+	aiTargetComicMeta
 )
 
 // aiTargetFilterForModule 返回模块对应的目标口径。
 func aiTargetFilterForModule(moduleType string) aiTargetFilter {
 	switch moduleType {
+	case AIJobTypeComicCover:
+		return aiTargetComicCoverSample
+	case AIJobTypeComicMeta:
+		return aiTargetComicMeta
 	case AIJobTypeAlbumCover:
 		return aiTargetPhotoMedia
 	case AIJobTypeFace, AIJobTypePortrait, AIJobTypeSimilarity:
@@ -70,7 +78,7 @@ type aiTargetCache struct {
 }
 
 func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapshot, filter aiTargetFilter, albumIDs ...string) []aiJobTarget {
-	ids := snapshot.FileIDs()
+	var ids []string
 	if albumID, err := s.analysisAlbumID(albumIDs); err != nil {
 		return nil
 	} else if albumID != "" {
@@ -88,6 +96,12 @@ func (s *AIJobService) buildTargets(ctx context.Context, snapshot CatalogSnapsho
 		if !exists {
 			return nil
 		}
+	} else if snapshot.Ready() && filter == aiTargetComicCoverSample {
+		ids = slices.Sorted(maps.Keys(snapshot.state.comicSamples))
+	} else if snapshot.Ready() && filter == aiTargetComicMeta {
+		ids = slices.Sorted(maps.Keys(snapshot.state.comicTargets))
+	} else {
+		ids = snapshot.FileIDs()
 	}
 	return s.buildTargetsForResources(ctx, snapshot, filter, ids)
 }
@@ -107,6 +121,9 @@ func (s *AIJobService) buildTargetsForResources(
 	}
 	targets := make([]aiJobTarget, 0, len(ids))
 	for _, id := range ids {
+		if filter == aiTargetComicMeta && snapshot.state.comicTargets[id] == "" || filter == aiTargetComicCoverSample && snapshot.state.comicSamples[id] == "" {
+			continue
+		}
 		ref, ok := snapshot.Lookup(id)
 		if !ok {
 			continue

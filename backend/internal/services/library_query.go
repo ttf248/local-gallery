@@ -18,6 +18,7 @@ import (
 
 // LibraryQuery 描述分页前的列表条件，parent 与 tag 互斥。
 type LibraryQuery struct {
+	EpisodeType   string           `json:"episodeType,omitempty"`
 	Kind          LibraryKindScope `json:"kind"`
 	Parent        string           `json:"parent,omitempty"`
 	Tag           string           `json:"tag,omitempty"`
@@ -77,6 +78,11 @@ type LibraryQueryPage struct {
 
 func (q *LibraryQuery) Normalize() error {
 	q.Query = strings.ToLower(strings.TrimSpace(q.Query))
+	switch q.EpisodeType {
+	case "", "all", "main", "extra":
+	default:
+		return ErrInvalidLibraryQuery
+	}
 	if q.View == "" {
 		q.View = "all"
 	}
@@ -153,6 +159,15 @@ func PageLibraryQuery(snapshot CatalogSnapshot, q LibraryQuery, history []models
 	result := LibraryQueryPage{Counts: map[string]int{"all": 0, "album": 0, "collection": 0, "smart": 0}, Years: []LibraryQueryYear{}, Series: []LibraryQuerySeries{}}
 	years := map[string]*LibraryQueryYear{}
 	for _, node := range nodes {
+		if q.Kind == LibraryKindComic && strings.HasPrefix(q.Parent, "c_") && q.EpisodeType != "" && q.EpisodeType != "all" {
+			if node.Comic == nil {
+				continue
+			}
+			typ := node.Comic.EpisodeType
+			if q.EpisodeType == "main" && typ != ComicEpisodeMain && typ != ComicEpisodeVolume || q.EpisodeType == "extra" && typ != ComicEpisodeExtra && typ != ComicEpisodeSpecial {
+				continue
+			}
+		}
 		if node.ContentKind != string(q.Kind) {
 			continue
 		}
@@ -246,6 +261,9 @@ func PageLibraryQuery(snapshot CatalogSnapshot, q LibraryQuery, history []models
 	filtered := make([]LibraryQueryItem, 0, len(items))
 	for _, item := range items {
 		title, subtitle := queryItemText(item, q.Parent != "")
+		if item.Node != nil {
+			subtitle += " " + item.Node.comicSearch
+		}
 		if q.Query != "" && !strings.Contains(strings.ToLower(title+" "+subtitle), q.Query) {
 			continue
 		}
@@ -266,6 +284,15 @@ func PageLibraryQuery(snapshot CatalogSnapshot, q LibraryQuery, history []models
 	}
 	sort.Slice(filtered, func(i, j int) bool {
 		a, b := filtered[i], filtered[j]
+		if q.Kind == LibraryKindComic && q.Parent != "" && q.Sort == "name" && a.Node != nil && b.Node != nil && a.Node.Comic != nil && b.Node.Comic != nil {
+			x, y := a.Node.Comic.ChapterNumber, b.Node.Comic.ChapterNumber
+			if x != nil && y != nil && *x != *y {
+				return *x < *y
+			}
+			if (x == nil) != (y == nil) {
+				return x != nil
+			}
+		}
 		if q.Sort == "count" && queryItemCount(a) != queryItemCount(b) {
 			return queryItemCount(a) > queryItemCount(b)
 		}
@@ -378,6 +405,9 @@ func queryItemText(item LibraryQueryItem, collection bool) (string, string) {
 	}
 	n := item.Node
 	title := n.Name
+	if n.Comic != nil {
+		title = n.Comic.CleanTitle
+	}
 	if n.Virtual {
 		title = n.Location
 		if collection {

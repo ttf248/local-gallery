@@ -78,6 +78,31 @@ class CoverScoreTests(unittest.TestCase):
             self.assertEqual(data["feature"]["width"], 90)
 
 
+class ComicCoverTests(unittest.TestCase):
+    def test_layout_color_and_template_hash(self):
+        import numpy as np
+        from PIL import Image, ImageDraw
+        with tempfile.TemporaryDirectory() as root:
+            def evidence(image, name):
+                path = os.path.join(root, name + ".png")
+                image.save(path)
+                session = SimpleNamespace(run=lambda *_: [np.array([[7.]])])
+                return worker.score_cover(path, session, "cpu", comic=True)["data"]
+            white = Image.new("RGB", (320, 480), "white")
+            self.assertGreater(evidence(white, "notice")["textRatio"], .85)
+            grid = white.copy()
+            draw = ImageDraw.Draw(grid)
+            draw.line((160, 0, 160, 480), fill="black", width=5)
+            draw.line((0, 240, 320, 240), fill="black", width=5)
+            poster = Image.new("RGB", white.size, "teal")
+            ImageDraw.Draw(poster).ellipse((20, 30, 300, 465), fill="coral")
+            a = evidence(poster, "poster")
+            self.assertGreater(a["colorfulness"], evidence(grid, "grid")["colorfulness"])
+            self.assertGreater(evidence(grid, "panels")["panelScore"], a["panelScore"])
+            ImageDraw.Draw(poster).rectangle((0, 0, 319, 72), fill="gold")
+            self.assertEqual(a["cropHash"], evidence(poster, "retitled")["cropHash"])
+
+
 class WorkerTests(unittest.TestCase):
     def setUp(self):
         self.originals = {

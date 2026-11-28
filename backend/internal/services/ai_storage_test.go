@@ -64,11 +64,11 @@ func TestAIStorageUsageReportsRelativePathsAndSizes(t *testing.T) {
 	if !usage.Available {
 		t.Fatal("storage usage should be available")
 	}
-	if len(usage.Modules) != 6 {
-		t.Fatalf("module count = %d, want 6", len(usage.Modules))
+	if len(usage.Modules) != 8 {
+		t.Fatalf("module count = %d, want 8", len(usage.Modules))
 	}
-	wantTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity, AIJobTypeAlbumCover}
-	wantNames := []string{"照片元数据", "向量索引", "文字识别", "人脸识别", "相似照片特征", "相册封面精选"}
+	wantTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity, AIJobTypeComicMeta, AIJobTypeComicCover, AIJobTypeAlbumCover}
+	wantNames := []string{"照片元数据", "向量索引", "文字识别", "人脸识别", "相似照片特征", "漫画内容识别", "漫画封面精选", "相册封面精选"}
 	for index, module := range usage.Modules {
 		if module.Type != wantTypes[index] || module.Name != wantNames[index] {
 			t.Fatalf("module %d = %s/%s", index, module.Type, module.Name)
@@ -212,7 +212,7 @@ func TestAIStorageAbsolutePathsExposeLocalLocations(t *testing.T) {
 	if paths.PythonExecutable != filepath.Join(workerDir, ".venv", "Scripts", "python.exe") {
 		t.Fatalf("python executable = %q", paths.PythonExecutable)
 	}
-	if len(paths.Modules) != 6 {
+	if len(paths.Modules) != 8 {
 		t.Fatalf("module count = %d", len(paths.Modules))
 	}
 	var clip *AIStorageAbsoluteFile

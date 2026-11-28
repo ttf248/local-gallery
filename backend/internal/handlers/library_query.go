@@ -28,7 +28,7 @@ func LibraryQueryHandler(catalog *services.ResourceCatalog, prefs *store.PrefsSt
 				return httputil.BadRequest(c, "invalid_library_query", "invalid minimum image count")
 			}
 		}
-		q := services.LibraryQuery{
+		q := services.LibraryQuery{EpisodeType: c.Query("episodeType"),
 			Kind:               kind,
 			Parent:             c.Query("parent"),
 			Tag:                c.Query("tag"),

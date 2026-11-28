@@ -32,6 +32,8 @@ type CacheLayout struct {
 	ScanCachePath      string
 	PreferencesPath    string
 	ActivityPath       string
+	ComicOverridesPath string
+	ComicDerivedDir    string
 	CoverOverridesPath string
 	PicksPath          string
 	AIJobsPath         string
@@ -57,6 +59,8 @@ func ResolveCacheLayout(root string) CacheLayout {
 		ScanCachePath:      filepath.Join(stateDir, "scan_cache.json"),
 		PreferencesPath:    filepath.Join(stateDir, "web_settings.json"),
 		ActivityPath:       filepath.Join(stateDir, "activity.json"),
+		ComicOverridesPath: filepath.Join(stateDir, "comic_overrides.json"),
+		ComicDerivedDir:    filepath.Join(derivedDir, "comic"),
 		CoverOverridesPath: filepath.Join(stateDir, "cover_overrides.json"),
 		PicksPath:          filepath.Join(stateDir, "picks.json"),
 		AIJobsPath:         filepath.Join(stateDir, "ai_jobs.json"),
@@ -72,7 +76,7 @@ func EnsureCacheLayout(root string) (CacheLayout, error) {
 		return CacheLayout{}, fmt.Errorf("cache root is required")
 	}
 	layout := ResolveCacheLayout(root)
-	for _, dir := range []string{layout.Root, layout.StateDir, layout.DerivedDir, layout.TempDir, layout.ThumbnailDir, layout.ConvertedDir, layout.PreviewDir, layout.MetadataDir, layout.AIVectorsDir, layout.AIModelsDir} {
+	for _, dir := range []string{layout.Root, layout.StateDir, layout.DerivedDir, layout.TempDir, layout.ThumbnailDir, layout.ConvertedDir, layout.PreviewDir, layout.MetadataDir, layout.ComicDerivedDir, layout.AIVectorsDir, layout.AIModelsDir} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return CacheLayout{}, fmt.Errorf("create cache layout: %w", err)
 		}

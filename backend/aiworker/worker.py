@@ -241,7 +241,38 @@ def cover_status():
     return {"ready": ready, "error": "" if ready else "cover_model_missing_or_checksum_invalid"}
 
 
-def score_cover(path, session, device_mode):
+def comic_page_features(rgb, frame, gray, fingerprint):
+    import cv2
+    import numpy as np
+    from PIL import Image
+    width, height = rgb.size
+    crop = rgb.crop((0, int(.18 * height), width, max(int(.18 * height) + 1, int(.95 * height))))
+    thumb = np.asarray(crop.convert("L").resize((9, 8), Image.Resampling.LANCZOS))
+    crop_hash = np.packbits(thumb[:, 1:] > thumb[:, :-1]).tobytes().hex()
+    edges = cv2.Canny(gray, 60, 160)
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 65, minLineLength=100, maxLineGap=8)
+    horizontal, vertical = set(), set()
+    for x1, y1, x2, y2 in (() if lines is None else lines[:, 0]):
+        if abs(y2 - y1) < 5 and 25 < y1 < 355:
+            horizontal.add(y1 // 12)
+        if abs(x2 - x1) < 5 and 25 < x1 < 355:
+            vertical.add(x1 // 12)
+    gradient = cv2.morphologyEx(gray, cv2.MORPH_GRADIENT, np.ones((3, 3), np.uint8))
+    text = cv2.morphologyEx((gradient > 55).astype(np.uint8), cv2.MORPH_CLOSE,
+                            np.ones((3, 9), np.uint8))
+    _, _, stats, _ = cv2.connectedComponentsWithStats(text)
+    text_area = sum(w * h for x, y, w, h, area in stats[1:] if w > 2 * h and 4 <= h <= 42)
+    channels = np.asarray(frame, dtype=float)
+    r, g, b = channels.transpose(2, 0, 1)
+    rg, yb = r - g, (r + g) / 2 - b
+    color = np.hypot(rg.std(), yb.std()) + .3 * np.hypot(rg.mean(), yb.mean())
+    return {"cropHash": crop_hash, "fullHash": fingerprint,
+            "aspectRatio": width / height, "colorfulness": float(min(1, color / 100)),
+            "panelScore": min(1, (len(horizontal) + len(vertical)) / 6) if horizontal and vertical else 0,
+            "textRatio": float(max(min(1, text_area / gray.size), (gray >= 250).mean() ** 4))}
+
+
+def score_cover(path, session, device_mode, comic=False):
     import numpy as np
     import cv2
     from PIL import Image as PILImage, ImageOps
@@ -265,12 +296,12 @@ def score_cover(path, session, device_mode):
         if not np.isfinite(raw):
             raise ValueError()
         return {"data": {"aesthetic": float(np.clip((raw - 1) / 9, 0, 1)),
-                         "feature": quality, "hash": fingerprint}}
+                         "feature": quality, **(comic_page_features(rgb, frame, gray, fingerprint) if comic else {"hash": fingerprint})}}
     except Exception:
         return {"error": "gpu_inference_failed" if device_mode == "gpu" else "image_analysis_failed"}
 
 
-def score_covers(paths, device_mode):
+def score_covers(paths, device_mode, comic=False):
     if not cover_status()["ready"]:
         return {"error": "cover_model_missing_or_checksum_invalid"}
     import onnxruntime as ort
@@ -286,7 +317,7 @@ def score_covers(paths, device_mode):
             return {"error": "gpu_inference_failed"}
         session.disable_fallback()
         cover_sessions[device_mode] = session
-    return run_image_analysis(paths, lambda path: score_cover(path, cover_sessions[device_mode], device_mode))
+    return run_image_analysis(paths, lambda path: score_cover(path, cover_sessions[device_mode], device_mode, comic))
 
 
 def ocr_module_status() -> dict:
@@ -1541,6 +1572,8 @@ def _process_request(request: dict) -> dict:
     device_mode = request.get("device", "auto")
     if device_mode not in ("auto", "cpu", "gpu"):
         return {"error": "invalid_device_mode"}
+    if action == "score_comic_covers":
+        return score_covers(request.get("paths"), device_mode, comic=True)
     if action == "score_covers":
         return score_covers(request.get("paths"), device_mode)
     if action == "ocr_images":
@@ -1612,7 +1645,7 @@ def process(request: dict) -> dict:
     try:
         return _process_request(request)
     finally:
-        inference_actions = ("embed_images", "embed_texts", "ocr_images", "face_images", "score_covers")
+        inference_actions = ("embed_images", "embed_texts", "ocr_images", "face_images", "score_covers", "score_comic_covers")
         if action in inference_actions and has_loaded_models():
             mark_model_activity()
 

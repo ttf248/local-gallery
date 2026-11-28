@@ -656,6 +656,13 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 		}
 	}
 	moduleTypes := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
+	if albumID == "" {
+		for _, t := range []string{AIJobTypeComicCover, AIJobTypeComicMeta} {
+			if s.analyzers[t] != nil {
+				moduleTypes = append(moduleTypes, t)
+			}
+		}
+	}
 	if albumID == "" && s.analyzers[AIJobTypeAlbumCover] != nil {
 		moduleTypes = append(moduleTypes, AIJobTypeAlbumCover)
 	}
@@ -1141,6 +1148,11 @@ func (s *AIJobService) List() AIJobSnapshot {
 // modulesLocked 列出全部已知分析模块及其安装情况。
 func (s *AIJobService) modulesLocked() []AIJobModule {
 	known := []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypeSimilarity}
+	for _, t := range []string{AIJobTypeComicCover, AIJobTypeComicMeta} {
+		if s.analyzers[t] != nil {
+			known = append(known, t)
+		}
+	}
 	if s.analyzers[AIJobTypePortrait] != nil {
 		known = append(known, AIJobTypePortrait)
 	}
@@ -1198,6 +1210,10 @@ func aiJobModuleName(moduleType string) string {
 		return "向量索引"
 	case AIJobTypeOCR:
 		return "文字识别"
+	case AIJobTypeComicCover:
+		return "漫画封面精选"
+	case AIJobTypeComicMeta:
+		return "漫画内容识别"
 	case AIJobTypeAlbumCover:
 		return "相册封面精选"
 	case AIJobTypePortrait:
@@ -1213,6 +1229,11 @@ func aiJobModuleName(moduleType string) string {
 
 // SetGPUEnabled updates the hardware plan for newly created jobs. Existing queued
 // jobs keep the device mode captured when they were created.
+func (s *AIJobService) ComicGPUEnabled() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.settings.GPUEnabled
+}
 func (s *AIJobService) SetGPUEnabled(enabled bool) (AIJobSettings, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1591,7 +1612,7 @@ func isAIJobActive(status string) bool {
 
 func validAIJobType(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeAlbumCover, AIJobTypeSimilarity:
+	case AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeComicMeta, AIJobTypeComicCover, AIJobTypeAlbumCover, AIJobTypeSimilarity:
 		return true
 	default:
 		return false
@@ -1604,7 +1625,7 @@ func validAIJobType(moduleType string) bool {
 // 用标准库算，强制 GPU 只会让它们因为没有 CUDA 环境而失败。
 func aiJobModuleUsesGPU(moduleType string) bool {
 	switch moduleType {
-	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeAlbumCover:
+	case AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeFace, AIJobTypePortrait, AIJobTypeComicMeta, AIJobTypeComicCover, AIJobTypeAlbumCover:
 		return true
 	default:
 		return false
@@ -1613,7 +1634,7 @@ func aiJobModuleUsesGPU(moduleType string) bool {
 
 // aiJobTypeNeedsImageConversion 判断分析模块是否需要先把 HEIC 转成 JPEG。
 func aiJobTypeNeedsImageConversion(moduleType string) bool {
-	return (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) || moduleType == AIJobTypeSimilarity || moduleType == AIJobTypeAlbumCover
+	return (moduleType == AIJobTypeFace || moduleType == AIJobTypePortrait) || moduleType == AIJobTypeSimilarity || moduleType == AIJobTypeComicMeta || moduleType == AIJobTypeComicCover || moduleType == AIJobTypeAlbumCover
 }
 
 // aiJobAnalysisMaxDimension 返回格式转换时保留的最大边长。

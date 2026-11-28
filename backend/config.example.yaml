@@ -103,3 +103,10 @@ skipHidden: true
 # 额外的系统噪声文件(在 Thumbs.db / desktop.ini / .DS_Store 之上追加)。
 # 一行一条;大小写不敏感。空数组即「不追加,只走内置」。
 systemFiles: []
+
+# 公开作品匹配仅查询清洗后的书名，图片与目录始终留在本机。
+comicMeta:
+  onlineEnabled: false
+  provider: bangumi
+  timeoutSec: 8
+  proxyURL: ""

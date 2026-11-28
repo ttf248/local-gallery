@@ -24,7 +24,7 @@ import (
 //
 // 行为：写入 cover_overrides.json，更新内存 ScanResult，标记 dirty 异步落盘。
 // 返回新的 CoverImage + CoverKind，前端立即拿来刷缩略图。
-func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore, catalog *services.ResourceCatalog) fiber.Handler {
+func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.CoverOverrideStore, catalog *services.ResourceCatalog, validator middleware.PathValidator) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		albumPath := middleware.SafePath(c)
 		if albumPath == "" {
@@ -38,10 +38,14 @@ func AlbumSetCoverHandler(cache *services.ScanResultCache, store *services.Cover
 		if !ok {
 			return nil
 		}
-		if !isFileInsideAlbum(file, albumPath) {
+		if !isFileInsideDir(file, albumPath) {
 			return writeError(c, fiber.StatusBadRequest, "file_outside_album", "file is not inside the album directory")
 		}
-		if fi, err := os.Stat(file); err != nil || fi.IsDir() {
+		file, validationErr := validator.Validate(file)
+		if validationErr != nil {
+			return writeError(c, 400, "invalid_cover_file", "封面文件不可用")
+		}
+		if fi, err := os.Lstat(file); err != nil || !fi.Mode().IsRegular() {
 			return writeError(c, fiber.StatusBadRequest, "invalid_cover_file", "file does not exist or is a directory")
 		}
 		kind := models.FileMediaKind(file)
@@ -90,9 +94,9 @@ func AlbumClearCoverHandler(cache *services.ScanResultCache, store *services.Cov
 	}
 }
 
-// isFileInsideAlbum 检查 file 是不是 albumPath 目录里的文件（防越权）。
+// isFileInsideDir 检查 file 是不是 albumPath 目录里的文件（防越权）。
 // Windows 下大小写不敏感。
-func isFileInsideAlbum(file, albumPath string) bool {
+func isFileInsideDir(file, albumPath string) bool {
 	fp := filepath.Clean(file)
 	dp := filepath.Clean(albumPath)
 	if runtime.GOOS == "windows" {
@@ -107,7 +111,7 @@ func isFileInsideAlbum(file, albumPath string) bool {
 	if err != nil {
 		return false
 	}
-	if rel == "." || rel == ".." || strings.HasPrefix(rel, "..") {
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return false
 	}
 	return true

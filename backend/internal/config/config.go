@@ -10,6 +10,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -99,18 +100,25 @@ func NormalizeMediaRootKind(value string) string {
 //
 // 媒体根只使用 `mediaRoots` 数组字段，避免多个配置入口产生歧义；
 // 每个元素同时携带目录路径与它的内容属性。
+type ComicMetaConfig struct {
+	OnlineEnabled bool   `yaml:"onlineEnabled" json:"onlineEnabled"`
+	Provider      string `yaml:"provider" json:"provider"`
+	TimeoutSec    int    `yaml:"timeoutSec" json:"timeoutSec"`
+	ProxyURL      string `yaml:"proxyURL" json:"proxyURL"`
+}
 type Config struct {
-	MediaRoots      []MediaRoot `yaml:"mediaRoots"`
-	Host            string      `yaml:"host"`
-	Port            int         `yaml:"port"`
-	AccessMode      string      `yaml:"accessMode"`
-	AccessToken     string      `yaml:"accessToken" json:"-"`
-	AllowOsOpen     bool        `yaml:"allowOsOpen"`
-	CacheDir        string      `yaml:"cacheDir"`
-	ThumbCacheSize  int         `yaml:"thumbCacheSize"`
-	CacheMaxAgeDays int         `yaml:"cacheMaxAgeDays"`
-	CacheMaxSizeMB  int64       `yaml:"cacheMaxSizeMB"`
-	StaticDir       string      `yaml:"staticDir"`
+	ComicMeta       ComicMetaConfig `yaml:"comicMeta,omitempty" json:"comicMeta"`
+	MediaRoots      []MediaRoot     `yaml:"mediaRoots"`
+	Host            string          `yaml:"host"`
+	Port            int             `yaml:"port"`
+	AccessMode      string          `yaml:"accessMode"`
+	AccessToken     string          `yaml:"accessToken" json:"-"`
+	AllowOsOpen     bool            `yaml:"allowOsOpen"`
+	CacheDir        string          `yaml:"cacheDir"`
+	ThumbCacheSize  int             `yaml:"thumbCacheSize"`
+	CacheMaxAgeDays int             `yaml:"cacheMaxAgeDays"`
+	CacheMaxSizeMB  int64           `yaml:"cacheMaxSizeMB"`
+	StaticDir       string          `yaml:"staticDir"`
 
 	// FFmpegPath ffmpeg 可执行文件绝对路径。空 → 走 DefaultFFmpegPath。
 	// 留空且 DefaultFFmpegPath 不存在 → 服务端抽帧关闭,视频封面仍由浏览器
@@ -130,7 +138,6 @@ type Config struct {
 	SkipHiddenSet   bool     `yaml:"-"` // YAML 显式提供标记(支持 false 覆盖)
 	SystemFiles     []string `yaml:"systemFiles"`
 	ExcludePatterns []string `yaml:"excludePatterns"`
-
 }
 
 // Roots 返回规范化后的所有媒体根目录（绝对路径、去空、去重、保序）。
@@ -187,6 +194,7 @@ func (c *Config) RootKinds() map[string]string {
 // Default 返回内置默认配置（缓存目录指向 CWD/.local-gallery）。
 func Default() *Config {
 	return &Config{
+		ComicMeta:       ComicMetaConfig{Provider: "bangumi", TimeoutSec: 8},
 		MediaRoots:      []MediaRoot{{Path: filepath.Join(".", "media"), Kind: DefaultMediaRootKind}},
 		Host:            "127.0.0.1",
 		Port:            8080,
@@ -222,7 +230,7 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	// 第一次解析：标准字段
-	tmp := &Config{}
+	tmp := &Config{ComicMeta: cfg.ComicMeta}
 	decoder := yaml.NewDecoder(strings.NewReader(string(data)))
 	decoder.KnownFields(true)
 	if err := decoder.Decode(tmp); err != nil {
@@ -243,6 +251,7 @@ func LoadFile(path string) (*Config, error) {
 	}
 
 	mergeFile(cfg, tmp)
+	cfg.ComicMeta = tmp.ComicMeta
 	if _, present := raw["cacheMaxSizeMB"]; present {
 		cfg.CacheMaxSizeMB = tmp.CacheMaxSizeMB
 	}
@@ -312,6 +321,15 @@ func mergeFile(dst, file *Config) {
 
 // Validate 校验运行参数，不要求媒体目录在线；管理员仍可进入设置页修复目录。
 func (c *Config) Validate() error {
+	if c.ComicMeta.Provider != "bangumi" || c.ComicMeta.TimeoutSec < 1 || c.ComicMeta.TimeoutSec > 60 {
+		return errors.New("invalid comicMeta provider or timeout")
+	}
+	if c.ComicMeta.ProxyURL != "" {
+		u, err := url.Parse(c.ComicMeta.ProxyURL)
+		if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+			return errors.New("invalid comicMeta proxy")
+		}
+	}
 	if c.Port <= 0 || c.Port > 65535 {
 		return fmt.Errorf("invalid port %d", c.Port)
 	}

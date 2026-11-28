@@ -14,7 +14,8 @@ import (
 //
 // 配置接口是唯一允许返回本机绝对配置路径的回环接口。
 type ConfigResponse struct {
-	CacheMaxSizeMB int64 `json:"cacheMaxSizeMB"`
+	ComicMeta      config.ComicMetaConfig `json:"comicMeta"`
+	CacheMaxSizeMB int64                  `json:"cacheMaxSizeMB"`
 	// MediaRoots 是媒体根列表，每项同时携带路径与内容属性。
 	// 前端按它渲染「每个目录选照片还是漫画」的单选控件。
 	MediaRoots            []MediaRootResponse `json:"mediaRoots"`
@@ -78,7 +79,7 @@ func ConfigGetHandler(mgr *config.Manager) fiber.Handler {
 			ffAvailable = services.FFmpegAvailableAt(ffPath)
 		}
 		return c.JSON(ConfigResponse{
-			MediaRoots:            mediaRootResponses(cfg),
+			MediaRoots: mediaRootResponses(cfg), ComicMeta: cfg.ComicMeta,
 			Host:                  cfg.Host,
 			Port:                  cfg.Port,
 			AccessMode:            cfg.AccessMode,
@@ -137,7 +138,7 @@ func ConfigUpdateHandler(mgr *config.Manager, onUpdate func(c *config.Config, me
 			OK:     true,
 			ScanID: scan.ScanID, ScanStartError: scan.ScanStartError,
 			Config: ConfigResponse{
-				MediaRoots:            mediaRootResponses(newCfg),
+				MediaRoots: mediaRootResponses(newCfg), ComicMeta: newCfg.ComicMeta,
 				Host:                  newCfg.Host,
 				Port:                  newCfg.Port,
 				AccessMode:            newCfg.AccessMode,
