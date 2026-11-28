@@ -70,10 +70,20 @@ for (const theme of ["light", "dark"] as const) {
       await page.keyboard.press("3");
       const pages = stage.locator("[data-reader-page]");
       await expect(pages).toHaveCount(2);
-      const left = (await pages.nth(0).boundingBox())!,
-        right = (await pages.nth(1).boundingBox())!;
-      expect(right.x - left.x - left.width).toBeCloseTo(4, 0);
-      expect(left.y).toBeCloseTo(right.y, 0);
+      await expect
+        .poll(() =>
+          pages.evaluateAll((elements) => {
+            const [left, right] = elements.map((el) =>
+              el.getBoundingClientRect(),
+            );
+            if (!left || !right) return null;
+            return { gap: right.x - left.right, rowOffset: right.y - left.y };
+          }),
+        )
+        .toEqual({
+          gap: expect.closeTo(4, 0),
+          rowOffset: expect.closeTo(0, 0),
+        });
       expect(await pages.first().getAttribute("data-reader-page")).toBe("2");
       // 第 1 页本身就是跨页扫描图，关闭封面偏移后仍然独占一屏。
       await page.keyboard.press("o");
