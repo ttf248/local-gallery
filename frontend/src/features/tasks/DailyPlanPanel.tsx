@@ -5,12 +5,13 @@ import type {
   AnalysisType,
 } from "../../api/aiJobs";
 import {
-  formatCount,
+  formatWorkload,
   formatEstimateDuration,
   sumEstimateModes,
 } from "../../utils/taskFormat";
 import { SettingsRow } from "../../ui/SettingsList";
 import { Switch } from "../../ui/Switch";
+import TaskModuleGroups from "./TaskModuleGroups";
 
 interface Props {
   enabled: boolean;
@@ -224,33 +225,39 @@ export default function DailyPlanPanel({
 
         <fieldset className="min-w-0 border-t border-line py-3">
           <legend className="text-label">运行模块</legend>
-          <div className="grid gap-x-3 [@container_plan_(min-width:350px)]:grid-cols-2">
-            {modules.map((module) => (
-              <SettingsRow
-                key={module.type}
-                label={module.name}
-                description={
-                  !module.installed
-                    ? "不可用：缺少模型或运行环境"
-                    : (module.type === "face" || module.type === "portrait") &&
-                        !peopleEnabled
-                      ? "需先启用人物分析"
-                      : undefined
-                }
-              >
-                <Switch
+          <div className="grid gap-3 pt-2">
+            <TaskModuleGroups
+              modules={modules}
+              className="grid gap-x-3 [@container_plan_(min-width:350px)]:grid-cols-2"
+            >
+              {(module) => (
+                <SettingsRow
+                  key={module.type}
                   label={module.name}
-                  checked={selectedModules.includes(module.type)}
-                  disabled={
-                    disabled ||
-                    !module.installed ||
-                    ((module.type === "face" || module.type === "portrait") &&
-                      !peopleEnabled)
+                  description={
+                    !module.installed
+                      ? "不可用：缺少模型或运行环境"
+                      : (module.type === "face" ||
+                            module.type === "portrait") &&
+                          !peopleEnabled
+                        ? "需先启用人物分析"
+                        : undefined
                   }
-                  onChange={() => toggleModule(module.type)}
-                />
-              </SettingsRow>
-            ))}
+                >
+                  <Switch
+                    label={module.name}
+                    checked={selectedModules.includes(module.type)}
+                    disabled={
+                      disabled ||
+                      !module.installed ||
+                      ((module.type === "face" || module.type === "portrait") &&
+                        !peopleEnabled)
+                    }
+                    onChange={() => toggleModule(module.type)}
+                  />
+                </SettingsRow>
+              )}
+            </TaskModuleGroups>
           </div>
         </fieldset>
         <div className="flex items-center gap-6 border-t border-line py-3">
@@ -377,7 +384,7 @@ function DailyPlanEstimate({
   );
   return (
     <span className="text-caption text-ink-3">
-      {`分析预计：${formatCount(total.count)} 张 · ${formatEstimateDuration(total.estimatedDurationMs)}`}
+      {`分析预计：${formatWorkload(estimate, modules, "incremental")} · ${formatEstimateDuration(total.estimatedDurationMs)}`}
     </span>
   );
 }

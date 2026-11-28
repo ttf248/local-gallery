@@ -739,6 +739,81 @@ describe("任务中心", () => {
     expect(screen.queryByText("队列空闲")).not.toBeInTheDocument();
   });
 
+  it("按实际处理范围分组，单部作品和抽样页分别核算", async () => {
+    const estimate = estimateFixture();
+    const entries = [
+      { type: "comicCover", name: "漫画封面精选", installed: true, count: 70 },
+      { type: "albumCover", name: "相册封面精选", installed: true, count: 0 },
+      { type: "comicMeta", name: "漫画内容识别", installed: true, count: 11 },
+    ] as const;
+    for (const { count, ...module } of entries) {
+      const mode = {
+        count,
+        estimatedDurationMs: null,
+        sampleCount: 0,
+        sampleImages: 0,
+      };
+      estimate.modules.push({
+        ...module,
+        available: true,
+        incremental: mode,
+        full: mode,
+      });
+      estimate.sequence.incremental.modules.push(module.type);
+      estimate.sequence.incremental.count += count;
+    }
+    vi.mocked(aiJobsApi.list).mockResolvedValue({
+      ok: true,
+      snapshot: snapshot({
+        jobs: [],
+        active: undefined,
+        modules: [...modules, ...entries],
+      }),
+    });
+    vi.mocked(aiJobsApi.estimate).mockResolvedValue({ ok: true, estimate });
+    renderCenter();
+    const manual = within(
+      await screen.findByRole("group", { name: "分析模块" }),
+    );
+    const daily = within(screen.getByRole("group", { name: "运行模块" }));
+    for (const [panel, role] of [
+      [manual, "button"],
+      [daily, "switch"],
+    ] as const) {
+      const common = within(panel.getByRole("group", { name: "全库通用" }));
+      const photos = within(panel.getByRole("group", { name: "照片相册" }));
+      const comics = within(panel.getByRole("group", { name: "漫画书架" }));
+      expect(
+        common.getByRole(role, { name: "照片元数据" }),
+      ).toBeInTheDocument();
+      expect(
+        photos.getByRole(role, { name: "相册封面精选" }),
+      ).toBeInTheDocument();
+      expect(comics.queryByRole(role, { name: "相册封面精选" })).toBeNull();
+      expect(
+        comics.getByRole(role, { name: "漫画封面精选" }),
+      ).toBeInTheDocument();
+      expect(
+        comics.getByRole(role, { name: "漫画内容识别" }),
+      ).toBeInTheDocument();
+    }
+    fireEvent.click(manual.getByRole("button", { name: "漫画内容识别" }));
+    expect(
+      await screen.findByText("漫画内容识别 · 漫画书架 · 11 部作品"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("4 个模块 · 320 张 · 70 页 · 11 部作品"),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "开始分析 · 漫画内容识别 · 11 部作品",
+      }),
+    );
+    await waitFor(() =>
+      expect(aiJobsApi.start).toHaveBeenCalledWith("comicMeta", "incremental"),
+    );
+  });
+
   it("空闲时给出增量与全量的规模对比，并标出当前模式", async () => {
     vi.mocked(aiJobsApi.list).mockResolvedValue({
       ok: true,
@@ -956,7 +1031,7 @@ describe("任务中心", () => {
       "/settings/server",
     );
     fireEvent.click(screen.getByRole("radio", { name: /^全量/ }));
-    fireEvent.click(screen.getByRole("button", { name: "按序启动全部任务" }));
+    fireEvent.click(screen.getByRole("button", { name: "按序启动所有分组" }));
     await waitFor(() =>
       expect(aiJobsApi.startAll).toHaveBeenCalledWith("full"),
     );
@@ -1311,7 +1386,7 @@ describe("任务中心", () => {
     await screen.findByText("队列空闲");
     const moduleGroup = within(screen.getByRole("group", { name: "分析模块" }));
     fireEvent.click(moduleGroup.getByRole("button", { name: "文字识别" }));
-    expect(await screen.findByText(/OCR 识别照片中的文字/)).toBeInTheDocument();
+    expect(await screen.findByText(/OCR 识别照片和漫画图片中的文字/)).toBeInTheDocument();
     expect(
       screen.getByText("文字识别已就绪 · rapidocr-v1"),
     ).toBeInTheDocument();

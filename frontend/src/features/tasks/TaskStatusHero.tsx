@@ -5,6 +5,7 @@ import {
   formatCount,
   formatTaskDuration,
   formatTaskSpeed,
+  taskUnit,
 } from "../../utils/taskFormat";
 import { Badge } from "../../ui/Badge";
 import { taskStatusTone } from "../../utils/taskFormat";
@@ -68,9 +69,9 @@ function ActiveProgress({ job }: { job: AIJob }) {
           </span>
           <span className="text-caption tabular-nums text-ink-2">
             {planned > 0
-              ? `${formatCount(job.completed)} / ${formatCount(planned)} 张`
+              ? `${formatCount(job.completed)} / ${formatCount(planned)} ${taskUnit(job.type)}`
               : settled
-                ? "本次没有需要处理的图片"
+                ? "本次没有待处理项"
                 : "正在整理分析清单"}
           </span>
         </div>
@@ -98,7 +99,10 @@ function ActiveProgress({ job }: { job: AIJob }) {
           value={formatCount(job.failed)}
           tone={job.failed > 0 ? "danger" : "default"}
         />
-        <Readout label="速度" value={formatTaskSpeed(job.speedPerSecond)} />
+        <Readout
+          label="速度"
+          value={formatTaskSpeed(job.speedPerSecond, taskUnit(job.type))}
+        />
         <Readout
           label="预计剩余"
           value={

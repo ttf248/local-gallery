@@ -1,4 +1,5 @@
 import { formatSize } from "../../utils/format";
+import { taskUnit } from "../../utils/taskFormat";
 import { useJobOutput } from "../../hooks/useStorage";
 
 interface Props {
@@ -50,7 +51,7 @@ export default function JobOutputSummary({ jobId, enabled }: Props) {
             : "产物目录不存在（可能已被清理）"}
         </span>
         <span className="font-mono tabular-nums text-ink-3">
-          每批 {output.batchSize} 张
+          每批 {output.batchSize} {taskUnit(output.type)}
         </span>
       </div>
       <p className="mt-1 break-all font-mono text-caption leading-relaxed text-ink-3">

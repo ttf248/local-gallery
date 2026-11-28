@@ -15,6 +15,8 @@ import {
   formatEstimateDuration,
   moduleReasonLabel,
   taskModeLabel,
+  taskScope,
+  taskUnit,
 } from "../../utils/taskFormat";
 import { RefreshIcon } from "../../ui/icons";
 
@@ -143,7 +145,7 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
           <EstimateDetails {...props} />
           <p className="mt-2 text-caption text-ink-2">
             {moduleEstimate?.knownFileFailures
-              ? `本次跳过 ${formatCount(moduleEstimate.knownFileFailures)} 张已有解析失败记录的图片。文件或分析器更新后会重新处理，也可在任务记录中重试失败项。`
+              ? `本次跳过 ${formatCount(moduleEstimate.knownFileFailures)} ${taskUnit(selectedModule)}${taskUnit(selectedModule) === "张" ? "已有解析失败记录的图片" : "，这些目标已有解析失败记录"}。文件或分析器更新后会重新处理，也可在任务记录中重试失败项。`
               : modeHint(selectedModule, mode, props.moduleName)}
           </p>
         </div>
@@ -156,7 +158,9 @@ export default function RunSummaryPanel(props: RunSummaryPanelProps) {
           onClick={props.onStart}
         >
           开始分析 · {props.moduleName}
-          {count === undefined ? "" : " · " + formatCount(count) + " 张"}
+          {count === undefined
+            ? ""
+            : ` · ${formatCount(count)} ${taskUnit(selectedModule)}`}
         </Button>
       )}
     </>
@@ -223,12 +227,19 @@ function EstimateDetails({
 
   const modes = ["incremental", "full"] as const;
   const active = entry[mode];
+  const unit = taskUnit(module);
+  const scope = taskScope[module];
+  const targetTotal =
+    entry.full && entry.full.count + (entry.knownFileFailures ?? 0);
   return (
     <div>
       {/* 核算口径写在表格上方：这次要处理多少、凭什么估的。
           「本次规模」这个标题由外层的字段标签给出，这里不再重复一遍。 */}
       <p className="text-caption text-ink-2">
-        {entry.name}· 整库 {formatCount(estimate.totalImages)} 张
+        {entry.name} ·{" "}
+        {scope === "全库通用"
+          ? `整库 ${formatCount(estimate.totalImages)} 张`
+          : `${scope}${targetTotal == null ? "" : ` · ${formatCount(targetTotal)} ${unit}`}`}
       </p>
 
       <div className="mt-3">
@@ -254,7 +265,7 @@ function EstimateDetails({
                 />
                 <span>{taskModeLabel(item)}</span>
                 <span className="tabular-nums">
-                  {value ? formatCount(value.count) + " 张" : "张数未知"}
+                  {value ? `${formatCount(value.count)} ${unit}` : "数量未知"}
                 </span>
                 <span className="text-caption text-ink-2">
                   {value?.estimatedDurationMs == null
@@ -268,7 +279,7 @@ function EstimateDetails({
 
         <p className="min-w-[15rem] flex-1 text-caption text-ink-3">
           {active && active.sampleCount > 0
-            ? `按最近 ${active.sampleCount} 次${entry.name}历史任务的速度估算，共 ${formatCount(active.sampleImages)} 张`
+            ? `按最近 ${active.sampleCount} 次${entry.name}历史任务的速度估算，共 ${formatCount(active.sampleImages)} ${unit}`
             : "这个模块还没有跑过，耗时算不出来"}
           {"；以启动时的实际清单为准。"}
         </p>
@@ -282,6 +293,14 @@ function modeHint(
   mode: AnalysisMode,
   moduleName: string,
 ): string {
+  if (type === "comicMeta")
+    return mode === "full"
+      ? "重新识别全部漫画作品"
+      : "只识别新增或变更的漫画作品";
+  if (type === "comicCover")
+    return mode === "full"
+      ? "重新评估各卷的抽样页"
+      : "只评估新增或变更的漫画抽样页";
   if (mode === "full") {
     return type === "metadata"
       ? "重新解析当前媒体库的全部图片"

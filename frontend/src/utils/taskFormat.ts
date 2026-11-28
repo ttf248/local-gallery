@@ -8,6 +8,45 @@ import type {
   AnalysisType,
 } from "../api/aiJobs";
 
+export const taskScope = {
+  metadata: "全库通用",
+  embedding: "全库通用",
+  ocr: "全库通用",
+  face: "照片相册",
+  portrait: "照片相册",
+  similarity: "照片相册",
+  albumCover: "照片相册",
+  comicCover: "漫画书架",
+  comicMeta: "漫画书架",
+} as const satisfies Record<AnalysisType, string>;
+
+export function taskUnit(type: AnalysisType) {
+  if (type === "comicMeta") return "部作品";
+  if (type === "comicCover") return "页";
+  if (type === "albumCover") return "项";
+  return "张";
+}
+
+export function formatWorkload(
+  estimate: AIJobEstimate,
+  types: AnalysisType[],
+  mode: AnalysisMode,
+) {
+  const totals = new Map<string, number>();
+  for (const entry of estimate.modules) {
+    const value = entry[mode];
+    if (!value || !entry.available || !types.includes(entry.type)) continue;
+    const unit = taskUnit(entry.type);
+    totals.set(unit, (totals.get(unit) ?? 0) + value.count);
+  }
+  return (
+    Array.from(totals)
+      .filter(([, count]) => count > 0 || totals.size === 1)
+      .map(([unit, count]) => `${formatCount(count)} ${unit}`)
+      .join(" · ") || "0 项"
+  );
+}
+
 /** 千分位计数。 */
 export function formatCount(value: number): string {
   if (!Number.isFinite(value)) return "—";
@@ -27,9 +66,9 @@ export function formatTaskDuration(milliseconds: number): string {
 }
 
 /** 每秒处理张数。 */
-export function formatTaskSpeed(value: number): string {
+export function formatTaskSpeed(value: number, unit = "张"): string {
   if (!Number.isFinite(value) || value <= 0) return "—";
-  return `${value.toFixed(1)} 张/秒`;
+  return `${value.toFixed(1)} ${unit}/秒`;
 }
 
 /**

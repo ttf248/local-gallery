@@ -8,6 +8,7 @@ import {
   formatCount,
   formatTaskDuration,
   formatTaskSpeed,
+  taskUnit,
   taskFieldLabel,
   taskModeLabel,
   taskResultLabel,
@@ -244,7 +245,10 @@ export default function JobHistoryPanel({
                     />
                     <SpecRow
                       label="速度"
-                      value={formatTaskSpeed(job.speedPerSecond)}
+                      value={formatTaskSpeed(
+                        job.speedPerSecond,
+                        taskUnit(job.type),
+                      )}
                     />
                     <SpecRow
                       label="模块版本"

@@ -9,7 +9,7 @@ import type {
   AnalysisType,
 } from "../../api/aiJobs";
 import type { TaskCenterSelection } from "../../hooks/useTaskCenter";
-import { formatCount, formatEstimateDuration } from "../../utils/taskFormat";
+import { formatWorkload, formatEstimateDuration } from "../../utils/taskFormat";
 import ModuleTiles from "./ModuleTiles";
 import RunSummaryPanel from "./RunSummaryPanel";
 
@@ -176,11 +176,11 @@ export default function TaskConsole({
               }
               onClick={() => onStartAll(mode)}
             >
-              按序启动全部任务
+              按序启动所有分组
             </button>
-            {sequence && sequence.modules.length > 0 ? (
+            {estimate && sequence && sequence.modules.length > 0 ? (
               <span className="text-caption text-ink-3">
-                {`${sequence.modules.length} 个模块 · ${formatCount(sequence.count)} 张`}
+                {`${sequence.modules.length} 个模块 · ${formatWorkload(estimate, sequence.modules, mode)}`}
               </span>
             ) : null}
             {sequence && sequence.modules.length > 0 ? (
@@ -226,9 +226,9 @@ export default function TaskConsole({
 function moduleDescription(type: AnalysisType): string {
   switch (type) {
     case "embedding":
-      return "用本机 Chinese-CLIP 为照片建立中文语义向量，可按描述搜索，也能按照片查找相似画面。";
+      return "用本机 Chinese-CLIP 为照片和漫画图片建立语义向量。";
     case "ocr":
-      return "用本机 OCR 识别照片中的文字，结果可在图片详情中查看。";
+      return "用本机 OCR 识别照片和漫画图片中的文字。";
     case "comicCover":
       return "为漫画作品与各卷挑选封面，减少重复扉页。";
     case "comicMeta":
@@ -242,7 +242,7 @@ function moduleDescription(type: AnalysisType): string {
     case "similarity":
       return "在本机提取照片的内容指纹、感知哈希与质量指标，用来发现重复、裁剪改过的副本与连拍；不联网，也不改动原始文件。";
     default:
-      return "读取照片拍摄时间、相机信息与 GPS 坐标，结果只写进本机的派生缓存。";
+      return "读取照片和漫画图片中的拍摄时间、相机信息与 GPS 坐标。";
   }
 }
 

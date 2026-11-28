@@ -7,6 +7,7 @@ import type { JobAction } from "../../hooks/useTaskCenter";
 import { formatDateTime } from "../../utils/date";
 import {
   formatCount,
+  taskUnit,
   formatTaskDuration,
   taskModeLabel,
   taskStageLabel,
@@ -79,7 +80,10 @@ export default function TaskSummary({
             <>
               <Link
                 className={buttonStyles({ variant: "secondary", size: "sm" })}
-                to={settingsRoute("tasks", { query: { job: lastJob.id }, hash: "task-history" })}
+                to={settingsRoute("tasks", {
+                  query: { job: lastJob.id },
+                  hash: "task-history",
+                })}
               >
                 查看原因
               </Link>
@@ -158,14 +162,15 @@ export default function TaskSummary({
                    不用翻到任务记录里去找原因。 */
               <span className="text-danger">
                 {jobModuleName(lastJob.type, modules)} · 失败{" "}
-                {formatCount(lastJob.failed)} 张 ·{" "}
+                {formatCount(lastJob.failed)} {taskUnit(lastJob.type)} ·{" "}
                 {lastJob.error ?? "原因见任务记录"}
               </span>
             ) : (
               <span>
                 上次运行 {formatDateTime(lastJob.createdAt)} ·{" "}
                 {taskModeLabel(lastJob.mode)} · 完成{" "}
-                {formatCount(lastJob.completed ?? lastJob.processed)} 张
+                {formatCount(lastJob.completed ?? lastJob.processed)}{" "}
+                {taskUnit(lastJob.type)}
               </span>
             )
           ) : (
