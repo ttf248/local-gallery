@@ -35,7 +35,7 @@ npm run test:e2e
 
 ## CI
 
-在 GitHub Actions 手动启动 CI 或 Release。CI 在 Windows、macOS、Linux 上运行 Go 测试、前端 lint、类型检查、单元测试和 E2E。E2E 失败时，在对应运行的 Artifacts 下载 `playwright-*` 报告，报告保留七天。Linux 另跑 Go race 检查、首屏体积审计并上传验证包。Release 复用同一套 CI 门禁。
+在 GitHub Actions 手动启动 CI 或 Release。CI 在 Windows、macOS、Linux 上运行 Go 测试、前端 lint、类型检查、单元测试和 E2E。E2E 失败时，在对应运行的 Artifacts 下载 `playwright-*` 报告，报告保留七天。Linux 同时审计首屏体积并上传验证包，Go race 检查则在独立 Ubuntu 任务并行运行。Release 复用同一套 CI 门禁。
 
 如需提交推送，先按项目规则暂存当前任务文件，再准备多行中文提交说明文件：
 

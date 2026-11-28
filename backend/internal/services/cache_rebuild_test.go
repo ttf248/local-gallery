@@ -1,9 +1,9 @@
 package services
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -117,33 +117,13 @@ func TestCacheRebuildReportsProgress(t *testing.T) {
 
 // 重建跑的过程中要持续推进度：进度条十分钟不动，用户只会以为卡死了。
 func TestCacheRebuildStreamsProgressWhileRunning(t *testing.T) {
-	// 素材要多到跑得完一个推送间隔：几张小图会在第一次推送之前就结束，
-	// 那样的用例测不出「跑的过程中有没有进度」。
-	root := t.TempDir()
-	albumPath := filepath.Join(root, "album")
-	if err := os.MkdirAll(albumPath, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	files := make([]string, 0, 24)
-	for i := 0; i < 24; i++ {
-		files = append(files, makeTestImage(t, albumPath, fmt.Sprintf("page-%02d.jpg", i), 2000, 1500))
-	}
-	catalog := NewResourceCatalog()
-	catalog.Publish(&models.ScanResult{
-		Roots: []string{root},
-		Albums: []models.Album{{
-			Type:       "album",
-			Path:       albumPath,
-			SourceRoot: root,
-			ImageFiles: files,
-			CoverImage: files[0],
-		}},
-	}, []string{root})
-	thumbs, err := NewThumbnailService(ThumbnailOptions{CacheDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	svc := NewCacheRebuildService(catalog, thumbs)
+	svc, thumbs, files := newRebuildService(t)
+	t.Cleanup(svc.Close)
+	// 占住解码槽，确保订阅者看到定时推送时，真实缩略图任务仍在运行。
+	thumbs.imageSlots = make(chan struct{}, 1)
+	thumbs.imageSlots <- struct{}{}
+	release := sync.OnceFunc(func() { <-thumbs.imageSlots })
+	defer release()
 	svc.progressInterval = 10 * time.Millisecond
 	jobID, _, err := svc.Start([]string{CacheScopeThumbs}, 0)
 	if err != nil {
@@ -156,7 +136,7 @@ func TestCacheRebuildStreamsProgressWhileRunning(t *testing.T) {
 	defer unsubscribe()
 
 	running := 0
-	deadline := time.After(30 * time.Second)
+	deadline := time.After(20 * time.Second)
 	for {
 		select {
 		case ev, open := <-events:
@@ -164,14 +144,17 @@ func TestCacheRebuildStreamsProgressWhileRunning(t *testing.T) {
 				t.Fatal("event stream closed before terminal state")
 			}
 			if ev.Status == RebuildStatusPending || ev.Status == RebuildStatusRunning {
-				// pending 是订阅时的初始快照，running 才是推进度的推送。
-				if ev.Status == RebuildStatusRunning {
+				if ev.Status == RebuildStatusRunning && ev.Total == len(files) && ev.Done == 0 {
 					running++
+					// 初始订阅和设置总数各至多发一条，第三条一定来自定时推送。
+					if running == 3 {
+						release()
+					}
 				}
 				continue
 			}
-			if running == 0 {
-				t.Fatal("no running progress event before the terminal one")
+			if running < 3 || ev.Status != RebuildStatusComplete || ev.Done != len(files) || ev.Failed != 0 {
+				t.Fatalf("unexpected progress: running events = %d, terminal = %+v", running, ev)
 			}
 			return
 		case <-deadline:

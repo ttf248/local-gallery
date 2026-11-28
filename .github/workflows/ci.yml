@@ -58,11 +58,6 @@ jobs:
         working-directory: frontend
         run: npm run typecheck
 
-      - name: 后端并发检查
-        if: runner.os == 'Linux'
-        working-directory: backend
-        run: go test -race ./...
-
       - name: 安装浏览器
         working-directory: frontend
         run: npx playwright install chromium
@@ -116,3 +111,17 @@ jobs:
           path: ${{ runner.temp }}/local-gallery-ci.tar.gz
           if-no-files-found: error
           retention-days: 7
+
+  race:
+    name: 后端并发检查 (Ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: 运行全部 Go 竞态测试
+        working-directory: backend
+        run: go test -race ./...

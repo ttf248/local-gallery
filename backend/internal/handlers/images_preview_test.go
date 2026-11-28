@@ -77,7 +77,7 @@ func TestPreviewHandlerScalesImage(t *testing.T) {
 	app := previewTestApp(root, catalog, svc)
 	id := catalog.ExternalID(path, services.ResourceFile)
 
-	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/previews/"+id+"?w=400", nil))
+	res, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/previews/"+id+"?w=400", nil), renditionTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestPreviewHandlerScalesImage(t *testing.T) {
 	// 带 If-None-Match 复访应返回 304，不再传图。
 	req := httptest.NewRequest(http.MethodGet, "/api/previews/"+id+"?w=400", nil)
 	req.Header.Set("If-None-Match", etag)
-	res2, err := app.Test(req)
+	res2, err := app.Test(req, renditionTestTimeoutMS)
 	if err != nil {
 		t.Fatal(err)
 	}
