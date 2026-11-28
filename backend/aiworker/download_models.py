@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import os
+import shutil
 import sys
 import time
 import urllib.request
@@ -136,11 +138,28 @@ def install_buffalo_m(model_dir: Path) -> None:
     print("[完成] Buffalo_m SCRFD 与人脸特征模型")
 
 
-def main() -> int:
-    model_dir = resolve_model_dir()
+def install_models(model_dir: Path, profile: str = "all", source: Path | None = None) -> None:
     for name, url, relative_path, digest in MODELS:
-        download(name, url, model_dir / relative_path, digest)
-    install_buffalo_m(model_dir)
+        cover = relative_path == "aesthetic/cover.onnx"
+        if (profile == "portable" and cover) or (profile == "extras" and not cover):
+            continue
+        target = model_dir / relative_path
+        if source is not None:
+            cached = source / relative_path
+            if cached.is_file() and sha256(cached) == digest:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(cached, target)
+        download(name, url, target, digest)
+    if profile != "portable":
+        install_buffalo_m(model_dir)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--profile", choices=("all", "portable", "extras"), default="all")
+    args = parser.parse_args()
+    model_dir = resolve_model_dir()
+    install_models(model_dir, args.profile)
     print(f"模型目录：{model_dir}")
     return 0
 

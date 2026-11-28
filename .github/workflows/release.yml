@@ -1,218 +1,187 @@
 name: Release
+run-name: 正式发布 ${{ inputs.version || inputs.increment }} · ${{ github.sha }}
 
 on:
   workflow_dispatch:
     inputs:
-      tag:
-        description: 要发布的已存在 v2.x 标签，例如 v2.0.0
-        required: true
+      increment:
+        description: 正式版本递增方式，首个版本固定为 v2.0.0
+        type: choice
+        options: [patch, minor]
+        default: patch
+      version:
+        description: 可留空自动计算，重试已创建的标签时填写同一版本
         type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ inputs.tag }}
+  group: stable-release
   cancel-in-progress: false
 
 jobs:
   prepare:
-    name: 校验版本
+    name: 确定发布版本
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.version.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
     steps:
-      - name: 检出标签
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag }}
           fetch-depth: 0
-
-      - name: 校验 v2 版本标签
+          persist-credentials: false
+      - name: 根据已有标签计算版本
         id: version
         shell: bash
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          INCREMENT: ${{ inputs.increment }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v2\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "仅允许发布 v2.x.y 或 v2.x.y-rc.1 标签，收到：$RELEASE_TAG" >&2
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo '请从仓库默认分支发布。' >&2
             exit 1
           fi
-          git rev-parse "refs/tags/$RELEASE_TAG^{commit}" >/dev/null
-          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+          tag=$(node scripts/release-version.mjs "$INCREMENT" "$REQUESTED_VERSION")
+          test -s "docs/release-notes/$tag.md"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+          echo "发布 $tag（$GITHUB_SHA）" >> "$GITHUB_STEP_SUMMARY"
+
+  verify:
+    name: 运行发布门禁
+    needs: prepare
+    uses: ./.github/workflows/ci.yml
 
   frontend:
     name: 构建前端
     needs: prepare
     runs-on: ubuntu-latest
     steps:
-      - name: 检出标签
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
-
-      - name: 设置 Node.js
-        uses: actions/setup-node@v4
+          persist-credentials: false
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      - name: 安装前端依赖
-        working-directory: frontend
-        run: npm ci
-
-      - name: 构建前端
+      - name: 安装依赖并构建
         working-directory: frontend
         env:
           LOCAL_GALLERY_VERSION: ${{ needs.prepare.outputs.version }}
-        run: npm run build
-
-      - name: 上传前端产物
-        uses: actions/upload-artifact@v4
+        run: |
+          npm ci
+          npm run build
+      - uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
-          path: frontend/dist
+          path: frontend/dist/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 3
 
   package:
-    name: 打包 ${{ matrix.target }}
+    name: 打包 ${{ matrix.os }}-${{ matrix.arch }}
     needs: [prepare, frontend]
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: linux-amd64
-            os: linux
-            arch: amd64
-          - target: linux-arm64
-            os: linux
-            arch: arm64
-          - target: windows-amd64
-            os: windows
-            arch: amd64
-          - target: darwin-amd64
-            os: darwin
-            arch: amd64
-          - target: darwin-arm64
-            os: darwin
-            arch: arm64
+          - {os: linux, arch: amd64, runner: ubuntu-latest}
+          - {os: linux, arch: arm64, runner: ubuntu-latest}
+          - {os: darwin, arch: amd64, runner: ubuntu-latest}
+          - {os: darwin, arch: arm64, runner: ubuntu-latest}
+          - {os: windows, arch: amd64, runner: windows-latest}
     env:
-      CGO_ENABLED: "0"
+      VERSION: ${{ needs.prepare.outputs.version }}
+      TARGET_OS: ${{ matrix.os }}
+      TARGET_ARCH: ${{ matrix.arch }}
     steps:
-      - name: 检出标签
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
-
-      - name: 设置 Go
-        uses: actions/setup-go@v5
+          persist-credentials: false
+      - uses: actions/setup-go@v5
         with:
           go-version-file: backend/go.mod
-          cache: true
           cache-dependency-path: backend/go.sum
-
-      - name: 下载前端产物
-        uses: actions/download-artifact@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-python@v5
+        if: runner.os == 'Windows'
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
         with:
           name: frontend-dist
           path: frontend/dist
-
       - name: 生成发布包
         shell: bash
-        env:
-          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
-          TARGET_OS: ${{ matrix.os }}
-          TARGET_ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          name="local-gallery-v${RELEASE_VERSION}-${TARGET_OS}-${TARGET_ARCH}"
-          work_dir="$RUNNER_TEMP/$name"
-          output_dir="$RUNNER_TEMP/release-assets"
-          mkdir -p "$work_dir/dist" "$work_dir/backend" "$work_dir/aiworker" "$output_dir"
-          (cd backend && CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" go build \
-            -ldflags "-X github.com/tianlongxiang/local-gallery/internal/config.Version=${RELEASE_VERSION}" \
-            -o "$work_dir/$( [[ "$TARGET_OS" == windows ]] && echo local-gallery.exe || echo local-gallery )" ./cmd/server)
-          cp -R frontend/dist/. "$work_dir/dist/"
-          cp backend/config.example.yaml "$work_dir/config.example.yaml" "$work_dir/backend/config.example.yaml"
-          cp README.md AGENTS.md "$work_dir/"
-          cp -R docs "$work_dir/docs"
-          cp backend/aiworker/*.py backend/aiworker/*.txt backend/aiworker/*.bat "$work_dir/aiworker/"
-          if [[ -f LICENSE ]]; then cp LICENSE "$work_dir/"; fi
-          if [[ "$TARGET_OS" == windows ]]; then
-            (cd "$RUNNER_TEMP" && zip -qr "$output_dir/$name.zip" "$name")
-          else
-            tar -czf "$output_dir/$name.tar.gz" -C "$RUNNER_TEMP" "$name"
-          fi
-          rm -rf "$work_dir"
-
-      - name: 上传平台发布包
-        uses: actions/upload-artifact@v4
+        run: node scripts/package-release.mjs "$VERSION" "$TARGET_OS" "$TARGET_ARCH" artifacts --skip-frontend
+      - name: 解压并验收 Windows 便携包
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: python scripts/windows-portable/smoke.py "artifacts/local-gallery-v${env:VERSION}-windows-amd64-portable.zip" $env:VERSION
+      - uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.target }}
-          path: ${{ runner.temp }}/release-assets/*
+          name: release-${{ matrix.os }}-${{ matrix.arch }}
+          path: artifacts/local-gallery-*
           if-no-files-found: error
-          retention-days: 1
+          compression-level: 0
+          retention-days: 3
 
   publish:
-    name: 创建 GitHub Release
-    needs: [prepare, package]
+    name: 公开 GitHub Release
+    needs: [prepare, verify, package]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
     steps:
-      - name: 检出标签
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.prepare.outputs.tag }}
-
-      - name: 下载所有平台包
-        uses: actions/download-artifact@v4
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
         with:
           pattern: release-*
           path: release-assets
           merge-multiple: true
-
-      - name: 生成 SHA256 校验文件
+      - name: 校验产物及生成 SHA256SUMS
         working-directory: release-assets
-        run: sha256sum local-gallery-* > SHA256SUMS
-
-      - name: 创建或更新 Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release-assets/* \
-              --repo "$GITHUB_REPOSITORY" --clobber
-            exit 0
+          assets=(local-gallery-*)
+          test "${#assets[@]}" = 5
+          sha256sum "${assets[@]}" > SHA256SUMS
+      - name: 上传草稿附件并发布
+        shell: bash
+        run: |
+          set -euo pipefail
+          if published=$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [[ "$published" != true ]]; then
+              echo "$RELEASE_TAG 已公开，不能覆盖正式发布的附件。" >&2
+              exit 1
+            fi
           fi
-
-          if [[ "$RELEASE_TAG" == *-* ]]; then
-            prerelease_args=(--prerelease)
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            test "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$GITHUB_SHA"
           else
-            prerelease_args=()
+            git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
+              tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "发布 $RELEASE_TAG"
+            git push origin "refs/tags/$RELEASE_TAG"
           fi
-
-          if [[ "$RELEASE_TAG" == "v2.0.0" && -f "docs/release-notes/v2.0.0.md" ]]; then
-            gh release create "$RELEASE_TAG" release-assets/* \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
+          if [[ "${published:-}" != true ]]; then
+            gh release create "$RELEASE_TAG" --verify-tag --draft \
               --title "Local Gallery $RELEASE_TAG" \
-              --notes-file "docs/release-notes/v2.0.0.md" \
-              "${prerelease_args[@]}"
-          else
-            gh release create "$RELEASE_TAG" release-assets/* \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --title "Local Gallery $RELEASE_TAG" \
-              --generate-notes \
-              "${prerelease_args[@]}"
+              --notes-file "docs/release-notes/$RELEASE_TAG.md"
           fi
+          gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest

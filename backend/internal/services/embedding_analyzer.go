@@ -61,7 +61,7 @@ func (a *EmbeddingAnalyzer) ValidateHardware(ctx context.Context, device string)
 		return nil
 	}
 	status, err := a.worker.Status(ctx)
-	if err != nil || !status.CUDAAvailable || !status.RuntimeReady {
+	if err != nil || !status.RuntimeReady || (!status.Portable && !status.CUDAAvailable) {
 		return ErrAIGPUUnavailable
 	}
 	return nil

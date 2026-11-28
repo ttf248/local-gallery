@@ -265,7 +265,7 @@ func main() {
 		log.Fatalf("初始化本地语义搜索 Worker 失败")
 	}
 	workerStatusCtx, workerStatusCancel := context.WithTimeout(context.Background(), 20*time.Second)
-	_, _ = aiWorker.Status(workerStatusCtx)
+	workerStatus, _ := aiWorker.Status(workerStatusCtx)
 	workerStatusCancel()
 	vectorIndex, err := services.OpenVectorIndex(cacheLayout.AIVectorsDir, services.ChineseCLIPModelVersion)
 	if err != nil {
@@ -337,6 +337,7 @@ func main() {
 	var similarityService *services.SimilarityService
 	aiJobs, err = services.NewAIJobService(services.AIJobServiceOptions{
 		StatePath:      cacheLayout.AIJobsPath,
+		DefaultCPU:     workerOptions.Portable && !workerStatus.DirectMLAvailable,
 		MetadataDir:    cacheLayout.MetadataDir,
 		Catalog:        resourceCatalog,
 		ValidatePath:   safetyState.Validate,
@@ -858,8 +859,13 @@ func runServer(
 	}()
 
 	httpErr := app.ShutdownWithTimeout(5 * time.Second)
+	// 退出信号可能先于 Fiber 注册监听器，此时 Shutdown 尚无法关闭它。
+	_ = listener.Close()
 	runtimeErr := <-runtimeDone
 	listenErr := <-listenDone
+	if errors.Is(listenErr, net.ErrClosed) {
+		listenErr = nil
+	}
 	return errors.Join(httpErr, runtimeErr, listenErr)
 }
 

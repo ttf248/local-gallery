@@ -438,6 +438,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 返回本机 Python、PyTorch、CUDA/GPU、ONNX Runtime CUDA Execution Provider、Chinese-CLIP SHA256 校验、向量索引版本与覆盖率，以及 `modules.ocr`、`modules.face` 和逐项的 `faceModels.quality-v2` / `faceModels.buffalo_m` 状态。`runtimeReady` 表示 Chinese-CLIP 推理依赖可导入，`modelValid` 表示权重匹配固定 revision；`cudaAvailable` 与 `cudaExecutionProviderAvailable` 分别报告 PyTorch CUDA 和 ONNX Runtime CUDA 是否可用。关闭 GPU 强制设置时仍可使用 CPU。OCR 和两种人脸模型通过各自状态独立报告依赖与权重就绪情况，不受 Chinese-CLIP 权重缺失影响。`coverage` 按当前资源快照和有效文件指纹统计已索引数/照片数。
 
+Windows 便携运行时增加 `portable: true`。探测到可用的 DirectML GPU 时报告 `directMLAvailable: true`，语义推理设备 `device` 可为 `directml`。
+
 ### `GET /api/storage/usage`
 
 本机分析存储的占用接口，经过现有 API 访问门禁即可访问（局域网客户端认证后同样可用），响应设置 `Cache-Control: no-store`。

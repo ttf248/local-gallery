@@ -416,6 +416,7 @@ type AIJobServiceOptions struct {
 	// 让按目录统计的占用缓存重新扫描。
 	OnRecordsCleared func()
 	ImageConverter   AIImageConverter
+	DefaultCPU       bool
 }
 
 // AIJobService 持久化分析任务，并通过有界 worker 处理图片元数据。
@@ -492,7 +493,7 @@ func NewAIJobService(options AIJobServiceOptions) (*AIJobService, error) {
 		subs:               make(map[string]map[chan AIJob]struct{}),
 		settings: AIJobSettings{
 			DailyEnabled: true, DailyTime: "03:00", DailyModules: []string{AIJobTypeMetadata},
-			DailyScan: true, DailySmartAlbums: true, GPUEnabled: true, FaceModel: DefaultFaceModel,
+			DailyScan: true, DailySmartAlbums: true, GPUEnabled: !options.DefaultCPU, FaceModel: DefaultFaceModel,
 		},
 	}
 	for _, analyzer := range options.Analyzers {

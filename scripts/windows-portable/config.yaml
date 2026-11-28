@@ -1,0 +1,7 @@
+mediaRoots: []
+host: "127.0.0.1"
+port: 8080
+accessMode: "local"
+cacheDir: ".local-gallery"
+staticDir: "dist"
+ffmpegPath: "ffmpeg/ffmpeg.exe"

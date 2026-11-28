@@ -2,17 +2,19 @@ name: CI
 
 on:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.workflow }}
+  cancel-in-progress: ${{ github.workflow == 'CI' }}
 
 jobs:
   verify:
-    name: 验证与构建
+    name: 验证与构建 (${{ matrix.os }})
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -50,7 +52,11 @@ jobs:
 
       - name: 前端测试
         working-directory: frontend
-        run: npm run test
+        run: npm run test -- --maxWorkers=2 --minWorkers=1
+
+      - name: 前端类型检查
+        working-directory: frontend
+        run: npm run typecheck
 
       - name: 后端并发检查
         if: runner.os == 'Linux'
@@ -59,7 +65,12 @@ jobs:
 
       - name: 安装浏览器
         working-directory: frontend
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
+
+      - name: 安装 Linux 浏览器系统依赖
+        if: runner.os == 'Linux'
+        working-directory: frontend
+        run: npx playwright install-deps chromium
 
       - name: 全栈端到端验证
         working-directory: frontend

@@ -38,6 +38,8 @@ type AIWorkerStatus struct {
 	TorchVersion                   string                          `json:"torchVersion,omitempty"`
 	CUDAAvailable                  bool                            `json:"cudaAvailable"`
 	CUDAExecutionProviderAvailable bool                            `json:"cudaExecutionProviderAvailable"`
+	Portable                       bool                            `json:"portable,omitempty"`
+	DirectMLAvailable              bool                            `json:"directMLAvailable,omitempty"`
 	CUDAVersion                    string                          `json:"cudaVersion,omitempty"`
 	GPUName                        string                          `json:"gpuName,omitempty"`
 	GPUMemoryBytes                 int64                           `json:"gpuMemoryBytes,omitempty"`
@@ -111,6 +113,7 @@ type LocalAIWorkerOptions struct {
 	PythonArgs []string
 	ScriptPath string
 	ModelDir   string
+	Portable   bool
 }
 
 type workerRequest struct {
@@ -166,7 +169,7 @@ func NewLocalAIWorker(options LocalAIWorkerOptions) (*localAIWorker, error) {
 	return &localAIWorker{options: options, request: make(chan struct{}, 1)}, nil
 }
 
-// ResolveLocalAIWorkerOptions 先找项目独立虚拟环境，再回退到 Python 3.11 启动器。
+// ResolveLocalAIWorkerOptions 优先使用发布包的运行时，其次是开发虚拟环境和系统 Python。
 func ResolveLocalAIWorkerOptions(modelDir string) (LocalAIWorkerOptions, error) {
 	_, sourceFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -182,6 +185,11 @@ func ResolveLocalAIWorkerOptions(modelDir string) (LocalAIWorkerOptions, error) 
 		script := filepath.Join(candidate, "worker.py")
 		if _, err := os.Stat(script); err != nil {
 			continue
+		}
+		if python := filepath.Join(candidate, "runtime", "python.exe"); runtime.GOOS == "windows" {
+			if info, err := os.Stat(python); err == nil && info.Mode().IsRegular() {
+				return LocalAIWorkerOptions{PythonPath: python, PythonArgs: []string{"-E", "-s"}, ScriptPath: script, ModelDir: modelDir, Portable: true}, nil
+			}
 		}
 		for _, python := range []string{
 			filepath.Join(candidate, ".venv", "Scripts", "python.exe"),
@@ -209,7 +217,7 @@ func (w *localAIWorker) Status(ctx context.Context) (AIWorkerStatus, error) {
 	response, err := w.send(ctx, workerRequest{Action: "status"})
 	if err != nil {
 		if errors.Is(err, ErrAIWorkerUnavailable) {
-			status := AIWorkerStatus{ModelVersion: ChineseCLIPModelVersion, Device: "unavailable", RuntimeError: "python_runtime_unavailable", Modules: unavailableImageModules("python_runtime_unavailable")}
+			status := AIWorkerStatus{ModelVersion: ChineseCLIPModelVersion, Device: "unavailable", Portable: w.options.Portable, RuntimeError: "python_runtime_unavailable", Modules: unavailableImageModules("python_runtime_unavailable")}
 			w.cacheStatus(status)
 			return status, nil
 		}
@@ -421,6 +429,9 @@ func (w *localAIWorker) ensureProcess() (*workerProcess, error) {
 		return nil, errors.New("Python runtime is not installed")
 	}
 	arguments := append(append([]string(nil), w.options.PythonArgs...), "-u", w.options.ScriptPath, w.options.ModelDir)
+	if w.options.Portable {
+		arguments = append(arguments, "--portable")
+	}
 	command := exec.Command(w.options.PythonPath, arguments...)
 	stdin, err := command.StdinPipe()
 	if err != nil {

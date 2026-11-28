@@ -498,11 +498,13 @@ export default function SemanticSearch() {
       </Page>
       {status && usesSemanticSearch ? (
         <Page as="p" className="shrink-0 py-2 text-caption text-ink-3">
-          {status.device === "cuda"
-            ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
-            : status.runtimeReady
-              ? "CPU 推理"
-              : "本机运行环境未就绪"}
+          {status.device === "directml"
+            ? `${status.gpuName ?? "GPU"} · DirectML`
+            : status.device === "cuda"
+              ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
+              : status.runtimeReady
+                ? "CPU 推理"
+                : "本机运行环境未就绪"}
           {" · "}
           {status.coverage.indexed.toLocaleString()} /{" "}
           {status.coverage.total.toLocaleString()} 张已索引 · <Link to={settingsRoute("tasks")} className="underline">任务中心</Link>

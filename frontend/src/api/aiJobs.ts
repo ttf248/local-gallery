@@ -170,6 +170,8 @@ export interface AIWorkerStatus {
   torchVersion?: string;
   cudaAvailable: boolean;
   cudaExecutionProviderAvailable: boolean;
+  portable?: boolean;
+  directMLAvailable?: boolean;
   cudaVersion?: string;
   gpuName?: string;
   gpuMemoryBytes?: number;

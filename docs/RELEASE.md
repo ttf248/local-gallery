@@ -35,7 +35,7 @@ npm run test:e2e
 
 ## CI
 
-CI 与 Release 只通过 GitHub Actions 的 `workflow_dispatch` 手动启动。CI 覆盖 Windows、macOS、Linux 的后端测试、前端 lint、单元测试和 E2E；Linux 另跑 Go race 检查并上传验证包。
+在 GitHub Actions 手动启动 CI 或 Release。CI 在 Windows、macOS、Linux 上运行 Go 测试、前端 lint、类型检查、单元测试和 E2E。Linux 另跑 Go race 检查、首屏体积审计并上传验证包。Release 复用同一套 CI 门禁。
 
 如需提交推送，先按项目规则暂存当前任务文件，再准备多行中文提交说明文件：
 
@@ -55,28 +55,24 @@ scripts\watch-github-actions.bat <commit-sha>
 
 ## 正式发布
 
-当前发布线为 Go + React v2；历史 v1 发布保持不变。发布前手动运行 CI，在 `docs/release-notes/vX.Y.Z.md` 写中文说明，确认远端没有同名标签，再推送注释标签：
+1. 运行 `node scripts/release-version.mjs patch` 预览版本。首发为 `v2.0.0`，以后从最高的正式 v2 标签递增。选 `minor` 时递增次版本并清零补丁号。
+2. 在 `docs/release-notes/v2.x.y.md` 准备中文说明，将代码与说明提交并推送 CNB。等同一提交同步到 GitHub 默认分支。
+3. 在 GitHub Actions 手动运行 Release，选择同一个 `increment`。`version` 可留空。如果上次发布已建立标签或草稿，填写原版本并从同一提交重跑该工作流，或在默认分支仍指向该提交时重新触发。
+4. CI 与打包验收通过后，工作流创建注释标签、上传五个平台包与 `SHA256SUMS` 到草稿，再公开 Release。公开后附件以该版本为准，后续修复使用新版本。
+5. 从 GitHub Release 下载 Windows ZIP 与 `SHA256SUMS` 到本机临时目录。对比 `Get-FileHash -Algorithm SHA256`，再运行下方的解压验收命令并查看实际页面。
 
-```sh
-git tag -a v2.0.0 -m "发布 v2.0.0"
-git push github v2.0.0
-```
-
-在 GitHub Actions 页面手动运行 Release 并选择该标签。工作流构建一次前端，交叉编译 Linux、Windows、macOS 的 amd64 / arm64 包，生成校验和并创建或更新 Release。
-
-Windows 本地生成发布包：
+Windows 可用 Go、Node.js、Python 3.11 和系统 `tar.exe` 本地打包。先运行 `npm --prefix frontend ci`，再执行：
 
 ```bat
-scripts\package-release.bat 2.0.0 windows amd64
+node scripts/package-release.mjs 2.0.0 windows amd64
+python scripts\windows-portable\smoke.py artifacts\local-gallery-v2.0.0-windows-amd64-portable.zip 2.0.0
 ```
 
-发布包包含可运行程序、`dist/`、示例配置、文档和 `aiworker/` 源码；不包含 Python 虚拟环境和模型。Windows 用户运行 `aiworker\setup.bat` 安装 AI 环境。macOS / Linux 需安装 Python 3.11 与平台对应依赖，再运行 Worker。
+打包脚本拉取并校验 Python、FFmpeg 和模型的 SHA256。打包时可通过 `LG_RELEASE_MODEL_CACHE` 复用已有模型目录，校验通过后复制。Windows 验收使用独立端口和带空格及中文的临时路径，检查启动器、前后端版本、样本扫描、FFmpeg 和内置模型的实际推理。使用方法见 [README](../README.md#使用发布包)。
 
 **发布包不含源码映射。** 前端构建默认不产出 `.map` —— 那是一份完整的
 TS/TSX 源码，随包分发等于把源码公开。需要排查线上堆栈时用
 `LOCAL_GALLERY_SOURCEMAP=hidden npm run build` 单独构建；打包脚本会再删
 一次 `dist/assets/*.map` 兜底。
 
-版本号由发布标签注入后端和前端。不要为普通提交修改版本，也不要提交 `frontend/dist`、`bin/`、发布包或运行时缓存。
-
-\n
+发布号统一注入 Go、Vite 和压缩包名称。开发版本从源码默认值读取。构建产物和缓存由 `.gitignore` 管理。

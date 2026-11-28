@@ -31,19 +31,29 @@ export default function ComputeHardwarePanel({
   const gpuReady = Boolean(
     status?.cudaAvailable && status.cudaExecutionProviderAvailable,
   );
+  const label = status?.portable ? "优先使用 GPU" : "强制使用 GPU";
+  const cpuDescription = "向量、文字识别与人脸分析任务使用 CPU 推理。";
+  const gpuDescription = status?.portable
+    ? "模型任务优先使用 DirectML GPU。未检测到可用 GPU 时使用 CPU。"
+    : "向量、文字识别与人脸分析任务强制使用 NVIDIA GPU；不可用时任务会失败并记录原因，不会转用 CPU。";
+  const runtimeDescription = status?.portable
+    ? status.directMLAvailable
+      ? `${status.gpuName ?? "GPU"} · DirectML 可用`
+      : "未检测到兼容 DirectML 的 GPU，模型任务使用 CPU。"
+    : gpuReady
+      ? `${status?.gpuName ?? "NVIDIA GPU"} · CUDA ${status?.cudaVersion ?? "可用"} · ONNX GPU 运行时可用`
+      : status?.cudaAvailable
+        ? "已检测到 NVIDIA GPU；ONNX GPU 运行时未就绪，OCR 与人脸 GPU 任务将记录错误。"
+        : "未检测到可用的 NVIDIA CUDA 运行环境；GPU 模式下的模型任务会记录错误。";
 
   return (
     <SettingsGroup id="hardware" title="硬件方案">
       <SettingsRow
-        label="强制使用 GPU"
-        description={
-          gpuEnabled
-            ? "向量、文字识别与人脸分析任务强制使用 NVIDIA GPU；不可用时任务会失败并记录原因，不会转用 CPU。"
-            : "向量、文字识别与人脸分析任务使用 CPU 推理；照片元数据始终由 CPU 处理。"
-        }
+        label={label}
+        description={gpuEnabled ? gpuDescription : cpuDescription}
       >
         <Switch
-          label="强制使用 GPU"
+          label={label}
           checked={gpuEnabled}
           disabled={disabled || saving}
           onChange={onChange}
@@ -54,11 +64,7 @@ export default function ComputeHardwarePanel({
         <p className="text-caption text-ink-3" role="status">
           {statusLoading
             ? "正在检查本机 GPU 运行环境…"
-            : gpuReady
-              ? `${status?.gpuName ?? "NVIDIA GPU"} · CUDA ${status?.cudaVersion ?? "可用"} · ONNX GPU 运行时可用`
-              : status?.cudaAvailable
-                ? "已检测到 NVIDIA GPU；ONNX GPU 运行时未就绪，OCR 与人脸 GPU 任务将记录错误。"
-                : "未检测到可用的 NVIDIA CUDA 运行环境；GPU 模式下的模型任务会记录错误。"}
+            : runtimeDescription}
         </p>
         {saveError ? (
           <p role="alert" className="mt-2 text-caption text-danger">
@@ -72,9 +78,7 @@ export default function ComputeHardwarePanel({
           </summary>
           <div className="tasks-advanced__body [padding:2px_0_14px]">
             <p className="text-caption leading-relaxed text-ink-2">
-              {gpuEnabled
-                ? "新建的向量、文字识别和人脸分析任务强制使用 NVIDIA GPU；GPU 不可用或推理失败时，任务会失败并记录原因，不会转用 CPU。已排队任务保留创建时的设备选择。照片元数据解析始终由 CPU 处理。"
-                : "新建的向量、文字识别和人脸分析任务使用 CPU 推理。已排队任务保留创建时的设备选择；照片元数据解析始终由 CPU 处理。"}
+              当前方案适用于新建任务。已排队任务保留创建时的设备选择。照片元数据解析始终由 CPU 处理。
             </p>
             <p className="mt-2 text-caption text-ink-3">
               推理设备与模型状态在同页的「高级信息」里；模型权重在「数据与存储」页签。

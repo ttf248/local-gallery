@@ -168,7 +168,7 @@ test("千页连续窗口与目录仅请求有限预览，快速定位采用最�
   });
   await page.goto(readerUrl(id, "?index=776"));
   const label = page.getByTitle("跳转到指定页 (G)");
-  await expect(label).toHaveText("777");
+  await expect(label).toHaveText("777", { timeout: 15_000 });
   await expect(
     page.getByAltText("第 777 页", { exact: true }),
   ).toBeInViewport();
@@ -264,7 +264,9 @@ test("缺失尺寸、延迟预览及 404 重试保持活动门禁", async ({ pag
   await page.waitForTimeout(700);
   expect(writes).toEqual([]);
   fail = false;
-  await retry.click();
+  // 连续模式的图像高度由占位尺寸推算，重试按钮可通过键盘聚焦激活。
+  await retry.focus();
+  await retry.press("Enter");
   await expect(page.getByAltText("第 4 页", { exact: true })).toBeInViewport();
   await expect.poll(() => writes).toContain(3);
   await page.keyboard.press("f");

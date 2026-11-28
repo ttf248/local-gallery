@@ -130,7 +130,7 @@ export default function TaskConsole({
               href="#hardware"
               className="mb-2 inline-block text-caption text-ink-2 underline"
             >
-              新任务使用 {gpuEnabled ? "NVIDIA GPU" : "CPU"} · 更改硬件方案
+              新任务使用 {gpuEnabled ? (embeddingStatus?.portable ? "GPU 优先" : "NVIDIA GPU") : "CPU"} · 更改硬件方案
             </a>
           )}
           <RunSummaryPanel
@@ -273,11 +273,13 @@ function EmbeddingRuntimeStatus({
       <p className="text-ink-2">
         运行设备：
         <span className="text-ink">
-          {status.device === "cuda"
-            ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
-            : status.runtimeReady
-              ? "CPU 回退"
-              : "运行环境未就绪"}
+          {status.device === "directml"
+            ? `${status.gpuName ?? "GPU"} · DirectML`
+            : status.device === "cuda"
+              ? `${status.gpuName ?? "NVIDIA GPU"} · CUDA ${status.cudaVersion ?? "可用"}`
+              : status.runtimeReady
+                ? "CPU 推理"
+                : "运行环境未就绪"}
         </span>
       </p>
       <p className="text-ink-2">

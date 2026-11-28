@@ -107,6 +107,12 @@ ocr_gpu_runtime_failed = False
 # 再失败一遍 —— 那是七百多兆权重的一次白加载。
 # 强制 GPU 的任务不受影响：它本来就该按 GPU 失败来报。
 cuda_inference_failed = False
+portable = False
+directml_device = None
+directml_adapter = None
+directml_name = None
+directml_inference_failed = False
+DIRECTML_PROVIDER = "DmlExecutionProvider"
 face_runtime_error = ""
 face_profile_runtime_errors = {}
 cover_sessions = {}
@@ -223,6 +229,10 @@ def status() -> dict:
             except Exception:
                 pass
     result.update(state)
+    if portable:
+        result.update(portable=True, directMLAvailable=directml_device is not None)
+        if directml_name:
+            result["gpuName"] = directml_name
     return result
 
 
@@ -309,21 +319,20 @@ def score_covers(paths, device_mode, comic=False):
     if gpu and not gpu_available(require_onnx=True):
         return {"error": "gpu_unavailable"}
     if device_mode not in cover_sessions:
-        providers = ["CUDAExecutionProvider"] if gpu else ["CPUExecutionProvider"]
         options = ort.SessionOptions()
         options.intra_op_num_threads = min(4, os.cpu_count() or 1)
-        session = ort.InferenceSession(str(model_dir / "aesthetic" / "cover.onnx"), options, providers=providers)
-        if gpu and session.get_providers()[0] != providers[0]:
-            return {"error": "gpu_inference_failed"}
+        session = onnx_session(str(model_dir / "aesthetic" / "cover.onnx"), gpu, options)
         session.disable_fallback()
         cover_sessions[device_mode] = session
     return run_image_analysis(paths, lambda path: score_cover(path, cover_sessions[device_mode], device_mode, comic))
 
 
 def ocr_module_status() -> dict:
+    expected_version = "1.20.1" if portable else "1.20.2"
+    module_version = f"rapidocr-3.10.0-onnxruntime-{expected_version}"
     error = module_error("ocr")
     if error:
-        return {"ready": False, "version": "rapidocr-3.10.0-onnxruntime-1.20.2", "error": error}
+        return {"ready": False, "version": module_version, "error": error}
     try:
         if (
             importlib.util.find_spec("rapidocr") is None
@@ -333,11 +342,8 @@ def ocr_module_status() -> dict:
             error = "ocr_dependencies_missing"
         else:
             version = importlib.metadata.version("rapidocr")
-            try:
-                runtime_version = importlib.metadata.version("onnxruntime-gpu")
-            except importlib.metadata.PackageNotFoundError:
-                runtime_version = importlib.metadata.version("onnxruntime")
-            if version != "3.10.0" or runtime_version != "1.20.2":
+            import onnxruntime
+            if version != "3.10.0" or onnxruntime.__version__ != expected_version:
                 error = "ocr_dependency_version_mismatch"
             else:
                 ocr_model_dir = model_dir / OCR_MODEL_DIRECTORY
@@ -352,7 +358,7 @@ def ocr_module_status() -> dict:
         error = "ocr_dependencies_missing"
     return {
         "ready": not error,
-        "version": "rapidocr-3.10.0-onnxruntime-1.20.2",
+        "version": module_version,
         **({"error": error} if error else {}),
     }
 
@@ -431,6 +437,48 @@ def cuda_provider_available() -> bool:
         return False
 
 
+def configure_directml() -> None:
+    global directml_device, directml_adapter, directml_name
+    try:
+        import onnxruntime
+        import torch_directml
+        if DIRECTML_PROVIDER not in onnxruntime.get_available_providers() or not torch_directml.is_available():
+            return
+        for index in range(torch_directml.device_count()):
+            name = torch_directml.device_name(index).rstrip("\0")
+            if "basic render driver" in name.lower():
+                continue
+            try:
+                candidate = torch_directml.device(index)
+                (torch.ones(1).to(candidate) + 1).cpu()
+            except (OSError, RuntimeError):
+                continue
+            directml_device, directml_adapter, directml_name = candidate, index, name
+            return
+    except (ImportError, OSError, RuntimeError):
+        return
+
+
+def onnx_gpu_provider() -> str:
+    return DIRECTML_PROVIDER if portable else "CUDAExecutionProvider"
+
+
+def onnx_session(path, gpu, options=None):
+    import onnxruntime as ort
+    provider = onnx_gpu_provider() if gpu else "CPUExecutionProvider"
+    providers = [provider]
+    if provider == DIRECTML_PROVIDER:
+        options = options if options is not None else ort.SessionOptions()
+        options.enable_mem_pattern = False
+        options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        providers = [(provider, {"device_id": directml_adapter})]
+    session_args = {"sess_options": options} if options is not None else {}
+    session = ort.InferenceSession(path, providers=providers, **session_args)
+    if session.get_providers()[0] != provider:
+        raise RuntimeError("gpu_unavailable" if gpu else "face_inference_failed")
+    return session
+
+
 def configure_cuda_dlls() -> None:
     if os.name != "nt" or cuda_dll_handles:
         return
@@ -460,13 +508,15 @@ def prepend_dll_search_path(directory) -> None:
 
 
 def gpu_available(require_onnx: bool = False) -> bool:
+    if portable:
+        return directml_device is not None
     if require_onnx:
         return cuda_provider_available()
     return bool(torch is not None and torch.cuda.is_available())
 
 
 def load_model(device_mode: str = "auto") -> None:
-    global clip, model, model_device, preprocess, torch, Image, device, runtime_error, cuda_inference_failed
+    global clip, model, model_device, preprocess, torch, Image, device, runtime_error, directml_inference_failed
     state = model_state()
     if not state.get("modelValid"):
         raise RuntimeError("model_missing_or_checksum_invalid")
@@ -479,9 +529,11 @@ def load_model(device_mode: str = "auto") -> None:
         runtime_error = "python_dependencies_missing"
         raise RuntimeError(runtime_error) from None
     torch, Image, clip = torch_module, image_module, clip_module
-    if device_mode == "gpu" and not torch.cuda.is_available():
+    if device_mode == "gpu" and not gpu_available():
         raise RuntimeError("gpu_unavailable")
-    if device_mode == "gpu":
+    if portable and directml_device is not None and (device_mode == "gpu" or (device_mode == "auto" and not directml_inference_failed)):
+        target_device = "directml"
+    elif device_mode == "gpu":
         target_device = "cuda"
     elif device_mode == "auto" and torch.cuda.is_available() and not cuda_inference_failed:
         target_device = "cuda"
@@ -501,9 +553,15 @@ def load_model(device_mode: str = "auto") -> None:
     try:
         with contextlib.redirect_stdout(sys.stderr):
             loaded_model, loaded_preprocess = load_from_name(
-                "ViT-B-16", device=target_device, download_root=str(model_dir)
+                "ViT-B-16", device="cpu" if target_device == "directml" else target_device, download_root=str(model_dir)
             )
+            if target_device == "directml":
+                loaded_model.to(directml_device)
     except Exception as error:
+        if target_device == "directml" and device_mode == "auto":
+            directml_inference_failed = True
+            load_model("cpu")
+            return
         if device_mode == "auto" and target_device == "cuda" and "out of memory" in str(error).lower():
             torch.cuda.empty_cache()
             target_device = "cpu"
@@ -540,15 +598,15 @@ def normalize_rows(features):
 
 
 def encode_image_batch(images):
-    tensor = torch.stack(images).to(device)
-    with torch.inference_mode():
+    tensor = torch.stack(images).to(directml_device if device == "directml" else device)
+    with (torch.no_grad() if device == "directml" else torch.inference_mode()):
         features = normalize_rows(model.encode_image(tensor)).float().cpu()
     return features.tolist()
 
 
 def encode_text_batch(texts):
-    tokens = clip.tokenize(texts).to(device)
-    with torch.inference_mode():
+    tokens = clip.tokenize(texts).to(directml_device if device == "directml" else device)
+    with (torch.no_grad() if device == "directml" else torch.inference_mode()):
         features = normalize_rows(model.encode_text(tokens)).float().cpu()
     return features.tolist()
 
@@ -558,7 +616,7 @@ def is_cuda_oom(error: Exception) -> bool:
 
 
 def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_workers=1):
-    global device, model, model_device, cuda_inference_failed
+    global device, model, model_device, cuda_inference_failed, directml_inference_failed
     batch_size = GPU_INITIAL_BATCH_SIZE if device == "cuda" else INITIAL_BATCH_SIZE
     results = [None] * len(items)
     errors = [""] * len(items)
@@ -600,6 +658,12 @@ def run_with_fallback(items, encode, prepare, device_mode="auto", prepare_worker
                     results[index] = vector
             pending = pending[size:]
         except Exception as error:
+            if device == "directml" and device_mode == "auto":
+                model_cache.pop("directml", None)
+                model = None
+                directml_inference_failed = True
+                load_model("cpu")
+                continue
             if not is_cuda_oom(error) or device != "cuda":
                 for index in chunk:
                     errors[index] = "gpu_inference_failed" if device_mode == "gpu" else "inference_failed"
@@ -747,7 +811,8 @@ def load_ocr_engine(device_mode="cpu"):
             from rapidocr import RapidOCR
             params = {
                 "Global.model_root_dir": str(model_dir / OCR_MODEL_DIRECTORY),
-                "EngineConfig.onnxruntime.use_cuda": mode == "gpu",
+                "EngineConfig.onnxruntime.use_cuda": mode == "gpu" and not portable,
+                "EngineConfig.onnxruntime.use_dml": mode == "gpu" and portable,
                 "Cls.cls_batch_num": (
                     OCR_CLASSIFIER_BATCH_SIZE if mode == "gpu" else OCR_DEFAULT_BATCH_SIZE
                 ),
@@ -755,6 +820,10 @@ def load_ocr_engine(device_mode="cpu"):
             }
             if mode == "cpu":
                 params["EngineConfig.onnxruntime.intra_op_num_threads"] = OCR_CPU_ONNX_THREADS
+            elif portable and directml_adapter:
+                # RapidOCR 3.10 的 DML 配置会将 OmegaConf 对象原样传给 ORT。
+                # 默认 DML 配置复用已转换成普通 dict 的 CPU provider 配置。
+                params["EngineConfig.onnxruntime.cpu_ep_cfg.device_id"] = directml_adapter
             with contextlib.redirect_stdout(sys.stderr):
                 rapid_ocr[mode] = RapidOCR(params=params)
         except Exception:
@@ -779,7 +848,7 @@ def ocr_engine_uses_cuda(engine) -> bool:
             providers = session.get_providers()
         except Exception:
             return False
-        if not providers or providers[0] != "CUDAExecutionProvider":
+        if not providers or providers[0] != onnx_gpu_provider():
             return False
         loaded_sessions += 1
     return loaded_sessions > 0
@@ -813,18 +882,10 @@ def load_face_models(device_mode="cpu", face_model=FACE_MODEL_DEFAULT):
             import numpy as numpy_module
             cv2, np = cv2_module, numpy_module
             if face_model == FACE_MODEL_BUFFALO_M:
-                import onnxruntime
                 detector_path = str(model_dir / "face" / FACE_MODEL_BUFFALO_M / BUFFALO_M_DETECTOR_FILE)
                 recognizer_path = str(model_dir / "face" / FACE_MODEL_BUFFALO_M / BUFFALO_M_RECOGNIZER_FILE)
-                providers = ["CUDAExecutionProvider"] if mode == "gpu" else ["CPUExecutionProvider"]
-                detector = onnxruntime.InferenceSession(detector_path, providers=providers)
-                recognizer = onnxruntime.InferenceSession(recognizer_path, providers=providers)
-                if any(
-                    not session.get_providers()
-                    or session.get_providers()[0] != providers[0]
-                    for session in (detector, recognizer)
-                ):
-                    raise RuntimeError("gpu_unavailable" if mode == "gpu" else "face_inference_failed")
+                detector = onnx_session(detector_path, mode == "gpu")
+                recognizer = onnx_session(recognizer_path, mode == "gpu")
                 outputs = detector.get_outputs()
                 if len(outputs) != 9:
                     raise RuntimeError("face_model_load_failed")
@@ -842,19 +903,8 @@ def load_face_models(device_mode="cpu", face_model=FACE_MODEL_DEFAULT):
             detector_path = str(model_dir / "face" / YUNET_FILE)
             recognizer_path = str(model_dir / "face" / SFACE_FILE)
             if mode == "gpu":
-                import onnxruntime
-                detector = onnxruntime.InferenceSession(
-                    detector_path, providers=["CUDAExecutionProvider"]
-                )
-                recognizer = onnxruntime.InferenceSession(
-                    recognizer_path, providers=["CUDAExecutionProvider"]
-                )
-                if any(
-                    not session.get_providers()
-                    or session.get_providers()[0] != "CUDAExecutionProvider"
-                    for session in (detector, recognizer)
-                ):
-                    raise RuntimeError("gpu_unavailable")
+                detector = onnx_session(detector_path, True)
+                recognizer = onnx_session(recognizer_path, True)
                 face_models[cache_key] = {
                     "device": mode, "profile": face_model,
                     "detector": detector, "recognizer": recognizer,
@@ -1439,7 +1489,7 @@ def run_ocr_image_analysis(paths, device_mode):
         return analyze_ocr_image(path, device_mode)
 
     max_workers = (
-        ocr_gpu_image_worker_count(paths)
+        (1 if portable else ocr_gpu_image_worker_count(paths))
         if device_mode == "gpu"
         else ocr_cpu_image_worker_count()
     )
@@ -1572,6 +1622,11 @@ def _process_request(request: dict) -> dict:
     device_mode = request.get("device", "auto")
     if device_mode not in ("auto", "cpu", "gpu"):
         return {"error": "invalid_device_mode"}
+    if portable:
+        if directml_device is None and device_mode == "gpu":
+            device_mode = "cpu"
+        elif directml_device is not None and device_mode == "auto" and action not in ("embed_images", "embed_texts"):
+            device_mode = "gpu"
     if action == "score_comic_covers":
         return score_covers(request.get("paths"), device_mode, comic=True)
     if action == "score_covers":
@@ -1605,7 +1660,7 @@ def _process_request(request: dict) -> dict:
         return run_image_analysis(
             paths,
             lambda path: analyze_face_image(path, device_mode, face_model),
-            max_workers=max_workers if device_mode == "gpu" else 1,
+            max_workers=max_workers if device_mode == "gpu" and not portable else 1,
         )
     if action not in ("embed_images", "embed_texts"):
         return {"error": "unknown_action"}
@@ -1658,7 +1713,7 @@ def configure_worker_stdio() -> None:
 
 
 def main() -> None:
-    global torch, runtime_error, device, clip, Image
+    global torch, runtime_error, device, clip, Image, portable
     configure_worker_stdio()
     configure_cuda_dlls()
     try:
@@ -1668,7 +1723,11 @@ def main() -> None:
         torch = torch_module
         Image = image_module
         clip = clip_module
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        portable = "--portable" in sys.argv[2:]
+        if portable:
+            os.environ["TORCH_FORCE_WEIGHTS_ONLY_LOAD"] = "1"
+            configure_directml()
+        device = "directml" if directml_device is not None else "cuda" if torch.cuda.is_available() else "cpu"
     except Exception:
         runtime_error = "python_dependencies_missing"
     if len(sys.argv) > 2 and sys.argv[2] == "--verify-install":

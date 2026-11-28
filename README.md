@@ -1,6 +1,6 @@
 # Local Gallery · 本地画廊
 
-Local Gallery 是一款在本机运行的照片、漫画与视频画廊。Go 后端直接读取配置的目录，浏览器提供界面；应用状态保存在本地 JSON 文件中，不需要数据库。媒体分析与语义检索都在本机执行，语义检索模型需首次单独下载。
+Local Gallery 是一款在本机运行的照片、漫画与视频画廊。Go 后端直接读取配置的目录，浏览器提供界面，应用状态保存在本地 JSON 文件中。媒体分析与语义检索都在本机执行，Windows x64 便携包内置语义检索模型与推理环境。
 
 协作规则见 [AGENTS.md](./AGENTS.md)。
 
@@ -23,15 +23,16 @@ Local Gallery 是一款在本机运行的照片、漫画与视频画廊。Go 后
 
 ### 使用发布包
 
-当前主线是 Go + React v2 架构。下载发布包时选择 v2.x 对应的系统与架构；v1.x 属于旧版 Python/PyInstaller 架构，不适用于当前配置。若 [发布页](https://github.com/ttf248/local-gallery/releases) 尚无 v2.x 包，请按下面的源码方式构建。
+在 [GitHub 发布页](https://github.com/ttf248/local-gallery/releases) 选择 v2.x 对应的系统与架构。v1.x 使用旧版 Python/PyInstaller 架构，升级时需要重新配置媒体目录。
 
-1. 下载并解压与你的操作系统和处理器架构对应的 local-gallery-v2.x 压缩包。
-2. 复制配置样例并编辑媒体目录。照片和漫画目录都可以配置多个；暂时不添加目录时可使用 mediaRoots: []，之后在设置页添加。
+**Windows 10/11 x64** 用户下载 `local-gallery-v2.x.y-windows-amd64-portable.zip`，将压缩包完整解压到有写权限的目录，双击 `start.bat`。浏览器打开 `http://127.0.0.1:8080`，在「设置与任务 → 媒体库与服务」添加照片或漫画目录。启动窗口中按 Ctrl+C 停止。
 
-   ~~~bat
-    REM Windows
-    copy /Y config.example.yaml config.yaml >NUL
-   ~~~
+便携包内置 Python、FFmpeg、Chinese-CLIP、PP-OCRv6、YuNet 和 SFace。首次使用这些功能可离线运行。支持 DirectML 的显卡会优先用于推理，未检测到可用显卡时使用 CPU。Buffalo_m 和封面审美模型按需运行包内的 `download-extra-models.bat` 从上游下载。
+
+**macOS / Linux** 用户按以下步骤运行基础包。
+
+1. 下载并解压对应系统与架构的压缩包。
+2. 复制配置样例并编辑媒体目录。可使用 `mediaRoots: []`，启动后从设置页添加。
 
    ~~~sh
    # macOS / Linux
@@ -53,14 +54,9 @@ Local Gallery 是一款在本机运行的照片、漫画与视频画廊。Go 后
    staticDir: "dist"
    ~~~
 
-   路径请替换为本机实际目录，并建议使用正斜杠。Windows 可写 `D:/Photos`；macOS/Linux 可写 `/Users/you/Pictures` 或 `/home/you/Pictures`。`cacheDir` 和 `staticDir` 的相对路径以启动目录为准。
+   将目录换成本机路径，例如 `/Users/you/Pictures` 或 `/home/you/Pictures`。`cacheDir` 和 `staticDir` 的相对路径以启动目录为准。
 
 3. 从解压目录启动。
-
-   ~~~powershell
-   # Windows
-   .\local-gallery.exe --config .\config.yaml
-   ~~~
 
    ~~~sh
    # macOS / Linux
@@ -69,7 +65,7 @@ Local Gallery 是一款在本机运行的照片、漫画与视频画廊。Go 后
 
 4. 浏览器打开 http://127.0.0.1:8080。等待已配置目录完成扫描后即可浏览。若 `mediaRoots` 为空，先进入「设置」添加照片或漫画目录；目录变更后会自动扫描。按 Ctrl+C 停止服务。
 
-使用发布包浏览照片、漫画和视频不需要 Go、Node.js、Python 或数据库。语义搜索需要额外安装 Python 环境并下载模型；FFmpeg 属于可选增强组件。
+macOS / Linux 基础包在浏览照片、漫画和视频时只需浏览器。配置本机 AI 或 FFmpeg 请参阅下文。
 
 ### 从源码开发
 
@@ -129,12 +125,6 @@ Windows 一键安装需要 Python 3.11、NVIDIA 驱动和网络。脚本会创�
 backend\aiworker\setup.bat
 ~~~
 
-发布包用户在解压目录运行：
-
-~~~bat
-aiworker\setup.bat
-~~~
-
 需要改代理端口时，编辑两个 BAT 脚本中的 `http_proxy`、`https_proxy`。脚本校验 Chinese-CLIP、YuNet、SFace 和 Buffalo_m 权重的 SHA256，并实际检查 OCR 与两种人脸模型推理。安装后重启应用，在「任务中心」运行相应任务；人物分析需先启用。模型来源：[OpenCV Zoo YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)、[SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) 和 [InsightFace Buffalo_m](https://github.com/deepinsight/insightface/releases/tag/model-zoo)。
 
 Python 虚拟环境位于 Worker 目录的 `.venv/`，模型按配置保存在 `<cacheDir>/derived/ai/models/`：
@@ -149,7 +139,7 @@ face/buffalo_m/w600k_r50.onnx
 
 任务中心的人脸模型选择同时作用于手动和每日增量任务。quality-v2 使用 128 维特征，Buffalo_m 使用 512 维特征；两套模型的分析记录、人物索引和人工修正分别持久化。切换模型会恢复对应数据，增量任务只补齐该模型缺失或已过期的结果；人物相册和智能相册的人物聚合始终读取当前模型。任务记录和本机存储页会标明使用模型及各模型的权重、批次与索引占用。
 
-默认 `cacheDir` 是进程工作目录下的 `.local-gallery`。虚拟环境位于 Worker 目录的 `.venv/`；模型保存在 `<cacheDir>/derived/ai/models/`，不包含在发布压缩包中。Chinese-CLIP 权重约 753 MB；OCR 模型保存在 `derived/ai/models/ocr/`。
+默认 `cacheDir` 是进程工作目录下的 `.local-gallery`。源码虚拟环境位于 Worker 目录的 `.venv/`，Windows 便携包使用 `aiworker/runtime/`。Chinese-CLIP 权重约 753 MB，OCR 模型位于 `<cacheDir>/derived/ai/models/ocr/`。
 
 macOS / Linux 用户自行用 Python 3.11 创建 `.venv` 并安装平台对应依赖，然后在 `backend/aiworker/` 中运行 `python download_models.py`。Linux 可使用 CUDA 版 PyTorch，macOS 使用 CPU 版。Windows 单独重下模型可运行 `backend/aiworker/download-model.bat`。
 
@@ -180,7 +170,7 @@ scripts\install-ffmpeg.bat
 - 照片相册支持在本相册内按可信拍摄时间、离线地点、人物候选和 Chinese-CLIP 场景分类，并基于多项线索生成精选主题；分组不改动媒体文件，名称与隐藏状态可自定义。智能相册专页只展示精选推荐；后台仍计算四类详细分组，供主题评选和来源相册内浏览；首页优先展示分散到不同来源文件夹的高质量主题。
 - 足迹页在本机将照片坐标匹配到省、市、区县边界，不调用在线地图或地理编码服务；地图上的点位只以约 20 公里一格的聚合下发，不还原到单张照片的坐标。边界数据来源与使用限制见 [架构文档](./docs/ARCHITECTURE.md#exifgps-与离线地点地图)。
 - 发布包是便携压缩包，不安装系统服务或配置登录自启；需要手动启动程序并保持进程运行。
-- 发布包会附带本机 AI Worker、依赖清单和一键安装脚本，但不会打包 Python 虚拟环境或模型权重。基本浏览无需 Python；启用 OCR、人脸分析或语义搜索前需运行上文安装脚本。
+- Windows x64 便携包内置核心 AI 权重和运行时。macOS / Linux 基础包附带 AI Worker 源码，启用本机 AI 前需配置运行环境及模型。
 
 ## 开发验证
 
@@ -208,7 +198,7 @@ scripts\install-ffmpeg.bat
 | frontend/ | npm run audit:size | 首屏静态传输 ≤120 KiB，字体 ≤80 KiB；`-- --dist` 验证构建入口 ≤420 KiB |
 | frontend/ | npm run shot | 多断点、明暗主题截图，产物在 `.smoke/` 不入库 |
 | 仓库根 | `build.bat` | Windows 全栈构建 |
-| 仓库根 | `scripts/package-release.bat 2.0.0 windows amd64` | 生成 Windows 发布包 |
+| 仓库根 | `node scripts/package-release.mjs 2.0.0 windows amd64` | 生成 Windows 便携发布包 |
 
 E2E 首次运行前，在 frontend/ 执行 npx playwright install chromium。测试会生成独立临时媒体与配置，不读取个人媒体库；只读文档改动不需要新增业务测试。
 

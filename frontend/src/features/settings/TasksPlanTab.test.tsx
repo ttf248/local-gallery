@@ -567,7 +567,7 @@ describe("任务中心", () => {
 
     renderCenter("tasks");
 
-    expect(await screen.findByText("设备：NVIDIA GPU")).toBeInTheDocument();
+    expect(await screen.findByText("设备：GPU")).toBeInTheDocument();
   });
 
   it("空闲时给出开始分析的入口与模块清单", async () => {

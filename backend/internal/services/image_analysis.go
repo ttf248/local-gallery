@@ -278,7 +278,7 @@ func validateImageGPU(ctx context.Context, worker AIImageAnalysisWorker, device 
 		return nil
 	}
 	status, err := worker.Status(ctx)
-	if err != nil || !status.CUDAAvailable || !status.CUDAExecutionProviderAvailable {
+	if err != nil || (!status.Portable && (!status.CUDAAvailable || !status.CUDAExecutionProviderAvailable)) {
 		return ErrAIGPUUnavailable
 	}
 	return nil

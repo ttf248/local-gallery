@@ -139,7 +139,7 @@ export default function TaskSummary({
             <span>{taskStageLabel(active.stage)}</span>
             <span>等待 {queuedCount} 项</span>
             <span>
-              设备：{active.computeDevice === "gpu" ? "NVIDIA GPU" : "CPU"}
+              设备：{active.computeDevice === "gpu" ? "GPU" : "CPU"}
             </span>
             {active.type === "face" && active.faceModel ? (
               <span>

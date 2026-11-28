@@ -200,6 +200,9 @@ func (s *AIStorageService) AbsolutePaths(options AIStoragePathOptions) AIStorage
 	layout := ResolveCacheLayout(cacheRoot)
 	workerDirectory := absolutePath(options.WorkerDirectory)
 	pythonEnvironment := filepath.Join(workerDirectory, ".venv")
+	if filepath.Base(filepath.Dir(options.PythonPath)) == "runtime" {
+		pythonEnvironment = filepath.Join(workerDirectory, "runtime")
+	}
 
 	paths := AIStorageAbsolutePaths{
 		WorkingDirectory:  workingDirectory,
