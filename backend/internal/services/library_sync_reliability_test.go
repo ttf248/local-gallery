@@ -27,7 +27,9 @@ import (
 // 那次并发也抓出来。
 func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 	root := t.TempDir()
-	batches := make(chan *SyncChangeSet, 64)
+	seen := map[string]struct{}{}
+	var seenMu sync.Mutex
+	changed := make(chan struct{}, 1)
 	watcher, err := NewChangeWatcher(ChangeWatcherOptions{
 		Roots:        []string{root},
 		Exclude:      DefaultExclude(),
@@ -35,8 +37,13 @@ func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 		MaxWait:      50 * time.Millisecond,
 		MaxWatchDirs: 100,
 		OnChange: func(changes *SyncChangeSet) {
+			seenMu.Lock()
+			for file := range changes.Files {
+				seen[file] = struct{}{}
+			}
+			seenMu.Unlock()
 			select {
-			case batches <- changes:
+			case changed <- struct{}{}:
 			default:
 			}
 		},
@@ -60,19 +67,20 @@ func TestChangeWatcher_HighFrequencyWritesAreAllReported(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	seen := map[string]struct{}{}
-	deadline := time.Now().Add(20 * time.Second)
-	for time.Now().Before(deadline) && len(seen) < total {
-		select {
-		case batch := <-batches:
-			for file := range batch.Files {
-				seen[file] = struct{}{}
-			}
-		case <-time.After(50 * time.Millisecond):
+	deadline := time.NewTimer(20 * time.Second)
+	defer deadline.Stop()
+	for {
+		seenMu.Lock()
+		count := len(seen)
+		seenMu.Unlock()
+		if count == total {
+			return
 		}
-	}
-	if len(seen) < total {
-		t.Fatalf("高频写入丢了事件：只收到 %d/%d 个文件", len(seen), total)
+		select {
+		case <-changed:
+		case <-deadline.C:
+			t.Fatalf("高频写入丢了事件：只收到 %d/%d 个文件", count, total)
+		}
 	}
 }
 
