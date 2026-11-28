@@ -61,6 +61,8 @@ scripts\watch-github-actions.bat <commit-sha>
 4. CI 与打包验收通过后，工作流创建注释标签、上传五个平台包与 `SHA256SUMS` 到草稿，再公开 Release。可同时验证不同提交，正式标签和附件的写入串行执行。公开后附件以该版本为准，后续修复使用新版本。
 5. 从 GitHub Release 下载 Windows ZIP 与 `SHA256SUMS` 到本机临时目录。对比 `Get-FileHash -Algorithm SHA256`，再运行下方的解压验收命令并查看实际页面。
 
+如果门禁运行期间默认分支的工作流文件发生变化，GitHub 可能拒绝工作流令牌为旧提交创建标签。确认该次运行的门禁和包验收均通过后，由维护者推送指向该运行提交的同名注释标签，再重跑该次运行的发布作业，沿用已验证的产物。[GitHub 发布权限说明](https://docs.github.com/en/rest/releases/releases#create-a-release)
+
 Windows 可用 Go、Node.js 和 Python 3.11 本地打包。先运行 `npm --prefix frontend ci`，再执行：
 
 ```bat

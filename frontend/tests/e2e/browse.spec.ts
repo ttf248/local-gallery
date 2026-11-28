@@ -2658,19 +2658,21 @@ test("列表只取首屏，真实后端分页与筛选保留完整计数", async
   await page.route("**/api/library/overview?**", async (route) => {
     const url = new URL(route.request().url());
     calls.push(url.searchParams.get("cursor") ?? "first");
-    url.searchParams.set("limit", "20");
+    // 保留真实后端分页，且让首批卡片覆盖虚拟网格的视口与下方预渲染区。
+    url.searchParams.set("limit", "50");
     await route.fulfill({
       response: await route.fetch({ url: url.toString() }),
     });
   });
-  await page.goto("/comic/library");
-  await expect(page.getByRole("heading", { name: "书架",exact:true })).toBeVisible();
-  // 首屏只取一页：剩下的等滚到底再要。
-  expect(calls.filter((cursor) => cursor === "first")).toHaveLength(1);
-  expect(calls).toHaveLength(1);
+  await page.goto("/comic/library?view=album");
+  await expect(
+    page.getByRole("heading", { name: "书架", exact: true }),
+  ).toBeVisible();
   await expect(
     page.locator('main [data-testid="album-card"]').first(),
   ).toBeVisible();
+  // 首批内容已渲染，滚动前只取第一页。
+  expect(calls).toEqual(["first"]);
   // 虚拟列表在主区按滚动事件加载下一页；逐段向下滚动会走过测量边界。
   await page.locator("main").hover();
   await expect

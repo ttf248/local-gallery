@@ -179,7 +179,10 @@ jobs:
           else
             git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com \
               tag -a "$RELEASE_TAG" "$GITHUB_SHA" -m "发布 $RELEASE_TAG"
-            git push origin "refs/tags/$RELEASE_TAG"
+            if ! git push origin "refs/tags/$RELEASE_TAG"; then
+              echo "::error::创建 $RELEASE_TAG 失败。若默认分支的工作流文件已变化，请用维护者凭据推送指向 $GITHUB_SHA 的同名注释标签，再重跑失败的发布作业。"
+              exit 1
+            fi
           fi
           if [[ "${published:-}" != true ]]; then
             gh release create "$RELEASE_TAG" --verify-tag --draft \
