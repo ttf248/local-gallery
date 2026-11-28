@@ -234,10 +234,8 @@ func TestChangeWatcher_MovedDirectoryIsReported(t *testing.T) {
 	for time.Now().Before(deadline) && (!sawOld || !sawParent) {
 		select {
 		case batch := <-batches:
-			for file := range batch.Files {
-				if filepath.Clean(file) == filepath.Clean(photo) {
-					sawOld = true
-				}
+			if _, removed := batch.RemovedDirs[source]; removed {
+				sawOld = true
 			}
 			for dir := range batch.Dirs {
 				if filepath.Clean(dir) == filepath.Clean(root) {
@@ -322,9 +320,16 @@ func TestLibrarySync_VerificationIsNotSatisfiedByReusedScan(t *testing.T) {
 	defer cancel()
 
 	// 占住扫描任务。
-	if _, _, err := h.runner.StartOrReuse(ScanOptions{Roots: []string{h.root}}); err != nil {
+	active, _, err := h.runner.StartOrReuse(ScanOptions{Roots: []string{h.root}})
+	if err != nil {
 		t.Fatalf("occupy scanner: %v", err)
 	}
+	t.Cleanup(func() {
+		h.runner.Wait(active)
+		if err := h.cache.Flush(); err != nil {
+			t.Errorf("flush verification fixture: %v", err)
+		}
+	})
 	h.runner.mu.Lock()
 	before := h.runner.activeID
 	h.runner.mu.Unlock()

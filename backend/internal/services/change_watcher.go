@@ -230,7 +230,7 @@ func (w *ChangeWatcher) Start(ctx context.Context) error {
 	roots := append([]string(nil), w.roots...)
 	w.mu.Unlock()
 	for _, root := range roots {
-		if err := w.addTree(ctx, root); err != nil {
+		if err := w.addTree(ctx, root, nil); err != nil {
 			w.reportRootError(root, err)
 		}
 	}
@@ -251,6 +251,10 @@ func (w *ChangeWatcher) Close() error {
 	w.running = false
 	watcher := w.watcher
 	w.mu.Unlock()
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
 	if watcher != nil {
 		return watcher.Close()
 	}
@@ -285,7 +289,7 @@ func (w *ChangeWatcher) SetRoots(ctx context.Context, roots []string) {
 		return
 	}
 	for _, root := range roots {
-		if err := w.addTree(ctx, root); err != nil {
+		if err := w.addTree(ctx, root, nil); err != nil {
 			w.reportRootError(root, err)
 		}
 	}
@@ -376,29 +380,32 @@ func (w *ChangeWatcher) handleEvent(ctx context.Context, event fsnotify.Event) {
 	w.mu.Unlock()
 
 	op := event.Op
-	if op.Has(fsnotify.Remove) {
+	if op.Has(fsnotify.Remove) || op.Has(fsnotify.Rename) {
 		w.markDirty(filepath.Dir(path))
-		w.removeSubtree(path)
-		w.markFile(path)
-		w.armTimer()
-		return
-	}
-	if op.Has(fsnotify.Rename) {
-		// 改名：旧位置的内容消失，父目录需要重新读取。
-		// 新名字在同一父目录里，父目录重读时会看到它。
-		w.markDirty(filepath.Dir(path))
+		w.mu.Lock()
+		_, watchedDir := w.watched[path]
+		w.mu.Unlock()
+		if watchedDir {
+			w.removeSubtree(path)
+			w.mu.Lock()
+			w.pending.RemovedDirs[path] = struct{}{}
+			w.mu.Unlock()
+		}
 		w.markFile(path)
 		w.armTimer()
 		return
 	}
 	if op.Has(fsnotify.Create) {
 		info, err := os.Lstat(path)
-		if err == nil && info.IsDir() {
-			if err := w.addTree(ctx, path); err != nil {
+		if err == nil && info.IsDir() && !w.opts.Exclude.ShouldSkipDir(filepath.Base(path)) {
+			// 目录事件到达前，文件可能已经写进尚未登记监听的目录。
+			changes := newSyncChangeSet()
+			if err := w.addTree(ctx, path, changes.Files); err != nil {
 				w.reportError(fmt.Errorf("watch new directory %s: %w", filepath.Base(path), err))
 			}
+			changes.CreatedDirs[path] = struct{}{}
 			w.mu.Lock()
-			w.pending.CreatedDirs[path] = struct{}{}
+			w.pending.Merge(changes)
 			w.mu.Unlock()
 		}
 		w.markDirty(filepath.Dir(path))
@@ -620,13 +627,11 @@ func (w *ChangeWatcher) filesStable(batch *SyncChangeSet) bool {
 }
 
 // addTree 登记一棵目录树的监听。
-func (w *ChangeWatcher) addTree(ctx context.Context, root string) error {
+func (w *ChangeWatcher) addTree(ctx context.Context, root string, initialFiles map[string]struct{}) error {
 	if directoryHasNoMediaMarker(root) {
 		return nil
 	}
-	return w.walkDirs(ctx, root, func(dir string) error {
-		return w.addDir(dir)
-	})
+	return w.walkDirs(ctx, root, initialFiles, w.addDir)
 }
 
 // addDir 登记单个目录的监听。
@@ -684,11 +689,10 @@ func (w *ChangeWatcher) removeSubtree(root string) {
 		delete(w.watched, dir)
 	}
 	w.mu.Unlock()
-	if watcher == nil {
-		return
-	}
-	for _, dir := range victims {
-		_ = watcher.Remove(dir)
+	if watcher != nil {
+		for _, dir := range victims {
+			_ = watcher.Remove(dir)
+		}
 	}
 }
 
@@ -697,7 +701,7 @@ func (w *ChangeWatcher) removeSubtree(root string) {
 // 跳过被排除规则排除的目录、符号链接、独立配置的媒体根（它们各自
 // 单独监听）以及带 .nomedia 标记的目录 —— 扫描器不读它们，监听它们
 // 只会浪费句柄。
-func (w *ChangeWatcher) walkDirs(ctx context.Context, root string, visit func(dir string) error) error {
+func (w *ChangeWatcher) walkDirs(ctx context.Context, root string, initialFiles map[string]struct{}, visit func(dir string) error) error {
 	type task struct {
 		path  string
 		depth int
@@ -729,6 +733,9 @@ func (w *ChangeWatcher) walkDirs(ctx context.Context, root string, visit func(di
 				continue
 			}
 			if !entry.IsDir() {
+				if initialFiles != nil && entry.Type().IsRegular() {
+					initialFiles[filepath.Join(current.path, entry.Name())] = struct{}{}
+				}
 				continue
 			}
 			if w.opts.Exclude.ShouldSkipDir(entry.Name()) {
