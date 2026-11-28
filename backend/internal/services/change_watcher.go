@@ -141,6 +141,8 @@ const (
 	defaultMaxWatchDirs = 10000
 	// defaultWatchBufferSize 是单个目录监听的事件缓冲区大小。
 	defaultWatchBufferSize = 8192
+	// watchEventQueueSize 限制通知读取与目录登记之间的队列长度。
+	watchEventQueueSize = 1024
 	// watchStabilityRounds 是「文件仍在写入」的最大确认轮次。
 	// 超过这个轮次仍然认为文件在写，就按当前状态提交，避免永远等下去。
 	watchStabilityRounds = 20
@@ -158,6 +160,7 @@ const (
 type ChangeWatcher struct {
 	opts ChangeWatcherOptions
 
+	watchOps  sync.Mutex
 	mu        sync.Mutex
 	watcher   *fsnotify.Watcher
 	roots     []string
@@ -219,7 +222,10 @@ func (w *ChangeWatcher) Start(ctx context.Context) error {
 	w.watcher = watcher
 	w.mu.Unlock()
 
-	go w.loop(ctx, watcher)
+	events := make(chan fsnotify.Event, watchEventQueueSize)
+	faults := make(chan error, 1)
+	go forwardWatchEvents(watcher, events, faults)
+	go w.loop(ctx, events, faults)
 	go w.flushLoop(ctx)
 
 	// 登记初始目录。单个目录登记失败不阻断整体：网络共享上某些目录
@@ -242,6 +248,8 @@ func (w *ChangeWatcher) Start(ctx context.Context) error {
 
 // Close 停止监听并释放系统句柄。
 func (w *ChangeWatcher) Close() error {
+	w.watchOps.Lock()
+	defer w.watchOps.Unlock()
 	w.mu.Lock()
 	if w.closed {
 		w.mu.Unlock()
@@ -312,18 +320,49 @@ func (w *ChangeWatcher) Status() WatcherStatus {
 	return status
 }
 
-// loop 是事件读取主循环。
-func (w *ChangeWatcher) loop(ctx context.Context, watcher *fsnotify.Watcher) {
+// forwardWatchEvents 独立读取系统通知，避免 Windows 的 Add/Remove 等待
+// 同一线程投递通知时，处理通知的 goroutine 又在等待 Add/Remove。
+// 队列满时报告溢出，交给定期校验补齐变化。系统监听关闭时结束转发。
+func forwardWatchEvents(watcher *fsnotify.Watcher, events chan<- fsnotify.Event, faults chan<- error) {
+	defer close(events)
+	defer close(faults)
+	report := func(err error) {
+		select {
+		case faults <- err:
+		default:
+		}
+	}
 	for {
 		select {
-		case <-ctx.Done():
-			return
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
 			}
-			w.handleEvent(ctx, event)
+			select {
+			case events <- event:
+			default:
+				report(fsnotify.ErrEventOverflow)
+			}
 		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			report(err)
+		}
+	}
+}
+
+func (w *ChangeWatcher) loop(ctx context.Context, events <-chan fsnotify.Event, faults <-chan error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			w.handleEvent(ctx, event)
+		case err, ok := <-faults:
 			if !ok {
 				return
 			}
@@ -636,8 +675,10 @@ func (w *ChangeWatcher) addTree(ctx context.Context, root string, initialFiles m
 
 // addDir 登记单个目录的监听。
 func (w *ChangeWatcher) addDir(dir string) error {
+	w.watchOps.Lock()
+	defer w.watchOps.Unlock()
 	w.mu.Lock()
-	if _, exists := w.watched[dir]; exists {
+	if _, exists := w.watched[dir]; exists || w.closed {
 		w.mu.Unlock()
 		return nil
 	}
@@ -676,6 +717,8 @@ func (w *ChangeWatcher) delegatedRoots() map[string]struct{} {
 
 // removeSubtree 摘掉某个路径及其子目录的监听。
 func (w *ChangeWatcher) removeSubtree(root string) {
+	w.watchOps.Lock()
+	defer w.watchOps.Unlock()
 	w.mu.Lock()
 	prefix := filepath.Clean(root)
 	watcher := w.watcher
