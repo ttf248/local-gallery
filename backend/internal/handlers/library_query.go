@@ -29,12 +29,12 @@ func LibraryQueryHandler(catalog *services.ResourceCatalog, prefs *store.PrefsSt
 			}
 		}
 		q := services.LibraryQuery{EpisodeType: c.Query("episodeType"),
-			Kind:               kind,
-			Parent:             c.Query("parent"),
-			Tag:                c.Query("tag"),
-			View:               c.Query("view"),
-			Query:              c.Query("q"),
-			Year:               c.Query("year"),
+			Kind:       kind,
+			Parent:     c.Query("parent"),
+			Tag:        c.Query("tag"),
+			View:       c.Query("view"),
+			Query:      c.Query("q"),
+			Year:       c.Query("year"),
 			MinImageCount:      minimum,
 			Sort:               c.Query("sort"),
 			ExcludeYearTargets: c.Query("excludeYearTargets") == "1" || c.Query("excludeYearTargets") == "true",

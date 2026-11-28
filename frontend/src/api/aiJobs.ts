@@ -267,6 +267,7 @@ export interface ImageMetadata {
   orientation?: number;
   cameraMake?: string;
   cameraModel?: string;
+  focalLength?:number;aperture?:number;exposureSeconds?:number;iso?:number;
   gps?: {
     latitude: number;
     longitude: number;
@@ -746,14 +747,14 @@ export const aiJobsApi = {
       method: "POST",
       body: { type, mode, albumId },
     }),
-  startAll: (mode: AnalysisMode, albumId?: string) =>
+  startAll: (mode: AnalysisMode, albumId?: string,modules?:AnalysisType[]) =>
     api<{
       ok: boolean;
       jobs: AIJob[];
       skippedModules: AIJobModule[];
     }>("/api/ai/jobs/sequence", {
       method: "POST",
-      body: { mode, albumId },
+      body: { mode, albumId,modules },
     }),
   action: (id: string, action: "pause" | "resume" | "cancel" | "retry") =>
     api<{ ok: boolean; job?: AIJob }>(

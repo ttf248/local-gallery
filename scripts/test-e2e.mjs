@@ -258,7 +258,8 @@ function allocatePort() {
 }
 
 async function waitForServer(child, baseUrl) {
-  for (let attempt = 0; attempt < 80; attempt++) {
+  const deadline = Date.now() + 90_000
+  while (Date.now() < deadline) {
     if (child.exitCode !== null) throw new Error('临时服务提前退出，退出码 ' + child.exitCode)
     try {
       const response = await fetch(baseUrl + '/api/health')
@@ -266,7 +267,7 @@ async function waitForServer(child, baseUrl) {
     } catch {}
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
-  throw new Error('临时服务未能在 20 秒内启动')
+  throw new Error('临时服务未能在 90 秒内启动')
 }
 
 function stopProcess(child) {

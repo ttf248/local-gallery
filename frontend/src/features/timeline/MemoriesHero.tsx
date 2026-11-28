@@ -1,4 +1,4 @@
-import {lazy,Suspense,useEffect,useMemo,useState} from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { usePhotoMemories } from "../../hooks/useLibrary";
 import { useUIStore } from "../../store/uiStore";
 import { albumRoute } from "../../utils/path";
@@ -28,6 +28,8 @@ export function MemoriesHero({
   onDismiss,
 }: MemoriesHeroProps) {
   const [sheet, setSheet] = useState(false);
+  const folded = useUIStore((s) => s.memoriesCollapsed),
+    setFolded = useUIStore((s) => s.setMemoriesCollapsed);
   if (!years.length) return null;
   const menu = (
     <Menu
@@ -50,7 +52,7 @@ export function MemoriesHero({
             key={year.year}
             type="button"
             aria-label={`${year.label}，${year.year} 年，${items.length} 张`}
-            className="relative aspect-[4/5] w-[clamp(200px,16vw,280px)] shrink-0 snap-start overflow-hidden rounded-xl bg-sunken text-left focus-visible:ring-inset"
+            className="relative h-[184px] sm:h-[216px] aspect-[4/3] shrink-0 snap-start overflow-hidden rounded-xl bg-sunken text-left focus-visible:ring-inset"
             onClick={() => onOpen(year, items.indexOf(cover))}
           >
             <ThumbImage
@@ -96,7 +98,7 @@ export function MemoriesHero({
               key={item.id}
               type="button"
               aria-label={item.name}
-              className="relative aspect-[4/5] w-[clamp(120px,12vw,200px)] flex-none self-end overflow-hidden rounded-lg"
+              className="relative h-[184px] sm:h-[216px] aspect-square flex-none self-end overflow-hidden rounded-lg"
               onClick={() => onOpen(years[0], years[0].items.indexOf(item))}
             >
               <ThumbImage
@@ -117,7 +119,14 @@ export function MemoriesHero({
       data-testid="on-this-day-strip"
       className="min-w-0 shrink-0 pb-2"
     >
-      {collapsed ? (
+      {folded ? (
+        <button
+          className="min-h-10 rounded-full bg-sunken px-3 text-label"
+          onClick={() => setFolded(false)}
+        >
+          展开往年今日
+        </button>
+      ) : collapsed ? (
         <>
           <div className="flex items-center gap-2">
             <button
@@ -125,6 +134,9 @@ export function MemoriesHero({
               onClick={() => setSheet(true)}
             >
               那年今日 · {years.length} 个年份 <ChevronRightIcon size={16} />
+            </button>
+            <button className="text-caption" onClick={() => setFolded(true)}>
+              收起回忆
             </button>
             {menu}
           </div>
@@ -140,7 +152,20 @@ export function MemoriesHero({
         </>
       ) : (
         <>
-          <SectionHeader title="那年今日" action={menu} />
+          <SectionHeader
+            title="那年今日"
+            action={
+              <div className="flex items-center gap-2">
+                <button
+                  className="min-h-10 text-caption"
+                  onClick={() => setFolded(true)}
+                >
+                  收起回忆
+                </button>
+                {menu}
+              </div>
+            }
+          />
           {row}
         </>
       )}

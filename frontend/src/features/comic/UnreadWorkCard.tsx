@@ -95,7 +95,7 @@ export function UnreadWorks({
       />
       <input
         aria-label="搜索待读作品"
-        className="my-3 w-full max-w-md rounded-lg border border-border bg-surface px-3 py-2"
+        className="my-3 w-full max-w-md rounded-lg border border-line-subtle bg-raised px-3 py-2"
         placeholder="搜索作品或作者"
         value={q}
         onChange={(e) => setQuery(e.target.value)}
@@ -148,7 +148,7 @@ function UnreadWorkCard({
   return (
     <article
       key={w.id}
-      className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-xl border border-border bg-surface p-3"
+      className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3 rounded-xl border border-line-subtle bg-raised p-3"
     >
       <div className="relative">
         <ThumbImage
@@ -157,7 +157,7 @@ function UnreadWorkCard({
           alt=""
           className="aspect-[2/3] w-full rounded-lg object-cover"
         />
-        <span className="absolute left-1 top-1 rounded bg-theater-surface px-1 text-micro text-theater-fg">
+        <span className="absolute left-1 top-1 rounded bg-theater-surface px-1 text-caption text-theater-fg">
           {g.unreadCount} 话未读
         </span>
       </div>
@@ -170,9 +170,10 @@ function UnreadWorkCard({
         <div className="mt-2 flex flex-wrap gap-1">
           <Link
             to={readerRoute(c.id)}
-            className={buttonStyles({ variant: "primary", size: "sm" })}
+            className={`${buttonStyles({ variant: "primary", size: "sm" })} max-w-full`}
+            title={`从${chapter}开读`}
           >
-            从{chapter}开读
+            <span className="truncate">从{chapter}开读</span>
           </Link>
           <Menu
             label={title + "的操作"}

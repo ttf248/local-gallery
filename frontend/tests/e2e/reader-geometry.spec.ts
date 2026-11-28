@@ -74,7 +74,15 @@ for (const theme of ["light", "dark"] as const) {
         right = (await pages.nth(1).boundingBox())!;
       expect(right.x - left.x - left.width).toBeCloseTo(4, 0);
       expect(left.y).toBeCloseTo(right.y, 0);
-      expect(await pages.first().getAttribute("data-reader-page")).toBe("1");
+      expect(await pages.first().getAttribute("data-reader-page")).toBe("2");
+      // 第 1 页本身就是跨页扫描图，关闭封面偏移后仍然独占一屏。
+      await page.keyboard.press("o");
+      await jump(page, 1);
+      await expect(pages).toHaveCount(1);
+      await expect(pages.first()).toHaveAttribute("data-reader-page", "0");
+      await jump(page, 2);
+      await page.keyboard.press("o");
+      await expect(pages.first()).toHaveAttribute("data-reader-page", "2");
       await shot(page, theme + "-1440x900-double-90");
       await page.keyboard.press("2");
       await expect(img).toBeVisible();
@@ -192,6 +200,7 @@ test("目录隔离背景并归焦，RTL 右键和键盘菜单绑定命中的页"
   await page.keyboard.press("Escape");
   await expect(opener).toBeFocused();
   await page.keyboard.press("3");
+  await jump(page, 2);
   const second = page.locator('[data-reader-page="1"]');
   const file = await second.getAttribute("data-file-id");
   await second.click({ button: "right" });

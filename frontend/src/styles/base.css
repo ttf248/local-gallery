@@ -136,7 +136,13 @@ dialog::backdrop { background: rgb(0 0 0 / .4); backdrop-filter: blur(8px); }
 }
 
 :root[data-keyboard] .mobile-tabs,
+@media(min-width:1024px){
+  .top-bar[data-inline-actions] + .app-main [data-page-header] {padding-inline-end: 3rem;}
+}
 body:has(dialog[open], [role="dialog"][aria-modal="true"]) .mobile-tabs {visibility:hidden}
+@media(min-width:1024px){
+  .top-bar[data-inline-actions] + .app-main [data-page-header] {padding-inline-end: 3rem;}
+}
 body:has(dialog[open], [role="dialog"][aria-modal="true"]) .app-main {overflow-y:hidden}
 [data-page] [data-page] {padding-inline:0;max-width:none}
 

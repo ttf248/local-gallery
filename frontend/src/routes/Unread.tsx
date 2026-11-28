@@ -1,7 +1,7 @@
-import {buttonStyles} from "../ui/buttonStyles";
-import {Page} from "../shell/Page";
-import {PageHero} from "../shell/PageHero";
-import { useMemo } from "react";
+import { buttonStyles } from "../ui/buttonStyles";
+import { Page } from "../shell/Page";
+import { PageHero } from "../shell/PageHero";
+import { useEffect, useMemo, useRef } from "react";
 import { UnreadWorks } from "../features/comic/UnreadWorkCard";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useListFilters } from "../hooks/useListFilters";
@@ -12,13 +12,14 @@ import AlbumGrid from "../features/library/AlbumGrid";
 import AlbumGridSkeleton from "../features/library/AlbumGridSkeleton";
 import { ListFilterBar } from "../features/common/ListFilterBar";
 import { EmptyState } from "../ui/EmptyState";
-import {
-  SparkleIcon,
-  ShuffleIcon,
-  FilterIcon,
-} from "../ui/icons";
+import { SparkleIcon, ShuffleIcon, FilterIcon } from "../ui/icons";
 import type { GalleryContextEntry } from "../utils/galleryContext";
-import { settingsRoute, albumRoute, decodeFavPath, homeRoute } from "../utils/path";
+import {
+  settingsRoute,
+  albumRoute,
+  decodeFavPath,
+  homeRoute,
+} from "../utils/path";
 import { compareDatesDesc } from "../utils/date";
 import { compareByAdded } from "../utils/cardSorting";
 import { useViewedSort } from "../hooks/useHistory";
@@ -36,15 +37,60 @@ import { SelectionToggle } from "../features/common/LibrarySelectionActions";
 //     的核心场景
 //  3. 全部看完时给一个明确「🎉 看完了」空态,而不是灰底 placeholder
 export default function Unread() {
-  const [params,setParams]=useSearchParams();
-  const flat=params.get("groupBy")==="album";
-  const change=(group:string,workId="")=>setParams(prev=>{const p=new URLSearchParams(prev);p.set("groupBy",group);if(workId)p.set("workId",workId);else p.delete("workId");return p});
-  return <><Page className="pt-3"><div role="group" aria-label="待读视图" className="flex gap-1">
-  {(["work","album"] as const).map(group=><button key={group} aria-pressed={group===(flat?"album":"work")} className={buttonStyles({variant:group===(flat?"album":"work")?"secondary":"ghost",size:"sm"})} onClick={()=>change(group)}>{group==="work"?"按作品":"按卷"}</button>)}</div></Page>
-  {flat?<UnreadAlbums workId={params.get("workId")??""}/>:<UnreadWorks q={params.get("q")??""} openVolumes={id=>change("album",id)} setQuery={q=>setParams(prev=>{const p=new URLSearchParams(prev);if(q)p.set("q",q);else p.delete("q");return p},{replace:true})}/>}</>;
+  const [params, setParams] = useSearchParams();
+  const flat = params.get("groupBy") === "album";
+  const change = (group: string, workId = "") =>
+    setParams((prev) => {
+      const p = new URLSearchParams(prev);
+      p.set("groupBy", group);
+      if (workId) p.set("workId", workId);
+      else p.delete("workId");
+      return p;
+    });
+  return (
+    <>
+      <Page className="pt-3">
+        <div role="group" aria-label="待读视图" className="flex gap-1">
+          {(["work", "album"] as const).map((group) => (
+            <button
+              key={group}
+              aria-pressed={group === (flat ? "album" : "work")}
+              className={buttonStyles({
+                variant:
+                  group === (flat ? "album" : "work") ? "secondary" : "ghost",
+                size: "sm",
+              })}
+              onClick={() => change(group)}
+            >
+              {group === "work" ? "按作品" : "按卷"}
+            </button>
+          ))}
+        </div>
+      </Page>
+      {flat ? (
+        <UnreadAlbums workId={params.get("workId") ?? ""} />
+      ) : (
+        <UnreadWorks
+          q={params.get("q") ?? ""}
+          openVolumes={(id) => change("album", id)}
+          setQuery={(q) =>
+            setParams(
+              (prev) => {
+                const p = new URLSearchParams(prev);
+                if (q) p.set("q", q);
+                else p.delete("q");
+                return p;
+              },
+              { replace: true },
+            )
+          }
+        />
+      )}
+    </>
+  );
 }
 
-function UnreadAlbums({workId}:{workId:string}) {
+function UnreadAlbums({ workId }: { workId: string }) {
   const navigate = useNavigate();
   const viewMode = useUIStore((s) => s.viewMode);
   const {
@@ -56,7 +102,34 @@ function UnreadAlbums({workId}:{workId:string}) {
     reset: resetFilters,
   } = useListFilters();
   const pushToast = useUIStore((s) => s.pushToast);
-  const { cards, count, total, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } = useUnreadAlbums(query,workId);
+  const {
+    cards,
+    count,
+    total,
+    isLoading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useUnreadAlbums(query, workId);
+  const nextPageButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const button = nextPageButton.current;
+    if (
+      !button ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      typeof IntersectionObserver === "undefined"
+    )
+      return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void fetchNextPage({ cancelRefetch: false });
+      },
+      { root: button.closest("main"), rootMargin: "0px 0px 240px" },
+    );
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, cards.length]);
   const copy = comicCopy();
   const needsHistory = sortBy === "viewed" && cards.length > 0;
   const { query: historyQuery, compareViewed } = useViewedSort(needsHistory);
@@ -122,38 +195,40 @@ function UnreadAlbums({workId}:{workId:string}) {
 
   return (
     <div className="min-h-full">
-      <Page ><PageHero
-  title={copy.unreadPageTitle}
-  actions={
-          count > 0 && (
-            <button
-              onClick={onShuffleUnread}
-              className={buttonStyles({variant:"secondary",size:"sm"})}
-              title={`从${copy.unreadTitle}里随机挑一本`}
-            >
-              <ShuffleIcon size={11} />
-              {copy.unreadButton}
-            </button>
-          )
-        }
-  meta={
-          <p className="text-body text-ink-2 tabular-nums">
-            {isLoading ? (
-              // 加载中不要报「0 本」：那是"还没数出来"，不是"没有未读"。
-              <span>正在统计未读卷…</span>
-            ) : (
-              <span>
-                还有 <span className="text-ink">{count}</span>{" "}
-                {copy.collectionUnit}
-                {copy.unreadCountVerb}
-                <span className="text-ink-3 mx-1.5">·</span>
-                全库 <span className="text-ink">{total}</span>{" "}
-                {copy.collectionUnit}
-              </span>
-            )}
-          </p>
-        }
-/></Page>
+      <Page>
+        <PageHero
+          title={copy.unreadPageTitle}
+          actions={
+            count > 0 && (
+              <button
+                onClick={onShuffleUnread}
+                className={buttonStyles({ variant: "secondary", size: "sm" })}
+                title={`从${copy.unreadTitle}里随机挑一本`}
+              >
+                <ShuffleIcon size={11} />
+                {copy.unreadButton}
+              </button>
+            )
+          }
+          meta={
+            <p className="text-body text-ink-2 tabular-nums">
+              {isLoading ? (
+                // 加载中不要报「0 本」：那是"还没数出来"，不是"没有未读"。
+                <span>正在统计未读卷…</span>
+              ) : (
+                <span>
+                  还有 <span className="text-ink">{count}</span>{" "}
+                  {copy.collectionUnit}
+                  {copy.unreadCountVerb}
+                  <span className="text-ink-3 mx-1.5">·</span>
+                  全库 <span className="text-ink">{total}</span>{" "}
+                  {copy.collectionUnit}
+                </span>
+              )}
+            </p>
+          }
+        />
+      </Page>
 
       {needsHistory && <ViewedSortNotice query={historyQuery} />}
       {count > 0 && (
@@ -182,14 +257,14 @@ function UnreadAlbums({workId}:{workId:string}) {
             total === 0 ? (
               <button
                 onClick={() => navigate(settingsRoute("server"))}
-                className={buttonStyles({variant:"primary"})}
+                className={buttonStyles({ variant: "primary" })}
               >
                 去设置
               </button>
             ) : (
               <button
                 onClick={() => navigate(homeRoute("comic"))}
-                className={buttonStyles({variant:"secondary"})}
+                className={buttonStyles({ variant: "secondary" })}
               >
                 回主页
               </button>
@@ -204,14 +279,14 @@ function UnreadAlbums({workId}:{workId:string}) {
           action={
             <button
               onClick={resetFilters}
-              className={buttonStyles({variant:"secondary"})}
+              className={buttonStyles({ variant: "secondary" })}
             >
               清除筛选
             </button>
           }
         />
       ) : (
-        <Page >
+        <Page>
           <div className="pb-10">
             <AlbumGrid
               selectable
@@ -222,7 +297,19 @@ function UnreadAlbums({workId}:{workId:string}) {
           </div>
         </Page>
       )}
-      {hasNextPage && <Page><button disabled={isFetchingNextPage} onClick={()=>void fetchNextPage()}>加载更多卷</button></Page>}<div className="h-12" />
+      {hasNextPage && (
+        <Page>
+          <button
+            ref={nextPageButton}
+            className={buttonStyles({ variant: "secondary", size: "sm" })}
+            disabled={isFetchingNextPage}
+            onClick={() => void fetchNextPage({ cancelRefetch: false })}
+          >
+            加载更多卷
+          </button>
+        </Page>
+      )}
+      <div className="h-12" />
     </div>
   );
 }

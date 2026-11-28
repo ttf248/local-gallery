@@ -6,6 +6,7 @@ import {
   resetWorkbenchMode,
   resetNavItems,
   readHistory,
+  readFavorites,
   openMeTab,
   type CopyAuditWindow,
   installCopyAudit,
@@ -18,14 +19,24 @@ test.beforeEach(async ({ request }) => {
 
 test("空收藏返回数组且无失效项时清理显示零项成功", async ({ page }) => {
   await scannedNodes(page.request);
-  const favorites = await page.request.get("/api/favorites");
-  expect(favorites.ok()).toBeTruthy();
-  expect((await favorites.json()).favorites).toEqual([]);
-  await page.goto("/settings/storage");
-  await page.getByRole("button", { name: "清理", exact: true }).click();
-  await expect(
-    page.getByText("已清理 0 项失效收藏", { exact: true }),
-  ).toBeVisible();
+  const previous = await readFavorites(page.request);
+  const setFavorites = async (action: "add" | "remove") => {
+    if (previous.length) {
+      const result = await page.request.post("/api/favorites/batch", {
+        data: { resourceIds: previous, action },
+      });
+      expect(result.ok()).toBeTruthy();
+    }
+  };
+  try {
+    await setFavorites("remove");
+    expect(await readFavorites(page.request)).toEqual([]);
+    await page.goto("/settings/storage");
+    await page.getByRole("button", { name: "清理", exact: true }).click();
+    await expect(page.getByText("已清理 0 项失效收藏", { exact: true })).toBeVisible();
+  } finally {
+    await setFavorites("add");
+  }
 });
 
 test("新打开相册立即出现在最近阅读，媒体分页不重复记录访问", async ({
@@ -459,6 +470,12 @@ test("失效收藏清理成功后刷新失败也立即更新收藏项数", async
     };
   const original = (await list()).favorites;
   try {
+    if (original.length) {
+      const reset = await page.request.post("/api/favorites/batch", {
+        data: { resourceIds: original, action: "remove" },
+      });
+      expect(reset.ok()).toBeTruthy();
+    }
     for (const resourceId of [album.id, missing])
       expect(
         (

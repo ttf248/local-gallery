@@ -39,6 +39,7 @@ interface Props {
     reindexedTarget?: number,
   ) => number;
   images: string[];
+  wideFlags?: readonly boolean[];
   /** 每页的原始像素尺寸。连续模式按它预留高度，图片加载前后页面不跳。 */
   dimensions?: Record<string, { width: number; height: number }>;
   /** 点击图片时触发：根据 clickX 在容器宽度的左/中/右决定动作。父组件传入 prev/next 即可。 */
@@ -119,6 +120,7 @@ export default function ImageGallery({
   albumId = "",
   images,
   dimensions,
+  wideFlags,
   ...rest
 }: Props) {
   const { request, viewportRef, onObserve, onInvalidate, onClickNavigate } =
@@ -431,7 +433,7 @@ export default function ImageGallery({
           )
         : row(
             mode === "double"
-              ? spreadAt(index, images.length, coverOffset)
+              ? spreadAt(index, images.length, coverOffset, wideFlags)
               : [index],
           )}
     </div>

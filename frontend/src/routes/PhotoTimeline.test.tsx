@@ -292,6 +292,9 @@ it("时间来源的分布收在可展开的说明里", async () => {
   expect(legend.textContent).toContain("文件名推断 1 张");
 });
 
+it("URL 的来源与精度一起送入服务端查询，页头计数沿用服务端总数",async()=>{
+ feed.total=135;renderTimeline("/photo?source=exif&precision=day");await waitFor(()=>expect(feed.lastQuery).toMatchObject({dateSource:"exif",datePrecision:"day"}));expect(screen.getByTestId("timeline-meta")).toHaveTextContent("135");
+});
 it("显示年月与年份精度而不伪造月份或日期", async () => {
   feed.items = [
     {

@@ -40,7 +40,7 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
   } = reader;
   const group =
     mode === "double" && !isVideo
-      ? spreadAt(index, total, reader.coverOffset)
+      ? spreadAt(index, total, reader.coverOffset, reader.wideFlags)
       : [index];
   const start =
     mode === "continuous"
@@ -86,7 +86,7 @@ export function ReaderChrome({ reader }: { reader: ReaderController }) {
           name={headerName}
           index={
             mode === "double" && !isVideo
-              ? spreadAt(index, total, reader.coverOffset)[0]
+              ? spreadAt(index, total, reader.coverOffset, reader.wideFlags)[0]
               : index
           }
           itemIndex={isVideo ? itemIndex : undefined}

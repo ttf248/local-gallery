@@ -1,6 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { scannedNodes } from "./helpers/library";
 
+test("作品待读队列一键标记后可撤销本次变更", async ({page,request})=>{
+  await scannedNodes(request,"comic");
+  const list="/api/library/unread?kind=comic&groupBy=work&q="+encodeURIComponent("斗罗大陆");
+  const initial=(await (await request.get(list)).json()).page.items[0];expect(initial).toBeTruthy();
+  await page.goto("/comic/unread?q="+encodeURIComponent("斗罗大陆"));
+  const card=page.getByRole("article").filter({hasText:"斗罗大陆"});await expect(card).toBeVisible();await card.getByRole("button").click();
+  const changed=page.waitForResponse(r=>r.url().includes("/mark-read")&&r.request().method()==="POST");
+  await page.getByRole("menuitem",{name:"整部标为已读"}).click();const {affectedAlbums}=await (await changed).json();
+  try{await expect(card).toHaveCount(0);await page.getByRole("button",{name:"撤销",exact:true}).click();await expect(card).toBeVisible();expect((await (await request.get(list)).json()).page.items[0].unreadCount).toBe(initial.unreadCount)}
+  finally{if(affectedAlbums.length)await request.delete("/api/activity/batch",{data:{albumIds:affectedAlbums}})}
+});
 test("书架展示本地作品信息，编辑简介与总封面后刷新可恢复", async ({
   page,
   request,

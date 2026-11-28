@@ -25,6 +25,8 @@ function base({
   };
 }
 
+export const LockIcon = (p:IconProps)=><svg {...base(p)}><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>;
+export const EditIcon = (p:IconProps)=><svg {...base(p)}><path d="m15 4 5 5M4 20l4.5-1L21 6.5 17.5 3 5 15.5 4 20Z"/></svg>;
 export const HomeIcon = (p: IconProps) => (
   <svg {...base(p)}>
     <path d="M3 11.5 12 4l9 7.5" />

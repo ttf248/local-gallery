@@ -5,7 +5,7 @@ import { Button } from "../../ui/Button";
 import { ChevronLeftIcon } from "../../ui/icons";
 import { useUIStore } from "../../store/uiStore";
 import {activityApi} from "../../api/activity";
-import {useConfirm} from "../common/ConfirmDialog";
+import {useConfirm} from "../common";
 import { fsApi } from "../../api/fs";
 import type { LibraryNodeSummary } from "../../api/library";
 import { comicSourceLabels } from "../../api/comicMeta";

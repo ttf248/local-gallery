@@ -402,9 +402,10 @@ func timelineYearIndexWhere(entries []timelineEntry, keep func(timelineEntry) bo
 
 // timelineFilter 是时间线的一次筛选：年、月、媒体类型。
 type timelineFilter struct {
-	year  int
-	month int
-	media string
+	source, precision string
+	year              int
+	month             int
+	media             string
 }
 
 // matches 判断一个条目落在筛选范围内。
@@ -435,6 +436,10 @@ func (f timelineFilter) matches(entry timelineEntry) bool {
 // matchesMedia 只看媒体类型：照片 / 视频这一维。
 //
 // 年份索引也要用它：只看视频时，年份的数量得是视频的数量。
+func (f timelineFilter) matchesDate(entry timelineEntry) bool {
+	return (f.source == "" || entry.source == f.source) && (f.precision == "" || entry.precision.String() == f.precision)
+}
+
 func (f timelineFilter) matchesMedia(entry timelineEntry) bool {
 	if f.media == "photo" && entry.mediaKindIsVideo() {
 		return false
@@ -487,7 +492,7 @@ func (s *PhotoTimelineService) Page(
 	// 筛选后的序列下标表：只算一次，翻页时按它切。
 	matched := make([]int, 0, len(index.entries))
 	for position := range index.entries {
-		if filter.matches(index.entries[position]) {
+		if filter.matches(index.entries[position]) && filter.matchesDate(index.entries[position]) {
 			matched = append(matched, position)
 		}
 	}
@@ -505,14 +510,16 @@ func (s *PhotoTimelineService) Page(
 	// 「这一屏看到的时间都是怎么来的」，而不是「这一页恰好有几种来源」。
 	sources := map[string]int{}
 	precisions := map[string]int{}
-	for _, position := range matched {
-		entry := index.entries[position]
+	for _, entry := range index.entries {
+		if !filter.matches(entry) {
+			continue
+		}
 		sources[entry.source]++
 		precisions[entry.precision.String()]++
 	}
 	unknown := 0
 	for _, entry := range index.entries {
-		if entry.source == TimelineDateModified && filter.matchesMedia(entry) {
+		if entry.source == TimelineDateModified && filter.matchesMedia(entry) && filter.matchesDate(entry) {
 			unknown++
 		}
 	}
@@ -525,8 +532,8 @@ func (s *PhotoTimelineService) Page(
 	// 年份索引：跳年跳月用。它按媒体类型筛选（照片 / 视频），但不按年份筛 ——
 	// 选中年份后还要能换到别的年份。
 	years := index.years
-	if filter.media != "all" {
-		years = timelineYearIndexWhere(index.entries, filter.matchesMedia)
+	if filter.media != "all" || filter.source != "" || filter.precision != "" {
+		years = timelineYearIndexWhere(index.entries, func(e timelineEntry) bool { return filter.matchesMedia(e) && filter.matchesDate(e) })
 	}
 
 	albums := []FeedAlbumRef{}
@@ -574,7 +581,17 @@ func (s *PhotoTimelineService) Page(
 
 // timelineFilterFromQuery 把请求参数收成筛选条件。
 func timelineFilterFromQuery(query MediaFeedQuery) (timelineFilter, error) {
-	filter := timelineFilter{media: strings.TrimSpace(query.Media)}
+	filter := timelineFilter{media: strings.TrimSpace(query.Media), source: query.DateSource, precision: query.DatePrecision}
+	switch filter.source {
+	case "", "exif", "filename", "folder", "modified":
+	default:
+		return timelineFilter{}, ErrInvalidMediaFeedQuery
+	}
+	switch filter.precision {
+	case "", "day", "month", "year", "unknown":
+	default:
+		return timelineFilter{}, ErrInvalidMediaFeedQuery
+	}
 	switch filter.media {
 	case "", "all":
 		filter.media = "all"
@@ -616,7 +633,7 @@ func (f timelineFilter) scopeKey() string {
 	return strings.Join([]string{
 		strconv.Itoa(f.year),
 		strconv.Itoa(f.month),
-		f.media,
+		f.media, f.source, f.precision,
 	}, "|")
 }
 

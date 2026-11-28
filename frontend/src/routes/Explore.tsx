@@ -1,7 +1,7 @@
 import { settingsRoute } from "../utils/path";
 import {buttonStyles} from "../ui/buttonStyles";
 import { Link } from "react-router-dom";
-import {useState} from "react";
+import {useCallback,useState} from "react";
 import { PageHero } from "../shell/PageHero";
 import {SearchField} from "../ui/SearchField";
 import Segmented from "../ui/Segmented";
@@ -21,6 +21,9 @@ export default function Explore() {
   const photoAlbumCount = manifest?.statistics.photoAlbumCount ?? 0;
   const comicAlbumCount = manifest?.statistics.comicAlbumCount ?? 0;
 
+  const [missing,setMissing]=useState<Record<string,boolean>>({});
+  const reportEmpty=useCallback((key:string,value:boolean)=>setMissing(old=>old[key]===value?old:{...old,[key]:value}),[]);
+  const combined=Object.values(missing).filter(Boolean).length>=2;
   const [scope,setScope]=useState<"name"|"content">("name");
   const open=(seed="")=>useUIStore.getState().setCommandPaletteOpen(true,scope,seed);
   return (
@@ -91,10 +94,11 @@ export default function Explore() {
 
       {manifest && photoAlbumCount > 0 ? (
         <div className="mt-4 grid grid-cols-12 items-start gap-4">
-          <PeopleRow />
-          <PlaceCards />
+          {combined&&<div className="col-span-full flex flex-wrap items-center gap-3 rounded-xl bg-sunken p-3 text-label">开启智能整理，按人物、地点与主题自动归类<Link className={buttonStyles({variant:"secondary",size:"sm"})} to={settingsRoute("tasks")}>前往任务中心</Link></div>}
+          <PeopleRow report={reportEmpty} combined={combined}/>
+          <PlaceCards report={reportEmpty} combined={combined}/>
           <YearRibbon />
-          <ThemeCards />
+          <ThemeCards report={reportEmpty} combined={combined}/>
         </div>
       ) : null}
     </Page>

@@ -340,7 +340,7 @@ for (const kind of ["image", "video"] as const) {
       await expect(dialog.getByText("下一页", { exact: true })).toBeVisible();
     await search.fill("Space");
     await expect(
-      dialog.getByText(kind === "video" ? "播放 / 暂停" : "幻灯片播放/暂停", {
+      dialog.getByText(kind === "video" ? "播放 / 暂停" : "按阅读顺序前进", {
         exact: true,
       }),
     ).toBeVisible();

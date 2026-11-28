@@ -270,6 +270,11 @@ const emptyAbsolutePaths: StorageAbsolutePaths = {
 };
 
 describe("任务中心", () => {
+ it("漫画预设只启动漫画两项，细项默认折叠",async()=>{
+ vi.mocked(aiJobsApi.list).mockResolvedValue({ok:true,snapshot:snapshot({active:undefined,jobs:[]})});renderCenter();const button=await screen.findByRole("button",{name:"一键运行漫画书架智能整理"});await waitFor(()=>expect(button).toBeEnabled());
+ expect(screen.getByText("高级模块明细").closest("details")).not.toHaveAttribute("open");
+ fireEvent.click(button);await waitFor(()=>expect(aiJobsApi.startAll).toHaveBeenCalledWith("incremental",undefined,["comicCover","comicMeta"]));
+ });
   afterEach(() => vi.restoreAllMocks());
 
   it("只在可见页签查询所需的规模预估与运行环境", async () => {

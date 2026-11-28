@@ -156,6 +156,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `GET /api/library/manifest`：返回根列表、扫描时间和相册/集合/标签/告警统计，不包含目录树或媒体数组；`warnings` 最多返回前 100 条脱敏告警详情，完整数量见 `statistics.warningCount`。`statistics.albumCount` 恒为全库相册总数，另带 `photoAlbumCount` 与 `comicAlbumCount` 两个按属性拆分的计数——库规模不随工作台模式跳变。集合同理：`collectionCount` 恒为全库集合总数，另带 `photoCollectionCount` 与 `comicCollectionCount`。
 - `GET /api/library/activity-summary`：返回当前 revision 的 `albumCount` 与 `unreadCount`，供常驻导航显示未读 badge；不返回相册清单或活动详情。两个计数都收敛到 `kind` 指定的属性。
 - `GET /api/library/dashboard`：返回首页所需的 `albumCount`、`unreadCount`、最多 6 本 `unread` 相册摘要与全部 `inProgress` 阅读摘要；不返回全量相册列表。每条在读摘要的 `pageCount` 始终以当前扫描结果为准。阅读进度只属于漫画工作台：`kind=photo` 时 `inProgress` 恒为空。
+- `GET /api/library/unread?kind=comic&groupBy=work` 按作品分页，`page.items` 含 `work`、`unreadCount`、`totalCount`、`nextChapter` 与可选的 `isStandalone`。正篇按自然序优先，`q` 可检索作品或作者。卷视图支持 `workId` 限定作品。
+- `POST /api/activity/works/:id/mark-read` 接受漫画集合 ID，`mode=mark_read|reset`，默认为 `mark_read`。返回 `updatedCount` 和实际变更的 `affectedAlbums`。撤销通过现有批量删除端点每次最多提交 1000 个新增卷 ID。
 - `GET /api/library/unread?limit=60&cursor=...`：分页返回尚未翻开过的相册摘要；已读和在读相册不会传输。有图片的相册以漫画阅读活动判定，纯视频相册以视频播放活动判定（没有阅读活动可依）。未读只统计漫画目录的相册：`kind=photo` 时恒为空。
 - `GET /api/library/recent?limit=60`：返回该属性下最近加入的相册摘要，按业务日期倒序（`date` 缺失时退回 `modTime`）。照片工作台不记录浏览进度，没有「继续阅读」可言，这个接口是它与漫画侧对称的入口，也是收藏空态的推荐来源。不分页：`total` 是该属性下的相册总数，`items` 至多 `limit` 条。
 - `GET /api/library/photo-memories?date=2026-11-26`：照片首页的回忆，按浏览器本地日期查询。必填的 `date` 为有效的 `YYYY-MM-DD`，格式错误返回 400。返回 `{ ok, items }`，最多 8 个去重媒体，字段同时间线照片流。只选参考年份以前、具有单张 EXIF 或文件名日期的照片或视频。同月同日优先，其余按月日距离补足（跨年相邻，等距先取较早一侧），同一月日内沿用时间线顺序。同一本相册可返回多项，每项都有自己的 `dateValue` 和 `albumId`。
@@ -311,6 +313,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `fields`：按字段统计的产出计数，键包括 `exifTime`、`camera`、`gps`、`embedding`、`ocrText`、`faces`、`similarity`。只统计实际取得内容的图片，不报告空结果。
 
 ### `POST /api/ai/jobs/sequence`
+
+全库场景预设可提交非空、无重复的 `modules` 数组，只将其中就绪的模块按指定顺序入队。照片整理组合 metadata、face、similarity、albumCover，增强搜索追加 embedding、ocr。漫画整理组合 comicCover、comicMeta。省略该字段沿用全部模块的顺序，专辑级队列使用既有 albumId 范围。
 
 请求为 `{ "mode": "full" | "incremental", "albumId"?: "a_…" }`，一次创建所有已就绪模块的任务，并按固定顺序加入既有任务队列。全库任务依次执行 metadata、embedding、OCR、face、similarity，再按注册情况排入 comicCover、comicMeta 和 albumCover。传入照片 `albumId` 时仅排入 metadata、embedding、face、similarity，并且每项只处理该相册图片。任务逐项执行，单项结束后自动启动下一项；未安装或运行环境未就绪的模块列在 `skippedModules`，其余任务仍会排队。响应包含有序 `jobs` 与 `{type,name,reason}` 形式的跳过清单。队列已有活动或待执行任务时返回 `409 analysis_job_active`；没有任何可运行模块时返回 `503 ai_module_unavailable`。
 
@@ -513,7 +517,7 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 
 ### `GET /api/images/:fileId/metadata`
 
-在现有图片资源路径重新校验后，读取匹配当前文件大小、修改时间与解析器版本的元数据；尚未分析或结果已过期时返回 `status: "pending"`。结果包含 EXIF 拍摄墙上时间、方向、相机信息及可用时的 GPS 坐标、海拔、时间、方向和精度字段。无 EXIF、格式不支持是正常状态。EXIF 日期不会覆盖相册现有的业务日期。文件 ID 无效返回 `404 resource_not_found`，非图片返回 `415 invalid_metadata_resource`。
+在现有图片资源路径重新校验后，读取匹配当前文件大小、修改时间与解析器版本的元数据；尚未分析或结果已过期时返回 `status: "pending"`。结果包含 EXIF 拍摄墙上时间、方向与相机信息。可选字段 `focalLength`（毫米）、`aperture`（光圈值）、`exposureSeconds`（秒）及 `iso` 来自 EXIF。结果还包含可用的 GPS 坐标、海拔、时间、方向和精度字段。无 EXIF、格式不支持是正常状态。EXIF 日期不会覆盖相册现有的业务日期。文件 ID 无效返回 `404 resource_not_found`，非图片返回 `415 invalid_metadata_resource`。
 
 ### `GET /api/images/:fileId/analysis`
 
@@ -747,6 +751,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 ## 相册与搜索
 
 ### `GET /api/search?q=<keyword>&limit=50&kind=photo|comic`
+
+可选 `type=album|collection|smartCollection` 在分页前限定命中类型。漫画章节结果含可用的 `parentName` 与 `chapterLabel`。
 
 搜索按名称和标签匹配相册、集合和标签，结果中的 `path` 是相册/集合 ID；相册与标签结果可带 `tags: string[]`。标签结果使用 `smart:<tag>` 作为内部标签标识，前端统一转换到 `/tags/<tag>`。搜索条目在每次媒体库 revision 发布时预计算，查询不会递归读取完整目录树。
 
@@ -1052,6 +1058,8 @@ LAN 模式下未认证响应只包含 `status` 与 `accessMode`，避免公开�
 - `years` 每项包含年份、直属项数、图片/视频总量、代表入口与封面；`series` 包含作品 ID、名称、卷数与封面；`completedCount` 是漫画标签全部成员中的已读数。响应不携带本机绝对路径。
 
 ### 跨相册照片流
+
+时间线作用域支持 `dateSource=exif|filename|folder|modified` 和 `datePrecision=day|month|year|unknown`，可与年月和媒体类型组合。服务端在分页前筛选，返回匹配总数与年份索引。来源与精度分布按当前年月、媒体范围计算。修改时间归于日期未知，指定具体年份时该组合返回空页。筛选条件参与游标校验。
 
 `GET /api/library/media-feed` 返回跨相册的照片序列：每张照片带它来自哪本相册，用户不必先认准是哪一本才能看到那些照片。
 

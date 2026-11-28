@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import {LockIcon,EditIcon} from "../../ui/icons";
 import { buttonStyles } from "../../ui/buttonStyles";
 import { createPortal } from "react-dom";
 import { useComicMeta } from "../../hooks/useComicMeta";
@@ -116,7 +117,7 @@ export default function ComicWorkPreview({
               {data.parentName}
             </p>
           )}
-          <h3 className="font-display text-heading">
+          <h3 className="line-clamp-2 font-display text-heading">
             {meta?.chapterLabel && meta.chapterLabel !== data.title
               ? meta.chapterLabel + " · "
               : ""}
@@ -134,7 +135,7 @@ export default function ComicWorkPreview({
           {meta?.genres?.length ? (
             <div className="flex flex-wrap gap-1">{meta.genres.slice(0,3).map(tag => <span key={tag} className="rounded-full bg-sunken px-2 py-0.5 text-caption">{tag}</span>)}</div>
           ) : null}
-          {meta?.locked && <span aria-label="已锁定" title="已锁定">🔒</span>}
+          {meta?.locked && <span role="img" aria-label="已锁定" title="已锁定" className="inline-flex text-ink-2"><LockIcon size={13} aria-hidden="true"/></span>}
         </div>
       </div>
       {album ? (
@@ -191,8 +192,8 @@ export default function ComicWorkPreview({
         {!data.resumeId && !album && meta?.firstEpisodeId && <Link onClick={onDismiss} className={buttonStyles({variant:"primary",size:"sm"})} to={readerRoute(meta.firstEpisodeId)}>开始阅读</Link>}
         <Link className={buttonStyles({variant:"secondary",size:"sm"})} onClick={onDismiss} to={data.linkTo ?? data.to}>{album ? "阅读本话" : "查看全卷"}</Link>
         {!album && onEdit && (
-          <button className={buttonStyles({variant:"ghost",size:"sm"})} onClick={onEdit}>
-            {meta?.synopsis ? "编辑简介" : "添加简介"}
+          <button className={buttonStyles({variant:"ghost",size:"sm"})} aria-label={meta?.synopsis?"编辑简介":"添加简介"} title={meta?.synopsis?"编辑简介":"添加简介"} onClick={onEdit}>
+            <EditIcon size={16} aria-hidden="true"/>
           </button>
         )}
       </div>

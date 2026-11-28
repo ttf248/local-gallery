@@ -265,7 +265,7 @@ describe("Reader 按媒体类型隔离快捷键", () => {
     expect(screen.queryByRole("dialog", { name: "目录" })).toBeNull();
   });
 
-  it("图片模式保留左右翻页与空格幻灯片", async () => {
+  it("图片模式左右翻页与空格前进", async () => {
     renderReader("image");
     await screen.findByTestId("image-gallery");
     await waitFor(() => expect(useGalleryStore.getState().index).toBe(1));
@@ -274,8 +274,8 @@ describe("Reader 按媒体类型隔离快捷键", () => {
     await pressKey("ArrowLeft");
     expect(useGalleryStore.getState().index).toBe(1);
     await pressKey(" ");
-    expect(useGalleryStore.getState().slideshow).toBe(true);
-    act(() => useGalleryStore.setState({ slideshow: false }));
+    expect(useGalleryStore.getState().index).toBe(2);
+    expect(useGalleryStore.getState().slideshow).toBe(false);
   });
 
   it("视频播到末尾的提示用视频的说法，并说明相册里还有图片", async () => {

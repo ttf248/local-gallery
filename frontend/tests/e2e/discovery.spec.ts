@@ -156,8 +156,8 @@ test("人物这一档没有分析结果时说清原因，不摆假卡", async ({
 
   // 临时库没跑过人脸分析：这一档要说清没分析，并给下一步。
   const people = page.getByRole("region", { name: "人物" });
-  await expect(people.getByText(/人物分析尚未启用/)).toBeVisible();
-  await expect(people.getByRole("link", { name: "打开任务中心" })).toBeVisible();
+  await expect(page.getByText(/开启智能整理，按人物、地点与主题自动归类/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "前往任务中心",exact:true })).toHaveAttribute("href","/settings/tasks");
   // 也没有把分组说成已确认的人。
   await expect(people.getByText(/已命名/)).toHaveCount(0);
 });

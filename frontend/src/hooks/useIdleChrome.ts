@@ -44,7 +44,8 @@ export function useIdleChrome(idleMs = 2500) {
       // 鼠标靠近画面底部时唤回工具条（工具条在进度条上方约 52px）。
       if (event.clientY > window.innerHeight - 160) markToolbarActive();
     };
-    const onKey = () => {
+    const onKey = (event:KeyboardEvent) => {
+      if(["p","r","s","+","=","-"].includes(event.key.toLowerCase()))return;
       markActive();
       markToolbarActive();
     };

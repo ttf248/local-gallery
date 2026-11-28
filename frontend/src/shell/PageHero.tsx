@@ -27,7 +27,7 @@ export function PageHero({
 }: PageHeroProps) {
   const { titleRef } = usePageChrome({ title, ...chrome });
   return (
-    <header className={compact ? "min-w-0 pb-2 pt-3" : "min-w-0 pb-3 pt-5 lg:pb-5 lg:pt-8"}>
+    <header data-page-header className={compact ? "min-w-0 pb-2 pt-3" : "min-w-0 pb-3 pt-5 lg:pb-5 lg:pt-8"}>
       {eyebrow && (
         <div className="mb-2 text-caption text-ink-3">{eyebrow}</div>
       )}

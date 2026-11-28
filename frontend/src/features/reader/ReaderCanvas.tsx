@@ -60,6 +60,7 @@ export function ReaderCanvas({ reader }: { reader: ReaderController }) {
             images={images}
             footer={<ChapterEndBanner reader={reader} />}
             dimensions={dimensions}
+            wideFlags={reader.wideFlags}
             key={pathParam}
             albumId={pathParam}
             onJump={reader.jumpTo}

@@ -41,10 +41,12 @@ const (
 
 // MediaFeedQuery 描述一次跨相册取照片的请求。
 type MediaFeedQuery struct {
-	Kind   LibraryKindScope
-	Scope  MediaFeedScope
-	Year   string
-	Parent string
+	DateSource    string
+	DatePrecision string
+	Kind          LibraryKindScope
+	Scope         MediaFeedScope
+	Year          string
+	Parent        string
 	// Seed 是随机取材的种子。
 	//
 	// 「换一批」要保证换出来的确实换掉了：纯随机会撞车，种子让服务端

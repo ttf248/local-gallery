@@ -362,11 +362,10 @@ export default function PhotoAlbum({ album }: Props) {
               ? "收起这一组"
               : `这一组有 ${group.albumSize} 张相似的照片，点开就地比较`
           }
-          className={`opacity-100 pointer-fine:opacity-0 absolute right-1.5 bottom-1.5 z-10 min-h-8 rounded-md bg-black/80 px-2 py-1 text-caption text-white touch:min-h-10 transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white group-hover:opacity-100 group-focus-within:opacity-100 ${
-            expanded ? "opacity-100" : ""
-          }`}
+          aria-label={expanded?"收起这组":`展开 ${group.albumSize} 张相似`}
+          className="absolute right-2 bottom-2 z-10 inline-flex min-h-8 items-center gap-1 rounded-full bg-theater-scrim/80 px-2 py-0.5 text-caption font-medium text-theater-fg backdrop-blur-sm focus-visible:ring-2 touch:min-h-10"
         >
-          {expanded ? "收起这组" : `${group.albumSize} 张相似`}
+          <span aria-hidden>⧉</span>{group.albumSize}<span className="hidden group-hover:inline group-focus-within:inline">{expanded?"收起这组":"张相似 · 展开"}</span>
         </button>
       );
     },

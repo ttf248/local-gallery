@@ -1,12 +1,6 @@
-import {buttonStyles} from "../ui/buttonStyles";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import ThumbImage from "../features/common/ThumbImage";
+import { buttonStyles } from "../ui/buttonStyles";
+import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useMediaFeed } from "../hooks/useMediaFeed";
 import { ApiError } from "../api/client";
@@ -29,11 +23,7 @@ import { usePhotoSelectionStore } from "../store/photoSelectionStore";
 import PhotoSelectionBar from "../features/common/PhotoSelectionActions";
 import { buildTimeRailMarks } from "../features/timeline/timeRailMarks";
 import TimeRail from "../features/timeline/TimeRail";
-import {
-  itemDatePrecision,
-  parseTimelinePrecision,
-  parseTimelineSource,
-} from "../utils/timeline";
+import { parseTimelinePrecision, parseTimelineSource } from "../utils/timeline";
 import { PageHero } from "../shell/PageHero";
 import MonthHeader from "../features/timeline/MonthHeader";
 import TimelineMemories from "../features/timeline/MemoriesHero";
@@ -133,46 +123,14 @@ export default function PhotoTimeline() {
       year: filter.year || undefined,
       month: isYearNumber && filter.month ? filter.month : undefined,
       media: filter.media || undefined,
+      dateSource: filter.source || undefined,
+      datePrecision: filter.precision || undefined,
     }),
     [filter, isYearNumber],
   );
   const feed = useMediaFeed(query);
   const localFilter = Boolean(filter.source || filter.precision);
-  const items = useMemo(
-    () =>
-      localFilter
-        ? feed.items.filter(
-            (item) =>
-              (!filter.source ||
-                (item.dateSource ?? "modified") === filter.source) &&
-              (!filter.precision ||
-                itemDatePrecision(item) === filter.precision),
-          )
-        : feed.items,
-    [feed.items, filter.source, filter.precision, localFilter],
-  );
-  const total = localFilter ? items.length : feed.total;
-  const [requestedMatches, setRequestedMatches] = useState(1);
-  const { hasNextPage, isFetching, isFetchNextPageError, fetchNextPage } = feed;
-  useEffect(() => {
-    if (
-      localFilter &&
-      items.length < requestedMatches &&
-      hasNextPage &&
-      !isFetching &&
-      !isFetchNextPageError
-    ) {
-      void fetchNextPage({ cancelRefetch: false });
-    }
-  }, [
-    localFilter,
-    items.length,
-    requestedMatches,
-    hasNextPage,
-    isFetching,
-    isFetchNextPageError,
-    fetchNextPage,
-  ]);
+  const { items, total } = feed;
 
   const selection = useAlbumSelection({
     albumId: "",
@@ -200,7 +158,6 @@ export default function PhotoTimeline() {
       if (next.media) params.set("media", next.media);
       if (next.source) params.set("source", next.source);
       if (next.precision) params.set("precision", next.precision);
-      setRequestedMatches(1);
       setSearchParams(params, { replace: true });
     },
     [setSearchParams],
@@ -236,18 +193,17 @@ export default function PhotoTimeline() {
         <MonthHeader
           group={{
             ...group,
-            count: localFilter ? group.count : groupCount(key) || group.count,
+            count: groupCount(key) || group.count,
           }}
         />
       );
     },
-    [groups, groupCount, localFilter],
+    [groups, groupCount],
   );
 
   const loadMore = useCallback(() => {
-    if (localFilter) setRequestedMatches(items.length + 1);
     feed.retryNextPage();
-  }, [feed, localFilter, items.length]);
+  }, [feed]);
 
   const togglePick = useCallback(
     (id: string) => {
@@ -295,11 +251,17 @@ export default function PhotoTimeline() {
           icon={<LibraryIcon size={20} />}
           action={
             <div className="flex items-center gap-3">
-              <Link to={settingsRoute("server")} className={buttonStyles({variant:"secondary"})}>
+              <Link
+                to={settingsRoute("server")}
+                className={buttonStyles({ variant: "secondary" })}
+              >
                 去设置里改属性
               </Link>
               {otherSideHasContent && (
-                <Link to={homeRoute("comic")} className={buttonStyles({variant:"primary"})}>
+                <Link
+                  to={homeRoute("comic")}
+                  className={buttonStyles({ variant: "primary" })}
+                >
                   去漫画库看看
                 </Link>
               )}
@@ -331,7 +293,6 @@ export default function PhotoTimeline() {
         title="全部照片"
         meta={
           <span data-testid="timeline-meta">
-            {localFilter && feed.hasNextPage ? "已找到 " : ""}
             {total.toLocaleString("zh-CN")} 张{range ? ` · ${range}` : ""}
           </span>
         }
@@ -361,10 +322,17 @@ export default function PhotoTimeline() {
             !filter.month &&
             !localFilter ? (
               <Link
-                className="max-w-48 truncate rounded-md px-2 py-2 text-caption text-ink-2"
+                className="inline-flex min-h-8 touch:min-h-10 max-w-48 items-center gap-1.5 rounded-full bg-sunken px-2.5 py-1 text-caption text-ink-2"
                 to={resume.to}
               >
-                接着看 · {resume.title}
+                {resume.coverPath && (
+                  <ThumbImage
+                    fileId={resume.coverPath}
+                    alt=""
+                    className="size-5 shrink-0 rounded-full object-cover"
+                  />
+                )}
+                <span className="truncate">接着看 · {resume.title}</span>
               </Link>
             ) : undefined
           }
@@ -429,7 +397,7 @@ export default function PhotoTimeline() {
               action={
                 <button
                   type="button"
-                  className={buttonStyles({variant:"secondary"})}
+                  className={buttonStyles({ variant: "secondary" })}
                   onClick={() => void feed.refetch()}
                   disabled={feed.isFetching}
                 >
@@ -437,16 +405,14 @@ export default function PhotoTimeline() {
                 </button>
               }
             />
-          ) : items.length === 0 &&
-            !feed.isLoading &&
-            !(localFilter && feed.hasNextPage) ? (
+          ) : items.length === 0 && !feed.isLoading ? (
             <EmptyState
               title="这一段没有照片"
               description="换一个年份或月份看看，或者回到整条时间线。"
               size="compact"
               action={
                 <button
-                  className={buttonStyles({variant:"secondary"})}
+                  className={buttonStyles({ variant: "secondary" })}
                   onClick={() =>
                     applyFilter({ year: "", month: "", media: "" })
                   }
@@ -455,8 +421,7 @@ export default function PhotoTimeline() {
                 </button>
               }
             />
-          ) : feed.isLoading ||
-            (localFilter && items.length === 0 && feed.hasNextPage) ? (
+          ) : feed.isLoading ? (
             <div
               aria-label="正在按时间排列照片"
               role="status"

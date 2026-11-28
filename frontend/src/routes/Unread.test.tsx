@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import Unread from "./Unread";
+import {libraryApi} from "../api/library";
 import { useFavorites } from "../hooks/useFavorites";
 import { useSortPreference } from "../store/sortPreference";
 import { useAppModeStore } from "../store/appModeStore";
@@ -128,6 +129,10 @@ describe("Unread", () => {
     });
   });
 
+  it("默认按作品分页，入口指向推荐正篇",async()=>{
+ const chapter=baseAlbum("a_main","第1话");const spy=vi.spyOn(libraryApi,"unreadWorkPage").mockResolvedValue({ok:true,page:{revision:1,total:1,items:[{work:{...chapter,kind:"collection",id:"c_one",displayName:"星海"},unreadCount:635,totalCount:636,nextChapter:chapter}]}});
+ try{renderUnread("/comic/unread");expect(await screen.findByText("635 话未读")).toBeVisible();expect(screen.getByRole("link",{name:"从第1话开读"})).toHaveAttribute("href","/comic/read/a_main");expect(useLibraryUnreadAlbums).not.toHaveBeenCalled()}finally{spy.mockRestore()}
+ });
   it("有未读时显示计数 + 随机按钮", async () => {
     seedUnread([baseAlbum("/a", "A"), baseAlbum("/b", "B")]);
     renderUnread();

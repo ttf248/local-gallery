@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { expect, it, vi } from "vitest";
 import ComicWorkHeader from "./ComicWorkHeader";
+import {useUIStore} from "../../store/uiStore";
 import type { LibraryNodeSummary } from "../../api/library";
 vi.mock("../../hooks/useComicMeta", () => ({
   useComicMeta: () => ({
@@ -15,7 +16,7 @@ vi.mock("../../hooks/useComicMeta", () => ({
       },
     },
   }),
-  useRefreshComicMeta: () => ({}),
+  useRefreshComicMeta: () => ({mutate: (_:undefined,{onSuccess}:{onSuccess:(result:object)=>void})=>onSuccess({})}),
 }));
 vi.mock("../../hooks/useFavorites", () => ({
   useFavorites: () => ({ favorites: [] }),
@@ -54,6 +55,9 @@ it("显示作品卷页数、完整简介及首个正篇入口，支持键盘编�
   expect(screen.getByRole("menu")).toBeVisible();
   fireEvent.keyDown(screen.getByRole("menu"), {key:"Escape"});
   expect(screen.queryByRole("menu")).toBeNull();
+  fireEvent.click(screen.getByRole("button",{name:"更多"}));
+  fireEvent.click(screen.getByRole("menuitem",{name:"重新识别内容"}));
+  expect(useUIStore.getState().toasts.at(-1)?.message).toBe("作品信息已更新");
   fireEvent.click(screen.getByRole("button", { name: "编辑信息" }));
   expect(screen.getByRole("dialog")).toBeVisible();
 });

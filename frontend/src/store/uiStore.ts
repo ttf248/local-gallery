@@ -24,8 +24,9 @@ interface Toast {
 }
 
 export type SidebarState = "expanded" | "collapsed";
-export interface PersistedUIPrefs { theme: ThemePref;sidebar:SidebarState;viewMode: ViewMode;showPersonFaceBoxes:boolean;folderDrawerOpen:boolean;inspectorOpen:boolean;memoriesDismissedOn:string|null; }
+export interface PersistedUIPrefs { theme: ThemePref;sidebar:SidebarState;viewMode: ViewMode;showPersonFaceBoxes:boolean;folderDrawerOpen:boolean;inspectorOpen:boolean;memoriesDismissedOn:string|null;memoriesCollapsed:boolean; }
 export interface UIState extends PersistedUIPrefs {
+  setMemoriesCollapsed:(value:boolean)=>void;
   setMemoriesDismissedOn: (date: string | null) => void;
   commandSeed?: string;
   commandPaletteOpen: boolean;
@@ -70,6 +71,7 @@ export interface UIState extends PersistedUIPrefs {
 export const useUIStore = create<UIState>()(
   persist(
     (set, get) => ({
+      memoriesCollapsed:false,setMemoriesCollapsed:memoriesCollapsed=>set({memoriesCollapsed}),
       memoriesDismissedOn: null,
       setMemoriesDismissedOn: (memoriesDismissedOn) =>
         set({ memoriesDismissedOn }),
@@ -131,15 +133,16 @@ export const useUIStore = create<UIState>()(
     }),
     {
       name: "local-gallery-ui",
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const old =
           typeof persisted === "object" && persisted !== null
             ? (persisted as Record<string, unknown>)
             : {};
         return {
-          sidebar: old.sidebarCollapsed === true ? "collapsed" : "expanded",
-          inspectorOpen: false,
+          memoriesCollapsed:old.memoriesCollapsed===true,
+          sidebar: (version>=4?old.sidebar==="collapsed":old.sidebarCollapsed===true) ? "collapsed" : "expanded",
+          inspectorOpen: version>=4 && old.inspectorOpen===true,
           theme:
             old.theme === "light" || old.theme === "dark"
               ? old.theme
@@ -164,6 +167,7 @@ export const useUIStore = create<UIState>()(
         >;
       },
       partialize: (s) => ({
+        memoriesCollapsed:s.memoriesCollapsed,
         memoriesDismissedOn: s.memoriesDismissedOn,
         folderDrawerOpen: s.folderDrawerOpen,
         sidebar: s.sidebar,

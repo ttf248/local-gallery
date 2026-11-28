@@ -361,13 +361,10 @@ const MEASURE = ({ minFontPx, minControlPx, touch, minTouchTargetPx }) => {
     const bottom = document
       .querySelector(".reader-bottom-chrome")
       ?.getBoundingClientRect();
-    if (
-      !stage ||
-      !top ||
-      stage.top < top.bottom - 0.5 ||
-      (bottom && stage.bottom > bottom.top + 0.5)
-    )
-      chromeIssues.push("阅读控件遮挡图片");
+    const workspace=document.querySelector(".reader-workspace").getBoundingClientRect();
+    if(!stage || !top || !bottom || Math.abs(stage.top-workspace.top)>1 || Math.abs(stage.bottom-workspace.bottom)>1 ||
+       top.top>stage.top+1 || top.bottom>stage.top+stage.height/2 || bottom.bottom<stage.bottom-1 || bottom.top<stage.top+stage.height/2)
+      chromeIssues.push("阅读舞台未铺满工作区或工具栏未贴边");
     for (const el of document.querySelectorAll(
       ".reader-header button,.reader-bottom-chrome button,[role=slider],[role=menu]",
     )) {
@@ -910,6 +907,16 @@ async function main() {
             touch: profile.hasTouch,
             minTouchTargetPx: MIN_TOUCH_TARGET_PX,
           });
+        }
+        if(route==="reader" && !m.routeError){
+          const stage=page.locator(".reader-stage"), workspace=page.locator(".reader-workspace");
+          const before=await stage.boundingBox();
+          await page.keyboard.press("h");await page.waitForTimeout(230);
+          const after=await stage.boundingBox();
+          if(!before||!after||["width","height","x","y"].some(k=>Math.abs(before[k]-after[k])>1) ||
+             await workspace.getAttribute("data-chrome")!=="hidden" || await page.locator(".reader-header").evaluate(el=>getComputedStyle(el).pointerEvents!=="none"))
+            m.chromeIssues.push("切换沉浸模式后舞台移动或隐藏控件仍拦截指针");
+          await page.keyboard.press("h");
         }
         report.push({
           theme,

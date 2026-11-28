@@ -1131,7 +1131,7 @@ test("六个列表的最近改排序使用真实修改时间", async ({ page }) 
       [`/comic/albums/${collection.id}`, childIds],
       ["/comic/me/favorites", ids],
       ["/comic/me/recents", ids],
-      ["/comic/unread", ids],
+      ["/comic/unread?groupBy=album", ids],
       [`/comic/tags/${encodeURIComponent("测试")}`, ids],
     ] as const;
     for (const [path, expected] of pages) {
@@ -1278,12 +1278,12 @@ test("六个列表支持按最近看排序，集合与标签具有当前页排�
       [`/comic/albums/${collectionId}`, expectedChildren],
       ["/comic/me/favorites", expectedRoot],
       ["/comic/me/recents", expectedRoot.slice(0, 2)],
-      ["/comic/unread", expectedRoot],
+      ["/comic/unread?groupBy=album", expectedRoot],
       [`/comic/tags/${encodeURIComponent("测试")}`, expectedRoot],
     ] as const;
     for (const [path, expected] of pages) {
       await test.step(path, async () => {
-        await page.goto(`${path}?q=${encodeURIComponent(taggedSortPrefix)}`);
+        await page.goto(`${path}${path.includes("?")?"&":"?"}q=${encodeURIComponent(taggedSortPrefix)}`);
         await page.getByRole("button", { name: "打开命令面板" }).click();
         // 漫画侧的叶级目录叫「卷」（作品 / 系列 / 卷 是漫画自己的层级），
         // 搜索框的说法跟着走。
@@ -1372,7 +1372,7 @@ for (const name of ["unread"] as const) {
         unread: "/comic/unread",
         tag: `/comic/tags/${encodeURIComponent("测试")}`,
       };
-      await page.goto(`${paths[name]}?q=${encodeURIComponent(taggedSortPrefix)}`);
+      await page.goto(`${paths[name]}?${name==="unread"?"groupBy=album&":""}q=${encodeURIComponent(taggedSortPrefix)}`);
       await page.getByRole("button", { name: "排序", exact: true }).click();
       await page.getByRole("button", { name: "按最近看", exact: true }).click();
       const alert = page.getByRole("alert");
@@ -1456,7 +1456,7 @@ for (const name of ["unread"] as const) {
         unread: "/comic/unread",
         tag: `/comic/tags/${encodeURIComponent("滚动回归")}`,
       };
-      await page.goto(`${paths[name]}?q=${encodeURIComponent(prefix)}`);
+      await page.goto(`${paths[name]}?${name==="unread"?"groupBy=album&":""}q=${encodeURIComponent(prefix)}`);
       await page
         .getByRole("button", {
           name: mode === "grid" ? "网格视图" : "列表视图",
@@ -1506,7 +1506,7 @@ test("排序选项支持键盘确认取消和自然移出焦点", async ({ page 
   // 未读页属于漫画工作台。
   await setWorkbenchMode(page.request, "comic");
   await scannedNodes(page.request, "comic");
-  await page.goto("/comic/unread");
+  await page.goto("/comic/unread?groupBy=album");
   const trigger = page.getByRole("button", { name: "排序", exact: true });
   const options = page.getByRole("group", { name: "排序选项" });
   const first = page.getByRole("button", { name: "按名称", exact: true });
@@ -1622,7 +1622,7 @@ for (const mode of ["grid", "list"] as const) {
         ).ok(),
       ).toBeTruthy();
       await setWorkbenchMode(page.request, "comic");
-      await page.goto(`/comic/unread?q=${encodeURIComponent(album.name)}`);
+      await page.goto(`/comic/unread?groupBy=album&q=${encodeURIComponent(album.name)}`);
       await page
         .getByRole("button", {
           name: mode === "grid" ? "网格视图" : "列表视图",
@@ -1721,6 +1721,7 @@ for (const mode of ["grid", "list"] as const) {
       await expect(card.getByText("已读完", { exact: true })).toHaveCount(0);
       expect((await page.request.get(activityPath)).status()).toBe(404);
       await page.getByRole("link", { name: /^未读/ }).click();
+      await page.getByRole("button", { name: "按卷", exact: true }).click();
       await expect(card).toBeVisible();
       await expect(card.getByText("已读完", { exact: true })).toHaveCount(0);
     } finally {
@@ -1859,7 +1860,7 @@ for (const mode of ["grid", "list"] as const) {
       await expect(dialog).toHaveCount(0);
       await expect(card).toBeFocused();
       await openCardProperties(page, node);
-      await expect(dialog.getByText(node.name, { exact: true })).toBeVisible();
+      await expect(dialog.getByText("名称",{exact:true}).locator("..").getByText(node.name,{exact:true})).toBeVisible();
       await page.mouse.click(3, 3);
       await expect(dialog).toHaveCount(0);
       await expect(card).toBeFocused();
@@ -2224,7 +2225,7 @@ test("目录属性读取失败可重试", async ({ page }) => {
   await expect(
     dialog.getByRole("button", { name: "关闭", exact: true }),
   ).toBeFocused();
-  await expect(dialog.getByText("sample-comic", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("名称",{exact:true}).locator("..").getByText("sample-comic",{exact:true})).toBeVisible();
   await dialog.getByRole("button", { name: "关闭", exact: true }).click();
   await expect(card).toBeFocused();
 });
@@ -2370,7 +2371,7 @@ test("卡片悬停预览完整落在视口内，不被视口下缘裁掉", async
   await page.waitForTimeout(300);
   await card.hover();
 
-  const preview = page.getByRole("dialog", { name: /预览/ });
+  const preview = page.getByRole("region", { name: /预览/ });
   await expect(preview).toBeVisible();
   const box = await preview.boundingBox();
   const viewport = page.viewportSize();
@@ -2538,7 +2539,7 @@ test("坏掉的图片在照片墙上标成「无法解码」", async ({ page, re
 test("结构页的视图筛选贴顶，随滚动保持可操作", async ({ page, request }) => {
   await setWorkbenchMode(request, "comic");
   await page.goto("/comic/library");
-  const bar=page.getByRole("toolbar",{name:"相册工具"});
+  const bar=page.getByRole("toolbar",{name:"书架工具"});
   await expect(bar.getByRole("tab",{name:/^卷/})).toBeVisible();
   await expect(page.getByTestId("card-cover").first()).toBeInViewport();
   await page.locator("main").evaluate(el=>{el.scrollTop=500;});
@@ -2622,7 +2623,7 @@ test("年份卡用空格也能进那一年", async ({ page }) => {
 test("列表视图在窄屏与宽屏都能逐行阅读，并可打开漫画", async ({ page }) => {
   // 未读页属于漫画工作台。
   await setWorkbenchMode(page.request, "comic");
-  await page.goto("/comic/unread");
+  await page.goto("/comic/unread?groupBy=album");
   await page.getByRole("button", { name: "列表视图", exact: true }).click();
   const cards = page.locator(
     'main [data-virtuoso-scroller] a[href^="/comic/albums/"]',
@@ -2663,9 +2664,7 @@ test("列表只取首屏，真实后端分页与筛选保留完整计数", async
     });
   });
   await page.goto("/comic/library");
-  // 顶层摆着作品、散卷与标签三类，标题说的是「全部内容」，
-  // 不是其中一种。
-  await expect(page.getByRole("heading", { name: "全部内容" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "书架",exact:true })).toBeVisible();
   // 首屏只取一页：剩下的等滚到底再要。
   expect(calls.filter((cursor) => cursor === "first")).toHaveLength(1);
   expect(calls).toHaveLength(1);

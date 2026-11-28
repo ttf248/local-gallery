@@ -57,13 +57,13 @@ export function CanvasTopBar({
   }, [fullTitle]);
   return (
     <header
-      data-testid="top-bar"
+      data-testid="top-bar" data-inline-actions={wide&&!showBack&&!localSearch || undefined}
       className={cx(
         "top-bar sticky top-0 z-topbar grid h-topbar transition-[background-color,border-color] duration-150 shrink-0 items-center gap-2 border-b px-gutter",
         localSearch
           ? "grid-cols-[auto_minmax(0,1fr)_auto]"
           : "grid-cols-[minmax(0,1fr)_auto_auto]",
-        scrolled ? "border-line-subtle bg-surface/90 backdrop-blur-md shadow-1" : "border-transparent bg-canvas lg:bg-transparent",
+        scrolled ? "border-line-subtle bg-raised/90 backdrop-blur-md shadow-1" : "border-transparent bg-canvas lg:bg-transparent",
         wide && !localSearch && !showBack && "lg:-mb-11",
         wide && !localSearch && !showBack && !scrolled && "pointer-events-none [&_button]:pointer-events-auto [&_a]:pointer-events-auto",
       )}
@@ -102,7 +102,7 @@ export function CanvasTopBar({
             </button>
           )}
       <div className="col-end-4 flex min-w-0 items-center justify-end gap-2">
-        {wide ? actions : compactActions ?? actions}
+        {!wide||(!showBack&&!localSearch) ? compactActions??actions : actions}
         <Menu
           label="更多操作"
           align="end"

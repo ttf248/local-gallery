@@ -115,7 +115,7 @@ it.each(["library", "image", "video"] as const)(
     render(<HelpOverlay context={context} open onClose={vi.fn()} />);
     if (context === "library") {
       expect(screen.getByText("回到照片库")).toBeInTheDocument();
-      expect(screen.queryByText(/旋转 90°/)).not.toBeInTheDocument();
+      expect(screen.queryByText("将照片顺时针旋转 90°")).not.toBeInTheDocument();
       expect(screen.queryByText("下一页")).not.toBeInTheDocument();
     } else {
       expect(screen.queryByText("回到照片库")).not.toBeInTheDocument();
@@ -147,7 +147,7 @@ it("photo 场景展示全局操作与大图预览操作", () => {
   expect(screen.getByText("关闭预览，回到照片墙")).toBeInTheDocument();
   // 阅读器的专属操作不该出现在照片墙。
   expect(screen.queryByText("当前内容设为封面")).not.toBeInTheDocument();
-  expect(screen.queryByText(/旋转 90°/)).not.toBeInTheDocument();
+  expect(screen.getByText("将照片顺时针旋转 90°")).toBeInTheDocument();
 });
 
 // 少数全局操作的措辞随工作台模式变化。
@@ -202,7 +202,7 @@ it("切换媒体场景时保留搜索词，展示该按键在新场景的含义"
   const view = render(<HelpOverlay context="image" open onClose={vi.fn()} />);
   const search = screen.getByRole("searchbox", { name: "搜索快捷键" });
   fireEvent.change(search, { target: { value: "Space" } });
-  expect(screen.getByText("幻灯片播放/暂停")).toBeInTheDocument();
+  expect(screen.getByText("按阅读顺序前进")).toBeInTheDocument();
   view.rerender(<HelpOverlay context="video" open onClose={vi.fn()} />);
   expect(search).toHaveValue("Space");
   expect(search).toHaveFocus();

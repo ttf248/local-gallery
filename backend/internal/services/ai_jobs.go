@@ -643,6 +643,9 @@ func sameResourceSet(left, right []string) bool {
 
 // StartAll 按固定模块顺序把所有已就绪的分析任务写入现有任务队列。
 func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJobModule, error) {
+	return s.StartSequence(mode, nil, albumIDs...)
+}
+func (s *AIJobService) StartSequence(mode string, requested []string, albumIDs ...string) ([]AIJob, []AIJobModule, error) {
 	albumID, err := s.analysisAlbumID(albumIDs)
 	if err != nil {
 		return nil, nil, err
@@ -670,6 +673,24 @@ func (s *AIJobService) StartAll(mode string, albumIDs ...string) ([]AIJob, []AIJ
 		// Album regrouping only needs EXIF/GPS, scene vectors, and face groups.
 		// OCR remains a separate user-requested task.
 		moduleTypes = []string{AIJobTypeMetadata, AIJobTypeEmbedding, AIJobTypeFace, AIJobTypeSimilarity}
+	}
+	if requested != nil {
+		if albumID != "" || len(requested) == 0 {
+			return nil, nil, errors.New("invalid module selection")
+		}
+		seen := map[string]bool{}
+		for _, typ := range requested {
+			switch typ {
+			case AIJobTypeMetadata, AIJobTypeAlbumCover, AIJobTypeFace, AIJobTypeSimilarity, AIJobTypeEmbedding, AIJobTypeOCR, AIJobTypeComicCover, AIJobTypeComicMeta:
+			default:
+				return nil, nil, errors.New("unknown preset module")
+			}
+			if seen[typ] {
+				return nil, nil, errors.New("duplicate preset module")
+			}
+			seen[typ] = true
+		}
+		moduleTypes = append([]string(nil), requested...)
 	}
 	s.mu.Lock()
 	if s.closed {

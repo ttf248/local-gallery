@@ -8,6 +8,7 @@ test("任务中心评分后，相册卡片使用已入选的封面", async ({ pa
   expect(runtime.ok()).toBeTruthy();
   const ready = (await runtime.json()).status.modules.albumCover.ready;
   await page.goto("/settings/tasks");
+  await page.getByText("高级模块明细",{exact:true}).click();
   const module = page.getByRole("button", {
     name: "相册封面精选",
     exact: true,

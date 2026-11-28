@@ -1495,10 +1495,13 @@ test("旧书签保留查询和片段，浏览器后退回到来源页", async ({
     await expect(page).toHaveURL(url => url.pathname + url.search + url.hash === target);
   }
   await page.getByRole("link", { name: "分析与计划" }).click();
+  const advanced = page.getByText("高级模块明细", { exact: true });
+  await advanced.click();
   const time = page.getByLabel("每日自动任务开始时间");
   await time.fill("07:28");
   await page.getByRole("link", { name: "数据与存储" }).click();
   await page.goBack();
+  if (!(await time.isVisible())) await advanced.click();
   await expect(time).toHaveValue("07:28");
 });
 

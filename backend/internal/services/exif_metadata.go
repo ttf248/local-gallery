@@ -12,7 +12,7 @@ import (
 )
 
 // MetadataParserVersion 隔离元数据解析规则的版本；升级解析器时只需重算 metadata。
-const MetadataParserVersion = "metadata-v1"
+const MetadataParserVersion = "metadata-v2"
 
 const (
 	MetadataParseParsed      = "parsed"
@@ -22,6 +22,10 @@ const (
 
 // ImageMetadata 是可由源图片重建的 EXIF 摘要，不包含文件系统路径。
 type ImageMetadata struct {
+	FocalLength      float64      `json:"focalLength,omitempty"`
+	Aperture         float64      `json:"aperture,omitempty"`
+	ExposureSeconds  float64      `json:"exposureSeconds,omitempty"`
+	ISO              uint32       `json:"iso,omitempty"`
 	Status           string       `json:"status"`
 	DateTimeOriginal string       `json:"dateTimeOriginal,omitempty"`
 	Orientation      uint16       `json:"orientation,omitempty"`
@@ -79,6 +83,16 @@ func ParseImageMetadata(reader io.ReadSeeker) (metadata ImageMetadata, err error
 	}
 	metadata.CameraMake = strings.TrimSpace(exif.IFD0.Make)
 	metadata.CameraModel = strings.TrimSpace(exif.IFD0.Model)
+	if v := float64(exif.ExifIFD.FocalLength); v > 0 && finite(v) {
+		metadata.FocalLength = v
+	}
+	if v := float64(exif.ExifIFD.FNumber); v > 0 && finite(v) {
+		metadata.Aperture = v
+	}
+	if v := float64(exif.ExifIFD.ExposureTime); v > 0 && finite(v) {
+		metadata.ExposureSeconds = v
+	}
+	metadata.ISO = exif.ExifIFD.ISOSpeedRatings
 
 	latitude := exif.GPS.Latitude()
 	longitude := exif.GPS.Longitude()
@@ -133,7 +147,7 @@ func ParseImageMetadata(reader io.ReadSeeker) (metadata ImageMetadata, err error
 		}
 		metadata.GPS = gps
 	}
-	if metadata.DateTimeOriginal == "" && metadata.Orientation == 0 && metadata.CameraMake == "" && metadata.CameraModel == "" && metadata.GPS == nil {
+	if metadata.DateTimeOriginal == "" && metadata.Orientation == 0 && metadata.CameraMake == "" && metadata.CameraModel == "" && metadata.GPS == nil && metadata.FocalLength == 0 && metadata.Aperture == 0 && metadata.ExposureSeconds == 0 && metadata.ISO == 0 {
 		metadata.Status = MetadataParseNoExif
 	}
 	return metadata, nil

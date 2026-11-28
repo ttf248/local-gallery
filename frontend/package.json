@@ -12,6 +12,7 @@
     "typecheck": "tsc -b",
     "preview": "vite preview --port 4173",
     "test": "vitest run",
+    "e2e": "npm run test:e2e",
     "test:e2e": "node ../scripts/test-e2e.mjs",
     "lint": "eslint .",
     "audit:contrast": "node scripts/contrast-audit.mjs",

@@ -24,8 +24,8 @@
   inset-inline: 0;
   z-index: 10;
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),visibility 0s;
   background: var(--theater-glass);
   padding-inline: max(8px, env(safe-area-inset-left))
     max(8px, env(safe-area-inset-right));
@@ -34,8 +34,8 @@
   top: 0;
   background: linear-gradient(
     to bottom,
-    var(--theater-surface),
-    var(--theater-glass)
+    var(--theater-scrim),
+    transparent
   );
   display: flex;
   align-items: center;
@@ -63,8 +63,8 @@
   bottom: 0;
   background: linear-gradient(
     to top,
-    var(--theater-surface),
-    var(--theater-glass)
+    var(--theater-scrim),
+    transparent
   );
   padding-bottom: env(safe-area-inset-bottom);
   border-top: 1px solid var(--theater-border);
@@ -77,6 +77,7 @@
   :is(.reader-header, .reader-bottom-chrome, .reader-volume-nav) {
   opacity: 0;
   visibility: hidden;
+  transition-delay:0s,0s,180ms;
   pointer-events: none;
 }
 .reader-workspace[data-chrome="hidden"] .reader-header {
@@ -253,5 +254,8 @@
   .reader-slider > div:has(> [role="slider"]) {
     flex-basis: 100%;
     min-width: 40px;
+  }
+  .reader-slider-track {
+    margin-inline: 0;
   }
 }

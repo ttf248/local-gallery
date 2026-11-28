@@ -26,6 +26,9 @@ import {
 import type { LibraryMediaItem } from "../../api/library";
 import { isFullscreen, toggleFullscreen } from "../../utils/fullscreen";
 import { shouldIgnoreShortcut } from "../../utils/shortcuts";
+import { ViewerHudToast, ViewerExifSummary } from "./ViewerHudToast";
+import { zoomAroundPoint } from "./viewerZoom";
+import { Menu } from "../../ui/Menu";
 import { usePhotoStore } from "../../store/photoStore";
 import { useUIStore } from "../../store/uiStore";
 import VideoPlayer from "./VideoPlayer";
@@ -178,9 +181,15 @@ export default function PhotoViewer({
   const showInfo = usePhotoStore((s) => s.showInfo);
   const setShowInfo = usePhotoStore((s) => s.setShowInfo);
   const [stripVisible, setStripVisible] = useState(true);
+  const [playing, setPlaying] = useState(false),
+    [intervalMs, setIntervalMs] = useState(4000);
+  const [hud, setHud] = useState<{ message: string } | null>(null);
   const [rotation, setRotation] = useState(0);
   const [loadedId, setLoadedId] = useState("");
   const { chromeVisible } = useIdleChrome();
+  const feedback = (message: string) => {
+    if (!chromeVisible) setHud({ message });
+  };
   const reducedMotion = useReducedMotion();
   const [failed, setFailed] = useState(false);
 
@@ -363,12 +372,17 @@ export default function PhotoViewer({
   }, [zoom]);
 
   const applyZoom = useCallback(
-    (next: number) => {
+    (next: number, point?: { x: number; y: number }) => {
       const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, next));
       setZoom(scale);
-      setPan((current) => clampPan(current, scale));
+      setPan((current) =>
+        clampPan(
+          zoomAroundPoint(current, point ?? { x: 0, y: 0 }, zoom, scale),
+          scale,
+        ),
+      );
     },
-    [clampPan],
+    [clampPan, zoom],
   );
 
   // 要下一页：已经在请求中就不再发一次。
@@ -380,7 +394,8 @@ export default function PhotoViewer({
   }, [hasNextPage, onLoadMore]);
 
   const go = useCallback(
-    (delta: number) => {
+    (delta: number, automatic = false) => {
+      if (!automatic) setPlaying(false);
       if (items.length === 0) return;
       // 按「已经翻到哪儿」算，不是按 props：连按的时候 props 还没跟上。
       const current = indexRef.current;
@@ -408,6 +423,27 @@ export default function PhotoViewer({
     [items.length, onIndexChange, requestMore],
   );
 
+  useEffect(() => {
+    if (!playing || showInfo || compareOpen) return;
+    if (loadMoreError || (!hasNextPage && index >= items.length - 1)) {
+      setPlaying(false);
+      return;
+    }
+    if (isLoadingMore) return;
+    const timer = window.setTimeout(() => go(1, true), intervalMs);
+    return () => window.clearTimeout(timer);
+  }, [
+    playing,
+    showInfo,
+    compareOpen,
+    loadMoreError,
+    hasNextPage,
+    index,
+    items.length,
+    isLoadingMore,
+    go,
+    intervalMs,
+  ]);
   // 新的一页到了：解锁请求，并兑现待处理的 End 或「用户已经按过的次数」。
   useEffect(() => {
     if (items.length <= loadedCountRef.current) return;
@@ -519,15 +555,15 @@ export default function PhotoViewer({
     const onWheel = (event: globalThis.WheelEvent) => {
       event.preventDefault();
       const factor = event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-      setZoom((current) => {
-        const scale = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, current * factor));
-        setPan((panNow) => clampPan(panNow, scale));
-        return scale;
+      const box = stage.getBoundingClientRect();
+      applyZoom(zoom * factor, {
+        x: event.clientX - box.left - box.width / 2,
+        y: event.clientY - box.top - box.height / 2,
       });
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
-  }, [clampPan]);
+  }, [applyZoom, zoom]);
 
   // 全局按键只装一次。
   //
@@ -565,11 +601,13 @@ export default function PhotoViewer({
           go(1);
           break;
         case "Home":
+          setPlaying(false);
           event.preventDefault();
           indexRef.current = 0;
           onIndexChange(0);
           break;
         case "End":
+          setPlaying(false);
           event.preventDefault();
           if (items.length === 0) break;
           pendingRef.current = 0;
@@ -587,10 +625,16 @@ export default function PhotoViewer({
         case "=":
           event.preventDefault();
           applyZoom(zoom * ZOOM_STEP);
+          feedback(
+            Math.round(Math.min(MAX_ZOOM, zoom * ZOOM_STEP) * 100) + "%",
+          );
           break;
         case "-":
           event.preventDefault();
           applyZoom(zoom / ZOOM_STEP);
+          feedback(
+            Math.round(Math.max(MIN_ZOOM, zoom / ZOOM_STEP) * 100) + "%",
+          );
           break;
         case "0":
           event.preventDefault();
@@ -607,12 +651,29 @@ export default function PhotoViewer({
           event.preventDefault();
           setShowInfo(!showInfo);
           break;
+        case "r":
+        case "R":
+          if (!isVideo) {
+            event.preventDefault();
+            setRotation((rotation + 90) % 360);
+            feedback("旋转 " + ((rotation + 90) % 360) + "°");
+          }
+          break;
+        case "s":
+        case "S":
+          if (items.length > 1) {
+            event.preventDefault();
+            setPlaying(!playing);
+            feedback(playing ? "已暂停幻灯片" : "开始幻灯片");
+          }
+          break;
         case "p":
         case "P":
           // 精选这一张：照片级的事，与相册级的收藏不是一回事。
           if (!onTogglePick) break;
           event.preventDefault();
           onTogglePick();
+          feedback(isPicked ? "取消精选" : "已精选");
           break;
         case "c":
         case "C":
@@ -717,12 +778,21 @@ export default function PhotoViewer({
     }
   };
 
-  const onDoubleClick = () => {
+  const onDoubleClick = (event: React.MouseEvent) => {
     if (zoom > 1) {
       applyZoom(1);
       setPan({ x: 0, y: 0 });
     } else {
-      applyZoom(2);
+      const rect = stageRef.current?.getBoundingClientRect();
+      applyZoom(
+        2,
+        rect
+          ? {
+              x: event.clientX - rect.left - rect.width / 2,
+              y: event.clientY - rect.top - rect.height / 2,
+            }
+          : undefined,
+      );
     }
   };
 
@@ -742,7 +812,16 @@ export default function PhotoViewer({
       aria-modal="true"
       aria-label={`${albumName} 大图预览`}
     >
-      <ViewerChrome chromeVisible={chromeVisible} onClose={close} albumHref={albumHref} albumName={albumName} date={current.dateValue || current.capturedAt?.slice(0, 10)} multiple={items.length > 1} index={index} total={totalCount ?? items.length}>
+      <ViewerChrome
+        chromeVisible={chromeVisible}
+        onClose={close}
+        albumHref={albumHref}
+        albumName={albumName}
+        date={current.dateValue || current.capturedAt?.slice(0, 10)}
+        multiple={items.length > 1}
+        index={index}
+        total={totalCount ?? items.length}
+      >
         <div className="flex items-center gap-0.5">
           {!isVideo && (
             <button
@@ -856,10 +935,40 @@ export default function PhotoViewer({
             <FullscreenIcon size={15} />
           </button>
         </div>
+        {items.length > 1 && (
+          <>
+            <button
+              className="grid size-10 shrink-0 place-items-center rounded-full hover:bg-theater-surface"
+              aria-label={playing ? "暂停幻灯片" : "播放幻灯片"}
+              aria-pressed={playing}
+              onClick={() => setPlaying(!playing)}
+            >
+              {playing ? "Ⅱ" : "▷"}
+            </button>
+            <Menu
+              label="幻灯片选项"
+              trigger={
+                <button
+                  className="size-10 rounded-full"
+                  aria-label="幻灯片选项"
+                >
+                  ⋯
+                </button>
+              }
+              items={[3, 4, 5, 8].map((s) => ({
+                id: String(s),
+                label: (intervalMs === s * 1000 ? "✓ " : "") + s + " 秒",
+                onSelect: () => setIntervalMs(s * 1000),
+              }))}
+            />
+          </>
+        )}
       </ViewerChrome>
+      <ViewerHudToast value={hud} />
 
       {/* 画布 */}
       <div className="relative flex min-h-0 flex-1">
+        {chromeVisible && !isVideo && <ViewerExifSummary id={current.id} />}
         <div
           ref={stageRef}
           className="relative flex min-h-0 min-w-0 flex-1 touch-none items-center justify-center overflow-hidden"
@@ -966,7 +1075,8 @@ export default function PhotoViewer({
 
         {showInfo && !isVideo && (
           <div className="relative h-full w-[min(360px,75%)] shrink-0 overflow-auto bg-theater-surface">
-            <ImageInfoPanel inline
+            <ImageInfoPanel
+              inline
               absPath={current.id}
               albumName={currentAlbumName}
               albumHref={albumHref}
@@ -1063,7 +1173,16 @@ export default function PhotoViewer({
         </div>
       </footer>
       {stripVisible && items.length > 1 && (
-        <Filmstrip items={items} index={index} onChange={onIndexChange} />
+        <div onMouseEnter={() => setPlaying(false)}>
+          <Filmstrip
+            items={items}
+            index={index}
+            onChange={(i) => {
+              setPlaying(false);
+              onIndexChange(i);
+            }}
+          />
+        </div>
       )}
     </dialog>
   );

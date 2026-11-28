@@ -7,10 +7,23 @@ import {
   JobHistoryPanel,
   SmartAlbumRefreshPanel,
 } from "../tasks";
+import { useEffect, useRef } from "react";
+import { useLocation } from "react-router-dom";
+import { TaskPresetCards } from "./TaskPresetCards";
 import { buttonStyles } from "../../ui/buttonStyles";
 import { useTaskCenter } from "../../hooks/useTaskCenter";
 
 export default function TasksPlanTab({ active: visible }: { active: boolean }) {
+  const { hash } = useLocation();
+  const details = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    if (visible && hash === "#daily-plan" && details.current) {
+      details.current.open = true;
+      document
+        .getElementById("daily-plan")
+        ?.scrollIntoView?.({ block: "start" });
+    }
+  }, [visible, hash]);
   const center = useTaskCenter({ active: visible });
   const { snapshot, active, queue, history, plan } = center;
   const taskActionsBusy = center.busy || center.gpuSaving;
@@ -62,89 +75,107 @@ export default function TasksPlanTab({ active: visible }: { active: boolean }) {
           onClear={center.clearQueue}
         />
       </div>
-      <div className="grid items-start gap-5 xl:grid-cols-12">
-        <div className="min-w-0 space-y-2 xl:col-span-7">
-          <TaskConsole
+      <TaskPresetCards
+        history={history}
+        disabled={
+          runBusy ||
+          center.loading ||
+          Boolean(active) ||
+          center.loadError ||
+          queue.length > 0
+        }
+        run={(modules) => center.startAll("incremental", modules)}
+      />
+      {center.operationError && (
+        <p role="alert" className="text-caption text-danger">
+          {center.operationError}
+        </p>
+      )}
+      {center.sequenceSkipped?.length ? (
+        <p role="status" className="text-caption text-warning">
+          本次按序启动已跳过未就绪模块：
+          {center.sequenceSkipped.map((m) => m.name).join("、")}
+        </p>
+      ) : null}
+      <details
+        ref={details}
+        className="rounded-lg border border-line-subtle p-3"
+      >
+        <summary className="cursor-pointer py-2 text-subheading">
+          高级模块明细
+        </summary>
+        <div className="grid items-start gap-5 xl:grid-cols-12">
+          <div className="min-w-0 space-y-2 xl:col-span-7">
+            <TaskConsole
+              gpuEnabled={center.gpuEnabled}
+              active={Boolean(active)}
+              connected={!center.loadError}
+              onStart={() =>
+                center.start(center.selection.module, center.selection.mode)
+              }
+              loading={center.loading}
+              busy={runBusy}
+              modules={snapshot?.modules ?? []}
+              history={history}
+              peopleEnabled={snapshot?.settings.peopleEnabled ?? false}
+              faceModel={center.faceModel}
+              faceModelSaving={center.faceModelSaving}
+              faceModelSaveError={center.faceModelSaveError}
+              onChangeFaceModel={center.setFaceModel}
+              embeddingStatus={center.embeddingStatus}
+              embeddingStatusLoading={center.embeddingStatusLoading}
+              selection={center.selection}
+              estimate={center.estimate}
+              estimateLoading={center.estimateLoading}
+              estimateError={center.estimateError}
+              onStartAll={center.startAll}
+              onRefreshEstimate={center.refreshEstimate}
+            />
+          </div>
+          <div className="min-w-0 xl:col-span-5">
+            <DailyPlanPanel
+              enabled={plan.enabled}
+              time={plan.time}
+              selectedModules={plan.modules}
+              scanEnabled={plan.scan}
+              smartAlbumsEnabled={plan.smartAlbums}
+              peopleEnabled={plan.peopleEnabled}
+              ready={plan.ready}
+              onEnabledChange={plan.setEnabled}
+              onTimeChange={plan.setTime}
+              onModulesChange={plan.setModules}
+              onScanChange={plan.setScan}
+              onSmartAlbumsChange={plan.setSmartAlbums}
+              onPeopleEnabledChange={plan.setPeopleEnabled}
+              onSave={plan.save}
+              saving={plan.saving}
+              dirty={plan.dirty}
+              saved={plan.saved}
+              error={plan.error}
+              lastScheduledDate={snapshot?.settings.lastScheduledDate}
+              lastScheduledStatus={snapshot?.settings.lastScheduledStatus}
+              lastScheduledStage={snapshot?.settings.lastScheduledStage}
+              lastScheduledError={snapshot?.settings.lastScheduledError}
+              modules={snapshot?.modules ?? []}
+              estimate={center.estimate}
+              estimateLoading={center.estimateLoading}
+              estimateError={center.estimateError}
+            />
+          </div>
+        </div>
+        <div className="grid gap-5 xl:grid-cols-2">
+          <ComputeHardwarePanel
             gpuEnabled={center.gpuEnabled}
-            active={Boolean(active)}
-            connected={!center.loadError}
-            onStart={() =>
-              center.start(center.selection.module, center.selection.mode)
-            }
-            loading={center.loading}
-            busy={runBusy}
-            modules={snapshot?.modules ?? []}
-            history={history}
-            peopleEnabled={snapshot?.settings.peopleEnabled ?? false}
-            faceModel={center.faceModel}
-            faceModelSaving={center.faceModelSaving}
-            faceModelSaveError={center.faceModelSaveError}
-            onChangeFaceModel={center.setFaceModel}
-            embeddingStatus={center.embeddingStatus}
-            embeddingStatusLoading={center.embeddingStatusLoading}
-            selection={center.selection}
-            estimate={center.estimate}
-            estimateLoading={center.estimateLoading}
-            estimateError={center.estimateError}
-            onStartAll={center.startAll}
-            onRefreshEstimate={center.refreshEstimate}
+            disabled={center.loading}
+            saving={center.gpuSaving}
+            saveError={center.gpuSaveError}
+            status={center.embeddingStatus}
+            statusLoading={center.embeddingStatusLoading}
+            onChange={center.setGPUEnabled}
           />
-          {center.sequenceSkipped && center.sequenceSkipped.length > 0 ? (
-            <p role="status" className="mt-3 text-caption text-warning">
-              本次按序启动已跳过未就绪模块：
-              {center.sequenceSkipped.map((module) => module.name).join("、")}
-              。可在「数据与存储」页签查看模型与运行环境。
-            </p>
-          ) : null}
-          {center.operationError ? (
-            <p role="alert" className="mt-2 text-caption text-danger">
-              {center.operationError}
-            </p>
-          ) : null}
+          <SmartAlbumRefreshPanel />
         </div>
-        <div className="min-w-0 xl:col-span-5">
-          <DailyPlanPanel
-            enabled={plan.enabled}
-            time={plan.time}
-            selectedModules={plan.modules}
-            scanEnabled={plan.scan}
-            smartAlbumsEnabled={plan.smartAlbums}
-            peopleEnabled={plan.peopleEnabled}
-            ready={plan.ready}
-            onEnabledChange={plan.setEnabled}
-            onTimeChange={plan.setTime}
-            onModulesChange={plan.setModules}
-            onScanChange={plan.setScan}
-            onSmartAlbumsChange={plan.setSmartAlbums}
-            onPeopleEnabledChange={plan.setPeopleEnabled}
-            onSave={plan.save}
-            saving={plan.saving}
-            dirty={plan.dirty}
-            saved={plan.saved}
-            error={plan.error}
-            lastScheduledDate={snapshot?.settings.lastScheduledDate}
-            lastScheduledStatus={snapshot?.settings.lastScheduledStatus}
-            lastScheduledStage={snapshot?.settings.lastScheduledStage}
-            lastScheduledError={snapshot?.settings.lastScheduledError}
-            modules={snapshot?.modules ?? []}
-            estimate={center.estimate}
-            estimateLoading={center.estimateLoading}
-            estimateError={center.estimateError}
-          />
-        </div>
-      </div>
-      <div className="grid gap-5 xl:grid-cols-2">
-        <ComputeHardwarePanel
-          gpuEnabled={center.gpuEnabled}
-          disabled={center.loading}
-          saving={center.gpuSaving}
-          saveError={center.gpuSaveError}
-          status={center.embeddingStatus}
-          statusLoading={center.embeddingStatusLoading}
-          onChange={center.setGPUEnabled}
-        />
-        <SmartAlbumRefreshPanel />
-      </div>
+      </details>
       <JobHistoryPanel
         jobs={history}
         retryDisabled={Boolean(active) || taskActionsBusy}

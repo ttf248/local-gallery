@@ -73,7 +73,7 @@ export default function SearchResults() {
     queryKey: ["library", "search", mode, query, SEARCH_PAGE_SIZE,type],
     initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) =>
-      type==="all"?albumsApi.search(query, mode, SEARCH_PAGE_SIZE, pageParam, signal):albumsApi.search(query,mode,SEARCH_PAGE_SIZE,pageParam,signal,type),
+      type==="all"?albumsApi.search(query, mode, SEARCH_PAGE_SIZE, pageParam, signal):albumsApi.search(query,mode,SEARCH_PAGE_SIZE,pageParam,signal,type==="smart"?"smartCollection":type),
     getNextPageParam: (lastPage) => lastPage.nextCursor || undefined,
     enabled: query.length >= 1 && !isContent,
     staleTime: 30_000,

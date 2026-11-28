@@ -65,7 +65,7 @@ export interface TaskCenterState {
   /** 当前选中的分析模块与处理方式。 */
   selection: TaskCenterSelection;
   start: (type: AnalysisType, mode: AnalysisMode) => void;
-  startAll: (mode: AnalysisMode) => void;
+  startAll: (mode: AnalysisMode,modules?:AnalysisType[]) => void;
   act: (id: string, action: JobAction) => void;
   moveQueued: (id: string, direction: "up" | "down") => void;
   clearQueue: () => void;
@@ -252,7 +252,7 @@ export function useTaskCenter(options: { active: boolean }): TaskCenterState {
     onError: () => void invalidateJobs(),
   });
   const startAllMutation = useMutation({
-    mutationFn: (mode: AnalysisMode) => aiJobsApi.startAll(mode),
+    mutationFn: ({mode,modules}:{mode:AnalysisMode;modules?:AnalysisType[]}) => modules?aiJobsApi.startAll(mode,undefined,modules):aiJobsApi.startAll(mode),
     onSuccess: () => void invalidateJobs(),
     onError: () => void invalidateJobs(),
   });
@@ -460,7 +460,7 @@ export function useTaskCenter(options: { active: boolean }): TaskCenterState {
     },
     start: (type: AnalysisType, mode: AnalysisMode) =>
       startMutation.mutate({ type, mode }),
-    startAll: (mode: AnalysisMode) => startAllMutation.mutate(mode),
+    startAll: (mode,modules) => startAllMutation.mutate({mode,modules}),
     act: (id: string, action: JobAction) =>
       actionMutation.mutate({ id, action }),
     moveQueued: (id: string, direction: "up" | "down") =>

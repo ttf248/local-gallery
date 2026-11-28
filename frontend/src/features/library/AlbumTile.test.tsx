@@ -91,7 +91,7 @@ describe("AlbumCard 封面语义", () => {
     vi.spyOn(window, "matchMedia").mockImplementation(
       (query: string) =>
         ({
-          matches: false,
+          matches: query.includes("(pointer: fine)"),
           media: query,
           onchange: null,
           addListener: vi.fn(),

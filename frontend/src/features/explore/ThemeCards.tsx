@@ -32,7 +32,7 @@ const THEME_LIMIT = 4;
  * 提示：每张卡都挂一行「线索：时间 · 地点」，一屏四张就是四行几乎
  * 一样的灰字，读不出差别。完整的主题清单在主题页。
  */
-export default function ThemeCards() {
+export default function ThemeCards({report,combined}:{report?:(key:string,v:boolean)=>void;combined?:boolean}={}) {
   const queryClient = useQueryClient();
   const directory = useSmartAlbumDirectory("featured", true, {
     limit: THEME_LIMIT,
@@ -62,6 +62,8 @@ export default function ThemeCards() {
     }
   }, [emptyFeatured, queryClient, task?.jobId, task?.status]);
 
+  const empty=emptyFeatured&&!allDirectory.isLoading&&!allDirectory.isError&&!!allDirectory.analysis&&!allDirectory.analysis.complete&&!allDirectory.analysis.analyzedAlbums&&!refresh.isLoading&&!refresh.isError&&!task;
+  useEffect(()=>report?.("themes",empty),[empty,report]);
   return (
     <ExploreSection
       id="explore-theme"
@@ -131,7 +133,7 @@ export default function ThemeCards() {
           icon={<span aria-hidden="true">✦</span>}
           size="compact"
         />
-      ) : allDirectory.analysis ? (
+      ) : combined&&empty ? null : allDirectory.analysis ? (
         <p className="text-body text-ink-2">
           {allDirectory.analysis.analyzedAlbums > 0
             ? `主题分析尚未完成（${allDirectory.analysis.analyzedAlbums}/${allDirectory.analysis.totalAlbums} 本相册已生成）。`

@@ -1,3 +1,4 @@
+import {useEffect} from "react";
 import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
 import { ScrollRow } from "../../ui/ScrollRow";
 import { useQuery } from "@tanstack/react-query";
@@ -20,7 +21,7 @@ const CANDIDATE_LIMIT = 6;
  * 已命名与待确认分成两栏，不用一枚灰标签糊弄：分组是相似度聚出来的
  * 候选，**不是身份确认** —— 界面上不能让人以为认出来了。
  */
-export default function PeopleRow() {
+export default function PeopleRow({report,combined}:{report?:(key:string,v:boolean)=>void;combined?:boolean}={}) {
   const people = useQuery({
     queryKey: ["people", false, "photos"],
     queryFn: () => aiJobsApi.people(false, "photos"),
@@ -33,6 +34,8 @@ export default function PeopleRow() {
   });
 
   const groups = people.data?.people ?? [];
+  const empty=!!jobs.data&&!jobs.isError&&!people.isLoading&&!people.isError&&groups.length===0&&!latestAnalysisJob(jobs.data.snapshot.jobs,"face");
+  useEffect(()=>report?.("people",empty),[empty,report]);
   const named = groups.filter((group) => group.confirmed).slice(0, NAMED_LIMIT);
   const candidates = groups
     .filter((group) => !group.confirmed)
@@ -69,7 +72,7 @@ export default function PeopleRow() {
         <PreviewSkeleton label="正在读取人物候选…" shape="person" />
       ) : null}
 
-      {!people.isLoading && !people.isError && groups.length === 0 ? (
+      {!(combined&&empty) && !people.isLoading && !people.isError && groups.length === 0 ? (
         <PeopleEmptyState
           jobs={jobs.data?.snapshot.jobs ?? []}
           enabled={jobs.data?.snapshot.settings.peopleEnabled ?? false}

@@ -1,6 +1,6 @@
 import { ExploreSection, PreviewSkeleton } from "./ExploreSection";
 
-import { useMemo } from "react";
+import { useMemo,useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { aiJobsApi, type AIJob, type ChinaPlace } from "../../api/aiJobs";
@@ -22,7 +22,7 @@ const PLACE_LIMIT = 8;
  * 卡片用真实的地理照片当画面：地名本身说明不了「那是哪儿」，一张照片
  * 才说得出。没有照片的地方给一块带图标的底，而不是一块空白方框。
  */
-export default function PlaceCards() {
+export default function PlaceCards({report,combined}:{report?:(key:string,v:boolean)=>void;combined?:boolean}={}) {
   const places = useChinaPlacesAll("city", null);
   const jobs = useQuery({
     queryKey: ["ai-jobs"],
@@ -37,6 +37,8 @@ export default function PlaceCards() {
     [places.data],
   );
 
+  const empty=!!jobs.data&&!jobs.isError&&!places.isLoading&&!places.isError&&items.length===0&&!jobs.data.snapshot.jobs.some(j=>j.type==="metadata");
+  useEffect(()=>report?.("places",empty),[empty,report]);
   return (
     <ExploreSection
       id="explore-place"
@@ -68,7 +70,7 @@ export default function PlaceCards() {
         <PreviewSkeleton label="正在读取地点…" shape="place" />
       ) : null}
 
-      {!places.isLoading && !places.isError && items.length === 0 ? (
+      {!(combined&&empty) && !places.isLoading && !places.isError && items.length === 0 ? (
         <PlaceEmptyState
           jobs={jobs.data?.snapshot.jobs ?? []}
           isLoading={jobs.isLoading}
@@ -79,7 +81,7 @@ export default function PlaceCards() {
       {items.length > 0 ? (
         <>
           <PlaceCard place={items[0]}/>
-          <ul className="mt-2 divide-y divide-line-subtle">{items.slice(1,4).map(place=><li key={place.adcode}><Link className="flex min-h-10 items-center justify-between gap-3 rounded-md px-2 text-label hover:bg-hover" to={travelPlaceRoute(place.adcode)}>
+          <ul className="mt-2 grid gap-1 sm:grid-cols-2">{items.slice(1,PLACE_LIMIT).map(place=><li key={place.adcode}><Link className="flex min-h-10 items-center justify-between gap-3 rounded-md px-2 text-label hover:bg-hover" to={travelPlaceRoute(place.adcode)}>
             <span>{place.name}</span><span className="text-caption tabular-nums text-ink-3">{place.photoCount.toLocaleString("zh-CN")} 张 · 去过 {place.visitCount} 次</span>
           </Link></li>)}</ul>
         </>

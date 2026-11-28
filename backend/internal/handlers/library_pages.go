@@ -115,7 +115,7 @@ func LibraryMediaFeedHandler(catalog *services.ResourceCatalog, dimensions *serv
 			// 给出一批确实不同的照片。
 			Seed: strings.TrimSpace(c.Query("seed")),
 			// 年份、月份与媒体类型只对时间线有意义。
-			Month: strings.TrimSpace(c.Query("month")),
+			Month: strings.TrimSpace(c.Query("month")), DateSource: c.Query("dateSource"), DatePrecision: c.Query("datePrecision"),
 			Media: strings.TrimSpace(c.Query("media")),
 		}
 		snapshot := requestCatalogSnapshot(c, catalog)

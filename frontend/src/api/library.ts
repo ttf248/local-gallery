@@ -349,6 +349,8 @@ export type MediaFeedScope =
   | "timeline";
 
 export interface MediaFeedQuery {
+ dateSource?:TimelineDateSource;
+ datePrecision?:TimelineDatePrecision;
   kind: AppMode;
   scope: MediaFeedScope;
   /** scope=year 时必填："1900".."2099" 或 "other"。 */

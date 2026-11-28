@@ -1,10 +1,11 @@
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
-import { expect, it } from "vitest";
+import { expect, it,vi } from "vitest";
 import { PageChromeProvider } from "./PageChrome";
 import { PageHero } from "./PageHero";
 import { CanvasTopBar } from "./CanvasTopBar";
+vi.mock("../hooks/useMediaQuery",()=>({useMediaQuery:()=>true,WIDE_LAYOUT_QUERY:"(min-width:1024px)"}));
 it("大标题离开视口时收进顶栏，详情有返回入口", () => {
   const noop = () => {};
   render(
@@ -12,7 +13,7 @@ it("大标题离开视口时收进顶栏，详情有返回入口", () => {
       <MemoryRouter>
         <PageChromeProvider>
           <CanvasTopBar
-            scrolled={false}
+            scrolled
             onSearch={noop}
             onHelp={noop}
             onRefresh={noop}

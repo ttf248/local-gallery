@@ -343,7 +343,8 @@ it("人物预览优先露出代表脸", async () => {
 
 it("区分人物分析尚未启用与已分析但没有候选", async () => {
   const { unmount } = renderExplore();
-  expect(await screen.findByText(/人物分析尚未启用/)).toBeInTheDocument();
+  expect(await screen.findByText(/开启智能整理，按人物、地点与主题自动归类/)).toBeVisible();
+  expect(screen.queryByText(/人物分析尚未启用/)).toBeNull();
   unmount();
 
   vi.mocked(aiJobsApi.list).mockResolvedValue(
@@ -380,7 +381,7 @@ it("地点预览列出可进入的地点", async () => {
 it("地点没有解析结果时区分尚未分析与分析完成但没有位置", async () => {
   const first = renderExplore();
   expect(
-    await screen.findByText(/尚未完成元数据 \/ GPS 分析/),
+    await screen.findByText(/开启智能整理，按人物、地点与主题自动归类/),
   ).toBeInTheDocument();
   first.unmount();
 
@@ -437,7 +438,7 @@ it("主题预览写清标题、张数与来源", async () => {
 
 it("主题区区分尚未生成与分析完成但没有分组", async () => {
   const first = renderExplore();
-  expect(await screen.findByText("主题尚未生成。")).toBeInTheDocument();
+  expect(await screen.findByText(/开启智能整理，按人物、地点与主题自动归类/)).toBeVisible();
   first.unmount();
 
   mocks.allDirectory = {

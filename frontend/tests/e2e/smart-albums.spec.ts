@@ -295,6 +295,9 @@ test("进入分组时结束冲突的筛选条件，回到全部照片不再意�
     // 墙上只剩精选的那一张。
     await expect(page.locator("button[aria-label^='查看']")).toHaveCount(1);
 
+    // 确认筛选条件后收起浮层，再打开相邻的分组工具。
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog", { name: "筛选照片" })).toBeHidden();
     // 进入分组：条件被明确结束，地址栏里也不再挂着它。
     await page.getByRole("button", { name: "按分组浏览" }).click();
     await page.getByRole("tab", { name: "按时间" }).click();

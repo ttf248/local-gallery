@@ -293,7 +293,7 @@ function Palette({
     save(mode,raw);
     onClose();
     const next = new URLSearchParams({ q: term, scope });
-    if(tag){next.set("type","smartCollection");next.set("scope","name")}
+    if(tag){next.set("type","smart");next.set("scope","name")}
     navigate(`${searchRoute(mode)}?${next}`);
   }
 

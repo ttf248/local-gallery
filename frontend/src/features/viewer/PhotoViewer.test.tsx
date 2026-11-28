@@ -13,6 +13,7 @@ import type { LibraryMediaItem } from "../../api/library";
 import { historyApi } from "../../api/prefs";
 import { resetVisitRecorder } from "../../hooks/useVisitRecorder";
 import PhotoViewer from "./PhotoViewer";
+import {zoomAroundPoint} from "./viewerZoom";
 
 // 图片信息面板自己去取属性；这里只需要它出现 / 消失。
 vi.mock("../../hooks/useImageInfo", () => ({
@@ -84,6 +85,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
+it("光标锚点在缩放前后对应相同的图像位置",()=>{
+ const p={x:93,y:-21},pan={x:11,y:-6},after=zoomAroundPoint(pan,p,1.25,2.5);
+ expect((p.x-after.x)/2.5).toBeCloseTo((p.x-pan.x)/1.25);expect((p.y-after.y)/2.5).toBeCloseTo((p.y-pan.y)/1.25);
+});
+it("暗场旋转只显示短提示，S 控制四秒幻灯片",()=>{
+ vi.useFakeTimers();try{const change=vi.fn();const view=render(<PhotoViewer items={items} index={0} albumName="相册" onIndexChange={change} onClose={vi.fn()}/>);
+ act(()=>vi.advanceTimersByTime(2600));const bar=screen.getByRole("banner");expect(bar).toHaveClass("opacity-0");fireEvent.keyDown(window,{key:"r"});expect(screen.getByTestId("viewer-hud")).toHaveTextContent("90°");expect(bar).toHaveClass("opacity-0");act(()=>vi.advanceTimersByTime(901));expect(screen.getByTestId("viewer-hud")).toBeEmptyDOMElement();
+ fireEvent.keyDown(window,{key:"s"});act(()=>vi.advanceTimersByTime(4000));expect(change).toHaveBeenCalledWith(1);fireEvent.keyDown(window,{key:"s"});expect(screen.getByRole("button",{name:"播放幻灯片"})).toHaveAttribute("aria-pressed","false");view.unmount()}finally{vi.useRealTimers()}
+});
 describe("大图预览的精选与对比", () => {
   it("P 键切换这张照片的精选", () => {
     const onTogglePick = vi.fn();

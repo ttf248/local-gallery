@@ -1,6 +1,6 @@
 import { useSetCollectionCover } from "../../hooks/useComicMeta";
 import { useImageProgressSync } from "../../hooks/useImageProgressSync";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { useParams, useSearchParams, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGalleryStore } from "../../store/galleryStore";
@@ -74,6 +74,13 @@ export function useReaderController() {
 
   const media = useReaderMedia(pathParam, isVideo);
   const { images, videos, dimensions, reload: reloadMedia } = media;
+  const wideFlags = useMemo(() => {
+    const flags = images.map((fileId) => {
+      const size = dimensions?.[fileId];
+      return Boolean(size && size.height > 0 && size.width / size.height >= 1.15);
+    });
+    return flags.some(Boolean) ? flags : undefined;
+  }, [images, dimensions]);
   const ready = media.status === "ready";
 
   const viewportRef = useRef<ReaderViewportHandle>(null);
@@ -635,7 +642,7 @@ export function useReaderController() {
     }
     if (mode === "double") {
       if (index > 0)
-        jumpImage(prevSpreadIndex(index, images.length, coverOffset));
+        jumpImage(prevSpreadIndex(index, images.length, coverOffset, wideFlags));
     } else if (index > 0) {
       jumpImage(index - 1);
     }
@@ -646,6 +653,7 @@ export function useReaderController() {
     goToVideo,
     mode,
     coverOffset,
+    wideFlags,
     jumpImage,
     index,
     images.length,
@@ -670,9 +678,9 @@ export function useReaderController() {
       return;
     }
     if (mode === "double") {
-      const last = spreadAt(index, images.length, coverOffset).at(-1) ?? 0;
+      const last = spreadAt(index, images.length, coverOffset, wideFlags).at(-1) ?? 0;
       if (last + 1 < images.length) {
-        jumpImage(nextSpreadIndex(index, images.length, coverOffset));
+        jumpImage(nextSpreadIndex(index, images.length, coverOffset, wideFlags));
         return;
       }
       onReachEnd();
@@ -690,6 +698,7 @@ export function useReaderController() {
     goToVideo,
     mode,
     coverOffset,
+    wideFlags,
     jumpImage,
     index,
     observation?.atBottom,
@@ -863,6 +872,7 @@ export function useReaderController() {
       toggleOverview: () => toggleDrawer("pages"),
       toggleChapters: () => toggleDrawer("chapters"),
       toggleChrome: chrome.toggle,
+      continueChapter: mode==="continuous"&&observation?.atBottom&&hasNextVolume ? ()=>void goAdjacent(1,{albumsOnly:true}) : undefined,
       advance: () => {
         if (mode === "continuous" && observation?.atBottom && hasNextVolume)
           void goAdjacent(1, { albumsOnly: true });
@@ -927,6 +937,7 @@ export function useReaderController() {
     contextMenu,
     current,
     dimensions,
+    wideFlags,
     goAdjacent,
     goBack,
     goToVideo,

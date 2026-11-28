@@ -300,9 +300,9 @@ export const SHORTCUTS: Shortcut[] = [
     group: "image",
   },
   {
-    id: "slideshow",
+    id: "advancePage",
     label: "Space",
-    description: "幻灯片播放/暂停",
+    description: "按阅读顺序前进",
     combo: "space",
     group: "image",
   },
@@ -316,10 +316,13 @@ export const SHORTCUTS: Shortcut[] = [
   {
     id: "overview",
     label: "T",
-    description: "打开目录（整本缩略图）",
+    description: "切换页码缩略图抽屉",
     combo: "t",
     group: "image",
   },
+  {id:"readerChrome",label:"H",description:"显示或隐藏阅读工具栏",combo:"h",group:"image"},
+  {id:"readerChapters",label:"C",description:"切换章节目录",combo:"c",group:"image"},
+  {id:"readerCoverOffset",label:"O",description:"切换双页封面单页偏移",combo:"o",group:"image"},
   // 视频
   {
     id: "videoPlay",
@@ -391,6 +394,8 @@ export const SHORTCUTS: Shortcut[] = [
     combo: "end",
     group: "video",
   },
+  {id:"photoRotate",label:"R",description:"将照片顺时针旋转 90°",combo:"r",group:"photo"},
+  {id:"photoSlideshow",label:"S",description:"播放或暂停幻灯片",combo:"s",group:"photo"},
   // 照片墙与大图预览
   {id:"densityDenser",label:"[",description:"照片墙更密",combo:"[",group:"photo"},
   {id:"densityLooser",label:"]",description:"照片墙更松",combo:"]",group:"photo"},

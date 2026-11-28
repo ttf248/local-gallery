@@ -40,34 +40,29 @@ async function pickAlbum() {
   const manifest = await (
     await fetch(`${BASE}/api/library/manifest`, { cache: "no-store" })
   ).json();
-  const root = (manifest?.manifest?.roots ?? []).find(
-    (r) => (r.contentKind ?? "photo") === "photo",
-  );
-  if (!root) throw new Error("媒体库还没扫描，先跑一次扫描");
-  const children = await (
-    await fetch(
-      `${BASE}/api/library/${root.id}/children?kind=photo&limit=200`,
-      { cache: "no-store" },
-    )
-  ).json();
-  const items = children?.page?.items ?? [];
-  const albums = items.filter((item) => item.kind === "album");
-  if (albums.length === 0) throw new Error("媒体库里没有相册");
-  if (ALBUM_NAME) {
-    const hit = albums.find((item) => item.name === ALBUM_NAME);
-    if (!hit) {
-      throw new Error(
-        `找不到相册 ${ALBUM_NAME}（可选：${albums
-          .slice(0, 8)
-          .map((i) => i.name)
-          .join(" / ")}）`,
-      );
+  let parents=(manifest?.manifest?.roots??[]).filter(r=>(r.contentKind??"photo")==="photo").map(r=>r.id);
+  while(parents.length){
+    const next=[],albums=[];
+    for(const id of parents){
+      let cursor="";
+      do {
+        const params=new URLSearchParams({kind:"photo",limit:"200",cursor});
+        const res=await fetch(`${BASE}/api/library/${encodeURIComponent(id)}/children?${params}`,{cache:"no-store"});
+        if(!res.ok)throw new Error("读取相册目录失败，HTTP "+res.status);
+        const {page}=await res.json();
+        for(const item of page.items){
+          if(item.kind==="collection")next.push(item.id);
+          if(item.kind!=="album")continue;
+          if(ALBUM_NAME && item.name===ALBUM_NAME)return item;
+          albums.push(item);
+        }
+        cursor=page.nextCursor;
+      }while(cursor);
     }
-    return hit;
+    if(!ALBUM_NAME && albums.length)return albums.reduce((best,item)=>(item.imageCount??0)>(best.imageCount??0)?item:best);
+    parents=next;
   }
-  return albums.reduce((best, item) =>
-    (item.imageCount ?? 0) > (best.imageCount ?? 0) ? item : best,
-  );
+  throw new Error(ALBUM_NAME?"找不到指定相册":"媒体库里没有照片相册");
 }
 
 const PNG = Buffer.from(

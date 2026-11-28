@@ -116,7 +116,7 @@ export default function ReaderDrawer({
                 return (
                   <button
                     aria-current={selected ? "page" : undefined}
-                    className="grid min-h-[52px] w-full gap-1 border-l-[3px] border-transparent px-3 py-1 text-left aria-[current=page]:border-primary aria-[current=page]:bg-primary-soft"
+                    className="grid min-h-[52px] w-full gap-1 border-l-[3px] border-transparent px-3 py-1 text-left aria-[current=page]:border-primary aria-[current=page]:bg-accent-soft"
                     onClick={() => {
                       props.onClose();
                       if (!selected) navigate(readerRoute(n.id));

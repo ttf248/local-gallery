@@ -14,6 +14,16 @@ describe("跨页配对", () => {
 });
 
 import { nextSpreadIndex, prevSpreadIndex } from "./readerLayout";
+it("翻到跨页扫描图时独占一屏，前后翻页访问相同的页组", () => {
+  const wide = [false, false, false, true, false, false];
+  expect(spreadAt(2, 6, true, wide)).toEqual([1, 2]);
+  expect(nextSpreadIndex(1, 6, true, wide)).toBe(3);
+  expect(spreadAt(3, 6, true, wide)).toEqual([3]);
+  expect(nextSpreadIndex(3, 6, true, wide)).toBe(4);
+  expect(prevSpreadIndex(4, 6, true, wide)).toBe(3);
+  expect(spreadAt(5, 6, true, wide)).toEqual([4, 5]);
+  expect(spreadAt(2, 6, false, wide)).toEqual([2]);
+});
 for (const total of [0, 1, 2, 3, 10])
   for (const offset of [false, true])
     it(`覆盖 ${total} 页偏移 ${offset}`, () => {

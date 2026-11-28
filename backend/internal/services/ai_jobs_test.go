@@ -269,6 +269,26 @@ func TestAIJobServiceStartAllQueuesModulesInOrder(t *testing.T) {
 	shutdownAIJobService(t, service)
 }
 
+func TestAIJobServiceStartSequenceLimitsModules(t *testing.T) {
+	root := t.TempDir()
+	files := writeAIJobImages(t, root, 1)
+	service := newTestAIJobService(t, filepath.Join(t.TempDir(), "jobs.json"), t.TempDir(), aiJobCatalog(root, files),
+		testJSONAnalyzer{module: AIJobTypeMetadata, version: MetadataParserVersion},
+		testJSONAnalyzer{module: AIJobTypeEmbedding, version: "embedding-v1"},
+		testJSONAnalyzer{module: AIJobTypeOCR, version: "ocr-v1"})
+	defer shutdownAIJobService(t, service)
+	for _, selection := range [][]string{{}, {AIJobTypeOCR, "unknown"}, {AIJobTypeOCR, AIJobTypeOCR}} {
+		if _, _, err := service.StartSequence(AIJobModeIncremental, selection); err == nil {
+			t.Fatalf("accepted invalid selection %v", selection)
+		}
+	}
+	jobs, skipped, err := service.StartSequence(AIJobModeIncremental, []string{AIJobTypeOCR, AIJobTypeFace})
+	if err != nil || len(jobs) != 1 || jobs[0].Type != AIJobTypeOCR || len(skipped) != 1 || skipped[0].Type != AIJobTypeFace {
+		t.Fatalf("preset jobs=%v skipped=%v err=%v", jobs, skipped, err)
+	}
+	waitForAIJob(t, service, jobs[0].ID, AIJobStatusCompleted)
+}
+
 func TestAIJobQueueAndHistoryManagementPreservesAnalysisResults(t *testing.T) {
 	root := t.TempDir()
 	files := writeAIJobImages(t, root, 1)
@@ -447,7 +467,7 @@ func TestAIJobServiceIncrementalDetectsChangedFilesAndModuleVersion(t *testing.T
 	waitForAIJobIdle(t, service)
 	shutdownAIJobService(t, service)
 
-	upgraded := newTestAIJobService(t, statePath, metadataDir, catalog, versionedMetadataAnalyzer{version: "metadata-v2"})
+	upgraded := newTestAIJobService(t, statePath, metadataDir, catalog, versionedMetadataAnalyzer{version: MetadataParserVersion + "-next"})
 	newVersion, _, err := upgraded.Start(AIJobTypeMetadata, AIJobModeIncremental)
 	if err != nil {
 		t.Fatal(err)

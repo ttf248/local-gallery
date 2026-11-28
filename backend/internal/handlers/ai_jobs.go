@@ -24,8 +24,9 @@ type aiJobStartRequest struct {
 }
 
 type aiJobSequenceStartRequest struct {
-	Mode    string `json:"mode"`
-	AlbumID string `json:"albumId,omitempty"`
+	Modules []string `json:"modules,omitempty"`
+	Mode    string   `json:"mode"`
+	AlbumID string   `json:"albumId,omitempty"`
 }
 
 type aiJobQueueMoveRequest struct {
@@ -131,7 +132,7 @@ func AIJobSequenceStartHandler(service *services.AIJobService) fiber.Handler {
 		if err := c.BodyParser(&body); err != nil {
 			return writeError(c, fiber.StatusBadRequest, "invalid_analysis_request", "request body is not valid JSON")
 		}
-		jobs, skipped, err := service.StartAll(strings.TrimSpace(body.Mode), body.AlbumID)
+		jobs, skipped, err := service.StartSequence(strings.TrimSpace(body.Mode), body.Modules, body.AlbumID)
 		if err != nil {
 			if errors.Is(err, services.ErrAIJobInvalidAlbum) {
 				return writeError(c, fiber.StatusBadRequest, "invalid_analysis_album", "albumId must identify a current photo album")

@@ -37,6 +37,7 @@ test("已知解码失败在后续任务中跳过，任务中心显示原因", as
       });
     }
     await page.goto("/settings/tasks");
+    await page.getByText("高级模块明细",{exact:true}).click();
     await page
       .getByRole("button", { name: "相似照片特征", exact: true })
       .click();
