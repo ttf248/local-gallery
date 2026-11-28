@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { AIJobSnapshot } from "../../src/api/aiJobs";
 import { scannedNodes } from "./helpers/library";
 
 test.describe("任务中心", () => {
@@ -129,9 +130,18 @@ test.describe("任务中心", () => {
   });
 
   test("任务中心能手动生成智能相册分组", async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(150_000);
     await page.goto("/settings/tasks");
     await scannedNodes(page.request, "photo");
+    // 启动补跑可能在扫描结束后继续写入元数据与相册分组。
+    await expect
+      .poll(async () => {
+        const response = await page.request.get("/api/ai/jobs");
+        if (!response.ok()) return false;
+        const { snapshot } = (await response.json()) as { snapshot: AIJobSnapshot };
+        return snapshot.settings.lastScheduledStatus !== "running" && !snapshot.active;
+      }, { timeout: 30_000 })
+      .toBe(true);
 
     await page.getByText("高级模块明细",{exact:true}).click();
     const panel = page.getByRole("region", { name: "智能相册分组" });
