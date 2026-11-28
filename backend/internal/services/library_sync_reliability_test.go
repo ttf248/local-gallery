@@ -190,6 +190,14 @@ func TestChangeWatcher_CloseAndRestartKeepsWatching(t *testing.T) {
 // 就能看到改名后的目录。
 func TestChangeWatcher_MovedDirectoryIsReported(t *testing.T) {
 	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "photo.jpg"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	batches := make(chan *SyncChangeSet, 16)
 	watcher, err := NewChangeWatcher(ChangeWatcherOptions{
 		Roots:        []string{root},
@@ -212,16 +220,10 @@ func TestChangeWatcher_MovedDirectoryIsReported(t *testing.T) {
 	}
 	defer watcher.Close()
 
-	source := filepath.Join(root, "source")
-	if err := os.MkdirAll(source, 0o755); err != nil {
-		t.Fatal(err)
+	// Start 返回后，初次遍历已经关闭读目录句柄。
+	if count := watcher.Status().WatchedDirs; count != 2 {
+		t.Fatalf("启动后应监听根目录和待移动目录，实际 %d 个", count)
 	}
-	photo := filepath.Join(source, "photo.jpg")
-	if err := os.WriteFile(photo, []byte("image"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	// 等监听器登记好新目录再移动，否则移动本身可能落在监听范围之外。
-	waitForWatchedDirs(t, watcher, 2)
 
 	target := filepath.Join(root, "target")
 	if err := os.Rename(source, target); err != nil {
